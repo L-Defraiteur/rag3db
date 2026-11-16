@@ -364,3 +364,13 @@ publiésavantleurpropreexécution, ASTslicesavec fauxclock/fichiers/processus,
 aucunappelRust/proc/FSQ. Attendusrougesdeadlineaprèsopen et mutationsELF/
 copies/HEAD/propreté ; casinchangédoitpublier. Ce sont des testsduPILOTE,
 pas le témoinRustconsommateurtoujoursNONjoué. Puis correction desréservesBanc.
+
+ROsourceRecherche81b0 favorablebornée : raccordvraiconsumer avantbuilder,
+onzeconfigsidentiques, mockdiscriminantstatique, pasréservebloquante ; aucune
+compilation/exécution. RéservesBanc regroupables dans UNdifffinaldupilote.
+Propositionpatchgardesfinales préparée NONappliquée, pilote99a8 inchangé :
+3ELF rehashés+HEAD/propreté/copies/préflight sousEND, budgetsavant/aprèsopen/
+aprèsflush, sanscontrôle106fa sousT aprèscompile(copieROseule). Six témoins
+PythonASTfakes publiés NONjoués ; HOLDmockC7encoreactif. ArbitrageprécisC7 :
+autorisation limitée de ces6témoins sansRust/ELF/Cargo/QFS/proc pourobserver
+leurrougeAVANTcorrection conformémentredfirst, puisvertmêmecas ; aucunGO600.

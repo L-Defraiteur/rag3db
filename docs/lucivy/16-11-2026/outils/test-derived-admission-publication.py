@@ -20,13 +20,16 @@ class FakePath:
     def __truediv__(self, name): return FakePath(self.value + '/' + str(name))
     def __str__(self): return self.value
     def iterdir(self): return iter(())
+    def is_absolute(self): return self.value.startswith('/')
+    @property
+    def parts(self): return tuple(self.value.split('/'))
 
 
 def final_context(mutation=None):
     targets = ['test_derived_fixture_admission', 'test_derived_in_ram', 'test_sfx_v3_ground_truth']
     artifacts = {name: dict(path='elf-' + name, sha256='hash-' + name) for name in targets}
     hashes = {row['path']: row['sha256'] for row in artifacts.values()}
-    hashes.update({'T/validation-provenance.json': 'marker', 'Q/frozen.py': 'copy'})
+    hashes.update({'T/validation-provenance.json': 'marker', 'Q/frozen.py': 'copy', 'Q/preflight.json': 'preflight'})
     if mutation == 'elf': hashes[artifacts[targets[0]]['path']] = 'mutated'
     if mutation == 'copy': hashes['Q/frozen.py'] = 'mutated'
     published = []
@@ -35,6 +38,7 @@ def final_context(mutation=None):
         return ' M modified.rs\n' if mutation == 'dirty' else ''
     ns = dict(data={'target_creator_sha256': 'marker', 'copy_hashes': {'frozen.py': 'copy'}},
               scratch=FakePath('scratch'), target=FakePath('T'), package=FakePath('Q'), root=FakePath('W'),
+              preflight=FakePath('Q/preflight.json'), preflight_sha256='preflight',
               artifacts=artifacts, TARGETS=targets, SOURCE='source', WITNESS='witness', deadline=600,
               Path=FakePath, subprocess=SimpleNamespace(check_output=check_output),
               checked_path=lambda value, **kwargs: FakePath(value),
