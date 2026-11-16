@@ -145,7 +145,7 @@ inventer de code retourné. Les anciens logs ne sont ni écrasés ni requalifié
 Ce delta ne modifie aucune qualification active et ne lance aucun calcul.
 
 
-## Base ED atterrie et point de coordination non levé
+## Base ED atterrie et coordination canonique
 
 ED confirme masterd395cb1f03f84c6abdfa023a0e3c7f87a7c0dab6, trois contrôles
 lus. Le lot a été reposé sur cette base dans `cx-rate-key-20261116-r3`, sans
@@ -157,11 +157,40 @@ Le lanceur ne force aucun quota CPU : poste garde sa borne. Les jobs des ciblés
 respectent min(8, POSTE_FILS), la preuve conserve cpu.max et POSTE_FILS. La passe
 officielle conserve son j8 et reste sous le quota du poste. Pas de CPUQuota8%.
 
-**Point non levé avant GO exact** : la consigne actuelle interdit les services
-partagés. Or la passe officielle SHA2150 configure7878/7879 et e2e_lectures a
-un témoin BGE réel (surlignage creux via l'hôte). Cette recette complète n'est
-DONC PAS hermétique. Les neuf ciblés et e2e_code_sync (HashEmbedder) ainsi que
-e2e_embarqueur_a_la_demande (fixturePython) sont privés. Aucun de ces témoins ne
-remplace les lectures réelles ou la lib/NAV, et aucun filtre ne doit faire dire
-VERT à une suite amputée. L'orchestration doit cadrer une phase privée ou un
-complément coordonné ; le lanceur complet reste inactif jusque-là.
+Clarification de l'orchestration : « pas de service partagé » interdit de
+modifier, redémarrer ou s'approprier les services ; les appels canoniques
+prévus vers7878/7879 sont autorisés après GO exact et coordination au vrai
+point. Aucun accès aux bases de Lucie ou à son API7970. Le slot PG de fixture
+rag3weaver_test doit aussi être coordonné, jamais reset/DROP de données d'autrui.
+
+Le pilote complet joue d'abord les neuf ciblés, puis publie
+`canonical-coordination-request.json` et attend le feu de coordination courant.
+Ce point ne réserve aucun créneau à l'avance et reste dans le même délai5400 :
+aucun reset pendant l'attente. Le permis écrit atomiquement après coordination
+avec Recherche et le propriétaire du slot PG nomme la source exacte, les deux
+adresses et la seule base de fixture. Une permission ancienne ne vaut pas.
+Les champs du permis sont `source`, `stage: "canonical"`, `services` (les deux
+adresses de la demande), `postgres_fixture: "rag3weaver_test"` et
+`coordinated: true`. Le fichier s'appelle `canonical-coordination-grant.json`.
+
+Le pilote relève /sante avant la passe, puis après même en cas d'échec ; il
+contrôle modèle/dimension/non-factice et invariance des identités. La passe
+reste intégrale : code_sync/lectures/activation, F5/preuve/lib/NAV. Le privé
+ne s'autoqualifie pas globalement et aucun modèle factice ne remplace le témoin
+BGE réel. RESULT VERT n'est écrit qu'après l'intégralité des contrôles. Aucune
+nouvelle pose, aucun fournisseur réel démarré, aucun arrêt de service.
+
+## Commande et couple à geler
+
+Depuis le W PC synchronisé à la source exacte revue, lancement futur seulement
+après GO couple de l'orchestration :
+
+```bash
+bash /home/lucied/git_workspaces/cx-rate-key/docs/embarquement/16-11-2026/rate-key/run-qualification.sh SOURCE_SHA_COMPLET
+```
+
+Le couple est constitué du commit source complet et du SHA256 du fichier
+`rate-key/qualify.py` de ce commit ; le shell et le profil SDK sont également
+empreintés. Leurs valeurs exactes sont transmises à l'orchestration après le
+push. Ce document ne s'auto-attribue aucun créneau. Source et pilote ne changent
+plus après admission sans arrêt/relecture et nouvel encadrement explicite.
