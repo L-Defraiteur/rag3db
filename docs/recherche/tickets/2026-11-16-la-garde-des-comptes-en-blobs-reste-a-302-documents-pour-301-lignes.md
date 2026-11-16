@@ -122,3 +122,9 @@ Lecturestatique PGpg_receipt.py f142db8211fef0577de8c363ade058065f85f76d : publi
 ## Master99entrant : audit et unionNEUVE avantdiff
 
 C7master99fef92ce6ee9a0007eaf99c7c3a6a3789061c57 atterri/tourclos,4RustVertexqualifiés. APP84baseb0 nevoitplusmastercourant : conserverAPP84/T/archives8distinct11rawfigés, préparerunionbrancheWTNEUFS depuis84 sur99 aprèsfetch/auditentrants. Range-diff/modeOID/protectionmaster/4entrantstests requis avantAPPfuturepin àEmbar/G ; aucunequalificationcombinaison ni ancienF8/globalreportée. Aucunrun6000/PG/health/native/Tmutation/force/rebasebranchepubliée. Ownercommun/PGprépaindépendantecontinue,pasQfinalavantnouveaucoupleRO.
+
+## Réserve PG b554 levée bornée sur G8ddb
+
+ROstatique Recherche de8ddb87233a22eda7122c04f2b4ba8b1656577550 : aprèsdernierfsync validate_current puisphase/clockultimesavantreturn ; loaderrefusalavantETaprèsraw. Réservefinalpub/JSONrefuséLEVÉE CEfinalseul. TroisSHArecalculésde69c498b1ac38d80d4976144fea79ddbfa7d3a34ea8ce7dae1d9e4a457aeed6/f9496688a506085562a071ce25827a2a683bccd457c9edf6e944e228b7c29328/2907a86d971770275b9ff6291e9bffebdf4467d23c7c59ff2015ae6a3fb9c864.25CPUownerNONREJOUÉS ici,aucunSQL/proc/native. OutilPGSQLréel/HOLDmaintenu,modulpur/contratnequalifiepastransport. Sourcefutureglobale636nouvelleunion99audit/ROHotfixfavorables,ancien84/T8-11intacts. Commontransport/ownerfinal àporterSTRICTdansnouveaupilotebase636avantQ/RO/GO6000distinct.
+
+Prévoir garde explicitemastercourant au prochainpilote : merge-base==BASE seul restevrai mêmequandorigin/masteravance. Exiger aussiorigin/master==BASEpinnée lorsdesguardsprepa/run/final,avanttouteadmission. AucunGO/correction d'ancienne333/Q2déduits ; regrouperaveclecouplefinal.
