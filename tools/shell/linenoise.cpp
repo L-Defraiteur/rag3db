@@ -906,6 +906,12 @@ static int getCursorPosition(int ifd, int ofd) {
     int cols, rows;
     unsigned int i = 0;
 
+    // Only a terminal answers ESC[6n. On a pipe or a file, the reply would be read from the script
+    // itself: the bytes not yet buffered by stdio, up to the first 'R', were stolen from the input
+    // (16 Nov. 2026, "CHECKPOINT;\nCREATE" read "CHECKPOIEATE").
+    if (!isatty(ifd) || !isatty(ofd))
+        return -1;
+
     /* Report cursor location */
     if (write(ofd, "\x1b[6n", 4) != 4)
         return -1;
