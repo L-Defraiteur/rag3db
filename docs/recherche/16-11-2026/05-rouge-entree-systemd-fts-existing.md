@@ -25,3 +25,5 @@ Témoins hermétiques ajoutés avant essai : le vrai launch.sh exécuté contre 
 Publication du correctif+témoins AVANT exécution : `78437ce0a6`. Puis `python3 -B .../test_launch.py` : **2 fonctions vertes**, 7 cas (argv + profil valide + cinq refus), 0.019s. Aucun appel au vrai poste/systemd/Cargo ; aucun relancement natif. Source produit et pilote inchangés depuis cette publication ; cette ligne rapporte uniquement les petits témoins.
 
 Préflight avant deuxième entrée : le superviseur commun vérifie son argv comme `python3 confiner_validation.py lancer` ; retirer `-B` devant ce script préserve cette signature existante. `-B` reste autorisé devant le driver seulement. Témoin argv exact adapté avant essai, aucune entrée réelle effectuée avec la forme précédente. Aucun changement de budget/profil/source.
+
+Repassage hermétique avant entrée v2 : code `3dbcef4d40a520c0fc1a16750f01d4338507290a`, 2 fonctions/7cas VERTS en0.017s, profil et signature common inchangés ; source187 toujours figée. GO distinct C7 reçu pour1200 après poste ; preuves/control v2 neufs, aucun écrasement v1.
