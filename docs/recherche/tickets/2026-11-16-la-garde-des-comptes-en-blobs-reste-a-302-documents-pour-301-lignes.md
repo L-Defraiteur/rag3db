@@ -136,3 +136,14 @@ Prévoir garde explicitemastercourant au prochainpilote : merge-base==BASE seul 
 ## Contrôle neuvebranche r4 base636 et septièmepin, avantdiff
 
 Nouvellebranchecx-recherche-fts-generation-global-pilot-r4 depuis636union99 ; produitcontrôledoitresterEXACT636. Réserves/docs/témoinsCPUhistorique r3 reportésappendonly,sourceAPPfuture636/BASE99 etguardorigin/master==BASEexplicite avantrun/final pournepasaccepterunstalemasterparmergebase. Common6322fichiersSTRICT (transporta851298893cc45477290a0368866374655db84902c8883f27ae40fb67b2217ce) +G8ddb3sourcesSTRICTpréparablesenrepo, PASQfinaltantque2wrappersownerfinalnonpubliés/qualifiés. transport_sha256est7epin avantlazyimport ; témoinfictiffichiersàétendreavantfix. AucunSQL/HTTP/PG/natif/Cargo/targetmutation/ancienGO. NouveauQ/P/Sàfigeraprèscompositiontotale+RO ettoolPGHOLD conservé.
+
+## Portage finalowner443/commonactualisé, avantdiffcouple
+
+Embarfinal443b5a039cc2a3ff11705b0ebaa5bfa6577d6b0e publié/39CPUownerverts
+(22global17common),0réseau/proc/SQL. CopierSTRICT4fichiersowner+test/common+test ;
+owner9d308b5bd2d1eb44dca02da8d02f8cce4a2a7717e57a246301b468c142bf6b8d,
+commonedf45f73bf97d21f2a0caab4d6e07a7d01f807fba8310c9006f442159e2bc2a6
+remplacea851historique. TroisG8ddb inchangés de69/f949/2907. APP636/BASE99
+restentfigés/produitcouplevide ;C7autoriseCPU60failfastAPRÈSpubcode/témoins
+composés, pasHTTP/SQL/PG/native. AprèscompositionCPU46attendus(22+17+7) :
+sourcefinal/pinsQv4metadataSEULE puisROtotales/GOdistinct,PGTOOLHOLDmaintenu.
