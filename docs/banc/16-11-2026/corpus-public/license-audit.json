@@ -30,5 +30,18 @@
       "packages/vuetify/"
     ],
     "evidence": "Package LICENSE.md MIT and package.json license=MIT. Unlicensed-at-root docs package not silently included."
+  },
+  "github.com/curl/curl@2ba56e30f8ccd18c35a83761d51bcf04b32e829b": {
+    "license_id": "curl",
+    "license_path": "COPYING",
+    "license_sha256": "82f2f4427d6545ee5aaac4f0b80428da6cc8ba41c2cf5da3a03680ec327b9681",
+    "allowed_prefixes": [
+      "lib/",
+      "src/",
+      "tests/",
+      "include/",
+      "docs/"
+    ],
+    "evidence": "Root COPYRIGHT AND PERMISSION NOTICE matches SPDX curl (https://spdx.org/licenses/curl.html); third party/generated excluded."
   }
 }
