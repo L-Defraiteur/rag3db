@@ -27,3 +27,11 @@ Dans qualify_green.py, result_file vérifie time.monotonic après open et avant 
 Avant GO, contrôler aussi l’horloge après flush/fsync, en gardant fichier/valeur retournée/exit cohérents et en refusant tout vert tardif. Conserver le témoin CPU post-open existant et ajouter une preuve rouge puis verte pour fsync franchissant END selon une autorisation CPU distincte ; aucun test lancé par cette revue. Cette réserve est pertinente ici parce que le pilote peut désormais retourner0, contrairement au collecteur de rouges qui rendait toujours1.
 
 Pas d’autre blocage statique repéré dans le périmètre. Publier le correctif et les pins PC/Q finaux, puis RO delta ; aucun GO600/795 implicite. Ni Vertex/D6/F8global, libentière/NAV/service/master ou fermeture du ticket qualifiés. Aucun Cargo/ELF/procscan, modèle, service, base ou nouvelle autorité lancé par Banc.
+
+## Delta9f3c9bcad4 : réserve Banc levée avant pin final
+
+APP742 inchangée, pilote exact `9f3c9bcad4ab75d77320a6841b4653f11d874c18`. Le delta de doc-bac-green depuis0f1167 ne touche que result_file (cinq lignes) et son témoin réel (douze lignes) ; le reste de la revue totale demeure applicable. AST2 seulement, sans exécution.
+
+Après flush/fsync, result_file relit l’horloge ; un statut vert dépassant sa deadline devient UNEXPECTED_FAILURE. Le même fichier créé exclusivement est seek/truncate/réécrit/flush/fsync, puis cette même valeur est retournée. Compose l’imprime et retourne1 car elle n’est plus GREEN_SETUP_TARGETED_ONLY. Le témoin appelle la vraie fonction avec fsync réel instrumenté pour faire franchir END, puis compare fichier/valeur/exit attendu. Le rouge avant correction et11CPU verts après publication sont rapportés par le porteur, pas rejoués dans cette revue.
+
+**Réserve73ba levée pour ce delta exact ; aucun autre blocage statique repéré dans le périmètre déjà relu.** Cela ne qualifie pas encore un paquet PC/Q final qui n’a pas été repinné. Les anciennes préparations restent historiques et non lancées ; les autres RO regroupées du porteur peuvent encore influer sur le pin final. Nouvelle configuration/copies exactes à publier et relire, puis GO distinct C7 ; aucun Cargo/natif/proc/autorité/service/DB lancé par Banc.

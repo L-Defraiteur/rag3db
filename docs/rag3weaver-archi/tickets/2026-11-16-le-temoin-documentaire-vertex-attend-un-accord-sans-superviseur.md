@@ -103,3 +103,6 @@ GO ou échéance13nov/rouge223 réactivé ; ticket reste ouvert.
 ## RO Banc du pilote vert0f1167 / APP742
 
 [Rapport17](../../banc/16-11-2026/17-ro-pilote-vert-archi-bac.md) : structure600/795, deux artifacts/ledger2postes avant exacts et assertions SandboxHEAD cohérentes. Une réserve groupée avant GO : contrôler après flush/fsync du résultat final et refuser un vert tardif avec fichier/retour/exit concordants. Porteur Archi, publier delta/pinsQ et preuve CPU sous autorisation distincte ; préparation PC non encore qualifiée ici. Aucun run par Banc, ticket global ouvert.
+
+
+Delta9f3c9bcad4 relu par Banc : réserve postfsync73ba levée, vraie fonction réécrit le résultat tardif en échec et compose retourne1 sur la même valeur. Complément rapport17 ; aucun autre blocage statique repéré, mais Q/pins finaux restent à publier/revoir après regroupement des RO. Aucun test natif ou CPU relancé par Banc, aucun GO déduit.
