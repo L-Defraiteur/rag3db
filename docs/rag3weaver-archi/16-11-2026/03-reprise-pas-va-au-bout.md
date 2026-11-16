@@ -48,3 +48,9 @@ Préparation uniquement : aucun Cargo/lourd nouveau lancé après le pin dans ce
 ## Admission C7 et lanceur concret
 
 C7 a accepté la recette305bb231ec, un slot Rust PC, extérieur7200/portée7100, suite exacte+F8/liblarge/NAV/Vertex réellement joué. Lanceur source [qualify.py](pas-va-au-bout/qualify.py) publié AVANT exécution ; il refuse source/script/cache/gitlink différents, P/T existants et toute ancienne lib. Copie hors W, preuve source et hash lib, résumé produit exclusivement par vraie passe, premier FAILED/ROUGE observable arrêté avec preuves puis nettoyage des seuls descendants par confineur. Aucun lancement n’est décrit comme déjà réussi. Fresh capacité immédiatement avant admission ; TSan et Recherche prioritaires selon C7. Défaillance = STOP/diagnostic sans retry/master.
+
+## Refus avant admission : erreur dans la commande, pas de qualification
+
+Première commande PC : argument saisi `419fe72b3a6079a3a9ef1d96cf326b3b8d1509dc`, alors que HEAD publié et lu était `419fe72b3a6a3e33e017154473e8616784f123a8`. Le lanceur a refusé sur guard/égalité HEAD, avant P, T, timeout, poste et reçu. Aucun Cargo ni suite ni calcul lancé. Diagnostic : erreur de transcription du SHA complet dans l’appel, pas une erreur de produit ou du lanceur ; ne jamais reconstruire un suffixe à partir d’un hash court.
+
+Contrôle RO PC après refus : HEAD exact ci-dessus, status propre, P `cx-archi-pas-va-au-bout-r2-59ac-pass1` et T `target-cx-archi-pas-va-au-bout-r2` tous deux absents ; seul TSan listé lourd1/4. Sortie du refus conservée dans la conversation de lancement et signalée C7 avant toute suite. Aucun résultat rouge produit ni vert de qualification déduit. Lanceur et produit inchangés ; pour une future commande, SHA complet relu de la source exacte publiée et reporté sans transcription manuelle. Aucune relance à cette publication.
