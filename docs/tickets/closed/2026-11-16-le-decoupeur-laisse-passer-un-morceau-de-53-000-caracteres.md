@@ -1,6 +1,6 @@
 # Le découpeur laisse passer un morceau de 53 000 caractères
 
-- **État** : ouvert (16 novembre 2026)
+- **État** : fermé (16 novembre 2026, ED) — `Chunker::chunk_lines` coupe une ligne plus longue que `max_size` en cœurs d'au plus `max_size` octets, sans contexte, et borne le contexte de chaque côté à `max_size` ; témoin `chunker::tests::a_line_longer_than_the_chunk_size_is_cut_and_the_cores_give_back_the_text` sur les cinq fichiers du banc et une ligne de 53 000 caractères, ROUGE sur 9ee1848fa (« copy_edge_case.test: a chunk of 53294 bytes ») puis vert. Les morceaux déjà posés d'une base ne changent qu'à la réécriture de leur contenu.
 - **Famille** : produit
 - **Gravité** : moyenne. Un morceau bien au-delà de la taille de chunk se forme. L'embarquement le
   coupe désormais au plafond du service, mais ce qui dépasse n'est pas cherchable par le vecteur.

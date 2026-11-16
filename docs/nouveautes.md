@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 16 novembre2026 — **Une ligne très longue ne fait plus un morceau géant.** Le découpage du code par lignes coupe une ligne plus longue que la taille d'un morceau (1 500 caractères pour le code) en morceaux de cette taille, et le contexte autour d'un morceau ne dépasse plus cette taille de chaque côté. Un fichier de données d'une ligne faisait un morceau de 53 000 caractères, que le vecteur ne savait pas chercher. Le code ordinaire se découpe comme avant ; une base déjà indexée garde ses anciens morceaux jusqu'à la réécriture de leur contenu.
+
 - 16 novembre2026 — **Un texte trop long ne fait plus tomber l'embarquement de tout son lot.** Depuis le 15 au
   soir, un seul texte de plus de 12 000 caractères (un fichier de données d'une ligne énorme) faisait refuser par
   le service chaque lot de 512, et un index neuf du dépôt restait sans aucun vecteur. Désormais, le client coupe
