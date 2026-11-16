@@ -54,3 +54,36 @@ la vraie chaîne enfant est nonqualifiée ; assertion rouge conservée avant
 fix. RAW horsW `cx-archi-doc-bac-registration-cpu-red-r1`, aucun Cargo/PID/
 DB/natif. Le refus Cargo réel précédent prouve déjà le mauvais target ; ce
 CPU isole l'autre problème qui aurait donné un enfant à zéro test.
+
+## Montage corrigé, préparation de reprise sans reset
+
+Source223b7f55cb publiée après ce rouge : seule chaîne enfant Rust qualifiée,
+setupsBac strictement inchangés. Pilote mêmebranche : --teste2e, NAMESenfant
+qualifié, artifactJSONtarget.name=e2e. Les quatre assertions portent sur les
+vrais Cargo.toml/main/source/constructeur, pas une table parallèle.
+
+Arbitrage C7 : DEUX builds incrémentaux corrigés sur223 à préparer, aucun
+réemploi de l'ELF15d comme nouvel ELF223 ni observateur Cargo inventé pour
+reconstruire les sept champs historiques absents. Les six entrées
+Cargo.toml/Cargo.lock/build.rs/src/lib.rs/teammate_tests/commonhelper sont
+modeOIDidentiques49↔223 ; tout produit hors du seul fichier e2e_equipier
+est identique. Cela documente la portée du correctif, pas une qualification
+du libELF historique comme source223. Les deux nouveaux artifacts/prefixes
+et leur ledger devront être réellement acquis sous futur GOdistinct.
+
+Reprise préparée sous mêmes ENDoriginaux : P/Q/F r2 neufs, T UNINCHANGÉ,
+ancienneportéeROUGE1TERMINE/39SHA/ELF15d/copies et58ownedgone exigés avant
+admission. Git-only049→223 avec vraie archivephysique049/admin/gitlink,
+sixentrées+diffproduit et cache COMPLET pré/postGitidentiques ; garder
+1bd/EA/Q1/anciencontrôleurdde6. Script prepare_git.py --reprise, pas la
+première transition rejouée et pas de purge.
+
+Après préparation/pin/Q2 et ROdelta seulement : nouveauGO doit appeler
+le même lanceur, qui calcule avantPopen `floor(ENDsoftoriginal-now)-3` et
+emploie cette DURÉERÉELLE au timeout ET politique. Après vrai poste,
+common≤MIN(1800,floor(ENDsoftoriginal-now)-15), refus≤60 ; phase/final
+toujours MINENDoriginaux. START1195292.902100429 n'est jamais remplacé.
+Tout manque de temps reste refus, sans nouvelle fenêtre1935 et sans rerun.
+
+Sixcontrats+quatreenregistrements mis à jour PUBLIÉS avant essai CPUvert.
+À cette publication : tous NONREJOUÉS depuis le correctif, zéro natif.

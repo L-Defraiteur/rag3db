@@ -82,5 +82,10 @@ class Contracts(unittest.TestCase):
         self.assertEqual(q.final_end(1900.,launch,1899.),2019.)
         with self.assertRaises(AssertionError):q.final_end(1900.,launch,1901.)
         with self.assertRaises(AssertionError):q.final_end(2500.,launch,2021.)
+        with patch.object(q.controller,'OUTER_SECONDS',123):
+            limited=q.controller.commands(control,pilot)
+            self.assertEqual(limited['outer'][3],'123s')
+            with patch.object(q.controller,'sha',return_value='script-hash'):
+                self.assertEqual(q.controller.policy(control,pilot)['roles']['watchdog']['argv'],limited['outer'])
 
 if __name__=='__main__':unittest.main(failfast=True)

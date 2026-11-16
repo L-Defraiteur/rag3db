@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Proposed 1800-second, two-ELF, two-expected-red fixture qualification."""
 from pathlib import Path
-import hashlib, importlib.util, json, mmap, os, re, shutil, stat, subprocess, sys, time
+import hashlib, importlib.util, json, math, mmap, os, re, shutil, stat, subprocess, sys, time
 import cache_state
 import contracts as proof
 import controller_policy as controller
@@ -9,8 +9,8 @@ import source_proof as source
 
 R=source.R;W=source.W;C=W/'extension/rag3weaver';APP=source.APP
 SESSION_TARGET=proof.SESSION;T=proof.T
-P=R/'cx-archi-doc-bac-red-r1';Q=R/'cx-archi-doc-bac-red-controller-r1'
-F=R/'bcr1'
+P=R/'cx-archi-doc-bac-red-r2';Q=R/'cx-archi-doc-bac-red-controller-r2'
+F=R/'bcr2'
 OLD_W=Path.home()/'git_workspaces/rag3db-cx-archi-pas-va-au-bout-r2'
 REL='docs/rag3weaver-archi/16-11-2026/doc-bac-red/qualify_red.py'
 BUDGET=1800
@@ -31,16 +31,24 @@ def cfg():return json.loads((Q/'configuration.json').read_text())
 
 def configure_controller():
     for name in ['R','W','C','T','OLD_W','P','Q','REL']:setattr(controller,name,globals()[name])
+    if (Q/'launch.json').exists():controller.OUTER_SECONDS=json.loads((Q/'launch.json').read_text())['outer_seconds']
 
 def check_transition():
     transition=json.loads((source.TRANSITION/'transition.json').read_text())
-    assert transition['source']==APP and transition['old_source']==source.OLD_APP
+    assert transition['source']==proof.PREVIOUS_APP and transition['old_source']==source.OLD_APP
     assert transition['owner']==str(C) and not transition['cargo_invoked'] and not transition['cache_guard_invoked']
     assert sha(source.TRANSITION/'frozen-source.json')==transition['archive_sha256']
     assert sha(source.TRANSITION/'new-source.json')==transition['new_source_sha256']
     frozen=json.loads((source.TRANSITION/'frozen-source.json').read_text())
     assert frozen['head']==source.OLD_APP
     source.verify_archive(frozen)
+    reprise=json.loads((proof.REPRISE/'transition.json').read_text())
+    assert reprise['source']==APP and reprise['previous_source']==proof.PREVIOUS_APP
+    assert not reprise['cargo_invoked'] and not reprise['cache_guard_invoked']
+    assert sha(proof.REPRISE/'frozen-source.json')==reprise['source_archive_sha256']
+    assert sha(proof.REPRISE/'new-source.json')==reprise['new_source_sha256']
+    archive=json.loads((proof.REPRISE/'frozen-source.json').read_text());assert archive['head']==proof.PREVIOUS_APP
+    source.verify_archive(archive)
     return transition
 
 def guard(config):
@@ -54,8 +62,10 @@ def guard(config):
     for name,record in config['tools'].items():assert sha(Path(record['path']))==record['sha256'],name
     for name,digest in SDK.items():assert sha(R.parent/'rag3db-libs'/LIB/name)==digest
     assert sha(source.TRANSITION/'transition.json')==config['transition_sha256']
+    assert sha(proof.REPRISE/'transition.json')==config['reprise_sha256']
     check_transition()
     assert proof.archived_green(require_original=False)==config['old_green']
+    assert proof.previous_refusal(require_original=False)==config['previous_refusal']
     assert sha(proof.RED/'frozen-old-cache.json')==config['cache']['frozen_old_sha256']
     cache_state.verify_frozen(SESSION_TARGET,T,json.loads((proof.RED/'frozen-old-cache.json').read_text()))
     cache_state.require_identity(T,config['cache']['identity'])
@@ -135,7 +145,7 @@ def artifact(label,text):
     for line in text.splitlines():
         try:row=json.loads(line)
         except ValueError:continue
-        name='rag3weaver' if label=='lib' else 'e2e_equipier'
+        name='rag3weaver' if label=='lib' else 'e2e'
         if row.get('reason')=='compiler-artifact' and row.get('target',{}).get('name')==name and row.get('profile',{}).get('test') and row.get('executable'):
             rows.append(row)
     assert len(rows)==1 and sorted(rows[0]['features'])==FEATURES,'wrong test artifact or features'
@@ -158,17 +168,19 @@ def driver():
     subprocess.run([sys.executable,str(Q/'confiner_validation.py'),'verifier'],check=True)
     receipt=Path(os.environ['RAG3WEAVER_VALIDATION_RECU']);auth=json.loads(receipt.read_text())
     launch_record=json.loads((Q/'launch.json').read_text());end=phase_end(auth['echeance'],launch_record)
-    assert auth['etat']=='actif' and json.loads((receipt.parent/'recette.json').read_text())['delai']==BUDGET
+    common_budget=json.loads((receipt.parent/'recette.json').read_text())['delai']
+    assert auth['etat']=='actif' and 60<common_budget<=BUDGET
+    assert auth['echeance']<=launch_record['soft_end']
     cg=(Path('/proc/self/cgroup').read_text().strip().split('::',1)[1]);assert cg==auth['cgroup']
     limits={k:(Path('/sys/fs/cgroup'+cg)/k).read_text().strip() for k in ['memory.max','memory.high','cpu.max']}
     assert limits['memory.max']=='34359738368' and limits['memory.high']=='max'
     quota,period=limits['cpu.max'].split();assert quota!='max' and 0<int(quota)<=8*int(period)
-    save('authority-path.json',dict(path=str(receipt),initial=auth['echeance']-BUDGET,
+    save('authority-path.json',dict(path=str(receipt),initial=launch_record['whole_start'],common_started=auth['echeance']-common_budget,
          common_deadline=auth['echeance'],deadline=end,whole_start=launch_record['whole_start'],
          soft_end=launch_record['soft_end'],hard_end=launch_record['hard_end'],limits=limits))
-    scan=fresh(config,config['old_green']['old_cgroup'],owned_cgroup=cg);save('cache-after-poste-scan.json',scan)
-    proof.owned_gone(config['old_green']['authority_path'])
-    assert proof.archived_green()==config['old_green']
+    scan=fresh(config,config['previous_refusal']['old_cgroup'],owned_cgroup=cg);save('cache-after-poste-scan.json',scan)
+    proof.owned_gone(config['previous_refusal']['authority_path'])
+    assert proof.previous_refusal()==config['previous_refusal']
     assert proof.cache_contract()==config['cache'],'cache changed after preparation'
     assert not F.exists() and not F.is_symlink()
     F.mkdir(mode=0o700);(F/'tmp').mkdir(mode=0o700)
@@ -190,7 +202,7 @@ def driver():
     artifacts={}
     for label in ['lib','e2e']:
         guard(config)
-        selection=['--lib'] if label=='lib' else ['--test','e2e_equipier']
+        selection=['--lib'] if label=='lib' else ['--test','e2e']
         command=['bash','scripts/cargo_magasin.sh','test',*selection,'--no-default-features',
                  '--features',','.join(FEATURES),'--locked','--offline','--no-run','--message-format=json-render-diagnostics']
         rc,text=run('compile-'+label,command,env,end,600)
@@ -258,8 +270,11 @@ def compose(pilot):
     try:
         guard(config)
         # The outer timeout wraps poste, not its immediate child: verify the real ancestry.
-        scan=fresh(config,config['old_green']['old_cgroup']);save('before-scope-scan.json',scan)
-        command=[sys.executable,str(Q/'confiner_validation.py'),'lancer','--delai',str(BUDGET),
+        scan=fresh(config,config['previous_refusal']['old_cgroup']);save('before-scope-scan.json',scan)
+        remaining=min(BUDGET,math.floor(launch_record['soft_end']-time.monotonic())-15)
+        assert remaining>60,'insufficient original remaining time after poste'
+        save('remaining-after-poste.json',dict(common_budget=remaining,observed=time.monotonic(),original_soft=launch_record['soft_end'],original_hard=launch_record['hard_end']))
+        command=[sys.executable,str(Q/'confiner_validation.py'),'lancer','--delai',str(remaining),
                  '--preuves',str(P/'supervision'),'--',sys.executable,str(Q/'qualify_red.py'),'--driver',pilot]
         code=subprocess.run(command,cwd='/var/tmp').returncode
         final_started=time.monotonic()
@@ -293,7 +308,7 @@ def prepare(pilot):
     for path in [P,Q]:
         assert not path.is_symlink() and (not path.exists() or (path.resolve()==path and path.stat().st_uid==os.getuid()))
     if P.exists():assert not list(P.iterdir()),'proof root must remain empty before launch'
-    old=proof.archived_green();proof.owned_gone(old['authority_path']);cache=proof.cache_contract()
+    old=proof.archived_green(require_original=False);prior=proof.previous_refusal();proof.owned_gone(prior['authority_path']);cache=proof.cache_contract()
     transition=check_transition();assert transition['old_proof']==old
     P.mkdir(mode=0o700,exist_ok=True);Q.mkdir(mode=0o700,exist_ok=True)
     copies={}
@@ -308,6 +323,7 @@ def prepare(pilot):
         file=Path(shutil.which(name)).resolve();tools[name]=dict(path=str(file),sha256=sha(file))
     config=dict(app=APP,pilot=pilot,control=str(control),copies=copies,tools=tools,
                 transition_sha256=sha(source.TRANSITION/'transition.json'),old_green=old,cache=cache,
+                reprise_sha256=sha(proof.REPRISE/'transition.json'),previous_refusal=prior,
                 budget=dict(common=BUDGET,term=TERM,kill_grace=WHOLE-TERM,hard=WHOLE,final_cap=FINAL))
     if (Q/'configuration.json').exists():assert cfg()==config
     else:proof.save(Q/'configuration.json',config)
@@ -321,17 +337,21 @@ def launch(pilot):
     config=cfg();assert config['pilot']==pilot;guard(config)
     allocation=os.environ['RAG3WEAVER_C7_ALLOCATION'];assert allocation.strip()
     assert not list(P.iterdir()) and not (Q/'launch.json').exists()
-    assert proof.archived_green()==config['old_green'] and proof.cache_contract()==config['cache']
+    assert proof.previous_refusal()==config['previous_refusal'] and proof.cache_contract()==config['cache']
     identity=controller.snapshot(Path('/proc')/str(os.getpid()));assert identity['stable']
     runtime_root=Path('/run/user')/str(os.getuid());bus=runtime_root/'bus'
     assert runtime_root.resolve()==runtime_root and bus.resolve()==bus and bus.is_socket() and bus.stat().st_uid==os.getuid()
     env={k:os.environ[k] for k in ['HOME','USER','LOGNAME','PATH','LANG','LC_ALL','CARGO_HOME','RUSTUP_HOME'] if k in os.environ}
     env.update(POSTE_MEM_MAX='32G',RAG3WEAVER_BUILD_MEMORY_HIGH='0',DBUS_SESSION_BUS_ADDRESS='unix:path='+str(bus),XDG_RUNTIME_DIR=str(runtime_root))
-    command=controller.commands(control,pilot)['outer']
+    original=config['previous_refusal']['launch']
     with (P/'supervision.log').open('x') as output:
-        started=time.monotonic()
+        started=original['whole_start']
+        remaining=math.floor(original['soft_end']-time.monotonic())-3
+        assert remaining>60,'original global deadline expired or too near'
+        controller.OUTER_SECONDS=remaining
+        command=controller.commands(control,pilot)['outer']
         proof.save(Q/'launch.json',dict(identity=identity,allocation=allocation,expected_reds=list(proof.NAMES.values()),
-                   whole_start=started,soft_end=started+TERM,hard_end=started+WHOLE))
+                   whole_start=started,soft_end=original['soft_end'],hard_end=original['hard_end'],outer_seconds=remaining))
         return subprocess.run(command,cwd='/var/tmp',env=env,stdout=output,stderr=subprocess.STDOUT).returncode
 
 if __name__=='__main__':

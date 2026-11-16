@@ -18,8 +18,15 @@ GREEN_ELF='734f6547e22bcdbef95bae0956cf68a7df20654ccc82092df63861bd1922bffa'
 EA_TRANSITION=R/'cx-doc-green-transition-r1'
 NAMES={
     'lib':'daemon_host::teammate_tests::task_fixture_uses_the_declared_private_sandbox_before_add',
-    'e2e':'documentation_fixture_uses_the_declared_private_sandbox_before_add',
+    'e2e':'e2e_equipier::documentation_fixture_uses_the_declared_private_sandbox_before_add',
 }
+PREVIOUS_APP='049153945e318784353c9cbd61e17beee67fa2d6'
+PREVIOUS_PILOT='dde6cfb9c06bdba6340ef05e0a7a6e02ebe1539e'
+PREVIOUS_P=R/'cx-archi-doc-bac-red-r1'
+PREVIOUS_ARCHIVE=R/'cx-proofs-doc-bac-red-unexpected-r1'
+REPRISE=R/'cx-doc-bac-registration-reprise-r1'
+ARCHIVE049=Path.home()/'git_workspaces/rag3db-cx-archi-doc-049-proof-r1'
+SIX=['Cargo.toml','Cargo.lock','build.rs','src/lib.rs','src/daemon_host/teammate_tests.rs','tests/common/documentation_fixture.rs']
 CHILD_MARKER='DOCUMENTATION_PRIVATE_SANDBOX_NOT_CONNECTED_BEFORE_ADD_FILES'
 PARENT_MARKER='DOCUMENTATION_PRIVATE_SANDBOX_SETUP_REFUSED'
 
@@ -85,6 +92,43 @@ def cache_contract():
     cache_state.require_size(SESSION)
     return dict(identity=identity,owner=str(C),frozen_old_sha256=sha(RED/'frozen-old-cache.json'),
                 active_inventory=cache_state.inventory(T,None))
+
+def source_equivalence():
+    changed=subprocess.check_output(['git','-C',str(W),'diff','--name-only',PREVIOUS_APP,source.APP,'--','extension'],text=True).splitlines()
+    assert changed==['extension/rag3weaver/tests/e2e_equipier.rs'],changed
+    records={}
+    for name in SIX:
+        path='extension/rag3weaver/'+name
+        before=source.git(W,'ls-tree',PREVIOUS_APP,path);after=source.git(W,'ls-tree',source.APP,path)
+        assert before==after and before, name
+        records[name]=after
+    return records
+
+def previous_refusal(require_original=True):
+    assert sha(PREVIOUS_ARCHIVE/'manifest.json')=='c1002d92c2d3c96b4c206f0961a8d23db66dfbfa3e16bb6120afd32a9a3ffc05'
+    rows=json.loads((PREVIOUS_ARCHIVE/'manifest.json').read_text());assert len(rows)==39
+    for row in rows:
+        file=PREVIOUS_ARCHIVE/row['path'];assert file.stat().st_size==row['size'] and sha(file)==row['sha256']
+    indexed={row['path']:row for row in rows}
+    for name in ['first-red.json','unexpected-red.json','post-failure-lib.json','selected-environment.json','compile-lib.command.json','compile-e2e.log']:
+        assert sha(PREVIOUS_P/name)==indexed['client/'+name]['sha256']
+    assert json.loads((PREVIOUS_P/'first-red.json').read_text())['expected'] is False
+    authority=Path(json.loads((PREVIOUS_P/'authority-path.json').read_text())['path'])
+    auth=json.loads(authority.read_text());scope=json.loads((authority.parent/'verdict.json').read_text())
+    assert auth['etat']=='termine' and scope['verdict']=='ROUGE' and scope['code']==1
+    assert not scope['restes'] and scope['nettoye'] and not Path(scope['prive']).exists()
+    for name in ['verdict.json','enfants.json']:assert sha(authority.parent/name)==indexed['supervisor/'+name]['sha256']
+    lib=json.loads((PREVIOUS_P/'post-failure-lib.json').read_text())
+    assert lib['source']==PREVIOUS_APP and lib['pilot']==PREVIOUS_PILOT
+    assert lib['sha256']=='15d3b9475d720f77aeb36fb31ebd5a7d9666ee33f72e0ee122ca038dd9456129'
+    assert sha(Path(lib['copy']))==sha(PREVIOUS_ARCHIVE/'client/lib-elf')==lib['sha256']
+    if require_original:assert sha(Path(lib['binary']))==lib['sha256']
+    launch=json.loads((PREVIOUS_ARCHIVE/'controller/launch.json').read_text())
+    assert launch['soft_end']==1197212.902100429 and launch['hard_end']==1197227.902100429
+    assert not (PREVIOUS_P/'ledger-before-witnesses.json').exists() and not (PREVIOUS_P/'runtime-permitted.json').exists()
+    return dict(authority_path=str(authority),authority_sha256=sha(authority),old_cgroup=auth['cgroup'],
+        manifest_sha256=sha(PREVIOUS_ARCHIVE/'manifest.json'),launch=launch,
+        library_sha256=lib['sha256'],library_reuse=False,six_inputs=source_equivalence())
 
 def expected_red(name, rc, text):
     assert name in NAMES.values() and rc==101, 'wrong witness or exit status'

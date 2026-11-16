@@ -3,7 +3,7 @@ from pathlib import Path
 import hashlib, json, os, stat, subprocess
 
 OLD_APP='1bd32dcd9b0cba098f64728971091c5c7b55c19e'
-APP='049153945e318784353c9cbd61e17beee67fa2d6'
+APP='223b7f55cb502deffe85584898d8fd340fd48518'
 R=Path.home()/'.cache/rag3weaver-build'
 W=Path.home()/'git_workspaces/rag3db-cx-archi-doc-supervisor-r1'
 ARCHIVE=Path.home()/'git_workspaces/rag3db-cx-archi-doc-1bd-proof-r1'

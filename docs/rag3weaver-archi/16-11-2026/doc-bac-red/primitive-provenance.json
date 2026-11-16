@@ -1,5 +1,5 @@
 {
-  "app": "049153945e318784353c9cbd61e17beee67fa2d6",
+  "app": "223b7f55cb502deffe85584898d8fd340fd48518",
   "files": [
     {
       "file": "cache_state.py",
@@ -14,36 +14,41 @@
       "source": "b12ee2a65af9d60b6264b0ececa07993fdff196a",
       "path": "docs/rag3weaver-archi/16-11-2026/doc-green/source_proof.py",
       "source_sha256": "d8ac14bb5c6bb3b69dbe682240b657097010ab666ac92a89fb1c89ef2cf1759e",
-      "prepared_sha256": "e20188fcfbf2af9f6bcdd309ce81ae9154b68d4644c1788c237b855accc1caa5",
-      "delta": "pins1bd/049, archive paths and explicit expected-head argument; tracked/admin checks unchanged"
+      "prepared_sha256": "078d05e1091cb5268a22f75ffc165ab21fd2fb887d914213cf987e306609ef85",
+      "delta": "APP223/pins/archive path and explicit expected-head; original1bd/EA archives retained"
     },
     {
       "file": "controller_policy.py",
       "source": "b12ee2a65af9d60b6264b0ececa07993fdff196a",
       "path": "docs/rag3weaver-archi/16-11-2026/doc-green/controller_policy.py",
       "source_sha256": "19125f44c9a411e9c60fb52580c0ca3a432ec0fe25c5ab3c1983b3571086f468",
-      "prepared_sha256": "861b60b7a421e6a6e71a08287bc7d2620291a242fa6443de5e64c5a8b3403867",
-      "delta": "constructor filename, launch mode and TERM1920 only; original KILLgrace15, attribution/FD/UNKNOWN checks unchanged"
+      "prepared_sha256": "9e2750f6b9f49272be86467d4819a343328e95a6deedd4c94d9f2e9b7a8b03a7",
+      "delta": "filename/mode and outer duration passed by the actual constructor from the ORIGINAL remaining window; attribution/FD/UNKNOWN checks unchanged"
     },
     {
       "file": "contracts.py",
       "source": "new test qualification wiring",
-      "prepared_sha256": "28d456dfe2ea21f57852d428a0ace565899bce207844d2209d5d5a5b9045ea4d"
+      "prepared_sha256": "1aab17349ac4e17aff99e8f80122ae8c397f822e324c37befeb53a4d8c74439d"
     },
     {
       "file": "prepare_git.py",
       "source": "new test qualification wiring",
-      "prepared_sha256": "1483b4322564dba819a99b65ea8f50c3f30f0a35afef9302c1e542f2e0415e98"
+      "prepared_sha256": "66170e2fdbfbf2ee0be66405350d946fbbbc2615a9c4c9a2172a5e6a739837c7"
     },
     {
       "file": "qualify_red.py",
       "source": "new test qualification wiring",
-      "prepared_sha256": "7cad8708d6a5dde84aebad5a347893419b5ae777e5c63918aea8ab771c5a8668"
+      "prepared_sha256": "8feed94affb7eae833aad8c203143bfbbe0e8f2ec964b9b9e2a66feb9839074f"
     },
     {
       "file": "test_contracts.py",
       "source": "new test qualification wiring",
-      "prepared_sha256": "98a09889fbccc13b3577f5f72ad8f2db442da8063dd08dea79992e5c9fe5f42a"
+      "prepared_sha256": "30b2141a8d048bab219776a5abb3f0670712ddf4d572e2a84f9687fc7e7140e3"
+    },
+    {
+      "file": "test_registration.py",
+      "source": "real Cargo/main/source/driver registration contract",
+      "prepared_sha256": "cd67b59f0a08bf1266e8224cc599939c827e4b69ecfd974427f60375dd3c3b9e"
     }
   ]
 }

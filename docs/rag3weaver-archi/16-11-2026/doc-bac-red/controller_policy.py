@@ -4,6 +4,7 @@ import hashlib, json, os, shutil, subprocess, sys, time
 
 # Filled from the actual launcher assignments, in both execution and tests.
 R = W = C = T = OLD_W = P = Q = REL = None
+OUTER_SECONDS = 1920
 
 def sha(path):
     with Path(path).open('rb') as stream:
@@ -21,7 +22,7 @@ def commands(control, pilot):
     # The launcher and the policy share these actual command assignments.
     admit = [sys.executable, str(Q / 'qualify_red.py'), '--admit', pilot]
     poste = [str(C / 'scripts/poste'), 'lourd', *admit]
-    outer = ['timeout', '--signal=TERM', '--kill-after=15s', '1920s', *poste]
+    outer = ['timeout', '--signal=TERM', '--kill-after=15s', str(OUTER_SECONDS)+'s', *poste]
     return dict(admit=admit, poste=poste, outer=outer,
                 launch=[str(control / REL), '--launch', pilot])
 
