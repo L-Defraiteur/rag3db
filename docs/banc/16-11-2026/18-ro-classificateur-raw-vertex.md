@@ -27,3 +27,9 @@ Chaque liste d’inventaire a des noms distincts et les statuts aux comptes atte
 F8 exige l’unique frontière ETAT_SUITE_E2E VERT puis exactement les huit jeux constants et verdict8/8 ; les précontrôles qui impriment aussi VERT ne sont pas pris pour les jeux. Preuve build dev présente une fois. Résumé canonique exige ordre des six sections, sept résumés de phases et fin suites jouées/`VERT` correspondant au contrat. Ces contrôles ne changent ni le statut de l’ancien composé ni les effets non observés.
 
 Aucun écart bloquant repéré pour ces RAW épinglés. L’ancienne allocation n’est pas renouvelée ; pas de composite, OAuth/F300, nouveau cloud ou master qualifié. Le ticket Vertex reste ouvert pour ses autres limites. L’inventaire post-exécution et les rehashes ELF non refaits restent des limites explicites de cette revue.
+
+## Réserves totales Mémoire reçues après cette relecture
+
+C7 transmet troisP2 sur197b et retire la candidature du classificateur : headers running0/malformés/supplémentaires non tous rejetés ; sept résumés canoniques non liés à leurs blocs (peuvent être déplacés dans NAV) ; preuve acceptant Finisheddev seul sans Checking/Compiling rag3weaver. Même ticket porteur consigné avant correction groupée et nouveaux mutants prépubliés. Aucun nouveau natif requis.
+
+L’avis ci-dessus reste strictement une concordance des RAW figés/pins et cardinalités, **pas une suffisance totale du parseur**. Les réserves reçues empêchent d’utiliser197b comme candidature suffisante jusqu’au nouveau SHA/correctifs et RO totale. Elles n’invalident pas les observations natives déjà conservées ; aucun CPU/mutant rejoué dans cette mise à jour.

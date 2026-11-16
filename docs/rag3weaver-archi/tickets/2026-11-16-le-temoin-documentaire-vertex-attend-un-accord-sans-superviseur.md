@@ -106,3 +106,6 @@ GO ou échéance13nov/rouge223 réactivé ; ticket reste ouvert.
 
 
 Delta9f3c9bcad4 relu par Banc : réserve postfsync73ba levée, vraie fonction réécrit le résultat tardif en échec et compose retourne1 sur la même valeur. Complément rapport17 ; aucun autre blocage statique repéré, mais Q/pins finaux restent à publier/revoir après regroupement des RO. Aucun test natif ou CPU relancé par Banc, aucun GO déduit.
+
+
+RO totale Banc291138a70b avant pin : --arm place bien journal/guard sous watchdog, mais le dispatch __main__ appelle configure_controller avant launch ; lecture Q/launch.json et durée OUTER_SECONDS encore avant watchdog. Test_arm appelle la fonction directe après configuration hors contexte instrumenté et ne couvre pas cette CLI. Réserve au rapport17, à traiter avec configuration pure fixe780 du lanceur/lecture seulement déjà armée + témoin CLI réel sous GOCPU distinct. Fsync9f3 reste levé ; HOLD global795, aucun run par Banc.
