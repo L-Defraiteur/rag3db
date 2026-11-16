@@ -44,3 +44,12 @@ La suite exige d'abord une décision sur ces données, sans contourner la garde.
 Source734/archives physiques/branches distantes/anciens rouges et ELF conservés.
 Incident scp cachecommun garde_worktree.py existant réécrit6f3 sans ancienSHA :
 rapport et métadonnées publiés, C7 averti ; aucune restauration spéculative.
+
+## Gel du cache commun après bilan
+
+Incident désormais suivi séparément par le
+[ticket dédié](2026-11-16-une-copie-de-garde-ecrase-un-chemin-preexistant-sans-empreinte-avant.md),
+avec appel outil et retour originaux, métadonnées/chemins exacts et recherches RO.
+Le cache commun reste gelé ; l'ancien SHA du fichier préexistant est inconnu.
+Le présent ticket reste ouvert pour les quatre WT PC ignorés nommés dans le rapport13,
+sans clean/reset ni retrait supplémentaire. Aucun autre nettoyage n'est entrepris.
