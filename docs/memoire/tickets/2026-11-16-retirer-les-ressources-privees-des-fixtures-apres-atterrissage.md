@@ -2,6 +2,10 @@
 
 - **État** : ouvert — autorisation C7 après master b0a845bb4877328eada37951c174e3d208986630.
 - **Porteur** : mémoire.
+- **Famille** : produit.
+- **Gravité** : ressources privées à retirer après livraison, sans perte des preuves.
+- **Atteignable en service** : non.
+- **Touche rag3weaver** : non, uniquement les ressources privées du lot qualifié.
 
 ## Constat et périmètre
 
