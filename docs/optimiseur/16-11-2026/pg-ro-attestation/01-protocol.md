@@ -132,3 +132,30 @@ explicitement enregistré, jamais effacé ; caller doit exiger le retour réussi
 `phase_check` fournit le contexte courant sans changer les trois bornes initiales.
 `prepare_observation()` renvoie HOLD/run_authorized=false : aucun runner natif
 réel n'existe ici, sa qualification et ses pins restent un prérequis distinct.
+
+### Dernier fsync et pièce déjà publiée puis refusée
+
+Après lien, écriture SHA et dernier fsync, le producteur revalide les pièces,
+la phase, puis l'horloge tout à la fin AVANT de retourner path/SHA. Un refus
+tardif laisse honnêtement attestation.json présent et artifact_published=true
+DANS refusal.json, jamais une réussite de fonction ni un grant. Le lecteur
+validate_attestation refuse toute présence de refusal.json AVANT et APRÈS les
+lectures de bruts. Ne pas découvrir un succès en scrutant un dossier ou un
+fichierSHA : le couple path/SHA doit venir d'un retour producteur réussi et
+des pins fournis explicitement par G/C7. Les checks phase98ab au point d'usage
+restent indispensables ; aucune atomicité globale filesystem/horloge annoncée.
+
+## État outil : observation FS PC seulement, sans chargement
+
+Recherche autorisée C7 : find_spec(psycopg/psycopg2/pg8000)→absents ; glob des
+libpq.so dans /usr/lib,/usr/lib64 et chemins Debian usuels→absent ;
+ldconfig -p rc0→aucune entrée libpq ; en-têtes libpq-fe/pg_config non relevés
+aux chemins examinés. Aucune bibliothèque/binding chargé ou connexion PG.
+Il n'existe donc pas de nouvel outil déjà disponible/pinnable démontré ici.
+Transport reste UNQUALIFIED/HOLD, pas de wire/crypto maison, extraction,
+installation, SDK, DockerAPI ou probe improvisée. Une observation RO outil
+future séparée reste requise avant exécution réelle.
+
+Le champ APP est une attente EXTERNE, jamais gravée sur84 : nouvelle union
+Recherche6365396b6323b03dc3441cb1f650c8804e53bdeb signalée, source non exécutée.
+Pilot/READY/nonce/scope/allocation futurs restent à fournir par C7/G.

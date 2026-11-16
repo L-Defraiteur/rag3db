@@ -178,12 +178,15 @@ def validate_attestation(path, expected_sha, expected_allocation, ready, now, *,
     """Charge uniquement l'artefact et ses bruts voisins, jamais une connexion PG."""
     path=Path(path).absolute()
     require(hex_value(expected_sha,64), 'missing external artifact SHA')
+    require(not os.path.lexists(path.parent/'refusal.json'), 'attestation directory was refused')
     raw=_read_regular(path,path.parent)
     require(hashlib.sha256(raw).hexdigest()==expected_sha, 'attestation SHA differs')
     receipt=decode(raw)
-    return validate_receipt(receipt,expected=expected_allocation,ready=ready,now=now,
-                            admission=admission,admitted_at=admitted_at,
-                            read_raw=lambda p:_read_regular(p,path.parent))
+    validated=validate_receipt(receipt,expected=expected_allocation,ready=ready,now=now,
+                               admission=admission,admitted_at=admitted_at,
+                               read_raw=lambda p:_read_regular(p,path.parent))
+    require(not os.path.lexists(path.parent/'refusal.json'), 'attestation refused during raw read')
+    return validated
 
 
 def prepare_observation():
@@ -246,11 +249,16 @@ def publish_observation(target, receipt, raw, *, expected, ready, clock, phase_c
             owner[field]=captured[key]
         require(not mismatches,'captured raw differs from claimed SHA')
 
-        def validate_current():
+        def current_phase():
             phase=phase_check()
             shape(phase,READY,'current ready timing')
             for key in ['issued_monotonic','admission_deadline_monotonic','common_end_monotonic']:
                 require(phase[key]==ready[key], 'original phase timing changed')
+            require(phase['active'] is True and phase['first_red'] is False, 'phase inactive or first red')
+            return phase
+
+        def validate_current():
+            phase=current_phase()
             now=number(clock())
             require(now<=number(body['evidence']['deadline_monotonic']), 'publication exceeds original whole5')
             return validate_receipt(body,expected=expected,ready=phase,now=now,
@@ -267,6 +275,10 @@ def publish_observation(target, receipt, raw, *, expected, ready, clock, phase_c
         sha=hashlib.sha256(payload).hexdigest()
         _write_exclusive(target/'attestation.sha256',(sha+'\n').encode())
         _sync_directory(target)
+        validate_current()  # dernier fsync inclus : aucune publication tardive admise
+        current_phase()
+        require(number(clock())<=number(body['evidence']['deadline_monotonic']),
+                'final publication exceeds original whole5')
         return final,sha
     except Exception as error:
         refusal=dict(verdict='RED',first_red_monotonic=clock(),reason=type(error).__name__+': '+str(error),

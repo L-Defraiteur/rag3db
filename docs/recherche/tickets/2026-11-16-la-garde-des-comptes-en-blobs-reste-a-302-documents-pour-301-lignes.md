@@ -179,3 +179,22 @@ whole5. Reprise G du même signalement, sans doublon : vrais faux CPU qui avance
 l'horloge ou posent firstred AU DERNIER fsync, avant fix. Exiger refus conservant
 les bruts et artifact_published honnête si le JSON existe déjà ; loader doit
 rejeter tout JSON publié puis accompagné de refusal.json. Aucun transport lancé.
+
+## Réserve publication traitée, outil PG toujours absent/non qualifié
+
+Témoins0960f1f4ed puisb72ea924f0 publiés AVANT fix : trois rouges
+(dernier fsync retardé, firstred après link, JSON publié puis refusé), puis un
+quatrième rouge (refusal apparaît pendant lecture raw). Journaux conservés
+final-publication-red.log et loader-late-refusal-red.log. Correctif G : checks
+après TOUT dernier fsync puis phase/horloge avant retour ; refusal marker avant
+et après loader. JSON déjà publié reste conservé avec artifact_published=true,
+aucun retour admissible et aucune réadmission par présence de fichier.
+Vingt-cinq faux CPU verts,0échec/0saut,0,010s souscap60 ; aucune probe réelle.
+
+Alternative outil demandée C7 examinée FS seulement sur PC : aucun binding
+psycopg/psycopg2/pg8000 viafind_spec, aucun libpq.so aux chemins usuels examinés,
+ldconfig -p code0 sans entrée libpq, aucun header relevé. Rien chargé ni importé,
+aucune connexion. Pas de client privé ni ABI qualifiés à déduire de ce relevé :
+TOOL_UNQUALIFIED/HOLD inchangé, aucun wire/crypto nouveau, aucune installation.
+FutureAPP6365396b6323b03dc3441cb1f650c8804e53bdeb fournie par Recherche : pins
+app/pilot restent externes, source combinée NON JOUÉE, pas de grant réanimé.
