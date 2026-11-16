@@ -1,6 +1,6 @@
 # Les journaux locaux bloquent le retrait du worktree ties
 
-- **État** : ouvert ; nettoyage arrêté avant toute suppression.
+- **État** : corrigé ; retrait du worktree source-r2 et du target réalisé après séquence autorisée, archives et garde fraîche verte.
 - **Famille** : produit
 - **Gravité** : ressources livrées conservées après refus de la garde.
 - **Atteignable en service** : non, retrait de worktree uniquement.
@@ -15,8 +15,12 @@ STOP global nettoyage comme demandé : zéro W/T/branche retiré, pasforce/prune
 
 ## Deux journaux désormais archivés fidèlement, CLI sans capacité correspondante
 
-[RO CLI et inventaire](../16-11-2026/12-ro-cli-garde-et-archives-journaux.md) :575+46629octets, UID/GID1000, mode0644, ignorés.gitignore89, aucuneentréeindex. ArchivesPC/portableTARpax SHA c9909c48bc190aa4914dfdc55924eb036ccee44be9983c1a4c48731b5df3cb52, métadonnées etSHAunitaires comparés auxoriginauxinchangés. Mais6f3 refuse inconditionnellementstatusignored et ne compare --archive quepouradministrations ; pasd'optionarchive-source. Zérorejeuaveugle/aucunnettoyage : VERTréel impossible avec seules copiesexternes tantqueoriginauxprésents. Suite àarbitrerC7sansforcer/modifier6f3 ; aucunegarantieinventée.
+[RO CLI et inventaire](../../everything-declarative/16-11-2026/12-ro-cli-garde-et-archives-journaux.md) :575+46629octets, UID/GID1000, mode0644, ignorés.gitignore89, aucuneentréeindex. ArchivesPC/portableTARpax SHA c9909c48bc190aa4914dfdc55924eb036ccee44be9983c1a4c48731b5df3cb52, métadonnées etSHAunitaires comparés auxoriginauxinchangés. Mais6f3 refuse inconditionnellementstatusignored et ne compare --archive quepouradministrations ; pasd'optionarchive-source. Zérorejeuaveugle/aucunnettoyage : VERTréel impossible avec seules copiesexternes tantqueoriginauxprésents. Suite àarbitrerC7sansforcer/modifier6f3 ; aucunegarantieinventée.
 
 ## Opération distincte autorisée puis arrêt structurel
 
-C7autorise déplacementréversible exact2journauxetparentsvides. Réalisé UID/GID/mode/mtime/SHAinchangés, nouvellearchiveadmin+TARPC/portableef962425...bfb2d. NOUVEAUrapport6f3 source-r2-after-move.json VERT/refus[],56entréesfidèlesbb9e3286...184e6, scanquiescent. Puis git worktree remove NORMAL refusecode128 (worktree contenant sousmodule). STOPsansforce/deinit, W/T/branches gardés ; [chronologie13](../16-11-2026/13-deplacement-journaux-et-refus-git-structurel.md). Dette journaux traitée parpréservation, retraitGitstructurelresteàbornerC7. AncienROUGEconservé.
+C7autorise déplacementréversible exact2journauxetparentsvides. Réalisé UID/GID/mode/mtime/SHAinchangés, nouvellearchiveadmin+TARPC/portableef962425...bfb2d. NOUVEAUrapport6f3 source-r2-after-move.json VERT/refus[],56entréesfidèlesbb9e3286...184e6, scanquiescent. Puis git worktree remove NORMAL refusecode128 (worktree contenant sousmodule). STOPsansforce/deinit, W/T/branches gardés ; [chronologie13](../../everything-declarative/16-11-2026/13-deplacement-journaux-et-refus-git-structurel.md). Dette journaux traitée parpréservation, retraitGitstructurelresteàbornerC7. AncienROUGEconservé.
+
+## Clôture sur retrait réellement réalisé
+
+AprèsFINIGexplicitementreçu, nouveau6f3VERT+archive2hosts, unique--forceGitstructurelautorisé réussi ; source-r2PCetT8009393544octets absents. OnzeautresWTinactifs retirésNORMALement aprèsgardesVERT, branchesgardées, preuvesELF29/rougesanciensgardés. [Bilan14](../../everything-declarative/16-11-2026/14-nettoyage-ties-realise.md). Cetteclôture ne réécrit aucunancienrefus et ne concerne pas les WIPVertex/deuxworktreeshistoriqueshorssélection ni ladettegardePILE.
