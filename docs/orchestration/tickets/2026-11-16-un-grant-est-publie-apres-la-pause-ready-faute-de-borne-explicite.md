@@ -49,3 +49,24 @@ ancienB5inchangé. NouveauP/Q/Sv2/paquet/source/RO/GOdistinct nécessaires ;
 checks+linknonatomiquesfaceàfinphase et aucune durabilitécrash revendiquée.
 
 Contrat de borne partagé effectivement exercé par producteur et consommateur avec témoins discriminants rouges puis verts ; aucune action après refus ni preuve perdue. Une éventuelle qualification native du cycle restera distincte de la durabilité générale et du LIVE. L'incident ne se ferme pas sur l'envoi d'un message ou le seul renommage du grant.
+
+## HOLD C7 avant correctif des lectures santé consommatrices
+
+Constat statique sur b9e5ea55792856c24c18982ccac144a939fc4eef :
+`qualify.py:health` demeure utilisé avant et après writer. Son timeout socket
+HTTP ne borne pas la durée totale du GET et du corps ; aucun worker tué/récolté
+à échéance globale. HTTPError, statut non-200, corps trop grand et JSON invalide
+peuvent refuser avant publication des octets/statut. La comparaison usage par
+égalité accepte aussi les booléens False à la place des entiers zéro.
+Le callback owner c530 ne corrige pas ces deux lectures du consommateur.
+
+Qv3/b9e5 et ses 17 copies restent figés ; les avis statiques précédents ne
+constituent pas un GO. Préparation autorisée : témoins hermétiques sur la vraie
+fonction et les raccords consommateurs publiés avant rouge, puis correction
+groupée avec transport commun Embar sans importer sa politique de grant.
+Borne totale MIN(5s, échéance effective), bruts/statut/partiels/rc avant refus,
+kill/reap et neuf champs typés plus usage entiers zéro exigés. Avant admission
+READY et après admission autorité/lease restent distinctes. Aucun embedding.
+C7 autorise seulement CPU hermétique 60s après publication : aucun HTTP,
+processus provider, DB, CLI writer, créneau ni nouveau GO900. Nouveau couple,
+paquet et relecture totale requis ; ticket toujours ouvert.
