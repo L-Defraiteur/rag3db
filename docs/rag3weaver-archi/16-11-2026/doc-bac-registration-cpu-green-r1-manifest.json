@@ -1,0 +1,57 @@
+[
+  {
+    "path": "cache_state.py",
+    "size": 2579,
+    "sha256": "54c9d34275ecb54c948d37d2e7add62cdf1af049e4bc7cf4f3a6ea2bd8166c8a"
+  },
+  {
+    "path": "contracts.py",
+    "size": 10924,
+    "sha256": "1aab17349ac4e17aff99e8f80122ae8c397f822e324c37befeb53a4d8c74439d"
+  },
+  {
+    "path": "controller_policy.py",
+    "size": 10175,
+    "sha256": "9e2750f6b9f49272be86467d4819a343328e95a6deedd4c94d9f2e9b7a8b03a7"
+  },
+  {
+    "path": "green.stderr",
+    "size": 1703,
+    "sha256": "7a37766dbd52f2d6697dd963869c348e20825cec466de1a5570ac69fa74bbc27"
+  },
+  {
+    "path": "green.stdout",
+    "size": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "path": "prepare_git.py",
+    "size": 4867,
+    "sha256": "66170e2fdbfbf2ee0be66405350d946fbbbc2615a9c4c9a2172a5e6a739837c7"
+  },
+  {
+    "path": "qualify_red.py",
+    "size": 23741,
+    "sha256": "8feed94affb7eae833aad8c203143bfbbe0e8f2ec964b9b9e2a66feb9839074f"
+  },
+  {
+    "path": "result.json",
+    "size": 301,
+    "sha256": "7ba5c153bdf35028529ed6aa6e7b260c911efc4af03d6d7a468017ea76677a8c"
+  },
+  {
+    "path": "source_proof.py",
+    "size": 2862,
+    "sha256": "078d05e1091cb5268a22f75ffc165ab21fd2fb887d914213cf987e306609ef85"
+  },
+  {
+    "path": "test_contracts.py",
+    "size": 6090,
+    "sha256": "30b2141a8d048bab219776a5abb3f0670712ddf4d572e2a84f9687fc7e7140e3"
+  },
+  {
+    "path": "test_registration.py",
+    "size": 3280,
+    "sha256": "cd67b59f0a08bf1266e8224cc599939c827e4b69ecfd974427f60375dd3c3b9e"
+  }
+]

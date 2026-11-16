@@ -87,3 +87,12 @@ Tout manque de temps reste refus, sans nouvelle fenêtre1935 et sans rerun.
 
 Sixcontrats+quatreenregistrements mis à jour PUBLIÉS avant essai CPUvert.
 À cette publication : tous NONREJOUÉS depuis le correctif, zéro natif.
+
+Après publication1abf62910b : UNIQUE CPU timeout60/failfast, **10/10**
+(sixcontrats+quatreenregistrements) en0,024s unittest/0,090887406s enveloppe,
+aucun Cargo/PID/DB/natif. RAW horsW
+`cx-archi-doc-bac-registration-cpu-green-r1`, manifesteSHA
+`8b2d264251634246beddae7c6e97f706b183392fbbc127fd1d35fb7352194f31`.
+Le rouge enfant nonqualifié f93 et le refus réel Cargo DDE6 restent intacts.
+Source223 et code pilote de cette publication sont ensuite figés pour
+préparation Git-only/Q2/paquet et RO, pas pour exécution sans nouveauGO.
