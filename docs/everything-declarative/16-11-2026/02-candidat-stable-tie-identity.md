@@ -1,5 +1,44 @@
 # Ordre stable des occurrences : candidat après reprise
 
+## Actualisation après PIN FINI G
+
+Nouvelle base explicite `68590270e21d00285b29800bd9cdecf0cb921461` ; branche
+`cx-ed-stable-tie-identity-r2`, WT portable
+`/home/lucied/git_workspaces/rag3db-cx-ed-stable-tie-identity-r2`.
+Tête avant la présente actualisation documentaire :
+`79ad68c924641fe156b394f578b831aa70a21c17`. Les cinq patchs de r1 ont un
+range-diff strictement égal ; diff produit avec r1 vide. Les changements
+entrants depuis927 concernent le pin et son témoin/prose, pas les fichiers
+produit ED. Les branches r1 et historique restent conservées.
+
+C7 annonce FINI G puis PIN FINI : script épinglé source/cache deux postes SHA
+`2150fcd847b1df7de04908d357a0c78abc05e50ce599e2793ff08ab48108825d`, mode755,
+lib exacte `rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF`.
+Le lancement vérifiera encore ces identités, la source et le sous-module.
+`RAG3WEAVER_MOTEUR_ANCIEN` doit être absent. Aucun script du cache modifié.
+
+**Proposition de borne fraîche, à coordonner avant lourd** :7200s globaux
+après acquisition du vrai poste32G/HIGHmax/j8, compilation et arrêt compris.
+Deux ciblés via `run_e2e.sh --lib`, chacun filtré par son nom complet avec
+contrôle running1/1passé/0ignoré :
+`fts_handle::tests::a_search_returns_every_tie_of_its_cut` puis
+`backend::tests::ties_keep_the_same_order_from_a_rewritten_base_to_a_fresh_one`.
+Le second doit rester le témoin déclaré dans la vraie passe courante
+(`SUITE_DU_TEMOIN=lib`, filtre de ce témoin, `SUITES=e2e_code,e2e_lectures`).
+F8/lib entière/NAV sont produits par le script actuel, pas `lib_seule.sh`
+ni un résumé assemblé. Tous plafonds sont intersectés avec END frais ; le
+premier rouge arrête. Si C7 borne autrement ou si la garde exige davantage,
+figer cette décision avant lancement, sans prolongation implicite.
+
+Priorité des deux slots Rust PC : Recherche existing-only et Archi Algareth,
+puis ED au créneau coordonné ; aucun Cargo ni target préparé par cette
+actualisation. Pas de service ou base de Lucie touché.
+
+Limites de preuve du témoin historique : six occurrences, pas chaque chemin
+vectoriel/fusion ; aucun ordre stable revendiqué lorsque path/line/name
+changent ou manquent ; borne4096 des ex æquo conservée. La relecture Archi
+était favorable sur f1cfa/r1 dans ces limites, sans preuve de la lib neuve.
+
 ## État et contrat
 
 Audit et préparation autorisés par C7 après la passation16 ; aucune passe lourde pendant la fenêtre de bascule G/Arbre. Source de départ publiée `1834bf1114bf6894f6554754e11c41b2614db4fa`, branche historique `stable-tie-identity` conservée intacte. Candidat produit **`9fcc98ad3f347d821f3f1b99c936a73a9e080d41`**, branche neuve `cx-ed-stable-tie-identity-r1`, basé sur master **`927941a67a5805450d49f1e04b39fdd542a6059b`**. WT portable `/home/lucied/git_workspaces/rag3db-cx-ed-stable-tie-identity-r1` ; aucun WT ou target de ce candidat créé à luciepc à cette étape.
