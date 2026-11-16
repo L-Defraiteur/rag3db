@@ -92,3 +92,19 @@ nonce/UID/source ; aucune adoption. Pas de retry, de corpus, de libcore entière
 de service ni de baseLucie. Rouge conservé avant tout correctif.
 Reste déjàprévu : implémenter schema_warnings/call/doc selonconception04, puis
 validationverte sur source/pilote/portée frais admis ; aucune réactivation duGOrouge.
+
+## Correctif préparé après le rouge, NON qualifié
+
+Branchelucivy cx-lucivy-indexed-false-warning, tête
+`890c86af44989f3fea6c6fa62fd40d688b4084df` poussée. Fonctionpure implémentée,
+text/string+Some(false) seulement, ordre champs et noms Debugéchappés ; appel
+Warning aprèsvalidate dansbuild_schema. Doc FieldDef::indexed et READMEcore
+explicites, sans changer l’indexation ni honorerfalse pourtexte/string.
+Témoininitial conservé, plus juge nomséchappés/une ligne et juge schéma prouvant
+text/string toujoursindexés, numérique false nonindexé. Trois tests préparés,
+**aucune compilation ni exécution de cette source**. Ni PR ni fusion engagée.
+
+Reste : RO diff puis nouvelle recette/portée verte source890, targetprivé
+provenance0c+quiescence à admettre explicitement si réemployé, logs/reçu neufs.
+Le GOrouge se termine avec sa preuve ; pas de second lancement par ce GO.
+Suitecore complète toujours bloquée corpus7.2, pas déclaréeverte via ce lot.
