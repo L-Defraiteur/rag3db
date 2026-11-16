@@ -86,16 +86,70 @@ fn read_tombstones(couche: &str, rang: i64, texte: &str) -> Result<(BTreeSet<Str
     }
 }
 
+/// **Why a stack does not load**: one variant per refusal, so that a caller (the name fallback of 2b-C) tests the
+/// kind instead of the text. `Display` gives the text of before, word for word.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StackError {
+    /// The layer has no generation at all (rank omitted): « couche inconnue (couche sans génération, 2a′-3) ».
+    UnknownLayer { layer: String, without_generation: bool },
+    /// The layer is known but not at the requested rank.
+    RankAbsent { layer: String, rank: i64 },
+    /// A pinned parent is not in `_generation`.
+    MissingParent { view: String, parent: String, rank: i64, child: String, child_rank: i64 },
+    /// A parent chain comes back on itself.
+    Cycle { view: String, layer: String, rank: i64 },
+    /// The stack is deeper than `tracked.views.max_depth`.
+    TooDeep { view: String, max_depth: usize },
+    /// Loading took longer than `tracked.views.load_timeout_ms`.
+    LoadTimeout { view: String, ms: u64 },
+    /// A generation's tombstones do not parse.
+    UnreadableTombstones { layer: String, rank: i64, text: String },
+    /// The dialect has no generations.
+    NoGenerations,
+    /// The read of `_generation` (or the catalog) failed; the message as before.
+    Db(String),
+}
+
+impl std::fmt::Display for StackError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            StackError::UnknownLayer { layer, without_generation: true } => write!(f, "vue « {layer} » : couche inconnue (couche sans génération, 2a′-3)"),
+            StackError::UnknownLayer { layer, without_generation: false } => write!(f, "vue « {layer} » : couche inconnue"),
+            StackError::RankAbsent { layer, rank } => write!(f, "vue {layer} : rang {rank} absent de _generation"),
+            StackError::MissingParent { view, parent, rank, child, child_rank } => {
+                write!(f, "vue {view} : parente manquante {parent}:{rank} (de {child}:{child_rank})")
+            }
+            StackError::Cycle { view, layer, rank } => write!(f, "vue {view} : cycle de parentes en {layer}:{rank}"),
+            StackError::TooDeep { view, max_depth } => write!(f, "vue {view} : profondeur au-delà de {max_depth} étages (tracked.views.max_depth)"),
+            StackError::LoadTimeout { view, ms } => write!(f, "vue {view} : chargement au-delà de {ms} ms (tracked.views.load_timeout_ms)"),
+            StackError::UnreadableTombstones { layer, rank, text } => write!(f, "vue {layer}:{rank} : tombstones illisibles ({text})"),
+            StackError::NoGenerations => write!(f, "vues : ce dialecte n'a pas de générations"),
+            StackError::Db(m) => write!(f, "{m}"),
+        }
+    }
+}
+
+impl std::error::Error for StackError {}
+
 /// **Charger la pile d'une vue** depuis `_generation`. Refus nommés : couche inconnue, rang absent, parente
 /// manquante, cycle, profondeur au-delà du réglage.
-pub fn load_stack(catalog: &crate::catalog::Catalog, vue: &ViewRequest, reglages: &ViewSettings) -> Result<ReadStack, String> {
-    catalog.check_reopen().map_err(|e| format!("vues : {e}"))?;
+pub fn load_stack(catalog: &crate::catalog::Catalog, vue: &ViewRequest, reglages: &ViewSettings) -> Result<ReadStack, StackError> {
+    catalog.check_reopen().map_err(|e| StackError::Db(format!("vues : {e}")))?;
     load_stack_on(catalog.conn(), catalog.dialect_arc().as_ref(), vue, reglages)
 }
 
 /// **Le chargeur sur une connexion** : celle de l'instantané d'un appel d'outil, pour que la vue et
 /// ses lignes viennent de la même lecture, sans le mutex du catalogue.
 pub fn load_stack_on(
+    conn: &dyn crate::connection::DbConnection,
+    dialecte: &dyn crate::dialect::SchemaDialect,
+    vue: &ViewRequest,
+    reglages: &ViewSettings,
+) -> Result<ReadStack, StackError> {
+    load_stack_text(conn, dialecte, vue, reglages).map_err(StackError::Db)
+}
+
+fn load_stack_text(
     conn: &dyn crate::connection::DbConnection,
     dialecte: &dyn crate::dialect::SchemaDialect,
     vue: &ViewRequest,
@@ -273,13 +327,38 @@ mod tests {
             (vue("a", None), "cycle"),
             (vue("illisible", None), "tombstones"),
         ] {
-            let refus = load_stack(&cat, &v, &r).expect_err(&format!("{v:?} se charge"));
+            let refus = load_stack(&cat, &v, &r).expect_err(&format!("{v:?} se charge")).to_string();
             assert!(refus.contains(mot), "le refus de {v:?} ne nomme pas « {mot} » : {refus}");
         }
         let court = ViewSettings { max_depth: 2, ..r };
-        let refus = load_stack(&cat, &vue("c2", None), &court).expect_err("trois étages sous une profondeur de 2");
+        let refus = load_stack(&cat, &vue("c2", None), &court).expect_err("trois étages sous une profondeur de 2").to_string();
         assert!(refus.contains("profondeur"), "{refus}");
         assert!(load_stack(&cat, &vue("c2", None), &ViewSettings::default()).is_ok());
+    }
+
+    /// **Each refusal has its kind** (2b-C's name fallback tests the kind, not the text), and `Display` keeps the
+    /// text of before.
+    #[test]
+    fn each_refusal_has_its_kind() {
+        let cat = catalogue();
+        poser(&cat, "backend", 0, None, "[]");
+        poser(&cat, "orpheline", 1, Some(("disparue", 3)), "[]");
+        poser(&cat, "a", 1, Some(("b", 1)), "[]");
+        poser(&cat, "b", 1, Some(("a", 1)), "[]");
+        poser(&cat, "illisible", 1, None, "pas du json");
+        let r = ViewSettings::default();
+        let e = |v: ViewRequest| load_stack(&cat, &v, &r).expect_err("loads");
+        assert_eq!(e(vue("inconnue", None)), StackError::UnknownLayer { layer: "inconnue".into(), without_generation: true });
+        assert_eq!(e(vue("inconnue", None)).to_string(), "vue « inconnue » : couche inconnue (couche sans génération, 2a′-3)");
+        assert_eq!(e(vue("backend", Some(7))), StackError::RankAbsent { layer: "backend".into(), rank: 7 });
+        assert!(
+            matches!(e(vue("orpheline", None)), StackError::MissingParent { ref parent, rank: 3, .. } if parent == "disparue"),
+            "{:?}",
+            e(vue("orpheline", None))
+        );
+        assert!(matches!(e(vue("a", None)), StackError::Cycle { .. }));
+        assert!(matches!(e(vue("illisible", None)), StackError::UnreadableTombstones { rank: 1, .. }));
+        assert!(matches!(load_stack(&cat, &vue("a", None), &ViewSettings { max_depth: 1, ..r }).unwrap_err(), StackError::TooDeep { max_depth: 1, .. }));
     }
 
     /// **Les réglages des vues** : les défauts sans `views`, les valeurs déclarées, et une clé inconnue
