@@ -128,3 +128,16 @@ préambule. Supprimer cette lecture préalable : configuration pure/fixe780 ; la
 lecture du reçu de lancement reste dans les modes déjà bornés. Prépublier un
 témoin du dispatch CLI réel AST qui observe toute lecture Q avant le spawn,
 rouge avant fix puis CPU hermétique. Ancien paqueta642/Qr2 conservé/non lancé.
+
+### Deux vrais positifs du bac ciblé acquis, ticket toujours ouvert
+
+Rapport29 : GO exact C7-ARCHI-BAC-GREEN-01C3-16nov795, APP742/P01c3/Qr3.
+Deux buildsJSON verts/lib36.88s/e2e31.52s ; ledger2ELF copiesPC+portable réhashées
+et publiées AVANTmarker puis deux juges/quatre invocations parent+enfant toutes
+1/0/0. Sandbox réel déclaré/manifeste/HEAD/approval/Qprivé/targets/j1/offline
+attestés. ScopeVERT0/restes[]/TERMINE/bus absent/outerrc0, elapsed enregistré
+177.936s sous600/795, finalpostfsync cohérent ; postretour132observationsgone,
+found[]/unknown_owned[]/11UNKNOWNglobaux consignés. 72preuvesdeuxpostes0écart,
+manifestfdafa95b...6ef3/rapport29 ; anciensrouges immuables, sources/T gardés.
+Ticket OUVERT : Vertex/D6 et qualification complète pas-va-au-bout NON JOUÉS,
+aucun master/service/retrait/SDKmodifié ou GOpluslarge déduit.
