@@ -72,6 +72,7 @@
 
 #include "../flaky_checkpointer.h"
 #include "bench_harness.h"
+#include "common/build_id.h"
 #include "common/string_format.h"
 #include "graph_test/private_graph_test.h"
 #include "main/connection.h"
@@ -419,7 +420,10 @@ private:
 };
 
 TEST_F(CheckpointOpenReader, OpenReaderOnRelsAcrossAControlledCheckpointWindow) {
+    std::cerr << "BUILD_ID=" << RAG3DB_BUILD_ID << std::endl;
     prepareACostlyRelCheckpoint();
+    std::cerr << "[reader-diagnostic] configured-pool=" << systemConfig->bufferPoolSize
+              << " configured-threads=" << systemConfig->maxNumThreads << std::endl;
     rag3db::main::Connection reader(database.get());
     rag3db::main::Connection writer(database.get());
     const std::string query = "MATCH ()-[l:Link]->() RETURN count(l), sum(l.weight);";
