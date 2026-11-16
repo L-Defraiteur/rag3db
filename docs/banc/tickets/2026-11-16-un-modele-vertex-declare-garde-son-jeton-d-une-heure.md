@@ -72,3 +72,7 @@ après le correctif.
 ## Reprise ED autorisée après TIES, avant complément du rouge
 
 Auditmasterdf2a5789888d16247f0dad42dcdaa3c4ceea2094 : aucun changement model_source.rs/openai_llm.rs/gcp_auth.rs depuisbase685 ; WIPc642propre, rebase3patches= souscx-ed-vertex-token-refresh-r3 (tête156986b340). Deuxjuges NONJOUÉS conservés ; complément prévu AVANTfix : toujours401→UNE invalidation/deuxrequêtes/erreurnommée, APIkeyBearerfixeinchangée, SSEcommencépasrejoué. Frontièretransport actuelle(snapshotfake→vraiVertexconstructeur) explicite, pasencoreunjugeconnect_llm déclaré. [Plan et bornes de fichiers avec Embarquement](../../everything-declarative/16-11-2026/03-preparation-vertex-token.md). AucunCargo/vraiVertex/credential/test lancé ; GOrecetteborneeC7encorerequis.
+
+## Préparation corrective après rouge conservé
+
+RougeCPUfe40/eb026 conservépreuves4d54cf4a47, aucunretry. C7 demande la préparation du transport à TokenSource conservée et du raccord déclaratif ; [plan17 et juges avantimpl](../../everything-declarative/16-11-2026/17-correctif-vertex-token.md). Deux nouveaux juges NONJOUÉS, sept fonctions prévues ; GOvert distinct nécessaire. Ticket reste ouvert.
