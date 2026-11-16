@@ -1,0 +1,26 @@
+{
+  "cpu_tests_played": 10,
+  "cpu_tests_passed": 10,
+  "cpu_duration_s": 0.134,
+  "first_cpu_attempt": {
+    "passed": 7,
+    "errors": 3,
+    "reason": "duplicate finally while composing supervisor; AST parse rejected before any native run; merged finalization blocks"
+  },
+  "actual_constructor_and_case_loop_exercised": true,
+  "host_probe_flag_set_in_cpu_test": true,
+  "effective_child_probe_flag_absent": true,
+  "native_test_executed": false,
+  "systemd_unit_created": false,
+  "source_concurrence_tree_oid_both": "b6f01a59b16915422c4a34c272dfa3df8d894cf3",
+  "other_test_delta_reference_to_candidate": "test/transaction/CMakeLists.txt +4, dictionary_append_exception_test.cpp +85, separate target not built; test/include/graph_test/concurrence CMake unchanged",
+  "scripts_sha256": {
+    "controller.py": "906f11e3043e8974c91275fef68c13d1e563fbbf7b637dde630f9d936a82734f",
+    "entry.py": "54243784be4fbc3913dead83735edbd6dc5986609ca30cd766dd3eae051e69f2",
+    "launch.sh": "2afca1082058924356eecec13206aa26ae3dcc6750de0f37d6c3b37794ff45c8",
+    "processes.py": "45f62ef55dd5722c86600d5719e9389aaf6030912a64e63247fdff7e73d8e51f",
+    "receipt.py": "a697f6408e0b9b932fb567af48ab6425f5f2adeb14288121016f27b5a8f7ec9e",
+    "test_driver.py": "dbe05a7608cfab013987e2b147b9fbbb28dd7e50d5fddd26f7133711054dcd1f"
+  },
+  "source_bundle_sha256": "740550ff86872813f0922ed88aae7b3ce68782a6d78cb32695ca456cbc680e23"
+}

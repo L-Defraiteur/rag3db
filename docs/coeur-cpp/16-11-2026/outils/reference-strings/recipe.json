@@ -1,0 +1,61 @@
+{
+  "status": "PREPARATION ONLY; NO BUILD/TEST/STAGING; RO AND DISTINCT EXACT GO REQUIRED",
+  "unit": "cx-coeur-reference-strings-01",
+  "variants": [
+    {
+      "name": "reference",
+      "source": "75a4ba4d467aa5f07ef83494f5393154ab2392c6",
+      "engine": "59ac9c86bc2b3529b590a7462ab7051e3ad26b8a",
+      "ref": "refs/heads/cx-coeur-two-reds-baseline",
+      "dictionary_sha256": "6a33b5ac833a296f60de6f72d976a27ac153ea329bc076cc573ac469d84261d6"
+    }
+  ],
+  "test_files": [
+    {
+      "path": "test/transaction/concurrence/string_rewrite_test.cpp",
+      "sha256": "4b37355f22ee9addf5724a4a3a3210cc36b8f9e7745c1288027658560b00f212"
+    },
+    {
+      "path": "test/transaction/concurrence/checkpoint_no_stall_test.cpp",
+      "sha256": "414c0f6682ff346280cbe223c58d7007453fcbf13b67c8336823ee37c77f98ba"
+    }
+  ],
+  "scripts": {
+    "controller.py": "906f11e3043e8974c91275fef68c13d1e563fbbf7b637dde630f9d936a82734f",
+    "entry.py": "54243784be4fbc3913dead83735edbd6dc5986609ca30cd766dd3eae051e69f2",
+    "launch.sh": "2afca1082058924356eecec13206aa26ae3dcc6750de0f37d6c3b37794ff45c8",
+    "processes.py": "45f62ef55dd5722c86600d5719e9389aaf6030912a64e63247fdff7e73d8e51f",
+    "receipt.py": "a697f6408e0b9b932fb567af48ab6425f5f2adeb14288121016f27b5a8f7ec9e",
+    "test_driver.py": "dbe05a7608cfab013987e2b147b9fbbb28dd7e50d5fddd26f7133711054dcd1f"
+  },
+  "bundle_sha256": "740550ff86872813f0922ed88aae7b3ce68782a6d78cb32695ca456cbc680e23",
+  "bundle_bytes": 315100,
+  "global_cap_s": 900,
+  "controller_after_acquisition_s": 780,
+  "native_end_after_acquisition_s": 810,
+  "unit_runtime_max_s": 800,
+  "stop_grace_s": 10,
+  "finalization_soft_end_s": 880,
+  "watchdog_term_s": 890,
+  "watchdog_kill_grace_s": 10,
+  "phase_caps_s": {
+    "configure": 120,
+    "build": 600,
+    "strings": 60
+  },
+  "all_phase_caps": "min(phase cap, controller END remaining minus10); staging/export/core metadata/finalization included",
+  "memory_bytes": 34359738368,
+  "swap_bytes": 0,
+  "scratch_bytes": 34359738368,
+  "parent_cpu_max_required": "500000 100000",
+  "POSTE_FILS_required": "5",
+  "build_jobs_required": 5,
+  "probe_flag_required_absent": true,
+  "native_build_id_stdout_expected": false,
+  "case": "StringRewriteAcrossAddColumn.AutomaticCheckpointsBetweenAddsAndDrops",
+  "case_executions": 1,
+  "candidate_execution_authorized": false,
+  "first_failure_stops": true,
+  "retry": false,
+  "no_C1_causality_inference": true
+}
