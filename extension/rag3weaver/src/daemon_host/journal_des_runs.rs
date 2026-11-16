@@ -122,10 +122,21 @@ pub fn lire_le_fichier(p: &Path) -> Result<Value, String> {
 }
 
 /// Écrit un journal compressé ; rend son poids sur le disque.
+/// **D'un coup** (16 nov. 2026, la CI `rag3weaver` rouge sur « le run se relit ») : le journal s'écrit dans un
+/// temporaire du même dossier, puis prend son nom par un `rename`. Un lecteur qui le liste (`runs_de`) le
+/// trouve entier, jamais vide ni tronqué. Le temporaire ne finit ni en `.json` ni en `.json.zst` : ni
+/// `runs_de` ni l'inventaire ne le comptent.
 fn ecrire_le_fichier(p: &Path, v: &Value) -> std::io::Result<u64> {
+    static SUITE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let json = serde_json::to_vec(v).unwrap_or_default();
     let octets = zstd::encode_all(json.as_slice(), NIVEAU_ZSTD)?;
-    std::fs::write(p, &octets)?;
+    let nom = p.file_name().and_then(|n| n.to_str()).unwrap_or("run");
+    let n = SUITE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let temporaire = p.with_file_name(format!(".{nom}.{}-{n}.tmp", std::process::id()));
+    if let Err(e) = std::fs::write(&temporaire, &octets).and_then(|_| std::fs::rename(&temporaire, p)) {
+        let _ = std::fs::remove_file(&temporaire);
+        return Err(e);
+    }
     Ok(octets.len() as u64)
 }
 
