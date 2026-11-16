@@ -60,3 +60,20 @@ NON JOUÉS : la compilation et le harnais attendent FINI de la fenêtre optimise
 Aucun rouge observé encore, aucun correctif appliqué. Prochain pas : jouer les
 témoins, conserver le rouge puis corriger ; parser CLI testable et compatibilité
 `--task` silencieuse à couvrir. Aucun ancien créneau ne se réactive.
+
+### Relecture mémoire et recette ciblée avant correctif
+
+Branche fraîche `cx-tty-english-aliases-2`, rebasée sur master `f83c6c4dd6`.
+`--task` déjà accepté doit devenir silencieux, aussi avec `--backend` ;
+conserver options françaises/backend et dernière valeur rencontrée.
+Extraire le parser avec arguments injectés et booléen steps dans Options :
+ne pas muter l'environnement dans les tests parallèles. Couvrir tables EN=FR,
+valeurs absentes/répétées/mixtes, aide et README anglais prioritaires, anciens
+noms explicites. Aucun correctif avant assertions rouges réellement observées.
+
+Recette publiée `docs/tty/16-11-2026/red-english-aliases.sh` : uniquement les
+2 témoins `english_`, crate lib sans vue, offline/locked/j4, target privé.
+Budget proposé 600 s global, plafond32G, sous confiner_validation/poste lourd ;
+aucun SDK natif, modèle, hôte, fixture réseau ni base de Lucie nécessaire.
+Le script conserve commande/rc/sortie avant jugement et distingue un refus de
+préparation du rouge d'assertions. À jouer au GO de l'orchestration seulement.
