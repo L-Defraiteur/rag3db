@@ -1,0 +1,6 @@
+1:  fb85df40d1 = 1:  1de48967ad Préparer le témoin déterministe du descripteur hérité
+2:  8e02d87946 = 2:  b95c75e3b4 Isoler l écriture des scripts de fixture du parent
+3:  fe807b493f = 3:  b0831f5a20 Conserver la preuve système et borner son enfant
+4:  fc4e55da9f = 4:  b66aeeb39f Signaler le lot de fixtures en cours et sa qualification restante
+5:  557465aa5f = 5:  14f58e3911 Préparer la qualification des fixtures après la bascule
+6:  734087a4e9 = 6:  696df9cf7b Épingler le magasin réel sous cache privé avant qualification
