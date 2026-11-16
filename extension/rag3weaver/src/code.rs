@@ -1740,6 +1740,9 @@ pub fn analyze_in_project_avec(
         .collect();
     for (abs, fa) in fichiers_tries.iter().copied() {
         let rel = relative(root, abs);
+        // Positions AST : lignes originales et colonnes en octets, avant tout trim ou découpage de scope.
+        let reference_lines: Vec<&str> = raw.get(abs)
+            .map(|content| content.split('\n').collect()).unwrap_or_default();
         // Les noms que le fichier réexporte, leur module source et la ligne
         // du `pub use`. Un renommage (`pub use a::X as Y`) n'est pas suivi :
         // le nom cherché n'est pas celui du définisseur.
@@ -1861,27 +1864,16 @@ pub fn analyze_in_project_avec(
                 if r.import_origin.as_ref().is_some_and(|o| o.via_qualifier && libraries.contains(&o.source) && externes_sures.contains(&o.source)) {
                     continue;
                 }
-                // **A path into a library of certain provenance is not a project homonym** (16 November 2026):
-                // `std::env::var("X")`, written in full without a `use`, is `std`'s. The whole path reads on the
-                // line (the qualifier may keep only its last segment); its first segment is the standard library
-                // of the language (`data/imports/<langue>.toml`) or a library of certain provenance.
-                // Every `<path>::<id>` of the line, `id` ending on a word boundary (`::collect` is not in
-                // `::collections`); skipped only if all of them are such paths.
-                let chemins: Vec<String> = r.context.as_deref().map_or_else(Vec::new, |ctx| {
-                    let motif = format!("::{id}");
-                    ctx.match_indices(&motif)
-                        .filter(|(i, _)| !ctx[i + motif.len()..].starts_with(|c: char| c.is_alphanumeric() || c == '_'))
-                        .filter_map(|(fin, _)| {
-                            let debut = ctx[..fin].rfind(|c: char| !(c.is_alphanumeric() || c == '_' || c == ':')).map_or(0, |i| i + 1);
-                            Some(ctx[debut..fin].to_string()).filter(|c| !c.is_empty() && c.contains(|ch: char| ch.is_alphabetic()))
-                        })
-                        .collect()
-                });
-                let sur = |chemin: &String| {
-                    codeparsers::import_resolution::provenance::est_builtin(abs, chemin) || externes_sures.contains(chemin.split("::").next().unwrap_or(""))
-                };
-                if !chemins.is_empty() && chemins.iter().all(sur) {
-                    continue;
+                // Une abstention concerne cette occurrence seulement : un autre `std::env::var`
+                // sur sa ligne ne doit pas masquer l'appel projet `var` (rouges056f, 16 novembre2026).
+                let path_root = r.line.checked_sub(1).and_then(|row| reference_lines.get(row))
+                    .and_then(|line| r.column.and_then(|column| reference_path_root(line, column, id)));
+                if let Some(path_root) = path_root {
+                    if codeparsers::import_resolution::provenance::est_builtin(abs, path_root)
+                        || externes_sures.contains(path_root)
+                    {
+                        continue;
+                    }
                 }
                 // **Un accès de champ ne prend pas de rendez-vous** avec une
                 // fonction homonyme (`r.chunk`, `self.config`) :
@@ -3871,6 +3863,56 @@ impl Catalog {
 /// ailleurs.
 /// Un graphe et un backend (`code_gabarits`) contiennent leurs nœuds et leurs outils.
 const GENRES_CONTENEURS: [&str; 7] = ["class", "interface", "namespace", "module", "enum", "graphe", "backend"];
+
+/// Racine du chemin de cette mention vérifiée dans sa ligne originale.
+/// Aucun repli vers un homonyme du contexte ; position/chemin indéterminable laisse la règle antérieure.
+fn reference_path_root<'a>(line: &'a str, column: usize, identifier: &str) -> Option<&'a str> {
+    let suffix = line.get(column..)?.strip_prefix(identifier)?;
+    if identifier.is_empty() || suffix.starts_with(|c: char| c.is_alphanumeric() || c == '_') {
+        return None;
+    }
+    let mut prefix = line.get(..column)?;
+    let mut root = None;
+    loop {
+        prefix = prefix.trim_end();
+        let Some(path) = prefix.strip_suffix("::") else { return root; };
+        prefix = path.trim_end();
+        // Un préfixe absolu `::std` ne nomme pas un segment vide.
+        if prefix.is_empty() {
+            return root;
+        }
+        let start = prefix.char_indices().rev()
+            .find(|(_, c)| !(c.is_alphanumeric() || *c == '_'))
+            .map(|(index, c)| index + c.len_utf8()).unwrap_or(0);
+        let segment = prefix.get(start..)?;
+        if !segment.starts_with(|c: char| c.is_alphabetic() || c == '_') {
+            return None;
+        }
+        root = Some(segment);
+        prefix = prefix.get(..start)?;
+    }
+}
+
+#[cfg(test)]
+mod reference_path_tests {
+    use super::reference_path_root;
+
+    #[test]
+    fn reference_paths_use_raw_utf8_columns_and_exact_identifier_boundaries() {
+        let line = "    /* é */ std::env::var(\"HOME\"); var(\"X\");";
+        let first = line.find("var").unwrap();
+        let second = line.rfind("var").unwrap();
+        assert_eq!(reference_path_root(line, first, "var"), Some("std"));
+        assert_eq!(reference_path_root(line, second, "var"), None);
+        assert_eq!(reference_path_root(line, line.find('é').unwrap() + 1, "var"), None);
+        let spaced = "::std :: env :: var()";
+        assert_eq!(reference_path_root(spaced, spaced.find("var").unwrap(), "var"), Some("std"));
+        let distinct = "std::collections::HashMap";
+        assert_eq!(reference_path_root(distinct, distinct.find("collections").unwrap(), "collect"), None);
+        let generic = "std::fmt::Formatter";
+        assert_eq!(reference_path_root(generic, generic.find("Formatter").unwrap(), "F"), None);
+    }
+}
 
 /// Les champs typés d'un scope, en JSON `[{name, type}]` (le type tel
 /// qu'écrit, génériques compris) ; vide s'il n'en a pas.
