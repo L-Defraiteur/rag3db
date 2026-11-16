@@ -47,3 +47,14 @@ ci-dessus est la preuve avant cette correction de fixture, pas le rouge produit.
 Nouveau SHA/diff borné/revue et GO distinct nécessaires avant toute compilation
 ou qualification. Ancien début/budget clos, aucun retry/reset/assouplissement
 XML et aucun FIX de production autorisé par cette suite préparatoire.
+
+Préparation suivante sur branche/worktree NEUFS
+`cx-hotfixs-rows-outside-graph-fixture-fix` : seul diffC++ est la construction
+du vecteur expectedTypes par reserve/emplace_back, dans le même ordre de neuf
+types et avec les mêmes fabriques LogicalType que5099. La primitive est celle
+de `show_indexes.cpp::bindColumns` ; macro EXPLICIT_COPY_DEFAULT_MOVE expose
+bien le déplacement tandis que la copie reste privée. Aucun changement des
+quatre cas/assertions, de la lecture publique, de la production ou du parseur.
+Diff-check seulement ; compilation, test et rouge binder toujours NON JOUÉS
+pour cette source révisée. Ne pas modifier ni réutiliser le paquet DB833/a31745
+déjà consommé ; nouveau couple source/pilote/reçu et GO distinct requis.

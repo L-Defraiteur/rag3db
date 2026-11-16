@@ -68,10 +68,19 @@ protected:
             "extension_error", "rows_outside_graph"};
         ASSERT_EQ(schema->getColumnNames(), names) << "[check: stable-index-columns]";
         using common::LogicalType;
-        const std::vector<LogicalType> expectedTypes{LogicalType::STRING(), LogicalType::STRING(),
-            LogicalType::STRING(), LogicalType::LIST(LogicalType::STRING()), LogicalType::BOOL(),
-            LogicalType::STRING(), LogicalType::STRING(), LogicalType::STRING(),
-            LogicalType::UINT64()};
+        // LogicalType expose le déplacement ; sa copie est explicite. Une
+        // initializer_list demanderait la copie privée de ses éléments const.
+        std::vector<LogicalType> expectedTypes;
+        expectedTypes.reserve(names.size());
+        expectedTypes.emplace_back(LogicalType::STRING());
+        expectedTypes.emplace_back(LogicalType::STRING());
+        expectedTypes.emplace_back(LogicalType::STRING());
+        expectedTypes.emplace_back(LogicalType::LIST(LogicalType::STRING()));
+        expectedTypes.emplace_back(LogicalType::BOOL());
+        expectedTypes.emplace_back(LogicalType::STRING());
+        expectedTypes.emplace_back(LogicalType::STRING());
+        expectedTypes.emplace_back(LogicalType::STRING());
+        expectedTypes.emplace_back(LogicalType::UINT64());
         const auto types = schema->getColumnDataTypes();
         ASSERT_EQ(types.size(), expectedTypes.size());
         for (size_t i = 0; i < types.size(); ++i) {

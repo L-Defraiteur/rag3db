@@ -100,3 +100,11 @@ réhashé2postes0écart, manifestef06755...c179. Aucun retry ni production modif
 C7 autorise PRÉPA correction FIXTURE SEULE après cette MAJ AVANTdiff : utiliser
 move/emplace pour la construction du vecteur attendu sans toucher aux quatre
 assertions/contrat ; nouveau SHA/RO/GO nécessaires avant compilation/rejeu.
+
+Préparation de cette correction sur branche NEUVE
+`cx-hotfixs-rows-outside-graph-fixture-fix` : seul diffC++ remplace la liste
+initializer_list de expectedTypes par reserve/emplace_back des neuf mêmes
+fabriques, comme bindColumns du callee existant. Aucun autre changement de
+cas/assertion, parseur ou production. Refus avant fix conservé96f469/f996c0,
+archive brute SHA b67863ea...95c8. Correction NON COMPILÉE/NON JOUÉE ; aucun
+rouge binder acquis, nouveau couple/admission nécessaires, ticket toujours ouvert.
