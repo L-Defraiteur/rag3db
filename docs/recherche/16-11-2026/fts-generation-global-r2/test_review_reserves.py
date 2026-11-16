@@ -1,7 +1,7 @@
 """Actual consumer expressions, fake providers/clocks only; no network or process."""
-import ast,contextlib,json,tempfile,unittest
+import ast,contextlib,json,tempfile,unittest,types
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch,Mock
 import qualify as q
 
 class ReviewReserves(unittest.TestCase):
@@ -23,7 +23,7 @@ class ReviewReserves(unittest.TestCase):
    contacts.append(provider['address']);evidence['transport']=dict(returncode=0,stdout_hex='7b7d')
    return dict(provider['identity'],usage=dict(baux=0,en_cours=0))
   pins=dict(providers=grant['providers'])
-  with tempfile.TemporaryDirectory() as d,patch.object(q,'P',Path(d)),patch.object(q.time,'monotonic',return_value=70.),patch.object(q,'owner_pins',return_value=pins),patch.object(q.ready_protocol,'read_phase_state',side_effect=phase),patch.object(q.global_owner,'health_observation',side_effect=observe):
+  with tempfile.TemporaryDirectory() as d,patch.object(q,'P',Path(d)),patch.object(q.time,'monotonic',return_value=70.),patch.object(q,'owner_pins',return_value=pins),patch.object(q.ready_protocol,'read_phase_state',side_effect=phase),patch.object(q,'global_owner',types.SimpleNamespace(health_observation=Mock(side_effect=observe))):
    with self.assertRaises(ValueError):exec(compile(ast.Module(body=[call],type_ignores=[]),'<actual-services-before>','exec'),dict(vars(q),grant=grant,end=600.,ready=ready))
    self.assertEqual(json.loads((Path(d)/'services-before-7878.json').read_text())['transport']['returncode'],0)
   self.assertEqual(len(contacts),1)
@@ -39,15 +39,15 @@ class ReviewReserves(unittest.TestCase):
   def timeout(ready,pins,provider,evidence,**kwargs):
    evidence.update(transport=dict(timed_out=True,returncode=-9,stdout_hex='7061727469616c',stderr_hex='657272'))
    raise error
-  with tempfile.TemporaryDirectory() as d,patch.object(q,'P',Path(d)),patch.object(q,'owner_pins',return_value=pins),patch.object(q.ready_protocol,'read_phase_state',return_value={}),patch.object(q.ready_protocol,'validate_ready_phase'),patch.object(q.time,'monotonic',return_value=70.),patch.object(q.global_owner,'health_observation',side_effect=timeout) as contact:
+  with tempfile.TemporaryDirectory() as d,patch.object(q,'P',Path(d)),patch.object(q,'owner_pins',return_value=pins),patch.object(q.ready_protocol,'read_phase_state',return_value={}),patch.object(q.ready_protocol,'validate_ready_phase'),patch.object(q.time,'monotonic',return_value=70.),patch.object(q,'global_owner',types.SimpleNamespace(health_observation=Mock(side_effect=timeout))) as contact:
    with self.assertRaises(subprocess.TimeoutExpired) as caught:q.health(grant,'fake',600.,ready=dict(deadline=600.),admission=True)
-   self.assertIs(caught.exception,error);self.assertEqual(contact.call_count,1)
+   self.assertIs(caught.exception,error);self.assertEqual(contact.health_observation.call_count,1)
    evidence=json.loads((Path(d)/'fake-7878.json').read_text());self.assertTrue(evidence['transport']['timed_out']);self.assertEqual(evidence['transport']['returncode'],-9)
    self.assertFalse((Path(d)/'fake-7879.json').exists())
  def test_after_canonical_uses_active_lease_without_new_ready_admission(self):
   pins=dict(providers=[dict(address='127.0.0.1:7878'),dict(address='127.0.0.1:7879')]);grant=dict(valid_until_monotonic=500.);seen=[]
   def observe(ready,pins,provider,evidence,**kwargs):seen.append(kwargs);return {}
-  with tempfile.TemporaryDirectory() as d,patch.object(q,'P',Path(d)),patch.object(q,'owner_pins',return_value=pins),patch.object(q.ready_protocol,'read_phase_state',return_value={}),patch.object(q.ready_protocol,'validate_ready_phase',side_effect=AssertionError('must not re-admit')),patch.object(q.ready_protocol,'validate_phase_authority') as core,patch.object(q.time,'monotonic',return_value=150.),patch.object(q.global_owner,'health_observation',side_effect=observe):
+  with tempfile.TemporaryDirectory() as d,patch.object(q,'P',Path(d)),patch.object(q,'owner_pins',return_value=pins),patch.object(q.ready_protocol,'read_phase_state',return_value={}),patch.object(q.ready_protocol,'validate_ready_phase',side_effect=AssertionError('must not re-admit')),patch.object(q.ready_protocol,'validate_phase_authority') as core,patch.object(q.time,'monotonic',return_value=150.),patch.object(q,'global_owner',types.SimpleNamespace(health_observation=Mock(side_effect=observe))):
    self.assertEqual(q.health(grant,'after',600.,ready=dict(deadline=600.,grant_deadline_monotonic=100.),admission=False),[{},{}])
    self.assertEqual(core.call_count,4)
   self.assertEqual(seen,[dict(admission=False,lease_end=500.)]*2)
@@ -75,5 +75,15 @@ class ReviewReserves(unittest.TestCase):
      with self.subTest(item=item),self.assertRaises(AssertionError):q.owner_pins(bind(item),ready)
     tampered=bind(pins);tampered['owner_pins_sha256']='0'*64
     with self.assertRaises(AssertionError):q.owner_pins(tampered,ready)
+ def test_real_owner_module_load_follows_successful_source_pins_only(self):
+  events=[];pins=dict(providers=[]);grant=dict(valid_until_monotonic=500.)
+  def valid(grant,ready):events.append('pins');return pins
+  def load(name):events.append('load:'+name);return types.SimpleNamespace()
+  with patch.object(q,'global_owner',None),patch.object(q,'owner_pins',side_effect=valid),patch.object(q,'module',side_effect=load):
+   self.assertEqual(q.health(grant,'unused',600.,ready={},admission=True),[])
+  self.assertEqual(events,['pins','load:global_services_owner'])
+  with patch.object(q,'global_owner',None),patch.object(q,'owner_pins',side_effect=AssertionError('source differs')),patch.object(q,'module') as load:
+   with self.assertRaises(AssertionError):q.health(grant,'unused',600.,ready={},admission=True)
+   load.assert_not_called()
 
 if __name__=='__main__':unittest.main()

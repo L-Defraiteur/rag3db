@@ -2,7 +2,7 @@
 """Proposed default canonical pass. Exact C7 GO plus a fresh Embar receipt required."""
 from pathlib import Path
 import uuid
-import global_services_owner as global_owner
+global_owner=None # Test injection only; real import follows admitted source pins.
 import lifecycle_protocol as ready_protocol
 import lifecycle_provider_observation as owner_observation
 import argparse,hashlib,importlib.util,json,math,os,re,shutil,signal,socket,stat,subprocess,sys,time,urllib.request
@@ -89,7 +89,7 @@ def owner_pins(grant,ready):
  admitted=pins.get('admitted_monotonic');observed=grant['observed_monotonic']
  assert type(admitted) in [int,float] and type(admitted) is type(observed) and math.isfinite(admitted) and admitted==observed
  for key,value in [('app',APP),('pilot',ready['pilot']),('scope',ready['scope']),('nonce',ready['nonce']),('ready_path',str(P/'READY_FOR_SERVICES.json')),('ready_sha256',sha(P/'READY_FOR_SERVICES.json')),('c7_reference',ready['c7_reference'])]:assert pins[key]==value
- for key,name in [('protocol_sha256','lifecycle_protocol.py'),('process_module_sha256','lifecycle_provider_observation.py'),('owner_sha256','global_services_owner.py'),('pg_receipt_sha256','pg_receipt.py')]:assert pins[key]==sha(Q/name)
+ for key,name in [('protocol_sha256','lifecycle_protocol.py'),('process_module_sha256','lifecycle_provider_observation.py'),('owner_sha256','global_services_owner.py'),('pg_receipt_sha256','pg_receipt.py'),('pg_identity_sql_sha256','identity.sql'),('pg_postcheck_sql_sha256','backend-postcheck.sql')]:assert pins[key]==sha(Q/name)
  assert len(pins['providers'])==2 and {v['address'] for v in pins['providers']}=={v['address'] for v in grant['providers']}
  for pinned in pins['providers']:
   row=next(v for v in grant['providers'] if v['address']==pinned['address'])
@@ -98,7 +98,9 @@ def owner_pins(grant,ready):
  return pins
 
 def health(grant,label,end,*,ready,admission):
- pins=owner_pins(grant,ready);result=[];lease_end=min(end,grant['valid_until_monotonic'])
+ pins=owner_pins(grant,ready)
+ owner=global_owner if global_owner is not None else module('global_services_owner')
+ result=[];lease_end=min(end,grant['valid_until_monotonic'])
  for provider in pins['providers']:
   evidence=dict(address=provider['address'],admission=admission);failure=None
   try:
@@ -106,7 +108,7 @@ def health(grant,label,end,*,ready,admission):
    if admission:ready_protocol.validate_ready_phase(ready,now,snapshot)
    else:ready_protocol.validate_phase_authority(ready,now,snapshot)
    assert now<lease_end<=ready['deadline']
-   data=global_owner.health_observation(ready,pins,provider,evidence,admission=admission,lease_end=lease_end)
+   data=owner.health_observation(ready,pins,provider,evidence,admission=admission,lease_end=lease_end)
    snapshot=ready_protocol.read_phase_state(ready);now=time.monotonic()
    if admission:ready_protocol.validate_ready_phase(ready,now,snapshot)
    else:ready_protocol.validate_phase_authority(ready,now,snapshot)
@@ -225,7 +227,7 @@ def launch(args):
  cp=W/'extension/rag3weaver/codeparsers';expected=git(W,'ls-tree',APP,'extension/rag3weaver/codeparsers').split()[2];assert (cp/'Cargo.toml').is_file() and git(cp,'rev-parse','HEAD')==expected and not git(cp,'status','--porcelain')
  assert not any(p.exists() or p.is_symlink() for p in [P,S])
  contract=cache_contract();Q.mkdir(mode=0o700,exist_ok=True);assert Q.resolve()==Q and Q.stat().st_uid==os.getuid()
- sources={'qualify.py':Path(__file__),'lifecycle_protocol.py':Path(__file__).parent/'lifecycle_protocol.py','services-contract.json':Path(__file__).parent/'services-contract.json','global_services_owner.py':Path(__file__).parent/'global_services_owner.py','pg_receipt.py':Path(__file__).parent/'pg_receipt.py','lifecycle_grant_producer.py':Path(__file__).parent/'lifecycle_grant_producer.py','lifecycle_provider_observation.py':Path(__file__).parent/'lifecycle_provider_observation.py','base_controller.py':control/'docs/recherche/16-11-2026/fts-fixture-root-green/qualify.py','passe_epinglee.sh':W/'tools/poste/passe_epinglee.sh'}
+ sources={'qualify.py':Path(__file__),'lifecycle_protocol.py':Path(__file__).parent/'lifecycle_protocol.py','services-contract.json':Path(__file__).parent/'services-contract.json','global_services_owner.py':Path(__file__).parent/'global_services_owner.py','pg_receipt.py':Path(__file__).parent/'pg_receipt.py','identity.sql':Path(__file__).parent/'identity.sql','backend-postcheck.sql':Path(__file__).parent/'backend-postcheck.sql','lifecycle_grant_producer.py':Path(__file__).parent/'lifecycle_grant_producer.py','lifecycle_provider_observation.py':Path(__file__).parent/'lifecycle_provider_observation.py','base_controller.py':control/'docs/recherche/16-11-2026/fts-fixture-root-green/qualify.py','passe_epinglee.sh':W/'tools/poste/passe_epinglee.sh'}
  for name in ['confiner_validation.py','poste','garde_target.sh']:sources[name]=W/'extension/rag3weaver/scripts'/name
  for name,path in sources.items():
   dest=Q/name

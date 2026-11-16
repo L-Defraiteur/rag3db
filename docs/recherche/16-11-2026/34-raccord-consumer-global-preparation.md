@@ -57,3 +57,13 @@ Après PUSH89af10f12e370413d507c5828037b6cc26365e1a, CPU60failfast6fonctions
 VERTES0.028s/rc0 : journalR/cx-proofs-recherche-fts-global-consumer-cpu-v2 et
 manifestjoint. Aucuncontact/SQL/Cargo/native/procscan ni paquetQfinal ;
 ces6témoins n'attestent pas le transport réel ni l'outilPG futur deG.
+
+## Deux SQL et chargement PG différé
+
+Témoinétendu PUB75fbc55ecaa87c2e05ea90ee4ef08898d3755449 avantCPU : vrai
+owner_pins accepte mauvaisSQLpin,1assertfail/0error0.002s,brutsR/
+cx-proofs-recherche-fts-global-sql-pins-red-v1/manifestjoint. Fixensuite
+ajoutePGidentity/postcheckSHAparmi6sources,Qcopies3PGprévues etchargement
+owner DIFFÉRÉAPRÈSpinsvalidés. Test7loaderfictifordre/refusavantloadnouveau,
+pasprétendu vu rouge ; aucunSQLlu/importé parfake. PGsourcesfinaltoujours
+attendues,aucuneQcopiepréparée/autorité/contact.
