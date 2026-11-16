@@ -8,18 +8,39 @@ import shutil
 import subprocess
 import sys
 import time
-from strict_target_guard import digest, snapshot, scan, finish
+from strict_target_guard import digest, snapshot, scan, finish, require_source, require_hashes
 
 BASE = Path.home() / '.cache/rag3weaver-build'
 W = Path.home() / 'git_workspaces/cx-tty-english-aliases'
 T = BASE / 'target-cx-tty-english-aliases-2'
-Q = BASE / 'cx-tty-aliases-controller-v3'
-P = BASE / 'cx-tty-english-aliases-full-v3'
-S = BASE / 'cx-tty-aliases-common-v3'
+Q = BASE / 'cx-tty-aliases-controller-v4'
+P = BASE / 'cx-tty-english-aliases-full-v4'
+S = BASE / 'cx-tty-aliases-common-v4'
 
 
 def git(*args):
     return subprocess.check_output(['git', '-C', str(W), *args], text=True).strip()
+
+
+def publish_result(path, result, deadline):
+    # Opening the actual destination is part of the deadline, not a later promise.
+    with Path(path).open('x') as stream:
+        now = time.monotonic()  # fresh AFTER open, immediately before encoding
+        result['finished'] = now
+        if now >= deadline:
+            result.update(verdict='ROUGE', error='deadline exceeded before publication')
+        json.dump(result, stream, indent=2)
+        stream.flush()
+        os.fsync(stream.fileno())
+        after = time.monotonic()
+        if after >= deadline:
+            result.update(verdict='ROUGE', error='deadline exceeded during publication', finished=after)
+            stream.seek(0)
+            stream.truncate()
+            json.dump(result, stream, indent=2)
+            stream.flush()
+            os.fsync(stream.fileno())
+    return result
 
 
 def main():
@@ -28,7 +49,7 @@ def main():
     parser.add_argument('--prepare-only', action='store_true')
     parser.add_argument('--allocation')
     args = parser.parse_args()
-    assert git('rev-parse', 'HEAD') == args.source and not git('status', '--porcelain')
+    require_source(W, args.source)
     assert not any(p.exists() or p.is_symlink() for p in [P, S])
     if args.prepare_only:
         assert not Q.exists() and not Q.is_symlink()
@@ -57,15 +78,19 @@ def main():
             shutil.copy2(old / name, Q / ('previous-' + name))
         sources = {name: W / 'docs/tty/16-11-2026' / name for name in [
             'check-english-aliases-full.sh', 'check_target_profile.py', 'strict_target_guard.py',
-            'run_private_harness.py', 'admit_full.py']}
+            'run_private_harness.py', 'admit_full.py', 'launch_full.py']}
+        sources['poste'] = W / 'extension/rag3weaver/scripts/poste'
         sources['confiner_validation.py'] = W / 'extension/rag3weaver/scripts/confiner_validation.py'
         hashes = {}
         for name, path in sources.items():
             shutil.copy2(path, Q / name)
             hashes[name] = digest(Q / name)
             assert hashes[name] == digest(path)
+        sdk = Path.home() / '.cache/rag3db-libs/rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF'
+        sdk_hashes = {str(sdk / 'librag3db.so'): 'b7e9fc75a3d2de04c72680b0309e8bb1df9eaadb5211ebbacf39716c6d0a2101', str(sdk / 'libvector.rag3db_extension'): '1669d6392ec8067fcf92ae2ccc972fd7cd3086629fb82d1f5d254e90d72d7561'}
+        require_hashes(sdk_hashes)
         config = dict(source=args.source, worktree=str(W), target=str(T), proofs=str(P), scope=str(S),
-                      budget=3600, controllers=hashes, ledger_sha=digest(Q / 'target-ledger.json'),
+                      budget=3600, controllers=hashes, sdk_hashes=sdk_hashes, ledger_sha=digest(Q / 'target-ledger.json'),
                       creation_identity=creation, capture='late stable capture anchored to recorded GO2 root identity',
                       previous_source='0c4ab173d4a3e418b2c5df1253b5090a4d97911e')
         (Q / 'prepared.json').write_text(json.dumps(config, indent=2))
@@ -84,7 +109,7 @@ def main():
     rc = 2
     result = dict(verdict='ROUGE')
     try:
-        command = [str(W / 'extension/rag3weaver/scripts/poste'), 'lourd', sys.executable, str(Q / 'admit_full.py')]
+        command = [str(Q / 'poste'), 'lourd', sys.executable, str(Q / 'admit_full.py')]
         (Q / 'outer-command.json').write_text(json.dumps(command))
         rc = subprocess.run(command, env=env, timeout=3600).returncode
         receipt = json.loads((P / 'authority-path.json').read_text())
@@ -97,14 +122,16 @@ def main():
         quiet = scan('/proc', [W, T])
         (P / 'quiet-after-common.json').write_text(json.dumps(quiet, indent=2))
         assert quiet['found'] == []
-        assert git('rev-parse', 'HEAD') == args.source and not git('status', '--porcelain')
+        require_source(W, args.source)
+        result['physical_sdk_hashes'] = require_hashes(config['sdk_hashes'])
+        result['physical_controller_hashes'] = require_hashes({str(Q / name): sha for name, sha in config['controllers'].items()})
         driver = 'VERT' if (P / 'verdict.txt').read_text().strip() == 'STAGES_PASSED F8 8/8 et harnais tty privé entier' else 'ROUGE'
         result['verdict'] = finish(authority, scope, driver, time.monotonic(), start + 3600, True)
         result['scope'] = scope
     except Exception as error:
         result['error'] = repr(error)
-    result.update(rc=rc, start=start, end=start + 3600, finished=time.monotonic())
-    (Q / 'composed-verdict.json').write_text(json.dumps(result, indent=2))
+    result.update(rc=rc, start=start, end=start + 3600)
+    result = publish_result(Q / 'composed-verdict.json', result, start + 3600)
     print(result['verdict'], Q / 'composed-verdict.json')
     if result['verdict'] != 'VERT':
         raise SystemExit(1)
