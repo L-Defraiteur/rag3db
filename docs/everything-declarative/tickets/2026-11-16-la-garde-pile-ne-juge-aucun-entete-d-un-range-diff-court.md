@@ -22,3 +22,29 @@ Témoin rouge CPU du VRAIparseur sur sortie indentée et sur zéro en-tête, pui
 Lot `cx-optimiseur-stack-guard-16`, base d395cb1f03. Témoin CPU du vrai mode
 `--pile`, avant correction ; caches et garde de nettoyage6f3 hors périmètre.
 Publication de cette reprise avant tests.
+
+## Correctif G publié, attente de revue et intégration C7
+
+Branche `origin/cx-optimiseur-stack-guard-16`, reprise publiée4cc6caeb3a,
+témoins publiésce6aa9ab60, correctionb74b85257b0d9363988519c63def98151c08ef8a.
+SHA du script corrigé :
+`fff9a4d9e20e739e5c8434b0a573ac2cfc00f6f37b45df500993d44d3a4b003d`.
+
+Le vrai mode `--pile` a été vu rouge : trois défauts au premier passage,
+puis six échecs sur six avec vérification de tous les en-têtes et placement du
+commit code en première position, donc dans la zone indentée. Les fixtures
+créent leurs dépôts privés ; Git produit réellement le padding de14/15commits.
+Seuls les cas sortie vide/invalide/erreur substituent le producteur range-diff,
+le parseur et les vérifications de la garde restent réels.
+
+Le correctif demande `--no-patch` pour séparer les en-têtes des corps de patches,
+vérifie le statut de range-diff, accepte l'alignement horizontal Git, exige le
+format entier et refuse zéro en-tête. Les règles existantes `=`, `<`, `>` et `!`
+restent inchangées : patches manquants, nouveau code et code modifié sont refusés.
+Sept témoins CPU passent ; suite existante49verts, zéro rouge, code0 ; syntaxe
+Bash et diff-check verts. Journaux conservés hors worktree :
+`~/.cache/optimiseur-notes/stack-guard-16/{red.log,red-all-headers.log,green-final.log,green-existing-final.log}`.
+
+Ticket maintenu ouvert pour intégration/revue et décision C7 sur installation.
+Aucun cache modifié, aucune pose, aucun service touché, aucun rejeu produit ED,
+aucune modification de la garde de nettoyage6f3.
