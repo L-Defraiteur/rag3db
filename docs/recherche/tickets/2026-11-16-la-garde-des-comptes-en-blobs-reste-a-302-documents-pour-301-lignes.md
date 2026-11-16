@@ -84,3 +84,9 @@ Hotfix favorable bornéBlobs : varianteFilesstricte propageErrrebuild_fts_step s
 ## Vert ciblé cinq juges, ticket encore OUVERT
 
 APPbc952/PILOTEaf11 unefoisGO C7-FTS-GEN-GREEN-AF11-16nov : buildrc0/ELFb23414d3/ledger512c2a avantmarkers/invent5/0ignore,5exactsDISTINCTS chacun1passed0failed0ignored etrc0. GENsurinchangé traceguard1/rebuild1 retire9000000commeclassic ; pendingcompteségaux/sourceErr/maintenanceErr validés. Rapport24/archive94SHA2postes57fbd028...eb3c ; scopeVERT0TERMINE/94ownedquiet/posterendu/Townerbcconservé. AnciennesportéesROUGES62+263/APP3ee/ELF268intactes. Pascanonical/master/globalFilesstrict/COUNTstrict/readonlyplanonly/multicellules qualifiés. PRÉPAUNIONNEUVEautoriséeC7seulement, BGE/PGnonréservés. ÉtatOUVERT.
+
+## Préparation globale après ciblés ROOT, sans GO
+
+C7 reprend préparation seule après0479 (8distinct/11rawverts), ROHotfix archive133 favorable. Fetchmastercourant b0 inchangé ; APP84 exact=union5f59+modulecfgtestfix, horsdocs autresproduits préservés. Nouvellebranche piloteglobalr2 ; ancien349b intact. Canoniquecommitted2150/Common6439 ; jamais recopier la copie locale divergente ni modifier cachecommun gelé.
+
+Coordination : ne pas recopier race READYB5. Réutiliser lifecycle_protocol.py98ab exactSHAc67f072ba0134f97be6150547d80b8a23174937f2c964b0bdc30bec5e0309ec0 pour ready_bounds/phase stable/firstred/PIDstartCGUIDscript et rechecks. Son joblegacy lifecycle-provider désigne admissionprovider ; purpose explicite fts-global-models-and-pg, pas qualificationcycle ni noembedding simulé. Callbackc530 reste endpoint7878/noembeddinguniquement, non transplanté au globalBGE+PG. Contratowner global devra couvrir2providers+PG/nonce/READYsha/observed/lease et rechecks communs, ROgroupéeavantnouveauGO. Aucun appelhealth/PG/service en préparation.
