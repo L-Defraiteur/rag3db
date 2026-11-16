@@ -159,6 +159,51 @@ TEST_F(EmptyBufferManagerTest, ClearingTheSpillFileStartsTheNextSpillAtPageZero)
            "kept from the first spill (a sparse <db>.tmp)";
 }
 
+// The spill file is shared by every connection of a database, and every query clears it when it
+// ends (ClientContext, Spiller::clearFile). A group spilled for a query still running (a
+// partitioning buffer of a COPY) must read back whole after another query has ended (16 Nov. 2026,
+// hotfixs).
+TEST_F(EmptyBufferManagerTest, AnotherQueryEndingDoesNotEraseAGroupStillSpilled) {
+    if (inMemMode) {
+        GTEST_SKIP();
+    }
+    auto bm = getBufferManager(*database);
+    auto mm = getMemoryManager(*database);
+    constexpr uint64_t numValues = 16 * 1024;
+    std::vector<std::unique_ptr<ColumnChunkData>> chunks;
+    chunks.push_back(std::make_unique<ColumnChunkData>(*mm, LogicalType(LogicalTypeID::INT64),
+        numValues, false, ResidencyState::IN_MEMORY, false));
+    for (auto i = 0u; i < numValues; i++) {
+        chunks[0]->setValue<int64_t>(static_cast<int64_t>(i) * 7 + 3, i);
+    }
+    auto chunkedNodeGroup = InMemChunkedNodeGroup(std::move(chunks), 0);
+    chunkedNodeGroup.setUnused(*mm);
+    SpillResult memorySpilled{};
+    bm->getSpillerOrSkip([&](auto& spiller) {
+        spiller.addUnusedChunk(&chunkedNodeGroup);
+        memorySpilled = spiller.claimNextGroup();
+    });
+    ASSERT_NE(memorySpilled.memoryFreed + memorySpilled.memoryNowEvictable, 0);
+    // Another connection's query ends while this group is still on disk.
+    bm->getSpillerOrSkip([](auto& spiller) { spiller.clearFile(); });
+    try {
+        chunkedNodeGroup.loadFromDisk(*mm);
+    } catch (std::exception& e) {
+        FAIL() << "[check: clearfile-keeps-live-spills] the spilled group did not read back after "
+                  "another query ended: "
+               << e.what();
+    }
+    uint64_t wrong = 0;
+    for (auto i = 0u; i < numValues; i++) {
+        if (chunkedNodeGroup.getColumnChunk(0).getValue<int64_t>(i) !=
+            static_cast<int64_t>(i) * 7 + 3) {
+            wrong++;
+        }
+    }
+    EXPECT_EQ(wrong, 0u) << "[check: clearfile-keeps-live-spills] values of the spilled group lost "
+                            "when another query ended and cleared the spill file";
+}
+
 // Simulates the case where we try to evict a page during an optimistic read
 TEST_F(BufferManagerTest, TestBMEvictionSlowRead) {
     if (inMemMode) {
