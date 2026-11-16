@@ -694,7 +694,7 @@ fn oublier_les_aretes_du_fichier(catalog: &mut Catalog, source_id: &str, indexed
     // Sous les générations (2a′-2), seules les lignes vivantes au rang en attente perdent leurs arêtes
     // sortantes, que l'ingestion repose : une ligne retirée garde les siennes, c'est son histoire.
     if let Some(v) = catalog.generations.as_ref() {
-        conditions.push(Predicate::Visible { couche: v.couche.clone(), rang: v.rang });
+        conditions.push(Predicate::Visible { couche: v.couche.clone(), rang: v.rang, masque: Default::default() });
     }
     let filtre = Predicate::AllOf(conditions);
     // Les paires défaites, rendues par la déliaison elle-même : elle
