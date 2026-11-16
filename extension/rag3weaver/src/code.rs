@@ -2158,29 +2158,32 @@ fn stable_scope_keys(
     source: &str,
 ) -> (HashMap<(String, usize), String>, HashMap<String, String>) {
     let mut cle_du_scope: HashMap<(String, usize), String> = HashMap::new();
-    let mut cle_par_position: HashMap<(String, String, String, usize, usize), String> = HashMap::new();
+    // The position adds the bytes of the scope's own node: two homonyms on one line (two comprehensions of
+    // one Python line) share their lines, not their node (16 November 2026).
+    type Position = (String, String, String, usize, usize, Option<usize>, Option<usize>);
+    let mut cle_par_position: HashMap<Position, String> = HashMap::new();
     for (abs, fa) in fichiers.iter().copied() {
         let rel = relative(root, abs);
         // Le fichier se nomme dans sa source, pas dans la racine d'analyse.
         let file = named.get(&rel).map(|(n, _)| n.clone()).unwrap_or_else(|| rel.clone());
         // Les homonymes de même parent et de même type.
-        let mut groupes: BTreeMap<(String, String, String), Vec<(usize, usize, usize)>> = BTreeMap::new();
+        let mut groupes: BTreeMap<(String, String, String), Vec<(usize, usize, usize, Option<usize>, Option<usize>)>> = BTreeMap::new();
         for (i, sc) in fa.scopes.iter().enumerate() {
             groupes
                 .entry((sc.parent.clone().unwrap_or_default(), sc.name.clone(), scope_type_name(&sc.r#type).to_string()))
                 .or_default()
-                .push((sc.scope_start_line, sc.scope_end_line, i));
+                .push((sc.scope_start_line, sc.scope_end_line, i, sc.node_start_byte, sc.node_end_byte));
         }
         for ((parent, name, typ), mut membres) in groupes {
             membres.sort_unstable();
             let qualified = if parent.is_empty() { name.clone() } else { format!("{parent}.{name}") };
-            for (rank, (debut, fin, i)) in membres.into_iter().enumerate() {
+            for (rank, (debut, fin, i, octet_debut, octet_fin)) in membres.into_iter().enumerate() {
                 let key = if rank == 0 {
                     format!("{source}#{file}#{qualified}:{typ}")
                 } else {
                     format!("{source}#{file}#{qualified}:{typ}#{rank}")
                 };
-                cle_par_position.entry((rel.clone(), name.clone(), typ.clone(), debut, fin)).or_insert_with(|| key.clone());
+                cle_par_position.entry((rel.clone(), name.clone(), typ.clone(), debut, fin, octet_debut, octet_fin)).or_insert_with(|| key.clone());
                 cle_du_scope.insert((rel.clone(), i), key);
             }
         }
@@ -2189,7 +2192,7 @@ fn stable_scope_keys(
         .iter()
         .filter_map(|(uuid, e)| {
             cle_par_position
-                .get(&(crate::workspace_path::slash(&e.file), e.name.clone(), e.r#type.clone(), e.start_line, e.end_line))
+                .get(&(crate::workspace_path::slash(&e.file), e.name.clone(), e.r#type.clone(), e.start_line, e.end_line, e.start_byte, e.end_byte))
                 .map(|k| (uuid.clone(), k.clone()))
         })
         .collect();

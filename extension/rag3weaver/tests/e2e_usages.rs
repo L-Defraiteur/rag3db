@@ -1212,3 +1212,22 @@ fn a_shadowed_local_reads_the_binding_visible_where_it_is_used() {
     assert_eq!(cibles_vers(&cat, "materialiser", "describe"), vec![("GraphTool".to_string(), "type".to_string())], "outil.describe(): the second");
 }
 
+/// **Two homonyms on one line both have their file** (ticket « des homonymes sur une même ligne partagent
+/// un seul DEFINED_IN », 16 November 2026): two generator expressions on one Python line, at the top of the
+/// module where no named scope folds them, are two scopes of
+/// the same name, kind and lines; each must be DEFINED_IN its file.
+#[test]
+#[ignore]
+fn two_homonyms_on_one_line_both_have_their_file() {
+    let catalog = setup();
+    let fichiers = vec![("tools/variants.py".to_string(), "A = [1, 0, 1]\nprint(sum(1 for x in A if x), sum(1 for y in A if not y))\n".to_string())];
+    catalog.lock().unwrap().ingest_code(&analyze("/projet", fichiers)).unwrap();
+    let cat = catalog.lock().unwrap();
+    let all = cat.execute_raw("MATCH (s:Scope) WHERE s.file_path = 'tools/variants.py' RETURN s.name, s.start_line").unwrap();
+    let orphans = cat
+        .execute_raw("MATCH (s:Scope) WHERE s.file_path = 'tools/variants.py' AND NOT EXISTS { MATCH (s)-[:DEFINED_IN]->(:File) } RETURN s.name, s.start_line")
+        .unwrap();
+    assert!(all.rows.iter().filter(|r| r[0].as_str() == Some("generator_expression")).count() == 2, "two generator expressions: {:?}", all.rows);
+    assert!(orphans.rows.is_empty(), "every scope has its file: {:?} of {:?}", orphans.rows, all.rows);
+}
+
