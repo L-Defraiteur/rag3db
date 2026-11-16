@@ -60,3 +60,7 @@ RO7749 favorable bornée ; sync_and_trace fait expect(Ok) avant de rendre TRACE,
 ## Réserves pilote DOUBLE490 — avant correction
 
 Hotfixs : (1) main-profile ne vérifie avantcontinue que basename/librag3db.so, SDKexact n'est vérifié qu'après exact0 ; exiger cheminmap canonique SDK59 ET empreintepin ledger AVANTcontinue. (2) cache_quiet accumule exe/cwd/FD puis attribue : PermissionError ultérieure peut effacer attribution d'un chemin déjàobservé sousT/source. Attribuer dès chaque lecture, conserver found/attributed sur erreur ; UNKNOWNattribuable refuse avantadoption.490 retiré avantallocation/run ; PCQv1 conservé, futurQv2 distinct ; aucunT muté. TémoinsCPU hermétiques à publier avantfix, pas de processus/proc/signaux réels.
+
+## DOUBLE premier refus du harnais — avant tout nouveau diff
+
+Pilote4d526/APP3ee uneinvocationGO C7 : buildrc0/ledgerELF268229be/invent2ignored0 ; CLASSICréelrc0/1passed0failed0ignored/tracecounts1-rebuild1/FTS[0,9000000]→[0] et UUID-H-positions conservés. Harnais ligne167 refuse nom+ok interrompu par événementsGDBthreads : premierrouge1189092.891744, GEN NONJOUÉ. Aucunretry ; nouveauGOdistinct nécessaire. Rapport19/manifeste62files2postes1a2e39e4...19324 ; scopeROUGE1TERMINE/restes[]/quiet127owned/postedéjàrendu. Défautcontrôleur connu NONCORRIGÉ àcecommit, ne qualifie pas DOUBLE ni branchegénérations/historique. État OUVERT.
