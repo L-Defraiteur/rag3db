@@ -1,6 +1,6 @@
 # Retirer les ressources privées des fixtures après atterrissage
 
-- **État** : ouvert — autorisation C7 après master b0a845bb4877328eada37951c174e3d208986630.
+- **État** : ouvert — retrait gardé de16WT/14branches locales/target terminé ; quatre WT PC avec ignorés conservés.
 - **Porteur** : mémoire.
 - **Famille** : produit.
 - **Gravité** : ressources privées à retirer après livraison, sans perte des preuves.
@@ -32,3 +32,15 @@ pas de suppression d’une cible liée ou étrangère, pas de service ni de base
 Rapport détaillé des ressources retirées et conservées, empreintes des copies aux
 deux postes, rapports frais avant retrait, totaux octets/WT/branches. Le ticket reste
 ouvert tant qu’un retrait autorisé reste bloqué ou qu’un contrôle manque.
+
+## Résultat et suite bornée
+
+[Rapport13](../16-11-2026/13-retrait-garde-des-fixtures.md) : 16WT retirés après
+archives2postes et garde6f3 fraîche verte, 14branches -d, target privé retiré après
+provenance/ELFs2postes/scans. Archives finales363entrées identiques2postes, manifeste
+b7d35c4e2bbf2dd67c9a6804800f612a0b681256791d15285fef2c0d3dcae3d4.
+Quatre WT PC conservés avec target interne ou __pycache__ ignorés ; aucun clean/reset.
+La suite exige d'abord une décision sur ces données, sans contourner la garde.
+Source734/archives physiques/branches distantes/anciens rouges et ELF conservés.
+Incident scp cachecommun garde_worktree.py existant réécrit6f3 sans ancienSHA :
+rapport et métadonnées publiés, C7 averti ; aucune restauration spéculative.
