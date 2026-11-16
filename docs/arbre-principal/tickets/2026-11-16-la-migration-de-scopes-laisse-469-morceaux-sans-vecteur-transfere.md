@@ -224,3 +224,13 @@ classifié sans requête snapshot, FTS/finished seulement sur même copieaudit
 figée, bornes aprèsposte floor(ENDoriginal−now)−3/refus<=60, pasreset900.
 Nouvelles5fonctionsCPU vertes0.024s, aucuneDB/provider. Paquet/source/RO/GO
 distinct requis ; expirationinitiale interdit toute extension implicite.
+
+ExpirationCC18 confirmée1190971.838355937/END1190939.194661205, aucune
+autorité/P/S/allocation de continuation. DeuxRO ED/Recherche favorables
+normalisationRAW seulement, canonicalSHA indépendant934621126891d9d8b35f2f875ed5bf31fc94072a11948169ce49a79ee6f6c07a.
+C7autorise PREPAÉTAPEDISTINCTE FIN-RO600, PASexécution. Voir [recette10](../16-11-2026/10-preparation-fin-ro-dette.md) : nouveauWT/branche,
+nouvellefreezeFIN entière avantDB, neufsources/pins dont huitCC18historisés,
+outer598+kill2/common530 aprèsposte32G ; grapheRAW classifié sans snapshotSQL,
+FTS5/finished seuls manquants. AncienEND conservé commehistorique, pasreset.
+DeuxCPU nouveaux +2normalisation verts0.025s, aucun natif/DB/provider.
+NouveauSHA/paquet/2RO/GOdistinct requis ; les deuxrouges et limites restent.

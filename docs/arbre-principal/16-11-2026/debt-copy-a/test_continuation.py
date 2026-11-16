@@ -6,7 +6,7 @@ import continue_result as c
 
 class ContinuationContract(unittest.TestCase):
  def test_poste_receipt_uses_only_remaining_original_budget(self):
-  common=types.SimpleNamespace(poste_tenu=lambda p:True,processus=lambda:[]) 
+  common=types.SimpleNamespace(poste_tenu=lambda p:True,processus=lambda:[])
   with tempfile.TemporaryDirectory() as d:
    root=Path(d);(root/'prepared.json').write_text(json.dumps(dict(timeout='/fake/timeout')))
    with patch.object(c,'Q',root),patch.object(c.q,'loadmod',return_value=common),patch.object(c.time,'monotonic',return_value=c.END-100),patch.object(c.os,'execv') as execute:c.post()
