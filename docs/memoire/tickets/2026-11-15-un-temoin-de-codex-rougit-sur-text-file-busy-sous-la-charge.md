@@ -77,3 +77,15 @@ NON JOUÉE ; conservation du premier rouge et des limites de cette preuve.
 Préparation magasin explicite sous XDG privé : contrôle résolveur seul portable/
 PC conforme, pin59ac et so/vectorSHA dans le rapport. La future recette fixe
 RAG3DB_LIBS_DIR réel sans copie SDK ; ce contrôle ne déclenche aucune passe.
+
+## Union neuve après masterbef, avant pilote et exécution
+
+C7 demande candidatNEUF avec codeEmbar entré après734. Branche
+cx-memoire-script-fixtures-union-r1 depuisbef0 ; sixpatcheségaux, seulRust
+codex_threads.rs mode/OID734 exact et préfixeproductioncfgtest inchangé.
+Tousmasterhorschevauchementpréservés, audit/range dansrapport09.
+[RecetteDISTINCTE3600proposée](../16-11-2026/09-union-master-et-recette-distincte.md),
+F8/lib/NAV+deuxièmeELFmême, nouvellefenêtre pasresetancien7200. Pilote et
+transitionGit archive734physique/mêmeC SAMEOWNER àpréparer ; zéro Cargo/target
+ou sourcePC734 touchés, pasGOmaster/retrait. Preuves2a068 restent acquises734,
+aucun report automatique àl'union avec 5Rust Embar entrants.

@@ -1,0 +1,23 @@
+{
+  "master": "bef0b27cb33b9143dabee019fccdf7453da553a3",
+  "prior_qualified_source": "734087a4e99d54331aac2f6321df9ef6da3b6d9c",
+  "audited_code_commit": "696df9cf7b80b41993cb3a504e80d3f3fa79a788",
+  "own_product_paths": [
+    "extension/rag3weaver/src/codex_threads.rs"
+  ],
+  "own_product_mode_type_oid_equal_to_source": true,
+  "production_prefix_before_cfg_test_byte_equal_to_master": true,
+  "master_protected_entries": 8984,
+  "master_protected_mismatches": [],
+  "range_diff_equal_patches": 6,
+  "protected_master_product_paths": [
+    "extension/rag3weaver/src/catalog.rs",
+    "extension/rag3weaver/src/catalog/progress.rs",
+    "extension/rag3weaver/src/daemon/embeddings.rs",
+    "extension/rag3weaver/src/embedder.rs",
+    "extension/rag3weaver/src/model_source/activation.rs",
+    "tools/poste/push_garde.sh",
+    "tools/poste/test_stack_headers.py"
+  ],
+  "meaning": "all protected paths compare mode/type/OID; includes gitlinks/locks/templates/C++; no runtime; final doc additions do not change product"
+}
