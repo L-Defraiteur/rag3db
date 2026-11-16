@@ -1,0 +1,112 @@
+[
+  {
+    "path": "canonical-manifest.json",
+    "size": 8145,
+    "sha256": "2754c91e37815873fbdfd4bbeff2800ca2b3f259f1f24397b2038c88a5a9ddde"
+  },
+  {
+    "path": "classify_raw.py",
+    "size": 10969,
+    "sha256": "fd1de7f9bc600d7213c2e612ec49387ff108d27c37a446b3498d64bc6395384e"
+  },
+  {
+    "path": "green-v1/result.json",
+    "size": 112,
+    "sha256": "e835360503853785d9af371bcaa17950fb0cfca73936039f22fc0d9ae6c5f31a"
+  },
+  {
+    "path": "green-v1/stderr.log",
+    "size": 1658,
+    "sha256": "3bb4a6044d7e726be046a133dec47c43fbefedcc73ecb65e13e7d046e83fb280"
+  },
+  {
+    "path": "green-v1/stdout.log",
+    "size": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "path": "green-v2/result.json",
+    "size": 111,
+    "sha256": "72c1dcaaa4a316b75839116ef2688096bf1079189a26af8061cce34b30038bef"
+  },
+  {
+    "path": "green-v2/stderr.log",
+    "size": 1438,
+    "sha256": "ac9138dac4501a0e9278ad94b8caeafc9c48e00de5a49f5fb40e858021489d3f"
+  },
+  {
+    "path": "green-v2/stdout.log",
+    "size": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "path": "green-v3/classification.json",
+    "size": 8204,
+    "sha256": "5e139fba759e8f1629933d81fae522f9b1d3502f707ac47cefb14dbc983df610"
+  },
+  {
+    "path": "green-v3/result.json",
+    "size": 111,
+    "sha256": "b98073ca94be14742f2c4215eb4cdb65bdc9f63ab0be10ddb9e2b5df85ac23d7"
+  },
+  {
+    "path": "green-v3/stderr.log",
+    "size": 110,
+    "sha256": "127fb1ed491083a56bbad2bc0f50ca4270ad33d9c68f6a152e4089eef6c876da"
+  },
+  {
+    "path": "green-v3/stdout.log",
+    "size": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "path": "observed-inventory.json",
+    "size": 443412,
+    "sha256": "02455373cba66f02d8aba186c5a7de7c7f5ef2eb5bfc8fa985381c41e00cbec3"
+  },
+  {
+    "path": "prepared.json",
+    "size": 633,
+    "sha256": "c653aa17271c82892d92faa3ff43c52db49714583287aa530da50299e9fd189b"
+  },
+  {
+    "path": "red-v1/result.json",
+    "size": 141,
+    "sha256": "6baf9657e409825ba2f3f35b1bbee56a74fa779b372877b979ff838ef0a79489"
+  },
+  {
+    "path": "red-v1/stderr.log",
+    "size": 1684,
+    "sha256": "bb46f0b384c009b91b3e5c99d1150b4b5adc398d461a23eefdddcbd8a91f2276"
+  },
+  {
+    "path": "red-v1/stdout.log",
+    "size": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "path": "red-v2/result.json",
+    "size": 79,
+    "sha256": "9159a6e2b053b827061cba35577739aa769efa3dd8ef5181812e63d2a6cee2f1"
+  },
+  {
+    "path": "red-v2/stderr.log",
+    "size": 1874,
+    "sha256": "5eccf0f17ddac07dd6b0c6408c683b3a15f3d6e41fb11232ff92bce80bd4f5f4"
+  },
+  {
+    "path": "red-v2/stdout.log",
+    "size": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "path": "test_classifier.py",
+    "size": 5562,
+    "sha256": "76ca08ccf710c031c18c7e73f0b8f18cfb7c10cafb5302fe7979f543616643a8"
+  },
+  {
+    "path": "test_old_helper_red.py",
+    "size": 1453,
+    "sha256": "eb2b965ca3fad586fd6cb355f46fe0c8622f9bc4b721b1a5886c04880d0aee7f"
+  }
+]
