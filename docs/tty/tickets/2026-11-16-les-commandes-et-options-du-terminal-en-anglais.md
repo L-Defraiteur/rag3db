@@ -47,3 +47,16 @@ Ajouter un nom anglais à chaque `/commande` et option française, en gardant l'
 ## Taille et blocage
 
 3 heures. Rien ne le bloque.
+
+
+## Reprise du 16 novembre — témoins préparés
+
+Porteur tty ; branche `cx-tty-english-aliases`, worktree
+`/home/lucied/git_workspaces/cx-tty-english-aliases`, base `927941a67a`.
+Réservation : `tty/src/commandes.rs`, `tty/src/main.rs`, `tty/README.md` et tests
+locaux ; aucun changement d'hôte ou de thème, aucun besoin de `tui.rs` identifié.
+Deux témoins ajoutés pour équivalence des commandes et complétion anglaise.
+NON JOUÉS : la compilation et le harnais attendent FINI de la fenêtre optimiseur.
+Aucun rouge observé encore, aucun correctif appliqué. Prochain pas : jouer les
+témoins, conserver le rouge puis corriger ; parser CLI testable et compatibilité
+`--task` silencieuse à couvrir. Aucun ancien créneau ne se réactive.
