@@ -83,3 +83,8 @@ Correction : liste fermée canonical-pass.log, second-lib.log et official/{temoi
 check_features,preuve,lib,navigateur,resume}.log ; aucun parcours des caches.
 Témoins actifs FAILED et expected should_panic conservés, aucune exception de
 contenu ni whitelist du mot FAILED dans les sorties actives. Nouveau pilote à RO.
+
+Après code publié36da4238cb : 11fonctions hermétiques/0échec en0,003s,
+timeout20, sans process réel/Cargo/proc/signal. Journal vert horsW
+`journaux-cx-memoire-script-fixtures-16nov/vert-watcher.log` ; rouge conservé.
+App734087 inchangée, aucune Auth/PQS/T créée. RO+GO exact nouveau pilote requis.
