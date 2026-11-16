@@ -19,3 +19,16 @@ Taper `!sudo true`, Entrée, puis tout de suite le mot de passe, avant l'invite 
 - ne garder de la sortie que ce qui suit la dernière invite de mot de passe reconnue, ou retirer d'une sortie l'écho d'une frappe qui précède une coupure d'écho (le terminal sait ce qu'il a relayé) ;
 - lire l'état d'écho du pseudo-terminal (`tcgetattr` sur le maître) avant de relayer une frappe, et retenir les frappes tant que la commande n'a pas lu ;
 - au moins, dire dans la consigne qu'une frappe a précédé l'invite.
+
+## Observation privée du16 novembre, à attribuer sans confondre les causes
+
+Harnaisseul91e5, phase0008 fauxsudo : invite et retour attendus nonvus,
+marqueur de mot de passe **factice** dans journal/raw, pas dans la consigne.
+Le harnais a été interrompu automatiquement au premier rouge, CommonTERMINÉ/
+restes[]/nettoye true. Ce constat ne prouve pas encore la course de frappe
+précoce décrite ci-dessus : l'invite elle-même est absente, la commande pourrait
+avoir échoué avant l'invite. Aucune cause alias ou nouveau défaut produit déduite.
+
+Preuves détaillées/traces désormais persistées et suivi d'attribution dans
+`2026-11-16-le-harnais-perd-les-traces-des-seances-et-juge-la-fin-sur-les-octets.md`.
+Aucun secret réel, aucune exécution sur l'hôte de Lucie, pas de réessai/fix.
