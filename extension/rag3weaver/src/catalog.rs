@@ -12291,6 +12291,74 @@ mod tests {
         assert!(t[0] <= 100 && t[0] > 90, "le plafond déclaré : {t:?}");
     }
 
+    // ─── The rate key by called address and host (16 November 2026) ───
+    // Agreed with the banc (docs/banc/16-11-2026/03-le-banc-d-etalonnage.md, § 7) :
+    // `embedding_rate:{model}:{address}@{host}`, the old `{model}:service|local`
+    // read as a fallback and no longer written.
+
+    /// A service-like embedder : distant, with the address it calls.
+    #[cfg(feature = "rag3db-native")]
+    struct CallingEmbedder(Option<String>);
+
+    #[cfg(feature = "rag3db-native")]
+    impl Embedder for CallingEmbedder {
+        fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, crate::embedder::EmbedError> {
+            Ok(texts.iter().map(|_| vec![0.5; 4]).collect())
+        }
+        fn dim(&self) -> usize { 4 }
+        fn name(&self) -> &str { "rate-model" }
+        fn distant(&self) -> bool { self.0.is_some() }
+        fn called_address(&self) -> Option<String> { self.0.clone() }
+    }
+
+    #[cfg(feature = "rag3db-native")]
+    fn catalog_calling(address: Option<&str>) -> Catalog {
+        let conn = crate::Rag3dbConnection::in_memory().expect("in-memory base");
+        let ext = crate::backend::vector_extension_of_this_process().unwrap_or_else(|e| panic!("{e}"));
+        crate::connection::DbConnection::execute(&conn, &format!("LOAD EXTENSION {}", crate::connection::cypher_path_literal(&ext))).expect("vector extension");
+        let mut catalog = Catalog::new(Box::new(conn), Box::new(CallingEmbedder(address.map(String::from))), CatalogConfig { name: Some("rates".into()), embedding_dim: 4, ..Default::default() });
+        catalog.initialize().unwrap();
+        catalog
+    }
+
+    /// **The measured rate is noted under the called address and the host**, and
+    /// the old key is no longer written.
+    #[cfg(feature = "rag3db-native")]
+    #[test]
+    fn the_measured_rate_is_noted_under_the_called_address_and_host() {
+        let catalog = catalog_calling(Some("127.0.0.1:7999"));
+        catalog.note_measured_embedding_rate(crate::estimate::Rate { chars_per_second: 1234.0 }).unwrap();
+        let place = format!("127.0.0.1:7999@{}", crate::catalog::progress::this_host());
+        assert_eq!(catalog.embedding_rate_at("rate-model", &place).unwrap().map(|r| r.chars_per_second.round()), Some(1234.0), "noted under {place}");
+        assert_eq!(catalog.embedding_rate("rate-model", "service").unwrap(), None, "the old key is no longer written");
+        assert_ne!(crate::catalog::progress::this_host(), "unknown-host", "the host is this machine's name");
+    }
+
+    /// **An in-process embedder is noted as `local@<host>`.**
+    #[cfg(feature = "rag3db-native")]
+    #[test]
+    fn an_in_process_embedder_is_noted_as_local_at_its_host() {
+        let catalog = catalog_calling(None);
+        catalog.note_measured_embedding_rate(crate::estimate::Rate { chars_per_second: 77.0 }).unwrap();
+        let place = format!("local@{}", crate::catalog::progress::this_host());
+        assert_eq!(catalog.embedding_rate_at("rate-model", &place).unwrap().map(|r| r.chars_per_second.round()), Some(77.0));
+        assert_eq!(catalog.embedding_rate("rate-model", "local").unwrap(), None);
+    }
+
+    /// **The known rate reads the new key first, then falls back to the old one.**
+    #[cfg(feature = "rag3db-native")]
+    #[test]
+    fn the_known_rate_falls_back_to_the_old_key_then_prefers_the_new_one() {
+        let catalog = catalog_calling(Some("127.0.0.1:7999"));
+        catalog.note_embedding_rate("rate-model", "service", crate::estimate::Rate { chars_per_second: 500.0 }).unwrap();
+        assert_eq!(catalog.known_embedding_rate().unwrap().map(|r| r.chars_per_second.round()), Some(500.0), "the old key, as a fallback");
+        let place = format!("127.0.0.1:7999@{}", crate::catalog::progress::this_host());
+        catalog.note_embedding_rate_at("rate-model", &place, crate::estimate::Rate { chars_per_second: 900.0 }).unwrap();
+        assert_eq!(catalog.known_embedding_rate().unwrap().map(|r| r.chars_per_second.round()), Some(900.0), "the new key wins");
+        let other = format!("127.0.0.1:7888@{}", crate::catalog::progress::this_host());
+        assert_eq!(catalog.embedding_rate_at("rate-model", &other).unwrap(), None, "another address has its own rate");
+    }
+
     #[test]
     fn lexical_catalog_refuses_sparse_provider_before_initialization_effects() {
         let mut catalog = Catalog::without_embedding_model(Box::new(MockConnection::new()), CatalogConfig::default());
