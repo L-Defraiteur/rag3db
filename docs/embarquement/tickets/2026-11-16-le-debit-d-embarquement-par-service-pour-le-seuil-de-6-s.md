@@ -106,3 +106,15 @@ Proposition bornée5400 s, neuf ciblés puis passe/suites exigées, target uniqu
 hérité : `docs/embarquement/16-11-2026/03-rate-key-validation-proposal.md`.
 La priorité Recherche/Archi aux deux créneaux Rust demeure ; cette proposition
 n'est pas une admission. Attendre le cadrage courant, aucun ancien GO ou pin.
+
+
+### Préparation du couple post-ED, non lancé
+
+ED intégré masterd395cb1f03f84c6abdfa023a0e3c7f87a7c0dab6 ; rebase neuf
+sur `cx-rate-key-20261116-r3`, sans conflit. Cinq chemins réservés inchangés
+à l'amont, mais union backend/search à qualifier réellement. Le pilote reste
+une passe complète5400 s : neuf ciblés avant coordination canonique réelle,
+puis code_sync/lectures/activation/F5/preuve/lib/NAV. Clarification C7 : appels
+canoniques7878/7879 possibles après GO/coordination, aucun changement de services
+ni base de Lucie ; slotPG fixture aussi coordonné. Source/pilote doivent être
+admis ensemble. Aucun Cargo ou runtime n'a été lancé pendant la préparation.
