@@ -72,3 +72,39 @@ Les anciennes bornes de passe ne se réactivent pas.
 Ressources actuelles : aucun build/test/service/target nouveau lancé par cette
 préparation ; aucune opération dans les anciens worktrees/admins. Les WIP et
 les rouges historiques restent préservés. Import ES externe hors de ce lot.
+
+## Base et pin après FINI G, qualification encore non lancée
+
+Reprise rebasée sur 68590270e21d00285b29800bd9cdecf0cb921461, branche active
+`cx-codeparsers-rust-stop-words-3`, code de reprise379d7857151c15c123b35614dc7ec4eac607daa2.
+Un conflit add/add purement documentaire sur le ticket du chemin std a été
+résolu en conservant le ticket complet du master et le complément de reprise ;
+aucun conflit produit. La publication automatique du nom -2 était partie avant
+fin du rebase : son distant est laissé intact comme sauvegarde, aucune poussée
+forcée. Le nom -3 porte le rebase terminé ; status propre et absence de rebase
+relus. Le sous-module reste34c74e4, les 43 mots sont inchangés, seuls les champs
+et le générateur neufs sont anglicisés. Cargo.toml/lock de Lucivy4.3.9 sont
+conservés depuis le master ; aucune commande Cargo exécutée.
+
+Le nouveau tools/poste/passe_epinglee.sh et sa copie cache locale ont le même
+SHA-256 2150fcd847b1df7de04908d357a0c78abc05e50ce599e2793ff08ab48108825d.
+La lib épinglée est
+rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF.
+Pas de MOTEUR_ANCIEN pour cette base927/685. Source du moteur plus neuve à signaler
+si master bouge avant la qualification, sans promesse d'ABI implicite.
+
+Proposition de première acquisition après accord du créneau : **1800 secondes
+neuves après poste lourd**, Max32G/j8, mode `temoins`, filtre
+`on_the_same_line`, SUITE_DU_TEMOIN=e2e_usages, branche source figée avant
+acquisition. Les deux nouveaux témoins sont attendus rouges sur le filtre
+contextuel encore intact ; un rouge de montage/compilation se diagnostique et
+ne vaut pas rouge du défaut. Conserver sorties et code retour, puis seulement
+corriger et proposer un nouveau jeu borné. Pas de phase complète ou sonde lancée
+sur ce budget. Priorité Recherche/Archi puis ED respectée ; aucun slot demandé
+à la machine avant coordination. Target reçu target-import-pointe-pile à
+qualifier (capacité/garde) avant usage, pas de target supplémentaire créé ici.
+
+Point à coordonner pour la future passe PG : le lanceur officiel impose
+rag3weaver_test à luciepc, même si une variable PG était posée en amont. Ne pas
+prétendre utiliser une base privée par simple export ; fixer le créneau PG ou
+une voie approuvée avant la passe. Les deux témoins seuls n'utilisent pas PG.
