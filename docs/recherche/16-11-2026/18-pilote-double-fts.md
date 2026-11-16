@@ -19,3 +19,5 @@ Prépublicationcode d41ea56e8e avant essais hermétiques :4fonctionsCPU/0échec 
 ## Réserves490 corrigées avant admission
 
 490 retiré avantallocation/run ; ticket6012 AVANTdiff, témoins913189 AVANTfix. Qv2 distinct conserveQv1 ; P/S restentabsents. SDKàmain : parser les vrais cheminsmap, exiger EXACTSDK59 résolu sansalias/deleted et SHA==ledger.sdk AVANTcontinue, en plus profil etELF. Trace/main-sdk publié ; erreur tue uniquementinferior puisquit1. Pas de basenamegénérique qualifiant. ScanT/source : chaqueexe/cwd/FD attribué immédiatement ; Permission ultérieure conservefound/attributed etrefuseUNKNOWNattribuable avantgarde. Témoins synthétiques mauvaisSDK/hash/deleted↔bon et attributionexe/FDavantPermission ; aucunproc/GDB/signalréel.
+
+Premier appel CPU après1dc arrêté à import : IndentationError sur reliquat de remplacement du scan, aucun témoin atteint, pas un rouge qualifiant des deux réserves. Correction de syntaxe avant essais effectifs ; aucune admission/native. Témoins aux points d’entrée réels à compléter après cette première correction, chronologie non réécrite.
