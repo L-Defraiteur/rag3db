@@ -1107,3 +1107,26 @@ fn an_inherited_method_is_reached_through_the_derived_type() {
     assert_eq!(cibles_vers(&cat, "alter", "setOID"), vec![("CatalogEntry".to_string(), "type".to_string())]);
 }
 
+/// **Two bases that both define the name: no guess** (the bound of the inherited search, c7, 16 November
+/// 2026). `Both` derives from `Left` and `Right`, which each define `reset`: `b->reset()` gets no edge. A
+/// guard, not a red: it held before the search existed, and must hold with it.
+#[test]
+#[ignore]
+fn two_bases_defining_the_name_are_not_guessed() {
+    let catalog = setup();
+    let fichiers: Vec<(String, String)> = [
+        ("d/left.h", "#pragma once\nclass Left {\npublic:\n    void reset();\n};\n"),
+        ("d/left.cpp", "#include \"left.h\"\n\nvoid Left::reset() {}\n"),
+        ("d/right.h", "#pragma once\nclass Right {\npublic:\n    void reset();\n};\n"),
+        ("d/right.cpp", "#include \"right.h\"\n\nvoid Right::reset() {}\n"),
+        ("d/both.h", "#pragma once\n#include \"left.h\"\n#include \"right.h\"\nclass Both : public Left, public Right {\npublic:\n    void run();\n};\n"),
+        ("d/both.cpp", "#include \"both.h\"\n\nvoid Both::run() {\n    Both* b = nullptr;\n    b->reset();\n}\n"),
+    ]
+    .iter()
+    .map(|(p, c)| (p.to_string(), c.to_string()))
+    .collect();
+    catalog.lock().unwrap().ingest_code(&analyze("/projet", fichiers)).unwrap();
+    let cat = catalog.lock().unwrap();
+    assert_eq!(cibles_vers(&cat, "run", "reset"), Vec::<(String, String)>::new(), "two bases define reset: no guess");
+}
+
