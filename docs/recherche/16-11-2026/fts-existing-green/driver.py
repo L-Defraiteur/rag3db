@@ -1,5 +1,5 @@
 """Run the one authorized pre-fix witness under the common validation receipt."""
-import hashlib,json,os,subprocess,sys,time
+import hashlib,json,os,re,selectors,subprocess,sys,time
 from pathlib import Path
 W=Path(sys.argv[1]).resolve();P=Path(sys.argv[2]).resolve();P.mkdir(exist_ok=False)
 C=W/'extension/rag3weaver'
@@ -46,10 +46,29 @@ def run(name,argv,cap):
  remaining=END-time.monotonic()-5
  assert remaining>0
  save(name+'.command.json',dict(argv=argv,start=time.monotonic(),timeout=min(cap,remaining)))
+ deadline=time.monotonic()+min(cap,remaining)
  with (P/(name+'.log')).open('wb') as f:
-  result=subprocess.run(argv,cwd=C,stdout=f,stderr=subprocess.STDOUT,timeout=min(cap,remaining))
- save(name+'.result.json',dict(returncode=result.returncode,end=time.monotonic()))
- return result.returncode
+  child=subprocess.Popen(argv,cwd=C,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+  assert child.stdout is not None
+  selector=selectors.DefaultSelector();selector.register(child.stdout,selectors.EVENT_READ)
+  tail=b'';stopped=False
+  try:
+   while selector.get_map():
+    assert time.monotonic()<deadline,'phase deadline exceeded'
+    for key,_ in selector.select(min(.05,max(0,deadline-time.monotonic()))):
+     chunk=os.read(key.fileobj.fileno(),65536)
+     if not chunk:selector.unregister(key.fileobj);continue
+     f.write(chunk);f.flush();tail=(tail+chunk)[-131072:]
+     if name in ['witness','module'] and not stopped and re.search(rb'(?m)^test .* \.\.\. FAILED\r?$|panicked at',tail):
+      save('first-red.json',dict(phase=name,observed=time.monotonic(),child_pid=child.pid))
+      stopped=True;child.terminate()
+   code=child.wait(timeout=max(.01,deadline-time.monotonic()))
+   if stopped and code==0:code=1
+  finally:
+   selector.close()
+   if child.poll() is None:child.terminate()
+ save(name+'.result.json',dict(returncode=code,end=time.monotonic()))
+ return code
 export_script='source "$1"; exporter_la_lib || exit; python3 -c \'import json,os; print(json.dumps({k:os.environ.get(k) for k in ["RAG3DB_SHARED","RAG3DB_LIBRARY_DIR","RAG3DB_INCLUDE_DIR","LD_LIBRARY_PATH"]}))\''
 native=json.loads(subprocess.check_output(['bash','-c',export_script,'export-profile',str(C/'scripts/lib_du_magasin.sh')],cwd=C,text=True))
 os.environ.update(native)
