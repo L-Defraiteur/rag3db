@@ -68,3 +68,14 @@ reste effectif après poste et nouvelle RO/GOexacte, en conservant P/Q/Sv1 et T.
 Cette variante nécessiterait une admission de cache porté documentée et strictement
 vérifiée ; pas de copie d'ELF inventée, pas de reset7200, pas de relance automatique.
 Ticket reste ouvert, aucune intégration/retrait/master déduit.
+
+### Complément diagnostic RO, sans rejeu
+
+Le [ticket fils socket](../tickets/2026-11-16-le-profil-tmp-prive-depasse-la-longueur-des-sockets-des-temoins-du-pont.md)
+porte cette suite distincte. Snapshot supplémentaire PC/local byteidentique
+`client/socket-diagnostic.json`, SHA93cabda18895dc12031a0eef061a86c2834a2c062817789a2c3d6a2f94641c7a :
+7dossiers réels, UID/modes/inodes/absence socket, géométrie108/115octets,
+profil HOME/XDG/TMP/DBUS/états, quotas relevés, Nodev22.22.3 (commande version
+seule, rc0). Les26entrées du premier manifeste restent inchangées ; ce supplément
+est séparé et ne repeint pas leur rouge. Aucun témoin produit/service rejoué.
+C7 impose HOLD : aucun helper/profil modifié jusqu'au diagnostic et à sa RO.
