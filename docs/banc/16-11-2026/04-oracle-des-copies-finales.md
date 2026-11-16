@@ -82,3 +82,40 @@ un délai autorisé ni une promesse. Qualification du lecteur et pertinence à
 ajouter selon cache/volume ; annoncer avant acquisition. Une portée commune
 32G avec preuves neuves et un budget global ; aucun verrou extérieur doublé,
 aucun ancien GO réactivé. Les copies de parité sont conservées.
+
+## Captures privées réalisées avant fermeture
+
+Racine `~/.cache/rag3db-banc-notes/source-freeze-16nov/`, aux postes indiqués.
+Chaque dossier contient `source/`, `inventory.json`, `inventory.sha256`,
+`declaration-offline.json` et `declaration-proof.json`. La déclaration copiée
+pointe sur sa source privée, a `database: null` et n'est pas exécutable. Les
+modèles LLM y sont retirés ; aucun chemin de base vivante n'est fourni au banc.
+
+| Poste / dossier | Fichiers | SHA256 de inventory.json |
+| --- | ---: | --- |
+| portable / portable-02 | 9074 | aecbedb04fb69cfcfe364268645ef339904668548daf626743d8fe44f1bb9401 |
+| luciepc / pc-principal-02 | 6949 | 5911ae8f24a660c2c525095357571422c0601bc4dead535ce22e5a1aa24ae232 |
+| luciepc / pc-lourd-02 | 7965 | 8f87e531ee2fadd37290437227d9ddeddeb59aa73db37d5b346495712cd9d512 |
+
+Les bytes du working tree sont copiés, y compris non suivis non ignorés et
+sous-dépôts initialisés. fuzzy-fst est présent dans pc-principal. Les HEAD de
+codeparsers capturés sont respectivement c660893dadf401c050b2ddbee84765615f917d3b,
+0c72f6812734306d2af8364f8b5c8798f7f3f614 et
+353d2c439d57c7967364b4892e9051dc8fa979b3 : ce sont les versions du **code source
+indexé**, pas la version du parseur embarqué dans le lecteur927. Ne pas les
+confondre ni modifier les arbres pour les aligner.
+
+Contrôle immédiatement après capture : tous les hashes source et copie sont
+identiques ; HEAD et empreintes de git status inchangés pour chaque sous-dépôt.
+La capture est STABLE_CANDIDATE, **pas corpus oracle qualifié**. Le script
+`verify.py` conservé aux deux postes permet le contrôle après repassage :
+`python3 <racine>/verify.py <racine>/<dossier>`. Il rend les chemins changés sans
+lire `.env` ni `.vault` ; il ne certifie pas l'équivalence du scanner.
+
+Limites à lever avant matched : admission par `.ignore`, exclusions Git/globales,
+liens internes admis par WorkingTree mais non suivis par cette capture,
+exclusion1MiB et lignes minifiées. L'inventaire indique les exclusions et ne
+contient aucun fichier `.env*`, `.vault` ou administration `.git`. Aucun chmod
+ni checkout n'a été fait dans les arbres sources. Les premières captures01,
+incomplètes à cause d'un lien récursif, sont conservées ; la capture locale01
+encore active a été arrêtée par son PID vérifié. Aucun service ni GPU touché.
