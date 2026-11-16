@@ -4754,15 +4754,6 @@ impl Backend {
             })?;
             response["view"] = read;
         }
-        if let Some(state) = index_state {
-            let line = not_ready_line(&state);
-            response["index"] = state;
-            for key in ["result", "presentation"] {
-                if let Some(text) = response.get(key).and_then(Value::as_str) {
-                    response[key] = Value::String(format!("> {line}\n{text}"));
-                }
-            }
-        }
         context["result"] = response["result"].clone();
         let mut report = self.validate_hooks(prepared, &harness.after, &context);
         report.warnings.extend(before.warnings);
@@ -4789,6 +4780,17 @@ impl Backend {
         }
         if attachment.freshness {
             self.dire_la_fraicheur(&mut response);
+        }
+        // After the freshness line, which a text already headed by « > » would skip:
+        // both lines are said.
+        if let Some(state) = index_state {
+            let line = not_ready_line(&state);
+            response["index"] = state;
+            for key in ["result", "presentation"] {
+                if let Some(text) = response.get(key).and_then(Value::as_str) {
+                    response[key] = Value::String(format!("> {line}\n{text}"));
+                }
+            }
         }
         Ok(response)
     }
@@ -8750,6 +8752,7 @@ mod tests {
         assert!(t.elapsed() < std::time::Duration::from_secs(1), "the read did not wait: {:?}", t.elapsed());
         assert_eq!(answer["index"], json!({"ready": false, "eta_s": 20, "pending_files": 1}), "{answer}");
         assert!(answer["result"].to_string().contains("index pas prêt, environ 20 s"), "{answer}");
+        assert!(answer["result"].to_string().contains("1 fichier changé"), "the freshness line is still said: {answer}");
     }
 
     /// **Without an observed rate, a read waits at most the setting, and says
