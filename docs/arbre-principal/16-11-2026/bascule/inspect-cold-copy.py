@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Fixed portable cold-copy inventory; no live path or service is opened."""
 from pathlib import Path
-import hashlib,importlib.util,json,os,subprocess,sys
+import hashlib,importlib.util,json,os,stat,subprocess,sys
 HERE=Path(__file__).resolve().parent
 spec=importlib.util.spec_from_file_location('inspect_fts',HERE/'inspect-fts.py');fs=importlib.util.module_from_spec(spec);spec.loader.exec_module(fs)
 HOME=Path.home()
 SOURCE=HOME/'.local/share/rag3weaver/instantanes/avant-59ac9c86b-20261116-927/code-rag3db-depot'
-ROOT=HOME/'.cache/rag3weaver-build/bascule-live-20261116/cold-inspection-01'
+ROOT=HOME/'.cache/rag3weaver-build/bascule-live-20261116/cold-inspection-02'
 QUERY=HOME/'.cache/optimiseur-notes/bascule-16nov-927/read-only-query-v2'
 LIB=HOME/'.cache/rag3db-libs/rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF'
 PINS={QUERY:'43cffb082a2487e9f33ffa62b5a246081e5c458683f4e6b7de50e46d60c01329',LIB/'librag3db.so':'b7e9fc75a3d2de04c72680b0309e8bb1df9eaadb5211ebbacf39716c6d0a2101'}
@@ -22,6 +22,23 @@ def query(base,queries,name,env):
  (ROOT/(name+'.stdout')).write_bytes(result.stdout);(ROOT/(name+'.stderr')).write_bytes(result.stderr)
  return result
 
+def validate_source(before,after):
+ if before!=after:raise ValueError('source snapshot changed; no sidecar exception')
+
+def validate_copy(before,after,root,base):
+ allowed=base+'.readers'
+ path=root/allowed
+ if path.exists() or path.is_symlink():
+  info=path.lstat()
+  if not stat.S_ISREG(info.st_mode) or info.st_uid!=1000 or info.st_size!=0:raise ValueError('invalid readers sidecar')
+ old={r['path']:r for r in before};new={r['path']:r for r in after}
+ created=allowed not in old and allowed in new
+ if created:
+  row=new.pop(allowed)
+  if row['size']!=0 or row['sha256']!=hashlib.sha256(b'').hexdigest():raise ValueError('nonempty sidecar inventory')
+ if old!=new:raise ValueError('unexpected mutation on private copy')
+ return dict(path=allowed,created=created,sha256=hashlib.sha256(b'').hexdigest() if path.exists() else None)
+
 def main():
  for path,expected in PINS.items():
   if digest(path)!=expected:raise ValueError('tool pin mismatch: '+str(path))
@@ -34,8 +51,10 @@ def main():
  for name,path in [('absent',fixture/'absent.rag3db'),('corrupt',bad)]:
   result=query(path,['RETURN 1'],name,env)
   if result.returncode==0:raise ValueError('native invalid fixture accepted: '+name)
-  if fs.file_inventory(fixture)!=before:raise ValueError('native refusal mutated fixture: '+name)
- save('fixtures.json',dict(absent='REFUSED_UNCHANGED',corrupt='REFUSED_UNCHANGED'))
+  receipt=validate_copy(before,fs.file_inventory(fixture),fixture,path.name)
+  save(name+'-sidecar.json',receipt)
+  before=fs.file_inventory(fixture)
+ save('fixtures.json',dict(absent='REFUSED',corrupt='REFUSED',readers_policy='exact regular UID1000 empty sidecar on private fixtures only'))
  original=fs.file_inventory(SOURCE);save('source-before.json',original)
  copy=ROOT/'copy'
  subprocess.run(['cp','-a','--reflink=always','--',str(SOURCE),str(copy)],check=True,timeout=90)
@@ -48,7 +67,8 @@ def main():
  source_after=fs.file_inventory(SOURCE);save('source-after.json',source_after)
  if result.returncode!=0:raise ValueError('native inventory refused; inspect raw logs')
  if b'59ac9c86bc2b3529b590a7462ab7051e3ad26b8a' not in result.stderr:raise ValueError('native BUILD_ID mismatch')
- if after!=original or source_after!=original:raise ValueError('native inspection mutated input or copy')
+ validate_source(original,source_after)
+ save('native-sidecar.json',validate_copy(original,after,copy,'code-rag3db-depot.rag3db'))
  save('verdict.json',dict(verdict='READ_ONLY_INVENTORY_COMPLETE',lucivy_decode_qualified=False,source=str(SOURCE),copy=str(copy),files=len(original)))
 if __name__=='__main__':
  try:main()

@@ -75,3 +75,7 @@ Lecture C++ readOnly/tampon1GiB depuis copie seulement, BUILD_ID réel attendu59
 ### Inventaire fichiers indépendant du préflight natif rouge
 
 `bascule/inspect-cold-files.py` ne lance QUE cp reflink (sous-processus90s), hashing Python et lecture config/génération/shards. Aucun moteurC++/Rust/Catalog, session HTTP ou service. Même source snapshotG froid fixe, destination neuve cold-files-01, tous hashes source/copie avant/après, portée commune600s/poste32GiB. FixturesPython3/3 déjà vertes pour ce même inspect-fts.py ; elles n'attestent aucun décodage natif. Cette phase autorisée copieRO est indépendante de la recette native rouge cold-inspection-01, dont rien n'est réutilisé ni effacé. VerdictFILESYSTEM_INVENTORY_ONLY, ni ouverture Lucivy ni dette/graphe/maintenance qualifiés.
+
+### Arbitrage explicite .readers, nouvelle étape native
+
+C7 autorise sur NOUVELLE copie/fixture privée uniquement le chemin exact `<base>.readers`, régulier/non-symlink/UID1000/0octet ; création et SHA vide consignés. Aucune exception source snapshot, ni DB/WAL/FTS/autre chemin. Le rouge cold-inspection-01 reste rouge. Nouveau validateur inspect-cold-copy.py vers destination exclusive cold-inspection-02, mêmes pins query43cff/lib59ac, mêmes requêtes readOnly, mêmes bornes600poste32/subprocess90. Cinq témoins CPU verts : sidecar exact vide, nonzero refusé, symlink refusé, WAL inattendu refusé, sourcechange refusé même pour readers. Publication avant run, aucun nouveau mot requis selon arbitrage C7.
