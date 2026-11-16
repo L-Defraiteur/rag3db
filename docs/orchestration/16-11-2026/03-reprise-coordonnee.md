@@ -74,4 +74,12 @@ Pour ne pas bloquer le diagnostic du moteur pendant la compilation de G, une seu
 
 Le relevé de capacité doit rester frais : TSan, G et C1 occupent au plus trois des quatre places ; G garde la priorité. Cette exception n'ouvre ni les passes Rust, ni les modèles/GPU, ni les bases réelles. Un premier rouge se conserve et se diagnostique avant la suite. La bibliothèque autonome de ce test C++ n'est pas la bibliothèque posée.
 
+## Préavis et coupure des hôtes
+
+G déclare les trois suites de déploiement vertes à la source gelée 927, sous 59ac sans moteur ancien : code 36/36, lectures 27/27 et démon 24/24, zéro ignoré. Les essais isolés et contrôles des manifestes aux deux postes sont également verts. Cela valide la préparation, pas encore la pose ni les migrations.
+
+Le préavis d'au moins une minute a été relayé aux douze autres porteurs : aucun appel au 7970 ni nouvelle passe pendant la fenêtre ; 7878 et 7879 restent inchangés. G a engagé la coupure à 11 h 27 CET : sockets et hôtes des deux postes inactifs, MainPID zéro ; arrêt propre du portable en environ vingt secondes. Les instantanés et le retour 72 heures sont en préparation, avant les deux sens sur copies et la pose. Un écart de nom de poste (`LuciePC` contre `luciepc`) a refusé la capture d'identité avant copie ; G conserve ce rouge et paramètre explicitement le rôle, sans attribution à une corruption de base.
+
+L'outil RO d'arbre, corrigé après le `RETURN` manquant, a été rejugé par G sur une fixture : identité moteur 59ac, compte exact, écriture refusée et octets inchangés. Il ne remplace pas les contrôles de migration. Les trois copies de sources du banc restent des candidates tant que l'admission du scanner (.ignore, liens, taille) n'est pas recoupée ; leurs déclarations privées ont `database=null` et ne sont pas exécutables en l'état. Aucun accès d'arbre aux bases vivantes avant le FINI explicite de G.
+
 Le suivi de la reprise est dans [le ticket](../tickets/2026-11-16-reprendre-les-perimetres-apres-lecture-des-diffs-recents.md).
