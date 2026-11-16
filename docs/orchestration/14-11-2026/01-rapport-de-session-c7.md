@@ -1799,3 +1799,97 @@ La chronologie est sur la page 03 ; ici les faits et les décisions.
 - **Au réveil de Lucie** : « oui tag » lucivy v4.3.9 → pointeur rag3weaver → bm25 seul du banc ; l'heure de la fenêtre
   de la bascule de lib ; puis la bascule des bases (changera un peu le classement, pour le mieux en dense) ; archi à
   débloquer ; les manifestes de ses tâches à mettre à jour après la pose, puis D5/D6 rejouées.
+
+## 9 h 1x (16 novembre) : l'état complet pour reprendre, avant la compaction de ma fenêtre
+
+Ce bloc est écrit pour celui qui reprend c7 (moi après compaction, ou une autre session) : tout ce qu'il faut savoir,
+avec les hashes et les chemins. La chronologie fine est sur la page 03 ; les règles de la maison dans la mémoire
+(`~/.claude/projects/-home-lucied-git-workspaces-rag3db/memory/`, MEMORY.md ≤ 200 lignes).
+
+### Ce que Lucie attend de lire et de dire au réveil
+
+1. **« oui tag »** pour lucivy v4.3.9 : main lucivy est prêt sur **0825bcd** (CI verte sur le SHA exact ; contenu contre
+   4.3.8 : la longueur moyenne BM25 sur les admis, PR #39, et deux tests). Lucivy a dit que Lucie l'avait autorisé dans sa
+   session ; la règle est que le mot passe par c7, pris dans ma session. À son oui : lucivy tague, release.yml, les
+   registres, CLAUDE.md, puis le **pointeur rag3weaver** (branche lucivy-4-3-9, par révision, passera à « 4.3.9 »,
+   rejeu court, en file), puis **le banc rejoue le bm25 seul et tous signaux sur ses copies A et B′** (il doit passer à
+   l'égalité : c'est la preuve finale que la cause des 23 classements était la longueur moyenne).
+2. **L'heure de la fenêtre de la bascule de lib** (G, plan `docs/optimiseur/16-11-2026/01-plan-de-la-bascule.md`) :
+   lib **59ac9c86bc** (master lui-même ; librag3db 697c7a0c, libvector 925b6b13 ; ABI inchangée pour le Rust, dit par le
+   cœur), verdict des trois suites vert sans MOTEUR_ANCIEN, hôtes bâtis contre elle (md5 d164e4da, check-lib 4c1e9eb2)
+   essayés sur 7991 aux deux postes, service d'embarquement neuf (sha256 6196fbe7102ad533, la coupe côté service).
+   La fenêtre : arrêt, instantanés, contrôle des deux sens sous poste lourd, `courant` aux deux postes ensemble, réveil ;
+   ~20 min au portable, ~40 à luciepc. Après : un lot court de G qui épingle la lib neuve dans passe_epinglee.sh sans
+   MOTEUR_ANCIEN, et la recopie de la garde. Les hôtes posés porteront tout ce qui a atterri depuis 4802a147a5 (l'écrivain
+   des générations et ses garde-fous, la migration, les vues 2b′/2b-C, les outils de l'agent, index pas prêt, la coupe au
+   plafond, le découpeur, les ex æquo, le repli par activation, les lots de codeparsers REGLES à 7 : **toutes les bases
+   repassent une fois** à l'ouverture).
+3. **La bascule de ses bases** (arbre, page de la fenêtre), après le pointeur lucivy et la pose : mesurée jusqu'au bout par
+   le banc (`docs/banc/16-11-2026/01-la-parite-de-la-migration.md`) ; rien de propre à la migration n'est perdu ; le
+   dense s'améliore (découpage d'aujourd'hui, `content` borné aux octets du nœud) ; le classement change un peu, à lui
+   dire. Fenêtre fermée ~15 min par base, repassage base ouverte 50–60 min, retour arrière 72 h, puis retrait base par
+   base à mon mot (sa politique du 15, 15 h 35).
+4. **Archi** : « waiting » et muet depuis 1 h 05 (16 nov.), malgré trois relances. À regarder dans son terminal (une
+   demande d'accord probablement). Son lot « le pas va au bout » (pas-va-au-bout, 12a7f6987 sur 7f9465fa9, vert sur ses
+   témoins, e2e_equipier sous Vertex pas encore joué) est le correctif principal d'Algareth ; l'entrée témoin du registre
+   (`~/.claude/sessions/<pid>.json`, « oui au registre » de Lucie) n'est pas posée ; ensuite S1 (plafond d'appels par
+   pas), S2 (contexte entre pas), S3, (B) pour une consigne, la position du worktree dans l'invite, le mode `pair`.
+5. **Après la pose des hôtes** : je mets à jour les manifestes de Lucie (le gabarit `~/.config/rag3weaver/code-rag3db/
+   templates/backends/code/rag3db.json` et les copies des tâches `~/.local/share/rag3weaver/taches/12389e156742/{atelier,
+   c7-essai}/declarations/backends/code/rag3db.json`, avec sauvegarde `.avant-*`) pour les nouvelles descriptions
+   d'outils, puis je rejoue D5 et D6 de la campagne (`docs/orchestration/16-11-2026/01-essais-empiriques-algareth.md`,
+   fichiers dans mon bac `scratchpad/algareth/`, décodeur `dump_run.py`). D6 ne passera pas sans le lot d'archi.
+
+### L'état des sessions au moment d'écrire
+
+- **ED** : tout atterri (écrivain + garde-fous, grain, outils de l'agent, découpeur, ex æquo, rebâti fermé). File : le
+  genre d'une méthode d'un autre fichier (ticket de codeparsers), les namespaces (observation), le redécoupage forcé
+  (confort) ; après la bascule.
+- **arbre** : 2b′, migration, renommage anglais, StackError atterris. File : 2a′-3 (page `docs/arbre-principal/16-11-2026/
+  01`, couches par branche et par worktree, plafond `tracked.writes.max_work_layers`, sélecteur `worktree:<motif>`) et le
+  ménage de luciepc (worktrees sync-2bp, sync-2bc, arbre-vues, arbre-migration, copies de répétition) après la bascule.
+- **recherche** : 2b-C et « index pas prêt » atterris. Rien en file ; le point 7 côté outils est fait, la notification
+  unique reste à archi.
+- **banc** : parité finie ; la mesure longue de compaction (F 25 %, variante, S 50, 300 k, N rejouée) finie ou presque ;
+  attend le pointeur lucivy pour le bm25 seul ; copies A, B, B′ gardées à luciepc (`banc-parite/sorties/`). Son juge
+  n'a joué que le lexical jusqu'au 16 (dit et corrigé ; le relevé ouvre l'embarqueur).
+- **embarquement** : repli par activation, coupe au plafond, journal des coupes atterris. Demain : la tolérance mesurée
+  de la parité des services (bruit par lot ≤ 5,86e-5), le ticket d'observation, le réglage déterministe de cubecl s'il
+  est gratuit. Worktrees gardés : rag3db-repli-nuit (mesure carte pleine, sans fenêtre), rag3db-a3.
+- **codeparsers** : pile de la résolution d'arêtes, méthodes héritées, membre platform, reste des receveurs, homonymes
+  d'une ligne, ReturnOf par l'import atterris (REGLES_DE_L_ANALYSE = 7, dépôt codeparsers master = bd13385). En cours :
+  (5) les mots vides de Rust tirés du poste. Attend le mot de Lucie : l'import ES externe.
+- **cœur** : pool saturé atterri ; le refus « Schema changed » sans fin en attente d'occurrence ; le SIGSEGV du dictionnaire
+  sans rouge (ASan 7 tours rien, l'ajout à moitié fait écarté par témoin empoisonné), **TSan** en cours à luciepc sous
+  poste lourd (cède la place à G pour la fenêtre) ; correctif « la chaîne avant le compte » en branche, non jugé.
+- **hotfixs** : spiller ×2, durabilité (fsync du répertoire, +1,6 ms par cycle), suppression sans dommage (témoin), shell
+  à historique propre ×2, shell sur pipe atterris. Reprend la liste par gravité avec le cœur.
+- **G** : garde au hash entier, known_red cas longs, confineur, gabarits, suites exigées, chemin absolu, plafond avant la
+  file, témoin de lib, mode tests seuls atterris ; garde au cache **95a1d85779f0105a** (push_garde.sh),
+  ec1529fc2f3dcf07 (passe_epinglee.sh), 79e3a8bbf457e3bc (poste) aux deux postes. Tickets : tools/shell dans la voie C++,
+  le témoin de poste qui cherche le confineur. Tient la bascule.
+- **96** : second tour, composeur, segment atterris. Rien en file.
+- **tty** : /nom, tty-19, tty-20 (mode plain attaché) atterris ; les binaires de Lucie et d'essai posés (md5 db755e5d,
+  `~/.cache/rag3weaver-build/rag3weaver-tty`) ; lot suivant : l'affichage des messages entre sessions (après le relevé
+  d'archi), en anglais pour ce qui vient.
+- **lucivy** : 4.3.9 prête, tag au mot de Lucie.
+- **Hôtes en service** : les deux postes sur **4802a147a5** (md5 8d9e62c3, lib 373b5477b) depuis le 15 à 22 h 37 ;
+  services 7878/7879 sur a70f1e46 (f85977d09e). Ma session d'hôte : `sid-hote.txt` dans mon bac (s-4bc9b07d495ba9b6,
+  tombera à la pose).
+
+### Les règles apprises ou précisées cette nuit (toutes en mémoire ou dans la procédure)
+
+- Un seul « à toi » à la fois ; un « à toi dès ton vert, sans second mot » est permis quand rien d'autre n'atterrit.
+- Je retiens mes commits de docs entre un « à toi » et son « poussé » (deux courses perdues par codeparsers).
+- Du code apporté se rejoue, fichier commun ou pas (96 a tenu la règle contre mon « pas de rejeu »).
+- Un lot du moteur seul : la lib du journal est le BUILD_ID du moteur bâti depuis la tête, écrit par les binaires
+  eux-mêmes (`CALL BUILD_ID()` pour le shell), jamais à la main (procédure push-d-un-lot.md).
+- Les suites exigées par les chemins touchés (required_suites.txt) : e2e_code_sync pour code.rs, code_sync.rs, catalog,
+  generations.rs ; un résumé de passe nomme ses suites.
+- Une parité de migration se mesure contre un index neuf du même arbre (B′), et la qualité contre l'oracle des bonnes
+  réponses, jamais un index contre l'autre ; un juge sans embarqueur ne juge que le lexical.
+- Un refus de permission ne se contourne pas et ne se demande pas à une autre session (le remède du 7878).
+- Que de l'anglais pour ce qu'une machine lit ou qu'un utilisateur tape, et pour les descriptions, invites et gabarits du
+  produit ; le français pour la prose ; l'existant ne se renomme pas en lot.
+- Algareth est un pair des sessions Claude par le registre `~/.claude/sessions`, pas par les sockets (« oui au registre,
+  non aux canaux » de Lucie) ; une entrée témoin se pose vraie et se retire après le relevé.
