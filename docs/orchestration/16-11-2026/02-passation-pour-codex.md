@@ -59,17 +59,17 @@ dit ce qu'elle lit, ce qu'elle fait, et où est le travail de chaque périmètre
 | orchestration | cette page | — | — |
 | arbre-principal | en attente | | |
 | banc | en attente | | |
-| codeparsers | en attente | | |
+| codeparsers | `docs/codeparsers/16-11-2026/01-passation-pour-codex.md` | 12 entrées : finir les mots vides de Rust (lot (5) en branche, 044c7d4250 / b48da05 ; un chemin de std relié à un homonyme, ticket neuf), mots vides Python et C, réexportations, receveurs sans type, définition liée à l'en-tête, oracle, manifestes, crate au nom distinct, vcpkg et find_package, fichier Rust lent, classe derrière une macro, nettoyage du parent | 87c584898d |
 | coeur-cpp | `docs/coeur-cpp/16-11-2026/01-passation-pour-codex.md` | 13 entrées par gravité : P1 COMMIT sous index vectoriel ; C1 dictionnaire, C2 lecteur de l'index de clé, C3 optimisticRead ; F1 pk-lookup ; B1 Schema changed, B2 verrou à la liaison, B3 point de reprise ; L1–L3 ; S1–S2 | 96daa8f12 |
 | coeur-cpp-hotfixs-tickets | `docs/coeur-cpp-hotfixs-tickets/16-11-2026/02-passation-pour-codex.md` | 14 entrées (70–90 h) : ADD COLUMN sous verrou de schéma, lecture au-delà de la colonne en cache, rang déplacé pendant un CREATE, rows_outside_graph, quarantaine d'une annulation partielle, journal sans borne hors COPY, nœuds liés par leur clé, DROP TABLE et ses pages, RTree, doublon du COPY, cible clean, traces de run_e2e, optimisticRead, tools/shell ; les entrées 2, 3, 5, 7 passent par l'orchestration avant d'écrire (fichiers du cœur) | d61841b448 |
 | embarquement | `docs/embarquement/16-11-2026/01-passation-pour-codex.md` | 13 entrées : tolérance de parité, bit selon le lot, cubecl déterministe, refus qui nomme le programme, creux d'un autre modèle, plafond en jetons, cause d'arrêt d'un service, débit par service (les 6 s), anciens morceaux géants, repli CPU des tests, mesure de la carte pleine, granite-278m, résidence (cinq tickets neufs) | 80ba4f661c |
 | everything-declarative | `docs/everything-declarative/16-11-2026/01-passation-pour-codex.md` | 13 entrées : llama-server, access/provider (alias au 29 nov.), erreurs de libération masquées, contrat de reçu d'un accord, estimation, genre d'une méthode d'un autre fichier, ALTER (lib 101ff50a6), sept témoins instables, morceaux refusés jamais repris, redécoupage après la bascule, postgres à générations, namespaces, cinq tickets à fermer sur mesure (deux tickets neufs) | d663340ef |
 | lucivy | en attente | | |
-| memoire | en attente | | |
+| memoire | `docs/memoire/16-11-2026/01-passation-pour-codex.md` | 14 entrées de la moins à la plus bloquée (35–40 h sans attente) : l'usage du découpage au total, compose_restart au-delà de 2 000 apports, la borne query_chars côté embarqueur, les 15 tickets relus contre master (trois tickets neufs, 2f8270612) | db6533bf8d |
 | optimiseur | `docs/optimiseur/16-11-2026/02-passation-pour-codex.md` | 7 lots : témoin de poste, témoin de run_e2e qui compte l'attente, tools/shell en voie C++, juge known_red intermittent, base un-seul-sens au témoin, épingler la lib après la bascule, défaut de 40G (quatre tickets neufs, six fermés) | 499cb10de6 |
 | rag3weaver-archi | en attente | | |
 | recherche | `docs/recherche/16-11-2026/03-passation-pour-codex.md` | 10 entrées : état d'index et orphelins, search_code avant l'index, CSV d'un COPY tué, filtre e2e vide, témoins du chat sous charge, arrêt par une connexion par run, cinq suites à résidus, banc de charge, juge Gemini, deux tickets neufs après 2a′-3 | 04102a27f6 |
-| tty | en attente | | |
+| tty | `docs/tty/16-11-2026/02-passation-pour-codex.md` (+ `03-knowledge-dump.md`) | 7 lots (25–35 h) : messages entre sessions dans le terminal, commandes et options en anglais, mode plain et fin d'un pas relancé, copie de l'hôte par un champ, terminal d'un agent pair, style du thème, frappe avant l'invite (cinq tickets neufs) | d1ea5a947a |
 
 Chaque page a quatre parties : l'état du périmètre ; le travail pour Codex dans l'ordre, par tickets réels
 (quoi faire, comment prouver, taille, blocage) ; ce qui attend Lucie ; les règles du périmètre.
