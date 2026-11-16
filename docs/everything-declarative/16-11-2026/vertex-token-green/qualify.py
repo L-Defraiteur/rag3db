@@ -7,7 +7,7 @@ BASE='df2a5789888d16247f0dad42dcdaa3c4ceea2094'
 R=Path.home()/'.cache/rag3weaver-build'
 W=Path.home()/'git_workspaces/rag3db-cx-ed-vertex-token-fix-r1'
 C=W/'extension/rag3weaver'
-P=R/'cx-ed-vertex-token-green-v1';Q=R/'cx-ed-vertex-token-green-controller-v1';S=R/'cx-ed-vertex-token-green-scope-v1'
+P=R/'cx-ed-vertex-token-green-v1';Q=R/'cx-ed-vertex-token-green-controller-v2';S=R/'cx-ed-vertex-token-green-scope-v1'
 T=R/'target-cx-ed-vertex-token-green-v1' # New absent private target; no reuse of red/TIES target.
 PREFIX='openai_llm::vertex_refresh_tests::'
 POSITIVE=['fixture_token_source_changes_its_cached_token_only_after_invalidation','a_fixed_api_bearer_is_not_refreshed_after_unauthorized','vertex_never_refreshes_or_replays_after_a_stream_fragment']
@@ -35,6 +35,7 @@ def guard(cfg,end=None):
  assert not git(C/'codeparsers','status','--porcelain')
  for name,value in cfg['copies'].items():assert sha(Q/name)==value
  assert sha(cfg['timeout'])==cfg['timeout_sha256']
+ assert sha(cfg['bash'])==cfg['bash_sha256']
  for name,value in SO.items():assert sha(R.parent/'rag3db-libs'/LIB/name)==value
  if end is not None:assert time.monotonic()<end-15
 
@@ -115,8 +116,25 @@ def driver():
  guard(cfg,end);assert sha(binary)==sha(copied)==ledger['sha256']
  save(P,'driver-result.json',dict(status='CPU_VERTEX_JUDGES_PASSED',source=APP,pilot=cfg['pilot'],exact_count=len(EXACTS),elf_sha256=ledger['sha256'],deadline=end,credentials_read=False,cloud_contact=False,native_runtime=False),end=end)
 
+def ancestor_identities():
+ result={};pid=os.getpid()
+ while pid>1 and pid not in result:
+  fields=(Path('/proc')/str(pid)/'stat').read_text().rsplit(') ',1)[1].split()
+  result[pid]=fields[19];pid=int(fields[1])
+ return result
+
+def poste_fd_allowed(proc,role,value,start,ancestors,cfg):
+ if not role.startswith('fd:') or value!=str(Q/'poste') or ancestors.get(int(proc.name))!=start:return False
+ if proc.stat().st_uid!=os.getuid() or os.readlink(proc/'exe')!=cfg['bash'] or sha(proc/'exe')!=cfg['bash_sha256']:return False
+ argv=[os.fsdecode(v) for v in (proc/'cmdline').read_bytes().split(b'\0') if v]
+ expected=[str(Q/'poste'),'lourd',cfg['timeout'],'--signal=TERM','--kill-after=2s',str(OUTER)+'s',sys.executable,str(Q/'qualify.py'),'--compose']
+ if argv[1:]!=expected:return False
+ fields=(proc/'stat').read_text().rsplit(') ',1)[1].split()
+ return fields[19]==start and fields[0]!='Z' and proc.stat().st_uid==os.getuid()
+
 def quiet(owned):
- alive=[];unknown=[];found=[];roots=[W,T,Q]
+ cfg=json.loads((Q/'configuration.json').read_text());ancestors=ancestor_identities()
+ alive=[];unknown=[];found=[];exemptions=[];roots=[W,T,Q]
  if (P/'short-tmp.json').exists():roots.append(Path(json.loads((P/'short-tmp.json').read_text())['path']))
  for row in owned:
   proc=Path('/proc')/str(row['pid'])
@@ -127,19 +145,25 @@ def quiet(owned):
   except OSError as error:unknown.append(dict(owned=True,pid=row['pid'],error=repr(error)))
  for proc in Path('/proc').iterdir():
   if not proc.name.isdigit() or int(proc.name)==os.getpid():continue
+  attributed=False
   try:
    if proc.stat().st_uid!=os.getuid():continue
    fields=(proc/'stat').read_text().rsplit(') ',1)[1].split()
    if fields[0]=='Z':continue
-   values=[os.readlink(proc/'exe'),os.readlink(proc/'cwd')]
+   def observe(role,value):
+    nonlocal attributed
+    if any(value==str(root) or value.startswith(str(root)+'/') for root in roots):
+     if poste_fd_allowed(proc,role,value,fields[19],ancestors,cfg):
+      exemptions.append(dict(pid=proc.name,start=fields[19],role=role,path=value,meaning='verified ancestor Bash poste owns this allocation'));return
+     attributed=True;found.append(dict(pid=proc.name,start=fields[19],role=role,path=value))
+   for role in ['exe','cwd']:observe(role,os.readlink(proc/role))
    for fd in (proc/'fd').iterdir():
-    try:values.append(os.readlink(fd))
-    except (FileNotFoundError,ProcessLookupError):pass
-   for value in values:
-    if any(value==str(root) or value.startswith(str(root)+'/') for root in roots):found.append(dict(pid=proc.name,start=fields[19],path=value))
+    try:value=os.readlink(fd)
+    except (FileNotFoundError,ProcessLookupError):continue
+    observe('fd:'+fd.name,value)
   except (FileNotFoundError,ProcessLookupError):pass
-  except OSError as error:unknown.append(dict(owned=False,pid=proc.name,error=repr(error)))
- return dict(owned_alive=alive,unknown=unknown,found=found,observed=time.monotonic())
+  except OSError as error:unknown.append(dict(owned=False,attributed=attributed,pid=proc.name,error=repr(error)))
+ return dict(owned_alive=alive,unknown=unknown,found=found,exemptions=exemptions,observed=time.monotonic())
 
 def compose():
  import importlib.util
@@ -159,7 +183,7 @@ def compose():
   driver=json.loads((P/'driver-result.json').read_text());assert driver['status']=='CPU_VERTEX_JUDGES_PASSED' and driver['exact_count']==len(EXACTS) and not (P/'first-red.json').exists()
   ledger=json.loads((P/'ledger-before-tests.json').read_text());assert sha(ledger['binary'])==sha(ledger['copy'])==ledger['sha256']==driver['elf_sha256']
   observed=quiet(json.loads((authority_path.parent/'enfants.json').read_text()));save(P,'quiescence-final.json',observed)
-  assert not observed['owned_alive'] and not observed['found'] and not any(x['owned'] for x in observed['unknown'])
+  assert not observed['owned_alive'] and not observed['found'] and not any(x['owned'] or x.get('attributed',False) for x in observed['unknown'])
   guard(cfg);assert time.monotonic()<end
   result=dict(status='CPU_VERTEX_CHECKED',returncode=0,source=APP,pilot=cfg['pilot'],scope=scope,authority_terminated=True,bus_absent=True,deadline=end,elapsed=time.monotonic()-(end-BUDGET),native_runtime=False,cloud_contact=False,real_oauth_qualified=False)
  except BaseException as error:
@@ -182,7 +206,8 @@ def launch(args):
   else:shutil.copy2(source,dest)
   copies[name]=sha(dest)
  timeout=str(Path(shutil.which('timeout')).resolve())
- cfg=dict(app=APP,pilot=args.pilot,control=str(control),copies=copies,timeout=timeout,timeout_sha256=sha(timeout))
+ bash=str(Path(shutil.which('bash')).resolve())
+ cfg=dict(app=APP,pilot=args.pilot,control=str(control),copies=copies,timeout=timeout,timeout_sha256=sha(timeout),bash=bash,bash_sha256=sha(bash))
  if (Q/'configuration.json').exists():assert json.loads((Q/'configuration.json').read_text())==cfg
  else:save(Q,'configuration.json',cfg)
  guard(cfg)

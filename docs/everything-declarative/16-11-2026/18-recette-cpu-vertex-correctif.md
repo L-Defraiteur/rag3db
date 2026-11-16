@@ -15,3 +15,7 @@ Scriptpréparé depuis pilote rougeeb026, adapté sept verts et composition born
 ## HOLD9d8 avant admission
 
 PrépaPC Gitseule/prepare-only0 auSHA9d8 : APPc38 etgitlinkbd133850 exactspropres, Qconfiguration69fcae7e4f0fca5d3976453507205e9ef1ae068582105b65f0d5330bb110f5fa/3copiesconformes, Pvide/S,T,launchabsents. AucunCargo/HTTP/test/autorité. RéservesHotfix scanconsignées au ticket AVANTdiff ;9d8nonalloué. Deux témoinsauxvraisquiet avecproc-entièrementfictif àvoirrougiravantcorrection. Transportinchangé.
+
+## Correction contrôleur v2 après deux rouges réels
+
+TémoinsquietAST prépubliés2a4db6814c AVANTexécution etfix :4fonctions dont2FAIL attendus en0.015s (FDposte ancêtre malattribué ; attributionexe perdue sur Permissioncwd),2PASS (targetFD/commandeinexacte refusés). Logs horsW cx-ed-vertex-quiet-cpu-v2/red.* conservés. Aucunvrai/proc/PID/signal/native consulté danslesdoubles. Correction : chaîned’ancêtres PIDstart figée, exemption uniquementfd:...→Q/poste et UID/PIDstart/exeBashSHA/argvposte lourdtimeout exacts revérifiés ; autreFD/W/Tjamaisexemptés. Attributionexe/cwd/FD immédiate, UNKNOWNattribuable conservé/refusé aucomposé. NouveauQcontroller-v2, Bashpin enconfiguration/guard ; ancienQv1/Pvideintacts. APPc38inchangée. Code publié avant essaisverts ; nouveauSHApilote/RO/GO1200distinctrequis.
