@@ -1,0 +1,10 @@
+ 1:  5b3da09a19 =  1:  e1c8522353 docs(recherche): isoler le plan de maintenance existing-only
+ 2:  316eb3de66 =  2:  2fa37e9da7 test(recherche): poser les refus de maintenance sur fichiers existants
+ 3:  187d58a7b5 =  3:  ef1f5a7415 test(recherche): rendre explicite la redirection de la fixture publique
+ 4:  a9699ebb9b =  4:  14858f33ad test(recherche): distinguer table physique, promesse et refus stricts
+ 5:  1ff6c23d9f =  5:  c2250f45e1 fix(recherche): lire un index FTS existant sans ouvrir de writer
+ 6:  d926f2f564 =  6:  02027279b9 docs(recherche): cadrer la réserve pending publique avant correction
+ 7:  1f816fd3b3 =  7:  d427b93e4c test(recherche): refuser la cible physique d’une entité en attente
+ 8:  33cb8e9464 =  8:  25ec1da312 docs(recherche): cadrer le schéma Content de la fixture rouge
+ 9:  c1b10a4993 =  9:  93298b6480 test(recherche): construire et valider la vraie dérivée Content des fixtures
+10:  04634cfed6 = 10:  90b0edb71b fix(recherche): composer la lecture stricte avec les fixtures Content validées

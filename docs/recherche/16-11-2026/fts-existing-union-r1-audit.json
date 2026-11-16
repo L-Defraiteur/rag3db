@@ -1,0 +1,18 @@
+{
+  "base": "d395cb1f03f84c6abdfa023a0e3c7f87a7c0dab6",
+  "qualified_source": "04634cfed667711192efd313ff1418ef8dfd5c26",
+  "audited_head": "90b0edb71bb9c16fcca3452e7e0423ef84b77d60",
+  "own_paths": [
+    "extension/rag3weaver/src/catalog.rs",
+    "extension/rag3weaver/src/fts_existing.rs",
+    "extension/rag3weaver/src/lib.rs"
+  ],
+  "own_paths_equal_app": true,
+  "protected_entries": 6913,
+  "protected_delta": 0,
+  "product_entries": 6916,
+  "product_mode_oid_exact": true,
+  "range_diff_equal": 10,
+  "product_digest": "3894a28458611142dca0e0c4bdff0218620bcea2fc631211cd3e0434ccb2d933",
+  "scope": "cold reading only; no writer maintenance"
+}
