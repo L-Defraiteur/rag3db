@@ -5,6 +5,7 @@
 # Usage : bash tools/poste/test_push_garde.sh [chemin de push_garde.sh] — sortie 0 si tout est vert.
 set -u
 GARDE=$(realpath "${1:-$(dirname "$0")/push_garde.sh}")
+ICI_TEMOIN=$(dirname "$(realpath "$0")")
 D=$(mktemp -d); trap 'rm -rf "$D"' EXIT
 cd "$D" && git init -q && git config user.email t@t && git config user.name t
 mkdir -p extension/rag3weaver/{src,tests,scripts,templates/backends/code,docs}
@@ -15,6 +16,7 @@ printf '#!/bin/bash\ncargo test\n' > extension/rag3weaver/scripts/cargo_magasin.
 printf '#!/bin/bash\npython3 scripts/sous_relais.py\n' > extension/rag3weaver/scripts/relais.sh
 echo '#[test] fn t() { std::process::Command::new("python3").arg("scripts/par_un_test.py"); }' > extension/rag3weaver/tests/e2e_x.rs
 echo 'print(1)' > extension/rag3weaver/scripts/appele.py
+mkdir -p tools/poste && cp "$ICI_TEMOIN/required_suites.sh" "$ICI_TEMOIN/required_suites.txt" tools/poste/ || exit 2
 git add -A && git commit -qm base && BASE=$(git rev-parse HEAD)
 rouge=0
 cas() { # cas <attendu: code|docs> <chemin> <contenu>
@@ -305,4 +307,19 @@ d=$(bash "$GARDE" --derive "$D"); rc=$?
 if [ $rc = 0 ] && echo "$d" | grep -q "le dépôt a changé la garde depuis la copie exécutée"; then echo "vert   dérive : le dépôt en avance sur la copie, dit dans ce sens, sans refus"; else echo "ROUGE  dérive, dépôt en avance : $d"; rouge=1; fi
 git checkout -q "$BASE" 2>/dev/null
 rm -f tools/poste/push_garde.sh
+# **Les suites qu'exige le lot** (16 novembre 2026, ticket de c7) : la garde refuse une passe qui n'a pas joué la suite
+# qu'exige un chemin du lot (tools/poste/required_suites.txt de l'arbre).
+exigees() { # exigees <attendu: tenue|arret> <description> <chemin du lot> [suite jouée dans le résumé]
+  git checkout -q "$BASE" 2>/dev/null; mkdir -p "$(dirname "$3")"; echo '// lot' > "$3"; git add -A; git commit -qm "$3"; N=$(git rev-parse HEAD)
+  local J; J=$(mktemp -d); printf 'commit x\n== e2e_code\ntest result: ok. 1 passed; 0 failed;\n' > "$J/resume.log"
+  printf 'test result: ok. 36 passed; 0 failed;\n' > "$J/e2e_code.log"
+  if [ -n "${4:-}" ]; then printf '== %s\ntest result: ok. 20 passed; 0 failed;\n' "$4" >> "$J/resume.log"; printf 'test result: ok. 20 passed; 0 failed;\n' > "$J/$4.log"; fi
+  local sortie rc; sortie=$(bash "$GARDE" --required-suites "$BASE" "$N" "$J" 2>&1); rc=$?; rm -rf "$J"
+  if { [ "$1" = tenue ] && [ $rc = 0 ]; } || { [ "$1" = arret ] && [ $rc != 0 ] && echo "$sortie" | grep -q "e2e_code_sync"; }; then echo "vert   suites exigées, $1 : $2"
+  else echo "ROUGE  suites exigées, attendu $1 (rc $rc) : $2 — $sortie"; rouge=1; fi
+}
+exigees arret "code_sync.rs touché, e2e_code_sync non joué" extension/rag3weaver/src/code_sync.rs
+exigees tenue "code_sync.rs touché, e2e_code_sync joué vert" extension/rag3weaver/src/code_sync.rs e2e_code_sync
+exigees arret "un fichier du catalogue touché, e2e_code_sync non joué" extension/rag3weaver/src/catalog/synchronisation.rs
+exigees tenue "lib.rs seul : rien d'exigé" extension/rag3weaver/src/lib.rs
 exit $rouge

@@ -1,0 +1,6 @@
+# Suites a lot must play in its pass when it touches one of the paths (16 November 2026, c7's ticket
+# docs/orchestration/tickets/2026-11-16-les-passes-des-lots-ne-jouent-pas-e2e-code-sync.md): master went red on
+# e2e_code_sync while every pass said "e2e_code 36/36", the e2e_code binary alone. Read by passe_epinglee.sh (which adds
+# the suite to the pass) and by push_garde.sh (which refuses a pass that did not play it), through required_suites.sh.
+# One line per suite: <suite> <path glob>...
+e2e_code_sync extension/rag3weaver/src/code.rs extension/rag3weaver/src/code_sync.rs extension/rag3weaver/src/catalog.rs extension/rag3weaver/src/catalog/* extension/rag3weaver/src/generations.rs extension/rag3weaver/src/marque_d_ecrivain.rs extension/rag3weaver/tests/e2e_code_sync.rs
