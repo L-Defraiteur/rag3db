@@ -8,6 +8,7 @@ Bootstrap identity is not the identity of future per-process test databases.
 import argparse
 import hashlib
 import http.client
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -82,26 +83,26 @@ def pins_check(pins):
             raise ValueError('provider cap/executable pin invalid')
     pg = pins['postgres']
     strict(pg, dict(host='127.0.0.1', port=5433, database='rag3weaver_test', user='rag3weaver'))
-    expected = pg['identity']
-    strict(expected, dict(database='rag3weaver_test', user='rag3weaver'))
-    if set(expected) != {'database', 'user', 'database_oid', 'user_oid', 'database_owner',
-                         'database_owner_oid', 'server_address', 'server_port'}:
-        raise ValueError('PG bootstrap SQL identity pins incomplete')
-    for key in ['database_oid', 'user_oid', 'database_owner_oid']:
-        if type(expected[key]) is not int or expected[key] <= 0:
-            raise ValueError('PG OID/port pin invalid')
-    if expected['server_port'] is not None and (type(expected['server_port']) is not int or expected['server_port'] <= 0):
-        raise ValueError('PG SQL server port invalid')
-    if expected['server_address'] is not None and not isinstance(expected['server_address'], str):
-        raise ValueError('PG SQL server address invalid')
-    if not isinstance(expected['database_owner'], str) or not expected['database_owner']:
-        raise ValueError('PG owner/server pin absent')
-    topology = pg['topology']
-    strict(topology, dict(host='127.0.0.1', host_port=5433, container_port=5432))
-    if set(topology) != {'host', 'host_port', 'container_port', 'container_id', 'image_id'} or any(not isinstance(topology[k], str) or not topology[k] for k in ['container_id', 'image_id']):
-        raise ValueError('PG container/image/binding pins incomplete')
-    if not isinstance(pg.get('observer_source_sha256'), str) or not re.fullmatch('[a-f0-9]{64}', pg['observer_source_sha256']):
-        raise ValueError('PG attestation observer source pin required')
+    expected = pg.get('allocation')
+    if not isinstance(expected, dict): raise ValueError('external G allocation pins required')
+    strict(expected, {k:pins[k] for k in ['app', 'pilot', 'scope', 'c7_reference', 'g_reference', 'reservation_reference']})
+    strict(expected, dict(tool_qualified=True, allocation_active=True))
+    pg_module(pins)
+
+
+def pg_module(pins):
+    """Import the exact G verifier/SQL constants; never infer executable/tool pins."""
+    root = Path(__file__).resolve().parent
+    for key, name in [('pg_receipt_sha256','pg_receipt.py'),
+                      ('pg_identity_sql_sha256','identity.sql'),
+                      ('pg_postcheck_sql_sha256','backend-postcheck.sql')]:
+        path = root/name
+        if not path.is_file() or path.is_symlink() or sha(path) != pins.get(key):
+            raise ValueError('exact G verifier/SQL source unavailable')
+    spec = importlib.util.spec_from_file_location('global_admitted_pg_receipt', root/'pg_receipt.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def ready_read(path, expected_sha, nonce, pins):
@@ -127,32 +128,14 @@ def gate(ready, clock, phase_reader):
 
 
 def reservation_read(path, expected_sha, ready, ready_sha, pins, now, *, admission=True):
-    value = owned_json(path, expected_sha)
-    strict(value, dict(kind='exclusive-private-pg-bootstrap', state='active',
-        app=pins['app'], pilot=pins['pilot'], scope=pins['scope'],
-        c7_reference=pins['c7_reference'], g_reference=pins['g_reference'],
-        reference=pins['reservation_reference'], nonce=ready['nonce'], ready_sha256=ready_sha,
-        exclusive_reservation=True, private_test_only=True))
-    observed = phase_protocol._clock(value.get('observed_monotonic'), 'PG reservation observation')
-    until = phase_protocol._clock(value.get('valid_until_monotonic'), 'PG reservation lease')
-    if not ready['ready_observed_monotonic'] <= observed <= now or (admission and now-observed > 120) or until < ready['deadline'] or now >= until:
-        raise ValueError('PG reservation is stale or does not cover common END')
-    if value.get('topology') != pins['postgres']['topology']:
-        raise ValueError('PG topology not attested by fresh C7/G reservation')
-    strict(value, dict(observer_source_sha256=pins['postgres']['observer_source_sha256'],
-                       sql_read_only=True, sql_returncode=0, observer_rc=0,
-                       observation_quiescent=True))
-    sql_observed = phase_protocol._clock(value.get('sql_observed_monotonic'), 'SQL observation')
-    if not ready['ready_observed_monotonic'] <= sql_observed <= observed or (admission and now-sql_observed > 120):
-        raise ValueError('PG SQL attestation not fresh at admission')
-    stdout = bytes.fromhex(value['sql_stdout_hex'])
-    if len(stdout) > 65536 or len(bytes.fromhex(value['sql_stderr_hex'])) > 65536:
-        raise ValueError('PG attestation raw evidence too large')
-    identity = phase_protocol.decode(stdout)
-    strict(identity, pins['postgres']['identity'])
-    if set(identity) != set(pins['postgres']['identity']):
-        raise ValueError('PG attestation SQL shape differs')
-    return value
+    expected = pins['postgres']['allocation']
+    strict(expected, dict(nonce=ready['nonce'], ready_sha256=ready_sha))
+    normal = dict(issued_monotonic=ready['ready_observed_monotonic'],
+                  admission_deadline_monotonic=ready['grant_deadline_monotonic'],
+                  common_end_monotonic=ready['deadline'], active=True, first_red=False)
+    admitted = None if admission else pins.get('admitted_monotonic')
+    return pg_module(pins).validate_attestation(path, expected_sha, expected, normal, now,
+                       admission=admission, admitted_at=admitted)
 
 
 def process_check(provider, process_reader):
@@ -339,6 +322,7 @@ def publish_services(ready_path, destination, *, expected_ready_sha256, expected
                                lease_end=ready['deadline'], clock=clock,
                                phase_reader=phase_reader, process_reader=process_reader, contact=contact)
         now = check()
+        pins['admitted_monotonic'] = now
         record['pg_attestation'] = reservation_read(reservation_path, reservation_sha256,
                             ready, expected_ready_sha256, pins, now)
         grant = dict(app=pins['app'], pilot=pins['pilot'], scope=pins['scope'],
@@ -353,7 +337,8 @@ def publish_services(ready_path, destination, *, expected_ready_sha256, expected
                      postgres=dict(host='127.0.0.1', port=5433, database='rag3weaver_test', ready=True,
                          private_test_only=True, exclusive_reservation=True,
                          reservation_reference=pins['reservation_reference'],
-                         identity=pins['postgres']['identity'], topology=pins['postgres']['topology']))
+                         identity=record['pg_attestation']['sql'],
+                         topology=record['pg_attestation']['topology']))
         record.update(result='OBSERVED_NOT_YET_GRANTED', grant=grant)
         persist()
         staged = stage(destination, grant)
