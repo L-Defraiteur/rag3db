@@ -939,6 +939,32 @@ fn load_call_view_stack(
     }
 }
 
+/// **Des lignes de `layer` posées ou retirées après `rank`**, dans l'une des
+/// tables à générations : ce que le rang en attente porte et qu'une vue au rang
+/// `rank` ne lit pas. Une requête par table, arrêtée à la première ligne.
+fn rows_after_rank(
+    conn: &dyn crate::connection::DbConnection,
+    dialect: &dyn crate::dialect::SchemaDialect,
+    tables: &std::collections::BTreeSet<String>,
+    layer: &str,
+    rank: i64,
+) -> Result<bool, String> {
+    use crate::connection::{CypherValue, QueryParam};
+    let params = [QueryParam::new("layer", CypherValue::String(layer.to_string())), QueryParam::new("rank", CypherValue::Int(rank))];
+    for table in tables {
+        let (couche, depuis, jusqu_a) = (dialect.quote(crate::generations::COUCHE), dialect.quote(crate::generations::DEPUIS), dialect.quote(crate::generations::JUSQU_A));
+        let q = format!(
+            "MATCH (n:{}) WHERE n.{couche} = $layer AND (n.{depuis} > $rank OR (n.{jusqu_a} IS NOT NULL AND n.{jusqu_a} > $rank)) RETURN n._uuid LIMIT 1",
+            dialect.quote(table)
+        );
+        let rows = conn.execute_with_params(&q, &params).map_err(|e| format!("`view` : rang en attente de {table} : {e}"))?;
+        if !rows.rows.is_empty() {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 /// **`view` d'un appel d'outil** : `{"layer": <id de couche>, "rank"?: <génération>}`.
 /// Le rang omis vaut la dernière génération publiée de la couche. Toute autre
 /// clé, une couche absente ou vide, un rang qui n'est pas un entier : un refus
@@ -5000,9 +5026,14 @@ impl Backend {
             let visibility = appel.generations.as_ref().ok_or_else(|| {
                 "`view` : cette base n'a pas de générations (forme d'avant les versions de scope, à migrer)".to_string()
             })?;
+            let tables = visibility.tables.clone();
             appel.generations = Some(visibility.avec_la_pile(&pile));
             let top = pile.etages.first().ok_or("`view` : pile vide")?;
-            let read = json!({"layer": top.couche, "rank": top.rang, "depth": pile.etages.len()});
+            // **L'écart avec le rang en attente** (c7, 16 novembre 2026) : tant que rien
+            // ne publie de génération, une vue sans rang lit l'état de la bascule ; la
+            // réponse dit le rang en attente, et s'il porte des lignes de cette couche.
+            let pending_rows = rows_after_rank(conn.as_ref(), vue.forme().dialect.as_ref(), &tables, &top.couche, top.rang)?;
+            let read = json!({"layer": top.couche, "rank": top.rang, "depth": pile.etages.len(), "pending": top.rang + 1, "pending_rows": pending_rows});
             VIEW_READ.with(|v| *v.borrow_mut() = Some(read));
         }
         services.register("conn", crate::dataflow::services::ConnService(conn.clone()));
@@ -8446,7 +8477,7 @@ mod tests {
         let under_child = backend
             .call("usages", json!({"name": "depart", "view": {"layer": "enfant"}}))
             .unwrap_or_else(|e| panic!("usages sous la vue de l'enfant : {e}"));
-        assert_eq!(under_child["view"], json!({"layer": "enfant", "rank": 1, "depth": 2}), "la pile lue est dite : {under_child}");
+        assert_eq!(under_child["view"], json!({"layer": "enfant", "rank": 1, "depth": 2, "pending": 2, "pending_rows": false}), "la pile lue est dite : {under_child}");
         assert!(!under_child["result"].to_string().contains("outils.rs"), "le fichier que l'enfant retire ne se voit plus : {under_child}");
         let without = backend.call("usages", json!({"name": "depart"})).expect("usages sans vue");
         assert!(without["result"].to_string().contains("outils.rs"), "sans vue, la vue courante reste celle du backend : {without}");
