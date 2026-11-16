@@ -68,3 +68,7 @@ Les requêtes refusées sont gardées dans `etat/requetes-refusees/*-401-*.json`
 
 F300 n'a que 199 décisions valides sur 244. Elle se juge sur ses 199 premiers tours, en le disant, ou se rejoue
 après le correctif.
+
+## Reprise ED autorisée après TIES, avant complément du rouge
+
+Auditmasterdf2a5789888d16247f0dad42dcdaa3c4ceea2094 : aucun changement model_source.rs/openai_llm.rs/gcp_auth.rs depuisbase685 ; WIPc642propre, rebase3patches= souscx-ed-vertex-token-refresh-r3 (tête156986b340). Deuxjuges NONJOUÉS conservés ; complément prévu AVANTfix : toujours401→UNE invalidation/deuxrequêtes/erreurnommée, APIkeyBearerfixeinchangée, SSEcommencépasrejoué. Frontièretransport actuelle(snapshotfake→vraiVertexconstructeur) explicite, pasencoreunjugeconnect_llm déclaré. [Plan et bornes de fichiers avec Embarquement](../../everything-declarative/16-11-2026/03-preparation-vertex-token.md). AucunCargo/vraiVertex/credential/test lancé ; GOrecetteborneeC7encorerequis.
