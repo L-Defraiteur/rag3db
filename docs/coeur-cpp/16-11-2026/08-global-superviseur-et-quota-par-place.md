@@ -41,3 +41,11 @@ Après unité : systemctlMainPID0/cgroupvide et aucun contrôleur/testattribué 
 Contrôle **récursif des quatre racinesCI** par imageclang18épinglée, -j2/CPU2/mémoire1G/RO/netnone/timeout180, script sansdry-run ni in-place : code0, sortie0octet. [Reçuformat](preuves/global-receipt/format18.json) contient commande exacte/image/sourceSHA. Source inchangée, aucune autocorrection. Pas d’autreclanglocal23 utilisé.
 
 Les journaux des unités précédentes rouges/vertes sont préservés sur branches de diagnostic ; aucun cleanup ni nouvelle lib posée. TSan historique demeure une preuve séparée, pas une attestation de888 ni du correctif.
+
+## Justification du seul disabled historique, avant GO
+
+Nom exact : **ReadOnlyOpenTest.DISABLED_MeasureCostOfRevalidationOnABigJournal**, read_only_open_test.cpp355. Mesure de coût de revalidation du grosWAL, pas un oracle de correction ; commentairehistorique50s/paliers16Mo/troispasseschecksum, activationexpliciteseulement --gtest_also_run_disabled_tests --gtest_filter=*MeasureCost*. Aucune telle activation ni nouvelle mesure dans cette recette.
+
+[Baseline relue et empreinte](preuves/global-receipt/disabled-baseline.json) : XML transaction source74ad,360entrées/disabled1, caseexactstatusnotrun/resultsuppressed. Le fichier du test est identique entre74ad et888, blobOID94f83c6f84881b16bb1275db2319d7fc475e79ea ; aucun disabled ajouté par le lot. Il reste nommé NONJOUÉ, distinct des deuxhelperssautés, sans greenindividuel. Aucun autre nomnotrun/saut admis. Scripts/SHAf319inchangés pendant la revue hotfixs.
+
+Consigne fraîcheC7 : pas de lancement global pendant fenêtre froide7970/CLIArbre ; aucune quatrième place prise avant acquisitionArbre et capacitéadmissible. Le cap10800 reste proposition préparée, pas de reçu réactivé ni nouveau service. Aucun staging distant global effectué à ce relevé.

@@ -1,0 +1,35 @@
+{
+  "read_only": true,
+  "native_run": false,
+  "baseline_source": "74ad9c25cd2a63e01abd54f25314992cda6fea60",
+  "baseline_xml_path": "docs/coeur-cpp/12-11-2026/preuves/ci-format18/reprise-03/transaction.xml",
+  "baseline_xml_sha256": "b4b54d5365a351525b0059ba76aac74ca30bd1f3935abd0e9580c5f96a429224",
+  "baseline_xml_root": {
+    "tests": "360",
+    "failures": "0",
+    "disabled": "1",
+    "errors": "0",
+    "time": "1069.769",
+    "timestamp": "2026-11-12T23:06:23.941",
+    "name": "AllTests"
+  },
+  "disabled_cases": [
+    {
+      "name": "DISABLED_MeasureCostOfRevalidationOnABigJournal",
+      "file": "/home/lucied/.cache/rag3weaver-build/cx-ci-format18-74ad-02/source/test/transaction/read_only_open_test.cpp",
+      "line": "355",
+      "status": "notrun",
+      "result": "suppressed",
+      "time": "0.",
+      "timestamp": "1970-01-01T00:00:00.000",
+      "classname": "ReadOnlyOpenTest"
+    }
+  ],
+  "current_source": "888c81825e4cd6556261233f0e238af3b95375c9",
+  "test_file": "test/transaction/read_only_open_test.cpp",
+  "baseline_and_current_blob_oid": "94f83c6f84881b16bb1275db2319d7fc475e79ea",
+  "byte_identical": true,
+  "reason": "Explicit measurement of read-only WAL revalidation cost, disabled by design; source comment says50s/paliers16Mo/triplechecksums; no new measurement inferred",
+  "activation": "--gtest_also_run_disabled_tests --gtest_filter=*MeasureCost*",
+  "new_disabled_admitted": false
+}
