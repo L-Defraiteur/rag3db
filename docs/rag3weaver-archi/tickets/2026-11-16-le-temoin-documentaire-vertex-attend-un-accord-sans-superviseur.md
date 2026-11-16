@@ -98,3 +98,12 @@ bâtis/ledger2ELF publiés aux deux postes avant deux juges/quatre invocations.
 Source742, même cible, archives223 et reçus rouges conservés. Proposition600s
 communes / 795s extérieures, nouveau GO exact requis avant natif. Aucun ancien
 GO ou échéance13nov/rouge223 réactivé ; ticket reste ouvert.
+
+### Réserve Banc après préparation b9b, avant correctif final
+
+RO totale Banc73ba173bc7 : unique réserve du pilote VERT : result_file contrôle
+l'échéance après open mais avant dump/flush/fsync. Une écriture durable traversant
+la borne finale peut encore laisser GREEN dans le fichier et le retour. Préparer
+un témoin du vrai fsync retardé, publier, observer rouge sous GO CPU distinct C7,
+puis corriger postfsync avec reclassement du même fichier et du retour avantexit.
+Couple b9b réservé/non lancé, APP742 et T/cache/archives/Q restent figés.
