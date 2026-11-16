@@ -8774,18 +8774,30 @@ mod tests {
     #[cfg(all(feature = "code", feature = "rag3db-native"))]
     #[test]
     fn the_observed_rate_is_kept_across_an_opening() {
-        let (dir, backend) = backend_with_read_freshness(None);
+        // A base on disk, opened twice: the rate observed by the first opening is
+        // read back by the second.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("rate.rag3db");
+        let open = || {
+            let conn = crate::Rag3dbConnection::new(&path).expect("the base on disk");
+            conn.execute(&format!("LOAD EXTENSION '{}'", extension_vector_de_test())).unwrap();
+            let mut catalog = Catalog::new(
+                Box::new(conn),
+                Box::new(crate::embedder::HashEmbedder::new(8)),
+                CatalogConfig { allow_mock_embedder: true, embedding_dim: 8, ..Default::default() },
+            );
+            catalog.initialize().unwrap();
+            catalog
+        };
         {
-            let cat = backend.catalog.lock().unwrap();
-            cat.observe_index_rate(1, std::time::Duration::from_millis(300));
+            let catalog = open();
+            assert_eq!(catalog.file_lag().rate(catalog.scope()), None, "a new base has no observed rate");
+            catalog.observe_index_rate(1, std::time::Duration::from_millis(300));
         }
-        drop(backend);
-        let prepared = PreparedBackend::load(&dir.path().join("backend.json")).expect("the manifest loads again");
-        let backend = backend_de_code(dir.path(), prepared);
-        let cat = backend.catalog.lock().unwrap();
-        let cell = cat.scope().clone();
-        cat.file_lag().note(&cell, "x.rs", crate::catalog::retard::now_ms());
-        assert_eq!(cat.file_lag().estimate(&cell), Some(crate::catalog::retard::IndexEstimate { pending_files: 1, eta_ms: Some(300) }));
+        let catalog = open();
+        let cell = catalog.scope().clone();
+        catalog.file_lag().note(&cell, "x.rs", crate::catalog::retard::now_ms());
+        assert_eq!(catalog.file_lag().estimate(&cell), Some(crate::catalog::retard::IndexEstimate { pending_files: 1, eta_ms: Some(300) }));
     }
 
     /// **Une vue inconnue est refusée avant toute lecture** (page 28 d'arbre,
