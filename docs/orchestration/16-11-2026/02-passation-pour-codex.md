@@ -60,7 +60,7 @@ dit ce qu'elle lit, ce qu'elle fait, et où est le travail de chaque périmètre
 | arbre-principal | en attente | | |
 | banc | en attente | | |
 | codeparsers | en attente | | |
-| coeur-cpp | en attente | | |
+| coeur-cpp | `docs/coeur-cpp/16-11-2026/01-passation-pour-codex.md` | 13 entrées par gravité : P1 COMMIT sous index vectoriel ; C1 dictionnaire, C2 lecteur de l'index de clé, C3 optimisticRead ; F1 pk-lookup ; B1 Schema changed, B2 verrou à la liaison, B3 point de reprise ; L1–L3 ; S1–S2 | 96daa8f12 |
 | coeur-cpp-hotfixs-tickets | en attente | | |
 | embarquement | en attente | | |
 | everything-declarative | en attente | | |
@@ -68,7 +68,7 @@ dit ce qu'elle lit, ce qu'elle fait, et où est le travail de chaque périmètre
 | memoire | en attente | | |
 | optimiseur | en attente | | |
 | rag3weaver-archi | en attente | | |
-| recherche | en attente | | |
+| recherche | `docs/recherche/16-11-2026/03-passation-pour-codex.md` | 10 entrées : état d'index et orphelins, search_code avant l'index, CSV d'un COPY tué, filtre e2e vide, témoins du chat sous charge, arrêt par une connexion par run, cinq suites à résidus, banc de charge, juge Gemini, deux tickets neufs après 2a′-3 | 04102a27f6 |
 | tty | en attente | | |
 
 Chaque page a quatre parties : l'état du périmètre ; le travail pour Codex dans l'ordre, par tickets réels
