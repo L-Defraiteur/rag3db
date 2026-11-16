@@ -387,3 +387,21 @@ cache et src : **luciole4.3.9, lucistore4.3.9, lucivy-core4.3.9,
 sparse-vector4.3.9**. Liste transmise avant tout élargissement ; aucun de ces
 quatre paquets n'est autorisé implicitement par l'acquisition ld-lucivy.
 Pas de cargo fetch massif ni de version flottante, pas de SDK/guard changé.
+
+### Acquisition ciblée ld-lucivy terminée, sans relance
+
+Script a0bca6925a publié avant action. URL exacte
+https://static.crates.io/crates/ld-lucivy/ld-lucivy-4.3.9.crate ; 1311506octets,
+SHA verrouillé24424a98439ff03e1fb75fc749a4d88d720ca5b9084b6c1a885dcd6cfe99afb7.
+419fichiers extraits et rehashés en staging, chemins relatifs/préfixe unique,
+liens et objets spéciaux refusés, limites taille/nombre, nom/version manifest
+vérifiés. Preuve `cx-tty-crate-ld-lucivy-439/proof.json` sous le cache privé.
+Seul le .crate final absent a été ajouté par renameat2 NOREPLACE ; UID1000,
+dev57/inode94970729/mode0644/hash relus. SrcCargo demeure absent et aucun
+fichier préexistant n'a été modifié. Aucun autre paquet acquis.
+
+RAW256 P/Q/scope conservés aux deux postes dans
+`archives/cx-tty-full-256-raw/evidence.tar`, SHA256 comparé identique
+`3b84d438f0555fba63796851848d17654c119d62def58fb05dad842fdb38205c`.
+Aucun Cargo/metadata/build/test/service/autorité ni réessai après préparation.
+Les4autres absences ont été signalées avant toute acquisition élargie.
