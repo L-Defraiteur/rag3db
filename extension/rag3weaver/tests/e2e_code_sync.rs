@@ -28,9 +28,35 @@ fn catalogue() -> Catalog {
     catalog
 }
 
+/// A catalogue of the form before versions, with no generations: the snapshot sessions keep their meaning
+/// there (an edit during a source-wide session leaves its retirements to it).
+fn catalogue_sans_generations() -> Catalog {
+    let conn = Rag3dbConnection::in_memory().expect("base en mémoire");
+    conn.execute(&format!("LOAD EXTENSION '{}'", crate::common::vector_extension())).unwrap();
+    let config = CatalogConfig { name: Some("code-sync".into()), embedding_dim: 64, ..Default::default() };
+    let mut catalog = Catalog::new(Box::new(conn), Box::new(HashEmbedder::new(64)), config);
+    catalog.initialize().unwrap();
+    rag3weaver::code::register_code_schema_sans_versions(&mut catalog, default_scope_chunking()).unwrap();
+    catalog
+}
+
+/// **The visibility of a generations table on an alias**, for the raw readers of these tests: a raw read sees
+/// the history too (2a′: retired rows stay). `Scope` and `File` carry generations, the other tables do not.
+fn visible(catalog: &Catalog, alias: &str, table: &str) -> Option<String> {
+    ["Scope", "File"].contains(&table).then(|| catalog.condition_visible(alias)).flatten()
+}
+
+fn and_visible(catalog: &Catalog, alias: &str, table: &str) -> String {
+    visible(catalog, alias, table).map(|c| format!(" AND {c}")).unwrap_or_default()
+}
+
+fn where_visible(catalog: &Catalog, alias: &str, table: &str) -> String {
+    visible(catalog, alias, table).map(|c| format!(" WHERE {c}")).unwrap_or_default()
+}
+
 fn scopes_nommes(catalog: &Catalog, nom: &str) -> i64 {
     catalog
-        .execute_raw(&format!("MATCH (s:Scope) WHERE s.name = '{nom}' RETURN count(s)"))
+        .execute_raw(&format!("MATCH (s:Scope) WHERE s.name = '{nom}'{} RETURN count(s)", and_visible(catalog, "s", "Scope")))
         .unwrap()
         .rows[0][0]
         .as_i64()
@@ -45,7 +71,9 @@ fn scopes_nommes(catalog: &Catalog, nom: &str) -> i64 {
 #[ignore]
 fn une_edition_pendant_la_synchronisation_de_la_source_laisse_ses_retraits_a_celle_ci() {
     let snapshot = Snapshot::new("demo", [("a.rs".to_string(), "pub fn alpha() {}\npub fn beta() {}\n".to_string())]);
-    let mut catalog = catalogue();
+    // The snapshot sessions are the form before generations: under generations there is no session, see
+    // `under_generations_an_edit_retires_at_the_pending_rank_and_the_published_rank_keeps_the_scope`.
+    let mut catalog = catalogue_sans_generations();
     let analysis = analyze_source(&snapshot).unwrap();
     catalog.ingest_code(&analysis).unwrap();
     assert_eq!(scopes_nommes(&catalog, "beta"), 1);
@@ -77,9 +105,26 @@ fn une_edition_pendant_la_synchronisation_de_la_source_laisse_ses_retraits_a_cel
     assert_eq!(scopes_nommes(&catalog, "gamma"), 1);
 }
 
+/// **Under generations, an edit retires at the pending rank** (C2, c7, 16 November 2026): there is no snapshot
+/// session to leave the retirement to. `beta` becomes `gamma`: at the pending rank `beta` is gone and `gamma`
+/// is there; at the published rank `beta` is still read.
+#[test]
+#[ignore]
+fn under_generations_an_edit_retires_at_the_pending_rank_and_the_published_rank_keeps_the_scope() {
+    let snapshot = Snapshot::new("demo", [("a.rs".to_string(), "pub fn alpha() {}\npub fn beta() {}\n".to_string())]);
+    let mut catalog = catalogue();
+    sync_source(&mut catalog, &snapshot, &SourceSyncOptions::default(), &mut |_| {}).unwrap();
+    let publie = catalog.publier_la_generation("c1", 0).expect("publish");
+    let r = edit_file(&snapshot, Some(&mut catalog), "a.rs", &EditOp::Replace { old: "pub fn beta()".into(), new: "pub fn gamma()".into() }).unwrap();
+    assert_eq!(r.reingest.as_ref().expect("re-ingested").scopes_deleted, 1, "{:?}", r.reingest);
+    assert_eq!((scopes_nommes(&catalog, "beta"), scopes_nommes(&catalog, "gamma")), (0, 1), "at the pending rank");
+    let au_publie = catalog.au_rang(publie, |c| (scopes_nommes(c, "beta"), scopes_nommes(c, "gamma")));
+    assert_eq!(au_publie, (1, 0), "at the published rank, beta is still read");
+}
+
 fn fichiers(catalog: &Catalog) -> Vec<String> {
     let mut v: Vec<String> = catalog
-        .execute_raw("MATCH (f:File) RETURN f.path")
+        .execute_raw(&format!("MATCH (f:File){} RETURN f.path", where_visible(catalog, "f", "File")))
         .unwrap()
         .rows
         .into_iter()
@@ -184,7 +229,8 @@ fn un_fichier_genere_est_ecarte_compte_et_la_regle_se_leve() {
 
     let levee = SourceSyncOptions { generated: GeneratedPolicy::off(), ..Default::default() };
     let tout = sync_source(&mut catalog, &Snapshot::new("depot", source.clone()), &levee, &mut |_| {}).unwrap();
-    assert_eq!(tout.files_ingested, 4, "{tout:?}");
+    // The writer does not rewrite an unchanged file (page 06): the three others are said unchanged.
+    assert_eq!(tout.files_ingested + tout.files_unchanged, 4, "{tout:?}");
     assert!(tout.files_set_aside.is_empty(), "{tout:?}");
     assert_eq!(scopes_nommes(&catalog, "parse_generated"), 1);
 
@@ -313,7 +359,11 @@ fn une_edition_reussit_meme_si_l_index_ne_suit_pas() {
 /// Les arêtes `CONSUMES` qui partent du scope `nom`.
 fn appels_de(catalog: &Catalog, nom: &str) -> Vec<String> {
     let mut v: Vec<String> = catalog
-        .execute_raw(&format!("MATCH (a:Scope)-[:CONSUMES]->(b:Scope) WHERE a.name = '{nom}' RETURN b.file_path"))
+        .execute_raw(&format!(
+            "MATCH (a:Scope)-[:CONSUMES]->(b:Scope) WHERE a.name = '{nom}'{}{} RETURN b.file_path",
+            and_visible(catalog, "a", "Scope"),
+            and_visible(catalog, "b", "Scope")
+        ))
         .unwrap()
         .rows
         .into_iter()
@@ -362,12 +412,17 @@ fn source_reliee() -> Vec<(String, String)> {
 fn graphe(catalog: &Catalog) -> Vec<(String, i64)> {
     let mut v = Vec::new();
     for rel in ["DEFINED_IN", "CONSUMES", "CONSUMED_BY", "PARENT_OF", "HAS_PARENT", "IMPLEMENTS", "DEFINES", "MENTIONS"] {
-        let n = catalog
-            .execute_raw(&format!("MATCH ()-[r:{rel}]->() RETURN count(r)"))
-            .unwrap()
-            .rows[0][0]
-            .as_i64()
-            .unwrap();
+        let mut n = 0;
+        for &(r, from, to) in rag3weaver::code::RELATIONS.iter().filter(|t| t.0 == rel) {
+            let clauses: Vec<String> = [visible(catalog, "a", from), visible(catalog, "b", to)].into_iter().flatten().collect();
+            let filtre = if clauses.is_empty() { String::new() } else { format!(" WHERE {}", clauses.join(" AND ")) };
+            n += catalog
+                .execute_raw(&format!("MATCH (a:{from})-[x:{r}]->(b:{to}){filtre} RETURN count(x)"))
+                .unwrap()
+                .rows[0][0]
+                .as_i64()
+                .unwrap();
+        }
         v.push((rel.to_string(), n));
     }
     v
@@ -447,14 +502,20 @@ fn etat(catalog: &Catalog) -> (Vec<Vec<CypherValue>>, Vec<Vec<CypherValue>>, Vec
     };
     let mut aretes = Vec::new();
     for (rel, from, to) in rag3weaver::code::RELATIONS {
+        let clauses: Vec<String> = [visible(catalog, "a", from), visible(catalog, "b", to)].into_iter().flatten().collect();
+        let filtre = if clauses.is_empty() { String::new() } else { format!(" WHERE {}", clauses.join(" AND ")) };
         aretes.extend(lignes(&format!(
-            "MATCH (a:{from})-[r:{rel}]->(b:{to}) RETURN '{rel}', a.{}, b.{}",
+            "MATCH (a:{from})-[r:{rel}]->(b:{to}){filtre} RETURN '{rel}', a.{}, b.{}",
             cle(from),
             cle(to)
         )));
     }
     aretes.sort_by_key(|r| format!("{r:?}"));
-    (lignes("MATCH (s:Scope) RETURN s.key, s.content"), lignes("MATCH (f:File) RETURN f.path, f.content_hash"), aretes)
+    (
+        lignes(&format!("MATCH (s:Scope){} RETURN s.key, s.content", where_visible(catalog, "s", "Scope"))),
+        lignes(&format!("MATCH (f:File){} RETURN f.path, f.content_hash", where_visible(catalog, "f", "File"))),
+        aretes,
+    )
 }
 
 /// L'index bâti à neuf sur l'état présent de `source`.
