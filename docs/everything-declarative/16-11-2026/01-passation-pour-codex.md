@@ -79,6 +79,15 @@ rag3db-native,burn-embedder,burn-ocr,code,daemon,postgres,openai-llm,anthropic-l
 
 ### 2.A En cours : l'ordre des ex æquo d'une base réécrite à une base neuve — prêt, à pousser
 
+**Reprise du 16 novembre, après audit demandé par Lucie** : candidat préparé sur
+`cx-ed-stable-tie-identity-r1`, produit `9fcc98ad3f347d821f3f1b99c936a73a9e080d41`,
+worktree portable `/home/lucied/git_workspaces/rag3db-cx-ed-stable-tie-identity-r1`.
+Les quatre patchs sont repris à l'identique sur master927941a67, sans conflit.
+Voir [le candidat et sa recette](02-candidat-stable-tie-identity.md).
+La qualification sur lib59ac attend FINI G et l'épingle des passes actualisée ;
+aucune passe nouvelle lancée ni ancien GO repris. Cette annotation prime sur
+la commande de reprise historique ci-dessous. Entrée2.B Vertex ensuite.
+
 **État : prêt, passe VERTE, pas sur master.** Branche `stable-tie-identity`, tête **1834bf111**, sur master fe5d81f81,
 4 commits gmail.
 - **Ce que le lot fait** : les ex æquo se départagent par une identité stable, `search::stable_order` : une occurrence
