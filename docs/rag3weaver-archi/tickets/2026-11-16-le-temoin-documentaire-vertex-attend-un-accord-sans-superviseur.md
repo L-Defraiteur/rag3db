@@ -107,3 +107,15 @@ la borne finale peut encore laisser GREEN dans le fichier et le retour. Prépare
 un témoin du vrai fsync retardé, publier, observer rouge sous GO CPU distinct C7,
 puis corriger postfsync avec reclassement du même fichier et du retour avantexit.
 Couple b9b réservé/non lancé, APP742 et T/cache/archives/Q restent figés.
+
+### Réserve totale Mémoire sur l'armement global, avant diff
+
+RO totale9f3 : unique P1 supplémentaire, START est posé avant save(launch.json)
+mais timeout780-k15 seulement lancé après son fsync. Un retard D de publication
+ou spawn décale l'arrêt réel de D au-delà du hard795 annoncé ; la publication
+elle-même peut bloquer hors watchdog. Aucun ancien couple lancé. Préparer témoin
+de la vraie fonction de lancement, publication retardée avant spawn, publier
+avant rouge puis correctif : armer timeout AVANT tout travail compté, START et
+journal d'allocation/log sous ce watchdog, exec du vrai poste, parent rc seul.
+Queue incluse ; pas de prolongation ni nouveau target. Source742 inchangée,
+ancien Qb9b/paquet figés, nouvelle RO totale/pin après correctif groupé requis.
