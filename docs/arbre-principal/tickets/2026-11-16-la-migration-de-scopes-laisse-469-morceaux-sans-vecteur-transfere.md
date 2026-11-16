@@ -213,3 +213,14 @@ Préparer un témoinCPU du VRAI audit.snapshot et de la VRAIE condition du
 driver, rouge avant fix, puis aligner les représentations persistées sans
 relâcher les valeurs/comptages/multiplicités. Nouveau paquet/RO/GOdistinct
 nécessaires ; résultat et rouge précédents restent conservés.
+
+Preuvesaudit334fichiers PC/local0écart manifeste
+e22f56a13b0eeef837d68f3a988c1dc2d98335ee49f3cae81a4373e85940e5eb,
+sources/copiefichiersmodesdirsinchangés aprèsrouge/aucunWALnouveau.
+Témoin98f303c896 VRAIsnapshot+conditionAST rougeavantfix ; normalisationJSON
+des deux côtés puis comparaisoncanonique conservant types/valeurs/multiplicité,
+neuf mutations refusées. Continue_result.py préparé séparément : RAWgraph
+classifié sans requête snapshot, FTS/finished seulement sur même copieaudit
+figée, bornes aprèsposte floor(ENDoriginal−now)−3/refus<=60, pasreset900.
+Nouvelles5fonctionsCPU vertes0.024s, aucuneDB/provider. Paquet/source/RO/GO
+distinct requis ; expirationinitiale interdit toute extension implicite.

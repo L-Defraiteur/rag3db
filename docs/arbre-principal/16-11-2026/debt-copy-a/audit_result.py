@@ -19,6 +19,13 @@ FILES.update({'inspect-fts.py':'docs/arbre-principal/16-11-2026/bascule/inspect-
  'confiner_validation.py':'extension/rag3weaver/scripts/confiner_validation.py','poste':'extension/rag3weaver/scripts/poste'})
 
 def save(name,data):q.save(P/name,data)
+def published_graph(value):
+ # Same JSON boundary as q.save/read_text, with nonfinite numbers refused.
+ return json.loads(json.dumps(value,allow_nan=False))
+def same_graph_publication(left,right):
+ # JSON spelling retains scalar types (False, 0 and 0.0 are distinct).
+ def canonical(value):return json.dumps(published_graph(value),sort_keys=True,separators=(',',':'),allow_nan=False)
+ return canonical(left)==canonical(right)
 def red(error):
  try:save('first-red.json',dict(reason=str(error),observed=time.monotonic()))
  except FileExistsError:pass
@@ -87,7 +94,9 @@ def driver():
  if len(cohort)!=469 or len(set(cohort))!=469:raise ValueError('cohort differs')
  reader=q.Reader(BINARY,end,env,cfg['timeout'])
  graph=audit.snapshot(reader,cohort);save('graph-observed.json',graph)
- if graph!=json.loads((OLD/'graph-before.json').read_text()):raise ValueError('graph/config/gen/visibility changed outside permitted cohort fields')
+ reference=json.loads((OLD/'graph-before.json').read_text())
+ save('graph-publications.json',dict(observed=published_graph(graph),reference=published_graph(reference)))
+ if not same_graph_publication(graph,json.loads((OLD/'graph-before.json').read_text())):raise ValueError('graph/config/gen/visibility changed outside permitted cohort fields')
  fts=q.fts(reader,fs,env,end,graph['offsets'],'observed');save('fts-observed.json',fts)
  if fts!=json.loads((OLD/'fts-before.json').read_text()):raise ValueError('FTS IDs/gens/files changed')
  vectors=audit.finished(reader,cohort);save('vectors-observed.json',vectors)

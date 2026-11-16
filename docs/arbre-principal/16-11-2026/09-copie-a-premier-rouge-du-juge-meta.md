@@ -184,3 +184,54 @@ a94ada3b5e12689b8279095792aea110d8f11d59654d9cfa889d55d56fe7795f.
 copy_quiet garde sa politique de racine/UID et son callback attribue chaque
 observation immédiatement, comme DOUBLE ; aucun troisième collecteur ad hoc.
 Ensemble22fonctionsCPU hermétiques vertes0.028s après ce portage.
+
+## AuditEDD consommé : second rouge du juge, sans nouveau writer
+
+GO C7-DEBT-AUDIT-EDD-16nov exactedd5f4a988/Q8dce7, scope
+validation-1wdottjl, END1190939.194661205. Copie intégrale fidèle puis148
+lecturesRO, refus1190497.036858159 sur comparaison graph. ScopeROUGE1,
+restes[]/nettoyé/autoritéterminée ; ownedvivants0/busabsent contrôlés.
+FTS après et finished (debt/dims/marker/index) n'ont PAS été joués.
+
+Attribution sans DB supplémentaire : graph-observed.json et graph-before
+relus sont égaux dans toutes sections (38tables,65913liens). Le snapshot
+runtime contient des tuples, la référence JSON des listes ; comparaison
+Python directe fausse. Les SHA bruts diffèrent par l'ordre de clés des
+signatures : cela ne prouve pas un delta logique. Après nettoyage, hashes
+des deux bundles sources stricts, copie fichiers/modes/dirs inchangés,
+aucun nouveau .readers/WAL, pins inchangés ; scans privés found[] et11
+UNKNOWNglobaux non attribués consignés. Aucune écriture native ni aucun
+provider n'a été lancé par cet audit.
+
+Preuves PC debt-audit-ro-red-01 :334fichiers/manifesteSHA
+e22f56a13b0eeef837d68f3a988c1dc2d98335ee49f3cae81a4373e85940e5eb.
+Copie locale debt-audit-ro-red-pc-local-01 :334tailles/SHA réempreintés,
+aucun écart. Références, snapshots bruts, refus, invariants après rouge et
+scope public conservés ; aucun contenu DB copié dans le paquet de preuves.
+
+Correction préparée après témoin rouge98f303c896 : VRAI audit.snapshot sur
+Reader fictif puis VRAIE condition AST du driver. Normalisation des DEUX
+côtés par contrat JSON de publication ; comparaison canonique JSON garde
+les types scalaires (false/int0/float0.0 distincts), valeurs et doublons,
+sans str() large, arrondi ni déduplication. graph-publications.json archive
+le dérivé. DeuxjugesCPU dont neuf mutations row/edge/doublon/table/type/
+scalaires refusées ; aucun runtime natif. AncienROUGEEDD inchangé.
+
+### Continuation préparée sur l'échéance originale, pas de GO acquis
+
+continue_result.py réutilise exactement la copie audit figée, sans nouvelle
+copie ni requête snapshot : pin du RAWgraph et manifeste334 puis classifier
+pur, FTS5 et finished seuls restants. Nouveaux Q/P/S dédiés ; mêmes8sources
+contrôlées, SDK/helpers existants et références rouges épinglés. Aucun CLI,
+provider, compilation, LOAD, recovery ni writer. Bundlecopie et deux sources
+avant/après/final stricts, quiescence corrigée et scopedTERMINE requis.
+
+END absolu1190939.194661205 conservé : après vrai poste, receiptremaining
+floor(END−now)−3 ; refuse<=60, outerremaining−2+kill2, commonremaining−20,
+chaque lecture min(cap,ENDcourant−15). Autorité doit finir avant ENDoriginal ;
+finalhash/scans/prépublication sous min(ENDoriginal,AUTHend). Aucun reset ou
+prolongation si préparation/revue consomme le reste. TroisCPU supplémentaires
+jugent receipt100→97/soft95/common77, refusdeadline courte/expirée et absence
+de snapshot/writer dans la vraie branche. Ensemble5CPU nouveaux verts0.024s.
+Publication du couple/paquet et nouvelles RO nécessaires avant GO distinct ;
+si le temps manque, aucun lancement ne doit être déduit de cette préparation.
