@@ -118,6 +118,16 @@ class RestoreTests(unittest.TestCase):
         self.assertNotEqual(result.returncode,0)
         self.assertEqual(shape(self.live),self.after)
 
+    def test_evidence_inside_snapshot_is_rejected_without_writing_it(self):
+        if LEGACY:
+            return
+        self.evidence = self.snapshot/'unsafe-evidence'
+        result = self.run_recipe()
+        self.assertNotEqual(result.returncode,0)
+        self.assertFalse(self.evidence.exists())
+        self.assertEqual(shape(self.snapshot),self.old)
+        self.assertEqual(shape(self.live),self.after)
+
     def test_active_api_refuses_before_moving_live_files(self):
         if LEGACY:
             return
