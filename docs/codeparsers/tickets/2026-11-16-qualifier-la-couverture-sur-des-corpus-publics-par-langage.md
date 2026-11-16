@@ -56,3 +56,22 @@ La compilation puis le parsing sous allocation fraîche restent à faire.
 Enfant Svelte : `2026-11-16-le-parseur-svelte-n-initialise-pas-sa-grammaire.md`.
 Coordination C7 : `2026-11-16-verifier-la-couverture-sur-des-corpus-publics-multilangages.md`
 (commit e843a7a9ba3e0654510f9222773ffdea433bcff4).
+
+## Rouge du pilote avant Cargo : contexte du lanceur
+
+GO `C7-CORPUS-384-16nov`, source parent384165760b / parser1b35cfb,
+FULL02 manifest96c2e771. Arrêt réel avant test/compilation/adoption :
+`cache_quiet` trouve deux cwd source, PIDs2717971/2717972, starttime118716552.
+Le shell SSH avait fait cd worktree et le pilote extérieur y restait ; contrairement
+au pilote Rust précédent, le pilote corpus n'avait pas déplacé son cwd en preuves.
+Aucun processus étranger ni utilisateur tué ; aucun retry.
+
+Scope `validation-2h66zbqx` ROUGE/code1/erreur null/restes[]/nettoyé true,
+privé `/tmp/r3v-djcyhfvm` supprimé. Target marker toujours Rust fix crate.
+Preuves PC `~/.cache/codeparsers-notes/language-corpus-02/`, copie des artefacts
+sans reçu/token sur portable au même chemin avant correction :
+PQS SHA5367e169523bcd4fa948054aad23314d5e8ab097d4601565d20eef455541ee63,
+stderr SHA8076f5015797022b61a6e3caf2a4147f4b22dbb7d30bebe32f3458f425955d96,
+classification SHAce2ca87cd7c85f0e48aad93fe4fdf7b273f550291ebf9d8cf2bbf19c623d2bbe.
+Correctif attendu : cwd du pilote hors source, commande SSH lancée hors source
+également ; conserver le contrôle PQS strict, puis nouvelle source/profil/borne.

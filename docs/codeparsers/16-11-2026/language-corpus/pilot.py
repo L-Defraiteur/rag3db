@@ -159,7 +159,9 @@ def main():
     if args.action == 'inside':
         return inside(config, proofs)
     assert args.allocation and 'RAG3WEAVER_VALIDATION_RECU' not in os.environ
-    (proofs / 'allocation.json').open('x').write(json.dumps({'reference': args.allocation}))
+    with (proofs / 'allocation.json').open('x') as stream:
+        stream.write(json.dumps({'reference': args.allocation}))
+    os.chdir(proofs)
     common = Path(config['worktree']) / 'extension/rag3weaver/scripts/confiner_validation.py'
     env = os.environ.copy()
     env.update(POSTE_MEM_MAX='32G', RAG3WEAVER_BUILD_MEMORY_HIGH='0')

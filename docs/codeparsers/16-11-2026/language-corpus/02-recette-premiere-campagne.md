@@ -138,3 +138,29 @@ language-corpus-01 par language-corpus-02 dans la commande initiale. Aucun fichi
 du premier gel n'a été parsé ; il n'y a donc pas de campagne à rejouer.
 Le coût complet reste à mesurer ; une échéance globale donne une preuve partielle,
 pas une réussite des 32382 fichiers. Le miroir FULL est en cours chez Banc.
+
+## Correction du lancement après rouge PQS
+
+L'allocation C7-CORPUS-384-16nov a été consommée et arrêtée avant tout Cargo :
+deux cwd du lanceur étaient encore sous source. La preuve rouge et sa cause
+sont conservées au ticket parent, sans réactivation de cette allocation.
+`test_pilot.py` appelle le vrai constructeur de `main(run)` en arrêtant juste
+avant l'appel du superviseur : rouge sur cwd worktree, puis vert après déplacement
+du pilote vers les preuves. Aucun faux reçu ni lancement d'autorité dans le test.
+Le contrôle PQS lui-même reste strict et inchangé.
+
+**Le shell appelant doit lui aussi être hors source.** La commande SSH suivante
+est la forme de reprise ; ne pas faire `cd worktree` avant de lancer le pilote :
+
+```sh
+cd /home/lucied
+python3 -B /home/lucied/git_workspaces/cx-codeparsers-language-corpus/docs/codeparsers/16-11-2026/language-corpus/pilot.py run \
+  --proofs /home/lucied/.cache/codeparsers-notes/language-corpus-02-r2 \
+  --allocation FRESH_C7_REFERENCE
+```
+
+Le profil r2 sera préparé sur la nouvelle source parent avec **le même parseur
+1b35cfb**, corpus/roots inchangés, aucune nouvelle fonctionnalité de CLI. Le commit
+877cb4a (modificateurs compacts) est poussé et conservé hors campagne selon C7 ;
+les modificateurs seront donc « non conservés par cet outil », jamais « absents IR ».
+Le coût/contrat des 32382 fichiers reste identique, budget proposé1800s neuf.
