@@ -8,6 +8,7 @@
 #include "main/client_context.h"
 #include "main/database.h"
 #include "storage/buffer_manager/buffer_manager.h"
+#include "storage/buffer_manager/spiller.h"
 #include "storage/file_handle.h"
 
 using namespace rag3db::common;
@@ -23,6 +24,10 @@ MemoryBuffer::~MemoryBuffer() {
         mm->freeBlock(pageIdx, buffer);
         mm->updateUsedMemoryForFreedBlock(pageIdx, buffer);
         buffer = std::span<uint8_t>();
+    } else if (evicted && filePosition != UINT64_MAX) {
+        // Spilled and never read back: the spill file no longer has to keep it.
+        mm->getBufferManager()->getSpillerOrSkip(
+            [](auto& spiller) { spiller.forgetBufferOnDisk(); });
     }
 }
 
