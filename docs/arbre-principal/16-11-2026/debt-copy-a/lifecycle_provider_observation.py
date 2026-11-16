@@ -62,7 +62,7 @@ def _health_worker(deadline, context):
         connection.close()
 
 
-def health_get(deadline, *, ready_path, ready_sha256, nonce, pins):
+def health_get(deadline, *, ready_path, ready_sha256, nonce, pins, trace=None):
     """Parent bounds the whole worker, including DNS-free connect/headers/body."""
     remaining = deadline-time.monotonic()
     if remaining <= 0: raise ValueError('health deadline before child')
