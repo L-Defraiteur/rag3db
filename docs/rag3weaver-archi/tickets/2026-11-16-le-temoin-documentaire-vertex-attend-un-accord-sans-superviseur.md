@@ -119,3 +119,12 @@ avant rouge puis correctif : armer timeout AVANT tout travail compté, START et
 journal d'allocation/log sous ce watchdog, exec du vrai poste, parent rc seul.
 Queue incluse ; pas de prolongation ni nouveau target. Source742 inchangée,
 ancien Qb9b/paquet figés, nouvelle RO totale/pin après correctif groupé requis.
+
+### Réserve Banc sur le dispatch CLI, avant correction
+
+RO totale291 / préparationa642 : configure_controller() du vrai __main__ lit
+Q/launch.json avant launch/watchdog. Le test direct de launch ne couvrait pas ce
+préambule. Supprimer cette lecture préalable : configuration pure/fixe780 ; la
+lecture du reçu de lancement reste dans les modes déjà bornés. Prépublier un
+témoin du dispatch CLI réel AST qui observe toute lecture Q avant le spawn,
+rouge avant fix puis CPU hermétique. Ancien paqueta642/Qr2 conservé/non lancé.
