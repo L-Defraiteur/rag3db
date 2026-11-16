@@ -97,3 +97,38 @@ Validation future (non lancée) : rouge du seul témoin sur base actuelle,
 validation de la sémantique, correctif puis vert ; transaction_test et tests
 SHOW_INDEXES impactés, avec BUILD_ID écrit par le binaire joué. Aucun lourd
 pendant la fenêtre de bascule. Ticket ouvert ; cette note n’autorise aucun run.
+
+## Arbitrage reçu et préparation privée du témoin
+
+Orchestration confirme : lignes à vecteur valide visibles dans l’instantané
+ET effectivement absentes du graphe utilisé par l’appel ; NULL si le holder ou
+l’extension ne peut prouver un compte cohérent, jamais un zéro de repli. Arbre
+confirme l’ajout en fin et la lecture réelle par noms à recontrôler au rebase.
+Aucune production modifiée ; ces réservations sont une annonce de surface,
+pas une autorisation de calcul ni d’écriture sur les fichiers C1 du cœur.
+
+Le témoin est finalement une cible autonome `vector_index_diagnostics_test`,
+non ajoutée à la liste commune de transaction_test. Coordination cœur : ses
+trois lignes de cible `dictionary_append_exception_test` en fin du CMakeLists
+sont indépendantes et doivent être conservées au rapprochement. Notre cible
+dépend du build_id et de l’extension vector si la configuration l’expose ;
+un runtime sans extension est un échec de prémisse explicite, jamais un saut.
+
+Quatre cas préparés et NON COMPILÉS/NON JOUÉS :
+- champ lisible et compte connu zéro sur un index complet ;
+- même lecture dans une transaction READ ONLY, sans verrou tenu ;
+- contre-exemple de fixture : quatre lignes prouvées rendues par le graphe seul
+  (watermark4), puis borne du balayage temporairement ramenée à0 en mémoire,
+  sans changer le graphe. Le résultat exact reste0 et non4. Accès à la vraie
+  structure HNSW, avec restauration RAII avant fin de fixture, pas de miroir
+  de disposition et pas de hook global. Cela ne reproduit pas un entrelacement
+  de production ; cela sépare les deux quantités dans un état contrôlé ;
+- suppression/NULL suivis de reconstruction : deux vecteurs valides restants,
+  aucun hors-graphe après reconstruction.
+
+Le futur passage à NON NULL sous concurrence exigerait une preuve de snapshot
+et de stabilité du graphe qui ne découle pas de ces cas. La cellule postCOPY
+avec vraie queue non vide et ordre déterministe n’est PAS encore écrite ;
+le cas existant 20k/300ms n’a pas été présenté comme tel. Le coût de la lecture
+exacte reste à mesurer hors fenêtre de bascule, après recette et autorisation.
+Aucun correctif, exécution, compteur simplifié ni modification du seuil produit.

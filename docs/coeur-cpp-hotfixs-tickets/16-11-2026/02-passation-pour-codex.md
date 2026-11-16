@@ -135,6 +135,8 @@ puis les trois contrôles : statut vide, aucun rebase en cours, et `FETCH_HEAD` 
 
 ### 4. Le nombre de lignes hors du graphe d'un index vectoriel, lisible sans écrire (4 à 6 h)
 
+**En cours par hotfixs** : branche `cx-hotfixs-rows-outside-graph`, note et ticket66f44c686e, témoin privé préparé ensuite ; aucun build/run ni code produit. Contrat exact sous instantané, NULL si inconnu ; pas une différence d’offsets physiques. [État et limites](04-rows-outside-graph-contract.md).
+
 - **Ticket** : [2026-11-08-le-nombre-de-lignes-hors-du-graphe-d-un-index-vectoriel-lisible-sans-ecrire.md](../tickets/2026-11-08-le-nombre-de-lignes-hors-du-graphe-d-un-index-vectoriel-lisible-sans-ecrire.md).
 - **À faire** : une colonne de `SHOW_INDEXES`, `rows_outside_graph` (nulle pour un index qui n'a pas cette notion), à
   la manière de `state` et d'`extension_error`. Elle compte les lignes de la table au-delà de

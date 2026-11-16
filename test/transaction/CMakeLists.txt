@@ -23,3 +23,12 @@ add_rag3db_test(transaction_test transaction_test.cpp checkpoint_test.cpp wal_te
         refused_copy_same_session_test.cpp data_file_extent_test.cpp rolled_back_insert_reopen_test.cpp commit_local_tables_test.cpp pk_lookup_under_checkpoint_test.cpp alter_waits_for_writers_test.cpp refused_commit_rel_directions_test.cpp read_during_open_batch_test.cpp refused_commit_rollback_test.cpp add_column_refused_midway_test.cpp update_memory_test.cpp)
 
 add_subdirectory(concurrence)
+
+add_rag3db_test(vector_index_diagnostics_test vector_index_diagnostics_test.cpp)
+add_dependencies(vector_index_diagnostics_test rag3db_build_id)
+if(TARGET rag3db_vector_extension)
+    add_dependencies(vector_index_diagnostics_test rag3db_vector_extension)
+endif()
+target_include_directories(vector_index_diagnostics_test PRIVATE
+        ${PROJECT_BINARY_DIR}/src/include
+        ${PROJECT_SOURCE_DIR}/extension/vector/src/include)

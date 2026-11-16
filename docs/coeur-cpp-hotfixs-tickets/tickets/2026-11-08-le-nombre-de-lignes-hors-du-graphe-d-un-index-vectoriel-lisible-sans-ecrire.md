@@ -58,3 +58,11 @@ Avant implémentation, fixer le sens exact avec orchestration et arbre principal
 sans livrer un nombre d’offsets physiques sous un nom qui promet des lignes.
 Témoin privé initial de projection à préparer ; échec attendu colonne absente,
 NON JOUÉ à cette date. Aucun correctif avant rouge effectivement lu.
+
+Contrat confirmé par orchestration et arbre : compte exact des vecteurs valides
+visibles effectivement absents du graphe de l’appel, sinon NULL explicite.
+Témoin privé `test/transaction/vector_index_diagnostics_test.cpp`, cible séparée
+dans CMakeLists transaction, quatre cellules de lecture/contre-exemple contrôlé/
+trous et NULL après reconstruction. NON COMPILÉ/NON JOUÉ ; aucun rouge lu.
+Cellule postCOPY déterministe, cohérence d’instantané et coût restent à établir
+avant production. Aucun fichier de production ni instrumentation C1 modifié.
