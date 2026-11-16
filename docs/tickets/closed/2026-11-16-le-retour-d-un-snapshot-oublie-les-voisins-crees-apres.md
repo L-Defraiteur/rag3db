@@ -1,6 +1,6 @@
 # Le retour d’un snapshot oublie les voisins créés après sa prise
 
-- **État** : ouvert (16 novembre2026), remède borné préparé pour le snapshot diagnostique principal ; recette génératrice non corrigée
+- **État** : corrigé et posé aux deux postes — e51b0d0c5bda791a62f39910a8872f43f7912468, 16 novembre2026
 - **Famille** : produit
 - **Gravité** : importante — un WAL postérieur peut rester à côté de l’ancienne base restaurée
 - **Atteignable en service** : non (recette de retour, hôte arrêté)
@@ -176,3 +176,35 @@ le plan par `return-generator-b8d7579797` (avec l'outil ba27110e). Aucun cache
 posé, aucun ancien snapshot/RET/attestation72h modifié. Retour opérateur hors
 Common ; pas de bus utilisateur réel injecté dans une validation.
 Ticket ouvert, attente nouvelle RO ED/C7 et ATOI exact.
+
+
+## Clôture après landing et pose vérifiés
+
+C7 ATOI exact e51 sur base bef0 ; push en avance rapide sous vrai postePush,
+garde cache réelle relue et jouée,12commits égaux, preuves CPU/audit relues.
+Fetch puis trois contrôles LUS aux deux postes : propre, sans rebase,
+HEAD/origin-master exact e51 (worktree propre dédié PC, arbre Lucie inchangé).
+P1 levée par ED sur les deux contre-exemples réels, quatre logs réhachés.
+
+Bundle b8 publié aux deux postes dans
+`~/.cache/rag3weaver-notes-A/return-generator-b8d7579797/`, trois fichiers
+réguliers755, SHA0cecea65/ba27110e/e1fd exacts. Entrée `instantanes.sh` remplacée
+par lien atomique vers ce bundle, ancien inode non réécrit ; anciennef4ab
+préservée avec métadonnées par cp-p sous
+`instantanes.sh.avant-return-generator-b8-20261116` aux deux postes.
+
+CONTRE CHAQUE COPIE POSÉE :15/15CPU,0échec,0saut. L'entrée cache réelle génère
+le RET du témoin WAL tardif ; neuf cas d'intégrité utilisent le générateur du
+bundle posé ; cinq filets utilisent son helper posé. Reçus sur chaque poste :
+`~/.cache/optimiseur-notes/return-generator-16/install-b8/{installation,qualification}.json`.
+SHA qualification portable fb6e8e73c547cfc97e95dc5a3ae709d8c8995535bd13bf1a1c469add0b85d6d5,
+PC0539d66f21c0fb86eb31d1f956dc0347900ad8936f4d9830d443e26d532a380d.
+SHA installation portable70c1fd517bf1ad2ee604e00e0a5e5a42a176e82b43f44bf0055b0ae6b62727a0,
+PC18dd32fd8ced2b26551025a486bb3670e45b95cf575614c2a5287a92d6fd39f5.
+
+Le nouveau générateur s'applique aux futurs snapshots. Anciens RET, snapshots,
+attestations et retours72h restent strictement inchangés. Aucun retour de base
+originale, CLI native, service/API, lib, GPU ou Cargo opéré par ce lot.
+Garanties bornées au préflight global sans déplacement et au contrôle exact du
+succès ; une erreur après début conserve état après/preuves, sans atomicité
+multibase annoncée. Les rouges historiques restent conservés.
