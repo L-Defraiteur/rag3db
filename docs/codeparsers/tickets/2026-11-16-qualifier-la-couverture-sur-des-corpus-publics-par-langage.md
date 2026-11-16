@@ -43,3 +43,16 @@ huit langages dans le routeur, API spécialisées distinctes. HTML est un stub
 explicite ; Svelte initialise un parser sans langage puis appelle `parse().expect()`.
 Ces limites restent ouvertes dans ce ticket, sans exécution ni correction annoncée.
 Le protocole d'entrée est proposé à Banc avant implémentation de la CLI réservée.
+
+## Source initiale publiée et acquisition disponible
+
+Exemple codeparsers `be2ebe3` sur `cx-language-corpus-probe`, base bibliothèque
+bd13385 inchangée ; aucun Cargo joué. Contrôleur et recette dans
+`docs/codeparsers/16-11-2026/language-corpus/02-recette-premiere-campagne.md`.
+Sept tests légers du contrôleur verts ; chemin canonique réel vérifié, archive
+sans .git vue rouge puis acceptée avec vérification du gel, archive altérée refusée.
+Première sélection Banc disponible : Go et C# 2500 contenus uniques chacun.
+La compilation puis le parsing sous allocation fraîche restent à faire.
+Enfant Svelte : `2026-11-16-le-parseur-svelte-n-initialise-pas-sa-grammaire.md`.
+Coordination C7 : `2026-11-16-verifier-la-couverture-sur-des-corpus-publics-multilangages.md`
+(commit e843a7a9ba3e0654510f9222773ffdea433bcff4).
