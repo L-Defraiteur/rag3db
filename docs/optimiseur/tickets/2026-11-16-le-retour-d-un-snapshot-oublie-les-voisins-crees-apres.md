@@ -130,3 +130,17 @@ move une erreur peut être partielle, état après et preuves restent conservés
 Succès = ensemble ancien exact, pas fichier seul. Retour opérateur hors Common,
 jamais de réinjection du bus propriétaire dans une validation privée. Aucune
 qualification réelle de retour, restauration ou fermeture induite par les fixtures.
+
+## Réserve P1 RO ED/C7 — préflight de tous les ensembles vivants
+
+HOLD sur bb5/6913 avant ATOI : le lanceur vérifie tous les snapshots mais pas
+les `live_roots/describe` de toutes les bases. Le helper2 peut refuser son vivant
+absent ou un voisin spécial APRÈS restauration de base1. Le filet existant du
+second SNAPSHOT corrompu ne couvre pas le second ensemble VIVANT invalide.
+
+Suite autorisée dans le même lot, tracée avant diff : deux témoins du vrai RET
+émis pour deux bases, second ensemble vivant absent puis voisin socket local
+non pris en charge ; attendre refus et premier ensemble intact. Ni socket de
+service ni manager réel : fixtures privées seulement. Puis préflight global des
+racines vivantes/types et de leurs intersections avec les chemins protégés,
+en réutilisant les primitives du helper e1fd inchangé. Aucun cache ni ancien RET.
