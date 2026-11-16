@@ -1,0 +1,189 @@
+{
+  "hote": "local",
+  "lanceur": "tmux-local-ouvert",
+  "date": "2026-11-16 20:10",
+  "rouges": [],
+  "sans_position_du_curseur": {
+    "repli_dit": false,
+    "texte_brut_suit": false,
+    "panique": false,
+    "vue_inline_demarre": true
+  },
+  "scenario": {
+    "secondes": 3.67,
+    "octets": 10957,
+    "octets_par_seconde": 2988
+  },
+  "latence_affichage_ms": {
+    "n": 20,
+    "mediane": 15.1,
+    "p95": 15.5,
+    "max": 32.2
+  },
+  "echo_frappe_ms": {
+    "n": 20,
+    "mediane": 1.0,
+    "p95": 1.2,
+    "max": 17.2
+  },
+  "redimensionnement": [
+    {
+      "colonnes": 60,
+      "octets_apres": 1378,
+      "colonne_max_visee": 41
+    },
+    {
+      "colonnes": 100,
+      "octets_apres": 764,
+      "colonne_max_visee": 3
+    }
+  ],
+  "ctrl_c_sortie_ms": 100,
+  "curseur_rendu_a_la_sortie": true,
+  "touches": {
+    "ctrl_g_stop": 1,
+    "echap_stop": 1,
+    "o_accord": 1,
+    "reply_to": "faux/mesure:1",
+    "ctrl_g_vers_stop_ms": 2,
+    "echap_vers_stop_ms": 501
+  },
+  "journal_explicite_relecture_dite": false,
+  "journal": {
+    "journal_explicite": {
+      "octets": 1360,
+      "mots_manquants": 0,
+      "code": true
+    }
+  },
+  "clavier": {
+    "textes_recus": [
+      "Lis src/vue.Rs\npuis\nrésume tout",
+      "Lis src/vue.Rs\npuis\nrésume tout !"
+    ],
+    "ctrl_c_vide_d_abord": true,
+    "ctrl_c_quitte_ensuite": true
+  },
+  "multiligne_kitty": {
+    "demande_kitty": false,
+    "aide_maj_entree": true,
+    "aide_alt_entree": false,
+    "textes_recus": [
+      "un\ndeux\ntrois"
+    ],
+    "aide_tmux": false
+  },
+  "multiligne_sans_kitty": {
+    "demande_kitty": false,
+    "aide_maj_entree": true,
+    "aide_alt_entree": false,
+    "textes_recus": [
+      "un\ndeux\ntrois"
+    ],
+    "aide_tmux": false
+  },
+  "outils": {
+    "numerotes": true,
+    "extrait_coupe_dit": true,
+    "ecran_alterne_ouvert": null,
+    "dernier_appel": true,
+    "appel_d_avant": true,
+    "fin_dit_l_extrait": true,
+    "ecran_alterne_ferme": null,
+    "ecran_principal_intact": true
+  },
+  "bang": {
+    "invite_vue": true,
+    "retour_vu": true,
+    "consignes": 1,
+    "consigne_porte_le_retour": true,
+    "secret_dans_la_consigne": false,
+    "secret_dans_le_journal": false,
+    "secret_a_l_ecran": false,
+    "lances_sans_frappe": [],
+    "envoyes_comme_texte": []
+  },
+  "couleurs": [
+    {
+      "theme": "alien",
+      "mode": "vraie",
+      "sgr_texte": "38;2;57;255;20",
+      "vu": true,
+      "tombe_en_256": true,
+      "coeur_vu": true
+    },
+    {
+      "theme": "alien",
+      "mode": "256",
+      "sgr_texte": "38;5;82",
+      "vu": true,
+      "tombe_en_256": null,
+      "coeur_vu": true
+    },
+    {
+      "theme": "cyberpunk",
+      "mode": "vraie",
+      "sgr_texte": "38;2;255;43;214",
+      "vu": true,
+      "tombe_en_256": true,
+      "coeur_vu": true
+    },
+    {
+      "theme": "cyberpunk",
+      "mode": "256",
+      "sgr_texte": "38;5;200",
+      "vu": true,
+      "tombe_en_256": null,
+      "coeur_vu": true
+    },
+    {
+      "theme": "cyborg",
+      "mode": "vraie",
+      "sgr_texte": "38;2;215;221;229",
+      "vu": true,
+      "tombe_en_256": true,
+      "coeur_vu": true
+    },
+    {
+      "theme": "cyborg",
+      "mode": "256",
+      "sgr_texte": "38;5;253",
+      "vu": true,
+      "tombe_en_256": null,
+      "coeur_vu": true
+    },
+    {
+      "theme": "daemon",
+      "mode": "vraie",
+      "sgr_texte": "38;2;255;51;51",
+      "vu": true,
+      "tombe_en_256": true,
+      "coeur_vu": true
+    },
+    {
+      "theme": "daemon",
+      "mode": "256",
+      "sgr_texte": "38;5;203",
+      "vu": true,
+      "tombe_en_256": null,
+      "coeur_vu": true
+    },
+    {
+      "theme": "foret",
+      "mode": "vraie",
+      "sgr_texte": "38;2;143;209;106",
+      "vu": true,
+      "tombe_en_256": true,
+      "coeur_vu": true
+    },
+    {
+      "theme": "foret",
+      "mode": "256",
+      "sgr_texte": "38;5;113",
+      "vu": true,
+      "tombe_en_256": null,
+      "coeur_vu": true
+    }
+  ],
+  "verdict": "VERT"
+}
