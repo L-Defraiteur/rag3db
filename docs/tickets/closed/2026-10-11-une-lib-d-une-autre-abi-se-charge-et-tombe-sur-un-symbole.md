@@ -1,6 +1,6 @@
 # Une lib d'une autre ABI se charge et tombe sur un symbole manquant
 
-- **État** : ouvert (11 octobre 2026) — au nom du cœur C++, ouvert par l'arbre principal à la demande de l'orchestration
+- **État** : fermé (16 novembre 2026) : corrigé sur master par f3d2290adc (la section `.rag3db_compiled_against`, `rag3db-check-lib`, `build_check::check_pair` et `check_loaded`) ; doublon de `docs/tickets/closed/2026-10-11-un-binaire-lie-a-une-autre-lib-echoue-sur-un-symbole-manquant-au-lieu-d-un-refus-nomme.md`. Relevé par arbre principal pour la passation.
 - **Gravité** : blocage (un hôte installé ne démarre plus, avec un message qui ne dit pas pourquoi)
 - **Atteignable en service** : oui, à chaque rebâti de la lib partagée qui change une signature exportée, pour tout binaire lié à la lib d'avant
 - **Touche rag3weaver** : oui (les binaires installés : `rag3weaver-backend`, les hôtes)

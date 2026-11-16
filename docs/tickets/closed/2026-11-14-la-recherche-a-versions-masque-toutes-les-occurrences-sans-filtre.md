@@ -1,6 +1,6 @@
 # La recherche à versions masque toutes les occurrences quand rien ne filtre
 
-- **État** : ouvert (14 novembre 2026), arbre principal ; lot `arbre-principal/masque-sans-filtre`.
+- **État** : fermé (16 novembre 2026) : corrigé sur master par 00e28eee67 (le court-circuit de `occurrence_mask_options` quand aucune orpheline) puis 7a2765baf1 (le masque en prédicat, sans liste `IN`) ; témoins `tests/e2e_masque_sans_filtre.rs` ; mesure 406 s → 12 s sur 24 requêtes, réponses identiques 24/24 (`docs/orchestration/14-11-2026/01-rapport-de-session-c7.md`).
 - **Famille** : produit
 - **Gravité** : la recherche est 10 à 25 fois plus lente sur toute base à versions (neuve depuis
   e62151904, ou migrée par 1b) ; elle bloque la bascule des bases de Lucie.

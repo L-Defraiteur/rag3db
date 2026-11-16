@@ -1,6 +1,6 @@
 # Le juge des outils sur Gemini range parfois un paramètre obligatoire en description trompeuse
 
-- **État** : ouvert (7 novembre 2026), vu par l'arbre principal dans la passe du lot du juge ; pour l'arbre principal (le juge).
+- **État** : fermé (16 novembre 2026) : corrigé sur master par abf7020e02 (`tests/e2e_juge.rs` accepte `parametre_devrait_etre_optionnel` ou `description_trompeuse`, pourvu que la preuve cite `required`) ; doublon de `2026-11-08-le-temoin-du-juge-des-outils-exige-un-genre-que-gemini-ne-tient-pas.md`. Relevé par arbre principal pour la passation.
 - **Famille** : produit
 - **Gravité** : faux rouge (un témoin sur vrai modèle qui exige une classe exacte) ; peut-être une réponse moins précise du juge en service.
 - **Atteignable en service** : oui pour la classe rendue (le juge en service peut ranger le même défaut sous une autre classe) ; non pour le rouge (le témoin).
