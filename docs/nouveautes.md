@@ -1,5 +1,12 @@
 # Nouveautés
 
+- 16 novembre2026 — **Un texte trop long ne fait plus tomber l'embarquement de tout son lot.** Depuis le 15 au
+  soir, un seul texte de plus de 12 000 caractères (un fichier de données d'une ligne énorme) faisait refuser par
+  le service chaque lot de 512, et un index neuf du dépôt restait sans aucun vecteur. Désormais, le client coupe
+  chaque texte au plafond que son service déclare, et le journal d'index dit combien il en a coupé ; le service
+  coupe lui-même pour un client d'avant, au lieu de refuser le lot. Ce qui dépassait le plafond n'est pas
+  cherchable par le vecteur ; la ligne, elle, reste entière en base.
+
 - 16 novembre2026 — **Les outils de recherche de l'agent se choisissent mieux.** `search_code` se dit l'outil à prendre d'abord pour une question en mots, un « où est décidé… » ou un nom incertain, et `grep_files` l'outil d'une chaîne exacte seulement (descriptions en anglais, gabarits `code` et `atelier`). Au-delà de 1 000 lignes trouvées, `grep_files` refuse sans rien rendre, en disant le total, le seuil (`refuse_above`) et les dossiers où restreindre par `path_prefix`. `git rev-parse`, `git ls-files` et `git describe` tournent sans demander d'accord.
 
 - 15 novembre2026 — **Le repli d'une carte pleine peut aller vers une autre activation.** Avec
