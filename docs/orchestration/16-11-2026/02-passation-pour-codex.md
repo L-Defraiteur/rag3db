@@ -66,7 +66,7 @@ dit ce qu'elle lit, ce qu'elle fait, et où est le travail de chaque périmètre
 | everything-declarative | en attente | | |
 | lucivy | en attente | | |
 | memoire | en attente | | |
-| optimiseur | en attente | | |
+| optimiseur | `docs/optimiseur/16-11-2026/02-passation-pour-codex.md` | 7 lots : témoin de poste, témoin de run_e2e qui compte l'attente, tools/shell en voie C++, juge known_red intermittent, base un-seul-sens au témoin, épingler la lib après la bascule, défaut de 40G (quatre tickets neufs, six fermés) | 499cb10de6 |
 | rag3weaver-archi | en attente | | |
 | recherche | `docs/recherche/16-11-2026/03-passation-pour-codex.md` | 10 entrées : état d'index et orphelins, search_code avant l'index, CSV d'un COPY tué, filtre e2e vide, témoins du chat sous charge, arrêt par une connexion par run, cinq suites à résidus, banc de charge, juge Gemini, deux tickets neufs après 2a′-3 | 04102a27f6 |
 | tty | en attente | | |
