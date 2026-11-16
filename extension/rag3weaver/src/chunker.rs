@@ -145,8 +145,11 @@ impl Chunker {
     /// **Par lignes** : des cœurs de lignes entières, jusqu'à `max_lines`
     /// lignes ou `max_size` octets, puis `overlap_lines` lignes de contexte
     /// de chaque côté. Un dernier cœur trop court (moins de 50 octets) rejoint
-    /// le précédent plutôt que de faire un chunk qui ne dit rien. Une ligne
-    /// plus longue que `max_size` fait un cœur à elle seule.
+    /// le précédent plutôt que de faire un chunk qui ne dit rien. **A line longer than `max_size` is cut into
+    /// cores of at most `max_size` bytes, on character boundaries, with no context** (embarquement's ticket of
+    /// 16 November 2026: a data file of one line made a single chunk of 53 294 characters). **The context on
+    /// each side stops before it would exceed `max_size` bytes**: five ordinary lines are untouched, a huge
+    /// line is never context.
     fn chunk_lines(&self, text: &str) -> Vec<Chunk> {
         let line_at = build_line_index(text);
         // Les débuts de ligne, plus la fin du texte.
@@ -160,32 +163,61 @@ impl Chunker {
         let fin_de = |l: usize| if l + 1 < n { debuts[l + 1] } else { text.len() };
         let max_lines = if self.config.max_lines == 0 { usize::MAX } else { self.config.max_lines };
 
-        // Phase 1 : les cœurs, en lignes.
-        let mut cores: Vec<(usize, usize)> = Vec::new(); // (première ligne, dernière ligne exclue)
+        // Phase 1 : les cœurs, en lignes. A line longer than `max_size` is cut in place: its cores are byte
+        // ranges inside it (`in_one_line`), and they take no context.
+        let max_size = self.config.max_size.max(1);
+        // (first line, last line excluded, byte range of the core, inside one long line)
+        let mut cores: Vec<(usize, usize, usize, usize, bool)> = Vec::new();
         let mut l = 0;
         while l < n {
+            if fin_de(l) - debuts[l] > max_size {
+                let mut start = debuts[l];
+                while start < fin_de(l) {
+                    let mut end = snap_to_char_boundary(text, (start + max_size).min(fin_de(l)));
+                    if end <= start {
+                        // Never an empty core: at least one whole character.
+                        end = start + text[start..].chars().next().map_or(1, char::len_utf8);
+                    }
+                    cores.push((l, l + 1, start, end, true));
+                    start = end;
+                }
+                l += 1;
+                continue;
+            }
             let mut fin = l + 1;
-            while fin < n && fin - l < max_lines && fin_de(fin) - debuts[l] <= self.config.max_size {
+            while fin < n && fin - l < max_lines && fin_de(fin) - debuts[l] <= max_size {
                 fin += 1;
             }
-            cores.push((l, fin));
+            cores.push((l, fin, debuts[l], fin_de(fin - 1), false));
             l = fin;
         }
         if cores.len() >= 2 {
-            let (d, f) = cores[cores.len() - 1];
-            if fin_de(f - 1) - debuts[d] < 50 {
+            let (d, f, _, last_byte, in_one_line) = cores[cores.len() - 1];
+            let previous_in_one_line = cores[cores.len() - 2].4;
+            if !in_one_line && !previous_in_one_line && last_byte - debuts[d] < 50 {
                 cores.pop();
-                cores.last_mut().expect("au moins un cœur").1 = f;
+                let last = cores.last_mut().expect("au moins un cœur");
+                last.1 = f;
+                last.3 = last_byte;
             }
         }
 
-        // Phase 2 : le contexte, en lignes.
+        // Phase 2 : le contexte, en lignes, at most `max_size` bytes on each side.
         let mut chunks = Vec::new();
-        for (index, &(d, f)) in cores.iter().enumerate() {
-            let start_line = d.saturating_sub(self.config.overlap_lines);
-            let end_line = (f + self.config.overlap_lines).min(n);
-            let (start_byte, end_byte) = (debuts[start_line], fin_de(end_line - 1));
-            let (core_start, core_end) = (debuts[d], fin_de(f - 1));
+        for (index, &(d, f, core_start, core_end, in_one_line)) in cores.iter().enumerate() {
+            let (start_byte, end_byte) = if in_one_line {
+                (core_start, core_end)
+            } else {
+                let mut start_line = d;
+                while start_line > d.saturating_sub(self.config.overlap_lines) && debuts[d] - debuts[start_line - 1] <= max_size {
+                    start_line -= 1;
+                }
+                let mut end_line = f;
+                while end_line < (f + self.config.overlap_lines).min(n) && fin_de(end_line) - fin_de(f - 1) <= max_size {
+                    end_line += 1;
+                }
+                (debuts[start_line], fin_de(end_line - 1))
+            };
             let chunk_text = text[start_byte..end_byte].trim_end();
             if chunk_text.trim().is_empty() {
                 continue;
@@ -397,6 +429,7 @@ mod tests {
     /// lines). With the code's chunking, every chunk of the bench's files stays within three chunk sizes
     /// (a core within `max_size`, at most `max_size` of context on each side), a long line's cores within
     /// `max_size`, and the cores put end to end give back the text.
+    #[cfg(feature = "code")]
     #[test]
     fn a_line_longer_than_the_chunk_size_is_cut_and_the_cores_give_back_the_text() {
         let config = crate::code::default_scope_chunking();
