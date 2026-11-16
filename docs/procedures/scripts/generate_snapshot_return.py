@@ -58,25 +58,52 @@ def digest(path):
     with Path(path).open('rb') as stream:
         return hashlib.file_digest(stream, 'sha256').hexdigest()
 
+if set(config) != {'helper', 'helper_sha256', 'evidence_parent', 'bases'} or not config['bases']:
+    raise SystemExit('invalid return configuration schema')
 helper = Path(config['helper'])
-if helper.is_symlink() or digest(helper) != config['helper_sha256']:
+if helper.resolve() != helper or helper.is_symlink() or digest(helper) != config['helper_sha256']:
     raise SystemExit('return helper SHA changed')
 spec = importlib.util.spec_from_file_location('snapshot_return', helper)
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
-# Vérifier TOUS les inventaires avant le premier déplacement, pas base par base.
+# Préflight GLOBAL : snapshots ET ensembles vivants, sans écrire ni déplacer.
+evidence = Path(config['evidence_parent'])/('return-evidence-'+uuid.uuid4().hex)
+if evidence.parent.resolve() != evidence.parent or evidence.exists():
+    raise SystemExit('invalid evidence parent')
+protected = [helper.parent, evidence]
+live_sets = []
 for item in config['bases']:
+    if set(item) != {'base', 'snapshot', 'inventory', 'inventory_sha256'}:
+        raise SystemExit('invalid base record schema')
     inventory = Path(item['inventory'])
     snapshot = Path(item['snapshot'])
     base = Path(item['base'])
-    if inventory.is_symlink() or digest(inventory) != item['inventory_sha256']:
+    if inventory.resolve() != inventory or inventory.is_symlink() or digest(inventory) != item['inventory_sha256']:
         raise SystemExit('return inventory SHA changed')
     if snapshot.resolve() != snapshot or base.parent.resolve() != base.parent:
         raise SystemExit('linked snapshot or destination parent')
     rows = json.loads(inventory.read_text())['files']
+    module.require(snapshot.is_dir() and base.name.endswith('.rag3db')
+                   and (snapshot/base.name).is_file(), 'invalid snapshot or base')
     module.verify_snapshot(snapshot, rows, snapshot)
+    roots = module.live_roots(base)
+    module.require(roots, 'no current live state to preserve: '+str(base))
+    module.describe(roots, base.parent)  # refuse les types spéciaux AVANT base1
+    live_sets.append(roots)
+    protected.extend([snapshot, inventory.parent])
+
+def intersects(left, right):
+    return left.is_relative_to(right) or right.is_relative_to(left)
+
+seen = []
+for roots in live_sets:
+    for root in roots:
+        module.require(not any(intersects(root, other) for other in seen),
+                       'overlapping live sets')
+        module.require(not any(intersects(root, path) for path in protected),
+                       'live set intersects protected snapshot, tool or evidence')
+    seen.extend(roots)
 module.require_cold_api()
-evidence = Path(config['evidence_parent'])/('return-evidence-'+uuid.uuid4().hex)
 for item in config['bases']:
     subprocess.run([sys.executable, str(helper), '--snapshot', item['snapshot'],
                     '--base', item['base'], '--inventory', item['inventory'],
