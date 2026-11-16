@@ -1718,3 +1718,33 @@ La chronologie est sur la page 03 ; ici les faits et les décisions.
 - **En file au matin** : codeparsers (quatre lots, passe complète), embarquement, archi (le pas va au bout, puis le
   mode pair), le grain du paquet, le segment de 96, les trois lots d'outillage de G, le pointeur lucivy 4.3.9, puis la
   **bascule des bases de Lucie** ; la fenêtre de la bascule de lib et le tag lucivy attendent son mot.
+
+## 2 h 0x – 4 h 0x (16 novembre) : le rouge de master expliqué et corrigé, la file vidée, la bascule mesurée
+
+- **Master a rougi sans un mot** sur `e2e_code_sync` (11 témoins de la synchronisation et du point de reprise), vu par la
+  passe complète de codeparsers : aucune passe de la nuit ne jouait cette suite. Cause : l'écrivain des générations, dont le
+  chemin `synchroniser_par_generations` n'avait repris ni la garde des fichiers manquants, ni le rapport des suppressions, ni
+  le plan seul, ni la reprise après un point de reprise ; ED l'a corrigé en une heure et demie (douze défauts, deux
+  changements de sens accordés : `files_unchanged` au rapport, le test des sessions sur une base sans générations), pas de
+  retour arrière (la migration, 2b′ et 2b-C étaient bâtis dessus ; les hôtes en service sont sur la pose d'avant).
+  **G a fait de la suite exigée une règle de la garde** (`required_suites.txt`, le résumé nomme ses suites) ; master est vert
+  depuis fff425b3c.
+- **Atterris ensuite** : la pile d'outillage de G (quatre lots, cinq tickets fermés), le mode « tests seuls » de la garde, les
+  tests du shell à historique propre (hotfixs, deux lots), la pile du déversement (deux pertes du moteur : un compte de
+  pages faux après vidage, un vidage sous un groupe encore déversé d'une autre requête), la pile de la résolution d'arêtes de
+  codeparsers (quatre lots, REGLES_DE_L_ANALYSE à 2, toutes les bases repassent une fois), le renommage en anglais des vues
+  (arbre), le repli par activation nommée (embarquement). Tous vérifiés : identité gmail, zéro attribution. CI verte.
+- **La bascule des bases de Lucie, mesurée par le banc** : la parité tous signaux copie migrée contre base vivante est rouge
+  sans perte franche (rappel 0,867 ; dense seul 0,793) ; la cause est nommée par le banc, l'arbre et ED ensemble : même
+  modèle, mais la base vivante garde les morceaux de la date où chaque fichier a été indexé, la copie repassée a le découpage
+  d'aujourd'hui et `content` borné aux octets du nœud ; 9 % des morceaux changent. Décision : la parité de la migration se
+  mesure contre un index neuf du même arbre (B′, en cours), et la qualité contre l'oracle des bonnes réponses ; la bascule
+  attend aussi le pointeur lucivy 4.3.9 (le BM25 au rang visible, 11/15 → 2/15). Le banc a dit un défaut de son juge : il
+  n'avait jamais joué que le lexical.
+- **Le moteur** : le SIGSEGV du dictionnaire reproduit sous un pool réduit (cœur, ASan en cours) ; une base neuve qui
+  disparaît entière sous une coupure sans fsync du répertoire (hotfixs, correctif en passe) ; le refus « Schema changed »
+  sans fin n'est plus reproductible depuis le correctif du pool.
+- **Archi** est « waiting » et muet depuis 1 h 05, malgré trois relances : à regarder au matin ; son lot « le pas va au
+  bout » est vert en branche, l'entrée témoin du registre n'est pas posée.
+- **Au matin, pour Lucie** : « oui tag » lucivy v4.3.9 ; l'heure de la fenêtre de la bascule de lib (tout est prêt) ; et
+  savoir que la bascule des bases changera un peu le classement dense (découpage d'aujourd'hui) avant de la dire.
