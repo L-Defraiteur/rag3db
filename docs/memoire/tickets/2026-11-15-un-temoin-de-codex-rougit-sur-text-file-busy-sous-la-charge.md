@@ -73,3 +73,7 @@ Un témoin Rust de chemin/corps littéraux est ajouté, NON JOUÉ avant FINI G.
 Vert système sur40e7 : 3/3 en0,007s, commande du helper extraite du source.
 [Rapport du lot](../16-11-2026/02-script-fixtures.md). Qualification Rust toujours
 NON JOUÉE ; conservation du premier rouge et des limites de cette preuve.
+
+Préparation magasin explicite sous XDG privé : contrôle résolveur seul portable/
+PC conforme, pin59ac et so/vectorSHA dans le rapport. La future recette fixe
+RAG3DB_LIBS_DIR réel sans copie SDK ; ce contrôle ne déclenche aucune passe.
