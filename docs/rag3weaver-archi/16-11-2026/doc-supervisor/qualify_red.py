@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """One deterministic native red witness; no Vertex and no permission granted."""
 from pathlib import Path
-import hashlib, json, os, re, shutil, signal, stat, subprocess, sys, time
+import hashlib, json, mmap, os, re, shutil, signal, stat, subprocess, sys, time
 
 R = Path.home() / '.cache/rag3weaver-build'
 W = Path.home() / 'git_workspaces/rag3db-cx-archi-doc-supervisor-r1'
@@ -161,7 +161,9 @@ def driver():
         artifact=artifacts[0]; binary=Path(artifact['executable']); assert binary.is_relative_to(T)
         assert set(artifact['features'])=={'rag3db-native','code','daemon'}
         copied=P/'native-fixture-elf'; shutil.copy2(binary,copied); assert sha(binary)==sha(copied)
-        save('ledger-before-witness.json',dict(source=APP,pilot=cfg['pilot'],artifact=artifact,binary=str(binary),sha256=sha(copied),features=artifact['features'],witness=NAME))
+        with copied.open('rb') as stream, mmap.mmap(stream.fileno(), 0, access=mmap.ACCESS_READ) as data:
+            source_offset=data.find(APP[:9].encode()); assert source_offset >= 0
+        save('ledger-before-witness.json',dict(source=APP,pilot=cfg['pilot'],artifact=artifact,binary=str(binary),sha256=sha(copied),source_offset=source_offset,features=artifact['features'],witness=NAME))
         rc, text = run('witness',['bash','-c','. "$1"; exporter_la_lib || exit 2; shift; exec "$@"','fixture-runtime',str(C/'scripts/lib_du_magasin.sh'),str(binary),'--exact',NAME,'--nocapture','--test-threads=1'],120)
         expected_red = rc != 0 and EXPECTED in text and ('FAILED' in text) and 'DOCUMENTATION_FAILED_FIXTURE ' in text
         save('first-red.json',dict(observed=time.monotonic(),phase='witness',rc=rc,expected_red=expected_red,expected=EXPECTED,counts=re.findall(r'test result:.*',text)))
@@ -203,7 +205,21 @@ def prepare(pilot):
         scope=json.loads(verdicts[0].read_text());outcome['scope']=scope
         red=P/'driver-result.json'
         if red.is_file() and json.loads(red.read_text())['status']=='EXPECTED_RED' and scope['verdict']=='ROUGE' and not scope['restes'] and scope['nettoye']:
-            outcome['status']='EXPECTED_RED';outcome['authority_terminated']=json.loads((verdicts[0].parent/'autorite.json').read_text())['etat']=='termine'
+            try:
+                assert result.returncode == 1 and scope['code'] == 101, 'not the expected driver red exit'
+                authority=json.loads((verdicts[0].parent/'autorite.json').read_text())
+                assert authority['etat'] == 'termine', 'authority still active'
+                assert not Path(scope['prive']).exists(), 'private bus remains'
+                guard(cfg)
+                ledger=json.loads((P/'ledger-before-witness.json').read_text())
+                assert sha(ledger['binary']) == sha(P/'native-fixture-elf') == ledger['sha256']
+                finished=time.monotonic()
+                assert finished < authority['echeance'], 'deadline after final hashes'
+                outcome.update(status='EXPECTED_RED',authority_terminated=True,bus_absent=True,deadline=authority['echeance'],finished=finished)
+            except Exception as error:
+                outcome['error']=repr(error)
+    if outcome['status']=='EXPECTED_RED' and time.monotonic() >= outcome['deadline']:
+        outcome.update(status='UNEXPECTED_FAILURE',error='deadline before publication')
     save('result.json',outcome); print(json.dumps(outcome));sys.exit(1)
 
 
