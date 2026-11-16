@@ -94,3 +94,7 @@ Coordination : ne pas recopier race READYB5. Réutiliser lifecycle_protocol.py98
 ## Réserve Embar sur globale333de822, avant correction
 
 ROcontrat partagé favorable mais implhealth() valide la phase seulement avant la boucle2providers. Premierrouge/finphase entre deuxGET peut laisser partir le second sansrecheck ; nepasadmettre333de822/Qb8a327. Corriger read_phase_state PUIS clock/validate_ready_phase avant CHAQUEGET et PG, checksaprès ; transportwhole<=5s/preuvesRAWstdoutstderr/rc/timeout. Témoinsfictifs au vrai raccord secondGET/PGtardif/firstred/phasefinie/nonce/source/linkretardé avant nouveauGO, pas de réseau réel. PGcontrat doit lierowner/C7/allocation/DB/user/freshness/réservationactive ; disponibilitéN/S n'est pas identitéSQL ni permission. AttendreROED/Hotfix pour regrouper delta, sources/ancienpaquet conservés et globalHOLD. Nouveauownerpolicy2providers+PG resteàqualifier,aucuneAPIshared àchanger.
+
+## Réserve Hotfix 7b9d9a8ecb, avant correction finale
+
+Le pilote333 exige check_features.log dernièreligne EXACTCHECK_FEATURES VERT alors que le vrai scripts/check_features.sh APP84 émet CHECK_FEATURES VERT8/8 (séparé par espace). Fauxrougefinalcertain ; publier témoinPythonpur contre la vraie forme du suffixe avantfix. Ni scriptcanonique2150 ni sourceAPP àmodifier. Raccordowner toujoursabsent : producer._ready/noembedding/worker7878 ne doivent pas être appelés au global. ROEDenattente ; groupercorrectifs quand ses réserves sont connues, maintenir333/Qb8a327HOLD.
