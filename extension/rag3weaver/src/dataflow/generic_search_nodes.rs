@@ -3136,7 +3136,7 @@ fn masque_en_predicat(
     }
     if let Some(v) = forme.generations.as_ref().filter(|v| !v.tout_visible && v.tables.contains(e)) {
         // La pile de la vue (2b′) : un étage seul donne les trois conditions d'avant.
-        conditions.extend(v.conditions_de_filtre(e, e));
+        conditions.extend(v.filter_conditions(e, e));
     }
     // Sans autre condition, la jointure seule dit « a au moins une occurrence » : une version orpheline
     // n'est pas admise.

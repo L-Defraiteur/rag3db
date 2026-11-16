@@ -99,7 +99,7 @@ pub fn declaration_du_manifeste(tracked: Option<&Value>) -> Result<Declaration, 
             return Err(format!("tracked : clé inconnue « {cle} » (root, sources, views)"));
         }
     }
-    crate::vues::reglages_des_vues(Some(tracked))?;
+    crate::views::view_settings(Some(tracked))?;
     let root = match objet.get("root") {
         None => Racine::Calculee,
         Some(Value::String(s)) if s == "computed" => Racine::Calculee,
@@ -690,7 +690,7 @@ pub const ID_DE_LA_COUCHE_DU_BACKEND: &str = "backend";
 /// **L'id d'une couche par son nom** (`couche_nom:<dépôt>:<nom>`), seulement si sa fiche est vivante
 /// (sans `fin`). `lire_meta` lit une clé de `_catalog_meta` : celle du catalogue, ou celle de
 /// l'instantané d'un appel d'outil.
-pub fn id_de_la_couche_par_son_nom(
+pub fn layer_id_by_name(
     lire_meta: &dyn Fn(&str) -> Result<Option<String>, String>,
     depot: &str,
     nom: &str,
@@ -866,7 +866,7 @@ struct Contexte {
 /// **L'id du dépôt** d'une racine, sans catalogue : celui de la résolution git des suivies (sinon
 /// l'ancien, `couches::identifiant_du_depot`). C'est le `<dépôt>` des clés `couche_nom:` et
 /// `fiche_couche:` ; `None` hors d'un dépôt git. Il ne change pas tant que le dépôt ne change pas.
-pub fn id_du_depot(racine: &std::path::Path, tracked: Option<&Value>) -> Result<Option<String>, String> {
+pub fn repo_id(racine: &std::path::Path, tracked: Option<&Value>) -> Result<Option<String>, String> {
     let Ok(depot) = crate::couches::git(racine, &["rev-parse", "--show-toplevel"]) else { return Ok(None) };
     let depot = std::path::PathBuf::from(depot);
     let backend = racine.canonicalize().unwrap_or_else(|_| racine.to_path_buf());
@@ -1617,12 +1617,12 @@ mod tests {
         assert!(!renomme.contains_key("refs/heads/a"), "{renomme:?}");
         // Le nom mène à l'id vivant (la vue d'un outil, 2b-C) ; un nom inconnu à rien.
         let lire = |cle: &str| cat.read_meta_key(cle).map_err(|e| e.to_string());
-        assert_eq!(id_de_la_couche_par_son_nom(&lire, "depot", "refs/heads/b").unwrap(), Some(a.clone()));
-        assert_eq!(id_de_la_couche_par_son_nom(&lire, "depot", "refs/heads/inconnue").unwrap(), None);
+        assert_eq!(layer_id_by_name(&lire, "depot", "refs/heads/b").unwrap(), Some(a.clone()));
+        assert_eq!(layer_id_by_name(&lire, "depot", "refs/heads/inconnue").unwrap(), None);
         // Effacée, puis recréée ailleurs sous le même nom : un identifiant neuf, l'ancien garde sa fin.
         git(&d, &["branch", "-D", "b"]);
         ids(&r);
-        assert_eq!(id_de_la_couche_par_son_nom(&lire, "depot", "refs/heads/b").unwrap(), None, "le nom d'une couche finie mène encore à son id");
+        assert_eq!(layer_id_by_name(&lire, "depot", "refs/heads/b").unwrap(), None, "le nom d'une couche finie mène encore à son id");
         let fiche = cat.read_meta_key(&format!("fiche_couche:depot:{a}")).unwrap().unwrap_or_default();
         assert!(fiche.contains("fin"), "la fiche de la couche effacée n'a pas sa fin : {fiche}");
         git(&d, &["branch", "b", "main"]);
@@ -1660,10 +1660,10 @@ mod tests {
         let cat = catalogue();
         let (avant, _) = rapport_des_suivies(&cat, &d, None).unwrap().expect("un dépôt git a son rapport");
         // L'id du dépôt sans catalogue (2b-C) est celui du rapport ; hors d'un dépôt, aucun.
-        let id = id_du_depot(&d, None).unwrap();
+        let id = repo_id(&d, None).unwrap();
         assert!(id.is_some(), "un dépôt git a son id");
         assert_eq!(id.as_deref(), avant["repo"].as_str(), "{avant}");
-        assert_eq!(id_du_depot(t.path(), None).unwrap(), None, "hors d'un dépôt git, un id");
+        assert_eq!(repo_id(t.path(), None).unwrap(), None, "hors d'un dépôt git, un id");
         assert_eq!(avant["racine"]["nature"], "calculee", "{avant}");
         assert!(avant["branches"].as_array().unwrap().iter().any(|x| x["ref"] == "refs/heads/main" && x["state"] == "tracked"), "{avant}");
         assert!(!avant["branches"].as_array().unwrap().iter().any(|x| x["ref"] == "refs/heads/b"), "b n'est pas suivie par défaut : {avant}");
