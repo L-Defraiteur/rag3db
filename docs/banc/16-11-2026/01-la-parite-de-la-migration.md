@@ -219,3 +219,13 @@ cause.
 
 Sorties à luciepc : `banc-parite/sorties/lucivy-439/only-{A,Bprime}.json` ; le script est
 `~/.cache/rag3weaver-build/only.sh`.
+
+**La suite, au mot de c7 (16 novembre, 10 h 4x)** :
+- le ticket lucivy `2026-11-16-le-bm25-seul-de-la-migration-reste-a-prouver-egal-sous-4-3-9.md` se ferme
+  sur le départage de lucivy et ce relevé ;
+- la copie finale de la bascule se refera sous les règles courantes (REGLES 7 et le découpeur de
+  master), depuis un état connu de l'arbre. **La parité A contre B′ se rejoue à ce moment-là**, sur cette
+  copie et sur un index neuf du même état de l'arbre ;
+- **un index du working tree compte les fichiers non suivis**. C'est voulu pour la vue courante, pas pour
+  un oracle. Un index neuf de comparaison se fait donc du même état de l'arbre, fichiers non suivis
+  compris, ou bien la comparaison les retire des deux côtés.
