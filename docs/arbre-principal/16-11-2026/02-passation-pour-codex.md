@@ -49,6 +49,7 @@ qui touche `src/code.rs`, `src/code_sync.rs`, `src/catalog.rs`, `src/catalog/*`,
 ### A. Sans dépendance : commencer ici
 
 **A1. Les sondes et bancs qui lisent `Scope_Chunk` en dur** — `docs/arbre-principal/tickets/2026-11-13-les-sondes-bancs-et-mesures-du-code-lisent-scope-chunk-en-dur.md`
+- **En cours par arbre principal** (16 novembre, 11 h), branche `arbre-principal/scope-chunks-des-sondes` sur master 1e45d6f21 : Codex la saute et part de la première entrée libre. Une fois poussée, le ticket passe dans `docs/tickets/closed/` avec son hash.
 - **Faire** : dans `tests/sonde_morceaux_vides.rs` (18 occurrences), `tests/e2e_mesure_index_entier.rs` (16),
   `tests/e2e_banc_etage.rs` (4), `tests/e2e_banc_hnsw.rs` (1), `tests/e2e_mesure_ingestion_code.rs` (2), lire la
   table des morceaux par `src/code.rs` `scope_chunks(&cat)` (champs `table`, `parent`, `chunked_from`, `to_scope`)
