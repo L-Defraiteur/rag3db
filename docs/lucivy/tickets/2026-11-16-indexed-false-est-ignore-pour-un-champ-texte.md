@@ -48,3 +48,12 @@ ajouté à build_schema ; aucune sémantique d’indexation modifiée.
 Prochain pas après créneau CPU : voir ce témoin réellement rouge avant de
 remplir schema_warnings, l’appeler et compléter query.rs/README. Ne pas confondre
 préparation du rouge et preuve exécutée. Aucun lourd pendant fenêtre G/Arbre.
+
+Conception brève avant correctif :
+`docs/lucivy/16-11-2026/04-conception-avertissement-indexed-false.md`.
+APIpurepublique dans handle, avertissementparchamp/parappelbuild_schema après
+validate ; pas de déduplication globale, de nouveau flag, ni d’effet d’indexation
+modifié. Noms échappés, texte anglais ; docquery/README à compléter aprèsrouge.
+Préparation du témoin corrigée en littéraux bruts Rust ; toujours NON compilé,
+NON joué, aucun correctif tant que rouge d’assertion pas vu. Fenêtre G/Arbre
+respectée, aucun nouveau lourd lancé.
