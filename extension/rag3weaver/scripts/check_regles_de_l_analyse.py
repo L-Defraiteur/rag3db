@@ -54,7 +54,8 @@ def main():
         print(f"VERT  règles de l'analyse : {CONSTANTE} monte")
         return 0
     messages = git(depot, "log", "--format=%B", f"{base}..HEAD")
-    if MENTION in messages:
+    # Sans casse : « Sans effet sur l'analyse » en tête de phrase compte aussi (arbre principal, 16 novembre 2026).
+    if MENTION.casefold() in messages.casefold():
         print(f"VERT  règles de l'analyse : « {MENTION} » dit dans le lot")
         return 0
     print(
