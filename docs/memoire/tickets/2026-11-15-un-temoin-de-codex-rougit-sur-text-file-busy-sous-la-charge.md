@@ -127,3 +127,7 @@ panic imprimés seulement en fin de lib : ne pas inventer son message exact.
 Pas de changement produit autorisé par ce constat ; prochaine proposition
 profilTMP court/privé serait un nouveau pilote et GO distinct sous ENDoriginal
 si C7 le décide. Ressources et premier rouge conservés sans nettoyage.
+
+Suite distincte tracée avant transmission : [fils profilTMP/socket](2026-11-16-le-profil-tmp-prive-depasse-la-longueur-des-sockets-des-temoins-du-pont.md).
+Aucun ticket des sept instables ED ne porte ce cas précis. STOP confirmé C7,
+aucune modification du helper ni nouveau budget autorisé avant diagnosticRO.

@@ -1,0 +1,40 @@
+# Le profil TMP privé dépasse la longueur des sockets des témoins du pont
+
+- **État** : ouvert, diagnostic RO le16nov ; aucun correctif ni GO de reprise.
+- **Famille** : produit.
+- **Gravité** : blocage de qualification, trois témoins de lib rouges sous profil privé long.
+- **Atteignable en service** : non établi ; observé dans les fixtures seulement.
+- **Touche rag3weaver** : oui, tests pont_navigateur/temoins_relai.rs et profil du pilote mémoire.
+- **Pour** : mémoire pour diagnostic/proposition de profil, C7 pour arbitrage ; Archi pour le pont si défaut produit établi.
+- **Signalé par** : mémoire, [preuve rouge04](../16-11-2026/04-preuves-rouge-script-fixtures.md), après GO C7 exact734087/383042.
+
+## Constat et liens
+
+Fils du [ticket de qualification codex](2026-11-15-un-temoin-de-codex-rougit-sur-text-file-busy-sous-la-charge.md).
+Les sept tickets instables listés dans passation ED2.8 ont été relus : aucun ne
+vise ces trois témoins sockets/profil long ; le ticket générique du pont Archi
+2026-11-12 est une capacité MCP distincte. Pas de doublon ouvert identifié.
+
+Témoincodex6/0/0/F8 8/8 acquis, lib entière STOP sur FAILED relai écoute,
+secondhôte et nouvelleconnexion. Le buffer ne livre pas le détail de panic avant
+le STOP : errno exact NON OBSERVÉ. Aucun lien causal ETXTBSY ni défaut du pont
+production déduit. NAV/seconde lib NON JOUÉES, ticketparent reste ouvert.
+
+TMPDIR84octets ; vrais dossiers pont-986542-N conservés ; chemins sockets
+108octets, ou115 avec ecoute/. dossier() utilise temp_dir, malgré son commentaire
+« court : un chemin de socket Unix tient en108octets ». Géométrie incompatible
+avec un chemin socket Unix terminé par NUL dans sun_path[108] : cause de profil
+plausible, à confirmer par une preuve ciblée autorisée ; pas de message errno inventé.
+
+## Suite à arbitrer avant toute édition du pilote
+
+C7 demande uniquement diagnosticRO et snapshots : profilHOME/XDG/TMP/DBUS,
+UID/modes/inodes des dossiers existants, source/pilote/limites et versionNode.
+Ne pas rejouer les témoins ni adapter le helper avant retour de RO C7.
+Proposition éventuelle : TMP privé court propre au reçu, possédé et nettoyé par
+le lot, mêmeENDoriginal et resteaprèsposte, cache porté avec provenance stricte.
+Ce serait nouveaupilote/RO/GOdistincts, pas un reset7200 ni un contournement du rouge.
+
+Critères de fin : cause qualifiée sans mélange avec ETXTBSY ; profil ou fixture
+corrigé au périmètre autorisé ; rouge/vert ciblé puis qualification globale
+requise. Conservation du premier rouge et des26preuves, aucun retrait de cache.
