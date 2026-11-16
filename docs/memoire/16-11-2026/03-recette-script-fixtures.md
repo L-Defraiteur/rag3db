@@ -72,3 +72,14 @@ Les huit fonctions hermétiques prépubliées4cef0f8ae9 ont passé en0,002s sous
 timeout20, Python-B, aucune lecture /proc réelle ni signal/process/Cargo.
 La fonction de finalisation publie bien RED quand le temps simulé est expiré.
 Nouvelle constante source/W/base propagée explicitement avant la RO finale.
+
+## Refus du watcher récursif, avant exécution lourde
+
+Pilote1e3a3d005d retiré/non lancé après RO ED. Réserve ticket0990449574
+avantdiff, témoins vrais run/fauxPopen publiés760b94b843 puis rouge acquis :
+journal historique `cache/builtin/llm-gemini.log` provoque à tort un arrêt.
+Journal horsW `journaux-cx-memoire-script-fixtures-16nov/rouge-watcher-760b.log`.
+Correction : liste fermée canonical-pass.log, second-lib.log et official/{temoins,
+check_features,preuve,lib,navigateur,resume}.log ; aucun parcours des caches.
+Témoins actifs FAILED et expected should_panic conservés, aucune exception de
+contenu ni whitelist du mot FAILED dans les sorties actives. Nouveau pilote à RO.

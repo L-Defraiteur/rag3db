@@ -96,7 +96,9 @@ def run(label,args,env,end,cap):
         while True:
             # Inspect only newly generated logs; expected should_panic is not a failure.
             bad=[]
-            for path in P.rglob('*.log'):
+            for name in ['canonical-pass.log','second-lib.log','official/temoins.log','official/check_features.log','official/preuve.log','official/lib.log','official/navigateur.log','official/resume.log']:
+                path=P/name
+                if not path.is_file():continue
                 if first_red(path.read_text(errors='replace')):bad.append(str(path))
             if bad:
                 if not (P/'first-red.json').exists():save(P,'first-red.json',dict(label=label,logs=bad,observed=time.monotonic()))
