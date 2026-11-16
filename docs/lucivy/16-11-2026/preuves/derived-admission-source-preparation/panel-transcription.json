@@ -1,0 +1,129 @@
+{
+  "scope": "static source transcription comparison only; no Rust executed",
+  "parent": "890c86af44989f3fea6c6fa62fd40d688b4084df",
+  "parent_test_sha256": "8f5223fae11dcbbe35e22e76ff975f4ec381fbfe1fc5577e7fca067934a7e0bc",
+  "panel": [
+    {
+      "label": "strict",
+      "query_type": "contains",
+      "field": "content",
+      "value": "mutex_lock",
+      "strict_separators": true,
+      "distance": null,
+      "regex": null,
+      "anchor_start": null,
+      "exact_match": null
+    },
+    {
+      "label": "relax",
+      "query_type": "contains",
+      "field": "content",
+      "value": "mutex lock",
+      "strict_separators": false,
+      "distance": null,
+      "regex": null,
+      "anchor_start": null,
+      "exact_match": null
+    },
+    {
+      "label": "strict",
+      "query_type": "contains",
+      "field": "content",
+      "value": "spin_lock",
+      "strict_separators": true,
+      "distance": null,
+      "regex": null,
+      "anchor_start": null,
+      "exact_match": null
+    },
+    {
+      "label": "term",
+      "query_type": "contains",
+      "field": "content",
+      "value": "sched",
+      "strict_separators": true,
+      "distance": null,
+      "regex": null,
+      "anchor_start": true,
+      "exact_match": true
+    },
+    {
+      "label": "sw",
+      "query_type": "contains",
+      "field": "content",
+      "value": "printk",
+      "strict_separators": true,
+      "distance": null,
+      "regex": null,
+      "anchor_start": true,
+      "exact_match": null
+    },
+    {
+      "label": "relax",
+      "query_type": "contains",
+      "field": "content",
+      "value": "return",
+      "strict_separators": false,
+      "distance": null,
+      "regex": null,
+      "anchor_start": null,
+      "exact_match": null
+    },
+    {
+      "label": "strict",
+      "query_type": "contains",
+      "field": "content",
+      "value": "if (",
+      "strict_separators": true,
+      "distance": null,
+      "regex": null,
+      "anchor_start": null,
+      "exact_match": null
+    },
+    {
+      "label": "fz1",
+      "query_type": "contains",
+      "field": "content",
+      "value": "schdule",
+      "strict_separators": false,
+      "distance": 1,
+      "regex": null,
+      "anchor_start": null,
+      "exact_match": null
+    },
+    {
+      "label": "fz2",
+      "query_type": "contains",
+      "field": "content",
+      "value": "regsiter",
+      "strict_separators": false,
+      "distance": 2,
+      "regex": null,
+      "anchor_start": null,
+      "exact_match": null
+    },
+    {
+      "label": "rx",
+      "query_type": "contains",
+      "field": "content",
+      "value": "spin_lock_[a-z]+",
+      "strict_separators": true,
+      "distance": null,
+      "regex": true,
+      "anchor_start": null,
+      "exact_match": null
+    },
+    {
+      "label": "relax-case",
+      "query_type": "contains",
+      "field": "content",
+      "value": "Mutex",
+      "strict_separators": false,
+      "distance": null,
+      "regex": null,
+      "anchor_start": null,
+      "exact_match": null
+    }
+  ],
+  "equal": true
+}

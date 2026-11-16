@@ -314,3 +314,26 @@ réutilisefuzzy_spansmoteur : distinctcheminindex, pasindépendancealgorithmique
 RustRegexUnicode/spansnonvides≠PythonASCII. Rougefuture50sanstémoin/mockbuilder0
 surpointENTRÉECONSOMMATEURadmission, pashelperisolé/APIabsente/modificationglobale
 usablequantité. RefNONvideaprès3builds préservée. ToutresteNONécrit/NONjoué.
+
+C7 lève la dépendanceRO et autorise la PRÉPARATION source/test/recette avant
+exécution : worktree/branche proprecx-lucivy-corpus-admission surAPP890, aucun
+Cargo/ELF/builder/RUN. Préparer entrée partagée du consommateurderived avec
+loader/builderinjectables, panelQueryConfig inchangé, couverture encore non
+contrôlée en baseline ; témoin50sansmutex doitrougir avantfix. Extrairecœurs
+literal/fuzzy/regex/frontières sur octetsimmuables ; anciens wrappersground_truth
+restent I/O historiques explicitement NONadmission. Pas de correctionducritère
+quantitéglobal ni réselection ; publier sources/recette/empreintesavantnouveauGO.
+
+Source de préparation publiéeAVANTexécution : Lucivy
+81b0e74f0254c8216864f90a460f8969842432ed, origin/cx-lucivy-corpus-admission.
+Consumerderived appellecommon::derived_fixture::with_derived_fixture avant
+sonbuilder ; neuf témoins dans test_derived_fixture_admission (manquepanel
+attenduROUGE, erreursloader/UTF8 et cœursUnicode/spans proposésnonjoués).
+Baseline laisselecritèrecouvertureABSENT ; pasdefixavantrouge. Extraction
+cœursliteral/fuzzy/regex utilisés parwrappersground_truth, frontièrespures
+disponibles ; enveloppesFS/lossy historiques restent NONadmission. Loader
+natif de sélection conserve encore ses filtres/continuehistoriques enbaseline,
+le mockreadtyped ne prouvePASuneadmissionFSréelle corrigée. OnzeQueryConfig
+statiquementidentiques à890 (provenance/empreintes publiées dansrecetteàsuivre).
+ActionRORechercheavantGO : nouveauSOURCE81b0, vrai raccordconsumer/modes/
+extraction/diagnosticredattendu ; aucunCargo/Rust/ELF/base/service/exécution.
