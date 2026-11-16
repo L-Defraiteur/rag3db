@@ -10,6 +10,10 @@ import unittest
 spec = importlib.util.spec_from_file_location('rust_red_pilot', Path(__file__).with_name('pilot.py'))
 pilot = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(pilot)
+common_path = Path(__file__).resolve().parents[4] / 'extension/rag3weaver/scripts/confiner_validation.py'
+common_spec = importlib.util.spec_from_file_location('common_fixture_layout', common_path)
+common = importlib.util.module_from_spec(common_spec)
+common_spec.loader.exec_module(common)
 
 
 class ScopeReaderTests(unittest.TestCase):
@@ -17,8 +21,7 @@ class ScopeReaderTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory(prefix='rust-red-reader-')
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
-        self.scope = self.root / 'scope' / 'validation-fixture'
-        self.scope.mkdir(parents=True)
+        self.scope = common.repertoire_preuves(str(self.root / 'scope'))
         self.verdict = dict(verdict='ROUGE', code=101, erreur=None, restes=[],
                             prive=str(self.root / 'removed-private'), nettoye=True)
         self.authority = dict(pid=os.getpid(), etat='termine', echeance=123.0, cgroup='/fixture-only')

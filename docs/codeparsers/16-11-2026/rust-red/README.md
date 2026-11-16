@@ -36,3 +36,16 @@ propriétaire noté dans le marqueur du target, même frontière que le pilote E
 Le lanceur se place hors source avant poste ; aucune autorité manager personnelle
 n'est réinjectée dans le bus privé. Le reçu et le cgroup restent ceux du commun.
 La préparation refuse un parent non possédé et un target déjà présent ou lié.
+
+Le lecteur final appelle un glob UNIQUE scope/validation-*/verdict.json. Il
+refuse zéro ou plusieurs résultats, les liens, une autorité non terminée ou
+d'une autre invocation, une erreur de supervision, des descendants restants,
+un répertoire privé encore présent, un code autre que101 et tout autre échec
+que les deux noms attendus (0passé/2échoués/0ignoré, assertion0→1 deux fois).
+Le code retour commun demeure rouge, jamais converti en passe verte.
+
+Le vrai lecteur est éprouvé par test_pilot.py : structure de dossier créée
+par la vraie fonction repertoire_preuves du commun, puis JSON de fixture.
+Cette fixture ne lance pas de superviseur ni ne crée d'autorité réelle.
+Rouge observé au lecteur initial c2b7639f5e ; correction bf507dd191, huit tests
+hermétiques verts. Cela ne constitue aucun rouge ni vert des deux témoins Rust.
