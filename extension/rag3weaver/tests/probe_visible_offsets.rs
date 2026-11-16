@@ -24,7 +24,33 @@ fn write_the_visible_offsets() {
     let target = cat.resolve_search_target("Scope").expect("the Scope target");
     // The same table the BM25 node resolves on (`allowed_ids_in`: `target.parent_table`).
     eprintln!("[probe] target parent table: {}, occurrence projection: {}", target.parent_table, target.occurrence_projection.is_some());
-    let ids = cat.resolve_filter_to_ids(&target.parent_table, &FilterCondition::Must(vec![]), &target).expect("resolve");
+    // The condition `masque_en_predicat` builds for a base with history (generic_search_nodes.rs): the
+    // occurrence entity's layer, born at or before the pending rank, not yet retired, and at least one
+    // occurrence. The pending rank is the last published one plus one.
+    use rag3weaver::connection::{CypherValue, DbConnection};
+    use rag3weaver::filter::{FilterOp, FilterValue};
+    let rang = cat
+        .conn()
+        .execute("MATCH (g:_generation) WHERE g.couche = 'backend' RETURN max(g.rang)")
+        .expect("the published ranks")
+        .rows
+        .first()
+        .and_then(|r| r.first())
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0)
+        + 1;
+    let field = |name: &str, value: FilterValue| FilterCondition::Field { key: format!("Scope.{name}"), value };
+    let condition = FilterCondition::Must(vec![
+        field("_couche", FilterValue::Direct(CypherValue::String("backend".into()))),
+        field("_depuis", FilterValue::Ops(vec![FilterOp::Lte(CypherValue::Int(rang))])),
+        FilterCondition::Should(vec![
+            field("_jusqu_a", FilterValue::Ops(vec![FilterOp::IsNull])),
+            field("_jusqu_a", FilterValue::Ops(vec![FilterOp::Gt(CypherValue::Int(rang))])),
+        ]),
+        field("_uuid", FilterValue::Ops(vec![FilterOp::IsNotNull])),
+    ]);
+    eprintln!("[probe] pending rank {rang}");
+    let ids = cat.resolve_filter_to_ids(&target.parent_table, &condition, &target).expect("resolve");
     let Some(mut ids) = ids else {
         eprintln!("[probe] no restriction: every row is visible (no history in this base)");
         return;
