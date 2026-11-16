@@ -108,3 +108,9 @@ fabriques, comme bindColumns du callee existant. Aucun autre changement de
 cas/assertion, parseur ou production. Refus avant fix conservé96f469/f996c0,
 archive brute SHA b67863ea...95c8. Correction NON COMPILÉE/NON JOUÉE ; aucun
 rouge binder acquis, nouveau couple/admission nécessaires, ticket toujours ouvert.
+
+Revue C7 source71fbe favorable bornée, aucune preuve de compilation. Préparation
+autorisée d'un [couple/paquet neuf v2](../16-11-2026/08-rows-red-fixture-revised-pilot.md)
+reprenant le même pilote : source71/moteur59, seuls pins et chemins privés
+révisés, même juge et mêmes caps2400 proposés. Ancien passage clos conservé,
+aucun reset de budget, autre cas joué ou changement de production.

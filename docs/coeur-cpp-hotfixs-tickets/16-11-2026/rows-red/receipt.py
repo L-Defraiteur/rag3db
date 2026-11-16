@@ -4,7 +4,7 @@ from pathlib import Path
 import re
 import xml.etree.ElementTree as ET
 
-SOURCE = '5099a367ddf1e48db2b4065d91a61403de994571'
+SOURCE = '71fbe786fcf0b2314e72b3eb4b8484faf590d78c'
 ENGINE = '59ac9c86bc2b3529b590a7462ab7051e3ad26b8a'
 CASE = 'VectorIndexDiagnosticsTest.ACompleteIndexReportsAKnownZero'
 BINDER = 'Binder exception: Variable rows_outside_graph is not in scope.'

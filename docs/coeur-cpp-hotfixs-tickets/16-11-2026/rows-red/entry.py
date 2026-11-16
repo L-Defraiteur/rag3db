@@ -16,8 +16,8 @@ started=time.monotonic()
 native_end=started+2330
 final_end=started+2380
 controller_end=started+2310
-unit='cx-hotfixs-rows-red-01.service'
-scratch=Path.home()/'.cache/rag3weaver-build/cx-hotfixs-rows-red'
+unit='cx-hotfixs-rows-red-02.service'
+scratch=Path.home()/'.cache/rag3weaver-build/cx-hotfixs-rows-red-v2'
 raw=out/'raw/driver'
 raw.mkdir(parents=True,exist_ok=True)
 first=None

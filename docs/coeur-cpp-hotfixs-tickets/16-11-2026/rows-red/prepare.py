@@ -12,8 +12,8 @@ import subprocess
 from receipt import ENGINE, SOURCE
 
 ROOT = Path.home()/'.cache/rag3weaver-build'
-OUT = ROOT/'cx-hotfixs-rows-outside-graph-red-v1'
-SCRATCH = ROOT/'cx-hotfixs-rows-red'
+OUT = ROOT/'cx-hotfixs-rows-outside-graph-red-v2'
+SCRATCH = ROOT/'cx-hotfixs-rows-red-v2'
 BASE = 'df2a5789888d16247f0dad42dcdaa3c4ceea2094'
 SCRIPTS = ['entry.py', 'controller.py', 'receipt.py', 'launch.sh']
 
@@ -61,7 +61,7 @@ def main(args):
     recipe = {'status': 'PREPARED ONLY; EXACT RO AND C7 ADMISSION REQUIRED; NOT EXECUTED',
               'source_commit': SOURCE, 'engine_commit': ENGINE, 'base': BASE,
               'pilot_commit': args.pilot, 'source_root': str(source),
-              'unit': 'cx-hotfixs-rows-red-01', 'scripts': scripts,
+              'unit': 'cx-hotfixs-rows-red-02', 'scripts': scripts,
               'bundle_sha256': sha(bundle), 'bundle_bytes': bundle.stat().st_size,
               'native_files': {name: sha(source/name) for name in
                                ['test/transaction/vector_index_diagnostics_test.cpp',
