@@ -42,3 +42,6 @@ types `u64`, `i64` et `f64` lisent bien `indexed`. La branche `"string"` l'ignor
 
 
 Delta44a7849a9c relu par Banc : pilote7833/admit7649/preflight0c903, les deux réserves7f6 sont levées pour ce paquetv2 exact. Rehash physique final3ELF/source/copies/préflight et gardes de publication aprèsopen/avantdump/aprèsfsync présents. Voir complément du rapport13. Avis préparatoire favorable, pasGO600 ; aucun mock Rust ou builder natif joué par Banc, ticket global toujours ouvert.
+
+
+RO preuves9a64654e7f par Banc : [rapport15](../../banc/16-11-2026/15-ro-preuves-rouge-lucivy-admission.md),35SHA conformes, unique rouge mock0/1/0/8filtered,left1/right0, trois identités initial/final/externe concordantes et fin Common101 propre sousEND. Favorable à ce rouge discriminant seulement ; aucun ELF ouvert ou exécuté par Banc, aucun correctif ou vert core déduit. Ticket reste ouvert pour la suite distincte.
