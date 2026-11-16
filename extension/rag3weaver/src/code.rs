@@ -3553,6 +3553,9 @@ impl Catalog {
         // `None` : deux déclarations qui ne s'accordent pas.
         let mut champs: HashMap<(String, String), Option<String>> = HashMap::new();
         let mut retours: HashMap<String, Option<(String, String)>> = HashMap::new();
+        // Every definition of a function, with its file: (written return, parent, file). When `retours` has
+        // no single answer, the module the mention's file imports the function from picks one.
+        let mut par_fichier: HashMap<String, Vec<(String, String, String)>> = HashMap::new();
         // Gabarit → (retour écrit, paramètres) : sans le parent, puisque la
         // même méthode gabarit (`constCast`) est déclarée par plusieurs classes.
         let mut gabarits: HashMap<String, Option<(String, Vec<String>)>> = HashMap::new();
@@ -3568,13 +3571,29 @@ impl Catalog {
             }
         };
         type Gabarits = HashMap<String, Option<(String, Vec<String>)>>;
-        let resoudre = |d: &D, champs: &HashMap<(String, String), Option<String>>, retours: &HashMap<String, Option<(String, String)>>, gabarits: &Gabarits, champ: Lecteur, retour: Lecteur| -> Option<String> {
+        type ParFichier = HashMap<String, Vec<(String, String, String)>>;
+        let resoudre = |d: &D, champs: &HashMap<(String, String), Option<String>>, retours: &HashMap<String, Option<(String, String)>>, par_fichier: &ParFichier, gabarits: &Gabarits, champ: Lecteur, retour: Lecteur| -> Option<String> {
             match d {
                 D::TemplateReturnOf { function, args, peel, .. } => gabarits.get(function).cloned().flatten().and_then(|(t, params)| {
                     nom_du_type(&codeparsers::scope_extraction::usage::substitute_template(&t, &params, args), peel, champ, retour)
                 }),
                 D::FieldOf { owner, field, peel } => champs.get(&(owner.clone(), field.clone())).cloned().flatten().and_then(|t| nom_du_type(&t, peel, champ, retour)),
-                D::ReturnOf { function, unwrap, peel } => retours.get(function).cloned().flatten().and_then(|(t, parent)| {
+                D::ReturnOf { function, unwrap, peel, module } => retours.get(function).cloned().flatten().or_else(|| {
+                    // Defined several times with different returns: the one in the file the import designates.
+                    let module = module.as_deref()?;
+                    let mut lus: Vec<(String, String)> = par_fichier
+                        .get(function)?
+                        .iter()
+                        .filter(|(_, _, f)| module_designe_fichier(module, f))
+                        .map(|(t, p, _)| (t.clone(), p.clone()))
+                        .collect();
+                    lus.sort();
+                    lus.dedup();
+                    match lus.as_slice() {
+                        [un] => Some(un.clone()),
+                        _ => None,
+                    }
+                }).and_then(|(t, parent)| {
                     // `f()?` : le `Result` ou l'`Option` se déballe d'abord.
                     let chaine: Vec<String> = unwrap.then(|| "?".to_string()).into_iter().chain(peel.iter().cloned()).collect();
                     let lu = nom_du_type(&t, &chaine, champ, retour)?;
@@ -3591,7 +3610,7 @@ impl Catalog {
                 break;
             }
             tours += 1;
-            self.charger_les_types_ecrits(&a_charger, source, &mut champs, &mut retours, &mut gabarits, &mut methodes)?;
+            self.charger_les_types_ecrits(&a_charger, source, &mut champs, &mut retours, &mut par_fichier, &mut gabarits, &mut methodes)?;
             charges.extend(a_charger);
             // Les classes qu'un pas de champ demande, et les méthodes qu'un
             // maillon de chaîne demande, pas encore chargées.
@@ -3610,7 +3629,7 @@ impl Catalog {
             };
             for m in mentions.values().flatten().filter(|m| m.qualifier_types.is_empty() && de_la_source(m)) {
                 for d in &m.deferred {
-                    let _ = resoudre(d, &champs, &retours, &gabarits, &champ, &retour);
+                    let _ = resoudre(d, &champs, &retours, &par_fichier, &gabarits, &champ, &retour);
                 }
             }
             noms.extend(demandes.into_inner());
@@ -3618,7 +3637,7 @@ impl Catalog {
         let champ = |classe: &str, f: &str| champs.get(&(classe.to_string(), f.to_string())).cloned().flatten();
         let retour = |classe: &str, m: &str| methodes.get(&(classe.to_string(), m.to_string())).cloned().flatten();
         for m in mentions.values_mut().flatten().filter(|m| m.qualifier_types.is_empty() && !m.deferred.is_empty() && de_la_source(m)) {
-            let lus: Option<Vec<String>> = m.deferred.iter().map(|d| resoudre(d, &champs, &retours, &gabarits, &champ, &retour)).collect();
+            let lus: Option<Vec<String>> = m.deferred.iter().map(|d| resoudre(d, &champs, &retours, &par_fichier, &gabarits, &champ, &retour)).collect();
             if let Some(mut v) = lus {
                 v.sort();
                 v.dedup();
@@ -3640,6 +3659,7 @@ impl Catalog {
         source: &(String, String),
         champs: &mut std::collections::HashMap<(String, String), Option<String>>,
         retours: &mut std::collections::HashMap<String, Option<(String, String)>>,
+        par_fichier: &mut std::collections::HashMap<String, Vec<(String, String, String)>>,
         gabarits: &mut std::collections::HashMap<String, Option<(String, Vec<String>)>>,
         methodes: &mut std::collections::HashMap<(String, String), Option<String>>,
     ) -> Result<(), CatalogError> {
@@ -3655,7 +3675,7 @@ impl Catalog {
         let lire = rag3weaver_ir::Select::filtered(
             SCOPE,
             filtre,
-            ["name", "field_types", "return_type", "parent_name", "template_params"].map(|f| Column::Node(f.into())).to_vec(),
+            ["name", "field_types", "return_type", "parent_name", "template_params", "file_path"].map(|f| Column::Node(f.into())).to_vec(),
         );
         let requete = crate::read_view::ReadCatalog::traduire_select(self, &lire).map_err(|e| CatalogError::DbError(e.to_string()))?;
         let result = self
@@ -3716,6 +3736,7 @@ impl Catalog {
                         })
                         .or_insert_with(|| Some(retour.clone()));
                 }
+                par_fichier.entry(nom.clone()).or_default().push((retour.clone(), texte(3), texte(5)));
                 let v = (retour, texte(3));
                 retours
                     .entry(nom)
