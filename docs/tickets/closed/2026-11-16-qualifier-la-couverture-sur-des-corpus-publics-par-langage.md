@@ -1,6 +1,6 @@
 # Qualifier la couverture sur des corpus publics par langage
 
-- **État** : ouvert — mission explicite de Lucie transmise par orchestration ; protocole et réservations à publier avant acquisition et mesure
+- **État** : fait — e5e2d9cf5a ; première référence exploratoire32382/32382, oracles indépendants et preuves aux deux postes ; suites explicitement ticketées
 - **Famille** : produit
 - **Gravité** : preuve de couverture ; un parsing sans erreur ne démontre pas des captures ou relations complètes
 - **Atteignable en service** : non, banc isolé ; les défauts de parseur révélés seront qualifiés séparément
@@ -87,3 +87,32 @@ upb générés explicitement,329C/255Cpp. Le résumé les sépare sans modifier 
 et ne prétend pas que tous les autres fichiers sont non générés.
 `summarize_probe.py` vérifie ordre/identités et longueur contre sélection puis
 calcule les statistiques à partir des seules sorties ; aucun parsing supplémentaire.
+
+
+## Clôture de la première référence
+
+Rapport et résultats : docs/codeparsers/16-11-2026/language-corpus/03-rapport-premiere-campagne.md,
+e5e2d9cf5a. Scopecanonique02b VERT(code0/erreur null/restes[]/nettoyé), autorité
+terminée, mais coverageunjudged/globalpassfalse. RésultatsSHA0667eab18d7892b442b8b912d98528d1253041620f43c60a286b47cd5fa81678
+et ELF exactbff1cafb conservés aux deux postes, auditsC7/Banc également.
+32382entrées :28115completed,1workerexit,5timeouts,4261refusHTML/Svelte.
+105ASTinvalides sont des données ; les enfants conservent défauts de faits,
+stack overflow et délais sans relance. Oracles avant résultats C7/Banc, jugement
+109faits=80observés/2manquants/1nonexposé/26indéterminés, sans rappel global.
+
+Suites ouvertes :
+
+- qualifier-les-relations-sur-les-projets-du-corpus-public ;
+- etendre-l-oracle-aux-facades-du-corpus-public ;
+- le-parseur-svelte-n-initialise-pas-sa-grammaire ;
+- un-worker-deborde-sa-pile-sur-un-fichier-openssl ;
+- les-champs-des-methodes-csharp-confondent-noms-et-types ;
+- cinq-fichiers-atteignent-la-borne-du-banc-public ;
+- un-template-forward-cpp-contamine-le-namespace ;
+- un-parametre-generique-rust-garde-sa-contrainte-dans-le-nom ;
+- les-parametres-proprietes-typescript-manquent-aux-membres.
+
+Les noms sont les tickets2026-11-16 de codeparsers ; le classement584générés a
+son ticket Banc. Le correctif Rust7601 reste un lot séparé et non déclaré fini.
+Cette clôture signifie livraison de la référence autorisée par C7, jamais une
+qualification globale du résolveur ou des façades HTML/Svelte.

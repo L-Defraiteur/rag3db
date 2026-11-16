@@ -187,3 +187,25 @@ les dimensions non conservées, les façades incomplètes et les diagnostics cib
 avec témoins minimaux dans leurs tickets. La qualification du correctif Rust7601
 (unit helper, mots vides, std seul, quatorze pertes historiques, puis passe complète)
 reste un autre lot et exige une allocation fraîche ; REGLES_DE_L_ANALYSE reste7.
+
+
+## Relectures indépendantes et suites portées
+
+Audit C7 :32382identités/ordre/provenances identiques, zéro borne scope/node hors
+[0,size] sur les faits rendus, zéro inventaire compact tronqué. Audit et code
+conservés aux deux postes sous language-corpus-02b/c7-audit/, SHAaudit
+53b6773df2c3128494565fddcd32167b1306fcd181f06e0a859cb10d56d48a76.
+Banc : bilan8bdedf4f2e, revueJSON SHA
+5ecbaa0e9c1da8cc740e923ab3c10cbabe99278fd9d896110a84568777cb4499.
+Parmi les329C générés upb :79ASTinvalides/250valides ; parmi255Cpp générés :
+zéro ASTinvalide. Hors de l'annexe, C compte12ASTinvalides et1avortement ; Cpp6
+ASTinvalides. Cela décrit les strates observées, pas un jugement de code humain.
+
+La suite relationnelle est portée par
+`2026-11-16-qualifier-les-relations-sur-les-projets-du-corpus-public.md` ;
+les façades et dimensions de captures encore non jugées par
+`2026-11-16-etendre-l-oracle-aux-facades-du-corpus-public.md`.
+Le défaut de classement des générés reste ouvert chez Banc dans
+`2026-11-16-les-sources-upb-gen-du-corpus-sont-mal-classees.md`.
+Le parent de cette première référence peut donc se clore sans faire disparaître
+ces travaux ni les cinq défauts de parsing/faits et les timeouts déjà ticketés.
