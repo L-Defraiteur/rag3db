@@ -62,3 +62,20 @@ python3 "$B/provide_live_cold_service_proof.py" \
 
 Aucune activation LIVE à cette rédaction ; dette469 reste à diagnostiquer et
 arbitrer. API/socket PC toujours froides ; portable/embarquement/tunnels préservés.
+
+
+## Fenêtre abandonnée et API rétablie — 16 novembre, 13 h 36
+
+Décision C7 après COPY02 ROUGE : aucune CLI originale exécutée, aucune
+restauration de données. Avant réveil, le principal conserve ses 733 entrées,
+identités et SHA d'origine ; aucun writer copie restant, observer terminé.
+G a redémarré uniquement API/socket PC à 13:36:20 : PID511010,
+start117847552, binaire0e310/source927/lib59ac inchangés. Sante et etat
+concordent, zéro backend, sans ouverture forcée ni warmup. La lib est mappée ;
+libvector reste vérifiée sur disque, sans prétendre un mapping à zéro backend.
+
+Reçu PC `~/.cache/optimiseur-notes/bascule-16nov-927/pc-cold-window-20261116-122721/window-closed.json`,
+SHA d9396ba55a2e538770d75f36f8dd45308c2761e5ee53107298781e0fc61fd814.
+FINI transmis à C7 et Arbre. Anciennes gates LIVE historiques et invalidées ;
+provider LIVE jamais activé. Originaux, copies, instantanés et retours conservés
+72 heures minimum. La classification des 469 reste une analyse sur copies.
