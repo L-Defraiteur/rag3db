@@ -35,7 +35,8 @@ class Observation(unittest.TestCase):
             factice=False, dual=False, sparse=False, precision='Flex32',
             executable='/fixture/provider@suffix', max_chars_per_text=12000)
         self.health = dict(identity, usage=dict(baux=0, en_cours=0))
-        self.pins = dict(protocol_sha256=owner.digest(protocol.__file__),
+        self.pins = dict(observation_sha256=owner.digest(owner.__file__),
+            protocol_sha256=owner.digest(protocol.__file__),
             producer_sha256=owner.digest(producer.__file__), pilot='f'*40,
             allocation='C7-fixture', c7_reference='C7-fixture', embar_reference='Embar-fixture',
             identity=identity, expected_process={k:v for k,v in self.process.items() if k!='state'})
