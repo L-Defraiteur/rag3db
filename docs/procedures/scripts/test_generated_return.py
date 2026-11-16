@@ -4,6 +4,8 @@ import hashlib
 import json
 import os
 import shutil
+import socket
+import stat
 from pathlib import Path
 import subprocess
 import tempfile
@@ -20,8 +22,10 @@ def shape(root):
             result[key] = ['link', os.readlink(path)]
         elif path.is_dir():
             result[key] = ['directory']
-        else:
+        elif path.is_file():
             result[key] = ['file', hashlib.sha256(path.read_bytes()).hexdigest()]
+        else:
+            result[key] = ['special', stat.S_IFMT(path.lstat().st_mode)]
     return result
 
 
@@ -132,6 +136,20 @@ class GeneratedReturnIntegrity(unittest.TestCase):
     def test_corrupt_second_snapshot_refuses_before_first_move(self):
         (self.snapshot/'second/second.rag3db').write_bytes(b'corrupt')
         self.assert_refusal_unchanged()
+
+    def test_absent_second_live_set_refuses_before_first_move(self):
+        second = self.bases[1]
+        second.unlink()
+        second.with_name(second.name+'.wal').unlink()
+        self.after = shape(self.live)
+        self.assert_refusal_unchanged()
+
+    def test_second_live_socket_refuses_before_first_move(self):
+        endpoint = self.live/(self.bases[1].name+'.unsupported-socket')
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:
+            listener.bind(str(endpoint))
+            self.after = shape(self.live)
+            self.assert_refusal_unchanged()
 
     def test_active_api_refuses_before_any_move(self):
         self.env['FIXTURE_UNIT_STATE']='active'
