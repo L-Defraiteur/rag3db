@@ -76,3 +76,7 @@ GO C7-GEN-BA5-16nov unefois, APP3ee/mêmeELF268/sansCargoGDBclassicrerun. Initia
 ## Préparation correctif commun autorisée C7 — AVANT diff
 
 Nouvelle source depuis preuves8f813, anciennesAPP3ee/ELF268/fixtures/portées figées intouchées. Extraire un helperprivé de préparationFTS utilisé par classique et générations AVANTlectureliste/filtreinchangé/retoursanticipés : gardecomptesexistante, gardeFiles stricte, reconstructionpendingexistante. Aucun redispatch/fallbackalias/downgrade ni modification contenu/visibilité/H/identités. ConserverAPIverify_fts_files historique pour ses autresappelants ; varianteinterneResult poursync évite nouveau succès aprèserreurFiles. PropagationErr/pending avantreadsource sera jugée. Témoins spécifiques àprépublier (pendingmêmecompte, erreurpending bloquelecture, listeErraprèsgarde) AVANTimpl, tousNONJOUÉS. Les2jugesDOUBLEexistants restent le rougeGEN et le classiqueacquisbrut ; green/nouveaupiloteGOdistinct obligatoire. AncienEND est historique, jamaisprolongé/réactivé.
+
+## Limite RO sourcebc952 et préparation du pilote vert
+
+Hotfix favorable bornéBlobs : varianteFilesstricte propageErrrebuild_fts_step seulement ; ouvertureFiles conserveOption+note_index_failure/log, donc passtrictglobalFiles. Défautouverture àqualifier séparément si nécessaire, NONrésolu par ce lot. Pas de qualificationreadonly/in_transaction/planonly/multicellules. Pilote5exacts décritrapport23, sourceAPPbcfigée, budgetNOUVEAU1200proposé/freshGOdistinct ; aucuneautoritéancienne réactivée, aucunrun ou Tmuté.
