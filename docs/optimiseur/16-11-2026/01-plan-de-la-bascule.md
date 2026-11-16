@@ -79,3 +79,29 @@ Les scripts de G qui nomment 373b5477b (verdicts, preparer-binaire) prennent l'i
 
 `RETOUR.sh` à côté des instantanés, `courant` reposé sur 373b5477b par `courant-bascule.sh`, et les binaires
 `.avant-<tête>` reposés par `poser-binaire.sh`. Les deux postes reviennent ensemble, jamais un seul.
+
+## Fenêtre autorisée du 16 novembre — reprise en préparation
+
+Lucie a autorisé explicitement la lib neuve, la pose aux deux postes puis les
+migrations des bases ; aucune nouvelle demande d’heure nécessaire. Source figée
+`927941a67a5805450d49f1e04b39fdd542a6059b`, dernier moteur
+`59ac9c86bc2b3529b590a7462ab7051e3ad26b8a`. Audit frais : aucun delta C++ ni
+configuration CMake entre 3177d2489e et cette source ; magasins concordants,
+17 symboles ajoutés, aucun retiré et trois vtables FileSystem agrandies.
+Le cœur confirme ce delta nul ; son ancien TSan reste autonome, sans arrêt.
+
+Les hôtes préparés sur 3177 sont périmés pour cette pose : rebâti sur 927 avec
+lock lucivy 4.3.9. Première tentative refusée par la garde du target historique
+appartenant à un autre arbre ; refus conservé, aucun artefact repris en silence.
+Reprise dans `target-cx-optimiseur-bascule-16`, 32 Gio, huit jobs, sous poste et timeout.
+Aucun hôte coupé à ce stade. Preuves hors dépôt aux deux postes :
+`~/.cache/optimiseur-notes/bascule-16nov-927/`.
+
+Porteur unique services/libs : optimiseur. Arbre prépare les migrations sur copies,
+puis attend le FINI technique de pose : pins complets, réveil et ouvertures,
+instantanés/RETOUR et contrôles des deux sens. Retour conservé 72 h minimum,
+aucun retrait d’ancien index. Après réveil, fenêtres offline par base coordonnées
+avec le porteur ; aucun outil historique lié à 373b ni purge sous lucivy ancienne.
+L’épinglage des passes suit par le ticket existant
+`docs/optimiseur/tickets/2026-11-16-les-passes-epinglent-373b5477b-apres-la-bascule.md`,
+sous un nouveau tour de push. Les passes des autres lots attendent le pin neuf.
