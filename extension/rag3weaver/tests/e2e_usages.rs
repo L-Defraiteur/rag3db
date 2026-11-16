@@ -1231,3 +1231,22 @@ fn two_homonyms_on_one_line_both_have_their_file() {
     assert!(orphans.rows.is_empty(), "every scope has its file: {:?} of {:?}", orphans.rows, all.rows);
 }
 
+/// **A return read through a function defined several times takes the one the file imports** (ticket « des
+/// receveurs restent sans type », 16 November 2026): `hote` is defined in two modules with two return types;
+/// `teammate_tests.rs` imports `super::chat_qui_code::hote`, so `let host = hote(…); host.hosted()` reaches
+/// `DaemonHost::hosted`, by type, instead of abstaining.
+#[test]
+#[ignore]
+fn a_return_through_a_twice_defined_function_takes_the_imported_one() {
+    let catalog = setup();
+    let fichiers = vec![
+        ("src/daemon_host.rs".to_string(), "pub mod chat_qui_code;\npub mod worktrees;\nmod teammate_tests;\npub struct DaemonHost;\nimpl DaemonHost {\n    pub fn hosted(&self) -> u8 { 0 }\n}\n".to_string()),
+        ("src/daemon_host/chat_qui_code.rs".to_string(), "use super::DaemonHost;\npub(super) fn hote() -> DaemonHost { DaemonHost }\n".to_string()),
+        ("src/daemon_host/worktrees.rs".to_string(), "pub struct Ecran;\nimpl Ecran {\n    pub fn hosted(&self) -> u8 { 1 }\n}\npub fn hote() -> Ecran { Ecran }\n".to_string()),
+        ("src/daemon_host/teammate_tests.rs".to_string(), "use super::chat_qui_code::hote;\npub fn works() -> u8 {\n    let host = hote();\n    host.hosted()\n}\n".to_string()),
+    ];
+    catalog.lock().unwrap().ingest_code(&analyze("/projet", fichiers)).unwrap();
+    let cat = catalog.lock().unwrap();
+    assert_eq!(cibles_vers(&cat, "works", "hosted"), vec![("DaemonHost".to_string(), "type".to_string())]);
+}
+
