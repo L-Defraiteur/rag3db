@@ -23,3 +23,5 @@ FinalcommonVERT0TERMINE/restes[]/busabsent/ownedquiet/cachequietfrais, pinsGit/c
 ## Liaison du grant au job, avant publication finale
 
 Témoin25c2prépub surVRAIvalidate_services, appétrangèreacceptée : ROUGEAssertionErrornonlevée vuAVANTfix, sansAPIabsente ni service. Le reçu doitdésormaisporter APP/pilote40hex/scope/ready_sha256 etréférenceC7 ; runtime compare lescinq à APP/config/autoritéACTIVE/SHAduREADY réellementpublié/allocationexacte AVANT1erGET. UnegrantfraisdujobED nequalifiepascejob. Embar doit calculerSHA256duREADYaprèspublication (pas dehashauto-référentdansleREADY) ; pas de SERVICES_GO avantposte. Aucun owner n'a encore écrit ce grant, aucune réservationacquise.
+
+ContratsCPU prépub86a5 avantprototype2252 :4fonctionsVERTES0.000s. Liengrantapp/scope prépub25c2 +vraiROUGE avantfix349b, puis6fonctionsCPU VERTES0.000s (arrondiunittest), AST2verts/diffcheck. Aucun processus/service/DB/Cargo/Auth/PQS/Tmutationdanscescontrats. ArchivesCPUlocales6fichiersmanifestc8111688fddc33940bebac3fec0f727336a375474fd0bf7f5c23c22738f4d8b7publiéàcôté, paspreuve decoordinationréelle/GLOBAL. SOURCEAPP5f59 figée ; source/piloteproduitdiffvide.

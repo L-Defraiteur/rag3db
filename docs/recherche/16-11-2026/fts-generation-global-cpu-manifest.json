@@ -1,0 +1,26 @@
+{
+  "green.json": {
+    "bytes": 59,
+    "sha256": "277da9e86b292f52f85bd1acc7b61ea2142b40a60c238d7b3dac790685fb958f"
+  },
+  "green.stderr": {
+    "bytes": 970,
+    "sha256": "61f02540e1a029bcaabbb027e011e3a2174624b82365e7ab838e3168e0bcfb9e"
+  },
+  "green.stdout": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "red.json": {
+    "bytes": 59,
+    "sha256": "441629c264c7d60390b36d6f025ad206ad8db7d879a80fff41aebfe183ca1d93"
+  },
+  "red.stderr": {
+    "bytes": 998,
+    "sha256": "7efb207d864172c518dffbff59894a21b34f4e1c8d0b6f498b4e94ef1e163bee"
+  },
+  "red.stdout": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}
