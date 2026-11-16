@@ -192,6 +192,34 @@ TEST_F(PowerCut, CommitsOfANewDatabaseSurviveACutOfItsDirectoryEntries) {
         << "[check: commits-survive-a-cut-of-the-directory-entries]";
 }
 
+// A checkpoint removes the journal and the shadow file, without syncing their directory: a cut
+// right after it can bring both back (ticket
+// 2026-10-04-durabilite-sur-faute-d-entree-sortie-ou-coupure, « suppression non synchronisée »).
+// The database must open with its rows, once and only once.
+TEST_F(PowerCut, ACutAfterACheckpointRemovedTheJournalLosesAndDoublesNothing) {
+    const auto status = inAChild(true, [&] {
+        CutFileSystem::pendingDirectoryEntries() = true;
+        Database database(databasePath, *systemConfig);
+        Connection connection(&database);
+        if (!fill(connection)) {
+            _exit(11);
+        }
+        if (!run(connection, "CHECKPOINT;")) {
+            _exit(12);
+        }
+        _exit(CUT); // the checkpoint returned "ok" and removed its journal: cut
+    });
+    ASSERT_EQ(status, CUT) << "[check: setup] the child did not reach the cut";
+    const auto walBack = std::filesystem::exists(databasePath + ".wal");
+    const auto shadowBack = std::filesystem::exists(databasePath + ".shadow");
+    EXPECT_EQ(judge("MATCH (t:T) RETURN count(*), sum(t.id);"), "2000|1999000\n")
+        << "[check: a-cut-after-a-checkpoint-loses-and-doubles-nothing] journal back after the "
+           "cut: "
+        << walBack << ", shadow file back: " << shadowBack;
+    EXPECT_EQ(judge("MATCH (t:T {id: 1234}) RETURN t.s;"), "ligne 1234\n")
+        << "[check: a-cut-after-a-checkpoint-loses-and-doubles-nothing]";
+}
+
 TEST_F(PowerCut, ACommitThatReturnedOkSurvivesACut) {
     const auto status = inAChild(true, [&] {
         Database database(databasePath, *systemConfig);
