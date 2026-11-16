@@ -156,3 +156,11 @@ de préparation. START après poste/END1800 et reste moins2/cleanupowned cohére
 Seul point de lancement à préciser : cwdQ, désormais fixé ci-dessus. Aucun
 changement du pilote2fa59 ni du preflight23dd. Rapport banc encore à pousser
 au moment de cette mise à jour ; aucun Cargo/ELF/scan réel par banc.
+
+## GO exact reçu et compléments de ressources
+
+Allocation C7-LUCIVY-CORE-890-16nov : couple890/2fa59, admit3cde/preflight23dd,
+noncee14. Le GO impose aussi swap0 et quotaCPU<=4 : la commande autorisée
+ci-dessus reçoit donc **POSTE_SWAP_MAX=0 POSTE_CPU_QUOTA=400%** en plus de ses
+variables mémoire. ParentcwdQ fixé avant poste, délai1800 unique inchangé.
+Aucun pilote/helper n’est modifié pour ce lancement.

@@ -216,3 +216,10 @@ rehashphysique des corpus par banc. Point de lancement précisé dans recette08 
 **cwdQ exact horsW/T**, sinon autosignalementattribué par collect_scan et refus.
 Pilote2fa59/preflight23dd inchangés, pas de nouvelle exécution ni GO reçu.
 Rapport banc à pousser ; transmettre ce complément avant décision C7.
+
+GO C7 exact reçu : allocation C7-LUCIVY-CORE-890-16nov, APP890/pilote2fa59/
+admit3cde/preflight23dd, noncee14, ENDunique1800. ParentcwdQ obligatoire,
+POSTE_MEM_MAX=32G, POSTE_SWAP_MAX=0, POSTE_CPU_QUOTA=400%, HIGHmax, jobs<=4.
+Ces variables complètent la commande08 conformément au GO reçu ; aucun helper
+ni pilote modifié. NeufHOLD/ignored explicites, full_corefalse. Premier rouge
+imprévu : arrêt sansretry, aucun merge/main/tag/ULP7.2/PR42 autorisé.
