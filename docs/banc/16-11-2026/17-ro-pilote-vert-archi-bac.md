@@ -53,3 +53,13 @@ APP742, PILOTE `a6428d7605f1ebfe48f80353548b5100a7336d1b`. Le diff réel depuis2
 Rehash local du paquet cx-archi-doc-bac-green-package-r2 :33 tailles/SHA conformes au manifeste `379f1f6f25f6520cd9624e91c0cce0edbed9b3177d7e9e3aa2bf84e8aa24e366`. Prepared `06f3b7aff5459be39d34ac759151ef648c23a14b3192285c8cc36298c2bd96f1`, configuration `d7232c89bbbe97bcbaf5f7be1c0c8b9ce09a1a2f03e7d369b033ee9355eb9613`, sept copies conformes, couple742/a642 et budget600/780/15/795/final120 cohérents. Propreté/Pvide/Fabsent/aucuneautorité/Cargo=false sont des attestations préparatoires, pas recontrôlées en proc par Banc.
 
 Avis favorable à l’intégrité metadata de ce paquet, **pas au franchissement du HOLD global795** : la même réserve CLI doit encore être traitée, aucun nouveau point ajouté. Aucun CPU/Cargo/natif/proc/service/DB lancé pendant cette revue ; le témoin12CPU annoncé ne couvre toujours pas ce dispatch. Ancien Q et paquet restent conservés, pas de GO.
+
+## Revue totale code01c3ae28e8 : réserve CLI levée, pin r3 attendu
+
+APP742 inchangée, code exact `01c3ae28e8218262ea545513d872f8f3370def0f`. Le diff depuis a642 remplace exclusivement la lecture Q de configure_controller par l’affectation pure OUTER_SECONDS=TERM780 et déplace Q versr3 ; le témoin CLI réel est ajouté. Les AST de launch/arm/compose/driver/fresh/phase_end/final_end/result_file sont strictement identiques à ceux du paquet déjà relu : ni bornes ni garde fsyncfinal ne régressent.
+
+Entrée __main__→configure_controller est désormais sans lecture Q ; launch vérifie les argv puis crée le vrai timeout780/KILL15 --arm et ne rend que son rc. Arm fait les contrôles/Q/logs/fsync et snapshots des contrôleurs après armement, puis execve le vrai poste ; queue/worker/final restent dedans. Clock worker explicitement post-watchdog, Common min600/solde et finale min120/softEND conservés. Les trois rôles stricts et UNKNOWN attribué bloquant restent ceux déjà relus ; ce n’est pas un nouveau scan de processus.
+
+Le nouveau test compile/exerce le vrai bloc __main__ AST avec les vraies fonctions configure/launch et une sentinelle Path.exists sur Q/launch.json : il cible précisément l’ancien accès avant watchdog. Rouge0c3bd puis13CPU verts après publication annoncés par le porteur, non rejoués ici. AST3 seulement, aucun import/test par Banc.
+
+**Réserves Banc CLI et postfsync levées pour ce code exact, aucun autre blocage statique repéré dans la portée totale déjà examinée.** Le HOLD d’exécution reste jusqu’au paquet/configuration/copies r3 exacts et à la décision finale C7 ; anciennes métadonnées a642/d723 ne qualifient pas ce nouveau code. Attente du pin r3 sans répéter les contrôles anciens, aucun GO600/795, Cargo, natif, autorité, procscan, base ou service lancé.

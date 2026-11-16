@@ -109,3 +109,6 @@ Delta9f3c9bcad4 relu par Banc : réserve postfsync73ba levée, vraie fonction r�
 
 
 RO totale Banc291138a70b avant pin : --arm place bien journal/guard sous watchdog, mais le dispatch __main__ appelle configure_controller avant launch ; lecture Q/launch.json et durée OUTER_SECONDS encore avant watchdog. Test_arm appelle la fonction directe après configuration hors contexte instrumenté et ne couvre pas cette CLI. Réserve au rapport17, à traiter avec configuration pure fixe780 du lanceur/lecture seulement déjà armée + témoin CLI réel sous GOCPU distinct. Fsync9f3 reste levé ; HOLD global795, aucun run par Banc.
+
+
+RO totale Banc01c3ae28e8 : configure_controller pur/OUTER_SECONDS780 fixe/aucune lectureQ avant watchdog ; vrai témoin dispatch CLI couvre l’ancien accès. Réserve6a1/fe2a levée pour ce code, fsync9f3 et reste des fonctions relues inchangés. Complément rapport17, aucun run ; attente pinQr3/configuration/copies puis RO metadata finale et décision C7, pasGO.
