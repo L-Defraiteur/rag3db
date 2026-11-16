@@ -12166,13 +12166,88 @@ mod tests {
         // vers cet index dérivé, puis vérifier le refus sans redirection.
         catalog.entity_configs.get_mut("Document").unwrap().search_index = Some("main".into());
         assert_eq!(catalog.resolve_search_target("Document").unwrap().parent_table, "main");
-        let error = catalog.fts_live_ids("Document").unwrap_err();
+        // Le mapping public ne change pas la table physique demandée.
+        let ids = catalog.fts_live_ids("Document").unwrap().0;
+        assert_eq!(ids, vec![41]);
+        let error = catalog.fts_live_ids("UnknownPhysicalTable").unwrap_err();
         assert!(error.contains("existing_fts:physical_table"), "{error}");
         catalog.entity_configs.get_mut("Document").unwrap().search_index = None;
         catalog.scope = crate::scope::Scope::new("foreign", "cell");
         let error = catalog.fts_live_ids("Document").unwrap_err();
         assert!(error.contains("existing_fts:absent"), "{error}");
         assert_eq!(before, existing_fts_manifest(root.path()));
+    }
+
+    #[test]
+    fn existing_fts_pending_promise_and_metadata_io_are_typed_refusals() {
+        let (root, mut catalog, _) = existing_fts_fixture();
+        let before = existing_fts_manifest(root.path());
+        catalog.conn = Arc::new(crate::connection::CallbackConnection::new(|_, params| {
+            let key = params.iter().find(|p| p.name == "prefix").and_then(|p| p.value.as_str()).unwrap_or("");
+            Ok(crate::connection::QueryResult {
+                columns: vec![], rows: vec![vec![CypherValue::String(key.into()),
+                    CypherValue::String(if key == FTS_PROMISE { "unfinished-writer" } else { "7" }.into())]],
+            })
+        }));
+        assert!(matches!(catalog.open_existing_fts_snapshot("Document"), Err(crate::fts_existing::ExistingFtsError::Pending(_))));
+        catalog.conn = Arc::new(crate::connection::CallbackConnection::new(|_, _| {
+            Err(crate::connection::DbError::QueryError("fixture metadata unavailable".into()))
+        }));
+        assert!(matches!(catalog.open_existing_fts_snapshot("Document"), Err(crate::fts_existing::ExistingFtsError::Metadata(_))));
+        assert_eq!(before, existing_fts_manifest(root.path()));
+    }
+
+    #[test]
+    fn existing_fts_rechecks_generation_and_promise_after_snapshot() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        for change_promise in [false, true] {
+            let (root, mut catalog, _) = existing_fts_fixture();
+            let before = existing_fts_manifest(root.path());
+            let calls = Arc::new(AtomicUsize::new(0));
+            catalog.conn = Arc::new(crate::connection::CallbackConnection::new(move |_, params| {
+                let key=params.iter().find(|p| p.name=="prefix").and_then(|p| p.value.as_str()).unwrap_or("");
+                let watched=if change_promise { FTS_PROMISE } else { "fts_generation:Lucivy_Document" };
+                let value=if key==watched {
+                    if calls.fetch_add(1,Ordering::SeqCst)==0 { if change_promise { "" } else { "7" } }
+                    else if change_promise { "new-writer" } else { "8" }
+                } else if key=="fts_generation:Lucivy_Document" { "7" } else { "" };
+                Ok(crate::connection::QueryResult {columns:vec![],rows:vec![vec![CypherValue::String(key.into()),CypherValue::String(value.into())]]})
+            }));
+            assert!(catalog.open_existing_fts_snapshot("Document").is_err(), "late change must invalidate the whole read");
+            assert_eq!(before, existing_fts_manifest(root.path()));
+        }
+    }
+
+    #[test]
+    fn existing_fts_source_remains_physical_when_public_target_has_other_ids() {
+        use lucivy_core::sharded_handle::{FsShardStorage, ShardedHandle};
+        let (root, mut catalog, _) = existing_fts_fixture();
+        let directory=root.path().join("Lucivy_main");
+        let config=crate::fts_handle::build_schema_config(&["body".into()], &[], 1).unwrap();
+        let writer=ShardedHandle::create_with_storage(Box::new(FsShardStorage::new(&directory.to_string_lossy()).unwrap()), &config).unwrap();
+        crate::fts_handle::index_document(&writer,&[("body".into(),"other physical table".into())],99).unwrap();
+        writer.commit().unwrap();writer.close().unwrap();drop(writer);
+        std::fs::write(directory.join(crate::fts_directory::GENERATION_FILE),b"7").unwrap();
+        catalog.entity_configs.get_mut("Document").unwrap().search_index=Some("main".into());
+        let before=existing_fts_manifest(root.path());
+        assert_eq!(catalog.fts_live_ids("Document").unwrap().0,vec![41]);
+        assert_eq!(before,existing_fts_manifest(root.path()));
+    }
+
+    #[test]
+    fn existing_fts_missing_generation_and_symlink_are_not_empty_indexes() {
+        let (root, catalog, directory)=existing_fts_fixture();
+        std::fs::remove_file(directory.join(crate::fts_directory::GENERATION_FILE)).unwrap();
+        let before=existing_fts_manifest(root.path());
+        assert!(matches!(catalog.open_existing_fts_snapshot("Document"),Err(crate::fts_existing::ExistingFtsError::Generation(_))));
+        assert_eq!(before,existing_fts_manifest(root.path()));
+        #[cfg(unix)] {
+            std::fs::write(directory.join(crate::fts_directory::GENERATION_FILE),b"7").unwrap();
+            let outside=root.path().join("unrelated-private-bytes");std::fs::write(&outside,b"retained").unwrap();
+            std::os::unix::fs::symlink(&outside,directory.join("forbidden-link")).unwrap();
+            assert!(matches!(catalog.open_existing_fts_snapshot("Document"),Err(crate::fts_existing::ExistingFtsError::InvalidPath(_))));
+            assert_eq!(std::fs::read(outside).unwrap(),b"retained");
+        }
     }
 
     #[test]
