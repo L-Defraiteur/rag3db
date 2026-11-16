@@ -64,3 +64,27 @@ Résumé canonique de passe inchangé ; preuve de seconde lib séparée, jamais
 fabriquer un résumé vert par assemblage. `run_e2e.sh --lib` remplace les anciens
 helpers du cache. Le créneau, la durée et les accès aux services éventuellement
 utilisés par la lib/NAV attendent encore l'accord exact C7.
+
+## Précondition magasin sous XDG privé
+
+Rappel C7 après le refus pré-Cargo d'ED : le magasin doit être explicite,
+même si le contrôleur isole XDG_CACHE_HOME. Avant toute future passe, fixer
+`RAG3DB_LIBS_DIR=/home/lucied/.cache/rag3db-libs` et l'identifiant complet59ac
+ci-dessus ; ne pas copier le SDK dans le cache privé, ne pas dépendre de
+`courant` ni hériter de variables SDK d'une autre passe.
+
+Contrôle du résolveur seul le16nov, portable puis luciepc, sous timeout20 :
+XDG_CACHE_HOME=temporaire privé, environnement minimal HOME/PATH/USER/LANG,
+RAG3DB_LIBS_DIR=magasin réel et RAG3DB_LIB=identifiant59ac. Le helper suivi
+`lib_du_magasin.sh` exporte exactement library/include/LD vers le dossier59ac,
+shared=1 ; répertoires/fichiers requis présents, aucun magasin dans le XDG
+privé. Le magasin et ses fichiers sont seulement lus. Zéro Cargo/service.
+
+Empreintes SHA256 vérifiées aux deux postes :
+
+- librag3db.so : `b7e9fc75a3d2de04c72680b0309e8bb1df9eaadb5211ebbacf39716c6d0a2101` ;
+- libvector.rag3db_extension : `1669d6392ec8067fcf92ae2ccc972fd7cd3086629fb82d1f5d254e90d72d7561`.
+
+Ce contrôle n'est pas un verdict de liaison/runtime du lot. Revalider ces
+chemins typés et empreintes à l'admission de la future passe ; profil des états
+privés frères et autres garanties inchangés. Aucun pilote actif modifié.
