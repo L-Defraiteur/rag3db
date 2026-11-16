@@ -38,7 +38,12 @@ d'avant les versions et la base migrée, puis entre chaque optimisation et le co
   d'un côté ni de l'autre. Le hash du contenu est le même sur les 229 `_uuid` communs aux relevés.
 - **Les dix premiers** : 248 sur 289 sont communs (86 %), et 12 cas sur 30 sont sous les
   tolérances.
-- **La cause** : tous les meilleurs signaux sont lexicaux, des deux côtés. 40 des 41 entrées sont
+- **La cause** : tous les meilleurs signaux sont lexicaux, des deux côtés. **Requalifié le 16 novembre** :
+  ce n'était pas une propriété des bases, c'était le juge. Le relevé ouvrait le backend sans embarqueur
+  (`prepared.open(…, None)`), donc search_code ne classait que par le signal lexical, sur toutes les
+  parités du 14 au 16. Les verts disent « même classement lexical » (et « même graphe » pour l'écrivain),
+  pas « même fusion avec le dense ». Le relevé ouvre maintenant l'embarqueur du manifeste, dit les signaux
+  actifs et refuse si un signal demandé manque (§ 9). 40 des 41 entrées sont
   des contenus neufs, et une seule est une autre occurrence du même contenu. C'est le BM25 sur le
   contenu dédoublonné (72 652 versions pour 79 662 occurrences) qui bouge. Le signal dense absent
   de R ne joue pas, et le choix de l'occurrence représentante non plus.
@@ -298,3 +303,24 @@ juge. Lib 373b5477b, `RAG3WEAVER_MOTEUR_ANCIEN=1`. Chaque côté a joué ses 30 
   Le script `parite-vue.sh` ne lance que le relevé des réponses (`--exact`). L'ancien `parite-opti.sh`
   lançait tous les tests ignorés du binaire, ce qui, depuis le relevé avec réindexation, aurait
   réindexé la même copie.
+
+## 9. Le juge ne jouait que le lexical (16 novembre, 2 h)
+
+- **Le constat** : la relecture de master, faite « tous signaux » puis « lexical seul », a rendu deux
+  relevés identiques au bit près. Le relevé ouvrait le backend sans embarqueur, et les journaux le
+  disaient (« pas de service d'embarquement : index en plein texte seul »).
+- **Ce que ça requalifie** :
+  - toutes les parités de search_code de cette page, du 14 au 16, jugent le classement lexical seul ;
+  - les index de l'écrivain faits par le relevé ont laissé leurs vecteurs en dette : l'index neuf du
+    parent n'a aucun vecteur ;
+  - pour la question de lucivy (le BM25), le lexical seul est la bonne mesure : la relecture de master
+    en est la référence. 23 rouges sur 30, rappel à 10 de 0,900, premier résultat identique 25 fois
+    sur 30, et la correction de `tout_visible` n'y change rien.
+- **Ce qui est changé** (`banc-parite-search-code` 10d40373a7) :
+  - le relevé ouvre l'embarqueur du manifeste (`connect_embedder`), et refuse de s'ouvrir sans lui ;
+    `RAG3WEAVER_PARITE_NO_EMBEDDER=1` garde le lexical exprès ;
+  - il dit, sur l'ensemble des résultats, les signaux qui ont contribué ;
+  - `RAG3WEAVER_PARITE_REQUIRE_SIGNALS` (par exemple `vector,bm25`) le fait refuser si un signal demandé
+    ne contribue à aucun résultat.
+- **La parité du dense** se fera sur des bases qui ont leurs vecteurs : code-principal migré par la
+  répétition de la bascule contre le code-principal courant, au mot de c7.
