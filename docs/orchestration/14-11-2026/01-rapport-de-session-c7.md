@@ -1778,3 +1778,24 @@ La chronologie est sur la page 03 ; ici les faits et les décisions.
 - **Archi** est « waiting » et muet depuis 1 h 05 : à regarder au réveil de Lucie.
 - **Pour Lucie au réveil** : « oui tag » lucivy v4.3.9 (main prêt, CI verte) ; l'heure de la fenêtre de la bascule de
   lib (tout prêt) ; la bascule des bases (changera un peu le classement, pour le mieux en dense).
+
+## 6 h 1x – 8 h 1x (16 novembre) : la file vidée, tout prêt pour le réveil
+
+- **Atterris** : le journal des coupes (embarquement), le découpeur borné en caractères et l'ordre stable des ex æquo
+  (ED), le membre platform et le reste des receveurs sans type (codeparsers, REGLES_DE_L_ANALYSE à 5). Tous vérifiés,
+  gmail, zéro attribution. CI verte. La file est vide depuis 7 h 3x.
+- **La bascule de lib, prête sur la tête courante** : lib 59ac9c86bc (master lui-même, le fsync de durabilité compris),
+  ABI inchangée pour le Rust (cœur), verdict des trois suites vert sans MOTEUR_ANCIEN, hôtes essayés aux deux postes
+  (md5 d164e4da), service d'embarquement bâti avec la coupe côté service. Rien ne touche ce qui est en service.
+- **La bascule des bases, mesurée jusqu'au bout** : A contre B′ (index neuf du même arbre) rappel 0,977 ; les deux
+  écarts nommés (l'histoire au BM25, lucivy 4.3.9 ; un bruit numérique du calcul par lot ≤ 5,86e-5, attendu) ; rien de
+  propre à la migration n'est perdu ; le ticket du plein texte rebâti fermé sur preuve (le juge joué avant le correctif
+  de tout_visible). Il reste à rejouer le bm25 seul au pointeur lucivy 4.3.9.
+- **Le moteur** : le SIGSEGV du dictionnaire n'a pas de rouge : ni ASan (7 tours), ni l'ajout à moitié fait (témoin
+  empoisonné et exigeant, vert avant comme après) ; le correctif reste en branche sans se juger ; TSan ensuite. Un
+  intermittent rare de la recherche par clé primaire au ticket.
+- **Archi** : « waiting » et muet depuis 1 h 05, malgré trois relances ; son lot « le pas va au bout » est vert en
+  branche ; l'entrée témoin du registre n'est pas posée ; la campagne D6 ne se rejoue pas sans lui.
+- **Au réveil de Lucie** : « oui tag » lucivy v4.3.9 → pointeur rag3weaver → bm25 seul du banc ; l'heure de la fenêtre
+  de la bascule de lib ; puis la bascule des bases (changera un peu le classement, pour le mieux en dense) ; archi à
+  débloquer ; les manifestes de ses tâches à mettre à jour après la pose, puis D5/D6 rejouées.
