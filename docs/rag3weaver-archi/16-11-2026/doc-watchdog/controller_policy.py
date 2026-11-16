@@ -75,6 +75,35 @@ def match_controller(row, ancestry, expected):
     matches = [role for role, checks in comparisons.items() if all(checks.values())]
     return (matches[0] if len(matches) == 1 else None), comparisons
 
+def partial_snapshot(proc, roots, old_cgroup, cause):
+    row = dict(pid=int(proc.name), cause=repr(cause), readable={}, errors=[], reasons=[])
+    readers = dict(uid=lambda:proc.stat().st_uid,
+        stat=lambda:(proc/'stat').read_text(), cgroup=lambda:(proc/'cgroup').read_text(),
+        argv=lambda:[os.fsdecode(v) for v in (proc/'cmdline').read_bytes().split(b'\0') if v],
+        exe=lambda:os.readlink(proc/'exe'), cwd=lambda:os.readlink(proc/'cwd'),
+        exe_sha256=lambda:sha(proc/'exe'))
+    for name, read in readers.items():
+        try:row['readable'][name]=read()
+        except (OSError,ValueError) as error:row['errors'].append(dict(field=name,error=repr(error)))
+    data=row['readable']
+    if 'cgroup' in data and data['cgroup'].split('::',1)[-1].strip()==old_cgroup:
+        row['reasons'].append(dict(field='cgroup',actual=data['cgroup']))
+    for field in ['exe','cwd']:
+        if field in data and rooted(data[field],roots):row['reasons'].append(dict(field=field,path=data[field]))
+    for index,arg in enumerate(data.get('argv',[])):
+        if rooted(arg,roots):row['reasons'].append(dict(field='argv',index=index,path=arg))
+    data['fds']=[]
+    try:
+        for fd in (proc/'fd').iterdir():
+            try:
+                dest=os.readlink(fd);data['fds'].append(dict(fd=fd.name,path=dest))
+                if rooted(dest,roots):row['reasons'].append(dict(field='fd',fd=fd.name,path=dest))
+            except (OSError,ValueError) as error:row['errors'].append(dict(field='fd',fd=fd.name,error=repr(error)))
+    except (OSError,ValueError) as error:row['errors'].append(dict(field='fds',error=repr(error)))
+    row['attributed']=True if row['reasons'] else None
+    row['admission']='BLOCKED_INCOMPLETE_SNAPSHOT'
+    return row
+
 def scan(expected, roots, old_cgroup, proc_root=Path('/proc'), current_pid=None, parent_pid=None):
     current_pid = os.getpid() if current_pid is None else current_pid
     parent_pid = os.getppid() if parent_pid is None else parent_pid
@@ -94,7 +123,7 @@ def scan(expected, roots, old_cgroup, proc_root=Path('/proc'), current_pid=None,
             if row['state'] == 'Z': continue
         except (FileNotFoundError, ProcessLookupError): continue
         except (PermissionError, OSError, ValueError) as error:
-            unknown.append(dict(pid=int(proc.name), error=repr(error), attributed=None)); continue
+            unknown.append(partial_snapshot(proc,roots,old_cgroup,error)); continue
         reasons = []
         if row['cgroup'].split('::', 1)[-1].strip() == old_cgroup:
             reasons.append(dict(field='cgroup', actual=row['cgroup'], expected=old_cgroup))

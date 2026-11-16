@@ -72,6 +72,7 @@ def fresh_cache(cfg):
     expected = controller.policy(Path(cfg['control']), cfg['pilot'])
     observed = controller.scan(expected, [T, W, OLD_W, Path(cfg['control'])], authority['cgroup'])
     save('cache-after-poste.json', observed)
+    assert not observed['unknown'] and not observed['ancestor_errors'], 'incomplete process or ancestor capture'
     assert not observed['found'] and len(observed['controllers']) == 3 and {r['role'] for r in observed['controllers']} == {'launch','poste','watchdog'}
 
 

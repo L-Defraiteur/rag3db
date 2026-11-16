@@ -82,6 +82,28 @@ class ProbeTests(unittest.TestCase):
         found=next(r for r in self.scan()['found'] if r['pid']==40)
         self.assertEqual(found['reasons'][0]['field'],'fd');self.assertEqual(found['fds'][0]['fd'],'4')
 
+    def test_scan_archives_partial_attributed_unknown(self):
+        self.add(40,1,['reader'],str(Path('/usr/bin/timeout').resolve()))
+        (self.proc/'40/fd/4').symlink_to(self.module.T/'active')
+        original=self.module.snapshot
+        def read(proc):
+            if proc.name=='40':raise PermissionError('fixture denied exe')
+            return original(proc)
+        with patch.object(self.module,'snapshot',side_effect=read):record=self.scan()
+        unknown=next(r for r in record['unknown'] if r['pid']==40)
+        self.assertTrue(unknown['attributed']);self.assertEqual(unknown['reasons'][0]['field'],'fd')
+        self.assertEqual(unknown['readable']['argv'],['reader'])
+        with self.assertRaises(AssertionError):self.run_real_admission_tail(record)
+    def test_scan_archives_unattributable_unknown_and_refuses(self):
+        self.add(40,1,['reader'],str(Path('/usr/bin/timeout').resolve()))
+        original=self.module.snapshot
+        def read(proc):
+            if proc.name=='40':raise PermissionError('fixture denied')
+            return original(proc)
+        with patch.object(self.module,'snapshot',side_effect=read):record=self.scan()
+        unknown=next(r for r in record['unknown'] if r['pid']==40)
+        self.assertIsNone(unknown['attributed'])
+        with self.assertRaises(AssertionError):self.run_real_admission_tail(record)
     def run_real_admission_tail(self, record):
         tree=ast.parse(Path(__file__).with_name('qualify_red.py').read_text())
         function=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='fresh_cache')
