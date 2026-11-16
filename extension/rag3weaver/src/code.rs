@@ -577,7 +577,10 @@ fn usage_properties(sites: &[UsageSite]) -> BTreeMap<String, CypherValue> {
 /// **Les règles de rag3weaver qui font une ligne à partir de l'analyse** (clés, imports, appartenance,
 /// provenance des manifestes) : à monter par tout lot qui les change. Une montée fait repasser toutes
 /// les bases à leur prochaine synchronisation, et les nouveautés du lot le disent (page 06, § 13).
-pub const REGLES_DE_L_ANALYSE: u32 = 1;
+// 2 (16 novembre 2026, la pile de la résolution d'arêtes de codeparsers) : une variante d'enum lit son
+// type, une méthode std sur une locale sans type lu ne se relie pas par le nom entre fichiers, une
+// chaîne de méthodes du projet se type au rendez-vous (`DeferredType::OfType`).
+pub const REGLES_DE_L_ANALYSE: u32 = 2;
 
 /// **La version de l'analyse** (page 06, § 13) : le commit du parseur lié, [`REGLES_DE_L_ANALYSE`] et le
 /// gabarit du code (le découpage et les champs déclarés de `File` et de `Scope`), hachés.
