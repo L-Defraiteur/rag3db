@@ -132,3 +132,26 @@ ED/Recherche favorables statiques sur7b264a72e1, paquetPC37a2/10fichiersconforme
 Correction à faire dans le même ticket : trois phases préflight sanscorpus (compile/selftesttyped/copie) doivent archiver argv/cap/rc ou timeout+sorties complètes/partielles **AVANT**require/raise, puisSTOP/first-redimmuable. Tester le VRAIhelpercommand extraitAST avec subprocessfictif, rougepour logsabsentsavantfix, pas de compilateur niDB. NouveaupaquetQv2/pin aprèspublication et ROdelta ; aucun budget ouGO ancien reporté, aucun élargissement de la voieA.
 
 RéserveP2logs traitée : rouge41ba du VRAIcommand AST (compile.stdout absent), puis command archiveAVANTrefus les3phasespréflight sanscorpus avecargv/cap/rcoutimeout/stdout/stderr+goldenbrut, callerne réécritplus. TroisCPUASTfakeverts0.028s+10gatesCPUinchangées0.001s, aucunnatif/CPP/DB/provider. Qv2neuf àpréparer aprèspublication ; Qv1/7bconservéssansGO. Manifeste/CPP/SQL/Source.meta/budget1730dansouter1800 inchangés ; mêmesconditionsROetnouveauGO1800copieseule, LIVEannulé.
+
+## COPYA9a2 exécuté : rouge du juge de protocole, dette non qualifiée
+
+GO distinct C7-COPYA-9a-16nov consommé sur PC, voir [rapport09](../16-11-2026/09-copie-a-premier-rouge-du-juge-meta.md).
+CPP/selftest avantDB/copie/inventaires initiaux/FTS5/payload469 passent ; ACK
+Embar frais cap12000>=4166 puis writer privé exact0e310 exécuté. Réponse
+réelle ok=true/partial=false/signals[]/**pendingCount=0** ; verify_meta
+attend **pending_count**, donc refuse à1188885.336819958 avant shutdown.
+Défaut du juge établi AVANT tout diff correctif ; aucun défaut SourceNode
+ni dette persistante attribué à cette seule réponse.
+
+Scope ROUGE/code1 pour descendants laissés après commande, ensuite
+nettoyés/restes[]/autorité terminée ; owned vivants0 avec start contrôlé et
+bus absent après arrêt. Aucun SQL post-writer ni invariant final qualifié ;
+la copie peut avoir reçu des écritures, son état de dette reste inconnu.
+Aucun rejeu, aucun service/LIVE/7970 ni base originale ciblés. P/Q/S et
+copie conservés. Preuves376 fichiers manifesteSHA
+373dccfa2a9550621fed8c89e0922ea3db56a9ff0666f7a0ed1c7528d398e687.
+
+Prochaine préparation à arbitrer séparément : vrai verify_meta testé rouge
+sur contrat camelCase puis correction stricte, nouveau couple/revue et GO
+distinct. Ne pas transformer cleanup en preuve de shutdown ni ce rouge en
+acquittement des469. Ticket et parent restent ouverts.
