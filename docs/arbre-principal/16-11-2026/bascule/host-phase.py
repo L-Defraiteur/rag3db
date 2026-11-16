@@ -12,6 +12,14 @@ BASES={
 def save(root,name,value):
  with (root/name).open('x') as stream:json.dump(value,stream,ensure_ascii=False,indent=2)
 
+def archive_http_error(root,route,error):
+ # Le corps seul est conservé octet pour octet ; jamais les en-têtes d'authentification.
+ root.chmod(0o700)
+ try:raw=error.read(1048577)
+ finally:error.close()
+ save(root,'http-refusal.json',dict(route=route,status=error.code,body_hex=raw[:1048576].hex(),body_length_read=len(raw),truncated=len(raw)>1048576))
+ raise RuntimeError('host refused '+route+' status '+str(error.code)) from None
+
 def maintenance_payload(result):
  assert isinstance(result,dict) and isinstance(result.get('token'),str),'missing maintenance token'
  ids=result.get('orphans');live=result.get('live_docs')
@@ -56,7 +64,7 @@ def main():
   try:
    with urllib.request.urlopen(request,timeout=min(600,remaining)) as response:result=json.load(response)
   except urllib.error.HTTPError as error:
-   raise RuntimeError('host refused '+route+' status '+str(error.code)) from None
+   archive_http_error(root,route,error)
   assert result.get('ok') is True or (route=='/session' and isinstance(result.get('session'),str)),result.get('error','host operation refused')
   return result
  session=post('/session',dict(client='migration-16nov',keys=['dev']))['session']

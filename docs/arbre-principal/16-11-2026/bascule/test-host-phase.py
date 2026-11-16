@@ -1,9 +1,21 @@
 """Pure safety witnesses: no authentication, HTTP, host or database."""
 from pathlib import Path
-import ast,json,re,unittest
-p=Path(__file__).with_name('host-phase.py');tree=ast.parse(p.read_text());names={'maintenance_payload','find_journal'}
+import ast,json,re,unittest,tempfile,io,urllib.error
+p=Path(__file__).with_name('host-phase.py');tree=ast.parse(p.read_text());names={'maintenance_payload','find_journal','save','archive_http_error'}
 functions=[n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name in names];ns=dict(Path=Path,json=json,re=re);exec(compile(ast.Module(body=functions,type_ignores=[]),'host-phase-pure','exec'),ns)
 class Safety(unittest.TestCase):
+ def test_http_refusal_is_preserved_before_raise(self):
+  with tempfile.TemporaryDirectory() as directory:
+   root=Path(directory);raw=b'{"ok":false,"error":"fixture refusal"}'
+   error=urllib.error.HTTPError('http://fixture/backend/maintain',422,'refused',{},io.BytesIO(raw))
+   with self.assertRaisesRegex(RuntimeError,'status 422'):
+    ns['archive_http_error'](root,'/backend/maintain',error)
+   record=json.loads((root/'http-refusal.json').read_text())
+   self.assertEqual(record,dict(route='/backend/maintain',status=422,body_hex=raw.hex(),body_length_read=len(raw),truncated=False))
+   main=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='main')
+   post=next(n for n in ast.walk(main) if isinstance(n,ast.FunctionDef) and n.name=='post')
+   handler=next(n for n in ast.walk(post) if isinstance(n,ast.ExceptHandler))
+   self.assertTrue(any(isinstance(n,ast.Call) and isinstance(n.func,ast.Name) and n.func.id=='archive_http_error' for n in ast.walk(handler)))
  def test_one_percent_is_exact_and_never_widened(self):
   self.assertEqual(ns['maintenance_payload'](dict(live_docs=100,orphans=[7],token='t'))['max_purge_ratio'],.01)
   with self.assertRaises(AssertionError):ns['maintenance_payload'](dict(live_docs=99,orphans=[7],token='t'))

@@ -27,3 +27,11 @@ Recette be91b5b3c742209cc59c2ce2b2ac29f9a97b9213, portable code-rag3db-depot : p
 Diagnostic RO : daemon_host.rs:1038 et 1865 au source927 acceptent précisément manifest/table/dry_run ; header X-Rag3weaver-Session conforme. HTTP422 indique une réponse opérationnelle refusée, sans identifier sa cause. Défaut de recette confirmé : host-phase.py:58–59 intercepte HTTPError puis abandonne son corps ; seule la valeur du statut est conservée. La cause hôte est donc NON ATTRIBUÉE, aucun défaut produit établi. G est sollicité pour préserver le journal existant sans rejouer la route. Le corps initial n’est pas reconstituable depuis les deux fichiers client ; ne pas présenter une future réponse comme sa preuve.
 
 Correction nécessaire avant toute nouvelle recette : archiver statut et corps de refus, sans jeton ni headers d’authentification, avant de lever l’erreur ; témoin hermétique HTTP422 pour vérifier conservation et arrêt. Ce paragraphe est publié avant modification du lanceur. Premier rouge conservé, pas de retry automatique ni de fermeture/snapshot comme si maintenance terminée.
+
+### Conservation corrigée, cause initiale toujours inconnue
+
+Journal existant G conservé host-journal-after-maintenance-01.log SHA2563d58adecef03aaaad5afe07263732813aad7085d7a0e9e2eabd1b1ecb1dab997 ; aucune entrée dans la fenêtre, journalctl utilisateur également vide. Aucun corps initial retrouvé. /etat observé par G : ouvert, sans held_closed/refused ; ce n'est pas une preuve de quiescence.
+
+Correction privée : capture du corps HTTPError en hexadécimal, plafonnée à1MiB avec indicateur de troncature et longueur lue, répertoire chmod0700 ; route/statut archivés avant exception, aucun header ni auth copié. Le témoin hermétique de conservation est vu rouge avant ajout de la primitive, puis neuf témoins passent ; contrôle AST du véritable handler. Aucun HTTP réel, Cargo, base ou service dans ces témoins. Ancien verdict422 intact, aucune cause hôte déduite.
+
+Piste RO distincte signalée par C7 : fts_releve_a_blanc utilise les handles déjà ouverts, dont l'ouverture est paresseuse ; backend ouvert ne prouve pas handle FTS ouvert. Ce n'est pas l'attribution du refus initial. Toute sonde dry_run File seule doit avoir recette et arbitrage distincts ; aucun retry maintenance autorisé implicitement par ce correctif.
