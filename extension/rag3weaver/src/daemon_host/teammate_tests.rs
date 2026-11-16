@@ -1820,3 +1820,74 @@ fn a_step_that_answers_without_step_done_is_continued_without_waiting() {
     let copie = boite.iter().find(|l| l["text"] == "Next I will write the test, then run it.").expect("la réponse du pas, seule");
     assert_eq!((&copie["from"], &copie["origin"]), (&json!("teammate"), &json!("host_copy")), "{copie}");
 }
+
+#[path = "../../tests/common/documentation_fixture.rs"]
+mod documentation_fixture;
+
+/// The fixture must answer its one known destructive request with a refusal,
+/// without replacing the original request or granting a command permission.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn a_documentation_supervisor_denies_lock_deletion_and_the_teammate_finishes_the_original_request() {
+    use documentation_fixture::{documentation_answer, DocumentationFixture, DENIAL_TEXT};
+    let mut fixture = DocumentationFixture::new();
+    let (depot, manifeste) = depot_inscrit(fixture.path(), true);
+    let lock = b"# fixture lock: must stay byte-identical\n";
+    std::fs::write(depot.join("Cargo.lock"), lock).unwrap();
+    let git = |args: &[&str]| {
+        let output = std::process::Command::new("git").arg("-C").arg(&depot).args(args).output().unwrap();
+        assert!(output.status.success());
+        String::from_utf8(output.stdout).unwrap().trim().to_string()
+    };
+    git(&["add", "Cargo.lock"]);
+    git(&["commit", "-q", "-m", "fixture lock to preserve"]);
+    let initial_head = git(&["rev-parse", "HEAD"]);
+    let original_readme = std::fs::read(depot.join("README.md")).unwrap();
+    let frontiers = Arc::new(Mutex::new(Vec::<String>::new()));
+    let seen = frontiers.clone();
+    let model: ChatModel = Arc::new(move |_| {
+        let seen = seen.clone();
+        Ok(Arc::new(CallbackLlm::new("documentation-supervisor-fixture", 8192, move |turns, opts, sink| {
+            let results = tool_results(turns);
+            if results.is_empty() { seen.lock().unwrap().push(last_user(turns)); }
+            let denied = last_user(turns).contains(DENIAL_TEXT);
+            match (denied, results.len()) {
+                (false, 0) => answer(turns, opts, sink, "", calls(&[("run_command", json!({"command": "rm Cargo.lock"}))])),
+                (false, _) => answer(turns, opts, sink, "", calls(&[("step_done", json!({"item":"", "succeeded":false, "done":"approval requested", "remaining":"write the documentation after the supervisor answer"}))])),
+                (true, 0) => answer(turns, opts, sink, "", calls(&[("read_file", json!({"path":"README.md"}))])),
+                (true, 1) => answer(turns, opts, sink, "", calls(&[("edit_file", json!({"path":"README.md", "content":"# Documentation\nThe bonjour function returns a greeting.\n"}))])),
+                (true, _) => answer(turns, opts, sink, "README.md documents bonjour.", calls(&[("step_done", json!({"item":"", "succeeded":true, "done":"documentation written", "remaining":""}))])),
+            }
+        })))
+    });
+    let host = Arc::new(hote(fixture.path(), model).with_runs_root(fixture.path().join("runs")));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).unwrap();
+    let request = "Document bonjour in README.md, preserving Cargo.lock.";
+    host.post_to_teammate(&h.id, "doc", "c7", "request", None, request, &Value::Null).unwrap();
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    let waiting = attendre_dans(&files, "the command approval", &|b| b.iter().any(|l| l["kind"] == "approval"));
+    assert!(host.teammate_running(&h.id, "doc"));
+    assert!(!waiting.iter().any(|l| l["kind"] == "ended"));
+    let response = match documentation_answer(&waiting) {
+        Ok(Some(response)) => response,
+        Ok(None) => fixture.fail("documentation fixture has no supervisor answer for the pending lock deletion", &waiting),
+        Err(error) => fixture.fail(&error, &waiting),
+    };
+    assert_eq!(response["approved"], false);
+    assert_eq!(response["reply_to"], waiting.iter().find(|l| l["kind"] == "approval").unwrap()["id"]);
+    host.post_to_teammate(&h.id, "doc", "c7", "answer", None, DENIAL_TEXT, &response).unwrap();
+    let finished = attendre_dans(&files, "documentation completion after refusal", &|b| b.iter().any(|l| l["kind"] == "ended"));
+    assert_eq!(finished.iter().filter(|l| l["kind"] == "request").count(), 1);
+    assert!(!finished.iter().any(|l| l["approved"] == true || l["granted"].is_string()));
+    assert_eq!(finished.iter().find(|l| l["kind"] == "ended").unwrap()["text"], "fait sans plan");
+    let task = host.tache(&h.id, "doc").unwrap();
+    let root = &task.workspace.as_ref().unwrap().racine;
+    assert_eq!(std::fs::read(root.join("Cargo.lock")).unwrap(), lock);
+    assert!(std::fs::read_to_string(root.join("README.md")).unwrap().contains("bonjour"));
+    assert_eq!(std::fs::read(depot.join("Cargo.lock")).unwrap(), lock);
+    assert_eq!(std::fs::read(depot.join("README.md")).unwrap(), original_readme);
+    assert_eq!(git(&["rev-parse", "HEAD"]), initial_head);
+    assert!(git(&["status", "--porcelain"]).is_empty());
+    assert!(frontiers.lock().unwrap().iter().skip(1).any(|f| f.contains(request) && f.contains(DENIAL_TEXT)));
+}
