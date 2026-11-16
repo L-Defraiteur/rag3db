@@ -69,6 +69,13 @@ class Regles(unittest.TestCase):
         r = garde(self.d, self.base)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
 
+    def test_the_mention_is_read_without_case(self):
+        # Arbre principal, 16 novembre 2026 : « Sans effet sur l'analyse » en tête de phrase ne comptait pas.
+        ecrire(self.d, CODE, "pub const REGLES_DE_L_ANALYSE: u32 = 1;\n// un commentaire\nfn analyse() {}\n")
+        commit(self.d, "docs: Sans effet sur l'analyse, un commentaire")
+        r = garde(self.d, self.base)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
     def test_un_lot_hors_de_l_analyse_passe(self):
         ecrire(self.d, "extension/rag3weaver/src/ide.rs", "fn vue() { autre(); }\n")
         commit(self.d, "feat: l'IDE")
