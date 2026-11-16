@@ -2064,3 +2064,5 @@ places libres, il y passe.
 - 02:26, **G poussé** le mode tests seuls : master eeb1ba8db5 (53813ba549 feat(garde), ticket 4b4f5ae700 fermé ; deux commits gmail, zéro attribution, vérifié). Recopie de la garde et ligne de provenance à hotfixs ensuite ; shell-tests-own-history pourra passer seul sous TESTS_ONLY=1.
 
 - 02:27, G, « poussé » guard-tests-only (2 h 26, eeb1ba8db5, mode simple, trois contrôles) ; **garde recopiée aux deux postes : push_garde.sh sha256 95a1d85779f0105a** (avant 57bd32f59f8e96cb, .avant-tests-only) ; test_push_garde 49 vert contre chaque copie ; ligne de provenance envoyée à hotfixs.
+
+- 02:42, hotfixs prêt pour shell-tests-own-history-2 (8d404496d sur a899dd583, conftest.py seul ; passe verte à luciepc, 245 sous HOME temporaire, rien laissé ; binaire bâti du commit et déclaré avec sa provenance, la copie de rag3db-colonnes refusée car « -dirty ») : **« à toi » sous TESTS_ONLY=1**. Pile du spiller pas prête : transaction_test 10 rouges de montage (extension vector non bâtie, LOAD EXTENSION refusé) ; témoins et 11 binaires de test/storage verts (102) ; rejoué avec l'extension bâtie (hotfixs-txn-vector).
