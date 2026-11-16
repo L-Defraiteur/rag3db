@@ -278,3 +278,29 @@ Recette : même lien rustc1.98.1/rlib927 attestés que scanner02, scope lourd32G
 neuf ; une compilation et une exécution, première erreur arrêt. Aucun Cargo,
 lecture source réelle, catalogue ou base. Accord C7 limité aux huit CPU
 hermétiques ; ces cas ne qualifient pas le contenu inconnu de `.env.example`.
+
+### Huit contrôles joués : ingestion et limite restante
+
+VERT/code0/restes[]/privé nettoyé, portée120s32G libérée :
+`oracle-final-16nov/validations-admission-01/validation-s5xl2ueo/` à luciepc.
+Les huit assertions sur les primitives927 passent ; sorties et argv conservés
+sous `oracle-final-16nov/admission-01/`. Aucun contenu réel ni `.env*` lu.
+
+- `.git` sans extension et `.gz` sont refusés par admission sur chemin seul :
+  les quatre archives supplémentaires du portable ne sont pas ingérées.
+- Le plafond1MiB est un seuil de code ; la prose a déjà128KiB au verdict. Les
+  fichiers manquants >1MiB ne sont donc pas une dette de copie de code ingérable
+  avec ces déclarations. Les motifs de refus peuvent précéder ce seuil.
+- Un YAML peut passer : l'extra docker-compose.test.yml de PClourd ne peut pas
+  être effacé du raisonnement par son suffixe. Une source privée future peut
+  utiliser une règle `.ignore` sur ce chemin exact, à rejuger par le scanner927 ;
+  jamais modifier freeze02 ni l'arbre de Lucie.
+- `.env.example` n'est pas refusé sur chemin seul. Son contenu reste inconnu et
+  NON LU. Avant toute qualification globale, vérifier dans les **copies finales**
+  les seules métadonnées File/Scope de ce chemin. Une absence d'ingestion
+  effectivement prouvée peut lever ce gap ; une présence maintient NONMATCHED,
+  sauf comparaison explicitement limitée à un périmètre commun déclaré et prouvé.
+
+La qualification des trois bases se fait individuellement : racines, manifestes,
+source figée et modèle/colonnes/dette0 propres à chacune. Ni le listing exact,
+ni les huit cas ne sont un oracle de pertinence ou une preuve de migration.
