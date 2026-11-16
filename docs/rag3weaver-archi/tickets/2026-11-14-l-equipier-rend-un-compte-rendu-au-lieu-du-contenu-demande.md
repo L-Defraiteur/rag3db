@@ -100,3 +100,5 @@ le choix de base de la tâche essai-tty, pas l'équipier.
 ## Reprise du 16 novembre après passation
 
 Lot de continuation repris sur branche neuve `cx-archi-pas-va-au-bout-r1`, correctif `3ae1e741448b70e70e4d9ebbd43ceebf3a80da2a`, base927941a67a5805450d49f1e04b39fdd542a6059b ; deux patches strictement égaux à pas-va-au-bout-2. [Rapport de préparation](../16-11-2026/03-reprise-pas-va-au-bout.md). Aucun nouveau test joué : qualification attend FINI G/bascule et lib neuve explicite, script épinglé conforme, puis tour C7 distinct. Ticket reste ouvert ; historiques rouges/verts conservés.
+
+Recette r2/lib59ac admise par C7 après pin685 : lanceur exact publié avant passe, rapport03 bloc Admission. Nouveau résultat toujours NON JOUÉ à cette publication ; premier rouge conservé sans retry, qualification et D6 séparées. Pas de push master autorisé par le lanceur.
