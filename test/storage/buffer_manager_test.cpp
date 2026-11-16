@@ -121,9 +121,10 @@ TEST_F(EmptyBufferManagerTest, TestSpillToDiskMemoryUsage) {
     }
 }
 
-// The spill file is cleared after every query (ClientContext, Spiller::clearFile). The next spill must start
-// again at page 0: if the file handle kept its page count, every later spill writes past it and the
-// <db>.tmp file grows sparse, query after query, in a long-lived host (16 Nov. 2026, hotfixs).
+// The spill file is cleared after every query (ClientContext, Spiller::clearFile). The next spill
+// must start again at page 0: if the file handle kept its page count, every later spill writes past
+// it and the <db>.tmp file grows sparse, query after query, in a long-lived host (16 Nov. 2026,
+// hotfixs).
 TEST_F(EmptyBufferManagerTest, ClearingTheSpillFileStartsTheNextSpillAtPageZero) {
     if (inMemMode) {
         GTEST_SKIP();
@@ -152,7 +153,8 @@ TEST_F(EmptyBufferManagerTest, ClearingTheSpillFileStartsTheNextSpillAtPageZero)
     ASSERT_EQ(std::filesystem::file_size(spillPath), 0u);
     spillOnce();
     EXPECT_EQ(std::filesystem::file_size(spillPath), oneSpill)
-        << "[check: spill-file-restarts-at-zero] after clearFile, the second spill of the same size "
+        << "[check: spill-file-restarts-at-zero] after clearFile, the second spill of the same "
+           "size "
            "must fill the file from page 0; a larger file means it was written past the page count "
            "kept from the first spill (a sparse <db>.tmp)";
 }
