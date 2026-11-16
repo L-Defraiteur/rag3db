@@ -1677,6 +1677,10 @@ fn read_sse(
     Ok((finish, usage))
 }
 
+#[cfg(all(test, feature = "daemon"))]
+#[path = "openai_llm/vertex_refresh_tests.rs"]
+mod vertex_refresh_tests;
+
 #[cfg(test)]
 mod tests {
     use super::*;
