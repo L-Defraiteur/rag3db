@@ -77,6 +77,20 @@ Le contexte long est ailleurs :
 - **`check_tickets.py`** (`scripts/check_tickets.py`) refuse un ticket dont la **Famille** n'est
   pas `moteur` ou `produit`. Le lancer avant de pousser un ticket.
 
+## État final (16 novembre 2026, 10 h 5x, à l'arrêt demandé par Lucie)
+
+- **En cours par la session mémoire (96)** : aucune entrée de la section 2. Elles sont toutes à
+  prendre depuis leur ticket, sur master.
+- **Ce qui tourne** : rien de cette session, ni passe ni lourd, au portable comme à luciepc.
+- **Les branches de travail** sont toutes poussées sous leur nom, et leur contenu est sur master :
+  - `cx-memoire-segment-pile` (f5a59210a), atterrie en 53a83d089 ;
+  - `cx-memoire-usage` (1c85fa06e), atterrie en 0653a6aef ;
+  - les branches `lot-96-*`.
+- **Ce qui attend** :
+  - le lot de compaction de la session archi, avec son témoin `cx-memoire-compaction-temoin-archi`
+    (3d30f16ee) ;
+  - les mots de Lucie de la section 3.
+
 ## 2. Travail pour Codex, dans l'ordre
 
 Chaque entrée renvoie à son ticket, qui porte le détail. Ici : quoi, la preuve, la taille, ce qui
