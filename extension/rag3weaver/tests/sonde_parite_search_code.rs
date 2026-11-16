@@ -37,7 +37,9 @@ fn releve_les_reponses_de_search_code() {
     let forme = {
         let mut cat = backend.catalog.lock().unwrap();
         let avant = rag3weaver::code::scope_form(&cat).unwrap();
-        if avant == rag3weaver::code::ScopeForm::Versions {
+        // `RAG3WEAVER_PARITE_NO_MIGRATION=1` reads the base in its own form: a parity that judges the
+        // migration itself must not migrate its reference (16 Nov. 2026).
+        if avant == rag3weaver::code::ScopeForm::Versions && std::env::var("RAG3WEAVER_PARITE_NO_MIGRATION").as_deref() != Ok("1") {
             rag3weaver::code::migrer_vers_les_generations(&mut cat).expect("la migration vers les générations");
         }
         format!("{avant:?} → {:?}", rag3weaver::code::scope_form(&cat).unwrap())
@@ -525,7 +527,9 @@ fn releve_les_reponses_apres_une_reindexation_publiee() {
     let forme = {
         let mut cat = backend.catalog.lock().unwrap();
         let avant = rag3weaver::code::scope_form(&cat).unwrap();
-        if avant == rag3weaver::code::ScopeForm::Versions {
+        // `RAG3WEAVER_PARITE_NO_MIGRATION=1` reads the base in its own form: a parity that judges the
+        // migration itself must not migrate its reference (16 Nov. 2026).
+        if avant == rag3weaver::code::ScopeForm::Versions && std::env::var("RAG3WEAVER_PARITE_NO_MIGRATION").as_deref() != Ok("1") {
             rag3weaver::code::migrer_vers_les_generations(&mut cat).expect("la migration vers les générations");
         }
         format!("{avant:?} → {:?}", rag3weaver::code::scope_form(&cat).unwrap())
