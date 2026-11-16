@@ -25,12 +25,17 @@
 ## Ce qu'il faut faire (la part d'embarquement)
 
 0. **Une page de conception d'abord**, soumise à l'orchestration avant le code :
-   `docs/embarquement/<jour>/NN-debit-par-service.md`. Elle dit la clé (proposée :
-   `embedding_rate:{model}:{provenance}:{host}`, où `provenance` est celle de `provenance_counts` et `host` le
-   nom du poste), la migration de l'ancienne clé (relue comme repli quand la neuve manque), et où le banc écrit
-   sa mesure (le même stockage, une seule source pour l'hôte).
-1. Après chaque passe, `run_index` mesure le débit **par provenance** (morceaux et caractères de la passe,
-   divisés par sa durée, par provenance), et le note sous la clé neuve. Seules les passes de 64 morceaux et
+   `docs/embarquement/<jour>/NN-debit-par-service.md`. **La clé est convenue avec le banc** (16 novembre,
+   sa conception `docs/banc/16-11-2026/03-le-banc-d-etalonnage.md`, § 7) :
+   `embedding_rate:{model}:{address}@{host}`, où `address` est l'adresse du fournisseur réellement appelé (pour
+   une activation, celle de la prise : la carte, le service de repli, l'activation de repli), `local` pour un
+   embarqueur en processus, et `host` le nom du poste du client (un tunnel compte à part, c'est voulu).
+   L'ancienne clé (`embedding_rate:{model}:service` ou `:local`) se lit en repli quand la neuve manque, et ne
+   s'écrit plus. Le banc écrit sa mesure sous la même clé, une seule source pour l'hôte.
+1. Après chaque passe, `run_index` mesure le débit **par adresse appelée** (morceaux et caractères de la
+   passe, divisés par sa durée), et le note sous la clé neuve. Un client de service simple (`DaemonEmbedder`)
+   n'a pas de `provenance_counts` : il faut une lecture de l'adresse appelée (son `adresse`, ou celle de la
+   prise d'une tenue). Seules les passes de 64 morceaux et
    plus comptent (une petite passe mesure surtout la latence).
 2. `known_embedding_rate` lit la clé de la provenance courante de l'embarqueur (celle de sa dernière prise :
    la carte, le service de repli, l'activation de repli), puis l'ancienne clé en repli.
