@@ -111,3 +111,12 @@ conservé, aucun guardT. Vraie capturepreflightreadonly8657FPetrequired_suites
 bef..APPvide. [Pilote concret10](../16-11-2026/10-pilote-union-concret.md).
 P/Q/Sunion/TMPnouveaux noncréés, aucunruntime/Cargo/service ; RO+GOdistinct
 3600nouveaux restent requis pour lecodeEmbar entrant etsameELFunion2libs.
+
+## Réserve ED avant contrôle des noms union
+
+Pilote0b63 nonlancé, réserve RO : doc10 promet égalitéNOMS mais driver ne
+compare que counts2==counts. Ajouter parse des deux journaux en CounterOK/
+ignored, refuser doublons/manquants/extras et cardinalités incompatibles ;
+snapshot avantassert, témoins vraisfonctions avantfix(rejouer CPU seulement).
+Même sourceAPP e272/T/transition/3600/SDK et autresfrontières inchangés.
+NouveauSHA à RO et GOdistinct, aucunPQS/Cargo ou runtime consommé.
