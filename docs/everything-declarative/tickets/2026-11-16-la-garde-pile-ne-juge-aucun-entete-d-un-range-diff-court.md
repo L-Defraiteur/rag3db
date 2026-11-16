@@ -55,3 +55,23 @@ Branche `cx-optimiseur-stack-guard-16-candidate`, base exacte
 `d395cb1f03f84c6abdfa023a0e3c7f87a7c0dab6`. Même correctif et témoins,
 porteur G ; aucun déplacement ni doublon du ticket ED. Publication avant
 qualification CPU et replay RO sur ED exact ; aucune mutation des caches.
+
+### Replay RO ED exact : refus sémantique conservé
+
+Candidat publié `e3360b5587`, source/tests identiquesb74b, 49+7CPU verts.
+Audit Git des arbres `src`, `test`, `extension` et `tools/rust_api` : identiques
+à masterd395 ; seules garde, nouveau témoin et présent ticket diffèrent.
+
+Le replay du vrai `--pile 68590270e2 bd76f55792 f83c6c4dd6 d395cb1f03`
+ne passe PAS : six `=` jugés, arrêt au septième en-tête, ajout non Markdown
+`ab0e877375841935a63c3afd8525a84a8b0d72d1`. Il ajoute notamment
+`docs/everything-declarative/16-11-2026/ties-qualification/driver.py` et
+`launch.py`. La sortie brute comporte15en-têtes : six `=` et neuf `>` ;
+ce résultat n'est pas quinze acceptations. La garde corrigée conserve le refus
+préexistant des ajouts hors `.md`. Aucun assouplissement, réattribution des audits
+produit indépendants ou nouveau rejeu produit. C7 informé du refus avant suite.
+
+Preuves complètes `~/.cache/optimiseur-notes/stack-guard-16/candidate-e3360b5587/` :
+`headers.log`, `historical.log`, `ed-exact.log`, `ed-exact-raw.log`, `verdict.json`.
+Verdict global ROUGE pour ce replay, indépendamment des56témoins CPU verts.
+En attente d'arbitrage C7 ; aucune installation ni cache modifié.
