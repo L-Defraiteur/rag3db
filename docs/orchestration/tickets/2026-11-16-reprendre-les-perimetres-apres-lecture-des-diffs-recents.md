@@ -37,3 +37,6 @@ Recherche signale avant passe globale un prérequis de fixture non posé par la 
 
 
 Cœur50e2 : premier cas privé rc139 sans XML/BUILD_ID runtime, arrêt quiescent ; trois cas non joués. Préservation et diagnostic RO au ticket Cœur avant correctif, aucun rejeu natif sous le GO terminé ; cause non attribuée et aucune clôture C1. Rapport de reprise détaillé.
+
+
+Contrôle périodique suivant : treize états relus ; reprises RO/PURE/préparations existantes Cœur/ED/TTY/Hotfix après dépendances levées. Deux admissions ciblées distinctes ordonnées, Lucivy300 puis Recherche1200 après restitution, sources/pilotes/pins et limites dans le rapport. Aucun global/master/service/base originale/nettoyage accordé. Callback final Arbre b9e5 encore en revue, paire Codeparsers en attente C7 ; les attentes justifiées ne sont pas relancées pour occupation. Tous les tickets métier restent ouverts jusqu’à résultat réel.
