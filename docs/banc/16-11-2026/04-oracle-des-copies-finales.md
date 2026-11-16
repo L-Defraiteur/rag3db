@@ -233,3 +233,15 @@ Le listing **ne vaut pas ingestion** : plafond1MiB/minified du manifeste,
 métadonnées, `.env.example` et extra doivent être départagés avant oracle matched.
 Portable : listing exact encore NON JOUÉ ; réutilisation du même binaire autonome
 proposée sous une nouvelle portée RO60s32G, sans compilation ni Cargo.
+
+### Recette de portabilité avant troisième entrée RO
+
+C7 exige un smoke sur dossier jetable avant listing portable, une simple copie
+ELF ne prouvant pas sa compatibilité ISA. Même binaire d6cbd33b..., transféré
+sans rebuild. Portée privée lourde32G, délai global60s après acquisition, aucun
+Cargo : vérifier SHA, lister uniquement un dossier jetable contenant sample.rs,
+vérifier sa présence dans le rendu et son code0 ; seulement ensuite vérifier
+freeze02, lister root original et snapshot portable, revérifier hashes/états.
+Conserver les codes/sorties même en refus ISA ; première erreur arrête l'entrée.
+Aucun accès base/service. Dossier de preuves neuf `validations-scanner-03/`,
+artefacts `oracle-final-16nov/scanner-03/`. Slot non conservé pour publication.
