@@ -142,3 +142,15 @@ suffisance/candidate/master/rerun automatique ; décisionC7 requise.
 ## Candidat neuf après levée HOLD préparation parC7
 
 [Rapport25/auditmodeOID/range](../../everything-declarative/16-11-2026/25-candidat-vertex-identique-source-qualifiee.md) : masterfetchb0inchangé/0entrant, produitstrictAPPb472 et4RustCPUc38, seulementMDaprèsb472. Classificateur/Python/JSON restentbranche86épinglée ; canoniqueoriginaleVERTproposéeàgardenormale, composéRED/scopeROUGEhistoriquesinchangés. CandidatNEUFcx-ed-vertex-integration-r2 avantROfinale/ÀTOIC7 ; aucunegardePush/master/rerun exécutée. TicketOUVERT/limitesOAuthF300/72ignored/POSTEXECconservées.
+
+
+## Landing transport sur master99fef, limites métier conservées
+
+ÀTOIC7exact99 puisgardenormalefff9/IFvraicanonVERT/FFpush, master
+99fef92ce6ee9a0007eaf99c7c3a6a3789061c57 ;3contrôles lus deuxpostes.
+[Rapport26](../../everything-declarative/16-11-2026/26-landing-vertex-et-controles-deux-postes.md)
+trace incidentlanceurpréfetchSyntaxError conservé puisfixopAST2posts,
+10preuvespushSHA8bac…cc9a réempreintées2posts0écart. CanoniqueVERTréelle,
+composéREDscopeROUGE historiques restent distincts. PasOAuth/from_env/F300,
+commentaireobsolète et72ignored nonacquittés, ticketOUVERT ; aucunservice/
+CIrerun/natif/cleanup. ArchivesWT/Tpréservés avant contratnettoyageC7distinct.
