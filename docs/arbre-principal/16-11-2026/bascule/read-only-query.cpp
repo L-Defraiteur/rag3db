@@ -11,7 +11,7 @@ int main(int argc, char** argv) {
         config.bufferPoolSize = 1ull << 30;
         Database database(argv[1], config);
         Connection connection(&database);
-        auto build = connection.query("CALL BUILD_ID()");
+        auto build = connection.query("CALL BUILD_ID() RETURN *");
         if (!build->isSuccess()) { std::cerr << "BUILD_ID_ERROR\t" << build->getErrorMessage() << '\n'; return 1; }
         while (build->hasNext()) { std::cerr << "BUILD_ID\t" << build->getNext()->toString(); }
         for (int index = 2; index < argc; ++index) {

@@ -15,3 +15,7 @@ Source audit927941a67a5805450d49f1e04b39fdd542a6059b ; lib préparée par G59ac9
 Pour fermer : pour chaque base, identité exacte, snapshot cohérent et RETOUR conservés72h, maintain frais borné, deux sens verts, versions1b lots2000 puis générations0publiée/1lu, repassage terminé (dernière ligne du journal, pas busy), comptes visibles/mirroirs0/0/vecteurs et oracle contemporain jugés, refus ou migrations partielles conservés sans faux vert. Retour et données d'avant gardés, aucun retrait maintenant. Une base non traitée ou oracle incomplet reste explicitement non qualifié.
 
 Rapport et recette d'exécution : `docs/arbre-principal/16-11-2026/03-preparation-bascule-bases.md`.
+
+## Préflight outil RO — rouge vu avant correction
+
+G a compilé read-only-query.cpp04a contre59ac et joué une fixture privée1nœud : BUILD_ID_ERROR Binder exception, CALLBUILD_ID sansRETURN n’est pas une standalone table function. Journal portable ~/.cache/optimiseur-notes/bascule-16nov-927/query-read.log. Aucune basevivante ouverte. Corriger la seule requête d’identité en CALL BUILD_ID() RETURN *, puis recompilation/témoin parG avant usage.
