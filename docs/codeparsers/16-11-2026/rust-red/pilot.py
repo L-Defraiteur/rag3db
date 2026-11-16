@@ -120,8 +120,15 @@ def inside(config, root):
         'features': env['RAG3WEAVER_E2E_FEATURES'], 'witnesses': NAMES, 'worktree': str(worktree)}))
     cache_quiet(config, root)
     target = Path(config['target'])
-    assert config['target_started_absent'] and not target.exists() and not target.is_symlink()
-    target.mkdir(mode=0o700)
+    if config['target_started_absent']:
+        assert not target.exists() and not target.is_symlink()
+        target.mkdir(mode=0o700)
+    else:
+        assert target.is_dir() and not target.is_symlink()
+        marker = target / '.arbre-du-target'
+        assert marker.is_file() and not marker.is_symlink()
+        assert marker.read_text().strip() == config['previous_owner']
+        read_scope_verdict(Path(config['previous_red_proofs']), 1, 'red')
     verify(config)
     rc = record(root, 'red-pair', ['bash', './run_e2e.sh', '--test', 'e2e_usages', 'on_the_same_line'], crate, env)
     # The common supervisor retains the actual nonzero outcome. No expected red is promoted to green.
@@ -129,7 +136,7 @@ def inside(config, root):
     return rc
 
 
-def read_scope_verdict(root, common_rc):
+def read_scope_verdict(root, common_rc, expected='red'):
     """Read one completed common invocation and the actual native red pair."""
     def require(condition, message):
         if not condition:
@@ -142,6 +149,7 @@ def read_scope_verdict(root, common_rc):
         except (OSError, ValueError) as error:
             raise ValueError('missing or invalid proof artifact: ' + path.name) from error
 
+    require(expected in ('red', 'green'), 'unknown expected phase')
     matches = list((root / 'scope').glob('validation-*/verdict.json'))
     require(len(matches) == 1, 'expected exactly one common verdict')
     scope_path = matches[0]
@@ -153,26 +161,37 @@ def read_scope_verdict(root, common_rc):
     require(authority.get('etat') == 'termine', 'common authority is not completed')
     require(observed.get('deadline') == authority.get('echeance') and 'deadline' in observed,
             'authority deadline mismatch')
-    require(common_rc == 1 and scope.get('code') == 101 and scope.get('verdict') == 'ROUGE',
+    child_rc = 101 if expected == 'red' else 0
+    expected_common_rc = 1 if expected == 'red' else 0
+    expected_verdict = 'ROUGE' if expected == 'red' else 'VERT'
+    require(common_rc == expected_common_rc and scope.get('code') == child_rc and scope.get('verdict') == expected_verdict,
             'unexpected common or child return code')
     require(scope.get('erreur', 'missing') is None and scope.get('restes') == [] and scope.get('nettoye') is True,
             'supervisor error, remaining descendants or incomplete cleanup')
     private = scope.get('prive')
     require(isinstance(private, str) and Path(private).is_absolute(), 'private scope path missing')
     require(not Path(private).exists() and not Path(private).is_symlink(), 'private scope still exists')
-    require(load(root / 'red-pair.result.json').get('rc') == 101, 'native runner did not return 101')
+    require(load(root / 'red-pair.result.json').get('rc') == child_rc, 'unexpected native runner code')
     require(load(root / 'red-pair.command.json') ==
             ['bash', './run_e2e.sh', '--test', 'e2e_usages', 'on_the_same_line'], 'unexpected native command')
     stdout = (root / 'red-pair.stdout').read_text(errors='replace')
     stderr = (root / 'red-pair.stderr').read_text(errors='replace')
     text = stdout + stderr
-    failed = [line.strip() for line in stdout.splitlines() if line.strip().startswith('e2e_usages::')]
-    require(sorted(failed) == sorted('e2e_usages::' + name for name in NAMES), 'unexpected failed witness names')
-    require(len(re.findall(r'test result: FAILED\. 0 passed; 2 failed; 0 ignored;', stdout)) == 1,
-            'expected exactly two failed tests and no ignored test')
-    require(text.count('the project call must remain visible') == 2 and
-            text.count('left: 0') == 2 and text.count('right: 1') == 2,
-            'failures do not establish the expected missing project calls')
+    if expected == 'red':
+        failed = [line.strip() for line in stdout.splitlines() if line.strip().startswith('e2e_usages::')]
+        require(sorted(failed) == sorted('e2e_usages::' + name for name in NAMES), 'unexpected failed witness names')
+        require(len(re.findall(r'test result: FAILED\. 0 passed; 2 failed; 0 ignored;', stdout)) == 1,
+                'expected exactly two failed tests and no ignored test')
+        require(text.count('the project call must remain visible') == 2 and
+                text.count('left: 0') == 2 and text.count('right: 1') == 2,
+                'failures do not establish the expected missing project calls')
+    else:
+        results = re.findall(r'^test result: (.+)$', stdout, re.M)
+        require(bool(results) and results[-1].startswith('ok. 2 passed; 0 failed; 0 ignored;'),
+                'expected exactly two passing native witnesses and no ignored test')
+        require(all(stdout.count('test e2e_usages::' + name + ' ...') == 1 for name in NAMES),
+                'green witnesses do not match the requested pair')
+        require('test result: FAILED.' not in stdout, 'an earlier failure must not be hidden')
     return scope
 
 
@@ -183,6 +202,8 @@ def main():
     p.add_argument('--source')
     p.add_argument('--proofs', type=Path, required=True)
     p.add_argument('--allocation')
+    p.add_argument('--expected', choices=['red', 'green'], default='red')
+    p.add_argument('--previous-red-proofs', type=Path)
     args = p.parse_args(); root = args.proofs
     if args.action == 'prepare':
         assert os.uname().nodename.lower() == 'luciepc'
@@ -191,7 +212,8 @@ def main():
         root.mkdir(mode=0o700, parents=True)
         config = {'source': args.source, 'base': BASE, 'worktree': str(worktree),
                   'target': str(Path.home() / '.cache/rag3weaver-build/target-import-pointe-pile'),
-                  'store': str(Path.home() / '.cache/rag3db-libs'), 'budget': 1800,
+                  'store': str(Path.home() / '.cache/rag3db-libs'), 'budget': 1800 if args.expected == 'red' else 900,
+                  'expected': args.expected,
                   'pilot_sha256': digest(__file__), 'scripts': {name: digest(worktree / name) for name in
                   ['extension/rag3weaver/scripts/confiner_validation.py', 'extension/rag3weaver/run_e2e.sh',
                    'extension/rag3weaver/scripts/lib_du_magasin.sh', 'extension/rag3weaver/scripts/cargo_garde.py',
@@ -199,9 +221,23 @@ def main():
         target = Path(config['target'])
         assert target.parent.is_dir() and target.parent.resolve() == target.parent
         assert target.parent.stat().st_uid == os.getuid()
-        assert not target.exists() and not target.is_symlink(), 'this allocation requires a fresh target'
-        config['previous_owner'] = str(worktree / 'extension/rag3weaver')
-        config['target_started_absent'] = True
+        if args.expected == 'red':
+            assert not target.exists() and not target.is_symlink(), 'this allocation requires a fresh target'
+            config['previous_owner'] = str(worktree / 'extension/rag3weaver')
+            config['target_started_absent'] = True
+        else:
+            previous = args.previous_red_proofs.resolve(strict=True)
+            read_scope_verdict(previous, 1, 'red')
+            previous_config = json.loads((previous / 'prepared.json').read_text())
+            assert str(target) == previous_config['target'] and previous_config['target_started_absent']
+            assert previous_config['source'] == '056f552c122353a25c37f2feaf1d4e5006c712f3'
+            assert target.is_dir() and not target.is_symlink() and target.stat().st_uid == os.getuid()
+            marker = target / '.arbre-du-target'
+            assert marker.is_file() and not marker.is_symlink()
+            config['previous_owner'] = marker.read_text().strip()
+            assert config['previous_owner'] == str(Path(previous_config['worktree']) / 'extension/rag3weaver')
+            config['previous_red_proofs'] = str(previous)
+            config['target_started_absent'] = False
         (root / 'prepared.json').write_text(json.dumps(config, indent=2))
         verify(config)
         crate = worktree / 'extension/rag3weaver'
@@ -228,20 +264,20 @@ def main():
     (root / 'allocation.json').open('x').write(json.dumps({'reference': args.allocation}))
     worktree = Path(config['worktree']); common = worktree / 'extension/rag3weaver/scripts/confiner_validation.py'
     env = os.environ.copy(); env.update(POSTE_MEM_MAX='32G', RAG3WEAVER_BUILD_MEMORY_HIGH='0')
-    command = [sys.executable, str(common), 'lancer', '--delai', '1800', '--preuves', str(root / 'scope'),
+    command = [sys.executable, str(common), 'lancer', '--delai', str(config['budget']), '--preuves', str(root / 'scope'),
                '--', sys.executable, str(Path(__file__).resolve()), 'inside', '--proofs', str(root)]
     os.chdir(root)
     rc = record(root, 'common', command, root, env)
     try:
-        scope = read_scope_verdict(root, rc)
+        scope = read_scope_verdict(root, rc, config['expected'])
         expected, reason = True, None
     except (ValueError, OSError) as error:
         scope, expected, reason = {}, False, str(error)
-    (root / 'classification.json').write_text(json.dumps({'expected_red_pair': expected,
+    (root / 'classification.json').write_text(json.dumps({'expected_' + config['expected'] + '_pair': expected,
         'common_rc': rc, 'scope_verdict': scope.get('verdict', 'NOT_QUALIFIED'),
         'reason': reason, 'global_pass': False}))
-    print('EXPECTED RED PAIR' if expected else 'UNEXPECTED RED; STOP AND DIAGNOSE')
-    return 1
+    print(('EXPECTED ' + config['expected'].upper() + ' PAIR') if expected else 'UNEXPECTED RESULT; STOP AND DIAGNOSE')
+    return 0 if expected and config['expected'] == 'green' else 1
 
 
 if __name__ == '__main__':

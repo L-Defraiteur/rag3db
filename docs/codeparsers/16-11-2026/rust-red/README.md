@@ -49,3 +49,17 @@ par la vraie fonction repertoire_preuves du commun, puis JSON de fixture.
 Cette fixture ne lance pas de superviseur ni ne crée d'autorité réelle.
 Rouge observé au lecteur initial c2b7639f5e ; correction bf507dd191, huit tests
 hermétiques verts. Cela ne constitue aucun rouge ni vert des deux témoins Rust.
+
+## Candidat vert séparé, pas de budget hérité
+
+Le mode --expected green de prepare impose les preuves rouges056 terminées
+via --previous-red-proofs, le même target réellement neuf à l'entrée rouge,
+son marqueur/son propriétaire, et recontrôle PQS après poste avant adoption
+par garde_target. Pas de copie SDK, pas de suppression des artefacts rouges.
+Mode rouge historique inchangé par défaut ; son source056 reste figé ailleurs.
+Le mode vert propose900 secondes NEUVES, deux témoins seulement, mêmes
+Hash64/native/code sans PG/service. Ce n'est ni un GO ni une passe complète.
+Le lecteur vert exige Common/enfant0, reçu terminé/cohérent, cleanup sans restes,
+et le dernier résultat2passés/0échoué/0ignoré pour les deux noms exacts.
+Les noms red-pair.* sont conservés pour compatibilité des preuves du pilote,
+la phase effective figure dans prepared.json et classification.json.
