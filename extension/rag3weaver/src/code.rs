@@ -6075,7 +6075,7 @@ mod tests_de_l_ecrivain {
     }
 
     /// Les instructions qu'un repassage complet (la version de l'analyse changée) de `n` fichiers envoie.
-    fn instructions_d_un_repassage(n: usize) -> usize {
+    fn statements_of_a_repass(n: usize) -> usize {
         let conn = crate::Rag3dbConnection::in_memory().unwrap();
         let mut cat = Catalog::new(Box::new(conn), Box::new(crate::embedder::HashEmbedder::new(8)), crate::CatalogConfig {
             allow_mock_embedder: true, embedding_dim: 8, ..Default::default()
@@ -6088,7 +6088,7 @@ mod tests_de_l_ecrivain {
         cat.ingest_code(&analyze_source(&src).unwrap()).unwrap();
         cat.publier_la_generation("c1", 0).expect("publier");
         cat.version_de_l_analyse = format!("{}-autre", cat.version_de_l_analyse);
-        let (r, instructions) = crate::rag3db_connection::instructions_du_fil::pendant(|| {
+        let (r, instructions) = crate::rag3db_connection::thread_statements::during(|| {
             crate::code_sync::sync_source(&mut cat, &src, &Default::default(), &mut |_| {}).expect("la synchronisation")
         });
         assert_eq!(r.files_ingested, n, "tout repasse");
@@ -6099,8 +6099,8 @@ mod tests_de_l_ecrivain {
     /// parent). Deux fois plus de fichiers dans un même paquet n'envoient pas deux fois plus
     /// d'instructions au moteur : au plus un quart de plus.
     #[test]
-    fn le_repassage_coute_le_paquet_pas_le_fichier() {
-        let (quarante, quatre_vingts) = (instructions_d_un_repassage(40), instructions_d_un_repassage(80));
+    fn a_repass_costs_the_batch_not_the_file() {
+        let (quarante, quatre_vingts) = (statements_of_a_repass(40), statements_of_a_repass(80));
         assert!(
             quatre_vingts * 4 <= quarante * 5,
             "40 fichiers : {quarante} instructions ; 80 fichiers : {quatre_vingts} — le coût suit le nombre de fichiers"
