@@ -96,3 +96,7 @@ joue sur le faux modèle (`fake_sse`) : deux outils refusés, puis un `step_done
 
 **À part** : le worktree de la tâche parti de `d61fe30d7` (des fichiers d'aujourd'hui absents) est
 le choix de base de la tâche essai-tty, pas l'équipier.
+
+## Reprise du 16 novembre après passation
+
+Lot de continuation repris sur branche neuve `cx-archi-pas-va-au-bout-r1`, correctif `3ae1e741448b70e70e4d9ebbd43ceebf3a80da2a`, base927941a67a5805450d49f1e04b39fdd542a6059b ; deux patches strictement égaux à pas-va-au-bout-2. [Rapport de préparation](../16-11-2026/03-reprise-pas-va-au-bout.md). Aucun nouveau test joué : qualification attend FINI G/bascule et lib neuve explicite, script épinglé conforme, puis tour C7 distinct. Ticket reste ouvert ; historiques rouges/verts conservés.
