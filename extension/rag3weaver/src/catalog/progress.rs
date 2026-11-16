@@ -282,6 +282,11 @@ fn rate_key(model: &str, origin: &str) -> String {
     format!("embedding_rate:{model}:{origin}")
 }
 
+/// **This machine's name**, the `host` of a rate key.
+pub fn this_host() -> String {
+    "unknown-host".to_string()
+}
+
 impl Catalog {
     /// **Où en est l'index**, compté en base, toutes entités confondues.
     /// Lecture seule.
@@ -607,6 +612,20 @@ impl Catalog {
             return Ok(());
         }
         self.persist_meta_key(&rate_key(model, origin), &format!("{:.0}", rate.chars_per_second))
+    }
+
+    /// **The rate noted for a model at a place** (`<address>@<host>`, or
+    /// `local@<host>`) : the key the index and the banc write.
+    pub fn embedding_rate_at(&self, model: &str, place: &str) -> Result<Option<Rate>, CatalogError> {
+        let _ = place;
+        self.embedding_rate(model, "service")
+    }
+
+    /// **Notes the rate of a model at a place** (`<address>@<host>`), for the
+    /// index and the banc alike.
+    pub fn note_embedding_rate_at(&self, model: &str, place: &str, rate: Rate) -> Result<(), CatalogError> {
+        let _ = place;
+        self.note_embedding_rate(model, "service", rate)
     }
 
     /// Le débit noté, s'il y en a un.

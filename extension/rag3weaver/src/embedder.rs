@@ -146,6 +146,15 @@ pub trait Embedder: Send + Sync {
         None
     }
 
+    /// **The address of the provider this embedder actually calls** : a service
+    /// client's address, or for an activation the address of its current take
+    /// (the card, the fallback service, the fallback activation). `None` : an
+    /// in-process embedder. The embedding rate is noted under it (banc and
+    /// embarquement, 16 November 2026 : `embedding_rate:{model}:{address}@{host}`).
+    fn called_address(&self) -> Option<String> {
+        None
+    }
+
     /// Les changements de provenance à dire (un repli, un retour, une carte
     /// pleine sans repli), lus et vidés comme [`Self::provenance_counts`].
     fn provenance_events(&self) -> Vec<String> {
@@ -204,6 +213,9 @@ impl<T: Embedder + ?Sized> Embedder for std::sync::Arc<T> {
     }
     fn char_truncations(&self) -> Option<(usize, usize)> {
         (**self).char_truncations()
+    }
+    fn called_address(&self) -> Option<String> {
+        (**self).called_address()
     }
     fn provenance_events(&self) -> Vec<String> {
         (**self).provenance_events()
