@@ -23,3 +23,5 @@ add_rag3db_test(transaction_test transaction_test.cpp checkpoint_test.cpp wal_te
         refused_copy_same_session_test.cpp data_file_extent_test.cpp rolled_back_insert_reopen_test.cpp commit_local_tables_test.cpp pk_lookup_under_checkpoint_test.cpp alter_waits_for_writers_test.cpp refused_commit_rel_directions_test.cpp read_during_open_batch_test.cpp refused_commit_rollback_test.cpp add_column_refused_midway_test.cpp update_memory_test.cpp)
 
 add_subdirectory(concurrence)
+
+add_rag3db_test(dictionary_append_exception_test dictionary_append_exception_test.cpp)
