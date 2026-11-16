@@ -111,3 +111,17 @@ proposée après résolution de la garde : même target, `cargo test --offline
 (vue par défaut, rouge CLI attendu), Common unique600s/32G ; conserver les deux
 rc/logs avant jugement, aucun retry, aucun nouveau cache. Aucun de ces essais
 n'a été lancé. Correctif CLI et README toujours à faire après rouge CLI.
+
+### Retrait préparé puis arrêté sur refus réel de garde
+
+Archive tar fidèle du target, ELF rouge, preuves et reçu :
+`~/.cache/rag3weaver-build/archives/cx-tty-aliases-red-20261116/target-and-proof.tar`,
+copiée sur luciepc au même chemin relatif. SHA256 comparé identique aux deux
+postes : `56aca2b2488b99a302f0e806724bf58a2677805a9413f8ca9152ac2caf9d09f3`.
+Garde courante exécutée depuis le worktree propriétaire, cible target seul :
+rc2 ROUGE, « inspection Git impossible » sur ce cache sans .git.
+Rapport hors target `archives/cx-tty-aliases-red-20261116/garde-target-retrait.json`.
+La garde exige un worktree Git enregistré et ne juge pas un target indépendant.
+STOP transmis à l'orchestration ; aucun retrait, marqueur, target neuf ou Cargo.
+Le worktree source reste intact. Attente de procédure applicable au target seul,
+sans assimiler un verdict sur le worktree à une autorisation de retrait du cache.
