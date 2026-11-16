@@ -120,3 +120,20 @@ Publier source et fakes discriminants avant test, puis rouge→fix→vert sous b
 CPU60 hermétique, sans processus/provider/PG/proc réels. Recherche regroupera le
 couple/pins/Q avant RO et GO6000 distinct éventuel. Ce paragraphe n'alloue aucune
 ressource ni exécution native. Ticket reste ouvert.
+
+Précision RO G avant source : aucun psql HOST disponible ; aucune installation
+ni docker exec abandonné sous faux timeout n'est introduit. PG sera attesté par
+un artefact G frais, SHA exact fourni par C7/G, lié nonce/READY/job/lease END,
+avec brut SQL RO bootstrap+DB/user/OID/owner et topologie conteneur/image/binding.
+Le code owner valide cet artefact et l'exclusivité, il n'ouvre pas PostgreSQL.
+La recette de production de cette attestation G doit être matérialisée et relue
+avant GO ; sa préparation n'est pas une attestation déjà acquise.
+`rag3weaver_test` désigne uniquement le bootstrap ; base_pg.rs crée et retire
+les bases de test par processus. Ni OID unique pour toutes les suites ni
+PG_BASE_FIXE=1 ne sont inférés. Recherche supprimera son ping PG redondant.
+
+Le transport santé owner sera aussi importé par le consommateur : même worker,
+phase avant chaque contact et après, brut conservé en refus. Avant canonique,
+admission READY requise ; après canonique, autorité de scope et lease encore
+actives seulement, sans rouvrir la fenêtre d'admission. Pas de troisième GET
+ad hoc ni de nouvelle copie d'une logique timeout partielle.
