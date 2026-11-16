@@ -210,3 +210,9 @@ supplémentaire sur les trous. Critère de fin conserve ces limites explicites.
 Action de relecture portée par banc : RO uniquement du paquet de préparation,
 manifestes/empreintes, pilote/admission/échéance et neufHOLD ; aucunrun/Cargo/ELF,
 aucunscan de base/service. Retour attendu lié à ce ticket avant GO C7 distinct.
+
+RO banc de21b18 : cohérence PRÉPA favorable bornée,13SHA conformes ; pas
+rehashphysique des corpus par banc. Point de lancement précisé dans recette08 :
+**cwdQ exact horsW/T**, sinon autosignalementattribué par collect_scan et refus.
+Pilote2fa59/preflight23dd inchangés, pas de nouvelle exécution ni GO reçu.
+Rapport banc à pousser ; transmettre ce complément avant décision C7.

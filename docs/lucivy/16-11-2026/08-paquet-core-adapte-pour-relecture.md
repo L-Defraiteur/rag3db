@@ -116,7 +116,13 @@ profil adapté. Aucune affirmation « core entier vert » possible avec ces trou
 
 ## Commande proposée — NON lancée, RO puis GO distinct requis
 
+Le répertoire de lancement est **Q**, hors W et T. Le lanceur ne fait pas de
+chdir ; un cwd dans W/T serait lui-même attribué et bloquerait la quiescence.
+Fixer aussi ce workdir dans tout appel distant ou exec ; pas de lancement depuis
+le checkout par commodité.
+
 ```bash
+cd /home/lucied/.cache/rag3weaver-build/cx-lucivy-indexed-warning-core-16nov-v1
 POSTE_MEM_MAX=32G RAG3WEAVER_BUILD_MEMORY_HIGH=0 /home/lucied/.cache/rag3weaver-build/cx-lucivy-indexed-warning-core-16nov-v1/support/poste lourd timeout --signal=TERM --kill-after=5s 1810 python3 /home/lucied/.cache/rag3weaver-build/cx-lucivy-indexed-warning-core-16nov-v1/admit-indexed-false-core.py
 ```
 
@@ -139,3 +145,14 @@ avait omis l’alias classify (troisNameError), corrigé sans changer le pilote.
 Un précontrôle de cache avait exigé à tort son parent déjà présent ; corrigé
 pour contrôler les ancêtres existants et garder l’absence comme prérequis,
 sans créer de cache/rapport ni modifierT. Les contrôles finaux sont ceux archivés.
+
+## Retour RO banc avant GO
+
+Cohérence favorable pour la PRÉPA21b18ac2ca, pas un GO :13 empreintes du
+manifeste conformes, pilote/admission/préparation identiques aux copies figées ;
+manifestes15007+8507/chemins exclus/prefixe300sur400/neufHOLD cohérents.
+Banc n’a pas rehashé les fichiers physiques des corpus ; il vérifie les preuves
+de préparation. START après poste/END1800 et reste moins2/cleanupowned cohérents.
+Seul point de lancement à préciser : cwdQ, désormais fixé ci-dessus. Aucun
+changement du pilote2fa59 ni du preflight23dd. Rapport banc encore à pousser
+au moment de cette mise à jour ; aucun Cargo/ELF/scan réel par banc.
