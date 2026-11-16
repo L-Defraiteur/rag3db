@@ -1,6 +1,6 @@
 # Les passes des lots ne jouent pas e2e_code_sync : master a rougi sans qu'aucune passe le dise
 
-- **État** : ouvert (16 novembre 2026) — à G
+- **État** : fait (16 novembre 2026, branche required-suites) : tools/poste/required_suites.txt dit quels chemins exigent e2e_code_sync (code.rs, code_sync.rs, le catalogue, l écrivain, la suite elle-même) ; passe_epinglee.sh la joue, même sous SUITES, et le résumé dit les suites exigées et toutes les suites jouées ; push_garde.sh refuse une passe qui ne l a pas jouée verte ; rouge d abord aux deux témoins (4 rouges sur la garde de master). Le défaut lui-même reste à ED et à l arbre.
 - **Famille** : produit (outillage : `extension/rag3weaver/scripts/run_e2e.sh`, `passe_epinglee.sh`)
 - **Gravité** : un rouge de master non vu. Onze témoins de la synchronisation et du point de reprise sont rouges sur master e264210dc7 (lib 373b5477b comme 52101b7fd) ; aucune des passes de la nuit du 15 au 16 ne les a joués.
 - **Atteignable en service** : oui (la synchronisation d'une source rend Ok avec `files_ingested: 0` et `scopes_written: 0` ; une source tronquée est acceptée sans `force`)
