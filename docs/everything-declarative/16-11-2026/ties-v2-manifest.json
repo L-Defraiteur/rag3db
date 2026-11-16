@@ -1,0 +1,137 @@
+{
+  "files": [
+    {
+      "path": "client/authority-path.json",
+      "remote": "cx/ed-ties-59ac-r2-v2/authority-path.json",
+      "sha256": "2800563c35bcca3ffb9d7f3c56e05810da4448fca241a49836b27e154d31ead9",
+      "size": 148
+    },
+    {
+      "path": "client/cache/rag3weaver/builtin-templates/1b055c9748b503bc/experiments/2026-10-11-fiches-classees-2/resultats/llm-gemini.log",
+      "remote": "cx/ed-ties-59ac-r2-v2/cache/rag3weaver/builtin-templates/1b055c9748b503bc/experiments/2026-10-11-fiches-classees-2/resultats/llm-gemini.log",
+      "sha256": "f89ab41305db9b34b66b67a2f61b82c1342ab7d0afa26154802e75ac5a629561",
+      "size": 360
+    },
+    {
+      "path": "client/composed-verdict.json",
+      "remote": "cx/ed-ties-59ac-r2-v2/composed-verdict.json",
+      "sha256": "3302ac555b549a5378306ca96dfa2490ed9f1482e7c0e20cd74f8ae6e8d43fd4",
+      "size": 66
+    },
+    {
+      "path": "client/configuration.json",
+      "remote": "cx/ed-ties-59ac-r2-v2/configuration.json",
+      "sha256": "705a748793908d06ae855fa04c8e15b07918841727d901b1b985c9ab9853eb15",
+      "size": 3179
+    },
+    {
+      "path": "client/exact-0.log",
+      "remote": "cx/ed-ties-59ac-r2-v2/exact-0.log",
+      "sha256": "4afc90dde84765449dd4284a17de1207e86bb7cfbf08308a1f92536ca43eedee",
+      "size": 43512
+    },
+    {
+      "path": "client/exact-1.log",
+      "remote": "cx/ed-ties-59ac-r2-v2/exact-1.log",
+      "sha256": "53bb647f2cda95fafc81fc027d5fa84195ecb08e7a36377c94b49f27edbaeeca",
+      "size": 17634
+    },
+    {
+      "path": "client/first-red.json",
+      "remote": "cx/ed-ties-59ac-r2-v2/first-red.json",
+      "sha256": "b7425ed9bf9acfde65b9f8e66a947e273e9f8d4c917a21ff54ca58c3c28a051f",
+      "size": 252
+    },
+    {
+      "path": "client/official/base",
+      "remote": "cx/ed-ties-59ac-r2-v2/official/base",
+      "sha256": "0e42d161f3b878bb93215cbcc476cfc790f0b6c6f161920a3dd6c3f8214b2d1d",
+      "size": 41
+    },
+    {
+      "path": "client/official/check_features.log",
+      "remote": "cx/ed-ties-59ac-r2-v2/official/check_features.log",
+      "sha256": "223fa175a3cce764796f2d10c8a6237cf5cd4aa3a1e175eec7fa9eb9d32c03da",
+      "size": 2810
+    },
+    {
+      "path": "client/official/e2e_code.log",
+      "remote": "cx/ed-ties-59ac-r2-v2/official/e2e_code.log",
+      "sha256": "1257cd4e44f5588ea09ad94ed9fba0ffac483e1ce0c70a7f40f52d907a784ffb",
+      "size": 52493
+    },
+    {
+      "path": "client/official/e2e_lectures.log",
+      "remote": "cx/ed-ties-59ac-r2-v2/official/e2e_lectures.log",
+      "sha256": "5dc6d0755e203e656e54a865c7d33e3813f17720146ca92bb63ad02c7f91c051",
+      "size": 48949
+    },
+    {
+      "path": "client/official/lib.log",
+      "remote": "cx/ed-ties-59ac-r2-v2/official/lib.log",
+      "sha256": "f704b7111e727d39fc261f7b14b6403903123707b411d678df7bb851c7c3b6f3",
+      "size": 42687
+    },
+    {
+      "path": "client/official/preuve.log",
+      "remote": "cx/ed-ties-59ac-r2-v2/official/preuve.log",
+      "sha256": "15617a0aa20668def95111233762876b062e718c12358f87adbd38ac74c5e2b3",
+      "size": 14968
+    },
+    {
+      "path": "client/official/resume.log",
+      "remote": "cx/ed-ties-59ac-r2-v2/official/resume.log",
+      "sha256": "3f79cea763fb301344e3f0447a21348ac790dd02f3e9fb4ab7f81f734afc6692",
+      "size": 1283
+    },
+    {
+      "path": "client/official/temoins.log",
+      "remote": "cx/ed-ties-59ac-r2-v2/official/temoins.log",
+      "sha256": "e2971627b9d1e91b8510a053afdc9d17ddb9569ec5a1432a4f46846351fe0914",
+      "size": 17764
+    },
+    {
+      "path": "client/official-pass.log",
+      "remote": "cx/ed-ties-59ac-r2-v2/official-pass.log",
+      "sha256": "cdc8b307b04f0a3f151fdbd93dd9eb1c29996773370bce5b95d070ae3a3ce929",
+      "size": 79
+    },
+    {
+      "path": "client/target-guard.log",
+      "remote": "cx/ed-ties-59ac-r2-v2/target-guard.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "controller/outer.log",
+      "remote": "cx-ed-ties-controller-20261116-v2/outer.log",
+      "sha256": "dd315278bfe249fb0279f13dcbb36c36eedf305d2f1306be8db73f021a071492",
+      "size": 1133
+    },
+    {
+      "path": "controller/prepared.json",
+      "remote": "cx-ed-ties-controller-20261116-v2/prepared.json",
+      "sha256": "9bcec223dc061534e10972e79be3d7ed3e22f299d6c674d0e1e9a87228d92ad2",
+      "size": 1693
+    },
+    {
+      "path": "supervisor/enfants.json",
+      "remote": "cx-ed-ties-confinement-20261116-v2/validation-e2mxb3og/enfants.json",
+      "sha256": "070191a0f10d8bfbdbbc7ba558596952c7a7c47cb3c359f840b87f8cbefb8ca3",
+      "size": 778568
+    },
+    {
+      "path": "supervisor/recette.json",
+      "remote": "cx-ed-ties-confinement-20261116-v2/validation-e2mxb3og/recette.json",
+      "sha256": "4dd51e40c855db77f6b4de3a051f78465b16db68de24e434889038e4746d18e5",
+      "size": 741
+    },
+    {
+      "path": "supervisor/verdict.json",
+      "remote": "cx-ed-ties-confinement-20261116-v2/validation-e2mxb3og/verdict.json",
+      "sha256": "0c9d39fce43131b45ca5bc04f510d09780856f9fe843c17c0b3510306e448a54",
+      "size": 167
+    }
+  ],
+  "comparison": "PC and local rehashed; zero differences; private authority excluded"
+}
