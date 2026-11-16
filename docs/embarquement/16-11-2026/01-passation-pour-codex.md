@@ -139,6 +139,30 @@ commandes de la partie 4 valent pour toutes les entrées.
 
 ### 8. Le débit par service — `2026-11-16-le-debit-d-embarquement-par-service-pour-le-seuil-de-6-s.md`
 
+**En cours par embarquement**, arrêté à la demande de Lucie le 16 novembre à 10 h 5x : branche **`rate-key`**,
+tête **`0aecc6b70b`**, worktree `~/git_workspaces/rag3db-rate-key` à luciepc, gardé pour la reprise. Le périmètre
+pris est la clé seule ; la mesure par passe reste au ticket.
+- **Fait** : la clé est convenue avec le banc, `embedding_rate:{model}:{address}@{host}`, l'ancienne
+  (`{model}:service|local`) en repli, non écrite ; voir le ticket. Trois témoins rouges dans
+  `extension/rag3weaver/src/catalog.rs`, **vus rouges pour la bonne raison** :
+  `the_measured_rate_is_noted_under_the_called_address_and_host`,
+  `an_in_process_embedder_is_noted_as_local_at_its_host`,
+  `the_known_rate_falls_back_to_the_old_key_then_prefers_the_new_one`. Les stubs sont posés :
+  `Embedder::called_address` (`src/embedder.rs`, vide par défaut, relayé par `Arc`), et dans
+  `src/catalog/progress.rs` `embedding_rate_at`, `note_embedding_rate_at` (qui écrivent encore l'ancienne clé)
+  et `this_host` (qui rend « unknown-host »).
+- **Reste** :
+  - `called_address` pour `DaemonEmbedder` (`Some(self.adresse.clone())`, dans `src/daemon/embeddings.rs`) et pour
+    `DenseTenu` (`self.tenue.adresse_active()`, dans `src/model_source/activation.rs`) ;
+  - `this_host` par `libc::gethostname`, avec un repli sur `/etc/hostname` ;
+  - `embedding_rate_at` et `note_embedding_rate_at` sur la clé neuve ;
+  - `note_measured_embedding_rate` et `probe_embedding_rate` qui écrivent sous la clé neuve
+    (`{address ou local}@{host}`) ;
+  - `known_embedding_rate` qui lit la neuve, puis l'ancienne ;
+  - puis la passe, avec `SUITES=e2e_code_sync` (le lot touche `catalog*`). Ne renommer ni `note_embedding_rate` ni
+    `embedding_rate` : `tests/e2e_banc_relations.rs` cite leurs noms, et `tests/e2e_simple_entity.rs` les appelle.
+- **Attendu** : le banc n'écrit ses débits au catalogue qu'une fois cette lecture sur master. Le lui dire au push.
+
 - **À faire** : la part d'embarquement seulement (la table par provenance et sa lecture). Une page de conception
   d'abord ; le détail, les fichiers et ce qui ne se touche pas sont au ticket.
 - **Preuve** : `the_rate_is_noted_per_provenance`, `known_embedding_rate_reads_the_current_provenance` ; suites
@@ -246,3 +270,16 @@ commandes de la partie 4 valent pour toutes les entrées.
   `python3 extension/rag3weaver/scripts/check_tickets.py` (la Famille : `moteur` ou `produit` seulement).
 - **Jamais un essai sur 7878 ou 7879 en place**, jamais card0, jamais d'arrêt ni de `.env` d'une unité
   `rag3weaver-embeddings@`.
+
+## État final (16 novembre 2026, 10 h 5x, arrêt demandé par Lucie)
+
+- **Les services** 7878 et 7879 tournent à luciepc sur le binaire `a70f1e46…`, qui déclare le plafond mais ne
+  coupe pas encore côté service (pas de `cut_texts`). Les hôtes de master coupent avant l'envoi : l'index B′ du
+  banc est vert, avec 99 235 morceaux et 0 sans vecteur.
+- **Le binaire neuf** `6196fbe7…` attend la pose de la bascule, par la session G.
+- **Rien de l'embarquement ne tourne** : ni passe, ni guetteur (`groupe-repli-jeu/guetter.sh` est arrêté ; à
+  relancer pour l'entrée 11).
+- **Les worktrees gardés** à luciepc : `rag3db-rate-key` (l'entrée 8, en cours), `rag3db-repli-nuit` (l'entrée 11),
+  et `rag3db-a3` (`repli-cpu-a3-2`, à ne pas fusionner).
+- **Ce qui attend Lucie** : la partie 3 ci-dessus.
+
