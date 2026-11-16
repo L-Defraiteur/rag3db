@@ -1702,6 +1702,15 @@ pub fn analyze_in_project_avec(
         }
     }
     let aucune = std::collections::HashSet::new();
+    // The libraries whose provenance is certain (`builtin`, `dependency`): a member of one is never a
+    // project scope. One of unknown provenance (a project package the tree does not declare, `rag3db` in
+    // `tools/python_api`) keeps its rendez-vous.
+    let externes_sures: std::collections::HashSet<String> = analysis
+        .libraries
+        .iter()
+        .filter(|l| matches!(l.provenance.as_deref(), Some("builtin" | "dependency")))
+        .map(|l| l.name.clone())
+        .collect();
     for (abs, fa) in fichiers_tries.iter().copied() {
         let rel = relative(root, abs);
         // Les noms que le fichier réexporte, leur module source et la ligne
@@ -1819,9 +1828,10 @@ pub fn analyze_in_project_avec(
                     continue;
                 }
                 // **A member of an external library is not a project homonym** (16 November 2026): the
-                // qualifier comes from an import of a library of this file (`process.platform` after
-                // `const process = require("process")`, `fs.readFileSync(…)`): the member is the library's.
-                if r.import_origin.as_ref().is_some_and(|o| o.via_qualifier && libraries.contains(&o.source)) {
+                // qualifier comes from an import of a library of this file whose provenance is certain
+                // (`process.platform` after `const process = require("process")`, `path.join(…)`): the
+                // member is the library's.
+                if r.import_origin.as_ref().is_some_and(|o| o.via_qualifier && libraries.contains(&o.source) && externes_sures.contains(&o.source)) {
                     continue;
                 }
                 // **Un accès de champ ne prend pas de rendez-vous** avec une
