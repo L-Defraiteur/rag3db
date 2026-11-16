@@ -1366,8 +1366,12 @@ fn synchroniser_la_source(
     // **Sous les générations (2a′-2), une source déjà indexée se synchronise par l'écrivain** : la fin
     // d'instantané effacerait ce qu'aucun paquet n'a marqué, lignes publiées retirées comprises.
     if catalog.generations.is_some() && source_deja_indexee(catalog, &source_id)? {
+        #[cfg(all(test, feature = "rag3db-native"))]
+        fts_guard_double_tests::record("dispatch:generations".into());
         return synchroniser_par_generations(catalog, source, options, progress, source_id);
     }
+    #[cfg(all(test, feature = "rag3db-native"))]
+    fts_guard_double_tests::record("dispatch:classic".into());
     let grain = BTreeMap::from([("source".to_string(), CypherValue::String(source_id.clone()))]);
     let s_scopes = catalog.begin_snapshot(SCOPE, &grain, options.takeover).map_err(|e| e.to_string())?.session;
     let s_files = match catalog.begin_snapshot(FILE, &grain, options.takeover) {
@@ -1660,7 +1664,11 @@ fn synchroniser(
     // rebâtir ; un dossier d'un processus tué se rebâtit ici, pas au milieu
     // d'un paquet.
     let t_garde = std::time::Instant::now();
+    #[cfg(all(test, feature = "rag3db-native"))]
+    fts_guard_double_tests::record("counts:begin".into());
     let ecarts = catalog.check_fts_counts().map_err(|e| e.to_string())?;
+    #[cfg(all(test, feature = "rag3db-native"))]
+    fts_guard_double_tests::record(format!("counts:end:{}", ecarts.len()));
     if !ecarts.is_empty() {
         eprintln!("[rag3weaver] garde des comptes : {} index à rebâtir ({:?})", ecarts.len(), t_garde.elapsed());
     }
@@ -1679,7 +1687,11 @@ fn synchroniser(
     // sans leur plein texte, et sa marque : il est rebâti d'abord, depuis les
     // lignes. D'ici là, l'état d'index disait « mots : en cours ».
     let t = std::time::Instant::now();
+    #[cfg(all(test, feature = "rag3db-native"))]
+    fts_guard_double_tests::record("rebuild:begin".into());
     let rebatis = catalog.rebuild_pending_fts().map_err(|e| e.to_string())?;
+    #[cfg(all(test, feature = "rag3db-native"))]
+    fts_guard_double_tests::record(format!("rebuild:end:{}", rebatis.len()));
     if !rebatis.is_empty() {
         profil.add("rebâtir le plein texte laissé par un arrêt", t);
     }
