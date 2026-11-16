@@ -208,7 +208,7 @@ fn aretes_par_marque_en_tsv() {
         );
         if let Some(prefixe) = &tsv {
             let r = cat
-                .execute_raw("MATCH (a:Scope)-[r:CONSUMES]->(b:Scope) RETURN a.file_path, r.line, a.name, b.name, b.file_path, r.resolution, a.key, b.key, a.uuid, b.uuid, a.start_line, a.end_line, b.start_line, b.end_line, a.scope_type, b.scope_type")
+                .execute_raw("MATCH (a:Scope)-[r:CONSUMES]->(b:Scope) RETURN a.file_path, r.line, a.name, b.name, b.file_path, r.resolution, a.key, b.key, a.uuid, b.uuid, a.start_line, a.end_line, b.start_line, b.end_line, a.scope_type, b.scope_type, a.start_byte, a.end_byte, b.start_byte, b.end_byte")
                 .unwrap();
             // Identité native et occurrences restent distinctes des six colonnes historiques.
             let mut occurrence_rows: Vec<serde_json::Value> = r
@@ -226,6 +226,10 @@ fn aretes_par_marque_en_tsv() {
                         "target_start_line":row.get(12).and_then(|v|v.as_i64()),
                         "target_end_line":row.get(13).and_then(|v|v.as_i64()),
                         "caller_type":texte(row.get(14)),"target_type":texte(row.get(15)),
+                "caller_start_byte":row.get(16).and_then(|v|v.as_i64()),
+                "caller_end_byte":row.get(17).and_then(|v|v.as_i64()),
+                "target_start_byte":row.get(18).and_then(|v|v.as_i64()),
+                "target_end_byte":row.get(19).and_then(|v|v.as_i64()),
                     })
                 })
                 .collect();
