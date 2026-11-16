@@ -1,0 +1,86 @@
+{
+  "tty_lock_sha": "9127845d654a37f4a9e0fbce59b69ef26da51c6f6d7af6a6833782fd4fecabbb",
+  "registry": "registry+https://github.com/rust-lang/crates.io-index",
+  "missing": [
+    {
+      "name": "crossterm_winapi",
+      "version": "0.9.1",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "checksum": "acdd7c62a3665c7f6830a51635d9ac9b23ed385797f70a83bb8bafe9c572ab2b",
+      "dependencies": [
+        "winapi"
+      ]
+    },
+    {
+      "name": "js-sys",
+      "version": "0.3.107",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "checksum": "8dc09d2154098bbf4ef54eab6b117a3c24cbbffe94046b16ee6d6d4510584d3a",
+      "dependencies": [
+        "cfg-if",
+        "futures-util",
+        "wasm-bindgen"
+      ]
+    },
+    {
+      "name": "wasip2",
+      "version": "1.0.4+wasi-0.2.12",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "checksum": "b67efb37e106e55ce722a510d6b5f9c17f083e5fc79afc2badeb12cc313d9487",
+      "dependencies": [
+        "wit-bindgen"
+      ]
+    },
+    {
+      "name": "wasm-bindgen",
+      "version": "0.2.130",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "checksum": "a0181c14ddd6c7b8b0b0132a5f1ea2f32be0d893cd3ea97b6e3b28886b8a3d1c",
+      "dependencies": [
+        "cfg-if",
+        "rustversion",
+        "wasm-bindgen-macro",
+        "wasm-bindgen-shared"
+      ]
+    },
+    {
+      "name": "wasm-bindgen-macro",
+      "version": "0.2.130",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "checksum": "6e931a02a39abdbf66966fc35902b5ed58344750a70885bed4ebb3d8eaf28ed9",
+      "dependencies": [
+        "quote",
+        "wasm-bindgen-macro-support"
+      ]
+    },
+    {
+      "name": "wasm-bindgen-macro-support",
+      "version": "0.2.130",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "checksum": "2ca4b54280e455bd831e33a6b8e734baf432fe63fbc35c42ac14ce67a043a53a",
+      "dependencies": [
+        "bumpalo",
+        "proc-macro2",
+        "quote",
+        "syn 3.0.9",
+        "wasm-bindgen-shared"
+      ]
+    },
+    {
+      "name": "wasm-bindgen-shared",
+      "version": "0.2.130",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "checksum": "3b1f9c3798725016c6ee5f2f57869ec0831e8bbc0ab0310a86e787e97f41389e",
+      "dependencies": [
+        "unicode-ident"
+      ]
+    },
+    {
+      "name": "wit-bindgen",
+      "version": "0.57.1",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "checksum": "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
+    }
+  ],
+  "metadata_executed_for_inventory": false
+}
