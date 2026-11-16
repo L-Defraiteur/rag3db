@@ -41,3 +41,7 @@ Correctif du lanceur et témoins publiés78437ce0a6 : suppression scope redondan
 ## Rouge comportemental réellement observé avant correctif
 
 Source187 figée, GO distinct C7 et pilote3a528b67921f3c3b698e6d6db593bf8d4f834516 : compilation125.019s réussie puis **unique premier positif0/1/0** sur absence de handle ouvert Document, pas sur un préfixe nouveau. Rapport06, preuves25 fichiers PC/local réhash0écart manifestea3519cc5325b675e7d4c4eff3c4d9061aa380175a8971ee1ced34fcbfa2b8110. Confineur ROUGE101/restes[]/nettoyé/reçu terminé, poste libéré, aucune autre fonction ni implémentation automatique. Target de session gardé. Quatre autres témoins NON JOUÉS ; leur réserve physique/public reste à corriger avant full.
+
+## Rouge pending distinct — prérequis non levé
+
+C7 a demandé le témoin préfixe1f816 seul avant le fixpending. Pilotec306, compilation29.058sOK, unique0/1/0 MAIS échec de fixture avant snapshot : main n’est pas une dérivée par contenu admissible de Document. Rapport08, archives26PC/local0écart manifest19c174ee157c7720299fba7560005fcb4b777572f6b18b25b66c2a315ea2bcdb. PremierrougeSTOP/reçu terminé/restes[]/poste libre, target conservé, aucunretry/qualificationa92. Corriger fixtureContent/from/render/champscompatibles ET juges utilisant ce mapping avant nouvelle admission distincte ; aucun rouge pending observé pour l’instant.
