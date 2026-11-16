@@ -208,22 +208,40 @@ fn aretes_par_marque_en_tsv() {
         );
         if let Some(prefixe) = &tsv {
             let r = cat
-                .execute_raw("MATCH (a:Scope)-[r:CONSUMES]->(b:Scope) RETURN a.file_path, r.line, a.name, b.name, b.file_path, r.resolution")
+                .execute_raw("MATCH (a:Scope)-[r:CONSUMES]->(b:Scope) RETURN a.file_path, r.line, a.name, b.name, b.file_path, r.resolution, a.key, b.key, a.uuid, b.uuid, a.start_line, a.end_line, b.start_line, b.end_line, a.scope_type, b.scope_type")
                 .unwrap();
-            // JSONL conserve les six champs même si un nom contient un séparateur TSV.
-            let mut edge_rows: Vec<Vec<String>> = r
+            // Identité native et occurrences restent distinctes des six colonnes historiques.
+            let mut occurrence_rows: Vec<serde_json::Value> = r
                 .rows
                 .iter()
-                .map(|row| (0..6).map(|i| texte(row.get(i))).collect())
+                .map(|row| {
+                    serde_json::json!({
+                        "caller_path":texte(row.first()),"line":row.get(1).and_then(|v|v.as_i64()),
+                        "caller_name":texte(row.get(2)),"target_name":texte(row.get(3)),
+                        "target_path":texte(row.get(4)),"resolution":texte(row.get(5)),
+                        "caller_key":texte(row.get(6)),"target_key":texte(row.get(7)),
+                        "caller_uuid":texte(row.get(8)),"target_uuid":texte(row.get(9)),
+                        "caller_start_line":row.get(10).and_then(|v|v.as_i64()),
+                        "caller_end_line":row.get(11).and_then(|v|v.as_i64()),
+                        "target_start_line":row.get(12).and_then(|v|v.as_i64()),
+                        "target_end_line":row.get(13).and_then(|v|v.as_i64()),
+                        "caller_type":texte(row.get(14)),"target_type":texte(row.get(15)),
+                    })
+                })
                 .collect();
-            edge_rows.sort();
-            let jsonl = edge_rows
+            occurrence_rows.sort_by_cached_key(|row| serde_json::to_string(row).unwrap());
+            let jsonl = occurrence_rows
                 .iter()
                 .map(|row| serde_json::to_string(row).unwrap())
                 .collect::<Vec<_>>()
                 .join("\n")
                 + "\n";
             std::fs::write(format!("{prefixe}-{n}.jsonl"), jsonl).unwrap();
+            let edge_rows: Vec<Vec<String>> = r
+                .rows
+                .iter()
+                .map(|row| (0..6).map(|i| texte(row.get(i))).collect())
+                .collect();
             let mut lignes: Vec<String> = edge_rows.iter().map(|row| row.join("\t")).collect();
             lignes.sort();
             std::fs::write(format!("{prefixe}-{n}.tsv"), lignes.join("\n") + "\n").unwrap();
