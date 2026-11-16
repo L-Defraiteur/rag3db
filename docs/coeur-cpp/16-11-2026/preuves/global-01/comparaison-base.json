@@ -1,0 +1,94 @@
+{
+  "base": "68590270e21d00285b29800bd9cdecf0cb921461",
+  "source": "888c81825e4cd6556261233f0e238af3b95375c9",
+  "files": [
+    {
+      "path": "test/transaction/concurrence/known_red.txt",
+      "identical_to_base": true,
+      "sha256": "03bda50a8cc1f0b12f042d5c801758549901a0beeecd86237b1f35f0939ab03f"
+    },
+    {
+      "path": "test/transaction/concurrence/probabilistic.txt",
+      "identical_to_base": true,
+      "sha256": "85c4cd5d4e1d594abd839ae5c028dada58a2a3344d3184d9a3c7b31306883311"
+    },
+    {
+      "path": "test/transaction/concurrence/long.txt",
+      "identical_to_base": true,
+      "sha256": "95fd1f026ca6f635ee287b38d604b880999bdcebb2fe54b605cf75150381ebe4"
+    },
+    {
+      "path": "test/transaction/concurrence/string_rewrite_test.cpp",
+      "identical_to_base": true,
+      "sha256": "9cb4213ebe71f1a01b1b68e808c42510cf56f36d1cd063ed6892f82403fbd2e0"
+    },
+    {
+      "path": "test/transaction/concurrence/checkpoint_no_stall_test.cpp",
+      "identical_to_base": true,
+      "sha256": "08c507b31c3aa1b796fdc6919faa5c3ab417e94c50ba3dcff5817dd69dac8add"
+    }
+  ],
+  "baseline_native_execution": false,
+  "historical_comparison_limits": "ASAN14nov previously reported green is a different build; no baseline runtime replay",
+  "configuration": "Release rcOFF/stOFF/asanOFF/tsanOFF/ubsanOFF/LTOOFF; parent quota500%; j5; MAX_NUM_THREADS2, OMP/OPENBLAS5; CheckpointOpenReader fixture pool2GiB; StringRewrite inherits fixture config, effective pool not logged separately",
+  "reader_checkpoint_ms": 29.5782,
+  "reader_plan_sleep_ms": 30,
+  "slow_known_red_case_completed_s": 695.757,
+  "artifact_manifest": {
+    "source": "888c81825e4cd6556261233f0e238af3b95375c9",
+    "engine": "888c81825e4cd6556261233f0e238af3b95375c9",
+    "build_id_header": "rag3db-build-888c81825e4cd6556261233f0e238af3b95375c9-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF",
+    "files": {
+      "offsets": {
+        "path": "/home/lucied/.cache/rag3weaver-build/cx-coeur-dictionary-global/build/test/transaction/dictionary_append_exception_test",
+        "sha256": "4a131bd6eea758774de8cf40b9627e8106715576726ee668b5f4598798d8a83a",
+        "bytes": 27040896
+      },
+      "transaction": {
+        "path": "/home/lucied/.cache/rag3weaver-build/cx-coeur-dictionary-global/build/test/transaction/transaction_test",
+        "sha256": "a4f74e613e9662cf34f939fe9975836616438490aa7560f3977bf6fc09ccb157",
+        "bytes": 32241664
+      },
+      "concurrence": {
+        "path": "/home/lucied/.cache/rag3weaver-build/cx-coeur-dictionary-global/build/test/transaction/concurrence/concurrence_test",
+        "sha256": "6e349ba560e11672d98f2d02d62f8c2d46b62de4c4e23ff7ef6aebc466d08479",
+        "bytes": 31512432
+      },
+      "e2e": {
+        "path": "/home/lucied/.cache/rag3weaver-build/cx-coeur-dictionary-global/build/test/runner/e2e_test",
+        "sha256": "1f6d381010606d85e728206fdcbd640dc89b00b2181649ca31089e432054f216",
+        "bytes": 27106616
+      },
+      "engine.a": {
+        "path": "/home/lucied/.cache/rag3weaver-build/cx-coeur-dictionary-global/build/src/librag3db.a",
+        "sha256": "6635cdc2e8d746a64c55e20774a86b472ff29c04f93972ad0e0909d27666dd3f",
+        "bytes": 65765564
+      },
+      "vector": {
+        "path": "/home/lucied/.cache/rag3weaver-build/cx-coeur-dictionary-global/source/extension/vector/build/libvector.rag3db_extension",
+        "sha256": "1dc6a09f244255ecf9acbd86fba5a06d35b1769b83d6867487dbafbb7c72a4e9",
+        "bytes": 958256
+      },
+      "geo": {
+        "path": "/home/lucied/.cache/rag3weaver-build/cx-coeur-dictionary-global/source/extension/geo/build/libgeo.rag3db_extension",
+        "sha256": "c03e92531ab7a4d475def55a6a6c5e1d0acf7ce44e93d96e604d350f897eb68a",
+        "bytes": 393872
+      },
+      "build_id.h": {
+        "path": "/home/lucied/.cache/rag3weaver-build/cx-coeur-dictionary-global/build/src/include/common/build_id.h",
+        "sha256": "650cec620083cd70467b41a0f2dad84620c0346b2ba5d16f135ad3591b19f577",
+        "bytes": 227
+      },
+      "CMakeCache.txt": {
+        "path": "/home/lucied/.cache/rag3weaver-build/cx-coeur-dictionary-global/build/CMakeCache.txt",
+        "sha256": "c6a1bec7b67145e8d049df48ee5c83afb6c2454683cc6e6b759aba26b0bdee24",
+        "bytes": 25633
+      },
+      "compile_commands.json": {
+        "path": "/home/lucied/.cache/rag3weaver-build/cx-coeur-dictionary-global/build/compile_commands.json",
+        "sha256": "c9db31fb9e651816fb02166419bd0f104e53de457fbfb4c5a0a3944d8502f771",
+        "bytes": 4096244
+      }
+    }
+  }
+}

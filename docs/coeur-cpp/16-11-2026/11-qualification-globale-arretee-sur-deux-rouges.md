@@ -25,3 +25,9 @@ Le refus natif est conservé dans raw/parsing/first-failure.json ; le superviseu
 [Lecture et empreinte d'archive](preuves/global-01/lecture.json), archive recus-et-resultats.tar.gz dans le même dossier : recettes, inventaire brut, résumé réellement émis, admission/refus/quiescence, XML offsets/transactions, JSON et log natifs de concurrence, manifeste et header. Le paquet complet avec ELF et archive moteur reste aux deux postes, chemins dans lecture.json. **53 fichiers bruts et10 artefacts rehashés localement après rapatriement**, conformes aux empreintes du reçu distant ; aucun journal réécrit.
 
 Le ciblé précédent5/5 ne devient pas une qualification globale. Ticket append et parent C1 restent ouverts. Pas de relance, correction d'oracle, reclassement probabiliste ni modification de known_red sans diagnostic et nouvelle recette coordonnée.
+
+## Comparaison RO avec la base exacte
+
+[Comparaison et empreintes des artefacts](preuves/global-01/comparaison-base.json) : known_red.txt, probabilistic.txt, long.txt et les deux fichiers des nouveaux rouges sont **identiques octet pour octet** entre base685 et source888. Aucun changement de noms, listes ou oracles dans ce lot. Cela n'est pas une exécution native de référence : aucune passe baseline n'a été lancée.
+
+BUILD_ID conservé Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF ; LTOOFF. Environnement tests MAX_NUM_THREADS2, OMP/OPENBLAS5, quota global5cœurs. CheckpointOpenReader impose lui-même pool2Gio ; la valeur effective du pool hérité de StringRewrite n'est pas journalisée séparément. Le vert ASAN historique14nov ne porte donc pas la même configuration. Le log natif du rouge [plan] mesure CHECKPOINT29,5782ms, avec sleep30ms dans le témoin : compatible avec la fenêtre manquée, sans démontrer un défaut moteur. Le cas lent NoWriterWaitsLongDuringTheCreate a finalement terminé en695,757s ; ce n'était pas le motif d'arrêt.
