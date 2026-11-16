@@ -63,3 +63,11 @@ Entrée __main__→configure_controller est désormais sans lecture Q ; launch v
 Le nouveau test compile/exerce le vrai bloc __main__ AST avec les vraies fonctions configure/launch et une sentinelle Path.exists sur Q/launch.json : il cible précisément l’ancien accès avant watchdog. Rouge0c3bd puis13CPU verts après publication annoncés par le porteur, non rejoués ici. AST3 seulement, aucun import/test par Banc.
 
 **Réserves Banc CLI et postfsync levées pour ce code exact, aucun autre blocage statique repéré dans la portée totale déjà examinée.** Le HOLD d’exécution reste jusqu’au paquet/configuration/copies r3 exacts et à la décision finale C7 ; anciennes métadonnées a642/d723 ne qualifient pas ce nouveau code. Attente du pin r3 sans répéter les contrôles anciens, aucun GO600/795, Cargo, natif, autorité, procscan, base ou service lancé.
+
+## Pin final r3 : revue totale Banc favorable, sans admission
+
+Paquet local cx-archi-doc-bac-green-package-r3 :36 tailles/SHA recalculées conformes au manifeste `f803d912f9f24599aaa93d27697fe13e1eb25b6eec0e9dc82858b4d9bb3eb9ec`. Prepared `f0a1ab22aaa4d34787a059135d0e1afb1c5671a3ce27dfa91ba27ffc7a15324a`, configuration `a1249cf2b7232337c5822f932fa4b56662d7a995c8a3b713d2abc94c1836e357`, couple742/01c3 exacts, sept copies conformes. La copie qualify_green.py est identique au blob01c3 déjà relu.
+
+Commandes/politique préparées désignent bien timeout780/KILL15 --arm depuisQr3, puis vrai poste --admit ; pas l’ancien constructeur directement vers poste. Configuration pure780 avant ce chemin, finale postfsync conservée, Common600MAX/final120/795 global, trois rôles stricts et code déjà relu inchangés. Pvide/Fabsent/aucuneautorité/propreté sont des attestations metadata du paquet, pas un nouveau scan PC. Anciennes copies et préparations restent distinctes.
+
+**Avis total préparatoire favorable au code01c3 et à ces pins r3 : réserves Banc levées, aucun autre blocage statique repéré dans ce périmètre.** Cette conclusion remplace le HOLD Banc CLI sur a642, pas les preuves historiques. Décision finale et GO795 exact restent à C7, sans autorité consommée par cette revue. Aucun test/Cargo/natif/ELF/procscan/base/service lancé.
