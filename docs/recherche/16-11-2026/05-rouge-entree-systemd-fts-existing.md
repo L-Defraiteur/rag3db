@@ -13,3 +13,11 @@ Log brut conservé sur PC `~/.cache/rag3weaver-build/cx-launch-recherche-fts-exi
 Contrôle après arrêt : target de session ABSENT, répertoires preuves et superviseur v1 ABSENTS (aucun reçu émis) ; checkout PC source187 propre. `poste --qui` ne montre plus ce pilote, conserve les deux autres lourds TSan/Archi. Leurs ressources n’ont pas été touchées. Aucun accès aux bases/service/modèle.
 
 Suite à arbitrer par C7 après revue du lanceur : nom unique explicite de portée ou primitive HIGH existante, nouvelle entrée distincte seulement. La réserve Document physique malgré redirection publique reste à corriger dans les tests avant le correctif/full. Les cinq témoins demeurent NON JOUÉS ; aucune qualification verte.
+
+## Correction du lanceur avant nouvelle admission
+
+RO C7 : `poste` crée déjà sa portée via systemd-run ; réexécuter systemd-run sans unité distincte réutilise ici le même PID et son nom automatique. La couche imbriquée est supprimée, sans masquer le défaut par un nouveau nom.
+
+Code poste PC/cache et source audité : `MEM=${POSTE_MEM_MAX:-40G}`, `SWAP=${POSTE_SWAP_MAX:-4G}`, puis propriétés MemoryMax, MemorySwapMax et CPUQuota à l’unique portée. Le lanceur pose donc POSTE_MEM_MAX=32G, POSTE_SWAP_MAX=0, POSTE_CPU_QUOTA=800% AVANT poste ; défaut HIGH illimité non abaissé. Le driver recontrôle fraîchement les fichiers cgroup réels (max32/highmax/swap0/quota<=8) et archive ces quatre valeurs. Une propriété manquante refuse avant compilation. Aucun marqueur ou reçu inventé, superviseur commun inchangé.
+
+Témoins hermétiques ajoutés avant essai : le vrai launch.sh exécuté contre un faux poste enregistre exactement un argv poste→python common lancer1200 ; l’attestation réelle extraite AST accepte le profil attendu et refuse chacun des cinq écarts. Ces témoins n’appellent ni systemd, poste réel, Cargo, signal ou /proc réel. Source tests187 inchangée ; aucun nouveau GO déduit.

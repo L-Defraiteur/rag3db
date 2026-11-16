@@ -21,11 +21,18 @@ assert sha(W/'tools/poste/passe_epinglee.sh')==PIN
 assert os.environ['RAG3DB_LIB']==LIB
 assert not any(os.environ.get(k) for k in ['RAG3WEAVER_MOTEUR_ANCIEN','RAG3WEAVER_EMBED_SERVICE','RAG3WEAVER_PG','RAG3WEAVER_TESTS_REPLI_PERIPHERIQUE'])
 cg=Path('/sys/fs/cgroup')/Path('/proc/self/cgroup').read_text().split('0::',1)[1].strip().lstrip('/')
-assert (cg/'memory.max').read_text().strip()=='34359738368'
-assert (cg/'memory.high').read_text().strip()=='max'
+def attest_scope(cgroup):
+ values={key:(cgroup/key).read_text().strip() for key in ['memory.max','memory.high','memory.swap.max','cpu.max']}
+ assert values['memory.max']=='34359738368'
+ assert values['memory.high']=='max'
+ assert values['memory.swap.max']=='0'
+ quota,period=values['cpu.max'].split()
+ assert quota!='max' and 0<int(quota)<=8*int(period)
+ return values
+scope_profile=attest_scope(cg)
 assert int(os.environ['CARGO_BUILD_JOBS'])<=8
 T=Path(os.environ['CARGO_TARGET_DIR']);assert not T.exists(),'new session target unexpectedly exists'
-save('entry.json',dict(source=git('rev-parse','HEAD'),test=TEST,features=['rag3db-native'],target=str(T),deadline=END,cgroup=str(cg),profile={k:os.environ.get(k) for k in ['CARGO_BUILD_JOBS','CARGO_INCREMENTAL','RAG3DB_LIB','RUST_TEST_THREADS','RAG3WEAVER_TARGET_MAX_GO']},pin_sha256=PIN))
+save('entry.json',dict(source=git('rev-parse','HEAD'),test=TEST,features=['rag3db-native'],target=str(T),deadline=END,cgroup=str(cg),scope_profile=scope_profile,profile={k:os.environ.get(k) for k in ['CARGO_BUILD_JOBS','CARGO_INCREMENTAL','RAG3DB_LIB','RUST_TEST_THREADS','RAG3WEAVER_TARGET_MAX_GO']},pin_sha256=PIN))
 def run(name,argv,cap):
  remaining=END-time.monotonic()-5
  assert remaining>0
