@@ -1,0 +1,17 @@
+{
+  "source": "934f3c810ab68530f169090bcb4bdfe152771999",
+  "allocation": "C7-TTY-HARNESS-934F-16nov1200",
+  "archive_two_hosts": "archives/cx-tty-harness-934f-green/evidence.tar",
+  "archive_sha256": "3c361191aa9a1de916d93f209b98c02e316e801e8221fe430ae8add0119fec43",
+  "files": {
+    "composed-verdict.json": "1c6f7d70707b6b32631e74b028617f6670bf110c946f5fced346228cff8ab942",
+    "harness-result.json": "622ca890bcbf6264e190d8ca9e8069fcf154440394a8a7ee87cb1ff613d87ccb",
+    "scope-verdict.json": "0b8bfed93f7cb04ec5aa2c77def2593fd0477af480be3e58fb2e33f80257ec51",
+    "quiet-after-common.json": "6a503f9898cc5dff0e5b1aafb2fc06a453b8439eea2954e683ada5fd15dca569"
+  },
+  "f8_source": "6d886375ea4627c88d28aef918b948a23f628ab1",
+  "f8_result": "CHECK_FEATURES VERT 8/8",
+  "build_elf_sha256": "cb24ce0425bcb2487c83b9e0416a274cbf40585e65743d7327cef430108f031a",
+  "rust_product_unchanged": true,
+  "f8_build_replayed": false
+}

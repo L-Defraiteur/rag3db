@@ -310,3 +310,16 @@ Nouveau Q/P/Sv4 et TMPttyhr4 pour préparation seulement, ancienQv3 et archives
 intacts ; précédent reçu le plus récent j4l20f5g terminé/restes[] conservé,
 ancien reçu flsb10fe reste historique nommé séparément. Aucun budget1200
 accordé par cette préparation, aucune ancienne allocation réactivée.
+
+## Qualification réelle934F complète, avant revue de clôture
+
+GO C7-TTY-HARNESS-934F-16nov1200, source934f3c810a : harnais ENTIER VERT,
+rouges[], phasebangfauxsudo invite/retour/consigne conformes et marqueurFACTICE
+absent de tous les canaux, Kitty2variantes et10couleurs conformes.
+Scope nur8to3w VERT0/erreur null/restes[]/nettoye true, autoritéTERMINÉE ;
+composé VERT/outerrc0 en146,660s dans1200, mêmeT/ELF/SDK contrôlés inchangés.
+Pas de F8/build/Cargo rejoués. Preuves choisies et manifest dans
+`docs/tty/16-11-2026/preuves-harnais-934f/`, bilan05, RAW complet2hosts
+archives/cx-tty-harness-934f-green/evidence.tar SHA3c3611…fec43.
+Ancienrunperdu9d et rouges antérieurs restent tels quels, pas requalifiés.
+Clôture à relire avec l'orchestration ; aucun master/pose/nettoyage autorisé.

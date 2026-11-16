@@ -538,3 +538,20 @@ retrouvée dans le flux brut. L'hôte927 n'a pas été appelé, API réelles non
 Aucun raw terminal/capture/frappe après arrêt inventé ; les chunks étaient en
 mémoire et le faux hôte écrase son journal entre séances. Analyse de source
 seule, aucun essai, metadata, provider, service, correctif ni nouvelle allocation.
+
+### Harnais934F vert mais raccord dynamique anglais restant, avant transmission
+
+Harnais ENTIER VERT/composé VERT0/source934f, F8/build portés, preuves et
+limites dans `docs/tty/16-11-2026/05-bilan-alias-et-harnais.md`. Ne pas fermer
+ce ticket sur ce seul vert de compatibilité : sources_de dans tui.rs ne charge
+le catalogue que pour les préfixes /tache et /depot. Action::Completer lui
+transmet /task et /repo non normalisés ; commandes::completer sait les traiter,
+mais les candidats restent vides. Les tests unitaires injectaient Sources,
+ils n'exerçaient pas ce raccord. Aucun défaut d'exécution des commandes déduit.
+
+Porteur tty, même ticket ; réservation complémentaire **tui.rs nécessaire**
+conformément à l'annonce initiale. Plan : témoin du vrai chemin de collecte,
+rouge avant correctif, puis baser la décision de collecte sur le parseur
+commandes::lire existant plutôt que maintenir une liste de préfixes parallèle.
+Aucun fix ni nouveau test/HTTP/Cargo lancé à cette découverte. SourceRust
+934f/F8/harnessgelés comme preuves, aucune autorisation nouvelle déduite.
