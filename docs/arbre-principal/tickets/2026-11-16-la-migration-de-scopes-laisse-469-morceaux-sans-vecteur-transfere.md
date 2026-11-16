@@ -194,3 +194,22 @@ UNKNOWNglobal non attribué toujours consigné. TroisCPU hermétiquesverts
 0.001s, aucun scan réel/DB/provider. Nouveau Qv2 à préparer ; Qv1 conservé
 sansGO, P/S encore absents. Autres branches et bornes inchangées, pas de
 nouveau runtime autorisé par cette correction.
+
+## AuditRO EDD exécuté : rouge de représentation du juge
+
+GO distinct C7-DEBT-AUDIT-EDD-16nov consommé, piloteedd5f4a988, scope
+validation-1wdottjl, END1190939.194661205. Copie complète fidèle puis148
+lecturesRO ; refus1190497.036858159 sur graph!=référence AVANTFTS/finished.
+ScopeROUGE1/restes[]/nettoyé/autoritéterminée, ownedvivants0/busabsent.
+Aucun autre SQL, aucune reprise ni correction native après rouge.
+
+Défaut du juge établi AVANT diff : les deux fichiers graph JSON relus sont
+ÉGAUX sur toutes sections (38tables/65913liens). audit.snapshot retourne
+tables et paires en tuples runtime ; json.loads de la référence retourne
+des listes. Leur comparaison directe refuse donc sans delta de données.
+Ce rouge n'établit aucune mutation produit ; FTSaprès/dims/marker/debt0
+restent NONJOUÉS, aucune qualification d'écritures/durabilité/shutdown.
+Préparer un témoinCPU du VRAI audit.snapshot et de la VRAIE condition du
+driver, rouge avant fix, puis aligner les représentations persistées sans
+relâcher les valeurs/comptages/multiplicités. Nouveau paquet/RO/GOdistinct
+nécessaires ; résultat et rouge précédents restent conservés.
