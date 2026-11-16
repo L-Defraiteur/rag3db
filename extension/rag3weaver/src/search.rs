@@ -1902,7 +1902,9 @@ pub fn search_bm25_chunked(
         serde_json::from_str(&json_query)
             .map_err(|e| CatalogError::DbError(format!("QueryConfig invalide: {e}")))?;
 
-    let raw = crate::fts_handle::search_hits_with_text(handle, &query_config, limit, allowed_ids)
+    // Every tie of the cut (lucivy's ticket of 16 November 2026), so that the cut below is stable from one base
+    // to another: lucivy breaks ties by document address.
+    let raw = crate::fts_handle::search_hits_with_ties(handle, &query_config, limit, allowed_ids)
         .map_err(CatalogError::DbError)?;
 
     // Avertissements honnêtes du moteur (littéral trop court, regex sans
@@ -1950,8 +1952,12 @@ pub fn search_bm25_chunked(
     // Le chemin lucivy passe par la même mesure de confiance que le chemin
     // natif : c'est ce qui rend le nombre comparable d'un backend à l'autre.
     // lucivy rend du BM25, non borné — on ne peut pas y poser de seuil.
-    let sortie =
+    let mut sortie =
         finish_bm25_chunked(conn, dialect, target, hits, return_fields, result_mode, diagnostics, warnings)?;
+    // The cut, on a stable order: the score, then the uuid, which the content or the key gives and the base does
+    // not (lucivy's order of ties is the documents' address).
+    sortie.sort_by(|a, b| b.score.total_cmp(&a.score).then_with(|| a.uuid.cmp(&b.uuid)));
+    sortie.truncate(limit);
     marquer_la_confiance(query, &sortie, warnings);
     Ok(sortie)
 }
