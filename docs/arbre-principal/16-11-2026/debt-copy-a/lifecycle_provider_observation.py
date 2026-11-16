@@ -39,10 +39,18 @@ def process_snapshot(pid):
     return dict(after, exe_sha256=sha)
 
 
-def _health_worker(deadline):
+def _health_worker(deadline, context):
     """Child: one fixed GET, raw response only, no redirects or environment proxy."""
-    remaining = deadline-time.monotonic()
-    if remaining <= 0: raise ValueError('health deadline before request')
+    _pins(context['pins'])
+    ready = producer._ready(Path(context['ready_path']), context['ready_sha256'], context['nonce'])
+    if ready['phase']['pilot'] != context['pins']['pilot'] or ready['phase']['allocation'] != context['pins']['allocation']:
+        raise ValueError('worker READY admission differs')
+    phase = protocol.read_phase_state(ready)
+    now = time.monotonic()
+    protocol.validate_ready_phase(ready, now, phase)
+    remaining = deadline-now
+    if remaining <= 0 or deadline > ready['grant_deadline_monotonic']-30.:
+        raise ValueError('health deadline before request or beyond READY margin')
     connection = http.client.HTTPConnection('127.0.0.1', 7878, timeout=remaining)
     try:
         connection.request('GET', '/sante')
@@ -54,17 +62,18 @@ def _health_worker(deadline):
         connection.close()
 
 
-def health_get(deadline):
+def health_get(deadline, *, ready_path, ready_sha256, nonce, pins):
     """Parent bounds the whole worker, including DNS-free connect/headers/body."""
     remaining = deadline-time.monotonic()
     if remaining <= 0: raise ValueError('health deadline before child')
     child = subprocess.Popen([sys.executable, '-B', str(Path(__file__).resolve()),
                               '--health-worker', str(deadline)],
-                             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
     try:
         remaining = deadline-time.monotonic()
         if remaining <= 0: raise subprocess.TimeoutExpired(child.args, 0)
-        out, err = child.communicate(timeout=remaining)
+        context = dict(ready_path=str(ready_path), ready_sha256=ready_sha256, nonce=nonce, pins=pins)
+        out, err = child.communicate(input=json.dumps(context, allow_nan=False).encode(), timeout=remaining)
     except BaseException:
         child.kill()
         child.communicate()
@@ -87,6 +96,8 @@ def _pins(pins):
     for name, module in [('protocol_sha256', protocol), ('producer_sha256', producer)]:
         if digest(module.__file__) != pins.get(name):
             raise ValueError('shared admitted source hash changed')
+    if digest(__file__) != pins.get('observation_sha256'):
+        raise ValueError('owner observation source hash changed')
     expected = pins.get('expected_process', {})
     if set(expected) != {'pid', 'uid', 'start', 'exe', 'exe_sha256'}:
         raise ValueError('complete expected provider process pin required')
@@ -114,7 +125,7 @@ def _pins(pins):
 def publish_observed_grant(ready_path, destination, *, expected_ready_sha256,
                            expected_nonce, pins, evidence_path,
                            clock=time.monotonic, phase_reader=protocol.read_phase_state,
-                           process_reader=process_snapshot, get_health=health_get):
+                           process_reader=process_snapshot, get_health=None):
     """Owner supplies immutable admission pins; producer margin is always 30 s.
 
     Admission expiry, HTTP's <=5 s budget and the receipt lease are distinct.
@@ -124,9 +135,20 @@ def publish_observed_grant(ready_path, destination, *, expected_ready_sha256,
     evidence_path = Path(evidence_path)
     if evidence_path.exists() or evidence_path.is_symlink():
         raise FileExistsError('fresh owner evidence required')
+    pins = protocol.decode(json.dumps(pins, allow_nan=False))
+    if get_health is None:
+        def get_health(deadline):
+            return health_get(deadline, ready_path=ready_path, ready_sha256=expected_ready_sha256,
+                              nonce=expected_nonce, pins=pins)
     record = dict(kind='LIFECYCLE_NO_EMBEDDING_OWNER_OBSERVATION',
                   no_embedding_calls_authorized=True, health_margin=30,
                   total_rpc_count='unknown; usage0 is not a total RPC counter')
+
+    def persist():
+        with evidence_path.open('x') as out:
+            json.dump(record, out, indent=2, allow_nan=False)
+            out.flush()
+            os.fsync(out.fileno())
 
     def observe(ready):
         if ready['phase']['pilot'] != pins['pilot'] or ready['phase']['allocation'] != pins['allocation']:
@@ -153,7 +175,19 @@ def publish_observed_grant(ready_path, destination, *, expected_ready_sha256,
         usage = health.get('usage', {})
         if not isinstance(usage, dict) or any(type(usage.get(k)) is not int or usage[k] != 0 for k in ['baux', 'en_cours']):
             raise ValueError('provider usage is active or unknown')
+        phase = phase_reader(ready)
         observed = clock()
+        protocol.validate_ready_phase(ready, observed, phase)
+        if observed >= due: raise ValueError('total health deadline exceeded')
+        after = process_reader(pins['expected_process']['pid'])
+        record['process_after'] = after
+        _validate_process(after, pins['expected_process'])
+        _pins(pins)
+        phase = phase_reader(ready)
+        observed = clock()
+        protocol.validate_ready_phase(ready, observed, phase)
+        if observed >= due: raise ValueError('total observation deadline exceeded')
+        record['health_finished_monotonic'] = observed
         until = min(ready['deadline']-480., observed+230.)
         if until <= observed+20: raise ValueError('receipt lease lacks post-health reserve')
         grant = dict(provider='127.0.0.1:7878', model='granite-278m', dimension=768,
@@ -163,7 +197,8 @@ def publish_observed_grant(ready_path, destination, *, expected_ready_sha256,
                      exe_sha256=before['exe_sha256'], identity=dict(pins['identity']),
                      nonce=ready['nonce'], ready_sha256=expected_ready_sha256,
                      no_embedding_calls_authorized=True)
-        record['grant'] = grant
+        record.update(grant=grant, result='OBSERVED_NOT_YET_GRANTED')
+        persist()  # Raw observations must exist BEFORE the producer exposes the grant.
         return grant
     try:
         grant = producer.publish_grant(
@@ -177,10 +212,7 @@ def publish_observed_grant(ready_path, destination, *, expected_ready_sha256,
         record.update(result='REFUSED', error_type=type(error).__name__)
         raise
     finally:
-        with evidence_path.open('x') as out:
-            json.dump(record, out, indent=2, allow_nan=False)
-            out.flush()
-            os.fsync(out.fileno())
+        if not evidence_path.exists(): persist()
 
 
 if __name__ == '__main__':
@@ -194,7 +226,7 @@ if __name__ == '__main__':
     parser.add_argument('--evidence')
     args = parser.parse_args()
     if args.health_worker is not None:
-        _health_worker(args.health_worker)
+        _health_worker(args.health_worker, protocol.decode(sys.stdin.buffer.read(131073)))
     else:
         if not all([args.ready, args.destination, args.pins, args.ready_sha256, args.nonce, args.evidence]):
             parser.error('all immutable admission arguments are required')
