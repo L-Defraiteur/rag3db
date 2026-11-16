@@ -55,22 +55,27 @@ class TestResult:
 
 
 def _user_history_state():
-    path = os.path.join(os.path.expanduser("~"), ".rag3db", "history.txt")
-    if not os.path.exists(path):
-        return None
-    with open(path, "rb") as f:
-        return hashlib.sha256(f.read()).hexdigest()
+    """The histories a shell without `-p` would use: history.txt in its working directory (which it prefers when it
+    exists), else the user's ~/.rag3db/history.txt."""
+    state = {}
+    for path in (os.path.join(os.getcwd(), "history.txt"), os.path.join(os.path.expanduser("~"), ".rag3db", "history.txt")):
+        if os.path.exists(path):
+            with open(path, "rb") as f:
+                state[path] = hashlib.sha256(f.read()).hexdigest()
+        else:
+            state[path] = None
+    return state
 
 
 @pytest.fixture(scope="session", autouse=True)
 def user_history_untouched():
-    """The suite leaves the user's ~/.rag3db/history.txt as it found it: a shell under test keeps its own history."""
+    """The suite leaves the shared histories as it found them: a shell under test keeps its own history (-p)."""
     before = _user_history_state()
     yield
     after = _user_history_state()
-    assert after == before, (
-        "[check: shell-tests-own-history] the suite changed ~/.rag3db/history.txt "
-        f"({before} -> {after}): a ShellTest ran without its own history (-p)"
+    changed = [p for p in before if before[p] != after[p]]
+    assert not changed, (
+        f"[check: shell-tests-own-history] the suite changed {changed}: a ShellTest ran without its own history (-p)"
     )
 
 
