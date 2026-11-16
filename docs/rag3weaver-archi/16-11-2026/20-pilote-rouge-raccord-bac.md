@@ -9,7 +9,8 @@ complète reste en préparation ; cette recette ne vaut pas GO ni qualification.
 
 ## Préparation et conservation, avant admission
 
-Le script `prepare_git.py` est PUBLIÉ pour revue, NONEXÉCUTÉ. Il exige le
+Le script `prepare_git.py` a été publié pour revue avant exécution ; la
+préparation Git autorisée est maintenant acquise (résultat ci-dessous). Il exige le
 sourcePC1bd propre au chemin propriétaire canonique, le vertb12 clos et ses
 36preuves réhachées, ELF734 original/copie, tous owned historiques disparus,
 ancien état racine et enfantcache inchangés. Il prépare une VRAIE archive1bd
@@ -121,8 +122,9 @@ Six témoins hermétiques écrits **NONJOUÉS** : classification réelle des
 deux formes du harnais, refus compilateur/zérojuge/autrenom/autrepanic,
 profil privé/jobs/allocationinvalide, vrai résultat retardé aprèsopen et vrai
 constructeur commandes/politique. Ils ne lancent aucun processus de validation.
-AST seulement et diffcheck à publier avec les hashes ; aucun Cargo, garde,
-test Rust, P/Q/runtimePC, sourcePC ou autorité consommé par cette préparation.
+À la publication initiale81d066 : AST seulement et diffcheck, aucun Cargo,
+garde, test Rust, P/Q/runtimePC, sourcePC ou autorité consommé. Les étapes
+ultérieures autorisées sont consignées ci-dessous séparément.
 
 ## Historique CPU du contrat1920, ensuite remplacé
 
@@ -164,3 +166,30 @@ RAW/codeversions horsW `cx-archi-doc-bac-red-cpu-d195`, manifesteSHA
 `062a4584a710214695b9d54e3ab61807178125326869336658a5fd35e435b69b`.
 Ancien rouge08523/e4bbdc inchangé, contrat1920dur remplacé explicitement.
 Pas de résultat natif, de garde réelle ou d'autorité consommée.
+
+## Préparation Git PC acquise, avant Q final
+
+Sous pilote bootstrap1423ea4af3 (code strictement d195), préparation Git
+seule autorisée C7 : **rc0/14,753362389s** sous timeout180. SourcePC branche
+NEUVE `cx-archi-doc-bac-witness-pc-r1` àAPP049, source/propre/gitlinkbd133850 ;
+pilotePC initial1423 propre, gitlinkbd133850 initialisé. Vraie archive1bd
+`~/git_workspaces/rag3db-cx-archi-doc-1bd-proof-r1`, detached/admin/gitlink
+indépendants/fulltrackedSHA égaux avant transition. ArchiveEA, ancienELF734,
+preuveverte36fa7f et refs distantes1bd/EA intacts.78identités historiques
+disparues/aucunUNKNOWNowned. Aucun Cargo/garde/invalidation/targetmodifié.
+
+CinqJSON PC/local réhachés0écart, répertoire
+`~/.cache/rag3weaver-build/cx-doc-bac-red-transition-r1` et suffixe-local,
+[manifest](doc-bac-red-transition-r1-manifest.json), SHA
+`9e6d04a43c7d2765117e8f4a0e917b7798c3f968c08400e906e8efd6484216ca` :
+
+- cache-before-git == cache-after-git : `ed75c3e084459fe966db570da8c033dbd219e4af794589b3c96fbb2a0ff989f8` ;
+- frozen-source1bd : `994dc11b2d050699fd8e6fe842d9613f6dc2d86d672b1c5df209bfdf7a833c2a` ;
+- new-source049 : `c5f155f215bf63d49c9a088d26c294bbfcd0b4d1a5764c1c4da7a315cec1e564` ;
+- transition : `e865ebf62e03fae4e729a06379e48053b6d41a9ac27b8fce274dc76b0456f1fa`.
+
+Enfant Tdevice55/inode164550643/UID1000/propriétaireC canonique conservés.
+P/Q/F étaient absents à cette étape. RAW Git horsW
+`cx-doc-bac-red-preparation-1423` et suffixe-local. Après publication de ces
+preuves, FFdocseule du pilotePC sur le pin final puis --prepare/Q/copieshash
+restent la préparation déjà autorisée ; aucun natif avant GOdistinct.
