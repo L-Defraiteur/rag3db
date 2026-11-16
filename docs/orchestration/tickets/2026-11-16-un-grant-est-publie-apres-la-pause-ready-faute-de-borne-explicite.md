@@ -1,7 +1,7 @@
 # Un grant est publié après la pause READY faute de borne explicite
 
 - **État** : ouvert, 16 novembre 2026 ; incident observé sur le cycle privé B5, aucune action writer autorisée par le grant tardif.
-- **Famille** : outillage
+- **Famille** : produit
 - **Gravité** : P1 de coordination de validation, borne de phase non attestée côté producteur.
 - **Atteignable en service** : non, pilote de qualification sur copie privée et coordination des services.
 - **Touche rag3weaver** : oui, indirectement par ses pilotes et preuves ; aucun correctif produit demandé.

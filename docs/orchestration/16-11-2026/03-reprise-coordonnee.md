@@ -539,3 +539,5 @@ Codeparsers paire P02 : ROtotaleBanc favorable, onze CPUhermétiques verts ; att
 
 
 Retour du contrôle : Lucivy a reçu le GO et démarre sa seule qualification mémoire ; Recherche accuse attente horsposte de sa restitution, sans allocation. ED actif sur classifierRAW54preuves2postes. Cœur reste systemError après message de reprise : travail RO non repris, aucune nouvelle exécution ; ne pas annoncer sa reprise comme réalisée. Archi a retransmis par erreur un ancien message776/4fca du13 : réancrage16 source742/deuxrouges223/72338 et anciens GO/délais expressément nonréactivables envoyé immédiatement, aucune admission donnée sur l’historique. Couple Arbre b9e5 reçoit RORecherche source favorable, pinPC encore en préparation, pasGO.
+
+Contrôle documentaire : check_tickets a refusé la famille « outillage » du ticket READYbe3 (seules moteur/produit admises). En-tête rectifié en produit ; périmètre reste explicitement pilote de qualification, non atteignable en service. Aucun constat fonctionnel ni clôture modifié. Hotfix contratROWSpublié ebcd3d46df, chemins encore proposés/nonréservés, poursuite lectureRO avant éventuel élargissement persistant.
