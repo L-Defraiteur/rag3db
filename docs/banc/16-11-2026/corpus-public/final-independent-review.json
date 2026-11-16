@@ -1,0 +1,446 @@
+{
+  "rows": 32382,
+  "results_sha256": "0667eab18d7892b442b8b912d98528d1253041620f43c60a286b47cd5fa81678",
+  "binary_sha256": "bff1cafb72e8c6662d2d595457b0ca6da4718686ae64b91ae1bde7a4e95565e2",
+  "manifest_sha256": "96c2e771fefc4cd0e204975feb8d1c73b1a66815cb1d3a1edc1b9002b94b644c",
+  "per_language": {
+    "c": {
+      "rows": 2500,
+      "execution:completed": 2499,
+      "routing:supported": 2499,
+      "ast:valid": 2408,
+      "captures:nonempty": 2498,
+      "ast:invalid": 91,
+      "captures:empty": 1,
+      "execution:worker_exit": 1,
+      "routing:unknown": 1,
+      "ast:unknown": 1,
+      "captures:unknown": 1
+    },
+    "cpp": {
+      "rows": 2500,
+      "execution:completed": 2500,
+      "routing:supported": 2500,
+      "ast:valid": 2494,
+      "captures:nonempty": 2500,
+      "ast:invalid": 6
+    },
+    "csharp": {
+      "rows": 2500,
+      "execution:completed": 2499,
+      "routing:supported": 2499,
+      "ast:valid": 2495,
+      "captures:nonempty": 2499,
+      "ast:invalid": 4,
+      "execution:timeout": 1,
+      "routing:unknown": 1,
+      "ast:unknown": 1,
+      "captures:unknown": 1
+    },
+    "css": {
+      "rows": 1041,
+      "execution:completed": 1041,
+      "routing:supported": 1041,
+      "ast:not_exposed": 1041,
+      "captures:nonempty": 1025,
+      "captures:empty": 16
+    },
+    "go": {
+      "rows": 2500,
+      "execution:completed": 2500,
+      "routing:supported": 2500,
+      "ast:valid": 2499,
+      "captures:nonempty": 2500,
+      "ast:invalid": 1
+    },
+    "html": {
+      "rows": 1761,
+      "execution:not_attempted": 1761,
+      "routing:unimplemented": 1761,
+      "ast:unknown": 1761,
+      "captures:unknown": 1761
+    },
+    "javascript": {
+      "rows": 2500,
+      "execution:completed": 2500,
+      "routing:supported": 2500,
+      "ast:valid": 2500,
+      "captures:nonempty": 2499,
+      "captures:empty": 1
+    },
+    "markdown": {
+      "rows": 2500,
+      "execution:completed": 2500,
+      "routing:supported": 2500,
+      "ast:not_exposed": 2500,
+      "captures:nonempty": 2393,
+      "captures:empty": 107
+    },
+    "mdx": {
+      "rows": 211,
+      "execution:completed": 211,
+      "routing:supported": 211,
+      "ast:not_exposed": 211,
+      "captures:nonempty": 208,
+      "captures:empty": 3
+    },
+    "python": {
+      "rows": 2500,
+      "execution:completed": 2500,
+      "routing:supported": 2500,
+      "ast:valid": 2500,
+      "captures:nonempty": 2443,
+      "captures:empty": 57
+    },
+    "rust": {
+      "rows": 2441,
+      "execution:completed": 2440,
+      "routing:supported": 2440,
+      "ast:valid": 2437,
+      "captures:nonempty": 2424,
+      "execution:timeout": 1,
+      "routing:unknown": 1,
+      "ast:unknown": 1,
+      "captures:unknown": 1,
+      "captures:empty": 16,
+      "ast:invalid": 3
+    },
+    "sass": {
+      "rows": 267,
+      "execution:completed": 267,
+      "routing:supported": 267,
+      "ast:not_exposed": 267,
+      "captures:nonempty": 216,
+      "captures:empty": 51
+    },
+    "scss": {
+      "rows": 1661,
+      "execution:completed": 1661,
+      "routing:supported": 1661,
+      "ast:not_exposed": 1661,
+      "captures:nonempty": 1607,
+      "captures:empty": 54
+    },
+    "svelte": {
+      "rows": 2500,
+      "execution:not_attempted": 2500,
+      "routing:unimplemented": 2500,
+      "ast:unknown": 2500,
+      "captures:unknown": 2500
+    },
+    "typescript": {
+      "rows": 2500,
+      "execution:completed": 2497,
+      "routing:supported": 2497,
+      "ast:valid": 2497,
+      "captures:nonempty": 2496,
+      "captures:empty": 1,
+      "execution:timeout": 3,
+      "routing:unknown": 3,
+      "ast:unknown": 3,
+      "captures:unknown": 3
+    },
+    "vue": {
+      "rows": 2500,
+      "execution:completed": 2500,
+      "routing:supported": 2500,
+      "ast:not_exposed": 2500,
+      "captures:nonempty": 2500
+    }
+  },
+  "explicit_generated_584": {
+    "c": {
+      "rows": 329,
+      "execution:completed": 329,
+      "routing:supported": 329,
+      "ast:invalid": 79,
+      "captures:nonempty": 329,
+      "ast:valid": 250
+    },
+    "cpp": {
+      "rows": 255,
+      "execution:completed": 255,
+      "routing:supported": 255,
+      "ast:valid": 255,
+      "captures:nonempty": 255
+    }
+  },
+  "other_rows_not_asserted_all_manual": {
+    "c": {
+      "rows": 2171,
+      "execution:completed": 2170,
+      "routing:supported": 2170,
+      "ast:valid": 2158,
+      "captures:nonempty": 2169,
+      "ast:invalid": 12,
+      "captures:empty": 1,
+      "execution:worker_exit": 1,
+      "routing:unknown": 1,
+      "ast:unknown": 1,
+      "captures:unknown": 1
+    },
+    "cpp": {
+      "rows": 2245,
+      "execution:completed": 2245,
+      "routing:supported": 2245,
+      "ast:valid": 2239,
+      "captures:nonempty": 2245,
+      "ast:invalid": 6
+    },
+    "csharp": {
+      "rows": 2500,
+      "execution:completed": 2499,
+      "routing:supported": 2499,
+      "ast:valid": 2495,
+      "captures:nonempty": 2499,
+      "ast:invalid": 4,
+      "execution:timeout": 1,
+      "routing:unknown": 1,
+      "ast:unknown": 1,
+      "captures:unknown": 1
+    },
+    "css": {
+      "rows": 1041,
+      "execution:completed": 1041,
+      "routing:supported": 1041,
+      "ast:not_exposed": 1041,
+      "captures:nonempty": 1025,
+      "captures:empty": 16
+    },
+    "go": {
+      "rows": 2500,
+      "execution:completed": 2500,
+      "routing:supported": 2500,
+      "ast:valid": 2499,
+      "captures:nonempty": 2500,
+      "ast:invalid": 1
+    },
+    "html": {
+      "rows": 1761,
+      "execution:not_attempted": 1761,
+      "routing:unimplemented": 1761,
+      "ast:unknown": 1761,
+      "captures:unknown": 1761
+    },
+    "javascript": {
+      "rows": 2500,
+      "execution:completed": 2500,
+      "routing:supported": 2500,
+      "ast:valid": 2500,
+      "captures:nonempty": 2499,
+      "captures:empty": 1
+    },
+    "markdown": {
+      "rows": 2500,
+      "execution:completed": 2500,
+      "routing:supported": 2500,
+      "ast:not_exposed": 2500,
+      "captures:nonempty": 2393,
+      "captures:empty": 107
+    },
+    "mdx": {
+      "rows": 211,
+      "execution:completed": 211,
+      "routing:supported": 211,
+      "ast:not_exposed": 211,
+      "captures:nonempty": 208,
+      "captures:empty": 3
+    },
+    "python": {
+      "rows": 2500,
+      "execution:completed": 2500,
+      "routing:supported": 2500,
+      "ast:valid": 2500,
+      "captures:nonempty": 2443,
+      "captures:empty": 57
+    },
+    "rust": {
+      "rows": 2441,
+      "execution:completed": 2440,
+      "routing:supported": 2440,
+      "ast:valid": 2437,
+      "captures:nonempty": 2424,
+      "execution:timeout": 1,
+      "routing:unknown": 1,
+      "ast:unknown": 1,
+      "captures:unknown": 1,
+      "captures:empty": 16,
+      "ast:invalid": 3
+    },
+    "sass": {
+      "rows": 267,
+      "execution:completed": 267,
+      "routing:supported": 267,
+      "ast:not_exposed": 267,
+      "captures:nonempty": 216,
+      "captures:empty": 51
+    },
+    "scss": {
+      "rows": 1661,
+      "execution:completed": 1661,
+      "routing:supported": 1661,
+      "ast:not_exposed": 1661,
+      "captures:nonempty": 1607,
+      "captures:empty": 54
+    },
+    "svelte": {
+      "rows": 2500,
+      "execution:not_attempted": 2500,
+      "routing:unimplemented": 2500,
+      "ast:unknown": 2500,
+      "captures:unknown": 2500
+    },
+    "typescript": {
+      "rows": 2500,
+      "execution:completed": 2497,
+      "routing:supported": 2497,
+      "ast:valid": 2497,
+      "captures:nonempty": 2496,
+      "captures:empty": 1,
+      "execution:timeout": 3,
+      "routing:unknown": 3,
+      "ast:unknown": 3,
+      "captures:unknown": 3
+    },
+    "vue": {
+      "rows": 2500,
+      "execution:completed": 2500,
+      "routing:supported": 2500,
+      "ast:not_exposed": 2500,
+      "captures:nonempty": 2500
+    }
+  },
+  "execution_faults": [
+    {
+      "input": {
+        "facade": "scope",
+        "language": "c",
+        "license_id": "Apache-2.0",
+        "license_path": "LICENSE.txt",
+        "relative_path": "ssl/s3_lib.c",
+        "repository_commit": "899d0ca02559e105b9cb30964e3478dfbd8c4578",
+        "repository_id": "github.com/openssl/openssl@899d0ca02559e105b9cb30964e3478dfbd8c4578",
+        "repository_url": "https://github.com/openssl/openssl",
+        "sha256": "38036ad0cc36536c11f1580d79206239d378c20aa9806e670cbb3b8ee3d27d47",
+        "size_bytes": 149934,
+        "stratum": "production"
+      },
+      "measurement": {
+        "execution_status": "worker_exit",
+        "diagnostic": "no retry",
+        "elapsed_ns": null
+      },
+      "sequence": 2258
+    },
+    {
+      "input": {
+        "facade": "scope",
+        "language": "csharp",
+        "license_id": "MIT",
+        "license_path": "License.txt",
+        "relative_path": "src/Compilers/VisualBasic/Test/Semantic/Binding/T_1247520.cs",
+        "repository_commit": "c6dae7dd4f51cef1680c6b23ab614394d6989a69",
+        "repository_id": "github.com/dotnet/roslyn@c6dae7dd4f51cef1680c6b23ab614394d6989a69",
+        "repository_url": "https://github.com/dotnet/roslyn",
+        "sha256": "924579c01284e0020f121e3d80592d3f14b960078bf2de495546811f2de29847",
+        "size_bytes": 787111,
+        "stratum": "test"
+      },
+      "measurement": {
+        "execution_status": "timeout",
+        "diagnostic": "no retry",
+        "elapsed_ns": null
+      },
+      "sequence": 5578
+    },
+    {
+      "input": {
+        "facade": "scope",
+        "language": "rust",
+        "license_id": "Apache-2.0",
+        "license_path": "LICENSE-APACHE",
+        "relative_path": "crates/hir/src/lib.rs",
+        "repository_commit": "15d97b98eacfad690e81757e867ca0800f1c9e07",
+        "repository_id": "github.com/rust-lang/rust-analyzer@15d97b98eacfad690e81757e867ca0800f1c9e07",
+        "repository_url": "https://github.com/rust-lang/rust-analyzer",
+        "sha256": "3ce10e550720d2d1d3c8152acea0c568c46e4f05a5bd31729f84bcc2093bd0f5",
+        "size_bytes": 231120,
+        "stratum": "production"
+      },
+      "measurement": {
+        "execution_status": "timeout",
+        "diagnostic": "no retry",
+        "elapsed_ns": null
+      },
+      "sequence": 20883
+    },
+    {
+      "input": {
+        "facade": "scope",
+        "language": "typescript",
+        "license_id": "MIT",
+        "license_path": "LICENSE.txt",
+        "relative_path": "src/vs/platform/agentHost/test/node/claudeAgent.test.ts",
+        "repository_commit": "6e68549edb69380c9316e49df5d3795d5064a2b0",
+        "repository_id": "github.com/microsoft/vscode@6e68549edb69380c9316e49df5d3795d5064a2b0",
+        "repository_url": "https://github.com/microsoft/vscode",
+        "sha256": "81b78deea19efab8bba474cd5bdcee37eb3951002896caffdca766efaa71838f",
+        "size_bytes": 588495,
+        "stratum": "test"
+      },
+      "measurement": {
+        "execution_status": "timeout",
+        "diagnostic": "no retry",
+        "elapsed_ns": null
+      },
+      "sequence": 28613
+    },
+    {
+      "input": {
+        "facade": "scope",
+        "language": "typescript",
+        "license_id": "MIT",
+        "license_path": "LICENSE.txt",
+        "relative_path": "src/vs/workbench/contrib/chat/browser/widget/input/chatInputPart.ts",
+        "repository_commit": "6e68549edb69380c9316e49df5d3795d5064a2b0",
+        "repository_id": "github.com/microsoft/vscode@6e68549edb69380c9316e49df5d3795d5064a2b0",
+        "repository_url": "https://github.com/microsoft/vscode",
+        "sha256": "c8667e7d6186189d231ad853f0df1e9baa63dfcb731a7fc3725b55b90aa6f626",
+        "size_bytes": 307069,
+        "stratum": "production"
+      },
+      "measurement": {
+        "execution_status": "timeout",
+        "diagnostic": "no retry",
+        "elapsed_ns": null
+      },
+      "sequence": 29069
+    },
+    {
+      "input": {
+        "facade": "scope",
+        "language": "typescript",
+        "license_id": "MIT",
+        "license_path": "LICENSE.txt",
+        "relative_path": "src/vs/workbench/contrib/sessions/browser/views/sessionsList.ts",
+        "repository_commit": "6e68549edb69380c9316e49df5d3795d5064a2b0",
+        "repository_id": "github.com/microsoft/vscode@6e68549edb69380c9316e49df5d3795d5064a2b0",
+        "repository_url": "https://github.com/microsoft/vscode",
+        "sha256": "9f96b488f6ff15bd2bf95fb5eb8ca1ede20a4f13fa8a0deae6de3d2398e1558e",
+        "size_bytes": 527289,
+        "stratum": "production"
+      },
+      "measurement": {
+        "execution_status": "timeout",
+        "diagnostic": "no retry",
+        "elapsed_ns": null
+      },
+      "sequence": 29325
+    }
+  ],
+  "per_file_provenance_absent_on_execution_failures": 6,
+  "failure_provenance_limit": "failure rows bind identity through input+sequence and the campaign-level ELF receipt, not per-file worker provenance",
+  "coverage_status": "unjudged",
+  "scope_completion_verified_separately": true,
+  "reparse_executed": false
+}
