@@ -1,0 +1,27 @@
+{
+  "master": "99fef92ce6ee9a0007eaf99c7c3a6a3789061c57",
+  "source": "7425375d66a64b0782672225c59516f048682b00",
+  "candidate_product": "5edb2917e1ba86eb65518c415c0973ae17699e3e",
+  "previous_master": "bef0b27cb33b9143dabee019fccdf7453da553a3",
+  "product_files": {
+    "extension/rag3weaver/src/daemon_host/chat_qui_code.rs": "100644 blob 1255336d28278465f105f6191ac61774b963483d",
+    "extension/rag3weaver/src/daemon_host/teammate.rs": "100644 blob 05e139b37a80519d886ce002ec261a0009d45bcc",
+    "extension/rag3weaver/src/daemon_host/teammate_tests.rs": "100644 blob 62969c3d43e8c5f107541b99f22ebf528f4db832",
+    "extension/rag3weaver/tests/common/documentation_fixture.rs": "100644 blob f0e3500381c549f995822a3f4667ffe592d2ed7e",
+    "extension/rag3weaver/tests/e2e_equipier.rs": "100644 blob 8876098bf7363b01ffe79e7a220257a0c1583358"
+  },
+  "protected_universe": 6913,
+  "protected_delta": 0,
+  "protected_sha256": "c50c0e353b6763c80e2092cd03d5d4517d682720cb519c0bdcbff6100d48c6c0",
+  "incoming_product": {
+    "extension/rag3weaver/src/codex_threads.rs": "100644 blob 8ad670824e4700cd5535cee16bb732704df07fbc",
+    "extension/rag3weaver/src/gcp_auth.rs": "100644 blob eb072b737bf98814068a19b42c36ab4eca6f1f32",
+    "extension/rag3weaver/src/model_source.rs": "100644 blob 13769b075f9c88e2ac682f3b5a5a5de2a1f2a024",
+    "extension/rag3weaver/src/openai_llm.rs": "100644 blob f78c525c72910f65b62d09ffd75304474ba636cf",
+    "extension/rag3weaver/src/openai_llm/vertex_refresh_tests.rs": "100644 blob 4cfbaa5b22aa74f9ba08cc48be8bef5a1515dab9"
+  },
+  "incoming_preserved": true,
+  "gitlink": "160000 commit bd133850f89d6b12a3ca2b2f6ce238785ed37e3a",
+  "no_cargo": true,
+  "no_runtime": true
+}

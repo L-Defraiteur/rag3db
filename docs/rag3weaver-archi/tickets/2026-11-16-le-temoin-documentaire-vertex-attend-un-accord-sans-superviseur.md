@@ -90,3 +90,15 @@ GOexactDDE6 closROUGEINATTENDU : libcompile0 puis Cargo refuse targete2e_equipie
 Reprise GOexact223/72338 acquise après montagecorrigé etRO : rapport22/2111SHA9d82deuxpostes0écart/fixturesCOMPLÈTES+2ELF, ledgerpub1197104AVANTmarker/juges. DEUXrougesprécis réellementvus (2juges4invocs, chaqueparent+enfant0/1/0), firstredexpectedimmutable, scopeROUGE101/0restes/TERMINE/bus+cggone, final1830,931sdepuisSTARTORIGINAL<1935sansreset ; post130ownedgone/11UNKNOWNglobauxconservés. Avanttoutdiff suivant, archive etprésentticketpubliés. C7 autorise CORRECTIFTESTS commun AVANTadd_files/commitHEAD viaSandboxConfig existant/extrareadQ/targetsprivés, sansprodAPI/registry/race/setenvglobal ; publier UNAPP+protocole2verts/recette puisROavantnouveauGOdistinct/fenêtreNEUVE. Source223/049/1bd etanciensrouges restentfigés, aucunancienEND/GOréactivé. D6/7200/Vertexréel/F8/libentière/NAVencoreNONJOUÉS.
 
 CorrectifTESTS préparé après preuvepub480604 etrattachementce4dd8 AVANTcode : rapport23, helperpartagé cfgtest connect_declared_sandbox<realSandboxConfig>, absenceFILE=>normalinchangé ; fichier/targetrootcanoniques, Landlock/réseaufermé/extra_writevide/approval/tokensrepo_target+tasktmp/offline/jobsMINposte validés, injectionVERBATIM avantwrite/add_files/commitHEAD. Deuxvraissetups appelants mêmehelper, aucuneAPIprod. Parent déclaretargetprivéVIDE parCommand.env/j1sanssetenvglobal ; enfantassertmanifest+HEAD puistracepositivefiltrée, parentrendstdoutenfantpourprouver4invocsvertes. Protocole2verts1/0/0chaqueparentenfant+recetteNEUVE1800MAX/global1935proposés,NATIFNONJOUÉ/ancienGOexpiré. NouveauAPPsource/RO puispilote/GOdistinct nécessaires, ticketOUVERT.
+
+### Reprise de préparation globale après suffisance ciblée C7
+
+C7 accepte la suffisance cibléea4a2/07fc (deux ROfavorables), puis autorise
+PRÉPAseule unionneuve master99fef92+source742 et recetteglobale/D6. Branche/WT
+cx-archi-pas-va-au-bout-union-r2 ; rapport31/audit6913protégés0écart/5produits
+modeOID==742/11patcheségaux ; nouveaux entrants Mem/B0/Vertex conservés.
+Rapport32 propose SandboxConfig réel/Qextra_read/targetsprivés AVANT création
+Task(ouvrir_une_tache_nommee)/D6 distinct/2150+6439+SDK59/baselineT0trusted+
+freshpostroles/guardold→new. Proposition7200Common/7455physique à arbitrer,
+aucun GO ni pilote concret global ni Cargo/Vertex/service/PCtransition encore.
+Sources742/P01c3/T/72preuves restent figés ; ticketOUVERT et suite à C7.
