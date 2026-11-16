@@ -131,3 +131,26 @@ si C7 le décide. Ressources et premier rouge conservés sans nettoyage.
 Suite distincte tracée avant transmission : [fils profilTMP/socket](2026-11-16-le-profil-tmp-prive-depasse-la-longueur-des-sockets-des-temoins-du-pont.md).
 Aucun ticket des sept instables ED ne porte ce cas précis. STOP confirmé C7,
 aucune modification du helper ni nouveau budget autorisé avant diagnosticRO.
+
+## Reprise v2 : canonique verte, seconde lib rouge — avant toute correction
+
+Couple APP734087/PILOTEf7ef exécuté au GO conditionnel C7 aprèsACKfraisEmbar.
+MêmeINITIAL/ENDoriginal ; reçuozbiuey5 borné1186772.644046987. TMPcourt
+R/m-0fdabc6d31 surdisque0700/UID1000/byteguard89 ; canonique entièreVERTE :
+6cibles/F8 8/8/preuve/lib2596/0/72/NAV45/0/0, trois sockets rougesv1 verts.
+
+Seconde lib sur MÊMEELFSHA6f1227...8e74, copie+ledger AVANTruntime, arrêt au
+premier FAILED code_tools::cwd_tests::cd_ne_ment_pas_sur_ou_on_est.
+Profil whitelist direct ne contient pas CARGO_MANIFEST_DIR ; ici() du témoin
+fait std::env::var(...).unwrap(). Aucun détail de panic acquis avantSTOP.
+Cas déjà identifié dans le [ticket ancres Arbre](../../arbre-principal/tickets/2026-11-12-migrer-les-ancres-de-code-vers-le-contenu-partage.md),
+section « A — lib v2 rouge de montage runtime, reprise v3 sans rebâtir les verts ».
+Ne pas créer de doublon ni attribuer un défaut produit sans preuve.
+
+C7 reçoit diagnosticRO avant toute modification : proposition éventuelle
+CARGO_MANIFEST_DIR=crate pour la SECONDE lib directe seulement, sous même
+ENDoriginal et avec nouvelle provenance du cache/reçuv2/ELF/archive ; pas de
+reset ni de retry automatique, anciencanonique et rouges conservés.
+ScopeROUGE1/restes[]/nettoyé/TERMINE ; scan frais owned_alive[]/owned_unknown[]/
+found[],bus+cgroupabsents,T5658160728conservé. Preuves34 avantcomplémenthealth
+à finaliser dans rapport06 ; aucune édition du pilote pendant/après le job.
