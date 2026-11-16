@@ -296,4 +296,10 @@ Les treize sessions ont été relues, avec les références et états des ticket
 
 Vérifications réelles : origin/masterb0a845bb4877328eada37951c174e3d208986630, SDK59ac/hôte927 inchangés. Les deux changements préexistants de l'arbre de Lucie restent intacts. Après les arrêts contrôlés, luciepc a0/4places lourdes tenues et55GiB disponibles ; les préparations et attentes de revue ne sont pas annoncées comme des calculs actifs. Aucun refus de garde ou de permission contourné.
 
+Compléments avant fin du contrôle : COPYA microfixDTO4baac924b13986214ac0946b423e6df17b593c62 a ses deux RO favorables, mais seul l'auditRO de la copie a reçu une autorisation de préparation, pas d'exécution. Le pilote devra être publié ; la réponse Source.meta n'acquitte toujours pas la dette et aucun writer ne se rejoue. Les376preuves rouge et les sources strictement inchangées sont conservées.
+
+Vertexe077 a ses deux RO de scan favorables ; C7 relève cependant le nouveau target-green distinct du target RED de session, encore à justifier. Avant GO, prouver l'ancien target retiré selon protocole ou réutiliser le même par garde réelle/provenance/freshscan, sans retrait expéditif ni second cache actif. ED a rectifié l'en-tête du ticket : correctif proposé et NON QUALIFIÉ, sept juges non joués. Cœur a publié pilote9b238/paireed0–75a ; RO Hotfix suspendue sur le parseur XML qui exige un attribut skipped absent de la racine native testsuites. Témoins sur XML brut avant fix, aucun build autorisé. Ces réserves sont des défauts de montage à lever, pas des rouges du produit.
+
+Les préparations reprennent concrètement : Archi témoinsTEST049153/APP274 sans correctif encore joué ; TTY nouveaub70a sur masterb0 avec préflight target et F8/harness3600 proposé ; Codeparsers118 avec manifeste préparé et corpus historique physique1840fichiers/14sites18couples séparé du900 proposé. Banc a livré la RO Lucivy3068 et prend le pilote Rust en lecture ; aucune limite d'usage ou ancien corpus manquant n'est contourné pour produire un vert.
+
 Le suivi de la reprise est dans [le ticket](../tickets/2026-11-16-reprendre-les-perimetres-apres-lecture-des-diffs-recents.md).
