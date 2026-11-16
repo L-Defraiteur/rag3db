@@ -2301,7 +2301,7 @@ impl Node for FuseResultsNode {
         let borrowed: Vec<(&[SearchResult], SignalConfig)> =
             lists.iter().map(|(l, c)| (l.as_slice(), *c)).collect();
         let mut scores = fuse_signals(&borrowed, strategy, rrf_k);
-        scores.sort_by(|a,b| b.score.total_cmp(&a.score).then(a.uuid.cmp(&b.uuid)));
+        scores.sort_by(crate::search::stable_order);
         // **Qui a porté la ligne** : la contribution de chaque signal à son
         // rang, poids / (k + rang), comme le RRF la compte. Les signaux en
         // rôle `boost` modulent sans faire le rang ; ils ne comptent que si
