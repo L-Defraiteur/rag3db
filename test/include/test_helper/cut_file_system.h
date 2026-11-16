@@ -11,10 +11,15 @@
 // d'exploitation n'est pas simulé : c'est le fils qui garde le non-synchronisé, comme les bancs de
 // SQLite et de PostgreSQL tuent le processus.
 //
-// Limite : la création, la suppression et la troncature à l'ouverture (CREATE_AND_TRUNCATE) restent
-// immédiates, comme si chaque entrée de répertoire était synchronisée. Le défaut « répertoire
-// jamais synchronisé » demandera une couche sur ces opérations et une synchronisation de
-// répertoire.
+// Les entrées de répertoire (16 novembre 2026, hotfixs) : par défaut, la création et la suppression
+// restent immédiates, comme si chaque entrée de répertoire était synchronisée. Avec
+// pendingDirectoryEntries() à vrai, elles attendent la synchronisation de leur répertoire
+// (syncDirectory), comme sur un vrai disque après une coupure :
+// - un fichier créé ne vit que sous un nom caché (`<chemin>.cut-entry-pending`) jusqu'à
+//   syncDirectory de son répertoire, qui lui donne son nom ; à la coupure, il n'a pas de nom ;
+// - un fichier supprimé disparaît pour le fils, mais reste sur le disque jusqu'à syncDirectory ;
+//   à la coupure, il est encore là.
+// La troncature à l'ouverture (CREATE_AND_TRUNCATE) reste immédiate.
 //
 // Une faute d'entrée-sortie s'injecte par failSyncOf : la synchronisation d'un chemin choisi lève,
 // comme sur un disque plein ; ce qui n'était pas synchronisé reste dans la couche, perdu à la
@@ -26,11 +31,13 @@
 #include <algorithm>
 #include <atomic>
 #include <cstring>
+#include <filesystem>
 #include <functional>
 #include <map>
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -67,6 +74,27 @@ public:
 
     std::unique_ptr<common::FileInfo> openFile(const std::string& path, common::FileOpenFlags flags,
         main::ClientContext* context = nullptr) override {
+        if (pendingDirectoryEntries()) {
+            std::string hidden;
+            {
+                std::lock_guard lck{entriesMtx};
+                const bool removed = pendingRemoved.contains(path);
+                if (auto it = pendingCreated.find(path); it != pendingCreated.end()) {
+                    hidden = it->second;
+                } else if ((removed || !local->fileOrPathExists(path, context)) &&
+                           (flags.flags & (common::FileFlags::CREATE_IF_NOT_EXISTS |
+                                              common::FileFlags::CREATE_AND_TRUNCATE_IF_EXISTS))) {
+                    hidden = path + ".cut-entry-pending";
+                    pendingCreated[path] = hidden;
+                } else if (removed) {
+                    throw common::IOException("Cannot open file " + path + ": removed");
+                }
+            }
+            if (!hidden.empty()) {
+                auto inner = local->openFile(hidden, flags, context);
+                return std::make_unique<CutFileInfo>(path, std::move(inner), this);
+            }
+        }
         auto inner = local->openFile(path, flags, context);
         const auto key = inner->path;
         return std::make_unique<CutFileInfo>(key, std::move(inner), this);
@@ -88,11 +116,63 @@ public:
             std::lock_guard lck{layersMtx};
             layers.erase(path);
         }
+        if (pendingDirectoryEntries()) {
+            std::lock_guard lck{entriesMtx};
+            if (auto it = pendingCreated.find(path); it != pendingCreated.end()) {
+                local->removeFileIfExists(it->second, context);
+                pendingCreated.erase(it);
+            }
+            if (local->fileOrPathExists(path, const_cast<main::ClientContext*>(context))) {
+                pendingRemoved.insert(path);
+            }
+            return;
+        }
         local->removeFileIfExists(path, context);
     }
     bool fileOrPathExists(const std::string& path,
         main::ClientContext* context = nullptr) override {
+        if (pendingDirectoryEntries()) {
+            std::lock_guard lck{entriesMtx};
+            if (pendingCreated.contains(path)) {
+                return true;
+            }
+            if (pendingRemoved.contains(path)) {
+                return false;
+            }
+        }
         return local->fileOrPathExists(path, context);
+    }
+
+    // Les entrées de répertoire attendent leur synchronisation (voir l'en-tête).
+    static bool& pendingDirectoryEntries() {
+        static bool pending = false;
+        return pending;
+    }
+
+    // Synchronise les entrées du répertoire `dir` : les suppressions en attente se font, les
+    // créations en attente prennent leur nom.
+    void syncDirectory(const std::string& dir) const {
+        std::lock_guard lck{entriesMtx};
+        const auto inDir = [&](const std::string& path) {
+            return std::filesystem::path(path).parent_path() == std::filesystem::path(dir);
+        };
+        for (auto it = pendingRemoved.begin(); it != pendingRemoved.end();) {
+            if (inDir(*it) && !pendingCreated.contains(*it)) {
+                std::filesystem::remove(*it);
+                it = pendingRemoved.erase(it);
+            } else {
+                ++it;
+            }
+        }
+        for (auto it = pendingCreated.begin(); it != pendingCreated.end();) {
+            if (inDir(it->first)) {
+                std::filesystem::rename(it->second, it->first);
+                pendingRemoved.erase(it->first);
+                it = pendingCreated.erase(it);
+            } else {
+                ++it;
+            }
+        }
     }
     std::string expandPath(main::ClientContext* context, const std::string& path) const override {
         return local->expandPath(context, path);
@@ -221,6 +301,9 @@ private:
     }
 
     std::unique_ptr<common::LocalFileSystem> local;
+    mutable std::mutex entriesMtx;
+    mutable std::map<std::string, std::string> pendingCreated; // nom → nom caché
+    mutable std::set<std::string> pendingRemoved;
     mutable std::mutex layersMtx;
     mutable std::map<std::string, std::unique_ptr<Layer>> layers;
 };
