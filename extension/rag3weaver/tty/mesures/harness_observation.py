@@ -13,9 +13,16 @@ def screen_contains(raw, rendered, needle):
 
 
 def approval_and_end(posts, mailbox, state):
+    expected = [line for line in mailbox if line.get('kind') == 'approval']
+    if len(expected) != 1:
+        return False
+    approval_id = expected[0].get('id')
+    if not isinstance(approval_id, str) or not approval_id:
+        return False
     approved = [p for p in posts if p.get('chemin') == '/ide/teammate/mailbox'
                 and p.get('corps', {}).get('kind') == 'answer'
-                and p['corps'].get('approved') is True and p['corps'].get('reply_to')]
+                and p['corps'].get('approved') is True
+                and p['corps'].get('reply_to') == approval_id]
     ended = any(line.get('kind') == 'ended' for line in mailbox)
     return bool(approved) and ended and state == 'ended'
 

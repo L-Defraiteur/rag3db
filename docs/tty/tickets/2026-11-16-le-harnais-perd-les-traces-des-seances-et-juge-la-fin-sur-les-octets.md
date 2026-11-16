@@ -132,3 +132,13 @@ plus loin ne suffit pas. Corréler exactement à l'unique approval attendue de
 **cette phase** ; contre-exemple publié avant fix et essai hermétique. Aucun
 changement produit ni assouplissement du faux hôte, pas de nouveau runtime.
 Revue97c fin totale : un seul point, autres contrôles bornément reconnus.
+
+## Identifiant d'accord corrélé exactement, réserve97c corrigée
+
+341624693f publié avant essai :6tests,3échecs observés (identifiant étranger
+au bon préfixe, approval absente et approvals multiples). Le correctif exige
+une seule approval avec id non vide dans la boîte de cette phase, et un POST
+answerapprovedtrue dont reply_to égale **exactement** cet id. ended et state
+ended restent requis indépendamment. Aucun changement du faux hôte/du produit.
+Le paquet de relecturev2 est distinct de v1 ; gate native toujours fermée sur
+l'ENDoriginal expiré. Aucun témoin natif ni validation du run perdu déduit.

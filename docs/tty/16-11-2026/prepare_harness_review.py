@@ -25,7 +25,7 @@ def main():
     git = lambda *parts: subprocess.check_output(['git', '-C', str(w), *parts], text=True).strip()
     assert git('rev-parse', 'HEAD') == args.source and not git('status', '--porcelain')
     base = Path.home() / '.cache/rag3weaver-build'
-    q = base / 'cx-tty-harness-screen-review-v1'
+    q = base / 'cx-tty-harness-screen-review-v2'
     if not args.prepare_only:
         # This gate cannot turn an expired allocation into permission to run.
         assert time.monotonic() < ORIGINAL_END, 'original allocation expired; native run closed'
