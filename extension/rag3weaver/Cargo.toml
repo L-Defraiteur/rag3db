@@ -574,6 +574,10 @@ name = "probe_visible_offsets"
 path = "tests/probe_visible_offsets.rs"
 required-features = ["rag3db-native", "code"]
 [[test]]
+name = "probe_one_sided_versions"
+path = "tests/probe_one_sided_versions.rs"
+required-features = ["rag3db-native", "code"]
+[[test]]
 name = "impact_rendu"
 path = "tests/impact_rendu.rs"
 [[test]]
