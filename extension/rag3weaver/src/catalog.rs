@@ -10600,6 +10600,10 @@ fn read_threads() -> u64 {
                     texte("commit", commit),
                     texte("base", ""),
                     texte("recette", ""),
+                    // Une génération de la couche du backend n'a pas de parente : ses rangs se lisent par
+                    // `_depuis` et `_jusqu_a` dans la couche même (2b′, une racine s'écrit '' et -1).
+                    texte("parente_couche", ""),
+                    QueryParam::new("parente_rang", CypherValue::Int(-1)),
                     texte("tombstones", "[]"),
                     QueryParam::new("publiee_le", CypherValue::Int(maintenant)),
                 ],
