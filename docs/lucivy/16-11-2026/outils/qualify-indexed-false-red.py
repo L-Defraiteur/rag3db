@@ -63,6 +63,9 @@ def cpu_jobs(cgroup_root):
     boundary = Path('/sys/fs/cgroup')
     quota_jobs = 4
     while True:
+        if path == boundary and not (path / 'cpu.max').exists():
+            limits.append(dict(path=str(path), quota='root', period='not-applicable'))
+            break
         quota, period = (path / 'cpu.max').read_text().split()
         limits.append(dict(path=str(path), quota=quota, period=period))
         if quota != 'max':
