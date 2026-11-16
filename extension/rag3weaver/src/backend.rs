@@ -926,8 +926,9 @@ fn load_call_view_stack(
 ) -> Result<crate::views::ReadStack, String> {
     let refusal = match crate::views::load_stack_on(conn, dialect, requested, settings) {
         Ok(pile) => return Ok(pile),
-        Err(e) if e.contains("couche inconnue") => e,
-        Err(e) => return Err(e),
+        // Seule une couche inconnue se relit par son nom ; un rang absent d'une couche connue reste un refus.
+        Err(e @ crate::views::StackError::UnknownLayer { .. }) => e.to_string(),
+        Err(e) => return Err(e.to_string()),
     };
     let Some(root) = prepared.workspace_root() else { return Err(refusal) };
     let Some(repo) = crate::suivies::repo_id(&root, prepared.manifest.tracked.as_ref())? else { return Err(refusal) };
@@ -939,7 +940,7 @@ fn load_call_view_stack(
         Ok(rows.rows.iter().find(|r| r.first().and_then(|k| k.as_str()) == Some(key)).and_then(|r| r.get(1)).and_then(|v| v.as_str()).map(str::to_string))
     };
     match crate::suivies::layer_id_by_name(&read_meta, &repo, &requested.layer)? {
-        Some(id) => crate::views::load_stack_on(conn, dialect, &crate::views::ViewRequest { layer: id, rank: requested.rank }, settings),
+        Some(id) => crate::views::load_stack_on(conn, dialect, &crate::views::ViewRequest { layer: id, rank: requested.rank }, settings).map_err(|e| e.to_string()),
         None => Err(refusal),
     }
 }
