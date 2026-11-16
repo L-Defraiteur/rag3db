@@ -1,0 +1,65 @@
+{
+  "inputs": [
+    {
+      "name": "gdb",
+      "path": "/usr/bin/gdb",
+      "bytes": 35318992,
+      "sha256": "e2db863afa4d39c743d5057509aa18a9a6330d5b7ccd71a63ffe70c8b862810a"
+    },
+    {
+      "name": "zstd",
+      "path": "/usr/bin/zstd",
+      "bytes": 214344,
+      "sha256": "4f8335318c5471e1b481bbb9eebdcc9cd9a31b0bcfb5e2393857d656f33160e8"
+    },
+    {
+      "name": "elf",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-two-reds-01/raw/candidate/artifacts/concurrence",
+      "bytes": 31549968,
+      "sha256": "5029277b742a1391ae570cbe2403a4dd6857b38535404d9121f281d333b01f5c"
+    },
+    {
+      "name": "build_id_header",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-two-reds-01/raw/candidate/artifacts/build_id.h",
+      "bytes": 227,
+      "sha256": "650cec620083cd70467b41a0f2dad84620c0346b2ba5d16f135ad3591b19f577"
+    },
+    {
+      "name": "compressed_core",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-two-reds-01/post-run-core/core.system.zst",
+      "bytes": 2387501,
+      "sha256": "77c13010a68f6ce77aabb1db849b087eb1bd8f682503490b8bd3fa568122d104"
+    }
+  ],
+  "package_index_read_only": {
+    "gdb": "18.1-1.1",
+    "zstd": "1.5.7-4",
+    "gcc-libs": "16.2.1+r23+gd564253eb6c8-3",
+    "glibc": "2.44+r50+g1848099f063e-3"
+  },
+  "elf_sections_read_in_python": {
+    ".note.gnu.build-id": 36,
+    ".dynsym": 123648,
+    ".symtab": 1166688,
+    ".strtab": 4411044
+  },
+  "debug_info_present": false,
+  "debug_line_present": false,
+  "cpu_tests": {
+    "played": 8,
+    "passed": 8,
+    "elapsed_s": 0.143
+  },
+  "gdb_executed": false,
+  "zstd_executed": false,
+  "inferior_executed": false,
+  "systemd_unit_created": false,
+  "scripts_sha256": {
+    "controller.py": "f0e13a781813e07e9640b8bfead334a8d1e7f7265585d90f2804e767afc941e2",
+    "entry.py": "50a2865bf4abe03305592a163c767f407696a7a1bb1797b96d3b26aac360b355",
+    "launch.sh": "43858a757db23bcd0e925fc79e00d21e5738cb40baadca7fb45933cf23932ac9",
+    "processes.py": "9effa22d5a98dbb59f818cc40fb2c5d978730acaea4c225cb104aed72ac037c3",
+    "receipt.py": "6c635aefd709949c47781c9df49d22c62608f7421e9c0d6a97c2121eefdc84dc",
+    "test_driver.py": "83cfe454ef54fce50da027f96db4e70d7b861de5b08ed1e8df334449f824099f"
+  }
+}
