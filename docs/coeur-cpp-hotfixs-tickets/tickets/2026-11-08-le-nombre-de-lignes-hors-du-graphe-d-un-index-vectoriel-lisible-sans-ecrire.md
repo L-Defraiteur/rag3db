@@ -121,3 +121,14 @@ quatre scripts/trois fichiers natifs hashés conformes, source/pilote propres,
 raw/résumé/allocation absents et scratchv2 vide. Six témoins synthétiques
 du parseur verts, aucune compilation ou exécution native de source71.
 Attente ROpaquet et admission distincte ; ticket ouvert, aucun FIX produit.
+
+GO distinct C7-ROWS-RED-B307-16nov2400 consommé ensuite :
+[rouge binder réel](../16-11-2026/09-rows-outside-graph-binder-red-observed.md),
+buildcode0, unique exact32ms/code natif1/une failure : colonne manquante à
+SHOW_INDEXES, BUILD_ID59 réel et cohérent. Aucun skip/error, parseur inchangé.
+Les trois autres cas sont compilés NON JOUÉS ; compteexact0 et schéma9 non
+atteints. Fin219,838s/quiescent/PIDs[], collecteur0 mais résuméTOUJOURSROUGE.
+48fichiers/6artéfacts rehashés deuxpostes0écart, manifestef49462...c52ee.
+Prépa correctif autorisée seulement : proposer chemins/capacitélecture commune,
+invariants snapshot/holder/graphe, NULL/coût et casqueuepositive/NULL/transactions
+à C7 AVANT édition de production. Aucun nouveau run/SDK/service ni FIX produit.
