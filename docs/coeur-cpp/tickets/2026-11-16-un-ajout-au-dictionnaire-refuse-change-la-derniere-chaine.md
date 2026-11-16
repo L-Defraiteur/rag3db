@@ -26,6 +26,8 @@ Correctif minimal envisagé : réserver offsets et octets avant de modifier le t
 
 ## Ciblés verts, intégration non faite
 
+La [référence75/59 seule, sans sonde](../16-11-2026/24-reference-chaines-verte-une-fois-sans-attribution-causale.md) passe le cas chaînes1/1 ; le candidat888 avait crashé lors d'une autre exécution. Cette seule paire historique ne prouve aucune responsabilité du correctif append et ne remplace pas la qualification globale rouge ni une intégration autorisée. Ticket reste ouvert.
+
 La [qualification globale888 du16novembre](../16-11-2026/11-qualification-globale-arretee-sur-deux-rouges.md) s'arrête ROUGE sur deux nouveaux rouges de concurrence : offsets1/1 et transactions393passés, mais comparateurknown_red refusé. Chaînes dédiées/E2E non joués, poste rendu, aucune intégration. Le présent ticket reste ouvert ; ces rouges ne sont pas attribués au correctif append.
 
 [Résultat cinq cas et preuves](../16-11-2026/05-refus-offsets-cinq-cibles-vertes.md) : source/moteur033ffb92068f31cdae6338db876d23e6bced3567,1offsets+2finalize+2split,0failure/error/skip/disabled. Assertions48octets/3strings/hash/retry gardées, BUILD_ID033 réellement émis. Unité145,114s success, poste rendu/MainPID0/cgroupvide/aucunrésidu,37fichierspaquet2postes+3ELF/archive/headerrehashés. Ticket reste ouvert avant suites/intégration, parentC1crashnonattribué, aucun stdunordered_setinsertgarantieforte/master/libposée.

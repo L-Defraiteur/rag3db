@@ -160,3 +160,7 @@ Ticket fils offsets : ciblés5/5 verts sur033ffb92068f31cdae6338db876d23e6bced35
 ## Core du cas isolé, lecture admise le16novembre
 
 [Analyse bornée du core existant](../16-11-2026/21-core-lu-pile-du-checkpoint-dictionnaire-conservee.md) : sourceed0/moteur888, cas AutomaticCheckpointsBetweenAddsAndDrops isolé, SIGSEGV confirmé ; pile Hashtable find → DictionaryChunk::appendString → StringChunkData::write → Column::checkpointSegment → NodeGroup::checkpointInMemAndOnDisk → Checkpointer::writeCheckpoint. Un autre thread lit DictionaryColumn/StringColumn. Pas de finalize dans les12frames acquis, pas de variables DWARF ; rapprochement de trajet avec C1, pas preuve de cause commune. Sonde chaînes non activée par le pilote50e2, aucune valeur détaillée. Aucun nouvel inférieur/test lancé par cette lecture, poste rendu5,511915s. Le parent reste ouvert/non attribué, comme le ticket propre du SIGSEGV isolé.
+
+## Référence isolée75/59, une exécution verte
+
+[Cas chaînes seul sans sonde](../16-11-2026/24-reference-chaines-verte-une-fois-sans-attribution-causale.md) sous profil effectif du crash ed0/888 :1/1passé,922ms, source/test/ELF/hash conservés, aucun candidat rejoué. Un vert unique de référence ne démontre pas une régression du correctif append ou une cause C1. Poste rendu225,250341s ; parent ouvert, aucune boucle/rebuild/GDB supplémentaire.

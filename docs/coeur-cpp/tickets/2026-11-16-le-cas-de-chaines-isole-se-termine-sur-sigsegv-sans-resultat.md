@@ -16,6 +16,8 @@ Le [drapeau de sonde perdu](2026-11-16-le-confinement-efface-le-drapeau-de-la-so
 
 ## Suite et fin
 
+[Référence75/59 seule](../16-11-2026/24-reference-chaines-verte-une-fois-sans-attribution-causale.md) admise900s, même cas/sources test/profil32G/quota5 et drapeau absent effectif :1/1passé,922ms, aucun retry/candidat supplémentaire. Un vert unique ne prouve ni régression du delta append ni cause commune C1 ; aucun nouveau core du candidat acquis. Poste rendu225,250341s, ticket reste ouvert.
+
 Analyse du core existant admise puis terminée : [pile et limites](../16-11-2026/21-core-lu-pile-du-checkpoint-dictionnaire-conservee.md). Thread crashé : Hashtable find → DictionaryChunk::appendString → StringChunkData::write → Column::checkpointSegment → NodeGroup::checkpointInMemAndOnDisk → Checkpointer::writeCheckpoint. Autre thread dans lecture DictionaryColumn/StringColumn. Pas de finalize dans les12frames obtenus, pas de variables DWARF ni cause démontrée. Aucun inférieur lancé, poste rendu en5,511915s. Ticket reste ouvert ; ni répétition du témoin ni attribution C1 acquise.
 
 La [tentative de lecture du core120s](../16-11-2026/19-lecture-du-core-refusee-avant-gdb.md) est arrêtée avant GDB : option zstd refusée, aucun backtrace nouveau. Le présent ticket reste ouvert sans attribution supplémentaire.

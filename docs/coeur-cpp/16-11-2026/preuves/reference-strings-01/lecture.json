@@ -1,0 +1,16 @@
+{
+  "pilot": "a202a1032a0eb83c672cdb4ccad8d54cf6a1ff19",
+  "source": "75a4ba4d467aa5f07ef83494f5393154ab2392c6",
+  "engine": "59ac9c86bc2b3529b590a7462ab7051e3ad26b8a",
+  "result": "one reference strings case passed; no causal inference",
+  "raw_files_rehashed_local": 53,
+  "artifact_files_rehashed_local": 5,
+  "archive_sha256": "fb37ff01e9bdcd39b594474dec47f46c2ef551293d7cc7de248dd15e07687f4d",
+  "full_packet_local": "/home/lucied/.cache/rag3db-moteur-notes/reference-strings-01",
+  "full_packet_remote": "luciepc:/home/lucied/.cache/rag3weaver-build/cx-reference-strings-01",
+  "probe_flag_effectively_absent": true,
+  "native_build_id_emitted": false,
+  "C1_closed": false,
+  "candidate_causality_established": false,
+  "retry": false
+}
