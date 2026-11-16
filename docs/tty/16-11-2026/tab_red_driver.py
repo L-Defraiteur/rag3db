@@ -14,7 +14,7 @@ previous=json.loads((q/'previous-autorite.json').read_text());verdict=json.loads
 assert previous['etat']=='termine' and verdict['restes']==[] and verdict['nettoye']
 quiet=scan('/proc',[w,old_w,t]);(p/'quiet-before.json').write_text(json.dumps(quiet,indent=2));assert quiet['found']==[]
 for name in ['cache','state','fixture','data','config']:(p/name).mkdir(mode=0o700)
-tmp=Path.home()/'.cache/ttytab1';tmp.mkdir(mode=0o700)
+tmp=Path.home()/'.cache/ttytab2';tmp.mkdir(mode=0o700)
 env={key:os.environ[key] for key in ['HOME','USER','LOGNAME','PATH','SHELL','LANG','LC_ALL','TZ','CARGO_HOME','RUSTUP_HOME',
      'DBUS_SESSION_BUS_ADDRESS','RAG3WEAVER_VALIDATION_RECU','RAG3WEAVER_VALIDATION_JETON'] if key in os.environ}
 env.update(CARGO_TARGET_DIR=str(t),CARGO_BUILD_JOBS='4',CARGO_INCREMENTAL='0',CARGO_NET_OFFLINE='true',CARGO_TERM_COLOR='never',

@@ -583,3 +583,12 @@ de préparation/compilation n'est pas le rouge attendu. Nouveau testELFhash et
 reçuTERMINÉ/restes[] conservés, composé ROUGE attendu/exit1, jamais un VERT.
 F8old6d/ELFcb24 sont exclusivement historiques, jamais juge de l'union99.
 NON JOUÉ ; source/pilote/paquet RO puis GO C7distinct obligatoires avant Cargo.
+
+### Réserve de RO041660, avant correction du témoin
+
+Mémoire fin totale : un refus statique bloquant. Le remplacement du point
+catalogue a touché aussi connaitre(), qui appelle load_state sans paramètre
+ni binding, donc E0425 avant le juge. Ce n'est pas le rouge d'assertion demandé
+et aucun Cargo n'a été lancé. Rétablir client::lire_brut dans connaitre seulement,
+conserver seam ActionCompleter/sources_de et préfixesFR inchangés ; nouveau
+Q/source pour ROdelta. AncienQv1 et target restent conservés.

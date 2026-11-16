@@ -49,7 +49,7 @@ fn connaitre(agent: &ureq::Agent, ep: &Endpoint, tache: &Tache, filtre: &Mutex<O
         *filtre.lock().unwrap_or_else(|p| p.into_inner()) = Some(m.clone());
     }
     let manifeste = worktree.unwrap_or_else(|| tache.depot.manifest.clone());
-    if let Ok(etat) = load_state("/ide/etat") {
+    if let Ok(etat) = client::lire_brut(agent, ep, "/ide/etat") {
         let _ = tx.send(Msg::Entete(client::entete(&etat, &manifeste, &tache.task)));
     }
     if let Ok(d) = client::poster_brut(agent, ep, "/ide/describe", &json!({ "manifest": manifeste })) {
