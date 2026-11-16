@@ -1,6 +1,6 @@
 # Les ex æquo de la recherche n'ont pas d'ordre stable
 
-- **État** : ouvert (16 novembre 2026).
+- **État** : fermé (16 novembre 2026, ED) — `fts_handle::search_hits_with_ties` demande à lucivy `limit` + 8 puis double tant que le dernier hit est ex æquo avec le `limit`-ième (au plus 4 096) ; `search_bm25_chunked` trie par score puis uuid (stable : le contenu ou la clé le donne, pas la base) et coupe lui-même. Témoin `fts_handle::tests::a_search_returns_every_tie_of_its_cut` : six ex æquo dans deux index d'ordres opposés, ROUGE sur 154f72e75 (`{1, 5}` sur six), vert ensuite.
 - **Gravité** : réponse instable. Les mêmes documents et les mêmes scores sortent dans un ordre qui dépend de la
   disposition des segments : deux bases qui tiennent le même contenu rendent leurs ex æquo dans des ordres
   différents, et un juge de parité les voit différer.
