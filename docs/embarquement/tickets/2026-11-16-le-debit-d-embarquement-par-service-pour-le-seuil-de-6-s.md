@@ -64,3 +64,19 @@ Une journée (conception, puis code et témoins).
 
 La conception relue par l'orchestration. La part du banc (le jeu de lots fixe) et celle de l'arbre (la
 conversion) avancent à part ; la table se livre sans elles.
+
+## Reprise de la clé seule, 16 novembre
+
+Prise par embarquement sur `cx-rate-key-20261116-r1`, W propre local
+`/home/lucied/git_workspaces/cx-rate-key`, depuis WIP rouge0aecc6b70b reposé
+sur master927941a67a. Ancien W PC `rag3db-rate-key` préservé sans changement.
+Contrat et limites : `docs/embarquement/16-11-2026/02-rate-key.md`.
+Banc informé, sa mesure reste sans écriture au catalogue avant livraison de la
+lecture ; ED confirme aucune collision sur les cinq chemins réservés.
+
+Point explicite : `DenseTenu.distant()` vrai + adresse prise absente n'est pas
+un embarqueur local ; aucune activation pour lire la clé. API historiques
+conservées pour les appels explicites, mesures automatiques sous clé neuve.
+Aucun élargissement à la table/mesure par passe. Aucun Cargo/test/service/GPU
+avant fin de la fenêtre G/Arbre et nouvelle recette ; les rouges hérités restent
+les seuls rouges déjà exécutés. Anciennes autorisations et échéances caduques.
