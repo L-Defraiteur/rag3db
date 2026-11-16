@@ -141,6 +141,9 @@ faire pour Codex. La suite reprend à l'entrée 3.
 
 ### Entrée 3 : un ulp d'écart de score entre profils en `parse`
 
+**En cours depuis le 16 novembre 2026 vers 10 h 30, par la session lucivy, à la demande de c7.** Avant de la
+reprendre, demander à l'orchestration où elle en est.
+
 - **Ticket** : `docs/lucivy/tickets/2026-11-14-un-ulp-d-ecart-de-score-entre-profils-en-parse.md`.
 - **Ce qu'il faut faire** : rendre la somme des clauses d'un OU indépendante de l'ordre de réponse des segments et des
   dictionnaires.
