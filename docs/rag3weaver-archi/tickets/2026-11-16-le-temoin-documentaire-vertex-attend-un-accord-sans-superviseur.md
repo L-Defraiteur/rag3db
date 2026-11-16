@@ -112,3 +112,6 @@ RO totale Banc291138a70b avant pin : --arm place bien journal/guard sous watchdo
 
 
 RO totale Banc01c3ae28e8 : configure_controller pur/OUTER_SECONDS780 fixe/aucune lectureQ avant watchdog ; vrai témoin dispatch CLI couvre l’ancien accès. Réserve6a1/fe2a levée pour ce code, fsync9f3 et reste des fonctions relues inchangés. Complément rapport17, aucun run ; attente pinQr3/configuration/copies puis RO metadata finale et décision C7, pasGO.
+
+
+RO preuves Banc a4a2de1e1a : [rapport21](../../banc/16-11-2026/21-ro-preuves-vert-cible-archi-bac.md),72sizeSHA et2ELF/prefixes conformes, ledgerpub avantmarker puis2positifs=2juges4invocs1/0/0, SandboxHEAD réellement assertés, fin scope0 propre et post132ownedgone. Favorable aux deux setups seulement, pasboucle/D6Vertex/global/master/retrait ; aucun test/proc/service lancé par Banc, ticket ouvert.
