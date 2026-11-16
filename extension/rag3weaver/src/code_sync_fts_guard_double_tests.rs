@@ -50,9 +50,10 @@ fn healthy_rows(c: &Catalog, table: &str) -> Vec<Vec<CypherValue>> {
 }
 fn sync_and_trace(c: &mut Catalog, src: &Snapshot, capture: &Capture, stage: &str) -> Vec<String> {
     let options = SourceSyncOptions { batch_files: 32, relations: Some(RelationsMode::Bulk), exige: crate::disponibilite::Disponibilites::RECHERCHE_TEXTE, force: true, ..Default::default() };
-    let report = sync_source(c, src, &options, &mut |_| {}).expect("API publique sync_source");
+    let result = sync_source(c, src, &options, &mut |_| {});
     let trace = capture.take();
-    eprintln!("FTS_DOUBLE_TRACE {stage} {trace:?}");
+    eprintln!("FTS_DOUBLE_TRACE {stage} {trace:?} result={result:?}");
+    let report = result.expect("API publique sync_source");
     assert_eq!(report.failed, 0, "{report:?}");
     trace
 }
