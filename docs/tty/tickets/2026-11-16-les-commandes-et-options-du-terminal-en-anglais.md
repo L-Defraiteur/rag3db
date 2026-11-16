@@ -204,3 +204,28 @@ arrête sans retry. Prérequis à réserver : créneau lourd CPU et port privé1
 tmux présent sur le portable, SDK59ac et archives antérieures présents.
 Pas de service partagé, aucune ouverture des bases de Lucie, aucun privilège.
 F8 et harnais restent NON JOUÉS sur le correctif jusqu'au verdict réel.
+
+### Révision RO du pilote F8/harnais avant GO
+
+Union neuve `cx-tty-english-aliases-6` sur `b0a845bb4877328eada37951c174e3d208986630`.
+Entrant Rust : uniquement cfg(test) codex_threads, préparation des exécutables
+factices dans un sous-processus borné ; nouveau test de caractères littéraux,
+aucun contrat terminal/runtime modifié. F8 vérifiera sa compilation ; aucun
+résultat d'exécution de ces tests hôte n'est revendiqué par le harnais tty.
+
+Préflight après vrai poste/Common AVANT garde : reçu précédent6tdyny terminé,
+starttime/PID, scan FD/exe/cwd avec inconnus conservés, propriétaire UID/dev/ino,
+ELF précédents et archive rouge réhashés. Réutilise scan publié du relogement
+et autorité Common réelle, sans permission ni mutation des processus tiers.
+L'absence de liens attribués n'efface pas les UNKNOWN non attribués.
+
+SDK : résolution/hash sans exporter avant F8 ; seul le script canonique F8
+exporte son profil de compilation. Le crate tty ne requiert aucun SDK natif.
+États XDG frères et TMP sur disque court `~/.cache/r3-tty16` créé exclusivement,
+CARGO_MANIFEST_DIR runtime fixé au crate tty avant harnais. Aucun credential
+ni service partagé ; auth du faux hôte est le jeton factice du harnais.
+Empreintes SDK/ELF contrôlées après, scan final puis verdict Common quiescent.
+Budget corrigé proposé : **3600s total**, étapes timeout2400 F8 /300 build /
+900 harnais dans la même portée, aucun reset ni retry. Sans mesure antérieure
+F8 sur ce target léger, ce sont des bornes, pas une durée promise ; dépassement
+rouge conservé. Les 7200s antérieures sont retirées, aucun lancement effectué.
