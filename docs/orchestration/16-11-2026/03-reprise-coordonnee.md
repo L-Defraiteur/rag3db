@@ -599,3 +599,6 @@ Ce tourn’autoriseAUCUNnative/CIrerun/OAuth/service/poseSDK/host/LIVE/retrait. 
 
 
 Arbreb9e5 RO2sources+Q17fa8dde reçuesfavorables, MAIScontrelectureC7 avantGOretientcheminhéritéconsommateurq.health(qualify.py103-113) : urllibsockettimeout5 +bodyread nonwholedeadline, RAWHTTPError/non200/oversize/JSONerr perdus, usageégalitéPythonpasintstrict. OwnerC530workercorrigé n’estpasappeléparcesdeuxGETconsommateurpré/postwriter ; sa ROnequalifiepascechemin. Réservegroupée avantdiff/coordEmbar-Arbre surprimitive transporthard/RAW typed+admissionvsleasecore, fakesvraisraccords avantfix ; nouveaucyclecouple/Q/ROtotaleavantadmission. AucunGO900/slot/provider/writer délivré ; ancienB5/lategrantetFINétatROinchangés. Dette0 observéenequalifiepasencorecycle/shutdownnormal.
+
+
+RetourpushED99 : lanceuropérationnel landing.py SyntaxErrorAVANTfetch/garde/push sousvraiposte,rc1. Pasdemastermuté/guardrefused, traceconservée ; correctionquotageetprécompilePythonPURE autoriséesmêmetour99, nouvelleprisedeposte+fetchfreshB0+gardenormale/IFVERT/FF+troiscontrôlesinchangés. AucunÀTOIsecondni mouvementautreslots àmaster ; nepasdemander àLucieunnouveautourpourcecorrectifréversiblelanceur.
