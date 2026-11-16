@@ -1821,6 +1821,7 @@ fn a_step_that_answers_without_step_done_is_continued_without_waiting() {
     assert_eq!((&copie["from"], &copie["origin"]), (&json!("teammate"), &json!("host_copy")), "{copie}");
 }
 
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
 #[path = "../../tests/common/documentation_fixture.rs"]
 mod documentation_fixture;
 
