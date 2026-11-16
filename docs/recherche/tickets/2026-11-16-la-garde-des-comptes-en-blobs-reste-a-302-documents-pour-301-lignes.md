@@ -147,3 +147,7 @@ remplacea851historique. TroisG8ddb inchangés de69/f949/2907. APP636/BASE99
 restentfigés/produitcouplevide ;C7autoriseCPU60failfastAPRÈSpubcode/témoins
 composés, pasHTTP/SQL/PG/native. AprèscompositionCPU46attendus(22+17+7) :
 sourcefinal/pinsQv4metadataSEULE puisROtotales/GOdistinct,PGTOOLHOLDmaintenu.
+
+## Composition CPUfd780 arrêtée : dépendancefixture, avantcorrectioncommande
+
+CPU46failfastpremiercasERREURsetup/0assertfail : testowner443 attendGLOBAL_HEALTH_SOURCE ouchemincanonique orchestration. Modulecommon étaitcopiéFTSfolderpourQruntime, commandeomettaitlehookEXISTANTGLOBAL_HEALTH_SOURCE (PGhookdéjàfixé). BrutsR/cx-proofs-recherche-fts-global-composed-cpu-v1/manifestjoint ; pasnouveaurougefonctionnel/native. CorrectionbornecommandeCPUenpinnantGLOBAL_HEALTH_SOURCE=cheminexactcommonedf45(DÉJÀcopiéSTRICT),pasretoucher4blobsownerniporterdoubloninutile ; sourceCG/noactualPGinchangée. PublierrecettecorrigéeAVANTnouvelessaiCPU60,source/PQSAuthaucunecréation.

@@ -47,3 +47,13 @@ ROcouple/paquetavantéventuelGOdistinctaprèslevéeoutillagePG.
 CPUcomposé46 fonctions àjouer APRÈScodepublié,sous60failfast,avecG3sources
 frozen_ROOT dansfixturesetaucunHTTP/proc/SQL/Cargo/rustc/native. Aucunrésultat
 CPUcomposé acquis àpublicationdecettesource ; docpreuverésultatsensuiteMDseuls.
+
+## Premier CPUcomposé : erreur de fixture, arrêt conservé
+
+AprèsPUSHfd7804be662d08abcdc33ab117f83577a2ec3c0b :1ERRORsetup/0assertfails
+0.003s, FileNotFound ducommon auchemincanonique attendu parlestestsowner.
+Ce n'est PAS un rougefonctionnel ; aucunHTTP/PG/proc/Cargo/native,stopfailfast.
+Le hookEXISTANT GLOBAL_HEALTH_SOURCE manquait danslacommande, PGROOT était
+bienfourni. Correctionrecette : freezer GLOBAL_HEALTH_SOURCE=sourcecommon
+copiéeSTRICTEDF45, sanséditerblobsowner/testsniimporteruneautreimplémentation.
+NouveletestCPU60 aprèspublicationdecettecorrection, vieuxrougepréservé.
