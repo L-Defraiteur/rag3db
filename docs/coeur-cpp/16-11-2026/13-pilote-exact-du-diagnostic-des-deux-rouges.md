@@ -9,6 +9,14 @@
 
 Les deux fichiers test restent identiques entre variantes. L'ajout depuis la paire a3f3/50412 émet le macro BUILD_ID réellement compilé et pool/fils configurés ; aucune modification des assertions ou du mécanisme de barrière. Le delta des chemins moteur reste dictionary_chunk.cpp seul. Ne pas confondre source/pilote/moteur. Le profil attendu est pour chacun Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF, LTOOFF. Aucun SDK installé n'est chargé : chaque variante construit son archive statique et son ELF concurrence privé ; la lib59 de l'hôte n'est pas une preuve de ce build référence.
 
+## Réserve XML Hotfixs corrigée avant admission
+
+Le pilote9b238 refusait tout XML GTest natif vert : il exigeait skipped=0 à la racine testsuites, champ réellement absent et porté par testsuite. Son fixture synthétique inventait ce champ et masquait le refus. **9b238 n'est pas admissible.**
+
+Un test ajouté avant correction copie le XML et stdout bruts offsets888 déjà archivés, sans renommer le cas ou réécrire le XML. Avec le parseur9b238 il échoue effectivement ValueError XML errors or skips (1test/1erreur). Après correction, les11contrôlesCPU passent. [Provenance, empreintes et résultats](preuves/two-reds-preparation/xml-review-cpu.json).
+
+Le parseur exige les champs réels de racine tests/failures/disabled/errors, la suite unique nommée et ses compteurs tests/failures/disabled/errors/skipped, puis le cas exact status=run/result=completed sans skipped/error et la cohérence avec le code natif. Si un autre producteur ajoute skipped à la racine, il doit être0 ; son absence n'invente pas un compteur. Le fixture synthétique suit désormais la structure native. Sourcepaire, données et délais restent inchangés ; recette et empreintes de scripts sont révisées. Nouvelle RO requise, aucune compilation ou exécution native autorisée par cette correction.
+
 [Recette exacte, SHA des scripts/bundle/tests/dictionnaires](outils/two-reds/recipe.json). Bundle privé local ~/.cache/rag3db-moteur-notes/two-reds-preparation/source.bundle, deux refs, ancêtre requis64eee2e1f6c3599f5e4a0bcd3369f6202e33eaca ; copie distante seulement après admission. Aucun besoin de changement SDK/lib/service.
 
 ## Entrée proposée, après revue et GO uniquement

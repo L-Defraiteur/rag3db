@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="1" failures="0" disabled="0" errors="0" time="0." timestamp="2026-11-16T12:50:33.991" name="AllTests">
+  <testsuite name="DictionaryAppendException" tests="1" failures="0" disabled="0" skipped="0" errors="0" time="0." timestamp="2026-11-16T12:50:33.991">
+    <testcase name="OffsetAllocationFailureKeepsExistingStringsUnchanged" file="/home/lucied/.cache/rag3weaver-build/cx-coeur-dictionary-global/source/test/transaction/dictionary_append_exception_test.cpp" line="37" status="run" result="completed" time="0." timestamp="2026-11-16T12:50:33.991" classname="DictionaryAppendException" />
+  </testsuite>
+</testsuites>

@@ -1,0 +1,13 @@
+Running main() from /usr/src/debug/gtest/googletest-1.18.0/googletest/src/gtest_main.cc
+Note: Google Test filter = DictionaryAppendException.OffsetAllocationFailureKeepsExistingStringsUnchanged
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from DictionaryAppendException
+[ RUN      ] DictionaryAppendException.OffsetAllocationFailureKeepsExistingStringsUnchanged
+BUILD_ID=rag3db-build-888c81825e4cd6556261233f0e238af3b95375c9-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+[       OK ] DictionaryAppendException.OffsetAllocationFailureKeepsExistingStringsUnchanged (0 ms)
+[----------] 1 test from DictionaryAppendException (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 1 test.

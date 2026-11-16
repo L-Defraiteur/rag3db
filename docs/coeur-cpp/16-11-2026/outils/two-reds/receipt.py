@@ -39,10 +39,23 @@ def inspect_case(directory, case, engine, code):
         raise ValueError('native skip or error')
     if int(root.get('tests', '-1')) != 1 or int(root.get('disabled', '-1')) != 0:
         raise ValueError('empty or disabled native scope')
-    if int(root.get('errors', '-1')) != 0 or int(root.get('skipped', '-1')) != 0:
-        raise ValueError('XML errors or skips')
+    if root.tag != 'testsuites' or int(root.get('errors', '-1')) != 0:
+        raise ValueError('XML root or errors')
+    # GTest emits skipped on suites, not on the native testsuites root.
+    # If another producer supplies the root field, require consistency too.
+    if 'skipped' in root.attrib and int(root.attrib['skipped']) != 0:
+        raise ValueError('XML root skipped count')
+    suites = root.findall('testsuite')
+    if len(suites) != 1 or suites[0].get('name') != item.get('classname'):
+        raise ValueError('different or additional native suite')
+    suite = suites[0]
+    if any(int(suite.get(field, '-1')) != expected for field, expected in
+           [('tests', 1), ('disabled', 0), ('errors', 0), ('skipped', 0)]):
+        raise ValueError('XML suite counts or skips')
+    if len(suite.findall('testcase')) != 1 or list(root.iter('error')) or list(root.iter('skipped')):
+        raise ValueError('XML nested errors, skips or counts')
     failures = [dict(x.attrib, text=x.text) for x in item.findall('failure')]
-    if int(root.get('failures', '-1')) != int(bool(failures)):
+    if any(int(node.get('failures', '-1')) != int(bool(failures)) for node in [root, suite]):
         raise ValueError('XML failure count disagrees')
     if code not in (0, 1) or bool(failures) != (code == 1):
         raise ValueError('native status and XML disagree')

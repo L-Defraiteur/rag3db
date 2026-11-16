@@ -1,0 +1,30 @@
+{
+  "native_run": false,
+  "native_fixture_provenance": "global888 raw/offsets, already executed and archived under0cc6bea1c6; copied byte-for-byte without case/XML rename",
+  "fixture_sha256": {
+    "result.xml": "a9952510159566486010f18fe258ae1bcc158e5d9622f18619f69976b547629d",
+    "stdout.log": "9feadf090c38c75f0d85511d39e4d1f9878f0669a3fb842d09eb9be7bb9b315e"
+  },
+  "red_before_parser_fix": {
+    "test": "test_actual_repository_native_xml",
+    "played": 1,
+    "errors": 1,
+    "exception": "ValueError: XML errors or skips",
+    "parser_commit": "9b238244c23459dcdb56fbc69a113078e377b989"
+  },
+  "after_parser_fix": {
+    "played": 11,
+    "passed": 11,
+    "errors": 0,
+    "duration_s": 0.181
+  },
+  "root_skipped_policy": "not required because absent in native GTest; if present must0; suite skipped required0 and actual testcase status/result/no skipped/error verified",
+  "scripts_sha256": {
+    "controller.py": "af4f0afbe47917dc9c54b90b7ad7e6bb5c2f6da33e389ce4a86a7643f733d45d",
+    "entry.py": "5a5795b97c6eb745a1c4929e2057e1e754a6b76d7592fd3da2a3a5f2430c755e",
+    "launch.sh": "7cb69f0ff68ef28e214e309f492a13483c04108c53162ef505ed6b895874b29c",
+    "processes.py": "45f62ef55dd5722c86600d5719e9389aaf6030912a64e63247fdff7e73d8e51f",
+    "receipt.py": "87bceeb51c2f53c6063d369ee9983393f14a0c9a6f611cc645b4c379b1df5987",
+    "test_driver.py": "01524594eeee44218a90ac36a63c81034d2b9254ccbb14ba3b50c2bdd44a2ddd"
+  }
+}

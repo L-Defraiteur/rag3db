@@ -27,8 +27,9 @@ def fixture(path, failed=False):
     count = int(failed)
     detail = '<failure message="same query error">same query error</failure>' if failed else ''
     (path / 'result.xml').write_text(
-        f'<testsuites tests="1" failures="{count}" disabled="0" errors="0" skipped="0">'
-        f'<testsuite><testcase classname="{suite}" name="{name}" status="run" result="completed">'
+        f'<testsuites tests="1" failures="{count}" disabled="0" errors="0">'
+        f'<testsuite name="{suite}" tests="1" failures="{count}" disabled="0" errors="0" skipped="0">'
+        f'<testcase classname="{suite}" name="{name}" status="run" result="completed">'
         f'{detail}</testcase></testsuite></testsuites>')
 
 
@@ -41,6 +42,17 @@ class ReceiptTests(unittest.TestCase):
 
     def test_green_exact_case(self):
         self.assertEqual(inspect_case(self.path, 'strings', ENGINE, 0)['verdict'], 'VERT')
+
+    def test_actual_repository_native_xml(self):
+        import shutil
+        fixture = HERE / 'fixtures/offsets-green'
+        for name in ['result.xml', 'stdout.log']:
+            shutil.copy2(fixture / name, self.path / name)
+        with patch.dict(CASES, {'offsets_fixture':
+                'DictionaryAppendException.OffsetAllocationFailureKeepsExistingStringsUnchanged'}):
+            result = inspect_case(self.path, 'offsets_fixture',
+                '888c81825e4cd6556261233f0e238af3b95375c9', 0)
+        self.assertEqual(result['verdict'], 'VERT')
 
     def test_complete_red_never_green(self):
         fixture(self.path, True)
