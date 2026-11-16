@@ -129,3 +129,17 @@ Preuves hors target :
 (`negative.log`, `positive.log`, `result.json`). C'est un contrôle de configuration,
 pas une compilation ni une qualification de rate-key. Le profil précédent
 épinglait déjà RAG3DB_LIBS_DIR : aucun défaut produit nouveau n'est inventé.
+
+
+## Preuve de portée et causes avant assertions
+
+Le lanceur ne consulte ni systemctl --user ni l'API7970 : aucun hôte réel n'est
+un prérequis de ses fixtures. Il conserve les chemins du reçu courant et du
+cgroup, memory.max/high observés dans /sys/fs/cgroup, puis appelle le vérificateur
+commun. Aucune réinjection du bus personnel de Lucie dans la portée privée.
+
+Chaque phase conserve avant son assertion : commande exacte sans environnement
+secret, code de retour, stdout et stderr séparés, durée et état. Le démarrage
+est inscrit avant le sous-processus ; une interruption note sa cause sans
+inventer de code retourné. Les anciens logs ne sont ni écrasés ni requalifiés.
+Ce delta ne modifie aucune qualification active et ne lance aucun calcul.
