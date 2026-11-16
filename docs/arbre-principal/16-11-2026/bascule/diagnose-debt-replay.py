@@ -20,6 +20,9 @@ def main():
  for entry in json.loads(manifest.read_text()):
   file=geo/entry['name']
   if file.stat().st_size!=entry['size'] or p.digest(file)!=entry['sha256']:raise ValueError('geometry evidence changed')
+ expected_modules={'chunker-before.rs':'b2b4a0a916b81a25bab50f18b28bd9355e6094f7ee42a456f8dcabf33bb6e9dd','chunker-after.rs':'1b35738216ab11ec7d0ba88f47b8724ef88eb48cfc858292790b79e39d114622'}
+ for name,sha in expected_modules.items():
+  if p.digest(HERE/name)!=sha:raise ValueError('independently verified Git blob mismatch '+name)
  prepared=json.loads((HERE/'replay-prepared.json').read_text())
  for name,sha in prepared['files'].items():
   if p.digest(HERE/name)!=sha:raise ValueError('prepared source pin')
@@ -44,6 +47,7 @@ def main():
  native_env=dict(os.environ,LD_LIBRARY_PATH=str(p.LIB));binary=root/'replay-chunker'
  try:
   command=[str(rustc),'--edition=2021','-C','codegen-units=1',str(HERE/'replay-chunker.rs'),'-L','dependency='+str(deps),'--extern','text_splitter='+str(libraries[0]),'--extern','blake3='+str(libraries[1]),'-o',str(binary)]
+  save('prebuild-ledger.json',dict(git_modules=expected_modules,prepared=prepared,prepared_sha256=p.digest(HERE/'replay-prepared.json'),dependencies=dep_before,rustc=dict(path=str(rustc),sha256=p.digest(rustc)),native_reader=dict(path=str(p.QUERY),sha256=p.digest(p.QUERY)),build_started=False,runtime_started=False))
   save('compile-command.json',command);build=call(command,cap=90);(root/'compile.stdout').write_bytes(build.stdout);(root/'compile.stderr').write_bytes(build.stderr);save('compile-process.json',dict(rc=build.returncode))
   if build.returncode:raise ValueError('standalone compilation refused')
   save('ledger.json',dict(binary_sha256=p.digest(binary),prepared=prepared,dependencies=dep_before,rustc_sha256=p.digest(rustc),runtime_started=False))
