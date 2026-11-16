@@ -43,6 +43,7 @@ fn racine(q: &str, differe: Option<&DeferredType>) -> &'static str {
             Some(DeferredType::ReturnOf { .. }) => "variable liée à un retour — différé lu",
             Some(DeferredType::FieldOf { .. }) => "variable, champ — différé lu",
             Some(DeferredType::TemplateReturnOf { .. }) => "appel de gabarit à arguments explicites — différé lu",
+            Some(DeferredType::OfType { .. }) => "variable liée à une chaîne sur un type connu — différé lu",
             None => "variable seule, non typée",
         };
     }
