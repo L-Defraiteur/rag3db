@@ -15,7 +15,7 @@
 //! recréé), `SONDE_BASE`.
 #![cfg(all(feature = "rag3db-native", feature = "code"))]
 
-use rag3weaver::code::{analyze_source, default_scope_chunking, register_code_schema};
+use rag3weaver::code::{analyze_source, default_scope_chunking, register_code_schema, scope_chunks, SCOPE_FORM_KEY, SCOPE_FORM_VERSIONS};
 use rag3weaver::code_sync::{sync_source, SourceSyncOptions};
 use rag3weaver::code_tools::{edit_file, EditOp, FileSource, Snapshot, WorkingTree};
 use rag3weaver::connection::DbConnection;
@@ -66,32 +66,37 @@ fn un(catalog: &Catalog, q: &str) -> i64 {
 }
 
 fn compter(catalog: &Catalog, chemin: &str) {
-    let total = un(catalog, "MATCH (c:Scope_Chunk) RETURN count(c)");
-    let nuls = un(catalog, "MATCH (c:Scope_Chunk) WHERE c._text IS NULL RETURN count(c)");
-    let vides = un(catalog, "MATCH (c:Scope_Chunk) WHERE c._text = '' RETURN count(c)");
+    // The scope chunks of this base's form (ticket of 13 Nov. 2026): ScopeContent_Chunk on a versions base.
+    let chunks = scope_chunks(catalog).expect("the scope chunk table of this base");
+    let t = &chunks.table;
+    let total = un(catalog, &format!("MATCH (c:{t}) RETURN count(c)"));
+    assert!(total > 0, "[{chemin}] no chunk in {t}: the probe would count nothing");
+    let nuls = un(catalog, &format!("MATCH (c:{t}) WHERE c._text IS NULL RETURN count(c)"));
+    let vides = un(catalog, &format!("MATCH (c:{t}) WHERE c._text = '' RETURN count(c)"));
     let haches = un(
         catalog,
-        "MATCH (c:Scope_Chunk) WHERE (c._text IS NULL OR c._text = '') AND c._text_hash IS NOT NULL AND c._text_hash <> '' RETURN count(c)",
+        &format!("MATCH (c:{t}) WHERE (c._text IS NULL OR c._text = '') AND c._text_hash IS NOT NULL AND c._text_hash <> '' RETURN count(c)"),
     );
-    println!("[{chemin}] Scope_Chunk {total}, _text nul {nuls}, _text vide {vides}, vides avec hash {haches}");
+    println!("[{chemin}] {t} {total}, _text nul {nuls}, _text vide {vides}, vides avec hash {haches}");
     let r = catalog
-        .execute_raw(
-            "MATCH (c:Scope_Chunk) WHERE c._text IS NULL OR c._text = '' \
-             RETURN c._parent_uuid, c._parent_field, c._text_hash, c._uuid LIMIT 3",
-        )
+        .execute_raw(&format!(
+            "MATCH (c:{t}) WHERE c._text IS NULL OR c._text = '' \
+             RETURN c._parent_uuid, c._parent_field, c._text_hash, c._uuid LIMIT 3"
+        ))
         .unwrap();
     for l in &r.rows {
         println!("  vide : {l:?}");
     }
     // Les pleins qui contiennent une barre oblique inverse, pour comparer.
-    let barres = un(catalog, "MATCH (c:Scope_Chunk) WHERE c._text CONTAINS '\\\\' RETURN count(c)");
+    let barres = un(catalog, &format!("MATCH (c:{t}) WHERE c._text CONTAINS '\\\\' RETURN count(c)"));
     println!("  pleins contenant une barre oblique inverse : {barres}");
     if nuls + vides > 0 {
         let r = catalog
-            .execute_raw(
-                "MATCH (c:Scope_Chunk), (s:Scope) WHERE (c._text IS NULL OR c._text = '') AND s._uuid = c._parent_uuid \
+            .execute_raw(&format!(
+                "MATCH {} WHERE c._text IS NULL OR c._text = '' \
                  RETURN s.file_path, count(c) AS n ORDER BY n DESC LIMIT 20",
-            )
+                chunks.to_scope
+            ))
             .unwrap();
         for l in &r.rows {
             println!("  par fichier : {l:?}");
@@ -157,8 +162,8 @@ fn les_morceaux_vides_sur_disque() {
                 let t0 = std::time::Instant::now();
                 let rapport = sync_source(&mut cat, &WorkingTree::new(dossier), &options, &mut |_| {}).unwrap();
                 println!("{dossier} [{variante}] : {} ingéré(s), {:.1} s", rapport.files_ingested, t0.elapsed().as_secs_f64());
-                let storage = cat.vector_storage("Scope_Chunk").unwrap();
-                let v = un(&cat, &format!("MATCH (c:Scope_Chunk) WHERE c.{} IS NOT NULL RETURN count(c)", storage.column));
+                let storage = cat.vector_storage(&scope_chunks(&cat).unwrap().table).unwrap();
+                let v = un(&cat, &format!("MATCH (c:{}) WHERE c.{} IS NOT NULL RETURN count(c)", scope_chunks(&cat).unwrap().table, storage.column));
                 println!("  vecteurs posés : {v}");
                 compter(&cat, &format!("{variante}, avant fermeture"));
             }
@@ -283,8 +288,8 @@ fn les_morceaux_vides_apres_rattrapage() {
                 let n = if variante == "embarquer" {
                     cat.embarquer_le_retard(Disponibilites::TOUT, 512, None).unwrap()
                 } else {
-                    let marqueur = cat.vector_storage("Scope_Chunk").unwrap().marker;
-                    cat.reclamer_le_retard("Scope_Chunk", &marqueur, 512).unwrap().len()
+                    let marqueur = cat.vector_storage(&scope_chunks(&cat).unwrap().table).unwrap().marker;
+                    cat.reclamer_le_retard(&scope_chunks(&cat).unwrap().table, &marqueur, 512).unwrap().len()
                 };
                 if n == 0 || passes >= 1000 {
                     break;
@@ -293,8 +298,8 @@ fn les_morceaux_vides_apres_rattrapage() {
                 lignes += n;
             }
             println!("[{variante}] rattrapage : {passes} passes, {lignes} lignes, {:.1} s", t0.elapsed().as_secs_f64());
-            let storage = cat.vector_storage("Scope_Chunk").unwrap();
-            let v = un(&cat, &format!("MATCH (c:Scope_Chunk) WHERE c.{} IS NOT NULL RETURN count(c)", storage.column));
+            let storage = cat.vector_storage(&scope_chunks(&cat).unwrap().table).unwrap();
+            let v = un(&cat, &format!("MATCH (c:{}) WHERE c.{} IS NOT NULL RETURN count(c)", scope_chunks(&cat).unwrap().table, storage.column));
             println!("  vecteurs posés : {v}");
             compter(&cat, &format!("{variante}, après rattrapage"));
         }
@@ -311,14 +316,22 @@ fn compter_une_base() {
     let chemin = std::env::var("SONDE_BASE").expect("SONDE_BASE");
     let conn = Rag3dbConnection::new(&chemin).unwrap();
     conn.execute(&format!("LOAD EXTENSION '{}'", rag3weaver::backend::vector_extension_of_this_process().expect("l'extension vector de ce processus").display())).unwrap();
+    // The scope chunks of this base's form, read from its stamp (`code_scope_form`) without a catalog.
+    let forme = conn
+        .execute(&format!("MATCH (m:_catalog_meta) WHERE m._key = '{SCOPE_FORM_KEY}' RETURN m._value"))
+        .ok()
+        .and_then(|r| r.rows.first().and_then(|l| l.first()).and_then(|v| v.as_str().map(str::to_string)))
+        .unwrap_or_default();
+    let t = if forme.starts_with(SCOPE_FORM_VERSIONS) { "ScopeContent_Chunk" } else { "Scope_Chunk" };
+    println!("forme {forme:?} : morceaux de scope dans {t}");
     for q in [
-        "MATCH (c:Scope_Chunk) RETURN count(c)",
-        "MATCH (c:Scope_Chunk) WHERE c._text IS NULL RETURN count(c)",
-        "MATCH (c:Scope_Chunk) WHERE c._text = '' RETURN count(c)",
-        "MATCH (c:File_Chunk) RETURN count(c)",
-        "MATCH (c:File_Chunk) WHERE c._text IS NULL OR c._text = '' RETURN count(c)",
+        format!("MATCH (c:{t}) RETURN count(c)"),
+        format!("MATCH (c:{t}) WHERE c._text IS NULL RETURN count(c)"),
+        format!("MATCH (c:{t}) WHERE c._text = '' RETURN count(c)"),
+        "MATCH (c:File_Chunk) RETURN count(c)".to_string(),
+        "MATCH (c:File_Chunk) WHERE c._text IS NULL OR c._text = '' RETURN count(c)".to_string(),
     ] {
-        let r = conn.execute(q).unwrap();
+        let r = conn.execute(&q).unwrap();
         println!("{q} → {:?}", r.rows.first().and_then(|l| l.first()));
     }
 }
