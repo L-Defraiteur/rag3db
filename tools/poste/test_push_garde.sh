@@ -16,7 +16,7 @@ printf '#!/bin/bash\ncargo test\n' > extension/rag3weaver/scripts/cargo_magasin.
 printf '#!/bin/bash\npython3 scripts/sous_relais.py\n' > extension/rag3weaver/scripts/relais.sh
 echo '#[test] fn t() { std::process::Command::new("python3").arg("scripts/par_un_test.py"); }' > extension/rag3weaver/tests/e2e_x.rs
 echo 'print(1)' > extension/rag3weaver/scripts/appele.py
-mkdir -p tools/poste && cp "$ICI_TEMOIN/required_suites.sh" "$ICI_TEMOIN/required_suites.txt" tools/poste/ || exit 2
+mkdir -p tools/poste && cp "$ICI_TEMOIN/required_suites.sh" "$ICI_TEMOIN/required_suites.txt" "$ICI_TEMOIN/tests_only_dirs.txt" tools/poste/ || exit 2
 git add -A && git commit -qm base && BASE=$(git rev-parse HEAD)
 rouge=0
 cas() { # cas <attendu: code|docs> <chemin> <contenu>
@@ -322,4 +322,20 @@ exigees arret "code_sync.rs touché, e2e_code_sync non joué" extension/rag3weav
 exigees tenue "code_sync.rs touché, e2e_code_sync joué vert" extension/rag3weaver/src/code_sync.rs e2e_code_sync
 exigees arret "un fichier du catalogue touché, e2e_code_sync non joué" extension/rag3weaver/src/catalog/synchronisation.rs
 exigees tenue "lib.rs seul : rien d'exigé" extension/rag3weaver/src/lib.rs
+# **Le mode tests seuls** (16 novembre 2026, ticket d'hotfixs) : un lot qui ne touche que des tests déclarés
+# (tools/poste/tests_only_dirs.txt) passe sans lib, sur un journal qui nomme le binaire joué et sa provenance ; un
+# chemin hors des dossiers déclarés, ou un journal sans provenance, est un arrêt nommé.
+seuls() { # seuls <attendu: tenue|arret> <description> <motif d'arrêt|-> <provenance: oui|non> <chemin>...
+  local attendu=$1 desc=$2 motif=$3 prov=$4; shift 4
+  git checkout -q "$BASE" 2>/dev/null; for c in "$@"; do mkdir -p "$(dirname "$c")"; echo '# lot' > "$c"; done
+  git add -- "$@"; git commit -qm "$desc"; N=$(git rev-parse HEAD)
+  local J; J=$(mktemp -d); printf 'teste %s\nVERT\n' "$N" > "$J/resume.log"; printf '245 passed\n' > "$J/shell.log"
+  [ "$prov" = oui ] && printf 'tested binary: /x/build/rag3db_shell commit %s sha256 %s\n' "$(printf '%040d' 7)" "$(printf '%064d' 9)" >> "$J/shell.log"
+  local sortie rc; sortie=$(bash "$GARDE" --tests-only "$BASE" "$N" "$J" 2>&1); rc=$?; rm -rf "$J"
+  if { [ "$attendu" = tenue ] && [ $rc = 0 ]; } || { [ "$attendu" = arret ] && [ $rc != 0 ] && echo "$sortie" | grep -qF -- "$motif"; }; then echo "vert   tests seuls, $attendu : $desc"
+  else echo "ROUGE  tests seuls, attendu $attendu (rc $rc) : $desc — $sortie"; rouge=1; fi
+}
+seuls tenue "un test du shell seul, binaire nommé avec sa provenance" - oui tools/shell/test/test_x.py
+seuls arret "un test du shell et un fichier du moteur" "src/x.cpp" oui tools/shell/test/test_x.py src/x.cpp
+seuls arret "un test du shell, journal sans provenance" "tested binary" non tools/shell/test/test_x.py
 exit $rouge

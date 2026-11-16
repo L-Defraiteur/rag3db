@@ -179,6 +179,27 @@ required_suites_played() {
   [ -z "$manque" ] || { echo "ARRÊT : le lot exige des suites que la passe n'a pas jouées vertes :$manque"; return 1; }
 }
 if [ "${1:-}" = "--required-suites" ]; then required_suites_played "$2" "$3" "$4"; exit $?; fi
+# **Le mode tests seuls** (16 novembre 2026, ticket d'hotfixs), pendant du mode docs : sous TESTS_ONLY=1, un lot qui ne
+# touche que des dossiers de tests déclarés (tools/poste/tests_only_dirs.txt de l'arbre), plus des .md, passe sans lib.
+# Sa preuve est la suite jouée contre un binaire : un journal de la passe doit le nommer, avec sa provenance, par une
+# ligne « tested binary: <chemin> commit <40 hex> sha256 <64 hex> ». Les autres contrôles restent. Mode
+# `--tests-only <base> <testé> <journaux>`, joué par le témoin.
+tests_only_check() {
+  local base=$1 teste=$2 J=$3 dirs f d ok hors="" prov
+  [ -f tools/poste/tests_only_dirs.txt ] || { echo "ARRÊT : mode tests seuls sans dossiers déclarés (tools/poste/tests_only_dirs.txt)"; return 1; }
+  dirs=$(grep -vE '^[[:space:]]*(#|$)' tools/poste/tests_only_dirs.txt)
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    case "$f" in *.md) continue ;; esac
+    ok=""; for d in $dirs; do case "$f" in "${d%/}"/*) ok=1 ;; esac; done
+    [ -n "$ok" ] || hors="$hors $f"
+  done < <(git diff --name-only "$base" "$teste")
+  [ -z "$hors" ] || { echo "ARRÊT : mode tests seuls, mais le lot touche hors des dossiers de tests déclarés ($(echo $dirs)) :$hors"; return 1; }
+  prov=$(grep -hE '^tested binary: [^ ]+ commit [0-9a-f]{40} sha256 [0-9a-f]{64}$' "$J"/*.log 2>/dev/null)
+  [ -n "$prov" ] || { echo "ARRÊT : mode tests seuls, mais aucun journal de la passe ($J/*.log) ne dit « tested binary: <chemin> commit <40 hex> sha256 <64 hex> »"; return 1; }
+  echo "mode tests seuls : le lot ne touche que $(echo $dirs) ; binaire joué :"; echo "$prov" | sed 's/^/  /'
+}
+if [ "${1:-}" = "--tests-only" ]; then tests_only_check "$2" "$3" "$4"; exit $?; fi
 # Master tenu pour une autre session (fenêtre de c7) : pas de push tant que le fichier existe.
 [ -e $HOME/.cache/rag3weaver-build/master-tenu ] && { echo "ARRÊT : master tenu — $(cat $HOME/.cache/rag3weaver-build/master-tenu)"; exit 1; }
 J=$HOME/.cache/rag3weaver-build/$2
@@ -209,13 +230,17 @@ fi
 # La lib se cherche dans **tous les journaux** de la passe (`$J/*.log`, 14 novembre 2026, relevé de tty) : une passe
 # courte (crate.log, e2e_tty.log…) n'avait aucun des journaux d'une liste fixe. Une seule lib, et au moins un
 # journal qui la nomme : zéro reste un ARRÊT.
+if [ "${TESTS_ONLY:-}" = 1 ]; then
+  tests_only_check "$base_exigees" "$teste" "$J" || exit 1
+else
 libs=$(grep -ho 'rag3db-build-[0-9a-f]\{40\}' "$J"/*.log 2>/dev/null | sort -u)
 case "$(echo "$libs" | grep -c .)" in
   1) ;;
-  0) echo "ARRÊT : aucun journal de la passe ($J/*.log) ne nomme une lib du magasin"; exit 1 ;;
+  0) echo "ARRÊT : aucun journal de la passe ($J/*.log) ne nomme une lib du magasin (un lot de tests seuls : TESTS_ONLY=1)"; exit 1 ;;
   *) echo "ARRÊT : la passe a vu plusieurs libs du magasin :"; echo "$libs"; exit 1 ;;
 esac
 echo "lib de toute la passe : $libs"
+fi
 git fetch -q origin master || exit 1
 neuf=$(git rev-parse FETCH_HEAD)
 # Le C++ du moteur (src/, test/) n'est pas lié par la lib épinglée : il se rebase sans rejeu
