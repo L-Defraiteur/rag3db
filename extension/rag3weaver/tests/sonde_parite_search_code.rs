@@ -559,6 +559,27 @@ fn releve_les_reponses_apres_une_reindexation_publiee() {
     ecrire(&format!("{}.avant.json", sortie.to_string_lossy()), &avant, json!({"structure": structure_avant}));
     let hash_avant = hash_des_scopes(&backend);
     let fin_index = indexer_et_attendre(&backend, "source entière");
+    // **The embedding backlog, settled before the relevé** (B-prime, 16 Nov. 2026): the index ends
+    // with chunks still owed to the model (92 708 on ScopeContent_Chunk for a fresh base), and a
+    // relevé taken then ranks by bm25 alone. Under `RAG3WEAVER_PARITE_EMBED_BACKLOG=1` the dense
+    // backlog is embedded, pass after pass, until a pass embeds nothing.
+    if std::env::var("RAG3WEAVER_PARITE_EMBED_BACKLOG").as_deref() == Ok("1") {
+        let debut = std::time::Instant::now();
+        let mut total = 0usize;
+        loop {
+            let n = rag3weaver::catalog::Catalog::embarquer_le_retard_hors_verrou(&backend.catalog, rag3weaver::disponibilite::Disponibilites::DENSE, 512, None)
+                .unwrap_or_else(|e| panic!("embedding the backlog: {e}"));
+            total += n;
+            if n == 0 {
+                break;
+            }
+            if total % 10240 < n {
+                eprintln!("[parité] backlog: {total} chunks embedded in {:.0} s", debut.elapsed().as_secs_f64());
+            }
+            assert!(debut.elapsed().as_secs() < 3 * 3600, "backlog not settled in three hours ({total} chunks)");
+        }
+        eprintln!("[parité] backlog settled: {total} chunks embedded in {:.0} s", debut.elapsed().as_secs_f64());
+    }
     // <publication>
     let publication = {
         let mut cat = backend.catalog.lock().unwrap();
