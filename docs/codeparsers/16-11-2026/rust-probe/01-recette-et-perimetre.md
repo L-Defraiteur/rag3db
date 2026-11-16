@@ -179,3 +179,8 @@ Ces tests utilisent des fichiers /proc factices, des horloges simulées et des
 JSON Cargo synthétiques, sans processus natif, Cargo, autorité ou bus réels.
 Aucun résultat n’est revendiqué au moment de cette publication. Au premier
 échec inattendu : arrêt, preuve et retour C7 ; pas de deuxième lot implicite.
+
+Le lot CPU prévu a ensuite été tenté sur1916b3553f : rouge de parsingCLI rc2,
+0,065s, zéro test exécuté (-f répété avec failfast=True dans main). Correction
+publiée : unittest.main() laisse -f commander failfast. Pas de relance implicite ;
+source corrigé encore non vérifié, nouvelle allocation CPU C7 nécessaire.

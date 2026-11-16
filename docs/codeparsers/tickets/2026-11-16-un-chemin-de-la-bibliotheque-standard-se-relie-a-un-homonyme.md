@@ -177,3 +177,17 @@ publication ouverte avant horloge et fsync). Leurs sources ne sont pas modifiée
 Source groupée corrigée à publier avant **un seul** jeu CPU hermétique borné60s
 failfast autorisé par C7 ; aucun Cargo/natif. Cette section constate la revue,
 pas un échec de sonde ni une remise en cause des1+1+2+41verts déjà prouvés.
+
+## Rouge du seul lot CPU autorisé après publication1916b3553f
+
+Paquet complet poussé1916b3553f avant essai. Commande de recette exécutée une
+seule fois ; retour2 en0,065s, **zéro test joué** : unittest.main(failfast=True)
+retire l'option de parsing -f, que la commande passait également. Aucun skip ni
+vert revendiqué. Preuves conservées sous
+~/.cache/codeparsers-notes/rust-probe-protocol-1916b3553f/ : command.json,
+stdout,stderr,result.json. Aucun Cargo/natif/autorité/bus lancé.
+
+Correction source : laisser unittest.main() parser -f, qui active failfast comme
+prévu. Publication sans relance ; une nouvelle allocation CPU explicite C7
+est nécessaire pour vérifier ce source. Les trois réserves ne sont pas encore
+qualifiées. Ce rouge de lanceur ne change pas les preuves natives118 acquises.
