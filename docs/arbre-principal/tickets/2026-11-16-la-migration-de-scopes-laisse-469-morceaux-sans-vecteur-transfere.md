@@ -234,3 +234,24 @@ outer598+kill2/common530 aprèsposte32G ; grapheRAW classifié sans snapshotSQL,
 FTS5/finished seuls manquants. AncienEND conservé commehistorique, pasreset.
 DeuxCPU nouveaux +2normalisation verts0.025s, aucun natif/DB/provider.
 NouveauSHA/paquet/2RO/GOdistinct requis ; les deuxrouges et limites restent.
+
+## FIN-RO600 exécuté : dette0 observée, limites conservées
+
+GO C7-FIN-RO-5B7-16nov exact5b7a4b00a8/Q6ee3, après2RO ; scope
+validation-c_u1en_c/32G/END1192105.971006448, VERT0/restes[]/nettoyé/
+TERMINE/busabsent/ownedvivants0, retour0/FIN_RO_OBSERVED. Voir
+[rapport11](../16-11-2026/11-preuves-fin-ro-etat-observable.md).
+NouvellefreezeFIN seule ouverteRO, aucun nouveau writer/CLI/provider.
+RAWgraphe classifié sans snapshotSQL ; FTS5IDs/gens/2247fichiers inchangés.
+SQLglobaldebt0,97247vecteursTOUS768finite/markerhash,cohorte469couverte,
+indexREADY/loaded. Claims469opérationnels admis/consignés, calculated/reused
+UNKNOWN, paspurge/claims0. Trois sources+FINfichiersmodesdirs inchangés,
+aucun ajout.readers/WAL,11UNKNOWNglobaux non attribués consignés.
+
+76preuvesPC/local réempreintées0écart manifesteSHA
+05661b1fddc82c1e66d21f218d0c8cdfd12b69d8ef16432a2c55c3b127a9462a.
+BUILD_IDSDK59ac8/8+pinsELF/SDK, pasnouvellecapturemapsReaderFIN ; anciennes
+mapsWRITERhistorique distinctes. Résultat ÉTATROOBSERVABLE aprèscleanup,
+pas qualification shutdown/durabilité/migrationLIVE. Les deuxrouges et
+CC18expired restent inchangés. Ticket et parent toujoursOUVERTS jusqu'à
+revuepreuves/décisionC7 ; aucun retrait/bascule/master/rejeu déduit.
