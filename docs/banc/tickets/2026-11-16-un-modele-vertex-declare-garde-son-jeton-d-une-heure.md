@@ -1,6 +1,14 @@
 # Un modèle Vertex déclaré garde son jeton d'une heure
 
-- **État** : ouvert ; constat, pas de correctif.
+- **État** : ouvert ; correctif proposé en branche, NON QUALIFIÉ.
+- **Correctif proposé** : c38fc3e4ddd8c806de904c7d08eb43b4988fec99,
+  branche `cx-ed-vertex-token-fix-r1` ; sept juges natifs NON JOUÉS.
+- **Pilote proposé** : e0777a894dad4e4edb9fa7f9ec4c065f94798b5d,
+  branche `cx-ed-vertex-token-green-pilot-r1` ; RO Archi/Hotfix favorables bornées,
+  préparation PC Git/hashes seulement ; aucun GO vert ni exécution déduits.
+- **Rouge conservé** : source fe40b640eb0cc54645cbd552aa13b065ed1d2fa7,
+  pilote eb026f0a3c7c4143b511175b2bc92bd4f65c2db4, preuves 4d54cf4a47.
+  Trois positifs puis refresh401 rouge ; persistant401 NON JOUÉ dans cette passe.
 - **Famille** : produit
 - **Gravité** : haute pour toute passe longue. Au bout d'une heure, chaque appel au modèle rend 401, et la
   décision est perdue sans que la passe s'arrête.
