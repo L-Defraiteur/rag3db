@@ -9085,7 +9085,7 @@ mod tests {
     /// and sends a question of meaning to `search_code`.
     #[test]
     fn the_search_tool_descriptions_say_when_each_is_the_right_one() {
-        for gabarit in ["templates/backends/code/backend.json", "templates/backends/atelier/backend.json"] {
+        for gabarit in ["templates/backends/code/backend.json", "templates/backends/code/snapshot.json", "templates/backends/atelier/backend.json"] {
             let chemin = Path::new(env!("CARGO_MANIFEST_DIR")).join(gabarit);
             let m: Value = serde_json::from_slice(&std::fs::read(&chemin).unwrap()).unwrap();
             let search = m["tools"]["search_code"]["description"].as_str().unwrap_or_default();
