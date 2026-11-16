@@ -1,0 +1,7 @@
+lazy_open_with_a_store_that_cannot_size_blobs_does_not_deadlock: test
+v3_blob_storage_create_reopen_search: test
+v3_blob_storage_lazy_open_matches_eager: test
+v3_close_means_no_more_store_calls: test
+v3_drop_index_leaves_nothing: test
+
+5 tests, 0 benchmarks

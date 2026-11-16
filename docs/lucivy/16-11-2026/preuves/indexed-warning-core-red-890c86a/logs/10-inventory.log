@@ -1,0 +1,7 @@
+a_healthy_index_needs_no_rebuild: test
+a_sharded_index_is_checked_shard_by_shard: test
+an_index_without_shard_dictionary_is_not_concerned: test
+lost_words_are_counted_and_call_for_a_rebuild: test
+the_saved_index_shows_its_lost_words: test
+
+5 tests, 0 benchmarks

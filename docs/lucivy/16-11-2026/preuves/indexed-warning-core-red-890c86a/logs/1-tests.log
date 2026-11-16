@@ -1,0 +1,32 @@
+
+running 1 test
+
+=== Collecting files from /home/lucied/.cache/rag3weaver-build/cx-lucivy-indexed-warning-core-16nov-v1/corpora/rag3db ===
+Found 8044 text files
+=== Indexing ===
+  committed 1000 docs
+  committed 2000 docs
+  committed 3000 docs
+  committed 4000 docs
+  committed 5000 docs
+  committed 6000 docs
+  committed 7000 docs
+  committed 8000 docs
+Indexed 8044 docs in 7.9s
+Exported /home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/tmp/lucivy-reports/lucivy_bench_rag3db.luce (454.5 MB)
+
+Query                                           Hits      No HL    With HL
+---------------------------------------------------------------------------
+contains 'rag3db'                                 20     52.3ms     18.9ms
+contains 'main'                                   20      9.2ms      9.6ms
+contains_split 'rag3db main'                      20     33.4ms     27.7ms
+contains_split 'rag3db main' d=1                  20    477.4ms    475.9ms
+startsWith 'rag3db'                               20     18.1ms     18.9ms
+startsWith_split 'rag3db main'                    20     27.2ms     26.3ms
+startsWith_split 'rag3db main' d=1                20    449.1ms    450.3ms
+
+.luce saved at /home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/tmp/lucivy-reports/lucivy_bench_rag3db.luce for reuse
+test bench_rag3db_contains ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 15.63s
+

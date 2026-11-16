@@ -1,0 +1,9 @@
+
+running 4 tests
+test commit_floor_profile ... ignored
+test commit_floor_profile_blob ... ignored
+test commit_floor_profile_reopen ... ignored
+test commit_floor_store_calls ... ignored
+
+test result: ok. 0 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

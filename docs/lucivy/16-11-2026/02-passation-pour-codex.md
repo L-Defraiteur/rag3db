@@ -319,3 +319,10 @@ paquet final, aucun nouveau Cargo. ULP7.2 reste en attente et PR42 HOLD.
 Préparation autorisée par C7 ensuite exécutée : recette08 et preuvescore-preparation,
 corpus privés/manifestes/licences, profil adapté neuf HOLD (ticket distinct).
 APP890/pilote2fa59f ; attente RO puis GO1800 distinct, aucunCargo/ELF.
+
+GOcoreadapté effectivement joué puisSTOProuge : rapport09, ticketwarningouvert.
+117passés/1échec/25ignorés observés, panelmutex_lock vide sur sousensemble300
+Linux2.6.0 confirméRAW0 ; pasbugwarningattribué. FinCommon101TERMINE/restes[]/
+nettoyé/ownedabsent,sourcepropre,aucunretry. Admissiondataset/PANELàcorriger
+avantfuturepasse ; propositionHOLDcascorpus et limitesledger tardif explicites.
+T/proofsconservés, aucune permission de nouvelle passe ou main/tag/PR42/ULP7.2.

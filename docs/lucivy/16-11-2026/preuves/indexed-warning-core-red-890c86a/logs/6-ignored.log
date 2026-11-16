@@ -1,0 +1,6 @@
+compare_tantivy: test
+probe_default_tokenizer: test
+probe_ngram_positions: test
+probe_substrings: test
+
+4 tests, 0 benchmarks

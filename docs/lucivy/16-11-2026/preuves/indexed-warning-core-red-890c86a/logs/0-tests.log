@@ -1,0 +1,11 @@
+
+running 6 tests
+test test_acid_blobs_in_postgres ... ignored
+test test_acid_crash_recovery ... ignored
+test test_acid_sharded_postgres_create_reopen_search ... ignored
+test test_bm25_scores_identical_across_shard_counts ... ignored
+test test_distributed_bm25_ground_truth ... ignored
+test test_distributed_search_two_nodes_postgres ... ignored
+
+test result: ok. 0 passed; 0 failed; 6 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

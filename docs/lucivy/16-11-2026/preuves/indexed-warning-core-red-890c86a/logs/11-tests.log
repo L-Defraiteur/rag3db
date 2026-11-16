@@ -1,0 +1,15 @@
+
+running 4 tests
+cold_rr: 20 results for 'function'
+cold_rr_2f: 20 results
+test test_cold_rr_search ... ok
+test test_cold_rr_two_fields ... ok
+single_handle_highlights: 1 results
+  field='content' offsets=[[4, 12]]
+    @4..12 = "function"
+test test_single_handle_highlights ... ok
+cold_ta: 20 results for 'function'
+test test_cold_ta_search ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+

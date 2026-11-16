@@ -1,0 +1,38 @@
+
+running 1 test
+single   mutex_lock         strict       1 docs    1 spans — as 3.0.8
+single   mutex lock         relax        1 docs    2 spans — as 3.0.8
+single   spin_lock          strict       4 docs   11 spans — as 3.0.8
+single   sched              term         2 docs   16 spans — as 3.0.8
+single   printk             sw           1 docs    2 spans — as 3.0.8
+single   return             relax        7 docs   19 spans — as 3.0.8
+single   if (               strict       6 docs   19 spans — as 3.0.8
+single   schdule            fz1          1 docs    1 spans — as 3.0.8
+single   regsiter           fz2          5 docs   23 spans — as 3.0.8
+single   spin_lock_[a-z]+   rx           2 docs    4 spans — as 3.0.8
+single   Mutex              relax-case   3 docs    5 spans — as 3.0.8
+single   i̇stanbul          relax        1 docs    2 spans — as 3.0.8
+single   解。                 strict       1 docs    1 spans — as 3.0.8
+single   return -ENOMEM     phrase       1 docs    1 spans — as 3.0.8
+single: after the conversion, 8 sfxpost files, 6 still in the 3.0.8 layout
+single: compacted — 2 sfxpost files, all current layouts, same answers
+sharded  mutex_lock         strict       1 docs    1 spans — as 3.0.8
+sharded  mutex lock         relax        1 docs    2 spans — as 3.0.8
+sharded  spin_lock          strict       4 docs   11 spans — as 3.0.8
+sharded  sched              term         2 docs   16 spans — as 3.0.8
+sharded  printk             sw           1 docs    2 spans — as 3.0.8
+sharded  return             relax        7 docs   19 spans — as 3.0.8
+sharded  if (               strict       6 docs   19 spans — as 3.0.8
+sharded  schdule            fz1          1 docs    1 spans — as 3.0.8
+sharded  regsiter           fz2          5 docs   23 spans — as 3.0.8
+sharded  spin_lock_[a-z]+   rx           2 docs    4 spans — as 3.0.8
+sharded  Mutex              relax-case   3 docs    5 spans — as 3.0.8
+sharded  i̇stanbul          relax        1 docs    2 spans — as 3.0.8
+sharded  解。                 strict       1 docs    1 spans — as 3.0.8
+sharded  return -ENOMEM     phrase       1 docs    1 spans — as 3.0.8
+sharded: after the conversion, 16 sfxpost files, 12 still in the 3.0.8 layout
+sharded: compacted — 4 sfxpost files, all current layouts, same answers
+test a_308_index_answers_like_308_then_converts_without_loss ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.52s
+

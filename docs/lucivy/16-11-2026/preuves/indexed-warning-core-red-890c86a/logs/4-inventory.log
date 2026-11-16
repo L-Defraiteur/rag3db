@@ -1,0 +1,9 @@
+t00_diag_starts_with: test
+t00_repro_starts_with_prefix: test
+t01_bench_sharding_comparison: test
+t02_ground_truth_exhaustive: test
+t03_bench_query_times: test
+t05_test_score_consistency_single_vs_sharded: test
+t06_profile_regex_automaton_weight: test
+
+7 tests, 0 benchmarks

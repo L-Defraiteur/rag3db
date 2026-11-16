@@ -1,0 +1,11 @@
+
+running 5 tests
+test lazy_open_with_a_store_that_cannot_size_blobs_does_not_deadlock ... ok
+test v3_blob_storage_create_reopen_search ... ok
+  lazy: 3642 bytes after open, 42943 after searches, 43383 in store
+test v3_blob_storage_lazy_open_matches_eager ... ok
+test v3_drop_index_leaves_nothing ... ok
+test v3_close_means_no_more_store_calls ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.34s
+

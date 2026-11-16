@@ -1,0 +1,201 @@
+[
+  {
+    "target": "acid_postgres",
+    "executable": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/acid_postgres-522533b9503ec00a",
+    "sha256": "d454752df643286c2fafee1d8576ff29742a635d4995801758e74316c213044f",
+    "discovered": 6,
+    "ignored_names": [
+      "test_acid_blobs_in_postgres",
+      "test_acid_crash_recovery",
+      "test_acid_sharded_postgres_create_reopen_search",
+      "test_bm25_scores_identical_across_shard_counts",
+      "test_distributed_bm25_ground_truth",
+      "test_distributed_search_two_nodes_postgres"
+    ],
+    "passed": 0,
+    "failed": 0,
+    "ignored": 6,
+    "qualification": "no default tests executed"
+  },
+  {
+    "target": "bench_contains",
+    "executable": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/bench_contains-190da80781829604",
+    "sha256": "eec715e707ab06d99dc141fabb87827faee894c64146e43e381e5ab9b125e83f",
+    "discovered": 1,
+    "ignored_names": [],
+    "passed": 1,
+    "failed": 0,
+    "ignored": 0,
+    "qualification": "default tests only"
+  },
+  {
+    "target": "bench_dict_compaction",
+    "executable": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/bench_dict_compaction-7ed08e14ed907b9e",
+    "sha256": "6b19a62cb063f68ec4771745d3f4b0d4327096033e80ab86ef42c7489c903782",
+    "discovered": 1,
+    "ignored_names": [
+      "bench_dict_compaction"
+    ],
+    "passed": 0,
+    "failed": 0,
+    "ignored": 1,
+    "qualification": "no default tests executed"
+  },
+  {
+    "target": "bench_docstore_fetch",
+    "executable": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/bench_docstore_fetch-da8969cc4098c193",
+    "sha256": "ff4b6e77ba8e817458768f9983e0b3f1bb467fe28e7366b03e23d73ae74ab660",
+    "discovered": 2,
+    "ignored_names": [
+      "bench_docstore_fetch",
+      "bench_sharded_fetch_docs"
+    ],
+    "passed": 0,
+    "failed": 0,
+    "ignored": 2,
+    "qualification": "no default tests executed"
+  },
+  {
+    "target": "bench_sharding",
+    "executable": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/bench_sharding-69b73f2476c9710e",
+    "sha256": "a84122078796987c9fc046cbecff2fcfb4ac3cf25bec274b7cc1ccd1b983796b",
+    "discovered": 7,
+    "ignored_names": [
+      "t00_diag_starts_with",
+      "t01_bench_sharding_comparison",
+      "t02_ground_truth_exhaustive",
+      "t03_bench_query_times",
+      "t05_test_score_consistency_single_vs_sharded",
+      "t06_profile_regex_automaton_weight"
+    ],
+    "passed": 1,
+    "failed": 0,
+    "ignored": 6,
+    "qualification": "default tests only"
+  },
+  {
+    "target": "bench_vs_tantivy",
+    "executable": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/bench_vs_tantivy-bb002e562b345d3f",
+    "sha256": "8504dec80b127c9091cccedef8e8f55e6b5f5587cb8ce6fdfbd2c6910e4e0eb1",
+    "discovered": 1,
+    "ignored_names": [],
+    "passed": 0,
+    "failed": 0,
+    "ignored": 0,
+    "qualification": "HOLD: not executed",
+    "reason": "persistent personal paths and lock removal; not isolated"
+  },
+  {
+    "target": "compare_tantivy",
+    "executable": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/compare_tantivy-9435ea596cc2d14b",
+    "sha256": "f7c83bfa8e5e77e0d41037a947fb3724786d13c8191abad602115045d6d507a4",
+    "discovered": 4,
+    "ignored_names": [
+      "compare_tantivy",
+      "probe_default_tokenizer",
+      "probe_ngram_positions",
+      "probe_substrings"
+    ],
+    "passed": 0,
+    "failed": 0,
+    "ignored": 4,
+    "qualification": "no default tests executed"
+  },
+  {
+    "target": "lucivy_core",
+    "executable": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/lucivy_core-fc1e35c9cf67f576",
+    "sha256": "7cd2346427d084d296dcb16b4aa2ef7ec3b5a83f832044de20c5d3c62f782c9e",
+    "discovered": 99,
+    "ignored_names": [],
+    "passed": 99,
+    "failed": 0,
+    "ignored": 0,
+    "qualification": "default tests only"
+  },
+  {
+    "target": "test_acid_blob_v3",
+    "executable": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_acid_blob_v3-ce63acdccbbba5a3",
+    "sha256": "f555421f72df27e0e5687c308c16b32e96e862bb6762988729dda100ca21cc96",
+    "discovered": 5,
+    "ignored_names": [],
+    "passed": 5,
+    "failed": 0,
+    "ignored": 0,
+    "qualification": "default tests only"
+  },
+  {
+    "target": "test_apostrophe_and_unknown_keys",
+    "executable": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_apostrophe_and_unknown_keys-44add0d8ffb85290",
+    "sha256": "23a04a21bdc3fdb55160d09c43de03839391c7d39994da119c44f5c6fced6aaf",
+    "discovered": 2,
+    "ignored_names": [],
+    "passed": 2,
+    "failed": 0,
+    "ignored": 0,
+    "qualification": "default tests only"
+  },
+  {
+    "target": "test_check_dictionary",
+    "executable": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_check_dictionary-d32d37431e108bc6",
+    "sha256": "0805ce9209fc9e938132ca8950e4575c5b8a42626468adc1011ca949251b2ec5",
+    "discovered": 5,
+    "ignored_names": [
+      "the_saved_index_shows_its_lost_words"
+    ],
+    "passed": 4,
+    "failed": 0,
+    "ignored": 1,
+    "qualification": "default tests only"
+  },
+  {
+    "target": "test_cold_scheduler",
+    "executable": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_cold_scheduler-25738d38b228c85e",
+    "sha256": "7a38adba90e1c6b167970321726be2e55b163879c964e6c49879de32cfdf1b09",
+    "discovered": 4,
+    "ignored_names": [],
+    "passed": 4,
+    "failed": 0,
+    "ignored": 0,
+    "qualification": "default tests only"
+  },
+  {
+    "target": "test_commit_floor",
+    "executable": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_commit_floor-a10d0f78b7c9feef",
+    "sha256": "a84fc90854c111915f5269f47bef33ea44b3c1026620fc7e0a29b41e3df7563e",
+    "discovered": 4,
+    "ignored_names": [
+      "commit_floor_profile",
+      "commit_floor_profile_blob",
+      "commit_floor_profile_reopen",
+      "commit_floor_store_calls"
+    ],
+    "passed": 0,
+    "failed": 0,
+    "ignored": 4,
+    "qualification": "no default tests executed"
+  },
+  {
+    "target": "test_compare_two_indexes",
+    "executable": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_compare_two_indexes-703f3f6d9df43390",
+    "sha256": "674df628407831abf6f73a6069c5d7caffcb4ff199a1e78ad6b7e5c908a4491e",
+    "discovered": 1,
+    "ignored_names": [
+      "compare_two_indexes"
+    ],
+    "passed": 0,
+    "failed": 0,
+    "ignored": 1,
+    "qualification": "no default tests executed"
+  },
+  {
+    "target": "test_compat_308",
+    "executable": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_compat_308-44b5adedda496401",
+    "sha256": "850ee7e2d92457b74bebe21be35cc02465ff60647be951d1e8551f8183c98416",
+    "discovered": 1,
+    "ignored_names": [],
+    "passed": 1,
+    "failed": 0,
+    "ignored": 0,
+    "qualification": "default tests only"
+  }
+]

@@ -1,0 +1,6 @@
+test_cold_rr_search: test
+test_cold_rr_two_fields: test
+test_cold_ta_search: test
+test_single_handle_highlights: test
+
+4 tests, 0 benchmarks

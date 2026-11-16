@@ -1,0 +1,21 @@
+{
+  "allocation": "C7-LUCIVY-CORE-890-16nov",
+  "observed": 1190768.570684106,
+  "authorities": [
+    {
+      "pid": 3528029,
+      "start": "119072861",
+      "state": "actif",
+      "deadline": 1192525.699990913,
+      "cwd": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-indexed-warning-core-16nov-v1",
+      "resources": {
+        "memory.max": "34359738368",
+        "memory.high": "max",
+        "memory.swap.max": "0",
+        "cpu.max": "400000 100000"
+      }
+    }
+  ],
+  "jobs": 4,
+  "launcher_note": "Remote login shell is fish; rejected set -eu, then continued to cd Q and the authorized poste command. One actual authority; no retry."
+}

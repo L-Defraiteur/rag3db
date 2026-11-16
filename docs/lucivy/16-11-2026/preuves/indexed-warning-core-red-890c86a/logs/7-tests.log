@@ -1,0 +1,192 @@
+
+running 99 tests
+Warning: BlobWriter for Lucivy_outage_idx/seg.data dropped without flushing. Data may be lost.
+test blob_directory::tests::store_outage_leaves_no_lock_file_and_no_half_written_file ... ok
+test blob_directory::tests::test_blob_directory_create_and_search ... ok
+test blob_directory::tests::test_blob_directory_create_close_reopen ... ok
+test blob_directory::tests::test_blob_directory_multiple_indexes_isolated ... ok
+test blob_directory::tests::test_blob_directory_multiple_commits ... ok
+test blob_directory::tests::test_blob_directory_search_after_reopen ... ok
+test blob_directory::tests::test_blob_directory_worm_semantics ... ok
+test bm25_global::tests::test_aggregated_stats_single_shard ... ok
+test blob_directory::tests::test_blob_directory_survives_cache_cleanup ... ok
+term 'mutex': 1
+parse 'full text search': 1
+contains 'weaver': 1
+contains 'rag3weaver': 1
+contains regex 'mutex.*lock': 1
+  → 1 results
+fuzzy 'mutx' d=1: 1
+startsWith 'imple': 1
+test handle::tests::test_all_query_types_v2 ... ok
+test bm25_global::tests::test_aggregated_stats_two_shards ... ok
+test handle::tests::test_close_releases_lock ... ok
+Highlight [18..28]: 'ingleQuery'
+Highlight [39..49]: 'ingleQuery'
+Highlight [68..78]: 'ingleQuery'
+test handle::tests::test_contains_camel_case_highlight_offsets ... ok
+[test] 'rag3db from' → [0]
+[test] 'use rag3weaver' → [1]
+[test] 'getElementById function' → [2]
+test handle::tests::test_contains_flexible_positions ... ok
+Contains 'neural networks': 1 results
+test handle::tests::test_contains_neural_networks ... ok
+[diag] skipping: .luce not found
+test handle::tests::test_diag_luce_cross_token ... ok
+[fz_diag] seg[0] tokens: ["for", "rag3", "search", "use", "weaver"]
+[fz_diag] query='weaver' d=0 → 1 results, highlights=["weaver"] ✓
+[fz_diag] query='rag3weaver' d=0 → 1 results, highlights=["rag3weaver"] ✓
+[fz_diag] query='weavr' d=1 → 1 results, highlights=["weav"] ✓
+[fz_diag] query='weavxr' d=1 → 1 results, highlights=["weaver"] ✓
+[fz_diag] query='rag3weavr' d=1 → 1 results, highlights=["rag3weav"] ✓
+[fz_diag] query='rak3weaver' d=1 → 1 results, highlights=["rag3weaver"] ✓
+[fz_diag] query='rag3we4ver' d=1 → 1 results, highlights=["rag3weaver"] ✓
+[fz_diag] query='rag3weaverr' d=1 → 1 results, highlights=["rag3weaver"] ✓
+test handle::tests::test_fuzzy_contains ... ok
+[hl_diag] doc len=19171 bytes, results=1, expected occurrences=24
+[hl_diag] expected: bytes 96..106 → "rag3weaver"
+[hl_diag] expected: bytes 819..829 → "rag3weaver"
+[hl_diag] expected: bytes 3542..3552 → "Rag3weaver"
+[hl_diag] expected: bytes 7134..7144 → "rag3weaver"
+[hl_diag] expected: bytes 7319..7329 → "rag3weaver"
+[hl_diag] expected: bytes 7678..7688 → "rag3weaver"
+[hl_diag] expected: bytes 8271..8281 → "Rag3weaver"
+[hl_diag] expected: bytes 9734..9744 → "Rag3weaver"
+[hl_diag] expected: bytes 10099..10109 → "Rag3weaver"
+[hl_diag] expected: bytes 10257..10267 → "rag3weaver"
+[hl_diag] expected: bytes 10372..10382 → "Rag3weaver"
+[hl_diag] expected: bytes 10769..10779 → "Rag3weaver"
+[hl_diag] expected: bytes 11463..11473 → "Rag3weaver"
+[hl_diag] expected: bytes 11948..11958 → "Rag3weaver"
+[hl_diag] expected: bytes 12033..12043 → "rag3weaver"
+[hl_diag] expected: bytes 12278..12288 → "rag3weaver"
+[hl_diag] expected: bytes 12506..12516 → "rag3weaver"
+[hl_diag] expected: bytes 12709..12719 → "rag3weaver"
+[hl_diag] expected: bytes 12898..12908 → "rag3weaver"
+[hl_diag] expected: bytes 13034..13044 → "rag3weaver"
+[hl_diag] expected: bytes 13445..13455 → "Rag3weaver"
+[hl_diag] expected: bytes 15927..15937 → "rag3weaver"
+[hl_diag] expected: bytes 15979..15989 → "rag3weaver"
+[hl_diag] expected: bytes 18859..18869 → "rag3weaver"
+[hl_diag] got: bytes 96..106 → "rag3weaver" ✓
+[hl_diag] got: bytes 819..829 → "rag3weaver" ✓
+[hl_diag] got: bytes 3542..3552 → "Rag3weaver" ✓
+[hl_diag] got: bytes 7134..7144 → "rag3weaver" ✓
+[hl_diag] got: bytes 7319..7329 → "rag3weaver" ✓
+[hl_diag] got: bytes 7678..7688 → "rag3weaver" ✓
+[hl_diag] got: bytes 8271..8281 → "Rag3weaver" ✓
+[hl_diag] got: bytes 9734..9744 → "Rag3weaver" ✓
+[hl_diag] got: bytes 10099..10109 → "Rag3weaver" ✓
+[hl_diag] got: bytes 10257..10267 → "rag3weaver" ✓
+[hl_diag] got: bytes 10372..10382 → "Rag3weaver" ✓
+[hl_diag] got: bytes 10769..10779 → "Rag3weaver" ✓
+[hl_diag] got: bytes 11463..11473 → "Rag3weaver" ✓
+[hl_diag] got: bytes 11948..11958 → "Rag3weaver" ✓
+[hl_diag] got: bytes 12033..12043 → "rag3weaver" ✓
+[hl_diag] got: bytes 12278..12288 → "rag3weaver" ✓
+[hl_diag] got: bytes 12506..12516 → "rag3weaver" ✓
+[hl_diag] got: bytes 12709..12719 → "rag3weaver" ✓
+[hl_diag] got: bytes 12898..12908 → "rag3weaver" ✓
+[hl_diag] got: bytes 13034..13044 → "rag3weaver" ✓
+[hl_diag] got: bytes 13445..13455 → "Rag3weaver" ✓
+[hl_diag] got: bytes 15927..15937 → "rag3weaver" ✓
+[hl_diag] got: bytes 15979..15989 → "rag3weaver" ✓
+[hl_diag] got: bytes 18859..18869 → "rag3weaver" ✓
+test handle::tests::test_diag_highlight_rag3weaver ... ok
+test handle::tests::test_handle_close_reopen_lock ... ok
+test handle::tests::test_handle_reopen_cycles ... ok
+Highlights for doc 0: {"body": [[18, 38]]}
+Highlights for doc 1: {"body": [[12, 32]]}
+test handle::tests::test_starts_with_multi_token_highlights ... ok
+Stored fields: {"path": "src/main.rs", "content": "fn main() { println!(\"hello\"); }"}
+test handle::tests::test_stored_fields_retrieval ... ok
+Results for eq 'systems' filter: [(1.5378814, DocAddress { segment_ord: 0, doc_id: 3 })]
+test handle::tests::test_string_filter_field_eq ... ok
+test query::tests::test_filter_clause_between ... ok
+test query::tests::test_filter_clause_between_bad_arity ... ok
+test query::tests::test_filter_clause_composite_empty_clauses ... ok
+test query::tests::test_filter_clause_composite_missing_clauses ... ok
+test query::tests::test_filter_clause_contains ... ok
+test query::tests::test_filter_clause_contains_with_fuzzy ... ok
+test query::tests::test_filter_clause_eq ... ok
+test query::tests::test_filter_clause_f64 ... ok
+test query::tests::test_filter_clause_in ... ok
+test query::tests::test_filter_clause_in_empty ... ok
+test query::tests::test_filter_clause_must_composite ... ok
+test query::tests::test_filter_clause_must_not_composite ... ok
+test query::tests::test_filter_clause_ne ... ok
+test query::tests::test_filter_clause_not_in ... ok
+test query::tests::test_filter_clause_not_in_empty ... ok
+test query::tests::test_filter_clause_range_ops ... ok
+test query::tests::test_filter_clause_should_composite ... ok
+test query::tests::test_filter_clause_starts_with ... ok
+test query::tests::test_filter_clause_string_eq ... ok
+test query::tests::test_filter_clause_unknown_field ... ok
+test query::tests::test_filter_clause_unknown_op ... ok
+test query::tests::test_json_to_term_f64 ... ok
+test query::tests::test_json_to_term_i64 ... ok
+test query::tests::test_json_to_term_i64_from_positive ... ok
+test query::tests::test_json_to_term_str ... ok
+test query::tests::test_json_to_term_type_mismatch ... ok
+test query::tests::test_json_to_term_u64 ... ok
+test query::tests::test_query_config_boolean ... ok
+test query::tests::test_query_config_contains ... ok
+test query::tests::test_query_config_contains_hybrid ... ok
+test query::tests::test_query_config_contains_regex ... ok
+test query::tests::test_query_config_fuzzy ... ok
+test query::tests::test_query_config_phrase ... ok
+test query::tests::test_query_config_with_filters ... ok
+test query::tests::test_regex_escape_all_special ... ok
+test query::tests::test_regex_escape_empty ... ok
+test query::tests::test_regex_escape_plain ... ok
+test query::tests::test_regex_escape_special_chars ... ok
+docs after reopen: 500 (expected ~500, some may be lost due to async drop)
+test handle::tests::test_handle_close_reopen_with_merges ... ok
+test sharded_handle::tests::a_failed_close_still_stops_its_pools ... ok
+test sharded_handle::tests::failed_close_releases_router_and_shards_at_return ... ok
+test sharded_handle::tests::successful_close_releases_router_and_shards_at_return ... ok
+test sharded_handle::tests::test_blob_shard_storage ... ok
+test sharded_handle::tests::test_close_and_reopen ... ok
+test sharded_handle::tests::test_create_and_search_multi_shard ... ok
+test sharded_handle::tests::test_create_and_search_single_shard ... ok
+test sharded_handle::tests::test_delete_by_node_id ... ok
+diag_rr: 20 results for 'function'
+test sharded_handle::tests::test_diag_rr_contains_search ... ok
+test sharded_handle::tests::test_commit_under_concurrent_searches_does_not_freeze ... ok
+[FUZZY-TEST] 5 docs indexed, 1 shard
+[FUZZY-TEST] contains 'lock': 5 hits
+[FUZZY-TEST] fuzzy 'lok' d=1: 5 hits
+[FUZZY-TEST] fuzzy 'lock' d=1: 5 hits
+[FUZZY-TEST] fuzzy 'mutx' d=1: 1 hits
+test sharded_handle::tests::test_fuzzy_contains_small_dataset ... ok
+[TEST] boolean(boolean(contains x title, contains x body)) on 2 fields + f64, 2 shards, 5 docs
+[TEST] results: 5
+test sharded_handle::tests::test_multifield_string_query_bm25 ... ok
+test sharded_handle::tests::test_ram_shard_storage ... ok
+test sharded_handle::tests::test_search_filtered_prefilter ... ok
+test sharded_handle::tests::test_updates_during_commits_keep_their_order ... ok
+test sharded_handle::tests::test_writes_to_a_shard_without_writer_are_reported_by_commit ... ok
+test snapshot::tests::test_bad_magic ... ok
+test snapshot::tests::test_bad_version ... ok
+test snapshot::tests::test_empty_files ... ok
+test snapshot::tests::test_read_schema_config_from_files ... ok
+test snapshot::tests::test_read_schema_config_missing ... ok
+test snapshot::tests::test_roundtrip_empty ... ok
+test snapshot::tests::test_roundtrip_multi_index ... ok
+test snapshot::tests::test_roundtrip_single_index ... ok
+test snapshot::tests::test_truncated_after_magic ... ok
+test snapshot::tests::test_truncated_header ... ok
+test sync::tests::test_export_apply_delta_e2e ... ok
+test sync::tests::test_sharded_delta_e2e ... ok
+test sync::tests::test_sync_server_with_handle ... ok
+test warnings::tests::boolean_recurses_and_dedups ... ok
+test warnings::tests::clean_queries_are_silent ... ok
+test warnings::tests::fuzzy_half_rewrite ... ok
+test warnings::tests::index_legacy_segments ... ok
+test warnings::tests::regex_full_scan_and_unbounded ... ok
+test warnings::tests::relaxed_separators_are_reported ... ok
+test warnings::tests::strict_separators_only_is_a_cost_warning ... ok
+test sharded_handle::tests::test_drop_commits_the_writes_still_queued ... ok
+
+test result: ok. 99 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.44s
+

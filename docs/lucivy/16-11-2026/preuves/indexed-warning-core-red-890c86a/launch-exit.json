@@ -1,0 +1,7 @@
+{
+  "ssh_exit_code": 1,
+  "common_code": 101,
+  "allocation": "C7-LUCIVY-CORE-890-16nov",
+  "retry": false,
+  "notes": "Remote fish refused set -eu; subsequent cd Q and authorized command ran once; resources and cwd separately attested."
+}

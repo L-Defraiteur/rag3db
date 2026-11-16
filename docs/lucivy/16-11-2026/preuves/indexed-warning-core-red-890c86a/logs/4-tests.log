@@ -1,0 +1,23 @@
+
+running 7 tests
+test t00_diag_starts_with ... ignored
+test t01_bench_sharding_comparison ... ignored
+test t02_ground_truth_exhaustive ... ignored
+test t03_bench_query_times ... ignored
+test t05_test_score_consistency_single_vs_sharded ... ignored
+test t06_profile_regex_automaton_weight ... ignored
+
+startsWith 'lock': 6 hits (expected 6)
+contains 'lock':   8 hits (expected 8)
+
+startsWith hits:
+  score=0.4928 doc=5 text=Detecting lockups automatically
+  score=0.4448 doc=1 text=Multiple locks are held
+  score=0.4448 doc=2 text=Locking primitives in kernel
+  score=0.4448 doc=3 text=The locked state persists
+  score=0.4053 doc=0 text=The lock mechanism is simple
+  score=0.4053 doc=4 text=lockdep is a debugging tool
+test t00_repro_starts_with_prefix ... ok
+
+test result: ok. 1 passed; 0 failed; 6 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

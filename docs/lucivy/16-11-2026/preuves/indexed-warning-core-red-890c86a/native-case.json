@@ -1,0 +1,29 @@
+{
+  "source": "890c86af44989f3fea6c6fa62fd40d688b4084df",
+  "test_target": "test_derived_in_ram",
+  "test_name": "derived_in_ram_answers_like_the_files",
+  "test_source_sha256": "8f5223fae11dcbbe35e22e76ff975f4ec381fbfe1fc5577e7fca067934a7e0bc",
+  "elf_sha256": "106fa398fcc24296c1d4b94198a150ed87917fac66e46531af5c617444fcf9a2",
+  "elf_hash_timing": "late attestation, after red stop",
+  "corpus_root": "/tmp/lucivy-cmp",
+  "selection_manifest_sha256": "f4a1f4eb52c70f51098f8075b210774a8d16f151d0953e3f3f197e4bea7860e8",
+  "actual_file_set_sha256": "31293c1849b36bac155b01c4d3dd45448bd76a99ec263905a8d792345fa21cf1",
+  "failing_query": {
+    "query_type": "contains",
+    "field": "content",
+    "value": "mutex_lock",
+    "strict_separators": true,
+    "distance": null,
+    "regex": null,
+    "anchor_start": null,
+    "exact_match": null
+  },
+  "failed_precondition": "reference result must contain at least one document before comparing regimes",
+  "libtest": {
+    "passed": 0,
+    "failed": 1,
+    "ignored": 0,
+    "duration_seconds": 3.53,
+    "exit_code": 101
+  }
+}

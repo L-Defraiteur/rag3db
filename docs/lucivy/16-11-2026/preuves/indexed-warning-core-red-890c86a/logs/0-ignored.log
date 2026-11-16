@@ -1,0 +1,8 @@
+test_acid_blobs_in_postgres: test
+test_acid_crash_recovery: test
+test_acid_sharded_postgres_create_reopen_search: test
+test_bm25_scores_identical_across_shard_counts: test
+test_distributed_bm25_ground_truth: test
+test_distributed_search_two_nodes_postgres: test
+
+6 tests, 0 benchmarks

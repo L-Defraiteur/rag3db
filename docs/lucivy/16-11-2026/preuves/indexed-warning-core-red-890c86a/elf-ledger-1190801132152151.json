@@ -1,0 +1,334 @@
+{
+  "source": "890c86af44989f3fea6c6fa62fd40d688b4084df",
+  "observed": 1190801.13216177,
+  "compile_complete": true,
+  "tests_logs_already_present": [
+    "0-tests.log",
+    "1-tests.log",
+    "2-tests.log",
+    "3-tests.log",
+    "4-tests.log",
+    "6-tests.log",
+    "7-tests.log",
+    "8-tests.log",
+    "9-tests.log",
+    "10-tests.log",
+    "11-tests.log",
+    "12-tests.log",
+    "13-tests.log",
+    "14-tests.log",
+    "15-tests.log"
+  ],
+  "artifacts": [
+    {
+      "target": "test_wsp_density",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_wsp_density-98af64b25bc30f3c",
+      "sha256": "f3c0dd4f455bf84b49ecc9b76454b1a89788973259ff701f2779fa1edf50314d"
+    },
+    {
+      "target": "test_apostrophe_and_unknown_keys",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_apostrophe_and_unknown_keys-44add0d8ffb85290",
+      "sha256": "23a04a21bdc3fdb55160d09c43de03839391c7d39994da119c44f5c6fced6aaf"
+    },
+    {
+      "target": "test_fuzzy_monotonicity",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_fuzzy_monotonicity-23704a73998f2209",
+      "sha256": "115ddfb9cba89ecb14479a1915c1091eb357c2666ac2ee0fe4eef46cf8882491"
+    },
+    {
+      "target": "bench_docstore_fetch",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/bench_docstore_fetch-da8969cc4098c193",
+      "sha256": "ff4b6e77ba8e817458768f9983e0b3f1bb467fe28e7366b03e23d73ae74ab660"
+    },
+    {
+      "target": "test_dictionary_index",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_dictionary_index-0ac4e4ac7d6571fa",
+      "sha256": "c043d38624bf4d6ccbb4f14441bfa58dadac4edb6c145bd870564014cdcecf5a"
+    },
+    {
+      "target": "test_lock_investigation",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_lock_investigation-0e7ff574664a2118",
+      "sha256": "595e0023970115ebd088e5043eb88210b0a848c4dfceb7c37da62f62a56ca98d"
+    },
+    {
+      "target": "test_filter_cost",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_filter_cost-24ac86e963b1951c",
+      "sha256": "4aa8691a683b63dbafeaa58cfacd8e4eb6d19f907b162fe3d297f4844e4b1be5"
+    },
+    {
+      "target": "test_fuzzy_ground_truth",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_fuzzy_ground_truth-146c77868a4c8c56",
+      "sha256": "7df357d57689dd447127caacd108745e655614ed1b70784899daa026c9e9fa3e"
+    },
+    {
+      "target": "test_filtered_search_truth",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_filtered_search_truth-3b227a0b736fb842",
+      "sha256": "c0fd5b9c632e2f58cd90428ffa539946b922e7428af61c895f5287b5f7b22791"
+    },
+    {
+      "target": "acid_postgres",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/acid_postgres-522533b9503ec00a",
+      "sha256": "d454752df643286c2fafee1d8576ff29742a635d4995801758e74316c213044f"
+    },
+    {
+      "target": "test_sfx_v3_ground_truth",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_sfx_v3_ground_truth-32bb5ee824ccaa93",
+      "sha256": "9de29a92a714bdc818fc6c6d7faaab13fc1ad24465810c07262a41fe2a146f26"
+    },
+    {
+      "target": "test_index_report",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_index_report-e7f5e2c6804d9e55",
+      "sha256": "7298d4178ab0cce43ea4d0b5956b52bf1e512719615213eae2d1dcb1a6e86d7f"
+    },
+    {
+      "target": "test_text_field_indexed_false",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_text_field_indexed_false-0b3a1bcf4b5c59a0",
+      "sha256": "d10152c78102ee701ef2b808fc2627d7e8044866fcbc5cebe9e5a23550958adc"
+    },
+    {
+      "target": "test_snapshot_served",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_snapshot_served-d936d8f4fa1da38a",
+      "sha256": "f15fe8959a68e7e2e8f71b00d6ebedb9dd564a6ca4fed61694f8b2dcdd1e6b35"
+    },
+    {
+      "target": "test_federated_search",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_federated_search-898b7239c72963cf",
+      "sha256": "1840ff65d83573ff95dcc947cb8aed998d95d3a0e59ad9bba0bf5f22e70db19d"
+    },
+    {
+      "target": "test_filtered_scores_match_the_subset",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_filtered_scores_match_the_subset-83c19ac9accdda6b",
+      "sha256": "9e1e9fae8b0d93c4cbd206760636a1a81a06154f3f6ce8800c15a6f88613fe80"
+    },
+    {
+      "target": "compare_tantivy",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/compare_tantivy-9435ea596cc2d14b",
+      "sha256": "f7c83bfa8e5e77e0d41037a947fb3724786d13c8191abad602115045d6d507a4"
+    },
+    {
+      "target": "test_acid_blob_v3",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_acid_blob_v3-ce63acdccbbba5a3",
+      "sha256": "f555421f72df27e0e5687c308c16b32e96e862bb6762988729dda100ca21cc96"
+    },
+    {
+      "target": "test_positions_off",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_positions_off-563a5f29dba28791",
+      "sha256": "7e9efdc3c4b26f2c71b66382adfc183a9adb3398dd54da5bb59c90623369c66e"
+    },
+    {
+      "target": "test_store_fallback",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_store_fallback-089cb3f7c9ca9037",
+      "sha256": "947fc667c27e79e9df8bcfe067aa75f0bc9e828ec880ed2e4e8c26835ccdbff2"
+    },
+    {
+      "target": "test_luce_roundtrip",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_luce_roundtrip-f1c0d1a7929ec063",
+      "sha256": "fb101bbd1dcb3953f8cd1215172e11ecff299daf04f2c5d6068a3389df4583a3"
+    },
+    {
+      "target": "test_no_residue_under_tmp",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_no_residue_under_tmp-78246bb3e5f49fe0",
+      "sha256": "7c7e4a1bebcad50fc87431602cdca02612ba3533e424707fb022b446e8468b32"
+    },
+    {
+      "target": "bench_sharding",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/bench_sharding-69b73f2476c9710e",
+      "sha256": "a84122078796987c9fc046cbecff2fcfb4ac3cf25bec274b7cc1ccd1b983796b"
+    },
+    {
+      "target": "test_missing_corpus",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_missing_corpus-b19189fe7e6815d8",
+      "sha256": "2922bede20e0960b1753042ff9c8469b7c91bf3f2fbe74a06459ad66a6b15877"
+    },
+    {
+      "target": "test_maintain",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_maintain-328a2e09d1081cc4",
+      "sha256": "74dedb7c1bc1ab56cabb6ef7e7ecaffac2531c4a587e903221be948279620e58"
+    },
+    {
+      "target": "test_dictionary_anatomy",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_dictionary_anatomy-3ecc6b0c68e0b79b",
+      "sha256": "baa8ac824479de4b10355c201ebcbcda3cebf0169bc1f272b7d8eff805a515e3"
+    },
+    {
+      "target": "test_two_fields",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_two_fields-b1f7e47f68b4b2ff",
+      "sha256": "c31bf4f14fea3cf1118f763f97c0fa09f13b16e162666e36dbca782ff93a09c2"
+    },
+    {
+      "target": "test_sfxpost_density",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_sfxpost_density-09820f0bbbb778da",
+      "sha256": "ce5a04a7e80dfc715b0b8b14164910d58d2cf7ce725a6da59b5a2212d76a00a1"
+    },
+    {
+      "target": "test_diagnostics",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_diagnostics-a46864d659ba81a0",
+      "sha256": "f8d705f0a3721c14f8c5010447e8ee790663a98199af016be391457c0f233f77"
+    },
+    {
+      "target": "test_check_dictionary",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_check_dictionary-d32d37431e108bc6",
+      "sha256": "0805ce9209fc9e938132ca8950e4575c5b8a42626468adc1011ca949251b2ec5"
+    },
+    {
+      "target": "test_playground_repro",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_playground_repro-afccb3945b425c11",
+      "sha256": "a12687a3fe7abbe2288d4a5b12b69ac56aa48b5e1d7af6e56518f42104f77f17"
+    },
+    {
+      "target": "test_commit_floor",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_commit_floor-a10d0f78b7c9feef",
+      "sha256": "a84fc90854c111915f5269f47bef33ea44b3c1026620fc7e0a29b41e3df7563e"
+    },
+    {
+      "target": "test_fuzzy_many_terms",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_fuzzy_many_terms-eb006079e8e65d59",
+      "sha256": "c1f5e3db818603a5e40b2c18020151181ee8145c1f1adf3c604a5371aea9e5a0"
+    },
+    {
+      "target": "test_light_profile",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_light_profile-d80d36f3e323e284",
+      "sha256": "68a96145b27df12f69fb053b90feca6a66e6d3171935a4c60fb5e9a7630c8016"
+    },
+    {
+      "target": "test_merge_contains",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_merge_contains-841fb294dd0f5906",
+      "sha256": "e16e915129ff6898a59768aa93a1ab3f132d97671169093fe4ac63ef3a202994"
+    },
+    {
+      "target": "test_highlight_cap",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_highlight_cap-904cb64597467f91",
+      "sha256": "76678cc63d9804fc8643c4549bc686c540a0ef058bf0c5c0c9dc2e4230e0095f"
+    },
+    {
+      "target": "test_relaxed_duplicate_spans",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_relaxed_duplicate_spans-812fd464787dee88",
+      "sha256": "dfe503f3f93c918035552ee0c0ef9040cf91952ba30d1c6c6e6ee47fa5dc2540"
+    },
+    {
+      "target": "test_query_warnings",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_query_warnings-806efa906f8463d0",
+      "sha256": "98198484b3bd112cedb382cd14299dd387bed549808eb63d949676a6c80f5574"
+    },
+    {
+      "target": "test_fetch_docs",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_fetch_docs-f405b1b94a1e4e1f",
+      "sha256": "1b1c8e0cb079975446c84d4c8574078ea452c3c60c51be4f426a6a67e2e993a3"
+    },
+    {
+      "target": "test_playground_parity",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_playground_parity-4f5c78502c611bb6",
+      "sha256": "f36037df649059509aabf0d1335e6fc476c0a94cb896ef83e75cb3a72dd19ee1"
+    },
+    {
+      "target": "test_fuzzy_jaro_winkler",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_fuzzy_jaro_winkler-3af04377940777ce",
+      "sha256": "782c634c54c355fe25b290f36a6c329672a0cf201571b537ec7571aa4b3c49a6"
+    },
+    {
+      "target": "test_regex_ground_truth",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_regex_ground_truth-160fff6135935e2c",
+      "sha256": "d8b2bf36072ad8b02e14fc9f0f144b5d13df70c1a30a9355718c11668f8bda50"
+    },
+    {
+      "target": "test_merge_drops_dead_ids",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_merge_drops_dead_ids-51238b6a100ee4a1",
+      "sha256": "fa8abbe942ca5da03f0153b5622d64e46c42d7f042c110f9286d2d659064a78a"
+    },
+    {
+      "target": "test_filtered_scores_ignore_hidden_lengths",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_filtered_scores_ignore_hidden_lengths-d07c1a948436b7c2",
+      "sha256": "fa2d964abad6df882f6675939992184d5c6d3b36e414a1997293bc34459d8952"
+    },
+    {
+      "target": "test_luce_v3_roundtrip",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_luce_v3_roundtrip-cc58a7f99d308546",
+      "sha256": "a1160cd315b0ada8a81f21413291f1d434a930d53d76b8547255b2ac6adc0148"
+    },
+    {
+      "target": "test_truncation_flag",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_truncation_flag-690eff0eebc73670",
+      "sha256": "facdf32901d527bd5bed13e046b40fc79fac46af70adc4b70536e0fcc7e243be"
+    },
+    {
+      "target": "bench_vs_tantivy",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/bench_vs_tantivy-bb002e562b345d3f",
+      "sha256": "8504dec80b127c9091cccedef8e8f55e6b5f5587cb8ce6fdfbd2c6910e4e0eb1"
+    },
+    {
+      "target": "lucivy_core",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/lucivy_core-fc1e35c9cf67f576",
+      "sha256": "7cd2346427d084d296dcb16b4aa2ef7ec3b5a83f832044de20c5d3c62f782c9e"
+    },
+    {
+      "target": "test_search_mismatch",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_search_mismatch-a81033dac73dc545",
+      "sha256": "2e1bbdef7363ce2e7f74930283172886b713176c535c537139fcd853741375b7"
+    },
+    {
+      "target": "test_compat_308",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_compat_308-44b5adedda496401",
+      "sha256": "850ee7e2d92457b74bebe21be35cc02465ff60647be951d1e8551f8183c98416"
+    },
+    {
+      "target": "test_fuzzy_tiers",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_fuzzy_tiers-56325107da5e29cd",
+      "sha256": "2bb8f10913592ace737701e506d477cd7e26d49cfa0e44119868d7874f8582c0"
+    },
+    {
+      "target": "test_merge_keeps_new_words",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_merge_keeps_new_words-87f5a73318d2dd13",
+      "sha256": "68180f8f3ced9bd6cccff1f5fd3b54448df0222d3581e4d24b11b3ae38680e1b"
+    },
+    {
+      "target": "test_relaxed_multibyte",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_relaxed_multibyte-53e9ec50dc47dffb",
+      "sha256": "c1ee437a2b0f7d8f53c280f29af695528ac31cdac50bb92ac98b41178ef3ce43"
+    },
+    {
+      "target": "test_lazy_directory",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_lazy_directory-04582b7546c66200",
+      "sha256": "605ae2cec602cad5d14a59df0354f7a970bdbb86fb06609e9c228155b2c50a88"
+    },
+    {
+      "target": "bench_dict_compaction",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/bench_dict_compaction-7ed08e14ed907b9e",
+      "sha256": "6b19a62cb063f68ec4771745d3f4b0d4327096033e80ab86ef42c7489c903782"
+    },
+    {
+      "target": "test_long_exact_passage",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_long_exact_passage-9f772a37bc099285",
+      "sha256": "8047bbaf920f12203d581bd43f2561602542be411fc32a9e2c89286944b89ff1"
+    },
+    {
+      "target": "test_sfx_v3_pipeline",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_sfx_v3_pipeline-9ab77ff8c626011f",
+      "sha256": "548580d1642c460ee574a35283e0f22e827a35a09172ad8390aa0582f6852e7b"
+    },
+    {
+      "target": "bench_contains",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/bench_contains-190da80781829604",
+      "sha256": "eec715e707ab06d99dc141fabb87827faee894c64146e43e381e5ab9b125e83f"
+    },
+    {
+      "target": "test_cold_scheduler",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_cold_scheduler-25738d38b228c85e",
+      "sha256": "7a38adba90e1c6b167970321726be2e55b163879c964e6c49879de32cfdf1b09"
+    },
+    {
+      "target": "test_touched_bytes",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_touched_bytes-2f83f7a9b3624649",
+      "sha256": "decb8be30d05d25067b151420d818d6505631bb387da3fda1b82141cc09ccf0a"
+    },
+    {
+      "target": "test_compare_two_indexes",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_compare_two_indexes-703f3f6d9df43390",
+      "sha256": "674df628407831abf6f73a6069c5d7caffcb4ff199a1e78ad6b7e5c908a4491e"
+    },
+    {
+      "target": "test_derived_in_ram",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_derived_in_ram-539df445d54ae12e",
+      "sha256": "106fa398fcc24296c1d4b94198a150ed87917fac66e46531af5c617444fcf9a2"
+    }
+  ]
+}

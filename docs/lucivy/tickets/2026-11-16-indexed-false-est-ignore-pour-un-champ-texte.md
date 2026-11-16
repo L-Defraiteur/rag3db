@@ -223,3 +223,47 @@ POSTE_MEM_MAX=32G, POSTE_SWAP_MAX=0, POSTE_CPU_QUOTA=400%, HIGHmax, jobs<=4.
 Ces variables complètent la commande08 conformément au GO reçu ; aucun helper
 ni pilote modifié. NeufHOLD/ignored explicites, full_corefalse. Premier rouge
 imprévu : arrêt sansretry, aucun merge/main/tag/ULP7.2/PR42 autorisé.
+
+Lancement effectif unique : Common PID3528029/start119072861, échéance
+1192525.699990913, jobs4, cwdQ vérifié, memory.max32G/highmax/swap0/cpu4 réels.
+Le shell distant fish a refusé la ligne de garde shell `set -eu`, puis a
+poursuivi cdQ et la commande autorisée ; aucune seconde admission/lancement.
+Ce diagnostic de shell n’est pas un test rouge. Ressources/cwd/autorité
+effectivement observés et sauvés dans Q/launch-resources.json.
+
+Premier ROUGE observé sous allocation C7-LUCIVY-CORE-890-16nov :
+`test_derived_in_ram::derived_in_ram_answers_like_the_files`, log15,
+0pass/1fail/0ignored, rc101. Les300 premiers fichiers réels Linux2.6.0 sont
+chargés ; le panel strict mutex_lock ne trouve rien (assertion ligne170).
+La condition de contenu du panel n’est donc pas satisfaite par ce sous-ensemble ;
+aucune conclusion de régression du correctif warnings ne peut en être tirée.
+Arrêt effectif sans retry ni nouveau ciblé, aucune assertion assouplie.
+CommonROUGE101/erreurnull/restes[]/nettoyétrue/autoritéTERMINE, scopewbvzcmca.
+Reste collecte finale quiescenceowned/empreintes et transmission C7, pas de
+recomposition de corpus ou nouvelle passe autorisée. Le ledgerELF global a
+été écrit après l’arrêt (62artifacts), pas une preuve de ledgerglobal avant
+les tests ; les inventaires par target exécutée précédaient leur invocation.
+
+Suite C7 aprèsSTOP : preuve RO sur les300 fichiers exactement épinglés avant
+conclusion RAW ; ne pas étendre une absence de ce sous-ensemble au corpusentier.
+Défaut de préparation identifié : l’admission vérifiait extension/taille/compte
+et identité, mais pas les préconditions de contenu du panel (résultats nonvides).
+Une future admission doit vérifier Source.dataset/PANEL sur contenus épinglés
+AVANT tout test. Travail RO actuel : compter mutex_lock sur ces300 fichiers et
+conserver hashcasenatif/source/ELF/panel/temps. Aucune correction de sélection,
+aucun nouveau test ni redémarrage autorisé. Proposition par défaut : conserver
+ce cas HOLD avec défaut de recette explicite ; choisir un autre sous-ensemble
+nécessiterait une conception et admission distinctes, pas une assertion affaiblie.
+
+Résultat final et preuves : rapport09-rouge-core-sur-le-sous-ensemble-linux.md.
+Compile39.95s/62ELF,16inventaires,117passés/1échec/25ignorésobservés ;46targets
+nonatteints/doctestsnonjoués, warnings3anciensvertsnonrejoués. CommonTERMINE101
+nettoyé/restes[], propre890, ownedabsent,11UNKNOWNnonattribués final conservés,
+observé1190873.393703287 < END1192525.699990913. Tmarkerinchangé/scratchvide.
+RAW sous-ensemble300 : zéro mutex_lock littéral ET ASCIIcasefold, sans
+réinspection globale des23514fichiers ; preuveparfichiercd103654 etcasnatifa03b6222. Aucune
+absencecorpusentierdéduite. Admissiondataset/PANELàcorrigerAVANTfuturtest ;
+propositionHOLDcecasavecdefautrecetteexplicite. Ledger62SHA tardif aprèsSTOP,
+inventairesintercalésavantchaqueappel etnoncomplets : limite de protocole
+conservée, pasrattrapage enpreuvepré-test. ROprépaBanc94a2cde reliée ; pasRO
+exécution encore. Aucunretry ni nouvelle sélection sans décision C7 distincte.

@@ -1,0 +1,4 @@
+bench_docstore_fetch: test
+bench_sharded_fetch_docs: test
+
+2 tests, 0 benchmarks

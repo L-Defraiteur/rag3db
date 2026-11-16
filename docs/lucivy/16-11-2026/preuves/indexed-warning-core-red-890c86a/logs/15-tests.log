@@ -1,0 +1,18 @@
+
+running 1 test
+corpus: 300 files under /tmp/lucivy-cmp
+corpus: 300 files
+size: v3 34174238 B, v3 derived_in_ram 28632013 B (-16.2 %), dictionary + derived_in_ram 28285029 B
+
+thread 'derived_in_ram_answers_like_the_files' (3545726) panicked at lucivy_core/tests/test_derived_in_ram.rs:170:9:
+mutex_lock strict: the panel must find something
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test derived_in_ram_answers_like_the_files ... FAILED
+
+failures:
+
+failures:
+    derived_in_ram_answers_like_the_files
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.53s
+
