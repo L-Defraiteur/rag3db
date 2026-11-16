@@ -191,6 +191,12 @@ class Transport(unittest.TestCase):
         fixture = Observation('test_non_200_status_is_refused')
         fixture.setUp()
         self.addCleanup(fixture.doCleanups)
+        shared=owner.transport_module(fixture.pins)
+        patches=[patch.object(owner,'transport_module',return_value=shared),
+                 patch.object(shared,'worker_gate',side_effect=owner.worker_gate),
+                 patch.object(owner,'process_snapshot',side_effect=lambda pid:copy.deepcopy(fixture.process)),
+                 patch.object(protocol,'read_phase_state',side_effect=fixture.phase_reader)]
+        for item in patches:item.start();self.addCleanup(item.stop)
         return fixture, dict(ready_path=str(fixture.path), ready_sha256=fixture.sha,
                              nonce='nonce', pins=fixture.pins)
 
@@ -210,15 +216,15 @@ class Transport(unittest.TestCase):
         fixture, context = self.context()
         connection = Mock()
         connection.getresponse.return_value.status = 200
-        connection.getresponse.return_value.read.return_value = json.dumps(fixture.health).encode()
+        connection.getresponse.return_value.read1.side_effect = [json.dumps(fixture.health).encode(), b'']
         with patch.object(owner.http.client, 'HTTPConnection', return_value=connection) as http, \
              patch.object(protocol, 'read_phase_state', side_effect=fixture.phase_reader), \
              patch.object(owner.time, 'monotonic', return_value=80.), patch('builtins.print') as printed:
             owner._health_worker(85., context)
-        http.assert_called_once_with('127.0.0.1',7878,timeout=5.)
+        http.assert_called_once_with('127.0.0.1',7878,timeout=4.5)
         connection.request.assert_called_once_with('GET','/sante')
         connection.close.assert_called_once()
-        observed = protocol.decode(printed.call_args.args[0])
+        observed = protocol.decode([c for c in printed.call_args_list if 'file' not in c.kwargs][-1].args[0])
         self.assertEqual(protocol.decode(bytes.fromhex(observed['raw_hex'])), fixture.health)
 
     def test_worker_checks_real_raccord_phase_before_http(self):
@@ -240,7 +246,7 @@ class Transport(unittest.TestCase):
             with self.assertRaises(owner.subprocess.TimeoutExpired):
                 owner.health_get(85.,ready_path=fixture.path,ready_sha256=fixture.sha,
                                  nonce='nonce',pins=fixture.pins)
-        self.assertEqual(child.communicate.call_args_list[0].kwargs['timeout'],5.)
+        self.assertEqual(child.communicate.call_args_list[0].kwargs['timeout'],4.5)
         child.kill.assert_called_once()
         self.assertEqual(child.communicate.call_count,2)
 
@@ -285,13 +291,13 @@ class Transport(unittest.TestCase):
         from unittest.mock import Mock
         fixture, context = self.context()
         connection=Mock();connection.getresponse.return_value.status=200
-        connection.getresponse.return_value.read.return_value=b'x'*65537
+        connection.getresponse.return_value.read1.side_effect=[b'x'*65537]
         with patch.object(owner.http.client,'HTTPConnection',return_value=connection), \
              patch.object(protocol,'read_phase_state',side_effect=fixture.phase_reader), \
              patch.object(owner.time,'monotonic',return_value=80.),patch('builtins.print') as printed:
             with self.assertRaises(ValueError):owner._health_worker(85.,context)
         self.assertIsNotNone(printed.call_args)
-        evidence=protocol.decode(printed.call_args.args[0])
+        evidence=protocol.decode([c for c in printed.call_args_list if 'file' not in c.kwargs][-1].args[0])
         self.assertEqual(bytes.fromhex(evidence['raw_hex']),b'x'*65537)
         self.assertTrue(evidence['oversize'])
         self.assertTrue(evidence['prefix_only'])

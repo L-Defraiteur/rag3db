@@ -7,6 +7,7 @@ Evidence is exclusive and includes the raw health body even on refusal.
 import argparse
 import hashlib
 import http.client
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -41,63 +42,59 @@ def process_snapshot(pid):
     return dict(after, exe_sha256=sha)
 
 
-def _health_worker(deadline, context):
-    """Child: one fixed GET, raw response only, no redirects or environment proxy."""
-    _pins(context['pins'])
+def transport_module(pins):
+    path = Path(__file__).resolve().with_name('provider_health_transport.py')
+    if not path.is_file() or path.is_symlink() or digest(path) != pins.get('transport_sha256'):
+        raise ValueError('exact shared health transport unavailable')
+    spec = importlib.util.spec_from_file_location('cycle_admitted_health_transport', path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def worker_gate(context):
+    """Owner's pre-grant lifecycle policy, never the global embedding policy."""
+    pins = context['pins']
+    _pins(pins)
+    if context.get('address') != '127.0.0.1:7878' or context.get('admission') is not True:
+        raise ValueError('owner observation only admits lifecycle 7878 health')
     ready = producer._ready(Path(context['ready_path']), context['ready_sha256'], context['nonce'])
-    if ready['phase']['pilot'] != context['pins']['pilot'] or ready['phase']['allocation'] != context['pins']['allocation']:
+    if ready['phase']['pilot'] != pins['pilot'] or ready['phase']['allocation'] != pins['allocation']:
         raise ValueError('worker READY admission differs')
+    _validate_process(context['expected_process'], pins['expected_process']) if 'state' in context['expected_process'] else None
+    if context['expected_process'] != pins['expected_process']:
+        raise ValueError('worker expected process pins differ')
+    actual = process_snapshot(pins['expected_process']['pid'])
+    _validate_process(actual, pins['expected_process'])
     phase = protocol.read_phase_state(ready)
     now = time.monotonic()
     protocol.validate_ready_phase(ready, now, phase)
-    remaining = deadline-now
-    if remaining <= 0 or deadline > ready['grant_deadline_monotonic']-30.:
-        raise ValueError('health deadline before request or beyond READY margin')
-    connection = http.client.HTTPConnection('127.0.0.1', 7878, timeout=remaining)
-    try:
-        connection.request('GET', '/sante')
-        response = connection.getresponse()
-        body = response.read(65537)
-        oversized = len(body) > 65536
-        print(json.dumps(dict(status=response.status, raw_hex=body.hex(),
-                              oversize=oversized, prefix_only=oversized)), flush=True)
-        if oversized: raise ValueError('health response too large; received prefix preserved')
-    finally:
-        connection.close()
+    due = protocol._clock(context['contact_deadline'], 'health deadline')
+    if not now < due <= min(now+5., ready['grant_deadline_monotonic']-30.):
+        raise ValueError('owner health deadline expired or consumes READY margin')
+    return None
+
+
+def worker_context(deadline, context):
+    pins = context['pins']
+    return dict(context, address='127.0.0.1:7878', admission=True,
+                contact_deadline=deadline, expected_process=dict(pins['expected_process']),
+                gate_module_path=str(Path(__file__).resolve()),
+                gate_module_sha256=pins['observation_sha256'])
+
+
+def _health_worker(deadline, context):
+    # Compatibility entry delegates the network action to the exact shared blob.
+    shared = transport_module(context['pins'])
+    return shared.worker(dict(worker_context(deadline, context), work_deadline_monotonic=deadline-.5))
 
 
 def health_get(deadline, *, ready_path, ready_sha256, nonce, pins, trace=None):
-    """Parent bounds the whole worker, including DNS-free connect/headers/body."""
     if trace is None: trace = {}
-    trace.update(started_monotonic=time.monotonic(), deadline_monotonic=deadline,
-                 timed_out=False, returncode=None, stdout_hex='', stderr_hex='')
-    remaining = deadline-time.monotonic()
-    if remaining <= 0: raise ValueError('health deadline before child')
-    child = subprocess.Popen([sys.executable, '-B', str(Path(__file__).resolve()),
-                              '--health-worker', str(deadline)],
-                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
-    trace['worker_pid'] = child.pid
-    try:
-        remaining = deadline-time.monotonic()
-        if remaining <= 0: raise subprocess.TimeoutExpired(child.args, 0)
-        context = dict(ready_path=str(ready_path), ready_sha256=ready_sha256, nonce=nonce, pins=pins)
-        out, err = child.communicate(input=json.dumps(context, allow_nan=False).encode(), timeout=remaining)
-    except BaseException as error:
-        trace['timed_out'] = isinstance(error, subprocess.TimeoutExpired)
-        if isinstance(error, subprocess.TimeoutExpired):
-            trace.update(timeout_stdout_hex=(error.output or b'').hex(),
-                         timeout_stderr_hex=(error.stderr or b'').hex())
-        child.kill()
-        out, err = child.communicate()
-        trace.update(returncode=child.returncode, stdout_hex=out.hex(), stderr_hex=err.hex(),
-                     finished_monotonic=time.monotonic())
-        raise
-    trace.update(returncode=child.returncode, stdout_hex=out.hex(), stderr_hex=err.hex(),
-                 finished_monotonic=time.monotonic())
-    if child.returncode or time.monotonic() >= deadline:
-        raise ValueError('health worker refused or exceeded total deadline')
-    value = protocol.decode(out)
-    return dict(status=value['status'], body=bytes.fromhex(value['raw_hex']))
+    context = worker_context(deadline, dict(ready_path=str(ready_path),
+                             ready_sha256=ready_sha256, nonce=nonce, pins=pins))
+    worker_gate(context)
+    return transport_module(pins).run_health_worker(context, trace)
 
 
 def _validate_process(actual, expected):
@@ -114,6 +111,7 @@ def _pins(pins):
             raise ValueError('shared admitted source hash changed')
     if digest(__file__) != pins.get('observation_sha256'):
         raise ValueError('owner observation source hash changed')
+    transport_module(pins)
     expected = pins.get('expected_process', {})
     if set(expected) != {'pid', 'uid', 'start', 'exe', 'exe_sha256'}:
         raise ValueError('complete expected provider process pin required')
@@ -183,15 +181,8 @@ def publish_observed_grant(ready_path, destination, *, expected_ready_sha256,
         raw = response['body']
         record.update(health_status=response['status'], health_raw_hex=raw.hex(),
                       health_raw_sha256=hashlib.sha256(raw).hexdigest())
-        if response['status'] != 200: raise ValueError('health status not 200')
-        health = protocol.decode(raw)
+        health = transport_module(pins).validate_health(raw, pins['identity'], status=response['status'])
         record['health'] = health
-        if not isinstance(health, dict) or any(type(health.get(k)) is not type(v) or health[k] != v
-                                              for k, v in pins['identity'].items()):
-            raise ValueError('provider nine-field identity differs')
-        usage = health.get('usage', {})
-        if not isinstance(usage, dict) or any(type(usage.get(k)) is not int or usage[k] != 0 for k in ['baux', 'en_cours']):
-            raise ValueError('provider usage is active or unknown')
         phase = phase_reader(ready)
         observed = clock()
         protocol.validate_ready_phase(ready, observed, phase)
@@ -213,7 +204,9 @@ def publish_observed_grant(ready_path, destination, *, expected_ready_sha256,
                      valid_until_monotonic=until, pid=before['pid'], start=before['start'],
                      exe_sha256=before['exe_sha256'], identity=dict(pins['identity']),
                      nonce=ready['nonce'], ready_sha256=expected_ready_sha256,
-                     no_embedding_calls_authorized=True)
+                     no_embedding_calls_authorized=True, owner_pins=pins,
+                     owner_pins_sha256=hashlib.sha256(json.dumps(pins, sort_keys=True,
+                         separators=(',', ':'), allow_nan=False).encode()).hexdigest())
         record.update(grant=grant, result='OBSERVED_NOT_YET_GRANTED')
         persist()  # Raw observations must exist BEFORE the producer exposes the grant.
         return grant
