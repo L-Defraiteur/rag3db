@@ -3,6 +3,7 @@ from pathlib import Path
 import copy
 import hashlib
 import json
+import io
 import os
 import subprocess
 import tempfile
@@ -115,6 +116,33 @@ class HealthTransport(unittest.TestCase):
             with self.assertRaises(ValueError):t.worker(context)
         record=t.decode(printed.call_args.args[0]);self.assertTrue(record['prefix_only'])
         self.assertEqual(len(bytes.fromhex(record['raw_hex'])),65537)
+
+    def test_status_is_preserved_before_body_read_exception(self):
+        context=dict(self.context,work_deadline_monotonic=84.5)
+        connection=Mock();response=connection.getresponse.return_value;response.status=503
+        response.read.side_effect=TimeoutError('body timed out')
+        response.read1.side_effect=TimeoutError('body timed out')
+        stderr=io.StringIO()
+        with patch.object(t.time,'monotonic',return_value=80.),patch.object(t.http.client,'HTTPConnection',return_value=connection),patch.object(t.sys,'stderr',stderr):
+            with self.assertRaises(TimeoutError):t.worker(context)
+        events=[t.decode(line) for line in stderr.getvalue().splitlines()]
+        self.assertTrue(any(e.get('status')==503 for e in events))
+
+    def test_streamed_prefix_is_flushed_before_later_read_timeout(self):
+        context=dict(self.context,work_deadline_monotonic=84.5)
+        connection=Mock();response=connection.getresponse.return_value;response.status=200
+        response.read.side_effect=TimeoutError('old buffered read loses prefix')
+        response.read1.side_effect=[b'prefix already received',TimeoutError('next chunk timeout')]
+        stderr=io.StringIO()
+        with patch.object(t.time,'monotonic',return_value=80.),patch.object(t.http.client,'HTTPConnection',return_value=connection),patch.object(t.sys,'stderr',stderr):
+            with self.assertRaises(TimeoutError):t.worker(context)
+        events=[t.decode(line) for line in stderr.getvalue().splitlines()]
+        chunks=[bytes.fromhex(e['raw_hex']) for e in events if e.get('event')=='health-body-chunk']
+        self.assertEqual(b''.join(chunks),b'prefix already received')
+
+    def test_numeric_overflow_is_not_finite_even_in_extra_health_metadata(self):
+        raw=json.dumps(self.health).encode()[:-1]+b',"extra":1e999}'
+        with self.assertRaises(ValueError):t.validate_health(raw,self.identity,status=200)
 
     def test_http_failure_duplicate_json_and_nonfinite_are_refused(self):
         for status,raw in [(503,b'{}'),(True,b'{}'),(200,b'{"x":1,"x":2}'),(200,b'{"x":NaN}'),(200,json.dumps(self.health).encode('utf-16'))]:
