@@ -637,6 +637,29 @@ void LocalFileSystem::writeFile(FileInfo& fileInfo, const uint8_t* buffer, uint6
     }
 }
 
+void LocalFileSystem::syncDirectory(const std::string& dirPath) const {
+#if defined(_WIN32)
+    // NTFS makes the entry of a created file durable with the file's own metadata.
+    (void)dirPath;
+#else
+    const auto dir = dirPath.empty() ? std::string(".") : dirPath;
+    const int fd = open(dir.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    if (fd < 0) {
+        throw IOException(
+            stringFormat("Failed to open directory {} to sync it: {}", dir, std::strerror(errno)));
+    }
+    // EINVAL: a file system that cannot sync a directory (some network ones); nothing to make
+    // durable there.
+    if (fsync(fd) != 0 && errno != EINVAL) {
+        const auto error = errno;
+        close(fd);
+        throw IOException(
+            stringFormat("Failed to sync directory {}: {}", dir, std::strerror(error)));
+    }
+    close(fd);
+#endif
+}
+
 void LocalFileSystem::syncFile(const FileInfo& fileInfo) const {
     auto localFileInfo = fileInfo.constPtrCast<LocalFileInfo>();
 #if defined(_WIN32)
