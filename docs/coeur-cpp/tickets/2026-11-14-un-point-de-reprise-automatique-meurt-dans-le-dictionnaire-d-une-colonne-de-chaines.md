@@ -152,3 +152,7 @@ Première qualification C1 privée : bâti1000étapes0 puis assertionrunnerBUILD
 Défaut isolé de garantie d’exception suivi séparément par [ticket fils](2026-11-16-un-ajout-au-dictionnaire-refuse-change-la-derniere-chaine.md), rouge physique publié avant correctif. Le présent ticket C1 reste ouvert : aucune causalité SIGSEGV déduite. Branche fillecx-coeur-dictionary-append-atomic pour témoin renforcé/hash/réessai puis correctif minimal distinct, pas256.
 
 Ticket fils offsets : ciblés5/5 verts sur033ffb92068f31cdae6338db876d23e6bced3567 ([preuves](../16-11-2026/05-refus-offsets-cinq-cibles-vertes.md)), aucune qualification globale ni attribution du SIGSEGVC1. Le présent ticket reste ouvert. TSan existant toujours indépendant, aucun tour neuf lancé.
+
+## Fin TSan historique : six tours, aucune relance
+
+[Rapport final et bruts](../16-11-2026/10-c1-tsan-six-tours-termines.md) : FIN12:38:29,0processusattribuérestant,6codes66/111warnings, aucun nom DictionaryChunk/StringChunkData ni segv seloncontrôleur. Cinq toursGTest1passed, tour2GTestfailedcatalog-as-expected (doc_vecprésentaprèsCREATErefusépoolplein,compteslignescorrects), [ticketdistinct](2026-11-16-le-scenario-tsan-revoit-un-index-dont-la-creation-a-ete-refusee.md) pour départageroracle/étatNOTEDnoninterrogé. Source64eee/engine59acTSanémis, pas033/888. TicketC1resteouvert ; prochaineétapelecturecheckpoint/mémoire, pas256aveugle.
