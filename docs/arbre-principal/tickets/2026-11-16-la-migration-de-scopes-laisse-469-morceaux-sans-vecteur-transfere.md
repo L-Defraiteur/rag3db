@@ -49,3 +49,20 @@ Piste à éprouver, pas attribution : le correctif479a46549e9d3eb04459bbfd05445e
 Correction du résumé de profils : les configurations brutes emploient `sourceLines/isContent/isTitle`, pas les seuls noms snake_case utilisés dans le premier résumé. Témoin pur camelCase passé ; nouvelle synthèse générée depuis les sorties brutes immuables avec leur SHA, anciennes observations conservées. Aucun rerun natif de configuration nécessaire. Configurations de découpage numériquement identiques ; champs content/docstring de contenu et name de titre des deux côtés. SourceLines existe sur Scope ancien, pas ScopeContent ; ce constat ne prouve pas à lui seul un changement du texte découpé.
 
 Les deux fichiers non suivis return-proof-gate.py/test-return-proof-gate.py restent WIP de l'ancienne préparation LIVE, conservés sans exécution ni activation ; le garde froid courant et le lanceur historique ne constituent pas un nouveau couple autorisé.
+
+## Résultat RO contenu/géométrie : piste479a renforcée, rejeu exact restant
+
+Source d5de903d30 ; scopes PCvalidation-n72f1k0k etportablevalidation-xm33y4w6 VERTdiagnosticseul32G/600,3.518530s et2.516747s, inventaires de toutes les copies strictement identiques avant/après. Pas de writer/HTTP/Cargo/embedding/service.
+
+Comparaison SQL sans export de contenu : les65913liens ScopeContent→Scope ont un champ content identique ; les469morceaux en dette concernent51parents et les469comparaisons sont égales. Les configurations de découpage sont identiques. Les1008anciens morceaux de ces51parents comprennent42cœurs>1500octets et120plagescomplètes>4500 ; maximum53295octets. Les469nouveaux :0cœur>1500,0plage>4500,maximum4255. Sur51parents,18ont au moins un anciencœur>1500 et50un contexte ancien d'un côté>1500 ; l'union couvre les51, aucun parent sans ce dépassement. Les1008 incluent tous les anciens champs du parent : ce comptage n'est pas une bijection de morceaux ni une validation de leurs hashes.
+
+Ces observations correspondent aux frontières précisément corrigées par479a (coupe des longues lignes et bornage du contexte). Elles écartent une différence du contenu parent et renforcent fortement la piste du redécoupage ; **aucun rejeu des deux algorithmes sur les51parents, aucune attribution complète des469hashes à479a, aucun fixproduit ni detteacquittée** à ce stade. Prochaine preuve concrète : rejouer le vrai module chunker avant/après479a, paramètres persistés, comparer seulement les tuples rang/bornes/hash aux morceaux stockés ; pas une réimplémentation Python. Préparer une recette standalone bornée, sans Cargo ni écritureDB, avant toute éventuelle compilation de l'outil.
+
+Profils corrigés : profiles-corrected-from-immutable-raw.json rattache chaque synthèse au SHA de la sortie brute de profile-01 ; anciens résultats intacts.
+
+Métadonnées pour Banc : File.path ET Scope.file_path ENDS WITH '/extension/llm/test/.env.example' rendent0ligne dans chacune des3copies avant ; même résultat pour '/extension/lucivy/ld-lucivy/docker-compose.test.yml' sur code-lourd. Sorties limitées UUID/path/repo_path/langue/taille ou offsets/flag absent. Résultat borné au prédicat de chemin absolu/suffixe, pas preuve de visibilité par génération ni lecture de fichier .env. Banc informé ; oracle global non qualifié.
+
+Preuves sous ~/.cache/rag3weaver-build/bascule-live-20261116/ :
+- PC vector-debt-geometry-pc-01/proof-manifest.json :42fichiers, SHAdd5157b51fac6d4ed1877585655039ac30ca41b4f46f3841a8192f37088c2568 ; copie locale vector-debt-geometry-pc-local-01,42tailles/SHA recalculés sans écart.
+- Portable vector-debt-geometry-portable-01/proof-manifest.json :12fichiers, SHAb431988159eb5a306b9e90b874059ca3b3a9365ca0474400dcfbf50c097ba55a.
+- queries.json, observations.json, geometry-audit.json(PC), sorties brutes, processus, inventaires avant/après et verdicts conservés. Rouge COPY02 inchangé, aucun GO de reprise vivante déduit.
