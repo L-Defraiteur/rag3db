@@ -15,10 +15,12 @@
 Les lignes d'une table indexée qui ne sont pas dans le graphe HNSW sont balayées une à une par
 chaque recherche (ticket
 [les lignes d'un COPY forcé… restent hors du graphe](2026-10-18-les-lignes-d-un-copy-force-valide-apres-un-create-restent-hors-du-graphe.md)).
-Le moteur connaît leur nombre : les lignes de la table au-delà de `numCheckpointedNodes`
-(`extension/vector/src/include/index/hnsw_index.h:93`), plus celles que le dernier bâti n'a pas
-prises. Aucune lecture ne le rend aujourd'hui : `SHOW_INDEXES` dit `state` et `extension_loaded`,
-pas cette part.
+La plage de la table au-delà de `numCheckpointedNodes` est parcourue par le
+fallback, mais sa longueur physique n'est pas le nombre exact de vecteurs valides
+visibles réellement absents du graphe : dédoublonnage, NULL, trous et versions
+doivent être respectés. Le contrat du16 novembre ci-dessous remplace l'hypothèse
+initiale d'une simple différence de compteurs. Aucune lecture ne rend aujourd'hui
+ce nombre : `SHOW_INDEXES` dit `state` et `extension_loaded`, pas cette part.
 
 ## Le seuil qui l'attend
 
@@ -66,3 +68,12 @@ dans CMakeLists transaction, quatre cellules de lecture/contre-exemple contrôl�
 trous et NULL après reconstruction. NON COMPILÉ/NON JOUÉ ; aucun rouge lu.
 Cellule postCOPY déterministe, cohérence d’instantané et coût restent à établir
 avant production. Aucun fichier de production ni instrumentation C1 modifié.
+
+Reprise après revue globale cœur : nouvelle branche/worktree
+`cx-hotfixs-rows-outside-graph-df2`, rebasée sur
+`df2a5789888d16247f0dad42dcdaa3c4ceea2094` ; anciennes preuves conservées.
+Quatre fixtures actualisées avec BUILD_ID natif et projection complète des huit
+champs stables + UINT64 final. Toujours NON COMPILÉES/NON JOUÉES.
+[Recette du rouge pour revue](../16-11-2026/05-rows-outside-graph-red-recipe.md) :
+vrai callee SHOW_INDEXES, rouge binder attendu, budget proposé2400s/32G ; pilote
+exact à adapter et relire avant admission, aucun GO lourd ni production.

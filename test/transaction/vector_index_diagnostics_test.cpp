@@ -4,9 +4,12 @@
 // non vide, sa définition exacte ou le comportement sous écritures concurrentes.
 #include <cstdint>
 #include <filesystem>
+#include <iostream>
 #include <string>
+#include <vector>
 
 #include "catalog/catalog.h"
+#include "common/build_id.h"
 #include "graph_test/private_graph_test.h"
 #include "index/hnsw_index.h"
 #include "main/connection.h"
@@ -22,6 +25,7 @@ namespace {
 class VectorIndexDiagnosticsTest : public EmptyDBTest {
 protected:
     void SetUp() override {
+        std::cout << "BUILD_ID=" << RAG3DB_BUILD_ID << std::endl;
         EmptyDBTest::SetUp();
         ASSERT_FALSE(inMemMode) << "[check: setup] on-disk fixture required";
         const auto extension =
@@ -55,6 +59,24 @@ protected:
         auto result = conn->query("CALL SHOW_INDEXES() RETURN index_name, rows_outside_graph;");
         ASSERT_TRUE(result->isSuccess())
             << "[check: rows-outside-graph-is-readable] " << result->getErrorMessage();
+        // La projection nommée ci-dessus est le premier rouge attendu sur la
+        // base non corrigée. Ne pas le remplacer par une méthode C++ absente.
+        auto schema = conn->query("CALL SHOW_INDEXES() RETURN *;");
+        ASSERT_TRUE(schema->isSuccess()) << schema->getErrorMessage();
+        const std::vector<std::string> names{"table_name", "index_name", "index_type",
+            "property_names", "extension_loaded", "index_definition", "state",
+            "extension_error", "rows_outside_graph"};
+        ASSERT_EQ(schema->getColumnNames(), names) << "[check: stable-index-columns]";
+        using common::LogicalType;
+        const std::vector<LogicalType> expectedTypes{LogicalType::STRING(), LogicalType::STRING(),
+            LogicalType::STRING(), LogicalType::LIST(LogicalType::STRING()), LogicalType::BOOL(),
+            LogicalType::STRING(), LogicalType::STRING(), LogicalType::STRING(),
+            LogicalType::UINT64()};
+        const auto types = schema->getColumnDataTypes();
+        ASSERT_EQ(types.size(), expectedTypes.size());
+        for (size_t i = 0; i < types.size(); ++i) {
+            EXPECT_EQ(types[i].toString(), expectedTypes[i].toString()) << names[i];
+        }
         unsigned found = 0;
         while (result->hasNext()) {
             const auto row = result->getNext();

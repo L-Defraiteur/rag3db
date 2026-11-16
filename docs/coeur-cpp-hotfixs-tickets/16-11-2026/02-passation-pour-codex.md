@@ -135,13 +135,14 @@ puis les trois contrôles : statut vide, aucun rebase en cours, et `FETCH_HEAD` 
 
 ### 4. Le nombre de lignes hors du graphe d'un index vectoriel, lisible sans écrire (4 à 6 h)
 
-**En cours par hotfixs** : branche `cx-hotfixs-rows-outside-graph`, note et ticket66f44c686e, témoin privé préparé ensuite ; aucun build/run ni code produit. Contrat exact sous instantané, NULL si inconnu ; pas une différence d’offsets physiques. [État et limites](04-rows-outside-graph-contract.md).
+**En cours par hotfixs** : reprise sur `cx-hotfixs-rows-outside-graph-df2`, basedf2a578988 ; ancienne branche conservée. Quatre fixtures actualisées, NON COMPILÉES/NON JOUÉES, aucun code produit. Contrat exact sous instantané, NULL si inconnu ; pas une différence d’offsets physiques. [État et limites](04-rows-outside-graph-contract.md), [recette du rouge à relire avant admission](05-rows-outside-graph-red-recipe.md).
 
 - **Ticket** : [2026-11-08-le-nombre-de-lignes-hors-du-graphe-d-un-index-vectoriel-lisible-sans-ecrire.md](../tickets/2026-11-08-le-nombre-de-lignes-hors-du-graphe-d-un-index-vectoriel-lisible-sans-ecrire.md).
 - **À faire** : une colonne de `SHOW_INDEXES`, `rows_outside_graph` (nulle pour un index qui n'a pas cette notion), à
-  la manière de `state` et d'`extension_error`. Elle compte les lignes de la table au-delà de
-  `numCheckpointedNodes` (`extension/vector/src/include/index/hnsw_index.h`), plus celles que le dernier bâti n'a
-  pas prises, sous l'instantané de l'appelant, sans verrou d'écriture.
+  la manière de `state` et d'`extension_error`. Elle compte les vecteurs valides visibles
+  effectivement absents du graphe utilisé par l'appel, sans verrou d'écriture ; NULL
+  si la cohérence ne peut être prouvée. La plage après `numCheckpointedNodes` seule
+  n'est pas ce nombre : elle peut contenir des lignes déjà dans le graphe, NULL ou invisibles.
 - **Preuve** : un index bâti, puis un COPY forcé validé juste après le CREATE (recette du ticket du 18 octobre, cité
   dans le ticket) : la colonne rend ce nombre ; après `rebuild`, zéro. Puis `e2e_test` sur les fichiers de test qui
   lisent `SHOW_INDEXES`, dont les colonnes changent.
