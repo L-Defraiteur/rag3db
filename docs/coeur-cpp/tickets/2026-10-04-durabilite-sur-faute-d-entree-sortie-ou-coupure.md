@@ -147,8 +147,14 @@ neuve, avec le shell bâti avant (1688239b2) puis après (4676ce513), cinq parti
 cycle : 14,2 ms avant, 15,8 ms après, soit environ +1,6 ms (+11 %), puisque le journal est recréé à chaque cycle. Une
 validation sans point de reprise ne crée aucun fichier et ne paie rien.
 
-**Reste ouvert, ligne suivante** : la suppression non synchronisée. Le journal retiré par un point de reprise
-réapparaîtrait après une coupure. Il faut un témoin rouge d'abord, et ce sera un lot à part.
+**La suppression non synchronisée : sans dommage, avec témoin** (16 nov., branche `journal-removal-sync`). Le point
+de reprise retire le journal puis le fichier fantôme (`checkpointer.cpp:115-116`), sans synchroniser leur répertoire.
+Le témoin `PowerCut.ACutAfterACheckpointRemovedTheJournalLosesAndDoublesNothing` place une base neuve de 2 000 lignes
+sous des entrées en attente, fait un `CHECKPOINT`, puis coupe. Il exige qu'au moins un des deux fichiers soit revenu
+après la coupure, faute de quoi le cas ne serait pas joué. Il est vert sur master : la base se rouvre avec ses 2 000
+lignes, une fois chacune. Le journal revenu finit par sa marque CHECKPOINT, et la reprise rejoue les pages fantômes
+déjà écrites, ce qui ne change rien. Aucun correctif, donc ; le témoin garde ce comportement. Un fichier créé après le
+point de reprise synchronise son répertoire (le lot précédent), et cette suppression devient durable avec lui.
 
 ## Pour le fermer
 
