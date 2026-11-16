@@ -141,3 +141,10 @@ found[]/unknown_owned[]/11UNKNOWNglobaux consignés. 72preuvesdeuxpostes0écart,
 manifestfdafa95b...6ef3/rapport29 ; anciensrouges immuables, sources/T gardés.
 Ticket OUVERT : Vertex/D6 et qualification complète pas-va-au-bout NON JOUÉS,
 aucun master/service/retrait/SDKmodifié ou GOpluslarge déduit.
+
+
+Revues preuvesa4a2 regroupées : Mémoire totale et Banc42e7b7fe8b favorables
+CIBLÉES/aucun blocage, rapport29 complété. Limite postretour maintenue : onze
+UNKNOWN non attribués et une PermissionError d'ascendance, sans substitution au
+final borné valide. Ticket toujours OUVERT pour la suite globale/Vertex/D6 après
+arbitrage C7 ; aucune reprise/réessai/nettoyage ni modification des ressources.

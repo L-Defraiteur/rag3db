@@ -66,7 +66,10 @@ runtime0B, ensemble8827813888B <32Gio. Aucun pic mémoire inventé.
 Contrôle indépendant APRÈS retour à1201423.276 environ, conservé séparément
 sans extension de délai :132observations attribuées, alive[]/unknown_owned[],
 scan found[], contrôleurs0, cgroup et bus absents. Onze UNKNOWN globaux non
-attribués consignés, ni zéro ni absence GPU déduite. Ce contrôle après retour
+attribués et une erreur d'ascendance PermissionError(PID1300512) restent
+consignés ; ce scan après retour n'est pas intégralement clair. Le contrôle
+FINAL borné avait ses trois contrôleurs reconnus, ancestor_errors[]/found[] et
+aucun UNKNOWN attribué. Ni zéro UNKNOWN global ni absence GPU ne sont déduits. Ce contrôle après retour
 ne se substitue pas au final borné déjà passé.
 
 ## Archives et portée
@@ -87,3 +90,24 @@ ressources sont gardées. Le [ticket existant](../tickets/2026-11-16-le-temoin-d
 reste OUVERT pour la boucle réelle et qualification complète/pas-va-au-bout.
 Demande RO bornée de ces preuves et arbitrage de la suite à C7 ; aucun GO ancien
 ou élargissement n'est déduit de ces deux positifs.
+
+
+## Revues des preuves a4a2de1, reçues et regroupées
+
+Mémoire : FIN RO totale preuves exacta4a2de1e1a9ffd4f9fb6a73fe93ed92bc425916f,
+favorable CIBLÉE, aucune réserve bloquante.72tailles/SHA réhashées personnellement
+LOCAL et PC sans écart, ledger et copies ELF pré-témoins réhashés aux deux postes ;
+logs recomptés deux noms distincts/quatre invocations. Le final borné et le scan
+postretour sont distingués avec la PermissionError d'ascendance conservée.
+
+Banc : avis favorable ciblé publié42e7b7fe8b,
+[rapport21](../../banc/16-11-2026/21-ro-preuves-vert-cible-archi-bac.md),72fichiers/
+507227951octets conformes, deux ELF réhashés et offsets source742 vérifiés,
+pilote copié identique au Git01c3, vrais asserts positifs Sandbox/HEAD relus,
+ordre ledger/publication/marker/juges et bornes/quiescence recoupés. Aucun
+blocage de preuve ; aucun natif, procscan, service ou base rejoué par les revues.
+
+Ces deux avis restent attachés aux preuvesa4a2 et ne qualifient ni la boucle
+Vertex/D6, ni F8/NAV/global/master/retrait. Conservation des ressources et
+attente de l'arbitrage C7 sur coûts/contrat Sandbox réel de la suite. Aucun
+nouveau GO ni aucune nouvelle exécution ne sont déduits de ces avis.
