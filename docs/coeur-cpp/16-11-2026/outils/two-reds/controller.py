@@ -49,14 +49,16 @@ def run(argv, label, cap, **kwargs):
     return proc.run(argv, label, cap, **kwargs)
 
 
-def confined(argv, testing=False):
+def confined(argv, testing=False, environment=None):
     command = ['bwrap', '--unshare-user', '--unshare-net', '--ro-bind', '/', '/',
                '--proc', '/proc', '--dev', '/dev', '--ro-bind', str(source), str(source),
                '--ro-bind' if testing else '--bind', str(build), str(build),
                '--bind', str(tmp), str(tmp), '--bind', str(home), str(home),
                '--bind', str(out), str(out), '--chdir', str(tmp if testing else build)]
     if testing:
-        command += ['/usr/bin/env', '-i', *[key + '=' + value for key, value in test_env.items()]]
+        if environment is None:
+            raise ValueError('explicit effective test environment required')
+        command += ['/usr/bin/env', '-i', *[key + '=' + value for key, value in environment.items()]]
     return command + argv
 
 
@@ -157,7 +159,7 @@ try:
             write(raw / phase / 'env.json', env)
             code = run(confined([str(files['concurrence']), '--gtest_filter=' + case_name,
                                  '--gtest_color=no', '--gtest_fail_fast',
-                                 '--gtest_output=xml:' + str(raw / phase / 'result.xml')], True),
+                                 '--gtest_output=xml:' + str(raw / phase / 'result.xml')], True, environment=env),
                        phase, 60, env=env, allowed=(0, 1))
             result = inspect_case(raw / phase, case, variant['engine'], code)
             write(raw / phase / 'receipt.json', result)

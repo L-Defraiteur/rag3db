@@ -124,12 +124,45 @@ class ReceiptTests(unittest.TestCase):
         namespace = {'CASES': CASES, 'name': 'candidate', 'ledger': ledger,
                      'save_ledger': lambda: None, 'test_env': {}, 'raw': raw,
                      'write': lambda p, v: p.write_text(json.dumps(v)), 'run': run,
-                     'confined': lambda argv, testing: argv, 'files': {'concurrence': 'not-executed'},
+                     'confined': lambda argv, testing, environment=None: argv, 'files': {'concurrence': 'not-executed'},
                      'inspect_case': inspect_case, 'variant': {'engine': ENGINE}}
         with self.assertRaisesRegex(RuntimeError, 'first native red'):
             exec(compile(ast.Module(body=[loop], type_ignores=[]), '<actual controller loop>', 'exec'), namespace)
         self.assertEqual(called, ['candidate/strings'])
         self.assertEqual([x['status'] for x in ledger], ['ROUGE', 'NON JOUE'])
+
+    def test_actual_constructor_keeps_explicit_probe_environment(self):
+        tree = ast.parse((HERE / 'controller.py').read_text())
+        constructor = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'confined')
+        loop = next(n for n in ast.walk(tree) if isinstance(n, ast.For)
+                    and isinstance(n.target, ast.Tuple)
+                    and [x.id for x in n.target.elts] == ['case', 'case_name'])
+        case = CASES['strings']
+        raw = self.path / 'raw'
+        (raw / 'candidate/strings').mkdir(parents=True)
+        baseline = {'PATH': '/usr/bin:/bin', 'MAX_NUM_THREADS': '2'}
+        called = []
+        def run(argv, label, cap, **kwargs):
+            called.append(label)
+            self.assertEqual(kwargs['env']['RAG3DB_STRING_DIAGNOSTIC'], '1')
+            self.assertIn('RAG3DB_STRING_DIAGNOSTIC=1', argv)
+            # Every inner env-i field must be the same explicitly recorded test environment.
+            start = argv.index('/usr/bin/env') + 2
+            actual = dict(x.split('=', 1) for x in argv[start:argv.index('not-executed')])
+            self.assertEqual(actual, kwargs['env'])
+            return 0
+        namespace = {'CASES': {'strings': case}, 'name': 'candidate',
+                     'ledger': [{'variant': 'candidate', 'case': 'strings', 'status': 'NON JOUE'}],
+                     'save_ledger': lambda: None, 'test_env': baseline, 'raw': raw,
+                     'write': lambda p, v: p.write_text(json.dumps(v)), 'run': run,
+                     'files': {'concurrence': 'not-executed'}, 'variant': {'engine': ENGINE},
+                     'inspect_case': lambda *args: {'verdict': 'VERT'},
+                     **{name: self.path / name for name in ['source', 'build', 'tmp', 'home', 'out']}}
+        exec(compile(ast.Module(body=[constructor], type_ignores=[]), '<actual constructor>', 'exec'), namespace)
+        with patch.dict(os.environ, {'RAG3DB_HOST_ONLY_SECRET': 'never-copy'}):
+            exec(compile(ast.Module(body=[loop], type_ignores=[]), '<actual case loop>', 'exec'), namespace)
+        self.assertEqual(called, ['candidate/strings'])
+        self.assertNotIn('RAG3DB_STRING_DIAGNOSTIC', baseline)
 
     def test_preflight_refusal_no_unit(self):
         (self.path / 'recipe.json').write_text(json.dumps({

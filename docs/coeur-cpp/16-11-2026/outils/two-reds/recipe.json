@@ -1,5 +1,5 @@
 {
-  "status": "PREPARATION; NO NATIVE EXECUTION; HOLD UNTIL RO AND DISTINCT EXACT GO",
+  "status": "POST-RUN HARNESS FIX ONLY; OLD GO CLOSED; NOT ADMITTED; FRESH PATHS/RECIPE REQUIRED BEFORE ANY FUTURE RUN",
   "unit": "cx-coeur-two-reds-01",
   "variants": [
     {
@@ -30,12 +30,12 @@
   "bundle_sha256": "fd095660bba5ca3a762739ccbfe8a4cbaadaea4fab8f745bd4071ac7d94ca2dc",
   "bundle_bytes": 324970,
   "scripts": {
-    "controller.py": "af4f0afbe47917dc9c54b90b7ad7e6bb5c2f6da33e389ce4a86a7643f733d45d",
+    "controller.py": "a6e8182bfcc68ee683588d7b70834843cc51cd70f06969c243a711af7e7592f7",
     "entry.py": "5a5795b97c6eb745a1c4929e2057e1e754a6b76d7592fd3da2a3a5f2430c755e",
     "launch.sh": "7cb69f0ff68ef28e214e309f492a13483c04108c53162ef505ed6b895874b29c",
     "processes.py": "45f62ef55dd5722c86600d5719e9389aaf6030912a64e63247fdff7e73d8e51f",
     "receipt.py": "87bceeb51c2f53c6063d369ee9983393f14a0c9a6f611cc645b4c379b1df5987",
-    "test_driver.py": "01524594eeee44218a90ac36a63c81034d2b9254ccbb14ba3b50c2bdd44a2ddd"
+    "test_driver.py": "724e78ea534ea9ee91e5c7311e8cf29f18b3fa69a962c3593c5e78c891d0d0df"
   },
   "global_cap_s": 2400,
   "controller_after_acquisition_s": 2250,
