@@ -88,3 +88,21 @@ OAuth/F300/composite/master/retrait déduit. Aucun relecteur ne rejoue les
 11CPU ou les suites natives. Les preuves/paquet/code197 restent figés.
 Cet ajout groupe les réceptions en une publication DOCSEULE, ne promeut
 aucun verdict ; arbitrage de suffisance PURE distinct réservé àC7.
+
+## HOLD après avis Mémoire : trois réserves groupées, avant correction
+
+Revue totale Mémoire197b réservée malgré les trois premiers avis favorables.
+C7 retire suffisancePURE197 et préparationcandidate ; WTneufintegration-r1
+resteHEADb472, aucuneédition/commit/gardePush. AucunRAW natif invalidé :
+Mémoire a réempreinté22paquet et54RAWdeuxpostes sansécart. Constats statiques,
+pas encore des mutants exécutés : (1) header running0/malformed ignoré ;
+(2) sept résumés du resume nonliés àleurs blocs ; (3) preuveFinisheddevseule
+acceptée sans crate/chemin/profil. Correction groupée requise AVANTnouvelavis.
+
+Trois fonctions de contreexemples test_strict_phases.py portent directement
+le vrai classificateur : headers supplément/malformés avant/pendant/après,
+résumés déplacés NAV et marqueurs F8/preuve horsphase, preuveFinishedseule/
+crateétranger/cheminétranger/profilinattendu. Publication AVANTCPU/fix ;
+GOCPUhermétique60 distinct C7, chaque rouge sélectionné failfast, puisfix
+publié et14fonctions groupéesfailfast dans60. AucunCargo/ELF/DB/health/cloud.
+Paquet197/22 et RAW54 restentIMMUTABLES ; nouveaupaquet/revue aprèsfix.

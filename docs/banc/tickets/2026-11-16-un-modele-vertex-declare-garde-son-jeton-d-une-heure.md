@@ -107,3 +107,14 @@ Banc réempreinte22paquet+51RAWnonELF, pas les3ELF ; Hotfix54portable etArchi54d
 AucunCPUtest/natif rejoué enRO. InventairePOSTEXEC nonindépendant/72ignored,
 ancienENDexpiré/composéRED/scopeROUGE conservés. AjoutDOCgroupé sans delta
 code/paquet197, pas candidate/master/rerun/GO implicite ; C7arbitre la suite.
+
+
+## HOLD Mémoire197b : trois réserves groupées avant correction
+
+C7 retire suffisancePURE et préparationcandidate après ROtotaleMémoire :
+headers running0/malformed ignorés, résumésresume nonliés auxblocs,
+preuveFinishedseule admise sanscrate/chemin/profil. RAW54/paquet22 SHAstables,
+pas invalidité nativeétablie. Trois témoins réels prépubliés dans
+[rapport24](../../everything-declarative/16-11-2026/24-classification-pure-des-raw-vertex.md)
+avantCPU60hermétiqueC7/fixgroupé ; ancien197/891/WTcandidateHEADb472 conservés.
+NouvelleROtotale requise, aucunGOmaster/garde/natif/ancienneborne réactivé.
