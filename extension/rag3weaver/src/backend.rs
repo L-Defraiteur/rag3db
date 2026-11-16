@@ -7521,6 +7521,50 @@ mod tests {
         assert!(rendu.contains("allongent"), "la recherche sans filtre rend la ligne ouverte de depart : {rendu}");
     }
 
+    /// **Ties keep the same order from a rewritten base to a fresh one** (lucivy's ticket of 16 November 2026: strict
+    /// ties of `search_code` changed rank between the migrated copy and the fresh index). Six twin scopes, the same
+    /// score: in X they are written, published, then rewritten (their rows are reborn, their uuid carries `_depuis`);
+    /// in Y the final contents are written once. A lexical `search_code` gives them in the same order in both.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn ties_keep_the_same_order_from_a_rewritten_base_to_a_fresh_one() {
+        let twin = |k: usize, word: &str| format!("pub fn tie_{k}() {{\n    // zorglub {word}\n}}\n");
+        let names_in_order = |backend: &Backend| -> Vec<String> {
+            let r = backend
+                .call("search_code", json!({"query": "zorglub", "options": {"signals": ["bm25"], "limit": 10, "format": "json"}}))
+                .expect("search_code");
+            let rendu = r.to_string();
+            let mut names: Vec<String> = Vec::new();
+            for k in 1..=6 {
+                let name = format!("tie_{k}");
+                if let Some(at) = rendu.find(&format!("\"name\":\"{name}\"")) {
+                    names.push(format!("{at:08}:{name}"));
+                }
+            }
+            names.sort();
+            names.into_iter().map(|n| n.split(':').nth(1).unwrap().to_string()).collect()
+        };
+        let write = |dir: &std::path::Path, backend: &Backend, word: &str| {
+            let source = backend.file_source.clone().unwrap();
+            let mut cat = backend.catalog.lock().unwrap();
+            for k in 1..=6 {
+                let texte = twin(k, word);
+                let chemin = format!("tie_{k}.rs");
+                std::fs::write(dir.join("sources").join(&chemin), &texte).unwrap();
+                crate::code_tools::reingest_file(&mut cat, source.as_ref(), &chemin, &texte).expect("reingest");
+            }
+        };
+        let (dx, x) = base_de_la_vue();
+        write(dx.path(), &x, "first");
+        x.catalog.lock().unwrap().publier_la_generation("c1", 0).expect("publish");
+        write(dx.path(), &x, "final");
+        let (dy, y) = base_de_la_vue();
+        write(dy.path(), &y, "final");
+        let (in_x, in_y) = (names_in_order(&x), names_in_order(&y));
+        assert_eq!(in_x.len(), 6, "the six ties are found: {in_x:?}");
+        assert_eq!(in_x, in_y, "the same order of ties in the rewritten base and in the fresh one");
+    }
+
     /// **Témoin 0 de 2a′ : la non-fuite** (page 03, § 4). Chaque ligne de `Scope` et de `File` est
     /// recopiée deux fois, avec ses arêtes : dans une autre couche, et retirée au rang lu. Aucune
     /// des deux copies n'est visible ; les outils de lecture rendent donc, au caractère près, ce
