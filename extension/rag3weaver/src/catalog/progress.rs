@@ -284,7 +284,21 @@ fn rate_key(model: &str, origin: &str) -> String {
 
 /// **This machine's name**, the `host` of a rate key.
 pub fn this_host() -> String {
-    "unknown-host".to_string()
+    #[cfg(unix)]
+    {
+        let mut bytes = [0_u8; 256];
+        // Le résultat n'est lu que si gethostname a rempli le tampon avec succès.
+        if unsafe { libc::gethostname(bytes.as_mut_ptr().cast(), bytes.len()) } == 0 {
+            if let Some(end) = bytes.iter().position(|byte| *byte == 0) {
+                if let Ok(host) = std::str::from_utf8(&bytes[..end]) {
+                    if !host.trim().is_empty() { return host.trim().to_owned(); }
+                }
+            }
+        }
+    }
+    std::fs::read_to_string("/etc/hostname").ok()
+        .and_then(|text| text.lines().next().map(str::trim).filter(|host| !host.is_empty()).map(str::to_owned))
+        .unwrap_or_default()
 }
 
 impl Catalog {
@@ -575,12 +589,28 @@ impl Catalog {
         if embedder.distant() { "service" } else { "local" }
     }
 
+    /// Une provenance inconnue ne prend jamais l'identité d'un calcul local.
+    fn embedding_rate_place(embedder: &dyn crate::embedder::Embedder) -> Option<String> {
+        let address = match embedder.called_address().filter(|address| !address.is_empty()) {
+            Some(address) => address,
+            None if !embedder.distant() => "local".to_owned(),
+            None => return None,
+        };
+        let host = this_host();
+        (!host.is_empty()).then(|| format!("{address}@{host}"))
+    }
+
     /// Le débit noté pour l'embarqueur de ce catalogue, s'il y en a un.
     pub fn known_embedding_rate(&self) -> Result<Option<Rate>, CatalogError> {
         self.check_reopen()?;
         let Some(embedder) = &self.embedder else { return Ok(None) };
         // Un modèle configuré indisponible ne fournit pas davantage de débit.
         if embedder.is_absent() { return Ok(None) }
+        if let Some(place) = Self::embedding_rate_place(embedder.as_ref()) {
+            if let Some(rate) = self.embedding_rate_at(embedder.name(), &place)? {
+                return Ok(Some(rate));
+            }
+        }
         self.embedding_rate(embedder.name(), Self::embedder_origin(embedder.as_ref()))
     }
 
@@ -590,7 +620,9 @@ impl Catalog {
         self.check_reopen()?;
         let embedder = self.embedder.as_ref().ok_or_else(||
             CatalogError::EmbeddingModelUnavailable("aucun modèle configuré pour noter un débit".into()))?;
-        self.note_embedding_rate(embedder.name(), Self::embedder_origin(embedder.as_ref()), rate)
+        let place = Self::embedding_rate_place(embedder.as_ref()).ok_or_else(||
+            CatalogError::EmbeddingModelUnavailable("embedding rate provenance is unknown; no rate was recorded".into()))?;
+        self.note_embedding_rate_at(embedder.name(), &place, rate)
     }
 
     /// Sonde le modèle configuré sur samples. Sans modèle, aucune acquisition,
@@ -600,7 +632,7 @@ impl Catalog {
         let Some(embedder) = &self.embedder else { return Ok(None) };
         let rate = crate::estimate::probe_rate(embedder.as_ref(), samples).map_err(CatalogError::DbError)?;
         if let Some(rate) = rate {
-            self.note_embedding_rate(embedder.name(), Self::embedder_origin(embedder.as_ref()), rate)?;
+            self.note_measured_embedding_rate(rate)?;
         }
         Ok(rate)
     }
@@ -617,15 +649,23 @@ impl Catalog {
     /// **The rate noted for a model at a place** (`<address>@<host>`, or
     /// `local@<host>`) : the key the index and the banc write.
     pub fn embedding_rate_at(&self, model: &str, place: &str) -> Result<Option<Rate>, CatalogError> {
-        let _ = place;
-        self.embedding_rate(model, "service")
+        Self::validate_rate_place(place)?;
+        self.embedding_rate(model, place)
     }
 
     /// **Notes the rate of a model at a place** (`<address>@<host>`), for the
     /// index and the banc alike.
     pub fn note_embedding_rate_at(&self, model: &str, place: &str, rate: Rate) -> Result<(), CatalogError> {
-        let _ = place;
-        self.note_embedding_rate(model, "service", rate)
+        Self::validate_rate_place(place)?;
+        self.note_embedding_rate(model, place, rate)
+    }
+
+    fn validate_rate_place(place: &str) -> Result<(), CatalogError> {
+        if place.rsplit_once('@').is_some_and(|(address, host)| !address.is_empty() && !host.is_empty()) {
+            Ok(())
+        } else {
+            Err(CatalogError::EmbeddingModelUnavailable("embedding rate provenance requires address@host or local@host".into()))
+        }
     }
 
     /// Le débit noté, s'il y en a un.

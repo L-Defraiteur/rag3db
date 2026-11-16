@@ -1113,6 +1113,7 @@ impl crate::embedder::Embedder for DenseTenu {
     fn is_mock(&self) -> bool { self.vu.lock().unwrap_or_else(|e| e.into_inner()).as_ref().is_some_and(|(m, _, _)| *m) }
     fn is_absent(&self) -> bool { false }
     fn distant(&self) -> bool { true }
+    fn called_address(&self) -> Option<String> { self.tenue.adresse_active() }
     fn budget_conseille(&self) -> Option<(usize, usize)> { self.vu.lock().unwrap_or_else(|e| e.into_inner()).as_ref().and_then(|(_, b, _)| *b) }
     fn troncatures(&self) -> Option<(usize, usize)> { self.vu.lock().unwrap_or_else(|e| e.into_inner()).as_ref().and_then(|(_, _, t)| *t) }
     fn timeout(&self) -> Option<std::time::Duration> { Some(delai_appel(&self.tenue.source)) }
