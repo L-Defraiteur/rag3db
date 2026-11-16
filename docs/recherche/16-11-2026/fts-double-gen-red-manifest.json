@@ -1,0 +1,1054 @@
+{
+  "control/__pycache__/base_controller.cpython-314.pyc": {
+    "bytes": 45082,
+    "sha256": "05190988626c31d3c7dcdc8347876b59c3132f2c56dbec4f838c0e7f7e90cae6"
+  },
+  "control/__pycache__/classifier.cpython-314.pyc": {
+    "bytes": 3895,
+    "sha256": "20b46f1a0588e50cdf8df6e8e63c2b771cebd0a79d376f35890c743d028f99bb"
+  },
+  "control/__pycache__/confiner_validation.cpython-314.pyc": {
+    "bytes": 34390,
+    "sha256": "3ccbfede13de37300e033cde5ad50b1040f7b584b5638a104d9c682d7202fe41"
+  },
+  "control/__pycache__/sdk_contract.cpython-314.pyc": {
+    "bytes": 1619,
+    "sha256": "a9056e23d3246f17a2a9368072fb5613456fec333c5fb03cf6fca0e86d154bc5"
+  },
+  "control/allocation.json": {
+    "bytes": 37,
+    "sha256": "316e321340e6ef54152b6859b98d42402e98d74bb88bcfe26531f3af1da9b83f"
+  },
+  "control/base_controller.py": {
+    "bytes": 19108,
+    "sha256": "9838902aa4bbe6e5acf2fb12528e6657419bbd7560362b5dfe35cd0daec021c8"
+  },
+  "control/classifier.py": {
+    "bytes": 1825,
+    "sha256": "3ff4287ac6b48570fe4270d7e69fc481bc3119a253f08f0a4d62fc7382a61a63"
+  },
+  "control/confiner_validation.py": {
+    "bytes": 17667,
+    "sha256": "6439fdd8b52c85fa4e74af0def2c667ef0bedae9b814cbbfd48e49946c4f74ea"
+  },
+  "control/launch.log": {
+    "bytes": 1047,
+    "sha256": "d9dac17ae29884057fb0e7c1dd2e2dabb40dc38738a62ad1c55bb8eff2708f62"
+  },
+  "control/poste": {
+    "bytes": 26869,
+    "sha256": "79e3a8bbf457e3bc9104aa1558e7d03072216c70b68e08ae606ace6aa4584c7b"
+  },
+  "control/prepared.json": {
+    "bytes": 828,
+    "sha256": "c16b3d280dc437d006d00dd9e5cf6322b598277c1d8aff5c34e91f4c01833679"
+  },
+  "control/qualify.py": {
+    "bytes": 13996,
+    "sha256": "05e62e851506525ba283349da9f9dcc31df1e04ef4ac68466efacf38602966f1"
+  },
+  "control/remaining-after-poste.json": {
+    "bytes": 152,
+    "sha256": "d7ee7c8a6e1391f6123aa6ef70ccdcabb882090ab167d81149ceedda1f1bd7ae"
+  },
+  "control/sdk_contract.py": {
+    "bytes": 836,
+    "sha256": "00b576903280c6437ff02978718ecfe255b5cff2144a30416ff55605ec48bd9a"
+  },
+  "proofs/authority-path.json": {
+    "bytes": 367,
+    "sha256": "edf303d0817859c85801b0dd56c6539757c820fbc3f4b22a87d2694f0c7453cf"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_0_8/.lucivy-writer.lock": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_0_8/.managed.json": {
+    "bytes": 1750,
+    "sha256": "1481e20527f6c0e3fa387b62c74e9c0ad50e1b1964c6b89c16198bf5012475d5"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_0_8/979ae539b9f54e7ba2c61cf80c7ca49a.1.gmap": {
+    "bytes": 133,
+    "sha256": "6b9813999ed113cd587b9d621a14aa83dc0e5938579828c656822f3783edcf22"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_0_8/979ae539b9f54e7ba2c61cf80c7ca49a.1.posmap": {
+    "bytes": 134,
+    "sha256": "c103ee432bc9bcea88dfaf86228da48fceab7e89990fb2f80a9e69ed6f41c41d"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_0_8/979ae539b9f54e7ba2c61cf80c7ca49a.1.sfxpost": {
+    "bytes": 153,
+    "sha256": "6ae1a3cfe82cc14640f6a4d8bc6cab43967ebab488300689d9570dc9cf1906ba"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_0_8/979ae539b9f54e7ba2c61cf80c7ca49a.1.sibling_v3": {
+    "bytes": 137,
+    "sha256": "84defc61a146dca0a615915ea7f7943df66e0586c9e292067c671db761098371"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_0_8/979ae539b9f54e7ba2c61cf80c7ca49a.1.word_pos_map": {
+    "bytes": 128,
+    "sha256": "717656964c47331712754d66b2e6a162ced803f6a142654e9009c48db3ed4ebe"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_0_8/979ae539b9f54e7ba2c61cf80c7ca49a.1.word_sfxpost": {
+    "bytes": 141,
+    "sha256": "11f841f31fedf1d484d03efc5b68c9300f2595aaee8d52b6c252c4eb020fbf9a"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_0_8/979ae539b9f54e7ba2c61cf80c7ca49a.2.gmap": {
+    "bytes": 117,
+    "sha256": "3e11cd63c9c7d78c2a178386e552a9602fbf3165cb21607f7402f44816356cf1"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_0_8/979ae539b9f54e7ba2c61cf80c7ca49a.2.posmap": {
+    "bytes": 128,
+    "sha256": "c20eab5fb045273c73fe4b27f45799819913dcafae05814c0eceb62c86940dd5"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_0_8/979ae539b9f54e7ba2c61cf80c7ca49a.2.sfxpost": {
+    "bytes": 132,
+    "sha256": "7a6577684b059bb87b4e0a69ea6695cc996683bb9bfbfbc047f2fa45efa1de87"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_0_8/979ae539b9f54e7ba2c61cf80c7ca49a.2.sibling_v3": {
+    "bytes": 126,
+    "sha256": "c36912a8e6eb7e95402ec6ba755a88a3d74081dd8e99531c4bb405458e8d0777"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_0_8/979ae539b9f54e7ba2c61cf80c7ca49a.2.word_pos_map": {
+    "bytes": 120,
+    "sha256": "f9e0b9309c28d26ca7d951b4754ceab900b84fa3e4cace3c81cacbe248160430"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_0_8/979ae539b9f54e7ba2c61cf80c7ca49a.2.word_sfxpost": {
+    "bytes": 129,
+    "sha256": "6d1763fb7017af1ff24677601e84818642fcd12694a68a165b1162c6bc945a7e"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_0_8/979ae539b9f54e7ba2c61cf80c7ca49a.3.gmap": {
+    "bytes": 117,
+    "sha256": "3e11cd63c9c7d78c2a178386e552a9602fbf3165cb21607f7402f44816356cf1"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_0_8/979ae539b9f54e7ba2c61cf80c7ca49a.3.posmap": {
+    "bytes": 128,
+    "sha256": "c20eab5fb045273c73fe4b27f45799819913dcafae05814c0eceb62c86940dd5"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_0_8/979ae539b9f54e7ba2c61cf80c7ca49a.3.sfxpost": {
+    "bytes": 132,
+    "sha256": "7a6577684b059bb87b4e0a69ea6695cc996683bb9bfbfbc047f2fa45efa1de87"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_0_8/979ae539b9f54e7ba2c61cf80c7ca49a.3.sibling_v3": {
+    "bytes": 126,
+    "sha256": "c36912a8e6eb7e95402ec6ba755a88a3d74081dd8e99531c4bb405458e8d0777"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_0_8/979ae539b9f54e7ba2c61cf80c7ca49a.3.word_pos_map": {
+    "bytes": 120,
+    "sha256": "f9e0b9309c28d26ca7d951b4754ceab900b84fa3e4cace3c81cacbe248160430"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_0_8/979ae539b9f54e7ba2c61cf80c7ca49a.3.word_sfxpost": {
+    "bytes": 129,
+    "sha256": "6d1763fb7017af1ff24677601e84818642fcd12694a68a165b1162c6bc945a7e"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_0_8/979ae539b9f54e7ba2c61cf80c7ca49a.fast": {
+    "bytes": 174,
+    "sha256": "be83d8dee42aa111a5488b2bcce77d03a3e9a4ed9e20cab0f7d2b21aef644f5e"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_0_8/979ae539b9f54e7ba2c61cf80c7ca49a.fieldnorm": {
+    "bytes": 125,
+    "sha256": "bbbe632e2a175141587ac4b848ec31371d0f1a34d5df34f0a39ef06561e0c350"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_0_8/979ae539b9f54e7ba2c61cf80c7ca49a.idx": {
+    "bytes": 163,
+    "sha256": "e16a85eaa043b25795a6380c93ce79fbe0d497ba146569fed3d7ed6ef6cb8524"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_0_8/979ae539b9f54e7ba2c61cf80c7ca49a.offsets": {
+    "bytes": 122,
+    "sha256": "50ea66eea368568a647c245e01c785eee2e62005f2995139d1ddc7f3eb2cfa9d"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_0_8/979ae539b9f54e7ba2c61cf80c7ca49a.pos": {
+    "bytes": 122,
+    "sha256": "50ea66eea368568a647c245e01c785eee2e62005f2995139d1ddc7f3eb2cfa9d"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_0_8/979ae539b9f54e7ba2c61cf80c7ca49a.store": {
+    "bytes": 180,
+    "sha256": "4524771bedb54706afa6061bbfc6d2328cd13469fcfe20307b89fa57172364b8"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_0_8/979ae539b9f54e7ba2c61cf80c7ca49a.term": {
+    "bytes": 647,
+    "sha256": "7590036c34d0c53b5197f252043ca5bdaaf8add849aa29cb7920424889220669"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_0_8/_config.json": {
+    "bytes": 394,
+    "sha256": "d1824137902b94f51fa527e463b5367a6abf917e12163fd94528d4a0c4072cdc"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_0_8/dict-1.1.pidx": {
+    "bytes": 109,
+    "sha256": "dfc3b8e7f905825a536dc40257f63de59aca30ea933b8c000056917aafd9cd2b"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_0_8/dict-1.1.sfx": {
+    "bytes": 328,
+    "sha256": "31b52a3f1dc4d7c5a3e3c15a713655025bef479bfdea55a4e6eaa19ab8fd602b"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_0_8/dict-1.1.termtexts": {
+    "bytes": 229,
+    "sha256": "643632926358dfb329e412515aa3b5aea15f2fdf36000ea0213357617db9bc4a"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_0_8/dict-1.2.pidx": {
+    "bytes": 109,
+    "sha256": "dfc3b8e7f905825a536dc40257f63de59aca30ea933b8c000056917aafd9cd2b"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_0_8/dict-1.2.sfx": {
+    "bytes": 293,
+    "sha256": "feeaa1dcd298ac5ec4ab1b78784a082b4d7e788a961d8cf16a767014a28b041a"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_0_8/dict-1.2.termtexts": {
+    "bytes": 201,
+    "sha256": "8f9d74e76db6e62ac75cf4550bd4ed0702e31c721c0cbd06c5ece6e402691aa1"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_0_8/dict-1.3.pidx": {
+    "bytes": 109,
+    "sha256": "dfc3b8e7f905825a536dc40257f63de59aca30ea933b8c000056917aafd9cd2b"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_0_8/dict-1.3.sfx": {
+    "bytes": 293,
+    "sha256": "feeaa1dcd298ac5ec4ab1b78784a082b4d7e788a961d8cf16a767014a28b041a"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_0_8/dict-1.3.termtexts": {
+    "bytes": 201,
+    "sha256": "8f9d74e76db6e62ac75cf4550bd4ed0702e31c721c0cbd06c5ece6e402691aa1"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_0_8/meta.json": {
+    "bytes": 1506,
+    "sha256": "ae60614430a319b3c84a5fefe176b47dd9746fab3cda29a51abf216716bf5c17"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_1_9/.lucivy-writer.lock": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_1_9/.managed.json": {
+    "bytes": 14,
+    "sha256": "0a4c0352ffdfef893e0989e373f250b8ed6d0fe2b3d2073b7a671944f4ef5b01"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_1_9/_config.json": {
+    "bytes": 394,
+    "sha256": "d1824137902b94f51fa527e463b5367a6abf917e12163fd94528d4a0c4072cdc"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_1_9/meta.json": {
+    "bytes": 1233,
+    "sha256": "8361eeed2a98bdbff7e3de7a3e3b838e94c393e5aedd29b3993db020d54f9170"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_2_10/.lucivy-writer.lock": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_2_10/.managed.json": {
+    "bytes": 14,
+    "sha256": "0a4c0352ffdfef893e0989e373f250b8ed6d0fe2b3d2073b7a671944f4ef5b01"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_2_10/_config.json": {
+    "bytes": 394,
+    "sha256": "d1824137902b94f51fa527e463b5367a6abf917e12163fd94528d4a0c4072cdc"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_2_10/meta.json": {
+    "bytes": 1233,
+    "sha256": "8361eeed2a98bdbff7e3de7a3e3b838e94c393e5aedd29b3993db020d54f9170"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_3_11/.lucivy-writer.lock": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_3_11/.managed.json": {
+    "bytes": 14,
+    "sha256": "0a4c0352ffdfef893e0989e373f250b8ed6d0fe2b3d2073b7a671944f4ef5b01"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_3_11/_config.json": {
+    "bytes": 394,
+    "sha256": "d1824137902b94f51fa527e463b5367a6abf917e12163fd94528d4a0c4072cdc"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_File/shard_3_11/meta.json": {
+    "bytes": 1233,
+    "sha256": "8361eeed2a98bdbff7e3de7a3e3b838e94c393e5aedd29b3993db020d54f9170"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Library/shard_0_0/.lucivy-writer.lock": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Library/shard_0_0/.managed.json": {
+    "bytes": 14,
+    "sha256": "0a4c0352ffdfef893e0989e373f250b8ed6d0fe2b3d2073b7a671944f4ef5b01"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Library/shard_0_0/_config.json": {
+    "bytes": 394,
+    "sha256": "83afad50d8b84977c776ef05c898581854c94eb685ab678a7ac37c884eb02ab6"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Library/shard_0_0/meta.json": {
+    "bytes": 1117,
+    "sha256": "da07027258586c6e20375e3512445764663e86e5cc8beae4cc4c83f544d43a8f"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Library/shard_1_1/.lucivy-writer.lock": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Library/shard_1_1/.managed.json": {
+    "bytes": 14,
+    "sha256": "0a4c0352ffdfef893e0989e373f250b8ed6d0fe2b3d2073b7a671944f4ef5b01"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Library/shard_1_1/_config.json": {
+    "bytes": 394,
+    "sha256": "83afad50d8b84977c776ef05c898581854c94eb685ab678a7ac37c884eb02ab6"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Library/shard_1_1/meta.json": {
+    "bytes": 1117,
+    "sha256": "da07027258586c6e20375e3512445764663e86e5cc8beae4cc4c83f544d43a8f"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Library/shard_2_2/.lucivy-writer.lock": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Library/shard_2_2/.managed.json": {
+    "bytes": 14,
+    "sha256": "0a4c0352ffdfef893e0989e373f250b8ed6d0fe2b3d2073b7a671944f4ef5b01"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Library/shard_2_2/_config.json": {
+    "bytes": 394,
+    "sha256": "83afad50d8b84977c776ef05c898581854c94eb685ab678a7ac37c884eb02ab6"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Library/shard_2_2/meta.json": {
+    "bytes": 1117,
+    "sha256": "da07027258586c6e20375e3512445764663e86e5cc8beae4cc4c83f544d43a8f"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Library/shard_3_3/.lucivy-writer.lock": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Library/shard_3_3/.managed.json": {
+    "bytes": 14,
+    "sha256": "0a4c0352ffdfef893e0989e373f250b8ed6d0fe2b3d2073b7a671944f4ef5b01"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Library/shard_3_3/_config.json": {
+    "bytes": 394,
+    "sha256": "83afad50d8b84977c776ef05c898581854c94eb685ab678a7ac37c884eb02ab6"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Library/shard_3_3/meta.json": {
+    "bytes": 1117,
+    "sha256": "da07027258586c6e20375e3512445764663e86e5cc8beae4cc4c83f544d43a8f"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/.lucivy-writer.lock": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/.managed.json": {
+    "bytes": 2512,
+    "sha256": "57744788a966b93deb53ed8ca45d5ca6d91c3453f79f2e47fb0680638e8af8b3"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/_config.json": {
+    "bytes": 544,
+    "sha256": "d641473977361829b8252c99ccc6f436f238dbb087664413bbb87c92549b6037"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/dict-1.1.pidx": {
+    "bytes": 109,
+    "sha256": "dfc3b8e7f905825a536dc40257f63de59aca30ea933b8c000056917aafd9cd2b"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/dict-1.1.sfx": {
+    "bytes": 629,
+    "sha256": "00a23833eb3c99c15fbd83e44400a79d005ce2e837ab5e1ec2180701d53bca75"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/dict-1.1.termtexts": {
+    "bytes": 291,
+    "sha256": "475f241faefc7a2f6a4a5f668c72117073a1aa48e19e6902e268da63f0e3c723"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/dict-1.3.pidx": {
+    "bytes": 109,
+    "sha256": "dfc3b8e7f905825a536dc40257f63de59aca30ea933b8c000056917aafd9cd2b"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/dict-1.3.sfx": {
+    "bytes": 261,
+    "sha256": "2241a0fa35755ad92ca496ac6d3e309524e7bea8fe0dd0572893c229e0b10883"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/dict-1.3.termtexts": {
+    "bytes": 197,
+    "sha256": "d6ffd933be2eeff2c3144b0828c485304edc4c27858ba137015707e1f389f80a"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/dict-1.4.pidx": {
+    "bytes": 109,
+    "sha256": "dfc3b8e7f905825a536dc40257f63de59aca30ea933b8c000056917aafd9cd2b"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/dict-1.4.sfx": {
+    "bytes": 293,
+    "sha256": "feeaa1dcd298ac5ec4ab1b78784a082b4d7e788a961d8cf16a767014a28b041a"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/dict-1.4.termtexts": {
+    "bytes": 201,
+    "sha256": "8f9d74e76db6e62ac75cf4550bd4ed0702e31c721c0cbd06c5ece6e402691aa1"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/dict-1.5.pidx": {
+    "bytes": 109,
+    "sha256": "dfc3b8e7f905825a536dc40257f63de59aca30ea933b8c000056917aafd9cd2b"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/dict-1.5.sfx": {
+    "bytes": 293,
+    "sha256": "feeaa1dcd298ac5ec4ab1b78784a082b4d7e788a961d8cf16a767014a28b041a"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/dict-1.5.termtexts": {
+    "bytes": 201,
+    "sha256": "8f9d74e76db6e62ac75cf4550bd4ed0702e31c721c0cbd06c5ece6e402691aa1"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/ec5b67cd997a44609345288ed292b79e.1.gmap": {
+    "bytes": 153,
+    "sha256": "1b047ded84ad0ed8b4448b1f5e753c86842d7e304801c527b8642791e04606ef"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/ec5b67cd997a44609345288ed292b79e.1.posmap": {
+    "bytes": 143,
+    "sha256": "fa907e03bcbf0ad57f4b420e6754e33e15baba87fba583f32f52d5c4152b83ed"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/ec5b67cd997a44609345288ed292b79e.1.sfxpost": {
+    "bytes": 180,
+    "sha256": "dea1357a02205edc002e5065605082e9df2ef698f36aaf18a8a27f44d0a66c80"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/ec5b67cd997a44609345288ed292b79e.1.sibling_v3": {
+    "bytes": 147,
+    "sha256": "1f3664ac87380f7622638bcc045876301b8e3c871d0e0d55e48f2555f2bb0922"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/ec5b67cd997a44609345288ed292b79e.1.word_pos_map": {
+    "bytes": 141,
+    "sha256": "50fa0890ce39df3f298e96498396895e6e298e36c9e51f8c04508045c74daf7f"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/ec5b67cd997a44609345288ed292b79e.1.word_sfxpost": {
+    "bytes": 153,
+    "sha256": "72642917c96c61c9b588a3a7d17c1e39d2570156c0ff2e7e16362308d1911b3f"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/ec5b67cd997a44609345288ed292b79e.2.gmap": {
+    "bytes": 105,
+    "sha256": "1537d5496a6c01685d4a5b1bace6550411bfd0e2579b6db50cc638670468b988"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/ec5b67cd997a44609345288ed292b79e.2.posmap": {
+    "bytes": 109,
+    "sha256": "e566aca4349a48e1c05100a257956a7ba162c84f13d8cbc341e833e42737bede"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/ec5b67cd997a44609345288ed292b79e.2.sfxpost": {
+    "bytes": 121,
+    "sha256": "81f56b9f14f6204bd191523fc4b5303f24b5ce5b04252468bfa4f62cbe8e8e32"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/ec5b67cd997a44609345288ed292b79e.2.sibling_v3": {
+    "bytes": 126,
+    "sha256": "6ccaab042188ec7bb06f3dcddf7f1c5365a6034cdad6b7612f689ffa42c3b917"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/ec5b67cd997a44609345288ed292b79e.2.word_pos_map": {
+    "bytes": 109,
+    "sha256": "783447ff24b7096a8ebfbb85ae5902eb7ec14a9d969d956b914d80121b24a223"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/ec5b67cd997a44609345288ed292b79e.2.word_sfxpost": {
+    "bytes": 122,
+    "sha256": "f816946b2df1deb026e2a09a1f998e69a88d08521bb9b4c88c269cbf38f3ef0f"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/ec5b67cd997a44609345288ed292b79e.3.gmap": {
+    "bytes": 116,
+    "sha256": "8900d42bd2456cad5723652c5cf115296c8104a6d892b07f643aebd0950fb6f6"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/ec5b67cd997a44609345288ed292b79e.3.posmap": {
+    "bytes": 128,
+    "sha256": "c20eab5fb045273c73fe4b27f45799819913dcafae05814c0eceb62c86940dd5"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/ec5b67cd997a44609345288ed292b79e.3.sfxpost": {
+    "bytes": 132,
+    "sha256": "7a6577684b059bb87b4e0a69ea6695cc996683bb9bfbfbc047f2fa45efa1de87"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/ec5b67cd997a44609345288ed292b79e.3.sibling_v3": {
+    "bytes": 126,
+    "sha256": "c36912a8e6eb7e95402ec6ba755a88a3d74081dd8e99531c4bb405458e8d0777"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/ec5b67cd997a44609345288ed292b79e.3.word_pos_map": {
+    "bytes": 120,
+    "sha256": "f9e0b9309c28d26ca7d951b4754ceab900b84fa3e4cace3c81cacbe248160430"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/ec5b67cd997a44609345288ed292b79e.3.word_sfxpost": {
+    "bytes": 129,
+    "sha256": "6d1763fb7017af1ff24677601e84818642fcd12694a68a165b1162c6bc945a7e"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/ec5b67cd997a44609345288ed292b79e.4.gmap": {
+    "bytes": 117,
+    "sha256": "3e11cd63c9c7d78c2a178386e552a9602fbf3165cb21607f7402f44816356cf1"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/ec5b67cd997a44609345288ed292b79e.4.posmap": {
+    "bytes": 128,
+    "sha256": "c20eab5fb045273c73fe4b27f45799819913dcafae05814c0eceb62c86940dd5"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/ec5b67cd997a44609345288ed292b79e.4.sfxpost": {
+    "bytes": 132,
+    "sha256": "7a6577684b059bb87b4e0a69ea6695cc996683bb9bfbfbc047f2fa45efa1de87"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/ec5b67cd997a44609345288ed292b79e.4.sibling_v3": {
+    "bytes": 126,
+    "sha256": "c36912a8e6eb7e95402ec6ba755a88a3d74081dd8e99531c4bb405458e8d0777"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/ec5b67cd997a44609345288ed292b79e.4.word_pos_map": {
+    "bytes": 120,
+    "sha256": "f9e0b9309c28d26ca7d951b4754ceab900b84fa3e4cace3c81cacbe248160430"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/ec5b67cd997a44609345288ed292b79e.4.word_sfxpost": {
+    "bytes": 129,
+    "sha256": "6d1763fb7017af1ff24677601e84818642fcd12694a68a165b1162c6bc945a7e"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/ec5b67cd997a44609345288ed292b79e.5.gmap": {
+    "bytes": 117,
+    "sha256": "3e11cd63c9c7d78c2a178386e552a9602fbf3165cb21607f7402f44816356cf1"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/ec5b67cd997a44609345288ed292b79e.5.posmap": {
+    "bytes": 128,
+    "sha256": "c20eab5fb045273c73fe4b27f45799819913dcafae05814c0eceb62c86940dd5"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/ec5b67cd997a44609345288ed292b79e.5.sfxpost": {
+    "bytes": 132,
+    "sha256": "7a6577684b059bb87b4e0a69ea6695cc996683bb9bfbfbc047f2fa45efa1de87"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/ec5b67cd997a44609345288ed292b79e.5.sibling_v3": {
+    "bytes": 126,
+    "sha256": "c36912a8e6eb7e95402ec6ba755a88a3d74081dd8e99531c4bb405458e8d0777"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/ec5b67cd997a44609345288ed292b79e.5.word_pos_map": {
+    "bytes": 120,
+    "sha256": "f9e0b9309c28d26ca7d951b4754ceab900b84fa3e4cace3c81cacbe248160430"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/ec5b67cd997a44609345288ed292b79e.5.word_sfxpost": {
+    "bytes": 129,
+    "sha256": "6d1763fb7017af1ff24677601e84818642fcd12694a68a165b1162c6bc945a7e"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/ec5b67cd997a44609345288ed292b79e.fast": {
+    "bytes": 174,
+    "sha256": "be83d8dee42aa111a5488b2bcce77d03a3e9a4ed9e20cab0f7d2b21aef644f5e"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/ec5b67cd997a44609345288ed292b79e.fieldnorm": {
+    "bytes": 140,
+    "sha256": "1fcda810dbbfa7b8721a51748532dfc23a6c8fe7473d0985c608bd9acaf26b4e"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/ec5b67cd997a44609345288ed292b79e.idx": {
+    "bytes": 182,
+    "sha256": "10addb1ecac8650de8912b614cf4eaf8a08b3882dc67edd4bf8fa0cc161f383d"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/ec5b67cd997a44609345288ed292b79e.offsets": {
+    "bytes": 128,
+    "sha256": "de60ac8f146c0f1ac5f71331d8aff12c65d01e2c75998a6645ae8316388bfdd0"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/ec5b67cd997a44609345288ed292b79e.pos": {
+    "bytes": 128,
+    "sha256": "de60ac8f146c0f1ac5f71331d8aff12c65d01e2c75998a6645ae8316388bfdd0"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/ec5b67cd997a44609345288ed292b79e.store": {
+    "bytes": 212,
+    "sha256": "e7885786343806f96ebc771855131c8931fd7d5765f570b5805656d3a687896f"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/ec5b67cd997a44609345288ed292b79e.term": {
+    "bytes": 793,
+    "sha256": "e2d32d6ced738a9897f7cdb002c75201bab814cef80499f66fa5f535fe264424"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_0_12/meta.json": {
+    "bytes": 2070,
+    "sha256": "fcc0db67aa4685683fc8b7bb8a2b7b72f8becefa95d612254990758ed48dec3f"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_1_13/.lucivy-writer.lock": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_1_13/.managed.json": {
+    "bytes": 1900,
+    "sha256": "0269fd0d9eb9bd5ecb5f5dc9caf50382e891ac06e41c6adbb25b24c6f762a5fe"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_1_13/32044a51f5c742e98b7c6393ffb606db.1.gmap": {
+    "bytes": 125,
+    "sha256": "9edbd02aaa84567ffbad8671351746add9ad07a7ce442183cb41008381686ea4"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_1_13/32044a51f5c742e98b7c6393ffb606db.1.posmap": {
+    "bytes": 131,
+    "sha256": "cbea3885a75e227e7b76ef60258828ec883fecc8d5f92e9e010cc06542a87fdd"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_1_13/32044a51f5c742e98b7c6393ffb606db.1.sfxpost": {
+    "bytes": 143,
+    "sha256": "6f68bfeb7416d34f2c4eb245c681de4fe598f64709077e1020ebb3cfe9f50b61"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_1_13/32044a51f5c742e98b7c6393ffb606db.1.sibling_v3": {
+    "bytes": 133,
+    "sha256": "180d0cf8fc623e3decebf47e73ffd5aa400f76b88bc0a0eb0730279ddf7fafa7"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_1_13/32044a51f5c742e98b7c6393ffb606db.1.word_pos_map": {
+    "bytes": 125,
+    "sha256": "4fc715ed1648ccc1931e39e3cc259b81c24a319c837aa6d224e66e0fef301982"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_1_13/32044a51f5c742e98b7c6393ffb606db.1.word_sfxpost": {
+    "bytes": 135,
+    "sha256": "345457422692cacc92921daaa9565a3f2e027f78cd3f1abb07a33eeda60d922b"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_1_13/32044a51f5c742e98b7c6393ffb606db.2.gmap": {
+    "bytes": 105,
+    "sha256": "1537d5496a6c01685d4a5b1bace6550411bfd0e2579b6db50cc638670468b988"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_1_13/32044a51f5c742e98b7c6393ffb606db.2.posmap": {
+    "bytes": 109,
+    "sha256": "e566aca4349a48e1c05100a257956a7ba162c84f13d8cbc341e833e42737bede"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_1_13/32044a51f5c742e98b7c6393ffb606db.2.sfxpost": {
+    "bytes": 121,
+    "sha256": "81f56b9f14f6204bd191523fc4b5303f24b5ce5b04252468bfa4f62cbe8e8e32"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_1_13/32044a51f5c742e98b7c6393ffb606db.2.sibling_v3": {
+    "bytes": 126,
+    "sha256": "6ccaab042188ec7bb06f3dcddf7f1c5365a6034cdad6b7612f689ffa42c3b917"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_1_13/32044a51f5c742e98b7c6393ffb606db.2.word_pos_map": {
+    "bytes": 109,
+    "sha256": "783447ff24b7096a8ebfbb85ae5902eb7ec14a9d969d956b914d80121b24a223"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_1_13/32044a51f5c742e98b7c6393ffb606db.2.word_sfxpost": {
+    "bytes": 122,
+    "sha256": "f816946b2df1deb026e2a09a1f998e69a88d08521bb9b4c88c269cbf38f3ef0f"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_1_13/32044a51f5c742e98b7c6393ffb606db.3.gmap": {
+    "bytes": 105,
+    "sha256": "1537d5496a6c01685d4a5b1bace6550411bfd0e2579b6db50cc638670468b988"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_1_13/32044a51f5c742e98b7c6393ffb606db.3.posmap": {
+    "bytes": 109,
+    "sha256": "e566aca4349a48e1c05100a257956a7ba162c84f13d8cbc341e833e42737bede"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_1_13/32044a51f5c742e98b7c6393ffb606db.3.sfxpost": {
+    "bytes": 121,
+    "sha256": "81f56b9f14f6204bd191523fc4b5303f24b5ce5b04252468bfa4f62cbe8e8e32"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_1_13/32044a51f5c742e98b7c6393ffb606db.3.sibling_v3": {
+    "bytes": 126,
+    "sha256": "6ccaab042188ec7bb06f3dcddf7f1c5365a6034cdad6b7612f689ffa42c3b917"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_1_13/32044a51f5c742e98b7c6393ffb606db.3.word_pos_map": {
+    "bytes": 109,
+    "sha256": "783447ff24b7096a8ebfbb85ae5902eb7ec14a9d969d956b914d80121b24a223"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_1_13/32044a51f5c742e98b7c6393ffb606db.3.word_sfxpost": {
+    "bytes": 122,
+    "sha256": "f816946b2df1deb026e2a09a1f998e69a88d08521bb9b4c88c269cbf38f3ef0f"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_1_13/32044a51f5c742e98b7c6393ffb606db.4.gmap": {
+    "bytes": 105,
+    "sha256": "1537d5496a6c01685d4a5b1bace6550411bfd0e2579b6db50cc638670468b988"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_1_13/32044a51f5c742e98b7c6393ffb606db.4.posmap": {
+    "bytes": 109,
+    "sha256": "e566aca4349a48e1c05100a257956a7ba162c84f13d8cbc341e833e42737bede"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_1_13/32044a51f5c742e98b7c6393ffb606db.4.sfxpost": {
+    "bytes": 121,
+    "sha256": "81f56b9f14f6204bd191523fc4b5303f24b5ce5b04252468bfa4f62cbe8e8e32"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_1_13/32044a51f5c742e98b7c6393ffb606db.4.sibling_v3": {
+    "bytes": 126,
+    "sha256": "6ccaab042188ec7bb06f3dcddf7f1c5365a6034cdad6b7612f689ffa42c3b917"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_1_13/32044a51f5c742e98b7c6393ffb606db.4.word_pos_map": {
+    "bytes": 109,
+    "sha256": "783447ff24b7096a8ebfbb85ae5902eb7ec14a9d969d956b914d80121b24a223"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_1_13/32044a51f5c742e98b7c6393ffb606db.4.word_sfxpost": {
+    "bytes": 122,
+    "sha256": "f816946b2df1deb026e2a09a1f998e69a88d08521bb9b4c88c269cbf38f3ef0f"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_1_13/32044a51f5c742e98b7c6393ffb606db.5.gmap": {
+    "bytes": 105,
+    "sha256": "1537d5496a6c01685d4a5b1bace6550411bfd0e2579b6db50cc638670468b988"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_1_13/32044a51f5c742e98b7c6393ffb606db.5.posmap": {
+    "bytes": 109,
+    "sha256": "e566aca4349a48e1c05100a257956a7ba162c84f13d8cbc341e833e42737bede"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_1_13/32044a51f5c742e98b7c6393ffb606db.5.sfxpost": {
+    "bytes": 121,
+    "sha256": "81f56b9f14f6204bd191523fc4b5303f24b5ce5b04252468bfa4f62cbe8e8e32"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_1_13/32044a51f5c742e98b7c6393ffb606db.5.sibling_v3": {
+    "bytes": 126,
+    "sha256": "6ccaab042188ec7bb06f3dcddf7f1c5365a6034cdad6b7612f689ffa42c3b917"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_1_13/32044a51f5c742e98b7c6393ffb606db.5.word_pos_map": {
+    "bytes": 109,
+    "sha256": "783447ff24b7096a8ebfbb85ae5902eb7ec14a9d969d956b914d80121b24a223"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_1_13/32044a51f5c742e98b7c6393ffb606db.5.word_sfxpost": {
+    "bytes": 122,
+    "sha256": "f816946b2df1deb026e2a09a1f998e69a88d08521bb9b4c88c269cbf38f3ef0f"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_1_13/32044a51f5c742e98b7c6393ffb606db.fast": {
+    "bytes": 177,
+    "sha256": "e5528a497b14cb21d3300796d2918f409cc910c705a51905be67fdd136dfc840"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_1_13/32044a51f5c742e98b7c6393ffb606db.fieldnorm": {
+    "bytes": 140,
+    "sha256": "49b8736a4f2322dae63184b7d314afeadec45ceafd0ef0bbec7b077e3bd1b3e4"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_1_13/32044a51f5c742e98b7c6393ffb606db.idx": {
+    "bytes": 130,
+    "sha256": "e95d278fb38a88e9fbf6345931007a0d910fa5e663ef875012248f39af2b32c4"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_1_13/32044a51f5c742e98b7c6393ffb606db.offsets": {
+    "bytes": 110,
+    "sha256": "34a6d76fa3984d03462ea0963eb525de18968475a39be4099d90be8692522bb5"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_1_13/32044a51f5c742e98b7c6393ffb606db.pos": {
+    "bytes": 110,
+    "sha256": "34a6d76fa3984d03462ea0963eb525de18968475a39be4099d90be8692522bb5"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_1_13/32044a51f5c742e98b7c6393ffb606db.store": {
+    "bytes": 170,
+    "sha256": "724ebecbc63f61acf7e3c008d351055e94ca2998d94bbe92a7a2216e4e2f09b7"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_1_13/32044a51f5c742e98b7c6393ffb606db.term": {
+    "bytes": 379,
+    "sha256": "836b71dcca318046fe9322410006892838e1c1b0c1f4da4ac99bc0e7774a31c9"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_1_13/_config.json": {
+    "bytes": 544,
+    "sha256": "d641473977361829b8252c99ccc6f436f238dbb087664413bbb87c92549b6037"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_1_13/dict-1.1.pidx": {
+    "bytes": 109,
+    "sha256": "dfc3b8e7f905825a536dc40257f63de59aca30ea933b8c000056917aafd9cd2b"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_1_13/dict-1.1.sfx": {
+    "bytes": 379,
+    "sha256": "a7c1107139bc13b32eec080812124c99b0bd0bd75202f08a348775c175c5abf4"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_1_13/dict-1.1.termtexts": {
+    "bytes": 222,
+    "sha256": "11f08bbd8a86c434224170770293d6e435ef80a20df69413420d39e8d7a8f4fe"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_1_13/meta.json": {
+    "bytes": 2000,
+    "sha256": "8ba9ab1189c35d66ed7cf728bbc9f122d831a5f6389db370d55ad5708ca6ea4a"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_2_14/.lucivy-writer.lock": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_2_14/.managed.json": {
+    "bytes": 14,
+    "sha256": "0a4c0352ffdfef893e0989e373f250b8ed6d0fe2b3d2073b7a671944f4ef5b01"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_2_14/_config.json": {
+    "bytes": 544,
+    "sha256": "d641473977361829b8252c99ccc6f436f238dbb087664413bbb87c92549b6037"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_2_14/meta.json": {
+    "bytes": 1751,
+    "sha256": "f8b7049c979466ae5f267459cef01cc06541555e124e1d4c8af28572736fbf82"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_3_15/.lucivy-writer.lock": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_3_15/.managed.json": {
+    "bytes": 14,
+    "sha256": "0a4c0352ffdfef893e0989e373f250b8ed6d0fe2b3d2073b7a671944f4ef5b01"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_3_15/_config.json": {
+    "bytes": 544,
+    "sha256": "d641473977361829b8252c99ccc6f436f238dbb087664413bbb87c92549b6037"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_ScopeContent/shard_3_15/meta.json": {
+    "bytes": 1751,
+    "sha256": "f8b7049c979466ae5f267459cef01cc06541555e124e1d4c8af28572736fbf82"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_0_4/.lucivy-writer.lock": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_0_4/.managed.json": {
+    "bytes": 1750,
+    "sha256": "8c27d3ef4c5e7db1c3dca865b262c1aef03d2bab54145d09952af148601d09ef"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_0_4/3bcaa144d2bc49a8bf8f248ac1a5d9c5.1.gmap": {
+    "bytes": 116,
+    "sha256": "8900d42bd2456cad5723652c5cf115296c8104a6d892b07f643aebd0950fb6f6"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_0_4/3bcaa144d2bc49a8bf8f248ac1a5d9c5.1.posmap": {
+    "bytes": 128,
+    "sha256": "c20eab5fb045273c73fe4b27f45799819913dcafae05814c0eceb62c86940dd5"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_0_4/3bcaa144d2bc49a8bf8f248ac1a5d9c5.1.sfxpost": {
+    "bytes": 132,
+    "sha256": "7a6577684b059bb87b4e0a69ea6695cc996683bb9bfbfbc047f2fa45efa1de87"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_0_4/3bcaa144d2bc49a8bf8f248ac1a5d9c5.1.sibling_v3": {
+    "bytes": 126,
+    "sha256": "c36912a8e6eb7e95402ec6ba755a88a3d74081dd8e99531c4bb405458e8d0777"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_0_4/3bcaa144d2bc49a8bf8f248ac1a5d9c5.1.word_pos_map": {
+    "bytes": 120,
+    "sha256": "f9e0b9309c28d26ca7d951b4754ceab900b84fa3e4cace3c81cacbe248160430"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_0_4/3bcaa144d2bc49a8bf8f248ac1a5d9c5.1.word_sfxpost": {
+    "bytes": 129,
+    "sha256": "6d1763fb7017af1ff24677601e84818642fcd12694a68a165b1162c6bc945a7e"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_0_4/3bcaa144d2bc49a8bf8f248ac1a5d9c5.2.gmap": {
+    "bytes": 117,
+    "sha256": "3e11cd63c9c7d78c2a178386e552a9602fbf3165cb21607f7402f44816356cf1"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_0_4/3bcaa144d2bc49a8bf8f248ac1a5d9c5.2.posmap": {
+    "bytes": 128,
+    "sha256": "c20eab5fb045273c73fe4b27f45799819913dcafae05814c0eceb62c86940dd5"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_0_4/3bcaa144d2bc49a8bf8f248ac1a5d9c5.2.sfxpost": {
+    "bytes": 132,
+    "sha256": "7a6577684b059bb87b4e0a69ea6695cc996683bb9bfbfbc047f2fa45efa1de87"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_0_4/3bcaa144d2bc49a8bf8f248ac1a5d9c5.2.sibling_v3": {
+    "bytes": 126,
+    "sha256": "c36912a8e6eb7e95402ec6ba755a88a3d74081dd8e99531c4bb405458e8d0777"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_0_4/3bcaa144d2bc49a8bf8f248ac1a5d9c5.2.word_pos_map": {
+    "bytes": 120,
+    "sha256": "f9e0b9309c28d26ca7d951b4754ceab900b84fa3e4cace3c81cacbe248160430"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_0_4/3bcaa144d2bc49a8bf8f248ac1a5d9c5.2.word_sfxpost": {
+    "bytes": 129,
+    "sha256": "6d1763fb7017af1ff24677601e84818642fcd12694a68a165b1162c6bc945a7e"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_0_4/3bcaa144d2bc49a8bf8f248ac1a5d9c5.3.gmap": {
+    "bytes": 117,
+    "sha256": "3e11cd63c9c7d78c2a178386e552a9602fbf3165cb21607f7402f44816356cf1"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_0_4/3bcaa144d2bc49a8bf8f248ac1a5d9c5.3.posmap": {
+    "bytes": 128,
+    "sha256": "c20eab5fb045273c73fe4b27f45799819913dcafae05814c0eceb62c86940dd5"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_0_4/3bcaa144d2bc49a8bf8f248ac1a5d9c5.3.sfxpost": {
+    "bytes": 132,
+    "sha256": "7a6577684b059bb87b4e0a69ea6695cc996683bb9bfbfbc047f2fa45efa1de87"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_0_4/3bcaa144d2bc49a8bf8f248ac1a5d9c5.3.sibling_v3": {
+    "bytes": 126,
+    "sha256": "c36912a8e6eb7e95402ec6ba755a88a3d74081dd8e99531c4bb405458e8d0777"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_0_4/3bcaa144d2bc49a8bf8f248ac1a5d9c5.3.word_pos_map": {
+    "bytes": 120,
+    "sha256": "f9e0b9309c28d26ca7d951b4754ceab900b84fa3e4cace3c81cacbe248160430"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_0_4/3bcaa144d2bc49a8bf8f248ac1a5d9c5.3.word_sfxpost": {
+    "bytes": 129,
+    "sha256": "6d1763fb7017af1ff24677601e84818642fcd12694a68a165b1162c6bc945a7e"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_0_4/3bcaa144d2bc49a8bf8f248ac1a5d9c5.fast": {
+    "bytes": 174,
+    "sha256": "be83d8dee42aa111a5488b2bcce77d03a3e9a4ed9e20cab0f7d2b21aef644f5e"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_0_4/3bcaa144d2bc49a8bf8f248ac1a5d9c5.fieldnorm": {
+    "bytes": 125,
+    "sha256": "14484d2369c20d06d0fa84821a2917d53dc9440ff599aa2a43ed8663bd5ddaef"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_0_4/3bcaa144d2bc49a8bf8f248ac1a5d9c5.idx": {
+    "bytes": 159,
+    "sha256": "53265e01dee00b2dd0712dfbe5f8bc0635979a5e034587a2274d7c0bba3df515"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_0_4/3bcaa144d2bc49a8bf8f248ac1a5d9c5.offsets": {
+    "bytes": 122,
+    "sha256": "50ea66eea368568a647c245e01c785eee2e62005f2995139d1ddc7f3eb2cfa9d"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_0_4/3bcaa144d2bc49a8bf8f248ac1a5d9c5.pos": {
+    "bytes": 122,
+    "sha256": "50ea66eea368568a647c245e01c785eee2e62005f2995139d1ddc7f3eb2cfa9d"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_0_4/3bcaa144d2bc49a8bf8f248ac1a5d9c5.store": {
+    "bytes": 175,
+    "sha256": "d81b3468ac09cfd6b0f74fc049e7f508a633320dd97f22cfbcfc4de069c376fa"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_0_4/3bcaa144d2bc49a8bf8f248ac1a5d9c5.term": {
+    "bytes": 634,
+    "sha256": "5698c6c8ef72b7050b89ebb864662ea18f02eefb873cdfdf00271ff8015ae8b7"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_0_4/_config.json": {
+    "bytes": 394,
+    "sha256": "83afad50d8b84977c776ef05c898581854c94eb685ab678a7ac37c884eb02ab6"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_0_4/dict-1.1.pidx": {
+    "bytes": 109,
+    "sha256": "dfc3b8e7f905825a536dc40257f63de59aca30ea933b8c000056917aafd9cd2b"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_0_4/dict-1.1.sfx": {
+    "bytes": 261,
+    "sha256": "2241a0fa35755ad92ca496ac6d3e309524e7bea8fe0dd0572893c229e0b10883"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_0_4/dict-1.1.termtexts": {
+    "bytes": 197,
+    "sha256": "d6ffd933be2eeff2c3144b0828c485304edc4c27858ba137015707e1f389f80a"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_0_4/dict-1.2.pidx": {
+    "bytes": 109,
+    "sha256": "dfc3b8e7f905825a536dc40257f63de59aca30ea933b8c000056917aafd9cd2b"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_0_4/dict-1.2.sfx": {
+    "bytes": 293,
+    "sha256": "feeaa1dcd298ac5ec4ab1b78784a082b4d7e788a961d8cf16a767014a28b041a"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_0_4/dict-1.2.termtexts": {
+    "bytes": 201,
+    "sha256": "8f9d74e76db6e62ac75cf4550bd4ed0702e31c721c0cbd06c5ece6e402691aa1"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_0_4/dict-1.3.pidx": {
+    "bytes": 109,
+    "sha256": "dfc3b8e7f905825a536dc40257f63de59aca30ea933b8c000056917aafd9cd2b"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_0_4/dict-1.3.sfx": {
+    "bytes": 293,
+    "sha256": "feeaa1dcd298ac5ec4ab1b78784a082b4d7e788a961d8cf16a767014a28b041a"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_0_4/dict-1.3.termtexts": {
+    "bytes": 201,
+    "sha256": "8f9d74e76db6e62ac75cf4550bd4ed0702e31c721c0cbd06c5ece6e402691aa1"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_0_4/meta.json": {
+    "bytes": 1506,
+    "sha256": "9b3efb57632fec39ccbb30f61c74bbc1eb4e09c2709ef35c0ee7831260e1690d"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_1_5/.lucivy-writer.lock": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_1_5/.managed.json": {
+    "bytes": 14,
+    "sha256": "0a4c0352ffdfef893e0989e373f250b8ed6d0fe2b3d2073b7a671944f4ef5b01"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_1_5/_config.json": {
+    "bytes": 394,
+    "sha256": "83afad50d8b84977c776ef05c898581854c94eb685ab678a7ac37c884eb02ab6"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_1_5/meta.json": {
+    "bytes": 1233,
+    "sha256": "0d4555a1f31e90c5769e44b068b865c93bbaac1cbcdd05bab58704174efb291a"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_2_6/.lucivy-writer.lock": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_2_6/.managed.json": {
+    "bytes": 14,
+    "sha256": "0a4c0352ffdfef893e0989e373f250b8ed6d0fe2b3d2073b7a671944f4ef5b01"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_2_6/_config.json": {
+    "bytes": 394,
+    "sha256": "83afad50d8b84977c776ef05c898581854c94eb685ab678a7ac37c884eb02ab6"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_2_6/meta.json": {
+    "bytes": 1233,
+    "sha256": "0d4555a1f31e90c5769e44b068b865c93bbaac1cbcdd05bab58704174efb291a"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_3_7/.lucivy-writer.lock": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_3_7/.managed.json": {
+    "bytes": 14,
+    "sha256": "0a4c0352ffdfef893e0989e373f250b8ed6d0fe2b3d2073b7a671944f4ef5b01"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_3_7/_config.json": {
+    "bytes": 394,
+    "sha256": "83afad50d8b84977c776ef05c898581854c94eb685ab678a7ac37c884eb02ab6"
+  },
+  "proofs/cache/rag3weaver/cache/3375093/Lucivy_Lucivy_Symbol/shard_3_7/meta.json": {
+    "bytes": 1233,
+    "sha256": "0d4555a1f31e90c5769e44b068b865c93bbaac1cbcdd05bab58704174efb291a"
+  },
+  "proofs/cache-quiet-after-scope.json": {
+    "bytes": 81236,
+    "sha256": "9e3c40a9fc6cac67d03321bf4e0ed5105d73c61042749f6f10650cc15c83d058"
+  },
+  "proofs/classic-raw-classification.json": {
+    "bytes": 139,
+    "sha256": "182a3a6b00fe966910365c630cb29e3d1e165b4d6a4963599287094a1b612cac"
+  },
+  "proofs/composed.json": {
+    "bytes": 393,
+    "sha256": "5790f6688089f19957f9c0afeea1496bafebb0e66f316165ea12b562712b87e1"
+  },
+  "proofs/databases/generations/base.rag3db": {
+    "bytes": 14286848,
+    "sha256": "953b042936c5503c9bd62232db1a271609bd3842c2027dc7a3c13736fa2f79f4"
+  },
+  "proofs/databases/generations/base.rag3db.ecrivain": {
+    "bytes": 289,
+    "sha256": "7dd4a97b3a82cd84965584d646fcc04b78b6eeaa6764e4fbb0e48e36eae2250c"
+  },
+  "proofs/databases/generations/base.rag3db.extensions": {
+    "bytes": 181,
+    "sha256": "535fedbf4abdc416734c9abf6288a8af142fcf65d543c1733da9e0869e235618"
+  },
+  "proofs/databases/generations/base.rag3db.readers": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "proofs/databases/generations/base.rag3db.wal": {
+    "bytes": 7975,
+    "sha256": "c5424b63fbcacbd9b53c831c2f2cbc3fceb0da9f2976c919d2ff69e7ea71dbbb"
+  },
+  "proofs/first-red.json": {
+    "bytes": 184,
+    "sha256": "37ff22dac46c6e440ca630c09c915af39f6281330af691f2758f29b562238fab"
+  },
+  "proofs/fresh-poste-quiet.json": {
+    "bytes": 81236,
+    "sha256": "9d03c588374dcd8487287f3716be06f4da6d59f299acef9421c9ae986c1ea9ac"
+  },
+  "proofs/gen-actual-profile.json": {
+    "bytes": 12715,
+    "sha256": "c24f54a32999ca41b9b379f55238e81d5d155892c5c7b2e1d9c8085b4eacded1"
+  },
+  "proofs/gen-process.json": {
+    "bytes": 128,
+    "sha256": "63b8f90753014ccad1c6584399ed3358f218e1f872937295ed81ef3b5fcf1a00"
+  },
+  "proofs/gen-sdk.json": {
+    "bytes": 292,
+    "sha256": "19519d5d3c175f0f8f9470301f354dbb9560769ab00aa02f194f7322cda26771"
+  },
+  "proofs/gen.command.json": {
+    "bytes": 295,
+    "sha256": "398ef92e5234c5a3a8a5a077d3cd0a978f722de146f47f7706ba751f461389c9"
+  },
+  "proofs/gen.stderr": {
+    "bytes": 4836,
+    "sha256": "58e1cdc9a61895b28f83201e3352415d0b6854391733c4547c4af38f0478c4de"
+  },
+  "proofs/gen.stdout": {
+    "bytes": 107,
+    "sha256": "235cc361d1d889f6bc535fafc0ed79fdf66f21dce5296714a4edfa72f759aee9"
+  },
+  "proofs/ledger.json": {
+    "bytes": 631,
+    "sha256": "fc395ef6aeb087b65f8d76ed8038b76e119473638e14215bf16339a31de235ad"
+  },
+  "proofs/new-common-window.json": {
+    "bytes": 97,
+    "sha256": "c176639e10f0f9071f87fc6cf7b6641406588dd4e62a709c400990e7092fbd76"
+  },
+  "proofs/outer-supervision.json": {
+    "bytes": 220,
+    "sha256": "3a276027870903660a6e24890ac4e75ca3ebdce8cd2b0ad34179ece96ee362f0"
+  },
+  "proofs/owned-after-scope.json": {
+    "bytes": 50,
+    "sha256": "6c48605daaf158a5edb4c7ef502f2110d4aa183bda51d7af85797f9bd912e9f3"
+  },
+  "proofs/profile.json": {
+    "bytes": 2639,
+    "sha256": "b8258b7aa934658c4623edc1f6781b2c21794e6ac394eeba398ade71ba28b1c1"
+  },
+  "proofs/runtime-marker.json": {
+    "bytes": 122,
+    "sha256": "90f07206f4490ce77cb317ad7981ce3f2a68b4321f0054ce32000b52fa786633"
+  },
+  "scope/validation-io69eeq0/autorite.json": {
+    "bytes": 443,
+    "sha256": "6147e49e3f21ae1a31266a996579bb54c5f2373c4b0a9445b0b82d1982f32fe6"
+  },
+  "scope/validation-io69eeq0/bus.xml": {
+    "bytes": 239,
+    "sha256": "c6b685ee03676fc1dc65ef98a6aa9c72a5e060c592a182d899955247eb94e0d5"
+  },
+  "scope/validation-io69eeq0/enfants.json": {
+    "bytes": 1158,
+    "sha256": "8d08b33b3b1e5f87a0f75e2dfd4ffd995b484b548076b42f94185b9e9001c737"
+  },
+  "scope/validation-io69eeq0/recette.json": {
+    "bytes": 762,
+    "sha256": "d42cb8232ef726d738748f2322f6b3881a2273e4baf445eae6c4c42ed03b6559"
+  },
+  "scope/validation-io69eeq0/verdict.json": {
+    "bytes": 122,
+    "sha256": "e7756b752bf0cfec3b55495b9156d5ec0f51a6c42d02d00ce24d08212f307e91"
+  }
+}
