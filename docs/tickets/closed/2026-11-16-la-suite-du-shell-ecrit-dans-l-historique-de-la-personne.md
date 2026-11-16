@@ -1,6 +1,6 @@
 # La suite de tests du shell écrit dans l'historique de la personne
 
-- **État** : ouvert (16 novembre 2026, hotfixs)
+- **État** : fermé (16 novembre 2026, hotfixs) : le lot `shell-tests-own-history-2` (8d404496d) donne à tout `ShellTest` son propre historique.
 - **Famille** : moteur
 - **Gravité** : une suite de tests qui modifie un fichier de la personne (`~/.rag3db/history.txt`) sur le poste où elle
   tourne. Et un test peut à nouveau dépendre de ce qu'y ont laissé les tests d'avant, comme
@@ -23,3 +23,18 @@ passe de la suite le 16 nov. à luciepc, `~/.rag3db/history.txt` avait changé.
    (`-p`). Les tests qui lisent `history.txt` gardent le leur.
 2. Un témoin : la suite entière laisse `~/.rag3db/history.txt` intact (même empreinte avant et après), sous un `HOME`
    de test.
+
+## Fermeture (16 nov.)
+
+Le lot `shell-tests-own-history-2` est passé par le mode « tests seuls » de la garde (eeb1ba8db5). Ses commits :
+
+- **55aaada11** : le témoin, une fixture de session qui compare les historiques partagés avant et après la suite.
+- **187fec001** : le témoin regarde aussi `history.txt` du dossier courant. Un test de la suite l'y crée, et tout shell
+  sans `-p` le préfère alors à `~/.rag3db` (`shell_runner.cpp:139`). Sous un `HOME` temporaire, le témoin est rouge :
+  « the suite changed …/tools/shell/test/history.txt », 245 passés et 1 erreur.
+- **8d404496d** : le correctif. Tout `ShellTest` sans `-p` reçoit un `TemporaryDirectory` tenu par l'instance, posé
+  juste après l'exécutable, pour que les tests de drapeau sans valeur (`-m`, `--max_db_size`…) finissent toujours sur
+  leur drapeau.
+
+La passe, à luciepc, avec un shell bâti de 8d404496d (sha256 2297d8da…) : 245 passés, le témoin vert, aucun dossier
+laissé sous `TMPDIR`, aucun `history.txt` dans l'arbre, aucun `~/.rag3db` créé.
