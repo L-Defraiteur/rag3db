@@ -169,6 +169,10 @@ def worker(context):
     pins = context['pins']
     pins_check(pins)
     ready = ready_read(context['ready_path'], context['ready_sha256'], context['nonce'], pins)
+    provider = next((p for p in pins['providers'] if p['address'] == context.get('address')), None)
+    if context.get('kind') != 'provider' or provider is None:
+        raise ValueError('only fixed provider health contacts allowed')
+    process_check(provider, process_observation.process_snapshot)
     now = contact_gate(ready, pins, context['admission'], context['lease_end'],
                        time.monotonic, phase_protocol.read_phase_state)
     due = phase_protocol._clock(context['contact_deadline'], 'contact deadline')
@@ -230,7 +234,9 @@ def contact_gate(ready, pins, admission, lease_end, clock, phase_reader):
     lease_end = phase_protocol._clock(lease_end, 'contact lease end')
     if lease_end > ready['deadline']:
         raise ValueError('contact lease cannot extend common END')
-    snapshot = phase_reader(ready)
+    current = ready_read(pins['ready_path'], pins['ready_sha256'], pins['nonce'], pins)
+    if current != ready: raise ValueError('caller READY differs from immutable published bytes')
+    snapshot = phase_reader(current)
     now = clock()
     if admission: phase_protocol.validate_ready_phase(ready, now, snapshot)
     else: phase_protocol.validate_phase_authority(ready, now, snapshot)
@@ -271,7 +277,13 @@ def health_observation(ready, pins, provider, evidence, *, admission, lease_end,
     value = phase_protocol.decode(body)
     strict(value, provider['identity'])
     strict(value.get('usage', {}), dict(baux=0, en_cours=0))
-    evidence['observed'] = value
+    now = contact_gate(ready, pins, admission, lease_end, clock, phase_reader)
+    if now >= due: raise ValueError('total health budget exceeded')
+    evidence['process_after'] = process_check(provider, process_reader)
+    pins_check(pins)
+    now = contact_gate(ready, pins, admission, lease_end, clock, phase_reader)
+    if now >= due: raise ValueError('total observation budget exceeded')
+    evidence.update(observed=value, finished_monotonic=now)
     return value
 
 
@@ -345,6 +357,11 @@ def publish_services(ready_path, destination, *, expected_ready_sha256, expected
         persist()
         staged = stage(destination, grant)
         try:
+            pins_check(pins)
+            record['process_before_grant'] = [process_check(p, process_reader) for p in pins['providers']]
+            now = check()
+            if not ready['ready_observed_monotonic'] <= grant['observed_monotonic'] <= now or now >= grant['valid_until_monotonic']:
+                raise ValueError('grant observation/lease invalid before publication')
             os.link(staged, destination)
         finally:
             staged.unlink()
