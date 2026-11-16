@@ -305,3 +305,16 @@ publication, ainsi qu'une relecture après écriture ; si tard, verdict ROUGE et
 retour1. Témoin sur vraie publication/main, pas uniquement le prédicat finish.
 Cette réserve et la copie privée de poste se corrigent dans le même paquet.
 Aucun défaut runtime observé, aucune passe291c lancée.
+
+### Fin TOTAL de revue291c : deux P2 complémentaires, même correction groupée
+
+3. Shell lancé depuis Q : git sans `-C W` échoue, et set-u n'arrête pas sur rc
+   nonnul. Exiger rc de chaque lecture Git, HEAD==source figée et arbre propre.
+4. Finaliseur : comparer les fichiers de hashes produits dans Common ne prouve
+   pas que les vraies bibliothèques n'ont pas changé depuis. Réempreinter le SDK
+   physique so/vector et les contrôleurs figés après Common ; le snapshot cible
+   couvre déjà les ELF, puis appliquer le contrôle frais de publication.
+
+Mémoire confirme FIN TOTAL de cette version : exactement quatre réserves,
+deux P1 et deux P2. Aucun autre point en file ; corrections groupées seulement.
+ProvenanceT et scan strict291c reconnus bornément, sans autoriser un run.
