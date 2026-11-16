@@ -68,3 +68,7 @@ Pilote4d526/APP3ee uneinvocationGO C7 : buildrc0/ledgerELF268229be/invent2ignore
 ## Continuation GEN seule proposée par C7 — avant nouveau code
 
 Après69a280, classique acquis BRUT sans requalification scopeROUGE. Ne rejouer NIclassic NIcompilation NIgdb pour le défautregex. ClassificateurCPU strict sur vraislogs+command--exact/invent2dontnomunique/summary1-0-0/rc/tracesréelles, sans nettoyage des lignesFAILED/panic. NouveaupiloteGENdirectseul mêmesELF268229...147c/SDK59/ledger, targetowner3ee inchangé/SOURCES3ee+ancien4d figées ; reçuNEUF aprèsposte MINENDoriginal1190161.616250876, borneouteroriginale conservée, aucunreset. Nouvellepublication/RO/GOdistinct ; refus ou échéance→STOPconserver sansretry.
+
+## GEN seule : vrai rouge du chemin générations — AVANT tout correctif
+
+GO C7-GEN-BA5-16nov unefois, APP3ee/mêmeELF268/sansCargoGDBclassicrerun. Initialclassic/counts0/rebuild0 ; aprèscommitfantôme[0,9000000], secondpublicsyncinchangé TRACE=[dispatch:generations]seule/ResultOk/files_unchanged1 ; aucun pointcounts/rebuild parcouru, FTSreste[0,9000000]/graphe[0]/jetoninchangé. VraiPanicassert ligne110,firstred1189858.149915276 sousENDoriginal1190161.616 (846.534sdepuisINITIAL). RetourfinaljugeNONACQUIS/STOPsansretry. Rapport21/archive263SHA2postesff62f87d...927b2 ; scopeROUGE1TERMINE/4ownedquiet/posterendu. CompareCLASSICbrut19répareavecguard1/rebuild1. Attributiondifférentielle danscesfixtures établie ; histoire149a/baselineancienmaster/réparation/canonical NONqualifiés. Aucun correctif source appliqué, étatOUVERT.
