@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 16 novembre2026 — **Les outils de recherche de l'agent se choisissent mieux.** `search_code` se dit l'outil à prendre d'abord pour une question en mots, un « où est décidé… » ou un nom incertain, et `grep_files` l'outil d'une chaîne exacte seulement (descriptions en anglais, gabarits `code` et `atelier`). Au-delà de 1 000 lignes trouvées, `grep_files` refuse sans rien rendre, en disant le total, le seuil (`refuse_above`) et les dossiers où restreindre par `path_prefix`. `git rev-parse`, `git ls-files` et `git describe` tournent sans demander d'accord.
+
 - 16 novembre2026 — **La synchronisation d'une base à générations retrouve ses garde-fous.** Une source tronquée (plus de fichiers disparus que `maxMissingRatio`) ou vide est de nouveau refusée sans `force` ou `allow_empty`, et rien n'est retiré ; le rapport dit les fichiers et les scopes qui partent ; le plan seul ne retire rien ; un fichier écarté à la lecture (généré, minifié) quitte l'index ; et `files_unchanged` compte les fichiers que l'écrivain n'a pas réécrits parce qu'ils n'avaient pas changé.
 
 - 16 novembre2026 — `rag3weaver-tty --plain --demande …` reste attaché jusqu'à la fin de sa demande, et son journal porte les appels d'outil : un script peut le lancer puis lire le journal. Il rendait la main en 3 s quand une demande précédente de la même tâche avait laissé sa fin dans la boîte ; il ne suit plus que le flux de sa tâche.
