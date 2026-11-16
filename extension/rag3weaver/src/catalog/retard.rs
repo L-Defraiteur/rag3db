@@ -17,7 +17,7 @@
 //! est là pour le jour où une montre servira une autre cellule.
 
 use std::collections::{BTreeMap, HashMap};
-use std::sync::Mutex;
+use std::sync::{Condvar, Mutex};
 
 use crate::scope::Scope;
 
@@ -44,6 +44,10 @@ impl LagSummary {
 pub struct Lag {
     /// Cellule → chemin → (premier changement en attente, dernier changement).
     pending: Mutex<HashMap<Scope, BTreeMap<String, (u64, u64)>>>,
+    /// Woken at every `done`: a read waiting for its cell to catch up.
+    changed: Condvar,
+    /// Cell → observed milliseconds per reindexed file (a moving average).
+    rates: Mutex<HashMap<Scope, f64>>,
 }
 
 impl Lag {
@@ -78,6 +82,7 @@ impl Lag {
                 pending.remove(cell);
             }
         }
+        self.changed.notify_all();
     }
 
     /// **Combien de fichiers attendent leur réindexation, toutes cellules** : un
@@ -104,12 +109,58 @@ pub struct IndexEstimate {
 }
 
 impl Lag {
-    /// A batch of `files` was reindexed in `held` for `cell`.
-    pub fn observe(&self, _cell: &Scope, _files: usize, _held: std::time::Duration) {}
+    fn rates(&self) -> std::sync::MutexGuard<'_, HashMap<Scope, f64>> {
+        self.rates.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// A batch of `files` was reindexed in `held` for `cell`: the rate moves
+    /// toward it (an exponential average, 0.3 for the new batch).
+    pub fn observe(&self, cell: &Scope, files: usize, held: std::time::Duration) {
+        if files == 0 {
+            return;
+        }
+        let per_file = held.as_secs_f64() * 1000.0 / files as f64;
+        let mut rates = self.rates();
+        let rate = rates.entry(cell.clone()).or_insert(per_file);
+        *rate = *rate * 0.7 + per_file * 0.3;
+    }
+
+    /// The rate of `cell`, in milliseconds per file, if one was observed.
+    pub fn rate(&self, cell: &Scope) -> Option<f64> {
+        self.rates().get(cell).copied()
+    }
+
+    /// Sets the rate of `cell` (the one kept by the catalog across openings).
+    pub fn set_rate(&self, cell: &Scope, ms_per_file: f64) {
+        if ms_per_file.is_finite() && ms_per_file >= 0.0 {
+            self.rates().insert(cell.clone(), ms_per_file);
+        }
+    }
 
     /// The estimate of `cell`, if it lags.
     pub fn estimate(&self, cell: &Scope) -> Option<IndexEstimate> {
-        self.summary_in(cell).map(|s| IndexEstimate { pending_files: s.files, eta_ms: None })
+        let s = self.summary_in(cell)?;
+        let eta_ms = self.rate(cell).map(|r| (s.files as f64 * r).ceil() as u64);
+        Some(IndexEstimate { pending_files: s.files, eta_ms })
+    }
+
+    /// Waits until `cell` has nothing left to reindex, or `deadline`: `true`
+    /// if it caught up.
+    pub fn wait_caught_up(&self, cell: &Scope, deadline: std::time::Instant) -> bool {
+        let mut pending = self.pending();
+        loop {
+            if pending.get(cell).is_none_or(|p| p.is_empty()) {
+                return true;
+            }
+            let now = std::time::Instant::now();
+            if now >= deadline {
+                return false;
+            }
+            pending = match self.changed.wait_timeout(pending, deadline - now) {
+                Ok((g, _)) => g,
+                Err(e) => e.into_inner().0,
+            };
+        }
     }
 }
 
