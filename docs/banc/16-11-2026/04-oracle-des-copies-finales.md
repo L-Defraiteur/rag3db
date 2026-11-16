@@ -119,3 +119,24 @@ contient aucun fichier `.env*`, `.vault` ou administration `.git`. Aucun chmod
 ni checkout n'a été fait dans les arbres sources. Les premières captures01,
 incomplètes à cause d'un lien récursif, sont conservées ; la capture locale01
 encore active a été arrêtée par son PID vérifié. Aucun service ni GPU touché.
+
+### Diagnostic d'admission pendant la fenêtre G (sans Cargo ni hôte)
+
+`admission-diagnostic.json` est conservé dans chaque freeze02. La méthode est
+un substitut de diagnostic (`rg --files --hidden`, exclusions de dossiers,
+secrets et plafond1MiB), **pas une exécution du scanner927**. Aucun contenu
+commun ne diffère. Les absences sont uniquement des fichiers d'administration
+`.git`, volontairement non copiés : 1 portable, 2 PCprincipal, 3 PClourd.
+Les extras démontrent pourquoi git ls-files n'est pas l'oracle d'admission :
+
+- portable : quatre archives `.tar.gz` de preuves sous
+  `docs/coeur-cpp/12-11-2026/preuves/` ;
+- PCprincipal : aucun extra dans ce diagnostic ;
+- PClourd : `extension/lucivy/ld-lucivy/docker-compose.test.yml`.
+
+Le seul lien trouvé dans les exclusions de chaque inventaire est
+`tools/rust_api/rag3db-src`, répertoire interne, que WorkingTree ne parcourt pas.
+Aucun lien-fichier interne dans ces inventaires. Les freezes02 restent intacts.
+Les détails et SHA des diagnostics sont conservés aux postes concernés ; la
+qualification finale exige le listing effectif de WorkingTree927 et l'admission
+par le manifeste (dont minified_line_max_bytes), pas une égalité supposée avec rg.
