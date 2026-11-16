@@ -1,0 +1,13 @@
+# Observation froide des blobs après le rouge302/301
+
+GO exact C7-RO-BLOBS-c5d-16nov, pilote c5d83cbc714b2dca39638558eee6450b3d39c561, code supervision51be. Une invocation, aucun retry. Poste réel2252477 puis timeout598+kill2, confineur550. Autorité initial1185174.661039122/échéance1185724.661039122 ; observation achevée à1.706465s depuis départcommun. Statut OBSERVATION_RO_VALIDATED_ONLY, pas de qualification produit verte.
+
+Adaptateur C++ compilé puis golden BLOB typé réussi AVANT création de la copieDB et toute lecture SQL. ELF SHA2a41c28b19ed8f1b367fa5e77a74b8426d2dbcad379621cb8732f46b4ec58d2a, golden SHA632327cfeebae2371911a31ad841815ed78db0846862a1cad795571e488bcdc4. Cinq commandes réelles rc0 : compile, typed-selftest, native-inventory, blob-dump, immutable-ids. Pas de Cargo/rustc, moteur écrivain, purge, modèles/PG/service/hôte.
+
+Nouvelle copie privée uniquement : archivefixture69b173 jamais ouverte par moteur ; inventaires source contrôlés avant/après. Les trois fichiers de la nouvelle copie sont strictement identiques avant/après, aucun sidecar supplémentaire ni nouveau répertoireDB. SDK59/pool1GiB/readOnly et outils exacts annoncés, BUILD_ID réels conservés. Forme observée code-scope-v1/content/generations ; Scope.searchIndex=ScopeContent, derived.from=Scope, cellule physique default/default.
+
+Extraction binaire visible puis matérialisation stricte sans writer ni reconstruction. Lucivy4.3.9 d0dd décode quatre shards,302documents/446823octets, commitREFUSED. IDsgraphe uniques0..300 ; IDsFTS uniques0..300 plus9000000. Donc FTS−graphe=[9000000] ; graphe−FTS=[]. L'écart302/301 correspond ici à un documentFTS sans ligne physique, pas seulement à une différence de cardinalités. Cette copie ne trace PAS la branche de synchronisation historiquement exécutée, ni les commits passés ; elle ne qualifie aucune maintenance écrivain/réparation. Futur juge DOUBLE et correctif exigent autre autorisation.
+
+Final : portéeVERT/code0/TERMINE/restes[]/nettoyé, bus privé absent ; scan12PID/start owned : alive[]/unknown[]. memory.max34359738368/highmax/swap0 ; cpu.max500000/100000 (5CPU). Aucun grant d'absenceGPU inféré. Poste rendu ; aucune ressource W/T/ancienne archive supprimée.
+
+Archive complète PC+portable `~/.cache/rag3weaver-build/cx-archive-recherche-fts-blobs-ro-v2` :774fichiers réhashés sur chaque poste,0écart, manifeste e9272f677dde45c7f875ca964dc29cbe7be2aa40f8c8f6a31ceac3a6ab863662. Contient contrôleurs, allocation, commandes/logs/résultats bruts, ELFadaptateur, golden, dumpBLOB, copieDB, fichiersLucivy et IDs, inventaires, observations, autorité/scope/scans/finalcomposé. Manifest publié à côté de ce rapport. Anciennes preuves rouges et outils conservés. Tickets restent ouverts.
