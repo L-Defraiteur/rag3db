@@ -136,3 +136,7 @@ schéma qui n'a rien écrit. Core 3079782 (02:55:41), binaire à côté :
 
 Un point de reprise demandé par un COMMIT. 1 tour sur 12 sous 200 Mio ; 0 sur 10 sous 2 Gio avec le
 pool corrigé. La pression du pool semble l'aider. La suite reste la passe sous ASan, en fenêtre.
+
+## Reprise du 16 novembre : diagnostic des offsets, sans attribution du crash
+
+Branche cx-coeur-c1-dictionary-diagnostic, base927941a67a ; [diagnostic et recette](../16-11-2026/02-c1-dictionnaire-diagnostic-et-temoin-des-offsets.md). Témoin seul publié2e25c850ecb627182f7ee64da13e9627e1339032 : refus48octets des offsets après copie du texte, préservation des anciennes chaînes et compteurs. NON COMPILÉ/NON JOUÉ, aucun rouge acquis ; correctif256 non repris. TSan existant tours1–4 finis0dictionnaire, tour5 encoreactif au relevé, pasFIN ; aucune relance. Fenêtre G prioritaire, qualification seulement sur feu neuf après sa fin ; aucun master autorisé.

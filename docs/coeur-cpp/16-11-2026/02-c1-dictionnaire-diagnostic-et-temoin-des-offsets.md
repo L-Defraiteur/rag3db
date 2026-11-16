@@ -1,0 +1,35 @@
+# C1 : diagnostic du dictionnaire et témoin du refus des offsets
+
+Ticket : [point de reprise dans le dictionnaire](../tickets/2026-11-14-un-point-de-reprise-automatique-meurt-dans-le-dictionnaire-d-une-colonne-de-chaines.md). Reprise autorisée par C7 après audit des diffs13→16 ; référence927941a67a5805450d49f1e04b39fdd542a6059b, worktree `/home/lucied/git_workspaces/cx-coeur-c1-dictionary-diagnostic`, branche `cx-coeur-c1-dictionary-diagnostic`. Aucun ancien GO/délai réactivé, aucun push master autorisé.
+
+## Faits et piste distincte du correctif non démontré
+
+Le WIP dictionary-index-after-string-2/256413fde374e6de6ad3f8a21d38f30f2726c030 reste intact et non repris. Son témoin vert avant/après n’établit pas la causalité du SIGSEGV. Ses hooks globaux ne sont ni nécessaires ni importés ici.
+
+Lecture de DictionaryChunk::appendString sur la référence : copie des octets, publication de stringDataChunk.numValues, puis agrandissement éventuel de offsetChunk, écriture/publication de son offset, enfin insertion dans indexTable. La longueur de la dernière chaîne existante est la différence entre le nombre total d’octets et son offset. Si la réservation pour agrandir les offsets est refusée après la copie des octets, cette dernière longueur peut donc inclure la nouvelle chaîne, alors qu’aucun nouvel offset n’a été publié. Les entrées de indexTable portent un indice dont le hash relit le texte via getString ; leur invariance serait alors rompue. La détection du refus et le statut des anciens offsets ne suffisent pas à prouver que les anciennes valeurs restent intactes.
+
+C’est une hypothèse de garantie d’exception à tester, **pas une attribution du SIGSEGV C1**. Le checkpoint utilise aussi un dictionnaire neuf dans finalize et un fresh dans Column::checkpointSegment ; leur durée de vie et la gestion des exceptions doivent être reliées au crash avant de prétendre résoudre C1. Aucun correctif n’est encore proposé dans le code.
+
+## Témoin seul publié
+
+Commit `2e25c850ecb627182f7ee64da13e9627e1339032`, deux chemins : test/transaction/dictionary_append_exception_test.cpp et son entrée CMake. Cible dédiée dictionary_append_exception_test ; cas DictionaryAppendException.OffsetAllocationFailureKeepsExistingStringsUnchanged.
+
+Substitution existante BufferManager::reserve, comme string_finalize_test : pool privé64Mio, aucune Database ni service, aucune modification de MemoryManager/test_hooks. Dictionnaire compressé de trois offsets ; octets préalloués64, chaînes alpha/beta/gamma. L’ajout delta tient sans agrandir les octets mais demande six offsets, soit48octets. Une réservation refusée exactement une fois produit BufferManagerException ; le témoin exige que cette réservation ait été atteinte et porte48octets, puis vérifie trois offsets inchangés, les trois chaînes réellement lisibles et le compteur d’octets. Il ne réessaie pas une recherche dans un index potentiellement incohérent et ne revendique aucune preuve du contenu des buckets par simple égalité de compteurs.
+
+Statut : **NON COMPILÉ, NON JOUÉ**, ni rouge ni vert. Lecture/diffcheck seuls. Ne pas appeler ce test « rouge vu » avant son exécution sur ce commit seul. Même s’il rougit, le défaut d’exception serait établi localement ; la causalité du SIGSEGV reste séparée.
+
+## TSan déjà lancé, sans relance
+
+Lecture luciepc ~/.cache/rag3db-moteur-notes/dict-tsan/passe.out : lancement sur64eee2e1f6, bâtiTSan0 à08:12:25. Tours1–4 terminés code66 :15/18/16/19rapports,0sur DictionaryChunk/StringChunkData et0segv selon le contrôleur. Tour4 fini11:08:04. Au relevé suivant, tour5 actif, rapporttsan-5.2815401 partiel14warnings,0nom dictionnaire/chaînes. Parentbash767883 ; poste2815357 ; test2815401 observés. Pas de FIN observé, pas de déclaration de six tours terminés.
+
+Les résumés lus nomment RelTable::reserveRelOffsets/getNumTotalRows et CatalogEntry::setTimestamp ; comparaison avec les deux piles et tickets nécessaire avant de décider de nouvelles actions. Le fichier tsan_signatures.txt courant contient seulement des commentaires et décrit un périmètre C5/C6 : il ne blanchit pas ces avertissements de DdlEveryMinute. Ne pas confondre absence du mot DictionaryChunk avec absence de course dans le moteur.
+
+G a été prévenu des PID et de la durée non proche ; il confirme coexistence d’un ancienTSan1/4 et d’un seul lourd32G/-j8 pour sa fenêtre. Aucun arrêt ni nouvelle chaîneTSan démarrée par cette reprise. Lire le futur FIN et les rapports finaux, sans relance automatique ; si six tours sans dictionnaire, poursuivre la lecture des accès/verrous de StringChunkData pendant checkpointInMemAndOnDisk, pas le correctif256 par défaut.
+
+## Recette de qualification proposée, pas exécutée
+
+Priorité actuelle : bascule lib et migrations G. Aucun nouveau lourd pendant sa fenêtre. Un feu de qualification **neuf** est attendu après FINI G/script de lib neuf ; ce document ne l’accorde pas.
+
+Après ce feu, source du test seule2e25c850ecb627182f7ee64da13e9627e1339032, checkout privé et source attestée propre. Nouveau bâti privé et nouveau plafond explicite : étape configure/build/test en une portée sous vrai poste lourd, j8, MemoryMax32G/swap0, scratch32G, réseau non nécessaire. Proposition de budget global1800s après acquisition comprenant préparation+arrêt ; configure120s, build au plus1600s plafonné par le solde moins60s, ciblé30s, arrêt10s inclus ; premier rouge du build ou timeout arrête, sans retry ni hausse. Pas de cible autre que dictionary_append_exception_test (et ses dépendances). Release, testsON, shellOFF, sans ASAN/TSAN/UBSAN/LTO ; pas d’extension ni GPU/PG/service. Lancement du cas unique nommé ci-dessus, fail-fast, XML, pas de filtre vide. Recueillir source/flags/BuildID émis réellement/binaireSHA/argv/limites/journaux/XML/exit/quiescence. Un refus d’allocation attendu n’est pas un verdict rouge : il faut les assertions de préservation qui échouent, avec les preuves de setup48octets.
+
+Ce budget est une proposition de revue, non réservé. Aucun SDK du magasin ni bibliothèque distribuée n’est modifié. Si ce cas est vert, reprendre le diagnostic sans justifier un correctif ; s’il est rouge, figer les preuves avant un commit correctif séparé. Pour une éventuelle livraison moteur : transaction_test entier, known_red avec cas longs explicités, e2e_test --gtest_filter='*', BUILD_ID réellement émis par les binaires, garde cpp_transferable courante ; répétitions C1 sous200Mio uniquement dans une nouvelle recette/fenêtre coordonnée. Pas de passe lourde implicite ni de promesse de clôture C1 sur ce seul cas.
