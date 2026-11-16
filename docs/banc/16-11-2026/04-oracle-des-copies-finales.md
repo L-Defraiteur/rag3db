@@ -205,3 +205,31 @@ un seul rustc `codegen-units=1`, sans Cargo/DB/réseau. Seule correction : chemi
 absolu du compilateur et contrôle de son SHA/-Vv. Premier rouge conservé intact.
 Le lanceur conserve argv, version, code et binaire hors scratch ; prochaine erreur
 arrête cette entrée. Capacité fraîche observée avant entrée : ~52Gio disponibles.
+
+### Seconde entrée : scanner exact PC joué, limites conservées
+
+Verdict VERT, code0, restes[], espace privé nettoyé :
+`oracle-final-16nov/validations-scanner-02/validation-i_eprqya/` à luciepc.
+Binaire SHA256 `d6cbd33b7e0ee53ae0aac3dc22b023c74aa3801ff2f69f020f79189ed79e917d`,
+lié depuis rlib927 par le compilateur1.98.1 attesté. `ldd` ne montre aucune
+librag3db.so, ni dépendance manquante ; aucune base ni service ouvert.
+
+| Listing exact WorkingTree927 | Original | Capture02 | Absents >1MiB | Métadonnées .git absentes | .env.example absent volontairement | Autres absents | Extras |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| PCprincipal | 7018 | 6949 | 66 | 2 | 1 | 0 | 0 |
+| PClourd | 8049 | 7965 | 81 | 3 | 1 | 0 | 1 |
+
+Les66/81 fichiers sont classés par stat seulement, sans lecture de leur contenu.
+Le scanner admet aussi un `.env.example` : la capture a volontairement exclu tous
+les `.env*`, sans les lire. L'extra PClourd reste
+`extension/lucivy/ld-lucivy/docker-compose.test.yml`. Le contrôle des hashes de
+source/capture et des HEAD/status passe avant et après chaque paire de listings.
+
+Sous `scanner-02/` : sorties TSV originales et snapshots, compiler-Vv.txt,
+compile-argv.json, compile.log/code, binary.sha256, comparison.json et
+classification.json. SHA256 comparaison :
+`8a88fd9206c5971c05dbdd8ca29df4ec54d1ad0bb9dbe8f00503d3eba286742e`.
+Le listing **ne vaut pas ingestion** : plafond1MiB/minified du manifeste,
+métadonnées, `.env.example` et extra doivent être départagés avant oracle matched.
+Portable : listing exact encore NON JOUÉ ; réutilisation du même binaire autonome
+proposée sous une nouvelle portée RO60s32G, sans compilation ni Cargo.
