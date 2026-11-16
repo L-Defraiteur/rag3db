@@ -367,3 +367,23 @@ aucun vert complet pour le candidat. Prochain pas transmis C7 : préparer
 l'acquisition de la dépendance exacte, avec provenance et voie réseau ciblée
 validées avant une nouvelle allocation ; aucun téléchargement ni reprise
 implicite. Target et preuves restent conservés.
+
+### Préparation réseau ciblée autorisée, avant toute acquisition
+
+Autorisation C7 après STOP256 : uniquement ld-lucivy4.3.9 verrouillé,
+crates.io, staging privé horsT, checksum/extraction stricte, ajout atomique
+sans écrasement des seules entrées absentes. Aucun Cargo/build/test/autorité.
+Cargo.lock SHA256 `090cc4e1330dc694127c0f08330d25acc656699763079400b502ba6607093fa7` ;
+source registry+https://github.com/rust-lang/crates.io-index ; package checksum
+`24424a98439ff03e1fb75fc749a4d88d720ca5b9084b6c1a885dcd6cfe99afb7`.
+Chemins cache et src exacts sous
+`~/.cargo/registry/{cache,src}/index.crates.io-1949cf8c6b5b557f/` vérifiés absents
+pour ld-lucivy4.3.9, sans lien. Le script préparé vérifiera encore leur état
+avant acquisition/publication. Le payload .crate seul sera ajouté au cache ;
+l'extraction sera vérifiée en staging privé, le src Cargo restera à Cargo.
+
+Inventaire filesystem des autres payloads verrouillés manquant à la fois en
+cache et src : **luciole4.3.9, lucistore4.3.9, lucivy-core4.3.9,
+sparse-vector4.3.9**. Liste transmise avant tout élargissement ; aucun de ces
+quatre paquets n'est autorisé implicitement par l'acquisition ld-lucivy.
+Pas de cargo fetch massif ni de version flottante, pas de SDK/guard changé.
