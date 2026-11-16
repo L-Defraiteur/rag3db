@@ -85,3 +85,9 @@ Nouvelle action autorisée sur copies froides seulement : lire CHAQUE _node_id v
 ### Ensembles exacts sur copies PC — zéro différence
 
 Source9bcab4965a, validation-0_vhpecn VERT,7.795124363s<600, une compilationrustc rc0. ELFIDs d0dd13e6d403e614038b251f413637d5f6d02a98ba1c10509388d0be1f5e15c7. Pourchaque table, IDsFTSvivants relevés avantquery OFFSET(id(n)), types/dups/complétude stricts. PrincipalFile6313/Scope65913 etlourdFile7275/Scope82848 : les DEUX différences sont vides dans les quatrecomparaisons, pas simple égalité de compte. Générations8sur8égales, inventaires sourcesprivées/copies identiquesavantaprès. Preuves id-sets-pc-01/*-set-comparison.json et sortiescomplètes. Portées et lecturesdepsGfinies ; aucunprocessusutilisanttargetGpararbre, Gprévenu pour ses archives. Copies froides seulement : nouvel étatlive/purge nonencorejugés.
+
+### Ensembles portable — zéro différence ; nouvel ordre proposé
+
+Sourcecc12cf35da, validation-_67ggcda VERT,11.937765126s<600. NouveauELFIds d0dd13e6 préflightISA réelportable puis ensembles : File8320 etScope81347, orphans[]/missing[] pourchaque, gen4sur4nonnullesaccord, sourcesprivées/copieinchangées. Ensemble troisbases : SIXcomparaisons de sets strictes sansécart, douzeaccordsgénération surlescopiesfroides, aucune déductiond'étatlive. Manifestespreuves : portable34fichiers SHA1cc2d5b1812a494d48b26cf2a63823819aee64c5deed72d6faea44cb94168ce1 ; PC70fichiers SHA903c3fcbbba0da52b3a8dcbdac40c8d189906d4af319bc42b4b4d08068bdb0c2. Ancien422 et rouge.readersinitiaux restent rouges.
+
+Plan court révisé : docs/arbre-principal/16-11-2026/04-plan-court-bascule-sans-purge.md. C7 autorise OPSconditionnelles aprèspublication, ordrecode-principalPUIScode-lourd ; G ne ferme que pour snapshotFRAISdiagnostic+retour, PAS sousprétexte de maintenanceverte. Requalification fraîche indispensable avant dispense depurge/CLI ; sinonSTOP etaucuneCLI.
