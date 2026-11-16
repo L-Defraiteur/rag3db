@@ -144,3 +144,35 @@ non pris en charge ; attendre refus et premier ensemble intact. Ni socket de
 service ni manager réel : fixtures privées seulement. Puis préflight global des
 racines vivantes/types et de leurs intersections avec les chemins protégés,
 en réutilisant les primitives du helper e1fd inchangé. Aucun cache ni ancien RET.
+
+
+## Réserve P1 corrigée — nouveaux filets rouges puis verts
+
+Témoins publiése1e307a248, avant fix : second vivant entièrement absent et voisin
+socket UNIX local, refus tardif dans les deux cas APRÈS déplacement de base1.
+Journal `~/.cache/optimiseur-notes/return-generator-16/global-live-red.log`,
+fixtures `generated-return-integrity-skczkxdt` et `generated-return-integrity-2yftr2ym`
+conservées. Aucun socket de service ni appel au manager réel.
+
+Correction5ba52411b9 : schémas exacts configuration/record ; chaque ensemble
+vivant est énuméré et décrit avant toute opération ; vide/type spécial refusés,
+parents canoniques contrôlés ; intersections entre ensembles, snapshots, outils
+et preuves refusées globalement. Réutilisation de live_roots/describe du helper
+e1fd, toujours bitidentique. Témoinsb8d7579797 ajoutent les parents imbriqués
+et le snapshot dans un voisin vivant. Tous échouent sans déplacement initial.
+
+Qualification nouvelle : dix tests générateur/RET + cinq tests helper,15/15 aux
+DEUX POSTES, zéro échec/saut ; syntaxeBash et diff-check verts. Le rouge et les
+anciens11verts restent historiques, non réécrits. Reçus :
+`~/.cache/optimiseur-notes/return-generator-16/local-b8d7579797/verdict.json`
+SHA ec61a231bd8d40b095ff65baccb54ac992907ad1c5715811559c4d93e9335954 ;
+PC `pc-b8d7579797/verdict.json`
+SHA c3cb7adf7930b5becea8e0c476833e634fe305b0970bf4bddc37bc50f0eafa1f.
+Outil générateur désormais SHA ba27110ea947697aa432f84ed5c8e9be9d06878717d9c5dd2738cab10c9e8cd4 ;
+instantanes.sh0cecea65 et helper e1fd inchangés.
+
+Le bundle préparatoire bb5 n'est PLUS le candidat de pose ; le remplacer dans
+le plan par `return-generator-b8d7579797` (avec l'outil ba27110e). Aucun cache
+posé, aucun ancien snapshot/RET/attestation72h modifié. Retour opérateur hors
+Common ; pas de bus utilisateur réel injecté dans une validation.
+Ticket ouvert, attente nouvelle RO ED/C7 et ATOI exact.

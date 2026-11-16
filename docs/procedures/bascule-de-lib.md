@@ -67,7 +67,9 @@ préparées) à 17 h 45, puis vers 3724accba (V2-1b, V2-1c) à 21 h 05. Les scri
    Le générateur versionné émet désormais un retour autonome avec `return-tools/` :
    helper V2 épinglé, inventaire SHA de chaque base et `SHA256SUMS`. Au retour,
    tous les snapshots/inventaires et les unités froides sont vérifiés avant le
-   premier déplacement ; les voisins ACTUELS sont conservés dans l'état après.
+   premier déplacement ; les racines vivantes et leurs types sont aussi vérifiés
+   pour TOUTES les bases, avec refus des ensembles imbriqués ou croisant les
+   snapshots, outils ou preuves. Les voisins ACTUELS sont conservés dans l'état après.
    Le témoin `scripts/test_generated_return.py` exerce le vrai générateur puis
    son RET, avec WAL tardif. Pour distribuer la source, fournir ensemble
    `instantanes.sh`, `generate_snapshot_return.py` et `restore_snapshot.py`
