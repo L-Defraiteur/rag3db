@@ -102,3 +102,10 @@ Task(ouvrir_une_tache_nommee)/D6 distinct/2150+6439+SDK59/baselineT0trusted+
 freshpostroles/guardold→new. Proposition7200Common/7455physique à arbitrer,
 aucun GO ni pilote concret global ni Cargo/Vertex/service/PCtransition encore.
 Sources742/P01c3/T/72preuves restent figés ; ticketOUVERT et suite à C7.
+
+
+Point ressource de la recette32 explicité AVANT pilote : canonique2150 force
+jobs8 ; proposer vrai poste mode mesureEXCLUSIF avec quota800%/POSTE_FILS>=8,
+refus avantmutation si place plus petite, aucunshimPATHcanonique/interception
+ou faux profiljobs5. Coût de réservation exclusive et7200/7455 à arbitrer C7,
+aucune entrée/poste/activité réelle effectuée.

@@ -38,7 +38,8 @@ Chaque enfant de tâche a ensuite sa propre admission exacte avant Cargo.
 Watchdog physique AVANT tout worker/log/fsync d'allocation/file/préflight,
 CLI pure avant spawn et parent ultime rc seul (correctifs01c3). START du worker
 est une observation APRÈS armement, pas une heure OS reconstruite. Un Common6439
-vivant/32Gio/HIGHmax/quota par place, jobs+Rayon min(8,POSTE_FILS), Rusttests1,
+vivant en mode mesure EXCLUSIF proposé/32Gio/HIGHmax/POSTE_CPU_QUOTA=800%,
+POSTE_FILS effectif>=8 exigé avant mutation, jobs+Rayon8=min(8,POSTE_FILS), Rusttests1,
 bus et états privés. Tout final/hash/scan/publication reste sous ce watchdog ;
 contrôles postopen ET postflush/fsync avec reclassement cohérent fichier/exit.
 
@@ -122,9 +123,13 @@ ledger/copies réhashées2hôtes AVANTmarker, aucun ELF préfixe source seulemen
 présenté comme profilSDK. Observations cohérentes owned/PIDstart/phase, selected
 fields seulement ; aucun environnement brut ou jeton publié. Tous les Cargo,
 metadata/nested comprise, passent par les garde/admissions communes déclarées.
-Le script2150 force jobs8 : le pilote doit transporter minPOSTE_FILS dans une
-admission qui REFUSE tout dépassement (interception de ce seul défaut de ressource
-sans modifier le canonique), jamais déclarer jobs5 tout en exécutant8.
+Le script2150 force jobs8. Proposition concrète sans interception : prendre le
+mode poste mesure EXCLUSIF avec quota explicite800%, vérifier POSTE_FILS>=8, puis
+8=min(8,POSTE_FILS). Si la place reçue est inférieure, STOP AVANT toute mutation,
+pas de réécriture du script ni de shim cargo sur le PATH canonique. C7 doit
+arbitrer le coût de cette réservation exclusive et le créneau ; cette recette
+ne lui substitue pas un quota ou un accord. Le mode exclusif couvre aussi les
+entrées imbriquées --build sans upgrade de mode interdit.
 
 SUITE_DU_TEMOIN=lib, filtre teammate_tests pour témoins du lot ; suites par
 défaut e2e_lectures/e2e_code conservées, plus e2e_demon_hote,
@@ -165,6 +170,9 @@ La marge extérieure240s est pour file/final, pas une prolongation de Common.
 Le capcanonique couvre suites supplémentaires dont Vertex900, F8/lib/NAV après
 une ancienne borne de coût1125s sur moins de suites ; aucun coût cloud garanti.
 Premier rouge STOP/pasretry ; D6TDDrouge précis seul événement attendu distinct.
+
+Arbitrages C7 proposés :7200Common/7455physique, mode mesure exclusif/quota800%
+et POSTE_FILS>=8, créneau+services+compte Vertex. Aucun de ces choix n'est un GO.
 
 Pilote exécutable, témoins hermétiques publiés avant essais, Q/pin/paquet/RO
 TOTALcodeCLI+metadata puis GO exact C7/créneau obligatoires AVANT Cargo/modèle/
