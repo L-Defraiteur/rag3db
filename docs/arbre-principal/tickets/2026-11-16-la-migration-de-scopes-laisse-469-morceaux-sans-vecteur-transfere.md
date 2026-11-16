@@ -31,3 +31,11 @@ Matrice469/0doublon/0inconnu : (1) aucuncandidatcompatible (detteavant,nouveauch
 Avantcorrectif : contre-exemple minimalreproductible vuROUGE, ticketaffinéàcauseétablie, revue/recettebornée. Aprèscorrectif : juge cibléVERTpuis qualification surcopie au coupleexact ; pasabaissementdugarde0 nimodificationdesrougeshistoriques. Si detteattendueparcontrat, documenterarbitrageexplicite etpreuve derepassage avantdeconclure ; nepasinventerunfixproduit. Toutefuturebascule réclame nouvellesprérequis/snapshot/autorisationC7.
 
 PréparationROcomplète : diagnose-vector-debt.py+vector-debt-matrix.py,6CPUfixturesvertes ; sourceplan04recette600/32G etmodèlepersistésuffixedSHAce61440b. MatricevisiteTOUTESoccurrencesH etnormaliseexactementcommeRustchamp/rang/hash/titre ; textelittéralauditéenplusparégalitéSQL, jamaisexporté. Aucuncorrectifproduit, aucunerequêtesurcolonneslegacy erronées exécutée. Classificationnonencorejouéeàcettepublication.
+
+## Premier résultat RO : choix du représentant écarté sur la cohorte
+
+Sourcematrice2c217b656e, scopevalidation-rv44n4sv VERTDIAGNOSTICSEUL5.003739s/600, jamaismigrationverte. AVANT :102002ancienschunks, dettevectorielle0 ; APRÈS :ces102002ancienschunks encorelà/dette0,469nouveauxchunksendette. Matrice469/0doublon/0inconnu :469 NO_COMPATIBLE_CANDIDATE ;0chezreprésentant,0chezautreoccurrence. Chaquechunkdelacohorten'aqu'UNEoccurrenceH : lechoixdu représentant n'expliquepas ces469.
+
+Les469ontunancienchampcompatible ;320ontunrangancienmaisaucunhashcompatible,149n'ontpasderangancien. Aucunanciencandidatpassechamp/rang/hash/titre, doncaucunvecteurcompatible exact ignoré. L'audittextelittéralparmilescandidatsvalides estvide (0mismatchvacuous, PASpreuve que textesanciens/nouveauxégaux). SHAensemblescopiesavant/aprèsstricts, aucunwriter/HTTP/recalc. Cause profonde du changement de texte/découpage restantàattribuer ; aucunfixproduit écrit. ConfigurationspersistéesScopeavant/ScopeContentaprès etdettesdécoupageparentàcomparer sansplaintext.
+
+PreuvesPC vector-debt-diagnostic-01/proof-manifest.json : 55 5447d16abcb0bf27b117522fca27354ae30dcaf6086cc1552055f3002236a28c.
