@@ -24,3 +24,18 @@ RO du code0f116 et rattachement documentaire b9b demandées à Mémoire/Banc ; C
 reçoit le couple, le pin préparé et le paquet avant tout nouveau GO exact.
 Proposition600s communes/795s extérieures inchangée. Aucun poste lourd, Cargo,
 rustc, ELF ou test natif lancé par cette préparation ; aucun ancien GO réutilisé.
+
+
+## Réserve du final : ancien couple réservé, jamais lancé
+
+Banc73ba173bc7 observe l'absence de contrôle après fsync. Ticket complété avant
+le diff4bfb5d7440 ; contre-exemple du vrai result_file publié5d1bc64576 puis
+ROUGE sous GO CPU distinct60 C7 : une fonction / un échec en0.001s, valeur
+GREEN après fsync99→101 malgré deadline100. Journal conservé hors W sous
+`cx-doc-bac-green-fsync-red-r1/tests.log`. Aucun natif.
+
+Correction publiée avant rejeu : recontrôle APRÈS flush/fsync ; si tardif,
+réécriture UNEXPECTED_FAILURE dans le même fichier exclusivement créé, flush/fsync
+de l'échec et retour de cette même valeur. Le compose imprime et rendexit1 sur
+cette valeur ; le paquet b9b/config ancien reste conservé et ne sera pas réutilisé.
+Nouveau pin/copies/RO totale requis, aucun GO600/795 reçu.

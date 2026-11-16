@@ -251,6 +251,11 @@ def result_file(value):
         if value['status']=='GREEN_SETUP_TARGETED_ONLY' and time.monotonic()>=value['deadline']:
             value=dict(value,status='UNEXPECTED_FAILURE',error='deadline after result open')
         json.dump(value,stream,indent=2);stream.write('\n');stream.flush();os.fsync(stream.fileno())
+        if value['status']=='GREEN_SETUP_TARGETED_ONLY' and time.monotonic()>=value['deadline']:
+            value=dict(value,status='UNEXPECTED_FAILURE',error='deadline after result fsync')
+            # Keep the exclusively created file, replacing the stale success in the same stream.
+            stream.seek(0);stream.truncate()
+            json.dump(value,stream,indent=2);stream.write('\n');stream.flush();os.fsync(stream.fileno())
     return value
 
 def compose(pilot):
