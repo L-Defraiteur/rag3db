@@ -1,0 +1,19 @@
+{
+  "unit": "ActiveState=failed\nSubState=failed\nMainPID=0\nResult=exit-code\nControlGroup=\n",
+  "remaining_attributed_pids": [],
+  "artifacts_rehashed": true,
+  "test_xml": {
+    "tests": "1",
+    "failures": "1",
+    "disabled": "0",
+    "errors": "0",
+    "time": "0.",
+    "timestamp": "2026-11-16T10:38:28.040",
+    "name": "AllTests"
+  },
+  "unit_elapsed_s": 155.73,
+  "previous_runner_unit_s": 144.848,
+  "combined_units_s": 300.578,
+  "no_retry": true,
+  "installed": false
+}

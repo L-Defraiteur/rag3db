@@ -1,0 +1,32 @@
+Running main() from /usr/src/debug/gtest/googletest-1.18.0/googletest/src/gtest_main.cc
+Note: Google Test filter = DictionaryAppendException.OffsetAllocationFailureKeepsExistingStringsUnchanged
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from DictionaryAppendException
+[ RUN      ] DictionaryAppendException.OffsetAllocationFailureKeepsExistingStringsUnchanged
+BUILD_ID=rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+/home/lucied/.cache/rag3weaver-build/cx-coeur-c1-offsets/source/test/transaction/dictionary_append_exception_test.cpp:62: Failure
+Expected equality of these values:
+  dictionary.getString(i)
+    Which is: "gammadelta"
+  before[i]
+    Which is: "gamma"
+existing dictionary entry 2
+
+/home/lucied/.cache/rag3weaver-build/cx-coeur-c1-offsets/source/test/transaction/dictionary_append_exception_test.cpp:64: Failure
+Expected equality of these values:
+  dictionary.getStringDataChunk()->getNumValues()
+    Which is: 19
+  bytesBefore
+    Which is: 14
+
+[  FAILED  ] DictionaryAppendException.OffsetAllocationFailureKeepsExistingStringsUnchanged (0 ms)
+[----------] 1 test from DictionaryAppendException (0 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (0 ms total)
+[  PASSED  ] 0 tests.
+[  FAILED  ] 1 test, listed below:
+[  FAILED  ] DictionaryAppendException.OffsetAllocationFailureKeepsExistingStringsUnchanged
+
+ 1 FAILED TEST

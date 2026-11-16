@@ -1,0 +1,2 @@
+Previous HEAD position was 64eee2e1f6 docs(orchestration): la piste de l'ajout à moitié fait tombe, TSan ensuite ; un intermittent pk-lookup au ticket
+HEAD is now at b82c06f257 Relier explicitement le témoin à son en-tête de bâti généré

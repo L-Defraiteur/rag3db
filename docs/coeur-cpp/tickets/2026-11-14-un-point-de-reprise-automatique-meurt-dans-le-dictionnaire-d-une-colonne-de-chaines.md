@@ -144,3 +144,7 @@ Branche cx-coeur-c1-dictionary-diagnostic, base927941a67a ; [diagnostic et recet
 Complément témoin seul b82c06f2572892d2124c71dce87eba287f5e9f2b : BUILD_ID émis par la cible/en-tête généré, aucune lib posée. Recette enrichie sorties/arrêt/quiescence/espace32G, plafond1800 proposé neuf, lanceur encore à publier après coordination G. ObservationTSan partielle datée/SHA conservée, aucun verdict final ni run neuf.
 
 Première qualification C1 privée : bâti1000étapes0 puis assertionrunnerBUILD_ID erronée avant test (IDmoteur59ac distinct source/testb82), unité144,848s. **0testjoué, aucunrougedutémoin** ; preuves arret-01, poste rendu/MainPID0. Aucun header/binaire conservé avantassert,tmpfsdisparu : limite notée. Delta runner publié pour revue seulement, aucun rerun après instruction C7, aucunfix256.
+
+## Rouge isolé du refus des offsets, 16 novembre
+
+[Résultat et limites](../16-11-2026/03-c1-refus-offsets-rouge-et-limites.md) : sourceb82/engine59ac,1casjoué1échec0skip, réservation48octets atteinte/refusée ; anciennegamma→gammadelta et bytecount14→19,3offsetsrestants. Défaut local de garantie d’exception prouvé ; causalité SIGSEGVC1 NONétablie, aucuncorrectif256. BUILD_ID émis/ELF+archive+header sauvés et rehashés2postes. Unité155,730s, quiescenceMainPID0/cgroupvide/aucunrésidu, poste rendu ; aucunretry/fix. Ticket reste ouvert, TSan existant toujours indépendant.

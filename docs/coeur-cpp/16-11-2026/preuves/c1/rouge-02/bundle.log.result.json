@@ -1,0 +1,15 @@
+{
+  "argv": [
+    "git",
+    "-C",
+    "/home/lucied/.cache/rag3weaver-build/cx-coeur-c1-offsets/source",
+    "fetch",
+    "/home/lucied/.cache/rag3db-moteur-notes/c1-offsets-02/source.bundle",
+    "refs/heads/cx-coeur-c1-dictionary-diagnostic"
+  ],
+  "pid": 3190054,
+  "returncode": 0,
+  "timeout": false,
+  "elapsed_s": 0.11426192219369113,
+  "waited": true
+}

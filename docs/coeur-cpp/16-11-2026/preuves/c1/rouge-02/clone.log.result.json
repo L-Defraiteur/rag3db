@@ -1,0 +1,15 @@
+{
+  "argv": [
+    "git",
+    "clone",
+    "--shared",
+    "--no-checkout",
+    "/home/lucied/git_workspaces/rag3db-colonnes",
+    "/home/lucied/.cache/rag3weaver-build/cx-coeur-c1-offsets/source"
+  ],
+  "pid": 3190052,
+  "returncode": 0,
+  "timeout": false,
+  "elapsed_s": 0.00792340305633843,
+  "waited": true
+}

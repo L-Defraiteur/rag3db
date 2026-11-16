@@ -1,0 +1,26 @@
+{
+  "source_commit": "b82c06f2572892d2124c71dce87eba287f5e9f2b",
+  "source_ref": "refs/heads/cx-coeur-c1-dictionary-diagnostic",
+  "bundle_sha256": "290fa7b7c9a3dd8b0667287a1ee5f12fd4d37bed79bdd8987928204ff94744b5",
+  "bundle_bytes": 312234,
+  "unit_runtime_s": 1790,
+  "stop_s": 10,
+  "controller_s": 1770,
+  "build_timeout_s": 1600,
+  "configure_timeout_s": 120,
+  "test_timeout_s": 30,
+  "global_cap_s": 1800,
+  "memory_bytes": 34359738368,
+  "scratch_bytes": 34359738368,
+  "swap_bytes": 0,
+  "parallelism": 8,
+  "scripts": {
+    "controller.py": "fe6341c3ecdec0c732274f2eb8d163eeeef64f416d967a00709c7f14c1271c91",
+    "launch.sh": "491fe0cf33d956a4d424b2a2d59a3b8e18936cb55350cd2a45ee69686d24075f"
+  },
+  "admission": "C7 NEW distinct corrective1800 admission after published runner failure diagnosis; no old receipt revived; G FINI; fresh capacity<=3/4 and no exclusive measure; first failure stops",
+  "engine_commit": "59ac9c86bc2b3529b590a7462ab7051e3ad26b8a",
+  "first_attempt_unit_s": 144.848,
+  "original_admission_s": 1800,
+  "max_combined_units_s": 1944.848
+}

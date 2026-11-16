@@ -1,0 +1,8 @@
+{
+  "phase": "test",
+  "type": "RuntimeError",
+  "message": "test.log exit 1",
+  "elapsed_s": 155.64490628312342,
+  "retry": false,
+  "source": "b82c06f2572892d2124c71dce87eba287f5e9f2b"
+}
