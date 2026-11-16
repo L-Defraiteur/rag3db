@@ -172,4 +172,60 @@ class Observation(unittest.TestCase):
         with patch.object(producer.os,'link',side_effect=check):self.publish()
 
 
+class Transport(unittest.TestCase):
+    def context(self):
+        fixture = Observation('test_non_200_status_is_refused')
+        fixture.setUp()
+        self.addCleanup(fixture.doCleanups)
+        return fixture, dict(ready_path=str(fixture.path), ready_sha256=fixture.sha,
+                             nonce='nonce', pins=fixture.pins)
+
+    def test_worker_only_fixed_health_endpoint_no_redirect_or_embedding(self):
+        from unittest.mock import Mock
+        fixture, context = self.context()
+        connection = Mock()
+        connection.getresponse.return_value.status = 200
+        connection.getresponse.return_value.read.return_value = json.dumps(fixture.health).encode()
+        with patch.object(owner.http.client, 'HTTPConnection', return_value=connection) as http, \
+             patch.object(protocol, 'read_phase_state', side_effect=fixture.phase_reader), \
+             patch.object(owner.time, 'monotonic', return_value=80.), patch('builtins.print') as printed:
+            owner._health_worker(85., context)
+        http.assert_called_once_with('127.0.0.1',7878,timeout=5.)
+        connection.request.assert_called_once_with('GET','/sante')
+        connection.close.assert_called_once()
+        observed = protocol.decode(printed.call_args.args[0])
+        self.assertEqual(protocol.decode(bytes.fromhex(observed['raw_hex'])), fixture.health)
+
+    def test_worker_checks_real_raccord_phase_before_http(self):
+        fixture, context = self.context()
+        fixture.phase['first_red_exists'] = True
+        with patch.object(owner.http.client,'HTTPConnection') as http, \
+             patch.object(protocol,'read_phase_state',side_effect=fixture.phase_reader), \
+             patch.object(owner.time,'monotonic',return_value=80.):
+            with self.assertRaises(ValueError): owner._health_worker(85.,context)
+        http.assert_not_called()
+
+    def test_parent_timeout_kills_and_reaps_worker_not_a_thread_left_running(self):
+        from unittest.mock import Mock
+        fixture, context = self.context()
+        child = Mock()
+        child.communicate.side_effect = [owner.subprocess.TimeoutExpired('fixture',5), (b'',b'')]
+        with patch.object(owner.subprocess,'Popen',return_value=child), \
+             patch.object(owner.time,'monotonic',return_value=80.):
+            with self.assertRaises(owner.subprocess.TimeoutExpired):
+                owner.health_get(85.,ready_path=fixture.path,ready_sha256=fixture.sha,
+                                 nonce='nonce',pins=fixture.pins)
+        self.assertEqual(child.communicate.call_args_list[0].kwargs['timeout'],5.)
+        child.kill.assert_called_once()
+        self.assertEqual(child.communicate.call_count,2)
+
+    def test_worker_expired_phase_never_opens_connection(self):
+        fixture, context = self.context()
+        with patch.object(owner.http.client,'HTTPConnection') as http, \
+             patch.object(protocol,'read_phase_state',side_effect=fixture.phase_reader), \
+             patch.object(owner.time,'monotonic',return_value=160.):
+            with self.assertRaises(ValueError): owner._health_worker(85.,context)
+        http.assert_not_called()
+
+
 if __name__=='__main__':unittest.main()
