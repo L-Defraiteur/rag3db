@@ -151,6 +151,46 @@ class GeneratedReturnIntegrity(unittest.TestCase):
             self.after = shape(self.live)
             self.assert_refusal_unchanged()
 
+    def test_nested_live_sets_refuse_before_any_move(self):
+        first, second = self.bases
+        nested = self.live/(first.name+'.nested')
+        nested.mkdir()
+        for path in [second, second.with_name(second.name+'.wal')]:
+            path.rename(nested/path.name)
+        self.bases[1] = nested/second.name
+        target = self.root/'nested-snapshot'; target.mkdir()
+        first_copy = target/first.stem; first_copy.mkdir()
+        for path in self.live.iterdir():
+            if path.name == first.name or path.name.startswith(first.name+'.'):
+                if path.is_dir():
+                    shutil.copytree(path,first_copy/path.name)
+                else:
+                    shutil.copy2(path,first_copy/path.name)
+        second_copy = target/second.stem;second_copy.mkdir()
+        for path in nested.iterdir():
+            shutil.copy2(path,second_copy/path.name)
+        result = subprocess.run(['python3',str(GENERATOR.with_name('generate_snapshot_return.py')),
+                                 str(target),*[str(b) for b in self.bases]],
+                                capture_output=True,text=True,timeout=10)
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.snapshot = target
+        self.after = shape(self.live)
+        self.assert_refusal_unchanged()
+
+    def test_snapshot_inside_live_neighbour_refuses_before_any_move(self):
+        target = self.live/(self.bases[0].name+'.snapshot')
+        target.mkdir()
+        for base in self.bases:
+            folder = target/base.stem;folder.mkdir()
+            shutil.copy2(base,folder/base.name)
+        result = subprocess.run(['python3',str(GENERATOR.with_name('generate_snapshot_return.py')),
+                                 str(target),*[str(b) for b in self.bases]],
+                                capture_output=True,text=True,timeout=10)
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.snapshot = target
+        self.after = shape(self.live)
+        self.assert_refusal_unchanged()
+
     def test_active_api_refuses_before_any_move(self):
         self.env['FIXTURE_UNIT_STATE']='active'
         self.assert_refusal_unchanged()
