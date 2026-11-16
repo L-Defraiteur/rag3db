@@ -82,3 +82,8 @@ rouge-final-open-qualified.log conservé ; ancien essai séparé rouge-final-ope
 Correction save : paramètre publication_deadline, comparaison APRÈSopenx
 immédiatementavantdump, basculeRED et retour de ce record au vrai finalize.
 Aucun changement du profil/cache/budget/produit, aucunrun/Auth/PQSv2.
+
+Après codeprépublié21a730dd93 :12qualification/0en0,004s,11profil-cache/0en0,008s.
+Témoin finalize/save réel ouverturetardive retourneREDrc1/motifdeadline,
+anciencasdeadlineaprèsscan resteRED.23fonctionsdistinctes, aucunequalifRust.
+Source734 et ENDoriginal inchangés, P/Q/Sv2absents ; nouveauSHA requis auGO.
