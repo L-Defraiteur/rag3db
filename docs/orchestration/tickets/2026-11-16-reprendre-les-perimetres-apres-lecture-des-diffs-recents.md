@@ -70,3 +70,6 @@ Incidentopérationnel tourED99 : SyntaxErrorlanding.py sousvraiPOSTEPUSH AVANTfe
 
 
 TTY934fixgroupéaprèsdiag91+troiscontreexemplesvraisrouges→verts/RO M TOTALE etC7diff+hashindépendantQv4bd147738 ; GO distinctC7-TTY-HARNESS-934F-16nov1200 harnaisseul/mêmeELFreadonly/neufbudgetmêmeOSwatchdogENTIER/firstredidempotent. AucunCargo/F8/service/nouveauSDK/nettoyage. Détailsrapport, aucunancienrouge/délai requalifié, aucuneclôture.
+
+
+ED99 atterrisousgardenormalefff9/vraiPOSTEPUSH/FF+3contrôlesdeuxhostsLUS, C7LSREMOTE99confirme ; touruniqueCLOS, aucunÀTOIouvert. TicketVertexresteOPENcritèresnonqualifiés, pasclôturefictive. PrépaCONTRATcleanupEDseule sansretrait, gelcacheMémoireintact. PrimitivecommunehealthpréparéeparEmbarpolitiquescycle/globaldistinctes, vrais7rougesArbreacquis, mécanismehard5RAW/typed/firstred, aucunprovider/PG/service/GO900/6000. PreuvesArchirevuesfavorablescibléespasglobalD6 ; TTYnouveauseulharnaiscadréencours.
