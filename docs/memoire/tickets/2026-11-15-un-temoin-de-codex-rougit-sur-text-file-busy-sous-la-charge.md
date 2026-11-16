@@ -109,3 +109,21 @@ actives canonical-pass/official témoins,F8,preuve,lib,NAV,résumé/second-lib ;
 aucun scan de cache/state. Témoins sur vrai run avec fauxPopen : historique
 FAILED ignoré, FAILED actif arrête avant phase suivante, should_panic préservé.
 Publication avant essais, nouveau SHA soumis RO puis GO distinct C7.
+
+## Rouge de qualification native, avant diagnostic correctif
+
+Couple APP734087/PILOTE383042 exécuté au GO exact C7. Témoincodex_threads6/0/0,
+F8 8/8 et preuve acquis. Lib entière arrêtée au premier FAILED du vrai journal
+actif : pont_navigateur::temoins_relai::l_ecoute_range_un_pont_par_navigateur_et_le_socket_est_a_soi.
+Deux autres FAILED relai apparaissent déjà dans le même buffer : secondhôte et
+remplacementconnexion. ScopeROUGEcode1/restes[]/nettoyé, autoritéTERMINE ;
+NAV et seconde lib NON JOUÉES. Aucun retry ni reset. Détails rapport04 à publier.
+
+Diagnostic RO à établir avant toute modification : dossier() du témoin relai
+compose std::env::temp_dir()/pont-PID-N/[ecoute/]pont.sock, limite108octets ;
+TMPDIR de notre pilote sousP long pourrait dépasser cette limite. Le STOP
+précoce a conservé la première ligne FAILED mais pas les détails capturés du
+panic imprimés seulement en fin de lib : ne pas inventer son message exact.
+Pas de changement produit autorisé par ce constat ; prochaine proposition
+profilTMP court/privé serait un nouveau pilote et GO distinct sous ENDoriginal
+si C7 le décide. Ressources et premier rouge conservés sans nettoyage.
