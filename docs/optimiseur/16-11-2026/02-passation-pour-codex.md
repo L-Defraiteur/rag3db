@@ -5,6 +5,22 @@ Pour une session Codex neuve, qui n'a que le dépôt, ses docs et ses tickets. �
 `docs/optimiseur/15-11-2026/01-rapport-de-session.md` (section « Reprendre »),
 `docs/optimiseur/11-11-2026/02-knowledge-dump.md` et `docs/optimiseur/16-11-2026/01-plan-de-la-bascule.md`.
 
+## Mise à jour après reprise du 16 novembre, 11 h 52
+
+La fenêtre explicitement autorisée par Lucie est terminée pour **lib et pose** :
+lib59ac9c86bc2b3529b590a7462ab7051e3ad26b8a aux deux postes, hôtes rebâtis sur
+927941a67a5805450d49f1e04b39fdd542a6059b avec lucivy4.3.9, puis pin des passes
+68590270e21d00285b29800bd9cdecf0cb921461 intégré et copié aux deux caches.
+Détails, hashes, instantanés72h, contrôles des deux sens, limites de validation,
+incidents et commandes de retour : `01-plan-de-la-bascule.md`, sections FINI et pin.
+Les tableaux plus bas restent le relevé de10h15, **pas les versions posées actuelles**.
+
+L’entrée6 est faite, ticket dans `docs/tickets/closed/` ; entrées1–5 non commencées,
+entrée7 attend toujours ses mesures. Les migrations sont distinctes et pas faites :
+première maintenance portable422, handlesFTSabsents au relevé ; pas de warmup ni
+fermeture/migration de cette base. C7/recherche suivent une primitive existing-only.
+Targets/deps release conservés pour Banc, aucun ménage ; ancien GO non réactivé.
+
 ## 1. État
 
 ### Ce qui tourne (n'y touchez pas sans le mot de l'orchestration)
@@ -136,10 +152,10 @@ Ticket : `docs/optimiseur/tickets/2026-11-16-la-base-un-seul-sens-n-est-pas-au-t
 La base, ses comptes exacts et la forme du mode `--one-direction` y sont. Le témoin se joue par son nom seulement, à
 luciepc, sous `poste lourd`, sur une copie reflink de `~/.cache/optimiseur-mesure/un-seul-sens-copie/base.kz`.
 
-### 6. Épingler la lib de la bascule dans les passes — 1 h 30, **après la bascule**
+### 6. Épingler la lib de la bascule dans les passes — fait après la bascule
 
-Ticket : `docs/optimiseur/tickets/2026-11-16-les-passes-epinglent-373b5477b-apres-la-bascule.md`. Bloqué par le mot
-de Lucie sur l'heure de la bascule, et par le « courant posé » de G ou de c7. Le lot passe alors en tête de file.
+Ticket : `docs/tickets/closed/2026-11-16-les-passes-epinglent-373b5477b-apres-la-bascule.md`.
+Fait68590270e2, recopie et témoins des copies verts aux deux postes ; voir la mise à jour ci-dessus.
 
 ### 7. Le défaut de 40G de `poste lourd` — 2 h, **après deux relevés**
 

@@ -158,3 +158,35 @@ avec opérations services/hôtes exclusivement par optimiseur. La réouverture a
 changer les identités des bases vivantes : ne pas appliquer une preuve de l’instantané
 à une autre identité sans vérification. Préparation du pin des passes prioritaire :
 témoin vu rouge sur l’ancienne ligne373b, correction59ac et rejeu court à suivre.
+
+## Pin des passes terminé — 16 novembre, après11:52
+
+Master `68590270e21d00285b29800bd9cdecf0cb921461`. Source/caches `passe_epinglee.sh`
+identiques SHA2562150fcd847b1df7de04908d357a0c78abc05e50ce599e2793ff08ab48108825d,
+mode755, témoins des deux copies verts ; anciens conservés. Vraie passe candidate :
+F8 8/8, preuve, lib2594/0/72ignorés, navigateur45/0/0, scope VERT sans reste.
+72ignorés ne sont pas72verts :45 rejoués au navigateur,27non jugés (mesures,
+services/modèles réels, anciens filets d’intégration explicitement ignorés).
+Inventaire et journaux archivés ; ticket fermé sous `docs/tickets/closed/`.
+L’ancien lib_seule est conservé sous `.avant-retrait-59ac-20261116` aux deux postes.
+
+Correction de provenance outil query : l’ELF43cff compilé au portable ne fonctionne
+pas à luciepc (ISA requise, rc127, fixture uniquement). L’exécutable NATIF PC est
+`~/.cache/optimiseur-notes/bascule-16nov-927/read-only-query-v2-luciepc`, SHA256
+`48ae2328a29676fa69154cb9c67d9125d4d04cf92b029bd2b2a09981dea95616` ; même source931267d2,
+même lib59ac, count1/BUILD_ID et refus d’écriture rc1/SHAfixture inchangé vérifiés.
+Le portable garde son ELF43cff. Les deux versions ne sont pas interchangeables sans qualification.
+
+Maintenance portable d’Arbre ensuite ROUGE : premier dry_runFile422 ; client perdait
+le corps, corrigé en recette distincte par son porteur. Une sonde distincte rapporte
+« pas d’index plein texte ouvert pour File (ouverts:[]) » : cela ne prouve pas une
+absence des fichiers. G n’a fermé aucun backend ni pris de snapshot migration ni
+lancé d’outil natif sur une base vivante pour contourner ce refus. Journal existant
+conservé, aucune ligne lors de l’appel : cause initiale exacte non retrouvée.
+Les routes de maintenance ne font qu’employer les handles ouverts ; le chemin
+ordinaire ensure_fts_handle d’un écrivain peut créer/rebâtir, donc aucun warmup
+implicite n’est autorisé pour ce diagnostic. La primitive existing-only est un
+lot distinct en coordination par c7/recherche. FINI lib/pose ne signifie pas FINI migrations.
+
+Worktrees/target de cette fenêtre conservés, car Banc dépend encore des artefacts
+release du source927. Pas de purge des targets, snapshots, anciens index ni magasins.

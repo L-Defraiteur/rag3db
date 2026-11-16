@@ -1,6 +1,6 @@
 # Les passes épinglent la lib 373b5477b : à changer au moment de la bascule
 
-- **État** : en cours (16 novembre 2026) — bascule autorisée et posée à11:30, pin en branche cx-optimiseur-bascule-16
+- **État** : fait 68590270e21d00285b29800bd9cdecf0cb921461 — pin59ac intégré, copies et témoins verts aux deux postes le16novembre à11:52
 - **Famille** : produit (outillage : `tools/poste/passe_epinglee.sh`, scripts de G)
 - **Gravité** : après la bascule, toute passe tournerait sur l'ancienne lib, sous `RAG3WEAVER_MOTEUR_ANCIEN=1`.
 - **Atteignable en service** : non
@@ -35,3 +35,28 @@ contrôles et réouvertures. Témoin du pin vu rouge sur la ligne373b (journal
 `~/.cache/optimiseur-notes/bascule-16nov-927/pin-red.log` portable), test e271ee084c.
 Correction pin59ac complète en préparation ; garder ouvert jusqu’à atterrissage,
 recopie au cache des deux postes, témoins contre ces copies et annonce aux pairs.
+
+## Clôture vérifiée — 16 novembre
+
+Témoin rouge e271ee084c ; correctif68590270e2 intégré par garde et poste push,
+status propre/aucun rebase/origin-master=HEAD lus aux deux postes. Vraie passe
+candidat : témoin lectures1/1 et filets2/2, CHECK_FEATURES8/8, preuve de recompilation,
+lib2594 réussis/0échec/72ignorés, navigateur45/45 sans ignoré. Les45 tests navigateur
+font partie des72 ignorés de la lib ; les27 autres restent NON JUGÉS, inventaire
+`~/.cache/optimiseur-notes/bascule-16nov-927/ignored-qualification.json` à luciepc.
+Aucune hausse des tests ignorés introduite : aucun Rust produit modifié depuis927.
+Scope `pin-validation/validation-vykn41uz` VERT/code0/restes[]/nettoye=true,
+32Gio. Journaux réels archivés aux deux postes :
+`~/.cache/rag3weaver-build/archives/pin-59ac-20261116-68590270/`.
+
+`passe_epinglee.sh` installé atomiquement aux deux caches, mode755, source et copie
+SHA256 `2150fcd847b1df7de04908d357a0c78abc05e50ce599e2793ff08ab48108825d`.
+Témoins joués contre les copies réelles, verts aux deux postes. Anciens conservés
+`.avant-59ac-20261116-68590270`. Annonce à c7, banc et arbre : lib59ac épinglée,
+MOTEUR_ANCIEN inutile pour source927 ; `run_e2e.sh --lib` remplace l’ancien script.
+Après annonce, `lib_seule.sh` déplacé aux deux caches vers
+`lib_seule.sh.avant-retrait-59ac-20261116` ; aucun contenu supprimé.
+
+La maintenance des bases et l’oracle sont distincts : maintenance portable arrêtée
+sur422, pas de migration déclarée faite. Targets/deps release préservés à la demande
+de c7 pour Banc ; aucun nettoyage forcé, aucune reprise d’ancien GO.
