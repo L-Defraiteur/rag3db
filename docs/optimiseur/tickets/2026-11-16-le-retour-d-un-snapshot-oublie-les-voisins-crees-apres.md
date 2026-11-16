@@ -25,3 +25,21 @@ Suite optimiseur : porter ce comportement dans le générateur versionné/sa
 source de procédure, avec témoin rouge avant correctif ; tous voisins
 base/wal/extensions/fts/checkpoints doivent être préservés au moment du retour,
 aucun écrasement d’état après. Ne pas fermer ce ticket sur le seul remède privé.
+
+## Recette de retour V2 publiée avant CLI live
+
+Source opérationnelle publique `bf0aba2cfc011f51f56e0419c63a3768cdb198ea`,
+`docs/optimiseur/16-11-2026/bascule/restore_snapshot.py`, SHA256
+`e1fd96b25c1cc61b70507c59f7f203acb21936e5b676f68c74b88d216f923854`.
+Témoin public rouge92d8e807b6 sur ancien comportement ; cinq filets verts aux
+deux postes : voisins tardifs+WAL archivés avec SHA/types, ancien ensemble
+reformé, snapshot corrompu/extra refusés, API active refusée, preuve empiétant
+sur snapshot refusée sans écriture. Ni moteur ni service réel dans les fixtures.
+
+Attestation séparée principale PC `RET_v2-attestation.json` dans le dossier du
+reçu frais, SHA24eced05414acb1e505b49ff018519820cc48cbbb6597824bf7af47befda452b ;
+`RETOUR_v2.sh` du snapshot, SHA f421c67d8df9437db2870660a7fd83ace49e4e68e12e88226286c515e1b74b89.
+Le reçu e215 et son retour initial restent immuables, données733 identiques.
+Qualification limitée aux fixtures privées ; aucune restauration réelle ni
+permission CLI déduite. Le générateur de snapshots demeure à corriger : ticket
+ouvert, même si chaque snapshot de cette fenêtre reçoit un retour V2 qualifié.

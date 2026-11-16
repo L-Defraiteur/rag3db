@@ -251,3 +251,21 @@ conservée ; générateur non corrigé en ticket
 `docs/optimiseur/tickets/2026-11-16-le-retour-d-un-snapshot-oublie-les-voisins-crees-apres.md`.
 Aucune restauration réelle exécutée. Nettoyage worktree/target G différé par c7
 jusqu’à fin de cette fenêtre froide, sans retrait de données ni de preuves.
+
+### Retour V2 et preuve OS hors bus privé
+
+Avant toute CLI live, c7 exige le retour V2 qualifié. Source publique bf0aba2cfc,
+helper et cinq filets dans `bascule/` de ce dossier ; ancien comportement vu rouge,
+nouveau vert sur fixtures aux deux postes, zéro moteur/service réel exécuté.
+Principal : attestation séparée `RET_v2-attestation.json` SHA24eced05414acb1e505b49ff018519820cc48cbbb6597824bf7af47befda452b,
+verdictVERT/scopefilesystem_fixture, cli_authorized=false ; ancien reçu e215,
+ancien RET et données733 immuables. Détails et limites au ticket de retour.
+
+Le préflight écrivain sur COPIE d’Arbre a ensuite refusé avant writer : systemctl
+ne peut interroger le bus propriétaire depuis le bus privé du confineur. Cela ne
+prouve pas l’API réveillée. G a fourni sans HTTP ni opération d’unité le relevé OS
+hors confineur à12:47:38 : API/socketinactive/dead/PID0, ss7970 rc0 sans écoute.
+Reçu `pc-cold-window-20261116-122721/api-off-os-attestation-20261116-124738.json`
+SHA8f3a131fbaaa066a3ea34a9f2b4254bdc961915981a7de120d96323c1282f2a6.
+Aucune CLI live par G, aucun réveil entre bases et aucune qualification verte
+inventée pour ce refus. Arbre coordonne sa garde OS sans détourner le bus privé.
