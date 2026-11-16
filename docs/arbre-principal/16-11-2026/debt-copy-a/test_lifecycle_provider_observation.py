@@ -230,6 +230,7 @@ class Transport(unittest.TestCase):
             with self.assertRaises(ValueError):
                 owner.health_get(85.,ready_path=fixture.path,ready_sha256=fixture.sha,
                                  nonce='nonce',pins=fixture.pins,trace=trace)
+        self.assertIn('stdout_hex',trace)
         self.assertEqual(bytes.fromhex(trace['stdout_hex']),b'partial health raw')
         self.assertEqual(bytes.fromhex(trace['stderr_hex']),b'worker failure')
         self.assertEqual(trace['returncode'],3)
@@ -247,6 +248,7 @@ class Transport(unittest.TestCase):
             with self.assertRaises(owner.subprocess.TimeoutExpired):
                 owner.health_get(85.,ready_path=fixture.path,ready_sha256=fixture.sha,
                                  nonce='nonce',pins=fixture.pins,trace=trace)
+        self.assertIn('stdout_hex',trace)
         self.assertEqual(bytes.fromhex(trace['stdout_hex']),b'partial plus tail')
         self.assertEqual(bytes.fromhex(trace['timeout_stdout_hex']),b'partial')
         self.assertEqual(bytes.fromhex(trace['stderr_hex']),b'early error plus tail')
@@ -263,6 +265,7 @@ class Transport(unittest.TestCase):
              patch.object(protocol,'read_phase_state',side_effect=fixture.phase_reader), \
              patch.object(owner.time,'monotonic',return_value=80.),patch('builtins.print') as printed:
             with self.assertRaises(ValueError):owner._health_worker(85.,context)
+        self.assertIsNotNone(printed.call_args)
         evidence=protocol.decode(printed.call_args.args[0])
         self.assertEqual(bytes.fromhex(evidence['raw_hex']),b'x'*65537)
         self.assertTrue(evidence['oversize'])
