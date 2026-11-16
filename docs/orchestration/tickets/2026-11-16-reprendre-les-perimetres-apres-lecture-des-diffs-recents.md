@@ -24,3 +24,10 @@ EDd395 est intégré et son tour fermé après trois contrôles lus aux deux pos
 - Premiers lots attribués avec leurs tickets existants, leurs chemins et leurs dépendances.
 - File des intégrations et capacité des validations annoncées, sans ancien GO réactivé.
 - Une attente ou un simple message de réception ne valent pas réalisation du ticket.
+
+
+## Suivi du contrôle périodique — 16 novembre
+
+Treize sessions relues : trois actives ; reprises des seules préparations existantes Cœur/Hotfix/Archi/TTY/Codeparsers/Lucivy, revues Mémoire et Banc réaffectées sur des lots déjà en attente. Embar réservé ED ; G/inventaire terminé ; gel du nettoyage Mémoire maintenu. Détails et limites dans le rapport de reprise.
+
+Signalement C7 avant transmission au porteur TTY : pilote b70a22933dae28ac96ba7d710a5a0c25a77c2b28, `docs/tty/16-11-2026/check_target_profile.py` importe le scan de `relocate_target.py`, qui ignore tous les ancêtres sans identité PID/start ni inspection de leurs FD/cwd T/W. Porteur attendu TTY, revue Mémoire, ticket produit existant `docs/tty/tickets/2026-11-16-les-commandes-et-options-du-terminal-en-anglais.md` à compléter avant correctif. Critère : distinguer le contrôleur nécessaire d'un ancêtre détenteur du target/worktree, sans exemption générale, avec témoin discriminant sur la vraie primitive et historique rouge conservé. Aucun contre-exemple runtime revendiqué ; pas de GO lourd b70.
