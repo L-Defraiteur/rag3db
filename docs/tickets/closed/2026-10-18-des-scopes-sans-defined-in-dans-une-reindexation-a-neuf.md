@@ -107,3 +107,10 @@ s'ajoutera ici. (L'analyse de l'arbre entier en mémoire crevait l'enveloppe de 
 
 La signature fausse des surcharges, elle, avait sa cause propre (les paramètres par pointeur ou par
 référence perdus) : [ticket du même jour](2026-11-15-un-parametre-cpp-par-pointeur-ou-reference-perd-son-nom.md).
+
+## La mesure sur la base du dépôt (banc, 16 novembre 2026 : deux index neufs de l'arbre 1de1f86d88 sur base vide, sans embarqueur — avant par f10336d3f2, après par 41144f8d22 ; sorties à luciepc, `~/.cache/rag3weaver-build/banc-parite/sorties/codeparsers-stack/`)
+
+- Scope : 77 154 → 77 248 ; **Scope sans DEFINED_IN : 3 814 → 63**.
+- Les 63 qui restent sont des homonymes sur une même ligne (25 lambdas et 2 variables Python d'une ligne,
+  35 variables et méthodes du bundle minifié `templates/ide/app/app.js`, une lambda de spdlog) : le
+  ticket [des homonymes sur une même ligne](../../codeparsers/tickets/2026-11-16-same-line-homonyms-share-one-defined-in.md).
