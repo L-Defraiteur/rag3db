@@ -660,3 +660,8 @@ path = "tests/structured_payloads.rs"
 [[test]]
 name = "usages_rendu"
 path = "tests/usages_rendu.rs"
+
+[[test]]
+name = "bench_embedding_rate"
+path = "tests/bench_embedding_rate.rs"
+required-features = ["daemon"]
