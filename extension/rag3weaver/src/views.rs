@@ -146,29 +146,20 @@ pub fn load_stack_on(
     vue: &ViewRequest,
     reglages: &ViewSettings,
 ) -> Result<ReadStack, StackError> {
-    load_stack_text(conn, dialecte, vue, reglages).map_err(StackError::Db)
-}
-
-fn load_stack_text(
-    conn: &dyn crate::connection::DbConnection,
-    dialecte: &dyn crate::dialect::SchemaDialect,
-    vue: &ViewRequest,
-    reglages: &ViewSettings,
-) -> Result<ReadStack, String> {
     use crate::connection::{CypherValue, QueryParam};
     let (Some(lire), Some(dernier)) = (dialecte.read_generation(), dialecte.latest_generation_rank()) else {
-        return Err("vues : ce dialecte n'a pas de générations".into());
+        return Err(StackError::NoGenerations);
     };
     let debut = std::time::Instant::now();
     let texte = |nom: &str, v: &str| QueryParam::new(nom, CypherValue::String(v.to_string()));
-    let executer = |cypher: &str, params: &[QueryParam]| conn.execute_with_params(cypher, params).map_err(|e| format!("vues : lecture de _generation : {e}"));
+    let executer = |cypher: &str, params: &[QueryParam]| conn.execute_with_params(cypher, params).map_err(|e| StackError::Db(format!("vues : lecture de _generation : {e}")));
     let rang = match vue.rank {
         Some(r) => r,
         None => {
             let lu = executer(&dernier, &[texte("couche", &vue.layer)])?;
             match lu.rows.first().and_then(|r| r.first()) {
                 Some(CypherValue::Int(r)) => *r,
-                _ => return Err(format!("vue « {} » : couche inconnue (couche sans génération, 2a′-3)", vue.layer)),
+                _ => return Err(StackError::UnknownLayer { layer: vue.layer.clone(), without_generation: true }),
             }
         }
     };
@@ -177,27 +168,34 @@ fn load_stack_text(
     let (mut couche, mut rang) = (vue.layer.clone(), rang);
     loop {
         if !vus.insert((couche.clone(), rang)) {
-            return Err(format!("vue {} : cycle de parentes en {couche}:{rang}", vue.layer));
+            return Err(StackError::Cycle { view: vue.layer.clone(), layer: couche, rank: rang });
         }
         if etages.len() >= reglages.max_depth {
-            return Err(format!("vue {} : profondeur au-delà de {} étages (tracked.views.max_depth)", vue.layer, reglages.max_depth));
+            return Err(StackError::TooDeep { view: vue.layer.clone(), max_depth: reglages.max_depth });
         }
         if debut.elapsed().as_millis() as u64 > reglages.load_timeout_ms {
-            return Err(format!("vue {} : chargement au-delà de {} ms (tracked.views.load_timeout_ms)", vue.layer, reglages.load_timeout_ms));
+            return Err(StackError::LoadTimeout { view: vue.layer.clone(), ms: reglages.load_timeout_ms });
         }
         let lu = executer(&lire, &[texte("couche", &couche), QueryParam::new("rang", CypherValue::Int(rang))])?;
         let Some(ligne) = lu.rows.first() else {
             return Err(match etages.last() {
-                None if vue.rank.is_some() => format!("vue {couche} : rang {rang} absent de _generation"),
-                None => format!("vue « {couche} » : couche inconnue"),
-                Some(enfant) => format!("vue {} : parente manquante {couche}:{rang} (de {}:{})", vue.layer, enfant.layer, enfant.rank),
+                None if vue.rank.is_some() => StackError::RankAbsent { layer: couche, rank: rang },
+                None => StackError::UnknownLayer { layer: couche, without_generation: false },
+                Some(enfant) => StackError::MissingParent {
+                    view: vue.layer.clone(),
+                    parent: couche,
+                    rank: rang,
+                    child: enfant.layer.clone(),
+                    child_rank: enfant.rank,
+                },
             });
         };
         let tombstones = match ligne.get(2) {
             Some(CypherValue::String(t)) => t.clone(),
             _ => "[]".to_string(),
         };
-        let (removed_keys, removed_files) = read_tombstones(&couche, rang, &tombstones)?;
+        let (removed_keys, removed_files) = read_tombstones(&couche, rang, &tombstones)
+            .map_err(|_| StackError::UnreadableTombstones { layer: couche.clone(), rank: rang, text: tombstones.clone() })?;
         etages.push(StackLayer { layer: couche.clone(), rank: rang, removed_keys, removed_files });
         match (ligne.first(), ligne.get(1)) {
             (Some(CypherValue::String(pc)), Some(CypherValue::Int(pr))) if !pc.is_empty() => {
