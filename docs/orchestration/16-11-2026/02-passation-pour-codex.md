@@ -74,6 +74,13 @@ dit ce qu'elle lit, ce qu'elle fait, et où est le travail de chaque périmètre
 Chaque page a quatre parties : l'état du périmètre ; le travail pour Codex dans l'ordre, par tickets réels
 (quoi faire, comment prouver, taille, blocage) ; ce qui attend Lucie ; les règles du périmètre.
 
+**La liste est vivante.** Les sessions Claude continuent de travailler leurs propres entrées entre deux
+sessions Codex. Quand une session prend une entrée, elle l'annote dans sa page « en cours par <session>,
+branche <nom>, tête <hash> » sans la retirer ; Codex saute une entrée annotée et commence à la première
+entrée libre de la page qu'il reprend. Quand une session est prise par Codex, c'est l'orchestration qui le
+dit à la session Claude : elle s'arrête à son commit, Codex repart de sa tête. Une entrée faite passe dans
+`tickets/closed/` avec son hash.
+
 ## 5. Comment Codex travaille un ticket
 
 1. Un worktree à lui (`git worktree add ~/git_workspaces/rag3db-cx-<lot> -b cx-<lot> origin/master`), un
