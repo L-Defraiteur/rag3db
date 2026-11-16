@@ -56,3 +56,12 @@ aucunerrno attribué au vieux Rust.22fonctions Pythonhermétiques vertes,
 préflightcapture readonlyPC OK/8647FP hashées, T734inchangé.
 [Recette concrète05](../16-11-2026/05-recette-tmp-court-reste-original.md).
 P/Q/Sv2/TMPexécution ABSENTS ; nouveauGO exact C7 NON reçu.
+
+## Réserve ED de publication avant correction
+
+Pilote13a093 retiré, jamais lancé. ED2519763ef8 a consigné avanttransmission
+que finalize vérifie END avant save mais save ouvrex puis dump sans nouvelle
+comparaison : une ouverture retardée pourrait publier GREENaprèsEND.
+Correction : comparaison APRÈSopen et immédiatementavantdump, résultat RED
+si tardif ; témoin réel finalize/save avec ouverture artificiellement retardée
+prépublié puis rouge avantfix. Aucun budget/PQSv2 consommé, autrecode inchangé.
