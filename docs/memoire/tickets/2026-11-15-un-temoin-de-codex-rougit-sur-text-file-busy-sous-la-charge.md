@@ -40,3 +40,9 @@ charge de la lib entière l'ouvre.
   qu'aux tests.
 - Ou lancer par `/bin/sh <script>` plutôt que le script lui-même : le fichier n'est alors qu'ouvert
   en lecture.
+
+## Réserve ED avant qualification : watcher du pilote 1e3a3d00
+
+RO statique exacte pilote1e3a3d005dc9f5c1a7bcbdcb72b307601b813d30/APP734087a4e99d54331aac2f6321df9ef6da3b6d9c : run() parcourt encore P.rglob('*.log'), alors que XDG_CACHE_HOME=P/cache. Le même gabarit embarqué historique qui a interrompu TIESv2 (rapportED08/preuves574) peut donc déclencher first_red pendant la lib : cache/rag3weaver/builtin-templates/.../experiments/2026-10-11-fiches-classees-2/resultats/llm-gemini.log contient test result:FAILED. Une racine P neuve ne rend pas les journaux embarqués neufs.
+
+Réserve bloquante de pilote, pas défaut produit des fixtures ni nouveau runtime : remplacer le parcours récursif par les seules sorties actives parent/J (SUITES=-, donc témoin/F8/preuve/lib/NAV/resume, puis second-lib), témoin CPU du VRAIwatcher ignorant historique imbriqué mais détectant FAILED actif. Mémoire reste porteur du lot ; nouveau SHA àRO avantGO. AucunCargo/service exécuté par ED, source/pilote Mémoire nonmodifiés. Le ticket ED du watcher TIES clos décrit son propre pilote corrigé ; cette occurrence du pilote Mémoire reste ici ouverte.
