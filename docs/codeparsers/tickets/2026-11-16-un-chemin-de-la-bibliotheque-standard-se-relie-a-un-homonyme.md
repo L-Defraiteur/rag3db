@@ -153,3 +153,27 @@ qualifiés sur leur ligne et10autres sont préservés comme attentes à juger,
 pas comme vérité automatique. La préparation de passe restante expose les
 vrais prérequis master entrant/REGLES/PG et scripts récents ; aucune allocation,
 test, compilation ou nouveau service n'a été lancé pour cette phase.
+
+## Relecture totale de la préparation1e5c : trois réserves avant modification
+
+Banc052d8a5377 et C7 ont relu la paire fec351/2b3d sans exécution. Pas de GO.
+À corriger ensemble, avant toute nouvelle qualification :
+
+1. Séparer compilation --no-run/messageJSON et appel : artefact unique de la bonne
+   source/features, copie/hash/inventaire/ledger du **nouvel ELF**, publiés aux
+   deux postes avant les tests, puis rehash final. Les trois ELF118 ne le remplacent pas.
+2. Porter toute la composition par le vrai poste puis1798s+kill2s : Common,
+   contrôles de sorties/corpus, hash/scans finaux et publication après open inclus.
+   Le lanceur extérieur ne fera que retourner le code ; aucune reclassification
+   non bornée après Common. Maximum proposé2x1800 distincts, aucune allocation.
+3. Scanner fraîchement avant garde et après Common, en conservant l'attribution
+   incrémentale exe/cwd/FD/argv/cgroup et les UNKNOWN protégés. Contrôleurs copiés
+   hors W/T sans exemption d'ancêtre/suffixe de FD ; vérifier owned PID/start et bus.
+
+Primitives relues avant adaptation : recherche af11e15b9c (qualify.py : outer
+sous poste, choix d'artefactJSON, ledger, owned_quiet, compose) et TTY256097281b
+(strict_target_guard.py et publish_result de launch_full.py : source/hash réels,
+publication ouverte avant horloge et fsync). Leurs sources ne sont pas modifiées.
+Source groupée corrigée à publier avant **un seul** jeu CPU hermétique borné60s
+failfast autorisé par C7 ; aucun Cargo/natif. Cette section constate la revue,
+pas un échec de sonde ni une remise en cause des1+1+2+41verts déjà prouvés.
