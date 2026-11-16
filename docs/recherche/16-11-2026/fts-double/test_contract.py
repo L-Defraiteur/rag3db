@@ -21,7 +21,6 @@ class Contracts(unittest.TestCase):
   cfg=dict(timeout='/timeout');cmd=q.outer_command(cfg)
   self.assertEqual(cmd[1:6],['lourd','/timeout','--signal=TERM','--kill-after=2s','1198s'])
   self.assertEqual(cmd[-1],'--compose')
-if __name__=='__main__':unittest.main(failfast=True)
 
 class BeforeActionContracts(unittest.TestCase):
  def test_real_sdk_maps_accept_only_exact_path_and_pinned_bytes(self):
@@ -48,3 +47,5 @@ class BeforeActionContracts(unittest.TestCase):
    with patch.object(q.os,'readlink',side_effect=readlink),self.assertRaises(PermissionError):q.collect_process_paths(WithFds(),lambda role,path:observed.append((role,path)))
    self.assertIn(('exe','/target/exe'),observed)
    if failing=='fd2':self.assertIn(('fd','/target/fd1'),observed)
+
+if __name__=='__main__':unittest.main(failfast=True)
