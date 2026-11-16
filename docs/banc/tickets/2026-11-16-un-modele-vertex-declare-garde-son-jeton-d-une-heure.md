@@ -84,3 +84,9 @@ C7autorise préparationseule ; sourceNEUVEbaseb0,8patches=,4OIDRustidentiquesc38
 ## Pilote union concret proposé sans qualification
 
 APPunionb472/code4b322 conserve4OIDc38+8998masterhorslot. [Pilote21](../../everything-declarative/16-11-2026/21-pilote-union-vertex.md) :5400proposés/outer5398/common5330,canonicalPARDEFAUTlectures+code/F88/libentière/NAV/7fakes,1TcarryCPUvert/gardescommunes/SDK59/profils/firstred etfinalpostopen,ACKEmbarfreshC7aupointd’usage.8petitsCPUsynthétiquesverts/codepubliéavanttests, aucunnatifjoué. Source/pilote/pinPCàROavantGOdistinct, parentticketOUVERT/pasOAuth/F300/master/retrait.
+
+## Contrôleur union968 : deux assertions de suites mal modélisées, avant tout fix
+
+Constatlecturependantrunexact APPb472/P968, allocationC7-VERTEX-UNION-968-16nov/commonvalidation-7q5oq5_w INITIAL1192303.460980840/END1197633.460980840. Source/piloteACTIFSINCHANGÉS, aucun appel prématuré du juge. Témoins7/0/0 ; lecturesRAWfilets2/0/0 puis27/0/0 avec917filtrés ; codeRAWfilets2/0/0 puis36/0/0 avec908filtrés. Ce sont les précontrôles et filtresinternesMONOBINAIREcontractuels, pas une suite tronquée. Le helperlibrary_summary imposeunrésuméunique et le postassertsuitesfiltered0 seraient donc incorrects pour ceslogs. Défaut DUHARNAIS, pas attribué au produit ; premierrouge natif encoreabsent à1193032.788.
+
+DécisionC7 : laisser CANONIQUEEXACTE déjàautorisée achever sousMÊMEEND/premierrougeréelSTOP, aucuneédition/skip/rerun/reset ; conserver futurverdictcanonique séparément du rougeharnais. ACKservices/PG maintenujusqu’àFIN/STOP+quiet puisrendu. FuturclassificateurRAW pur doit valider types/noms/inventaires/filets+suite etmutants, jamaisprendreledernier partout. Aucun fix appliqué ici, aucune nouvelleautorité ni GOmaster déduit. Cesnotes sont dansunWTdocs SÉPARÉ, pas danslesdeuxWTactifs.
