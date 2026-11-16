@@ -58,10 +58,13 @@
 
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <memory>
+#include <mutex>
 #include <random>
 #include <string>
 #include <thread>
@@ -379,6 +382,93 @@ TEST_F(CheckpointOpenReader, OpenReaderOnRelsIsNotWaitedFor) {
     openReaderAcrossACheckpoint("MATCH ()-[l:Link]->() RETURN count(l), sum(l.weight);",
         {"MATCH (a:Doc {id: 1}), (b:Doc {id: 2}) CREATE (a)-[:Link {weight: 1000000}]->(b);",
             "MATCH ()-[l:Link]->() WHERE l.weight = 6 SET l.weight = 7000000;"});
+}
+
+// Fenêtre diagnostique contrôlée, après checkpointStorage et avant la publication.
+// Elle prouve le chevauchement avec cette phase suspendue, pas avec des E/S en cours.
+struct ReaderCheckpointGate {
+    std::mutex mutex;
+    std::condition_variable condition;
+    bool entered = false;
+    bool release = false;
+    bool held = false;
+    bool expired = false;
+};
+
+class ReaderGatedCheckpointer final : public rag3db::storage::Checkpointer {
+public:
+    ReaderGatedCheckpointer(rag3db::main::ClientContext& context,
+        std::shared_ptr<ReaderCheckpointGate> gate)
+        : Checkpointer(context), gate(std::move(gate)) {}
+
+protected:
+    bool checkpointStorage() override {
+        const auto changed = Checkpointer::checkpointStorage();
+        std::unique_lock lock(gate->mutex);
+        gate->entered = true;
+        gate->held = true;
+        gate->condition.notify_all();
+        gate->expired = !gate->condition.wait_for(lock, std::chrono::seconds(10),
+            [&] { return gate->release; });
+        gate->held = false;
+        return changed;
+    }
+
+private:
+    std::shared_ptr<ReaderCheckpointGate> gate;
+};
+
+TEST_F(CheckpointOpenReader, OpenReaderOnRelsAcrossAControlledCheckpointWindow) {
+    prepareACostlyRelCheckpoint();
+    rag3db::main::Connection reader(database.get());
+    rag3db::main::Connection writer(database.get());
+    const std::string query = "MATCH ()-[l:Link]->() RETURN count(l), sum(l.weight);";
+    ok(reader, "BEGIN TRANSACTION READ ONLY;");
+    const auto before = read(reader, query);
+    ok(writer, "MATCH (a:Doc {id: 1}), (b:Doc {id: 2}) "
+               "CREATE (a)-[:Link {weight: 1000000}]->(b);");
+    ok(writer, "MATCH ()-[l:Link]->() WHERE l.weight = 6 SET l.weight = 7000000;");
+    const auto others = read(writer, query);
+    auto gate = std::make_shared<ReaderCheckpointGate>();
+    const FlakyCheckpointer controlled([gate](rag3db::main::ClientContext& context) {
+        return std::make_unique<ReaderGatedCheckpointer>(context, gate);
+    });
+    controlled.setCheckpointer(*conn->getClientContext());
+    std::string checkpointError;
+    std::thread checkpoint([&] {
+        auto result = conn->query("CHECKPOINT;");
+        checkpointError = result->isSuccess() ? "" : result->getErrorMessage();
+    });
+    bool entered;
+    bool heldBefore;
+    {
+        std::unique_lock lock(gate->mutex);
+        entered =
+            gate->condition.wait_for(lock, std::chrono::seconds(5), [&] { return gate->entered; });
+        heldBefore = gate->held;
+    }
+    const auto during = entered ? read(reader, query) : "window not entered";
+    bool heldAfter;
+    {
+        const std::lock_guard lock(gate->mutex);
+        heldAfter = gate->held;
+        gate->release = true;
+        gate->condition.notify_all();
+    }
+    checkpoint.join();
+    const auto after = read(reader, query);
+    reader.query("COMMIT;");
+    std::cerr << "[reader-diagnostic] entered=" << entered << " held-before=" << heldBefore
+              << " held-after=" << heldAfter << " expired=" << gate->expired << " before=" << before
+              << " during=" << during << " after=" << after << " others=" << others
+              << " checkpoint-error=" << checkpointError << std::endl;
+    ASSERT_TRUE(entered && heldBefore && heldAfter && !gate->expired)
+        << "[check: controlled-checkpoint-window]";
+    ASSERT_NE(before, others) << "[check: controlled-checkpoint-writes-visible]";
+    EXPECT_TRUE(checkpointError.empty())
+        << "[check: controlled-checkpoint-success] " << checkpointError;
+    EXPECT_EQ(before, during) << "[check: controlled-reader-snapshot-during]";
+    EXPECT_EQ(before, after) << "[check: controlled-reader-snapshot-after]";
 }
 
 TEST_F(CheckpointNoStall, WriterCommittedDuringACheckpointSurvivesACrash) {
