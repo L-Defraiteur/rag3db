@@ -35,7 +35,7 @@ old_verdict = json.loads((q / 'previous-verdict.json').read_text())
 assert old['etat'] == 'termine' and old_verdict['restes'] == [] and old_verdict['nettoye']
 for name in ['state','fixture','config','data','cache','harness']:
     (p / name).mkdir(mode=0o700)
-tmp = Path.home() / '.cache/ttyhr3'
+tmp = Path.home() / '.cache/ttyhr4'
 tmp.mkdir(mode=0o700)
 env = {key:os.environ[key] for key in ['HOME','USER','LOGNAME','PATH','SHELL','LANG','LC_ALL','TZ',
        'DBUS_SESSION_BUS_ADDRESS','RAG3WEAVER_VALIDATION_RECU','RAG3WEAVER_VALIDATION_JETON'] if key in os.environ}

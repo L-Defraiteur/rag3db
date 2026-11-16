@@ -14,12 +14,13 @@ from launch_full import publish_result
 R = Path.home() / '.cache/rag3weaver-build'
 W = Path.home() / 'git_workspaces/cx-tty-english-aliases'
 T = R / 'target-cx-tty-english-aliases-2'
-Q = R / 'cx-tty-harness-only-controller-v3'
-P = R / 'cx-tty-harness-only-v3'
-S = R / 'cx-tty-harness-only-common-v3'
+Q = R / 'cx-tty-harness-only-controller-v4'
+P = R / 'cx-tty-harness-only-v4'
+S = R / 'cx-tty-harness-only-common-v4'
 PRODUCT = '6d886375ea4627c88d28aef918b948a23f628ab1'
 BUDGET = 1200
 PREVIOUS_SCOPE = R / 'cx-tty-aliases-continuation-common-v1/validation-flsb10fe'
+LATEST_SCOPE = R / 'cx-tty-harness-only-common-v3/validation-j4l20f5g'
 
 
 def production_identity():
@@ -51,7 +52,7 @@ def allocation_worker(args):
     assert not any(path.exists() or path.is_symlink() for path in [P, S])
     if args.prepare_only:
         Q.mkdir(mode=0o700)
-        old = PREVIOUS_SCOPE
+        old = LATEST_SCOPE
         authority = json.loads((old / 'autorite.json').read_text())
         verdict = json.loads((old / 'verdict.json').read_text())
         assert authority['etat'] == 'termine' and verdict['restes'] == [] and verdict['nettoye']
@@ -98,7 +99,7 @@ def allocation_worker(args):
         tmux = Path(shutil.which('tmux'))
         config = dict(source=args.source, product=PRODUCT, changed_harness_only=changed,
                       host=os.uname().nodename, worktree=str(W), target=str(T), proofs=str(P), scope=str(S),
-                      budget=BUDGET, outer_watchdog={'path':'/usr/bin/timeout','sha256':digest('/usr/bin/timeout'),'grace':5,'entry_margin':1}, controllers=hashes, carried=carried, sdk=sdk_hashes,
+                      budget=BUDGET, previous_scope=str(LATEST_SCOPE), historical_previous_scope=str(PREVIOUS_SCOPE), outer_watchdog={'path':'/usr/bin/timeout','sha256':digest('/usr/bin/timeout'),'grace':5,'entry_margin':1}, controllers=hashes, carried=carried, sdk=sdk_hashes,
                       elf=str(elf), elf_sha=elf_sha, ledger_sha=digest(Q / 'target-ledger.json'),
                       tmux={str(tmux):digest(tmux)}, old_expired_end=852082.791694931,
                       purpose='HARNESS ONLY; F8 and build carried, no lost run requalified')
