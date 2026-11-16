@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import shutil
 import subprocess
@@ -51,6 +52,26 @@ class TestResult:
 
     def check_stderr(self, expected: str) -> None:
         assert expected in self.stderr
+
+
+def _user_history_state():
+    path = os.path.join(os.path.expanduser("~"), ".rag3db", "history.txt")
+    if not os.path.exists(path):
+        return None
+    with open(path, "rb") as f:
+        return hashlib.sha256(f.read()).hexdigest()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def user_history_untouched():
+    """The suite leaves the user's ~/.rag3db/history.txt as it found it: a shell under test keeps its own history."""
+    before = _user_history_state()
+    yield
+    after = _user_history_state()
+    assert after == before, (
+        "[check: shell-tests-own-history] the suite changed ~/.rag3db/history.txt "
+        f"({before} -> {after}): a ShellTest ran without its own history (-p)"
+    )
 
 
 class ShellTest:
