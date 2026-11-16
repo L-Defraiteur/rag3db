@@ -12162,8 +12162,13 @@ mod tests {
     fn existing_fts_does_not_fall_back_to_another_cell_or_public_alias() {
         let (root, mut catalog, _) = existing_fts_fixture();
         let before = existing_fts_manifest(root.path());
-        let error = catalog.fts_live_ids("main").unwrap_err();
+        // `main` est une vraie table : rendre Document explicitement public
+        // vers cet index dérivé, puis vérifier le refus sans redirection.
+        catalog.entity_configs.get_mut("Document").unwrap().search_index = Some("main".into());
+        assert_eq!(catalog.resolve_search_target("Document").unwrap().parent_table, "main");
+        let error = catalog.fts_live_ids("Document").unwrap_err();
         assert!(error.contains("existing_fts:physical_table"), "{error}");
+        catalog.entity_configs.get_mut("Document").unwrap().search_index = None;
         catalog.scope = crate::scope::Scope::new("foreign", "cell");
         let error = catalog.fts_live_ids("Document").unwrap_err();
         assert!(error.contains("existing_fts:absent"), "{error}");
