@@ -119,6 +119,7 @@ const LECTURE_SEULE: &[&str] = &[
     "ls", "cat", "head", "tail", "wc", "file", "stat", "pwd", "which", "env", "date", "uname",
     "rg", "grep", "find", "fd", "tree", "du", "df", "ps",
     "git status", "git diff", "git log", "git show", "git branch", "git remote", "git blame",
+    "git rev-parse", "git ls-files", "git describe",
     "cargo check", "cargo test", "cargo tree", "cargo metadata", "cargo fmt", "cargo clippy",
     "npm test", "npm ls", "go test", "go vet", "make -n",
 ];
