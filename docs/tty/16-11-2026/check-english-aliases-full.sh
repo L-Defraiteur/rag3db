@@ -63,5 +63,6 @@ sha256sum "$SDK/librag3db.so" "$SDK/libvector.rag3db_extension" > "$J/sdk-sha-fi
 cmp "$J/sdk-sha.txt" "$J/sdk-sha-final.txt" || stop sdk-changed
 sha256sum "$T/debug/rag3weaver-tty" > "$J/tty-elf-sha-final.txt"
 cmp "$J/tty-elf-sha.txt" "$J/tty-elf-sha-final.txt" || stop elf-changed
+cd "$Q" || stop controller-cwd
 python3 -B "$Q/check_target_profile.py" "$W" "$T" "$J" after > "$J/profile-after.log" 2>&1 || stop quiet-final
 echo 'STAGES_PASSED F8 8/8 et harnais tty privé entier' | tee "$J/verdict.txt"
