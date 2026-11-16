@@ -9,7 +9,7 @@
   20 h 36, à luciepc (le plafond `RAG3WEAVER_EMBED_MAX_CHARS` par défaut).
 - **Touche rag3weaver** : oui. L'embarquement du retard (`catalog.rs`), le découpeur des
   `ScopeContent_Chunk`, et le client du service d'embarquement.
-- **Pour** : embarquement, à confirmer par c7.
+- **Pour** : embarquement (pris par lui le 16 novembre : le lot du 413, le client qui ne lit pas le plafond). Le découpeur qui laisse passer 53 000 caractères est un défaut d'amont, proposé à son propriétaire par embarquement.
 - **Signalé par** : banc, mesure B′ de la parité de la migration (demande de c7, 16 novembre).
 - **Ouvert le** : 16 novembre 2026
 
