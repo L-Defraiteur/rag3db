@@ -57,3 +57,11 @@ Source07779472c7, portée validation-4haq4mdx VERT (client seul, aucun producteu
 Le décodage Lucivy4.3.9 et l'accord générationDB restent NON QUALIFIÉS. L'inventaire natif antérieur reste ROUGE pour latéral.readers sur fixture corrompue. Snapshot G original conservé, copie privée cold-files-01/copy disponible pour les lectures suivantes après recette appropriée.
 
 Empreintes résultat : verdict.json SHA256 b84a159517cc6d5c9e2ae0d5b8b152b81f6820ab47350708b66f189f8ea7e38d, fts-inventory.json SHA256 1ca53be9831e0eee2b76c0f13d9fd7f7d1bd8767c99950ddde42a5b090110d0a, source-before.json SHA256 71377e1da485835454b9c7d8317c2069d5f948563dad4d268569f37c6d3583a2, source-after.json SHA256 71377e1da485835454b9c7d8317c2069d5f948563dad4d268569f37c6d3583a2, copy-before.json SHA256 71377e1da485835454b9c7d8317c2069d5f948563dad4d268569f37c6d3583a2, copy-after.json SHA256 71377e1da485835454b9c7d8317c2069d5f948563dad4d268569f37c6d3583a2.
+
+### Inventaire natif sur copie privée02 accompli
+
+Sourcea3116aa7d2, portée validation-t1977o3g VERT sous600/poste32GiB, query43cff et BUILD_ID59ac effectifs. Fixtures absente/corrompue refusées ; seule création autorisée corrupt.rag3db.readers régulièreUID1000/vide consignée. Snapshot source strictement inchangé, copie3007fichiers inchangée (readers déjà présent sur cette copie). Show_tables33tables ; File19colonnes et8320lignes, Scope34colonnes et81347lignes ; les deux regroupements donnent uniquement cellule default/default sur ce snapshot. Aucun code_scope_form retourné, Scope_Chunk présent et pas de ScopeContent observé ; pas de migration jouée.
+
+Comparaison explicite générationDB/dossier : File4526=4526, Scope5502=5502, Library142=142, Symbol3573=3573, quatre accords. fts_counts_at_index_end et maintenance03:30 sont des métadonnées historiques, pas des comptes Lucivy actuels ni une nouvelle maintenance. fts_promesse vide observée. Copie privée cold-inspection-02/copy disponible ; décodage Lucivy4.3.9 toujours NON QUALIFIÉ, hôte vivant non interrogé par cette étape. Rouge01 conservé, aucune purge ni service touché.
+
+SHA256 génération-comparison.json a02d66b1060e3cc2c4092409779bfb6094294e938a1a24865a6393fa76c429fd, native-inventory.stdout 930901a88a3376fd62ec6768cfc689bf230b4ab966149563346807994b68d691.
