@@ -80,3 +80,7 @@ RougeCPUfe40/eb026 conservépreuves4d54cf4a47, aucunretry. C7 demande la prépar
 ## Union avant qualification canonique
 
 C7autorise préparationseule ; sourceNEUVEbaseb0,8patches=,4OIDRustidentiquesc38 et8998masterprotégés. [Plan20/audit](../../everything-declarative/16-11-2026/20-union-vertex-et-recette-canonique.md). Budgetproposé5400neufs/UNIQUEtargetrepriscommun/F8+libentière+NAV+lectures/code réels, aucuncanonicaljouéici. CommentaireRustconnect_llm « pris àconnexion/uneheure » restehistoriquementobsolète, consignéavantfuturecorrectiondocumentaire ; pas demutation du codequalifiéCPUc38 danscettereprise. AnciennespreuvesCPUc599 etrouge4d54 conservées, ticketouvert/aucunGOmaster niOAuth/F300.
+
+## Pilote union concret proposé sans qualification
+
+APPunionb472/code4b322 conserve4OIDc38+8998masterhorslot. [Pilote21](../../everything-declarative/16-11-2026/21-pilote-union-vertex.md) :5400proposés/outer5398/common5330,canonicalPARDEFAUTlectures+code/F88/libentière/NAV/7fakes,1TcarryCPUvert/gardescommunes/SDK59/profils/firstred etfinalpostopen,ACKEmbarfreshC7aupointd’usage.8petitsCPUsynthétiquesverts/codepubliéavanttests, aucunnatifjoué. Source/pilote/pinPCàROavantGOdistinct, parentticketOUVERT/pasOAuth/F300/master/retrait.

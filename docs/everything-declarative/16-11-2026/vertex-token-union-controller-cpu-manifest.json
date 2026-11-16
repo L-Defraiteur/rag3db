@@ -1,0 +1,42 @@
+[
+  {
+    "path": "primitive-provenance.json",
+    "size": 1065,
+    "sha256": "1c13ba932d35b40cae4cb251bf12e48b02cb6731a3703c949932e5dea98a5713"
+  },
+  {
+    "path": "qualify.py",
+    "size": 21702,
+    "sha256": "ef03f0a4e8e53aebe4c3bddae3452101739c6ae89a6516e57f594caae32a2724"
+  },
+  {
+    "path": "result.json",
+    "size": 164,
+    "sha256": "911069183dfc8e353bce179dad59443b333bb55b11144855e95d27c881680628"
+  },
+  {
+    "path": "stderr.log",
+    "size": 1188,
+    "sha256": "3d56d6dc256823fdfc11fb080a9da09a09b80760a4763e3b751a2d50b6c93ec6"
+  },
+  {
+    "path": "stdout.log",
+    "size": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "path": "test_contract.py",
+    "size": 2073,
+    "sha256": "389b210ed4a062e04263d1f24f6489f8bb2434cf849a108ea336518b2899c751"
+  },
+  {
+    "path": "test_quiet.py",
+    "size": 4051,
+    "sha256": "ad009d43c5474213c4d5a11fec2e88f415887fd198c7c4427295628548d0161f"
+  },
+  {
+    "path": "union_cache.py",
+    "size": 4661,
+    "sha256": "a4e02f70d37492e8fa61542a58898ba043c13627035696a3cd37cebf40ae9424"
+  }
+]
