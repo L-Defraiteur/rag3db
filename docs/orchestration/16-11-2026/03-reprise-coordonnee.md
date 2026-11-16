@@ -602,3 +602,12 @@ Arbreb9e5 RO2sources+Q17fa8dde reçuesfavorables, MAIScontrelectureC7 avantGOret
 
 
 RetourpushED99 : lanceuropérationnel landing.py SyntaxErrorAVANTfetch/garde/push sousvraiposte,rc1. Pasdemastermuté/guardrefused, traceconservée ; correctionquotageetprécompilePythonPURE autoriséesmêmetour99, nouvelleprisedeposte+fetchfreshB0+gardenormale/IFVERT/FF+troiscontrôlesinchangés. AucunÀTOIsecondni mouvementautreslots àmaster ; nepasdemander àLucieunnouveautourpourcecorrectifréversiblelanceur.
+
+
+## TTY correctif groupé : nouvelle admission ciblée
+
+934f3c810ab68530f169090bcb4bdfe152771999/Qv4prepared bd1477389c5e28785ed9cf44b7de0b4b647a1fc4e4721d95bdd1119979951d8d. Aprèsdiag91E5sourcefixturephase7/absentephase8/code127, unvraitémoinASTagrégétroiscontreexemplespubdbb82avanttestsvusrouges puisfix60f02prépub/vert0.015s sousCPU60. Fixturefaux_sudo crééeAPRÈSinitphase/BANG_SCRIPTimmuable/exclmode600+byteshash/fsync ; inviteabsente resteROUGEetScenarioFailed AVANTenvoiFACTICE ; stopperidempotentpidfd1signal/premieropenximmuable/touteslignesROUGEappendfsync. Rust/fauxhôte/SCREEN/protocolapprovalexactinchangés.
+
+MémoireRO TOTALE934code+CLI+Q favorable0réserve, C7 relitdiff91→934 et rehashindépendammentQ12controllers/13carried/SDK2/tmux/GNUtimeout/ELFtargetetcopiecb24/ledger4e4363, HEAD934propre/P-S-allocationabsents. latestCommonj4l20TERMINE/ROUGE/restes[]/nettoyé, anciennesRAW91dbf296...1d3deuxpostes etpoststophashf1b372...2730 préservées. C7GOdistinct **C7-TTY-HARNESS-934F-16nov1200** : mêmeprotocole1200watchdogENTIERsoftEND−6/kill5/marge1inclfile+postereal32Ghighmax/Commonreste−15+harnais+finalhash/quietpubpostfsync, nouvellesP/Q/Sv4/TMPttyhr4/neufbudgetaprèscorrectionqualifiée. Ancien91E5 etancienEND852082 restentrouges/expirés, pasprolongation.
+
+HARNAISSEULmêmeELFcb24/Treadonly/gardeledgerownerTTY/F8-buildcarriednonrejoués, fake17990privatefreshport/XDGfrères/aucun7970/providers/PG/Cargo/build/F8/nouveauSDK/master/retrait. PremierrougeSTOPviaownpidfdstrict+traces, pasretry/hypothèseprodaveugle. Cetteadmissiondistinctenequalifiepasencorebang/sudo: résultatdoitêtresortirduvraiPTYcorrigé, invitationseulepasvert. NouvellepreuveCommonterminé/ownedquiet/ledgeridentique+publicationEND requise avantpositif ; aucunvertanticipé.
