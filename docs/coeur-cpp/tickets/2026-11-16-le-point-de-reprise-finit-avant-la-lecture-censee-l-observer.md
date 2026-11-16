@@ -12,7 +12,7 @@
 
 [Passe et preuves](../16-11-2026/11-qualification-globale-arretee-sur-deux-rouges.md), source/moteur888c81825e4cd6556261233f0e238af3b95375c9. CheckpointOpenReader.OpenReaderOnRelsIsNotWaitedFor dure2,410s et échoue checkpoint_no_stall_test.cpp358 : checkpointEndedFirst=true attendu false, [check: plan] the checkpoint ended before the read made during it. Nouveau rouge refusé par known_red ; pas de réessai.
 
-openReaderAcrossACheckpoint ouvre un lecteur, écrit ailleurs, lance CHECKPOINT, attend30ms puis lit et relève done. Un checkpoint fini avant ce relevé rend ce plan rouge. Cette observation **ne prouve pas** qu'un lecteur attend ou perd son instantané ; les assertions de garanties suivantes ne sont pas atteintes après ASSERT_FALSE. Ne pas appeler cela une régression moteur sur ce seul résultat.
+openReaderAcrossACheckpoint ouvre un lecteur, écrit ailleurs, lance CHECKPOINT, attend30ms puis lit et relève done. Un checkpoint fini avant ce relevé rend ce plan rouge. Le relevé est après read : il ne prouve pas une fin avant le début de lecture, la fin peut survenir pendant celle-ci. Le log montre les mêmes valeurs avant/pendant/après (300000|45000150000), distinctes des autres (300001|45008149994), sans assertion finale atteinte. Cette observation **ne prouve pas** qu'un lecteur attend ou perd son instantané ; les assertions de garanties suivantes ne sont pas atteintes après ASSERT_FALSE. Ne pas appeler cela une régression moteur sur ce seul résultat.
 
 ## Suite et fin
 
