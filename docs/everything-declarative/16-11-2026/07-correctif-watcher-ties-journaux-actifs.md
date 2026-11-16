@@ -1,0 +1,9 @@
+# Correctif du watcher ties : journaux actifs uniquement
+
+APP bd76f557928b5078f98a235f1cb0b5f78e7360d8 inchangée. Nouveau pilote r3, diagnostic publié e9b2a797d8 avant correction a7919d26e0d3596ddd9e76446f043a69b91a8192. Ce dernier contient code et témoin publiés avant exécution. Le vrai watcher extrait AST passe ensuite 1 fonction hermétique en0,003s : FAILED historique imbriqué ignoré, mention FAILED et panic attendu ignorés, vraie ligne test foo::bar ... FAILED active détectée, preuve path/stat/hash/extrait écrite avant assertion, first-red immutable. Tous les Python AST et diffcheck verts. Aucun Cargo pour ces contrôles.
+
+Liste explicite des seules sorties de l'invocation : fichier parent courant et, pour official-pass, J/temoins.log, e2e_code.log, e2e_lectures.log, check_features.log, preuve.log, lib.log, navigateur.log, resume.log. Aucun parcours récursif des caches/gabarits. Vérification supplémentaire des lignes ROUGE ancrées dans check_features et resume. Les panics attendus ne sont pas un verdict d'échec.
+
+Même target source propre bd76 : marqueur exact et autorités v2 terminées vérifiés ; scan exe/cwd/FD frais après poste avant garde commune réelle. Seul FD du script poste exact haché d'un ancêtre UID courant est admis. UNKNOWN baseline consigné et aucune inférence d'absence GPU ; activité attribuée refuse. Empreintes avant/après garde identiques, aucune purge. P/Q/S v3 neufs, START1173727.964331921 END1180927.964331921 conservés, reste après poste−3, aucun reset7200. Passe canonique entière rejouée pour produire son resume.log propre ; anciens acquis et rouges ne sont jamais assemblés en faux résumé.
+
+Runtime correctif non lancé à cette publication ; C7 autorise le correctif sous RESTE initial après publication et contrôles. Pas de master, pas de nouveau service ni appel7970.
