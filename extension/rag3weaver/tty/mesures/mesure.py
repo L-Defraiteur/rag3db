@@ -34,6 +34,8 @@ import termios
 import threading
 import time
 import urllib.request
+from pathlib import Path
+from harness_observation import ObservationArchive, screen_contains, approval_and_end
 
 HOTE, BINAIRE, FAUX, DOSSIER, THEMES, SORTIE = sys.argv[1:7]
 LANCEUR = sys.argv[7] if len(sys.argv) > 7 else "ssh"
@@ -73,12 +75,48 @@ def commande(base):
 
 
 commande_ = commande
+ROOT_DOSSIER = DOSSIER
+OBSERVATIONS = ObservationArchive(ROOT_DOSSIER)
+CURRENT_PHASE = None
+FAKE_PROCESS = None
+FAKE_OUTPUT = None
+TERMINAL_COUNT = 0
+
+
+def ecran_tmux(nom=None):
+    if not LANCEUR.startswith("tmux"):
+        return None
+    nom = nom or seance[-1]
+    args = ["tmux", "-L", nom, "capture-pane", "-p", "-t", nom]
+    if LOCAL:
+        result = subprocess.run(args, capture_output=True, text=True, timeout=3)
+        if result.returncode != 0:
+            raise RuntimeError(f"capture-pane refused ({result.returncode}): {result.stderr}")
+        return result.stdout
+    return ssh(" ".join(args))
+
+
+def fake_snapshot():
+    headers = {"Authorization": "Bearer jeton-de-mesure"}
+    def read(path):
+        request = urllib.request.Request(f"http://127.0.0.1:{TUNNEL}{path}", headers=headers)
+        with urllib.request.urlopen(request, timeout=3) as response:
+            return json.load(response)["result"]
+    mailbox = read("/ide/teammate?backend=faux&task=mesure")["mailbox"]
+    tasks = read("/ide/teammate/list?supervisor=supervisor")["teammates"]
+    state = next(task["state"] for task in tasks if task["task"] == "mesure")
+    CURRENT_PHASE.record("fake-host-state", dict(mailbox=mailbox, state=state))
+    return mailbox, state
 
 
 class Terminal:
     """Le terminal distant, vu d'ici : un pseudo-terminal dont on lit chaque octet, horodaté."""
 
     def __init__(self, env, theme, colonnes=100, lignes=30, repond_au_curseur=True, extra="", kitty=False):
+        global TERMINAL_COUNT
+        TERMINAL_COUNT += 1
+        self.observation_id = f'terminal-{TERMINAL_COUNT:04}'
+        self.trace = CURRENT_PHASE
         self.repond_au_curseur = repond_au_curseur
         # Un terminal qui annonce le protocole clavier de kitty (tty-10) répond à ESC[?u ; tout
         # terminal répond à la demande d'attributs ESC[c.
@@ -87,7 +125,12 @@ class Terminal:
         self.maitre, esclave = pty.openpty()
         self.taille(colonnes, lignes, signaler=False)
         commande = f"env {env} {BINAIRE} --theme {theme} --depot faux --tache mesure --daemon-json {DOSSIER}/daemon.json --demande go {extra}"
-        self.p = subprocess.Popen(commande_(commande), stdin=esclave, stdout=esclave, stderr=esclave, start_new_session=True, env=dict(os.environ, TERM="xterm-256color", LANG=os.environ.get("LANG", "fr_FR.UTF-8")))
+        argv = commande_(commande)
+        self.session_name = seance[-1] if LANCEUR.startswith('tmux') else None
+        self.trace.record('terminal-command', dict(terminal=self.observation_id, argv=argv,
+                          terminal_environment={"TERM":"xterm-256color", "LANG":os.environ.get("LANG", "fr_FR.UTF-8"),
+                                                "scenario_env":env, "theme":theme, "launcher":LANCEUR}), sync=True)
+        self.p = subprocess.Popen(argv, stdin=esclave, stdout=esclave, stderr=esclave, start_new_session=True, env=dict(os.environ, TERM="xterm-256color", LANG=os.environ.get("LANG", "fr_FR.UTF-8")))
         os.close(esclave)
         self.recu = []  # (t, octets)
         self.verrou = threading.Lock()
@@ -108,6 +151,7 @@ class Terminal:
                     o = os.read(self.maitre, 65536)
                     if not o:
                         break
+                    self.trace.output(self.observation_id, o)
                     with self.verrou:
                         self.recu.append((time.monotonic(), o))
                     # Un vrai terminal répond à la demande de position du curseur (DSR,
@@ -148,8 +192,30 @@ class Terminal:
 
     def ecrire(self, octets):
         t = time.monotonic()
-        os.write(self.maitre, octets)
+        written = os.write(self.maitre, octets)
+        self.trace.input(self.observation_id, octets, written)
         return t
+
+    def screen_text(self):
+        started = time.monotonic()
+        text = ecran_tmux(self.session_name)
+        if text is not None:
+            self.trace.screen(self.observation_id, text, started, 0)
+        return text
+
+    def attendre_visible(self, motif, apres=0.0, borne=20.0):
+        if not LANCEUR.startswith('tmux'):
+            # Other launchers retain their historical raw oracle, explicitly not requalified here.
+            self.trace.record('observer', dict(kind='legacy-raw', terminal=self.observation_id))
+            return self.attendre(motif, apres=apres, borne=borne)
+        needle = motif.decode('utf8')
+        end = time.monotonic() + borne
+        while time.monotonic() < end:
+            screen = self.screen_text()
+            if screen_contains(self.tout(), screen, needle):
+                return time.monotonic()
+            time.sleep(0.1)
+        return None
 
     def arreter(self):
         # Le serveur tmux de la séance et sa socket partent avec elle (rien ne reste sous /tmp/tmux-*).
@@ -162,6 +228,7 @@ class Terminal:
             except ProcessLookupError:
                 pass
         self.p.wait(timeout=10)
+        self.trace.checkpoint("terminal-stopped")
 
 
 def indice_256(r, g, b):
@@ -181,12 +248,36 @@ def rgb(h):
 
 
 def hote_demarrer():
-    # Le faux hôte écrit lui-même son pid dans faux.pid (pas celui d'un lanceur qui rend la main).
-    ssh(f"mkdir -p {DOSSIER}; rm -f {DOSSIER}/journal.jsonl {DOSSIER}/faux.pid; nohup python3 {FAUX} {PORT} {DOSSIER}/journal.jsonl {DOSSIER}/daemon.json > {DOSSIER}/faux.out 2>&1 < /dev/null & for i in $(seq 50); do [ -s {DOSSIER}/faux.pid ] && break; sleep 0.1; done")
+    global DOSSIER, CURRENT_PHASE, FAKE_PROCESS, FAKE_OUTPUT
+    CURRENT_PHASE = OBSERVATIONS.new_phase()
+    DOSSIER = str(CURRENT_PHASE.path)
+    CURRENT_PHASE.record('host-command', dict(fake=FAUX, port=PORT, local=LOCAL), sync=True)
+    if LOCAL:
+        FAKE_OUTPUT = open(f"{DOSSIER}/faux.out", 'xb')
+        FAKE_PROCESS = subprocess.Popen([sys.executable, FAUX, str(PORT), f"{DOSSIER}/journal.jsonl", f"{DOSSIER}/daemon.json"],
+                                        stdout=FAKE_OUTPUT, stderr=subprocess.STDOUT, cwd=DOSSIER)
+        for _ in range(50):
+            if os.path.isfile(f"{DOSSIER}/faux.pid"):
+                break
+            if FAKE_PROCESS.poll() is not None:
+                raise RuntimeError('private fake host failed to start')
+            time.sleep(0.1)
+        else:
+            raise RuntimeError('private fake host did not become ready')
+    else:
+        ssh(f"mkdir -p {DOSSIER}; nohup python3 {FAUX} {PORT} {DOSSIER}/journal.jsonl {DOSSIER}/daemon.json > {DOSSIER}/faux.out 2>&1 < /dev/null & for i in $(seq 50); do [ -s {DOSSIER}/faux.pid ] && break; sleep 0.1; done")
 
 
 def hote_arreter():
-    ssh(f"kill -TERM $(cat {DOSSIER}/faux.pid) 2>/dev/null; rm -f {DOSSIER}/faux.pid")
+    CURRENT_PHASE.checkpoint('before-host-stop')
+    if LOCAL:
+        if FAKE_PROCESS.poll() is None:
+            FAKE_PROCESS.terminate()
+        FAKE_PROCESS.wait(timeout=5)
+        FAKE_OUTPUT.close()
+    else:
+        ssh(f"kill -TERM $(cat {DOSSIER}/faux.pid) 2>/dev/null")
+    CURRENT_PHASE.checkpoint('after-host-stop')
 
 
 def journal():
@@ -211,6 +302,8 @@ themes = json.load(open(THEMES))
 
 
 def rouge(quoi):
+    CURRENT_PHASE.record("assertion-failed", dict(reason=quoi), sync=True)
+    CURRENT_PHASE.checkpoint("assertion-failed")
     resultats["rouges"].append(quoi)
     print("ROUGE", quoi, flush=True)
 
@@ -303,10 +396,21 @@ try:
         t.ecrire(b"\x1b")
         time.sleep(1.5)
         t0 = t.ecrire(b"o")
+        protocol_end = time.monotonic() + 3
+        protocol_ok = False
+        while time.monotonic() < protocol_end:
+            mailbox, state = fake_snapshot()
+            protocol_ok = approval_and_end(journal(), mailbox, state)
+            if protocol_ok:
+                break
+            time.sleep(0.1)
+        CURRENT_PHASE.record('approval-end-protocol', dict(ok=protocol_ok), sync=True)
+        if not protocol_ok:
+            rouge('accord : POST answer approved/reply_to, ended et state ended non confirmés')
         # La fin ne se dit plus par un mot (Lucie, 15 nov.) : l'invite de repos du thème respire, ou
         # une phrase dit qu'il a fini sans répondre.
         repos = themes["daemon"]["animations"]["repos"]["gabarits"][0].rsplit("}", 1)[-1].strip()
-        if t.attendre(repos.encode(), apres=t0, borne=15) is None and t.attendre("fini sans répondre".encode(), apres=t0, borne=1) is None:
+        if t.attendre_visible(repos.encode(), apres=t0, borne=15) is None and t.attendre_visible("fini sans répondre".encode(), apres=t0, borne=1) is None:
             rouge(f"après o, la fin ne paraît pas (ni « {repos} », ni « fini sans répondre »)")
         t0 = t.ecrire(b"\x03")
         fin = time.monotonic() + 10
@@ -466,15 +570,16 @@ for kitty in (True, False):
             rouge(f"{quoi} : la demande d'accord ne paraît pas en 40 s")
         tout = t.tout()
         demande_kitty = b"\x1b[>1u" in tout
-        aide_maj = "Maj-Entrée : à la ligne".encode() in tout
-        aide_alt = "Alt-Entrée : à la ligne".encode() in tout
+        screen = t.screen_text()
+        aide_maj = screen_contains(tout, screen, "Maj-Entrée : à la ligne") if screen is not None else "Maj-Entrée : à la ligne".encode() in tout
+        aide_alt = screen_contains(tout, screen, "Alt-Entrée : à la ligne") if screen is not None else "Alt-Entrée : à la ligne".encode() in tout
         for morceau in (b"un", b"\x1b[13;2u", b"deux", b"\x1b\r", b"trois", b"\r"):
             t.ecrire(morceau)
             time.sleep(0.2)
         time.sleep(1.5)
         textes = [e["corps"].get("text") for e in journal() if e["corps"].get("kind") in ("answer", "instruction", "request") and e["corps"].get("text") not in (None, "go")]
         resultats[quoi] = {"demande_kitty": demande_kitty, "aide_maj_entree": aide_maj, "aide_alt_entree": aide_alt, "textes_recus": textes}
-        aide_tmux = "sous tmux, Maj-Entrée envoie".encode() in tout
+        aide_tmux = screen_contains(tout, screen, "sous tmux, Maj-Entrée envoie") if screen is not None else "sous tmux, Maj-Entrée envoie".encode() in tout
         resultats[quoi]["aide_tmux"] = aide_tmux
         if LANCEUR == "tmux-local-ouvert" and not (aide_maj and textes[:1] == ["un\ndeux\ntrois"]):
             rouge(f"{quoi} : sous un tmux ouvert, Maj-Entrée doit passer à la ligne et l'indication le dire : {resultats[quoi]}")
@@ -501,15 +606,6 @@ for kitty in (True, False):
 # 1f. Les appels d'outil qu'on lit (tty-11) : numérotés, l'extrait coupé qui le dit, et Ctrl-O qui ouvre la
 #     visionneuse dans un écran alterné ; ← l'appel d'avant, Fin, Échap. Sous tmux, l'écran principal capturé
 #     avant et après doit être le même : la visionneuse ne l'a pas touché.
-def ecran_tmux():
-    if not LANCEUR.startswith("tmux"):
-        return None
-    nom = seance[-1]
-    cmd = f"tmux -L {nom} capture-pane -p -t {nom}"
-    if LANCEUR in ("tmux-local", "tmux-local-ouvert"):
-        return subprocess.run(cmd.split(), capture_output=True, text=True).stdout
-    return ssh(cmd)
-
 
 hote_demarrer()
 tunnel = subprocess.Popen(["sleep", "86400"] if LOCAL else ["ssh", "-N", "-o", "BatchMode=yes", "-L", f"{TUNNEL}:127.0.0.1:{PORT}", HOTE])
