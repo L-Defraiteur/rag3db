@@ -130,6 +130,10 @@ fn le_hnsw_a_l_ecriture() {
     let t_masse = t.elapsed();
     let t_reconstruction = t_masse.saturating_sub(t_dedans);
     let n_plein = chunks(&catalog);
+    // **The measure reads the scope chunks it measures** (ticket of 13 Nov. 2026, the probes that read
+    // Scope_Chunk hard-coded): on a versions base they live elsewhere, and a count of zero would measure nothing.
+    let scope_chunk_count = compte(&catalog, "Scope_Chunk");
+    assert!(scope_chunk_count > 0, "no scope chunk read: the bench would measure an empty table");
     eprintln!(
         "[hnsw] dim {dim} · {n_fichiers} fichiers, {} scopes, {n_plein} chunks · analyse {:.0} ms · ingestion index tombé {:.0} ms · reconstruction du HNSW {:.0} ms ({:.1} µs/chunk)",
         rapport.scopes, ms(t_analyse), ms(t_dedans), ms(t_reconstruction), ms(t_reconstruction) * 1000.0 / n_plein.max(1) as f64
