@@ -888,7 +888,9 @@ provider.
   connection. It then answers every request still in flight, and exits with code 70; its last log
   line says « ✗ arrêt : <cause> (code 70) ». It never exits 0 silently. A text longer than
   `max_chars_per_text` (12000 by default, `RAG3WEAVER_EMBED_MAX_CHARS`, reported in `/sante` with
-  `chars_per_token`) is refused with a named 413, before any computation. A provider started by an
+  `chars_per_token`) is cut to the cap, never refused with its batch: the client cuts it before
+  sending and the index journal says how many texts were cut; the service also cuts for an older
+  client, and counts it in `/sante` (`cut_texts`). A provider started by an
   activation that stopped this way is reported as « service d'embarquement arrêté : <cause> ».
 - **Query length cap.** Before it is embedded (dense, dual or sparse), a search query is cut to
   `models.embed.query_max_chars` characters (6000 by default), on a word boundary. The search says

@@ -1,6 +1,6 @@
 # Un texte au-dessus du plafond du service fait tomber tout l'embarquement
 
-- **État** : ouvert ; constat, pas de correctif.
+- **État** : corrigé (16 novembre 2026, embarquement, branche `text-cap-cut`)
 - **Famille** : produit
 - **Gravité** : haute. Un index neuf du dépôt ne reçoit aucun vecteur de scope, et sa dette ne se
   solde jamais.
@@ -79,3 +79,20 @@ Les trois ne s'excluent pas. Le troisième protège de tout texte qui passera un
 À luciepc, `~/.cache/rag3weaver-build/b-prime.sh` (sous `poste lourd`). Les sorties sont dans
 `~/.cache/rag3weaver-build/banc-parite/sorties/b-prime/` : `bprime.log`, et `gros-3-*.json` pour
 les tailles des morceaux de B′ et de la copie migrée.
+
+## Corrigé (16 novembre 2026, embarquement, branche `text-cap-cut`)
+
+Les choix (a) et (c) du constat, au mot de c7 :
+- **(a) le client coupe** : `DaemonEmbedder` lit `max_chars_per_text` dans l'identité de son service, coupe
+  chaque texte au-dessus avant l'envoi (dense, dual, creux) et compte la coupe ; le catalogue le dit au journal
+  d'index (« N texte(s) coupé(s) à M caractères avant l'envoi au service… ») ;
+- **(c) le service coupe** au lieu de refuser le lot, pour un client d'avant, et compte ce qu'il a coupé
+  (`cut_texts` dans son identité) ; le 413 du plafond par texte n'existe plus.
+
+Témoin : un lot de 512 dont un texte de 53 000 caractères reçoit ses 512 vecteurs, rien au-dessus du plafond
+n'atteint le modèle, et la coupe est comptée. Rouge sur 381a934876, vert ensuite.
+
+**Reste** : le défaut d'amont, le découpeur qui forme un morceau de 53 000 caractères, au ticket
+`docs/everything-declarative/tickets/2026-11-16-le-decoupeur-laisse-passer-un-morceau-de-53-000-caracteres.md`,
+chez ED. Pour B′, le binaire du service neuf se pose au 7878 par la voie des services (bâti, essai sur un port à
+part, verdict, pose). Un client neuf suffit déjà : il coupe avant l'envoi, même face à l'ancien service.
