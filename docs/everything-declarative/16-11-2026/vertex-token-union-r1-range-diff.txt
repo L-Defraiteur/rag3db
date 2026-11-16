@@ -1,0 +1,8 @@
+1:  6d3cbcabe7 = 1:  38146af549 Préparer le témoin local du renouvellement Vertex
+2:  d417cec5b8 = 2:  936f13daa2 Écrire le témoin local du jeton Vertex refusé avant flux
+3:  156986b340 = 3:  166a5dbc23 Reporter la préparation Vertex sur la nouvelle épingle
+4:  e82a3c9258 = 4:  cefdd3fb2c Auditer la reprise Vertex sur master et borner les témoins avant diff
+5:  2b3bdfd1cc = 5:  5ed1961d6b Préparer les bornes du refus Vertex persistant et du flux déjà ouvert
+6:  fe40b640eb = 6:  cb0ea38b52 Figer les cinq témoins Vertex non joués avant recette rouge
+7:  12bf0668a5 = 7:  efb9aba736 Préparer les juges du raccord Vertex à source de jetons conservée
+8:  c38fc3e4dd = 8:  4b32256693 Conserver la source Vertex et renouveler une seule fois avant le flux

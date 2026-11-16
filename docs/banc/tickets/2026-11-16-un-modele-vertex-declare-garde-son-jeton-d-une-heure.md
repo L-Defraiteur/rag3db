@@ -1,6 +1,6 @@
 # Un modèle Vertex déclaré garde son jeton d'une heure
 
-- **État** : ouvert ; constat, pas de correctif.
+- **État** : ouvert ; correctif proposé c38 qualifié CPU/faux HTTP seulement ; union et intégration NON QUALIFIÉES.
 - **Famille** : produit
 - **Gravité** : haute pour toute passe longue. Au bout d'une heure, chaque appel au modèle rend 401, et la
   décision est perdue sans que la passe s'arrête.
@@ -76,3 +76,7 @@ Auditmasterdf2a5789888d16247f0dad42dcdaa3c4ceea2094 : aucun changement model_sou
 ## Préparation corrective après rouge conservé
 
 RougeCPUfe40/eb026 conservépreuves4d54cf4a47, aucunretry. C7 demande la préparation du transport à TokenSource conservée et du raccord déclaratif ; [plan17 et juges avantimpl](../../everything-declarative/16-11-2026/17-correctif-vertex-token.md). Deux nouveaux juges NONJOUÉS, sept fonctions prévues ; GOvert distinct nécessaire. Ticket reste ouvert.
+
+## Union avant qualification canonique
+
+C7autorise préparationseule ; sourceNEUVEbaseb0,8patches=,4OIDRustidentiquesc38 et8998masterprotégés. [Plan20/audit](../../everything-declarative/16-11-2026/20-union-vertex-et-recette-canonique.md). Budgetproposé5400neufs/UNIQUEtargetrepriscommun/F8+libentière+NAV+lectures/code réels, aucuncanonicaljouéici. CommentaireRustconnect_llm « pris àconnexion/uneheure » restehistoriquementobsolète, consignéavantfuturecorrectiondocumentaire ; pas demutation du codequalifiéCPUc38 danscettereprise. AnciennespreuvesCPUc599 etrouge4d54 conservées, ticketouvert/aucunGOmaster niOAuth/F300.

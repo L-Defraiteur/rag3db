@@ -1,0 +1,41 @@
+{
+  "master": "b0a845bb4877328eada37951c174e3d208986630",
+  "historical_source": "c38fc3e4ddd8c806de904c7d08eb43b4988fec99",
+  "code_head": "4b32256693ad3f1ce16bfdecabc3d82a081d510b",
+  "vertex_paths": {
+    "extension/rag3weaver/src/gcp_auth.rs": [
+      "100644",
+      "blob",
+      "eb072b737bf98814068a19b42c36ab4eca6f1f32"
+    ],
+    "extension/rag3weaver/src/model_source.rs": [
+      "100644",
+      "blob",
+      "13769b075f9c88e2ac682f3b5a5a5de2a1f2a024"
+    ],
+    "extension/rag3weaver/src/openai_llm.rs": [
+      "100644",
+      "blob",
+      "f78c525c72910f65b62d09ffd75304474ba636cf"
+    ],
+    "extension/rag3weaver/src/openai_llm/vertex_refresh_tests.rs": [
+      "100644",
+      "blob",
+      "4cfbaa5b22aa74f9ba08cc48be8bef5a1515dab9"
+    ]
+  },
+  "vertex_mode_type_oid_equal": true,
+  "master_protected_entries": 8998,
+  "master_protected_differences": [],
+  "master_incoming_product_paths": [
+    "extension/rag3weaver/src/catalog.rs",
+    "extension/rag3weaver/src/catalog/progress.rs",
+    "extension/rag3weaver/src/codex_threads.rs",
+    "extension/rag3weaver/src/daemon/embeddings.rs",
+    "extension/rag3weaver/src/embedder.rs",
+    "extension/rag3weaver/src/model_source/activation.rs"
+  ],
+  "incoming_all_preserved": true,
+  "new_or_missing_outside_lot": [],
+  "range_patch_equal": 8
+}
