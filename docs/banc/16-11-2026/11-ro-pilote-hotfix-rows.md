@@ -35,3 +35,15 @@ Publication documentaire exacte `37d03c0cbd45331e1e437a58bc8b732527abc8f8`, pilo
 Les deux worktrees PC privés source/pilot-v1 sont aux HEAD5099/db833 exacts et `git status --porcelain` est vide. Les trois empreintes natives de la recette correspondent à la fois aux fichiers PC et aux blobs APP5099. Raw, resume.log et allocation.json sont absents dans le paquet ; le scratch cx-hotfixs-rows-red existe vide au moment du contrôle.
 
 La recette conserve les bornes et l’unique cas relus ci-dessus. Avis favorable à cette **préparation exacte** ; l’attente de production/relecture de recette est levée. Aucune admission n’est donnée ici : un GO2400 distinct de C7 reste nécessaire, et les garanties dépendant du poste/unité ne seront observables que dans les preuves du futur run. Aucun CMake, test, poste, systemd, base, SDK magasin ou service appelé pendant ce complément.
+
+## Complément : fixture et paquet v2
+
+Publication exacte `a2b9ddaca886205a9b4387d7b5dfd24ce9706c66` ; APP `71fbe786fcf0b2314e72b3eb4b8484faf590d78c`, PILOTE `b307f74cc21587cb982d6ef44cdb95763f992cba`. Le refus de compilation v1 demeure un refus de fixture, pas reproduction du binder manquant. Il ne qualifie aucune correction produit ; le nouveau C++ reste NON COMPILÉ/NON JOUÉ dans cette revue.
+
+Le seul diff hors docs depuis APP5099 est dans vector_index_diagnostics_test.cpp : la construction initializer_list du vector de LogicalType devient reserve(names.size()) puis neuf emplace_back. Les mêmes fabriques et le même ordre sont conservés ; pas de changement SQL, assertion, quatre cas, CMake ou production. Le diff des scripts depuis db833 ne modifie que SOURCE et les destinations/unité v2 ; controller.py et le corps du parseur sont inchangés. Les garanties statiques et limites de la première revue restent applicables.
+
+Les six SHA de scripts du reçu CPU v2 correspondent aux blobs pilote ; AST seulement, aucun test synthétique rejoué. Recipe publiée et fichier PC recalculé ont le même SHA256 `37e29c250113c12bd4ff0385a1ca06590c41cfa519268c3590bf699223387867`. Les quatre scripts copiés correspondent, ainsi que les trois fichiers natifs PC/recipe/blobsAPP71. Contrôle SSH RO du bundle :657545040 octets, SHA256 `42f19dc05811589c8f4180c0c1546e85862e76a1c9f31ab769107a1d747ed280`, unique HEAD71fbe786fcf0b2314e72b3eb4b8484faf590d78c. Pas d’extraction ou de réexécution du bundle ; verify reste attesté par le porteur.
+
+Les deux worktrees PC source-v2/pilot-v2 sont propres aux HEAD exacts71/b307. raw/resume.log/allocation.json absents, scratchrows-red-v2 vide lors de ce contrôle. Le paquet v1 n’a pas été modifié par cette revue ; sa conservation est rapportée par le porteur, pas réinventoriée ici.
+
+Avis favorable **à la préparation exacte v2**, sans blocage statique supplémentaire. GO2400 neuf de C7 encore nécessaire avant build/test. Aucun CMake, build, test, poste, unité, SDK magasin, service ou DB appelé par cette revue. Le rouge produit binder et le format XML natif restent à observer ; un nouveau refus doit être conservé sans retry.
