@@ -326,3 +326,8 @@ Linux2.6.0 confirméRAW0 ; pasbugwarningattribué. FinCommon101TERMINE/restes[]/
 nettoyé/ownedabsent,sourcepropre,aucunretry. Admissiondataset/PANELàcorriger
 avantfuturepasse ; propositionHOLDcascorpus et limitesledger tardif explicites.
 T/proofsconservés, aucune permission de nouvelle passe ou main/tag/PR42/ULP7.2.
+
+SuiteROautorisée : conception10 et audit11queries sur15007sourcespubliques.
+mutex_lock0dans300mais64autresdocsadmissibles ; pasabsenceLinux2.6global.
+AdmissionSource.dataset/PANELàrevoiravantheavy, oraclesexistantsàcomposer ;
+rougepure/mockdécritNONcodé/NONjoué, RORechercheavantcode/RUN, aucunretry.

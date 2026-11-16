@@ -1,0 +1,5 @@
+{
+  "audit_tool_sha256": "b7886900633e74dd340b2307db603cd74b4e32609430ff5a76a36d259f4b4074",
+  "output_sha256": "518f47c410fb4b9479268e6f5d5390202cdd1e1d2f247e9d3f65fbc4d6e329ec",
+  "scope": "C7-authorized read-only corpus location, not test execution or admission proof"
+}

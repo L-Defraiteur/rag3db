@@ -267,3 +267,36 @@ propositionHOLDcecasavecdefautrecetteexplicite. Ledger62SHA tardif aprèsSTOP,
 inventairesintercalésavantchaqueappel etnoncomplets : limite de protocole
 conservée, pasrattrapage enpreuvepré-test. ROprépaBanc94a2cde reliée ; pasRO
 exécution encore. Aucunretry ni nouvelle sélection sans décision C7 distincte.
+
+Nouvelle préparation RO autorisée par C7 aprèsa05e : lire le contrat exact du
+test et sa sélection hardcodée, localiser TOUS les termes du panel dans les
+seules15007sources publiques Linux2.6.0 déjà admises. Distinguer300 vs corpus
+entier et2.6 vs7.2 ; aucune lecture.env/.vault/base, aucun test/Cargo/exécution
+de fixture. Pas de permutation posthoc pour verdir, pas d’assertion assouplie.
+Livrable : contrat et données d’admission épinglées, proposition de test
+d’admission vérifiant l’objectif RAM/Files et ses préconditions avant heavy.
+Rouge pure/mock à concevoir puis RO avant toute correction de code/RUN ;
+aucune autorisation implicite de cette correction ou d’une nouvelle passe.
+
+Audit RO des onze requêtes terminé6.55s sur15007fichiers publics épinglés
+(rehashés),12133admissibles. mutex_lock ASCIIcasefold :0documents du premier300,
+64admissibles dans l’ensemble,75fichiers réguliers au total. On ne peut donc
+pas attribuer ce manque à une absence dans Linux2.6.0 entier. Mutex :0dans300,
+442admissibles ; mutex lock relax repérage ASCII normalisé0dans300/79admissibles.
+Autres modes : témoins repérés mais locateurs incomplets, pasoracle Lucivy
+(typos floues localisées via schedule/register, frontièresASCII/regexlocales).
+Aucun fichier permuté, aucun test/Cargo rejoué, aucune preuve7.2 acquise.
+Suite conceptionRO : composer les oracles de tests existants ground_truth
+plutôt que dupliquer le moteur, admission Source.dataset/PANEL avant toute
+construction ; cas pure/mock à proposer, nonjoués/noncodés produit.
+
+[ConceptionRO10](../16-11-2026/10-contrat-du-panel-et-admission-du-corpus.md) :
+objectifRAM/Files inchangé, admission Source.dataset/PANEL fondée sur QueryConfig
+et oraclespursdéjàprésentsground_truth, avanttoutbuilder. Rougepure/mock décrit
+maisNONcodé/NONjoué : count50suffisant accepteactuellement une vue sanstémoin,
+doitrefuser sansconstruction ; ensuitecasfrontières/Unicode/hashes/privé.
+AuditRO public conservé SHA518f47c410fb4b9479268e6f5d5390202cdd1e1d2f247e9d3f65fbc4d6e329ec,
+outilb7886900 ; localisation11queriespasqualificationmoteur. Action deRO portée
+parRecherche : vérifiercontrat/modes/oracles/conception10, lecture seule sans
+Cargo/test/ELF/base/services ; retour relié au même ticket avantcode/RUN.
+Pasdesélectionposthoc,2.6présenceailleurs≠admission/7.2toujoursabsent.

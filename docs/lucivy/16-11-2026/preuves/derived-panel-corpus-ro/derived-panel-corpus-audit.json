@@ -1,0 +1,1377 @@
+{
+  "source": "890c86af44989f3fea6c6fa62fd40d688b4084df",
+  "test_source_sha256": "8f5223fae11dcbbe35e22e76ff975f4ec381fbfe1fc5577e7fca067934a7e0bc",
+  "manifest_sha256": "d4faf3a7988f42db9d0801ee5bd6630d01f97f7be58ce9838fb6cbe189d4f204",
+  "selection_manifest_sha256": "f4a1f4eb52c70f51098f8075b210774a8d16f151d0953e3f3f197e4bea7860e8",
+  "scope": "public admitted Linux 2.6.0 regular files only; source/selection unchanged; no Linux 7.2 evidence",
+  "files_rehashed": 15007,
+  "eligible_files": 12133,
+  "subset_documents": 300,
+  "queries": [
+    {
+      "query": {
+        "text": "mutex_lock",
+        "strict": true,
+        "distance": "0",
+        "anchor": false,
+        "exact": false,
+        "label": "strict"
+      },
+      "locator_kind": "case-insensitive ASCII literal location",
+      "scopes": {
+        "first300": {
+          "documents": 300,
+          "raw_literal_documents": 0,
+          "raw_ascii_casefold_documents": 0,
+          "raw_literal_occurrences": 0,
+          "raw_ascii_casefold_occurrences": 0,
+          "locator_evaluated_utf8_documents": 300,
+          "locator_positive_documents": 0,
+          "raw_examples": [],
+          "locator_examples": []
+        },
+        "all_eligible": {
+          "documents": 12133,
+          "raw_literal_documents": 11,
+          "raw_ascii_casefold_documents": 64,
+          "raw_literal_occurrences": 16,
+          "raw_ascii_casefold_occurrences": 107,
+          "locator_evaluated_utf8_documents": 12133,
+          "locator_positive_documents": 64,
+          "raw_examples": [
+            {
+              "path": "net/sunrpc/sched.c",
+              "sha256": "c8a456326c8672f0993973132c05c23989758a72b5deb4836b4241184a429f46",
+              "first_ascii_casefold_byte_offset": 21695
+            },
+            {
+              "path": "drivers/net/ppp_synctty.c",
+              "sha256": "835bd8f6034919badbdc8777a1b621e5bc824ffc45372249f00105114bfd3124",
+              "first_ascii_casefold_byte_offset": 5538
+            },
+            {
+              "path": "drivers/net/ppp_async.c",
+              "sha256": "f15c6fd41878b25036ffc7b552ffde4240ece28211975127cc19c202d39b3472",
+              "first_ascii_casefold_byte_offset": 4368
+            }
+          ],
+          "locator_examples": [
+            {
+              "path": "net/sunrpc/sched.c",
+              "sha256": "c8a456326c8672f0993973132c05c23989758a72b5deb4836b4241184a429f46",
+              "witness": "mutex_lock"
+            },
+            {
+              "path": "drivers/net/ppp_synctty.c",
+              "sha256": "835bd8f6034919badbdc8777a1b621e5bc824ffc45372249f00105114bfd3124",
+              "witness": "mutex_lock"
+            },
+            {
+              "path": "drivers/net/ppp_async.c",
+              "sha256": "f15c6fd41878b25036ffc7b552ffde4240ece28211975127cc19c202d39b3472",
+              "witness": "mutex_lock"
+            }
+          ]
+        },
+        "all_regular": {
+          "documents": 15007,
+          "raw_literal_documents": 12,
+          "raw_ascii_casefold_documents": 75,
+          "raw_literal_occurrences": 17,
+          "raw_ascii_casefold_occurrences": 143,
+          "locator_evaluated_utf8_documents": 14738,
+          "locator_positive_documents": 72,
+          "raw_examples": [
+            {
+              "path": "net/sunrpc/sched.c",
+              "sha256": "c8a456326c8672f0993973132c05c23989758a72b5deb4836b4241184a429f46",
+              "first_ascii_casefold_byte_offset": 21695
+            },
+            {
+              "path": "drivers/net/ppp_synctty.c",
+              "sha256": "835bd8f6034919badbdc8777a1b621e5bc824ffc45372249f00105114bfd3124",
+              "first_ascii_casefold_byte_offset": 5538
+            },
+            {
+              "path": "drivers/net/ppp_async.c",
+              "sha256": "f15c6fd41878b25036ffc7b552ffde4240ece28211975127cc19c202d39b3472",
+              "first_ascii_casefold_byte_offset": 4368
+            }
+          ],
+          "locator_examples": [
+            {
+              "path": "net/sunrpc/sched.c",
+              "sha256": "c8a456326c8672f0993973132c05c23989758a72b5deb4836b4241184a429f46",
+              "witness": "mutex_lock"
+            },
+            {
+              "path": "drivers/net/ppp_synctty.c",
+              "sha256": "835bd8f6034919badbdc8777a1b621e5bc824ffc45372249f00105114bfd3124",
+              "witness": "mutex_lock"
+            },
+            {
+              "path": "drivers/net/ppp_async.c",
+              "sha256": "f15c6fd41878b25036ffc7b552ffde4240ece28211975127cc19c202d39b3472",
+              "witness": "mutex_lock"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "query": {
+        "text": "mutex lock",
+        "strict": false,
+        "distance": "0",
+        "anchor": false,
+        "exact": false,
+        "label": "relax"
+      },
+      "locator_kind": "ASCII alphanumeric separator-stripped location; not a Unicode/engine oracle",
+      "scopes": {
+        "first300": {
+          "documents": 300,
+          "raw_literal_documents": 0,
+          "raw_ascii_casefold_documents": 0,
+          "raw_literal_occurrences": 0,
+          "raw_ascii_casefold_occurrences": 0,
+          "locator_evaluated_utf8_documents": 300,
+          "locator_positive_documents": 0,
+          "raw_examples": [],
+          "locator_examples": []
+        },
+        "all_eligible": {
+          "documents": 12133,
+          "raw_literal_documents": 3,
+          "raw_ascii_casefold_documents": 4,
+          "raw_literal_occurrences": 3,
+          "raw_ascii_casefold_occurrences": 4,
+          "locator_evaluated_utf8_documents": 12133,
+          "locator_positive_documents": 79,
+          "raw_examples": [
+            {
+              "path": "drivers/acpi/utilities/utglobal.c",
+              "sha256": "79d4a1cbf57c9e5135c3ada95c96a0351423fea7c1cd5138527f470af0c88deb",
+              "first_ascii_casefold_byte_offset": 25034
+            },
+            {
+              "path": "drivers/mtd/chips/sharp.c",
+              "sha256": "ef244714cb3af4226a4e68090b519076cf2e2c2e76e485a0891441f381af6bc5",
+              "first_ascii_casefold_byte_offset": 5819
+            },
+            {
+              "path": "drivers/cpufreq/cpufreq.c",
+              "sha256": "fdcea5fba7296b7e4626dacdc7f33e3e476ace658047bee3dfa4a748960713db",
+              "first_ascii_casefold_byte_offset": 1385
+            }
+          ],
+          "locator_examples": [
+            {
+              "path": "net/ipv4/ipvs/ip_vs_ctl.c",
+              "sha256": "b8a83879299ef50e3db91d3e8702e8f6346521626e6d040fd45b50e25c3baee3",
+              "witness": "mutexlock"
+            },
+            {
+              "path": "net/sunrpc/sched.c",
+              "sha256": "c8a456326c8672f0993973132c05c23989758a72b5deb4836b4241184a429f46",
+              "witness": "mutexlock"
+            },
+            {
+              "path": "drivers/net/ppp_synctty.c",
+              "sha256": "835bd8f6034919badbdc8777a1b621e5bc824ffc45372249f00105114bfd3124",
+              "witness": "mutexlock"
+            }
+          ]
+        },
+        "all_regular": {
+          "documents": 15007,
+          "raw_literal_documents": 4,
+          "raw_ascii_casefold_documents": 5,
+          "raw_literal_occurrences": 4,
+          "raw_ascii_casefold_occurrences": 5,
+          "locator_evaluated_utf8_documents": 14738,
+          "locator_positive_documents": 87,
+          "raw_examples": [
+            {
+              "path": "net/bridge/netfilter/ebtables.c",
+              "sha256": "7ca32dfa38b6f8bc47d69bf1c0c3f6f26af2a8ee7d0888cc69d85c112bfcec1c",
+              "first_ascii_casefold_byte_offset": 27177
+            },
+            {
+              "path": "drivers/acpi/utilities/utglobal.c",
+              "sha256": "79d4a1cbf57c9e5135c3ada95c96a0351423fea7c1cd5138527f470af0c88deb",
+              "first_ascii_casefold_byte_offset": 25034
+            },
+            {
+              "path": "drivers/mtd/chips/sharp.c",
+              "sha256": "ef244714cb3af4226a4e68090b519076cf2e2c2e76e485a0891441f381af6bc5",
+              "first_ascii_casefold_byte_offset": 5819
+            }
+          ],
+          "locator_examples": [
+            {
+              "path": "net/ipv4/ipvs/ip_vs_ctl.c",
+              "sha256": "b8a83879299ef50e3db91d3e8702e8f6346521626e6d040fd45b50e25c3baee3",
+              "witness": "mutexlock"
+            },
+            {
+              "path": "net/sunrpc/sched.c",
+              "sha256": "c8a456326c8672f0993973132c05c23989758a72b5deb4836b4241184a429f46",
+              "witness": "mutexlock"
+            },
+            {
+              "path": "drivers/net/ppp_synctty.c",
+              "sha256": "835bd8f6034919badbdc8777a1b621e5bc824ffc45372249f00105114bfd3124",
+              "witness": "mutexlock"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "query": {
+        "text": "spin_lock",
+        "strict": true,
+        "distance": "0",
+        "anchor": false,
+        "exact": false,
+        "label": "strict"
+      },
+      "locator_kind": "case-insensitive ASCII literal location",
+      "scopes": {
+        "first300": {
+          "documents": 300,
+          "raw_literal_documents": 9,
+          "raw_ascii_casefold_documents": 10,
+          "raw_literal_occurrences": 30,
+          "raw_ascii_casefold_occurrences": 33,
+          "locator_evaluated_utf8_documents": 300,
+          "locator_positive_documents": 10,
+          "raw_examples": [
+            {
+              "path": "Documentation/io_ordering.txt",
+              "sha256": "cc8c52995ad35bf8d938a3bebc41e9a7adb2e8d915172bc8aebfaf7d7aab01f6",
+              "first_ascii_casefold_byte_offset": 745
+            },
+            {
+              "path": "Documentation/networking/NAPI_HOWTO.txt",
+              "sha256": "54c612f96625731cc401fb631957eb1e3ba355f749e3a0ef87be020ba8a97daa",
+              "first_ascii_casefold_byte_offset": 9590
+            },
+            {
+              "path": "Documentation/networking/8139too.txt",
+              "sha256": "10f2c7571e504ad50c42c266eb26d374192b6df887d58962ca94f62894b166cc",
+              "first_ascii_casefold_byte_offset": 7910
+            }
+          ],
+          "locator_examples": [
+            {
+              "path": "Documentation/io_ordering.txt",
+              "sha256": "cc8c52995ad35bf8d938a3bebc41e9a7adb2e8d915172bc8aebfaf7d7aab01f6",
+              "witness": "spin_lock"
+            },
+            {
+              "path": "Documentation/networking/NAPI_HOWTO.txt",
+              "sha256": "54c612f96625731cc401fb631957eb1e3ba355f749e3a0ef87be020ba8a97daa",
+              "witness": "spin_lock"
+            },
+            {
+              "path": "Documentation/networking/8139too.txt",
+              "sha256": "10f2c7571e504ad50c42c266eb26d374192b6df887d58962ca94f62894b166cc",
+              "witness": "spin_lock"
+            }
+          ]
+        },
+        "all_eligible": {
+          "documents": 12133,
+          "raw_literal_documents": 1447,
+          "raw_ascii_casefold_documents": 1498,
+          "raw_literal_occurrences": 7166,
+          "raw_ascii_casefold_occurrences": 7853,
+          "locator_evaluated_utf8_documents": 12133,
+          "locator_positive_documents": 1498,
+          "raw_examples": [
+            {
+              "path": "net/core/link_watch.c",
+              "sha256": "69f474182f22f7c7c14ed3803399d6e290e46211cbc0adb14e790c1086330bbd",
+              "first_ascii_casefold_byte_offset": 999
+            },
+            {
+              "path": "net/core/utils.c",
+              "sha256": "efbebacad9d41645561c69580e88c3d0c1cdc82c600b38cc33a0ee1df478c672",
+              "first_ascii_casefold_byte_offset": 1201
+            },
+            {
+              "path": "net/core/neighbour.c",
+              "sha256": "925b257049c171ac6cc7f8080f17aa1836976859f222dc914e83cba38443dff9",
+              "first_ascii_casefold_byte_offset": 24801
+            }
+          ],
+          "locator_examples": [
+            {
+              "path": "net/core/link_watch.c",
+              "sha256": "69f474182f22f7c7c14ed3803399d6e290e46211cbc0adb14e790c1086330bbd",
+              "witness": "spin_lock"
+            },
+            {
+              "path": "net/core/utils.c",
+              "sha256": "efbebacad9d41645561c69580e88c3d0c1cdc82c600b38cc33a0ee1df478c672",
+              "witness": "spin_lock"
+            },
+            {
+              "path": "net/core/neighbour.c",
+              "sha256": "925b257049c171ac6cc7f8080f17aa1836976859f222dc914e83cba38443dff9",
+              "witness": "spin_lock"
+            }
+          ]
+        },
+        "all_regular": {
+          "documents": 15007,
+          "raw_literal_documents": 1704,
+          "raw_ascii_casefold_documents": 1758,
+          "raw_literal_occurrences": 10368,
+          "raw_ascii_casefold_occurrences": 11179,
+          "locator_evaluated_utf8_documents": 14738,
+          "locator_positive_documents": 1712,
+          "raw_examples": [
+            {
+              "path": "net/core/link_watch.c",
+              "sha256": "69f474182f22f7c7c14ed3803399d6e290e46211cbc0adb14e790c1086330bbd",
+              "first_ascii_casefold_byte_offset": 999
+            },
+            {
+              "path": "net/core/utils.c",
+              "sha256": "efbebacad9d41645561c69580e88c3d0c1cdc82c600b38cc33a0ee1df478c672",
+              "first_ascii_casefold_byte_offset": 1201
+            },
+            {
+              "path": "net/core/neighbour.c",
+              "sha256": "925b257049c171ac6cc7f8080f17aa1836976859f222dc914e83cba38443dff9",
+              "first_ascii_casefold_byte_offset": 24801
+            }
+          ],
+          "locator_examples": [
+            {
+              "path": "net/core/link_watch.c",
+              "sha256": "69f474182f22f7c7c14ed3803399d6e290e46211cbc0adb14e790c1086330bbd",
+              "witness": "spin_lock"
+            },
+            {
+              "path": "net/core/utils.c",
+              "sha256": "efbebacad9d41645561c69580e88c3d0c1cdc82c600b38cc33a0ee1df478c672",
+              "witness": "spin_lock"
+            },
+            {
+              "path": "net/core/neighbour.c",
+              "sha256": "925b257049c171ac6cc7f8080f17aa1836976859f222dc914e83cba38443dff9",
+              "witness": "spin_lock"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "query": {
+        "text": "sched",
+        "strict": true,
+        "distance": "0",
+        "anchor": true,
+        "exact": true,
+        "label": "term"
+      },
+      "locator_kind": "ASCII alphanumeric boundary location; not Lucivy tokenization proof",
+      "scopes": {
+        "first300": {
+          "documents": 300,
+          "raw_literal_documents": 22,
+          "raw_ascii_casefold_documents": 23,
+          "raw_literal_occurrences": 161,
+          "raw_ascii_casefold_occurrences": 167,
+          "locator_evaluated_utf8_documents": 300,
+          "locator_positive_documents": 6,
+          "raw_examples": [
+            {
+              "path": "Documentation/networking/de4x5.txt",
+              "sha256": "341a49cee0b2415a065a31f73f6cef87a7cfde6e70759204bafd89399b63139c",
+              "first_ascii_casefold_byte_offset": 3794
+            },
+            {
+              "path": "Documentation/networking/netdevices.txt",
+              "sha256": "f69354a1c37a3ae8c8f2770b6c8278653bd77b82dec187fb0cec90138c250e81",
+              "first_ascii_casefold_byte_offset": 1766
+            },
+            {
+              "path": "Documentation/networking/eql.txt",
+              "sha256": "f8dbf1dc0da17d2b400f39e284bfeb08470a3f0e1aef0e586f106c762ba5d90c",
+              "first_ascii_casefold_byte_offset": 7568
+            }
+          ],
+          "locator_examples": [
+            {
+              "path": "Documentation/networking/netdevices.txt",
+              "sha256": "f69354a1c37a3ae8c8f2770b6c8278653bd77b82dec187fb0cec90138c250e81",
+              "witness": null
+            },
+            {
+              "path": "Documentation/crypto/descore-readme.txt",
+              "sha256": "5003e85c7682b8d7cb5532d8252d8816f602ca80f88bdfdc12b3dbea53096de0",
+              "witness": null
+            },
+            {
+              "path": "Documentation/sched-coding.txt",
+              "sha256": "86d661df162211668769f3f752c3fa13ce20c8133098bd6eecb5dfaa364f0412",
+              "witness": null
+            }
+          ]
+        },
+        "all_eligible": {
+          "documents": 12133,
+          "raw_literal_documents": 2230,
+          "raw_ascii_casefold_documents": 2272,
+          "raw_literal_occurrences": 6079,
+          "raw_ascii_casefold_occurrences": 6719,
+          "locator_evaluated_utf8_documents": 12133,
+          "locator_positive_documents": 1663,
+          "raw_examples": [
+            {
+              "path": "net/core/link_watch.c",
+              "sha256": "69f474182f22f7c7c14ed3803399d6e290e46211cbc0adb14e790c1086330bbd",
+              "first_ascii_casefold_byte_offset": 3039
+            },
+            {
+              "path": "net/core/flow.c",
+              "sha256": "68dd2eb07d5da26d35e9930dbeeebd8a17b71d30d95b1afc7cc71651e1b28911",
+              "first_ascii_casefold_byte_offset": 6179
+            },
+            {
+              "path": "net/core/neighbour.c",
+              "sha256": "925b257049c171ac6cc7f8080f17aa1836976859f222dc914e83cba38443dff9",
+              "first_ascii_casefold_byte_offset": 625
+            }
+          ],
+          "locator_examples": [
+            {
+              "path": "net/core/neighbour.c",
+              "sha256": "925b257049c171ac6cc7f8080f17aa1836976859f222dc914e83cba38443dff9",
+              "witness": null
+            },
+            {
+              "path": "net/core/filter.c",
+              "sha256": "a9c3c5a434ff51afc959f9900b301f8c339076b4a9e61edb8e9016101383041d",
+              "witness": null
+            },
+            {
+              "path": "net/core/dev_mcast.c",
+              "sha256": "423595e84e75bb9a5bff9fdc160b7c8c72c4cd2aa9598145a751073ca6da8358",
+              "witness": null
+            }
+          ]
+        },
+        "all_regular": {
+          "documents": 15007,
+          "raw_literal_documents": 2641,
+          "raw_ascii_casefold_documents": 2831,
+          "raw_literal_occurrences": 8667,
+          "raw_ascii_casefold_occurrences": 9866,
+          "locator_evaluated_utf8_documents": 14738,
+          "locator_positive_documents": 1961,
+          "raw_examples": [
+            {
+              "path": "net/core/link_watch.c",
+              "sha256": "69f474182f22f7c7c14ed3803399d6e290e46211cbc0adb14e790c1086330bbd",
+              "first_ascii_casefold_byte_offset": 3039
+            },
+            {
+              "path": "net/core/flow.c",
+              "sha256": "68dd2eb07d5da26d35e9930dbeeebd8a17b71d30d95b1afc7cc71651e1b28911",
+              "first_ascii_casefold_byte_offset": 6179
+            },
+            {
+              "path": "net/core/neighbour.c",
+              "sha256": "925b257049c171ac6cc7f8080f17aa1836976859f222dc914e83cba38443dff9",
+              "first_ascii_casefold_byte_offset": 625
+            }
+          ],
+          "locator_examples": [
+            {
+              "path": "net/core/neighbour.c",
+              "sha256": "925b257049c171ac6cc7f8080f17aa1836976859f222dc914e83cba38443dff9",
+              "witness": null
+            },
+            {
+              "path": "net/core/filter.c",
+              "sha256": "a9c3c5a434ff51afc959f9900b301f8c339076b4a9e61edb8e9016101383041d",
+              "witness": null
+            },
+            {
+              "path": "net/core/dev_mcast.c",
+              "sha256": "423595e84e75bb9a5bff9fdc160b7c8c72c4cd2aa9598145a751073ca6da8358",
+              "witness": null
+            }
+          ]
+        }
+      }
+    },
+    {
+      "query": {
+        "text": "printk",
+        "strict": true,
+        "distance": "0",
+        "anchor": true,
+        "exact": false,
+        "label": "sw"
+      },
+      "locator_kind": "ASCII alphanumeric boundary location; not Lucivy tokenization proof",
+      "scopes": {
+        "first300": {
+          "documents": 300,
+          "raw_literal_documents": 17,
+          "raw_ascii_casefold_documents": 18,
+          "raw_literal_occurrences": 44,
+          "raw_ascii_casefold_occurrences": 45,
+          "locator_evaluated_utf8_documents": 300,
+          "locator_positive_documents": 17,
+          "raw_examples": [
+            {
+              "path": "Documentation/DocBook/procfs_example.c",
+              "sha256": "c9b33eed629d91abbadc086fcc0e187514e6a1102df41ecef8be456258ea9bf1",
+              "first_ascii_casefold_byte_offset": 4361
+            },
+            {
+              "path": "Documentation/networking/skfp.txt",
+              "sha256": "a0a65f2b4be83796f2400186e8b65c46fe2726937e891e1ddd4e90f0ee779547",
+              "first_ascii_casefold_byte_offset": 4713
+            },
+            {
+              "path": "Documentation/networking/NAPI_HOWTO.txt",
+              "sha256": "54c612f96625731cc401fb631957eb1e3ba355f749e3a0ef87be020ba8a97daa",
+              "first_ascii_casefold_byte_offset": 11483
+            }
+          ],
+          "locator_examples": [
+            {
+              "path": "Documentation/DocBook/procfs_example.c",
+              "sha256": "c9b33eed629d91abbadc086fcc0e187514e6a1102df41ecef8be456258ea9bf1",
+              "witness": null
+            },
+            {
+              "path": "Documentation/networking/skfp.txt",
+              "sha256": "a0a65f2b4be83796f2400186e8b65c46fe2726937e891e1ddd4e90f0ee779547",
+              "witness": null
+            },
+            {
+              "path": "Documentation/networking/NAPI_HOWTO.txt",
+              "sha256": "54c612f96625731cc401fb631957eb1e3ba355f749e3a0ef87be020ba8a97daa",
+              "witness": null
+            }
+          ]
+        },
+        "all_eligible": {
+          "documents": 12133,
+          "raw_literal_documents": 3491,
+          "raw_ascii_casefold_documents": 3528,
+          "raw_literal_occurrences": 35691,
+          "raw_ascii_casefold_occurrences": 37921,
+          "locator_evaluated_utf8_documents": 12133,
+          "locator_positive_documents": 3481,
+          "raw_examples": [
+            {
+              "path": "net/core/utils.c",
+              "sha256": "efbebacad9d41645561c69580e88c3d0c1cdc82c600b38cc33a0ee1df478c672",
+              "first_ascii_casefold_byte_offset": 1087
+            },
+            {
+              "path": "net/core/neighbour.c",
+              "sha256": "925b257049c171ac6cc7f8080f17aa1836976859f222dc914e83cba38443dff9",
+              "first_ascii_casefold_byte_offset": 854
+            },
+            {
+              "path": "net/core/dev_mcast.c",
+              "sha256": "423595e84e75bb9a5bff9fdc160b7c8c72c4cd2aa9598145a751073ca6da8358",
+              "first_ascii_casefold_byte_offset": 4901
+            }
+          ],
+          "locator_examples": [
+            {
+              "path": "net/core/utils.c",
+              "sha256": "efbebacad9d41645561c69580e88c3d0c1cdc82c600b38cc33a0ee1df478c672",
+              "witness": null
+            },
+            {
+              "path": "net/core/neighbour.c",
+              "sha256": "925b257049c171ac6cc7f8080f17aa1836976859f222dc914e83cba38443dff9",
+              "witness": null
+            },
+            {
+              "path": "net/core/dev_mcast.c",
+              "sha256": "423595e84e75bb9a5bff9fdc160b7c8c72c4cd2aa9598145a751073ca6da8358",
+              "witness": null
+            }
+          ]
+        },
+        "all_regular": {
+          "documents": 15007,
+          "raw_literal_documents": 3904,
+          "raw_ascii_casefold_documents": 3961,
+          "raw_literal_occurrences": 54247,
+          "raw_ascii_casefold_occurrences": 58721,
+          "locator_evaluated_utf8_documents": 14738,
+          "locator_positive_documents": 3820,
+          "raw_examples": [
+            {
+              "path": "net/core/utils.c",
+              "sha256": "efbebacad9d41645561c69580e88c3d0c1cdc82c600b38cc33a0ee1df478c672",
+              "first_ascii_casefold_byte_offset": 1087
+            },
+            {
+              "path": "net/core/neighbour.c",
+              "sha256": "925b257049c171ac6cc7f8080f17aa1836976859f222dc914e83cba38443dff9",
+              "first_ascii_casefold_byte_offset": 854
+            },
+            {
+              "path": "net/core/dev_mcast.c",
+              "sha256": "423595e84e75bb9a5bff9fdc160b7c8c72c4cd2aa9598145a751073ca6da8358",
+              "first_ascii_casefold_byte_offset": 4901
+            }
+          ],
+          "locator_examples": [
+            {
+              "path": "net/core/utils.c",
+              "sha256": "efbebacad9d41645561c69580e88c3d0c1cdc82c600b38cc33a0ee1df478c672",
+              "witness": null
+            },
+            {
+              "path": "net/core/neighbour.c",
+              "sha256": "925b257049c171ac6cc7f8080f17aa1836976859f222dc914e83cba38443dff9",
+              "witness": null
+            },
+            {
+              "path": "net/core/dev_mcast.c",
+              "sha256": "423595e84e75bb9a5bff9fdc160b7c8c72c4cd2aa9598145a751073ca6da8358",
+              "witness": null
+            }
+          ]
+        }
+      }
+    },
+    {
+      "query": {
+        "text": "return",
+        "strict": false,
+        "distance": "0",
+        "anchor": false,
+        "exact": false,
+        "label": "relax"
+      },
+      "locator_kind": "ASCII alphanumeric separator-stripped location; not a Unicode/engine oracle",
+      "scopes": {
+        "first300": {
+          "documents": 300,
+          "raw_literal_documents": 87,
+          "raw_ascii_casefold_documents": 89,
+          "raw_literal_occurrences": 479,
+          "raw_ascii_casefold_occurrences": 619,
+          "locator_evaluated_utf8_documents": 300,
+          "locator_positive_documents": 89,
+          "raw_examples": [
+            {
+              "path": "Documentation/DocBook/procfs_example.c",
+              "sha256": "c9b33eed629d91abbadc086fcc0e187514e6a1102df41ecef8be456258ea9bf1",
+              "first_ascii_casefold_byte_offset": 2200
+            },
+            {
+              "path": "Documentation/video4linux/CQcam.txt",
+              "sha256": "62f69a0b9d459d0930fc3c134624d6ad2909e965600802866e865e723cb1997a",
+              "first_ascii_casefold_byte_offset": 4632
+            },
+            {
+              "path": "Documentation/networking/cs89x0.txt",
+              "sha256": "4dfd542f525227bcbcd741761810463ef2c4abe63535f582e9158507d6956e35",
+              "first_ascii_casefold_byte_offset": 19359
+            }
+          ],
+          "locator_examples": [
+            {
+              "path": "Documentation/DocBook/procfs_example.c",
+              "sha256": "c9b33eed629d91abbadc086fcc0e187514e6a1102df41ecef8be456258ea9bf1",
+              "witness": "return"
+            },
+            {
+              "path": "Documentation/video4linux/CQcam.txt",
+              "sha256": "62f69a0b9d459d0930fc3c134624d6ad2909e965600802866e865e723cb1997a",
+              "witness": "return"
+            },
+            {
+              "path": "Documentation/networking/cs89x0.txt",
+              "sha256": "4dfd542f525227bcbcd741761810463ef2c4abe63535f582e9158507d6956e35",
+              "witness": "return"
+            }
+          ]
+        },
+        "all_eligible": {
+          "documents": 12133,
+          "raw_literal_documents": 7046,
+          "raw_ascii_casefold_documents": 7144,
+          "raw_literal_occurrences": 119380,
+          "raw_ascii_casefold_occurrences": 123931,
+          "locator_evaluated_utf8_documents": 12133,
+          "locator_positive_documents": 7144,
+          "raw_examples": [
+            {
+              "path": "net/core/link_watch.c",
+              "sha256": "69f474182f22f7c7c14ed3803399d6e290e46211cbc0adb14e790c1086330bbd",
+              "first_ascii_casefold_byte_offset": 2659
+            },
+            {
+              "path": "net/core/utils.c",
+              "sha256": "efbebacad9d41645561c69580e88c3d0c1cdc82c600b38cc33a0ee1df478c672",
+              "first_ascii_casefold_byte_offset": 764
+            },
+            {
+              "path": "net/core/flow.c",
+              "sha256": "68dd2eb07d5da26d35e9930dbeeebd8a17b71d30d95b1afc7cc71651e1b28911",
+              "first_ascii_casefold_byte_offset": 3059
+            }
+          ],
+          "locator_examples": [
+            {
+              "path": "net/core/link_watch.c",
+              "sha256": "69f474182f22f7c7c14ed3803399d6e290e46211cbc0adb14e790c1086330bbd",
+              "witness": "return"
+            },
+            {
+              "path": "net/core/utils.c",
+              "sha256": "efbebacad9d41645561c69580e88c3d0c1cdc82c600b38cc33a0ee1df478c672",
+              "witness": "return"
+            },
+            {
+              "path": "net/core/flow.c",
+              "sha256": "68dd2eb07d5da26d35e9930dbeeebd8a17b71d30d95b1afc7cc71651e1b28911",
+              "witness": "return"
+            }
+          ]
+        },
+        "all_regular": {
+          "documents": 15007,
+          "raw_literal_documents": 7957,
+          "raw_ascii_casefold_documents": 8107,
+          "raw_literal_occurrences": 174330,
+          "raw_ascii_casefold_occurrences": 181924,
+          "locator_evaluated_utf8_documents": 14738,
+          "locator_positive_documents": 7923,
+          "raw_examples": [
+            {
+              "path": "net/core/link_watch.c",
+              "sha256": "69f474182f22f7c7c14ed3803399d6e290e46211cbc0adb14e790c1086330bbd",
+              "first_ascii_casefold_byte_offset": 2659
+            },
+            {
+              "path": "net/core/utils.c",
+              "sha256": "efbebacad9d41645561c69580e88c3d0c1cdc82c600b38cc33a0ee1df478c672",
+              "first_ascii_casefold_byte_offset": 764
+            },
+            {
+              "path": "net/core/flow.c",
+              "sha256": "68dd2eb07d5da26d35e9930dbeeebd8a17b71d30d95b1afc7cc71651e1b28911",
+              "first_ascii_casefold_byte_offset": 3059
+            }
+          ],
+          "locator_examples": [
+            {
+              "path": "net/core/link_watch.c",
+              "sha256": "69f474182f22f7c7c14ed3803399d6e290e46211cbc0adb14e790c1086330bbd",
+              "witness": "return"
+            },
+            {
+              "path": "net/core/utils.c",
+              "sha256": "efbebacad9d41645561c69580e88c3d0c1cdc82c600b38cc33a0ee1df478c672",
+              "witness": "return"
+            },
+            {
+              "path": "net/core/flow.c",
+              "sha256": "68dd2eb07d5da26d35e9930dbeeebd8a17b71d30d95b1afc7cc71651e1b28911",
+              "witness": "return"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "query": {
+        "text": "if (",
+        "strict": true,
+        "distance": "0",
+        "anchor": false,
+        "exact": false,
+        "label": "strict"
+      },
+      "locator_kind": "case-insensitive ASCII literal location",
+      "scopes": {
+        "first300": {
+          "documents": 300,
+          "raw_literal_documents": 25,
+          "raw_ascii_casefold_documents": 26,
+          "raw_literal_occurrences": 212,
+          "raw_ascii_casefold_occurrences": 213,
+          "locator_evaluated_utf8_documents": 300,
+          "locator_positive_documents": 26,
+          "raw_examples": [
+            {
+              "path": "Documentation/video4linux/CQcam.txt",
+              "sha256": "62f69a0b9d459d0930fc3c134624d6ad2909e965600802866e865e723cb1997a",
+              "first_ascii_casefold_byte_offset": 11524
+            },
+            {
+              "path": "Documentation/networking/ifenslave.c",
+              "sha256": "c24a5db92578390291d872b0b408e6ec185766b653a4e695136aa3241c6589d7",
+              "first_ascii_casefold_byte_offset": 8748
+            },
+            {
+              "path": "Documentation/networking/NAPI_HOWTO.txt",
+              "sha256": "54c612f96625731cc401fb631957eb1e3ba355f749e3a0ef87be020ba8a97daa",
+              "first_ascii_casefold_byte_offset": 9293
+            }
+          ],
+          "locator_examples": [
+            {
+              "path": "Documentation/video4linux/CQcam.txt",
+              "sha256": "62f69a0b9d459d0930fc3c134624d6ad2909e965600802866e865e723cb1997a",
+              "witness": "if ("
+            },
+            {
+              "path": "Documentation/networking/ifenslave.c",
+              "sha256": "c24a5db92578390291d872b0b408e6ec185766b653a4e695136aa3241c6589d7",
+              "witness": "if ("
+            },
+            {
+              "path": "Documentation/networking/NAPI_HOWTO.txt",
+              "sha256": "54c612f96625731cc401fb631957eb1e3ba355f749e3a0ef87be020ba8a97daa",
+              "witness": "if ("
+            }
+          ]
+        },
+        "all_eligible": {
+          "documents": 12133,
+          "raw_literal_documents": 6041,
+          "raw_ascii_casefold_documents": 6046,
+          "raw_literal_occurrences": 161709,
+          "raw_ascii_casefold_occurrences": 161735,
+          "locator_evaluated_utf8_documents": 12133,
+          "locator_positive_documents": 6046,
+          "raw_examples": [
+            {
+              "path": "net/core/link_watch.c",
+              "sha256": "69f474182f22f7c7c14ed3803399d6e290e46211cbc0adb14e790c1086330bbd",
+              "first_ascii_casefold_byte_offset": 1556
+            },
+            {
+              "path": "net/core/utils.c",
+              "sha256": "efbebacad9d41645561c69580e88c3d0c1cdc82c600b38cc33a0ee1df478c672",
+              "first_ascii_casefold_byte_offset": 1452
+            },
+            {
+              "path": "net/core/flow.c",
+              "sha256": "68dd2eb07d5da26d35e9930dbeeebd8a17b71d30d95b1afc7cc71651e1b28911",
+              "first_ascii_casefold_byte_offset": 2072
+            }
+          ],
+          "locator_examples": [
+            {
+              "path": "net/core/link_watch.c",
+              "sha256": "69f474182f22f7c7c14ed3803399d6e290e46211cbc0adb14e790c1086330bbd",
+              "witness": "if ("
+            },
+            {
+              "path": "net/core/utils.c",
+              "sha256": "efbebacad9d41645561c69580e88c3d0c1cdc82c600b38cc33a0ee1df478c672",
+              "witness": "if ("
+            },
+            {
+              "path": "net/core/flow.c",
+              "sha256": "68dd2eb07d5da26d35e9930dbeeebd8a17b71d30d95b1afc7cc71651e1b28911",
+              "witness": "if ("
+            }
+          ]
+        },
+        "all_regular": {
+          "documents": 15007,
+          "raw_literal_documents": 6631,
+          "raw_ascii_casefold_documents": 6640,
+          "raw_literal_occurrences": 249261,
+          "raw_ascii_casefold_occurrences": 249312,
+          "locator_evaluated_utf8_documents": 14738,
+          "locator_positive_documents": 6492,
+          "raw_examples": [
+            {
+              "path": "net/core/link_watch.c",
+              "sha256": "69f474182f22f7c7c14ed3803399d6e290e46211cbc0adb14e790c1086330bbd",
+              "first_ascii_casefold_byte_offset": 1556
+            },
+            {
+              "path": "net/core/utils.c",
+              "sha256": "efbebacad9d41645561c69580e88c3d0c1cdc82c600b38cc33a0ee1df478c672",
+              "first_ascii_casefold_byte_offset": 1452
+            },
+            {
+              "path": "net/core/flow.c",
+              "sha256": "68dd2eb07d5da26d35e9930dbeeebd8a17b71d30d95b1afc7cc71651e1b28911",
+              "first_ascii_casefold_byte_offset": 2072
+            }
+          ],
+          "locator_examples": [
+            {
+              "path": "net/core/link_watch.c",
+              "sha256": "69f474182f22f7c7c14ed3803399d6e290e46211cbc0adb14e790c1086330bbd",
+              "witness": "if ("
+            },
+            {
+              "path": "net/core/utils.c",
+              "sha256": "efbebacad9d41645561c69580e88c3d0c1cdc82c600b38cc33a0ee1df478c672",
+              "witness": "if ("
+            },
+            {
+              "path": "net/core/flow.c",
+              "sha256": "68dd2eb07d5da26d35e9930dbeeebd8a17b71d30d95b1afc7cc71651e1b28911",
+              "witness": "if ("
+            }
+          ]
+        }
+      }
+    },
+    {
+      "query": {
+        "text": "schdule",
+        "strict": false,
+        "distance": "1",
+        "anchor": false,
+        "exact": false,
+        "label": "fz1"
+      },
+      "locator_kind": "literal witness within edit distance; incomplete locator, not a fuzzy oracle",
+      "scopes": {
+        "first300": {
+          "documents": 300,
+          "raw_literal_documents": 0,
+          "raw_ascii_casefold_documents": 0,
+          "raw_literal_occurrences": 0,
+          "raw_ascii_casefold_occurrences": 0,
+          "locator_evaluated_utf8_documents": 300,
+          "locator_positive_documents": 18,
+          "raw_examples": [],
+          "locator_examples": [
+            {
+              "path": "Documentation/networking/eql.txt",
+              "sha256": "f8dbf1dc0da17d2b400f39e284bfeb08470a3f0e1aef0e586f106c762ba5d90c",
+              "witness": "schedule"
+            },
+            {
+              "path": "Documentation/networking/NAPI_HOWTO.txt",
+              "sha256": "54c612f96625731cc401fb631957eb1e3ba355f749e3a0ef87be020ba8a97daa",
+              "witness": "schedule"
+            },
+            {
+              "path": "Documentation/arm/XScale/pmu.txt",
+              "sha256": "8f09b7a3ffeeaf4b517eaaf51019aedeb4020ee3640b34230cebd770241ccaf2",
+              "witness": "schedule"
+            }
+          ]
+        },
+        "all_eligible": {
+          "documents": 12133,
+          "raw_literal_documents": 0,
+          "raw_ascii_casefold_documents": 0,
+          "raw_literal_occurrences": 0,
+          "raw_ascii_casefold_occurrences": 0,
+          "locator_evaluated_utf8_documents": 12133,
+          "locator_positive_documents": 974,
+          "raw_examples": [],
+          "locator_examples": [
+            {
+              "path": "net/core/link_watch.c",
+              "sha256": "69f474182f22f7c7c14ed3803399d6e290e46211cbc0adb14e790c1086330bbd",
+              "witness": "schedule"
+            },
+            {
+              "path": "net/core/flow.c",
+              "sha256": "68dd2eb07d5da26d35e9930dbeeebd8a17b71d30d95b1afc7cc71651e1b28911",
+              "witness": "schedule"
+            },
+            {
+              "path": "net/core/netfilter.c",
+              "sha256": "bcffbe7efed14e1d94b670c83b3e6c91af69a141076dc1b6b68faabf3335c5ab",
+              "witness": "schedule"
+            }
+          ]
+        },
+        "all_regular": {
+          "documents": 15007,
+          "raw_literal_documents": 0,
+          "raw_ascii_casefold_documents": 0,
+          "raw_literal_occurrences": 0,
+          "raw_ascii_casefold_occurrences": 0,
+          "locator_evaluated_utf8_documents": 14738,
+          "locator_positive_documents": 1259,
+          "raw_examples": [],
+          "locator_examples": [
+            {
+              "path": "net/core/link_watch.c",
+              "sha256": "69f474182f22f7c7c14ed3803399d6e290e46211cbc0adb14e790c1086330bbd",
+              "witness": "schedule"
+            },
+            {
+              "path": "net/core/flow.c",
+              "sha256": "68dd2eb07d5da26d35e9930dbeeebd8a17b71d30d95b1afc7cc71651e1b28911",
+              "witness": "schedule"
+            },
+            {
+              "path": "net/core/netfilter.c",
+              "sha256": "bcffbe7efed14e1d94b670c83b3e6c91af69a141076dc1b6b68faabf3335c5ab",
+              "witness": "schedule"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "query": {
+        "text": "regsiter",
+        "strict": false,
+        "distance": "2",
+        "anchor": false,
+        "exact": false,
+        "label": "fz2"
+      },
+      "locator_kind": "literal witness within edit distance; incomplete locator, not a fuzzy oracle",
+      "scopes": {
+        "first300": {
+          "documents": 300,
+          "raw_literal_documents": 0,
+          "raw_ascii_casefold_documents": 0,
+          "raw_literal_occurrences": 0,
+          "raw_ascii_casefold_occurrences": 0,
+          "locator_evaluated_utf8_documents": 300,
+          "locator_positive_documents": 103,
+          "raw_examples": [],
+          "locator_examples": [
+            {
+              "path": "Documentation/io_ordering.txt",
+              "sha256": "cc8c52995ad35bf8d938a3bebc41e9a7adb2e8d915172bc8aebfaf7d7aab01f6",
+              "witness": "register"
+            },
+            {
+              "path": "Documentation/networking/cs89x0.txt",
+              "sha256": "4dfd542f525227bcbcd741761810463ef2c4abe63535f582e9158507d6956e35",
+              "witness": "register"
+            },
+            {
+              "path": "Documentation/networking/arcnet.txt",
+              "sha256": "dcbb0abd7885521c8de4c26cb391ea6f54cfcb36f6f03b857398e1ee4fd286ae",
+              "witness": "register"
+            }
+          ]
+        },
+        "all_eligible": {
+          "documents": 12133,
+          "raw_literal_documents": 3,
+          "raw_ascii_casefold_documents": 10,
+          "raw_literal_occurrences": 3,
+          "raw_ascii_casefold_occurrences": 13,
+          "locator_evaluated_utf8_documents": 12133,
+          "locator_positive_documents": 4618,
+          "raw_examples": [
+            {
+              "path": "drivers/net/irda/act200l.c",
+              "sha256": "2ccab82b9b7813e9fba2575e4b79072e9b34179eeb7dcc1806c6f0c7506e3195",
+              "first_ascii_casefold_byte_offset": 1224
+            },
+            {
+              "path": "drivers/net/amd8111e.h",
+              "sha256": "3fef2111eafbcc457a39b36105b697f3cdd240d56b0729448dc5424df01cda79",
+              "first_ascii_casefold_byte_offset": 1999
+            },
+            {
+              "path": "drivers/char/rio/cirrus.h",
+              "sha256": "2fd31e089a20e971cc53f2fd1cd2dc4523370dde125b455efe060045c8921dd5",
+              "first_ascii_casefold_byte_offset": 4338
+            }
+          ],
+          "locator_examples": [
+            {
+              "path": "net/core/flow.c",
+              "sha256": "68dd2eb07d5da26d35e9930dbeeebd8a17b71d30d95b1afc7cc71651e1b28911",
+              "witness": "register"
+            },
+            {
+              "path": "net/core/neighbour.c",
+              "sha256": "925b257049c171ac6cc7f8080f17aa1836976859f222dc914e83cba38443dff9",
+              "witness": "register"
+            },
+            {
+              "path": "net/core/filter.c",
+              "sha256": "a9c3c5a434ff51afc959f9900b301f8c339076b4a9e61edb8e9016101383041d",
+              "witness": "register"
+            }
+          ]
+        },
+        "all_regular": {
+          "documents": 15007,
+          "raw_literal_documents": 5,
+          "raw_ascii_casefold_documents": 12,
+          "raw_literal_occurrences": 5,
+          "raw_ascii_casefold_occurrences": 15,
+          "locator_evaluated_utf8_documents": 14738,
+          "locator_positive_documents": 5330,
+          "raw_examples": [
+            {
+              "path": "drivers/net/irda/act200l.c",
+              "sha256": "2ccab82b9b7813e9fba2575e4b79072e9b34179eeb7dcc1806c6f0c7506e3195",
+              "first_ascii_casefold_byte_offset": 1224
+            },
+            {
+              "path": "drivers/net/amd8111e.h",
+              "sha256": "3fef2111eafbcc457a39b36105b697f3cdd240d56b0729448dc5424df01cda79",
+              "first_ascii_casefold_byte_offset": 1999
+            },
+            {
+              "path": "drivers/char/rio/cirrus.h",
+              "sha256": "2fd31e089a20e971cc53f2fd1cd2dc4523370dde125b455efe060045c8921dd5",
+              "first_ascii_casefold_byte_offset": 4338
+            }
+          ],
+          "locator_examples": [
+            {
+              "path": "net/core/flow.c",
+              "sha256": "68dd2eb07d5da26d35e9930dbeeebd8a17b71d30d95b1afc7cc71651e1b28911",
+              "witness": "register"
+            },
+            {
+              "path": "net/core/neighbour.c",
+              "sha256": "925b257049c171ac6cc7f8080f17aa1836976859f222dc914e83cba38443dff9",
+              "witness": "register"
+            },
+            {
+              "path": "net/core/filter.c",
+              "sha256": "a9c3c5a434ff51afc959f9900b301f8c339076b4a9e61edb8e9016101383041d",
+              "witness": "register"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "query": {
+        "text": "spin_lock_[a-z]+",
+        "strict": true,
+        "distance": "RX",
+        "anchor": false,
+        "exact": false,
+        "label": "rx"
+      },
+      "locator_kind": "ASCII regex location only",
+      "scopes": {
+        "first300": {
+          "documents": 300,
+          "raw_literal_documents": 0,
+          "raw_ascii_casefold_documents": 0,
+          "raw_literal_occurrences": 0,
+          "raw_ascii_casefold_occurrences": 0,
+          "locator_evaluated_utf8_documents": 300,
+          "locator_positive_documents": 7,
+          "raw_examples": [],
+          "locator_examples": [
+            {
+              "path": "Documentation/io_ordering.txt",
+              "sha256": "cc8c52995ad35bf8d938a3bebc41e9a7adb2e8d915172bc8aebfaf7d7aab01f6",
+              "witness": null
+            },
+            {
+              "path": "Documentation/networking/8139too.txt",
+              "sha256": "10f2c7571e504ad50c42c266eb26d374192b6df887d58962ca94f62894b166cc",
+              "witness": null
+            },
+            {
+              "path": "Documentation/s390/cds.txt",
+              "sha256": "7890fe8d5795cc8ff179226a1d6ae0c97eddb1300e3332aba1b9e796fd4f4cc0",
+              "witness": null
+            }
+          ]
+        },
+        "all_eligible": {
+          "documents": 12133,
+          "raw_literal_documents": 0,
+          "raw_ascii_casefold_documents": 0,
+          "raw_literal_occurrences": 0,
+          "raw_ascii_casefold_occurrences": 0,
+          "locator_evaluated_utf8_documents": 12133,
+          "locator_positive_documents": 1300,
+          "raw_examples": [],
+          "locator_examples": [
+            {
+              "path": "net/core/link_watch.c",
+              "sha256": "69f474182f22f7c7c14ed3803399d6e290e46211cbc0adb14e790c1086330bbd",
+              "witness": null
+            },
+            {
+              "path": "net/core/utils.c",
+              "sha256": "efbebacad9d41645561c69580e88c3d0c1cdc82c600b38cc33a0ee1df478c672",
+              "witness": null
+            },
+            {
+              "path": "net/core/filter.c",
+              "sha256": "a9c3c5a434ff51afc959f9900b301f8c339076b4a9e61edb8e9016101383041d",
+              "witness": null
+            }
+          ]
+        },
+        "all_regular": {
+          "documents": 15007,
+          "raw_literal_documents": 0,
+          "raw_ascii_casefold_documents": 0,
+          "raw_literal_occurrences": 0,
+          "raw_ascii_casefold_occurrences": 0,
+          "locator_evaluated_utf8_documents": 14738,
+          "locator_positive_documents": 1508,
+          "raw_examples": [],
+          "locator_examples": [
+            {
+              "path": "net/core/link_watch.c",
+              "sha256": "69f474182f22f7c7c14ed3803399d6e290e46211cbc0adb14e790c1086330bbd",
+              "witness": null
+            },
+            {
+              "path": "net/core/utils.c",
+              "sha256": "efbebacad9d41645561c69580e88c3d0c1cdc82c600b38cc33a0ee1df478c672",
+              "witness": null
+            },
+            {
+              "path": "net/core/filter.c",
+              "sha256": "a9c3c5a434ff51afc959f9900b301f8c339076b4a9e61edb8e9016101383041d",
+              "witness": null
+            }
+          ]
+        }
+      }
+    },
+    {
+      "query": {
+        "text": "Mutex",
+        "strict": false,
+        "distance": "0",
+        "anchor": false,
+        "exact": false,
+        "label": "relax-case"
+      },
+      "locator_kind": "ASCII alphanumeric separator-stripped location; not a Unicode/engine oracle",
+      "scopes": {
+        "first300": {
+          "documents": 300,
+          "raw_literal_documents": 0,
+          "raw_ascii_casefold_documents": 0,
+          "raw_literal_occurrences": 0,
+          "raw_ascii_casefold_occurrences": 0,
+          "locator_evaluated_utf8_documents": 300,
+          "locator_positive_documents": 0,
+          "raw_examples": [],
+          "locator_examples": []
+        },
+        "all_eligible": {
+          "documents": 12133,
+          "raw_literal_documents": 15,
+          "raw_ascii_casefold_documents": 442,
+          "raw_literal_occurrences": 41,
+          "raw_ascii_casefold_occurrences": 2357,
+          "locator_evaluated_utf8_documents": 12133,
+          "locator_positive_documents": 442,
+          "raw_examples": [
+            {
+              "path": "net/core/flow.c",
+              "sha256": "68dd2eb07d5da26d35e9930dbeeebd8a17b71d30d95b1afc7cc71651e1b28911",
+              "first_ascii_casefold_byte_offset": 1867
+            },
+            {
+              "path": "net/core/netfilter.c",
+              "sha256": "bcffbe7efed14e1d94b670c83b3e6c91af69a141076dc1b6b68faabf3335c5ab",
+              "first_ascii_casefold_byte_offset": 1500
+            },
+            {
+              "path": "net/core/rtnetlink.c",
+              "sha256": "10946a2184dd21fd3adee2439047d1bdbc428c0cdeb3e5137427eb2e254a19a8",
+              "first_ascii_casefold_byte_offset": 1465
+            }
+          ],
+          "locator_examples": [
+            {
+              "path": "net/core/flow.c",
+              "sha256": "68dd2eb07d5da26d35e9930dbeeebd8a17b71d30d95b1afc7cc71651e1b28911",
+              "witness": "mutex"
+            },
+            {
+              "path": "net/core/netfilter.c",
+              "sha256": "bcffbe7efed14e1d94b670c83b3e6c91af69a141076dc1b6b68faabf3335c5ab",
+              "witness": "mutex"
+            },
+            {
+              "path": "net/core/rtnetlink.c",
+              "sha256": "10946a2184dd21fd3adee2439047d1bdbc428c0cdeb3e5137427eb2e254a19a8",
+              "witness": "mutex"
+            }
+          ]
+        },
+        "all_regular": {
+          "documents": 15007,
+          "raw_literal_documents": 16,
+          "raw_ascii_casefold_documents": 574,
+          "raw_literal_occurrences": 42,
+          "raw_ascii_casefold_occurrences": 3006,
+          "locator_evaluated_utf8_documents": 14738,
+          "locator_positive_documents": 553,
+          "raw_examples": [
+            {
+              "path": "net/core/flow.c",
+              "sha256": "68dd2eb07d5da26d35e9930dbeeebd8a17b71d30d95b1afc7cc71651e1b28911",
+              "first_ascii_casefold_byte_offset": 1867
+            },
+            {
+              "path": "net/core/netfilter.c",
+              "sha256": "bcffbe7efed14e1d94b670c83b3e6c91af69a141076dc1b6b68faabf3335c5ab",
+              "first_ascii_casefold_byte_offset": 1500
+            },
+            {
+              "path": "net/core/dev.c",
+              "sha256": "a277319effbddeacb3c6f7ca610e392816de0cdc42f5ff8320fd5906b3ed66aa",
+              "first_ascii_casefold_byte_offset": 68983
+            }
+          ],
+          "locator_examples": [
+            {
+              "path": "net/core/flow.c",
+              "sha256": "68dd2eb07d5da26d35e9930dbeeebd8a17b71d30d95b1afc7cc71651e1b28911",
+              "witness": "mutex"
+            },
+            {
+              "path": "net/core/netfilter.c",
+              "sha256": "bcffbe7efed14e1d94b670c83b3e6c91af69a141076dc1b6b68faabf3335c5ab",
+              "witness": "mutex"
+            },
+            {
+              "path": "net/core/dev.c",
+              "sha256": "a277319effbddeacb3c6f7ca610e392816de0cdc42f5ff8320fd5906b3ed66aa",
+              "witness": "mutex"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "duration": 6.5459654370788485,
+  "deadline": 1191494.627811384,
+  "read_only": true,
+  "cargo_or_test_invoked": false,
+  "qualified_as_engine_oracle": false,
+  "limitations": [
+    "Raw literal/ASCII counts are exact for pinned files.",
+    "Other locators provide candidate evidence, never a Lucivy semantic qualification.",
+    "Fuzzy locators are incomplete positive witnesses; zero cannot establish fuzzy absence.",
+    "No reselection, ordering change, index creation, corpus write, or fixture execution."
+  ]
+}
