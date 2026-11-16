@@ -1,6 +1,6 @@
 # Les commandes et options du terminal en anglais, avec alias
 
-- **État** : ouvert. Règle de Lucie du 16 nov. 2026 (« stop au code en français, ou aux /commandes en français ») ; rien n'est encore fait dans le terminal.
+- **État** : ouvert — alias implémentés, crate qualifié sur `0c4ab173d4` (vue113+1CLI, minimal22 ; zéro échec/ignoré), F8 et harnais NON JOUÉS. Pilote `b70a22933d` en HOLD de préparation, réserve de scan des ancêtres ; aucun runtime invalide observé.
 - **Famille** : produit
 - **Gravité** : forme. Les commandes et options françaises restent, mais toute nouveauté est en anglais, et l'existant prend un alias quand on y touche.
 - **Atteignable en service** : oui, à chaque lancement du terminal et à chaque `/commande`.
@@ -229,3 +229,18 @@ Budget corrigé proposé : **3600s total**, étapes timeout2400 F8 /300 build /
 900 harnais dans la même portée, aucun reset ni retry. Sans mesure antérieure
 F8 sur ce target léger, ce sont des bornes, pas une durée promise ; dépassement
 rouge conservé. Les 7200s antérieures sont retirées, aucun lancement effectué.
+
+
+### Réserve C7 avant correction du scan (c4ff33a7e5)
+
+Le pilote b70 importe `relocate_target.scan`, qui ignore tous les ancêtres du
+contrôleur sans lire exe/cwd/FD/starttime. Un FD de target ou de worktree dans
+un ancêtre serait invisible. HOLD GO lourd ; aucune nouvelle exécution et
+aucun résultat runtime invalide observé. Porteur tty, même ticket.
+Avant correction : publier un témoin discriminant de FD T/W dans un ancêtre,
+contrôleur légitime et réutilisation de PID. La frontière corrigée doit lire
+chaque processus, y compris contrôleur/ancêtres, ne permettre que les FD des
+scripts contrôleurs exacts avec PID/starttime/identité de fichier et programme,
+et bloquer tout autre lien attribué T/W. Le lancement sera depuis un cwd
+extérieur au worktree ; un cwd W du contrôleur n'est pas une exemption.
+Ne pas changer le pilote de relogement historique ni réinterpréter ses preuves.
