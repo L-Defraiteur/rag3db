@@ -65,3 +65,8 @@ comparaison : une ouverture retardée pourrait publier GREENaprèsEND.
 Correction : comparaison APRÈSopen et immédiatementavantdump, résultat RED
 si tardif ; témoin réel finalize/save avec ouverture artificiellement retardée
 prépublié puis rouge avantfix. Aucun budget/PQSv2 consommé, autrecode inchangé.
+
+Premier essai4c45976c38 nonqualifiant pour ce rouge : harnais finalize({},0)
+oublie la clépilot, donc retourne REDsurKeyError avantpublication. Aucunfix du
+pilote effectué ni vert de correction revendiqué. Corriger d'abord ce harnais
+et exiger le motif deadline, puis observer rouge réel avantfixsave.

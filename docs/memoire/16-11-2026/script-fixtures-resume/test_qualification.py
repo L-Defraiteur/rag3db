@@ -58,9 +58,9 @@ class Qualification(unittest.TestCase):
                 return stream
             observed=dict(found=[],unknown=[],owned_alive=[],owned_unknown=[])
             with patch.object(m,'P',p),patch.object(m,'S',s),patch.object(m,'guard'),patch.object(m,'scan',return_value=observed),patch.object(m.contract,'check_same_short'),patch.object(m.time,'monotonic',side_effect=lambda:clock[0]),patch.object(Path,'open',delayed_open):
-                rc=m.finalize({},0)
+                rc=m.finalize({'pilot':'fixture-pilot'},0)
             self.assertEqual(rc,1,'an open delayed past END must refuse GREEN')
-            self.assertEqual(json.loads(composed.read_text())['status'],'RED')
+            result=json.loads(composed.read_text());self.assertEqual(result['status'],'RED');self.assertIn('deadline',result['error'])
     def exercise_real_run(self,historical,active):
         with tempfile.TemporaryDirectory(prefix='cx-watcher-test-') as tmp:
             root=Path(tmp);proofs=root/'proofs';proofs.mkdir();cache=proofs/'cache/builtin';cache.mkdir(parents=True)
