@@ -1,6 +1,6 @@
 """Exercise the real launcher and armed worker with simulated process boundaries."""
 from pathlib import Path
-import os,tempfile,unittest
+import ast,os,tempfile,unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 import qualify_green as q
@@ -44,5 +44,21 @@ class Arm(unittest.TestCase):
             self.assertEqual(record['soft_end'],record['whole_start']+780)
             self.assertEqual(record['hard_end'],record['whole_start']+795)
             self.assertEqual(result,0)
+
+    def test_actual_cli_dispatch_has_no_q_access_before_watchdog(self):
+        tree=ast.parse(Path(q.__file__).read_text());entry=tree.body[-1]
+        self.assertIsInstance(entry,ast.If)
+        pilot='b'*40;control=Path(q.__file__).resolve().parents[4];events=[]
+        real_exists=Path.exists
+        def exists(path):
+            if path==q.Q/'launch.json':events.append('Q-before-watchdog');return False
+            return real_exists(path)
+        def process(args,**kwargs):events.append('watchdog');return SimpleNamespace(returncode=0)
+        namespace=dict(q.__dict__,__name__='__main__')
+        with patch.object(Path,'exists',exists),patch.object(q.subprocess,'run',side_effect=process),             patch.object(q.sys,'argv',[q.__file__,'--launch',pilot]),             patch.object(q.sys,'orig_argv',['python3',str(control/q.REL),'--launch',pilot]):
+            with self.assertRaises(SystemExit) as stopped:
+                exec(compile(ast.Module(body=[entry],type_ignores=[]),'actual-cli-dispatch','exec'),namespace)
+        self.assertEqual(stopped.exception.code,0)
+        self.assertEqual(events,['watchdog'],'the actual CLI must not inspect stale Q before the timeout')
 
 if __name__=='__main__':unittest.main(failfast=True)
