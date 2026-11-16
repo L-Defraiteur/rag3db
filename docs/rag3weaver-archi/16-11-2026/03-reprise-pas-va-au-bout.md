@@ -24,3 +24,9 @@ Depuis6b672afa6 jusqu'à927, seuls Cargo.toml/Cargo.lock changent le produit ent
 4. Vérifier les noms des témoins, absence de nouveaux skips et refus réels, hash source/ELF/lib, premier rouge STOP, journaux conservés. Rapporter prêt à C7. Le push de code master exige son nouveau « à toi », puis dernier fetch/entrants/garde et trois contrôles. D6 est coordonnée par C7 après lot équipier.
 
 Aucune lecture de clé Vertex : seul son chemin est transmis au moment autorisé. Aucun registre pair, PR42, pose d'hôte ni nettoyage. S1/S2 viennent ensuite ; backend.rs/chat.rs ne sont réservés qu'après accord de fichiers avec ED. Préparation actuelle terminée, attente FINI G et recette exacte, pas un verdict VERT de qualification.
+
+## Revue croisée ED sur e8b147277f
+
+Avis statique favorable sur candidat `e8b147277fcd4cc91c293d5ada08aec42d482ce7`, produit3ae1e741448b70e70e4d9ebbd43ceebf3a80da2a : continuation sans step_done, copie du texte seul origin host_copy, priorités question/approval/stopped_by et bornes MAX_STEPS40/MAX_STALLED3 conservées. Outils et budget StepTools inchangés.
+
+La frontière réinjecte la consigne courante entière, mais une nouvelle request remplace toujours l’ancienne (S3 ouvert) : aucune composition de demandes n’est prouvée par ce lot. S1 plafond et S2 retours d’outils restent séparés. Le faux modèle prouve continuation et copie, pas une écriture et son test réels ; D6 après livraison reste requis. Avis obtenu sans Cargo/service ; qualification sur59ac seulement après FINI G et pin neuf, aucun ancien vert transféré.
