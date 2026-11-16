@@ -67,3 +67,8 @@ ajoutePGidentity/postcheckSHAparmi6sources,Qcopies3PGprévues etchargement
 owner DIFFÉRÉAPRÈSpinsvalidés. Test7loaderfictifordre/refusavantloadnouveau,
 pasprétendu vu rouge ; aucunSQLlu/importé parfake. PGsourcesfinaltoujours
 attendues,aucuneQcopiepréparée/autorité/contact.
+
+Après PUSHd9b1f626b6ecaa7e21923cac399822eb712faaa8 :7fonctionsCPUVERTES
+0.023s/rc0 sous60failfast,manifestCPUv3joint. FixturesfichiersSQLfictives
+seulement(niimportSQL/GnioutilPG/natif/network). Touslogsrougesprécédents
+conservés,préparationfinaletoujoursHOLDsourceG/ownerstable/ROtotales.
