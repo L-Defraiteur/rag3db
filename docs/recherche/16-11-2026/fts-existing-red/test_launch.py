@@ -12,7 +12,7 @@ class Launch(unittest.TestCase):
    for key in ['RAG3WEAVER_VERROU_TENU','RAG3WEAVER_VALIDATION_RECU']:env.pop(key,None)
    subprocess.run(['bash',str(HERE/'launch.sh'),'/fixture/source','/fixture/proof','/fixture/control'],env=env,check=True,capture_output=True)
    row=json.loads(output.read_text())
-   self.assertEqual(row['argv'],['lourd','python3','-B','/fixture/control/confiner_validation.py','lancer','--delai','1200','--preuves','/fixture/proof-supervisor','--','python3','-B','/fixture/control/driver.py','/fixture/source','/fixture/proof'])
+   self.assertEqual(row['argv'],['lourd','python3','/fixture/control/confiner_validation.py','lancer','--delai','1200','--preuves','/fixture/proof-supervisor','--','python3','-B','/fixture/control/driver.py','/fixture/source','/fixture/proof'])
    self.assertEqual(row['env'],dict(POSTE_MEM_MAX='32G',POSTE_SWAP_MAX='0',POSTE_CPU_QUOTA='800%',CARGO_BUILD_JOBS='8',RAG3WEAVER_VERROU_TENU=None,RAG3WEAVER_VALIDATION_RECU=None))
  def test_real_attestation_refuses_each_missing_scope_guarantee(self):
   tree=ast.parse((HERE/'driver.py').read_text());node=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='attest_scope')
