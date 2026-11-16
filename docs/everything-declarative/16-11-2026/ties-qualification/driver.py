@@ -42,6 +42,11 @@ def first_red(reason):
     except FileExistsError:
         pass
 
+def library_environment():
+    # Independent of the deliberately private XDG cache.
+    return dict(RAG3DB_LIB=CONFIG['lib'], RAG3DB_LIBS_DIR=CONFIG['library_store'],
+                RAG3DB_BUFFER_POOL_SIZE='1073741824')
+
 def run(name, args, env):
     check()
     with (P / (name + '.log')).open('w') as output:
@@ -69,7 +74,10 @@ def run(name, args, env):
 def main():
     P.mkdir(parents=True, exist_ok=False)
     assert AUTH['etat'] == 'actif'
-    assert json.loads((RECEIPT.parent / 'recette.json').read_text())['delai'] == 7200
+    remaining = json.loads((Q / 'remaining-after-poste.json').read_text())
+    assert 60 < json.loads((RECEIPT.parent / 'recette.json').read_text())['delai'] == remaining['duration']
+    assert END <= CONFIG['original_end'] and remaining['original_end'] == CONFIG['original_end']
+    assert remaining['original_start'] == CONFIG['original_start']
     cg = Path('/proc/self/cgroup').read_text().strip().split('::', 1)[1]
     group = Path('/sys/fs/cgroup' + cg)
     assert (group / 'memory.max').read_text().strip() == '34359738368'
@@ -82,19 +90,23 @@ def main():
         (P / name).mkdir()
     env.update(CARGO_TARGET_DIR=str(T), CARGO_BUILD_JOBS='8', CARGO_INCREMENTAL='0',
                CARGO_TERM_COLOR='never', RUST_TEST_THREADS='8', RUST_BACKTRACE='1',
-               CIBLE=T.name, RAG3DB_LIB=CONFIG['lib'], RAG3DB_BUFFER_POOL_SIZE='1073741824', POSTE_MEM_MAX='32G',
+               CIBLE=T.name, POSTE_MEM_MAX='32G',
                RAG3WEAVER_BUILD_MEMORY_HIGH='0', RAG3WEAVER_TARGET_MAX_GO='32',
                RAG3WEAVER_PAQUETS_REACT=str(R / 'I-paquets-react'),
                RAG3WEAVER_EXIGER_NAVIGATEUR='1', TMPDIR=str(P / 'tmp'),
                XDG_CONFIG_HOME=str(P / 'config'), XDG_DATA_HOME=str(P / 'data'),
                XDG_CACHE_HOME=str(P / 'cache'), XDG_STATE_HOME=str(P / 'xdg-state'),
                RAG3WEAVER_STATE_DIR=str(P / 'state-fixture'))
+    env.update(library_environment())
     for suffix in ['', '_EMBEDDER', '_RERANKER', '_OCR']:
         env['RAG3WEAVER_BURN_DEVICE' + suffix] = 'cpu'
     (P / 'configuration.json').write_text(json.dumps(dict(CONFIG, cgroup=cg,
-        environment_keys=sorted(env), initial=END-7200, deadline=END, distinct_witnesses=NAMES), indent=2))
+        environment_keys=sorted(env), initial=CONFIG['original_start'], deadline=END,
+        selected_library_environment=library_environment(), distinct_witnesses=NAMES), indent=2))
     check()
-    assert not T.exists() and not T.is_symlink(), 'refuse unrelated/reused target'
+    assert T.is_dir() and T.resolve() == T, 'only the known same-owner v1 target'
+    assert (T / '.arbre-du-target').read_text().strip() == str(C)
+    assert not any(T.rglob('.fingerprint'))
     run('target-guard', ['bash', '-c', '. "$1"; garder_le_target "$2" "$3"',
         'initial-empty-target', str(C / 'scripts/garde_target.sh'), str(T), str(C)], env)
     assert (T / '.arbre-du-target').read_text().strip() == str(C)
@@ -114,7 +126,7 @@ def main():
         assert digest(R.parent / 'rag3db-libs' / CONFIG['lib'] / name) == sha
     check()
     verdict = dict(verdict='VERT', source=CONFIG['app'], deadline=END,
-                   elapsed=time.monotonic() - (END-7200), distinct_witnesses=2,
+                   elapsed=time.monotonic() - CONFIG['original_start'], distinct_witnesses=2,
                    targeted_invocations_before_full_lib=3, official_summary=str(summary))
     (P / 'driver-verdict.json').write_text(json.dumps(verdict, indent=2))
 
