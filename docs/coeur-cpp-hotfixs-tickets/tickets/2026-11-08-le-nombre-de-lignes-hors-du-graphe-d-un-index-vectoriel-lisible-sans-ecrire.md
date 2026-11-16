@@ -132,3 +132,14 @@ atteints. Fin219,838s/quiescent/PIDs[], collecteur0 mais résuméTOUJOURSROUGE.
 Prépa correctif autorisée seulement : proposer chemins/capacitélecture commune,
 invariants snapshot/holder/graphe, NULL/coût et casqueuepositive/NULL/transactions
 à C7 AVANT édition de production. Aucun nouveau run/SDK/service ni FIX produit.
+
+Proposition de contrat publiée après rouge acquis :
+[capacité d'appartenance au snapshot, chemins proposés, coûts et témoins](../16-11-2026/10-rows-outside-graph-read-capability-proposal.md).
+Lecture figée source71f/moteur59 : capture lifetime existante insuffisante pour
+cohérence des racines ; LockManager sans garde temporaire/release isolée ; aucune
+source exhaustive de membership MVCC établie. Prochaine action hotfixs/cœur :
+relire une éventuelle marque de présence versionnée dans le stockage relationnel,
+sinon proposer explicitement le périmètre persistant avant tout correctif.
+Chemins proposés seulement, pas réservés ; budget par appel/unknownNULL,
+positif>0/NULL/transactions et contre-exemples détaillés. Quatre fixtures intactes,
+aucun code produit, build/rejeu/SDK/service ni qualification supplémentaire.
