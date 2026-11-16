@@ -3,7 +3,7 @@
 import argparse,hashlib,importlib.util,json,os,re,shutil,signal,stat,subprocess,sys,time
 from pathlib import Path
 R=Path.home()/'.cache/rag3weaver-build'
-Q=R/'cx-control-recherche-fts-double-v1';P=R/'cx-proofs-recherche-fts-double-v1';S=R/'cx-scope-recherche-fts-double-v1'
+Q=R/'cx-control-recherche-fts-double-v2';P=R/'cx-proofs-recherche-fts-double-v1';S=R/'cx-scope-recherche-fts-double-v1'
 T=R/'cx-target-recherche-fts-counts-freshness'
 APP='3ee1e117cc0c9ff7e9de1f08263c26cb4e907c79'
 OLD=Path.home()/'git_workspaces/rag3db-cx-recherche-fts-existing-union-r1'
@@ -78,6 +78,12 @@ def owned_quiet(scope):
   except OSError as error:unknown.append(dict(pid=row['pid'],error=repr(error)))
  return dict(checked=len(rows),alive=alive,unknown=unknown)
 
+def collect_process_paths(proc,observe):
+ for role in ['exe','cwd']:observe(role,os.readlink(proc/role))
+ for fd in (proc/'fd').iterdir():
+  try:path=os.readlink(fd)
+  except (FileNotFoundError,ProcessLookupError):continue
+  observe('fd',path)
 def cache_quiet(cfg):
  roots=[Path(cfg['source_root']),OLD,T];found=[];unknown=[];ancestors=set();pid=os.getpid()
  while pid>1 and pid not in ancestors:
@@ -88,10 +94,13 @@ def cache_quiet(cfg):
   try:
    fields=(proc/'stat').read_text().rsplit(') ',1)[1].split();start=fields[19]
    if fields[0]=='Z':continue
-   targets=[('exe',os.readlink(proc/'exe')),('cwd',os.readlink(proc/'cwd'))]
-   for fd in (proc/'fd').iterdir():
-    try:targets.append(('fd',os.readlink(fd)))
-    except (FileNotFoundError,ProcessLookupError):continue
+   def observe(role,path):
+    nonlocal attributed
+    if path==str(Q/'poste') and int(proc.name) in ancestors and proc.stat().st_uid==os.getuid():return
+    if any(path==str(root) or path.startswith(str(root)+'/') for root in roots):
+     attributed=True;found.append(dict(pid=proc.name,start=start,role=role,path=path))
+   collect_process_paths(proc,observe)
+  except (FileNotFoundError,ProcessLookupError):continue
    for role,path in targets:
     if path==str(Q/'poste') and int(proc.name) in ancestors and proc.stat().st_uid==os.getuid():continue
     if any(path==str(root) or path.startswith(str(root)+'/') for root in roots):attributed=True;found.append(dict(pid=proc.name,start=start,role=role,path=path))
@@ -202,7 +211,7 @@ def launch(args):
  contract=cache_contract()
  Q.mkdir(mode=0o700,exist_ok=True);assert Q.resolve()==Q and Q.stat().st_uid==os.getuid()
  copies={};folder=Path(__file__).parent
- for name,src in [(n,folder/n) for n in ['qualify.py','main-profile.py']]+[(n,source/'extension/rag3weaver/scripts'/n) for n in ['confiner_validation.py','poste','garde_target.sh']]:
+ for name,src in [(n,folder/n) for n in ['qualify.py','main-profile.py','sdk_contract.py']]+[(n,source/'extension/rag3weaver/scripts'/n) for n in ['confiner_validation.py','poste','garde_target.sh']]:
   dest=Q/name
   if dest.exists():assert not dest.is_symlink() and sha(dest)==sha(src)
   else:shutil.copy2(src,dest)
