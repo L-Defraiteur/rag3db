@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Immutable lifecycle READY; observation precedes atomic publication",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "clock",
+    "ready_observed_monotonic",
+    "grant_deadline_monotonic",
+    "deadline",
+    "phase",
+    "nonce",
+    "no_embedding_calls_authorized",
+    "expected_embedding_calculations",
+    "health_required",
+    "max_chars",
+    "manifest_sha256",
+    "graph_sha256",
+    "fixture_vector_digest_sha256"
+  ],
+  "properties": {
+    "clock": {
+      "const": "CLOCK_MONOTONIC@luciepc"
+    },
+    "ready_observed_monotonic": {
+      "type": "number",
+      "minimum": 0
+    },
+    "grant_deadline_monotonic": {
+      "type": "number",
+      "minimum": 0
+    },
+    "deadline": {
+      "type": "number",
+      "minimum": 0
+    },
+    "phase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "job",
+        "pilot",
+        "allocation",
+        "authority",
+        "first_red_path"
+      ],
+      "properties": {
+        "job": {
+          "const": "lifecycle-provider"
+        },
+        "pilot": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{40}$"
+        },
+        "allocation": {
+          "type": "string",
+          "minLength": 1
+        },
+        "authority": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "pid",
+            "start",
+            "cgroup",
+            "uid",
+            "script_sha256"
+          ],
+          "properties": {
+            "path": {
+              "type": "string",
+              "pattern": "^/"
+            },
+            "pid": {
+              "type": "integer",
+              "minimum": 2
+            },
+            "start": {
+              "type": "string",
+              "pattern": "^[0-9]+$"
+            },
+            "cgroup": {
+              "type": "string",
+              "pattern": "^/"
+            },
+            "uid": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "script_sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          }
+        },
+        "first_red_path": {
+          "type": "string",
+          "pattern": "^/"
+        }
+      }
+    },
+    "nonce": {
+      "type": "string",
+      "minLength": 1
+    },
+    "no_embedding_calls_authorized": {
+      "const": true
+    },
+    "expected_embedding_calculations": {
+      "const": 0
+    },
+    "health_required": {
+      "const": true
+    },
+    "max_chars": {
+      "const": 0
+    },
+    "manifest_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "graph_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "fixture_vector_digest_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  }
+}

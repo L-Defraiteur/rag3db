@@ -5,14 +5,19 @@ import argparse,hashlib,json,os,shutil,signal,subprocess,sys,time,uuid
 import finish_result as f
 import lifecycle_protocol as protocol
 a=f.a;q=a.q;R=a.R
-P=R/'lifecycle-copy-v1';Q=R/'lifecycle-control-v1';S=R/'lifecycle-scopes-v1'
+P=R/'lifecycle-copy-v2';Q=R/'lifecycle-control-v2';S=R/'lifecycle-scopes-v2'
 FIN=R/'debt-fin-ro-result-v1';SOURCE=FIN/'copy';BASE=P/'copy/code-principal.rag3db'
 FIN_MANIFEST=R/'debt-fin-ro-proofs-01/proof-manifest.json'
 FIN_MANIFEST_SHA='05661b1fddc82c1e66d21f218d0c8cdfd12b69d8ef16432a2c55c3b127a9462a'
 FIN_REFS=['copy-after.json','fts-observed.json','vectors-observed.json','sources-after.json','composed.json']
-a.FILES=dict(a.FILES,**{n:a.PREFIX+n for n in ['lifecycle.py','lifecycle_protocol.py','lifecycle.json','lifecycle.mmd','lifecycle-provider-go.schema.json']})
+a.FILES=dict(a.FILES,**{n:a.PREFIX+n for n in ['lifecycle.py','lifecycle_protocol.py','lifecycle.json','lifecycle.mmd','lifecycle-provider-go.schema.json','lifecycle-ready.schema.json']})
 f.Q=Q;f.carried.Q=Q;a.Q=Q;a.P=P;a.S=S;a.BASE=BASE;q.Q=Q
 def save(name,value):q.save(P/name,value)
+def publish_ready(ready):
+ # The observation is sampled before this write; no fsync-completion time claimed.
+ pending=P/'READY_FOR_PROVIDER_COORDINATION.pending.json';public=P/'READY_FOR_PROVIDER_COORDINATION.json'
+ q.save(pending,ready);q.require_time(ready['grant_deadline_monotonic'],0)
+ os.link(pending,public) # Exclusive publication of a complete, fsynced immutable file.
 def guard(cfg):
  f.guard(cfg)
  if q.sha(FIN_MANIFEST)!=FIN_MANIFEST_SHA or set(cfg['fin_refs'])!=set(FIN_REFS):raise ValueError('FIN evidence reference set differs')
@@ -127,19 +132,23 @@ def driver():
  expected=json.loads((FIN/'vectors-observed.json').read_text())
  if vectors_before['count']!=expected['total_vectors_checked'] or expected['debt']!=0:raise ValueError('fixture vector count differs')
  before_writer=fs.file_inventory(BASE.parent);a.stable_readers(initial['fin_files'],before_writer);save('copy-before-writer-quiet.json',q.copy_quiet());nonce=uuid.uuid4().hex
- ready=dict(nonce=nonce,deadline=end,no_embedding_calls_authorized=True,expected_embedding_calculations=0,health_required=True,max_chars=0,manifest_sha256=q.sha(Q/'lifecycle.json'),graph_sha256=q.sha(Q/'lifecycle.mmd'),fixture_vector_digest_sha256=q.sha(P/'vectors-bits-before.json'))
- save('READY_FOR_PROVIDER_COORDINATION.json',ready);pause=min(end-500,time.monotonic()+60)
+ phase_identity=dict(job='lifecycle-provider',pilot=cfg['pilot'],allocation=json.loads((Q/'allocation.json').read_text())['reference'],authority=dict(path=os.environ['RAG3WEAVER_VALIDATION_RECU'],pid=authority['pid'],start=authority['debut'],cgroup=authority['cgroup'],uid=os.getuid(),script_sha256=authority['script_sha256']),first_red_path=str(P/'first-red.json'))
+ ready=dict(nonce=nonce,deadline=end,phase=phase_identity,no_embedding_calls_authorized=True,expected_embedding_calculations=0,health_required=True,max_chars=0,manifest_sha256=q.sha(Q/'lifecycle.json'),graph_sha256=q.sha(Q/'lifecycle.mmd'),fixture_vector_digest_sha256=q.sha(P/'vectors-bits-before.json'),**protocol.ready_bounds(time.monotonic(),end))
+ publish_ready(ready)
  while not (Q/'PROVIDER_GO.json').exists():
-  if time.monotonic()>=pause:raise ValueError('fresh lifecycle provider coordination absent or post-RO reserve too short')
+  if time.monotonic()>=ready['grant_deadline_monotonic']:raise ValueError('fresh lifecycle provider coordination deadline expired')
   time.sleep(.2)
  path=Q/'PROVIDER_GO.json';info=path.lstat()
  import stat
  if path.is_symlink() or not stat.S_ISREG(info.st_mode) or info.st_uid!=os.getuid():raise ValueError('invalid provider coordination file')
- grant=json.loads(path.read_text());q.validate_grant(grant,time.monotonic(),0)
- if grant.get('ready_sha256')!=q.sha(P/'READY_FOR_PROVIDER_COORDINATION.json') or grant.get('no_embedding_calls_authorized') is not True or grant.get('nonce')!=nonce:raise ValueError('provider grant not bound to lifecycle/no-calculation phase')
- save('provider-coordination.json',grant);q.health(grant,'provider-before',min(end,grant['valid_until_monotonic']))
+ grant=protocol.decode(path.read_bytes());q.validate_grant(grant,time.monotonic(),0)
+ ready_sha256=q.sha(P/'READY_FOR_PROVIDER_COORDINATION.json');phase_state=protocol.read_phase_state(ready)
+ protocol.validate_grant_phase(ready,grant,time.monotonic(),phase_state,ready_sha256)
+ save('provider-coordination.json',grant)
+ phase_state=protocol.read_phase_state(ready);protocol.validate_grant_phase(ready,grant,time.monotonic(),phase_state,ready_sha256)
+ q.health(grant,'provider-before',min(end,grant['valid_until_monotonic'],ready['grant_deadline_monotonic']))
  if sources(fs)!=initial or fs.file_inventory(BASE.parent)!=before_writer:raise ValueError('sources or fixture changed before writer')
- guard(cfg);save('copy-just-before-writer-quiet.json',q.copy_quiet());save('source-just-before-writer-quiet.json',quiet_source());q.require_time(end,500);writer(cfg,env,profile,grant,end,nonce);q.health(grant,'provider-after',min(end,grant['valid_until_monotonic']))
+ guard(cfg);save('copy-just-before-writer-quiet.json',q.copy_quiet());save('source-just-before-writer-quiet.json',quiet_source());phase_state=protocol.read_phase_state(ready);protocol.validate_phase_authority(ready,time.monotonic(),phase_state);q.require_time(end,500);writer(cfg,env,profile,grant,end,nonce);q.health(grant,'provider-after',min(end,grant['valid_until_monotonic']))
  # No open in recovery mode. Refuse a new/residual WAL before any cold read.
  after_writer=fs.file_inventory(BASE.parent);save('copy-after-shutdown.json',after_writer);save('copy-directories-after-shutdown.json',q.directories(BASE.parent));previous={x['path']:x for x in before_writer}
  if q.directories(BASE.parent)!=initial['fin_dirs']:raise ValueError('fixture directories changed after shutdown')

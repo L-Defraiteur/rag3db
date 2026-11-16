@@ -16,18 +16,21 @@ def driver_body():
 
 class ReadyConsumption(unittest.TestCase):
  def test_actual_ready_publication_contains_observation_and_absolute_bound(self):
-  body=driver_body();assignment=next(n for n in body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='ready' for t in n.targets));publication=next(n for n in body if isinstance(n,ast.Expr) and isinstance(n.value,ast.Call) and ast.unparse(n.value.func)=='save' and n.value.args and isinstance(n.value.args[0],ast.Constant) and n.value.args[0].value=='READY_FOR_PROVIDER_COORDINATION.json')
+  body=driver_body();assignment=next(n for n in body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='ready' for t in n.targets));publication=next(n for n in body if isinstance(n,ast.Expr) and isinstance(n.value,ast.Call) and ast.unparse(n.value.func)=='publish_ready')
   ready,_=fixture();published=[]
   with tempfile.TemporaryDirectory() as d:
    root=Path(d);p=root/'P';p.mkdir();q=root/'Q';q.mkdir()
    for name in ['lifecycle.json','lifecycle.mmd']:(q/name).write_text('{}')
    (p/'vectors-bits-before.json').write_text('{}')
-   namespace=dict(vars(c),P=p,Q=q,nonce=ready['nonce'],end=600.,phase_identity=ready['phase'],save=lambda name,value:published.append(value))
-   with patch.object(c.time,'monotonic',return_value=40.):exec(compile(ast.Module(body=[assignment,publication],type_ignores=[]),'<actual-ready-publication>','exec'),namespace)
+   namespace=dict(vars(c),P=p,Q=q,nonce=ready['nonce'],end=600.,phase_identity=ready['phase'])
+   with patch.object(c,'P',p),patch.object(c.time,'monotonic',return_value=40.):exec(compile(ast.Module(body=[assignment,publication],type_ignores=[]),'<actual-ready-publication>','exec'),namespace)
+   published.append(json.loads((p/'READY_FOR_PROVIDER_COORDINATION.json').read_text()))
   self.assertEqual(published[0]['ready_observed_monotonic'],40.);self.assertEqual(published[0]['grant_deadline_monotonic'],100.)
- def consume(self,now):
+ def consume(self,now,terminated=False,refused=False):
   body=driver_body();start=next(i for i,n in enumerate(body) if isinstance(n,ast.While) and 'PROVIDER_GO.json' in ast.unparse(n.test));stop=next(i for i in range(start,len(body)) if isinstance(body[i],ast.Expr) and isinstance(body[i].value,ast.Call) and ast.unparse(body[i].value.func)=='q.health')
   ready,phase=fixture()
+  if terminated:phase['authority']['etat']='termine'
+  if refused:phase['first_red_exists']=True
   with tempfile.TemporaryDirectory() as d:
    root=Path(d);p=root/'P';p.mkdir();q=root/'Q';q.mkdir();(p/'READY_FOR_PROVIDER_COORDINATION.json').write_text(json.dumps(ready))
    grant=dict(nonce=ready['nonce'],ready_sha256=c.q.sha(p/'READY_FOR_PROVIDER_COORDINATION.json'),no_embedding_calls_authorized=True,observed_monotonic=now,valid_until_monotonic=590.)
@@ -39,5 +42,21 @@ class ReadyConsumption(unittest.TestCase):
   with self.assertRaisesRegex(ValueError,'deadline'):self.consume(100.1)
  def test_timely_present_grant_can_reach_first_action(self):
   with self.assertRaises(WouldContactProvider):self.consume(99.)
+ def test_terminated_authority_or_first_red_forbids_first_action(self):
+  for options in [dict(terminated=True),dict(refused=True)]:
+   with self.subTest(options=options),self.assertRaises(ValueError):self.consume(99.,**options)
+ def test_atomic_ready_never_replaces_or_publishes_after_delayed_write(self):
+  ready,_=fixture()
+  with tempfile.TemporaryDirectory() as d:
+   root=Path(d)
+   with patch.object(c,'P',root),patch.object(c.time,'monotonic',return_value=40.):c.publish_ready(ready)
+   public=root/'READY_FOR_PROVIDER_COORDINATION.json';original=public.read_bytes()
+   self.assertEqual(public.stat().st_ino,(root/'READY_FOR_PROVIDER_COORDINATION.pending.json').stat().st_ino)
+   with patch.object(c,'P',root),self.assertRaises(FileExistsError):c.publish_ready(dict(ready,nonce='foreign'))
+   self.assertEqual(public.read_bytes(),original)
+  with tempfile.TemporaryDirectory() as d:
+   root=Path(d)
+   with patch.object(c,'P',root),patch.object(c.time,'monotonic',return_value=100.1),self.assertRaises(ValueError):c.publish_ready(ready)
+   self.assertFalse((root/'READY_FOR_PROVIDER_COORDINATION.json').exists());self.assertTrue((root/'READY_FOR_PROVIDER_COORDINATION.pending.json').exists())
 
 if __name__=='__main__':unittest.main(failfast=True)
