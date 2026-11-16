@@ -69,3 +69,7 @@ Le correctif des deux fixtures passe par `/bin/sh -c` avec chemin et corps en
 arguments séparés ; printf/chmod s'exécutent dans l'enfant seulement. Attente
 bornée à5s ; aucun réessai et aucun changement du pont de production.
 Un témoin Rust de chemin/corps littéraux est ajouté, NON JOUÉ avant FINI G.
+
+Vert système sur40e7 : 3/3 en0,007s, commande du helper extraite du source.
+[Rapport du lot](../16-11-2026/02-script-fixtures.md). Qualification Rust toujours
+NON JOUÉE ; conservation du premier rouge et des limites de cette preuve.
