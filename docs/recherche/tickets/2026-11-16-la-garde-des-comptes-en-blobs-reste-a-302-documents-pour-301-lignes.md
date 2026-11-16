@@ -64,3 +64,7 @@ Hotfixs : (1) main-profile ne vérifie avantcontinue que basename/librag3db.so, 
 ## DOUBLE premier refus du harnais — avant tout nouveau diff
 
 Pilote4d526/APP3ee uneinvocationGO C7 : buildrc0/ledgerELF268229be/invent2ignored0 ; CLASSICréelrc0/1passed0failed0ignored/tracecounts1-rebuild1/FTS[0,9000000]→[0] et UUID-H-positions conservés. Harnais ligne167 refuse nom+ok interrompu par événementsGDBthreads : premierrouge1189092.891744, GEN NONJOUÉ. Aucunretry ; nouveauGOdistinct nécessaire. Rapport19/manifeste62files2postes1a2e39e4...19324 ; scopeROUGE1TERMINE/restes[]/quiet127owned/postedéjàrendu. Défautcontrôleur connu NONCORRIGÉ àcecommit, ne qualifie pas DOUBLE ni branchegénérations/historique. État OUVERT.
+
+## Continuation GEN seule proposée par C7 — avant nouveau code
+
+Après69a280, classique acquis BRUT sans requalification scopeROUGE. Ne rejouer NIclassic NIcompilation NIgdb pour le défautregex. ClassificateurCPU strict sur vraislogs+command--exact/invent2dontnomunique/summary1-0-0/rc/tracesréelles, sans nettoyage des lignesFAILED/panic. NouveaupiloteGENdirectseul mêmesELF268229...147c/SDK59/ledger, targetowner3ee inchangé/SOURCES3ee+ancien4d figées ; reçuNEUF aprèsposte MINENDoriginal1190161.616250876, borneouteroriginale conservée, aucunreset. Nouvellepublication/RO/GOdistinct ; refus ou échéance→STOPconserver sansretry.
