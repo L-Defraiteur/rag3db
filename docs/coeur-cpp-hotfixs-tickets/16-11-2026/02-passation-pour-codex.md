@@ -44,7 +44,7 @@ atterri, est dans [01-rapport-de-la-nuit.md](01-rapport-de-la-nuit.md).
 ## 2. Le travail pour Codex, dans l'ordre
 
 **État final de la session hotfixs (16 novembre 2026, 10 h 5x, à l'arrêt demandé par Lucie)** : aucune entrée n'est
-en cours. Les quatorze entrées ci-dessous sont toutes **à faire**, aucune n'est commencée. Toutes les branches de la
+en cours. Les quatorze entrées étaient toutes à faire à cet arrêt ; la réconciliation du 16 novembre ci-dessous ferme l’entrée1 sans nouveau test. Les autres restent à faire. Toutes les branches de la
 nuit sont sur master, aucune n'est en branche seule. Aucune passe ni unité ne tourne à luciepc. Les worktrees
 `rag3db-extension-dite` et `rag3db-hotfixs-shell` de luciepc sont propres (statut vide) et peuvent servir de modèle,
 mais Codex prend les siens (`cx-…`).
@@ -92,18 +92,14 @@ Une passe longue tourne de préférence dans une unité :
 `if tail -1 $J/resume.log | grep -qx VERT; then ./poste push <session> -- bash ~/.cache/rag3weaver-build/push_garde.sh cx-<nom> <nom-du-dossier>; fi`,
 puis les trois contrôles : statut vide, aucun rebase en cours, et `FETCH_HEAD` égal à `HEAD`.
 
-### 1. Vérifier qu'un ADD COLUMN attend l'écrivain ouvert, et fermer (2 h)
+### 1. ADD COLUMN : déjà corrigé, ticket réconcilié le 16 novembre
 
-- **Ticket** : [docs/coeur-cpp-hotfixs-tickets/tickets/2026-11-14-un-add-column-passe-sous-une-transaction-d-ecriture-ouverte.md](../tickets/2026-11-14-un-add-column-passe-sous-une-transaction-d-ecriture-ouverte.md).
-- **À faire** : le verrou de schéma par table du cœur (681b35b38, `src/processor/operator/ddl/alter.cpp`,
-  `lock_manager.h`) fait attendre un ALTER derrière les écrivains ouverts sur sa table. Reprendre le cas du ticket
-  (connexion A dans `BEGIN` qui écrit, connexion B qui fait `ALTER TABLE … ADD`) en test gtest, dans
-  `test/transaction/` : l'ADD doit attendre le COMMIT de A, puis aboutir. Le test s'appelle par exemple
-  `SchemaLock.AnAddColumnWaitsForTheOpenWriter`.
-- **Preuve** : si le test est vert sur master, c'est un témoin, et le ticket se ferme avec lui. S'il est rouge, le
-  verrou ne couvre pas ce cas : l'écrire au ticket et le donner au cœur, sans corriger.
-- **Ne pas toucher** : le verrou lui-même, qui est au cœur.
-- **Bloqué par** : rien.
+- **Fait** : [ticket fermé](../../tickets/closed/2026-11-14-un-add-column-passe-sous-une-transaction-d-ecriture-ouverte.md), correctif master101ff50a6.
+- `AlterWaitsForWriters.AnAddWaitsForTheOpenWriter` existe déjà sur master,
+  avec DROP et relecture après checkpoint/réouverture ; aucun test doublon à créer.
+- Rouge historique d8b60cc38, vert ciblé au sein du journal transaction b7251cb77 ;
+  chemins concernés identiques à101ff50a6. [Preuves relues](preuves/add-column/lecture-historique.json).
+- Fermeture documentaire uniquement : aucune nouvelle passe, aucun mécanisme de verrou modifié.
 
 ### 2. Le CREATE_VECTOR_INDEX concurrent lit une ligne au-delà de la colonne en cache (8 à 10 h)
 
