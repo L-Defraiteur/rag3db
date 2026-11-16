@@ -36,9 +36,15 @@ session+runtime ≤32Gio surveillé, aucune suppression pour faire place.
 
 ## Borne et ordre exact proposés
 
-**1800 NEUFS après vrai poste**, extérieur `timeout --signal=TERM
---kill-after=15s 1920s poste lourd …` couvre aussi attente et composition.
-Le pilote admet une autorité commune1800 seulement. Mem32GiB/HIGHmax et
+**1920s de plafond global dur**, attente du poste incluse : extérieur
+`timeout --signal=TERM --kill-after=2s 1918s poste lourd …`. Début logiciel
+enregistré juste AVANTPopen, ENDsoft=début+1918/ENDhard=début+1920 ; la
+publication attendue doit précéder ENDsoft, la grâce2s sert à l'arrêt.
+Le pilote admet une autorité commune1800 MAXIMUM après vrai poste, mais
+chaque phase prend MIN(ENDcommon,ENDsoft) et sa marge15. **1800utilisables
+ne sont pas garantis** : attente, copies et autres coûts consomment le solde.
+Après fermeture commune dans sa borne, finalisation≤120 ET≤soldeENDsoft,
+sans nouveau budget global. Ce n'est pas un composé1800. Mem32GiB/HIGHmax et
 quota CPU par place ≤8, Cargo/Rayon=min8/POSTE_FILS, Rusttests1. Budget
 nouveau, aucune constante END ancienne réactivée. Identités des trois vrais
 contrôleurs issues du constructeur partagé, chaîne bornée au lanceur figé
@@ -65,7 +71,7 @@ avant Popen, aucune exemption globale d'ancêtres/T/UNKNOWN attribué.
    ownedgone+scan frais+hashes+END, puis contrôle APRÈSopen/avantdump.
 
 Somme des caps explicites avant finale1530, temps de copies/hash/setup/coût
-froid inconnu, tous intersectés à la même échéance. Pas de promesse de finir.
+froid inconnu, tous intersectés à ENDcommon ET ENDsoft. Pas de promesse de finir.
 Une borne dépassée ou un autre refus reste UNEXPECTED_FAILURE/extérieur1.
 
 ## Ce qui compte comme rouge attendu
@@ -133,3 +139,10 @@ Correction suivante doit conserver ce rouge et aligner constructeur/politique
 et réserve finale sous1920WHOLE, sans resetcommon1800. Aucun PID/proc/DB/
 natif consulté par ces simulations ; les processus de test Python restent
 des simulations, jamais une portée ni une qualification native.
+
+Arbitrages C7 croisés clarifiés : alternative1935 sans correctif retirée,
+**choix FINAL1920dur confirmé**, correctif1918+kill2 demandé après ce vrai
+rouge. Mêmebranche/aucunframework nouveau. ENDglobal enregistré avant
+Popen, MINcommon/soft explicite dans driver, final≤120/MINsolde et contrôle
+aprèsopen cohérents. Microfix et sixCPU mis à jour publiés AVANT l'unique
+rejeu hermétique renouvelé ; si autre écart, STOP sans enchaîner de retries.

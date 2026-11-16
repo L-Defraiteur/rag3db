@@ -14,6 +14,9 @@ F=R/'bcr1'
 OLD_W=Path.home()/'git_workspaces/rag3db-cx-archi-pas-va-au-bout-r2'
 REL='docs/rag3weaver-archi/16-11-2026/doc-bac-red/qualify_red.py'
 BUDGET=1800
+WHOLE=1920
+TERM=1918
+FINAL=120
 FILES=['qualify_red.py','contracts.py','controller_policy.py','cache_state.py','source_proof.py','prepare_git.py']
 LIB='rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF'
 SDK={'librag3db.so':'b7e9fc75a3d2de04c72680b0309e8bb1df9eaadb5211ebbacf39716c6d0a2101',
@@ -60,6 +63,15 @@ def guard(config):
 def launch_policy(config):
     launch=json.loads((Q/'launch.json').read_text())
     return controller.policy(Path(config['control']),config['pilot'],launch['identity'])
+
+def phase_end(common_end,launch):
+    assert launch['soft_end']==launch['whole_start']+TERM
+    assert launch['hard_end']==launch['whole_start']+WHOLE
+    return min(common_end,launch['soft_end'])
+
+def final_end(common_end,launch,started):
+    assert started<=common_end and started<phase_end(common_end,launch),'common exceeded its cap or outer expired'
+    return min(started+FINAL,launch['soft_end'])
 
 def fresh(config,old_cgroup,owned_cgroup=None):
     result=controller.scan(launch_policy(config),[T,W,Path(config['control']),source.ARCHIVE],
@@ -144,13 +156,16 @@ def check_ledger(ledger):
 def driver():
     config=cfg();guard(config)
     subprocess.run([sys.executable,str(Q/'confiner_validation.py'),'verifier'],check=True)
-    receipt=Path(os.environ['RAG3WEAVER_VALIDATION_RECU']);auth=json.loads(receipt.read_text());end=auth['echeance']
+    receipt=Path(os.environ['RAG3WEAVER_VALIDATION_RECU']);auth=json.loads(receipt.read_text())
+    launch_record=json.loads((Q/'launch.json').read_text());end=phase_end(auth['echeance'],launch_record)
     assert auth['etat']=='actif' and json.loads((receipt.parent/'recette.json').read_text())['delai']==BUDGET
     cg=(Path('/proc/self/cgroup').read_text().strip().split('::',1)[1]);assert cg==auth['cgroup']
     limits={k:(Path('/sys/fs/cgroup'+cg)/k).read_text().strip() for k in ['memory.max','memory.high','cpu.max']}
     assert limits['memory.max']=='34359738368' and limits['memory.high']=='max'
     quota,period=limits['cpu.max'].split();assert quota!='max' and 0<int(quota)<=8*int(period)
-    save('authority-path.json',dict(path=str(receipt),initial=end-BUDGET,deadline=end,limits=limits))
+    save('authority-path.json',dict(path=str(receipt),initial=auth['echeance']-BUDGET,
+         common_deadline=auth['echeance'],deadline=end,whole_start=launch_record['whole_start'],
+         soft_end=launch_record['soft_end'],hard_end=launch_record['hard_end'],limits=limits))
     scan=fresh(config,config['old_green']['old_cgroup'],owned_cgroup=cg);save('cache-after-poste-scan.json',scan)
     proof.owned_gone(config['old_green']['authority_path'])
     assert proof.archived_green()==config['old_green']
@@ -203,6 +218,7 @@ def driver():
     assert publication['elf_sha256']==hashes and publication['copies']==dict(pc=hashes,local=hashes)
     assert ledger['created']<=publication['observed']<=time.monotonic()<pause_end
     guard(config);check_ledger(ledger)
+    assert time.monotonic()<end,'effective driver deadline before runtime marker'
     save('runtime-permitted.json',dict(observed=time.monotonic(),ledger_sha256=sha(P/'ledger-before-witnesses.json')))
     observations=[]
     for label in ['lib','e2e']:
@@ -219,9 +235,10 @@ def driver():
         try:save('first-red.json',dict(expected=True,observation=result))
         except FileExistsError:pass
     guard(config);check_ledger(ledger)
+    sizes=storage();assert time.monotonic()<end,'effective driver deadline after final hashes'
     save('driver-result.json',dict(status='EXPECTED_SETUP_REDS_OBSERVED',source=APP,pilot=config['pilot'],
          deadline=end,observations=observations,distinct_judges=2,raw_test_invocations=4,
-         production_fixed=False,not_a_full_qualification=True,finished=time.monotonic(),storage=storage()))
+         production_fixed=False,not_a_full_qualification=True,finished=time.monotonic(),storage=sizes))
     return 101
 
 def result_file(value):
@@ -233,6 +250,7 @@ def result_file(value):
 
 def compose(pilot):
     config=cfg();assert config['pilot']==pilot
+    launch_record=json.loads((Q/'launch.json').read_text())
     spec=importlib.util.spec_from_file_location('common',Q/'confiner_validation.py')
     common=importlib.util.module_from_spec(spec);spec.loader.exec_module(common)
     assert common.poste_tenu(common.processus())
@@ -244,18 +262,23 @@ def compose(pilot):
         command=[sys.executable,str(Q/'confiner_validation.py'),'lancer','--delai',str(BUDGET),
                  '--preuves',str(P/'supervision'),'--',sys.executable,str(Q/'qualify_red.py'),'--driver',pilot]
         code=subprocess.run(command,cwd='/var/tmp').returncode
+        final_started=time.monotonic()
         receipt=Path(json.loads((P/'authority-path.json').read_text())['path'])
         auth=json.loads(receipt.read_text());scope=json.loads((receipt.parent/'verdict.json').read_text())
+        deadline=final_end(auth['echeance'],launch_record,final_started)
         assert code==1 and auth['etat']=='termine' and scope['verdict']=='ROUGE' and scope['code']==101
         assert not scope['erreur'] and not scope['restes'] and scope['nettoye'] and not Path(scope['prive']).exists()
         result=json.loads((P/'driver-result.json').read_text());assert result['status']=='EXPECTED_SETUP_REDS_OBSERVED'
+        assert result['deadline']==phase_end(auth['echeance'],launch_record)
         assert result['distinct_judges']==2 and result['raw_test_invocations']==4 and not (P/'unexpected-red.json').exists()
         assert json.loads((P/'first-red.json').read_text())['expected'] is True
         gone=proof.owned_gone(receipt);scan=fresh(config,auth['cgroup']);save('quiescence-final.json',dict(scan=scan,owned=gone))
         guard(config);check_ledger(json.loads((P/'ledger-before-witnesses.json').read_text()))
-        assert time.monotonic()<auth['echeance']
-        outcome.update(status='EXPECTED_SETUP_REDS_OBSERVED',scope=scope,deadline=auth['echeance'],
-            elapsed=time.monotonic()-(auth['echeance']-BUDGET),authority_terminated=True,bus_absent=True,
+        assert time.monotonic()<deadline
+        outcome.update(status='EXPECTED_SETUP_REDS_OBSERVED',scope=scope,deadline=deadline,
+            common_deadline=auth['echeance'],final_started=final_started,soft_end=launch_record['soft_end'],
+            hard_end=launch_record['hard_end'],whole_start=launch_record['whole_start'],
+            elapsed=time.monotonic()-launch_record['whole_start'],authority_terminated=True,bus_absent=True,
             source=APP,pilot=pilot,distinct_judges=2,raw_test_invocations=4,production_fixed=False)
     except Exception as error:
         unexpected(repr(error));outcome['error']=repr(error)
@@ -284,7 +307,8 @@ def prepare(pilot):
     for name in ['python3','bash','timeout','cargo']:
         file=Path(shutil.which(name)).resolve();tools[name]=dict(path=str(file),sha256=sha(file))
     config=dict(app=APP,pilot=pilot,control=str(control),copies=copies,tools=tools,
-                transition_sha256=sha(source.TRANSITION/'transition.json'),old_green=old,cache=cache)
+                transition_sha256=sha(source.TRANSITION/'transition.json'),old_green=old,cache=cache,
+                budget=dict(common=BUDGET,term=TERM,kill_grace=WHOLE-TERM,hard=WHOLE,final_cap=FINAL))
     if (Q/'configuration.json').exists():assert cfg()==config
     else:proof.save(Q/'configuration.json',config)
     guard(config)
@@ -299,13 +323,15 @@ def launch(pilot):
     assert not list(P.iterdir()) and not (Q/'launch.json').exists()
     assert proof.archived_green()==config['old_green'] and proof.cache_contract()==config['cache']
     identity=controller.snapshot(Path('/proc')/str(os.getpid()));assert identity['stable']
-    proof.save(Q/'launch.json',dict(identity=identity,allocation=allocation,expected_reds=list(proof.NAMES.values())))
     runtime_root=Path('/run/user')/str(os.getuid());bus=runtime_root/'bus'
     assert runtime_root.resolve()==runtime_root and bus.resolve()==bus and bus.is_socket() and bus.stat().st_uid==os.getuid()
     env={k:os.environ[k] for k in ['HOME','USER','LOGNAME','PATH','LANG','LC_ALL','CARGO_HOME','RUSTUP_HOME'] if k in os.environ}
     env.update(POSTE_MEM_MAX='32G',RAG3WEAVER_BUILD_MEMORY_HIGH='0',DBUS_SESSION_BUS_ADDRESS='unix:path='+str(bus),XDG_RUNTIME_DIR=str(runtime_root))
     command=controller.commands(control,pilot)['outer']
     with (P/'supervision.log').open('x') as output:
+        started=time.monotonic()
+        proof.save(Q/'launch.json',dict(identity=identity,allocation=allocation,expected_reds=list(proof.NAMES.values()),
+                   whole_start=started,soft_end=started+TERM,hard_end=started+WHOLE))
         return subprocess.run(command,cwd='/var/tmp',env=env,stdout=output,stderr=subprocess.STDOUT).returncode
 
 if __name__=='__main__':

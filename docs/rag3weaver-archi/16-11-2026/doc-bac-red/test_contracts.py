@@ -76,5 +76,11 @@ class Contracts(unittest.TestCase):
         self.assertEqual(policy['roles']['poste']['argv'][1:],actual['poste'])
         self.assertEqual(policy['roles']['launch']['argv'],['python3',str(control/q.REL),'--launch',pilot])
         self.assertEqual(policy['launch_identity'],dict(pid=7,start='123'))
+        launch=dict(whole_start=100.,soft_end=2018.,hard_end=2020.)
+        self.assertEqual(q.phase_end(2500.,launch),2018.)
+        self.assertEqual(q.phase_end(1900.,launch),1900.)
+        self.assertEqual(q.final_end(1900.,launch,1899.),2018.)
+        with self.assertRaises(AssertionError):q.final_end(1900.,launch,1901.)
+        with self.assertRaises(AssertionError):q.final_end(2500.,launch,2019.)
 
 if __name__=='__main__':unittest.main(failfast=True)
