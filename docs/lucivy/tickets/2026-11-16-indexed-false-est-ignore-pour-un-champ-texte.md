@@ -108,3 +108,10 @@ Reste : RO diff puis nouvelle recette/portée verte source890, targetprivé
 provenance0c+quiescence à admettre explicitement si réemployé, logs/reçu neufs.
 Le GOrouge se termine avec sa preuve ; pas de second lancement par ce GO.
 Suitecore complète toujours bloquée corpus7.2, pas déclaréeverte via ce lot.
+
+RO ciblée demandée par C7 à recherche et mémoire, avant GOvert : source890c86a,
+contrat configwarning/text|stringSomefalse, échappement des noms, ordre stable,
+indexationschéma inchangée et docpublique. Preuve rouge0c conservée. Reste :
+leur retour RO puis couplevert3juges, réemploi du seulTnonce3552/receiptancien
+terminé/ELFrougeSHA conservé, contrôle identité/quiescence frais aprèsposte,
+600s uniques, pas de libcore complète/corpus/ulp/PR42 inclus par ce seul juge.
