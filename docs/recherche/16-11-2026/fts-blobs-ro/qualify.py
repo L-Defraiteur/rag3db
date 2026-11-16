@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Proposed 600s read-only diagnostic on a new private copy; explicit C7 GO required."""
-import argparse,hashlib,json,os,re,shutil,stat,subprocess,sys,time
+import argparse,hashlib,importlib.util,json,os,re,shutil,signal,stat,subprocess,sys,time
 from pathlib import Path
 from blob_adapter import decode_frames,materialize
 from observations import native_queries,snapshot_ids,compare_ids
 R=Path.home()/'.cache/rag3weaver-build'
-Q=R/'cx-control-recherche-fts-blobs-ro-v1';P=R/'cx-proofs-recherche-fts-blobs-ro-v1';S=R/'cx-scope-recherche-fts-blobs-ro-v1'
+Q=R/'cx-control-recherche-fts-blobs-ro-v2';P=R/'cx-proofs-recherche-fts-blobs-ro-v2';S=R/'cx-scope-recherche-fts-blobs-ro-v2'
 ARCHIVE=R/'cx-archive-recherche-fts-existing-canon-fixture-v1'
 ARCHIVE_SHA='69b1734910cace8d0b05ff4d2a5b128d2594c9e2834eb136167aa462dd433192'
 NATIVE=Path.home()/'.cache/optimiseur-notes/bascule-16nov-927/read-only-query-v2-luciepc'
@@ -43,19 +43,20 @@ def guard(cfg):
  assert inventory(ARCHIVE/'copy')==cfg['files']
  assert not any(p.is_dir() for p in (ARCHIVE/'copy').rglob('*')),'unexpected archive directory'
  assert sha(cfg['compiler'])==cfg['compiler_sha256']
+ assert sha(cfg['timeout'])==cfg['timeout_sha256']
  for name,value in cfg['copies'].items():assert sha(Q/name)==value
  assert sha(NATIVE)==NATIVE_SHA and sha(IDS)==IDS_SHA
  for name,value in SO.items():assert sha(LIB/name)==value
 
 def driver():
- cfg=json.loads((Q/'prepared.json').read_text());P.mkdir(mode=0o700);guard(cfg)
+ cfg=json.loads((Q/'prepared.json').read_text());assert P.is_dir();guard(cfg)
  subprocess.run([sys.executable,str(Q/'confiner_validation.py'),'verifier'],check=True)
  receipt=Path(os.environ['RAG3WEAVER_VALIDATION_RECU']);auth=json.loads(receipt.read_text());end=auth['echeance']
- assert auth['etat']=='actif' and json.loads((receipt.parent/'recette.json').read_text())['delai']==600
+ assert auth['etat']=='actif' and json.loads((receipt.parent/'recette.json').read_text())['delai']==550
  group=Path('/sys/fs/cgroup')/auth['cgroup'].lstrip('/');limits={name:(group/name).read_text().strip() for name in ['memory.max','memory.high','memory.swap.max','cpu.max']}
  assert limits['memory.max']=='34359738368' and limits['memory.high']=='max' and limits['memory.swap.max']=='0'
  quota,period=limits['cpu.max'].split();assert quota!='max' and 0<int(quota)<=8*int(period)
- save(P,'authority-path.json',dict(path=str(receipt),deadline=end,initial=end-600,limits=limits))
+ save(P,'authority-path.json',dict(path=str(receipt),deadline=end,initial=end-550,limits=limits))
  env={k:os.environ[k] for k in ['HOME','USER','PATH','LANG','DBUS_SESSION_BUS_ADDRESS','RAG3WEAVER_VALIDATION_RECU','RAG3WEAVER_VALIDATION_JETON'] if k in os.environ};env['LD_LIBRARY_PATH']=str(LIB)
  def run(label,argv,cap):
   guard(cfg);duration=min(cap,end-time.monotonic()-15);assert duration>0
@@ -100,7 +101,7 @@ def driver():
  live=snapshot_ids(decoded.decode('utf-8'));comparison=compare_ids(rows[6],live)
  save(P,'id-sets.json',dict(graph_rows=rows[6],fts_live_ids=live,comparison=comparison,scope='physical ScopeContent/default/default'))
  unchanged();guard(cfg);save(P,'copy-after.json',inventory(cold));assert time.monotonic()<end-10
- save(P,'observation.json',dict(status='OBSERVATION_RO_VALIDATED_ONLY',comparison=comparison,source_database_opened=False,deadline=end,elapsed=time.monotonic()-(end-600),branch_at_failed_runtime_traced=False,writer_maintenance_qualified=False))
+ save(P,'observation.json',dict(status='OBSERVATION_RO_VALIDATED_ONLY',comparison=comparison,source_database_opened=False,deadline=end,elapsed_since_common=time.monotonic()-(end-550),global_hardcap_seconds=600,branch_at_failed_runtime_traced=False,writer_maintenance_qualified=False))
 
 def launch(args):
  assert os.uname().nodename.lower()=='luciepc' and re.fullmatch('[0-9a-f]{40}',args.pilot)
@@ -118,7 +119,7 @@ def launch(args):
   if dest.exists():assert not dest.is_symlink() and sha(dest)==sha(source)
   else:shutil.copy2(source,dest)
   copies[name]=sha(dest)
- cfg=dict(source_root=str(root),pilot=args.pilot,files=files,copies=copies,compiler=compiler,compiler_sha256=sha(compiler))
+ cfg=dict(source_root=str(root),pilot=args.pilot,files=files,copies=copies,compiler=compiler,compiler_sha256=sha(compiler),timeout=str(Path(shutil.which('timeout')).resolve()),timeout_sha256=sha(Path(shutil.which('timeout')).resolve()))
  prepared=Q/'prepared.json'
  if prepared.exists():assert json.loads(prepared.read_text())==cfg
  else:save(Q,'prepared.json',cfg)
@@ -126,22 +127,69 @@ def launch(args):
  assert args.allocation and 'RAG3WEAVER_VALIDATION_RECU' not in os.environ
  save(Q,'allocation.json',dict(reference=args.allocation))
  env={k:os.environ[k] for k in ['HOME','USER','PATH','LANG','XDG_RUNTIME_DIR','DBUS_SESSION_BUS_ADDRESS'] if k in os.environ};env.update(POSTE_MEM_MAX='32G',POSTE_SWAP_MAX='0',CARGO_BUILD_JOBS='8')
- argv=[str(Q/'poste'),'lourd','timeout','--kill-after=10s','630s',sys.executable,str(Q/'confiner_validation.py'),'lancer','--delai','600','--preuves',str(S),'--',sys.executable,str(Q/'qualify.py'),'--driver']
- with (Q/'launch.log').open('x') as out:rc=subprocess.run(argv,cwd='/var/tmp',env=env,stdout=out,stderr=subprocess.STDOUT).returncode
- record=dict(status='RED',code=rc)
+ return run_outer(cfg,env)
+
+def outer_command(cfg):
+ return [str(Q/'poste'),'lourd',cfg['timeout'],'--signal=TERM','--kill-after=2s','598s',sys.executable,str(Q/'qualify.py'),'--compose']
+
+def run_outer(cfg,env):
+ # No hash, scan, composition or publication after this bounded child returns.
+ with (Q/'launch.log').open('x') as out:
+  result=subprocess.run(outer_command(cfg),cwd='/var/tmp',env=env,stdout=out,stderr=subprocess.STDOUT)
+ return result.returncode
+
+def verify_outer_signature(observed,cfg):
+ expected=[cfg['timeout'],'--signal=TERM','--kill-after=2s','598s',sys.executable,str(Q/'qualify.py'),'--compose']
+ assert observed['exe']==cfg['timeout'] and observed['argv']==expected and observed['poste'],'real outer timeout/poste required'
+
+def owned_quiet(scope):
+ rows=json.loads((scope/'enfants.json').read_text());assert isinstance(rows,list)
+ alive=[];unknown=[]
+ for row in rows:
+  try:
+   fields=(Path('/proc')/str(row['pid'])/'stat').read_text().rsplit(') ',1)[1].split()
+   if fields[19]==row['debut'] and fields[0]!='Z':alive.append(row)
+  except (FileNotFoundError,ProcessLookupError):pass
+  except OSError as error:unknown.append(dict(pid=row['pid'],error=repr(error)))
+ return dict(checked=len(rows),alive=alive,unknown=unknown)
+
+def compose():
+ # This entire function, including imports/reads/cleanup and final guard, is under
+ # the 598s+2s outer timeout which poste has already started.
+ cfg=json.loads((Q/'prepared.json').read_text())
+ spec=importlib.util.spec_from_file_location('common_validation',Q/'confiner_validation.py')
+ common=importlib.util.module_from_spec(spec);spec.loader.exec_module(common)
+ parent=Path('/proc')/str(os.getppid())
+ observed=dict(exe=str(Path(os.readlink(parent/'exe')).resolve()),argv=[os.fsdecode(v) for v in (parent/'cmdline').read_bytes().split(b'\0') if v],poste=common.poste_tenu(common.processus()))
+ verify_outer_signature(observed,cfg)
+ P.mkdir(mode=0o700);save(P,'outer-supervision.json',dict(observed=time.monotonic(),parent=observed,soft_timeout=598,kill_after=2,hardcap=600,common_budget=550))
+ def stop(sig,frame):
+  if not (P/'first-red.json').exists():save(P,'first-red.json',dict(reason='outer supervision signal',signal=sig,observed=time.monotonic()))
+  raise RuntimeError('outer supervision stopped the whole diagnostic')
+ signal.signal(signal.SIGTERM,stop)
+ record=dict(status='RED');rc=1
  try:
+  guard(cfg)
+  command=[sys.executable,str(Q/'confiner_validation.py'),'lancer','--delai','550','--preuves',str(S),'--',sys.executable,str(Q/'qualify.py'),'--driver']
+  rc=subprocess.run(command,cwd='/var/tmp',env=os.environ.copy()).returncode
   authority=json.loads((P/'authority-path.json').read_text());path=Path(authority['path']);auth=json.loads(path.read_text());scope=json.loads((path.parent/'verdict.json').read_text())
+  quiet=owned_quiet(path.parent);save(P,'owned-after-scope.json',quiet)
+  record.update(code=rc,scope=scope,owned=quiet,authority_state=auth['etat'])
   assert rc==0 and scope['verdict']=='VERT' and scope['code']==0 and not scope['restes'] and scope['nettoye'] and auth['etat']=='termine' and not Path(scope['prive']).exists()
-  assert json.loads((P/'observation.json').read_text())['status']=='OBSERVATION_RO_VALIDATED_ONLY';guard(cfg)
-  record=dict(status='OBSERVATION_RO_VALIDATED_ONLY',code=0,deadline=auth['echeance'],scope=scope)
- except BaseException as error:record['error']=repr(error)
- if P.exists():
-  with (P/'composed.json').open('x') as f:
-   if record['status']=='OBSERVATION_RO_VALIDATED_ONLY' and time.monotonic()>=record['deadline']:record=dict(status='RED',error='deadline before publication')
-   json.dump(record,f,indent=2)
+  assert not quiet['alive'] and not quiet['unknown']
+  assert json.loads((P/'observation.json').read_text())['status']=='OBSERVATION_RO_VALIDATED_ONLY' and not (P/'first-red.json').exists()
+  guard(cfg)
+  record.update(status='OBSERVATION_RO_VALIDATED_ONLY',deadline=auth['echeance'])
+ except BaseException as error:
+  record.update(status='RED',code=rc,error=repr(error))
+  if not (P/'first-red.json').exists():save(P,'first-red.json',dict(reason=repr(error),observed=time.monotonic()))
+ with (P/'composed.json').open('x') as f:
+  if record['status']=='OBSERVATION_RO_VALIDATED_ONLY' and time.monotonic()>=record['deadline']:record=dict(status='RED',error='deadline before publication')
+  json.dump(record,f,indent=2)
  print(json.dumps(record));return 0 if record['status']=='OBSERVATION_RO_VALIDATED_ONLY' else 1
 if __name__=='__main__':
- parser=argparse.ArgumentParser();parser.add_argument('--pilot');parser.add_argument('--prepare-only',action='store_true');parser.add_argument('--allocation');parser.add_argument('--driver',action='store_true');args=parser.parse_args()
+ parser=argparse.ArgumentParser();parser.add_argument('--pilot');parser.add_argument('--prepare-only',action='store_true');parser.add_argument('--allocation');parser.add_argument('--driver',action='store_true');parser.add_argument('--compose',action='store_true');args=parser.parse_args()
+ if args.compose:sys.exit(compose())
  if args.driver:
   try:driver()
   except BaseException as error:
