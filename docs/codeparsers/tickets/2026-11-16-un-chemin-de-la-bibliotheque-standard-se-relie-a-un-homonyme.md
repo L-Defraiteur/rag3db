@@ -115,3 +115,15 @@ Le nom historique du target PC n'autorise jamais à toucher les31Go du portable.
 La source corrigée, le pilote et les tests purs de lecteur sont publiés avant
 RO et avant tout nouveau Cargo. Le gitlink34c74e4 reste inchangé/poussé ;
 REGLES7 conservé, qualification complète et passage8 non acquis.
+
+## Préparation de la suite après corpus public, sans nouveau Cargo
+
+Voir docs/codeparsers/16-11-2026/rust-followup/01-recette-de-qualification.md.
+Pilote proposé900s neufs : test Ruststopwords, unité reference_path, toute suite
+native e2e_usages (std seul+motJS+deuxordres) ; pas de sonde ni F8 dans ce créneau.
+Le target PC a maintenant le propriétaire codeparsers du corpus livré ; ancien
+ELFbff conservé, adoption uniquement par la vraie garde après nouveau PQS.
+L'ancien GOvert2/2 est consommé, pas réactivé. Source/pilote restent à proposer à C7.
+Les roots/TSV historiques sont retrouvés et hashés :290rw/1550engine,
+14sites =18couples de scopes identifiés, pas une nouvelle exécution ni14liens
+justes postulés. Profil baseline/candidat, miroir PC et budgets sonde restent à fixer.
