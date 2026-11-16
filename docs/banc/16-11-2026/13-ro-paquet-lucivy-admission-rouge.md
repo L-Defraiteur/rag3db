@@ -26,3 +26,15 @@ Après artifactJSON, le ledger APP+trois chemins/SHA est ouvert exclusivement, f
 La fin complète reste à établir séparément : Common terminé/nettoyé sans restes, owned absents, conservation des scans UNKNOWN et des hashes, sous autorité valide. Le contrôleur rend101 et ne contient pas de composé externe qui qualifierait lui-même cette fin ; la recette l’exige après retour. Ce manque d’observation actuelle n’est pas un résultat de test et ne devient pas vert par lecture.
 
 Pas d’autre réserve bloquante dans ce périmètre statique. Le témoin est une baseline mock volontairement non corrigée, pas une couverture réelle du corpus, pas le fix d’admission ni la qualification du core. Les anciens rouges, neuf HOLD, corpus7.2/ULP/PR42 restent distincts. Nouveau SHA/pins à relire si modification ; aucune allocation déduite de cette revue.
+
+## Delta final44a7849a9c : les deux réserves sont levées
+
+Référence exacte `44a7849a9c9a6d345c936b74522d647f5115c701`, source81b0 inchangée. Pilote final SHA256 `7833a6f4bc42c137c1766aba889f529b006a27ee72402d6227c22b9defdad0fc`, admission7649 inchangée. Revue du seul delta depuis a039 et des pins/preuves nouveaux, sans refaire la revue sémantique du source ni exécuter de témoin.
+
+Après le mock, les trois nouveaux ELF physiques sont chacun réhachés et comparés au ledger initial ; le résultat reprend ces SHA finaux. HEAD81b0 et propreté sont recontrôlés, copies figées réhachées, préflight comparé au SHA pris à l’entrée. La boucle vérifie le budget ; le dernier publish le vérifie encore avant ouverture, après ouverture avant dump et après flush/fsync. Un dépassement interdit le retour101 attendu. La copie historique106fa reste dansQ et est réattestée sans imposer l’ancien contenu au chemin recompilable sousT. Les deux réserves7f6 sont donc traitées sans nouveau budget.
+
+Huit entrées SHA256SUMS des dossiers final-guards et source-preparation-v2 recalculées depuis Git, sans écart. AST des deux pilotes seulement. Nouveau préflight SHA `0c90301ed5324f8a07d80641283e581ed3f427bc6355dcf1304afa14763f7325`, pilote7833 pin cohérent, Qderived-red-v2, nonced4f2d8cfd6d6705b2c17423ba66d91a9. Le relevé de douze UNKNOWN non attribués est archivé ; pas de scan nouveau ni relecture physique d’ELF par cette revue.
+
+Les logs Python conservés montrent un seul rouge changed-copy (AssertionError not raised), failfast/cinq autres non joués avant correctif, puis six réussites/zéro échec après publication272c. Ce sont des tranches AST avec objets simulés, pas une observation du mock Rust, des fichiers PC réels ou d’un builder natif ; aucun rejeu ici. Le log vert dit0.001s, sans en déduire une durée native.
+
+**Avis favorable à ce delta/pins v2 exacts, réserves levées ; pas GO600.** Le budget unique, ledger avant inventaires puis ledger avant témoin et résultat pendingCommon restent ceux déjà relus. Fin complète Common/owned et rouge Rust réel sont encore NON OBSERVÉS. Aucun Cargo, ELF exécuté, scan proc, base ou service lancé.
