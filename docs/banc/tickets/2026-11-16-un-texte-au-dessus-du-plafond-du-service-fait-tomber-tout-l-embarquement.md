@@ -44,6 +44,13 @@ de données de test faits d'une ou deux lignes énormes :
 
 Le découpeur coupe par lignes. Une ligne de 50 000 caractères reste donc un seul morceau.
 
+**L'exclusion du manifeste de Lucie ne les couvre pas.** B′ porte le manifeste de Lucie, avec
+`workspace.index_exclude {minified_line_max_bytes: 5000, code_file_max_bytes: 1048576}`. Il
+écarte bien `templates/ide/app/app.js` (0 scope dans B′ comme dans la copie migrée). Mais ces cinq
+fichiers sont des scopes `texte_brut`, et ils restent indexés malgré des lignes de plus de
+5 000 octets. Exemple : `extension/vector/test/test_files/demo.test` fait 87 709 octets pour
+107 lignes, faites de littéraux de vecteurs.
+
 ## Pourquoi tout tombe
 
 - Le service refuse un lot entier dès qu'un seul de ses textes passe le plafond.
