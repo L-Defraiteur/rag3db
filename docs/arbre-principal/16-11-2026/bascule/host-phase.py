@@ -48,7 +48,7 @@ def find_journal(value):
  return path
 
 def main():
- ap=argparse.ArgumentParser();ap.add_argument('action',choices=['maintenance','index']);ap.add_argument('base',choices=BASES);ap.add_argument('--evidence',required=True);ap.add_argument('--fini-proof',required=True);ap.add_argument('--seconds',type=int,default=7200);ap.add_argument('--table',action='append',default=[])
+ ap=argparse.ArgumentParser();ap.add_argument('action',choices=['maintenance','index','diagnostic']);ap.add_argument('base',choices=BASES);ap.add_argument('--evidence',required=True);ap.add_argument('--fini-proof',required=True);ap.add_argument('--seconds',type=int,default=7200);ap.add_argument('--table',action='append',default=[])
  args=ap.parse_args();proof=Path(args.fini_proof);assert proof.is_file(),'G FINI evidence absent'
  manifest,expected=BASES[args.base];m=Path(manifest);assert hashlib.sha256(m.read_bytes()).hexdigest()==expected,'live declaration changed; inspect instead of rewriting'
  root=Path(args.evidence);root.mkdir(parents=True,exist_ok=False);end=time.monotonic()+args.seconds
@@ -69,7 +69,11 @@ def main():
   return result
  session=post('/session',dict(client='migration-16nov',keys=['dev']))['session']
  try:
-  if args.action=='maintenance':
+  if args.action=='diagnostic':
+   assert args.base=='code-rag3db-depot' and args.table==['File'],'diagnostic is File on portable only'
+   before=post('/backend/maintain',dict(manifest=manifest,table='File',dry_run=True))
+   save(root,'File-diagnostic-dry-run.json',before)
+  elif args.action=='maintenance':
    assert args.table and all(re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*',t) for t in args.table),'explicit table list required'
    for table in args.table:
     before=post('/backend/maintain',dict(manifest=manifest,table=table,dry_run=True));save(root,table+'-dry-run.json',before)
