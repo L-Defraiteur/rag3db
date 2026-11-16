@@ -1,6 +1,6 @@
 # La garde des règles de l'analyse lit la mention avec sa casse
 
-- **État** : ouvert (16 novembre 2026)
+- **État** : fermé (16 novembre 2026, ED) — `check_regles_de_l_analyse.py` lit la mention sans casse (`MENTION.casefold() in messages.casefold()`) ; cas rouge `test_the_mention_is_read_without_case` dans `test_check_regles_de_l_analyse.py`, vu ROUGE (code 1) puis les 5 tests verts
 - **Famille** : produit (la garde de la passe)
 - **Gravité** : petite ; un lot qui dit « Sans effet sur l'analyse » en tête de phrase est refusé par check_features,
   et il faut un commit de plus pour le redire en minuscules.
