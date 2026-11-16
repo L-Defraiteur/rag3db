@@ -67,7 +67,7 @@ class Contracts(unittest.TestCase):
     def test_real_constructor_and_policy_agree_with_outer_timeout_and_exact_pilot(self):
         q.configure_controller();pilot='a'*40;control=Path('/private/checkout')
         actual=q.controller.commands(control,pilot)
-        self.assertEqual(actual['outer'],['timeout','--signal=TERM','--kill-after=2s','1918s',
+        self.assertEqual(actual['outer'],['timeout','--signal=TERM','--kill-after=15s','1920s',
             str(q.C/'scripts/poste'),'lourd',q.sys.executable,str(q.Q/'qualify_red.py'),'--admit',pilot])
         with patch.object(q.controller,'sha',return_value='script-hash'):
             policy=q.controller.policy(control,pilot,dict(pid=7,start='123'))
@@ -76,11 +76,11 @@ class Contracts(unittest.TestCase):
         self.assertEqual(policy['roles']['poste']['argv'][1:],actual['poste'])
         self.assertEqual(policy['roles']['launch']['argv'],['python3',str(control/q.REL),'--launch',pilot])
         self.assertEqual(policy['launch_identity'],dict(pid=7,start='123'))
-        launch=dict(whole_start=100.,soft_end=2018.,hard_end=2020.)
-        self.assertEqual(q.phase_end(2500.,launch),2018.)
+        launch=dict(whole_start=100.,soft_end=2020.,hard_end=2035.)
+        self.assertEqual(q.phase_end(2500.,launch),2020.)
         self.assertEqual(q.phase_end(1900.,launch),1900.)
-        self.assertEqual(q.final_end(1900.,launch,1899.),2018.)
+        self.assertEqual(q.final_end(1900.,launch,1899.),2019.)
         with self.assertRaises(AssertionError):q.final_end(1900.,launch,1901.)
-        with self.assertRaises(AssertionError):q.final_end(2500.,launch,2019.)
+        with self.assertRaises(AssertionError):q.final_end(2500.,launch,2021.)
 
 if __name__=='__main__':unittest.main(failfast=True)

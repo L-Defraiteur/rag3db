@@ -21,7 +21,7 @@ def commands(control, pilot):
     # The launcher and the policy share these actual command assignments.
     admit = [sys.executable, str(Q / 'qualify_red.py'), '--admit', pilot]
     poste = [str(C / 'scripts/poste'), 'lourd', *admit]
-    outer = ['timeout', '--signal=TERM', '--kill-after=2s', '1918s', *poste]
+    outer = ['timeout', '--signal=TERM', '--kill-after=15s', '1920s', *poste]
     return dict(admit=admit, poste=poste, outer=outer,
                 launch=[str(control / REL), '--launch', pilot])
 

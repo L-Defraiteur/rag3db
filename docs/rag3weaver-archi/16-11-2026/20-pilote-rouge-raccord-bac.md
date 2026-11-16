@@ -36,10 +36,10 @@ session+runtime ≤32Gio surveillé, aucune suppression pour faire place.
 
 ## Borne et ordre exact proposés
 
-**1920s de plafond global dur**, attente du poste incluse : extérieur
-`timeout --signal=TERM --kill-after=2s 1918s poste lourd …`. Début logiciel
-enregistré juste AVANTPopen, ENDsoft=début+1918/ENDhard=début+1920 ; la
-publication attendue doit précéder ENDsoft, la grâce2s sert à l'arrêt.
+**1935s de plafond global dur**, attente du poste incluse : extérieur
+`timeout --signal=TERM --kill-after=15s 1920s poste lourd …`. Début logiciel
+enregistré juste AVANTPopen, ENDsoft=début+1920/ENDhard=début+1935 ; la
+publication attendue doit précéder ENDsoft, la grâce15s sert à l'arrêt.
 Le pilote admet une autorité commune1800 MAXIMUM après vrai poste, mais
 chaque phase prend MIN(ENDcommon,ENDsoft) et sa marge15. **1800utilisables
 ne sont pas garantis** : attente, copies et autres coûts consomment le solde.
@@ -124,7 +124,7 @@ constructeur commandes/politique. Ils ne lancent aucun processus de validation.
 AST seulement et diffcheck à publier avec les hashes ; aucun Cargo, garde,
 test Rust, P/Q/runtimePC, sourcePC ou autorité consommé par cette préparation.
 
-## Diagnostic CPU avant correction du budget
+## Historique CPU du contrat1920, ensuite remplacé
 
 Réserve indépendante Banc957ebdd188 et clarification C7 concordent : la
 première version81d066 porte TERM1920+KILL15, donc1935 au pire. Ce n'est pas
@@ -146,3 +146,12 @@ rouge. Mêmebranche/aucunframework nouveau. ENDglobal enregistré avant
 Popen, MINcommon/soft explicite dans driver, final≤120/MINsolde et contrôle
 aprèsopen cohérents. Microfix et sixCPU mis à jour publiés AVANT l'unique
 rejeu hermétique renouvelé ; si autre écart, STOP sans enchaîner de retries.
+
+**Décision finale C7 reçue après publication015ce566 :1935dur**, constructeur
+original TERM1920/KILL15 conservé. L'alternative1920dur et le microfix015
+sont SUPERSÉDÉS avant tout lancement ; aucune exécution sous015. La suite
+CPU08523 reste un rouge réel contre l'ancien contrat1920, pas un défaut
+produit ni une preuve verte sous1935. Recette/politique/constantes finales
+1935 cohérentes ; MINENDcommon/ENDsoft par phase et final≤120/solde conservés.
+Publication du pin final précède l'unique sixCPU renouvelé et la préparation
+Git/QPC déjà autorisée ; aucun GO natif.

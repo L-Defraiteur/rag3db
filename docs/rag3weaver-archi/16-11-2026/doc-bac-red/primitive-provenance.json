@@ -22,8 +22,8 @@
       "source": "b12ee2a65af9d60b6264b0ececa07993fdff196a",
       "path": "docs/rag3weaver-archi/16-11-2026/doc-green/controller_policy.py",
       "source_sha256": "19125f44c9a411e9c60fb52580c0ca3a432ec0fe25c5ab3c1983b3571086f468",
-      "prepared_sha256": "cb005f879b67a1e9ff1c4a453d763606bd4fd55c610b551bba46598c173c27a9",
-      "delta": "constructor filename, launch mode, TERM1918 and KILLgrace2 only; attribution/FD/UNKNOWN checks unchanged"
+      "prepared_sha256": "861b60b7a421e6a6e71a08287bc7d2620291a242fa6443de5e64c5a8b3403867",
+      "delta": "constructor filename, launch mode and TERM1920 only; original KILLgrace15, attribution/FD/UNKNOWN checks unchanged"
     },
     {
       "file": "contracts.py",
@@ -38,12 +38,12 @@
     {
       "file": "qualify_red.py",
       "source": "new test qualification wiring",
-      "prepared_sha256": "1048b40398d9a18321c8019198df705fe3bf409ef834754b65ceb6b630322c26"
+      "prepared_sha256": "7cad8708d6a5dde84aebad5a347893419b5ae777e5c63918aea8ab771c5a8668"
     },
     {
       "file": "test_contracts.py",
       "source": "new test qualification wiring",
-      "prepared_sha256": "6b4019ef32c85bcb63f1da8c965f585d6c0e37d0e43f877ad58ba6e78f01fee4"
+      "prepared_sha256": "98a09889fbccc13b3577f5f72ad8f2db442da8063dd08dea79992e5c9fe5f42a"
     }
   ]
 }
