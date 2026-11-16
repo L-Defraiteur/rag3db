@@ -14,7 +14,7 @@ class ConsumerHealthPolicy(unittest.TestCase):
   for name in ['lifecycle_protocol.py','lifecycle_grant_producer.py','lifecycle_provider_observation.py','provider_health_transport.py']:
    (root/name).write_bytes(b'fixture');hashes[name]=hashlib.sha256(b'fixture').hexdigest()
   (root/'prepared.json').write_text(json.dumps(dict(pilot='f'*40,files=hashes)))
-  self.pins=dict(protocol_sha256=hashes['lifecycle_protocol.py'],producer_sha256=hashes['lifecycle_grant_producer.py'],observation_sha256=hashes['lifecycle_provider_observation.py','provider_health_transport.py'],pilot='f'*40,allocation='fixture',expected_process=self.process,identity={'fixture':'identity'})
+  self.pins=dict(protocol_sha256=hashes['lifecycle_protocol.py'],producer_sha256=hashes['lifecycle_grant_producer.py'],observation_sha256=hashes['lifecycle_provider_observation.py'],transport_sha256=hashes['provider_health_transport.py'],pilot='f'*40,allocation='fixture',expected_process=self.process,identity={'fixture':'identity'})
   self.grant=dict(owner_pins=self.pins,owner_pins_sha256=policy.canonical_sha(self.pins),identity=self.pins['identity'],pid=456,start='77',exe_sha256='d'*64,nonce=self.ready['nonce'],ready_sha256='a'*64,no_embedding_calls_authorized=True,observed_monotonic=98.,valid_until_monotonic=590.)
   self.context=dict(address='127.0.0.1:7878',contact_deadline=154.,admission=False,expected_process=self.process,grant=self.grant,ready_path='/fixture/READY',ready_sha256='a'*64,nonce=self.ready['nonce'])
   self.stack=[]
