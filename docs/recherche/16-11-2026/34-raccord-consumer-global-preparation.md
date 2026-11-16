@@ -52,3 +52,8 @@ et quatrièmehashsourcepg_receipt_sha256==Qpg_receipt.py. AjoutcopiePGprévue
 mais fichierfinalGencoreattendu :aucunprepareQpossible/GOdéduit.
 Sixièmefonction couvrepositif+mutantsclock/sources/nonce/pilot/scope/allocation/
 SHAcanonique ; nouveauxsouscas PG n'ont pas tous étévusrouges avantfix.
+
+Après PUSH89af10f12e370413d507c5828037b6cc26365e1a, CPU60failfast6fonctions
+VERTES0.028s/rc0 : journalR/cx-proofs-recherche-fts-global-consumer-cpu-v2 et
+manifestjoint. Aucuncontact/SQL/Cargo/native/procscan ni paquetQfinal ;
+ces6témoins n'attestent pas le transport réel ni l'outilPG futur deG.
