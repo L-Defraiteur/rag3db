@@ -24,7 +24,12 @@ def first_red(error):
  except FileExistsError:pass
 def canonical_overrides():
  return dict(CIBLE=T.name,SUITE_DU_TEMOIN='lib',SUITES_EN_PLUS=' '.join(REQUIRED[3:]),RAG3WEAVER_EXIGER_NAVIGATEUR='1',RAG3WEAVER_TARGET_MAX_GO='32',RAG3DB_LIB=LIB.name,RAG3DB_LIBS_DIR=str(LIB.parent),RAG3DB_BUFFER_POOL_SIZE='1073741824',CARGO_BUILD_JOBS='8',CARGO_TARGET_DIR=str(T),CARGO_INCREMENTAL='0',CARGO_TERM_COLOR='never',RUST_TEST_THREADS='8',RUST_BACKTRACE='1')
-def validate_services(grant,now,end):
+def validate_services(grant,now,end,context=None):
+ assert grant.get('app')==APP
+ assert re.fullmatch('[0-9a-f]{40}',grant.get('pilot','')) and grant.get('scope') and re.fullmatch('[0-9a-f]{64}',grant.get('ready_sha256',''))
+ if context is not None:
+  assert set(context)=={'app','pilot','scope','ready_sha256','c7_reference'}
+  for key,value in context.items():assert grant.get(key)==value
  assert grant.get('c7_reference') and grant.get('embar_reference') and grant.get('restart_authorized') is False
  for key in ['observed_monotonic','valid_until_monotonic']:assert type(grant.get(key)) in [int,float] and math.isfinite(grant[key])
  assert 0<=now-grant['observed_monotonic']<=120 and grant['valid_until_monotonic']>=end and now<end
@@ -96,12 +101,13 @@ def driver():
  run_guard('old-owner',OLD/'extension/rag3weaver','0');run_guard('adopt-union',C,'1');assert (T/'.arbre-du-target').read_text().strip()==str(C)
  required=subprocess.check_output(['bash',str(W/'tools/poste/required_suites.sh'),BASE,APP],cwd=W,text=True);assert required=='e2e_code_sync extension/rag3weaver/src/catalog.rs\n'
  save(P,'required-suites.json',dict(base=BASE,app=APP,result=required,table_sha256=cfg['required_table_sha256']))
- save(P,'READY_FOR_SERVICES.json',dict(observed=time.monotonic(),deadline=end,app=APP,pilot=cfg['pilot'],scope=str(receipt.parent),requested=['127.0.0.1:7878','127.0.0.1:7879','127.0.0.1:5433/rag3weaver_test'],receipt=str(Q/'SERVICES_GO.json'),service_operations_authorized=False))
+ save(P,'READY_FOR_SERVICES.json',dict(c7_reference=json.loads((Q/'allocation.json').read_text())['reference'],observed=time.monotonic(),deadline=end,app=APP,pilot=cfg['pilot'],scope=str(receipt.parent),requested=['127.0.0.1:7878','127.0.0.1:7879','127.0.0.1:5433/rag3weaver_test'],receipt=str(Q/'SERVICES_GO.json'),service_operations_authorized=False))
  wait_end=min(end-60,time.monotonic()+120)
  while not (Q/'SERVICES_GO.json').exists():
   assert time.monotonic()<wait_end,'no fresh actual Embar receipt received';time.sleep(.2)
  grant_path=Q/'SERVICES_GO.json';m=grant_path.lstat();assert not grant_path.is_symlink() and stat.S_ISREG(m.st_mode) and m.st_uid==os.getuid() and m.st_size<=65536
- grant=validate_services(json.loads(grant_path.read_text()),time.monotonic(),end);save(P,'services-receipt.json',grant);health(grant,'services-before',end)
+ context=dict(app=APP,pilot=cfg['pilot'],scope=str(receipt.parent),ready_sha256=sha(P/'READY_FOR_SERVICES.json'),c7_reference=json.loads((Q/'allocation.json').read_text())['reference'])
+ grant=validate_services(json.loads(grant_path.read_text()),time.monotonic(),end,context);save(P,'services-receipt.json',grant);health(grant,'services-before',end)
  # Only protocol availability is observed here; canonical SQL tests own their assertions.
  with socket.create_connection(('127.0.0.1',5433),timeout=min(5,end-time.monotonic()-15)) as pg:pg.sendall(bytes.fromhex('0000000804d2162f'));answer=pg.recv(1)
  assert answer in [b'N',b'S'];save(P,'postgres-protocol.json',dict(response=answer.decode(),sql_executed=False,identity_claim='fresh Embar receipt, not independently inferred from protocol'))
