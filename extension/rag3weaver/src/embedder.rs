@@ -148,8 +148,10 @@ pub trait Embedder: Send + Sync {
 
     /// **The address of the provider this embedder actually calls** : a service
     /// client's address, or for an activation the address of its current take
-    /// (the card, the fallback service, the fallback activation). `None` : an
-    /// in-process embedder. The embedding rate is noted under it (banc and
+    /// (the card, the fallback service, the fallback activation). `None` means
+    /// no address is currently known: only `!distant()` identifies an in-process
+    /// embedder. Reading this property never activates or probes a provider.
+    /// The embedding rate is noted under it (banc and
     /// embarquement, 16 November 2026 : `embedding_rate:{model}:{address}@{host}`).
     fn called_address(&self) -> Option<String> {
         None
