@@ -137,6 +137,15 @@ pub trait Embedder: Send + Sync {
         Vec::new()
     }
 
+    /// **Texts cut in characters before they were embedded** : `(cumulated
+    /// count, cap in characters)`, or `None`. A service client cuts each text
+    /// to the `max_chars_per_text` its service declares, rather than having
+    /// its whole batch refused (banc ticket, 16 November 2026). Distinct from
+    /// [`Self::troncatures`], which counts tokens cut by the model itself.
+    fn char_truncations(&self) -> Option<(usize, usize)> {
+        None
+    }
+
     /// Les changements de provenance à dire (un repli, un retour, une carte
     /// pleine sans repli), lus et vidés comme [`Self::provenance_counts`].
     fn provenance_events(&self) -> Vec<String> {
@@ -192,6 +201,9 @@ impl<T: Embedder + ?Sized> Embedder for std::sync::Arc<T> {
     }
     fn provenance_counts(&self) -> Vec<(String, usize)> {
         (**self).provenance_counts()
+    }
+    fn char_truncations(&self) -> Option<(usize, usize)> {
+        (**self).char_truncations()
     }
     fn provenance_events(&self) -> Vec<String> {
         (**self).provenance_events()
