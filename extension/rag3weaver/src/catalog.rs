@@ -12071,6 +12071,105 @@ mod tests {
         .avec_regime(crate::disponibilite::RegimeEcriture::ParLot)
     }
 
+    // Les écrivains ci-dessous ne servent qu'à construire la fixture privée.
+    fn existing_fts_fixture() -> (tempfile::TempDir, Catalog, std::path::PathBuf) {
+        use lucivy_core::sharded_handle::{FsShardStorage, ShardedHandle};
+        let root = tempfile::tempdir().unwrap();
+        let directory = root.path().join("Lucivy_Document");
+        let config = crate::fts_handle::build_schema_config(&["body".into()], &[], 1).unwrap();
+        let writer = ShardedHandle::create_with_storage(
+            Box::new(FsShardStorage::new(&directory.to_string_lossy()).unwrap()), &config,
+        ).unwrap();
+        crate::fts_handle::index_document(&writer, &[("body".into(), "private witness".into())], 41).unwrap();
+        writer.commit().unwrap();
+        writer.close().unwrap();
+        drop(writer);
+        std::fs::write(directory.join(crate::fts_directory::GENERATION_FILE), b"7").unwrap();
+        let mut catalog = make_catalog();
+        catalog.initialize().unwrap();
+        catalog.fts_handles.clear();
+        catalog.set_fts_storage(crate::fts_handle::FtsStorage::Files {
+            base_path: root.path().to_string_lossy().into_owned(),
+        });
+        catalog.conn = Arc::new(crate::connection::CallbackConnection::new(|_, params| {
+            let key = params.iter().find(|p| p.name == "prefix").and_then(|p| p.value.as_str());
+            Ok(crate::connection::QueryResult {
+                columns: vec!["key".into(), "value".into()],
+                rows: if key == Some("fts_generation:Lucivy_Document") {
+                    vec![vec![CypherValue::String(key.unwrap().into()), CypherValue::String("7".into())]]
+                } else { vec![] },
+            })
+        }));
+        (root, catalog, directory)
+    }
+
+    fn existing_fts_manifest(root: &std::path::Path) -> std::collections::BTreeMap<std::path::PathBuf, Vec<u8>> {
+        fn visit(root: &std::path::Path, path: &std::path::Path, result: &mut std::collections::BTreeMap<std::path::PathBuf, Vec<u8>>) {
+            for entry in std::fs::read_dir(path).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() { result.insert(path.strip_prefix(root).unwrap().to_owned(), vec![]); visit(root, &path, result); }
+                else { result.insert(path.strip_prefix(root).unwrap().to_owned(), std::fs::read(&path).unwrap()); }
+            }
+        }
+        let mut result = Default::default(); visit(root, root, &mut result); result
+    }
+
+    #[test]
+    fn existing_fts_live_ids_reads_closed_files_without_writer_or_changes() {
+        let (root, catalog, _) = existing_fts_fixture();
+        let before = existing_fts_manifest(root.path());
+        let first = catalog.fts_live_ids("Document").expect("existing files must be readable without warmup");
+        let second = catalog.fts_live_ids("Document").unwrap();
+        assert_eq!(first.0, vec![41]); assert_eq!(first, second);
+        assert!(catalog.fts_handles.is_empty(), "snapshot must not install a writer handle");
+        assert_eq!(before, existing_fts_manifest(root.path()));
+    }
+
+    #[test]
+    fn existing_fts_absent_is_an_error_and_does_not_create() {
+        let (root, catalog, directory) = existing_fts_fixture();
+        std::fs::remove_dir_all(directory).unwrap();
+        let before = existing_fts_manifest(root.path());
+        let error = catalog.fts_live_ids("Document").unwrap_err();
+        assert!(error.contains("existing_fts:absent"), "{error}");
+        assert_eq!(before, existing_fts_manifest(root.path()));
+    }
+
+    #[test]
+    fn existing_fts_corrupt_index_is_preserved_and_not_recreated() {
+        let (root, catalog, directory) = existing_fts_fixture();
+        std::fs::write(directory.join("_shard_config.json"), b"not-json").unwrap();
+        let before = existing_fts_manifest(root.path());
+        let error = catalog.fts_live_ids("Document").unwrap_err();
+        assert!(error.contains("existing_fts:corrupt"), "{error}");
+        assert_eq!(before, existing_fts_manifest(root.path()));
+    }
+
+    #[test]
+    fn existing_fts_generation_mismatch_or_invalid_marker_never_rebuilds() {
+        let (root, catalog, directory) = existing_fts_fixture();
+        for generation in ["8", "not-a-generation"] {
+            std::fs::write(directory.join(crate::fts_directory::GENERATION_FILE), generation).unwrap();
+            let before = existing_fts_manifest(root.path());
+            let error = catalog.fts_live_ids("Document").unwrap_err();
+            assert!(error.contains("existing_fts:generation"), "{error}");
+            assert_eq!(before, existing_fts_manifest(root.path()));
+            assert!(catalog.fts_rebuild.is_empty());
+        }
+    }
+
+    #[test]
+    fn existing_fts_does_not_fall_back_to_another_cell_or_public_alias() {
+        let (root, mut catalog, _) = existing_fts_fixture();
+        let before = existing_fts_manifest(root.path());
+        let error = catalog.fts_live_ids("main").unwrap_err();
+        assert!(error.contains("existing_fts:physical_table"), "{error}");
+        catalog.scope = crate::scope::Scope::new("foreign", "cell");
+        let error = catalog.fts_live_ids("Document").unwrap_err();
+        assert!(error.contains("existing_fts:absent"), "{error}");
+        assert_eq!(before, existing_fts_manifest(root.path()));
+    }
+
     #[test]
     fn lexical_catalog_has_no_dense_services_signature_or_debt() {
         let mut catalog = Catalog::without_embedding_model(
