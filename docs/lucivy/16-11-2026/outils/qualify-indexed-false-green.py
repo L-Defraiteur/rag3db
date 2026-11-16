@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import runpy
 import subprocess
+import stat
 import time
 
 SOURCE = '890c86af44989f3fea6c6fa62fd40d688b4084df'
@@ -21,8 +22,14 @@ TESTS = ['unsupported_text_indexing_options_are_reported_once_per_field',
 
 # Shared checks are copied byte-for-byte from the reviewed red package.
 # Loading them performs no test, command or scope admission.
-BASE = runpy.run_path(str(Path(__file__).absolute().with_name('qualify-indexed-false-red.py')),
-                      run_name='shared_red_checks')
+base_path = Path(__file__).absolute().with_name('qualify-indexed-false-red.py')
+current = Path('/')
+for part in base_path.parts[1:]:
+    current /= part
+    assert not stat.S_ISLNK(current.lstat().st_mode), f'symlink refused: {current}'
+assert base_path.lstat().st_uid == os.getuid() and stat.S_ISREG(base_path.lstat().st_mode)
+assert hashlib.sha256(base_path.read_bytes()).hexdigest() == '0a269dd90b0ca745811713e21f66b45fda563074bfc06dd6993f04ab03bd2352'
+BASE = runpy.run_path(str(base_path), run_name='shared_red_checks')
 checked_path = BASE['checked_path']
 cpu_jobs = BASE['cpu_jobs']
 
@@ -163,9 +170,10 @@ def main():
         assert 'running 1 test' in result and re.search(r'test result: ok\. 1 passed; 0 failed; 0 ignored;', result)
     hashes = {file.name: hashlib.sha256(file.read_bytes()).hexdigest() for file in output.iterdir() if file.is_file()}
     (output / 'hashes.json').write_text(json.dumps(hashes, indent=2))
+    executable_sha = hashlib.sha256(executable.read_bytes()).hexdigest()
     budget()
     (output / 'result.json').write_text(json.dumps(dict(source=SOURCE, tests=3, passed=3, failed=0, ignored=0,
-        executable_sha256=hashlib.sha256(executable.read_bytes()).hexdigest(), deadline=deadline,
+        executable_sha256=executable_sha, deadline=deadline,
         scope_verdict='pending common supervisor quiescence')))
     return 0
 
