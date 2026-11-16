@@ -43,3 +43,9 @@ Les corpus/profil/cohortes et la sonde demeurent ceux de la première revue ; au
 Le seul essai CPU1916 s’est arrêté en parsingCLI rc2, zéro test joué ; le correctif c1cd remplace unittest.main(failfast=True) par unittest.main() afin que -f de la commande en soit l’unique source. Aucun retry ni test par Banc. **Ce correctifCLI et les nouveaux contrôles ne sont donc pas CPU/natif qualifiés à ce stade.** Le rouge est conservé ; un nouveau GO CPU de C7 reste nécessaire avant essai, puis les phases natives auront leur propre GO.
 
 **Avis préparatoire favorable au delta et pair02 exacts : trois réserves de protocole levées statiquement, pas d’autre blocage repéré dans cette lecture.** Aucune allocation, Cargo/test/ELF, procscan, SDK/service/DB lancé ; aucun ELF historique rouvert. Ticket global et REGLES7 restent ouverts/inchangés.
+
+### Complément reçu après cette revue : preuves CPU2
+
+Rapport documentaire distinct `9c1b6e26c7` sur cx-codeparsers-protocol-report, sans déplacer le candidatc1cd ni pair02f919. GO renouvelé explicite C7-PARSERS-PROTOCOL-CPU2-16nov60 consigné. Les quatre fichiers locaux command/stdout/stderr/result ont été réhachés : conformes au rapport, resultSHA `d87aea28824cd6a9159558a2aa0816a7e8cae3e4879bca7eb4066960c161bcdb`. Le brut unittest rapporte11tests/0.003s/OK, rc0 et0.071853632s externe. Sourcec1cd dans le résultat, native=false/cargo=false. Aucun test rejoué par Banc.
+
+Le statut préparatoire précédent « CPU non qualifié » demeure historique avant réception de ce lot distinct ; **les onze juges CPU hermétiques sont maintenant attestés par leurs preuves**, sans qualifier la composition Linux réelle ni une phase native. Les trois réserves restent levées statiquement ; avis préparatoire favorable au candidat/pins exacts et à ce complément documentaire, sans GO natif, REGLES7 et ticket inchangés.
