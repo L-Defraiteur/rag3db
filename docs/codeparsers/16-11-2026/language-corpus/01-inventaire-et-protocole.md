@@ -121,3 +121,49 @@ Avant toute charge : source figée, revue du protocole d'entrée avec Banc,
 réservation fraîche auprès de C7, budget, poste, target unique et pilote canonique
 confiné. Aucun ancien GO Rust ne s'applique à cette campagne. Première erreur
 inattendue : preuve conservée et diagnostic, pas de relance aveugle.
+
+## Accord d'interface avec Banc
+
+Identité retenue pour les acquisitions GitHub :
+`repository_id=github.com/owner/repo@<full_commit>` ; URL canonique et SHA complet
+restent présents dans chaque entrée. Pour une autre forge, arrêter d'abord sa
+forme canonique plutôt qu'inventer une identité au téléchargement.
+Le fichier `--roots` est un objet JSON :
+
+```json
+{"schema_version":1,"repositories":{"github.com/owner/repo@<full_commit>":"/absolute/checkout"}}
+```
+
+Ajouter `repository_id` aux champs JSONL proposés ci-dessus. `license_id` contient
+une expression SPDX, y compris les choix multiples ; `license_path` pointe la
+preuve relative. Licence inconnue : exclusion motivée, jamais MIT inférée.
+`relative_path` est POSIX relatif, sans composant `..`, ni traversée de symlink.
+Hash SHA-256 des octets bruts avant analyse, UTF-8 strict, aucun décodage lossy.
+BOM et CRLF sont conservés : le lecteur ne normalise ni contenu ni positions.
+Les octets non UTF-8 restent visibles dans l'inventaire des rejets motivés.
+
+Vocabulaire initial fixé :
+
+| `language` | `facade` | État de la cohorte |
+|---|---|---|
+| `typescript`, `javascript`, `python`, `rust`, `go`, `c`, `cpp`, `csharp` | `scope` | routeur de code |
+| `css` | `css` | API spécialisée |
+| `scss` | `scss` | API spécialisée |
+| `sass` | `scss` | dialecte indenté à qualifier séparément |
+| `vue` | `vue` | API spécialisée regex |
+| `svelte` | `svelte` | limite d'initialisation connue |
+| `markdown` | `markdown` | API documentaire |
+| `mdx` | `markdown` | dialecte à qualifier séparément |
+| `html` | `html` | absence de parsing déclarée |
+
+Les cohortes de limites ne sont pas des langages qualifiés. Pas de sélection
+Generic ou Bash dans cette première interface. `stratum` vaut `production`,
+`test` ou `documentation` ; les cas ambigus reçoivent une règle de classement
+publiée dans le manifeste annexe.
+
+La déduplication globale par SHA est un indicateur de contenu unique, pas une
+permission de supprimer un cas de routage. La sélection préserve au moins les
+couples `(language, facade)` et les dialectes/strates annoncés : un même contenu
+`.c`/`.h` ou `.ts`/`.tsx` peut déclencher une autre analyse. Toutes les occurrences
+restent dans l'inventaire annexe. Publier séparément fichiers sélectionnés,
+contenus uniques et sous-effectifs, sans gonfler les quotas par duplication.
