@@ -127,3 +127,13 @@ c88662d673 publié AVANT14fonctionsfailfastVERTES0.376s sousCPU60hermétique.
 [Rapport24/V2](../../everything-declarative/16-11-2026/24-classification-pure-des-raw-vertex.md) : paquet34 SHA5593b7…60d/preparedd625…e794 réempreinté2posts0écart,
 RAW54/inventaire/ancien197+22 immuables ; ROtotalegroupée demandée sans
 reportdesavistroisfavorablesprécédents. HOLDcandidat/master inchangé.
+
+
+## Nouvelles RO totales86 : quatre favorables bornées, C7 distinct
+
+Hotfix/Archi/Banc/Mémoire favorables sur86a131 après correctiongroupée,
+Mémoire lève3P2 et0réserveenfile. [Rapport24](../../everything-declarative/16-11-2026/24-classification-pure-des-raw-vertex.md)
+regroupe leurs portées de réempreinte ; RO Banc2135b33efd/rapport18.
+Code/paquet34 inchangés, avis197 nonreportés ; POSTEXECnonindépendant/
+72NONJUGÉS/composéREDscopeROUGE/ENDexpiré conservés. AjoutDOCSEULE, pas
+suffisance/candidate/master/rerun automatique ; décisionC7 requise.

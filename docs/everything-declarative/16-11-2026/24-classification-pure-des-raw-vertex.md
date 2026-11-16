@@ -140,3 +140,26 @@ nouvelle dansstrict-green-v1. AucuneancienneGO/suffisance reportée.
 RO TOTALE GROUPÉE code+3contreexemples+14tests+paquet demandée AVANT reprise
 candidature. CandidatWTintegration-r1 resteb472 propre/nonpublié et aucune
 gardePush exécutée. TicketOUVERT/composéRED/scopeROUGE/ancienENDexpiré.
+
+
+## Quatre nouvelles RO totales sur86a13133667c89b7954445f7dc38eef6173ea6c5
+
+Avis NEUFS Hotfix, Archi, Banc et Mémoire favorables PURE bornés après les
+3P2 groupés, sans report des avis197. Mémoire les lève explicitement et
+n'a aucune autre réserve en file. Tous relisent code entier/delta,3vrais
+contreexemples/14fonctions et logs3FAIL0ERROR puis14verts sansrejeu.
+Hotfix réempreinte34V2+54RAW ; Archi etMémoire réempreintent34V2 deuxpostes ;
+Banc réempreinte34V2+8RAWlogs, sans ELF ouvert ; ne pas les confondre.
+CodeSHA9fc037…66a7c==Git86 confirmé ; manifest5593…60d/prepared d625…e794.
+Banc publie sa nouvelle RO2135b33efd dans sonrapport18, distinct de sa RO197.
+
+Les quatre avis maintiennent l'inventairePOSTEXEC024553 nonindépendant,
+72ignoredNONJUGÉS, ancien54RAW/22paquet/197/historiques, composéRED et
+scopeROUGE/ENDexpiré. Aucun testCPU/classificateur/Cargo/ELF--list/natif/
+DB/HTTP/cloud rejoué par les relecteurs. Verdict de cette préparation :
+RAW_CANONICAL_CLASSIFIED_ONLY ; pas qualification composite générale.
+
+Cet ajout est DOCSEULE, code86/paquet34 inchangés. C7 doit décider la
+suffisance PURE puis la reprise éventuelle d'une candidature NEUVE ; le WT
+integration-r1 reste b472 propre sans édition, aucune gardePush exécutée,
+pas de GOmaster ou rerun acquis par ces avis. Ticket reste ouvert.
