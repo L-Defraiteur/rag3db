@@ -4,13 +4,13 @@ from pathlib import Path
 import argparse,hashlib,json,os,shutil,signal,subprocess,sys,time
 import continue_result as carried
 a=carried.a;q=a.q;R=a.R
-P=R/'debt-fin-ro-result-v1';Q=R/'debt-fin-ro-control-v1';S=R/'debt-fin-ro-scopes-v1'
+P=R/'debt-fin-ro-result-v1';Q=R/'debt-fin-ro-control-v2';S=R/'debt-fin-ro-scopes-v1'
 FROZEN=carried.PRIOR/'copy'
 BASE=P/'copy/code-principal.rag3db'
 OLD_Q=R/'debt-audit-ro-continuation-control-v1'
 OLD_PREPARED='3ba4c7d1df85c0e7d15d351738f8d5a20314f41cae80a6823465e5494bb72ee9'
 OLD_PILOT='cc18bc7d1dd513c71407f07e887134871af0576e'
-HISTORY=dict(audit_deadline=1190939.194661205,continuation_status='EXPIRED_WITHOUT_LAUNCH',old_prepared_sha256=OLD_PREPARED,old_pilot=OLD_PILOT)
+HISTORY=dict(audit_common_start=1190109.194661205,audit_common_delay=830,audit_deadline=1190939.194661205,audit_start_provenance='derived: authority.echeance minus recipe.delai; not outer poste timestamp',continuation_status='EXPIRED_WITHOUT_LAUNCH',old_prepared_sha256=OLD_PREPARED,old_pilot=OLD_PILOT)
 # Reuse admission, typed Reader, immutable FTS and vector judges, not old drivers.
 a.FILES=dict(a.FILES,**{'finish_result.py':a.PREFIX+'finish_result.py'})
 carried.Q=Q;a.Q=Q;a.P=P;a.S=S;a.BASE=BASE;q.Q=Q

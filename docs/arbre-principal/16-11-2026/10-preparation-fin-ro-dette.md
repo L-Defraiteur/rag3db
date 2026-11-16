@@ -3,6 +3,10 @@
 C7 autorise la PRÉPARATION, pas l'exécution, après expiration propre de
 l'audit900. L'ancien END1190939.194661205 et CC18/Q3ba4c7d1 restent des
 pièces historiques ; aucune reprise de ce budget ni aucun writer autorisé.
+STARTcommun1190109.194661205 est conservé explicitement comme dérivé de
+authority.echeance−recipe.delai830 (confiner_validation.py266/289), pas comme
+une observation supplémentaire du timestamp poste ; aucune de ces valeurs
+n'est utilisée pour déterminer la nouvelle échéanceFIN.
 Les deux scopes COPYA et auditEDD restent ROUGES. FTS après et finished
 sont encore NONJOUÉS, aucune dette zéro ni durabilité acquise.
 
@@ -35,7 +39,7 @@ Le paquet neuf contient9sources, dont les8primitives CC18 et le contrôleur
 FIN ; la neuvième ne crée aucun nouveau lecteur natif.
 
 P/Q/S proposés sous ~/.cache/rag3weaver-build/bascule-live-20261116 :
-debt-fin-ro-result-v1, debt-fin-ro-control-v1, debt-fin-ro-scopes-v1.
+debt-fin-ro-result-v1, debt-fin-ro-control-v2, debt-fin-ro-scopes-v1.
 `--prepare EXACT` copie seulement les sources et empreintes ; P/S restent
 absents. `--launch EXACT --allocation GOREF` restera interdit avant GO C7
 distinct sur le SHA/paquet relus.
@@ -87,3 +91,7 @@ Aucun processus natif ni DB/provider n'est appelé par ces tests.
 L'espace final signalé par ED dans test_continuation.py:9 est corrigé.
 Publication SHA puis préparationPC/paquet et deux RO courtes précèdent le
 GO distinct ; cette recette ne l'accorde pas.
+
+Qv1/preparedbfad2f9534ee756e13dfd83e807ed76faeafbb417ca59963ca63fed9f0ad65f2
+reste conservé sans GO. Qv2 reprend le même code d'exécution ; seul l'ajout
+explicite du START historique/provenance dans HISTORY et le nom Q changent.
