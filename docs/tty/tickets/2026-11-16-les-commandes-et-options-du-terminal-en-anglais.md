@@ -264,3 +264,24 @@ scénarios discriminants avant essais hermétiques ; aucune exécution b70, aucu
 Cargo ni nouveau cache. Le test de texte initial du scan est un premier signal,
 pas une preuve du comportement : il sera remplacé par de vrais processus factices
 avec liens contrôleur/ancêtre/target et starttime changé.
+
+### Correction groupée du protocole, avant toute nouvelle exécution
+
+Les5scénarios hermétiques de `test_target_scan.py`, publiés à b67c9ac84f avant
+leur première exécution, passent (0,002s) : contrôleur légitime extérieur sans
+exemption PID, FD T/W d'ancêtre/contrôleur bloqué, PID réutilisé détecté,
+target modifié/substitué refusé malgré ownertexte identique, finalisation
+refusée si portée active/résidu/échéance dépassée/empreinte différente.
+Ce résultat ne qualifie pas F8 ni le harnais.
+
+Nouveau lanceur concret `launch_full.py` : prépare uniquement sur sourcepropre,
+fige ledger complet target et copiesELF, conserve reçus6td et identité initiale
+réelleGO2 (UID/dev/inode/mode), capture tardive nommée comme telle. Les contrôles
+sont copiés horsW, depuis un cwd extérieur ; **aucun PID, ancêtre ou FD de W/T
+n'est exempté**. Les scripts contrôleurs ouverts sont eux aussi horsW/T.
+Un lien W/T dans ces contrôleurs arrête donc comme pour tout autre processus.
+Après poste réel, admission calcule le reste du budget original3600 et lance
+Common ; préflight exige égalité avec ledger avant garde. Finaliseur extérieur
+vérifie Common terminé, code0, restes[], nettoye, empreintes et scan frais,
+source propre et temps final avant échéance. Le shell dit STAGES_PASSED,
+jamais un VERT composé avant la fin de Common. Aucun GO b70 réactivé.
