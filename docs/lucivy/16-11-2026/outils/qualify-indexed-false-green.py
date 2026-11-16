@@ -45,9 +45,10 @@ def classify_scan(records, baseline):
         if row['owned'] or row['attributed']:
             blocked.append(dict(record=row, reason='attributed_unknown' if row['errors'] else 'known_activity'))
         elif row['errors']:
-            unknown.append(row)
-            if identity not in allowed_unknown:
-                blocked.append(dict(record=row, reason='new_unattributed_unknown'))
+            # This is not a universal absence-of-processes gate. Unattributed
+            # opaque metadata stays UNKNOWN; baseline membership is evidence,
+            # not a claim that an unrelated process is absent.
+            unknown.append(dict(row, baseline_identity=identity in allowed_unknown))
     return dict(admitted=not blocked, blocked=blocked, unknown=unknown,
                 scope='owned identities and attributable target/worktree activity only',
                 universal_quiescence_claimed=False)

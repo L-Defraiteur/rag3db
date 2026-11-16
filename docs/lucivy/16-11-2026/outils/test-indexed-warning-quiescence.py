@@ -34,7 +34,9 @@ class QuiescenceContract(unittest.TestCase):
         opaque = record(errors=[dict(field='exe', errno=13)])
         result = classify([opaque], [opaque])
         self.assertTrue(result['admitted'])
-        self.assertEqual(result['unknown'], [opaque])
+        self.assertEqual(len(result['unknown']), 1)
+        self.assertEqual(result['unknown'][0]['errors'], opaque['errors'])
+        self.assertTrue(result['unknown'][0]['baseline_identity'])
         self.assertFalse(result['universal_quiescence_claimed'])
 
 
