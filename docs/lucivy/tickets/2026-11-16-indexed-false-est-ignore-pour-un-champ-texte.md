@@ -397,3 +397,10 @@ nonattribuésconservés,scope/logsabsents/scratchvide. ActionROBancDELTA sur
 7833/v2 avantGO600 : réattestationfinalephysiqueELF+HEAD/propreté/copies/préflight
 etpubbudgetaprèsopen/avantdumppuisaprèsflush,source81b0déjàRORecherchefavorable.
 C7 reçoitlecouplefinalsansautreSHAcycle ; aucunGOnatif600/Rustdeduitdes6verts.
+
+RODELTA Banc e082ea5bbf reçue : les2réserves7f6 LEVÉES sur
+7833/7649/préflight0c90301e exacts, SOURCE81b0 inchangée. HuitSHApreuves
+conformes/ASTsansimport/logspurscohérents, aucunrejeu/Cargo/ELF/proc/base.
+SourceRechercheetpaquetBanc désormaisfavorablesPRÉPA ; seulGO600 exactC7
+resteàrecevoiravantrougeRust. Aucunrefuscontourné/RUNimplicite,9HOLD/
+corefalse/ULP7.2/PR42 maintenus. Recette12complétée et statut transmisC7.

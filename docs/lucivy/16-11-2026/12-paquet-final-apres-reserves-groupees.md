@@ -104,3 +104,14 @@ Le résultat attendu resterait provisoire jusqu’au Common terminé/nettoyé et
 scan final owned, tous contrôles sousEND. Rien ne qualifie le core entier,
 neufHOLD/ignorés, les corpus réels,7.2/ULP, les anciens trois warnings ou PR42.
 Pas de réactivation de deadline, de nouvelle sélection, builder natif, main/tag.
+
+## RO delta reçue
+
+Banc e082ea5bbf, même rapport13 et ticketindexed-false : favorable bornée,
+les deux réserves7f6 sont levées sur7833/7649/préflight0c90301e exacts ;
+SOURCE81b0 inchangée. HuitSHApreuves conformes, AST sans import et sansrejeu.
+Rehashphysique3ELF/HEAD/propreté/copies/préflight sousEND et publication après
+open contrôlés statiquement ; logsrouge1/1puisvert6/0CPUfakes cohérents.
+Pas de rehashphysique ELF par Banc, ni procscan/Cargo/ELF/base/service.
+Avis PRÉPARATOIRE seulement : rougeRust et finCommon/owned NONOBSERVÉS,
+GO600 exact toujours distinct. C7 informée, aucune exécution supplémentaire.
