@@ -154,6 +154,17 @@ pub fn search_hits(
 /// placer le span dans un morceau rogné de ses blancs (voir
 /// [`crate::search::chunk_highlights`]). Un span qui ne tombe pas sur des
 /// frontières de caractère porte un texte vide.
+/// **The hits of a search, with every tie of the cut** (lucivy's ticket of 16 November 2026: lucivy breaks ties by
+/// document address, stable in one index but not from one index to another). Stub of the witness: lucivy's cut only.
+pub fn search_hits_with_ties(
+    handle: &lucivy_core::sharded_handle::ShardedHandle,
+    query_config: &lucivy_core::query::QueryConfig,
+    limit: usize,
+    allowed_ids: Option<&[u64]>,
+) -> Result<Vec<(u64, f64, std::collections::HashMap<String, Vec<(usize, usize, String)>>)>, String> {
+    search_hits_with_text(handle, query_config, limit, allowed_ids)
+}
+
 pub fn search_hits_with_text(
     handle: &lucivy_core::sharded_handle::ShardedHandle,
     query_config: &lucivy_core::query::QueryConfig,
@@ -549,6 +560,43 @@ mod tests {
 
         complet.close().ok();
         seul.close().ok();
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    /// **The ties of the cut come with it** (lucivy's ticket of 16 November 2026). Six documents with the same text,
+    /// hence the same score, indexed in two opposite orders over two shards: asked for two, each index gives
+    /// every tie of the cut, and both give the same set. Above it, rag3weaver sorts by score then a stable
+    /// identity and cuts: the same list from one base to the other.
+    #[test]
+    fn a_search_returns_every_tie_of_its_cut() {
+        use lucivy_core::blob_store::MemBlobStore;
+        use lucivy_core::sharded_handle::{BlobShardStorage, ShardedHandle};
+        let tmp = std::env::temp_dir().join(format!("rag3weaver_fts_ties_{}", std::process::id()));
+        let cfg = build_schema_config(&["content".to_string()], &[], 2).unwrap();
+        let open = |name: &str| {
+            let storage = BlobShardStorage::new(Arc::new(MemBlobStore::new()), fts_index_name(name), &tmp.join(name));
+            ShardedHandle::create_with_storage(Box::new(storage), &cfg).expect("create")
+        };
+        let (forward, backward) = (open("TiesForward"), open("TiesBackward"));
+        let offsets: Vec<u64> = (0..6).collect();
+        for &o in &offsets {
+            index_document(&forward, &[("content".into(), "zorglub stands alone".to_string())], o).unwrap();
+        }
+        for &o in offsets.iter().rev() {
+            index_document(&backward, &[("content".into(), "zorglub stands alone".to_string())], o).unwrap();
+        }
+        forward.commit().unwrap();
+        backward.commit().unwrap();
+        let q: lucivy_core::query::QueryConfig =
+            serde_json::from_value(serde_json::json!({ "type": "contains", "field": "content", "value": "zorglub" })).unwrap();
+        let set = |h: &ShardedHandle| -> std::collections::BTreeSet<u64> {
+            search_hits_with_ties(h, &q, 2, None).expect("search").into_iter().map(|(o, _, _)| o).collect()
+        };
+        let (a, b) = (set(&forward), set(&backward));
+        assert_eq!(a, offsets.iter().copied().collect(), "every tie of the cut comes with it");
+        assert_eq!(a, b, "the same set from both indexes");
+        forward.close().ok();
+        backward.close().ok();
         let _ = std::fs::remove_dir_all(&tmp);
     }
 
