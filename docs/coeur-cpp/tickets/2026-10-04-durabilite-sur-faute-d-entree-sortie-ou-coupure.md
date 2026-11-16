@@ -118,6 +118,38 @@ sous la sonde qui retire la synchronisation).
   DROP, le verrou d'état de page et la file d'éviction, la frontière d'algorithme de graphe, madvise
   sur des pages de 16 ou 64 Kio : à lire contre l'amont, un par un.
 
+## Avancement (16 novembre 2026, hotfixs) : le nom d'un fichier créé survit à une coupure
+
+**Répertoire jamais synchronisé après création : corrigé, avec témoin.** La doublure `CutFileSystem` a une option,
+`pendingDirectoryEntries()`, éteinte par défaut, et `syncDirectory`. Avec l'option, un fichier créé ne vit que sous
+un nom caché jusqu'à la synchronisation de son répertoire, et une suppression attend de même. `failSyncOf` est
+inchangé. L'autotest de la doublure est `PowerCut.TheDoubleLosesADirectoryEntryThatIsNotSynced`.
+
+Le témoin `PowerCut.CommitsOfANewDatabaseSurviveACutOfItsDirectoryEntries` : une base neuve reçoit 2 000 lignes
+validées, rendues « ok », puis une coupure tombe. Il est rouge sur master : « REFUS Binder exception: Table T does not
+exist. » La base a disparu entière, parce que rien ne synchronisait le répertoire après la création du fichier de
+données ni du journal.
+
+Le correctif : `FileSystem::syncDirectory`, vide par défaut, un `fsync` du répertoire chez `LocalFileSystem`
+(EINVAL toléré, rien sous Windows). `VirtualFileSystem::openFile` l'appelle sur le répertoire parent quand
+l'ouverture crée le fichier, sur le système de fichiers par défaut seulement.
+
+La passe, à luciepc, sur 4676ce513 :
+
+| Suite | Résultat |
+| --- | --- |
+| `PowerCut*` | les 8 verts |
+| `transaction_test` entier | 392 verts, 2 sautés (les outils à variable), code 0 |
+| Les 11 binaires de `test/storage` | verts |
+
+**Le coût**, mesuré sous `poste mesure` à luciepc : des cycles « une ligne validée, puis CHECKPOINT » sur une base
+neuve, avec le shell bâti avant (1688239b2) puis après (4676ce513), cinq parties alternées de 199 cycles. Médiane par
+cycle : 14,2 ms avant, 15,8 ms après, soit environ +1,6 ms (+11 %), puisque le journal est recréé à chaque cycle. Une
+validation sans point de reprise ne crée aucun fichier et ne paie rien.
+
+**Reste ouvert, ligne suivante** : la suppression non synchronisée. Le journal retiré par un point de reprise
+réapparaîtrait après une coupure. Il faut un témoin rouge d'abord, et ce sera un lot à part.
+
 ## Pour le fermer
 
 un crochet de test dans `src/` (faute d'E/S injectée, mort à un point nommé), puis un témoin par défaut ; ou un correctif lu sur l'amont pour chacun, sans témoin, avec l'accord de la session cœur C++.
