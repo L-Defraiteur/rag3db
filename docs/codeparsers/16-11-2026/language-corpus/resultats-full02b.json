@@ -1,0 +1,827 @@
+{
+  "schema_version": 1,
+  "files": 32382,
+  "languages": {
+    "c": {
+      "files": 2500,
+      "execution": {
+        "completed": 2499,
+        "worker_exit": 1
+      },
+      "routing": {
+        "supported": 2499,
+        "not_reported": 1
+      },
+      "ast": {
+        "valid": 2408,
+        "invalid": 91,
+        "not_reported": 1
+      },
+      "capture": {
+        "nonempty": 2498,
+        "empty": 1,
+        "not_reported": 1
+      },
+      "strata": {
+        "documentation": 149,
+        "production": 1800,
+        "test": 551
+      },
+      "amended_strata": {
+        "documentation_not_in_upb_amendment": 149,
+        "production_not_in_upb_amendment": 1471,
+        "test_not_in_upb_amendment": 551,
+        "confirmed_generated_upb": 329
+      },
+      "scope_types": {
+        "Function": 24468,
+        "Module": 7472,
+        "Class": 694,
+        "Enum": 51,
+        "TypeAlias": 1547
+      },
+      "worker_wall_seconds_total": 49.603007269790396,
+      "compact_omitted": 0,
+      "files_with_compact_omissions": 0,
+      "counter_disagreements": 2498,
+      "parser_call_timing": {
+        "samples": 2499,
+        "total_ms": 44388.951003,
+        "median_ms": 6.546938,
+        "p95_ms": 65.723831,
+        "scope": "worker call including lazy initialization, not file IO/hash/compact serialization"
+      }
+    },
+    "cpp": {
+      "files": 2500,
+      "execution": {
+        "completed": 2500
+      },
+      "routing": {
+        "supported": 2500
+      },
+      "ast": {
+        "valid": 2494,
+        "invalid": 6
+      },
+      "capture": {
+        "nonempty": 2500
+      },
+      "strata": {
+        "documentation": 1,
+        "production": 1857,
+        "test": 642
+      },
+      "amended_strata": {
+        "documentation_not_in_upb_amendment": 1,
+        "production_not_in_upb_amendment": 1602,
+        "test_not_in_upb_amendment": 642,
+        "confirmed_generated_upb": 255
+      },
+      "scope_types": {
+        "Class": 3397,
+        "Function": 20394,
+        "Method": 8397,
+        "Module": 4991,
+        "Enum": 284,
+        "Lambda": 2594,
+        "Namespace": 3333
+      },
+      "worker_wall_seconds_total": 82.20390623970889,
+      "compact_omitted": 0,
+      "files_with_compact_omissions": 0,
+      "counter_disagreements": 2500,
+      "parser_call_timing": {
+        "samples": 2500,
+        "total_ms": 76076.420414,
+        "median_ms": 5.362108,
+        "p95_ms": 139.300939,
+        "scope": "worker call including lazy initialization, not file IO/hash/compact serialization"
+      }
+    },
+    "csharp": {
+      "files": 2500,
+      "execution": {
+        "completed": 2499,
+        "timeout": 1
+      },
+      "routing": {
+        "supported": 2499,
+        "not_reported": 1
+      },
+      "ast": {
+        "valid": 2495,
+        "invalid": 4,
+        "not_reported": 1
+      },
+      "capture": {
+        "nonempty": 2499,
+        "not_reported": 1
+      },
+      "strata": {
+        "production": 1804,
+        "test": 690,
+        "documentation": 6
+      },
+      "amended_strata": {
+        "production_not_in_upb_amendment": 1804,
+        "test_not_in_upb_amendment": 690,
+        "documentation_not_in_upb_amendment": 6
+      },
+      "scope_types": {
+        "Class": 3066,
+        "Method": 26811,
+        "Module": 3104,
+        "Namespace": 2504,
+        "Enum": 137,
+        "Interface": 183
+      },
+      "worker_wall_seconds_total": 74.75886813900433,
+      "compact_omitted": 0,
+      "files_with_compact_omissions": 0,
+      "counter_disagreements": 2499,
+      "parser_call_timing": {
+        "samples": 2499,
+        "total_ms": 59134.409519,
+        "median_ms": 4.327143,
+        "p95_ms": 79.805894,
+        "scope": "worker call including lazy initialization, not file IO/hash/compact serialization"
+      }
+    },
+    "css": {
+      "files": 1041,
+      "execution": {
+        "completed": 1041
+      },
+      "routing": {
+        "supported": 1041
+      },
+      "ast": {
+        "not_exposed": 1041
+      },
+      "capture": {
+        "nonempty": 1025,
+        "empty": 16
+      },
+      "strata": {
+        "production": 759,
+        "documentation": 8,
+        "test": 274
+      },
+      "amended_strata": {
+        "production_not_in_upb_amendment": 759,
+        "documentation_not_in_upb_amendment": 8,
+        "test_not_in_upb_amendment": 274
+      },
+      "scope_types": {},
+      "worker_wall_seconds_total": 2.6351726565044373,
+      "compact_omitted": 0,
+      "files_with_compact_omissions": 0,
+      "counter_disagreements": 0,
+      "parser_call_timing": {
+        "samples": 1041,
+        "total_ms": 1386.230018,
+        "median_ms": 0.332417,
+        "p95_ms": 4.155311,
+        "scope": "worker call including lazy initialization, not file IO/hash/compact serialization"
+      }
+    },
+    "go": {
+      "files": 2500,
+      "execution": {
+        "completed": 2500
+      },
+      "routing": {
+        "supported": 2500
+      },
+      "ast": {
+        "valid": 2499,
+        "invalid": 1
+      },
+      "capture": {
+        "nonempty": 2500
+      },
+      "strata": {
+        "production": 1800,
+        "test": 615,
+        "documentation": 85
+      },
+      "amended_strata": {
+        "production_not_in_upb_amendment": 1800,
+        "test_not_in_upb_amendment": 615,
+        "documentation_not_in_upb_amendment": 85
+      },
+      "scope_types": {
+        "Class": 2704,
+        "Function": 13432,
+        "Method": 9598,
+        "Module": 11122,
+        "TypeAlias": 1203,
+        "Interface": 275
+      },
+      "worker_wall_seconds_total": 61.51151557895355,
+      "compact_omitted": 0,
+      "files_with_compact_omissions": 0,
+      "counter_disagreements": 2500,
+      "parser_call_timing": {
+        "samples": 2500,
+        "total_ms": 56064.416,
+        "median_ms": 3.7674755,
+        "p95_ms": 99.581023,
+        "scope": "worker call including lazy initialization, not file IO/hash/compact serialization"
+      }
+    },
+    "html": {
+      "files": 1761,
+      "execution": {
+        "not_attempted": 1761
+      },
+      "routing": {
+        "unimplemented": 1761
+      },
+      "ast": {
+        "not_reported": 1761
+      },
+      "capture": {
+        "not_reported": 1761
+      },
+      "strata": {
+        "production": 753,
+        "documentation": 13,
+        "test": 995
+      },
+      "amended_strata": {
+        "production_not_in_upb_amendment": 753,
+        "documentation_not_in_upb_amendment": 13,
+        "test_not_in_upb_amendment": 995
+      },
+      "scope_types": {},
+      "worker_wall_seconds_total": 1.649688130710274,
+      "compact_omitted": 0,
+      "files_with_compact_omissions": 0,
+      "counter_disagreements": 0,
+      "parser_call_timing": {
+        "samples": 0,
+        "total_ms": 0.0,
+        "median_ms": null,
+        "p95_ms": null,
+        "scope": "worker call including lazy initialization, not file IO/hash/compact serialization"
+      }
+    },
+    "javascript": {
+      "files": 2500,
+      "execution": {
+        "completed": 2500
+      },
+      "routing": {
+        "supported": 2500
+      },
+      "ast": {
+        "valid": 2500
+      },
+      "capture": {
+        "nonempty": 2499,
+        "empty": 1
+      },
+      "strata": {
+        "production": 1800,
+        "test": 500,
+        "documentation": 200
+      },
+      "amended_strata": {
+        "production_not_in_upb_amendment": 1800,
+        "test_not_in_upb_amendment": 500,
+        "documentation_not_in_upb_amendment": 200
+      },
+      "scope_types": {
+        "Module": 7320,
+        "Variable": 20583,
+        "Block": 841,
+        "Function": 9352,
+        "Lambda": 728,
+        "Method": 4340,
+        "Class": 370
+      },
+      "worker_wall_seconds_total": 87.21376854996197,
+      "compact_omitted": 0,
+      "files_with_compact_omissions": 0,
+      "counter_disagreements": 0,
+      "parser_call_timing": {
+        "samples": 2500,
+        "total_ms": 81054.4942,
+        "median_ms": 4.4860575,
+        "p95_ms": 114.212519,
+        "scope": "worker call including lazy initialization, not file IO/hash/compact serialization"
+      }
+    },
+    "markdown": {
+      "files": 2500,
+      "execution": {
+        "completed": 2500
+      },
+      "routing": {
+        "supported": 2500
+      },
+      "ast": {
+        "not_exposed": 2500
+      },
+      "capture": {
+        "nonempty": 2393,
+        "empty": 107
+      },
+      "strata": {
+        "documentation": 2500
+      },
+      "amended_strata": {
+        "documentation_not_in_upb_amendment": 2500
+      },
+      "scope_types": {},
+      "worker_wall_seconds_total": 6.868611093144864,
+      "compact_omitted": 0,
+      "files_with_compact_omissions": 0,
+      "counter_disagreements": 0,
+      "parser_call_timing": {
+        "samples": 2500,
+        "total_ms": 3918.356318,
+        "median_ms": 0.651407,
+        "p95_ms": 5.014943,
+        "scope": "worker call including lazy initialization, not file IO/hash/compact serialization"
+      }
+    },
+    "mdx": {
+      "files": 211,
+      "execution": {
+        "completed": 211
+      },
+      "routing": {
+        "supported": 211
+      },
+      "ast": {
+        "not_exposed": 211
+      },
+      "capture": {
+        "nonempty": 208,
+        "empty": 3
+      },
+      "strata": {
+        "documentation": 211
+      },
+      "amended_strata": {
+        "documentation_not_in_upb_amendment": 211
+      },
+      "scope_types": {},
+      "worker_wall_seconds_total": 0.5595541736111045,
+      "compact_omitted": 0,
+      "files_with_compact_omissions": 0,
+      "counter_disagreements": 0,
+      "parser_call_timing": {
+        "samples": 211,
+        "total_ms": 309.138976,
+        "median_ms": 0.988042,
+        "p95_ms": 4.279059,
+        "scope": "worker call including lazy initialization, not file IO/hash/compact serialization"
+      }
+    },
+    "python": {
+      "files": 2500,
+      "execution": {
+        "completed": 2500
+      },
+      "routing": {
+        "supported": 2500
+      },
+      "ast": {
+        "valid": 2500
+      },
+      "capture": {
+        "nonempty": 2443,
+        "empty": 57
+      },
+      "strata": {
+        "test": 1418,
+        "production": 1075,
+        "documentation": 7
+      },
+      "amended_strata": {
+        "test_not_in_upb_amendment": 1418,
+        "production_not_in_upb_amendment": 1075,
+        "documentation_not_in_upb_amendment": 7
+      },
+      "scope_types": {
+        "Class": 9134,
+        "Constant": 2912,
+        "Function": 3681,
+        "Method": 29636,
+        "Variable": 2349,
+        "Lambda": 2308
+      },
+      "worker_wall_seconds_total": 56.925589149584994,
+      "compact_omitted": 0,
+      "files_with_compact_omissions": 0,
+      "counter_disagreements": 0,
+      "parser_call_timing": {
+        "samples": 2500,
+        "total_ms": 50992.042189,
+        "median_ms": 4.435624,
+        "p95_ms": 78.022973,
+        "scope": "worker call including lazy initialization, not file IO/hash/compact serialization"
+      }
+    },
+    "rust": {
+      "files": 2441,
+      "execution": {
+        "completed": 2440,
+        "timeout": 1
+      },
+      "routing": {
+        "supported": 2440,
+        "not_reported": 1
+      },
+      "ast": {
+        "valid": 2437,
+        "not_reported": 1,
+        "invalid": 3
+      },
+      "capture": {
+        "nonempty": 2424,
+        "not_reported": 1,
+        "empty": 16
+      },
+      "strata": {
+        "production": 2029,
+        "test": 410,
+        "documentation": 2
+      },
+      "amended_strata": {
+        "production_not_in_upb_amendment": 2029,
+        "test_not_in_upb_amendment": 410,
+        "documentation_not_in_upb_amendment": 2
+      },
+      "scope_types": {
+        "Class": 8026,
+        "Enum": 1009,
+        "Function": 16866,
+        "Lambda": 9866,
+        "Method": 14131,
+        "Module": 11393,
+        "Namespace": 2046,
+        "Interface": 277
+      },
+      "worker_wall_seconds_total": 225.72631701850332,
+      "compact_omitted": 0,
+      "files_with_compact_omissions": 0,
+      "counter_disagreements": 2424,
+      "parser_call_timing": {
+        "samples": 2440,
+        "total_ms": 207246.015161,
+        "median_ms": 13.3974935,
+        "p95_ms": 360.237467,
+        "scope": "worker call including lazy initialization, not file IO/hash/compact serialization"
+      }
+    },
+    "sass": {
+      "files": 267,
+      "execution": {
+        "completed": 267
+      },
+      "routing": {
+        "supported": 267
+      },
+      "ast": {
+        "not_exposed": 267
+      },
+      "capture": {
+        "nonempty": 216,
+        "empty": 51
+      },
+      "strata": {
+        "documentation": 4,
+        "production": 263
+      },
+      "amended_strata": {
+        "documentation_not_in_upb_amendment": 4,
+        "production_not_in_upb_amendment": 263
+      },
+      "scope_types": {},
+      "worker_wall_seconds_total": 0.7651767292991281,
+      "compact_omitted": 0,
+      "files_with_compact_omissions": 0,
+      "counter_disagreements": 0,
+      "parser_call_timing": {
+        "samples": 267,
+        "total_ms": 472.345849,
+        "median_ms": 0.753817,
+        "p95_ms": 4.86094,
+        "scope": "worker call including lazy initialization, not file IO/hash/compact serialization"
+      }
+    },
+    "scss": {
+      "files": 1661,
+      "execution": {
+        "completed": 1661
+      },
+      "routing": {
+        "supported": 1661
+      },
+      "ast": {
+        "not_exposed": 1661
+      },
+      "capture": {
+        "nonempty": 1607,
+        "empty": 54
+      },
+      "strata": {
+        "documentation": 23,
+        "production": 1552,
+        "test": 86
+      },
+      "amended_strata": {
+        "documentation_not_in_upb_amendment": 23,
+        "production_not_in_upb_amendment": 1552,
+        "test_not_in_upb_amendment": 86
+      },
+      "scope_types": {},
+      "worker_wall_seconds_total": 3.47932818508707,
+      "compact_omitted": 0,
+      "files_with_compact_omissions": 0,
+      "counter_disagreements": 0,
+      "parser_call_timing": {
+        "samples": 1661,
+        "total_ms": 1675.580807,
+        "median_ms": 0.405415,
+        "p95_ms": 3.608718,
+        "scope": "worker call including lazy initialization, not file IO/hash/compact serialization"
+      }
+    },
+    "svelte": {
+      "files": 2500,
+      "execution": {
+        "not_attempted": 2500
+      },
+      "routing": {
+        "unimplemented": 2500
+      },
+      "ast": {
+        "not_reported": 2500
+      },
+      "capture": {
+        "not_reported": 2500
+      },
+      "strata": {
+        "production": 2,
+        "test": 2498
+      },
+      "amended_strata": {
+        "production_not_in_upb_amendment": 2,
+        "test_not_in_upb_amendment": 2498
+      },
+      "scope_types": {},
+      "worker_wall_seconds_total": 2.3587734068278223,
+      "compact_omitted": 0,
+      "files_with_compact_omissions": 0,
+      "counter_disagreements": 0,
+      "parser_call_timing": {
+        "samples": 0,
+        "total_ms": 0.0,
+        "median_ms": null,
+        "p95_ms": null,
+        "scope": "worker call including lazy initialization, not file IO/hash/compact serialization"
+      }
+    },
+    "typescript": {
+      "files": 2500,
+      "execution": {
+        "completed": 2497,
+        "timeout": 3
+      },
+      "routing": {
+        "supported": 2497,
+        "not_reported": 3
+      },
+      "ast": {
+        "valid": 2497,
+        "not_reported": 3
+      },
+      "capture": {
+        "nonempty": 2496,
+        "empty": 1,
+        "not_reported": 3
+      },
+      "strata": {
+        "documentation": 99,
+        "production": 1800,
+        "test": 601
+      },
+      "amended_strata": {
+        "documentation_not_in_upb_amendment": 99,
+        "production_not_in_upb_amendment": 1800,
+        "test_not_in_upb_amendment": 601
+      },
+      "scope_types": {
+        "Function": 10758,
+        "Method": 14741,
+        "Module": 3388,
+        "Variable": 12933,
+        "TypeAlias": 1192,
+        "Block": 2606,
+        "Interface": 2655,
+        "Lambda": 362,
+        "Class": 2058,
+        "Enum": 215
+      },
+      "worker_wall_seconds_total": 281.4879697947763,
+      "compact_omitted": 0,
+      "files_with_compact_omissions": 0,
+      "counter_disagreements": 0,
+      "parser_call_timing": {
+        "samples": 2497,
+        "total_ms": 241767.968207,
+        "median_ms": 16.123994,
+        "p95_ms": 363.427842,
+        "scope": "worker call including lazy initialization, not file IO/hash/compact serialization"
+      }
+    },
+    "vue": {
+      "files": 2500,
+      "execution": {
+        "completed": 2500
+      },
+      "routing": {
+        "supported": 2500
+      },
+      "ast": {
+        "not_exposed": 2500
+      },
+      "capture": {
+        "nonempty": 2500
+      },
+      "strata": {
+        "documentation": 1321,
+        "production": 639,
+        "test": 540
+      },
+      "amended_strata": {
+        "documentation_not_in_upb_amendment": 1321,
+        "production_not_in_upb_amendment": 639,
+        "test_not_in_upb_amendment": 540
+      },
+      "scope_types": {},
+      "worker_wall_seconds_total": 10.583698438480496,
+      "compact_omitted": 0,
+      "files_with_compact_omissions": 0,
+      "counter_disagreements": 0,
+      "parser_call_timing": {
+        "samples": 2500,
+        "total_ms": 7641.868834,
+        "median_ms": 1.201434,
+        "p95_ms": 10.45464,
+        "scope": "worker call including lazy initialization, not file IO/hash/compact serialization"
+      }
+    }
+  },
+  "failures": [
+    {
+      "sequence": 2258,
+      "input": {
+        "facade": "scope",
+        "language": "c",
+        "license_id": "Apache-2.0",
+        "license_path": "LICENSE.txt",
+        "relative_path": "ssl/s3_lib.c",
+        "repository_commit": "899d0ca02559e105b9cb30964e3478dfbd8c4578",
+        "repository_id": "github.com/openssl/openssl@899d0ca02559e105b9cb30964e3478dfbd8c4578",
+        "repository_url": "https://github.com/openssl/openssl",
+        "sha256": "38036ad0cc36536c11f1580d79206239d378c20aa9806e670cbb3b8ee3d27d47",
+        "size_bytes": 149934,
+        "stratum": "production"
+      },
+      "measurement": {
+        "execution_status": "worker_exit",
+        "diagnostic": "no retry",
+        "elapsed_ns": null
+      },
+      "worker_returncode": -6
+    },
+    {
+      "sequence": 5578,
+      "input": {
+        "facade": "scope",
+        "language": "csharp",
+        "license_id": "MIT",
+        "license_path": "License.txt",
+        "relative_path": "src/Compilers/VisualBasic/Test/Semantic/Binding/T_1247520.cs",
+        "repository_commit": "c6dae7dd4f51cef1680c6b23ab614394d6989a69",
+        "repository_id": "github.com/dotnet/roslyn@c6dae7dd4f51cef1680c6b23ab614394d6989a69",
+        "repository_url": "https://github.com/dotnet/roslyn",
+        "sha256": "924579c01284e0020f121e3d80592d3f14b960078bf2de495546811f2de29847",
+        "size_bytes": 787111,
+        "stratum": "test"
+      },
+      "measurement": {
+        "execution_status": "timeout",
+        "diagnostic": "no retry",
+        "elapsed_ns": null
+      },
+      "worker_returncode": -9
+    },
+    {
+      "sequence": 20883,
+      "input": {
+        "facade": "scope",
+        "language": "rust",
+        "license_id": "Apache-2.0",
+        "license_path": "LICENSE-APACHE",
+        "relative_path": "crates/hir/src/lib.rs",
+        "repository_commit": "15d97b98eacfad690e81757e867ca0800f1c9e07",
+        "repository_id": "github.com/rust-lang/rust-analyzer@15d97b98eacfad690e81757e867ca0800f1c9e07",
+        "repository_url": "https://github.com/rust-lang/rust-analyzer",
+        "sha256": "3ce10e550720d2d1d3c8152acea0c568c46e4f05a5bd31729f84bcc2093bd0f5",
+        "size_bytes": 231120,
+        "stratum": "production"
+      },
+      "measurement": {
+        "execution_status": "timeout",
+        "diagnostic": "no retry",
+        "elapsed_ns": null
+      },
+      "worker_returncode": -9
+    },
+    {
+      "sequence": 28613,
+      "input": {
+        "facade": "scope",
+        "language": "typescript",
+        "license_id": "MIT",
+        "license_path": "LICENSE.txt",
+        "relative_path": "src/vs/platform/agentHost/test/node/claudeAgent.test.ts",
+        "repository_commit": "6e68549edb69380c9316e49df5d3795d5064a2b0",
+        "repository_id": "github.com/microsoft/vscode@6e68549edb69380c9316e49df5d3795d5064a2b0",
+        "repository_url": "https://github.com/microsoft/vscode",
+        "sha256": "81b78deea19efab8bba474cd5bdcee37eb3951002896caffdca766efaa71838f",
+        "size_bytes": 588495,
+        "stratum": "test"
+      },
+      "measurement": {
+        "execution_status": "timeout",
+        "diagnostic": "no retry",
+        "elapsed_ns": null
+      },
+      "worker_returncode": -9
+    },
+    {
+      "sequence": 29069,
+      "input": {
+        "facade": "scope",
+        "language": "typescript",
+        "license_id": "MIT",
+        "license_path": "LICENSE.txt",
+        "relative_path": "src/vs/workbench/contrib/chat/browser/widget/input/chatInputPart.ts",
+        "repository_commit": "6e68549edb69380c9316e49df5d3795d5064a2b0",
+        "repository_id": "github.com/microsoft/vscode@6e68549edb69380c9316e49df5d3795d5064a2b0",
+        "repository_url": "https://github.com/microsoft/vscode",
+        "sha256": "c8667e7d6186189d231ad853f0df1e9baa63dfcb731a7fc3725b55b90aa6f626",
+        "size_bytes": 307069,
+        "stratum": "production"
+      },
+      "measurement": {
+        "execution_status": "timeout",
+        "diagnostic": "no retry",
+        "elapsed_ns": null
+      },
+      "worker_returncode": -9
+    },
+    {
+      "sequence": 29325,
+      "input": {
+        "facade": "scope",
+        "language": "typescript",
+        "license_id": "MIT",
+        "license_path": "LICENSE.txt",
+        "relative_path": "src/vs/workbench/contrib/sessions/browser/views/sessionsList.ts",
+        "repository_commit": "6e68549edb69380c9316e49df5d3795d5064a2b0",
+        "repository_id": "github.com/microsoft/vscode@6e68549edb69380c9316e49df5d3795d5064a2b0",
+        "repository_url": "https://github.com/microsoft/vscode",
+        "sha256": "9f96b488f6ff15bd2bf95fb5eb8ca1ede20a4f13fa8a0deae6de3d2398e1558e",
+        "size_bytes": 527289,
+        "stratum": "production"
+      },
+      "measurement": {
+        "execution_status": "timeout",
+        "diagnostic": "no retry",
+        "elapsed_ns": null
+      },
+      "worker_returncode": -9
+    }
+  ],
+  "max_observed_worker_peak_rss_bytes": 845991936,
+  "peak_rss_scope": "maximum VmHWM observation across reused workers; no per-file attribution; crash peak may be unobserved",
+  "classification_amendment_files": 584,
+  "results_sha256": "0667eab18d7892b442b8b912d98528d1253041620f43c60a286b47cd5fa81678",
+  "manifest_sha256": "96c2e771fefc4cd0e204975feb8d1c73b1a66815cb1d3a1edc1b9002b94b644c",
+  "amendment_sha256": "8e673337e1361122167b4647d94ac02fcdd2563ee6bb31a8680e711bc8d6a18a",
+  "summarizer_sha256": "30397ec96e9b3417e0573bf310f7d05311d6412521c418c96f9b4d083e58b3c5",
+  "binary_sha256": "bff1cafb72e8c6662d2d595457b0ca6da4718686ae64b91ae1bde7a4e95565e2",
+  "coverage_status": "unjudged",
+  "project_resolution": "not_run",
+  "scope_counter_rule": "recursive count of returned IR, separate from reported_total_scopes"
+}

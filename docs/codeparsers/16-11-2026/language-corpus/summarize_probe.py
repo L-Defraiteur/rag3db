@@ -22,7 +22,7 @@ def identity(row):
 def bucket():
     return {'files': 0, 'execution': Counter(), 'routing': Counter(), 'ast': Counter(),
         'capture': Counter(), 'strata': Counter(), 'amended_strata': Counter(),
-        'scope_types': Counter(), 'parser_elapsed_ns': [], 'compact_omitted': 0,
+        'scope_types': Counter(), 'parser_elapsed_ns': [], 'worker_wall_seconds_total': 0.0, 'compact_omitted': 0,
         'files_with_compact_omissions': 0, 'counter_disagreements': 0}
 
 
@@ -55,6 +55,7 @@ def main():
             language = expected['language']
             stats = languages.setdefault(language, bucket())
             stats['files'] += 1
+            stats['worker_wall_seconds_total'] += row['controller_elapsed_seconds']
             for source, target in [('execution_status', 'execution'), ('routing_status', 'routing'),
                     ('ast_status', 'ast'), ('capture_status', 'capture')]:
                 stats[target][measurement.get(source, 'not_reported')] += 1

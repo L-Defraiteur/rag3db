@@ -1,7 +1,7 @@
 # Premier corpus public : résultats et limites
 
-État : campagne FULL02b en cours, ne pas lire ce document comme un reçu de fin.
-Le bilan chiffré complet sera ajouté après le verdict du superviseur.
+État : campagne FULL02b terminée, 32382/32382 entrées contrôlées.
+Le superviseur est fermé sans résidu ; la couverture sémantique reste partielle.
 Ticket parent : `2026-11-16-qualifier-la-couverture-sur-des-corpus-publics-par-langage.md`.
 
 ## Sources et périmètre réellement exécuté
@@ -101,4 +101,89 @@ refusés comme chemins incomplets connus, pas déclarés réussis. Les façades 
 validité AST publique restent not_exposed, pas valides par défaut. Les fichiers
 sans capture ne sont jugés fautifs qu'après lecture d'une attente sourcée.
 L'oracle indépendant Banc109faits/12sources, publié905bf17f36 avant consultation
-des résultats, complète les six autres langages ; jugement en cours, pas encore livré.
+des résultats, complète les six autres langages ; jugement livré3f102e028e :
+80observés,2manquants(x/yPoint),1nonexposéforwardC++,26indéterminés notamment
+par limites du compact. Ce sont des faits choisis, pas un estimateur de rappel.
+
+
+## Bilan final de l'exécution
+
+Le verdict canonique validation-5r_yy729 est VERT/code0/erreur null/restes[]/
+nettoyé true, autorité terminée et privé/tmp/r3v-mmm0wzk2 absent. Cela établit
+l'achèvement du banc, pas la validité de tous ses parseurs. Classification :
+campaign_completed=true, coverage_status=unjudged, global_pass=false.
+Le résumé vérifie une à une identité/ordre/longueur contre le manifeste figé.
+
+| Cohorte | Fichiers | Appels terminés | Panne / timeout | AST invalides observés | Captures vides |
+|---|---:|---:|---:|---:|---:|
+| c | 2500 | 2499 | 1 | 91 | 1 |
+| cpp | 2500 | 2500 | 0 | 6 | 0 |
+| csharp | 2500 | 2499 | 1 | 4 | 0 |
+| css | 1041 | 1041 | 0 | non mesuré | 16 |
+| go | 2500 | 2500 | 0 | 1 | 0 |
+| html | 1761 | 0 | 0 | non mesuré | non tenté |
+| javascript | 2500 | 2500 | 0 | 0 | 1 |
+| markdown | 2500 | 2500 | 0 | non mesuré | 107 |
+| mdx | 211 | 211 | 0 | non mesuré | 3 |
+| python | 2500 | 2500 | 0 | 0 | 57 |
+| rust | 2441 | 2440 | 1 | 3 | 16 |
+| sass | 267 | 267 | 0 | non mesuré | 51 |
+| scss | 1661 | 1661 | 0 | non mesuré | 54 |
+| svelte | 2500 | 0 | 0 | non mesuré | non tenté |
+| typescript | 2500 | 2497 | 3 | 0 | 1 |
+| vue | 2500 | 2500 | 0 | non mesuré | 0 |
+
+28115 appels terminés,1avortement stack overflow et5timeouts ;4261 chemins
+HTML/Svelte refusés explicitement avant parsing.105fichiers ont des diagnostics
+AST invalides, conservés comme données ;307résultats ont des captures vides,
+sans défaut inféré automatiquement. Pas de troncature du compact sur ce corpus.
+Les cohortes sass/mdx ne démontrent pas la prise en charge complète de ces dialectes.
+
+Les faits de l'oracle Banc révèlent aussi un namespace C++ portant les paramètres
+d'un template forward, un paramètre générique Rust dont le nom inclut sa contrainte,
+et deux propriétés TypeScript de constructeur absentes des membres de Point.
+Tickets enfants existants (Banc les a créés avant correction) :
+
+- `2026-11-16-un-template-forward-cpp-contamine-le-namespace.md` ;
+- `2026-11-16-un-parametre-generique-rust-garde-sa-contrainte-dans-le-nom.md` ;
+- `2026-11-16-les-parametres-proprietes-typescript-manquent-aux-membres.md`.
+
+Les cinq timeouts sont conservés dans
+`2026-11-16-cinq-fichiers-atteignent-la-borne-du-banc-public.md` avec leurs hashes.
+Aucun de ces défauts n'a été corrigé dans le binaire de référence.
+
+## Coûts et stratification
+
+Temps cumulé contrôleur par fichier :948,331s, comprenant lecture/hash/transport/
+initialisation/appel/compact, mais pas compilation ni vérification préalable des
+archives. Ce n'est pas du temps CPU. Les médianes/p95 de l'appel seul par langage
+sont dans `resultats-full02b.json`, avec leur nombre de mesures ; les timeouts
+n'y reçoivent pas une durée de parsing inventée. P95 Rust360,24ms et TS363,43ms,
+sur les appels qui ont produit une mesure ; les cas censurés restent séparés.
+Maximum VmHWM observé parmi les workers réutilisés :845991936octets, environ807MiB.
+Ce n'est pas une mémoire par fichier ni un pic exact d'un worker qui avorte.
+L'enveloppe32GiB/quota5 reste celle du processus supervisé, distincte de cette mesure.
+
+584fichiers upb générés sont reclassés à part sans redistribuer les quotas.
+Les décomptes bruts2500C/2500Cpp incluent329/255de ces fichiers ; il reste donc
+2171/2245fichiers hors cette annexe, sans prétendre que l'identification de tous
+les générés est exhaustive. Les strates originales et amendées sont conservées
+par langage dans le JSON du bilan.
+
+## Artefacts figés et suite
+
+Preuves PC `~/.cache/codeparsers-notes/language-corpus-02b/`, résultats et petits
+artefacts copiés sur portable au même chemin, sans reçu contenant le token.
+ELF exact préservé sur PC dans bin/language_corpus_probe avant nouvelle adoption
+du target, hash bff1cafb...5565e2 vérifié ; aucun recompile nécessaire pour relire.
+
+- Résultats JSONL :0667eab18d7892b442b8b912d98528d1253041620f43c60a286b47cd5fa81678.
+- Classification :5715048617f92d7acffc10cca8740ab204e00dc6756e3109b22d13445799b35a.
+- Verdict canonique :8a869e3c41664ba6ef3569e0bb43119a000854d9f01b7e1cb56de6f9c26aa1b2.
+- Résumé strict :208fd9be294df9df51713651b37bfd852da7941d66829b4da9adc30c94ef359a.
+
+La première référence exploratoire est livrée. Restent la résolution par projet,
+les dimensions non conservées, les façades incomplètes et les diagnostics ciblés
+avec témoins minimaux dans leurs tickets. La qualification du correctif Rust7601
+(unit helper, mots vides, std seul, quatorze pertes historiques, puis passe complète)
+reste un autre lot et exige une allocation fraîche ; REGLES_DE_L_ANALYSE reste7.
