@@ -56,3 +56,7 @@ C7 demande deux témoins minimaux par la même API sync_source, formes déclaré
 ## Réserve de diagnostic ED DOUBLE — avant delta
 
 RO7749 favorable bornée ; sync_and_trace fait expect(Ok) avant de rendre TRACE, donc une erreur précoce peut masquer les événements. Corriger uniquement ordre : recueillir Result, vider/imprimer TRACE et Result, puis expect/assert. Deux exacts séparés sans parallélisme dans futur pilote (même curseur Snapshot/registre partagé). Aucun test natif ni compilation autorisés par cette remarque.
+
+## Réserves pilote DOUBLE490 — avant correction
+
+Hotfixs : (1) main-profile ne vérifie avantcontinue que basename/librag3db.so, SDKexact n'est vérifié qu'après exact0 ; exiger cheminmap canonique SDK59 ET empreintepin ledger AVANTcontinue. (2) cache_quiet accumule exe/cwd/FD puis attribue : PermissionError ultérieure peut effacer attribution d'un chemin déjàobservé sousT/source. Attribuer dès chaque lecture, conserver found/attributed sur erreur ; UNKNOWNattribuable refuse avantadoption.490 retiré avantallocation/run ; PCQv1 conservé, futurQv2 distinct ; aucunT muté. TémoinsCPU hermétiques à publier avantfix, pas de processus/proc/signaux réels.
