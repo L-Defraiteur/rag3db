@@ -5,12 +5,15 @@ from cache_contract import verify_cache_contract,publish_composed
 class CacheContract(unittest.TestCase):
  def baseline(self):
   regular=dict(device=1,inode=3,mode=stat.S_IFREG|0o600,uid=os.getuid())
-  return dict(target=dict(device=1,inode=2,mode=stat.S_IFDIR|0o700,uid=os.getuid()),marker=dict(identity=regular,owner='/old/crate'),previous_files={'supervisor/autorite.json':'auth','supervisor/verdict.json':'scope','driver/ledger.json':'ledger','manifest.json':'manifest'},live_previous_files={name:dict(identity=regular,sha256=value) for name,value in [('authority','auth'),('verdict','scope')]},authority=dict(etat='termine',pid=4),scope=dict(verdict='VERT',code=0,restes=[],nettoye=True),elf=dict(identity=regular,path='/target/elf',sha256='elf',ledger_sha256='elf'),old_worktree=dict(head='04634cfed667711192efd313ff1418ef8dfd5c26',status=''))
+  return dict(target=dict(device=1,inode=2,mode=stat.S_IFDIR|0o700,uid=os.getuid()),marker=dict(identity=regular,owner='/old/crate'),previous_files={'supervisor/autorite.json':'auth','supervisor/verdict.json':'scope','driver/ledger.json':'ledger','manifest.json':'manifest'},manifest_entries={'supervisor/autorite.json':'auth','supervisor/verdict.json':'scope','driver/ledger.json':'ledger'},live_previous_files={name:dict(identity=regular,sha256=value) for name,value in [('authority','auth'),('verdict','scope')]},authority=dict(etat='termine',pid=4),scope=dict(verdict='VERT',code=0,restes=[],nettoye=True),elf=dict(identity=regular,path='/target/elf',sha256='elf',ledger_sha256='elf'),old_worktree=dict(head='04634cfed667711192efd313ff1418ef8dfd5c26',status=''))
  def test_fresh_contract_accepts_exact_snapshot_and_refuses_each_divergence(self):
   baseline=self.baseline();verify_cache_contract(baseline,baseline)
   for field,key,value in [('target','inode',99),('target','device',99),('marker','owner','/other'),('authority','etat','actif'),('scope','verdict','ROUGE'),('previous_files','manifest.json','changed'),('elf','sha256','changed'),('old_worktree','status',' M source')]:
    with self.subTest(field=field,key=key),self.assertRaises(AssertionError):
     current=copy.deepcopy(baseline);current[field][key]=value;verify_cache_contract(current,baseline)
+ def test_mutating_both_archived_and_original_receipt_cannot_bypass_qualified_manifest(self):
+  current=self.baseline();current['previous_files']['supervisor/autorite.json']='modified';current['live_previous_files']['authority']['sha256']='modified'
+  with self.assertRaises(AssertionError):verify_cache_contract(current,current)
  def test_actual_runner_publishes_snapshot_before_refusal_and_never_starts_guard(self):
   tree=ast.parse(Path(__file__).with_name('driver.py').read_text());node=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='run')
   with tempfile.TemporaryDirectory(prefix='fts-cache-contract-fixture-') as tmp:
