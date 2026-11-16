@@ -198,3 +198,18 @@ aucune connexion. Pas de client privé ni ABI qualifiés à déduire de ce relev
 TOOL_UNQUALIFIED/HOLD inchangé, aucun wire/crypto nouveau, aucune installation.
 FutureAPP6365396b6323b03dc3441cb1f650c8804e53bdeb fournie par Recherche : pins
 app/pilot restent externes, source combinée NON JOUÉE, pas de grant réanimé.
+
+## Alternative archives Rust — trace RO avant toute recette/client
+
+C7 autorise l'audit d'archives immuables, pasCargo/rustc/native maintenant.
+G927release-archive4806 n'a aucun postgres/tokio_postgres rlib/rmeta ; R archives
+133/94/62/65 sans rlibs aussi. Trois packages sources (tokio-postgres0.7.16,
+tokio1.53.1,serde_json1.0.151) recoupés aux `.crate` locaux/checksums lock090,
+APIvraielue ; ceci ne fournit pas la fermeture binaire. CompilerPC1.98.1 hash859
+observé en fichier, pas fausse provenance prébuild.
+ED propose copieOUT_T depuis b472QUIESCENTE autoriséeC7 ; paquet nécessaire
+confirmé, aucune lecture G sur son T ni alias vivant, attente manifest finalisé.
+Rapport `docs/optimiseur/16-11-2026/pg-ro-attestation/02-rust-archives-ro.md`.
+Aucun client/recette de compilation inventé avant paquet pinnable ; futur
+transportRust n'est pas admis par v1/private-host-psql sans revue contractuelle.
+HOLD outil maintenu,0PG/DockerAPI/slot/service/SDK/RET/compilation.
