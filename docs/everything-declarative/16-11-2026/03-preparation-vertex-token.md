@@ -54,3 +54,28 @@ revient au banc après qualification, avec sa propre décision.
 
 Tous ces juges et recettes restent NON JOUÉS à la préparation. Aucun À TOI
 ou délai historique repris, aucune modification de master ni pose d'hôte.
+
+## Témoin de transport écrit, non joué
+
+`src/openai_llm/vertex_refresh_tests.rs`, raccordé sous `cfg(all(test,
+feature = "daemon"))` (le faux HTTP utilise la dépendance tiny_http déjà
+présente). Deux fonctions :
+
+- `vertex_rejected_token_is_refreshed_once_before_opening_a_stream` : premier
+  appel accepté puis401 ; attend réussite, trois requêtes et une invalidation.
+  Rouge attendu sur le client figé actuel, mais NON OBSERVÉ à cette étape.
+- `fixture_token_source_changes_its_cached_token_only_after_invalidation` :
+  contrôle de la source factice, qui ne remplace pas le juge de transport.
+
+Le helper `current_declared_vertex` reproduit explicitement la frontière
+actuelle : il prend un jeton factice puis appelle le VRAI constructeur vertex.
+Il ne prétend ni retenir déjà cette source dans le produit ni passer par
+`connect_llm`. Ce raccord et son témoin complémentaire restent à écrire après
+observation du rouge. HTTP sur loopback aléatoire, client borné3s, serveur
+borné8s et joint au Drop, pas de sleep d'expiration, pas de service/cloud ou
+identifiant réel. Les refus passent par la racine d'état temporaire déjà
+imposée par `builtin_templates::state_root` sous cfg(test).
+
+Aucun comportement de production modifié, aucun verdict de compilation ou
+d'exécution ; seul `git diff --check` a été contrôlé. Le correctif de
+renouvellement reste NON ÉCRIT avant le rouge exécuté.
