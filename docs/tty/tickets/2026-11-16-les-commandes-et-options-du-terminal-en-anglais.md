@@ -138,3 +138,21 @@ Source encore présente, destination `retired-target` absente, aucune mutation
 du target ni Cargo. Archives aux deux postes et worktree toujours conservés.
 Prochain pas : qualifier ces inconnus avec l'orchestration avant relogement ;
 ne pas transformer « aucun lien observé » en preuve de quiescence complète.
+
+### Relogement réversible effectué, GO2 distinct à venir
+
+Implémentation `relocate_target.py` publiée avant action à `1c08020816` ;
+3 tests filesystem factices passés, dont refus atomique d'une destination
+existante par renameat2 RENAME_NOREPLACE. Exécution réelle ensuite réussie :
+`archives/cx-tty-aliases-red-20261116/relocation-atomic.json`, état
+RELOCATED_IDENTICAL, snapshots complets identiques avant/après, archives tar
+recontrôlées aux deux postes, autorité terminée et scan frais conservés.
+Target ancien intégral sous `retired-target`, mêmes inodes/modes/SHA ; chemin
+T de session désormais absent. UNKNOWN baseline non attribués gardés dans le
+rapport, pas assimilés à zéro processus. Aucun Cargo ni target actif créé.
+
+Prochain pilote publié `check-english-aliases-v2.sh` : création exclusive du
+même T absent, vraie garde initiale sur le crate propriétaire puis deux essais
+bornés au prochain GO600 : commandes lib sans vue (2 verts attendus), options
+binaire vue par défaut (1 rouge attendu). Journaux/rc conservés séparément,
+Common unique32G/j4, aucun SDK/hôte/modèle. NON JOUÉ.
