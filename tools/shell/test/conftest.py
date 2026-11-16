@@ -201,15 +201,17 @@ def test(request):
 
 
 @pytest.fixture
-def multiline():
-    test = ShellTest()
+def multiline(tmp_path):
+    # Its own history (tmp_path, new for each test): without `-p` the shell reads and writes the user's
+    # ~/.rag3db/history.txt, and a test depended on what the previous ones had left there.
+    test = ShellTest().add_argument("-p").add_argument(str(tmp_path))
     test.start()
     return test
 
 
 @pytest.fixture
-def singleline():
-    test = ShellTest()
+def singleline(tmp_path):
+    test = ShellTest().add_argument("-p").add_argument(str(tmp_path))
     test.start()
     test.send_finished_statement(":singleline\r")
     assert (
