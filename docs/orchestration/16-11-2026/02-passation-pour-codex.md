@@ -6,8 +6,8 @@ bosse avec Codex il saura quoi faire ; on peut lui prévoir beaucoup de boulot, 
 expliciter ce qu'il doit traiter ; faisons comme la dernière fois. »
 
 Cette page est le point d'entrée d'une session Codex neuve, sans aucune mémoire de nos échanges. Elle
-dit ce qu'elle lit, ce qu'elle fait, et où est le travail de chaque périmètre. Ouverte à 09:28, remplie
-à mesure que les treize pages de session arrivent (hash et chemin dans le tableau).
+dit ce qu'elle lit, ce qu'elle fait, et où est le travail de chaque périmètre. Ouverte à 09:28, complète
+à 09:45 ; les treize pages sont au tableau avec leur hash.
 
 ## 1. Ce que Codex lit d'abord, dans cet ordre
 
@@ -67,7 +67,7 @@ dit ce qu'elle lit, ce qu'elle fait, et où est le travail de chaque périmètre
 | lucivy | `docs/lucivy/16-11-2026/02-passation-pour-codex.md` | 6 entrées : le bm25 seul de la migration sous 4.3.9 (avec la reprise du pointeur s'il n'est pas sur master), la compaction qui grossit un dictionnaire sans texte mort, un ulp d'écart en parse, indexed:false ignoré, préparer la 4.3.10 sans la taguer, le chemin sans positions (lot long) ; trois tickets neufs ; 4.3.9 en ligne sur crates.io, npm, PyPI | 9c1d71fb11 |
 | memoire | `docs/memoire/16-11-2026/01-passation-pour-codex.md` | 14 entrées de la moins à la plus bloquée (35–40 h sans attente) : l'usage du découpage au total, compose_restart au-delà de 2 000 apports, la borne query_chars côté embarqueur, les 15 tickets relus contre master (trois tickets neufs, 2f8270612) | db6533bf8d |
 | optimiseur | `docs/optimiseur/16-11-2026/02-passation-pour-codex.md` | 7 lots : témoin de poste, témoin de run_e2e qui compte l'attente, tools/shell en voie C++, juge known_red intermittent, base un-seul-sens au témoin, épingler la lib après la bascule, défaut de 40G (quatre tickets neufs, six fermés) | 499cb10de6 |
-| rag3weaver-archi | en attente | | |
+| rag3weaver-archi | `docs/rag3weaver-archi/16-11-2026/01-passation-pour-codex.md` | 13 entrées : faire atterrir pas-va-au-bout, S1 plafond d'appels d'un pas, S2 le pas suivant ne voit pas les retours d'outils, S3 une request remplace la demande, garde B pour une consigne, S4 step_done avant report, S5 présentation à chaque run, J1 demande figée au journal, position du worktree, attente d'index d'un pas, delegate (3 lots), mode pair par le registre, affichage des messages pour tty (douze tickets neufs) ; après chaque lot sur l'équipier, la campagne D6 se rejoue | 11b7e8da34 |
 | recherche | `docs/recherche/16-11-2026/03-passation-pour-codex.md` | 10 entrées : état d'index et orphelins, search_code avant l'index, CSV d'un COPY tué, filtre e2e vide, témoins du chat sous charge, arrêt par une connexion par run, cinq suites à résidus, banc de charge, juge Gemini, deux tickets neufs après 2a′-3 | 04102a27f6 |
 | tty | `docs/tty/16-11-2026/02-passation-pour-codex.md` (+ `03-knowledge-dump.md`) | 7 lots (25–35 h) : messages entre sessions dans le terminal, commandes et options en anglais, mode plain et fin d'un pas relancé, copie de l'hôte par un champ, terminal d'un agent pair, style du thème, frappe avant l'invite (cinq tickets neufs) | d1ea5a947a |
 
