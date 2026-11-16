@@ -196,6 +196,25 @@ class ArtifactTests(unittest.TestCase):
             pg.publish_observation(self.root/'late-clock',self.body,self.raw,expected=self.expected,ready=self.ready,
                                    clock=lambda:1001.,phase_check=lambda:dict(self.ready))
 
+    def test_publisher_keeps_raw_even_when_metadata_is_malformed(self):
+        del self.body['evidence']['postcheck']
+        target=self.root/'malformed'
+        with self.assertRaises(ValueError):
+            pg.publish_observation(target,self.body,self.raw,expected=self.expected,ready=self.ready,
+                                   clock=lambda:1000.,phase_check=lambda:dict(self.ready))
+        for name,key in [('identity.stdout','sql-out'),('identity.stderr','sql-err'),('postcheck.stdout','check-out'),('postcheck.stderr','check-err')]:
+            self.assertEqual((target/name).read_bytes(),self.raw[key])
+        self.assertFalse((target/'attestation.json').exists())
+
+    def test_publisher_keeps_available_partial_raw(self):
+        del self.raw['check-err']
+        target=self.root/'missing-raw'
+        with self.assertRaises(ValueError):
+            pg.publish_observation(target,self.body,self.raw,expected=self.expected,ready=self.ready,
+                                   clock=lambda:1000.,phase_check=lambda:dict(self.ready))
+        self.assertEqual((target/'identity.stdout').read_bytes(),self.raw['sql-out'])
+        self.assertFalse((target/'attestation.json').exists())
+
     def test_publisher_valid_fake_is_loadable(self):
         path,sha=pg.publish_observation(self.root/'ok',self.body,self.raw,expected=self.expected,ready=self.ready,
                                        clock=lambda:1000.,phase_check=lambda:dict(self.ready))
