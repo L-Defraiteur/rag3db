@@ -1,0 +1,25 @@
+{
+  "watchers": [
+    {
+      "name": "first_red",
+      "source": "13c8bf21e6c34d4480f034e66453bec22330e6a0",
+      "path": "docs/everything-declarative/16-11-2026/ties-qualification/driver.py",
+      "sha256": "fbd73cb75b545d867907e3a23c10818519d5023d954eab03a84aba4de0f6301d"
+    },
+    {
+      "name": "active_logs",
+      "source": "13c8bf21e6c34d4480f034e66453bec22330e6a0",
+      "path": "docs/everything-declarative/16-11-2026/ties-qualification/driver.py",
+      "sha256": "510e789415dd6adc20910d261d97689924960fbb6308658d3722483d81fc54ca"
+    },
+    {
+      "name": "watch_logs",
+      "source": "13c8bf21e6c34d4480f034e66453bec22330e6a0",
+      "path": "docs/everything-declarative/16-11-2026/ties-qualification/driver.py",
+      "sha256": "8ce4bdde9212fef23b0d1e605a18e2a1063392d1a7fa99df93ab1f5421b587dd"
+    }
+  ],
+  "controller_base": "441002d11bd07b7e8b77b0351d6e522ac5a9c6db",
+  "quiet": "ancestor/exeSHA/argv and incremental attribution bodies unchanged",
+  "canonical_sha256": "2150fcd847b1df7de04908d357a0c78abc05e50ce599e2793ff08ab48108825d"
+}
