@@ -51,5 +51,29 @@ class ReviewReserves(unittest.TestCase):
    self.assertEqual(q.health(grant,'after',600.,ready=dict(deadline=600.,grant_deadline_monotonic=100.),admission=False),[{},{}])
    self.assertEqual(core.call_count,4)
   self.assertEqual(seen,[dict(admission=False,lease_end=500.)]*2)
+ def test_owner_pins_bind_admission_clock_and_every_source(self):
+  import copy,hashlib
+  with tempfile.TemporaryDirectory() as d:
+   root=Path(d);P=root/'P';Q=root/'Q';P.mkdir();Q.mkdir()
+   ready=dict(app=q.APP,pilot='a'*40,scope='/scope',nonce='fake',c7_reference='go')
+   path=P/'READY_FOR_SERVICES.json';path.write_text(json.dumps(ready))
+   sources={}
+   for key,name in [('protocol_sha256','lifecycle_protocol.py'),('process_module_sha256','lifecycle_provider_observation.py'),('owner_sha256','global_services_owner.py'),('pg_receipt_sha256','pg_receipt.py')]:
+    f=Q/name;f.write_bytes(('fake source '+name).encode());sources[key]=q.sha(f)
+   providers=[]
+   for address in ['127.0.0.1:7878','127.0.0.1:7879']:
+    providers.append(dict(address=address,identity=dict(fake=True),process=dict(pid=123,uid=q.os.getuid(),start='42',exe='/fake',exe_sha256='b'*64)))
+   pins=dict(ready,ready_path=str(path),ready_sha256=q.sha(path),providers=providers,admitted_monotonic=80.,**sources)
+   grant=dict(providers=[dict(address=p['address'],identity=p['identity'],**p['process']) for p in providers],observed_monotonic=80.)
+   def bind(value):return dict(grant,owner_pins=value,owner_pins_sha256=hashlib.sha256(json.dumps(value,sort_keys=True,separators=(',',':'),allow_nan=False).encode()).hexdigest())
+   with patch.object(q,'P',P),patch.object(q,'Q',Q):
+    self.assertEqual(q.owner_pins(bind(pins),ready),pins)
+    variants=[]
+    for key,value in [('admitted_monotonic',79.),('admitted_monotonic',True),('pg_receipt_sha256','c'*64),('owner_sha256','c'*64),('nonce','foreign'),('pilot','c'*40),('scope','/foreign'),('c7_reference','other')]:
+     item=copy.deepcopy(pins);item[key]=value;variants.append(item)
+    for item in variants:
+     with self.subTest(item=item),self.assertRaises(AssertionError):q.owner_pins(bind(item),ready)
+    tampered=bind(pins);tampered['owner_pins_sha256']='0'*64
+    with self.assertRaises(AssertionError):q.owner_pins(tampered,ready)
 
 if __name__=='__main__':unittest.main()
