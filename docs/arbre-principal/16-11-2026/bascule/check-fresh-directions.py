@@ -15,6 +15,7 @@ def parse_directions(text):
  counts=re.findall(r'^    comptes : avant ([0-9]+), arrière ([0-9]+), union ([0-9]+), perdues d.un seul sens ([0-9]+)$',text,re.M)
  if len(tables)!=18 or len({t[0] for t in tables})!=18 or len(counts)!=18:raise ValueError('incomplete 18-table observation')
  if any(a!=b or a!=c or d!='0' for a,b,c,d in counts):raise ValueError('direction counts disagree')
+ if any(t[1]!=c[0] or t[2]!=c[1] for t,c in zip(tables,counts)):raise ValueError('raw versus distinct direction counts disagree')
  if not text.endswith('Aucun écart entre les deux rangements.\n'):raise ValueError('missing final checker verdict')
  return ([dict(table=t[0],forward=int(c[0]),backward=int(c[1]),union=int(c[2]),lost=int(c[3])) for t,c in zip(tables,counts)])
 
