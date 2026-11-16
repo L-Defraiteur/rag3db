@@ -3,20 +3,24 @@
   "source_ref": "refs/heads/cx-coeur-c1-dictionary-diagnostic",
   "bundle_sha256": "290fa7b7c9a3dd8b0667287a1ee5f12fd4d37bed79bdd8987928204ff94744b5",
   "bundle_bytes": 312234,
-  "unit_runtime_s": 1790,
+  "unit_runtime_s": 1640,
   "stop_s": 10,
-  "controller_s": 1770,
-  "build_timeout_s": 1600,
+  "controller_s": 1620,
+  "build_timeout_s": 1500,
   "configure_timeout_s": 120,
   "test_timeout_s": 30,
-  "global_cap_s": 1800,
+  "global_cap_s": 1650,
   "memory_bytes": 34359738368,
   "scratch_bytes": 34359738368,
   "swap_bytes": 0,
   "parallelism": 8,
   "scripts": {
-    "controller.py": "a989a58af3b9c008b96c983a0c4a93b22652bd4c614213ef708fc84074ad06c2",
-    "launch.sh": "9b6ff5c33f739bf665e66582586dbf20e89e74affcfcaf9a486455a4897c3c8b"
+    "controller.py": "8584e4de1da72a9acfba73fcb1ebb7cc627f765732f375602042b855e2c25215",
+    "launch.sh": "7ac2d0727878029f629a6c860cf78bef07ec7203269ef7464e1a11fccc07cee4"
   },
-  "admission": "C7 private CPU admission distinct1800; G priority; fresh capacity and no exclusive measure required; no GPU/service/liveDB/sharedcache/installedlib"
+  "admission": "PROPOSAL ONLY: no rerun after first runner failure; await new C7 admission; corrected engine ID contract and export before verification",
+  "engine_commit": "59ac9c86bc2b3529b590a7462ab7051e3ad26b8a",
+  "first_attempt_unit_s": 144.848,
+  "original_admission_s": 1800,
+  "max_combined_units_s": 1794.848
 }

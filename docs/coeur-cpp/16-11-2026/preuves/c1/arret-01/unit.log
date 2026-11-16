@@ -1,0 +1,11 @@
+Running as unit: cx-coeur-c1-offsets-01.service
+Traceback (most recent call last):
+  File "/home/lucied/.cache/rag3db-moteur-notes/c1-offsets-01/controller.py", line 106, in <module>
+    assert recipe['source_commit'] in marker and marker.encode() in binary.read_bytes()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError
+          Finished with result: exit-code
+Main processes terminated with: code=exited, status=1/FAILURE
+               Service runtime: 2min 24.848s
+             CPU time consumed: 18min 11.540s
+                   Memory peak: 5.4G (swap: 0B)

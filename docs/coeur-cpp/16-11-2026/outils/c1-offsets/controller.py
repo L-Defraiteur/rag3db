@@ -13,7 +13,7 @@ import xml.etree.ElementTree as ET
 scratch, out, reference, bundle, recipe_path = map(Path, sys.argv[1:])
 recipe = json.loads(recipe_path.read_text())
 start = time.monotonic()
-deadline = start + 1770
+deadline = start + 1620
 phase = 'preparation'
 source, build, tmp = scratch/'source', scratch/'build', scratch/'tmp'
 process = None
@@ -97,18 +97,19 @@ try:
         (out/n).write_bytes((build/n).read_bytes())
     phase = 'build'
     run(confined(['cmake','--build',str(build),'--target','dictionary_append_exception_test','-j','8']),
-        'build.log', min(1600, max(1,deadline-time.monotonic()-60)))
+        'build.log', min(1500, max(1,deadline-time.monotonic()-60)))
     phase = 'test_preparation'
     binary = build/'test/transaction/dictionary_append_exception_test'
     header = build/'src/include/common/build_id.h'
     text = header.read_text()
     marker = re.search(r'RAG3DB_BUILD_ID "([^"]+)"',text)[1]
-    assert recipe['source_commit'] in marker and marker.encode() in binary.read_bytes()
     (out/'dictionary_append_exception_test').write_bytes(binary.read_bytes())
     (out/'build_id.h').write_text(text)
-    write('manifest.json', {'source': actual, 'build_id_header': marker, 'binary_sha256': sha(binary),
+    write('manifest.json', {'source': actual, 'expected_engine_commit': recipe['engine_commit'], 'build_id_header': marker, 'binary_sha256': sha(binary),
           'binary_bytes': binary.stat().st_size, 'distributed_install': False,
           'scratch_used_bytes': (os.statvfs(scratch).f_blocks-os.statvfs(scratch).f_bfree)*os.statvfs(scratch).f_frsize})
+    assert marker.startswith('rag3db-build-'+recipe['engine_commit']+'-') and '-dirty-' not in marker
+    assert marker.encode() in binary.read_bytes()
     env = {'PATH':'/usr/bin:/bin','LANG':'C','LC_ALL':'C','TZ':'UTC', 'TMPDIR':str(tmp)}
     argv = [str(binary),'--gtest_filter=DictionaryAppendException.OffsetAllocationFailureKeepsExistingStringsUnchanged',
             '--gtest_color=no','--gtest_output=xml:'+str(out/'test.xml')]

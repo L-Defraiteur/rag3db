@@ -1,0 +1,22 @@
+{
+  "source_commit": "b82c06f2572892d2124c71dce87eba287f5e9f2b",
+  "expected_engine_commit_from_build_id_contract": "59ac9c86bc2b3529b590a7462ab7051e3ad26b8a",
+  "engine_paths": [
+    "src",
+    "extension",
+    "third_party",
+    "cmake",
+    "CMakeLists.txt",
+    ":(exclude)extension/rag3weaver",
+    ":(exclude)extension/lucivy"
+  ],
+  "actual_header_retained": false,
+  "binary_retained": false,
+  "test_run": false,
+  "reason": "runner required source/test commit in engine BUILD_ID, contrary to cmake/build_id.cmake; actual rejected header not exported before assertion",
+  "unit_elapsed_s": 144.848,
+  "main_pid_after": 0,
+  "cgroup_after": "",
+  "unit_result": "exit-code",
+  "retry": false
+}
