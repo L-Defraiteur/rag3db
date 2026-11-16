@@ -90,3 +90,33 @@ APPbc952/PILOTEaf11 unefoisGO C7-FTS-GEN-GREEN-AF11-16nov : buildrc0/ELFb23414d3
 C7 reprend préparation seule après0479 (8distinct/11rawverts), ROHotfix archive133 favorable. Fetchmastercourant b0 inchangé ; APP84 exact=union5f59+modulecfgtestfix, horsdocs autresproduits préservés. Nouvellebranche piloteglobalr2 ; ancien349b intact. Canoniquecommitted2150/Common6439 ; jamais recopier la copie locale divergente ni modifier cachecommun gelé.
 
 Coordination : ne pas recopier race READYB5. Réutiliser lifecycle_protocol.py98ab exactSHAc67f072ba0134f97be6150547d80b8a23174937f2c964b0bdc30bec5e0309ec0 pour ready_bounds/phase stable/firstred/PIDstartCGUIDscript et rechecks. Son joblegacy lifecycle-provider désigne admissionprovider ; purpose explicite fts-global-models-and-pg, pas qualificationcycle ni noembedding simulé. Callbackc530 reste endpoint7878/noembeddinguniquement, non transplanté au globalBGE+PG. Contratowner global devra couvrir2providers+PG/nonce/READYsha/observed/lease et rechecks communs, ROgroupéeavantnouveauGO. Aucun appelhealth/PG/service en préparation.
+
+## Owner global : préparation bornée avant code
+
+Portage Embar sur autorisation C7, base333de822. Deux nouveaux fichiers
+`fts-generation-global-r2/global_services_owner.py` et son test ; aucun changement
+au produit, au protocole98ab, au process_snapshotc530 ou au pilote Recherche.
+Ce contrat global autorise seulement les embeddings des tests canoniques admis :
+aucun flag lifecycle no_embedding ne sera injecté, et aucun appel au publisher3aa
+ou à validate_grant_phase, réservés à cette autre politique.
+
+Réutiliser ready_bounds/read_phase_state/validate_ready_phase/validate_phase_authority
+et process_snapshot stricts. Pins externes immuables APP/pilot/scope/allocation,
+nonce/SHA du READY, neuf champs typés de chaque provider7878/7879 et identité
+PID/UID/start/exe/SHA. Contrôles avant CHAQUE contact, après les observations,
+après fsync et juste avant lien exclusif du grant. GET santé directs seulement,
+worker propre <=5s et marge admission30 ; stdout/stderr/rc/timeout et préfixes
+bornés conservés avant refus. Usage0 observé ne prouve jamais zéro RPC.
+
+PG5433/rag3weaver_test exige une provenance DB/user/OID exacte et une réservation
+exclusive active, fraîche et liée C7/G au même job/READY/END : ni pingTCP ni zéro
+session n'en tiennent lieu. La recette SQL RO et ses pins sont coordonnés avec G
+avant intégration ; aucun reset, migration, drop ou contact en préparation.
+La lease du grant couvre END commun original ; la borne d'admission ne prolonge
+ni END ni le budget. Toute identité/autorité/réservation inconnue ou premier rouge
+refuse sans publication ; READY, refus et anciennes preuves restent immuables.
+
+Publier source et fakes discriminants avant test, puis rouge→fix→vert sous borne
+CPU60 hermétique, sans processus/provider/PG/proc réels. Recherche regroupera le
+couple/pins/Q avant RO et GO6000 distinct éventuel. Ce paragraphe n'alloue aucune
+ressource ni exécution native. Ticket reste ouvert.
