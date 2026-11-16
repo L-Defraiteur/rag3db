@@ -1,0 +1,7 @@
+%% tool: payer_retard_dense
+%% description: Exiger les vecteurs dus depuis les textes persistés de Scope ; aucune recherche ni lecture de fichiers.
+%% param: options json! -- Consigne de disponibilité figée par le manifeste.
+%% result: source.meta
+
+graph LR
+    source["SearchSourceNode(target_name='Scope', query='qualification dette persistée', options=$options, mode='indexed')"]

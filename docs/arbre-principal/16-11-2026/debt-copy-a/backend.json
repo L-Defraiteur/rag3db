@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "kind": "code",
+  "name": "qualification-dette-469-copie-a-v1",
+  "database": "/home/lucied/.cache/rag3weaver-build/bascule-live-20261116/debt-acquittement-copy-v1/copy/code-principal.rag3db",
+  "buffer_pool": 1073741824,
+  "vector_extension": "/home/lucied/.cache/rag3db-libs/rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF/libvector.rag3db_extension",
+  "embeddings": {"address": "127.0.0.1:7878", "model": "granite-278m", "dimensions": 768, "provider": "daemon", "timeout_secs": 120, "catch_up_on_open": false},
+  "entities": {},
+  "relations": {},
+  "workspace": {"source": "working_tree", "root": "/home/lucied/git_workspaces/rag3db", "read_only": true, "commands": "off", "index": "code"},
+  "fts": {"maintenance": {"enabled": false, "at": "03:30", "max_purge_ratio": 0.05, "compact": false}},
+  "reactions": {},
+  "watches": {},
+  "tools": {
+    "payer_retard_dense": {
+      "graph": "payer-retard-dense.mmd",
+      "bindings": {"options": {"signals": [], "exige": ["data", "dense"], "consistency": "strict", "strict_signals": true, "timeout_ms": 120000, "limit": 1}},
+      "policy": {"read_files": false, "write_files": false, "run_commands": false},
+      "freshness": false
+    }
+  }
+}
