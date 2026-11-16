@@ -105,3 +105,56 @@ avec le porteur ; aucun outil historique lié à 373b ni purge sous lucivy ancie
 L’épinglage des passes suit par le ticket existant
 `docs/optimiseur/tickets/2026-11-16-les-passes-epinglent-373b5477b-apres-la-bascule.md`,
 sous un nouveau tour de push. Les passes des autres lots attendent le pin neuf.
+
+## FINI lib et pose — 16 novembre, 11 h 32 CET
+
+Préavis 11:26:40, arrêt engagé 11:27:4x, réveil des deux hôtes à11:30:53.
+Source exacte `927941a67a5805450d49f1e04b39fdd542a6059b`, lock SHA256
+`090cc4e1330dc694127c0f08330d25acc656699763079400b502ba6607093fa7`, lucivy4.3.9.
+Binaire identique aux deux postes SHA256
+`0e310a9cfe1c9e12534f3a579b3e781dcef7e9335e37d7e57349b16d053d5288`,
+check-lib `da8fe5f81a5defc98a56086364e7a824e6a755eeb27792cf90a1673b55afc295`.
+Lib complète posée :
+`rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF`.
+SHA256 lib `b7e9fc75a3d2de04c72680b0309e8bb1df9eaadb5211ebbacf39716c6d0a2101`,
+vector `1669d6392ec8067fcf92ae2ccc972fd7cd3086629fb82d1f5d254e90d72d7561`.
+`courant` concorde aux deux postes ; lib-des-passes PC mise à jour avec ancien conservé.
+Maps des PID portable2698568/PC3136522 : lib ET vector59ac. Services7878/7879 et
+tunnels7979/7980 inchangés et joignables ; aucune action card0, aucun sudo.
+
+Verdict source927 sans MOTEUR_ANCIEN : code36/36, lectures27/27 et demon_hote24/24,
+aucun ignoré ; trois témoins lectures nommés contrôlés, reçus de confinement verts.
+Essais7991 verts aux deux postes, check-manifests5+2 acceptés.
+Réouvertures vérifiées POST/open ET GET/etat : mémoire, code principal du portable,
+code-essais-c7, essai-atelier, atelier ; code-principal et code-lourd PC, zéro refus.
+Les anciens backends de tâches non ciblés ne sont pas déclarés restaurés par cette preuve.
+
+Instantanés cohérents arrêtés, avec base et tous voisins présents/fts/checkpoints :
+`~/.local/share/rag3weaver/instantanes/avant-59ac9c86b-20261116-927/` aux deux postes,
+`RETOUR.sh` à la racine, conservation72hminimum, aucun retrait ancien index.
+Copies de contrôle : même chemin suffixé `-controle`. Chacune des quatre bases a
+18 tables de relations jugées ; sommes des unions (pas des relations uniques entre
+bases) : portable code1148759/mémoire9054, PC lourd1205199/principal931405 ; zéro
+perte d’un sens et aucun écart de propriétés. Contrôles bien exécutés, non vides.
+L’ancienne extension enregistrée373b a été refusée à l’ouverture des COPIES ; cela
+n’invalide pas le contrôle relationnel et ne prouve pas le vectoriel. Les hôtes
+chargent ensuite leur extension59ac, confirmée dans les maps ; parité/oracle reste au banc.
+
+Reçus privés aux deux postes `~/.cache/optimiseur-notes/bascule-16nov-927/` :
+`runtime.json`, `opening-receipts.json`, `state-after-open.json`, `snapshot-identities.json`,
+`live-stopped-identities.json`, `controls-summary.json`, journaux, recettes et rouges.
+Le sélecteur hostname du premier snapshot PC a refusé avant copie (LuciePC/casse),
+puis été remplacé par rôle explicite ; trace conservée. Aucun jeu réel perdu.
+Le contrôleur est la source927 SHA f665671416a1eefa7b9e056445be1f2e8a5abf60c4ce3bcf07a32355915f8fc0.
+L’outil requête RO privé d’Arbre, corrigé après rouge BUILD_ID, est
+`read-only-query-v2` dans ce dossier aux deux postes : ELF
+43cffb082a2487e9f33ffa62b5a246081e5c458683f4e6b7de50e46d60c01329,
+source0f498190/SHA931267d266acf730a7699b9713c146e2ab17492d11b18ceafd651a5cc8bff125.
+Fixture privée copiée : lecture1nœud, BUILD_ID59ac effectif, écriture refusée rc1,
+SHA base inchangé. Aucun ancien outil de requête réutilisé.
+
+FINI communiqué à c7 et arbre. Les migrations sont ensuite portées par arbre,
+avec opérations services/hôtes exclusivement par optimiseur. La réouverture a pu
+changer les identités des bases vivantes : ne pas appliquer une preuve de l’instantané
+à une autre identité sans vérification. Préparation du pin des passes prioritaire :
+témoin vu rouge sur l’ancienne ligne373b, correction59ac et rejeu court à suivre.

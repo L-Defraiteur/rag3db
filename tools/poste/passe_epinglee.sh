@@ -43,9 +43,10 @@ else
 fi
 export RAG3WEAVER_TARGET_REPRENDRE=1
 # Épinglée : une bascule de `courant` ne change pas la lib sous la passe.
-export RAG3DB_LIB=rag3db-build-373b5477b4fd413f96605061b8d09393439a1a30-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
-# Depuis le 13 novembre 2026 (c7) : la lib 373b5477b (bascule de G du 14 nov. 20 h 52), sans MOTEUR_ANCIEN
-# (avant : 29a7bc52a, 9bae60786, cbc06c3e1, dadbf0041).
+export RAG3DB_LIB=rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+# Depuis le 16 novembre 2026 : lib 59ac9c86bc posée aux deux postes, hôtes source 927941a67a ;
+# les passes de cette source ne demandent plus MOTEUR_ANCIEN. Avant : 373b5477b (14 novembre),
+# puis 29a7bc52a, 9bae60786, cbc06c3e1, dadbf0041.
 # Le plafond du target de run_e2e.sh, 32 Go mesurés par G (d845744a2) : une branche d'avant garde 20.
 export RAG3WEAVER_TARGET_MAX_GO=32
 # Les paquets React des témoins de l'aperçu à chaud (scripts/paquets_react.sh), s'ils sont déballés.

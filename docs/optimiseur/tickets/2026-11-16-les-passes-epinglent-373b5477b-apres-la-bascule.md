@@ -1,6 +1,6 @@
 # Les passes épinglent la lib 373b5477b : à changer au moment de la bascule
 
-- **État** : ouvert (16 novembre 2026) — bloqué par la bascule de lib (mot de Lucie sur l'heure)
+- **État** : en cours (16 novembre 2026) — bascule autorisée et posée à11:30, pin en branche cx-optimiseur-bascule-16
 - **Famille** : produit (outillage : `tools/poste/passe_epinglee.sh`, scripts de G)
 - **Gravité** : après la bascule, toute passe tournerait sur l'ancienne lib, sous `RAG3WEAVER_MOTEUR_ANCIEN=1`.
 - **Atteignable en service** : non
@@ -27,3 +27,11 @@ première ligne du résumé. `~/.cache/rag3weaver-build/lib_seule.sh`, aux deux 
    « RAG3WEAVER_MOTEUR_ANCIEN retiré, lib <id> épinglée ».
 4. `lib_seule.sh` : le retirer du cache des deux postes, en gardant `lib_seule.sh.avant-retrait`, après l'annonce que
    `run_e2e.sh --lib` le remplace.
+
+## Reprise après pose réelle du 16 novembre
+
+Bascule FINI11:32 : plan existant complété avec sources, hashes, snapshots,
+contrôles et réouvertures. Témoin du pin vu rouge sur la ligne373b (journal
+`~/.cache/optimiseur-notes/bascule-16nov-927/pin-red.log` portable), test e271ee084c.
+Correction pin59ac complète en préparation ; garder ouvert jusqu’à atterrissage,
+recopie au cache des deux postes, témoins contre ces copies et annonce aux pairs.
