@@ -9,13 +9,14 @@ import shutil
 import stat
 import subprocess
 import sys
+from cache_contract import capture_cache_contract, verify_cache_contract, publish_composed
 
 APP = '9576079d62c3f46bdf241cd19c9ab30e9218333e'
 BASE = 'd395cb1f03f84c6abdfa023a0e3c7f87a7c0dab6'
 R = Path.home() / '.cache/rag3weaver-build'
 W = Path.home() / 'git_workspaces/rag3db-cx-recherche-fts-existing-union-r1'
 C = W / 'extension/rag3weaver'
-Q = R / 'cx-control-recherche-fts-existing-canon-v1'
+Q = R / 'cx-control-recherche-fts-existing-canon-v2'
 P = R / 'cx/recherche-fts-existing-canon-v1'
 S = R / 'cx-scope-recherche-fts-existing-canon-v1'
 T = R / 'cx-target-recherche-fts-counts-freshness'
@@ -64,6 +65,11 @@ def main():
     ledger = json.loads((previous / 'driver/ledger.json').read_text())
     assert digest(ledger['artifact']['executable']) == ledger['elf_sha256']
     assert digest(previous / 'manifest.json') == 'df97717f2c944ccadca3246492a076db98a81d08886387d132d6bf526a38d2c9'
+    previous_authority = R / 'cx-proofs-recherche-fts-existing-green-v1-supervisor/validation-akvadari/autorite.json'
+    contract_config=dict(target=str(T),previous_worktree=str(PREVIOUS_W),previous_archive=str(previous),previous_authority=str(previous_authority))
+    previous_contract=capture_cache_contract(contract_config,git,digest)
+    verify_cache_contract(previous_contract,previous_contract)
+    previous_contract.pop('observed',None)
     cache = R / 'passe_epinglee.sh'
     assert digest(cache) == PIN and stat.S_IMODE(cache.stat().st_mode) == 0o755
     source_pin = subprocess.check_output(['git', '-C', str(W), 'show', BASE + ':tools/poste/passe_epinglee.sh'])
@@ -79,6 +85,7 @@ def main():
     for name, source in [
         ('driver.py', Path(__file__).with_name('driver.py')),
         ('admit.py', Path(__file__).with_name('admit.py')),
+        ('cache_contract.py', Path(__file__).with_name('cache_contract.py')),
         ('confiner_validation.py', C / 'scripts/confiner_validation.py'),
     ]:
         dest = Q / name
@@ -90,7 +97,7 @@ def main():
     config = dict(app=APP, pilot=args.pilot, base=BASE, control=str(control), worktree=str(W),
                   target=str(T), proofs=str(P), scope=str(S), lib=LIB, lib_hashes=LIB_HASHES,
                   pass_sha256=PIN, controllers=files, budget=BUDGET, library_store=str(store),
-                  previous_worktree=str(PREVIOUS_W),
+                  previous_worktree=str(PREVIOUS_W), previous_archive=str(previous), previous_contract=previous_contract, previous_authority=str(previous_authority),
                   target_started_absent=False, target_same_owner=False, poste_sha256=digest(C / 'scripts/poste'),
                   previous_manifest_sha256=digest(previous / 'manifest.json'))
     path = Q / 'prepared.json'
@@ -127,6 +134,8 @@ def main():
     try:
         receipt = json.loads((P / 'authority-path.json').read_text())
         scope = json.loads((Path(receipt['path']).parent / 'verdict.json').read_text())
+        final_authority = json.loads(Path(receipt['path']).read_text())
+        assert final_authority['etat'] == 'termine' and final_authority['echeance'] == receipt['deadline']
         assert result.returncode == 0 and scope['verdict'] == 'VERT' and scope['code'] == 0
         assert not scope['restes'] and scope['nettoye'] and not Path(scope['prive']).exists()
         assert json.loads((P / 'driver-verdict.json').read_text())['verdict'] == 'VERT'
@@ -140,7 +149,7 @@ def main():
     except BaseException as error:
         record['error'] = repr(error)
     if P.exists():
-        (P / 'composed-verdict.json').write_text(json.dumps(record, indent=2))
+        record = publish_composed(P / 'composed-verdict.json', record, record.get('deadline', 0))
     print(json.dumps(record))
     sys.exit(0 if record['verdict'] == 'VERT' else 1)
 

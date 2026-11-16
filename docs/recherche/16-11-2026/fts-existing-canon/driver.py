@@ -8,6 +8,7 @@ import re
 import subprocess
 import sys
 import time
+from cache_contract import capture_cache_contract, verify_cache_contract
 
 Q = Path(__file__).parent
 CONFIG = json.loads((Q / 'prepared.json').read_text())
@@ -120,6 +121,11 @@ def cache_quiet():
 def run(name, args, env):
     check()
     phase_end = min(END - 10, time.monotonic() + (120 if name == 'target-guard' else 5800))
+    if name == 'target-guard':
+        record = capture_cache_contract(CONFIG, lambda root,*args: subprocess.check_output(['git','-C',str(root),*args],text=True).strip(), digest)
+        with (P / 'cache-contract-after-poste.json').open('x') as stream:
+            json.dump(record,stream,indent=2)
+        verify_cache_contract(record,CONFIG['previous_contract'])
     with (P / (name + '.log')).open('w') as output:
         child = subprocess.Popen(args, cwd=C, env=env, stdout=output, stderr=subprocess.STDOUT)
         try:
