@@ -103,3 +103,42 @@ PR42/main/tag. NeufHOLD et ignorés du profil core restent nonqualifiés.
 RO Recherche demandée sur ce NOUVEAU source81b0, distincte de la RO déjà reçue
 sur la conception. Assemblage/preflight metadata peuvent avancer en parallèle ;
 aucune compilation ou exécution avant publication complète et GO exact distinct.
+
+## Paquet metadata assemblé après publication des sources
+
+Q réel UID1000/dev55/inode168475170, nonce neuf
+`2e5cac17050a7d5dcf4ea8a932309625`. WPC créé sur branche propre
+cx-lucivy-corpus-admission-16nov à81b0 ; aucun Cargo ni ELF lancé. Les métadonnées
+seules ont été vérifiées après publication1162dc7f4d des sources du pilote/recette.
+
+[Préparation et empreintes](preuves/derived-admission-source-preparation/SHA256SUMS).
+Préflight exact SHA3557847be05f314650dcb2afb9f5ced24c57de84c36ce959cfd161f3e642b76e.
+Les neuf empreintes de copies incluent pilotes99a8/7649, helperscore2fa59/rouge0a269,
+Common6439/poste79e3 mode755, ELFancien106fa copié RO, ledger des six sources et
+transcription des onze configs. Aucun ancien ELF adopté sans nonce/owner/source.
+Target unique3552 inchangé, taille RO mesurée1754562560octets, pas de purge.
+
+Précontrôle frais sauvegardé AVANT assertion :11UNKNOWN nonattribués conservés,
+aucun owned/attribué actif. Reçu core ancien TERMINE101/restes[]/nettoyé validé.
+Scope/logs neufs **absents**, scratch privé vide. Les sources et le raccord sont
+noncompilés ; aucune observation du rouge attendu n’est encore revendiquée.
+
+Pour la future invocation distante, utiliser explicitement **bash**, avec le
+shell parent déjà dans Q. Cette enveloppe corrigera le diagnostic fish antérieur,
+sans répéter un lancement ; elle est proposée ici, **NON lancée** :
+
+```bash
+ssh -o BatchMode=yes luciepc 'cd /home/lucied/.cache/rag3weaver-build/cx-lucivy-derived-admission-red-16nov-v1
+exec bash -s' <<'BASH'
+set -euo pipefail
+set -C
+test "$PWD" = /home/lucied/.cache/rag3weaver-build/cx-lucivy-derived-admission-red-16nov-v1
+POSTE_MEM_MAX=32G POSTE_SWAP_MAX=0 POSTE_CPU_QUOTA=400% RAG3WEAVER_BUILD_MEMORY_HIGH=0 /home/lucied/.cache/rag3weaver-build/cx-lucivy-derived-admission-red-16nov-v1/support/poste lourd timeout --signal=TERM --kill-after=5s 610 python3 /home/lucied/.cache/rag3weaver-build/cx-lucivy-derived-admission-red-16nov-v1/admit-derived-admission-red.py > launch.log 2>&1
+BASH
+```
+
+Le noclobber protège aussi un éventuel journal existant. GO exact600 distinct
+encore requis après RO du nouveau SOURCE81b0 et du paquet99a8/7649/preflight3557.
+La RO de conception ne qualifie pas ce nouveau code, son compilation ou son
+pilote. Banc est sollicité pour la recette/ledger/deadline/provenance seulement,
+Recherche pour le raccord/modes/extraction/discriminant ; aucun run par eux.

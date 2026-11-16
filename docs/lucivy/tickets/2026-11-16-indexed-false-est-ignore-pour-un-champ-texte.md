@@ -337,3 +337,17 @@ le mockreadtyped ne prouvePASuneadmissionFSréelle corrigée. OnzeQueryConfig
 statiquementidentiques à890 (provenance/empreintes publiées dansrecetteàsuivre).
 ActionRORechercheavantGO : nouveauSOURCE81b0, vrai raccordconsumer/modes/
 extraction/diagnosticredattendu ; aucunCargo/Rust/ELF/base/service/exécution.
+
+Recette11complète/paquetPC préparésmetadataaprès publication1162 : APP81b0/
+pilote99a8afcacfabd76928e596f956345dbe786641cbd96baf8c86dae32c69e30db1/
+admit7649a9b9/preflight3557847b, Qderived-red-v1nonce2e5cac17050a7d5dcf4ea8a932309625,
+UID1000/dev55/inode168475170. Tunique3552/1.75GB/ELFancien106faROcopié,
+ancienCommoncoreTERMINE101/restes[]/nettoyé/fresh11UNKNOWNnonattribuésconservés.
+Nouvelleautorité/logsabsents,scratchvide. ASTseulement/pascompilé/aucunRustELF.
+Budgetproposé600unique32G/HIGHmax/swap0/quotaCPU4/j<=4, no-run3targets puis
+ledgerELFpersistéavantinventairesetledgerinventairescompletAVANTtémoinunique
+mémoireexpectedred101/0pass1fail0ignore/mockbuilder1au lieude0. Aucunbuilder
+natif/aucunautretest. EnveloppebashparentcwdQ+noclobber littérale documentée.
+ActionROBanc portéeavanttransmission : codepilote/ressources/ledgeravanttest/
+nonce/provenance/oldReceipt, lectureseule sansCargo/ELF/procscan/base/service.
+C7 reçoit couple/recetteexactspourGOdistinctaprèsnouvellesRO, pasattenteancienne.

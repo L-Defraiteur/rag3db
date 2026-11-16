@@ -331,3 +331,10 @@ SuiteROautorisée : conception10 et audit11queries sur15007sourcespubliques.
 mutex_lock0dans300mais64autresdocsadmissibles ; pasabsenceLinux2.6global.
 AdmissionSource.dataset/PANELàrevoiravantheavy, oraclesexistantsàcomposer ;
 rougepure/mockdécritNONcodé/NONjoué, RORechercheavantcode/RUN, aucunretry.
+
+Préparation autorisée poursuivie aprèsROconception : sourceLucivy81b0e74 sur
+origin/cx-lucivy-corpus-admission, vraieentréeconsumer+baselinecouvertureabsente,
+9témoinsproposésnonjoués/cœurspurs extraits ; recette11publiée AVANTRust.
+Paquetderived-red-v1nonce2e5/pilote99a8/admit7649/preflight3557, Tunique3552
+conservé. Proposé600unique,compilenorun3ELF/inventairesavantunique mockrouge ;
+aucunCargo/buildernatif joué. NouvellesROsource/paquet demandées, puisGOdistinct.
