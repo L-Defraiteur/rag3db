@@ -3,7 +3,7 @@
 set -u
 Q=${TTY_CONTROLLER_DIR:?prepared controller required}
 W=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["worktree"])' "$Q/prepared.json") || exit 2
-J=$HOME/.cache/rag3weaver-build/cx-tty-english-aliases-full-v4
+J=$HOME/.cache/rag3weaver-build/cx-tty-english-aliases-full-v5
 T=$HOME/.cache/rag3weaver-build/target-cx-tty-english-aliases-2
 LIB=rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
 [ ! -e "$J" ] && [ ! -L "$J" ] || exit 2
@@ -22,8 +22,8 @@ command -v tmux > "$J/tmux.txt" || stop tmux
 ss -ltn 'sport = :17990' > "$J/port-before.txt" || stop port-inspection
 [ "$(wc -l < "$J/port-before.txt")" = 1 ] || stop port-busy
 mkdir -m 700 "$J/cache" "$J/xdg-state" "$J/state-fixture" "$J/config" "$J/data" "$J/harness" "$J/features" || stop directories
-mkdir -m 700 "$HOME/.cache/r3-tty16v4" || stop tmp-directory
-export TMPDIR="$HOME/.cache/r3-tty16v4"
+mkdir -m 700 "$HOME/.cache/r3-tty16v5" || stop tmp-directory
+export TMPDIR="$HOME/.cache/r3-tty16v5"
 export RAG3DB_LIBS_DIR=$HOME/.cache/rag3db-libs RAG3DB_LIB="$LIB"
 export XDG_CACHE_HOME="$J/cache" XDG_STATE_HOME="$J/xdg-state" XDG_CONFIG_HOME="$J/config" XDG_DATA_HOME="$J/data"
 export RAG3WEAVER_STATE_DIR="$J/state-fixture"
