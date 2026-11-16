@@ -32,3 +32,13 @@ avoir échoué avant l'invite. Aucune cause alias ou nouveau défaut produit dé
 Preuves détaillées/traces désormais persistées et suivi d'attribution dans
 `2026-11-16-le-harnais-perd-les-traces-des-seances-et-juge-la-fin-sur-les-octets.md`.
 Aucun secret réel, aucune exécution sur l'hôte de Lucie, pas de réessai/fix.
+
+## Attribution RO91e5 levée : fixture absente, pas preuve de ce défaut produit
+
+Raw et consigne de phase0008 confirment code127/No such file : faux_sudo.sh
+avait été créé phase0007 avant le changement DOSSIER. Le fauxsudo n'a jamais
+coupé l'écho ou affiché d'invite ; le marqueur FACTICE a ensuite été écrit dans
+la vue redevenue normale et posté comme answer. Cette observation91e5 relève
+du ticket HARNESSEXISTANT, pas d'un correctif de coquille.rs. Le défaut historique
+possible de frappe avant invite reste ouvert avec sa propre recette ; aucune
+réussite ni correction produit déduite de ce diagnostic. Aucun nouveau test.

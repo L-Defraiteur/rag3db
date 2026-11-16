@@ -232,3 +232,39 @@ first-red-stop.json et levé FileExistsError. Le premier marqueur et le premier
 signal sont bien conservés, Common a quiescé. Prévoir un arrêt idempotent/une
 seule émission du signal puis attente de terminaison, témoin discriminant
 avant fix. Aucune correction ni attribution bang implicite sur ce run.
+
+## Diagnostic RO91e5 établi par raw + commandes + journaux, sans nouveau runtime
+
+Avant édition : snapshotT actuel==ledgerQv3 complet, scan frais liens W/T
+attribués[],7UNKNOWN non attribués conservés ; preuve
+`archives/cx-tty-harness-91e5-raw/post-stop-readonly.json` copiée aux deux postes,
+SHA256 f1b3722a17c0212f4c2db5f50e8a063aef136661ebb88233592abe4af0652730.
+L'archive RAW dbf296…1d3 demeure inchangée aux deux postes. W propre.
+
+Cause prouvée de la séancebang : le script fauxsudo est créé **avant**
+hote_demarrer ; depuis l'isolation par phase, DOSSIER pointe encore phase0007,
+puis hote_demarrer choisit phase0008. Le fichier existe phase0007 (SHA
+c7aab20c15245d881671d3d0350f06efaccadb7d041cc5253b9e4b3e9155e663),
+mais est absent phase0008. La frappe !sh à854860.227391972 vise phase0008.
+Raw PTY **et** consigne reçue dans journal.jsonl indiquent explicitement
+`sh: …/phase-0008/faux_sudo.sh: No such file or directory`, retour **127**.
+Le fauxsudo n'a donc jamais commencé, ni coupé l'écho ni affiché son invite.
+
+À854870.728745199, après10s+0,5s de recherche d'invite, le harnais écrit quand
+même le marqueur FACTICE dans la vue riche redevenue disponible. Journal
+fauxhôte : ce texte part comme `answer` à1794855266.4267082. Sa présence en
+raw/journal n'est donc pas une preuve de mot de passe échappé du PTY ni de
+course avant coupure d'écho. Le défaut est dans l'adaptation du harnais, pas
+une régression d'alias ou un correctif produit justifié. Aucun secret réel.
+
+Plan de diff proposé, **non appliqué** :
+1. Créer/valider le fauxsudo dans la phase courante APRÈS hote_demarrer,
+   garder le chemin immuable pour commande et assertions ; témoins de deux
+   phases distinctes montrant le mauvais chemin refusé puis corrigé.
+2. Si invite absente ou fixture manquante, enregistrer le refus et ne jamais
+   injecter le marqueur ; test de gate, pas de contournement par un délai.
+3. Contrôleur : après premier rouge, premier marqueur/envoiTERM immuables,
+   conserver toutes les autres lignes en append, ne signaler qu'une fois.
+   Contre-exemple deuxROUGE avant effetTERM avant correction, callback factice.
+4. Publication puis témoins CPU hermétiques, RO du paquet avant un éventuel
+   GO distinct. Aucun retry du run91e5 ni F8/build/Cargo/tmux/HTTP pendant RO.
