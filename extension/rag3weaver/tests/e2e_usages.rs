@@ -1085,3 +1085,25 @@ fn c_api_prototype_is_visible_through_the_includes_of_a_c_source() {
     );
 }
 
+/// **A method inherited from a base class is reached through the derived type** (ticket « une définition
+/// C++ se lie à la déclaration de son en-tête », 16 November 2026 — the misses of a single definer):
+/// `newEntry->setOID(1)` with `newEntry` a `TableCatalogEntry*`, `setOID` defined in `CatalogEntry`, its
+/// base. The type read is the derived class; the definer's parent is its base: the call goes to it, by type.
+#[test]
+#[ignore]
+fn an_inherited_method_is_reached_through_the_derived_type() {
+    let catalog = setup();
+    let fichiers: Vec<(String, String)> = [
+        ("cat/base.h", "#pragma once\nclass CatalogEntry {\npublic:\n    void setOID(int oid);\n};\n"),
+        ("cat/base.cpp", "#include \"base.h\"\n\nvoid CatalogEntry::setOID(int oid) {}\n"),
+        ("cat/derived.h", "#pragma once\n#include \"base.h\"\nclass TableCatalogEntry : public CatalogEntry {\npublic:\n    void alter();\n};\n"),
+        ("cat/derived.cpp", "#include \"derived.h\"\n\nvoid TableCatalogEntry::alter() {\n    TableCatalogEntry* newEntry = nullptr;\n    newEntry->setOID(1);\n}\n"),
+    ]
+    .iter()
+    .map(|(p, c)| (p.to_string(), c.to_string()))
+    .collect();
+    catalog.lock().unwrap().ingest_code(&analyze("/projet", fichiers)).unwrap();
+    let cat = catalog.lock().unwrap();
+    assert_eq!(cibles_vers(&cat, "alter", "setOID"), vec![("CatalogEntry".to_string(), "type".to_string())]);
+}
+
