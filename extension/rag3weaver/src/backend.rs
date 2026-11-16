@@ -9078,6 +9078,27 @@ mod tests {
         assert_eq!(w.index_gate().imports, w.imports, "la porte de l'index les porte jusqu'à la synchronisation");
     }
 
+    /// **The search tools say when each is the right one** (P1, Algareth's empirical runs of 16 November 2026:
+    /// `search_code` was never chosen, 0 of 82 calls, while `grep_files` was taken for questions of meaning). In
+    /// the shipped `code` and `atelier` templates, in English: `search_code` is the first tool for a question in
+    /// words, a "where is … decided", or a name one is not sure of; `grep_files` is for an exact string only,
+    /// and sends a question of meaning to `search_code`.
+    #[test]
+    fn the_search_tool_descriptions_say_when_each_is_the_right_one() {
+        for gabarit in ["templates/backends/code/backend.json", "templates/backends/atelier/backend.json"] {
+            let chemin = Path::new(env!("CARGO_MANIFEST_DIR")).join(gabarit);
+            let m: Value = serde_json::from_slice(&std::fs::read(&chemin).unwrap()).unwrap();
+            let search = m["tools"]["search_code"]["description"].as_str().unwrap_or_default();
+            let grep = m["tools"]["grep_files"]["description"].as_str().unwrap_or_default();
+            for attendu in ["Use first", "where is", "not sure of the exact name"] {
+                assert!(search.contains(attendu), "{gabarit}: search_code says « {attendu} »: {search}");
+            }
+            for attendu in ["exact string", "search_code"] {
+                assert!(grep.contains(attendu), "{gabarit}: grep_files says « {attendu} »: {grep}");
+            }
+        }
+    }
+
     /// **`models.embed` et `embeddings` disent la même chose** : l'une ou
     /// l'autre, jamais les deux, et l'absence des deux se dit au chargement.
     /// **Le nom de l'agent** (c7, 15 novembre, le nom des agents (1)) : « équipier » sans déclaration,
