@@ -2,23 +2,23 @@
 //! (lot tty-2) ; `--plain` écrit le texte brut, sans terminal riche (lot tty-1).
 //!
 //! ```text
-//! rag3weaver-tty [--plain] [--theme daemon|foret|cyberpunk|cyborg|alien] --depot <nom|chemin> --tache <nom> [--demande "<texte>"]
-//!                [--daemon-json <chemin> | --daemon-cmd "<commande>"] [--adresse hôte:port]
-//!                [--depuis <id>] [--journal <fichier>]
+//! rag3weaver-tty [--plain] [--theme daemon|foret|cyberpunk|cyborg|alien] --repo <nom|chemin> --task <nom> [--request "<texte>"]
+//!                [--daemon-json <chemin> | --daemon-cmd "<commande>"] [--address hôte:port]
+//!                [--since <id>] [--log <fichier>]
 //! ```
 //!
-//! `--journal` écrit en texte brut ce qui part dans l'historique du terminal (lot
+//! `--log` écrit en texte brut ce qui part dans l'historique du terminal (lot
 //! tty-7). Sous mosh, qui ne garde aucun historique au-delà de l'écran, un journal
 //! s'ouvre de lui-même dans `~/.local/state/rag3weaver/tty/`, et la vue dit la
 //! commande qui le relit.
 //!
 //! Écrit au fil de l'eau ce que fait l'équipier de la tâche : les tokens du
-//! modèle, ses outils, sa boîte. Une `--demande` lance l'équipier (une
+//! modèle, ses outils, sa boîte. Une `--request` lance l'équipier (une
 //! `request`). Le flux se reprend tout seul après une coupure, sans perte ni
 //! doublon (`Last-Event-ID`). S'arrête quand l'équipier a fini (`ended`).
 //!
 //! L'hôte sur une autre machine : `--daemon-cmd "ssh luciepc cat .local/share/rag3weaver/daemon.json"`
-//! et `--adresse 127.0.0.1:17970` derrière un `ssh -L 17970:127.0.0.1:7970 luciepc`.
+//! et `--address 127.0.0.1:17970` derrière un `ssh -L 17970:127.0.0.1:7970 luciepc`.
 
 use rag3weaver_tty::journal::{self, Journal};
 use rag3weaver_tty::{client, endpoint::Endpoint, flux, plain, theme::Theme, tui};
@@ -28,12 +28,10 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 struct Options {
     depot: String,
     task: String,
-    /// L'ancien nom (`--backend`, `--task`) a été employé : on le dit.
-    ancien_nom: bool,
     steps: bool,
     demande: Option<String>,
     daemon_json: Option<String>,
@@ -53,42 +51,33 @@ fn options() -> Result<Options, String> {
 
 fn parse_options(args: impl IntoIterator<Item = String>, default_theme: Option<String>) -> Result<Options, String> {
     let mut args = args.into_iter();
-    let mut o = Options { depot: String::new(), task: String::new(), ancien_nom: false, steps: false, demande: None, daemon_json: None, daemon_cmd: None, adresse: None, depuis: None, plain: false, theme: default_theme.filter(|v| !v.is_empty()), journal: None };
+    let mut o = Options { depot: String::new(), task: String::new(), steps: false, demande: None, daemon_json: None, daemon_cmd: None, adresse: None, depuis: None, plain: false, theme: default_theme.filter(|v| !v.is_empty()), journal: None };
     while let Some(a) = args.next() {
         let mut valeur = || args.next().ok_or_else(|| format!("{a} attend une valeur"));
         match a.as_str() {
             "--plain" => o.plain = true,
             "--theme" => o.theme = Some(valeur()?),
-            "--depot" => o.depot = valeur()?,
-            "--tache" => o.task = valeur()?,
-            // Les noms du lot tty-1, lus encore un lot (docs/07-novembre-2026-tty/02, § Vocabulaire).
-            "--backend" => {
-                o.depot = valeur()?;
-                o.ancien_nom = true;
-            }
-            "--task" => {
-                o.task = valeur()?;
-                o.ancien_nom = true;
-            }
-            "--demande" => o.demande = Some(valeur()?),
-            "--journal" => o.journal = Some(valeur()?),
+            "--repo" | "--depot" | "--backend" => o.depot = valeur()?,
+            "--task" | "--tache" => o.task = valeur()?,
+            "--request" | "--demande" => o.demande = Some(valeur()?),
+            "--log" | "--journal" => o.journal = Some(valeur()?),
             // Les étapes de l'équipier dans l'historique (sinon, elles défilent dans la zone vivante).
-            "--etapes" => o.steps = true,
+            "--steps" | "--etapes" => o.steps = true,
             "--daemon-json" => o.daemon_json = Some(valeur()?),
             "--daemon-cmd" => o.daemon_cmd = Some(valeur()?),
-            "--adresse" => o.adresse = Some(valeur()?),
-            "--depuis" => o.depuis = Some(valeur()?.parse().map_err(|e| format!("--depuis : {e}"))?),
+            "--address" | "--adresse" => o.adresse = Some(valeur()?),
+            "--since" | "--depuis" => o.depuis = Some(valeur()?.parse().map_err(|e| format!("--depuis : {e}"))?),
             "-h" | "--help" => return Err(String::new()),
             autre => return Err(format!("option inconnue : {autre}")),
         }
     }
     if o.depot.is_empty() || o.task.is_empty() {
-        return Err("--depot et --tache sont exigés".into());
+        return Err("--repo et --task sont exigés".into());
     }
     Ok(o)
 }
 
-const AIDE: &str = "rag3weaver-tty [--plain] [--theme daemon|foret|cyberpunk|cyborg|alien] --depot <nom|chemin> --tache <nom> [--demande \"<texte>\"] [--daemon-json <chemin> | --daemon-cmd \"<commande>\"] [--adresse hôte:port] [--depuis <id>] [--journal <fichier>] [--etapes]";
+const AIDE: &str = "rag3weaver-tty [--plain] [--theme daemon|foret|cyberpunk|cyborg|alien] --repo <nom|chemin> --task <nom> [--request \"<texte>\"] [--daemon-json <chemin> | --daemon-cmd \"<commande>\"] [--address hôte:port] [--since <id>] [--log <fichier>] [--steps]\nAnciens noms acceptés : --depot/--backend, --tache, --demande, --journal, --etapes, --adresse, --depuis.";
 
 fn main() {
     let o = match options() {
@@ -119,9 +108,6 @@ fn lancer(o: Options) -> Result<(), String> {
         None => ep,
     };
     let agent = client::agent();
-    if o.ancien_nom {
-        eprintln!("rag3weaver-tty : --backend et --task deviennent --depot et --tache (l'ancien nom part au prochain lot)");
-    }
     // Le dépôt se désigne par son nom ou son chemin ; son id ne sert qu'au JSON.
     let etat = client::lire_brut(&agent, &ep, "/ide/etat")?;
     let depot = client::resoudre_depot(&etat, &o.depot)?;
@@ -292,6 +278,11 @@ mod english_options_tests {
 
     #[test]
     fn english_options_match_legacy_and_last_value_wins() {
+        let english = parse(&["--repo", "r", "--task", "t", "--request", "hello", "--log", "l", "--address", "localhost:1", "--since", "9", "--steps"]).unwrap();
+        let legacy = parse(&["--depot", "r", "--tache", "t", "--demande", "hello", "--journal", "l", "--adresse", "localhost:1", "--depuis", "9", "--etapes"]).unwrap();
+        assert_eq!(english, legacy);
+        assert!(AIDE.starts_with("rag3weaver-tty"));
+        assert!(AIDE.contains("--repo") && AIDE.contains("Anciens noms"));
         let options = parse(&["--repo", "first", "--depot", "last", "--task", "sample",
             "--request", "hello", "--log", "session.log", "--address", "127.0.0.1:1",
             "--since", "42", "--steps"]).unwrap();
@@ -302,9 +293,9 @@ mod english_options_tests {
         assert_eq!(options.adresse.as_deref(), Some("127.0.0.1:1"));
         assert_eq!(options.depuis, Some(42));
         assert!(options.steps);
-        assert!(!options.ancien_nom);
         let mixed = parse(&["--backend", "repo", "--task", "sample"]).unwrap();
-        assert!(!mixed.ancien_nom);
+        assert_eq!(mixed.depot, "repo");
+        assert_eq!(mixed.task, "sample");
         for flag in ["--repo", "--task", "--request", "--log", "--address", "--since"] {
             assert!(parse(&["--repo", "repo", "--task", "sample", flag]).is_err(), "{flag}");
         }

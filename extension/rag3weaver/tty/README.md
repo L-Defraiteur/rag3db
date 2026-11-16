@@ -10,23 +10,24 @@ MIT, like rag3weaver. The crate does not link the engine: it is a plain HTTP cli
 ## Run it
 
 ```
-rag3weaver-tty --depot <name|path> --tache <name> [--demande "<text>"]
-               [--theme daemon|foret|cyberpunk|cyborg|alien] [--journal <file>] [--plain]
-               [--daemon-json <path> | --daemon-cmd "<command>"] [--adresse host:port] [--depuis <id>]
+rag3weaver-tty --repo <name|path> --task <name> [--request "<text>"]
+               [--theme daemon|foret|cyberpunk|cyborg|alien] [--log <file>] [--plain]
+               [--daemon-json <path> | --daemon-cmd "<command>"] [--address host:port] [--since <id>]
 ```
 
-- `--depot` names an attached repository, by name or path; `--tache` names the task (its branch is
-  `agent/<name>`). `--demande` opens the task with a first request; without it, the terminal follows
+- `--repo` names an attached repository, by name or path; `--task` names the task (its branch is
+  `agent/<name>`). `--request` opens the task with a first request; without it, the terminal follows
   the task as it is.
 - The host is found through its `daemon.json` (address and token), by default the local one.
   On another machine: `ssh -N -L 17970:127.0.0.1:7970 <host machine>`, then
-  `--daemon-cmd "ssh <host machine> cat .local/share/rag3weaver/daemon.json" --adresse 127.0.0.1:17970`.
+  `--daemon-cmd "ssh <host machine> cat .local/share/rag3weaver/daemon.json" --address 127.0.0.1:17970`.
 - `--plain` writes the stream as plain text. It also takes over by itself when the inline view cannot
   start, for instance when the terminal does not report its cursor position, and it says so. It
-  follows the task's own stream only, from what arrives after it starts: with `--demande`, it stays
+  follows the task's own stream only, from what arrives after it starts: with `--request`, it stays
   attached until that request ends (an end left in the mailbox by an earlier request does not count),
   and its journal carries the tool calls, so a script can run it and read the journal afterwards.
-- The old names `--backend` and `--task` are still read, with a warning.
+- Legacy options `--depot`/`--backend`, `--tache`, `--demande`, `--journal`, `--etapes`,
+  `--adresse` and `--depuis` remain accepted silently; `--task` is the current English name.
 
 ```
 cargo build --release --bin rag3weaver-tty
@@ -56,8 +57,8 @@ task, when they fit.
 The history keeps what was asked and what was answered (and a `!` command with its output). The
 last working tool call scrolls on the muted top line of the live zone instead, without a verdict
 (a refusal is said); the step's plumbing (`step_done`, `report`, `edit_plan`), steps done and the
-host's own words are not shown; Ctrl-O and the journal keep them all. `--etapes`
-(`RAG3WEAVER_TTY_ETAPES=1`, or `/etapes` during the session) writes them all to the history.
+host's own words are not shown; Ctrl-O and the journal keep them all. `--steps`
+(`RAG3WEAVER_TTY_ETAPES=1`, or `/steps` during the session) writes them all to the history.
 
 An approval request is live state: it is said on the status line, not written to the history,
 and still said once the teammate's step has ended. It shows two buttons, `[ Oui ]` chosen in
@@ -109,14 +110,14 @@ break a line: Shift-Enter, Alt-Enter, or under tmux that Shift-Enter sends.
 ## Commands
 
 An input starting with `/` is a command of the terminal, never sent to the teammate (`//` sends a
-text starting with one `/`): `/aide`, `/quitter`, `/arreter`, `/theme <name>`, `/tache <name>` and
-`/depot <name>` (the view starts again on another task or repository, keeping the session journal
-and theme), `/journal`, `/effacer` (clears the visible screen) and `/effacer historique`, and
+text starting with one `/`): `/help`, `/quit`, `/stop`, `/theme <name>`, `/task <name>` and
+`/repo <name>` (the view starts again on another task or repository, keeping the session journal
+and theme), `/log`, `/clear` (clears the visible screen) and `/clear history`, and
 `/context` (how full the teammate's model context is, from the host's `GET /ide/chat`), and
 `/model` (the language models the task's manifest declares, the default and the task's own marked;
-`/model <name>` makes the task use one, kept with the task by the host), and `/nom <x>` (names the
-task's agent through the host's `POST /ide/teammate/name`; `/nom -` gives it back its repository's
-name; `/nom` alone says the last name the agent's lines carried).
+`/model <name>` makes the task use one, kept with the task by the host), and `/name <x>` (names the
+task's agent through the host's `POST /ide/teammate/name`; `/name -` gives it back its repository's
+name; `/name` alone says the last name the agent's lines carried).
 
 `!<command>` runs it with `/bin/sh -c` where the terminal runs, in the task's worktree when it is on
 this machine. The screen goes to the command, on a pseudo-terminal of its own (`posix_openpt`, through
@@ -168,12 +169,12 @@ host and a pty), both ways between two machines:
   `mosh-server` ancestor (Linux, `/proc`), a session journal opens by itself and the top line of the
   live zone gives the command that reads it back: `less <journal>`. When the sentence does not fit,
   the command stays whole. Inside a container whose pid namespace hides the `mosh-server`, under a
-  tmux started inside mosh, or on macOS, nothing is detected and nothing is said; `--journal` stays
+  tmux started inside mosh, or on macOS, nothing is detected and nothing is said; `--log` stays
   available.
 
 ## The session journal
 
-`--journal <file>` writes, as plain text without colours, every line sent to the terminal's history:
+`--log <file>` writes, as plain text without colours, every line sent to the terminal's history:
 the folded prose, code blocks, tools and the mailbox. In `--plain`, it receives the same text as the
 output. Journals opened by themselves go to `$XDG_STATE_HOME/rag3weaver/tty/` (by default
 `~/.local/state/rag3weaver/tty/`, `%LOCALAPPDATA%` on Windows) as `seance-<seconds>-<pid>.txt`.
@@ -217,3 +218,11 @@ real binary through ssh, tmux or mosh against `mesures/faux_hote.py`, and checks
 resizing, keys (stop, approval, the line editor as typed by a real terminal, Ctrl-C), the journal and
 the colours of every theme. rag3weaver's own end-to-end suite runs the stream client against a real
 host, with a fake teammate.
+
+
+Legacy slash commands remain accepted: `/aide`, `/quitter`, `/arreter`, `/tache`,
+`/depot`, `/journal`, `/effacer`, `/effacer historique`, `/etapes`, and `/nom`.
+Their English names are `/help`, `/quit`, `/stop`, `/task`, `/repo`, `/log`,
+`/clear`, `/clear history`, `/steps`, and `/name`. Tab offers English names as
+well as legacy names. For repeated options, the last value wins, including
+mixed English and legacy spellings.
