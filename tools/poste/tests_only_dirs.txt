@@ -1,0 +1,3 @@
+# Directories whose files are tests only (16 November 2026, hotfixs ticket): a lot that touches nothing else may
+# land in tests-only mode (TESTS_ONLY=1 for push_garde.sh), without a lib, on a journal that names the binary it played.
+tools/shell/test/
