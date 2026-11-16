@@ -128,6 +128,11 @@ def inside(config, root):
     return rc
 
 
+def read_scope_verdict(root, common_rc):
+    scope_path = root / 'scope/verdict.json'
+    return json.loads(scope_path.read_text()) if scope_path.exists() else {}
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('action', choices=['prepare', 'run', 'inside'])
@@ -190,8 +195,7 @@ def main():
     expected = (rc != 0 and all(('    e2e_usages::' + name) in text for name in NAMES)
                 and '0 passed; 2 failed; 0 ignored' in text
                 and text.count('the project call must remain visible') == 2)
-    scope_path = root / 'scope/verdict.json'
-    scope = json.loads(scope_path.read_text()) if scope_path.exists() else {}
+    scope = read_scope_verdict(root, rc)
     expected = (expected and scope.get('nettoye', False) and not scope.get('restes', ['unknown'])
                 and text.count('left: 0') == 2 and text.count('right: 1') == 2)
     (root / 'classification.json').write_text(json.dumps({'expected_red_pair': expected,
