@@ -352,6 +352,24 @@ fn releve_du_jeu(backend: &rag3weaver::backend::Backend, jeu: &Value, k: usize) 
             releve.push(json!({"requete": q, "forme": nom, "ms": ms, "resultats": resultats, "view": vue.get("view").cloned().unwrap_or(Value::Null)}));
         }
     }
+    // **The active signals, said and checked** (c7, 16 Nov.: a green reads by its path). Every signal
+    // that contributed to a returned result is counted; `RAG3WEAVER_PARITE_REQUIRE_SIGNALS` (comma
+    // separated, e.g. `vector,bm25`) names the signals that must show up at least once, or the relevé
+    // refuses instead of silently falling back.
+    let mut seen: std::collections::BTreeMap<String, usize> = Default::default();
+    for case in &releve {
+        for r in case["resultats"].as_array().into_iter().flatten() {
+            for part in r["signal"].as_str().unwrap_or("").split('+').filter(|x| !x.is_empty()) {
+                *seen.entry(part.to_string()).or_default() += 1;
+            }
+        }
+    }
+    eprintln!("[parité] active signals over the results: {seen:?}");
+    if let Ok(req) = std::env::var("RAG3WEAVER_PARITE_REQUIRE_SIGNALS") {
+        for want in req.split(',').map(str::trim).filter(|x| !x.is_empty()) {
+            assert!(seen.keys().any(|k| k.starts_with(want)), "required signal `{want}` never contributed to a result (seen: {seen:?}) — refusing a relevé that would fall back silently");
+        }
+    }
     releve
 }
 
