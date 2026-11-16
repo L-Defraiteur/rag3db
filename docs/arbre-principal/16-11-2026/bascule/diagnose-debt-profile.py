@@ -22,7 +22,7 @@ def rows(text):
 
 def profile(config):
  fields=config.get('fields',{});derived=config.get('derived') or {};render=derived.get('render',{})
- return dict(chunking=config.get('chunking'),source_lines=config.get('source_lines'),signals=config.get('signals'),search_index=config.get('search_index'),chunked=config.get('chunked'),field_names=sorted(fields),content_fields=sorted(k for k,v in fields.items() if v.get('is_content')),title_fields=sorted(k for k,v in fields.items() if v.get('is_title')),derived_from=derived.get('from'),derived_identity=derived.get('identity'),render_hashes={k:hashlib.sha256(json.dumps(v,ensure_ascii=False,sort_keys=True).encode()).hexdigest() for k,v in render.items()})
+ return dict(chunking=config.get('chunking'),source_lines=config.get('sourceLines',config.get('source_lines')),signals=config.get('signals'),search_index=config.get('search_index'),chunked=config.get('chunked'),field_names=sorted(fields),content_fields=sorted(k for k,v in fields.items() if v.get('isContent',v.get('is_content'))),title_fields=sorted(k for k,v in fields.items() if v.get('isTitle',v.get('is_title'))),derived_from=derived.get('from'),derived_identity=derived.get('identity'),render_hashes={k:hashlib.sha256(json.dumps(v,ensure_ascii=False,sort_keys=True).encode()).hexdigest() for k,v in render.items()})
 
 def main():
  if digest(QUERY)!='48ae2328a29676fa69154cb9c67d9125d4d04cf92b029bd2b2a09981dea95616' or digest(LIB/'librag3db.so')!='b7e9fc75a3d2de04c72680b0309e8bb1df9eaadb5211ebbacf39716c6d0a2101':raise ValueError('native pins')
