@@ -1,0 +1,2872 @@
+{
+  "oracle_sha256": "38f7cf22ffa11042ccca0d3238071a46765040a70cb8a406bff6d39cb0d2d31b",
+  "sample_sha256": "3e3ee90db2111430e8bb9f6e27db6bccc92df673346574df7804a0375fc311ff",
+  "campaign_completion_qualified": false,
+  "judgment_counts": {
+    "observed": 80,
+    "unjudged": 26,
+    "not_exposed": 1,
+    "missing": 2
+  },
+  "files": [
+    {
+      "repository_id": "github.com/tokio-rs/tokio@f3e855fa55d6c1cc3e7a28e115a421b8ee5860bd",
+      "relative_path": "tokio-stream/src/empty.rs",
+      "sha256": "ab34ee4707b5defb851933cb5dee0fa8fe7611864752fb23d57e40ad68659333",
+      "language": "rust",
+      "row_present": true,
+      "ast_status": "valid",
+      "execution_status": "completed",
+      "judgments": [
+        {
+          "name": "Empty",
+          "source_kind": "generic_tuple_struct",
+          "owner": null,
+          "anchor_line_1based": 11,
+          "anchor_column_0based": 11,
+          "anchor_byte_0based": 262,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 287,
+            "end_line": 11,
+            "generic_parameters": [
+              {
+                "constraint": null,
+                "default_type": null,
+                "name": "T"
+              }
+            ],
+            "heritage": null,
+            "name": "Empty",
+            "node_end_byte": 287,
+            "node_start_byte": 251,
+            "parent": null,
+            "parent_path": null,
+            "record": "scope",
+            "return_type": null,
+            "start_byte": 251,
+            "start_line": 11,
+            "type": "Class"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "empty",
+          "source_kind": "generic_const_function",
+          "owner": null,
+          "anchor_line_1based": 37,
+          "anchor_column_0based": 13,
+          "anchor_byte_0based": 928,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 977,
+            "end_line": 39,
+            "generic_parameters": [
+              {
+                "constraint": null,
+                "default_type": null,
+                "name": "T"
+              }
+            ],
+            "heritage": null,
+            "name": "empty",
+            "node_end_byte": 977,
+            "node_start_byte": 915,
+            "parent": null,
+            "parent_path": null,
+            "record": "scope",
+            "return_type": "Empty<T>",
+            "start_byte": 915,
+            "start_line": 37,
+            "type": "Function"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "poll_next",
+          "source_kind": "trait_impl_method",
+          "owner": "Empty<T> / Stream",
+          "anchor_line_1based": 44,
+          "anchor_column_0based": 7,
+          "anchor_byte_0based": 1036,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 1332,
+            "end_line": 54,
+            "generic_parameters": null,
+            "heritage": null,
+            "name": "poll_next",
+            "node_end_byte": 1332,
+            "node_start_byte": 1033,
+            "parent": "Empty",
+            "parent_path": null,
+            "record": "scope",
+            "return_type": "Poll<Option<T>>",
+            "start_byte": 1029,
+            "start_line": 44,
+            "type": "Method"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "size_hint",
+          "source_kind": "trait_impl_method",
+          "owner": "Empty<T> / Stream",
+          "anchor_line_1based": 56,
+          "anchor_column_0based": 7,
+          "anchor_byte_0based": 1341,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 1412,
+            "end_line": 58,
+            "generic_parameters": null,
+            "heritage": null,
+            "name": "size_hint",
+            "node_end_byte": 1412,
+            "node_start_byte": 1338,
+            "parent": "Empty",
+            "parent_path": null,
+            "record": "scope",
+            "return_type": "(usize, Option<usize>)",
+            "start_byte": 1334,
+            "start_line": 56,
+            "type": "Method"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "is_terminated",
+          "source_kind": "trait_impl_method",
+          "owner": "Empty<T> / FusedStream",
+          "anchor_line_1based": 62,
+          "anchor_column_0based": 7,
+          "anchor_byte_0based": 1458,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 1507,
+            "end_line": 64,
+            "generic_parameters": null,
+            "heritage": null,
+            "name": "is_terminated",
+            "node_end_byte": 1507,
+            "node_start_byte": 1455,
+            "parent": "Empty",
+            "parent_path": null,
+            "record": "scope",
+            "return_type": "bool",
+            "start_byte": 1451,
+            "start_line": 62,
+            "type": "Method"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "Item",
+          "source_kind": "associated_type",
+          "owner": "Empty<T> / Stream",
+          "anchor_line_1based": 42,
+          "anchor_column_0based": 9,
+          "anchor_byte_0based": 1018,
+          "judgment_contract": "only_if_exposed_by_api",
+          "status": "unjudged",
+          "reason": "dimension_not_retained_in_compact_fixture_no_IR_absence_claim"
+        },
+        {
+          "name": "Unpin",
+          "source_kind": "trait_impl",
+          "owner": "Empty<T>",
+          "anchor_line_1based": 13,
+          "anchor_column_0based": 8,
+          "anchor_byte_0based": 297,
+          "judgment_contract": "only_if_exposed_by_api",
+          "status": "unjudged",
+          "reason": "dimension_not_retained_in_compact_fixture_no_IR_absence_claim"
+        },
+        {
+          "name": "Send",
+          "source_kind": "unsafe_trait_impl",
+          "owner": "Empty<T>",
+          "anchor_line_1based": 14,
+          "anchor_column_0based": 15,
+          "anchor_byte_0based": 334,
+          "judgment_contract": "only_if_exposed_by_api",
+          "status": "unjudged",
+          "reason": "dimension_not_retained_in_compact_fixture_no_IR_absence_claim"
+        },
+        {
+          "name": "Sync",
+          "source_kind": "unsafe_trait_impl",
+          "owner": "Empty<T>",
+          "anchor_line_1based": 15,
+          "anchor_column_0based": 15,
+          "anchor_byte_0based": 370,
+          "judgment_contract": "only_if_exposed_by_api",
+          "status": "unjudged",
+          "reason": "dimension_not_retained_in_compact_fixture_no_IR_absence_claim"
+        },
+        {
+          "name": "Stream",
+          "source_kind": "import",
+          "owner": null,
+          "anchor_line_1based": 1,
+          "anchor_column_0based": 11,
+          "anchor_byte_0based": 11,
+          "judgment_contract": "only_if_exposed_by_api",
+          "status": "observed",
+          "reason": "import_binding_retained_line_may_anchor_declaration_start",
+          "evidence": [
+            {
+              "binding": {
+                "alias": "Stream",
+                "imported": "Stream",
+                "is_local": true,
+                "kind": "Named",
+                "line": 1,
+                "module_path": "crate",
+                "source": "crate"
+              },
+              "record": "file_import"
+            }
+          ]
+        },
+        {
+          "name": "ready!",
+          "source_kind": "macro_call",
+          "owner": "poll_next",
+          "anchor_line_1based": 49,
+          "anchor_column_0based": 34,
+          "anchor_byte_0based": 1223,
+          "judgment_contract": "only_if_exposed_by_api",
+          "status": "unjudged",
+          "reason": "dimension_not_retained_in_compact_fixture_no_IR_absence_claim"
+        }
+      ]
+    },
+    {
+      "repository_id": "github.com/tokio-rs/tokio@f3e855fa55d6c1cc3e7a28e115a421b8ee5860bd",
+      "relative_path": "tokio-util/src/io/read_arc.rs",
+      "sha256": "dab2593708bc82235202fc49c02e4af97fd8b4310baa98553c2f07fa75f7bb72",
+      "language": "rust",
+      "row_present": true,
+      "ast_status": "valid",
+      "execution_status": "completed",
+      "judgments": [
+        {
+          "name": "read_exact_arc",
+          "source_kind": "async_generic_function",
+          "owner": null,
+          "anchor_line_1based": 27,
+          "anchor_column_0based": 13,
+          "anchor_byte_0based": 661,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 1527,
+            "end_line": 45,
+            "generic_parameters": [
+              {
+                "constraint": ": AsyncRead",
+                "default_type": null,
+                "name": "R: AsyncRead"
+              }
+            ],
+            "heritage": null,
+            "name": "read_exact_arc",
+            "node_end_byte": 1527,
+            "node_start_byte": 648,
+            "parent": null,
+            "parent_path": null,
+            "record": "scope",
+            "return_type": "io::Result<Arc<[u8]>>",
+            "start_byte": 648,
+            "start_line": 27,
+            "type": "Function"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "AsyncRead",
+          "source_kind": "import",
+          "owner": null,
+          "anchor_line_1based": 4,
+          "anchor_column_0based": 16,
+          "anchor_byte_0based": 76,
+          "judgment_contract": "only_if_exposed_by_api",
+          "status": "observed",
+          "reason": "import_binding_retained_line_may_anchor_declaration_start",
+          "evidence": [
+            {
+              "binding": {
+                "alias": "AsyncRead",
+                "imported": "io::AsyncRead",
+                "is_local": false,
+                "kind": "Named",
+                "line": 4,
+                "module_path": "tokio::io",
+                "source": "tokio"
+              },
+              "record": "file_import"
+            }
+          ]
+        },
+        {
+          "name": "Arc",
+          "source_kind": "import",
+          "owner": null,
+          "anchor_line_1based": 3,
+          "anchor_column_0based": 15,
+          "anchor_byte_0based": 55,
+          "judgment_contract": "only_if_exposed_by_api",
+          "status": "observed",
+          "reason": "import_binding_retained_line_may_anchor_declaration_start",
+          "evidence": [
+            {
+              "binding": {
+                "alias": "Arc",
+                "imported": "sync::Arc",
+                "is_local": false,
+                "kind": "Named",
+                "line": 3,
+                "module_path": "std::sync",
+                "source": "std"
+              },
+              "record": "file_import"
+            }
+          ]
+        },
+        {
+          "name": "pin!",
+          "source_kind": "macro_call",
+          "owner": "read_exact_arc",
+          "anchor_line_1based": 28,
+          "anchor_column_0based": 11,
+          "anchor_byte_0based": 749,
+          "judgment_contract": "only_if_exposed_by_api",
+          "status": "unjudged",
+          "reason": "dimension_not_retained_in_compact_fixture_no_IR_absence_claim"
+        },
+        {
+          "name": "MaybeUninit",
+          "source_kind": "type_reference",
+          "owner": "read_exact_arc",
+          "anchor_line_1based": 33,
+          "anchor_column_0based": 61,
+          "anchor_byte_0based": 1091,
+          "judgment_contract": "only_if_exposed_by_api",
+          "status": "unjudged",
+          "reason": "dimension_not_retained_in_compact_fixture_no_IR_absence_claim"
+        }
+      ]
+    },
+    {
+      "repository_id": "github.com/django/django@03158f2189346e35831586dfd0381e37eacb685d",
+      "relative_path": "django/template/loaders/filesystem.py",
+      "sha256": "7f8b22943ed65a1bf72bd43248c816edd94618dc3060070708c493169c228976",
+      "language": "python",
+      "row_present": true,
+      "ast_status": "valid",
+      "execution_status": "completed",
+      "judgments": [
+        {
+          "name": "Loader",
+          "source_kind": "class",
+          "owner": null,
+          "anchor_line_1based": 12,
+          "anchor_column_0based": 6,
+          "anchor_byte_0based": 263,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 1505,
+            "end_line": 45,
+            "generic_parameters": null,
+            "heritage": [
+              {
+                "clause": "Extends",
+                "types": [
+                  "BaseLoader"
+                ]
+              }
+            ],
+            "name": "Loader",
+            "node_end_byte": 1505,
+            "node_start_byte": 257,
+            "parent": null,
+            "parent_path": null,
+            "record": "scope",
+            "return_type": null,
+            "start_byte": 257,
+            "start_line": 12,
+            "type": "Class"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "__init__",
+          "source_kind": "method",
+          "owner": "Loader",
+          "anchor_line_1based": 13,
+          "anchor_column_0based": 8,
+          "anchor_byte_0based": 291,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 383,
+            "end_line": 15,
+            "generic_parameters": null,
+            "heritage": null,
+            "name": "__init__",
+            "node_end_byte": 383,
+            "node_start_byte": 287,
+            "parent": "Loader",
+            "parent_path": null,
+            "record": "scope",
+            "return_type": null,
+            "start_byte": 283,
+            "start_line": 13,
+            "type": "Method"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "get_dirs",
+          "source_kind": "method",
+          "owner": "Loader",
+          "anchor_line_1based": 17,
+          "anchor_column_0based": 8,
+          "anchor_byte_0based": 393,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 480,
+            "end_line": 18,
+            "generic_parameters": null,
+            "heritage": null,
+            "name": "get_dirs",
+            "node_end_byte": 480,
+            "node_start_byte": 389,
+            "parent": "Loader",
+            "parent_path": null,
+            "record": "scope",
+            "return_type": null,
+            "start_byte": 385,
+            "start_line": 17,
+            "type": "Method"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "get_contents",
+          "source_kind": "method",
+          "owner": "Loader",
+          "anchor_line_1based": 20,
+          "anchor_column_0based": 8,
+          "anchor_byte_0based": 490,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 721,
+            "end_line": 25,
+            "generic_parameters": null,
+            "heritage": null,
+            "name": "get_contents",
+            "node_end_byte": 721,
+            "node_start_byte": 486,
+            "parent": "Loader",
+            "parent_path": null,
+            "record": "scope",
+            "return_type": null,
+            "start_byte": 482,
+            "start_line": 20,
+            "type": "Method"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "get_template_sources",
+          "source_kind": "generator_method",
+          "owner": "Loader",
+          "anchor_line_1based": 27,
+          "anchor_column_0based": 8,
+          "anchor_byte_0based": 731,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 1505,
+            "end_line": 45,
+            "generic_parameters": null,
+            "heritage": null,
+            "name": "get_template_sources",
+            "node_end_byte": 1505,
+            "node_start_byte": 727,
+            "parent": "Loader",
+            "parent_path": null,
+            "record": "scope",
+            "return_type": null,
+            "start_byte": 723,
+            "start_line": 27,
+            "type": "Method"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "BaseLoader",
+          "source_kind": "base_class",
+          "owner": "Loader",
+          "anchor_line_1based": 12,
+          "anchor_column_0based": 13,
+          "anchor_byte_0based": 270,
+          "judgment_contract": "only_if_exposed_by_api",
+          "status": "observed",
+          "reason": "heritage_clause_retained",
+          "evidence": [
+            {
+              "end_byte": 1505,
+              "end_line": 45,
+              "generic_parameters": null,
+              "heritage": [
+                {
+                  "clause": "Extends",
+                  "types": [
+                    "BaseLoader"
+                  ]
+                }
+              ],
+              "name": "Loader",
+              "node_end_byte": 1505,
+              "node_start_byte": 257,
+              "parent": null,
+              "parent_path": null,
+              "record": "scope",
+              "return_type": null,
+              "start_byte": 257,
+              "start_line": 12,
+              "type": "Class"
+            }
+          ]
+        },
+        {
+          "name": "Loader",
+          "source_kind": "aliased_relative_import",
+          "owner": null,
+          "anchor_line_1based": 9,
+          "anchor_column_0based": 18,
+          "anchor_byte_0based": 234,
+          "judgment_contract": "only_if_exposed_by_api",
+          "status": "observed",
+          "reason": "import_binding_retained_line_may_anchor_declaration_start",
+          "evidence": [
+            {
+              "binding": {
+                "alias": "BaseLoader",
+                "imported": "Loader",
+                "is_local": true,
+                "kind": "Named",
+                "line": 9,
+                "source": ".base"
+              },
+              "record": "file_import"
+            }
+          ]
+        },
+        {
+          "name": "safe_join",
+          "source_kind": "import",
+          "owner": null,
+          "anchor_line_1based": 7,
+          "anchor_column_0based": 29,
+          "anchor_byte_0based": 205,
+          "judgment_contract": "only_if_exposed_by_api",
+          "status": "observed",
+          "reason": "import_binding_retained_line_may_anchor_declaration_start",
+          "evidence": [
+            {
+              "binding": {
+                "alias": null,
+                "imported": "safe_join",
+                "is_local": false,
+                "kind": "Named",
+                "line": 7,
+                "source": "django.utils._os"
+              },
+              "record": "file_import"
+            }
+          ]
+        },
+        {
+          "name": "Origin",
+          "source_kind": "call",
+          "owner": "get_template_sources",
+          "anchor_line_1based": 41,
+          "anchor_column_0based": 18,
+          "anchor_byte_0based": 1383,
+          "judgment_contract": "only_if_exposed_by_api",
+          "status": "unjudged",
+          "reason": "dimension_not_retained_in_compact_fixture_no_IR_absence_claim"
+        }
+      ]
+    },
+    {
+      "repository_id": "github.com/django/django@03158f2189346e35831586dfd0381e37eacb685d",
+      "relative_path": "django/contrib/postgres/aggregates/statistics.py",
+      "sha256": "c525a4e59e595693362d268c80ff7ba717228ce9cf1e23c04dedd7e39a685c22",
+      "language": "python",
+      "row_present": true,
+      "ast_status": "valid",
+      "execution_status": "completed",
+      "judgments": [
+        {
+          "name": "StatAggregate",
+          "source_kind": "class",
+          "owner": null,
+          "anchor_line_1based": 19,
+          "anchor_column_0based": 6,
+          "anchor_byte_0based": 283,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 619,
+            "end_line": 27,
+            "generic_parameters": null,
+            "heritage": [
+              {
+                "clause": "Extends",
+                "types": [
+                  "Aggregate"
+                ]
+              }
+            ],
+            "name": "StatAggregate",
+            "node_end_byte": 619,
+            "node_start_byte": 277,
+            "parent": null,
+            "parent_path": null,
+            "record": "scope",
+            "return_type": null,
+            "start_byte": 277,
+            "start_line": 19,
+            "type": "Class"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "__init__",
+          "source_kind": "method",
+          "owner": "StatAggregate",
+          "anchor_line_1based": 22,
+          "anchor_column_0based": 8,
+          "anchor_byte_0based": 350,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 619,
+            "end_line": 27,
+            "generic_parameters": null,
+            "heritage": null,
+            "name": "__init__",
+            "node_end_byte": 619,
+            "node_start_byte": 346,
+            "parent": "StatAggregate",
+            "parent_path": null,
+            "record": "scope",
+            "return_type": null,
+            "start_byte": 342,
+            "start_line": 22,
+            "type": "Method"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "Corr",
+          "source_kind": "class",
+          "owner": null,
+          "anchor_line_1based": 30,
+          "anchor_column_0based": 6,
+          "anchor_byte_0based": 628,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 670,
+            "end_line": 31,
+            "generic_parameters": null,
+            "heritage": [
+              {
+                "clause": "Extends",
+                "types": [
+                  "StatAggregate"
+                ]
+              }
+            ],
+            "name": "Corr",
+            "node_end_byte": 670,
+            "node_start_byte": 622,
+            "parent": null,
+            "parent_path": null,
+            "record": "scope",
+            "return_type": null,
+            "start_byte": 622,
+            "start_line": 30,
+            "type": "Class"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "CovarPop",
+          "source_kind": "class",
+          "owner": null,
+          "anchor_line_1based": 34,
+          "anchor_column_0based": 6,
+          "anchor_byte_0based": 679,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 901,
+            "end_line": 37,
+            "generic_parameters": null,
+            "heritage": [
+              {
+                "clause": "Extends",
+                "types": [
+                  "StatAggregate"
+                ]
+              }
+            ],
+            "name": "CovarPop",
+            "node_end_byte": 901,
+            "node_start_byte": 673,
+            "parent": null,
+            "parent_path": null,
+            "record": "scope",
+            "return_type": null,
+            "start_byte": 673,
+            "start_line": 34,
+            "type": "Class"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "__init__",
+          "source_kind": "method",
+          "owner": "CovarPop",
+          "anchor_line_1based": 35,
+          "anchor_column_0based": 8,
+          "anchor_byte_0based": 712,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 901,
+            "end_line": 37,
+            "generic_parameters": null,
+            "heritage": null,
+            "name": "__init__",
+            "node_end_byte": 901,
+            "node_start_byte": 708,
+            "parent": "CovarPop",
+            "parent_path": null,
+            "record": "scope",
+            "return_type": null,
+            "start_byte": 704,
+            "start_line": 35,
+            "type": "Method"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "RegrAvgX",
+          "source_kind": "class",
+          "owner": null,
+          "anchor_line_1based": 40,
+          "anchor_column_0based": 6,
+          "anchor_byte_0based": 910,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 961,
+            "end_line": 41,
+            "generic_parameters": null,
+            "heritage": [
+              {
+                "clause": "Extends",
+                "types": [
+                  "StatAggregate"
+                ]
+              }
+            ],
+            "name": "RegrAvgX",
+            "node_end_byte": 961,
+            "node_start_byte": 904,
+            "parent": null,
+            "parent_path": null,
+            "record": "scope",
+            "return_type": null,
+            "start_byte": 904,
+            "start_line": 40,
+            "type": "Class"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "RegrAvgY",
+          "source_kind": "class",
+          "owner": null,
+          "anchor_line_1based": 44,
+          "anchor_column_0based": 6,
+          "anchor_byte_0based": 970,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 1021,
+            "end_line": 45,
+            "generic_parameters": null,
+            "heritage": [
+              {
+                "clause": "Extends",
+                "types": [
+                  "StatAggregate"
+                ]
+              }
+            ],
+            "name": "RegrAvgY",
+            "node_end_byte": 1021,
+            "node_start_byte": 964,
+            "parent": null,
+            "parent_path": null,
+            "record": "scope",
+            "return_type": null,
+            "start_byte": 964,
+            "start_line": 44,
+            "type": "Class"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "RegrCount",
+          "source_kind": "class",
+          "owner": null,
+          "anchor_line_1based": 48,
+          "anchor_column_0based": 6,
+          "anchor_byte_0based": 1030,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 1148,
+            "end_line": 51,
+            "generic_parameters": null,
+            "heritage": [
+              {
+                "clause": "Extends",
+                "types": [
+                  "StatAggregate"
+                ]
+              }
+            ],
+            "name": "RegrCount",
+            "node_end_byte": 1148,
+            "node_start_byte": 1024,
+            "parent": null,
+            "parent_path": null,
+            "record": "scope",
+            "return_type": null,
+            "start_byte": 1024,
+            "start_line": 48,
+            "type": "Class"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "RegrIntercept",
+          "source_kind": "class",
+          "owner": null,
+          "anchor_line_1based": 54,
+          "anchor_column_0based": 6,
+          "anchor_byte_0based": 1157,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 1218,
+            "end_line": 55,
+            "generic_parameters": null,
+            "heritage": [
+              {
+                "clause": "Extends",
+                "types": [
+                  "StatAggregate"
+                ]
+              }
+            ],
+            "name": "RegrIntercept",
+            "node_end_byte": 1218,
+            "node_start_byte": 1151,
+            "parent": null,
+            "parent_path": null,
+            "record": "scope",
+            "return_type": null,
+            "start_byte": 1151,
+            "start_line": 54,
+            "type": "Class"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "RegrR2",
+          "source_kind": "class",
+          "owner": null,
+          "anchor_line_1based": 58,
+          "anchor_column_0based": 6,
+          "anchor_byte_0based": 1227,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 1274,
+            "end_line": 59,
+            "generic_parameters": null,
+            "heritage": [
+              {
+                "clause": "Extends",
+                "types": [
+                  "StatAggregate"
+                ]
+              }
+            ],
+            "name": "RegrR2",
+            "node_end_byte": 1274,
+            "node_start_byte": 1221,
+            "parent": null,
+            "parent_path": null,
+            "record": "scope",
+            "return_type": null,
+            "start_byte": 1221,
+            "start_line": 58,
+            "type": "Class"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "RegrSlope",
+          "source_kind": "class",
+          "owner": null,
+          "anchor_line_1based": 62,
+          "anchor_column_0based": 6,
+          "anchor_byte_0based": 1283,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 1336,
+            "end_line": 63,
+            "generic_parameters": null,
+            "heritage": [
+              {
+                "clause": "Extends",
+                "types": [
+                  "StatAggregate"
+                ]
+              }
+            ],
+            "name": "RegrSlope",
+            "node_end_byte": 1336,
+            "node_start_byte": 1277,
+            "parent": null,
+            "parent_path": null,
+            "record": "scope",
+            "return_type": null,
+            "start_byte": 1277,
+            "start_line": 62,
+            "type": "Class"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "RegrSXX",
+          "source_kind": "class",
+          "owner": null,
+          "anchor_line_1based": 66,
+          "anchor_column_0based": 6,
+          "anchor_byte_0based": 1345,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 1394,
+            "end_line": 67,
+            "generic_parameters": null,
+            "heritage": [
+              {
+                "clause": "Extends",
+                "types": [
+                  "StatAggregate"
+                ]
+              }
+            ],
+            "name": "RegrSXX",
+            "node_end_byte": 1394,
+            "node_start_byte": 1339,
+            "parent": null,
+            "parent_path": null,
+            "record": "scope",
+            "return_type": null,
+            "start_byte": 1339,
+            "start_line": 66,
+            "type": "Class"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "RegrSXY",
+          "source_kind": "class",
+          "owner": null,
+          "anchor_line_1based": 70,
+          "anchor_column_0based": 6,
+          "anchor_byte_0based": 1403,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 1452,
+            "end_line": 71,
+            "generic_parameters": null,
+            "heritage": [
+              {
+                "clause": "Extends",
+                "types": [
+                  "StatAggregate"
+                ]
+              }
+            ],
+            "name": "RegrSXY",
+            "node_end_byte": 1452,
+            "node_start_byte": 1397,
+            "parent": null,
+            "parent_path": null,
+            "record": "scope",
+            "return_type": null,
+            "start_byte": 1397,
+            "start_line": 70,
+            "type": "Class"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "RegrSYY",
+          "source_kind": "class",
+          "owner": null,
+          "anchor_line_1based": 74,
+          "anchor_column_0based": 6,
+          "anchor_byte_0based": 1461,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 1510,
+            "end_line": 75,
+            "generic_parameters": null,
+            "heritage": [
+              {
+                "clause": "Extends",
+                "types": [
+                  "StatAggregate"
+                ]
+              }
+            ],
+            "name": "RegrSYY",
+            "node_end_byte": 1510,
+            "node_start_byte": 1455,
+            "parent": null,
+            "parent_path": null,
+            "record": "scope",
+            "return_type": null,
+            "start_byte": 1455,
+            "start_line": 74,
+            "type": "Class"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "Aggregate",
+          "source_kind": "base_class",
+          "owner": "StatAggregate",
+          "anchor_line_1based": 19,
+          "anchor_column_0based": 10,
+          "anchor_byte_0based": 287,
+          "judgment_contract": "only_if_exposed_by_api",
+          "status": "observed",
+          "reason": "heritage_clause_retained",
+          "evidence": [
+            {
+              "end_byte": 619,
+              "end_line": 27,
+              "generic_parameters": null,
+              "heritage": [
+                {
+                  "clause": "Extends",
+                  "types": [
+                    "Aggregate"
+                  ]
+                }
+              ],
+              "name": "StatAggregate",
+              "node_end_byte": 619,
+              "node_start_byte": 277,
+              "parent": null,
+              "parent_path": null,
+              "record": "scope",
+              "return_type": null,
+              "start_byte": 277,
+              "start_line": 19,
+              "type": "Class"
+            }
+          ]
+        },
+        {
+          "name": "StatAggregate",
+          "source_kind": "base_class",
+          "owner": "CovarPop",
+          "anchor_line_1based": 34,
+          "anchor_column_0based": 15,
+          "anchor_byte_0based": 688,
+          "judgment_contract": "only_if_exposed_by_api",
+          "status": "observed",
+          "reason": "heritage_clause_retained",
+          "evidence": [
+            {
+              "end_byte": 901,
+              "end_line": 37,
+              "generic_parameters": null,
+              "heritage": [
+                {
+                  "clause": "Extends",
+                  "types": [
+                    "StatAggregate"
+                  ]
+                }
+              ],
+              "name": "CovarPop",
+              "node_end_byte": 901,
+              "node_start_byte": 673,
+              "parent": null,
+              "parent_path": null,
+              "record": "scope",
+              "return_type": null,
+              "start_byte": 673,
+              "start_line": 34,
+              "type": "Class"
+            }
+          ]
+        },
+        {
+          "name": "output_field",
+          "source_kind": "class_attribute",
+          "owner": "StatAggregate",
+          "anchor_line_1based": 20,
+          "anchor_column_0based": 4,
+          "anchor_byte_0based": 313,
+          "judgment_contract": "only_if_exposed_by_api",
+          "status": "unjudged",
+          "reason": "dimension_not_retained_in_compact_fixture_no_IR_absence_claim"
+        },
+        {
+          "name": "output_field",
+          "source_kind": "class_attribute",
+          "owner": "RegrCount",
+          "anchor_line_1based": 50,
+          "anchor_column_0based": 4,
+          "anchor_byte_0based": 1088,
+          "judgment_contract": "only_if_exposed_by_api",
+          "status": "unjudged",
+          "reason": "dimension_not_retained_in_compact_fixture_no_IR_absence_claim"
+        }
+      ]
+    },
+    {
+      "repository_id": "github.com/openssl/openssl@899d0ca02559e105b9cb30964e3478dfbd8c4578",
+      "relative_path": "crypto/rand/rand_meth.c",
+      "sha256": "504c0354ea2eafca4809802b9776b6eba5e2953a80bfcb49d5767eabe7bf343f",
+      "language": "c",
+      "row_present": true,
+      "ast_status": "valid",
+      "execution_status": "completed",
+      "judgments": [
+        {
+          "name": "drbg_add",
+          "source_kind": "static_function",
+          "owner": null,
+          "anchor_line_1based": 15,
+          "anchor_column_0based": 11,
+          "anchor_byte_0based": 479,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 696,
+            "end_line": 23,
+            "generic_parameters": null,
+            "heritage": null,
+            "name": "drbg_add",
+            "node_end_byte": 696,
+            "node_start_byte": 468,
+            "parent": null,
+            "parent_path": null,
+            "record": "scope",
+            "return_type": "int",
+            "start_byte": 468,
+            "start_line": 15,
+            "type": "Function"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "drbg_seed",
+          "source_kind": "static_function",
+          "owner": null,
+          "anchor_line_1based": 26,
+          "anchor_column_0based": 11,
+          "anchor_byte_0based": 765,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 840,
+            "end_line": 29,
+            "generic_parameters": null,
+            "heritage": null,
+            "name": "drbg_seed",
+            "node_end_byte": 840,
+            "node_start_byte": 754,
+            "parent": null,
+            "parent_path": null,
+            "record": "scope",
+            "return_type": "int",
+            "start_byte": 754,
+            "start_line": 26,
+            "type": "Function"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "drbg_status",
+          "source_kind": "static_function",
+          "owner": null,
+          "anchor_line_1based": 32,
+          "anchor_column_0based": 11,
+          "anchor_byte_0based": 911,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 1093,
+            "end_line": 40,
+            "generic_parameters": null,
+            "heritage": null,
+            "name": "drbg_status",
+            "node_end_byte": 1093,
+            "node_start_byte": 900,
+            "parent": null,
+            "parent_path": null,
+            "record": "scope",
+            "return_type": "int",
+            "start_byte": 900,
+            "start_line": 32,
+            "type": "Function"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "drbg_bytes",
+          "source_kind": "static_function",
+          "owner": null,
+          "anchor_line_1based": 43,
+          "anchor_column_0based": 11,
+          "anchor_byte_0based": 1163,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 1362,
+            "end_line": 51,
+            "generic_parameters": null,
+            "heritage": null,
+            "name": "drbg_bytes",
+            "node_end_byte": 1362,
+            "node_start_byte": 1152,
+            "parent": null,
+            "parent_path": null,
+            "record": "scope",
+            "return_type": "int",
+            "start_byte": 1152,
+            "start_line": 43,
+            "type": "Function"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "RAND_OpenSSL",
+          "source_kind": "function_returning_pointer",
+          "owner": null,
+          "anchor_line_1based": 62,
+          "anchor_column_0based": 13,
+          "anchor_byte_0based": 1499,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 1549,
+            "end_line": 65,
+            "generic_parameters": null,
+            "heritage": null,
+            "name": "RAND_OpenSSL",
+            "node_end_byte": 1549,
+            "node_start_byte": 1486,
+            "parent": null,
+            "parent_path": null,
+            "record": "scope",
+            "return_type": "RAND_METHOD",
+            "start_byte": 1486,
+            "start_line": 62,
+            "type": "Function"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "ossl_rand_meth",
+          "source_kind": "global_callback_table",
+          "owner": null,
+          "anchor_line_1based": 53,
+          "anchor_column_0based": 12,
+          "anchor_byte_0based": 1376,
+          "judgment_contract": "only_if_exposed_by_api",
+          "status": "unjudged",
+          "reason": "dimension_not_retained_in_compact_fixture_no_IR_absence_claim"
+        },
+        {
+          "name": "drbg_seed",
+          "source_kind": "callback_reference",
+          "owner": "ossl_rand_meth",
+          "anchor_line_1based": 54,
+          "anchor_column_0based": 4,
+          "anchor_byte_0based": 1399,
+          "judgment_contract": "only_if_exposed_by_api",
+          "status": "unjudged",
+          "reason": "dimension_not_retained_in_compact_fixture_no_IR_absence_claim"
+        },
+        {
+          "name": "drbg_bytes",
+          "source_kind": "callback_reference",
+          "owner": "ossl_rand_meth",
+          "anchor_line_1based": 55,
+          "anchor_column_0based": 4,
+          "anchor_byte_0based": 1414,
+          "judgment_contract": "only_if_exposed_by_api",
+          "status": "unjudged",
+          "reason": "dimension_not_retained_in_compact_fixture_no_IR_absence_claim"
+        },
+        {
+          "name": "EVP_RAND_generate",
+          "source_kind": "call",
+          "owner": "drbg_bytes",
+          "anchor_line_1based": 50,
+          "anchor_column_0based": 11,
+          "anchor_byte_0based": 1309,
+          "judgment_contract": "only_if_exposed_by_api",
+          "status": "unjudged",
+          "reason": "dimension_not_retained_in_compact_fixture_no_IR_absence_claim"
+        }
+      ]
+    },
+    {
+      "repository_id": "github.com/curl/curl@2ba56e30f8ccd18c35a83761d51bcf04b32e829b",
+      "relative_path": "lib/curl_memrchr.c",
+      "sha256": "dff69f81e54f228174b72513467b506c9ff05b4e86bfa4ad679cdf62fff8eb9a",
+      "language": "c",
+      "row_present": true,
+      "ast_status": "valid",
+      "execution_status": "completed",
+      "judgments": [
+        {
+          "name": "Curl_memrchr",
+          "source_kind": "function_returning_pointer",
+          "owner": null,
+          "anchor_line_1based": 37,
+          "anchor_column_0based": 6,
+          "anchor_byte_0based": 1401,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 1581,
+            "end_line": 46,
+            "generic_parameters": null,
+            "heritage": null,
+            "name": "Curl_memrchr",
+            "node_end_byte": 1581,
+            "node_start_byte": 1395,
+            "parent": null,
+            "parent_path": null,
+            "record": "scope",
+            "return_type": "void",
+            "start_byte": 1395,
+            "start_line": 37,
+            "type": "Function"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "HAVE_MEMRCHR",
+          "source_kind": "conditional_compilation",
+          "owner": null,
+          "anchor_line_1based": 28,
+          "anchor_column_0based": 8,
+          "anchor_byte_0based": 1104,
+          "judgment_contract": "only_if_exposed_by_api",
+          "status": "unjudged",
+          "reason": "dimension_not_retained_in_compact_fixture_no_IR_absence_claim"
+        },
+        {
+          "name": "CURL_UNCONST",
+          "source_kind": "macro_call",
+          "owner": "Curl_memrchr",
+          "anchor_line_1based": 43,
+          "anchor_column_0based": 13,
+          "anchor_byte_0based": 1540,
+          "judgment_contract": "only_if_exposed_by_api",
+          "status": "unjudged",
+          "reason": "dimension_not_retained_in_compact_fixture_no_IR_absence_claim"
+        },
+        {
+          "name": "curl_setup.h",
+          "source_kind": "include",
+          "owner": null,
+          "anchor_line_1based": 24,
+          "anchor_column_0based": 10,
+          "anchor_byte_0based": 1054,
+          "judgment_contract": "only_if_exposed_by_api",
+          "status": "observed",
+          "reason": "import_binding_retained_line_may_anchor_declaration_start",
+          "evidence": [
+            {
+              "binding": {
+                "alias": null,
+                "imported": "curl_setup.h",
+                "is_local": true,
+                "kind": "side-effect",
+                "line": 24,
+                "source": "curl_setup.h"
+              },
+              "record": "file_import"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "repository_id": "github.com/grpc/grpc@e67d793e4c19c3715fa3370d760280cdf3943903",
+      "relative_path": "src/core/lib/resource_tracker/resource_tracker.h",
+      "sha256": "7355003c7cee08b0346ba8ed6d922bb7d3408c3dcf5009373d2301cf59f0ebb6",
+      "language": "cpp",
+      "row_present": true,
+      "ast_status": "valid",
+      "execution_status": "completed",
+      "judgments": [
+        {
+          "name": "ResourceTracker",
+          "source_kind": "class",
+          "owner": "grpc_core",
+          "anchor_line_1based": 28,
+          "anchor_column_0based": 6,
+          "anchor_byte_0based": 923,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 1416,
+            "end_line": 42,
+            "generic_parameters": null,
+            "heritage": null,
+            "name": "ResourceTracker",
+            "node_end_byte": 1415,
+            "node_start_byte": 917,
+            "parent": "grpc_core",
+            "parent_path": null,
+            "record": "scope",
+            "return_type": null,
+            "start_byte": 917,
+            "start_line": 28,
+            "type": "Class"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "~ResourceTracker",
+          "source_kind": "virtual_destructor_declaration",
+          "owner": "ResourceTracker",
+          "anchor_line_1based": 30,
+          "anchor_column_0based": 10,
+          "anchor_byte_0based": 960,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 989,
+            "end_line": 30,
+            "generic_parameters": null,
+            "heritage": null,
+            "name": "~ResourceTracker",
+            "node_end_byte": 989,
+            "node_start_byte": 952,
+            "parent": "ResourceTracker",
+            "parent_path": null,
+            "record": "scope",
+            "return_type": null,
+            "start_byte": 950,
+            "start_line": 30,
+            "type": "Method"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "Get",
+          "source_kind": "static_method_declaration",
+          "owner": "ResourceTracker",
+          "anchor_line_1based": 32,
+          "anchor_column_0based": 26,
+          "anchor_byte_0based": 1017,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "member_name_type_owner_and_anchor_line_retained_byte_range_not_exposed",
+          "evidence": {
+            "line": 32,
+            "member_type": "Method",
+            "name": "Get",
+            "owner": "ResourceTracker",
+            "record": "member",
+            "type": "ResourceTracker"
+          },
+          "byte_range_judgment": "not_exposed"
+        },
+        {
+          "name": "Set",
+          "source_kind": "static_method_declaration",
+          "owner": "ResourceTracker",
+          "anchor_line_1based": 33,
+          "anchor_column_0based": 14,
+          "anchor_byte_0based": 1038,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "member_name_type_owner_and_anchor_line_retained_byte_range_not_exposed",
+          "evidence": {
+            "line": 33,
+            "member_type": "Method",
+            "name": "Set",
+            "owner": "ResourceTracker",
+            "record": "member",
+            "type": "void"
+          },
+          "byte_range_judgment": "not_exposed"
+        },
+        {
+          "name": "GetMetrics",
+          "source_kind": "pure_virtual_method_declaration",
+          "owner": "ResourceTracker",
+          "anchor_line_1based": 36,
+          "anchor_column_0based": 35,
+          "anchor_byte_0based": 1172,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "member_name_type_owner_and_anchor_line_retained_byte_range_not_exposed",
+          "evidence": {
+            "line": 36,
+            "member_type": "Method",
+            "name": "GetMetrics",
+            "owner": "ResourceTracker",
+            "record": "member",
+            "type": "std::vector<std::string>"
+          },
+          "byte_range_judgment": "not_exposed"
+        },
+        {
+          "name": "GetMetricValue",
+          "source_kind": "pure_virtual_method_declaration",
+          "owner": "ResourceTracker",
+          "anchor_line_1based": 40,
+          "anchor_column_0based": 33,
+          "anchor_byte_0based": 1349,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "member_name_type_owner_and_anchor_line_retained_byte_range_not_exposed",
+          "evidence": {
+            "line": 40,
+            "member_type": "Method",
+            "name": "GetMetricValue",
+            "owner": "ResourceTracker",
+            "record": "member",
+            "type": "absl::StatusOr<double>"
+          },
+          "byte_range_judgment": "not_exposed"
+        },
+        {
+          "name": "grpc_core",
+          "source_kind": "namespace",
+          "owner": null,
+          "anchor_line_1based": 25,
+          "anchor_column_0based": 10,
+          "anchor_byte_0based": 839,
+          "judgment_contract": "only_if_exposed_by_api",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 1443,
+            "end_line": 44,
+            "generic_parameters": null,
+            "heritage": null,
+            "name": "grpc_core",
+            "node_end_byte": 1419,
+            "node_start_byte": 829,
+            "parent": null,
+            "parent_path": null,
+            "record": "scope",
+            "return_type": null,
+            "start_byte": 829,
+            "start_line": 25,
+            "type": "Namespace"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "StatusOr",
+          "source_kind": "generic_return_type",
+          "owner": "GetMetricValue",
+          "anchor_line_1based": 40,
+          "anchor_column_0based": 16,
+          "anchor_byte_0based": 1332,
+          "judgment_contract": "only_if_exposed_by_api",
+          "status": "unjudged",
+          "reason": "dimension_not_retained_in_compact_fixture_no_IR_absence_claim"
+        }
+      ]
+    },
+    {
+      "repository_id": "github.com/grpc/grpc@e67d793e4c19c3715fa3370d760280cdf3943903",
+      "relative_path": "include/grpc/event_engine/internal/slice_cast.h",
+      "sha256": "8cb2d8dfd38e13c33d233c11da64b88c8952be8aa440465dd67b03fe7e338408",
+      "language": "cpp",
+      "row_present": true,
+      "ast_status": "valid",
+      "execution_status": "completed",
+      "judgments": [
+        {
+          "name": "SliceCastable",
+          "source_kind": "template_struct_forward_declaration",
+          "owner": "grpc_event_engine::experimental::internal",
+          "anchor_line_1based": 30,
+          "anchor_column_0based": 7,
+          "anchor_byte_0based": 1192,
+          "judgment_contract": "definition_or_declaration",
+          "status": "not_exposed",
+          "reason": "cpp_extractor_class_scope_requires_body_forward_declaration_not_exposed"
+        },
+        {
+          "name": "SliceCastable",
+          "source_kind": "template_struct_partial_specialization",
+          "owner": "grpc_event_engine::experimental::internal",
+          "anchor_line_1based": 37,
+          "anchor_column_0based": 7,
+          "anchor_byte_0based": 1421,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 1444,
+            "end_line": 37,
+            "generic_parameters": [
+              {
+                "constraint": null,
+                "default_type": null,
+                "name": "A"
+              }
+            ],
+            "heritage": null,
+            "name": "SliceCastable",
+            "node_end_byte": 1443,
+            "node_start_byte": 1414,
+            "parent": "internal",
+            "parent_path": null,
+            "record": "scope",
+            "return_type": null,
+            "start_byte": 1414,
+            "start_line": 37,
+            "type": "Class"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "SliceCast",
+          "source_kind": "template_function_const_reference",
+          "owner": "grpc_event_engine::experimental::internal",
+          "anchor_line_1based": 43,
+          "anchor_column_0based": 14,
+          "anchor_byte_0based": 1698,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 2078,
+            "end_line": 49,
+            "generic_parameters": [
+              {
+                "constraint": null,
+                "default_type": null,
+                "name": "Result"
+              },
+              {
+                "constraint": null,
+                "default_type": null,
+                "name": "T"
+              }
+            ],
+            "heritage": null,
+            "name": "SliceCast",
+            "node_end_byte": 2078,
+            "node_start_byte": 1684,
+            "parent": "internal",
+            "parent_path": null,
+            "record": "scope",
+            "return_type": "Result",
+            "start_byte": 1684,
+            "start_line": 43,
+            "type": "Function"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "SliceCast",
+          "source_kind": "template_function_lvalue_reference",
+          "owner": "grpc_event_engine::experimental::internal",
+          "anchor_line_1based": 55,
+          "anchor_column_0based": 8,
+          "anchor_byte_0based": 2314,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 2682,
+            "end_line": 61,
+            "generic_parameters": [
+              {
+                "constraint": null,
+                "default_type": null,
+                "name": "Result"
+              },
+              {
+                "constraint": null,
+                "default_type": null,
+                "name": "T"
+              }
+            ],
+            "heritage": null,
+            "name": "SliceCast",
+            "node_end_byte": 2682,
+            "node_start_byte": 2306,
+            "parent": "internal",
+            "parent_path": null,
+            "record": "scope",
+            "return_type": "Result",
+            "start_byte": 2306,
+            "start_line": 55,
+            "type": "Function"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "SliceCast",
+          "source_kind": "template_function_rvalue_reference",
+          "owner": "grpc_event_engine::experimental::internal",
+          "anchor_line_1based": 67,
+          "anchor_column_0based": 9,
+          "anchor_byte_0based": 2921,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 3291,
+            "end_line": 73,
+            "generic_parameters": [
+              {
+                "constraint": null,
+                "default_type": null,
+                "name": "Result"
+              },
+              {
+                "constraint": null,
+                "default_type": null,
+                "name": "T"
+              }
+            ],
+            "heritage": null,
+            "name": "SliceCast",
+            "node_end_byte": 3291,
+            "node_start_byte": 2912,
+            "parent": "internal",
+            "parent_path": null,
+            "record": "scope",
+            "return_type": "Result",
+            "start_byte": 2912,
+            "start_line": 67,
+            "type": "Function"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "grpc_event_engine",
+          "source_kind": "namespace",
+          "owner": null,
+          "anchor_line_1based": 18,
+          "anchor_column_0based": 10,
+          "anchor_byte_0based": 698,
+          "judgment_contract": "only_if_exposed_by_api",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 3380,
+            "end_line": 77,
+            "generic_parameters": null,
+            "heritage": null,
+            "name": "grpc_event_engine",
+            "node_end_byte": 3348,
+            "node_start_byte": 688,
+            "parent": null,
+            "parent_path": null,
+            "record": "scope",
+            "return_type": null,
+            "start_byte": 688,
+            "start_line": 18,
+            "type": "Namespace"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "experimental",
+          "source_kind": "namespace",
+          "owner": "grpc_event_engine",
+          "anchor_line_1based": 19,
+          "anchor_column_0based": 10,
+          "anchor_byte_0based": 728,
+          "judgment_contract": "only_if_exposed_by_api",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 3346,
+            "end_line": 76,
+            "generic_parameters": null,
+            "heritage": null,
+            "name": "experimental",
+            "node_end_byte": 3319,
+            "node_start_byte": 718,
+            "parent": "grpc_event_engine",
+            "parent_path": null,
+            "record": "scope",
+            "return_type": null,
+            "start_byte": 718,
+            "start_line": 19,
+            "type": "Namespace"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "internal",
+          "source_kind": "namespace",
+          "owner": "grpc_event_engine::experimental",
+          "anchor_line_1based": 20,
+          "anchor_column_0based": 10,
+          "anchor_byte_0based": 753,
+          "judgment_contract": "only_if_exposed_by_api",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 3317,
+            "end_line": 75,
+            "generic_parameters": [
+              {
+                "constraint": null,
+                "default_type": null,
+                "name": "Result"
+              },
+              {
+                "constraint": null,
+                "default_type": null,
+                "name": "T"
+              }
+            ],
+            "heritage": null,
+            "name": "internal",
+            "node_end_byte": 3294,
+            "node_start_byte": 743,
+            "parent": "experimental",
+            "parent_path": null,
+            "record": "scope",
+            "return_type": null,
+            "start_byte": 743,
+            "start_line": 20,
+            "type": "Namespace"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        }
+      ]
+    },
+    {
+      "repository_id": "github.com/nodejs/node@d3c4048962853bb12359682381001ab63dced4ce",
+      "relative_path": "lib/internal/crypto/certificate.js",
+      "sha256": "c9c1463f93a1dcff2546cf8ec7dee8d08a5f457a51bd1fa60f1e63d2467c3753",
+      "language": "javascript",
+      "row_present": true,
+      "ast_status": "valid",
+      "execution_status": "completed",
+      "judgments": [
+        {
+          "name": "verifySpkac",
+          "source_kind": "function",
+          "owner": null,
+          "anchor_line_1based": 17,
+          "anchor_column_0based": 9,
+          "anchor_byte_0based": 394,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 505,
+            "end_line": 20,
+            "generic_parameters": [],
+            "heritage": null,
+            "name": "verifySpkac",
+            "node_end_byte": 505,
+            "node_start_byte": 385,
+            "parent": null,
+            "parent_path": null,
+            "record": "scope",
+            "return_type": null,
+            "start_byte": 385,
+            "start_line": 17,
+            "type": "Function"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "exportPublicKey",
+          "source_kind": "function",
+          "owner": null,
+          "anchor_line_1based": 22,
+          "anchor_column_0based": 9,
+          "anchor_byte_0based": 516,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 635,
+            "end_line": 25,
+            "generic_parameters": [],
+            "heritage": null,
+            "name": "exportPublicKey",
+            "node_end_byte": 635,
+            "node_start_byte": 507,
+            "parent": null,
+            "parent_path": null,
+            "record": "scope",
+            "return_type": null,
+            "start_byte": 507,
+            "start_line": 22,
+            "type": "Function"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "exportChallenge",
+          "source_kind": "function",
+          "owner": null,
+          "anchor_line_1based": 27,
+          "anchor_column_0based": 9,
+          "anchor_byte_0based": 646,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 765,
+            "end_line": 30,
+            "generic_parameters": [],
+            "heritage": null,
+            "name": "exportChallenge",
+            "node_end_byte": 765,
+            "node_start_byte": 637,
+            "parent": null,
+            "parent_path": null,
+            "record": "scope",
+            "return_type": null,
+            "start_byte": 637,
+            "start_line": 27,
+            "type": "Function"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "Certificate",
+          "source_kind": "constructor_function_not_es_class",
+          "owner": null,
+          "anchor_line_1based": 40,
+          "anchor_column_0based": 9,
+          "anchor_byte_0based": 1131,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 1216,
+            "end_line": 43,
+            "generic_parameters": [],
+            "heritage": null,
+            "name": "Certificate",
+            "node_end_byte": 1216,
+            "node_start_byte": 1122,
+            "parent": null,
+            "parent_path": null,
+            "record": "scope",
+            "return_type": null,
+            "start_byte": 1122,
+            "start_line": 40,
+            "type": "Function"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "require",
+          "source_kind": "commonjs_import",
+          "owner": null,
+          "anchor_line_1based": 11,
+          "anchor_column_0based": 4,
+          "anchor_byte_0based": 156,
+          "judgment_contract": "only_if_exposed_by_api",
+          "status": "unjudged",
+          "reason": "no_individual_reference_for_this_name_retained",
+          "evidence": []
+        },
+        {
+          "name": "verifySpkac",
+          "source_kind": "prototype_assignment",
+          "owner": "Certificate",
+          "anchor_line_1based": 45,
+          "anchor_column_0based": 22,
+          "anchor_byte_0based": 1240,
+          "judgment_contract": "only_if_exposed_by_api",
+          "status": "unjudged",
+          "reason": "dimension_not_retained_in_compact_fixture_no_IR_absence_claim"
+        },
+        {
+          "name": "exportChallenge",
+          "source_kind": "static_assignment",
+          "owner": "Certificate",
+          "anchor_line_1based": 49,
+          "anchor_column_0based": 12,
+          "anchor_byte_0based": 1394,
+          "judgment_contract": "only_if_exposed_by_api",
+          "status": "unjudged",
+          "reason": "dimension_not_retained_in_compact_fixture_no_IR_absence_claim"
+        },
+        {
+          "name": "Certificate",
+          "source_kind": "commonjs_export",
+          "owner": null,
+          "anchor_line_1based": 53,
+          "anchor_column_0based": 17,
+          "anchor_byte_0based": 1533,
+          "judgment_contract": "only_if_exposed_by_api",
+          "status": "unjudged",
+          "reason": "dimension_not_retained_in_compact_fixture_no_IR_absence_claim"
+        }
+      ]
+    },
+    {
+      "repository_id": "github.com/material-components/material-components-web@6ceadb81df508ac08ab007c52c4d3dc1d811cc15",
+      "relative_path": "scripts/webpack/copyright-banner-plugin.js",
+      "sha256": "d9e93188759d480a00859e268d0aeb8b0509c6e6cd7737befa21a0ec47f7a5f3",
+      "language": "javascript",
+      "row_present": true,
+      "ast_status": "valid",
+      "execution_status": "completed",
+      "judgments": [
+        {
+          "name": "CopyrightBannerPlugin",
+          "source_kind": "class",
+          "owner": null,
+          "anchor_line_1based": 32,
+          "anchor_column_0based": 6,
+          "anchor_byte_0based": 1286,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 1697,
+            "end_line": 46,
+            "generic_parameters": [],
+            "heritage": [
+              {
+                "clause": "Extends",
+                "types": [
+                  "webpack.BannerPlugin"
+                ]
+              }
+            ],
+            "name": "CopyrightBannerPlugin",
+            "node_end_byte": 1697,
+            "node_start_byte": 1280,
+            "parent": null,
+            "parent_path": null,
+            "record": "scope",
+            "return_type": null,
+            "start_byte": 1280,
+            "start_line": 32,
+            "type": "Class"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "constructor",
+          "source_kind": "constructor_method",
+          "owner": "CopyrightBannerPlugin",
+          "anchor_line_1based": 33,
+          "anchor_column_0based": 2,
+          "anchor_byte_0based": 1341,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 1695,
+            "end_line": 45,
+            "generic_parameters": [],
+            "heritage": null,
+            "name": "constructor",
+            "node_end_byte": 1695,
+            "node_start_byte": 1341,
+            "parent": "CopyrightBannerPlugin",
+            "parent_path": null,
+            "record": "scope",
+            "return_type": null,
+            "start_byte": 1339,
+            "start_line": 33,
+            "type": "Method"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "BannerPlugin",
+          "source_kind": "base_class",
+          "owner": "CopyrightBannerPlugin",
+          "anchor_line_1based": 32,
+          "anchor_column_0based": 15,
+          "anchor_byte_0based": 1295,
+          "judgment_contract": "only_if_exposed_by_api",
+          "status": "observed",
+          "reason": "heritage_clause_retained",
+          "evidence": [
+            {
+              "end_byte": 1697,
+              "end_line": 46,
+              "generic_parameters": [],
+              "heritage": [
+                {
+                  "clause": "Extends",
+                  "types": [
+                    "webpack.BannerPlugin"
+                  ]
+                }
+              ],
+              "name": "CopyrightBannerPlugin",
+              "node_end_byte": 1697,
+              "node_start_byte": 1280,
+              "parent": null,
+              "parent_path": null,
+              "record": "scope",
+              "return_type": null,
+              "start_byte": 1280,
+              "start_line": 32,
+              "type": "Class"
+            }
+          ]
+        },
+        {
+          "name": "webpack",
+          "source_kind": "commonjs_import",
+          "owner": null,
+          "anchor_line_1based": 30,
+          "anchor_column_0based": 6,
+          "anchor_byte_0based": 1249,
+          "judgment_contract": "only_if_exposed_by_api",
+          "status": "observed",
+          "reason": "import_binding_retained_line_may_anchor_declaration_start",
+          "evidence": [
+            {
+              "binding": {
+                "alias": "webpack",
+                "imported": "default",
+                "is_local": false,
+                "kind": "Default",
+                "line": 30,
+                "source": "webpack"
+              },
+              "record": "file_import"
+            }
+          ]
+        },
+        {
+          "name": "CopyrightBannerPlugin",
+          "source_kind": "commonjs_export",
+          "owner": null,
+          "anchor_line_1based": 48,
+          "anchor_column_0based": 17,
+          "anchor_byte_0based": 1716,
+          "judgment_contract": "only_if_exposed_by_api",
+          "status": "unjudged",
+          "reason": "dimension_not_retained_in_compact_fixture_no_IR_absence_claim"
+        }
+      ]
+    },
+    {
+      "repository_id": "github.com/microsoft/vscode@6e68549edb69380c9316e49df5d3795d5064a2b0",
+      "relative_path": "src/vs/editor/common/core/2d/point.ts",
+      "sha256": "df5618042c1771f60d6ba34dd77ce1caa193d22eaee462cbdb0fb3933146693a",
+      "language": "typescript",
+      "row_present": true,
+      "ast_status": "valid",
+      "execution_status": "completed",
+      "judgments": [
+        {
+          "name": "Point",
+          "source_kind": "exported_class",
+          "owner": null,
+          "anchor_line_1based": 6,
+          "anchor_column_0based": 13,
+          "anchor_byte_0based": 366,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 1501,
+            "end_line": 58,
+            "generic_parameters": [],
+            "heritage": [],
+            "name": "Point",
+            "node_end_byte": 1501,
+            "node_start_byte": 360,
+            "parent": null,
+            "parent_path": null,
+            "record": "scope",
+            "return_type": null,
+            "start_byte": 353,
+            "start_line": 6,
+            "type": "Class"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "equals",
+          "source_kind": "static_method",
+          "owner": "Point",
+          "anchor_line_1based": 7,
+          "anchor_column_0based": 8,
+          "anchor_byte_0based": 382,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 459,
+            "end_line": 9,
+            "generic_parameters": [],
+            "heritage": null,
+            "name": "equals",
+            "node_end_byte": 459,
+            "node_start_byte": 375,
+            "parent": "Point",
+            "parent_path": null,
+            "record": "scope",
+            "return_type": "boolean",
+            "start_byte": 374,
+            "start_line": 7,
+            "type": "Method"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "constructor",
+          "source_kind": "constructor_method",
+          "owner": "Point",
+          "anchor_line_1based": 11,
+          "anchor_column_0based": 1,
+          "anchor_byte_0based": 462,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 539,
+            "end_line": 14,
+            "generic_parameters": [],
+            "heritage": null,
+            "name": "constructor",
+            "node_end_byte": 539,
+            "node_start_byte": 462,
+            "parent": "Point",
+            "parent_path": null,
+            "record": "scope",
+            "return_type": null,
+            "start_byte": 461,
+            "start_line": 11,
+            "type": "Method"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "add",
+          "source_kind": "method",
+          "owner": "Point",
+          "anchor_line_1based": 16,
+          "anchor_column_0based": 8,
+          "anchor_byte_0based": 549,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 634,
+            "end_line": 18,
+            "generic_parameters": [],
+            "heritage": null,
+            "name": "add",
+            "node_end_byte": 634,
+            "node_start_byte": 542,
+            "parent": "Point",
+            "parent_path": null,
+            "record": "scope",
+            "return_type": "Point",
+            "start_byte": 541,
+            "start_line": 16,
+            "type": "Method"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "deltaX",
+          "source_kind": "method",
+          "owner": "Point",
+          "anchor_line_1based": 20,
+          "anchor_column_0based": 8,
+          "anchor_byte_0based": 644,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 721,
+            "end_line": 22,
+            "generic_parameters": [],
+            "heritage": null,
+            "name": "deltaX",
+            "node_end_byte": 721,
+            "node_start_byte": 637,
+            "parent": "Point",
+            "parent_path": null,
+            "record": "scope",
+            "return_type": "Point",
+            "start_byte": 636,
+            "start_line": 20,
+            "type": "Method"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "deltaY",
+          "source_kind": "method",
+          "owner": "Point",
+          "anchor_line_1based": 24,
+          "anchor_column_0based": 8,
+          "anchor_byte_0based": 731,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 808,
+            "end_line": 26,
+            "generic_parameters": [],
+            "heritage": null,
+            "name": "deltaY",
+            "node_end_byte": 808,
+            "node_start_byte": 724,
+            "parent": "Point",
+            "parent_path": null,
+            "record": "scope",
+            "return_type": "Point",
+            "start_byte": 723,
+            "start_line": 24,
+            "type": "Method"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "toString",
+          "source_kind": "method",
+          "owner": "Point",
+          "anchor_line_1based": 28,
+          "anchor_column_0based": 8,
+          "anchor_byte_0based": 818,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 867,
+            "end_line": 30,
+            "generic_parameters": [],
+            "heritage": null,
+            "name": "toString",
+            "node_end_byte": 867,
+            "node_start_byte": 811,
+            "parent": "Point",
+            "parent_path": null,
+            "record": "scope",
+            "return_type": null,
+            "start_byte": 810,
+            "start_line": 28,
+            "type": "Method"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "subtract",
+          "source_kind": "method",
+          "owner": "Point",
+          "anchor_line_1based": 32,
+          "anchor_column_0based": 8,
+          "anchor_byte_0based": 877,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 967,
+            "end_line": 34,
+            "generic_parameters": [],
+            "heritage": null,
+            "name": "subtract",
+            "node_end_byte": 967,
+            "node_start_byte": 870,
+            "parent": "Point",
+            "parent_path": null,
+            "record": "scope",
+            "return_type": "Point",
+            "start_byte": 869,
+            "start_line": 32,
+            "type": "Method"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "scale",
+          "source_kind": "method",
+          "owner": "Point",
+          "anchor_line_1based": 36,
+          "anchor_column_0based": 8,
+          "anchor_byte_0based": 977,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 1064,
+            "end_line": 38,
+            "generic_parameters": [],
+            "heritage": null,
+            "name": "scale",
+            "node_end_byte": 1064,
+            "node_start_byte": 970,
+            "parent": "Point",
+            "parent_path": null,
+            "record": "scope",
+            "return_type": "Point",
+            "start_byte": 969,
+            "start_line": 36,
+            "type": "Method"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "mapComponents",
+          "source_kind": "method_with_function_typed_parameter",
+          "owner": "Point",
+          "anchor_line_1based": 40,
+          "anchor_column_0based": 8,
+          "anchor_byte_0based": 1074,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 1177,
+            "end_line": 42,
+            "generic_parameters": [],
+            "heritage": null,
+            "name": "mapComponents",
+            "node_end_byte": 1177,
+            "node_start_byte": 1067,
+            "parent": "Point",
+            "parent_path": null,
+            "record": "scope",
+            "return_type": "Point",
+            "start_byte": 1066,
+            "start_line": 40,
+            "type": "Method"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "isZero",
+          "source_kind": "method",
+          "owner": "Point",
+          "anchor_line_1based": 44,
+          "anchor_column_0based": 8,
+          "anchor_byte_0based": 1187,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 1248,
+            "end_line": 46,
+            "generic_parameters": [],
+            "heritage": null,
+            "name": "isZero",
+            "node_end_byte": 1248,
+            "node_start_byte": 1180,
+            "parent": "Point",
+            "parent_path": null,
+            "record": "scope",
+            "return_type": "boolean",
+            "start_byte": 1179,
+            "start_line": 44,
+            "type": "Method"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "withThreshold",
+          "source_kind": "method",
+          "owner": "Point",
+          "anchor_line_1based": 48,
+          "anchor_column_0based": 8,
+          "anchor_byte_0based": 1258,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 1499,
+            "end_line": 57,
+            "generic_parameters": [],
+            "heritage": null,
+            "name": "withThreshold",
+            "node_end_byte": 1499,
+            "node_start_byte": 1251,
+            "parent": "Point",
+            "parent_path": null,
+            "record": "scope",
+            "return_type": "Point",
+            "start_byte": 1250,
+            "start_line": 48,
+            "type": "Method"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "x",
+          "source_kind": "readonly_constructor_parameter_property",
+          "owner": "Point",
+          "anchor_line_1based": 12,
+          "anchor_column_0based": 18,
+          "anchor_byte_0based": 493,
+          "judgment_contract": "only_if_exposed_by_api",
+          "status": "missing",
+          "reason": "constructor_parameter_is_retained_but_corresponding_class_property_is_missing",
+          "evidence": {
+            "parameters": [
+              {
+                "column": 2,
+                "line": 12,
+                "name": "x",
+                "owner": "constructor",
+                "record": "parameter",
+                "type": "number"
+              }
+            ],
+            "members": []
+          },
+          "readonly_modifier_judgment": "unjudged_compact_does_not_retain_modifier"
+        },
+        {
+          "name": "y",
+          "source_kind": "readonly_constructor_parameter_property",
+          "owner": "Point",
+          "anchor_line_1based": 13,
+          "anchor_column_0based": 16,
+          "anchor_byte_0based": 520,
+          "judgment_contract": "only_if_exposed_by_api",
+          "status": "missing",
+          "reason": "constructor_parameter_is_retained_but_corresponding_class_property_is_missing",
+          "evidence": {
+            "parameters": [
+              {
+                "column": 2,
+                "line": 13,
+                "name": "y",
+                "owner": "constructor",
+                "record": "parameter",
+                "type": "number"
+              }
+            ],
+            "members": []
+          },
+          "readonly_modifier_judgment": "unjudged_compact_does_not_retain_modifier"
+        },
+        {
+          "name": "axisVal",
+          "source_kind": "anonymous_arrow_parameter",
+          "owner": "withThreshold",
+          "anchor_line_1based": 49,
+          "anchor_column_0based": 28,
+          "anchor_byte_0based": 1328,
+          "judgment_contract": "only_if_exposed_by_api",
+          "status": "unjudged",
+          "reason": "dimension_not_retained_in_compact_fixture_no_IR_absence_claim"
+        }
+      ]
+    },
+    {
+      "repository_id": "github.com/element-plus/element-plus@3b5d0ad35b1d309a3430b49db9be1369f0966321",
+      "relative_path": "packages/components/message/src/instance.ts",
+      "sha256": "4abf74bede025a8ca0be59f78d54a4668766b1c3982e5c2249bc9dd77715992b",
+      "language": "typescript",
+      "row_present": true,
+      "ast_status": "valid",
+      "execution_status": "completed",
+      "judgments": [
+        {
+          "name": "MessageContext",
+          "source_kind": "exported_type_alias",
+          "owner": null,
+          "anchor_line_1based": 7,
+          "anchor_column_0based": 12,
+          "anchor_byte_0based": 243,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 380,
+            "end_line": 13,
+            "generic_parameters": null,
+            "heritage": null,
+            "name": "MessageContext",
+            "node_end_byte": 380,
+            "node_start_byte": 238,
+            "parent": null,
+            "parent_path": null,
+            "record": "scope",
+            "return_type": null,
+            "start_byte": 231,
+            "start_line": 7,
+            "type": "type_alias"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "getOrCreatePlacementInstances",
+          "source_kind": "exported_arrow_function",
+          "owner": null,
+          "anchor_line_1based": 19,
+          "anchor_column_0based": 13,
+          "anchor_byte_0based": 500,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 707,
+            "end_line": 24,
+            "generic_parameters": null,
+            "heritage": null,
+            "name": "getOrCreatePlacementInstances",
+            "node_end_byte": 707,
+            "node_start_byte": 500,
+            "parent": null,
+            "parent_path": null,
+            "record": "scope",
+            "return_type": null,
+            "start_byte": 487,
+            "start_line": 19,
+            "type": "Function"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "getInstance",
+          "source_kind": "exported_arrow_function",
+          "owner": null,
+          "anchor_line_1based": 26,
+          "anchor_column_0based": 13,
+          "anchor_byte_0based": 722,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 1058,
+            "end_line": 35,
+            "generic_parameters": null,
+            "heritage": null,
+            "name": "getInstance",
+            "node_end_byte": 1058,
+            "node_start_byte": 722,
+            "parent": null,
+            "parent_path": null,
+            "record": "scope",
+            "return_type": null,
+            "start_byte": 709,
+            "start_line": 26,
+            "type": "Function"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "getLastOffset",
+          "source_kind": "exported_arrow_function_with_return_type",
+          "owner": null,
+          "anchor_line_1based": 37,
+          "anchor_column_0based": 13,
+          "anchor_byte_0based": 1073,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 1258,
+            "end_line": 44,
+            "generic_parameters": null,
+            "heritage": null,
+            "name": "getLastOffset",
+            "node_end_byte": 1258,
+            "node_start_byte": 1073,
+            "parent": null,
+            "parent_path": null,
+            "record": "scope",
+            "return_type": "number",
+            "start_byte": 1060,
+            "start_line": 37,
+            "type": "Function"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "getOffsetOrSpace",
+          "source_kind": "exported_arrow_function",
+          "owner": null,
+          "anchor_line_1based": 46,
+          "anchor_column_0based": 13,
+          "anchor_byte_0based": 1273,
+          "judgment_contract": "definition_or_declaration",
+          "status": "observed",
+          "reason": "definition_anchor_lines_bytes_and_owner_match",
+          "evidence": {
+            "end_byte": 1519,
+            "end_line": 54,
+            "generic_parameters": null,
+            "heritage": null,
+            "name": "getOffsetOrSpace",
+            "node_end_byte": 1519,
+            "node_start_byte": 1273,
+            "parent": null,
+            "parent_path": null,
+            "record": "scope",
+            "return_type": null,
+            "start_byte": 1260,
+            "start_line": 46,
+            "type": "Function"
+          },
+          "qualifiers": "not_judged_from_name_alone"
+        },
+        {
+          "name": "Mutable",
+          "source_kind": "type_only_import",
+          "owner": null,
+          "anchor_line_1based": 4,
+          "anchor_column_0based": 14,
+          "anchor_byte_0based": 113,
+          "judgment_contract": "only_if_exposed_by_api",
+          "status": "observed",
+          "reason": "import_binding_retained_line_may_anchor_declaration_start",
+          "evidence": [
+            {
+              "binding": {
+                "alias": null,
+                "imported": "Mutable",
+                "is_local": false,
+                "kind": "Named",
+                "line": 4,
+                "source": "@element-plus/utils"
+              },
+              "record": "file_import"
+            }
+          ]
+        },
+        {
+          "name": "Mutable",
+          "source_kind": "generic_type_reference",
+          "owner": "MessageContext",
+          "anchor_line_1based": 12,
+          "anchor_column_0based": 9,
+          "anchor_byte_0based": 357,
+          "judgment_contract": "only_if_exposed_by_api",
+          "status": "unjudged",
+          "reason": "dimension_not_retained_in_compact_fixture_no_IR_absence_claim"
+        },
+        {
+          "name": "placementInstances",
+          "source_kind": "exported_variable",
+          "owner": null,
+          "anchor_line_1based": 15,
+          "anchor_column_0based": 13,
+          "anchor_byte_0based": 395,
+          "judgment_contract": "only_if_exposed_by_api",
+          "status": "unjudged",
+          "reason": "dimension_not_retained_in_compact_fixture_no_IR_absence_claim"
+        },
+        {
+          "name": "instance",
+          "source_kind": "anonymous_arrow_parameter",
+          "owner": "getInstance",
+          "anchor_line_1based": 28,
+          "anchor_column_0based": 14,
+          "anchor_byte_0based": 853,
+          "judgment_contract": "only_if_exposed_by_api",
+          "status": "unjudged",
+          "reason": "dimension_not_retained_in_compact_fixture_no_IR_absence_claim"
+        }
+      ]
+    }
+  ],
+  "global_coverage_claim": false,
+  "method": "source expectations before outputs; line/byte/owner checked; API limitations explicit; source_kind qualifiers not inferred from names"
+}
