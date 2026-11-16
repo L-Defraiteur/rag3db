@@ -82,7 +82,7 @@ class Contracts(unittest.TestCase):
         q.configure_controller();pilot='a'*40;control=Path('/private/checkout')
         actual=q.controller.commands(control,pilot)
         self.assertEqual(actual['outer'],['timeout','--signal=TERM','--kill-after=15s','780s',
-            str(q.C/'scripts/poste'),'lourd',q.sys.executable,str(q.Q/'qualify_green.py'),'--admit',pilot])
+            q.sys.executable,str(q.Q/'qualify_green.py'),'--arm',pilot])
         with patch.object(q.controller,'sha',return_value='script-hash'):
             policy=q.controller.policy(control,pilot,dict(pid=7,start='123'))
         self.assertEqual(policy['outer_command'],actual['outer'])

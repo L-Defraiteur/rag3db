@@ -11,7 +11,7 @@ class Arm(unittest.TestCase):
             root=Path(tmp);p=root/'proof';p.mkdir();control=Path(q.__file__).resolve().parents[4]
             runtime=root/'run';runtime.mkdir();(runtime/str(os.getuid())).mkdir()
             (runtime/str(os.getuid())/'bus').touch()
-            clock=[100.];events=[];pilot='a'*40;config=dict(pilot=pilot,previous_expected_red={},cache={})
+            clock=[100.];events=[];pilot='a'*40;config=dict(pilot=pilot,control=str(control),previous_expected_red={},cache={})
             def local_path(*parts):
                 if parts==('/run/user',):return runtime
                 return Path(*parts)
@@ -23,16 +23,16 @@ class Arm(unittest.TestCase):
                 if args[4:]==[q.sys.executable,str(q.Q/'qualify_green.py'),'--arm',pilot]:
                     with patch.dict(os.environ,kwargs['env'],clear=True):q.arm(pilot)
                 return SimpleNamespace(returncode=0)
-            def execute(path,args):events.append(('poste',clock[0],list(args)))
+            def execute(path,args,env):events.append(('poste',clock[0],list(args)))
             q.configure_controller()
             with patch.object(q,'P',p),patch.object(q,'Path',side_effect=local_path),\
                  patch.object(q,'cfg',return_value=config),patch.object(q,'guard'),\
                  patch.object(q.proof,'previous_expected_red',return_value={}),\
                  patch.object(q.proof,'cache_contract',return_value={}),patch.object(q.proof,'save',side_effect=publish),\
-                 patch.object(q.controller,'snapshot',return_value=dict(stable=True)),\
+                 patch.object(q.controller,'snapshot',side_effect=[dict(stable=True,argv=q.controller.commands(control,pilot)['outer'],ppid=7),dict(stable=True,argv=['python3',str(control/q.REL),'--launch',pilot])]),\
                  patch.object(q.time,'monotonic',side_effect=lambda:clock[0]),\
                  patch.object(q.os,'getcwd',return_value='/var/tmp'),patch.object(Path,'is_socket',return_value=True),\
-                 patch.object(q.os,'dup2'),patch.object(q.os,'execv',side_effect=execute),\
+                 patch.object(q.os,'dup2'),patch.object(q.os,'execve',side_effect=execute),\
                  patch.object(q.subprocess,'run',side_effect=process),\
                  patch.object(q.sys,'orig_argv',['python3',str(control/q.REL),'--launch',pilot]),\
                  patch.dict(os.environ,dict(HOME=str(root),PATH='/usr/bin',RAG3WEAVER_C7_ALLOCATION='CPU-only'),clear=True):

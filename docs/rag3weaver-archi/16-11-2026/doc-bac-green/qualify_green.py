@@ -330,31 +330,45 @@ def prepare(pilot):
     print(json.dumps(dict(prepared=True,source=APP,pilot=pilot,cargo=False,authority=False,proof_root_empty=True)))
 
 def launch(pilot):
-    assert os.getcwd()=='/var/tmp' and 'RAG3WEAVER_VALIDATION_RECU' not in os.environ
     control=Path(__file__).resolve().parents[4]
     assert sys.orig_argv==['python3',str(control/REL),'--launch',pilot]
+    # No allocation journal, clock or validation work before the physical watchdog.
+    return subprocess.run(controller.commands(control,pilot)['outer'],cwd='/var/tmp').returncode
+
+def arm(pilot):
+    observed=time.monotonic()  # Worker observation AFTER the OS watchdog has already started.
+    assert os.getcwd()=='/var/tmp' and 'RAG3WEAVER_VALIDATION_RECU' not in os.environ
     config=cfg();assert config['pilot']==pilot;guard(config)
+    control=Path(config['control'])
+    assert controller.OUTER_SECONDS==TERM
+    actual=controller.commands(control,pilot)
+    watchdog=controller.snapshot(Path('/proc')/str(os.getppid()))
+    assert watchdog['stable'] and watchdog['argv']==actual['outer']
+    identity=controller.snapshot(Path('/proc')/str(watchdog['ppid']))
+    assert identity['stable'] and identity['argv']==['python3',str(control/REL),'--launch',pilot]
     allocation=os.environ['RAG3WEAVER_C7_ALLOCATION'];assert allocation.strip()
     assert not list(P.iterdir()) and not (Q/'launch.json').exists()
     assert proof.previous_expected_red()==config['previous_expected_red'] and proof.cache_contract()==config['cache']
-    identity=controller.snapshot(Path('/proc')/str(os.getpid()));assert identity['stable']
     runtime_root=Path('/run/user')/str(os.getuid());bus=runtime_root/'bus'
     assert runtime_root.resolve()==runtime_root and bus.resolve()==bus and bus.is_socket() and bus.stat().st_uid==os.getuid()
     env={k:os.environ[k] for k in ['HOME','USER','LOGNAME','PATH','LANG','LC_ALL','CARGO_HOME','RUSTUP_HOME'] if k in os.environ}
     env.update(POSTE_MEM_MAX='32G',RAG3WEAVER_BUILD_MEMORY_HIGH='0',DBUS_SESSION_BUS_ADDRESS='unix:path='+str(bus),XDG_RUNTIME_DIR=str(runtime_root))
-    with (P/'supervision.log').open('x') as output:
-        started=time.monotonic()
-        remaining=TERM
-        controller.OUTER_SECONDS=remaining
-        command=controller.commands(control,pilot)['outer']
-        proof.save(Q/'launch.json',dict(identity=identity,allocation=allocation,expected_positive_setups=list(proof.NAMES.values()),
-                   whole_start=started,soft_end=started+TERM,hard_end=started+WHOLE,outer_seconds=remaining))
-        return subprocess.run(command,cwd='/var/tmp',env=env,stdout=output,stderr=subprocess.STDOUT).returncode
+    fd=os.open(P/'supervision.log',os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
+    try:os.dup2(fd,1);os.dup2(fd,2)
+    finally:os.close(fd)
+    proof.save(Q/'launch.json',dict(identity=identity,allocation=allocation,expected_positive_setups=list(proof.NAMES.values()),
+               whole_start=observed,worker_observed_after_watchdog=observed,
+               clock_semantics='worker observation; OS watchdog is earlier and can stop before these conservative bounds',
+               soft_end=observed+TERM,hard_end=observed+WHOLE,outer_seconds=TERM))
+    assert time.monotonic()<observed+TERM,'allocation publication exhausted the already armed watchdog budget'
+    # Same PID becomes the real poste shell; the queue is still under the original timeout.
+    os.execve(actual['poste'][0],actual['poste'],env)
 
 if __name__=='__main__':
     mode,pilot=sys.argv[1:];configure_controller()
     if mode=='--prepare':prepare(pilot)
     elif mode=='--launch':sys.exit(launch(pilot))
+    elif mode=='--arm':arm(pilot)
     elif mode=='--admit':sys.exit(compose(pilot))
     elif mode=='--driver':
         try:sys.exit(driver())
