@@ -476,3 +476,24 @@ workspace root réel, reçu93l terminé, ledger nouveau à figer avant sa garde.
 NouveauxP/Q/S/TMP, mais **même INITIAL848482.791694931 et
 END852082.791694931**, minreste calculé après vrai poste ; si expiré, fermer.
 Lecture de l'horloge avant prépa : now849100.284, reste2982,5s, non réinitialisé.
+
+### Huit payloads tty préparés et continuation sans F8
+
+Préparation18a7 publiée avant actions : inventaire **complet** du lockTTY,
+8absents téléchargés aux versions/checksums verrouillés, chacun extrait et
+vérifié strictement en staging, .crate ajoutés absents par NOREPLACE/UID/mode
+consignés. Rapport `cx-tty-lock-payload-preparation/report.json`
+TTY_LOCK_PAYLOADS_READY/missing_after[] ; aucun Cargo/metadata/build/test/natif.
+
+Pilote de continuation distinct `launch_continuation.py` et
+`check-english-aliases-continuation.sh` : uniquement buildTTY+harnais, source
+produit6d prouvée identique par diff Git de tout extension/rag3weaver, F8 porté
+par les8logs et leurs SHA/source/rc0. Pas de rejeu F8. Q/P/S/TMP de continuation
+neufs, target unique propriétaire root réellement capturé et ledger figé.
+Le reçu93l terminé et le profil F8 restent conservés ; vraie garde root→tty
+au prochain créneau seulement. Les13payloads des deux locks sont vérifiés.
+
+INITIAL848482.791694931/END852082.791694931 conservés dans le contrôleur :
+préparation et file consomment le même budget original, timeout extérieur et
+Common réduits au reste. Expiration ferme le lot au lieu de recréer3600s.
+La préparation n'est pas une autorisation de lancement ; RO et GO distincts.

@@ -15,4 +15,4 @@ assert 60 < remaining <= config['budget']
 os.chdir(q)
 os.execve(sys.executable, [sys.executable, str(q / 'confiner_validation.py'), 'lancer',
     '--delai', str(remaining), '--preuves', config['scope'], '--',
-    'bash', str(q / 'check-english-aliases-full.sh')], dict(os.environ, TTY_CONTROLLER_DIR=str(q)))
+    'bash', str(q / config.get('driver', 'check-english-aliases-full.sh'))], dict(os.environ, TTY_CONTROLLER_DIR=str(q)))
