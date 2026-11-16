@@ -304,3 +304,19 @@ se jouent par `python3 scripts/test_confiner_validation.py`, sans Cargo/bus rée
   réglage, un comportement visible — met aussi à jour le README concerné (`README.md` à la racine,
   `extension/rag3weaver/README.md`) dans le même lot. Sinon, un rattrapage des README depuis
   `nouveautes.md` toutes les semaines.
+
+## Un lot du moteur seul (C++) : une seule recette (16 novembre 2026)
+
+Un lot qui ne touche que `src/`, `test/`, `extension/vector`, les CMakeLists et `cmake/` passe par la **voie des suites
+C++ transférables** de `push_garde.sh` (`cpp_transferable`) : ses suites C++ ne lient pas le Rust, elles ne se rejouent
+pas parce que du Rust a atterri. La commande est la même que pour tout lot :
+
+```
+poste push <session> -- bash push_garde.sh <worktree> <journaux>   # dans un if grep -qx VERT
+```
+
+La « lib de toute la passe » que la garde cherche dans les journaux est **le BUILD_ID du moteur bâti depuis la tête du
+lot** (`rag3db-build-<40 hex>…`), que les binaires de test écrivent eux-mêmes ; on ne déclare pas la lib courante du
+magasin, et on n'écrit jamais une ligne de lib à la main. Un lot moteur dont aucun journal ne nomme ce BUILD_ID est un
+ARRÊT : la passe n'a pas joué les binaires de la tête. Ce qui a atterri ainsi la nuit du 15 au 16 : le SIGSEGV de la
+colonne ajoutée, le pool saturé, le fichier de déversement.
