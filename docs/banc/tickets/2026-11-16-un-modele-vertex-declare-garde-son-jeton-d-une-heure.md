@@ -12,6 +12,17 @@
 - **Signalé par** : banc, mesure longue de l'archiviste (F300, 16 novembre).
 - **Ouvert le** : 16 novembre 2026
 
+## Reprise ED après audit du 16 novembre
+
+Préparation autorisée par C7, sans Cargo ni cloud pendant la bascule G/Arbre.
+Branche `cx-ed-vertex-token-refresh-r1`, WT portable
+`/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-refresh-r1`, base927941a67.
+Fichiers réservés proposés : `src/model_source.rs`, `src/openai_llm.rs`,
+`src/gcp_auth.rs` ; pas `model_source/activation.rs` réservé à embarquement.
+Plan : [préparer le renouvellement Vertex](../../everything-declarative/16-11-2026/03-preparation-vertex-token.md).
+Le rouge HTTP reste à écrire puis à exécuter avant tout correctif ; aucune
+preuve du banc n'est repeinte ni aucun vert annoncé sur cette préparation.
+
 ## Le constat
 
 La passe F300 de la mesure longue (`~/.cache/rag3db-banc-notes/compaction/long/F300-ov10-0653-20261116-0157/`
