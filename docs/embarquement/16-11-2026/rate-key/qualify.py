@@ -10,6 +10,8 @@ import sys
 import time
 import urllib.request
 
+from validation_profile import check_private_environment, private_environment
+
 W = Path(__file__).resolve().parents[4]
 C = W / 'extension/rag3weaver'
 R = Path.home() / '.cache/rag3weaver-build'
@@ -28,7 +30,7 @@ AUTH = json.loads(Path(os.environ['RAG3WEAVER_VALIDATION_RECU']).read_text())
 DEADLINE = AUTH['echeance']
 assert time.monotonic() < DEADLINE - 20
 P.mkdir(exist_ok=False)
-E = os.environ.copy()
+E = private_environment(P, os.environ)
 for key in list(E):
     if key.startswith(('RAG3WEAVER_SERVICE_', 'RAG3WEAVER_EMBED_')) or key in ('RAG3WEAVER_MOTEUR_ANCIEN', 'RAG3WEAVER_PG'):
         E.pop(key, None)
@@ -38,9 +40,7 @@ E.update(CARGO_TARGET_DIR=str(T), CARGO_BUILD_JOBS=str(JOBS), CARGO_INCREMENTAL=
          RAG3WEAVER_TARGET_MAX_GO='32', RAG3WEAVER_TARGET_REPRENDRE='1',
          RAG3DB_LIB=SDK, RAG3DB_LIBS_DIR=str(STORE),
          RAG3DB_LIBRARY_DIR=str(SDK_ROOT), RAG3DB_INCLUDE_DIR=str(SDK_ROOT), RAG3DB_SHARED='1',
-         CARGO_MANIFEST_DIR=str(C), RUST_TEST_THREADS=str(JOBS), LUCIVY_SCHEDULER_THREADS=str(JOBS),
-         RAG3WEAVER_STATE_DIR=str(P/'state'), RAG3WEAVER_JOURNAUX_DIR=str(P/'journals'),
-         RAG3WEAVER_BUILTIN_TEMPLATES_DIR=str(P/'templates'))
+         CARGO_MANIFEST_DIR=str(C), RUST_TEST_THREADS=str(JOBS), LUCIVY_SCHEDULER_THREADS=str(JOBS))
 TESTS = ['catalog::tests::'+name for name in (
     'the_measured_rate_is_noted_under_the_called_address_and_host',
     'an_in_process_embedder_is_noted_as_local_at_its_host',
@@ -132,6 +132,7 @@ def coordinate_canonical():
 verdict = 'ROUGE'
 try:
     guard()
+    save('environment-profile-before.json', check_private_environment(P, E))
     script = R/'passe_epinglee.sh'
     assert hashlib.sha256(script.read_bytes()).hexdigest() == PIN_SHA
     assert hashlib.sha256((W/'tools/poste/passe_epinglee.sh').read_bytes()).hexdigest() == PIN_SHA
@@ -203,6 +204,7 @@ try:
     summary = (P/'resume.log').read_text().splitlines()
     assert summary and summary[0].startswith('commit '+git('rev-parse', '--short', 'HEAD')+' ') and summary[-1] == 'VERT'
     assert (P/'base').read_text().strip() == git('merge-base', 'HEAD', 'origin/master')
+    save('environment-profile-after.json', check_private_environment(P, E))
     verdict = 'VERT'
 finally:
     save('result.json', dict(verdict=verdict, source=SOURCE, deadline=DEADLINE,
