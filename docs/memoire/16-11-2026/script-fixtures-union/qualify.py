@@ -47,6 +47,10 @@ def summary(text):
     passed,failed,ignored,filtered=map(int,rows[0]);require(passed>0 and failed==0,'no passing tests or failed tests')
     return dict(passed=passed,failed=failed,ignored=ignored,filtered=filtered)
 
+def compare_judge_names(first,second,expected):
+    # Baseline acceptance before the discriminating witness: counts only.
+    return dict(qualified=summary(first)==summary(second)==expected,meaning='counts-only baseline before name comparison fix')
+
 def large_elf(text,target):
     rows=re.findall(r'Running unittests src/lib\.rs \(([^\n]+)\)',text)
     require(len(rows)==1,'expected one large unit-test ELF')
@@ -221,6 +225,8 @@ def driver():
     guard(cfg);deadline(end-30)
     second=run('second-lib',runtime_command(),env,end,600)
     counts2=summary(second);require(counts2==counts and counts2['filtered']==0,'second lib counts differ or filtered')
+    comparison=compare_judge_names(first,second,counts);save(P,'judge-names-comparison.json',comparison)
+    require(comparison['qualified'],'library judge identities differ, duplicate or incomplete')
     require(sha(binary)==sha(copied)==elf_sha,'large ELF changed')
     guard(cfg);require(sha(canonical)==json.loads((P/'ledger-before-second-lib.json').read_text())['canonical_summary_sha256'],'canonical summary changed')
     deadline(end-15)
