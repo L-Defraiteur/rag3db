@@ -278,3 +278,21 @@ sur les blocs réels, avec faux processus/pidfd : fixture après initialisation 
 phase et chemin immuable ; invite absente ROUGE/STOP sans marqueur ; deuxROUGE
 conservés en append avec premier marqueur immuable et un seul signal.
 ProduitRust et fauxhôte restent inchangés ; aucun ancien GO1200 recyclé.
+
+## Rouge hermétique des trois vrais raccords puis correctif groupé
+
+Témoin dbb82e927e publié avant essai. Première commande avec -f refusée par
+argparse (failfast déjà fixé dans unittest.main), aucun test joué ; invocation
+corrigée sans changement de code :1test agrégé/3contre-exemples réels observés
+sur AST des blocs mesure.py et harness_only_driver.py : mauvais dossier de
+fixture, marqueur malgré invite absente, secondROUGE réouvrant le marqueur.
+0,034s, aucun vrai processus de métier/pidfd/signal/HTTP/tmux/Cargo/Common.
+
+Correctif : prépare la vraie fixture APRÈS hote_demarrer dans le dossier de la
+phase courante (création exclusive et bytes/hash vérifiés), BANG_SCRIPT immuable
+utilisé au lancement ; invite absente écritROUGE puis ScenarioFailed avant
+l'injection du marqueur. Fauxhôte/Rust/oracles accord-écran ne changent pas.
+Stopper : toutes lignesROUGE append+fsync dans red-lines.jsonl et harness.log,
+flag avant premier signal ; markeropenx créé une seule fois, un seul pidfd/
+signal, lignes suivantes conservées sans réécriture ni seconde inspection.
+Témoin actualisé vérifie aussi les2lignes append, toujours avant essai vert.

@@ -33,14 +33,14 @@ def fixture_connection(root):
         return ''
     def host_start():
         ns['DOSSIER']=str(new)
-        ns['CURRENT_PHASE']=types.SimpleNamespace(record=lambda *a,**k:None,checkpoint=lambda *a:None)
+        ns['CURRENT_PHASE']=types.SimpleNamespace(path=new,record=lambda *a,**k:None,checkpoint=lambda *a:None)
     class StopAtTerminal(Exception):pass
     captured={}
     def terminal(*args,**kwargs):
         captured['path']=ns.get('BANG_SCRIPT',str(Path(ns['DOSSIER'])/'faux_sudo.sh'))
         raise StopAtTerminal()
     ns.update(DOSSIER=str(old),LOCAL=True,Path=Path,ssh=ssh,hote_demarrer=host_start,
-              CURRENT_PHASE=None,HOTE='local',TUNNEL=17990,PORT=17990,FAUX='fake.py',
+              CURRENT_PHASE=None,os=__import__('os'),HOTE='local',TUNNEL=17990,PORT=17990,FAUX='fake.py',
               subprocess=types.SimpleNamespace(Popen=lambda *a,**k:object()),
               time=types.SimpleNamespace(sleep=lambda *a:None),Terminal=terminal,
               hashlib=__import__('hashlib'))
@@ -101,7 +101,8 @@ def duplicate_red_connection(root):
     try:exec(compile(ast.fix_missing_locations(ast.Module(body=[loop],type_ignores=[])),'<actual-red-reader>','exec'),ns)
     except FileExistsError:return False
     marker=json.loads((p/'first-red-stop.json').read_text())
-    return opened==[1234] and signals==[(99,15)] and marker['cause']=='ROUGE first' and output.getvalue()==''.join(lines)
+    reds=[json.loads(row) for row in (p/'red-lines.jsonl').read_text().splitlines()]
+    return opened==[1234] and signals==[(99,15)] and marker['cause']=='ROUGE first' and output.getvalue()==''.join(lines) and [r['cause'] for r in reds]==['ROUGE first','ROUGE second']
 
 
 class HarnessConnectionsTests(unittest.TestCase):

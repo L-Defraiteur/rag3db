@@ -48,6 +48,7 @@ themes = {path.stem:json.loads(path.read_text()) for path in sorted((w/'extensio
 command = [sys.executable,'-B',str(q/'run_private_harness.py'),str(q/'mesure.py'),c['elf'],
            str(q/'faux_hote.py'),str(p/'harness'),str(p/'themes.json'),str(p/'harness-result.json'),str(p/'state')]
 (p / 'harness-command.json').write_text(json.dumps(command))
+stop_requested = False
 with (p/'harness.log').open('x') as output:
     child = subprocess.Popen(command, cwd=q, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     for line in child.stdout:
@@ -55,6 +56,12 @@ with (p/'harness.log').open('x') as output:
         output.flush()
         if line.startswith('ROUGE '):
             os.fsync(output.fileno())
+            with (p/'red-lines.jsonl').open('a') as red:
+                json.dump(dict(cause=line.strip(), observed=time.monotonic()), red)
+                red.write('\n'); red.flush(); os.fsync(red.fileno())
+            if stop_requested:
+                continue
+            stop_requested = True
             authority = json.loads(receipt.read_text())
             pid = authority['pid']
             assert authority['etat'] == 'actif' and authority['script'] == str(q/'confiner_validation.py')
