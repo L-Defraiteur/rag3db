@@ -189,6 +189,7 @@ pub mod filter;
 pub mod exclusion;
 pub mod generated;
 pub mod workspace_path;
+pub(crate) mod fts_existing;
 pub mod fts_handle;
 pub mod fts_maintenance;
 pub mod fts_directory;
