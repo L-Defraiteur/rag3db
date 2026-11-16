@@ -143,3 +143,25 @@ secret, code de retour, stdout et stderr séparés, durée et état. Le démarra
 est inscrit avant le sous-processus ; une interruption note sa cause sans
 inventer de code retourné. Les anciens logs ne sont ni écrasés ni requalifiés.
 Ce delta ne modifie aucune qualification active et ne lance aucun calcul.
+
+
+## Base ED atterrie et point de coordination non levé
+
+ED confirme masterd395cb1f03f84c6abdfa023a0e3c7f87a7c0dab6, trois contrôles
+lus. Le lot a été reposé sur cette base dans `cx-rate-key-20261116-r3`, sans
+conflit ; aucun des cinq fichiers réservés n'a changé dans l'amont. La vraie
+union apporte backend.rs, generic_search_nodes.rs et search.rs : elle doit être
+qualifiée, les anciens verts ne suffisent pas. Les anciennes branches restent.
+
+Le lanceur ne force aucun quota CPU : poste garde sa borne. Les jobs des ciblés
+respectent min(8, POSTE_FILS), la preuve conserve cpu.max et POSTE_FILS. La passe
+officielle conserve son j8 et reste sous le quota du poste. Pas de CPUQuota8%.
+
+**Point non levé avant GO exact** : la consigne actuelle interdit les services
+partagés. Or la passe officielle SHA2150 configure7878/7879 et e2e_lectures a
+un témoin BGE réel (surlignage creux via l'hôte). Cette recette complète n'est
+DONC PAS hermétique. Les neuf ciblés et e2e_code_sync (HashEmbedder) ainsi que
+e2e_embarqueur_a_la_demande (fixturePython) sont privés. Aucun de ces témoins ne
+remplace les lectures réelles ou la lib/NAV, et aucun filtre ne doit faire dire
+VERT à une suite amputée. L'orchestration doit cadrer une phase privée ou un
+complément coordonné ; le lanceur complet reste inactif jusque-là.
