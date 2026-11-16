@@ -70,3 +70,20 @@ READY et après admission autorité/lease restent distinctes. Aucun embedding.
 C7 autorise seulement CPU hermétique 60s après publication : aucun HTTP,
 processus provider, DB, CLI writer, créneau ni nouveau GO900. Nouveau couple,
 paquet et relecture totale requis ; ticket toujours ouvert.
+
+### Témoins rouges publiés avant correctif consommateur
+
+8640f74873 publie six juges appelant la vraie fonction `qualify.health` :
+usage False, dimension 768.0, réponse complète après six secondes fictives,
+JSON invalide sans bruts conservés, statut 503 sans statut/corps conservés,
+réponse trop grande sans preuve. Après push : six échecs attendus, 0.010s.
+f7bb59662e ajoute le septième juge : extrait AST des vraies instructions
+writer puis santé ; phase terminée simulée après writer, GET fictif encore
+atteint au lieu du refus. Après push : sept échecs attendus, 0.019s, rc1.
+Aucun réseau, /proc, signal réel, DB, CLI ou processus enfant dans ces tests.
+
+Frontière commune convenue avec Embar : transport worker borné et validation
+identité/usage, avec policy de phase fournie par module épinglé. La politique
+READY/lease reste dans le cycle et la politique PG reste dans le global ;
+aucune troisième implémentation HTTP. Le callback owner rejoindra également
+ce transport commun. Correctif non encore publié à ce stade.
