@@ -22,3 +22,66 @@ Témoin rouge CPU du VRAIparseur sur sortie indentée et sur zéro en-tête, pui
 Lot `cx-optimiseur-stack-guard-16`, base d395cb1f03. Témoin CPU du vrai mode
 `--pile`, avant correction ; caches et garde de nettoyage6f3 hors périmètre.
 Publication de cette reprise avant tests.
+
+## Correctif G publié, attente de revue et intégration C7
+
+Branche `origin/cx-optimiseur-stack-guard-16`, reprise publiée4cc6caeb3a,
+témoins publiésce6aa9ab60, correctionb74b85257b0d9363988519c63def98151c08ef8a.
+SHA du script corrigé :
+`fff9a4d9e20e739e5c8434b0a573ac2cfc00f6f37b45df500993d44d3a4b003d`.
+
+Le vrai mode `--pile` a été vu rouge : trois défauts au premier passage,
+puis six échecs sur six avec vérification de tous les en-têtes et placement du
+commit code en première position, donc dans la zone indentée. Les fixtures
+créent leurs dépôts privés ; Git produit réellement le padding de14/15commits.
+Seuls les cas sortie vide/invalide/erreur substituent le producteur range-diff,
+le parseur et les vérifications de la garde restent réels.
+
+Le correctif demande `--no-patch` pour séparer les en-têtes des corps de patches,
+vérifie le statut de range-diff, accepte l'alignement horizontal Git, exige le
+format entier et refuse zéro en-tête. Les règles existantes `=`, `<`, `>` et `!`
+restent inchangées : patches manquants, nouveau code et code modifié sont refusés.
+Sept témoins CPU passent ; suite existante49verts, zéro rouge, code0 ; syntaxe
+Bash et diff-check verts. Journaux conservés hors worktree :
+`~/.cache/optimiseur-notes/stack-guard-16/{red.log,red-all-headers.log,green-final.log,green-existing-final.log}`.
+
+Ticket maintenu ouvert pour intégration/revue et décision C7 sur installation.
+Aucun cache modifié, aucune pose, aucun service touché, aucun rejeu produit ED,
+aucune modification de la garde de nettoyage6f3.
+
+## Candidat neuf demandé par C7
+
+Branche `cx-optimiseur-stack-guard-16-candidate`, base exacte
+`d395cb1f03f84c6abdfa023a0e3c7f87a7c0dab6`. Même correctif et témoins,
+porteur G ; aucun déplacement ni doublon du ticket ED. Publication avant
+qualification CPU et replay RO sur ED exact ; aucune mutation des caches.
+
+### Replay RO ED exact : refus sémantique conservé
+
+Candidat publié `e3360b5587`, source/tests identiquesb74b, 49+7CPU verts.
+Audit Git des arbres `src`, `test`, `extension` et `tools/rust_api` : identiques
+à masterd395 ; seules garde, nouveau témoin et présent ticket diffèrent.
+
+Le replay du vrai `--pile 68590270e2 bd76f55792 f83c6c4dd6 d395cb1f03`
+ne passe PAS : six `=` jugés, arrêt au septième en-tête, ajout non Markdown
+`ab0e877375841935a63c3afd8525a84a8b0d72d1`. Il ajoute notamment
+`docs/everything-declarative/16-11-2026/ties-qualification/driver.py` et
+`launch.py`. La sortie brute comporte15en-têtes : six `=` et neuf `>` ;
+ce résultat n'est pas quinze acceptations. La garde corrigée conserve le refus
+préexistant des ajouts hors `.md`. Aucun assouplissement, réattribution des audits
+produit indépendants ou nouveau rejeu produit. C7 informé du refus avant suite.
+
+Preuves complètes `~/.cache/optimiseur-notes/stack-guard-16/candidate-e3360b5587/` :
+`headers.log`, `historical.log`, `ed-exact.log`, `ed-exact-raw.log`, `verdict.json`.
+Verdict global ROUGE pour ce replay, indépendamment des56témoins CPU verts.
+En attente d'arbitrage C7 ; aucune installation ni cache modifié.
+
+### Arbitrage C7 et candidat conservant les patches testés
+
+C7 confirme que le replay ED négatif est attendu : APPbd76 ne contient pas les
+neuf ajouts ultérieurs ; qualification ED indépendante APP+PILOT inchangée.
+Le replay positif demandé b74→d736 refuse lui aussi correctement : le squash a
+perdu le patch4cc6 du ticket. Rouge conservé dans `self-squashed-replay.log`.
+Nouveau candidat `cx-optimiseur-stack-guard-16-r2` depuis b74, donc mêmes commits
+testés et seuls compléments `.md` ensuite. Aucun assouplissement de la garde,
+ni réécriture des branches publiées ou des anciennes preuves.
