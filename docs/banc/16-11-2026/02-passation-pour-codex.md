@@ -61,6 +61,8 @@ master ; voir l'entrée 2.
 
 ## 2. Le travail pour Codex, dans l'ordre
 
+**La liste est vivante** (c7, 16 novembre, 11 h) : Codex ne travaille que si Lucie ouvre une session avec lui. D'ici là, les entrées sont au banc, dans l'ordre 6, 1, 2, 3, 4, 7, 8. Chacune est annotée « en cours par banc, branche, tête » quand le banc la prend.
+
 Chaque entrée a son ticket sous `docs/banc/tickets/` ; le ticket a le détail. Les tailles sont en
 heures de travail.
 
@@ -135,6 +137,8 @@ sur la copie finale de la bascule, quand c7 la refera : même méthode, contre u
   `git show origin/master:extension/rag3weaver/Cargo.lock | grep -A1 'name = "lucivy-core"'`.
 
 ### Entrée 6. Le banc d'étalonnage du débit d'embarquement
+
+**En cours par banc** (16 novembre, 11 h, au mot de c7) : la page de conception, branche `banc-page-etalonnage`, tête à venir.
 
 - **Ticket** : `docs/banc/tickets/2026-11-16-le-banc-d-etalonnage-du-debit-d-embarquement.md`
 - **À faire** : **d'abord la page de conception**, soumise à c7 et à embarquement (le jeu de lots de
