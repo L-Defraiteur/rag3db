@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Proposed fresh CPU qualification; no real credentials or provider services."""
+import vertex_cache
 import argparse,hashlib,json,os,re,shutil,stat,subprocess,sys,time
 from pathlib import Path
 APP='c38fc3e4ddd8c806de904c7d08eb43b4988fec99'
@@ -7,8 +8,8 @@ BASE='df2a5789888d16247f0dad42dcdaa3c4ceea2094'
 R=Path.home()/'.cache/rag3weaver-build'
 W=Path.home()/'git_workspaces/rag3db-cx-ed-vertex-token-fix-r1'
 C=W/'extension/rag3weaver'
-P=R/'cx-ed-vertex-token-green-v1';Q=R/'cx-ed-vertex-token-green-controller-v2';S=R/'cx-ed-vertex-token-green-scope-v1'
-T=R/'target-cx-ed-vertex-token-green-v1' # New absent private target; no reuse of red/TIES target.
+P=R/'cx-ed-vertex-token-green-v1';Q=R/'cx-ed-vertex-token-green-controller-v3';S=R/'cx-ed-vertex-token-green-scope-v1'
+T=R/'target-cx-ed-stable-tie-identity' # The one existing session target, known red fe40 provenance.
 PREFIX='openai_llm::vertex_refresh_tests::'
 POSITIVE=['fixture_token_source_changes_its_cached_token_only_after_invalidation','a_fixed_api_bearer_is_not_refreshed_after_unauthorized','vertex_never_refreshes_or_replays_after_a_stream_fragment']
 RED='vertex_rejected_token_is_refreshed_once_before_opening_a_stream'
@@ -73,7 +74,10 @@ def driver():
  assert limits['memory.max']=='34359738368' and limits['memory.high']=='max' and limits['memory.swap.max']=='0'
  quota,period=limits['cpu.max'].split();assert quota!='max' and 0<int(quota)<=8*int(period)
  save(P,'authority-path.json',dict(path=str(receipt),initial=end-BUDGET,deadline=end,limits=limits))
- assert not T.exists() and not T.is_symlink()
+ before=vertex_cache.capture(T);save(P,'cache-after-poste.json',before);assert before==cfg['cache_contract']
+ old_scope=Path(before['authority']['path']).parent
+ observed=quiet(json.loads((old_scope/'enfants.json').read_text()));save(P,'cache-quiet-after-poste.json',observed)
+ assert not observed['owned_alive'] and not observed['found'] and not any(x['owned'] or x.get('attributed',False) for x in observed['unknown'])
  tmp=short_tmp();save(P,'short-tmp.json',dict(path=str(tmp),uid=tmp.stat().st_uid,device=tmp.stat().st_dev,inode=tmp.stat().st_ino))
  env={k:os.environ[k] for k in ['HOME','USER','LOGNAME','PATH','LANG','LC_ALL','CARGO_HOME','RUSTUP_HOME','DBUS_SESSION_BUS_ADDRESS','RAG3WEAVER_VALIDATION_RECU','RAG3WEAVER_VALIDATION_JETON'] if k in os.environ}
  for name in ['cache','config','data','xdg-state','state-fixture']:(P/name).mkdir(mode=0o700)
@@ -82,6 +86,15 @@ def driver():
  for suffix in ['','_EMBEDDER','_RERANKER','_OCR']:env['RAG3WEAVER_BURN_DEVICE'+suffix]='cpu'
  assert not Path(env['XDG_STATE_HOME']).is_relative_to(Path(env['RAG3WEAVER_STATE_DIR'])) and not Path(env['RAG3WEAVER_STATE_DIR']).is_relative_to(Path(env['XDG_STATE_HOME']))
  save(P,'profile.json',{k:v for k,v in env.items() if k!='RAG3WEAVER_VALIDATION_JETON'})
+ guard_argv=['bash','-c','. "$1"; garder_le_target "$2" "$3"','vertex-cache-guard',str(Q/'garde_target.sh'),str(T)]
+ assert sha(Q/'garde_target.sh')==sha(vertex_cache.OLD/'extension/rag3weaver/scripts/garde_target.sh')
+ guard(cfg,end)
+ for label,owner,reuse in [('cache-old-owner',vertex_cache.OLD/'extension/rag3weaver','0'),('cache-adopt',C,'1')]:
+  phase_env=dict(env,RAG3WEAVER_TARGET_REPRENDRE=reuse)
+  rc,_=run(label,guard_argv+[str(owner)],phase_env,end,60)
+  if rc:first_red(label+' refused');raise RuntimeError('shared target guard refused')
+  assert (T/'.arbre-du-target').read_text().strip()==str(owner)
+ save(P,'cache-adopted.json',dict(target=str(T),owner=str(C),real_shared_guard_calls=2,python_invalidation=False,old_red_preserved=True))
  args=[sys.executable,str(C/'scripts/cargo_garde.py'),'test','--locked','--offline','--no-default-features','--features',','.join(FEATURES),'--lib','--no-run','--message-format=json']
  rc,text=run('compile',args,env,end,900)
  if rc:first_red('compilation failed before any judge');raise RuntimeError('compile refused')
@@ -134,7 +147,7 @@ def poste_fd_allowed(proc,role,value,start,ancestors,cfg):
 
 def quiet(owned):
  cfg=json.loads((Q/'configuration.json').read_text());ancestors=ancestor_identities()
- alive=[];unknown=[];found=[];exemptions=[];roots=[W,T,Q]
+ alive=[];unknown=[];found=[];exemptions=[];roots=[W,T,Q]+[Path(cfg[k]) for k in ['old_source','old_controller','old_control_root'] if k in cfg]
  if (P/'short-tmp.json').exists():roots.append(Path(json.loads((P/'short-tmp.json').read_text())['path']))
  for row in owned:
   proc=Path('/proc')/str(row['pid'])
@@ -194,20 +207,21 @@ def launch(args):
  assert os.uname().nodename.lower()=='luciepc' and re.fullmatch('[0-9a-f]{40}',args.pilot)
  control=Path(__file__).resolve().parents[4]
  assert git(control,'rev-parse','HEAD')==args.pilot and not git(control,'status','--porcelain')
- assert not any(x.exists() or x.is_symlink() for x in [S,T])
+ assert not S.exists() and not S.is_symlink()
  for path in [P,Q]:assert not path.is_symlink() and (not path.exists() or (path.is_dir() and path.resolve()==path and path.stat().st_uid==os.getuid()))
  if P.exists():assert not any(P.iterdir()),'prepared proof root must still be empty'
  assert git(W,'rev-parse','HEAD')==APP and not git(W,'status','--porcelain')
  Q.mkdir(mode=0o700,exist_ok=True);P.mkdir(mode=0o700,exist_ok=True)
  copies={}
- for name,source in [('qualify.py',Path(__file__)),('poste',C/'scripts/poste'),('confiner_validation.py',C/'scripts/confiner_validation.py')]:
+ for name,source in [('qualify.py',Path(__file__)),('vertex_cache.py',Path(__file__).with_name('vertex_cache.py')),('poste',C/'scripts/poste'),('confiner_validation.py',C/'scripts/confiner_validation.py'),('garde_target.sh',C/'scripts/garde_target.sh')]:
   dest=Q/name
   if dest.exists():assert not dest.is_symlink() and sha(dest)==sha(source)
   else:shutil.copy2(source,dest)
   copies[name]=sha(dest)
  timeout=str(Path(shutil.which('timeout')).resolve())
  bash=str(Path(shutil.which('bash')).resolve())
- cfg=dict(app=APP,pilot=args.pilot,control=str(control),copies=copies,timeout=timeout,timeout_sha256=sha(timeout),bash=bash,bash_sha256=sha(bash))
+ oldcfg=json.loads((vertex_cache.OLD_Q/'configuration.json').read_text())
+ cfg=dict(app=APP,pilot=args.pilot,control=str(control),copies=copies,timeout=timeout,timeout_sha256=sha(timeout),bash=bash,bash_sha256=sha(bash),cache_contract=vertex_cache.capture(T),old_source=str(vertex_cache.OLD),old_controller=str(vertex_cache.OLD_Q),old_control_root=oldcfg['control'])
  if (Q/'configuration.json').exists():assert json.loads((Q/'configuration.json').read_text())==cfg
  else:save(Q,'configuration.json',cfg)
  guard(cfg)
