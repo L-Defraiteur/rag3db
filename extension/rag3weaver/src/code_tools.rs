@@ -32,6 +32,10 @@ pub const MAX_READ_LIMIT: usize = 2000;
 pub const MAX_LINE_CHARS: usize = 2000;
 pub const DEFAULT_GREP_LIMIT: usize = 50;
 pub const MAX_GREP_LIMIT: usize = 500;
+/// **Above this many matching lines, `grep_files` refuses** (P2, Algareth's empirical runs of 16 November 2026:
+/// `agent`, `manifest` and `/nom` matched 4 800 to 5 100 lines, 12 KiB of context, before the agent narrowed).
+/// The grep node's default; twice [`MAX_GREP_LIMIT`]. `0` never refuses.
+pub const DEFAULT_GREP_REFUSAL: usize = 1_000;
 pub const MAX_CONTEXT_LINES: usize = 5;
 /// Voisins rendus par scope quand `grep` suit une relation.
 pub const DEFAULT_RELATION_LIMIT: usize = 5;
@@ -818,6 +822,9 @@ pub struct GrepOptions {
     pub case_insensitive: bool,
     pub max_results: usize,
     pub context_lines: usize,
+    /// Refuse, returning no line, when more than this many lines match; `0` never refuses (the library
+    /// default). The grep node sets [`DEFAULT_GREP_REFUSAL`].
+    pub refuse_above: usize,
     /// **Suivre le graphe depuis les scopes trouvés.**
     ///
     /// Une relation déclarée dans le schéma (`CONSUMES`, `CONSUMED_BY`…).
@@ -1863,6 +1870,18 @@ mod tests {
         let prefixed = grep_files(&s, None, "alpha", &GrepOptions { path_prefix: Some("src/".into()), case_insensitive: true, ..Default::default() }).unwrap();
         assert_eq!(prefixed.total_found, 1);
         assert!(grep_files(&s, None, "(", &GrepOptions::default()).is_err(), "invalid regex is an error, not a silent empty");
+    }
+
+    /// **A pattern that matches too much is refused** (P2): no line is returned, the refusal names the
+    /// count and the threshold, and says where to narrow with `path_prefix`.
+    #[test]
+    fn grep_refuses_above_its_threshold_and_names_where_to_narrow() {
+        let s = snapshot();
+        let err = grep_files(&s, None, "line", &GrepOptions { refuse_above: 100, ..Default::default() }).expect_err("300 matches above 100");
+        assert!(err.contains("300") && err.contains("100"), "the count and the threshold: {err}");
+        assert!(err.contains("path_prefix") && err.contains("src/"), "where to narrow: {err}");
+        assert_eq!(grep_files(&s, None, "line", &GrepOptions { refuse_above: 300, ..Default::default() }).unwrap().total_found, 300, "at the threshold, no refusal");
+        assert_eq!(grep_files(&s, None, "line", &GrepOptions::default()).unwrap().total_found, 300, "0 never refuses");
     }
 
     #[test]

@@ -572,6 +572,7 @@ impl NodeFactory for GrepNodeFactory {
             case_insensitive: config.get("case_insensitive").and_then(|v| v.as_bool()).unwrap_or(false),
             max_results: usize_param(config, "max_results", "GrepNode")?.unwrap_or(DEFAULT_GREP_LIMIT),
             context_lines: usize_param(config, "context_lines", "GrepNode")?.unwrap_or(0),
+            refuse_above: usize_param(config, "refuse_above", "GrepNode")?.unwrap_or(crate::code_tools::DEFAULT_GREP_REFUSAL),
             relation: config.get("relation").and_then(|v| v.as_str()).filter(|s| !s.trim().is_empty()).map(String::from),
             relation_limit: usize_param(config, "relation_limit", "GrepNode")?.unwrap_or(0),
             symbol_hierarchy_depth: usize_param(config, "symbol_hierarchy_depth", "GrepNode")?.unwrap_or(0),
@@ -598,6 +599,7 @@ impl NodeFactory for GrepNodeFactory {
                 ConfigParam { name: "extension".into(), param_type: ConfigParamType::String, required: false, default: None, description: "Ne chercher que cette extension (ex. 'rs')".into(), choices: None, json_schema: None },
                 ConfigParam { name: "case_insensitive".into(), param_type: ConfigParamType::Bool, required: false, default: Some(serde_json::json!(false)), description: "Ignorer la casse".into(), choices: None, json_schema: None },
                 ConfigParam { name: "max_results".into(), param_type: ConfigParamType::Int, required: false, default: Some(serde_json::json!(DEFAULT_GREP_LIMIT)), description: "Résultats rendus (plafond 500) ; tous sont comptés".into(), choices: None, json_schema: None },
+                ConfigParam { name: "refuse_above".into(), param_type: ConfigParamType::Int, required: false, default: Some(serde_json::json!(crate::code_tools::DEFAULT_GREP_REFUSAL)), description: "Refuse, returning no line, when more lines than this match; 0 never refuses".into(), choices: None, json_schema: None },
                 ConfigParam { name: "context_lines".into(), param_type: ConfigParamType::Int, required: false, default: Some(serde_json::json!(0)), description: "Lignes de contexte avant/après (plafond 5)".into(), choices: None, json_schema: None },
                 ConfigParam { name:"symbol_hierarchy_depth".into(),param_type:ConfigParamType::Int,required:false,default:Some(serde_json::json!(0)),description:"0 : grep inchangé ; 1..16 : contenant du match puis au plus ce nombre de parents de plages qualifiées, sans corps. Index absent/périmé/ambigu explicite, budget global96Kio/200nœuds/8fichiers".into(),choices:None,json_schema:None },
                 // **Le graphe se greffe là où les agents vont.** Mesuré le
