@@ -323,3 +323,22 @@ def test_shell_unicode_input(temp_db) -> None:
     )
     result.check_stdout("Error: Null character not allowed")
     result.check_stdout("Error: Invalid Unicode codepoint")
+
+
+def test_piped_input_past_4096_bytes_loses_nothing() -> None:
+    # Input and output are pipes, not terminals (16 Nov. 2026, hotfixs): printing a table asked the
+    # terminal for its width by reading the reply to ESC[6n from stdin, and so stole the bytes after
+    # the first 4096 of the script, up to the first 'R' ("CHECKPOINT;\nCREATE" read "CHECKPOIEATE").
+    statements = [f"RETURN {k} AS v;" for k in range(1, 401)]
+    assert len("\n".join(statements)) > 4096
+    test = ShellTest()
+    for statement in statements:
+        test.statement(statement)
+    result = test.run()
+    assert "Parser exception" not in result.stdout + result.stderr, (
+        "[check: piped-input-keeps-every-byte] a statement of the script was read cut: "
+        + (result.stdout + result.stderr)[-400:]
+    )
+    missing = [k for k in range(1, 401) if f"\u2502 {k} " not in result.stdout]
+    assert not missing, f"[check: piped-input-keeps-every-byte] values never printed: {missing[:10]}"
+
