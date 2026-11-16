@@ -63,6 +63,20 @@ recommandé : la tâche d'écriture de la campagne D6 (`docs/orchestration/16-11
 doit passer avant le reste.
 
 1. Faire atterrir **`pas-va-au-bout`** (ci-dessus) : 1 h.
+   **En cours par archi, prêt au push** (16 novembre, 10 h 12). La branche est reposée sur master
+   sous le nom **`pas-va-au-bout-2`**, tête **`5e25a110d`** (worktree
+   `~/.cache/rag3weaver-build/wt-delegate`), base testée `6b672afa6`. Le rejeu court est **vert** :
+   - module `daemon_host::teammate`/`chat` : 62/0 ;
+   - check_features, e2e_demon_hote 24/0, e2e_lectures 27/0 (pilefile) ;
+   - e2e_equipier sous Vertex : 2/0.
+
+   Tout tourne sous `RAG3WEAVER_MOTEUR_ANCIEN=1` et la lib 373b5477b. Les journaux sont dans
+   `~/.cache/rag3weaver-build/bout-module/`, `bout-pilefile/`, `bout-e2eseul/` et `bout2-rejeu.log`.
+   **Pour finir** :
+   1. Préparer le dossier de journaux du push, avec `resume.log` (ligne 1 `commit 5e25a110d — …`,
+      dernière ligne `VERT`) et `base` (`6b672afa6`).
+   2. Pousser par la garde au « à toi » de l'orchestration. La garde rejoue si du code est arrivé
+      sur master depuis `6b672afa6`.
 2. `2026-11-16-le-plafond-d-appels-d-un-pas.md` (S1) : 4 h.
 3. `2026-11-16-le-pas-suivant-ne-voit-pas-les-retours-d-outils.md` (S2) : 1 jour.
 4. `2026-11-16-une-request-remplace-la-demande-en-cours.md` (S3) : 3 h.
@@ -119,3 +133,13 @@ au « à toi » de l'orchestration seulement.
 - **Identité** : `luciedefraiteur@gmail.com`, **zéro attribution** d'assistant dans les commits.
 - **Une question à Lucie ne bloque jamais le reste** : elle s'écrit dans la page, l'orchestration la
   porte, et le travail continue sur ce qui n'en dépend pas.
+
+## État final d'archi (16 novembre, 10 h 2x)
+
+Archi s'arrête sur le mot de Lucie. Voici ce qui est posé :
+- la passation (`11b7e8da3`) ;
+- le relevé de la trame du bus (`33d532035`, page 02) ;
+- `pas-va-au-bout-2`, vert, poussé sur sa branche, pas sur master.
+
+Aucune passe ne tourne. La seconde entrée témoin (qui déclare `notify_idle`) attend le mot de
+Lucie : la question est dans la page 02.
