@@ -35,3 +35,11 @@ Aucun défaut masqué par le statut parseOK, aucun claim d'exhaustivité.
 La qualification du correctif Rust7601 et ce banc sont distincts ; aucune
 nouvelle campagne ne remplace ses validations restantes. Le présent ticket
 n'autorise pas de nouveau Cargo ou mesure sans son profil et son créneau.
+
+## Inventaire statique initial
+
+Voir `docs/codeparsers/16-11-2026/language-corpus/01-inventaire-et-protocole.md` :
+huit langages dans le routeur, API spécialisées distinctes. HTML est un stub
+explicite ; Svelte initialise un parser sans langage puis appelle `parse().expect()`.
+Ces limites restent ouvertes dans ce ticket, sans exécution ni correction annoncée.
+Le protocole d'entrée est proposé à Banc avant implémentation de la CLI réservée.
