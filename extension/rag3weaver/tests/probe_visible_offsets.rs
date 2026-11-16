@@ -27,7 +27,7 @@ fn write_the_visible_offsets() {
     // The condition `masque_en_predicat` builds for a base with history (generic_search_nodes.rs): the
     // occurrence entity's layer, born at or before the pending rank, not yet retired, and at least one
     // occurrence. The pending rank is the last published one plus one.
-    use rag3weaver::connection::{CypherValue, DbConnection};
+    use rag3weaver::connection::CypherValue;
     use rag3weaver::filter::{FilterOp, FilterValue};
     let rang = cat
         .conn()
