@@ -1,0 +1,761 @@
+[
+  {
+    "repository_id": "github.com/curl/curl@2ba56e30f8ccd18c35a83761d51bcf04b32e829b",
+    "repository_url": "https://github.com/curl/curl",
+    "repository_commit": "2ba56e30f8ccd18c35a83761d51bcf04b32e829b",
+    "root": "/home/lucied/.cache/rag3db-banc-notes/public-corpus-20261116/repositories/curl--curl--2ba56e30f8ccd18c35a83761d51bcf04b32e829b/source",
+    "license_id": "NOASSERTION",
+    "license_evidence": [
+      {
+        "path": "COPYING",
+        "sha256": "82f2f4427d6545ee5aaac4f0b80428da6cc8ba41c2cf5da3a03680ec327b9681"
+      }
+    ],
+    "github_metadata_license_is_not_per_file_audit": true,
+    "archive_sha256": "a91658ac789063d8e48316f9ffa83766af556faf396bf9d790f64b439621c4a3",
+    "archive_bytes": 3764098,
+    "stored_bytes": 18394349,
+    "inventory_sha256": "38afdf864f9faac39ade033ae2f660e497092dd4a0e53c4deb7d84d697712b20",
+    "entries": 4576,
+    "language_occurrences": {
+      "markdown": 930,
+      "c": 813,
+      "cpp": 258,
+      "python": 56
+    },
+    "executed_repository_code": false,
+    "frozen_unix": 1794840749.1101706
+  },
+  {
+    "repository_id": "github.com/django/django@03158f2189346e35831586dfd0381e37eacb685d",
+    "repository_url": "https://github.com/django/django",
+    "repository_commit": "03158f2189346e35831586dfd0381e37eacb685d",
+    "root": "/home/lucied/.cache/rag3db-banc-notes/public-corpus-20261116/repositories/django--django--03158f2189346e35831586dfd0381e37eacb685d/source",
+    "license_id": "BSD-3-Clause",
+    "license_evidence": [
+      {
+        "path": "LICENSE",
+        "sha256": "b846415d1b514e9c1dff14a22deb906d794bc546ca6129f950a18cd091e2a669"
+      },
+      {
+        "path": "LICENSE.python",
+        "sha256": "765e2b1e339fef8d3e9f12892e7e072a8be309996a0be43ffc5796398ec4e7d4"
+      }
+    ],
+    "github_metadata_license_is_not_per_file_audit": true,
+    "archive_sha256": "ea1f6baf3b385d7d7ff2f5cd9e174d3e06fabccefd94e677cc80c312a4c4b838",
+    "archive_bytes": 10632628,
+    "stored_bytes": 46312462,
+    "inventory_sha256": "7f322fb926262e97894702ecfac973dbc4d5a9221287b15f100abc94f264b502",
+    "entries": 7104,
+    "language_occurrences": {
+      "markdown": 8,
+      "javascript": 111,
+      "python": 2943,
+      "css": 44,
+      "html": 371
+    },
+    "executed_repository_code": false,
+    "frozen_unix": 1794840654.666256
+  },
+  {
+    "repository_id": "github.com/dotnet/roslyn@c6dae7dd4f51cef1680c6b23ab614394d6989a69",
+    "repository_url": "https://github.com/dotnet/roslyn",
+    "repository_commit": "c6dae7dd4f51cef1680c6b23ab614394d6989a69",
+    "root": "/home/lucied/.cache/rag3db-banc-notes/public-corpus-20261116/repositories/dotnet--roslyn--c6dae7dd4f51cef1680c6b23ab614394d6989a69/source",
+    "license_id": "MIT",
+    "license_evidence": [
+      {
+        "path": "License.txt",
+        "sha256": "ae48df11a335dc1a615f4f938b69cba73bcf4485c4f97af49b38efb0f216353b"
+      }
+    ],
+    "github_metadata_license_is_not_per_file_audit": true,
+    "archive_sha256": "868e79dfb7b0abb61139abec488b194b30dfb82a2576cf655162cbd256421b4a",
+    "archive_bytes": 61849615,
+    "stored_bytes": 398770639,
+    "inventory_sha256": "34bc639c8ef47ca55077fac326b0680bcb841e850e5e7ea7e5ab83e684ac0417",
+    "entries": 35506,
+    "language_occurrences": {
+      "markdown": 414,
+      "csharp": 18307,
+      "python": 1,
+      "html": 65,
+      "css": 9
+    },
+    "executed_repository_code": false,
+    "frozen_unix": 1794840566.8939977
+  },
+  {
+    "repository_id": "github.com/element-plus/element-plus@3b5d0ad35b1d309a3430b49db9be1369f0966321",
+    "repository_url": "https://github.com/element-plus/element-plus",
+    "repository_commit": "3b5d0ad35b1d309a3430b49db9be1369f0966321",
+    "root": "/home/lucied/.cache/rag3db-banc-notes/public-corpus-20261116/repositories/element-plus--element-plus--3b5d0ad35b1d309a3430b49db9be1369f0966321/source",
+    "license_id": "MIT",
+    "license_evidence": [
+      {
+        "path": "LICENSE",
+        "sha256": "0790118bb4d66681db1d63181f72ef68e632d632f6db0373ef87cf328561af27"
+      }
+    ],
+    "github_metadata_license_is_not_per_file_audit": true,
+    "archive_sha256": "946adc87a41cf862339013b43dfd3b1c90795f77b0308c4a0ae8383e796f10cb",
+    "archive_bytes": 3157860,
+    "stored_bytes": 10572337,
+    "inventory_sha256": "118d2c204711bcc5282d664bef7f61774ae3a53a78b6f20ddd88f9824ee36507",
+    "entries": 2753,
+    "language_occurrences": {
+      "markdown": 115,
+      "javascript": 5,
+      "typescript": 1241,
+      "css": 1,
+      "vue": 1022,
+      "scss": 170,
+      "html": 2
+    },
+    "executed_repository_code": false,
+    "frozen_unix": 1794840653.944493
+  },
+  {
+    "repository_id": "github.com/foundation/yeti@199661d950f0be216ab5c6263dd272e3afdac8bf",
+    "repository_url": "https://github.com/foundation/yeti",
+    "repository_commit": "199661d950f0be216ab5c6263dd272e3afdac8bf",
+    "root": "/home/lucied/.cache/rag3db-banc-notes/public-corpus-20261116/repositories/foundation--yeti--199661d950f0be216ab5c6263dd272e3afdac8bf/source",
+    "license_id": "NOASSERTION",
+    "license_evidence": [
+      {
+        "path": "LICENSE",
+        "sha256": "d81db9d0dec248eaac172414e2f3c0ce3e3e876646e761ef27ccd62df914fc91"
+      }
+    ],
+    "github_metadata_license_is_not_per_file_audit": true,
+    "archive_sha256": "46a1e3c85e5bbe7c1e1f5606cf63f2e3c8cfc350ae2879c0e0fdd63d5ddea1c5",
+    "archive_bytes": 6183114,
+    "stored_bytes": 9478523,
+    "inventory_sha256": "69e265376e65c50edd3ba53c03ab8d30d8a0e48552f480919e852034af1ec667",
+    "entries": 660,
+    "language_occurrences": {
+      "markdown": 136,
+      "javascript": 126,
+      "css": 71,
+      "html": 120
+    },
+    "executed_repository_code": false,
+    "frozen_unix": 1794840657.5778189
+  },
+  {
+    "repository_id": "github.com/golang/go@3c6d0928959aa02598fa073f2747a1b563d3a852",
+    "repository_url": "https://github.com/golang/go",
+    "repository_commit": "3c6d0928959aa02598fa073f2747a1b563d3a852",
+    "root": "/home/lucied/.cache/rag3db-banc-notes/public-corpus-20261116/repositories/golang--go--3c6d0928959aa02598fa073f2747a1b563d3a852/source",
+    "license_id": "BSD-3-Clause",
+    "license_evidence": [
+      {
+        "path": "LICENSE",
+        "sha256": "911f8f5782931320f5b8d1160a76365b83aea6447ee6c04fa6d5591467db9dad"
+      }
+    ],
+    "github_metadata_license_is_not_per_file_audit": true,
+    "archive_sha256": "506b34f95e32c72aa4b1dadc24cd5990d01cada5cf15f2f37b554fa84407c8e5",
+    "archive_bytes": 36669167,
+    "stored_bytes": 128496014,
+    "inventory_sha256": "db24d7ccbfe4f640ee085f56f24527adc041032ab54bd0d35fedd002c115a4c9",
+    "entries": 16277,
+    "language_occurrences": {
+      "markdown": 90,
+      "html": 14,
+      "python": 2,
+      "go": 11979,
+      "javascript": 9,
+      "cpp": 30,
+      "c": 117,
+      "css": 4
+    },
+    "executed_repository_code": false,
+    "frozen_unix": 1794840564.9121938
+  },
+  {
+    "repository_id": "github.com/grpc/grpc@e67d793e4c19c3715fa3370d760280cdf3943903",
+    "repository_url": "https://github.com/grpc/grpc",
+    "repository_commit": "e67d793e4c19c3715fa3370d760280cdf3943903",
+    "root": "/home/lucied/.cache/rag3db-banc-notes/public-corpus-20261116/repositories/grpc--grpc--e67d793e4c19c3715fa3370d760280cdf3943903/source",
+    "license_id": "Apache-2.0",
+    "license_evidence": [
+      {
+        "path": "LICENSE",
+        "sha256": "58c86a3f2b5cca0ebdf9ed3e7f4e6dc38e3b38796d8c3dc92064c62a4e39d0dd"
+      }
+    ],
+    "github_metadata_license_is_not_per_file_audit": true,
+    "archive_sha256": "5b0e37fafe05c6236284946785b60ec1ed1604df35fe02cfc2b9e897594d5435",
+    "archive_bytes": 16526259,
+    "stored_bytes": 78410499,
+    "inventory_sha256": "86a59df1866bd8609fcdd7dd27d16f91c2a32c7e2c604bf21d8ae26bb9aed48d",
+    "entries": 10810,
+    "language_occurrences": {
+      "markdown": 297,
+      "python": 2842,
+      "css": 3,
+      "html": 2,
+      "cpp": 4103,
+      "csharp": 33,
+      "javascript": 14,
+      "c": 493,
+      "go": 13
+    },
+    "executed_repository_code": false,
+    "frozen_unix": 1794840647.7926998
+  },
+  {
+    "repository_id": "github.com/ionic-team/ionic-framework@a79e1a130b0213637c80910f2537b54d6b74b70d",
+    "repository_url": "https://github.com/ionic-team/ionic-framework",
+    "repository_commit": "a79e1a130b0213637c80910f2537b54d6b74b70d",
+    "root": "/home/lucied/.cache/rag3db-banc-notes/public-corpus-20261116/repositories/ionic-team--ionic-framework--a79e1a130b0213637c80910f2537b54d6b74b70d/source",
+    "license_id": "MIT",
+    "license_evidence": [
+      {
+        "path": "LICENSE",
+        "sha256": "4862ae1846439cae0cc097120a14e93a142d36016a9fc609b5d23959e3ff041f"
+      },
+      {
+        "path": "core/LICENSE",
+        "sha256": "fa8725a0baf2a84788bd5e34f99ae64b7ea256a5c037ff37761180e0c5ece28a"
+      }
+    ],
+    "github_metadata_license_is_not_per_file_audit": true,
+    "archive_sha256": "d9c4bc17f1af301552ec00a4eb899e0290b2293409090057ff05544682cd5911",
+    "archive_bytes": 85252647,
+    "stored_bytes": 110586124,
+    "inventory_sha256": "9ec866653180d8e4fd3344bc8411dc476fa25bd5bf48289431d82a4bbae20294",
+    "entries": 10535,
+    "language_occurrences": {
+      "markdown": 62,
+      "javascript": 111,
+      "typescript": 1724,
+      "css": 19,
+      "scss": 414,
+      "html": 460,
+      "vue": 67
+    },
+    "executed_repository_code": false,
+    "frozen_unix": 1794840753.6575553
+  },
+  {
+    "repository_id": "github.com/material-components/material-components-web@6ceadb81df508ac08ab007c52c4d3dc1d811cc15",
+    "repository_url": "https://github.com/material-components/material-components-web",
+    "repository_commit": "6ceadb81df508ac08ab007c52c4d3dc1d811cc15",
+    "root": "/home/lucied/.cache/rag3db-banc-notes/public-corpus-20261116/repositories/material-components--material-components-web--6ceadb81df508ac08ab007c52c4d3dc1d811cc15/source",
+    "license_id": "MIT",
+    "license_evidence": [
+      {
+        "path": "LICENSE",
+        "sha256": "d6cf3b8854951ec25fe35dbdca789ff2d5a9b95d2412abe935706fcb99545de0"
+      }
+    ],
+    "github_metadata_license_is_not_per_file_audit": true,
+    "archive_sha256": "9b07e7cfde9bd4bd047bb531f803bfa44c56037d60321463d66bae967e1b0bc8",
+    "archive_bytes": 3778152,
+    "stored_bytes": 11200135,
+    "inventory_sha256": "c77a86e6a1dfd809050bbf531452f274757c7e6c736cc5a0f1ecdc19fdca3bc0",
+    "entries": 1458,
+    "language_occurrences": {
+      "markdown": 95,
+      "javascript": 17,
+      "scss": 736,
+      "typescript": 447
+    },
+    "executed_repository_code": false,
+    "frozen_unix": 1794840659.5285885
+  },
+  {
+    "repository_id": "github.com/mdn/css-examples@65b08d2236b304d50d28a807a48c35f6889d902d",
+    "repository_url": "https://github.com/mdn/css-examples",
+    "repository_commit": "65b08d2236b304d50d28a807a48c35f6889d902d",
+    "root": "/home/lucied/.cache/rag3db-banc-notes/public-corpus-20261116/repositories/mdn--css-examples--65b08d2236b304d50d28a807a48c35f6889d902d/source",
+    "license_id": "CC0-1.0",
+    "license_evidence": [
+      {
+        "path": "LICENSE",
+        "sha256": "36ffd9dc085d529a7e60e1276d73ae5a030b020313e6c5408593a6ae2af39673"
+      }
+    ],
+    "github_metadata_license_is_not_per_file_audit": true,
+    "archive_sha256": "0791f163730235d698f166c97c19afaf79f0524919b878a1a9eb91d5956391a2",
+    "archive_bytes": 39600771,
+    "stored_bytes": 9289232,
+    "inventory_sha256": "30adeca1cca8a3d6515d86e529f9fd84797607adeef41fa8b8c13cbe4d85b8a9",
+    "entries": 864,
+    "language_occurrences": {
+      "markdown": 24,
+      "css": 85,
+      "html": 552,
+      "javascript": 38
+    },
+    "executed_repository_code": false,
+    "frozen_unix": 1794840661.4698253
+  },
+  {
+    "repository_id": "github.com/mdx-js/mdx@52285a6758fa078ec57f3d4bd8803d9cbfb12065",
+    "repository_url": "https://github.com/mdx-js/mdx",
+    "repository_commit": "52285a6758fa078ec57f3d4bd8803d9cbfb12065",
+    "root": "/home/lucied/.cache/rag3db-banc-notes/public-corpus-20261116/repositories/mdx-js--mdx--52285a6758fa078ec57f3d4bd8803d9cbfb12065/source",
+    "license_id": "MIT",
+    "license_evidence": [
+      {
+        "path": "license",
+        "sha256": "c274d2be30a4def0f9344506f3fe6d15668890a8e6d3e3d6bea732b44af9e124"
+      }
+    ],
+    "github_metadata_license_is_not_per_file_audit": true,
+    "archive_sha256": "f5ac2c07c41c994faccacdc5b117a519bdd25508b243f277ae35881d68013450",
+    "archive_bytes": 1982160,
+    "stored_bytes": 1741274,
+    "inventory_sha256": "f09cc2dc538c4d75276c98b1336a6a8a37c916c82a9c626c499b4b3443b6eac5",
+    "entries": 179,
+    "language_occurrences": {
+      "markdown": 11,
+      "javascript": 78,
+      "mdx": 36,
+      "css": 1,
+      "typescript": 2
+    },
+    "executed_repository_code": false,
+    "frozen_unix": 1794840660.730139
+  },
+  {
+    "repository_id": "github.com/microsoft/vscode@6e68549edb69380c9316e49df5d3795d5064a2b0",
+    "repository_url": "https://github.com/microsoft/vscode",
+    "repository_commit": "6e68549edb69380c9316e49df5d3795d5064a2b0",
+    "root": "/home/lucied/.cache/rag3db-banc-notes/public-corpus-20261116/repositories/microsoft--vscode--6e68549edb69380c9316e49df5d3795d5064a2b0/source",
+    "license_id": "MIT",
+    "license_evidence": [
+      {
+        "path": "LICENSE.txt",
+        "sha256": "cce33203a80863c22499035b1cfb6aba5df5f02e4ea2669cf5bc5730c1864236"
+      }
+    ],
+    "github_metadata_license_is_not_per_file_audit": true,
+    "archive_sha256": "4cbe9be85b970bc721abc1559e9facd2fde5414fff238fca9feb90b39ee27b3d",
+    "archive_bytes": 89829961,
+    "stored_bytes": 290125932,
+    "inventory_sha256": "0ae30eb5b8b72f491c151e4f3c54ec472268624b178cabf220e0427fd96123eb",
+    "entries": 21466,
+    "language_occurrences": {
+      "markdown": 379,
+      "typescript": 16113,
+      "python": 10,
+      "javascript": 134,
+      "csharp": 6,
+      "html": 118,
+      "cpp": 17,
+      "rust": 122,
+      "css": 567,
+      "go": 3,
+      "scss": 4,
+      "c": 1
+    },
+    "executed_repository_code": false,
+    "frozen_unix": 1794840657.500655
+  },
+  {
+    "repository_id": "github.com/nodejs/node@d3c4048962853bb12359682381001ab63dced4ce",
+    "repository_url": "https://github.com/nodejs/node",
+    "repository_commit": "d3c4048962853bb12359682381001ab63dced4ce",
+    "root": "/home/lucied/.cache/rag3db-banc-notes/public-corpus-20261116/repositories/nodejs--node--d3c4048962853bb12359682381001ab63dced4ce/source",
+    "license_id": "NOASSERTION",
+    "license_evidence": [
+      {
+        "path": "LICENSE",
+        "sha256": "3ebb7123f4d2b9b916338e11748380972d4339d66f54cb3258270f99bb62faf5"
+      },
+      {
+        "path": "tools/license-builder.sh",
+        "sha256": "d99a6173c7424ec5fd81662dda09cf4631769b16377dd7a0da6e762d51e2dc7e"
+      },
+      {
+        "path": "tools/license2rtf.mjs",
+        "sha256": "eafd5fcdda9c13a0b8e95dbdc5f293043735993b8f0a4c63ab235363c53fea1d"
+      }
+    ],
+    "github_metadata_license_is_not_per_file_audit": true,
+    "archive_sha256": "8f8e59e0828b6e4f0af5727b362704716bbbca5de7e6fbc69af567299e92cc03",
+    "archive_bytes": 148479866,
+    "stored_bytes": 531337319,
+    "inventory_sha256": "c09a5996877542333a81a3aa664331a71a50084ec398d26b087518050f0f088b",
+    "entries": 56698,
+    "language_occurrences": {
+      "markdown": 731,
+      "python": 574,
+      "javascript": 23419,
+      "html": 1519,
+      "typescript": 238,
+      "cpp": 14499,
+      "c": 3121,
+      "rust": 1132,
+      "css": 20
+    },
+    "executed_repository_code": false,
+    "frozen_unix": 1794840590.0125234
+  },
+  {
+    "repository_id": "github.com/nuxt/nuxt@19d4b899036215e60447c6b93224c4230e8d9ad7",
+    "repository_url": "https://github.com/nuxt/nuxt",
+    "repository_commit": "19d4b899036215e60447c6b93224c4230e8d9ad7",
+    "root": "/home/lucied/.cache/rag3db-banc-notes/public-corpus-20261116/repositories/nuxt--nuxt--19d4b899036215e60447c6b93224c4230e8d9ad7/source",
+    "license_id": "MIT",
+    "license_evidence": [
+      {
+        "path": "LICENSE",
+        "sha256": "947a111b1c5797180b92547c6498358fd812b0f133090844dae324eb3fb2efc7"
+      }
+    ],
+    "github_metadata_license_is_not_per_file_audit": true,
+    "archive_sha256": "49f246638156ebce272156dac4b18912e62ec522b7d9108e5e3b6d058dea7b15",
+    "archive_bytes": 6007908,
+    "stored_bytes": 9617019,
+    "inventory_sha256": "de63cde0e510f3c9b3c00be226ebf3523ac46603d5316fa27e4718100bd5c650",
+    "entries": 2728,
+    "language_occurrences": {
+      "markdown": 270,
+      "typescript": 1393,
+      "vue": 698,
+      "css": 21,
+      "javascript": 26,
+      "html": 9
+    },
+    "executed_repository_code": false,
+    "frozen_unix": 1794840825.3846705
+  },
+  {
+    "repository_id": "github.com/openssl/openssl@899d0ca02559e105b9cb30964e3478dfbd8c4578",
+    "repository_url": "https://github.com/openssl/openssl",
+    "repository_commit": "899d0ca02559e105b9cb30964e3478dfbd8c4578",
+    "root": "/home/lucied/.cache/rag3db-banc-notes/public-corpus-20261116/repositories/openssl--openssl--899d0ca02559e105b9cb30964e3478dfbd8c4578/source",
+    "license_id": "Apache-2.0",
+    "license_evidence": [
+      {
+        "path": "LICENSE.txt",
+        "sha256": "7d5450cb2d142651b8afa315b5f238efc805dad827d91ba367d8516bc9d49e7a"
+      }
+    ],
+    "github_metadata_license_is_not_per_file_audit": true,
+    "archive_sha256": "d81dbbfe8257b7519eaeaca160da4ba200eeca2139343a82dcccffc9e17982e2",
+    "archive_bytes": 56457228,
+    "stored_bytes": 71591765,
+    "inventory_sha256": "2d521d57c643ddf967628a55b319ba98ba7bae87b00573dd6d81061b86f2628b",
+    "entries": 6120,
+    "language_occurrences": {
+      "markdown": 108,
+      "c": 1699,
+      "cpp": 490,
+      "python": 11
+    },
+    "executed_repository_code": false,
+    "frozen_unix": 1794840651.1672993
+  },
+  {
+    "repository_id": "github.com/primer/css@d0cdad70d6c936501e9f8520212e00d0c4589f69",
+    "repository_url": "https://github.com/primer/css",
+    "repository_commit": "d0cdad70d6c936501e9f8520212e00d0c4589f69",
+    "root": "/home/lucied/.cache/rag3db-banc-notes/public-corpus-20261116/repositories/primer--css--d0cdad70d6c936501e9f8520212e00d0c4589f69/source",
+    "license_id": "MIT",
+    "license_evidence": [
+      {
+        "path": "LICENSE",
+        "sha256": "e2719fc6fd67f6d25fea6cc263509bc517460a554248a8b87426e06e51ea4984"
+      }
+    ],
+    "github_metadata_license_is_not_per_file_audit": true,
+    "archive_sha256": "413aa824121997a2ceddcce512477e39733d56e473c9a5c1b9e37aaceebd0a23",
+    "archive_bytes": 399697,
+    "stored_bytes": 1813306,
+    "inventory_sha256": "d55325a3a23e07197d37c3c680229f2d571ecfa0788e1b329aca8965aa8d0bac",
+    "entries": 292,
+    "language_occurrences": {
+      "markdown": 37,
+      "javascript": 45,
+      "html": 1,
+      "css": 2,
+      "mdx": 32,
+      "typescript": 16,
+      "scss": 113
+    },
+    "executed_repository_code": false,
+    "frozen_unix": 1794840749.016144
+  },
+  {
+    "repository_id": "github.com/protocolbuffers/protobuf@cf1e10c24b0f93df0e5c073fe49ae82c3740b7cf",
+    "repository_url": "https://github.com/protocolbuffers/protobuf",
+    "repository_commit": "cf1e10c24b0f93df0e5c073fe49ae82c3740b7cf",
+    "root": "/home/lucied/.cache/rag3db-banc-notes/public-corpus-20261116/repositories/protocolbuffers--protobuf--cf1e10c24b0f93df0e5c073fe49ae82c3740b7cf/source",
+    "license_id": "NOASSERTION",
+    "license_evidence": [
+      {
+        "path": "LICENSE",
+        "sha256": "6e5e117324afd944dcf67f36cf329843bc1a92229a8cd9bb573d7a83130fea7d"
+      }
+    ],
+    "github_metadata_license_is_not_per_file_audit": true,
+    "archive_sha256": "18d287327b65e7b4217aa45cdb860f7cf7f8dcb1c98ac3826354325aa40365e4",
+    "archive_bytes": 7958197,
+    "stored_bytes": 49263156,
+    "inventory_sha256": "ee741154c277ec7fb397fd8edcfa34d9ddc92a824bf60889801bde315df9a274",
+    "entries": 3756,
+    "language_occurrences": {
+      "markdown": 88,
+      "python": 105,
+      "cpp": 1219,
+      "rust": 126,
+      "csharp": 223,
+      "go": 4,
+      "c": 143
+    },
+    "executed_repository_code": false,
+    "frozen_unix": 1794840556.3739457
+  },
+  {
+    "repository_id": "github.com/quasarframework/quasar@8424c2b0dd2618c81ee401e355e790a23966ffc5",
+    "repository_url": "https://github.com/quasarframework/quasar",
+    "repository_commit": "8424c2b0dd2618c81ee401e355e790a23966ffc5",
+    "root": "/home/lucied/.cache/rag3db-banc-notes/public-corpus-20261116/repositories/quasarframework--quasar--8424c2b0dd2618c81ee401e355e790a23966ffc5/source",
+    "license_id": "MIT",
+    "license_evidence": [
+      {
+        "path": "LICENSE",
+        "sha256": "830424149e83c3b9caa4243c36e73ac1b024b501fea99f8a22138b86eedc8d47"
+      },
+      {
+        "path": "app-vite/LICENSE",
+        "sha256": "830424149e83c3b9caa4243c36e73ac1b024b501fea99f8a22138b86eedc8d47"
+      },
+      {
+        "path": "cli/LICENSE",
+        "sha256": "830424149e83c3b9caa4243c36e73ac1b024b501fea99f8a22138b86eedc8d47"
+      },
+      {
+        "path": "extras/LICENSE",
+        "sha256": "9b2ad806e5484fe6a5ea829e54d06227680fccef93d8be285ea566fd01ed8e72"
+      },
+      {
+        "path": "icongenie/LICENSE",
+        "sha256": "405f84ccd49fb65470418c42bc2e3c476d685d1a35858350cf13932f94b63621"
+      },
+      {
+        "path": "ui/LICENSE",
+        "sha256": "5eb081f51dbc5ac932691ad6be2a177cae80a8f5167ded6f55d683ba83914098"
+      },
+      {
+        "path": "vite-plugin/LICENSE",
+        "sha256": "417263743a9930e74ebba0818307388ceddd7bfc0819031f1640157256d2edaa"
+      }
+    ],
+    "github_metadata_license_is_not_per_file_audit": true,
+    "archive_sha256": "90c493df30cb15267f7e030b8521b9ce2216f4255f1c475cebfd5e311a26956f",
+    "archive_bytes": 29424420,
+    "stored_bytes": 31708911,
+    "inventory_sha256": "52f4d28abbaeeac2d88b6d5f32786a8c84f95610fb9d56a22a2cfd78afc763a2",
+    "entries": 4562,
+    "language_occurrences": {
+      "markdown": 385,
+      "javascript": 1705,
+      "typescript": 158,
+      "html": 18,
+      "vue": 1463,
+      "css": 121,
+      "scss": 12,
+      "sass": 111
+    },
+    "executed_repository_code": false,
+    "frozen_unix": 1794840827.7622218
+  },
+  {
+    "repository_id": "github.com/rust-lang/rust-analyzer@15d97b98eacfad690e81757e867ca0800f1c9e07",
+    "repository_url": "https://github.com/rust-lang/rust-analyzer",
+    "repository_commit": "15d97b98eacfad690e81757e867ca0800f1c9e07",
+    "root": "/home/lucied/.cache/rag3db-banc-notes/public-corpus-20261116/repositories/rust-lang--rust-analyzer--15d97b98eacfad690e81757e867ca0800f1c9e07/source",
+    "license_id": "Apache-2.0",
+    "license_evidence": [
+      {
+        "path": "LICENSE-APACHE",
+        "sha256": "62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a"
+      },
+      {
+        "path": "LICENSE-MIT",
+        "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3"
+      }
+    ],
+    "github_metadata_license_is_not_per_file_audit": true,
+    "archive_sha256": "92441cad5b8dd95cc8e7a6563b93e91eee90920f9eff96b86df3f081c01aab92",
+    "archive_bytes": 4110408,
+    "stored_bytes": 22158508,
+    "inventory_sha256": "d1e5e259c9da88deb3427bd7a5b6c32e266b58483ea8e8939ecb2b2e454c71ed",
+    "entries": 2389,
+    "language_occurrences": {
+      "markdown": 50,
+      "javascript": 1,
+      "rust": 1510,
+      "html": 36,
+      "typescript": 28,
+      "python": 1
+    },
+    "executed_repository_code": false,
+    "frozen_unix": 1794840650.8586812
+  },
+  {
+    "repository_id": "github.com/sass/sass-spec@acbdcd3914a2ebae45b99014e1dc827df8343946",
+    "repository_url": "https://github.com/sass/sass-spec",
+    "repository_commit": "acbdcd3914a2ebae45b99014e1dc827df8343946",
+    "root": "/home/lucied/.cache/rag3db-banc-notes/public-corpus-20261116/repositories/sass--sass-spec--acbdcd3914a2ebae45b99014e1dc827df8343946/source",
+    "license_id": "MIT",
+    "license_evidence": [
+      {
+        "path": "LICENSE",
+        "sha256": "d51e586775405c2734ca4c0b39cd70c5184a9011f880339a15f84690f479a106"
+      }
+    ],
+    "github_metadata_license_is_not_per_file_audit": true,
+    "archive_sha256": "f0812a0816d735a8d09a5f67f613c235a3f1dac3c7e355801e22fb23bc916306",
+    "archive_bytes": 1014642,
+    "stored_bytes": 6680262,
+    "inventory_sha256": "c454566aaa629bef4d52802d490a31f0f8009c30c204b4b1c65cbaadfe2e9414",
+    "entries": 3253,
+    "language_occurrences": {
+      "javascript": 5,
+      "markdown": 25,
+      "scss": 18,
+      "typescript": 88,
+      "css": 4
+    },
+    "executed_repository_code": false,
+    "frozen_unix": 1794840661.746311
+  },
+  {
+    "repository_id": "github.com/sveltejs/svelte@99c07450d2e093c0d637903dc2c94f28f264d70d",
+    "repository_url": "https://github.com/sveltejs/svelte",
+    "repository_commit": "99c07450d2e093c0d637903dc2c94f28f264d70d",
+    "root": "/home/lucied/.cache/rag3db-banc-notes/public-corpus-20261116/repositories/sveltejs--svelte--99c07450d2e093c0d637903dc2c94f28f264d70d/source",
+    "license_id": "MIT",
+    "license_evidence": [
+      {
+        "path": "LICENSE.md",
+        "sha256": "06257f4847b13a49a039efb17b944c141e71b12fd8d231b362d86919067d77a3"
+      }
+    ],
+    "github_metadata_license_is_not_per_file_audit": true,
+    "archive_sha256": "897edd0089fedf6164f17eaf4d1fa5d4ed2c5325790647cafaa5f210362cd25a",
+    "archive_bytes": 1974403,
+    "stored_bytes": 7310876,
+    "inventory_sha256": "d936434c0cd61fe3428488c36cb5c104ac5b94347bac919148bdb6d58f5d0746",
+    "entries": 9301,
+    "language_occurrences": {
+      "markdown": 149,
+      "javascript": 3500,
+      "svelte": 4623,
+      "html": 263,
+      "typescript": 86,
+      "css": 189
+    },
+    "executed_repository_code": false,
+    "frozen_unix": 1794840659.6487255
+  },
+  {
+    "repository_id": "github.com/tokio-rs/tokio@f3e855fa55d6c1cc3e7a28e115a421b8ee5860bd",
+    "repository_url": "https://github.com/tokio-rs/tokio",
+    "repository_commit": "f3e855fa55d6c1cc3e7a28e115a421b8ee5860bd",
+    "root": "/home/lucied/.cache/rag3db-banc-notes/public-corpus-20261116/repositories/tokio-rs--tokio--f3e855fa55d6c1cc3e7a28e115a421b8ee5860bd/source",
+    "license_id": "MIT",
+    "license_evidence": [
+      {
+        "path": "LICENSE",
+        "sha256": "253cd04c6714889df2d32f3f64d669179a1c95c76ac43c40882c52eb06bc3552"
+      },
+      {
+        "path": "tokio-macros/LICENSE",
+        "sha256": "0b83dc40cba89b9922bb84b0a9c7d2768ce37c1d7e138b7424fd4549915778c9"
+      },
+      {
+        "path": "tokio-stream/LICENSE",
+        "sha256": "253cd04c6714889df2d32f3f64d669179a1c95c76ac43c40882c52eb06bc3552"
+      },
+      {
+        "path": "tokio-test/LICENSE",
+        "sha256": "253cd04c6714889df2d32f3f64d669179a1c95c76ac43c40882c52eb06bc3552"
+      },
+      {
+        "path": "tokio-util/LICENSE",
+        "sha256": "253cd04c6714889df2d32f3f64d669179a1c95c76ac43c40882c52eb06bc3552"
+      },
+      {
+        "path": "tokio/LICENSE",
+        "sha256": "253cd04c6714889df2d32f3f64d669179a1c95c76ac43c40882c52eb06bc3552"
+      }
+    ],
+    "github_metadata_license_is_not_per_file_audit": true,
+    "archive_sha256": "89ba92d2272ec989875f0b4a4a130db40fadce7afa067698b41e181f46d53f37",
+    "archive_bytes": 1304751,
+    "stored_bytes": 6491185,
+    "inventory_sha256": "0b9f47a90008a528e59343e68b3f9902ac8113b37e9ab35038dedc1690c8cbbb",
+    "entries": 892,
+    "language_occurrences": {
+      "markdown": 29,
+      "rust": 816
+    },
+    "executed_repository_code": false,
+    "frozen_unix": 1794840652.1129045
+  },
+  {
+    "repository_id": "github.com/twbs/bootstrap@da71a1044296e82b047419f16a90ee0d6aa23886",
+    "repository_url": "https://github.com/twbs/bootstrap",
+    "repository_commit": "da71a1044296e82b047419f16a90ee0d6aa23886",
+    "root": "/home/lucied/.cache/rag3db-banc-notes/public-corpus-20261116/repositories/twbs--bootstrap--da71a1044296e82b047419f16a90ee0d6aa23886/source",
+    "license_id": "MIT",
+    "license_evidence": [
+      {
+        "path": "LICENSE",
+        "sha256": "bc0cd18d94c028f1c0b62ec9fdaddcb9921c1e07c29cf52dc7df8cca9daf2488"
+      }
+    ],
+    "github_metadata_license_is_not_per_file_audit": true,
+    "archive_sha256": "6000ea3f6808b27927e8b154e5b23f702baae3a20a182a9e5122e6dbab78f21d",
+    "archive_bytes": 14826762,
+    "stored_bytes": 26360486,
+    "inventory_sha256": "4516333e7ecec342caa026311181086eb9ef28b5193e3d9ca0986cec6323ac68",
+    "entries": 995,
+    "language_occurrences": {
+      "markdown": 30,
+      "javascript": 125,
+      "scss": 139,
+      "css": 33,
+      "typescript": 98,
+      "html": 17,
+      "mdx": 143
+    },
+    "executed_repository_code": false,
+    "frozen_unix": 1794840657.1857362
+  },
+  {
+    "repository_id": "github.com/vuetifyjs/vuetify@5f5faf5bb90cf43583cbb5126c54306536aee259",
+    "repository_url": "https://github.com/vuetifyjs/vuetify",
+    "repository_commit": "5f5faf5bb90cf43583cbb5126c54306536aee259",
+    "root": "/home/lucied/.cache/rag3db-banc-notes/public-corpus-20261116/repositories/vuetifyjs--vuetify--5f5faf5bb90cf43583cbb5126c54306536aee259/source",
+    "license_id": "NOASSERTION",
+    "license_evidence": [],
+    "github_metadata_license_is_not_per_file_audit": true,
+    "archive_sha256": "2626294b972fa4381baca843368c8cf5f27a2501916e4135dd12d894918a24ed",
+    "archive_bytes": 2761402,
+    "stored_bytes": 10621516,
+    "inventory_sha256": "27aeba36ac8b4a49e7b555cbec18b60627baea2b82e6e7b3e5bea9887dfc8953",
+    "entries": 3195,
+    "language_occurrences": {
+      "markdown": 262,
+      "javascript": 43,
+      "typescript": 902,
+      "html": 2,
+      "vue": 1311,
+      "scss": 133,
+      "sass": 156
+    },
+    "executed_repository_code": false,
+    "frozen_unix": 1794840655.5261273
+  }
+]

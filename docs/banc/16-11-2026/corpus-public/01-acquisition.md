@@ -31,3 +31,60 @@ Tirage à publier : seed fixe, rang SHA256(seed,repository_id,relative_path),
 strates production/test/documentation conservées, généré/tiers/invalides séparés.
 Déduplication par contenu pour compter, sans supprimer les couples de routage
 ou dialectes. Toutes les occurrences annexées ; sous-effectifs explicites.
+
+## Premier gel livré, puis lot complet local
+
+Gel01 : quatre dépôts, dont2500C# et2500Go sélectionnés sans attendre les autres.
+`selection-01/selected.jsonl` SHA256
+`6ab2b309e0365974d8ee59d6d1c442e7b2d78963659bfd20f225d83a764053b2`.
+Leurs archives n'ont pas de.git ; le contratCP accepte freeze.json, SHA archive,
+SHA inventaire et contrôle bytes/fichiers, sans git fictif.
+
+Gel local complet :24dépôts,633946116octets d'archives et1888331829octets
+stockés ;32382fichiers sélectionnés dans selection-02. ManifesteSHA256
+`96c2e771fefc4cd0e204975feb8d1c73b1a66815cb1d3a1edc1b9002b94b644c`.
+Les pins, licences et empreintes détaillés sont dans repository-freezes.json ;
+les dénominateurs, strates, dialectes et exclusions dans selection-02-summary.json.
+Aucune analyse de parsing n'a encore joué côtéBanc.
+
+| Cohorte | Fichiers sélectionnés |
+| --- | ---: |
+| C | 2500 |
+| C++ | 2500 |
+| C# | 2500 |
+| Go | 2500 |
+| JavaScript | 2500 |
+| Python | 2500 |
+| TypeScript | 2500 |
+| Rust | 2441 |
+| Vue | 2500 |
+| Markdown | 2500 |
+| CSS | 1041 |
+| SCSS | 1661 |
+| Sass, dialecte à qualifier | 267 |
+| MDX, dialecte à qualifier | 211 |
+| Svelte, limite d'initialisation | 2500 |
+| HTML, stub déclaré | 1761 |
+
+Les huit langues de code atteignent2–3k. Les sous-effectifs des façades restent
+explicites ; pas de duplication pour gonfler. Vue inclut1321fichiers de
+ documentation et540de test ; Svelte2498de test et2de production : ces
+compositions ne sont pas une preuve de couverture des applications réelles.
+
+184fichiers dépassent1MiB : dont16.cs,4.go,6.ts,12.js,3.c,5.cc,4.h,2.cpp,
+1.scss ; tous restent nommés dans les inventaires, sans analyse cachée. Les
+secrets/métadonnées exclus sont comptés1414, liens/spéciaux70, arbres de build
+ou dépendances1859. Les octets invalides, générés et tiers sont détaillés à part.
+
+La licence GitHubNOASSERTION ne bloque pas une lecture du vrai texte : NodeMIT
+sur lib et sous-arbres de tests relus, ProtobufBSD3 sur src/google/protobuf,
+curl selon SPDXcurl, VuetifyMIT limité à packages/vuetify. Périmètres et preuves
+hashées dans license-audit.json. Le dépôt demandé foundation/foundation-sites
+redirige aujourd'hui vers foundation/yeti avecFSL-1.1-MIT : gel conservé mais non
+sélectionné, pas licenceMIT inventée. Les docsVuetify sans preuve de portée ne
+sont pas incluses par défaut.
+
+CopiePC gel01 autorisée par C7 : mêmes chemins pour garder freeze.root inchangé,
+rsync2concurrents,24Mio/s chacun, ignore-existing, aucun delete ; vérifications
+archive/inventaire/fichiers/roots obligatoires avant READY. Cette section ne
+prétend pas la copie déjà vérifiée tant que son reçu n'est pas publié.

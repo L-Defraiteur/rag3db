@@ -1,0 +1,390 @@
+{
+  "seed": "rag3db-public-corpus-20261116-v1",
+  "repositories": 24,
+  "repository_pins": [
+    "github.com/curl/curl@2ba56e30f8ccd18c35a83761d51bcf04b32e829b",
+    "github.com/django/django@03158f2189346e35831586dfd0381e37eacb685d",
+    "github.com/dotnet/roslyn@c6dae7dd4f51cef1680c6b23ab614394d6989a69",
+    "github.com/element-plus/element-plus@3b5d0ad35b1d309a3430b49db9be1369f0966321",
+    "github.com/foundation/yeti@199661d950f0be216ab5c6263dd272e3afdac8bf",
+    "github.com/golang/go@3c6d0928959aa02598fa073f2747a1b563d3a852",
+    "github.com/grpc/grpc@e67d793e4c19c3715fa3370d760280cdf3943903",
+    "github.com/ionic-team/ionic-framework@a79e1a130b0213637c80910f2537b54d6b74b70d",
+    "github.com/material-components/material-components-web@6ceadb81df508ac08ab007c52c4d3dc1d811cc15",
+    "github.com/mdn/css-examples@65b08d2236b304d50d28a807a48c35f6889d902d",
+    "github.com/mdx-js/mdx@52285a6758fa078ec57f3d4bd8803d9cbfb12065",
+    "github.com/microsoft/vscode@6e68549edb69380c9316e49df5d3795d5064a2b0",
+    "github.com/nodejs/node@d3c4048962853bb12359682381001ab63dced4ce",
+    "github.com/nuxt/nuxt@19d4b899036215e60447c6b93224c4230e8d9ad7",
+    "github.com/openssl/openssl@899d0ca02559e105b9cb30964e3478dfbd8c4578",
+    "github.com/primer/css@d0cdad70d6c936501e9f8520212e00d0c4589f69",
+    "github.com/protocolbuffers/protobuf@cf1e10c24b0f93df0e5c073fe49ae82c3740b7cf",
+    "github.com/quasarframework/quasar@8424c2b0dd2618c81ee401e355e790a23966ffc5",
+    "github.com/rust-lang/rust-analyzer@15d97b98eacfad690e81757e867ca0800f1c9e07",
+    "github.com/sass/sass-spec@acbdcd3914a2ebae45b99014e1dc827df8343946",
+    "github.com/sveltejs/svelte@99c07450d2e093c0d637903dc2c94f28f264d70d",
+    "github.com/tokio-rs/tokio@f3e855fa55d6c1cc3e7a28e115a421b8ee5860bd",
+    "github.com/twbs/bootstrap@da71a1044296e82b047419f16a90ee0d6aa23886",
+    "github.com/vuetifyjs/vuetify@5f5faf5bb90cf43583cbb5126c54306536aee259"
+  ],
+  "selected_manifest_sha256": "96c2e771fefc4cd0e204975feb8d1c73b1a66815cb1d3a1edc1b9002b94b644c",
+  "roots_sha256": "98766ce80d550ec1f2ae1a75ba1f0394ac35b0101f4bf819855c0bb4bca495c6",
+  "occurrences_sha256": "2e9a0b9ae7f52c7e27f3c38153ead694dbde33cf058eb582f59a48f0b421a580",
+  "selected_files": 32382,
+  "selected_unique_content_sha256": 32366,
+  "cohorts": {
+    "c": {
+      "admissible_occurrences": 3017,
+      "unique_route_dialect_contents": 3010,
+      "selected": 2500,
+      "selected_unique_sha256": 2500,
+      "strata": {
+        "production": 1800,
+        "test": 551,
+        "documentation": 149
+      },
+      "dialects": {
+        "c": 2500
+      },
+      "intentionally_invalid_candidates": 1,
+      "under_target": false
+    },
+    "cpp": {
+      "admissible_occurrences": 5314,
+      "unique_route_dialect_contents": 5299,
+      "selected": 2500,
+      "selected_unique_sha256": 2500,
+      "strata": {
+        "production": 1857,
+        "test": 642,
+        "documentation": 1
+      },
+      "dialects": {
+        "cc": 1048,
+        "h": 1444,
+        "cpp": 8
+      },
+      "intentionally_invalid_candidates": 0,
+      "under_target": false
+    },
+    "csharp": {
+      "admissible_occurrences": 18297,
+      "unique_route_dialect_contents": 17724,
+      "selected": 2500,
+      "selected_unique_sha256": 2500,
+      "strata": {
+        "production": 1804,
+        "test": 690,
+        "documentation": 6
+      },
+      "dialects": {
+        "cs": 2500
+      },
+      "intentionally_invalid_candidates": 2,
+      "under_target": false
+    },
+    "css": {
+      "admissible_occurrences": 1084,
+      "unique_route_dialect_contents": 1041,
+      "selected": 1041,
+      "selected_unique_sha256": 1041,
+      "strata": {
+        "production": 759,
+        "test": 274,
+        "documentation": 8
+      },
+      "dialects": {
+        "css": 1041
+      },
+      "intentionally_invalid_candidates": 0,
+      "under_target": true
+    },
+    "go": {
+      "admissible_occurrences": 10431,
+      "unique_route_dialect_contents": 10274,
+      "selected": 2500,
+      "selected_unique_sha256": 2500,
+      "strata": {
+        "production": 1800,
+        "test": 615,
+        "documentation": 85
+      },
+      "dialects": {
+        "go": 2500
+      },
+      "intentionally_invalid_candidates": 0,
+      "under_target": false
+    },
+    "html": {
+      "admissible_occurrences": 1922,
+      "unique_route_dialect_contents": 1761,
+      "selected": 1761,
+      "selected_unique_sha256": 1761,
+      "strata": {
+        "production": 753,
+        "test": 995,
+        "documentation": 13
+      },
+      "dialects": {
+        "html": 1761
+      },
+      "intentionally_invalid_candidates": 2,
+      "under_target": true
+    },
+    "javascript": {
+      "admissible_occurrences": 11846,
+      "unique_route_dialect_contents": 11431,
+      "selected": 2500,
+      "selected_unique_sha256": 2500,
+      "strata": {
+        "production": 1800,
+        "test": 500,
+        "documentation": 200
+      },
+      "dialects": {
+        "js": 2373,
+        "mjs": 84,
+        "cjs": 11,
+        "jsx": 32
+      },
+      "intentionally_invalid_candidates": 10,
+      "under_target": false
+    },
+    "markdown": {
+      "admissible_occurrences": 3486,
+      "unique_route_dialect_contents": 3438,
+      "selected": 2500,
+      "selected_unique_sha256": 2500,
+      "strata": {
+        "documentation": 2500
+      },
+      "dialects": {
+        "md": 2500
+      },
+      "intentionally_invalid_candidates": 0,
+      "under_target": false
+    },
+    "mdx": {
+      "admissible_occurrences": 211,
+      "unique_route_dialect_contents": 211,
+      "selected": 211,
+      "selected_unique_sha256": 211,
+      "strata": {
+        "documentation": 211
+      },
+      "dialects": {
+        "mdx": 211
+      },
+      "intentionally_invalid_candidates": 0,
+      "under_target": true
+    },
+    "python": {
+      "admissible_occurrences": 4847,
+      "unique_route_dialect_contents": 2972,
+      "selected": 2500,
+      "selected_unique_sha256": 2500,
+      "strata": {
+        "production": 1075,
+        "test": 1418,
+        "documentation": 7
+      },
+      "dialects": {
+        "py": 2493,
+        "pyi": 7
+      },
+      "intentionally_invalid_candidates": 10,
+      "under_target": false
+    },
+    "rust": {
+      "admissible_occurrences": 2444,
+      "unique_route_dialect_contents": 2441,
+      "selected": 2441,
+      "selected_unique_sha256": 2441,
+      "strata": {
+        "production": 2029,
+        "test": 410,
+        "documentation": 2
+      },
+      "dialects": {
+        "rs": 2441
+      },
+      "intentionally_invalid_candidates": 2,
+      "under_target": false
+    },
+    "sass": {
+      "admissible_occurrences": 267,
+      "unique_route_dialect_contents": 267,
+      "selected": 267,
+      "selected_unique_sha256": 267,
+      "strata": {
+        "production": 263,
+        "documentation": 4
+      },
+      "dialects": {
+        "sass": 267
+      },
+      "intentionally_invalid_candidates": 0,
+      "under_target": true
+    },
+    "scss": {
+      "admissible_occurrences": 1728,
+      "unique_route_dialect_contents": 1661,
+      "selected": 1661,
+      "selected_unique_sha256": 1661,
+      "strata": {
+        "production": 1552,
+        "test": 86,
+        "documentation": 23
+      },
+      "dialects": {
+        "scss": 1661
+      },
+      "intentionally_invalid_candidates": 0,
+      "under_target": true
+    },
+    "svelte": {
+      "admissible_occurrences": 4622,
+      "unique_route_dialect_contents": 4371,
+      "selected": 2500,
+      "selected_unique_sha256": 2500,
+      "strata": {
+        "production": 2,
+        "test": 2498
+      },
+      "dialects": {
+        "svelte": 2500
+      },
+      "intentionally_invalid_candidates": 64,
+      "under_target": false
+    },
+    "typescript": {
+      "admissible_occurrences": 21235,
+      "unique_route_dialect_contents": 21139,
+      "selected": 2500,
+      "selected_unique_sha256": 2500,
+      "strata": {
+        "production": 1800,
+        "test": 601,
+        "documentation": 99
+      },
+      "dialects": {
+        "ts": 2369,
+        "tsx": 131
+      },
+      "intentionally_invalid_candidates": 1,
+      "under_target": false
+    },
+    "vue": {
+      "admissible_occurrences": 3258,
+      "unique_route_dialect_contents": 3170,
+      "selected": 2500,
+      "selected_unique_sha256": 2500,
+      "strata": {
+        "production": 639,
+        "test": 540,
+        "documentation": 1321
+      },
+      "dialects": {
+        "vue": 2500
+      },
+      "intentionally_invalid_candidates": 4,
+      "under_target": false
+    }
+  },
+  "excluded": {
+    "markdown:outside_reviewed_license_scope": 597,
+    "c:outside_reviewed_license_scope": 246,
+    "c:generated_separate": 2,
+    "cpp:outside_reviewed_license_scope": 1151,
+    "markdown:third_party_separate": 504,
+    "css:third_party_separate": 14,
+    "javascript:third_party_separate": 13032,
+    "css:invalid_utf8": 6,
+    "csharp:generated_separate": 74,
+    "csharp:invalid_utf8": 1,
+    "csharp:third_party_separate": 19,
+    "markdown:license_unresolved": 136,
+    "javascript:license_unresolved": 126,
+    "css:license_unresolved": 71,
+    "html:license_unresolved": 120,
+    "go:generated_separate": 584,
+    "go:third_party_separate": 980,
+    "html:third_party_separate": 130,
+    "c:third_party_separate": 3122,
+    "javascript:generated_separate": 76,
+    "python:generated_separate": 1023,
+    "cpp:third_party_separate": 14106,
+    "python:third_party_separate": 410,
+    "typescript:generated_separate": 997,
+    "markdown:generated_separate": 2,
+    "html:generated_separate": 1,
+    "python:outside_reviewed_license_scope": 265,
+    "javascript:outside_reviewed_license_scope": 4428,
+    "html:outside_reviewed_license_scope": 1357,
+    "typescript:outside_reviewed_license_scope": 193,
+    "typescript:third_party_separate": 109,
+    "rust:third_party_separate": 1132,
+    "javascript:invalid_utf8": 4,
+    "html:invalid_utf8": 39,
+    "css:outside_reviewed_license_scope": 11,
+    "cpp:generated_separate": 45,
+    "rust:outside_reviewed_license_scope": 126,
+    "csharp:outside_reviewed_license_scope": 178,
+    "go:outside_reviewed_license_scope": 4,
+    "rust:generated_separate": 4,
+    "scss:invalid_utf8": 10,
+    "svelte:third_party_separate": 1,
+    "css:generated_separate": 8,
+    "vue:outside_reviewed_license_scope": 1303,
+    "scss:outside_reviewed_license_scope": 1
+  },
+  "parser_executed": false,
+  "acquisition_exclusions": {
+    "secret_or_git_metadata_not_read": 1414,
+    "file_above_1MiB": 184,
+    "symlink_or_special_not_followed": 70,
+    "build_or_dependency_tree": 1859
+  },
+  "oversize_by_extension": {
+    ".cs": 16,
+    ".txt": 21,
+    ".xlf": 1,
+    ".ildump": 1,
+    ".winmd": 1,
+    ".vb": 4,
+    ".json": 4,
+    ".dic": 1,
+    ".go": 4,
+    ".syso": 3,
+    ".base64": 1,
+    ".html": 1,
+    ".yaml": 1,
+    ".otf": 1,
+    ".woff2": 5,
+    ".mp4": 1,
+    ".webm": 1,
+    ".png": 2,
+    ".tiff": 3,
+    ".nupkg": 2,
+    ".tiktoken": 2,
+    ".ts": 6,
+    ".xpm": 1,
+    ".bmp": 1,
+    ".webp": 2,
+    ".js": 12,
+    ".bz2": 1,
+    ".pm": 56,
+    ".s": 4,
+    ".asm": 2,
+    ".c": 3,
+    ".cc": 5,
+    ".h": 4,
+    ".cpp": 2,
+    ".def": 6,
+    ".avif": 1,
+    ".scss": 1,
+    ".hrx": 1
+  },
+  "archive_bytes": 633946116,
+  "stored_bytes": 1888331829
+}
