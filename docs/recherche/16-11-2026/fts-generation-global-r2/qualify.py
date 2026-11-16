@@ -2,10 +2,11 @@
 """Proposed default canonical pass. Exact C7 GO plus a fresh Embar receipt required."""
 from pathlib import Path
 import uuid
+import global_services_owner as global_owner
 import lifecycle_protocol as ready_protocol
 import lifecycle_provider_observation as owner_observation
 import argparse,hashlib,importlib.util,json,math,os,re,shutil,signal,socket,stat,subprocess,sys,time,urllib.request
-R=Path.home()/'.cache/rag3weaver-build';Q=R/'cx-control-recherche-fts-generation-global-v2';P=R/'cx-proofs-recherche-fts-generation-global-v2';S=R/'cx-scope-recherche-fts-generation-global-v2'
+R=Path.home()/'.cache/rag3weaver-build';Q=R/'cx-control-recherche-fts-generation-global-v3';P=R/'cx-proofs-recherche-fts-generation-global-v3';S=R/'cx-scope-recherche-fts-generation-global-v3'
 APP='84ddeb88b7452278b0d697fad817c7e44f5fd3d3';BASE='b0a845bb4877328eada37951c174e3d208986630'
 W=Path.home()/'git_workspaces/rag3db-cx-recherche-fts-generation-root-global-r1';OLD=R/'cx-wt-recherche-fts-fixture-root-source-v1';OLD_SHA=APP;T=R/'cx-target-recherche-fts-counts-freshness'
 ARCHIVE=R/'cx-archive-recherche-fts-fixture-root-green-v1';MANIFEST='ee0e1cde90660c9e210c60e3902f1c4ae3809990fca51fd722b92761fc1d101d'
@@ -81,15 +82,41 @@ def provider_stable(row,hash_exe=False):
  else:
   fields=(p/'stat').read_text().rsplit(') ',1)[1].split()
   assert fields[19]==row['start'] and fields[0] in ['R','S','D','I'] and p.stat().st_uid==row['uid']==os.getuid() and os.readlink(p/'exe')==row['exe']
-def health(grant,label,end):
- assert time.monotonic()<end-15;result=[]
- for row in grant['providers']:
-  provider_stable(row,True)
-  with urllib.request.urlopen('http://'+row['address']+'/sante',timeout=min(5,end-time.monotonic()-15)) as response:
-   assert response.status==200;raw=response.read(1048577)
-  assert len(raw)<=1048576;data=json.loads(raw);save(P,label+'-'+row['address'].rsplit(':',1)[1]+'.json',data)
-  for key,value in row['identity'].items():assert data.get(key)==value
-  assert data.get('usage')=={'baux':0,'en_cours':0};provider_stable(row,True);result.append(data)
+def owner_pins(grant,ready):
+ pins=grant['owner_pins']
+ canonical=json.dumps(pins,sort_keys=True,separators=(',',':'),allow_nan=False).encode()
+ assert hashlib.sha256(canonical).hexdigest()==grant['owner_pins_sha256']
+ for key,value in [('app',APP),('pilot',ready['pilot']),('scope',ready['scope']),('nonce',ready['nonce']),('ready_path',str(P/'READY_FOR_SERVICES.json')),('ready_sha256',sha(P/'READY_FOR_SERVICES.json')),('c7_reference',ready['c7_reference'])]:assert pins[key]==value
+ for key,name in [('protocol_sha256','lifecycle_protocol.py'),('process_module_sha256','lifecycle_provider_observation.py'),('owner_sha256','global_services_owner.py')]:assert pins[key]==sha(Q/name)
+ assert len(pins['providers'])==2 and {v['address'] for v in pins['providers']}=={v['address'] for v in grant['providers']}
+ for pinned in pins['providers']:
+  row=next(v for v in grant['providers'] if v['address']==pinned['address'])
+  assert row['identity']==pinned['identity']
+  for key in ['pid','uid','start','exe','exe_sha256']:assert row[key]==pinned['process'][key]
+ return pins
+
+def health(grant,label,end,*,ready,admission):
+ pins=owner_pins(grant,ready);result=[];lease_end=min(end,grant['valid_until_monotonic'])
+ for provider in pins['providers']:
+  evidence=dict(address=provider['address'],admission=admission);failure=None
+  try:
+   snapshot=ready_protocol.read_phase_state(ready);now=time.monotonic()
+   if admission:ready_protocol.validate_ready_phase(ready,now,snapshot)
+   else:ready_protocol.validate_phase_authority(ready,now,snapshot)
+   assert now<lease_end<=ready['deadline']
+   data=global_owner.health_observation(ready,pins,provider,evidence,admission=admission,lease_end=lease_end)
+   snapshot=ready_protocol.read_phase_state(ready);now=time.monotonic()
+   if admission:ready_protocol.validate_ready_phase(ready,now,snapshot)
+   else:ready_protocol.validate_phase_authority(ready,now,snapshot)
+   assert now<lease_end
+   result.append(data)
+  except BaseException as error:
+   failure=error;evidence['consumer_refusal_type']=type(error).__name__;raise
+  finally:
+   try:save(P,label+'-'+provider['address'].rsplit(':',1)[1]+'.json',evidence)
+   except BaseException as publication_error:
+    if failure is not None:raise failure from publication_error
+    raise
  return result
 
 def driver():
@@ -125,11 +152,10 @@ def driver():
  snapshot=ready_protocol.read_phase_state(ready);ready_protocol.validate_ready_phase(ready,time.monotonic(),snapshot)
  save(P,'services-receipt.json',grant)
  snapshot=ready_protocol.read_phase_state(ready);ready_protocol.validate_ready_phase(ready,time.monotonic(),snapshot)
- health(grant,'services-before',min(end,ready['grant_deadline_monotonic']))
+ health(grant,'services-before',end,ready=ready,admission=True)
  snapshot=ready_protocol.read_phase_state(ready);ready_protocol.validate_ready_phase(ready,time.monotonic(),snapshot)
- # Only protocol availability is observed here; canonical SQL tests own their assertions.
- with socket.create_connection(('127.0.0.1',5433),timeout=min(5,end-time.monotonic()-15)) as pg:pg.sendall(bytes.fromhex('0000000804d2162f'));answer=pg.recv(1)
- assert answer in [b'N',b'S'];save(P,'postgres-protocol.json',dict(response=answer.decode(),sql_executed=False,identity_claim='fresh Embar receipt, not independently inferred from protocol'))
+ # No second PostgreSQL contact: the owner validates the exact SQL-RO/topology/
+ # exclusive-reservation artefact before the grant and again before each health.
  snapshot=ready_protocol.read_phase_state(ready);ready_protocol.validate_phase_authority(ready,time.monotonic(),snapshot)
  guard(cfg);official=P/'official';official.mkdir();argv=['bash',str(Q/'passe_epinglee.sh'),W.name,str(official.relative_to(R)),WITNESS]
  save(P,'canonical-ledger.json',dict(app=APP,pilot=cfg['pilot'],base=BASE,argv=argv,script_sha256=PIN,cache_owner=str(C),services_receipt_sha256=sha(P/'services-receipt.json'),expected_before_script_environment={k:v for k,v in env.items() if k!='RAG3WEAVER_VALIDATION_JETON'},required_suites=required,sdk=SO,compiled_elf_attested_before_tests=False))
@@ -160,9 +186,9 @@ def driver():
  summary=(official/'resume.log').read_text();assert summary.splitlines()[-1]=='VERT' and (official/'base').read_text().strip()==BASE
  assert 'suites réduites' not in summary and all('== '+name in summary for name in REQUIRED)
  for name in ['temoins',*REQUIRED,'lib','navigateur']:assert re.search(r'test result: ok\.',(official/(name+'.log')).read_text(errors='replace'))
- assert (official/'check_features.log').read_text().splitlines()[-1]=='CHECK_FEATURES VERT'
+ assert (official/'check_features.log').read_text().splitlines()[-1]=='CHECK_FEATURES VERT 8/8'
  assert 'preuve : rag3weaver revérifié' in summary and '== témoins navigateur' in summary
- health(grant,'services-after',end);guard(cfg);assert time.monotonic()<end-10
+ health(grant,'services-after',end,ready=ready,admission=False);guard(cfg);assert time.monotonic()<end-10
  save(P,'driver-result.json',dict(status='CANONICAL_PASSED',app=APP,deadline=end,services_unchanged=True,canonical_summary=str(official/'resume.log'),baseline_old_master_qualified=False))
 def outer_command(cfg):return [str(Q/'poste'),'lourd',cfg['timeout'],'--signal=TERM','--kill-after=2s','5998s',sys.executable,str(Q/'qualify.py'),'--compose']
 def run_outer(cfg,env):
@@ -197,7 +223,7 @@ def launch(args):
  cp=W/'extension/rag3weaver/codeparsers';expected=git(W,'ls-tree',APP,'extension/rag3weaver/codeparsers').split()[2];assert (cp/'Cargo.toml').is_file() and git(cp,'rev-parse','HEAD')==expected and not git(cp,'status','--porcelain')
  assert not any(p.exists() or p.is_symlink() for p in [P,S])
  contract=cache_contract();Q.mkdir(mode=0o700,exist_ok=True);assert Q.resolve()==Q and Q.stat().st_uid==os.getuid()
- sources={'qualify.py':Path(__file__),'lifecycle_protocol.py':Path(__file__).parent/'lifecycle_protocol.py','services-contract.json':Path(__file__).parent/'services-contract.json','lifecycle_grant_producer.py':Path(__file__).parent/'lifecycle_grant_producer.py','lifecycle_provider_observation.py':Path(__file__).parent/'lifecycle_provider_observation.py','base_controller.py':control/'docs/recherche/16-11-2026/fts-fixture-root-green/qualify.py','passe_epinglee.sh':W/'tools/poste/passe_epinglee.sh'}
+ sources={'qualify.py':Path(__file__),'lifecycle_protocol.py':Path(__file__).parent/'lifecycle_protocol.py','services-contract.json':Path(__file__).parent/'services-contract.json','global_services_owner.py':Path(__file__).parent/'global_services_owner.py','lifecycle_grant_producer.py':Path(__file__).parent/'lifecycle_grant_producer.py','lifecycle_provider_observation.py':Path(__file__).parent/'lifecycle_provider_observation.py','base_controller.py':control/'docs/recherche/16-11-2026/fts-fixture-root-green/qualify.py','passe_epinglee.sh':W/'tools/poste/passe_epinglee.sh'}
  for name in ['confiner_validation.py','poste','garde_target.sh']:sources[name]=W/'extension/rag3weaver/scripts'/name
  for name,path in sources.items():
   dest=Q/name
