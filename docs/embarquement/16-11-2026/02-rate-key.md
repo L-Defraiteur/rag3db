@@ -48,6 +48,15 @@ française d'avancement parsée par l'hôte. Aucun changement de `index_nodes.rs
 aucun étalonnage ni mesure par passe, aucune table textes/s/date dans ce lot.
 Le seuil de six secondes et la politique des vues restent aux porteurs dédiés.
 
+La provenance est lue après la mesure : c'est celle de la prise courante à cet
+instant, pas une attestation atomique des fournisseurs qui auraient servi un
+lot ou une indexation entière. La répartition et le débit par passe restent
+hors de cette tranche ; aucune précision plus forte n'est revendiquée.
+
+Revue mémoire en lecture seule du code produit e0c5dbfdd2 : favorable au
+contrat de clé et à la compatibilité, sans défaut bloquant établi. Aucun Cargo,
+test ou service utilisé par cette revue ; compilation toujours non établie.
+
 ## Preuve et qualification à venir
 
 Les trois rouges hérités sont préservés avec leur commit et le journal PC
