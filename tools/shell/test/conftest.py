@@ -4,6 +4,7 @@ import hashlib
 import os
 import shutil
 import subprocess
+import tempfile
 
 import pexpect
 import pytest
@@ -111,7 +112,17 @@ class ShellTest:
 
     # Test Running methods
 
+    def own_history(self) -> None:
+        """Without `-p` the shell reads and writes history.txt in its working directory, else the user's
+        ~/.rag3db/history.txt; a test that names none gets a new, empty history of its own."""
+        if not any(a in ("-p", "--path_history") or str(a).startswith("--path_history=") for a in self.arguments):
+            # Right after the executable: a test that ends on a flag without its value (`-m`) must still see it so.
+            # Held by the instance: the directory goes with it, nothing piles up under /tmp.
+            self.history_dir = tempfile.TemporaryDirectory(prefix="rag3db-shell-test-")
+            self.arguments[1:1] = ["-p", self.history_dir.name]
+
     def get_command(self, cmd: str) -> list[str]:
+        self.own_history()
         command = self.arguments
         if self.input:
             command += [cmd]
@@ -168,6 +179,7 @@ class ShellTest:
         return TestResult(stdout, stderr, res.returncode)
 
     def start(self) -> None:
+        self.own_history()
         command = " ".join(self.arguments)
 
         my_env = os.environ.copy()
