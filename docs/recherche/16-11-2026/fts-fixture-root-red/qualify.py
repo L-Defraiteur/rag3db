@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Short negative fixture probe only; no Cargo/GDB/database/service operation."""
 from pathlib import Path
-import argparse,hashlib,importlib.util,json,os,re,shutil,signal,subprocess,sys,time
+import argparse,hashlib,importlib.util,json,os,re,shutil,signal,stat,subprocess,sys,time
 R=Path.home()/'.cache/rag3weaver-build';Q=R/'cx-control-recherche-fts-fixture-root-red-v1';P=R/'cx-proofs-recherche-fts-fixture-root-red-v1';S=R/'cx-scope-recherche-fts-fixture-root-red-v1'
 SOURCE=R/'cx-wt-recherche-fts-generation-guard-source-v1';APP='bc9526408ea3a48320b4a27e7644075dcf7307b0';C=SOURCE/'extension/rag3weaver'
 A=R/'cx-archive-recherche-fts-generation-guard-v1';MANIFEST='57fbd0280d3c46452366eb546ad3d7dedac484051e60ea859b59b2e60e9deb3c';ELF=A/'proofs/unit-tests';ELF_SHA='b23414d3742f7d8f1b2a230d72b2d91df187926375c1389f90b05ad277458c19'
@@ -18,6 +18,8 @@ def module(name):
 def guard(cfg):
  assert git(SOURCE,'rev-parse','HEAD')==APP and not git(SOURCE,'status','--porcelain')
  assert git(cfg['control'],'rev-parse','HEAD')==cfg['pilot'] and not git(cfg['control'],'status','--porcelain')
+ assert all(path.resolve()==path for path in [SOURCE,C,A,ELF,Q])
+ assert stat.S_ISREG(ELF.lstat().st_mode) and ELF.stat().st_uid==os.getuid()
  assert sha(A/'manifest.json')==MANIFEST and sha(ELF)==ELF_SHA
  manifest=json.loads((A/'manifest.json').read_text());ledger=json.loads((A/'proofs/ledger.json').read_text())
  assert ledger['app']==APP and ledger['elf_sha256']==ELF_SHA and ledger['names'].count(NAME)==1
@@ -65,7 +67,7 @@ def compose():
 
 def launch(args):
  root=Path(__file__).resolve().parents[4];assert os.uname().nodename.lower()=='luciepc' and git(root,'rev-parse','HEAD')==args.pilot and not git(root,'status','--porcelain') and not any(p.exists() or p.is_symlink() for p in [P,S])
- Q.mkdir(mode=0o700,exist_ok=True);sources={'qualify.py':Path(__file__),'base_controller.py':root/'docs/recherche/16-11-2026/fts-generation-guard/qualify.py','confiner_validation.py':C/'scripts/confiner_validation.py','poste':C/'scripts/poste'}
+ Q.mkdir(mode=0o700,exist_ok=True);assert Q.resolve()==Q and Q.stat().st_uid==os.getuid();sources={'qualify.py':Path(__file__),'base_controller.py':root/'docs/recherche/16-11-2026/fts-generation-guard/qualify.py','confiner_validation.py':C/'scripts/confiner_validation.py','poste':C/'scripts/poste'}
  for n,path in sources.items():
   dest=Q/n
   if dest.exists():assert not dest.is_symlink() and sha(dest)==sha(path)
