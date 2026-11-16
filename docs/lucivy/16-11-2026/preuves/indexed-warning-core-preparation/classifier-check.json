@@ -1,0 +1,7 @@
+{
+  "tests": 3,
+  "failures": 0,
+  "errors": 0,
+  "scope": "AST-extracted pure classifier only; no proc scan/test binary/Cargo",
+  "first_harness_attempt": "three NameError: classify alias missing in temporary harness; alias corrected, pilot unchanged"
+}

@@ -175,3 +175,38 @@ aucune extraction ni Cargo. ULP/corpus7.2 toujours en attente.
 Banc RO favorablebornée3068ad7 : 28hashes conformes, 3exacts verts ; nuance
 UNKNOWN12entrée/**13posttests**/12final tous nonattribués. Pas de rehashELF
 ni nouveau run par Banc. Ticket reste ouvert ; lucivy porte la suite, C7 le GO.
+
+Admission PREPA C7 reçue : Linux2.6.0 archive4d0299 et clone1b22409 admis
+pour corewarnings seul ; copies privées/nonce/SHA/licence/sous-ensembles,
+originaux RO, pas lecture.env/.vault et pas Cargo avant GO distinct.
+Audit statique suivant : bench_vs_tantivy est un test par défaut, chemins
+persistants /home/luciedefraiteur codés en dur, réemploi d’index existants et
+remove_locks récursif ; impossible de le qualifier ici par racine privée via
+les options existantes. À garder HOLD explicite, pas de lancement/skipvert.
+Autre prérequis : test_luce_playground_search retourne avec messageSkipping
+si playground/dataset.luce absent. Vérifier ce fichier exact sans substitution
+de snapshot. Recette et pilote doivent rendre ces absences nonqualifiées.
+
+Préparation corpus admise effectuée sans Cargo : Qcore-v1nonce
+e14c4d52ea84cbb255feeb63679cfcb3, 15007 fichiers Linux2.6.0 sous racine
+privée réelle /tmp/lucivy-cmp, 8507 blobs publics réguliers du clone1b22409
+sousQ/corpora/rag3db. Archive originale hashée avant/aprèsinchangée ; cloneHEAD
+inchangé, seules lectures d’objets suivis permis. .env/.vault/symlinks/gitlinks
+exclus avant lecture des blobs. Licences/manifeste complet/sous-ensembles conservés.
+Écarts de profil reliés au ticket distinct
+`2026-11-16-le-profil-core-par-defaut-inclut-des-diagnostics-non-isoles.md` :
+9targets HOLD proposés ; pas de fauxcorecomplet.
+
+Paquet PC Qcore-v1 préparé, préflight23dd3516 ; recette08 publiée avec
+commande littérale1800s/32G/HIGHmax/jquota<=4. APP890/piloteSHA2fa59faafe18/
+admission3cde2f1e, Common6439/poste79e3 inchangés ; Tunique et ELFvertd101
+réemployés knownowner, reçuvertTERMINE, scanspartiels12puis13UNKNOWNnonattribués
+conservés. Manifestes complets Linuxd4faf3/clonebb7089 rehashés après copie ;
+licences et sous-ensembles300/400 archivés. Zéro Cargo/ELF lancé, scope/logs
+absents. 9targetsHOLD déclarés et ignorés nonqualifiés ; jamais coreentiervert.
+Reste RO paquet/pilote puis GOdistinct C7 pour profil adapté, ou arbitrage
+supplémentaire sur les trous. Critère de fin conserve ces limites explicites.
+
+Action de relecture portée par banc : RO uniquement du paquet de préparation,
+manifestes/empreintes, pilote/admission/échéance et neufHOLD ; aucunrun/Cargo/ELF,
+aucunscan de base/service. Retour attendu lié à ce ticket avant GO C7 distinct.

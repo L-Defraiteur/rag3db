@@ -1,0 +1,1704 @@
+{
+  "source": "890c86af44989f3fea6c6fa62fd40d688b4084df",
+  "scope": "regex source inventory; compiled cfg and full names require ELF --list after GO",
+  "tests": [
+    {
+      "file": "tests/acid_postgres.rs",
+      "line": 144,
+      "name": "test_acid_sharded_postgres_create_reopen_search",
+      "ignored": true
+    },
+    {
+      "file": "tests/acid_postgres.rs",
+      "line": 238,
+      "name": "test_acid_blobs_in_postgres",
+      "ignored": true
+    },
+    {
+      "file": "tests/acid_postgres.rs",
+      "line": 282,
+      "name": "test_acid_crash_recovery",
+      "ignored": true
+    },
+    {
+      "file": "tests/acid_postgres.rs",
+      "line": 338,
+      "name": "test_distributed_search_two_nodes_postgres",
+      "ignored": true
+    },
+    {
+      "file": "tests/acid_postgres.rs",
+      "line": 500,
+      "name": "test_bm25_scores_identical_across_shard_counts",
+      "ignored": true
+    },
+    {
+      "file": "tests/acid_postgres.rs",
+      "line": 670,
+      "name": "test_distributed_bm25_ground_truth",
+      "ignored": true
+    },
+    {
+      "file": "tests/bench_dict_compaction.rs",
+      "line": 14,
+      "name": "bench_dict_compaction",
+      "ignored": true
+    },
+    {
+      "file": "tests/bench_docstore_fetch.rs",
+      "line": 44,
+      "name": "bench_docstore_fetch",
+      "ignored": true
+    },
+    {
+      "file": "tests/bench_docstore_fetch.rs",
+      "line": 162,
+      "name": "bench_sharded_fetch_docs",
+      "ignored": true
+    },
+    {
+      "file": "tests/test_acid_blob_v3.rs",
+      "line": 65,
+      "name": "v3_blob_storage_create_reopen_search",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_acid_blob_v3.rs",
+      "line": 120,
+      "name": "v3_blob_storage_lazy_open_matches_eager",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_acid_blob_v3.rs",
+      "line": 197,
+      "name": "v3_drop_index_leaves_nothing",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_acid_blob_v3.rs",
+      "line": 238,
+      "name": "v3_close_means_no_more_store_calls",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_acid_blob_v3.rs",
+      "line": 317,
+      "name": "lazy_open_with_a_store_that_cannot_size_blobs_does_not_deadlock",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_apostrophe_and_unknown_keys.rs",
+      "line": 39,
+      "name": "both_apostrophes_find_each_other",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_apostrophe_and_unknown_keys.rs",
+      "line": 61,
+      "name": "unknown_query_keys_are_named_by_the_warnings",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_check_dictionary.rs",
+      "line": 49,
+      "name": "a_healthy_index_needs_no_rebuild",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_check_dictionary.rs",
+      "line": 65,
+      "name": "an_index_without_shard_dictionary_is_not_concerned",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_check_dictionary.rs",
+      "line": 81,
+      "name": "lost_words_are_counted_and_call_for_a_rebuild",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_check_dictionary.rs",
+      "line": 106,
+      "name": "a_sharded_index_is_checked_shard_by_shard",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_check_dictionary.rs",
+      "line": 129,
+      "name": "the_saved_index_shows_its_lost_words",
+      "ignored": true
+    },
+    {
+      "file": "tests/test_cold_scheduler.rs",
+      "line": 18,
+      "name": "test_cold_rr_search",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_cold_scheduler.rs",
+      "line": 51,
+      "name": "test_cold_ta_search",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_cold_scheduler.rs",
+      "line": 84,
+      "name": "test_cold_rr_two_fields",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_cold_scheduler.rs",
+      "line": 125,
+      "name": "test_single_handle_highlights",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_commit_floor.rs",
+      "line": 45,
+      "name": "commit_floor_profile",
+      "ignored": true
+    },
+    {
+      "file": "tests/test_commit_floor.rs",
+      "line": 111,
+      "name": "commit_floor_store_calls",
+      "ignored": true
+    },
+    {
+      "file": "tests/test_commit_floor.rs",
+      "line": 150,
+      "name": "commit_floor_profile_reopen",
+      "ignored": true
+    },
+    {
+      "file": "tests/test_commit_floor.rs",
+      "line": 190,
+      "name": "commit_floor_profile_blob",
+      "ignored": true
+    },
+    {
+      "file": "tests/test_compare_two_indexes.rs",
+      "line": 72,
+      "name": "compare_two_indexes",
+      "ignored": true
+    },
+    {
+      "file": "tests/test_compat_308.rs",
+      "line": 180,
+      "name": "a_308_index_answers_like_308_then_converts_without_loss",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_derived_in_ram.rs",
+      "line": 175,
+      "name": "derived_in_ram_answers_like_the_files",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_diagnostics.rs",
+      "line": 15,
+      "name": "verify_index",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_dictionary_anatomy.rs",
+      "line": 27,
+      "name": "dictionary_anatomy",
+      "ignored": true
+    },
+    {
+      "file": "tests/test_dictionary_index.rs",
+      "line": 170,
+      "name": "dictionary_index_answers_like_v3",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_dictionary_index.rs",
+      "line": 224,
+      "name": "dictionary_pieces",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_dictionary_index.rs",
+      "line": 299,
+      "name": "deferred_fold_settles",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_dictionary_index.rs",
+      "line": 364,
+      "name": "reopened_without_group_index_rebuilds_it",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_dictionary_index.rs",
+      "line": 435,
+      "name": "reopened_writer_mints_no_duplicate_ids",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_federated_search.rs",
+      "line": 79,
+      "name": "federated_equals_one_index_holding_everything",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_federated_search.rs",
+      "line": 88,
+      "name": "federated_dictionary_nodes_equal_one_v3_index",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_federated_search.rs",
+      "line": 135,
+      "name": "the_pre_filter_composes_with_federated_statistics",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_federated_search.rs",
+      "line": 140,
+      "name": "the_pre_filter_composes_with_federated_statistics_on_dictionary_nodes",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_federated_search.rs",
+      "line": 175,
+      "name": "federated_top_k_is_bounded_and_is_the_best",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_fetch_docs.rs",
+      "line": 58,
+      "name": "fetch_docs_short_and_long_lists_match_one_by_one_reads",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_fetch_docs.rs",
+      "line": 70,
+      "name": "fetch_docs_after_deletes_and_merges",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_filter_cost.rs",
+      "line": 71,
+      "name": "filter_cost_of_an_index",
+      "ignored": true
+    },
+    {
+      "file": "tests/test_filtered_scores_ignore_hidden_lengths.rs",
+      "line": 95,
+      "name": "one_shard_hidden_documents_do_not_move_the_ranks",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_filtered_scores_ignore_hidden_lengths.rs",
+      "line": 98,
+      "name": "two_shards_hidden_documents_do_not_move_the_ranks",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_filtered_scores_match_the_subset.rs",
+      "line": 55,
+      "name": "one_shard_a_filtered_search_scores_like_the_subset_indexed_alone",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_filtered_scores_match_the_subset.rs",
+      "line": 58,
+      "name": "two_shards_a_filtered_search_scores_like_the_subset_indexed_alone",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_filtered_search_truth.rs",
+      "line": 68,
+      "name": "filtered_equals_unfiltered_intersected_with_allowed",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_filtered_search_truth.rs",
+      "line": 77,
+      "name": "filtered_equals_unfiltered_intersected_with_allowed_on_dictionary",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_filtered_search_truth.rs",
+      "line": 168,
+      "name": "bench_filtered_search_cost",
+      "ignored": true
+    },
+    {
+      "file": "tests/test_fuzzy_ground_truth.rs",
+      "line": 333,
+      "name": "test_fuzzy_ground_truth",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_fuzzy_jaro_winkler.rs",
+      "line": 28,
+      "name": "jaro_winkler_fuzzy_end_to_end",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_fuzzy_many_terms.rs",
+      "line": 94,
+      "name": "fuzzy_query_cost_is_bounded_in_its_length",
+      "ignored": true
+    },
+    {
+      "file": "tests/test_fuzzy_many_terms.rs",
+      "line": 125,
+      "name": "long_fuzzy_query_finds_its_passage",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_fuzzy_many_terms.rs",
+      "line": 166,
+      "name": "probe_exact_passage_lengths",
+      "ignored": true
+    },
+    {
+      "file": "tests/test_fuzzy_many_terms.rs",
+      "line": 200,
+      "name": "probe_first_failing_length",
+      "ignored": true
+    },
+    {
+      "file": "tests/test_fuzzy_monotonicity.rs",
+      "line": 169,
+      "name": "test_monotonicity_real_repo",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_fuzzy_monotonicity.rs",
+      "line": 324,
+      "name": "test_fuzzy_sku_catalog",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_fuzzy_monotonicity.rs",
+      "line": 440,
+      "name": "test_fuzzy_long_api_keys",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_fuzzy_monotonicity.rs",
+      "line": 570,
+      "name": "test_diag_miss_count",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_fuzzy_monotonicity.rs",
+      "line": 695,
+      "name": "test_camelcase_matched_by_underscore_query",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_fuzzy_tiers.rs",
+      "line": 14,
+      "name": "levenshtein_tier_is_the_verified_edit_distance",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_highlight_cap.rs",
+      "line": 62,
+      "name": "a_capped_sink_still_yields_complete_highlights_for_the_top_k",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_index_report.rs",
+      "line": 15,
+      "name": "the_report_gives_the_known_numbers_of_a_fixture",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_index_report.rs",
+      "line": 78,
+      "name": "report_of_an_index",
+      "ignored": true
+    },
+    {
+      "file": "tests/test_lazy_directory.rs",
+      "line": 18,
+      "name": "lazy_handle_reads_ranges_and_whole_files",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_lazy_directory.rs",
+      "line": 38,
+      "name": "deleted_file_stays_readable_through_a_live_handle",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_lazy_directory.rs",
+      "line": 61,
+      "name": "rewritten_file_is_not_served_from_the_old_cache_entry",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_light_profile.rs",
+      "line": 120,
+      "name": "light_profile_of_an_index",
+      "ignored": true
+    },
+    {
+      "file": "tests/test_lock_investigation.rs",
+      "line": 1,
+      "name": "check_audioclock_suffix",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_long_exact_passage.rs",
+      "line": 60,
+      "name": "an_exact_passage_is_found_at_every_length_on_one_shard",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_long_exact_passage.rs",
+      "line": 66,
+      "name": "an_exact_passage_is_found_at_every_length_on_four_shards",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_long_exact_passage.rs",
+      "line": 79,
+      "name": "a_long_passage_with_two_typos_is_found_at_distance_two",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_luce_roundtrip.rs",
+      "line": 23,
+      "name": "test_luce_playground_search",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_luce_v3_roundtrip.rs",
+      "line": 72,
+      "name": "luce_v3_sharded_roundtrip",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_luce_v3_roundtrip.rs",
+      "line": 81,
+      "name": "luce_dictionary_sharded_roundtrip",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_maintain.rs",
+      "line": 40,
+      "name": "maintain_purges_the_given_ids_and_compacts",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_maintain.rs",
+      "line": 80,
+      "name": "maintain_without_ids_nor_compaction_only_reports",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_maintain.rs",
+      "line": 90,
+      "name": "maintain_purges_without_compacting",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_maintain.rs",
+      "line": 112,
+      "name": "maintain_an_index",
+      "ignored": true
+    },
+    {
+      "file": "tests/test_maintain.rs",
+      "line": 141,
+      "name": "maintain_refuses_a_purge_of_more_than_half_the_table",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_merge_contains.rs",
+      "line": 52,
+      "name": "test_merge_contains_correctness",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_merge_drops_dead_ids.rs",
+      "line": 51,
+      "name": "a_merge_drops_the_ids_of_deleted_documents",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_merge_drops_dead_ids.rs",
+      "line": 111,
+      "name": "maintain_gives_back_the_dictionary_of_deleted_documents",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_merge_keeps_new_words.rs",
+      "line": 37,
+      "name": "a_merge_between_commits_keeps_the_new_segments_words",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_merge_keeps_new_words.rs",
+      "line": 42,
+      "name": "without_a_merge_the_new_segments_words_are_found",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_missing_corpus.rs",
+      "line": 5,
+      "name": "a_missing_corpus_is_red_unless_allowed",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_no_residue_under_tmp.rs",
+      "line": 15,
+      "name": "no_test_writes_under_a_fixed_tmp_path",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_playground_parity.rs",
+      "line": 18,
+      "name": "playground_parity_native",
+      "ignored": true
+    },
+    {
+      "file": "tests/test_playground_repro.rs",
+      "line": 110,
+      "name": "test_playground_repro",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_positions_off.rs",
+      "line": 144,
+      "name": "positions_off_writes_documents_and_frequencies_only",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_positions_off.rs",
+      "line": 185,
+      "name": "positions_off_is_refused_where_it_cannot_answer",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_positions_off.rs",
+      "line": 291,
+      "name": "positions_off_answers_literals_like_positions",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_positions_off.rs",
+      "line": 348,
+      "name": "positions_off_answers_fuzzy_and_regex_like_positions",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_query_warnings.rs",
+      "line": 4,
+      "name": "warnings_through_handle",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_regex_ground_truth.rs",
+      "line": 74,
+      "name": "test_regex_ground_truth",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_relaxed_duplicate_spans.rs",
+      "line": 91,
+      "name": "one_occurrence_is_one_span_in_every_layout",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_relaxed_duplicate_spans.rs",
+      "line": 125,
+      "name": "the_default_index_scores_like_the_index_that_reads_the_text",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_relaxed_multibyte.rs",
+      "line": 98,
+      "name": "relaxed_needle_does_not_end_inside_a_multibyte_character",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_search_mismatch.rs",
+      "line": 8,
+      "name": "diagnose_missing_function_docs",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_ground_truth.rs",
+      "line": 927,
+      "name": "v3_ground_truth_contains",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_ground_truth.rs",
+      "line": 992,
+      "name": "fuzzy_finds_an_occurrence_that_straddles_tokens",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_ground_truth.rs",
+      "line": 1046,
+      "name": "v3_ground_truth_demo",
+      "ignored": true
+    },
+    {
+      "file": "tests/test_sfx_v3_ground_truth.rs",
+      "line": 1100,
+      "name": "v3_ground_truth_coherence",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_ground_truth.rs",
+      "line": 1658,
+      "name": "debug_struct_fp",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_ground_truth.rs",
+      "line": 1920,
+      "name": "baseline_fuzzy_regex",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_ground_truth.rs",
+      "line": 2063,
+      "name": "perf_shape_executor",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_ground_truth.rs",
+      "line": 2131,
+      "name": "perf_shape_sharded",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_ground_truth.rs",
+      "line": 2226,
+      "name": "v3_distributed_two_nodes",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_ground_truth.rs",
+      "line": 2315,
+      "name": "regex_v2_vs_v3",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_ground_truth.rs",
+      "line": 2405,
+      "name": "v3_distributed_coherence",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_ground_truth.rs",
+      "line": 2560,
+      "name": "v3_sharded_filter_delete_delta",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_pipeline.rs",
+      "line": 39,
+      "name": "v3_smoke_direct_index",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_pipeline.rs",
+      "line": 112,
+      "name": "v3_contains_basic",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_pipeline.rs",
+      "line": 126,
+      "name": "v3_contains_substring",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_pipeline.rs",
+      "line": 140,
+      "name": "v3_contains_cross_token",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_pipeline.rs",
+      "line": 150,
+      "name": "v3_starts_with",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_pipeline.rs",
+      "line": 161,
+      "name": "v3_fuzzy_d1",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_pipeline.rs",
+      "line": 180,
+      "name": "v3_highlights_byte_ranges",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_pipeline.rs",
+      "line": 195,
+      "name": "v3_strict_sep_false",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_pipeline.rs",
+      "line": 214,
+      "name": "v3_multi_doc_correct_ids",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_pipeline.rs",
+      "line": 253,
+      "name": "v3_term_is_whole_token_not_prefix",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_pipeline.rs",
+      "line": 281,
+      "name": "v3_starts_with_is_word_start",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_pipeline.rs",
+      "line": 305,
+      "name": "probe_exact_match_edge_cases",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_pipeline.rs",
+      "line": 331,
+      "name": "v3_merge_preserves_results",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_pipeline.rs",
+      "line": 439,
+      "name": "v3_span_exact_across_chunk_boundary",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_pipeline.rs",
+      "line": 449,
+      "name": "v3_span_exact_three_chunks",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_pipeline.rs",
+      "line": 459,
+      "name": "v3_span_exact_relaxed_trailing_token",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_pipeline.rs",
+      "line": 469,
+      "name": "v3_span_starts_at_match_not_at_head_token",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_pipeline.rs",
+      "line": 479,
+      "name": "v3_span_relaxed_starts_at_content",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_pipeline.rs",
+      "line": 489,
+      "name": "v3_span_relaxed_real_file_head",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_pipeline.rs",
+      "line": 502,
+      "name": "v3_span_relaxed_two_real_files",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_pipeline.rs",
+      "line": 670,
+      "name": "v3_merge_equals_fresh_by_spans",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_pipeline.rs",
+      "line": 735,
+      "name": "v3_word_shapes_share_key_not_ordinal",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_pipeline.rs",
+      "line": 769,
+      "name": "v3_merge_non_ascii_neighbours",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_pipeline.rs",
+      "line": 791,
+      "name": "v3_merge_bisect",
+      "ignored": true
+    },
+    {
+      "file": "tests/test_sfx_v3_pipeline.rs",
+      "line": 845,
+      "name": "v3_merge_repro_files",
+      "ignored": true
+    },
+    {
+      "file": "tests/test_sfx_v3_pipeline.rs",
+      "line": 863,
+      "name": "v3_span_non_ascii_neighbours",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_pipeline.rs",
+      "line": 888,
+      "name": "v3_a2_probe",
+      "ignored": true
+    },
+    {
+      "file": "tests/test_sfx_v3_pipeline.rs",
+      "line": 904,
+      "name": "v3_a2_chunks",
+      "ignored": true
+    },
+    {
+      "file": "tests/test_sfx_v3_pipeline.rs",
+      "line": 922,
+      "name": "v3_policy_merges_preserve_everything",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_pipeline.rs",
+      "line": 1014,
+      "name": "v3_fuzzy_span_inside_long_token",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_pipeline.rs",
+      "line": 1100,
+      "name": "v3_relaxed_sku_corpus_matches_grep",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_pipeline.rs",
+      "line": 1137,
+      "name": "v3_strict_sep_head_three_chunks",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_pipeline.rs",
+      "line": 1171,
+      "name": "v3_parse_boolean_syntax_is_composite",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_pipeline.rs",
+      "line": 1210,
+      "name": "v3_fuzzy_spans_beside_multibyte_punctuation",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_pipeline.rs",
+      "line": 1245,
+      "name": "v3_contains_beside_multibyte_punctuation",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_pipeline.rs",
+      "line": 1295,
+      "name": "v3_migration_from_v2_index",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_pipeline.rs",
+      "line": 1452,
+      "name": "v3_case_fold_length_changes",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_pipeline.rs",
+      "line": 1481,
+      "name": "v3_sharded_fuzzy_regex_reach_all_shards",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_pipeline.rs",
+      "line": 1530,
+      "name": "v3_fuzzy_union_docsets_are_sorted",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_pipeline.rs",
+      "line": 1561,
+      "name": "v3_sharded_filter_routes_to_holding_shards",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_pipeline.rs",
+      "line": 1622,
+      "name": "v3_closed_handle_refuses_cleanly",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_pipeline.rs",
+      "line": 1653,
+      "name": "v3_node_id_is_stamped_automatically",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_pipeline.rs",
+      "line": 1713,
+      "name": "v3_schema_config_errors_speak",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfx_v3_pipeline.rs",
+      "line": 1757,
+      "name": "v3_parse_is_alive_and_honest",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_sfxpost_density.rs",
+      "line": 62,
+      "name": "sfxpost_density",
+      "ignored": true
+    },
+    {
+      "file": "tests/test_snapshot_served.rs",
+      "line": 59,
+      "name": "snapshot_served_answers_like_the_index_it_came_from",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_store_fallback.rs",
+      "line": 1,
+      "name": "test_regex_on_persisted_index",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_text_field_indexed_false.rs",
+      "line": 3,
+      "name": "unsupported_text_indexing_options_are_reported_once_per_field",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_text_field_indexed_false.rs",
+      "line": 23,
+      "name": "warning_escapes_field_names_without_extra_lines",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_text_field_indexed_false.rs",
+      "line": 34,
+      "name": "reporting_preserves_existing_field_indexing",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_touched_bytes.rs",
+      "line": 18,
+      "name": "touched_bytes_per_query",
+      "ignored": true
+    },
+    {
+      "file": "tests/test_truncation_flag.rs",
+      "line": 9,
+      "name": "a_capped_search_reports_it_and_a_normal_one_does_not",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_two_fields.rs",
+      "line": 6,
+      "name": "test_two_text_fields_posmap",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_two_fields.rs",
+      "line": 62,
+      "name": "test_multi_segment_fuzzy",
+      "ignored": false
+    },
+    {
+      "file": "tests/test_wsp_density.rs",
+      "line": 55,
+      "name": "word_sfxpost_density",
+      "ignored": true
+    },
+    {
+      "file": "benches/bench_contains.rs",
+      "line": 120,
+      "name": "bench_rag3db_contains",
+      "ignored": false
+    },
+    {
+      "file": "benches/bench_sharding.rs",
+      "line": 226,
+      "name": "t00_repro_starts_with_prefix",
+      "ignored": false
+    },
+    {
+      "file": "benches/bench_sharding.rs",
+      "line": 307,
+      "name": "t00_diag_starts_with",
+      "ignored": true
+    },
+    {
+      "file": "benches/bench_sharding.rs",
+      "line": 440,
+      "name": "t01_bench_sharding_comparison",
+      "ignored": true
+    },
+    {
+      "file": "benches/bench_sharding.rs",
+      "line": 990,
+      "name": "t02_ground_truth_exhaustive",
+      "ignored": true
+    },
+    {
+      "file": "benches/bench_sharding.rs",
+      "line": 1136,
+      "name": "t03_bench_query_times",
+      "ignored": true
+    },
+    {
+      "file": "benches/bench_sharding.rs",
+      "line": 1287,
+      "name": "t05_test_score_consistency_single_vs_sharded",
+      "ignored": true
+    },
+    {
+      "file": "benches/bench_sharding.rs",
+      "line": 1381,
+      "name": "t06_profile_regex_automaton_weight",
+      "ignored": true
+    },
+    {
+      "file": "benches/bench_vs_tantivy.rs",
+      "line": 302,
+      "name": "bench_vs_tantivy",
+      "ignored": false
+    },
+    {
+      "file": "benches/compare_tantivy.rs",
+      "line": 248,
+      "name": "compare_tantivy",
+      "ignored": true
+    },
+    {
+      "file": "benches/compare_tantivy.rs",
+      "line": 386,
+      "name": "probe_ngram_positions",
+      "ignored": true
+    },
+    {
+      "file": "benches/compare_tantivy.rs",
+      "line": 412,
+      "name": "probe_default_tokenizer",
+      "ignored": true
+    },
+    {
+      "file": "benches/compare_tantivy.rs",
+      "line": 435,
+      "name": "probe_substrings",
+      "ignored": true
+    },
+    {
+      "file": "src/blob_directory.rs",
+      "line": 511,
+      "name": "store_outage_leaves_no_lock_file_and_no_half_written_file",
+      "ignored": false
+    },
+    {
+      "file": "src/blob_directory.rs",
+      "line": 543,
+      "name": "test_blob_directory_create_and_search",
+      "ignored": false
+    },
+    {
+      "file": "src/blob_directory.rs",
+      "line": 565,
+      "name": "test_blob_directory_create_close_reopen",
+      "ignored": false
+    },
+    {
+      "file": "src/blob_directory.rs",
+      "line": 591,
+      "name": "test_blob_directory_worm_semantics",
+      "ignored": false
+    },
+    {
+      "file": "src/blob_directory.rs",
+      "line": 617,
+      "name": "test_blob_directory_search_after_reopen",
+      "ignored": false
+    },
+    {
+      "file": "src/blob_directory.rs",
+      "line": 669,
+      "name": "test_blob_directory_multiple_indexes_isolated",
+      "ignored": false
+    },
+    {
+      "file": "src/blob_directory.rs",
+      "line": 691,
+      "name": "test_blob_directory_survives_cache_cleanup",
+      "ignored": false
+    },
+    {
+      "file": "src/blob_directory.rs",
+      "line": 718,
+      "name": "test_blob_directory_multiple_commits",
+      "ignored": false
+    },
+    {
+      "file": "src/bm25_global.rs",
+      "line": 270,
+      "name": "test_aggregated_stats_single_shard",
+      "ignored": false
+    },
+    {
+      "file": "src/bm25_global.rs",
+      "line": 312,
+      "name": "test_aggregated_stats_two_shards",
+      "ignored": false
+    },
+    {
+      "file": "src/handle.rs",
+      "line": 716,
+      "name": "test_string_filter_field_eq",
+      "ignored": false
+    },
+    {
+      "file": "src/handle.rs",
+      "line": 783,
+      "name": "test_stored_fields_retrieval",
+      "ignored": false
+    },
+    {
+      "file": "src/handle.rs",
+      "line": 859,
+      "name": "test_handle_close_reopen_lock",
+      "ignored": false
+    },
+    {
+      "file": "src/handle.rs",
+      "line": 903,
+      "name": "test_handle_close_reopen_with_merges",
+      "ignored": false
+    },
+    {
+      "file": "src/handle.rs",
+      "line": 949,
+      "name": "test_handle_reopen_cycles",
+      "ignored": false
+    },
+    {
+      "file": "src/handle.rs",
+      "line": 1006,
+      "name": "test_close_releases_lock",
+      "ignored": false
+    },
+    {
+      "file": "src/handle.rs",
+      "line": 1053,
+      "name": "test_starts_with_multi_token_highlights",
+      "ignored": false
+    },
+    {
+      "file": "src/handle.rs",
+      "line": 1129,
+      "name": "test_contains_flexible_positions",
+      "ignored": false
+    },
+    {
+      "file": "src/handle.rs",
+      "line": 1209,
+      "name": "test_all_query_types_v2",
+      "ignored": false
+    },
+    {
+      "file": "src/handle.rs",
+      "line": 1289,
+      "name": "test_fuzzy_contains",
+      "ignored": false
+    },
+    {
+      "file": "src/handle.rs",
+      "line": 1409,
+      "name": "test_contains_neural_networks",
+      "ignored": false
+    },
+    {
+      "file": "src/handle.rs",
+      "line": 1471,
+      "name": "test_contains_camel_case_highlight_offsets",
+      "ignored": false
+    },
+    {
+      "file": "src/handle.rs",
+      "line": 1552,
+      "name": "test_diag_luce_cross_token",
+      "ignored": false
+    },
+    {
+      "file": "src/handle.rs",
+      "line": 1797,
+      "name": "test_diag_highlight_rag3weaver",
+      "ignored": false
+    },
+    {
+      "file": "src/query.rs",
+      "line": 1156,
+      "name": "test_regex_escape_plain",
+      "ignored": false
+    },
+    {
+      "file": "src/query.rs",
+      "line": 1161,
+      "name": "test_regex_escape_special_chars",
+      "ignored": false
+    },
+    {
+      "file": "src/query.rs",
+      "line": 1166,
+      "name": "test_regex_escape_all_special",
+      "ignored": false
+    },
+    {
+      "file": "src/query.rs",
+      "line": 1174,
+      "name": "test_regex_escape_empty",
+      "ignored": false
+    },
+    {
+      "file": "src/query.rs",
+      "line": 1190,
+      "name": "test_json_to_term_u64",
+      "ignored": false
+    },
+    {
+      "file": "src/query.rs",
+      "line": 1199,
+      "name": "test_json_to_term_i64",
+      "ignored": false
+    },
+    {
+      "file": "src/query.rs",
+      "line": 1208,
+      "name": "test_json_to_term_f64",
+      "ignored": false
+    },
+    {
+      "file": "src/query.rs",
+      "line": 1217,
+      "name": "test_json_to_term_str",
+      "ignored": false
+    },
+    {
+      "file": "src/query.rs",
+      "line": 1226,
+      "name": "test_json_to_term_type_mismatch",
+      "ignored": false
+    },
+    {
+      "file": "src/query.rs",
+      "line": 1234,
+      "name": "test_json_to_term_i64_from_positive",
+      "ignored": false
+    },
+    {
+      "file": "src/query.rs",
+      "line": 1245,
+      "name": "test_query_config_contains",
+      "ignored": false
+    },
+    {
+      "file": "src/query.rs",
+      "line": 1256,
+      "name": "test_query_config_contains_regex",
+      "ignored": false
+    },
+    {
+      "file": "src/query.rs",
+      "line": 1264,
+      "name": "test_query_config_contains_hybrid",
+      "ignored": false
+    },
+    {
+      "file": "src/query.rs",
+      "line": 1272,
+      "name": "test_query_config_fuzzy",
+      "ignored": false
+    },
+    {
+      "file": "src/query.rs",
+      "line": 1280,
+      "name": "test_query_config_phrase",
+      "ignored": false
+    },
+    {
+      "file": "src/query.rs",
+      "line": 1292,
+      "name": "test_query_config_with_filters",
+      "ignored": false
+    },
+    {
+      "file": "src/query.rs",
+      "line": 1302,
+      "name": "test_query_config_boolean",
+      "ignored": false
+    },
+    {
+      "file": "src/query.rs",
+      "line": 1354,
+      "name": "test_filter_clause_eq",
+      "ignored": false
+    },
+    {
+      "file": "src/query.rs",
+      "line": 1359,
+      "name": "test_filter_clause_ne",
+      "ignored": false
+    },
+    {
+      "file": "src/query.rs",
+      "line": 1364,
+      "name": "test_filter_clause_range_ops",
+      "ignored": false
+    },
+    {
+      "file": "src/query.rs",
+      "line": 1371,
+      "name": "test_filter_clause_in",
+      "ignored": false
+    },
+    {
+      "file": "src/query.rs",
+      "line": 1376,
+      "name": "test_filter_clause_in_empty",
+      "ignored": false
+    },
+    {
+      "file": "src/query.rs",
+      "line": 1381,
+      "name": "test_filter_clause_unknown_op",
+      "ignored": false
+    },
+    {
+      "file": "src/query.rs",
+      "line": 1386,
+      "name": "test_filter_clause_unknown_field",
+      "ignored": false
+    },
+    {
+      "file": "src/query.rs",
+      "line": 1391,
+      "name": "test_filter_clause_f64",
+      "ignored": false
+    },
+    {
+      "file": "src/query.rs",
+      "line": 1396,
+      "name": "test_filter_clause_string_eq",
+      "ignored": false
+    },
+    {
+      "file": "src/query.rs",
+      "line": 1403,
+      "name": "test_filter_clause_between",
+      "ignored": false
+    },
+    {
+      "file": "src/query.rs",
+      "line": 1408,
+      "name": "test_filter_clause_between_bad_arity",
+      "ignored": false
+    },
+    {
+      "file": "src/query.rs",
+      "line": 1414,
+      "name": "test_filter_clause_not_in",
+      "ignored": false
+    },
+    {
+      "file": "src/query.rs",
+      "line": 1419,
+      "name": "test_filter_clause_not_in_empty",
+      "ignored": false
+    },
+    {
+      "file": "src/query.rs",
+      "line": 1424,
+      "name": "test_filter_clause_starts_with",
+      "ignored": false
+    },
+    {
+      "file": "src/query.rs",
+      "line": 1432,
+      "name": "test_filter_clause_contains",
+      "ignored": false
+    },
+    {
+      "file": "src/query.rs",
+      "line": 1437,
+      "name": "test_filter_clause_contains_with_fuzzy",
+      "ignored": false
+    },
+    {
+      "file": "src/query.rs",
+      "line": 1452,
+      "name": "test_filter_clause_must_composite",
+      "ignored": false
+    },
+    {
+      "file": "src/query.rs",
+      "line": 1467,
+      "name": "test_filter_clause_should_composite",
+      "ignored": false
+    },
+    {
+      "file": "src/query.rs",
+      "line": 1482,
+      "name": "test_filter_clause_must_not_composite",
+      "ignored": false
+    },
+    {
+      "file": "src/query.rs",
+      "line": 1496,
+      "name": "test_filter_clause_composite_empty_clauses",
+      "ignored": false
+    },
+    {
+      "file": "src/query.rs",
+      "line": 1508,
+      "name": "test_filter_clause_composite_missing_clauses",
+      "ignored": false
+    },
+    {
+      "file": "src/sharded_handle.rs",
+      "line": 3444,
+      "name": "test_create_and_search_single_shard",
+      "ignored": false
+    },
+    {
+      "file": "src/sharded_handle.rs",
+      "line": 3480,
+      "name": "test_commit_under_concurrent_searches_does_not_freeze",
+      "ignored": false
+    },
+    {
+      "file": "src/sharded_handle.rs",
+      "line": 3541,
+      "name": "test_updates_during_commits_keep_their_order",
+      "ignored": false
+    },
+    {
+      "file": "src/sharded_handle.rs",
+      "line": 3653,
+      "name": "successful_close_releases_router_and_shards_at_return",
+      "ignored": false
+    },
+    {
+      "file": "src/sharded_handle.rs",
+      "line": 3656,
+      "name": "failed_close_releases_router_and_shards_at_return",
+      "ignored": false
+    },
+    {
+      "file": "src/sharded_handle.rs",
+      "line": 3659,
+      "name": "a_failed_close_still_stops_its_pools",
+      "ignored": false
+    },
+    {
+      "file": "src/sharded_handle.rs",
+      "line": 3708,
+      "name": "test_drop_commits_the_writes_still_queued",
+      "ignored": false
+    },
+    {
+      "file": "src/sharded_handle.rs",
+      "line": 3736,
+      "name": "test_writes_to_a_shard_without_writer_are_reported_by_commit",
+      "ignored": false
+    },
+    {
+      "file": "src/sharded_handle.rs",
+      "line": 3752,
+      "name": "test_create_and_search_multi_shard",
+      "ignored": false
+    },
+    {
+      "file": "src/sharded_handle.rs",
+      "line": 3798,
+      "name": "test_close_and_reopen",
+      "ignored": false
+    },
+    {
+      "file": "src/sharded_handle.rs",
+      "line": 3833,
+      "name": "test_delete_by_node_id",
+      "ignored": false
+    },
+    {
+      "file": "src/sharded_handle.rs",
+      "line": 3862,
+      "name": "test_blob_shard_storage",
+      "ignored": false
+    },
+    {
+      "file": "src/sharded_handle.rs",
+      "line": 3913,
+      "name": "test_diag_rr_contains_search",
+      "ignored": false
+    },
+    {
+      "file": "src/sharded_handle.rs",
+      "line": 3948,
+      "name": "test_search_filtered_prefilter",
+      "ignored": false
+    },
+    {
+      "file": "src/sharded_handle.rs",
+      "line": 3994,
+      "name": "test_ram_shard_storage",
+      "ignored": false
+    },
+    {
+      "file": "src/sharded_handle.rs",
+      "line": 4019,
+      "name": "test_multifield_string_query_bm25",
+      "ignored": false
+    },
+    {
+      "file": "src/sharded_handle.rs",
+      "line": 4076,
+      "name": "test_fuzzy_contains_small_dataset",
+      "ignored": false
+    },
+    {
+      "file": "src/snapshot.rs",
+      "line": 309,
+      "name": "test_roundtrip_empty",
+      "ignored": false
+    },
+    {
+      "file": "src/snapshot.rs",
+      "line": 316,
+      "name": "test_roundtrip_single_index",
+      "ignored": false
+    },
+    {
+      "file": "src/snapshot.rs",
+      "line": 339,
+      "name": "test_roundtrip_multi_index",
+      "ignored": false
+    },
+    {
+      "file": "src/snapshot.rs",
+      "line": 362,
+      "name": "test_bad_magic",
+      "ignored": false
+    },
+    {
+      "file": "src/snapshot.rs",
+      "line": 368,
+      "name": "test_bad_version",
+      "ignored": false
+    },
+    {
+      "file": "src/snapshot.rs",
+      "line": 378,
+      "name": "test_truncated_header",
+      "ignored": false
+    },
+    {
+      "file": "src/snapshot.rs",
+      "line": 384,
+      "name": "test_truncated_after_magic",
+      "ignored": false
+    },
+    {
+      "file": "src/snapshot.rs",
+      "line": 390,
+      "name": "test_empty_files",
+      "ignored": false
+    },
+    {
+      "file": "src/snapshot.rs",
+      "line": 401,
+      "name": "test_read_schema_config_from_files",
+      "ignored": false
+    },
+    {
+      "file": "src/snapshot.rs",
+      "line": 413,
+      "name": "test_read_schema_config_missing",
+      "ignored": false
+    },
+    {
+      "file": "src/sync.rs",
+      "line": 270,
+      "name": "test_export_apply_delta_e2e",
+      "ignored": false
+    },
+    {
+      "file": "src/sync.rs",
+      "line": 325,
+      "name": "test_sharded_delta_e2e",
+      "ignored": false
+    },
+    {
+      "file": "src/sync.rs",
+      "line": 427,
+      "name": "test_sync_server_with_handle",
+      "ignored": false
+    },
+    {
+      "file": "src/warnings.rs",
+      "line": 223,
+      "name": "clean_queries_are_silent",
+      "ignored": false
+    },
+    {
+      "file": "src/warnings.rs",
+      "line": 233,
+      "name": "relaxed_separators_are_reported",
+      "ignored": false
+    },
+    {
+      "file": "src/warnings.rs",
+      "line": 242,
+      "name": "strict_separators_only_is_a_cost_warning",
+      "ignored": false
+    },
+    {
+      "file": "src/warnings.rs",
+      "line": 251,
+      "name": "fuzzy_half_rewrite",
+      "ignored": false
+    },
+    {
+      "file": "src/warnings.rs",
+      "line": 265,
+      "name": "regex_full_scan_and_unbounded",
+      "ignored": false
+    },
+    {
+      "file": "src/warnings.rs",
+      "line": 277,
+      "name": "boolean_recurses_and_dedups",
+      "ignored": false
+    },
+    {
+      "file": "src/warnings.rs",
+      "line": 288,
+      "name": "index_legacy_segments",
+      "ignored": false
+    }
+  ]
+}

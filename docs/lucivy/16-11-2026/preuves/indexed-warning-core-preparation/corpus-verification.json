@@ -1,0 +1,25 @@
+{
+  "results": [
+    {
+      "name": "linux",
+      "files": 15007,
+      "manifest_sha256": "d4faf3a7988f42db9d0801ee5bd6630d01f97f7be58ce9838fb6cbe189d4f204"
+    },
+    {
+      "name": "rag3db",
+      "files": 8507,
+      "manifest_sha256": "bb70899c1fba6cac19f58a735bcc2e56a0e25de00dfd33f13a4785b08f608e12"
+    }
+  ],
+  "duration": 1.1387665460351855,
+  "scans": [
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-indexed-warning-core-16nov-v1/scans/check-1190017893343167.json",
+      "unknown": 12,
+      "blocked": 0,
+      "admitted": true
+    }
+  ],
+  "cargo_invoked": false,
+  "test_binary_invoked": false
+}

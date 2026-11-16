@@ -315,3 +315,7 @@ faire pour Codex. La suite reprend à l'entrée 3.
 Suite qualification warnings : voir recette07 et ticket indexed-false existant.
 RO banc favorable bornée ; profil core proposé1800s, corpus à admettre avant
 paquet final, aucun nouveau Cargo. ULP7.2 reste en attente et PR42 HOLD.
+
+Préparation autorisée par C7 ensuite exécutée : recette08 et preuvescore-preparation,
+corpus privés/manifestes/licences, profil adapté neuf HOLD (ticket distinct).
+APP890/pilote2fa59f ; attente RO puis GO1800 distinct, aucunCargo/ELF.

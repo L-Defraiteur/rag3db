@@ -161,8 +161,35 @@ def check_preflight(filename, scope_exists):
         assert not Path(relative).is_absolute() and '..' not in Path(relative).parts
         copy = checked_path(str(package / relative), kind='file')
         assert hashlib.sha256(copy.read_bytes()).hexdigest() == expected, f'copy hash mismatch: {relative}'
+    cache = Path(data['ground_truth_cache'])
+    assert cache.is_relative_to(target / 'tmp/lucivy-reports') and '..' not in cache.parts
+    current = target
+    for part in cache.relative_to(target).parts:
+        current /= part
+        if not current.exists() and not current.is_symlink():
+            break
+        info = current.lstat()
+        assert not stat.S_ISLNK(info.st_mode) and info.st_uid == os.getuid()
+    assert not cache.exists() and not cache.is_symlink(), 'ground-truth cache must start absent'
     quiescence(data)
     return data
+
+
+def verify_corpus_members(root, expected):
+    """Reject unlisted files and links without reading forbidden path contents."""
+    found = set()
+    for directory, dirs, files in os.walk(root, followlinks=False):
+        for name in dirs + files:
+            path = Path(directory) / name
+            assert not name.startswith('.env') and '.vault' not in name and name != '.git'
+            assert not path.is_symlink(), f'corpus link refused: {path}'
+        for name in files:
+            path = Path(directory) / name
+            relative = str(path.relative_to(root))
+            assert relative in expected, f'unlisted corpus member: {relative}'
+            assert checked_path(str(path), kind='file') == path
+            found.add(relative)
+    assert found == set(expected), 'missing corpus member'
 
 
 def main():
@@ -194,9 +221,20 @@ def main():
     corpus = checked_path(admission['corpus'], kind='dir')
     assert str(corpus) == '/tmp/lucivy-cmp'
     clone = checked_path(admission['rag3db_corpus'], kind='dir')
-    assert subprocess.check_output(['git', '-C', str(clone), 'rev-parse', 'HEAD'], text=True).strip() == admission['rag3db_commit']
-    assert not subprocess.check_output(['git', '-C', str(clone), 'status', '--porcelain'], text=True).strip()
+    assert admission['rag3db_commit'] == '1b22409b31a79543a9fe63e516c5b311bc43f1da'
+    clone_manifest = checked_path(admission['rag3db_manifest'], kind='file')
+    assert hashlib.sha256(clone_manifest.read_bytes()).hexdigest() == admission['rag3db_manifest_sha256']
+    clone_record = json.loads(clone_manifest.read_text())
+    assert clone_record['commit'] == admission['rag3db_commit']
+    assert clone_record['root'] == str(clone) and clone_record['nonce'] == admission['corpus_nonce']
+    assert clone_record['uid'] == os.getuid() and clone_record['files']
+    for relative, expected in clone_record['files'].items():
+        assert not Path(relative).is_absolute() and '..' not in Path(relative).parts
+        assert not any(part.startswith('.env') or '.vault' in part or part == '.git' for part in Path(relative).parts)
+        member = checked_path(str(clone / relative), kind='file')
+        assert hashlib.sha256(member.read_bytes()).hexdigest() == expected
     # Admission must separately attest archive hash, extraction manifest, UID and nonce.
+    verify_corpus_members(clone, clone_record['files'])
     corpus_manifest = checked_path(admission['corpus_manifest'], kind='file')
     assert hashlib.sha256(corpus_manifest.read_bytes()).hexdigest() == admission['corpus_manifest_sha256']
     corpus_record = json.loads(corpus_manifest.read_text())
@@ -208,11 +246,17 @@ def main():
         assert not Path(relative).is_absolute() and '..' not in Path(relative).parts
         member = checked_path(str(corpus / relative), kind='file')
         assert hashlib.sha256(member.read_bytes()).hexdigest() == expected
+    verify_corpus_members(corpus, corpus_record['files'])
+    assert (clone / 'test/c_api/query_result_test.cpp').is_file(), 'diagnostic input missing'
     output.mkdir(exist_ok=False)
     entry = dict(source=SOURCE, target_creator=OLD_SOURCE,
                  old_nonce=OLD_NONCE, nonce=admission['nonce'], cgroup=cgroup, memory=memory,
                  jobs=jobs, cpu=cpu, deadline=deadline, quiescence=quiescence(admission))
     (output / 'entry.json').write_text(json.dumps(entry, indent=2))
+    forbidden_options = ['RUSTFLAGS', 'CARGO_ENCODED_RUSTFLAGS', 'RUSTDOCFLAGS', 'RUSTC_WRAPPER', 'RUSTC_WORKSPACE_WRAPPER',
+                         'DIAG_FILE', 'DIAG_QUERY', 'BENCH_INDEX', 'PARITY_DIR', 'PARITY_ROOT', 'PARITY_LIST',
+                         'BENCH_DATASET', 'MAX_DOCS', 'LUCIVY_BENCH_DIR', 'LUCE_ROOT', 'LUCE_LIST', 'SERVED_ROOT', 'SERVED_LIST']
+    assert not any(key in os.environ for key in forbidden_options), 'unreviewed build or corpus option'
     env = dict(os.environ, CARGO_TARGET_DIR=str(target), CARGO_BUILD_JOBS=str(jobs),
                CARGO_TERM_COLOR='never', CARGO_NET_OFFLINE='true',
                RAG3DB_ROOT=str(clone), V3_CORPUS=str(clone), TMPDIR=admission['scratch'])
@@ -257,6 +301,16 @@ def main():
     assert artifacts and TEST_TARGET in artifacts.values()
     totals = dict(passed=0, failed=0, ignored=0)
     results = []
+    holds = {'test_store_fallback': 'diagnostic on a persistent personal index; not isolated',
+             'test_diagnostics': 'diagnostic on a persistent personal index; not isolated',
+             'test_lock_investigation': 'diagnostic on a persistent personal index; not isolated',
+             'test_search_mismatch': 'diagnostic on a persistent personal index; not isolated',
+             'test_fuzzy_ground_truth': 'checkout walk does not exclude tracked .vault paths',
+             'test_regex_ground_truth': 'checkout walk does not exclude tracked .vault paths',
+             'test_merge_contains': 'checkout walk does not exclude tracked .vault paths',
+             'bench_vs_tantivy': 'persistent personal paths and lock removal; not isolated',
+             'test_luce_roundtrip': 'exact playground dataset.luce absent; no substitute snapshot admitted'}
+    assert admission['held_targets'] == holds
     for number, (filename, name) in enumerate(sorted(artifacts.items())):
         inventory = run([filename, '--list'], f'{number}-inventory.log')
         ignored = run([filename, '--list', '--ignored'], f'{number}-ignored.log')
@@ -268,6 +322,12 @@ def main():
                    discovered=len(names), ignored_names=ignored_names)
         # No --include-ignored: external services, benchmarks and manual diagnostics
         # are explicitly outside this default profile, and remain unqualified.
+        if name in holds:
+            row.update(passed=0, failed=0, ignored=len(ignored_names),
+                       qualification='HOLD: not executed', reason=holds[name])
+            results.append(row)
+            (output / 'suite-progress.json').write_text(json.dumps(results, indent=2))
+            continue
         result = run([filename, '--test-threads=2', '--nocapture'], f'{number}-tests.log')
         match = re.search(r'test result: ok\. (\d+) passed; (\d+) failed; (\d+) ignored;.*? (\d+) filtered out;', result)
         assert match, f'missing libtest summary for {name}'
@@ -282,14 +342,15 @@ def main():
         (output / 'suite-progress.json').write_text(json.dumps(results, indent=2))
     # Doc tests are a separate Cargo mode and use the same remaining deadline.
     run(['cargo', 'test', '--offline', '--release', f'-j{jobs}', '-p', 'lucivy-core', '--doc'], 'doctests.log')
+    assert not list(scratch.iterdir()), 'test scratch residue; qualification incomplete'
     post_scan = quiescence(admission)
     (output / 'post-scan.json').write_text(json.dumps(post_scan, indent=2))
     assert hashlib.sha256((target / 'validation-provenance.json').read_bytes()).hexdigest() == admission['target_creator_sha256']
     hashes = {file.name: hashlib.sha256(file.read_bytes()).hexdigest() for file in output.iterdir() if file.is_file()}
     (output / 'hashes.json').write_text(json.dumps(hashes, indent=2))
     budget()
-    (output / 'result.json').write_text(json.dumps(dict(source=SOURCE, profile='default core plus doctests; ignored tests unqualified',
-        totals=totals, artifacts=results, doctests='see doctests.log; counts not merged', deadline=deadline,
+    (output / 'result.json').write_text(json.dumps(dict(source=SOURCE, profile='adapted default core plus doctests; explicit held targets and ignored tests unqualified',
+        totals=totals, held_targets=holds, full_core_qualified=False, artifacts=results, doctests='see doctests.log; counts not merged', deadline=deadline,
         scope_verdict='pending common supervisor quiescence')))
     return 0
 

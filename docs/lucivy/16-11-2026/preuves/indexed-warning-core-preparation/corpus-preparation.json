@@ -1,0 +1,17 @@
+{
+  "nonce": "e14c4d52ea84cbb255feeb63679cfcb3",
+  "uid": 1000,
+  "deadline": 1189951.681449643,
+  "finished": 1189773.928776589,
+  "kernel_files": 15007,
+  "rag3db_files": 8507,
+  "licences": {
+    "LICENSE": "23818912204ab249e2be4878eec76597525a0e42277b1bb6c70a698dc392a439"
+  },
+  "linux_manifest_sha256": "d4faf3a7988f42db9d0801ee5bd6630d01f97f7be58ce9838fb6cbe189d4f204",
+  "rag3db_manifest_sha256": "bb70899c1fba6cac19f58a735bcc2e56a0e25de00dfd33f13a4785b08f608e12",
+  "kernel_root": "/tmp/lucivy-cmp",
+  "rag3db_root": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-indexed-warning-core-16nov-v1/corpora/rag3db",
+  "tests_executed": 0,
+  "cargo_invoked": false
+}

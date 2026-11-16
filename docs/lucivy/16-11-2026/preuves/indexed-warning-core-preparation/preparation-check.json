@@ -1,0 +1,37 @@
+{
+  "preflight_sha256": "23dd351692d45004e23f5a92c3d9ec6d5706cb03008a6afee3bc816c6aa4b3be",
+  "copied_helpers": {
+    "qualify-indexed-false-core.py": "2fa59faafe18634a055da4e770a96d4eb87da79864332f8d2a5d8ed222a8fa14",
+    "admit-indexed-false-core.py": "3cde2f1ebd9a038641c403e75d5a4eb425ba25fe34cf0d2b0c62361101d707a2",
+    "prepare-indexed-warning-corpora.py": "3c55ddb9bca00d0cc565fd4043091c071761bd02d08fbb0a6439e3f80a7fdb48",
+    "qualify-indexed-false-red.py": "0a269dd90b0ca745811713e21f66b45fda563074bfc06dd6993f04ab03bd2352",
+    "support/confiner_validation.py": "6439fdd8b52c85fa4e74af0def2c667ef0bedae9b814cbbfd48e49946c4f74ea",
+    "support/poste": "79e3a8bbf457e3bc9104aa1558e7d03072216c70b68e08ae606ace6aa4584c7b",
+    "green-test-elf": "d10152c78102ee701ef2b808fc2627d7e8044866fcbc5cebe9e5a23550958adc",
+    "corpora/linux-manifest.json": "d4faf3a7988f42db9d0801ee5bd6630d01f97f7be58ce9838fb6cbe189d4f204",
+    "corpora/rag3db-manifest.json": "bb70899c1fba6cac19f58a735bcc2e56a0e25de00dfd33f13a4785b08f608e12",
+    "corpora/linux-selections.json": "f4a1f4eb52c70f51098f8075b210774a8d16f151d0953e3f3f197e4bea7860e8",
+    "corpus-preparation.json": "9e421f7f8123d074abb9c2455920aff6c409953a900268b0e63032b293ab3ea3"
+  },
+  "source": "890c86af44989f3fea6c6fa62fd40d688b4084df",
+  "package_inode": 167787175,
+  "package_device": 55,
+  "uid": 1000,
+  "nonce": "e14c4d52ea84cbb255feeb63679cfcb3",
+  "held_targets": {
+    "test_store_fallback": "diagnostic on a persistent personal index; not isolated",
+    "test_diagnostics": "diagnostic on a persistent personal index; not isolated",
+    "test_lock_investigation": "diagnostic on a persistent personal index; not isolated",
+    "test_search_mismatch": "diagnostic on a persistent personal index; not isolated",
+    "test_fuzzy_ground_truth": "checkout walk does not exclude tracked .vault paths",
+    "test_regex_ground_truth": "checkout walk does not exclude tracked .vault paths",
+    "test_merge_contains": "checkout walk does not exclude tracked .vault paths",
+    "bench_vs_tantivy": "persistent personal paths and lock removal; not isolated",
+    "test_luce_roundtrip": "exact playground dataset.luce absent; no substitute snapshot admitted"
+  },
+  "scope_absent": true,
+  "logs_absent": true,
+  "cargo_invoked": false,
+  "ground_truth_cache": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/tmp/lucivy-reports/v3_fuzzy_regex_gt__home_lucied__cache_rag3weaver_build_cx_lucivy_indexed_warning_core_16nov_v1_corpora_rag3db_500.json",
+  "ground_truth_cache_absent": true
+}

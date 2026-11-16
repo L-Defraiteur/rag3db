@@ -94,3 +94,7 @@ Banc, aucun rehash des binaires par Banc. Nuance : 12 UNKNOWN entrée, **13 apr�
 tests**, 12 final, tous nonattribués ; pas d’absence universelle /proc.
 Aucun core entier, ULP, corpus7.2, fusion, tag ou publication qualifié.
 PR42 reste HOLD suite au refus, sans contournement.
+
+Préparation admise et matérialisée ensuite : voir08, ses empreintes finales,
+corpus privés et neuf targets HOLD explicites. Les hashes proposés ci-dessus
+sont ceux du brouillon28bdd49e72, pas ceux du paquet final à soumettre au GO.
