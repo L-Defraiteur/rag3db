@@ -277,7 +277,7 @@ fn transferer_les_vecteurs(catalog: &Catalog, modele: &crate::embedding_storage:
 /// À jouer sur une copie, sans autre ouvreur.
 #[cfg(feature = "rag3db-native")]
 pub fn migrer_la_base(chemin: &std::path::Path) -> Result<Bilan, String> {
-    let mut catalog = ouvrir_par_le_chemin(chemin)?;
+    let mut catalog = open_by_path(chemin)?;
     migrer_vers_les_versions(&mut catalog, crate::code::default_scope_chunking())
 }
 
@@ -285,7 +285,7 @@ pub fn migrer_la_base(chemin: &std::path::Path) -> Result<Bilan, String> {
 /// vectorielle, son plein texte en fichiers, un embarqueur qui refuse tout appel au nom de son modèle,
 /// et le schéma de code enregistré (une base garde alors sa forme).
 #[cfg(feature = "rag3db-native")]
-fn ouvrir_par_le_chemin(chemin: &std::path::Path) -> Result<Catalog, String> {
+fn open_by_path(chemin: &std::path::Path) -> Result<Catalog, String> {
     use crate::connection::DbConnection;
     use crate::{CatalogConfig, Rag3dbConnection};
     let ouvrir = || -> Result<Rag3dbConnection, String> {
@@ -311,15 +311,15 @@ fn ouvrir_par_le_chemin(chemin: &std::path::Path) -> Result<Catalog, String> {
 
 /// Ce que la montée aux générations a fait, pour le rapport.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BilanDesGenerations {
+pub struct GenerationsReport {
     /// La forme de la base avant (`versions` attendue).
-    pub forme_avant: String,
+    pub form_before: String,
     /// La forme après (`generations`).
-    pub forme_apres: String,
+    pub form_after: String,
     /// La couche et le rang de la dernière génération publiée, lus dans `_generation` (`backend`, 0).
     pub generation: Option<(String, i64)>,
     /// Le rang que les lectures voient ensuite : celui en attente (1), que le repassage écrit.
-    pub rang_lu: Option<i64>,
+    pub read_rank: Option<i64>,
 }
 
 /// **Monter une base à versions aux générations par son chemin** (la bascule des bases, après 1b) :
@@ -327,7 +327,7 @@ pub struct BilanDesGenerations {
 /// [`crate::code::migrer_vers_les_generations`]. Refuse une base tenue par un autre écrivain vivant
 /// (sa marque `<base>.ecrivain`) et une base qui n'est pas à versions, en nommant la forme.
 #[cfg(feature = "rag3db-native")]
-pub fn migrer_la_base_aux_generations(chemin: &std::path::Path) -> Result<BilanDesGenerations, String> {
+pub fn migrate_base_to_generations(chemin: &std::path::Path) -> Result<GenerationsReport, String> {
     use crate::code::ScopeForm;
     if let Some(m) = crate::marque_d_ecrivain::lire(chemin).filter(|m| m.pid != std::process::id()) {
         #[cfg(feature = "daemon")]
@@ -342,17 +342,17 @@ pub fn migrer_la_base_aux_generations(chemin: &std::path::Path) -> Result<BilanD
             ));
         }
     }
-    let mut catalog = ouvrir_par_le_chemin(chemin)?;
+    let mut catalog = open_by_path(chemin)?;
     let nom = |f: ScopeForm| match f {
         ScopeForm::Generations => "generations",
         ScopeForm::Versions => "versions",
         ScopeForm::SansVersions => "sans versions",
         ScopeForm::Neuve => "neuve",
     };
-    let forme_avant = nom(crate::code::scope_form(&catalog).map_err(|e| format!("la forme : {e}"))?).to_string();
+    let form_before = nom(crate::code::scope_form(&catalog).map_err(|e| format!("la forme : {e}"))?).to_string();
     crate::code::migrer_vers_les_generations(&mut catalog).map_err(|e| e.to_string())?;
-    let forme_apres = nom(crate::code::scope_form(&catalog).map_err(|e| format!("la forme : {e}"))?).to_string();
-    let rang_lu = catalog.generations.as_ref().map(|v| v.rang);
+    let form_after = nom(crate::code::scope_form(&catalog).map_err(|e| format!("la forme : {e}"))?).to_string();
+    let read_rank = catalog.generations.as_ref().map(|v| v.rang);
     let couche = crate::code::COUCHE_DU_BACKEND;
     let generation = match catalog.dialect_arc().latest_generation_rank() {
         Some(q) => {
@@ -363,7 +363,7 @@ pub fn migrer_la_base_aux_generations(chemin: &std::path::Path) -> Result<BilanD
         }
         None => None,
     };
-    Ok(BilanDesGenerations { forme_avant, forme_apres, generation, rang_lu })
+    Ok(GenerationsReport { form_before, form_after, generation, read_rank })
 }
 
 /// L'embarqueur d'une migration : le nom et la dimension d'un modèle de la base, et un refus à

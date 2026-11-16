@@ -916,16 +916,16 @@ fn load_call_view_stack(
     prepared: &PreparedBackend,
     conn: &dyn crate::connection::DbConnection,
     dialect: &dyn crate::dialect::SchemaDialect,
-    requested: &crate::vues::VueDemandee,
-    settings: &crate::vues::ReglagesDesVues,
-) -> Result<crate::vues::PileDeLecture, String> {
-    let refusal = match crate::vues::charger_la_pile_sur(conn, dialect, requested, settings) {
+    requested: &crate::views::ViewRequest,
+    settings: &crate::views::ViewSettings,
+) -> Result<crate::views::ReadStack, String> {
+    let refusal = match crate::views::load_stack_on(conn, dialect, requested, settings) {
         Ok(pile) => return Ok(pile),
         Err(e) if e.contains("couche inconnue") => e,
         Err(e) => return Err(e),
     };
     let Some(root) = prepared.workspace_root() else { return Err(refusal) };
-    let Some(repo) = crate::suivies::id_du_depot(&root, prepared.manifest.tracked.as_ref())? else { return Err(refusal) };
+    let Some(repo) = crate::suivies::repo_id(&root, prepared.manifest.tracked.as_ref())? else { return Err(refusal) };
     let read_meta = |key: &str| -> Result<Option<String>, String> {
         let q = dialect.load_meta_by_prefix("prefix");
         let rows = conn
@@ -933,8 +933,8 @@ fn load_call_view_stack(
             .map_err(|e| format!("`view` : lecture de _catalog_meta : {e}"))?;
         Ok(rows.rows.iter().find(|r| r.first().and_then(|k| k.as_str()) == Some(key)).and_then(|r| r.get(1)).and_then(|v| v.as_str()).map(str::to_string))
     };
-    match crate::suivies::id_de_la_couche_par_son_nom(&read_meta, &repo, &requested.couche)? {
-        Some(id) => crate::vues::charger_la_pile_sur(conn, dialect, &crate::vues::VueDemandee { couche: id, rang: requested.rang }, settings),
+    match crate::suivies::layer_id_by_name(&read_meta, &repo, &requested.layer)? {
+        Some(id) => crate::views::load_stack_on(conn, dialect, &crate::views::ViewRequest { layer: id, rank: requested.rank }, settings),
         None => Err(refusal),
     }
 }
@@ -969,7 +969,7 @@ fn rows_after_rank(
 /// Le rang omis vaut la dernière génération publiée de la couche. Toute autre
 /// clé, une couche absente ou vide, un rang qui n'est pas un entier : un refus
 /// qui les nomme.
-fn parse_view(v: &Value) -> Result<crate::vues::VueDemandee, String> {
+fn parse_view(v: &Value) -> Result<crate::views::ViewRequest, String> {
     let o = v.as_object().ok_or_else(|| format!("`view` doit être un objet {{\"layer\", \"rank\"?}}, pas {v}"))?;
     if let Some(k) = o.keys().find(|k| *k != "layer" && *k != "rank") {
         return Err(format!("`view` : clé inconnue « {k} » (attendues : layer, rank)"));
@@ -983,7 +983,7 @@ fn parse_view(v: &Value) -> Result<crate::vues::VueDemandee, String> {
         None | Some(Value::Null) => None,
         Some(r) => Some(r.as_i64().ok_or_else(|| format!("`view.rank` doit être un entier, pas {r}"))?),
     };
-    Ok(crate::vues::VueDemandee { couche: layer, rang: rank })
+    Ok(crate::views::ViewRequest { layer, rank })
 }
 
 fn schema_refusal(e: &jsonschema::ValidationError<'_>) -> String {
@@ -3509,7 +3509,7 @@ thread_local! {
     /// `call_tool_on` le temps de l'appel, dans ce fil. `poser_l_instantane` la
     /// lit et charge sa pile dans l'instantané de l'appel : la vue et ses lignes
     /// viennent de la même lecture.
-    static CALL_VIEW: std::cell::RefCell<Option<crate::vues::VueDemandee>> = const { std::cell::RefCell::new(None) };
+    static CALL_VIEW: std::cell::RefCell<Option<crate::views::ViewRequest>> = const { std::cell::RefCell::new(None) };
     /// La vue lue par l'appel en cours (couche, rang, profondeur), que la
     /// réponse rend.
     static VIEW_READ: std::cell::RefCell<Option<Value>> = const { std::cell::RefCell::new(None) };
@@ -4674,7 +4674,7 @@ impl Backend {
                 metadata_ports.push(port.clone());
             }
         }
-        struct RestoreView(Option<crate::vues::VueDemandee>);
+        struct RestoreView(Option<crate::views::ViewRequest>);
         impl Drop for RestoreView {
             fn drop(&mut self) {
                 CALL_VIEW.with(|v| *v.borrow_mut() = self.0.take());
@@ -5021,19 +5021,19 @@ impl Backend {
         // instantané, et compose la visibilité de la vue de l'appel. Une vue
         // inconnue se refuse ici, avant que le graphe ne lise.
         if let Some(requested) = CALL_VIEW.with(|v| v.borrow().clone()) {
-            let settings = crate::vues::reglages_des_vues(prepared.manifest.tracked.as_ref())?;
+            let settings = crate::views::view_settings(prepared.manifest.tracked.as_ref())?;
             let pile = load_call_view_stack(prepared, conn.as_ref(), vue.forme().dialect.as_ref(), &requested, &settings)?;
             let visibility = appel.generations.as_ref().ok_or_else(|| {
                 "`view` : cette base n'a pas de générations (forme d'avant les versions de scope, à migrer)".to_string()
             })?;
             let tables = visibility.tables.clone();
-            appel.generations = Some(visibility.avec_la_pile(&pile));
-            let top = pile.etages.first().ok_or("`view` : pile vide")?;
+            appel.generations = Some(visibility.with_stack(&pile));
+            let top = pile.layers.first().ok_or("`view` : pile vide")?;
             // **L'écart avec le rang en attente** (c7, 16 novembre 2026) : tant que rien
             // ne publie de génération, une vue sans rang lit l'état de la bascule ; la
             // réponse dit le rang en attente, et s'il porte des lignes de cette couche.
-            let pending_rows = rows_after_rank(conn.as_ref(), vue.forme().dialect.as_ref(), &tables, &top.couche, top.rang)?;
-            let read = json!({"layer": top.couche, "rank": top.rang, "depth": pile.etages.len(), "pending": top.rang + 1, "pending_rows": pending_rows});
+            let pending_rows = rows_after_rank(conn.as_ref(), vue.forme().dialect.as_ref(), &tables, &top.layer, top.rank)?;
+            let read = json!({"layer": top.layer, "rank": top.rank, "depth": pile.layers.len(), "pending": top.rank + 1, "pending_rows": pending_rows});
             VIEW_READ.with(|v| *v.borrow_mut() = Some(read));
         }
         services.register("conn", crate::dataflow::services::ConnService(conn.clone()));
