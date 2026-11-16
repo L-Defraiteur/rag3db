@@ -497,3 +497,32 @@ INITIAL848482.791694931/END852082.791694931 conservés dans le contrôleur :
 préparation et file consomment le même budget original, timeout extérieur et
 Common réduits au reste. Expiration ferme le lot au lieu de recréer3600s.
 La préparation n'est pas une autorisation de lancement ; RO et GO distincts.
+
+### Continuation C7-TTY-CONT-9D8-16nov-RESTE — bâti acquis, harnais rouge
+
+Sourcecontrôleur `9d83118b19aba9f2c4793dfe0337026b8fad4be4`, produit6d
+identique ; F8 porté8/8, **pas rejoué**. Garde réelle root→tty réussie,
+bâti tty **rc0 en1,07s**. Reçu continuation après poste : reste829s sous
+INITIAL848482.791694931/END852082.791694931 originaux, aucun reset.
+
+Premier rouge lu dans le harnais : après accord `o`, aucune fin attendue
+(anim reposdaemon ou « fini sans répondre ») détectée. Arrêt de l'autorité
+Common **propriétaire seulement**, via pidfd après vérification exacte
+PID705646/start85125068/cgroup/scriptQ/état actif. Preuve
+`cx-tty-aliases-continuation-v1/first-red-stop.json`. Le superviseur a arrêté
+ses descendants ; aucun processus tiers ni service partagé touché.
+
+Deuxième observation déjà écrite avant arrêt effectif : `multiligne_kitty`,
+indicateurs d'aide/kitty absents malgré réception du texte un/deux/trois avec
+les deux sauts de ligne attendus. Ces constats restent à attribuer : aucun
+correctif produit ni réessai lancé, pas de conclusion de non-régression.
+Le harnais **ENTIER est NON ACQUIS**, interrompu au premier rouge observé.
+
+Preuves privées P/Q/scope de continuationv1 : build.log/rc, harness.log,
+first-red-stop.json, source/ELFhash, configuration/reçus. Common
+`validation-flsb10fe` ROUGE code1/signal15 de cet arrêt explicite,
+restes[], nettoye true ; autoritéTERMINÉE, pic320704512octets, oom_kill0.
+Composé ROUGE, final851326.668131734 avant ENDoriginal. Worktree propre,
+markerT maintenant propriétaire crate tty. Même target conservé, aucun retrait.
+Prochain pas : lecture des traces et attribution des deux observations avant
+toute nouvelle action autorisée ; ticket reste ouvert, aucun push master.
