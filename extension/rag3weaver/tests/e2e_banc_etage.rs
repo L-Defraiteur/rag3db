@@ -975,15 +975,19 @@ Extrait :
     // Le vecteur de la requête est celui du catalogue ; la comparaison est
     // exhaustive au lieu du HNSW ; les 20 meilleurs chunks remontent à leur
     // parent, dédoublonnés au meilleur rang — la résolution d'aujourd'hui.
-    let stockage = reel.lock().unwrap().vector_storage("Scope_Chunk").expect("stockage du modèle courant");
+    // The scope chunks of this base's form (ticket of 13 Nov. 2026): ScopeContent_Chunk on a versions base.
+    let morceaux = rag3weaver::code::scope_chunks(&reel.lock().unwrap()).expect("the scope chunk table of this base");
+    let stockage = reel.lock().unwrap().vector_storage(&morceaux.table).expect("stockage du modèle courant");
     let mut m2 = Mesure::default();
     for (q, attendus) in QUESTIONS {
         let (qvec, _) = reel.lock().unwrap().embarquer_la_requete(q, true, false, &mut Vec::new()).expect("embarquer la requête");
         let cypher = format!(
-            "MATCH (c:Scope_Chunk) WHERE c.{col} IS NOT NULL \
+            "MATCH (c:{table}) WHERE c.{col} IS NOT NULL \
              WITH c, array_cosine_similarity(c.{col}, $q) AS sim ORDER BY sim DESC LIMIT 20 \
-             MATCH (c)-[:Scope_CHUNKED_FROM]->(p:Scope) RETURN p.name, sim ORDER BY sim DESC",
-            col = stockage.column
+             MATCH {to_scope} RETURN s.name, sim ORDER BY sim DESC",
+            table = morceaux.table,
+            col = stockage.column,
+            to_scope = morceaux.to_scope
         );
         let q_val = CypherValue::List(qvec.iter().map(|&f| CypherValue::Float(f as f64)).collect());
         let r = reel.lock().unwrap().execute_raw_with_params(&cypher, &[QueryParam::new("q", q_val)]).expect("cosinus exact");
@@ -999,14 +1003,17 @@ Extrait :
     for (q, attendus) in QUESTIONS {
         let (qvec, _) = reel.lock().unwrap().embarquer_la_requete(q, true, false, &mut Vec::new()).expect("embarquer la requête");
         let hits = backend
-            .vector_search("Scope_Chunk", &stockage.index, &stockage.column, &qvec, 20)
+            .vector_search(&morceaux.table, &stockage.index, &stockage.column, &qvec, 20)
             .expect("HNSW brut");
         let uuids = CypherValue::List(hits.iter().map(|h| CypherValue::String(h.uuid.clone())).collect());
         let r = reel
             .lock()
             .unwrap()
             .execute_raw_with_params(
-                "UNWIND $uuids AS u MATCH (c:Scope_Chunk {_uuid: u})-[:Scope_CHUNKED_FROM]->(p:Scope) RETURN u, p.name",
+                &format!(
+                    "UNWIND $uuids AS u MATCH {} RETURN u, s.name",
+                    morceaux.to_scope.replacen(&format!("(c:{})", morceaux.table), &format!("(c:{} {{_uuid: u}})", morceaux.table), 1)
+                ),
                 &[QueryParam::new("uuids", uuids)],
             )
             .expect("parents des chunks");
