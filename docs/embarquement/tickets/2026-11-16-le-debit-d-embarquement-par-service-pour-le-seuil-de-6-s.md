@@ -1,0 +1,61 @@
+# Le débit d'embarquement par service, pour le seuil de 6 s
+
+- **État** : ouvert (16 novembre 2026, embarquement ; partage décidé par c7, f338855abf)
+- **Pour** : embarquement (la table par service et sa lecture) ; le banc (le jeu de lots fixe et la mesure) ;
+  l'arbre (la conversion reste × débit par phase)
+- **Famille** : produit
+- **Gravité** : manque. Le point 7 de la vision de Lucie (1be007546b) traduit le seuil de 6 s d'attente de
+  l'index en lots à embarquer ; il faut le débit **de chaque service**, pas d'un catalogue.
+- **Atteignable en service** : oui
+- **Touche rag3weaver** : oui (`src/catalog/progress.rs`, `src/estimate.rs`, `src/dataflow/index_nodes.rs`)
+
+## Ce qui existe
+
+- `Catalog::note_embedding_rate(model, origin, rate)` et `embedding_rate(model, origin)`
+  (`src/catalog/progress.rs`) rangent un `Rate { chars_per_second }` (`src/estimate.rs`) dans une clé de méta
+  `embedding_rate:{model}:{origin}`. **`origin` ne vaut que `local` ou `service`** (`embedder_origin`) :
+  deux services du même modèle, ou un service par tunnel et le même en local, partagent une seule valeur.
+- `run_index` (`src/dataflow/index_nodes.rs`) note un débit mesuré à la fin d'un index de 512 morceaux et plus
+  (`note_measured_embedding_rate`), et `known_embedding_rate` le relit pour l'estimation et le « reste
+  environ N min » du journal.
+- La **provenance par passe** (lot du 15 novembre, `Embedder::provenance_counts`, `dire_la_provenance` dans
+  `index_nodes.rs`) dit déjà, après chaque passe, quel service ou quelle carte a servi combien de morceaux :
+  « carte card2 », « service 127.0.0.1:7879 », « activation <nom> ».
+
+## Ce qu'il faut faire (la part d'embarquement)
+
+0. **Une page de conception d'abord**, soumise à l'orchestration avant le code :
+   `docs/embarquement/<jour>/NN-debit-par-service.md`. Elle dit la clé (proposée :
+   `embedding_rate:{model}:{provenance}:{host}`, où `provenance` est celle de `provenance_counts` et `host` le
+   nom du poste), la migration de l'ancienne clé (relue comme repli quand la neuve manque), et où le banc écrit
+   sa mesure (le même stockage, une seule source pour l'hôte).
+1. Après chaque passe, `run_index` mesure le débit **par provenance** (morceaux et caractères de la passe,
+   divisés par sa durée, par provenance), et le note sous la clé neuve. Seules les passes de 64 morceaux et
+   plus comptent (une petite passe mesure surtout la latence).
+2. `known_embedding_rate` lit la clé de la provenance courante de l'embarqueur (celle de sa dernière prise :
+   la carte, le service de repli, l'activation de repli), puis l'ancienne clé en repli.
+3. Une méthode publique `Catalog::embedding_rates()` rend la table entière (provenance, poste, modèle,
+   caractères/s, textes/s, date), pour l'état d'index et pour l'arbre.
+
+**Ce qui ne se touche pas** : le format de `Rate` (l'estimation en dépend), la ligne d'avancement du journal
+(`plein texte prêt · vecteurs N sur C (P %, modèle) · reste environ …`), que `daemon_host/worktrees.rs`
+analyse.
+
+## Comment le prouver
+
+- `the_rate_is_noted_per_provenance` (lib, `index_nodes.rs`) : un faux embarqueur qui sert deux provenances
+  à des vitesses différentes (une attente par appel) ; après l'index, la table a deux débits, dans le bon
+  ordre. Rouge d'abord.
+- `known_embedding_rate_reads_the_current_provenance` : après un repli, le débit lu est celui du service de
+  repli.
+- Suites exigées par chemins : `catalog/progress.rs` → `e2e_code_sync` ; `index_nodes.rs` (le journal) →
+  `e2e_lectures`.
+
+## Taille
+
+Une journée (conception, puis code et témoins).
+
+## Ce qui le bloque
+
+La conception relue par l'orchestration. La part du banc (le jeu de lots fixe) et celle de l'arbre (la
+conversion) avancent à part ; la table se livre sans elles.
