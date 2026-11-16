@@ -12437,6 +12437,18 @@ mod tests {
 
     #[cfg(feature = "rag3db-native")]
     #[test]
+    fn rate_place_access_requires_an_address_and_host_without_legacy_writes() {
+        let catalog = catalog_calling(Some("127.0.0.1:7999"));
+        for place in ["service", "local", "@host", "127.0.0.1:7999@"] {
+            assert!(catalog.embedding_rate_at("rate-model", place).is_err());
+            assert!(catalog.note_embedding_rate_at("rate-model", place, crate::estimate::Rate { chars_per_second: 100.0 }).is_err());
+        }
+        assert_eq!(catalog.embedding_rate("rate-model", "service").unwrap(), None);
+        assert_eq!(catalog.embedding_rate("rate-model", "local").unwrap(), None);
+    }
+
+    #[cfg(feature = "rag3db-native")]
+    #[test]
     fn a_shared_embedder_forwards_its_called_address() {
         let embedder: Arc<dyn Embedder> = Arc::new(CallingEmbedder(Some("127.0.0.1:7999".into())));
         assert_eq!(Embedder::called_address(&embedder), Some("127.0.0.1:7999".into()));
