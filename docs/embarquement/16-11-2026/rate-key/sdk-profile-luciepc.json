@@ -1,0 +1,25 @@
+{
+  "store": "/home/lucied/.cache/rag3db-libs",
+  "sdk": "rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF",
+  "files": [
+    {
+      "role": "shared_library",
+      "type": "file",
+      "path": "/home/lucied/.cache/rag3db-libs/rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF/librag3db.so",
+      "sha256": "b7e9fc75a3d2de04c72680b0309e8bb1df9eaadb5211ebbacf39716c6d0a2101"
+    },
+    {
+      "role": "vector_extension",
+      "type": "file",
+      "path": "/home/lucied/.cache/rag3db-libs/rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF/libvector.rag3db_extension",
+      "sha256": "1669d6392ec8067fcf92ae2ccc972fd7cd3086629fb82d1f5d254e90d72d7561"
+    },
+    {
+      "role": "build_id_header",
+      "type": "file",
+      "path": "/home/lucied/.cache/rag3db-libs/rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF/include/common/build_id.h",
+      "sha256": "1cf920608514b5f3c5e90952ecc580ca6170398f288dd554d00bb0bb32b03110"
+    }
+  ],
+  "profile": "luciepc"
+}

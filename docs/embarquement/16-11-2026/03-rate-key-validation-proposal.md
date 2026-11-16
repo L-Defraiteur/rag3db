@@ -109,3 +109,23 @@ sans réinitialiser le délai. `result.json` ne dit VERT qu'après la passe enti
 Les descripteurs illisibles restent nommés inconnus ; aucune suppression du
 cache, aucun signal envoyé à un processus, aucune ouverture des bases de Lucie.
 Seuls AST Python, syntaxe shell et diff --check ont été contrôlés à ce stade.
+
+
+## Magasin explicite et XDG privé : précontrôle sans Cargo
+
+Le profil `rate-key/sdk-profile-luciepc.json` épingle le magasin réel absolu,
+le SDK59ac et les chemins typés/SHA256 de `librag3db.so`, de l'extension vectorielle
+et de l'en-tête BUILD_ID. Le pilote vérifie ces trois artefacts avant tout Cargo,
+et exporte explicitement le magasin et les dossiers de lib/en-têtes. Il ne copie
+ni SDK ni cache partagé dans le dossier privé. Un changement de fichier arrête.
+
+Précontrôle effectué à luciepc sur le résolveur existant, XDG_CACHE_HOME privé :
+- sans RAG3DB_LIBS_DIR : refus attendu/code2, avant tout Cargo ;
+- avec le magasin explicite : résolution du SDK exact, paths lib/include attendus ;
+- empreintes relevées et conservées, aucun appel natif ou test produit.
+
+Preuves hors target :
+`~/.cache/embarquement-notes/rate-key-16nov/xdg-resolver-preflight-v1/`
+(`negative.log`, `positive.log`, `result.json`). C'est un contrôle de configuration,
+pas une compilation ni une qualification de rate-key. Le profil précédent
+épinglait déjà RAG3DB_LIBS_DIR : aucun défaut produit nouveau n'est inventé.

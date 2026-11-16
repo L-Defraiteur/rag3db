@@ -17,6 +17,10 @@ P = R / 'cx-rate-key-59ac-v1'
 F = 'rag3db-native,burn-embedder,burn-ocr,code,daemon,postgres,openai-llm,anthropic-llm'
 SDK = 'rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF'
 PIN_SHA = '2150fcd847b1df7de04908d357a0c78abc05e50ce599e2793ff08ab48108825d'
+PROFILE = json.loads((Path(__file__).parent/'sdk-profile-luciepc.json').read_text())
+assert PROFILE['sdk'] == SDK
+STORE = Path(PROFILE['store'])
+SDK_ROOT = STORE / SDK
 SOURCE = sys.argv[1]
 assert re.fullmatch('[0-9a-f]{40}', SOURCE)
 AUTH = json.loads(Path(os.environ['RAG3WEAVER_VALIDATION_RECU']).read_text())
@@ -29,7 +33,8 @@ for key in list(E):
         E.pop(key, None)
 E.update(CARGO_TARGET_DIR=str(T), CARGO_BUILD_JOBS='8', CARGO_INCREMENTAL='0',
          RAG3WEAVER_TARGET_MAX_GO='32', RAG3WEAVER_TARGET_REPRENDRE='1',
-         RAG3DB_LIB=SDK, RAG3DB_LIBS_DIR=str(Path.home()/'.cache/rag3db-libs'),
+         RAG3DB_LIB=SDK, RAG3DB_LIBS_DIR=str(STORE),
+         RAG3DB_LIBRARY_DIR=str(SDK_ROOT), RAG3DB_INCLUDE_DIR=str(SDK_ROOT), RAG3DB_SHARED='1',
          CARGO_MANIFEST_DIR=str(C), RUST_TEST_THREADS='8', LUCIVY_SCHEDULER_THREADS='8',
          RAG3WEAVER_STATE_DIR=str(P/'state'), RAG3WEAVER_JOURNAUX_DIR=str(P/'journals'),
          RAG3WEAVER_BUILTIN_TEMPLATES_DIR=str(P/'templates'))
@@ -87,6 +92,15 @@ try:
     script = R/'passe_epinglee.sh'
     assert hashlib.sha256(script.read_bytes()).hexdigest() == PIN_SHA
     assert hashlib.sha256((W/'tools/poste/passe_epinglee.sh').read_bytes()).hexdigest() == PIN_SHA
+    expected_names = dict(shared_library='librag3db.so', vector_extension='libvector.rag3db_extension', build_id_header='include/common/build_id.h')
+    assert len(PROFILE['files']) == 3 and {item['role'] for item in PROFILE['files']} == set(expected_names)
+    for item in PROFILE['files']:
+        path = Path(item['path'])
+        assert item['type'] == 'file' and path == SDK_ROOT/expected_names[item['role']]
+        assert path.resolve() == path and path.is_file() and not path.is_symlink()
+        with path.open('rb') as handle: observed_sha = hashlib.file_digest(handle, 'sha256').hexdigest()
+        assert observed_sha == item['sha256'], ('SDK artifact changed', item['role'])
+    save('sdk-profile.json', PROFILE)
     refs = []; unknown = []
     for q in Path('/proc').iterdir():
         if not q.name.isdigit() or int(q.name) == os.getpid(): continue
