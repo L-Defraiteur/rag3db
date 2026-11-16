@@ -1,0 +1,8 @@
+{
+  "name": "oracle_decode_failure_is_distinct_from_zero_matches",
+  "passed": 1,
+  "failed": 0,
+  "ignored": 0,
+  "filtered_out": 8,
+  "log_sha256": "76e8f2b68feec7fd24f9d6c56a60efa2711c7097fc8d27da8a970f99af364696"
+}

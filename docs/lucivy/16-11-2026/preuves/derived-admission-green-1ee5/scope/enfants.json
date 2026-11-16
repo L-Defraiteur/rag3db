@@ -1,0 +1,178 @@
+[
+  {
+    "pid": 1021307,
+    "parent": 1021297,
+    "session": 1021307,
+    "debut": "119982651",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p1021296-i151931027.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 1021308,
+    "parent": 1021307,
+    "session": 1021307,
+    "debut": "119982651",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p1021296-i151931027.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 1021309,
+    "parent": 1021307,
+    "session": 1021307,
+    "debut": "119982651",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p1021296-i151931027.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 1021315,
+    "parent": 1021309,
+    "session": 1021307,
+    "debut": "119982660",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p1021296-i151931027.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 1021330,
+    "parent": 1021315,
+    "session": 1021307,
+    "debut": "119982667",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p1021296-i151931027.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 1021331,
+    "parent": 1021315,
+    "session": 1021307,
+    "debut": "119982667",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p1021296-i151931027.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 1021332,
+    "parent": 1021315,
+    "session": 1021307,
+    "debut": "119982667",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p1021296-i151931027.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 1021822,
+    "parent": 1021331,
+    "session": 1021307,
+    "debut": "119982743",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p1021296-i151931027.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 1021828,
+    "parent": 1021822,
+    "session": 1021307,
+    "debut": "119982743",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p1021296-i151931027.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 1021846,
+    "parent": 1021828,
+    "session": 1021307,
+    "debut": "119982744",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p1021296-i151931027.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 1022415,
+    "parent": 1021332,
+    "session": 1021307,
+    "debut": "119982891",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p1021296-i151931027.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 1022416,
+    "parent": 1022415,
+    "session": 1021307,
+    "debut": "119982891",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p1021296-i151931027.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 1022417,
+    "parent": 1022416,
+    "session": 1021307,
+    "debut": "119982891",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p1021296-i151931027.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 1022618,
+    "parent": 1021330,
+    "session": 1021307,
+    "debut": "119982991",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p1021296-i151931027.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 1022620,
+    "parent": 1022618,
+    "session": 1021307,
+    "debut": "119982991",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p1021296-i151931027.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 1022622,
+    "parent": 1022620,
+    "session": 1021307,
+    "debut": "119982991",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p1021296-i151931027.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  }
+]

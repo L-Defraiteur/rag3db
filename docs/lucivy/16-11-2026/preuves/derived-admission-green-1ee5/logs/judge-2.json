@@ -1,0 +1,8 @@
+{
+  "name": "invalid_utf8_is_not_silently_replaced_or_dropped",
+  "passed": 1,
+  "failed": 0,
+  "ignored": 0,
+  "filtered_out": 8,
+  "log_sha256": "d6dd82247bfdc76438a7c31740f8a6365ad7805481bd8cbb82205604de812cf6"
+}

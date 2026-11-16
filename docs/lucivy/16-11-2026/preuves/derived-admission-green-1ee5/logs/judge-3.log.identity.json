@@ -1,0 +1,11 @@
+{
+  "pid": 1022664,
+  "start": "119983002",
+  "argv": [
+    "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_derived_fixture_admission-0bd690ba36035513",
+    "--exact",
+    "strict_unicode_folding_maps_to_original_bytes",
+    "--test-threads=1",
+    "--nocapture"
+  ]
+}

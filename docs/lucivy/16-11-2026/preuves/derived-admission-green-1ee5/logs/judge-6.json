@@ -1,0 +1,8 @@
+{
+  "name": "regex_keeps_nonempty_original_byte_spans",
+  "passed": 1,
+  "failed": 0,
+  "ignored": 0,
+  "filtered_out": 8,
+  "log_sha256": "f9cc0b9481ca7f5f1bde1af7162c0b19b089ef91a50ad85dd553545f433a6517"
+}

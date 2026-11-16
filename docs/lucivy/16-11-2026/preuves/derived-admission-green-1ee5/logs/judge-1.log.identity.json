@@ -1,0 +1,11 @@
+{
+  "pid": 1022660,
+  "start": "119983002",
+  "argv": [
+    "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_derived_fixture_admission-0bd690ba36035513",
+    "--exact",
+    "loader_error_is_not_an_empty_corpus_or_no_hit",
+    "--test-threads=1",
+    "--nocapture"
+  ]
+}

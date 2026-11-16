@@ -1,0 +1,9 @@
+{
+  "archive": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-admission-proof-archive-1ee5-16nov",
+  "uid": 1000,
+  "files": {
+    "tested-green-elf": "0a61a812a09a4adaead13cab8f5344965c390144bba1c6508804bff595525961"
+  },
+  "source": "1ee5b366ca67d7fe6926da232a6650d1b1d81407",
+  "purpose": "read-only evidence archive, not a cargo target; no archived ELF executed"
+}

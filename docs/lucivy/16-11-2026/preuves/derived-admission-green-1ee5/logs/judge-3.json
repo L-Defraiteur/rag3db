@@ -1,0 +1,8 @@
+{
+  "name": "strict_unicode_folding_maps_to_original_bytes",
+  "passed": 1,
+  "failed": 0,
+  "ignored": 0,
+  "filtered_out": 8,
+  "log_sha256": "2dfc5e5037f8366ac1d6a743c1325e9295f6e95db168d78542a75410602381f1"
+}

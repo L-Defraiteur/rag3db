@@ -483,3 +483,25 @@ vraiposte32Ghighmaxswap0quota4/j<=4,TERM295kill5plafond300,validation285postPost
 Commonreste-2,3ELFcompile+ledgersavant9exactsMEMOIRE ;2natifsnonjoués. Premier
 rougeSTOPsansretry ;finCommonTERMINE/ownedquiet+3ELF àattester. Restitutionréelle
 duposteàsignaleràC7ETRechercheavantsonciblé ;pascorecomplet/ULP/PR42.
+
+GO C7-LUCIVY-GREEN-6C701-16nov300 exécutéUNEfois : compile3ELF3.37s puis9exacts
+MEMOIRE **1pass/0fail/0ignore chacun**,8filteredparappel(les9fonctionsjouées
+surl’ensemble). LedgersELF/inventairesavantjuges, assertionsnégatif/positif,
+Read/UTF8/Query/spans/fuzzy/regex/frontières passent dansles9. ELFtesté
+0a61a812a09a4adaead13cab8f5344965c390144bba1c6508804bff595525961.
+Common1021297/start119982634 TERMINE0/erreurnull/restes[]/nettoyé,scopebbpomsjk,
+retourwrapperposte/SSH0 puisownedabsent/aucunattribuéactif,12UNKNOWNnonattribués
+finalconservés ;source1eepropre/3SHAphysiques==ledger/copiespréflight277a réattestés,
+Tmarkerinchangé/scratchvide. Final1199987.922879889<receipt1200108.49825763
+<bound1200111.35926876,STARTpostPoste1199826.35926876/validation285/hard300,
+pasreset. Ressourcesviaentryruntime32G/highmax/swap0/cpu4/j4.
+RestitutionRÉELLEnotifiée immédiatementàC7ETRecherche avantarchivagehorsposte ;
+sonGOFTS-ROOT peutprendresonlock. ELFvertROarchivéPC+portable,old7c6f/106fa
+etproofs2hostspréservés ;aucunnatif2/corpus/corecomplet/9HOLD/ULP7.2/PR42
+qualifié. Ticketresteouvert,cevertqualifie seulementles9jugesd’admissionmémoire.
+
+Rapport15+brutsderived-admission-green-1ee5/60SHA archivés aprèsrestitution
+effective, Source1ee/Pilote6c701 9/0/0réels. ActionROBancpreuvesseules
+(hashes/9exacts/ledgersavant/3ELFphysiques/bornes285-300/Commonfin/owned)
+portéeaumêmeticketavanttransmission, sansRust/Cargo/ELF/proc/base/service.
+C7etRecherche déjànotifiésrestitution, aucunworkflowmain/tag/PR42autorisé.

@@ -1,0 +1,14 @@
+{
+  "allocation": "C7-LUCIVY-GREEN-6C701-16nov300",
+  "observed": 1199857.566706599,
+  "authorities": [
+    {
+      "pid": 1021297,
+      "debut": "119982634",
+      "etat": "termine",
+      "echeance": 1200108.49825763
+    }
+  ],
+  "hard_envelope_seconds": 300,
+  "validation_seconds": 285
+}

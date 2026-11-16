@@ -357,3 +357,11 @@ Recette14/greenpilote6c701/admit22550/préflight277a/nonce0233/Tunique3552,
 sourcepropreNONcompilée,aucunRustvert. ProposéenveloppeDURE300/validation285,
 compile3ELF+invent/ledgerpuis9exactsMEMOIRE ;ROBancnouveaupaquet puisGOdistinct.
 Deuxbuildersnatifs/corpus/9HOLD/corefalse/ULP7.2/PR42horsqualification.
+
+GO300vert effectif1ee5/6c701 : rapport15/bruts,compile3ELF3.37s puis9exacts
+MEMOIRE9/0/0,Common1021297TERMINE0/restes[]/nettoyé/ownedabsent,12UNKNOWN
+conservés,sourcepropre/scratchvide/3SHAphysiques==ledger etbornesrespectées.
+Poste réellementrendu+notifiéC7/Recherche avantarchivehorsposte. ELFvert0a61
+ROPC+portable,anciens7c6f/106fa/proofs2hostsconservés,T3552unique. ROBancpreuves
+demandée,qualificationmémoireseulement :2natifs/corpus/core/9HOLD/ULP7.2/PR42
+nonqualifiés ;ticketouvert/pasmain/tag/deliveryduwarningdéduit.

@@ -1,0 +1,45 @@
+{
+  "source": "1ee5b366ca67d7fe6926da232a6650d1b1d81407",
+  "observed": 1199830.018337349,
+  "inventories": {
+    "test_derived_fixture_admission": {
+      "tests": [
+        "fuzzy_uses_the_existing_occurrence_definition_on_admitted_bytes",
+        "invalid_utf8_is_not_silently_replaced_or_dropped",
+        "loader_error_is_not_an_empty_corpus_or_no_hit",
+        "missing_panel_is_rejected_before_any_builder",
+        "oracle_decode_failure_is_distinct_from_zero_matches",
+        "regex_keeps_nonempty_original_byte_spans",
+        "relaxed_spans_cross_separators_without_losing_offsets",
+        "strict_unicode_folding_maps_to_original_bytes",
+        "underscore_is_a_boundary_but_a_content_suffix_is_not"
+      ],
+      "ignored": []
+    },
+    "test_derived_in_ram": {
+      "tests": [
+        "derived_in_ram_answers_like_the_files"
+      ],
+      "ignored": []
+    },
+    "test_sfx_v3_ground_truth": {
+      "tests": [
+        "baseline_fuzzy_regex",
+        "debug_struct_fp",
+        "fuzzy_finds_an_occurrence_that_straddles_tokens",
+        "perf_shape_executor",
+        "perf_shape_sharded",
+        "regex_v2_vs_v3",
+        "v3_distributed_coherence",
+        "v3_distributed_two_nodes",
+        "v3_ground_truth_coherence",
+        "v3_ground_truth_contains",
+        "v3_ground_truth_demo",
+        "v3_sharded_filter_delete_delta"
+      ],
+      "ignored": [
+        "v3_ground_truth_demo"
+      ]
+    }
+  }
+}

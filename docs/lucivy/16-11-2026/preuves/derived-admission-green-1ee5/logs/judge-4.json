@@ -1,0 +1,8 @@
+{
+  "name": "relaxed_spans_cross_separators_without_losing_offsets",
+  "passed": 1,
+  "failed": 0,
+  "ignored": 0,
+  "filtered_out": 8,
+  "log_sha256": "afd6e6aeba08303ddd781457313aac46449d1a282c1691b98675f1c784c1c901"
+}
