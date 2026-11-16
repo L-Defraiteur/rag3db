@@ -8,6 +8,13 @@ fond est dans `docs/recherche/11-11-2026/02-knowledge-dump.md`. Les rapports ré
 
 ## 1. État
 
+**État final, 16 novembre 2026, 11 h, arrêt demandé par Lucie** :
+- aucune entrée de la partie 2 n'est en cours, et aucune n'est encore faite ; Codex part de l'entrée 1 ;
+- aucune branche inachevée : tous les lots de la session sont sur master ;
+- rien ne tourne de cette session, ni passe, ni lourd, ni mesure, aux deux postes (liste vide vérifiée) ;
+- le ticket de l'entrée 10, l'attente d'index par vue, porte depuis ce matin la forme de c7 : l'attente
+  compte aussi l'embarquement sous le signal vector. Elle attend le débit du banc et le mot de Lucie.
+
 **Sur master, de cette session (le plus récent d'abord)** :
 
 | hash | lot |
