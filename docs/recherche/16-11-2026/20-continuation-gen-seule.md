@@ -13,3 +13,5 @@ GENcap60MINENDcommun−15. ProfilSHA+SDKpinés au lancement, capturevraiPID/star
 Final nouveaucommonTERMINE/restes[]/nettoyé/busabsent+ownedquietPIDstart+cachequiet, hashes2ELF/SDK/source/contrôleurs/archives etENDoriginalaprèshash/prépub. Parentinitial retourneSEULEMENTrc aprèsposte, aucun scanfinalhorsborne. Archives/logs/copies2postes aprèsfin conservés ; aucunnettoyage. Statutnouveau GEN_PASSED_WITH_PRIOR_CLASSIC_RAW éventuel ne changeaucun anciencomposéROUGE ni ne prouve baselineancienmaster/histoire149a. SiENDexpiré pendantprépa/revue, refuser etdemander nouvelarbitrageexplicite, pasredémarrerbudget.
 
 PiloteNONJOUÉ/aucunAuth/PQS/targetmutation ; GOexactdistinctC7 aprèspublication/RO requis. GDB thread-events off recommandé seulement futurspilotesGDB, aucune ancienne sortie réécrite ou recompilation pour cette continuation.
+
+Classificateur : témoinréelprépubdfa puisROUGE1/0.000s AVANTfixac4c ;3fonctionsCPU VERTES0.004s APRÈSfix, mutantsinclus. AST3verts/diffcheck. PreuvesCPU6fichiers manifest5899da92d8e42e8d12151393467d3e7856f853dcac44dcfb8590b07520608f51, horsnative. Aucune GEN/Cargo/GDB ni autoritécréée par cette préparation.
