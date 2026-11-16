@@ -73,6 +73,14 @@ préparées) à 17 h 45, puis vers 3724accba (V2-1b, V2-1c) à 21 h 05. Les scri
    `instantanes.sh`, `generate_snapshot_return.py` et `restore_snapshot.py`
    (copie du helper qualifié, pas un lien cassé). La pose cache reste une
    opération G autorisée par C7 ; ne jamais régénérer les anciens retours.
+   Un refus de préflight (pin, inventaire, snapshot ou unités) ne déplace aucun
+   fichier. Après le premier déplacement, une erreur d'E/S peut laisser un retour
+   partiel : conserver preuves et état après, ne pas prétendre une transaction
+   atomique entre bases. Un succès vérifie l'ensemble restauré exact (chemins,
+   types, SHA et métadonnées), pas seulement la présence du fichier principal.
+   Le retour opérateur exige le contexte de gestion hors Common ; les fixtures
+   remplacent systemctl. Ne pas appeler le bus utilisateur réel depuis une
+   validation à bus privé, ni injecter son adresse pour faire passer un garde.
 8. **Le contrôle des deux sens, sur les instantanés** (`scripts/controle-des-deux-sens.sh
    <étiquette> <id>`, à chaque poste ; demande d'hotfixs, 7 novembre 2026) : `tools/check_rel_directions`,
    bâti contre la lib neuve du magasin (son `rag3db.hpp`) depuis **`origin/master`** (jamais un

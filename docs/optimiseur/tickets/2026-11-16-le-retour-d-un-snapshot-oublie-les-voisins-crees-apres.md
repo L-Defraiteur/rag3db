@@ -102,3 +102,31 @@ SHA73aa4ed3f98d1b62825bcffe9929f7c6a9cd422672e13637d28d07bf26262449.
 Ticket encore ouvert : intégration et éventuelle pose du bundle décidées par C7.
 Les caches historiques restent inchangés ; aucun ancien snapshot, RET, reçu ou
 attestation72h modifié. Aucune CLI native, API, lib, Cargo ou base originale opéré.
+
+
+## Audit de périmètre et préparation de pose, sans activation
+
+Audit RO bb5 : huit chemins attendus, aucun hors scope ; arbres `src`, `test`,
+`extension` et `tools/rust_api` byteidentiques à df2a. Helper et ses cinq tests
+identiques à bf0aba. Lien source suivi Git vers le helper qualifié, bundle futur
+composé de trois fichiers réguliers755 ; recette générée autonome ensuite.
+Audit privé `~/.cache/optimiseur-notes/return-generator-16/audit-bb5/audit.json`,
+SHA db81aa80932fe8db1dbdbed649ef229a64668c19e90cfa8998f34b8f75a94393.
+Bundle privé préparé sous le même dossier, `return-generator-bb5d4695fd/`.
+
+Plan de pose À EXÉCUTER UNIQUEMENT après ATOI exact C7 : vérifier source master
+et trois SHA, copier un bundle versionné régulier dans
+`~/.cache/rag3weaver-notes-A/return-generator-bb5d4695fd/`, préserver par `cp -p`
+l'entrée historique sous `instantanes.sh.avant-return-generator-bb5-20261116`,
+puis publier par renommage un lien atomique `instantanes.sh` vers le bundle.
+`realpath` de l'entrée sélectionne les deux helpers voisins du bundle. L'ancien
+inode n'est pas réécrit. Mode du script cible755, SHA0cecea65 ; helper e1fd et
+outil9e9885f5 dans la même version. Rejouer les fixtures contre la copie posée
+sur chaque poste et conserver les reçus. Aucun de ces chemins cache n'a été écrit.
+Lecture fresh des deux entrées historiques : SHA f4ab49a97dea7983af91ddb52523a4a71e4cca4eadd0283313f065ce3d94464e inchangé.
+
+Garantie documentée : refus de PRÉFLIGHT = aucun déplacement ; après premier
+move une erreur peut être partielle, état après et preuves restent conservés.
+Succès = ensemble ancien exact, pas fichier seul. Retour opérateur hors Common,
+jamais de réinjection du bus propriétaire dans une validation privée. Aucune
+qualification réelle de retour, restauration ou fermeture induite par les fixtures.
