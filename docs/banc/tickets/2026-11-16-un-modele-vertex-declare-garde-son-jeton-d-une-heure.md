@@ -1,6 +1,9 @@
 # Un modèle Vertex déclaré garde son jeton d'une heure
 
-- **État** : ouvert ; constat, pas de correctif.
+- **État** : ouvert ; correctif proposé en branche, qualifié CPU/faux HTTP uniquement.
+- **Source proposée** : c38fc3e4ddd8c806de904c7d08eb43b4988fec99 ; intégration et qualification complète en attente.
+- **Recette CPU** : pilote441002d11bd07b7e8b77b0351d6e522ac5a9c6db, sept exacts1/0/0 ; aucun OAuth/cloud/F300 qualifié.
+- **Rouge historique conservé** : sourcefe40/piloteeb026, preuves4d54/39SHA141a ; ancien verdict reste rouge.
 - **Famille** : produit
 - **Gravité** : haute pour toute passe longue. Au bout d'une heure, chaque appel au modèle rend 401, et la
   décision est perdue sans que la passe s'arrête.
@@ -86,3 +89,7 @@ Contrôleurv2 :2FAIL observés avantfix sur vrai quietAST,4/0 aprèscodepublié 
 ## Réserve un target de session, avant delta pilote
 
 C7 refuse le second target proposé par e077 ; il n’a jamais été créé (prepare-only seulement/Pvide). Ancien target-cx-ed-stable-tie-identity existe ownerWTfe40, ELF53b5/copie/39SHA141a intacts, reçu rougeTERMINE/restes[]/nettoyé. Aucun retrait pour contourner cette règle. Préparer reprise connue oldfe40→APPc38 via garde commune réelle : provenance/identités/hashs avant et APRÈSvraiposte, freshscanowned+exe/cwd/FD/T/oldW/newW/Q et UNKNOWNattribuablefatal, oldguard sansREPRENDRE puis newguard REPRENDRE1. Sourcec38inchangée ; e077NONALLOUÉ, nouveaupilote/Qv3/RO/GOdistinct nécessaires avanttoute mutationT.
+
+## Sept juges CPU verts, ticket toujours ouvert
+
+GO441C7distinctconsomméUNEfois surUNIQUEtarget repriscommune :7exacts1/0/0,composéVERT0/113.024s<1130/restes[]/busabsent/quietindépendante. [Preuves19 etlimites](../../everything-declarative/16-11-2026/19-preuves-cpu-vertex-correctif.md),59SHA7a73 conformesPC/portable. Le raccorddéclaratifinjecté estqualifiéCPU ; from_env/OAuth/cloud/F300/déploiement/intégration ne lesontpas. Ancienrougefe40gardé, aucuneclôture/master/retraitdéduits.
