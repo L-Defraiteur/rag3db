@@ -127,15 +127,20 @@ hf-hub = { version = "0.4", optional = true, default-features = false, features 
 # dictionnaire (513,8 → 400,7 Mo sur Lucivy_Scope après la purge des orphelins ;
 # l'index entier 4,27 → 1,16 Go). Format inchangé. C'est ce qu'appelle
 # `POST /backend/maintain` (`fts_maintenance`).
-lucivy-core = "4.3.8"
+# La 4.3.9 (16 novembre 2026) : une recherche filtrée prend la longueur moyenne de
+# ses admis, et non celle de tout l'index. Avec l'histoire gardée au plein texte, la
+# moyenne du corpus déplaçait la normalisation de BM25 (11 requêtes de search_code sur
+# 15 classées autrement qu'un index neuf, jusqu'à 69 % d'écart ; 2 après, des ex æquo).
+# Format inchangé. Publiée le 16 novembre 2026 (tag v4.3.9, main 0825bcd).
+lucivy-core = "4.3.9"
 # Moteur : nécessaire pour construire les LucivyDocument à l'indexation.
-ld-lucivy = { version = "4.3.8", default-features = false, features = ["stopwords", "lz4-compression"] }
+ld-lucivy = { version = "4.3.9", default-features = false, features = ["stopwords", "lz4-compression"] }
 
 
 # sparse_vector — crate ami de lucivy (Apache-2.0, dérivé en partie de Qdrant,
-# voir son NOTICE), persistance via lucistore. Aligné sur lucivy en 4.3.8
-# (15 novembre 2026) ; depuis la 4.3.3, close() arrête aussi ses pools après une erreur.
-sparse-vector = "4.3.8"
+# voir son NOTICE), persistance via lucistore. Aligné sur lucivy en 4.3.9
+# (16 novembre 2026) ; depuis la 4.3.3, close() arrête aussi ses pools après une erreur.
+sparse-vector = "4.3.9"
 
 # rag3db native (feature flag, pour natif + Node.js)
 rag3db = { path = "../../tools/rust_api", optional = true }
