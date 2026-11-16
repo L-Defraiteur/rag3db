@@ -117,7 +117,12 @@ Ce qui suit reste comme méthode, si une autre migration doit se départager.
 
 ### Entrée 2 : la compaction ne doit pas grossir un dictionnaire sans texte mort
 
-- **Ticket** : `docs/lucivy/tickets/2026-11-16-la-compaction-du-dictionnaire-grossit-un-dictionnaire-sans-texte-mort.md`.
+**Fait le 16 novembre 2026, sans défaut.** La compaction rend le dictionnaire d'un index neuf, et c'est la
+disposition en petites générations qui était 3 % plus petite. Ticket fermé, avec la mesure :
+`docs/tickets/closed/2026-11-16-la-compaction-du-dictionnaire-grossit-un-dictionnaire-sans-texte-mort.md`. Rien à
+faire pour Codex. La suite reprend à l'entrée 3.
+
+- **Ticket** : `docs/tickets/closed/2026-11-16-la-compaction-du-dictionnaire-grossit-un-dictionnaire-sans-texte-mort.md`.
 - **Ce qu'il faut faire** :
   1. Mesurer sur une copie de `Lucivy_Source` de la mémoire longue : `index_report` par fichier, avant et après
      `compact_dictionary`.

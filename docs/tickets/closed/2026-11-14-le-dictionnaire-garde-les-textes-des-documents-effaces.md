@@ -6,8 +6,8 @@
   refus (lu dans `daemon_status`, clé `fts_maintenance`). Les dictionnaires qui portaient des textes morts baissent :
   587,2 → 436,4 Mo pour l'atelier (`Scope` 559,0 → 409,8 Mo, 36 orphelins purgés), 453,0 → 433,6 et 441,4 → 425,2 Mo
   pour les deux autres bases de code. Une table sans texte mort a grossi (`Lucivy_Source` de la mémoire longue, +3,75 %) :
-  c'est un autre défaut, avec son propre ticket
-  (`docs/lucivy/tickets/2026-11-16-la-compaction-du-dictionnaire-grossit-un-dictionnaire-sans-texte-mort.md`).
+  mesuré à part, ce n'est pas un défaut : la compaction rend la taille d'un index neuf
+  (`docs/tickets/closed/2026-11-16-la-compaction-du-dictionnaire-grossit-un-dictionnaire-sans-texte-mort.md`).
 - **Gravité** : poids. Les réponses ne changent pas, mais une purge suivie d'une compaction laisse dans le
   dictionnaire du shard les textes de tous les documents effacés : 93,7 Mo sur `Lucivy_Scope` de
   code-rag3db-depot, 7 % de l'index. C'est une part du « cent fois ses sources »

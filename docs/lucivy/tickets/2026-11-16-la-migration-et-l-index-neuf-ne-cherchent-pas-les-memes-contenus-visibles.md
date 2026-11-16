@@ -78,6 +78,14 @@ Sur « parse translate a hop into a query », les rangs 4, 8, 12, 14 et 19 de A 
    identité qui ne dépend ni de la base ni de son histoire. Pour une occurrence, c'est `Scope.key` ; pour une version,
    son uuid de contenu.
 
+**Le relevé de banc (16 novembre 2026, § 12 de `docs/banc/16-11-2026/01-la-parite-de-la-migration.md`, a4119c4dcd)**
+nomme deux sources aux contenus d'un seul côté :
+- 122 occurrences de `third_party/fuzzy-fst/`, que l'arbre de Lucie ne suit pas et qui sont indexées depuis le
+  working tree ;
+- les en-têtes C/C++ de `third_party`, découpés par codeparsers avant le lot des règles 2.
+
+Le rejeu sur la copie finale de la bascule suit en 9ed0c640c7.
+
 ## Comment le rejouer
 
 Le script est à luciepc, `~/.cache/rag3weaver-build/lucivy-bm25-migration/cmp-detail.sh`, sous `poste lourd`. Son
