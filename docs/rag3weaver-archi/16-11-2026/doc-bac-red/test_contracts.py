@@ -67,7 +67,7 @@ class Contracts(unittest.TestCase):
     def test_real_constructor_and_policy_agree_with_outer_timeout_and_exact_pilot(self):
         q.configure_controller();pilot='a'*40;control=Path('/private/checkout')
         actual=q.controller.commands(control,pilot)
-        self.assertEqual(actual['outer'],['timeout','--signal=TERM','--kill-after=15s','1920s',
+        self.assertEqual(actual['outer'],['timeout','--signal=TERM','--kill-after=2s','1918s',
             str(q.C/'scripts/poste'),'lourd',q.sys.executable,str(q.Q/'qualify_red.py'),'--admit',pilot])
         with patch.object(q.controller,'sha',return_value='script-hash'):
             policy=q.controller.policy(control,pilot,dict(pid=7,start='123'))
