@@ -47,6 +47,77 @@ def library_environment():
     return dict(RAG3DB_LIB=CONFIG['lib'], RAG3DB_LIBS_DIR=CONFIG['library_store'],
                 RAG3DB_BUFFER_POOL_SIZE='1073741824')
 
+def active_logs(name):
+    paths = [P / (name + '.log')]
+    if name == 'official-pass':
+        paths += [P / 'official' / (item + '.log') for item in
+                  ['temoins', 'e2e_code', 'e2e_lectures', 'check_features',
+                   'preuve', 'lib', 'navigateur', 'resume']]
+    return paths
+
+def watch_logs(name):
+    # Only files produced by this invocation, never cached template evidence.
+    for log in active_logs(name):
+        if not log.exists():
+            continue
+        with log.open('rb') as stream:
+            before = os.fstat(stream.fileno())
+            data = stream.read()
+            after = os.fstat(stream.fileno())
+        text = data.decode(errors='replace')
+        match = FAILED.search(text)
+        if match is None and log.name in ['check_features.log', 'resume.log']:
+            match = re.search(r'^(?:CHECK_FEATURES )?ROUGE\b.*$', text, re.M)
+        if match:
+            evidence = dict(invocation=name, path=str(log), observed=time.monotonic(),
+                            device=before.st_dev, inode=before.st_ino, size_before=before.st_size,
+                            size_after=after.st_size, mtime_ns=after.st_mtime_ns,
+                            bytes_read=len(data), sha256=hashlib.sha256(data).hexdigest(),
+                            matched=match.group(), meaning='active invocation output')
+            with (P / 'watcher-first-match.json').open('x') as stream:
+                json.dump(evidence, stream, indent=2)
+                stream.flush(); os.fsync(stream.fileno())
+            first_red('active log failure: ' + str(log))
+            raise AssertionError('first red in active log ' + str(log))
+
+def cache_quiet():
+    ancestors = set(); pid = os.getpid()
+    while pid > 1 and pid not in ancestors:
+        ancestors.add(pid)
+        pid = int((Path('/proc') / str(pid) / 'stat').read_text().rsplit(') ', 1)[1].split()[1])
+    found = []; unknown = []
+    for proc in Path('/proc').iterdir():
+        if not proc.name.isdigit():
+            continue
+        stamp = None; attributed = False
+        try:
+            fields = (proc / 'stat').read_text().rsplit(') ', 1)[1].split(); stamp = fields[19]
+            if fields[0] == 'Z':
+                continue
+            for field in ['exe', 'cwd']:
+                dest = os.readlink(proc / field)
+                if any(dest == str(root) or dest.startswith(str(root) + '/') for root in [W, T]):
+                    attributed = True; found.append(dict(pid=proc.name, starttime=stamp, field=field, path=dest))
+            for fd in (proc / 'fd').iterdir():
+                try:
+                    dest = os.readlink(fd)
+                except (FileNotFoundError, ProcessLookupError):
+                    continue
+                if dest == str(C / 'scripts/poste') and int(proc.name) in ancestors and proc.stat().st_uid == os.getuid():
+                    assert digest(dest) == CONFIG['poste_sha256']
+                    continue
+                if any(dest == str(root) or dest.startswith(str(root) + '/') for root in [W, T]):
+                    attributed = True; found.append(dict(pid=proc.name, starttime=stamp, field='fd', path=dest))
+        except PermissionError:
+            unknown.append(dict(pid=proc.name, starttime=stamp, attributed=attributed))
+            if attributed:
+                found.append(unknown[-1])
+        except (FileNotFoundError, ProcessLookupError):
+            continue
+    record = dict(observed=time.monotonic(), found=found, unknown=unknown, target=str(T), owner=str(C))
+    (P / 'cache-quiet-after-poste.json').write_text(json.dumps(record, indent=2))
+    assert not found, found
+
 def run(name, args, env):
     check()
     with (P / (name + '.log')).open('w') as output:
@@ -54,10 +125,7 @@ def run(name, args, env):
         try:
             while True:
                 assert time.monotonic() < END - 10
-                for log in P.rglob('*.log'):
-                    text = log.read_text(errors='replace')
-                    if FAILED.search(text) or (log.name == 'check_features.log' and re.search(r'^(?:CHECK_FEATURES )?ROUGE\b', text, re.M)):
-                        raise AssertionError('first red in ' + str(log))
+                watch_logs(name)
                 if child.poll() is not None:
                     break
                 time.sleep(.1)
@@ -106,11 +174,12 @@ def main():
     check()
     assert T.is_dir() and T.resolve() == T, 'only the known same-owner v1 target'
     assert (T / '.arbre-du-target').read_text().strip() == str(C)
-    assert not any(T.rglob('.fingerprint'))
+    cache_quiet()
+    fingerprints = sorted(str(p.relative_to(T)) for p in T.rglob('.fingerprint'))
     run('target-guard', ['bash', '-c', '. "$1"; garder_le_target "$2" "$3"',
         'initial-empty-target', str(C / 'scripts/garde_target.sh'), str(T), str(C)], env)
     assert (T / '.arbre-du-target').read_text().strip() == str(C)
-    assert not any(T.rglob('.fingerprint'))
+    assert fingerprints == sorted(str(p.relative_to(T)) for p in T.rglob('.fingerprint'))
     for index, name in enumerate(NAMES):
         text = run('exact-' + str(index), ['bash', './run_e2e.sh', '--features',
             'openai-llm,anthropic-llm', '--lib', name, '--exact'], env)
