@@ -120,3 +120,21 @@ python3 -B docs/codeparsers/16-11-2026/language-corpus/pilot.py run \
 Les deux placeholders sont remplacés par les valeurs réellement relues avant GO.
 Le manifeste gel01 attendu est `6ab2b309e0365974d8ee59d6d1c442e7b2d78963659bfd20f225d83a764053b2`.
 Le miroir PC est pris en charge par Banc à mêmes chemins pour préserver les gels.
+
+## Delta avant allocation : erreurs de façade et gel complet
+
+La source exemple `1b35cfb66ae160954981d7dd3a90f5ef88e95b01` corrige la
+classification lue en revue : un Err du worker spécialisé ne remonte plus comme
+validation_error globale. Il devient parser_error avec diagnostic et durée.
+Un test de la conversion réellement appelée est ajouté ; NON JOUÉ avant Cargo.
+Le pilote le joue explicitement (1 passé attendu, zéro ignoré), puis construit
+l'ELF normal et lance la campagne dans la même borne globale de 1800s.
+
+La première campagne vise désormais directement `selection-02` complète :
+32382 fichiers, manifeste
+`96c2e771fefc4cd0e204975feb8d1c73b1a66815cb1d3a1edc1b9002b94b644c`.
+Remplacer les chemins selection-01 par selection-02 et le répertoire de preuves
+language-corpus-01 par language-corpus-02 dans la commande initiale. Aucun fichier
+du premier gel n'a été parsé ; il n'y a donc pas de campagne à rejouer.
+Le coût complet reste à mesurer ; une échéance globale donne une preuve partielle,
+pas une réussite des 32382 fichiers. Le miroir FULL est en cours chez Banc.

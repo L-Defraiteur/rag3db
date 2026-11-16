@@ -98,6 +98,13 @@ def inside(config, proofs):
     target = Path(config['target'])
     assert target.is_dir() and not target.is_symlink()
     assert (target / '.arbre-du-target').read_text().strip() == config['previous_owner']
+    test_command = [sys.executable, str(crate / 'scripts/cargo_garde.py'), 'test', '--locked',
+        '--manifest-path', str(crate / 'codeparsers/Cargo.toml'), '--example', 'language_corpus_probe',
+        '-j8', 'tests::specialized_parser_errors_remain_observations', '--', '--exact']
+    rc = record(proofs, 'conversion-test', test_command, worktree, env)
+    if rc != 0:
+        return rc
+    assert '1 passed; 0 failed; 0 ignored;' in (proofs / 'conversion-test.stdout').read_text()
     command = [sys.executable, str(crate / 'scripts/cargo_garde.py'), 'build', '--locked',
         '--manifest-path', str(crate / 'codeparsers/Cargo.toml'), '--example', 'language_corpus_probe', '-j8']
     rc = record(proofs, 'compile', command, worktree, env)
@@ -135,10 +142,10 @@ def main():
             ['confiner_validation.py', 'poste', 'cargo_garde.py', 'garde_target.sh']]
         files += ['docs/codeparsers/16-11-2026/language-corpus/' + name for name in ['pilot.py', 'control_probe.py']]
         config = {'worktree': str(worktree), 'source': args.source,
-            'parser': '7b09657', 'target': str(target), 'previous_owner': owner,
+            'parser': '1b35cfb66ae160954981d7dd3a90f5ef88e95b01', 'target': str(target), 'previous_owner': owner,
             'manifest': str(args.manifest.resolve(strict=True)), 'roots': str(args.roots.resolve(strict=True)),
             'budget': 1800, 'scripts': {name: digest(worktree / name) for name in files}}
-        config['parser'] = git(worktree / 'extension/rag3weaver/codeparsers', 'rev-parse', '7b09657^{commit}')
+        config['parser'] = git(worktree / 'extension/rag3weaver/codeparsers', 'rev-parse', '1b35cfb66ae160954981d7dd3a90f5ef88e95b01^{commit}')
         config['manifest_sha256'] = digest(config['manifest'])
         config['roots_sha256'] = digest(config['roots'])
         config['lock_sha256'] = digest(worktree / 'extension/rag3weaver/codeparsers/Cargo.lock')
