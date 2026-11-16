@@ -16,4 +16,6 @@ Le [drapeau de sonde perdu](2026-11-16-le-confinement-efface-le-drapeau-de-la-so
 
 ## Suite et fin
 
+La [tentative de lecture du core120s](../16-11-2026/19-lecture-du-core-refusee-avant-gdb.md) est arrêtée avant GDB : option zstd refusée, aucun backtrace nouveau. Le présent ticket reste ouvert sans attribution supplémentaire.
+
 Relire les sources et métadonnées déjà acquises ; si insuffisant, proposer une recette bornée de lecture du core avec ELF exact, sans replay du test. Tout outil natif d'analyse ou nouveau runtime requiert admission distincte. Préserver l'absence de comparaison référence/candidat, les trois autres cas non joués et les limites mémoire/maps non observées. Fin : cause démontrée, rouge pertinent avant correction, qualification et intégration autorisées ; pas de fermeture par simple similarité de pile ou correction du pilote.

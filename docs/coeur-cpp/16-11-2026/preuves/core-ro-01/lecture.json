@@ -1,0 +1,12 @@
+{
+  "verdict": "ROUGE BEFORE GDB",
+  "pilot": "7ec74865853ad5556dd77dc9bc925c338b293c39",
+  "raw_files_rehashed_local": 15,
+  "archive_sha256": "386e95a176a156fec32d624008f98e17104888edf0fe4b3c695399daea7f5aad",
+  "gdb_executed": false,
+  "decompression_completed": false,
+  "inferior_executed": false,
+  "retry": false,
+  "full_packet_local": "/home/lucied/.cache/rag3db-moteur-notes/core-ro-01",
+  "full_packet_remote": "luciepc:/home/lucied/.cache/rag3weaver-build/cx-core-ro-01"
+}
