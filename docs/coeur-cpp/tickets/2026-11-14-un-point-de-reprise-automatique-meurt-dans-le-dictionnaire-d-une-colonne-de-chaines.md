@@ -136,3 +136,5 @@ schéma qui n'a rien écrit. Core 3079782 (02:55:41), binaire à côté :
 
 Un point de reprise demandé par un COMMIT. 1 tour sur 12 sous 200 Mio ; 0 sur 10 sous 2 Gio avec le
 pool corrigé. La pression du pool semble l'aider. La suite reste la passe sous ASan, en fenêtre.
+
+Reprise C1 : défaut BufferManager distinct rouge isolé puis5ciblésverts033, suivi au [ticket fils](2026-11-16-un-ajout-au-dictionnaire-refuse-change-la-derniere-chaine.md). Le présent crash reste nonattribué/ouvert, TSan ancien indépendant. Livraison propre888/base685 prépare sa passe, aucun vert888 ni master accordé.
