@@ -22,7 +22,9 @@ fn write_the_visible_offsets() {
     cat.initialize().expect("initialize");
     rag3weaver::code::register_code_schema(&mut cat, rag3weaver::code::default_scope_chunking()).expect("the code schema");
     let target = cat.resolve_search_target("Scope").expect("the Scope target");
-    let ids = cat.resolve_filter_to_ids("Scope", &FilterCondition::Must(vec![]), &target).expect("resolve");
+    // The same table the BM25 node resolves on (`allowed_ids_in`: `target.parent_table`).
+    eprintln!("[probe] target parent table: {}, occurrence projection: {}", target.parent_table, target.occurrence_projection.is_some());
+    let ids = cat.resolve_filter_to_ids(&target.parent_table, &FilterCondition::Must(vec![]), &target).expect("resolve");
     let Some(mut ids) = ids else {
         eprintln!("[probe] no restriction: every row is visible (no history in this base)");
         return;
