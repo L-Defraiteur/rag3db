@@ -106,8 +106,8 @@ ensemble, puis le relevé.
 ## 7. Les erreurs du banc, et ce qu'elles apprennent
 
 - **Une source sans sous-module.** Le premier B′ complet venait d'un worktree détaché sans
-  `submodule update` : 11 fichiers de `codeparsers` lui manquaient, et le cas « parse a json
-  manifest » rendait une autre liste. Le script refuse maintenant une source dont un sous-module est
+  `submodule update` : tout `codeparsers` lui manquait (92 708 `ScopeContent_Chunk`, contre
+  96 884 avec le sous-module), et le cas « parse a json manifest » rendait une autre liste. Le script refuse maintenant une source dont un sous-module est
   vide.
 - **Un relevé avant la fin de l'embarquement.** Sur une base vide, l'index finit avec une dette
   d'embarquement, et un relevé pris à ce moment ne classe qu'en bm25. Le relevé exige ses signaux,
