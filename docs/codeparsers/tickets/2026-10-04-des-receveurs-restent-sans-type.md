@@ -142,9 +142,22 @@ avec quatre types de retour (`mcp.rs`, `worktrees.rs`, `fichier_nodes.rs`, `chat
 se lit pas, et la règle du 11 octobre (une locale à différé non lu est visible, jamais reliée) s'applique.
 On ne revient pas sur cette décision de Lucie.
 
+## Fait le 16 novembre 2026 : le retour d'une fonction définie plusieurs fois, par l'import
+
+Codeparsers `bd13385`. `ReturnOf` porte le module d'où le fichier importe la fonction (`use
+super::chat_qui_code::hote` → `super::chat_qui_code`, posé à la finalisation du fichier depuis ses imports).
+Au rendez-vous, quand les définitions de la fonction ne s'accordent pas sur leur retour, celle du fichier que ce
+module désigne le donne ; aucune autre n'est devinée. Les vingt liens laissés plus haut dans
+`teammate_tests.rs` (`hote` défini quatre fois) reviennent, par le type, sans lever l'abstention du 11 octobre.
+
+Témoin : `a_return_through_a_twice_defined_function_takes_the_imported_one` (`tests/e2e_usages.rs`), vu rouge
+puis vert.
+
+La sonde (corpus figé de rag3db-garde ; avant = master, codeparsers `d754ee5`) : rag3weaver/src, « type »
+9 572 → 9 691, « nom » 8 736 → 8 701 ; 86 couples naissent (tous « type » : `hosted`, `with_backend`,
+`teammate_files`, `read_plans`… de `teammate_tests.rs`, `embed`, `dim` d'`activation.rs`), 33 passent de
+« nom » à « type », 2 partent (`position`, `collect` : des std reliées à tort). Le moteur ne bouge pas.
+
 ## Reste
 
-- **`ReturnOf` d'une fonction définie plusieurs fois** : quand les définisseurs ont des types de retour
-  différents, le `hote` que le fichier importe désigne le bon. Résoudre par l'import rendrait les vingt liens
-  de `teammate_tests.rs` sans lever l'abstention.
 - Les paramètres de fermeture, l'élément d'un itérateur (`Iterator<T>`), C++ `for (auto& x : v)`.

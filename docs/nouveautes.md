@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 16 novembre2026 — **Une fonction définie plusieurs fois donne le type de celle que le fichier importe.** `let host = hote(…); host.hosted()`, où `hote` existe dans quatre modules avec quatre types de retour, n'était relié à rien ; c'est maintenant la méthode du type que rend le `hote` importé. Sur rag3weaver, 86 appels de plus sont reliés par le type. **Toutes les bases repassent une fois** (`REGLES_DE_L_ANALYSE` monte à 7 ; pointeur codeparsers : le module du retour, `bd13385`).
+
 - 16 novembre2026 — **Deux expressions d'une même ligne ont chacune leur fichier.** Deux générateurs ou compréhensions Python sur une même ligne (`print(sum(… for x in A), sum(… for y in B))`) partageaient une seule arête vers leur fichier : l'une des deux restait sans fichier dans le plan et dans `usages`. Les 27 cas de la base du dépôt (scripts Python, une lambda de spdlog) n'en ont plus. **Toutes les bases repassent une fois** (`REGLES_DE_L_ANALYSE` monte à 6 ; pointeur codeparsers : les octets du nœud, `d754ee5`).
 
 - 16 novembre2026 — **Une locale d'un motif de tuple ou redéclarée dit son type.** `let (mut catalog, _store) = make_pair(); catalog.drain()` vise la méthode du bon type, et `let outil = …?; let outil = outil.bind()?;` ne perd plus le type de `outil` : chaque `let` vaut là où il est écrit. Sur rag3weaver, 245 appels de plus sont reliés et 278 passent du nom au type. **Toutes les bases repassent une fois** (`REGLES_DE_L_ANALYSE` monte à 5 ; pointeur codeparsers : les liaisons situées, `6291939`).

@@ -591,7 +591,9 @@ fn usage_properties(sites: &[UsageSite]) -> BTreeMap<String, CypherValue> {
 // (codeparsers, les liaisons différées situées).
 // 6 (16 novembre 2026) : deux homonymes d'une même ligne gardent deux uuid et deux clés (les octets du
 // nœud, codeparsers).
-pub const REGLES_DE_L_ANALYSE: u32 = 6;
+// 7 (16 novembre 2026) : le retour d'une fonction définie plusieurs fois se lit par celle que le fichier
+// importe (`ReturnOf` porte son module, codeparsers).
+pub const REGLES_DE_L_ANALYSE: u32 = 7;
 
 /// **La version de l'analyse** (page 06, § 13) : le commit du parseur lié, [`REGLES_DE_L_ANALYSE`] et le
 /// gabarit du code (le découpage et les champs déclarés de `File` et de `Scope`), hachés.
