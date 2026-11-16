@@ -88,3 +88,34 @@ Aucun juge vert encore observé. Assemblage metadata du paquet puis RO Banc du
 pilote/préflight et GO exact distinct C7 requis. NeufHOLD/full_core=false,
 physiqueFS/corpus réels, Linux7.2/ULP, anciens trois warnings, PR42/main/tag
 conservent leurs limites. Les preuves et ELF rouges sont conservés deux postes.
+
+## Paquet vert préparé, aucune exécution
+
+Q réel `/home/lucied/.cache/rag3weaver-build/cx-lucivy-derived-admission-green-16nov-v1`,
+UID1000/dev55/inode168601424, nonce neuf **023317833614261f17091d13c8a4988a**.
+WPC avancéFF dans sa branche propre vers1ee5, source propre/noncompilée.
+Préflight SHA **277a637e9bebebeef15cd77d81c8d835db5a6c43f9baa06a829086b9dedba369**.
+Neuf copies : green6c701/admit22550/core2fa59/rouge0a269/Common6439/poste79e3,
+ELF rouge7c6f RO, ledger des six sources et invariants statiques. Même target3552,
+ancien Common588652 TERMINE101/restes[]/nettoyé ; contrôlemetadata frais :
+11UNKNOWN nonattribués conservés, aucunowned/attribué actif, pas de quiescence
+universelle. Scope/logs absents, scratch vide. Aucune sélection de corpus.
+
+[Paquet et relevés](preuves/derived-admission-fix-preparation/SHA256SUMS).
+La commande candidate respecte une enveloppeDURE300 (TERM295+kill5), avec
+validation285 et sans nouvelle échéance à mi-parcours ; **NON lancée** :
+
+```bash
+ssh -o BatchMode=yes luciepc 'cd /home/lucied/.cache/rag3weaver-build/cx-lucivy-derived-admission-green-16nov-v1
+exec bash -s' <<'BASH'
+set -euo pipefail
+set -C
+test "$PWD" = /home/lucied/.cache/rag3weaver-build/cx-lucivy-derived-admission-green-16nov-v1
+POSTE_MEM_MAX=32G POSTE_SWAP_MAX=0 POSTE_CPU_QUOTA=400% RAG3WEAVER_BUILD_MEMORY_HIGH=0 /home/lucied/.cache/rag3weaver-build/cx-lucivy-derived-admission-green-16nov-v1/support/poste lourd timeout --signal=TERM --kill-after=5s 295 python3 /home/lucied/.cache/rag3weaver-build/cx-lucivy-derived-admission-green-16nov-v1/admit-derived-admission-green.py > launch.log 2>&1
+BASH
+```
+
+RO source Recherche exacte1ee5 déjà favorable bornée ; RO Banc NOUVEAU paquet
+green6c701/22550/préflight277a sollicitée sur le même ticket avant toute
+exécution. Aucun juge vert Rust encore observé ; seul C7 peut donner le GO
+distinct. Le rouge7c6f, l’ancien106fa et leurs preuves2postes restent intacts.

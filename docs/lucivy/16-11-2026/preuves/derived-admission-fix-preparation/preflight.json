@@ -1,0 +1,106 @@
+{
+  "package": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-derived-admission-green-16nov-v1",
+  "uid": 1000,
+  "package_inode": 168601424,
+  "package_device": 55,
+  "nonce": "023317833614261f17091d13c8a4988a",
+  "source": "1ee5b366ca67d7fe6926da232a6650d1b1d81407",
+  "worktree": "/home/lucied/git_workspaces/cx-lucivy-corpus-admission-16nov",
+  "target": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov",
+  "target_creator_sha256": "5a1671d22dc784bec78f60cf25c8b3003acc5f21e28290f05d0dfc22e0c394df",
+  "old_elf": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_derived_fixture_admission-0bd690ba36035513",
+  "old_receipt": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-derived-admission-red-16nov-v2/scope/validation-e1p6s0dc/autorite.json",
+  "old_verdict": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-derived-admission-red-16nov-v2/scope/validation-e1p6s0dc/verdict.json",
+  "old_children": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-derived-admission-red-16nov-v2/scope/validation-e1p6s0dc/enfants.json",
+  "output": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-derived-admission-green-16nov-v1/logs",
+  "scope": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-derived-admission-green-16nov-v1/scope",
+  "scratch": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-derived-admission-green-16nov-v1/scratch",
+  "scan_directory": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-derived-admission-green-16nov-v1/scans",
+  "baseline_unknown": [
+    {
+      "pid": 1247,
+      "uid": 1000,
+      "start": "1022",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/init.scope"
+    },
+    {
+      "pid": 1256,
+      "uid": 1000,
+      "start": "1023",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/init.scope"
+    },
+    {
+      "pid": 2578,
+      "uid": 1000,
+      "start": "2807",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/plasma-kwin_wayland.service"
+    },
+    {
+      "pid": 2754,
+      "uid": 1000,
+      "start": "2866",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/background.slice/plasma-polkit-agent.service"
+    },
+    {
+      "pid": 673498,
+      "uid": 1000,
+      "start": "117906338",
+      "cgroup": "0::/user.slice/user-1000.slice/session-c960707.scope"
+    },
+    {
+      "pid": 1322557,
+      "uid": 1000,
+      "start": "118148766",
+      "cgroup": "0::/user.slice/user-1000.slice/session-c964648.scope"
+    },
+    {
+      "pid": 2532216,
+      "uid": 1000,
+      "start": "17178100",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/plasma-kwin_wayland.service"
+    },
+    {
+      "pid": 2532317,
+      "uid": 1000,
+      "start": "17178136",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/plasma-kwin_wayland.service"
+    },
+    {
+      "pid": 2532319,
+      "uid": 1000,
+      "start": "17178136",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/plasma-kwin_wayland.service"
+    },
+    {
+      "pid": 4085469,
+      "uid": 1000,
+      "start": "109325538",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope"
+    },
+    {
+      "pid": 4086221,
+      "uid": 1000,
+      "start": "109325843",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope"
+    },
+    {
+      "pid": 4086421,
+      "uid": 1000,
+      "start": "109325875",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope"
+    }
+  ],
+  "baseline_snapshot": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-indexed-warning-green-16nov-v4/scans/baseline-1181487802492849.json",
+  "observed_at": 1794853219.554284,
+  "copy_hashes": {
+    "qualify-derived-admission-green.py": "6c701601a5057285c36420d964288060ed20da75173d359aa2f6ca553f9ae023",
+    "admit-derived-admission-green.py": "22550ba19b772c120892cd8fcdf7fbfc8c60708251728e5419680cc8c08426af",
+    "qualify-indexed-false-core.py": "2fa59faafe18634a055da4e770a96d4eb87da79864332f8d2a5d8ed222a8fa14",
+    "qualify-indexed-false-red.py": "0a269dd90b0ca745811713e21f66b45fda563074bfc06dd6993f04ab03bd2352",
+    "support/confiner_validation.py": "6439fdd8b52c85fa4e74af0def2c667ef0bedae9b814cbbfd48e49946c4f74ea",
+    "support/poste": "79e3a8bbf457e3bc9104aa1558e7d03072216c70b68e08ae606ace6aa4584c7b",
+    "red-consumer-elf": "7c6f65e2e8427b53828a58cecd313d4a6c02cd7a3074f358d14ce5f2114ea9e8",
+    "source-ledger.json": "cea24dcf222e2d7efb1667ce7da0476ef584927a5a28a7a133fbcadc4e9d1de6",
+    "source-invariants.json": "33e3c990d9471c8420dfa73008460b81720b1e8c9edb80a46fe1fbbbf822ce5f"
+  }
+}

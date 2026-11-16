@@ -1,0 +1,14 @@
+{
+  "source": "1ee5b366ca67d7fe6926da232a6650d1b1d81407",
+  "files": {
+    "lucivy_core/tests/common/mod.rs": "b96b0304d4b6fc19c6482022646c5d2d5e331f03a3cd72e27ef5ffb479bde7a2",
+    "lucivy_core/tests/common/corpus_oracle.rs": "eeed6ea286fe6b4161fb901b843083611367dfac8e1c6ed491edc09d323bf6f1",
+    "lucivy_core/tests/common/derived_fixture.rs": "19bdebf13aba8a314e0a7ec74788e0cdcf9c53a7778b29ace3944a0f6361797b",
+    "lucivy_core/tests/test_derived_fixture_admission.rs": "954810552c58e5d0c705f61d306e7419b7fe7969826d456ae59e94ed09df63bb",
+    "lucivy_core/tests/test_derived_in_ram.rs": "06c3abc8dd4879ce01dad34dd31bef1b9d57cf9c3b3b5c9a811e8e0d171ebd04",
+    "lucivy_core/tests/test_sfx_v3_ground_truth.rs": "6441c60252ee8cdfc66eca96921a303d80d971a68963dfe3ae4764bb0e900f5e"
+  },
+  "observed": 1199114.664059581,
+  "compiled": false,
+  "tests_executed": false
+}

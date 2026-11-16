@@ -1,0 +1,36 @@
+{
+  "package": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-derived-admission-green-16nov-v1",
+  "uid": 1000,
+  "nonce": "023317833614261f17091d13c8a4988a",
+  "package_inode": 168601424,
+  "package_device": 55,
+  "source": "1ee5b366ca67d7fe6926da232a6650d1b1d81407",
+  "source_clean": true,
+  "source_compiled": false,
+  "cargo_or_test_or_elf_executed": false,
+  "preflight_sha256": "277a637e9bebebeef15cd77d81c8d835db5a6c43f9baa06a829086b9dedba369",
+  "copy_hashes": {
+    "qualify-derived-admission-green.py": "6c701601a5057285c36420d964288060ed20da75173d359aa2f6ca553f9ae023",
+    "admit-derived-admission-green.py": "22550ba19b772c120892cd8fcdf7fbfc8c60708251728e5419680cc8c08426af",
+    "qualify-indexed-false-core.py": "2fa59faafe18634a055da4e770a96d4eb87da79864332f8d2a5d8ed222a8fa14",
+    "qualify-indexed-false-red.py": "0a269dd90b0ca745811713e21f66b45fda563074bfc06dd6993f04ab03bd2352",
+    "support/confiner_validation.py": "6439fdd8b52c85fa4e74af0def2c667ef0bedae9b814cbbfd48e49946c4f74ea",
+    "support/poste": "79e3a8bbf457e3bc9104aa1558e7d03072216c70b68e08ae606ace6aa4584c7b",
+    "red-consumer-elf": "7c6f65e2e8427b53828a58cecd313d4a6c02cd7a3074f358d14ce5f2114ea9e8",
+    "source-ledger.json": "cea24dcf222e2d7efb1667ce7da0476ef584927a5a28a7a133fbcadc4e9d1de6",
+    "source-invariants.json": "33e3c990d9471c8420dfa73008460b81720b1e8c9edb80a46fe1fbbbf822ce5f"
+  },
+  "snapshots": [
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-derived-admission-green-16nov-v1/scans/preflight-1199230641125642.json",
+      "unknown": 11,
+      "blocked": 0,
+      "admitted": true
+    }
+  ],
+  "output_absent": true,
+  "scope_absent": true,
+  "scratch_empty": true,
+  "proposed_validation_seconds": 285,
+  "proposed_hard_envelope_seconds": 300
+}

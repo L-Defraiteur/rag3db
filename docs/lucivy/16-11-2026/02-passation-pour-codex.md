@@ -350,3 +350,10 @@ pasbuildernatif/corpus. Common101TERMINE/restes[]/nettoyé/ownedabsent,11UNKNOWN
 conservés,sousEND,sourcepropre. 106faet7c6fROarchivésPC+portable,T3552conservé.
 Aucunfixcouvertureouvertimplicitement ;C7informéetROBancpreuvesdemandée,
 8autresNONjoués/9HOLD/corefalse/ULP7.2/PR42inchangés.
+
+Prépa correctifgateAPRÈSrougeréel : APP1ee5b36publiée/RORecherchefavorable,
+11configs/50négatif9nomsinchangés, refusprécisavantbuilder+positifdistinct.
+Recette14/greenpilote6c701/admit22550/préflight277a/nonce0233/Tunique3552,
+sourcepropreNONcompilée,aucunRustvert. ProposéenveloppeDURE300/validation285,
+compile3ELF+invent/ledgerpuis9exactsMEMOIRE ;ROBancnouveaupaquet puisGOdistinct.
+Deuxbuildersnatifs/corpus/9HOLD/corefalse/ULP7.2/PR42horsqualification.

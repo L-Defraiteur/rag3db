@@ -455,3 +455,16 @@ RORechercheNOUVELLESOURCEàfaire avantGOvert distinct ; actionportéesurmême
 ticketavanttransmission. PropositionenveloppeDURE300(TERM295+kill5),validation
 285STARTaprèsPosteinclpréflight/Commonreste-2,3ELFcompile/listpuis9exactsMEMOIRE,
 zérobuildernatif/corpusréel. Aucuneancienneautorité/GO615réutilisée.
+
+RORecherche exacteAPPfix1ee5 favorablebornée reçue :2fichierstestsseuls,
+11modes/raccord/4causes/positif-négatif cohérents,sansCargo/mock/ELF/proc.
+Recette14+paquetgreenNEUFpréparés : pilote6c701601a5057285c36420d964288060ed20da75173d359aa2f6ca553f9ae023/
+admit22550ba19b772c120892cd8fcdf7fbfc8c60708251728e5419680cc8c08426af,
+préflight277a637e9bebebeef15cd77d81c8d835db5a6c43f9baa06a829086b9dedba369,
+nonce023317833614261f17091d13c8a4988a, Qgreen-v1UID1000/dev55/inode168601424.
+WPCFFpropre1ee5/noncompilé, Tunique3552, oldCommon588652TERMINE101/ELFrouge7c6f
+ROcopié,11UNKNOWNnonattribuésfraisconservés/scope-logabsents/scratchvide.
+PropositionDURE300(TERM295+kill5),validation285postPosteinclpréflight/Commonreste-2,
+3ELFcompileonly+ledger/inventAVANT9exactsMemory. ActionROBancsurNOUVEAU
+paquetvertavantGOdistinctC7, sansCargo/ELF/proc/base/service ; nepasattendre
+l’ancienneROsource ou réactiverGO615. AucunvertRust observé àcestade.
