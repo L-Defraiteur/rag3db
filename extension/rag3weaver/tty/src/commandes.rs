@@ -180,6 +180,29 @@ pub fn mot_de_fichier(texte: &str) -> Option<&str> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn english_commands_preserve_legacy_semantics() {
+        for (english, legacy) in [
+            ("/help", "/aide"), ("/quit", "/quitter"),
+            ("/stop", "/arreter"), ("/task sample", "/tache sample"),
+            ("/repo sample", "/depot sample"), ("/log", "/journal"),
+            ("/clear", "/effacer"), ("/clear history", "/effacer historique"),
+            ("/steps", "/etapes"), ("/name Sample", "/nom Sample"),
+        ] {
+            assert_eq!(lire(english), lire(legacy), "{english}");
+        }
+        assert_eq!(lire("//help").1.as_deref(), Some("/help"));
+    }
+
+    #[test]
+    fn english_completion_offers_steps_and_stop_and_task_arguments() {
+        let sources = Sources { taches: vec!["sample".into()], ..Default::default() };
+        let result = completer("/st", &sources).expect("English commands");
+        assert_eq!(result.candidats, vec!["steps", "stop"]);
+        assert_eq!(completer("/task sam", &sources).unwrap().texte, "/task sample");
+        assert_eq!(completer("/clear h", &sources).unwrap().texte, "/clear history");
+    }
+
     /// Une saisie en `/` est une commande, en `//` un envoi avec un seul `/`,
     /// en `!` une commande à lancer ; le reste part à l'équipier.
     #[test]
