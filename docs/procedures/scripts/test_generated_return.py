@@ -3,6 +3,7 @@
 import hashlib
 import json
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import tempfile
@@ -71,6 +72,70 @@ class GeneratedReturn(unittest.TestCase):
         current = {k:v for k,v in current.items() if k!=saved[0].name and not k.startswith(saved[0].name+'/')}
         self.assertEqual(current,old)
         self.assertEqual(shape(snapshot),old)
+
+
+class GeneratedReturnIntegrity(unittest.TestCase):
+    def setUp(self):
+        self.root = Path(tempfile.mkdtemp(prefix='generated-return-integrity-',dir=Path.home()/'.cache'))
+        self.live = self.root/'private-files'; self.live.mkdir()
+        self.snapshot = self.root/'snapshot'; self.snapshot.mkdir()
+        self.bases = []
+        for name in ["quoted's base", 'second']:
+            base = self.live/(name+'.rag3db'); base.write_bytes(b'old-base')
+            folder = self.snapshot/name; folder.mkdir()
+            shutil.copy2(base,folder/base.name)
+            self.bases.append(base)
+        fake = self.root/'bin';fake.mkdir()
+        (fake/'systemctl').write_text('#!/bin/sh\nprintf "%s\\n" "${FIXTURE_UNIT_STATE:-inactive}"\n')
+        (fake/'systemctl').chmod(0o755)
+        self.env = dict(os.environ,PATH=str(fake)+':'+os.environ['PATH'])
+        result = subprocess.run(['python3',str(GENERATOR.with_name('generate_snapshot_return.py')),
+                                 str(self.snapshot),*[str(b) for b in self.bases]],
+                                capture_output=True,text=True,timeout=10)
+        self.assertEqual(result.returncode,0,result.stderr)
+        for base in self.bases:
+            base.write_bytes(b'new-base')
+            base.with_name(base.name+'.wal').write_bytes(b'new-wal')
+        self.after = shape(self.live)
+
+    def run_return(self):
+        result = subprocess.run(['bash',str(self.snapshot/'RETOUR.sh')],env=self.env,
+                                capture_output=True,text=True,timeout=20)
+        (self.root/'return.log').write_text(result.stdout+result.stderr)
+        print('fixture='+str(self.root),flush=True)
+        return result
+
+    def assert_refusal_unchanged(self):
+        result = self.run_return()
+        self.assertNotEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertEqual(shape(self.live),self.after)
+
+    def test_two_bases_and_quoted_path(self):
+        result = self.run_return()
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        saved = list(self.live.glob('after-return-*'))
+        self.assertEqual(len(saved),2)
+        for base in self.bases:
+            self.assertEqual(base.read_bytes(),b'old-base')
+            self.assertFalse(base.with_name(base.name+'.wal').exists())
+            self.assertEqual(sum((d/(base.name+'.wal')).exists() for d in saved),1)
+
+    def test_changed_helper_refuses_before_any_move(self):
+        with (self.snapshot/'return-tools/restore_snapshot.py').open('a') as stream:
+            stream.write('\n# unexpected change\n')
+        self.assert_refusal_unchanged()
+
+    def test_changed_inventory_refuses_before_any_move(self):
+        (self.snapshot/'return-tools/second.json').write_text('{}')
+        self.assert_refusal_unchanged()
+
+    def test_corrupt_second_snapshot_refuses_before_first_move(self):
+        (self.snapshot/'second/second.rag3db').write_bytes(b'corrupt')
+        self.assert_refusal_unchanged()
+
+    def test_active_api_refuses_before_any_move(self):
+        self.env['FIXTURE_UNIT_STATE']='active'
+        self.assert_refusal_unchanged()
 
 
 if __name__ == '__main__':
