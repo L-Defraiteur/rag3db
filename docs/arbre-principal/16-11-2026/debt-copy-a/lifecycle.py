@@ -5,12 +5,12 @@ import argparse,hashlib,json,os,shutil,signal,subprocess,sys,time,uuid
 import finish_result as f
 import lifecycle_protocol as protocol
 a=f.a;q=a.q;R=a.R
-P=R/'lifecycle-copy-v2';Q=R/'lifecycle-control-v2';S=R/'lifecycle-scopes-v2'
+P=R/'lifecycle-copy-v3';Q=R/'lifecycle-control-v3';S=R/'lifecycle-scopes-v3'
 FIN=R/'debt-fin-ro-result-v1';SOURCE=FIN/'copy';BASE=P/'copy/code-principal.rag3db'
 FIN_MANIFEST=R/'debt-fin-ro-proofs-01/proof-manifest.json'
 FIN_MANIFEST_SHA='05661b1fddc82c1e66d21f218d0c8cdfd12b69d8ef16432a2c55c3b127a9462a'
 FIN_REFS=['copy-after.json','fts-observed.json','vectors-observed.json','sources-after.json','composed.json']
-a.FILES=dict(a.FILES,**{n:a.PREFIX+n for n in ['lifecycle.py','lifecycle_protocol.py','lifecycle.json','lifecycle.mmd','lifecycle-provider-go.schema.json','lifecycle-ready.schema.json','lifecycle_grant_producer.py']})
+a.FILES=dict(a.FILES,**{n:a.PREFIX+n for n in ['lifecycle.py','lifecycle_protocol.py','lifecycle.json','lifecycle.mmd','lifecycle-provider-go.schema.json','lifecycle-ready.schema.json','lifecycle_grant_producer.py','lifecycle_provider_observation.py']})
 f.Q=Q;f.carried.Q=Q;a.Q=Q;a.P=P;a.S=S;a.BASE=BASE;q.Q=Q
 def save(name,value):q.save(P/name,value)
 def publish_ready(ready):

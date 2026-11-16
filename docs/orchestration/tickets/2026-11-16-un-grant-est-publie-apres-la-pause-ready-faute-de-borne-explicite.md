@@ -28,6 +28,15 @@ Cette étape est une PRÉPARATION seulement : ancien GO B5 terminé et grant ré
 
 ## Critères de fin
 
+Raccordcallbackowner désormais concret, pas RUN : [recette16](../../arbre-principal/16-11-2026/16-couple-callback-owner-ready-borne.md),
+deuxblobs c530Embar reprisstricts/observerSHA95729d4d...f8618. Parentworker
+GET5s/marge30/phase+9identités/PIDstartUIDexeSHA/types/usage/lease bornés,
+rawstdoutstderr/rc/temps/partiels/prefixoversize conservés avant refus.
+ÉtatsR↔S sains ne changent pas l'identité, T/Z/inconnus refusent.52fonctionsCPU
+couple vertes aprèspublicationb94d, aucunhealth/DB/native ; ROED+Mémoire
+composantfinal favorables n'accordent pas GOcouple. NouveauQv3/17sources
+etP/Sneufs/ROexacte exigés ; B5, son ACKtardif et anciennespreuves intacts.
+
 Préparationcouple réalisée, pas de RUN : [recetteArbre15](../../arbre-principal/16-11-2026/15-contrat-ready-borne-producteur-consommateur.md).
 Contrat partagé98ab/SHAc67f072b...9ec0, bornesPCobservationavantpub/
 grantdeadlineMINobs+120/END−500, autorité/PIDstartCGUIDscriptSHA/firstred
