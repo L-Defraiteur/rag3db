@@ -1,0 +1,94 @@
+{
+  "control/allocation.json": {
+    "sha256": "1f27bc171ea7f4ecdffd2ace63aa9b3aebfed35eab7a8c1f7360c6a942930ba4",
+    "size": 77
+  },
+  "control/base_controller.py": {
+    "sha256": "2a6ed3bee4d886f4996c60bbb663b7926bc569485a457aa37655232fa2136715",
+    "size": 20006
+  },
+  "control/confiner_validation.py": {
+    "sha256": "6439fdd8b52c85fa4e74af0def2c667ef0bedae9b814cbbfd48e49946c4f74ea",
+    "size": 17667
+  },
+  "control/launch.log": {
+    "sha256": "d05f625f6a9e801773dc1a802687b041dccbeb6103edccddf6122c2c0229a059",
+    "size": 449
+  },
+  "control/poste": {
+    "sha256": "79e3a8bbf457e3bc9104aa1558e7d03072216c70b68e08ae606ace6aa4584c7b",
+    "size": 26869
+  },
+  "control/prepared.json": {
+    "sha256": "a8c14bf86b98511a98e5ac1aec0b0a96328178732288d55a1c0a5c5826312958",
+    "size": 654
+  },
+  "control/qualify.py": {
+    "sha256": "216c48feb42cf3673ecd1fa704d5aa94bb63a9ed71ef694fb16fee4268e6068c",
+    "size": 10018
+  },
+  "elf-reference.json": {
+    "sha256": "25b0e5b413b20638792ef6c16d9fcb041b1783f3f33132b7aa89b2d493df5703",
+    "size": 309
+  },
+  "proofs/authority-path.json": {
+    "sha256": "11ae6d88ca899e942756472ee50150f9faf08ccb9d42baf75aeb8b65ff964ac3",
+    "size": 299
+  },
+  "proofs/command.json": {
+    "sha256": "1085a8474f1624cc0e57e53f2404a6b33bc7be6a234de9ddd9cb8120e3e36882",
+    "size": 461
+  },
+  "proofs/composed.json": {
+    "sha256": "e517ed2d09c9dd38e3046c6fdb0d0d8eb95e4dff7aca218c578752c7eed9eabe",
+    "size": 378
+  },
+  "proofs/ledger-before-test.json": {
+    "sha256": "cdecbabdf9a0d3bc765532ded39c7eabf366d8e37fd6bb1962a787363e10c35e",
+    "size": 2883
+  },
+  "proofs/native-result.json": {
+    "sha256": "33c0d77d36230ccb2608ac47c7aa252586ab9d3525dba927989daad0af3f8136",
+    "size": 48
+  },
+  "proofs/native.stderr": {
+    "sha256": "7c9f03683fbbf800edc6b427e2de5a24d0ebf0e4395a904b77c7f97c0f63aeeb",
+    "size": 260
+  },
+  "proofs/native.stdout": {
+    "sha256": "489af90683c46dda04b59d6f6a77758833df2bdd3726e70233321c96c6f90a31",
+    "size": 325
+  },
+  "proofs/negative-probe.json": {
+    "sha256": "e2e5f75b09a92035bbc3dc0bf13353357a751fd1dffa584fb5022d64da514d81",
+    "size": 192
+  },
+  "proofs/owned-after.json": {
+    "sha256": "a1934db4e9f79d13c7bc47acfcb957f35c69540cf4a18caa955042f94364d9bb",
+    "size": 50
+  },
+  "proofs/quiet-after.json": {
+    "sha256": "204603a2a77005eba1643868e62f93930b5270181f87c2ad0afcb7a4622d7ced",
+    "size": 77971
+  },
+  "proofs/quiet-before.json": {
+    "sha256": "d05c540371a264fa66ca92ea850ebe30146a91b844d0dc48bb45d93cf322b35e",
+    "size": 77972
+  },
+  "scope/authority-public.json": {
+    "sha256": "ff2d4bed0652c1be64424260a9ad0807e251c77910f4a5783388b4d113733225",
+    "size": 156
+  },
+  "scope/enfants.json": {
+    "sha256": "f5bd345fc1ef16c8fd33aa442e191937eb90bff6a53ea7c1c2dcdd53e580a64c",
+    "size": 857
+  },
+  "scope/recette.json": {
+    "sha256": "dca793e04c1d9fdb825d41d58602f4b0fb75556e5a4ef29985e4c0c1d2210d82",
+    "size": 766
+  },
+  "scope/verdict.json": {
+    "sha256": "a163859e3b8846455382d27a7c2ff158d047dda2c7cec75f4182d6cbaa9c1c9f",
+    "size": 121
+  }
+}
