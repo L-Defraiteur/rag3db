@@ -1,6 +1,6 @@
 # Premier échantillon indépendant : attentes avant les résultats
 
-Ticket : `docs/codeparsers/tickets/2026-11-16-verifier-la-couverture-sur-des-corpus-publics-multilangages.md`.
+Ticket : `docs/tickets/closed/2026-11-16-verifier-la-couverture-sur-des-corpus-publics-multilangages.md`.
 État : deux sources publiques sélectionnées lues par C7, attentes posées avant
 la campagne. Aucune extraction jouée ni couverture déclarée par cette page.
 Manifeste `selection-01/selected.jsonl` SHA
