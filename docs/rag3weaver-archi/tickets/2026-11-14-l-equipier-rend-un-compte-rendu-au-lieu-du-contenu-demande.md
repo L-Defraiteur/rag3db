@@ -104,3 +104,5 @@ Lot de continuation repris sur branche neuve `cx-archi-pas-va-au-bout-r1`, corre
 Recette r2/lib59ac admise par C7 après pin685 : lanceur exact publié avant passe, rapport03 bloc Admission. Nouveau résultat toujours NON JOUÉ à cette publication ; premier rouge conservé sans retry, qualification et D6 séparées. Pas de push master autorisé par le lanceur.
 
 Refus de préadmission conservé au rapport03 : erreur de SHA complet saisi dans la commande, gardeHEAD refuse avant P/T/reçu/Cargo. Diagnostic connu, aucun test joué, script et produit inchangés. C7 averti avant toute reprise ; pas de rouge produit effacé ou requalifié.
+
+Qualification713433/lib59ac ROUGE sur attente d'approval du scénario documentaire Vertex, après témoincontinuation1/0/0+hôte24+lectures27. [Rapport04](../16-11-2026/04-arret-vertex-pas-va-au-bout.md) et [ticket de blocage du témoin](2026-11-16-le-temoin-documentaire-vertex-attend-un-accord-sans-superviseur.md). Aucunretry/landing ; suite restante NON JOUÉE. Cause de produit non attribuée depuis ce seul run, prioritéapproval conservée et D6 non joué.
