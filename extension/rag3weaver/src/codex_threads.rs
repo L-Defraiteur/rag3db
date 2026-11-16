@@ -210,6 +210,49 @@ pub fn traiter(ligne: &Value, racine: &Path, binaire: &Path, delai: Duration) ->
 mod tests {
     use super::*;
 
+    // Le fichier exécutable n'est jamais ouvert en écriture dans le parent.
+    // Un autre test qui fork pendant cette préparation ne peut donc pas en
+    // hériter le writer. Renommer le même inode ne suffirait pas.
+    const WRITE_EXECUTABLE_SCRIPT: &str = r#"printf '%s' "$2" > "$1" && chmod 700 "$1""#;
+
+    fn write_executable(path: &Path, body: &str) {
+        let mut writer = std::process::Command::new("/bin/sh")
+            .args(["-c", WRITE_EXECUTABLE_SCRIPT, "write-fixture"])
+            .arg(path)
+            .arg(body)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .spawn()
+            .expect("start the isolated fixture writer");
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            match writer.try_wait().expect("wait for the fixture writer") {
+                Some(status) => {
+                    assert!(status.success(), "fixture writer failed: {status}");
+                    return;
+                }
+                None if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(5)),
+                None => {
+                    let _ = writer.kill();
+                    let _ = writer.wait();
+                    panic!("fixture writer did not finish within five seconds");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn executable_fixture_preserves_literal_path_and_script_arguments() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("fixture ; '$ name");
+        let body = "#!/bin/sh\nprintf '%s' 'literal $value ; 100%'\n";
+        write_executable(&path, body);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), body);
+        let output = std::process::Command::new(&path).output().unwrap();
+        assert!(output.status.success());
+        assert_eq!(output.stdout, b"literal $value ; 100%");
+    }
+
     const U1: &str = "01a1b6af-70d1-7b93-a9aa-0811cba4fc62";
     const U2: &str = "01a1b6b0-fced-71a1-bc96-8740d2db55ca";
 
@@ -258,9 +301,7 @@ mod tests {
     fn faux_codex(d: &Path, code: i32) -> (PathBuf, PathBuf) {
         let trace = d.join("trace");
         let bin = d.join("faux-codex");
-        std::fs::write(&bin, format!("#!/bin/sh\nfor a in \"$@\"; do printf '%s\\n' \"$a\" >> {}; done\necho 'No active session found' >&2\nexit {code}\n", trace.display())).unwrap();
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755)).unwrap();
+        write_executable(&bin, &format!("#!/bin/sh\nfor a in \"$@\"; do printf '%s\\n' \"$a\" >> {}; done\necho 'No active session found' >&2\nexit {code}\n", trace.display()));
         (bin, trace)
     }
 
@@ -300,9 +341,7 @@ mod tests {
     fn un_codex_qui_ne_rend_pas_la_main_est_coupe_au_delai() {
         let d = tempfile::tempdir().unwrap();
         let bin = d.path().join("lent");
-        std::fs::write(&bin, "#!/bin/sh\nsleep 30\n").unwrap();
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755)).unwrap();
+        write_executable(&bin, "#!/bin/sh\nsleep 30\n");
         let debut = Instant::now();
         let e = livrer(&bin, U1, "x", Duration::from_millis(300)).unwrap_err();
         assert!(e.contains("pas de réponse en 0 s") && debut.elapsed() < Duration::from_secs(5), "{e}");
