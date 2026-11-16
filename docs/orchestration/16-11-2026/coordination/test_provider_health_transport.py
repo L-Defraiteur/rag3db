@@ -141,6 +141,19 @@ class HealthTransport(unittest.TestCase):
         chunks=[bytes.fromhex(e['raw_hex']) for e in events if e.get('event')=='health-body-chunk']
         self.assertEqual(b''.join(chunks),b'prefix already received')
 
+    def test_incomplete_read_exception_retains_its_separate_known_partial(self):
+        context=dict(self.context,work_deadline_monotonic=84.5)
+        connection=Mock();response=connection.getresponse.return_value;response.status=200
+        response.read1.side_effect=[b'already streamed',t.http.client.IncompleteRead(b'known exception partial',99)]
+        stderr=io.StringIO()
+        with patch.object(t.time,'monotonic',return_value=80.),patch.object(t.http.client,'HTTPConnection',return_value=connection),patch.object(t.sys,'stderr',stderr):
+            with self.assertRaises(t.http.client.IncompleteRead):t.worker(context)
+        events=[t.decode(line) for line in stderr.getvalue().splitlines()]
+        partials=[e for e in events if e.get('event')=='health-exception-partial']
+        self.assertEqual(len(partials),1)
+        self.assertEqual(bytes.fromhex(partials[0]['raw_hex']),b'known exception partial')
+        self.assertEqual(partials[0]['deduplication'],'not_attempted')
+
     def test_numeric_overflow_is_not_finite_even_in_extra_health_metadata(self):
         raw=json.dumps(self.health).encode()[:-1]+b',"extra":1e999}'
         with self.assertRaises(ValueError):t.validate_health(raw,self.identity,status=200)
