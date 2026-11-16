@@ -1,7 +1,7 @@
 # Le témoin documentaire Vertex attend un accord sans superviseur
 
 - **État** : ouvert, rouge de qualification du 16 novembre ; diagnostic avant tout correctif ou reprise, arbitrage C7.
-- **Famille** : qualification
+- **Famille** : produit
 - **Pour** : rag3weaver-archi, coordination C7 et ED pour la porte si nécessaire
 - **Gravité** : bloque la qualification et le landing de pas-va-au-bout ; la suite native complète n'a pas été jouée.
 - **Atteignable en service** : attente d'accord oui ; défaut produit non établi par ce seul run.
