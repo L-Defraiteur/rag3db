@@ -1,0 +1,18 @@
+# Recette isolée du rouge Vertex, sans cloud
+
+APP **fe40b640eb0cc54645cbd552aa13b065ed1d2fa7**, sourceWT rag3db-cx-ed-vertex-token-refresh-r3 propre/base df2. Cinqfonctions écritesNONJOUÉES, parsingrustfmtseulement. Nouvellebranche/WT pilote cx-ed-vertex-token-red-pilot-r1, fichier vertex-token-red/qualify.py. Proposé àRO etGO C7 distincts, aucuneautorité/compilation/processusfakelauncé àcettepublication.
+
+Budget1200uniqueaprèsposte32GiB/HIGHmax/swap0/quotaPARPLACE/jobsmin8, TMPnoncecourtdisk0700 et2étatsfrères. RAG3DB_LIB59/magasinréel/2SOhashes vérifiés mais **aucunexportSDK** pourcetELF CPUdaemon+openai-llm, aucunefeaturecode/native/burn. CARGO_MANIFEST_DIR=crateexact pourinvocationsdirectes. Envwhitelist exclut credentialsGoogle/APIkeys/HTTPproxies/servicespartagés, aucunTokenSource::from_env côtéfake. SousmoduleGitlinkexactnécessaireavantpréparation pourmétadataCargo, aucuneinitialisationcachéeparpilote.
+
+TargetSESSION ~/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity repris comme NOM seulement, désormaisABSENT aprèsnettoyageTIES ; pascacheporté/reprise/marqueurmenti. P/Q/Sneufs cx-ed-vertex-token-{red,controller,scope}-v1. Prépare-only peut être réutilisé uniquement siPencorevide etchaquecopie/configidentique, source/pilotepropres ; aucuneentréeauthcréée parpréparation.
+
+CommandeaprèsRO/GOexactsurPC : python3 docs/everything-declarative/16-11-2026/vertex-token-red/qualify.py --pilot SHA40 --allocation REFERENCE_C7. AvantGO : --prepare-only, Git/hashes/copiesseuls (pasCargo). Copiecontrôleur/poste/confineur horsW, signatures communesconservées. Le vrai poste est acquisavantconfinerlancer1200 ; budgetincluantnettoyage,pasdépendanceAPI7970/7878/7879/PG/Node.
+
+1. Compile900MAX/MINEND : vrai scripts/cargo_garde.py test --locked --offline --no-default-features --features daemon,openai-llm --lib --no-run --message-format=json. La primitivegarde crée/protège lemêmeTavantCargo réel, pasCargo brut. ArtifactJSONunique rag3weaver/test/executable/featuresexactes2, provenanceAPP/sourcehashGit, aucunELFinventé.
+2. Listageharness2x20MAX, aucuneexécutiontest : cinqnoms exacts attendus, aucunignoredpourcemodule. CopierELF/hash+taille/ledgerAVANTtests. Pause<=120MINEND pourcopieELF+ledgerautreposte etréhash2postes. L'agent publie seulementaprèspreuves un ledger-published.json {source,elf_sha256,ledger_sha256,two_hosts_rehashed:true}. Cetteétape n'est pas une questiondepermission/uneautreautorité ; elle matérialise la preuveavanttest.
+3. Troiscontrôlespositifs30sMAXchacun : fakeTokenSource, APIkeyfixe401, SSEpartialpuis401sansrejeu. Chaquebilanexige1/0/0 ; premieréchec STOP, pasdedéclarationvertesupposée.
+4. Refresh401exact30MAX : attendrougeRÉEL0/1/0avecassertVertexMustRefreshetHTTP401. Premierrougeimmuable, artifactred-observation EXPECTED_TRANSPORT_RED_OBSERVED uniquementsi cesprédicats sontvus. Le driverQUITTEnonzeroetlascope resteROUGE,ce n'est pas unevalidationverte. Aucunfix/retryaprèsrouge. Lejuge401persistantresteNONJOUÉ danscetteentrée(premierrougeSTOP).
+
+La frontièretestactuelle reproduit snapshotFake→VRAIconstructeurVertex, pas encoreconnect_llm déclaré : nepas prétendre uneréparation ouqualificationdéclarative. Aprèsrougeobservé, correctif/source-retained etjugeconnect_llm àrevoiravecsourcefigée/GOvert distinct. F8/liblarge/NAV/F300 horspérimètredeceGOredCPU. Ni aucunrougeattendu ni positif ne qualifie production.
+
+Àlafin, lireverdictcommun/autoritéTERMINE/restes[]/busabsent etscanindépendantPID/start/exe/cwd/FDsource/T, UNKNOWNownedrefusequiescence. ConserverELF/logs/firstred/témoincopié2hosts. Le pilote ne supprimeaucunT/W/PQS, aucuneclé/capacitéd'unhôte réel. Aucunmaster/outilhôte déployé. Tout refus horsscénarioattendu restediagnosticdistinct ; aucunretryidentique.
