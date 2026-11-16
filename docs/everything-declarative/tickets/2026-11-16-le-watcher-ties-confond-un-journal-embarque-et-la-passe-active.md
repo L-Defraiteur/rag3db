@@ -16,3 +16,7 @@ Acquis dans resume.log canonique : témoin1/0/0, code36/0/0, lectures27/0/0, CHE
 Surveiller uniquement les journaux explicitement produits par les invocations actives du pilote et la liste canonique J : temoins, e2e_code, e2e_lectures, check_features, preuve, lib, navigateur, resume. Aucun rglob dans les fixtures. Conserver provenance/stat et extrait correspondant avant assertion, premier rouge immutable, pas de détection des panics légitimes. Témoin hermétique du vrai watcher avant runtime : historique imbriqué ignoré, FAILED actif détecté, mention de FAILED dans une donnée ignorée. Publier code et témoins avant leur exécution.
 
 Reprise même APP/target connu au même propriétaire, garde commune réelle et contrôle de quiescence frais après poste ; empreintes conservées, aucune purge. Rejouer la passe canonique COMPLÈTE pour son propre resume.log. Nouveau P/Q/S ; END1180927.964331921, START1173727.964331921, reste floor après poste moins3, aucun reset7200. Fin après qualification complète ou nouveau rouge attribué. Aucun GO master.
+
+## Qualification corrective acquise
+
+APPbd76/pilote13c8 : passe canonique v3 entièrement VERTE, scopeVERT0/restes[]/busabsent, sous reste de START/ENDinitial sans reset. [Preuves détaillées](../16-11-2026/09-preuves-canon-ties-v3.md),29fichiersPC/localréhash0écart. Anciensrougesconservés. Pas de GOmaster ni retrait déduit ; ticket laissé ouvert pour revue et intégration coordonnées.

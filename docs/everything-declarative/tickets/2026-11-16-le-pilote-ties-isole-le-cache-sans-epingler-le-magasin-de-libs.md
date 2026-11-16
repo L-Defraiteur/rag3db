@@ -44,3 +44,7 @@ Profil magasin explicite et témoin du vrai résolveur dans la branche
 `cx-ed-stable-tie-qualifier-r2`, [rapport06](../16-11-2026/06-correctif-pilote-ties-magasin.md).
 Code et témoin NON JOUÉS lors de cette publication, rouge v1 inchangé.
 Admission corrective bornée au RESTE ENDv1 après poste, pas à7200 neufs.
+
+## Qualification corrective acquise
+
+APPbd76/pilote13c8 : passe canonique v3 entièrement VERTE, scopeVERT0/restes[]/busabsent, sous reste de START/ENDinitial sans reset. [Preuves détaillées](../16-11-2026/09-preuves-canon-ties-v3.md),29fichiersPC/localréhash0écart. Anciensrougesconservés. Pas de GOmaster ni retrait déduit ; ticket laissé ouvert pour revue et intégration coordonnées.
