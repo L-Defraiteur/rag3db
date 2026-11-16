@@ -19,9 +19,16 @@ use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
 fn setup() -> Catalog {
     let conn = Rag3dbConnection::in_memory().expect("in-memory DB");
     let boxed: Box<dyn rag3weaver::connection::DbConnection> = Box::new(conn);
-    let ext = rag3weaver::backend::vector_extension_of_this_process().expect("l'extension vector de ce processus").display().to_string();
+    let ext = rag3weaver::backend::vector_extension_of_this_process()
+        .expect("l'extension vector de ce processus")
+        .display()
+        .to_string();
     boxed.execute(&format!("LOAD EXTENSION '{ext}'")).unwrap();
-    let config = CatalogConfig { name: Some("sonde-marque-nom".into()), embedding_dim: 64, ..Default::default() };
+    let config = CatalogConfig {
+        name: Some("sonde-marque-nom".into()),
+        embedding_dim: 64,
+        ..Default::default()
+    };
     let mut catalog = Catalog::new(boxed, Box::new(HashEmbedder::new(64)), config);
     catalog.initialize().unwrap();
     register_code_schema(&mut catalog, default_scope_chunking()).unwrap();
@@ -39,7 +46,11 @@ fn fichiers(d: &std::path::Path, v: &mut Vec<std::path::PathBuf>) {
         if p.is_dir() {
             fichiers(&p, v)
         } else if let Some(x) = p.extension().and_then(|x| x.to_str()) {
-            if ["rs", "c", "h", "cpp", "cc", "hpp", "py", "ts", "js", "go", "cs"].contains(&x) {
+            if [
+                "rs", "c", "h", "cpp", "cc", "hpp", "py", "ts", "js", "go", "cs",
+            ]
+            .contains(&x)
+            {
                 v.push(p)
             }
         }
@@ -47,7 +58,12 @@ fn fichiers(d: &std::path::Path, v: &mut Vec<std::path::PathBuf>) {
 }
 
 fn texte(v: Option<&rag3weaver::connection::CypherValue>) -> String {
-    v.map(|v| v.as_str().map(str::to_string).unwrap_or_else(|| v.as_i64().map(|n| n.to_string()).unwrap_or_default())).unwrap_or_default()
+    v.map(|v| {
+        v.as_str()
+            .map(str::to_string)
+            .unwrap_or_else(|| v.as_i64().map(|n| n.to_string()).unwrap_or_default())
+    })
+    .unwrap_or_default()
 }
 
 #[test]
@@ -55,6 +71,19 @@ fn texte(v: Option<&rag3weaver::connection::CypherValue>) -> String {
 fn aretes_par_marque_en_tsv() {
     let dirs = std::env::var("SONDE_DIRS").expect("SONDE_DIRS");
     let tsv = std::env::var("SONDE_TSV").ok();
+    // Profil strict optionnel : l'ancien appelant garde sa forme, le pilote frais l'exige.
+    let probe_profile = std::env::var("RUST_PROBE_PROFILE").ok().map(|path| {
+        serde_json::from_str::<serde_json::Value>(
+            &std::fs::read_to_string(path).expect("probe profile readable"),
+        )
+        .expect("probe profile valid JSON")
+    });
+    if let Some(profile) = &probe_profile {
+        assert_eq!(
+            profile["roots"],
+            serde_json::json!(dirs.split(',').collect::<Vec<_>>())
+        );
+    }
     for (n, racine) in dirs.split(',').enumerate() {
         let mut v = Vec::new();
         fichiers(std::path::Path::new(racine), &mut v);
@@ -65,18 +94,110 @@ fn aretes_par_marque_en_tsv() {
             .filter_map(|p| {
                 let c = std::fs::read_to_string(p).ok()?;
                 let rel = p.strip_prefix(racine).ok()?.display().to_string();
-                (c.len() <= 1_000_000 && admission(&rel, Some(&c), &porte).is_ok()).then_some((rel, c))
+                (c.len() <= 1_000_000 && admission(&rel, Some(&c), &porte).is_ok())
+                    .then_some((rel, c))
             })
             .collect();
         let admis = sources.len();
+        if let Some(profile) = &probe_profile {
+            assert_eq!(
+                v.len() as u64,
+                profile["expected_counts"][n]
+                    .as_u64()
+                    .expect("expected file count")
+            );
+            assert_eq!(
+                admis,
+                v.len(),
+                "no unreadable, oversized or unadmitted source may disappear"
+            );
+        }
+        let analysis = analyze(racine, sources);
+        if let Some(prefix) = &tsv {
+            std::fs::write(
+                format!("{prefix}-{n}.analysis.json"),
+                serde_json::to_vec_pretty(&serde_json::json!({
+                    "files":analysis.files.len(),"scopes":analysis.scopes.len(),
+                    "skipped":analysis.skipped,"relations_dropped":analysis.relations_dropped,
+                }))
+                .unwrap(),
+            )
+            .unwrap();
+        }
+        if probe_profile.is_some() {
+            assert!(
+                analysis.skipped.is_empty(),
+                "source analysis skipped files: {:?}",
+                analysis.skipped
+            );
+            assert_eq!(
+                analysis.files.len(),
+                admis,
+                "analysis must preserve every admitted file"
+            );
+        }
         let mut cat = setup();
-        cat.ingest_code(&analyze(racine, sources)).unwrap();
-        let r = cat.execute_raw("MATCH (:Scope)-[r:CONSUMES]->(:Scope) RETURN r.resolution, count(*)").unwrap();
-        let mut marques: Vec<(String, i64)> = r.rows.iter().map(|x| (texte(x.first()), x.get(1).and_then(|v| v.as_i64()).unwrap_or(0))).collect();
+        let observed_build_id = if let Some(profile) = &probe_profile {
+            let result = cat
+                .execute_raw("CALL BUILD_ID()")
+                .expect("runtime BUILD_ID query");
+            let actual = result
+                .rows
+                .first()
+                .and_then(|row| row.first())
+                .and_then(|value| value.as_str())
+                .expect("BUILD_ID yields a string")
+                .to_string();
+            assert_eq!(
+                Some(actual.as_str()),
+                profile["expected_build_id"].as_str(),
+                "actual native SDK"
+            );
+            Some(actual)
+        } else {
+            None
+        };
+        let report = cat.ingest_code(&analysis).unwrap();
+        if probe_profile.is_some() {
+            assert_eq!(report.failed, 0, "ingestion failures must not be hidden");
+            assert_eq!(report.files, admis);
+        }
+        let r = cat
+            .execute_raw("MATCH (:Scope)-[r:CONSUMES]->(:Scope) RETURN r.resolution, count(*)")
+            .unwrap();
+        let mut marques: Vec<(String, i64)> = r
+            .rows
+            .iter()
+            .map(|x| {
+                (
+                    texte(x.first()),
+                    x.get(1).and_then(|v| v.as_i64()).unwrap_or(0),
+                )
+            })
+            .collect();
         marques.sort();
         let non_types = cat.execute_raw("MATCH (:Scope)-[m:MENTIONS]->(:Symbol) WHERE m.untyped_receiver = 'oui' RETURN count(*)").unwrap();
         let scopes = cat.execute_raw("MATCH (s:Scope) RETURN count(*)").unwrap();
         let orphans = cat.execute_raw("MATCH (s:Scope) WHERE NOT EXISTS { MATCH (s)-[:DEFINED_IN]->(:File) } RETURN count(*)").unwrap();
+        let stored_files = cat.execute_raw("MATCH (f:File) RETURN count(*)").unwrap();
+        if probe_profile.is_some() {
+            assert_eq!(stored_files.rows[0][0].as_i64(), Some(admis as i64));
+            assert_eq!(
+                orphans.rows[0][0].as_i64(),
+                Some(0),
+                "every scope must retain its file"
+            );
+        }
+        if let Some(prefix) = &tsv {
+            std::fs::write(format!("{prefix}-{n}.meta.json"), serde_json::to_vec_pretty(&serde_json::json!({
+                "root":racine,"discovered":v.len(),"admitted":admis,"analysis_files":analysis.files.len(),
+                "analysis_skipped":analysis.skipped,"relations_dropped":analysis.relations_dropped,
+                "ingest_report":report,"stored_files":stored_files.rows[0][0].as_i64(),
+                "scope_count":scopes.rows[0][0].as_i64(),"orphan_scopes":orphans.rows[0][0].as_i64(),
+                "resolution_counts":marques,"untyped_receiver_mentions":non_types.rows[0][0].as_i64(),
+                "actual_build_id":observed_build_id,"strict_profile":probe_profile,
+            })).unwrap()).unwrap();
+        }
         println!(
             "SONDE {racine} : fichiers {} ; admis {admis} ; scopes {} (sans DEFINED_IN {}) ; CONSUMES {:?} ; rendez-vous non typés {}",
             v.len(),
@@ -89,7 +210,21 @@ fn aretes_par_marque_en_tsv() {
             let r = cat
                 .execute_raw("MATCH (a:Scope)-[r:CONSUMES]->(b:Scope) RETURN a.file_path, r.line, a.name, b.name, b.file_path, r.resolution")
                 .unwrap();
-            let mut lignes: Vec<String> = r.rows.iter().map(|x| (0..6).map(|i| texte(x.get(i))).collect::<Vec<_>>().join("\t")).collect();
+            // JSONL conserve les six champs même si un nom contient un séparateur TSV.
+            let mut edge_rows: Vec<Vec<String>> = r
+                .rows
+                .iter()
+                .map(|row| (0..6).map(|i| texte(row.get(i))).collect())
+                .collect();
+            edge_rows.sort();
+            let jsonl = edge_rows
+                .iter()
+                .map(|row| serde_json::to_string(row).unwrap())
+                .collect::<Vec<_>>()
+                .join("\n")
+                + "\n";
+            std::fs::write(format!("{prefixe}-{n}.jsonl"), jsonl).unwrap();
+            let mut lignes: Vec<String> = edge_rows.iter().map(|row| row.join("\t")).collect();
             lignes.sort();
             std::fs::write(format!("{prefixe}-{n}.tsv"), lignes.join("\n") + "\n").unwrap();
         }
