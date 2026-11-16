@@ -1,0 +1,22 @@
+{
+  "source": "033ffb92068f31cdae6338db876d23e6bced3567",
+  "expected_engine_commit": "033ffb92068f31cdae6338db876d23e6bced3567",
+  "build_id_header": "rag3db-build-033ffb92068f31cdae6338db876d23e6bced3567-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF",
+  "binary_sha256": "0762f12ddbf6558e310eee120fd17f2a9b92b7cd15ca0f43e2f4711cd8ef70df",
+  "binary_bytes": 27036800,
+  "archive_sha256": "ee266572cfd175d691742484d597f6c7fa40643e65343ffe747c82389a673334",
+  "archive_bytes": 65763804,
+  "header_sha256": "3d47f95a4bbc16758781766582699df691706b8594fa115558751d2dae95ea47",
+  "extra_binaries": {
+    "string_finalize_test": {
+      "sha256": "70ae0eb79d489cda0c919e28babfe6408d36d673441f3530d150fda7cf14846b",
+      "bytes": 27022448
+    },
+    "string_split_test": {
+      "sha256": "26094698f7919a238fc7cd243a32848cbb2724940739abbe90128faa29b073f6",
+      "bytes": 27026112
+    }
+  },
+  "distributed_install": false,
+  "scratch_used_bytes": 738304000
+}

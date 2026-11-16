@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="2" failures="0" disabled="0" errors="0" time="0.344" timestamp="2026-11-16T10:49:22.506" name="AllTests">
+  <testsuite name="StringSplitTest" tests="2" failures="0" disabled="0" skipped="0" errors="0" time="0.344" timestamp="2026-11-16T10:49:22.506">
+    <testcase name="LargeBlobsGetOneSegmentEach" file="/home/lucied/.cache/rag3weaver-build/cx-coeur-c1-offsets/source/test/storage/string_split_test.cpp" line="78" status="run" result="completed" time="0.332" timestamp="2026-11-16T10:49:22.506" classname="StringSplitTest" />
+    <testcase name="SmallStringsAroundALargeBlobStayBounded" file="/home/lucied/.cache/rag3weaver-build/cx-coeur-c1-offsets/source/test/storage/string_split_test.cpp" line="88" status="run" result="completed" time="0.011" timestamp="2026-11-16T10:49:22.839" classname="StringSplitTest" />
+  </testsuite>
+</testsuites>

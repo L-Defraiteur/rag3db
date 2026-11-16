@@ -23,3 +23,7 @@ Branche neuve cx-coeur-dictionary-append-atomic dans le worktree possédé cx-co
 Correctif minimal envisagé : réserver offsets et octets avant de modifier le texte ou ses compteurs, à analyser avec les primitives existantes. Ne pas reprendre256 ni modifier StringChunkData, MemoryManager ou test_hooks. Qualification ciblée puis suites pertinentes sous recette fraîche coordonnée, aucune lib posée ni master implicite. Fermer seulement après correctif qualifié et intégration autorisée ; C1 crash ne se ferme pas par ce ticket.
 
 [Correctif et recette proposée](../16-11-2026/04-refus-offsets-correctif-et-recette-proposee.md) : test/hash/réessai séparéac612 puis correctifminimal033ffb92068f31cdae6338db876d23e6bced3567, src/storage/table/dictionary_chunk.cpp seul. Réservation avant memcpy/comptes, aucun256, garantie stdunordered_setinsert non démontrée. Ciblés proposés1+2+2cas/1800neufCPU32G/j8/quiescence, pas encore joués et lanceur exact à publier avant admission. Ticket ouvert.
+
+## Ciblés verts, intégration non faite
+
+[Résultat cinq cas et preuves](../16-11-2026/05-refus-offsets-cinq-cibles-vertes.md) : source/moteur033ffb92068f31cdae6338db876d23e6bced3567,1offsets+2finalize+2split,0failure/error/skip/disabled. Assertions48octets/3strings/hash/retry gardées, BUILD_ID033 réellement émis. Unité145,114s success, poste rendu/MainPID0/cgroupvide/aucunrésidu,37fichierspaquet2postes+3ELF/archive/headerrehashés. Ticket reste ouvert avant suites/intégration, parentC1crashnonattribué, aucun stdunordered_setinsertgarantieforte/master/libposée.

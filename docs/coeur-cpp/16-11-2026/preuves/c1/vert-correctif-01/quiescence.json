@@ -1,0 +1,8 @@
+{
+  "unit": "ActiveState=inactive\nSubState=dead\nMainPID=0\nResult=success\nControlGroup=\n",
+  "remaining_attributed_pids": [],
+  "artifacts_rehashed": true,
+  "unit_elapsed_s": 145.114,
+  "cpu_s": 1088.971,
+  "installed": false
+}

@@ -1,0 +1,15 @@
+{
+  "argv": [
+    "git",
+    "-C",
+    "/home/lucied/.cache/rag3weaver-build/cx-coeur-c1-offsets/source",
+    "checkout",
+    "--detach",
+    "033ffb92068f31cdae6338db876d23e6bced3567"
+  ],
+  "pid": 3385734,
+  "returncode": 0,
+  "timeout": false,
+  "elapsed_s": 0.8651733831502497,
+  "waited": true
+}

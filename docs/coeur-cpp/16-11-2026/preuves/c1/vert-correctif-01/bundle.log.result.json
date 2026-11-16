@@ -1,0 +1,15 @@
+{
+  "argv": [
+    "git",
+    "-C",
+    "/home/lucied/.cache/rag3weaver-build/cx-coeur-c1-offsets/source",
+    "fetch",
+    "/home/lucied/.cache/rag3db-moteur-notes/dictionary-append-fix-01/source.bundle",
+    "refs/heads/cx-coeur-dictionary-append-atomic"
+  ],
+  "pid": 3385710,
+  "returncode": 0,
+  "timeout": false,
+  "elapsed_s": 0.11364746699109674,
+  "waited": true
+}

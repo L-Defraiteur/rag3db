@@ -1,0 +1,6 @@
+Running as unit: cx-coeur-dictionary-append-fix-01.service
+          Finished with result: success
+Main processes terminated with: code=exited, status=0/SUCCESS
+               Service runtime: 2min 25.114s
+             CPU time consumed: 18min 8.971s
+                   Memory peak: 5.4G (swap: 0B)

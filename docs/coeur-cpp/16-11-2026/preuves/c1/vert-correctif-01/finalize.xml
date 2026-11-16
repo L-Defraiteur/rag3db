@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="2" failures="0" disabled="0" errors="0" time="0.005" timestamp="2026-11-16T10:49:22.490" name="AllTests">
+  <testsuite name="StringFinalizeTests" tests="2" failures="0" disabled="0" skipped="0" errors="0" time="0.005" timestamp="2026-11-16T10:49:22.490">
+    <testcase name="StringSurvivesAllocationFailureAndRetry" file="/home/lucied/.cache/rag3weaver-build/cx-coeur-c1-offsets/source/test/storage/string_finalize_test.cpp" line="62" status="run" result="completed" time="0.003" timestamp="2026-11-16T10:49:22.490" classname="StringFinalizeTests" />
+    <testcase name="BlobSurvivesAllocationFailureAndRetry" file="/home/lucied/.cache/rag3weaver-build/cx-coeur-c1-offsets/source/test/storage/string_finalize_test.cpp" line="65" status="run" result="completed" time="0.002" timestamp="2026-11-16T10:49:22.493" classname="StringFinalizeTests" />
+  </testsuite>
+</testsuites>
