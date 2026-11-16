@@ -26,8 +26,8 @@ class Contracts(unittest.TestCase):
  def test_exact_manifest_prevents_rescan_and_uses_existing_body(self):
   c=json.loads(Path(__file__).with_name('backend.json').read_text());options=c['tools']['payer_retard_dense']['bindings']['options'];self.assertEqual(options['signals'],[]);self.assertEqual(options['exige'],['data','dense']);self.assertFalse(c['embeddings']['catch_up_on_open']);self.assertEqual(c['workspace']['commands'],'off');self.assertTrue(c['workspace']['read_only']);self.assertFalse(c['reactions']);self.assertFalse(c['watches']);self.assertFalse(c['tools']['payer_retard_dense']['policy']['read_files']);graph=Path(__file__).with_name('payer-retard-dense.mmd').read_text();self.assertIn('source.meta',graph);self.assertNotIn('IndexNode(',graph);self.assertNotIn('VectorSearchNode',graph)
  def test_source_meta_warnings_or_partial_fail_before_shutdown(self):
-  meta=dict(warnings=[],partial=False,pending_count=0,signals=[]);self.assertEqual(q.verify_meta(dict(ok=True,result=dict(result=meta))),meta)
-  for key,v in [('warnings',['refus']),('partial',True),('pending_count',1),('signals',['vector'])]:
+  meta=dict(warnings=[],partial=False,pendingCount=0,signals=[]);self.assertEqual(q.verify_meta(dict(ok=True,result=dict(result=meta))),meta)
+  for key,v in [('warnings',['refus']),('partial',True),('pendingCount',1),('signals',['vector'])]:
    with self.subTest(key=key),self.assertRaises(ValueError):q.verify_meta(dict(ok=True,result=dict(result=dict(meta,**{key:v}))))
  def test_stale_or_wrong_provider_grant_refused(self):
   grant=dict(provider='127.0.0.1:7878',model='granite-278m',dimension=768,c7_reference='c7',embar_reference='embar',restart_authorized=False,observed_monotonic=100,valid_until_monotonic=1000,identity=dict(service='rag3weaver-embeddings',modele='granite-278m',dim=768,factice=False,dual=False,sparse=False,max_chars_per_text=5000,executable='bin@mtime',precision='Flex32'))

@@ -71,3 +71,45 @@ dimensions/debt, sous un futur GO distinct. Même favorable, il ne prouvera
 pas le shutdown propre non observé ni une qualification de durabilité.
 Embar réatteste après nettoyage usage0/0, identité provider inchangée et
 327owned absents ; sa réservation est rendue, aucun nouveau grant acquis.
+
+## Correction du juge préparée, sans nouvelle exécution native
+
+Le vrai verify_meta a été vu rouge avec les392octets exacts de writer.stdout,
+conservés dans writer-meta-response.json (commitdd6a953473 du témoin avant
+fix). Le DTO SearchMeta de search.rs porte serde(rename_all="camelCase").
+Le juge lit désormais exclusivement pendingCount entier0, refuse snake-only
+et toute présence de l'alias pending_count, même concordant ; false/null ne
+valent pas le nombre0. partial doit être explicitement false ; warnings et
+signaux restent refusés. Aucun changement du produit ni des autres phases.
+16fonctions CPU hermétiques passent en0.032s (10contrats+3logs+3meta), dont
+la vraie réponse et variantes absente/snake/conflit/alias/type/refus. Aucun
+compiler/DB/provider/processus réel lancé par ces tests. Le rouge natif et
+son absence de shutdown demeurent inchangés.
+
+## Proposition d'audit RO du résultat figé, non autorisée à l'exécution
+
+Préparer un contrôleur séparé, aucune branche writer du pilote : nouvelle
+destination de preuve, borne900 proposée après poste32G avec même enveloppe
+outer/finalisation et premier refus STOP ; arbitrage C7 et RO du code requis.
+P reste celui du résultat rouge, pas nouvelle copie ni reprise SourceNode.
+CLI/provider ne sont jamais invoqués, pas compilation de helper : ELF typé
+déjà compilé et son pin typed-before-db, SDK59/IDS et sources exacts à figer
+dans un nouveau ledger avant toute DB. fd/exe/cwd/start et inventaire copie
+avant ouverture ; profil RO pool1G/threads4 et états privés distincts.
+
+Lectures proposées : audit.snapshot avec les mêmes469UUID puis comparaison
+exacte à graph-before (mêmes exclusions explicites de vector/marker/claim
+sur cohorte seulement) ; fts et comparaison exacte à fts-before ;
+audit.finished avec SQLglobaldebt, dimensions768/finite/marker sur TOUS les
+chunks, couverture469, claimsformat/writerunique et show_indexesREADY/loaded.
+Inventaires fichier/dirs copie avant/après stricts, même .readers déjàprésent ;
+sourceCOPY02/pins stricts après lectures ; quiescence et finalisation sous
+même échéance. Aucun LOAD forcé, recovery, writer, purge, rescan, changement
+de génération ou retry : si ouverture RO refuse l'état après cleanup, STOP
+et documenter sans le réparer. Si indexREADY ou toute autre assertion refuse,
+premierrouge et pas de contournement.
+
+Un succès éventuel serait seulement un état logique/physique observé RO
+après cleanup. Il ne transforme ni l'ancien scope ni l'absence de shutdown
+propre en VERT et ne qualifie pas la durabilité, migration ou LIVE. Aucun
+GO900 n'est acquis par cette proposition ; contrôleur encore non matérialisé.

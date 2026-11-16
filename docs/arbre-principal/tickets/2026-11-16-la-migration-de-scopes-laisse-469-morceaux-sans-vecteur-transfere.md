@@ -155,3 +155,12 @@ Prochaine préparation à arbitrer séparément : vrai verify_meta testé rouge
 sur contrat camelCase puis correction stricte, nouveau couple/revue et GO
 distinct. Ne pas transformer cleanup en preuve de shutdown ni ce rouge en
 acquittement des469. Ticket et parent restent ouverts.
+
+Microfix préparé après témoin rouge dd6a953473 sur les392octets réels :
+contrat public SearchMeta camelCase repris strictement, pendingCount int0
+uniquement, tout alias pending_count refusé (y compris paire concordante),
+partial=false explicite. 16fonctionsCPU hermétiques vertes0.032s, aucun
+runtime natif ; ancien rouge inchangé. Rapport09 propose un audit RO900 de
+la copie figée sans nouveau Source/embedding/writer, première ouverture RO
+refusée=>STOP sans recovery ; code et GO distinct restent à obtenir. Rien
+n'est lancé par cette correction ni par la proposition.

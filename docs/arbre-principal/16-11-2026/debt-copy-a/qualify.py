@@ -150,7 +150,8 @@ def fts(reader,fs,env,end,offsets,label):
 def verify_meta(response):
  if response.get('ok') is not True:raise ValueError('tool response refused')
  meta=response['result']['result'];meta=json.loads(meta) if isinstance(meta,str) else meta
- if not isinstance(meta,dict) or meta.get('warnings') or meta.get('partial') or meta.get('pending_count')!=0 or meta.get('signals')!=[]:raise ValueError('source.meta refused or partial; not a debt-zero proof')
+ # SearchMeta (search.rs) serializes camelCase. No legacy alias or ambiguous pair.
+ if not isinstance(meta,dict) or 'pending_count' in meta or type(meta.get('pendingCount')) is not int or meta['pendingCount']!=0 or meta.get('warnings') or meta.get('partial') is not False or meta.get('signals')!=[]:raise ValueError('source.meta refused or partial; not a debt-zero proof')
  return meta
 
 def driver():
