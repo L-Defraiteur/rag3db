@@ -44,3 +44,7 @@ Préparation concrète RO600 : extracteurC++typedreadOnly+matérialiseurframing+
 ## Réserve supervision Hotfixs b83 — AVANT diff
 
 L’avis favorable aux contrats dump/lecture ne lève pas cette réserve : ancien launch effectuait hashes/git/composition après retour du timeout630 interne, donc hors borne ; refuser un statut tardif n’arrêtait pas ces lectures. b83 retiré avant toute admission/native. Correction prévue : poste→timeoutEXTÉRIEUR598s+kill2s couvrant compose ET confineur ET tous hashes/scans/publication, confineur interne550s pour marge ; lanceur extérieur ne fait que propager le rc, aucune finalisation après retour. Signature du vrai parenttimeout/poste vérifiée, arrêtpremierrouge/timeout = nonqualification, quiescence affirmative seulement après scope et scanowned complets. Aucun native/Cargo/PQS pour cette correction hermétique, nouveauSHA àRO/GO distinct600.
+
+## Observation RO autorisée, sans correction
+
+Recette exacte c5d sous GO C7-RO-BLOBS-c5d-16nov : copie neuve strictement inchangée, extractiontypedBLOB et décodeLucivy4.3.9 réussis. Graphe0..300, FTS0..300+9000000 ; FTS−graphe=[9000000], graphe−FTS=[]. OBSERVATIONseulement : branchehistorique nontracée, maintenance/réparation nonqualifiée. Rapport [16](../16-11-2026/16-preuves-diagnostic-blobs-ro.md), manifeste774SHA identiques2postes e9272f...3662. ScopeVERT0/TERMINE/quiet, poste rendu, aucune suppression. Ticket demeure OUVERT.
