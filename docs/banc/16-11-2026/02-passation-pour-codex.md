@@ -138,7 +138,7 @@ sur la copie finale de la bascule, quand c7 la refera : même méthode, contre u
 
 ### Entrée 6. Le banc d'étalonnage du débit d'embarquement
 
-**En cours par banc** (16 novembre, 11 h, au mot de c7) : la page de conception, branche `banc-page-etalonnage`, tête à venir.
+**En cours par banc** (16 novembre, 11 h, au mot de c7) : la page de conception est sur master (01d94fa6f1), `docs/banc/16-11-2026/03-le-banc-d-etalonnage.md`, soumise à c7 et à embarquement. La mesure attend leur accord.
 
 - **Ticket** : `docs/banc/tickets/2026-11-16-le-banc-d-etalonnage-du-debit-d-embarquement.md`
 - **À faire** : **d'abord la page de conception**, soumise à c7 et à embarquement (le jeu de lots de
