@@ -82,7 +82,8 @@ commit pour le témoin, un pour le correctif, dans cet ordre.
 
 ### Plantages
 
-**C1. Le point de reprise qui meurt dans le dictionnaire d'une colonne de chaînes**
+**C1. Le point de reprise qui meurt dans le dictionnaire d'une colonne de chaînes** — **EN COURS** (arrêté le 16 novembre à 11 h au mot
+de Lucie ; reprendre depuis la passe TSan ci-dessous)
 `docs/coeur-cpp/tickets/2026-11-14-un-point-de-reprise-automatique-meurt-dans-le-dictionnaire-d-une-colonne-de-chaines.md`
 - Ce qu'on sait : SIGSEGV dans `std::_Hash_bytes` ← `DictionaryChunk::appendString` ←
   `StringChunkData::finalize` ← `Column::checkpointSegment`, pendant un point de reprise demandé par un
@@ -91,6 +92,18 @@ commit pour le témoin, un pour le correctif, dans cet ordre.
   saturé d'avant `2385b5f616`). Jamais sous ASan (7 tours). La piste « ligne comptée avant sa chaîne »
   est écartée (voir la section 1).
 - À faire, dans l'ordre :
+  0. **Où en est la passe TSan, laissée finir seule** : au plus 6 tours de `DdlEveryMinute` sous
+     200 Mio, lancés à 08 h 12, environ 45 min chacun, arrêt au premier rapport qui touche le
+     dictionnaire. Ligne par tour dans `~/.cache/rag3db-moteur-notes/dict-tsan/passe.out` (« rapports
+     TSan N ; touchant le dictionnaire M ») ; elle finit par `FIN`. Aux tours 1 et 2 : 15 et 18
+     rapports, aucun sur le dictionnaire. Ce qu'ils montrent : des courses sur
+     `RelTable::getNumTotalRows` et `RelTable::reserveRelOffsets`, sur `CatalogEntry::setTimestamp`
+     (écrit au COMMIT hors du verrou du `CatalogSet` ; voir le ticket de l'entrée B1) et sur
+     `Checkpointer::canAutoCheckpoint`. **Comment juger** : un rapport qui nomme `DictionaryChunk` ou
+     `StringChunkData` dans l'une de ses deux piles est la piste, avec ses deux fils. Les autres ne
+     sont pas ce défaut, mais se comparent à `test/transaction/concurrence/tsan_signatures.txt` ; une
+     signature absente de cette liste a droit à son ticket. Aucun rapport sur le dictionnaire en
+     6 tours : passer à l'étape 2.
   1. Lire la passe TSan en cours (section 1). `grep -l 'DictionaryChunk\|StringChunkData'
      ~/.cache/rag3db-moteur-notes/dict-tsan/tsan-*`. Un rapport qui les touche donne les deux piles
      concurrentes : qui écrit dans le `StringChunkData` pendant `finalize`. Les autres rapports sont
@@ -271,3 +284,10 @@ Pris par la session hotfixs le 16 novembre. Ne le reprendre que si son État ne 
 - **Un défaut connu non corrigé a son ticket** sous `docs/coeur-cpp/tickets/`, contrôlé par
   `python3 -I extension/rag3weaver/scripts/check_tickets.py --index` (familles admises : moteur ou
   produit).
+
+## État final (16 novembre 2026, 11 h, arrêt au mot de Lucie)
+
+Sur master : les lots du 15 et du 16 (section 1), le dernier en `2385b5f616`. En branche, poussée,
+non jugée : `dictionary-index-after-string-2` (`256413fde`). En cours : l'entrée C1, passe TSan finie
+seule à luciepc (à lire comme dit en C1, étape 0). Aucun autre pas commencé ; toutes les autres entrées
+sont à prendre telles qu'écrites.
