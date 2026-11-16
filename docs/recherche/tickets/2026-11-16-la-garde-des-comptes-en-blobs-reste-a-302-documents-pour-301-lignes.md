@@ -120,3 +120,22 @@ Publier source et fakes discriminants avant test, puis rouge→fix→vert sous b
 CPU60 hermétique, sans processus/provider/PG/proc réels. Recherche regroupera le
 couple/pins/Q avant RO et GO6000 distinct éventuel. Ce paragraphe n'alloue aucune
 ressource ni exécution native. Ticket reste ouvert.
+
+## G : protocole d'attestation PG RO future — préparation avant code
+
+Autorisation C7, même contrat owner79cb, branche G
+`cx-optimiseur-pg-ro-attestation-20261116-r1`. Aucun PG/Docker/health maintenant.
+Inventaire source2150/APP84 : bootstrap5433/rag3weaver_test distinct des bases
+par processus, aucun psql hôte présent sur le PC relevé, DockerCLI tué ne prouve
+pas reap du psql conteneur. OID/imageID/binding runtime non relevés.
+
+Publier protocole et fakes discriminants avant implémentation : format JSON
+exact nonce/READY/job/END/allocation, SQL constante RO et son SHA, topologie,
+identités et propriétaire, réservation/bootstrap/enfants distincts, sources et
+raw partiels immuables. Valider avant tout grant la fraîcheur<=120 et le budget
+whole5, rc/quiet/reap/backend postcheck. Transport préféré : client hôte privé
+épinglé, qualification/outillage future G/C7 nécessaire. Pas de dockerexecprobe
+présenté comme borné ; pas d'installation, création/DROP ou appel réseau ici.
+Le producteur de pièces ne lance aucune probe : il refuse si qualification
+outil/identités externes manquent. Aucun VERT transport réel ne sera déduit des
+fakes CPU. Nouvelle RO nécessaire avant toute future exécution autorisée.
