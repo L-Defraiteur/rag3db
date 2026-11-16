@@ -44,7 +44,7 @@ def _stage(destination, grant):
 
 
 def publish_grant(ready_path, destination, *, expected_sha256, expected_nonce,
-                  observe_provider, clock=time.monotonic,
+                  expected_protocol_sha256, observe_provider, clock=time.monotonic,
                   phase_reader=protocol.read_phase_state, health_margin=5.):
     """Observe only inside admission, preserve existing destination exclusively.
 
@@ -53,6 +53,10 @@ def publish_grant(ready_path, destination, *, expected_sha256, expected_nonce,
     READY. The callback's observations remain the owner's evidence to preserve.
     """
     ready_path, destination = Path(ready_path), Path(destination)
+    def pinned_protocol():
+        if hashlib.sha256(Path(protocol.__file__).read_bytes()).hexdigest() != expected_protocol_sha256:
+            raise ValueError('shared lifecycle protocol differs from admitted hash')
+    pinned_protocol()
     ready = _ready(ready_path, expected_sha256, expected_nonce)
     phase = phase_reader(ready)
     now = clock()
@@ -64,9 +68,14 @@ def publish_grant(ready_path, destination, *, expected_sha256, expected_nonce,
     if destination.exists() or destination.is_symlink():
         raise FileExistsError('coordination destination already exists')
     grant = observe_provider(ready)
-    protocol.validate_grant_phase(ready, grant, now, phase, expected_sha256)
+    phase = phase_reader(ready)
+    protocol.validate_grant_phase(ready, grant, clock(), phase, expected_sha256)
     staged = _stage(destination, grant)
     try:
+        pinned_protocol()
+        current = _ready(ready_path, expected_sha256, expected_nonce)
+        phase = phase_reader(current)
+        protocol.validate_grant_phase(current, grant, clock(), phase, expected_sha256)
         os.link(staged, destination)
     finally:
         staged.unlink()

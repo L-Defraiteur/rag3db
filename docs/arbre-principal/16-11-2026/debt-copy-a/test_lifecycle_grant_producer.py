@@ -56,7 +56,9 @@ class Producer(unittest.TestCase):
 
     def run_publish(self, **extra):
         return producer.publish_grant(self.path, self.dest, expected_sha256=self.sha,
-                                      expected_nonce='fixture', observe_provider=self.observe,
+                                      expected_nonce='fixture',
+                                      expected_protocol_sha256=hashlib.sha256(Path(protocol.__file__).read_bytes()).hexdigest(),
+                                      observe_provider=self.observe,
                                       clock=lambda: self.now, phase_reader=self.snapshot, **extra)
 
     def refused(self):
