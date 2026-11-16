@@ -589,7 +589,9 @@ fn usage_properties(sites: &[UsageSite]) -> BTreeMap<String, CypherValue> {
 // un membre lu au niveau du fichier garde son propriétaire (codeparsers).
 // 5 (16 novembre 2026) : une locale d'un motif de tuple et une locale redéclarée lisent leur type
 // (codeparsers, les liaisons différées situées).
-pub const REGLES_DE_L_ANALYSE: u32 = 5;
+// 6 (16 novembre 2026) : deux homonymes d'une même ligne gardent deux uuid et deux clés (les octets du
+// nœud, codeparsers).
+pub const REGLES_DE_L_ANALYSE: u32 = 6;
 
 /// **La version de l'analyse** (page 06, § 13) : le commit du parseur lié, [`REGLES_DE_L_ANALYSE`] et le
 /// gabarit du code (le découpage et les champs déclarés de `File` et de `Scope`), hachés.

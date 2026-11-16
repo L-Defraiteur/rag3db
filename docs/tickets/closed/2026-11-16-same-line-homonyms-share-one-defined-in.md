@@ -1,6 +1,6 @@
 # Des homonymes sur une même ligne partagent un seul DEFINED_IN
 
-- **État** : ouvert (16 novembre 2026)
+- **État** : fermé (16 novembre 2026) — codeparsers `d754ee5` et rag3weaver ; voir « La correction »
 - **Famille** : produit
 - **Gravité** : réponse incomplète (un scope sans son fichier : `usages` et le plan du fichier le taisent)
 - **Atteignable en service** : oui, sur la base du dépôt (63 scopes sur 77 248)
@@ -40,3 +40,30 @@ les **28** (Python et la lambda de spdlog), qui sont ce ticket.
 
 Un témoin rouge (deux lambdas sur une ligne d'un fichier Python), la clé qui les distingue, puis les 28
 recomptés par le banc, sous le manifeste de Lucie.
+
+## La correction (16 novembre 2026)
+
+La piste était juste, et il y avait une seconde cause, en amont. Deux générateurs d'une même ligne Python,
+au niveau du module (là où aucun scope nommé ne les replie, `fold_lambdas`), ont même nom, même genre, mêmes
+lignes, **et mêmes octets de scope** (ceux de la ligne). Ils ne diffèrent que par les octets de leur nœud.
+
+- **codeparsers** (`d754ee5`) : la table des positions des uuid (`uuid_par_position`, 15 novembre) se clait
+  par les octets du scope ; les deux recevaient le même uuid. Elle se clé maintenant par les octets du nœud
+  (`node_position`), et `ScopeMappingEntry` les porte (`start_byte`, `end_byte`).
+- **rag3weaver** : la clé de position qui rattache un uuid à sa clé stable (`stable_scope_keys`) prend aussi
+  les octets du nœud.
+
+Témoin : `tests/e2e_usages.rs`, `two_homonyms_on_one_line_both_have_their_file`
+(`print(sum(1 for x in A if x), sum(1 for y in A if not y))`), vu rouge puis vert.
+
+La sonde (`tests/sonde_marque_nom.rs`, qui compte maintenant les scopes sans DEFINED_IN ; corpus figé de
+rag3db-garde ; avant = master, codeparsers `6291939`) :
+
+| corpus | scopes | sans DEFINED_IN avant | après |
+|---|---|---|---|
+| experiments/ et extension/rag3weaver/docs (Python) | 1 295 | 26 | 0 |
+| third_party/spdlog | 3 040 | 1 | 0 |
+| rag3weaver/src | 16 222 | 0 | 0 |
+| src/ du moteur | 19 057 | 0 | 0 |
+
+Le nombre de scopes ne change pas, et aucun couple CONSUMES ne naît ni ne part, sur aucun des quatre.
