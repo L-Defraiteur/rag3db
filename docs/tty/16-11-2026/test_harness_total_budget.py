@@ -61,6 +61,10 @@ class HarnessBudgetTests(unittest.TestCase):
             self.assertLess(time.monotonic()-started,1.0,'finalization ran outside the actual outer watchdog')
             self.assertNotEqual(result.returncode,0)
 
+    def test_historical_receipt_is_independent_of_new_controller_number(self):
+        self.assertEqual(harness_only.PREVIOUS_SCOPE.name,'validation-flsb10fe')
+        self.assertEqual(harness_only.PREVIOUS_SCOPE.parent.name,'cx-tty-aliases-continuation-common-v1')
+
     def test_actual_main_execs_watchdog_and_does_no_finalization_after_it(self):
         from unittest.mock import patch
         class ExecIntercept(Exception):

@@ -14,11 +14,12 @@ from launch_full import publish_result
 R = Path.home() / '.cache/rag3weaver-build'
 W = Path.home() / 'git_workspaces/cx-tty-english-aliases'
 T = R / 'target-cx-tty-english-aliases-2'
-Q = R / 'cx-tty-harness-only-controller-v2'
-P = R / 'cx-tty-harness-only-v2'
-S = R / 'cx-tty-harness-only-common-v2'
+Q = R / 'cx-tty-harness-only-controller-v3'
+P = R / 'cx-tty-harness-only-v3'
+S = R / 'cx-tty-harness-only-common-v3'
 PRODUCT = '6d886375ea4627c88d28aef918b948a23f628ab1'
 BUDGET = 1200
+PREVIOUS_SCOPE = R / 'cx-tty-aliases-continuation-common-v1/validation-flsb10fe'
 
 
 def production_identity():
@@ -50,7 +51,7 @@ def allocation_worker(args):
     assert not any(path.exists() or path.is_symlink() for path in [P, S])
     if args.prepare_only:
         Q.mkdir(mode=0o700)
-        old = R / 'cx-tty-aliases-continuation-common-v2/validation-flsb10fe'
+        old = PREVIOUS_SCOPE
         authority = json.loads((old / 'autorite.json').read_text())
         verdict = json.loads((old / 'verdict.json').read_text())
         assert authority['etat'] == 'termine' and verdict['restes'] == [] and verdict['nettoye']

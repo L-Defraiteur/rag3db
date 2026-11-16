@@ -193,3 +193,11 @@ moins15s, pour finaliser avant l'échéance. Les scans et la publication restent
 Nouveau Q/P/Sv2 et TMPttyhr2, ancien paquet5b43 intact. Second témoin sur le
 vrai main : exec du watchdog avec le worker privé, aucune finalisation après.
 Réessais hermétiques seulement après publication ; aucun GO/runtime natif.
+
+Préparation a0ea : refus avant tout runtime/autorité, chemin historique de reçu
+flsb10fe renommé par erreur continuation-common-v2 au lieu de v1 lors du
+renommage du nouveau paquet. Qv2 partiel conservé, aucun prepared.json produit.
+La propriété watchdog a passé ses2témoins hermétiques (0,146s) ; ce refus est
+un défaut distinct de préparation, pas un run rouge ou un vert de harnais.
+Référence historique désormais constante PREVIOUS_SCOPE/v1, test de séparation
+des numéros ; nouveau Q/P/Sv3 et TMPttyhr3. Aucun ancien dossier réécrit.
