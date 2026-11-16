@@ -96,3 +96,17 @@ aucun Cargo/PID/DB/natif. RAW horsW
 Le rouge enfant nonqualifié f93 et le refus réel Cargo DDE6 restent intacts.
 Source223 et code pilote de cette publication sont ensuite figés pour
 préparation Git-only/Q2/paquet et RO, pas pour exécution sans nouveauGO.
+
+Préparation Git-only reprise exécutée sous65aed23198/code1abf : rc0 en
+11,305468562s, sourcePC223 propre, archive049 physique/admin/gitlink
+indépendants, contrôleur historiqueDDE6 inchangé et contrôleur reprise
+séparé sur la même branche distante. Aucun Cargo/garde/natif ni target
+modifié. CinqJSON PC/local réhash0écart, manifestSHA
+`9cdf74b040c020719315d66e3e33a61ed13be7086d337bdb2ba90f50672915db` ;
+cacheavant/après SHAIDENTIQUE
+`10bff20cbbfa4782cb86c54b55c6d0c19d610fa482cab18b412d7dde62262478`.
+Sourcearchive049 SHA937ebb9b61e432db9d5a731bcef8cb7644e87ea0f2eb8bfefce6ceefefbfa80d,
+nouveausource223 SHA135e83755a031e3a61f0f7e80010517bbcb6c71c9a980fd528342b0f23684955.
+Le target garde dev55/inode164550643/UID1000 et même C ; rien n'est purgé.
+Après publication de ce résultat, Q2 peut être figé au pin final en
+préparationseule. ENDoriginaux restent1197212.902/1197227.902, pasreset.

@@ -1,0 +1,27 @@
+[
+  {
+    "path": "cache-after-git.json",
+    "size": 1340914,
+    "sha256": "10bff20cbbfa4782cb86c54b55c6d0c19d610fa482cab18b412d7dde62262478"
+  },
+  {
+    "path": "cache-before-git.json",
+    "size": 1340914,
+    "sha256": "10bff20cbbfa4782cb86c54b55c6d0c19d610fa482cab18b412d7dde62262478"
+  },
+  {
+    "path": "frozen-source.json",
+    "size": 2505431,
+    "sha256": "937ebb9b61e432db9d5a731bcef8cb7644e87ea0f2eb8bfefce6ceefefbfa80d"
+  },
+  {
+    "path": "new-source.json",
+    "size": 2375117,
+    "sha256": "135e83755a031e3a61f0f7e80010517bbcb6c71c9a980fd528342b0f23684955"
+  },
+  {
+    "path": "transition.json",
+    "size": 3797,
+    "sha256": "81cf3cde5d9e0cf674456f386c1221a18e3201fe655f090b16b6d5b1df8d3624"
+  }
+]
