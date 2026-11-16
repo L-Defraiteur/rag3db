@@ -1,0 +1,11 @@
+{
+  "source_pilot": "b12ee2a65af9d60b6264b0ececa07993fdff196a",
+  "source_proof_delta": "APP/OLD_APP and owned paths constants; tracked() additionally refuses secret paths before read",
+  "cache_state_delta": "retain four functions byte-identical; omit unused creation helpers",
+  "cache_functions": {
+    "require_size": "3c49ca34c8b198edb41acf224d7c730272a4ebef41be63b14053c66ae3215360",
+    "require_root": "9f68fbbdc6faf53d318b7214cfcaac353b1c1b03fe3f4a01e7895a544e4252f4",
+    "inventory": "b0ece9fa06007b37a646a9518a20257140f7eaa9d5cea3793b4b02b7dcd9ad9e",
+    "verify_frozen": "e0e4c3fde8ac62db427d19629b2b5c1b7a238eed5206481f4fc147b006127baf"
+  }
+}
