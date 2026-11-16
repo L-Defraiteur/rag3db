@@ -1,0 +1,999 @@
+{
+  "scope": "lecture de fichiers existants uniquement, aucun nouveau test",
+  "files": [
+    {
+      "path": "/home/lucied/.cache/rag3db-moteur-notes/alter/alter-d8b60cc38.log",
+      "sha256": "a63a52c4dd466abcb0ede1f86bfd665007b41f61d88a2b3416c14ff499209781",
+      "selected_lines": [
+        {
+          "line": 1,
+          "text": "Running main() from /usr/src/debug/gtest/googletest-1.18.0/googletest/src/gtest_main.cc"
+        },
+        {
+          "line": 2,
+          "text": "Note: Google Test filter = AlterWaitsForWriters.*"
+        },
+        {
+          "line": 3,
+          "text": "[==========] Running 5 tests from 1 test suite."
+        },
+        {
+          "line": 4,
+          "text": "[----------] Global test environment set-up."
+        },
+        {
+          "line": 5,
+          "text": "[----------] 5 tests from AlterWaitsForWriters"
+        },
+        {
+          "line": 6,
+          "text": "[ RUN      ] AlterWaitsForWriters.AnAddWaitsForTheOpenWriter"
+        },
+        {
+          "line": 7,
+          "text": "/home/lucied/git_workspaces/rag3db-colonnes/test/transaction/alter_waits_for_writers_test.cpp:83: Failure"
+        },
+        {
+          "line": 8,
+          "text": "Expected: (t.ddlDone) > (t.commitDone), actual: 1.148023 vs 405.26978800000001"
+        },
+        {
+          "line": 9,
+          "text": "[check: an-add-waits-for-the-open-writer] the ADD ended at 1.148023 ms, the writer committed at 405.26978800000001 ms"
+        },
+        {
+          "line": 10,
+          "text": ""
+        },
+        {
+          "line": 11,
+          "text": "/home/lucied/git_workspaces/rag3db-colonnes/test/transaction/alter_waits_for_writers_test.cpp:86: Failure"
+        },
+        {
+          "line": 12,
+          "text": "Expected equality of these values:"
+        },
+        {
+          "line": 13,
+          "text": "  one(*conn, \"MATCH (n:T) WHERE n.s = 'réécrite' AND n.note = 'n' RETURN count(*);\")"
+        },
+        {
+          "line": 14,
+          "text": "    Which is: \"500\\n\""
+        },
+        {
+          "line": 15,
+          "text": "  \"500\""
+        },
+        {
+          "line": 16,
+          "text": ""
+        },
+        {
+          "line": 17,
+          "text": "[  FAILED  ] AlterWaitsForWriters.AnAddWaitsForTheOpenWriter (455 ms)"
+        },
+        {
+          "line": 18,
+          "text": "[ RUN      ] AlterWaitsForWriters.ADropOfAColumnTheOpenWriterWroteWaits"
+        },
+        {
+          "line": 19,
+          "text": "/home/lucied/git_workspaces/rag3db-colonnes/test/transaction/alter_waits_for_writers_test.cpp:94: Failure"
+        },
+        {
+          "line": 20,
+          "text": "Expected: (t.ddlDone) > (t.commitDone), actual: 1.020875 vs 404.705806"
+        },
+        {
+          "line": 21,
+          "text": "[check: a-drop-of-a-written-column-waits] the DROP ended at 1.020875 ms, the writer committed at 404.705806 ms"
+        },
+        {
+          "line": 22,
+          "text": ""
+        },
+        {
+          "line": 23,
+          "text": "/home/lucied/git_workspaces/rag3db-colonnes/test/transaction/alter_waits_for_writers_test.cpp:97: Failure"
+        },
+        {
+          "line": 24,
+          "text": "Expected equality of these values:"
+        },
+        {
+          "line": 25,
+          "text": "  one(*conn, \"MATCH (n:T) RETURN count(*);\")"
+        },
+        {
+          "line": 26,
+          "text": "    Which is: \"1000\\n\""
+        },
+        {
+          "line": 27,
+          "text": "  \"1000\""
+        },
+        {
+          "line": 28,
+          "text": ""
+        },
+        {
+          "line": 29,
+          "text": "[  FAILED  ] AlterWaitsForWriters.ADropOfAColumnTheOpenWriterWroteWaits (430 ms)"
+        },
+        {
+          "line": 30,
+          "text": "[ RUN      ] AlterWaitsForWriters.AnAddWithAnOpenWriterKeepsTheDataAcrossACheckpointAndAReopening"
+        },
+        {
+          "line": 31,
+          "text": "[Checkpoint postponed: other transactions are open] the journal holds 85173 bytes"
+        },
+        {
+          "line": 32,
+          "text": "/home/lucied/git_workspaces/rag3db-colonnes/test/transaction/alter_waits_for_writers_test.cpp:105: Failure"
+        },
+        {
+          "line": 33,
+          "text": "Expected: (t.ddlDone) > (t.commitDone), actual: 1.3839570000000001 vs 318.43114800000001"
+        },
+        {
+          "line": 34,
+          "text": "[check: an-add-waits-for-the-open-writer]"
+        },
+        {
+          "line": 35,
+          "text": ""
+        },
+        {
+          "line": 36,
+          "text": "/home/lucied/git_workspaces/rag3db-colonnes/test/transaction/alter_waits_for_writers_test.cpp:108: Failure"
+        },
+        {
+          "line": 37,
+          "text": "Expected equality of these values:"
+        },
+        {
+          "line": 38,
+          "text": "  one(*conn, \"MATCH (n:T) WHERE n.s = 'neuve' AND n.note = 'n' RETURN count(*);\")"
+        },
+        {
+          "line": 39,
+          "text": "    Which is: \"500\\n\""
+        },
+        {
+          "line": 40,
+          "text": "  \"500\""
+        },
+        {
+          "line": 41,
+          "text": "[check: an-add-with-an-open-writer-keeps-the-data]"
+        },
+        {
+          "line": 42,
+          "text": ""
+        },
+        {
+          "line": 43,
+          "text": "/home/lucied/git_workspaces/rag3db-colonnes/test/transaction/alter_waits_for_writers_test.cpp:111: Failure"
+        },
+        {
+          "line": 44,
+          "text": "Expected equality of these values:"
+        },
+        {
+          "line": 45,
+          "text": "  one(*conn, \"MATCH (n:T) RETURN count(*);\")"
+        },
+        {
+          "line": 46,
+          "text": "    Which is: \"1500\\n\""
+        },
+        {
+          "line": 47,
+          "text": "  \"1500\""
+        },
+        {
+          "line": 48,
+          "text": ""
+        },
+        {
+          "line": 49,
+          "text": "[  FAILED  ] AlterWaitsForWriters.AnAddWithAnOpenWriterKeepsTheDataAcrossACheckpointAndAReopening (338 ms)"
+        },
+        {
+          "line": 50,
+          "text": "[ RUN      ] AlterWaitsForWriters.AWriterArrivingDuringTheAlterWaitsForIt"
+        },
+        {
+          "line": 51,
+          "text": "/home/lucied/git_workspaces/rag3db-colonnes/test/transaction/alter_waits_for_writers_test.cpp:136: Failure"
+        },
+        {
+          "line": 52,
+          "text": "Expected: (ddlDone) > (commitDone), actual: 0.614128 vs 454.75400100000002"
+        },
+        {
+          "line": 53,
+          "text": "[check: an-add-waits-for-the-open-writer]"
+        },
+        {
+          "line": 54,
+          "text": ""
+        },
+        {
+          "line": 55,
+          "text": "/home/lucied/git_workspaces/rag3db-colonnes/test/transaction/alter_waits_for_writers_test.cpp:140: Failure"
+        },
+        {
+          "line": 56,
+          "text": "Expected equality of these values:"
+        },
+        {
+          "line": 57,
+          "text": "  one(*conn, \"MATCH (n:T) WHERE n.id = 2 RETURN n.s, n.note;\")"
+        },
+        {
+          "line": 58,
+          "text": "    Which is: \"c|n\\n\""
+        },
+        {
+          "line": 59,
+          "text": "  \"c|n\""
+        },
+        {
+          "line": 60,
+          "text": ""
+        },
+        {
+          "line": 61,
+          "text": "[  FAILED  ] AlterWaitsForWriters.AWriterArrivingDuringTheAlterWaitsForIt (476 ms)"
+        },
+        {
+          "line": 62,
+          "text": "[ RUN      ] AlterWaitsForWriters.AnAlterThatWaitsTooLongSaysWhichWriterItWaitedFor"
+        },
+        {
+          "line": 63,
+          "text": "/home/lucied/git_workspaces/rag3db-colonnes/test/transaction/alter_waits_for_writers_test.cpp:150: Failure"
+        },
+        {
+          "line": 64,
+          "text": "Value of: r->isSuccess()"
+        },
+        {
+          "line": 65,
+          "text": "  Actual: true"
+        },
+        {
+          "line": 66,
+          "text": "Expected: false"
+        },
+        {
+          "line": 67,
+          "text": "[check: an-alter-that-waits-too-long-is-refused]"
+        },
+        {
+          "line": 68,
+          "text": ""
+        },
+        {
+          "line": 69,
+          "text": "[  FAILED  ] AlterWaitsForWriters.AnAlterThatWaitsTooLongSaysWhichWriterItWaitedFor (21 ms)"
+        },
+        {
+          "line": 70,
+          "text": "[----------] 5 tests from AlterWaitsForWriters (1722 ms total)"
+        },
+        {
+          "line": 71,
+          "text": ""
+        },
+        {
+          "line": 72,
+          "text": "[----------] Global test environment tear-down"
+        },
+        {
+          "line": 73,
+          "text": "[==========] 5 tests from 1 test suite ran. (1722 ms total)"
+        },
+        {
+          "line": 74,
+          "text": "[  PASSED  ] 0 tests."
+        },
+        {
+          "line": 75,
+          "text": "[  FAILED  ] 5 tests, listed below:"
+        },
+        {
+          "line": 76,
+          "text": "[  FAILED  ] AlterWaitsForWriters.AnAddWaitsForTheOpenWriter"
+        },
+        {
+          "line": 77,
+          "text": "[  FAILED  ] AlterWaitsForWriters.ADropOfAColumnTheOpenWriterWroteWaits"
+        },
+        {
+          "line": 78,
+          "text": "[  FAILED  ] AlterWaitsForWriters.AnAddWithAnOpenWriterKeepsTheDataAcrossACheckpointAndAReopening"
+        },
+        {
+          "line": 79,
+          "text": "[  FAILED  ] AlterWaitsForWriters.AWriterArrivingDuringTheAlterWaitsForIt"
+        },
+        {
+          "line": 80,
+          "text": "[  FAILED  ] AlterWaitsForWriters.AnAlterThatWaitsTooLongSaysWhichWriterItWaitedFor"
+        },
+        {
+          "line": 81,
+          "text": ""
+        },
+        {
+          "line": 82,
+          "text": " 5 FAILED TESTS"
+        }
+      ]
+    },
+    {
+      "path": "/home/lucied/.cache/rag3db-moteur-notes/alter7/transaction.log",
+      "sha256": "b8c850ddbb2276d0c429fa4ff0b42f395a2a998b398fed40c83ca1f369afb16e",
+      "selected_lines": [
+        {
+          "line": 2,
+          "text": "[==========] Running 387 tests from 79 test suites."
+        },
+        {
+          "line": 1726,
+          "text": "[  SKIPPED ] VectorIndexCrashReopenProbe.OpenInAFreshProcess (0 ms)"
+        },
+        {
+          "line": 1733,
+          "text": "[==========] Running 1 test from 1 test suite."
+        },
+        {
+          "line": 1742,
+          "text": "[==========] Running 1 test from 1 test suite."
+        },
+        {
+          "line": 1751,
+          "text": "[==========] Running 1 test from 1 test suite."
+        },
+        {
+          "line": 1760,
+          "text": "[==========] Running 1 test from 1 test suite."
+        },
+        {
+          "line": 1769,
+          "text": "[==========] Running 1 test from 1 test suite."
+        },
+        {
+          "line": 1778,
+          "text": "[==========] Running 1 test from 1 test suite."
+        },
+        {
+          "line": 1784,
+          "text": "[==========] Running 1 test from 1 test suite."
+        },
+        {
+          "line": 1793,
+          "text": "[==========] Running 1 test from 1 test suite."
+        },
+        {
+          "line": 1803,
+          "text": "[==========] Running 1 test from 1 test suite."
+        },
+        {
+          "line": 1813,
+          "text": "[==========] Running 1 test from 1 test suite."
+        },
+        {
+          "line": 1823,
+          "text": "[==========] Running 1 test from 1 test suite."
+        },
+        {
+          "line": 1836,
+          "text": "[==========] Running 1 test from 1 test suite."
+        },
+        {
+          "line": 1849,
+          "text": "[==========] Running 1 test from 1 test suite."
+        },
+        {
+          "line": 1858,
+          "text": "[==========] Running 1 test from 1 test suite."
+        },
+        {
+          "line": 1870,
+          "text": "[==========] Running 1 test from 1 test suite."
+        },
+        {
+          "line": 1876,
+          "text": "[==========] Running 1 test from 1 test suite."
+        },
+        {
+          "line": 1882,
+          "text": "[==========] Running 1 test from 1 test suite."
+        },
+        {
+          "line": 1892,
+          "text": "[==========] Running 1 test from 1 test suite."
+        },
+        {
+          "line": 1898,
+          "text": "[==========] Running 1 test from 1 test suite."
+        },
+        {
+          "line": 1908,
+          "text": "[==========] Running 1 test from 1 test suite."
+        },
+        {
+          "line": 1917,
+          "text": "[==========] Running 1 test from 1 test suite."
+        },
+        {
+          "line": 1926,
+          "text": "[==========] Running 1 test from 1 test suite."
+        },
+        {
+          "line": 2432,
+          "text": "[  SKIPPED ] WalReader.PrintAFile (4 ms)"
+        },
+        {
+          "line": 58054,
+          "text": "[ RUN      ] AlterWaitsForWriters.AnAddWaitsForTheOpenWriter"
+        },
+        {
+          "line": 58055,
+          "text": "[tache] source=CREATE_TABLE card=? puits=CREATE_TABLE fils=1/1 duree=1.26 ms sans=CREATE_TABLE"
+        },
+        {
+          "line": 58056,
+          "text": "[tache] source=TABLE_FUNCTION_CALL card=1 puits=RESULT_COLLECTOR fils=1/1 duree=0.57 ms"
+        },
+        {
+          "line": 58057,
+          "text": "[tache] source=TABLE_FUNCTION_CALL card=1000 puits=BATCH_INSERT fils=1/1 duree=4.36 ms"
+        },
+        {
+          "line": 58058,
+          "text": "[tache] source=TRANSACTION card=? puits=RESULT_COLLECTOR fils=1/1 duree=0.02 ms sans=RESULT_COLLECTOR"
+        },
+        {
+          "line": 58059,
+          "text": "[tache] source=SCAN_NODE_TABLE card=1000 puits=RESULT_COLLECTOR fils=1/1 duree=0.09 ms"
+        },
+        {
+          "line": 58060,
+          "text": "[tache] source=TABLE_FUNCTION_CALL card=100 puits=RESULT_COLLECTOR fils=1/1 duree=1.42 ms"
+        },
+        {
+          "line": 58061,
+          "text": "[tache] source=TRANSACTION card=? puits=RESULT_COLLECTOR fils=1/1 duree=4.42 ms sans=RESULT_COLLECTOR"
+        },
+        {
+          "line": 58062,
+          "text": "[tache] source=ALTER card=? puits=ALTER fils=1/1 duree=404.60 ms sans=ALTER"
+        },
+        {
+          "line": 58063,
+          "text": "[tache] source=SCAN_NODE_TABLE card=1000 puits=AGGREGATE fils=1/1 duree=0.11 ms"
+        },
+        {
+          "line": 58064,
+          "text": "[tache] source=AGGREGATE_FINALIZE card=1 puits=AGGREGATE_FINALIZE fils=1/1 duree=0.13 ms"
+        },
+        {
+          "line": 58065,
+          "text": "[tache] source=AGGREGATE_SCAN card=1 puits=RESULT_COLLECTOR fils=1/1 duree=0.19 ms"
+        },
+        {
+          "line": 58066,
+          "text": "[       OK ] AlterWaitsForWriters.AnAddWaitsForTheOpenWriter (433 ms)"
+        },
+        {
+          "line": 58067,
+          "text": "[ RUN      ] AlterWaitsForWriters.ADropOfAColumnTheOpenWriterWroteWaits"
+        },
+        {
+          "line": 58068,
+          "text": "[tache] source=CREATE_TABLE card=? puits=CREATE_TABLE fils=1/1 duree=1.06 ms sans=CREATE_TABLE"
+        },
+        {
+          "line": 58069,
+          "text": "[tache] source=TABLE_FUNCTION_CALL card=1 puits=RESULT_COLLECTOR fils=1/1 duree=0.21 ms"
+        },
+        {
+          "line": 58070,
+          "text": "[tache] source=TABLE_FUNCTION_CALL card=1000 puits=BATCH_INSERT fils=1/1 duree=3.78 ms"
+        },
+        {
+          "line": 58071,
+          "text": "[tache] source=TRANSACTION card=? puits=RESULT_COLLECTOR fils=1/1 duree=0.15 ms sans=RESULT_COLLECTOR"
+        },
+        {
+          "line": 58072,
+          "text": "[tache] source=SCAN_NODE_TABLE card=1000 puits=RESULT_COLLECTOR fils=1/1 duree=0.10 ms"
+        },
+        {
+          "line": 58073,
+          "text": "[tache] source=TABLE_FUNCTION_CALL card=100 puits=RESULT_COLLECTOR fils=1/1 duree=0.87 ms"
+        },
+        {
+          "line": 58074,
+          "text": "[tache] source=TRANSACTION card=? puits=RESULT_COLLECTOR fils=1/1 duree=4.95 ms sans=RESULT_COLLECTOR"
+        },
+        {
+          "line": 58075,
+          "text": "[tache] source=ALTER card=? puits=ALTER fils=1/1 duree=405.20 ms sans=ALTER"
+        },
+        {
+          "line": 58076,
+          "text": "[tache] source=SCAN_NODE_TABLE card=1000 puits=AGGREGATE fils=1/1 duree=0.03 ms"
+        },
+        {
+          "line": 58077,
+          "text": "[tache] source=AGGREGATE_FINALIZE card=1000 puits=AGGREGATE_FINALIZE fils=1/1 duree=0.20 ms"
+        },
+        {
+          "line": 58078,
+          "text": "[tache] source=AGGREGATE_SCAN card=1 puits=RESULT_COLLECTOR fils=1/1 duree=0.44 ms"
+        },
+        {
+          "line": 58079,
+          "text": "[       OK ] AlterWaitsForWriters.ADropOfAColumnTheOpenWriterWroteWaits (431 ms)"
+        },
+        {
+          "line": 58080,
+          "text": "[ RUN      ] AlterWaitsForWriters.AnAddWithAnOpenWriterKeepsTheDataAcrossACheckpointAndAReopening"
+        },
+        {
+          "line": 58081,
+          "text": "[tache] source=CREATE_TABLE card=? puits=CREATE_TABLE fils=1/1 duree=0.62 ms sans=CREATE_TABLE"
+        },
+        {
+          "line": 58082,
+          "text": "[tache] source=TABLE_FUNCTION_CALL card=1 puits=RESULT_COLLECTOR fils=1/1 duree=0.22 ms"
+        },
+        {
+          "line": 58083,
+          "text": "[tache] source=TABLE_FUNCTION_CALL card=1000 puits=BATCH_INSERT fils=1/1 duree=2.31 ms"
+        },
+        {
+          "line": 58084,
+          "text": "[tache] source=STANDALONE_CALL card=? puits=RESULT_COLLECTOR fils=1/1 duree=0.01 ms sans=RESULT_COLLECTOR"
+        },
+        {
+          "line": 58085,
+          "text": "[tache] source=TRANSACTION card=? puits=RESULT_COLLECTOR fils=1/1 duree=0.01 ms sans=RESULT_COLLECTOR"
+        },
+        {
+          "line": 58086,
+          "text": "[tache] source=TABLE_FUNCTION_CALL card=1 puits=RESULT_COLLECTOR fils=1/1 duree=0.07 ms"
+        },
+        {
+          "line": 58087,
+          "text": "[tache] source=TABLE_FUNCTION_CALL card=500 puits=RESULT_COLLECTOR fils=1/1 duree=0.64 ms"
+        },
+        {
+          "line": 58088,
+          "text": "[tache] source=TRANSACTION card=? puits=RESULT_COLLECTOR fils=1/1 duree=5.12 ms sans=RESULT_COLLECTOR"
+        },
+        {
+          "line": 58089,
+          "text": "[tache] source=ALTER card=? puits=ALTER fils=1/1 duree=305.48 ms sans=ALTER"
+        },
+        {
+          "line": 58090,
+          "text": "[Checkpoint postponed: other transactions are open] the journal holds 85173 bytes"
+        },
+        {
+          "line": 58091,
+          "text": "[tache] source=TRANSACTION card=? puits=RESULT_COLLECTOR fils=1/1 duree=1.94 ms sans=RESULT_COLLECTOR"
+        },
+        {
+          "line": 58092,
+          "text": "[tache] source=SCAN_NODE_TABLE card=1500 puits=AGGREGATE fils=1/1 duree=0.27 ms"
+        },
+        {
+          "line": 58093,
+          "text": "[tache] source=AGGREGATE_FINALIZE card=1 puits=AGGREGATE_FINALIZE fils=1/1 duree=0.41 ms"
+        },
+        {
+          "line": 58094,
+          "text": "[tache] source=AGGREGATE_SCAN card=1 puits=RESULT_COLLECTOR fils=1/1 duree=0.58 ms"
+        },
+        {
+          "line": 58095,
+          "text": "[tache] source=SCAN_NODE_TABLE card=1500 puits=AGGREGATE fils=1/1 duree=0.02 ms"
+        },
+        {
+          "line": 58096,
+          "text": "[tache] source=AGGREGATE_FINALIZE card=1500 puits=AGGREGATE_FINALIZE fils=1/1 duree=0.04 ms"
+        },
+        {
+          "line": 58097,
+          "text": "[tache] source=AGGREGATE_SCAN card=1 puits=RESULT_COLLECTOR fils=1/1 duree=0.07 ms"
+        },
+        {
+          "line": 58098,
+          "text": "[       OK ] AlterWaitsForWriters.AnAddWithAnOpenWriterKeepsTheDataAcrossACheckpointAndAReopening (340 ms)"
+        },
+        {
+          "line": 58099,
+          "text": "[ RUN      ] AlterWaitsForWriters.AWriterArrivingDuringTheAlterWaitsForIt"
+        },
+        {
+          "line": 58100,
+          "text": "[tache] source=CREATE_TABLE card=? puits=CREATE_TABLE fils=1/1 duree=0.60 ms sans=CREATE_TABLE"
+        },
+        {
+          "line": 58101,
+          "text": "[tache] source=TABLE_FUNCTION_CALL card=1 puits=RESULT_COLLECTOR fils=1/1 duree=0.21 ms"
+        },
+        {
+          "line": 58102,
+          "text": "[tache] source=TABLE_FUNCTION_CALL card=1000 puits=BATCH_INSERT fils=1/1 duree=2.10 ms"
+        },
+        {
+          "line": 58103,
+          "text": "[tache] source=TRANSACTION card=? puits=RESULT_COLLECTOR fils=1/1 duree=0.01 ms sans=RESULT_COLLECTOR"
+        },
+        {
+          "line": 58104,
+          "text": "[tache] source=PRIMARY_KEY_SCAN_NODE_TABLE card=1 puits=RESULT_COLLECTOR fils=1/1 duree=0.03 ms"
+        },
+        {
+          "line": 58105,
+          "text": "[tache] source=TABLE_FUNCTION_CALL card=1 puits=RESULT_COLLECTOR fils=1/1 duree=0.06 ms"
+        },
+        {
+          "line": 58106,
+          "text": "[tache] source=PRIMARY_KEY_SCAN_NODE_TABLE card=1 puits=RESULT_COLLECTOR fils=1/1 duree=0.09 ms"
+        },
+        {
+          "line": 58107,
+          "text": "[tache] source=TRANSACTION card=? puits=RESULT_COLLECTOR fils=1/1 duree=4.50 ms sans=RESULT_COLLECTOR"
+        },
+        {
+          "line": 58108,
+          "text": "[tache] source=ALTER card=? puits=ALTER fils=1/1 duree=454.78 ms sans=ALTER"
+        },
+        {
+          "line": 58109,
+          "text": "[tache] source=PRIMARY_KEY_SCAN_NODE_TABLE card=1 puits=RESULT_COLLECTOR fils=1/1 duree=0.06 ms"
+        },
+        {
+          "line": 58110,
+          "text": "[tache] source=TABLE_FUNCTION_CALL card=1 puits=RESULT_COLLECTOR fils=1/1 duree=0.28 ms"
+        },
+        {
+          "line": 58111,
+          "text": "[tache] source=PRIMARY_KEY_SCAN_NODE_TABLE card=1 puits=RESULT_COLLECTOR fils=1/1 duree=0.20 ms"
+        },
+        {
+          "line": 58112,
+          "text": "[       OK ] AlterWaitsForWriters.AWriterArrivingDuringTheAlterWaitsForIt (479 ms)"
+        },
+        {
+          "line": 58113,
+          "text": "[ RUN      ] AlterWaitsForWriters.AWriterCreatingDuringTheAlterWritesNoRowOfTheOldSchema"
+        },
+        {
+          "line": 58114,
+          "text": "[tache] source=CREATE_TABLE card=? puits=CREATE_TABLE fils=1/1 duree=0.62 ms sans=CREATE_TABLE"
+        },
+        {
+          "line": 58115,
+          "text": "[tache] source=TABLE_FUNCTION_CALL card=1 puits=RESULT_COLLECTOR fils=1/1 duree=0.27 ms"
+        },
+        {
+          "line": 58116,
+          "text": "[tache] source=TABLE_FUNCTION_CALL card=1000 puits=BATCH_INSERT fils=1/1 duree=2.55 ms"
+        },
+        {
+          "line": 58117,
+          "text": "[tache] source=TRANSACTION card=? puits=RESULT_COLLECTOR fils=1/1 duree=0.01 ms sans=RESULT_COLLECTOR"
+        },
+        {
+          "line": 58118,
+          "text": "[tache] source=PRIMARY_KEY_SCAN_NODE_TABLE card=1 puits=RESULT_COLLECTOR fils=1/1 duree=0.04 ms"
+        },
+        {
+          "line": 58119,
+          "text": "[tache] source=TABLE_FUNCTION_CALL card=1 puits=RESULT_COLLECTOR fils=1/1 duree=0.13 ms"
+        },
+        {
+          "line": 58120,
+          "text": "[tache] source=TABLE_FUNCTION_CALL card=1 puits=RESULT_COLLECTOR fils=1/1 duree=0.12 ms"
+        },
+        {
+          "line": 58121,
+          "text": "[tache] source=TRANSACTION card=? puits=RESULT_COLLECTOR fils=1/1 duree=4.27 ms sans=RESULT_COLLECTOR"
+        },
+        {
+          "line": 58122,
+          "text": "[tache] source=ALTER card=? puits=ALTER fils=1/1 duree=454.88 ms sans=ALTER"
+        },
+        {
+          "line": 58123,
+          "text": "[tache] source=SCAN_NODE_TABLE card=1000 puits=AGGREGATE fils=1/1 duree=0.07 ms"
+        },
+        {
+          "line": 58124,
+          "text": "[tache] source=AGGREGATE_FINALIZE card=100 puits=AGGREGATE_FINALIZE fils=1/1 duree=0.16 ms"
+        },
+        {
+          "line": 58125,
+          "text": "[tache] source=AGGREGATE_SCAN card=1 puits=RESULT_COLLECTOR fils=1/1 duree=0.24 ms"
+        },
+        {
+          "line": 58126,
+          "text": "[tache] source=TRANSACTION card=? puits=RESULT_COLLECTOR fils=1/1 duree=13.71 ms sans=RESULT_COLLECTOR"
+        },
+        {
+          "line": 58127,
+          "text": "[tache] source=SCAN_NODE_TABLE card=1000 puits=AGGREGATE fils=1/1 duree=0.06 ms"
+        },
+        {
+          "line": 58128,
+          "text": "[tache] source=AGGREGATE_FINALIZE card=100 puits=AGGREGATE_FINALIZE fils=1/1 duree=0.08 ms"
+        },
+        {
+          "line": 58129,
+          "text": "[tache] source=AGGREGATE_SCAN card=1 puits=RESULT_COLLECTOR fils=1/1 duree=0.29 ms"
+        },
+        {
+          "line": 58130,
+          "text": "[tache] source=SCAN_NODE_TABLE card=1000 puits=AGGREGATE fils=1/1 duree=0.02 ms"
+        },
+        {
+          "line": 58131,
+          "text": "[tache] source=AGGREGATE_FINALIZE card=1000 puits=AGGREGATE_FINALIZE fils=1/1 duree=0.03 ms"
+        },
+        {
+          "line": 58132,
+          "text": "[tache] source=AGGREGATE_SCAN card=1 puits=RESULT_COLLECTOR fils=1/1 duree=0.05 ms"
+        },
+        {
+          "line": 58133,
+          "text": "[       OK ] AlterWaitsForWriters.AWriterCreatingDuringTheAlterWritesNoRowOfTheOldSchema (485 ms)"
+        },
+        {
+          "line": 58134,
+          "text": "[ RUN      ] AlterWaitsForWriters.AWriterOpenBeforeACommentFinishesWithoutRetrying"
+        },
+        {
+          "line": 58135,
+          "text": "[tache] source=CREATE_TABLE card=? puits=CREATE_TABLE fils=1/1 duree=0.52 ms sans=CREATE_TABLE"
+        },
+        {
+          "line": 58136,
+          "text": "[tache] source=TABLE_FUNCTION_CALL card=1 puits=RESULT_COLLECTOR fils=1/1 duree=0.20 ms"
+        },
+        {
+          "line": 58137,
+          "text": "[tache] source=TABLE_FUNCTION_CALL card=1000 puits=BATCH_INSERT fils=1/1 duree=2.25 ms"
+        },
+        {
+          "line": 58138,
+          "text": "[tache] source=TRANSACTION card=? puits=RESULT_COLLECTOR fils=1/1 duree=0.01 ms sans=RESULT_COLLECTOR"
+        },
+        {
+          "line": 58139,
+          "text": "[tache] source=SCAN_NODE_TABLE card=1000 puits=AGGREGATE fils=1/1 duree=0.01 ms"
+        },
+        {
+          "line": 58140,
+          "text": "[tache] source=AGGREGATE_FINALIZE card=1000 puits=AGGREGATE_FINALIZE fils=1/1 duree=0.02 ms"
+        },
+        {
+          "line": 58141,
+          "text": "[tache] source=AGGREGATE_SCAN card=1 puits=RESULT_COLLECTOR fils=1/1 duree=0.09 ms"
+        },
+        {
+          "line": 58142,
+          "text": "[tache] source=ALTER card=? puits=ALTER fils=1/1 duree=0.02 ms sans=ALTER"
+        },
+        {
+          "line": 58143,
+          "text": "[tache] source=PRIMARY_KEY_SCAN_NODE_TABLE card=1 puits=RESULT_COLLECTOR fils=1/1 duree=0.03 ms"
+        },
+        {
+          "line": 58144,
+          "text": "[tache] source=TABLE_FUNCTION_CALL card=1 puits=RESULT_COLLECTOR fils=1/1 duree=0.06 ms"
+        },
+        {
+          "line": 58145,
+          "text": "[tache] source=TRANSACTION card=? puits=RESULT_COLLECTOR fils=1/1 duree=0.47 ms sans=RESULT_COLLECTOR"
+        },
+        {
+          "line": 58146,
+          "text": "[tache] source=PRIMARY_KEY_SCAN_NODE_TABLE card=1 puits=RESULT_COLLECTOR fils=1/1 duree=0.02 ms"
+        },
+        {
+          "line": 58147,
+          "text": "[       OK ] AlterWaitsForWriters.AWriterOpenBeforeACommentFinishesWithoutRetrying (20 ms)"
+        },
+        {
+          "line": 58148,
+          "text": "[ RUN      ] AlterWaitsForWriters.AnAlterThatWaitsTooLongSaysWhichWriterItWaitedFor"
+        },
+        {
+          "line": 58149,
+          "text": "[tache] source=CREATE_TABLE card=? puits=CREATE_TABLE fils=1/1 duree=0.45 ms sans=CREATE_TABLE"
+        },
+        {
+          "line": 58150,
+          "text": "[tache] source=TABLE_FUNCTION_CALL card=1 puits=RESULT_COLLECTOR fils=1/1 duree=0.27 ms"
+        },
+        {
+          "line": 58151,
+          "text": "[tache] source=TABLE_FUNCTION_CALL card=1000 puits=BATCH_INSERT fils=1/1 duree=2.00 ms"
+        },
+        {
+          "line": 58152,
+          "text": "[tache] source=STANDALONE_CALL card=? puits=RESULT_COLLECTOR fils=1/1 duree=0.01 ms sans=RESULT_COLLECTOR"
+        },
+        {
+          "line": 58153,
+          "text": "[tache] source=TRANSACTION card=? puits=RESULT_COLLECTOR fils=1/1 duree=0.01 ms sans=RESULT_COLLECTOR"
+        },
+        {
+          "line": 58154,
+          "text": "[tache] source=PRIMARY_KEY_SCAN_NODE_TABLE card=1 puits=RESULT_COLLECTOR fils=1/1 duree=0.04 ms"
+        },
+        {
+          "line": 58155,
+          "text": "[tache] source=TABLE_FUNCTION_CALL card=1 puits=RESULT_COLLECTOR fils=1/1 duree=0.07 ms"
+        },
+        {
+          "line": 58156,
+          "text": "[tache] source=TRANSACTION card=? puits=RESULT_COLLECTOR fils=1/1 duree=3.73 ms sans=RESULT_COLLECTOR"
+        },
+        {
+          "line": 58157,
+          "text": "[       OK ] AlterWaitsForWriters.AnAlterThatWaitsTooLongSaysWhichWriterItWaitedFor (323 ms)"
+        },
+        {
+          "line": 453646,
+          "text": "[==========] 387 tests from 79 test suites ran. (1295379 ms total)"
+        },
+        {
+          "line": 453647,
+          "text": "[  PASSED  ] 385 tests."
+        },
+        {
+          "line": 453648,
+          "text": "[  SKIPPED ] 2 tests, listed below:"
+        },
+        {
+          "line": 453649,
+          "text": "[  SKIPPED ] VectorIndexCrashReopenProbe.OpenInAFreshProcess"
+        },
+        {
+          "line": 453650,
+          "text": "[  SKIPPED ] WalReader.PrintAFile"
+        }
+      ]
+    },
+    {
+      "path": "/home/lucied/.cache/rag3db-moteur-notes/alter7/passe.out",
+      "sha256": "d7a85aa77a86be8d191de1e273a54694c93ea845e91e5aa80178273ab0a0c281",
+      "selected_lines": [
+        {
+          "line": 1,
+          "text": "== f8e5c2b45 test(transaction): un commentaire ou un index vali 09:52:18"
+        },
+        {
+          "line": 2,
+          "text": "bâti code 0"
+        },
+        {
+          "line": 3,
+          "text": "commentaire code 1 [check: a-change-that-keeps-the-columns-retries-no-writer] Schema changed, retry: the schema of table T changed after this transaction started (an ALTER or a DROP it waited for, or that committed mean [  PASSED  ] 0 tests. "
+        },
+        {
+          "line": 4,
+          "text": "index code 1 [check: query] CALL CREATE_VECTOR_INDEX('C', 'c_index', 'vec', metric := 'l2'); [  PASSED  ] 0 tests. "
+        },
+        {
+          "line": 5,
+          "text": "== b7251cb77 fix(transaction): le contrôle de schéma compare la 09:52:34"
+        },
+        {
+          "line": 6,
+          "text": "bâti code 0"
+        },
+        {
+          "line": 7,
+          "text": "commentaire code 0 [  PASSED  ] 1 test. "
+        },
+        {
+          "line": 8,
+          "text": "index code 1 [check: query] CALL CREATE_VECTOR_INDEX('C', 'c_index', 'vec', metric := 'l2'); [  PASSED  ] 0 tests. "
+        },
+        {
+          "line": 9,
+          "text": "transaction_test entier code 0 [  PASSED  ] 385 tests. "
+        },
+        {
+          "line": 10,
+          "text": "concurrence known_red code 8 0% tests passed, 1 tests failed out of 1 "
+        },
+        {
+          "line": 11,
+          "text": "    new red: VectorIndexCreateUnderManyWriters.AWriterOpenDuringACreateFinishesWithoutRetrying [query]"
+        },
+        {
+          "line": 12,
+          "text": "vectoriel pendant un CREATE code 1 [  FAILED  ] 2 tests, listed below: [  FAILED  ] VectorIndexCreateInMemory.ChangesCommittedDuringACreateAreSeen [  FAILED  ] VectorIndexCreateInMemory.ChangesCommittedDuringACreateAreSeen (4685 ms) [  FAILED  ] VectorIndexCreateUnderManyWriters.AWriterOpenDuringACreateFinishesWithoutRetrying [  FAILED  ] VectorIndexCreateUnderManyWriters.AWriterOpenDuringACreateFinishesWithoutRetrying (5083 ms) [ "
+        },
+        {
+          "line": 13,
+          "text": "ddl tour 1 code 1 [check: create-rel-table-holds-writers-at-most-its-duration] [check: index-creation-refuses-no-reader]  10:36:11"
+        },
+        {
+          "line": 14,
+          "text": "  [scénario] écritures recommencées après un changement de schéma : 37"
+        },
+        {
+          "line": 15,
+          "text": "  [scénario] attente de « 1 ADD note » : durée 16.1079 ms, paquet le plus long 1342.95 ms, reste du plus long paquet ouvert à son départ 31.1867 ms"
+        },
+        {
+          "line": 16,
+          "text": "  [scénario] attente de « 2 ADD rang DEFAULT 0 » : durée 56.4907 ms, paquet le plus long 1342.95 ms, reste du plus long paquet ouvert à son départ 69.4012 ms"
+        },
+        {
+          "line": 17,
+          "text": "  [scénario] attente de « 6 ADD b DEFAULT » : durée 87.413 ms, paquet le plus long 1342.95 ms, reste du plus long paquet ouvert à son départ 152.245 ms"
+        },
+        {
+          "line": 18,
+          "text": "ddl tour 2 code 139 [check: index-creation-refuses-no-reader]  10:42:42"
+        },
+        {
+          "line": 19,
+          "text": "  [scénario] écritures recommencées après un changement de schéma : 20"
+        },
+        {
+          "line": 20,
+          "text": "  [scénario] attente de « 1 ADD note » : durée 18.6637 ms, paquet le plus long 1456.58 ms, reste du plus long paquet ouvert à son départ 16.2767 ms"
+        },
+        {
+          "line": 21,
+          "text": "  [scénario] attente de « 2 ADD rang DEFAULT 0 » : durée 118.286 ms, paquet le plus long 1456.58 ms, reste du plus long paquet ouvert à son départ 248.696 ms"
+        },
+        {
+          "line": 22,
+          "text": "  [scénario] attente de « 6 ADD b DEFAULT » : durée 111.725 ms, paquet le plus long 1456.58 ms, reste du plus long paquet ouvert à son départ 148.714 ms"
+        },
+        {
+          "line": 23,
+          "text": "ddl tour 3 code 0  10:51:43"
+        },
+        {
+          "line": 24,
+          "text": "  [scénario] écritures recommencées après un changement de schéma : 60"
+        },
+        {
+          "line": 25,
+          "text": "  [scénario] attente de « 1 ADD note » : durée 15.1151 ms, paquet le plus long 275259 ms, reste du plus long paquet ouvert à son départ 40.5484 ms"
+        },
+        {
+          "line": 26,
+          "text": "  [scénario] attente de « 2 ADD rang DEFAULT 0 » : durée 14.2833 ms, paquet le plus long 275259 ms, reste du plus long paquet ouvert à son départ 33.8727 ms"
+        },
+        {
+          "line": 27,
+          "text": "  [scénario] attente de « 6 ADD b DEFAULT » : durée 152.037 ms, paquet le plus long 275259 ms, reste du plus long paquet ouvert à son départ 149.188 ms"
+        },
+        {
+          "line": 28,
+          "text": "FIN"
+        }
+      ]
+    }
+  ]
+}
