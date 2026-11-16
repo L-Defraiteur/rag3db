@@ -805,7 +805,8 @@ pub fn reingest_files(
     // Délier puis reposer, sans transaction quand il n'y en a pas : une
     // fenêtre de retenue fait de l'ensemble une seule annonce, en état net
     // (un fichier inchangé ne publie aucun lien).
-    catalog.avec_retenue(|catalog| reingest_files_retenu(catalog, source, files, exige))
+    let politique = generated_policy_of(source);
+    catalog.avec_retenue(|catalog| reingest_files_retenu(catalog, source, files, exige, &politique))
 }
 
 fn reingest_files_retenu(
@@ -813,16 +814,18 @@ fn reingest_files_retenu(
     source: &dyn FileSource,
     files: &[(String, Option<String>)],
     exige: Disponibilites,
+    // The admission's policy for generated files: the source's own for an edit, the sync's options for a
+    // source sync (a rule lifted by the call must let the generated file in).
+    politique: &crate::generated::GeneratedPolicy,
 ) -> Result<ReingestReport, String> {
     if files.is_empty() {
         return Ok(ReingestReport::default());
     }
     // La porte de l'index : un contenu qu'elle refuse est un fichier absent.
-    let politique = generated_policy_of(source);
     let admis: Vec<(String, Option<String>)> = files
         .iter()
         .map(|(p, c)| match c {
-            Some(contenu) if crate::code::admission(p, Some(contenu), &politique).is_err() => (p.clone(), None),
+            Some(contenu) if crate::code::admission(p, Some(contenu), politique).is_err() => (p.clone(), None),
             autre => (p.clone(), autre.clone()),
         })
         .collect();
@@ -1487,7 +1490,7 @@ fn synchroniser_par_generations(
             }
             lot.push((path.clone(), contenu));
         }
-        let r = if lot.is_empty() { ReingestReport::default() } else { catalog.avec_retenue(|c| reingest_files_retenu(c, source, &lot, options.exige))? };
+        let r = if lot.is_empty() { ReingestReport::default() } else { catalog.avec_retenue(|c| reingest_files_retenu(c, source, &lot, options.exige, &options.generated))? };
         report.files_ingested += lot.iter().filter(|(_, c)| c.is_some()).count();
         report.scopes_written += r.scopes_upserted;
         report.relations += r.relations;
@@ -1524,7 +1527,7 @@ fn synchroniser_par_generations(
     report.scopes.applied = !options.plan_only;
     if !partis.is_empty() && !options.plan_only {
         let lot: Vec<(String, Option<String>)> = partis.iter().map(|p| (p.clone(), None)).collect();
-        let r = catalog.avec_retenue(|c| reingest_files_retenu(c, source, &lot, options.exige))?;
+        let r = catalog.avec_retenue(|c| reingest_files_retenu(c, source, &lot, options.exige, &options.generated))?;
         report.failed += r.failed;
         avancement.files_done += partis.len();
         progress(avancement);
