@@ -30,3 +30,26 @@ clause, puis à rejouer le banc.
 
 `lucivy_core/tests/test_light_profile.rs`, branche lucivy `mesure-profil-leger` (f89e6df), avec un fichier de
 requêtes réduit aux `parse` : la ligne `SCORES DIFFER … largest gap` donne l'écart.
+
+## Reprise du 16 novembre après audit des diffs
+
+Porteur lucivy. Branche neuve poussée `cx-lucivy-parse-sum-order`, tête
+`1b9f47d4f87dddbe76cdf5535a95de6cdff11bdb`, identique au WIP de passation ;
+worktree portable `/home/lucied/git_workspaces/cx-lucivy-parse-sum-order`.
+Réservés : score_combiner.rs, boolean_query/block_wand.rs et le témoin
+`test_parse_scores_identical_across_layouts.rs`. Pas de nouveau correctif.
+
+Preuves anciennes relues : témoin rouge1échec puis vert1/0/0, lib1480/0/24ignorés,
+clippyrc0, core interrompu faute de corpus. Aucune nouvelle suite exécutée.
+Le noyau7.2 attendu (recette épinglée8d3ae59288f1) et les liens lucivy-cmp sont
+absents aux deux postes, non retrouvés dans les emplacements documentés.
+À luciepc existent `~/.cache/lucivy-corpora/linux-linux-2.6.0.tar.gz` (42Mo,
+sourcekernel.org documentée dans playground/corpora.json) et le clone rag3db
+`~/.cache/lucivy-tests/rag3db-clone`. Ce ne sont pas des preuves de présence
+ni d’équivalence du corpus7.2. Ni extraction, substitution de corpus, symlink,
+ni téléchargement effectué. ABSENT_OK ne sera pas utilisé pour peindre vert.
+
+Reste : faire admettre une provenance de corpus et une recette exacte par
+coordination, puis compléter core --no-fail-fast et les preuves manquantes.
+Pendant fenêtre G/Arbre : aucun lourd. Entrée4 explorée indépendamment.
+Voir `docs/lucivy/16-11-2026/03-reprise-ulp-et-corpus.md` pour la recette.

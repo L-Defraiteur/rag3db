@@ -34,3 +34,17 @@ types `u64`, `i64` et `f64` lisent bien `indexed`. La branche `"string"` l'ignor
   fonction pure qui rend les avertissements du schéma (`schema_warnings(&SchemaConfig) -> Vec<String>`), appelée
   par `build_schema` et testée directement. Rouge tant qu'elle n'existe pas ou rend une liste vide.
 - Vert ensuite, puis `cargo test --release -p lucivy-core` en entier.
+
+## Préparation du témoin, 16 novembre
+
+Porteur lucivy ; branche poussée `cx-lucivy-indexed-false-warning`, tête
+`07ccd12e484ea20f4ae85d23639f9da7316acbfd`, base main a1c0dfd.
+Worktree portable `/home/lucied/git_workspaces/cx-lucivy-indexed-false-warning`.
+Deux fichiers : handle.rs (API scaffold renvoyant liste vide, pas de correctif),
+`tests/test_text_field_indexed_false.rs` (text/string false doivent avertir,
+true/omis et champs numériques ne doivent pas ajouter d’avertissement).
+**NON compilé, NON joué, rouge pas encore observé.** Aucun appel de cette API
+ajouté à build_schema ; aucune sémantique d’indexation modifiée.
+Prochain pas après créneau CPU : voir ce témoin réellement rouge avant de
+remplir schema_warnings, l’appeler et compléter query.rs/README. Ne pas confondre
+préparation du rouge et preuve exécutée. Aucun lourd pendant fenêtre G/Arbre.
