@@ -30,7 +30,7 @@ class ActiveLogs(unittest.TestCase):
         names={'active_logs','watch_logs','first_red'}
         body=[n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name in names]
         failed=next(n for n in tree.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='FAILED' for t in n.targets))
-        for suite in ['e2e_code_sync','e2e_tx']:
+        for suite in ['e2e_code_sync', 'e2e_contrat_transactions', 'e2e_tx_ligne_a_ligne', 'e2e_tx_merge_puis_copy', 'e2e_tx_par_paquet_arret', 'e2e_tx_vecteurs_apres_rollback']:
             with self.subTest(suite=suite), tempfile.TemporaryDirectory() as tmp:
                 p=Path(tmp);(p/'official').mkdir();log=p/'official'/(suite+'.log');log.write_text('test fixture ... FAILED\n')
                 ns=dict(P=p,re=re,time=time,os=os,json=json,hashlib=hashlib)
