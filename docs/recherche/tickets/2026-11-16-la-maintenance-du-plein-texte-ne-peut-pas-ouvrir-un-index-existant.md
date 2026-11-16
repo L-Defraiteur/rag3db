@@ -29,3 +29,21 @@ Branche neuve `cx-recherche-fts-existing-only-r2`, W `cx-wt-recherche-fts-existi
 Recette proposée à C7 : fenêtre CPU/native petite 1200s uniques, compilation témoin plafonnée900s sous poste32GiB/j8/HIGHmax, exécution filtre `catalog::tests::existing_fts_`120s au plus ; premier rouge conservé (attendu sur source avant correctif), pas de retry. Même target Recherche après garde commune, aucun SDK ancien, pin685/lib59ac exact, aucune base/service/modèle. Source rouge figée avant correction ; seconde admission distincte pour vert après revue du diff. Aucun lancement avant accord de recette et slot.
 
 Précision de fixture avant tout essai : `main` est une vraie table dérivée dans ce schéma ; le témoin alias configure explicitement Document.search_index=main et vérifie la résolution avant le refus, puis la retire pour le cas cellule. Aucun verdict exécuté auparavant.
+
+## Premier arrêt de recette — aucun rouge produit observé
+
+GO C7 source187 pour le seul premier positif ; pilote fac5eeee11 arrêté code1 sur collision de nom de portée systemd AVANT superviseur/Cargo. Rapport `docs/recherche/16-11-2026/05-rouge-entree-systemd-fts-existing.md`, log SHA189ee19f784f34e33952cf4ac10079270d810e4c5dd3a4d431893db48b3668a2 identique PC/local. Target/preuves/reçu absents, poste libéré, aucun retry ni implémentation automatique.
+
+Réserve C7 avant implémentation : une table physique Document reste admissible même avec search_index=main ; le chemin maintenance doit ouvrir exactement Document, jamais rediriger ni refuser au seul motif de ce mapping. Remplacer le négatif187 par nom réellement inconnu et ajouter Document41/main99 comme positif distinct ; autre cellule toujours refusée.
+
+Correctif du lanceur et témoins publiés78437ce0a6 : suppression scope redondant, POSTE_SWAP_MAX=0 en plus32G/800%, driver recontrôle high/max/swap/quota. Deux fonctions hermétiques/7cas vertes0.019s après publication ; aucun Cargo/reçu réel nouveau. Source187 figée, attente nouveau GO distinct C7.
+
+## Rouge comportemental réellement observé avant correctif
+
+Source187 figée, GO distinct C7 et pilote3a528b67921f3c3b698e6d6db593bf8d4f834516 : compilation125.019s réussie puis **unique premier positif0/1/0** sur absence de handle ouvert Document, pas sur un préfixe nouveau. Rapport06, preuves25 fichiers PC/local réhash0écart manifestea3519cc5325b675e7d4c4eff3c4d9061aa380175a8971ee1ced34fcbfa2b8110. Confineur ROUGE101/restes[]/nettoyé/reçu terminé, poste libéré, aucune autre fonction ni implémentation automatique. Target de session gardé. Quatre autres témoins NON JOUÉS ; leur réserve physique/public reste à corriger avant full.
+
+## Suite autorisée après rouge — témoins avant implémentation
+
+Réserve Document corrigée : table physique légitime malgré search_index=main, négatif réellement inconnu, positif distinct Document41 contre main99 ; cellule étrangère conserve refus. Quatre fonctions supplémentaires (promesse/erreur métadonnées typées, génération/promesse changée après snapshot, source physique contre cible publique99, génération absente/symlink) sont écrites AVANT implémentation. Neuf fonctions au total, huit autres NON JOUÉES et premier positif seulement rouge observé sur187. Les références à la primitive/erreurs nouvelles seront définies au commit suivant ; aucun nouveau Cargo ici.
+
+Implémentation prévue : réutiliser export_snapshot_sharded/open_snapshot publics Lucivy4.3.9 ; collecte stricte de fichiers réguliers sans writer/constructeur créant, empreinte du contenu avant/après ; catalogue encadre par table physique déclarée/cellule exacte/génération DB et FS/PROMISE et pending avant/après. Toute absence, corruption, erreur IO/métadonnées, divergence ou promesse refuse, jamais zéro inventé ; pas de reprise journal. Snapshots en lecture seulement, pas installés comme handles écrivains ; purge existante continue d’exiger un handle réellement ouvert. Plan de qualification ultérieure distincte, même target via garde commune après créneau ED, aucune exécution automatique.
