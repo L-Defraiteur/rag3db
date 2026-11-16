@@ -1,6 +1,6 @@
 # Une classe derrière une macro d'export n'a pas de scope (la grammaire C++)
 
-- **État** : ouvert (15 novembre 2026) — grammaire
+- **État** : ouvert, basse priorité (16 novembre 2026, c7) — aucune classe du moteur dans ce cas ; voir « Le compte »
 - **Famille** : produit
 - **Gravité** : basse. Les membres de la classe sont relevés ; le scope de la classe manque, et ses
   membres ont le parent d'au-dessus au lieu d'elle.
@@ -21,3 +21,11 @@ n'en fait plus une fonction anonyme (correctif du même jour), mais n'a pas de c
 Soit la grammaire (une macro seule sur sa ligne devant une déclaration), à signaler en amont de
 tree-sitter-cpp ; soit, dans codeparsers, lire le texte de la tête (`class <nom>` après une macro) pour en
 tirer la classe et son corps. La seconde voie est une lecture de texte sous un arbre fautif : à peser.
+
+## Le compte (16 novembre 2026)
+
+La forme du ticket (une macro seule sur sa ligne, juste avant `class` / `struct` / `union`), sur l'arbre figé de
+rag3db-garde : **aucune dans src/ du moteur**. Ailleurs : `third_party/nlohmann_json` (4, dont la grande classe
+`basic_json` derrière `NLOHMANN_BASIC_JSON_TPL_DECLARATION`), `third_party/pybind11` (2 faux positifs :
+`PYBIND11_NAMESPACE_BEGIN(…)` ouvre un namespace, la classe suit dedans) et la fixture `fmt/format.h` de
+codeparsers, d'où vient le ticket. Le coût est une classe de bibliothèque tierce : basse priorité (c7).
