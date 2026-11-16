@@ -142,3 +142,6 @@ encore requis après RO du nouveau SOURCE81b0 et du paquet99a8/7649/preflight355
 La RO de conception ne qualifie pas ce nouveau code, son compilation ou son
 pilote. Banc est sollicité pour la recette/ledger/deadline/provenance seulement,
 Recherche pour le raccord/modes/extraction/discriminant ; aucun run par eux.
+
+Versionv1 historique : remplacée pour tout GO éventuel par recette12, pilote
+final7833, paquetv2nonce d4f2 et préflight0c9030 après réservesgroupées.

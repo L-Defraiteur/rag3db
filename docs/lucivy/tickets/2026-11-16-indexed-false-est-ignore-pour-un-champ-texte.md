@@ -383,3 +383,17 @@ INCHANGÉ, aucunvertlancé ; commit13b0b802e3 necontientque preuvesrouges malgr�
 messageinexact. Diagnostic : patchcheminreporoot nécessitant-p0 ; dryruncheck
 puisapplicationcontrôléeavanttoutepublication/gardesvertes. Pasretrydetest ni
 source81bmodifié. Historiqueconservé sansamend/force.
+
+Réservesgroupées traitées aprèsROsourcefavorable etautorisationCPUpureC7 :
+rouge99a8observé1/1(changedcopy),5nonjouésfailfast ; puispublication272c3fea55
+pilotefinal7833a6f4bc42c137c1766aba889f529b006a27ee72402d6227c22b9defdad0fc
+avantseulpassagevert6/0. AucunRust/Cargo/ELF/QFS/proc/corpus/builder exécuté
+parlesfonctions testées. Incidentgitapplystrip1consigné, diagnostic-p0 avant
+applicationréelle ; pasde retrydetestaveugle. BaselineAPP81b0 inchangéeNONcompilée.
+Recette12/paquetv2neufnonce d4f2d8cfd6d6705b2c17423ba66d91a9, UID1000/dev55/
+inode168509414,préflight0c90301ed5324f8a07d80641283e581ed3f427bc6355dcf1304afa14763f7325,
+admit7649inchangé,Tunique3552/ELFold106faRO/oldCommonTERMINE101/fresh12UNKNOWN
+nonattribuésconservés,scope/logsabsents/scratchvide. ActionROBancDELTA sur
+7833/v2 avantGO600 : réattestationfinalephysiqueELF+HEAD/propreté/copies/préflight
+etpubbudgetaprèsopen/avantdumppuisaprèsflush,source81b0déjàRORecherchefavorable.
+C7 reçoitlecouplefinalsansautreSHAcycle ; aucunGOnatif600/Rustdeduitdes6verts.

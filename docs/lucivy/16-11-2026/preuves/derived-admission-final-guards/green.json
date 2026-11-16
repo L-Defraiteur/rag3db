@@ -1,0 +1,11 @@
+{
+  "pilot_sha256": "7833a6f4bc42c137c1766aba889f529b006a27ee72402d6227c22b9defdad0fc",
+  "published_before_execution_commit": "272c3fea55",
+  "exit_code": 0,
+  "tests_run": 6,
+  "failures": 0,
+  "errors": 0,
+  "fail_fast": true,
+  "scope": "Python AST slices and fake objects only; zero subprocesses/native/Rust/Cargo/ELF/proc/Q filesystem access",
+  "red_before_fix": "one changed-copy guard failed as expected under failfast; other five were not run before fix"
+}

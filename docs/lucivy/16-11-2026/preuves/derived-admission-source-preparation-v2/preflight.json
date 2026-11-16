@@ -1,0 +1,106 @@
+{
+  "package": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-derived-admission-red-16nov-v2",
+  "uid": 1000,
+  "package_inode": 168509414,
+  "package_device": 55,
+  "nonce": "d4f2d8cfd6d6705b2c17423ba66d91a9",
+  "source": "81b0e74f0254c8216864f90a460f8969842432ed",
+  "worktree": "/home/lucied/git_workspaces/cx-lucivy-corpus-admission-16nov",
+  "target": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov",
+  "target_creator_sha256": "5a1671d22dc784bec78f60cf25c8b3003acc5f21e28290f05d0dfc22e0c394df",
+  "old_elf": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_derived_in_ram-539df445d54ae12e",
+  "old_receipt": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-indexed-warning-core-16nov-v1/scope/validation-wbvzcmca/autorite.json",
+  "old_verdict": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-indexed-warning-core-16nov-v1/scope/validation-wbvzcmca/verdict.json",
+  "old_children": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-indexed-warning-core-16nov-v1/scope/validation-wbvzcmca/enfants.json",
+  "output": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-derived-admission-red-16nov-v2/logs",
+  "scope": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-derived-admission-red-16nov-v2/scope",
+  "scratch": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-derived-admission-red-16nov-v2/scratch",
+  "scan_directory": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-derived-admission-red-16nov-v2/scans",
+  "baseline_unknown": [
+    {
+      "pid": 1247,
+      "uid": 1000,
+      "start": "1022",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/init.scope"
+    },
+    {
+      "pid": 1256,
+      "uid": 1000,
+      "start": "1023",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/init.scope"
+    },
+    {
+      "pid": 2578,
+      "uid": 1000,
+      "start": "2807",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/plasma-kwin_wayland.service"
+    },
+    {
+      "pid": 2754,
+      "uid": 1000,
+      "start": "2866",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/background.slice/plasma-polkit-agent.service"
+    },
+    {
+      "pid": 673498,
+      "uid": 1000,
+      "start": "117906338",
+      "cgroup": "0::/user.slice/user-1000.slice/session-c960707.scope"
+    },
+    {
+      "pid": 1322557,
+      "uid": 1000,
+      "start": "118148766",
+      "cgroup": "0::/user.slice/user-1000.slice/session-c964648.scope"
+    },
+    {
+      "pid": 2532216,
+      "uid": 1000,
+      "start": "17178100",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/plasma-kwin_wayland.service"
+    },
+    {
+      "pid": 2532317,
+      "uid": 1000,
+      "start": "17178136",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/plasma-kwin_wayland.service"
+    },
+    {
+      "pid": 2532319,
+      "uid": 1000,
+      "start": "17178136",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/plasma-kwin_wayland.service"
+    },
+    {
+      "pid": 4085469,
+      "uid": 1000,
+      "start": "109325538",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope"
+    },
+    {
+      "pid": 4086221,
+      "uid": 1000,
+      "start": "109325843",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope"
+    },
+    {
+      "pid": 4086421,
+      "uid": 1000,
+      "start": "109325875",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope"
+    }
+  ],
+  "baseline_snapshot": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-indexed-warning-green-16nov-v4/scans/baseline-1181487802492849.json",
+  "observed_at": 1794849264.10351,
+  "copy_hashes": {
+    "qualify-derived-admission-red.py": "7833a6f4bc42c137c1766aba889f529b006a27ee72402d6227c22b9defdad0fc",
+    "admit-derived-admission-red.py": "7649a9b9d34ec3cdfc1333f33bc216f260fbda9a6d52f3c70fe979d7aabff5e2",
+    "qualify-indexed-false-core.py": "2fa59faafe18634a055da4e770a96d4eb87da79864332f8d2a5d8ed222a8fa14",
+    "qualify-indexed-false-red.py": "0a269dd90b0ca745811713e21f66b45fda563074bfc06dd6993f04ab03bd2352",
+    "support/confiner_validation.py": "6439fdd8b52c85fa4e74af0def2c667ef0bedae9b814cbbfd48e49946c4f74ea",
+    "support/poste": "79e3a8bbf457e3bc9104aa1558e7d03072216c70b68e08ae606ace6aa4584c7b",
+    "red-core-elf": "106fa398fcc24296c1d4b94198a150ed87917fac66e46531af5c617444fcf9a2",
+    "source-ledger.json": "3641666d1209f528227322b5d1a5c5707802a4845b648f6f523f0a3a358264c0",
+    "panel-transcription.json": "52d967e0d560fac0d63643eacc2a3ba34ad9c3ed2c4a54dec777d97ccb31a72f"
+  }
+}
