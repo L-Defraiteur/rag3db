@@ -19,3 +19,11 @@ Rapport et recette d'exécution : `docs/arbre-principal/16-11-2026/03-preparatio
 ## Préflight outil RO — rouge vu avant correction
 
 G a compilé read-only-query.cpp04a contre59ac et joué une fixture privée1nœud : BUILD_ID_ERROR Binder exception, CALLBUILD_ID sansRETURN n’est pas une standalone table function. Journal portable ~/.cache/optimiseur-notes/bascule-16nov-927/query-read.log. Aucune basevivante ouverte. Corriger la seule requête d’identité en CALL BUILD_ID() RETURN *, puis recompilation/témoin parG avant usage.
+
+## Première maintenance réelle — arrêt HTTP 422 avant purge
+
+Recette be91b5b3c742209cc59c2ce2b2ac29f9a97b9213, portable code-rag3db-depot : premier POST /backend/maintain avec table File et dry_run=true refusé HTTP422. Preuves privées : ~/.cache/rag3weaver-build/bascule-live-20261116/code-rag3db-depot/maintenance-01/{phase,verdict}.json. Aucun relevé accepté ni appel de purge, aucune migration hors ligne ; autres bases non rejouées. La quiescence du producteur hébergé reste NON ATTESTÉE.
+
+Diagnostic RO : daemon_host.rs:1038 et 1865 au source927 acceptent précisément manifest/table/dry_run ; header X-Rag3weaver-Session conforme. HTTP422 indique une réponse opérationnelle refusée, sans identifier sa cause. Défaut de recette confirmé : host-phase.py:58–59 intercepte HTTPError puis abandonne son corps ; seule la valeur du statut est conservée. La cause hôte est donc NON ATTRIBUÉE, aucun défaut produit établi. G est sollicité pour préserver le journal existant sans rejouer la route. Le corps initial n’est pas reconstituable depuis les deux fichiers client ; ne pas présenter une future réponse comme sa preuve.
+
+Correction nécessaire avant toute nouvelle recette : archiver statut et corps de refus, sans jeton ni headers d’authentification, avant de lever l’erreur ; témoin hermétique HTTP422 pour vérifier conservation et arrêt. Ce paragraphe est publié avant modification du lanceur. Premier rouge conservé, pas de retry automatique ni de fermeture/snapshot comme si maintenance terminée.
