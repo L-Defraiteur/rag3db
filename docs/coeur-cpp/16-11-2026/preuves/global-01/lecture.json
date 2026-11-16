@@ -1,0 +1,18 @@
+{
+  "source": "888c81825e4cd6556261233f0e238af3b95375c9",
+  "delivery": "15ab2f4815511400ac806314a3e964f2d7e723e0",
+  "driver": "0de1ed3fefff91a84dd1487ee2a819e1b713cef8",
+  "verdict": "ROUGE",
+  "raw_files_verified_local": 53,
+  "artifact_files_verified_local": 10,
+  "receipt_archive_sha256": "96cff9c204851897021882739d957121b1fb263651bd6d7c71ccebd5dcca4a65",
+  "full_packet_local": "/home/lucied/.cache/rag3db-moteur-notes/dictionary-global-01",
+  "full_packet_remote": "luciepc:/home/lucied/.cache/rag3weaver-build/cx-dictionary-global-01",
+  "not_run": [
+    "strings",
+    "e2e-inventory",
+    "e2e-positive",
+    "e2e-drop"
+  ],
+  "retry": false
+}
