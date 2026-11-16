@@ -12167,6 +12167,40 @@ mod tests {
         (root, catalog, directory)
     }
 
+    /// Un seul constructeur pour les trois juges de mapping : schéma Content
+    /// validé par les mêmes primitives que le catalogue, jamais un faux alias.
+    fn existing_fts_redirect_fixture(catalog: &mut Catalog) {
+        let fields = HashMap::from([
+            ("title".into(), SimpleFieldDef { field_type: FieldType::String, is_title: true, ..Default::default() }),
+            ("body".into(), SimpleFieldDef { field_type: FieldType::Text, is_content: true, ..Default::default() }),
+        ]);
+        let mut source = EntityConfig { fields, signals: crate::search::SearchSignals::BM25, ..Default::default() };
+        let mut target = source.clone();
+        target.derived = Some(crate::config::DerivedConfig {
+            from: "Document".into(),
+            identity: crate::config::DerivedIdentity::Content { format: "existing-fts-fixture-v1".into() },
+            gather: vec![],
+            render: std::collections::BTreeMap::from([
+                ("title".into(), "{{ root.title }}".into()),
+                ("body".into(), "{{ root.body }}".into()),
+            ]),
+        });
+        source.search_index = Some("main".into());
+        source.validate().expect("valid physical source configuration");
+        target.validate().expect("valid content-derived target configuration");
+        catalog.entity_configs.insert("Document".into(), source);
+        catalog.entity_configs.insert("main".into(), target);
+        let source = &catalog.entity_configs["Document"];
+        let target = &catalog.entity_configs["main"];
+        target.derived.as_ref().unwrap().validate_context("main",
+            |name| catalog.entity_configs.get(name), |name| catalog.config.relations.get(name))
+            .expect("valid Content/from/render context");
+        source.validate_search_index_context("Document", |name| catalog.entity_configs.get(name))
+            .expect("valid public search index context");
+        assert_eq!(catalog.resolve_search_target("Document").unwrap().parent_table, "main");
+        eprintln!("existing_fts_fixture_schema_validated: Document/body/title -> main/Content");
+    }
+
     fn existing_fts_manifest(root: &std::path::Path) -> std::collections::BTreeMap<std::path::PathBuf, Vec<u8>> {
         fn visit(root: &std::path::Path, path: &std::path::Path, result: &mut std::collections::BTreeMap<std::path::PathBuf, Vec<u8>>) {
             for entry in std::fs::read_dir(path).unwrap() {
@@ -12228,7 +12262,7 @@ mod tests {
         let before = existing_fts_manifest(root.path());
         // `main` est une vraie table : rendre Document explicitement public
         // vers cet index dérivé, puis vérifier le refus sans redirection.
-        catalog.entity_configs.get_mut("Document").unwrap().search_index = Some("main".into());
+        existing_fts_redirect_fixture(&mut catalog);
         assert_eq!(catalog.resolve_search_target("Document").unwrap().parent_table, "main");
         // Le mapping public ne change pas la table physique demandée.
         let ids = catalog.fts_live_ids("Document").unwrap().0;
@@ -12292,7 +12326,7 @@ mod tests {
         crate::fts_handle::index_document(&writer,&[("body".into(),"other physical table".into())],99).unwrap();
         writer.commit().unwrap();writer.close().unwrap();drop(writer);
         std::fs::write(directory.join(crate::fts_directory::GENERATION_FILE),b"7").unwrap();
-        catalog.entity_configs.get_mut("Document").unwrap().search_index=Some("main".into());
+        existing_fts_redirect_fixture(&mut catalog);
         let before=existing_fts_manifest(root.path());
         assert_eq!(catalog.fts_live_ids("Document").unwrap().0,vec![41]);
         assert_eq!(before,existing_fts_manifest(root.path()));
@@ -12308,7 +12342,7 @@ mod tests {
         crate::fts_handle::index_document(&writer,&[("body".into(),"pending target".into())],99).unwrap();
         writer.commit().unwrap();writer.close().unwrap();drop(writer);
         std::fs::write(directory.join(crate::fts_directory::GENERATION_FILE),b"7").unwrap();
-        catalog.entity_configs.get_mut("Document").unwrap().search_index=Some("main".into());
+        existing_fts_redirect_fixture(&mut catalog);
         assert_eq!(catalog.resolve_search_target("Document").unwrap().parent_table,"main");
         let pending_key=format!("{FTS_PENDING}Document");
         catalog.conn=Arc::new(crate::connection::CallbackConnection::new(move |_, params| {
