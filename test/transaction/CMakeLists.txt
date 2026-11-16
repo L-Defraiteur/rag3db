@@ -25,3 +25,5 @@ add_rag3db_test(transaction_test transaction_test.cpp checkpoint_test.cpp wal_te
 add_subdirectory(concurrence)
 
 add_rag3db_test(dictionary_append_exception_test dictionary_append_exception_test.cpp)
+add_dependencies(dictionary_append_exception_test rag3db_build_id)
+target_include_directories(dictionary_append_exception_test PRIVATE ${PROJECT_BINARY_DIR}/src/include)
