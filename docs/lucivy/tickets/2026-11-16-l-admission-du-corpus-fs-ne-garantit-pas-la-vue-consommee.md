@@ -80,3 +80,10 @@ avantlecture mêmevide/0. AucunRustdiff/test/Cargo/ELF/proc/corpus/service.
 Choixcapture/transportmanifestC7resteAVANTimplémentation/GO ; proposition
 captureuniquepolitiqueactuellepubliéeavantbuilder,aucunereselectionaprèsrefus,
 manifestedereplayensuite ; pastri5000silencieux. TransmisC7,pasFSqualifiée.
+
+ROsecondaireBanc ccd9ebcf86 contrat355ff favorableprépa/4SHAconformes,
+baseline1eeconfirméeparGit, pasbloqueursupplémentaire. SouscasIOenum/meta/read
+distinctssirevendiqués, preuveREFUSEDadmise≠reportindexavantgate. Aucunimpl/
+témoinCPU/Cargo/ELF/proc/corpusmêmemetadata/service. Les2ROcontratfavorables,
+choixcapture/transportC7avantcodeetGOtoujoursrequis ;source1ee/neufmémoire/
+core9HOLD/7.2ULPPR42inchangés.

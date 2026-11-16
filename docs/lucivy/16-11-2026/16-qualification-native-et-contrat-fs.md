@@ -230,3 +230,12 @@ une nouvelle runtime autour du refusA interdit. Un plan de cas explicite peut
 porter ce contrat dans les utilitaires de tests ; son point de transport doit
 être validé, le vieux V3_CORPUS seul ne le porte pas. Aucune de ces options
 n’est implémentée ni autorisée à lire les corpus dans cette préparation.
+
+RO secondaire Banc ccd9ebcf86, `docs/banc/16-11-2026/23-ro-contrat-admission-fs-lucivy.md`,
+favorable au contrat355ff :4SHApins conformes, baseline1ee relue viaGit,
+aucun bloqueur supplémentaire. Si l’on revendique les trois erreurs IO,
+enumerate/metadata/read exigent des sous-cas distincts observables : un seul
+read injecté ne vaut pas preuve de tous. ManifestREFUSED autorisé comme preuve
+d’admission, jamais comme report/index créé avant gate. Source/capture/transport
+à figer par C7 avant code ; aucun impl/témoinCPU/Cargo/ELF/proc/contact corpus
+ou service par Banc. Les budgets300/60 restent propositions, pas GO.
