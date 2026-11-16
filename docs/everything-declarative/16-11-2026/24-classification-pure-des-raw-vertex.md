@@ -106,3 +106,14 @@ crateétranger/cheminétranger/profilinattendu. Publication AVANTCPU/fix ;
 GOCPUhermétique60 distinct C7, chaque rouge sélectionné failfast, puisfix
 publié et14fonctions groupéesfailfast dans60. AucunCargo/ELF/DB/health/cloud.
 Paquet197/22 et RAW54 restentIMMUTABLES ; nouveaupaquet/revue aprèsfix.
+
+
+Publication180dfd2d9c puis CPUhermétique60 : trois sélections distinctes
+failfast ont donné chacune1FAIL/0ERROR, erreur attendue ValueError not raised
+sur le vrai classificateur197. Logs cx-ed-vertex-raw-strict-red-v1 conservés.
+Fix groupé : tousheadersrunning sont consommés ou refusés ; chaque bloc du
+resume porte uniquement ses résumés attendus(1/2/2/0/1/1) et F8/preuve
+restent dans check_features ; preuve impose Checking/Compiling rag3weaver
+v0.1.0 du chemin APPunion exact AVANT Finisheddev/unoptimized+debuginfo.
+Listes/inventaires54/22historiques inchangés ; seul classificateur corrigé.
+Publication du fix AVANT jugement14fonctions groupées ; pas de native-run.

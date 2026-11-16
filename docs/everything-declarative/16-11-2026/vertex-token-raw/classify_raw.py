@@ -16,6 +16,7 @@ LOG_NAMES = ('temoins', 'lib', 'navigateur', 'e2e_code', 'e2e_lectures', 'check_
 MANIFEST_SHA = '2754c91e37815873fbdfd4bbeff2800ca2b3f259f1f24397b2038c88a5a9ddde'
 INVENTORY_SHA = '02455373cba66f02d8aba186c5a7de7c7f5ef2eb5bfc8fa985381c41e00cbec3'
 SOURCE = 'b472035a4e2944a9d90727817c95290cc0fba1ea'
+APP_CRATE = '/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-union-r1/extension/rag3weaver'
 CONTRACT = {
     'temoins': [7, 0, 0, 0, 2677],
     'lib': [2612, 0, 72, 0, 0],
@@ -74,8 +75,12 @@ def inventories(value):
 
 def phase(text, key, expected):
     lines = text.splitlines()
-    starts = [(i, re.fullmatch(r'running ([1-9]\d*) tests?', line)) for i, line in enumerate(lines)]
-    starts = [(i, int(match[1])) for i, match in starts if match]
+    # Consume every running header, including invalid/zero/indented extras.
+    headers = [(i, line) for i, line in enumerate(lines) if re.match(r'\s*running(?:\s|$)', line)]
+    need(len(headers) == 1, 'one running header '+key)
+    header = re.fullmatch(r'running ([1-9]\d*) tests?', headers[0][1])
+    need(header is not None, 'malformed/zero running header '+key)
+    starts = [(headers[0][0], int(header[1]))]
     ends = [(i, SUMMARY.fullmatch(line)) for i, line in enumerate(lines) if line.startswith('test result:')]
     need(len(starts) == len(ends) == 1 and ends[0][1] is not None, 'one running/result pair '+key)
     first, count = starts[0]
@@ -115,7 +120,7 @@ def classify(raw, inventory):
         headers = re.findall(r'^     Running tests/[^\n]+$', raw[name], re.M)
         need(headers == [marker_a, marker_b], 'ordered e2e phase headers '+name)
         a, b = raw[name].index(marker_a), raw[name].index(marker_b)
-        need(not re.search(r'^(?:test |running )', raw[name][:a], re.M), 'event outside e2e phases')
+        need(not any(re.match(r'\s*(?:test|running)(?:\s|$)', line) for line in raw[name][:a].splitlines()), 'event outside e2e phases')
         need(len(re.findall(r'^▸ binaire e2e : /[^\n]+ \(\d+ Mo\)$', raw[name], re.M)) == 1, 'real e2e binary header')
         result[name+'/filets'] = phase(raw[name][a:b], name+'/filets', expected[name+'/filets'])
         result[name+'/suite'] = phase(raw[name][b:], name+'/suite', expected[name+'/suite'])
@@ -125,17 +130,33 @@ def classify(raw, inventory):
     need(feature_lines[boundary+1:] == ['VERT  '+game for game in GAMES]+['CHECK_FEATURES VERT 8/8'], 'eight exact feature games')
     need(raw['check_features'].splitlines()[-1] == 'CHECK_FEATURES VERT 8/8', 'features final verdict')
     need(len(re.findall(r'^CHECK_FEATURES ', raw['check_features'], re.M)) == 1, 'features duplicate verdict')
-    need(len(re.findall(r'^    Finished `dev` profile .* target\(s\) in [0-9.]+s$', raw['preuve'], re.M)) == 1, 'proof build completion')
+    proof = raw['preuve'].splitlines()
+    crate = [(i, line) for i, line in enumerate(proof) if re.fullmatch(r' +(?:Checking|Compiling) rag3weaver v0\.1\.0 \('+re.escape(APP_CRATE)+r'\)', line)]
+    finished = [(i, line) for i, line in enumerate(proof) if line.startswith('    Finished')]
+    need(len(crate) == len(finished) == 1 and crate[0][0] < finished[0][0], 'proof real crate/path before completion')
+    need(re.fullmatch(r'    Finished `dev` profile \[unoptimized \+ debuginfo\] target\(s\) in \d+(?:\.\d+)?s', finished[0][1]) is not None, 'proof expected dev profile')
     resume = raw['resume'].splitlines()
     need(resume[-2:] == ['suites jouées : e2e_lectures e2e_code', 'VERT'], 'canonical final verdict/suites')
-    need([l for l in resume if l.startswith('== ')] == ['== témoin', '== e2e_lectures', '== e2e_code', '== check_features', '== lib', '== témoins navigateur'], 'canonical phase order')
-    summary_lines = [line for line in resume if line.startswith('test result:')]
-    order = ['temoins', 'e2e_lectures/filets', 'e2e_lectures/suite', 'e2e_code/filets', 'e2e_code/suite', 'lib', 'navigateur']
-    need(len(summary_lines) == len(order), 'canonical summary cardinality')
-    for line, key in zip(summary_lines, order):
-        match = SUMMARY.fullmatch(line)
-        need(match is not None and [int(x) for x in match.groups()] == CONTRACT[key], 'canonical summary phase '+key)
-    need(resume.count('preuve : rag3weaver revérifié') == 1 and resume.count('CHECK_FEATURES VERT 8/8') == 1, 'canonical proof/features marker')
+    section_contract = [('== témoin', ['temoins']),
+                        ('== e2e_lectures', ['e2e_lectures/filets', 'e2e_lectures/suite']),
+                        ('== e2e_code', ['e2e_code/filets', 'e2e_code/suite']),
+                        ('== check_features', []), ('== lib', ['lib']),
+                        ('== témoins navigateur', ['navigateur'])]
+    sections = [(i, line) for i, line in enumerate(resume) if line.startswith('== ')]
+    need([line for i, line in sections] == [header for header, keys in section_contract], 'canonical phase order')
+    need(not any(line.startswith(('test result:', 'CHECK_FEATURES ', 'preuve :')) for line in resume[:sections[0][0]]), 'canonical events before first phase')
+    for index, (start, header) in enumerate(sections):
+        stop = sections[index+1][0] if index+1 < len(sections) else len(resume)
+        body = resume[start+1:stop]
+        keys = section_contract[index][1]
+        summaries = [line for line in body if line.startswith('test result:')]
+        need(len(summaries) == len(keys), 'canonical block summary cardinality '+header)
+        for line, key in zip(summaries, keys):
+            match = SUMMARY.fullmatch(line)
+            need(match is not None and [int(x) for x in match.groups()] == CONTRACT[key], 'canonical block summary '+key)
+        markers = [line for line in body if line.startswith(('CHECK_FEATURES ', 'preuve :'))]
+        wanted = ['CHECK_FEATURES VERT 8/8', 'preuve : rag3weaver revérifié'] if header == '== check_features' else []
+        need(markers == wanted, 'canonical markers in matching feature/proof phase '+header)
     return dict(status='RAW_CANONICAL_CLASSIFIED_ONLY', phases=result,
                 historical_controller='RED', historical_scope='ROUGE',
                 composite_requalified=False, new_execution=False,
