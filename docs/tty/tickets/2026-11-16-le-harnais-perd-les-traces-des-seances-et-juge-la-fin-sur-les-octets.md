@@ -171,3 +171,25 @@ Le premier essai71d57 du témoin a échoué en0,046s sur son rc, sans atteindre
 la finalisation bloquée : env manquait dans le contexte AST factice. Ce n'est
 pas le rouge du budget. Fixture corrigée/publiée avant le nouvel essai ; aucune
 correction du pilote n'a encore été faite, revue groupée Mémoire en cours.
+
+## Watchdog extérieur total, correction groupée après fin de revue5b43
+
+Mémoire fin totale rectifiée : une réserve, celle du budget global C7 ; aucun
+autre point en file. Témoin c2192e3fa8 publié avant essai : la vraie queue AST
+du main bloque dans son snapshot3s et dépasse effectivement le budget factice
+0,2s (3,0419s observées), sans Common ni natif. Le premier échec de fixture
+reste documenté séparément, non présenté comme rouge de cette propriété.
+
+Entrée ultime désormais remplacée par exec de `/usr/bin/timeout` autour du
+**worker entier**, entrée/file/poste/Common/snapshot/hash/scan/Git/publication.
+Elle ne fait rien après exec et transmet donc uniquement le rc du watchdog.
+Borne globale proposée1200 : arrêt doux calculé à END−6s, KILL au plus5s plus
+tard, marge d'entrée1s **incluse** dans1200, aucun +5s ajouté au budget.
+Le worker reçoit le START de l'entrée et garde le même END ; il refuse un
+parent qui n'est pas le watchdog. Common reste borné au reste après poste
+moins15s, pour finaliser avant l'échéance. Les scans et la publication restent
+à l'intérieur du watchdog, et leurs checks d'échéance restent conservés.
+
+Nouveau Q/P/Sv2 et TMPttyhr2, ancien paquet5b43 intact. Second témoin sur le
+vrai main : exec du watchdog avec le worker privé, aucune finalisation après.
+Réessais hermétiques seulement après publication ; aucun GO/runtime natif.
