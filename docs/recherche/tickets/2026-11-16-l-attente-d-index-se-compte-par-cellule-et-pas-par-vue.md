@@ -27,3 +27,35 @@ chaque worktree aura sa couche de travail et sa montre : le retard doit se lire 
   dire avant le lot.
 - Les témoins, rouges d'abord : deux couches, un fichier en retard dans l'une. Sous la vue de l'autre, la
   lecture ne l'attend pas ; sous la sienne, elle l'attend, ou répond « index pas prêt ».
+
+## L'attente compte aussi l'embarquement (c7, 16 novembre 2026, à relire par Lucie)
+
+**Le constat du banc** (`docs/banc/16-11-2026/03-le-banc-d-etalonnage.md`) : un fichier sort du registre de
+retard dès que son **texte** est écrit. Les vecteurs de ses morceaux neufs arrivent plus tard, le temps de
+l'appel au service. Une recherche qui utilise le signal vector, et qui a attendu sous `search.index_wait_s`,
+manque donc encore ces morceaux.
+
+**La forme décidée par c7** :
+- `eta = eta_texte + eta_vecteurs` quand la recherche utilise le signal vector ; en bm25 seul,
+  `eta_texte` suffit ;
+- `eta_texte` est celui d'aujourd'hui : les fichiers en attente × le débit observé par fichier (`Lag`) ;
+- `eta_vecteurs` = les morceaux dus des fichiers de la vue (`count_marqueur_manquant`, restreint à ces
+  fichiers) × la taille moyenne d'un morceau ÷ le débit du service de la vue. Le débit vient d'abord du
+  banc, puis il est corrigé par la moyenne glissante des lots embarqués.
+
+**Ce qui existe et sert** : `IndexState::with_time_left` (`src/catalog/progress.rs`) calcule déjà la dette
+de vecteurs en secondes (morceaux manquants × caractères par morceau ÷ `Rate` du service), pour l'état
+d'index (`vectors_seconds_left`). Le lot le reprend plutôt que d'écrire une seconde formule. Il ajoute la
+restriction aux fichiers de la vue et le départ du débit au banc.
+
+**Les nuances de recherche** :
+1. **Un service absent ou en panne** : les vecteurs ne viendront pas dans l'appel. `eta_vecteurs` est alors
+   `null`, la cause est dite (`vectors: "service absent"`), et l'appel n'attend pas pour rien. La recherche
+   dense dit déjà « not available » dans ce cas.
+2. **La recherche hybride** : la branche bm25 voit déjà le texte neuf. Au-dessus du seuil, la réponse dit
+   les deux restes à part (`text_eta_s`, `vectors_eta_s`), pour qu'un agent sache que ses résultats
+   lexicaux sont complets et que seuls les denses peuvent manquer.
+3. **Les outils sans signal vector** (`usages`, `outline`, `read_file`, `grep_files`) ne comptent jamais
+   l'embarquement.
+
+**Bloqué par** : le débit du banc, et le mot de Lucie sur cette forme. Rien ne se code avant.
