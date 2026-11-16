@@ -268,3 +268,13 @@ Plan de diff proposé, **non appliqué** :
    Contre-exemple deuxROUGE avant effetTERM avant correction, callback factice.
 4. Publication puis témoins CPU hermétiques, RO du paquet avant un éventuel
    GO distinct. Aucun retry du run91e5 ni F8/build/Cargo/tmux/HTTP pendant RO.
+
+## Préparation corrective groupée explicitement autorisée après diagnostic91e5
+
+GO CPU distinct C7-TTY-SUDO-HARNESS-PURE-16nov60 : source/témoins publiés
+avant rouge puis correction publiée avant verts, timeout60 failfast hermétique,
+aucun Common réel/tmux/HTTP/Cargo/natif/signal réel. Trois raccords à éprouver
+sur les blocs réels, avec faux processus/pidfd : fixture après initialisation de
+phase et chemin immuable ; invite absente ROUGE/STOP sans marqueur ; deuxROUGE
+conservés en append avec premier marqueur immuable et un seul signal.
+ProduitRust et fauxhôte restent inchangés ; aucun ancien GO1200 recyclé.
