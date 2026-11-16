@@ -61,3 +61,11 @@ le parent multi-thread qui crée les autres enfants. Le témoin vert utilisera
 la commande shell exacte du helper Rust de test, extraite du source ; pas un
 réessai de livrer, pas une relaxation de délai. Lib/F8/NAV NON JOUÉES, attendent
 FINI G et une recette compatible avec la lib nouvellement autorisée59ac.
+
+Rouge système vu sur `bc07b0cb85` : 3 cas en0,005s, deux contrôles de cause
+passent et le lancement attendu échoue exactement avec errno26. Journal horsW
+`~/.cache/rag3weaver-build/journaux-cx-memoire-script-fixtures-16nov/rouge-bc07.log`.
+Le correctif des deux fixtures passe par `/bin/sh -c` avec chemin et corps en
+arguments séparés ; printf/chmod s'exécutent dans l'enfant seulement. Attente
+bornée à5s ; aucun réessai et aucun changement du pont de production.
+Un témoin Rust de chemin/corps littéraux est ajouté, NON JOUÉ avant FINI G.
