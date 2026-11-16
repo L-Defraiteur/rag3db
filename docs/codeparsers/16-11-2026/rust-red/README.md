@@ -17,7 +17,8 @@ Préparation seule : pilot.py prepare --worktree W --source SHA --proofs P_NEUF.
 Elle résout réellement la lib sous XDG privé et relève required_suites sans
 Cargo/autorité. run exige une allocation fraîche : pilot.py run --proofs P
 --allocation REFERENCE. Aucune exécution n'est autorisée par ce fichier seul.
-Le target PC target-cx-codeparsers-rust-red doit être initialement absent.
+Le target PC target-import-pointe-pile doit être initialement absent lors du rouge
+(nom historique, emplacement réellement neuf sur ce poste ; ancien31Go du portable intouché).
 Il est créé seulement après poste/PQS, puis gardé par le lanceur canonique.
 Aucun target nouveau créé par la préparation. La garde de capacité reste requise.
 

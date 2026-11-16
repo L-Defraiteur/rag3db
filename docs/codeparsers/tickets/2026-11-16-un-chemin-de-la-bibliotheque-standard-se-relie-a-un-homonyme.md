@@ -102,3 +102,16 @@ qualifient la racine, aucun nouveau schéma ou liste de bibliothèques.
 Témoin pur ajouté pour positions UTF-8, deux occurrences, chemin espacé/absolu,
 collect/collections et F/Formatter. **NON JOUÉ**, comme les deux e2e après ce
 correctif ; aucun nouveau budget ni Cargo. REGLES reste7 jusqu'aux preuves.
+
+### Couple vert proposé avant nouveau Cargo
+
+Pilote étendu uniquement pour le mode green, sans changer le source rouge056
+conservé. Nouvelle allocation proposée900s, ni code ni borne du rouge réactivés.
+Même target PC physiquement créé neuf lors du rouge, marqueur d'ancien
+propriétaire et preuve056/autoritéterminée vérifiés ; PQS après poste avant
+adoption par la garde officielle. Lire le dernier résumé natif2/0/0 après les
+préalables2/0/0, vérifier les deux noms ; pas de PG, service ou modèle.
+Le nom historique du target PC n'autorise jamais à toucher les31Go du portable.
+La source corrigée, le pilote et les tests purs de lecteur sont publiés avant
+RO et avant tout nouveau Cargo. Le gitlink34c74e4 reste inchangé/poussé ;
+REGLES7 conservé, qualification complète et passage8 non acquis.

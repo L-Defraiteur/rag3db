@@ -107,5 +107,35 @@ class ScopeReaderTests(unittest.TestCase):
             pilot.read_scope_verdict(self.root, 1)
 
 
+    def green_fixture(self):
+        self.write(self.scope / 'verdict.json', dict(self.verdict, verdict='VERT', code=0))
+        self.write(self.root / 'red-pair.result.json', dict(rc=0))
+        native = '\n'.join('test e2e_usages::' + name + ' ... HashEmbedder fixture\nok' for name in pilot.NAMES)
+        summary = 'test result: ok. 2 passed; 0 failed; 0 ignored; 40 filtered out;\n'
+        (self.root / 'red-pair.stdout').write_text(summary + native + '\n' + summary)
+        (self.root / 'red-pair.stderr').write_text('')
+
+    def test_green_pair_uses_last_summary_after_native_preconditions(self):
+        self.green_fixture()
+        self.assertEqual(pilot.read_scope_verdict(self.root, 0, 'green')['code'], 0)
+
+    def test_green_pair_with_ignored_or_other_witnesses_is_refused(self):
+        for other in ('ignored', 'name'):
+            self.green_fixture()
+            path = self.root / 'red-pair.stdout'
+            data = path.read_text()
+            if other == 'ignored':
+                data = data.rsplit('0 ignored', 1)[0] + '1 ignored;\n'
+            else:
+                data = data.replace(pilot.NAMES[0], 'unrelated_test')
+            path.write_text(data)
+            with self.assertRaises(ValueError):
+                pilot.read_scope_verdict(self.root, 0, 'green')
+
+    def test_unknown_expected_phase_is_refused(self):
+        with self.assertRaises(ValueError):
+            pilot.read_scope_verdict(self.root, 1, 'unknown')
+
+
 if __name__ == '__main__':
     unittest.main()
