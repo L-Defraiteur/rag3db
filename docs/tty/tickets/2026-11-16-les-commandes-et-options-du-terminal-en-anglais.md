@@ -89,3 +89,25 @@ Cargo rc101 ; pilote rc1. Preuves conservées hors worktree :
 Common `~/.cache/rag3weaver-build/validations/validation-g4dqpr6q/` :
 verdict ROUGE attendu, erreur null, restes [], nettoye true. Aucun service/SDK.
 Ce résultat remplace le NON JOUÉ des deux témoins ci-dessus seulement.
+
+### Préparation GO2 — provenance du target conservée, garde à résoudre
+
+Le target unique reste `~/.cache/rag3weaver-build/target-cx-tty-english-aliases-2`.
+Il était absent avant le rouge ; source et autorité terminée ci-dessus. ELF rouge
+`debug/deps/rag3weaver_tty-bf2e988222854013`, SHA256
+`b2b6101a8face2ebda84400a31ad653444e576167e9198410dc6a64ad83d3015`.
+Le pilote rouge avait appelé Cargo directement : aucun `.arbre-du-target` n'a
+été posé. La garde courante refuse explicitement un target non vide sans ce
+marqueur. Pas de marqueur fabriqué ni de nouveau target créé : demander à
+l'orchestration la procédure de provenance qualifiée avant GO2 ; ne pas éluder
+ce refus par un appel Cargo direct. Le rouge d'assertions observé reste conservé.
+
+Features vérifiées dans Cargo.toml : lib minimale sans vue ; le binaire exige
+`vue`, dont seules ratatui/unicode-width/unicode-segmentation sont optionnelles.
+Aucun SDK natif, modèle ou moteur n'est une dépendance de ce crate. Chaîne
+proposée après résolution de la garde : même target, `cargo test --offline
+--locked -j4 --no-default-features --lib english_` (2 verts attendus), puis
+`cargo test --offline --locked -j4 --bin rag3weaver-tty english_options_tests`
+(vue par défaut, rouge CLI attendu), Common unique600s/32G ; conserver les deux
+rc/logs avant jugement, aucun retry, aucun nouveau cache. Aucun de ces essais
+n'a été lancé. Correctif CLI et README toujours à faire après rouge CLI.
