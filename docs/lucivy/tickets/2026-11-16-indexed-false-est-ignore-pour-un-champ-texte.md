@@ -156,3 +156,10 @@ pasreset. Logs PIDcargo1575020/start118237725, jobs4 réels sousquota et32G/HIGH
 Reste : RO preuves puis décision d’intégration/CI ; corecomplet/corpus7.2/ULP
 restent horsqualification. Pas de fermeture de ce ticket sur la seule preuve
 ciblée ; aucun nouveau lancement, PR42/fusionmain/tag ou service par ce résultat.
+
+Suite C7 : préparation qualification adaptée au coreentier, pas nouveau ciblé
+sans cause. Audit fetch : origin/main lucivy restea1c0dfd, candidat890 est déjà
+son descendant (aucun commit entrant à intégrer, pas de rebase artificiel).
+Banc sollicité pour RO des preuvescae3 sansrun. Reste : cartographie des tests
+corpus/ignorés et recettebornée explicite avec provenance/cachesknownowner ;
+aucun ABSENT_OK ni faux0ignoré, pas d’équivalence2.6/7.2 ni validationULP.
