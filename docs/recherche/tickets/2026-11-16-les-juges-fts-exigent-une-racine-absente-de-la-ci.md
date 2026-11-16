@@ -18,3 +18,7 @@ GO C7-FTS-ROOT-C438-16nov120 consommé : preuve b414d84d27e6cce0d8a0705356d0fa97
 C7 autorise PREPA microfix cfg(test) uniquement, brancheneuve basée union5f59 (masterb0 préservé). Primitive existante tempfile::Builder::tempdir_in(...).keep() comme daemon_host/chat_qui_code.rs ; résolution standard CARGO_TARGET_DIR sinon env!CARGO_MANIFEST_DIR/target comme code_tree.rs. Pas de HOME ou /tmp par défaut. ROOT explicite doit déjà exister/canonique/absolue/répertoire sans symlink, aucun fallback si invalide. Mode absent : sous-parent privé fts-double-fixtures sous target, validation sans symlink de tout chemin ; enfant unique par invocation et bases conservées. Aucun TempDir supprimé avant Catalog.
 
 Avant impl : témoins filesystem explicitROOT 2invocations même label distinctes+contenu préservé, mode absent parent target sansHOME, refus racine relative/symlink. Nonjoués jusqu'à GO. Recette native future : mêmes5juges, GEN sansROOT puis2GEN mêmeROOT, profils et ELF/ledger publiés avant tests ; aucunecompilation autorisée maintenant. Tickets restent ouverts/globalHOLD.
+
+## Ciblés corrigés observés, pas clôture globale
+
+APP84/PILOTE2b5 sous GO C7-FTS-ROOT-GREEN-2B5-16nov1200 : 8juges distincts/11invocations toutes1/0/0, GENsansROOT+2GENsameROOT/HOMEpréservé, scopeVERT0TERMINEowned114quiet. Report31/archive133 manifestee0e1cde90660c9e210c60e3902f1c4ae3809990fca51fd722b92761fc1d101d ; sourcecfgtest corrigée ciblée, global/lib/NAV/F8/canonicalNONJOUÉS. TicketOUVERTjusqu'àrevue+suitecoordonnée,aucunmaster/retrait.
