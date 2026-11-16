@@ -52,3 +52,6 @@ Signalement Mémoire avant correction groupée : RO197b60 PURE totale réservée
 
 
 TTY91e5 corrigé : ROtotaleMémoire favorableCLI/imports/dispatch/12copies+carried13/SDK2/timeout/tmux/ELFledger, P1TOTAL5blevée. C7 relitdiffetrehashindépendammentQv3cf99/12+13+SDK2+tmux/ELFphysique+copiecb24/ledger4e4363,HEAD91e5propre/P-S-allocationabsents. GO distinct C7-TTY-HARNESS-91E5-16nov1200 au ticketHARNESSEXISTANT, seulementnouveauharnaisprivé sur ELFacquis ; ancienEND852082resteexpiré. Détailsbornesetlimitesdansrapport, aucunF8/build/natifautreservice/master/nettoyage.
+
+
+Archi CLI corrigée01c3 reçoitdeuxROtotalcode+pinr3favorables, C7 relit+vérifiePCconfiga124/preparedf0a1/septcopies/outils/HEADpropre/Pvide/Fabsent. GO distinctC7-ARCHI-BAC-GREEN-01C3-16nov795 au ticketsetupdéjàexistant : deuxbuildsJSON→ledgerpubdeuxhôtes→deuxjuges/quatreinvocations, 780TERM+15hard/600CommonMAX/final120sousmêmeOSwatchdog depuisavantfile. AucunVertex/D6/global/ancienEND/master. Rapport précisepreuvesetlimitations, aucunvert anticipé.
