@@ -252,4 +252,10 @@ Les lots terminés libèrent leurs dépendances : ED reprend son WIP Vertex2.B d
 
 Lucie propose enfin Mistral Large4 **pour plus tard, après les crédits Vertex**. Source tarifaire officielle vérifiée, idée gardée dans [un ticket conditionnel](../../banc/tickets/2026-11-16-evaluer-mistral-large-4-apres-les-credits-vertex.md). Aucune nouvelle facturation, configuration ou passe de modèle engagée.
 
+## Banc public multilangage demandé par Lucie
+
+Lucie autorise explicitement l'acquisition de dépôts publics, environ2000à3000fichiers sources par langage, pour vérifier la couverture des usages moins habituels. [Ticket de coordination](../../codeparsers/tickets/2026-11-16-verifier-la-couverture-sur-des-corpus-publics-multilangages.md) publié e843a7a9ba avant acquisition ; ticket d'implémentation Codeparsers c787933145 et contrat JSONL/racines c96e9852a5 reliés. Banc acquiert, fige URL/SHA/licence/manifestes et distingue production, tests, invalides, généré et tiers. Codeparsers implémente une CLI utilisant les vraies API, sans interrompre son correctif Rust7601 déjà vert ciblé.
+
+Huit langages du routeur principal, quatre façades supplémentaires et des limites explicites : `.h` routé C++, HTML stub, Svelte incomplet, Sass indenté/MDX non qualifiés. Ni un compteur de fichiers, ni un AST sans panique, ni un fallback texte brut ne prouvent la couverture. Les mesures séparent erreurs, refus, scopes/imports/relations, positions et échantillons vérifiés. Aucun script de projet externe exécuté, ni modèle, GPU ou base vivante requis. Acquisition autorisée et débloquée ; compilation/mesure après publication du pilote sous portée commune bornée.
+
 Le suivi de la reprise est dans [le ticket](../tickets/2026-11-16-reprendre-les-perimetres-apres-lecture-des-diffs-recents.md).

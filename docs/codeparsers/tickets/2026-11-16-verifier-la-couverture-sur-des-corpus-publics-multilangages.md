@@ -14,6 +14,14 @@ Interpréter les documents comme fichiers sources du langage visé, avec les var
 
 Ne pas interrompre ni dupliquer le correctif std/homonyme7601 déjà vert sur deux régressions. Banc indépendant, sources et pilotes épinglés ; aucun changement des parseurs ou du routage pour embellir le résultat.
 
+### Prise en charge et façades
+
+Le ticket de mise en œuvre Codeparsers est `docs/codeparsers/tickets/2026-11-16-qualifier-la-couverture-sur-des-corpus-publics-par-langage.md`, publié sur `cx-codeparsers-language-corpus` en c787933145. Son contrat d'entrée JSONL et de racines est figé par c96e9852a5 dans `docs/codeparsers/16-11-2026/language-corpus/01-inventaire-et-protocole.md`. Ce ticket-ci porte la coordination et l'acquisition ; les deux ne représentent pas deux bancs à exécuter.
+
+L'audit des façades ajoute CSS, SCSS, Vue et Markdown à examiner séparément du routeur des huit langages. HTML est un stub explicite ; Svelte a une initialisation incomplète. Sass indenté et MDX ne sont pas qualifiés par leur simple routage. Ces limites ont leurs cohortes nommées, sans capacité présumée. Compter les contenus uniques par SHA tout en conservant les occurrences et dialectes distincts : un même contenu `.c`/`.h` ou `.ts`/`.tsx` ne suit pas nécessairement le même parseur.
+
+Banc a reçu le chemin du ticket publié et l'autorisation d'acquisition immédiate ; Codeparsers implémente la CLI réservée `examples/language_corpus_probe.rs` sur le parseur bd13385 épinglé. Les corpus et leurs téléchargements restent hors des worktrees et targets des autres lots.
+
 ## Corpus reproductibles
 
 - Dépôts publics significatifs, environ2000à3000 sources par catégorie lorsque leur structure s'y prête ; un sous-projet cohérent ou plusieurs dépôts complémentaires valent mieux qu'un quota artificiel de fichiers.
