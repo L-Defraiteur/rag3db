@@ -1,6 +1,6 @@
 # Après un CHECKPOINT, les écrivains d'une table sont refusés « Schema changed, retry: » sans fin
 
-- **État** : ouvert (15 novembre 2026, cœur c++) — vu une fois en 30 tours, non reproduit depuis
+- **État** : ouvert (15 novembre 2026, cœur c++) — vu une fois en 42 tours, non reproduit depuis
 - **Famille** : moteur
 - **Gravité** : blocage (les écritures d'une table et ses ALTER refusés jusqu'à la réouverture)
 - **Atteignable en service** : à établir. Vu sous vingt écrivains et un pool plein. Les hôtes de
@@ -44,6 +44,14 @@ property b ».
   la tête et l'instantané quand il refuse : aucun tour bloqué. Dans les 12 derniers, la sonde
   n'écrit que les têtes non validées : aucune vue. Journaux :
   `~/.cache/rag3db-moteur-notes/sonde-diag/`.
+
+- 12 tours de plus le 16 novembre, sur master `2385b5f616` (le pool corrigé), sous la sonde filtrée
+  et un pool réduit pour recréer des DDL refusés. À 384 Mio, aucun DDL n'est refusé : le pool ne
+  sature plus. À 200 Mio, seul le CREATE_VECTOR_INDEX l'est, jamais un ADD ni un CREATE REL TABLE.
+  Aucun tour bloqué, aucune tête non validée vue. Journaux :
+  `~/.cache/rag3db-moteur-notes/stuck-probe/`. Depuis le correctif du pool, les conditions du tour
+  bloqué (des ADD et des CREATE REL TABLE refusés par le pool plein, puis un CHECKPOINT qui
+  réussit) ne se recréent pas en jouant sur la taille du pool.
 
 ## Pour avancer
 

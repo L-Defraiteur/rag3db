@@ -112,3 +112,27 @@ reproduit par ces formes. Il manque au témoin, par rapport au scénario, les vi
 simultanés, les MERGE par clé avec relations et vecteur, et `CREATE_VECTOR_INDEX`. Ces cas
 apprennent en revanche l'isolement du catalogue, qui fait l'objet d'un ticket à part :
 `docs/coeur-cpp-hotfixs-tickets/tickets/2026-11-14-un-add-column-passe-sous-une-transaction-d-ecriture-ouverte.md`.
+
+## Reproduit sur master le 16 novembre 2026, binaire gardé
+
+`TwentyWriters.DdlEveryMinute`, tour 8 sur 12, sur master `2385b5f616` (le pool corrigé), sous un
+binaire sonde hors dépôt : le pool du scénario réduit à 200 Mio, et un diagnostic du contrôle de
+schéma qui n'a rien écrit. Core 3079782 (02:55:41), binaire à côté :
+`~/.cache/rag3db-moteur-notes/stuck-probe/concurrence_test.sonde`. La même pile qu'au 14 novembre :
+
+```
+#0 std::_Hash_bytes
+#1 std::_Hashtable<DictionaryChunk::DictionaryEntry, …>::find
+#2 DictionaryChunk::appendString
+#3 StringChunkData::finalize
+#4 Column::checkpointSegment
+#5 ColumnChunk::checkpoint
+#6 NodeGroup::checkpointInMemAndOnDisk
+…
+#12 TransactionManager::checkpointNoLock
+#13 TransactionManager::writeRequestedCheckpointIfLastNoLock
+#14 TransactionManager::commit
+```
+
+Un point de reprise demandé par un COMMIT. 1 tour sur 12 sous 200 Mio ; 0 sur 10 sous 2 Gio avec le
+pool corrigé. La pression du pool semble l'aider. La suite reste la passe sous ASan, en fenêtre.
