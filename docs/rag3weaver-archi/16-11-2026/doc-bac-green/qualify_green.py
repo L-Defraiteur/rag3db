@@ -9,7 +9,7 @@ import source_proof as source
 
 R=source.R;W=source.W;C=W/'extension/rag3weaver';APP=source.APP
 SESSION_TARGET=proof.SESSION;T=proof.T
-P=R/'cx-archi-doc-bac-green-r1';Q=R/'cx-archi-doc-bac-green-controller-r2'
+P=R/'cx-archi-doc-bac-green-r1';Q=R/'cx-archi-doc-bac-green-controller-r3'
 F=R/'bcg1'
 OLD_W=Path.home()/'git_workspaces/rag3db-cx-archi-pas-va-au-bout-r2'
 REL='docs/rag3weaver-archi/16-11-2026/doc-bac-green/qualify_green.py'
@@ -31,7 +31,7 @@ def cfg():return json.loads((Q/'configuration.json').read_text())
 
 def configure_controller():
     for name in ['R','W','C','T','OLD_W','P','Q','REL']:setattr(controller,name,globals()[name])
-    if (Q/'launch.json').exists():controller.OUTER_SECONDS=json.loads((Q/'launch.json').read_text())['outer_seconds']
+    controller.OUTER_SECONDS=TERM  # Pure initialization: no Q read before the watchdog, in any CLI dispatch.
 
 def check_transition():
     for root,old,new in [(source.TRANSITION,source.OLD_APP,'049153945e318784353c9cbd61e17beee67fa2d6'),
