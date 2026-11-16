@@ -1,5 +1,6 @@
 """Exercise the real scanner against a private proc-shaped fixture; no real PID."""
-import copy, importlib.util, json, os, sys, tempfile, unittest
+import ast, copy, importlib.util, json, os, sys, tempfile, unittest
+from unittest.mock import patch
 from pathlib import Path
 
 class ProbeTests(unittest.TestCase):
@@ -80,5 +81,29 @@ class ProbeTests(unittest.TestCase):
         (self.proc/'40/fd/4').symlink_to(self.module.OLD_W/'file')
         found=next(r for r in self.scan()['found'] if r['pid']==40)
         self.assertEqual(found['reasons'][0]['field'],'fd');self.assertEqual(found['fds'][0]['fd'],'4')
+
+    def run_real_admission_tail(self, record):
+        tree=ast.parse(Path(__file__).with_name('qualify_red.py').read_text())
+        function=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='fresh_cache')
+        index=next(i for i,n in enumerate(function.body) if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='expected' for t in n.targets))
+        function.body=function.body[index:]
+        saved=[]
+        ns=dict(controller=self.module,Path=Path,T=self.module.T,W=self.module.W,OLD_W=self.module.OLD_W,
+                authority={'cgroup':'/old-scope'},save=lambda name,value:saved.append((name,value)))
+        exec(compile(ast.Module(body=[function],type_ignores=[]),'actual-admission-tail','exec'),ns)
+        with patch.object(self.module,'policy',return_value=self.expected),patch.object(self.module,'scan',return_value=record):
+            try:ns['fresh_cache']({'control':str(self.control),'pilot':self.pilot})
+            finally:self.assertEqual(saved,[('cache-after-poste.json',record)])
+    def test_real_admission_rejects_unattributable_unknown_after_saving(self):
+        record=self.scan();record['unknown'].append(dict(pid=50,attributed=None,error='PermissionError'))
+        with self.assertRaises(AssertionError):self.run_real_admission_tail(record)
+    def test_real_admission_rejects_attributed_unknown_after_saving(self):
+        record=self.scan();record['unknown'].append(dict(pid=50,attributed=True,error='PermissionError'))
+        with self.assertRaises(AssertionError):self.run_real_admission_tail(record)
+    def test_real_admission_rejects_incomplete_ancestor_capture_after_saving(self):
+        record=self.scan();record['ancestor_errors'].append(dict(pid=10,error='PermissionError'))
+        with self.assertRaises(AssertionError):self.run_real_admission_tail(record)
+    def test_real_admission_accepts_complete_known_quiet_snapshot(self):
+        self.run_real_admission_tail(self.scan())
 
 if __name__=='__main__':unittest.main(failfast=True)
