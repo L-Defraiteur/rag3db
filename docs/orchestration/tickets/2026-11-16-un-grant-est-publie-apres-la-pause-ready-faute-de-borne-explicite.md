@@ -28,4 +28,15 @@ Cette étape est une PRÉPARATION seulement : ancien GO B5 terminé et grant ré
 
 ## Critères de fin
 
+Préparationcouple réalisée, pas de RUN : [recetteArbre15](../../arbre-principal/16-11-2026/15-contrat-ready-borne-producteur-consommateur.md).
+Contrat partagé98ab/SHAc67f072b...9ec0, bornesPCobservationavantpub/
+grantdeadlineMINobs+120/END−500, autorité/PIDstartCGUIDscriptSHA/firstred
+relus ; READYcompletfsync+linkexclusif, checksconsumeraprèsopenetavantaction.
+Producteur9052→3aa importéstrict, rechecksaprèshealth/fsyncavantlink ;
+callbackownerrestechargédes9identitésprovideretcontactsbornés. Deuxrouges
+vraisraccordsConsumerdf610 puis29CPUcouplevertsaprèspublication316d,
+producteur11rouges(5fail)→15vertsowner. Aucunservice/DB/provider réel,
+ancienB5inchangé. NouveauP/Q/Sv2/paquet/source/RO/GOdistinct nécessaires ;
+checks+linknonatomiquesfaceàfinphase et aucune durabilitécrash revendiquée.
+
 Contrat de borne partagé effectivement exercé par producteur et consommateur avec témoins discriminants rouges puis verts ; aucune action après refus ni preuve perdue. Une éventuelle qualification native du cycle restera distincte de la durabilité générale et du LIVE. L'incident ne se ferme pas sur l'envoi d'un message ou le seul renommage du grant.

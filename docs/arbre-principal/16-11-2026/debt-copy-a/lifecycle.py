@@ -10,7 +10,7 @@ FIN=R/'debt-fin-ro-result-v1';SOURCE=FIN/'copy';BASE=P/'copy/code-principal.rag3
 FIN_MANIFEST=R/'debt-fin-ro-proofs-01/proof-manifest.json'
 FIN_MANIFEST_SHA='05661b1fddc82c1e66d21f218d0c8cdfd12b69d8ef16432a2c55c3b127a9462a'
 FIN_REFS=['copy-after.json','fts-observed.json','vectors-observed.json','sources-after.json','composed.json']
-a.FILES=dict(a.FILES,**{n:a.PREFIX+n for n in ['lifecycle.py','lifecycle_protocol.py','lifecycle.json','lifecycle.mmd','lifecycle-provider-go.schema.json','lifecycle-ready.schema.json']})
+a.FILES=dict(a.FILES,**{n:a.PREFIX+n for n in ['lifecycle.py','lifecycle_protocol.py','lifecycle.json','lifecycle.mmd','lifecycle-provider-go.schema.json','lifecycle-ready.schema.json','lifecycle_grant_producer.py']})
 f.Q=Q;f.carried.Q=Q;a.Q=Q;a.P=P;a.S=S;a.BASE=BASE;q.Q=Q
 def save(name,value):q.save(P/name,value)
 def publish_ready(ready):
