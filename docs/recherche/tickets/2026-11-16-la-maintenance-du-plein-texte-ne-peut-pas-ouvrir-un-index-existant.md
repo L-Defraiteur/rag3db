@@ -35,3 +35,5 @@ Précision de fixture avant tout essai : `main` est une vraie table dérivée da
 GO C7 source187 pour le seul premier positif ; pilote fac5eeee11 arrêté code1 sur collision de nom de portée systemd AVANT superviseur/Cargo. Rapport `docs/recherche/16-11-2026/05-rouge-entree-systemd-fts-existing.md`, log SHA189ee19f784f34e33952cf4ac10079270d810e4c5dd3a4d431893db48b3668a2 identique PC/local. Target/preuves/reçu absents, poste libéré, aucun retry ni implémentation automatique.
 
 Réserve C7 avant implémentation : une table physique Document reste admissible même avec search_index=main ; le chemin maintenance doit ouvrir exactement Document, jamais rediriger ni refuser au seul motif de ce mapping. Remplacer le négatif187 par nom réellement inconnu et ajouter Document41/main99 comme positif distinct ; autre cellule toujours refusée.
+
+Correctif du lanceur et témoins publiés78437ce0a6 : suppression scope redondant, POSTE_SWAP_MAX=0 en plus32G/800%, driver recontrôle high/max/swap/quota. Deux fonctions hermétiques/7cas vertes0.019s après publication ; aucun Cargo/reçu réel nouveau. Source187 figée, attente nouveau GO distinct C7.
