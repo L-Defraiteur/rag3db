@@ -101,10 +101,6 @@ def cache_quiet(cfg):
      attributed=True;found.append(dict(pid=proc.name,start=start,role=role,path=path))
    collect_process_paths(proc,observe)
   except (FileNotFoundError,ProcessLookupError):continue
-   for role,path in targets:
-    if path==str(Q/'poste') and int(proc.name) in ancestors and proc.stat().st_uid==os.getuid():continue
-    if any(path==str(root) or path.startswith(str(root)+'/') for root in roots):attributed=True;found.append(dict(pid=proc.name,start=start,role=role,path=path))
-  except (FileNotFoundError,ProcessLookupError):continue
   except OSError as error:unknown.append(dict(pid=proc.name,start=start,attributed=attributed,error=repr(error)))
  assert not found and not any(row['attributed'] for row in unknown)
  return dict(found=found,unknown=unknown,observed=time.monotonic())
