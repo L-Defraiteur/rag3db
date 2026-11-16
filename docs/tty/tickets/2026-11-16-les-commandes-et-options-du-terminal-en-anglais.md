@@ -285,3 +285,12 @@ Common ; préflight exige égalité avec ledger avant garde. Finaliseur extérie
 vérifie Common terminé, code0, restes[], nettoye, empreintes et scan frais,
 source propre et temps final avant échéance. Le shell dit STAGES_PASSED,
 jamais un VERT composé avant la fin de Common. Aucun GO b70 réactivé.
+
+### Réserve Mémoire sur 291c — script poste encore ouvert sous W
+
+HOLD, aucun run : launch_full.py appelle encore le poste de W. Son interprète
+Bash garde un FD sur ce script sous W pendant Common ; le scan sans exemption
+doit le refuser avant Cargo. Copier/hasher le poste privé et exécuter sa copie
+horsW, après vérification des dépendances du script ; ne pas ajouter d'exemption
+W. Réserve de finalisation/publication encore en revue, à regrouper dans le
+même ticket et paquet avant nouveau pin. Préparation291c conservée comme telle.
