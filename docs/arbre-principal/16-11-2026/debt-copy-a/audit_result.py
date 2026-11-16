@@ -12,6 +12,7 @@ RESULT=OLD/'copy';ORIGIN=q.SOURCE;BASE=P/'copy/code-principal.rag3db'
 BINARY=OLD/'read-typed';BINARY_SHA='add01058f3b0d6efd28d936c865b1ba9071c0e2eb85f559743bf0c52aeea6371'
 RED_PROOFS=R/'debt-copy-a-red-01'
 RED_MANIFEST='373dccfa2a9550621fed8c89e0922ea3db56a9ff0666f7a0ed1c7528d398e687'
+OLD_REFERENCES=['DEBT_PENDING.json','graph-before.json','fts-before.json','source-before.json','source-directories-before.json','typed-before-db.json','first-red.json','composed.json','writer.stdout']
 PREFIX='docs/arbre-principal/16-11-2026/debt-copy-a/'
 FILES={n:PREFIX+n for n in ['audit_result.py','qualify.py','audit.py','typed_rows.py']}
 FILES.update({'inspect-fts.py':'docs/arbre-principal/16-11-2026/bascule/inspect-fts.py',
@@ -31,6 +32,7 @@ def guard(cfg):
   if q.sha(path)!=h:raise ValueError('SDK/tool pin differs')
  if q.sha(BINARY)!=BINARY_SHA or q.sha(cfg['timeout'])!=cfg['timeout_sha']:raise ValueError('reader/timeout pin differs')
  if q.sha(RED_PROOFS/'proof-manifest.json')!=RED_MANIFEST:raise ValueError('red evidence manifest differs')
+ if set(cfg['old_proofs'])!=set(OLD_REFERENCES):raise ValueError('red reference set differs')
  references={row['name']:row['sha256'] for row in json.loads((RED_PROOFS/'proof-manifest.json').read_text())}
  for name,h in cfg['old_proofs'].items():
   if references.get('client/'+name)!=h or q.sha(OLD/name)!=h:raise ValueError('frozen reference proof differs')
@@ -129,8 +131,7 @@ def prepare(root,pilot):
  Q.mkdir(mode=0o700)
  for name,path in FILES.items():shutil.copy2(Path(root)/path,Q/name)
  timeout=str(Path(shutil.which('timeout')).resolve())
- refs=['DEBT_PENDING.json','graph-before.json','fts-before.json','source-before.json','source-directories-before.json','typed-before-db.json','first-red.json','composed.json','writer.stdout']
- cfg=dict(source_root=str(root),pilot=pilot,files={n:q.sha(Q/n) for n in FILES},timeout=timeout,timeout_sha=q.sha(timeout),old_proofs={n:q.sha(OLD/n) for n in refs})
+ cfg=dict(source_root=str(root),pilot=pilot,files={n:q.sha(Q/n) for n in FILES},timeout=timeout,timeout_sha=q.sha(timeout),old_proofs={n:q.sha(OLD/n) for n in OLD_REFERENCES})
  q.save(Q/'prepared.json',cfg);guard(cfg);return cfg
 def launch(pilot,allocation):
  cfg=json.loads((Q/'prepared.json').read_text());guard(cfg)
