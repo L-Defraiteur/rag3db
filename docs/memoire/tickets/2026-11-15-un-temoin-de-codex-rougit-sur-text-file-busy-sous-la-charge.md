@@ -40,3 +40,24 @@ charge de la lib entière l'ouvre.
   qu'aux tests.
 - Ou lancer par `/bin/sh <script>` plutôt que le script lui-même : le fichier n'est alors qu'ouvert
   en lecture.
+
+## Reprise du 16 novembre : preuve avant correction
+
+Lot `cx-memoire-script-fixtures-r1`, base `927941a67a5805450d49f1e04b39fdd542a6059b`.
+Périmètre réservé : fixtures de `src/codex_threads.rs`, présent ticket et preuves.
+Aucune modification de `livrer` ni de la logique de production autorisée.
+
+Le renommage n'isole pas l'inode : un enfant qui garde le descripteur d'écriture
+hérité bloque aussi l'exécution au nouveau nom. Le témoin Linux autonome
+`docs/memoire/16-11-2026/script_fixture_probe.py` garde ce descripteur jusqu'à
+un acquittement explicite, sans sommeil ni course probabiliste. `--legacy`
+exige le lancement malgré ce writer et doit rougir avec errno26. Le second
+cas vérifie que rename ne corrige pas cette cause. C'est une preuve système,
+pas encore l'exécution des témoins Rust du crate.
+
+Correction proposée : faire écrire les deux scripts par un processus enfant
+attendu, de sorte qu'aucun writer du fichier exécutable ne soit ouvert dans
+le parent multi-thread qui crée les autres enfants. Le témoin vert utilisera
+la commande shell exacte du helper Rust de test, extraite du source ; pas un
+réessai de livrer, pas une relaxation de délai. Lib/F8/NAV NON JOUÉES, attendent
+FINI G et une recette compatible avec la lib nouvellement autorisée59ac.
