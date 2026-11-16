@@ -34,7 +34,11 @@ def run(name,argv,cap):
   result=subprocess.run(argv,cwd=C,stdout=f,stderr=subprocess.STDOUT,timeout=min(cap,remaining))
  save(name+'.result.json',dict(returncode=result.returncode,end=time.monotonic()))
  return result.returncode
-code=run('compile',['bash',str(C/'scripts/cargo_magasin.sh'),'test','--locked','--no-default-features','--features','rag3db-native','--lib','--no-run','--message-format=json-render-diagnostics','-j8'],900)
+export_script='source "$1"; exporter_la_lib || exit; python3 -c \'import json,os; print(json.dumps({k:os.environ.get(k) for k in ["RAG3DB_SHARED","RAG3DB_LIBRARY_DIR","RAG3DB_INCLUDE_DIR","LD_LIBRARY_PATH"]}))\''
+native=json.loads(subprocess.check_output(['bash','-c',export_script,'export-profile',str(C/'scripts/lib_du_magasin.sh')],cwd=C,text=True))
+os.environ.update(native)
+save('native-profile.json',dict(env=native,library_sha256=sha(Path(native['RAG3DB_LIBRARY_DIR'])/'librag3db.so')))
+code=run('compile',[sys.executable,'-B',str(C/'scripts/cargo_garde.py'),'test' ,'--locked','--no-default-features','--features','rag3db-native','--lib','--no-run','--message-format=json-render-diagnostics','-j8'],900)
 if code:sys.exit(code)
 artifacts=[]
 for line in (P/'compile.log').read_text().splitlines():
@@ -43,7 +47,8 @@ for line in (P/'compile.log').read_text().splitlines():
  if row.get('reason')=='compiler-artifact' and row.get('target',{}).get('name')=='rag3weaver' and row.get('profile',{}).get('test') and row.get('executable'):artifacts.append(row)
 assert len(artifacts)==1
 artifact=artifacts[0];assert artifact['features']==['rag3db-native']
-elf=Path(artifact['executable']);assert elf.read_bytes()[:4]==b'\x7fELF'
+elf=Path(artifact['executable'])
+with elf.open('rb') as f:assert f.read(4)==b'\x7fELF'
 if run('inventory',[str(elf),'--list','--format','terse'],15):sys.exit(2)
 if run('exact-inventory',[str(elf),TEST,'--exact','--list','--format','terse'],15):sys.exit(2)
 assert (P/'exact-inventory.log').read_text().splitlines()==[TEST+': test']
