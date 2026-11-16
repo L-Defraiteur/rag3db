@@ -1,7 +1,7 @@
 # Scripts de fixture : rouge déterministe puis écriture isolée
 
 Lot `cx-memoire-script-fixtures-r1`, base927941a67a5805450d49f1e04b39fdd542a6059b.
-[Ticket](../tickets/2026-11-15-un-temoin-de-codex-rougit-sur-text-file-busy-sous-la-charge.md).
+[Ticket](../../tickets/closed/2026-11-15-un-temoin-de-codex-rougit-sur-text-file-busy-sous-la-charge.md).
 Réservation : tests de `src/codex_threads.rs` uniquement ; `livrer` inchangé.
 
 Prépublication rouge `bc07b0cb85` puis correction `40e7f2c37c`, branches poussées.

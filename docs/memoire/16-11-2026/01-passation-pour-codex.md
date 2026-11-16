@@ -118,22 +118,22 @@ Une suite e2e neuve se monte en trois pas :
 
 ### 2.1 Le témoin de codex qui rougit sur « Text file busy » — 1 h
 
-**En cours par la session mémoire** : candidat NEUF
-`cx-memoire-script-fixtures-union-r1` depuis masterbef, Wlocal
-`~/.cache/rag3weaver-build/cx-wt-memoire-script-fixtures-union-r1`.
-Sixpatches734égaux, mêmeRustcfgtest/modeOID, codeEmbar entrant préservé.
-Ancienne source734 et qualification2a068 acquises séparément :6ciblés/F8 8/8/
-lib2596/0/72/NAV45 +seconde2596/0/72 surmêmeELF6f12,40SHA répliqués,quiescence.
-[Union et recette09](09-union-master-et-recette-distincte.md) : nouvellequalification
-DISTINCTE3600 proposée pourcodeentrant, pasreset7200 ; pilote/transitionGit
-physique734+SAMEOWNER/RO/GOdistinct C7 àfaire. AucunCargo/target/serviceWPC734touché.
+**Corrigé et qualifié en branche par mémoire**, proposé à intégration :
+sourceunion e2722d521192b3c25f9dd13e0e9aed47a7d7487f, pilote01f3,47preuves
+465d68a678/manifest054388...59a9.6ciblés/F8 8/8/lib2605/0/72/NAV45 puis seconde
+lib2605/0/72 surmêmeELFc397, nomsidentiques/aucundoublon,560,038s<3600.
+Préfixeproductioninchangé, helper enfantwriter cfgtest seulement ; renommage
+seul réfuté. Parent/fils proposésclosed dans le même candidatNEUFmaster57fbd9,
+[rapport12](12-candidat-final-script-fixtures.md). Sourcearchive734 et les anciens
+rouges/profils/targets/TMP gardés, poste etBGE/PG rendus, ownedquiet. Aucun retrait
+ni pushmaster effectué ; seul ÀTOIexact C7/garde/dernierfetch/3contrôles reste.
 
-`2026-11-15-un-temoin-de-codex-rougit-sur-text-file-busy-sous-la-charge.md`
+`docs/tickets/closed/2026-11-15-un-temoin-de-codex-rougit-sur-text-file-busy-sous-la-charge.md`
 
 - **Le défaut** : `src/codex_threads.rs`, aux lignes 261-263 et 303-305. Le test écrit un script et
   le lance aussitôt, et sous la charge les forks des autres tests gardent le descripteur ouvert.
-- **À faire** : un utilitaire de test `write_executable` (écrire dans un fichier temporaire, fixer
-  les droits, `rename` vers le nom final), utilisé aux deux endroits. `livrer` ne se touche pas.
+- **Réalisé** : `write_executable` fait écrire les scripts par un enfant attendu5s au plus, parent sans
+  writer, utilisé aux deux endroits. `rename` seul ne corrige pas un writer hérité ; `livrer` inchangé.
 - **La preuve** : le filtre lib `codex_threads`, puis la lib entière deux fois sans le rouge. Un
   rouge déterministe est difficile à écrire. Si tu en écris un
   (`write_executable_closes_before_exec_under_parallel_forks`), il doit d'abord rougir avec

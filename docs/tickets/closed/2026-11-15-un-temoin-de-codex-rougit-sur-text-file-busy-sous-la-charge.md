@@ -1,0 +1,248 @@
+# Un témoin de codex_threads rougit sur « Text file busy » sous la charge
+
+- **État** : corrigé en branche, APPe2722d5211 qualifiée surunion ; preuves465d68a678, intégration au seul tour C7.
+- **Famille** : produit. Le défaut est dans un témoin de la lib du crate ; le code de
+  `codex_threads` n'est pas en cause.
+- **Gravité** : un rouge intermittent de la lib entière, qui fait rejouer une passe. Il est vert
+  seul.
+- **Atteignable en service** : non.
+- **Touche rag3weaver** : oui, `src/codex_threads.rs`, le test
+  `un_codex_qui_ne_rend_pas_la_main_est_coupe_au_delai`.
+- **Pour** : la session qui tient le pont vers Codex (pont entre agents de code), ou qui le veut.
+- **Signalé par** : la session mémoire (96), dans la passe du lot `segment` du 15 novembre 2026 au
+  portable.
+
+## Ce qu'on voit
+
+```
+codex_threads::tests::un_codex_qui_ne_rend_pas_la_main_est_coupe_au_delai ... FAILED
+/tmp/.tmpbxAo6B/lent queue : ne démarre pas : Text file busy (os error 26)
+```
+
+Il est rouge dans la lib entière (2472 passés, 1 rouge, 20 h 03), et vert joué seul juste après
+(1/1).
+
+## Pourquoi, très probablement
+
+Le test écrit un script (`std::fs::write`), le rend exécutable, puis le lance aussitôt. Sous Linux,
+`execve` refuse avec `ETXTBSY` un fichier encore ouvert en écriture par un processus. Les autres
+tests de la lib forkent en parallèle : un enfant forké pendant l'écriture hérite du descripteur
+ouvert, le garde jusqu'à son propre `exec`, et le lancement du script tombe dans cette fenêtre.
+C'est la course classique d'un exécutable écrit puis lancé dans un programme multi-fil. Seule la
+charge de la lib entière l'ouvre.
+
+## Ce qui serait juste
+
+- Écrire le script dans un fichier temporaire, le fermer, puis le **renommer** à son nom final avant
+  de le lancer : un `rename` ne porte pas le descripteur hérité.
+- Ou réessayer le lancement sur `ETXTBSY`, quelques fois avec un court délai, dans le test ou dans
+  `livrer`. Un vrai binaire de codex n'est jamais écrit par nous, donc le réessai ne servirait
+  qu'aux tests.
+- Ou lancer par `/bin/sh <script>` plutôt que le script lui-même : le fichier n'est alors qu'ouvert
+  en lecture.
+
+## Reprise du 16 novembre : preuve avant correction
+
+Lot `cx-memoire-script-fixtures-r1`, base `927941a67a5805450d49f1e04b39fdd542a6059b`.
+Périmètre réservé : fixtures de `src/codex_threads.rs`, présent ticket et preuves.
+Aucune modification de `livrer` ni de la logique de production autorisée.
+
+Le renommage n'isole pas l'inode : un enfant qui garde le descripteur d'écriture
+hérité bloque aussi l'exécution au nouveau nom. Le témoin Linux autonome
+`docs/memoire/16-11-2026/script_fixture_probe.py` garde ce descripteur jusqu'à
+un acquittement explicite, sans sommeil ni course probabiliste. `--legacy`
+exige le lancement malgré ce writer et doit rougir avec errno26. Le second
+cas vérifie que rename ne corrige pas cette cause. C'est une preuve système,
+pas encore l'exécution des témoins Rust du crate.
+
+Correction proposée : faire écrire les deux scripts par un processus enfant
+attendu, de sorte qu'aucun writer du fichier exécutable ne soit ouvert dans
+le parent multi-thread qui crée les autres enfants. Le témoin vert utilisera
+la commande shell exacte du helper Rust de test, extraite du source ; pas un
+réessai de livrer, pas une relaxation de délai. Lib/F8/NAV NON JOUÉES, attendent
+FINI G et une recette compatible avec la lib nouvellement autorisée59ac.
+
+Rouge système vu sur `bc07b0cb85` : 3 cas en0,005s, deux contrôles de cause
+passent et le lancement attendu échoue exactement avec errno26. Journal horsW
+`~/.cache/rag3weaver-build/journaux-cx-memoire-script-fixtures-16nov/rouge-bc07.log`.
+Le correctif des deux fixtures passe par `/bin/sh -c` avec chemin et corps en
+arguments séparés ; printf/chmod s'exécutent dans l'enfant seulement. Attente
+bornée à5s ; aucun réessai et aucun changement du pont de production.
+Un témoin Rust de chemin/corps littéraux est ajouté, NON JOUÉ avant FINI G.
+
+Vert système sur40e7 : 3/3 en0,007s, commande du helper extraite du source.
+[Rapport du lot](../../memoire/16-11-2026/02-script-fixtures.md). Qualification Rust toujours
+NON JOUÉE ; conservation du premier rouge et des limites de cette preuve.
+
+Préparation magasin explicite sous XDG privé : contrôle résolveur seul portable/
+PC conforme, pin59ac et so/vectorSHA dans le rapport. La future recette fixe
+RAG3DB_LIBS_DIR réel sans copie SDK ; ce contrôle ne déclenche aucune passe.
+
+## Pilote concret demandé par C7, avant implémentation
+
+Le16nov C7 autorise la préparation/petits CPU, pas Cargo avant couple publié
+et GO exact. Source r3 `ff37eb82e52aa733503f3bf60fbf7a4d052ead85`, base
+`f83c6c4dd6a40200883c6325326f093ecdba3e23` : six patches égaux à r2.
+Pilote séparé : portée unique7200 après vrai poste32G/HIGHmax/swap0/quota
+par place/j8 maximum ; P/Q/S neufs horsW, target unique neuf, pin59ac/magasin
+réel. Canonique SUITES=- et codex_threads, puis seconde lib entière DIRECTEMENT
+sur le même ELF large identifié dans lib.log, SHA avant/après ; aucune seconde
+F8/NAV. Résumé canonique intact, deuxième journal et verdict composé séparés.
+Arrêt premier rouge, cleanup par confineur, contrôles frais après hashes et
+avant publication, autorité terminée/bus absent/quiescence. Aucun manager
+7970/base de Lucie requis. Préparation ne vaut pas GO ni qualification Rust.
+
+Gel corrigé après entrant ties C7 : branche NEUVE r4, source734087a4e99d54331aac2f6321df9ef6da3b6d9c
+base d395cb1f03f84c6abdfa023a0e3c7f87a7c0dab6, six patches égaux ;
+pilote NEUF r2 porte même qualification7200. R1 jamais lancé, aucun reçu.
+Huit fonctions Python hermétiques vertes0,002s, pas qualification Rust.
+[Recette concrète03](https://github.com/L-Defraiteur/rag3db/blob/2a068b49c404008e3523efa335c44cf0c8a680e2/docs/memoire/16-11-2026/03-recette-script-fixtures.md).
+
+## Réserve ED avant correction du watcher
+
+Pilote1e3a3d005d RETIRÉ, jamais lancé. ED a identifié que P.rglob('*.log')
+parcourt aussi XDG_CACHE_HOME=P/cache : des journaux historiques de gabarits
+(llm-gemini.log et test result FAILED) peuvent y être copiés pendant les tests.
+Un P neuf ne rend pas ces contenus contemporains. Réserve ED consignée aussi
+par ED3d2d6cfffd. Correction attendue : liste EXPLICITE des seules sorties
+actives canonical-pass/official témoins,F8,preuve,lib,NAV,résumé/second-lib ;
+aucun scan de cache/state. Témoins sur vrai run avec fauxPopen : historique
+FAILED ignoré, FAILED actif arrête avant phase suivante, should_panic préservé.
+Publication avant essais, nouveau SHA soumis RO puis GO distinct C7.
+
+## Rouge de qualification native, avant diagnostic correctif
+
+Couple APP734087/PILOTE383042 exécuté au GO exact C7. Témoincodex_threads6/0/0,
+F8 8/8 et preuve acquis. Lib entière arrêtée au premier FAILED du vrai journal
+actif : pont_navigateur::temoins_relai::l_ecoute_range_un_pont_par_navigateur_et_le_socket_est_a_soi.
+Deux autres FAILED relai apparaissent déjà dans le même buffer : secondhôte et
+remplacementconnexion. ScopeROUGEcode1/restes[]/nettoyé, autoritéTERMINE ;
+NAV et seconde lib NON JOUÉES. Aucun retry ni reset. Détails rapport04 à publier.
+
+Diagnostic RO à établir avant toute modification : dossier() du témoin relai
+compose std::env::temp_dir()/pont-PID-N/[ecoute/]pont.sock, limite108octets ;
+TMPDIR de notre pilote sousP long pourrait dépasser cette limite. Le STOP
+précoce a conservé la première ligne FAILED mais pas les détails capturés du
+panic imprimés seulement en fin de lib : ne pas inventer son message exact.
+Pas de changement produit autorisé par ce constat ; prochaine proposition
+profilTMP court/privé serait un nouveau pilote et GO distinct sous ENDoriginal
+si C7 le décide. Ressources et premier rouge conservés sans nettoyage.
+
+Suite distincte tracée avant transmission : [fils profilTMP/socket](2026-11-16-le-profil-tmp-prive-depasse-la-longueur-des-sockets-des-temoins-du-pont.md).
+Aucun ticket des sept instables ED ne porte ce cas précis. STOP confirmé C7,
+aucune modification du helper ni nouveau budget autorisé avant diagnosticRO.
+
+## Reprise v2 : canonique verte, seconde lib rouge — avant toute correction
+
+Couple APP734087/PILOTEf7ef exécuté au GO conditionnel C7 aprèsACKfraisEmbar.
+MêmeINITIAL/ENDoriginal ; reçuozbiuey5 borné1186772.644046987. TMPcourt
+R/m-0fdabc6d31 surdisque0700/UID1000/byteguard89 ; canonique entièreVERTE :
+6cibles/F8 8/8/preuve/lib2596/0/72/NAV45/0/0, trois sockets rougesv1 verts.
+
+Seconde lib sur MÊMEELFSHA6f1227...8e74, copie+ledger AVANTruntime, arrêt au
+premier FAILED code_tools::cwd_tests::cd_ne_ment_pas_sur_ou_on_est.
+Profil whitelist direct ne contient pas CARGO_MANIFEST_DIR ; ici() du témoin
+fait std::env::var(...).unwrap(). Aucun détail de panic acquis avantSTOP.
+Cas déjà identifié dans le [ticket ancres Arbre](../../arbre-principal/tickets/2026-11-12-migrer-les-ancres-de-code-vers-le-contenu-partage.md),
+section « A — lib v2 rouge de montage runtime, reprise v3 sans rebâtir les verts ».
+Ne pas créer de doublon ni attribuer un défaut produit sans preuve.
+
+C7 reçoit diagnosticRO avant toute modification : proposition éventuelle
+CARGO_MANIFEST_DIR=crate pour la SECONDE lib directe seulement, sous même
+ENDoriginal et avec nouvelle provenance du cache/reçuv2/ELF/archive ; pas de
+reset ni de retry automatique, anciencanonique et rouges conservés.
+ScopeROUGE1/restes[]/nettoyé/TERMINE ; scan frais owned_alive[]/owned_unknown[]/
+found[],bus+cgroupabsents,T5658160728conservé. Preuves34 avantcomplémenthealth
+à finaliser dans rapport06 ; aucune édition du pilote pendant/après le job.
+
+## Accord C7 de préparation de seconde lib seule, avant code
+
+Après RO968 Arbre/ED, C7 autorise PRÉPA seulement : nouveau pilote exécute
+SEULE seconde lib entière mêmeELF6f12, zéroCargo/F8/NAV. Source734propre,
+canonique déjàVERT SHA0ddd et35manifestc804 inchangés, nouveauprofil avec
+CARGO_MANIFEST_DIR=crateEXACT archivé AVANTassert, SDKexportunefois, TMPdisque
+courtprivé et étatsfrères. NouveauP/Q/Sv3, pasnouveauT. Capturecache/ELF/FP/
+reçuv2TERMINE/provenance avant et justeaprèsPOSTE, délai floorEND-now-3,
+INITIAL1179575.678/END1186775.678 originaux. Verdictcomposite seulementsi
+seconde lib2596/0/72 sansfiltre etshaidentiques, résumécanonique intact.
+Anciens rouges conservés, aucun GOreprise ni budgetneuf. Publication pilote
+ettémoins vraisenv/commande +deadlineAPRÈSopen pourROavantGOexact.
+
+## Qualification composée acquise en branche, RO/intégration restantes
+
+Source734/PILOTEcanonf7ef et second-onlyf812 au GO exact C7 :6ciblés/F8 8/8/
+preuve/lib2596/0/72/NAV45 puis seconde lib2596/0/72, mêmes2596noms,72ignorés
+nonjoués. MêmeELFSHA6f12/copieledgerAVANTseconde, CARGOMANIFEST runtimeCexact/
+SDKdiff{} archivéavantassert/exec. Canon0dddintact, vieuxrougesv1/v2 restentrouges.
+FinalcomposéVERT0/4599,834sdepuisINITIALoriginal<7200,scopeVERT0/restes[]/TERMINE/
+busabsent/scan426ownedquiet. [40preuvesPC/localréhashées](https://github.com/L-Defraiteur/rag3db/blob/2a068b49c404008e3523efa335c44cf0c8a680e2/docs/memoire/16-11-2026/08-preuves-deux-libs-et-canonique.md).
+Poste/BGE/PG rendus/healthservicesusage0 ; sources/target/TMPconservés.
+État resteOUVERT pourROpreuves+intégration C7, aucunGOmaster/retrait déduit.
+
+## Union neuve après masterbef, avant pilote et exécution
+
+C7 demande candidatNEUF avec codeEmbar entré après734. Branche
+cx-memoire-script-fixtures-union-r1 depuisbef0 ; sixpatcheségaux, seulRust
+codex_threads.rs mode/OID734 exact et préfixeproductioncfgtest inchangé.
+Tousmasterhorschevauchementpréservés, audit/range dansrapport09.
+[RecetteDISTINCTE3600proposée](../../memoire/16-11-2026/09-union-master-et-recette-distincte.md),
+F8/lib/NAV+deuxièmeELFmême, nouvellefenêtre pasresetancien7200. Pilote et
+transitionGit archive734physique/mêmeC SAMEOWNER àpréparer ; zéro Cargo/target
+ou sourcePC734 touchés, pasGOmaster/retrait. Preuves2a068 restent acquises734,
+aucun report automatique àl'union avec 5Rust Embar entrants.
+
+## Pilote union avant implémentation
+
+APPunionfigée e2722d521192b3c25f9dd13e0e9aed47a7d7487f. Préparer transition
+GitSEULE archivephysique734 propre/detached/admin+gitlink/fullSHA, puis HEADunion
+au MÊMEcheminC propriétaireT ; inventaires completsT avant/après égaux,
+ELF6f12/canon0ddd/preuvesda809 et reçuv3TERMINE préservés. Ne pas reclasser
+les preuves734 commeunion. Pilote isolé3600neufsaprèsPOSTE (ancienbudgetGREEN
+terminé), canoniqueENTIÈRE+secondeMEMEELF avecCARGOMANIFESTCexact dèsdépart ;
+profilTMPcourt/fs/UID/identity, étatsfrères, SDK59store/pool1G, watchEDactifs,
+sourceUNION9dansELFavant2e, finalSHA/scan/autorité/deadlineAPRÈSopen.
+Primitives sourcearchive et cacheinventory réemployées d'Archi b12, provenance
+à publier ; code+témoins avantpetitsCPU. AucunCargo/service/targetguard réel
+ou nouvelleportée pendant la préparation ; nouveauGOexact requis.
+
+Prépaunion observée sansCargo : d8da prépubpuis33CPUverts, vraiearchive734
+physiqueDETACH/gitlink/adminfullSHA, checkoutsourcePCunionAPPe272 auMÊMEC ;
+5JSONtransitionPC/local0écart, inventoryTavant/aprèsSHA8a6e...1052égal, ELF6f12
+conservé, aucun guardT. Vraie capturepreflightreadonly8657FPetrequired_suites
+bef..APPvide. [Pilote concret10](https://github.com/L-Defraiteur/rag3db/blob/465d68a67862e264d65df63c35e83e188606e804/docs/memoire/16-11-2026/10-pilote-union-concret.md).
+P/Q/Sunion/TMPnouveaux noncréés, aucunruntime/Cargo/service ; RO+GOdistinct
+3600nouveaux restent requis pour lecodeEmbar entrant etsameELFunion2libs.
+
+## Réserve ED avant contrôle des noms union
+
+Pilote0b63 nonlancé, réserve RO : doc10 promet égalitéNOMS mais driver ne
+compare que counts2==counts. Ajouter parse des deux journaux en CounterOK/
+ignored, refuser doublons/manquants/extras et cardinalités incompatibles ;
+snapshot avantassert, témoins vraisfonctions avantfix(rejouer CPU seulement).
+Même sourceAPP e272/T/transition/3600/SDK et autresfrontières inchangés.
+NouveauSHA à RO et GOdistinct, aucunPQS/Cargo ou runtime consommé.
+
+## Union qualifiée au GO distinct3600, avant candidatfinal
+
+APPe272/PILOTE01f3 :6ciblés/F8 8/8/preuve/lib2605/0/72/NAV45 puis seconde
+MÊMEELFc397...a9072605/0/72. CounterNOMS2605/72×2, absents/extras/doublons
+vides ; ignorésNONJUGÉS. Canonrésuméf7ea...3a3c intact, source9dansELFunion,
+ledgercopieavantseconde, SDKruntime/C_MANIFESTdiff{}. FinalGREEN0en560,0378s
+<3600newaprèsPOSTE, scopeVERT0/restes[]/TERMINE/busCGabsents,2831ownedquiet.
+[47preuvesPC/localréhashées](../../memoire/16-11-2026/11-preuves-union-deux-libs.md),
+modèleshealth200usage0/PG rendus, T/source/TMPconservés. Anciens734 etrouges
+restenthistoriques. ROpreuves puis candidatNEUFmasterfrais/code_apporte/ÀTOI C7
+restent avant intégration/fermetureeffective ; aucunmaster/retraitautorisé.
+
+## Clôture proposée dans le candidat final
+
+Sourcecfgtesthelperenfant identique mode/OID734 etunion testéee272, production
+livrer inchangée. Rouge système déterministe puisvert, deuxlibs réelles2605/0/72
+(mêmesnoms/sameELF),6ciblés/F8 8/8/NAV45 qualifiés surunion,47SHA répliqués,
+sourcearchive734 et anciensrouges préservés. Correction du profil TMP etruntime
+CARGOMANIFEST qualifiées séparément. Code du candidat final identique àe272 ;
+master entrant depuisbef ne touche que docs/opsCPU seloncode_apporte.
+[Rapport11](../../memoire/16-11-2026/11-preuves-union-deux-libs.md),
+[relecture finale12](../../memoire/16-11-2026/12-candidat-final-script-fixtures.md).
+Ce statut ne dit pas master poussé : candidatNEUF, ÀTOIexactC7 et garde/3contrôles
+restent requis. Aucune suppression de source/target/TMP autorisée.

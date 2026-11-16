@@ -52,7 +52,7 @@ manifestda809 etFP/SO/source/pilote propres. Arrêtpremierrouge, pasretry, pas
 restart/services/API7970/basesLucie ; créneau modèles BGE/PG coordonné avantposte.
 Final source/ELFunion/copie/SDK/profils/TMP/ownedquiet/deadlineaprèsopen.
 
-[Ticket existant](../tickets/2026-11-15-un-temoin-de-codex-rougit-sur-text-file-busy-sous-la-charge.md)
+[Ticket existant](../../tickets/closed/2026-11-15-un-temoin-de-codex-rougit-sur-text-file-busy-sous-la-charge.md)
 reste ouvert ; fermeture parent/fils seulement avec lot final relu/qualifié puis
 ÀTOIexact C7. Source/piloteconcrets, transitionGit et recette attendent RO/GO ;
 aucun Cargo/rustc/service/target niWsourcePC734 modifié par cette préparation.
