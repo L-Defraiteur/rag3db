@@ -1,0 +1,23 @@
+{
+  "command": "timeout 180 docker run --rm --network=none --memory=1073741824 --memory-swap=1073741824 --cpus=2 --user=1000:1000 --read-only --tmpfs /tmp:rw,size=16777216 -v /home/lucied/git_workspaces/cx-coeur-dictionary-append-delivery:/work:ro -w /work rag3db-clang-format-18 python3 scripts/run-clang-format.py --clang-format-executable /usr/bin/clang-format-18 -j2 -r src test tools extension",
+  "image_id": "sha256:d58d28d7a16180e13240382444b550ef1a0d186731665d6abccdad641343af45",
+  "exit_code": 0,
+  "stdout_stderr_bytes": 0,
+  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "source_native_commit": "888c81825e4cd6556261233f0e238af3b95375c9",
+  "native_files": [
+    {
+      "path": "src/storage/table/dictionary_chunk.cpp",
+      "sha256": "8e711cf9808dfefb2c2e12a4f343999057a380bf98e5526929506e99cec014f1"
+    },
+    {
+      "path": "test/transaction/CMakeLists.txt",
+      "sha256": "22d148cb5adf7822516639b525ec37795b3b114f73fa3326bdda665442d5f3c7"
+    },
+    {
+      "path": "test/transaction/dictionary_append_exception_test.cpp",
+      "sha256": "f02cb1ff0dfd93029d9f9fbd654c596dcfc815641390881924920e0a521c7400"
+    }
+  ],
+  "source_rewritten": false
+}

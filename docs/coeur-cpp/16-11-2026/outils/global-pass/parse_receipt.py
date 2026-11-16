@@ -121,3 +121,14 @@ def inspect_outcomes(xml_path, suite, drop_raw_text=''):
         raise ValueError('zero tests actually executed')
     return {'xml': root.attrib, 'executed': executed, 'nominal_helper_skips': skips,
             'declared_disabled': disabled, 'historical_failure_exceptions': admitted}
+
+
+def admitted_cpu(cpu_max, poste_threads):
+    parts = cpu_max.split()
+    if len(parts) != 2 or parts[0] == 'max':
+        raise ValueError('missing effective poste CPU quota')
+    quota, period, threads = int(parts[0]), int(parts[1]), int(poste_threads)
+    if quota <= 0 or period <= 0 or threads <= 0:
+        raise ValueError('invalid CPU admission')
+    return {'jobs': min(8, threads, max(1, quota//period)),
+            'quota_percent': 100*quota/period}

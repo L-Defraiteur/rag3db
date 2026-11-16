@@ -1,0 +1,20 @@
+{
+  "tests": 10,
+  "failures": 0,
+  "native_run": false,
+  "scripts": {
+    "entry.py": "034149a319cd8c2346c98811a8401606beac0671a645794dd80fd3a4a2962c30",
+    "controller.py": "ba4d9b4aebd463bb13a340216aaca8ad0d1dd8ac368fd6ac1aa3fdc1cfdb1f77",
+    "parse_receipt.py": "502c49866d3f047f880a851d680ae04644c7a28078ace08b17348b3e8964b885",
+    "launch.sh": "4dbf358cd3987b1a9e4e05d64e308b1e5d125ce221b3d1c84b91c01e9d7028bd"
+  },
+  "checks": [
+    "fixture identity immutable and contextual",
+    "native attestation identical bytes",
+    "foreign identity rejected",
+    "scope union overlap",
+    "unexpected skip/F1/empty suite rejected",
+    "Drop exact historical assertion only",
+    "cpu.max and POSTE_FILS clamp, missing quota rejected"
+  ]
+}

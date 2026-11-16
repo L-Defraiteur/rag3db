@@ -3,7 +3,7 @@ from pathlib import Path
 import unittest
 import xml.etree.ElementTree as ET
 
-from parse_receipt import (DROP_MESSAGE, DROP_QUERY, RECOVERY_FIXTURE, admit_drop_failure,
+from parse_receipt import (DROP_MESSAGE, DROP_QUERY, RECOVERY_FIXTURE, admit_drop_failure, admitted_cpu,
                            excluded_scope, inspect_outcomes, inspect_raw_identities, verify_attestation)
 
 
@@ -81,6 +81,14 @@ class ReceiptTests(unittest.TestCase):
         ET.ElementTree(root).write(path)
         with self.assertRaises(ValueError):
             inspect_outcomes(path, 'transaction')
+
+    def test_jobs_are_clamped_to_actual_poste_quota(self):
+        self.assertEqual(admitted_cpu('550000 100000', 8), {'jobs': 5, 'quota_percent': 550.0})
+        self.assertEqual(admitted_cpu('200000 100000', 8)['jobs'], 2)
+        self.assertEqual(admitted_cpu('1600000 100000', 16)['jobs'], 8)
+        for value in ['max 100000', '0 100000', '100000 0']:
+            with self.assertRaises(ValueError):
+                admitted_cpu(value, 8)
 
     def drop(self, message):
         case = ET.Element('testcase', classname='transaction~ddl~ddl_empty', name='DropNodeTableReclaim')
