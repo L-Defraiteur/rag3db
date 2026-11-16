@@ -84,6 +84,11 @@ public:
     common::page_idx_t addNewPages(common::page_idx_t numNewPages);
 
     void removePageIdxAndTruncateIfNecessary(common::page_idx_t pageIdx);
+    // Empties a file whose pages never go through the buffer manager's frames (the spill file):
+    // the page count restarts at 0 and the file is truncated, while the capacity and the frame
+    // groups stay for the next pages. Without it, the next pages are added past the old count and
+    // written past the end of the emptied file, which grows sparse.
+    void restartAtPageZero();
     void removePageFromFrameIfNecessary(common::page_idx_t pageIdx);
     void flushAllDirtyPagesInFrames();
 

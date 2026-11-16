@@ -137,6 +137,14 @@ uint8_t* FileHandle::getFrame(page_idx_t pageIdx) {
     return bm->getFrame(*this, pageIdx);
 }
 
+void FileHandle::restartAtPageZero() {
+    std::unique_lock xLck{fhSharedMutex};
+    numPages = 0;
+    if (!isInMemoryMode()) {
+        fileInfo->truncate(0 /* size */);
+    }
+}
+
 void FileHandle::removePageIdxAndTruncateIfNecessary(page_idx_t pageIdx) {
     std::unique_lock xLck{fhSharedMutex};
     if (numPages <= pageIdx) {

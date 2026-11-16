@@ -107,7 +107,8 @@ SpillResult Spiller::claimNextGroup() {
 void Spiller::clearFile() {
     auto curDataFH = getDataFH();
     if (curDataFH) {
-        curDataFH->getFileInfo()->truncate(0);
+        // The handle's page count restarts with the file: the next spill writes from page 0.
+        curDataFH->restartAtPageZero();
     }
 }
 
