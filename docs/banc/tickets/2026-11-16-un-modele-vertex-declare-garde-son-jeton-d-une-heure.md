@@ -80,3 +80,65 @@ RougeCPUfe40/eb026 conservépreuves4d54cf4a47, aucunretry. C7 demande la prépar
 ## Union avant qualification canonique
 
 C7autorise préparationseule ; sourceNEUVEbaseb0,8patches=,4OIDRustidentiquesc38 et8998masterprotégés. [Plan20/audit](../../everything-declarative/16-11-2026/20-union-vertex-et-recette-canonique.md). Budgetproposé5400neufs/UNIQUEtargetrepriscommun/F8+libentière+NAV+lectures/code réels, aucuncanonicaljouéici. CommentaireRustconnect_llm « pris àconnexion/uneheure » restehistoriquementobsolète, consignéavantfuturecorrectiondocumentaire ; pas demutation du codequalifiéCPUc38 danscettereprise. AnciennespreuvesCPUc599 etrouge4d54 conservées, ticketouvert/aucunGOmaster niOAuth/F300.
+
+## Pilote union concret proposé sans qualification
+
+APPunionb472/code4b322 conserve4OIDc38+8998masterhorslot. [Pilote21](../../everything-declarative/16-11-2026/21-pilote-union-vertex.md) :5400proposés/outer5398/common5330,canonicalPARDEFAUTlectures+code/F88/libentière/NAV/7fakes,1TcarryCPUvert/gardescommunes/SDK59/profils/firstred etfinalpostopen,ACKEmbarfreshC7aupointd’usage.8petitsCPUsynthétiquesverts/codepubliéavanttests, aucunnatifjoué. Source/pilote/pinPCàROavantGOdistinct, parentticketOUVERT/pasOAuth/F300/master/retrait.
+
+## Contrôleur union968 : deux assertions de suites mal modélisées, avant tout fix
+
+Constatlecturependantrunexact APPb472/P968, allocationC7-VERTEX-UNION-968-16nov/commonvalidation-7q5oq5_w INITIAL1192303.460980840/END1197633.460980840. Source/piloteACTIFSINCHANGÉS, aucun appel prématuré du juge. Témoins7/0/0 ; lecturesRAWfilets2/0/0 puis27/0/0 avec917filtrés ; codeRAWfilets2/0/0 puis36/0/0 avec908filtrés. Ce sont les précontrôles et filtresinternesMONOBINAIREcontractuels, pas une suite tronquée. Le helperlibrary_summary imposeunrésuméunique et le postassertsuitesfiltered0 seraient donc incorrects pour ceslogs. Défaut DUHARNAIS, pas attribué au produit ; premierrouge natif encoreabsent à1193032.788.
+
+DécisionC7 : laisser CANONIQUEEXACTE déjàautorisée achever sousMÊMEEND/premierrougeréelSTOP, aucuneédition/skip/rerun/reset ; conserver futurverdictcanonique séparément du rougeharnais. ACKservices/PG maintenujusqu’àFIN/STOP+quiet puisrendu. FuturclassificateurRAW pur doit valider types/noms/inventaires/filets+suite etmutants, jamaisprendreledernier partout. Aucun fix appliqué ici, aucune nouvelleautorité ni GOmaster déduit. Cesnotes sont dansunWTdocs SÉPARÉ, pas danslesdeuxWTactifs.
+
+
+## Fin canonique et préparation du classificateur PURE
+
+[Preuves23](../../everything-declarative/16-11-2026/23-preuves-canonique-vertex-et-rouge-controleur.md) : canonique968 VERT/rc0, contrôleur/scope ROUGES sur vraieassertiondeuxrésumés ;54preuves SHA2754…ddde deuxpostes0écart, ressources RENDUES/quiescence sans reste. AncienEND1197633.460980840 EXPIRÉ.
+[Classification24](../../everything-declarative/16-11-2026/24-classification-pure-des-raw-vertex.md) : ancienhelper2FAILréels après correction documentée d'extractionAST ; inventairesRAWfigés après exécution/pasELF--list indépendant ;11fonctionsmutantsVERTES, paquet22réempreinté2posts0écart. Classificateur f2d6845 ne produit qu'une analyse séparée, préserve tous les ROUGES, aucuneautorité/composite/master déduit. PréparationPURE autorisée parC7 sansCargo/DB/ELF/service/cloud/rejeu ; relecture exacte requise avant suite éventuelle.
+
+
+## Avis groupés du classificateur197b60, ticket toujours ouvert
+
+Hotfix/Archi/Banc favorables à la classification PURE des seuls RAW figés ;
+[rapport24](../../everything-declarative/16-11-2026/24-classification-pure-des-raw-vertex.md)
+et [RO Banc18](../16-11-2026/18-ro-classificateur-raw-vertex.md), commits Banc1d667d02ee/b2257d58dd.
+Banc réempreinte22paquet+51RAWnonELF, pas les3ELF ; Hotfix54portable etArchi54deuxpostes sansécart.
+AucunCPUtest/natif rejoué enRO. InventairePOSTEXEC nonindépendant/72ignored,
+ancienENDexpiré/composéRED/scopeROUGE conservés. AjoutDOCgroupé sans delta
+code/paquet197, pas candidate/master/rerun/GO implicite ; C7arbitre la suite.
+
+
+## HOLD Mémoire197b : trois réserves groupées avant correction
+
+C7 retire suffisancePURE et préparationcandidate après ROtotaleMémoire :
+headers running0/malformed ignorés, résumésresume nonliés auxblocs,
+preuveFinishedseule admise sanscrate/chemin/profil. RAW54/paquet22 SHAstables,
+pas invalidité nativeétablie. Trois témoins réels prépubliés dans
+[rapport24](../../everything-declarative/16-11-2026/24-classification-pure-des-raw-vertex.md)
+avantCPU60hermétiqueC7/fixgroupé ; ancien197/891/WTcandidateHEADb472 conservés.
+NouvelleROtotale requise, aucunGOmaster/garde/natif/ancienneborne réactivé.
+
+
+## Trois vrais rouges puis correction groupée, nouvelle RO requise
+
+Tests prépub180dfd2d9c puis3sélectionsréelles chacun1FAIL/0ERROR ;fix groupé
+c88662d673 publié AVANT14fonctionsfailfastVERTES0.376s sousCPU60hermétique.
+[Rapport24/V2](../../everything-declarative/16-11-2026/24-classification-pure-des-raw-vertex.md) : paquet34 SHA5593b7…60d/preparedd625…e794 réempreinté2posts0écart,
+RAW54/inventaire/ancien197+22 immuables ; ROtotalegroupée demandée sans
+reportdesavistroisfavorablesprécédents. HOLDcandidat/master inchangé.
+
+
+## Nouvelles RO totales86 : quatre favorables bornées, C7 distinct
+
+Hotfix/Archi/Banc/Mémoire favorables sur86a131 après correctiongroupée,
+Mémoire lève3P2 et0réserveenfile. [Rapport24](../../everything-declarative/16-11-2026/24-classification-pure-des-raw-vertex.md)
+regroupe leurs portées de réempreinte ; RO Banc2135b33efd/rapport18.
+Code/paquet34 inchangés, avis197 nonreportés ; POSTEXECnonindépendant/
+72NONJUGÉS/composéREDscopeROUGE/ENDexpiré conservés. AjoutDOCSEULE, pas
+suffisance/candidate/master/rerun automatique ; décisionC7 requise.
+
+
+## Candidat neuf après levée HOLD préparation parC7
+
+[Rapport25/auditmodeOID/range](../../everything-declarative/16-11-2026/25-candidat-vertex-identique-source-qualifiee.md) : masterfetchb0inchangé/0entrant, produitstrictAPPb472 et4RustCPUc38, seulementMDaprèsb472. Classificateur/Python/JSON restentbranche86épinglée ; canoniqueoriginaleVERTproposéeàgardenormale, composéRED/scopeROUGEhistoriquesinchangés. CandidatNEUFcx-ed-vertex-integration-r2 avantROfinale/ÀTOIC7 ; aucunegardePush/master/rerun exécutée. TicketOUVERT/limitesOAuthF300/72ignored/POSTEXECconservées.
