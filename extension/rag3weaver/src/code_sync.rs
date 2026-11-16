@@ -403,13 +403,13 @@ fn ecrire_par_generations(
     source_id: &str,
     indexed_path: &str,
 ) -> Result<EcritureParGenerations, String> {
-    let un = FichierAEcrire { source_id: source_id.to_string(), chemin: indexed_path.to_string(), scopes: scopes.to_vec(), fichier };
-    ecrire_le_lot_par_generations(catalog, std::slice::from_ref(&un))
+    let un = FileToWrite { source_id: source_id.to_string(), chemin: indexed_path.to_string(), scopes: scopes.to_vec(), fichier };
+    write_batch_by_generations(catalog, std::slice::from_ref(&un))
 }
 
 /// Un fichier du lot de l'écrivain : son grain, ses scopes analysés (aucun pour un fichier qui part)
 /// et sa rangée `File` analysée (aucune pour un fichier qui part).
-struct FichierAEcrire<'a> {
+struct FileToWrite<'a> {
     source_id: String,
     chemin: String,
     scopes: Vec<&'a crate::code::ScopeRecord>,
@@ -420,16 +420,16 @@ struct FichierAEcrire<'a> {
 /// parent ») : pour chaque table, une lecture des lignes de tous les fichiers du lot, les décisions de
 /// la page 06 (§ 2) fichier par fichier en mémoire, puis un UNWIND par table pour les retraits et les
 /// réouvertures. Les instructions suivent le nombre de paquets, pas celui des fichiers.
-fn ecrire_le_lot_par_generations(catalog: &mut Catalog, fichiers: &[FichierAEcrire]) -> Result<EcritureParGenerations, String> {
+fn write_batch_by_generations(catalog: &mut Catalog, fichiers: &[FileToWrite]) -> Result<EcritureParGenerations, String> {
     let mut e = EcritureParGenerations { noms_retires: Vec::new(), remplacees: Vec::new(), disparues: 0 };
-    let scopes: Vec<(&FichierAEcrire, Vec<(String, String, BTreeMap<String, CypherValue>)>)> = fichiers
+    let scopes: Vec<(&FileToWrite, Vec<(String, String, BTreeMap<String, CypherValue>)>)> = fichiers
         .iter()
         .map(|f| (f, f.scopes.iter().map(|sc| (sc.key.clone(), sc.key.clone(), sc.data())).collect()))
         .collect();
     ecrire_la_table(catalog, SCOPE, "file_path", "key", &scopes, &mut e)?;
     // La ligne `File` suit la même règle (page 06, § 11) : sa clé de naissance est préfixée, une clé de
     // scope et un chemin ne se confondent pas.
-    let lignes_file: Vec<(&FichierAEcrire, Vec<_>)> = fichiers
+    let lignes_file: Vec<(&FileToWrite, Vec<_>)> = fichiers
         .iter()
         .map(|f| {
             let recs = f.fichier.into_iter().map(|r| (crate::code::cle_de_naissance_du_fichier(&r.path), r.path.clone(), catalog.donnees_du_fichier(r))).collect();
@@ -448,7 +448,7 @@ fn ecrire_la_table(
     table: &str,
     champ_du_chemin: &str,
     champ_cle: &str,
-    fichiers: &[(&FichierAEcrire, Vec<(String, String, BTreeMap<String, CypherValue>)>)],
+    fichiers: &[(&FileToWrite, Vec<(String, String, BTreeMap<String, CypherValue>)>)],
     e: &mut EcritureParGenerations,
 ) -> Result<(), String> {
     let v = catalog.generations.clone().ok_or("l'écrivain sans générations")?;
@@ -719,12 +719,12 @@ fn recopier_les_aretes_entrantes(catalog: &mut Catalog, remplacees: &[Remplacee]
 }
 
 fn oublier_les_aretes_du_fichier(catalog: &mut Catalog, source_id: &str, indexed_path: &str) -> Result<(), String> {
-    oublier_les_aretes_des_fichiers(catalog, source_id, &[indexed_path.to_string()])
+    forget_edges_of_files(catalog, source_id, &[indexed_path.to_string()])
 }
 
 /// L'oubli des arêtes des fichiers d'un lot d'une même source : une instruction par relation pour tout
 /// le lot (`file_path IN $paths`), au lieu d'une par fichier.
-fn oublier_les_aretes_des_fichiers(catalog: &mut Catalog, source_id: &str, chemins: &[String]) -> Result<(), String> {
+fn forget_edges_of_files(catalog: &mut Catalog, source_id: &str, chemins: &[String]) -> Result<(), String> {
     if chemins.is_empty() {
         return Ok(());
     }
@@ -1040,16 +1040,16 @@ fn reingest_files_par_generations(
             fichier_par_chemin.entry(crate::workspace_path::slash(&x.path)).or_insert(x);
         }
     }
-    let lot: Vec<FichierAEcrire> = fichiers
+    let lot: Vec<FileToWrite> = fichiers
         .iter()
-        .map(|f| FichierAEcrire {
+        .map(|f| FileToWrite {
             source_id: f.source_id.clone(),
             chemin: f.indexed_path.clone(),
             scopes: if f.present { scopes_par_chemin.get(&f.indexed_path).cloned().unwrap_or_default() } else { Vec::new() },
             fichier: if f.present { fichier_par_chemin.get(&f.indexed_path).copied() } else { None },
         })
         .collect();
-    let e = ecrire_le_lot_par_generations(catalog, &lot)?;
+    let e = write_batch_by_generations(catalog, &lot)?;
     let (mut noms_retires, remplacees, deleted) = (e.noms_retires, e.remplacees, e.disparues);
     crate::ingest_profile::add("réindexer · l'écrivain des générations", t);
     let mut presents_par_source: BTreeMap<&str, Vec<String>> = BTreeMap::new();
@@ -1057,7 +1057,7 @@ fn reingest_files_par_generations(
         presents_par_source.entry(f.source_id.as_str()).or_default().push(f.indexed_path.clone());
     }
     for (source, chemins) in presents_par_source {
-        oublier_les_aretes_des_fichiers(catalog, source, &chemins)?;
+        forget_edges_of_files(catalog, source, &chemins)?;
     }
     let mut rapport = ReingestReport::default();
     if let Some(a) = analysis {
@@ -1734,7 +1734,7 @@ fn synchroniser(
             catalog.defer_blob_push(true);
         }
         // Les naissances par COPY à chaque paquet, la marque de session dans
-        // la ligne : plus de COUNT, de relecture ni de marquage par paquet
+        // la ligne : plus de COMPTE, de relecture ni de marquage par paquet
         // pour une table vide au départ (`Catalog::begin_fresh_ingest`).
         // `RAG3WEAVER_TX_SANS_NAISSANCES=1` le coupe, pour mesurer : le temps
         // qu'il retire aux paquets se retrouvait dans les COMMIT (155 → 157 s,
