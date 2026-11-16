@@ -26,3 +26,22 @@ source.bundle complet et quatre scripts pinés dans recette neuve. Après
 publication/RO du paquet, GO2400 exact distinct obligatoire avant `launch.sh`.
 Anciennes source5099, pilotdb833, recettea31745, Jv1 et preuves38/f067/b678
 restent intacts. Aucun CMake/build/test/poste/unité lancé dans cette préparation.
+
+Après publication du code pilote `b307f74cc21587cb982d6ef44cdb95763f992cba` :
+six tests du parseur synthétiques verts0,002s, AST5 et bash-n/diff-check valides,
+[reçu CPU v2](rows-red-v2-cpu-receipt.json). Cela n'exécute pas le contrôleur,
+ni le C++, ni le callee SHOW_INDEXES, et ne qualifie pas le rouge produit.
+
+Préparation PC fichiers/Git seulement terminée code0, sur deux worktrees
+détachés propres NEUFS :
+`/home/lucied/git_workspaces/cx-hotfixs-rows-outside-graph-source-v2` àsource71,
+`/home/lucied/git_workspaces/cx-hotfixs-rows-outside-graph-pilot-v2` àpiloteb307.
+[Recette exacte copiée du PC](rows-red-v2-prepared-recipe.json) SHA256
+`37e29c250113c12bd4ff0385a1ca06590c41cfa519268c3590bf699223387867`.
+PaquetJv2 `~/.cache/rag3weaver-build/cx-hotfixs-rows-outside-graph-red-v2`,
+source.bundle657545040octets, SHA256
+`42f19dc05811589c8f4180c0c1546e85862e76a1c9f31ab769107a1d747ed280`.
+Bundleverify/listHEAD71 puis rehash indépendant, quatre scripts et trois
+fichiers natifs conformes ; raw/résumé/allocation ABSENTS, scratchv2 VIDE.
+Aucun CMake/build/test C++/poste/systemd ; nouveau couple reste HOLD avant
+RO recette/paquet et GO2400 exact distinct. Ancien Jv1/recettes/preuves conservés.

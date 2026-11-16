@@ -1,0 +1,23 @@
+{
+  "pilot": "b307f74cc21587cb982d6ef44cdb95763f992cba",
+  "source": "71fbe786fcf0b2314e72b3eb4b8484faf590d78c",
+  "synthetic_receipt_tests": 6,
+  "failures": 0,
+  "elapsed_s": 0.002,
+  "ast_files": 5,
+  "bash_n_exit": 0,
+  "diff_check_exit": 0,
+  "scripts_sha256": {
+    "controller.py": "cac256333dea854d2dee6cd7f5b8b5cd79a358db3f468feecb47261ee388a9e0",
+    "entry.py": "7c3aec53840858fbcb69ea4d037695034de1b6c3da56871176e95f191ac32df1",
+    "launch.sh": "bcf6f4719111d9a0c773ff9c53cedfcd13b0f7b8b8a30c3756b96e7d7dc546b0",
+    "prepare.py": "86a858d0214d27892e6f93a462896f589c7e43a74c9372b4aac8d6ac9dcc3b32",
+    "receipt.py": "76fa2c5871152443a83d6542983819ac4dfb0ee56e99fbb96f7036c81284e941",
+    "test_receipt.py": "0c5088fdbdf5f835cc94c9bf730121bddaf90a53fbf542fee9b6b5fe645d1483"
+  },
+  "cpp_compiled": false,
+  "native_execution": false,
+  "systemd_invoked": false,
+  "actual_binder_red_observed": false,
+  "limits": "Parser on synthetic XML/stdout only; no entry/controller or native process qualification."
+}

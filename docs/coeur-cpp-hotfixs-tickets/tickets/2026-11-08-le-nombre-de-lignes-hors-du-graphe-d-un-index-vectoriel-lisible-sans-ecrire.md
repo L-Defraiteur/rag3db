@@ -114,3 +114,10 @@ autorisée d'un [couple/paquet neuf v2](../16-11-2026/08-rows-red-fixture-revise
 reprenant le même pilote : source71/moteur59, seuls pins et chemins privés
 révisés, même juge et mêmes caps2400 proposés. Ancien passage clos conservé,
 aucun reset de budget, autre cas joué ou changement de production.
+
+Pilote neuf b307f74cc21587cb982d6ef44cdb95763f992cba /source71 préparé PC
+fichiers/Git seuls : recette37e29c25...7867 et bundle42f19dc0...d280 publiés,
+quatre scripts/trois fichiers natifs hashés conformes, source/pilote propres,
+raw/résumé/allocation absents et scratchv2 vide. Six témoins synthétiques
+du parseur verts, aucune compilation ou exécution native de source71.
+Attente ROpaquet et admission distincte ; ticket ouvert, aucun FIX produit.
