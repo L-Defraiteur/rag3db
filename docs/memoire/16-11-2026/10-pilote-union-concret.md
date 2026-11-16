@@ -116,3 +116,9 @@ Correction : CounterOK/ignored danslesdeuxlogs, décor shouldpanic normalisé ;
 comptes/cardinalités cohérentes, doublons et chevauchementOK/ignored refusés,
 comparaison multisetavec absents/extras. Snapshotjudge-names-comparison.json
 AVANTrequirequalified. Le reste source/carry/3600/SDK/finalinchangé ; zéroCargo.
+
+Après codeprépub4d8cfe52e1 :6/0témoinsnoms en0,006s timeout20 ; mêmescomptes/
+nomsdifférents, doublons, statutdoubleOK/ignored etligneabsente refusés ;
+permutation/raisonsignored tolérées ; vrai blocdriver sauvegardeavantrefus.
+33autresCPU précédemmentverts inchangés, total39fonctions distinctes.
+Aucunruntime/Cargo/PQSunion, nouveauSHA àRO/GOdistinct C7.
