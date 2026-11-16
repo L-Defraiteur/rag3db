@@ -59,6 +59,26 @@ passe est la même pour toutes (section 4).
 
 ### Entrée 1 — Finir les mots vides de Rust (2 à 3 h)
 
+> **En cours par codeparsers, arrêté le 16 novembre à 11 h (mot de Lucie).** Branches poussées : rag3db
+> `codeparsers/rust-stop-words`, tête **`5ef2935d29`** ; codeparsers `rust-stop-words`, tête **`b48da05`** (le
+> pointeur de la branche rag3db). Où ça en est :
+>
+> - **Les mots vides** (le premier ticket) : faits et verts (témoin `a_rust_call_named_like_a_javascript_keyword_is_a_reference`
+>   vu rouge puis vert ; e2e_usages, e2e_code et codeparsers verts).
+> - **Le std homonyme** (le second ticket) : la règle est écrite dans `code.rs` (chercher « A path into a library
+>   of certain provenance »), témoin `a_path_into_the_standard_library_is_not_a_project_homonym` vu rouge puis
+>   vert. La sonde de sa **première** forme (sans frontière de mot) sur rag3weaver/src : +285 couples justes
+>   (`GenOptions::default()`, `from`…), les 107 `std::env::var` partis, et 248 couples d'avant ôtés, presque tous
+>   des chemins `std::` faux (`std::process::id` 77, `std::fs::remove_file` 49, `std::fs::metadata` 37,
+>   `std::sync::mpsc::channel` 34, `std::fs::copy` 22, `std::env::args` 6) ; 14 étaient une faute de la règle
+>   (`::collect` trouvé dans `::collections`, `::F` dans `::Formatter`). **La forme corrigée** (l'occurrence finit
+>   sur une frontière de mot, et toutes les occurrences de la ligne doivent être des chemins sûrs) est dans la tête
+>   `5ef2935d29` : son témoin est vert, **sa sonde et e2e_usages n'ont pas été rejoués** (arrêtés).
+> - **Ce qui reste** : rejouer la sonde (`tests/sonde_marque_nom.rs`, racines rag3weaver/src et src/ du moteur,
+>   avant = master) et vérifier que les 14 fautes ne partent plus ; lire les couples ôtés ; puis la doc (fermer
+>   les deux tickets avec leurs chiffres, la nouveauté), `REGLES_DE_L_ANALYSE = 8`, la passe complète, et le « prêt »
+>   à l'orchestration. Le Cargo.lock est inchangé.
+
 - **Tickets** : `docs/codeparsers/tickets/2026-11-15-la-liste-des-mots-vides-de-rust-est-une-copie-de-celle-de-javascript.md`
   et `docs/codeparsers/tickets/2026-11-16-un-chemin-de-la-bibliotheque-standard-se-relie-a-un-homonyme.md`.
 - **Où** : reprendre les branches `codeparsers/rust-stop-words` (rag3db) et `rust-stop-words` (codeparsers),
@@ -203,3 +223,10 @@ touche pas.
   poser), jamais l'adresse pro ; aucune attribution d'assistant dans les commits.
 - **Un défaut connu non corrigé a un ticket** sous `docs/codeparsers/tickets/` (famille « produit » ou « moteur »,
   `extension/rag3weaver/scripts/check_tickets.py --lot origin/master` vert).
+
+## État final (16 novembre 2026, 11 h)
+
+Session codeparsers arrêtée au mot de Lucie. Sur master : `REGLES_DE_L_ANALYSE = 7`, pointeur `bd13385`. En
+branche : l'entrée 1 (mots vides de Rust et std homonyme), têtes ci-dessus. Aucune passe ni aucun lourd en cours ;
+les worktrees `~/.cache/rag3weaver-build/wt-stopwords` (la branche de l'entrée 1) et `wt-master-temoin` (au mot
+d'ED) restent, le target `target-import-pointe-pile` aussi (jusqu'au mot de Lucie sur la fin de session).
