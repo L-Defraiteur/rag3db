@@ -94,3 +94,30 @@ séances. Pas de requalification du run perdu ni de correctif produit.
 SourceRustTTY reste inchangée. L'END852082.791694931 est constaté expiré à
 now852108.599496 : aucun run natif possible sur ce budget, aucune nouvelle
 allocation inventée. Prochain paquet RO devra refuser allocation absente/expirée.
+
+## Correctif de harnais publié et témoins observés
+
+Contre-exemple24aef900cb publié avant essai : deux échecs hermétiques réels,
+frame correcte fragmentée refusée par l'oracle raw et ancien texte raw accepté
+malgré écran courant différent. Correctif7daf342c95 : oracles tmux par
+capture-pane déjà présente, protocole answer-approved/reply_to/ended/state
+jugé séparément ; trois objets sont donc distincts : transport, protocole, écran.
+
+Quatre témoins hermétiques passent ensuite : ces deux discriminants, isolation
+append des traces/raw/input/screen/journal entre phases et refus de réutiliser
+un dossier, indépendance du verdict protocole et écran. Aucun terminal, Cargo,
+hôte, tmux ou natif lancé pour ces essais ; le run perdu reste non qualifié.
+
+Trace par séance privée : chunksraw et frappes réellement écrites horodatés,
+commande/env non secrets, journal fauxhôte non supprimé ; captures persistées ;
+fsync aux assertions, aux arrêts normaux et à SIGTERM. Hôte faux local détenu
+par Popen, arrêté via ce propriétaire, aucun nom de processus partagé. Modes
+SSH/mosh conservent leurs oracles historiques raw et ne sont pas requalifiés
+par ce correctif ciblé tmux ; captures tmux hors local restent voie existante.
+
+Paquet `prepare_harness_review.py` prépare copies/hash/sourcepropre, F8porté,
+ELFtty déjà bâti rehashé et sourceRust inchangée (seuls3fichiers mesuresPython
+changent sous extension/rag3weaver). Sa gate native refuse ENDoriginal expiré,
+refuse de transformer préparation en nouvelle allocation ; aucun GO réactivé.
+Avant tout natif futur : revue de l'intégration, commande/env privés et budget
+neuf explicitement décidé par C7, pas de fenêtre inventée dans le paquet.

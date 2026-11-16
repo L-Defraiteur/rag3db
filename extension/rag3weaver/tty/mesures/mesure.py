@@ -76,11 +76,20 @@ def commande(base):
 
 commande_ = commande
 ROOT_DOSSIER = DOSSIER
-OBSERVATIONS = ObservationArchive(ROOT_DOSSIER)
+OBSERVATIONS = ObservationArchive(Path(SORTIE).resolve().parent)
 CURRENT_PHASE = None
 FAKE_PROCESS = None
 FAKE_OUTPUT = None
 TERMINAL_COUNT = 0
+
+
+def sync_before_signal_stop(sig, frame):
+    if CURRENT_PHASE is not None:
+        CURRENT_PHASE.checkpoint(f'signal-stop-{sig}')
+    raise SystemExit(128 + sig)
+
+
+signal.signal(signal.SIGTERM, sync_before_signal_stop)
 
 
 def ecran_tmux(nom=None):
@@ -250,7 +259,7 @@ def rgb(h):
 def hote_demarrer():
     global DOSSIER, CURRENT_PHASE, FAKE_PROCESS, FAKE_OUTPUT
     CURRENT_PHASE = OBSERVATIONS.new_phase()
-    DOSSIER = str(CURRENT_PHASE.path)
+    DOSSIER = str(CURRENT_PHASE.path) if LOCAL else ROOT_DOSSIER.rstrip("/") + "/" + CURRENT_PHASE.path.name
     CURRENT_PHASE.record('host-command', dict(fake=FAUX, port=PORT, local=LOCAL), sync=True)
     if LOCAL:
         FAKE_OUTPUT = open(f"{DOSSIER}/faux.out", 'xb')
@@ -276,6 +285,7 @@ def hote_arreter():
         FAKE_PROCESS.wait(timeout=5)
         FAKE_OUTPUT.close()
     else:
+        CURRENT_PHASE.record('remote-journal-snapshot', dict(text=ssh(f'cat {DOSSIER}/journal.jsonl 2>/dev/null')), sync=True)
         ssh(f"kill -TERM $(cat {DOSSIER}/faux.pid) 2>/dev/null")
     CURRENT_PHASE.checkpoint('after-host-stop')
 

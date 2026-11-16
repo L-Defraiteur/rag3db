@@ -19,5 +19,6 @@ evidence = Path(output).parent
     'replacement_count': 1, 'state_path': state,
     'only_change': 'ETAT_TTY private path; no HOME modification, scenarios unchanged',
 }, indent=2))
+sys.path.insert(0, str(path.parent))  # helpers from this exact harness source
 sys.argv = [source, 'local', binary, fake, fixture, themes, output, 'tmux-local-ouvert']
 exec(compile(patched, source, 'exec'), {'__name__': '__main__', '__file__': source})
