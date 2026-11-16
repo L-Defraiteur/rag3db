@@ -37,3 +37,10 @@ nouvelle entrée seulement après arbitrage du reste/budget par C7.
 
 Fin : preuve d'entrée correcte puis qualification réelle complète ou nouveau
 rouge attribué ; ce ticket ne ferme pas le lot produit ni n'autorise master.
+
+## Correctif publié avant test
+
+Profil magasin explicite et témoin du vrai résolveur dans la branche
+`cx-ed-stable-tie-qualifier-r2`, [rapport06](../16-11-2026/06-correctif-pilote-ties-magasin.md).
+Code et témoin NON JOUÉS lors de cette publication, rouge v1 inchangé.
+Admission corrective bornée au RESTE ENDv1 après poste, pas à7200 neufs.
