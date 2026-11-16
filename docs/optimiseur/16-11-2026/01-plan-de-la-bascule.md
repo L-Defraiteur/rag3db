@@ -218,3 +218,36 @@ l’égalité de l’archive ne promet pas un rebâti après relocalisation des 
 Originaux worktrees/target conservés, aucun nettoyage ni fermeture de backend.
 Les services restent réservés au porteur pour la future fenêtre explicitement
 qualifiée ; aucune maintenance verte ni migration déduite de ces faits.
+
+### Fenêtre froide PC adaptée — 16 novembre, 12 h 29
+
+À12h20 l’API avait changé de PID et ne connaissait plus aucun backend ; la
+précondition de fermeture par alias a refusé AVANT tout POSTclose. Reçu privé
+`diagnostic-code-principal-20261116-122008/`, aucun writer ouvert pour contourner.
+C7 a adapté et Arbre publié le plan360bcd75db avant action : arrêt API7970PC
+seule/service+socket, principal puis lourd sans réveil entre deux, aucune
+maintenance API déclarée verte et aucune CLI par G.
+
+Préavis≥60s, état immédiatement avant arrêt PID3761669/starttime117390374,
+0backend ; arrêt à12:29:14, deux unitésinactive/dead/MainPID0. Portable,
+embarquement et tunnels inchangés. Preuve FD/maps accessibles et verrous noyau
+sur les deux bases/latéraux sans référence ; processus système protégés non
+inspectables explicitement listés, aucun prétendu droit ptrace global.
+Reçus PC `~/.cache/optimiseur-notes/bascule-16nov-927/pc-cold-window-20261116-122721/`,
+complément après arrêt `post-stop-quiescence.json`, aucun nouvel HTTP7970.
+
+Snapshot diagnostique FRAIS principal :
+`~/.local/share/rag3weaver/instantanes/diagnostic-code-principal-20261116-122933/`.
+733entrées, source avant/après et copie même arbreSHA
+ca7e52e6e4483a0785a1d0e3bf72491748f8ec33fec80ce1eee8f587ce9c130e ;
+identités source strictement inchangées. Reçu `code-principal/fresh-receipt.json`
+SHA e21599096e1a6b93ea120fbddaae5dfcf7c9508a060a5e4a9e1aa3cc917d02f1,
+retour72h. Arbre reprend ensembles/générations/deuxsens sur nouvelle copie,
+aucune ancienne qualification reportée ; cli_authorized=false.
+
+Le retour préparé préserve aussi les nouveaux voisins (dont un WAL né après
+snapshot), après rouge/vert sur fixtures privées. La recette initiale est
+conservée ; générateur non corrigé en ticket
+`docs/optimiseur/tickets/2026-11-16-le-retour-d-un-snapshot-oublie-les-voisins-crees-apres.md`.
+Aucune restauration réelle exécutée. Nettoyage worktree/target G différé par c7
+jusqu’à fin de cette fenêtre froide, sans retrait de données ni de preuves.
