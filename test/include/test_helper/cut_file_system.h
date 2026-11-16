@@ -151,7 +151,7 @@ public:
 
     // Synchronise les entrées du répertoire `dir` : les suppressions en attente se font, les
     // créations en attente prennent leur nom.
-    void syncDirectory(const std::string& dir) const {
+    void syncDirectory(const std::string& dir) const override {
         std::lock_guard lck{entriesMtx};
         const auto inDir = [&](const std::string& path) {
             return std::filesystem::path(path).parent_path() == std::filesystem::path(dir);

@@ -50,7 +50,19 @@ std::unique_ptr<FileInfo> VirtualFileSystem::openFile(const std::string& path, F
     if (compressionType == FileCompressionType::AUTO_DETECT) {
         compressionType = autoDetectCompressionType(path);
     }
-    auto fileHandle = findFileSystem(path)->openFile(path, flags, context);
+    auto* fileSystem = findFileSystem(path);
+    // A file this open creates gets its name made durable: without the sync of its directory, a
+    // power cut can take the name of a new data file or journal away, with every commit in it
+    // (ticket 2026-10-04-durabilite-sur-faute-d-entree-sortie-ou-coupure). Only for the local file
+    // system, the one databases live on.
+    const bool mayCreate =
+        flags.flags & (FileFlags::CREATE_IF_NOT_EXISTS | FileFlags::CREATE_AND_TRUNCATE_IF_EXISTS);
+    const bool creates =
+        mayCreate && fileSystem == defaultFS.get() && !fileSystem->fileOrPathExists(path, context);
+    auto fileHandle = fileSystem->openFile(path, flags, context);
+    if (creates) {
+        fileSystem->syncDirectory(std::filesystem::path(path).parent_path().string());
+    }
     if (compressionType == FileCompressionType::UNCOMPRESSED) {
         return fileHandle;
     }
@@ -102,6 +114,10 @@ int64_t VirtualFileSystem::readFile(FileInfo& /*fileInfo*/, void* /*buf*/, size_
 void VirtualFileSystem::writeFile(FileInfo& /*fileInfo*/, const uint8_t* /*buffer*/,
     uint64_t /*numBytes*/, uint64_t /*offset*/) const {
     KU_UNREACHABLE;
+}
+
+void VirtualFileSystem::syncDirectory(const std::string& dirPath) const {
+    findFileSystem(dirPath)->syncDirectory(dirPath);
 }
 
 void VirtualFileSystem::syncFile(const FileInfo& fileInfo) const {

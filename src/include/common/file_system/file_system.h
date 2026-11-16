@@ -91,6 +91,10 @@ public:
 
     virtual void syncFile(const FileInfo& fileInfo) const = 0;
 
+    // Makes the entries of a directory durable: a file created in it keeps its name through a power
+    // cut. A no-op for a file system without directories to sync.
+    virtual void syncDirectory(const std::string& /*dirPath*/) const {}
+
     virtual bool canPerformSeek() const { return true; }
 
     virtual bool handleFileViaFunction(const std::string& /*path*/) const { return false; }
