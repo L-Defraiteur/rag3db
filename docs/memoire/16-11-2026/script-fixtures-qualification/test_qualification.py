@@ -1,5 +1,5 @@
 """Pure witnesses; only private temporary files, no Cargo, signals or /proc."""
-import importlib.util,json,tempfile,unittest
+import importlib.util,json,tempfile,unittest,types
 from pathlib import Path
 from unittest.mock import patch
 spec=importlib.util.spec_from_file_location('fixture_qualification',Path(__file__).with_name('qualify.py'))
@@ -44,4 +44,28 @@ class Qualification(unittest.TestCase):
             with patch.object(m,'P',p),patch.object(m,'S',s),patch.object(m,'guard'),patch.object(m,'scan',return_value=observed),patch.object(m.time,'monotonic',return_value=101):
                 self.assertEqual(m.finalize({},0),1)
             self.assertEqual(json.loads((p/'composed-result.json').read_text())['status'],'RED')
+    def exercise_real_run(self,historical,active):
+        with tempfile.TemporaryDirectory(prefix='cx-watcher-test-') as tmp:
+            root=Path(tmp);proofs=root/'proofs';proofs.mkdir();cache=proofs/'cache/builtin';cache.mkdir(parents=True)
+            (cache/'llm-gemini.log').write_text(historical)
+            calls=[]
+            def popen(args,**kwargs):
+                calls.append(args);kwargs['stdout'].write(active);kwargs['stdout'].flush()
+                return types.SimpleNamespace(poll=lambda:0,wait=lambda:0)
+            with patch.object(m,'P',proofs),patch.object(m,'T',root/'absent-target'),patch.object(m,'C',root),patch.object(m.subprocess,'Popen',side_effect=popen):
+                try:
+                    result=m.run('canonical-pass',['current-command'],{},m.time.monotonic()+100,60)
+                    m.run('second-lib',['next-command'],{},m.time.monotonic()+100,60)
+                    return result,len(calls)
+                except RuntimeError:
+                    self.assertEqual(len(calls),1,'failure must stop before next invocation')
+                    raise
+    def test_real_run_ignores_embedded_historical_failed_log(self):
+        result,calls=self.exercise_real_run('test historical ... FAILED\n','current output\n')
+        self.assertEqual(result,'current output\n');self.assertEqual(calls,2)
+    def test_real_run_detects_active_failed_log_before_next_invocation(self):
+        with self.assertRaises(RuntimeError):self.exercise_real_run('','test current ... FAILED\n')
+    def test_real_run_preserves_active_expected_should_panic(self):
+        _,calls=self.exercise_real_run('',"thread 'fixture' panicked at expected\ntest fixture ... ok\n")
+        self.assertEqual(calls,2)
 if __name__=='__main__':unittest.main(failfast=True)
