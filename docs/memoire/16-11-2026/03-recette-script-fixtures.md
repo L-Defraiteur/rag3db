@@ -1,17 +1,17 @@
 # Qualification des scripts de fixture — couple proposé
 
 [Ticket existant](../tickets/2026-11-15-un-temoin-de-codex-rougit-sur-text-file-busy-sous-la-charge.md).
-Source gelée `ff37eb82e52aa733503f3bf60fbf7a4d052ead85`, branche
-`cx-memoire-script-fixtures-r3`, base `f83c6c4dd6a40200883c6325326f093ecdba3e23`.
+Source gelée `734087a4e99d54331aac2f6321df9ef6da3b6d9c`, branche
+`cx-memoire-script-fixtures-r4`, base `d395cb1f03f84c6abdfa023a0e3c7f87a7c0dab6`.
 Six patches range-diff égaux depuis r2 ; changement Rust dans cfg(test) seulement.
-Pilote séparé `cx-memoire-script-fixtures-pilot-r1`, produit identique à APP.
+Pilote séparé `cx-memoire-script-fixtures-pilot-r2`, produit identique à APP.
 Aucun Cargo/rustc/target/service lancé pendant cette préparation. GO couple exact
 et créneau réservés à C7, pas d'héritage des anciennes autorisations.
 
 ## Admission et commande
 
 Préparer par Git seul les deux worktrees PC propres et le gitlink exact APP :
-`~/git_workspaces/cx-memoire-script-fixtures-r3` et un W pilote séparé.
+`~/git_workspaces/cx-memoire-script-fixtures-r4` et un W pilote séparé.
 Ne pas basculer/reconfigurer les hôtes927. Le pilote ne lance ni CLI7970 ni manager.
 Après RO et GO exact C7 seulement, depuis le W pilote :
 
@@ -62,3 +62,13 @@ Témoins Python hermétiques prépubliés avant exécution : parse de résumés 
 refus zéro/échec/doublons, should_panic vs first-red, chemin/ELF exact/symlink,
 deadlineégalité, premier rouge immutable, finalisation après deadline refusée.
 Leurs résultats futurs ne qualifient pas le helper Rust ni la passe canonique.
+
+## Actualisation avant gel
+
+C7 impose le master ties `d395cb1f03f84c6abdfa023a0e3c7f87a7c0dab6` :
+source r4 NEUVE `734087a4e99d54331aac2f6321df9ef6da3b6d9c`, six patches
+range-diff égaux. Pilote r2 NEUF ; r1 jamais lancé, ne vaut aucun GO.
+Les huit fonctions hermétiques prépubliées4cef0f8ae9 ont passé en0,002s sous
+timeout20, Python-B, aucune lecture /proc réelle ni signal/process/Cargo.
+La fonction de finalisation publie bien RED quand le temps simulé est expiré.
+Nouvelle constante source/W/base propagée explicitement avant la RO finale.

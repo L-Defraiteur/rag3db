@@ -3,8 +3,8 @@
 from pathlib import Path
 import argparse, hashlib, json, os, re, shutil, stat, subprocess, sys, time
 
-APP = 'ff37eb82e52aa733503f3bf60fbf7a4d052ead85'
-BASE = 'f83c6c4dd6a40200883c6325326f093ecdba3e23'
+APP = '734087a4e99d54331aac2f6321df9ef6da3b6d9c'
+BASE = 'd395cb1f03f84c6abdfa023a0e3c7f87a7c0dab6'
 REL = 'docs/memoire/16-11-2026/script-fixtures-qualification/qualify.py'
 PIN = 'rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF'
 SO = {'librag3db.so':'b7e9fc75a3d2de04c72680b0309e8bb1df9eaadb5211ebbacf39716c6d0a2101',
@@ -12,7 +12,7 @@ SO = {'librag3db.so':'b7e9fc75a3d2de04c72680b0309e8bb1df9eaadb5211ebbacf39716c6d
 PASS_SHA = '2150fcd847b1df7de04908d357a0c78abc05e50ce599e2793ff08ab48108825d'
 FEATURES = 'rag3db-native,burn-embedder,burn-ocr,code,daemon,postgres,openai-llm,anthropic-llm'
 R = Path.home()/'.cache/rag3weaver-build'
-W = Path.home()/'git_workspaces/cx-memoire-script-fixtures-r3'
+W = Path.home()/'git_workspaces/cx-memoire-script-fixtures-r4'
 C = W/'extension/rag3weaver'
 T = R/'target-cx-memoire-script-fixtures'
 P = R/'cx-memoire-script-fixtures-qualification-v1'

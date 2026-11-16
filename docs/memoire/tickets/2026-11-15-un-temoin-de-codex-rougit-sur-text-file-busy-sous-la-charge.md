@@ -91,3 +91,9 @@ F8/NAV. Résumé canonique intact, deuxième journal et verdict composé sépar�
 Arrêt premier rouge, cleanup par confineur, contrôles frais après hashes et
 avant publication, autorité terminée/bus absent/quiescence. Aucun manager
 7970/base de Lucie requis. Préparation ne vaut pas GO ni qualification Rust.
+
+Gel corrigé après entrant ties C7 : branche NEUVE r4, source734087a4e99d54331aac2f6321df9ef6da3b6d9c
+base d395cb1f03f84c6abdfa023a0e3c7f87a7c0dab6, six patches égaux ;
+pilote NEUF r2 porte même qualification7200. R1 jamais lancé, aucun reçu.
+Huit fonctions Python hermétiques vertes0,002s, pas qualification Rust.
+[Recette concrète03](../16-11-2026/03-recette-script-fixtures.md).
