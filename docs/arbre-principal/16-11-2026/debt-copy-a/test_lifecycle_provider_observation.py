@@ -130,6 +130,7 @@ class Observation(unittest.TestCase):
                 self.process = dict(self.pins['expected_process'], state='S')
                 self.after_get = lambda k=key,v=value:self.process.update({k:v})
                 self.evidence = self.root/('process-'+key+'.json')
+                self.dest = self.root/('process-'+key+'-grant.json')
                 self.refused()
 
     def test_wrong_process_before_health_does_not_contact_provider(self):
