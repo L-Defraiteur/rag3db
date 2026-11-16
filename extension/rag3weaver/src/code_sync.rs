@@ -2278,3 +2278,7 @@ mod registry_key_tests {
     }
 }
 
+
+#[cfg(all(test, feature = "rag3db-native"))]
+#[path = "code_sync_fts_guard_double_tests.rs"]
+mod fts_guard_double_tests;
