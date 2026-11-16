@@ -1,0 +1,41 @@
+{
+  "status": "PREPARED ONLY; EXACT RO AND C7 ADMISSION REQUIRED; NOT EXECUTED",
+  "source_commit": "5099a367ddf1e48db2b4065d91a61403de994571",
+  "engine_commit": "59ac9c86bc2b3529b590a7462ab7051e3ad26b8a",
+  "base": "df2a5789888d16247f0dad42dcdaa3c4ceea2094",
+  "pilot_commit": "db833d135cbceb3319424f1619f219e64bfd1fc0",
+  "source_root": "/home/lucied/git_workspaces/cx-hotfixs-rows-outside-graph-source-v1",
+  "unit": "cx-hotfixs-rows-red-01",
+  "scripts": {
+    "entry.py": "378673d1c330d0cd444ead112e41fbef91a4325537ef6a0e20541b3dd47289d8",
+    "controller.py": "cac256333dea854d2dee6cd7f5b8b5cd79a358db3f468feecb47261ee388a9e0",
+    "receipt.py": "113254aa262798b9c2eec291f53b203ebe5ed85f66c8ec7323ea782571f1d3ae",
+    "launch.sh": "4b3768fcf8439eb441827e74e9db6bff27f6f28ff0423aea7c30019527bdcd4f"
+  },
+  "bundle_sha256": "69688d86790e6ef6b3d5552deee8ae8af5995b492a05e73ce898c2dc2aa42ba3",
+  "bundle_bytes": 657484714,
+  "native_files": {
+    "test/transaction/vector_index_diagnostics_test.cpp": "c468c928fc1fcb1eaae0dd1388c7852e62bc902d53538463572ed68c2b95db92",
+    "test/transaction/CMakeLists.txt": "fc4efe04bd5987c504571acc7944881963978634f2735839f8980a87b4f31393",
+    "src/function/table/show_indexes.cpp": "8a0ed9ba91be136593ec1c4671737e0b02ad388593e717c86b9b0fd45a32fd06"
+  },
+  "global_cap_s": 2400,
+  "watchdog_term_s": 2390,
+  "watchdog_kill_s": 10,
+  "controller_end_s": 2310,
+  "native_end_s": 2330,
+  "finalization_end_s": 2380,
+  "phase_caps_s": {
+    "staging": 60,
+    "configure": 120,
+    "build": 1800,
+    "red": 30
+  },
+  "memory_bytes": 34359738368,
+  "swap_bytes": 0,
+  "scratch_bytes": 34359738368,
+  "jobs": "min(8, POSTE_FILS, floor(effective admitted quota))",
+  "final_summary": "ROUGE",
+  "product_green": false,
+  "retry": false
+}

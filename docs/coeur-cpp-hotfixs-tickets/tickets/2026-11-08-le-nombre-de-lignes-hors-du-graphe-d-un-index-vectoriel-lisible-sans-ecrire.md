@@ -84,3 +84,9 @@ Pilote concret préparé ensuite sur branche/worktree distinct
 2400s après vrai poste, unité privée bornée, un seul appel réel SHOW_INDEXES
 attendu rouge au binder, résumé final toujours ROUGE. Préparation PC et run
 NON FAITS ; recette hashée/RO/admission séparées avant tout lourd. Aucun FIX.
+
+Préparation privée PC faite ensuite, autorisation C7 fichiers/Git seulement :
+source5099/pilotedb833 détachés propres, bundle69688d86...42ba3 (657484714octets),
+recette exacte a31745c5...ef44d [publiée](../16-11-2026/rows-red-prepared-recipe.json).
+Quatre scripts rehashés conformes, raw/résumé/allocation absents et scratch vide.
+Aucun CMake/test/build/poste/systemd ; rouge natif toujours NON OBSERVÉ, aucun FIX.

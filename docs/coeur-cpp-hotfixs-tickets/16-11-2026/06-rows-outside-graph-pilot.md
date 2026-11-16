@@ -24,7 +24,7 @@ python3 docs/coeur-cpp-hotfixs-tickets/16-11-2026/rows-red/prepare.py \
 
 Ce script ne prend aucune place, ne lance ni système natif, ni unité, ni service.
 Il crée `~/.cache/rag3weaver-build/cx-hotfixs-rows-outside-graph-red-v1` et un
-répertoire vide `cx-hotfixs-rows-red`. Préparation PC NON FAITE à la publication.
+répertoire vide `cx-hotfixs-rows-red`. Préparation PC initialement NON FAITE à la publication du code ; réalisée ensuite en fichiers/Git seuls selon le relevé ci-dessous.
 Pas de lecture du SDK/hôte59, de base Lucie, d'API7970 ni de clef.
 
 ## Commande sous admission exacte, pas exécutée
@@ -100,3 +100,28 @@ valides, diff-check sans erreur. [Reçu CPU et empreintes](rows-red-cpu-receipt.
 Ces six témoins exécutent seulement le parseur sur XML/stdout fabriqués ; ni
 entry/controller, processus natif, supervision réelle, bundle PC ou base exécutés.
 Il ne s'agit pas d'un rouge produit avant FIX, ni d'une qualification native.
+
+## Préparation privée PC faite, toujours sans run
+
+Après autorisation explicite C7 de Git/copies/hashes/paquet seulement : deux
+worktrees détachés privés créés, sans toucher aux branches des arbres existants :
+
+- source `/home/lucied/git_workspaces/cx-hotfixs-rows-outside-graph-source-v1`,
+  HEAD `5099a367ddf1e48db2b4065d91a61403de994571`, statut propre ;
+- pilote `/home/lucied/git_workspaces/cx-hotfixs-rows-outside-graph-pilot-v1`,
+  HEAD `db833d135cbceb3319424f1619f219e64bfd1fc0`, statut propre.
+
+`prepare.py` de ce SHA a terminé code0. [Recette PC copiée exactement](rows-red-prepared-recipe.json)
+SHA256 `a31745c578c38bc93a8cf25366ca72019121cede92a42b6d388f73a900aef44d`.
+Paquet `~/.cache/rag3weaver-build/cx-hotfixs-rows-outside-graph-red-v1/source.bundle`,
+657484714octets, SHA256
+`69688d86790e6ef6b3d5552deee8ae8af5995b492a05e73ce898c2dc2aa42ba3`.
+`git bundle verify` réussi et `list-heads` donne uniquement source5099/HEAD.
+
+Relecture indépendante sur PC après préparation : bundle réhashé conforme,
+quatre scripts conformes aux SHA de recette, seuls ces scripts/recipe/bundle
+dans le dossier. `raw/`, `resume.log` et `allocation.json` ABSENTS ; scratch
+`~/.cache/rag3weaver-build/cx-hotfixs-rows-red` présent VIDE. Aucun target partagé,
+copie de base, SDK ou service touché. Aucun CMake, build, test C++, poste lourd,
+allocation ou systemd appelé. Le paquet et le pilote restent HOLD pour revue
+externe et GO2400 exact distinct ; aucun lancement déduit de la préparation.
