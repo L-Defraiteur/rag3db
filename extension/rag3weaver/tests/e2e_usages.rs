@@ -1250,3 +1250,19 @@ fn a_return_through_a_twice_defined_function_takes_the_imported_one() {
     assert_eq!(cibles_vers(&cat, "works", "hosted"), vec![("DaemonHost".to_string(), "type".to_string())]);
 }
 
+/// **A Rust call named like a JavaScript keyword is a reference** (ticket « la liste des mots vides de Rust
+/// est une copie de celle de JavaScript », 16 November 2026): `Settings::default()` calls the project's
+/// `impl Default for Settings`; `default` is a JavaScript keyword, not a Rust one, and must not be dropped.
+#[test]
+#[ignore]
+fn a_rust_call_named_like_a_javascript_keyword_is_a_reference() {
+    let catalog = setup();
+    let fichiers = vec![
+        ("src/settings.rs".to_string(), "pub struct Settings;\nimpl Default for Settings {\n    fn default() -> Self { Settings }\n}\n".to_string()),
+        ("src/main.rs".to_string(), "use crate::settings::Settings;\npub fn start() {\n    let s = Settings::default();\n}\n".to_string()),
+    ];
+    catalog.lock().unwrap().ingest_code(&analyze("/projet", fichiers)).unwrap();
+    let cat = catalog.lock().unwrap();
+    assert_eq!(cibles_vers(&cat, "start", "default"), vec![("Settings".to_string(), "type".to_string())]);
+}
+
