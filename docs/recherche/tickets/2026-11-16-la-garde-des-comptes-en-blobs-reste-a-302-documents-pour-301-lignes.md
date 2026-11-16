@@ -110,3 +110,7 @@ Branche/WTneufs cx-recherche-fts-generation-global-pilot-r3, ancien333/Qv2prése
 ## Frontière PGv1 avant assertionsconsumercomplémentaires
 
 API G validate_attestation(path,SHA,allocation,READYnormalisé,now,admission,admitted_at) attenduecopieSTRICTpg_receipt.py/hashpg_receipt_sha256 ; owner intègreASOFadmissionfiable etactiveleasecoreactualnow. Consumerdoitassert owner_pins.admitted_monotonic==grant.observed_monotonic(typeclockfinite), sourcepg_receipt_sha256==Qmodulepinné ; pas d'ASOF fabriqué parconsumer. Ajouter6etémoinVRAIowner_pins/mockfichiers avantcesasserts,puiséventuelCPUpur60bornépostpublication, pasSQL/PGtool/runtime. AucunQfinaltantqueSHAG/ownerfinal instables.
+
+## Trois fichiers PG stricts et chargement différé, avant raccordfinal
+
+Gpg_receipt.py dépend identity.sql/backend-postcheck.sql :QfinaldoitcopierSTRICTles3 etconsumercompareclés pg_receipt_sha256/pg_identity_sql_sha256/pg_postcheck_sql_sha256 AVANTimportPG. Rendreownerchargementdifféréaprèsowner_pins (sixsources98ab/c530/owner/PGpy/2SQL), aucunelectureSQLimportanticipée. TestsCPUfixturefichiersàétendreaux2SQL+loaderfictif ; fichiersGfinaltoujoursabsents,aucunsubstitut. Embarprévenu,mêmeAPIobservations/PGownerartifactrevalidé etoutilPGHOLD.
