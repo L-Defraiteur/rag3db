@@ -1282,3 +1282,31 @@ fn a_path_into_the_standard_library_is_not_a_project_homonym() {
     assert_eq!(marques_vers(&cat, "home", "var"), Vec::<String>::new(), "std::env::var is std's");
 }
 
+
+/// The library path and a bare project call share a line, but not an occurrence.
+#[test]
+#[ignore]
+fn a_standard_library_path_does_not_hide_a_bare_project_call_on_the_same_line() {
+    let catalog = setup();
+    let files = vec![
+        ("src/local.rs".to_string(), "pub fn var(name: &str) -> String { name.to_string() }\n".to_string()),
+        ("src/config.rs".to_string(), "use crate::local::var;\npub fn mixed() { let _ = std::env::var(\"HOME\"); let _ = var(\"X\"); }\n".to_string()),
+    ];
+    catalog.lock().unwrap().ingest_code(&analyze("/project", files)).unwrap();
+    let cat = catalog.lock().unwrap();
+    assert_eq!(cibles_vers(&cat, "mixed", "var").len(), 1, "the project call must remain visible");
+}
+
+/// The reverse order and UTF-8 indentation must not change the chosen occurrence.
+#[test]
+#[ignore]
+fn a_bare_project_call_before_a_library_path_on_the_same_line_remains_visible() {
+    let catalog = setup();
+    let files = vec![
+        ("src/local.rs".to_string(), "pub fn var(name: &str) -> String { name.to_string() }\n".to_string()),
+        ("src/config.rs".to_string(), "use crate::local::var;\npub fn mixed() { /* é */ let _ = var(\"X\"); let _ = std::env::var(\"HOME\"); }\n".to_string()),
+    ];
+    catalog.lock().unwrap().ingest_code(&analyze("/project", files)).unwrap();
+    let cat = catalog.lock().unwrap();
+    assert_eq!(cibles_vers(&cat, "mixed", "var").len(), 1, "the project call must remain visible");
+}
