@@ -2182,6 +2182,10 @@ pub struct EmbedWatch {
     /// Ce que l'embarqueur dit de sa provenance (replié, carte pleine sans
     /// repli), noté après chaque passe : lu par l'état d'index hors du verrou.
     pub provenance_state: Mutex<Option<String>>,
+    /// Texts cut to the service's cap, already written in the index journal.
+    pub char_cuts_reported: std::sync::atomic::AtomicUsize,
+    /// Texts truncated by the model (in tokens), already written in the index journal.
+    pub token_cuts_reported: std::sync::atomic::AtomicUsize,
 }
 
 impl EmbedWatch {

@@ -305,7 +305,11 @@ pub fn stop_indexings_of(catalog: &Arc<Mutex<Catalog>>) -> usize {
 pub fn new_index_journal() -> std::io::Result<std::path::PathBuf> {
     let dir = super::run_nodes::dossier_journaux().join("index");
     std::fs::create_dir_all(&dir)?;
-    let path = dir.join(format!("{}-{}.out", crate::dataflow::checkpoint::timestamp_ms(), std::process::id()));
+    // A process-wide counter as well : two indexes started in the same millisecond
+    // by the same process would otherwise share one journal (16 November 2026).
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let path = dir.join(format!("{}-{}-{n}.out", crate::dataflow::checkpoint::timestamp_ms(), std::process::id()));
     std::fs::write(&path, "")?;
     Ok(path)
 }
@@ -323,6 +327,33 @@ fn dire_la_provenance(catalog: &Catalog, journal: &std::path::Path, watch: &Embe
         log(journal, &format!("provenance des vecteurs : {}", parts.join(" ; ")));
     }
     *watch.provenance_state.lock().unwrap_or_else(|p| p.into_inner()) = catalog.embedder_provenance_state();
+    // **What was cut, said here** (c7, 16 November 2026) : the catalog's warning
+    // goes to its event bus, which this journal does not read. Only what is new
+    // since the last pass is written.
+    if let Some((name, chars, tokens)) = catalog.embedder_cuts() {
+        let fresh = |reported: &std::sync::atomic::AtomicUsize, total: usize| {
+            let before = reported.swap(total, std::sync::atomic::Ordering::SeqCst);
+            total.saturating_sub(before)
+        };
+        if let Some((total, cap)) = chars {
+            let n = fresh(&watch.char_cuts_reported, total);
+            if n > 0 {
+                log(journal, &format!(
+                    "{n} texte(s) coupé(s) à {cap} caractères avant l'envoi au service « {name} » : ce qui dépassait \
+                     n'est pas cherchable par le vecteur ; la ligne reste entière en base"
+                ));
+            }
+        }
+        if let Some((total, limit)) = tokens {
+            let n = fresh(&watch.token_cuts_reported, total);
+            if n > 0 {
+                log(journal, &format!(
+                    "{n} texte(s) tronqué(s) à {limit} jetons par « {name} » : ce qui dépassait n'est pas cherchable \
+                     par le vecteur ; la ligne reste entière en base"
+                ));
+            }
+        }
+    }
 }
 
 fn log(journal: &std::path::Path, line: &str) {

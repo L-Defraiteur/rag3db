@@ -554,6 +554,13 @@ impl Catalog {
         self.embedder.as_ref().map(|e| (e.provenance_counts(), e.provenance_events())).unwrap_or_default()
     }
 
+    /// **What the embedder cut** : its name, the texts cut in characters to its
+    /// service's cap `(count, cap)`, and the texts truncated by the model
+    /// `(count, tokens)`, both cumulated ; `None` without an embedder.
+    pub fn embedder_cuts(&self) -> Option<(String, Option<(usize, usize)>, Option<(usize, usize)>)> {
+        self.embedder.as_ref().map(|e| (e.name().to_string(), e.char_truncations(), e.troncatures()))
+    }
+
     /// Ce que l'état d'index dit de l'embarquement : replié, ou carte pleine sans repli.
     pub fn embedder_provenance_state(&self) -> Option<String> {
         self.embedder.as_ref().and_then(|e| e.provenance_state())
