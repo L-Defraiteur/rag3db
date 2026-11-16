@@ -1496,7 +1496,7 @@ mod tests {
 
     #[test]
     fn reading_the_rate_address_never_starts_an_on_demand_provider() {
-        let f = a_la_demande(8, 4);
+        let f = a_la_demande(60, 30);
         let (client, _) = connect_embedder(&f.source).unwrap();
         assert!(client.distant());
         assert_eq!(client.called_address(), None);

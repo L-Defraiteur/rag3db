@@ -80,3 +80,19 @@ conservées pour les appels explicites, mesures automatiques sous clé neuve.
 Aucun élargissement à la table/mesure par passe. Aucun Cargo/test/service/GPU
 avant fin de la fenêtre G/Arbre et nouvelle recette ; les rouges hérités restent
 les seuls rouges déjà exécutés. Anciennes autorisations et échéances caduques.
+
+
+### Correctif de clé préparé, non qualifié
+
+Branche `cx-rate-key-20261116-r1`, correctif e0c5dbfdd25a6fd70b417c2f9f3cdd3178c015e1
+poussé après contrat3e3187b53d et compléments de testsff24e447b8. C7 confirme
+la conservation des API historiques explicites. Cinq chemins réservés seulement,
+aucune édition des chemins ED Vertex ou de index_nodes.rs. Les trois rouges
+hérités ont été relus dans `rate-key-red.out` :0/3/0, causes attendues
+(ancienne écriture, local absent, adresse confondue). Les nouveaux témoins ne
+sont pas encore joués ; aucun vert ou compilation n'est prétendu.
+
+Les compléments vérifient adresse inconnue distante, isolement adresse/poste,
+changement de prise, relai Arc et lecture de l'adresse d'une activation non
+ouverte sans la démarrer ; fixture Python et faux embarqueurs uniquement.
+Aucune qualification avant « FINI G », nouvelle recette et source courante.
