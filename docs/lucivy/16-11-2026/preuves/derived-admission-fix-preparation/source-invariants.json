@@ -1,0 +1,20 @@
+{
+  "parent": "81b0e74f0254c8216864f90a460f8969842432ed",
+  "source": "1ee5b366ca67d7fe6926da232a6650d1b1d81407",
+  "panel_declaration_sha256": "240fd8d0fe3ab20cf5f49dabc3ada55a3d59d56b642c6bc1ed9308b551538c4a",
+  "negative_fifty_sha256": "7c06d6de24a87d3d561c6b25b1feb1f1800ba87f7b28bb1bf2b7447eae4348e5",
+  "unchanged_query_declarations": true,
+  "unchanged_negative_fifty": true,
+  "unchanged_test_names": [
+    "missing_panel_is_rejected_before_any_builder",
+    "loader_error_is_not_an_empty_corpus_or_no_hit",
+    "invalid_utf8_is_not_silently_replaced_or_dropped",
+    "strict_unicode_folding_maps_to_original_bytes",
+    "relaxed_spans_cross_separators_without_losing_offsets",
+    "underscore_is_a_boundary_but_a_content_suffix_is_not",
+    "regex_keeps_nonempty_original_byte_spans",
+    "fuzzy_uses_the_existing_occurrence_definition_on_admitted_bytes",
+    "oracle_decode_failure_is_distinct_from_zero_matches"
+  ],
+  "scope": "static source invariants only; positive memory fixture and error probes added inside existing judges; no Rust execution"
+}

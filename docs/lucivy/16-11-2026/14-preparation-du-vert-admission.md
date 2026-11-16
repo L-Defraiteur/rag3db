@@ -1,0 +1,90 @@
+# Gate corrigé — proposition de neuf juges mémoire, aucun vert Rust encore joué
+
+Ticket existant complété AVANT le diff :
+`docs/lucivy/tickets/2026-11-16-indexed-false-est-ignore-pour-un-champ-texte.md`.
+Rouge réellement observé et publié9a64654e7f, ROpreuvesBanc c195a6e5fd favorable
+bornée (35SHA conformes) ; C7 autorise ensuite ce correctif de TESTS.
+
+## Source corrective et limites
+
+APP **1ee5b366ca67d7fe6926da232a6650d1b1d81407**, publiée sur
+origin/cx-lucivy-corpus-admission, parent81b0. Deux fichiers de tests changés,
+aucune API ou dépendance produit. Worktree portable cx-lucivy-corpus-admission.
+Aucun Cargo/Rust/ELF/judge joué depuis ce correctif.
+
+with_derived_fixture conserve les octets de la vue chargée, valide UTF8, prépare
+les onze requêtes et cherche un témoin nonvide pour chacune via les cœurs
+communs, **avant** d’appeler le builder. Les absences sont collectées et nommées
+par label+valeur, pas seulement la première. La liste vide de spans est une
+absence ; erreur Read, Utf8 ou Query (pattern/oracle) est une cause distincte,
+jamais convertie en « aucun résultat ». Regex préparée une fois, RustRegex
+insensible à la casse, spans vides exclus ; literal/relax/fuzzy/frontières se
+composent avec les primitives du parent, sans nouveau moteur.
+
+PreparedQuery est limité aux modes contains(content) du panel déclaré. Il ne
+prétend pas interpréter tout QueryConfig. La définition floue reste partagée
+avec le moteur, distincte du chemin index. Les enveloppes FS/lossy de ground_truth
+et le loader historique restent inchangés ; **pas d’admission physique FS déjà
+qualifiée**. Aucun corpus, ordre, seuil de quantité, common::usable, fallback
+ou assertion de référence nonvide ne change dans cette correction.
+
+[Invariants statiques](preuves/derived-admission-fix-preparation/source-invariants.json) :
+onze QueryConfig/déclarations identiques (SHA240fd8...), mock négatif50return0
+identique (SHA7c06d6...), neuf noms de juges identiques. Le témoin initial garde
+son compteur0 attendu, maintenant refus précis avant builder, avec vérification
+d’absences multiples et du retour couvert. Un contrôle **positif mémoire distinct**
+couvre les onze requêtes et exige le passage au builder une seule fois, pour
+écarter un faux correctif « toujours rejeter ». Il ne remplace aucun des50
+négatifs et ne sélectionne aucun fichier du corpus réel. Les probes de pattern
+invalide et décodage sont renforcés dans les juges existants, hors du panel fixe.
+
+RO Recherche exacte1ee5 favorable bornée, aucun blocage source : modes/raccord,
+causes d’erreur, refus négatif et positif séparé cohérents ; pas de compilation,
+exécution ou qualification des neuf juges déduite de cette lecture.
+
+## Pilotes proposés avant exécution
+
+`outils/qualify-derived-admission-green.py` SHA
+**6c701601a5057285c36420d964288060ed20da75173d359aa2f6ca553f9ae023** ;
+admission `outils/admit-derived-admission-green.py` SHA
+**22550ba19b772c120892cd8fcdf7fbfc8c60708251728e5419680cc8c08426af**.
+SOURCE1ee5, anciens Common588652/start119729720 TERMINE101 et ELF rouge7c6f.
+Copie RO de cet ELF requise avant compilation, aucun ancien SHA exigé sousT
+après son remplacement ; copies et preuves précédentes sont conservées.
+
+Même target unique3552/marker5a1671, pas un autre target par essai. WPC sera
+avancé fast-forward vers1ee5 dans sa branche propre après fetch, jamais l’arbre
+principal de Lucie. Q neuf prévu
+`~/.cache/rag3weaver-build/cx-lucivy-derived-admission-green-16nov-v1`.
+Nonce/scope/logs neufs et préflight à figer/publier après ces scripts ; aucun
+ancien GO600/615 ou deadline ne peut être réactivé.
+
+Proposition pour respecter le plafond~300MAX demandé : **enveloppe dure300s**
+(TERM295+kill5), validation **285s** START après vrai poste incluant préflight,
+Common pour le reste moins2, pas de reset. Mémoire32G/HIGHmax/swap0, quotaCPU4,
+jobs<=4/affmoins2/quota hiérarchique, parent bash cwdQ/noclobber.
+
+Le pilote reprend les gardes7833 (AST des fonctions publish/budget statiquement
+identiques, aucun test supplémentaire exécuté pour le vérifier). Flux :
+
+1. Contrôles frais source/copies/nonce/UID/inode/marker/oldReceiptTERMINE/ELFRO,
+   scans owned/attribués, UNKNOWN nonattribués conservés avec relevé avant assert.
+2. Compiler offline release **sans run** les mêmes trois targets mémoire/derived/
+   ground_truth ; écrire et fsync le ledger3ELF avant tout inventaire, puis les
+   trois inventaires/ignorés et leur ledger complet avant les tests.
+3. Neuf appels --exact, neuf noms publiés identiques, un thread chacun, mémoire
+   seulement : chaque juge doit donner1pass/0fail/0ignored/8filtered. Le juge
+   antérieurement rouge est premier. Ces filtres sont par appel : à la fin les
+   neuf fonctions auront été jouées, aucun « ignoré » repeint en vert.
+4. Premier processus ou assertion inattendu STOP sans retry. Aucune requête,
+   donnée négative, assertion de spans ou de référence n’est assouplie pour
+   rattraper un vert. Les deux corps de tests natifs sont seulement compilés et
+   inventoriés, jamais joués, sans index/builder natif ni corpus réel.
+5. Rehashphysique3ELF/HEAD/propreté/copies/préflight et publication contrôlée
+   avant/aprèsopen/avantdump/aprèsflush sous le mêmeEND. Résultat provisoire
+   jusqu’à Common terminé/nettoyé et scan final owned après retour.
+
+Aucun juge vert encore observé. Assemblage metadata du paquet puis RO Banc du
+pilote/préflight et GO exact distinct C7 requis. NeufHOLD/full_core=false,
+physiqueFS/corpus réels, Linux7.2/ULP, anciens trois warnings, PR42/main/tag
+conservent leurs limites. Les preuves et ELF rouges sont conservés deux postes.

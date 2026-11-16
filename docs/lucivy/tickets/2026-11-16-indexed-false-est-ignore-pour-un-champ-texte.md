@@ -432,3 +432,26 @@ Rapport13+brutsderived-admission-red-81b0 publiés, avecELF/ledger/inventaire/
 expectedred/finCommon/owned et archivesprivées2hosts vérifiées. ActionROBanc
 preuvesseules surceGO615, sansRust/Cargo/ELF/procscan/base/service ; retourlié
 aumêmeticketavanttouteconclusiondedelivery. AucunfixcouvertureRundéduit.
+
+C7 autorise APRÈSpreuvespubliées9a64654e7f le correctifTESTS du gatePANEL
+avant scratch/builder. Porterwith_derived_fixture sur cœurscommunsdéjàextraits,
+conserver11QueryConfig/50mocknégatif/seuilquantité/ordre/corpus etrefnonvide.
+Absencehit distincte IO/pattern/UTF8, refusprécis regroupantrequêtesnoncouvertes.
+PublierAPPfix/difftestborné, neufjugesMEMOIRE(inclUnicode/backmap/fuzzy/regex),
+proposerphaseverteplafond~300MAXaprèsROetGOdistinct. Deuxbuildersnatifset
+corpusréelsrestentNONJOUÉS ;aucunGO615réactivé/core/9HOLD/ULP7.2/PR42changé.
+Contrôlepositifmémoire distinct àajouterauxneuffonctionsexistantespourrefuser
+unfauxfix 'toujoursrejeter', sansmodifierlemock50négatif ou11configs.
+
+ROpreuvesBanc c195a6e5fd favorableauSEULrougediscriminant9a64654e7f,
+35SHAconformes(pas36entréeshorsmanifest),compile32.20s/invent9-1-12/ordreledgers
+cohérent,ticksPIDpas microhorloge, fin101ownedquiet/11UNKNOWNbornés. Aucunrun
+parBanc,aucun deliverydéduit. Correctifsource testéNONJOUÉ publié1ee5b36 sur
+origin/cx-lucivy-corpus-admission : preparedqueries/oraclespursgateavantbuilder,
+4causesRead/Utf8/Query/Uncovered,11configs/50négatif9noms inchangésstatique.
+Contrôlepositifmémoire distinctempêche'rejettout',patterninvalideseparé/erreur
+décodage≠nohit ajoutésdans9jugesexistants. AucunCargo/native/vertjoué.
+RORechercheNOUVELLESOURCEàfaire avantGOvert distinct ; actionportéesurmême
+ticketavanttransmission. PropositionenveloppeDURE300(TERM295+kill5),validation
+285STARTaprèsPosteinclpréflight/Commonreste-2,3ELFcompile/listpuis9exactsMEMOIRE,
+zérobuildernatif/corpusréel. Aucuneancienneautorité/GO615réutilisée.
