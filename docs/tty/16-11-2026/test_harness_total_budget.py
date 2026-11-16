@@ -33,7 +33,7 @@ def execute_real_finalization_tail(root):
     context = dict(Q=q,P=p,T=target,W=root,args=types.SimpleNamespace(source='fixture'),
                    config=dict(controllers={},carried={},sdk={},elf='fixture',elf_sha='fixture'),
                    start=time.monotonic(),end=time.monotonic()+0.2,record=dict(verdict='ROUGE'),
-                   rc=2,json=json,sys=sys,time=time,Path=Path,math=harness_only.math,
+                   rc=2,env={},json=json,sys=sys,time=time,Path=Path,math=harness_only.math,
                    subprocess=types.SimpleNamespace(run=lambda *a,**k:types.SimpleNamespace(returncode=0)),
                    snapshot=blocked_final_snapshot,require_hashes=lambda *a:{},scan=lambda *a:dict(found=[]),
                    require_source=lambda *a:None,production_identity=lambda:None,
