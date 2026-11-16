@@ -1,0 +1,23 @@
+{
+  "package": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-indexed-warning-16nov-v2",
+  "uid": 1000,
+  "package_inode": 164532587,
+  "package_device": 55,
+  "nonce": "3552903efab590b44f44cd8002f7b028",
+  "worktree": "/home/lucied/git_workspaces/cx-lucivy-indexed-false-warning-16nov",
+  "target": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov",
+  "output": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-indexed-warning-16nov-v2/logs",
+  "scope": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-indexed-warning-16nov-v2/scope",
+  "target_absent": true,
+  "package_initial_state": "absent_observed_before_copy",
+  "scope_absent": true,
+  "output_absent": true,
+  "source": "0c795f99e5f49926a510971c521eb056a4880adc",
+  "copy_hashes": {
+    "qualify-indexed-false-red.py": "0a269dd90b0ca745811713e21f66b45fda563074bfc06dd6993f04ab03bd2352",
+    "admit-indexed-false-red.py": "32c7e0936e6ad29f83224c948856851a78f622fa1f5c4cbb4fbea5a4cda2835c",
+    "support/confiner_validation.py": "6439fdd8b52c85fa4e74af0def2c667ef0bedae9b814cbbfd48e49946c4f74ea",
+    "support/poste": "79e3a8bbf457e3bc9104aa1558e7d03072216c70b68e08ae606ace6aa4584c7b"
+  },
+  "observed_at": 1794833928.3019059
+}

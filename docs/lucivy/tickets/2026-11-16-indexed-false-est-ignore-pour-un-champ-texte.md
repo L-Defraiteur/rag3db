@@ -64,3 +64,11 @@ Recette bornée publiée pour RO puis GOslot :
 vraiposte/32G-HIGHmax/j4, compilationoffline+inventaire+exact1configpure.
 Rougeassertion attendu distingué compilation/inventaire/confinement ; aucun
 lancement effectué. Corpus7.2/PR42 restent deux blocages distincts noncontournés.
+
+Suite RO C7 : chemins concrets/PQS et4hashes copiés préparés sur luciepc,
+précontrôle `preuves/indexed-warning-preflight-v2.json`, targetABSENT et P/scope
+ABSENTS, Qneuf UID1000 et nonce de provenance. Pilote refuse les composants
+symlink sansresolve, créeT/provenance exclusivement et abaisse j4 au quotaCPU
+hiérarchique réel. Admission600 aprèsvraiposte avec END conservé, commande
+littérale sansplaceholder dans recette05. Supportd395 copies privées, aucun
+cache déployé modifié. Aucun Cargo/build/test joué ; attend admissionexactefinale.

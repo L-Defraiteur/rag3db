@@ -25,29 +25,51 @@ logs/PQS neufs `cx-lucivy-indexed-warning-16nov-v1` horsW. Aucun téléchargemen
 Cargo offline ; dépendance manquante = erreur de compilation, pas TDDrouge.
 Pas de corpus, ABSENT_OK refusé, aucun service/7970 ni modèle/baseLucie.
 
-## Commande exacte candidate au slot, PAS exécutée
+## Chemins matérialisés et précontrôle (aucun Cargo)
 
-Préparer les copies support et source lors du GO exact, vérifierSHA/mod es,
-worktreepropre, cibleprivée et absence d’autre détenteur ; ne pas prendre le
-target de l’ancienne session. Dans le worktreePC :
+[PrécontrôlePC](preuves/indexed-warning-preflight-v2.json) :
+- Q `/home/lucied/.cache/rag3weaver-build/cx-lucivy-indexed-warning-16nov-v2`,
+  créé neuf, UID1000, dev55/inode164532587, poste mode755 ;
+- W `/home/lucied/git_workspaces/cx-lucivy-indexed-false-warning-16nov`, branchecx
+  neuve depuis0c795f99 et propre ;
+- T `/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov`, **ABSENT**,
+  aucune adoption d’un ancien target ;
+- P `/home/lucied/.cache/rag3weaver-build/cx-lucivy-indexed-warning-16nov-v2/logs`,
+  **ABSENT**, et scope sous mêmeQ `/scope` **ABSENT** ;
+- nonce de provenance `3552903efab590b44f44cd8002f7b028` (pas un jeton d’autorité).
+
+Le paquetv1 de préparation, jamais admis/lancé, est conservé. Le v2 corrige la
+lecturecpu.max à la racine cgroupv2 sans contrôleur racine et fige le couple.
+Hashes copiés et vérifiés avant tout build :
+- qualify-indexed-false-red.py `0a269dd90b0ca745811713e21f66b45fda563074bfc06dd6993f04ab03bd2352` ;
+- admit-indexed-false-red.py `32c7e0936e6ad29f83224c948856851a78f622fa1f5c4cbb4fbea5a4cda2835c` ;
+- support/confiner_validation.py `6439fdd8b52c85fa4e74af0def2c667ef0bedae9b814cbbfd48e49946c4f74ea` ;
+- support/poste `79e3a8bbf457e3bc9104aa1558e7d03072216c70b68e08ae606ace6aa4584c7b`.
+
+Le précontrôle par lstat rejette T/P existants et tout composant symlink,
+au lieu de les masquer avec resolve. Il vérifie UID/nonce/inodeQ/hashes4copies.
+L’admission refait ces contrôles APRÈS vrai poste, crée scope neuf+provenance
+et END=START+600, puis exec le confineur pour le reste entier moins2s, aucun
+reset. Le pilote vérifie receipt/scope/nonce et crée T avec mkdir exclusif,
+markerprovenance nonce/UID/source ; logs neufs exclusifs. Le quota cpu.max est
+relu sur toute hiérarchie du scope, jobs=min(4,allowedmoins2,quotaentier),
+minimum1job si quota fractionnaire ; le cap4 est donc abaissé si quota<4.
+La compilation prend ce même nombre dans -j et CARGO_BUILD_JOBS.
+
+## Commande littérale candidate au GO final, PAS exécutée
 
 ```bash
-POSTE_MEM_MAX=32G RAG3WEAVER_BUILD_MEMORY_HIGH=0 SUPPORT/poste lourd timeout --signal=TERM --kill-after=5s 610 python3 SUPPORT/confiner_validation.py lancer --delai 600 --preuves P_SCOPE_NEUF -- python3 PILOTE_FIGE/qualify-indexed-false-red.py --worktree WORKTREE_0C --target /home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov --output P_LOGS_NEUF
+POSTE_MEM_MAX=32G RAG3WEAVER_BUILD_MEMORY_HIGH=0 /home/lucied/.cache/rag3weaver-build/cx-lucivy-indexed-warning-16nov-v2/support/poste lourd timeout --signal=TERM --kill-after=5s 610 python3 /home/lucied/.cache/rag3weaver-build/cx-lucivy-indexed-warning-16nov-v2/admit-indexed-false-red.py
 ```
 
-Les chemins SUPPORT/PILOTE/P/W seront matérialisés et figés au GOslot ; les
-commandes intérieures du pilote sont fixées :
-
-```bash
-cargo test --offline --release -j4 -p lucivy-core --test test_text_field_indexed_false --no-run --message-format=json-render-diagnostics
-EXECUTABLE_ATTESTE --list --exact unsupported_text_indexing_options_are_reported_once_per_field
-EXECUTABLE_ATTESTE --exact unsupported_text_indexing_options_are_reported_once_per_field --nocapture
-```
-
-Le pilote atteste l’exécutable produit (chemin sous target etSHA), source et
-propreté, inventaireexact1 ; compile/inventaire/test en brutsdirectfichiers,
-identitésPID/start. Même reçuactif/end avant/après chaque phase et posthash.
-Harddeadline et arrêt des descendants/quiescence restent au confineurcommun.
+Cette admission transmet les chemins W/T/P/scope ci-dessus au pilote figé et
+au helper de SHA explicite. Pas de scope systemd imbriqué ni d’ancien reçu.
+La commandeCargo est --offline --release -jN -p lucivy-core --test
+ test_text_field_indexed_false --no-run --message-format=json-render-diagnostics,
+N issu du quota réel. Puis l’exécutable attesté est inventorié --list --exact
+unsupported_text_indexing_options_are_reported_once_per_field, et joué une
+fois avec --exact et --nocapture. ExécutableSHA/source/receiptEND/identités
+et bruts conservés ; harddeadline et quiescence au confineur commun.
 
 ## Verdicts distincts
 
