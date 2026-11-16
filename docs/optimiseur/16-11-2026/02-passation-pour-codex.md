@@ -189,7 +189,7 @@ deux tiennent sous 24 Gio, le défaut passe à 32G ; sinon, le ticket se ferme s
   `~/.cache/rag3weaver-build/poste lourd`, une mesure par `poste mesure`. On ne tue que ses propres pids (`$!`),
   jamais par motif.
 
-## État final de G (16 novembre 2026, 11 h), au mot de Lucie : arrêt
+## État final de G (16 novembre 2026, 10 h 15), au mot de Lucie : arrêt
 
 - **Entrée en cours** : aucune. G n'a commencé aucun des sept lots de la partie 2 : ils sont entiers pour Codex.
 - **Branches** : toutes poussées. Chaque lot de G est sur master ; ses branches (`required-suites`,
