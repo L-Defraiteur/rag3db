@@ -15,6 +15,8 @@ def capture_cache_contract(config,git,digest):
         record['marker']=dict(identity=identity(marker),owner=marker.read_text().strip())
         record['previous_files']={name:digest(previous/name) for name in
             ['supervisor/autorite.json','supervisor/verdict.json','driver/ledger.json','manifest.json']}
+        manifest=json.loads((previous/'manifest.json').read_text())
+        record['manifest_entries']={name:manifest[name] for name in ['supervisor/autorite.json','supervisor/verdict.json','driver/ledger.json']}
         authority=Path(config['previous_authority']);verdict=authority.parent/'verdict.json'
         record['live_previous_files']={name:dict(identity=identity(path),sha256=digest(path)) for name,path in [('authority',authority),('verdict',verdict)]}
         auth=json.loads(authority.read_text())
@@ -29,11 +31,13 @@ def capture_cache_contract(config,git,digest):
 
 def verify_cache_contract(record,expected):
     assert 'capture_error' not in record,record.get('capture_error')
-    for key in ['target','marker','previous_files','live_previous_files','authority','scope','elf','old_worktree']:
+    for key in ['target','marker','previous_files','manifest_entries','live_previous_files','authority','scope','elf','old_worktree']:
         assert record[key]==expected[key],'changed cache contract: '+key
     assert stat.S_ISDIR(record['target']['mode']) and record['target']['uid']==os.getuid()
     assert stat.S_ISREG(record['marker']['identity']['mode']) and record['marker']['identity']['uid']==os.getuid()
     assert stat.S_ISREG(record['elf']['identity']['mode']) and record['elf']['sha256']==record['elf']['ledger_sha256']
+    for name,value in record['manifest_entries'].items():
+        assert record['previous_files'][name]==value,'qualified manifest mismatch: '+name
     for name,archived in [('authority','supervisor/autorite.json'),('verdict','supervisor/verdict.json')]:
         live=record['live_previous_files'][name]
         assert stat.S_ISREG(live['identity']['mode']) and live['identity']['uid']==os.getuid()
