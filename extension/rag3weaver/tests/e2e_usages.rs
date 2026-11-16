@@ -1128,6 +1128,7 @@ fn two_bases_defining_the_name_are_not_guessed() {
     catalog.lock().unwrap().ingest_code(&analyze("/projet", fichiers)).unwrap();
     let cat = catalog.lock().unwrap();
     assert_eq!(cibles_vers(&cat, "run", "reset"), Vec::<(String, String)>::new(), "two bases define reset: no guess");
+}
 
 /// **A member of an external object is not a homonym of the project** (ticket « un membre externe platform
 /// se lie à un homonyme », 11 November 2026): `process.platform` in a Node test is the member of Node's global
