@@ -45,3 +45,7 @@ Source187 figée, GO distinct C7 et pilote3a528b67921f3c3b698e6d6db593bf8d4f8345
 ## Rouge pending distinct — prérequis non levé
 
 C7 a demandé le témoin préfixe1f816 seul avant le fixpending. Pilotec306, compilation29.058sOK, unique0/1/0 MAIS échec de fixture avant snapshot : main n’est pas une dérivée par contenu admissible de Document. Rapport08, archives26PC/local0écart manifest19c174ee157c7720299fba7560005fcb4b777572f6b18b25b66c2a315ea2bcdb. PremierrougeSTOP/reçu terminé/restes[]/poste libre, target conservé, aucunretry/qualificationa92. Corriger fixtureContent/from/render/champscompatibles ET juges utilisant ce mapping avant nouvelle admission distincte ; aucun rouge pending observé pour l’instant.
+
+## Rouge pending atteint, schéma validé
+
+Rapport09 : sourcepréfixec1b10a4993650a82e0cac9d40f4cb3567a0593d9 sansfixpending, pilote5a2c42444a. Compilation29.316sOK ; unique0/1/0 après marker des validateurs réels, assertpendingDocument→main échoue au point attendu. **Prérequis rouge pending levé**, sans attribuer ce statut au rouge setup précédent. Archives27PC/local0écart manifeste456493b004107ace9d7adfc908a00fc4b0f0edfc98a7bdd737356cc292373606 ; scopeROUGE101/restes[]/nettoyé/reçu terminé/poste libéré, target gardé. Aucun autre juge ni qualification verte automatique. Finale à composer du préfixe Content validé et du fixpendinga92, puis RO/source exacte/admission distincte.
