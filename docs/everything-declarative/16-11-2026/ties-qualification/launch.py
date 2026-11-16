@@ -15,9 +15,9 @@ BASE = '68590270e21d00285b29800bd9cdecf0cb921461'
 R = Path.home() / '.cache/rag3weaver-build'
 W = Path.home() / 'git_workspaces/rag3db-cx-ed-stable-tie-identity-r2'
 C = W / 'extension/rag3weaver'
-Q = R / 'cx-ed-ties-controller-20261116-v2'
-P = R / 'cx/ed-ties-59ac-r2-v2'
-S = R / 'cx-ed-ties-confinement-20261116-v2'
+Q = R / 'cx-ed-ties-controller-20261116-v3'
+P = R / 'cx/ed-ties-59ac-r2-v3'
+S = R / 'cx-ed-ties-confinement-20261116-v3'
 T = R / 'target-cx-ed-stable-tie-identity'
 ORIGINAL_END = 1180927.964331921
 ORIGINAL_START = ORIGINAL_END - 7200
@@ -55,16 +55,15 @@ def main():
     assert T.is_dir() and T.resolve() == T and T.stat().st_uid == os.getuid()
     assert (T / '.arbre-du-target').is_file() and not (T / '.arbre-du-target').is_symlink()
     assert (T / '.arbre-du-target').read_text().strip() == str(C)
-    assert not any(T.rglob('.fingerprint')), 'v1 stopped before Cargo; no artifacts expected'
-    previous = R / 'cx/ed-ties-59ac-r2-v1'
+    previous = R / 'cx/ed-ties-59ac-r2-v2'
     old_authority = json.loads((previous / 'authority-path.json').read_text())
-    assert old_authority['deadline'] == ORIGINAL_END
+    assert old_authority['deadline'] <= ORIGINAL_END
     assert json.loads(Path(old_authority['path']).read_text())['etat'] == 'termine'
     old_scope = json.loads((Path(old_authority['path']).parent / 'verdict.json').read_text())
     assert old_scope['verdict'] == 'ROUGE' and not old_scope['restes'] and old_scope['nettoye']
     assert json.loads((previous / 'configuration.json').read_text())['app'] == APP
-    assert 'exact-0' in json.loads((previous / 'first-red.json').read_text())['reason']
-    assert 'cache/rag3db-libs' in (previous / 'exact-0.log').read_text()
+    assert 'builtin-templates' in json.loads((previous / 'first-red.json').read_text())['reason']
+    assert '== lib' in (previous / 'official/resume.log').read_text()
     cache = R / 'passe_epinglee.sh'
     assert digest(cache) == PIN and stat.S_IMODE(cache.stat().st_mode) == 0o755
     source_pin = subprocess.check_output(['git', '-C', str(W), 'show', BASE + ':tools/poste/passe_epinglee.sh'])
@@ -92,7 +91,7 @@ def main():
                   target=str(T), proofs=str(P), scope=str(S), lib=LIB, lib_hashes=LIB_HASHES,
                   pass_sha256=PIN, controllers=files, budget=7200, library_store=str(store),
                   original_start=ORIGINAL_START, original_end=ORIGINAL_END,
-                  target_started_absent=False, target_same_owner=True,
+                  target_started_absent=False, target_same_owner=True, poste_sha256=digest(C / 'scripts/poste'),
                   previous_red_sha256=digest(previous / 'first-red.json'),
                   previous_configuration_sha256=digest(previous / 'configuration.json'))
     path = Q / 'prepared.json'
