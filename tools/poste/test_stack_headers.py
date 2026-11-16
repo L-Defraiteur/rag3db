@@ -25,9 +25,10 @@ class StackHeaders(unittest.TestCase):
         self.git('init', '-q')
         self.commit('base.md', 'base', 'base')
         self.before = self.git('rev-parse', 'HEAD')
+        self.commit('extension/rag3weaver/src/header.rs', 'fn tested() {}', 'code')
+        self.code = self.git('rev-parse', 'HEAD')
         for i in range(13):
             self.commit(f'docs/{i}.md', str(i), f'doc {i}')
-        self.commit('extension/rag3weaver/src/header.rs', 'fn tested() {}', 'code')
         self.tested = self.git('rev-parse', 'HEAD')
 
     def git(self, *args):
@@ -54,9 +55,6 @@ class StackHeaders(unittest.TestCase):
             wrapper.chmod(0o755)
             env['PATH'] = str(bin_dir) + os.pathsep + env['PATH']
         else:
-            raw = self.git('range-diff', '--no-color', '--creation-factor=100',
-                           f'{self.before}..{self.tested}', f'{self.before}..{target}')
-            # strip() ôte le padding initial : relire sans cette transformation.
             raw = subprocess.check_output([GIT, 'range-diff', '--no-color',
                   '--creation-factor=100', f'{self.before}..{self.tested}',
                   f'{self.before}..{target}'], cwd=self.root, env=env, text=True)
@@ -69,6 +67,8 @@ class StackHeaders(unittest.TestCase):
                                 timeout=10)
         self.assertEqual(result.returncode, expected_rc, result.stdout)
         self.assertIn(message, result.stdout)
+        if not expected_rc:
+            self.assertEqual(result.stdout.count('  = égal :'), 14, result.stdout)
         if expected_rc:
             self.assertNotIn('pile tenue :', result.stdout)
 
@@ -80,15 +80,22 @@ class StackHeaders(unittest.TestCase):
         self.judge('HEAD', 1, 'un commit ajouté après le rejeu touche autre chose')
 
     def test_padded_missing(self):
-        self.judge('HEAD~1', 1, "son patch n'est pas sur master")
+        self.git('checkout', '-q', '--detach', self.before)
+        self.git('cherry-pick', f'{self.code}..{self.tested}')
+        self.judge('HEAD', 1, "son patch n'est pas sur master")
 
     def test_padded_changed(self):
-        (self.root / 'extension/rag3weaver/src/header.rs').write_text('fn tested() { changed(); }\n')
-        self.git('commit', '-qam', 'code modifié', '--amend')
+        self.git('checkout', '-q', '--detach', self.before)
+        self.commit('extension/rag3weaver/src/header.rs', 'fn tested() { changed(); }', 'code modifié')
+        self.git('cherry-pick', f'{self.code}..{self.tested}')
         self.judge('HEAD', 1, 'a changé hors des .md')
 
     def test_no_headers(self):
         self.judge(self.tested, 1, 'aucun en-tête', 'exit 0')
+
+    def test_malformed_header(self):
+        self.judge(self.tested, 1, 'en-tête range-diff invalide',
+                   "printf '  1: not-a-hash = 1: also-invalid subject\\n'; exit 0")
 
     def test_range_diff_failure(self):
         self.judge(self.tested, 1, 'range-diff a échoué', 'exit 42')

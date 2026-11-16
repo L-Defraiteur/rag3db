@@ -93,16 +93,21 @@ verifier_pile() {
   git merge-base --is-ancestor "$avant" "$teste" || { echo "ARRÊT : la tête d'avant ($avant) n'est pas un ancêtre du commit testé ($teste)"; return 1; }
   apporte=$(code_apporte "$avant" "$maitre")
   [ -z "$apporte" ] || { echo "ARRÊT : la pile a changé — master a du code que la tête d'avant n'avait pas :"; echo "$apporte"; return 1; }
-  local ancien signe nouveau
+  local ancien signe nouveau range_output header_count=0
+  local header_pattern='^[[:blank:]]*([0-9]+|-):[[:blank:]]+([[:xdigit:]]+|-+)[[:blank:]]+([=!<>])[[:blank:]]+([0-9]+|-):[[:blank:]]+([[:xdigit:]]+|-+)([[:blank:]].*)?$'
   echo "range-diff jugé ($(git rev-parse --short "$avant")..$(git rev-parse --short "$teste") contre $(git rev-parse --short "$maitre")..$(git rev-parse --short "$tete")) :"
   # --creation-factor=100 : un petit commit dont seule une ligne de .md a changé (un fichier créé devenu un fichier
   # modifié par un conflit résolu) serait sinon vu « < » puis « > », deux commits sans rapport.
+  # Les corps de patch ne sont pas des en-têtes ; leur comparaison reste faite ci-dessous.
+  range_output=$(git range-diff --no-color --no-patch --creation-factor=100 "$avant..$teste" "$maitre..$tete") || {
+    echo "ARRÊT : range-diff a échoué"; return 1;
+  }
   while IFS= read -r ligne; do
     [ -n "$ligne" ] || continue
-    # Une ligne d'en-tête : « 1:  <ancien> <signe> 1:  <nouveau> <sujet> » ; les lignes de diff qui suivent un `!`
-    # commencent par une espace et sont sautées.
-    case "$ligne" in [0-9-]*:*) ;; *) continue ;; esac
-    ancien=$(echo "$ligne" | awk '{print $2}'); signe=$(echo "$ligne" | awk '{print $3}'); nouveau=$(echo "$ligne" | awk '{print $5}')
+    # Git aligne les ordinaux sur la largeur maximale, y compris les « -: ».
+    [[ "$ligne" =~ $header_pattern ]] || { echo "ARRÊT : en-tête range-diff invalide : $ligne"; return 1; }
+    ancien=${BASH_REMATCH[2]}; signe=${BASH_REMATCH[3]}; nouveau=${BASH_REMATCH[5]}
+    header_count=$((header_count + 1))
     case "$signe" in
       =) echo "  = égal : $ligne" ;;
       '>')
@@ -124,7 +129,8 @@ verifier_pile() {
         fi ;;
       *) echo "ARRÊT : le lot n'est plus celui qui a été testé : $ligne"; return 1 ;;
     esac
-  done < <(git range-diff --no-color --creation-factor=100 "$avant..$teste" "$maitre..$tete")
+  done <<< "$range_output"
+  [ "$header_count" -gt 0 ] || { echo "ARRÊT : aucun en-tête range-diff jugé"; return 1; }
   echo "pile tenue : les commits du lot sont ceux du rejeu, et la pile d'avant est sur master"
 }
 if [ "${1:-}" = "--pile" ]; then verifier_pile "$2" "$3" "$4" "$5"; exit $?; fi
