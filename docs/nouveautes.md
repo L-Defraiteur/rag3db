@@ -1,5 +1,12 @@
 # Nouveautés
 
+- 16 novembre2026 — **Le journal d'index dit enfin ce qui a été coupé.** La ligne de nouveautés de la coupe au plafond
+  (828ff28153) promettait que le journal d'index dise combien de textes avaient été coupés : il ne le disait pas,
+  l'avertissement partait sur le bus d'événements du catalogue, que le journal ne lit pas. Désormais, après chaque
+  passe, le journal écrit « N texte(s) coupé(s) à M caractères avant l'envoi au service « nom » », et aussi les
+  textes tronqués par le modèle à sa fenêtre de jetons, qui n'y étaient jamais dits non plus. Deux index lancés dans
+  la même milliseconde ont chacun leur journal.
+
 - 16 novembre2026 — **Un texte trop long ne fait plus tomber l'embarquement de tout son lot.** Depuis le 15 au
   soir, un seul texte de plus de 12 000 caractères (un fichier de données d'une ligne énorme) faisait refuser par
   le service chaque lot de 512, et un index neuf du dépôt restait sans aucun vecteur. Désormais, le client coupe
