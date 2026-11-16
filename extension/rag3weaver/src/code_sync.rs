@@ -1440,6 +1440,36 @@ fn synchroniser_la_source(
     resultat
 }
 
+/// Préparer le plein texte avant toute transaction ou lecture d'une source : même garde,
+/// mêmes marques pending et même table physique sur les deux chemins de synchronisation.
+/// Une erreur remonte avant que l'appel lise ou ingère le moindre fichier.
+fn prepare_fts_for_source_sync(catalog: &mut Catalog) -> Result<Option<std::time::Instant>, String> {
+    // Le plein texte se vérifie avant la première transaction : la garde des
+    // comptes (un document sans ligne, une ligne sans document) marque à
+    // rebâtir ; un dossier d'un processus tué se rebâtit ici, pas au milieu
+    // d'un paquet.
+    let t_garde = std::time::Instant::now();
+    #[cfg(all(test, feature = "rag3db-native"))]
+    fts_guard_double_tests::record("counts:begin".into());
+    let ecarts = catalog.check_fts_counts().map_err(|e| e.to_string())?;
+    #[cfg(all(test, feature = "rag3db-native"))]
+    fts_guard_double_tests::record(format!("counts:end:{}", ecarts.len()));
+    if !ecarts.is_empty() {
+        eprintln!("[rag3weaver] garde des comptes : {} index à rebâtir ({:?})", ecarts.len(), t_garde.elapsed());
+    }
+    catalog.verify_fts_files_strict().map_err(|e| e.to_string())?;
+    // **Un premier index arrêté avant sa poussée finale** a laissé des lignes
+    // sans leur plein texte, et sa marque : il est rebâti d'abord, depuis les
+    // lignes. D'ici là, l'état d'index disait « mots : en cours ».
+    let t = std::time::Instant::now();
+    #[cfg(all(test, feature = "rag3db-native"))]
+    fts_guard_double_tests::record("rebuild:begin".into());
+    let rebatis = catalog.rebuild_pending_fts().map_err(|e| e.to_string())?;
+    #[cfg(all(test, feature = "rag3db-native"))]
+    fts_guard_double_tests::record(format!("rebuild:end:{}", rebatis.len()));
+    Ok((!rebatis.is_empty()).then_some(t))
+}
+
 /// **La synchronisation d'une source déjà indexée, sous les générations** : les fichiers retenus par
 /// paquets, puis ceux que la couche voit encore au rang en attente et que la source ne liste plus, tous
 /// par [`reingest_files_par_generations`] — l'écrivain décide, rien n'est effacé d'une génération
@@ -1451,6 +1481,8 @@ fn synchroniser_par_generations(
     progress: &mut dyn FnMut(SourceSyncProgress),
     source_id: String,
 ) -> Result<(SourceSyncReport, SourceSyncProgress), String> {
+    // Une source inchangée passe aussi par la garde : aucun paquet ne la déclencherait.
+    prepare_fts_for_source_sync(catalog)?;
     let listed = source.list()?;
     let manifestes = crate::manifestes::Manifestes::lire(&listed, |c| source.read(c).ok().flatten());
     catalog.note_manifestes(&manifestes).map_err(|e| e.to_string())?;
@@ -1659,20 +1691,7 @@ fn synchroniser(
     source_id: String,
     (transaction, coupee): (bool, Option<String>),
 ) -> Result<(SourceSyncReport, SourceSyncProgress), String> {
-    // Le plein texte se vérifie avant la première transaction : la garde des
-    // comptes (un document sans ligne, une ligne sans document) marque à
-    // rebâtir ; un dossier d'un processus tué se rebâtit ici, pas au milieu
-    // d'un paquet.
-    let t_garde = std::time::Instant::now();
-    #[cfg(all(test, feature = "rag3db-native"))]
-    fts_guard_double_tests::record("counts:begin".into());
-    let ecarts = catalog.check_fts_counts().map_err(|e| e.to_string())?;
-    #[cfg(all(test, feature = "rag3db-native"))]
-    fts_guard_double_tests::record(format!("counts:end:{}", ecarts.len()));
-    if !ecarts.is_empty() {
-        eprintln!("[rag3weaver] garde des comptes : {} index à rebâtir ({:?})", ecarts.len(), t_garde.elapsed());
-    }
-    catalog.verify_fts_files();
+    let rebuild_started = prepare_fts_for_source_sync(catalog)?;
     let cursor = source.cursor();
     let (root, virtual_source) = match crate::workspace_path::worktree_root(&cursor) {
         Some(root) => (root.to_string(), false),
@@ -1683,17 +1702,8 @@ fn synchroniser(
     // aucune ligne de profil (180 s sur 643, mesuré le 3 octobre 2026). Des
     // temps cumulés, publiés à la fin ; aucun changement de comportement.
     let mut profil = SyncProfile::default();
-    // **Un premier index arrêté avant sa poussée finale** a laissé des lignes
-    // sans leur plein texte, et sa marque : il est rebâti d'abord, depuis les
-    // lignes. D'ici là, l'état d'index disait « mots : en cours ».
-    let t = std::time::Instant::now();
-    #[cfg(all(test, feature = "rag3db-native"))]
-    fts_guard_double_tests::record("rebuild:begin".into());
-    let rebatis = catalog.rebuild_pending_fts().map_err(|e| e.to_string())?;
-    #[cfg(all(test, feature = "rag3db-native"))]
-    fts_guard_double_tests::record(format!("rebuild:end:{}", rebatis.len()));
-    if !rebatis.is_empty() {
-        profil.add("rebâtir le plein texte laissé par un arrêt", t);
+    if let Some(started) = rebuild_started {
+        profil.add("rebâtir le plein texte laissé par un arrêt", started);
     }
     let t = std::time::Instant::now();
     let listed = source.list()?;

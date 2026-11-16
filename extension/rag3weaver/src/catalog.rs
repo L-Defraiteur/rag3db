@@ -1355,23 +1355,24 @@ fn read_threads() -> u64 {
     }
 
     pub fn verify_fts_files(&mut self) {
+        if let Err(e) = self.verify_fts_files_strict() {
+            eprintln!("[rag3weaver] rebâti du plein texte : {e}");
+        }
+    }
+
+    /// La même préparation en fichiers, pour un appel qui doit refuser si le rebâti échoue.
+    /// Les appelants historiques de `verify_fts_files` gardent leur journalisation ; une
+    /// synchronisation ne peut pas poursuivre une source après une erreur de maintenance.
+    pub(crate) fn verify_fts_files_strict(&mut self) -> Result<(), CatalogError> {
         if !matches!(self.fts_storage, crate::fts_handle::FtsStorage::Files { .. }) {
-            return;
+            return Ok(());
         }
         self.open_fts_files();
         if self.lecture_seule || self.in_transaction {
-            return;
+            return Ok(());
         }
-        loop {
-            match self.rebuild_fts_step(FTS_REBUILD_BATCH) {
-                Ok(true) => continue,
-                Ok(false) => break,
-                Err(e) => {
-                    eprintln!("[rag3weaver] rebâti du plein texte : {e}");
-                    break;
-                }
-            }
-        }
+        while self.rebuild_fts_step(FTS_REBUILD_BATCH)? {}
+        Ok(())
     }
 
     pub fn drop_fts_index(&mut self, table: &str) {
