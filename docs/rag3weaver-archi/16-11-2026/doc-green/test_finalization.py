@@ -9,13 +9,14 @@ import sys
 import tempfile
 import types
 import unittest
+from unittest.mock import patch
 import cache_state
 
 SOURCE = Path(__file__).with_name('qualify_green.py')
 
 
 class Finalization(unittest.TestCase):
-    def outcome(self, *, scope_code=0, authority_state='termine', bus_exists=False, external_rc=0, times=(50, 50)):
+    def outcome(self, *, scope_code=0, authority_state='termine', bus_exists=False, external_rc=0, times=(50, 50), delayed_open=False):
         tree = ast.parse(SOURCE.read_text())
         prepare = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'prepare')
         start = next(i for i,n in enumerate(prepare.body) if isinstance(n, ast.Assign) and any(isinstance(t,ast.Name) and t.id == 'verdicts' for t in n.targets))
@@ -35,12 +36,24 @@ class Finalization(unittest.TestCase):
             frozen=cache_state.inventory(session,cache)
             red=p/'red';red.mkdir();(red/'frozen-old-cache.json').write_text(json.dumps(frozen))
             st=cache.lstat();identity=dict(device=st.st_dev,inode=st.st_ino,uid=st.st_uid,path=str(cache))
-            moments=iter(times); last=times[-1]
+            moments=iter(times); last=times[-1]; clock={'late':False}
             namespace=dict(P=p,Path=Path,json=json,sys=sys,result=types.SimpleNamespace(returncode=external_rc),
-                           time=types.SimpleNamespace(monotonic=lambda:next(moments,last)),
+                           time=types.SimpleNamespace(monotonic=lambda:101 if clock['late'] else next(moments,last)),
                            cfg={'cache_identity':identity},guard=lambda _:None,sha=digest,empty_cache=cache_state,SESSION_TARGET=session,T=cache,RED=red,
                            save=lambda name,value:(p/name).write_text(json.dumps(value)))
-            with contextlib.redirect_stdout(io.StringIO()), self.assertRaises(SystemExit): exec(code,namespace)
+            save_function=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='save')
+            exec(compile(ast.Module(body=[save_function],type_ignores=[]),'actual-save','exec'),namespace)
+            real_open=Path.open
+            def opened(path,*args,**kwargs):
+                stream=real_open(path,*args,**kwargs)
+                mode=args[0] if args else kwargs.get('mode','r')
+                if delayed_open and path==p/'result.json' and 'w' in mode:clock['late']=True
+                return stream
+            printed=io.StringIO()
+            with patch.object(Path,'open',opened),contextlib.redirect_stdout(printed),self.assertRaises(SystemExit) as raised:
+                exec(code,namespace)
+            self.last_exit=raised.exception.code
+            self.last_printed=json.loads(printed.getvalue())
             return json.loads((p/'result.json').read_text())
 
     def test_complete_targeted_green_is_not_full_qualification(self):
@@ -65,6 +78,12 @@ class Finalization(unittest.TestCase):
 
     def test_expiry_before_publication_is_not_targeted_green(self):
         self.assertNotEqual(self.outcome(times=(99,101))['status'],'GREEN_TARGETED_ONLY')
+
+    def test_open_finishing_after_deadline_cannot_publish_targeted_green(self):
+        result=self.outcome(times=(99,99),delayed_open=True)
+        self.assertNotEqual(result['status'],'GREEN_TARGETED_ONLY')
+        self.assertEqual(self.last_exit,1)
+        self.assertEqual(self.last_printed,result)
 
 
 if __name__=='__main__': unittest.main()
