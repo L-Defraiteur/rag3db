@@ -85,3 +85,38 @@ worker silencieux borné et récolté, sortie17 distinguée du timeout, protocol
 invalide refusé, chemin canonique réel, archive sans .git acceptée, archive
 altérée refusée. Le témoin archive sans .git a été vu rouge (git rc128), puis vert. Aucun Cargo, aucun corpus ni code de projet public exécuté.
 La compilation, les témoins de parsing et la campagne restent NON JOUÉS.
+
+## Complément exécutable et oracle compact
+
+Exemple désormais `7b09657` (même branche/base) : inventaire compact des scopes
+avec nom/type/parent/positions lignes et octets, membres, paramètres, variables,
+héritage/génériques, décorateurs et bindings d'import, sans contenu ni signature.
+Budget d'inventaire 2MiB/fichier ; omissions comptées explicitement. Les définitions
+peuvent ainsi être jugées sur les fichiers déjà parsés, sans relancer le corpus.
+Les compteurs complets restent séparés. Les façades spécialisées ont encore
+seulement leurs compteurs de sorties : leur oracle nécessitera une phase ciblée.
+
+`pilot.py` prépare sans Cargo un profil figé sur luciepc puis compose compile
+standalone et contrôleur sous la portée canonique. PQS OS reprise du pilote Rust
+qualifié, après acquisition du vrai poste ; adoption exclusivement par la vraie
+garde, aucun fingerprint touché à la main. Le profil refuse un propriétaire
+différent de celui du target Rust7601 attendu. La compilation et la campagne
+ont leurs commandes, stdout/stderr et codes séparés, même si le résultat est rouge.
+Le verdict global termine uniquement la campagne exploratoire ; coverage reste
+non jugée et aucune passe complète rag3weaver n'est revendiquée.
+
+```sh
+python3 -B docs/codeparsers/16-11-2026/language-corpus/pilot.py prepare \
+  --worktree /home/lucied/git_workspaces/cx-codeparsers-language-corpus \
+  --source FULL_PARENT_COMMIT \
+  --manifest /home/lucied/.cache/rag3db-banc-notes/public-corpus-20261116/selection-01/selected.jsonl \
+  --roots /home/lucied/.cache/rag3db-banc-notes/public-corpus-20261116/selection-01/roots.json \
+  --proofs /home/lucied/.cache/codeparsers-notes/language-corpus-01
+python3 -B docs/codeparsers/16-11-2026/language-corpus/pilot.py run \
+  --proofs /home/lucied/.cache/codeparsers-notes/language-corpus-01 \
+  --allocation FRESH_C7_REFERENCE
+```
+
+Les deux placeholders sont remplacés par les valeurs réellement relues avant GO.
+Le manifeste gel01 attendu est `6ab2b309e0365974d8ee59d6d1c442e7b2d78963659bfd20f225d83a764053b2`.
+Le miroir PC est pris en charge par Banc à mêmes chemins pour préserver les gels.
