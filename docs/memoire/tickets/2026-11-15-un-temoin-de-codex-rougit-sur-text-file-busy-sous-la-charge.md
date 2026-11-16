@@ -97,3 +97,15 @@ base d395cb1f03f84c6abdfa023a0e3c7f87a7c0dab6, six patches égaux ;
 pilote NEUF r2 porte même qualification7200. R1 jamais lancé, aucun reçu.
 Huit fonctions Python hermétiques vertes0,002s, pas qualification Rust.
 [Recette concrète03](../16-11-2026/03-recette-script-fixtures.md).
+
+## Réserve ED avant correction du watcher
+
+Pilote1e3a3d005d RETIRÉ, jamais lancé. ED a identifié que P.rglob('*.log')
+parcourt aussi XDG_CACHE_HOME=P/cache : des journaux historiques de gabarits
+(llm-gemini.log et test result FAILED) peuvent y être copiés pendant les tests.
+Un P neuf ne rend pas ces contenus contemporains. Réserve ED consignée aussi
+par ED3d2d6cfffd. Correction attendue : liste EXPLICITE des seules sorties
+actives canonical-pass/official témoins,F8,preuve,lib,NAV,résumé/second-lib ;
+aucun scan de cache/state. Témoins sur vrai run avec fauxPopen : historique
+FAILED ignoré, FAILED actif arrête avant phase suivante, should_panic préservé.
+Publication avant essais, nouveau SHA soumis RO puis GO distinct C7.
