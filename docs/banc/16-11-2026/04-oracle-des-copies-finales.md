@@ -264,3 +264,17 @@ Le poste est rendu avant publication. Les trois listings exacts sont désormais
 joués ; le premier refus E0514 reste conservé séparément. L'oracle reste
 NONMATCHED tant que manifeste/type d'admission de `.env.example` et extras ne
 sont pas prouvés comparables. Ne jamais lire/copier `.env*` pour forcer le match.
+
+### Huit contrôles hermétiques proposés pour la porte d'ingestion
+
+Les trois déclarations privées relues portent working_tree/index code,
+minified_line_max_bytes5000/code_file_max_bytes1048576, generated absent : la
+politique par défaut de GeneratedPolicy est donc pertinente. Source publiée
+`outils/admission_contract.rs` : huit assertions sur les primitives927, données
+synthétiques uniquement, jamais de contenu `.env*`. Cas : métadonnée.git, archive
+gz, yaml potentiellement admis, `.env.example` non refusé par le chemin seul,
+code>1MiB, ligne de code>5000, prose longue non minifiée et tête binaire.
+Recette : même lien rustc1.98.1/rlib927 attestés que scanner02, scope lourd32G120s
+neuf ; une compilation et une exécution, première erreur arrêt. Aucun Cargo,
+lecture source réelle, catalogue ou base. Accord C7 limité aux huit CPU
+hermétiques ; ces cas ne qualifient pas le contenu inconnu de `.env.example`.
