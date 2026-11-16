@@ -1,0 +1,19 @@
+# Relecture pure des preuves du harnais TTY
+
+Publication exacte `28ed85dcf9fc4485b7fb37c6c10f4371f09d039f`, source `934f3c810ab68530f169090bcb4bdfe152771999`, allocation C7-TTY-HARNESS-934F-16nov1200. [Bilan porteur](../../tty/16-11-2026/05-bilan-alias-et-harnais.md). **Avis favorable au harnais entier tmux-local-ouvert sur cette source, pas au lot d’alias complet ni à une union master future.** Aucun CPU/test, service, HTTP, procscan ou exécutable natif lancé par Banc.
+
+Archive locale evidence.tar :37201920octets, SHA256 recalculé `3c361191aa9a1de916d93f209b98c02e316e801e8221fe430ae8add0119fec43`,158fichiers réguliers. Les quatre fichiers sélectionnés versionnés ont les SHA du manifest et sont identiques octet pour octet aux fichiers de l’archive : composed-verdict, harness-result, scope-verdict, quiet-after-common. Lecture de l’archive sans extraction ni exécution. La capacité d’autorité privée n’a pas été ouverte ou reproduite dans cette revue.
+
+Résultat harnaisverdictVERT/rouges[], driverVERT puis CommonVERT0/erreur nulle/restes[]/nettoyé, composéVERT/rc0. START855836.130261483, END857036.130261483, finished855982.790141532 :146.659880049s, sous1200. Le contrôleur recontrôle source/prod, ledgerT inchangé, SDK/ELF/contrôleurs puis quiet avant finish/publication ; le code refuse un résultat tardif. Les valeurs de SDK/T sont des contrôles du porteur archivés, pas une réinspection du target réel par Banc. L’ELF archivé lu seulement pour SHA vaut bien `cb24ce0425bcb2487c83b9e0416a274cbf40585e65743d7327cef430108f031a`.
+
+L’accord phase2 est recoupé sur le journal et le snapshot faux-hôte : une seule approvalID faux/mesure:1, POST answer approved=true/reply_to exact, événement ended et state ended. approval-end-protocol.ok=true est persisté ; le helper réellement archivé vérifie cette corrélation et non un simple mot à l’écran. Les captures de phase2 et le jugement de repos sont conservés.
+
+Phasesmultiligne0005/0006 : le journal contient une fois chacune le texte exact un\ndeux\ntrois et les deux captures-pane portent Maj-Entrée. demandeKitty=false reste compatible avec ce transport tmux ouvert, pas une qualification de tous les terminaux. Résultat outils conserve certains champs null plutôt que d’inventer une observation d’écran alterné.
+
+Commande !/fauxsudo : le marqueur de mot de passe est explicitement FACTICE. Vérification sans publier sa valeur : absent des octets PTY output décodés, du journal de requêtes et du journal de séance phase8. Résultat consigne unique portant le retour, invite/retour vus, lancements sans frappe[] et textes bang transmis[] cohérents. Aucun secret réel ni action privilégiée effectués par cette revue.
+
+Cinq thèmes/dix passages couleurs et les autres séances du harnais sont consignés verts. Quiet après Common : found[], quatre UNKNOWN non attribués conservés, pas une quiescence universelle inventée. L’autorité terminée et le cleanup sont exigés par la composition ; pas de scan vivant refait ici. Les trois anciens rouges restent des preuves distinctes.
+
+Rust produit tty/src et Cargo inchangés entre6d886375ea4627c88d28aef918b948a23f628ab1 et934f par diffGit ; F8ancien8/8 et buildttycb24 sont portés, **pas rejoués**. Le raccord dynamique Tab anglais reste ouvert : lecture réelle de tui.rs confirme Action::Completer→sources_de avec le début original, puis GET/ide/etat seulement pour /tache ou /depot. Le harnais français ne qualifie pas /task ou /repo. Même ticket d’alias et ticket de harnais restent ouverts ; réservation tui.rs et rouge réel du raccord sont une suite distincte à décider par C7.
+
+Aucun écart bloquant repéré dans ces preuves figées. Pas de propriété sur un nouveau master, pose du binaire de Lucie ou clôture globale déduite. Union et qualification future séparées, sans GO supplémentaire implicite.
