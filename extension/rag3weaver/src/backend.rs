@@ -308,6 +308,11 @@ pub struct BackendManifest {
     /// worktree que le backend indexe et les tâches de l'atelier, la racine calculée.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tracked: Option<serde_json::Value>,
+    /// **The settings of the read tools** (`search`, point 7 of Lucie's vision,
+    /// 16 November 2026): `index_wait_s`, how long a read waits for a lagging
+    /// index before it answers « index not ready ».
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub search: Option<SearchSettings>,
     /// **Les montres de fichiers** : chacune balaie la source du workspace et
     /// publie un `FileChanged` par fichier créé, modifié ou supprimé, sur le
     /// sujet `files` — de quoi réagir à une édition faite hors de nos outils.
@@ -963,6 +968,19 @@ fn rows_after_rank(
         }
     }
     Ok(false)
+}
+
+/// **The settings of the read tools** (`search` in the manifest).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SearchSettings {
+    /// How long a read waits for a lagging index, in seconds (6 by default).
+    #[serde(default = "default_index_wait_s")]
+    pub index_wait_s: u64,
+}
+
+fn default_index_wait_s() -> u64 {
+    6
 }
 
 /// **`view` d'un appel d'outil** : `{"layer": <id de couche>, "rank"?: <génération>}`.
@@ -8606,6 +8624,122 @@ mod tests {
         assert_eq!(under["view"]["pending_rows"], json!(true), "the pending rank holds rows, and the answer says so: {under}");
         assert!(!under["result"].to_string().contains("arrivee.rs"), "a row of the pending rank is not read under the view: {under}");
         assert!(backend.stop_reactions().is_empty());
+    }
+
+    /// The watching backend of `backend_qui_surveille`, with `freshness` on
+    /// `usages` and, if given, `search.index_wait_s`.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    fn backend_with_read_freshness(index_wait_s: Option<u64>) -> (tempfile::TempDir, Backend) {
+        let tools = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates");
+        let (dir, p) = fixture_code_avec("working_tree", false, json!({}), &|m| {
+            m["watches"] = json!({"code": {"source": "workspace", "every_ms": 20, "settle_ms": 0}});
+            m["reactions"] = json!({"reindex_on_change": {"graph": "reindex_on_change.mmd"}});
+            m["tools"]["usages"] = json!({"graph": "usages.mmd", "freshness": true});
+            if let Some(s) = index_wait_s {
+                m["search"] = json!({"index_wait_s": s});
+            }
+        });
+        drop(p);
+        std::fs::copy(tools.join("backends/code/graphs/reindex_on_change.mmd"), dir.path().join("reindex_on_change.mmd")).unwrap();
+        std::fs::copy(tools.join("tools/usages.mmd"), dir.path().join("usages.mmd")).unwrap();
+        std::fs::write(dir.path().join("sources/outils.rs"), "pub fn depart() {}\n").unwrap();
+        let prepared = PreparedBackend::load(&dir.path().join("backend.json")).expect("the watching manifest loads");
+        let backend = backend_de_code(dir.path(), prepared);
+        {
+            let source = backend.file_source.clone().unwrap();
+            let mut cat = backend.catalog.lock().unwrap();
+            crate::code_sync::sync_source(&mut cat, source.as_ref(), &Default::default(), &mut |_| {}).expect("the initial index");
+        }
+        (dir, backend)
+    }
+
+    /// Waits (10 s at most) until the watch has noted `files` lagging files.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    fn wait_for_lag(backend: &Backend, files: u64) {
+        let end = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while backend.index_states().ok().and_then(|e| e["lag"]["files"].as_u64()).unwrap_or(0) < files {
+            assert!(std::time::Instant::now() < end, "the watch never noted the change");
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+    }
+
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    fn seed_rate(backend: &Backend, per_file: std::time::Duration) {
+        let cat = backend.catalog.lock().unwrap();
+        cat.file_lag().observe(&cat.scope().clone(), 1, per_file);
+    }
+
+    /// **Under a short estimate, a read waits and answers complete** (point 7
+    /// of Lucie's vision, 16 November 2026). The observed rate is 100 ms per
+    /// file; a file is written whose batch holds 2 s (`__pause_du_lot__`).
+    /// `usages` waits for it, finds the new definition, and says nothing
+    /// about the wait.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_read_under_a_short_estimate_waits_and_answers_complete() {
+        let (dir, backend) = backend_with_read_freshness(None);
+        backend.mount_reactions().unwrap();
+        seed_rate(&backend, std::time::Duration::from_millis(100));
+        std::fs::write(dir.path().join("sources/__pause_du_lot__.rs"), "pub fn arrivee() {}\n").unwrap();
+        wait_for_lag(&backend, 1);
+        let answer = backend.call("usages", json!({"name": "arrivee"})).expect("usages");
+        assert!(answer["result"].to_string().contains("__pause_du_lot__"), "the read waited for the index: {answer}");
+        assert!(answer.get("index").is_none(), "nothing is said about a wait under the setting: {answer}");
+        assert!(backend.stop_reactions().is_empty());
+    }
+
+    /// **Under a long estimate, a read answers at once and says the index is
+    /// not ready.** No reaction runs, so the lag stays; the observed rate is
+    /// 20 s per file.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_read_under_a_long_estimate_answers_at_once_and_says_not_ready() {
+        let (dir, backend) = backend_with_read_freshness(None);
+        backend.mount_watches().unwrap();
+        seed_rate(&backend, std::time::Duration::from_secs(20));
+        std::fs::write(dir.path().join("sources/arrivee.rs"), "pub fn arrivee() {}\n").unwrap();
+        wait_for_lag(&backend, 1);
+        let t = std::time::Instant::now();
+        let answer = backend.call("usages", json!({"name": "depart"})).expect("usages");
+        assert!(t.elapsed() < std::time::Duration::from_secs(1), "the read did not wait: {:?}", t.elapsed());
+        assert_eq!(answer["index"], json!({"ready": false, "eta_s": 20, "pending_files": 1}), "{answer}");
+        assert!(answer["result"].to_string().contains("index pas prêt, environ 20 s"), "{answer}");
+    }
+
+    /// **Without an observed rate, a read waits at most the setting, and says
+    /// it waited.** `search.index_wait_s` is 1; nothing reindexes.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_read_without_an_observed_rate_waits_at_most_the_setting() {
+        let (dir, backend) = backend_with_read_freshness(Some(1));
+        backend.mount_watches().unwrap();
+        std::fs::write(dir.path().join("sources/arrivee.rs"), "pub fn arrivee() {}\n").unwrap();
+        wait_for_lag(&backend, 1);
+        let t = std::time::Instant::now();
+        let answer = backend.call("usages", json!({"name": "depart"})).expect("usages");
+        let waited = t.elapsed();
+        assert!(waited >= std::time::Duration::from_secs(1) && waited < std::time::Duration::from_secs(3), "{waited:?}");
+        assert_eq!(answer["index"], json!({"ready": false, "eta_s": null, "pending_files": 1, "waited_s": 1}), "{answer}");
+        assert!(answer["result"].to_string().contains("index pas prêt, durée inconnue"), "{answer}");
+    }
+
+    /// **The observed rate is kept across an opening** (c7, 16 November 2026):
+    /// otherwise the first index of a session never has an estimate.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn the_observed_rate_is_kept_across_an_opening() {
+        let (dir, backend) = backend_with_read_freshness(None);
+        {
+            let cat = backend.catalog.lock().unwrap();
+            cat.observe_index_rate(1, std::time::Duration::from_millis(300));
+        }
+        drop(backend);
+        let prepared = PreparedBackend::load(&dir.path().join("backend.json")).expect("the manifest loads again");
+        let backend = backend_de_code(dir.path(), prepared);
+        let cat = backend.catalog.lock().unwrap();
+        let cell = cat.scope().clone();
+        cat.file_lag().note(&cell, "x.rs", crate::catalog::retard::now_ms());
+        assert_eq!(cat.file_lag().estimate(&cell), Some(crate::catalog::retard::IndexEstimate { pending_files: 1, eta_ms: Some(300) }));
     }
 
     /// **Une vue inconnue est refusée avant toute lecture** (page 28 d'arbre,
