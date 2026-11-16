@@ -41,6 +41,8 @@ def guard(cfg):
  root=Path(cfg['source_root']);assert git(root,'rev-parse','HEAD')==cfg['pilot'] and not git(root,'status','--porcelain')
  assert sha(ARCHIVE/'manifest.json')==ARCHIVE_SHA
  assert inventory(ARCHIVE/'copy')==cfg['files']
+ assert not any(p.is_dir() for p in (ARCHIVE/'copy').rglob('*')),'unexpected archive directory'
+ assert sha(cfg['compiler'])==cfg['compiler_sha256']
  for name,value in cfg['copies'].items():assert sha(Q/name)==value
  assert sha(NATIVE)==NATIVE_SHA and sha(IDS)==IDS_SHA
  for name,value in SO.items():assert sha(LIB/name)==value
@@ -74,21 +76,27 @@ def driver():
  save(P,'copy-before.json',inventory(cold))
  def unchanged():
   current=inventory(cold)
+  assert not any(p.is_dir() for p in cold.rglob('*')),'no new database directory is authorized'
   for name,value in cfg['files'].items():assert current.get(name)==value,'data/WAL/sidecar changed: '+name
   for name,value in current.items():
    if name not in cfg['files']:
     path=cold/name;meta=path.lstat();assert name=='base.rag3db.readers' and stat.S_ISREG(meta.st_mode) and meta.st_uid==os.getuid() and value['bytes']==0,'unapproved sidecar'
   assert inventory(ARCHIVE/'copy')==cfg['files']
- raw=run('native-inventory',[str(NATIVE),str(base),*SQL],90);unchanged();rows=native_queries(raw.decode('utf-8'),len(SQL))
+ raw=run('native-inventory',[str(NATIVE),str(base),*SQL],90);unchanged()
+ assert 'BUILD_ID' in (P/'native-inventory.stderr').read_text() and '59ac9c86bc' in (P/'native-inventory.stderr').read_text()
+ rows=native_queries(raw.decode('utf-8'),len(SQL))
  assert rows[0]==['code-scope-v1/content/generations']
  assert len(rows[1])==len(rows[2])==1
  assert json.loads(rows[1][0])['searchIndex']=='ScopeContent' and json.loads(rows[2][0])['derived']['from']=='Scope'
  assert rows[5]==['default|default'],'unexpected physical cell; no alias fallback'
- framed=run('blob-dump',[str(binary),str(base)],90);unchanged();blobs=decode_frames(framed)
+ framed=run('blob-dump',[str(binary),str(base)],90);unchanged()
+ assert 'BUILD_ID' in (P/'blob-dump.stderr').read_text() and '59ac9c86bc' in (P/'blob-dump.stderr').read_text()
+ blobs=decode_frames(framed)
  assert rows[7]==[str(len(blobs))]
  root=P/'immutable-fts';manifest=materialize(blobs,'Lucivy_ScopeContent',root);save(P,'materialized.json',manifest)
+ materialized_dirs=sorted(str(p.relative_to(root)) for p in root.rglob('*') if p.is_dir())
  decoded=run('immutable-ids',[str(IDS),str(root),'--live-ids'],90)
- assert inventory(root)==manifest
+ assert inventory(root)==manifest and materialized_dirs==sorted(str(p.relative_to(root)) for p in root.rglob('*') if p.is_dir())
  live=snapshot_ids(decoded.decode('utf-8'));comparison=compare_ids(rows[6],live)
  save(P,'id-sets.json',dict(graph_rows=rows[6],fts_live_ids=live,comparison=comparison,scope='physical ScopeContent/default/default'))
  unchanged();guard(cfg);save(P,'copy-after.json',inventory(cold));assert time.monotonic()<end-10
@@ -134,5 +142,9 @@ def launch(args):
  print(json.dumps(record));return 0 if record['status']=='OBSERVATION_RO_VALIDATED_ONLY' else 1
 if __name__=='__main__':
  parser=argparse.ArgumentParser();parser.add_argument('--pilot');parser.add_argument('--prepare-only',action='store_true');parser.add_argument('--allocation');parser.add_argument('--driver',action='store_true');args=parser.parse_args()
- if args.driver:driver()
+ if args.driver:
+  try:driver()
+  except BaseException as error:
+   if P.exists() and not (P/'first-red.json').exists():save(P,'first-red.json',dict(error=repr(error),observed=time.monotonic()))
+   raise
  else:sys.exit(launch(args))
