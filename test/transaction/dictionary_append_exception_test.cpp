@@ -1,6 +1,8 @@
+#include <iostream>
 #include <string>
 #include <vector>
 
+#include "common/build_id.h"
 #include "common/exception/buffer_manager.h"
 #include "gtest/gtest.h"
 #include "storage/buffer_manager/buffer_manager.h"
@@ -33,6 +35,7 @@ public:
 };
 
 TEST(DictionaryAppendException, OffsetAllocationFailureKeepsExistingStringsUnchanged) {
+    std::cout << "BUILD_ID=" << RAG3DB_BUILD_ID << std::endl;
     DictionaryFailingBufferManager bm;
     MemoryManager mm(&bm, nullptr);
     DictionaryChunk dictionary(mm, 3, true, ResidencyState::IN_MEMORY);
