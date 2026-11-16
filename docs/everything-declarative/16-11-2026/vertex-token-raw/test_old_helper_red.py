@@ -11,7 +11,7 @@ class HistoricalRed(unittest.TestCase):
   ns['library_summary']((ROOT/'client/official/e2e_lectures.log').read_text())
  def test_actual_filtered_code_phase_should_be_admitted_by_driver_assertion(self):
   driver=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='driver')
-  loop=next(n for n in driver.body if isinstance(n,ast.For) and ast.unparse(n.target)=='name')
+  loop=next(n for n in driver.body if isinstance(n,ast.For) and ast.unparse(n.target)=='name' and any(isinstance(x,ast.Assert) for x in n.body))
   check=next(n for n in loop.body if isinstance(n,ast.Assert))
   text=(ROOT/'client/official/e2e_code.log').read_text().split('     Running tests/e2e_code.rs ',1)[1]
   env={'suites':{'e2e_code':ns['library_summary'](text)},'name':'e2e_code'}
