@@ -84,7 +84,7 @@ fn depot_de_test(d: &Path) -> (PathBuf, PathBuf, PathBuf) {
 #[test]
 fn documentation_fixture_uses_the_declared_private_sandbox_before_add() {
     documentation_fixture::witness_declared_sandbox_setup(
-        "documentation_fixture_uses_the_declared_private_sandbox_before_add",
+        "e2e_equipier::documentation_fixture_uses_the_declared_private_sandbox_before_add",
         |root| depot_de_test(root).1,
     );
 }
