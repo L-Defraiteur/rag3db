@@ -32,3 +32,26 @@ Le harnais le joue sous `tmux-local-ouvert` : un tmux réglé avec ces deux opti
 Que tmux passe Maj-Entrée à l'application : `set -g extended-keys on`, plus, selon l'émulateur, `terminal-features` avec `extkeys`. Ce sont des réglages de l'utilisateur, alors que rien ne doit être à installer ni à configurer en plus de rag3weaver. Deux pistes restent à essayer avant de le dire impossible :
 - demander à tmux le mode `modifyOtherKeys` (`CSI > 4;1 m`), qu'un tmux réglé en `extended-keys on` honore, et voir ce que fait un tmux par défaut ;
 - lire le réglage de tmux (`tmux show -gv extended-keys`) pour dire, dans l'indication, la commande exacte qui l'active.
+
+## Observation RO de la continuation alias du16 novembre
+
+Sourceproduit6d/contrôleur9d, tmux-local-ouvert : harness.log signale
+`demande_kitty=false`, `aide_maj_entree=false`, `aide_alt_entree=false`,
+`aide_tmux=false` mais `textes_recus=['un\ndeux\ntrois']` **correct**.
+Ce n'est donc pas une preuve que Maj-Entrée envoie au lieu de sauter une ligne.
+Sous multiplexeur, demande_kittyfalse seule n'est pas un échec attendu ; le
+rouge porte sur aide_maj non détectée avec la donnée de saisie correcte.
+
+L'oracle recherche une phrase contiguë dans les octets de Terminal.tout,
+pas dans un écran VT reconstruit. La vue choisit pourtant l'aide Maj-Entrée
+si le tmux lu permet CSIu ; aucun diff de tui/vue/saisie entre927 et6d.
+Sans capture persistée, on ne peut trancher affichage réellement absent,
+lecture du réglage ou fragmentation des mises à jour du terminal.
+Ne pas attribuer ce constat aux nouveaux alias ni modifier le terminal
+par hypothèse. Aucun réglage de Lucie ou serveur tmux partagé touché.
+
+Preuves/limites et plan d'oracles :
+`2026-11-16-le-harnais-perd-les-traces-des-seances-et-juge-la-fin-sur-les-octets.md`.
+Suite à proposer : capture privée pendant la séance et rendu reconstruit,
+en conservant l'exigence de donnée multiligne exacte et les deux modes tmux.
+Aucun nouveau test/capture après arrêt, aucun nouveau GO.
