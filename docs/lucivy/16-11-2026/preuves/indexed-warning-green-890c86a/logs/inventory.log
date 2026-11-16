@@ -1,0 +1,5 @@
+reporting_preserves_existing_field_indexing: test
+unsupported_text_indexing_options_are_reported_once_per_field: test
+warning_escapes_field_names_without_extra_lines: test
+
+3 tests, 0 benchmarks

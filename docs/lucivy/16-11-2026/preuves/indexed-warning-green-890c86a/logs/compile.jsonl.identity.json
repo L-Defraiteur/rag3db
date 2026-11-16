@@ -1,0 +1,1 @@
+{"pid": 1575020, "start": "118237725", "argv": ["cargo", "test", "--offline", "--release", "-j4", "-p", "lucivy-core", "--test", "test_text_field_indexed_false", "--no-run", "--message-format=json-render-diagnostics"]}

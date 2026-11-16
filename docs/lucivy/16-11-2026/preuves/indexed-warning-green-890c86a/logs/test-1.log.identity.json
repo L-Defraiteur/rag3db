@@ -1,0 +1,1 @@
+{"pid": 1576350, "start": "118238353", "argv": ["/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_text_field_indexed_false-0b3a1bcf4b5c59a0", "--exact", "unsupported_text_indexing_options_are_reported_once_per_field", "--nocapture"]}

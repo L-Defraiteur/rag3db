@@ -67,3 +67,11 @@ Premiercode nonzeroSTOP/firstredopenx, aucunretry. Scanpartielaprès, creatorT
 inchangé, empreintes puis recontrôleEND. Résultatpilote provisoire seulement ;
 VERT final exige Commoncode0/restes[] et scanownedaprèsfin, toujoursUNKNOWN
 nonattribués conservés. Pascoreentière/ULP/corpus/PR42/tag/fusion/service par ce GO.
+
+## Résultat du GO ciblé
+
+Couple890/de364 exécuté : compileofflineOK6,24s puis3exacts1/0/0 chacun ;
+CommonVERT0/restes[] et ownedabsents, sourcespropres. Relevés partiels après
+fin :12UNKNOWNnonattribués conservés, pas d’absenceuniverselle déduite.
+Bruts `preuves/indexed-warning-green-890c86a/`, ticketcomplété. Aucun corecomplet,
+corpus7.2 ou ULP qualifié, aucune fermeture/fusion/publication automatique.

@@ -134,3 +134,25 @@ et scansfrais avant/après. Trois cas synthétiques publiés puis joués3/0,
 aucunCargo. Nouvelle recette06 et paquetvertQv4 figés (préflight12UNKNOWN,
 aucunowned/attribuéactif), Tanciennonce3552 unique, jamaispurgé ; nouvelog/scope
 encoreabsents. Source890 reste NONJOUÉE, demandeRO/GO600VERTdistinct avantCargo.
+
+## Vert ciblé exécuté :3config, portée bornée
+
+GO exact C7 source890c86af44989f3fea6c6fa62fd40d688b4084df / pilote
+de36488bd948babf25548f78e80dcf7e89c5fe95, Qgreen-v4nonceb8c7e19b6185c7d2a4ac2aa690ed2bfe.
+Compileoffline réussie6,24s, inventaire3 puis troisexacts **1/0/0 chacun**,
+aucunretry. Le troisième log montre réellement les2Warning de build_schema et
+vérifie que text/string restentindexés, numérique nonindexé.
+ELFvertSHA d10152c78102ee701ef2b808fc2627d7e8044866fcbc5cebe9e5a23550958adc ;
+ELFrougecopiéSHAc247 inchangé. MêmeTnonce3552/inode164536077/dev55/creatorSHA5a1671,
+aucunepurge ni nouveauT. Sourcespropres aprèsrun.
+
+[Bruts/manifeste](../16-11-2026/preuves/indexed-warning-green-890c86a/SHA256SUMS),
+[finalCommon et relevépartiel](../16-11-2026/preuves/indexed-warning-green-890c86a/final-evidence.json).
+ScopeVERT0/erreur=null/restes[]/nettoyétrue, autoritéterminée PID1575006/start118237703,
+ownedduCommonvert absents ; scanaprès12UNKNOWNnonattribués conservés, aucune
+absenceuniverselle/proc revendiquée. END1182974.134124184, contrôlefinal1182433.62054773,
+pasreset. Logs PIDcargo1575020/start118237725, jobs4 réels sousquota et32G/HIGHmax.
+
+Reste : RO preuves puis décision d’intégration/CI ; corecomplet/corpus7.2/ULP
+restent horsqualification. Pas de fermeture de ce ticket sur la seule preuve
+ciblée ; aucun nouveau lancement, PR42/fusionmain/tag ou service par ce résultat.
