@@ -187,18 +187,30 @@ fn lancer(o: Options) -> Result<(), String> {
         }
     };
     let arret = Arc::new(AtomicBool::new(false));
-    let lues = Arc::new(AtomicUsize::new(0));
+    // **Ce qui est déjà dans la boîte n'est pas de cette séance** (T1, 16 nov.) : une demande précédente de la
+    // même tâche y a laissé sa fin (`ended`), que la relecture prenait pour la sienne et qui rendait la main en
+    // 3 s. On part de la longueur de la boîte avant la demande ; le manifeste de la tâche filtre le flux,
+    // comme dans le terminal riche : une trame d'une autre tâche ne la regarde pas.
+    let chemin = format!("/ide/teammate?backend={}&task={}", client::encoder(&backend), client::encoder(&o.task));
+    let au_depart = client::lire(&agent, &ep, &chemin).ok();
+    let deja = au_depart.as_ref().and_then(|v| v["mailbox"].as_array().map(Vec::len)).unwrap_or(0);
+    let task_manifest: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(au_depart.as_ref().and_then(|v| v["backend"].as_str().map(str::to_string))));
+    let lues = Arc::new(AtomicUsize::new(deja));
 
     // La boîte n'est pas encore relayée sur le flux (lot 1 de l'équipier) :
     // on la relit toutes les 2 s, et on s'arrête à la ligne `ended`. Quand le
     // flux portera `MailboxLine`, cette relecture s'efface d'elle-même.
     let boite_au_flux = Arc::new(AtomicBool::new(false));
     let releve = {
-        let (ep, agent, arret, lues, boite_au_flux, ecrire) = (ep.clone(), agent.clone(), arret.clone(), lues.clone(), boite_au_flux.clone(), ecrire.clone());
-        let chemin = format!("/ide/teammate?backend={}&task={}", client::encoder(&backend), client::encoder(&o.task));
+        let (ep, agent, arret, lues, boite_au_flux, ecrire, task_manifest) = (ep.clone(), agent.clone(), arret.clone(), lues.clone(), boite_au_flux.clone(), ecrire.clone(), task_manifest.clone());
+        let chemin = chemin.clone();
         std::thread::spawn(move || {
             while !arret.load(Ordering::SeqCst) {
                 if let Ok(v) = client::lire(&agent, &ep, &chemin) {
+                    // La tâche peut naître de la demande : son manifeste se lit dès qu'il existe.
+                    if let Some(m) = v["backend"].as_str() {
+                        *task_manifest.lock().unwrap_or_else(|p| p.into_inner()) = Some(m.to_string());
+                    }
                     let lignes = v["mailbox"].as_array().cloned().unwrap_or_default();
                     for l in lignes.iter().skip(lues.load(Ordering::SeqCst)) {
                         if !boite_au_flux.load(Ordering::SeqCst) {
@@ -240,6 +252,11 @@ fn lancer(o: Options) -> Result<(), String> {
                 return flux::Suite::Continuer;
             }
             if let Ok(v) = serde_json::from_str::<Value>(&t.data) {
+                if let Some(m) = task_manifest.lock().unwrap_or_else(|p| p.into_inner()).as_deref() {
+                    if v["backend"].as_str() != Some(m) {
+                        return flux::Suite::Continuer;
+                    }
+                }
                 if v["evenement"]["kind"] == "MailboxLine" {
                     boite_au_flux.store(true, Ordering::SeqCst);
                 }
