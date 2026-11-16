@@ -143,3 +143,11 @@ sinon proposer explicitement le périmètre persistant avant tout correctif.
 Chemins proposés seulement, pas réservés ; budget par appel/unknownNULL,
 positif>0/NULL/transactions et contre-exemples détaillés. Quatre fixtures intactes,
 aucun code produit, build/rejeu/SDK/service ni qualification supplémentaire.
+
+Lecture complémentaire C7 autorisée : [preuves de stockage/membership](../16-11-2026/11-rows-membership-storage-findings.md).
+Singleton réellement sans arête (insertToLayer), CSR0 commun aux offsets non
+sélectionnés et aux sommets degré0, map de bâti détruite, format HNSW cinq
+scalaires sans ensemble MVCC : aucune marque complète versionnée établie.
+Option membership persistant exige arbitrage cœur/C7 sur maintenance et
+compatibilité ; sinon compte inconnuNULL, ticket ouvert/fourfixturesinchangées.
+Aucun chemin réservé/édition production/DB/natif, aucune analyse C1 suppléée.
