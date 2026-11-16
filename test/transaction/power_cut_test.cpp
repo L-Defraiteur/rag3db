@@ -124,6 +124,74 @@ TEST_F(PowerCut, TheDoubleLosesWhatIsNotSynced) {
     EXPECT_EQ(std::filesystem::file_size(synced), 4u) << "[check: synced-write-survives-the-cut]";
 }
 
+// The double, its directory entries pending (16 Nov. 2026, hotfixs): a file whose data is synced
+// but whose directory is not has no name after the cut; with the directory synced it has one; a
+// file removed without syncing its directory is still there. Without it, a green proves nothing.
+TEST_F(PowerCut, TheDoubleLosesADirectoryEntryThatIsNotSynced) {
+    const auto dir = std::filesystem::path(databasePath).parent_path().string();
+    const auto unnamed = databasePath + ".entry-unsynced";
+    const auto named = databasePath + ".entry-synced";
+    const auto removed = databasePath + ".entry-removed";
+    std::filesystem::remove(unnamed);
+    std::filesystem::remove(named);
+    std::ofstream(removed) << "abcd";
+    const auto status = inAChild(false, [&] {
+        CutFileSystem::pendingDirectoryEntries() = true;
+        CutFileSystem fs{""};
+        const auto flags = FileOpenFlags(
+            FileFlags::WRITE | FileFlags::READ_ONLY | FileFlags::CREATE_IF_NOT_EXISTS);
+        const uint8_t bytes[4] = {'a', 'b', 'c', 'd'};
+        auto a = fs.openFile(unnamed, flags);
+        a->writeFile(bytes, 4, 0);
+        a->syncFile();
+        if (!fs.fileOrPathExists(unnamed)) {
+            _exit(10); // the child must see the file it created
+        }
+        fs.syncDirectory(dir + "/elsewhere");
+        auto b = fs.openFile(named, flags);
+        b->writeFile(bytes, 4, 0);
+        b->syncFile();
+        fs.syncDirectory(dir);
+        auto c = fs.openFile(unnamed + ".late", flags); // created after the sync: no name either
+        c->writeFile(bytes, 4, 0);
+        c->syncFile();
+        fs.removeFileIfExists(removed);
+        if (fs.fileOrPathExists(removed)) {
+            _exit(11); // the child must not see the file it removed
+        }
+        _exit(CUT);
+    });
+    ASSERT_EQ(status, CUT) << "[check: setup] the child did not reach the cut";
+    EXPECT_FALSE(std::filesystem::exists(unnamed + ".late"))
+        << "[check: an-entry-created-after-the-directory-sync-is-lost-by-the-cut]";
+    EXPECT_TRUE(std::filesystem::exists(named) && std::filesystem::file_size(named) == 4u)
+        << "[check: an-entry-whose-directory-is-synced-survives-the-cut]";
+    EXPECT_TRUE(std::filesystem::exists(removed))
+        << "[check: a-removal-whose-directory-is-not-synced-is-undone-by-the-cut]";
+    // The unnamed file was created before the sync of its own directory: it is named by it.
+    EXPECT_TRUE(std::filesystem::exists(unnamed))
+        << "[check: the-directory-sync-names-every-pending-entry-of-its-directory]";
+}
+
+// A new database, its directory entries pending: commits that returned "ok" are there after a
+// cut. The data file and the journal are created by the database; if their directory is never
+// synced, a power cut can take both names away, and every commit with them (ticket
+// 2026-10-04-durabilite-sur-faute-d-entree-sortie-ou-coupure, « répertoire jamais synchronisé »).
+TEST_F(PowerCut, CommitsOfANewDatabaseSurviveACutOfItsDirectoryEntries) {
+    const auto status = inAChild(true, [&] {
+        CutFileSystem::pendingDirectoryEntries() = true;
+        Database database(databasePath, *systemConfig);
+        Connection connection(&database);
+        if (!fill(connection)) {
+            _exit(11);
+        }
+        _exit(CUT); // the commits returned "ok": cut
+    });
+    ASSERT_EQ(status, CUT) << "[check: setup] the child did not reach the cut";
+    EXPECT_EQ(judge("MATCH (t:T) RETURN count(*), sum(t.id);"), "2000|1999000\n")
+        << "[check: commits-survive-a-cut-of-the-directory-entries]";
+}
+
 TEST_F(PowerCut, ACommitThatReturnedOkSurvivesACut) {
     const auto status = inAChild(true, [&] {
         Database database(databasePath, *systemConfig);
