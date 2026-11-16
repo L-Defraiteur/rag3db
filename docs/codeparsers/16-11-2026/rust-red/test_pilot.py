@@ -42,5 +42,67 @@ class ScopeReaderTests(unittest.TestCase):
         self.assertEqual(scope.get('verdict'), 'ROUGE')
 
 
+    def test_no_verdict_is_refused(self):
+        (self.scope / 'verdict.json').unlink()
+        with self.assertRaises(ValueError):
+            pilot.read_scope_verdict(self.root, 1)
+
+    def test_two_verdicts_are_refused(self):
+        other = self.root / 'scope' / 'validation-other'
+        other.mkdir()
+        self.write(other / 'verdict.json', self.verdict)
+        with self.assertRaises(ValueError):
+            pilot.read_scope_verdict(self.root, 1)
+
+    def test_active_or_foreign_authority_is_refused(self):
+        self.authority['etat'] = 'actif'
+        self.write(self.scope / 'autorite.json', self.authority)
+        with self.assertRaises(ValueError):
+            pilot.read_scope_verdict(self.root, 1)
+        self.authority['etat'] = 'termine'
+        self.write(self.scope / 'autorite.json', self.authority)
+        self.write(self.root / 'authority-path.json', dict(path='/another/invocation', deadline=123.0))
+        with self.assertRaises(ValueError):
+            pilot.read_scope_verdict(self.root, 1)
+
+    def test_wrong_codes_cleanup_or_remaining_descendants_are_refused(self):
+        for changes in [dict(code=0), dict(code=1), dict(restes=[42]), dict(nettoye=False),
+                        dict(erreur='deadline'), dict(verdict='VERT')]:
+            with self.subTest(changes=changes):
+                self.write(self.scope / 'verdict.json', dict(self.verdict, **changes))
+                with self.assertRaises(ValueError):
+                    pilot.read_scope_verdict(self.root, 1)
+        self.write(self.scope / 'verdict.json', self.verdict)
+        with self.assertRaises(ValueError):
+            pilot.read_scope_verdict(self.root, 0)
+        self.write(self.root / 'red-pair.result.json', dict(rc=1))
+        with self.assertRaises(ValueError):
+            pilot.read_scope_verdict(self.root, 1)
+
+    def test_live_private_scope_is_refused(self):
+        Path(self.verdict['prive']).mkdir()
+        with self.assertRaises(ValueError):
+            pilot.read_scope_verdict(self.root, 1)
+
+    def test_wrong_or_ignored_tests_and_wrong_failure_are_refused(self):
+        for stdout, stderr in [
+            (self.stdout.replace('2 failed; 0 ignored', '1 failed; 1 ignored'), self.stderr),
+            (self.stdout.replace(pilot.NAMES[0], 'another_test'), self.stderr),
+            (self.stdout, self.stderr.replace('the project call must remain visible', 'unrelated failure'))]:
+            with self.subTest(stdout=stdout):
+                (self.root / 'red-pair.stdout').write_text(stdout)
+                (self.root / 'red-pair.stderr').write_text(stderr)
+                with self.assertRaises(ValueError):
+                    pilot.read_scope_verdict(self.root, 1)
+
+    def test_linked_verdict_is_refused(self):
+        path = self.scope / 'verdict.json'
+        other = self.root / 'linked-target.json'
+        path.rename(other)
+        path.symlink_to(other)
+        with self.assertRaises(ValueError):
+            pilot.read_scope_verdict(self.root, 1)
+
+
 if __name__ == '__main__':
     unittest.main()

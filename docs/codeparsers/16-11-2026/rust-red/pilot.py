@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -129,8 +130,50 @@ def inside(config, root):
 
 
 def read_scope_verdict(root, common_rc):
-    scope_path = root / 'scope/verdict.json'
-    return json.loads(scope_path.read_text()) if scope_path.exists() else {}
+    """Read one completed common invocation and the actual native red pair."""
+    def require(condition, message):
+        if not condition:
+            raise ValueError(message)
+
+    def load(path):
+        require(path.resolve() == path.absolute() and not path.is_symlink(), 'linked proof artifact')
+        try:
+            return json.loads(path.read_text())
+        except (OSError, ValueError) as error:
+            raise ValueError('missing or invalid proof artifact: ' + path.name) from error
+
+    matches = list((root / 'scope').glob('validation-*/verdict.json'))
+    require(len(matches) == 1, 'expected exactly one common verdict')
+    scope_path = matches[0]
+    scope = load(scope_path)
+    authority_path = scope_path.with_name('autorite.json')
+    authority = load(authority_path)
+    observed = load(root / 'authority-path.json')
+    require(observed.get('path') == str(authority_path), 'authority does not belong to this invocation')
+    require(authority.get('etat') == 'termine', 'common authority is not completed')
+    require(observed.get('deadline') == authority.get('echeance') and 'deadline' in observed,
+            'authority deadline mismatch')
+    require(common_rc == 1 and scope.get('code') == 101 and scope.get('verdict') == 'ROUGE',
+            'unexpected common or child return code')
+    require(scope.get('erreur', 'missing') is None and scope.get('restes') == [] and scope.get('nettoye') is True,
+            'supervisor error, remaining descendants or incomplete cleanup')
+    private = scope.get('prive')
+    require(isinstance(private, str) and Path(private).is_absolute(), 'private scope path missing')
+    require(not Path(private).exists() and not Path(private).is_symlink(), 'private scope still exists')
+    require(load(root / 'red-pair.result.json').get('rc') == 101, 'native runner did not return 101')
+    require(load(root / 'red-pair.command.json') ==
+            ['bash', './run_e2e.sh', '--test', 'e2e_usages', 'on_the_same_line'], 'unexpected native command')
+    stdout = (root / 'red-pair.stdout').read_text(errors='replace')
+    stderr = (root / 'red-pair.stderr').read_text(errors='replace')
+    text = stdout + stderr
+    failed = [line.strip() for line in stdout.splitlines() if line.strip().startswith('e2e_usages::')]
+    require(sorted(failed) == sorted('e2e_usages::' + name for name in NAMES), 'unexpected failed witness names')
+    require(len(re.findall(r'test result: FAILED\. 0 passed; 2 failed; 0 ignored;', stdout)) == 1,
+            'expected exactly two failed tests and no ignored test')
+    require(text.count('the project call must remain visible') == 2 and
+            text.count('left: 0') == 2 and text.count('right: 1') == 2,
+            'failures do not establish the expected missing project calls')
+    return scope
 
 
 def main():
@@ -189,17 +232,14 @@ def main():
                '--', sys.executable, str(Path(__file__).resolve()), 'inside', '--proofs', str(root)]
     os.chdir(root)
     rc = record(root, 'common', command, root, env)
-    stdout = (root / 'red-pair.stdout').read_text(errors='replace') if (root / 'red-pair.stdout').exists() else ''
-    stderr = (root / 'red-pair.stderr').read_text(errors='replace') if (root / 'red-pair.stderr').exists() else ''
-    text = stdout + stderr
-    expected = (rc != 0 and all(('    e2e_usages::' + name) in text for name in NAMES)
-                and '0 passed; 2 failed; 0 ignored' in text
-                and text.count('the project call must remain visible') == 2)
-    scope = read_scope_verdict(root, rc)
-    expected = (expected and scope.get('nettoye', False) and not scope.get('restes', ['unknown'])
-                and text.count('left: 0') == 2 and text.count('right: 1') == 2)
+    try:
+        scope = read_scope_verdict(root, rc)
+        expected, reason = True, None
+    except (ValueError, OSError) as error:
+        scope, expected, reason = {}, False, str(error)
     (root / 'classification.json').write_text(json.dumps({'expected_red_pair': expected,
-        'common_rc': rc, 'scope_verdict': scope.get('verdict', 'NOT_ADMITTED'), 'global_pass': False}))
+        'common_rc': rc, 'scope_verdict': scope.get('verdict', 'NOT_QUALIFIED'),
+        'reason': reason, 'global_pass': False}))
     print('EXPECTED RED PAIR' if expected else 'UNEXPECTED RED; STOP AND DIAGNOSE')
     return 1
 
