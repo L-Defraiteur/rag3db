@@ -37,3 +37,13 @@ Log horsW cx-doc-green-cpu-20261116/green-a506.log SHA256 8cde3bd3140d85143ecd06
 Log horsW cx-doc-green-cpu-20261116/green-e60.log SHA256 3706154697102f00aa59849c67df1260e2fdb5e2660e2a1d2ce5fb75599cb749.
 
 AST10/diffcheck/ticketcheck ; aucuneP/Qverte ni garde/cache réel/Cargo/natif/Vertex depuisrouge. NouvelleROexacte et GO600distinct C7 requis.
+
+## Réserve publication après ouverture tardive
+
+Mémoire réserve1b9e consignée5c112 avant correction. Vrai prepare final ET vraie save AST publiés40591 puis rouge0,004s : ouverture result.json finit101/END100 après contrôles99, statutGREEN à tort. Correctife63c88a1674b01a64dc8ad5b72ac3e3439301616 publié AVANTrejeu : contrôle APRÈSopen immédiatementavantdump, basculeUNEXPECTED_FAILURE, retour du verdict effectivement écrit puis même valeur pourprint/exit1. Quarante-et-une fonctions passent en0,299s sous timeout60failfast. Ancienrouge conservé. APP1bd/transitionGit/cache inchangés, aucunP/Qvert/Cargo/Vertex.
+
+Log horsW cx-doc-green-cpu-20261116/red-40591.log SHA256 9fbd793dcb521b0e729aa7793974634cd66d0dd5a04cb83292145b2566eaa0a3.
+
+Log horsW cx-doc-green-cpu-20261116/green-e63.log SHA256 f00fd9ec83513d8ce5447d2f83ce4a0db0aee0e364319f45a74f1d995c48171f.
+
+Couple1b9e supersédé/nonlancé ; nouvelleROexacte requise sur SHA documentaire final, même proposition600 aprèsposte/sixexacts seulement.
