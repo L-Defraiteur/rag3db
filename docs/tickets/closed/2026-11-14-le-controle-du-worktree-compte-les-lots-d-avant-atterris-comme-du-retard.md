@@ -1,6 +1,6 @@
 # Le contrôle du worktree compte les lots d'avant atterris comme du retard
 
-- **État** : ouvert (14 novembre 2026, 23 h 50), relevé de codeparsers par c7 ; corrigé dans `docs/optimiseur/scripts/controle-du-worktree.sh` et recopié au cache des deux postes à 23 h 46 (sha256 110283489f652d69 → 94d5c09b6c85b737, l'ancien en `.avant-cherry-pick`). Reste ouvert pour l'inventaire ci-dessous.
+- **État** : fait (14 novembre 2026, 0cc9bbf676) : docs/optimiseur/scripts/controle-du-worktree.sh compte son retard par contenu (--cherry-pick --right-only), recopié au cache des deux postes (sha256 94d5c09b6c85b737) ; fermé à la passation de G le 16 novembre
 - **Famille** : produit
 - **Gravité** : faux rouge ; une passe sur une tête de pile s'arrête avant de commencer.
 - **Atteignable en service** : non, c'est l'outillage des passes.

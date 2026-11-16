@@ -1,6 +1,6 @@
 # Un lot C++ rejoue 35 minutes quand seul du Rust a atterri
 
-- **État** : ouvert (15 novembre 2026, 11 h 55), relevé du cœur par c7.
+- **État** : fait (15 novembre 2026, master 72f5e1ffe) : la voie des suites C++ transférables de push_garde.sh ; tools/shell y manque encore (ticket docs/optimiseur/tickets/2026-11-16-la-voie-cpp-transferable-ignore-tools-shell.md) ; fermé à la passation de G le 16 novembre
 - **Famille** : produit
 - **Gravité** : coût ; un lot C++ vert rejoue ses suites (35 minutes) pour du code qu'elles ne lient pas.
 - **Atteignable en service** : non, c'est l'outillage du push.

@@ -1,6 +1,6 @@
 # La garde refuse un commit du lot déjà sur master
 
-- **État** : ouvert (15 novembre 2026, 1 h 35), relevé de c7 (archi, la file des écritures, refusé au range-diff).
+- **État** : fait (15 novembre 2026, master bdeac0b86) : un « < » du range-diff dont le patch est déjà sur master (git cherry) est toléré ; fermé à la passation de G le 16 novembre
 - **Famille** : produit
 - **Gravité** : faux refus ; un lot juste ne passe pas, et la session repose sa tête à la main.
 - **Atteignable en service** : non, c'est l'outillage du push.

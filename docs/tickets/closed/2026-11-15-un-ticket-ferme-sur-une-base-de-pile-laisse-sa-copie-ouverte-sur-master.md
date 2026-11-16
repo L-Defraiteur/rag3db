@@ -1,6 +1,6 @@
 # Un ticket fermé sur une base de pile laisse sa copie ouverte sur master
 
-- **État** : ouvert (15 novembre 2026, 0 h 45), relevé de c7 (vu trois fois le 14 au soir : archi deux fois, embarquement).
+- **État** : fait (15 novembre 2026, master 2fb7fdcec) : la garde retire la copie ouverte d'un ticket que le lot ferme, au dernier pas ; fermé à la passation de G le 16 novembre
 - **Famille** : produit
 - **Gravité** : CI rouge ; master porte deux copies d'un même ticket jusqu'au commit de docs qui retire l'ouverte, poussé à la main.
 - **Atteignable en service** : non, c'est l'outillage du push.

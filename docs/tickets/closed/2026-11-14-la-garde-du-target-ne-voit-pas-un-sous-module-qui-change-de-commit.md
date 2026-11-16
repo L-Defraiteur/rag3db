@@ -1,6 +1,6 @@
 # La garde du target ne voit pas un sous-module qui change de commit
 
-- **État** : ouvert (14 novembre 2026, 23 h 15), relevé de codeparsers par c7 ; corrigé sur la branche garde-sous-module (dba057156), dans la pile derrière la chaîne Rust.
+- **État** : fait (14 novembre 2026, master ac8ef511f) : le commit de chaque sous-module est noté à côté du marqueur du target, et un commit changé efface les empreintes locales ; fermé à la passation de G le 16 novembre
 - **Famille** : produit
 - **Gravité** : faux rouge, ou faux vert ; une passe juge un binaire bâti en partie avec le code d'un autre commit du sous-module.
 - **Atteignable en service** : non, c'est l'outillage des passes.

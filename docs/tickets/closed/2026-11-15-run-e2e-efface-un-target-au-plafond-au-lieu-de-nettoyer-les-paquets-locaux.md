@@ -1,6 +1,6 @@
 # run_e2e.sh refuse un target au plafond au lieu de nettoyer ses paquets locaux
 
-- **État** : ouvert (15 novembre 2026), relevé par archi, mis en ticket sur le mot de c7
+- **État** : fait (15 novembre 2026, master 2bd2c136b puis 2e11d5345) : au plafond, run_e2e.sh fait d'abord le ménage des paquets locaux (menager_au_plafond), et pose le CACHEDIR.TAG de cargo quand il manque ; fermé à la passation de G le 16 novembre
 - **Famille** : produit
 - **Gravité** : coût — une passe s'arrête avant de jouer, et l'effacement du target entier coûte
   un rebâti complet (de 5 à 10 min sous poste lourd) à chaque fois
