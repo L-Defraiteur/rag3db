@@ -75,13 +75,22 @@ def run(name, argv, export=False, extra=None):
     env = E.copy(); env.update(extra or {})
     command = (['bash', '-c', '. scripts/lib_du_magasin.sh; exporter_la_lib || exit 2; exec "$@"', 'rate-key'] + argv) if export else argv
     started = time.monotonic()
-    print('START', name, 'remaining', int(DEADLINE-started), flush=True)
-    with (P/(name+'.log')).open('w') as output:
-        result = subprocess.run(command, cwd=C, env=env, stdout=output, stderr=subprocess.STDOUT,
-                                timeout=max(1, DEADLINE-time.monotonic()-15))
-    phases.append(dict(name=name, code=result.returncode, seconds=time.monotonic()-started))
+    record = dict(name=name, command=command, cwd=str(C), code=None,
+                  stdout=name+'.log', stderr=name+'.stderr.log', state='running')
+    phases.append(record)
     save('phases.json', phases)
-    assert result.returncode == 0, (name, result.returncode)
+    print('START', name, 'remaining', int(DEADLINE-started), flush=True)
+    with (P/record['stdout']).open('w') as output, (P/record['stderr']).open('w') as errors:
+        try:
+            result = subprocess.run(command, cwd=C, env=env, stdout=output, stderr=errors,
+                                    timeout=max(1, DEADLINE-time.monotonic()-15))
+        except BaseException as error:
+            record.update(state='interrupted', error=repr(error), seconds=time.monotonic()-started)
+            save('phases.json', phases)
+            raise
+    record.update(code=result.returncode, state='finished', seconds=time.monotonic()-started)
+    save('phases.json', phases)
+    assert result.returncode == 0, (name, result.returncode, record['stdout'], record['stderr'])
     guard(); size_guard()
     print('PASS', name, flush=True)
     return (P/(name+'.log')).read_text(errors='replace')
@@ -120,6 +129,11 @@ try:
     save('source.json', dict(source=SOURCE, tree=git('rev-parse', 'HEAD^{tree}'),
          base=git('merge-base', 'HEAD', 'origin/master'), sdk=SDK, pin_sha256=PIN_SHA,
          deadline=DEADLINE, budget_seconds=5400, target=str(T), initial_target_bytes=size_guard(), tests=TESTS))
+    cgroup = Path('/proc/self/cgroup').read_text().strip().split('::', 1)[1]
+    group = Path('/sys/fs/cgroup'+cgroup)
+    save('scope-os.json', dict(receipt=os.environ['RAG3WEAVER_VALIDATION_RECU'],
+         cgroup=cgroup, memory_max=(group/'memory.max').read_text().strip(),
+         memory_high=(group/'memory.high').read_text().strip(), supervisor='common receipt verifier'))
     run('scope', ['python3', 'scripts/confiner_validation.py', 'verifier'])
     run('target-ownership', ['bash', '-c', '. scripts/garde_target.sh; garder_le_target "$CARGO_TARGET_DIR" "$PWD"'])
     build = run('compile-targeted', ['bash', 'scripts/cargo_magasin.sh', 'test', '--lib', '--features', F,
