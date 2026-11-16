@@ -62,3 +62,29 @@ parent réel/possédé, PQS après poste et création exclusive dans la portée.
 Ancien target d'un autre poste inchangé ; pas de copie SDK/cache. Nouveau
 proofroot et capture cmd/rc/stdout/stderr externes avant toute assertion.
 Le correctif fonctionnel de la collision reste absent, témoins NON JOUÉS.
+
+## Rouge exact avant correctif de la mention, 16 novembre
+
+Source056f552c122353a25c37f2feaf1d4e5006c712f3, pilote SHA-256
+b3a7f1f0acb31ed8e01645e92ee8ee71eceeea527e24706a49989eb649a39f5d,
+allocation C7-ROUGE-056f-16nov : les deux ordres d'appels ont échoué pour la
+bonne raison, 0passé/2échoués/0ignoré en0,89s, assertion left0/right1
+« the project call must remain visible ». Deux préalables natifs avaient passé.
+HashEmbedder64, aucune requête PG/service/modèle, lib59ac vérifiée.
+
+Reçu validation-kjnv52n2 terminé : Commonrc1/ROUGE, enfant101, erreur=null,
+restes=[], nettoye=true, privé /tmp/r3v-frf5yk7u retiré. Aucun vert/global acquis.
+Les bruts, manifestes et classification sont conservés sur les deux postes sous
+~/.cache/codeparsers-notes/rust-red-056f552c12/proofs/. Le reçu contenant le
+jeton reste dans sa preuve protégée d'origine à luciepc ; le fichier de chemin
+d'autorité et le verdict peuvent être relus sans recopier ce jeton.
+red-pair.stdout SHA-256 ecabf0b3b22075aef0600d115cde8c57c9159e6aee1f44cfa991f4504d21ab49,
+prepared.json 1fbef7c4caf9243b4c12b96a04b1834d5567626808f4348a97e9ee0b430d24ae,
+classification.json fad8edcc7dd66875922e749a50faf2be8a9cacf819de32d0340aaaa022a3d6cb.
+
+Le worktree rouge demeure figé. Correction préparée séparément dans
+/home/lucied/git_workspaces/cx-codeparsers-rust-fix, branche
+cx-codeparsers-rust-fix-1 ; aucun budget rouge réactivé. La ligne brute sera
+indexée une seule fois par fichier ; la position de chaque référence sera
+vérifiée en octets avant de qualifier le chemin de cette occurrence seulement.
+REGLES reste7 jusqu'à preuve verte et qualification du gitlink.
