@@ -17,3 +17,5 @@ FinalexigecommonVERT0TERMINE/restes[]/nettoyé/busabsent, ownedPID/startquiet sa
 ## Portée des erreurs, explicitement bornée
 
 ROsourceHotfix favorableBlobs, pasunequalificationnative. verify_fts_files_strict propage lesErr de rebuild_fts_step ; open_fts_files→open_fts_handles_for conserve ses retoursOption/diagnosticshistoriques, donc PASgarantiedetouteserreursd'ouvertureFiles. Limiteconsignée même302/301 ; pascause du DOUBLEBlobs. COUNTsql→0 hérité reste ticketdistinct ouvert. Ce pilotejugesBlobswriter/plan_onlyfalse, pasreadonly/transactionouverte/multicellules. Aucun élargissement silencieux ni promesse de strictesseglobale.
+
+Prépublication548e des contrats puis codef9a7 AVANTessais :8fonctionsPythonCPU vertes0.006s, AST5verts/diffcheck ; tests SDK/proc/GDB sont des doubles, aucun processus/proc/signalnatif/Cargo/DB/target/autorité exécuté. Le testinventaire est maintenant nommé all_exact (5noms paramétrés), sans changementd'assertions. Source5juges toujoursNONJOUÉSaprèsfix, pasdeVERTproduit déduit.
