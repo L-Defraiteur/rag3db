@@ -307,3 +307,10 @@ AVANTcode : les enveloppes des oracles existants ne sont pas toutes pures
 octetsadmisépinglés ; touteerreurlecture/hash/décodagefatale avantadmission,
 pasaucunhitdéduitd’uneerreur ni réouvertureambiguë. Futurmocklectureéchouée
 àprévoir, NONcodé/NONjoué. Document10précisé ; aucune modification du core.
+
+ComplémentRORecherche portéavantcode : strictpréserveséparateurs maisfoldUnicode/
+backmapoctets ; '_'séparateur,termanchor+exact,prefixanchorseul. Oraclefuzzy
+réutilisefuzzy_spansmoteur : distinctcheminindex, pasindépendancealgorithmique.
+RustRegexUnicode/spansnonvides≠PythonASCII. Rougefuture50sanstémoin/mockbuilder0
+surpointENTRÉECONSOMMATEURadmission, pashelperisolé/APIabsente/modificationglobale
+usablequantité. RefNONvideaprès3builds préservée. ToutresteNONécrit/NONjoué.

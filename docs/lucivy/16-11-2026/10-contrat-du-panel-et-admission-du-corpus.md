@@ -107,7 +107,7 @@ Invariants proposés pour cette admission :
 1. Résoudre les identités/contenus et leur ordre exact, refuser tout chemin privé,
    lien ou empreinte inattendue avant lecture/construction. Les node_id restent
    liés aux mêmes occurrences pour les trois index et la réouverture.
-2. Évaluer **tous** les prérequis du panel avec les oracles indépendants existants
+2. Évaluer **tous** les prérequis du panel avec les oracles existants, distincts du chemin index
    et les mêmes paramètres de QueryConfig. Publier chaque requête sans témoin,
    pas seulement la première. Un comptage RAW ou le présent audit ne suffit pas
    pour les modes flous/regex/frontières/Unicode.
@@ -173,3 +173,23 @@ du brouillon : ce sont leurs cœurs réutilisables qui doivent devenir purs.
 Ajouter au futur témoin mock une erreur de lecture/UTF8 : refus explicite avant
 construction, jamais une absence de résultat. Témoin toujours NONcodé/NONjoué ;
 pas d’autorisation de correction ou de passe déduite de cette RO.
+
+Complément Recherche sur les modes : strict conserve les séparateurs mais
+reste insensible à la casse (fold Unicode avec correspondance vers les octets
+originaux) ; relax retire les séparateurs. `_` est un séparateur selon
+is_content_char, les caractères nonASCII de contenu restent à traiter. Term
+est anchor_start+exact, prefix anchor_start seul. L’oracle flou réemploie la
+définition fuzzy_spans du moteur : il est distinct du chemin **index**, pas
+algorithmiquement indépendant. RustRegex/Unicode/casse/spans nonvides ne se
+qualifient pas par le locateur PythonASCII de cet audit. Ces limites sont à
+conserver dans les futurs témoins et leur portée.
+
+Le rouge pure/mock doit atteindre le **point d’entrée consommateur de
+l’admission**, avant son builder, avec50documents sans témoin et compteur
+construction0. Il doit montrer un vrai échec du critère actuel, pas une API
+absente ni une modification globale de common::usable (contrat de quantité/
+absence à préserver). L’adaptateur de test doit exercer le même point que
+derived_in_ram ; une nouvelle fonction seule sans raccord au consommateur ne
+suffit pas. Publier ce témoin et voir son rouge avant le correctif, puis garder
+le nonvide de la référence après tripleconstruction. Aucun témoin écrit/joué
+ni changement au consommateur dans cette préparation documentaire.
