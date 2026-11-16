@@ -359,6 +359,7 @@ impl Node for ReindexFileNode {
                         .collect()
                 }
             };
+            cat.observe_index_rate(lot.len(), tenue.elapsed());
             drop(cat);
             let tenu = tenue.elapsed();
             faits += lot.len();

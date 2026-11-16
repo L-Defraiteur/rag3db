@@ -983,6 +983,16 @@ fn default_index_wait_s() -> u64 {
     6
 }
 
+/// The line a read puts at the top of its answer when the index is not ready.
+fn not_ready_line(state: &Value) -> String {
+    let files = state["pending_files"].as_u64().unwrap_or(0);
+    let when = match state["eta_s"].as_u64() {
+        Some(n) => format!("environ {n} s"),
+        None => "durée inconnue".to_string(),
+    };
+    format!("index pas prêt, {when} : la réponse porte sur ce qui est déjà indexé ({files} fichier(s) en attente).")
+}
+
 /// **`view` d'un appel d'outil** : `{"layer": <id de couche>, "rank"?: <génération>}`.
 /// Le rang omis vaut la dernière génération publiée de la couche. Toute autre
 /// clé, une couche absente ou vide, un rang qui n'est pas un entier : un refus
@@ -4720,6 +4730,11 @@ impl Backend {
                 metadata_ports.push(port.clone());
             }
         }
+        // **A lagging index** (point 7 of Lucie's vision, 16 November 2026): a read
+        // tool waits for it under `search.index_wait_s`, or answers at once and
+        // says it is not ready. Before the graph, so that its snapshot sees the
+        // catch-up.
+        let index_state = if attachment.freshness { self.wait_for_a_lagging_index(prepared) } else { None };
         struct RestoreView(Option<crate::views::ViewRequest>);
         impl Drop for RestoreView {
             fn drop(&mut self) {
@@ -4738,6 +4753,15 @@ impl Backend {
                 format!("`view` : l'outil {name} n'a lu sous aucune vue (ce backend n'a pas d'instantané de lecture) ; la réponse n'est pas rendue")
             })?;
             response["view"] = read;
+        }
+        if let Some(state) = index_state {
+            let line = not_ready_line(&state);
+            response["index"] = state;
+            for key in ["result", "presentation"] {
+                if let Some(text) = response.get(key).and_then(Value::as_str) {
+                    response[key] = Value::String(format!("> {line}\n{text}"));
+                }
+            }
         }
         context["result"] = response["result"].clone();
         let mut report = self.validate_hooks(prepared, &harness.after, &context);
@@ -4767,6 +4791,28 @@ impl Backend {
             self.dire_la_fraicheur(&mut response);
         }
         Ok(response)
+    }
+
+    /// **The wait for a lagging index** of the call's cell, by the read view
+    /// (never the catalog's mutex). `None`: the index is caught up, or caught
+    /// up within the wait, and nothing is said. Otherwise the `index` field of
+    /// the answer: `ready: false`, the estimate in seconds (`null` without an
+    /// observed rate), the files still pending, and `waited_s` when it waited.
+    fn wait_for_a_lagging_index(&self, prepared: &PreparedBackend) -> Option<Value> {
+        let vue = self.read_view.current()?;
+        let cell = CELL_OF_CALL.with(|c| c.borrow().clone()).unwrap_or_else(|| vue.scope.clone());
+        let estimate = vue.file_lag.estimate(&cell)?;
+        let wait_s = prepared.manifest.search.as_ref().map_or_else(default_index_wait_s, |s| s.index_wait_s);
+        let eta_s = estimate.eta_ms.map(|ms| ms.div_ceil(1000));
+        if estimate.eta_ms.is_some_and(|ms| ms > wait_s * 1000) {
+            return Some(json!({"ready": false, "eta_s": eta_s, "pending_files": estimate.pending_files}));
+        }
+        let start = std::time::Instant::now();
+        if vue.file_lag.wait_caught_up(&cell, start + std::time::Duration::from_secs(wait_s)) {
+            return None;
+        }
+        let pending = vue.file_lag.estimate(&cell).map_or(estimate.pending_files, |e| e.pending_files);
+        Some(json!({"ready": false, "eta_s": eta_s, "pending_files": pending, "waited_s": start.elapsed().as_secs()}))
     }
 
     /// **La fraîcheur d'une réponse de lecture** (`ToolAttachment::freshness`) : le champ
