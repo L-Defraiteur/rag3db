@@ -339,3 +339,31 @@ Q/P/S v3 restent conservés ; nouveau paquet v4 uniquement, même target actif.
 La préparation v4 doit relire et comparer le ledger et copies du target connu,
 sans Cargo, réallocation, suppression, marqueur forgé ni nouveau target.
 Les résultats des nouveaux témoins restent NON JOUÉS à cette publication.
+
+### GO distinct C7-TTY-FULL-256-16nov3600 — rouge de préparation conservé
+
+Source/pilote exact `256097281b6588a008858177de7b373576b20608`, Qv4. Budget
+original start847833.676762083/end851433.676762083 ; final847834.842848808.
+Préflight après vrai poste : ledger1018entrées égal, aucun lien attribué W/T,
+4UNKNOWN non attribués consignés ; copies de contrôleurs extérieures à W.
+
+Premier rouge : garde commune lors du passage target crate→workspace, avant
+compilation, `cargo metadata` refuse le paquet **ld-lucivy v4.3.9 absent du
+cache Cargo**, réseau interdit par CARGO_NET_OFFLINE=true. Message exact :
+`failed to download ld-lucivy v4.3.9` puis
+`attempting to make an HTTP request, but --offline was specified`.
+Ce n'est pas un échec d'assertion ni un défaut produit établi. F8rc2/pilote1 ;
+aucun juge F8 joué, aucun bâti tty ni harnais lancé, aucun retry/reset.
+
+Preuves sous `~/.cache/rag3weaver-build/` :
+- `cx-tty-english-aliases-full-v4/{f8.log,f8.rc,profile-before.json,sdk-sha.txt}` ;
+- `cx-tty-aliases-controller-v4/{allocation,remaining-after-poste,composed-verdict}.json` ;
+- `cx-tty-aliases-common-v4/validation-zcvv4qs0/` : ROUGE code1/erreur null,
+  restes[], nettoye true ; autorité PID539556/start84783370 TERMINÉE.
+
+Worktree propre après et marqueur target toujours propriétaire crate tty ;
+la garde n'a pas effectué l'adoption. Les verts crate0c4 restent historiques,
+aucun vert complet pour le candidat. Prochain pas transmis C7 : préparer
+l'acquisition de la dépendance exacte, avec provenance et voie réseau ciblée
+validées avant une nouvelle allocation ; aucun téléchargement ni reprise
+implicite. Target et preuves restent conservés.
