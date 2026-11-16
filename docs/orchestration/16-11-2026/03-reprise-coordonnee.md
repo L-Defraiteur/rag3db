@@ -43,7 +43,7 @@ Les préparations se font sur des branches `cx-…`, avec les tickets déjà dé
 | banc | Témoin du débit au faux service, entrée 6 pas 2 | Aucun appel aux services partagés ; clé à coordonner avec embarquement |
 | mémoire | Reproduire et corriger le `Text file busy` des fixtures | `codex_threads.rs` côté tests ; hypothèse du FD hérité à prouver |
 | tty | Alias anglais compatibles des commandes et options | `commandes.rs`, `main.rs`, tests et README ; aucune modification d'hôte ou de thème |
-| codeparsers | Terminer le WIP des mots vides Rust et du std homonyme | Réservation à confirmer avant code ; pointeur et règle d'analyse dans le même lot |
+| codeparsers | Terminer le WIP des mots vides Rust et du std homonyme | `code.rs`, `e2e_usages` et chemins du sous-module annoncés ; pointeur et règle d'analyse dans le même lot |
 | lucivy | Préparer la validation de l'ulp en parse et retrouver le corpus | Si absent, consigner le blocage avant l'entrée suivante ; aucune fusion de PR #42 ni publication |
 
 Le témoin ADD COLUMN existe déjà sur master : c'est un résultat de l'audit de hotfixs, pas un nouveau vert d'exécution. Les pages du 13 sont historiques. Les champs et mécanismes de générations, vues, socle, archiviste et services livrés du 14 au 16 ne sont pas à réimplémenter.
@@ -57,5 +57,21 @@ G prend la priorité : bibliothèque `59ac9c86bc`, audit de fraîcheur des artef
 Arbre prépare les migrations et les réalise seulement après le FINI vérifié de G : instantanés et retour, contrôles des deux sens, maintenance, 1b et montée aux générations, repassage puis contrôles visibles, miroirs et vecteurs. Le retour est gardé 72 heures. Aucun retrait d'ancien index ni nettoyage des ressources n'est inclus maintenant.
 
 Les poses et migrations restent sous leurs plans et propriétaires. Ce mot n'autorise ni un contournement du refus de fusion de la PR lucivy #42, ni un tag ou une publication. Une cause bloquante est rapportée avec ses preuves ; les autres préparations continuent.
+
+## Premiers retours de préparation
+
+- G confirme les deux bibliothèques au magasin : `librag3db` md5 `697c7a0cdf7a5dc7860a5c13b7e1135f`, `libvector` md5 `925b6b1331e78a3b1bd112497611bd95`. L'hôte de 927 est reconstruit, SHA256 `0e310a9cfe1c9e12534f3a579b3e781dcef7e9335e37d7e57349b16d053d5288` ; lucivy 4.3.9 au lock, essais 7991 verts aux deux postes. Le verdict des trois suites compile encore : **aucun vert global, aucune coupure à ce relevé**. Plan de G publié sur `cx-optimiseur-bascule-16`, tête `806715b2d6` puis complément `dc32e7073a` ; contrôle des backends par `/etat`, pas le vieux script qui ne jugeait pas un 404.
+- Arbre a publié la préparation `04a3970be09a06fc5ff1fabd8f8b18cc71d3ee9e` sur `cx-arbre-bascule-bases-20261116-r1`, dont un nouvel outil privé explicitement en lecture seule ; G le compile contre 59ac. Aucun accès d'arbre aux bases vivantes avant FINI G. Banc a publié sa recette d'oracle `df02f39a06c9949d285acd08747824f30cfa0297`, avec un ticket propre, et attend copies finales, manifestes et empreintes du working tree/non suivis. Ses limites de score distinguent BM25 brut, fusion et dense.
+- Archi : candidat `e8b147277fcd4cc91c293d5ada08aec42d482ce7`, deux patches conservés au rebase ; aucune nouvelle passe. ED : candidat des ex æquo `f1cfa89542247d5d575f9953c80ce6d83f61dce1`, quatre patches conservés ; préparation du témoin Vertex `d148fe0e8701f1653f6261d9ce601a3e4cbc5dd5`, non joué et sans correctif.
+- Mémoire : WIP `61dc67eb18b7c60e81894c4670a4903ee8b02aee`, rouge/vert CPU du mécanisme Linux et de la commande extraite, **pas encore du helper Rust compilé**. Le lot ne revendique pas l'attribution unique du rouge historique. Tty et banc ont publié les témoins d'alias et de débit, non joués en Rust ; banc tête `675cf02000b4c0540a3bd89ebc7eb2384bd74059`.
+- Embarquement : contrat de clé accepté (écritures automatiques `address@host`, lecture ancienne en secours ; API historiques explicites conservées), WIP `5fddd5481d0787654f243aad4a07a94f159822db`. Relecture statique mémoire favorable ; code et neuf témoins non compilés/non joués. La provenance lue après une mesure n'est pas une attestation atomique d'un index multi-fournisseur.
+- Hotfixs : rapprochement du témoin ADD COLUMN publié `c92d557bd8` ; le rouge du juge global historique reste nommé, seul le contrat du ticket est rapproché des deux témoins réussis. Pour `rows_outside_graph`, la conception doit compter les lignes à vecteur valide de l'instantané absentes du graphe utilisé ; un watermark ou un nombre de candidats n'est pas ce compte exact. Inconnu vaut NULL, jamais zéro. Pas encore de modification de production.
+- Lucivy : corpus Linux 7.2 non retrouvé, aucune substitution silencieuse du corpus 2.6.0 ; l'ulp reste bloquée sur la couverture complète. L'entrée `indexed:false` avance par une API de diagnostic pure, témoin publié mais non joué ; aucune fusion ni publication.
+
+### Exception de capacité pour C1
+
+Pour ne pas bloquer le diagnostic du moteur pendant la compilation de G, une seule validation C++ privée est admise après publication du lanceur exact : nouvelle borne de 1 800 s, un poste lourd, 32 Gio, `-j8` au plus, target privé borné, aucune bibliothèque du magasin ni service partagé. Le témoin direct est publié sous `cx-coeur-c1-dictionary-diagnostic`, compléments `2f88b3df36591b3b8a4275018c7cddec6828a8d1` ; il ne porte aucun correctif de production et reste non joué à ce relevé.
+
+Le relevé de capacité doit rester frais : TSan, G et C1 occupent au plus trois des quatre places ; G garde la priorité. Cette exception n'ouvre ni les passes Rust, ni les modèles/GPU, ni les bases réelles. Un premier rouge se conserve et se diagnostique avant la suite. La bibliothèque autonome de ce test C++ n'est pas la bibliothèque posée.
 
 Le suivi de la reprise est dans [le ticket](../tickets/2026-11-16-reprendre-les-perimetres-apres-lecture-des-diffs-recents.md).
