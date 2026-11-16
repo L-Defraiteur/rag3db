@@ -114,4 +114,36 @@ La recette corrigée `4e3773250d639f2d7b396e7d4ff8611912f282ba` a joué un test 
 
 Preuves publiées `cd7731186b2bb7044df8441fe7a3e67bf3863f99`, 29 fichiers, artefacts sauvegardés avant assertion puis rehashés aux deux postes ; unité finie et place rendue. Cœur prépare un correctif séparé qui réserve les capacités avant publication, sans reprendre le correctif 256 ni revendiquer toutes les exceptions possibles. Le parent C1, l'allocation de l'index de hash et la garde `sanityCheck` tautologique restent à suivre dans des tickets adaptés ; aucune nouvelle bibliothèque posée ni intégration n'est déduite.
 
+## Pin intégré et reprise des qualifications
+
+G a intégré `68590270e21d00285b29800bd9cdecf0cb921461` après le tour exact, la garde et les trois contrôles lus aux deux postes. Vraie passe du script candidat : témoin un juge et deux filets, F8 8/8, preuve de recompilation, lib 2 594 réussites/0 échec/72 ignorés, puis navigateur 45/0/0. Parmi les 72 ignorés de la lib, ces 45 navigateurs sont rejugés séparément ; les 27 autres restent NON JUGÉS et leurs raisons sont inventoriées. Aucun vert ne leur est attribué.
+
+Les copies du cache des deux postes correspondent à la source, SHA256 `2150fcd847b1df7de04908d357a0c78abc05e50ce599e2793ff08ab48108825d`, mode 755, témoins contre copies verts et anciennes copies conservées. Le lot documentaire de clôture `f83c6c4dd6a40200883c6325326f093ecdba3e23` ferme le ticket du pin, pas celui de l'ancienne route status404. `lib_seule.sh` est archivé par renommage réversible après contrôle d'absence d'acteurs ; `run_e2e.sh --lib` est l'entrée actuelle.
+
+Annonce aux treize : reposer les WIP sur des branches neuves base685, sans moteur ancien pour ces sources Rust et ce moteur59ac, puis qualifier sous garde/budget frais. Priorité à deux places Rust, recherche (déblocage FTS) et archi (Algareth), sans flood des services ; ED puis mémoire, embarquement et codeparsers suivent selon libération réelle des places. Le portable reste utilisable pour les inspections d'arbre. TSan continue, sans attribution au correctif ciblé.
+
+Archi a conservé un refus de SHA mal recopié avant toute admission, puis reçu le maintien du GO sur `713433bd602a6d35266fe5cd528925ba664924c9` (deux MD seuls, script/produit inchangés), avec lecture de HEAD par Git. Sa vraie passe 59ac a commencé ; aucun résultat n'est encore déclaré ici. Recherche a publié le témoin positif d'ouverture d'un index fermé avant implémentation, admission rouge seul 1 200 s. Une réserve statique corrige le négatif avant la suite : une table physique source reste maintenable malgré sa redirection de recherche publique ; il faut refuser la redirection, pas la table physique légitime.
+
+### Maintenance arrêtée sur 422 et diagnostic séparé
+
+Le premier dry-run File du portable a reçu HTTP422 : aucune purge, compaction ni migration n'a suivi. Le client jetait le corps de l'erreur ; le premier corps est irrécupérable et le journal existant ne le contient pas. Diagnostic consigné avant correction, puis archivage statut/corps ajouté et jugé hermétiquement. G n'a pas fermé le backend pour une prétendue maintenance verte.
+
+Une sonde DISTINCTE, `/backend/fts-live-ids` seule, a ensuite établi à son propre instant : « pas d'index plein texte ouvert pour File (ouverts : []) ». Cela ne prouve ni l'absence sur disque ni le corps du premier 422. La map courante et les poignées garées par cellule restent à distinguer. Le warmup par `open_fts_files`/`ensure_fts_handle` est exclu : chez l'écrivain actuel il peut jeter un dossier de mauvaise génération, marquer un rebâti puis créer après un échec d'ouverture.
+
+Arbitrage : lecture sur copie privée qualifiée d'abord ; recherche prépare une primitive réutilisable « existant seulement », sans création, rebâti ou retrait implicite, avec refus strict absent/corrompu/génération incohérente/cellule étrangère. La maintenance et les trois migrations restent STOP tant que la voie n'est pas qualifiée. Les tickets d'arbre et le fils recherche portent le blocage, les preuves et la suite ; aucune nouvelle permission de Lucie n'est nécessaire pour la préparation et les diagnostics autorisés.
+
+### Copies froides et fichier de coordination
+
+Le premier préflight natif a refusé avant copie : la fixture corrompue est refusée par le moteur readOnly, mais un fichier vide `<base>.readers` apparaît. Rouge conservé ; le hash de la DB seule ne prouvait pas la neutralité des voisins. Le code `ReadersLock` explique ce fichier de coordination, distinct des données.
+
+C7 a autorisé explicitement ce seul chemin latéral sur COPIE PRIVÉE/fixture, régulier, UID1000, vide et sans symlink ; tous les autres fichiers DB/WAL/FTS restent stricts et le snapshot SOURCE n'a aucune exception. Cinq témoins hermétiques jugent le validateur avant l'étape native corrective. Aucun passage en écriture ni création d'index n'est autorisé par cette exception.
+
+Inventaire Python puis lecture native readOnly de la copie : 3 007 fichiers d'ensemble, dont 3 004 FTS, hashes source/copie inchangés avant/après. DB et FS concordent pour les générations File4526, Scope5502, Library142 et Symbol3573, quatre shards chacun. Cellule default/default seulement, comptes bruts File8 320 et Scope81 347, 33 tables, Scope_Chunk présent et code_scope_form absent. Les counts historiques ne valent pas comptes FTS actuels. Le lecteur immuable Lucivy4.3.9 est préparé séparément via export snapshot/open_snapshot, sans factory writer ; sa qualification reste à faire.
+
+### Correctif ciblé du dictionnaire
+
+Source033 a passé cinq natifs (offsets1/finalize2/split2, aucun saut), BUILD_ID033 réellement émis. Preuves `bf6102a2939ae6277afc9098cb5bf8dca4851d4d`, 37 fichiers et artefacts rehashés aux deux postes ; place rendue. Hotfixs confirme en RO la garantie restreinte aux refus BufferManager des réservations. L'exception de `unordered_set::insert`, les alias empruntés et le crash C1 restent hors preuve.
+
+Une livraison propre base685, `15ab2f4815511400ac806314a3e964f2d7e723e0`, n'emporte que trois fichiers natifs identiques à033 et des MD ; nouveau moteur888 à qualifier, sans réétiqueter033. Les preuves volumineuses restent sur leurs branches. C7 accepte de préparer une passe moteur bornée sans les longs du comparateur courant, explicitement NON JUGÉS avec les probabilistes, pas une concurrence entièrement verte. Recette, artefacts fidèles et lanceur exact restent à publier avant admission ; aucune intégration ni nouvelle bibliothèque n'est encore autorisée.
+
 Le suivi de la reprise est dans [le ticket](../tickets/2026-11-16-reprendre-les-perimetres-apres-lecture-des-diffs-recents.md).
