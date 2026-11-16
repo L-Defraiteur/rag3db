@@ -1678,3 +1678,43 @@ La chronologie reste sur la page 03. L'essentiel :
   mémoire sans cause dite.
 - **La pose du soir** (G) : hash vers 19 h 35 après 96, ED (nom + persona), lucivy (maintenance nocturne), archi (branchement) ;
   hôte aux deux postes et services 7878/7879, lib 373b5477b, vers 20 h 30.
+
+## 19 h 0x (15 novembre) – 2 h 0x (16 novembre) : la file de la nuit, le reset, Algareth à l'épreuve
+
+La chronologie est sur la page 03 ; ici les faits et les décisions.
+
+- **Atterris sur master dans l'ordre** : le nom de l'agent (archi, 3e8587f0e7), l'ouverture sans la feature (ED,
+  c224658dc5), les gardes de recherche (6e493fd5db), les quatre lots d'outillage de G (garde au hash entier, juge
+  known_red cas longs, confineur, gabarits d'un autre arbre ; e692fa3a58), la route de renommage (ED, a178fb9231),
+  tty-18 /nom (4802a147a5), l'extension non chargée dite (hotfixs, 7ece05d8a2), tty-19 (3ad8950c4f), **l'écrivain des
+  générations** (ED, c33574eb9, 47 commits), le pool saturé (cœur, 2385b5f616, voie C++ transférable), **la
+  migration aux générations** (arbre, 1bf1483d67), tty-20 mode plain attaché (9f0cbe7ce4), le journal des runs
+  atomique et le test shell isolé (hotfixs, 08643d9232), **2b′** (arbre, 988651d39e), **2b-C** (recherche,
+  457892de98). Tous vérifiés : identité gmail, zéro attribution. **Les vues par couche sont sur master.**
+- **Hôtes** posés sur 4802a147a5 (G, 22 h 37, md5 8d9e62c3) : /nom, Algareth, second tour de 96.
+- **Le reset de Lucie** (22 h 37 → 0 h 02) : toutes les sessions en pause ; rien de perdu, les passes avaient fini ;
+  reprise par un message à chacune, réponses croisées.
+- **Décisions de Lucie** : le point 7 de la vision (la recherche attend l'index sous 6 s réglables, sinon « pas prêt »
+  et une notification ; un banc d'étalonnage traduit les secondes en lots) ; **Algareth, un pair des sessions Claude**
+  (page de vision du 16 nov. ; le bus est le registre `~/.claude/sessions`, « oui au registre, non aux canaux ») ;
+  **que de l'anglais** pour tout ce qu'une machine lit ou qu'un utilisateur tape, et pour les descriptions, invites et
+  gabarits du produit ; c7 joue son rôle devant Algareth, à l'empirique.
+- **La campagne d'essais d'Algareth** (page `16-11-2026/01`) : les primitives justes, le pas qui ne va pas au bout
+  (plafond d'appels, contexte perdu entre les pas, une consigne qui remplace la demande, step_done avant report,
+  présentation répétée) ; 0 ligne écrite en 20 min sur la tâche d'écriture ; défauts répartis (archi, ED, tty) ; le
+  worktree de la tâche atelier était 350 commits derrière master.
+- **L'écrivain et BM25** : 23 cas sur 30 changeaient de rang contre un index neuf ; la cause est double, une base
+  rouverte se croyait « tout visible » (corrigé dans l'écrivain) et la longueur moyenne du champ gardée sur le corpus
+  (corrigé dans lucivy, 11/15 → 2/15, PR #39, 4.3.9 prête, tag au mot de Lucie) ; un plein texte rebâti depuis les
+  lignes ne classe pas comme celui tenu au fil de l'eau (ticket) ; les ex æquo n'ont pas d'ordre stable (ticket).
+- **Le cœur** : le pool saturé expliqué et corrigé (une version de mise à jour née à 2 048 lignes pour une seule),
+  DdlEveryMinute passe en probabilistic.txt ; la **bascule de lib** bâtie et verte (52101b7fd6, ABI inchangée), fenêtre
+  des hôtes au mot de Lucie.
+- **La CI rag3weaver** rouge depuis 21 h 33 UTC : une course du journal des runs, antérieure ; écriture atomique sur
+  master ; vert attendu au prochain run.
+- **Outillage** : trois pièges de script le même soir (chemin absolu emboîté, plafond 40G contre 32G, témoin de lib
+  absent de run_e2e.sh) et un faux constat (« passe disparue ») ; tickets et lots chez G ; un mode « tests seuls »
+  de la garde en ticket.
+- **En file au matin** : codeparsers (quatre lots, passe complète), embarquement, archi (le pas va au bout, puis le
+  mode pair), le grain du paquet, le segment de 96, les trois lots d'outillage de G, le pointeur lucivy 4.3.9, puis la
+  **bascule des bases de Lucie** ; la fenêtre de la bascule de lib et le tag lucivy attendent son mot.
