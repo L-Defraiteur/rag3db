@@ -49,3 +49,7 @@ C7 a demandé le témoin préfixe1f816 seul avant le fixpending. Pilotec306, com
 ## Rouge pending atteint, schéma validé
 
 Rapport09 : sourcepréfixec1b10a4993650a82e0cac9d40f4cb3567a0593d9 sansfixpending, pilote5a2c42444a. Compilation29.316sOK ; unique0/1/0 après marker des validateurs réels, assertpendingDocument→main échoue au point attendu. **Prérequis rouge pending levé**, sans attribuer ce statut au rouge setup précédent. Archives27PC/local0écart manifeste456493b004107ace9d7adfc908a00fc4b0f0edfc98a7bdd737356cc292373606 ; scopeROUGE101/restes[]/nettoyé/reçu terminé/poste libéré, target gardé. Aucun autre juge ni qualification verte automatique. Finale à composer du préfixe Content validé et du fixpendinga92, puis RO/source exacte/admission distincte.
+
+## Lecture froide ciblée verte — ticket général toujours ouvert
+
+Source04634cfed667711192efd313ff1418ef8dfd5c26 / pilote d218bea07d, GO C7 distinct : compile31.099sOK, positif1/0/0 puis module10/0/0, 10distincts/11invocations, global31.965<1200. Rapport11 ; preuves30PC/localréhash0écart manifestedf97717f2c944ccadca3246492a076db98a81d08886387d132d6bf526a38d2c9. ConfineurVERT0/restes[]/nettoyé/reçu terminé/bus absent/poste libéré. Target2071785640 gardé. RO/qualification lecture froide seulement, pas de purge froide/maintenancewriter/F8/e2e/master/nettoyage autorisés par ce résultat. Counts indépendant demeure en attente.
