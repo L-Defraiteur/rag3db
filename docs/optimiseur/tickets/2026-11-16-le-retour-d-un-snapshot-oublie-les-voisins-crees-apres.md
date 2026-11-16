@@ -64,3 +64,41 @@ inchangés. Aucun moteur, writer CLI, fermeture ou opération API autorisé ici.
 
 Le helper bf0aba et ses cinq témoins, encore sur la branche publique G, sont
 repris bitidentiques dans ce lot pour rendre le générateur autonome dans Git.
+
+
+## Correctif du vrai générateur publié et qualifié
+
+Ticket/reprise fcc0b7d020 puis sources helper V2 reprises bitidentiquesf5b3e8d825 ;
+témoin du générateur publiéc1cb61a414 AVANT fix. Rouge réel : génération et RET
+rc0 mais WAL tardif encore présent, fixture privée
+`~/.cache/generated-return-nsiznm4f/`, journal
+`~/.cache/optimiseur-notes/return-generator-16/generated-red.log`.
+
+Correctif e6ca9b4426, compléments des témoins62e6415159 : génération de RET
+par `generate_snapshot_return.py`, helper e1fd copié dans chaque NOUVEAU
+snapshot, inventaires épinglés et vérifiés tous avant le premier déplacement.
+Aucune duplication du mécanisme de restauration : le RET appelle le helper V2.
+Le fichier source voisin `restore_snapshot.py` est un lien Git vers le helper
+public qualifié ; la recette générée embarque une copie régulière indépendante.
+
+Six tests générateur/RET et cinq tests helper passent aux DEUX POSTES :
+11/11, zéro échec, zéro saut. Le vrai instantanes.sh est exercé avec HOME privé,
+reflinks réels, fichiers de fixture et faux systemctl ; aucun moteur ou service
+réel lancé. Les autres filets couvrent deux bases/chemin avec apostrophe, pins
+helper/inventaire altérés, second snapshot corrompu AVANT premier déplacement,
+unités actives refusées, et invariants historiques du helper.
+Les fixtures générateur et leurs journaux sont conservés.
+
+SHA sources : instantanes.sh
+`0cecea650a9db3dbe9dbe57159f63372339dd99cb35ef2b0d5909cb99eec9437` ;
+generate_snapshot_return.py
+`9e9885f52b20248c7502a7d96a64499c4c8d4b74c0a571ea55219f8b15723f33` ;
+helper V2 toujours `e1fd96b25c1cc61b70507c59f7f203acb21936e5b676f68c74b88d216f923854`.
+Reçus `~/.cache/optimiseur-notes/return-generator-16/local-62e6415159/verdict.json`
+SHA595acf0b6e72c866647aebd32a418ab16792930e11fb6775235ef5a0a1155ef1 ;
+PC `pc-62e6415159/verdict.json`
+SHA73aa4ed3f98d1b62825bcffe9929f7c6a9cd422672e13637d28d07bf26262449.
+
+Ticket encore ouvert : intégration et éventuelle pose du bundle décidées par C7.
+Les caches historiques restent inchangés ; aucun ancien snapshot, RET, reçu ou
+attestation72h modifié. Aucune CLI native, API, lib, Cargo ou base originale opéré.

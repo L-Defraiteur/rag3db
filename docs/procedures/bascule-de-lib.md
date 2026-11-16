@@ -64,6 +64,15 @@ préparées) à 17 h 45, puis vers 3724accba (V2-1b, V2-1c) à 21 h 05. Les scri
    copie par `cp --reflink=always` (les deux `/home` sont en btrfs : immédiat, sans place), vérifie
    les tailles octet pour octet et écrit `RETOUR.sh` à côté. Un `.wal` absent des copies dit que les
    hôtes se sont arrêtés proprement.
+   Le générateur versionné émet désormais un retour autonome avec `return-tools/` :
+   helper V2 épinglé, inventaire SHA de chaque base et `SHA256SUMS`. Au retour,
+   tous les snapshots/inventaires et les unités froides sont vérifiés avant le
+   premier déplacement ; les voisins ACTUELS sont conservés dans l'état après.
+   Le témoin `scripts/test_generated_return.py` exerce le vrai générateur puis
+   son RET, avec WAL tardif. Pour distribuer la source, fournir ensemble
+   `instantanes.sh`, `generate_snapshot_return.py` et `restore_snapshot.py`
+   (copie du helper qualifié, pas un lien cassé). La pose cache reste une
+   opération G autorisée par C7 ; ne jamais régénérer les anciens retours.
 8. **Le contrôle des deux sens, sur les instantanés** (`scripts/controle-des-deux-sens.sh
    <étiquette> <id>`, à chaque poste ; demande d'hotfixs, 7 novembre 2026) : `tools/check_rel_directions`,
    bâti contre la lib neuve du magasin (son `rag3db.hpp`) depuis **`origin/master`** (jamais un
