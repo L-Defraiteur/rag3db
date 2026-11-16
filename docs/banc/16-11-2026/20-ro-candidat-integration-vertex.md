@@ -1,0 +1,15 @@
+# Relecture finale du candidat d’intégration Vertex
+
+Candidat exact `99fef92ce6ee9a0007eaf99c7c3a6a3789061c57`, branche cx-ed-vertex-integration-r2. Source réellement testée `b472035a4e2944a9d90727817c95290cc0fba1ea`, CPUc38, base `b0a845bb4877328eada37951c174e3d208986630`. **Avis favorable à la cohérence du candidat et de ses preuves, pas ÀTOI ni GO master.** Revue Git/fichiers seulement ; aucune gardePush, test, Cargo, ELF, procscan, DB/service/cloud ou push d’intégration lancé.
+
+Fetch origin/master effectué pendant la revue : pointe b0 inchangée. Les deux worktrees candidat local/PC sont à99fef exact, git status --porcelain vide et rebase-merge/rebase-apply absents. La sourceb472 est bien ancêtre, avec les neuf commits b0..b472 conservés ; aucun rebase réécrit.
+
+Comparaison indépendante complète mode/type/OID : toutes les entrées hors docs/ de99fef sont exactement celles deb472, soit **6917 blobs et1gitlink** (6918 entrées avec le gitlink). Les quatre Rust gcp_auth/model_source/openai_llm/vertex_refresh_tests sont également identiques àCPUc38. Diff après b472 : exactement sept chemins docs/*.md, aucun JSON/Python/classificateur/runtime ajouté. Le classificateur86 reste un outil/proof externe au candidat, pas un changement produit insinué après tests.
+
+En excluant le périmètre source déclaré et ces sept Markdown déclarés, les maps master/candidat mode/type/OID sont identiques, ensembles de chemins compris : entrées et absences préservées. Les8998 entrées protégées résultantes incluent le gitlink ; aucune donnée master hors lot n’est remplacée. Le rapport25 explique son snapshot d’index avant ajout du rapport, lui-même Markdown ; cette précision ne sert pas à masquer un delta code.
+
+Lecture indépendante du **journal original PC** `~/.cache/rag3weaver-build/cx-ed-vertex-token-union-v1/official` : les neuf fichiers (base et huit logs) sont identiques octet pour octet aux copies dans l’archive canonique. Résumé SHA256 `768258ce60e8cfaa8c3863a474918586f5d56ce58747f33681479e6a2f4b9a43`, première ligne commitb472/lib59ac, finVERT, baseb0. Aucun journal recomposé ou édité par cette revue. Official-pass rc0 réel et composé historiqueRED/portéeROUGE restent des faits distincts.
+
+La classification pure86 et ses trois corrections ont leur revue totale séparée (rapport18), avec inventaire observé après exécution, pas ELF-list indépendant préalable. Le candidat les référence sans importer leurs fichiers exécutables. Les72ignored restent non jugés ; les anciennes bornes sont expirées, aucun reset. OAuth/from_env/F300 et commentaire connect_llm obsolète restent explicitement non résolus, ticket ouvert. Aucune qualification composite ou cloud ne découle de la préparation Markdown.
+
+Aucun écart bloquant repéré dans ces contrôles. Le vrai journal original est une entrée concrète pour une future garde normale ; **son acceptation n’a pas été prédite ni forcée par Banc**. Après décision et ÀTOI C7, la garde devra être rejouée au point d’usage avec le master alors entrant ; refus=STOP. Aucun PILE/TESTS_ONLY/override, retrait de preuve ou publication autorisé par cet avis.
