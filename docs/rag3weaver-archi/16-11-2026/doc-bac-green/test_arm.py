@@ -21,7 +21,7 @@ class Arm(unittest.TestCase):
             def process(args,**kwargs):
                 events.append(('watchdog',clock[0],list(args)))
                 if args[4:]==[q.sys.executable,str(q.Q/'qualify_green.py'),'--arm',pilot]:
-                    with patch.dict(os.environ,kwargs['env'],clear=True):q.arm(pilot)
+                    with patch.dict(os.environ,kwargs.get('env',dict(os.environ)),clear=True):q.arm(pilot)
                 return SimpleNamespace(returncode=0)
             def execute(path,args,env):events.append(('poste',clock[0],list(args)))
             q.configure_controller()
