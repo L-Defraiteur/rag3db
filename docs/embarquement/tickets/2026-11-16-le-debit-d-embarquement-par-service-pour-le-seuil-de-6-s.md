@@ -96,3 +96,13 @@ Les compléments vérifient adresse inconnue distante, isolement adresse/poste,
 changement de prise, relai Arc et lecture de l'adresse d'une activation non
 ouverte sans la démarrer ; fixture Python et faux embarqueurs uniquement.
 Aucune qualification avant « FINI G », nouvelle recette et source courante.
+
+### Après le pin de la bascule
+
+WIP reposé sans conflit sur master68590270e21d00285b29800bd9cdecf0cb921461,
+branche neuve `cx-rate-key-20261116-r2`. Diff produit r1→r2 vide ; SDK59ac
+et copie de passe SHA2150fcd… relus. Aucun build ou test lancé.
+Proposition bornée5400 s, neuf ciblés puis passe/suites exigées, target unique
+hérité : `docs/embarquement/16-11-2026/03-rate-key-validation-proposal.md`.
+La priorité Recherche/Archi aux deux créneaux Rust demeure ; cette proposition
+n'est pas une admission. Attendre le cadrage courant, aucun ancien GO ou pin.
