@@ -82,3 +82,15 @@ les oracles distinguent protocole, état, écran et transport. Un témoin discri
 rouge puis vert sur flux fragmenté, et un scénario d'accord privé qualifié,
 permettent une attribution concrète des observations. Aucun vert déduit du
 présent diagnostic ; aucune nouvelle allocation ou ancien END réactivé.
+
+## Reprise du correctif de harnais autorisée, avant diff
+
+C7 autorise les traces append par séance, raw/input/chrono/journal fauxhôte/env
+non secrets avec fsync aux assertions/arrêts ; oracles protocole et écran
+séparés, primitive capture-pane déjà utilisée1f. Témoins hermétiques publiés
+avant essai : frame correcte dont le raw est fragmenté refusée par l'ancien
+observateur, acceptée par l'observation d'écran ; journaux conservés entre
+séances. Pas de requalification du run perdu ni de correctif produit.
+SourceRustTTY reste inchangée. L'END852082.791694931 est constaté expiré à
+now852108.599496 : aucun run natif possible sur ce budget, aucune nouvelle
+allocation inventée. Prochain paquet RO devra refuser allocation absente/expirée.
