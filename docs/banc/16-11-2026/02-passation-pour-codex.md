@@ -68,6 +68,17 @@ heures de travail.
 
 ### Entrée 1. Juger F300 et N rejouée de la mesure longue
 
+**Commencé par banc, arrêté le 16 novembre à 11 h** :
+- **la cause des 45 décisions vides de F300 est trouvée** : du tour 199 au tour 244, chaque Decide rend
+  `HTTP 401 ACCESS_TOKEN_EXPIRED`. Le jeton Vertex d'un `models.llm` est pris une fois et dure une heure ;
+- ticket `docs/banc/tickets/2026-11-16-un-modele-vertex-declare-garde-son-jeton-d-une-heure.md`, pour ED
+  (confirmé par c7) ;
+- **restant** : juger F300 sur ses 199 premiers tours, en le disant, et rejuger F 25 %, F 25 % variante et S 50
+  contre la N rejouée. La N rejouée a ses 244 décisions ; vérifier qu'aucun de ses tours ne porte un 401 sous
+  `reponse.errors`, avant de la prendre pour référence ;
+- **à corriger aussi** : le script de la mesure longue (`x_archive_long.py`) marque `"ok": true` un tour dont
+  `reponse.errors` est plein. Il doit arrêter la passe.
+
 - **Ticket** : `docs/banc/tickets/2026-11-16-juger-f300-et-n-rejouee-de-la-mesure-longue-de-l-archiviste.md`
 - **À faire** :
   - expliquer les 45 décisions vides de F300 ;
@@ -138,7 +149,38 @@ sur la copie finale de la bascule, quand c7 la refera : même méthode, contre u
 
 ### Entrée 6. Le banc d'étalonnage du débit d'embarquement
 
-**En cours par banc** (16 novembre, 11 h, au mot de c7) : la page de conception est sur master (01d94fa6f1), `docs/banc/16-11-2026/03-le-banc-d-etalonnage.md`, soumise à c7 et à embarquement. La mesure attend leur accord.
+**En cours par banc, arrêté le 16 novembre à 11 h (mot de Lucie)** :
+- **Fait** :
+  - la page de conception, `docs/banc/16-11-2026/03-le-banc-d-etalonnage.md`, avec les réponses de c7 et
+    d'embarquement (ad29a938c3). Accord pour les pas 1 à 4 ; le pas 5 attend la lecture de la clé
+    `embedding_rate:{modèle}:{adresse}@{poste}` par embarquement ;
+  - **le pas 1, le jeu figé** : `~/.cache/rag3db-banc-notes/etalonnage/set.json` à luciepc, sha256
+    `458f83f0e8877cd3c585eb6b3a54e0ef4b42c0e15cd4e1a72439854326acaa3d`, produit par
+    `~/.cache/rag3weaver-build/etalonnage-jeu.sh`. Il contient :
+    - 4 096 textes réels de `ScopeContent_Chunk`, par ordre de `_text_hash`, tirés d'une copie de B′ : médiane
+      382 caractères, p90 1 751, max 25 927 ;
+    - 1 024 morceaux pleins, de 1 400 à 1 500 caractères ;
+    - **le nombre médian de morceaux par fichier : 6** (p90 32, sur 6 288 fichiers), pour la colonne « fichiers
+      moyens du dépôt en 6 s ».
+
+    Le décodage des textes est vérifié : 4 092 longueurs sur 4 096 égalent `size(_text)`, et les 4 écarts sont
+    de quelques caractères non ASCII. `_text_hash` n'est pas le sha256 du seul texte.
+- **Restant** : les pas 2 à 5 du § 8 de la page. Aucun code n'est écrit, aucune branche n'existe.
+- **Pour le pas 2, ce que le code de master offre** :
+  - un faux service à débit connu se monte avec
+    `rag3weaver::daemon::embeddings::EmbedDaemon::new(Arc::new(CallbackEmbedder::new(dim, f)))`. La fonction `f`
+    dort en proportion des caractères, et le démon se sert par `.servir_lie(TcpListener::bind("127.0.0.1:0"))`
+    dans un fil ;
+  - le client est celui de l'hôte : `DaemonEmbedder::joindre(adresse)` (feature `daemon`), dont `embed` envoie le
+    lot tel quel ;
+  - les lots « comme l'hôte » se forment par `crate::embedder::stable_batches(lens, lot_budget(conseil, défaut))`,
+    où `conseil` vaut `Embedder::budget_conseille()` ;
+  - l'identité se lit par `identite()` (`modele`, `dim`, `lot_conseille`, `max_chars_per_text`).
+
+  Le test proposé est `tests/bench_embedding_rate.rs`, en anglais. Il porte un témoin non ignoré (le faux service
+  retrouvé à 5 % près, rouge d'abord, la mesure posée à vide) et une mesure ignorée, réglée par
+  `RAG3WEAVER_BENCH_SET`, `RAG3WEAVER_BENCH_SERVICES`, `RAG3WEAVER_BENCH_HOST` et `RAG3WEAVER_BENCH_OUT`.
+  La mesure se fait sous `poste mesure`, annoncé à c7.
 
 - **Ticket** : `docs/banc/tickets/2026-11-16-le-banc-d-etalonnage-du-debit-d-embarquement.md`
 - **À faire** : **d'abord la page de conception**, soumise à c7 et à embarquement (le jeu de lots de
@@ -186,6 +228,14 @@ sur la copie finale de la bascule, quand c7 la refera : même méthode, contre u
   everything declarative.
 - `2026-10-12-*` et `2026-10-18-*` (HNSW, fils d'un bâti d'index) : au cœur C++ ou à hotfixs.
 - `2026-10-10-*` et `2026-10-11-*` (l'élagage du graphe) : confort, sans porteur.
+
+**État final du banc, le 16 novembre à 11 h** (arrêt au mot de Lucie) :
+- rien ne tourne à luciepc ;
+- aucune place de `poste` n'est tenue ;
+- la branche de code `banc-parite-search-code` est propre et poussée (3d422fad11) ;
+- toutes les pages et tous les tickets sont sur master ;
+- les entrées 5 (fait), 6 et 1 (en cours) sont annotées ci-dessus ;
+- les entrées 2, 3, 4, 7 et 8 ne sont pas commencées.
 
 ## 3. Ce qui attend Lucie
 

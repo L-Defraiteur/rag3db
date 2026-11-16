@@ -8,7 +8,7 @@
   plus d'une heure : l'archiviste, l'équipier, le chat.
 - **Touche rag3weaver** : oui, `model_source.rs` (`connect_llm`), `openai_llm.rs` (`OpenAiLlm::vertex`) et
   `gcp_auth.rs` (`TokenSource`).
-- **Pour** : everything declarative, qui tient `models.llm`. À confirmer par c7.
+- **Pour** : everything declarative, qui tient `models.llm` (confirmé par c7, 16 novembre).
 - **Signalé par** : banc, mesure longue de l'archiviste (F300, 16 novembre).
 - **Ouvert le** : 16 novembre 2026
 
