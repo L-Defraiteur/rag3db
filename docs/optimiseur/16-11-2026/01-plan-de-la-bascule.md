@@ -190,3 +190,13 @@ lot distinct en coordination par c7/recherche. FINI lib/pose ne signifie pas FIN
 
 Worktrees/target de cette fenêtre conservés, car Banc dépend encore des artefacts
 release du source927. Pas de purge des targets, snapshots, anciens index ni magasins.
+
+### Limite supplémentaire des sondes natives RO
+
+Le filet froid d’Arbre sur fichier corrompu révèle qu’une ouverture moteur
+readOnly peut créer le latéral `.readers` vide avant de refuser le format. Les
+filets de G prouvaient le SHA inchangé du fichier BASE, pas l’absence d’effets sur
+ses voisins ; aucun vert global de neutralité du système de fichiers n’en découle.
+Les contrôles natifs restent sur copies privées, jamais sur base vivante détenue.
+L’acceptation explicite du latéral sur COPIE et la primitive existing-only sont
+arbitrées par c7 ; pas de relaxation, reprise maintenance ou migration déduite.
