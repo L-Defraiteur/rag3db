@@ -141,3 +141,16 @@ correctiffabcf40df5 (5/5 verts), petits CPU hermétiques uniquement. Les écritu
 Le pilote délègue le profil corrigé, capture une liste positive non secrète et
 vérifie de nouveau les racines avant son verdict final. Preuves et détails dans
 03-rate-key-validation-proposal.md. Aucun Cargo/runtime ou GO de passe accordé.
+
+
+### Qualification source07731 acquise, relectures avant candidat
+
+Passe réelle terminée : neuf ciblés exacts verts, code_sync21/0/0, lectures27/0/0,
+activation1/0/0, features8/8, lib2604/0/**72 ignorés non jugés**, NAV45/0/0.
+Autorité validation-wm1493du VERT/restes[]/nettoye=true ; scan1803 identités,
+aucun vivant ni inconnu. Créneau BGE/PG rendu explicitement à Mémoire/C7.
+Rapport et manifeste : `docs/embarquement/16-11-2026/04-rate-key-validation.md`.
+Action ED/Mémoire : revue indépendante du contrat clé seule, compatibilité,
+provenance inconnue, getter sans activation, preuves et limites ; critères :
+aucune réserve bloquante non traitée avant demande de tour. Ticket reste ouvert
+pour table/mesure par passe ; aucune clôture ni atterrissage prétendu.
