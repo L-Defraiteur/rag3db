@@ -1,6 +1,6 @@
 # Sous vingt écrivains, le pool sature et ne se vide plus
 
-- **État** : ouvert (13 novembre 2026, cœur c++)
+- **État** : corrigé sur master `2385b5f616` (16 novembre 2026, cœur c++) : une version de mise à jour naît à 4 lignes et double à la demande ; le pic du pool sous `DdlEveryMinute` passe de 2 000 à 331-445 Mio
 - **Famille** : moteur
 - **Gravité** : indisponibilité partielle — la plupart des écritures et une partie des lectures
   sont refusées tant que le pool reste plein ; la base reste ouverte et intègre
@@ -124,3 +124,17 @@ d'un vecteur entier relue avant et après une réouverture. Rouge sur `abc5117fd
 
 **(b), le point de reprise sous la pression du pool**, ne s'ajoute que si les ×10 de
 `DdlEveryMinute` le demandent, avec sa mesure (c7).
+
+## Fermé (16 novembre 2026)
+
+Sur master `2385b5f616` (voie des suites C++ transférables). Le pool gardé par écriture, même sonde
+avant et après (`abc5117fd` → `ec7a0bf30`) : SET des trois colonnes 42 095 → 471 octets ; SET du
+vecteur 25 149 → 373 ; SET du titre 8 526 → 102 ; l'instruction du scénario à vingt connexions
+42 101 → 477. `DdlEveryMinute` ×10 (CONCURRENCE_LONG=1) : aucun refus du pool plein (des dizaines
+de milliers avant), pic de 331 à 445 Mio (2 000 à 2 052 avant), 10 tours sur 10 jusqu'aux comptes,
+justes. `index-creation-refuses-no-reader` : 0 sur 10. Le point de reprise sous la pression du pool,
+voie (b), n'est pas demandé par ces mesures.
+
+Sa ligne de `known_red.txt` est retirée dans le même lot : le cas passe dans `probabilistic.txt`,
+pour l'intermittent d'avant qui reste (ticket
+`2026-11-16-un-create-rel-table-retient-un-ecrivain-au-dela-de-sa-duree.md`, 1 tour sur 10).

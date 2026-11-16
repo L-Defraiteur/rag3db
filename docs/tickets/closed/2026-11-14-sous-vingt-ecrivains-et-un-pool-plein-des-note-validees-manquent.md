@@ -1,8 +1,6 @@
 # Sous vingt écrivains et un pool plein, des Note validées manquent
 
-- **État** : ouvert (14 novembre 2026, cœur c++) — corrigé sur master `373b5477b`, lib posée à ce
-  hash ; reste ouvert faute des ×10 de `DdlEveryMinute` comptes cités (le relevé du 15 novembre,
-  en fin de ticket)
+- **État** : corrigé sur master `373b5477b` (14 novembre 2026), prouvé le 16 novembre 2026 : `DdlEveryMinute` ×10 sur le correctif du pool, `counts-match-commits` vert, comptes justes 10 sur 10
 - **Famille** : moteur
 - **Gravité** : perte de données validées (une écriture dite validée est absente, avant le point
   de reprise comme après la réouverture)
@@ -162,3 +160,24 @@ luciepc le 15 novembre, tous sur un moteur de master qui porte `373b5477b` (`08f
 Aucun `counts-match-commits` rouge sur les douze, mais dix tours s'arrêtent avant de compter.
 Deux tours justes ne valent pas les ×10. Il se ferme avec les ×10 de `DdlEveryMinute`, comptes
 cités, une fois le SIGSEGV corrigé (c7, 15 novembre).
+
+## Fermé (16 novembre 2026)
+
+Les ×10 de `DdlEveryMinute` (CONCURRENCE_LONG=1) sur `ec7a0bf30`, le correctif du pool qui
+saturait (master `2385b5f616`), dont le moteur porte `373b5477b`. Les dix tours vont jusqu'aux
+comptes d'après la réouverture, et les dix sont justes :
+
+| tour | Doc | Link | Note |
+|---|---|---|---|
+| 1 | 59 866/59 866 | 410 165/410 165 | 45 189/45 189 |
+| 2 | 59 205/59 205 | 302 953/302 953 | 40 427/40 427 |
+| 3 | 59 864/59 864 | 410 120/410 120 | 53 026/53 026 |
+| 4 | 59 727/59 727 | 368 605/368 605 | 52 785/52 785 |
+| 5 | 59 942/59 942 | 462 815/462 815 | 64 548/64 548 |
+| 6 | 59 951/59 951 | 474 613/474 613 | 65 695/65 695 |
+| 7 | 59 955/59 955 | 478 899/478 899 | 64 582/64 582 |
+| 8 | 59 951/59 951 | 477 577/477 577 | 64 948/64 948 |
+| 9 | 59 951/59 951 | 475 349/475 349 | 66 388/66 388 |
+| 10 | 59 951/59 951 | 475 318/475 318 | 66 616/66 616 |
+
+Journaux : `~/.cache/rag3db-moteur-notes/apres/ddl-<tour>.log` à luciepc.
