@@ -1,6 +1,6 @@
 # Un test du shell expire par intermittence : test_prev_history_multiline[multiline]
 
-- **État** : ouvert (15 novembre 2026, hotfixs, relevé par tty) ; cause prouvée le 16 nov., correctif sur la branche `shell-test-isolated-history`
+- **État** : fermé (16 novembre 2026, hotfixs) : le correctif est sur master (9b932226e, 08643d923), et la CI de master est verte depuis.
 - **Famille** : moteur
 - **Gravité** : test instable. Un rouge sans défaut sur un commit qui ne touche pas le shell ; il apprend à passer
   outre un rouge du job shell test.
@@ -84,3 +84,15 @@ toujours `~/.rag3db/history.txt`, sans qu'aucun test en dépende aujourd'hui.
    à côté), qui voit l'expiration au moins une fois.
 2. Le correctif, dans le test (attendre l'écho de chaque touche avant la suivante) ou dans la lecture des séquences
    d'échappement du shell, puis la même boucle à zéro expiration.
+
+## Fermeture (16 nov.)
+
+- **Sur master** : 9b932226e (l'historique isolé par `-p tmp_path`, rouge 5 fois sur 5) et 08643d923 (la flèche haute à
+  la place du troisième Ctrl-P), empilés sur le lot du journal des runs.
+- **La suite du shell** passe entière à luciepc sur le lot (245 sur 245), et le test visé 100 fois de suite (200 passés
+  sur 200, ses deux variantes comprises).
+- **La CI** de master est verte depuis : le « CI Workflow » sur 9f0cbe7ce, et `rag3weaver` sur 457892de98
+  (run 43782802364).
+- **Reste ouvert, à part** : les ~130 `ShellTest()` sans `-p`, et un test qui crée `history.txt` dans le dossier
+  courant (ticket `2026-11-16-la-suite-du-shell-ecrit-dans-l-historique-de-la-personne.md`, lot
+  `shell-tests-own-history`, en attente d'empilement).
