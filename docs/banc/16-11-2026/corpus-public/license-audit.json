@@ -1,0 +1,34 @@
+{
+  "github.com/protocolbuffers/protobuf@cf1e10c24b0f93df0e5c073fe49ae82c3740b7cf": {
+    "license_id": "BSD-3-Clause",
+    "license_path": "LICENSE",
+    "license_sha256": "6e5e117324afd944dcf67f36cf329843bc1a92229a8cd9bb573d7a83130fea7d",
+    "allowed_prefixes": [
+      "src/google/protobuf/"
+    ],
+    "evidence": "Root LICENSE has three redistribution conditions and disclaimer; generated code ownership exception preserved; generated and third party excluded."
+  },
+  "github.com/nodejs/node@d3c4048962853bb12359682381001ab63dced4ce": {
+    "license_id": "MIT",
+    "license_path": "LICENSE",
+    "license_sha256": "3ebb7123f4d2b9b916338e11748380972d4339d66f54cb3258270f99bb62faf5",
+    "allowed_prefixes": [
+      "lib/",
+      "test/parallel/",
+      "test/sequential/",
+      "test/common/",
+      "test/es-module/",
+      "test/message/"
+    ],
+    "evidence": "Root LICENSE explicitly applies Node MIT to parts not externally maintained; deps and fixtures omitted from reviewed selection scope."
+  },
+  "github.com/vuetifyjs/vuetify@5f5faf5bb90cf43583cbb5126c54306536aee259": {
+    "license_id": "MIT",
+    "license_path": "packages/vuetify/LICENSE.md",
+    "license_sha256": "70bfef859a7eed41e630a7257ee3772cd98345d21219e3ae3c3e75f91ff55e9c",
+    "allowed_prefixes": [
+      "packages/vuetify/"
+    ],
+    "evidence": "Package LICENSE.md MIT and package.json license=MIT. Unlicensed-at-root docs package not silently included."
+  }
+}

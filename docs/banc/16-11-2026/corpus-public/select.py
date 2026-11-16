@@ -9,7 +9,7 @@ audit_path=base/'license-audit.json';audits=json.loads(audit_path.read_text()) i
 for fp in sorted((base/'repositories').glob('*/freeze.json')):
  receipt=json.loads(fp.read_text());receipts.append(receipt);rid=receipt['repository_id'];roots[rid]=receipt['root'];inv=fp.parent/'inventory.jsonl'
  assert hashlib.sha256(inv.read_bytes()).hexdigest()==receipt['inventory_sha256']
- lic=audits.get(rid,{}).get('license_id',receipt['license_id']);proof=receipt['license_evidence'];license_path=next((x['path'] for x in proof if '/' not in x['path'] and x['path'].lower().startswith(('license','copying'))),None)
+ lic=audits.get(rid,{}).get('license_id',receipt['license_id']);proof=receipt['license_evidence'];license_path=audits.get(rid,{}).get('license_path') or next((x['path'] for x in proof if '/' not in x['path'] and x['path'].lower().startswith(('license','copying'))),None)
  for line in inv.read_text().splitlines():
   r=json.loads(line)
   if not r.get('language'):continue
@@ -17,6 +17,7 @@ for fp in sorted((base/'repositories').glob('*/freeze.json')):
   if not reason and r.get('encoding')!='utf-8':reason='invalid_utf8'
   if not reason and r.get('third_party'):reason='third_party_separate'
   if not reason and r.get('generated'):reason='generated_separate'
+  if not reason and audits.get(rid,{}).get('allowed_prefixes') and not any(r['relative_path'].startswith(prefix) for prefix in audits[rid]['allowed_prefixes']):reason='outside_reviewed_license_scope'
   if not reason and (not lic or lic in ['NOASSERTION','OTHER'] or not license_path):reason='license_unresolved'
   r['selection_excluded_reason']=reason;occurrences.append(r)
   if reason:excluded[r['language']+':'+reason]+=1;continue
