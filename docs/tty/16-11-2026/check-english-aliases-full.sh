@@ -1,8 +1,9 @@
 #!/bin/bash
 # Proposition F8+harnais : aucun lancement hors GO exact C7.
 set -u
-W=$(git rev-parse --show-toplevel) || exit 2
-J=$HOME/.cache/rag3weaver-build/cx-tty-english-aliases-full-v2
+Q=${TTY_CONTROLLER_DIR:?prepared controller required}
+W=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["worktree"])' "$Q/prepared.json") || exit 2
+J=$HOME/.cache/rag3weaver-build/cx-tty-english-aliases-full-v3
 T=$HOME/.cache/rag3weaver-build/target-cx-tty-english-aliases-2
 LIB=rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
 [ ! -e "$J" ] && [ ! -L "$J" ] || exit 2
@@ -12,7 +13,7 @@ git rev-parse HEAD > "$J/source.txt"
 git status --porcelain > "$J/status-before.txt"
 [ ! -s "$J/status-before.txt" ] || stop dirty
 [ -d "$T" ] && [ ! -L "$T" ] || stop target
-python3 -B "$W/docs/tty/16-11-2026/check_target_profile.py" "$W" "$T" "$J" before > "$J/profile-before.log" 2>&1 || stop provenance
+python3 -B "$Q/check_target_profile.py" "$W" "$T" "$J" before > "$J/profile-before.log" 2>&1 || stop provenance
 cat "$T/.arbre-du-target" > "$J/target-owner-before.txt"
 [ "$(cat "$T/.arbre-du-target")" = "$W/extension/rag3weaver/tty" ] || stop target-owner
 command -v tmux > "$J/tmux.txt" || stop tmux
@@ -52,7 +53,7 @@ root=Path(sys.argv[1])/'extension/rag3weaver/templates/themes'
 Path(sys.argv[2]).write_text(json.dumps({p.stem:json.loads(p.read_text()) for p in sorted(root.glob('*.json'))}))
 PY
 export CARGO_MANIFEST_DIR="$W/extension/rag3weaver/tty"
-timeout 900 python3 -B "$W/docs/tty/16-11-2026/run_private_harness.py" "$W/extension/rag3weaver/tty/mesures/mesure.py" "$T/debug/rag3weaver-tty" "$W/extension/rag3weaver/tty/mesures/faux_hote.py" "$J/harness" "$J/themes.json" "$J/harness-result.json" "$J/xdg-state" > "$J/harness.log" 2>&1
+timeout 900 python3 -B "$Q/run_private_harness.py" "$W/extension/rag3weaver/tty/mesures/mesure.py" "$T/debug/rag3weaver-tty" "$W/extension/rag3weaver/tty/mesures/faux_hote.py" "$J/harness" "$J/themes.json" "$J/harness-result.json" "$J/xdg-state" > "$J/harness.log" 2>&1
 rc=$?; printf '%s\n' "$rc" > "$J/harness.rc"
 [ "$rc" = 0 ] && tail -1 "$J/harness.log" | grep -qx VERT || stop harness
 git -C "$W" status --porcelain > "$J/status-after.txt"
@@ -62,5 +63,5 @@ sha256sum "$SDK/librag3db.so" "$SDK/libvector.rag3db_extension" > "$J/sdk-sha-fi
 cmp "$J/sdk-sha.txt" "$J/sdk-sha-final.txt" || stop sdk-changed
 sha256sum "$T/debug/rag3weaver-tty" > "$J/tty-elf-sha-final.txt"
 cmp "$J/tty-elf-sha.txt" "$J/tty-elf-sha-final.txt" || stop elf-changed
-python3 -B "$W/docs/tty/16-11-2026/check_target_profile.py" "$W" "$T" "$J" after > "$J/profile-after.log" 2>&1 || stop quiet-final
-echo 'VERT F8 8/8 et harnais tty privé entier' | tee "$J/verdict.txt"
+python3 -B "$Q/check_target_profile.py" "$W" "$T" "$J" after > "$J/profile-after.log" 2>&1 || stop quiet-final
+echo 'STAGES_PASSED F8 8/8 et harnais tty privé entier' | tee "$J/verdict.txt"
