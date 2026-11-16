@@ -74,3 +74,21 @@ privé/quota, le constructeur de commandes/politique, les bornes et le verdict a
 ouverture tardive. `test_registration.py` lit les vrais Cargo.toml/main/Rust et
 exécute les affectations AST du vrai driver ; aucun Cargo ou ELF natif.
 À cette publication : AST8 parsés, aucun test CPU de ce nouveau pilote encore joué.
+
+## Résultats de préparation après prépublication0f1167daca
+
+Dix fonctions CPU (six contrats et quatre lectures d'enregistrement/AST réel)
+VERTES en0.023s, timeout60/failfast, aucun Cargo ou processus natif. Journal hors W
+`~/.cache/rag3weaver-build/cx-archi-doc-bac-green-cpu-r1/tests.log`, SHA256
+`1b283b0b802f67eb62896a149e6606f20d06febcfe331e255810d90eb7d3f4d1`.
+656 tickets VERTS ; produit pilote identique à742, AST8 et diffcheck VERTS.
+
+Préparation Git PC terminée : même W canonique maintenant742, archive223 détachée
+avec son gitlink propre, contrôleur rouge72338 inchangé. Sous
+`cx-doc-bac-green-transition-r1/`, inventaires cache avant/après SHA identique
+`fe11f4a743ddafc2e78baba70017ffa854fdb4938172df20142c83d460d1faaf` ;
+archive source223 `2677f8ed38e0e5be8c05a4783a44f621034f1dfedbb2e7f8f4fb46296ecee43d`,
+source742 `340fcbf36728ca9da216e308af38b41e15c4a97b0691710aef55b24bcc7f5dec`,
+transition `963fe0d9536649f4933420bc429d68d863e76ab3d2cba867a1e24294de75260e`.
+130 observations anciennes : aucun vivant ni UNKNOWN attribué ; aucun Cargo,
+aucune garde ni mutation du cache durant cette préparation Git.
