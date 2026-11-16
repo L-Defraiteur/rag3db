@@ -66,6 +66,18 @@ class Contracts(unittest.TestCase):
             self.assertEqual(json.loads((root/'result.json').read_text()),value)
             with patch.object(q,'P',root),self.assertRaises(FileExistsError):q.result_file(value)
 
+    def test_real_fsync_crossing_final_deadline_rewrites_file_and_return_to_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);clock=[99.];real_sync=q.os.fsync;calls=[]
+            def late_sync(fd):
+                real_sync(fd);calls.append(fd);clock[0]=101.
+            with patch.object(q,'P',root),patch.object(q.time,'monotonic',side_effect=lambda:clock[0]),patch.object(q.os,'fsync',side_effect=late_sync):
+                value=q.result_file(dict(status='GREEN_SETUP_TARGETED_ONLY',deadline=100.))
+            self.assertTrue(calls,'the real write/flush/fsync boundary must be exercised')
+            self.assertEqual(value['status'],'UNEXPECTED_FAILURE')
+            self.assertEqual(json.loads((root/'result.json').read_text()),value)
+            self.assertEqual(0 if value['status']=='GREEN_SETUP_TARGETED_ONLY' else 1,1)
+
     def test_real_constructor_and_policy_agree_with_outer_timeout_and_exact_pilot(self):
         q.configure_controller();pilot='a'*40;control=Path('/private/checkout')
         actual=q.controller.commands(control,pilot)
