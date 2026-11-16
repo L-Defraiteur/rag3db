@@ -154,3 +154,16 @@ reset ni de retry automatique, anciencanonique et rouges conservés.
 ScopeROUGE1/restes[]/nettoyé/TERMINE ; scan frais owned_alive[]/owned_unknown[]/
 found[],bus+cgroupabsents,T5658160728conservé. Preuves34 avantcomplémenthealth
 à finaliser dans rapport06 ; aucune édition du pilote pendant/après le job.
+
+## Accord C7 de préparation de seconde lib seule, avant code
+
+Après RO968 Arbre/ED, C7 autorise PRÉPA seulement : nouveau pilote exécute
+SEULE seconde lib entière mêmeELF6f12, zéroCargo/F8/NAV. Source734propre,
+canonique déjàVERT SHA0ddd et35manifestc804 inchangés, nouveauprofil avec
+CARGO_MANIFEST_DIR=crateEXACT archivé AVANTassert, SDKexportunefois, TMPdisque
+courtprivé et étatsfrères. NouveauP/Q/Sv3, pasnouveauT. Capturecache/ELF/FP/
+reçuv2TERMINE/provenance avant et justeaprèsPOSTE, délai floorEND-now-3,
+INITIAL1179575.678/END1186775.678 originaux. Verdictcomposite seulementsi
+seconde lib2596/0/72 sansfiltre etshaidentiques, résumécanonique intact.
+Anciens rouges conservés, aucun GOreprise ni budgetneuf. Publication pilote
+ettémoins vraisenv/commande +deadlineAPRÈSopen pourROavantGOexact.
