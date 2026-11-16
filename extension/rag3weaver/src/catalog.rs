@@ -1425,18 +1425,82 @@ fn read_threads() -> u64 {
         })
     }
 
+    /// Provenance exacte, sans ouvrir de writer ni reprendre une promesse.
+    fn existing_fts_stamp(&self, table: &str) -> Result<(std::path::PathBuf, u64, u64), crate::fts_existing::ExistingFtsError> {
+        use crate::fts_existing::{ExistingFtsError as Error, validate_directory};
+        self.check_reopen().map_err(|error| Error::Metadata(error.to_string()))?;
+        let name = table.strip_prefix(crate::fts_handle::INDEX_PREFIX).unwrap_or(table);
+        if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+            || !(self.entity_configs.contains_key(name) || self.entity_configs.keys().any(|entity| {
+                self.resolve_search_target(entity).is_ok_and(|target| target.parent_table == name)
+            })) {
+            return Err(Error::PhysicalTable(table.into()));
+        }
+        let crate::fts_handle::FtsStorage::Files { base_path } = &self.fts_storage else {
+            return Err(Error::UnsupportedStorage);
+        };
+        let index_name = self.scope.index_name(&crate::fts_handle::fts_index_name(name));
+        let directory = std::path::Path::new(base_path).join(&index_name);
+        validate_directory(&directory)?;
+        if self.in_transaction || self.fts_rebuild.contains(name)
+            || self.fts_promise.load(std::sync::atomic::Ordering::SeqCst)
+            || self.fts_promise_orphan.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err(Error::Pending(name.into()));
+        }
+        let read = |key: &str| self.read_meta_key(key).map_err(|error| Error::Metadata(error.to_string()));
+        if !read(FTS_PROMISE)?.unwrap_or_default().trim().is_empty()
+            || !read(&format!("{FTS_PENDING}{name}"))?.unwrap_or_default().trim().is_empty() {
+            return Err(Error::Pending(name.into()));
+        }
+        let raw = read(&format!("fts_generation:{index_name}"))?
+            .ok_or_else(|| Error::Generation("missing database generation".into()))?;
+        let database = raw.trim().parse::<u64>().map_err(|_| Error::Generation("invalid database generation".into()))?;
+        let path = directory.join(crate::fts_directory::GENERATION_FILE);
+        let raw = std::fs::read_to_string(&path).map_err(|source| {
+            if source.kind() == std::io::ErrorKind::NotFound { Error::Generation("missing directory generation".into()) }
+            else { Error::Io { path, source } }
+        })?;
+        let disk = raw.trim().parse::<u64>().map_err(|_| Error::Generation("invalid directory generation".into()))?;
+        if database != disk { return Err(Error::Generation(format!("database={database}, directory={disk}"))); }
+        Ok((directory, database, disk))
+    }
+
+    /// Lit la table PHYSIQUE de la cellule courante, même si sa porte publique
+    /// est redirigée. Aucun handle writer installé, aucune reprise de promesse.
+    pub(crate) fn open_existing_fts_snapshot(
+        &self, table: &str,
+    ) -> Result<Arc<lucivy_core::sharded_handle::ShardedHandle>, crate::fts_existing::ExistingFtsError> {
+        let before = self.existing_fts_stamp(table)?;
+        let handle = crate::fts_existing::open_snapshot(&before.0)?;
+        if self.existing_fts_stamp(table)? != before { return Err(crate::fts_existing::ExistingFtsError::Changed); }
+        Ok(Arc::new(handle))
+    }
+
+    /// Le jeton du snapshot ne change plus : encadrer aussi le relevé entier
+    /// par la provenance externe, pas seulement l'ouverture du lecteur.
+    fn with_fts_read<T>(&self, table: &str, read: impl FnOnce(&Arc<lucivy_core::sharded_handle::ShardedHandle>) -> Result<T, String>) -> Result<T, String> {
+        let name = table.strip_prefix(crate::fts_handle::INDEX_PREFIX).unwrap_or(table);
+        if let Some(handle) = self.fts_handles.get(name) { return read(handle); }
+        let before = self.existing_fts_stamp(table).map_err(|error| error.to_string())?;
+        let handle = self.open_existing_fts_snapshot(table).map_err(|error| error.to_string())?;
+        let result = read(&handle)?;
+        if self.existing_fts_stamp(table).map_err(|error| error.to_string())? != before {
+            return Err(crate::fts_existing::ExistingFtsError::Changed.to_string());
+        }
+        Ok(result)
+    }
+
     /// Les documents vivants du plein texte d'une table et le jeton du même
     /// lecteur (`fts_maintenance::live_ids`) : le premier temps d'une
     /// maintenance, avant la lecture du graphe.
     pub fn fts_live_ids(&self, table: &str) -> Result<(Vec<u64>, String), String> {
-        crate::fts_maintenance::live_ids(&self.fts_handle_nomme(table)?)
+        self.with_fts_read(table, crate::fts_maintenance::live_ids)
     }
 
     /// **Le relevé à blanc** du plein texte d'une table (`fts_maintenance::releve_a_blanc`) :
     /// ses vivants, ses lignes (les décalages que le graphe porte, toutes cellules) et ses
     /// orphelins, sans rien effacer.
     pub fn fts_releve_a_blanc(&self, table: &str) -> Result<serde_json::Value, String> {
-        let handle = self.fts_handle_nomme(table)?;
         let nom = table.strip_prefix(crate::fts_handle::INDEX_PREFIX).unwrap_or(table);
         let decalage = self.dialect.node_offset_expr("n");
         let lignes = || -> Result<Vec<u64>, String> {
@@ -1446,7 +1510,7 @@ fn read_threads() -> u64 {
                     .ok_or_else(|| format!("décalage illisible dans les lignes de {nom}")))
                 .collect()
         };
-        crate::fts_maintenance::releve_a_blanc(&handle, nom, lignes)
+        self.with_fts_read(table, |handle| crate::fts_maintenance::releve_a_blanc(handle, nom, lignes))
     }
 
     /// **La maintenance nocturne** du plein texte de ce catalogue (`fts_maintenance::maintenance_nocturne`),
