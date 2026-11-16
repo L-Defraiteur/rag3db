@@ -49,3 +49,6 @@ Retour : ciblésLucivy9mémoire etRecherche8distincts11invocations annoncésvert
 
 
 Signalement Mémoire avant correction groupée : RO197b60 PURE totale réservée troisP2 : phase ignore headers running supplémentaires/malformés/0 ; résumés finaux nonliés aux blocs correspondants (déplacement dansNAV accepté) ; preuve accepte Finisheddevseul sansChecking/Compilingrag3weaver. Constatsstatiques, pasmutantsrejoués, RAW54+22paquet2postesSHAstables nonremisencause. C7 retire suffisancePUREclassificateur197b et suspend préparationcandidate autorisée44e2 jusqu’aux troistémoinsvraisrouges avantfix+nouveauSHA/ROtotale. PorteurED au ticketexistantVertex observation, famillesdecritèresetbornesRAW/CANON/composéhistorique inchangées, aucunrerun natifautorisé.
+
+
+TTY91e5 corrigé : ROtotaleMémoire favorableCLI/imports/dispatch/12copies+carried13/SDK2/timeout/tmux/ELFledger, P1TOTAL5blevée. C7 relitdiffetrehashindépendammentQv3cf99/12+13+SDK2+tmux/ELFphysique+copiecb24/ledger4e4363,HEAD91e5propre/P-S-allocationabsents. GO distinct C7-TTY-HARNESS-91E5-16nov1200 au ticketHARNESSEXISTANT, seulementnouveauharnaisprivé sur ELFacquis ; ancienEND852082resteexpiré. Détailsbornesetlimitesdansrapport, aucunF8/build/natifautreservice/master/nettoyage.

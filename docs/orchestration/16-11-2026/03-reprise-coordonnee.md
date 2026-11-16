@@ -560,3 +560,12 @@ Vertex classificationPURE197b60ebc83ec0d4b6329dc977c85572a65a7312 reçoit Hotfix
 
 
 Mémoire ROtotale197b60 ultérieure retient troisP2 de strictesse malgré RAWfigésconformes : running supplémentaire/malformé ignoré ; résumé nonlié à sa phase ; Finisheddevseul pris pour preuvecrate. Retrait de suffisancePURE du parseur197b et HOLDpréparationcandidate44e2 avanttransmissioncorrectiveEDgroupée au ticketexistant ; trois vrais contreexemples publiés/vusrouges avantfix puisnouveauSHA+ROtotale, sansNative. Les avisfavorables antérieurs sont bornés et supersédés par cette réserve, aucune altérationRAW/nouvelle invaliditécanonique native affirmée. VERTcanoniqueofficiel/composéRED/scopeROUGE demeurent les faits séparés.
+
+
+## GO ciblé TTY harnais seul, nouvelle étape distincte
+
+SOURCE91e5ed5fc11e565f238478d946d3e994146e1e8d, Qcx-tty-harness-only-controller-v3/prepared SHA cf99a2559610ba301f7ed7d45434ac264ddce0b50feea53cf119a07b6fe1ab95. Mémoire ROtotale favorable/0réserve, C7 relit totalitédelta5b→91 et vérifieréellement12controllers/13carried/SDK2/tmux/ELFtarget+copiecb24ce0425bcb2487c83b9e0416a274cbf40585e65743d7327cef430108f031a, ledger4e4363e03586217a4397ef599a9ce294d08d28208c5059690f6018a146b90e32, HEAD91e5 propre/P-S-allocationabsents. Nouveau GNUtimeout physique SHA ccecc427cae6d6c091964a9ec140d83933a60900533daf46b74f8288551e29c3.
+
+GO distinct **C7-TTY-HARNESS-91E5-16nov1200**, hôteTABLET préparé : vraieentrée execOSwatchdogsoftreste−6/kill5/marge1 incluseplafond1200, workerENTIERpréchecks+allocation+fileposte32G/HIGHmax+Commonreste−15+harnais+finalhashT/source/quiet/publication souswatchdog, parentultimepastravailaprèsretour. STARTavantentrytransmis, toutesphasesMINEND, pasancienEND852082réactivé. Qv3/Pv3/Sv3/TMPttyhr3neufs ; contrôleurs/fauxhôteprivé17990, portfreshavantPopen, XDGétatsfrères, premierROUGEtracefsync→pidfdseuleautoritépossédée+PIDstartCGscriptQvérifiés→STOPsansretry. SCREENcourant etapprovalreplyIDEXACT sontdeuxjugesdistincts ; pasréinterprétationanciennecaptureperdue.
+
+MêmeTownerTTY lectureseulecomparéeledger, ELFcb24/F8source6d+13preuves carried etpasrejoués. AucuneCargo/build/F8/PG/provider/7970/serviceSDKpose/master/nettoyage. Harnais natifTTYprivé seulement ; autrepremierrouge→conservation/ticketavantfix/aucunassouplissement. Toutequalificationpositive attendCommonterminé/nettoyé/busabsent/ownedquiet+rehashledger/source/pins/pubdansEND. DeuxanciensrefusTTY restentrouges ; nouveauprotocole n’estpasunvertdecesanciensruns.
