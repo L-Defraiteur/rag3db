@@ -140,3 +140,36 @@ Aucun lien-fichier interne dans ces inventaires. Les freezes02 restent intacts.
 Les détails et SHA des diagnostics sont conservés aux postes concernés ; la
 qualification finale exige le listing effectif de WorkingTree927 et l'admission
 par le manifeste (dont minified_line_max_bytes), pas une égalité supposée avec rg.
+
+### Outil autonome exact, exception RO autorisée par C7
+
+Source publiée : `outils/source_admission.rs`, SHA256
+`34dadd5c874bc319b03a622f7e0215c6835aa5d0c1811af543566f9d800652a1`.
+Seul appel métier : `WorkingTree::new(root).list_with_exclusions()` ; aucune
+référence à Catalog, PreparedBackend, connexion, ingestion ni lecture du contenu
+des fichiers source. Le scanner lit ses règles d'exclusion habituelles. Sortie
+TSV, chemins/raisons UTF-8 codés en hexadécimal ; compte final explicite, code
+non nul si erreur. Le listing brut est distinct de l'admission du manifeste.
+
+Préconditions bloquantes avant compilation : G fournit une rlib927 existante,
+son dossier deps, SOURCE/build flags, compilateur et paramètres de lien59ac.
+Vérifier ces provenances, hacher rlib, outils et sources, relever la capacité
+fraîche puis acquérir le vrai poste lourd via la portée commune32G. Aucun
+rebuild de G pour cet outil, aucun Cargo, aucune mesure exclusive. Une rlib
+absente ou incompatible arrête cette voie ; proposer une alternative à C7.
+
+Recette autorisée, à instancier seulement avec ces artefacts attestés : portée
+commune `--mode lourd --delai 120`, preuves neuves, compile **une fois** par
+`rustc --edition=2021 source_admission.rs --extern rag3weaver=<rlib927>
+-L dependency=<deps927> <paramètres de lien59ac attestés> -o <binaire privé>`.
+Pas de parallélisme Cargo ; un seul rustc, budget global de120s après acquisition,
+arrêt/cleanup inclus. Le même budget couvre les listings si leur coût tient,
+sinon arrêter et demander un créneau distinct, sans remettre le compteur à zéro.
+Lancer ensuite séquentiellement le binaire sur les trois roots et leurs captures,
+sorties privées hors target, jamais sur un fichier de base. Hacher le binaire et
+conserver argv, codes, sortie, cgroup/plafond, verdict et quiescence. Ne pas
+publier le jeton d'autorité privé. Pas de qualification de passe Rust produit.
+
+À cette publication, **source non compilée/non jouée**, rlib927 attendue. L'accord
+porte uniquement sur cet outil RO borné ; il ne réactive ni passe générale,
+ancien GO, migration de base vivante ou nouveau service.
