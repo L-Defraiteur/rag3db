@@ -1,0 +1,21 @@
+{
+  "verdict": "ROUGE INCOMPLETE NATIVE RESULT",
+  "pilot": "50e2f6bfe0d04cf787977170a465d924fbfef469",
+  "source": "ed0c3c8af57f25e83ae5c4ba004ae3393e77812e",
+  "engine": "888c81825e4cd6556261233f0e238af3b95375c9",
+  "reference_source_not_played": "75a4ba4d467aa5f07ef83494f5393154ab2392c6",
+  "raw_files_rehashed_local": 47,
+  "artifacts_rehashed_local": 5,
+  "archive_sha256": "a487686f422b3bdd97306ac662a3423d533cbdcaa1949b81e8395d29b0db4028",
+  "compressed_core_sha256": "77c13010a68f6ce77aabb1db849b087eb1bd8f682503490b8bd3fa568122d104",
+  "core_gdb_analysis": false,
+  "full_packet_local": "/home/lucied/.cache/rag3db-moteur-notes/two-reds-01",
+  "full_packet_remote": "luciepc:/home/lucied/.cache/rag3weaver-build/cx-two-reds-01",
+  "raw_inventory_not_modified": true,
+  "post_run_core_kept_separate": true,
+  "instrumentation_effectively_enabled": false,
+  "native_build_id_stdout": false,
+  "native_maps_captured": false,
+  "memory_events_captured": false,
+  "retry": false
+}

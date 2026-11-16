@@ -16,4 +16,6 @@ Le témoin charge5000lignes, réécrit cinq lots avec ADD/DROP sous lecteur, act
 
 ## Suite et fin
 
+La [paire diagnostique50e2](../16-11-2026/15-paire-diagnostique-arretee-sur-sigsegv-et-sonde-non-activee.md) s'arrête sur SIGSEGV natif avant résultat complet ; drapeau de sonde effacé par le pilote, donc aucune valeur instrumentée acquise ni localisation du228. Trois autres cas non joués, référence non construite, aucun retry. Deux tickets distincts suivent signal et défaut de pilote, sans attribution au présent défaut.
+
 Relire oracle et opérations/valeurs, puis témoin réduit sous recette et admission neuves si nécessaire. Ne pas modifier known_red, exclure le cas ou fermer C1 pour obtenir du vert. Fin : cause documentée, rouge avant correction, qualification pertinente puis intégration autorisée. Aucun nouveau lourd autorisé par ce ticket.

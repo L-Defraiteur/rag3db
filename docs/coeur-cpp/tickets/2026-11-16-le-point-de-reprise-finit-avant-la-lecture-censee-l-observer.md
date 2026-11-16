@@ -16,4 +16,6 @@ openReaderAcrossACheckpoint ouvre un lecteur, écrit ailleurs, lance CHECKPOINT,
 
 ## Suite et fin
 
+Le lecteur contrôlé de la paire50e2 est NON JOUE après l'arrêt du premier cas chaînes ; [bilan conservé](../16-11-2026/15-paire-diagnostique-arretee-sur-sigsegv-et-sonde-non-activee.md). Aucune nouvelle preuve de chevauchement ou de snapshot à ajouter au présent ticket.
+
 Relire synchronisation et garantie réellement visée ; préférer les primitives de test existantes à un sleep accru. Toute correction de témoin doit conserver la preuve qu'il lit pendant la fenêtre visée, avec rouge préalable et qualification sous admission neuve. Ne pas reclasser probabiliste ni affaiblir known_red automatiquement. Aucun runtime nouveau autorisé par ce ticket.
