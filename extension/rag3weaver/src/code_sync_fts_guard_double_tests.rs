@@ -194,3 +194,50 @@ fn generations_maintenance_precedes_an_early_source_error() {
     assert_eq!(c.fts_live_ids(&table).unwrap().0, graph);
     assert_eq!(healthy_rows(&c, &table), healthy);
 }
+
+
+// Témoins de chemin publiés AVANT le microfix ; aucun environnement global muté.
+fn fixture_path_test_root() -> std::path::PathBuf {
+    let target = fixture_disk_target();
+    std::fs::create_dir_all(&target).unwrap();
+    tempfile::Builder::new().prefix("fts-path-witness-").tempdir_in(target).unwrap().keep()
+}
+
+#[test]
+fn explicit_fixture_root_keeps_unique_cases_and_prior_bytes() {
+    let root = fixture_path_test_root();
+    let first = fixture_case(Some(&root), &root.join("unused-target"), "generations").unwrap();
+    std::fs::write(first.join("sentinel"), b"prior-proof").unwrap();
+    let second = fixture_case(Some(&root), &root.join("unused-target"), "generations").unwrap();
+    assert_ne!(first, second);
+    assert_eq!(first.parent(), Some(root.as_path()));
+    assert_eq!(second.parent(), Some(root.as_path()));
+    assert_eq!(std::fs::read(first.join("sentinel")).unwrap(), b"prior-proof");
+    assert!(!root.join("unused-target").exists());
+}
+
+#[test]
+fn absent_fixture_root_uses_only_the_private_disk_target() {
+    let root = fixture_path_test_root();
+    let target = root.join("disk-target");
+    let first = fixture_case(None, &target, "generations").unwrap();
+    let second = fixture_case(None, &target, "generations").unwrap();
+    assert_ne!(first, second);
+    assert_eq!(first.parent(), Some(target.join("fts-double-fixtures").as_path()));
+    assert_eq!(second.parent(), first.parent());
+    assert_eq!(std::fs::read_dir(&root).unwrap().count(), 1);
+}
+
+#[cfg(unix)]
+#[test]
+fn invalid_explicit_fixture_roots_never_fall_back_or_follow_symlinks() {
+    let root = fixture_path_test_root();
+    let target = root.join("unused-target");
+    assert!(fixture_case(Some(std::path::Path::new("relative")), &target, "case").is_err());
+    assert!(fixture_case(Some(&root.join("missing")), &target, "case").is_err());
+    let alias = root.join("alias");
+    std::os::unix::fs::symlink(&root, &alias).unwrap();
+    assert!(fixture_case(Some(&alias), &target, "case").is_err());
+    assert!(fixture_case(Some(&alias.join("child")), &target, "case").is_err());
+    assert!(!target.exists());
+}
