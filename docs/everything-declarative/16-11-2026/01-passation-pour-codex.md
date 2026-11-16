@@ -8,6 +8,11 @@ quelques outils de l'agent. Le fond de la conception est dans les pages du 14 no
 cache par rang), et le rapport `00-rapport-de-session.md` du même dossier. Le dernier knowledge dump est
 `docs/everything-declarative/13-11-2026/03-knowledge-dump.md`.
 
+**État final d'ED (16 novembre 2026, 10 h 20, arrêt demandé par Lucie)** : tout est poussé, plus rien ne tourne. Sur master :
+l'écrivain, les garde-fous de la synchronisation, les outils de l'agent, le découpeur, l'ordre stable des ex æquo
+(f9ebafc9e). **Une branche prête, pas sur master** : `stable-tie-identity` (entrée 2.A ci-dessous). Un ticket neuf
+confirmé par c7 : le jeton Vertex (entrée 2.B). Les entrées 2.1 et suivantes ne sont pas commencées.
+
 ## 1. L'état
 
 **Sur master** (16 novembre au matin) :
@@ -71,6 +76,37 @@ Pour un témoin seul pendant le travail : `cargo test --lib --features
 rag3db-native,burn-embedder,burn-ocr,code,daemon,postgres,openai-llm,anthropic-llm <filtre>`, par
 `scripts/cargo_magasin.sh` après `. scripts/lib_du_magasin.sh && exporter_la_lib` (avec `RAG3DB_LIB` posé). Toujours sous
 `poste lourd`, avec `CARGO_BUILD_JOBS=8` au plus.
+
+### 2.A En cours : l'ordre des ex æquo d'une base réécrite à une base neuve — prêt, à pousser
+
+**État : prêt, passe VERTE, pas sur master.** Branche `stable-tie-identity`, tête **1834bf111**, sur master fe5d81f81,
+4 commits gmail.
+- **Ce que le lot fait** : les ex æquo se départagent par une identité stable, `search::stable_order` : une occurrence
+  par son chemin, sa ligne de début et son nom, une version par son uuid de contenu. Avant, l'uuid d'occurrence, qui
+  porte `_depuis` sous les générations, changeait d'une base réécrite à une base neuve.
+- **Où** : `src/search.rs` (`stable_order`, les tris de `search_bm25_chunked`, de la remontée vers les occurrences et des
+  résolutions), `src/dataflow/generic_search_nodes.rs` (le tri de la fusion).
+- **Témoin** : `backend::tests::ties_keep_the_same_order_from_a_rewritten_base_to_a_fresh_one`. Rouge sur ea4704bf6
+  (deux ordres différents des six ex æquo), vert sur a4d1c59db.
+- **Passe VERTE sur 1834bf111** : e2e_code 36, e2e_lectures 27, check_features 8/8, lib 2595/0/72, navigateur 45.
+- **Ce qui reste** : attendre le « à toi » de c7. Puis reposer sur la tête de master du moment, sous un nom neuf
+  (`git cherry-pick` des 4 commits de `fe5d81f81..1834bf111`, puis la ligne de nouveautés à rajouter si
+  `docs/nouveautes.md` entre en conflit). Rejeu court si master a apporté du code, puis le push par la garde.
+
+### 2.B Un modèle Vertex déclaré garde son jeton d'une heure — 4 h, rien ne bloque, gravité haute
+
+Ticket : `docs/banc/tickets/2026-11-16-un-modele-vertex-declare-garde-son-jeton-d-une-heure.md`, confirmé pour ED par c7.
+- **Le problème** : `connect_llm` (`src/model_source.rs`), en protocole vertex, prend le jeton une fois et le pose en
+  `Auth::Bearer` fixe dans `OpenAiLlm::vertex` (`src/openai_llm.rs`). Au bout d'une heure, chaque appel rend 401
+  `ACCESS_TOKEN_EXPIRED`, et une passe longue perd ses décisions sans s'arrêter : 45 de perdues dans la passe F300 de banc.
+- **À faire** : le client garde la `TokenSource` (`src/gcp_auth.rs`) et appelle `token()` à chaque appel. Sur un 401, il
+  fait `invalidate()` puis **une seule** retentative ; un second 401 remonte en erreur nommée. **Ne touche pas** le
+  chemin des clés d'API (protocole openai avec clé fixe).
+- **Témoin, rouge d'abord** (nom anglais, dans les tests d'`openai_llm.rs`) : un faux serveur (`tests/common/fake_sse`, ou
+  un `tiny_http` local) qui accepte le jeton n°1, puis rend 401 jusqu'à ce qu'un jeton n°2 arrive. La `TokenSource`
+  factice donne n°1, puis n°2 après `invalidate()`. Le second appel réussit avec n°2 : rouge aujourd'hui, puisque le
+  jeton fixe reste n°1.
+- **Passe** : `SUITE_DU_TEMOIN=e2e_demon_hote SUITES=-`, avec la feature `openai-llm` (déjà dans la passe).
 
 ### 2.1 Un llama-server déclaré est classé cloud — 2 h, rien ne bloque
 
