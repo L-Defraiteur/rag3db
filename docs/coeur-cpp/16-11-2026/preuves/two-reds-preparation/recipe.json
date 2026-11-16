@@ -1,0 +1,43 @@
+{
+  "status": "PREPARATION ONLY; NOT COMPILED; NOT EXECUTED; EXACT DRIVER AND RO REQUIRED BEFORE ADMISSION",
+  "reference_source": "c4ebc7905735f3739966f8c24144a172d54a794e",
+  "reference_engine": "59ac9c86bc2b3529b590a7462ab7051e3ad26b8a",
+  "candidate_source": "4488055b60863b7562132802de39faf394035012",
+  "candidate_engine": "888c81825e4cd6556261233f0e238af3b95375c9",
+  "identical_test_files": [
+    {
+      "path": "test/transaction/concurrence/string_rewrite_test.cpp",
+      "sha256": "00394dff3c1d95b689cf52759b9791f075347ee8df38445d4f4189f6e3402be0"
+    },
+    {
+      "path": "test/transaction/concurrence/checkpoint_no_stall_test.cpp",
+      "sha256": "4a68b28139edb77c2c46ea6e62b39707d630a7277c7f0a757bc4130f6cc85bff"
+    }
+  ],
+  "production_delta_paths": [
+    "src/storage/table/dictionary_chunk.cpp"
+  ],
+  "global_proposed_cap_s": 2400,
+  "variant_caps_s": {
+    "configure": 120,
+    "build": 800,
+    "strings": 60,
+    "reader": 60
+  },
+  "reserved_finalization_s": 320,
+  "jobs": "min(8, POSTE_FILS, floor(parent effective quota))",
+  "memory_bytes": 34359738368,
+  "swap_bytes": 0,
+  "scratch_bytes": 34359738368,
+  "filters": [
+    "StringRewriteAcrossAddColumn.AutomaticCheckpointsBetweenAddsAndDrops",
+    "CheckpointOpenReader.OpenReaderOnRelsAcrossAControlledCheckpointWindow"
+  ],
+  "string_environment": {
+    "RAG3DB_STRING_DIAGNOSTIC": "1"
+  },
+  "options": "Release; runtime checks/stats/ASAN/TSAN/UBSAN/LTO OFF; MAX_NUM_THREADS=2; OMP/OPENBLAS inherited bounded poste count",
+  "no_global_suites": true,
+  "native_runs_per_case": 1,
+  "retry": false
+}
