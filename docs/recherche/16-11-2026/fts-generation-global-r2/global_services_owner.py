@@ -81,6 +81,7 @@ def pins_check(pins):
                               dual=dual, sparse=dual, factice=False, precision='Flex32'))
         if type(identity['max_chars_per_text']) is not int or identity['max_chars_per_text'] <= 0 or not isinstance(identity['executable'], str) or not identity['executable'].startswith('/'):
             raise ValueError('provider cap/executable pin invalid')
+    transport_module(pins)
     pg = pins['postgres']
     strict(pg, dict(host='127.0.0.1', port=5433, database='rag3weaver_test', user='rag3weaver'))
     expected = pg.get('allocation')
@@ -147,14 +148,25 @@ def process_check(provider, process_reader):
     return actual
 
 
-def worker(context):
-    """One direct health GET only; PG is a separate G attestation, never a probe."""
+def transport_module(pins):
+    path = Path(__file__).resolve().with_name('provider_health_transport.py')
+    if not path.is_file() or path.is_symlink() or sha(path) != pins.get('transport_sha256'):
+        raise ValueError('exact shared health transport unavailable')
+    spec = importlib.util.spec_from_file_location('global_admitted_health_transport', path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def worker_gate(context):
+    """Global policy only; called by the common worker immediately before HTTP."""
     pins = context['pins']
     pins_check(pins)
     ready = ready_read(context['ready_path'], context['ready_sha256'], context['nonce'], pins)
     provider = next((p for p in pins['providers'] if p['address'] == context.get('address')), None)
     if context.get('kind') != 'provider' or provider is None:
         raise ValueError('only fixed provider health contacts allowed')
+    strict(context['expected_process'], provider['process'])
     process_check(provider, process_observation.process_snapshot)
     now = contact_gate(ready, pins, context['admission'], context['lease_end'],
                        time.monotonic, phase_protocol.read_phase_state)
@@ -163,52 +175,27 @@ def worker(context):
     if context['admission']: upper = min(upper, ready['grant_deadline_monotonic']-30)
     if due <= now or due > upper:
         raise ValueError('contact budget expired or exceeds admission/lease margin')
-    address = context['address']
-    if context['kind'] != 'provider' or address not in PROVIDERS:
-        raise ValueError('contact not in fixed provider policy')
-    connection = http.client.HTTPConnection('127.0.0.1', int(address.rsplit(':', 1)[1]),
-                                            timeout=due-time.monotonic())
-    try:
-        connection.request('GET', '/sante')
-        response = connection.getresponse()
-        body = response.read(65537)
-        oversized = len(body) > 65536
-        print(json.dumps(dict(status=response.status, raw_hex=body.hex(),
-                              prefix_only=oversized, oversize=oversized)), flush=True)
-        if oversized: raise ValueError('health prefix exceeds bound')
-    finally:
-        connection.close()
+    return None
+
+
+def worker_context(context):
+    pins = context['pins']
+    provider = next((p for p in pins['providers'] if p['address'] == context.get('address')), None)
+    if provider is None: raise ValueError('provider outside admitted set')
+    return dict(context, gate_module_path=str(Path(__file__).resolve()),
+                gate_module_sha256=pins['owner_sha256'], expected_process=provider['process'])
+
+
+def worker(context):
+    # Compatibility entry; there is only one network/cleanup implementation.
+    shared = transport_module(context['pins'])
+    context = worker_context(context)
+    context.setdefault('work_deadline_monotonic', context['contact_deadline']-.5)
+    return shared.worker(context)
 
 
 def transport(context, trace):
-    """Total <=5s worker; preserve even partial output before every refusal."""
-    due = context['contact_deadline']
-    trace.update(started_monotonic=time.monotonic(), deadline_monotonic=due,
-                 stdout_hex='', stderr_hex='', returncode=None, timed_out=False)
-    if time.monotonic() >= due: raise ValueError('contact expired before worker')
-    child = subprocess.Popen([sys.executable, '-B', str(Path(__file__).resolve()), '--worker'],
-                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    trace['worker_pid'] = child.pid
-    try:
-        remaining = due-time.monotonic()
-        if remaining <= 0: raise subprocess.TimeoutExpired(child.args, 0)
-        out, err = child.communicate(json.dumps(context, allow_nan=False).encode(), timeout=remaining)
-    except BaseException as error:
-        trace['timed_out'] = isinstance(error, subprocess.TimeoutExpired)
-        if trace['timed_out']:
-            trace.update(timeout_stdout_hex=(error.output or b'').hex(),
-                         timeout_stderr_hex=(error.stderr or b'').hex())
-        child.kill()
-        out, err = child.communicate()
-        trace.update(stdout_hex=out.hex(), stderr_hex=err.hex(), returncode=child.returncode,
-                     finished_monotonic=time.monotonic())
-        raise
-    trace.update(stdout_hex=out.hex(), stderr_hex=err.hex(), returncode=child.returncode,
-                 finished_monotonic=time.monotonic())
-    if child.returncode or time.monotonic() >= due:
-        raise ValueError('contact worker refused or exceeded total deadline')
-    value = phase_protocol.decode(out)
-    return dict(status=value['status'], body=bytes.fromhex(value['raw_hex']))
+    return transport_module(context['pins']).run_health_worker(worker_context(context), trace)
 
 
 def contact_gate(ready, pins, admission, lease_end, clock, phase_reader):
@@ -257,10 +244,7 @@ def health_observation(ready, pins, provider, evidence, *, admission, lease_end,
     body = response['body']
     evidence.update(status=response['status'], raw_hex=body.hex(),
                     raw_sha256=hashlib.sha256(body).hexdigest())
-    if response['status'] != 200: raise ValueError('health status not 200')
-    value = phase_protocol.decode(body)
-    strict(value, provider['identity'])
-    strict(value.get('usage', {}), dict(baux=0, en_cours=0))
+    value = transport_module(pins).validate_health(body, provider['identity'], status=response['status'])
     now = contact_gate(ready, pins, admission, lease_end, clock, phase_reader)
     if now >= due: raise ValueError('total health budget exceeded')
     evidence['process_after'] = process_check(provider, process_reader)

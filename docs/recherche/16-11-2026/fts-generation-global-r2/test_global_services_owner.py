@@ -19,6 +19,9 @@ class GlobalOwner(unittest.TestCase):
             str(Path(__file__).resolve().parents[3]/'optimiseur/16-11-2026/pg-ro-attestation')))
         for name in ['pg_receipt.py','identity.sql','backend-postcheck.sql']:
             (self.root/name).write_bytes((source_root/name).read_bytes())
+        shared_source=Path(os.environ.get('GLOBAL_HEALTH_SOURCE',
+            str(Path(__file__).resolve().parents[3]/'orchestration/16-11-2026/coordination/provider_health_transport.py')))
+        (self.root/'provider_health_transport.py').write_bytes(shared_source.read_bytes())
         (self.root/'global_services_owner.py').write_bytes(Path(owner.__file__).read_bytes())
         location=patch.object(owner,'__file__',str(self.root/'global_services_owner.py'))
         location.start();self.addCleanup(location.stop)
@@ -29,6 +32,7 @@ class GlobalOwner(unittest.TestCase):
             protocol_sha256=owner.sha(owner.phase_protocol.__file__),
             process_module_sha256=owner.sha(owner.process_observation.__file__),
             owner_sha256=owner.sha(owner.__file__),providers=[],
+            transport_sha256=owner.sha(self.root/'provider_health_transport.py'),
             pg_receipt_sha256=owner.sha(self.root/'pg_receipt.py'),
             pg_identity_sql_sha256=owner.sha(self.root/'identity.sql'),
             pg_postcheck_sql_sha256=owner.sha(self.root/'backend-postcheck.sql'),
@@ -62,7 +66,7 @@ class GlobalOwner(unittest.TestCase):
         def raw(name,value):
             body=value if isinstance(value,bytes) else json.dumps(value).encode()
             (self.root/name).write_bytes(body)
-            return dict(path=name,sha256=hashlib.sha256(body).hexdigest())
+            return dict(path=str(self.root/name),sha256=hashlib.sha256(body).hexdigest())
         check=dict(backend_pid=700,application_name=self.pg_identity['application_name'],backend_absent=True,
                    observer_backend_pid=701,observer_application_name=self.pg_identity['application_name']+':check')
         self.reservation=dict(schema_version=1,kind='postgres-read-only-admission',
@@ -242,11 +246,11 @@ class SharedTransport(unittest.TestCase):
         connection.getresponse.return_value.status=200
         connection.getresponse.return_value.read.return_value=b'{"modele":"bge-m3"}'
         with patch.object(owner.http.client,'HTTPConnection',return_value=connection) as http, \
-             patch.object(owner,'contact_gate',return_value=80.), \
+             patch.object(owner.phase_protocol,'read_phase_state',side_effect=f.phase_reader), \
              patch.object(owner.process_observation,'process_snapshot',side_effect=f.process_reader), \
              patch.object(owner.time,'monotonic',return_value=80.),patch('builtins.print'):
             owner.worker(context)
-        http.assert_called_once_with('127.0.0.1',7879,timeout=5.)
+        http.assert_called_once_with('127.0.0.1',7879,timeout=4.5)
         connection.request.assert_called_once_with('GET','/sante')
         connection.close.assert_called_once()
 
