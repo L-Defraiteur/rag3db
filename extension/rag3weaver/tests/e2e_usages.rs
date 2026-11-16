@@ -1177,3 +1177,38 @@ fn an_external_member_is_not_a_project_homonym_in_the_real_files() {
     assert!(edges.rows.is_empty(), "process.platform is Node's: {:?}\nmentions {:?}", edges.rows, mentions.rows);
 }
 
+/// **A local bound by a tuple pattern reads its element's type** (ticket « des receveurs restent sans type »,
+/// 16 November 2026): `let (mut catalog, _store) = make_pair(); catalog.drain()` with `make_pair() ->
+/// (Catalog, Store)` reaches `Catalog::drain`, by type — not the `drain` of another type.
+#[test]
+#[ignore]
+fn a_tuple_pattern_local_reads_its_element_type() {
+    let catalog = setup();
+    let fichiers = vec![
+        ("src/catalog.rs".to_string(), "pub struct Catalog;\nimpl Catalog {\n    pub fn drain(&mut self) -> u8 { 0 }\n}\npub struct Store;\npub fn make_pair() -> (Catalog, Store) { (Catalog, Store) }\n".to_string()),
+        ("src/journal.rs".to_string(), "pub struct Journal;\nimpl Journal {\n    pub fn drain(&mut self) -> u8 { 1 }\n}\n".to_string()),
+        ("src/checkpoint.rs".to_string(), "use crate::catalog::make_pair;\npub fn checkpoint() -> u8 {\n    let (mut catalog, _store) = make_pair();\n    catalog.drain()\n}\n".to_string()),
+    ];
+    catalog.lock().unwrap().ingest_code(&analyze("/projet", fichiers)).unwrap();
+    let cat = catalog.lock().unwrap();
+    assert_eq!(cibles_vers(&cat, "checkpoint", "drain"), vec![("Catalog".to_string(), "type".to_string())]);
+}
+
+/// **A shadowed local reads the binding visible where it is used** (same ticket): `let outil =
+/// GraphTool::from_mermaid(t)?; let outil = outil.bind()?;` — the `outil` of `outil.bind()` is the first
+/// binding, the one after it the second; both are `GraphTool`. Two bindings of one name no longer cancel out.
+#[test]
+#[ignore]
+fn a_shadowed_local_reads_the_binding_visible_where_it_is_used() {
+    let catalog = setup();
+    let fichiers = vec![
+        ("src/graph.rs".to_string(), "pub struct GraphTool;\nimpl GraphTool {\n    pub fn from_mermaid(t: &str) -> Result<Self, String> { Ok(GraphTool) }\n    pub fn bind(self) -> Result<Self, String> { Ok(self) }\n    pub fn describe(&self) -> u8 { 0 }\n}\n".to_string()),
+        ("src/registre.rs".to_string(), "pub struct Registre;\nimpl Registre {\n    pub fn bind(self) -> Result<Self, String> { Ok(self) }\n    pub fn describe(&self) -> u8 { 1 }\n}\n".to_string()),
+        ("src/foreach.rs".to_string(), "use crate::graph::GraphTool;\npub fn materialiser(t: &str) -> Result<u8, String> {\n    let outil = GraphTool::from_mermaid(t).map_err(|e| e.to_string())?;\n    let outil = outil.bind()?;\n    Ok(outil.describe())\n}\n".to_string()),
+    ];
+    catalog.lock().unwrap().ingest_code(&analyze("/projet", fichiers)).unwrap();
+    let cat = catalog.lock().unwrap();
+    assert_eq!(cibles_vers(&cat, "materialiser", "bind"), vec![("GraphTool".to_string(), "type".to_string())], "outil.bind(): the first binding");
+    assert_eq!(cibles_vers(&cat, "materialiser", "describe"), vec![("GraphTool".to_string(), "type".to_string())], "outil.describe(): the second");
+}
+
