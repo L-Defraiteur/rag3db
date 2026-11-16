@@ -145,6 +145,12 @@ def worker(context):
         if oversized: raise ValueError('health prefix exceeds body bound')
         if time.monotonic() >= work_due: raise ValueError('whole health worker deadline expired')
     except BaseException as error:
+        partial = getattr(error, 'partial', None)
+        if isinstance(partial, (bytes, bytearray)):
+            prefix = bytes(partial[:MAX_BODY+1])
+            event(dict(event='health-exception-partial', raw_hex=prefix.hex(),
+                       reported_partial_bytes=len(partial), prefix_only=len(partial)>len(prefix),
+                       deduplication='not_attempted', body_complete=False))
         event(dict(event='health-failure', error_type=type(error).__name__,
                    status=status, received=len(body)))
         try:
