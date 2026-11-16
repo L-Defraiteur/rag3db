@@ -1,0 +1,14 @@
+[
+  {
+    "source": "/home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/debug/deps/rag3weaver-a73493fa2f444bca",
+    "archive": "/home/lucied/.cache/rag3weaver-build/cx-ed-ties-cleanup-archives-20261116/elf/rag3weaver-a73493fa2f444bca",
+    "sha256": "0f3c862c119af48cfc5272b2a63ca6c45ac34626005983d05321067aade937db",
+    "size": 484010936
+  },
+  {
+    "source": "/home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/debug/deps/rag3weaver-ff98124261f9fdf4",
+    "archive": "/home/lucied/.cache/rag3weaver-build/cx-ed-ties-cleanup-archives-20261116/elf/rag3weaver-ff98124261f9fdf4",
+    "sha256": "26c39f7e5962d67222a10d6f1bc14dd3d984d282fa6bf605e65b2e9eaccd2e08",
+    "size": 484443160
+  }
+]
