@@ -88,3 +88,16 @@ HOLD/ignorés du profil complet, corpus réel/FS, Linux7.2/ULP et PR42 gardent l
 limites ; les anciens trois ciblés warnings ne sont pas rejoués dans cette passe.
 Pas de main/tag/fusion/publication produit, ticket ouvert. C7 reçoit les bruts ;
 Banc est sollicité pour RO des preuves seulement, sans run/ELF/proc/base/service.
+
+## RO preuves reçue
+
+Banc8040fe84a9, `docs/banc/16-11-2026/19-ro-preuves-neuf-juges-lucivy-verts.md`,
+favorable **aux neuf juges mémoire seulement** :60SHA conformes, neuf logs et
+identités exacts1/0/0/8filtered, SHA des logs concordants, troisSHA initiaux
+égaux aux rehashpilote et externe, compile3,37s et ledgers cohérents.
+FinCommon0TERMINE/nettoyé/restes[]/ownedabsent,12UNKNOWNnonattribués, source/
+copies/préflight/T/scratch et bornes285/300 attestés par les preuves.
+Banc n’a pas ouvert ou exécuté d’ELF, refait de procscan/Cargo/base/service.
+Le signal de restitution avant archive est rapporté, sans nouveau travail
+lourd. Aucun delivery/core/corpusFS/7.2/ULP/PR42 déduit ; ticket ouvert et
+rouge81b0 conservé. C7 informée de cette RO finale bornée.
