@@ -33,3 +33,19 @@ Aucun écart bloquant repéré pour ces RAW épinglés. L’ancienne allocation 
 C7 transmet troisP2 sur197b et retire la candidature du classificateur : headers running0/malformés/supplémentaires non tous rejetés ; sept résumés canoniques non liés à leurs blocs (peuvent être déplacés dans NAV) ; preuve acceptant Finisheddev seul sans Checking/Compiling rag3weaver. Même ticket porteur consigné avant correction groupée et nouveaux mutants prépubliés. Aucun nouveau natif requis.
 
 L’avis ci-dessus reste strictement une concordance des RAW figés/pins et cardinalités, **pas une suffisance totale du parseur**. Les réserves reçues empêchent d’utiliser197b comme candidature suffisante jusqu’au nouveau SHA/correctifs et RO totale. Elles n’invalident pas les observations natives déjà conservées ; aucun CPU/mutant rejoué dans cette mise à jour.
+
+## Revue totale nouveau86a1313366 : trois P2 traités, classification pure seulement
+
+Référence exacte `86a13133667c89b7954445f7dc38eef6173ea6c5`, code SHA256 `9fc037896bd3a470585d5d54f7f602505e1c28f256e0bb5bf6a6d632fed66a7c`. Lecture du delta complet197→86, des trois mutants réels et des pins nouveaux, aucun classificateur/test exécuté par Banc.
+
+- phase consomme maintenant toutes les lignes de header running (y compris zéro, malformé ou indenté), exige un seul header valide et refuse les événements avant les phases e2e ; le mutant couvre avant/pendant/après.
+- Le résumé est segmenté en six blocs de contrat : nombres de résumés1/2/2/0/1/1, champs comparés dans le bloc attendu, aucun événement avant la première phase. F8 et preuve sont exigés dans le seul bloc check_features, dans leur ordre exact ; déplacer les sept résumés dans NAV ou déplacer les marqueurs ne passe plus ces conditions.
+- La preuve exige un Checking/Compiling rag3weaver v0.1.0 au chemin union exact, avant l’unique Finisheddev au profil unoptimized+debuginfo. Le seul Finisheddev ne suffit plus ; autres crate/chemin/profil sont couverts par les mutants.
+
+Paquet local cx-ed-vertex-raw-review-v2 :34 tailles/SHA recalculées sans écart, manifeste `5593b7b7b497cd194d63306209c9f66d20f52d7dca98e631e253f294c09fd60d`, prepared `d625f927f9e0d717c65bad55f98770d9af38645432788f648699faacb89ee794`. Classificateur et deux sources de juges correspondants sont identiques aux blobs86, AST seulement. Ancien paquet22/197 conservé.
+
+Les trois stderr rouges prépub180dfd montrent chacun un seul test, une failure « ValueError not raised », sans ERROR ; leur résultat conserve trois rc1 distincts. Après correctif prépubc886, strict-green-v1 rapporte14tests/OK en0.376s, rc0 et0.417417s processus sous cap60. Ce sont des preuves CPU du porteur relues/hachées, aucun rejeu ici et aucun nouveau natif.
+
+Manifeste canonique2754 et inventaire024553 inchangés. Les huit logs RAW utiles ont été réhachés contre ce manifeste, sans écart ; aucun ELF ouvert ni54rehashes physiques revendiqués ici. Lecture indépendante du résumé réel : six blocs1/2/2/0/1/1, F8+preuve dans check_features. Le log preuve contient effectivement Compiling rag3weaver au chemin union exact puis Finisheddev unoptimized+debuginfo. Les comptes/lib72ignored/NAV2641filtered/filets et noms typés/uniques de la revue initiale restent inchangés.
+
+**Avis total favorable à la classification pure de ces RAW épinglés par ce nouveau code ; les trois P2 reçus sont traités dans cette lecture.** Limite inchangée : inventaire observé APRÈS exécution, figé AVANTimpl, pas ELF-list indépendant prétest. RAW_CANONICAL_CLASSIFIED_ONLY, composé historiqueRED/portéeROUGE et échéance expirée sont conservés ; aucune requalification composite, ancien GO réactivé, candidat runtime/master/OAuthF300 qualifié ou retrait de HOLD C7 automatique. Décision de candidature reste à C7 après les autres RO. Aucun CPU/ELF/proc/DB/service/cloud lancé par Banc.

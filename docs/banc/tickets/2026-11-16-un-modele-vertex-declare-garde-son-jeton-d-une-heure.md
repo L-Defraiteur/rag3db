@@ -51,3 +51,6 @@ Les requêtes refusées sont gardées dans `etat/requetes-refusees/*-401-*.json`
 
 F300 n'a que 199 décisions valides sur 244. Elle se juge sur ses 199 premiers tours, en le disant, ou se rejoue
 après le correctif.
+
+
+RO totale Banc classificateur RAW86a1313366 : trois P2Mémoire traités (running strict, six blocs de résumés/marqueurs, vraie crate avant Finisheddev), paquet34pins conformes et14CPU du porteur attestés sans rejeu. Complément rapport18, avis favorable classification pure sur RAW figés seulement ; inventaire postexécution, compositeRED/scopeROUGE/ENDexpiré et HOLDcandidatureC7 non levé automatiquement. Aucun natif/ELF/proc/service exécuté par Banc.
