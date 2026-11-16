@@ -118,3 +118,18 @@ puis code_sync/lectures/activation/F5/preuve/lib/NAV. Clarification C7 : appels
 canoniques7878/7879 possibles après GO/coordination, aucun changement de services
 ni base de Lucie ; slotPG fixture aussi coordonné. Source/pilote doivent être
 admis ensemble. Aucun Cargo ou runtime n'a été lancé pendant la préparation.
+
+### Réserve de profil avant admission — couple5e889 non autorisé
+
+Revue C7 du piloteb04a : le dictionnaire hérité ne fixait pas les racines XDG
+state/config/data/cache ou TMP privées ; seul RAG3WEAVER_STATE_DIR était posé.
+Cela ne garantit pas l'isolation du Catalog et des gabarits depuis HOME.
+Aucun GO de qualification n'a été accordé et aucune passe n'a été lancée.
+
+Correctif préparatoire dans ce même ticket avant son diff : racines privées
+sous P, XDG_STATE_HOME=P/xdg-state et RAG3WEAVER_STATE_DIR=P/state-fixture
+frères sans inclusion mutuelle ; TMP/config/data/cache/journaux/templates
+privés. Magasin SDK absolu externe conservé. Profil non secret capturé et
+invariants revérifiés en fin de qualification. Ajouter des témoins de profil
+hermétiques sans Cargo et soumettre le nouveau couple à revue ; aucune barrière
+manager/systemctl, aucune mutation du cache SDK partagé ou du code produit.
