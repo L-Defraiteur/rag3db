@@ -77,3 +77,15 @@ Budget proposé 600 s global, plafond32G, sous confiner_validation/poste lourd ;
 aucun SDK natif, modèle, hôte, fixture réseau ni base de Lucie nécessaire.
 Le script conserve commande/rc/sortie avant jugement et distingue un refus de
 préparation du rouge d'assertions. À jouer au GO de l'orchestration seulement.
+
+### Rouge observé avant correctif
+
+Source exacte `4cc0b98a8c93093ba7dad63edd74287df7d798e9` : worktree propre,
+target et dossier de preuve absents avant entrée. Le pilote borné autorisé a
+compilé le crate depuis ce worktree (2,83 s), puis joué **2 tests, 0 passés,
+2 échoués, 0 ignoré** : `/help` donne `Inconnue`, `/st` ne se complète pas.
+Cargo rc101 ; pilote rc1. Preuves conservées hors worktree :
+`~/.cache/rag3weaver-build/cx-tty-english-aliases-red-v1/` (commande,source,rc,log,verdict).
+Common `~/.cache/rag3weaver-build/validations/validation-g4dqpr6q/` :
+verdict ROUGE attendu, erreur null, restes [], nettoye true. Aucun service/SDK.
+Ce résultat remplace le NON JOUÉ des deux témoins ci-dessus seulement.
