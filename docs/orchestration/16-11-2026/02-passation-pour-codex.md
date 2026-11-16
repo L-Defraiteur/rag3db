@@ -81,6 +81,34 @@ entrée libre de la page qu'il reprend. Quand une session est prise par Codex, c
 dit à la session Claude : elle s'arrête à son commit, Codex repart de sa tête. Une entrée faite passe dans
 `tickets/closed/` avec son hash.
 
+## 4 bis. L'arrêt du 16 novembre, 10:22 : l'état exact que Codex reprend
+
+Lucie, 10 h 5x : « si la passation est prête dis-leur de s'arrêter ». Les treize sessions se sont arrêtées : plus
+aucune passe, aucun lourd (listes vérifiées vides aux deux postes), aucun « à toi » ancien ne vaut plus. Chaque
+page porte sa ligne d'état final et l'annotation de son entrée en cours (hash de l'annotation) :
+archi 5c23e50be · banc 8368af5838 · recherche 0b93714221 · arbre 0e7d0b08b6 · embarquement 254636abca ·
+mémoire 332e1c886 · hotfixs 7dccf65cc · tty 078e1b12a2 · cœur 9fa67677e · G 3692f5b79f · codeparsers 1ec0accaaa ·
+ED 4f3630adc · lucivy 227442ac05.
+
+**Vert en branche, prêt au push** (rebase sur master, rejeu court par la garde si du code est arrivé depuis la
+base, puis « prêt » à l'orchestration, push au « à toi ») :
+- archi, `pas-va-au-bout-2`, tête 5e25a110d (rejeu court vert, base 6b672afa6 ; le pointeur lucivy cb4a1757a4 est arrivé depuis) ;
+- ED, `stable-tie-identity`, tête 1834bf111 (passe verte : e2e_code 36, lectures 27, lib 2595/0/72, navigateur 45).
+
+**En cours en branche, à reprendre depuis la tête** (le reste pas à pas est dans la page de la session) :
+- codeparsers, (5) mots vides de Rust : rag3db `codeparsers/rust-stop-words` 5ef2935d29, codeparsers `rust-stop-words` b48da05 ; le std homonyme d'abord ;
+- arbre, A1 sondes `Scope_Chunk` : `arbre-principal/scope-chunks-des-sondes` 2e0f986825 (rouge pas encore vu, correctif ni compilé ni joué) ;
+- embarquement, entrée 8 clé du débit : `rate-key` 0aecc6b70b (trois témoins rouges, sans correctif) ;
+- cœur, C1 dictionnaire : `dictionary-index-after-string-2` 256413fde, non jugée ; **le TSan finit seul à luciepc vers midi**, sa page dit où lire et comment juger ;
+- lucivy, entrée 3 ulp en parse : branche lucivy `parse-sum-order` 1b9f47d (cause : `swap_remove` dans l'union, somme f32 dans l'ordre des segments ; sommes en f64 ; témoin rouge sur main, vert avec) ; lucivy-core à rejouer `--no-fail-fast` sur un poste qui a le corpus, puis PR ;
+- banc, entrée 6 étalonnage : pas 1 fait (jeu figé à luciepc `~/.cache/rag3db-banc-notes/etalonnage/set.json`, sha256 458f83f0e8877cd3c585eb6b3a54e0ef4b42c0e15cd4e1a72439854326acaa3d), pas 2 à 5 sans code.
+
+**Refus de permission, à Lucie, jamais contourné** : la fusion de la PR lucivy #42 (outil de détail, CI verte) a été
+refusée par le classifieur de la session lucivy ; elle attend Lucie ou Codex.
+
+**Mots de Lucie encore attendus** : l'heure de la bascule de lib (G la joue sur son mot) ; la seconde entrée témoin du
+registre (oui/non, archi) ; la décision « l'attente de 6 s compte les vecteurs dus sous le signal vector » (oui proposé).
+
 ## 5. Comment Codex travaille un ticket
 
 1. Un worktree à lui (`git worktree add ~/git_workspaces/rag3db-cx-<lot> -b cx-<lot> origin/master`), un
