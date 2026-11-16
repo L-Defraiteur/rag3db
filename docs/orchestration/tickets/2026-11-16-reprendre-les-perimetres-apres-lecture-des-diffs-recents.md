@@ -46,3 +46,6 @@ Signalement C7 avant transmission : TTY protocoleHARNAISSEUL5b43d336c1c33b52b615
 
 
 Retour : ciblésLucivy9mémoire etRecherche8distincts11invocations annoncésverts/restitutionsréelles/preuvespubliées, limites métier conservées. Dépendanceslevées permettent préparationglobaleFTS et candidatVertex après troisROclassificationPURE, sansGOexécution/master. Archi nouvelle réserveTOTALarmement795 au ticketexistant avantfix, CPUfictif60seul autorisé ; TTYTOTAL1200 unique réservegroupée préparefixaprèsvrairougeAST, aucunharnais lancé. Rapport de reprise référence les preuves/porteurs/admissions ; aucune clôture induite.
+
+
+Signalement Mémoire avant correction groupée : RO197b60 PURE totale réservée troisP2 : phase ignore headers running supplémentaires/malformés/0 ; résumés finaux nonliés aux blocs correspondants (déplacement dansNAV accepté) ; preuve accepte Finisheddevseul sansChecking/Compilingrag3weaver. Constatsstatiques, pasmutantsrejoués, RAW54+22paquet2postesSHAstables nonremisencause. C7 retire suffisancePUREclassificateur197b et suspend préparationcandidate autorisée44e2 jusqu’aux troistémoinsvraisrouges avantfix+nouveauSHA/ROtotale. PorteurED au ticketexistantVertex observation, famillesdecritèresetbornesRAW/CANON/composéhistorique inchangées, aucunrerun natifautorisé.
