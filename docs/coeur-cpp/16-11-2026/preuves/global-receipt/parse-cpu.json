@@ -1,0 +1,9 @@
+{
+  "cpu_tests": 9,
+  "failures": 0,
+  "native_run": false,
+  "scripts": {
+    "parse_receipt.py": "dc5eadd5da1ac216bc5866e7f2aaf1e76155f212eec4a8c47bbc9a457ff99a12",
+    "test_parse_receipt.py": "9c540107f6b37b3383071adc559af460cf38993f7bb722091ad3b5d98c9bde82"
+  }
+}
