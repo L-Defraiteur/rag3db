@@ -4,6 +4,8 @@
 
 ## 1. État
 
+**État final (16 nov. 2026, 10 h 5x, arrêt demandé par Lucie)** : rien en branche, aucun pas en cours, aucune passe ni aucun processus de tty en vol ; le binaire posé est `db755e5d` (master, code de tty-20). Codex repart de cette page.
+
 ### Sur master (tête 9f0cbe7ce4 pour le dernier lot tty)
 
 Le terminal fait aujourd'hui, dans l'ordre des lots du 15 et du 16 novembre :
