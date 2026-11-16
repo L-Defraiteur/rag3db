@@ -32,3 +32,9 @@ Source/témoinPUB3dac7fcb2703e4aeeca096f4adfb7a68662425b0, puis1assertfail/
 cx-proofs-recherche-fts-global-transport-pin-red-v1/manifestjoint. Fixensuite
 ajoute7epintransport avantlazyload+Qcopiecommon STRICTdéclarée. PasactualPG/
 network/proc/CPUcommonimport ; seulCPUfixturefichiers,avantpostpubtestscomposés.
+
+AprèsPUSHf421be2be644d67fa26039740d79f3b7f9d106f2,7CPUconsumerVERTS
+0.037s/rc0 sous60failfast ; brutsR/cx-proofs-recherche-fts-global-consumer-cpu-v4
+etmanifestjoint. Produitcontrôle636inchangé,aucunQfinal/contactPG/HTTP/
+proc/native/Cargo ;1nouveauhashtransport refuséaprèsvraiROUGE. Pasrejeu
+des13common/25G niqualificationwrappersfinaux encore234provisoires.
