@@ -82,4 +82,18 @@ Le préavis d'au moins une minute a été relayé aux douze autres porteurs : au
 
 L'outil RO d'arbre, corrigé après le `RETURN` manquant, a été rejugé par G sur une fixture : identité moteur 59ac, compte exact, écriture refusée et octets inchangés. Il ne remplace pas les contrôles de migration. Les trois copies de sources du banc restent des candidates tant que l'admission du scanner (.ignore, liens, taille) n'est pas recoupée ; leurs déclarations privées ont `database=null` et ne sont pas exécutables en l'état. Aucun accès d'arbre aux bases vivantes avant le FINI explicite de G.
 
+## FINI de G à 11 h 32 CET
+
+G confirme la pose aux deux postes : source 927, hôte SHA256 `0e310a9cfe1c9e12534f3a579b3e781dcef7e9335e37d7e57349b16d053d5288`, lock `090cc4e1330dc694127c0f08330d25acc656699763079400b502ba6607093fa7`, lucivy 4.3.9. `courant`, la bibliothèque et vector sont sur `rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF`. Les maps des processus confirment lib et vector ; les cinq ouvertures du portable et deux du PC sont acceptées et confirmées par `/etat`.
+
+Les contrôles sur copies couvrent dix-huit tables par base, unions 1 148 759 et 9 054 au portable, 1 205 199 et 931 405 au PC, zéro perte. Les instantanés et `RETOUR` sont sous `~/.local/share/rag3weaver/instantanes/avant-59ac9c86b-20261116-927`, gardés 72 heures aux deux postes ; preuves sous `~/.cache/optimiseur-notes/bascule-16nov-927/`. Ce FINI lève la dépendance d'arbre pour les trois migrations, pas leurs propres contrôles ni l'oracle. G reste propriétaire des services.
+
+Les passes générales restent retenues jusqu'au lot prioritaire qui épingle `passe_epinglee.sh` sur 59ac, puis à sa copie et son témoin aux deux postes. L'oracle peut préparer son outil autonome RO depuis une rlib 927 attestée, avec un seul rustc privé borné à 120 s après poste ; aucun Catalog, ingestion ou base vivante. Le listing doit conserver le contexte d'admission git original : une copie sans `.git` ne reproduit pas seule ses exclusions.
+
+Les relectures croisées sont favorables dans leurs limites : ED pour le candidat archi (S1/S2/S3 restent distincts), archi pour les ex æquo ED (pas de preuve de chaque chemin par le seul juge), mémoire pour la préparation des alias tty (témoins non joués, implémentation encore à faire). Aucun avis ne remplace une nouvelle passe sous la bibliothèque posée.
+
+### Rouge de préparation C1
+
+Le bâti autonome C1 a fini, mais son lanceur a refusé avant le test : il attendait le commit de test b82 dans le BUILD_ID, alors que le générateur emploie le dernier commit moteur 59ac et exclut les tests. Zéro juge joué, aucun correctif du dictionnaire qualifié. Le scratch a disparu avant copie des artefacts, limite conservée avec les journaux. Cœur publie le diagnostic puis corrige la recette (source et moteur distincts, copies hors scratch avant contrôle) ; une étape corrective distincte bornée à 1 800 s est admise aux mêmes frontières CPU privées, après publication de l'identité exacte. Aucun ancien reçu ni rouge n'est converti en vert.
+
 Le suivi de la reprise est dans [le ticket](../tickets/2026-11-16-reprendre-les-perimetres-apres-lecture-des-diffs-recents.md).
