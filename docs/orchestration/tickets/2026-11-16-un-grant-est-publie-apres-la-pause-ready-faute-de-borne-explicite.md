@@ -87,3 +87,17 @@ identité/usage, avec policy de phase fournie par module épinglé. La politique
 READY/lease reste dans le cycle et la politique PG reste dans le global ;
 aucune troisième implémentation HTTP. Le callback owner rejoindra également
 ce transport commun. Correctif non encore publié à ce stade.
+
+### Réserves avant portage du transport commun 63221a7a6c
+
+Lecture statique du premier transport commun publié : le worker connaît le
+statut HTTP avant `response.read`, mais ne le publie qu'après lecture complète.
+Une exception pendant le corps ou un kill à échéance peut perdre ce statut et
+le préfixe reçu. Réserve transmise à Embar avant portage : persister les en-têtes
+connus et les morceaux bornés sur un canal de trace immédiatement flushé, sans
+changer le frame final stdout ; témoin hermétique du vrai worker requis.
+Le rejet des non-finis par `parse_constant` seul ne rejette pas l'overflow
+numérique JSON `1e999` dans une valeur supplémentaire. Si l'ensemble du corps
+est annoncé sans non-fini, compléter le décodeur et son juge discriminant.
+Ces points sont statiques, non joués ici ; 632 n'est pas intégré dans le cycle.
+Les brouillons du consommateur restent non publiés, aucun nouveau paquet ni GO.
