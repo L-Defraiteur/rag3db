@@ -1275,6 +1275,10 @@ impl Embedder for DaemonEmbedder {
         true
     }
 
+    fn called_address(&self) -> Option<String> {
+        Some(self.adresse.clone())
+    }
+
     fn timeout(&self) -> Option<std::time::Duration> {
         Some(self.delai)
     }
