@@ -21,3 +21,19 @@ InventaireELF prouve6noms présents (pas un juge), puis5policy exacts et1nativee
 P/Q NEUFS cx-archi-doc-supervisor-green-r1 et cx-archi-doc-supervisor-controller-green-r1. Wcontrôle PC ~/git_workspaces/rag3db-cx-archi-doc-green-pilot-r1 ; commande future /var/tmp : python3 cheminabsolu/doc-green/qualify_green.py --green SHA40luGit. Code/témoins publiés AVANT essais, Git-only attesté séparément ensuite ; ROcouple/GOexact C7 avant cette commande. Aucun P/Q vert créé.
 
 Témoins Python préparés : vrais constructeur/matcher/scan/admission fauxproc, cache/inventaire/garde réelle fixture/fauxCargo, finaliseurAST scope/TERMINE/bus/deadline, vrais WT Git temporaires/proofphysique/refusgitfilemobile. AucunCargo/rustc/native/proc réel dans ces tests. CinqRustpolicy+native nouveau NON JOUÉS, aucunVertex900.
+
+## Préparation réellement acquise, aucun natif vert
+
+Code396d publié AVANT35CPU/0 en0,193s ; son prepare_git.py a ensuite exécuté la transition Git autorisée sur PC, achevée1181658.951518812. Archiveea670 detached/admin/gitlink distincts/fulltrackedSHAégaux, branchePCNEUVE1bd mêmeC, refEA/remotes inchangés, cache prépostGit SHA214ed4d08bd4c43e937af47e9119595c3765ddc866f489948b3275f5c16c5757 identique. CinqJSON PC/localréhash0écart ([manifest](doc-green-transition-manifest.json)). Sourcegelée3bceb903…ad13b/nouvellesource2b1dbb33…c5691/transitionc8ef94be…eda6e. Aucun garde/Cargo/target muté pendant Git-only. ContrôleurPC396d à FF sur SHAfinal avant admission.
+
+Défautenv consigné5d61 AVANTfix : jobs8 fixe/POSTE_FILS perdu. Vrai blocAST publié puis rouge0,003s allocation2 (8 != 2). Correctiona506 publiée AVANTrejeu : POSTE_FILS conservé/positif, Cargo+Rayon=min(8,POSTE_FILS), Rusttests1.38CPU/0 en0,196s ;2témoins vraie gardeSAMEOWNER/préflightétranger publiése60 AVANTessais, puis40CPU/0 en0,288s timeout60failfast. APP1bd inchangée/noncompilée, produitAPP→piloteVIDE.
+
+Log horsW cx-doc-green-cpu-20261116/396d-tests.log SHA256 7d54f5726979a130bc8b1eba24293431ce1b3481fcab5a6b2b433f921b6c1f9b.
+
+Log horsW cx-doc-green-cpu-20261116/red-5d61.log SHA256 8379aa09d4275b4fdf6109bfb47ec6f067fdb1c745aedcf5ec38963183757b36.
+
+Log horsW cx-doc-green-cpu-20261116/green-a506.log SHA256 8cde3bd3140d85143ecd068c2285dce234bb64352c70e27fe96c9cd867e7df54.
+
+Log horsW cx-doc-green-cpu-20261116/green-e60.log SHA256 3706154697102f00aa59849c67df1260e2fdb5e2660e2a1d2ce5fb75599cb749.
+
+AST10/diffcheck/ticketcheck ; aucuneP/Qverte ni garde/cache réel/Cargo/natif/Vertex depuisrouge. NouvelleROexacte et GO600distinct C7 requis.
