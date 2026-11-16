@@ -90,3 +90,13 @@ source5099/pilotedb833 détachés propres, bundle69688d86...42ba3 (657484714octe
 recette exacte a31745c5...ef44d [publiée](../16-11-2026/rows-red-prepared-recipe.json).
 Quatre scripts rehashés conformes, raw/résumé/allocation absents et scratch vide.
 Aucun CMake/test/build/poste/systemd ; rouge natif toujours NON OBSERVÉ, aucun FIX.
+
+GO distinct C7-ROWS-RED-DB833-16nov2400 consommé ensuite UNE fois :
+[refus de compilation et preuves](../16-11-2026/07-rows-red-compile-refused.md).
+La liste initializer_list de vector<LogicalType> exige sa copie privée :
+compilecode1, aucun cas exécuté, aucun rouge binder observé. Fin237,437s,
+quiescent/aucun PID restant, collecteur1 et résuméROUGE. Paquet38fichiers
+réhashé2postes0écart, manifestef06755...c179. Aucun retry ni production modifiée.
+C7 autorise PRÉPA correction FIXTURE SEULE après cette MAJ AVANTdiff : utiliser
+move/emplace pour la construction du vecteur attendu sans toucher aux quatre
+assertions/contrat ; nouveau SHA/RO/GO nécessaires avant compilation/rejeu.
