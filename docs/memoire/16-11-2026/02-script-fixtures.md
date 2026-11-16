@@ -31,3 +31,6 @@ attend au plus10s le relâchement. Il ne compile rien et ne touche que son tempo
 La preuve système établit le mécanisme du descripteur hérité, pas que c'était
 l'unique cause historique du rouge sous charge. La qualification Rust ultérieure
 reste nécessaire ; ticket ouvert, aucun GO master ni nettoyage.
+
+Dernier témoin système sur `f2e7a6980f` : 3/3 en0,008s, journal `vert-f2e7.log`.
+Toutes les preuves ci-dessus sont hors passe Rust et ne valent pas VERT du lot.
