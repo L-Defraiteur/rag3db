@@ -309,6 +309,8 @@ pub struct EmbedDaemon {
     empoisonne: Mutex<Option<String>>,
     /// Le plafond d'un texte, en caractères.
     max_chars: usize,
+    /// Texts cut to the cap since the service started (said in its identity).
+    cut_texts: std::sync::atomic::AtomicU64,
 }
 
 impl EmbedDaemon {
@@ -339,6 +341,7 @@ impl EmbedDaemon {
             relances: None,
             empoisonne: Mutex::new(None),
             max_chars: MAX_CHARS_PAR_TEXTE,
+            cut_texts: std::sync::atomic::AtomicU64::new(0),
         }
     }
 
@@ -614,7 +617,7 @@ impl EmbedDaemon {
             relances: self.relances,
             max_chars_per_text: Some(self.max_chars),
             chars_per_token: Some(CARACTERES_PAR_JETON),
-            cut_texts: None,
+            cut_texts: Some(self.cut_texts.load(std::sync::atomic::Ordering::Relaxed)),
         }
     }
 
@@ -634,15 +637,20 @@ impl EmbedDaemon {
         format!("serveur de la carte empoisonné ({cause}) : le service s'arrête")
     }
 
-    /// Le premier texte au-dessus du plafond, dit ; `None` si tous passent.
-    fn trop_long<'a>(&self, textes: impl IntoIterator<Item = &'a String>) -> Option<String> {
-        textes.into_iter().enumerate().find_map(|(i, t)| {
-            let n = t.chars().count();
-            (n > self.max_chars).then(|| format!(
-                "texte {i} : {n} caractères, plafond {} (RAG3WEAVER_EMBED_MAX_CHARS, environ {CARACTERES_PAR_JETON} caractères par jeton) : refusé sans calcul",
-                self.max_chars
-            ))
-        })
+    /// **The texts to compute, each within the cap** : a text above
+    /// `max_chars` is cut on a character boundary and counted, rather than
+    /// having its whole batch refused (banc ticket, 16 November 2026).
+    fn cut_to_cap(&self, texts: &[String]) -> Vec<String> {
+        texts
+            .iter()
+            .map(|t| match t.char_indices().nth(self.max_chars) {
+                Some((end, _)) => {
+                    self.cut_texts.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    t[..end].to_string()
+                }
+                None => t.clone(),
+            })
+            .collect()
     }
 
     /// **Écoute, et ne rend jamais la main** (sauf erreur d'écoute).
@@ -793,8 +801,7 @@ impl EmbedDaemon {
             },
             ("POST", "/embed") => match lire_json::<Textes>(req) {
                 Err(e) => (400, erreur(&e)),
-                Ok(t) if self.trop_long(&t.texts).is_some() => (413, erreur(&self.trop_long(&t.texts).unwrap_or_default())),
-                Ok(t) => match self.par_lots(&t.texts, |lot| self.embedder.embed(lot)) {
+                Ok(t) => match self.par_lots(&self.cut_to_cap(&t.texts), |lot| self.embedder.embed(lot)) {
                     Ok(v) => (200, serde_json::json!({ "vectors": v }).to_string()),
                     Err(e) => (500, erreur(&e.to_string())),
                 },
@@ -802,10 +809,9 @@ impl EmbedDaemon {
             ("POST", "/embed_dual") => match (&self.dual, lire_json::<Textes>(req)) {
                 (None, _) => (404, erreur("ce démon ne sert pas le creux")),
                 (Some(_), Err(e)) => (400, erreur(&e)),
-                (Some(_), Ok(t)) if self.trop_long(&t.texts).is_some() => (413, erreur(&self.trop_long(&t.texts).unwrap_or_default())),
                 // Les deux moitiés voyagent appariées : on découpe une fois,
                 // et chaque lot rend ses paires, qu'on sépare à la fin.
-                (Some(d), Ok(t)) => match self.par_lots(&t.texts, |lot| {
+                (Some(d), Ok(t)) => match self.par_lots(&self.cut_to_cap(&t.texts), |lot| {
                     d.embed_dual(lot).map(|(dense, creux)| dense.into_iter().zip(creux).collect())
                 }) {
                     Ok(paires) => {
@@ -826,8 +832,7 @@ impl EmbedDaemon {
             ("POST", "/embed_sparse") => match (&self.sparse, lire_json::<Textes>(req)) {
                 (None, _) => (404, erreur("ce démon ne sert pas le creux seul")),
                 (Some(_), Err(e)) => (400, erreur(&e)),
-                (Some(_), Ok(t)) if self.trop_long(&t.texts).is_some() => (413, erreur(&self.trop_long(&t.texts).unwrap_or_default())),
-                (Some(sp), Ok(t)) if t.spans => match self.par_lots(&t.texts, |lot| sp.embed_sparse_spans(lot)) {
+                (Some(sp), Ok(t)) if t.spans => match self.par_lots(&self.cut_to_cap(&t.texts), |lot| sp.embed_sparse_spans(lot)) {
                     Ok(lignes) => (
                         200,
                         serde_json::json!({
@@ -838,7 +843,7 @@ impl EmbedDaemon {
                     ),
                     Err(e) => (500, erreur(&e.to_string())),
                 },
-                (Some(sp), Ok(t)) => match self.par_lots(&t.texts, |lot| sp.embed_sparse(lot)) {
+                (Some(sp), Ok(t)) => match self.par_lots(&self.cut_to_cap(&t.texts), |lot| sp.embed_sparse(lot)) {
                     Ok(creux) => (
                         200,
                         serde_json::json!({
@@ -854,14 +859,11 @@ impl EmbedDaemon {
             ("POST", "/rerank") => match (&self.reranker, lire_json::<Relecture>(req)) {
                 (None, _) => (404, erreur("ce démon ne sert pas de relecteur")),
                 (Some(_), Err(e)) => (400, erreur(&e)),
-                (Some(_), Ok(d)) if self.trop_long(std::iter::once(&d.query).chain(&d.passages)).is_some() => {
-                    (413, erreur(&self.trop_long(std::iter::once(&d.query).chain(&d.passages)).unwrap_or_default()))
-                }
                 (Some((_, r)), Ok(d)) => {
                     let debut = std::time::Instant::now();
                     let scores = {
                         let _passe = self.passe.lock();
-                        r.rerank(&d.query, &d.passages)
+                        { let mut cut = self.cut_to_cap(&[d.query.clone()]); r.rerank(&cut.remove(0), &self.cut_to_cap(&d.passages)) }
                     };
                     souffler(debut.elapsed());
                     match scores {
@@ -953,6 +955,8 @@ pub struct DaemonEmbedder {
     /// Gardée pour sa politique de fin ; sans ce champ, un démon lancé en
     /// `Fin::Arreter` mourrait aussitôt après avoir été assuré.
     _attache: Option<crate::serveur::Attache>,
+    /// Texts this client cut to its service's `max_chars_per_text` before sending.
+    cut_texts: std::sync::atomic::AtomicUsize,
 }
 
 /// **Un bail d'usage tenu chez un fournisseur** ([`DaemonEmbedder::prendre_bail`]).
@@ -1119,7 +1123,7 @@ impl DaemonEmbedder {
     fn depuis_dans(adresse: &str, attache: Option<crate::serveur::Attache>, delai: std::time::Duration) -> Result<Self, DaemonError> {
         let agent = super::agent_with_timeout(delai);
         let identite: Identite = identite_de(&agent, adresse, SERVICE)?;
-        Ok(Self { adresse: adresse.to_string(), base: base_url(adresse), agent, delai, identite, _attache: attache })
+        Ok(Self { adresse: adresse.to_string(), base: base_url(adresse), agent, delai, identite, _attache: attache, cut_texts: Default::default() })
     }
 
     /// **Le délai d'un appel** au service, au lieu du défaut
@@ -1197,8 +1201,35 @@ impl DaemonEmbedder {
     }
 }
 
+impl DaemonEmbedder {
+    /// **The texts to send, each within the cap the service declares**
+    /// (`max_chars_per_text`) : a text above it is cut on a character boundary
+    /// and counted ([`Embedder::char_truncations`]), so that one long text never
+    /// has its whole batch refused. A service that declares no cap gets the
+    /// texts as they are.
+    fn within_cap<'a>(&self, texts: &'a [String]) -> std::borrow::Cow<'a, [String]> {
+        let Some(cap) = self.identite.max_chars_per_text else { return std::borrow::Cow::Borrowed(texts) };
+        if texts.iter().all(|t| t.char_indices().nth(cap).is_none()) {
+            return std::borrow::Cow::Borrowed(texts);
+        }
+        std::borrow::Cow::Owned(
+            texts
+                .iter()
+                .map(|t| match t.char_indices().nth(cap) {
+                    Some((end, _)) => {
+                        self.cut_texts.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        t[..end].to_string()
+                    }
+                    None => t.clone(),
+                })
+                .collect(),
+        )
+    }
+}
+
 impl Embedder for DaemonEmbedder {
     fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
+        let texts = &*self.within_cap(texts);
         // **Sous l'échéance d'un appel** (le `/call` d'un hook, `deadline_ms`) :
         // l'attente du service est bornée au temps qui reste, et ce qu'on attendait
         // est noté dans l'échéance, pour que la réponse « deadline » le dise
@@ -1246,6 +1277,11 @@ impl Embedder for DaemonEmbedder {
 
     fn timeout(&self) -> Option<std::time::Duration> {
         Some(self.delai)
+    }
+
+    fn char_truncations(&self) -> Option<(usize, usize)> {
+        let cut = self.cut_texts.load(std::sync::atomic::Ordering::Relaxed);
+        (cut > 0).then_some(()).and(self.identite.max_chars_per_text).map(|cap| (cut, cap))
     }
 }
 
@@ -1385,12 +1421,14 @@ impl SparseEmbedder for DaemonEmbedder {
     }
 
     fn embed_sparse(&self, texts: &[String]) -> Result<Vec<SparseVector>, EmbedError> {
+        let texts = &*self.within_cap(texts);
         creux_de(&self.envoyer("/embed_sparse", texts)?)
     }
 
     /// `/embed_sparse` avec `"spans": true`. Un service d'avant l'option rend
     /// le creux sans `spans` : c'est dit, pas inventé.
     fn embed_sparse_spans(&self, texts: &[String]) -> Result<Vec<(SparseVector, Vec<SparseSpan>)>, EmbedError> {
+        let texts = &*self.within_cap(texts);
         let corps = serde_json::json!({ "texts": texts, "spans": true });
         let v = self.envoyer_corps("/embed_sparse", corps)?;
         let creux = creux_de(&v)?;
@@ -1422,6 +1460,7 @@ impl DualEmbedder for DaemonEmbedder {
         &self,
         texts: &[String],
     ) -> Result<(Vec<Vec<f32>>, Vec<SparseVector>), EmbedError> {
+        let texts = &*self.within_cap(texts);
         let v = self.envoyer("/embed_dual", texts)?;
         let dense: Vec<Vec<f32>> = serde_json::from_value(v["dense"].clone())
             .map_err(|e| EmbedError::ProviderError(format!("champ 'dense' : {e}")))?;

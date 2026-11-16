@@ -354,6 +354,8 @@ pub struct Catalog {
     /// Combien de troncatures d'embarquement ont **déjà été dites**. Le modèle
     /// compte depuis son ouverture ; c'est ici qu'on sait ce qui est neuf.
     troncatures_signalees: usize,
+    /// Texts cut in characters by a service client, already reported.
+    char_truncations_reported: usize,
     drain_counters: DrainCounters,
     event_bus: EventBus,
     /// Simple entity configs (registerEntity API). Separate from KB metadata.
@@ -763,6 +765,7 @@ fn read_threads() -> u64 {
             regime_d_ecriture: crate::disponibilite::RegimeEcriture::default(),
             lecture_seule: false,
             troncatures_signalees: 0,
+            char_truncations_reported: 0,
             drain_counters: DrainCounters::default(),
             // 1024 : un agent émet quelques événements par appel d'outil et
             // par nœud ; un graphe de trace qui draine entre deux tours ne
@@ -9556,6 +9559,24 @@ fn read_threads() -> u64 {
     /// (idée de février, jamais tenue) ; elle change une surface de
     /// configuration, donc elle ne se décide pas ici.
     fn signaler_les_troncatures(&mut self, contexte: &str) {
+        let Some(embedder) = &self.embedder else { return };
+        // **Texts cut in characters by a service client** (banc ticket, 16 November
+        // 2026) : what was past the cap was not embedded either, and the journal says so.
+        if let Some((total, cap)) = embedder.char_truncations() {
+            if total > self.char_truncations_reported {
+                let fresh = total - self.char_truncations_reported;
+                self.char_truncations_reported = total;
+                let nom = embedder.name().to_string();
+                self.emit_event(CatalogEvent::Warning {
+                    context: contexte.to_string(),
+                    message: format!(
+                        "{fresh} texte(s) coupé(s) à {cap} caractères avant l'envoi au service « {nom} » \
+                         (son max_chars_per_text) : ce qui dépassait n'a pas été embarqué, et n'est donc pas \
+                         trouvable par le vecteur ; la ligne, elle, est complète en base."
+                    ),
+                });
+            }
+        }
         let Some(embedder) = &self.embedder else { return };
         let Some((total, limite)) = embedder.troncatures() else {
             return;
