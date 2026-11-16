@@ -1493,6 +1493,24 @@ mod tests {
         assert_eq!(evenements(&f, "constructeur_demarre"), 0, "ouvrir ne lance pas le fournisseur");
     }
 
+    #[test]
+    fn reading_the_rate_address_never_starts_an_on_demand_provider() {
+        let f = a_la_demande(8, 4);
+        let (client, _) = connect_embedder(&f.source).unwrap();
+        assert!(client.distant());
+        assert_eq!(client.called_address(), None);
+        assert_eq!(client.called_address(), None);
+        assert_eq!(evenements(&f, "constructeur_demarre"), 0);
+        client.embed(&["synthetic text".into()]).unwrap();
+        let active = crate::serveur::activation::adresse_retenue(
+            &f.source.activation.as_ref().unwrap().coordination, &f.source.address.0[0],
+        ).unwrap();
+        assert_eq!(client.called_address(), Some(active.clone()));
+        let daemon = crate::daemon::DaemonEmbedder::joindre(&active).unwrap();
+        assert_eq!(crate::embedder::Embedder::called_address(&daemon), Some(active));
+        assert_eq!(evenements(&f, "constructeur_demarre"), 1);
+    }
+
     /// **Le premier calcul lance le fournisseur** et rend ses vecteurs, en
     /// moins d'une minute.
     #[test]
