@@ -84,3 +84,7 @@ Hotfix favorable bornéBlobs : varianteFilesstricte propageErrrebuild_fts_step s
 ## Vert ciblé cinq juges, ticket encore OUVERT
 
 APPbc952/PILOTEaf11 unefoisGO C7-FTS-GEN-GREEN-AF11-16nov : buildrc0/ELFb23414d3/ledger512c2a avantmarkers/invent5/0ignore,5exactsDISTINCTS chacun1passed0failed0ignored etrc0. GENsurinchangé traceguard1/rebuild1 retire9000000commeclassic ; pendingcompteségaux/sourceErr/maintenanceErr validés. Rapport24/archive94SHA2postes57fbd028...eb3c ; scopeVERT0TERMINE/94ownedquiet/posterendu/Townerbcconservé. AnciennesportéesROUGES62+263/APP3ee/ELF268intactes. Pascanonical/master/globalFilesstrict/COUNTstrict/readonlyplanonly/multicellules qualifiés. PRÉPAUNIONNEUVEautoriséeC7seulement, BGE/PGnonréservés. ÉtatOUVERT.
+
+## Prépa canonique : lier le reçu de services au job — avant diff
+
+Le prototype2252 vérifie fraîcheur/identités/fenêtre mais pas APP/pilote/scope/READY/referenceC7 de cette allocation. Un autre reçuBGE frais ne doitpas servir de grant au lot. Prépublier témoinVRAIvalidate_services surappétrangère avantfix, puis lier les cinq champs à READY/autoritécourante/allocationexacte. Aucun modèle/contact/grant réel ni autorité par cesCPU.
