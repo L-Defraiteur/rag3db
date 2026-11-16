@@ -3,6 +3,9 @@
 - **État** : ouvert, canonique arrêtée au premier rouge, attribution NON ÉTABLIE.
 - **Pour** : Recherche, revue Hotfixs/ED coordonnée C7 avant action.
 - **Famille** : produit
+- **Gravité** : importante — un index plein texte peut garder un document sans ligne.
+- **Atteignable en service** : oui, synchronisation classique/générations.
+- **Touche rag3weaver** : oui
 - **Parent** : [maintenance générale](2026-11-16-la-maintenance-du-plein-texte-ne-peut-pas-ouvrir-un-index-existant.md), ouvert ; [lecture sans writer](2026-11-16-lire-un-index-plein-texte-existant-sans-writer.md), cible verte mais canonique non qualifiée.
 
 ## Preuve exacte avant tout correctif
@@ -139,3 +142,31 @@ présenté comme borné ; pas d'installation, création/DROP ou appel réseau ic
 Le producteur de pièces ne lance aucune probe : il refuse si qualification
 outil/identités externes manquent. Aucun VERT transport réel ne sera déduit des
 fakes CPU. Nouvelle RO nécessaire avant toute future exécution autorisée.
+
+
+## Protocole G/PG offline publié, pas de transport qualifié
+
+Publication avant code c438 (contrat),3ea6 (SQL constantes/fakes), baseline131189
+explicitement non qualifiée ; rouge11tests/43discriminants conservé. Vérificateur
+strict0a842, puis deux filets supplémentairesd856 : métadonnées malformées ou
+brut manquant doivent conserver les autres bruts avant refus (deux rouges vus).
+Correction conservation puis21/21fakes CPU verts en0,016s,0échec/0saut, borne60.
+Le producteur offline archive les captures, refuse, fsync et publie exclusivement ;
+il n'exécute PAS la probe. Les anciens résultats ne sont pas des tests PG :
+les19 premiers fakes puis21 finaux sont des validations de contrat uniquement.
+
+API et quinze champs d'allocation/cinq champs ready fixés dans
+`docs/optimiseur/16-11-2026/pg-ro-attestation/01-protocol.md`. Relecture
+postcanonique avec admitted_at fiable initial : pas de nouveau TTL admission.
+Loader SHA/UID/type/taille/absence de liens et bruts voisins ; fake postcheck
+borne backend attribué PID+nonce dans le même5, sans programme PG réel.
+
+Source/pins runtime PG restent inconnus. Aucun client natif, Docker, connexion
+SQL/health/TCP, processus réel de provider, service, slot ou ressource réservé.
+Le plan retourne HOLD jusqu'à une RO outil/observateur distincte G/C7 : il ne
+peut pas produire une attestation réelle depuis les seuls fakes. END/coldG/RET
+anciens restent gelés. Parent FTS toujours OUVERT et globale non qualifiée.
+
+Check_tickets sur base79cb relève quinze champs manquants préexistants dans
+cinq tickets Recherche. Les trois du présent ticket sont complétés ici ; les
+quatre autres tickets restent hors périmètre, aucun VERT global inventé.

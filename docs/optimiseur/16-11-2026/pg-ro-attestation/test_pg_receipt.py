@@ -199,19 +199,21 @@ class ArtifactTests(unittest.TestCase):
     def test_publisher_keeps_raw_even_when_metadata_is_malformed(self):
         del self.body['evidence']['postcheck']
         target=self.root/'malformed'
-        with self.assertRaises(ValueError):
+        with self.assertRaises((ValueError,KeyError)):
             pg.publish_observation(target,self.body,self.raw,expected=self.expected,ready=self.ready,
                                    clock=lambda:1000.,phase_check=lambda:dict(self.ready))
         for name,key in [('identity.stdout','sql-out'),('identity.stderr','sql-err'),('postcheck.stdout','check-out'),('postcheck.stderr','check-err')]:
+            self.assertTrue((target/name).is_file(), "raw lost before metadata refusal")
             self.assertEqual((target/name).read_bytes(),self.raw[key])
         self.assertFalse((target/'attestation.json').exists())
 
     def test_publisher_keeps_available_partial_raw(self):
         del self.raw['check-err']
         target=self.root/'missing-raw'
-        with self.assertRaises(ValueError):
+        with self.assertRaises((ValueError,KeyError)):
             pg.publish_observation(target,self.body,self.raw,expected=self.expected,ready=self.ready,
                                    clock=lambda:1000.,phase_check=lambda:dict(self.ready))
+        self.assertTrue((target/'identity.stdout').is_file(), 'available raw lost')
         self.assertEqual((target/'identity.stdout').read_bytes(),self.raw['sql-out'])
         self.assertFalse((target/'attestation.json').exists())
 

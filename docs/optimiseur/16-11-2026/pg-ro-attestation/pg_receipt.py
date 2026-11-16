@@ -222,24 +222,28 @@ def publish_observation(target, receipt, raw, *, expected, ready, clock, phase_c
     target.mkdir(mode=0o700)  # exclusif : ne réécrit JAMAIS une ancienne observation
     body=copy.deepcopy(receipt)
     try:
-        shape(raw,{'sql-out','sql-err','check-out','check-err'},'captured raw')
-        slots=[('sql-out','identity.stdout',body['evidence'],'stdout'),
-               ('sql-err','identity.stderr',body['evidence'],'stderr'),
-               ('check-out','postcheck.stdout',body['evidence']['postcheck'],'stdout'),
-               ('check-err','postcheck.stderr',body['evidence']['postcheck'],'stderr')]
-        mismatches=[]
-        for key,name,owner,field in slots:
-            value=raw[key]
-            require(type(value) is bytes, 'raw must be bytes')
-            prefix=value[:MAX_BYTES]
+        require(type(raw) is dict, 'captured raw must be a dictionary')
+        names={'sql-out':'identity.stdout','sql-err':'identity.stderr',
+               'check-out':'postcheck.stdout','check-err':'postcheck.stderr'}
+        captured={}
+        for key,name in names.items():
+            if key not in raw or type(raw[key]) is not bytes:
+                continue
+            prefix=raw[key][:MAX_BYTES]
             path=target/name
-            _write_exclusive(path,prefix)  # conserver AVANT le jugement
-            sha=hashlib.sha256(prefix).hexdigest()
-            if len(value)>MAX_BYTES:
+            _write_exclusive(path,prefix)  # AVANT tout jugement des métadonnées
+            captured[key]=dict(path=str(path),sha256=hashlib.sha256(prefix).hexdigest())
+        require(set(raw)==set(names) and set(captured)==set(names), 'captured raw incomplete')
+        slots=[('sql-out',body['evidence'],'stdout'),('sql-err',body['evidence'],'stderr'),
+               ('check-out',body['evidence']['postcheck'],'stdout'),
+               ('check-err',body['evidence']['postcheck'],'stderr')]
+        mismatches=[]
+        for key,owner,field in slots:
+            if len(raw[key])>MAX_BYTES:
                 owner['truncated']=True
-            if owner[field]['sha256']!=sha:
+            if owner[field]['sha256']!=captured[key]['sha256']:
                 mismatches.append(key)
-            owner[field]=dict(path=str(path),sha256=sha)
+            owner[field]=captured[key]
         require(not mismatches,'captured raw differs from claimed SHA')
 
         def validate_current():
@@ -265,8 +269,8 @@ def publish_observation(target, receipt, raw, *, expected, ready, clock, phase_c
         _sync_directory(target)
         return final,sha
     except Exception as error:
-        refusal=dict(verdict='RED',reason=type(error).__name__+': '+str(error),
+        refusal=dict(verdict='RED',first_red_monotonic=clock(),reason=type(error).__name__+': '+str(error),
                      artifact_published=(target/'attestation.json').exists(),grant_authorized=False)
         _write_exclusive(target/'refusal.json',(json.dumps(refusal,sort_keys=True)+'\n').encode())
         _sync_directory(target)
-        raise
+        raise ValueError('observation refused: '+type(error).__name__) from error
