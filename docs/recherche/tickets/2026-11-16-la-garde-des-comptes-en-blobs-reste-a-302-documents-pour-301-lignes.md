@@ -52,3 +52,7 @@ Recette exacte c5d sous GO C7-RO-BLOBS-c5d-16nov : copie neuve strictement incha
 ## Préparation DOUBLE autorisée après observation149a, AVANT code
 
 C7 demande deux témoins minimaux par la même API sync_source, formes déclarées avant schéma classique/générations, bases privées distinctes mais paramètres/corpus/options identiques. Chaque témoin exige IDs physiques égaux et nonvides avant fantôme, commitFTS réussi après injection9000000 préalablement absent, puis égalité restaurée après synchronisation inchangée et conservation UUID/H/positions. Témoin cfg(test) local au fil autour du dispatch réel et appels garde/rebuild, sans nouvelle API produit ni modification du dispatch. Deux fonctions NONJOUÉES, pas de correctif ici. Données publiées avant toute exécution ; futur build/native DOUBLE et ancien-master distincts attendent RO+GO exact. Pas de canonical retry ni affaiblissement de la garde302/301.
+
+## Réserve de diagnostic ED DOUBLE — avant delta
+
+RO7749 favorable bornée ; sync_and_trace fait expect(Ok) avant de rendre TRACE, donc une erreur précoce peut masquer les événements. Corriger uniquement ordre : recueillir Result, vider/imprimer TRACE et Result, puis expect/assert. Deux exacts séparés sans parallélisme dans futur pilote (même curseur Snapshot/registre partagé). Aucun test natif ni compilation autorisés par cette remarque.
