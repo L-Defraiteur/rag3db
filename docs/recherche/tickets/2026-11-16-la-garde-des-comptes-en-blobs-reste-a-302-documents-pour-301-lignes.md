@@ -137,3 +137,24 @@ phase avant chaque contact et après, brut conservé en refus. Avant canonique,
 admission READY requise ; après canonique, autorité de scope et lease encore
 actives seulement, sans rouvrir la fenêtre d'admission. Pas de troisième GET
 ad hoc ni de nouvelle copie d'une logique timeout partielle.
+
+### Transport commun global/cycle — contrat avant diff
+
+Sur cadrage C7 (ticket READY
+`docs/orchestration/tickets/2026-11-16-un-grant-est-publie-apres-la-pause-ready-faute-de-borne-explicite.md`),
+extraire `docs/orchestration/16-11-2026/coordination/provider_health_transport.py`
+et son test, réutilisés par owner global, owner lifecycle et consommateurs.
+Le mécanisme n'importe aucun READY/PG ni politique : source de garde propriétaire
+path/SHA/UID pinée, `worker_gate(context)->None` avant GET fixe `/sante` sur
+127.0.0.1:7878 ou7879. Mode admission booléen, PID/UID/start/exe/SHA attendus et
+échéance absolue explicites ; la garde porte la politique de chaque job.
+`validate_health(body, identity9, *, status)` centralise types/HTTP200/usageINT0.
+
+Whole5 inclut import, garde, réseau, collecte et cleanup : réserver0.5s pour
+kill/reap, ne jamais attendre sans borne. Cleanup inconnu/résidu refuse et se
+conserve avec PID ; aucune attestation de quiescence inventée. La première
+exception reste celle du refus même si cleanup échoue. Bruts/partiels/rc/temps
+et préfixe oversize65537 sont conservés avant refus. Tests de ces vrais raccords
+par faux HTTP/Popen/horloge/policy uniquement, source publiée avant tests.
+Les politiques PG/embeddings canoniques et lifecycle no_embedding restent
+séparées et hashées. Aucun GO900/6000, aucune sonde ni réservation.
