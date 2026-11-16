@@ -1,6 +1,6 @@
 # Les commandes et options du terminal en anglais, avec alias
 
-- **État** : ouvert — alias implémentés, crate qualifié sur `0c4ab173d4` (vue113+1CLI, minimal22 ; zéro échec/ignoré), F8 et harnais NON JOUÉS. Pilote `b70a22933d` en HOLD de préparation, réserve de scan des ancêtres ; aucun runtime invalide observé.
+- **État** : ouvert — alias implémentés, crate qualifié sur `0c4ab173d4` (vue113+1CLI, minimal22 ; zéro échec/ignoré), F8 canonique 8/8 sur `6d886375ea` ; bâti tty arrêté avant compilation sur dépendance offline absente du lock séparé, harnais NON JOUÉ. Les anciens HOLD de préparation restent historiques.
 - **Famille** : produit
 - **Gravité** : forme. Les commandes et options françaises restent, mais toute nouveauté est en anglais, et l'existant prend un alias quand on y touche.
 - **Atteignable en service** : oui, à chaque lancement du terminal et à chaque `/commande`.
@@ -435,3 +435,31 @@ Nouveau paquet Q/P/S v5 et TMPcourt v5 ; le contrôleur vérifie les5payloads et
 le reçu rouge256 le plus récent terminé/restes[]/nettoye, en plus du reçu
 vert6td historique ; target actuel exigé identique au ledger d'avant le STOP256.
 Aucun ancien budget repris. Préparation v5 puis RO/GO distincts nécessaires.
+
+
+### GO C7-TTY-FULL-6D8-16nov3600 — F8 acquis, refus de préparation tty
+
+Source/pilote exact `6d886375ea4627c88d28aef918b948a23f628ab1`, Qv5.
+F8 canonique **CHECK_FEATURES VERT 8/8** lu, les8configurations compilées.
+Puis vraie garde pour revenir au crate tty : cargo metadata offline/locked
+refuse `crossterm_winapi v0.9.1` absent du cache, avant tout bâti tty.
+Buildrc2/pilote1, premier refus arrête sans retry. Harnais NON JOUÉ.
+Ce n'est pas un défaut d'assertion ni un ticket clos sur F8 seul.
+
+Preuves privées `cx-tty-english-aliases-full-v5/{f8.log,features/,build.log,build.rc}`,
+`cx-tty-aliases-controller-v5/composed-verdict.json`,
+`cx-tty-aliases-common-v5/validation-93l3ksmi/` : ROUGE code1, erreur null,
+restes[], nettoye true, autorité574793/start84848282 TERMINÉE.
+Budget start848482.791694931/end852082.791694931/final848934.497279601,
+soit451,71s, aucun reset. Source propre. MarqueurT désormais workspace
+rag3weaver après F8 réussi ; retour vers tty NON effectué après refus metadata.
+
+Inventaire filesystem de **tous** les absents cache+src du lockTTY séparé,
+SHA9127845d654a37f4a9e0fbce59b69ef26da51c6f6d7af6a6833782fd4fecabbb :
+`docs/tty/16-11-2026/tty-lock-missing-after-6d8.json`, versions/checksums/source.
+Huit paquets : crossterm_winapi0.9.1 ; js-sys0.3.107 ;
+wasip2 1.0.4+wasi-0.2.12 ; wasm-bindgen, wasm-bindgen-macro,
+wasm-bindgen-macro-support et wasm-bindgen-shared0.2.130 ; wit-bindgen0.57.1.
+Aucun téléchargement de ces8paquets, aucun metadata supplémentaire.
+Liste transmise C7 avant tout élargissement ciblé. Prochaine recette doit
+préserver F8 acquis et nommer le propriétaireT réel avant un GO neuf.
