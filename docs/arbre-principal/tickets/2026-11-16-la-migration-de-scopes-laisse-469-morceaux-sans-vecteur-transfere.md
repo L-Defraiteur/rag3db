@@ -269,3 +269,25 @@ sourcesstrictes, aucunrecovery/LOAD/Index/rescan/service/CLI live.
 NeufCPUhermétiquesverts0.008s, pasvraiPopen/proc/signal/DB/provider.
 BudgetPROPOSÉ900whole898+2/common830/réserveRO500, pas600contrel'observé.
 Code/paquet/revue/GOdistinct requis avantrun, anciennefenêtreLIVErestefermée.
+
+## Cycle B5 tenté : timeoutREADY avant tout writer, ACK tardif révoqué
+
+GO C7-LIFECYCLE-B5-16nov900 consommé, préflights/debt0/flagsFTSvides/FTS5/
+digest97247 passent ; premierrouge1195692.294115836 surpauseREADY60 sansgrant.
+ACKEmbar1195697.090762079 arrive+4.796646243sAPRÈSrouge, jamaisconsommé ;
+sonGEThealthPOSTSTOP distinct de nos0contactsprovider. Grant révoqué et
+préservéPROVIDER_GO.LATE-INVALID-e261bb25.json. Aucunwriter/publication/
+shutdown lancé, aucuncontrôlecyclePOST ; rouge de coordination, pas produit.
+ScopeTERMINE/ROUGE1/restes[]/nettoyé/busabsent/owned0 ; quatre sources et
+fixture strictement inchangées après nettoyage, aucunreaders/WALnouveau.
+[Rapport14](../16-11-2026/14-rouge-cycle-vie-coordination-tardive.md) et65preuves
+manifeste cddb26214c6c0176c96566a091f09102b8415926691ffbe8f01060556221ec03.
+
+Avant tout diff : READY manque observed/pause_deadline ; âge sous-estimé
+par Arbre et contrôleextérieur estimé depuis notification, reconnuEmbar.
+Publier bornePC explicite/firstredabsent/autoritéactive/margehealth avant
+futurgrant. RéserveCODE statique : grant présent aprèsdeadline peut sortir
+du whileabsent sans nouveauchecktime ; PAS événement consommé ici. Préparer
+régression vraiebranchegrantprésent+tardif rougeavantfix, ensuite gateborne
+avantconsommer. Aucunretry/nouveauGO/extension par cette préparation ;
+FINRO reste acquis borné, cycle/shutdown/durabilité/LIVE restent NONQUALIFIÉS.
