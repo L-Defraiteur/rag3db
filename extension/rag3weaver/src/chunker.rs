@@ -392,6 +392,40 @@ mod tests {
         assert_eq!(c[2].core_end_byte, texte.len());
     }
 
+    /// **A line longer than the chunk size is cut too** (embarquement's ticket of 16 November 2026: 31 chunks
+    /// above 12 000 characters on the bench's fresh index, up to 53 294, all from data files of one or two
+    /// lines). With the code's chunking, every chunk of the bench's files stays within three chunk sizes
+    /// (a core within `max_size`, at most `max_size` of context on each side), a long line's cores within
+    /// `max_size`, and the cores put end to end give back the text.
+    #[test]
+    fn a_line_longer_than_the_chunk_size_is_cut_and_the_cores_give_back_the_text() {
+        let config = crate::code::default_scope_chunking();
+        let chunker = par_lignes(config.max_lines, config.max_size, config.overlap_lines);
+        let mut fichiers: Vec<(String, String)> = [
+            "test/test_files/copy/copy_edge_case.test",
+            "extension/vector/test/test_files/demo.test",
+            "test/test_files/exceptions/copy/duplicated.test",
+            "benchmark/queries/click/click/q24.benchmark",
+            "test/answers/large_list_of_struct_answer.txt",
+        ]
+        .iter()
+        .map(|p| (p.to_string(), std::fs::read_to_string(format!("{}/../../{p}", env!("CARGO_MANIFEST_DIR"))).expect(p)))
+        .collect();
+        fichiers.push(("une ligne de 53 000 caractères".into(), "é".repeat(26_500)));
+        for (nom, texte) in &fichiers {
+            let chunks = chunker.chunk(texte);
+            let plus_long = chunks.iter().map(|c| c.text.len()).max().unwrap_or(0);
+            assert!(plus_long <= 3 * config.max_size, "{nom}: a chunk of {plus_long} bytes");
+            let cores: String = chunks.iter().map(|c| &texte[c.core_start_byte..c.core_end_byte]).collect();
+            assert_eq!(cores, *texte, "{nom}: the cores give back the text");
+            for c in &chunks {
+                if !texte[c.core_start_byte..c.core_end_byte].contains('\n') && c.core_end_byte - c.core_start_byte > config.max_size {
+                    panic!("{nom}: a core of {} bytes inside one line", c.core_end_byte - c.core_start_byte);
+                }
+            }
+        }
+    }
+
     fn semantic_chunker(max_size: usize, overlap: usize) -> Chunker {
         Chunker::new(ChunkerConfig {
             max_size,
