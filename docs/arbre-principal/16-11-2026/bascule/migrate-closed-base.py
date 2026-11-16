@@ -123,9 +123,9 @@ def main():
     rc=process.wait();save(name+'-process.json',dict(argv=[str(a) for a in argv],rc=rc,elapsed=time.monotonic()-began,runtime_maps_captured=captured))
     if rc:raise ValueError(name+' refused rc='+str(rc))
     if writer and not captured:raise ValueError('writer native runtime not observed '+name)
-   except BaseException:
+   except BaseException as error:
     if process.poll() is None:process.kill()
-    process.wait();raise
+    rc=process.wait();save(name+'-failure.json',dict(error=str(error),rc_after_stop=rc,pid=process.pid,start=pid_start));raise
   return (root/(name+'.stdout')).read_text()
  def query(path,sql,name):
   text=run([QUERY,path,sql],name,120)
@@ -214,5 +214,11 @@ def main():
   if time.monotonic()>=end:raise ValueError('deadline after final hashes')
   save('verdict.json',dict(verdict='REHEARSAL_OFFICIAL_CLI_GREEN' if args.target_kind=='rehearsal' else 'OFFLINE_GENERATIONS_AND_COLD_GATES_GREEN',base=args.base,elapsed=time.monotonic()-start,index_qualified=False,oracle_qualified=False,service_reopened=False))
  except BaseException as error:
+  try:
+   snapshot_after=normalize_inventory(fs.file_inventory(source));save('failure-snapshot-after.json',snapshot_after)
+   if args.target_kind=='rehearsal':
+    canonical_after=inventory_live(fs,Path(g_receipt['canonical_base']));save('failure-canonical-live-after.json',canonical_after)
+    save('failure-source-audit.json',dict(snapshot_unchanged=snapshot_after==expected,canonical_live_unchanged=canonical_after==expected))
+  except Exception as audit_error:save('failure-source-audit-error.json',dict(error=str(audit_error)))
   save('verdict.json',dict(verdict='RED',error=str(error),target_kind=args.target_kind,target_may_be_partially_migrated=True,retry_authorized=False));raise
 if __name__=='__main__':main()
