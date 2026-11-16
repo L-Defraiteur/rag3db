@@ -80,3 +80,20 @@ def finish(authority, scope, driver, now, end, hashes_match):
     assert driver == 'VERT' and hashes_match
     assert now < end, 'original deadline exceeded'
     return 'VERT'
+
+
+def require_source(worktree, expected):
+    import subprocess
+    head = subprocess.run(['git', '-C', str(worktree), 'rev-parse', 'HEAD'], capture_output=True, text=True)
+    status = subprocess.run(['git', '-C', str(worktree), 'status', '--porcelain'], capture_output=True, text=True)
+    record = dict(head_rc=head.returncode, head=head.stdout.strip(), head_error=head.stderr,
+                  status_rc=status.returncode, status=status.stdout, status_error=status.stderr)
+    assert head.returncode == 0 and status.returncode == 0, record
+    assert record['head'] == expected and not record['status'], record
+    return record
+
+
+def require_hashes(expected):
+    actual = {path: digest(path) for path in expected}
+    assert actual == expected, 'physical file hashes changed'
+    return actual

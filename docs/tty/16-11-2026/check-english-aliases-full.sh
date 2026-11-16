@@ -3,14 +3,16 @@
 set -u
 Q=${TTY_CONTROLLER_DIR:?prepared controller required}
 W=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["worktree"])' "$Q/prepared.json") || exit 2
-J=$HOME/.cache/rag3weaver-build/cx-tty-english-aliases-full-v3
+J=$HOME/.cache/rag3weaver-build/cx-tty-english-aliases-full-v4
 T=$HOME/.cache/rag3weaver-build/target-cx-tty-english-aliases-2
 LIB=rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
 [ ! -e "$J" ] && [ ! -L "$J" ] || exit 2
 mkdir -m 700 "$J" || exit 2
 stop() { echo "ROUGE $1" | tee "$J/verdict.txt"; exit 1; }
-git rev-parse HEAD > "$J/source.txt"
-git status --porcelain > "$J/status-before.txt"
+git -C "$W" rev-parse HEAD > "$J/source.txt" || stop git-head
+EXPECTED=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["source"])' "$Q/prepared.json") || stop config-source
+[ "$(cat "$J/source.txt")" = "$EXPECTED" ] || stop wrong-source
+git -C "$W" status --porcelain > "$J/status-before.txt" || stop git-status
 [ ! -s "$J/status-before.txt" ] || stop dirty
 [ -d "$T" ] && [ ! -L "$T" ] || stop target
 python3 -B "$Q/check_target_profile.py" "$W" "$T" "$J" before > "$J/profile-before.log" 2>&1 || stop provenance
@@ -20,8 +22,8 @@ command -v tmux > "$J/tmux.txt" || stop tmux
 ss -ltn 'sport = :17990' > "$J/port-before.txt" || stop port-inspection
 [ "$(wc -l < "$J/port-before.txt")" = 1 ] || stop port-busy
 mkdir -m 700 "$J/cache" "$J/xdg-state" "$J/state-fixture" "$J/config" "$J/data" "$J/harness" "$J/features" || stop directories
-mkdir -m 700 "$HOME/.cache/r3-tty16" || stop tmp-directory
-export TMPDIR="$HOME/.cache/r3-tty16"
+mkdir -m 700 "$HOME/.cache/r3-tty16v4" || stop tmp-directory
+export TMPDIR="$HOME/.cache/r3-tty16v4"
 export RAG3DB_LIBS_DIR=$HOME/.cache/rag3db-libs RAG3DB_LIB="$LIB"
 export XDG_CACHE_HOME="$J/cache" XDG_STATE_HOME="$J/xdg-state" XDG_CONFIG_HOME="$J/config" XDG_DATA_HOME="$J/data"
 export RAG3WEAVER_STATE_DIR="$J/state-fixture"
@@ -56,7 +58,7 @@ export CARGO_MANIFEST_DIR="$W/extension/rag3weaver/tty"
 timeout 900 python3 -B "$Q/run_private_harness.py" "$W/extension/rag3weaver/tty/mesures/mesure.py" "$T/debug/rag3weaver-tty" "$W/extension/rag3weaver/tty/mesures/faux_hote.py" "$J/harness" "$J/themes.json" "$J/harness-result.json" "$J/xdg-state" > "$J/harness.log" 2>&1
 rc=$?; printf '%s\n' "$rc" > "$J/harness.rc"
 [ "$rc" = 0 ] && tail -1 "$J/harness.log" | grep -qx VERT || stop harness
-git -C "$W" status --porcelain > "$J/status-after.txt"
+git -C "$W" status --porcelain > "$J/status-after.txt" || stop git-status-after
 [ ! -s "$J/status-after.txt" ] || stop dirty-after
 [ "$(du -sm "$T" | cut -f1)" -le 32768 ] || stop target-budget
 sha256sum "$SDK/librag3db.so" "$SDK/libvector.rag3db_extension" > "$J/sdk-sha-final.txt" || stop sdk-final

@@ -318,3 +318,24 @@ Aucun défaut runtime observé, aucune passe291c lancée.
 Mémoire confirme FIN TOTAL de cette version : exactement quatre réserves,
 deux P1 et deux P2. Aucun autre point en file ; corrections groupées seulement.
 ProvenanceT et scan strict291c reconnus bornément, sans autoriser un run.
+
+### Correction groupée des quatre réserves291c
+
+- Copie byte-à-byte et hashée du vrai poste dans Q, invocation Q/poste et
+  contrôleurs/cwd extérieurs. Le script n'utilise pas de dépendance relative
+  à son ancien dossier : les verrous restent au chemin partagé réel, aucun
+  POSTE_LOCK_DIR privé n'est introduit. Aucune exemption W/T au scan.
+- Publication réelle exclusive : horloge relue après open avant dump puis
+  après flush/fsync ; dépassement force ROUGE et retour1, y compris quand
+  l'écriture elle-même consomme le reste. Témoins publiés9a1 avant essai sur
+  vrai fichier et sur la queue réelle du main via AST, avec horloge injectée.
+- Git toujours -C W, rc obligatoires et source==SHA figée ; témoins publiésa8f
+  avant essai depuis cwd extérieur, mauvais SHA et faux worktree refusés.
+- SDK so/vector physiques et copies de tous les contrôleurs réempreintés
+  après Common, puis délai final et publication. Le test physique modifie
+  vraiment une bibliothèque factice, pas un ancien fichier de hashes.
+
+Q/P/S v3 restent conservés ; nouveau paquet v4 uniquement, même target actif.
+La préparation v4 doit relire et comparer le ledger et copies du target connu,
+sans Cargo, réallocation, suppression, marqueur forgé ni nouveau target.
+Les résultats des nouveaux témoins restent NON JOUÉS à cette publication.
