@@ -155,15 +155,34 @@ pub fn search_hits(
 /// [`crate::search::chunk_highlights`]). Un span qui ne tombe pas sur des
 /// frontières de caractère porte un texte vide.
 /// **The hits of a search, with every tie of the cut** (lucivy's ticket of 16 November 2026: lucivy breaks ties by
-/// document address, stable in one index but not from one index to another). Stub of the witness: lucivy's cut only.
+/// document address, stable in one index but not from one index to another). Asks lucivy for a little more than
+/// `limit`, and doubles the request while its last hit ties with the `limit`-th one: the caller gets every tie of
+/// the cut, sorts by score then a stable identity, and cuts at `limit` itself. Bounded by [`MAX_TIE_REQUEST`].
 pub fn search_hits_with_ties(
     handle: &lucivy_core::sharded_handle::ShardedHandle,
     query_config: &lucivy_core::query::QueryConfig,
     limit: usize,
     allowed_ids: Option<&[u64]>,
 ) -> Result<Vec<(u64, f64, std::collections::HashMap<String, Vec<(usize, usize, String)>>)>, String> {
-    search_hits_with_text(handle, query_config, limit, allowed_ids)
+    if limit == 0 {
+        return search_hits_with_text(handle, query_config, limit, allowed_ids);
+    }
+    let mut request = limit + TIE_SLACK;
+    loop {
+        let hits = search_hits_with_text(handle, query_config, request, allowed_ids)?;
+        // Every hit returned (fewer than asked), or the last one strictly below the cut: the ties are in.
+        let complete = hits.len() < request || hits.len() <= limit || hits[hits.len() - 1].1 < hits[limit - 1].1;
+        if complete || request >= MAX_TIE_REQUEST.max(limit + TIE_SLACK) {
+            return Ok(hits);
+        }
+        request = (request * 2).min(MAX_TIE_REQUEST.max(limit + TIE_SLACK));
+    }
 }
+
+/// How many hits past `limit` a search asks for first, to see whether the cut falls inside a tie.
+pub const TIE_SLACK: usize = 8;
+/// The most hits a search asks lucivy for while it gathers the ties of its cut.
+pub const MAX_TIE_REQUEST: usize = 4_096;
 
 pub fn search_hits_with_text(
     handle: &lucivy_core::sharded_handle::ShardedHandle,
