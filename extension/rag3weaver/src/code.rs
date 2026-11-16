@@ -353,6 +353,9 @@ pub fn scope_config(chunking: ChunkingConfig) -> EntityConfig {
     // nom et type égaux, la méthode propre du type passe avant. Vide sinon.
     fields.insert("trait_impl".into(), field(FieldType::String));
     fields.insert("template_params".into(), field(FieldType::String));
+    // **The bases of a class, as written** (`extends` / `implements`, a C++ `: public Base`), comma-separated
+    // (16 November 2026): a typed call whose method is defined in a base is reached through it.
+    fields.insert("base_types".into(), field(FieldType::String));
     // **Le chemin écrit du propriétaire** (codeparsers `parent_path`, 15 novembre 2026) : `kz::Foo` pour
     // une définition C++ `kz::Foo::qux`, `crate::a::Foo` pour un bloc `impl … for crate::a::Foo` et ses
     // méthodes ; vide quand le code ne l'écrit pas, jamais deviné. `parent_name` reste le nom court.
@@ -981,6 +984,10 @@ pub struct ScopeRecord {
     /// explicites s'en lit (`ku_dynamic_cast<ProcessorTask*>(t)`).
     #[serde(default)]
     pub template_params: String,
+    /// The bases of a class, as written in its heritage clauses, comma-separated (`CatalogEntry`) ; empty
+    /// otherwise. A typed call whose method is defined in a base reaches it through them.
+    #[serde(default)]
+    pub base_types: String,
     /// Le chemin écrit du propriétaire (`kz::Foo`, `crate::a::Foo`) ; vide sinon. Voir [`scope_config`].
     pub parent_path: String,
     /// **Un bloc qui prolonge un type défini ailleurs** (un `impl` Rust,
@@ -1471,6 +1478,7 @@ pub fn analyze_in_project_avec(
                     return_type: String::new(),
                     trait_impl: String::new(),
                     template_params: String::new(),
+                    base_types: String::new(),
                     parent_path: String::new(),
                     start_line: g.start_line,
                     end_line: g.end_line,
@@ -1543,6 +1551,7 @@ pub fn analyze_in_project_avec(
             return_type: String::new(),
             trait_impl: String::new(),
             template_params: String::new(),
+            base_types: String::new(),
             parent_path: String::new(),
             start_line: sc.scope_start_line,
             end_line: sc.scope_end_line,
@@ -1644,6 +1653,14 @@ pub fn analyze_in_project_avec(
                 return_type: s.return_type.clone().unwrap_or_default(),
                 trait_impl: if s.modifiers.iter().any(|m| m == "trait_impl") { "oui".into() } else { String::new() },
                 template_params: s.generic_parameters.iter().flatten().map(|g| g.name.as_str()).collect::<Vec<_>>().join(","),
+                base_types: s
+                    .heritage_clauses
+                    .iter()
+                    .flatten()
+                    .flat_map(|c| c.types.iter())
+                    .filter_map(|t| codeparsers::scope_extraction::usage::base_type_name(t))
+                    .collect::<Vec<_>>()
+                    .join(","),
                 parent_path: s.parent_path.clone().unwrap_or_default(),
                 start_line: s.scope_start_line,
                 end_line: s.scope_end_line,
@@ -2473,6 +2490,7 @@ impl ScopeRecord {
             ("return_type".into(), s(&self.return_type)),
             ("trait_impl".into(), s(&self.trait_impl)),
             ("template_params".into(), s(&self.template_params)),
+            ("base_types".into(), s(&self.base_types)),
             ("parent_path".into(), s(&self.parent_path)),
             ("extends_type".into(), s(if self.extends_type { "oui" } else { "" })),
             ("start_line".into(), i(self.start_line)),
@@ -3064,6 +3082,15 @@ impl Catalog {
             .collect();
         let t = std::time::Instant::now();
         let (parents, fichiers, genres, origines, de_trait) = self.parents_et_fichiers(&a_departager)?;
+        // The bases of the types that typed mentions read, for a method defined in a base
+        // (`newEntry->setOID()`, `setOID` in `CatalogEntry`, the base of `TableCatalogEntry`).
+        let depth = inheritance_depth();
+        let read_types: std::collections::BTreeSet<String> = mentioners_by_symbol
+            .values()
+            .flatten()
+            .flat_map(|m| m.qualifier_types.iter().map(|t| nom_de_type(t).to_string()))
+            .collect();
+        let bases = self.base_types_of(&read_types, depth)?;
         let borne = borne_ambigu();
         let familles: HashMap<&str, Option<&'static str>> = fichiers.iter().map(|(u, f)| (u.as_str(), famille_de_langage(f))).collect();
         crate::ingest_profile::add("symboles · parents et fichiers", t);
@@ -3243,7 +3270,9 @@ impl Catalog {
                     continue;
                 }
                 let definers: &[String] = &visibles;
-                let cibles: Vec<(String, Resolution)> = match choose_target(&m, definers, &parents, &fichiers, &genres, &de_trait, &reexports) {
+                let choisi = choose_target(&m, definers, &parents, &fichiers, &genres, &de_trait, &reexports)
+                    .or_else(|| choose_inherited(&m, definers, &parents, &origines, &bases, depth));
+                let cibles: Vec<(String, Resolution)> = match choisi {
                     // Le filtre des langages ôte des candidats, il n'en désigne pas : un nom que
                     // plusieurs langages définissent, unique dans le sien, ne se résout pas par le
                     // seul nom (sur code-lourd, la moitié de ces arêtes étaient fausses). Un parent
@@ -3946,6 +3975,115 @@ impl Resolution {
 fn this_implicite(fichier: &str) -> bool {
     let ext = fichier.rsplit('.').next().unwrap_or("");
     matches!(ext, "cpp" | "cc" | "cxx" | "c++" | "h" | "hh" | "hpp" | "hxx" | "cs" | "java")
+}
+
+/// **How far up the bases a typed call looks** for its method (`RAG3WEAVER_INHERITANCE_DEPTH`, 16 November
+/// 2026): a level is one `extends` / `: public` step. 0 turns the search off.
+fn inheritance_depth() -> usize {
+    std::env::var("RAG3WEAVER_INHERITANCE_DEPTH").ok().and_then(|v| v.parse().ok()).unwrap_or(DEFAULT_INHERITANCE_DEPTH)
+}
+
+/// The default of [`inheritance_depth`], measured on the frozen tree (ticket of the header definition).
+const DEFAULT_INHERITANCE_DEPTH: usize = 4;
+
+/// (source, repo, class) → its bases as written. Loaded by levels from the read types, `depth` levels.
+type Bases = HashMap<(String, String, String), Vec<String>>;
+
+impl Catalog {
+    /// **The bases of the read types**, level by level, by their `base_types`: one query per level, a
+    /// class read with its source and repo (a homonymous class of another source does not lend its bases).
+    fn base_types_of(&self, names: &std::collections::BTreeSet<String>, depth: usize) -> Result<Bases, CatalogError> {
+        use rag3weaver_ir::{Column, Predicate, Select};
+        let mut out: Bases = HashMap::new();
+        let mut loaded: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+        let mut next: std::collections::BTreeSet<String> = names.clone();
+        for _ in 0..depth {
+            let level: Vec<String> = next.difference(&loaded).cloned().collect();
+            if level.is_empty() {
+                break;
+            }
+            loaded.extend(level.iter().cloned());
+            next.clear();
+            let read = Select::filtered(
+                SCOPE,
+                Predicate::In { field: "name".into(), param: "names".into() },
+                ["name", "base_types", "source", "repo"].map(|f| Column::Node(f.into())).to_vec(),
+            );
+            let query = crate::read_view::ReadCatalog::traduire_select(self, &read).map_err(|e| CatalogError::DbError(e.to_string()))?;
+            let param = CypherValue::List(level.iter().map(|n| CypherValue::String(n.clone())).collect());
+            let rows = self
+                .conn()
+                .execute_with_params(&query, &[crate::connection::QueryParam::new("names", param)])
+                .map_err(|e| CatalogError::DbError(e.to_string()))?;
+            for r in &rows.rows {
+                let text = |i: usize| r.get(i).and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let written = text(1);
+                if written.is_empty() {
+                    continue;
+                }
+                let list: Vec<String> = written.split(',').map(str::trim).filter(|b| !b.is_empty()).map(String::from).collect();
+                next.extend(list.iter().cloned());
+                let entry = out.entry((text(2), text(3), text(0))).or_default();
+                for b in list {
+                    if !entry.contains(&b) {
+                        entry.push(b);
+                    }
+                }
+            }
+        }
+        Ok(out)
+    }
+}
+
+/// **A typed call whose method is defined in a base** (16 November 2026): when no definer has the read
+/// type for parent, the bases of that type are searched, nearest level first, within the definer's source
+/// and repo. One definer at the nearest level that has any: the target, by type. Two (a diamond, or a
+/// redefinition along two branches): abstain — we do not guess.
+fn choose_inherited(
+    m: &Mention,
+    definers: &[String],
+    parents: &HashMap<String, String>,
+    origins: &HashMap<String, (String, String)>,
+    bases: &Bases,
+    depth: usize,
+) -> Option<(String, Resolution)> {
+    if m.qualifier_types.is_empty() || m.kind == "HAS_PARENT" || depth == 0 {
+        return None;
+    }
+    let mut seen: std::collections::BTreeSet<String> = m.qualifier_types.iter().map(|t| nom_de_type(t).to_string()).collect();
+    let mut level: Vec<String> = seen.iter().cloned().collect();
+    for _ in 0..depth {
+        let found: Vec<&String> = definers
+            .iter()
+            .filter(|d| {
+                let Some((source, repo)) = origins.get(*d) else { return false };
+                let Some(parent) = parents.get(*d) else { return false };
+                level.iter().any(|t| {
+                    bases.get(&(source.clone(), repo.clone(), t.clone())).is_some_and(|bs| bs.iter().any(|b| nom_de_type(b) == nom_de_type(parent)))
+                })
+            })
+            .collect();
+        match found.as_slice() {
+            [one] => return Some(((*one).clone(), Resolution::Type)),
+            [] => {}
+            _ => return None,
+        }
+        let mut up: Vec<String> = Vec::new();
+        for ((_, _, class), bs) in bases.iter() {
+            if level.contains(class) {
+                for b in bs {
+                    if seen.insert(nom_de_type(b).to_string()) {
+                        up.push(nom_de_type(b).to_string());
+                    }
+                }
+            }
+        }
+        if up.is_empty() {
+            return None;
+        }
+        level = up;
+    }
+    None
 }
 
 fn choose_target(
