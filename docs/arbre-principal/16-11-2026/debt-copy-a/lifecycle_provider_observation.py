@@ -34,7 +34,9 @@ def process_snapshot(pid):
     before = sample()
     sha = digest(root/'exe')
     after = sample()
-    if before != after or after['state'] not in ('R', 'S', 'D', 'I'):
+    identity_fields = ('pid', 'uid', 'start', 'exe')
+    if any(before[k] != after[k] for k in identity_fields) or any(
+            sample['state'] not in ('R', 'S', 'D', 'I') for sample in (before, after)):
         raise ValueError('provider process unstable/unknown')
     return dict(after, exe_sha256=sha)
 
