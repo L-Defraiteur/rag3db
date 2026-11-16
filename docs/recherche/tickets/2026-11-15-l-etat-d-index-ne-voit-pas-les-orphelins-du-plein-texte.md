@@ -88,3 +88,11 @@ Cinquième juge spécifié AVANT correctif : une égalité de comptes historique
 ne promeut pas l'état texte running en ready. Les cinq tests backend et
 le test finindex restent NON JOUÉS ; C7 a levé seulement l'écriture privée,
 pas la compilation pendant la fenêtre. Aucun harnais de substitution joué.
+
+## WIP publié avant isolation de l’urgence existing-only
+
+Les témoins ont été publiés seuls dans e5ec4bb8c5 puis 78db6b3026 : cinq fonctions backend et renforcement du témoin de fin d’index. Ils restent NON JOUÉS ; aucun rouge observé, aucune compilation ni qualification. Le harnais/extraction du premier plan n’est pas retenu : les fixtures appellent directement les primitives existantes.
+
+Ce WIP ajoute en Catalog la persistance de relevés réussis datés (live/graph/orphans/table), les hooks dry-run/maintenance/fin d’index, et expose âge/date inconnue dans `Backend::index_states_du_code` (précision du nom réservé). Les comptes historiques ne promeuvent plus text en ready. La maintenance pure, ses jetons, sa purge et son ratio restent inchangés ; seule une erreur de rafraîchissement est ajoutée au rapport. Le commentaire host est ajusté pour la seule écriture des métadonnées.
+
+Diff contrôlé textuellement seulement ; NON QUALIFIÉ, pas destiné à master en cet état. La priorité C7 devient le ticket fils `2026-11-16-la-maintenance-du-plein-texte-ne-peut-pas-ouvrir-un-index-existant.md`, isolé dans un nouveau W sans ces changements. Qualification ultérieure sur pin G exact, après ED, avec rouge réellement observé avant validation du correctif et suites requises code_sync/lectures.

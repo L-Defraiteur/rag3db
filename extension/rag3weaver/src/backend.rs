@@ -6231,37 +6231,30 @@ impl Backend {
             }
             _ => {}
         }
-        // **La garde des comptes du dernier index** : documents contre
-        // lignes, par entité ; un écart se dit aussi en avertissement.
-        if let Some(Value::Object(comptes)) = cat.comptes_notes_du_plein_texte() {
-            for (entite, c) in &comptes {
-                if c["documents"] != c["rows"] {
+        // Un relevé historique n'est pas un état vivant : sa date et son âge
+        // restent explicites, sans relancer la maintenance depuis /etat.
+        if let Some(Value::Object(mut comptes)) = cat.comptes_notes_du_plein_texte() {
+            let now = crate::catalog::retard::now_ms();
+            for (entity, counts) in &mut comptes {
+                let measured_at_ms = counts.get("measured_at_ms").and_then(Value::as_u64);
+                if let Some(record) = counts.as_object_mut() {
+                    record.insert("measured_at_ms".into(), json!(measured_at_ms));
+                    record.insert("age_ms".into(), json!(measured_at_ms.and_then(|at| now.checked_sub(at))));
+                }
+                let measurement = measured_at_ms.map(|at| format!("relevé du {at} ms"))
+                    .unwrap_or_else(|| "relevé non daté".to_string());
+                if counts["documents"] != counts["rows"] {
                     avertissements.push(format!(
-                        "plein texte de « {entite} » au dernier index : {} documents pour {} lignes — des écritures ont été perdues",
-                        c["documents"], c["rows"]
+                        "plein texte de « {entity} » ({measurement}) : {} documents pour {} lignes ; {} document(s) orphelin(s)",
+                        counts["documents"], counts["rows"], counts.get("orphan_docs").unwrap_or(&Value::Null),
                     ));
                 }
-            }
-            // **Une note « en cours » périmée** (c7, 8 novembre 2026 : code-essais-c7 disait
-            // `text: running` depuis le 25 octobre, rebâtie depuis, rien ne tournait) : la
-            // note d'avant un arrêt ne se recalcule qu'à l'index suivant. Sans indexation
-            // vivante ni rebâti en cours (`text_percent`), des comptes complets disent prêt.
-            if tournent == 0 {
-                // Une entité sans compte noté (rien à indexer en plein texte, comme Library
-                // d'un dépôt sans bibliothèque) ne tient pas non plus un « en cours ».
-                for entite in entites.iter().copied() {
-                    let c = comptes.get(entite);
-                    let complet = c.is_none_or(|c| c["rows"].is_u64() && c["documents"] == c["rows"]);
-                    // Une entité vide au dernier index (0 ligne, comme Library d'un dépôt sans
-                    // bibliothèque) : rien n'y manque, « jamais » n'y est pas un retard.
-                    let vide = c.is_some_and(|c| c["rows"] == 0);
-                    if let Some(e) = etats.get_mut(entite) {
-                        if complet && e["text"] == "running" && e["text_percent"].is_null() {
-                            e["text"] = json!("ready");
-                            e["text_stale_note"] = json!("la note « en cours » d'avant un arrêt, sans indexation vivante : prêt d'après les comptes du dernier index");
-                        } else if vide && e["text"] == "never" {
-                            e["text"] = json!("ready");
-                            e["text_stale_note"] = json!("aucune ligne au dernier index : rien à indexer");
+                // L'égalité d'un ancien relevé ne certifie jamais le ready
+                // présent : seuls l'index et ses véritables états le disent.
+                if tournent == 0 {
+                    if let Some(state) = etats.get_mut(entity) {
+                        if state["text"] == "running" && state["text_percent"].is_null() {
+                            state["text_stale_note"] = json!(format!("{measurement} : les comptes historiques ne prouvent pas que l'index est prêt"));
                         }
                     }
                 }

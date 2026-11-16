@@ -1340,7 +1340,8 @@ fn read_threads() -> u64 {
         comptes
     }
 
-    /// Les comptes relevés à la fin du dernier index, pour l'état.
+    /// Compatibilité des anciennes notes de comptes, sans date ni relevé d'orphelins.
+    /// Les chemins de production appellent maintenant `refresh_fts_measurements`.
     pub fn noter_les_comptes_du_plein_texte(&self, comptes: &[(String, u64, u64)]) -> Result<(), CatalogError> {
         let v: serde_json::Map<String, serde_json::Value> = comptes
             .iter()
@@ -1349,7 +1350,60 @@ fn read_threads() -> u64 {
         self.persist_meta_key(COMPTES_DU_PLEIN_TEXTE_KEY, &serde_json::Value::Object(v).to_string())
     }
 
-    /// Les comptes du dernier index, s'il y en a eu un.
+    /// Enregistre le relevé physique réussi, sans toucher à l'index ni à son jeton.
+    /// Une table de contenu partagé se dit sous les entités publiques qui la lisent.
+    pub(crate) fn record_fts_measurement(
+        &self,
+        table: &str,
+        report: &serde_json::Value,
+        measured_at_ms: u64,
+    ) -> Result<(), String> {
+        let documents = report["live_docs"].as_u64().ok_or("FTS measurement: missing live_docs")?;
+        let rows = report["graph_docs"].as_u64().ok_or("FTS measurement: missing graph_docs")?;
+        let orphans = report["orphans"].as_array().ok_or("FTS measurement: missing orphans")?;
+        if orphans.iter().any(|id| !id.is_u64()) || orphans.len() as u64 > documents {
+            return Err("FTS measurement: invalid orphan documents".into());
+        }
+        let mut notes = match self.read_meta_key(COMPTES_DU_PLEIN_TEXTE_KEY).map_err(|e| e.to_string())? {
+            Some(raw) => serde_json::from_str::<serde_json::Value>(&raw)
+                .map_err(|e| format!("FTS measurement: previous counts are invalid: {e}"))?,
+            None => serde_json::json!({}),
+        };
+        let notes = notes.as_object_mut().ok_or("FTS measurement: previous counts are not an object")?;
+        let mut entities: Vec<String> = self.entity_configs.keys().filter(|entity| {
+            self.resolve_search_target(entity).is_ok_and(|target| target.parent_table == table && target.default_signals.bm25())
+        }).cloned().collect();
+        if entities.is_empty() { entities.push(table.to_owned()); }
+        for entity in entities {
+            notes.insert(entity, serde_json::json!({
+                "documents": documents,
+                "rows": rows,
+                "orphan_docs": orphans.len(),
+                "table": table,
+                "measured_at_ms": measured_at_ms,
+            }));
+        }
+        self.persist_meta_key(COMPTES_DU_PLEIN_TEXTE_KEY, &serde_json::Value::Object(notes.clone()).to_string())
+            .map_err(|e| format!("FTS measurement could not be recorded: {e}"))
+    }
+
+    /// Rafraîchit une fois chaque table physique ouverte de l'index public.
+    /// Les autres notes gardent leur propre date ; aucun relevé raté n'est rajeuni.
+    pub(crate) fn refresh_fts_measurements(&self) -> Result<(), String> {
+        let mut tables: Vec<String> = self.entity_configs.keys().filter_map(|entity| {
+            self.resolve_search_target(entity).ok().filter(|target| {
+                target.default_signals.bm25()
+                    && self.fts_handles.contains_key(&target.parent_table)
+                    && !self.fts_rebuild.contains(&target.parent_table)
+            }).map(|target| target.parent_table)
+        }).collect();
+        tables.sort();
+        tables.dedup();
+        for table in tables { self.fts_releve_a_blanc(&table)?; }
+        Ok(())
+    }
+
+    /// Les derniers comptes notés par entité, avec leur date quand elle est connue.
     pub fn comptes_notes_du_plein_texte(&self) -> Option<serde_json::Value> {
         self.read_meta_key(COMPTES_DU_PLEIN_TEXTE_KEY).ok().flatten().and_then(|v| serde_json::from_str(&v).ok())
     }
@@ -1446,7 +1500,9 @@ fn read_threads() -> u64 {
                     .ok_or_else(|| format!("décalage illisible dans les lignes de {nom}")))
                 .collect()
         };
-        crate::fts_maintenance::releve_a_blanc(&handle, nom, lignes)
+        let report = crate::fts_maintenance::releve_a_blanc(&handle, nom, lignes)?;
+        self.record_fts_measurement(nom, &report, retard::now_ms())?;
+        Ok(report)
     }
 
     /// **La maintenance nocturne** du plein texte de ce catalogue (`fts_maintenance::maintenance_nocturne`),
@@ -1472,8 +1528,17 @@ fn read_threads() -> u64 {
                             .ok_or_else(|| format!("décalage illisible dans les lignes de {table}")))
                         .collect()
                 };
-                crate::fts_maintenance::maintenance_nocturne(&handle, table, lignes, max_purge_ratio, compact)
-                    .unwrap_or_else(|e| serde_json::json!({"table": table, "error": e}))
+                match crate::fts_maintenance::maintenance_nocturne(&handle, table, lignes, max_purge_ratio, compact) {
+                    Ok(mut report) => {
+                        // Après la maintenance, le relevé dit les documents qui restent,
+                        // y compris quand la politique a refusé la purge des orphelins.
+                        if let Err(error) = self.fts_releve_a_blanc(table) {
+                            report["error"] = serde_json::json!(format!("FTS counts were not refreshed: {error}"));
+                        }
+                        report
+                    }
+                    Err(error) => serde_json::json!({"table": table, "error": error}),
+                }
             }).collect()
         };
         let note = serde_json::json!({
@@ -1501,7 +1566,13 @@ fn read_threads() -> u64 {
         if self.in_transaction {
             return Err("une transaction est ouverte : la maintenance attend son COMMIT ou son ROLLBACK".into());
         }
-        crate::fts_maintenance::maintain(&self.fts_handle_nomme(table)?, demande)
+        let mut report = crate::fts_maintenance::maintain(&self.fts_handle_nomme(table)?, demande)?;
+        // La purge et son jeton ont leur résultat inchangé. Une erreur du relevé
+        // qui suit se dit séparément, sans présenter l'ancienne note comme neuve.
+        if let Err(error) = self.fts_releve_a_blanc(table) {
+            report["error"] = serde_json::json!(format!("FTS counts were not refreshed: {error}"));
+        }
+        Ok(report)
     }
 
     /// Ouvre (ou crée) l'index FTS d'une table, en le mémorisant.

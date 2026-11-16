@@ -1039,8 +1039,9 @@ impl DaemonHost {
         let result = self.check_session(session).and_then(|_| {
             let table = v["table"].as_str().ok_or("« table » manque : la table du plein texte (Scope, ou Lucivy_Scope)")?;
             if v["dry_run"].as_bool().unwrap_or(false) {
-                // Le relevé à blanc lit sans écrire : le slot en lecture, puis le catalogue (aucun fil
-                // de fond n'écrit pendant la lecture des lignes) ; le jeton relu juge le reste.
+                // Le relevé à blanc ne touche ni l'index ni son jeton ; seuls ses
+                // comptes datés sont notés dans les métas. Slot en lecture puis
+                // catalogue : aucun fil de fond n'écrit pendant la lecture des lignes.
                 let hosted = self.hosted_existing(manifest).ok_or_else(|| format!("{NOT_HOSTED} : {}", manifest.display()))?;
                 let slot = hosted.backend.read().unwrap_or_else(|p| p.into_inner());
                 let backend = slot.as_ref().ok_or_else(|| format!("le backend {} est fermé : l'ouvrir d'abord", hosted.id))?;

@@ -9,7 +9,7 @@
 
 Sonde RO rapportée par C7 : `/backend/fts-live-ids`, File, hôte927, renvoie422 avec aucun handle ouvert. Cela ne prouve pas une absence sur disque.
 `ensure_fts_handle` et `open_fts_files` suivent un chemin autorisant suppression de dossier sur génération divergente et création après échec d’ouverture : ils ne conviennent pas à cette maintenance.
-Suite du [ticket des comptes](2026-11-15-l-etat-d-index-ne-voit-pas-les-orphelins-du-plein-texte.md), prioritaire avant sa qualification. Le lien exact du ticket Arbre de bascule des trois bases est demandé à son porteur ; aucune base de Lucie n’est ouverte ici.
+Suite du [ticket des comptes](2026-11-15-l-etat-d-index-ne-voit-pas-les-orphelins-du-plein-texte.md), prioritaire avant sa qualification. Parent confirmé par Arbre sur sa branche privée `cx-arbre-bascule-bases-20261116-r1`, source `20093817d8` : `docs/arbre-principal/tickets/2026-11-16-basculer-les-trois-bases-vers-les-generations.md`. Le fichier n’est pas présent sur cette base ; lien à rendre relatif après intégration du parent. Aucune base de Lucie n’est ouverte ici.
 
 ## Plan avant code
 

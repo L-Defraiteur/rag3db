@@ -555,7 +555,7 @@ fn run_index(
         } else {
             log(journal, &format!("plein texte : écart entre documents et lignes — {}", ecarts.join(" ; ")));
         }
-        if let Err(e) = cat.noter_les_comptes_du_plein_texte(&comptes) {
+        if let Err(e) = cat.refresh_fts_measurements() {
             log(journal, &format!("avertissement : comptes du plein texte non notés ({e})"));
         }
     }
