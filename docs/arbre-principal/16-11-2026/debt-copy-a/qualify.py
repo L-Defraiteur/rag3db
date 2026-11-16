@@ -58,6 +58,12 @@ def require_time(end,margin=15):
 def process_identity(pid):
  p=Path('/proc')/str(pid);raw=(p/'stat').read_text().rsplit(') ',1)[1].split()
  return dict(pid=pid,start=raw[19],state=raw[0],exe=os.readlink(p/'exe'),exe_sha256=sha(p/'exe'))
+def collect_process_paths(proc,observe):
+ for role in ['exe','cwd']:observe(role,os.readlink(proc/role))
+ for fd in (proc/'fd').iterdir():
+  try:path=os.readlink(fd)
+  except (FileNotFoundError,ProcessLookupError):continue
+  observe('fd',path)
 def copy_quiet():
  found=[];unknown=[]
  for entry in Path('/proc').iterdir():
@@ -67,13 +73,12 @@ def copy_quiet():
    if entry.stat().st_uid!=os.getuid():continue
    fields=(entry/'stat').read_text().rsplit(') ',1)[1].split();start=fields[19]
    if fields[0]=='Z':continue
-   targets=[('exe',os.readlink(entry/'exe')),('cwd',os.readlink(entry/'cwd'))]
-   for fd in (entry/'fd').iterdir():
-    try:targets.append(('fd:'+fd.name,os.readlink(fd)))
-    except (FileNotFoundError,ProcessLookupError):continue
-   for field,path in targets:
+   def observe(field,path):
+    nonlocal attributed
     if path==str(BASE.parent) or path.startswith(str(BASE.parent)+'/'):
      attributed=True;found.append(dict(pid=pid,start=start,field=field,path=path))
+   # Existing DOUBLE collect_process_paths primitive, byte-identical port.
+   collect_process_paths(entry,observe)
   except (FileNotFoundError,ProcessLookupError):continue
   except OSError as error:unknown.append(dict(pid=pid,start=start,attributed=attributed,error=str(error)))
  if found or any(x['attributed'] for x in unknown):raise ValueError('private COPY occupied or attributed UNKNOWN')

@@ -118,7 +118,7 @@ GO900 n'est acquis par cette proposition.
 
 `debt-copy-a/audit_result.py` implémente cette proposition séparément de la
 branche writer. P/Q/S neufs : debt-audit-ro-result-v1,
-debt-audit-ro-control-v1, debt-audit-ro-scopes-v1 sous la racine commune.
+debt-audit-ro-control-v2, debt-audit-ro-scopes-v1 sous la racine commune.
 `--prepare EXACT` ne fait que copier les7sources et épingler timeout,
 SDK/helpers et9références immuables du rouge ; pas d'ouverture DB. Le reader
 existant add01058f3b0d6efd28d936c865b1ba9071c0e2eb85f559743bf0c52aeea6371
@@ -156,3 +156,31 @@ copie complète avant Reader. Un premier test d'ordre utilisait ast.walk
 aucune correction de comportement du pilote n'en découle. Ce ne sont pas
 des tests natifs. Q/P/S ne sont pas encore créés ; préparation PC et revue
 du couple exact précéderont tout éventuel GO900 distinct.
+
+### Réserve de scan levée en préparation, ancien paquet conservé
+
+ROED+Recherche sur9a144 ont identifié la même perte d'attribution dans le
+helper commun copy_quiet : collecte complète avant attribution, donc
+PermissionError tardive pouvait effacer un chemin déjà observé. Ticket
+enrichi avant diff ; e5392b1945 publie le témoin du VRAIhelper sur /proc
+fictif, vu rouge (« ValueError not raised ») avant correction.
+
+Le helper attribue désormais immédiatement chaque exe/cwd/FD réussi,
+avant la lecture suivante ; found et attributed survivent aux OSError,
+et tout chemin observé ou UNKNOWN attribué refuse le scan. Les UNKNOWN
+globaux non attribués restent consignés et ne deviennent pas des absences.
+Trois fonctions CPU hermétiques passent0.001s : exe puis cwd refusé,
+FD puis FD refusé, UNKNOWN initial non attribuable conservé. Aucun vrai
+/proc/processus/signal/DB/provider n'est utilisé par ces témoins.
+
+Qv1/prepared9c8285 est conservé sans GO ; nouveau Qv2 à préparer au nouveau
+SHA exact. P/S sont toujours absents et n'ont jamais été consommés.
+Autres juges, lecteurs ELF, références rouges, bornes et portée RO sont
+inchangés ; nouvelle ROdelta et GOdistinct restent requis.
+
+Primitive existante réutilisée : collect_process_paths de DOUBLE4d5265fc11,
+octets de la fonction recoupés identiques, SHA
+a94ada3b5e12689b8279095792aea110d8f11d59654d9cfa889d55d56fe7795f.
+copy_quiet garde sa politique de racine/UID et son callback attribue chaque
+observation immédiatement, comme DOUBLE ; aucun troisième collecteur ad hoc.
+Ensemble22fonctionsCPU hermétiques vertes0.028s après ce portage.

@@ -6,7 +6,7 @@ import qualify as q
 import audit
 
 R=q.R;OLD=R/'debt-acquittement-copy-v1'
-P=R/'debt-audit-ro-result-v1';Q=R/'debt-audit-ro-control-v1';S=R/'debt-audit-ro-scopes-v1'
+P=R/'debt-audit-ro-result-v1';Q=R/'debt-audit-ro-control-v2';S=R/'debt-audit-ro-scopes-v1'
 q.Q=Q
 RESULT=OLD/'copy';ORIGIN=q.SOURCE;BASE=P/'copy/code-principal.rag3db'
 BINARY=OLD/'read-typed';BINARY_SHA='add01058f3b0d6efd28d936c865b1ba9071c0e2eb85f559743bf0c52aeea6371'

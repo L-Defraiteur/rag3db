@@ -186,3 +186,11 @@ attribuable. Aucun audit natif lancé. Préparer témoin du VRAI helper sur
 /proc fictif, rouge avant fix, puis attribuer chaque lecture immédiatement
 et conserver found/attributed lors des OSError. Nouveau paquet/delta RO et
 GO distinct requis ; ancien paquet préparé reste conservé sans GO.
+
+Réserve commune ED/Recherche traitée après rouge e5392b1945 sur vraihelper
+avec /proc fictif : attribution à CHAQUE lecture exe/cwd/FD immédiatement,
+found/attributed conservés si OSError ultérieur, UNKNOWNattribué fatal ;
+UNKNOWNglobal non attribué toujours consigné. TroisCPU hermétiquesverts
+0.001s, aucun scan réel/DB/provider. Nouveau Qv2 à préparer ; Qv1 conservé
+sansGO, P/S encore absents. Autres branches et bornes inchangées, pas de
+nouveau runtime autorisé par cette correction.
