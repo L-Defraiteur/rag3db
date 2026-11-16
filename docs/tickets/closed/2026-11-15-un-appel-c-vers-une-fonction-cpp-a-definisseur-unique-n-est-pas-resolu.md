@@ -1,6 +1,6 @@
 # Un appel C vers une fonction C++ à définisseur unique n'est pas résolu
 
-- **État** : ouvert (15 novembre 2026)
+- **État** : fermé (16 novembre 2026) — deux défauts de codeparsers (`6aec30d`), voir « La cause » et « La correction »
 - **Famille** : produit (la résolution des arêtes)
 - **Gravité** : défaut. `usages`, `impact` et les appelants manquent, pour un appel que l'index a pourtant vu
 - **Atteignable en service** : oui. Toute base qui indexe `examples/c/main.c` et `src/c_api/` du dépôt
@@ -45,3 +45,41 @@ avec la raison.
 
 Par le témoin vert, ou par la raison écrite ici. Le témoin 19 de l'écrivain ne juge que la non-perte au repassage : il ne
 change pas avec ce ticket.
+
+## La cause (16 novembre 2026)
+
+L'abstention n'était pas voulue. C'est la visibilité par les `#include` (25 octobre) qui la produisait,
+sur deux défauts de codeparsers. Un définisseur C/C++ n'est candidat que si son fichier est dans la
+fermeture des includes du mentionneur, si un en-tête de même nom de base y est, ou si une de ses
+**déclarations** y est. `connection.cpp` n'a pas d'en-tête `connection.h`, et sa déclaration est dans
+`rag3db.h` :
+
+1. **Une source `.c` ne relevait aucun `#include`.** Le parseur C prenait ses imports par la voie
+   générique, qui ne voit pas les `#include`, et `File.includes` de `main.c` valait `""`. Sa fermeture se
+   réduisait à elle-même : tout appel d'une source C vers un autre fichier était « invisible ».
+2. **`rag3db.h` perdait ses 167 prototypes.** La garde `#ifdef __cplusplus` / `extern "C" {` / `#endif`,
+   avec l'accolade fermée dans un autre `#ifdef`, puis un `#if defined(__APPLE__)` dans le corps d'une
+   struct plus loin, faisait perdre à tree-sitter tout ce qui suivait. Le scope de fichier n'avait
+   aucune déclaration. La macro d'export `RAG3DB_C_API`, soupçonnée d'abord, était déjà masquée.
+
+La recette à deux fichiers (`main.c` et `connection.cpp` seuls) ne pouvait pas rendre l'arête : sans
+l'en-tête, rien ne déclare la fonction, et l'abstention y est juste. La recette juste prend les trois
+fichiers du dépôt.
+
+## La correction
+
+Codeparsers `6aec30d` : le parseur C relève ses includes comme le C++ (`extract_cpp_includes`), et les
+deux lignes de garde `extern "C"` sont masquées pour l'arbre, comme les macros d'export, sans changer
+les octets ni les lignes.
+
+Les témoins : `tests/e2e_usages.rs`, `c_api_prototype_is_visible_through_the_includes_of_a_c_source`, sur
+les vrais `examples/c/main.c`, `src/include/c_api/rag3db.h` et `src/c_api/connection.cpp`. Il est rouge
+sans l'une ou l'autre des deux corrections (13 abstentions « invisible »), vert avec les deux. Côté
+codeparsers, `tests/prototypes_c.rs`, `a_c_source_records_its_includes`, vu rouge puis vert. La garde ne
+se reproduit pas sur une forme réduite : son témoin est le vrai en-tête.
+
+Une sonde en mémoire (`tests/sonde_marque_nom.rs`, corpus figé de rag3db-garde, `src`, `examples` et
+`test` ensemble, 1 725 fichiers) : 27 couples naissent (`main.c` → 16 fonctions de l'API C, `test/c_api`
+→ 11), aucun ne part. Le reste des 2 533 de la base du dépôt est dans des dossiers que la sonde n'a pas
+pris (`tools`, `third_party`, `extension`). La base repassée le dira, puisque REGLES_DE_L_ANALYSE monte
+avec ce lot.
