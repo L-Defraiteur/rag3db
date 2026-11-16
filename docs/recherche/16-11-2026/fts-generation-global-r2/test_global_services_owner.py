@@ -193,4 +193,68 @@ class GlobalOwner(unittest.TestCase):
         self.assertEqual(bytes.fromhex(evidence['contacts'][0]['trace']['stdout_hex']),b'partial health')
 
 
+class SharedTransport(unittest.TestCase):
+    def fixture(self):
+        f=GlobalOwner('test_joint_receipt_real_link_no_lifecycle_flag_and_end_lease')
+        f.setUp();self.addCleanup(f.doCleanups)
+        context=dict(pins=f.pins,ready_path=str(f.path),ready_sha256=f.sha,nonce='nonce',
+            kind='provider',address='127.0.0.1:7879',admission=True,lease_end=1000.,contact_deadline=85.)
+        return f,context
+
+    def test_real_worker_is_bge_health_only_not_7878_lifecycle_or_embedding(self):
+        from unittest.mock import Mock
+        f,context=self.fixture();connection=Mock()
+        connection.getresponse.return_value.status=200
+        connection.getresponse.return_value.read.return_value=b'{"modele":"bge-m3"}'
+        with patch.object(owner.http.client,'HTTPConnection',return_value=connection) as http, \
+             patch.object(owner,'contact_gate',return_value=80.), \
+             patch.object(owner.process_observation,'process_snapshot',side_effect=f.process_reader), \
+             patch.object(owner.time,'monotonic',return_value=80.),patch('builtins.print'):
+            owner.worker(context)
+        http.assert_called_once_with('127.0.0.1',7879,timeout=5.)
+        connection.request.assert_called_once_with('GET','/sante')
+        connection.close.assert_called_once()
+
+    def test_worker_first_red_is_checked_before_any_http(self):
+        f,context=self.fixture();f.phase['first_red_exists']=True
+        with patch.object(owner.http.client,'HTTPConnection') as http, \
+             patch.object(owner.process_observation,'process_snapshot',side_effect=f.process_reader), \
+             patch.object(owner.phase_protocol,'read_phase_state',side_effect=f.phase_reader), \
+             patch.object(owner.time,'monotonic',return_value=80.):
+            with self.assertRaises(ValueError):owner.worker(context)
+        http.assert_not_called()
+
+    def test_worker_unknown_provider_or_pg_probe_cannot_open_http(self):
+        f,context=self.fixture();context['kind']='postgres'
+        with patch.object(owner.http.client,'HTTPConnection') as http:
+            with self.assertRaises(ValueError):owner.worker(context)
+        http.assert_not_called()
+
+    def test_transport_timeout_preserves_partial_output_and_reaps(self):
+        from unittest.mock import Mock
+        f,context=self.fixture();trace={}
+        error=owner.subprocess.TimeoutExpired('fake',5,output=b'partial',stderr=b'early')
+        child=Mock(pid=999,returncode=-9)
+        child.communicate.side_effect=[error,(b'partial and tail',b'early and tail')]
+        with patch.object(owner.subprocess,'Popen',return_value=child), \
+             patch.object(owner.time,'monotonic',return_value=80.):
+            with self.assertRaises(owner.subprocess.TimeoutExpired):owner.transport(context,trace)
+        child.kill.assert_called_once();self.assertEqual(child.communicate.call_count,2)
+        self.assertEqual(trace['returncode'],-9)
+        self.assertEqual(bytes.fromhex(trace['stdout_hex']),b'partial and tail')
+        self.assertEqual(bytes.fromhex(trace['timeout_stdout_hex']),b'partial')
+        self.assertTrue(trace['timed_out'])
+
+    def test_nonzero_worker_retains_all_raw_without_grant(self):
+        from unittest.mock import Mock
+        f,context=self.fixture();trace={};child=Mock(pid=999,returncode=1)
+        child.communicate.return_value=(b'health prefix',b'worker error')
+        with patch.object(owner.subprocess,'Popen',return_value=child), \
+             patch.object(owner.time,'monotonic',return_value=80.):
+            with self.assertRaises(ValueError):owner.transport(context,trace)
+        self.assertEqual(bytes.fromhex(trace['stdout_hex']),b'health prefix')
+        self.assertEqual(bytes.fromhex(trace['stderr_hex']),b'worker error')
+        self.assertEqual(trace['returncode'],1)
+
+
 if __name__=='__main__':unittest.main()
