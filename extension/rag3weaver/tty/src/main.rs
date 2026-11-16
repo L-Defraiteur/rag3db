@@ -28,11 +28,13 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+#[derive(Debug)]
 struct Options {
     depot: String,
     task: String,
     /// L'ancien nom (`--backend`, `--task`) a été employé : on le dit.
     ancien_nom: bool,
+    steps: bool,
     demande: Option<String>,
     daemon_json: Option<String>,
     daemon_cmd: Option<String>,
@@ -46,8 +48,12 @@ struct Options {
 }
 
 fn options() -> Result<Options, String> {
-    let mut args = std::env::args().skip(1);
-    let mut o = Options { depot: String::new(), task: String::new(), ancien_nom: false, demande: None, daemon_json: None, daemon_cmd: None, adresse: None, depuis: None, plain: false, theme: std::env::var("RAG3WEAVER_TTY_THEME").ok().filter(|v| !v.is_empty()), journal: None };
+    parse_options(std::env::args().skip(1), std::env::var("RAG3WEAVER_TTY_THEME").ok())
+}
+
+fn parse_options(args: impl IntoIterator<Item = String>, default_theme: Option<String>) -> Result<Options, String> {
+    let mut args = args.into_iter();
+    let mut o = Options { depot: String::new(), task: String::new(), ancien_nom: false, steps: false, demande: None, daemon_json: None, daemon_cmd: None, adresse: None, depuis: None, plain: false, theme: default_theme.filter(|v| !v.is_empty()), journal: None };
     while let Some(a) = args.next() {
         let mut valeur = || args.next().ok_or_else(|| format!("{a} attend une valeur"));
         match a.as_str() {
@@ -67,7 +73,7 @@ fn options() -> Result<Options, String> {
             "--demande" => o.demande = Some(valeur()?),
             "--journal" => o.journal = Some(valeur()?),
             // Les étapes de l'équipier dans l'historique (sinon, elles défilent dans la zone vivante).
-            "--etapes" => std::env::set_var("RAG3WEAVER_TTY_ETAPES", "1"),
+            "--etapes" => o.steps = true,
             "--daemon-json" => o.daemon_json = Some(valeur()?),
             "--daemon-cmd" => o.daemon_cmd = Some(valeur()?),
             "--adresse" => o.adresse = Some(valeur()?),
@@ -102,6 +108,7 @@ fn main() {
 }
 
 fn lancer(o: Options) -> Result<(), String> {
+    if o.steps { std::env::set_var("RAG3WEAVER_TTY_ETAPES", "1"); }
     let ep = match (&o.daemon_json, &o.daemon_cmd) {
         (Some(p), _) => Endpoint::depuis_fichier(std::path::Path::new(p))?,
         (None, Some(c)) => Endpoint::depuis_commande(c)?,
@@ -273,4 +280,33 @@ fn lancer(o: Options) -> Result<(), String> {
         return Err(e);
     }
     rendu.map(|_| ())
+}
+
+#[cfg(test)]
+mod english_options_tests {
+    use super::*;
+
+    fn parse(args: &[&str]) -> Result<Options, String> {
+        parse_options(args.iter().map(|s| s.to_string()), None)
+    }
+
+    #[test]
+    fn english_options_match_legacy_and_last_value_wins() {
+        let options = parse(&["--repo", "first", "--depot", "last", "--task", "sample",
+            "--request", "hello", "--log", "session.log", "--address", "127.0.0.1:1",
+            "--since", "42", "--steps"]).unwrap();
+        assert_eq!(options.depot, "last");
+        assert_eq!(options.task, "sample");
+        assert_eq!(options.demande.as_deref(), Some("hello"));
+        assert_eq!(options.journal.as_deref(), Some("session.log"));
+        assert_eq!(options.adresse.as_deref(), Some("127.0.0.1:1"));
+        assert_eq!(options.depuis, Some(42));
+        assert!(options.steps);
+        assert!(!options.ancien_nom);
+        let mixed = parse(&["--backend", "repo", "--task", "sample"]).unwrap();
+        assert!(!mixed.ancien_nom);
+        for flag in ["--repo", "--task", "--request", "--log", "--address", "--since"] {
+            assert!(parse(&["--repo", "repo", "--task", "sample", flag]).is_err(), "{flag}");
+        }
+    }
 }
