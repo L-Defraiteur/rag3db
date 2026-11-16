@@ -198,7 +198,7 @@ def test_prev_history_multiline(test) -> None:
     )
     test.send_control_statement(KEY_ACTION.CTRL_P.value)  # move up in history
     test.send_control_statement(KEY_ACTION.CTRL_P.value)  # move up in history
-    test.send_control_statement(KEY_ACTION.CTRL_P.value)  # move up line
+    test.send_statement("\x1b[A")  # move up line (Ctrl-P only moves a line on Windows)
     test.send_statement("\x1b[B")
     test.send_statement("\x1b[B")
     test.send_finished_statement(KEY_ACTION.ENTER.value)
