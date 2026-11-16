@@ -58,7 +58,7 @@ class ReviewReserves(unittest.TestCase):
    ready=dict(app=q.APP,pilot='a'*40,scope='/scope',nonce='fake',c7_reference='go')
    path=P/'READY_FOR_SERVICES.json';path.write_text(json.dumps(ready))
    sources={}
-   for key,name in [('protocol_sha256','lifecycle_protocol.py'),('process_module_sha256','lifecycle_provider_observation.py'),('owner_sha256','global_services_owner.py'),('pg_receipt_sha256','pg_receipt.py')]:
+   for key,name in [('protocol_sha256','lifecycle_protocol.py'),('process_module_sha256','lifecycle_provider_observation.py'),('owner_sha256','global_services_owner.py'),('pg_receipt_sha256','pg_receipt.py'),('pg_identity_sql_sha256','identity.sql'),('pg_postcheck_sql_sha256','backend-postcheck.sql')]:
     f=Q/name;f.write_bytes(('fake source '+name).encode());sources[key]=q.sha(f)
    providers=[]
    for address in ['127.0.0.1:7878','127.0.0.1:7879']:
@@ -69,7 +69,7 @@ class ReviewReserves(unittest.TestCase):
    with patch.object(q,'P',P),patch.object(q,'Q',Q):
     self.assertEqual(q.owner_pins(bind(pins),ready),pins)
     variants=[]
-    for key,value in [('admitted_monotonic',79.),('admitted_monotonic',True),('pg_receipt_sha256','c'*64),('owner_sha256','c'*64),('nonce','foreign'),('pilot','c'*40),('scope','/foreign'),('c7_reference','other')]:
+    for key,value in [('admitted_monotonic',79.),('admitted_monotonic',True),('pg_receipt_sha256','c'*64),('pg_identity_sql_sha256','c'*64),('pg_postcheck_sql_sha256','c'*64),('owner_sha256','c'*64),('nonce','foreign'),('pilot','c'*40),('scope','/foreign'),('c7_reference','other')]:
      item=copy.deepcopy(pins);item[key]=value;variants.append(item)
     for item in variants:
      with self.subTest(item=item),self.assertRaises(AssertionError):q.owner_pins(bind(item),ready)
