@@ -1,0 +1,6 @@
+/home/lucied/.cache/rag3weaver-build/cx-reference-strings-01/source.bundle est correct
+Le colis contient cette référence :
+75a4ba4d467aa5f07ef83494f5393154ab2392c6 refs/heads/cx-coeur-two-reds-baseline
+Le colis exige cette référence :
+64eee2e1f6c3599f5e4a0bcd3369f6202e33eaca 
+algorithme d'empreinte du colis : sha1

@@ -35,3 +35,9 @@ ELF/archive/header/cache/compile_commands exportés avant assertions et lancemen
 Dix contrôles CPU verts : vrai constructeur et vraie boucle avec drapeau hôte simulé1 mais aucun drapeau enfant, un seul filtre/cas/cap, GTest0/1, XML absent/sauté/désactivé/incohérent, absence d'identité runtime honnête, classification139 sans signal affirmé, premier rouge STOP, petit Python expiré/récolté et refus avant unité réelle. Premier essai7verts/3erreursSyntaxError a révélé un finally dupliqué à la composition ; fusion corrigée avant publication. Syntaxe AST, bash-n et diff contrôlés. **Aucun C++ compilé ou joué, aucune unité ou poste acquis.**
 
 RO du paquet demandé avant admission. Un vert unique de référence ne prouve pas une régression du candidat ; un crash comparable n'établit pas la même cause C1. Ticket crash/parentC1/wrongRows228/append/plan lecteur restent ouverts. Aucun moteur59 posé, service touché ou master modifié.
+
+## Copies privées et revue, sans admission
+
+Staging réalisé dans le périmètre de préparation autorisé : J=/home/lucied/.cache/rag3weaver-build/cx-reference-strings-01, six scripts a202a1032a et recette2ccafae5 vérifiés. Bundle référence unique vérifié en lecture seule contre rag3db-colonnes et list-heads75a, SHA740550ff86872813f0922ed88aae7b3ce68782a6d78cb32695ca456cbc680e23. [Reçu PC rapatrié](preuves/reference-strings-staging/preparation.json), SHA02299e0b165c89d48bee9bcba48d173dd26c5c71a9df71b79371901d7077062d ; sorties bundle conservées à côté.
+
+Scratch neuf vide, unité not-found/MainPID0/ControlGroup vide, aucun processus attribué, raw/resume/build absents. Aucun configure/build/cas, poste, réservation ou GDB lancé. Pin prêt pour admission distincte, sans capacité réservée. RO Hotfixs favorable au paquet ; métriques cgroup seulement si le finally est atteint (SIGKILL peut l'empêcher, aucune valeur inventée). Le staging ne transforme pas cet avis en GO.
