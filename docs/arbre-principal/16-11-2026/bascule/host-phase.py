@@ -56,7 +56,7 @@ def main():
  # Auth is read from the local host's protected files, never printed or copied.
  state=Path.home()/'.local/share/rag3weaver';address=json.loads((state/'daemon.json').read_text())['address'];token=(state/'daemon.token').read_text().strip();session=None
  def post(route,body):
-  assert route in ['/session','/call','/backend/maintain'],'service open/close operations belong to G'
+  assert route in ['/session','/call','/backend/maintain','/backend/fts-live-ids'],'service open/close operations belong to G'
   remaining=end-time.monotonic();assert remaining>0,'phase deadline'
   headers={'Content-Type':'application/json','Authorization':'Bearer '+token}
   if session:headers['X-Rag3weaver-Session']=session
@@ -71,8 +71,8 @@ def main():
  try:
   if args.action=='diagnostic':
    assert args.base=='code-rag3db-depot' and args.table==['File'],'diagnostic is File on portable only'
-   before=post('/backend/maintain',dict(manifest=manifest,table='File',dry_run=True))
-   save(root,'File-diagnostic-dry-run.json',before)
+   before=post('/backend/fts-live-ids',dict(manifest=manifest,table='File'))
+   save(root,'File-diagnostic-live-ids.json',before)
   elif args.action=='maintenance':
    assert args.table and all(re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*',t) for t in args.table),'explicit table list required'
    for table in args.table:

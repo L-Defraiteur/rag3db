@@ -61,3 +61,7 @@ Après FINI, G a effectivement essayé ELFportable43cff sur fixturePC : refus127
 ## Sonde RO distincte après refus422 — préparée, non lancée
 
 Action `diagnostic code-rag3db-depot --table File` de host-phase.py : session puis UNIQUE POST /backend/maintain avec dry_run=true, aucun chemin purge, autre table/base ou indexation. Preuves neuves `~/.cache/rag3weaver-build/bascule-live-20261116/code-rag3db-depot/diagnostic-01`, même --fini-proof runtime.json G. Borne client60secondes sous confineur commun90secondes/poste32GiB frais, pas de deadline héritée. Statut/corps refus conservés avant exception (1MiB, troncature explicite, répertoire0700), aucun retry. C7 arbitre cette sonde exacte avant lancement. Une réponse nouvelle n'est jamais le corps perdu initial ; refus ou lecture ne qualifient ni purge ni quiescence hôte. La maintenance demeure arrêtée.
+
+### Arbitrage C7 : sonde live-ids uniquement
+
+La proposition dry_run ci-dessus est remplacée AVANT lancement : action diagnostic appelle UNIQUEMENT /backend/fts-live-ids, table File, même manifeste portable, session fraîche. Aucun /backend/maintain dans cette branche ; aucun graphe, compact, purge, ensure/warmup ni autre base. Borne totale60secondes sous poste32GiB commun ; client45secondes. Autorisation C7 distincte reçue pour ce diagnostic seulement. Corps initial toujours perdu ; handle absent ne prouverait pas index disque absent.
