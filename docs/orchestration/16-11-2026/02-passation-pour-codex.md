@@ -40,7 +40,7 @@ dit ce qu'elle lit, ce qu'elle fait, et où est le travail de chaque périmètre
   on y touche.
 - **Les hôtes se relancent sans attendre Lucie** (seul le sudo est à elle) ; **jamais un essai sur le 7878 en
   place** ; card0 interdite ; `-j8` au plus ; `/tmp` est de la mémoire vive ; jamais de pkill par nom.
-- **Lucivy** : un tag `v*` publie partout ; il ne se pose qu'au mot de Lucie. 4.3.9 est posée (0825bcd).
+- **Lucivy** : un tag `v*` publie partout ; il ne se pose qu'au mot de Lucie. 4.3.9 est posée (0825bcd) et en ligne sur crates.io, npm et PyPI ; le pointeur rag3weaver « 4.3.9 » est en file.
 - **Identité** : gmail seule, GitHub L-Defraiteur, npm luciformresearch ; zéro attribution d'assistant dans
   les commits ; `gh auth switch --user L-Defraiteur` avant tout appel gh.
 
@@ -64,7 +64,7 @@ dit ce qu'elle lit, ce qu'elle fait, et où est le travail de chaque périmètre
 | coeur-cpp-hotfixs-tickets | `docs/coeur-cpp-hotfixs-tickets/16-11-2026/02-passation-pour-codex.md` | 14 entrées (70–90 h) : ADD COLUMN sous verrou de schéma, lecture au-delà de la colonne en cache, rang déplacé pendant un CREATE, rows_outside_graph, quarantaine d'une annulation partielle, journal sans borne hors COPY, nœuds liés par leur clé, DROP TABLE et ses pages, RTree, doublon du COPY, cible clean, traces de run_e2e, optimisticRead, tools/shell ; les entrées 2, 3, 5, 7 passent par l'orchestration avant d'écrire (fichiers du cœur) | d61841b448 |
 | embarquement | `docs/embarquement/16-11-2026/01-passation-pour-codex.md` | 13 entrées : tolérance de parité, bit selon le lot, cubecl déterministe, refus qui nomme le programme, creux d'un autre modèle, plafond en jetons, cause d'arrêt d'un service, débit par service (les 6 s), anciens morceaux géants, repli CPU des tests, mesure de la carte pleine, granite-278m, résidence (cinq tickets neufs) | 80ba4f661c |
 | everything-declarative | `docs/everything-declarative/16-11-2026/01-passation-pour-codex.md` | 13 entrées : llama-server, access/provider (alias au 29 nov.), erreurs de libération masquées, contrat de reçu d'un accord, estimation, genre d'une méthode d'un autre fichier, ALTER (lib 101ff50a6), sept témoins instables, morceaux refusés jamais repris, redécoupage après la bascule, postgres à générations, namespaces, cinq tickets à fermer sur mesure (deux tickets neufs) | d663340ef |
-| lucivy | en attente | | |
+| lucivy | `docs/lucivy/16-11-2026/02-passation-pour-codex.md` | 6 entrées : le bm25 seul de la migration sous 4.3.9 (avec la reprise du pointeur s'il n'est pas sur master), la compaction qui grossit un dictionnaire sans texte mort, un ulp d'écart en parse, indexed:false ignoré, préparer la 4.3.10 sans la taguer, le chemin sans positions (lot long) ; trois tickets neufs ; 4.3.9 en ligne sur crates.io, npm, PyPI | 9c1d71fb11 |
 | memoire | `docs/memoire/16-11-2026/01-passation-pour-codex.md` | 14 entrées de la moins à la plus bloquée (35–40 h sans attente) : l'usage du découpage au total, compose_restart au-delà de 2 000 apports, la borne query_chars côté embarqueur, les 15 tickets relus contre master (trois tickets neufs, 2f8270612) | db6533bf8d |
 | optimiseur | `docs/optimiseur/16-11-2026/02-passation-pour-codex.md` | 7 lots : témoin de poste, témoin de run_e2e qui compte l'attente, tools/shell en voie C++, juge known_red intermittent, base un-seul-sens au témoin, épingler la lib après la bascule, défaut de 40G (quatre tickets neufs, six fermés) | 499cb10de6 |
 | rag3weaver-archi | en attente | | |
