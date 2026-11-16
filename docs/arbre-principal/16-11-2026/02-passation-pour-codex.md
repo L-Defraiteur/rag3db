@@ -49,7 +49,27 @@ qui touche `src/code.rs`, `src/code_sync.rs`, `src/catalog.rs`, `src/catalog/*`,
 ### A. Sans dépendance : commencer ici
 
 **A1. Les sondes et bancs qui lisent `Scope_Chunk` en dur** — `docs/arbre-principal/tickets/2026-11-13-les-sondes-bancs-et-mesures-du-code-lisent-scope-chunk-en-dur.md`
-- **En cours par arbre principal** (16 novembre, 11 h), branche `arbre-principal/scope-chunks-des-sondes` sur master 1e45d6f21 : Codex la saute et part de la première entrée libre. Une fois poussée, le ticket passe dans `docs/tickets/closed/` avec son hash.
+- **Commencé par arbre principal, arrêté au mot de Lucie (16 novembre, 10 h 5x) : Codex le reprend depuis sa tête.**
+  - **Tête** : `arbre-principal/scope-chunks-des-sondes`, **2e0f986825**, sur master a281e2451. Deux commits :
+    - 3af275852, le rouge : la garde « au moins un morceau de scope » du banc HNSW, qui compte encore `Scope_Chunk` ;
+    - 2e0f98682, le correctif, **ni compilé ni joué** : les cinq fichiers du ticket lisent la table par
+      `code::scope_chunks(&cat)` et exigent un morceau ; le banc HNSW indexe en masse `ENTITES_EN_MASSE` ;
+      `compter_une_base` lit la forme par l'estampille ; `e2e_mesure_index_entier` dit qu'il mesure la forme d'avant
+      et refuse une base à versions par son nom (`require_the_form_of_before`).
+  - **Où ça en est** : le rouge n'a pas encore été vu. La première passe a été refusée parce que `target-vues` n'avait
+    pas de provenance ; la seconde, sur un target neuf, a été arrêtée pendant son bâti.
+  - **Ce qui reste pour finir** :
+    1. voir le rouge sur 3af275852 seul : `./run_e2e.sh --test e2e_banc_hnsw le_hnsw_a_l_ecriture`, avec
+       `RAG3WEAVER_MESURE_RACINE=<un dossier de deux ou trois .rs>`, sur un target neuf, sous `poste lourd`
+       (`HashEmbedder`, une à deux minutes) ;
+    2. compiler 2e0f98682 (`scripts/check_features.sh` compile toutes les cibles de test) et corriger ce qui ne
+       compile pas ;
+    3. jouer une fois `e2e_banc_hnsw`, `e2e_mesure_ingestion_code` et `sonde_morceaux_vides` ;
+       `e2e_banc_etage` et `e2e_mesure_index_entier` demandent un modèle réel ou une copie de base de la forme
+       d'avant (`RAG3WEAVER_MESURE_*`, voir leurs en-têtes) : les jouer si l'orchestration donne la place, sinon le
+       dire ;
+    4. la passe épinglée, puis le push au « à toi ».
+  - **État final** : branche poussée telle quelle, rien sur master, aucun processus en cours.
 - **Faire** : dans `tests/sonde_morceaux_vides.rs` (18 occurrences), `tests/e2e_mesure_index_entier.rs` (16),
   `tests/e2e_banc_etage.rs` (4), `tests/e2e_banc_hnsw.rs` (1), `tests/e2e_mesure_ingestion_code.rs` (2), lire la
   table des morceaux par `src/code.rs` `scope_chunks(&cat)` (champs `table`, `parent`, `chunked_from`, `to_scope`)
