@@ -1,5 +1,21 @@
 # Préparer le renouvellement des jetons Vertex
 
+Actualisation PIN FINI G : reprise des deux commits préparatoires à
+l'identique sur `68590270e21d00285b29800bd9cdecf0cb921461`, branche neuve
+`cx-ed-vertex-token-refresh-r2`, WT portable
+`/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-refresh-r2`.
+Tête avant cette annotation documentaire :
+`b402243bb78d973434842f82e209fb69d58370df`, diff produit r1→r2 vide.
+Aucun correctif, compilation ou rouge exécuté. Les deux juges restent
+NON JOUÉS ; la branche r1 est conservée. Qualification après landing ED ties
+et créneau C7, sous lib59ac épinglée complète/sans MOTEUR_ANCIEN, script cache
+SHA2150fcd847b1df7de04908d357a0c78abc05e50ce599e2793ff08ab48108825d
+conforme à685 ; pas de commande sur l'ancien pin373 ni `lib_seule.sh`.
+Le rouge exact utilisera `run_e2e.sh --lib`/la vraie passe
+`SUITE_DU_TEMOIN=lib` avec son nom complet, dans une borne fraîche encore à
+coordonner. Les slots actuels restent Recherche/Archi puis ED, pas de Cargo
+automatique au seul reçu de FINI G.
+
 Ticket : [un modèle Vertex déclaré garde son jeton d'une heure](../../banc/tickets/2026-11-16-un-modele-vertex-declare-garde-son-jeton-d-une-heure.md).
 Préparation après audit de master927941a67, branche `cx-ed-vertex-token-refresh-r1`.
 Aucun Cargo, faux serveur lancé, service, cloud ou lecture d'identifiants. La
