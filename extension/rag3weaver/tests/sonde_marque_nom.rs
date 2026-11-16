@@ -76,10 +76,12 @@ fn aretes_par_marque_en_tsv() {
         marques.sort();
         let non_types = cat.execute_raw("MATCH (:Scope)-[m:MENTIONS]->(:Symbol) WHERE m.untyped_receiver = 'oui' RETURN count(*)").unwrap();
         let scopes = cat.execute_raw("MATCH (s:Scope) RETURN count(*)").unwrap();
+        let orphans = cat.execute_raw("MATCH (s:Scope) WHERE NOT EXISTS { MATCH (s)-[:DEFINED_IN]->(:File) } RETURN count(*)").unwrap();
         println!(
-            "SONDE {racine} : fichiers {} ; admis {admis} ; scopes {} ; CONSUMES {:?} ; rendez-vous non typés {}",
+            "SONDE {racine} : fichiers {} ; admis {admis} ; scopes {} (sans DEFINED_IN {}) ; CONSUMES {:?} ; rendez-vous non typés {}",
             v.len(),
             texte(scopes.rows[0].first()),
+            texte(orphans.rows[0].first()),
             marques,
             texte(non_types.rows[0].first())
         );
