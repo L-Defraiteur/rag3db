@@ -77,3 +77,17 @@ NON JOUÉE ; conservation du premier rouge et des limites de cette preuve.
 Préparation magasin explicite sous XDG privé : contrôle résolveur seul portable/
 PC conforme, pin59ac et so/vectorSHA dans le rapport. La future recette fixe
 RAG3DB_LIBS_DIR réel sans copie SDK ; ce contrôle ne déclenche aucune passe.
+
+## Pilote concret demandé par C7, avant implémentation
+
+Le16nov C7 autorise la préparation/petits CPU, pas Cargo avant couple publié
+et GO exact. Source r3 `ff37eb82e52aa733503f3bf60fbf7a4d052ead85`, base
+`f83c6c4dd6a40200883c6325326f093ecdba3e23` : six patches égaux à r2.
+Pilote séparé : portée unique7200 après vrai poste32G/HIGHmax/swap0/quota
+par place/j8 maximum ; P/Q/S neufs horsW, target unique neuf, pin59ac/magasin
+réel. Canonique SUITES=- et codex_threads, puis seconde lib entière DIRECTEMENT
+sur le même ELF large identifié dans lib.log, SHA avant/après ; aucune seconde
+F8/NAV. Résumé canonique intact, deuxième journal et verdict composé séparés.
+Arrêt premier rouge, cleanup par confineur, contrôles frais après hashes et
+avant publication, autorité terminée/bus absent/quiescence. Aucun manager
+7970/base de Lucie requis. Préparation ne vaut pas GO ni qualification Rust.
