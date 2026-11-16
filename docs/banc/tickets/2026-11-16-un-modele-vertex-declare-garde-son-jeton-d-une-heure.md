@@ -1,0 +1,53 @@
+# Un modèle Vertex déclaré garde son jeton d'une heure
+
+- **État** : ouvert ; constat, pas de correctif.
+- **Famille** : produit
+- **Gravité** : haute pour toute passe longue. Au bout d'une heure, chaque appel au modèle rend 401, et la
+  décision est perdue sans que la passe s'arrête.
+- **Atteignable en service** : oui. Tout hôte ou toute passe qui garde un `models.llm` de protocole `vertex`
+  plus d'une heure : l'archiviste, l'équipier, le chat.
+- **Touche rag3weaver** : oui, `model_source.rs` (`connect_llm`), `openai_llm.rs` (`OpenAiLlm::vertex`) et
+  `gcp_auth.rs` (`TokenSource`).
+- **Pour** : everything declarative, qui tient `models.llm`. À confirmer par c7.
+- **Signalé par** : banc, mesure longue de l'archiviste (F300, 16 novembre).
+- **Ouvert le** : 16 novembre 2026
+
+## Le constat
+
+La passe F300 de la mesure longue (`~/.cache/rag3db-banc-notes/compaction/long/F300-ov10-0653-20261116-0157/`
+à luciepc) a tourné de 01 h 57 à 02 h 58. Le backend de la passe y garde un Decide sur
+`google/gemini-3.8-flash` par Vertex. Les 45 derniers tours (199 à 244, sauf 208) rendent tous :
+
+```
+Decide (google/gemini-3.8-flash) : llm model error: HTTP 401: … "reason": "ACCESS_TOKEN_EXPIRED" …
+```
+
+Les requêtes refusées sont gardées dans `etat/requetes-refusees/*-401-*.json`. La passe ne s'arrête pas :
+`appels.jsonl` marque ces tours `"ok": true`, avec l'erreur sous `reponse.errors`.
+
+## Pourquoi
+
+- `connect_llm` (`model_source.rs`), pour le protocole `vertex`, prend un jeton une seule fois :
+  `TokenSource::from_env().and_then(|s| s.token())`.
+- Il le pose en `Auth::Bearer` fixe dans `OpenAiLlm::vertex` (`openai_llm.rs`).
+- Le commentaire de `connect_llm` le dit : « **Limite** : il est pris à la connexion et dure une heure ».
+- `TokenSource` sait pourtant renouveler (`token()` relit le cache et refait l'échange, `invalidate()` sur un
+  401), mais personne ne le rappelle.
+
+## La forme attendue
+
+- Le client Vertex garde la `TokenSource` et non le jeton. Il demande `token()` à chaque appel : le cache rend le
+  même jeton tant qu'il est loin de son expiration.
+- Sur un 401, il appelle `invalidate()` puis retente une fois.
+- Un 401 qui persiste est une erreur nommée, qui arrête la passe, au lieu d'une décision perdue.
+
+## La preuve
+
+- Un témoin rouge d'abord : une `TokenSource` de test au jeton de courte durée, ou un faux serveur qui rend 401
+  pour un jeton périmé. Un appel au-delà de cette durée doit réussir, et il rougit sur le code d'aujourd'hui.
+- Puis la passe F300 rejouée par la mesure longue : 244 décisions, aucun 401.
+
+## Ce que ça coûte au banc
+
+F300 n'a que 199 décisions valides sur 244. Elle se juge sur ses 199 premiers tours, en le disant, ou se rejoue
+après le correctif.
