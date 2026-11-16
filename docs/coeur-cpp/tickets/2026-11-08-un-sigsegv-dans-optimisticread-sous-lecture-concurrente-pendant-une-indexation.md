@@ -3,10 +3,10 @@
 - **État** : ouvert (8 novembre 2026), en cours (cœur c++) : un mécanisme est prouvé (l'étendue, plus bas), le premier événement non ; ce qui
   suit est lu sur le core et le désassemblage.
 - **Famille** : moteur
-- **Gravité** : plantage (l'hôte de Lucie, relancé par systemd 46 s plus tard).
+- **Gravité** : métadonnée fausse, dite par une erreur (16 nov., au mot de c7 ; avant : plantage, l'hôte de Lucie relancé par systemd 46 s plus tard). Depuis le lot etendue-gardes (9bae60786), une page au-delà du fichier lève une erreur au lieu de planter.
 - **Atteignable en service** : oui — vu en service le 8 novembre à 8 h 50 m 11 s.
 - **Touche rag3weaver** : par le moteur (l'hôte rag3weaver-backend meurt).
-- **Pour** : cœur c++.
+- **Pour** : hotfixs depuis le 16 nov. (laissé par le cœur), pour le premier événement.
 
 ## Ce que c'est
 
@@ -194,6 +194,24 @@ Témoins dans `test/transaction/data_file_extent_test.cpp` :
 
 Les sondes en lecture seule (`croise.cpp`, `entete.py`) sont dans
 `~/.cache/rag3db-moteur-notes/essais-c7/`.
+
+## Le 16 novembre : la gravité baisse, le premier événement reste (hotfixs)
+
+Ce qui est relevé, huit jours après le lot etendue-gardes :
+
+- **Aucun core de `rag3weaver-backend`** depuis les deux du 8 nov. (8 h 50 et 9 h 05), ni au portable ni à
+  luciepc (`coredumpctl list --since 2026-11-08`).
+- **Aucune des trois gardes déclenchée** dans le journal utilisateur des deux postes depuis le 8 nov. : « lies
+  beyond the », « would go beyond its », « refused, pages [ ».
+- **Aucune base neuve creuse.** Sur 340 bases de plus de 50 Mo (103 au portable, 237 à luciepc), la taille
+  apparente ne dépasse de beaucoup la taille réelle que pour code-essais-c7 et ses copies d'étude du 8 nov.
+  (324 Gio contre 1,8 Gio).
+
+Décision de c7 : la gravité devient « métadonnée fausse, dite par une erreur ». Le ticket reste ouvert pour le
+premier événement : ce qui a posé une entrée libre ou des pages vers 83 millions dans une base de 455 000, entre
+0 h 08 et 8 h 50 le 8 nov. La recherche est bornée à un lot de lecture (deux heures) : les commits moteur
+17a094d12..dadbf0041, avec la base etat-ferme-17h14 comme pièce. Si rien ne sort, ce premier événement passe en ticket
+de confort. Aucun code sans un témoin qui le reproduit.
 
 ## Témoin
 
