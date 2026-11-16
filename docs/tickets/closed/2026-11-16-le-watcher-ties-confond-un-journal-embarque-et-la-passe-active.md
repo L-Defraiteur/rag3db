@@ -1,9 +1,12 @@
 # Le watcher ties confond un journal embarqué et la passe active
 
-- **État** : ouvert.
+- **État** : corrigé dans le candidat ; qualification v3 complète verte.
 - **Pour** : everything declarative, coordination C7.
-- **Famille** : outillage de qualification.
+- **Famille** : produit
 - **Gravité** : qualification interrompue ; aucun défaut produit attribué.
+
+- **Atteignable en service** : non, contrôleur privé de validation seulement.
+- **Touche rag3weaver** : oui, pilote de qualification des recherches.
 
 ## Diagnostic avant correction
 
@@ -19,4 +22,8 @@ Reprise même APP/target connu au même propriétaire, garde commune réelle et 
 
 ## Qualification corrective acquise
 
-APPbd76/pilote13c8 : passe canonique v3 entièrement VERTE, scopeVERT0/restes[]/busabsent, sous reste de START/ENDinitial sans reset. [Preuves détaillées](../16-11-2026/09-preuves-canon-ties-v3.md),29fichiersPC/localréhash0écart. Anciensrougesconservés. Pas de GOmaster ni retrait déduit ; ticket laissé ouvert pour revue et intégration coordonnées.
+APPbd76/pilote13c8 : passe canonique v3 entièrement VERTE, scopeVERT0/restes[]/busabsent, sous reste de START/ENDinitial sans reset. [Preuves détaillées](../../everything-declarative/16-11-2026/09-preuves-canon-ties-v3.md),29fichiersPC/localréhash0écart. Anciensrougesconservés. Pas de GOmaster ni retrait déduit ; ticket laissé ouvert pour revue et intégration coordonnées.
+
+## Clôture proposée par le candidat
+
+Réserves pilote corrigées et qualifiées : sourcebd76/pilote13c8/preuves574134fb1e, RO indépendantes Archi et Mémoire favorables. Clôture de ce défaut de pilote seulement ; aucune clôture de Vertex, recherche existing-only, CI ou autres lots, aucun déploiement hôte. Les SHAs historiques restent des archives exactes.

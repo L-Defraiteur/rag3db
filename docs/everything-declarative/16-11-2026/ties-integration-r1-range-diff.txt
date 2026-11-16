@@ -1,0 +1,14 @@
+ 1:  d2afed8a80 =  1:  032d273942 test(rag3weaver): les ex æquo gardent leur ordre d'une base réécrite à une base neuve — témoin rouge (ticket de lucivy : l'uuid d'occurrence porte _depuis)
+ 2:  564b4ae335 =  2:  e9febedb0e fix(rag3weaver): les ex æquo se départagent par une identité stable — une occurrence par son chemin, sa ligne et son nom, une version par son uuid de contenu ; l'uuid d'occurrence porte _depuis et changeait d'une base réécrite à une base neuve (ticket de lucivy)
+ 3:  7edcda0c77 =  3:  3e771bc260 fix(rag3weaver): stable_order se place avant la doc et les attributs de SearchResult
+ 4:  30bb9a8ac0 =  4:  e896547f36 docs: la nouveauté de l'ordre des ex æquo d'une base réécrite à une base neuve
+ 5:  79ad68c924 =  5:  5b8ac75039 Préparer la reprise de l ordre stable sur la lib neuve
+ 6:  bd76f55792 =  6:  9f51c97993 Actualiser le candidat sur la passe épinglée après bascule
+ 7:  6d1e3468a2 =  7:  ab0e877375 Publier l entrée bornée de qualification des ex æquo
+ 8:  bbe4950066 =  8:  bcd7ec1ae5 Conserver le refus de magasin de la qualification ties
+ 9:  dae3a62ee6 =  9:  f6b8b4d454 Épingler le magasin du pilote sous cache privé sans reset du délai
+10:  e9b2a797d8 = 10:  7ea272f8c1 Consigner le rouge du watcher sur un journal embarqué avant correction
+11:  a7919d26e0 = 11:  ac30def3e4 Borner le watcher aux journaux actifs et conserver le cache connu
+12:  13c8bf21e6 = 12:  a3d0d6291d Consigner le témoin du watcher actif avant reprise canonique
+13:  1326cddd30 = 13:  056c23079a Conserver les preuves réhachées du rouge watcher sans les requalifier
+14:  574134fb1e = 14:  6c41445708 Publier la passe canonique ties verte et ses preuves réhachées

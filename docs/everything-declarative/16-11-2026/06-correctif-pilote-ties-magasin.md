@@ -1,6 +1,6 @@
 # Pilote ties correctif : magasin explicite et reste de la borne initiale
 
-Ticket [rouge du magasin](../tickets/2026-11-16-le-pilote-ties-isole-le-cache-sans-epingler-le-magasin-de-libs.md)
+Ticket [rouge du magasin](../../tickets/closed/2026-11-16-le-pilote-ties-isole-le-cache-sans-epingler-le-magasin-de-libs.md)
 publiébbe495 AVANT correctif. APPbd76 inchangée. Contrôle séparé branche
 neuve `cx-ed-stable-tie-qualifier-r2`, P/Q/Sv2 neufs. La v1 et ses preuves
 restent conservées ; aucune autoritév2 créée à publication.

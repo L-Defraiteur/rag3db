@@ -34,3 +34,9 @@ rag3weaver trie les hits et où il coupe le top k.
 
 Pour que la coupe elle-même soit stable, demander à lucivy un peu plus que k (k plus les ex æquo du k-ième), puis
 trier et couper en haut. Sinon, le k-ième rang reste celui que la disposition des segments a choisi.
+
+## Complément qualifié : identité stable entre bases
+
+La première clôture ci-dessus décrit le correctif de coupe déjà livré. Le complément sourcebd76 trie score puis identité chemin/ligne/nom et UUID résiduel ; il s'applique au lexical, aux résultats vectoriels et à la fusion. L'UUID d'occurrence seul ne garantit pas l'ordre entre base réécrite et base neuve car il porte _depuis. Le contenu, l'identité et l'occurrence restent distincts ; aucune mutation d'UUID/coordonnées ni nouvelle APIoutil. Si chemin/ligne/nom manquent ou changent, la stabilité interbases n'est pas promise. Limite de surcollecte4096 inchangée ; le juge de six occurrences ne prouve pas toutes les variantes de fusion/vectoriel.
+
+Qualification réelle sourcebd76f557928b5078f98a235f1cb0b5f78e7360d8/pilote13c8bf21e6c34d4480f034e66453bec22330e6a0, preuves574134fb1e1a8330a38f51d23bc6c4b4209b3f86 : F88/8,lib2595/0/72ignorés,NAV45/0/0,code36/lectures27 et deux ciblés distincts verts, canonique complète sous délai initial sansreset. [Rapport et manifeste](../../everything-declarative/16-11-2026/09-preuves-canon-ties-v3.md). RO Archi et Mémoire favorables bornées ; anciensrougesconservés. Candidat préparé surmasterf83 documents entrants seuls, aucunGOmaster/déploiement/retrait déduit.

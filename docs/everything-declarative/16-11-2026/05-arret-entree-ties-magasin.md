@@ -1,7 +1,7 @@
 # Rouge d'entrée de la qualification ties, avant Cargo
 
 Ticket créé avant correctif/transmission :
-[cache privé et magasin de libs](../tickets/2026-11-16-le-pilote-ties-isole-le-cache-sans-epingler-le-magasin-de-libs.md).
+[cache privé et magasin de libs](../../tickets/closed/2026-11-16-le-pilote-ties-isole-le-cache-sans-epingler-le-magasin-de-libs.md).
 
 Sourceproduitbd76/pilote6d1e ont été joués sous l'allocation fraîche C7.
 La garde du target neuf est passée ; le premier `run_e2e.sh --lib` s'arrête

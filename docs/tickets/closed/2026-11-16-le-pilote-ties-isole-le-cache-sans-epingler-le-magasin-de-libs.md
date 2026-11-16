@@ -1,7 +1,7 @@
 # Le pilote ties isole le cache sans épingler le magasin de libs
 
-- **État** : ouvert ; rouge d'entrée conservé, aucun juge produit joué.
-- **Famille** : outillage
+- **État** : corrigé dans le candidat ; rouges historiques conservés, qualification v3 complète verte.
+- **Famille** : produit
 - **Gravité** : bloque la qualification de l'ordre stable avant Cargo.
 - **Atteignable en service** : non, contrôleur privé de validation seulement.
 - **Touche rag3weaver** : oui, résolution de lib dans run_e2e.sh appelée par le pilote.
@@ -41,10 +41,14 @@ rouge attribué ; ce ticket ne ferme pas le lot produit ni n'autorise master.
 ## Correctif publié avant test
 
 Profil magasin explicite et témoin du vrai résolveur dans la branche
-`cx-ed-stable-tie-qualifier-r2`, [rapport06](../16-11-2026/06-correctif-pilote-ties-magasin.md).
+`cx-ed-stable-tie-qualifier-r2`, [rapport06](../../everything-declarative/16-11-2026/06-correctif-pilote-ties-magasin.md).
 Code et témoin NON JOUÉS lors de cette publication, rouge v1 inchangé.
 Admission corrective bornée au RESTE ENDv1 après poste, pas à7200 neufs.
 
 ## Qualification corrective acquise
 
-APPbd76/pilote13c8 : passe canonique v3 entièrement VERTE, scopeVERT0/restes[]/busabsent, sous reste de START/ENDinitial sans reset. [Preuves détaillées](../16-11-2026/09-preuves-canon-ties-v3.md),29fichiersPC/localréhash0écart. Anciensrougesconservés. Pas de GOmaster ni retrait déduit ; ticket laissé ouvert pour revue et intégration coordonnées.
+APPbd76/pilote13c8 : passe canonique v3 entièrement VERTE, scopeVERT0/restes[]/busabsent, sous reste de START/ENDinitial sans reset. [Preuves détaillées](../../everything-declarative/16-11-2026/09-preuves-canon-ties-v3.md),29fichiersPC/localréhash0écart. Anciensrougesconservés. Pas de GOmaster ni retrait déduit ; ticket laissé ouvert pour revue et intégration coordonnées.
+
+## Clôture proposée par le candidat
+
+Réserves pilote corrigées et qualifiées : sourcebd76/pilote13c8/preuves574134fb1e, RO indépendantes Archi et Mémoire favorables. Clôture de ce défaut de pilote seulement ; aucune clôture de Vertex, recherche existing-only, CI ou autres lots, aucun déploiement hôte. Les SHAs historiques restent des archives exactes.
