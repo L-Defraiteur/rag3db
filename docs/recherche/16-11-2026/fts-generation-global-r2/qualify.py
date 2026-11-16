@@ -86,8 +86,10 @@ def owner_pins(grant,ready):
  pins=grant['owner_pins']
  canonical=json.dumps(pins,sort_keys=True,separators=(',',':'),allow_nan=False).encode()
  assert hashlib.sha256(canonical).hexdigest()==grant['owner_pins_sha256']
+ admitted=pins.get('admitted_monotonic');observed=grant['observed_monotonic']
+ assert type(admitted) in [int,float] and type(admitted) is type(observed) and math.isfinite(admitted) and admitted==observed
  for key,value in [('app',APP),('pilot',ready['pilot']),('scope',ready['scope']),('nonce',ready['nonce']),('ready_path',str(P/'READY_FOR_SERVICES.json')),('ready_sha256',sha(P/'READY_FOR_SERVICES.json')),('c7_reference',ready['c7_reference'])]:assert pins[key]==value
- for key,name in [('protocol_sha256','lifecycle_protocol.py'),('process_module_sha256','lifecycle_provider_observation.py'),('owner_sha256','global_services_owner.py')]:assert pins[key]==sha(Q/name)
+ for key,name in [('protocol_sha256','lifecycle_protocol.py'),('process_module_sha256','lifecycle_provider_observation.py'),('owner_sha256','global_services_owner.py'),('pg_receipt_sha256','pg_receipt.py')]:assert pins[key]==sha(Q/name)
  assert len(pins['providers'])==2 and {v['address'] for v in pins['providers']}=={v['address'] for v in grant['providers']}
  for pinned in pins['providers']:
   row=next(v for v in grant['providers'] if v['address']==pinned['address'])
@@ -223,7 +225,7 @@ def launch(args):
  cp=W/'extension/rag3weaver/codeparsers';expected=git(W,'ls-tree',APP,'extension/rag3weaver/codeparsers').split()[2];assert (cp/'Cargo.toml').is_file() and git(cp,'rev-parse','HEAD')==expected and not git(cp,'status','--porcelain')
  assert not any(p.exists() or p.is_symlink() for p in [P,S])
  contract=cache_contract();Q.mkdir(mode=0o700,exist_ok=True);assert Q.resolve()==Q and Q.stat().st_uid==os.getuid()
- sources={'qualify.py':Path(__file__),'lifecycle_protocol.py':Path(__file__).parent/'lifecycle_protocol.py','services-contract.json':Path(__file__).parent/'services-contract.json','global_services_owner.py':Path(__file__).parent/'global_services_owner.py','lifecycle_grant_producer.py':Path(__file__).parent/'lifecycle_grant_producer.py','lifecycle_provider_observation.py':Path(__file__).parent/'lifecycle_provider_observation.py','base_controller.py':control/'docs/recherche/16-11-2026/fts-fixture-root-green/qualify.py','passe_epinglee.sh':W/'tools/poste/passe_epinglee.sh'}
+ sources={'qualify.py':Path(__file__),'lifecycle_protocol.py':Path(__file__).parent/'lifecycle_protocol.py','services-contract.json':Path(__file__).parent/'services-contract.json','global_services_owner.py':Path(__file__).parent/'global_services_owner.py','pg_receipt.py':Path(__file__).parent/'pg_receipt.py','lifecycle_grant_producer.py':Path(__file__).parent/'lifecycle_grant_producer.py','lifecycle_provider_observation.py':Path(__file__).parent/'lifecycle_provider_observation.py','base_controller.py':control/'docs/recherche/16-11-2026/fts-fixture-root-green/qualify.py','passe_epinglee.sh':W/'tools/poste/passe_epinglee.sh'}
  for name in ['confiner_validation.py','poste','garde_target.sh']:sources[name]=W/'extension/rag3weaver/scripts'/name
  for name,path in sources.items():
   dest=Q/name

@@ -41,3 +41,14 @@ aucunHTTP/procscan/PG/Cargo/native/Auth/poste. Bruts stdout/stderr/result
 R/cx-proofs-recherche-fts-global-consumer-cpu-v1, manifestejoint.
 Ce verdictCPU n'est pas qualificationworker/providerréel/SQLG/canonique ;
 QfinalNONcréé, ownerPGprovisoire234 remplacéstrictementaprèsSHAGstable.
+
+## Complément PG/instantadmis, rougeavantfix
+
+Témoin6PUBff7691a7e1d2f6596c2c8e8559341cf4a5f1c539 AVANTrunCPU60failfast :
+1assertfail/0error/0.001s, vraiowner_pins accepte admitted différentgrant ;
+brutsR/cx-proofs-recherche-fts-global-admitted-red-v1+manifestjoint. Fixensuite :
+égalitétype/valeurfiniteowner_pins.admitted_monotonic==grant.observed_monotonic
+et quatrièmehashsourcepg_receipt_sha256==Qpg_receipt.py. AjoutcopiePGprévue
+mais fichierfinalGencoreattendu :aucunprepareQpossible/GOdéduit.
+Sixièmefonction couvrepositif+mutantsclock/sources/nonce/pilot/scope/allocation/
+SHAcanonique ; nouveauxsouscas PG n'ont pas tous étévusrouges avantfix.
