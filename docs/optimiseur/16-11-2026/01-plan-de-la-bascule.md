@@ -3,6 +3,16 @@
 Session G (optimiseur). Plan préparé dans la nuit du 15 au 16 novembre, au mot de c7. **Rien n'est bâti avant son
 mot** ; la bascule se fait quand Lucie se lève, dans une fenêtre qu'il ouvre.
 
+## Mise à jour de 6 h 30 : la lib 59ac9c86bc
+
+Au mot de c7 (6 h 1x), on ne bascule pas vers une lib en retard d'un correctif de durabilité. La lib est rebâtie sur master
+3177d2489e : **rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a** (librag3db 697c7a0c, libvector 925b6b13), le
+fsync du répertoire parent à la création d'un fichier. Contre 373b5477b : 17 symboles ajoutés, 0 retiré. Les vtables de
+`FileSystem`, `LocalFileSystem` et `VirtualFileSystem` changent de taille (syncDirectory s'insère) ; le cœur lit l'ABI
+inchangée pour le Rust, qui ne voit pas ces classes. Verdict sans MOTEUR_ANCIEN sur 3177d2489e : 36/36, 27/27, 24/24. Les
+hôtes bâtis contre elle (binaire d164e4da) ont été essayés aux deux postes. Le service d'embarquement sur 3177d2489e
+(sha256 6196fbe7102ad533) attend dans `nuit-3177d2489e/` à luciepc. Ce qui suit valait pour 52101b7fd, et vaut de même.
+
 ## Ce que porte la lib neuve
 
 Le magasin nomme une lib par son dernier commit moteur (`src`, `extension/vector`). Sur master, c'est aujourd'hui
