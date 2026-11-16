@@ -1,0 +1,177 @@
+[
+  {
+    "path": "client/authority-path.json",
+    "size": 325,
+    "sha256": "5e6fc50755b294012696c3cb0df3fb19b6514c534cbd4ee50860efaf4aad1dc0"
+  },
+  {
+    "path": "client/carry-after-poste.json",
+    "size": 1424180,
+    "sha256": "9a82d3a1445916a39a244d999d70aa7db358cb85beb42242c8e75ff55cb5b45f"
+  },
+  {
+    "path": "client/carry-before-poste.json",
+    "size": 1424180,
+    "sha256": "56c66a09432c7e32045e7661fb32486d8d0a3753ba5f22528357d6dab1c80b8c"
+  },
+  {
+    "path": "client/composed-result.json",
+    "size": 84,
+    "sha256": "e176b66b4b2fb45f90072313680c40a781736b012f46371e1123d6e224f0a963"
+  },
+  {
+    "path": "client/first-match-prefix.log",
+    "size": 49067,
+    "sha256": "94b97dc54fb5fa79a37f572217c9992c16a5c7362ece69e9e8a529d3a8c237bc"
+  },
+  {
+    "path": "client/first-red.json",
+    "size": 159,
+    "sha256": "41e2c750d7a843cd70893e5722aa525816984750e849901a7fdad8e438774e71"
+  },
+  {
+    "path": "client/large-unit-tests",
+    "size": 484292712,
+    "sha256": "6f12273abeb4a957dd5abdcd0f518ee673607146eefbe2c2938769d9bfdf8e74"
+  },
+  {
+    "path": "client/launch.json",
+    "size": 639,
+    "sha256": "abdb5018475c182fdeadcdbbb84833b44ae351c64188a0b8e757dd73d4c8b004"
+  },
+  {
+    "path": "client/ledger-before-second-lib.json",
+    "size": 823,
+    "sha256": "289424dc065b31678d22bedf5c7077aca8f26b8fa6a2e425e4879f3a4c48a1f3"
+  },
+  {
+    "path": "client/manifest-env-diagnostic.json",
+    "size": 449,
+    "sha256": "59ac58f960ae7ba3226a619b668d8b98a854b73786952539bbceabb1f59d1a2b"
+  },
+  {
+    "path": "client/official/base",
+    "size": 41,
+    "sha256": "d07d2424f2fbaad2b4e9ffd3798b3f5019e61427ad503fef27a7e9747d2ac4de"
+  },
+  {
+    "path": "client/official/check_features.log",
+    "size": 2771,
+    "sha256": "3444b957787dc1f187c97f689e043ab72fe5a7b11e2d296e33fa07795cc8b7d7"
+  },
+  {
+    "path": "client/official/lib.log",
+    "size": 239452,
+    "sha256": "37dcfbeac467cab23cc8b134214ab0622d08e32d36e5500bab437e5e4412e136"
+  },
+  {
+    "path": "client/official/navigateur.log",
+    "size": 25382,
+    "sha256": "177e6f0623e23f4af785fc85b8f245a9346969426fae03c3ba7f08cd667924ad"
+  },
+  {
+    "path": "client/official/preuve.log",
+    "size": 14794,
+    "sha256": "131d63683f868a742a36db5c43a0cbcef82eeb95daa30c596d07c923934d88e0"
+  },
+  {
+    "path": "client/official/resume.log",
+    "size": 796,
+    "sha256": "0dddc68c959407fc97c88f024b1911fa9dcd1c718a738175b8f9f3d2e99076ca"
+  },
+  {
+    "path": "client/official/temoins.log",
+    "size": 17501,
+    "sha256": "39d42182618a56bb83b11f0b9e5ae7ba113574d64fe2807d0b3bd6944089939e"
+  },
+  {
+    "path": "client/official-pass.log",
+    "size": 101,
+    "sha256": "f537510b33058aada5bf037918d77eacb2d6701427e5850cc01573210ad210a0"
+  },
+  {
+    "path": "client/outer.log",
+    "size": 1080,
+    "sha256": "ff7c8899629d093f11df84f8a632afa86de06a1f52f8b0b8c81b145ae90d7528"
+  },
+  {
+    "path": "client/profile.json",
+    "size": 2350,
+    "sha256": "4f4c1199c3754874575ad8f171dab8963b78cc153fce3476ce7fe0548b59b17c"
+  },
+  {
+    "path": "client/quiescence-independent.json",
+    "size": 1827,
+    "sha256": "466db4c11f6b3916882276117ad5569cf1ed6db2db92b474268837da501b896e"
+  },
+  {
+    "path": "client/scan-before-carry.json",
+    "size": 1444,
+    "sha256": "7470c08b6eaed508eb8c9da21bbcf9f893a897865ffca911dd7d4ae8fa46e17a"
+  },
+  {
+    "path": "client/second-lib.log",
+    "size": 49518,
+    "sha256": "bf7a42a4ad018e0e5244dc17f1bc8d3e5af46c0ca635e4c79e5c01149df3189a"
+  },
+  {
+    "path": "client/services-after.json",
+    "size": 4761,
+    "sha256": "caf2a02ca2147226e640e4766d132cc49a2e5825deae3419d6f8ded2bba4abf5"
+  },
+  {
+    "path": "client/short-tmp.json",
+    "size": 191,
+    "sha256": "53b901414c3b8b6cb52aa94098c33ee59f754705b0fdabb9caabbe2b3162a6cf"
+  },
+  {
+    "path": "client/watcher-first-match.json",
+    "size": 522,
+    "sha256": "62c19015e9fa5282dc5db069543e7547b94e1fe31be5734ae7624fc89ec71767"
+  },
+  {
+    "path": "controller/configuration.json",
+    "size": 1494419,
+    "sha256": "6082693fa731d04b4b4849e9b42bf98af9b97934d4113b6a78963a9a020b1fc2"
+  },
+  {
+    "path": "controller/confiner_validation.py",
+    "size": 17667,
+    "sha256": "6439fdd8b52c85fa4e74af0def2c667ef0bedae9b814cbbfd48e49946c4f74ea"
+  },
+  {
+    "path": "controller/poste",
+    "size": 26869,
+    "sha256": "79e3a8bbf457e3bc9104aa1558e7d03072216c70b68e08ae606ace6aa4584c7b"
+  },
+  {
+    "path": "controller/profile_contract.py",
+    "size": 6227,
+    "sha256": "eb099fba7c778a311e15c314f82fdb68ae1b45b736c121f018f6a1dab4a554a1"
+  },
+  {
+    "path": "controller/qualify.py",
+    "size": 18691,
+    "sha256": "0154cf240ca0d49f2ea1cacca649fed46eef8655eb6471ef6d7b63d52737fca0"
+  },
+  {
+    "path": "controller/remaining-after-poste.json",
+    "size": 125,
+    "sha256": "40d8f222fdd11496d49328136aa891922794eedf470dbbf8b29b93d24d772537"
+  },
+  {
+    "path": "supervisor/enfants.json",
+    "size": 667592,
+    "sha256": "2239ba79b5ddaabbae1367c43f0cb915a9483e9b8791448a8c830825bbe68e29"
+  },
+  {
+    "path": "supervisor/recette.json",
+    "size": 765,
+    "sha256": "38f8532a05b55a2f40d414e7311cfe5ad5e798ce1775f5bdd1b03dea8af06de2"
+  },
+  {
+    "path": "supervisor/verdict.json",
+    "size": 167,
+    "sha256": "475588960ddd91a18feadfa89327b7ee1cdf79c14715d5546e5c042d0c3b97c4"
+  }
+]
