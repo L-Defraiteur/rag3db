@@ -1,6 +1,6 @@
 # La garde du push n'a pas de mode « tests seuls »
 
-- **État** : ouvert (16 novembre 2026, hotfixs, au mot de c7)
+- **État** : fait (16 novembre 2026, branche guard-tests-only) : sous TESTS_ONLY=1, push_garde.sh laisse passer sans lib un lot qui ne touche que les dossiers de tools/poste/tests_only_dirs.txt (tools/shell/test/), plus des .md, sur un journal qui dit « tested binary: <chemin> commit <40 hex> sha256 <64 hex> » ; tout autre chemin, ou un journal sans provenance, est un ARRÊT nommé ; trois cas neufs au témoin, 3 rouges sur la garde de master
 - **Famille** : produit
 - **Gravité** : un lot qui ne touche que des tests Python du shell ne peut pas atterrir seul. `push_garde.sh` exige
   qu'un journal de la passe nomme une lib du magasin (« zéro reste un ARRÊT », l. 188-192). Or un tel lot n'en a
