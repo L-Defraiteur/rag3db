@@ -1,0 +1,198 @@
+{
+  "status": "MIRROR_READY_BYTES_VERIFIED_NO_PARSING",
+  "repositories": 24,
+  "selected_files": 32382,
+  "manifest_sha256": "96c2e771fefc4cd0e204975feb8d1c73b1a66815cb1d3a1edc1b9002b94b644c",
+  "roots_sha256": "98766ce80d550ec1f2ae1a75ba1f0394ac35b0101f4bf819855c0bb4bca495c6",
+  "occurrences_sha256": "2e9a0b9ae7f52c7e27f3c38153ead694dbde33cf058eb582f59a48f0b421a580",
+  "cohorts": {
+    "c": 2500,
+    "cpp": 2500,
+    "csharp": 2500,
+    "css": 1041,
+    "go": 2500,
+    "html": 1761,
+    "javascript": 2500,
+    "markdown": 2500,
+    "mdx": 211,
+    "python": 2500,
+    "rust": 2441,
+    "sass": 267,
+    "scss": 1661,
+    "svelte": 2500,
+    "typescript": 2500,
+    "vue": 2500
+  },
+  "repository_proofs": [
+    {
+      "repository_id": "github.com/curl/curl@2ba56e30f8ccd18c35a83761d51bcf04b32e829b",
+      "freeze_sha256": "7ef16f72403432b5d60e98ce96f040abdbdc045e82804482bbaa08b1f09ab2c1",
+      "archive_sha256": "a91658ac789063d8e48316f9ffa83766af556faf396bf9d790f64b439621c4a3",
+      "inventory_sha256": "38afdf864f9faac39ade033ae2f660e497092dd4a0e53c4deb7d84d697712b20",
+      "root_verified": true
+    },
+    {
+      "repository_id": "github.com/django/django@03158f2189346e35831586dfd0381e37eacb685d",
+      "freeze_sha256": "e58c4c2a9eb83704ca788a43c64d53f4adf73f760c1d88f22eba3a1c9f76d126",
+      "archive_sha256": "ea1f6baf3b385d7d7ff2f5cd9e174d3e06fabccefd94e677cc80c312a4c4b838",
+      "inventory_sha256": "7f322fb926262e97894702ecfac973dbc4d5a9221287b15f100abc94f264b502",
+      "root_verified": true
+    },
+    {
+      "repository_id": "github.com/dotnet/roslyn@c6dae7dd4f51cef1680c6b23ab614394d6989a69",
+      "freeze_sha256": "f506131477b4cf05ff3230f6373f23620a2920fefaa8e45d9617e7384a71df3a",
+      "archive_sha256": "868e79dfb7b0abb61139abec488b194b30dfb82a2576cf655162cbd256421b4a",
+      "inventory_sha256": "34bc639c8ef47ca55077fac326b0680bcb841e850e5e7ea7e5ab83e684ac0417",
+      "root_verified": true
+    },
+    {
+      "repository_id": "github.com/element-plus/element-plus@3b5d0ad35b1d309a3430b49db9be1369f0966321",
+      "freeze_sha256": "39d3e62ee76c9a41d0aa0c94ce6a45e9ec8b74bf6eebaefd038c193a56ed2ed1",
+      "archive_sha256": "946adc87a41cf862339013b43dfd3b1c90795f77b0308c4a0ae8383e796f10cb",
+      "inventory_sha256": "118d2c204711bcc5282d664bef7f61774ae3a53a78b6f20ddd88f9824ee36507",
+      "root_verified": true
+    },
+    {
+      "repository_id": "github.com/foundation/yeti@199661d950f0be216ab5c6263dd272e3afdac8bf",
+      "freeze_sha256": "289d8cf12cb2b6f7907f108267de6ad702c6e36e2becbc5a026485c36f6ff578",
+      "archive_sha256": "46a1e3c85e5bbe7c1e1f5606cf63f2e3c8cfc350ae2879c0e0fdd63d5ddea1c5",
+      "inventory_sha256": "69e265376e65c50edd3ba53c03ab8d30d8a0e48552f480919e852034af1ec667",
+      "root_verified": true
+    },
+    {
+      "repository_id": "github.com/golang/go@3c6d0928959aa02598fa073f2747a1b563d3a852",
+      "freeze_sha256": "1ac029d34cbefc269f30aeae7235c108be6152a14cd148f7dbd7c2dcbb3e2280",
+      "archive_sha256": "506b34f95e32c72aa4b1dadc24cd5990d01cada5cf15f2f37b554fa84407c8e5",
+      "inventory_sha256": "db24d7ccbfe4f640ee085f56f24527adc041032ab54bd0d35fedd002c115a4c9",
+      "root_verified": true
+    },
+    {
+      "repository_id": "github.com/grpc/grpc@e67d793e4c19c3715fa3370d760280cdf3943903",
+      "freeze_sha256": "081139661b5bd3a2d45d4ad007f8c868b3db6bc535a5a055fcf8f22b5a55faad",
+      "archive_sha256": "5b0e37fafe05c6236284946785b60ec1ed1604df35fe02cfc2b9e897594d5435",
+      "inventory_sha256": "86a59df1866bd8609fcdd7dd27d16f91c2a32c7e2c604bf21d8ae26bb9aed48d",
+      "root_verified": true
+    },
+    {
+      "repository_id": "github.com/ionic-team/ionic-framework@a79e1a130b0213637c80910f2537b54d6b74b70d",
+      "freeze_sha256": "5a40c929f516ddaf4cacc9419e1a9152d111cab74b0339684e30394337fe7a49",
+      "archive_sha256": "d9c4bc17f1af301552ec00a4eb899e0290b2293409090057ff05544682cd5911",
+      "inventory_sha256": "9ec866653180d8e4fd3344bc8411dc476fa25bd5bf48289431d82a4bbae20294",
+      "root_verified": true
+    },
+    {
+      "repository_id": "github.com/material-components/material-components-web@6ceadb81df508ac08ab007c52c4d3dc1d811cc15",
+      "freeze_sha256": "781d9292d50840a675dde3d2968ebf537eb019087be4a81077ed5527d028c7f7",
+      "archive_sha256": "9b07e7cfde9bd4bd047bb531f803bfa44c56037d60321463d66bae967e1b0bc8",
+      "inventory_sha256": "c77a86e6a1dfd809050bbf531452f274757c7e6c736cc5a0f1ecdc19fdca3bc0",
+      "root_verified": true
+    },
+    {
+      "repository_id": "github.com/mdn/css-examples@65b08d2236b304d50d28a807a48c35f6889d902d",
+      "freeze_sha256": "0d27c667214552a5696231206acaf3e3fb2fece4e8f836d8379dcf7bb7761d4a",
+      "archive_sha256": "0791f163730235d698f166c97c19afaf79f0524919b878a1a9eb91d5956391a2",
+      "inventory_sha256": "30adeca1cca8a3d6515d86e529f9fd84797607adeef41fa8b8c13cbe4d85b8a9",
+      "root_verified": true
+    },
+    {
+      "repository_id": "github.com/mdx-js/mdx@52285a6758fa078ec57f3d4bd8803d9cbfb12065",
+      "freeze_sha256": "2ff983f9d493c1170909cd942135c9f5589b0d83b18da3d3edd88e39f312e486",
+      "archive_sha256": "f5ac2c07c41c994faccacdc5b117a519bdd25508b243f277ae35881d68013450",
+      "inventory_sha256": "f09cc2dc538c4d75276c98b1336a6a8a37c916c82a9c626c499b4b3443b6eac5",
+      "root_verified": true
+    },
+    {
+      "repository_id": "github.com/microsoft/vscode@6e68549edb69380c9316e49df5d3795d5064a2b0",
+      "freeze_sha256": "494a3ed33255e930858b22abbd18974cc74b89e702dddae7b960fcbeed7a42d1",
+      "archive_sha256": "4cbe9be85b970bc721abc1559e9facd2fde5414fff238fca9feb90b39ee27b3d",
+      "inventory_sha256": "0ae30eb5b8b72f491c151e4f3c54ec472268624b178cabf220e0427fd96123eb",
+      "root_verified": true
+    },
+    {
+      "repository_id": "github.com/nodejs/node@d3c4048962853bb12359682381001ab63dced4ce",
+      "freeze_sha256": "b7bf8f440fb4e1127371f67c166a9aa27e4184485baa0f92aa1a6d9dcf97ac2a",
+      "archive_sha256": "8f8e59e0828b6e4f0af5727b362704716bbbca5de7e6fbc69af567299e92cc03",
+      "inventory_sha256": "c09a5996877542333a81a3aa664331a71a50084ec398d26b087518050f0f088b",
+      "root_verified": true
+    },
+    {
+      "repository_id": "github.com/nuxt/nuxt@19d4b899036215e60447c6b93224c4230e8d9ad7",
+      "freeze_sha256": "dd27a4d3d276a6ef83d219397af856ab032ad4c76f9aa4d6c4dfc031cd1e9a47",
+      "archive_sha256": "49f246638156ebce272156dac4b18912e62ec522b7d9108e5e3b6d058dea7b15",
+      "inventory_sha256": "de63cde0e510f3c9b3c00be226ebf3523ac46603d5316fa27e4718100bd5c650",
+      "root_verified": true
+    },
+    {
+      "repository_id": "github.com/openssl/openssl@899d0ca02559e105b9cb30964e3478dfbd8c4578",
+      "freeze_sha256": "290481bebaab5192a177daa42f5933029d4b4fba8c79823cae12b9ecccff84e1",
+      "archive_sha256": "d81dbbfe8257b7519eaeaca160da4ba200eeca2139343a82dcccffc9e17982e2",
+      "inventory_sha256": "2d521d57c643ddf967628a55b319ba98ba7bae87b00573dd6d81061b86f2628b",
+      "root_verified": true
+    },
+    {
+      "repository_id": "github.com/primer/css@d0cdad70d6c936501e9f8520212e00d0c4589f69",
+      "freeze_sha256": "0eb98e996fa30a44be64745682aa2c4c55e3dba44c139c356f98613afc809957",
+      "archive_sha256": "413aa824121997a2ceddcce512477e39733d56e473c9a5c1b9e37aaceebd0a23",
+      "inventory_sha256": "d55325a3a23e07197d37c3c680229f2d571ecfa0788e1b329aca8965aa8d0bac",
+      "root_verified": true
+    },
+    {
+      "repository_id": "github.com/protocolbuffers/protobuf@cf1e10c24b0f93df0e5c073fe49ae82c3740b7cf",
+      "freeze_sha256": "51401d0a23f3f3c6aa1cd0be7c258d3133eda998e5ad1e8676fbe1a5856980fe",
+      "archive_sha256": "18d287327b65e7b4217aa45cdb860f7cf7f8dcb1c98ac3826354325aa40365e4",
+      "inventory_sha256": "ee741154c277ec7fb397fd8edcfa34d9ddc92a824bf60889801bde315df9a274",
+      "root_verified": true
+    },
+    {
+      "repository_id": "github.com/quasarframework/quasar@8424c2b0dd2618c81ee401e355e790a23966ffc5",
+      "freeze_sha256": "e8403bb9ead4e8ba24349e48257d94e96dbf57989b602cf9123b0f0f3ba746e9",
+      "archive_sha256": "90c493df30cb15267f7e030b8521b9ce2216f4255f1c475cebfd5e311a26956f",
+      "inventory_sha256": "52f4d28abbaeeac2d88b6d5f32786a8c84f95610fb9d56a22a2cfd78afc763a2",
+      "root_verified": true
+    },
+    {
+      "repository_id": "github.com/rust-lang/rust-analyzer@15d97b98eacfad690e81757e867ca0800f1c9e07",
+      "freeze_sha256": "36a835bd33538dc37a16c308674f7a545ec3a173221b00edb799f6fd35f274a6",
+      "archive_sha256": "92441cad5b8dd95cc8e7a6563b93e91eee90920f9eff96b86df3f081c01aab92",
+      "inventory_sha256": "d1e5e259c9da88deb3427bd7a5b6c32e266b58483ea8e8939ecb2b2e454c71ed",
+      "root_verified": true
+    },
+    {
+      "repository_id": "github.com/sass/sass-spec@acbdcd3914a2ebae45b99014e1dc827df8343946",
+      "freeze_sha256": "bf9ee6cd0b6500e273962984ab687cd34e7283ab429da2336df92054d52a54a4",
+      "archive_sha256": "f0812a0816d735a8d09a5f67f613c235a3f1dac3c7e355801e22fb23bc916306",
+      "inventory_sha256": "c454566aaa629bef4d52802d490a31f0f8009c30c204b4b1c65cbaadfe2e9414",
+      "root_verified": true
+    },
+    {
+      "repository_id": "github.com/sveltejs/svelte@99c07450d2e093c0d637903dc2c94f28f264d70d",
+      "freeze_sha256": "de6afdeee0b8d41356a3f4a1eef5eb8ae997d180bb30b37bbb99a22f47eba97a",
+      "archive_sha256": "897edd0089fedf6164f17eaf4d1fa5d4ed2c5325790647cafaa5f210362cd25a",
+      "inventory_sha256": "d936434c0cd61fe3428488c36cb5c104ac5b94347bac919148bdb6d58f5d0746",
+      "root_verified": true
+    },
+    {
+      "repository_id": "github.com/tokio-rs/tokio@f3e855fa55d6c1cc3e7a28e115a421b8ee5860bd",
+      "freeze_sha256": "7d94a07665035b69f0bed6d7ad9633832324bb7603c2d27d80a847077ae80903",
+      "archive_sha256": "89ba92d2272ec989875f0b4a4a130db40fadce7afa067698b41e181f46d53f37",
+      "inventory_sha256": "0b9f47a90008a528e59343e68b3f9902ac8113b37e9ab35038dedc1690c8cbbb",
+      "root_verified": true
+    },
+    {
+      "repository_id": "github.com/twbs/bootstrap@da71a1044296e82b047419f16a90ee0d6aa23886",
+      "freeze_sha256": "741085d957101aef5f3a4dc7e2a860d711e5a1eda228e7ab6389c4a8c78f4635",
+      "archive_sha256": "6000ea3f6808b27927e8b154e5b23f702baae3a20a182a9e5122e6dbab78f21d",
+      "inventory_sha256": "4516333e7ecec342caa026311181086eb9ef28b5193e3d9ca0986cec6323ac68",
+      "root_verified": true
+    },
+    {
+      "repository_id": "github.com/vuetifyjs/vuetify@5f5faf5bb90cf43583cbb5126c54306536aee259",
+      "freeze_sha256": "b01911d928c5e189b0d9fdf12d8d7dd55edca38378f143f1d4751da1fe3c1c9c",
+      "archive_sha256": "2626294b972fa4381baca843368c8cf5f27a2501916e4135dd12d894918a24ed",
+      "inventory_sha256": "27aeba36ac8b4a49e7b555cbec18b60627baea2b82e6e7b3e5bea9887dfc8953",
+      "root_verified": true
+    }
+  ],
+  "license_files_verified": 23,
+  "parsing_executed": false
+}

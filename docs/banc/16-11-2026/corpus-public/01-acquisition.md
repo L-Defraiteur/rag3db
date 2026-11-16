@@ -88,3 +88,32 @@ CopiePC gel01 autorisée par C7 : mêmes chemins pour garder freeze.root inchang
 rsync2concurrents,24Mio/s chacun, ignore-existing, aucun delete ; vérifications
 archive/inventaire/fichiers/roots obligatoires avant READY. Cette section ne
 prétend pas la copie déjà vérifiée tant que son reçu n'est pas publié.
+
+## Miroir complet prêt pour le pilote Codeparsers
+
+Copie complète autorisée et achevée,24repos et selection-02, même racine absolue
+aux deux postes. Les gels01/02 restent inchangés, aucune source externe exécutée.
+Validation locale puis PC :24archives SHA,24inventaires SHA,32382fichiers
+sélectionnés taille/SHA/UTF8 strict, preuves de licence présentes et racines
+strictes. Les deux reçus sont identiques, SHA256
+`8894a37a0626071c2206ce23629f4248807bd7eb952c5e064e8b23f5d68436a7`.
+Le détail est publié dans mirror-02-verification.json.
+
+Entrées réelles du pilotePC :
+
+```text
+/home/lucied/.cache/rag3db-banc-notes/public-corpus-20261116/selection-02/selected.jsonl
+/home/lucied/.cache/rag3db-banc-notes/public-corpus-20261116/selection-02/roots.json
+```
+
+SHA roots : `98766ce80d550ec1f2ae1a75ba1f0394ac35b0101f4bf819855c0bb4bca495c6`.
+SHA occurrences : `2e9a0b9ae7f52c7e27f3c38153ead694dbde33cf058eb582f59a48f0b421a580`.
+Aux postes : reçus local-02-verification.json et mirror-02-verification.json,
+archives et inventaires complets conservés ; pas de retrait ni nettoyage.
+
+READY transmis à Codeparsers etC7 pour son pilote32382fichiers, sans rejouer
+les5000premiersC#/Go de01. Il s'agit d'un **READY des données**, pas d'un verdict
+de parsing ni d'un GO de charge. CLI/options/parser/ELF, budget et créneau sont
+à Codeparsers/C7. Les tickets coordinateur etCLI restent ouverts jusqu'aux
+mesures et à leur interprétation. L'ancien oracle de migration reste indépendant
+et NONMATCHED ; cette acquisition ne l'a ni relancé ni qualifié.
