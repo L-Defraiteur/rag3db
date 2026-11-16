@@ -12359,6 +12359,89 @@ mod tests {
         assert_eq!(catalog.embedding_rate_at("rate-model", &other).unwrap(), None, "another address has its own rate");
     }
 
+    #[cfg(feature = "rag3db-native")]
+    struct MutableCallingEmbedder {
+        address: Arc<Mutex<Option<String>>>,
+        calls: Arc<std::sync::atomic::AtomicUsize>,
+    }
+
+    #[cfg(feature = "rag3db-native")]
+    impl Embedder for MutableCallingEmbedder {
+        fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, crate::embedder::EmbedError> {
+            self.calls.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            Ok(texts.iter().map(|_| vec![0.5; 4]).collect())
+        }
+        fn dim(&self) -> usize { 4 }
+        fn name(&self) -> &str { "rate-model" }
+        fn distant(&self) -> bool { true }
+        fn called_address(&self) -> Option<String> { self.address.lock().unwrap().clone() }
+    }
+
+    #[cfg(feature = "rag3db-native")]
+    fn set_mutable_rate_provider(catalog: &mut Catalog, address: Option<&str>)
+        -> (Arc<Mutex<Option<String>>>, Arc<std::sync::atomic::AtomicUsize>)
+    {
+        let address = Arc::new(Mutex::new(address.map(String::from)));
+        let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        catalog.set_embedder(Arc::new(MutableCallingEmbedder { address: address.clone(), calls: calls.clone() }));
+        (address, calls)
+    }
+
+    #[cfg(feature = "rag3db-native")]
+    #[test]
+    fn an_unknown_remote_rate_address_never_becomes_local_or_calls_the_provider() {
+        let mut catalog = catalog_calling(Some("127.0.0.1:7999"));
+        let (_address, calls) = set_mutable_rate_provider(&mut catalog, None);
+        let local = format!("local@{}", crate::catalog::progress::this_host());
+        catalog.note_embedding_rate("rate-model", "service", crate::estimate::Rate { chars_per_second: 500.0 }).unwrap();
+        catalog.note_embedding_rate_at("rate-model", &local, crate::estimate::Rate { chars_per_second: 900.0 }).unwrap();
+        assert_eq!(catalog.known_embedding_rate().unwrap().unwrap().chars_per_second, 500.0);
+        let error = catalog.note_measured_embedding_rate(crate::estimate::Rate { chars_per_second: 700.0 }).unwrap_err();
+        assert!(error.to_string().contains("provenance"), "{error}");
+        assert_eq!(catalog.embedding_rate("rate-model", "service").unwrap().unwrap().chars_per_second, 500.0);
+        assert_eq!(catalog.embedding_rate_at("rate-model", &local).unwrap().unwrap().chars_per_second, 900.0);
+        assert_eq!(calls.load(std::sync::atomic::Ordering::Relaxed), 0);
+    }
+
+    #[cfg(feature = "rag3db-native")]
+    #[test]
+    fn rate_keys_keep_addresses_and_client_hosts_isolated() {
+        let catalog = catalog_calling(Some("127.0.0.1:7999"));
+        let places = [("127.0.0.1:7999@client-one", 100.0), ("127.0.0.1:7888@client-one", 200.0), ("127.0.0.1:7999@client-two", 300.0)];
+        for (place, chars_per_second) in places {
+            catalog.note_embedding_rate_at("rate-model", place, crate::estimate::Rate { chars_per_second }).unwrap();
+        }
+        for (place, expected) in places {
+            assert_eq!(catalog.embedding_rate_at("rate-model", place).unwrap().unwrap().chars_per_second, expected);
+        }
+        assert_eq!(catalog.embedding_rate_at("rate-model", "127.0.0.1:7888@client-two").unwrap(), None);
+        assert_eq!(catalog.embedding_rate("rate-model", "service").unwrap(), None);
+    }
+
+    #[cfg(feature = "rag3db-native")]
+    #[test]
+    fn the_known_rate_tracks_the_taken_address_without_provider_calls() {
+        let mut catalog = catalog_calling(Some("127.0.0.1:7999"));
+        let (address, calls) = set_mutable_rate_provider(&mut catalog, Some("127.0.0.1:7999"));
+        catalog.note_measured_embedding_rate(crate::estimate::Rate { chars_per_second: 100.0 }).unwrap();
+        *address.lock().unwrap() = Some("127.0.0.1:7888".into());
+        assert_eq!(catalog.known_embedding_rate().unwrap(), None, "a new take cannot borrow the previous take's rate");
+        catalog.note_measured_embedding_rate(crate::estimate::Rate { chars_per_second: 200.0 }).unwrap();
+        assert_eq!(catalog.known_embedding_rate().unwrap().unwrap().chars_per_second, 200.0);
+        let previous = format!("127.0.0.1:7999@{}", crate::catalog::progress::this_host());
+        assert_eq!(catalog.embedding_rate_at("rate-model", &previous).unwrap().unwrap().chars_per_second, 100.0);
+        *address.lock().unwrap() = None;
+        assert_eq!(catalog.known_embedding_rate().unwrap(), None);
+        assert_eq!(calls.load(std::sync::atomic::Ordering::Relaxed), 0);
+    }
+
+    #[cfg(feature = "rag3db-native")]
+    #[test]
+    fn a_shared_embedder_forwards_its_called_address() {
+        let embedder: Arc<dyn Embedder> = Arc::new(CallingEmbedder(Some("127.0.0.1:7999".into())));
+        assert_eq!(Embedder::called_address(&embedder), Some("127.0.0.1:7999".into()));
+    }
+
     #[test]
     fn lexical_catalog_refuses_sparse_provider_before_initialization_effects() {
         let mut catalog = Catalog::without_embedding_model(Box::new(MockConnection::new()), CatalogConfig::default());
