@@ -1,0 +1,13 @@
+# Les469vecteurs dus correspondent au redécoupage des longues lignes
+
+Le rejeu RO exact ae5d3ac4ff explique les469nouveaux morceaux sans vecteur transféré. Sur les51parents concernés, le vrai module Chunker avant479a reproduit exactement les1008morceaux anciens ; celui après479a, inchangé dans927, reproduit exactement les1157nouveaux. Comparaison exhaustive des multisets index/bornes complètes/bornes cœur/hashBLAKE3, multiplicité conservée. Les469UUID en dette sont tous couverts.
+
+Les contenus Scope/ScopeContent et paramètres persistés sont identiques. Il existe688tuples communs,320anciensseuls et469neufsseuls. Le choix du représentant n'est pas en cause ; aucun ancien candidat répondant à la clé exacte de transfert n'a été omis. Le correctif de découpage existant479a est la cause de cette cohorte : anciens cœurs longs divisés, ancien contexte trop large borné. Aucun second correctif de transfert n'a été écrit.
+
+C7 a autorisé ce seul diagnostic au couple exact après revueED. Exécution PC sous common neuf600s/32G effectifs, scope validation-qwbuqe__, verdict READ_ONLY_CHUNKER_REPLAY_MATCHED en7.283473716s, superviseurVERT0/restes[]/nettoyé/autoritéterminée. Rustc1.98.1 standalone, zéroCargo ;2rlibs archivéesG et copieDB inchangées. Les51corps sont restés enRAM, jamais dans les journaux ; ledger sources/dépendances avant compilation et ELF avant CPU. ELF ac861f7f6d5da390a8b171429656f121497dfc79ed2e60d5e5bb3451819a37f0.
+
+PreuvesPC sous ~/.cache/rag3weaver-build/bascule-live-20261116/vector-debt-replay-01 ; manifeste121fichiers SHA6d4667936fc876e4a415d5cd12698486f0d231b7f8ebd1cca57250b475868cc6. Copie portable vector-debt-replay-pc-local-01,121tailles/SHA conformes. Paquet02préparé SHA46cf932225bd14f7cbf600d35fc34800cf4c26d7feddab1955964dcd9c9fe48d, vérifié indépendamment parED sur lesdeuxpostes avant GO ; aucune exécution du diagnostic sur le portable.
+
+**La dette n'est pas payée.** Les469nouveaux textes exigent leur propre qualification vectorielle ; les anciens vecteurs ne peuvent pas être recopiés pour forcer0. Aucun recalcul/embedding/service/writer/migration n'a été lancé, la fenêtreLIVE reste annulée et le rougeCOPY02 reste rouge. Le diagnostic ne vaut pas qualification de migration complète.
+
+Suite à arbitrer : revue des preuves puis acquittement qualifié de la dette sur copie avant toute nouvelle bascule. Le [ticket469](../tickets/2026-11-16-la-migration-de-scopes-laisse-469-morceaux-sans-vecteur-transfere.md) et son parent restent ouverts ; pas de fermeture par attribution seule. Les deux fichiers return-proof-gate.py/test-return-proof-gate.py restent WIP conservé de l'ancienne préparation, non exécuté/non activé.
