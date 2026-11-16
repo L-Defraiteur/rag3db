@@ -1,6 +1,6 @@
 # La garde pile ne juge aucun en-tête d'un range-diff court
 
-- **État** : ouvert.
+- **État** : corrigé et posé aux deux postes — e982b13e6052e0573b96354580443151cd5de71a, 16 novembre2026.
 - **Famille** : produit
 - **Gravité** : filet de push qui peut accepter sans juger les patches.
 - **Atteignable en service** : non, garde de push uniquement.
@@ -85,3 +85,31 @@ perdu le patch4cc6 du ticket. Rouge conservé dans `self-squashed-replay.log`.
 Nouveau candidat `cx-optimiseur-stack-guard-16-r2` depuis b74, donc mêmes commits
 testés et seuls compléments `.md` ensuite. Aucun assouplissement de la garde,
 ni réécriture des branches publiées ou des anciennes preuves.
+
+
+## Clôture après intégration et pose vérifiées
+
+C7 ATOI exact e982 ; push en avance rapide d395→e982 sous vrai `poste push`,
+preuves CPU56 relues et garde corrigée réellement exécutée : trois commits égaux,
+un ajout `.md` toléré. Contrôles lus aux deux postes : propre, sans rebase,
+HEAD/origin-master exact e982 (worktree dédié PC détaché, arbre Lucie inchangé).
+Aucun rejeu Rust/C++/gabarits : leurs arbres sont identiques au master de base.
+
+Cache `~/.cache/rag3weaver-build/push_garde.sh` posé atomiquement aux deux postes,
+source master e982, SHA fff9a4d9e20e739e5c8434b0a573ac2cfc00f6f37b45df500993d44d3a4b003d,
+mode755. Ancienne95a conservée par `cp -p` sous
+`push_garde.sh.avant-e982-20261116` ; nouveaux inodes portable93623269,
+PC164579620, anciens85639036 et156100521. Aucun overwrite d'un inode lu.
+Une première préparation PC a refusé avant toute pose, dossier parent de preuves
+absent ; le parent privé a ensuite été créé, sans modification du cache avant
+sauvegarde et remplacement atomique.
+
+Qualification contre chacune des COPIES POSÉES : historique49/49, en-têtes7/7,
+0échec,0sauté. Le témoin Python charge le module public puis fixe GUARD au vrai
+chemin cache ; le témoin historique reçoit ce même chemin en argument.
+Reçus sur chaque poste :
+`~/.cache/optimiseur-notes/stack-guard-16/cache-install-e982/installation.json`
+et `qualification.json`, avec chemins des journaux et SHA.
+Push local conservé sous `stack-guard-16/push-e982/push.log`.
+Négatifs ED et candidat squashé conservés séparément, sans requalification ED.
+SDK, services, garde de nettoyage6f3 et preuves historiques inchangés.
