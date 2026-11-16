@@ -46,3 +46,19 @@ projet nu sur la même ligne, puis ordre inverse avec préfixe UTF-8. **NON JOU�
 (pas de Cargo/rustc/test pendant la fenêtre de bascule). Le rouge est à observer
 sur la forme 5ef avant de remplacer ce filtrage ; aucun vert n'est revendiqué.
 Les rouges historiques et les 14 pertes de la première sonde restent conservés.
+
+### Préparation du pilote après ED : cible reçue absente sur PC
+
+Nouvelle base ED d395cb1f03, source pilote504898a5c8 publiée avant préparation.
+La préparation PC a laissé un dossier vide puis s'est arrêtée avant manifest
+et avant Cargo : son hypothèse d'un target-import-pointe-pile existant à PC
+était fausse. Relevé RO : source504898 propre, sous-module présent, targetabsent,
+proofroot rust-red-504898a5c8 vide. Sortie originale non récupérée dans le retour
+du lanceur interactif ; ne pas inventer son rc ou sa traceback. Ce n'est ni
+un rouge Rust ni une allocation1800 consommée. Dossier conservé, aucun rejeu.
+
+Correctif du seul profil : target-cx-codeparsers-rust-red PC initialement absent,
+parent réel/possédé, PQS après poste et création exclusive dans la portée.
+Ancien target d'un autre poste inchangé ; pas de copie SDK/cache. Nouveau
+proofroot et capture cmd/rc/stdout/stderr externes avant toute assertion.
+Le correctif fonctionnel de la collision reste absent, témoins NON JOUÉS.

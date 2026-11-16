@@ -118,6 +118,9 @@ def inside(config, root):
     (root / 'profile.json').write_text(json.dumps({'keys': sorted(env), 'library': library_environment(config),
         'features': env['RAG3WEAVER_E2E_FEATURES'], 'witnesses': NAMES, 'worktree': str(worktree)}))
     cache_quiet(config, root)
+    target = Path(config['target'])
+    assert config['target_started_absent'] and not target.exists() and not target.is_symlink()
+    target.mkdir(mode=0o700)
     verify(config)
     rc = record(root, 'red-pair', ['bash', './run_e2e.sh', '--test', 'e2e_usages', 'on_the_same_line'], crate, env)
     # The common supervisor retains the actual nonzero outcome. No expected red is promoted to green.
@@ -146,11 +149,11 @@ def main():
                    'extension/rag3weaver/scripts/lib_du_magasin.sh', 'extension/rag3weaver/scripts/cargo_garde.py',
                    'extension/rag3weaver/scripts/poste']}}
         target = Path(config['target'])
-        assert target.is_dir() and target.resolve() == target and target.stat().st_uid == os.getuid()
-        marker = target / '.arbre-du-target'
-        assert marker.is_file() and not marker.is_symlink()
-        config['previous_owner'] = marker.read_text().strip()
-        assert Path(config['previous_owner']).is_absolute()
+        assert target.parent.is_dir() and target.parent.resolve() == target.parent
+        assert target.parent.stat().st_uid == os.getuid()
+        assert not target.exists() and not target.is_symlink(), 'this allocation requires a fresh target'
+        config['previous_owner'] = str(worktree / 'extension/rag3weaver')
+        config['target_started_absent'] = True
         (root / 'prepared.json').write_text(json.dumps(config, indent=2))
         verify(config)
         crate = worktree / 'extension/rag3weaver'
