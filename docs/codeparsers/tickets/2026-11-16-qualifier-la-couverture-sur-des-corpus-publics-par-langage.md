@@ -75,3 +75,15 @@ stderr SHA8076f5015797022b61a6e3caf2a4147f4b22dbb7d30bebe32f3458f425955d96,
 classification SHAce2ca87cd7c85f0e48aad93fe4fdf7b273f550291ebf9d8cf2bbf19c623d2bbe.
 Correctif attendu : cwd du pilote hors source, commande SSH lancée hors source
 également ; conserver le contrôle PQS strict, puis nouvelle source/profil/borne.
+
+## Interprétation des compteurs et reclassement
+
+Les premières lignes oracle C#/Go rapportent total_scopes=0 malgré5/75 scopes
+récursifs effectivement rendus. Le banc conserve les deux, ne propage pas le zéro
+comme absence de captures. Le contrat du compteur de fichier reste à qualifier ;
+aucun correctif de compteurs pendant la campagne.
+Banc fournit une annexe de reclassement indépendante (b33c7d5d2c),584 fichiers
+upb générés explicitement,329C/255Cpp. Le résumé les sépare sans modifier le gel,
+et ne prétend pas que tous les autres fichiers sont non générés.
+`summarize_probe.py` vérifie ordre/identités et longueur contre sélection puis
+calcule les statistiques à partir des seules sorties ; aucun parsing supplémentaire.
