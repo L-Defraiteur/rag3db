@@ -72,3 +72,23 @@ symlink sansresolve, créeT/provenance exclusivement et abaisse j4 au quotaCPU
 hiérarchique réel. Admission600 aprèsvraiposte avec END conservé, commande
 littérale sansplaceholder dans recette05. Supportd395 copies privées, aucun
 cache déployé modifié. Aucun Cargo/build/test joué ; attend admissionexactefinale.
+
+## Rouge exécuté le 16 novembre, source0c795f99
+
+GO exact C7 APP0c795f99/pilote86989d7ab5/Qv2nonce3552903efab590b44f44cd8002f7b028.
+Compilationoffline réussie (release1m02s), exécutableSHA
+`c2478e972de2295a79c41cd651461653f38706e02cccd2ceace45c49fe33b01b`,
+inventaireexact1 puis UNtest : **0passé,1échec,0ignoré**, code101 à l’assertion
+left:[] contre deuxmessages body/label. Ce n’est ni une erreur de compilation ni
+un refus de confinement. first-red.json : expected_assertion_red_observed.
+
+[Brut](../16-11-2026/preuves/indexed-warning-red-0c795/logs/test.log),
+[manifeste](../16-11-2026/preuves/indexed-warning-red-0c795/SHA256SUMS),
+[quiescence](../16-11-2026/preuves/indexed-warning-red-0c795/quiescence.json).
+Portée ROUGEcode1/erreur=null/restes[]/nettoyétrue, autoritéterminée ; scanPID/start
+vide et sourcepropre. END1180583.723555907, observationfinale1180124.091534846,
+aucunreset. Quotaeffectif5CPU→j4,32G/HIGHmax. Target crééexclusivement, provenance
+nonce/UID/source ; aucune adoption. Pas de retry, de corpus, de libcore entière,
+de service ni de baseLucie. Rouge conservé avant tout correctif.
+Reste déjàprévu : implémenter schema_warnings/call/doc selonconception04, puis
+validationverte sur source/pilote/portée frais admis ; aucune réactivation duGOrouge.

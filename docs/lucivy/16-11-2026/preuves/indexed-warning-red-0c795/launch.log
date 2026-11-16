@@ -1,0 +1,2 @@
+{"kind": "expected_assertion_red_observed", "source": "0c795f99e5f49926a510971c521eb056a4880adc", "phase_exit_code": 101, "deadline": 1180583.723555907, "executable_sha256": "c2478e972de2295a79c41cd651461653f38706e02cccd2ceace45c49fe33b01b", "tests": 1, "ignored": 0}
+validation : ROUGE ; preuves : /home/lucied/.cache/rag3weaver-build/cx-lucivy-indexed-warning-16nov-v2/scope/validation-bnf098fh

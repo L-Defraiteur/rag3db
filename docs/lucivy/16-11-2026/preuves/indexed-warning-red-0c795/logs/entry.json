@@ -1,0 +1,74 @@
+{
+  "source": "0c795f99e5f49926a510971c521eb056a4880adc",
+  "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p856196-i147609900.scope",
+  "memory": {
+    "memory.max": "34359738368",
+    "memory.high": "max"
+  },
+  "deadline": 1180583.723555907,
+  "jobs": 4,
+  "cpu": {
+    "allowed": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23
+    ],
+    "hierarchy": [
+      {
+        "path": "/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/app.slice/run-p856196-i147609900.scope",
+        "quota": "500000",
+        "period": "100000"
+      },
+      {
+        "path": "/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/app.slice",
+        "quota": "max",
+        "period": "100000"
+      },
+      {
+        "path": "/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service",
+        "quota": "max",
+        "period": "100000"
+      },
+      {
+        "path": "/sys/fs/cgroup/user.slice/user-1000.slice",
+        "quota": "max",
+        "period": "100000"
+      },
+      {
+        "path": "/sys/fs/cgroup/user.slice",
+        "quota": "max",
+        "period": "100000"
+      },
+      {
+        "path": "/sys/fs/cgroup",
+        "quota": "root",
+        "period": "not-applicable"
+      }
+    ]
+  },
+  "nonce": "3552903efab590b44f44cd8002f7b028",
+  "target": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov",
+  "worktree": "/home/lucied/git_workspaces/cx-lucivy-indexed-false-warning-16nov",
+  "network": "offline"
+}

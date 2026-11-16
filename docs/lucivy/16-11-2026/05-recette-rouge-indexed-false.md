@@ -82,3 +82,11 @@ STOP sans correctif ni retry automatique. Le rouge attendu seul ouvre l’étape
 suivante déjà prévue : implémentation warnings/call/doc, puis même juge vert.
 Pas de suitecore complète ni ulp qualifiés par ce seul juge, pas de PR42/fusion,
 publication/tag ou installation de service.
+
+## Résultat du seul lancement admis
+
+Source0c795f99/pilote86989d7ab5 exécutés : compilationoffline réussie, inventaire1,
+rouge d’assertion attendu0/1/0 code101, aucunretry. ScopeROUGEcode1 sansrestes,
+quiescence et sourcespropres confirmées. Bruts dans
+`preuves/indexed-warning-red-0c795/` et ticketmisàjour. Ce GO ne vaut pas un
+second lancement sur un correctif ; aucun ancien END réactivé.

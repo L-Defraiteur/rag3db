@@ -1,0 +1,17 @@
+
+running 1 test
+
+thread 'unsupported_text_indexing_options_are_reported_once_per_field' (873825) panicked at lucivy_core/tests/test_text_field_indexed_false.rs:19:5:
+assertion `left == right` failed
+  left: []
+ right: ["field \"body\": indexed=false is not supported for text and string fields; the field is indexed", "field \"label\": indexed=false is not supported for text and string fields; the field is indexed"]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test unsupported_text_indexing_options_are_reported_once_per_field ... FAILED
+
+failures:
+
+failures:
+    unsupported_text_indexing_options_are_reported_once_per_field
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

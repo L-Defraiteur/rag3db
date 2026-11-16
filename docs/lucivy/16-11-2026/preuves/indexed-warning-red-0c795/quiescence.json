@@ -1,0 +1,15 @@
+{
+  "scope_verdict": {
+    "verdict": "ROUGE",
+    "code": 1,
+    "erreur": null,
+    "restes": [],
+    "prive": "/tmp/r3v-v935sa61",
+    "nettoye": true
+  },
+  "authority_state": "termine",
+  "deadline": 1180583.723555907,
+  "observed_at": 1180124.091534846,
+  "live": [],
+  "source_clean": true
+}
