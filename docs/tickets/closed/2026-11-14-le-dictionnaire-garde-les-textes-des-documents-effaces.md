@@ -1,8 +1,13 @@
 # Le dictionnaire garde les textes des documents effacés
 
-- **État** : ouvert (14 novembre 2026). Corrigé dans lucivy main (PR #37 et #38, d3b8c4a6a, 15 novembre) : sur
-  `Lucivy_Scope`, le dictionnaire passe de 513,8 à 400,7 Mo après la purge et la compaction. Se ferme quand
-  rag3weaver est en 4.3.8 et que `maintain` a tourné sur les vraies bases.
+- **État** : corrigé et fermé (16 novembre 2026). Corrigé dans lucivy 4.3.8 (PR #37 et #38, d3b8c4a6a) ;
+  rag3weaver est en 4.3.8 sur master depuis e95a1b8c6, avec la maintenance par l'hôte. La première maintenance
+  nocturne (`fts.maintenance`, 16 novembre 2026, 03:30) a tourné sur les quatre backends ouverts de Lucie, sans aucun
+  refus (lu dans `daemon_status`, clé `fts_maintenance`). Les dictionnaires qui portaient des textes morts baissent :
+  587,2 → 436,4 Mo pour l'atelier (`Scope` 559,0 → 409,8 Mo, 36 orphelins purgés), 453,0 → 433,6 et 441,4 → 425,2 Mo
+  pour les deux autres bases de code. Une table sans texte mort a grossi (`Lucivy_Source` de la mémoire longue, +3,75 %) :
+  c'est un autre défaut, avec son propre ticket
+  (`docs/lucivy/tickets/2026-11-16-la-compaction-du-dictionnaire-grossit-un-dictionnaire-sans-texte-mort.md`).
 - **Gravité** : poids. Les réponses ne changent pas, mais une purge suivie d'une compaction laisse dans le
   dictionnaire du shard les textes de tous les documents effacés : 93,7 Mo sur `Lucivy_Scope` de
   code-rag3db-depot, 7 % de l'index. C'est une part du « cent fois ses sources »

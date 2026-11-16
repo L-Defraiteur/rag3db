@@ -264,7 +264,7 @@ Cela fait 5 923 des 6 928 ms. Le reste comprend les ~9 ms de lucivy et les deux 
 
 ## 4. Le dictionnaire qui garde les textes des documents effacés
 
-Ticket : `docs/lucivy/tickets/2026-11-14-le-dictionnaire-garde-les-textes-des-documents-effaces.md`. Sur
+Ticket : `docs/tickets/closed/2026-11-14-le-dictionnaire-garde-les-textes-des-documents-effaces.md`. Sur
 `Lucivy_Scope`, après la purge de 8 809 documents et la compaction, le dictionnaire reste à 513,8 Mo, contre
 420,1 Mo pour un index neuf des survivants.
 
