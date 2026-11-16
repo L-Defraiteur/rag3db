@@ -156,3 +156,23 @@ même T absent, vraie garde initiale sur le crate propriétaire puis deux essais
 bornés au prochain GO600 : commandes lib sans vue (2 verts attendus), options
 binaire vue par défaut (1 rouge attendu). Journaux/rc conservés séparément,
 Common unique32G/j4, aucun SDK/hôte/modèle. NON JOUÉ.
+
+### GO2 terminé et correctif CLI publié
+
+Sur source11a59d3be7 : commandes 2/2 vertes, CLI 0/1 rouge attendu
+`option inconnue : --repo`, zéro ignoré. Preuves privées
+`cx-tty-english-aliases-go2-v1`, Common `validation-qtgpttem` terminé,
+code1/erreur null/restes[]/nettoye true ; HEAD et worktree propres avant/après.
+FixCLI+README publié `3be38590ac` après clôture du tour Embarquement.
+Nouvelle branche `cx-tty-english-aliases-4` rebasée sur master
+`bef0b27cb33b9143dabee019fccdf7453da553a3` ; range-diff des11commits
+équivalent, conservé horsW sous `cx-tty-aliases-union-review/range-diff.txt`.
+Aucun changement hôte/thème/tui. Parser testable avec arguments injectés,
+steps stocké en booléen puis appliqué seulement au lancement, --task silencieux,
+FR/backend préservés. CLI/tableau et aide/README restent NON QUALIFIÉS après fix.
+
+Proposition suivante : Common600s/32G/j4, même target connu gardé,
+`check-english-aliases-green.sh`, tous tests crate vue puis minimal offline/locked,
+états XDG privés (cache inchangé, aucun SDK). Harnais et check_features produit
+restent à préparer et jouer séparément ; ne pas annoncer le ticket clos sur le
+seul vert crate. Aucun nouveau Cargo lancé à ce stade.
