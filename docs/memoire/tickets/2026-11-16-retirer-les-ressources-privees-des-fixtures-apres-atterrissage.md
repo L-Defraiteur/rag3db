@@ -1,0 +1,30 @@
+# Retirer les ressources privées des fixtures après atterrissage
+
+- **État** : ouvert — autorisation C7 après master b0a845bb4877328eada37951c174e3d208986630.
+- **Porteur** : mémoire.
+
+## Constat et périmètre
+
+Le lot ETXTBSY et son profil TMP sont intégrés. Les worktrees privés
+`cx-memoire-script-fixtures*`, leurs administrations et le target privé
+`target-cx-memoire-script-fixtures` restent présents aux deux postes.
+Les autres lots mémoire et toutes les ressources étrangères sont exclus.
+
+## Contrat avant chaque retrait
+
+Inventaire exact, arbres propres sans nettoyage/reset, branches distantes poussées,
+archives fidèles des sources et administrations détruites répliquées aux deux postes,
+preuves/ELF et anciens rouges conservés. La source historique 734 et son archive
+physique restent conservées. Quiescence fraîche exe/cwd/FD/cmdline ; garde courante
+SHA256 6f3dfceb17c9703029d2f4f26385f9aa21820c84bc79c518e1338b6d0f36188c,
+rapport neuf VERT relu immédiatement avant chaque retrait. Aucun -D ni branche
+remote supprimée. Refus structurel Git sous-module : nouvelle copie et nouveau VERT
+avant un unique --force ; aucun contournement de garde. Tout état sale reste conservé.
+Target : propriétaire/provenance/reçus terminés/ELF sauvegardés et scan strict frais,
+pas de suppression d’une cible liée ou étrangère, pas de service ni de base touchés.
+
+## Critères de fin
+
+Rapport détaillé des ressources retirées et conservées, empreintes des copies aux
+deux postes, rapports frais avant retrait, totaux octets/WT/branches. Le ticket reste
+ouvert tant qu’un retrait autorisé reste bloqué ou qu’un contrôle manque.
