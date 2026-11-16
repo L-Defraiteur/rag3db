@@ -4,7 +4,7 @@ from pathlib import Path
 import argparse,collections,hashlib,importlib.util,io,json,math,os,re,shutil,signal,stat,subprocess,sys,time,urllib.request
 import audit,typed_rows
 HOME=Path.home();R=HOME/'.cache/rag3weaver-build/bascule-live-20261116';HERE=Path(__file__).resolve().parent
-P=R/'debt-acquittement-copy-v1';Q=R/'debt-acquittement-control-v1';S=R/'debt-acquittement-scopes-v1'
+P=R/'debt-acquittement-copy-v1';Q=R/'debt-acquittement-control-v2';S=R/'debt-acquittement-scopes-v1'
 SOURCE=R/'migration-rehearsal-service-corrective-02/code-principal/post-copy';BASE=P/'copy/code-principal.rag3db'
 PROOFS=R/'vector-debt-replay-01';GEO=R/'vector-debt-geometry-pc-01'
 CLI=HOME/'.local/bin/rag3weaver-backend';IDS=R/'id-sets-pc-01/snapshot-files';BLAKE=PROOFS/'replay-chunker'
@@ -173,12 +173,27 @@ def driver():
  for name in ['tmp','cache','config','data','xdg-state','state-fixture']:(P/name).mkdir(mode=0o700)
  env.update(LD_LIBRARY_PATH=str(LIB),TMPDIR=str(P/'tmp'),XDG_CACHE_HOME=str(P/'cache'),XDG_CONFIG_HOME=str(P/'config'),XDG_DATA_HOME=str(P/'data'),XDG_STATE_HOME=str(P/'xdg-state'),RAG3WEAVER_STATE_DIR=str(P/'state-fixture'),RAG3DB_LIB=LIB.name,RAG3DB_LIBS_DIR=str(LIB.parent),RAG3DB_BUFFER_POOL_SIZE='1073741824',RAG3WEAVER_DB_THREADS='4',RAG3WEAVER_EXEC_THREADS='4',CARGO_BUILD_JOBS='8',RUST_TEST_THREADS='4',RAYON_NUM_THREADS='4',RAG3WEAVER_SERVICE_EMBED='127.0.0.1:7878')
  def command(args,cap):
-  require_time(end);result=subprocess.run(args,capture_output=True,env=env,timeout=min(cap,end-time.monotonic()-15))
-  if result.returncode:raise ValueError('preflight tool refused')
+  require_time(end);duration=min(cap,end-time.monotonic()-15)
+  if str(args[0])==cfg['compiler']:label='compile'
+  elif str(args[0])==str(binary) and args[1:]==['--self-test']:label='typed-selftest'
+  elif args[0]=='cp':label='copy'
+  else:raise ValueError('not an approved corpus-free preflight command')
+  began=time.monotonic();save(P/(label+'-command.json'),dict(argv=[str(x) for x in args],cap=duration,started=began))
+  result=None;timed_out=None
+  try:result=subprocess.run(args,capture_output=True,env=env,timeout=duration)
+  except subprocess.TimeoutExpired as error:timed_out=error
+  stdout=(timed_out.stdout or b'') if timed_out else result.stdout
+  stderr=(timed_out.stderr or b'') if timed_out else result.stderr
+  # These three commands cannot emit database corpus: preserve even failed/partial logs.
+  for suffix,data in [('stdout',stdout),('stderr',stderr)]:
+   with (P/(label+'.'+suffix)).open('xb') as stream:stream.write(data);stream.flush();os.fsync(stream.fileno())
+  save(P/(label+'-process.json'),dict(rc=None if timed_out else result.returncode,timeout=timed_out is not None,elapsed=time.monotonic()-began,stdout_bytes=len(stdout),stderr_bytes=len(stderr)))
+  if timed_out:raise RuntimeError(label+' timed out; partial outputs preserved') from timed_out
+  if result.returncode:raise RuntimeError(label+' refused rc='+str(result.returncode)+'; outputs preserved')
   return result
  binary=P/'read-typed';build=[cfg['compiler'],'-std=c++20','-O2','-I'+str(LIB),str(Q/'read-typed.cpp'),'-L'+str(LIB),'-Wl,-rpath,'+str(LIB),'-lrag3db','-pthread','-o',str(binary)]
  save(P/'prebuild-ledger.json',dict(command=build,source_sha256=sha(Q/'read-typed.cpp'),compiler_sha256=sha(cfg['compiler']),pins={str(p):h for p,h in PINS.items()},prepared_sha256=sha(Q/'prepared.json')))
- result=command(build,90);(P/'compile.stdout').write_bytes(result.stdout);(P/'compile.stderr').write_bytes(result.stderr)
+ result=command(build,90)
  golden=command([str(binary),'--self-test'],15);decoded=[];typed_rows.consume(io.BytesIO(golden.stdout),decoded.append)
  if decoded!=[[('STRING',b'a\0|\nb'),('FLOAT',1.25),('STRING',b'')]]:raise ValueError('native typed selftest differs')
  save(P/'typed-before-db.json',dict(elf_sha256=sha(binary),golden_sha256=hashlib.sha256(golden.stdout).hexdigest()))

@@ -5,7 +5,7 @@ from unittest.mock import patch
 spec=importlib.util.spec_from_file_location('qualification',Path(__file__).with_name('qualify.py'));q=importlib.util.module_from_spec(spec);spec.loader.exec_module(q)
 def actual_command(root):
  tree=ast.parse(Path(__file__).with_name('qualify.py').read_text());driver=next(x for x in tree.body if isinstance(x,ast.FunctionDef) and x.name=='driver');fn=next(x for x in driver.body if isinstance(x,ast.FunctionDef) and x.name=='command')
- ns=dict(subprocess=subprocess,require_time=lambda *x:None,end=time.monotonic()+100,env={},P=root,save=q.save,time=time,cfg={'compiler':'/fake/c++'},binary=root/'read-typed')
+ ns=dict(vars(q));ns.update(subprocess=subprocess,require_time=lambda *x:None,end=time.monotonic()+100,env={},P=root,save=q.save,time=time,cfg={'compiler':'/fake/c++'},binary=root/'read-typed')
  exec(compile(ast.fix_missing_locations(ast.Module(body=[fn],type_ignores=[])),'actual-command-AST','exec'),ns)
  return ns['command']
 class PreflightLogs(unittest.TestCase):

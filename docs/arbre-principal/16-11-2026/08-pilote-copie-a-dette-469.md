@@ -52,3 +52,11 @@ Seulement ensuite GET/sante (pas de warmup) vérifie HTTP200/identité/proc/baux
 **10fonctionsCPUhermétiques vertes0.001s** : octets/UTF8/NUL/newlines, NULL≠vide, compte/doublons/ordre, protocolesincomplets, float/nested, métadonnéesdoublonnées, manifesteno-rescan, refusSourceMetaavantshutdown, coordinationpérimée/mauvaismodèle/capinsuffisant, dimensions/NaN/marker/indexREADY. Pas de C++/Database/FTS/modèle lancés par cesjuges. ASTPython etdiffcheckverts. NouveauC++/CPPgolden, touteslecturesnatives, appelprovider, paiements, graphe etCOPYqualifications **NONJOUÉS**.
 
 Àfaire avant GO : publierSHApilote exact etpaquetQ, préparerQmetadata surPC sansP/S/contact, revueED/Recherche du code+manifeste, réceptionEmbarfraîche prévue àphaseREADY, puis seulement arbitrageC7GO1800distinct. LIVEtoujoursANNULÉ ; parent3bases etce ticket restentOUVERTS, aucun master/retrait autorisé.
+
+## Delta de revue : premier refus préflight conservé, paquetv2
+
+ED etRecherche ont relu7b etréempreintéPCQ37a2/10fichiers ; favorables statiques, réserveP2logspréflight repriseparC7. Ticket enrichiAVANTdiff ettrois nouveauxjuges publiés41ba21f996. Le jugeAST du vrai command() a été vuROUGE pour compile.stdout absent, soussubprocessfictif uniquement ; preuve `~/.cache/rag3weaver-build/debt-copy-a-preflight-logs-red-01/` conservée.
+
+Correctif : command() identifie exclusivement compile/selftest/copie (aucun corpus), archive commande/cap/timestamps AVANTappel, stdout/stderr complets ou partiels, rcoutimeout AVANTraise ; pas de réécriture des logs par le caller. Typedgolden brut+stderr maintenant conservés. C++/SQL/manifest/graphe/payload/gardes/budgets inchangés. TroisjugesAST de rc1/TimeoutExpired/succèsfake passés0.028s ; dixautresjuges inchangés0.001s. **13fonctionsCPUsynthétiques**, pas13jugesnatifs ni C++ joué.
+
+NouveauQ=`.../debt-acquittement-control-v2`, ancienQv1 conservé/nonautorisé ; P/Sv1toujoursabsents (jamaislancés). Nouveaupinprepared à calculer APRESPUBLICATION surPC par --prepare exacte, puis ROdeltaetGOdistinctC7 requis. Aucun provider/writer/DB n'a été lancé pour traiter cette réserve.
