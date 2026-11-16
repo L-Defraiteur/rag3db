@@ -85,6 +85,8 @@ private:
         common::offset_t startPosInOtherChunk, uint32_t numValuesToAppend);
 
     void setValueFromString(std::string_view value, uint64_t pos);
+    // Ajoute une ligne : sa chaîne au dictionnaire, son indice, puis seulement son compte.
+    void appendRow(bool isNull, std::string_view value);
 
     void updateNumValues(size_t newValue);
 

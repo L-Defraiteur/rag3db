@@ -73,17 +73,26 @@ void StringChunkData::resetToEmpty() {
 
 void StringChunkData::append(ValueVector* vector, const SelectionView& selView) {
     selView.forEach([&](auto pos) {
-        // index is stored in main chunk, data is stored in the data chunk
         KU_ASSERT(vector->dataType.getPhysicalType() == PhysicalTypeID::STRING);
-        // index is stored in main chunk, data is stored in the data chunk
-        nullData->setNull(numValues, vector->isNull(pos));
-        auto dstPos = numValues;
-        updateNumValues(numValues + 1);
-        if (!vector->isNull(pos)) {
-            auto kuString = vector->getValue<ku_string_t>(pos);
-            setValueFromString(kuString.getAsStringView(), dstPos);
-        }
+        const auto isNull = vector->isNull(pos);
+        appendRow(isNull,
+            isNull ? std::string_view{} : vector->getValue<ku_string_t>(pos).getAsStringView());
     });
+}
+
+// Une ligne n'est comptée qu'une fois sa chaîne au dictionnaire et son indice écrit. Comptée avant,
+// et l'ajout refusé (un pool plein lève dans DictionaryChunk::appendString), elle restait non nulle
+// avec un indice jamais écrit, que le point de reprise suivant relisait dans finalize (ticket du
+// point de reprise qui meurt dans le dictionnaire d'une colonne de chaînes, 16 novembre 2026).
+void StringChunkData::appendRow(bool isNull, std::string_view value) {
+    const auto dstPos = numValues;
+    DictionaryChunk::string_index_t index = 0;
+    if (!isNull) {
+        index = dictionaryChunk->appendString(value);
+    }
+    nullData->setNull(dstPos, isNull);
+    indexColumnChunk->setValue<DictionaryChunk::string_index_t>(index, dstPos);
+    updateNumValues(dstPos + 1);
 }
 
 void StringChunkData::append(const ColumnChunkData* other, offset_t startPosInOtherChunk,
@@ -205,14 +214,11 @@ void StringChunkData::write(const ColumnChunkData* srcChunk, offset_t srcOffsetI
 void StringChunkData::appendStringColumnChunk(const StringChunkData* other,
     offset_t startPosInOtherChunk, uint32_t numValuesToAppend) {
     for (auto i = 0u; i < numValuesToAppend; i++) {
-        auto posInChunk = numValues;
-        auto posInOtherChunk = i + startPosInOtherChunk;
-        updateNumValues(numValues + 1);
-        if (nullData->isNull(posInChunk)) {
-            indexColumnChunk->setValue<DictionaryChunk::string_index_t>(0, posInChunk);
-            continue;
-        }
-        setValueFromString(other->getValue<std::string_view>(posInOtherChunk), posInChunk);
+        const auto posInOtherChunk = i + startPosInOtherChunk;
+        // La nullité a été versée par l'appelant (nullData->append) ; la chaîne, puis le compte.
+        const auto isNull = nullData->isNull(numValues);
+        appendRow(isNull,
+            isNull ? std::string_view{} : other->getValue<std::string_view>(posInOtherChunk));
     }
 }
 
