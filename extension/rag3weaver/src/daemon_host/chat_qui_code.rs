@@ -43,6 +43,9 @@ pub(super) fn depot_inscrit(d: &Path, task_writes: bool) -> (PathBuf, PathBuf) {
     let source = roots.manifest("code-lourd");
     let mut m: Value = serde_json::from_str(&std::fs::read_to_string(&source).unwrap()).unwrap();
     m["database"] = json!(roots.data.join("code-lourd.rag3db").display().to_string());
+    #[cfg(feature = "rag3db-native")]
+    super::teammate_tests::documentation_fixture::connect_declared_sandbox::<crate::backend_code::SandboxConfig>(&mut m)
+        .expect("private code fixture SandboxConfig before add_files");
     std::fs::write(&source, serde_json::to_string_pretty(&m).unwrap()).unwrap();
     let ajoute = crate::code_tree::add_files(&roots, &depot, "code-lourd", Some("code-petit")).unwrap();
     let manifeste = ajoute.manifest.canonicalize().unwrap();

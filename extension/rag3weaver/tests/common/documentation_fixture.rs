@@ -70,6 +70,52 @@ impl Drop for DocumentationFixture {
     }
 }
 
+/// Test-only bridge to the existing manifest SandboxConfig, before add_files
+/// copies/commits the template. No declaration means the normal fixture stays unchanged.
+#[cfg(test)]
+pub fn connect_declared_sandbox<S: serde::de::DeserializeOwned>(manifest: &mut Value) -> Result<bool, String> {
+    let Some(file) = std::env::var_os("RAG3WEAVER_DOCUMENTATION_SANDBOX_FILE") else { return Ok(false) };
+    let file = PathBuf::from(file);
+    if !file.is_absolute() || !file.is_file() || file.canonicalize().map_err(|e| e.to_string())? != file {
+        return Err("private sandbox declaration must be an absolute regular unlinked file".into());
+    }
+    let targets = PathBuf::from(std::env::var_os("RAG3WEAVER_TARGETS_DIR")
+        .ok_or("private fixture sandbox requires explicit RAG3WEAVER_TARGETS_DIR")?);
+    if !targets.is_absolute() || !targets.is_dir() || targets.canonicalize().map_err(|e| e.to_string())? != targets {
+        return Err("private session target root must be an existing canonical directory".into());
+    }
+    let sandbox: Value = serde_json::from_slice(&std::fs::read(&file).map_err(|e| e.to_string())?)
+        .map_err(|e| format!("private sandbox JSON: {e}"))?;
+    // Both callers instantiate this with the real backend_code::SandboxConfig.
+    // Keep the original JSON so omitted defaults do not change the committed declaration.
+    let _: S = serde_json::from_value(sandbox.clone()).map_err(|e| format!("private SandboxConfig: {e}"))?;
+    if !matches!(sandbox.get("mode"), None | Some(Value::Null)) && sandbox["mode"] != "landlock" {
+        return Err("private fixture must retain Landlock".into());
+    }
+    if sandbox.get("network").is_some_and(|v| v != &Value::Bool(false))
+        || sandbox.get("extra_write").is_some_and(|v| v.as_array().is_none_or(|v| !v.is_empty())) {
+        return Err("private fixture does not grant network or extra writes".into());
+    }
+    if sandbox["env"]["CARGO_TARGET_DIR"] != "{repo_target}"
+        || sandbox["env"]["TMPDIR"] != "{task_dir}/tmp"
+        || sandbox["env"]["CARGO_NET_OFFLINE"] != "true" {
+        return Err("private fixture must use the declared repo target, task tmp and offline Cargo".into());
+    }
+    let jobs = sandbox["env"]["CARGO_BUILD_JOBS"].as_str().and_then(|v| v.parse::<usize>().ok())
+        .ok_or("private fixture Cargo jobs must be a positive integer")?;
+    let allocation = match std::env::var("POSTE_FILS") {
+        Ok(v) => v.parse::<usize>().map_err(|_| "invalid POSTE_FILS")?.min(8),
+        Err(std::env::VarError::NotPresent) => 8,
+        Err(_) => return Err("invalid POSTE_FILS".into()),
+    };
+    if jobs == 0 || jobs > allocation { return Err("private fixture Cargo jobs exceed the poste allocation".into()) }
+    if manifest["workspace"]["commands"] != "approval" {
+        return Err("private fixture must preserve command approval".into());
+    }
+    manifest["workspace"]["sandbox"] = sandbox;
+    Ok(true)
+}
+
 /// Exercise the real fixture setup in a separate invocation of this test ELF.
 /// Only the child sees the declared sandbox; other tests never see set_var.
 #[cfg(test)]
@@ -96,6 +142,25 @@ pub fn witness_declared_sandbox_setup(test_name: &str, setup: impl FnOnce(&Path)
         let committed: Value = serde_json::from_slice(&output.stdout).unwrap();
         assert_eq!(committed["workspace"]["sandbox"], expected,
             "DOCUMENTATION_PRIVATE_SANDBOX_NOT_COMMITTED_BEFORE_TASK");
+        let head = std::process::Command::new("git").arg("-C").arg(config)
+            .args(["rev-parse", "HEAD"]).output().unwrap();
+        assert!(head.status.success(), "the private fixture HEAD is readable");
+        // Positive fields only: never publish the whole command environment.
+        let sandbox = &committed["workspace"]["sandbox"];
+        println!("DOCUMENTATION_PRIVATE_SANDBOX_COMMITTED {}", json!({
+            "name": test_name,
+            "manifest": manifest,
+            "head": String::from_utf8_lossy(&head.stdout).trim(),
+            "commands": committed["workspace"]["commands"],
+            "extra_read": sandbox["extra_read"],
+            "target_token": sandbox["env"]["CARGO_TARGET_DIR"],
+            "tmp_token": sandbox["env"]["TMPDIR"],
+            "cargo_jobs": sandbox["env"]["CARGO_BUILD_JOBS"],
+            "offline": sandbox["env"]["CARGO_NET_OFFLINE"],
+            "targets_root": std::env::var_os("RAG3WEAVER_TARGETS_DIR").map(PathBuf::from),
+            "manifest_equals_declaration": true,
+            "head_equals_declaration": true
+        }));
         return;
     }
 
@@ -107,13 +172,16 @@ pub fn witness_declared_sandbox_setup(test_name: &str, setup: impl FnOnce(&Path)
     let q = root.join("private-controller");
     std::fs::create_dir(&q).unwrap();
     sandbox["extra_read"].as_array_mut().unwrap().push(json!(q));
-    sandbox["env"]["CARGO_BUILD_JOBS"] = json!("2");
+    sandbox["env"]["CARGO_BUILD_JOBS"] = json!("1");
     sandbox["env"]["CARGO_TARGET_DIR"] = json!("{repo_target}");
     let declaration = root.join("sandbox.json");
     std::fs::write(&declaration, serde_json::to_vec_pretty(&sandbox).unwrap()).unwrap();
+    let targets = root.join("private-session-targets");
+    std::fs::create_dir(&targets).unwrap();
     let output = std::process::Command::new(std::env::current_exe().unwrap())
         .args([test_name, "--exact", "--nocapture", "--test-threads=1"])
         .env(DECLARATION, declaration).env(CHILD, test_name).env(ROOT, &root)
+        .env("RAG3WEAVER_TARGETS_DIR", targets)
         .output().expect("run the actual setup in the same test ELF");
     std::fs::write(root.join("setup-child.stdout"), &output.stdout).unwrap();
     std::fs::write(root.join("setup-child.stderr"), &output.stderr).unwrap();
@@ -124,6 +192,10 @@ pub fn witness_declared_sandbox_setup(test_name: &str, setup: impl FnOnce(&Path)
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("test result: ok. 1 passed; 0 failed; 0 ignored;"),
         "the setup child must actually judge this exact witness: {stdout}");
+    println!("DOCUMENTATION_SETUP_CHILD_OK {test_name}\n{stdout}");
+    if !output.stderr.is_empty() {
+        eprintln!("DOCUMENTATION_SETUP_CHILD_STDERR {test_name}\n{}", String::from_utf8_lossy(&output.stderr));
+    }
 }
 
 #[cfg(test)]
