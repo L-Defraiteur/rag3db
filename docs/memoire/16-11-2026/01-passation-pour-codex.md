@@ -118,11 +118,11 @@ Une suite e2e neuve se monte en trois pas :
 
 ### 2.1 Le témoin de codex qui rougit sur « Text file busy » — 1 h
 
-**En cours par la session mémoire** : branche `cx-memoire-script-fixtures-r1`,
-worktree `~/.cache/rag3weaver-build/cx-wt-memoire-script-fixtures`, tête WIP
-`f2e7a6980ff03dc498d5420a52cb9f3fcaf778ce`. Rouge système déterministe puis
+**En cours par la session mémoire** : branche `cx-memoire-script-fixtures-r2`,
+worktree `~/.cache/rag3weaver-build/cx-wt-memoire-script-fixtures-r2`, tête code
+`4e0d812f28498589224b022837f0cc51461445d1` (rebase68590270, r1 conservée). Rouge système déterministe puis
 3/3 verts ; correction des seules fixtures poussée. Rust/lib/F8/NAV NON JOUÉS,
-attente FINI G et recette de qualification après bascule59ac.
+FINI G et pin59ac reçus ; recette proposée, attente de créneau C7 après priorités.
 
 `2026-11-15-un-temoin-de-codex-rougit-sur-text-file-busy-sous-la-charge.md`
 
