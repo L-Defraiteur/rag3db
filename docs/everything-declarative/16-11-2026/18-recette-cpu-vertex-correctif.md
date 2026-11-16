@@ -11,3 +11,7 @@ Build900MINEND−15 → artifactJSONunique/featuresexactes/ELFcopiéSHA → inve
 ScopeVERT0/TERMINE/nettoyé/restes[]/busabsent, ELFsource+copie/hashoutils/SDK/sourceGitpropres et scansowned PID/start/FD/cwd/exe àfin ; UNKNOWNowned bloque, UNKNOWNglobal conservé sans absenceGPU déduite. Final dansENDcommon aprèshash/scan puis contrôleAPRÈSopenavantpublication ; même échec tardif ne vaut pasvert. RésultatCPU_VERTEX_CHECKED seulement, aucun F300/Vertex réel/latencecloud/GPU/API7970/master/retrait implicite.
 
 Scriptpréparé depuis pilote rougeeb026, adapté sept verts et composition bornée. Vérifications disponibles : AST etdiffcheck seulement ; aucun petitCPU, Cargo/rustc/fixture/prepare-only/autorité/PQS/target consommé. NouveauSHApilote doit être relu etGOexact distinct avantlancement ; sousmoduleAPP exact doit être initialisé surPC avantgel, Gitseul.
+
+## HOLD9d8 avant admission
+
+PrépaPC Gitseule/prepare-only0 auSHA9d8 : APPc38 etgitlinkbd133850 exactspropres, Qconfiguration69fcae7e4f0fca5d3976453507205e9ef1ae068582105b65f0d5330bb110f5fa/3copiesconformes, Pvide/S,T,launchabsents. AucunCargo/HTTP/test/autorité. RéservesHotfix scanconsignées au ticket AVANTdiff ;9d8nonalloué. Deux témoinsauxvraisquiet avecproc-entièrementfictif àvoirrougiravantcorrection. Transportinchangé.

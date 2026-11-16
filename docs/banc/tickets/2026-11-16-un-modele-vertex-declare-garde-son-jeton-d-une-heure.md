@@ -76,3 +76,7 @@ Auditmasterdf2a5789888d16247f0dad42dcdaa3c4ceea2094 : aucun changement model_sou
 ## Préparation corrective après rouge conservé
 
 RougeCPUfe40/eb026 conservépreuves4d54cf4a47, aucunretry. C7 demande la préparation du transport à TokenSource conservée et du raccord déclaratif ; [plan17 et juges avantimpl](../../everything-declarative/16-11-2026/17-correctif-vertex-token.md). Deux nouveaux juges NONJOUÉS, sept fonctions prévues ; GOvert distinct nécessaire. Ticket reste ouvert.
+
+## Réserves du pilote9d8 avant admission, transportc38 inchangé
+
+Hotfix relève deux défauts quiet : FD255 du Bashposte ancêtre sousQ interprété comme reste ; attribution exe/cwd/FD perdue si PermissionError ultérieure. Pilote9d8 retiré/HOLD sans aucune autorité ni exécution ; PcrééVIDEparprepare-only, S/T/launchabsents. Correction prévue uniquementcontrôleur : attribution incrémentale/UNKNOWNattribuable fatal, seule exemption FDQ/poste pour ancêtre UID/PIDstart/exeBash/argvplace exacts revérifiés. Aucun W/T/autreFD exempté. TémoinsAST/proc-fictif à publier AVANTessais/fix, puis nouveauQ2/piloteSHAàRO ; transportc38restefigé, aucunGOrecyclé.
