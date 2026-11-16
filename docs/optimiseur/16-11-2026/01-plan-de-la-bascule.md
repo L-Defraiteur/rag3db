@@ -200,3 +200,21 @@ ses voisins ; aucun vert global de neutralité du système de fichiers n’en d�
 Les contrôles natifs restent sur copies privées, jamais sur base vivante détenue.
 L’acceptation explicite du latéral sur COPIE et la primitive existing-only sont
 arbitrées par c7 ; pas de relaxation, reprise maintenance ou migration déduite.
+
+### Fin des lecteurs des artefacts release — 16 novembre, 12 h 13
+
+Banc confirme ses scanners/admission terminés et ses exécutables autonomes hors
+target. Arbre confirme les liens immutablepc01/idsetspc01 terminés, scopes verts
+sans reste, aucun besoin futur déclaré de ces deps ; son ELF idsets est copié
+hors target (SHA d0dd13e6d403e614038b251f413637d5f6d02a98ba1c10509388d0be1f5e15c7).
+Le relevé des exécutables et FD utilisateur ne voit aucune référence active au target.
+
+Archive reflink fidèle de tout release à luciepc :
+`~/.cache/optimiseur-notes/bascule-16nov-927/release-archive`.
+Reçu `release-archive-verdict.json` : VERT,4806entrées ; SHA contenus, modes,
+uid/gid, mtime et liens identiques, source avant/après inchangée. Inclut deps,
+build, fingerprints et binaires. Aucun nouveau Cargo ou lien exécuté pour cela ;
+l’égalité de l’archive ne promet pas un rebâti après relocalisation des chemins.
+Originaux worktrees/target conservés, aucun nettoyage ni fermeture de backend.
+Les services restent réservés au porteur pour la future fenêtre explicitement
+qualifiée ; aucune maintenance verte ni migration déduite de ces faits.
