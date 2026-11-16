@@ -55,3 +55,6 @@ TTY91e5 corrigé : ROtotaleMémoire favorableCLI/imports/dispatch/12copies+carri
 
 
 Archi CLI corrigée01c3 reçoitdeuxROtotalcode+pinr3favorables, C7 relit+vérifiePCconfiga124/preparedf0a1/septcopies/outils/HEADpropre/Pvide/Fabsent. GO distinctC7-ARCHI-BAC-GREEN-01C3-16nov795 au ticketsetupdéjàexistant : deuxbuildsJSON→ledgerpubdeuxhôtes→deuxjuges/quatreinvocations, 780TERM+15hard/600CommonMAX/final120sousmêmeOSwatchdog depuisavantfile. AucunVertex/D6/global/ancienEND/master. Rapport précisepreuvesetlimitations, aucunvert anticipé.
+
+
+TTY91E5 premierrouge phase0008 fauxsudo : invitevuefalse/retourvufalse, uneconsigne/retourabsent etSECRETFACTICEobservéjournal+rawécran, pasdansconsigne ; attributionproduitnonétablie. Firstred854883.759418159→pidfdCommon841941/start85476802TERM ; scopej4l20f5gtermine1/restes[]/nettoyé,composéRED854883.900733566<END855967.8475, aucunretry/build. Nouveau défautcontrôleur signaléavantdiff : deuxième ligneROUGE avantSIGTERMeffectif tente first-red-stop.json.open(x), FileExistsError ; premiermarqueur/signalconservés. PorteurTTY chercheticketsproduitexistants et rattacheauHARNESS/fichedefautAVANTfix, sauvegardeRAWinputjournalSCREEN+sourceetTreadonlydeuxhôtes/quiescence. DiagnosticROautorisé seulement, ni masquerpremierrouge ni supprimersecondepreuve ni qualifierfinharnais.
