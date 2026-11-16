@@ -37,3 +37,41 @@ backend pour en prendre une copie fidèle.
 - Un chiffre ancien se dit ancien : « relevé du <date> », jamais présenté comme l'état présent.
 - Le témoin : un orphelin posé dans un test (une suppression lucivy non validée, comme avant 262be6fc4),
   puis l'état relu, qui doit le compter sans index complet entre les deux.
+
+## Reprise Recherche — plan du 16 novembre, avant diff
+
+Base lue927941a67a5805450d49f1e04b39fdd542a6059b ; W privé
+`~/.cache/rag3weaver-build/cx-wt-recherche-fts-counts-freshness-r1`, branche
+`cx-recherche-fts-counts-freshness-r1`. Aucun WIP produit antérieur repris.
+Réservation à coordonner avec ED : `Backend::index_states` et tests
+`fts_measurement_*` seulement, aucun témoin ties. Landing après ED.
+
+Ordre prévu :
+1. Extraire sans changement de comportement la projection JSON des comptes
+   dans `catalog/fts_counts.rs` (dépendance serde_json seule) ; un harnais CPU
+   privé peut inclure ce vrai module, sans DB/SDK/recopie de l'implémentation.
+   Écrire le témoin d'absence d'horodatage avant correction. Pas de grep utilisé
+   comme substitut d'un rouge comportemental.
+2. Écrire le témoin backend réel : orphelin FTS ajouté/commité dans fixture
+   privée, relevé à blanc, état relu sans index complet ; vérifier présence
+   de l'orphelin, date et absence de purge. NON JOUÉ pendant fenêtreG/Arbre.
+3. Réutiliser `fts_releve_a_blanc` pour enregistrer par entité publique/table
+   physique les documents/lignes/orphelins et `measured_at_ms`. Conserver les
+   clés existantes documents/rows ; anciennes notes sans date = date inconnue,
+   jamais rajeunies à la lecture. L'âge calculé n'est pas un relevé vivant.
+4. Rafraîchir fin d'index et maintenance, sans modifier la purge ni son jeton.
+   Une erreur de relevé/enregistrement ne renouvelle pas la date et reste dite.
+   Ne pas compter uniquement les lignes visibles de la vue comme orphelins :
+   le relevé physique existant porte la table de l'index, toutes cellules.
+5. Qualification sur lib neuve uniquement après FINI G : témoin rouge réel,
+   correction, check_features/lib entière/NAV et e2e_code_sync+e2e_lectures par
+   passe canonique bornée32GiB/j8, reçus/journaux réels. Aucun master sans ÀTOI.
+
+Noms proposés : Catalog::record_fts_measurement / refresh_fts_measurements,
+Catalog::fts_releve_a_blanc / fts_maintenance_nocturne, hook finindex et
+Backend::index_states. La projection JSON pure porte les tests CPU ; pas de
+nouvelle interface d'outil ni calcul par lecture d'état sur toute la base.
+Pendant fenêtre G/Arbre : RO/écriture privée seulement ; aucune passe lourde,
+service, base vivante, suppression, ancien GO ou délai réactivé. La portée
+exacte d'une petite compilation du harnais CPU doit être confirmée par C7
+avant lancement ; aucune compilation ni test encore joué dans cette reprise.
