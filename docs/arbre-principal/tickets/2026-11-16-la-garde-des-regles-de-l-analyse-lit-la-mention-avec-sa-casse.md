@@ -1,7 +1,7 @@
 # La garde des règles de l'analyse lit la mention avec sa casse
 
 - **État** : ouvert (16 novembre 2026)
-- **Famille** : outillage
+- **Famille** : produit (la garde de la passe)
 - **Gravité** : petite ; un lot qui dit « Sans effet sur l'analyse » en tête de phrase est refusé par check_features,
   et il faut un commit de plus pour le redire en minuscules.
 - **Atteignable en service** : non (la passe et la garde du push seulement).
