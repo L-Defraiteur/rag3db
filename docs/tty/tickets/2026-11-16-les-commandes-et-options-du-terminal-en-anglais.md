@@ -294,3 +294,14 @@ doit le refuser avant Cargo. Copier/hasher le poste privé et exécuter sa copie
 horsW, après vérification des dépendances du script ; ne pas ajouter d'exemption
 W. Réserve de finalisation/publication encore en revue, à regrouper dans le
 même ticket et paquet avant nouveau pin. Préparation291c conservée comme telle.
+
+### Fin de revue groupée291c — publication après échéance
+
+Deuxième P1 restante, signalée par Mémoire avant correction : main vérifie
+finish(now<END), puis calcule finished non contrôlé et écrit le verdict ;
+l'ouverture/écriture peuvent donc dépasser END tout en publiant VERT/exit0.
+Prévoir ouverture exclusive et horloge fraîche après open immédiatement avant
+publication, ainsi qu'une relecture après écriture ; si tard, verdict ROUGE et
+retour1. Témoin sur vraie publication/main, pas uniquement le prédicat finish.
+Cette réserve et la copie privée de poste se corrigent dans le même paquet.
+Aucun défaut runtime observé, aucune passe291c lancée.
