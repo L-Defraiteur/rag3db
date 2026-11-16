@@ -138,3 +138,18 @@ classificationSHAb6c3da20f98fe5705e1dbfa36d4c0021a1a289b8b3cae21bb9f96941e43c412
 Rapport rust-followup/02-resultats-unites-et-usages.md. Ce ticket reste ouvert :
 sonde14sites/18couples, intégration fraîche et passe complète encore non jouées,
 REGLES7 maintenue. Aucun ancien GO réactivé ni push master.
+
+## Préparation concrète de la sonde après END118
+
+Référence privée fec35198b64b7e9da0496de6b01a7232fa7a8390 (production d395,parserbd),
+candidat production118/parser34, sonde instrumentée identique. Cargo/lock/scripts
+sont communs ; SDK59 commun exigé, BUILD_ID réellement interrogé par la sonde.
+Profil proposé deux1800s distincts et séquentiels sur le seul targetPC, sans GO.
+Chaque source découverte/admissible/analysée/ingérée doit être conservée, zéro
+skipped/failed/orphelin, JSONL avec clés/UUID natifs et positions, TSV historique
+secondaire. Pilote et protocole dans docs/codeparsers/16-11-2026/rust-probe/.
+L'ancienne sonde373 et ses alias ne sont pas relancés.107anciens couples var
+qualifiés sur leur ligne et10autres sont préservés comme attentes à juger,
+pas comme vérité automatique. La préparation de passe restante expose les
+vrais prérequis master entrant/REGLES/PG et scripts récents ; aucune allocation,
+test, compilation ou nouveau service n'a été lancé pour cette phase.

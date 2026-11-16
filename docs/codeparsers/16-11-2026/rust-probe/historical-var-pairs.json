@@ -1,0 +1,1530 @@
+{
+  "source_tsv_sha256": "bd07f0752d4dd6df382ff90c935a0f5fe176bdfb810697cd603c94ab8c99d244",
+  "state": "historical_list_only_run_not_current_sdk_proof",
+  "rows": [
+    {
+      "fields": [
+        "src/anthropic_llm.rs",
+        "633",
+        "read_sse",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "2aaec3921313b89a1d54f4a08ec60b3ef45ac87acfe985b1406d45e37ef3a1c9",
+      "line_contains_std_env_var": true,
+      "source_line": "        if let Ok(path) = std::env::var(\"RAG3WEAVER_SSE_DUMP\") {"
+    },
+    {
+      "fields": [
+        "src/backend.rs",
+        "2063",
+        "PreparedBackend",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "b2d66885c6def36d8d6f907ec0851a9839fd16b1b999a843535f5db71df68cf7",
+      "line_contains_std_env_var": true,
+      "source_line": "            && !self.embed.addresses(Capability::Embed, &|k| std::env::var(k).ok()).is_empty()"
+    },
+    {
+      "fields": [
+        "src/backend.rs",
+        "2063",
+        "service_a_retenter",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "b2d66885c6def36d8d6f907ec0851a9839fd16b1b999a843535f5db71df68cf7",
+      "line_contains_std_env_var": true,
+      "source_line": "            && !self.embed.addresses(Capability::Embed, &|k| std::env::var(k).ok()).is_empty()"
+    },
+    {
+      "fields": [
+        "src/backend.rs",
+        "2068",
+        "raison_sans_service",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "b2d66885c6def36d8d6f907ec0851a9839fd16b1b999a843535f5db71df68cf7",
+      "line_contains_std_env_var": true,
+      "source_line": "        let adresses = self.embed.addresses(Capability::Embed, &|k| std::env::var(k).ok());"
+    },
+    {
+      "fields": [
+        "src/backend.rs",
+        "5773",
+        "reaction_stop_wait",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "b2d66885c6def36d8d6f907ec0851a9839fd16b1b999a843535f5db71df68cf7",
+      "line_contains_std_env_var": true,
+      "source_line": "    let s = std::env::var(\"RAG3WEAVER_STOP_WAIT_S\").ok().and_then(|v| v.parse::<u64>().ok()).unwrap_or(30);"
+    },
+    {
+      "fields": [
+        "src/backend_code.rs",
+        "322",
+        "etendre_tilde",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "ba4bab8281b7fda0548143153f5f019c1367a1a7e9b7764a99dd2de852b69677",
+      "line_contains_std_env_var": true,
+      "source_line": "        if let Ok(home) = std::env::var(\"HOME\") {"
+    },
+    {
+      "fields": [
+        "src/bin/rag3daemon.rs",
+        "52",
+        "servir",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "1664b60ccad2b37aa7f6409f19791fe2038cec1db070ddf5901a8f30f87b3c71",
+      "line_contains_std_env_var": true,
+      "source_line": "    if let Some(k) = std::env::var(\"RAG3WEAVER_TEST_FAILED_CHECKPOINT_AT_REQUEST\")"
+    },
+    {
+      "fields": [
+        "src/bin/rag3weaver-backend.rs",
+        "586",
+        "ecoute_de_systemd",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "68b4fe7a5268d8e905418909d495ff50ad2e324a18723e5a64db42c9ef2b18e5",
+      "line_contains_std_env_var": true,
+      "source_line": "        let pid: u32 = std::env::var(\"LISTEN_PID\").ok()?.trim().parse().ok()?;"
+    },
+    {
+      "fields": [
+        "src/bin/rag3weaver-backend.rs",
+        "981",
+        "run",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "68b4fe7a5268d8e905418909d495ff50ad2e324a18723e5a64db42c9ef2b18e5",
+      "line_contains_std_env_var": true,
+      "source_line": "    let fail_at_call: Option<usize> = std::env::var(\"RAG3WEAVER_TEST_FAILED_CHECKPOINT_AT_CALL\")"
+    },
+    {
+      "fields": [
+        "src/bin/rag3weaver-embeddings.rs",
+        "204",
+        "artefact",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "7e21cba3c9a7dedd77e0b880640ec6a4b86eed8756914dff29a43a35f454556e",
+      "line_contains_std_env_var": true,
+      "source_line": "    let chemin = match std::env::var(variable) {"
+    },
+    {
+      "fields": [
+        "src/bin/rag3weaver-embeddings.rs",
+        "218",
+        "cache",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "7e21cba3c9a7dedd77e0b880640ec6a4b86eed8756914dff29a43a35f454556e",
+      "line_contains_std_env_var": true,
+      "source_line": "    PathBuf::from(std::env::var(\"HOME\").unwrap_or_else(|_| \".\".into()))"
+    },
+    {
+      "fields": [
+        "src/bin/rag3weaver-embeddings.rs",
+        "61",
+        "servir",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "7e21cba3c9a7dedd77e0b880640ec6a4b86eed8756914dff29a43a35f454556e",
+      "line_contains_std_env_var": true,
+      "source_line": "    let nom = std::env::var(\"RAG3WEAVER_EMBED_MODEL\").ok().filter(|v| !v.trim().is_empty()).unwrap_or_else(|| MODELE_PAR_DEFAUT.into());"
+    },
+    {
+      "fields": [
+        "src/burn_device.rs",
+        "128",
+        "BurnDevice",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "7b76ad8313fd3077667c34aa1fac1ab1e527fdf0e195f9baabf37824e53ef5f4",
+      "line_contains_std_env_var": true,
+      "source_line": "        let choix = std::env::var(role.env_var())"
+    },
+    {
+      "fields": [
+        "src/burn_device.rs",
+        "128",
+        "for_role",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "7b76ad8313fd3077667c34aa1fac1ab1e527fdf0e195f9baabf37824e53ef5f4",
+      "line_contains_std_env_var": true,
+      "source_line": "        let choix = std::env::var(role.env_var())"
+    },
+    {
+      "fields": [
+        "src/burn_device.rs",
+        "373",
+        "float_dtype_voulu",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "7b76ad8313fd3077667c34aa1fac1ab1e527fdf0e195f9baabf37824e53ef5f4",
+      "line_contains_std_env_var": true,
+      "source_line": "    let voulu = std::env::var(\"RAG3WEAVER_BURN_FLOAT\")"
+    },
+    {
+      "fields": [
+        "src/burn_ppocr.rs",
+        "215",
+        "BurnPpOcr",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "f1d415274e3ceb43af9495a3bf2fecb64dc5d9b4980fec31c99324e5ee36dc0c",
+      "line_contains_std_env_var": true,
+      "source_line": "        if let Ok(dir) = std::env::var(\"RAG3WEAVER_PPOCR_DIR\") {"
+    },
+    {
+      "fields": [
+        "src/burn_ppocr.rs",
+        "215",
+        "default_cache_dir",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "f1d415274e3ceb43af9495a3bf2fecb64dc5d9b4980fec31c99324e5ee36dc0c",
+      "line_contains_std_env_var": true,
+      "source_line": "        if let Ok(dir) = std::env::var(\"RAG3WEAVER_PPOCR_DIR\") {"
+    },
+    {
+      "fields": [
+        "src/burn_ppocr.rs",
+        "990",
+        "default_cache_dir_honours_env",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "f1d415274e3ceb43af9495a3bf2fecb64dc5d9b4980fec31c99324e5ee36dc0c",
+      "line_contains_std_env_var": true,
+      "source_line": "        assert!(dir.ends_with(\"ppocrv6-tiny\") || std::env::var(\"RAG3WEAVER_PPOCR_DIR\").is_ok());"
+    },
+    {
+      "fields": [
+        "src/burst.rs",
+        "245",
+        "active",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "6e6475cf95d1e9138b7adb2b90fc08615d778bde31eb0f24ae15cb5ae38b1f37",
+      "line_contains_std_env_var": true,
+      "source_line": "    let set = |v: &str| std::env::var(v).map(|v| !v.trim().is_empty()).unwrap_or(false);"
+    },
+    {
+      "fields": [
+        "src/burst.rs",
+        "270",
+        "plan",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "6e6475cf95d1e9138b7adb2b90fc08615d778bde31eb0f24ae15cb5ae38b1f37",
+      "line_contains_std_env_var": true,
+      "source_line": "        let explicit = std::env::var(\"RAG3WEAVER_EMBED_CHAR_BUDGET\").ok().and_then(|v| v.trim().parse::<usize>().ok()).filter(|v| *v > 0);"
+    },
+    {
+      "fields": [
+        "src/burst.rs",
+        "97",
+        "BurstSettings",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "6e6475cf95d1e9138b7adb2b90fc08615d778bde31eb0f24ae15cb5ae38b1f37",
+      "line_contains_std_env_var": true,
+      "source_line": "        Self::from_values(std::env::var(TARGET_VARIABLE).ok().as_deref(), std::env::var(PAUSE_VARIABLE).ok().as_deref())"
+    },
+    {
+      "fields": [
+        "src/burst.rs",
+        "97",
+        "from_env",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "6e6475cf95d1e9138b7adb2b90fc08615d778bde31eb0f24ae15cb5ae38b1f37",
+      "line_contains_std_env_var": true,
+      "source_line": "        Self::from_values(std::env::var(TARGET_VARIABLE).ok().as_deref(), std::env::var(PAUSE_VARIABLE).ok().as_deref())"
+    },
+    {
+      "fields": [
+        "src/catalog.rs",
+        "1094",
+        "choisir_le_stockage_du_plein_texte",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "2c4ba2029fa470433e7f84adf54f69143ca37c9a3b484c40ce664ae62f095f16",
+      "line_contains_std_env_var": true,
+      "source_line": "        match std::env::var(\"RAG3WEAVER_FTS\").as_deref() {"
+    },
+    {
+      "fields": [
+        "src/catalog.rs",
+        "13903",
+        "tuer_avant_la_synchronisation_du_plein_texte",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "2c4ba2029fa470433e7f84adf54f69143ca37c9a3b484c40ce664ae62f095f16",
+      "line_contains_std_env_var": true,
+      "source_line": "    let Some(n) = std::env::var(\"RAG3WEAVER_TEST_KILL_BEFORE_FTS_SYNC\").ok().and_then(|v| v.parse::<usize>().ok()) else {"
+    },
+    {
+      "fields": [
+        "src/catalog.rs",
+        "6206",
+        "trace_previous_state",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "2c4ba2029fa470433e7f84adf54f69143ca37c9a3b484c40ce664ae62f095f16",
+      "line_contains_std_env_var": true,
+      "source_line": "        if std::env::var(\"RAG3WEAVER_TRACE_ETAT_DAVANT\").is_ok() {"
+    },
+    {
+      "fields": [
+        "src/catalog.rs",
+        "6543",
+        "ingest_entities_jusqu_a",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "2c4ba2029fa470433e7f84adf54f69143ca37c9a3b484c40ce664ae62f095f16",
+      "line_contains_std_env_var": true,
+      "source_line": "        let profil = std::env::var(\"RAG3WEAVER_INGEST_PROFILE\").is_ok();"
+    },
+    {
+      "fields": [
+        "src/catalog.rs",
+        "683",
+        "Catalog",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "2c4ba2029fa470433e7f84adf54f69143ca37c9a3b484c40ce664ae62f095f16",
+      "line_contains_std_env_var": true,
+      "source_line": "    std::env::var(\"RAG3WEAVER_READ_THREADS\").ok().and_then(|v| v.parse().ok()).unwrap_or(2)"
+    },
+    {
+      "fields": [
+        "src/catalog.rs",
+        "683",
+        "read_threads",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "2c4ba2029fa470433e7f84adf54f69143ca37c9a3b484c40ce664ae62f095f16",
+      "line_contains_std_env_var": true,
+      "source_line": "    std::env::var(\"RAG3WEAVER_READ_THREADS\").ok().and_then(|v| v.parse().ok()).unwrap_or(2)"
+    },
+    {
+      "fields": [
+        "src/claude_code_hook.rs",
+        "212",
+        "Reglage",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "f9b0ec3d7ba77c6084895fb0d72156925024fd75a9657aee7961f80317938320",
+      "line_contains_std_env_var": true,
+      "source_line": "        if let Ok(v) = std::env::var(\"RAG3WEAVER_HOOK_CONTEXT_TOKENS\") {"
+    },
+    {
+      "fields": [
+        "src/claude_code_hook.rs",
+        "212",
+        "lire",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "f9b0ec3d7ba77c6084895fb0d72156925024fd75a9657aee7961f80317938320",
+      "line_contains_std_env_var": true,
+      "source_line": "        if let Ok(v) = std::env::var(\"RAG3WEAVER_HOOK_CONTEXT_TOKENS\") {"
+    },
+    {
+      "fields": [
+        "src/claude_code_hook.rs",
+        "704",
+        "identite_de_la_session",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "f9b0ec3d7ba77c6084895fb0d72156925024fd75a9657aee7961f80317938320",
+      "line_contains_std_env_var": true,
+      "source_line": "    let cle = std::env::var(\"RAG3WEAVER_AGENT_KEY\").ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty())?;"
+    },
+    {
+      "fields": [
+        "src/code.rs",
+        "3877",
+        "borne_ambigu",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "0b27211acf2fd9b1171f00d7b4533b1d4671b4ba4271beb2a26f83283300712b",
+      "line_contains_std_env_var": true,
+      "source_line": "    std::env::var(\"RAG3WEAVER_AMBIGU_MAX\").ok().and_then(|v| v.parse().ok()).unwrap_or(1)"
+    },
+    {
+      "fields": [
+        "src/code_sync.rs",
+        "1034",
+        "synchroniser",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "4272d5980c28afbdff675c73152dbec5fb319fe3c3ed3b2e62ba242afdaf5cc6",
+      "line_contains_std_env_var": true,
+      "source_line": "    let poussee_differee = par_transaction && std::env::var(\"RAG3WEAVER_TX_POUSSEE_A_LA_FIN\").as_deref() == Ok(\"1\");"
+    },
+    {
+      "fields": [
+        "src/code_sync.rs",
+        "1361",
+        "paquets_par_validation",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "4272d5980c28afbdff675c73152dbec5fb319fe3c3ed3b2e62ba242afdaf5cc6",
+      "line_contains_std_env_var": true,
+      "source_line": "    match std::env::var(\"RAG3WEAVER_TX_PAQUETS_PAR_VALIDATION\").ok().as_deref().map(str::trim) {"
+    },
+    {
+      "fields": [
+        "src/code_sync.rs",
+        "1381",
+        "decider_la_transaction_par_paquet",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "4272d5980c28afbdff675c73152dbec5fb319fe3c3ed3b2e62ba242afdaf5cc6",
+      "line_contains_std_env_var": true,
+      "source_line": "        std::env::var(\"RAG3WEAVER_TX_PAR_PAQUET\").ok().as_deref(),"
+    },
+    {
+      "fields": [
+        "src/code_sync.rs",
+        "1427",
+        "commencer",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "4272d5980c28afbdff675c73152dbec5fb319fe3c3ed3b2e62ba242afdaf5cc6",
+      "line_contains_std_env_var": true,
+      "source_line": "    catalog.set_checkpoints_in_transaction(std::env::var(\"RAG3WEAVER_TX_AVEC_POINTS_DE_REPRISE\").as_deref() == Ok(\"1\"));"
+    },
+    {
+      "fields": [
+        "src/code_sync.rs",
+        "1487",
+        "echouer_dans_le_paquet",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "4272d5980c28afbdff675c73152dbec5fb319fe3c3ed3b2e62ba242afdaf5cc6",
+      "line_contains_std_env_var": true,
+      "source_line": "    if std::env::var(\"RAG3WEAVER_TEST_FAIL_IN_BATCH\").ok().and_then(|v| v.parse::<usize>().ok()) == Some(rang)"
+    },
+    {
+      "fields": [
+        "src/code_sync.rs",
+        "1500",
+        "tuer_avant_la_poussee",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "4272d5980c28afbdff675c73152dbec5fb319fe3c3ed3b2e62ba242afdaf5cc6",
+      "line_contains_std_env_var": true,
+      "source_line": "    if std::env::var(\"RAG3WEAVER_TEST_KILL_BEFORE_BLOB_PUSH\").as_deref() == Ok(\"1\") {"
+    },
+    {
+      "fields": [
+        "src/code_sync.rs",
+        "1517",
+        "tuer_pendant_la_validation",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "4272d5980c28afbdff675c73152dbec5fb319fe3c3ed3b2e62ba242afdaf5cc6",
+      "line_contains_std_env_var": true,
+      "source_line": "    let Ok(v) = std::env::var(\"RAG3WEAVER_TEST_KILL_IN_COMMIT\") else { return };"
+    },
+    {
+      "fields": [
+        "src/code_sync.rs",
+        "1536",
+        "tuer_dans_le_paquet",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "4272d5980c28afbdff675c73152dbec5fb319fe3c3ed3b2e62ba242afdaf5cc6",
+      "line_contains_std_env_var": true,
+      "source_line": "    if std::env::var(\"RAG3WEAVER_TEST_KILL_IN_BATCH\").ok().and_then(|v| v.parse::<usize>().ok()) == Some(rang) {"
+    },
+    {
+      "fields": [
+        "src/code_sync.rs",
+        "716",
+        "paquet_par_defaut",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "4272d5980c28afbdff675c73152dbec5fb319fe3c3ed3b2e62ba242afdaf5cc6",
+      "line_contains_std_env_var": true,
+      "source_line": "    std::env::var(\"RAG3WEAVER_BATCH_FILES\").ok().and_then(|v| v.trim().parse().ok()).filter(|&n: &usize| n > 0).unwrap_or(BATCH_FILES_DEFAULT)"
+    },
+    {
+      "fields": [
+        "src/code_sync.rs",
+        "911",
+        "synchroniser_la_source",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "4272d5980c28afbdff675c73152dbec5fb319fe3c3ed3b2e62ba242afdaf5cc6",
+      "line_contains_std_env_var": true,
+      "source_line": "    if tx.0 && std::env::var(\"RAG3WEAVER_TX_SANS_PREUVE\").as_deref() != Ok(\"1\") {"
+    },
+    {
+      "fields": [
+        "src/code_tools.rs",
+        "2060",
+        "Cwd",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "52c9cb4fb2ddd85d62c46ed61e151ee5d6c3a407285108aeef15080df5faeeaa",
+      "line_contains_std_env_var": true,
+      "source_line": "        let maison = || std::env::var(\"HOME\").map(PathBuf::from).unwrap_or_default();"
+    },
+    {
+      "fields": [
+        "src/code_tools.rs",
+        "2060",
+        "expand",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "52c9cb4fb2ddd85d62c46ed61e151ee5d6c3a407285108aeef15080df5faeeaa",
+      "line_contains_std_env_var": true,
+      "source_line": "        let maison = || std::env::var(\"HOME\").map(PathBuf::from).unwrap_or_default();"
+    },
+    {
+      "fields": [
+        "src/code_tools.rs",
+        "2113",
+        "ici",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "52c9cb4fb2ddd85d62c46ed61e151ee5d6c3a407285108aeef15080df5faeeaa",
+      "line_contains_std_env_var": true,
+      "source_line": "        PathBuf::from(std::env::var(\"CARGO_MANIFEST_DIR\").unwrap())"
+    },
+    {
+      "fields": [
+        "src/commande.rs",
+        "1252",
+        "tenir_la_cible",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "aed883a199242ceb52c09506350ed5cdda2860c41c2ecbe6cfb79229583eda40",
+      "line_contains_std_env_var": true,
+      "source_line": "    let plafond = std::env::var(\"RAG3WEAVER_TARGET_MAX_GO\").ok().and_then(|v| v.trim().parse::<u64>().ok()).unwrap_or(32);"
+    },
+    {
+      "fields": [
+        "src/commande.rs",
+        "1699",
+        "role_hote_qui_sort",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "aed883a199242ceb52c09506350ed5cdda2860c41c2ecbe6cfb79229583eda40",
+      "line_contains_std_env_var": true,
+      "source_line": "        let Ok(dossier) = std::env::var(\"COMMANDE_HOTE_JOURNAUX\") else { return };"
+    },
+    {
+      "fields": [
+        "src/commande.rs",
+        "2231",
+        "le_bac_a_sable_borne_ce_que_la_commande_voit",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "aed883a199242ceb52c09506350ed5cdda2860c41c2ecbe6cfb79229583eda40",
+      "line_contains_std_env_var": true,
+      "source_line": "        if let Ok(home) = std::env::var(\"HOME\") {"
+    },
+    {
+      "fields": [
+        "src/commande.rs",
+        "941",
+        "Atelier",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "aed883a199242ceb52c09506350ed5cdda2860c41c2ecbe6cfb79229583eda40",
+      "line_contains_std_env_var": true,
+      "source_line": "            plafond_journal: std::env::var(\"RAG3WEAVER_JOURNAL_PLAFOND\")"
+    },
+    {
+      "fields": [
+        "src/commande.rs",
+        "941",
+        "dans",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "aed883a199242ceb52c09506350ed5cdda2860c41c2ecbe6cfb79229583eda40",
+      "line_contains_std_env_var": true,
+      "source_line": "            plafond_journal: std::env::var(\"RAG3WEAVER_JOURNAL_PLAFOND\")"
+    },
+    {
+      "fields": [
+        "src/cypher_blob_store.rs",
+        "337",
+        "upsert_blobs_query",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "df7c0a2b1612f966e1fda292db123a23c3b7895a5274ac24b166036d59164f6d",
+      "line_contains_std_env_var": false,
+      "source_line": "            &[crate::dialect::ParCle { var: \"b\", label: Some(\"_index_blobs\"), prop: \"_key\", champ: \"key\" }],"
+    },
+    {
+      "fields": [
+        "src/cypher_blob_store.rs",
+        "60",
+        "CypherBlobStore",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "df7c0a2b1612f966e1fda292db123a23c3b7895a5274ac24b166036d59164f6d",
+      "line_contains_std_env_var": true,
+      "source_line": "        let retention = std::env::var(RETENTION_ENV).ok().and_then(|v| v.parse().ok()).unwrap_or(2);"
+    },
+    {
+      "fields": [
+        "src/cypher_blob_store.rs",
+        "60",
+        "new",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "df7c0a2b1612f966e1fda292db123a23c3b7895a5274ac24b166036d59164f6d",
+      "line_contains_std_env_var": true,
+      "source_line": "        let retention = std::env::var(RETENTION_ENV).ok().and_then(|v| v.parse().ok()).unwrap_or(2);"
+    },
+    {
+      "fields": [
+        "src/daemon/embeddings.rs",
+        "77",
+        "IdentiteActivation",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "e331c1fe698de9311b08b826169b862d9fd148c6083607773e9173f0c91e0ae8",
+      "line_contains_std_env_var": true,
+      "source_line": "        let valeurs: Vec<_> = noms.iter().map(|n| std::env::var(n).ok().filter(|s| !s.trim().is_empty())).collect();"
+    },
+    {
+      "fields": [
+        "src/daemon/embeddings.rs",
+        "77",
+        "depuis_environnement",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "e331c1fe698de9311b08b826169b862d9fd148c6083607773e9173f0c91e0ae8",
+      "line_contains_std_env_var": true,
+      "source_line": "        let valeurs: Vec<_> = noms.iter().map(|n| std::env::var(n).ok().filter(|s| !s.trim().is_empty())).collect();"
+    },
+    {
+      "fields": [
+        "src/daemon/embeddings.rs",
+        "821",
+        "default_embed_timeout",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "e331c1fe698de9311b08b826169b862d9fd148c6083607773e9173f0c91e0ae8",
+      "line_contains_std_env_var": true,
+      "source_line": "    let secondes = std::env::var(\"RAG3WEAVER_EMBED_TIMEOUT_SECS\").ok().and_then(|v| v.trim().parse::<u64>().ok()).filter(|s| *s > 0);"
+    },
+    {
+      "fields": [
+        "src/daemon/embeddings.rs",
+        "940",
+        "DaemonEmbedder",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "e331c1fe698de9311b08b826169b862d9fd148c6083607773e9173f0c91e0ae8",
+      "line_contains_std_env_var": true,
+      "source_line": "        let explicit = std::env::var(MODEL_VARIABLE).ok();"
+    },
+    {
+      "fields": [
+        "src/daemon/embeddings.rs",
+        "940",
+        "serveur_for_repository",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "e331c1fe698de9311b08b826169b862d9fd148c6083607773e9173f0c91e0ae8",
+      "line_contains_std_env_var": true,
+      "source_line": "        let explicit = std::env::var(MODEL_VARIABLE).ok();"
+    },
+    {
+      "fields": [
+        "src/daemon/embeddings.rs",
+        "964",
+        "from_service",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "e331c1fe698de9311b08b826169b862d9fd148c6083607773e9173f0c91e0ae8",
+      "line_contains_std_env_var": true,
+      "source_line": "            .find_map(|v| std::env::var(v).ok().filter(|v| !v.trim().is_empty()))?;"
+    },
+    {
+      "fields": [
+        "src/daemon_host.rs",
+        "1552",
+        "idle_from_env",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "1bdb93fc96c45631ba030ce6b4bf03ac5d2c581032139824fdd7eab568e413c0",
+      "line_contains_std_env_var": true,
+      "source_line": "    let minutes = std::env::var(\"RAG3WEAVER_DAEMON_IDLE_MIN\").ok().and_then(|v| v.trim().parse::<f64>().ok()).unwrap_or(30.0);"
+    },
+    {
+      "fields": [
+        "src/daemon_host/apercu_a_chaud.rs",
+        "26",
+        "paquets_ou_saut",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "f7c05a98860b3d719149e00e5d07ace0388a116d71ee9483e631aba84dff781d",
+      "line_contains_std_env_var": true,
+      "source_line": "    if std::env::var(\"RAG3WEAVER_EXIGER_NAVIGATEUR\").as_deref() == Ok(\"1\") {"
+    },
+    {
+      "fields": [
+        "src/daemon_host/apercu_a_chaud.rs",
+        "605",
+        "gemini_ou_saut",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "f7c05a98860b3d719149e00e5d07ace0388a116d71ee9483e631aba84dff781d",
+      "line_contains_std_env_var": true,
+      "source_line": "    let projet = std::env::var(\"GOOGLE_CLOUD_PROJECT\").ok().filter(|p| !p.is_empty());"
+    },
+    {
+      "fields": [
+        "src/daemon_host/apercu_a_chaud.rs",
+        "714",
+        "l_agent_de_l_ide_propose_un_gabarit_sur_gemini",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "f7c05a98860b3d719149e00e5d07ace0388a116d71ee9483e631aba84dff781d",
+      "line_contains_std_env_var": true,
+      "source_line": "    let patience = std::env::var(\"RAG3WEAVER_TOUR_MAX_S\").ok().and_then(|v| v.parse().ok()).unwrap_or(300);"
+    },
+    {
+      "fields": [
+        "src/daemon_host/journal_des_runs.rs",
+        "193",
+        "reglage",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "57ac4c9905cd90bba80ac50200a8f19d8d5ec4a3f4a2d6edbf4b4afb6ddc52f9",
+      "line_contains_std_env_var": true,
+      "source_line": "    std::env::var(nom).ok().and_then(|v| v.parse().ok()).unwrap_or(defaut)"
+    },
+    {
+      "fields": [
+        "src/daemon_host/navigateur.rs",
+        "1015",
+        "l_ide_d_un_vrai_hote_se_rend_en_lecture_seule",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "c460038fa016e9ae71a76fe257bd5d6d20cb3223da4229150e307e4d46ce0e9c",
+      "line_contains_std_env_var": true,
+      "source_line": "    let (Ok(adresse), Ok(manifeste)) = (std::env::var(\"RAG3WEAVER_TEMOIN_HOTE\"), std::env::var(\"RAG3WEAVER_TEMOIN_MANIFESTE\")) else {"
+    },
+    {
+      "fields": [
+        "src/daemon_host/navigateur.rs",
+        "80",
+        "navigateur_ou_saut",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "c460038fa016e9ae71a76fe257bd5d6d20cb3223da4229150e307e4d46ce0e9c",
+      "line_contains_std_env_var": true,
+      "source_line": "    if std::env::var(\"RAG3WEAVER_EXIGER_NAVIGATEUR\").as_deref() == Ok(\"1\") {"
+    },
+    {
+      "fields": [
+        "src/daemon_lifecycle.rs",
+        "126",
+        "launch_address",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "752c60c37e8ff53d65aa73dba04fa9d122c59d40ff845ec008cd1581c9d909fa",
+      "line_contains_std_env_var": true,
+      "source_line": "    std::env::var(\"RAG3WEAVER_DAEMON_ADDRESS\")"
+    },
+    {
+      "fields": [
+        "src/daemon_lifecycle.rs",
+        "551",
+        "unite_installee",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "752c60c37e8ff53d65aa73dba04fa9d122c59d40ff845ec008cd1581c9d909fa",
+      "line_contains_std_env_var": true,
+      "source_line": "    let du_client = std::env::var(\"RAG3WEAVER_DAEMON_DIR\").ok().filter(|v| !v.is_empty());"
+    },
+    {
+      "fields": [
+        "src/dataflow/clic_tsx.rs",
+        "134",
+        "transpiler",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "fichier"
+      ],
+      "source_sha256": "292dfa429f727e5d39f8d5087f9857916d7c83a49a2557b8df537116e97bd111",
+      "line_contains_std_env_var": false,
+      "source_line": "            Genre::Pur { .. } if actifs.contains(e.from_node.as_str()) => Some(var(&e.from_node)),"
+    },
+    {
+      "fields": [
+        "src/dataflow/highlight_nodes.rs",
+        "367",
+        "sonde_le_creux_reel",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "95ae8f5d7a776ba3df99b2420e9857e6ecfe058a975667b683c12aca45f737fb",
+      "line_contains_std_env_var": true,
+      "source_line": "        let adresse = std::env::var(\"RAG3WEAVER_SONDE_CREUX\").expect(\"RAG3WEAVER_SONDE_CREUX : l'adresse du service bge-m3\");"
+    },
+    {
+      "fields": [
+        "src/dataflow/index_nodes.rs",
+        "514",
+        "run_index",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "417ddc91afcc30b0d774fb7b4c2d21f4b9959a14f57320005bc783e9be79fec5",
+      "line_contains_std_env_var": true,
+      "source_line": "        let permise = std::env::var(\"RAG3WEAVER_REECRIRE_LES_VIDES\").map_or(true, |v| v != \"0\");"
+    },
+    {
+      "fields": [
+        "src/dataflow/jetons_tests.rs",
+        "182",
+        "start_llama",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "274fd3fca07f1fe4f39620df897020b650f4f0a662dc5ab3e378dff0fbb5708f",
+      "line_contains_std_env_var": true,
+      "source_line": "        let model = std::env::var(\"RAG3WEAVER_TEMOIN_MODELE\").unwrap_or_else(|_| {"
+    },
+    {
+      "fields": [
+        "src/dataflow/mermaid.rs",
+        "286",
+        "parse_value",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "2d77f535a0871f641d6849e458d1d7a3cc574b87434ab1f1d983ee8860a60ff1",
+      "line_contains_std_env_var": false,
+      "source_line": "            let val = vars.get(racine).ok_or_else(|| MermaidError::UnknownVariable { line: line_num, var: racine.to_string() })?;"
+    },
+    {
+      "fields": [
+        "src/dataflow/mermaid.rs",
+        "350",
+        "substitute_vars",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "2d77f535a0871f641d6849e458d1d7a3cc574b87434ab1f1d983ee8860a60ff1",
+      "line_contains_std_env_var": false,
+      "source_line": "                var: var_name.to_string(),"
+    },
+    {
+      "fields": [
+        "src/dataflow/mermaid.rs",
+        "704",
+        "parse_template_unknown_var_errors",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "2d77f535a0871f641d6849e458d1d7a3cc574b87434ab1f1d983ee8860a60ff1",
+      "line_contains_std_env_var": false,
+      "source_line": "        assert!(matches!(err, MermaidError::UnknownVariable { var, .. } if var == \"missing\"));"
+    },
+    {
+      "fields": [
+        "src/dataflow/migrations/physical_index.rs",
+        "986",
+        "physical_boundary",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "30099882d2d6aece90faeb1468310a3d955c48c43e66ec7ca59f9a709f4bc8d2",
+      "line_contains_std_env_var": true,
+      "source_line": "        let wanted = std::env::var(\"RAG3WEAVER_PHYSICAL_CRASH\").ok();"
+    },
+    {
+      "fields": [
+        "src/dataflow/migrations/physical_index/tests.rs",
+        "505",
+        "physical_crash_child",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "b5fe9a0c382b3e4c753b3cfa5570dbce6baceeef22ac1bd078f2928116795d64",
+      "line_contains_std_env_var": true,
+      "source_line": "    let Ok(root) = std::env::var(\"RAG3WEAVER_PHYSICAL_CHILD_ROOT\") else {"
+    },
+    {
+      "fields": [
+        "src/dataflow/migrations/publication/native/tests.rs",
+        "201",
+        "native_interruption_child",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "f3aa01fb06b6d0691ce20137b6cfc42ae3272f80beb4884c619eec2dd051de57",
+      "line_contains_std_env_var": true,
+      "source_line": "    let origin = std::env::var(\"CX_PUBLICATION_CRASH_ORIGIN\").unwrap();"
+    },
+    {
+      "fields": [
+        "src/dataflow/record_nodes.rs",
+        "2499",
+        "embed_pipeline_suivi",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "4e12f89687ddc92b2e53cdab1df67f2ac388b75ac4903bf2a4544aac7e0a87aa",
+      "line_contains_std_env_var": true,
+      "source_line": "                let producteurs = std::env::var(\"RAG3WEAVER_EMBED_THREADS\")"
+    },
+    {
+      "fields": [
+        "src/dataflow/record_nodes.rs",
+        "681",
+        "copy_seuil",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "4e12f89687ddc92b2e53cdab1df67f2ac388b75ac4903bf2a4544aac7e0a87aa",
+      "line_contains_std_env_var": true,
+      "source_line": "        std::env::var(\"RAG3WEAVER_LINK_COPY_THRESHOLD\")"
+    },
+    {
+      "fields": [
+        "src/dataflow/run_nodes.rs",
+        "114",
+        "jours_gardes",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "d161aaa6a2db1cc21f86b642e5809f246e0d64a271579f79322f2b8ac58bed4e",
+      "line_contains_std_env_var": true,
+      "source_line": "    std::env::var(\"RAG3WEAVER_JOURNAUX_JOURS\").ok().and_then(|v| v.trim().parse().ok()).unwrap_or(JOURS_GARDES)"
+    },
+    {
+      "fields": [
+        "src/dialect.rs",
+        "2239",
+        "Rag3dbDialect",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "cbac8caf5af77e70911344b47acfda7dd793b956ebe915f424f011970b41678a",
+      "line_contains_std_env_var": false,
+      "source_line": "            unwind_par_cle(\"items\", &[ParCle { var: \"n\", label: Some(&t), prop: &prop, champ: &champ }], \"MATCH\")"
+    },
+    {
+      "fields": [
+        "src/dialect.rs",
+        "2239",
+        "batch_select",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "cbac8caf5af77e70911344b47acfda7dd793b956ebe915f424f011970b41678a",
+      "line_contains_std_env_var": false,
+      "source_line": "            unwind_par_cle(\"items\", &[ParCle { var: \"n\", label: Some(&t), prop: &prop, champ: &champ }], \"MATCH\")"
+    },
+    {
+      "fields": [
+        "src/dialect.rs",
+        "2256",
+        "batch_select_chunks_with_parent_link",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "cbac8caf5af77e70911344b47acfda7dd793b956ebe915f424f011970b41678a",
+      "line_contains_std_env_var": false,
+      "source_line": "            unwind_par_cle(\"items\", &[ParCle { var: \"n\", label: Some(&t), prop: \"_parent_uuid\", champ: &champ }], \"MATCH\"),"
+    },
+    {
+      "fields": [
+        "src/dialect.rs",
+        "843",
+        "SchemaDialect",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "cbac8caf5af77e70911344b47acfda7dd793b956ebe915f424f011970b41678a",
+      "line_contains_std_env_var": false,
+      "source_line": "            unwind_par_cle(\"items\", &[ParCle { var: \"a\", label: Some(\"_snapshot_aside\"), prop: \"_key\", champ: \"key\" }], \"MERGE\")"
+    },
+    {
+      "fields": [
+        "src/dialect.rs",
+        "843",
+        "upsert_aside",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "cbac8caf5af77e70911344b47acfda7dd793b956ebe915f424f011970b41678a",
+      "line_contains_std_env_var": false,
+      "source_line": "            unwind_par_cle(\"items\", &[ParCle { var: \"a\", label: Some(\"_snapshot_aside\"), prop: \"_key\", champ: \"key\" }], \"MERGE\")"
+    },
+    {
+      "fields": [
+        "src/embedder.rs",
+        "1043",
+        "lot_budget",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "74f5c0d0b6540c37520ccbf76a5b1f14175df658cfe3996566b1720256e8a128",
+      "line_contains_std_env_var": true,
+      "source_line": "    let explicite = std::env::var(\"RAG3WEAVER_EMBED_CHAR_BUDGET\").ok().and_then(|v| v.trim().parse::<usize>().ok()).filter(|v| *v > 0);"
+    },
+    {
+      "fields": [
+        "src/embedder.rs",
+        "926",
+        "gpu_duty",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "74f5c0d0b6540c37520ccbf76a5b1f14175df658cfe3996566b1720256e8a128",
+      "line_contains_std_env_var": true,
+      "source_line": "    std::env::var(\"RAG3WEAVER_GPU_DUTY\")"
+    },
+    {
+      "fields": [
+        "src/embedder.rs",
+        "994",
+        "embed_char_budget",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "74f5c0d0b6540c37520ccbf76a5b1f14175df658cfe3996566b1720256e8a128",
+      "line_contains_std_env_var": true,
+      "source_line": "    std::env::var(\"RAG3WEAVER_EMBED_CHAR_BUDGET\")"
+    },
+    {
+      "fields": [
+        "src/estimate.rs",
+        "115",
+        "buffer_pool_here",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "81a00854b2d4550bb814c6cecfc69a6ab267b266364ef4ad49fae518bd814140",
+      "line_contains_std_env_var": true,
+      "source_line": "        let bytes = std::env::var(\"RAG3DB_BUFFER_POOL_SIZE\").ok().and_then(|v| v.trim().parse::<u64>().ok());"
+    },
+    {
+      "fields": [
+        "src/estimate.rs",
+        "419",
+        "service_attached",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "81a00854b2d4550bb814c6cecfc69a6ab267b266364ef4ad49fae518bd814140",
+      "line_contains_std_env_var": true,
+      "source_line": "        crate::model_source::Capability::Embed.variables().iter().any(|v| std::env::var(v).is_ok_and(|v| !v.trim().is_empty()))"
+    },
+    {
+      "fields": [
+        "src/estimate.rs",
+        "447",
+        "estimate_here",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "81a00854b2d4550bb814c6cecfc69a6ab267b266364ef4ad49fae518bd814140",
+      "line_contains_std_env_var": true,
+      "source_line": "    let explicit = std::env::var(crate::embedding_choice::MODEL_VARIABLE).ok();"
+    },
+    {
+      "fields": [
+        "src/events.rs",
+        "418",
+        "Event",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "caa4f28bcffa682708d31474b4e0420456a687189b4cc7025880665ac8cfe269",
+      "line_contains_std_env_var": true,
+      "source_line": "        std::env::var(\"RAG3WEAVER_PAIRES_PAR_EVENEMENT\")"
+    },
+    {
+      "fields": [
+        "src/events.rs",
+        "418",
+        "paires_par_evenement_par_defaut",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "caa4f28bcffa682708d31474b4e0420456a687189b4cc7025880665ac8cfe269",
+      "line_contains_std_env_var": true,
+      "source_line": "        std::env::var(\"RAG3WEAVER_PAIRES_PAR_EVENEMENT\")"
+    },
+    {
+      "fields": [
+        "src/gcp_auth.rs",
+        "94",
+        "TokenSource",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "40dcba1e0484be2a372496778608c42667b7f5961a48538f8531d86a7c106922",
+      "line_contains_std_env_var": true,
+      "source_line": "        if let Ok(path) = std::env::var(\"GOOGLE_APPLICATION_CREDENTIALS\") {"
+    },
+    {
+      "fields": [
+        "src/gcp_auth.rs",
+        "94",
+        "from_env",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "40dcba1e0484be2a372496778608c42667b7f5961a48538f8531d86a7c106922",
+      "line_contains_std_env_var": true,
+      "source_line": "        if let Ok(path) = std::env::var(\"GOOGLE_APPLICATION_CREDENTIALS\") {"
+    },
+    {
+      "fields": [
+        "src/http_embedder.rs",
+        "31",
+        "HttpEmbedder",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "00551215aa94d0cda24575155dbd1c4d13eb7b00bc4e11009070c50546e56fd7",
+      "line_contains_std_env_var": true,
+      "source_line": "                std::env::var(name)"
+    },
+    {
+      "fields": [
+        "src/http_embedder.rs",
+        "31",
+        "new",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "00551215aa94d0cda24575155dbd1c4d13eb7b00bc4e11009070c50546e56fd7",
+      "line_contains_std_env_var": true,
+      "source_line": "                std::env::var(name)"
+    },
+    {
+      "fields": [
+        "src/model_source.rs",
+        "267",
+        "process_env",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "79118d815c1bf6c38809e3c8c6a61d4e2201f30a106f083a0d6ace5e191c360f",
+      "line_contains_std_env_var": true,
+      "source_line": "    std::env::var(name).ok()"
+    },
+    {
+      "fields": [
+        "src/model_source.rs",
+        "653",
+        "local_artifact",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "79118d815c1bf6c38809e3c8c6a61d4e2201f30a106f083a0d6ace5e191c360f",
+      "line_contains_std_env_var": true,
+      "source_line": "    let path = match std::env::var(&variable) {"
+    },
+    {
+      "fields": [
+        "src/model_source/activation.rs",
+        "612",
+        "profil_etranger_entre_processus_est_refuse",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "83f96ae85746a7fe8d53357a0d4505b0453d5937b6de1f6edea03e084a57138e",
+      "line_contains_std_env_var": true,
+      "source_line": "        if let Ok(chemin) = std::env::var(\"CX_ACTIVATION_SOURCE_TEST\") {"
+    },
+    {
+      "fields": [
+        "src/model_source/activation.rs",
+        "712",
+        "une_activation_distante_reelle_lance_compte_et_evince",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "83f96ae85746a7fe8d53357a0d4505b0453d5937b6de1f6edea03e084a57138e",
+      "line_contains_std_env_var": true,
+      "source_line": "        let v = |n: &str| std::env::var(format!(\"RAG3WEAVER_ESSAI_DISTANT_{n}\")).unwrap_or_else(|_| panic!(\"RAG3WEAVER_ESSAI_DISTANT_{n} requise\"));"
+    },
+    {
+      "fields": [
+        "src/openai_llm.rs",
+        "1447",
+        "read_sse",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "c0aff091ef4b64b56f76d4df7b3b387a40af744aeb92a5f83db2b00ece0a772d",
+      "line_contains_std_env_var": true,
+      "source_line": "        if let Ok(path) = std::env::var(\"RAG3WEAVER_SSE_DUMP\") {"
+    },
+    {
+      "fields": [
+        "src/origin.rs",
+        "438",
+        "the_same_file_reached_from_two_depths_has_one_origin_and_one_name",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "5d880dbd66a08ab744b4cfe106688536a19c37c88f825235061f4d62aad328ff",
+      "line_contains_std_env_var": true,
+      "source_line": "        let manifest = std::env::var(\"CARGO_MANIFEST_DIR\").unwrap();"
+    },
+    {
+      "fields": [
+        "src/origin.rs",
+        "491",
+        "git_coordinates_name_a_file_by_its_repo_not_by_the_disk",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "5d880dbd66a08ab744b4cfe106688536a19c37c88f825235061f4d62aad328ff",
+      "line_contains_std_env_var": true,
+      "source_line": "        let manifest = std::env::var(\"CARGO_MANIFEST_DIR\").unwrap();"
+    },
+    {
+      "fields": [
+        "src/rag3db_connection.rs",
+        "295",
+        "Rag3dbConnection",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "736ba893968791d88731823c6a91c9321e6334c02e8e7c2214f880f8455e1c9a",
+      "line_contains_std_env_var": true,
+      "source_line": "        if let Some(v) = std::env::var(\"RAG3DB_MAX_DB_SIZE\").ok().and_then(|s| s.parse::<u64>().ok()) {"
+    },
+    {
+      "fields": [
+        "src/rag3db_connection.rs",
+        "295",
+        "config_with_buffer_pool",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "736ba893968791d88731823c6a91c9321e6334c02e8e7c2214f880f8455e1c9a",
+      "line_contains_std_env_var": true,
+      "source_line": "        if let Some(v) = std::env::var(\"RAG3DB_MAX_DB_SIZE\").ok().and_then(|s| s.parse::<u64>().ok()) {"
+    },
+    {
+      "fields": [
+        "src/rag3db_connection.rs",
+        "447",
+        "connect",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "736ba893968791d88731823c6a91c9321e6334c02e8e7c2214f880f8455e1c9a",
+      "line_contains_std_env_var": true,
+      "source_line": "            if let Some(n) = std::env::var(\"RAG3WEAVER_EXEC_THREADS\").ok().and_then(|v| v.parse::<u64>().ok()) {"
+    },
+    {
+      "fields": [
+        "src/rag3db_connection.rs",
+        "938",
+        "buffer_pool_choice",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "736ba893968791d88731823c6a91c9321e6334c02e8e7c2214f880f8455e1c9a",
+      "line_contains_std_env_var": true,
+      "source_line": "    if let Some(v) = std::env::var(\"RAG3DB_BUFFER_POOL_SIZE\").ok().and_then(|s| s.parse::<u64>().ok()) {"
+    },
+    {
+      "fields": [
+        "src/rag3db_connection.rs",
+        "986",
+        "crossed_open_budget",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "736ba893968791d88731823c6a91c9321e6334c02e8e7c2214f880f8455e1c9a",
+      "line_contains_std_env_var": true,
+      "source_line": "    let ms = std::env::var(\"RAG3WEAVER_READ_ONLY_CROSSED_MS\")"
+    },
+    {
+      "fields": [
+        "src/read_pool.rs",
+        "65",
+        "plafond",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "53a56d55c670c7b23fb0be5fbe28f84eab90d2fe973b496b5482c95976a956be",
+      "line_contains_std_env_var": true,
+      "source_line": "    std::env::var(\"RAG3WEAVER_READ_POOL\").ok().and_then(|v| v.parse().ok()).unwrap_or(8)"
+    },
+    {
+      "fields": [
+        "src/regime.rs",
+        "209",
+        "Origine",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "e7660fe242322a0be41626c523315fb4d0468b293b535e5bbcdab82b5227226e",
+      "line_contains_std_env_var": true,
+      "source_line": "        Self::voulue_si(regime, std::env::var(VARIABLE_LLM).ok().as_deref(), std::env::var(\"RAG3WEAVER_LOCAL_LLM\").is_ok())"
+    },
+    {
+      "fields": [
+        "src/regime.rs",
+        "209",
+        "voulue",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "e7660fe242322a0be41626c523315fb4d0468b293b535e5bbcdab82b5227226e",
+      "line_contains_std_env_var": true,
+      "source_line": "        Self::voulue_si(regime, std::env::var(VARIABLE_LLM).ok().as_deref(), std::env::var(\"RAG3WEAVER_LOCAL_LLM\").is_ok())"
+    },
+    {
+      "fields": [
+        "src/regime.rs",
+        "261",
+        "modele_agentique_nomme",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "e7660fe242322a0be41626c523315fb4d0468b293b535e5bbcdab82b5227226e",
+      "line_contains_std_env_var": true,
+      "source_line": "            let base = std::env::var(\"RAG3WEAVER_LOCAL_LLM\")"
+    },
+    {
+      "fields": [
+        "src/regime.rs",
+        "96",
+        "Regime",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "e7660fe242322a0be41626c523315fb4d0468b293b535e5bbcdab82b5227226e",
+      "line_contains_std_env_var": true,
+      "source_line": "        match std::env::var(VARIABLE) {"
+    },
+    {
+      "fields": [
+        "src/regime.rs",
+        "96",
+        "explicit",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "e7660fe242322a0be41626c523315fb4d0468b293b535e5bbcdab82b5227226e",
+      "line_contains_std_env_var": true,
+      "source_line": "        match std::env::var(VARIABLE) {"
+    },
+    {
+      "fields": [
+        "src/work_domain.rs",
+        "323",
+        "the_default_domain_is_the_repo_of_the_file_being_worked_on",
+        "var",
+        "src/dataflow/clic_tsx.rs",
+        "nom"
+      ],
+      "source_sha256": "e25140067ed16bfe1f301ae6b3a6f14d55489f5c2e4dfbe4120accf5e433da74",
+      "line_contains_std_env_var": true,
+      "source_line": "        let here = std::path::PathBuf::from(std::env::var(\"CARGO_MANIFEST_DIR\").unwrap()).join(\"src/work_domain.rs\");"
+    }
+  ],
+  "total_var_rows": 117,
+  "qualified_spelling_on_line": 107,
+  "limitations": "A matching line is not an AST occurrence oracle; same-line bare calls must not be erased."
+}
