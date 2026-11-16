@@ -61,7 +61,7 @@ dit ce qu'elle lit, ce qu'elle fait, et où est le travail de chaque périmètre
 | banc | en attente | | |
 | codeparsers | en attente | | |
 | coeur-cpp | `docs/coeur-cpp/16-11-2026/01-passation-pour-codex.md` | 13 entrées par gravité : P1 COMMIT sous index vectoriel ; C1 dictionnaire, C2 lecteur de l'index de clé, C3 optimisticRead ; F1 pk-lookup ; B1 Schema changed, B2 verrou à la liaison, B3 point de reprise ; L1–L3 ; S1–S2 | 96daa8f12 |
-| coeur-cpp-hotfixs-tickets | en attente | | |
+| coeur-cpp-hotfixs-tickets | `docs/coeur-cpp-hotfixs-tickets/16-11-2026/02-passation-pour-codex.md` | 14 entrées (70–90 h) : ADD COLUMN sous verrou de schéma, lecture au-delà de la colonne en cache, rang déplacé pendant un CREATE, rows_outside_graph, quarantaine d'une annulation partielle, journal sans borne hors COPY, nœuds liés par leur clé, DROP TABLE et ses pages, RTree, doublon du COPY, cible clean, traces de run_e2e, optimisticRead, tools/shell ; les entrées 2, 3, 5, 7 passent par l'orchestration avant d'écrire (fichiers du cœur) | d61841b448 |
 | embarquement | en attente | | |
 | everything-declarative | en attente | | |
 | lucivy | en attente | | |
