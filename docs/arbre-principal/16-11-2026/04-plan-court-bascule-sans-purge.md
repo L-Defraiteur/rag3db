@@ -50,3 +50,9 @@ Après migration surcopie : estampilleEXACTE code-scope-v1/content/generations (
 ### DiagnosticRO dette469 après premierrougedata, aucuneCLIrejouée
 
 `bascule/diagnose-vector-debt.py` : deuxcopiesséparées, fresh-sets-01/code-principal/copy AVANT et corrective02/post-copy APRÈS ; niGsource ni basevivante ouverts. Query48ae/lib59ac SHA etBUILDID exact, readonlypool1GiB ; septcomptes scalaires (oldchunks/debtavant, mêmesoldchunk/debtaprès, newdebt, newdebtavecancienexact etavecancienexact+vecteurvalide selon tupleparentfield/index/texthash/title). Comparaisons SQLinDB évitent exportdetextes/titres. SHAensemblescopiessavant/après eterreursconservées, premierrefusSTOP ; portéeRO300s/poste32G/interne280/sousprocessusMIN60reste−5, aucunembed/Cargo/service/writer. Diagnosticcountsn'estPASqualifmigration/absencededette ; aucun relâchement du garde0 à chaud.
+
+## Fenêtre vivante ANNULÉE après dette469 — aucune permission courante
+
+C7 annuleexplicitement lafenêtrefroideaprèsrougedataCOPY02 : GpeutreprendreAPI7970PC/source927/59acaprèsfreshsourceSHAold etabsencewriterdesCOPIES. AucuneCLIvivante n'a étéjouée, donc pasderestaurationdata. **Toutesgatesfresh733/6b16/5e13/b3c sont désormais HISTORIQUES ; autorisationCLIliveexpirée**, aucuneconservationimplicitedeGO. Unefuturemigrationprincipale réclame nouvellefenêtre/snapshot/préconditionsactualisées etqualificationde la cause469. Pasd'API7970parArbrejusqu'auFINIG.
+
+Seulemissionactive : diagnosticROcatégorisédes469surcopiesfroidesconservées, source927/CLI59gelés, pasCargo/HTTP/recalc/index/écrivain/autrebase. Pourchaquechunkendette : toutesoccurrencesH, compatibilitéexacteancienschunks etfraîcheurvecteur, classeraucuncandidat/chezreprésentant/chezautreoccurrence ; comptagedetteavant etdiffschamp/rang/hash/texte/titre, matrice469unique/complète sanssecretvectoriel ni sourcecodeenclair. PuisarbitrageC7 ; ticketouvert/missionbascule NONTERMINÉE. Aucunseuil0relâchépourblanchirrouge.
