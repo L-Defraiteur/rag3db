@@ -32,8 +32,12 @@ def decode(raw):
             value[key] = item
         return value
     def nonfinite(value): raise ValueError('nonfinite health JSON scalar')
+    def floating(value):
+        number = float(value)
+        if not math.isfinite(number): raise ValueError('overflowing health JSON number')
+        return number
     if isinstance(raw, bytes): raw = raw.decode('utf-8', 'strict')
-    return json.loads(raw, object_pairs_hook=unique, parse_constant=nonfinite)
+    return json.loads(raw, object_pairs_hook=unique, parse_constant=nonfinite, parse_float=floating)
 
 
 def finite(value):
@@ -113,16 +117,42 @@ def worker(context):
     if now >= work_due: raise ValueError('health deadline exhausted by policy/imports')
     connection = http.client.HTTPConnection('127.0.0.1', int(context['address'].rsplit(':', 1)[1]),
                                             timeout=work_due-now)
+    def event(value):
+        print(json.dumps(value, allow_nan=False), file=sys.stderr, flush=True)
+    status = None
+    body = bytearray()
     try:
+        event(dict(event='health-request-start', address=context['address'], method='GET', path='/sante'))
         connection.request('GET', '/sante')
         response = connection.getresponse()
-        body = response.read(MAX_BODY+1)
+        status = response.status
+        event(dict(event='health-status', status=status))
+        while len(body) <= MAX_BODY:
+            if time.monotonic() >= work_due: raise TimeoutError('health body deadline expired')
+            chunk = response.read1(min(4096, MAX_BODY+1-len(body)))
+            if not chunk:
+                remaining = getattr(response, 'length', None)
+                if type(remaining) is int and remaining > 0:
+                    raise ValueError('health body closed before declared length')
+                break
+            chunk = chunk[:MAX_BODY+1-len(body)]
+            body.extend(chunk)
+            event(dict(event='health-body-chunk', raw_hex=chunk.hex(), received=len(body)))
+            if len(body) > MAX_BODY: break
         oversized = len(body) > MAX_BODY
-        print(json.dumps(dict(status=response.status, raw_hex=body.hex(),
+        print(json.dumps(dict(status=status, raw_hex=body.hex(),
                               oversize=oversized, prefix_only=oversized)), flush=True)
         if oversized: raise ValueError('health prefix exceeds body bound')
         if time.monotonic() >= work_due: raise ValueError('whole health worker deadline expired')
-    finally:
+    except BaseException as error:
+        event(dict(event='health-failure', error_type=type(error).__name__,
+                   status=status, received=len(body)))
+        try:
+            connection.close()
+        except BaseException as cleanup_error:
+            event(dict(event='health-close-failure', error_type=type(cleanup_error).__name__))
+        raise
+    else:
         connection.close()
 
 

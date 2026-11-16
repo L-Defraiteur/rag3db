@@ -52,7 +52,7 @@ class HealthTransport(unittest.TestCase):
     def test_worker_calls_only_pinned_policy_then_fixed_bge_health(self):
         context=dict(self.context,work_deadline_monotonic=84.5)
         connection=Mock();connection.getresponse.return_value.status=200
-        connection.getresponse.return_value.read.return_value=json.dumps(self.health).encode()
+        connection.getresponse.return_value.read1.side_effect=[json.dumps(self.health).encode(),b'']
         with patch.object(t.time,'monotonic',return_value=80.),patch.object(t.http.client,'HTTPConnection',return_value=connection) as http,patch('builtins.print'):
             t.worker(context)
         http.assert_called_once_with('127.0.0.1',7879,timeout=4.5)
@@ -111,10 +111,11 @@ class HealthTransport(unittest.TestCase):
     def test_oversize_worker_preserves_bounded_prefix_before_refusal(self):
         context=dict(self.context,work_deadline_monotonic=84.5)
         connection=Mock();connection.getresponse.return_value.status=200
-        connection.getresponse.return_value.read.return_value=b'x'*65537
+        connection.getresponse.return_value.read1.side_effect=[b'x'*65537]
         with patch.object(t.time,'monotonic',return_value=80.),patch.object(t.http.client,'HTTPConnection',return_value=connection),patch('builtins.print') as printed:
             with self.assertRaises(ValueError):t.worker(context)
-        record=t.decode(printed.call_args.args[0]);self.assertTrue(record['prefix_only'])
+        frame=[c for c in printed.call_args_list if 'file' not in c.kwargs][-1]
+        record=t.decode(frame.args[0]);self.assertTrue(record['prefix_only'])
         self.assertEqual(len(bytes.fromhex(record['raw_hex'])),65537)
 
     def test_status_is_preserved_before_body_read_exception(self):

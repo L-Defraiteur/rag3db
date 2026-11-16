@@ -244,7 +244,7 @@ class SharedTransport(unittest.TestCase):
         from unittest.mock import Mock
         f,context=self.fixture();connection=Mock()
         connection.getresponse.return_value.status=200
-        connection.getresponse.return_value.read.return_value=b'{"modele":"bge-m3"}'
+        connection.getresponse.return_value.read1.side_effect=[b'{"modele":"bge-m3"}',b'']
         with patch.object(owner.http.client,'HTTPConnection',return_value=connection) as http, \
              patch.object(owner.phase_protocol,'read_phase_state',side_effect=f.phase_reader), \
              patch.object(owner.process_observation,'process_snapshot',side_effect=f.process_reader), \
