@@ -53,6 +53,15 @@ property b ».
   bloqué (des ADD et des CREATE REL TABLE refusés par le pool plein, puis un CHECKPOINT qui
   réussit) ne se recréent pas en jouant sur la taille du pool.
 
+- Une course vue par TSan le 16 novembre (passe du dictionnaire sous 200 Mio, sur master
+  `64eee2e1f`, 7 rapports en deux tours) : le COMMIT écrit l'horodatage d'une entrée du catalogue
+  (`UndoBuffer::commitCatalogEntryRecord` → `CatalogEntry::setTimestamp`) sans le verrou du
+  `CatalogSet`, pendant qu'un lecteur le lit sous ce verrou
+  (`CatalogSet::traverseVersionChainsForTransactionNoLock`, depuis `PlanMapper::mapScanNodeTable`).
+  Une écriture de 8 octets alignés : elle ne se déchire pas sur x86-64, et elle ne peut pas laisser
+  pour toujours une tête non validée. Pas la cause probable ; à garder pour la lecture. Rapports :
+  `~/.cache/rag3db-moteur-notes/dict-tsan/tsan-<tour>.*` à luciepc.
+
 ## Pour avancer
 
 - La sonde reste posée (`scratchpad` de cœur c++ : `sonde-diag.py`, à appliquer à
