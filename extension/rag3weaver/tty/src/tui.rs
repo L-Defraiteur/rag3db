@@ -49,7 +49,7 @@ fn connaitre(agent: &ureq::Agent, ep: &Endpoint, tache: &Tache, filtre: &Mutex<O
         *filtre.lock().unwrap_or_else(|p| p.into_inner()) = Some(m.clone());
     }
     let manifeste = worktree.unwrap_or_else(|| tache.depot.manifest.clone());
-    if let Ok(etat) = client::lire_brut(agent, ep, "/ide/etat") {
+    if let Ok(etat) = load_state("/ide/etat") {
         let _ = tx.send(Msg::Entete(client::entete(&etat, &manifeste, &tache.task)));
     }
     if let Ok(d) = client::poster_brut(agent, ep, "/ide/describe", &json!({ "manifest": manifeste })) {
@@ -305,7 +305,7 @@ fn boucle(terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, rx: &mpsc::Rec
                     sale = true;
                 }
                 Some(Action::Completer(debut)) => {
-                    let sources = sources_de(&debut, agent, ep, tache);
+                    let sources = sources_de(&debut, agent, ep, tache, &|path| client::lire_brut(agent, ep, path));
                     match crate::commandes::completer(&debut, &sources) {
                         Some(c) => vue.appliquer_completion(c),
                         None => vue.propositions = Some("rien à compléter".into()),
@@ -362,7 +362,7 @@ pub fn dossier_de_commande(manifeste: Option<&str>) -> std::path::PathBuf {
 }
 
 /// Ce que Tab peut proposer pour `debut`.
-fn sources_de(debut: &str, agent: &ureq::Agent, ep: &Endpoint, tache: &Tache) -> crate::commandes::Sources {
+fn sources_de(debut: &str, agent: &ureq::Agent, ep: &Endpoint, tache: &Tache, load_state: &dyn Fn(&str) -> Result<Value, String>) -> crate::commandes::Sources {
     let mut s = crate::commandes::Sources { themes: crate::theme::THEMES.iter().map(|(n, _)| n.to_string()).collect(), ..Default::default() };
     if debut.starts_with("/model") {
         if let Ok(v) = modeles_de_tache(agent, ep, tache) {
@@ -370,7 +370,7 @@ fn sources_de(debut: &str, agent: &ureq::Agent, ep: &Endpoint, tache: &Tache) ->
         }
     }
     if debut.starts_with("/tache") || debut.starts_with("/depot") {
-        if let Ok(etat) = client::lire_brut(agent, ep, "/ide/etat") {
+        if let Ok(etat) = load_state("/ide/etat") {
             for b in etat["backends"].as_array().cloned().unwrap_or_default() {
                 match b["tache"]["nom"].as_str() {
                     Some(t) if b["tache"]["parent"].as_str() == Some(tache.depot.id.as_str()) => s.taches.push(t.to_string()),
@@ -815,6 +815,36 @@ mod tests {
     use serde_json::json;
     use std::io::{self, Write};
     use std::sync::atomic::AtomicUsize;
+
+    #[test]
+    fn partial_english_and_legacy_commands_collect_catalogue_before_completion() {
+        let agent = client::agent();
+        let endpoint = Endpoint { address: "127.0.0.1:1".into(), token: "fake-test-token".into() };
+        let task = Tache {
+            depot: Depot { id: "faux".into(), manifest: "/fake/backend.json".into(), repo: "faux-depot".into(), branch: "main".into() },
+            task: "mesure".into(),
+        };
+        let catalogue = json!({"backends":[
+            {"id":"faux", "repo":"faux-depot", "tache":null},
+            {"id":"faux-task", "repo":"faux-depot", "tache":{"nom":"mesure", "parent":"faux"}}
+        ]});
+        for (input, expected) in [
+            ("/tache mes", "/tache mesure"),
+            ("/depot faux-d", "/depot faux-depot"),
+            ("/task mes", "/task mesure"),
+            ("/repo faux-d", "/repo faux-depot"),
+        ] {
+            let requests = std::cell::RefCell::new(Vec::new());
+            let load_state = |path: &str| -> Result<Value, String> {
+                requests.borrow_mut().push(path.to_string());
+                Ok(catalogue.clone())
+            };
+            let sources = sources_de(input, &agent, &endpoint, &task, &load_state);
+            assert_eq!(*requests.borrow(), vec!["/ide/etat"], "catalogue request for {input}");
+            let completion = crate::commandes::completer(input, &sources).expect("live catalogue candidates");
+            assert_eq!(completion.texte, expected, "completion for {input}");
+        }
+    }
 
     /// Un écrivain qui compte les octets et les jette.
     struct Compteur(Arc<AtomicUsize>);

@@ -555,3 +555,15 @@ rouge avant correctif, puis baser la décision de collecte sur le parseur
 commandes::lire existant plutôt que maintenir une liste de préfixes parallèle.
 Aucun fix ni nouveau test/HTTP/Cargo lancé à cette découverte. SourceRust
 934f/F8/harnessgelés comme preuves, aucune autorisation nouvelle déduite.
+
+### Réservation TUI et union99, témoin avant fix
+
+C7 autorise tui.rs uniquement sources_de/ActionCompleter+tests du vrai collecteur.
+NouveauW cx-tty-english-aliases-union-99/branchecx-tty-english-aliases-7 base99fef92ce6,
+ancien934/W/T figés. Audit et plan de qualification
+`docs/tty/16-11-2026/06-union-master-99-et-reste-tab.md`.
+TémoinRust préparé : vrai sources_de avec capacité load_state, ActionCompleter
+lui fournit client::lire_brut ; spy de la route et completion réelle pour4formes
+partielles FR/EN. Le branchementFR est volontairement intact, aucun fix anglais.
+NON JOUÉ, aucun Cargo/HTTP/metadata. CouponROUGE600 proposé, pilote exact et
+RO/GO distinct requis ; F8old6d ne qualifie pas cette union avec4entrantsVertex.
