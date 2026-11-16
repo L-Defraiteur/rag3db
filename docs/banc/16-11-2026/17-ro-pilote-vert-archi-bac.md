@@ -45,3 +45,11 @@ APP742 inchangée ; pilote exact `291138a70b0aeb76aa2c5613fb317f921dd4af53` (cor
 Le nouveau témoin appelle configure_controller() avant le contexte instrumenté, puis appelle directement q.launch(). Il démontre l’ordre journal/watchdog à l’intérieur de launch/arm, mais ne teste pas le dispatch __main__ qui contient encore cette I/O. Traiter ensemble : configuration pure du lanceur (durée fixe780), aucune lecture Q/launch avant watchdog, lecture/configuration dynamique réservée aux modes déjà armés ; témoin de l’entrée CLI réelle qui refuse un accès pré-watchdog. Nouveau test CPU seulement sous décision C7 distincte. Aucun correctif appliqué par Banc.
 
 Pas d’autre blocage nouveau repéré dans le delta et la portée déjà relue. **La borne physique globale n’est donc pas encore totalement levée dans cette revue CLI.** Nouveaux Q/pins non encore préparés à cette demande, anciens paquets conservés/non lancés ; aucune réactivation d’autorité ou ancienEND. Avis fsync9f3 demeure levé, mais pas de GO795 global.
+
+## Paquet final annoncé a6428d7605 : métadonnées conformes, HOLD CLI maintenu
+
+APP742, PILOTE `a6428d7605f1ebfe48f80353548b5100a7336d1b`. Le diff réel depuis291 dans qualify_green.py change uniquement Qcontroller-r1→r2 : le dispatch CLI et configure_controller ne sont pas corrigés. Les deux expressions __main__→configure_controller et lecture de Q/launch.json avant launch sont présentes dans la copie préparée. La réserve6a1 n’est donc pas levée par ce nouveau pin.
+
+Rehash local du paquet cx-archi-doc-bac-green-package-r2 :33 tailles/SHA conformes au manifeste `379f1f6f25f6520cd9624e91c0cce0edbed9b3177d7e9e3aa2bf84e8aa24e366`. Prepared `06f3b7aff5459be39d34ac759151ef648c23a14b3192285c8cc36298c2bd96f1`, configuration `d7232c89bbbe97bcbaf5f7be1c0c8b9ce09a1a2f03e7d369b033ee9355eb9613`, sept copies conformes, couple742/a642 et budget600/780/15/795/final120 cohérents. Propreté/Pvide/Fabsent/aucuneautorité/Cargo=false sont des attestations préparatoires, pas recontrôlées en proc par Banc.
+
+Avis favorable à l’intégrité metadata de ce paquet, **pas au franchissement du HOLD global795** : la même réserve CLI doit encore être traitée, aucun nouveau point ajouté. Aucun CPU/Cargo/natif/proc/service/DB lancé pendant cette revue ; le témoin12CPU annoncé ne couvre toujours pas ce dispatch. Ancien Q et paquet restent conservés, pas de GO.
