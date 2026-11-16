@@ -9,7 +9,7 @@ import source_proof as source
 
 R=source.R;W=source.W;C=W/'extension/rag3weaver';APP=source.APP
 SESSION_TARGET=proof.SESSION;T=proof.T
-P=R/'cx-archi-doc-bac-green-r1';Q=R/'cx-archi-doc-bac-green-controller-r1'
+P=R/'cx-archi-doc-bac-green-r1';Q=R/'cx-archi-doc-bac-green-controller-r2'
 F=R/'bcg1'
 OLD_W=Path.home()/'git_workspaces/rag3db-cx-archi-pas-va-au-bout-r2'
 REL='docs/rag3weaver-archi/16-11-2026/doc-bac-green/qualify_green.py'
