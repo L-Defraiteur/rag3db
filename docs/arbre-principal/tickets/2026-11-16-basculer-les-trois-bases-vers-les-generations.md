@@ -127,3 +127,21 @@ DiagnosticROnécessaire AVANTattribution : dettepréalableScope_Chunk ? nouveaux
 ArbitrageC7 : fenêtreLIVEsuspendue/annuléeaprèsCOPY02dette469, Gautorisé àreprendreAPIaprèscontrôlesourcesold/aucunwriter. **ZéroCLIsuroriginal : aucuneRESTOREdata nécessaire.** Lesgatesfresh733 sont historiques etGOliveexpiré, aucuneactivationduproviderLIVEpréparé. Futuremigration requiertsnapshot/préconditionsneufs aprèsdiagnostic. ArbrecontinueROuniquementcopies, matrice469complète/catégories selonprédicatexactdu transfert ; aucunrecalculembed/indexpourmasquer, aucunrerunwriter ni autresbases. TicketresteOUVERT, basculeNONTERMINÉE. API7970pasappeléeparArbrejusqu'auFINIGreprise.
 
 Ticket FILS dédié au correctif/attribution469 demandé parLucie : `docs/arbre-principal/tickets/2026-11-16-la-migration-de-scopes-laisse-469-morceaux-sans-vecteur-transfere.md`. Publié avanttoutcorrectifRust/produit ; causeencoreNONATTRIBUÉE, diagnosticROseul etrougeCOPY02conservé. RepriseAPI parGFINI13:37, reçuwindow-closed.json SHAd9396ba55a2e538770d75f36f8dd45308c2761e5ee53107298781e0fc61fd814 ; originaux733identités/ca7inchangés, aucuneRESTOREdata.
+
+## Mise à jour après FIN-RO : état observé, pas bascule
+
+Cause469 désormais attribuée par rejeu réel479a sur51parents ; FIN-RO600
+source5b7a4b00a8 observe sur une NOUVELLEfreezeprivée dette0/97247vecteurs768
+finite/markers/cohort469/indexREADY etFTS5inchangés, trois sources+FINstricts.
+Preuves af2eb41ecb1d53b4fcdaf401748a8d3399cb5a51/[rapport11](../16-11-2026/11-preuves-fin-ro-etat-observable.md),76fichiersPC/local0écart manifeste05661b1fddc82c1e66d21f218d0c8cdfd12b69d8ef16432a2c55c3b127a9462a,
+revuesindépendantes demandées. Calculés/réutilisésUNKNOWN et469claimsop admis,
+pas de nouvellecapturemapsReader (BUILD_ID59ac/pinsELFSDKseulement).
+COPYA et auditEDD demeurentROUGES ; shutdowninitial/durabilité/LIVEnonqualifiés.
+Aucun original/CLI live visé, aucune autrebase ne reçoit ce VERT par transfert.
+
+C7 demande seulement [plan12actualisé](../16-11-2026/12-suite-bascule-trois-bases-apres-fin-ro.md)
+enlecture : nouveau couple produit/master/SDK59 àarbitrer, qualificationwriter
+surcopieneuve avec réponsepublique/shutdown/ACK/rc0 observés, nouveauGO
+etfenêtreG/snapshotFRAIS+RETOUR72h/RET_v2lié, gatesparbase et oracleBanc
+contemporain. Aucun codeopérationnel/live/service/nouvellecopie autorisé par
+le plan ; anciensGO/snapshots restent historiques. Ticket parent OUVERT.
