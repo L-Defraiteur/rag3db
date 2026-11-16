@@ -70,6 +70,62 @@ impl Drop for DocumentationFixture {
     }
 }
 
+/// Exercise the real fixture setup in a separate invocation of this test ELF.
+/// Only the child sees the declared sandbox; other tests never see set_var.
+#[cfg(test)]
+pub fn witness_declared_sandbox_setup(test_name: &str, setup: impl FnOnce(&Path) -> PathBuf) {
+    const DECLARATION: &str = "RAG3WEAVER_DOCUMENTATION_SANDBOX_FILE";
+    const CHILD: &str = "RAG3WEAVER_DOCUMENTATION_SETUP_WITNESS";
+    const ROOT: &str = "RAG3WEAVER_DOCUMENTATION_SETUP_ROOT";
+    if std::env::var(CHILD).ok().as_deref() == Some(test_name) {
+        let root = PathBuf::from(std::env::var_os(ROOT).expect("private witness root"));
+        let declaration = PathBuf::from(std::env::var_os(DECLARATION).expect("private sandbox declaration"));
+        assert_eq!(root.canonicalize().unwrap(), root);
+        assert_eq!(declaration.parent(), Some(root.as_path()));
+        let expected: Value = serde_json::from_slice(&std::fs::read(declaration).unwrap()).unwrap();
+        let manifest = setup(&root.join("setup"));
+        let actual: Value = serde_json::from_slice(&std::fs::read(&manifest).unwrap()).unwrap();
+        assert_eq!(actual["workspace"]["commands"], "approval", "fixture command policy must stay approval");
+        assert_eq!(actual["workspace"]["sandbox"], expected,
+            "DOCUMENTATION_PRIVATE_SANDBOX_NOT_CONNECTED_BEFORE_ADD_FILES");
+        let config = manifest.ancestors().find(|p| p.join(".git").exists()).expect("fixture config Git root");
+        let relative = manifest.strip_prefix(config).unwrap().to_str().unwrap();
+        let output = std::process::Command::new("git").arg("-C").arg(config)
+            .args(["show", &format!("HEAD:{relative}")]).output().unwrap();
+        assert!(output.status.success(), "fixture manifest must be committed before a task");
+        let committed: Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(committed["workspace"]["sandbox"], expected,
+            "DOCUMENTATION_PRIVATE_SANDBOX_NOT_COMMITTED_BEFORE_TASK");
+        return;
+    }
+
+    let mut fixture = DocumentationFixture::new();
+    let root = fixture.path().canonicalize().unwrap();
+    let templates = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("templates/backends/code/backend.json");
+    let template: Value = serde_json::from_slice(&std::fs::read(templates).unwrap()).unwrap();
+    let mut sandbox = template["workspace"]["sandbox"].clone();
+    let q = root.join("private-controller");
+    std::fs::create_dir(&q).unwrap();
+    sandbox["extra_read"].as_array_mut().unwrap().push(json!(q));
+    sandbox["env"]["CARGO_BUILD_JOBS"] = json!("2");
+    sandbox["env"]["CARGO_TARGET_DIR"] = json!("{repo_target}");
+    let declaration = root.join("sandbox.json");
+    std::fs::write(&declaration, serde_json::to_vec_pretty(&sandbox).unwrap()).unwrap();
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([test_name, "--exact", "--nocapture", "--test-threads=1"])
+        .env(DECLARATION, declaration).env(CHILD, test_name).env(ROOT, &root)
+        .output().expect("run the actual setup in the same test ELF");
+    std::fs::write(root.join("setup-child.stdout"), &output.stdout).unwrap();
+    std::fs::write(root.join("setup-child.stderr"), &output.stderr).unwrap();
+    if !output.status.success() {
+        fixture.fail(&format!("DOCUMENTATION_PRIVATE_SANDBOX_SETUP_REFUSED: {}\n{}\n{}",
+            output.status, String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr)), &[]);
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("test result: ok. 1 passed; 0 failed; 0 ignored;"),
+        "the setup child must actually judge this exact witness: {stdout}");
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

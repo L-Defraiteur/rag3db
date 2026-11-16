@@ -1825,6 +1825,16 @@ fn a_step_that_answers_without_step_done_is_continued_without_waiting() {
 #[path = "../../tests/common/documentation_fixture.rs"]
 mod documentation_fixture;
 
+/// The real code-tree fixture must receive the declared Bac before add_files.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn task_fixture_uses_the_declared_private_sandbox_before_add() {
+    documentation_fixture::witness_declared_sandbox_setup(
+        "daemon_host::teammate_tests::task_fixture_uses_the_declared_private_sandbox_before_add",
+        |root| depot_inscrit(root, true).1,
+    );
+}
+
 /// The fixture must answer its one known destructive request with a refusal,
 /// without replacing the original request or granting a command permission.
 #[cfg(all(feature = "code", feature = "rag3db-native"))]
