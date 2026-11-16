@@ -1,0 +1,83 @@
+{
+  "status": "DISCRIMINATING PROPOSAL ONLY; NO PILOT OR GO; NOT EXECUTED",
+  "source_reference_only": "75a4ba4d467aa5f07ef83494f5393154ab2392c6",
+  "engine_reference": "59ac9c86bc2b3529b590a7462ab7051e3ad26b8a",
+  "candidate_historical_only": "ed0c3c8af57f25e83ae5c4ba004ae3393e77812e",
+  "candidate_new_execution": false,
+  "native_case": "StringRewriteAcrossAddColumn.AutomaticCheckpointsBetweenAddsAndDrops",
+  "executions": 1,
+  "identical_test_files": [
+    {
+      "path": "test/transaction/concurrence/string_rewrite_test.cpp",
+      "sha256": "4b37355f22ee9addf5724a4a3a3210cc36b8f9e7745c1288027658560b00f212"
+    },
+    {
+      "path": "test/transaction/concurrence/checkpoint_no_stall_test.cpp",
+      "sha256": "414c0f6682ff346280cbe223c58d7007453fcbf13b67c8336823ee37c77f98ba"
+    }
+  ],
+  "engine_delta_paths": [
+    "src/storage/table/dictionary_chunk.cpp"
+  ],
+  "candidate_effective_environment_from_actual_argv": {
+    "PATH": "/usr/bin:/bin",
+    "LANG": "C",
+    "LC_ALL": "C",
+    "TZ": "UTC",
+    "HOME": "/home/lucied/.cache/rag3weaver-build/cx-coeur-two-reds/candidate/home",
+    "TMPDIR": "/home/lucied/.cache/rag3weaver-build/cx-coeur-two-reds/candidate/tmp",
+    "RUNNER_TEMP": "/home/lucied/.cache/rag3weaver-build/cx-coeur-two-reds/candidate/tmp",
+    "MAX_NUM_THREADS": "2",
+    "OMP_NUM_THREADS": "5",
+    "OPENBLAS_NUM_THREADS": "5"
+  },
+  "probe_flag_must_be_absent": true,
+  "probe_flag_value_0_is_not_absent": true,
+  "cmake_profile_from_actual_argv": [
+    "cmake",
+    "-S",
+    "/home/lucied/.cache/rag3weaver-build/cx-coeur-two-reds/candidate/source",
+    "-B",
+    "/home/lucied/.cache/rag3weaver-build/cx-coeur-two-reds/candidate/build",
+    "-G",
+    "Ninja",
+    "-DCMAKE_BUILD_TYPE=Release",
+    "-DBUILD_TESTS=ON",
+    "-DBUILD_SHELL=OFF",
+    "-DBUILD_SHARED_LIBS=OFF",
+    "-DBUILD_EXTENSIONS=",
+    "-DENABLE_ADDRESS_SANITIZER=OFF",
+    "-DENABLE_THREAD_SANITIZER=OFF",
+    "-DSINGLE_THREADED=OFF",
+    "-DENABLE_UBSAN=OFF",
+    "-DENABLE_RUNTIME_CHECKS=OFF",
+    "-DENABLE_LTO=OFF",
+    "-DENABLE_BACKTRACES=OFF",
+    "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+    "-DAUTO_UPDATE_GRAMMAR=OFF",
+    "-DFETCHCONTENT_FULLY_DISCONNECTED=ON",
+    "-DFETCHCONTENT_UPDATES_DISCONNECTED=ON",
+    "-DCCACHE_PROGRAM:FILEPATH="
+  ],
+  "global_proposed_cap_s": 900,
+  "phase_caps_s": {
+    "configure": 120,
+    "build_concurrence_only": 600,
+    "case": 60
+  },
+  "remaining_global_s_for_staging_export_and_shutdown": 120,
+  "parent_required_cpu_max": "500000 100000",
+  "parent_required_POSTE_FILS": 5,
+  "jobs_required": 5,
+  "memory_bytes": 34359738368,
+  "swap_bytes": 0,
+  "scratch_bytes": 34359738368,
+  "extensions": [],
+  "new_source_test_instrumentation": false,
+  "runtime_build_id_line_expected": false,
+  "identity_proof": "exact source + generated header/ELF marker + named execution path + pre/post artifact hashes; native BUILD_ID emission remains absent, not invented",
+  "first_failure_stops": true,
+  "retry": false,
+  "pass_implication": "one green reference does not establish candidate fix causality",
+  "matching_crash_implication": "append fix is not necessary for this observed family of failure, shared root cause still requires evidence"
+}
