@@ -6,8 +6,8 @@
 
 [Recette et empreintes communes](preuves/two-reds-preparation/recipe.json).
 
-- Référence : source `c4ebc7905735f3739966f8c24144a172d54a794e`, branche cx-coeur-two-reds-baseline, base68590270e21d00285b29800bd9cdecf0cb921461, moteur attendu59ac9c86bc2b3529b590a7462ab7051e3ad26b8a.
-- Candidat : source `4488055b60863b7562132802de39faf394035012`, branche cx-coeur-two-reds-diagnostic, base888c81825e4cd6556261233f0e238af3b95375c9, moteur attendu888c81825e4cd6556261233f0e238af3b95375c9.
+- Référence : source `50412d9c501708d8464efd85e94273fdf91e7f80`, branche cx-coeur-two-reds-baseline, base68590270e21d00285b29800bd9cdecf0cb921461, moteur attendu59ac9c86bc2b3529b590a7462ab7051e3ad26b8a.
+- Candidat : source `a3f3e3bce46de8864f140ae21c2dff6b539bf838`, branche cx-coeur-two-reds-diagnostic, base888c81825e4cd6556261233f0e238af3b95375c9, moteur attendu888c81825e4cd6556261233f0e238af3b95375c9.
 
 Les deux fichiers de tests modifiés sont identiques octet pour octet. Dans les chemins réellement utilisés par build_id.cmake, le seul delta entre ces deux sources est dictionary_chunk.cpp (correctif append). Aucune instrumentation dans src, aucun changement de known_red/probabilistic/long. Les worktrees sont privés ; aucun SDK ou service touché. Les sources de tests différentes de la passe globale sont annoncées, sans attribuer rétroactivement un rouge à ces sondes non jouées.
 
@@ -40,3 +40,7 @@ Le pilote exact doit encore être préparé, publié et relu RO avant toute admi
 ## Contrôles réellement faits
 
 Format clang18 des deux fichiers, git diff --check, égalité des deux fichiers sur la paire et delta moteur limité à dictionary_chunk.cpp. **Ni syntaxe C++ compilée ni résultats natifs**, donc aucun cas annoncé vert. Revue Hotfixs demandée avant de figer le pilote.
+
+## Réserve RO lecteur levée dans les sources, exécution encore absente
+
+Hotfixs a relevé qu’une égalité de trois messages ERREUR pouvait satisfaire les comparaisons d’instantané. La paire révisée exige le succès explicite des quatre requêtes before/during/after/others, exactement deux colonnes non nulles et une seule ligne, ainsi que COMMIT réussi. Elle exige aussi les valeurs initiales300000|45000150000 et les valeurs de l’écrivain300001|45008149994, issues des données fixes et des deux modifications ; les valeurs pendant/après doivent égaler l’initial. Une erreur marque GTest en échec même si le texte retourné est identique. Les sources antérieures448/c4eb sont remplacées, pas amendées. Format18/diff contrôlés, aucun nouveau résultat compilé ou natif. Nouvelle RO demandée.
