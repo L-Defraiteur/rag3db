@@ -43,6 +43,12 @@ atterri, est dans [01-rapport-de-la-nuit.md](01-rapport-de-la-nuit.md).
 
 ## 2. Le travail pour Codex, dans l'ordre
 
+**État final de la session hotfixs (16 novembre 2026, 10 h 5x, à l'arrêt demandé par Lucie)** : aucune entrée n'est
+en cours. Les quatorze entrées ci-dessous sont toutes **à faire**, aucune n'est commencée. Toutes les branches de la
+nuit sont sur master, aucune n'est en branche seule. Aucune passe ni unité ne tourne à luciepc. Les worktrees
+`rag3db-extension-dite` et `rag3db-hotfixs-shell` de luciepc sont propres (statut vide) et peuvent servir de modèle,
+mais Codex prend les siens (`cx-…`).
+
 ### La passe d'un lot du moteur, une fois pour toutes
 
 **Le worktree et le bâti, à luciepc**, une fois par lot :
