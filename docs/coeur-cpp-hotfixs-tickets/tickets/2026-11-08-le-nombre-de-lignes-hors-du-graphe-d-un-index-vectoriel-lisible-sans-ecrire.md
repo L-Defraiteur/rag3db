@@ -45,3 +45,16 @@ Un index bâti, puis un COPY forcé validé juste après le CREATE (la recette d
 
 La lecture, son témoin, et la ligne dans le ticket du 18 octobre qui dit que le produit peut
 décider la reconstruction au seuil.
+
+## Reprise du 16 novembre : contrat et témoin avant correctif
+
+En cours par hotfixs, branche `cx-hotfixs-rows-outside-graph`, base
+`927941a67a5805450d49f1e04b39fdd542a6059b` ; aucun lourd ni code produit.
+[Note de lecture et chemins à coordonner](../16-11-2026/04-rows-outside-graph-contract.md).
+La plage après numCheckpointedNodes n’est pas encore prouvée égale au nombre
+exact de lignes visibles hors graphe : le code de recherche dédoublonne cette
+plage et le graphe ; trous/NULL/suppressions/instantanés doivent aussi compter.
+Avant implémentation, fixer le sens exact avec orchestration et arbre principal,
+sans livrer un nombre d’offsets physiques sous un nom qui promet des lignes.
+Témoin privé initial de projection à préparer ; échec attendu colonne absente,
+NON JOUÉ à cette date. Aucun correctif avant rouge effectivement lu.
