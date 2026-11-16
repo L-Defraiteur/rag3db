@@ -1,0 +1,21 @@
+# Proposition contractuelle : sous-cache neuf, aucune reprise de l'ancien état
+
+HOLD natif2397 confirmé C7. Le [ticket existant](../tickets/2026-11-16-le-temoin-documentaire-vertex-attend-un-accord-sans-superviseur.md) garde les UNKNOWN opaques et ENDinitial expiré. Cette page est une proposition RO seulement : aucun nouveau script, répertoire, target, lancement, changement de permission ni service. [Diagnostic08](08-classification-unknown-documentaire.md) inchangé.
+
+## Lecture des chemins existants
+
+La garde commune scripts/garde_target.sh, garder_le_target, a un chemin explicite pour target absent/vide : mkdir, refus de contenu sans provenance, marqueur du propriétaire canonique, notation des sous-modules, retour sans invalidation ni cargo metadata. Sa branche de refus d'un autre propriétaire propose explicitement un sous-dossier par worktree dans target-session. À l'inverse, réutiliser l'ancien cache propriétaire713433 vers ea670 exige invalidation des paquets locaux et parfois sorties build.rs : le garde2397 interdit justement cette opération tant que des détenteurs possibles restent opaques.
+
+Appeler seulement run_e2e/cargo_magasin contre l'ancien target ne fournit pas la preuve absente et ne résout pas ce blocage. Changer OLDW en place, ignorer les UNKNOWN ou prendre le chemin canonique pour éviter notre refus serait un contournement ; ces variantes sont écartées. Le pilote2397 reste inchangé et non lancé.
+
+## Variante proposée, à faire relire avant implémentation
+
+Conserver UNE racine session T=target-cx-archi-pas-va-au-bout-r2. Geler ses anciens debug/release/markers et les preuves713/f27 ; ne rien y reprendre, renommer, purger ou réécrire. Désigner pour cette étape UN seul sous-cache actif, par exemple T/native-doc-ea670-v1, actuellement à vérifier absent lors d'une future admission. L'ancien état reste conservé en lecture seule par nos outils ; cela ne prétend pas que les UNKNOWN n'ont aucun FD dessus. Aucun deuxième target actif ni build parallèle de cette session.
+
+Nouveau contrat d'admission proposé : avant poste figer APP/source/sous-module/lib et commande exacte ; après poste, refuser tout chemin neuf déjà existant ou lien et tout parent inattendu, créer le dossier neuf de manière exclusive sous T vérifié canonique/UID, constater son inode neuf et contenu vide, puis appeler réellement la branche initiale de la garde commune. Sans état antérieur dans ce nouvel inode, aucun descripteur ouvert AVANT sa création ne peut désigner son ancien contenu ; l'invariant porte sur l'absence d'état à invalider, pas sur une innocence supposée des processus opaques. Les FD/états inconnus de l'ancien cache ne sont ni reclassés ni blanchis. Toute lecture attribuée au nouveau cache ou tout writer sur nos sources reste refusé, sourceSHA/états et identité du cache contrôlés pendant et après l'étape. Aucune copie d'artefact/FP/build.rs depuis l'ancien cache, aucune variable REPRENDRE imposée.
+
+C'est une nouvelle admission « cache initialement vide », pas une exception ajoutée au garde de reprise2397. Si les relecteurs estiment que l'invariant exige aussi l'absence de tout lecteur opaque du W source figé, ce contrat ne suffit pas : HOLD inchangé, aucune exécution. Aucun nom/CG/PID de session à allowlister, aucun droit supplémentaire demandé par cette page.
+
+Ressources : ancien T mesuré en lecture seule à6108704768octets au relevé actuel. Plafond32GiB cumulé de toute la racine T (ancien état + nouveau sous-cache), arrêt explicite avant dépassement, aucun ménage automatique de l'ancien état. Budget proposé distinct1200 après poste32G/HIGH0/quota par place/j8, compile froide900 puis UN exact120 et finalisation sous mêmeEND ; coût à froid inconnu, aucune promesse de finir sous900. Un seul premier rouge, aucune relance à échéance neuve. AncienEND1177548.693791571 jamais réactivé.
+
+Avant implémentation : RO C7/Mémoire sur cette frontière et sur la règle d'un target actif, puis pilote neuf/mode explicite et témoins du vrai chemin initial garde/fauxCargo + refus dossier nonvide/symlink/import ancien/inode changé/UNKNOWN attribué nouveau chemin/budget combiné. Publication avant essais ; couple exact et GO distinct requis avant Cargo. Aucun Vertex900, aucune qualification du lot pas-va-au-bout déduite.

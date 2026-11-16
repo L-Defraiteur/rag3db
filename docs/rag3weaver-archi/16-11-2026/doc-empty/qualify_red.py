@@ -1,0 +1,221 @@
+#!/usr/bin/env python3
+"""One deterministic native red witness; no Vertex and no permission granted."""
+from pathlib import Path
+import hashlib, json, mmap, os, re, shutil, signal, stat, subprocess, sys, time
+
+R = Path.home() / '.cache/rag3weaver-build'
+W = Path.home() / 'git_workspaces/rag3db-cx-archi-doc-supervisor-r1'
+C = W / 'extension/rag3weaver'
+SESSION_TARGET = R / 'target-cx-archi-pas-va-au-bout-r2'
+T = SESSION_TARGET / 'native-doc-ea670-v1'
+P = R / 'cx-archi-doc-supervisor-empty-r1'
+Q = R / 'cx-archi-doc-supervisor-controller-empty-r1'
+OLD = R / 'cx-archi-pas-va-au-bout-r2-59ac-pass1'
+OLD_W = Path.home() / 'git_workspaces/rag3db-cx-archi-pas-va-au-bout-r2'
+APP = 'ea67054a11d73e06cf44c38d9ce941a754c0190d'
+OLD_APP = '713433bd602a6d35266fe5cd528925ba664924c9'
+REL = 'docs/rag3weaver-archi/16-11-2026/doc-empty/qualify_red.py'
+ORIGINAL_END = 1177548.693791571
+import controller_policy as controller
+import empty_cache
+for key in ['R','W','C','T','OLD_W','P','Q','REL']:
+    setattr(controller, key, globals()[key])
+NAME = 'daemon_host::teammate_tests::a_documentation_supervisor_denies_lock_deletion_and_the_teammate_finishes_the_original_request'
+EXPECTED = 'documentation fixture has no supervisor answer for the pending lock deletion'
+LIB = 'rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF'
+LIB_HASHES = {'librag3db.so': 'b7e9fc75a3d2de04c72680b0309e8bb1df9eaadb5211ebbacf39716c6d0a2101', 'libvector.rag3db_extension': '1669d6392ec8067fcf92ae2ccc972fd7cd3086629fb82d1f5d254e90d72d7561'}
+FEATURES = 'rag3db-native,code,daemon'
+
+
+def sha(path):
+    with Path(path).open('rb') as f: return hashlib.file_digest(f, 'sha256').hexdigest()
+
+def save(name, value):
+    (P / name).write_text(json.dumps(value, indent=2) + '\n')
+
+def git(root, *args):
+    return subprocess.check_output(['git', '-C', str(root), *args], text=True).strip()
+
+def config(): return json.loads((Q / 'configuration.json').read_text())
+
+def guard(cfg):
+    for root, head in [(W, APP), (Path(cfg['control']), cfg['pilot']), (OLD_W, OLD_APP)]:
+        assert git(root, 'rev-parse', 'HEAD') == head and not git(root, 'status', '--porcelain')
+    assert sha(Q / 'qualify_red.py') == cfg['script_sha256']
+    assert sha(Q / 'controller_policy.py') == cfg['policy_sha256']
+    assert sha(Q / 'empty_cache.py') == cfg['empty_sha256']
+    empty_cache.require_size(SESSION_TARGET)
+    if (P/'new-cache-identity.json').exists():
+        empty_cache.require_identity(T,json.loads((P/'new-cache-identity.json').read_text()))
+    assert sha(Q / 'confiner_validation.py') == cfg['supervisor_sha256']
+    assert git(W, 'ls-tree', APP, 'extension/rag3weaver/codeparsers').split()[2] == git(C / 'codeparsers', 'rev-parse', 'HEAD')
+    assert not git(C / 'codeparsers', 'status', '--porcelain')
+    for name, expected in LIB_HASHES.items(): assert sha(R.parent / 'rag3db-libs' / LIB / name) == expected
+
+
+def in_roots(value, roots):
+    return any(value == str(root) or value.startswith(str(root) + '/') for root in roots)
+
+
+def fresh_cache(cfg):
+    subprocess.run(['python3', str(Q / 'confiner_validation.py'), 'verifier'], check=True)
+    st = SESSION_TARGET.lstat()
+    assert SESSION_TARGET.resolve() == SESSION_TARGET and stat.S_ISDIR(st.st_mode) and st.st_uid == os.getuid()
+    assert [st.st_dev, st.st_ino] == cfg['target_identity']
+    marker = SESSION_TARGET / '.arbre-du-target'
+    assert marker.is_file() and not marker.is_symlink() and marker.read_text().strip() == str(OLD_W / 'extension/rag3weaver')
+    receipt = Path(cfg['old_receipt']); authority = json.loads(receipt.read_text())
+    assert sha(OLD / 'manifest-final.json') == cfg['old_manifest_sha256']
+    assert authority['etat'] == 'termine' and sha(receipt) == cfg['old_receipt_sha256']
+    assert json.loads((receipt.parent / 'verdict.json').read_text()) == cfg['old_verdict']
+    assert not Path(cfg['old_verdict']['prive']).exists()
+    assert sha(Path(cfg['previous_red'])/'first-red.json') == cfg['previous_red_sha256']
+    previous_auth = json.loads(Path(cfg['previous_receipt']).read_text())
+    assert previous_auth['etat'] == 'termine' and previous_auth['echeance'] == ORIGINAL_END
+    previous_scope = json.loads((Path(cfg['previous_receipt']).parent/'verdict.json').read_text())
+    assert previous_scope['verdict'] == 'ROUGE' and not previous_scope['restes'] and previous_scope['nettoye']
+    assert not Path(previous_scope['prive']).exists()
+    expected = controller.policy(Path(cfg['control']), cfg['pilot'],cfg['launch_identity'])
+    current_auth=json.loads(Path(os.environ['RAG3WEAVER_VALIDATION_RECU']).read_text())
+    observed = controller.scan(expected, [T, W, Path(cfg['control'])], authority['cgroup'], owned_cgroup=current_auth['cgroup'])
+    save('cache-after-poste.json', observed)
+    assert not observed['ancestor_errors'], 'incomplete ancestor capture'
+    assert not any(row.get('attributed') or row.get('reasons') for row in observed['unknown']), 'attributed or owned UNKNOWN'
+    assert not T.exists() and not T.is_symlink(), 'initial cache must be absent'
+    assert not observed['found'] and len(observed['controllers']) == 3 and {r['role'] for r in observed['controllers']} == {'launch','poste','watchdog'}
+
+
+
+def driver():
+    cfg = config(); guard(cfg)
+    receipt = Path(os.environ['RAG3WEAVER_VALIDATION_RECU']); auth = json.loads(receipt.read_text())
+    end = auth['echeance']; assert json.loads((receipt.parent / 'recette.json').read_text())['delai'] == 1200
+    save('authority-path.json', dict(path=str(receipt), deadline=end))
+    env = {k: os.environ[k] for k in ['HOME', 'USER', 'LOGNAME', 'PATH', 'LANG', 'LC_ALL', 'CARGO_HOME', 'RUSTUP_HOME', 'DBUS_SESSION_BUS_ADDRESS', 'RAG3WEAVER_VALIDATION_RECU', 'RAG3WEAVER_VALIDATION_JETON'] if k in os.environ}
+    for label in ['tmp', 'cache', 'data', 'config', 'xdg-state', 'state-fixture', 'old-elfs']: (P / label).mkdir()
+    env.update(CARGO_TARGET_DIR=str(T), CARGO_MANIFEST_DIR=str(C), CARGO_BUILD_JOBS='8', CARGO_INCREMENTAL='0',
+        XDG_CACHE_HOME=str(P/'cache'), XDG_CONFIG_HOME=str(P/'config'), XDG_DATA_HOME=str(P/'data'), XDG_STATE_HOME=str(P/'xdg-state'),
+        RAG3WEAVER_STATE_DIR=str(P/'state-fixture'), TMPDIR=str(P/'tmp'), RAG3DB_LIB=LIB,
+        RAG3DB_LIBS_DIR=str(R.parent/'rag3db-libs'), RAG3DB_BUFFER_POOL_SIZE='1073741824')
+    for suffix in ['', '_EMBEDDER', '_RERANKER', '_OCR']: env['RAG3WEAVER_BURN_DEVICE'+suffix] = 'cpu'
+    assert not any(k.startswith('GOOGLE_') or k.endswith('_API_KEY') for k in env)
+    save('selected-environment.json', {k:v for k,v in env.items() if k not in ['RAG3WEAVER_VALIDATION_JETON']})
+    def run(label, args, cap):
+        guard(cfg); deadline = min(end-15, time.monotonic()+cap)
+        assert time.monotonic() < deadline
+        with (P/(label+'.log')).open('w') as output:
+            child = subprocess.Popen(args, cwd=C, env=env, stdout=output, stderr=subprocess.STDOUT)
+            last_storage_check=0.0
+            while child.poll() is None:
+                if time.monotonic()-last_storage_check>=1:
+                    empty_cache.require_size(SESSION_TARGET);last_storage_check=time.monotonic()
+                assert time.monotonic() < deadline, label+' timeout'
+                if label == 'witness':
+                    observed = (P/(label+'.log')).read_text(errors='replace')
+                    if re.search(r'^test [^\n]* \.\.\. FAILED\b|^\s*FAILED\s*$', observed, re.M):
+                        child.terminate()
+                        try: child.wait(timeout=2)
+                        except subprocess.TimeoutExpired: child.kill(); child.wait()
+                        break
+                time.sleep(.05)
+            rc = child.wait()
+        assert time.monotonic() < deadline
+        return rc, (P/(label+'.log')).read_text(errors='replace')
+    try:
+        fresh_cache(cfg)
+        baseline=empty_cache.inventory(SESSION_TARGET,T)
+        save('frozen-old-cache.json',baseline)
+        identity=empty_cache.create_new(SESSION_TARGET,T)
+        save('new-cache-identity.json',identity)
+        rc, log = run('target-initial-guard', ['bash','-c','. "$1"; garder_le_target "$2" "$3"','fixture-initial-empty',str(C/'scripts/garde_target.sh'),str(T),str(C)],60)
+        assert rc == 0
+        assert (T/'.arbre-du-target').read_text().strip() == str(C)
+        empty_cache.verify_frozen(SESSION_TARGET,T,baseline)
+        rc, text = run('compile', ['bash','scripts/cargo_magasin.sh','test','--lib','--no-default-features','--features',FEATURES,'--locked','--no-run','--message-format=json-render-diagnostics'],900)
+        assert rc == 0, 'compilation failed before the expected red witness'
+        artifacts = []
+        for line in text.splitlines():
+            try: row = json.loads(line)
+            except ValueError: continue
+            if row.get('reason')=='compiler-artifact' and row.get('target',{}).get('name')=='rag3weaver' and row.get('profile',{}).get('test') and row.get('executable'): artifacts.append(row)
+        assert len(artifacts)==1
+        artifact=artifacts[0]; binary=Path(artifact['executable']); assert binary.is_relative_to(T)
+        assert set(artifact['features'])=={'rag3db-native','code','daemon'}
+        copied=P/'native-fixture-elf'; shutil.copy2(binary,copied); assert sha(binary)==sha(copied)
+        with copied.open('rb') as stream, mmap.mmap(stream.fileno(), 0, access=mmap.ACCESS_READ) as data:
+            source_offset=data.find(APP[:9].encode()); assert source_offset >= 0
+        save('ledger-before-witness.json',dict(source=APP,pilot=cfg['pilot'],artifact=artifact,binary=str(binary),sha256=sha(copied),source_offset=source_offset,features=artifact['features'],witness=NAME))
+        rc, text = run('witness',['bash','-c','. "$1"; exporter_la_lib || exit 2; shift; exec "$@"','fixture-runtime',str(C/'scripts/lib_du_magasin.sh'),str(binary),'--exact',NAME,'--nocapture','--test-threads=1'],120)
+        empty_cache.verify_frozen(SESSION_TARGET,T,baseline)
+        empty_cache.require_identity(T,identity)
+        expected_red = rc != 0 and EXPECTED in text and ('FAILED' in text) and 'DOCUMENTATION_FAILED_FIXTURE ' in text
+        save('first-red.json',dict(observed=time.monotonic(),phase='witness',rc=rc,expected_red=expected_red,expected=EXPECTED,counts=re.findall(r'test result:.*',text)))
+        assert expected_red,'witness did not reach the expected missing-supervisor failure'
+        save('driver-result.json',dict(status='EXPECTED_RED',not_a_green_qualification=True,rc=rc))
+        sys.exit(101)
+    except Exception as error:
+        if not (P/'first-red.json').exists(): save('first-red.json',dict(observed=time.monotonic(),expected_red=False,error=repr(error)))
+        raise
+
+
+def prepare(pilot):
+    assert os.uname().nodename.lower()=='luciepc'
+    control=Path(__file__).resolve().parents[4]
+    assert sys.orig_argv[1:]==[str(control/REL),'--initial-empty',pilot]
+    assert time.monotonic() > ORIGINAL_END, 'old native deadline still active; corrective step is separate'
+    assert re.fullmatch('[0-9a-f]{40}',pilot)
+    assert not P.exists() and not Q.exists()
+    for root, head in [(W, APP), (control, pilot), (OLD_W, OLD_APP)]:
+        assert git(root, 'rev-parse', 'HEAD') == head and not git(root, 'status', '--porcelain')
+    old_source=json.loads((OLD/'source.json').read_text()); assert old_source['source']==OLD_APP
+    receipts=list((OLD/'supervision').glob('validation-*/autorite.json')); assert len(receipts)==1
+    authority=json.loads(receipts[0].read_text()); assert authority['etat']=='termine'
+    verdict=json.loads((receipts[0].parent/'verdict.json').read_text()); assert verdict['verdict']=='ROUGE' and verdict['restes']==[] and verdict['nettoye']
+    assert (SESSION_TARGET/'.arbre-du-target').read_text().strip()==str(OLD_W/'extension/rag3weaver')
+    previous = R/'cx-archi-doc-supervisor-red1'
+    previous_receipts = list((previous/'supervision').glob('validation-*/autorite.json')); assert len(previous_receipts)==1
+    P.mkdir(mode=0o700); Q.mkdir(mode=0o700)
+    shutil.copy2(__file__,Q/'qualify_red.py'); shutil.copy2(control/REL.replace('qualify_red.py','controller_policy.py'),Q/'controller_policy.py'); shutil.copy2(control/REL.replace('qualify_red.py','empty_cache.py'),Q/'empty_cache.py'); shutil.copy2(C/'scripts/confiner_validation.py',Q/'confiner_validation.py')
+    assert not T.exists() and not T.is_symlink()
+    st=SESSION_TARGET.lstat()
+    cfg=dict(launch_identity=controller.snapshot(Path('/proc')/str(os.getpid())),mode='INITIAL_EMPTY_STEP_PROPOSED',empty_sha256=sha(Q/'empty_cache.py'),original_end=ORIGINAL_END,previous_red=str(previous),previous_red_sha256=sha(previous/'first-red.json'),previous_receipt=str(previous_receipts[0]),app=APP,pilot=pilot,policy_sha256=sha(Q/'controller_policy.py'),control=str(control),script_sha256=sha(__file__),supervisor_sha256=sha(Q/'confiner_validation.py'),target_identity=[st.st_dev,st.st_ino],old_receipt=str(receipts[0]),old_receipt_sha256=sha(receipts[0]),old_verdict=verdict,old_manifest_sha256=sha(OLD/'manifest-final.json'))
+    (Q/'configuration.json').write_text(json.dumps(cfg,indent=2)+'\n'); guard(cfg)
+    runtime=Path('/run/user')/str(os.getuid());bus=runtime/'bus'
+    assert runtime.resolve()==runtime and bus.resolve()==bus and bus.is_socket() and bus.stat().st_uid==os.getuid()
+    env={k:os.environ[k] for k in ['HOME','USER','LOGNAME','PATH','LANG','LC_ALL','CARGO_HOME','RUSTUP_HOME'] if k in os.environ}
+    env.update(POSTE_MEM_MAX='32G',RAG3WEAVER_BUILD_MEMORY_HIGH='0',XDG_RUNTIME_DIR=str(runtime),DBUS_SESSION_BUS_ADDRESS='unix:path='+str(bus))
+    command=controller.commands(control,pilot)['outer']
+    with (P/'supervision.log').open('w') as output: result=subprocess.run(command,cwd='/var/tmp',env=env,stdout=output,stderr=subprocess.STDOUT)
+    verdicts=list((P/'supervision').glob('validation-*/verdict.json'))
+    outcome=dict(status='UNEXPECTED_FAILURE',scope_rc=result.returncode,not_a_green_qualification=True)
+    if len(verdicts)==1:
+        scope=json.loads(verdicts[0].read_text());outcome['scope']=scope
+        red=P/'driver-result.json'
+        if red.is_file() and json.loads(red.read_text())['status']=='EXPECTED_RED' and scope['verdict']=='ROUGE' and not scope['restes'] and scope['nettoye']:
+            try:
+                assert result.returncode == 1 and scope['code'] == 101, 'not the expected driver red exit'
+                authority=json.loads((verdicts[0].parent/'autorite.json').read_text())
+                assert authority['etat'] == 'termine', 'authority still active'
+                assert not Path(scope['prive']).exists(), 'private bus remains'
+                guard(cfg)
+                ledger=json.loads((P/'ledger-before-witness.json').read_text())
+                assert sha(ledger['binary']) == sha(P/'native-fixture-elf') == ledger['sha256']
+                empty_cache.verify_frozen(SESSION_TARGET,T,json.loads((P/'frozen-old-cache.json').read_text()))
+                empty_cache.require_identity(T,json.loads((P/'new-cache-identity.json').read_text()))
+                finished=time.monotonic()
+                assert finished < authority['echeance'], 'deadline after final hashes'
+                outcome.update(status='EXPECTED_RED',authority_terminated=True,bus_absent=True,deadline=authority['echeance'],finished=finished)
+            except Exception as error:
+                outcome['error']=repr(error)
+    if outcome['status']=='EXPECTED_RED' and time.monotonic() >= outcome['deadline']:
+        outcome.update(status='UNEXPECTED_FAILURE',error='deadline before publication')
+    save('result.json',outcome); print(json.dumps(outcome));sys.exit(1)
+
+
+if __name__=='__main__':
+    mode=sys.argv[1]
+    if mode=='--admit':
+        os.execv(sys.executable,[sys.executable,str(Q/'confiner_validation.py'),'lancer','--delai','1200','--preuves',str(P/'supervision'),'--','python3',str(Q/'qualify_red.py'),'--driver',sys.argv[-1]])
+    elif mode=='--driver': driver()
+    elif mode=='--initial-empty': prepare(sys.argv[2])
+    else: raise RuntimeError('explicit initial-empty mode required')

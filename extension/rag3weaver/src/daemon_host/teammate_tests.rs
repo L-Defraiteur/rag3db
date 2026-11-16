@@ -1879,6 +1879,7 @@ fn a_documentation_supervisor_denies_lock_deletion_and_the_teammate_finishes_the
     assert_eq!(response["reply_to"], waiting.iter().find(|l| l["kind"] == "approval").unwrap()["id"]);
     host.post_to_teammate(&h.id, "doc", "c7", "answer", None, DENIAL_TEXT, &response).unwrap();
     let finished = attendre_dans(&files, "documentation completion after refusal", &|b| b.iter().any(|l| l["kind"] == "ended"));
+    fixture.observe(&finished);
     assert_eq!(finished.iter().filter(|l| l["kind"] == "request").count(), 1);
     assert!(!finished.iter().any(|l| l["approved"] == true || l["granted"].is_string()));
     assert_eq!(finished.iter().find(|l| l["kind"] == "ended").unwrap()["text"], "fait sans plan");
