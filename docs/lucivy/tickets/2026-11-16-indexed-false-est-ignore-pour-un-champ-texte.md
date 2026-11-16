@@ -57,3 +57,10 @@ modifié. Noms échappés, texte anglais ; docquery/README à compléter aprèsr
 Préparation du témoin corrigée en littéraux bruts Rust ; toujours NON compilé,
 NON joué, aucun correctif tant que rouge d’assertion pas vu. Fenêtre G/Arbre
 respectée, aucun nouveau lourd lancé.
+
+Recette bornée publiée pour RO puis GOslot :
+`docs/lucivy/16-11-2026/05-recette-rouge-indexed-false.md` et pilote
+`outils/qualify-indexed-false-red.py`, sourcefixe0c795f99, budgetproposé600s après
+vraiposte/32G-HIGHmax/j4, compilationoffline+inventaire+exact1configpure.
+Rougeassertion attendu distingué compilation/inventaire/confinement ; aucun
+lancement effectué. Corpus7.2/PR42 restent deux blocages distincts noncontournés.
