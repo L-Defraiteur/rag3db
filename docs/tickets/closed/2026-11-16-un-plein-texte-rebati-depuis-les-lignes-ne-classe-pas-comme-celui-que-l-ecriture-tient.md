@@ -1,6 +1,6 @@
 # Un plein texte rebâti depuis les lignes ne classe pas comme celui que l'écriture tient
 
-- **État** : ouvert (16 novembre 2026)
+- **État** : fermé (16 novembre 2026, ED) — ce n'était pas le rebâti. Le juge cherchait avec 794b14232, où une base rouverte se croyait « tout visible » : la remontée vers les occurrences admettait les `Scope` fermées. Rejoué sur master 11878bf6d (qui porte le correctif, 209bc299b), l'élagué rend le classement de l'index neuf au rang près. La preuve est en fin de page
 - **Famille** : produit (le plein texte, son rebâti)
 - **Gravité** : défaut. Un rebâti du plein texte, qu'il vienne d'une réparation, d'un élagage ou d'un `rebuild_fts_step`,
   rend une recherche lexicale moins juste que l'index qu'il remplace, alors qu'il en a les comptes exacts
@@ -60,3 +60,24 @@ disent pas.
 ## Comment le fermer
 
 Par ce témoin vert. Puis la preuve par élagage de banc se refait sur un rebâti juste, pour le ticket BM25.
+
+## La preuve (banc, 16 novembre 2026)
+
+Le juge `releve_les_reponses_de_search_code` (bm25 seul, 30 cas, même manifeste), rejoué sur master 11878bf6d, sur des
+copies neuves des trois bases :
+
+| | rappel à 10 | même premier | même classement |
+|---|---|---|---|
+| neuf contre élagué | 289/289 = 1,000 | 30/30 | 30/30 |
+| neuf contre lot | 260/289 = 0,900 | 25/30 | 8/30 |
+| lot contre élagué | 260/289 = 0,900 | 25/30 | 8/30 |
+
+- Le cas vide, « read_text » sur `src/include/`, a disparu.
+- Entre le neuf et l'élagué, 257 scores sur 289 sont égaux au bit près. Les autres diffèrent d'au plus 7,6e-6, sans
+  changer un rang.
+- Le plein texte rebâti depuis les lignes classe donc comme celui que l'écriture tient. Le 0,668 venait de
+  `tout_visible`, posé vrai à toute ouverture avant 209bc299b.
+- **Ce qui reste entre le lot et le neuf (0,900) vient tout entier des versions fermées** : les retirer rend le
+  classement du neuf. C'est la longueur moyenne du ticket BM25, que lucivy 4.3.9 corrige sans élaguer.
+
+Sorties à luciepc : `banc-parite/sorties/preuve-bm25-master/`, script `~/.cache/rag3weaver-build/preuve-bm25-master.sh`.
