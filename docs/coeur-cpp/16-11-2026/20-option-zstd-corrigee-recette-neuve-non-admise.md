@@ -15,3 +15,9 @@ Le stderr constant conserve ses espaces de fin de ligne et sa ligne finale à l'
 Commande proposée après RO et GO distinct : `bash /home/lucied/.cache/rag3weaver-build/cx-core-ro-02/launch.sh`. Toujours120s total après vrai poste4G/swap0/quota, contrôleur80/unité90+5/fin native95/final110/watchdog115+5, décompression20 et GDB35 dans la même portée. Le chemin du core temporaire et celui du sysroot vide de la commande GDB suivent le scratch02 ; les options et commandes d'analyse restent identiques, sans inférieur/autoload/solib/debuginfod.
 
 Aucun staging02, décompression ou GDB exécuté par ce correctif. Source C++ et anciennes preuves/staging01 inchangés. Nouvelle RO demandée sur ce paquet avant toute admission ; ticket de décompression, ticket SIGSEGV et C1 toujours ouverts. Pas de retry automatique, test C++, rebuild, service ou nouveau modèle.
+
+## Staging02 autorisé ensuite, sans analyse
+
+Copies privées réalisées au mot de C7, après publication du correctif : J=/home/lucied/.cache/rag3weaver-build/cx-core-ro-02, six scripts37f2b52aa834f3359292bd0e58f2c82be4689b32 et recette314d vérifiés ; cinq entrées vérifiées/copiées dans J/inputs/revérifiées, chemins runtime de la recette inchangés. Source propre au staging, preuves01 intactes.
+
+[Reçu PC rapatrié](preuves/core-ro-staging-02/preparation.json), SHA256 c6f413f46b7f81fe4105169b600177b7e2d1f9efec550d7c358dc6444054d609. Scratchcx-coeur-core-ro-02 vide, unité02 not-found/MainPID0/ControlGroup vide, aucun processus attribué ; raw/resume/core décompressé absents. Aucune décompression, GDB, allocation poste ou réservation. Pin02 prêt à l'admission distincte, qui reste requise. RO Hotfixs et C7 favorables au delta, sans qualification native ni attribution au crash.
