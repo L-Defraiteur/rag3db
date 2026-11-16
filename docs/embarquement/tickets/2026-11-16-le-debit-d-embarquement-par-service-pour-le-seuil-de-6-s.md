@@ -133,3 +133,11 @@ privés. Magasin SDK absolu externe conservé. Profil non secret capturé et
 invariants revérifiés en fin de qualification. Ajouter des témoins de profil
 hermétiques sans Cargo et soumettre le nouveau couple à revue ; aucune barrière
 manager/systemctl, aucune mutation du cache SDK partagé ou du code produit.
+
+
+Réserve profil : preuve rouge réelle c0bdd7439a (5 cas,3 échecs/2 succès), puis
+correctiffabcf40df5 (5/5 verts), petits CPU hermétiques uniquement. Les écritures
+étaient dans un faux HOME temporaire contrôlé, jamais les racines de Lucie.
+Le pilote délègue le profil corrigé, capture une liste positive non secrète et
+vérifie de nouveau les racines avant son verdict final. Preuves et détails dans
+03-rate-key-validation-proposal.md. Aucun Cargo/runtime ou GO de passe accordé.

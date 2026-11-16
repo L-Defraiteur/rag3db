@@ -194,3 +194,36 @@ Le couple est constitué du commit source complet et du SHA256 du fichier
 empreintés. Leurs valeurs exactes sont transmises à l'orchestration après le
 push. Ce document ne s'auto-attribue aucun créneau. Source et pilote ne changent
 plus après admission sans arrêt/relecture et nouvel encadrement explicite.
+
+
+## Réserve de profil levée par témoins hermétiques, à relire avant GO
+
+RéserveC7 tracée au ticket AVANT diff, commit9156ce44d6. Extraction du profil
+réel initial dans `rate-key/validation_profile.py`, déléguée par le pilote,
+puis témoinrouge c0bdd7439a : cinq cas CPU, deux passent et trois échouent
+(écritures dans un faux HOME, racines d'état non frères, contrôle final permissif).
+Correctionfabcf40df5 : cinq cas sur cinq passent, sans ignoré, en0,016 s.
+Les journaux locaux cmd/rc/stdout/stderr sont dans
+`~/.cache/embarquement-notes/rate-key-16nov/profile-{red,green}-v1/`.
+Ces chiffres ne qualifient ni le code Rust ni la passe complète.
+
+Le profil est maintenant explicite :
+- XDG_STATE_HOME=P/xdg-state et RAG3WEAVER_STATE_DIR=P/state-fixture,
+  racines frères, distinctes, jamais ancêtres l'une de l'autre ;
+- XDG_CONFIG_HOME=P/xdg-config, XDG_DATA_HOME=P/xdg-data,
+  XDG_CACHE_HOME=P/xdg-cache ; TMPDIR/TMP/TEMP=P/tmp ;
+- RAG3WEAVER_CACHE_DIR=P/cache-fixture (cache des index), journaux/templates
+  dans P/journals et P/templates.
+
+Les racines doivent être absolues, exactes et sans lien les faisant échapper.
+Le profil public est limité à ces chemins et au magasin SDK : aucune valeur
+secrète, jeton de validation ou environnement complet n'est enregistré.
+Contrôle et capture avant toute phase, puis assertion/capture finale avant VERT.
+Les racines sont créées seulement dans la portée admise, hors du magasin SDK.
+
+Le bus et XDG_RUNTIME_DIR restent ceux de la portée commune ; HOME et les
+bindings d'artefacts de modèles restent inchangés. Les poids existants sont lus
+par leurs chemins explicites ou HOME/.cache/rag3weaver, pas copiés dans le XDG
+privé. Aucun changement du profil CPU/quota ou des modèles canoniques, aucune
+barrière manager, aucune qualification active touchée. Le couple5e889/b04a
+n'est pas autorisé et ne doit pas être lancé ; le nouveau couple requiert RO/GO.
