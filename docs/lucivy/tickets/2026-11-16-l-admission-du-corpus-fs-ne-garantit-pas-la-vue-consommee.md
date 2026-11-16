@@ -72,3 +72,11 @@ RORecherche duCONTRAT/raccordconsommateur/StdFsSpy/4vraisrougesAVANTimpl
 substantielle. Les signatures du plan sont proposéesNONimplémentées, pasAPI
 existantefactice. C7 tranchetransportmanifest/politiquecaptureavantcode ;
 aucunrunArefusprédit,source1eequalifiée9mémoireseulement resteinchangée.
+
+RORecherche CONTRATexact355ffadd01 favorablebornée reçue sansblocagestatique :
+vraiStdFs/Spyentréeavantbuild/report,4rougesbaseline+positif/panel15/readonce
+mêmetamponcohérents. Spieseffetsréelspourreuse/delete/persist, flagsV3refusés
+avantlecture mêmevide/0. AucunRustdiff/test/Cargo/ELF/proc/corpus/service.
+Choixcapture/transportmanifestC7resteAVANTimplémentation/GO ; proposition
+captureuniquepolitiqueactuellepubliéeavantbuilder,aucunereselectionaprèsrefus,
+manifestedereplayensuite ; pastri5000silencieux. TransmisC7,pasFSqualifiée.

@@ -210,3 +210,23 @@ actuel. Pas de code crypto artisanal ou d’hypothèse de nouvelle résolution.
 
 Aucun contact corpus, aucune source Rust changée, aucun témoin exécuté ici.
 Source1ee/neuf mémoire verts, core/9HOLD/FS/ULP7.2/PR42 gardent leurs périmètres.
+
+## RO contrat reçue et choix restant avant code
+
+Recherche exacte355ffadd01 favorable bornée, après lecture doc16/JSON/ticket et
+collect_files/create_v3_index/v3_ground_truth_contains/run_panel1ee. Aucun
+Rustdiff/test/Cargo/ELF/proc/corpus/service. Pas de bloqueur statique du contrat ;
+StdFs/SpyStdFs au vrai consommateur avant effets, quatre baselines conservées,
+positif séparé et même tampon hash/UTF8/index/oracle confirmés. Les pièges
+reuse/delete/persist doivent viser la vraie frontière d’effets, et les flags
+V3 dangereux être refusés avant lecture même valeur vide/0.
+
+Choix à faire par C7 avant implémentation/GO : capture de la première vue et
+transport de son plan. Proposition minimale : origine/arbre/politique/cap/panel
+figés avant lecture, capture unique publiée avant builder, refus conservé sans
+seconde sélection ; le manifeste effectif sert de référence de replay ensuite.
+Ne pas introduire un tri qui changerait silencieusement la sélection5000, ni
+une nouvelle runtime autour du refusA interdit. Un plan de cas explicite peut
+porter ce contrat dans les utilitaires de tests ; son point de transport doit
+être validé, le vieux V3_CORPUS seul ne le porte pas. Aucune de ces options
+n’est implémentée ni autorisée à lire les corpus dans cette préparation.
