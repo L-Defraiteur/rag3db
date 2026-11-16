@@ -1,0 +1,52 @@
+{
+  "app": "3ee1e117cc0c9ff7e9de1f08263c26cb4e907c79",
+  "pilot": "4d5265fc11151dd78c69355f26d214075b66ab8d",
+  "artifact": {
+    "reason": "compiler-artifact",
+    "package_id": "path+file:///home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-double-source-v1/extension/rag3weaver#0.1.0",
+    "manifest_path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-double-source-v1/extension/rag3weaver/Cargo.toml",
+    "target": {
+      "kind": [
+        "lib"
+      ],
+      "crate_types": [
+        "lib"
+      ],
+      "name": "rag3weaver",
+      "src_path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-double-source-v1/extension/rag3weaver/src/lib.rs",
+      "edition": "2021",
+      "doc": true,
+      "doctest": true,
+      "test": true
+    },
+    "profile": {
+      "opt_level": "0",
+      "debuginfo": "line-tables-only",
+      "debug_assertions": true,
+      "overflow_checks": true,
+      "test": true
+    },
+    "features": [
+      "code",
+      "rag3db-native"
+    ],
+    "filenames": [
+      "/home/lucied/.cache/rag3weaver-build/cx-target-recherche-fts-counts-freshness/debug/deps/rag3weaver-f05fee0f090390b5"
+    ],
+    "executable": "/home/lucied/.cache/rag3weaver-build/cx-target-recherche-fts-counts-freshness/debug/deps/rag3weaver-f05fee0f090390b5",
+    "fresh": false
+  },
+  "source_executable": "/home/lucied/.cache/rag3weaver-build/cx-target-recherche-fts-counts-freshness/debug/deps/rag3weaver-f05fee0f090390b5",
+  "copied_executable": "/home/lucied/.cache/rag3weaver-build/cx-proofs-recherche-fts-double-v1/unit-tests",
+  "elf_sha256": "268229be9fd21290e369337cc52993bf5be42ea0b1eee17fe078180c581c147c",
+  "names": [
+    "code_sync::fts_guard_double_tests::classic_sync_removes_a_committed_fts_ghost",
+    "code_sync::fts_guard_double_tests::generations_sync_removes_a_committed_fts_ghost"
+  ],
+  "ignored": 0,
+  "published_before_runtime": 1189091.429916959,
+  "sdk": {
+    "librag3db.so": "b7e9fc75a3d2de04c72680b0309e8bb1df9eaadb5211ebbacf39716c6d0a2101",
+    "libvector.rag3db_extension": "1669d6392ec8067fcf92ae2ccc972fd7cd3086629fb82d1f5d254e90d72d7561"
+  }
+}

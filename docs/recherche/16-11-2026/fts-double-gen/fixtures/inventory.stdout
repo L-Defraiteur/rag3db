@@ -1,0 +1,4 @@
+code_sync::fts_guard_double_tests::classic_sync_removes_a_committed_fts_ghost: test
+code_sync::fts_guard_double_tests::generations_sync_removes_a_committed_fts_ghost: test
+
+2 tests, 0 benchmarks

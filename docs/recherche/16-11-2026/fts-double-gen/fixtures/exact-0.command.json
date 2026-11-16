@@ -1,0 +1,26 @@
+{
+  "argv": [
+    "/usr/bin/gdb",
+    "--batch",
+    "--return-child-result",
+    "-ex",
+    "set pagination off",
+    "-ex",
+    "set confirm off",
+    "-ex",
+    "start",
+    "-ex",
+    "source /home/lucied/.cache/rag3weaver-build/cx-control-recherche-fts-double-v2/main-profile.py",
+    "-ex",
+    "continue",
+    "--args",
+    "/home/lucied/.cache/rag3weaver-build/cx-proofs-recherche-fts-double-v1/unit-tests",
+    "code_sync::fts_guard_double_tests::classic_sync_removes_a_committed_fts_ghost",
+    "--exact",
+    "--nocapture"
+  ],
+  "cwd": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-double-source-v1/extension/rag3weaver",
+  "cap": 60,
+  "deadline": 1189151.535200258,
+  "started": 1189091.535202414
+}
