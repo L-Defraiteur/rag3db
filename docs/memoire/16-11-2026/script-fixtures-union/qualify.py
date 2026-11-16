@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """One fresh allocation: canonical pass, then the identical large unit-test ELF."""
 from pathlib import Path
+from collections import Counter
 import argparse, hashlib, json, os, re, shutil, stat, subprocess, sys, time
 import profile_contract as contract
 import source_proof
@@ -48,8 +49,20 @@ def summary(text):
     return dict(passed=passed,failed=failed,ignored=ignored,filtered=filtered)
 
 def compare_judge_names(first,second,expected):
-    # Baseline acceptance before the discriminating witness: counts only.
-    return dict(qualified=summary(first)==summary(second)==expected,meaning='counts-only baseline before name comparison fix')
+    def collect(text):
+        result={'ok':Counter(),'ignored':Counter()}
+        for name,status in re.findall(r'^test (.*?) \.\.\. (ok|ignored)(?:, [^\n]*)?$',text,re.M):
+            result[status][name.removesuffix(' - should panic')]+=1
+        return result
+    left,right=collect(first),collect(second)
+    only_first={status:dict(left[status]-right[status]) for status in left}
+    only_second={status:dict(right[status]-left[status]) for status in left}
+    duplicates={label:sorted(name for name,count in (row['ok']+row['ignored']).items() if count!=1) for label,row in [('first',left),('second',right)]}
+    totals={label:{status:sum(names.values()) for status,names in row.items()} for label,row in [('first',left),('second',right)]}
+    cardinalities=all(row['ok']==expected['passed'] and row['ignored']==expected['ignored'] for row in totals.values())
+    counts_match=summary(first)==summary(second)==expected and expected['filtered']==0
+    qualified=counts_match and cardinalities and not any(duplicates.values()) and not any(only_first.values()) and not any(only_second.values())
+    return dict(qualified=qualified,counts_match=counts_match,cardinalities_match=cardinalities,first=left,second=right,totals=totals,duplicates=duplicates,only_first=only_first,only_second=only_second,meaning='multisets of actual Rust harness names; ignored remain unplayed; should-panic display suffix normalized')
 
 def large_elf(text,target):
     rows=re.findall(r'Running unittests src/lib\.rs \(([^\n]+)\)',text)

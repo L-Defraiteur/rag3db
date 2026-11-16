@@ -105,3 +105,14 @@ P/Q/Sunion-v1 ABSENTS, TMPunion noncréé ; zéroCargo/F8/lib/NAV nouveau.
 3watchersED byteidentiques/hashesprovenanceexact,654ticketsverts, produitAPP→piloteVIDE.
 Prochaine étape est ROcouple puis GOexact+créneau et nouvelleborne3600, aucun
 GOmaster/retrait/déploiement.
+
+## Réserve des noms, rouge avant contrôle
+
+Pilote0b63 nonlancé/HOLD C7+ED. Ticketfe3dab332aAVANTdiff, baselinecomptes
+seuls et6témoins publiésb8f1ff804b AVANTessais : doublonsmêmescomptes rouge
+immédiat, puis témoin ciblé mêmescomptes/nomsdifférents rouge0,000s.
+Journaux horsW union-judge-names-red.log et ...-red-different.log conservés.
+Correction : CounterOK/ignored danslesdeuxlogs, décor shouldpanic normalisé ;
+comptes/cardinalités cohérentes, doublons et chevauchementOK/ignored refusés,
+comparaison multisetavec absents/extras. Snapshotjudge-names-comparison.json
+AVANTrequirequalified. Le reste source/carry/3600/SDK/finalinchangé ; zéroCargo.
