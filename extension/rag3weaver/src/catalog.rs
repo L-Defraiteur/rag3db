@@ -1448,9 +1448,22 @@ fn read_threads() -> u64 {
             return Err(Error::Pending(name.into()));
         }
         let read = |key: &str| self.read_meta_key(key).map_err(|error| Error::Metadata(error.to_string()));
-        if !read(FTS_PROMISE)?.unwrap_or_default().trim().is_empty()
-            || !read(&format!("{FTS_PENDING}{name}"))?.unwrap_or_default().trim().is_empty() {
+        if !read(FTS_PROMISE)?.unwrap_or_default().trim().is_empty() {
             return Err(Error::Pending(name.into()));
+        }
+        // La marque porte un nom d'entité, pas forcément celui de l'index.
+        // Résoudre sert uniquement à attribuer cette dette à la table exacte ;
+        // cela ne redirige jamais la table ouverte pour la maintenance.
+        let mut pending_names = vec![name.to_owned()];
+        pending_names.extend(self.entity_configs.keys().filter(|entity| {
+            self.resolve_search_target(entity).is_ok_and(|target| target.parent_table == name)
+        }).cloned());
+        pending_names.sort();
+        pending_names.dedup();
+        for entity in pending_names {
+            if !read(&format!("{FTS_PENDING}{entity}"))?.unwrap_or_default().trim().is_empty() {
+                return Err(Error::Pending(entity));
+            }
         }
         let raw = read(&format!("fts_generation:{index_name}"))?
             .ok_or_else(|| Error::Generation("missing database generation".into()))?;
