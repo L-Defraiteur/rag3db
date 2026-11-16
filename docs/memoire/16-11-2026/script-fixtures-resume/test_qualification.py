@@ -44,6 +44,23 @@ class Qualification(unittest.TestCase):
             with patch.object(m.contract,'check_same_short'),patch.object(m,'P',p),patch.object(m,'S',s),patch.object(m,'guard'),patch.object(m,'scan',return_value=observed),patch.object(m.time,'monotonic',return_value=101):
                 self.assertEqual(m.finalize({},0),1)
             result=json.loads((p/'composed-result.json').read_text());self.assertEqual(result['status'],'RED');self.assertIn('allocation deadline reached',result['error'])
+    def test_real_finalize_refuses_publication_when_open_crosses_deadline(self):
+        with tempfile.TemporaryDirectory(prefix='cx-late-publication-') as tmp:
+            root=Path(tmp);p=root/'proofs';p.mkdir();s=root/'scope';v=s/'validation-test';v.mkdir(parents=True)
+            m.save(v,'verdict.json',dict(verdict='VERT',code=0,restes=[],nettoye=True,prive=str(root/'absent-bus')))
+            m.save(v,'autorite.json',dict(etat='termine',echeance=100));m.save(v,'enfants.json',[])
+            m.save(p,'driver-result.json',dict(status='GREEN'));m.save(p,'short-tmp.json',dict(path=str(root)))
+            binary=root/'elf';binary.write_bytes(b'\x7fELFfixture');m.save(p,'ledger-before-second-lib.json',dict(binary=str(binary),copy=str(binary),sha256=m.sha(binary)))
+            clock=[99.];original_open=Path.open;composed=p/'composed-result.json'
+            def delayed_open(path,*args,**kwargs):
+                stream=original_open(path,*args,**kwargs)
+                if path==composed:clock[0]=101.
+                return stream
+            observed=dict(found=[],unknown=[],owned_alive=[],owned_unknown=[])
+            with patch.object(m,'P',p),patch.object(m,'S',s),patch.object(m,'guard'),patch.object(m,'scan',return_value=observed),patch.object(m.contract,'check_same_short'),patch.object(m.time,'monotonic',side_effect=lambda:clock[0]),patch.object(Path,'open',delayed_open):
+                rc=m.finalize({},0)
+            self.assertEqual(rc,1,'an open delayed past END must refuse GREEN')
+            self.assertEqual(json.loads(composed.read_text())['status'],'RED')
     def exercise_real_run(self,historical,active):
         with tempfile.TemporaryDirectory(prefix='cx-watcher-test-') as tmp:
             root=Path(tmp);proofs=root/'proofs';proofs.mkdir();cache=proofs/'cache/builtin';cache.mkdir(parents=True)
