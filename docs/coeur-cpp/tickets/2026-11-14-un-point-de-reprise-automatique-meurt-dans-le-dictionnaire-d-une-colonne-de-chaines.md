@@ -140,3 +140,5 @@ pool corrigé. La pression du pool semble l'aider. La suite reste la passe sous 
 ## Reprise du 16 novembre : diagnostic des offsets, sans attribution du crash
 
 Branche cx-coeur-c1-dictionary-diagnostic, base927941a67a ; [diagnostic et recette](../16-11-2026/02-c1-dictionnaire-diagnostic-et-temoin-des-offsets.md). Témoin seul publié2e25c850ecb627182f7ee64da13e9627e1339032 : refus48octets des offsets après copie du texte, préservation des anciennes chaînes et compteurs. NON COMPILÉ/NON JOUÉ, aucun rouge acquis ; correctif256 non repris. TSan existant tours1–4 finis0dictionnaire, tour5 encoreactif au relevé, pasFIN ; aucune relance. Fenêtre G prioritaire, qualification seulement sur feu neuf après sa fin ; aucun master autorisé.
+
+Complément témoin seul b82c06f2572892d2124c71dce87eba287f5e9f2b : BUILD_ID émis par la cible/en-tête généré, aucune lib posée. Recette enrichie sorties/arrêt/quiescence/espace32G, plafond1800 proposé neuf, lanceur encore à publier après coordination G. ObservationTSan partielle datée/SHA conservée, aucun verdict final ni run neuf.

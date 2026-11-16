@@ -1,0 +1,78 @@
+{
+  "observed_utc": "2026-11-16T10:18:26.123263+00:00",
+  "partial": true,
+  "restarted": false,
+  "controller_log": "== 64eee2e1f6 docs(orchestration): la piste de l'ajout à moitié 08:06:02\nbâti TSan code 0 08:12:25 ; pic de la portée 8.1 Gio (/user.slice/user-1000.slice/user@1000.service/app.slice/run-p768831-i143348102.scope)\ntour 1 code 66 ; rapports TSan 15 ; touchant le dictionnaire 0 ; segv 0 08:55:52\ntour 2 code 66 ; rapports TSan 18 ; touchant le dictionnaire 0 ; segv 0 09:40:36\ntour 3 code 66 ; rapports TSan 16 ; touchant le dictionnaire 0 ; segv 0 10:23:49\ntour 4 code 66 ; rapports TSan 19 ; touchant le dictionnaire 0 ; segv 0 11:08:04\n",
+  "reports": [
+    {
+      "path": "/home/lucied/.cache/rag3db-moteur-notes/dict-tsan/tsan-1.842904",
+      "bytes_read": 535373,
+      "sha256_of_bytes_read": "cad8509d1ba4183782c3660588eea58db47bee66bf050411a4ef6c0d1790b005",
+      "warnings": 15,
+      "dictionary_mentions": 0,
+      "string_chunk_mentions": 0,
+      "summaries": [
+        "SUMMARY: ThreadSanitizer: data race /home/lucied/git_workspaces/rag3db-colonnes/src/include/catalog/catalog_entry/catalog_entry.h:46 in rag3db::catalog::CatalogEntry::setTimestamp(unsigned long)",
+        "SUMMARY: ThreadSanitizer: data race /home/lucied/git_workspaces/rag3db-colonnes/src/include/storage/table/rel_table.h:227 in rag3db::storage::RelTable::reserveRelOffsets(unsigned long)",
+        "SUMMARY: ThreadSanitizer: data race /home/lucied/git_workspaces/rag3db-colonnes/src/storage/table/rel_table.cpp:672 in rag3db::storage::RelTable::getNumTotalRows(rag3db::transaction::Transaction const*)"
+      ]
+    },
+    {
+      "path": "/home/lucied/.cache/rag3db-moteur-notes/dict-tsan/tsan-2.1294105",
+      "bytes_read": 624300,
+      "sha256_of_bytes_read": "7bfb18a89ec0cc78e137e10bdec9e832000fdb68307fd6aa3d40576c9f2529ab",
+      "warnings": 18,
+      "dictionary_mentions": 0,
+      "string_chunk_mentions": 0,
+      "summaries": [
+        "SUMMARY: ThreadSanitizer: data race /home/lucied/git_workspaces/rag3db-colonnes/src/include/catalog/catalog_entry/catalog_entry.h:46 in rag3db::catalog::CatalogEntry::setTimestamp(unsigned long)",
+        "SUMMARY: ThreadSanitizer: data race /home/lucied/git_workspaces/rag3db-colonnes/src/include/storage/table/rel_table.h:227 in rag3db::storage::RelTable::reserveRelOffsets(unsigned long)",
+        "SUMMARY: ThreadSanitizer: data race /home/lucied/git_workspaces/rag3db-colonnes/src/storage/checkpointer.cpp:302 in rag3db::storage::Checkpointer::canAutoCheckpoint(rag3db::main::ClientContext const&, rag3db::transaction::Transaction const&)",
+        "SUMMARY: ThreadSanitizer: data race /home/lucied/git_workspaces/rag3db-colonnes/src/storage/table/rel_table.cpp:672 in rag3db::storage::RelTable::getNumTotalRows(rag3db::transaction::Transaction const*)"
+      ]
+    },
+    {
+      "path": "/home/lucied/.cache/rag3db-moteur-notes/dict-tsan/tsan-3.1751179",
+      "bytes_read": 570626,
+      "sha256_of_bytes_read": "6109ec9a2497cb0507b7b1b69c231e2c79879f36781f7de786a3365fac3ce3ed",
+      "warnings": 16,
+      "dictionary_mentions": 0,
+      "string_chunk_mentions": 0,
+      "summaries": [
+        "SUMMARY: ThreadSanitizer: data race /home/lucied/git_workspaces/rag3db-colonnes/src/include/catalog/catalog_entry/catalog_entry.h:46 in rag3db::catalog::CatalogEntry::setTimestamp(unsigned long)",
+        "SUMMARY: ThreadSanitizer: data race /home/lucied/git_workspaces/rag3db-colonnes/src/include/storage/table/rel_table.h:227 in rag3db::storage::RelTable::reserveRelOffsets(unsigned long)",
+        "SUMMARY: ThreadSanitizer: data race /home/lucied/git_workspaces/rag3db-colonnes/src/storage/table/rel_table.cpp:672 in rag3db::storage::RelTable::getNumTotalRows(rag3db::transaction::Transaction const*)"
+      ]
+    },
+    {
+      "path": "/home/lucied/.cache/rag3db-moteur-notes/dict-tsan/tsan-4.2370050",
+      "bytes_read": 687957,
+      "sha256_of_bytes_read": "16f37d60041e19b4b8a2a8283bf15ebe2a4598d10325d07a6ac2971b7ef4309c",
+      "warnings": 19,
+      "dictionary_mentions": 0,
+      "string_chunk_mentions": 0,
+      "summaries": [
+        "SUMMARY: ThreadSanitizer: data race /home/lucied/git_workspaces/rag3db-colonnes/src/include/catalog/catalog_entry/catalog_entry.h:46 in rag3db::catalog::CatalogEntry::setTimestamp(unsigned long)",
+        "SUMMARY: ThreadSanitizer: data race /home/lucied/git_workspaces/rag3db-colonnes/src/include/storage/table/rel_table.h:227 in rag3db::storage::RelTable::reserveRelOffsets(unsigned long)",
+        "SUMMARY: ThreadSanitizer: data race /home/lucied/git_workspaces/rag3db-colonnes/src/storage/table/node_group.cpp:897 in rag3db::storage::NodeGroup::findChunkedGroupIdx(std::vector<std::shared_ptr<rag3db::storage::ChunkedNodeGroup>, std::allocator<std::shared_ptr<rag3db::storage::ChunkedNodeGroup> > > const&, unsigned long)",
+        "SUMMARY: ThreadSanitizer: data race /home/lucied/git_workspaces/rag3db-colonnes/src/storage/table/rel_table.cpp:672 in rag3db::storage::RelTable::getNumTotalRows(rag3db::transaction::Transaction const*)"
+      ]
+    },
+    {
+      "path": "/home/lucied/.cache/rag3db-moteur-notes/dict-tsan/tsan-5.2815401",
+      "bytes_read": 561192,
+      "sha256_of_bytes_read": "25983105eac5da357d53b95337d720cd1e3a2c947fd72b2f483c3adf21cb9652",
+      "warnings": 17,
+      "dictionary_mentions": 0,
+      "string_chunk_mentions": 0,
+      "summaries": [
+        "SUMMARY: ThreadSanitizer: data race /home/lucied/git_workspaces/rag3db-colonnes/src/include/catalog/catalog_entry/catalog_entry.h:46 in rag3db::catalog::CatalogEntry::setTimestamp(unsigned long)",
+        "SUMMARY: ThreadSanitizer: data race /home/lucied/git_workspaces/rag3db-colonnes/src/include/storage/table/node_table.h:333 in rag3db::storage::NodeTable::getColumn(unsigned int)",
+        "SUMMARY: ThreadSanitizer: data race /home/lucied/git_workspaces/rag3db-colonnes/src/include/storage/table/rel_table.h:227 in rag3db::storage::RelTable::reserveRelOffsets(unsigned long)",
+        "SUMMARY: ThreadSanitizer: data race /home/lucied/git_workspaces/rag3db-colonnes/src/storage/table/node_table.cpp:831 in rag3db::storage::NodeTable::addColumn(rag3db::transaction::Transaction*, rag3db::storage::TableAddColumnState&, rag3db::storage::PageAllocator&)",
+        "SUMMARY: ThreadSanitizer: data race /home/lucied/git_workspaces/rag3db-colonnes/src/storage/table/rel_table.cpp:672 in rag3db::storage::RelTable::getNumTotalRows(rag3db::transaction::Transaction const*)"
+      ]
+    }
+  ],
+  "controller_finished": false
+}
