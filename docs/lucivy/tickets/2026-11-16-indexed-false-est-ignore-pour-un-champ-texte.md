@@ -115,3 +115,14 @@ indexationschéma inchangée et docpublique. Preuve rouge0c conservée. Reste :
 leur retour RO puis couplevert3juges, réemploi du seulTnonce3552/receiptancien
 terminé/ELFrougeSHA conservé, contrôle identité/quiescence frais aprèsposte,
 600s uniques, pas de libcore complète/corpus/ulp/PR42 inclus par ce seul juge.
+
+Préparation verte : pilotesqualify/admit-indexed-false-green publiés60735fa9af
+puis14cbf7af3d (basepartagée rouge vérifiée avantlecture, codeconfig890 inchangé).
+Paquet privé PC cx-lucivy-indexed-warning-green-16nov-v1 copié, ELFrougeSHAc247
+conservé dans red-test-elf avant toute compilation, Tnonce3552 non modifié,
+WPC avancé propre890. **Précontrôle bloqué avant admission** : PermissionError
+Errno13 sur /proc/1247/exe lors du scanmetadata global des processus UID1000.
+Aucune tentativeCargo/test, aucun reçuvert créé ; preflight.json NON écrit.
+Pas d’élévation ni de contournement. Reste C7 : décider critère de quiescence
+admissible pour le réemploi avec cet accès /proc protégé, puis nouveaupréflight
+et recettefigée avant GO. Le rouge0c et son autoritéterminée restent intacts.
