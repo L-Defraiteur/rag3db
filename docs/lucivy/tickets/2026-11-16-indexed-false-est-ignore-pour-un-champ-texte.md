@@ -404,3 +404,12 @@ conformes/ASTsansimport/logspurscohérents, aucunrejeu/Cargo/ELF/proc/base.
 SourceRechercheetpaquetBanc désormaisfavorablesPRÉPA ; seulGO600 exactC7
 resteàrecevoiravantrougeRust. Aucunrefuscontourné/RUNimplicite,9HOLD/
 corefalse/ULP7.2/PR42 maintenus. Recette12complétée et statut transmisC7.
+
+GO exact reçu C7-LUCIVY-ADMISSION-7833-16nov615 : APP81b0/PILOT7833/
+admit7649/Qv2préflight0c90301e ; scripts/9copies/sourceclean/absenceoutputs
+relus aussi parC7. EnveloppeDURE615(TERM610+kill5), validation600STARTaprès
+vraiposte inclpréflight/Commonreste-2, pasclaimwhole600. BashexactcwdQv2/
+noclobber/32Ghighmaxswap0CPU4/j<=4. Compile3ELF/inventairesETledgersavant
+unique mockRust attendu101/0-1-0/left1-right0. ToutautreécartSTOPsansretry ;
+8autresmock/natifbuilder/corpus/réselection/ULP/PR42/main/tag NONautorisés.
+FinCommonTERMINE/ownedquietàattesteraprèsretour,ancien106fa/proofsconservés.
