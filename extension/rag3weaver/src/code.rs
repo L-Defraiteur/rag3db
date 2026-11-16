@@ -1837,6 +1837,12 @@ pub fn analyze_in_project_avec(
                 if id.is_empty() || (id == sc.name && !recursion) || libraries.contains(id) {
                     continue;
                 }
+                // **A member of an external library is not a project homonym** (16 November 2026): the
+                // qualifier comes from an import of a library of this file (`process.platform` after
+                // `const process = require("process")`, `fs.readFileSync(…)`): the member is the library's.
+                if r.import_origin.as_ref().is_some_and(|o| o.via_qualifier && libraries.contains(&o.source)) {
+                    continue;
+                }
                 // **Un accès de champ ne prend pas de rendez-vous** avec une
                 // fonction homonyme (`r.chunk`, `self.config`) :
                 // le résolveur de codeparsers écarte déjà une référence
