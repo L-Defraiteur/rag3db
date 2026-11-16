@@ -117,3 +117,26 @@ restent dans check_features ; preuve impose Checking/Compiling rag3weaver
 v0.1.0 du chemin APPunion exact AVANT Finisheddev/unoptimized+debuginfo.
 Listes/inventaires54/22historiques inchangés ; seul classificateur corrigé.
 Publication du fix AVANT jugement14fonctions groupées ; pas de native-run.
+
+
+## Correctif groupé c88662, nouveau paquet V2 pour RO totale
+
+Après publication du fixc88662d673 :14fonctions(11initiales+3groupées)
+vertes0.376s sousGOCPU60failfast, tous souscas des3contreexemples passent.
+Le CLI PURE revalide aussi les54fichiers épinglés et produit sa nouvelle
+analyse séparée, toujours RAW_CANONICAL_CLASSIFIED_ONLY ; aucunanciencomposé
+ou RAW réécrit. Aucun changement d'inventaire024553 ni de données natives.
+
+Nouveau paquet distinct ~/.cache/rag3weaver-build/cx-ed-vertex-raw-review-v2,
+34fichiers502369octets, manifeste
+5593b7b7b497cd194d63306209c9f66d20f52d7dca98e631e253f294c09fd60d,
+preparedSHA d625f927f9e0d717c65bad55f98770d9af38645432788f648699faacb89ee794,
+classificateurSHA9fc037896bd3a470585d5d54f7f602505e1c28f256e0bb5bf6a6d632fed66a7c.
+CopiePC34tailles/SHA réempreintées et portable idem0écart. Ancienpaquet22/
+197b/891/HOLD/3rouges et54RAW conservés. Tousleslogsrouges intermédiaires
+restent dansV2, classificationancienne dansgreen-v3 explicitementhistorique,
+nouvelle dansstrict-green-v1. AucuneancienneGO/suffisance reportée.
+
+RO TOTALE GROUPÉE code+3contreexemples+14tests+paquet demandée AVANT reprise
+candidature. CandidatWTintegration-r1 resteb472 propre/nonpublié et aucune
+gardePush exécutée. TicketOUVERT/composéRED/scopeROUGE/ancienENDexpiré.

@@ -118,3 +118,12 @@ pas invalidité nativeétablie. Trois témoins réels prépubliés dans
 [rapport24](../../everything-declarative/16-11-2026/24-classification-pure-des-raw-vertex.md)
 avantCPU60hermétiqueC7/fixgroupé ; ancien197/891/WTcandidateHEADb472 conservés.
 NouvelleROtotale requise, aucunGOmaster/garde/natif/ancienneborne réactivé.
+
+
+## Trois vrais rouges puis correction groupée, nouvelle RO requise
+
+Tests prépub180dfd2d9c puis3sélectionsréelles chacun1FAIL/0ERROR ;fix groupé
+c88662d673 publié AVANT14fonctionsfailfastVERTES0.376s sousCPU60hermétique.
+[Rapport24/V2](../../everything-declarative/16-11-2026/24-classification-pure-des-raw-vertex.md) : paquet34 SHA5593b7…60d/preparedd625…e794 réempreinté2posts0écart,
+RAW54/inventaire/ancien197+22 immuables ; ROtotalegroupée demandée sans
+reportdesavistroisfavorablesprécédents. HOLDcandidat/master inchangé.
