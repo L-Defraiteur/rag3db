@@ -5294,6 +5294,12 @@ fn read_threads() -> u64 {
 
     /// Le registre du retard de l'index sur le disque (la montre y note, la
     /// réindexation y efface, les lectures le disent).
+    /// **A reindexed batch observed** (point 7 of Lucie's vision): `files` in
+    /// `held`, for the rate the read tools estimate from.
+    pub fn observe_index_rate(&self, files: usize, held: std::time::Duration) {
+        self.file_lag().observe(&self.scope().clone(), files, held);
+    }
+
     pub fn file_lag(&self) -> Arc<retard::Lag> {
         self.file_lag.clone()
     }
