@@ -115,3 +115,12 @@ processus/autorité/nonce/lease ; le préwriter exige également la fenêtre REA
 Le manifeste v4 vise strictement sa nouvelle fixture avec garde correspondant.
 Publication avant CPU : pas encore de résultat consommateur vert ni paquet v4
 créé. Nouveau couple et RO totale restent requis avant arbitrage C7 distinct.
+
+### Résultat CPU du groupe publié
+
+d3f2d6acd2 : groupe84, 80 réussites/4 erreurs de setup en 0.430s (clé tuple
+erronée dans la nouvelle fixture, aucun corps policy exécuté). Correction
+fixture seule publiée 3f3af87898 : policy4 verts0.006s, groupe84 verts0.431s.
+Les sept rouges initiaux sont verts sur ce dernier groupe ; le premier essai
+erroné reste rouge. Témoins hermétiques seulement, aucun health/proc/DB/CLI
+réel, créneau ou GO900. Le ticket reste ouvert jusqu'à qualification distincte.

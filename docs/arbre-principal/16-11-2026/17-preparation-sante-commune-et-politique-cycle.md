@@ -1,6 +1,6 @@
 # Préparation du transport santé commun et de la politique cycle
 
-État : préparation, pas de GO ni de qualification native. Qv3/b9e5 est figé et
+État : préparation avec qualification CPU hermétique, pas de GO ni de qualification native. Qv3/b9e5 est figé et
 retiré des candidats au lancement après contrelecture C7. Son manifeste et ses
 preuves ne sont pas modifiés. Les anciens rouges restent rouges.
 
@@ -48,3 +48,33 @@ SHA owner 83139ebb329a59f19aa881f7f9678a7e6bf87c39abd3ff0ab7d20ecc15c0ba00.
 Aucun fichier global/PG n'est porté. Le manifeste v4 est recoupé avec BASE
 par un garde et un témoin. Le contrôle CPU du groupe suit sa publication ;
 aucun résultat vert du consommateur n'est encore revendiqué ici.
+
+## Contrôles CPU après publication
+
+Source d3f2d6acd2 publiée puis suite de 84 fonctions : 80 réussites et quatre
+erreurs de setup en 0.430s, rc1. Erreur locale du nouveau témoin : une
+substitution textuelle avait construit une clé tuple au lieu des deux pins
+observation/transport. Aucun corps des quatre juges policy n'avait été atteint ;
+ce rouge reste attaché à d3f2. Les sept contre-exemples initiaux étaient verts.
+
+Correction fixture seule publiée 3f3af87898 : quatre juges policy verts en
+0.006s, puis groupe complet 84 fonctions distinctes vertes en 0.431s, rc0.
+Les sous-cas ne sont pas comptés comme nouvelles fonctions. Commandes bornées
+par timeout (59s+kill1 pour le premier, puis 20s+kill1 pour les contrôles après
+correction), toutes terminées en moins d'une seconde réelle chacune.
+
+Commande du groupe : `python3 -B -m unittest test_lifecycle_protocol
+test_lifecycle_writer test_lifecycle_admission test_ready_contract
+test_ready_consumption test_lifecycle_grant_producer
+test_lifecycle_provider_observation test_consumer_health
+test_consumer_health_policy test_provider_health_transport`, avec PYTHONPATH
+pointant seulement sur le dossier coordination du transport commun.
+Aucun test supplémentaire après la correction verte n'est nécessaire sans
+nouveau delta de code. Les modifications documentaires ultérieures ne sont pas
+présentées comme de nouveaux runs.
+
+Les fakes couvrent le vrai transport worker, le vrai wrapper owner, le vrai
+consommateur et son raccord AST après writer, ainsi que la policy cycle. Ils
+ne qualifient aucun PID, GET, DB, CLI, service, retrait ou arrêt réel. Aucun
+embedding autorisé ; ticket READY ouvert, nouveau paquet et RO totale avant
+arbitrage C7 distinct. Aucun ancien GO transféré et aucun GO900 consommé.
