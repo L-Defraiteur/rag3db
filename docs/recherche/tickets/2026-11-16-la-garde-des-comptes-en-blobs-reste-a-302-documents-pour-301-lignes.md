@@ -170,3 +170,12 @@ anciens restent gelés. Parent FTS toujours OUVERT et globale non qualifiée.
 Check_tickets sur base79cb relève quinze champs manquants préexistants dans
 cinq tickets Recherche. Les trois du présent ticket sont complétés ici ; les
 quatre autres tickets restent hors périmètre, aucun VERT global inventé.
+
+## Réserve Recherche b554fb255b — AVANT nouveau diff PG
+
+La publication G f142 vérifie la phase/horloge avant link mais pas après son
+dernier fsync/écritureSHA. Une opération tardive peut rendre path/SHA après le
+whole5. Reprise G du même signalement, sans doublon : vrais faux CPU qui avancent
+l'horloge ou posent firstred AU DERNIER fsync, avant fix. Exiger refus conservant
+les bruts et artifact_published honnête si le JSON existe déjà ; loader doit
+rejeter tout JSON publié puis accompagné de refusal.json. Aucun transport lancé.

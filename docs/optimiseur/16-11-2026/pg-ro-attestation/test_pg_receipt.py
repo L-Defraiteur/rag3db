@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import unittest
 import tempfile
+from unittest.mock import patch
 
 import pg_receipt as pg
 
@@ -216,6 +217,45 @@ class ArtifactTests(unittest.TestCase):
         self.assertTrue((target/'identity.stdout').is_file(), 'available raw lost')
         self.assertEqual((target/'identity.stdout').read_bytes(),self.raw['sql-out'])
         self.assertFalse((target/'attestation.json').exists())
+
+    def test_last_fsync_crossing_deadline_is_red_with_published_artifact(self):
+        current=[1000.];calls=[]
+        original=pg._sync_directory
+        def sync(path):
+            original(path);calls.append(True)
+            if len(calls)==2:current[0]=1001.
+        target=self.root/'last-fsync-late'
+        with patch.object(pg,'_sync_directory',sync):
+            with self.assertRaises(ValueError):
+                pg.publish_observation(target,self.body,self.raw,expected=self.expected,ready=self.ready,
+                                       clock=lambda:current[0],phase_check=lambda:dict(self.ready))
+        self.assertEqual((target/'identity.stdout').read_bytes(),self.raw['sql-out'])
+        self.assertTrue((target/'attestation.json').is_file())
+        refusal=json.loads((target/'refusal.json').read_text())
+        self.assertIs(refusal['artifact_published'],True)
+        self.assertIs(refusal['grant_authorized'],False)
+        path=target/'attestation.json'
+        with self.assertRaises(ValueError):
+            pg.validate_attestation(path,digest(path.read_bytes()),self.expected,self.ready,1001.)
+
+    def test_first_red_at_last_fsync_is_not_returned_as_success(self):
+        calls=[];original=pg._sync_directory
+        def sync(path):
+            original(path);calls.append(True)
+            if len(calls)==2:self.ready['first_red']=True
+        target=self.root/'last-fsync-first-red'
+        with patch.object(pg,'_sync_directory',sync):
+            with self.assertRaises(ValueError):
+                pg.publish_observation(target,self.body,self.raw,expected=self.expected,ready=self.ready,
+                                       clock=lambda:1000.,phase_check=lambda:dict(self.ready))
+        self.assertTrue((target/'refusal.json').is_file())
+        self.assertTrue((target/'attestation.json').is_file())
+
+    def test_loader_refuses_a_previously_published_then_rejected_json(self):
+        path,sha=self.write_artifact()
+        (self.root/'refusal.json').write_text('{"verdict":"RED","artifact_published":true}')
+        with self.assertRaises(ValueError):
+            pg.validate_attestation(path,sha,self.expected,self.ready,1000.)
 
     def test_publisher_valid_fake_is_loadable(self):
         path,sha=pg.publish_observation(self.root/'ok',self.body,self.raw,expected=self.expected,ready=self.ready,
