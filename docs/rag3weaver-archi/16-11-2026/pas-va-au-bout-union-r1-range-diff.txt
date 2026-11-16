@@ -1,0 +1,5 @@
+1:  97bd008b59 = 1:  3e7cc5d890 test(teammate): a step that answers without step_done does not stop the task — red witnesses (Algareth, 16 Nov 2026: « Ce qui reste à exécuter au prochain pas », then waiting for the supervisor; the host copy carried a French prefix; the prompt made the step a reporting unit)
+2:  37771e225c = 2:  7ef6b9bab9 fix(teammate): a step works the request through to its end, and a step that answers without step_done is continued
+3:  c56639390e = 3:  01f2c905fe Décrire en témoin rouge le refus du superviseur documentaire
+4:  ea67054a11 = 4:  76869937c1 Limiter le helper de fixture au jeu du témoin natif
+5:  1bd32dcd9b = 5:  d309a3bb52 Refuser dans la fixture la suppression du lock sans remplacer la demande

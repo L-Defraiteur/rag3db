@@ -1,0 +1,18 @@
+{
+  "master": "bef0b27cb33b9143dabee019fccdf7453da553a3",
+  "source_app": "1bd32dcd9b0cba098f64728971091c5c7b55c19e",
+  "union_before_docs": "d309a3bb52876c6d1e101f9e25bd88b0abd93897",
+  "product_scope": [
+    "extension/rag3weaver/src/daemon_host/teammate.rs",
+    "extension/rag3weaver/src/daemon_host/teammate_tests.rs",
+    "extension/rag3weaver/tests/common/documentation_fixture.rs",
+    "extension/rag3weaver/tests/e2e_equipier.rs"
+  ],
+  "product_scope_differences": [],
+  "protected_non_docs_entries_and_absences": 6913,
+  "protected_non_docs_differences": [],
+  "gitlink": "160000 commit bd133850f89d6b12a3ca2b2f6ce238785ed37e3a",
+  "product_range_equal": 5,
+  "document_conflict": "historical ticket absent in master; entire source ticket preserved, no product conflict",
+  "note": "All product paths outside four-file scope are exact master mode/type/OID; final additions docs only."
+}
