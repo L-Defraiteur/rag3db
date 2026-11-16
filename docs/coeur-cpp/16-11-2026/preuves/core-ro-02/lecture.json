@@ -1,0 +1,15 @@
+{
+  "scope": "existing core analysis only; not a native test qualification",
+  "pilot": "37f2b52aa834f3359292bd0e58f2c82be4689b32",
+  "recipe_sha256": "314d3f603501fa62a40a89c05456f088a58f40668031f7334f299d13dee1cc4e",
+  "analysis_accepted": true,
+  "inferior_started": false,
+  "raw_files_rehashed_local": 20,
+  "input_copies_rehashed_local": 5,
+  "archive_sha256": "40f6ee668f247fa5b703814a9e90282c841f606693dbe530ffa0745007bdde72",
+  "full_packet_local": "/home/lucied/.cache/rag3db-moteur-notes/core-ro-02",
+  "full_packet_remote": "luciepc:/home/lucied/.cache/rag3weaver-build/cx-core-ro-02",
+  "C1_closed": false,
+  "crash_cause_established": false,
+  "retry": false
+}

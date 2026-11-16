@@ -4,7 +4,7 @@ GO distinct C7-CORE-RO-7EC-16nov120, pilote7ec74865853ad5556dd77dc9bc925c338b293
 
 Vrai poste4Gio/swap0/quota500000/100000, POSTE_FILS5/admitted_threads5. Parent run-p154081-i151063688.scope, départ monotonic1194772,945472579. Unité cx-coeur-core-ro-01.service lancée ; préflight cinq entrées/limites/absence réseau accepté, aucune entrée modifiée.
 
-zstd code1, timeout=false, durée0,001478s, PID154129 attendu/reapé, groupe/cgroup sans résidu. Stderr brut : Incorrect parameter: --output=/home/lucied/.cache/rag3weaver-build/cx-coeur-core-ro/core, puis usage montrant -o OUTPUT. Le pilote avait construit une option non acceptée par l'outil épinglé. [Ticket ouvert avant correction](../tickets/2026-11-16-la-commande-de-decompression-du-core-utilise-une-option-refusee.md).
+zstd code1, timeout=false, durée0,001478s, PID154129 attendu/reapé, groupe/cgroup sans résidu. Stderr brut : Incorrect parameter: --output=/home/lucied/.cache/rag3weaver-build/cx-coeur-core-ro/core, puis usage montrant -o OUTPUT. Le pilote avait construit une option non acceptée par l'outil épinglé. [Ticket ouvert avant correction](../../tickets/closed/2026-11-16-la-commande-de-decompression-du-core-utilise-une-option-refusee.md).
 
 Contrôleur arrêté en0,031665s. Entrée fin0,151556s, unité failed/Result=exit-code/MainPID0/ControlGroup vide, quiescent=true, aucun PID attribué restant. Rehash des cinq entrées après quiescence conservé. Résumé réel ROUGE. Poste rendu, GO120clos ; aucun retry ou correction pendant la passe.
 

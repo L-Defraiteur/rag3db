@@ -156,3 +156,7 @@ Ticket fils offsets : ciblés5/5 verts sur033ffb92068f31cdae6338db876d23e6bced35
 ## Fin TSan historique : six tours, aucune relance
 
 [Rapport final et bruts](../16-11-2026/10-c1-tsan-six-tours-termines.md) : FIN12:38:29,0processusattribuérestant,6codes66/111warnings, aucun nom DictionaryChunk/StringChunkData ni segv seloncontrôleur. Cinq toursGTest1passed, tour2GTestfailedcatalog-as-expected (doc_vecprésentaprèsCREATErefusépoolplein,compteslignescorrects), [ticketdistinct](2026-11-16-le-scenario-tsan-revoit-un-index-dont-la-creation-a-ete-refusee.md) pour départageroracle/étatNOTEDnoninterrogé. Source64eee/engine59acTSanémis, pas033/888. TicketC1resteouvert ; prochaineétapelecturecheckpoint/mémoire, pas256aveugle.
+
+## Core du cas isolé, lecture admise le16novembre
+
+[Analyse bornée du core existant](../16-11-2026/21-core-lu-pile-du-checkpoint-dictionnaire-conservee.md) : sourceed0/moteur888, cas AutomaticCheckpointsBetweenAddsAndDrops isolé, SIGSEGV confirmé ; pile Hashtable find → DictionaryChunk::appendString → StringChunkData::write → Column::checkpointSegment → NodeGroup::checkpointInMemAndOnDisk → Checkpointer::writeCheckpoint. Un autre thread lit DictionaryColumn/StringColumn. Pas de finalize dans les12frames acquis, pas de variables DWARF ; rapprochement de trajet avec C1, pas preuve de cause commune. Sonde chaînes non activée par le pilote50e2, aucune valeur détaillée. Aucun nouvel inférieur/test lancé par cette lecture, poste rendu5,511915s. Le parent reste ouvert/non attribué, comme le ticket propre du SIGSEGV isolé.
