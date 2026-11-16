@@ -48,7 +48,7 @@ def large_elf(text,target):
     with binary.open('rb') as stream:require(stream.read(4)==b'\x7fELF','not an ELF')
     return binary
 
-def first_red(text):
+def failure_match(text):
     return re.search(r'^test [^\n]* \.\.\. FAILED\b|^\s*FAILED\s*$|^test result: FAILED\.',text,re.M)
 
 def guard(cfg):
@@ -89,20 +89,55 @@ def scan(owned=()):
         except OSError as error:unknown.append(dict(pid=proc.name,attributed=attributed,error=repr(error)))
     return dict(observed=time.monotonic(),found=found,unknown=unknown,owned_alive=alive,owned_unknown=owned_unknown)
 
+FAILED = re.compile(r'^test .* \.\.\. FAILED$|^\s*FAILED\s*$|^test result: FAILED\.', re.M)
+
+def first_red(reason):
+    try:
+        with (P / 'first-red.json').open('x') as f:
+            json.dump(dict(reason=reason, observed=time.monotonic()), f)
+            f.flush(); os.fsync(f.fileno())
+    except FileExistsError:
+        pass
+
+def active_logs(name):
+    paths = [P / (name + '.log')]
+    if name == 'official-pass':
+        paths += [P / 'official' / (item + '.log') for item in
+                  ['temoins', 'e2e_code', 'e2e_lectures', 'check_features',
+                   'preuve', 'lib', 'navigateur', 'resume']]
+    return paths
+
+def watch_logs(name):
+    # Only files produced by this invocation, never cached template evidence.
+    for log in active_logs(name):
+        if not log.exists():
+            continue
+        with log.open('rb') as stream:
+            before = os.fstat(stream.fileno())
+            data = stream.read()
+            after = os.fstat(stream.fileno())
+        text = data.decode(errors='replace')
+        match = FAILED.search(text)
+        if match is None and log.name in ['check_features.log', 'resume.log']:
+            match = re.search(r'^(?:CHECK_FEATURES )?ROUGE\b.*$', text, re.M)
+        if match:
+            evidence = dict(invocation=name, path=str(log), observed=time.monotonic(),
+                            device=before.st_dev, inode=before.st_ino, size_before=before.st_size,
+                            size_after=after.st_size, mtime_ns=after.st_mtime_ns,
+                            bytes_read=len(data), sha256=hashlib.sha256(data).hexdigest(),
+                            matched=match.group(), meaning='active invocation output')
+            with (P / 'watcher-first-match.json').open('x') as stream:
+                json.dump(evidence, stream, indent=2)
+                stream.flush(); os.fsync(stream.fileno())
+            first_red('active log failure: ' + str(log))
+            raise AssertionError('first red in active log ' + str(log))
+
 def run(label,args,env,end,cap):
     limit=min(end-30,time.monotonic()+cap);deadline(limit)
     with (P/(label+'.log')).open('x') as output:
         child=subprocess.Popen(args,cwd=C,env=env,stdout=output,stderr=subprocess.STDOUT)
         while True:
-            # Inspect only newly generated logs; expected should_panic is not a failure.
-            bad=[]
-            for name in ['canonical-pass.log','second-lib.log','official/temoins.log','official/check_features.log','official/preuve.log','official/lib.log','official/navigateur.log','official/resume.log']:
-                path=P/name
-                if not path.is_file():continue
-                if first_red(path.read_text(errors='replace')):bad.append(str(path))
-            if bad:
-                if not (P/'first-red.json').exists():save(P,'first-red.json',dict(label=label,logs=bad,observed=time.monotonic()))
-                raise RuntimeError('first unexpected failing test: '+str(bad))
+            watch_logs(label)
             deadline(limit)
             if child.poll() is not None:break
             require(int(subprocess.check_output(['du','-sb',str(T)],text=True).split()[0])<=32*1024**3,'target over 32GiB') if T.exists() else None
@@ -133,7 +168,7 @@ def driver():
     env.update(RAG3WEAVER_EMBED_SERVICE='127.0.0.1:7878,127.0.0.1:7879',RAG3WEAVER_PG='postgres://rag3weaver:rag3weaver@127.0.0.1:5433/rag3weaver_test',RAG3WEAVER_TESTS_REPLI_PERIPHERIQUE='igpu:0',RAG3WEAVER_TARGET_REPRENDRE='1')
     require(not Path(env['XDG_STATE_HOME']).is_relative_to(Path(env['RAG3WEAVER_STATE_DIR'])) and not Path(env['RAG3WEAVER_STATE_DIR']).is_relative_to(Path(env['XDG_STATE_HOME'])),'state roots overlap')
     save(P,'profile.json',{k:v for k,v in env.items() if k!='RAG3WEAVER_VALIDATION_JETON'})
-    run('canonical-pass',['bash',str(R/'passe_epinglee.sh'),W.name,str(P.relative_to(R)/'official'),'codex_threads'],env,end,6600)
+    run('official-pass',['bash',str(R/'passe_epinglee.sh'),W.name,str(P.relative_to(R)/'official'),'codex_threads'],env,end,6600)
     canonical=P/'official/resume.log';require(canonical.read_text().splitlines()[-1]=='VERT','canonical summary not green')
     first=(P/'official/lib.log').read_text();counts=summary(first);require(counts['filtered']==0,'first lib filtered')
     binary=large_elf(first,T);copied=P/'large-unit-tests';shutil.copy2(binary,copied);elf_sha=sha(binary);require(sha(copied)==elf_sha,'ELF copy differs')

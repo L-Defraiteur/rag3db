@@ -13,10 +13,10 @@ class Qualification(unittest.TestCase):
         row='test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out;\n'
         with self.assertRaises(RuntimeError):m.summary(row+row)
     def test_expected_panic_is_not_first_red(self):
-        self.assertIsNone(m.first_red("thread 'normal_should_panic' panicked at fixture\ntest normal_should_panic ... ok\n"))
+        self.assertIsNone(m.failure_match("thread 'normal_should_panic' panicked at fixture\ntest normal_should_panic ... ok\n"))
     def test_real_failure_is_first_red(self):
         for text in ['test fixture ... FAILED\n','FAILED\n','test result: FAILED. 0 passed; 1 failed;']:
-            with self.subTest(text=text):self.assertIsNotNone(m.first_red(text))
+            with self.subTest(text=text):self.assertIsNotNone(m.failure_match(text))
     def test_large_elf_exact_path_and_magic(self):
         with tempfile.TemporaryDirectory(prefix='cx-qualification-test-') as tmp:
             root=Path(tmp);binary=root/'large-tests';binary.write_bytes(b'\x7fELFfixture')
@@ -54,17 +54,18 @@ class Qualification(unittest.TestCase):
                 return types.SimpleNamespace(poll=lambda:0,wait=lambda:0)
             with patch.object(m,'P',proofs),patch.object(m,'T',root/'absent-target'),patch.object(m,'C',root),patch.object(m.subprocess,'Popen',side_effect=popen):
                 try:
-                    result=m.run('canonical-pass',['current-command'],{},m.time.monotonic()+100,60)
+                    result=m.run('official-pass',['current-command'],{},m.time.monotonic()+100,60)
                     m.run('second-lib',['next-command'],{},m.time.monotonic()+100,60)
                     return result,len(calls)
-                except RuntimeError:
+                except (RuntimeError,AssertionError):
+                    first=(proofs/'first-red.json').read_bytes();m.first_red('later failure');self.assertEqual((proofs/'first-red.json').read_bytes(),first)
                     self.assertEqual(len(calls),1,'failure must stop before next invocation')
                     raise
     def test_real_run_ignores_embedded_historical_failed_log(self):
         result,calls=self.exercise_real_run('test historical ... FAILED\n','current output\n')
         self.assertEqual(result,'current output\n');self.assertEqual(calls,2)
     def test_real_run_detects_active_failed_log_before_next_invocation(self):
-        with self.assertRaises(RuntimeError):self.exercise_real_run('','test current ... FAILED\n')
+        with self.assertRaises((RuntimeError,AssertionError)):self.exercise_real_run('','test current ... FAILED\n')
     def test_real_run_preserves_active_expected_should_panic(self):
         _,calls=self.exercise_real_run('',"thread 'fixture' panicked at expected\ntest fixture ... ok\n")
         self.assertEqual(calls,2)

@@ -1,0 +1,11 @@
+{
+  "source_pilot": "13c8bf21e6c34d4480f034e66453bec22330e6a0",
+  "source_path": "docs/everything-declarative/16-11-2026/ties-qualification/driver.py",
+  "source_sha256": "864b13d8746cce7db338bada49c5d22def2febd753bca2b3c332c4c17da61e47",
+  "functions": {
+    "first_red": "fbd73cb75b545d867907e3a23c10818519d5023d954eab03a84aba4de0f6301d",
+    "active_logs": "510e789415dd6adc20910d261d97689924960fbb6308658d3722483d81fc54ca",
+    "watch_logs": "8ce4bdde9212fef23b0d1e605a18e2a1063392d1a7fa99df93ab1f5421b587dd"
+  },
+  "delta": "functions byte-identical; caller phase renamed official-pass; no e2e files produced under SUITES=-; outer run keeps own absolute deadline and target cap"
+}

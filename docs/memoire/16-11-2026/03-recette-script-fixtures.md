@@ -88,3 +88,11 @@ Après code publié36da4238cb : 11fonctions hermétiques/0échec en0,003s,
 timeout20, sans process réel/Cargo/proc/signal. Journal vert horsW
 `journaux-cx-memoire-script-fixtures-16nov/vert-watcher.log` ; rouge conservé.
 App734087 inchangée, aucune Auth/PQS/T créée. RO+GO exact nouveau pilote requis.
+
+Demande C7 après correction liste fermée : réemploi BYTEIDENTIQUE des vraies
+primitives ED13c8 `first_red/active_logs/watch_logs`, provenance SHA complète
+et parfonction dans watcher-provenance.json. Phase appelante renommée official-pass ;
+les chemins e2e déclarés par ED ne sont pas produits sous SUITES=-. Aucun rglob
+dans watcher, lecture/stat/hash du seul fichier producteur actif ; premiers
+match/rouge exclusifs. Vrai run testé avec historique FAILED, actif FAILED,
+should_panic et re-latch sans écrasement. Journal canonique demeure intact.
