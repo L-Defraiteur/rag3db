@@ -37,3 +37,7 @@ GO C7 source187 pour le seul premier positif ; pilote fac5eeee11 arrêté code1 
 Réserve C7 avant implémentation : une table physique Document reste admissible même avec search_index=main ; le chemin maintenance doit ouvrir exactement Document, jamais rediriger ni refuser au seul motif de ce mapping. Remplacer le négatif187 par nom réellement inconnu et ajouter Document41/main99 comme positif distinct ; autre cellule toujours refusée.
 
 Correctif du lanceur et témoins publiés78437ce0a6 : suppression scope redondant, POSTE_SWAP_MAX=0 en plus32G/800%, driver recontrôle high/max/swap/quota. Deux fonctions hermétiques/7cas vertes0.019s après publication ; aucun Cargo/reçu réel nouveau. Source187 figée, attente nouveau GO distinct C7.
+
+## Rouge comportemental réellement observé avant correctif
+
+Source187 figée, GO distinct C7 et pilote3a528b67921f3c3b698e6d6db593bf8d4f834516 : compilation125.019s réussie puis **unique premier positif0/1/0** sur absence de handle ouvert Document, pas sur un préfixe nouveau. Rapport06, preuves25 fichiers PC/local réhash0écart manifestea3519cc5325b675e7d4c4eff3c4d9061aa380175a8971ee1ced34fcbfa2b8110. Confineur ROUGE101/restes[]/nettoyé/reçu terminé, poste libéré, aucune autre fonction ni implémentation automatique. Target de session gardé. Quatre autres témoins NON JOUÉS ; leur réserve physique/public reste à corriger avant full.
