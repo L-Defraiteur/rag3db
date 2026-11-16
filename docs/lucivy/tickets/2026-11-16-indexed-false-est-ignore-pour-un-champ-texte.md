@@ -34,3 +34,8 @@ types `u64`, `i64` et `f64` lisent bien `indexed`. La branche `"string"` l'ignor
   fonction pure qui rend les avertissements du schéma (`schema_warnings(&SchemaConfig) -> Vec<String>`), appelée
   par `build_schema` et testée directement. Rouge tant qu'elle n'existe pas ou rend une liste vide.
 - Vert ensuite, puis `cargo test --release -p lucivy-core` en entier.
+
+
+## Relecture Banc du paquet consommateur a039e4bbce
+
+[Rapport indépendant](../../banc/16-11-2026/13-ro-paquet-lucivy-admission-rouge.md) : ordre des ledgers et budget unique cohérents, deux réserves groupées avant GO du paquet99a8/7649 : réattestation finale des trois nouveaux ELF et source/copies contre les pins ; contrôle d’échéance après ouverture et avant publication du résultat attendu. Porteur Lucivy, critères de fin : nouveau paquet épinglé/relu, mêmes bornes et seul témoin mock, aucune confusion avec correction/couverture du core. Aucun run par Banc ; ticket toujours ouvert.
