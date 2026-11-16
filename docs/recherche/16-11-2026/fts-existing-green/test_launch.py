@@ -41,4 +41,32 @@ class Launch(unittest.TestCase):
   self.assertEqual(ns['attest_scope'](Scope(good)),good)
   for key,bad in [('memory.max','42949672960'),('memory.high','1000000000'),('memory.swap.max','4294967296'),('cpu.max','max 100000'),('cpu.max','900000 100000')]:
    with self.subTest(key=key,bad=bad),self.assertRaises(AssertionError):ns['attest_scope'](Scope(dict(good,**{key:bad})))
+
+class FirstRed(unittest.TestCase):
+ def test_real_runner_stops_only_current_popen_on_failed_line(self):
+  import re,time,types
+  tree=ast.parse((HERE/'driver.py').read_text());functions=[n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name in ['run','save']]
+  children=[];chunks=iter([b'test catalog::tests::fixture ... FAILED\n',b''])
+  class Child:
+   pid=123
+   stdout=types.SimpleNamespace(fileno=lambda:77)
+   def __init__(self,*args,**kwargs):self.terminations=0;children.append(self)
+   def terminate(self):self.terminations+=1
+   def poll(self):return -15
+   def wait(self,timeout):return -15
+  class Selector:
+   active=True
+   def register(self,*args):pass
+   def get_map(self):return {77:True} if self.active else {}
+   def select(self,*args):return [(types.SimpleNamespace(fileobj=Child.stdout),None)]
+   def unregister(self,*args):self.active=False
+   def close(self):pass
+  with tempfile.TemporaryDirectory(prefix='fts-first-red-fixture-') as tmp:
+   ns=dict(P=Path(tmp),C=Path('/fixture'),END=time.monotonic()+100,time=time,json=json,re=re,selectors=types.SimpleNamespace(DefaultSelector=Selector,EVENT_READ=1),os=types.SimpleNamespace(read=lambda *args:next(chunks)),subprocess=types.SimpleNamespace(Popen=Child,PIPE=-1,STDOUT=-2))
+   exec(compile(ast.Module(body=functions,type_ignores=[]),'actual-runner','exec'),ns)
+   self.assertNotEqual(ns['run']('module',['fixture'],10),0)
+   self.assertEqual(len(children),1);self.assertEqual(children[0].terminations,1)
+   self.assertEqual(json.loads((Path(tmp)/'first-red.json').read_text())['child_pid'],123)
+   self.assertEqual((Path(tmp)/'module.log').read_bytes(),b'test catalog::tests::fixture ... FAILED\n')
+
 if __name__=='__main__':unittest.main()
