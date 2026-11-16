@@ -300,3 +300,10 @@ outilb7886900 ; localisation11queriespasqualificationmoteur. Action deRO portée
 parRecherche : vérifiercontrat/modes/oracles/conception10, lecture seule sans
 Cargo/test/ELF/base/services ; retour relié au même ticket avantcode/RUN.
 Pasdesélectionposthoc,2.6présenceailleurs≠admission/7.2toujoursabsent.
+
+RORecherche sur3b48e94ddc favorablebornée, sansrun. Correction de conception
+AVANTcode : les enveloppes des oracles existants ne sont pas toutes pures
+(repo_path/lecturesFS/continue ouUTF8avecpertes). Extraire leurs cœurs sur
+octetsadmisépinglés ; touteerreurlecture/hash/décodagefatale avantadmission,
+pasaucunhitdéduitd’uneerreur ni réouvertureambiguë. Futurmocklectureéchouée
+àprévoir, NONcodé/NONjoué. Document10précisé ; aucune modification du core.

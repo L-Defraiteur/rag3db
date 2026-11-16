@@ -93,9 +93,11 @@ La frontière utile serait une **admission de fixture pour un panel déclaré**,
 dans les utilitaires de tests : vue ordonnée/manifeste de documents + QueryConfig
 existants + préconditions/témoins associés. Elle ne changerait ni API produit
 ni options d’indexation. Le fichier common sait déjà exprimer absence et
-scratch ; ground_truth possède déjà les oracles grep_spans, grep_spans_fuzzy,
-grep_spans_regex et filter_boundaries. Vérifier leur couverture sémantique
-puis extraire/composer seulement les fonctions pures utiles dans common,
+scratch ; ground_truth possède déjà les logiques d’oracles grep_spans, grep_spans_fuzzy,
+grep_spans_regex et filter_boundaries. Leurs enveloppes ne sont pas toutes
+pures : repo_path/lecturesFS, erreurs ignorées et UTF8 avec pertes existent.
+Vérifier leur couverture sémantique puis extraire/composer leurs seuls cœurs
+sur les octets admis épinglés dans common,
 sans importer le fichier entier avec ses tests/diagnostics. Coût : déplacement
 de quelques helpers et dépendance de tests, à relire ; pas de nouvelle crate,
 cache persistant, mécanisme runtime ou duplication dans les clients.
@@ -154,3 +156,20 @@ et GO distinct. Le ledger tardif de la passe arrêtée n’est pas réhabilité.
 RO demandée à Recherche sur le sens des modes et la composition des oracles,
 reliée au même ticket ; aucun code Lucivy ou RUN avant retour et décision C7.
 NeufHOLD/ignorés restent visibles, full_core=false, ULP7.2/PR42/main/tag horslot.
+
+## Retour RO Recherche sur3b48e94ddc
+
+Conception favorable bornée après lecture du core890, sans Cargo/test/ELF/base,
+service ou lecture corpus par Recherche. Séparation admission/référence/parité
+confirmée. Précision impérative avant code : les enveloppes d’oracles existantes
+ne sont pas actuellement toutes pures. Extraire leurs cœurs sur des **octets
+admis et épinglés** ; toute erreur de lecture, de hash ou de décodage contraire
+au contrat est **fatale avant admission**, jamais convertie en contenu vide ou
+en « aucun hit ». Aucune réouverture ambiguë par repo_path au milieu d’un oracle,
+aucune conversion UTF8 avec pertes introduite pour sauver une entrée. La lecture
+unique vérifiée définit les octets de la vue, les occurrences et les spans.
+Cette précision remplace la qualification trop générale « oracles purs existants »
+du brouillon : ce sont leurs cœurs réutilisables qui doivent devenir purs.
+Ajouter au futur témoin mock une erreur de lecture/UTF8 : refus explicite avant
+construction, jamais une absence de résultat. Témoin toujours NONcodé/NONjoué ;
+pas d’autorisation de correction ou de passe déduite de cette RO.
