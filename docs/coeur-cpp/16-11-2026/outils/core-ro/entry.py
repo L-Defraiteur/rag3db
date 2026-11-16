@@ -16,8 +16,8 @@ started=time.monotonic()
 native_end=started+95
 final_end=started+110
 controller_end=started+80
-unit='cx-coeur-core-ro-01.service'
-scratch=Path.home()/'.cache/rag3weaver-build/cx-coeur-core-ro'
+unit='cx-coeur-core-ro-02.service'
+scratch=Path.home()/'.cache/rag3weaver-build/cx-coeur-core-ro-02'
 raw=out/'raw/driver'
 raw.mkdir(parents=True,exist_ok=True)
 first=None

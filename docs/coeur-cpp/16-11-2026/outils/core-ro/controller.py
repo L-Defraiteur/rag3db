@@ -73,7 +73,7 @@ try:
     # Core and all host inputs remain read-only to GDB; only private output/tmp/home are writable.
     phase = 'decompress'
     run([str(inputs['zstd']), '--decompress', '--sparse', '--no-progress',
-         '--output=' + str(core), str(inputs['compressed_core'])], phase, 20, env)
+         '-o', str(core), str(inputs['compressed_core'])], phase, 20, env)
     assert core.stat().st_size == recipe['raw_core_bytes']
     core_sha = sha(core)
     write(raw / 'parsing/decompressed-core.json', {'bytes': core.stat().st_size, 'sha256': core_sha})

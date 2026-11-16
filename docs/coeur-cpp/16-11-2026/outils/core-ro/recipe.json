@@ -1,6 +1,6 @@
 {
-  "status": "PREPARATION ONLY; GDB/ZSTD NOT EXECUTED; RO AND DISTINCT EXACT GO REQUIRED",
-  "unit": "cx-coeur-core-ro-01",
+  "status": "PREPARATION02 AFTER CLI REFUSAL01; HOLD UNTIL NEW RO AND DISTINCT GO; NO NEW ZSTD/GDB EXECUTION",
+  "unit": "cx-coeur-core-ro-02",
   "source": "ed0c3c8af57f25e83ae5c4ba004ae3393e77812e",
   "engine": "888c81825e4cd6556261233f0e238af3b95375c9",
   "engine_profile": "-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF",
@@ -37,12 +37,12 @@
     }
   ],
   "scripts": {
-    "controller.py": "f0e13a781813e07e9640b8bfead334a8d1e7f7265585d90f2804e767afc941e2",
-    "entry.py": "50a2865bf4abe03305592a163c767f407696a7a1bb1797b96d3b26aac360b355",
-    "launch.sh": "43858a757db23bcd0e925fc79e00d21e5738cb40baadca7fb45933cf23932ac9",
+    "controller.py": "d7fda617c9c2809c12240eb0ad66d5b573c3887c1121b32c2422775ea9d82103",
+    "entry.py": "1e977e6d24cf08a395b11e719ef930fe79d2b3e218219d18d8941679f090cfd0",
+    "launch.sh": "7a748e2641d547fba42b7fe1c092c5fc795e85a308e35fba740b928ccafb4e60",
     "processes.py": "9effa22d5a98dbb59f818cc40fb2c5d978730acaea4c225cb104aed72ac037c3",
     "receipt.py": "6c635aefd709949c47781c9df49d22c62608f7421e9c0d6a97c2121eefdc84dc",
-    "test_driver.py": "83cfe454ef54fce50da027f96db4e70d7b861de5b08ed1e8df334449f824099f"
+    "test_driver.py": "0d00e25328baf393f1f59460ea87e6eefa15e35a67bfb8560cc039af1a6ea89c"
   },
   "raw_core_bytes": 17548656640,
   "raw_core_sha256": "15a21f6deeacb0c8c1400acd4196f230189971b7bd325703c0091d6f14d34e2f",
@@ -75,9 +75,9 @@
     "-iex",
     "set auto-solib-add off",
     "-iex",
-    "set sysroot /home/lucied/.cache/rag3weaver-build/cx-coeur-core-ro/empty-sysroot",
+    "set sysroot /home/lucied/.cache/rag3weaver-build/cx-coeur-core-ro-02/empty-sysroot",
     "-iex",
-    "set solib-search-path /home/lucied/.cache/rag3weaver-build/cx-coeur-core-ro/empty-sysroot",
+    "set solib-search-path /home/lucied/.cache/rag3weaver-build/cx-coeur-core-ro-02/empty-sysroot",
     "-iex",
     "set pagination off",
     "-iex",
@@ -87,7 +87,7 @@
     "-iex",
     "set print entry-values no",
     "--se=/home/lucied/.cache/rag3weaver-build/cx-two-reds-01/raw/candidate/artifacts/concurrence",
-    "--core=/home/lucied/.cache/rag3weaver-build/cx-coeur-core-ro/core",
+    "--core=/home/lucied/.cache/rag3weaver-build/cx-coeur-core-ro-02/core",
     "-ex",
     "info files",
     "-ex",

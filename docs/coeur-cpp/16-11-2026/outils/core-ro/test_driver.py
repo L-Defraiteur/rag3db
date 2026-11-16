@@ -109,7 +109,7 @@ class Tests(unittest.TestCase):
 
     def test_preflight_error_does_not_create_unit(self):
         (self.path / 'recipe.json').write_text(json.dumps({
-            'unit': 'cx-coeur-core-ro-01', 'scripts': {'absent.py': 'bad'}, 'inputs': []}))
+            'unit': 'cx-coeur-core-ro-02', 'scripts': {'absent.py': 'bad'}, 'inputs': []}))
         result = subprocess.run([sys.executable, str(HERE / 'entry.py'), str(self.path)],
                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=5)
         self.assertEqual(result.returncode, 1)

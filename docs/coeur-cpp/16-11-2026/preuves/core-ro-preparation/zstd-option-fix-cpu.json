@@ -1,0 +1,31 @@
+{
+  "ticket_and_run_proofs_published_before_fix": "4185550a2a",
+  "test_published_before_cpu_and_fix": "d16e2a4ba1",
+  "before_fix": {
+    "test": "test_actual_decompression_argv_matches_captured_usage",
+    "played": 1,
+    "failures": 1,
+    "observed_argv_option": "--output=/private/core",
+    "expected_argv_option": [
+      "-o",
+      "/private/core"
+    ]
+  },
+  "after_fix": {
+    "played": 9,
+    "passed": 9,
+    "elapsed_s": 0.143
+  },
+  "zstd_executed_again": false,
+  "gdb_executed": false,
+  "old_staging_modified": false,
+  "stderr_fixture_sha256": "d65a9d9443abe9c0dd114c747f0ea20b0042a9c9eeb0a5f3fd9616844b286523",
+  "stderr_fixture_bytes_unchanged": true,
+  "fresh_ids": [
+    "cx-core-ro-02",
+    "cx-coeur-core-ro-02",
+    "cx-coeur-core-ro-02.service"
+  ],
+  "recipe_sha256": "314d3f603501fa62a40a89c05456f088a58f40668031f7334f299d13dee1cc4e",
+  "retry": false
+}
