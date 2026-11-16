@@ -7776,7 +7776,9 @@ mod tests {
         for at in [None, Some(1u64)] {
             let mut entry = json!({"documents": 1, "rows": 1});
             if let Some(at) = at { entry["measured_at_ms"] = json!(at); }
-            let note = json!({crate::code::SCOPE: entry}).to_string();
+            let mut note = json!({});
+            note[crate::code::SCOPE] = entry;
+            let note = note.to_string();
             backend.catalog.lock().unwrap().persist_meta_key(crate::catalog::COMPTES_DU_PLEIN_TEXTE_KEY, &note).unwrap();
             let state = backend.index_states().unwrap();
             let counts = &state["fts_counts"][crate::code::SCOPE];
@@ -7787,6 +7789,25 @@ mod tests {
             }
             assert_eq!(backend.catalog.lock().unwrap().read_meta_key(crate::catalog::COMPTES_DU_PLEIN_TEXTE_KEY).unwrap().as_deref(), Some(note.as_str()), "reading state never refreshes its measurement");
         }
+    }
+
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn fts_measurement_historical_counts_do_not_promote_text_to_ready() {
+        let (_dir, backend) = fts_measurement_backend();
+        {
+            let catalog = backend.catalog.lock().unwrap();
+            let mut status = catalog.index_state_for(crate::code::SCOPE).unwrap();
+            status.text = crate::catalog::Level::Running;
+            status.text_percent = None;
+            status.updated_ms = crate::dataflow::checkpoint::timestamp_ms();
+            catalog.note_index_state_for(crate::code::SCOPE, status).unwrap();
+            let mut note = json!({});
+            note[crate::code::SCOPE] = json!({"documents": 1, "rows": 1, "measured_at_ms": 1});
+            catalog.persist_meta_key(crate::catalog::COMPTES_DU_PLEIN_TEXTE_KEY, &note.to_string()).unwrap();
+        }
+        let state = backend.index_states().unwrap();
+        assert_eq!(state[crate::code::SCOPE]["text"], "running", "historical equality of counts cannot certify present readiness: {state}");
     }
 
     #[cfg(all(feature = "code", feature = "rag3db-native"))]

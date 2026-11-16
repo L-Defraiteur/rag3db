@@ -83,3 +83,8 @@ NON JOUÉS ; aucun rouge observé revendiqué. L'extraction de projection JSON
 reste un choix d'implémentation, pas un prétexte pour compiler dans la fenêtre.
 Précision réservation : les comptes sont rendus par index_states_du_code,
 appelé par index_states ; seule cette section FTS et ces tests sont touchés.
+
+Cinquième juge spécifié AVANT correctif : une égalité de comptes historiques
+ne promeut pas l'état texte running en ready. Les cinq tests backend et
+le test finindex restent NON JOUÉS ; C7 a levé seulement l'écriture privée,
+pas la compilation pendant la fenêtre. Aucun harnais de substitution joué.
