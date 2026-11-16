@@ -177,3 +177,12 @@ SDK.readers0/mode0644 sur nouvelle copie seulement, WAL nouveau refusé.
 Trois fonctionsCPU de gardes hermétiques vertes0.004s, aucun natif/DB lancé.
 PréparationPC/RO/GOexact restent distincts ; succès éventuel seulement
 FROZEN_RESULT_RO_OBSERVED, pas shutdown propre ni durabilité ni LIVE.
+
+Réserve RO Recherche bloquante sur9a144, consignée AVANT correction :
+copy_quiet collecte exe/cwd/tousFD puis attribue seulement après collecte.
+Une PermissionError tardive peut perdre un exe/FD déjà observé sous copie
+et laisser attributed=False ; le scan accepte alors un UNKNOWN pourtant
+attribuable. Aucun audit natif lancé. Préparer témoin du VRAI helper sur
+/proc fictif, rouge avant fix, puis attribuer chaque lecture immédiatement
+et conserver found/attributed lors des OSError. Nouveau paquet/delta RO et
+GO distinct requis ; ancien paquet préparé reste conservé sans GO.
