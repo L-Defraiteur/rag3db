@@ -187,3 +187,21 @@ argv et compile.log sous `oracle-final-16nov/scanner-01/`.
 Alternative soumise à C7/G : retrouver le compilateur1.98.1 exact existant et
 attester sa provenance ; nouvelle recette/autorisation avant nouvelle entrée.
 Les captures02 et la rlib restent préservées. Aucun oracle matched annoncé.
+
+### Recette corrective publiée avant seconde entrée distincte
+
+Compilateur **déjà installé**, sans installation ni réseau :
+`~/.rustup/toolchains/1.98.1-x86_64-unknown-linux-gnu/bin/rustc`, SHA256
+`859254978c0a0402c32f949f6de0d99aee73be8d15f45aac00ae1448aac51e74`.
+`-Vv` réel : rustc1.98.1, commit
+`48a229ceaefd4985c50990b14116b6d856af0985`, date2026-09-01,
+host x86_64-unknown-linux-gnu, LLVM22.1.8. Correspond à E0514 de la rlib927,
+dont le SHA aaad2d69589ffc3aea073d534ed1aa37da87431725456d2c5d2a71ea225305d5
+est vérifié à nouveau. Source outil34dadd inchangée.
+
+Nouvelle entrée autorisée distinctement par C7 : dossier `scanner-02/`, nouvelles
+preuves `validations-scanner-02/`, même plafond32G/délai120 après vrai poste lourd,
+un seul rustc `codegen-units=1`, sans Cargo/DB/réseau. Seule correction : chemin
+absolu du compilateur et contrôle de son SHA/-Vv. Premier rouge conservé intact.
+Le lanceur conserve argv, version, code et binaire hors scratch ; prochaine erreur
+arrête cette entrée. Capacité fraîche observée avant entrée : ~52Gio disponibles.
