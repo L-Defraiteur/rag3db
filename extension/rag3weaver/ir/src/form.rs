@@ -437,23 +437,23 @@ pub enum Predicate {
         rang: i64,
         /// Ce que les étages plus proches de la pile retirent de celui-ci (2b′) ; vide pour une
         /// pile d'un étage, dont la condition reste alors exactement celle d'avant.
-        masque: Masque,
+        mask: Mask,
     },
 }
 
 /// **Le masque d'un étage de pile** (2b′) : les lignes que des étages plus proches ont retirées,
 /// par leur uuid ou par leur fichier.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct Masque {
+pub struct Mask {
     /// Les uuids retirés (tombstones d'occurrence).
-    pub cles: Vec<String>,
+    pub keys: Vec<String>,
     /// La colonne du fichier dans la table lue, et les fichiers retirés.
-    pub fichiers: Option<(String, Vec<String>)>,
+    pub files: Option<(String, Vec<String>)>,
 }
 
-impl Masque {
-    pub fn est_vide(&self) -> bool {
-        self.cles.is_empty() && self.fichiers.as_ref().is_none_or(|(_, f)| f.is_empty())
+impl Mask {
+    pub fn is_empty(&self) -> bool {
+        self.keys.is_empty() && self.files.as_ref().is_none_or(|(_, f)| f.is_empty())
     }
 }
 

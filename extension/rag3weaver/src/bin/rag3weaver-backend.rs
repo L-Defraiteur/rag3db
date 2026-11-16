@@ -1088,7 +1088,7 @@ fn inspecter_migration(args: &[String]) -> Result<(), String> {
     if action == "generations" {
         let [_, option, base] = args else { return Err(USAGE.into()) };
         if option != "--base" { return Err(USAGE.into()); }
-        let bilan = rag3weaver::migration_des_versions::migrer_la_base_aux_generations(Path::new(base))?;
+        let bilan = rag3weaver::migration_des_versions::migrate_base_to_generations(Path::new(base))?;
         println!("{bilan:#?}");
         return Ok(());
     }

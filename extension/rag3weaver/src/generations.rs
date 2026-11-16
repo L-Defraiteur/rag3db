@@ -75,19 +75,19 @@ pub struct Visibilite {
     pub ensembles: Arc<EnsemblesPoses>,
     /// **Les étages parents de la pile** (2b′), du plus proche à la racine, chacun avec ce que les
     /// étages plus proches lui retirent. Vide pour une pile d'un étage : tout se lit alors comme avant.
-    pub parentes: Vec<EtageLu>,
+    pub parents: Vec<ParentLayer>,
     /// La colonne du fichier de chaque table à générations, pour les tombstones de fichier.
-    pub colonnes_de_fichier: BTreeMap<String, String>,
+    pub file_columns: BTreeMap<String, String>,
 }
 
 /// **Un étage parent lu** (2b′) : sa couche, son rang épinglé, et l'union des tombstones des
 /// étages plus proches (par uuid, par fichier).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EtageLu {
-    pub couche: String,
-    pub rang: i64,
-    pub cles_masquees: BTreeSet<String>,
-    pub fichiers_masques: BTreeSet<String>,
+pub struct ParentLayer {
+    pub layer: String,
+    pub rank: i64,
+    pub masked_keys: BTreeSet<String>,
+    pub masked_files: BTreeSet<String>,
 }
 
 impl PartialEq for Visibilite {
@@ -97,49 +97,49 @@ impl PartialEq for Visibilite {
             && self.rang == autre.rang
             && self.tout_visible == autre.tout_visible
             && self.rang_publie == autre.rang_publie
-            && self.parentes == autre.parentes
+            && self.parents == autre.parents
     }
 }
 impl Eq for Visibilite {}
 
 impl Visibilite {
-    /// **La visibilité d'une vue** (2b′) : la pile chargée par [`crate::vues::charger_la_pile`] sur
+    /// **La visibilité d'une vue** (2b′) : la pile chargée par [`crate::views::load_stack`] sur
     /// les tables de celle-ci. Le sommet de la pile devient la couche et le rang lus ; chaque parente
     /// garde l'union des tombstones des étages plus proches. Une pile d'un étage rend la même
     /// visibilité, couche et rang mis à part. `rang_publie`, l'état de l'écrivain, ne change pas : une vue
     /// se pose sur la visibilité d'une lecture (l'instantané d'un appel), jamais sur celle qui écrit.
-    pub fn avec_la_pile(&self, pile: &crate::vues::PileDeLecture) -> Visibilite {
+    pub fn with_stack(&self, pile: &crate::views::ReadStack) -> Visibilite {
         let mut v = self.clone();
-        let Some((sommet, reste)) = pile.etages.split_first() else { return v };
-        v.couche = sommet.couche.clone();
-        v.rang = sommet.rang;
-        let mut cles = sommet.cles_retirees.clone();
-        let mut fichiers = sommet.fichiers_retires.clone();
-        v.parentes = reste
+        let Some((sommet, reste)) = pile.layers.split_first() else { return v };
+        v.couche = sommet.layer.clone();
+        v.rang = sommet.rank;
+        let mut cles = sommet.removed_keys.clone();
+        let mut fichiers = sommet.removed_files.clone();
+        v.parents = reste
             .iter()
             .map(|e| {
-                let lu = EtageLu { couche: e.couche.clone(), rang: e.rang, cles_masquees: cles.clone(), fichiers_masques: fichiers.clone() };
-                cles.extend(e.cles_retirees.iter().cloned());
-                fichiers.extend(e.fichiers_retires.iter().cloned());
+                let lu = ParentLayer { layer: e.layer.clone(), rank: e.rank, masked_keys: cles.clone(), masked_files: fichiers.clone() };
+                cles.extend(e.removed_keys.iter().cloned());
+                fichiers.extend(e.removed_files.iter().cloned());
                 lu
             })
             .collect();
         // « Tout visible » ne tient que pour la couche et le rang posés à l'ouverture, sans parente.
-        if v.couche != self.couche || v.rang != self.rang || !v.parentes.is_empty() {
+        if v.couche != self.couche || v.rang != self.rang || !v.parents.is_empty() {
             v.tout_visible = false;
         }
         v
     }
 
     /// Le masque d'un étage parent sur `table`.
-    fn masque_de(&self, etage: &EtageLu, table: &str) -> rag3weaver_ir::Masque {
-        rag3weaver_ir::Masque {
-            cles: etage.cles_masquees.iter().cloned().collect(),
-            fichiers: self
-                .colonnes_de_fichier
+    fn mask_for(&self, etage: &ParentLayer, table: &str) -> rag3weaver_ir::Mask {
+        rag3weaver_ir::Mask {
+            keys: etage.masked_keys.iter().cloned().collect(),
+            files: self
+                .file_columns
                 .get(table)
-                .filter(|_| !etage.fichiers_masques.is_empty())
-                .map(|c| (c.clone(), etage.fichiers_masques.iter().cloned().collect())),
+                .filter(|_| !etage.masked_files.is_empty())
+                .map(|c| (c.clone(), etage.masked_files.iter().cloned().collect())),
         }
     }
 
@@ -150,15 +150,15 @@ impl Visibilite {
         if !self.tables.contains(table) {
             return None;
         }
-        let sommet = Predicate::Visible { couche: self.couche.clone(), rang: self.rang, masque: Default::default() };
-        if self.parentes.is_empty() {
+        let sommet = Predicate::Visible { couche: self.couche.clone(), rang: self.rang, mask: Default::default() };
+        if self.parents.is_empty() {
             return Some(sommet);
         }
         let mut etages = vec![sommet];
         etages.extend(
-            self.parentes
+            self.parents
                 .iter()
-                .map(|e| Predicate::Visible { couche: e.couche.clone(), rang: e.rang, masque: self.masque_de(e, table) }),
+                .map(|e| Predicate::Visible { couche: e.layer.clone(), rang: e.rank, mask: self.mask_for(e, table) }),
         );
         Some(Predicate::AnyOf(etages))
     }
@@ -179,7 +179,7 @@ impl Visibilite {
         if !self.tables.contains(table) {
             return None;
         }
-        if self.parentes.is_empty() {
+        if self.parents.is_empty() {
             return dialect.condition_visible_sur(alias, &self.couche, self.rang);
         }
         dialect.condition_sur_predicat(alias, &self.predicat(table)?)
@@ -189,7 +189,7 @@ impl Visibilite {
     /// `prefixe` (un lecteur qui compose un `FilterCondition`, comme le masque de la recherche) ;
     /// sans préfixe, sur l'entité lue elle-même.
     /// Une pile d'un étage rend les trois conditions d'avant 2b′, dans le même ordre.
-    pub fn conditions_de_filtre(&self, table: &str, prefixe: &str) -> Vec<rag3weaver_ir::FilterCondition> {
+    pub fn filter_conditions(&self, table: &str, prefixe: &str) -> Vec<rag3weaver_ir::FilterCondition> {
         use rag3weaver_ir::{FilterCondition, FilterOp, FilterValue};
         let champ = |nom: &str, valeur: FilterValue| FilterCondition::Field {
             key: if prefixe.is_empty() { nom.to_string() } else { format!("{prefixe}.{nom}") },
@@ -205,18 +205,18 @@ impl Visibilite {
                 ]),
             ]
         };
-        if self.parentes.is_empty() {
+        if self.parents.is_empty() {
             return etage(&self.couche, self.rang);
         }
         let texte = |v: &String| CypherValue::String(v.clone());
         let mut etages = vec![FilterCondition::Must(etage(&self.couche, self.rang))];
-        for e in &self.parentes {
-            let mut c = etage(&e.couche, e.rang);
-            if !e.cles_masquees.is_empty() {
-                c.push(champ("_uuid", FilterValue::Ops(vec![FilterOp::NotIn(e.cles_masquees.iter().map(texte).collect())])));
+        for e in &self.parents {
+            let mut c = etage(&e.layer, e.rank);
+            if !e.masked_keys.is_empty() {
+                c.push(champ("_uuid", FilterValue::Ops(vec![FilterOp::NotIn(e.masked_keys.iter().map(texte).collect())])));
             }
-            if let Some(colonne) = self.colonnes_de_fichier.get(table).filter(|_| !e.fichiers_masques.is_empty()) {
-                c.push(champ(colonne, FilterValue::Ops(vec![FilterOp::NotIn(e.fichiers_masques.iter().map(texte).collect())])));
+            if let Some(colonne) = self.file_columns.get(table).filter(|_| !e.masked_files.is_empty()) {
+                c.push(champ(colonne, FilterValue::Ops(vec![FilterOp::NotIn(e.masked_files.iter().map(texte).collect())])));
             }
             etages.push(FilterCondition::Must(c));
         }
@@ -292,11 +292,11 @@ impl Visibilite {
             return true;
         }
         let uuid = champ("_uuid").and_then(|v| v.as_str());
-        self.parentes.iter().any(|e| {
-            let fichier = self.colonnes_de_fichier.iter().find_map(|(_, col)| champ(col)).and_then(|v| v.as_str());
-            visible(&e.couche, e.rang)
-                && uuid.is_none_or(|u| !e.cles_masquees.contains(u))
-                && fichier.is_none_or(|f| !e.fichiers_masques.contains(f))
+        self.parents.iter().any(|e| {
+            let fichier = self.file_columns.iter().find_map(|(_, col)| champ(col)).and_then(|v| v.as_str());
+            visible(&e.layer, e.rank)
+                && uuid.is_none_or(|u| !e.masked_keys.contains(u))
+                && fichier.is_none_or(|f| !e.masked_files.contains(f))
         })
     }
 }
@@ -314,12 +314,12 @@ pub fn champs_et_visibilite<'a>(v: Option<&'a Visibilite>, table: &str, fields: 
             }
         }
         // Une pile de plusieurs étages masque par uuid et par fichier : `admet` les lit.
-        if let Some(v) = v.filter(|v| !v.parentes.is_empty()) {
+        if let Some(v) = v.filter(|v| !v.parents.is_empty()) {
             if !f.contains(&"_uuid") {
                 f.push("_uuid");
                 ajoutes.push("_uuid");
             }
-            if let Some(col) = v.colonnes_de_fichier.get(table).map(String::as_str) {
+            if let Some(col) = v.file_columns.get(table).map(String::as_str) {
                 if !f.contains(&col) {
                     f.push(col);
                     ajoutes.push(col);
@@ -353,7 +353,7 @@ pub fn garder_les_visibles(
 mod tests {
     use super::*;
     use crate::connection::DbConnection;
-    use crate::vues::{Etage, PileDeLecture};
+    use crate::views::{StackLayer, ReadStack};
 
     fn base() -> Visibilite {
         Visibilite {
@@ -363,26 +363,26 @@ mod tests {
             tout_visible: true,
             rang_publie: -1,
             ensembles: Arc::new(EnsemblesPoses::default()),
-            parentes: Vec::new(),
-            colonnes_de_fichier: [("T".to_string(), "path".to_string())].into(),
+            parents: Vec::new(),
+            file_columns: [("T".to_string(), "path".to_string())].into(),
         }
     }
 
-    fn etage(couche: &str, rang: i64, cles: &[&str], fichiers: &[&str]) -> Etage {
-        Etage {
-            couche: couche.into(),
-            rang,
-            cles_retirees: cles.iter().map(|s| s.to_string()).collect(),
-            fichiers_retires: fichiers.iter().map(|s| s.to_string()).collect(),
+    fn etage(couche: &str, rang: i64, cles: &[&str], fichiers: &[&str]) -> StackLayer {
+        StackLayer {
+            layer: couche.into(),
+            rank: rang,
+            removed_keys: cles.iter().map(|s| s.to_string()).collect(),
+            removed_files: fichiers.iter().map(|s| s.to_string()).collect(),
         }
     }
 
     /// La pile `enfant:1` → `milieu:3` → `backend:0` : l'enfant retire `u2` par sa clé et `vieux.rs`
     /// par son fichier (dans les deux étages en dessous), le milieu retire `u6`.
-    fn pile() -> PileDeLecture {
-        PileDeLecture {
-            etages: vec![etage("enfant", 1, &["u2"], &["vieux.rs"]), etage("milieu", 3, &["u6"], &[]), etage("backend", 0, &[], &[])],
-            racine_sans_parente: true,
+    fn pile() -> ReadStack {
+        ReadStack {
+            layers: vec![etage("enfant", 1, &["u2"], &["vieux.rs"]), etage("milieu", 3, &["u6"], &[]), etage("backend", 0, &[], &[])],
+            root_without_parent: true,
         }
     }
 
@@ -424,11 +424,11 @@ mod tests {
     /// **Une pile de trois étages se compose par la clause** (celle de `resoudre_le_filtre` et du
     /// filtre vectoriel) et par le prédicat des plans, qui en est la même traduction.
     #[test]
-    fn une_pile_se_compose_par_la_clause() {
+    fn a_stack_composes_through_the_clause() {
         let conn = table();
-        let v = base().avec_la_pile(&pile());
+        let v = base().with_stack(&pile());
         assert!(!v.tout_visible, "une pile de plusieurs étages n'est pas « tout visible »");
-        assert_eq!((v.couche.as_str(), v.rang, v.parentes.len()), ("enfant", 1, 2));
+        assert_eq!((v.couche.as_str(), v.rang, v.parents.len()), ("enfant", 1, 2));
         let clause = v.clause_sur(&crate::dialect::Rag3dbDialect, "T", "p").expect("T a des générations");
         let lu = uuids(conn.execute(&format!("MATCH (p:T) WHERE {clause} RETURN p._uuid")).unwrap());
         assert_eq!(lu, attendus(), "clause : {clause}");
@@ -437,8 +437,8 @@ mod tests {
     /// **La même pile par `admet`**, le lecteur à la main (`get`, `find_by_field`), qui lit la ligne
     /// avec les colonnes que `champs_et_visibilite` ajoute.
     #[test]
-    fn une_pile_se_compose_par_admet() {
-        let v = base().avec_la_pile(&pile());
+    fn a_stack_composes_through_admet() {
+        let v = base().with_stack(&pile());
         let (champs, ajoutes) = champs_et_visibilite(Some(&v), "T", &["path"]);
         assert!(champs.contains(&"_uuid") && ajoutes.contains(&"_uuid"), "l'uuid se lit pour les tombstones : {champs:?}");
         let admises: BTreeSet<String> = LIGNES
@@ -457,13 +457,13 @@ mod tests {
         assert_eq!(admises, attendus());
     }
 
-    /// **La même pile par le filtre** du masque de la recherche (`conditions_de_filtre`), compilé
+    /// **La même pile par le filtre** du masque de la recherche (`filter_conditions`), compilé
     /// par le dialecte.
     #[test]
-    fn une_pile_se_compose_par_le_filtre() {
+    fn a_stack_composes_through_the_filter() {
         let conn = table();
-        let v = base().avec_la_pile(&pile());
-        let filtre = rag3weaver_ir::FilterCondition::Must(v.conditions_de_filtre("T", ""));
+        let v = base().with_stack(&pile());
+        let filtre = rag3weaver_ir::FilterCondition::Must(v.filter_conditions("T", ""));
         let relations = std::collections::HashMap::new();
         let lu = crate::filter::FilterParser::new(&relations, &crate::dialect::Rag3dbDialect).parse_condition(&filtre, "T", "p").expect("le filtre se compile");
         let clause = lu.combine_where();
@@ -474,16 +474,16 @@ mod tests {
     /// **Une pile d'un étage ne change rien** (le témoin 0 au niveau de la visibilité) : la même
     /// visibilité, le même prédicat, la même clause, les mêmes conditions de filtre.
     #[test]
-    fn une_pile_d_un_etage_ne_change_rien() {
+    fn a_one_layer_stack_changes_nothing() {
         let avant = base();
-        let apres = avant.avec_la_pile(&PileDeLecture { etages: vec![etage("backend", 0, &[], &[])], racine_sans_parente: true });
+        let apres = avant.with_stack(&ReadStack { layers: vec![etage("backend", 0, &[], &[])], root_without_parent: true });
         assert_eq!(apres, avant);
         assert_eq!(apres.tout_visible, avant.tout_visible);
-        assert_eq!(apres.predicat("T"), Some(Predicate::Visible { couche: "backend".into(), rang: 0, masque: Default::default() }));
+        assert_eq!(apres.predicat("T"), Some(Predicate::Visible { couche: "backend".into(), rang: 0, mask: Default::default() }));
         use crate::dialect::SchemaDialect;
         let d = crate::dialect::Rag3dbDialect;
         assert_eq!(apres.clause_sur(&d, "T", "p"), d.condition_visible_sur("p", "backend", 0));
-        assert_eq!(format!("{:?}", apres.conditions_de_filtre("T", "p")), format!("{:?}", avant.conditions_de_filtre("T", "p")));
+        assert_eq!(format!("{:?}", apres.filter_conditions("T", "p")), format!("{:?}", avant.filter_conditions("T", "p")));
         let (c, a) = champs_et_visibilite(Some(&apres), "T", &["path"]);
         assert_eq!((c, a), (vec!["path", COUCHE, DEPUIS, JUSQU_A], vec![COUCHE, DEPUIS, JUSQU_A]));
     }

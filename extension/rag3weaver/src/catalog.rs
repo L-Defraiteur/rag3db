@@ -10526,8 +10526,8 @@ fn read_threads() -> u64 {
             rang_publie: rang,
             tout_visible,
             ensembles: std::sync::Arc::new(crate::generations::EnsemblesPoses::default()),
-            parentes: Vec::new(),
-            colonnes_de_fichier: Default::default(),
+            parents: Vec::new(),
+            file_columns: Default::default(),
         });
         self.publish_read_view();
         Ok(())
@@ -10535,9 +10535,9 @@ fn read_threads() -> u64 {
 
     /// **Les colonnes de fichier** des tables à générations (2b′) : où un tombstone de fichier
     /// se lit. Sans elles, une pile ne masque que par uuid.
-    pub fn dire_les_colonnes_de_fichier(&mut self, colonnes: &[(&str, &str)]) {
+    pub fn set_file_columns(&mut self, colonnes: &[(&str, &str)]) {
         if let Some(v) = self.generations.as_mut() {
-            v.colonnes_de_fichier = colonnes.iter().map(|(t, c)| (t.to_string(), c.to_string())).collect();
+            v.file_columns = colonnes.iter().map(|(t, c)| (t.to_string(), c.to_string())).collect();
         }
         self.publish_read_view();
     }
