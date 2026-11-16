@@ -38,3 +38,14 @@ Ce serait nouveaupilote/RO/GOdistincts, pas un reset7200 ni un contournement du 
 Critères de fin : cause qualifiée sans mélange avec ETXTBSY ; profil ou fixture
 corrigé au périmètre autorisé ; rouge/vert ciblé puis qualification globale
 requise. Conservation du premier rouge et des26preuves, aucun retrait de cache.
+
+## Accord C7 de préparation seulement, avant code
+
+C7 autorise un témoin AF_UNIX privé distinct court/107/108/115octets et
+UTF8, résultats/errno archivés sans attribuer au vieux panic perdu. Aucun Rust
+rejoué. Préparer ensuite TMPcourt exclusif0700/UIDneuf sousR surdisque,
+P/Q/Sv2neufs, mêmeTsource734 avec reçuTERMINE+SHAELF/natif+marqueur/identité,
+sans purge/repriseFP. END1186775.678574093 et INITIAL1179575.678574093
+originaux conservés ; reste après poste, aucunreset7200 niGO de reprise.
+Deux étatsXDG/RAG restentfrères. Publication du nouveaupilote avanttémoins
+purs ; ROcouple et nouveauGOC7 restent requis avant tout Cargo/runtime.
