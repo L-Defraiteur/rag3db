@@ -212,6 +212,9 @@ TEST_F(PowerCut, ACutAfterACheckpointRemovedTheJournalLosesAndDoublesNothing) {
     ASSERT_EQ(status, CUT) << "[check: setup] the child did not reach the cut";
     const auto walBack = std::filesystem::exists(databasePath + ".wal");
     const auto shadowBack = std::filesystem::exists(databasePath + ".shadow");
+    // Without a file back, the cut did not undo the removal: the case is not played.
+    ASSERT_TRUE(walBack || shadowBack)
+        << "[check: setup] neither the journal nor the shadow file came back after the cut";
     EXPECT_EQ(judge("MATCH (t:T) RETURN count(*), sum(t.id);"), "2000|1999000\n")
         << "[check: a-cut-after-a-checkpoint-loses-and-doubles-nothing] journal back after the "
            "cut: "
