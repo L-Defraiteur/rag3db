@@ -257,7 +257,7 @@ fn declared_vertex_connector_retains_injected_source_and_refreshes() {
 #[test]
 fn dynamic_vertex_auth_debug_never_discloses_a_token() {
     let source = Arc::new(FakeTokenSource::default());
-    let debug=format!("{:?}",Auth::Vertex(source));
+    let debug=format!("{:?}",OpenAiLlm::vertex_with_source("p","global",source,"m"));
     assert!(!debug.contains("fixture-token"));
     assert!(debug.contains("redacted"));
 }

@@ -787,6 +787,20 @@ pub fn connect_ocr(source: &ModelSource) -> Result<(std::sync::Arc<dyn crate::oc
 /// llama-server, donc `compatible` à une adresse locale.
 #[cfg(feature = "openai-llm")]
 pub fn connect_llm(source: &ModelSource) -> Result<(std::sync::Arc<dyn crate::llm::Llm>, Origin), String> {
+    connect_llm_with_vertex(source, |project, location, model| {
+        let tokens = crate::gcp_auth::TokenSource::from_env()
+            .map_err(|e| format!("jeton Vertex : {e}"))?;
+        Ok(crate::openai_llm::OpenAiLlm::vertex_with_source(project, location, std::sync::Arc::new(tokens), model))
+    })
+}
+
+/// Même résolution déclarative ; seule la construction du fournisseur Vertex s'injecte.
+/// Les autres protocoles n'appellent jamais cette fabrique.
+#[cfg(feature = "openai-llm")]
+pub(crate) fn connect_llm_with_vertex(
+    source: &ModelSource,
+    vertex: impl FnOnce(&str, &str, &str) -> Result<crate::openai_llm::OpenAiLlm, String>,
+) -> Result<(std::sync::Arc<dyn crate::llm::Llm>, Origin), String> {
     use std::sync::Arc;
     use crate::openai_llm::{secret_from_env, Auth, OpenAiLlm};
     let what = format!("models.llm ({})", source.model);
@@ -834,8 +848,7 @@ pub fn connect_llm(source: &ModelSource) -> Result<(std::sync::Arc<dyn crate::ll
             .or_else(|| process_env("GOOGLE_CLOUD_PROJECT"))
             .ok_or_else(|| format!("{what} : le protocole vertex demande `params.project`, ou GOOGLE_CLOUD_PROJECT"))?;
         let location = source.params.get("location").cloned().unwrap_or_else(|| "global".to_string());
-        let token = crate::gcp_auth::TokenSource::from_env().and_then(|s| s.token()).map_err(|e| format!("{what} : jeton Vertex : {e}"))?;
-        let llm = with_context(OpenAiLlm::vertex(&project, &location, token, &source.model));
+        let llm = with_context(vertex(&project, &location, &source.model).map_err(|e| format!("{what} : {e}"))?);
         return Ok((Arc::new(llm) as Arc<dyn crate::llm::Llm>, Origin::Compatible(format!("vertex:{project}/{location}"))));
     }
     let compatible = |address: &str, s: &ModelSource| -> Result<OpenAiLlm, String> {

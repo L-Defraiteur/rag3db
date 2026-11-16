@@ -6,4 +6,6 @@ Avant implémentation, les scénarios transport existants sont raccordés à la 
 
 Le mécanisme prévu conserve TokenSource via Arc, appelle token à chaque tentative et invalide UNE fois sur HTTP401 Vertex avant réponse200. Une seconde401 est une erreur nommée. Aucune branche de reprise401 dans le lecteurSSE ; aucun changement des Bearer/APIkeys fixes, Header, retry429/transient existants. Aucun changement de protocole ou endpoint déclaré supplémentaire. Le constructeur vertex(tokenfixe) existant reste compatible ; connect_llm utilise le constructeur à capacité conservée.
 
-Fichiers réservés : gcp_auth.rs(capacité/impl), openai_llm.rs(Auth/constructeur/401), model_source.rs(connect_llm seulement), modulefixture. Pas activation.rs ni fichiers Embar. Après publication source et pilote isolé, GO CPU distinct requis ; aucun cloud/F300/service/déploiement ne découle de ce plan.
+Fichiers réservés : gcp_auth.rs(capacité/impl), openai_llm.rs(capacité conservée/constructeur/401), model_source.rs(connect_llm seulement), modulefixture. Pas activation.rs ni fichiers Embar. Après publication source et pilote isolé, GO CPU distinct requis ; aucun cloud/F300/service/déploiement ne découle de ce plan.
+
+Relecture : Auth est aussi partagé par Anthropic ; la capacité Vertex reste donc un champ privé exclusif du client OpenAiLlm. with_auth remplace cette capacité par les en-têtes fixes, sans modifier Auth ni Anthropic. Le juge Debug vise le vrai client. Rustfmt parse-seulement/diffcheck valides, aucun Cargo/rustc/test lancé.
