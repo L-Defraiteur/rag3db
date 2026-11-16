@@ -526,3 +526,15 @@ Composé ROUGE, final851326.668131734 avant ENDoriginal. Worktree propre,
 markerT maintenant propriétaire crate tty. Même target conservé, aucun retrait.
 Prochain pas : lecture des traces et attribution des deux observations avant
 toute nouvelle action autorisée ; ticket reste ouvert, aucun push master.
+
+### Diagnostic RO après interruption, sans attribution abusive aux aliases
+
+Analyse et plan de diff, preuves manquantes explicitement nommées :
+`docs/tty/tickets/2026-11-16-le-harnais-perd-les-traces-des-seances-et-juge-la-fin-sur-les-octets.md`
+(porteur tty). Premier rouge = terminal riche après accord, pas le contrat
+--plain ended/relance ; le ticket plain reste distinct. Deuxième observation
+rattachée au ticket tmux15 existant, texte multiligne correct reçu, aide non
+retrouvée dans le flux brut. L'hôte927 n'a pas été appelé, API réelles non jugées.
+Aucun raw terminal/capture/frappe après arrêt inventé ; les chunks étaient en
+mémoire et le faux hôte écrase son journal entre séances. Analyse de source
+seule, aucun essai, metadata, provider, service, correctif ni nouvelle allocation.
