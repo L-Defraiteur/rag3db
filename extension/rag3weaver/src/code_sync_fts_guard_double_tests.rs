@@ -57,11 +57,11 @@ fn sync_and_trace(c: &mut Catalog, src: &Snapshot, capture: &Capture, stage: &st
     assert_eq!(report.failed, 0, "{report:?}");
     trace
 }
-fn run_case(generations: bool) {
+fn fixture(generations: bool, label: &str) -> (Catalog, Snapshot) {
     // La recette doit fournir une racine privée disque ; aucune utilisation implicite de /tmp.
     let root = std::path::PathBuf::from(std::env::var_os("RAG3WEAVER_FTS_DOUBLE_ROOT").expect("racine privée DOUBLE"));
     assert!(root.is_absolute() && root.is_dir() && !root.is_symlink());
-    let case = root.join(if generations { "generations" } else { "classic" });
+    let case = root.join(label);
     std::fs::create_dir(&case).expect("fixture neuve, aucun réemploi");
     let conn = Rag3dbConnection::new(case.join("base.rag3db")).expect("base neuve");
     let extension = crate::backend::vector_extension_of_this_process().expect("extension du SDK courant");
@@ -74,6 +74,11 @@ fn run_case(generations: bool) {
     register_code_schema(&mut c, default_scope_chunking()).expect("schéma");
     assert_eq!(c.generations.is_some(), generations);
     let src = Snapshot::new("fts-double", [("src/a.rs".to_string(), "pub fn alpha() -> u32 { 7 }\n".to_string())]);
+    (c, src)
+}
+fn run_case(generations: bool) {
+    let (mut c, src) = fixture(generations, if generations { "generations" } else { "classic" });
+    let form = if generations { SCOPE_FORM_GENERATIONS } else { SCOPE_FORM_VERSIONS };
     let capture = Capture::start();
     let initial = sync_and_trace(&mut c, &src, &capture, "initial");
     assert_eq!(initial.first().map(String::as_str), Some("dispatch:classic"));
@@ -116,3 +121,76 @@ fn run_case(generations: bool) {
 fn classic_sync_removes_a_committed_fts_ghost() { run_case(false); }
 #[test]
 fn generations_sync_removes_a_committed_fts_ghost() { run_case(true); }
+
+#[test]
+fn generations_sync_rebuilds_pending_fts_even_when_counts_match() {
+    let (mut c, src) = fixture(true, "pending-same-count");
+    let capture = Capture::start();
+    sync_and_trace(&mut c, &src, &capture, "initial-pending");
+    let table = scope_chunks(&c).unwrap().parent;
+    let graph = graph_ids(&c, &table);
+    assert_eq!(c.fts_live_ids(&table).unwrap().0, graph);
+    let healthy = healthy_rows(&c, &table);
+    c.mark_fts_pending(&["Scope"]).unwrap();
+    assert!(c.fts_pending_entities().unwrap().contains(&"Scope".to_string()));
+    let trace = sync_and_trace(&mut c, &src, &capture, "pending-same-count");
+    assert_eq!(trace.first().map(String::as_str), Some("dispatch:generations"));
+    assert!(trace.contains(&"counts:end:0".to_string()), "{trace:?}");
+    assert!(trace.contains(&"rebuild:end:1".to_string()), "{trace:?}");
+    assert!(c.fts_pending_entities().unwrap().is_empty());
+    assert_eq!(c.fts_live_ids(&table).unwrap().0, graph);
+    assert_eq!(healthy_rows(&c, &table), healthy);
+}
+
+struct RefusingList<'a> {
+    source: &'a Snapshot,
+    calls: std::sync::atomic::AtomicUsize,
+}
+impl FileSource for RefusingList<'_> {
+    fn cursor(&self) -> String { self.source.cursor() }
+    fn list(&self) -> Result<Vec<String>, String> {
+        self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Err("source-list-refused-witness".to_string())
+    }
+    fn read(&self, _: &str) -> Result<Option<String>, String> {
+        panic!("une liste refusée ne lit aucun fichier")
+    }
+}
+
+#[test]
+fn generations_maintenance_error_prevents_source_listing_and_preserves_pending() {
+    let (mut c, src) = fixture(true, "pending-error");
+    let capture = Capture::start();
+    sync_and_trace(&mut c, &src, &capture, "initial-error");
+    c.mark_fts_pending(&["UnknownPhysicalTable"]).unwrap();
+    let source = RefusingList { source: &src, calls: std::sync::atomic::AtomicUsize::new(0) };
+    let error = sync_source(&mut c, &source, &SourceSyncOptions::default(), &mut |_| {}).unwrap_err();
+    let trace = capture.take();
+    eprintln!("FTS_PENDING_ERROR {trace:?} error={error}");
+    assert!(!error.contains("source-list-refused-witness"), "{error}");
+    assert_eq!(source.calls.load(std::sync::atomic::Ordering::SeqCst), 0);
+    assert!(trace.contains(&"rebuild:begin".to_string()), "{trace:?}");
+    assert!(!trace.iter().any(|event| event.starts_with("rebuild:end:")), "{trace:?}");
+    assert!(c.fts_pending_entities().unwrap().contains(&"UnknownPhysicalTable".to_string()));
+}
+
+#[test]
+fn generations_maintenance_precedes_an_early_source_error() {
+    let (mut c, src) = fixture(true, "early-source-error");
+    let capture = Capture::start();
+    sync_and_trace(&mut c, &src, &capture, "initial-source-error");
+    let table = scope_chunks(&c).unwrap().parent;
+    let graph = graph_ids(&c, &table);
+    let healthy = healthy_rows(&c, &table);
+    c.mark_fts_pending(&["Scope"]).unwrap();
+    let source = RefusingList { source: &src, calls: std::sync::atomic::AtomicUsize::new(0) };
+    let error = sync_source(&mut c, &source, &SourceSyncOptions::default(), &mut |_| {}).unwrap_err();
+    let trace = capture.take();
+    eprintln!("FTS_EARLY_ERROR {trace:?} error={error}");
+    assert!(error.contains("source-list-refused-witness"), "{error}");
+    assert_eq!(source.calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+    assert!(trace.contains(&"rebuild:end:1".to_string()), "{trace:?}");
+    assert!(c.fts_pending_entities().unwrap().is_empty());
+    assert_eq!(c.fts_live_ids(&table).unwrap().0, graph);
+    assert_eq!(healthy_rows(&c, &table), healthy);
+}
