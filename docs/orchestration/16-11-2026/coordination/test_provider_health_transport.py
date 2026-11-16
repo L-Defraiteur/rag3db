@@ -39,6 +39,15 @@ class HealthTransport(unittest.TestCase):
         self.assertEqual(trace['work_deadline_monotonic'],84.5)
         self.assertTrue(trace['client_reaped']);self.assertTrue(trace['cleanup_verified'])
 
+    def test_parsing_cannot_return_a_success_after_original_whole_deadline(self):
+        child=self.child();trace={};clock=[80.];original=t.decode
+        def delayed(raw):
+            value=original(raw);clock[0]=85.001;return value
+        with patch.object(t.time,'monotonic',side_effect=lambda:clock[0]), \
+             patch.object(t.subprocess,'Popen',return_value=child),patch.object(t,'decode',side_effect=delayed):
+            with self.assertRaises(ValueError):t.run_health_worker(self.context,trace)
+        self.assertTrue(trace['client_reaped'])
+
     def test_worker_calls_only_pinned_policy_then_fixed_bge_health(self):
         context=dict(self.context,work_deadline_monotonic=84.5)
         connection=Mock();connection.getresponse.return_value.status=200
@@ -108,7 +117,7 @@ class HealthTransport(unittest.TestCase):
         self.assertEqual(len(bytes.fromhex(record['raw_hex'])),65537)
 
     def test_http_failure_duplicate_json_and_nonfinite_are_refused(self):
-        for status,raw in [(503,b'{}'),(True,b'{}'),(200,b'{"x":1,"x":2}'),(200,b'{"x":NaN}')]:
+        for status,raw in [(503,b'{}'),(True,b'{}'),(200,b'{"x":1,"x":2}'),(200,b'{"x":NaN}'),(200,json.dumps(self.health).encode('utf-16'))]:
             with self.subTest(status=status,raw=raw),self.assertRaises(ValueError):t.validate_health(raw,self.identity,status=status)
 
     def test_false_is_not_zero_and_all_nine_identity_types_are_strict(self):
