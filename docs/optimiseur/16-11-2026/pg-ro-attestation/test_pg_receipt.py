@@ -4,6 +4,7 @@ import hashlib
 import json
 from pathlib import Path
 import unittest
+import tempfile
 
 import pg_receipt as pg
 
@@ -118,4 +119,92 @@ class ReceiptTests(unittest.TestCase):
         self.setUp();self.ready['active']=False;self.reject()
 
 
+class ArtifactTests(ReceiptTests):
+    # Ne pas hériter les onze tests : chargement explicite de ce sous-ensemble ci-dessous.
+    def setUp(self):
+        ReceiptTests.setUp(self)
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name).resolve()
+
+    def write_artifact(self):
+        for role, ref in [('sql-out',self.body['evidence']['stdout']),('sql-err',self.body['evidence']['stderr']),
+                          ('check-out',self.body['evidence']['postcheck']['stdout']),('check-err',self.body['evidence']['postcheck']['stderr'])]:
+            path=self.root/role;path.write_bytes(self.raw[role]);ref['path']=str(path)
+        path=self.root/'attestation.json';raw=json.dumps(self.body).encode();path.write_bytes(raw)
+        return path,digest(raw)
+
+    def test_loaded_artifact_is_exact(self):
+        path,sha=self.write_artifact()
+        self.assertEqual(pg.validate_attestation(path,sha,self.expected,self.ready,1000.),self.body)
+
+    def test_loaded_sha_symlink_and_outside_raw_are_refused(self):
+        path,sha=self.write_artifact()
+        with self.assertRaises(ValueError):pg.validate_attestation(path,'0'*64,self.expected,self.ready,1000.)
+        link=self.root/'linked.json';link.symlink_to(path)
+        with self.assertRaises(ValueError):pg.validate_attestation(link,sha,self.expected,self.ready,1000.)
+        self.body['evidence']['stdout']['path']=str(self.root.parent/'outside')
+        path.write_text(json.dumps(self.body))
+        with self.assertRaises(ValueError):pg.validate_attestation(path,digest(path.read_bytes()),self.expected,self.ready,1000.)
+
+    def test_post_admission_reuses_trusted_original_time(self):
+        path,sha=self.write_artifact()
+        result=pg.validate_attestation(path,sha,self.expected,self.ready,2000.,admission=False,admitted_at=1000.)
+        self.assertEqual(result,self.body)
+        for admitted in [None,1100.,2001.]:
+            with self.assertRaises(ValueError):pg.validate_attestation(path,sha,self.expected,self.ready,2000.,admission=False,admitted_at=admitted)
+        with self.assertRaises(ValueError):pg.validate_attestation(path,sha,self.expected,self.ready,2000.)
+
+    def test_post_admission_expired_lease_or_first_red_refuses(self):
+        path,sha=self.write_artifact()
+        with self.assertRaises(ValueError):pg.validate_attestation(path,sha,self.expected,self.ready,4001.,admission=False,admitted_at=1000.)
+        self.ready['first_red']=True
+        with self.assertRaises(ValueError):pg.validate_attestation(path,sha,self.expected,self.ready,2000.,admission=False,admitted_at=1000.)
+
+    def test_prepare_is_explicit_hold_without_probe(self):
+        plan=pg.prepare_observation()
+        self.assertEqual(plan['status'],'HOLD')
+        self.assertIs(plan['run_authorized'],False)
+        self.assertIs(plan['transport_qualified'],False)
+
+    def test_offline_publisher_preserves_immutable_raw_before_refusal(self):
+        self.body['evidence']['partial']=True
+        target=self.root/'refusal'
+        with self.assertRaises(ValueError):
+            pg.publish_observation(target,self.body,self.raw,expected=self.expected,ready=self.ready,
+                                   clock=lambda:1000.,phase_check=lambda:dict(self.ready))
+        self.assertTrue((target/'refusal.json').is_file())
+        self.assertEqual((target/'identity.stdout').read_bytes(),self.raw['sql-out'])
+        self.assertFalse((target/'attestation.json').exists())
+        before={p.name:p.read_bytes() for p in target.iterdir()}
+        with self.assertRaises(FileExistsError):
+            pg.publish_observation(target,self.body,self.raw,expected=self.expected,ready=self.ready,
+                                   clock=lambda:1000.,phase_check=lambda:dict(self.ready))
+        self.assertEqual(before,{p.name:p.read_bytes() for p in target.iterdir()})
+
+    def test_publisher_requires_phase_after_fsync_and_single_deadline(self):
+        calls=[]
+        def phase():
+            calls.append(True)
+            return dict(self.ready,first_red=len(calls)>1)
+        target=self.root/'late-red'
+        with self.assertRaises(ValueError):
+            pg.publish_observation(target,self.body,self.raw,expected=self.expected,ready=self.ready,
+                                   clock=lambda:1000.,phase_check=phase)
+        self.assertGreaterEqual(len(calls),2)
+        self.assertFalse((target/'attestation.json').exists())
+        with self.assertRaises(ValueError):
+            pg.publish_observation(self.root/'late-clock',self.body,self.raw,expected=self.expected,ready=self.ready,
+                                   clock=lambda:1001.,phase_check=lambda:dict(self.ready))
+
+    def test_publisher_valid_fake_is_loadable(self):
+        path,sha=pg.publish_observation(self.root/'ok',self.body,self.raw,expected=self.expected,ready=self.ready,
+                                       clock=lambda:1000.,phase_check=lambda:dict(self.ready))
+        result=pg.validate_attestation(path,sha,self.expected,self.ready,1000.)
+        self.assertEqual(result['nonce'],self.body['nonce'])
+
+
+# Réutiliser seulement le setUp pour les faux disque, sans rejouer les tests hérités.
+ArtifactTests = type('ArtifactTests',(unittest.TestCase,),dict(
+    (name,value) for name,value in ArtifactTests.__dict__.items() if name not in ('__dict__','__weakref__')))
 if __name__=='__main__':unittest.main(verbosity=2)
