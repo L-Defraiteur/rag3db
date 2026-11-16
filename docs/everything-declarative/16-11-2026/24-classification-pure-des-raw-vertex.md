@@ -15,3 +15,10 @@ search::tests_des_littéraux_bornés. L'ASCII arbitraire du classificateur
 refuse le RAW valide ; pas un défaut produit ni un problème de framing.
 Correction : chaque segment de chemin doit être un identifiant Unicode,
 comparaison exacte aux listes figées inchangée. Aucun nom n'est réécrit.
+
+Jugement20fefd sousfailfast :2OK+1ERROR, logs green-v2 conservés.
+Le précontrôle tickets et celui de l'analyse utilisent également VERT.
+Le source check_features.sh joue d'abord ses précontrôles (dont
+ETAT_SUITE_E2E VERT), puis les huit jeux avec leur verdict final. Correction
+bornée : suffixe APRÈS l'unique marqueur ETAT_SUITE_E2E VERT exigé égal aux
+huit lignes de jeux + verdict8/8 ; pas un take-last ni une liste auto-ajustée.
