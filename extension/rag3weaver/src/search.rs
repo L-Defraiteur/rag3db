@@ -544,9 +544,6 @@ impl Default for SearchOptions {
 
 // ─── SearchResult / SearchResponse / SearchMeta ──────────────────────────────
 
-/// A single search result.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 /// **The stable order of results**: the score, then an identity that neither the base nor its history gives (lucivy's
 /// ticket of 16 November 2026). An occurrence is told apart by its path, its first line and its name — its uuid carries
 /// `_depuis` under generations, so a rewritten base and a fresh one give the same row two uuids. A result without a
@@ -568,6 +565,9 @@ fn stable_identity(r: &SearchResult) -> (String, i64, String, String) {
     }
 }
 
+/// A single search result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SearchResult {
     pub uuid: String,
     pub score: f64,
