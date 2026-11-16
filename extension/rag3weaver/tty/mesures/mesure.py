@@ -665,8 +665,34 @@ finally:
 #     ligne de l'équipier « !touch … » et un « !touch … » collé puis effacé par Ctrl-C ne lancent rien. Un
 #     faux sudo demande un mot de passe sans écho : la consigne reçue par la boîte porte le retour de la
 #     commande, jamais le mot de passe, et le journal de séance non plus.
+class ScenarioFailed(RuntimeError):
+    pass
+
+
+def prepare_bang_fixture(directory):
+    import hashlib
+    import shlex
+    script = 'stty -echo; printf "Mot de passe : "; read p; stty echo; echo; echo "lu ${#p} caracteres"\n'
+    path = Path(directory) / 'faux_sudo.sh'
+    if LOCAL:
+        if path.parent.resolve() != CURRENT_PHASE.path.resolve():
+            raise RuntimeError('fixture is not in the current phase')
+        with path.open('x') as output:
+            output.write(script)
+            output.flush()
+            os.fsync(output.fileno())
+        path.chmod(0o600)
+        if path.read_text() != script:
+            raise RuntimeError('fake sudo fixture differs from prepared bytes')
+    else:
+        ssh(f"printf %s {shlex.quote(script)} > {shlex.quote(str(path))}")
+    CURRENT_PHASE.record('bang-fixture', dict(path=str(path), sha256=hashlib.sha256(script.encode()).hexdigest()), sync=True)
+    CURRENT_PHASE.checkpoint('bang-fixture-ready')
+    return str(path)
+
+
 SECRET = "s3cr3t-du-harnais"
-ssh(f"rm -f {DOSSIER}/jamais-1 {DOSSIER}/jamais-2 {DOSSIER}/seance-bang.txt; printf '%s\\n' 'stty -echo; printf \"Mot de passe : \"; read p; stty echo; echo; echo \"lu ${{#p}} caracteres\"' > {DOSSIER}/faux_sudo.sh")
+
 
 
 def ligne_d_ailleurs(texte):
@@ -675,6 +701,7 @@ def ligne_d_ailleurs(texte):
 
 
 hote_demarrer()
+BANG_SCRIPT = prepare_bang_fixture(DOSSIER)
 tunnel = subprocess.Popen(["sleep", "86400"] if LOCAL else ["ssh", "-N", "-o", "BatchMode=yes", "-L", f"{TUNNEL}:127.0.0.1:{PORT}", HOTE])
 time.sleep(1.5)
 try:
@@ -687,8 +714,11 @@ try:
     time.sleep(0.5)
     t.ecrire(b"\x03")
     time.sleep(0.5)
-    t0 = t.ecrire(f"!sh {DOSSIER}/faux_sudo.sh\r".encode())
+    t0 = t.ecrire(f"!sh {BANG_SCRIPT}\r".encode())
     invite = t.attendre("Mot de passe :".encode(), apres=t0, borne=10) is not None
+    if not invite:
+        rouge('bang : invite absente, marqueur factice non envoyé')
+        raise ScenarioFailed('missing prompt; fake marker input refused')
     time.sleep(0.5)
     t0 = t.ecrire(f"{SECRET}\r".encode())
     lu = t.attendre(f"lu {len(SECRET)} caracteres".encode(), apres=t0, borne=10) is not None
