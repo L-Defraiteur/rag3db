@@ -96,4 +96,22 @@ Les relectures croisées sont favorables dans leurs limites : ED pour le candida
 
 Le bâti autonome C1 a fini, mais son lanceur a refusé avant le test : il attendait le commit de test b82 dans le BUILD_ID, alors que le générateur emploie le dernier commit moteur 59ac et exclut les tests. Zéro juge joué, aucun correctif du dictionnaire qualifié. Le scratch a disparu avant copie des artefacts, limite conservée avec les journaux. Cœur publie le diagnostic puis corrige la recette (source et moteur distincts, copies hors scratch avant contrôle) ; une étape corrective distincte bornée à 1 800 s est admise aux mêmes frontières CPU privées, après publication de l'identité exacte. Aucun ancien reçu ni rouge n'est converti en vert.
 
+## Entrées après la pose
+
+- Arbre a publié la recette exacte `be91b5b3c742209cc59c2ce2b2ac29f9a97b9213` et lancé la maintenance du portable, client privé sous poste 32 Gio/1 800 s, API de l'hôte, relevé frais puis même jeton pour purge au plus 1 % et compact. Cela n'atteste pas le cgroup de l'hôte producteur, qui reste à G. Aucun résultat de maintenance ni migration n'est encore déclaré ici. Fermeture, instantané à froid et migration suivent seulement cette phase verte.
+- L'outil RO portable a refusé sur le CPU du PC dans une fixture, pas sur une base vivante. G a recompilé et rejugé la même source nativement PC : `read-only-query-v2-luciepc`, SHA256 `48ae2328a29676fa69154cb9c67d9125d4d04cf92b029bd2b2a09981dea95616`, identité 59ac, compte exact, écriture refusée, octets inchangés. La recette d'arbre épingle chaque exécutable au bon poste ; les hôtes posés ne sont pas concernés.
+- G qualifie son candidat de pin `68590270e21d00285b29800bd9cdecf0cb921461` par le script candidat, `SUITES=-`, dossier neuf `pin-59ac-20261116-927`. Témoin ciblé et deux filets verts ; huit jeux de features verts et preuve de recompilation acquise. La lib entière et le navigateur restent nécessaires avant le tour de push et la pose des copies du cache. Aucun tour de code n'est encore ouvert.
+
+### Oracle : admission exacte, pas encore corpus comparable
+
+Le premier lien du petit outil a refusé (E0514) : rustc 1.98.0 choisi hors checkout ne correspondait pas à la rlib 927, bâtie avec 1.98.1. Rouge conservé, aucune base ouverte. G a fourni le compilateur absolu déjà installé, SHA256 `859254978c0a0402c32f949f6de0d99aee73be8d15f45aac00ae1448aac51e74` ; la recette corrective publiée a lié la rlib attestée sans Cargo ni nouveau rebâti de produit.
+
+Les trois listings du scanner 927 sur les racines originales sont maintenant jugés ; l'exécutable a aussi passé une fixture ISA avant le portable. Sources, copies, HEAD et statuts sont restés identiques avant/après. L'exécutable de listing ne lie pas la bibliothèque DB et n'ouvre ni Catalog ni base. Des différences restent à qualifier : fichiers de plus de 1 Mio absents des captures, métadonnées `.git` volontairement absentes, `.env.example` non lu selon la règle des secrets, un compose ignoré au PC lourd et quatre archives de preuves au portable. L'admission finale du manifeste et ses filtres de contenu ne sont pas déduits du seul listing. Les captures restent NONMATCHED ; aucun fichier secret n'est lu pour forcer l'oracle.
+
+### C1 : premier rouge physique
+
+La recette corrigée `4e3773250d639f2d7b396e7d4ff8611912f282ba` a joué un test sur source b82, BUILD_ID moteur 59ac réellement émis : une fonction, un échec, zéro skip. Un refus d'allocation de 48 octets des offsets laisse les trois offsets, mais la dernière chaîne devient `gammadelta` au lieu de `gamma` et le compteur d'octets passe de 14 à 19. Le défaut de préservation après cette exception est prouvé ; la causalité du SIGSEGV initial ne l'est pas. Les recherches de hash après refus n'ont pas été jouées.
+
+Preuves publiées `cd7731186b2bb7044df8441fe7a3e67bf3863f99`, 29 fichiers, artefacts sauvegardés avant assertion puis rehashés aux deux postes ; unité finie et place rendue. Cœur prépare un correctif séparé qui réserve les capacités avant publication, sans reprendre le correctif 256 ni revendiquer toutes les exceptions possibles. Le parent C1, l'allocation de l'index de hash et la garde `sanityCheck` tautologique restent à suivre dans des tickets adaptés ; aucune nouvelle bibliothèque posée ni intégration n'est déduite.
+
 Le suivi de la reprise est dans [le ticket](../tickets/2026-11-16-reprendre-les-perimetres-apres-lecture-des-diffs-recents.md).
