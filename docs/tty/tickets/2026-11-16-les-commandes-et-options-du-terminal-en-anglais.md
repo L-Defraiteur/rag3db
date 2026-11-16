@@ -419,3 +419,19 @@ aucun Cargo/metadata/build/test/autorité pendant cette préparation.
 
 Staging distinct par paquet ; cache .crate seul, création atomique si absent.
 Si déjà présent ou concurrent, valider hash/type/UID sans écraser.
+
+### Préparation cinq paquets terminée, nouveau pin distinct
+
+Les5.crate exacts sont présents et rehashés conformes au lock090cc4 :
+ld-lucivy déjà présent seulement vérifié ; quatre autres ajoutés absents
+atomiquement, chacun UID1000/dev57/mode0644 et SHA consigné. Extraction
+stricte privée pour chacun, aucun srcCargo écrit, aucun fichier remplacé.
+Rapport `cx-tty-five-crates-preparation/report.json` FIVE_VERIFIED, inventaire
+filesystem lock complet missing_locked_payloads=[] ; pas une preuve metadata.
+Aucun Cargo, metadata, build, test ou autorité exécuté pendant l'acquisition.
+
+Master relu b0a845bb4877328eada37951c174e3d208986630 inchangé depuis l'union.
+Nouveau paquet Q/P/S v5 et TMPcourt v5 ; le contrôleur vérifie les5payloads et
+le reçu rouge256 le plus récent terminé/restes[]/nettoye, en plus du reçu
+vert6td historique ; target actuel exigé identique au ledger d'avant le STOP256.
+Aucun ancien budget repris. Préparation v5 puis RO/GO distincts nécessaires.

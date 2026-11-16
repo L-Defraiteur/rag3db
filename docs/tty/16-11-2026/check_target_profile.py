@@ -18,6 +18,11 @@ try:
     assert time.monotonic() < a['end']
     old = json.loads((q / 'previous-autorite.json').read_text())
     assert old['etat'] == 'termine'
+    latest = json.loads((q / 'latest-red-autorite.json').read_text())
+    latest_verdict = json.loads((q / 'latest-red-verdict.json').read_text())
+    assert latest['etat'] == 'termine' and latest_verdict['restes'] == [] and latest_verdict['nettoye']
+    from strict_target_guard import require_hashes
+    record['crate_hashes'] = require_hashes(config['crate_hashes'])
     assert digest(q / 'target-ledger.json') == config['ledger_sha']
     record['scan'] = scan('/proc', [worktree, target])
     assert record['scan']['found'] == []

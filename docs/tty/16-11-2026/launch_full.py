@@ -13,9 +13,9 @@ from strict_target_guard import digest, snapshot, scan, finish, require_source, 
 BASE = Path.home() / '.cache/rag3weaver-build'
 W = Path.home() / 'git_workspaces/cx-tty-english-aliases'
 T = BASE / 'target-cx-tty-english-aliases-2'
-Q = BASE / 'cx-tty-aliases-controller-v4'
-P = BASE / 'cx-tty-english-aliases-full-v4'
-S = BASE / 'cx-tty-aliases-common-v4'
+Q = BASE / 'cx-tty-aliases-controller-v5'
+P = BASE / 'cx-tty-english-aliases-full-v5'
+S = BASE / 'cx-tty-aliases-common-v5'
 
 
 def git(*args):
@@ -66,6 +66,22 @@ def main():
         quiet = scan('/proc', [W, T])
         (Q / 'quiet-prepare.json').write_text(json.dumps(quiet, indent=2))
         assert quiet['found'] == []
+        latest = BASE / 'cx-tty-aliases-common-v4/validation-zcvv4qs0'
+        latest_authority = json.loads((latest / 'autorite.json').read_text())
+        latest_verdict = json.loads((latest / 'verdict.json').read_text())
+        assert latest_authority['etat'] == 'termine'
+        assert latest_verdict['verdict'] == 'ROUGE' and latest_verdict['restes'] == [] and latest_verdict['nettoye']
+        old_ledger = json.loads((BASE / 'cx-tty-aliases-controller-v4/target-ledger.json').read_text())
+        assert snapshot(T) == old_ledger, 'failed metadata must not silently change target provenance'
+        crates = json.loads((BASE / 'cx-tty-five-crates-preparation/report.json').read_text())
+        assert crates['status'] == 'FIVE_VERIFIED' and crates['missing_locked_payloads'] == []
+        crate_cache = Path.home() / '.cargo/registry/cache/index.crates.io-1949cf8c6b5b557f'
+        crate_hashes = {str(crate_cache / (package['name'] + '-4.3.9.crate')): package['sha256'] for package in crates['packages']}
+        assert len(crate_hashes) == 5
+        require_hashes(crate_hashes)
+        for name in ['autorite.json', 'verdict.json']:
+            shutil.copy2(latest / name, Q / ('latest-red-' + name))
+        shutil.copy2(BASE / 'cx-tty-five-crates-preparation/report.json', Q / 'five-crates.json')
         ledger = snapshot(T)
         assert snapshot(T) == ledger
         (Q / 'target-ledger.json').write_text(json.dumps(ledger, indent=2))
@@ -90,7 +106,7 @@ def main():
         sdk_hashes = {str(sdk / 'librag3db.so'): 'b7e9fc75a3d2de04c72680b0309e8bb1df9eaadb5211ebbacf39716c6d0a2101', str(sdk / 'libvector.rag3db_extension'): '1669d6392ec8067fcf92ae2ccc972fd7cd3086629fb82d1f5d254e90d72d7561'}
         require_hashes(sdk_hashes)
         config = dict(source=args.source, worktree=str(W), target=str(T), proofs=str(P), scope=str(S),
-                      budget=3600, controllers=hashes, sdk_hashes=sdk_hashes, ledger_sha=digest(Q / 'target-ledger.json'),
+                      budget=3600, controllers=hashes, sdk_hashes=sdk_hashes, crate_hashes=crate_hashes, ledger_sha=digest(Q / 'target-ledger.json'),
                       creation_identity=creation, capture='late stable capture anchored to recorded GO2 root identity',
                       previous_source='0c4ab173d4a3e418b2c5df1253b5090a4d97911e')
         (Q / 'prepared.json').write_text(json.dumps(config, indent=2))
