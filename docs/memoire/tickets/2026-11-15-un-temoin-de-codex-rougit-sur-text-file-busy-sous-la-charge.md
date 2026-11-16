@@ -89,3 +89,17 @@ F8/lib/NAV+deuxièmeELFmême, nouvellefenêtre pasresetancien7200. Pilote et
 transitionGit archive734physique/mêmeC SAMEOWNER àpréparer ; zéro Cargo/target
 ou sourcePC734 touchés, pasGOmaster/retrait. Preuves2a068 restent acquises734,
 aucun report automatique àl'union avec 5Rust Embar entrants.
+
+## Pilote union avant implémentation
+
+APPunionfigée e2722d521192b3c25f9dd13e0e9aed47a7d7487f. Préparer transition
+GitSEULE archivephysique734 propre/detached/admin+gitlink/fullSHA, puis HEADunion
+au MÊMEcheminC propriétaireT ; inventaires completsT avant/après égaux,
+ELF6f12/canon0ddd/preuvesda809 et reçuv3TERMINE préservés. Ne pas reclasser
+les preuves734 commeunion. Pilote isolé3600neufsaprèsPOSTE (ancienbudgetGREEN
+terminé), canoniqueENTIÈRE+secondeMEMEELF avecCARGOMANIFESTCexact dèsdépart ;
+profilTMPcourt/fs/UID/identity, étatsfrères, SDK59store/pool1G, watchEDactifs,
+sourceUNION9dansELFavant2e, finalSHA/scan/autorité/deadlineAPRÈSopen.
+Primitives sourcearchive et cacheinventory réemployées d'Archi b12, provenance
+à publier ; code+témoins avantpetitsCPU. AucunCargo/service/targetguard réel
+ou nouvelleportée pendant la préparation ; nouveauGOexact requis.
