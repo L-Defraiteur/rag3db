@@ -8453,6 +8453,35 @@ mod tests {
         assert!(backend.stop_reactions().is_empty());
     }
 
+    /// **Une vue sans rang lit le rang publié, et la réponse dit l'écart avec
+    /// le rang en attente** (c7, 16 novembre 2026). L'appel sans vue lit le rang
+    /// en attente w = n + 1, et `view: {layer: backend}` lit le rang publié n
+    /// (promesse 1 de 2b′). Tant que rien du produit ne publie de génération, n
+    /// reste 0, et une vue sans rang lirait l'état de la bascule sans le dire.
+    /// Ici, un fichier écrit après l'index de départ se voit sans vue, mais pas
+    /// sous `view: backend`, et la réponse dit `pending: w` et
+    /// `pending_rows: true`.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_view_reports_the_pending_rank_and_whether_it_holds_rows() {
+        let (dir, backend) = backend_qui_surveille();
+        backend.mount_reactions().unwrap();
+        attendre_les_usages(&backend, "depart", |u| u.contains("outils.rs"));
+        let before = backend.call("usages", json!({"name": "depart", "view": {"layer": "backend"}})).expect("the backend view");
+        let rank = before["view"]["rank"].as_i64().expect("the published rank");
+        assert_eq!(before["view"]["pending"], json!(rank + 1), "the pending rank is said: {before}");
+        std::fs::write(dir.path().join("sources/arrivee.rs"), "pub fn arrivee() {}\n").unwrap();
+        attendre_les_usages(&backend, "arrivee", |u| u.contains("arrivee.rs"));
+        let live = backend.call("usages", json!({"name": "arrivee"})).expect("usages without a view");
+        assert!(live["result"].to_string().contains("arrivee.rs"), "without a view, the live index is read: {live}");
+        let under = backend.call("usages", json!({"name": "arrivee", "view": {"layer": "backend"}})).expect("usages under the backend view");
+        assert_eq!(under["view"]["rank"], json!(rank), "the published rank is read: {under}");
+        assert_eq!(under["view"]["pending"], json!(rank + 1), "{under}");
+        assert_eq!(under["view"]["pending_rows"], json!(true), "the pending rank holds rows, and the answer says so: {under}");
+        assert!(!under["result"].to_string().contains("arrivee.rs"), "a row of the pending rank is not read under the view: {under}");
+        assert!(backend.stop_reactions().is_empty());
+    }
+
     /// **Une vue inconnue est refusée avant toute lecture** (page 28 d'arbre,
     /// contre-exemple de la vue inconnue) : le refus la nomme, et rien n'est lu
     /// sous une autre vue, ni l'ancre ni le disque.
