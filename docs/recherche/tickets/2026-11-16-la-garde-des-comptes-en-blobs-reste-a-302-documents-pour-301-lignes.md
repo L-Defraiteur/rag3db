@@ -90,3 +90,21 @@ APPbc952/PILOTEaf11 unefoisGO C7-FTS-GEN-GREEN-AF11-16nov : buildrc0/ELFb23414d3
 C7 reprend préparation seule après0479 (8distinct/11rawverts), ROHotfix archive133 favorable. Fetchmastercourant b0 inchangé ; APP84 exact=union5f59+modulecfgtestfix, horsdocs autresproduits préservés. Nouvellebranche piloteglobalr2 ; ancien349b intact. Canoniquecommitted2150/Common6439 ; jamais recopier la copie locale divergente ni modifier cachecommun gelé.
 
 Coordination : ne pas recopier race READYB5. Réutiliser lifecycle_protocol.py98ab exactSHAc67f072ba0134f97be6150547d80b8a23174937f2c964b0bdc30bec5e0309ec0 pour ready_bounds/phase stable/firstred/PIDstartCGUIDscript et rechecks. Son joblegacy lifecycle-provider désigne admissionprovider ; purpose explicite fts-global-models-and-pg, pas qualificationcycle ni noembedding simulé. Callbackc530 reste endpoint7878/noembeddinguniquement, non transplanté au globalBGE+PG. Contratowner global devra couvrir2providers+PG/nonce/READYsha/observed/lease et rechecks communs, ROgroupéeavantnouveauGO. Aucun appelhealth/PG/service en préparation.
+
+## Revue hotfixs du pilote global333de82220, sans exécution
+
+Réserve source de verdict final : fts-generation-global-r2/qualify.py exige
+la dernière ligne de check_features.log égale à `CHECK_FEATURES VERT`, alors
+que scripts/check_features.sh de APP84 termine réellement par
+`CHECK_FEATURES VERT 8/8`. Cela refuserait une canonique réussie. Porteur
+Recherche : publier un témoin contre ce vrai suffixe avant correction du
+contrôle, sans changer le script2150 ni rejouer la globale sous ce pilote.
+La recette doit ensuite être relue au nouveau SHA avant admission.
+
+Raccord owner toujours non livré, comme le document32 l'indique : la copie
+lifecycle_grant_producer._ready exige no_embedding_calls_authorized=true,
+absent du READY global qui autorise les appels seulement par la canonique.
+Ne pas injecter ce champ pour contourner une autre politique. Matérialiser et
+relire le producteur/observateur global2providers+PG et ses témoins avant GO.
+Source seulement ; aucun CPU, grant, service, Cargo ou natif lancé par la revue.
+Le présent constat n'est pas une qualification du reste du pilote ni du coût.
