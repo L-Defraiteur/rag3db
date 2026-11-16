@@ -29,12 +29,14 @@ Codeparsers distingue deux homonymes par leur position (`uuid_par_position`, 15 
 de rag3weaver (`stable_scope_keys`) les confond sans doute encore quand ils partagent nom, genre et ligne :
 un seul DEFINED_IN pour deux scopes.
 
-## Une question pour l'orchestration
+## Le bundle minifié ne s'indexe pas
 
-Un bundle minifié comme `app.js` doit-il entrer dans l'index ? 35 des 63 en viennent ; la porte du généré
-pourrait l'écarter.
+c7, 16 novembre 2026 : `app.js` n'a pas sa place dans l'index. Le manifeste de Lucie l'exclut depuis le 15 au
+soir (`workspace.index_exclude {minified_line_max_bytes: 5000, code_file_max_bytes: 1048576}`) ; la base
+mesurée par le banc ne portait pas cette exclusion. Avec elle, les 35 homonymes JavaScript partent ; restent
+les **28** (Python et la lambda de spdlog), qui sont ce ticket.
 
 ## Pour le fermer
 
-Un témoin rouge (deux lambdas sur une ligne d'un fichier Python), la clé qui les distingue, puis les 63
-recomptés par le banc.
+Un témoin rouge (deux lambdas sur une ligne d'un fichier Python), la clé qui les distingue, puis les 28
+recomptés par le banc, sous le manifeste de Lucie.
