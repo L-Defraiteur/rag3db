@@ -1,4 +1,5 @@
 """CPU-only supervision checks; never invoke GDB, zstd or a native test."""
+import ast
 import hashlib
 import json
 import os
@@ -36,6 +37,24 @@ class Tests(unittest.TestCase):
         commands = [command[i + 1] for i, x in enumerate(command) if x == '-ex']
         self.assertEqual(commands, ['info files', 'info sharedlibrary', 'thread apply all bt 12',
                                     'info registers rip rsp', 'quit'])
+
+    def test_actual_decompression_argv_matches_captured_usage(self):
+        usage = (HERE / 'fixtures/zstd-output-refusal.stderr.log').read_text()
+        self.assertIn('-o OUTPUT', usage)
+        self.assertIn('Incorrect parameter: --output=', usage)
+        tree = ast.parse((HERE / 'controller.py').read_text())
+        call = next(node for node in ast.walk(tree) if isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Name) and node.func.id == 'run'
+                    and isinstance(node.args[0], ast.List)
+                    and "inputs['zstd']" in ast.unparse(node.args[0]))
+        commands = []
+        namespace = {'inputs': {'zstd': Path('/usr/bin/zstd'),
+                                'compressed_core': Path('/private/input.zst')},
+                     'core': Path('/private/core'), 'phase': 'decompress', 'env': {},
+                     'run': lambda argv, *args: commands.append(argv)}
+        exec(compile(ast.Expression(body=call), '<actual decompress constructor>', 'eval'), namespace)
+        self.assertEqual(commands, [['/usr/bin/zstd', '--decompress', '--sparse', '--no-progress',
+                                     '-o', '/private/core', '/private/input.zst']])
 
     def test_effective_cpu_not_guessed(self):
         self.assertEqual(admitted_cpu('500000 100000', '8')['jobs'], 5)
