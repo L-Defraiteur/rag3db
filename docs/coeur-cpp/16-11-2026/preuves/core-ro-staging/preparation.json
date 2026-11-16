@@ -1,0 +1,93 @@
+{
+  "status": "STAGED ONLY; NOT ADMITTED",
+  "utc": "2026-11-16T17:05:28.024263+00:00",
+  "pilot_commit": "7ec74865853ad5556dd77dc9bc925c338b293c39",
+  "recipe_sha256": "9b0489196b524feabf2e4aca9870d57edd1a4956e872346bf6e232dc5b37bda2",
+  "directory": "/home/lucied/.cache/rag3weaver-build/cx-core-ro-01",
+  "scratch": "/home/lucied/.cache/rag3weaver-build/cx-coeur-core-ro",
+  "scratch_empty": true,
+  "unit_state": "LoadState=not-found\nMainPID=0\nControlGroup=\n",
+  "owned_processes": [],
+  "raw_resume_and_decompressed_core_absent": true,
+  "scripts": [
+    {
+      "path": "controller.py",
+      "bytes": 5251,
+      "sha256": "f0e13a781813e07e9640b8bfead334a8d1e7f7265585d90f2804e767afc941e2"
+    },
+    {
+      "path": "entry.py",
+      "bytes": 8326,
+      "sha256": "50a2865bf4abe03305592a163c767f407696a7a1bb1797b96d3b26aac360b355"
+    },
+    {
+      "path": "launch.sh",
+      "bytes": 422,
+      "sha256": "43858a757db23bcd0e925fc79e00d21e5738cb40baadca7fb45933cf23932ac9"
+    },
+    {
+      "path": "processes.py",
+      "bytes": 3162,
+      "sha256": "9effa22d5a98dbb59f818cc40fb2c5d978730acaea4c225cb104aed72ac037c3"
+    },
+    {
+      "path": "receipt.py",
+      "bytes": 1945,
+      "sha256": "6c635aefd709949c47781c9df49d22c62608f7421e9c0d6a97c2121eefdc84dc"
+    },
+    {
+      "path": "test_driver.py",
+      "bytes": 5061,
+      "sha256": "83cfe454ef54fce50da027f96db4e70d7b861de5b08ed1e8df334449f824099f"
+    }
+  ],
+  "inputs_and_preserved_copies": [
+    {
+      "name": "gdb",
+      "path": "/usr/bin/gdb",
+      "bytes": 35318992,
+      "sha256": "e2db863afa4d39c743d5057509aa18a9a6330d5b7ccd71a63ffe70c8b862810a",
+      "preserved_copy": "/home/lucied/.cache/rag3weaver-build/cx-core-ro-01/inputs/gdb",
+      "copy_sha256": "e2db863afa4d39c743d5057509aa18a9a6330d5b7ccd71a63ffe70c8b862810a"
+    },
+    {
+      "name": "zstd",
+      "path": "/usr/bin/zstd",
+      "bytes": 214344,
+      "sha256": "4f8335318c5471e1b481bbb9eebdcc9cd9a31b0bcfb5e2393857d656f33160e8",
+      "preserved_copy": "/home/lucied/.cache/rag3weaver-build/cx-core-ro-01/inputs/zstd",
+      "copy_sha256": "4f8335318c5471e1b481bbb9eebdcc9cd9a31b0bcfb5e2393857d656f33160e8"
+    },
+    {
+      "name": "elf",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-two-reds-01/raw/candidate/artifacts/concurrence",
+      "bytes": 31549968,
+      "sha256": "5029277b742a1391ae570cbe2403a4dd6857b38535404d9121f281d333b01f5c",
+      "preserved_copy": "/home/lucied/.cache/rag3weaver-build/cx-core-ro-01/inputs/elf",
+      "copy_sha256": "5029277b742a1391ae570cbe2403a4dd6857b38535404d9121f281d333b01f5c"
+    },
+    {
+      "name": "build_id_header",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-two-reds-01/raw/candidate/artifacts/build_id.h",
+      "bytes": 227,
+      "sha256": "650cec620083cd70467b41a0f2dad84620c0346b2ba5d16f135ad3591b19f577",
+      "preserved_copy": "/home/lucied/.cache/rag3weaver-build/cx-core-ro-01/inputs/build_id_header",
+      "copy_sha256": "650cec620083cd70467b41a0f2dad84620c0346b2ba5d16f135ad3591b19f577"
+    },
+    {
+      "name": "compressed_core",
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-two-reds-01/post-run-core/core.system.zst",
+      "bytes": 2387501,
+      "sha256": "77c13010a68f6ce77aabb1db849b087eb1bd8f682503490b8bd3fa568122d104",
+      "preserved_copy": "/home/lucied/.cache/rag3weaver-build/cx-core-ro-01/inputs/compressed_core",
+      "copy_sha256": "77c13010a68f6ce77aabb1db849b087eb1bd8f682503490b8bd3fa568122d104"
+    }
+  ],
+  "runtime_input_paths_unchanged": true,
+  "gdb_executed": false,
+  "zstd_executed": false,
+  "inferior_executed": false,
+  "poste_acquired": false,
+  "reservation": false,
+  "command_after_distinct_go": "bash /home/lucied/.cache/rag3weaver-build/cx-core-ro-01/launch.sh"
+}
