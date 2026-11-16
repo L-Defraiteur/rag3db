@@ -1748,3 +1748,33 @@ La chronologie est sur la page 03 ; ici les faits et les décisions.
   bout » est vert en branche, l'entrée témoin du registre n'est pas posée.
 - **Au matin, pour Lucie** : « oui tag » lucivy v4.3.9 ; l'heure de la fenêtre de la bascule de lib (tout est prêt) ; et
   savoir que la bascule des bases changera un peu le classement dense (découpage d'aujourd'hui) avant de la dire.
+
+## 4 h 0x – 6 h 1x (16 novembre) : la file vidée, la bascule des bases mesurée jusqu'au bout
+
+- **Atterris** : les garde-fous de la synchronisation sous les générations (ED, master vert depuis fff425b3c), la
+  pile d'outillage de G et le mode « tests seuls », les tests du shell à historique propre et le shell sur pipe
+  (hotfixs), la pile du déversement (deux pertes), la durabilité d'une base neuve sous coupure (+1,6 ms par cycle,
+  accepté) et le témoin de la suppression sans dommage (hotfixs), la pile de la résolution d'arêtes puis les
+  méthodes héritées (codeparsers, REGLES_DE_L_ANALYSE à 3), le renommage des vues et le refus typé du chargeur
+  (arbre), le repli par activation nommée et la coupe au plafond (embarquement), « index pas prêt » (recherche, le
+  point 7 côté outils), la pile des outils de l'agent et le grain du paquet (ED), le segment (96). Tous vérifiés :
+  gmail, zéro attribution. CI verte.
+- **Un défaut grave trouvé par B′** : un seul morceau de plus de 12 000 caractères faisait refuser tout un lot de 512
+  par le service granite, donc un index neuf sans aucun vecteur. Corrigé par embarquement (le client coupe au
+  plafond, le service coupe au lieu de refuser), le découpeur borné en caractères prêt chez ED. Le remède immédiat sur
+  le 7878 a été refusé par les permissions de la session d'embarquement et **personne ne l'a contourné** ; le correctif a
+  suffi. Le journal d'index ne disait pas les coupes (embarquement l'a dit lui-même) : lot court prêt.
+- **La bascule des bases de Lucie, mesurée jusqu'au bout par le banc** (page `docs/banc/16-11-2026/01`) : contre
+  l'oracle des bonnes réponses, la copie migrée est égale au rang 1 et nettement meilleure en dense (le découpage
+  d'aujourd'hui) ; contre un index neuf du même arbre (B′), rappel 0,977, même premier 28/30 ; les deux écarts
+  restants sont nommés : le plein texte compte l'histoire (lucivy 4.3.9), et un bruit numérique du calcul par lot sur
+  GPU (≤ 5,86e-5, attendu). **Rien de propre à la migration n'est perdu.** La bascule attend le pointeur lucivy et
+  le mot de Lucie.
+- **Le moteur** : le SIGSEGV du dictionnaire sous ASan (cœur, verdict vers 7 h 15) ; le refus « Schema changed » sans
+  fin non reproductible depuis le correctif du pool.
+- **Mes propres fautes de la nuit** : deux « à toi » à la fois (corrigé) ; un « pas de rejeu » contraire à la garde
+  (96 a tenu la règle) ; des commits de docs à la minute qui ont fait perdre deux courses à la garde de codeparsers
+  (je retiens mes notes pendant un push).
+- **Archi** est « waiting » et muet depuis 1 h 05 : à regarder au réveil de Lucie.
+- **Pour Lucie au réveil** : « oui tag » lucivy v4.3.9 (main prêt, CI verte) ; l'heure de la fenêtre de la bascule de
+  lib (tout prêt) ; la bascule des bases (changera un peu le classement, pour le mieux en dense).
