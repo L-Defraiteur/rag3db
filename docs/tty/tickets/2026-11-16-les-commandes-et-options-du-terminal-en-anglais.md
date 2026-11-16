@@ -405,3 +405,17 @@ RAW256 P/Q/scope conservés aux deux postes dans
 `3b84d438f0555fba63796851848d17654c119d62def58fb05dad842fdb38205c`.
 Aucun Cargo/metadata/build/test/service/autorité ni réessai après préparation.
 Les4autres absences ont été signalées avant toute acquisition élargie.
+
+
+### Élargissement ciblé autorisé, pins AVANT chaque acquisition
+
+C7 autorise les5paquets suivants uniquement, lock090cc4 inchangé ;
+aucun Cargo/metadata/build/test/autorité pendant cette préparation.
+- `ld-lucivy 4.3.9` : `24424a98439ff03e1fb75fc749a4d88d720ca5b9084b6c1a885dcd6cfe99afb7` (registry+https://github.com/rust-lang/crates.io-index).
+- `luciole 4.3.9` : `9a9f91d0e6326601e8c7c2d3390af3b2d5199c459d3bc5a1d9a3200d2969d0f9` (registry+https://github.com/rust-lang/crates.io-index).
+- `lucistore 4.3.9` : `7ccae99afa56dc99810a24f1c322ebb94b5962a0adf9a738576c1b565f92b8a2` (registry+https://github.com/rust-lang/crates.io-index).
+- `lucivy-core 4.3.9` : `8343104e0dfec41a1341f8c5092cd0cf3e5dca0b98d07d00f1a8ceca5e11c71a` (registry+https://github.com/rust-lang/crates.io-index).
+- `sparse-vector 4.3.9` : `8d135db2852e30d5d05b412c6a6e4f161d2ee52168ed7e3e5bc81348e8071a7c` (registry+https://github.com/rust-lang/crates.io-index).
+
+Staging distinct par paquet ; cache .crate seul, création atomique si absent.
+Si déjà présent ou concurrent, valider hash/type/UID sans écraser.
