@@ -1,0 +1,61 @@
+{
+  "proof_commit": "cae3f3276e9ec473ba3ea7d4f551b786e48dff3b",
+  "sha_manifest_sha256": "a99c45adcd03fea6dce9f700cc3e17a204ae4548ae24e6161f008b656d8e3b2d",
+  "files_rehashed": 28,
+  "three_exact_tests": [
+    {
+      "name": "unsupported_text_indexing_options_are_reported_once_per_field",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "pid": 1576350,
+      "start": "118238353"
+    },
+    {
+      "name": "warning_escapes_field_names_without_extra_lines",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "pid": 1576352,
+      "start": "118238353"
+    },
+    {
+      "name": "reporting_preserves_existing_field_indexing",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0,
+      "pid": 1576354,
+      "start": "118238353"
+    }
+  ],
+  "compile_offline_success": true,
+  "compile_log_non_json_lines": 8,
+  "memory_effective_bytes": 34359738368,
+  "jobs": 4,
+  "source": "890c86af44989f3fea6c6fa62fd40d688b4084df",
+  "green_elf_recorded_sha256": "d10152c78102ee701ef2b808fc2627d7e8044866fcbc5cebe9e5a23550958adc",
+  "red_elf_recorded_sha256": "c2478e972de2295a79c41cd651461653f38706e02cccd2ceace45c49fe33b01b",
+  "elf_bytes_independently_rehashed": false,
+  "common_verdict": "VERT",
+  "authority_state_recorded": "termine",
+  "owned_alive_recorded": 0,
+  "unknown_unattributed_preserved": 12,
+  "unknown_counts_entry_post_tests_final": [
+    12,
+    13,
+    12
+  ],
+  "unknown_not_converted_to_absence": true,
+  "final_control_before_deadline": true,
+  "warnings_observed": 2,
+  "global_core_qualified": false,
+  "corpus_72_qualified": false,
+  "ulp_qualified": false,
+  "merge_approval": false,
+  "new_execution": false,
+  "limitations": [
+    "read-only consistency of immutable proof blobs; no proc rescan",
+    "ELF hashes corroborated between receipts, no binary file read",
+    "warning behavior tested; indexed=false is not implemented by this diagnostic"
+  ]
+}
