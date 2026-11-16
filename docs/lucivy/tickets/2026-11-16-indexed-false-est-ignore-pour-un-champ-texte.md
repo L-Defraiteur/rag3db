@@ -512,3 +512,41 @@ ROpreuvesBanc8040fe84a9 favorableauxSEULS9jugesmémoire sur9d6451f721 :
 attestés. AucunELF/proc/Cargo/base/service parBanc ;pasdelivery/core/corpusFS/
 7.2/ULP/PR42. Rouge81b0,archives2postesconservés,ticketouvert. Statut final
 mémoirequalifié transmisC7,sansnouveauRUN/GO implicite.
+
+C7 accepte suffisance9mémoire aprèsRO8040, autorisePRÉPA auMÊMEticket de
+recettes/pinsséparés des2parcoursnatifs corpusréel surELFs1ee déjàcompilés si
+hash/profilidentiques. Maintenant0Cargo/ELFexécuté/contactcorpus/service/main/tag,
+pasrerun9verts. Auditcode+preuvesarchivéesseulement : sélectioneffective,
+erreurslecture/UTF8/fallbackhistoriques,11queries/frontièreentrée→builder,
+corpusfigé/provenance/attendu(refusnommé≠vert)/budget/firstredSTOP/ledgers/
+finwholeàproposer etRO avantnouveauGO. Aucunereselectionposthoc niassimilation
+gatepureàadmissionFS ;source1ee/9HOLD/core/ULP7.2/PR42bornés.
+
+AuditcodePREPA natifs sanscontactcorpus : dérivéexactwith_fixture(corpus300)
+gate11AVANTscratch/builder,lecturetriéeDFSmaisIO/metadata/UTF8sautés enloader
+historique, fallbacksynthetique encorepossibleviaABSENT_OKàinterdire. Kernel
+préfixe300figéconnu0mutex : attendurefusnomméUncoveredPanel/rc101,pasparitéverte.
+Groundtruth exactv3_ground_truth_contains : collector5000UNSORTED/IO-skip/UTF8-skip/
+entries.flatten puisreturnvert sivuevide, constructeurAVANTpanel15(defaults≠11).
+OraclesrelisentFS(lossy/skip) ;run_panelpeutcompterOKsur0=0. V3_INDEX_DIRpeut
+réouvrir/supprimerindexpersistant, doncstrictementinterdit. Vueeffectiveordonnée
+5000NONépingléedanspreuves (seultarbre8507hashé) : pasinventerpin/couvertureFS.
+PointconcretàtrancherC7aprèsROprépa : AseuldiagnosticrefusfigéouHOLDparité ;
+BqualificationFSHOLDtantquevuereadonce/ordre/erreurs+admissionavantbuilder
+ne sontpasobservables. PasdechangementSOURCE/corpus/query/cap pourfairevert.
+
+AdmissioncorpusFS découverte et portée AVANTsourcefix substantiel dans
+[le ticketFS dédié](2026-11-16-l-admission-du-corpus-fs-ne-garantit-pas-la-vue-consommee.md),
+liéaupèrecoreetindexed-false. C7confirme : pasrerunArefusprédit, jeufixé
+nonadmissibleparité ;BnatifHOLD. Prépaobservablevueordonnée/readonce/IOUTF8fatal/
+panel15avantbuilder/ni0=0vert/nireuse-deleteV3,4témoinsauvrai raccordFS+spies,
+ROavantimplsubstantielle/natif. Aucuncorpus/ELF/Cargo/servicecontacté,9mémoire
+qualifiésSource1ee conservés,aucunequalificationFSdéduite.
+
+Prépa16/contratFSnouveauticket liéaux2parents : Aentrée fixéeNONadmissible
+(pasdebudget/rerunrefus),BnatifHOLD,ELFs1ee/profils historiquespinnés séparément,
+Bvueeffective5000/orderNULLexplicitementnonobservée. Contratobservable
+vueordonnée/readonce/hash+UTF8fatal/panel15avantbuilder/referencesnapshot/
+freshbuildernireuse-delete,4vraisraccordsFS+spies/redfirst définisNONimplémentés.
+RORecherche demandéeavantimplsubstantielle/natif ;0CorpusContact/ELF/Cargo/
+Rust/service/main/tag,toutcodeSource1ee/neufverts préservé.

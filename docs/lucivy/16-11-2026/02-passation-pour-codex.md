@@ -365,3 +365,9 @@ Poste réellementrendu+notifiéC7/Recherche avantarchivehorsposte. ELFvert0a61
 ROPC+portable,anciens7c6f/106fa/proofs2hostsconservés,T3552unique. ROBancpreuves
 demandée,qualificationmémoireseulement :2natifs/corpus/core/9HOLD/ULP7.2/PR42
 nonqualifiés ;ticketouvert/pasmain/tag/deliveryduwarningdéduit.
+
+AprèsRO8040 etdemandenatifs : prépa16 et ticket admissioncorpusFS dédié
+liéprofilcore+indexedfalse. AKernel300fixedinputnonadmissible/pasrerun ;
+Bgroundtruth15HOLD(order5000nonpinné/FSskip/UTF8/vide0=0/reuse). ContratFS
+observable readonce/ordre/panelavantbuilder et4spiesredfirst proposés,ROavant
+implsubstantielle ;aucuncontactcorpus/ELF/Cargo/sourceRustchangé.

@@ -39,3 +39,11 @@ avoir ses propres témoins rouges puis verts, et ne pas transformer une absence
 de données en succès. Fin : profil par défaut isolé, prérequis manquants rendus
 explicitement non qualifiés, preuve de non accès aux index personnels et racines
 privées. Aucun test de ce ticket joué à ce stade.
+
+AdmissioncorpusFS découverte et portée AVANTsourcefix substantiel dans
+[le ticketFS dédié](2026-11-16-l-admission-du-corpus-fs-ne-garantit-pas-la-vue-consommee.md),
+liéaupèrecoreetindexed-false. C7confirme : pasrerunArefusprédit, jeufixé
+nonadmissibleparité ;BnatifHOLD. Prépaobservablevueordonnée/readonce/IOUTF8fatal/
+panel15avantbuilder/ni0=0vert/nireuse-deleteV3,4témoinsauvrai raccordFS+spies,
+ROavantimplsubstantielle/natif. Aucuncorpus/ELF/Cargo/servicecontacté,9mémoire
+qualifiésSource1ee conservés,aucunequalificationFSdéduite.

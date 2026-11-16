@@ -1,0 +1,74 @@
+{
+  "status": "PREPARATION ONLY; no implementation or execution",
+  "baseline_source": "1ee5b366ca67d7fe6926da232a6650d1b1d81407",
+  "ticket": "docs/lucivy/tickets/2026-11-16-l-admission-du-corpus-fs-ne-garantit-pas-la-vue-consommee.md",
+  "native_consumer": "lucivy_core/tests/test_sfx_v3_ground_truth.rs::v3_ground_truth_contains",
+  "proposed_shared_entry": "run_v3_contains_case(plan, fs_backend, fresh_builder, compare_snapshot)",
+  "native_backend": "StdFs delegates actual enumerate/metadata/read through the shared entry",
+  "witness_backend": "SpyStdFs delegates the same operations on small temporary fixtures; deterministic injected errors, never chmod assumptions",
+  "immutable_view_fields": [
+    "ordinal",
+    "relative_path",
+    "origin",
+    "sha256",
+    "utf8_bytes",
+    "panel_fingerprint"
+  ],
+  "event_order": [
+    "plan_and_policy_bound",
+    "root_and_paths_checked",
+    "candidate_read_once",
+    "hash_and_utf8_checked",
+    "ordered_view_frozen",
+    "all_fifteen_queries_covered",
+    "view_published",
+    "fresh_builder_entered",
+    "compare_same_snapshot",
+    "whole_final_attested"
+  ],
+  "forbidden_effects": [
+    "private_path_read",
+    "silent_io_skip",
+    "lossy_decode",
+    "reread_for_oracle",
+    "reselect_after_refusal",
+    "reuse_index",
+    "persist_index",
+    "delete_index"
+  ],
+  "vacuities": [
+    {
+      "id": "empty_view",
+      "baseline": "successful early return",
+      "required": "named EMPTY_VIEW refusal; zero builder/report/compare"
+    },
+    {
+      "id": "io_failure",
+      "baseline": "skip enumeration/metadata/read failure and substitute another or return empty",
+      "required": "named IO_ERROR with operation/path; no substitute, zero builder"
+    },
+    {
+      "id": "invalid_utf8",
+      "baseline": "skip or lossy conversion of selected text",
+      "required": "named UTF8_ERROR; exact bytes kept, zero builder"
+    },
+    {
+      "id": "uncovered_panel",
+      "baseline": "builder then empty reference/index equality accepted",
+      "required": "named UNCOVERED_PANEL before builder; same fifteen queries"
+    }
+  ],
+  "companion_properties": [
+    "positive FS fixture reaches builder once",
+    "same real consumer entry for native and spies",
+    "one read per retained document shared by hash/decode/index/oracle",
+    "ordered view published before builder",
+    "zero reuse/delete/persist even with forbidden options",
+    "forbidden paths refused before content read"
+  ],
+  "remaining_design_choices": [
+    "explicit manifest transport versus first capture published before builder",
+    "preserve capture order; deterministic sorting only if policy approved before any corpus/result"
+  ],
+  "qualification_preserved": "Nine memory judges on 1ee5 stay historical and bounded; no FS/native/core/ULP qualification added"
+}
