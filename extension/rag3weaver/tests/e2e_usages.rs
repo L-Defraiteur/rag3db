@@ -1128,5 +1128,51 @@ fn two_bases_defining_the_name_are_not_guessed() {
     catalog.lock().unwrap().ingest_code(&analyze("/projet", fichiers)).unwrap();
     let cat = catalog.lock().unwrap();
     assert_eq!(cibles_vers(&cat, "run", "reset"), Vec::<(String, String)>::new(), "two bases define reset: no guess");
+
+/// **A member of an external object is not a homonym of the project** (ticket « un membre externe platform
+/// se lie à un homonyme », 11 November 2026): `process.platform` in a Node test is the member of Node's global
+/// `process`, not the top-level `const platform` of `install.js`.
+#[test]
+#[ignore]
+fn an_external_member_is_not_a_project_homonym() {
+    let catalog = setup();
+    let fichiers = vec![
+        ("tools/nodejs_api/install.js".to_string(), "const process = require(\"process\");\nconst platform = process.platform;\nconst arch = process.arch;\nmodule.exports = { platform, arch };\n".to_string()),
+        (
+            "tools/nodejs_api/test/test_database.js".to_string(),
+            "describe(\"Database close\", function () {\n  it(\"closes\", async function () {\n    if (process.platform === \"win32\") {\n      this.skip();\n    }\n  });\n});\nfunction closeTest() {\n  if (process.platform === \"win32\") {\n    return;\n  }\n}\n".to_string(),
+        ),
+    ];
+    catalog.lock().unwrap().ingest_code(&analyze("/projet", fichiers)).unwrap();
+    let cat = catalog.lock().unwrap();
+    let all = cat.execute_raw("MATCH (a:Scope)-[c:CONSUMES]->(b:Scope {name: 'platform'}) RETURN a.name, a.file_path, c.resolution").unwrap();
+    let from_test: Vec<String> = all
+        .rows
+        .iter()
+        .filter(|x| x[1].as_str().unwrap_or("").contains("test_database"))
+        .map(|x| format!("{} {}", x[0].as_str().unwrap_or(""), x[2].as_str().unwrap_or("")))
+        .collect();
+    assert_eq!(from_test, Vec::<String>::new(), "process.platform is Node's, not install.js's: {:?}", all.rows);
+}
+
+/// The real files of the repository (ticket « un membre externe platform se lie à un homonyme »):
+/// `test/test_database.js` (`const process = require("process")`, then `process.platform`) and
+/// `src_js/rag3db_native.js` (the global `process.platform`) are not users of `install.js`'s `platform`.
+#[test]
+#[ignore]
+fn an_external_member_is_not_a_project_homonym_in_the_real_files() {
+    let depot = format!("{}/../..", env!("CARGO_MANIFEST_DIR"));
+    let fichiers: Vec<(String, String)> = ["tools/nodejs_api/install.js", "tools/nodejs_api/test/test_database.js", "tools/nodejs_api/src_js/rag3db_native.js"]
+        .iter()
+        .map(|p| (p.to_string(), std::fs::read_to_string(format!("{depot}/{p}")).unwrap_or_else(|e| panic!("{p} : {e}"))))
+        .collect();
+    let catalog = setup();
+    catalog.lock().unwrap().ingest_code(&analyze("/projet", fichiers)).unwrap();
+    let cat = catalog.lock().unwrap();
+    let edges = cat.execute_raw("MATCH (a:Scope)-[c:CONSUMES]->(b:Scope {name: 'platform'}) WHERE a.file_path <> b.file_path RETURN a.file_path, a.name, c.resolution").unwrap();
+    let mentions = cat
+        .execute_raw("MATCH (a:Scope)-[m:MENTIONS]->(y:Symbol {name: 'platform'}) RETURN a.file_path, a.name, m.kind, m.qualifier_types, m.import_modules, m.untyped_receiver")
+        .unwrap();
+    assert!(edges.rows.is_empty(), "process.platform is Node's: {:?}\nmentions {:?}", edges.rows, mentions.rows);
 }
 
