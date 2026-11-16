@@ -23,6 +23,7 @@
 #include <thread>
 
 #include "../flaky_checkpointer.h"
+#include "common/build_id.h"
 #include "common/string_format.h"
 #include "graph_test/private_graph_test.h"
 #include "main/connection.h"
@@ -394,6 +395,9 @@ TEST_F(StringRewriteAcrossAddColumn, AutomaticCheckpointsBetweenAddsAndDrops) {
     const bool diagnostic = std::getenv("RAG3DB_STRING_DIAGNOSTIC") != nullptr;
     auto state = std::make_shared<StringDiagnosticState>();
     if (diagnostic) {
+        std::cerr << "BUILD_ID=" << RAG3DB_BUILD_ID << std::endl;
+        std::cerr << "[string-diagnostic] configured-pool=" << systemConfig->bufferPoolSize
+                  << " configured-threads=" << systemConfig->maxNumThreads << std::endl;
         const FlakyCheckpointer probe([state](rag3db::main::ClientContext& context) {
             return std::make_unique<StringDiagnosticCheckpointer>(context, state);
         });
