@@ -90,6 +90,11 @@ def main():
         target=str(TARGET), gitlink=git('ls-tree', 'HEAD', 'extension/rag3weaver/codeparsers'))))
     env = dict(os.environ, POSTE_MEM_MAX='32G', RAG3WEAVER_BUILD_MEMORY_HIGH='0', CARGO_BUILD_JOBS='8')
     env.pop('RAG3WEAVER_MOTEUR_ANCIEN', None)
+    runtime = Path('/run/user') / str(os.getuid())
+    bus = runtime / 'bus'
+    assert runtime.resolve() == runtime and bus.resolve() == bus and bus.is_socket()
+    assert runtime.stat().st_uid == bus.stat().st_uid == os.getuid()
+    env.update(XDG_RUNTIME_DIR=str(runtime), DBUS_SESSION_BUS_ADDRESS='unix:path=' + str(bus))
     command = ['timeout', '--signal=TERM', '--kill-after=15s', '7200s', 'python3',
         str(CRATE / 'scripts/confiner_validation.py'), 'lancer', '--delai', '7100',
         '--preuves', str(PROOFS / 'supervision'), '--', 'python3', str(PROOFS / 'qualify.py'), '--inside', expected]
