@@ -34,7 +34,7 @@ def main():
     assert cache.resolve() == cache and cache.stat().st_uid == os.getuid()
     assert not destination.exists() and not destination.is_symlink()
     assert not source.exists() and not source.is_symlink()
-    staging = Path.home() / '.cache/rag3weaver-build/cx-tty-crate-ld-lucivy-439'
+    staging = Path.home() / f'.cache/rag3weaver-build/cx-tty-crate-{NAME}-439'
     staging.mkdir(mode=0o700)
     proof = dict(package=package, lock_sha=LOCK_SHA, destination=str(destination),
                  before=dict(cache_absent=True, source_absent=True))
