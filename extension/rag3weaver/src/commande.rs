@@ -1851,6 +1851,18 @@ mod tests {
         assert!(!observer(&cmd("cargo", &["test"])).ecrit);
     }
 
+    /// **Git commands that only read are free** (G1, Algareth's empirical runs, 16 November 2026: an
+    /// approval was asked for a `git rev-parse --show-toplevel`). `rev-parse`, `ls-files` and `describe`
+    /// read the repository and write nothing.
+    #[test]
+    fn git_rev_parse_ls_files_and_describe_are_read_only() {
+        for args in [&["rev-parse", "--show-toplevel"][..], &["ls-files", "src/"][..], &["describe", "--tags"][..]] {
+            let faits = observer(&cmd("git", args));
+            assert!(!faits.ecrit, "git {args:?} is read-only");
+            assert!(!faits.reseau && !faits.irreversible, "git {args:?} neither leaves the machine nor destroys");
+        }
+    }
+
     #[test]
     fn on_reconnait_l_elevation_le_shell_et_l_irreversible() {
         assert!(observer(&cmd("sudo", &["ls"])).eleve);
