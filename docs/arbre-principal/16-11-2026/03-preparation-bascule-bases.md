@@ -65,3 +65,9 @@ Action `diagnostic code-rag3db-depot --table File` de host-phase.py : session pu
 ### Arbitrage C7 : sonde live-ids uniquement
 
 La proposition dry_run ci-dessus est remplacée AVANT lancement : action diagnostic appelle UNIQUEMENT /backend/fts-live-ids, table File, même manifeste portable, session fraîche. Aucun /backend/maintain dans cette branche ; aucun graphe, compact, purge, ensure/warmup ni autre base. Borne totale60secondes sous poste32GiB commun ; client45secondes. Autorisation C7 distincte reçue pour ce diagnostic seulement. Corps initial toujours perdu ; handle absent ne prouverait pas index disque absent.
+
+## Inventaire froid portable — recette exécutable distincte
+
+`bascule/inspect-cold-copy.py` : source FIXE snapshotG prélib/code-rag3db-depot ; destination neuve `bascule-live-20261116/cold-inspection-01`, chmod0700. Avant lecture native réelle, fixtures absente/corrompue sous destination, même binaire RO43cff et lib59ac SHA vérifiés ; refus nonzero et inventaire inchangé requis. Reflink explicite de l'ensemble snapshot, hashes SHA256 de TOUS fichiers source/copie avant et après, erreur au premier écart. `inspect-fts.py` lit config/génération/shards/meta.json et inventorie tous fichiers ; fixtures Python3/3 absente/corrompue/layout valides sans mutation. Il ne qualifie PAS le décodage Lucivy.
+
+Lecture C++ readOnly/tampon1GiB depuis copie seulement, BUILD_ID réel attendu59ac : show_tables, table_info File/Scope, métadonnées fts_* et forme, cellules org/project avec comptesFile/Scope. Aucun chargé de manifeste ni Catalog, aucun extensionLOAD, CREATE, purge ou service. Sorties intégrales privées ; mutation de la copie même latérale = rouge. Une seule portée commune neuve poste32GiB/délai600s, chaque sous-processus90s, pasretry. HôteG reste ouvert, ancien snapshot conservé. L'ouverture immutable Lucivy4.3.9 reste NON QUALIFIÉE jusqu'à outil séparé ; cet inventaire ne peut donner de GOmaintenance.
