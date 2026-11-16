@@ -3,6 +3,7 @@
 #include "common/constants.h"
 #include "common/serializer/deserializer.h"
 #include "common/serializer/serializer.h"
+#include "common/test_hooks.h"
 #include "storage/enums/residency_state.h"
 #include <bit>
 
@@ -53,6 +54,7 @@ uint64_t DictionaryChunk::getStringLength(string_index_t index) const {
 }
 
 DictionaryChunk::string_index_t DictionaryChunk::appendString(std::string_view val) {
+    common::TestHooks::failOnceIfArmed(common::TestFailPoint::STRING_DICTIONARY_APPEND);
     const auto found = indexTable.find(val);
     // If the string already exists in the dictionary, skip it and refer to the existing string
     if (enableCompression && found != indexTable.end()) {

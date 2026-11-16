@@ -62,9 +62,15 @@ void TestHooks::armFailPointFromEnvironment() {
         armedFailPoint = static_cast<uint8_t>(TestFailPoint::ADD_COLUMN_BETWEEN_CHUNKED_GROUPS);
         return;
     }
+    if (std::strcmp(at, "string-dictionary-append") == 0) {
+        fprintf(stderr, "TEST HOOK: the next string appended to a dictionary will fail\n");
+        armedFailPoint = static_cast<uint8_t>(TestFailPoint::STRING_DICTIONARY_APPEND);
+        return;
+    }
     fprintf(stderr,
         "TEST HOOK: unknown point RAG3DB_TEST_FAIL_AT=%s ignored (known: "
-        "rel-commit-between-directions, add-column-between-chunked-groups)\n",
+        "rel-commit-between-directions, add-column-between-chunked-groups, "
+        "string-dictionary-append)\n",
         at);
 }
 
@@ -73,17 +79,33 @@ void TestHooks::armFailPoint(TestFailPoint point, uint32_t delayMs) {
     armedFailPoint = static_cast<uint8_t>(point);
 }
 
+static const char* failPointName(TestFailPoint point) {
+    switch (point) {
+    case TestFailPoint::REL_COMMIT_BETWEEN_DIRECTIONS:
+        return "rel-commit-between-directions";
+    case TestFailPoint::ADD_COLUMN_BETWEEN_CHUNKED_GROUPS:
+        return "add-column-between-chunked-groups";
+    case TestFailPoint::STRING_DICTIONARY_APPEND:
+        return "string-dictionary-append";
+    default:
+        return "none";
+    }
+}
+
 void TestHooks::failOnceIfArmed(TestFailPoint point) {
+    // Le chemin chaud (appendString passe ici à chaque chaîne) : une lecture simple quand rien
+    // n'est armé, avant l'échange atomique.
+    if (armedFailPoint.load(std::memory_order_relaxed) != static_cast<uint8_t>(point)) {
+        return;
+    }
     auto expected = static_cast<uint8_t>(point);
     if (point != TestFailPoint::NONE && armedFailPoint.compare_exchange_strong(expected,
                                             static_cast<uint8_t>(TestFailPoint::NONE))) {
         if (const auto delay = armedFailDelayMs.load(); delay > 0) {
             std::this_thread::sleep_for(std::chrono::milliseconds(delay));
         }
-        throw RuntimeException(std::string("TEST HOOK: failure injected at ") +
-                               (point == TestFailPoint::REL_COMMIT_BETWEEN_DIRECTIONS ?
-                                       "rel-commit-between-directions" :
-                                       "add-column-between-chunked-groups"));
+        throw RuntimeException(
+            std::string("TEST HOOK: failure injected at ") + failPointName(point));
     }
 }
 

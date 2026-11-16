@@ -41,10 +41,15 @@ enum class TestDiePoint : uint8_t {
 //  - add-column-between-chunked-groups : dans NodeGroup::addColumn, après la colonne neuve posée
 //    sur le premier groupe de lignes d'un groupe de nœuds : un ADD COLUMN refusé à mi-chemin,
 //    comme par un pool plein (le ticket du SIGSEGV de DdlEveryMinute, 15 novembre 2026).
+//  - string-dictionary-append : au début de DictionaryChunk::appendString, avant que la chaîne
+//  entre
+//    au dictionnaire ; un ajout refusé comme par un pool plein (le ticket du point de reprise qui
+//    meurt dans le dictionnaire d'une colonne de chaînes, 16 novembre 2026).
 enum class TestFailPoint : uint8_t {
     NONE = 0,
     REL_COMMIT_BETWEEN_DIRECTIONS = 1,
     ADD_COLUMN_BETWEEN_CHUNKED_GROUPS = 2,
+    STRING_DICTIONARY_APPEND = 3,
 };
 
 struct TestHooks {
