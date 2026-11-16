@@ -76,3 +76,6 @@ ED99 atterrisousgardenormalefff9/vraiPOSTEPUSH/FF+3contrôlesdeuxhostsLUS, C7LSR
 
 
 Blocage Cœur détaillé identifié : refus contrôleplateforme«possible cybersecurity risk», pas simple panne de session. Nouveau ticketorchestration2026-11-16-la-session-coeur-est-bloquee-par-le-controle-de-la-plateforme.md crééavanttransmission. Plusdereprise/fork/autresessionpourcontournerce refus ; analyseC1enattenterésolutionaccès, sources/proofspréservés, aucun testnatif. Autreslotsindépendantsautoriséscontinuent.
+
+
+Codeparsers troisréservesROtotalelevées+onzeCPUverts/C7lecturepilotscanneretPC8copies/pinP02sourcespropres/phasesvides : deuxGOHISTBASEP02 puisCANDP02 conditionnels1800APRÈSpostechacun, CsiBVERTquiescentpubliéuniquement, troisièmecomparaisonPURE60conditionnelle. Voirrapportpourallocationscomplètes/ACK2ledgers/limitesempreintes/profile/corpus1840/4oraclesmanuels ; pasREGLES8/push/globalreplay. HotfixROWSpoursuitROsourceindépendant ; Cœur refusplateformeresteSTOP, aucuntransfertC1.
