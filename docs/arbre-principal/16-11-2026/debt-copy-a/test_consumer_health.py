@@ -2,7 +2,9 @@
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
-import json,tempfile,unittest
+import ast,json,tempfile,unittest
+import lifecycle as c
+from test_ready_consumption import fixture,driver_body
 import qualify as q
 
 IDENTITY=dict(service='rag3weaver-embeddings',modele='granite-278m',dim=768,factice=False,dual=False,sparse=False,precision='Flex32',executable='/fixture/embeddings',max_chars_per_text=12000)
@@ -40,5 +42,21 @@ class ConsumerHealth(unittest.TestCase):
   raw=b'x'*1048577
   with self.assertRaises(ValueError):self.invoke(raw)
   self.assertTrue(any(p.stat().st_size>0 for p in self.root.iterdir()),'no evidence for oversized response')
+
+ def test_actual_post_writer_raccord_rechecks_phase_before_get(self):
+  body=driver_body()
+  start=next(i for i,n in enumerate(body) if isinstance(n,ast.Expr) and isinstance(n.value,ast.Call) and ast.unparse(n.value.func)=='writer')
+  stop=next(i for i in range(start,len(body)) if isinstance(body[i],ast.Expr) and isinstance(body[i].value,ast.Call) and ast.unparse(body[i].value.func)=='q.health')
+  ready,phase=fixture();phase['authority']['etat']='termine';phase['snapshot_observed_monotonic']=150.
+  grant=dict(identity=IDENTITY,valid_until_monotonic=590.)
+  class Response:
+   status=200
+   def __enter__(self):return self
+   def __exit__(self,*args):pass
+   def read(self,limit):return json.dumps(dict(IDENTITY,usage=dict(baux=0,en_cours=0))).encode()
+  namespace=dict(vars(c),ready=ready,grant=grant,end=600.,cfg={},env={},profile={},nonce='fixture',writer=lambda *a:None)
+  with patch.object(q,'P',self.root),patch.object(q,'provider_identity'),patch.object(q.time,'monotonic',return_value=150.),patch.object(c.protocol,'read_phase_state',return_value=phase),patch.object(q.urllib.request,'urlopen',return_value=Response()) as contact:
+   with self.assertRaises(ValueError):exec(compile(ast.Module(body=body[start:stop+1],type_ignores=[]),'<actual-post-writer-health>','exec'),namespace)
+   contact.assert_not_called()
 
 if __name__=='__main__':unittest.main()
