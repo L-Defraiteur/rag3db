@@ -90,3 +90,11 @@ GOexactDDE6 closROUGEINATTENDU : libcompile0 puis Cargo refuse targete2e_equipie
 Reprise GOexact223/72338 acquise après montagecorrigé etRO : rapport22/2111SHA9d82deuxpostes0écart/fixturesCOMPLÈTES+2ELF, ledgerpub1197104AVANTmarker/juges. DEUXrougesprécis réellementvus (2juges4invocs, chaqueparent+enfant0/1/0), firstredexpectedimmutable, scopeROUGE101/0restes/TERMINE/bus+cggone, final1830,931sdepuisSTARTORIGINAL<1935sansreset ; post130ownedgone/11UNKNOWNglobauxconservés. Avanttoutdiff suivant, archive etprésentticketpubliés. C7 autorise CORRECTIFTESTS commun AVANTadd_files/commitHEAD viaSandboxConfig existant/extrareadQ/targetsprivés, sansprodAPI/registry/race/setenvglobal ; publier UNAPP+protocole2verts/recette puisROavantnouveauGOdistinct/fenêtreNEUVE. Source223/049/1bd etanciensrouges restentfigés, aucunancienEND/GOréactivé. D6/7200/Vertexréel/F8/libentière/NAVencoreNONJOUÉS.
 
 CorrectifTESTS préparé après preuvepub480604 etrattachementce4dd8 AVANTcode : rapport23, helperpartagé cfgtest connect_declared_sandbox<realSandboxConfig>, absenceFILE=>normalinchangé ; fichier/targetrootcanoniques, Landlock/réseaufermé/extra_writevide/approval/tokensrepo_target+tasktmp/offline/jobsMINposte validés, injectionVERBATIM avantwrite/add_files/commitHEAD. Deuxvraissetups appelants mêmehelper, aucuneAPIprod. Parent déclaretargetprivéVIDE parCommand.env/j1sanssetenvglobal ; enfantassertmanifest+HEAD puistracepositivefiltrée, parentrendstdoutenfantpourprouver4invocsvertes. Protocole2verts1/0/0chaqueparentenfant+recetteNEUVE1800MAX/global1935proposés,NATIFNONJOUÉ/ancienGOexpiré. NouveauAPPsource/RO puispilote/GOdistinct nécessaires, ticketOUVERT.
+
+### Préparation du VERT ciblé après les deux rouges 223
+
+Le [pilote ciblé24](../16-11-2026/24-pilote-vert-bac-cible.md) prépare les deux
+bâtis/ledger2ELF publiés aux deux postes avant deux juges/quatre invocations.
+Source742, même cible, archives223 et reçus rouges conservés. Proposition600s
+communes / 795s extérieures, nouveau GO exact requis avant natif. Aucun ancien
+GO ou échéance13nov/rouge223 réactivé ; ticket reste ouvert.
