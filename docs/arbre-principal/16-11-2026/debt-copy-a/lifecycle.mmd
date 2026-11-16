@@ -1,0 +1,8 @@
+%% tool: observer_cycle_vie
+%% description: Observer la disponibilité déjà acquise sur fixture privée sans index ni requête de recherche.
+%% param: nonce string! -- Corrélation publique observée dans SearchMeta.query.
+%% param: options json! -- Consigne de disponibilité figée par le manifeste.
+%% result: source.meta
+
+graph LR
+    source["SearchSourceNode(target_name='Scope', query=$nonce, options=$options, mode='indexed')"]

@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Receipt to create only after an exact C7 writer/embedding GO and fresh Embar coordination; no current grant exists.",
+  "type": "object",
+  "required": [
+    "provider",
+    "model",
+    "dimension",
+    "c7_reference",
+    "embar_reference",
+    "restart_authorized",
+    "observed_monotonic",
+    "valid_until_monotonic",
+    "pid",
+    "start",
+    "exe_sha256",
+    "identity",
+    "nonce",
+    "ready_sha256",
+    "no_embedding_calls_authorized"
+  ],
+  "properties": {
+    "provider": {
+      "const": "127.0.0.1:7878"
+    },
+    "model": {
+      "const": "granite-278m"
+    },
+    "dimension": {
+      "const": 768
+    },
+    "c7_reference": {
+      "type": "string",
+      "minLength": 1
+    },
+    "embar_reference": {
+      "type": "string",
+      "minLength": 1
+    },
+    "restart_authorized": {
+      "const": false
+    },
+    "observed_monotonic": {
+      "type": "number"
+    },
+    "valid_until_monotonic": {
+      "type": "number"
+    },
+    "pid": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "start": {
+      "type": "string",
+      "pattern": "^[0-9]+$"
+    },
+    "exe_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "identity": {
+      "type": "object",
+      "required": [
+        "service",
+        "modele",
+        "dim",
+        "factice",
+        "dual",
+        "sparse",
+        "executable",
+        "precision",
+        "max_chars_per_text"
+      ],
+      "properties": {
+        "service": {
+          "const": "rag3weaver-embeddings"
+        },
+        "modele": {
+          "const": "granite-278m"
+        },
+        "dim": {
+          "const": 768
+        },
+        "factice": {
+          "const": false
+        },
+        "dual": {
+          "const": false
+        },
+        "sparse": {
+          "const": false
+        },
+        "executable": {
+          "type": "string",
+          "minLength": 1
+        },
+        "precision": {
+          "type": "string",
+          "minLength": 1
+        },
+        "max_chars_per_text": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "nonce": {
+      "type": "string",
+      "minLength": 1
+    },
+    "ready_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "no_embedding_calls_authorized": {
+      "const": true
+    }
+  },
+  "title": "Fresh provider coordination for debt-zero lifecycle fixture; no embedding call authorized"
+}

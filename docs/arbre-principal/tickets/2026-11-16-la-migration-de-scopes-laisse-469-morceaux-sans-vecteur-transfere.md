@@ -255,3 +255,17 @@ mapsWRITERhistorique distinctes. Résultat ÉTATROOBSERVABLE aprèscleanup,
 pas qualification shutdown/durabilité/migrationLIVE. Les deuxrouges et
 CC18expired restent inchangés. Ticket et parent toujoursOUVERTS jusqu'à
 revuepreuves/décisionC7 ; aucun retrait/bascule/master/rejeu déduit.
+
+Trois ROpreuves FIN favorables ED/Recherche/Banc bornéesétatRO reçues.
+C7 autorise PRÉPARATION d'un cyclewriter propre sur NOUVELLEcopie FIN déjà0,
+fixture seulement, PASRUN : [recette13](../16-11-2026/13-preparation-cycle-vie-sur-fixture-fin.md),
+source/branche/WTneufs cx-arbre-cycle-vie-copie-20261116-r1. PrimitiveCLI927
+JSON publique/noncequery→meta.query+run/PIDstart/ELF/manifest/base enreçulocal,
+pasrequest_idechoinventé ni jetonDB ; publicationfsync PUISshutdownACKexact
+PUISrc0mêmeenfant. Avant writerdebt0/FTSpendingpromessevides/FTS5ready,
+aucunpaiement de dette pour test ; grantproviderfrais déclaré mêmehealth.
+DigestvectorbitTOUS97247avant/après+graphsnapshotPOSTseul/FTS5/finished,
+sourcesstrictes, aucunrecovery/LOAD/Index/rescan/service/CLI live.
+NeufCPUhermétiquesverts0.008s, pasvraiPopen/proc/signal/DB/provider.
+BudgetPROPOSÉ900whole898+2/common830/réserveRO500, pas600contrel'observé.
+Code/paquet/revue/GOdistinct requis avantrun, anciennefenêtreLIVErestefermée.
