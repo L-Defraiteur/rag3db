@@ -1,0 +1,14 @@
+F
+======================================================================
+FAIL: test_changed_copy_is_refused_before_final_result (__main__.PublicationGuards.test_changed_copy_is_refused_before_final_result)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/lucied/git_workspaces/cx-lucivy-plan-shutdown/docs/lucivy/16-11-2026/outils/test-derived-admission-publication.py", line 85, in test_changed_copy_is_refused_before_final_result
+    with self.assertRaises(AssertionError): finish()
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+AssertionError: AssertionError not raised
+
+----------------------------------------------------------------------
+Ran 1 test in 0.001s
+
+FAILED (failures=1)

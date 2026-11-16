@@ -1,0 +1,11 @@
+{
+  "pilot_sha256": "99a8afcacfabd76928e596f956345dbe786641cbd96baf8c86dae32c69e30db1",
+  "guard_test_commit": "6d5a123b6e",
+  "exit_code": 1,
+  "tests_run": 1,
+  "failures": 1,
+  "remaining_tests_not_run": 5,
+  "fail_fast": true,
+  "expected_failure": "changed frozen copy not refused before final result; AssertionError not raised",
+  "scope": "Python AST slices and fake objects only; no Rust/Cargo/ELF/proc/Q filesystem or native builder"
+}
