@@ -1,4 +1,5 @@
 #include <cstdint>
+#include <filesystem>
 #include <memory>
 #include <vector>
 
@@ -17,6 +18,7 @@
 #include "storage/buffer_manager/vm_region.h"
 #include "storage/enums/residency_state.h"
 #include "storage/storage_manager.h"
+#include "storage/storage_utils.h"
 #include "storage/table/chunked_node_group.h"
 #include "storage/table/column_chunk.h"
 
@@ -117,6 +119,42 @@ TEST_F(EmptyBufferManagerTest, TestSpillToDiskMemoryUsage) {
         ASSERT_EQ(memorySpilled.memoryFreed, 0);
         ASSERT_EQ(memorySpilled.memoryNowEvictable, TEMP_PAGE_SIZE);
     }
+}
+
+// The spill file is cleared after every query (ClientContext, Spiller::clearFile). The next spill must start
+// again at page 0: if the file handle kept its page count, every later spill writes past it and the
+// <db>.tmp file grows sparse, query after query, in a long-lived host (16 Nov. 2026, hotfixs).
+TEST_F(EmptyBufferManagerTest, ClearingTheSpillFileStartsTheNextSpillAtPageZero) {
+    if (inMemMode) {
+        GTEST_SKIP();
+    }
+    auto bm = getBufferManager(*database);
+    auto mm = getMemoryManager(*database);
+    const auto spillPath = StorageUtils::getTmpFilePath(databasePath);
+    const auto spillOnce = [&]() {
+        std::vector<std::unique_ptr<ColumnChunkData>> chunks;
+        chunks.push_back(std::make_unique<ColumnChunkData>(*mm, LogicalType(LogicalTypeID::INT64),
+            16 * 1024, false, ResidencyState::IN_MEMORY, false));
+        auto chunkedNodeGroup = InMemChunkedNodeGroup(std::move(chunks), 0);
+        chunkedNodeGroup.setUnused(*mm);
+        SpillResult memorySpilled{};
+        bm->getSpillerOrSkip([&](auto& spiller) {
+            spiller.addUnusedChunk(&chunkedNodeGroup);
+            memorySpilled = spiller.claimNextGroup();
+        });
+        ASSERT_NE(memorySpilled.memoryFreed + memorySpilled.memoryNowEvictable, 0);
+    };
+    spillOnce();
+    ASSERT_TRUE(std::filesystem::exists(spillPath));
+    const auto oneSpill = std::filesystem::file_size(spillPath);
+    ASSERT_GT(oneSpill, 0u);
+    bm->getSpillerOrSkip([](auto& spiller) { spiller.clearFile(); });
+    ASSERT_EQ(std::filesystem::file_size(spillPath), 0u);
+    spillOnce();
+    EXPECT_EQ(std::filesystem::file_size(spillPath), oneSpill)
+        << "[check: spill-file-restarts-at-zero] after clearFile, the second spill of the same size "
+           "must fill the file from page 0; a larger file means it was written past the page count "
+           "kept from the first spill (a sparse <db>.tmp)";
 }
 
 // Simulates the case where we try to evict a page during an optimistic read
