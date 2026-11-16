@@ -209,3 +209,7 @@ Le défaut de classement des générés reste ouvert chez Banc dans
 `2026-11-16-les-sources-upb-gen-du-corpus-sont-mal-classees.md`.
 Le parent de cette première référence peut donc se clore sans faire disparaître
 ces travaux ni les cinq défauts de parsing/faits et les timeouts déjà ticketés.
+
+La métadonnée de fichier total_scopes=0 malgré des scopes présents est portée par
+`2026-11-16-le-compteur-de-scopes-du-fichier-reste-a-zero.md` ; sa granularité
+fichier/récursion doit être établie avant correction, sans retoucher les captures.
