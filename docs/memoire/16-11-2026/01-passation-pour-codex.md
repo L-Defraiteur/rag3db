@@ -118,18 +118,25 @@ Une suite e2e neuve se monte en trois pas :
 
 ### 2.1 Le témoin de codex qui rougit sur « Text file busy » — 1 h
 
-**En cours par la session mémoire** : branche `cx-memoire-script-fixtures-r2`,
-worktree `~/.cache/rag3weaver-build/cx-wt-memoire-script-fixtures-r2`, tête code
-`4e0d812f28498589224b022837f0cc51461445d1` (rebase68590270, r1 conservée). Rouge système déterministe puis
-3/3 verts ; correction des seules fixtures poussée. Rust/lib/F8/NAV NON JOUÉS,
-FINI G et pin59ac reçus ; recette proposée, attente de créneau C7 après priorités.
+**En cours par la session mémoire, correctif qualifié en branche** : source
+`cx-memoire-script-fixtures-r4`, APP `734087a4e99d54331aac2f6321df9ef6da3b6d9c`
+(base mastertiesd395), Wlocal `~/.cache/rag3weaver-build/cx-wt-memoire-script-fixtures-r4`,
+WPC `~/git_workspaces/cx-memoire-script-fixtures-r4`, target unique
+`~/.cache/rag3weaver-build/target-cx-memoire-script-fixtures` conservé.
+Rouge système déterministe puis3/3verts ; helper enfantwriter cfg(test), pasrename
+ni retry de production. Canonique f7ef :6ciblés/F8 8/8/preuve/lib2596/0/72/NAV45.
+Seconde lib seule f812 sur mêmeELF6f12 :2596/0/72,0filtré, nomsidentiques ;
+composéVERT4599,834s<7200depuisINITIALoriginal. [Preuves08](08-preuves-deux-libs-et-canonique.md),
+anciensrougesv1/v2 conservés. Tout est terminé/quiescent/busabsent et ressources
+gardées ; ROpreuves puis candidat/intégration C7 restent à faire, aucunGOmaster.
 
 `2026-11-15-un-temoin-de-codex-rougit-sur-text-file-busy-sous-la-charge.md`
 
 - **Le défaut** : `src/codex_threads.rs`, aux lignes 261-263 et 303-305. Le test écrit un script et
   le lance aussitôt, et sous la charge les forks des autres tests gardent le descripteur ouvert.
-- **À faire** : un utilitaire de test `write_executable` (écrire dans un fichier temporaire, fixer
-  les droits, `rename` vers le nom final), utilisé aux deux endroits. `livrer` ne se touche pas.
+- **Réalisé en branche** : `write_executable` fait écrire le script par un enfant attendu au plus5s,
+  parent sans writer ; utilisé aux deux endroits. `rename` seul a été réfuté par le témoin hérité.
+  `livrer` inchangé. Reste RO des preuves et intégration au seul tour exact C7.
 - **La preuve** : le filtre lib `codex_threads`, puis la lib entière deux fois sans le rouge. Un
   rouge déterministe est difficile à écrire. Si tu en écris un
   (`write_executable_closes_before_exec_under_parallel_forks`), il doit d'abord rougir avec

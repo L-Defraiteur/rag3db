@@ -70,3 +70,8 @@ Premier essai4c45976c38 nonqualifiant pour ce rouge : harnais finalize({},0)
 oublie la clépilot, donc retourne REDsurKeyError avantpublication. Aucunfix du
 pilote effectué ni vert de correction revendiqué. Corriger d'abord ce harnais
 et exiger le motif deadline, puis observer rouge réel avantfixsave.
+
+Profilcourt qualifié par première libcanonf7ef puis second-onlyf812 : trois
+ancienssocketFAILEDv1 passent ; deuxlibs2596/0/72, sameELF, TARGET/MODELPREUVES
+rapport08. Aucunfixproduitdu pont ; ticketfils reste ouvert jusqu'àRO/intégration
+pilotes avecparent, aucunGO/retrait implicitementdéduit.

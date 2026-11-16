@@ -167,3 +167,14 @@ INITIAL1179575.678/END1186775.678 originaux. Verdictcomposite seulementsi
 seconde lib2596/0/72 sansfiltre etshaidentiques, résumécanonique intact.
 Anciens rouges conservés, aucun GOreprise ni budgetneuf. Publication pilote
 ettémoins vraisenv/commande +deadlineAPRÈSopen pourROavantGOexact.
+
+## Qualification composée acquise en branche, RO/intégration restantes
+
+Source734/PILOTEcanonf7ef et second-onlyf812 au GO exact C7 :6ciblés/F8 8/8/
+preuve/lib2596/0/72/NAV45 puis seconde lib2596/0/72, mêmes2596noms,72ignorés
+nonjoués. MêmeELFSHA6f12/copieledgerAVANTseconde, CARGOMANIFEST runtimeCexact/
+SDKdiff{} archivéavantassert/exec. Canon0dddintact, vieuxrougesv1/v2 restentrouges.
+FinalcomposéVERT0/4599,834sdepuisINITIALoriginal<7200,scopeVERT0/restes[]/TERMINE/
+busabsent/scan426ownedquiet. [40preuvesPC/localréhashées](../16-11-2026/08-preuves-deux-libs-et-canonique.md).
+Poste/BGE/PG rendus/healthservicesusage0 ; sources/target/TMPconservés.
+État resteOUVERT pourROpreuves+intégration C7, aucunGOmaster/retrait déduit.
