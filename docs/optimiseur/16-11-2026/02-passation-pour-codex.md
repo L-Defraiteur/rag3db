@@ -188,3 +188,17 @@ deux tiennent sous 24 Gio, le défaut passe à 32G ; sinon, le ticket se ferme s
 - **La machine** : `-j 8` au plus, jamais `-j$(nproc)`. Tout bâti ou toute suite lourde passe par
   `~/.cache/rag3weaver-build/poste lourd`, une mesure par `poste mesure`. On ne tue que ses propres pids (`$!`),
   jamais par motif.
+
+## État final de G (16 novembre 2026, 11 h), au mot de Lucie : arrêt
+
+- **Entrée en cours** : aucune. G n'a commencé aucun des sept lots de la partie 2 : ils sont entiers pour Codex.
+- **Branches** : toutes poussées. Chaque lot de G est sur master ; ses branches (`required-suites`,
+  `passe-chemin-absolu-3`, `poste-plafond-validation-3`, `run-e2e-temoin-lib-3`, `guard-tests-only`…) restent sur
+  `origin` sous leur nom, sans rien qui ne soit sur master.
+- **Hôtes** : master 4802a147a5, md5 8d9e62c3, aux deux postes. **Lib** `courant` 373b5477b aux deux postes.
+  **Services** d'embarquement a70f1e462bd9df95 (7878 sous `RAG3WEAVER_EMBED_MAX_CHARS=60000`, provisoire, à embarquement).
+- **Garde et scripts au cache des deux postes** : `push_garde.sh` 95a1d85779f0105a, `passe_epinglee.sh`
+  ec1529fc2f3dcf07, `poste` 79e3a8bbf457e3bc.
+- **La bascule** : prête, non posée (lib 59ac9c86bc, hôtes d164e4da en `.nouveau`, service 6196fbe7102ad533 dans
+  `nuit-3177d2489e/` à luciepc) ; elle attend le mot de Lucie, porté par c7.
+- **Aucun lourd de G** ne tourne, à aucun poste.
