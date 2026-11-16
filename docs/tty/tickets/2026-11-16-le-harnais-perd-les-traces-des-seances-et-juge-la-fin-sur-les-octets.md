@@ -201,3 +201,34 @@ La propriété watchdog a passé ses2témoins hermétiques (0,146s) ; ce refus e
 un défaut distinct de préparation, pas un run rouge ou un vert de harnais.
 Référence historique désormais constante PREVIOUS_SCOPE/v1, test de séparation
 des numéros ; nouveau Q/P/Sv3 et TMPttyhr3. Aucun ancien dossier réécrit.
+
+## GO C7-TTY-HARNESS-91E5-16nov1200 — premier rouge phase0008, preuves complètes
+
+Source/pilote91e5ed5fc11e565f238478d946d3e994146e1e8d, Qv3/preparedcf99…ab95.
+Harnais seul sur ELFcb24, aucune F8/build/Cargo rejouée. Nouvelle allocation
+START854767.847527584/END855967.847527584 ; Commonreste1184 après poste.
+Phases2/5/6 passées sans rouge : protocoleaccordOK et captureécranfin, puis
+les deux variantes Kitty avec captures, saisie multiligne jugée. Ceci valide
+ces observations nouvelles seulement, sans réinterpréter le run perdu9d.
+
+Premier rouge phase0008, séance !/fauxsudo : invite_vuefalse, retour_vufalse,
+consignes1 mais consigne_porte_le_retourfalse ; marqueur de mot de passe
+**FACTICE** vu dans journal et raw (booleans true), pas dans la consigne.
+Aucun lancement sans frappe relevé. Cause encore non attribuée au produit.
+Les raw/input horodatés, journal fauxhôte et checkpoints de cette phase
+existent désormais, contrairement au run9d. Aucun secret réel n'a été saisi.
+
+Arrêt automatique dès première ligneROUGE après flush/fsync : pidfd autorité
+Common841941/start85476802/scriptQ/cgroup vérifiés, observation854883.759418159.
+Scope `cx-tty-harness-only-common-v3/validation-j4l20f5g` TERMINÉ,
+ROUGE code1/signal15 explicite, restes[], nettoye true, pic71847936octets/oom0.
+Composé ROUGE final854883.900733566, avant END, aucun retry ni nettoyage.
+Wpropre ; harnais ENTIER NON ACQUIS. P `cx-tty-harness-only-v3/observations/`
+garde8phases et `first-red-stop.json`, Qcomposé et tous les reçus conservés.
+
+Défaut contrôleur identifié AVANT toute correction : deux lignesROUGE sont
+arrivées avant arrêt effectif ; le lecteur a tenté une seconde open(x) du même
+first-red-stop.json et levé FileExistsError. Le premier marqueur et le premier
+signal sont bien conservés, Common a quiescé. Prévoir un arrêt idempotent/une
+seule émission du signal puis attente de terminaison, témoin discriminant
+avant fix. Aucune correction ni attribution bang implicite sur ce run.
