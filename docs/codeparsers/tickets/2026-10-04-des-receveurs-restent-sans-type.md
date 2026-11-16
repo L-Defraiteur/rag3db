@@ -109,12 +109,42 @@ la classe (`Catalog → admet`), par un paramètre de fermeture. Sur le moteur, 
 **Le prix de la marque « nom » est rendu en partie** : `files.append` (2), les `c.wait_timeout` des tests
 (12), `back.description()`.
 
+## Fait le 16 novembre 2026 : le motif de tuple et la locale redéclarée
+
+Codeparsers `6291939`.
+
+- **Le motif de tuple** : dans `let (mut catalog, _store) = make_pair();`, chaque nom prend le différé de la
+  valeur, suivi d'un pas `#i` qui lit l'élément de rang `i` du tuple écrit (`(Catalog, Store)` → `Catalog`).
+- **Les liaisons différées sont situées** (`DeferredBindings`) : une liaison vaut de la fin de son `let` à la
+  fin de son bloc, et une référence lit celle qui est visible là où elle est. `let outil = …?; let outil =
+  outil.bind()?;` avait deux liaisons d'un même nom, qui s'annulaient ; chacune vaut maintenant à sa place.
+
+Témoins : `a_tuple_pattern_local_reads_its_element_type` et
+`a_shadowed_local_reads_the_binding_visible_where_it_is_used` (`tests/e2e_usages.rs`, vus rouges puis
+verts) ; `codeparsers/tests/tuple_and_shadowed_locals.rs`.
+
+La sonde (`tests/sonde_marque_nom.rs`, corpus figé de rag3db-garde ; avant = master, codeparsers `edfc72d`) :
+
+| corpus | « type » avant | après | « nom » avant | après |
+|---|---|---|---|---|
+| rag3weaver/src | 9 070 | 9 572 | 9 059 | 8 736 |
+| src/ du moteur | 10 912 | 10 912 | 2 653 | 2 653 |
+
+Sur rag3weaver/src, par couple : 245 naissent (228 « type »), 278 passent de « nom » à « type », 47 partent.
+Ceux qui partent : ~25 méthodes std reliées à tort (`collect` 14, `join` 5, `starts_with`), et **une
+vingtaine de liens justes**, presque tous de `daemon_host/teammate_tests.rs` (`host.hosted`,
+`host.with_backend`, `host.teammate_files`, `host.run_teammate`…).
+
+**Ces vingt-là, et pourquoi on les laisse** (décision de c7, 16 novembre) : `let host = hote(…).with_runs_root(…)`
+puis, plus loin, `let host = host.with_chat_model(…)`. Avant, les deux `host` s'annulaient : pas de différé, et
+le lien par le nom. Maintenant la première liaison porte `ReturnOf hote` ; or `hote` est défini quatre fois,
+avec quatre types de retour (`mcp.rs`, `worktrees.rs`, `fichier_nodes.rs`, `chat_qui_code.rs`) : le différé ne
+se lit pas, et la règle du 11 octobre (une locale à différé non lu est visible, jamais reliée) s'applique.
+On ne revient pas sur cette décision de Lucie.
+
 ## Reste
 
-- **Un motif de tuple** : `let (mut catalog, _store) = make_catalog_with_mock_checkpoint();` puis
-  `catalog.drain()` (trois liens de la marque « nom »).
-- **Une locale redéclarée** : `let mut outil = GraphTool::from_mermaid(…)?; let outil = outil.bind(…)?;`.
-  Les liaisons différées ne savent pas où chacune vaut (les liaisons typées le savent, `Bindings::at`), et
-  deux valeurs différentes s'annulent.
+- **`ReturnOf` d'une fonction définie plusieurs fois** : quand les définisseurs ont des types de retour
+  différents, le `hote` que le fichier importe désigne le bon. Résoudre par l'import rendrait les vingt liens
+  de `teammate_tests.rs` sans lever l'abstention.
 - Les paramètres de fermeture, l'élément d'un itérateur (`Iterator<T>`), C++ `for (auto& x : v)`.
-
