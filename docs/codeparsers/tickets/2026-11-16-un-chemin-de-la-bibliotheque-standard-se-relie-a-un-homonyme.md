@@ -35,3 +35,6 @@ part.
 ## Relecture Banc de la préparation de paire 2b3d66/fec351
 
 [Rapport spécialisé14](../../banc/16-11-2026/14-ro-paire-sonde-rust.md), trois réserves groupées avant GO : nouvel ELF/ledger/copie avant test et rehash final ; composition1800 bornée incluant finale/publication ; attribution cache et fresh-owned final après Common. Couple/source/corpus/cohortes et comparaison multiensemble cohérents, aucun run par Banc. Porteur Codeparsers, critères : nouveau pilote/pins publiés puis RO delta, aucune modification produit nécessaire pour ces réserves de preuve. Ticket et REGLES7 restent ouverts/inchangés.
+
+
+RO delta c1cd/pair02f919 par Banc : les trois réserves052d sont levées statiquement (ELF/2ACK avant test, composition1800 finale incluse, fresh attribution/owned/bus). Voir complément du rapport14. Avis préparatoire favorable, aucun GO ; essai CPU1916=refusCLI rc2/zéro test, correctifc1cd non rejoué, CPU/natif toujours non qualifiés. Paire/cohortes identiques, aucun REGLES8 ni fermeture du ticket.
