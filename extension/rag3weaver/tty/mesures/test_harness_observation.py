@@ -36,9 +36,22 @@ class ObservationArchiveTests(unittest.TestCase):
             with self.assertRaises(FileExistsError):
                 ObservationArchive(temp)
 
+    def test_valid_prefix_but_foreign_approval_id_is_rejected(self):
+        posts = [{'chemin':'/ide/teammate/mailbox', 'corps':{
+            'kind':'answer', 'approved':True, 'reply_to':'faux/mesure:999'}}]
+        mailbox = [{'kind':'approval','id':'faux/mesure:0'},
+                   {'kind':'answer','reply_to':'faux/mesure:999'}, {'kind':'ended'}]
+        self.assertFalse(approval_and_end(posts, mailbox, 'ended'))
+
+    def test_multiple_or_missing_phase_approvals_are_not_a_green_protocol(self):
+        posts = [{'chemin':'/ide/teammate/mailbox','corps':{'kind':'answer','approved':True,'reply_to':'a1'}}]
+        for mailbox in [[{'kind':'ended'}], [{'kind':'approval','id':'a1'}, {'kind':'approval','id':'a2'}, {'kind':'ended'}]]:
+            with self.subTest(mailbox=mailbox):
+                self.assertFalse(approval_and_end(posts, mailbox, 'ended'))
+
     def test_protocol_and_visible_screen_are_independent_judges(self):
         posts = [{'chemin':'/ide/teammate/mailbox', 'corps':{'kind':'answer','approved':True,'reply_to':'a1'}}]
-        mailbox = [{'kind':'ended'}]
+        mailbox = [{'kind':'approval','id':'a1'}, {'kind':'answer','reply_to':'a1'}, {'kind':'ended'}]
         self.assertTrue(approval_and_end(posts, mailbox, 'ended'))
         self.assertFalse(approval_and_end([], mailbox, 'ended'))
         self.assertFalse(approval_and_end(posts, [], 'ended'))
