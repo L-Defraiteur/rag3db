@@ -113,14 +113,14 @@
     },
     "search_code": {
       "graph": "../../tools/atelier_search_code.mmd",
-      "description": "Chercher dans le code, par mots et par sens — à prendre d'abord. L'outil choisit seul : l'index quand il est prêt, le balayage des fichiers (mots exacts) quand rien n'est indexé ; la réponse dit d'où elle vient. grep ne sert que pour un motif littéral exact. Choisir explicitement le contexte du dépôt attaché.",
+      "description": "Use first for any question about the code: a question in words (\"where is the default agent name decided\", \"what refuses an empty name\"), a behaviour to locate, or a name you are not sure of the exact name of. Ranks scopes (functions, types, constants) by words and meaning, with file:line; the index when it is ready, a scan of the files (exact words) when nothing is indexed, and the answer says which. Then usages, outline or read_file on what it found. Choose the attached repository's context explicitly.",
       "policy": {
         "read_files": true
       }
     },
     "grep_files": {
       "graph": "../../tools/atelier_grep_files.mmd",
-      "description": "Motif littéral ou regex sur les fichiers du workspace. À prendre pour une chaîne exacte (un message d'erreur, un nom précis) ; pour une question de sens, search_code fait mieux. Choisir explicitement le contexte du dépôt attaché.",
+      "description": "For an exact string only: one you already know appears verbatim (an error message, a literal, an exact identifier). Regex over the workspace files; above its threshold it refuses and says where to narrow with path_prefix. For a question of meaning, or a name you are not sure of, use search_code first. Choose the attached repository's context explicitly.",
       "policy": {
         "read_files": true
       }
