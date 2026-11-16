@@ -31,11 +31,13 @@ E = os.environ.copy()
 for key in list(E):
     if key.startswith(('RAG3WEAVER_SERVICE_', 'RAG3WEAVER_EMBED_')) or key in ('RAG3WEAVER_MOTEUR_ANCIEN', 'RAG3WEAVER_PG'):
         E.pop(key, None)
-E.update(CARGO_TARGET_DIR=str(T), CARGO_BUILD_JOBS='8', CARGO_INCREMENTAL='0',
+JOBS = min(8, int(os.environ.get('POSTE_FILS', '8')))
+assert JOBS >= 1
+E.update(CARGO_TARGET_DIR=str(T), CARGO_BUILD_JOBS=str(JOBS), CARGO_INCREMENTAL='0',
          RAG3WEAVER_TARGET_MAX_GO='32', RAG3WEAVER_TARGET_REPRENDRE='1',
          RAG3DB_LIB=SDK, RAG3DB_LIBS_DIR=str(STORE),
          RAG3DB_LIBRARY_DIR=str(SDK_ROOT), RAG3DB_INCLUDE_DIR=str(SDK_ROOT), RAG3DB_SHARED='1',
-         CARGO_MANIFEST_DIR=str(C), RUST_TEST_THREADS='8', LUCIVY_SCHEDULER_THREADS='8',
+         CARGO_MANIFEST_DIR=str(C), RUST_TEST_THREADS=str(JOBS), LUCIVY_SCHEDULER_THREADS=str(JOBS),
          RAG3WEAVER_STATE_DIR=str(P/'state'), RAG3WEAVER_JOURNAUX_DIR=str(P/'journals'),
          RAG3WEAVER_BUILTIN_TEMPLATES_DIR=str(P/'templates'))
 TESTS = ['catalog::tests::'+name for name in (
@@ -133,7 +135,9 @@ try:
     group = Path('/sys/fs/cgroup'+cgroup)
     save('scope-os.json', dict(receipt=os.environ['RAG3WEAVER_VALIDATION_RECU'],
          cgroup=cgroup, memory_max=(group/'memory.max').read_text().strip(),
-         memory_high=(group/'memory.high').read_text().strip(), supervisor='common receipt verifier'))
+         memory_high=(group/'memory.high').read_text().strip(),
+         cpu_max=(group/'cpu.max').read_text().strip(), poste_threads=os.environ.get('POSTE_FILS'),
+         targeted_jobs=JOBS, supervisor='common receipt verifier'))
     run('scope', ['python3', 'scripts/confiner_validation.py', 'verifier'])
     run('target-ownership', ['bash', '-c', '. scripts/garde_target.sh; garder_le_target "$CARGO_TARGET_DIR" "$PWD"'])
     build = run('compile-targeted', ['bash', 'scripts/cargo_magasin.sh', 'test', '--lib', '--features', F,
