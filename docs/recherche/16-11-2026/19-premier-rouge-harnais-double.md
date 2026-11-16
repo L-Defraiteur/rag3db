@@ -1,0 +1,17 @@
+# DOUBLE : classique exécuté, arrêt du harnais avant générations
+
+GO exact C7-DOUBLE-4d5265fc-1200-PC-16nov, APP3ee1e117cc0c9ff7e9de1f08263c26cb4e907c79/PILOTE4d5265fc11151dd78c69355f26d214075b66ab8d. UNE invocation, pas de retry/reset. Poste initialementlibre PID3183704 ; outertimeout1198+kill2 réel, commun1150 INITIAL1189011.616250876/END1190161.616250876. memory32G/HIGHmax/swap0/quota5 ; services/PG/modèlesaucuns.
+
+Contrat provenance957/ancienrougeTERMINE/copielogs+2ELF vérifié avant mutation puis aprèsposte ; freshquiet et deux gardes COMMUNESréelles old957 puis REPRENDRE1source3ee rc0. Target R/cx-target-recherche-fts-counts-freshness porte désormais ownerAPP3ee, conservé. Archivehistorique957 et ses preuves intacts ; aucunlabelvert ajouté.
+
+Compilation rc0 en77.330617s. JSONunit exactsourceAPP3ee/features[code,rag3db-native], executableTdebug/deps/rag3weaver-f05fee0f090390b5 ; copieunit-tests SHA268229be9fd21290e369337cc52993bf5be42ea0b1eee17fe078180c581c147c. Inventaire2noms/0ignored etALL archivés, ledger publié1189091.429916959 AVANTmarker/exact. GDBmain vraiPID3199390, exeSHA/actualenv et SDKchemin59ac+SHAb7e9 vérifiés AVANTcontinue, mêmeinferior ensuitecontinué. Aucun mauvaisSDK accepté.
+
+ExactCLASSIC : processusrc0, rawlibtest1passed0failed0ignored, même nom exact demandé/unique. Tracesréelles initialclassic/counts0/rebuild0 ; fantômecommitSUCCÈS ensuitegraph=[0]/FTS=[0,9000000] ; secondsyncinchangéeclassic/counts1/rebuild1 ; aprèsgraph=[0]/FTS=[0]/diffsvides et assertionsUUID/H/contenu/positions/jetonpassées. Ce résultat classique brut est une observation réelle, mais la RECETTEresteROUGE et DOUBLE NONQUALIFIÉ.
+
+Premierrouge1189092.891744015 (~81.28s depuisdépartcommun) : AssertionError qualify.py167, regexnomcontigu+ok. GDB insère [NewThread...] et ses événements entre `test NOM ...` et la lignefinale `ok` ; le juge produit a réussi, le contrôleur refuse sa présentation. Les logs ne sont ni nettoyés ni réinterprétés en succès global. GEN n'a JAMAIS été lancé : aucunmarker/runtime/exact1 ; pas d'attribution du bypassgénérations prouvée par ce DOUBLE incomplet. L'observationfroide149a reste limitée à son époque/cellule. Aucun baselineancienmaster ni canonicalreplay.
+
+ScopeROUGE1/TERMINE/restes[]/nettoyé/busabsent. Scan127owned PID/start alive[]unknown[] ; cachequietfinalfound[], UNKNOWNglobauxnonattribués conservés (pasabsenceGPU/ressourcesglobale inférée). Poste rendu. Basesclassic privées conservées, générationsabsente ; aucune suppression W/T/copie/remote, aucunservice posé ou touché.
+
+Archives PC+portable `R/cx-archive-recherche-fts-double-v1` :62fichiersSHA/tailleidentiques après réhash complet sur chaque poste, manifeste1a2e39e4b8cc3ee521c81ac57b6e9c6a2a62d7d0397e1b6684c3007a21519324 publié ici. Comprend contrôleurs/Qallocation/ledger/ELFcopié/logsbruts+snapshotsprofil/SDK/receipts/scope/cachequiet et fixtureDBclassic entière. Anciensrouges et contrôleursconservés. Ticket EXISTANT misàjour AVANTtoutcorrectif du contrôleur ; aucun nouveaupilote ni rerun autorisé par ce rapport.
+
+Suite à arbitrer C7 : correction minimale du harnais avec témoinCPU sur ces logsréels AVANTfix et nouvelleRO/nouveauGOdistinct sous borneunique appropriée ; aucun assouplissement du verdictproduit ni conversion de l'ancienROUGE. Une option à relire est désactiver les seuls événementsGDB de threads AVANTstart, ou parser explicitement leurs lignes sans accepter de sortiearbitraire. Pas de diffcorrectif appliqué ici.
