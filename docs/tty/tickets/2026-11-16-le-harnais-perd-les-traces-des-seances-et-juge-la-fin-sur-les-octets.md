@@ -154,3 +154,15 @@ Préflight provenance/quiet sous vrai poste, premier rouge observé arrêté
 immédiatement via autoritéCommon propriétaire, final après TERMINE/restes[]/
 nettoye/hash physiques/quiet/publication dans nouvelle échéance éventuelle.
 Publier source/pilote/paquet puis RO avant tout GO distinct.
+
+## Réserve C7 sur protocole5b43 : budget total, avant correction
+
+HOLD, aucun run. Ticket coordination a483d0fdc9 : subprocess.run(timeout)
+borne le poste/Common seulement ; après retour, snapshot/hash/scan/Git et
+publication du parent restent hors watchdog. Le contrôle d'horloge refuse
+un VERT tardif mais ne garantit pas une exécution totale bornée à1200s.
+Correctif groupé demandé : watchdog extérieur englobant file, poste, Common,
+toute finalisation et publication ; entrée ultime ne fait que transmettre
+le rc. Témoin sur vraie construction et finalisation bloquée, publié avant
+essai hermétique, rouge avant correction. Pas d'ajout implicite au budget,
+aucun natif/ancienEND réactivé ; nouveau Q/pin et RO totale avant GO.
