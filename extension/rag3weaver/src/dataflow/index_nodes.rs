@@ -1169,4 +1169,64 @@ mod tests {
         assert_eq!(embarques, 12, "chaque morceau embarqué a sa provenance au journal : {lignes:?}");
         assert!(lignes.last().is_some_and(|l| l.starts_with(DONE_LINE)), "la dernière ligne reste le contrat : {lignes:?}");
     }
+
+    /// **The index journal says the texts cut to the service's cap and the
+    /// tokens truncated by the model** (c7, 16 November 2026 : the cut was
+    /// counted but went only to the catalog's event bus, which the journal does
+    /// not read ; the README promised a line that was never written).
+    #[cfg(all(feature = "rag3db-native", feature = "code"))]
+    #[test]
+    fn the_index_journal_says_texts_cut_to_the_cap_and_tokens_truncated() {
+        #[derive(Default)]
+        struct Cutting { calls: std::sync::atomic::AtomicUsize }
+        impl crate::embedder::Embedder for Cutting {
+            fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, crate::embedder::EmbedError> {
+                self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                Ok(vec![vec![0.5; 4]; texts.len()])
+            }
+            fn dim(&self) -> usize { 4 }
+            fn name(&self) -> &str { "cutting" }
+            fn distant(&self) -> bool { true }
+            // After the first call : 3 texts cut to 12 000 characters, 2 truncated at 512 tokens.
+            fn char_truncations(&self) -> Option<(usize, usize)> {
+                (self.calls.load(std::sync::atomic::Ordering::SeqCst) > 0).then_some((3, 12_000))
+            }
+            fn troncatures(&self) -> Option<(usize, usize)> {
+                (self.calls.load(std::sync::atomic::Ordering::SeqCst) > 0).then_some((2, 512))
+            }
+        }
+        let files: Vec<(String, String)> = (0..6).map(|i| (format!("src/f{i}.rs"), format!("pub fn f{i}() -> u32 {{ {i} }}\n"))).collect();
+        let source: Arc<dyn FileSource> = Arc::new(Snapshot::new("depot", files));
+        let conn = crate::Rag3dbConnection::in_memory().expect("in-memory base");
+        let ext = crate::backend::vector_extension_of_this_process().unwrap_or_else(|e| panic!("{e}"));
+        crate::connection::DbConnection::execute(&conn, &format!("LOAD EXTENSION {}", crate::connection::cypher_path_literal(&ext))).expect("vector extension");
+        let config = crate::CatalogConfig { name: Some("cuts".into()), embedding_dim: 4, ..Default::default() };
+        let mut catalog = Catalog::new(Box::new(conn), Box::new(Cutting::default()), config);
+        catalog.initialize().unwrap();
+        crate::code::register_code_schema(&mut catalog, crate::code::default_scope_chunking()).unwrap();
+        let catalog = Arc::new(Mutex::new(catalog));
+        let journal = new_index_journal().expect("journal");
+        spawn_index(catalog.clone(), source, journal.clone(), 0, Default::default()).join().expect("the index thread");
+        let lines: Vec<String> = std::fs::read_to_string(&journal).unwrap().lines().map(String::from).collect();
+        let _ = std::fs::remove_file(&journal);
+        let cut: Vec<&String> = lines.iter().filter(|l| l.starts_with("3 texte(s) coupé(s) à 12000 caractères avant l'envoi au service « cutting »")).collect();
+        assert_eq!(cut.len(), 1, "the cut is said once : {lines:?}");
+        let truncated: Vec<&String> = lines.iter().filter(|l| l.starts_with("2 texte(s) tronqué(s) à 512 jetons par « cutting »")).collect();
+        assert_eq!(truncated.len(), 1, "the token truncation is said once : {lines:?}");
+        assert!(lines.last().is_some_and(|l| l.starts_with(DONE_LINE)), "the last line stays the contract : {lines:?}");
+    }
+
+    /// **Two index journals created in the same millisecond are two files**
+    /// (16 November 2026 : two witnesses run in parallel wrote into one journal,
+    /// named by the millisecond and the pid only ; a host starting two indexes in
+    /// the same millisecond would do the same).
+    #[test]
+    fn two_index_journals_created_together_are_distinct() {
+        let journals: Vec<std::path::PathBuf> = (0..64).map(|_| new_index_journal().expect("journal")).collect();
+        let distinct: std::collections::BTreeSet<&std::path::PathBuf> = journals.iter().collect();
+        for j in &journals {
+            let _ = std::fs::remove_file(j);
+        }
+        assert_eq!(distinct.len(), journals.len(), "every journal has its own file");
+    }
 }
