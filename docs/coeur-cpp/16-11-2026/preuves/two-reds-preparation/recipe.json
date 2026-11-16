@@ -1,5 +1,5 @@
 {
-  "status": "PREPARATION ONLY; NOT COMPILED; NOT EXECUTED; EXACT DRIVER AND RO REQUIRED BEFORE ADMISSION",
+  "status": "SUPERSEDED BEFORE ANY NATIVE RUN; exact driver recipe in ../../outils/two-reds/recipe.json",
   "reference_source": "50412d9c501708d8464efd85e94273fdf91e7f80",
   "reference_engine": "59ac9c86bc2b3529b590a7462ab7051e3ad26b8a",
   "candidate_source": "a3f3e3bce46de8864f140ae21c2dff6b539bf838",
