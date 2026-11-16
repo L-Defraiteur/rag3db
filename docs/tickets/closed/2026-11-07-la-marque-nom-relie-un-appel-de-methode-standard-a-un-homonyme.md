@@ -109,3 +109,8 @@ Le 15 novembre au soir, le ticket des receveurs (codeparsers `65b1a93`) en a ren
 (2), les `c.wait_timeout` des tests, `back.description()`. Restent `catalog.drain()` (un motif de tuple) et
 `outil.bind(…)` (une locale redéclarée), écrits dans ce ticket.
 
+## La mesure sur la base du dépôt (banc, 16 novembre 2026 : deux index neufs de l'arbre 1de1f86d88 sur base vide, sans embarqueur — avant par f10336d3f2, après par 41144f8d22 ; sorties à luciepc, `~/.cache/rag3weaver-build/banc-parite/sorties/codeparsers-stack/`)
+
+CONSUMES par marque, avant → après la pile (marque « nom », receveurs, appels C, homonymes) : fichier
+51 145 → 56 155 ; type 24 834 → 29 043 ; **nom 20 145 → 18 480** ; import 13 092 → 13 023 ; liaison
+631 → 631.

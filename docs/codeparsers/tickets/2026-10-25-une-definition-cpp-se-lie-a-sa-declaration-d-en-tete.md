@@ -65,3 +65,50 @@ Ses limites, à mesurer avec elle :
 - **Les surcharges ne se distinguent pas** : aucune signature n'est comparée.
 - **Une fonction déclarée derrière une macro** (`RAG3DB_C_API rag3db_state f(…);`) n'est pas
   relevée comme déclaration par tree-sitter : ni membre, ni visible par elle.
+
+## Les manques à définisseur unique, mesurés (16 novembre 2026)
+
+`tests/probe_unique_definer_misses.rs` liste les mentions C/C++ dont le nom n'a qu'un définisseur et qui
+n'ont pas d'arête (corpus figé de rag3db-garde : src, examples et test ; master 64f3b53cb, après la pile de
+la résolution d'arêtes) : **3 871**. La plupart sont des abstentions justes :
+
+| forme | compte |
+|---|---|
+| valeur d'enum (`LogicalTypeID::INT16`, sinon reliée à `LogicalType::INT16()`) | 2 182 |
+| `src/` vers un définisseur d'un fichier de test (`key`, `now`) | 537 |
+| méthode std (`emplace_back`, `len`) | 272 |
+| même fichier | 18 |
+| reste | 862 (484 de src vers src, 335 de test vers test, 43 de test vers src) |
+
+Dans le reste, la famille qui se répète est **la méthode héritée** : `newEntry->setOID(oid)`, le type lu
+`TableCatalogEntry`, `setOID` défini dans `CatalogEntry`, sa base. La branche du type lu exigeait un
+définisseur dont le parent est le type lu lui-même.
+
+## Fait le 16 novembre 2026 : la recherche par les bases
+
+Le Scope garde ses bases écrites (`base_types`, depuis les clauses d'héritage) ; quand aucun définisseur
+n'a le type lu pour parent, `choose_inherited` cherche dans les bases de ce type, du niveau le plus proche
+au plus loin, dans la source et le dépôt du définisseur. Un seul au niveau le plus proche : la cible, par
+le type. Deux (un diamant, une redéfinition par deux branches) : l'abstention (décision de c7). La
+profondeur se règle, `RAG3WEAVER_INHERITANCE_DEPTH`, 4 par défaut, 0 coupe la recherche.
+
+Témoins : `an_inherited_method_is_reached_through_the_derived_type` (vu rouge puis vert),
+`two_bases_defining_the_name_are_not_guessed` (une garde).
+
+La sonde, même corpus, par profondeur (0 = la recherche coupée, le comportement d'avant) :
+
+| profondeur | manques à définisseur unique | CONSUMES « type » |
+|---|---|---|
+| 0 | 3 871 | 11 521 |
+| 1 | 3 749 | 12 044 |
+| 2 | 3 741 | 12 338 |
+| 4 | 3 741 | 12 346 |
+| 8 | 3 741 | 12 346 |
+
+À la profondeur 4, **804 couples (mentionneur, cible) naissent, tous « type », aucun ne part** ; les autres
+marques ne bougent pas. La plupart des gains sont des noms à plusieurs définisseurs que la base départage
+(`getChild` de `LogicalOperator`, `isUnfiltered` de `SelectionView`, `getName` de `CatalogEntry`, le
+`SetUp` de la fixture de base des tests, 174). Lus un par un sur un échantillon de 25 : justes.
+
+Reste ouvert ici : les deux limites de la forme exacte (le conteneur comparé par son dernier segment, les
+surcharges), et la mesure à l'oracle des arêtes « entete ».

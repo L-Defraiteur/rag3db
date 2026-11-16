@@ -583,7 +583,9 @@ fn usage_properties(sites: &[UsageSite]) -> BTreeMap<String, CypherValue> {
 // 2 (16 novembre 2026, la pile de la résolution d'arêtes de codeparsers) : une variante d'enum lit son
 // type, une méthode std sur une locale sans type lu ne se relie pas par le nom entre fichiers, une
 // chaîne de méthodes du projet se type au rendez-vous (`DeferredType::OfType`).
-pub const REGLES_DE_L_ANALYSE: u32 = 2;
+// 3 (16 novembre 2026) : une méthode héritée se trouve par le type dérivé (les bases d'une classe,
+// `base_types`).
+pub const REGLES_DE_L_ANALYSE: u32 = 3;
 
 /// **La version de l'analyse** (page 06, § 13) : le commit du parseur lié, [`REGLES_DE_L_ANALYSE`] et le
 /// gabarit du code (le découpage et les champs déclarés de `File` et de `Scope`), hachés.
