@@ -187,3 +187,35 @@ est en 4.3.9 dans le lock du worktree comme dans `cargo tree`. Chaque relevé li
 - A contre B en tous signaux : 233 / 293 = 0,795. B garde son ancien découpage, donc ce n'est pas une parité.
 
 Sorties à luciepc : `banc-parite/sorties/lucivy-439/`. Script : `~/.cache/rag3weaver-build/parity-lucivy-439.sh`.
+
+## 12. Ajout, 10 h 30 : le départage de lucivy, et d'où viennent les contenus propres à chaque côté
+
+lucivy a rejoué `test_compare_two_indexes` sur les dossiers `Lucivy_ScopeContent` de A et de B′, avec
+l'ensemble exact des ids visibles de A. Ce sont 61 122 offsets, confirmés par ED : une seule couche, une
+seule génération, rien après le rang en attente.
+- **lucivy rend les mêmes scores sur les mêmes contenus** : écart relatif au plus de 1,8e-3, pour un
+  contrat de 5e-3.
+- Les cas d'un mot ne divergent qu'entre ex æquo stricts. En bm25 seul, le score de search_code est une
+  fusion RRF (k = 60) de `bm25` et `bm25_exact`, cette dernière dominante.
+- Les autres écarts viennent de contenus présents d'un seul côté : 911 dans A, 879 dans B′.
+
+Ces contenus, rattachés à leur occurrence ouverte :
+1. **122 occurrences de A viennent de `third_party/fuzzy-fst/`, que git ne suit pas** dans l'arbre de
+   Lucie à luciepc (`??`). A est indexée du working tree, B′ d'un worktree propre au commit 284cc00c0b.
+   C'est un écart de banc.
+2. **Les autres sont des en-têtes C/C++ de `third_party`, découpés autrement** :
+   - `json.hpp` : 330 dans A contre 449 dans B′ ;
+   - spdlog : 276 contre 335 ;
+   - yyjson : 99 contre 27.
+
+   Dans B′, 874 sur 879 sont des scopes `module`. 21 scopes ont la même identité des deux côtés mais un
+   contenu de taille différente. C'est le découpage de codeparsers qui a changé entre la répétition qui a
+   fait A et master : la garde `extern "C"` et les règles d'analyse 2. Le repassage de la bascule le
+   refera.
+
+**Conclusion** : le bm25 seul de A et de B′ diffère par le découpage d'avant le lot de codeparsers et par
+les fichiers non suivis de l'arbre de Lucie. Rien n'est propre à la migration, et lucivy est hors de
+cause.
+
+Sorties à luciepc : `banc-parite/sorties/lucivy-439/only-{A,Bprime}.json` ; le script est
+`~/.cache/rag3weaver-build/only.sh`.
