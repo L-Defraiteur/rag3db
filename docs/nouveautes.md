@@ -1,5 +1,9 @@
 # Nouveautés
 
+- 16 novembre2026 — **Une ligne très longue ne fait plus un morceau géant.** Le découpage du code par lignes coupe une ligne plus longue que la taille d'un morceau (1 500 caractères pour le code) en morceaux de cette taille, et le contexte autour d'un morceau ne dépasse plus cette taille de chaque côté. Un fichier de données d'une ligne faisait un morceau de 53 000 caractères, que le vecteur ne savait pas chercher. Le code ordinaire se découpe comme avant ; une base déjà indexée garde ses anciens morceaux jusqu'à la réécriture de leur contenu.
+
+- 16 novembre2026 — **Une recherche lexicale rend le même ordre d'une base à l'autre.** Deux résultats au même score sortent désormais dans un ordre fixé par leur identité (le contenu ou la clé), et non par la place de leurs documents dans l'index ; la coupe aux k premiers prend en compte tous les ex æquo avant de trancher. Deux bases au même contenu rendent la même liste.
+
 - 16 novembre2026 — **Le journal d'index dit enfin ce qui a été coupé.** La ligne de nouveautés de la coupe au plafond
   (828ff28153) promettait que le journal d'index dise combien de textes avaient été coupés : il ne le disait pas,
   l'avertissement partait sur le bus d'événements du catalogue, que le journal ne lit pas. Désormais, après chaque
