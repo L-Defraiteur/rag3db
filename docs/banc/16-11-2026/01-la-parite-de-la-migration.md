@@ -164,3 +164,26 @@ même manifeste, en bm25 seul :
   texte compte encore** : les retirer rend le classement du neuf, au rang près. C'est la cause (1)
   du § 3, celle que lucivy 4.3.9 doit effacer sans élaguer.
 - Le 0,668 d'avant venait du défaut « tout visible », pas de l'élagage.
+
+## 11. Ajout, 9 h 50 : sous lucivy 4.3.9
+
+Rejouée par master fe5d81f811 (pointeur cb4a1757a4 et ordre stable des ex æquo 0ae49fa84c). lucivy-core
+est en 4.3.9 dans le lock du worktree comme dans `cargo tree`. Chaque relevé lit une copie reflink fraîche.
+
+| A contre B′ | rappel à 10 | même premier | même classement | même classement, scores à 1e-5 |
+|---|---|---|---|---|
+| bm25 seul, 4.3.8 (§ 3) | 270 / 279 | 27 / 30 | 14 / 30 | 11 / 30 |
+| bm25 seul, 4.3.9 | 271 / 279 | 27 / 30 | 21 / 30 | 12 / 30 |
+| vector seul, 4.3.9 | 292 / 300 | 28 / 30 | 23 / 30 | 2 / 30 |
+| tous signaux, 4.3.9 | 287 / 300 = 0,957 | 28 / 30 | 22 / 30 | 18 / 30 |
+
+- **Le bm25 seul s'améliore** (14 → 21 classements égaux) **mais n'est pas égal** : 9 cas diffèrent encore.
+- Les requêtes d'un mot (`read_text`, `rag3db`, `value`) ont des scores autour de 0,021, avec un écart relatif
+  de 3 à 4,5 % sur les résultats communs. Les requêtes de plusieurs mots sont sous 5e-4, sauf « translate a
+  hop into a query » (8e-3), où deux résultats changent aux rangs 9 et 10.
+- Selon le ticket `docs/lucivy/tickets/2026-11-16-le-bm25-seul-de-la-migration-reste-a-prouver-egal-sous-4-3-9.md`,
+  c'est à lucivy de départager par `test_compare_two_indexes`, sur le dossier `Lucivy_ScopeContent` des
+  copies A et B′. Les entrées lui sont données.
+- A contre B en tous signaux : 233 / 293 = 0,795. B garde son ancien découpage, donc ce n'est pas une parité.
+
+Sorties à luciepc : `banc-parite/sorties/lucivy-439/`. Script : `~/.cache/rag3weaver-build/parity-lucivy-439.sh`.
