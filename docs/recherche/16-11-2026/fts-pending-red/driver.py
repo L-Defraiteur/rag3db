@@ -54,7 +54,7 @@ native=json.loads(subprocess.check_output(['bash','-c',export_script,'export-pro
 os.environ.update(native)
 library=Path(native['RAG3DB_LIBRARY_DIR']);assert library==Path(os.environ['RAG3DB_LIBS_DIR'])/LIB
 assert sha(library/'librag3db.so')=='b7e9fc75a3d2de04c72680b0309e8bb1df9eaadb5211ebbacf39716c6d0a2101'
-assert (library/'libvector.rag3db_extension').is_file()
+assert sha(library/'libvector.rag3db_extension')=='1669d6392ec8067fcf92ae2ccc972fd7cd3086629fb82d1f5d254e90d72d7561'
 save('native-profile.json',dict(env=native,library_sha256=sha(library/'librag3db.so'),vector_sha256=sha(library/'libvector.rag3db_extension'),store=str(library.parent)))
 # Observation fraîche juste avant la garde commune : aucun processus attribué
 # au target ou à son ancien arbre, aucune disparition masquée d'un tel processus.
