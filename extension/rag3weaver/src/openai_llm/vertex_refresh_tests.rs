@@ -1,4 +1,4 @@
-//! Transport reproducer for the current declared Vertex token snapshot.
+//! Token refresh contracts on the real Vertex transport and declared connector.
 //! Prepared only: no execution or compilation verdict yet.
 
 use super::*;
@@ -121,11 +121,13 @@ impl Drop for RefreshServer {
     }
 }
 
-// Exact current connect_llm boundary: snapshot token once, pass it to the
-// REAL Vertex client constructor. After the observed red, wire this fixture
-// to the production retained-source constructor without changing the scenario.
-fn current_declared_vertex(source: &FakeTokenSource, base_url: &str) -> OpenAiLlm {
-    let mut client = OpenAiLlm::vertex("fixture-project", "global", source.token(), "fixture-model")
+impl crate::gcp_auth::AccessTokenSource for FakeTokenSource {
+    fn token(&self) -> Result<String, LlmError> { Ok(FakeTokenSource::token(self).into()) }
+    fn invalidate(&self) { FakeTokenSource::invalidate(self); }
+}
+
+fn current_declared_vertex(source: &Arc<FakeTokenSource>, base_url: &str) -> OpenAiLlm {
+    let mut client = OpenAiLlm::vertex_with_source("fixture-project", "global", source.clone(), "fixture-model")
         .with_base_url(base_url)
         .without_retry();
     client.agent = ureq::Agent::new_with_config(
@@ -222,4 +224,40 @@ fn vertex_never_refreshes_or_replays_after_a_stream_fragment() {
     assert_eq!(sink.text, "partial", "an opened stream must never be emitted twice");
     assert_eq!(source.invalidations.load(Ordering::SeqCst), 0);
     assert_eq!(*server.authorizations.lock().unwrap(), ["Bearer fixture-token-1"]);
+}
+
+#[test]
+fn declared_vertex_connector_retains_injected_source_and_refreshes() {
+    use crate::model_source::{connect_llm_with_vertex, ModelSource, Origin};
+    let source = Arc::new(FakeTokenSource::default());
+    let server = RefreshServer::start();
+    let declaration: ModelSource = serde_json::from_value(json!({
+        "provider":"compatible", "protocol":"vertex", "model":"fixture-model",
+        "context_tokens":12345, "params":{"project":"fixture-project","location":"global"}
+    })).unwrap();
+    let mut constructed = 0;
+    let (client, origin) = connect_llm_with_vertex(&declaration, |project, location, model| {
+        constructed += 1;
+        assert_eq!((project,location,model), ("fixture-project","global","fixture-model"));
+        Ok(current_declared_vertex(&source, &server.base_url))
+    }).expect("real declared provider branch with injected constructor, no from_env");
+    assert_eq!(constructed,1);
+    assert_eq!(origin,Origin::Compatible("vertex:fixture-project/global".into()));
+    assert_eq!(client.context_len(),12345);
+    assert_eq!(source.acquisitions.load(Ordering::SeqCst),0,"connection must retain capability, not fetch a snapshot");
+    for _ in 0..2 {
+        let mut sink=StringSink::default();
+        client.generate(&[Turn::user("fixture")],&GenOptions::default(),&mut sink).unwrap();
+        assert_eq!(sink.text,"ok");
+    }
+    assert_eq!(source.invalidations.load(Ordering::SeqCst),1);
+    assert_eq!(*server.authorizations.lock().unwrap(),["Bearer fixture-token-1","Bearer fixture-token-1","Bearer fixture-token-2"]);
+}
+
+#[test]
+fn dynamic_vertex_auth_debug_never_discloses_a_token() {
+    let source = Arc::new(FakeTokenSource::default());
+    let debug=format!("{:?}",Auth::Vertex(source));
+    assert!(!debug.contains("fixture-token"));
+    assert!(debug.contains("redacted"));
 }
