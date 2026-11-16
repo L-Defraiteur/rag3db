@@ -120,7 +120,10 @@ heures de travail.
 
 ### Entrée 5. Rejouer la parité de la migration au pointeur lucivy 4.3.9
 
-- **Ticket** : `docs/banc/tickets/2026-11-16-rejouer-la-parite-de-la-migration-au-pointeur-lucivy-4-3-9.md`
+**Fait le 16 novembre (banc), ticket fermé** : voir la page de parité, § 11 et § 12. Il reste à rejouer la parité
+sur la copie finale de la bascule, quand c7 la refera : même méthode, contre un index neuf du même état de l'arbre.
+
+- **Ticket** : `docs/tickets/closed/2026-11-16-rejouer-la-parite-de-la-migration-au-pointeur-lucivy-4-3-9.md`
 - **À faire** : quand `lucivy-core` est en 4.3.9 dans `extension/rag3weaver/Cargo.lock` de master :
   - le bm25 seul A contre B′ (`b-prime-signals.sh`) ;
   - tous les signaux A contre B (`parity-migration.sh`) ;

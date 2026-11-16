@@ -1,6 +1,10 @@
 # Rejouer la parité de la migration au pointeur lucivy 4.3.9
 
-- **État** : ouvert ; bloqué jusqu'au pointeur lucivy 4.3.9 sur master.
+- **État** : fermé (16 novembre 2026, banc) — rejoué par master fe5d81f811 (lucivy-core 4.3.9 au lock et dans
+  `cargo tree`) : bm25 seul A contre B′ à 21/30 classements égaux (14 sous 4.3.8). Le départage de lucivy
+  (mêmes scores sur les mêmes contenus, ≤ 1,8e-3) et le relevé du banc (fuzzy-fst non suivi, en-têtes C/C++
+  découpés avant les règles 2) le ferment : rien de propre à la migration. Page de parité, § 11 et § 12
+  (a4119c4dcd, 9ed0c640c7). La parité se rejoue sur la copie finale de la bascule.
 - **Famille** : produit
 - **Gravité** : moyenne. C'est la dernière preuve que la bascule attend avant de passer les bases de
   Lucie aux générations.
