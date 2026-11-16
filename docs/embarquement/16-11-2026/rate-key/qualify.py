@@ -132,6 +132,9 @@ def coordinate_canonical():
 verdict = 'ROUGE'
 try:
     guard()
+    private_profile = check_private_environment(P, E)
+    for path in set(private_profile['paths'].values()):
+        Path(path).mkdir(parents=True, exist_ok=True)
     save('environment-profile-before.json', check_private_environment(P, E))
     script = R/'passe_epinglee.sh'
     assert hashlib.sha256(script.read_bytes()).hexdigest() == PIN_SHA
