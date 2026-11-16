@@ -149,6 +149,10 @@ pub struct Identite {
     /// Le ratio qui traduit ce plafond en jetons, dit avec lui (environ).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub chars_per_token: Option<usize>,
+    /// **Texts the service cut to its cap** since it started, rather than
+    /// refusing their batch. Absent : a service from before the cut.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cut_texts: Option<u64>,
 }
 
 /// La politique de déchargement d'un fournisseur, telle qu'il la déclare.
@@ -610,6 +614,7 @@ impl EmbedDaemon {
             relances: self.relances,
             max_chars_per_text: Some(self.max_chars),
             chars_per_token: Some(CARACTERES_PAR_JETON),
+            cut_texts: None,
         }
     }
 
@@ -1693,40 +1698,86 @@ mod tests {
         }
     }
 
-    /// Un embarqueur qui compte ses appels.
-    #[derive(Debug, Default)]
-    struct Compteur(std::sync::atomic::AtomicUsize);
 
-    impl Embedder for Compteur {
+    /// **The cap is declared, and a text above it is cut, never refused with
+    /// its batch** (banc ticket, 16 November 2026 : one 13 135-character text
+    /// had the 7878 refuse every batch of 512, and a whole index stayed
+    /// without vectors). The identity says the cap and its ratio (12 000
+    /// characters by default, about 3 per token).
+    #[test]
+    fn the_cap_is_declared_and_an_oversized_text_is_cut_not_refused() {
+        let recorder = Arc::new(LengthRecorder::default());
+        let adresse = demon(EmbedDaemon::new(recorder.clone()));
+        let c = DaemonEmbedder::joindre(&adresse).expect("joindre");
+        assert_eq!((c.identite().max_chars_per_text, c.identite().chars_per_token), (Some(12_000), Some(3)));
+        let v = c.embed(&["court".to_string(), "x".repeat(13_000)]).expect("an oversized text is cut, its batch served");
+        assert_eq!(v.len(), 2);
+        assert!(recorder.longest() <= 12_000, "the model never sees more than the cap : {}", recorder.longest());
+        let adresse = demon(EmbedDaemon::new(recorder.clone()).max_chars_per_text(100));
+        let c = DaemonEmbedder::joindre(&adresse).expect("joindre");
+        assert_eq!(c.identite().max_chars_per_text, Some(100));
+        assert!(c.embed(&["y".repeat(101)]).is_ok(), "above a set cap : cut, served");
+        assert!(c.embed(&["y".repeat(100)]).is_ok(), "at the cap : served");
+    }
+
+    /// An embedder that records the length, in characters, of every text it receives.
+    #[derive(Debug, Default)]
+    struct LengthRecorder(std::sync::Mutex<Vec<usize>>);
+
+    impl LengthRecorder {
+        fn longest(&self) -> usize {
+            self.0.lock().unwrap().iter().copied().max().unwrap_or(0)
+        }
+        fn seen(&self) -> usize {
+            self.0.lock().unwrap().len()
+        }
+    }
+
+    impl Embedder for LengthRecorder {
         fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
-            self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            self.0.lock().unwrap().extend(texts.iter().map(|t| t.chars().count()));
             Ok(texts.iter().map(|_| vec![0.0; 4]).collect())
         }
         fn dim(&self) -> usize {
             4
         }
         fn name(&self) -> &str {
-            "compteur"
+            "length-recorder"
         }
     }
 
-    /// **3. Un texte au-dessus du plafond est refusé nommé, sans calcul**, et
-    /// l'identité dit le plafond et son ratio (12 000 caractères par défaut,
-    /// environ 3 par jeton).
+    /// **A batch of 512 with one 53 000-character text gets its 512 vectors**
+    /// (the banc's B′ index, 16 November 2026) : the client cuts that text to
+    /// the cap its service declares before sending, and counts the cut.
     #[test]
-    fn un_texte_au_dessus_du_plafond_est_refuse_nomme_sans_calcul() {
-        let compteur = Arc::new(Compteur::default());
-        let adresse = demon(EmbedDaemon::new(compteur.clone()));
+    fn a_batch_with_one_oversized_text_gets_all_its_vectors_and_the_cut_is_counted() {
+        let recorder = Arc::new(LengthRecorder::default());
+        let adresse = demon(EmbedDaemon::new(recorder.clone()));
         let c = DaemonEmbedder::joindre(&adresse).expect("joindre");
-        assert_eq!((c.identite().max_chars_per_text, c.identite().chars_per_token), (Some(12_000), Some(3)));
-        let e = c.embed(&["court".to_string(), "x".repeat(13_000)]).err().expect("un texte trop long est refusé").to_string();
-        assert!(e.contains("(413)") && e.contains("texte 1 : 13000 caractères, plafond 12000"), "{e}");
-        assert_eq!(compteur.0.load(std::sync::atomic::Ordering::SeqCst), 0, "rien n'a été calculé");
-        let adresse = demon(EmbedDaemon::new(compteur.clone()).max_chars_per_text(100));
+        let mut texts: Vec<String> = (0..511).map(|i| format!("chunk {i}")).collect();
+        texts.insert(200, "z".repeat(53_000));
+        let v = c.embed(&texts).expect("the whole batch is served");
+        assert_eq!(v.len(), 512, "every text has its vector");
+        assert_eq!(recorder.seen(), 512);
+        assert!(recorder.longest() <= 12_000, "the service received nothing above its cap : {}", recorder.longest());
+        assert_eq!(c.char_truncations(), Some((1, 12_000)), "the client counts its cut, with the cap");
+    }
+
+    /// **The service itself cuts an oversized text instead of refusing its
+    /// batch**, for a client that does not cut (one from before), and counts it
+    /// in its identity.
+    #[test]
+    fn the_service_cuts_an_oversized_text_for_a_client_that_does_not() {
+        let recorder = Arc::new(LengthRecorder::default());
+        let adresse = demon(EmbedDaemon::new(recorder.clone()));
+        let corps = serde_json::json!({ "texts": ["court", "w".repeat(13_000)] }).to_string();
+        let reponse = super::super::poster(&super::super::agent_with_timeout(std::time::Duration::from_secs(10)), &format!("http://{adresse}"), "/embed", corps)
+            .expect("the batch is served, not refused");
+        let v: serde_json::Value = serde_json::from_str(&reponse).unwrap();
+        assert_eq!(v["vectors"].as_array().map(|a| a.len()), Some(2), "{reponse}");
+        assert!(recorder.longest() <= 12_000, "{}", recorder.longest());
         let c = DaemonEmbedder::joindre(&adresse).expect("joindre");
-        assert_eq!(c.identite().max_chars_per_text, Some(100));
-        assert!(c.embed(&["y".repeat(101)]).err().expect("plafond réglé").to_string().contains("plafond 100"));
-        assert!(c.embed(&["y".repeat(100)]).is_ok(), "au plafond, il passe");
+        assert_eq!(c.identite().cut_texts, Some(1), "the service counts what it cut");
     }
 
     #[test]
