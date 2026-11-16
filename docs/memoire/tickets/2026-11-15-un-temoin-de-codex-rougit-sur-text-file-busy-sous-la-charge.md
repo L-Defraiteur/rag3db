@@ -103,3 +103,11 @@ sourceUNION9dansELFavant2e, finalSHA/scan/autorité/deadlineAPRÈSopen.
 Primitives sourcearchive et cacheinventory réemployées d'Archi b12, provenance
 à publier ; code+témoins avantpetitsCPU. AucunCargo/service/targetguard réel
 ou nouvelleportée pendant la préparation ; nouveauGOexact requis.
+
+Prépaunion observée sansCargo : d8da prépubpuis33CPUverts, vraiearchive734
+physiqueDETACH/gitlink/adminfullSHA, checkoutsourcePCunionAPPe272 auMÊMEC ;
+5JSONtransitionPC/local0écart, inventoryTavant/aprèsSHA8a6e...1052égal, ELF6f12
+conservé, aucun guardT. Vraie capturepreflightreadonly8657FPetrequired_suites
+bef..APPvide. [Pilote concret10](../16-11-2026/10-pilote-union-concret.md).
+P/Q/Sunion/TMPnouveaux noncréés, aucunruntime/Cargo/service ; RO+GOdistinct
+3600nouveaux restent requis pour lecodeEmbar entrant etsameELFunion2libs.

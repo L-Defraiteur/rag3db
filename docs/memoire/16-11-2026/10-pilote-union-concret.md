@@ -75,3 +75,33 @@ Témoins prépubliés avantpetitsCPU : watchers/finalsave/lateopen/SDKexec et vr
 conservés ; sourcearchiveGit/admin secretguard, vraie gardeSAMEOWNER/fauxCargo,
 foreignbuildrsrefusé avantmutation ; contratcache porté. Aucun Rust/runtime
 autorisé avant coupleRO+GOdistinct. Résultats seront ajoutés aprèsobservations.
+
+## Préparation observée après publication, sans qualification
+
+Code et33témoins publiésd8da4a7c3d210e8ea5affe90c857e406941667f9 AVANTtests.
+Résultats timeout20failfast parmodule : sourceGit4/0 en0,054s ; gardeSAMEOWNER
+réelle surfixture/fauxCargo2/0 en0,111s ; contratcache11/0 en0,010s ; vraisenv/
+SDKexec4/0 en0,012s ; watcher/finalsave12/0 en0,004s. Aucun Cargo/Rust, modèle,
+DB ou signal réel dans ces témoins ; Git uniquement dans petitsreposprivés.
+
+TransitionPC GitSEULE exécutée via ce codeprépublié, terminée1185991.721369388 :
+archivephysique734détachée/gitadmin+gitlinkindépendants/fulltrackedSHA égal
+sourceavanttransition ; checkoutPC MÊMEC maintenantAPPe272 détaché. Référence
+distante734 conservée. Targetidentique avant/après, inventairecompletSHA
+**8a6e03e98db3e5ec06b21be8eb0478749ae56099c46ccdf983cf831773831052**,
+ELF6f12inchangé. Frozen-sourceSHA510f0c...8c16, new-sourceSHAedd03a...8669.
+Aucun guardT/Cargo/metadata lancé et aucune nouvelleportée consommée.
+
+[Manifest5preuvestransition](script-fixtures-union-transition-manifest.json)
+SHA **6701e75c62238ce253cd51e9d9f7e48bf860b18c0f8b14b4ee85c76451b019c1**,
+PC/localréhash0écart sous cx-memoire-script-fixtures-union-transition-r1[-local].
+La source734 physique et ses anciens40SHA restent valides comme historiques,
+pas comme sourceunion. Ancienbudget terminéVERT toujours terminé.
+
+Préflight lectureseule VRAIcaptureunion aprèsGit : OK,8657fichiersFPhashés,
+archives/source/marker/reçuv3/ELF/oldcanon cohérents. Origin/masterPC=befexact,
+vraie required_suites.sh bef..e272 rc0/stdoutvide confirmeSUITES=-.
+P/Q/Sunion-v1 ABSENTS, TMPunion noncréé ; zéroCargo/F8/lib/NAV nouveau.
+3watchersED byteidentiques/hashesprovenanceexact,654ticketsverts, produitAPP→piloteVIDE.
+Prochaine étape est ROcouple puis GOexact+créneau et nouvelleborne3600, aucun
+GOmaster/retrait/déploiement.
