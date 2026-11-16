@@ -280,4 +280,35 @@ class Transport(unittest.TestCase):
         http.assert_not_called()
 
 
+class ProcessSnapshot(unittest.TestCase):
+    def snapshot(self, states=('R','S'), starts=('77','77'), uids=None):
+        from types import SimpleNamespace
+        uids = iter(uids if uids is not None else [os.getuid(),os.getuid()])
+        samples = iter(zip(states, starts))
+        class Proc:
+            def __init__(self, path): self.path=path
+            def __truediv__(self, name):return Proc(self.path+'/'+str(name))
+            def stat(self):return SimpleNamespace(st_uid=next(uids))
+            def read_text(self):
+                state,start=next(samples)
+                return '321 (provider) '+' '.join([state]+['0']*18+[start])
+        real_path=Path
+        with patch.object(owner,'Path',side_effect=lambda x:Proc('/proc') if str(x)=='/proc' else real_path(x)), \
+             patch.object(owner.os,'readlink',return_value='/fixture/provider'), \
+             patch.object(owner,'digest',return_value='b'*64):
+            return owner.process_snapshot(321)
+
+    def test_real_snapshot_accepts_live_scheduler_state_changes(self):
+        for states in [('R','S'),('S','R')]:
+            with self.subTest(states=states):
+                actual=self.snapshot(states)
+                self.assertEqual(actual,dict(pid=321,uid=os.getuid(),start='77',
+                    state=states[1],exe='/fixture/provider',exe_sha256='b'*64))
+
+    def test_real_snapshot_still_refuses_identity_change_or_nonlive_state(self):
+        for args in [dict(starts=('77','88')),dict(uids=[os.getuid(),os.getuid()+1]),
+                     dict(states=('T','R')),dict(states=('R','Z')),dict(states=('?','S'))]:
+            with self.subTest(args=args),self.assertRaises(ValueError):self.snapshot(**args)
+
+
 if __name__=='__main__':unittest.main()
