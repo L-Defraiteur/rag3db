@@ -219,6 +219,55 @@ class Transport(unittest.TestCase):
         child.kill.assert_called_once()
         self.assertEqual(child.communicate.call_count,2)
 
+    def test_nonzero_worker_retains_stdout_stderr_and_exit_before_refusal(self):
+        from unittest.mock import Mock
+        fixture, context = self.context()
+        child = Mock(pid=987, returncode=3)
+        child.communicate.return_value=(b'partial health raw', b'worker failure')
+        trace={}
+        with patch.object(owner.subprocess,'Popen',return_value=child), \
+             patch.object(owner.time,'monotonic',return_value=80.):
+            with self.assertRaises(ValueError):
+                owner.health_get(85.,ready_path=fixture.path,ready_sha256=fixture.sha,
+                                 nonce='nonce',pins=fixture.pins,trace=trace)
+        self.assertEqual(bytes.fromhex(trace['stdout_hex']),b'partial health raw')
+        self.assertEqual(bytes.fromhex(trace['stderr_hex']),b'worker failure')
+        self.assertEqual(trace['returncode'],3)
+        self.assertFalse(trace['timed_out'])
+
+    def test_timeout_preserves_partial_and_reaped_output(self):
+        from unittest.mock import Mock
+        fixture, context = self.context()
+        error=owner.subprocess.TimeoutExpired('fixture',5,output=b'partial',stderr=b'early error')
+        child=Mock(pid=987,returncode=-9)
+        child.communicate.side_effect=[error,(b'partial plus tail',b'early error plus tail')]
+        trace={}
+        with patch.object(owner.subprocess,'Popen',return_value=child), \
+             patch.object(owner.time,'monotonic',return_value=80.):
+            with self.assertRaises(owner.subprocess.TimeoutExpired):
+                owner.health_get(85.,ready_path=fixture.path,ready_sha256=fixture.sha,
+                                 nonce='nonce',pins=fixture.pins,trace=trace)
+        self.assertEqual(bytes.fromhex(trace['stdout_hex']),b'partial plus tail')
+        self.assertEqual(bytes.fromhex(trace['timeout_stdout_hex']),b'partial')
+        self.assertEqual(bytes.fromhex(trace['stderr_hex']),b'early error plus tail')
+        self.assertEqual(trace['returncode'],-9)
+        self.assertTrue(trace['timed_out'])
+        child.kill.assert_called_once()
+
+    def test_oversize_worker_preserves_received_prefix_before_refusal(self):
+        from unittest.mock import Mock
+        fixture, context = self.context()
+        connection=Mock();connection.getresponse.return_value.status=200
+        connection.getresponse.return_value.read.return_value=b'x'*65537
+        with patch.object(owner.http.client,'HTTPConnection',return_value=connection), \
+             patch.object(protocol,'read_phase_state',side_effect=fixture.phase_reader), \
+             patch.object(owner.time,'monotonic',return_value=80.),patch('builtins.print') as printed:
+            with self.assertRaises(ValueError):owner._health_worker(85.,context)
+        evidence=protocol.decode(printed.call_args.args[0])
+        self.assertEqual(bytes.fromhex(evidence['raw_hex']),b'x'*65537)
+        self.assertTrue(evidence['oversize'])
+        self.assertTrue(evidence['prefix_only'])
+
     def test_worker_expired_phase_never_opens_connection(self):
         fixture, context = self.context()
         with patch.object(owner.http.client,'HTTPConnection') as http, \
