@@ -11,7 +11,7 @@ import tempfile
 import unittest
 
 SOURCE = Path(__file__).resolve().parents[3] / 'extension/rag3weaver/src/codex_threads.rs'
-BODY = '#!/bin/sh\nprintf fixture-ok\\n\n'
+BODY = '#!/bin/sh\nprintf \"%s\\n\" fixture-ok\n'
 
 
 def run_with_inherited_writer(use_child_writer, rename=False):
@@ -31,8 +31,10 @@ def run_with_inherited_writer(use_child_writer, rename=False):
             os.close(release_w)
             os.write(ready_w, b'R')
             os.close(ready_w)
-            os.read(release_r, 1)
-            os._exit(0)
+            released = select.select([release_r], [], [], 10)[0]
+            if released:
+                os.read(release_r, 1)
+            os._exit(0 if released else 98)
         os.close(ready_w)
         os.close(release_r)
         try:
