@@ -163,3 +163,15 @@ son descendant (aucun commit entrant à intégrer, pas de rebase artificiel).
 Banc sollicité pour RO des preuvescae3 sansrun. Reste : cartographie des tests
 corpus/ignorés et recettebornée explicite avec provenance/cachesknownowner ;
 aucun ABSENT_OK ni faux0ignoré, pas d’équivalence2.6/7.2 ni validationULP.
+
+## Proposition de qualification core et RO banc
+
+[Recette07](../16-11-2026/07-preparation-qualification-core.md) : candidat890
+déjà union de maina1 ; deux pilotes proposés, syntaxeAST seulement, paquet
+non admis. Proposition1800s/32G/HIGHmax/j<=4, profilcorepar défaut+doctests,
+inventaires complets et ignorés nonqualifiés. C7 doit arbitrer Linux2.6.0
+cacheprovenancé pour cette régression seulement avant finalisation du paquet ;
+aucune extraction ni Cargo. ULP/corpus7.2 toujours en attente.
+Banc RO favorablebornée3068ad7 : 28hashes conformes, 3exacts verts ; nuance
+UNKNOWN12entrée/**13posttests**/12final tous nonattribués. Pas de rehashELF
+ni nouveau run par Banc. Ticket reste ouvert ; lucivy porte la suite, C7 le GO.

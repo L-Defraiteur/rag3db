@@ -311,3 +311,7 @@ faire pour Codex. La suite reprend à l'entrée 3.
 - **Pas de force push**, pas d'effacement de branche distante. Une branche rebasée se pousse sous un nouveau nom.
 - **Les lourds** passent par `~/.cache/rag3weaver-build/poste lourd`, et une mesure par `poste mesure`. Toujours
   laisser deux cœurs libres.
+
+Suite qualification warnings : voir recette07 et ticket indexed-false existant.
+RO banc favorable bornée ; profil core proposé1800s, corpus à admettre avant
+paquet final, aucun nouveau Cargo. ULP7.2 reste en attente et PR42 HOLD.
