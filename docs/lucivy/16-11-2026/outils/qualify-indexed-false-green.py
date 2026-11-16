@@ -34,41 +34,107 @@ checked_path = BASE['checked_path']
 cpu_jobs = BASE['cpu_jobs']
 
 
-def quiescence(data):
-    old = json.loads(checked_path(data['old_receipt'], kind='file').read_text())
-    verdict = json.loads(checked_path(data['old_verdict'], kind='file').read_text())
-    assert old['etat'] == 'termine' and old['pid'] == 856197 and old['debut'] == '117998665'
-    assert verdict['code'] == 1 and verdict['erreur'] is None and not verdict['restes'] and verdict['nettoye']
-    live = []
-    for child in json.loads(checked_path(data['old_children'], kind='file').read_text()):
-        path = Path('/proc') / str(child['pid']) / 'stat'
-        try:
-            start = path.read_text().rsplit(') ', 1)[1].split()[19]
-        except FileNotFoundError:
+def classify_scan(records, baseline):
+    """Do not turn inaccessible baseline metadata into a claim of universal quiet."""
+    allowed_unknown = {(r['pid'], r['uid'], r['start'], r['cgroup']) for r in baseline}
+    blocked, unknown = [], []
+    for row in records:
+        if not row['present']:
             continue
-        if start == child['debut']:
-            live.append(dict(pid=child['pid'], start=start, reason='old scope descendant'))
+        identity = (row['pid'], row['uid'], row['start'], row['cgroup'])
+        if row['owned'] or row['attributed']:
+            blocked.append(dict(record=row, reason='attributed_unknown' if row['errors'] else 'known_activity'))
+        elif row['errors']:
+            unknown.append(row)
+            if identity not in allowed_unknown:
+                blocked.append(dict(record=row, reason='new_unattributed_unknown'))
+    return dict(admitted=not blocked, blocked=blocked, unknown=unknown,
+                scope='owned identities and attributable target/worktree activity only',
+                universal_quiescence_claimed=False)
+
+
+def collect_scan(data):
+    owned = {int(c['pid']): c['debut'] for c in json.loads(Path(data['old_children']).read_text())}
     roots = [data['target'], data['worktree']]
+    records = []
     for path in Path('/proc').iterdir():
         if not path.name.isdigit():
             continue
+        row = dict(pid=int(path.name), uid=None, start=None, cgroup=None, present=True,
+                   owned=False, attributed=False, exe=None, cwd=None, related_fds=[],
+                   accessible_fd_count=0, errors=[])
         try:
-            if path.stat().st_uid != os.getuid():
+            row['uid'] = path.stat().st_uid
+            if row['uid'] != os.getuid():
                 continue
-            start = (path / 'stat').read_text().rsplit(') ', 1)[1].split()[19]
-            candidates = [path / 'exe', path / 'cwd', *list((path / 'fd').iterdir())]
-            for candidate in candidates:
-                try:
-                    value = os.readlink(candidate).removesuffix(' (deleted)')
-                except FileNotFoundError:
-                    continue
-                if any(value == root or value.startswith(root + '/') for root in roots):
-                    live.append(dict(pid=int(path.name), start=start, reference=str(candidate), value=value))
+            fields = (path / 'stat').read_text().rsplit(') ', 1)[1].split()
+            row['start'] = fields[19]
+            row['owned'] = owned.get(row['pid']) == row['start']
+            if fields[0] == 'Z':
+                row['present'] = False; row['state'] = 'exited_zombie'
+                records.append(row); continue
         except (FileNotFoundError, ProcessLookupError):
             continue
-    assert not live, f'target/worktree not quiescent: {live}'
-    return dict(old_authority='terminated', old_pid=old['pid'], old_start=old['debut'], live=live,
-                checked_at=time.monotonic())
+        except OSError as error:
+            row['errors'].append(dict(field='identity', errno=error.errno, error=str(error)))
+            row['owned'] = row['pid'] in owned
+        try:
+            row['cgroup'] = (path / 'cgroup').read_text().strip()
+        except OSError as error:
+            row['errors'].append(dict(field='cgroup', errno=error.errno, error=str(error)))
+        for field in ['exe', 'cwd']:
+            try:
+                row[field] = os.readlink(path / field).removesuffix(' (deleted)')
+                if any(row[field] == root or row[field].startswith(root + '/') for root in roots):
+                    row['attributed'] = True
+            except OSError as error:
+                row['errors'].append(dict(field=field, errno=error.errno, error=str(error)))
+        try:
+            fds = list((path / 'fd').iterdir())
+        except OSError as error:
+            fds = []
+            row['errors'].append(dict(field='fd_directory', errno=error.errno, error=str(error)))
+        for fd in fds:
+            try:
+                value = os.readlink(fd).removesuffix(' (deleted)')
+                row['accessible_fd_count'] += 1
+                if any(value == root or value.startswith(root + '/') for root in roots):
+                    row['related_fds'].append(dict(fd=fd.name, target=value)); row['attributed'] = True
+            except FileNotFoundError:
+                pass  # An individual descriptor may close during this read-only scan.
+            except OSError as error:
+                row['errors'].append(dict(field='fd/' + fd.name, errno=error.errno, error=str(error)))
+        try:
+            current = (path / 'stat').read_text().rsplit(') ', 1)[1].split()[19]
+            if current != row['start']:
+                row['errors'].append(dict(field='identity', error='PID changed during scan'))
+        except (FileNotFoundError, ProcessLookupError):
+            row['present'] = False
+        records.append(row)
+    return records
+
+
+def save_scan(data, records, assessment, phase):
+    directory = checked_path(data['scan_directory'])
+    path = directory / f"{phase}-{time.monotonic_ns()}.json"
+    payload = dict(phase=phase, observed_at=time.monotonic(), records=records, assessment=assessment)
+    with path.open('x') as file:
+        json.dump(payload, file, indent=2); file.flush(); os.fsync(file.fileno())
+    return path
+
+
+def quiescence(data):
+    old = json.loads(checked_path(data['old_receipt'], kind='file').read_text())
+    verdict = json.loads(checked_path(data['old_verdict'], kind='file').read_text())
+    records = collect_scan(data)
+    assessment = classify_scan(records, data['baseline_unknown'])
+    snapshot = save_scan(data, records, assessment, 'check')
+    # Evidence exists even when these assertions refuse admission.
+    assert old['etat'] == 'termine' and old['pid'] == 856197 and old['debut'] == '117998665'
+    assert verdict['code'] == 1 and verdict['erreur'] is None and not verdict['restes'] and verdict['nettoye']
+    assert assessment['admitted'], f'owned/attributed activity or new unknown; see {snapshot}'
+    return dict(old_authority='terminated', old_pid=old['pid'], old_start=old['debut'],
+                assessment=assessment, snapshot=str(snapshot), checked_at=time.monotonic())
 
 
 def check_preflight(filename, scope_exists):
