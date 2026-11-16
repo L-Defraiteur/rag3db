@@ -71,3 +71,14 @@ reste observé5418,8s au relevé, pure indication historique et aucun crédit de
 budget nouveau. Cette capture ne remplace PAS la future capture après poste.
 Aucun P/Q/Sv2 ni TMP d'exécution v2 créé, T/source inchangés, zéro Cargo.
 Trois primitives watcher toujours byteidentiques ED13c8/hashesprovenance exacts.
+
+## Réserve publication : rouge réel avant correction
+
+13a093 retiré/nonlancé après ROED, ticket755a AVANTdiff. Témoin4c45976c38
+prépublié mais premier passage NONqualifiant : KeyErrorpilot du harnais.
+Harnais complétéce046b2c54 puis vrai rouge : finalize/save publient GREEN
+après ouverture artificiellement passée de99à101 avec END100. Journal
+rouge-final-open-qualified.log conservé ; ancien essai séparé rouge-final-open.log.
+Correction save : paramètre publication_deadline, comparaison APRÈSopenx
+immédiatementavantdump, basculeRED et retour de ce record au vrai finalize.
+Aucun changement du profil/cache/budget/produit, aucunrun/Auth/PQSv2.

@@ -25,9 +25,12 @@ def sha(path):
     with Path(path).open('rb') as stream:return hashlib.file_digest(stream,'sha256').hexdigest()
 
 def git(root,*args):return subprocess.check_output(['git','-C',str(root),*args],text=True).strip()
-def save(root,name,value):
+def save(root,name,value,publication_deadline=None):
     with (root/name).open('x') as stream:
+        if publication_deadline is not None and value.get('status')=='GREEN' and time.monotonic()>=publication_deadline:
+            value=dict(status='RED',returncode=1,error='deadline reached after open immediately before publication')
         json.dump(value,stream,indent=2);stream.write('\n');stream.flush();os.fsync(stream.fileno())
+    return value
 
 def require(condition,message):
     if not condition:raise RuntimeError(message)
@@ -210,7 +213,7 @@ def finalize(cfg,rc):
         deadline(end) # Fresh, after scan and hashes, immediately before publication.
     except Exception as error:outcome=dict(status='RED',returncode=rc,error=repr(error))
     if outcome['status']=='GREEN' and time.monotonic()>=outcome['deadline']:outcome=dict(status='RED',error='deadline before publication')
-    save(P,'composed-result.json',outcome);print(json.dumps(outcome));return 0 if outcome['status']=='GREEN' else 1
+    outcome=save(P,'composed-result.json',outcome,publication_deadline=outcome.get('deadline'));print(json.dumps(outcome));return 0 if outcome['status']=='GREEN' else 1
 
 def launch(pilot):
     control=Path(__file__).resolve().parents[4]
