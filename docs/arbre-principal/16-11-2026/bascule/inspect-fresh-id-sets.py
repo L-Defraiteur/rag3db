@@ -31,7 +31,10 @@ def main():
  def command(argv,name,env=None):
   remaining=end-time.monotonic()
   if remaining<=5:raise ValueError('deadline before '+name)
-  result=subprocess.run([str(a) for a in argv],capture_output=True,timeout=min(90,remaining-5),env=env)
+  try:result=subprocess.run([str(a) for a in argv],capture_output=True,timeout=min(90,remaining-5),env=env)
+  except subprocess.TimeoutExpired as error:
+   (root/(name+'.stdout')).write_bytes(error.stdout or b'');(root/(name+'.stderr')).write_bytes(error.stderr or b'')
+   save(name+'-process.json',dict(argv=[str(a) for a in argv],rc=None,timeout=True));raise
   (root/(name+'.stdout')).write_bytes(result.stdout);(root/(name+'.stderr')).write_bytes(result.stderr)
   save(name+'-process.json',dict(argv=[str(a) for a in argv],rc=result.returncode));return result
  start=time.monotonic();end=start+580
@@ -64,17 +67,21 @@ def main():
     comparison=ids.compare(fts_ids,ids.parse_graph(graph.stdout.decode()));save(table+'-set-comparison.json',comparison)
     if not comparison['equal']:raise ValueError('ID sets differ '+table)
   except Exception as error:first_error=error
-  after=fs.file_inventory(copy);source_after=fs.file_inventory(source);save('copy-after.json',after);save('source-after.json',source_after)
-  old={r['path']:r for r in before};new={r['path']:r for r in after};name=args.base+'.rag3db.readers';path=copy/name;created=name not in old and name in new
-  if path.exists() or path.is_symlink():
-   import stat
-   info=path.lstat()
-   if not stat.S_ISREG(info.st_mode) or info.st_uid!=1000 or info.st_size!=0:raise ValueError('invalid readers sidecar')
-  if created:
-   row=new.pop(name)
-   if row['sha256']!=hashlib.sha256(b'').hexdigest():raise ValueError('nonempty readers')
-  save('sidecar.json',dict(path=name,created=created))
-  if old!=new or before!=source_after:raise ValueError('input changed')
+  try:
+   after=fs.file_inventory(copy);source_after=fs.file_inventory(source);save('copy-after.json',after);save('source-after.json',source_after)
+   old={r['path']:r for r in before};new={r['path']:r for r in after};name=args.base+'.rag3db.readers';path=copy/name;created=name not in old and name in new
+   if path.exists() or path.is_symlink():
+    import stat
+    info=path.lstat()
+    if not stat.S_ISREG(info.st_mode) or info.st_uid!=1000 or info.st_size!=0:raise ValueError('invalid readers sidecar')
+   if created:
+    row=new.pop(name)
+    if row['sha256']!=hashlib.sha256(b'').hexdigest():raise ValueError('nonempty readers')
+   save('sidecar.json',dict(path=name,created=created))
+   if old!=new or before!=source_after:raise ValueError('input changed')
+  except Exception as audit_error:
+   save('audit-error.json',dict(error=str(audit_error)))
+   if first_error is None:first_error=audit_error
   if first_error:raise first_error
   check_pins()
   if digest(receipt)!=args.receipt_sha or time.monotonic()>=end:raise ValueError('receipt changed or deadline')

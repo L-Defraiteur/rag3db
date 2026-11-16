@@ -10,6 +10,14 @@ def digest(path):
  with path.open('rb') as stream:
   for chunk in iter(lambda:stream.read(1048576),b''):h.update(chunk)
  return h.hexdigest()
+def parse_directions(text):
+ tables=re.findall(r'^([A-Za-z_][A-Za-z0-9_]*) : [0-9]+ étiquettes sources, [0-9]+ destinations ; lectures avant ([0-9]+), arrière ([0-9]+) — égales$',text,re.M)
+ counts=re.findall(r'^    comptes : avant ([0-9]+), arrière ([0-9]+), union ([0-9]+), perdues d.un seul sens ([0-9]+)$',text,re.M)
+ if len(tables)!=18 or len({t[0] for t in tables})!=18 or len(counts)!=18:raise ValueError('incomplete 18-table observation')
+ if any(a!=b or a!=c or d!='0' for a,b,c,d in counts):raise ValueError('direction counts disagree')
+ if not text.endswith('Aucun écart entre les deux rangements.\n'):raise ValueError('missing final checker verdict')
+ return ([dict(table=t[0],forward=int(c[0]),backward=int(c[1]),union=int(c[2]),lost=int(c[3])) for t,c in zip(tables,counts)])
+
 def main():
  ap=argparse.ArgumentParser();ap.add_argument('--base',choices=['code-principal','code-lourd'],required=True);ap.add_argument('--sets-verdict-sha',required=True);ap.add_argument('--source-inventory-sha',required=True);args=ap.parse_args()
  if digest(TOOL)!='554b08c031e26de725682cf335c436093248d62f96badab29097c0a86c4a57da':raise ValueError('checker pin mismatch')
@@ -39,26 +47,27 @@ def main():
   try:
    remaining=end-time.monotonic()
    if remaining<=30:raise ValueError('deadline before checker')
-   result=subprocess.run([str(TOOL),str(copy/(args.base+'.rag3db'))],capture_output=True,timeout=min(1700,remaining-30),env=env)
+   try:result=subprocess.run([str(TOOL),str(copy/(args.base+'.rag3db'))],capture_output=True,timeout=min(1700,remaining-30),env=env)
+   except subprocess.TimeoutExpired as error:
+    (root/'directions.stdout').write_bytes(error.stdout or b'');(root/'directions.stderr').write_bytes(error.stderr or b'');save('process.json',dict(rc=None,timeout=True));raise
    (root/'directions.stdout').write_bytes(result.stdout);(root/'directions.stderr').write_bytes(result.stderr);save('process.json',dict(rc=result.returncode))
    if result.returncode:raise ValueError('two-direction checker refused')
-   text=result.stdout.decode();tables=re.findall(r'^([A-Za-z_][A-Za-z0-9_]*) : [0-9]+ étiquettes sources, [0-9]+ destinations ; lectures avant ([0-9]+), arrière ([0-9]+) — égales$',text,re.M)
-   counts=re.findall(r'^    comptes : avant ([0-9]+), arrière ([0-9]+), union ([0-9]+), perdues d.un seul sens ([0-9]+)$',text,re.M)
-   if len(tables)!=18 or len({t[0] for t in tables})!=18 or len(counts)!=18:raise ValueError('incomplete 18-table observation')
-   if any(a!=b or a!=c or d!='0' for a,b,c,d in counts):raise ValueError('direction counts disagree')
-   if not text.endswith('Aucun écart entre les deux rangements.\n'):raise ValueError('missing final checker verdict')
-   save('tables.json',[dict(table=t[0],forward=int(c[0]),backward=int(c[1]),union=int(c[2]),lost=int(c[3])) for t,c in zip(tables,counts)])
+   save('tables.json',parse_directions(result.stdout.decode()))
   except Exception as error:first_error=error
-  after=fs.file_inventory(copy);source_after=fs.file_inventory(source);save('copy-after.json',after);save('source-after.json',source_after)
-  old={r['path']:r for r in before};new={r['path']:r for r in after};name=args.base+'.rag3db.readers';path=copy/name;created=name not in old and name in new
-  if path.exists() or path.is_symlink():
-   info=path.lstat()
-   if not stat.S_ISREG(info.st_mode) or info.st_uid!=1000 or info.st_size!=0:raise ValueError('invalid readers sidecar')
-  if created:
-   row=new.pop(name)
-   if row['sha256']!=hashlib.sha256(b'').hexdigest():raise ValueError('nonempty readers')
-  save('sidecar.json',dict(path=name,created=created))
-  if old!=new or before!=source_after:raise ValueError('snapshot or copy changed')
+  try:
+   after=fs.file_inventory(copy);source_after=fs.file_inventory(source);save('copy-after.json',after);save('source-after.json',source_after)
+   old={r['path']:r for r in before};new={r['path']:r for r in after};name=args.base+'.rag3db.readers';path=copy/name;created=name not in old and name in new
+   if path.exists() or path.is_symlink():
+    info=path.lstat()
+    if not stat.S_ISREG(info.st_mode) or info.st_uid!=1000 or info.st_size!=0:raise ValueError('invalid readers sidecar')
+   if created:
+    row=new.pop(name)
+    if row['sha256']!=hashlib.sha256(b'').hexdigest():raise ValueError('nonempty readers')
+   save('sidecar.json',dict(path=name,created=created))
+   if old!=new or before!=source_after:raise ValueError('snapshot or copy changed')
+  except Exception as audit_error:
+   save('audit-error.json',dict(error=str(audit_error)))
+   if first_error is None:first_error=audit_error
   if first_error:raise first_error
   if digest(TOOL)!='554b08c031e26de725682cf335c436093248d62f96badab29097c0a86c4a57da' or time.monotonic()>=end:raise ValueError('tool changed or deadline')
   save('verdict.json',dict(verdict='FRESH_18_DIRECTIONS_EQUAL',base=args.base,elapsed=time.monotonic()-start,purge_qualified=False,cli_authorized=False))
