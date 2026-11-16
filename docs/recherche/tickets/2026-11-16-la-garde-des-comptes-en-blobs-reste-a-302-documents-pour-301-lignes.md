@@ -48,3 +48,7 @@ L’avis favorable aux contrats dump/lecture ne lève pas cette réserve : ancie
 ## Observation RO autorisée, sans correction
 
 Recette exacte c5d sous GO C7-RO-BLOBS-c5d-16nov : copie neuve strictement inchangée, extractiontypedBLOB et décodeLucivy4.3.9 réussis. Graphe0..300, FTS0..300+9000000 ; FTS−graphe=[9000000], graphe−FTS=[]. OBSERVATIONseulement : branchehistorique nontracée, maintenance/réparation nonqualifiée. Rapport [16](../16-11-2026/16-preuves-diagnostic-blobs-ro.md), manifeste774SHA identiques2postes e9272f...3662. ScopeVERT0/TERMINE/quiet, poste rendu, aucune suppression. Ticket demeure OUVERT.
+
+## Préparation DOUBLE autorisée après observation149a, AVANT code
+
+C7 demande deux témoins minimaux par la même API sync_source, formes déclarées avant schéma classique/générations, bases privées distinctes mais paramètres/corpus/options identiques. Chaque témoin exige IDs physiques égaux et nonvides avant fantôme, commitFTS réussi après injection9000000 préalablement absent, puis égalité restaurée après synchronisation inchangée et conservation UUID/H/positions. Témoin cfg(test) local au fil autour du dispatch réel et appels garde/rebuild, sans nouvelle API produit ni modification du dispatch. Deux fonctions NONJOUÉES, pas de correctif ici. Données publiées avant toute exécution ; futur build/native DOUBLE et ancien-master distincts attendent RO+GO exact. Pas de canonical retry ni affaiblissement de la garde302/301.
