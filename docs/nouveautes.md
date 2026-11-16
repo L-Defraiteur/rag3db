@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 16 novembre2026 — **Une recherche lexicale rend le même ordre d'une base à l'autre.** Deux résultats au même score sortent désormais dans un ordre fixé par leur identité (le contenu ou la clé), et non par la place de leurs documents dans l'index ; la coupe aux k premiers prend en compte tous les ex æquo avant de trancher. Deux bases au même contenu rendent la même liste.
+
 - 16 novembre2026 — **Un texte trop long ne fait plus tomber l'embarquement de tout son lot.** Depuis le 15 au
   soir, un seul texte de plus de 12 000 caractères (un fichier de données d'une ligne énorme) faisait refuser par
   le service chaque lot de 512, et un index neuf du dépôt restait sans aucun vecteur. Désormais, le client coupe
