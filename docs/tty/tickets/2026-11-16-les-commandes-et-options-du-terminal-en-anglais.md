@@ -176,3 +176,31 @@ Proposition suivante : Common600s/32G/j4, même target connu gardé,
 états XDG privés (cache inchangé, aucun SDK). Harnais et check_features produit
 restent à préparer et jouer séparément ; ne pas annoncer le ticket clos sur le
 seul vert crate. Aucun nouveau Cargo lancé à ce stade.
+
+### Suite F8 et harnais — préparation sur master frais
+
+Crate source0c4ab173d4 : vue113lib+1CLI/minimal22 passés, tous0échec/0ignoré ;
+Common `validation-6tdyny5z` VERT0/erreur null/restes[]/nettoye true.
+Nouvelle union `cx-tty-english-aliases-5` sur master
+`57fbd9aa56f4b7caeacb891388f3f10cbbb39d71` : depuis basebef, entrants
+procédure/outil de retour de snapshots seulement, aucun Rust/tty/SDK ajouté.
+Diff de périmètre audité en lecture seule, aucun nouveau Cargo.
+
+Pilote proposé `check-english-aliases-full.sh` : F8 canonique8/8 puis bâti
+binaire et harnais tmux-local-ouvert entier avec anciens noms. Même target
+session, gardes réelles de changement propriétaire workspace→crate ; aucun
+second cache d'artefacts. SDK59ac épinglé avec magasin explicite et SHA so/vector,
+cache/états XDG privés frères, aucun modèle ou hôte partagé. Port17990 libre
+observé en préparation ; il doit encore l'être à l'entrée, sinon arrêt.
+Le harnais démarre uniquement son faux hôte privé et ses sessions tmux privées.
+Son état historique en dur `$HOME/.local/state` serait inadapté : shim publié
+`run_private_harness.py` substitue seulement ETAT_TTY au chemin privé et conserve
+source générée+empreintes, sans changer HOME, scénarios, commandes ou résultats.
+
+Coût proposé : Common unique7200s/32G/j4, un budget non réinitialisé pour F8,
+bâti et harnais ; CHECK_FEATURES_TIMEOUT1200 par jeu à l'intérieur du même
+budget. Target plafond32G. Aucun lancement avant GO distinct ; premier refus
+arrête sans retry. Prérequis à réserver : créneau lourd CPU et port privé17990 ;
+tmux présent sur le portable, SDK59ac et archives antérieures présents.
+Pas de service partagé, aucune ouverture des bases de Lucie, aucun privilège.
+F8 et harnais restent NON JOUÉS sur le correctif jusqu'au verdict réel.
