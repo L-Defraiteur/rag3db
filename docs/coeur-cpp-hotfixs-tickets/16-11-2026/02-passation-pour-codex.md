@@ -135,7 +135,7 @@ puis les trois contrôles : statut vide, aucun rebase en cours, et `FETCH_HEAD` 
 
 ### 4. Le nombre de lignes hors du graphe d'un index vectoriel, lisible sans écrire (4 à 6 h)
 
-**En cours par hotfixs** : reprise sur `cx-hotfixs-rows-outside-graph-df2`, basedf2a578988 ; ancienne branche conservée. Quatre fixtures actualisées, NON COMPILÉES/NON JOUÉES, aucun code produit. Contrat exact sous instantané, NULL si inconnu ; pas une différence d’offsets physiques. [État et limites](04-rows-outside-graph-contract.md), [recette du rouge à relire avant admission](05-rows-outside-graph-red-recipe.md).
+**En cours par hotfixs** : source5099 sur `cx-hotfixs-rows-outside-graph-df2`, basedf2a578988 ; ancienne branche conservée. Quatre fixtures NON COMPILÉES/NON JOUÉES, aucun code produit. Pilote séparé sur `cx-hotfixs-rows-outside-graph-red-pilot`, [RO avant admission2400](06-rows-outside-graph-pilot.md) ; préparation PC/run NON FAITS. Contrat exact sous instantané, NULL si inconnu ; pas une différence d’offsets physiques. [État et limites](04-rows-outside-graph-contract.md), [recette](05-rows-outside-graph-red-recipe.md).
 
 - **Ticket** : [2026-11-08-le-nombre-de-lignes-hors-du-graphe-d-un-index-vectoriel-lisible-sans-ecrire.md](../tickets/2026-11-08-le-nombre-de-lignes-hors-du-graphe-d-un-index-vectoriel-lisible-sans-ecrire.md).
 - **À faire** : une colonne de `SHOW_INDEXES`, `rows_outside_graph` (nulle pour un index qui n'a pas cette notion), à

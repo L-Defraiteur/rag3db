@@ -77,3 +77,10 @@ champs stables + UINT64 final. Toujours NON COMPILÉES/NON JOUÉES.
 [Recette du rouge pour revue](../16-11-2026/05-rows-outside-graph-red-recipe.md) :
 vrai callee SHOW_INDEXES, rouge binder attendu, budget proposé2400s/32G ; pilote
 exact à adapter et relire avant admission, aucun GO lourd ni production.
+
+Pilote concret préparé ensuite sur branche/worktree distinct
+`cx-hotfixs-rows-outside-graph-red-pilot`, sans changer source5099 ni C++ :
+[superviseur et limites](../16-11-2026/06-rows-outside-graph-pilot.md).
+2400s après vrai poste, unité privée bornée, un seul appel réel SHOW_INDEXES
+attendu rouge au binder, résumé final toujours ROUGE. Préparation PC et run
+NON FAITS ; recette hashée/RO/admission séparées avant tout lourd. Aucun FIX.
