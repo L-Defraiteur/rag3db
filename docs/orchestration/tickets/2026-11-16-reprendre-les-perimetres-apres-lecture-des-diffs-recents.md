@@ -73,3 +73,6 @@ TTY934fixgroupéaprèsdiag91+troiscontreexemplesvraisrouges→verts/RO M TOTALE 
 
 
 ED99 atterrisousgardenormalefff9/vraiPOSTEPUSH/FF+3contrôlesdeuxhostsLUS, C7LSREMOTE99confirme ; touruniqueCLOS, aucunÀTOIouvert. TicketVertexresteOPENcritèresnonqualifiés, pasclôturefictive. PrépaCONTRATcleanupEDseule sansretrait, gelcacheMémoireintact. PrimitivecommunehealthpréparéeparEmbarpolitiquescycle/globaldistinctes, vrais7rougesArbreacquis, mécanismehard5RAW/typed/firstred, aucunprovider/PG/service/GO900/6000. PreuvesArchirevuesfavorablescibléespasglobalD6 ; TTYnouveauseulharnaiscadréencours.
+
+
+Blocage Cœur détaillé identifié : refus contrôleplateforme«possible cybersecurity risk», pas simple panne de session. Nouveau ticketorchestration2026-11-16-la-session-coeur-est-bloquee-par-le-controle-de-la-plateforme.md crééavanttransmission. Plusdereprise/fork/autresessionpourcontournerce refus ; analyseC1enattenterésolutionaccès, sources/proofspréservés, aucun testnatif. Autreslotsindépendantsautoriséscontinuent.
