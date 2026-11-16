@@ -1,0 +1,11 @@
+{
+  "manifest_sha256": "96c2e771fefc4cd0e204975feb8d1c73b1a66815cb1d3a1edc1b9002b94b644c",
+  "amendment_sha256": "8e673337e1361122167b4647d94ac02fcdd2563ee6bb31a8680e711bc8d6a18a",
+  "confirmed_generated_selected": 584,
+  "language_counts": {
+    "c": 329,
+    "cpp": 255
+  },
+  "parser_result_consulted": false,
+  "selection_modified": false
+}
