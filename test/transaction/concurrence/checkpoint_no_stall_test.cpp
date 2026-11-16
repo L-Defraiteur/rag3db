@@ -424,11 +424,31 @@ TEST_F(CheckpointOpenReader, OpenReaderOnRelsAcrossAControlledCheckpointWindow) 
     rag3db::main::Connection writer(database.get());
     const std::string query = "MATCH ()-[l:Link]->() RETURN count(l), sum(l.weight);";
     ok(reader, "BEGIN TRANSACTION READ ONLY;");
-    const auto before = read(reader, query);
+    // Une égalité de messages d'erreur ne constitue jamais un instantané conservé.
+    const auto checkedRead = [&](rag3db::main::Connection& connection, const char* phase) {
+        auto result = connection.query(query);
+        if (!result->isSuccess()) {
+            ADD_FAILURE() << "[check: controlled-reader-query] " << phase << " "
+                          << result->getErrorMessage();
+            return std::string("query failed");
+        }
+        if (result->getNumColumns() != 2 || !result->hasNext()) {
+            ADD_FAILURE() << "[check: controlled-reader-result-shape] " << phase;
+            return std::string("invalid result");
+        }
+        const auto row = result->getNext();
+        if (row->getValue(0)->isNull() || row->getValue(1)->isNull()) {
+            ADD_FAILURE() << "[check: controlled-reader-null] " << phase;
+        }
+        const auto value = row->getValue(0)->toString() + "|" + row->getValue(1)->toString();
+        EXPECT_FALSE(result->hasNext()) << "[check: controlled-reader-extra-row] " << phase;
+        return value;
+    };
+    const auto before = checkedRead(reader, "before");
     ok(writer, "MATCH (a:Doc {id: 1}), (b:Doc {id: 2}) "
                "CREATE (a)-[:Link {weight: 1000000}]->(b);");
     ok(writer, "MATCH ()-[l:Link]->() WHERE l.weight = 6 SET l.weight = 7000000;");
-    const auto others = read(writer, query);
+    const auto others = checkedRead(writer, "others");
     auto gate = std::make_shared<ReaderCheckpointGate>();
     const FlakyCheckpointer controlled([gate](rag3db::main::ClientContext& context) {
         return std::make_unique<ReaderGatedCheckpointer>(context, gate);
@@ -447,7 +467,7 @@ TEST_F(CheckpointOpenReader, OpenReaderOnRelsAcrossAControlledCheckpointWindow) 
             gate->condition.wait_for(lock, std::chrono::seconds(5), [&] { return gate->entered; });
         heldBefore = gate->held;
     }
-    const auto during = entered ? read(reader, query) : "window not entered";
+    const auto during = entered ? checkedRead(reader, "during") : "window not entered";
     bool heldAfter;
     {
         const std::lock_guard lock(gate->mutex);
@@ -456,14 +476,18 @@ TEST_F(CheckpointOpenReader, OpenReaderOnRelsAcrossAControlledCheckpointWindow) 
         gate->condition.notify_all();
     }
     checkpoint.join();
-    const auto after = read(reader, query);
-    reader.query("COMMIT;");
+    const auto after = checkedRead(reader, "after");
+    const auto commit = reader.query("COMMIT;");
+    EXPECT_TRUE(commit->isSuccess())
+        << "[check: controlled-reader-commit] " << commit->getErrorMessage();
     std::cerr << "[reader-diagnostic] entered=" << entered << " held-before=" << heldBefore
               << " held-after=" << heldAfter << " expired=" << gate->expired << " before=" << before
               << " during=" << during << " after=" << after << " others=" << others
               << " checkpoint-error=" << checkpointError << std::endl;
     ASSERT_TRUE(entered && heldBefore && heldAfter && !gate->expired)
         << "[check: controlled-checkpoint-window]";
+    EXPECT_EQ(before, "300000|45000150000") << "[check: controlled-reader-initial-values]";
+    EXPECT_EQ(others, "300001|45008149994") << "[check: controlled-reader-writer-values]";
     ASSERT_NE(before, others) << "[check: controlled-checkpoint-writes-visible]";
     EXPECT_TRUE(checkpointError.empty())
         << "[check: controlled-checkpoint-success] " << checkpointError;
