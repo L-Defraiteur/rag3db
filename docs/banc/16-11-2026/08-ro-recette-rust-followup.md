@@ -69,3 +69,43 @@ Les14sites historiques,1840fichiers, comparaison baseline/candidat, REGLES8 et
 passe complète sont hors de ce créneau. Aucun corpus/14sites qualifié ni ancien
 GO900 réactivé. Le scan partiel doit garder ses UNKNOWN ; il n'est pas une preuve
 de quiescence universelle. Aucun changement de source, target, service ou base.
+
+## Complément : END118 effectivement relu, sans nouvelle exécution
+
+Après le GO distinct C7-RUST-FOLLOWUP-118-16nov, Codeparsers annonce END. Banc a
+relu les pièces existantes PC et vérifié les hashes, pas exécuté le pilote.
+ClassificationSHA256
+b6c3da20f98fe5705e1dbfa36d4c0021a1a289b8b3cae21bb9f96941e43c412d,
+followup_units_and_usages=true/commonrc0, historical_probe_run=false/global_pass=false.
+Les trois result.json sont rc0 ; les stdout portent réellement :
+
+- stop-words :1passed/0failed/0ignored ;
+- reference-path :1passed/0failed/0ignored ;
+- usages : filets natifs2passed/0failed/0ignored, puis e2e_usages41passed/
+  0failed/0ignored en132,64s.
+
+Les quatre noms requis sont présents exactement une fois chacun. Les autres
+cas filtrés ne sont pas déclarés exécutés :2118au filtre de la lib,676et637
+dans les deux phases du binaire e2e. Ni la lib entière ni les autres suites ne
+sont vertes par cette ligne41/41. Le test Python du constructeur n'est pas
+déclaré joué par les résumés ci-dessus ; le helper1/1 est bien le test natif de
+colonnesUTF8/frontières, pas une substitution des deux.
+
+SHA256 usages.stdout :
+a713cafc10a3eb40a03098731e3c265f09dddc1a2bfa438e4245d19c03c48a9c.
+Scopevalidation-k4rax94qVERT/code0/erreur=null/restes[]/nettoyétrue ; métadonnée
+sansTOKEN authority-status.json etat=termine/PID3331048. Privé
+/tmp/r3v-pkpfl8i1 absent au contrôle RO. Aucune ancienne autorité relancée.
+
+Trois copies ELF réellement rehachées par Banc sur PC, sans les exécuter :
+
+| Copie sous preuves/bin | Octets | SHA256 |
+| --- | ---: | --- |
+| stop-words | 85007200 | 2cfa5e879fac8f69a424e3c54827f4d853701ae51915e220c2412524a78125cb |
+| reference-path | 225350000 | f785a0c6b4afa4d5307800df1acdf8c477f881034ccfec7c56f336b31dc326ba |
+| usages | 199378448 | 17351ca564127ab8659c382b53826aa9a8e780585910ed3824b92ee8c47362fe |
+
+Pas de deuxième transfert massif : Codeparsers porte le miroir des preuves et
+binaires au portable. Les14sites/18couples,1840sources et passe globale restent
+NONJOUÉS ; REGLES7 inchangées. Cette corroboration ciblée n'est pas un GO de
+sonde historique, de nouvelle passe, de fusion ou de service.
