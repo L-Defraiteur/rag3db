@@ -1,0 +1,31 @@
+{
+  "source": "/home/lucied/git_workspaces/rag3db-cx-ed-stable-tie-identity-r2",
+  "root": "/home/lucied/git_workspaces/rag3db-cx-ed-stable-tie-identity-r2/extension/rag3weaver/target",
+  "index_entries": "",
+  "files": [
+    {
+      "path": "extension/rag3weaver/target/charge-last.tsv",
+      "uid": 1000,
+      "gid": 1000,
+      "mode": "0o100644",
+      "size": 575,
+      "mtime_ns": 1794831135201865592,
+      "type": "file",
+      "sha256": "595e117db8572ffab35be79432901204e38d6f037b64d1423dc8b7b02ab90952",
+      "ignore_rc": 0,
+      "ignore_rule": ".gitignore:89:extension/rag3weaver/target/\textension/rag3weaver/target/charge-last.tsv"
+    },
+    {
+      "path": "extension/rag3weaver/target/e2e-last.log",
+      "uid": 1000,
+      "gid": 1000,
+      "mode": "0o100644",
+      "size": 46629,
+      "mtime_ns": 1794831135881619064,
+      "type": "file",
+      "sha256": "60563e48c29344abbe237b15957c924d3f55db85c50bb44f6c56854e538aba19",
+      "ignore_rc": 0,
+      "ignore_rule": ".gitignore:89:extension/rag3weaver/target/\textension/rag3weaver/target/e2e-last.log"
+    }
+  ]
+}
