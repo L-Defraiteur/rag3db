@@ -1,0 +1,42 @@
+{
+  "old_app": "84ddeb88b7452278b0d697fad817c7e44f5fd3d3",
+  "old_base": "b0a845bb4877328eada37951c174e3d208986630",
+  "master_fetched": "99fef92ce6ee9a0007eaf99c7c3a6a3789061c57",
+  "union_product_head": "205815a0ceae25b1c31c86f9a80fc868b2294dbb",
+  "range_diff_equal": 66,
+  "range_diff_changed": 0,
+  "fts_mode_oid_identical_to_old": [
+    "extension/rag3weaver/src/catalog.rs",
+    "extension/rag3weaver/src/code_sync.rs",
+    "extension/rag3weaver/src/code_sync_fts_guard_double_tests.rs",
+    "extension/rag3weaver/src/fts_existing.rs",
+    "extension/rag3weaver/src/lib.rs"
+  ],
+  "incoming_code_preserved": {
+    "extension/rag3weaver/src/gcp_auth.rs": "100644 blob eb072b737bf98814068a19b42c36ab4eca6f1f32",
+    "extension/rag3weaver/src/model_source.rs": "100644 blob 13769b075f9c88e2ac682f3b5a5a5de2a1f2a024",
+    "extension/rag3weaver/src/openai_llm.rs": "100644 blob f78c525c72910f65b62d09ffd75304474ba636cf",
+    "extension/rag3weaver/src/openai_llm/vertex_refresh_tests.rs": "100644 blob 4cfbaa5b22aa74f9ba08cc48be8bef5a1515dab9"
+  },
+  "incoming_markdown_preserved": [
+    "docs/banc/16-11-2026/18-ro-classificateur-raw-vertex.md",
+    "docs/banc/tickets/2026-11-16-un-modele-vertex-declare-garde-son-jeton-d-une-heure.md",
+    "docs/everything-declarative/16-11-2026/03-preparation-vertex-token.md",
+    "docs/everything-declarative/16-11-2026/17-correctif-vertex-token.md",
+    "docs/everything-declarative/16-11-2026/19-preuves-cpu-vertex-correctif.md",
+    "docs/everything-declarative/16-11-2026/20-union-vertex-et-recette-canonique.md",
+    "docs/everything-declarative/16-11-2026/21-pilote-union-vertex.md",
+    "docs/everything-declarative/16-11-2026/22-observation-harnais-union.md",
+    "docs/everything-declarative/16-11-2026/23-preuves-canonique-vertex-et-rouge-controleur.md",
+    "docs/everything-declarative/16-11-2026/24-classification-pure-des-raw-vertex.md",
+    "docs/everything-declarative/16-11-2026/25-candidat-vertex-identique-source-qualifiee.md",
+    "docs/everything-declarative/16-11-2026/vertex-token-green-v1-manifest.json",
+    "docs/everything-declarative/16-11-2026/vertex-token-union-r1-audit.json",
+    "docs/everything-declarative/16-11-2026/vertex-token-union-r1-range-diff.txt"
+  ],
+  "master_protected_non_doc_entries_and_absences": 6914,
+  "master_differences_outside_fts": [],
+  "all_non_doc_difference_from_old_equals_incoming_code": true,
+  "canonical_sha256": "2150fcd847b1df7de04908d357a0c78abc05e50ce599e2793ff08ab48108825d",
+  "common_sha256": "6439fdd8b52c85fa4e74af0def2c667ef0bedae9b814cbbfd48e49946c4f74ea"
+}
