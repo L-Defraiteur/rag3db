@@ -49,3 +49,10 @@ sans purge/repriseFP. END1186775.678574093 et INITIAL1179575.678574093
 originaux conservés ; reste après poste, aucunreset7200 niGO de reprise.
 Deux étatsXDG/RAG restentfrères. Publication du nouveaupilote avanttémoins
 purs ; ROcouple et nouveauGOC7 restent requis avant tout Cargo/runtime.
+
+Prépa publiée eb2cb15691 : sonde AF_UNIX sur disque confirme107octets acceptés,
+108/115refusés (PythonerrnoNone, rawbindNUL22/EINVAL), UTF8 mesuré en octets ;
+aucunerrno attribué au vieux Rust.22fonctions Pythonhermétiques vertes,
+préflightcapture readonlyPC OK/8647FP hashées, T734inchangé.
+[Recette concrète05](../16-11-2026/05-recette-tmp-court-reste-original.md).
+P/Q/Sv2/TMPexécution ABSENTS ; nouveauGO exact C7 NON reçu.

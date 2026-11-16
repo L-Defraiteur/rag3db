@@ -55,3 +55,19 @@ Primitives watcher ED13c8 first_red/active_logs/watch_logs restent BYTEIDENTIQUE
 provenance recopiée. Témoins prépubliés avant exécution : 11qualification conservés,
 11nouveaux profils/cache purs/fauxmetadata ; aucun Rust/Cargo/proc/signal réel.
 Le contrôleur actuel doit recevoir RO et GO avant toute création de P/Q/Sv2.
+
+## Résultats de préparation après publication
+
+Code et22témoins prépubliés `eb2cb15691a8273139f5532cc971ee3d51e587b2` AVANT
+exécution : qualification11/0 en0,003s, profil/cache11/0 en0,008s, timeout20
+chacun ; pas de processus Cargo/Rust ni /proc/signaux réels dans les fixtures.
+Journaux resume-qualification-eb2c.log et resume-profile-eb2c.log horsW.
+
+Sonde AF_UNIX4319 copiée PC/local, SHA **478779db5c98461fb4b48992a5a9d6e82ad0c47cde2470fbf1124d15c122709a**.
+Préflight PC du VRAI helper capture, en lecture seule avec Git/sonde buildrsRO :
+OK,8647fichiers d'empreinte hachés, reçu/ELF/marker/archives cohérents.
+Snapshot carry-preflight-eb2c.json copié local, SHA **4598fd6b85efd09dbab1148b1afa522befab8cca102e8e8d417a8a9208b68445** ;
+reste observé5418,8s au relevé, pure indication historique et aucun crédit de
+budget nouveau. Cette capture ne remplace PAS la future capture après poste.
+Aucun P/Q/Sv2 ni TMP d'exécution v2 créé, T/source inchangés, zéro Cargo.
+Trois primitives watcher toujours byteidentiques ED13c8/hashesprovenance exacts.
