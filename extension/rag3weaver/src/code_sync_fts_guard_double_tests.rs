@@ -57,12 +57,69 @@ fn sync_and_trace(c: &mut Catalog, src: &Snapshot, capture: &Capture, stage: &st
     assert_eq!(report.failed, 0, "{report:?}");
     trace
 }
+// Même résolution disque que code_tree::tests::poste ; aucune racine HOME/tmp.
+fn fixture_disk_target() -> std::path::PathBuf {
+    let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let target = std::env::var_os("CARGO_TARGET_DIR").map(std::path::PathBuf::from)
+        .unwrap_or_else(|| manifest.join("target"));
+    if target.is_absolute() { target } else { manifest.join(target) }
+}
+
+fn checked_fixture_directory(path: &std::path::Path, create: bool) -> std::io::Result<()> {
+    use std::io::{Error, ErrorKind};
+    if !path.is_absolute() { return Err(Error::new(ErrorKind::InvalidInput, "absolute fixture directory required")); }
+    let mut current = std::path::PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::RootDir | std::path::Component::Normal(_) => current.push(component.as_os_str()),
+            _ => return Err(Error::new(ErrorKind::InvalidInput, "canonical fixture directory required")),
+        }
+        if create && !current.try_exists()? {
+            let mut builder = std::fs::DirBuilder::new();
+            #[cfg(unix)] {
+                use std::os::unix::fs::DirBuilderExt;
+                builder.mode(0o700);
+            }
+            match builder.create(&current) {
+                Ok(()) => {},
+                Err(error) if error.kind() == ErrorKind::AlreadyExists => {},
+                Err(error) => return Err(error),
+            }
+        }
+        let meta = std::fs::symlink_metadata(&current)?;
+        if !meta.is_dir() || meta.file_type().is_symlink() {
+            return Err(Error::new(ErrorKind::InvalidInput, "fixture directory must not traverse a symlink"));
+        }
+    }
+    if path.canonicalize()? != path {
+        return Err(Error::new(ErrorKind::InvalidInput, "canonical fixture directory required"));
+    }
+    Ok(())
+}
+
+fn fixture_case(explicit: Option<&std::path::Path>, target: &std::path::Path, label: &str) -> std::io::Result<std::path::PathBuf> {
+    let fallback;
+    let root = if let Some(root) = explicit {
+        checked_fixture_directory(root, false)?;
+        root
+    } else {
+        fallback = target.join("fts-double-fixtures");
+        checked_fixture_directory(&fallback, true)?;
+        &fallback
+    };
+    if label.is_empty() || !label.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-') {
+        return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid fixture label"));
+    }
+    // Primitive existante de chat_qui_code : unicité exclusive et preuves conservées.
+    let case = tempfile::Builder::new().prefix(&format!("{label}-")).tempdir_in(root)?.keep();
+    checked_fixture_directory(&case, false)?;
+    Ok(case)
+}
+
 fn fixture(generations: bool, label: &str) -> (Catalog, Snapshot) {
-    // La recette doit fournir une racine privée disque ; aucune utilisation implicite de /tmp.
-    let root = std::path::PathBuf::from(std::env::var_os("RAG3WEAVER_FTS_DOUBLE_ROOT").expect("racine privée DOUBLE"));
-    assert!(root.is_absolute() && root.is_dir() && !root.is_symlink());
-    let case = root.join(label);
-    std::fs::create_dir(&case).expect("fixture neuve, aucun réemploi");
+    let explicit = std::env::var_os("RAG3WEAVER_FTS_DOUBLE_ROOT").map(std::path::PathBuf::from);
+    let case = fixture_case(explicit.as_deref(), &fixture_disk_target(), label).expect("private unique disk fixture");
+    eprintln!("FTS_DOUBLE_CASE {}", case.display());
     let conn = Rag3dbConnection::new(case.join("base.rag3db")).expect("base neuve");
     let extension = crate::backend::vector_extension_of_this_process().expect("extension du SDK courant");
     conn.execute(&format!("LOAD EXTENSION '{}'", extension.display())).expect("extension vectorielle");
