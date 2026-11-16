@@ -26,3 +26,10 @@ service ou reçu réel dans ce module ni dans ces témoins. Le pilote complet
 reste à matérialiser ; ces contrats seuls ne qualifient aucune exécution et
 ne donnent aucun GO7200. Les résultats éventuels seront ajoutés après
 publication préalable, sans réécrire un échec.
+
+Après publication et push `e5b069be07`, premier essai sous `timeout60`, Python
+`-B`, failfast : **12/12 en0,002s**, aucun échec ni saut. Journal horsWT
+`~/.cache/rag3weaver-build/cx-pv7-policy-e5b069.log`, SHA256
+`9f56a0273ab5adfff0f4b891fdbdfd37039e06423462fb8a5fd7f881121f32af`.
+Code inchangé depuis publication ; ces simulations ne qualifient ni Landlock,
+ni Cargo réel, ni le scénario D6, ni la passe entière.
