@@ -88,6 +88,11 @@ La qualification sur lib59ac attend FINI G et l'épingle des passes actualisée 
 aucune passe nouvelle lancée ni ancien GO repris. Cette annotation prime sur
 la commande de reprise historique ci-dessous. Entrée2.B Vertex ensuite.
 
+Après PIN FINI G : repris à l'identique sur base68590270 dans
+`cx-ed-stable-tie-identity-r2`, tête de préparation79ad68c924 avant mise à jour
+documentaire ; recette et proposition7200s au rapport02. Qualification
+NON JOUÉE, créneau ED après les slots Recherche/Archi selon C7.
+
 **État : prêt, passe VERTE, pas sur master.** Branche `stable-tie-identity`, tête **1834bf111**, sur master fe5d81f81,
 4 commits gmail.
 - **Ce que le lot fait** : les ex æquo se départagent par une identité stable, `search::stable_order` : une occurrence
