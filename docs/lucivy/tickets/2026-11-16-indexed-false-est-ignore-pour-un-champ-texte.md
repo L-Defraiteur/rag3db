@@ -374,3 +374,12 @@ aprèsflush, sanscontrôle106fa sousT aprèscompile(copieROseule). Six témoins
 PythonASTfakes publiés NONjoués ; HOLDmockC7encoreactif. ArbitrageprécisC7 :
 autorisation limitée de ces6témoins sansRust/ELF/Cargo/QFS/proc pourobserver
 leurrougeAVANTcorrection conformémentredfirst, puisvertmêmecas ; aucunGO600.
+
+AutorisationC7Pythonpurs reçue : timeout60/failfast, sansRust/Cargo/ELF/proc/QFS.
+Rouge99a8 réellementobservé : test_changed_copy_is_refused_before_final_result,
+AssertionErrornotraised,1échec/1joué,5nonjouéscarfailfast. Ensuiteapplicationpatch
+aéchoué parstrippagepardéfautdeschemins (docs/retiré pargitapply). Pilote99a8
+INCHANGÉ, aucunvertlancé ; commit13b0b802e3 necontientque preuvesrouges malgré
+messageinexact. Diagnostic : patchcheminreporoot nécessitant-p0 ; dryruncheck
+puisapplicationcontrôléeavanttoutepublication/gardesvertes. Pasretrydetest ni
+source81bmodifié. Historiqueconservé sansamend/force.

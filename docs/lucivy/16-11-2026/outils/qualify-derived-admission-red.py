@@ -78,7 +78,9 @@ def check_preflight(filename, scope_exists):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--preflight', required=True)
-    data = check_preflight(parser.parse_args().preflight, scope_exists=True)
+    preflight = checked_path(parser.parse_args().preflight, kind='file')
+    preflight_sha256 = sha(preflight)
+    data = check_preflight(str(preflight), scope_exists=True)
     package = Path(data['package'])
     output = Path(data['output'])
     root = Path(data['worktree'])
@@ -110,15 +112,19 @@ def main():
                CARGO_TERM_COLOR='never', CARGO_NET_OFFLINE='true', TMPDIR=str(scratch))
 
     def publish(name, payload):
+        budget()
         with (output / name).open('x') as file:
+            budget()  # Opening a file may block: refuse before writing any payload.
             json.dump(payload, file, indent=2)
             file.flush(); os.fsync(file.fileno())
+        budget()
 
     def budget():
         live = json.loads(receipt_path.read_text())
         assert live['etat'] == 'actif' and live['echeance'] == deadline and deadline-time.monotonic() > 5
 
     publish('entry.json', dict(source=SOURCE, pilot_sha256=sha(Path(__file__)), nonce=data['nonce'],
+            preflight_sha256=preflight_sha256,
             resources=resources, jobs=jobs, cpu=cpu, cgroup=cgroup, deadline=deadline,
             quiescence=quiescence(data, 'entry'), index_building_tests_selected=False))
 
@@ -172,10 +178,26 @@ def main():
     assert re.search(r'test result: FAILED\. 0 passed; 1 failed; 0 ignored;', text)
     post = quiescence(data, 'post-witness')
     assert not list(scratch.iterdir()) and sha(target / 'validation-provenance.json') == data['target_creator_sha256']
+    final_artifacts = {}
+    for name, row in artifacts.items():
+        budget()
+        path = checked_path(row['path'], kind='file')
+        digest = sha(path)
+        assert digest == row['sha256'], f'ELF changed after inventory: {name}'
+        final_artifacts[name] = dict(path=str(path), sha256=digest)
+    assert subprocess.check_output(['git', '-C', str(root), 'rev-parse', 'HEAD'], text=True).strip() == SOURCE
+    assert not subprocess.check_output(['git', '-C', str(root), 'status', '--porcelain'], text=True).strip()
+    for relative, digest in data['copy_hashes'].items():
+        budget()
+        assert not Path(relative).is_absolute() and '..' not in Path(relative).parts
+        assert sha(checked_path(str(package / relative), kind='file')) == digest, f'frozen copy changed: {relative}'
+    assert sha(preflight) == preflight_sha256, 'preflight changed after admission'
     budget()
     publish('expected-red.json', dict(source=SOURCE, witness=WITNESS, code=101, passed=0, failed=1, ignored=0,
             explanation='baseline consumer calls mock builder once despite uncovered panel; correction not implemented',
-            executable_sha256=artifacts[TARGETS[0]]['sha256'], post=post, deadline=deadline,
+            executable_sha256=final_artifacts[TARGETS[0]]['sha256'], final_artifacts=final_artifacts,
+            final_source=SOURCE, source_clean=True, frozen_copies_rechecked=True,
+            preflight_sha256=preflight_sha256, post=post, deadline=deadline,
             native_index_builders_executed=False, other_mock_tests_executed=False,
             full_core_qualified=False, final_common_verdict='pending supervisor cleanup and external owned scan'))
     return 101
