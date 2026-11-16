@@ -32,6 +32,7 @@ def decode(raw):
             value[key] = item
         return value
     def nonfinite(value): raise ValueError('nonfinite health JSON scalar')
+    if isinstance(raw, bytes): raw = raw.decode('utf-8', 'strict')
     return json.loads(raw, object_pairs_hook=unique, parse_constant=nonfinite)
 
 
@@ -59,7 +60,7 @@ def validate_health(body, identity9, *, status):
                                          for k, v in identity9.items()):
         raise ValueError('typed health identity differs')
     usage = value.get('usage', {})
-    if not isinstance(usage, dict) or any(usage.get(k) != 0 for k in ['baux', 'en_cours']):
+    if not isinstance(usage, dict) or any(type(usage.get(k)) is not int or usage[k] != 0 for k in ['baux', 'en_cours']):
         raise ValueError('health usage active or unknown')
     return value
 
@@ -106,7 +107,7 @@ def worker_gate(context):
 def worker(context):
     due = context_check(context, time.monotonic())
     work_due = finite(context['work_deadline_monotonic'])
-    if work_due > due: raise ValueError('worker deadline exceeds original contact budget')
+    if work_due > due-CLEANUP_RESERVE: raise ValueError('worker deadline consumes cleanup reserve')
     worker_gate(context)  # Caller policy checks phase/process immediately before GET.
     now = time.monotonic()
     if now >= work_due: raise ValueError('health deadline exhausted by policy/imports')
@@ -128,15 +129,17 @@ def worker(context):
 def run_health_worker(context, trace):
     started = time.monotonic()
     trace.update(started_monotonic=started, stdout_hex='', stderr_hex='', returncode=None,
-                 timed_out=False, client_reaped=False, cleanup_verified=False)
+                 timed_out=False, client_reaped=False, cleanup_verified=False, worker_created=False)
     due = context_check(context, started)
     trace['deadline_monotonic'] = due
-    work_due = due
+    work_due = due-CLEANUP_RESERVE
+    if time.monotonic() >= work_due:
+        raise ValueError('health budget lacks cleanup reserve before spawn')
     child_context = dict(context, work_deadline_monotonic=work_due)
     trace['work_deadline_monotonic'] = work_due
     child = subprocess.Popen([sys.executable, '-B', str(Path(__file__).resolve()), '--worker'],
                              stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    trace['worker_pid'] = child.pid
+    trace.update(worker_pid=child.pid, worker_created=True)
     try:
         remaining = work_due-time.monotonic()
         if remaining <= 0: raise subprocess.TimeoutExpired(child.args, 0)
@@ -147,10 +150,29 @@ def run_health_worker(context, trace):
         if trace['timed_out']:
             trace.update(timeout_stdout_hex=(error.output or b'').hex(),
                          timeout_stderr_hex=(error.stderr or b'').hex())
-        child.kill()
-        out, err = child.communicate()
-        trace.update(stdout_hex=out.hex(), stderr_hex=err.hex(), returncode=child.returncode,
-                     client_reaped=True, cleanup_verified=True, finished_monotonic=time.monotonic())
+        trace['cleanup_errors'] = []
+        try:
+            child.kill()
+        except BaseException as cleanup_error:
+            trace['cleanup_errors'].append(type(cleanup_error).__name__)
+        remaining = min(CLEANUP_RESERVE, max(0., due-time.monotonic()))
+        if remaining > 0:
+            try:
+                out, err = child.communicate(timeout=remaining)
+                trace.update(stdout_hex=out.hex(), stderr_hex=err.hex(), returncode=child.returncode,
+                             client_reaped=type(child.returncode) is int,
+                             cleanup_verified=type(child.returncode) is int)
+            except BaseException as cleanup_error:
+                trace['cleanup_errors'].append(type(cleanup_error).__name__)
+                if isinstance(cleanup_error, subprocess.TimeoutExpired):
+                    trace.update(cleanup_stdout_hex=(cleanup_error.output or b'').hex(),
+                                 cleanup_stderr_hex=(cleanup_error.stderr or b'').hex())
+        else:
+            trace['cleanup_errors'].append('DeadlineExhausted')
+        if not trace['client_reaped']:
+            trace['returncode'] = child.returncode
+            error.add_note('worker reap unknown; original refusal preserved; inspect worker_pid in trace')
+        trace['finished_monotonic'] = time.monotonic()
         raise
     trace.update(stdout_hex=out.hex(), stderr_hex=err.hex(), returncode=child.returncode,
                  client_reaped=True, cleanup_verified=True, finished_monotonic=time.monotonic())
