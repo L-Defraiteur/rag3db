@@ -77,3 +77,19 @@ processus natif ni découverte automatique de pins. Il peut assembler une pièce
 seulement depuis résultats d'un observateur qualifié externe ; tant que celui-ci
 manque, produire un plan HOLD, pas une attestation. Source observateur/transport
 réel et son runner devront être relus et qualifiés AVANT futur GO probe.
+
+### Preuve postcheck dans la même borne5
+
+Ajouter à evidence la clé `postcheck` : schéma exact
+`query_sha256,started_monotonic,ended_monotonic,returncode,partial,truncated,stdout,stderr`.
+Ses bruts sont eux aussi `{path,sha256}`. SELECT constant `backend-postcheck.sql`
+avec paramètres GUC de SESSION `g_pg.expected_backend_pid` (entier positif) et
+`g_pg.expected_application_name` (`g-pg-<nonce>`). L'observateur porte
+`g-pg-<nonce>:check`, distinct du premier backend. Aucun SQL arbitraire accepté.
+Son stdout JSON exact : `backend_pid,application_name,backend_absent,
+observer_backend_pid,observer_application_name`. Absence par PID OU nom initial,
+observateur distinct ; résultat absent=true obligatoire. Cette seconde lecture
+reste dans le budget ORIGINAL5 (pas5+5), rc0, sortie complète et stderr vide.
+Le premier stdout doit porter application_name=`g-pg-<nonce>` ; le postcheck
+n'atteste pas sa propre absence à sa sortie : quiet/reap porte TOUT le client
+hôte, dont cette seconde invocation. Toute quiescence inconnue refuse.
