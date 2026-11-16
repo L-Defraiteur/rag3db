@@ -98,3 +98,7 @@ ROcontrat partagé favorable mais implhealth() valide la phase seulement avant l
 ## Réserve Hotfix 7b9d9a8ecb, avant correction finale
 
 Le pilote333 exige check_features.log dernièreligne EXACTCHECK_FEATURES VERT alors que le vrai scripts/check_features.sh APP84 émet CHECK_FEATURES VERT8/8 (séparé par espace). Fauxrougefinalcertain ; publier témoinPythonpur contre la vraie forme du suffixe avantfix. Ni scriptcanonique2150 ni sourceAPP àmodifier. Raccordowner toujoursabsent : producer._ready/noembedding/worker7878 ne doivent pas être appelés au global. ROEDenattente ; groupercorrectifs quand ses réserves sont connues, maintenir333/Qb8a327HOLD.
+
+## Complément RO ED groupée, avant correction transport
+
+ED confirme lesdeuxréserves et ajoute : timeouturllib5 ne borne paswholeGET+body ; response.read peut dépasserREADY/lease. Consumer doit réutiliser transportowner worker harddeadline/killreap+RAWstdoutstderr/rc/timeout, phasecheckavant CHAQUEcontact etaprès, pas simpletimeout de socket ni outerglobal seul. PGprobeN/S déjà annoncéeprotocolONLY n'établitniidentitéSQLniexclusivité. Embar consulté pour APItransport réutilisable avantcanon(admission) etaprèscanon(leaseactive/coreautorité,pasréadmissionREADY). AucuneAPIcommonàchanger,ownerglobalconcretattendu ; regroupementfix quand ce raccord est publié. Aucunautreblocageétabli parED ; aucuneexécutionreviewer.
