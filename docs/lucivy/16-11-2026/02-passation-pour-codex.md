@@ -11,6 +11,21 @@ Pour le reste du contexte :
 - `docs/lucivy/11-11-2026/02-knowledge-dump.md` : les règles du périmètre et ce qu'il faut savoir du moteur ;
 - dans le dépôt lucivy, le `CLAUDE.md` : architecture, registres, historique des versions.
 
+## 0. État final de la session lucivy (16 novembre 2026, 10 h 20)
+
+- **4.3.9 en ligne** : crates.io, npm, PyPI ; tag `v4.3.9` sur `0825bcd`.
+- **Le pointeur rag3weaver 4.3.9 est sur master de rag3db** : cb4a1757a4, passe courte verte, poussée par la garde.
+- **Le bm25 seul de la migration** est départagé, sans défaut de lucivy (entrée 1, faite). Ticket ouvert pour ED :
+  `docs/lucivy/tickets/2026-11-16-la-migration-et-l-index-neuf-ne-cherchent-pas-les-memes-contenus-visibles.md`.
+- **La compaction qui grossit** : ce n'est pas un défaut (entrée 2, faite, ticket fermé).
+- **L'ulp en `parse`** : le correctif est sur la branche lucivy `parse-sum-order` (1b9f47d), et sa preuve reste
+  incomplète (entrée 3).
+- **La PR lucivy #42** (l'outil de détail de `test_compare_two_indexes`, test ignoré) : **CI toute verte, pas
+  fusionnée.** Sa fusion m'a été refusée par les permissions de la session au moment de l'arrêt. La fusionner est le
+  premier geste de Codex dans lucivy (par rebase, comme les autres).
+- Aucune passe ni aucun lourd ne tourne. Les copies de mesure à luciepc : `lucivy-bm25-migration/`,
+  `mesure-dico-source/`, `lucivy-ulp/`, sous `~/.cache/rag3weaver-build/`.
+
 ## 1. État au 16 novembre 2026, 10 h
 
 ### La version 4.3.9
@@ -141,8 +156,39 @@ faire pour Codex. La suite reprend à l'entrée 3.
 
 ### Entrée 3 : un ulp d'écart de score entre profils en `parse`
 
-**En cours depuis le 16 novembre 2026 vers 10 h 30, par la session lucivy, à la demande de c7.** Avant de la
-reprendre, demander à l'orchestration où elle en est.
+**Arrêtée le 16 novembre 2026 à 10 h 20, sur le mot de Lucie : correctif fait, preuve incomplète.**
+
+- **La cause.** `parse` devient un OU de `contains`. L'union (`src/query/union/buffered_union.rs`, `refill`) retire
+  une clause épuisée par `swap_remove` (`unordered_drain_filter`), ce qui change l'ordre des clauses restantes. La
+  somme f32 d'un document suit donc la disposition des segments : `w4 + w2 + w3` dans un index, `w2 + w3 + w4` dans
+  l'autre, un ulp d'écart.
+- **Le correctif.** Branche lucivy **`parse-sum-order`**, commit **`1b9f47d`**, poussée, **sans PR**. Les sommes se
+  font en f64, arrondies une seule fois en `Score`, dans :
+  - `SumCombiner` (`src/query/score_combiner.rs`) ;
+  - la somme de `DisjunctionMaxCombiner` ;
+  - la somme du pivot de `block_wand` (`src/query/boolean_query/block_wand.rs`).
+
+  Le format et l'API ne changent pas.
+- **Le témoin.** `lucivy_core/tests/test_parse_scores_identical_across_layouts.rs`. Les mêmes 41 documents, en un
+  segment ou en deux, doivent avoir des scores égaux au bit près.
+  - **Rouge sur main** (a1c0dfd) : 4 scores sur 41 à un ulp, par exemple 0,1596082 contre 0,15960819. L'ordre
+    inverse des mots ne donne aucun écart, comme le mécanisme le prévoit.
+  - Vert avec le correctif.
+- **Les suites, jouées à luciepc** (journaux dans `~/.cache/rag3weaver-build/lucivy-ulp/`) :
+  - `cargo test --release --lib` : 1 480 ok, 0 échec ;
+  - clippy `--lib` et clippy des crates : verts ;
+  - **`-p lucivy-core` : non concluant.** `derived_in_ram_answers_like_the_files` échoue faute de corpus
+    (`/tmp/lucivy-cmp` absent à luciepc), et cargo s'est arrêté à ce binaire : les autres tests de `lucivy-core`
+    n'ont pas joué.
+- **Ce qui reste à Codex** :
+  1. reprendre la branche `parse-sum-order` dans un worktree à lui ;
+  2. rejouer `cargo test --release -p lucivy-core --no-fail-fast`, sur un poste qui a le corpus (la recette s'affiche
+     dans l'échec : un lien `/tmp/lucivy-cmp` vers `~/lucivy_bench/linux-7.2`). `LUCIVY_CORPUS_ABSENT_OK=1` saute ce
+     test, et un test sauté n'est pas vert ;
+  3. regarder si un test compare des scores exacts d'avant : la somme f64 peut déplacer un score d'un ulp ;
+  4. ouvrir la PR vers `main`, puis fusionner au vert ;
+  5. ensuite, le banc du profil léger sur une copie (`test_light_profile`, `parse` seul) pour voir disparaître
+     `SCORES DIFFER`, puis fermer le ticket. C'est une pièce de la 4.3.10 (entrée 5), sans tag.
 
 - **Ticket** : `docs/lucivy/tickets/2026-11-14-un-ulp-d-ecart-de-score-entre-profils-en-parse.md`.
 - **Ce qu'il faut faire** : rendre la somme des clauses d'un OU indépendante de l'ordre de réponse des segments et des
