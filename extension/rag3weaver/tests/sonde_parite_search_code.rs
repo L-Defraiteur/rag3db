@@ -33,7 +33,7 @@ fn releve_les_reponses_de_search_code() {
     let k: usize = std::env::var("RAG3WEAVER_PARITE_K").ok().and_then(|v| v.parse().ok()).unwrap_or(10);
     let jeu: Value = serde_json::from_str(&std::fs::read_to_string(&requetes).expect("le jeu")).expect("le jeu en JSON");
     let prepared = PreparedBackend::load(std::path::Path::new(&manifeste)).expect("le manifeste");
-    let backend = prepared.open(Box::new(Rag3dbConnection::new(&base).expect("ouvrir la copie")), embedder_of(&prepared)).expect("ouvrir le backend");
+    let backend = { let embedder = embedder_of(&prepared); prepared.open(Box::new(Rag3dbConnection::new(&base).expect("ouvrir la copie")), embedder) }.expect("ouvrir le backend");
     let forme = {
         let mut cat = backend.catalog.lock().unwrap();
         let avant = rag3weaver::code::scope_form(&cat).unwrap();
@@ -109,7 +109,7 @@ fn releve_les_comptes_du_plein_texte_apres_un_effacement() {
     let racine = prepared.manifest.workspace.as_ref().map(|w| w.root.clone()).expect("la racine du manifeste");
     let fichier = racine.join(&retirer);
     let contenu = std::fs::read(&fichier).unwrap_or_else(|e| panic!("le fichier à retirer {} : {e}", fichier.display()));
-    let backend = prepared.open(Box::new(Rag3dbConnection::new(&base).expect("ouvrir la copie")), embedder_of(&prepared)).expect("ouvrir le backend");
+    let backend = { let embedder = embedder_of(&prepared); prepared.open(Box::new(Rag3dbConnection::new(&base).expect("ouvrir la copie")), embedder) }.expect("ouvrir le backend");
     // **Sous `RAG3WEAVER_PARITE_GENERATIONS=1`** (l'écrivain de 2a′-2) : la copie passe aux générations,
     // et chaque index est suivi d'une publication là où le code sait publier.
     let generations = std::env::var("RAG3WEAVER_PARITE_GENERATIONS").as_deref() == Ok("1");
@@ -523,7 +523,7 @@ fn releve_les_reponses_apres_une_reindexation_publiee() {
     let k: usize = std::env::var("RAG3WEAVER_PARITE_K").ok().and_then(|v| v.parse().ok()).unwrap_or(10);
     let jeu: Value = serde_json::from_str(&std::fs::read_to_string(&requetes).expect("le jeu")).expect("le jeu en JSON");
     let prepared = PreparedBackend::load(std::path::Path::new(&manifeste)).expect("le manifeste");
-    let backend = prepared.open(Box::new(Rag3dbConnection::new(&base).expect("ouvrir la copie")), embedder_of(&prepared)).expect("ouvrir le backend");
+    let backend = { let embedder = embedder_of(&prepared); prepared.open(Box::new(Rag3dbConnection::new(&base).expect("ouvrir la copie")), embedder) }.expect("ouvrir le backend");
     let forme = {
         let mut cat = backend.catalog.lock().unwrap();
         let avant = rag3weaver::code::scope_form(&cat).unwrap();
@@ -631,7 +631,7 @@ fn releve_des_lignes_par_cypher() {
     let mut doc = serde_json::Map::new();
     let conn: std::sync::Arc<dyn rag3weaver::connection::DbConnection> = if let Some(manifeste) = var("RAG3WEAVER_PARITE_MANIFESTE") {
         let prepared = PreparedBackend::load(std::path::Path::new(&manifeste)).expect("le manifeste");
-        let backend = prepared.open(Box::new(Rag3dbConnection::new(&base).expect("ouvrir la copie")), embedder_of(&prepared)).expect("ouvrir le backend");
+        let backend = { let embedder = embedder_of(&prepared); prepared.open(Box::new(Rag3dbConnection::new(&base).expect("ouvrir la copie")), embedder) }.expect("ouvrir le backend");
         let cat = backend.catalog.lock().unwrap();
         let c = cat.comptes_du_plein_texte();
         for (e, d, l) in &c {
