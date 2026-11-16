@@ -1471,17 +1471,17 @@ fn postgres_condition_sur(d: &PostgresDialect, p: &rag3weaver_ir::Predicate, a: 
         // Un Plan lié n'en porte plus : la validation les a refusées avant.
         Predicate::Optional(_) | Predicate::Let(_) => "FALSE".to_string(),
         Predicate::Compiled(c) => c.clone(),
-        Predicate::Visible { couche, rang, masque } => {
+        Predicate::Visible { couche, rang, mask } => {
             let texte = |v: &str| format!("'{}'", v.replace('\'', "''"));
             let liste = |v: &[String]| v.iter().map(|x| texte(x)).collect::<Vec<_>>().join(", ");
             let mut sortie = format!(
                 "({a}.\"_couche\" = {} AND {a}.\"_depuis\" <= {rang} AND ({a}.\"_jusqu_a\" IS NULL OR {a}.\"_jusqu_a\" > {rang})",
                 texte(couche)
             );
-            if !masque.cles.is_empty() {
-                sortie.push_str(&format!(" AND {a}.\"_uuid\" NOT IN ({})", liste(&masque.cles)));
+            if !mask.keys.is_empty() {
+                sortie.push_str(&format!(" AND {a}.\"_uuid\" NOT IN ({})", liste(&mask.keys)));
             }
-            if let Some((colonne, fichiers)) = masque.fichiers.as_ref().filter(|(_, f)| !f.is_empty()) {
+            if let Some((colonne, fichiers)) = mask.files.as_ref().filter(|(_, f)| !f.is_empty()) {
                 sortie.push_str(&format!(" AND {a}.{} NOT IN ({})", d.quote(colonne), liste(fichiers)));
             }
             sortie.push(')');
@@ -1594,17 +1594,17 @@ fn rag3db_condition_sur(p: &rag3weaver_ir::Predicate, a: &str, n: &mut usize) ->
         // Un Plan lié n'en porte plus : la validation les a refusées avant.
         Predicate::Optional(_) | Predicate::Let(_) => "false".to_string(),
         Predicate::Compiled(c) => c.clone(),
-        Predicate::Visible { couche, rang, masque } => {
+        Predicate::Visible { couche, rang, mask } => {
             let texte = |v: &str| format!("'{}'", v.replace('\\', "\\\\").replace('\'', "\\'"));
             let liste = |v: &[String]| v.iter().map(|x| texte(x)).collect::<Vec<_>>().join(", ");
             let mut sortie = format!(
                 "({a}._couche = {} AND {a}._depuis <= {rang} AND ({a}._jusqu_a IS NULL OR {a}._jusqu_a > {rang})",
                 texte(couche)
             );
-            if !masque.cles.is_empty() {
-                sortie.push_str(&format!(" AND NOT {a}._uuid IN [{}]", liste(&masque.cles)));
+            if !mask.keys.is_empty() {
+                sortie.push_str(&format!(" AND NOT {a}._uuid IN [{}]", liste(&mask.keys)));
             }
-            if let Some((colonne, fichiers)) = masque.fichiers.as_ref().filter(|(_, f)| !f.is_empty()) {
+            if let Some((colonne, fichiers)) = mask.files.as_ref().filter(|(_, f)| !f.is_empty()) {
                 sortie.push_str(&format!(" AND NOT {a}.{} IN [{}]", cypher_quote(colonne), liste(fichiers)));
             }
             sortie.push(')');
@@ -1651,7 +1651,7 @@ impl SchemaDialect for Rag3dbDialect {
     }
 
     fn condition_visible_sur(&self, alias: &str, couche: &str, rang: i64) -> Option<String> {
-        let p = rag3weaver_ir::Predicate::Visible { couche: couche.to_string(), rang, masque: Default::default() };
+        let p = rag3weaver_ir::Predicate::Visible { couche: couche.to_string(), rang, mask: Default::default() };
         Some(rag3db_condition_sur(&p, alias, &mut 0))
     }
 

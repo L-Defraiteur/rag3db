@@ -210,7 +210,7 @@ fn une_migration_par_lots_d_une_occurrence_donne_le_meme_resultat() {
 /// repassage de l'écrivain écrit.
 #[test]
 #[ignore]
-fn une_base_a_versions_monte_aux_generations_par_son_chemin() {
+fn a_versions_base_moves_to_generations_by_its_path() {
     let dir = tempfile::tempdir().unwrap();
     let base = dir.path().join("code.rag3db");
     let avant = {
@@ -220,17 +220,17 @@ fn une_base_a_versions_monte_aux_generations_par_son_chemin() {
         assert_eq!(cat.ingest_code(&analyze_source(&source).unwrap()).unwrap().failed, 0);
         occurrences(&cat)
     };
-    let refus = rag3weaver::migration_des_versions::migrer_la_base_aux_generations(&base).expect_err("une base d'avant monte aux générations");
+    let refus = rag3weaver::migration_des_versions::migrate_base_to_generations(&base).expect_err("une base d'avant monte aux générations");
     assert!(refus.contains("forme"), "le refus d'une base d'avant ne nomme pas la forme : {refus}");
     rag3weaver::migration_des_versions::migrer_la_base(&base).unwrap_or_else(|e| panic!("1b refuse : {e}"));
-    let bilan = rag3weaver::migration_des_versions::migrer_la_base_aux_generations(&base).unwrap_or_else(|e| panic!("la montée refuse : {e}"));
+    let bilan = rag3weaver::migration_des_versions::migrate_base_to_generations(&base).unwrap_or_else(|e| panic!("la montée refuse : {e}"));
     assert_eq!(
         bilan,
-        rag3weaver::migration_des_versions::BilanDesGenerations {
-            forme_avant: "versions".into(),
-            forme_apres: "generations".into(),
+        rag3weaver::migration_des_versions::GenerationsReport {
+            form_before: "versions".into(),
+            form_after: "generations".into(),
             generation: Some(("backend".into(), 0)),
-            rang_lu: Some(1),
+            read_rank: Some(1),
         }
     );
     let (mut cat, texts) = ouvrir(dir.path());
@@ -239,7 +239,7 @@ fn une_base_a_versions_monte_aux_generations_par_son_chemin() {
     assert_eq!(occurrences(&cat), avant, "les occurrences ont changé");
     assert_eq!(texts.lock().unwrap().len(), 0, "la réouverture a embarqué");
     drop(cat);
-    let refus = rag3weaver::migration_des_versions::migrer_la_base_aux_generations(&base).expect_err("une base aux générations remonte");
+    let refus = rag3weaver::migration_des_versions::migrate_base_to_generations(&base).expect_err("une base aux générations remonte");
     assert!(refus.contains("forme"), "le second passage ne nomme pas la forme : {refus}");
 }
 
@@ -247,7 +247,7 @@ fn une_base_a_versions_monte_aux_generations_par_son_chemin() {
 /// celle du processus parent, vivant) vaut un refus qui dit qui la tient, avant toute ouverture.
 #[test]
 #[ignore]
-fn une_base_tenue_par_un_autre_ne_monte_pas_aux_generations() {
+fn a_base_held_by_another_does_not_move_to_generations() {
     let dir = tempfile::tempdir().unwrap();
     let base = dir.path().join("code.rag3db");
     {
@@ -258,6 +258,6 @@ fn une_base_tenue_par_un_autre_ne_monte_pas_aux_generations() {
         "pid": std::os::unix::process::parent_id(), "started": null, "role": "hote", "outil": "un hôte de test", "depuis_ms": 0
     });
     std::fs::write(rag3weaver::marque_d_ecrivain::chemin(&base), marque.to_string()).unwrap();
-    let refus = rag3weaver::migration_des_versions::migrer_la_base_aux_generations(&base).expect_err("une base tenue monte");
+    let refus = rag3weaver::migration_des_versions::migrate_base_to_generations(&base).expect_err("une base tenue monte");
     assert!(refus.contains("tenue"), "le refus ne dit pas que la base est tenue : {refus}");
 }
