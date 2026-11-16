@@ -184,6 +184,9 @@ def run_health_worker(context, trace):
     body = bytes.fromhex(response['raw_hex'])
     if len(body) > MAX_BODY or response.get('oversize') is not False or response.get('prefix_only') is not False:
         raise ValueError('health worker response incomplete or oversized')
+    trace['returned_monotonic'] = time.monotonic()
+    if trace['returned_monotonic'] >= due:
+        raise ValueError('whole health budget expired during response validation')
     return dict(status=response['status'], body=body)
 
 
