@@ -258,7 +258,8 @@ def health_observation(ready, pins, provider, evidence, *, admission, lease_end,
     pinned = next((p for p in pins['providers'] if p['address'] == provider['address']), None)
     if pinned is None: raise ValueError('provider outside admitted two-provider set')
     strict(provider['identity'], pinned['identity'])
-    process_check(provider, lambda pid: dict(pinned['process'], state='S'))
+    expected_process = provider['process'] if 'process' in provider else {k:provider[k] for k in ['pid','uid','start','exe','exe_sha256']}
+    strict(expected_process, pinned['process'])
     evidence.update(address=provider['address'], trace={})
     evidence['process_before'] = process_check(provider, process_reader)
     now = contact_gate(ready, pins, admission, lease_end, clock, phase_reader)
