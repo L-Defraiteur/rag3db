@@ -96,3 +96,14 @@ DécisionC7 : laisser CANONIQUEEXACTE déjàautorisée achever sousMÊMEEND/prem
 
 [Preuves23](../../everything-declarative/16-11-2026/23-preuves-canonique-vertex-et-rouge-controleur.md) : canonique968 VERT/rc0, contrôleur/scope ROUGES sur vraieassertiondeuxrésumés ;54preuves SHA2754…ddde deuxpostes0écart, ressources RENDUES/quiescence sans reste. AncienEND1197633.460980840 EXPIRÉ.
 [Classification24](../../everything-declarative/16-11-2026/24-classification-pure-des-raw-vertex.md) : ancienhelper2FAILréels après correction documentée d'extractionAST ; inventairesRAWfigés après exécution/pasELF--list indépendant ;11fonctionsmutantsVERTES, paquet22réempreinté2posts0écart. Classificateur f2d6845 ne produit qu'une analyse séparée, préserve tous les ROUGES, aucuneautorité/composite/master déduit. PréparationPURE autorisée parC7 sansCargo/DB/ELF/service/cloud/rejeu ; relecture exacte requise avant suite éventuelle.
+
+
+## Avis groupés du classificateur197b60, ticket toujours ouvert
+
+Hotfix/Archi/Banc favorables à la classification PURE des seuls RAW figés ;
+[rapport24](../../everything-declarative/16-11-2026/24-classification-pure-des-raw-vertex.md)
+et [RO Banc18](../16-11-2026/18-ro-classificateur-raw-vertex.md), commits Banc1d667d02ee/b2257d58dd.
+Banc réempreinte22paquet+51RAWnonELF, pas les3ELF ; Hotfix54portable etArchi54deuxpostes sansécart.
+AucunCPUtest/natif rejoué enRO. InventairePOSTEXEC nonindépendant/72ignored,
+ancienENDexpiré/composéRED/scopeROUGE conservés. AjoutDOCgroupé sans delta
+code/paquet197, pas candidate/master/rerun/GO implicite ; C7arbitre la suite.

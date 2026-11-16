@@ -70,3 +70,21 @@ Le CLI refuse tout manifeste/inventaire non épinglé et toute sortie existante.
 RO classificateur/paquet demandée à C7 et relecteurs. Aucune qualification
 composite déduite, aucun GOmaster/retrait, pas de rerun. Ticket resteOUVERT,
 commentaire obsolète connect_llm et OAuth/F300 toujours non réglés ici.
+
+## Avis groupés sur197b60ebc83ec0d4b6329dc977c85572a65a7312
+
+- Hotfix : favorable PURE bornée ; code relu, paquet22 et RAW54 réempreintés
+  sur portable sans écart, rouges et11CPUlogs lus sans rejeu.
+- Archi : favorable PURE bornée, aucune réserve bloquante ; code entier/AST
+  sans import, paquet22 et RAW54 réempreintés sur portable ET PC0écart.
+- Banc : favorable AUX RAW FIGÉS, [rapport18](../../banc/16-11-2026/18-ro-classificateur-raw-vertex.md)
+  publié1d667d02ee puisclarificationb2257d58dd ; paquet22/485696B réempreinté,
+  RAW51nonELF réempreintés sans écart, troisELF volontairement nonouverts.
+  Ce n'est PAS une troisième réempreinte physique des54 fichiers.
+
+Tous gardent l'inventairePOSTEXEC nonindépendant,72ignored consignés,
+RAW_CANONICAL_CLASSIFIED_ONLY, composéRED/scopeROUGE, ENDexpiré, aucun
+OAuth/F300/composite/master/retrait déduit. Aucun relecteur ne rejoue les
+11CPU ou les suites natives. Les preuves/paquet/code197 restent figés.
+Cet ajout groupe les réceptions en une publication DOCSEULE, ne promeut
+aucun verdict ; arbitrage de suffisance PURE distinct réservé àC7.
