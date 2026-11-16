@@ -32,3 +32,7 @@ Le lanceur exact adapté à ces trois cibles/commandes et ses empreintes doit ê
 ## TSan indépendant
 
 Dernier relevé : tours1–4finis code66/15,18,16,19rapports,0dictionnaire ; tour5rapport17warnings/0dictionnaire encorepartiel, pasFIN. Aucune relance/arrêt ; ce résultat ne prouve ni ce correctif ni son lien au crashC1. G/TSan demeurent prioritaires.
+
+## GO ciblé reçu et publication du lanceur exact
+
+C7 autorise explicitement nouvelle qualification corrective DISTINCTE1800, après revue033ff et recette1+2+2, sans attente Lucie. Priorités Gpin/Arbre/TSan et aucun poste mesure exclusif à vérifier fraîchement. [Lanceur exact](outils/dictionary-append-fix/launch.sh), [contrôleur](outils/dictionary-append-fix/controller.py), [recette/SHA/bundle](outils/dictionary-append-fix/recipe.json) publiés AVANT entrée. Source ET engine033ffb92068f31cdae6338db876d23e6bced3567, bundle382214octets SHAa65a16bcb3b916f716416f3c8544dbd12df360756dd6130a3d6002b2a112bb7b. Sourcecheckout propre exact, pas reprise d’un cache précédent. Bâti3cibles/5cas en une unité1790+10stop/ctrl1770 ; config120/build1500cap/test3×30, tmpfs32G/cgroup32G/swap0/j8/netnone. Paquet3ELF/header/archive+manifestes sauvegardé horsscratch avant assertions ; identité moteur033 réellement émise par le cas offsets et requise dans header/ELF. Premierrougearrêt, aucunmaster/libposée ni globalC1vert accordés. ParsePython/bash-n/diffcheck seuls avant publication ; aucun natif correctif encore lancé à ce stade.

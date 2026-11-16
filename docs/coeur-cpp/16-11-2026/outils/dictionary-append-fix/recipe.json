@@ -1,0 +1,28 @@
+{
+  "source_commit": "033ffb92068f31cdae6338db876d23e6bced3567",
+  "engine_commit": "033ffb92068f31cdae6338db876d23e6bced3567",
+  "source_ref": "refs/heads/cx-coeur-dictionary-append-atomic",
+  "bundle_sha256": "a65a16bcb3b916f716416f3c8544dbd12df360756dd6130a3d6002b2a112bb7b",
+  "bundle_bytes": 382214,
+  "global_s": 1800,
+  "runtime_s": 1790,
+  "stop_s": 10,
+  "controller_s": 1770,
+  "configure_s": 120,
+  "build_s": 1500,
+  "test_each_s": 30,
+  "cases": [
+    1,
+    2,
+    2
+  ],
+  "memory_bytes": 34359738368,
+  "swap_bytes": 0,
+  "scratch_bytes": 34359738368,
+  "jobs": 8,
+  "admission": "C7 NEW DISTINCT1800 correction033 source/engine033; publish exact launcher then fresh real poste; G pin/Arbre/TSan priority, no exclusive measure; first failure stops; no installed library/services/liveDB/GPU/cache",
+  "scripts": {
+    "controller.py": "16b661e2f15d229a66e80a4f833914d260ab241fd370f7bd4552a501bf278c47",
+    "launch.sh": "151636a971f1a9a1b0dd334ad19ae40dc0a1ca6a5f3f7ce886f9977b2866ff0e"
+  }
+}
