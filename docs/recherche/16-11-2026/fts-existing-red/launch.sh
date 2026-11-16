@@ -1,0 +1,12 @@
+#!/bin/bash
+set -euo pipefail
+W=$1
+P=$2
+CONTROL=$3
+export POSTE_MEM_MAX=32G POSTE_CPU_QUOTA=800% CARGO_BUILD_JOBS=8 CARGO_INCREMENTAL=0 RUST_TEST_THREADS=1
+export CARGO_TARGET_DIR="$HOME/.cache/rag3weaver-build/cx-target-recherche-fts-counts-freshness"
+export RAG3WEAVER_TARGET_MAX_GO=32 RAG3DB_BUFFER_POOL_SIZE=1073741824
+export RAG3DB_LIB=rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+unset RAG3WEAVER_MOTEUR_ANCIEN RAG3WEAVER_EMBED_SERVICE RAG3WEAVER_PG RAG3WEAVER_TESTS_REPLI_PERIPHERIQUE RAG3WEAVER_TARGET_REPRENDRE
+unset RAG3DB_LIBRARY_DIR RAG3DB_INCLUDE_DIR RAG3DB_SHARED LD_LIBRARY_PATH RUSTFLAGS CARGO_ENCODED_RUSTFLAGS
+exec "$HOME/.cache/rag3weaver-build/poste" lourd systemd-run --user --scope --quiet -p MemoryMax=32G -p MemoryHigh=infinity -p MemorySwapMax=0 -p CPUQuota=800% -- python3 -B "$CONTROL/confiner_validation.py" lancer --delai 1200 --preuves "$P-supervisor" -- python3 -B "$CONTROL/driver.py" "$W" "$P"
