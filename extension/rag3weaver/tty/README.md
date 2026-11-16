@@ -22,7 +22,10 @@ rag3weaver-tty --depot <name|path> --tache <name> [--demande "<text>"]
   On another machine: `ssh -N -L 17970:127.0.0.1:7970 <host machine>`, then
   `--daemon-cmd "ssh <host machine> cat .local/share/rag3weaver/daemon.json" --adresse 127.0.0.1:17970`.
 - `--plain` writes the stream as plain text. It also takes over by itself when the inline view cannot
-  start, for instance when the terminal does not report its cursor position, and it says so.
+  start, for instance when the terminal does not report its cursor position, and it says so. It
+  follows the task's own stream only, from what arrives after it starts: with `--demande`, it stays
+  attached until that request ends (an end left in the mailbox by an earlier request does not count),
+  and its journal carries the tool calls, so a script can run it and read the journal afterwards.
 - The old names `--backend` and `--task` are still read, with a warning.
 
 ```
