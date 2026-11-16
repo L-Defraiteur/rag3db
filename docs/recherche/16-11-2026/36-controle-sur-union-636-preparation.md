@@ -24,3 +24,11 @@ Report32/pinsJSON32 historiques333 ne sontPASpinscecontrôle. Prochain
 manifest/finalsourceSHA aprèswrappers/CPUcomposé etauditcouple ; aucun
 prépareQ/Auth/allocation/grant niGO6000 maintenant. OutilPGSQLréelHOLD,
 combinaison636NONJOUÉE.
+
+## Septièmepin vu rouge avantfix
+
+Source/témoinPUB3dac7fcb2703e4aeeca096f4adfb7a68662425b0, puis1assertfail/
+0error0.002s surVRAIowner_pins contretransport_sha256incorrect ; brutsR/
+cx-proofs-recherche-fts-global-transport-pin-red-v1/manifestjoint. Fixensuite
+ajoute7epintransport avantlazyload+Qcopiecommon STRICTdéclarée. PasactualPG/
+network/proc/CPUcommonimport ; seulCPUfixturefichiers,avantpostpubtestscomposés.
