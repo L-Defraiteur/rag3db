@@ -117,3 +117,19 @@ profil privé/jobs/allocationinvalide, vrai résultat retardé aprèsopen et vra
 constructeur commandes/politique. Ils ne lancent aucun processus de validation.
 AST seulement et diffcheck à publier avec les hashes ; aucun Cargo, garde,
 test Rust, P/Q/runtimePC, sourcePC ou autorité consommé par cette préparation.
+
+## Diagnostic CPU avant correction du budget
+
+Réserve indépendante Banc957ebdd188 et clarification C7 concordent : la
+première version81d066 porte TERM1920+KILL15, donc1935 au pire. Ce n'est pas
+un GO et aucun natif n'a été lancé sous cette version. Ticket complété puis
+témoin constructeur adapté et publié08523e2128 AVANT premier essai.
+Exécution unique autorisée des sixCPU, timeout60/failfast : quatrePASS puis
+unFAIL nommé constructeur (`kill-after15s/1920s` au lieu de `2s/1918s`),
+sixième NONJOUÉ. 0,001s unittest/0,058156836s enveloppe, rc1. STOP, aucun
+rejeu. RAW/codeversions/statut horsW `cx-archi-doc-bac-red-cpu-r1`, manifeste
+SHA `e4bbdc8c9dcba5b687f0881d66d669a5b7dd8ffa1d11a04be4d05fa6204f5709`.
+Correction suivante doit conserver ce rouge et aligner constructeur/politique
+et réserve finale sous1920WHOLE, sans resetcommon1800. Aucun PID/proc/DB/
+natif consulté par ces simulations ; les processus de test Python restent
+des simulations, jamais une portée ni une qualification native.
