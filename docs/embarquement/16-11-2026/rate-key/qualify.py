@@ -8,6 +8,7 @@ import re
 import subprocess
 import sys
 import time
+import urllib.request
 
 W = Path(__file__).resolve().parents[4]
 C = W / 'extension/rag3weaver'
@@ -97,6 +98,37 @@ def run(name, argv, export=False, extra=None):
     print('PASS', name, flush=True)
     return (P/(name+'.log')).read_text(errors='replace')
 
+def health_snapshot(name):
+    rows = []
+    for address in ('127.0.0.1:7878', '127.0.0.1:7879'):
+        try:
+            with urllib.request.urlopen('http://'+address+'/sante', timeout=min(5, max(1, DEADLINE-time.monotonic()-15))) as response:
+                data = json.load(response)
+            keys = ('service', 'modele', 'dim', 'dual', 'sparse', 'precision', 'lot_conseille', 'factice', 'executable', 'max_chars_per_text', 'cut_texts', 'reranker', 'ocr')
+            rows.append(dict(address=address, identity={key: data[key] for key in keys if key in data}))
+        except Exception as error:
+            rows.append(dict(address=address, error=str(error)))
+    save(name, dict(observed_monotonic=time.monotonic(), services=rows))
+    return rows
+
+
+def coordinate_canonical():
+    # Le dossier est neuf ; le permis de coordination doit répondre à cette demande réelle.
+    save('canonical-coordination-request.json', dict(source=SOURCE, stage='canonical',
+         requested_monotonic=time.monotonic(), deadline=DEADLINE,
+         services=['127.0.0.1:7878', '127.0.0.1:7879'], postgres_fixture='rag3weaver_test'))
+    print('WAIT_CANONICAL_COORDINATION', P, flush=True)
+    grant_path = P/'canonical-coordination-grant.json'
+    while not grant_path.exists():
+        guard()
+        time.sleep(1)
+    guard()
+    grant = json.loads(grant_path.read_text())
+    assert grant.get('source') == SOURCE and grant.get('stage') == 'canonical'
+    assert grant.get('services') == ['127.0.0.1:7878', '127.0.0.1:7879']
+    assert grant.get('postgres_fixture') == 'rag3weaver_test' and grant.get('coordinated') is True
+    save('canonical-coordination-accepted.json', grant)
+
 verdict = 'ROUGE'
 try:
     guard()
@@ -158,8 +190,16 @@ try:
         assert listed.count(test+': test') == 1, 'test absent or ambiguous'
         log = run(f'target-{index:02}', [str(binary), test, '--exact', '--nocapture', '--test-threads=1'], export=True)
         assert re.findall(r'test result: ok\. (\d+) passed; (\d+) failed; (\d+) ignored;', log)[-1] == ('1', '0', '0')
-    run('official-pass', ['bash', str(script), W.name, P.name, TESTS[0].rsplit('::', 1)[1]],
-        extra=dict(CIBLE=T.name, SUITE_DU_TEMOIN='lib', SUITES='e2e_code_sync,e2e_lectures,e2e_embarqueur_a_la_demande'))
+    coordinate_canonical()
+    before = health_snapshot('canonical-health-before.json')
+    assert all('error' not in row for row in before), 'canonical service health unavailable'
+    assert [(row['identity'].get('modele'), row['identity'].get('dim'), row['identity'].get('factice')) for row in before] == [('granite-278m', 768, False), ('bge-m3', 1024, False)]
+    try:
+        run('official-pass', ['bash', str(script), W.name, P.name, TESTS[0].rsplit('::', 1)[1]],
+            extra=dict(CIBLE=T.name, SUITE_DU_TEMOIN='lib', SUITES='e2e_code_sync,e2e_lectures,e2e_embarqueur_a_la_demande'))
+    finally:
+        after = health_snapshot('canonical-health-after.json')
+    assert before == after, 'canonical service identities changed'
     summary = (P/'resume.log').read_text().splitlines()
     assert summary and summary[0].startswith('commit '+git('rev-parse', '--short', 'HEAD')+' ') and summary[-1] == 'VERT'
     assert (P/'base').read_text().strip() == git('merge-base', 'HEAD', 'origin/master')
