@@ -63,16 +63,7 @@ for b in "$@"; do
   echo "instantané de $b → $sous"
 done
 
-# 4. La recette de retour, écrite à côté (à jouer hôte arrêté, avec la lib d'avant en courant).
-{
-  echo "# Retour à l'instantané $ETIQUETTE ($(date '+%d/%m/%Y %H:%M'), $(hostname))"
-  echo "# Hôte arrêté proprement, courant ramené à la lib d'avant, puis pour chaque base :"
-  for b in "$@"; do
-    sous="$D/$(basename "$b" .rag3db)"
-    # L'état d'après, mis de côté hors du motif `nom.rag3db.*` (il serait pris pour un voisin).
-    apres="$(dirname "$b")/apres-$ETIQUETTE-$(basename "$b" .rag3db)"
-    echo "mkdir -p '$apres' && mv $(fichiers_de "$b" | sed "s/.*/'&'/" | tr '\n' ' ')'$apres/'"
-    echo "cp -a --reflink=always '$sous'/* '$(dirname "$b")/'"
-  done
-} > "$D/RETOUR.sh"
+# 4. Retour autonome : helper qualifié copié et inventaires SHA du snapshot.
+# La liste des voisins vivants sera lue AU RETOUR, jamais figée à la prise.
+python3 "$(dirname "$(realpath "$0")")/generate_snapshot_return.py" "$D" "$@" || exit 8
 echo "fini ; recette de retour : $D/RETOUR.sh"
