@@ -93,3 +93,10 @@ observé. Le premier rouge natif reste obligatoire avant tout FIX. Exactitude
 snapshot/graphe, vrai postCOPY déterministe, repli NULL et coût restent dans le
 même ticket ; ce premier rouge ne qualifie aucun de ces contrats. Revue externe
 et admission neuve obligatoires avant tout lourd.
+
+Après publication du code pilote `eb6d5db0aa`, six tests de reçu synthétiques
+réellement verts en0,002s, AST des cinq fichiers Python et bash-n du lancement
+valides, diff-check sans erreur. [Reçu CPU et empreintes](rows-red-cpu-receipt.json).
+Ces six témoins exécutent seulement le parseur sur XML/stdout fabriqués ; ni
+entry/controller, processus natif, supervision réelle, bundle PC ou base exécutés.
+Il ne s'agit pas d'un rouge produit avant FIX, ni d'une qualification native.

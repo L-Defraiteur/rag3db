@@ -1,0 +1,25 @@
+{
+  "pilot_source": "eb6d5db0aa",
+  "checks": {
+    "synthetic_receipt_tests": 6,
+    "failures": 0,
+    "elapsed_s": 0.002,
+    "ast_files": 5,
+    "bash_n_exit": 0,
+    "diff_check_exit": 0
+  },
+  "scripts_sha256": {
+    "controller.py": "cac256333dea854d2dee6cd7f5b8b5cd79a358db3f468feecb47261ee388a9e0",
+    "entry.py": "378673d1c330d0cd444ead112e41fbef91a4325537ef6a0e20541b3dd47289d8",
+    "launch.sh": "4b3768fcf8439eb441827e74e9db6bff27f6f28ff0423aea7c30019527bdcd4f",
+    "prepare.py": "d030f8377eee0103834b4f5c570d60724679b3093a3046d42450d2bf19dba95e",
+    "receipt.py": "113254aa262798b9c2eec291f53b203ebe5ed85f66c8ec7323ea782571f1d3ae",
+    "test_receipt.py": "0c5088fdbdf5f835cc94c9bf730121bddaf90a53fbf542fee9b6b5fe645d1483"
+  },
+  "native_execution": false,
+  "cpp_compiled": false,
+  "source_bundle_prepared": false,
+  "systemd_invoked": false,
+  "actual_binder_red_observed": false,
+  "limits": "Six synthetic XML/stdout receipt tests only; no controller/entry execution, no real process supervision qualification."
+}
