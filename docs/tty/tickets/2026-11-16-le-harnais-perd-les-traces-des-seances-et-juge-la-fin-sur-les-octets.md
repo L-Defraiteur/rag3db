@@ -121,3 +121,14 @@ changent sous extension/rag3weaver). Sa gate native refuse ENDoriginal expiré,
 refuse de transformer préparation en nouvelle allocation ; aucun GO réactivé.
 Avant tout natif futur : revue de l'intégration, commande/env privés et budget
 neuf explicitement décidé par C7, pas de fenêtre inventée dans le paquet.
+
+## Réserve unique de revue97c, avant correction
+
+Mémoire : approval_and_end accepte tout reply_to non vide ; le faux hôte publie
+ended/stateended pour tout answerapprovedtrue et ne valide pas l'identifiant.
+Un answer reply_to faux/mesure:999, avec approval réelle faux/mesure:0 et
+ended/stateended, ferait donc passer l'oracle à tort. Le préfixe seul vérifié
+plus loin ne suffit pas. Corréler exactement à l'unique approval attendue de
+**cette phase** ; contre-exemple publié avant fix et essai hermétique. Aucun
+changement produit ni assouplissement du faux hôte, pas de nouveau runtime.
+Revue97c fin totale : un seul point, autres contrôles bornément reconnus.
