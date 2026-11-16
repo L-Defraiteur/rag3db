@@ -2,7 +2,7 @@
 import unittest
 import qualify as q
 class Contracts(unittest.TestCase):
- def test_inventory_requires_two_exact_nonignored_names(self):
+ def test_inventory_requires_all_exact_nonignored_names(self):
   raw='\n'.join(n+': test' for n in q.NAMES)+f'\n{len(q.NAMES)} tests, 0 benchmarks\n'
   self.assertEqual(q.inventory_names(raw),q.NAMES)
   for bad in [raw.replace(q.NAMES[0],'other'),raw+'other: test\n']:
