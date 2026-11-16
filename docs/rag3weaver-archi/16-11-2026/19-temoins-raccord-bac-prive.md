@@ -51,3 +51,19 @@ inattendu. À défaut de cet arbitrage, un seul nom pourra être lancé.
 Contrôles effectués sans exécution des témoins : rustfmt sortie standard
 jetée pour chacun des trois fichiers (parse seulement), diffcheck,656tickets.
 Aucun Cargo/rustc, aucun ELF de ce source ni résultat de test revendiqué.
+
+## Correction du nom enfant après le refus de montage, setups inchangés
+
+La tentative piloteDDE6 a compilé la lib puis refusé le target inexistant
+e2e_equipier, sans aucun juge (rapport21 de la branche pilote). C7 a confirmé
+le vrai targetCargo e2e et son main qui inclut ce fichier comme module
+e2e_equipier. Test pur prépubliéf93 puis rouge avant fix : la chaîne du même
+ELFenfant n'était pas qualifiée et aurait donné zéro test sous --exact.
+
+Ce delta corrige UNE chaîne dans le seul témoin e2e :
+`e2e_equipier::documentation_fixture_uses_the_declared_private_sandbox_before_add`.
+Ni depot_de_test, ni depot_inscrit, ni le Bac ne sont corrigés ; les deux
+rouges du raccord manquant restent à observer sous nouveauGO distinct.
+Commande pilote/Names/artifactJSON sont corrigés séparément, pas de target
+Cargo supplémentaire ni de modification du main/Cargo.toml. Préfixe qualifié
+écrit avant ce correctif dans le vrai main, pas un nom inventé pour le test.
