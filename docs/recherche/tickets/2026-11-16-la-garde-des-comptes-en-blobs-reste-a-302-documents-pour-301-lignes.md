@@ -158,3 +158,49 @@ et préfixe oversize65537 sont conservés avant refus. Tests de ces vrais raccor
 par faux HTTP/Popen/horloge/policy uniquement, source publiée avant tests.
 Les politiques PG/embeddings canoniques et lifecycle no_embedding restent
 séparées et hashées. Aucun GO900/6000, aucune sonde ni réservation.
+
+## Composants owner et transport publiés — préparation, pas admission
+
+Owner global source443b5a039cc2a3ff11705b0ebaa5bfa6577d6b0e :
+`global_services_owner.py` SHA9d308b5bd2d1eb44dca02da8d02f8cce4a2a7717e57a246301b468c142bf6b8d ;
+transport commun SHAedf45f73bf97d21f2a0caab4d6e07a7d01f807fba8310c9006f442159e2bc2a6.
+La frontière `health_observation(...,admission,lease_end)` est partagée avec le
+consommateur, statut HTTP obligatoire dans validate_health ; metadata PG déléguée
+au vérificateur G8ddb exact, avec ses deux SQL constants et sans ouvrir PG.
+Grant.owner_pins et son SHA JSON canonique lient source, processus, contexte et
+instant d'admission ; après canonique, autorité+lease/as-of de cet instant, pas
+nouvelle admission ni nouveau TTL. APP/pilot définitifs restent des pins externes,
+jamais gravés à84/333 : Recherche prépare sa nouvelle union sur master99.
+
+TDD CPU hermétique sous60s : source initiale de62 publiée avant17 témoins,
+6 assertions rouges réelles ; correction234 puis17 verts. L'intégration du
+loader G a aussi révélé des chemins relatifs de fixtures, refusés correctement :
+ce montage est corrigé en chemins absolus, ses sorties restent conservées et ne
+sont pas un défaut produit. Final443 publié avant **39/39 CPU verts** en0.694s
+(22 owner global,17 transport), failfast. HTTP/proc/horloge/processus tous faux,
+aucune compilation native, aucune requête PG ou service réelle.
+
+Les discriminants transport précèdent les corrections : réserve cleanup0.5 dans
+whole5, première exception conservée même si cleanup échoue, status/chunks connus
+flushés avant erreur/kill, IncompleteRead.partial enregistré séparément sans
+prétendre dédupliquer, nombres1e999/NaN/Infinity refusés, UTF8 strict, usageINT0.
+Le worker appelle la garde propriétaire path/SHA/UID pinée avant son seul GET.
+Une quiescence inconnue reste un refus ; aucune attente cleanup sans borne.
+
+Owner lifecycle séparé bcfd1934ac44153b26ea5832f2bd7415ea83ded2, source
+83139ebb329a59f19aa881f7f9678a7e6bf87c39abd3ff0ab7d20ecc15c0ba00,
+importe **le même** transport et garde sa politique no_embedding ;57/57 CPU verts
+sur cette base propre (25 owner,11 producteur,4 contrat,17 commun). Ce n'est pas
+le verdict du futur couple lifecycle : Arbre porte son consommateur/protocole/Q.
+
+Preuves brutes aux deux postes sous ~/.cache/embarquement-notes/ :
+
+- global-services-owner :36fichiers, manifeste81b18acca528ed4102be575ae358896a1ce2404e32b2f2848a29857208be13a9 ;
+- health-transport :40fichiers, manifeste071faa4c1b09d45533565d9420b032c6380c3dd9550b1129fc9953bd6fbd2efc ;
+- cycle-shared-owner :12fichiers, manifesteffa9f266b75e5d7118ff45715d392dc6d39614c13e7efd9900b96376a48605d8.
+
+Les rouges, erreurs de fixture et snapshots précédents restent lisibles. Revues
+ED/Mémoire demandées sur les composants exacts ; Recherche et Arbre regroupent
+leurs sources/pins/Q pour revue totale. Aucun GO900/6000 ni health/slot accordé
+par ces résultats. Outil d'observation PG réel absent : HOLD qualifié externe
+G/C7 obligatoire, un fake tool_qualified=true n'est jamais une qualification.
