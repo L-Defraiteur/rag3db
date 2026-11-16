@@ -1,0 +1,47 @@
+[
+  {
+    "path": "green.json",
+    "size": 125,
+    "sha256": "71797ed8d7b2ad84245d81ed133bbac118a07ce6a34940315c11d54a29d33972"
+  },
+  {
+    "path": "green.stderr",
+    "size": 102,
+    "sha256": "84ff24306afcf5e19892adf32493aa9bc9dbc8db16870c6155e8e03c23864a33"
+  },
+  {
+    "path": "green.stdout",
+    "size": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "path": "quiet-after.py",
+    "size": 17318,
+    "sha256": "ec5a7f1d7b58a556264059877a97af5b0cdc7d89710008e4c2e4a7f799308ef4"
+  },
+  {
+    "path": "quiet-before.py",
+    "size": 15760,
+    "sha256": "0f8a4684cedca2e6dd5fb2601e526fb73fd712499148956b5717be973150ff50"
+  },
+  {
+    "path": "red.json",
+    "size": 125,
+    "sha256": "ee32b05566a4a43f4ce3158a5f98990035dbcf0b8e7f8f8daca2f27c62f51a99"
+  },
+  {
+    "path": "red.stderr",
+    "size": 1705,
+    "sha256": "139039af7f9d0b6c8c7488f7a4b92cdbde78165dbd8d178b8aa8000864dd00d9"
+  },
+  {
+    "path": "red.stdout",
+    "size": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "path": "test_quiet.py",
+    "size": 4051,
+    "sha256": "ad009d43c5474213c4d5a11fec2e88f415887fd198c7c4427295628548d0161f"
+  }
+]

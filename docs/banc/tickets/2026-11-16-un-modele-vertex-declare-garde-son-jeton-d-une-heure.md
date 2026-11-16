@@ -80,3 +80,5 @@ RougeCPUfe40/eb026 conservépreuves4d54cf4a47, aucunretry. C7 demande la prépar
 ## Réserves du pilote9d8 avant admission, transportc38 inchangé
 
 Hotfix relève deux défauts quiet : FD255 du Bashposte ancêtre sousQ interprété comme reste ; attribution exe/cwd/FD perdue si PermissionError ultérieure. Pilote9d8 retiré/HOLD sans aucune autorité ni exécution ; PcrééVIDEparprepare-only, S/T/launchabsents. Correction prévue uniquementcontrôleur : attribution incrémentale/UNKNOWNattribuable fatal, seule exemption FDQ/poste pour ancêtre UID/PIDstart/exeBash/argvplace exacts revérifiés. Aucun W/T/autreFD exempté. TémoinsAST/proc-fictif à publier AVANTessais/fix, puis nouveauQ2/piloteSHAàRO ; transportc38restefigé, aucunGOrecyclé.
+
+Contrôleurv2 :2FAIL observés avantfix sur vrai quietAST,4/0 aprèscodepublié ; logsrougesconservés/manifeste9fichiersdansrecette18. Attributionincrémentale, exemptionFDposteancêtreUID/PIDstart/exeSHA/argvexactseulement. APPc38et7jugesNONJOUÉSinchangés. Nouveaupilote/paquetQv2àRO,9d8resteHOLDnonalloué.
