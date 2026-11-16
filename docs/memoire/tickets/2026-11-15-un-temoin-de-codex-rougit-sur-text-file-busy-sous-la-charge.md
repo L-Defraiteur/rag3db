@@ -120,3 +120,15 @@ ignored, refuser doublons/manquants/extras et cardinalités incompatibles ;
 snapshot avantassert, témoins vraisfonctions avantfix(rejouer CPU seulement).
 Même sourceAPP e272/T/transition/3600/SDK et autresfrontières inchangés.
 NouveauSHA à RO et GOdistinct, aucunPQS/Cargo ou runtime consommé.
+
+## Union qualifiée au GO distinct3600, avant candidatfinal
+
+APPe272/PILOTE01f3 :6ciblés/F8 8/8/preuve/lib2605/0/72/NAV45 puis seconde
+MÊMEELFc397...a9072605/0/72. CounterNOMS2605/72×2, absents/extras/doublons
+vides ; ignorésNONJUGÉS. Canonrésuméf7ea...3a3c intact, source9dansELFunion,
+ledgercopieavantseconde, SDKruntime/C_MANIFESTdiff{}. FinalGREEN0en560,0378s
+<3600newaprèsPOSTE, scopeVERT0/restes[]/TERMINE/busCGabsents,2831ownedquiet.
+[47preuvesPC/localréhashées](../16-11-2026/11-preuves-union-deux-libs.md),
+modèleshealth200usage0/PG rendus, T/source/TMPconservés. Anciens734 etrouges
+restenthistoriques. ROpreuves puis candidatNEUFmasterfrais/code_apporte/ÀTOI C7
+restent avant intégration/fermetureeffective ; aucunmaster/retraitautorisé.
