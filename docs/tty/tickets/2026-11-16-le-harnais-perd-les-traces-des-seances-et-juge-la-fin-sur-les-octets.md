@@ -296,3 +296,17 @@ Stopper : toutes lignesROUGE append+fsync dans red-lines.jsonl et harness.log,
 flag avant premier signal ; markeropenx créé une seule fois, un seul pidfd/
 signal, lignes suivantes conservées sans réécriture ni seconde inspection.
 Témoin actualisé vérifie aussi les2lignes append, toujours avant essai vert.
+
+## Résultat CPU groupé et paquet neuf avant RO totale
+
+Correctif60f02d37a2 publié avant essai ; sous timeout60 failfast,1test agrégé
+sur les3raccords réels passe (0,015s), processus/pidfd/signaux entièrement
+factices, aucun Common/natif/tmux/HTTP/Cargo. La fixture réelle du dossier
+temporaire courant contient stty-echo ; gate réelle n'envoie rien sans invite ;
+lecteur réel conserve2ROUGE en append, premier marqueur non remplacé,
+callback pidfd/signal appelé1fois. Aucun résultat natif91e5 requalifié.
+
+Nouveau Q/P/Sv4 et TMPttyhr4 pour préparation seulement, ancienQv3 et archives
+intacts ; précédent reçu le plus récent j4l20f5g terminé/restes[] conservé,
+ancien reçu flsb10fe reste historique nommé séparément. Aucun budget1200
+accordé par cette préparation, aucune ancienne allocation réactivée.
