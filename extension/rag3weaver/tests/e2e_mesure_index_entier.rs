@@ -13,12 +13,27 @@
 
 use std::time::Instant;
 
-use rag3weaver::code::{default_scope_chunking, register_code_schema};
+use rag3weaver::code::{default_scope_chunking, register_code_schema, SCOPE_FORM_KEY, SCOPE_FORM_VERSIONS};
 use rag3weaver::connection::{DbConnection, QueryParam};
 use rag3weaver::embedder::HashEmbedder;
 use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
 
 /// La copie de l'index, ou `None` en le disant.
+/// **The empty-chunk measures read the form of before** (ticket of 13 Nov. 2026): they count `Scope_Chunk`,
+/// which a versions base leaves empty, and would then measure zero without failing. They say so, and refuse a
+/// versions base by name.
+fn require_the_form_of_before(conn: &Rag3dbConnection) {
+    let form = conn
+        .execute(&format!("MATCH (m:_catalog_meta) WHERE m._key = '{SCOPE_FORM_KEY}' RETURN m._value"))
+        .ok()
+        .and_then(|r| r.rows.first().and_then(|l| l.first()).and_then(|v| v.as_str().map(str::to_string)))
+        .unwrap_or_default();
+    assert!(
+        !form.starts_with(SCOPE_FORM_VERSIONS),
+        "this measure reads Scope_Chunk, the form of before; the base is a versions base ({form}): copy a base of before"
+    );
+}
+
 fn base() -> Option<String> {
     let b = std::env::var("RAG3WEAVER_MESURE_BASE").ok();
     if b.is_none() {
@@ -268,6 +283,7 @@ fn les_formes_du_saut_d_usages_sur_l_index_entier() {
 fn les_morceaux_a_texte_vide() {
     let Some(base) = base() else { return };
     let conn = Rag3dbConnection::new(&base).expect("ouvrir la copie");
+    require_the_form_of_before(&conn);
     let n = conn
         .execute("MATCH (n:`Scope_Chunk`) WHERE n.`_text` IS NULL OR n.`_text` = '' RETURN count(n)")
         .unwrap_or_else(|e| panic!("{e}"));
@@ -292,6 +308,7 @@ fn les_morceaux_a_texte_vide() {
 fn les_morceaux_vides_ont_le_hash_d_un_texte() {
     let Some(base) = base() else { return };
     let conn = Rag3dbConnection::new(&base).expect("ouvrir la copie");
+    require_the_form_of_before(&conn);
     const SHA256_VIDE: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
     let r = conn
         .execute(&format!(
@@ -319,6 +336,7 @@ fn ce_qui_distingue_les_morceaux_vides() {
     use rag3weaver::connection::CypherValue;
     let Some(base) = base() else { return };
     let conn = Rag3dbConnection::new(&base).expect("ouvrir la copie");
+    require_the_form_of_before(&conn);
     let info = conn.execute("CALL TABLE_INFO('Scope_Chunk') RETURN *").unwrap_or_else(|e| panic!("{e}"));
     let colonnes: Vec<(String, String)> = info
         .rows
@@ -393,6 +411,7 @@ fn ce_qui_distingue_les_morceaux_vides() {
 fn les_fichiers_des_scopes_vides() {
     let Some(base) = base() else { return };
     let conn = Rag3dbConnection::new(&base).expect("ouvrir la copie");
+    require_the_form_of_before(&conn);
     if let Ok(r) = conn.execute("CALL TABLE_INFO('File') RETURN *") {
         let c: Vec<String> = r.rows.iter().filter_map(|l| l.get(1).and_then(|v| v.as_str()).map(|s| s.to_string())).collect();
         eprintln!("[fichiers] colonnes de File : {c:?}");
@@ -439,6 +458,7 @@ fn ce_que_porte_le_texte_des_scopes_vides() {
     use rag3weaver::connection::CypherValue;
     let Some(base) = base() else { return };
     let conn = Rag3dbConnection::new(&base).expect("ouvrir la copie");
+    require_the_form_of_before(&conn);
     // En deux temps : le classement des scopes sans leur texte, puis leur
     // texte par paquets, par clé (la même requête en un temps fait tomber le
     // moteur : SIGSEGV, le 12 octobre).
@@ -504,6 +524,7 @@ fn deux_lectures_pour_departager_les_chemins() {
     use std::collections::HashMap;
     let Some(base) = base() else { return };
     let conn = Rag3dbConnection::new(&base).expect("ouvrir la copie");
+    require_the_form_of_before(&conn);
     let vide = "(n.`_text` IS NULL OR n.`_text` = '')";
     let r = conn
         .execute(&format!(
@@ -565,6 +586,7 @@ fn deux_lectures_pour_departager_les_chemins() {
 fn les_morceaux_vides_et_les_groupes_de_noeuds() {
     let Some(base) = base() else { return };
     let conn = Rag3dbConnection::new(&base).expect("ouvrir la copie");
+    require_the_form_of_before(&conn);
     let r = conn
         .execute(
             "MATCH (n:`Scope_Chunk`) \
