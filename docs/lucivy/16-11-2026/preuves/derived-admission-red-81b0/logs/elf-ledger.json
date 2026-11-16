@@ -1,0 +1,19 @@
+{
+  "source": "81b0e74f0254c8216864f90a460f8969842432ed",
+  "observed": 1197329.725521448,
+  "artifacts": {
+    "test_derived_fixture_admission": {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_derived_fixture_admission-0bd690ba36035513",
+      "sha256": "7c6f65e2e8427b53828a58cecd313d4a6c02cd7a3074f358d14ce5f2114ea9e8"
+    },
+    "test_derived_in_ram": {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_derived_in_ram-539df445d54ae12e",
+      "sha256": "64758437584801255698598fea0db343a6528c22cfdfb5df851e79b2f5700ede"
+    },
+    "test_sfx_v3_ground_truth": {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_sfx_v3_ground_truth-32bb5ee824ccaa93",
+      "sha256": "777c911f0216529d01fb8957cd3bcfe66d80b86b7378f10e0e33f7d977e5036d"
+    }
+  },
+  "native_builders_executed": false
+}

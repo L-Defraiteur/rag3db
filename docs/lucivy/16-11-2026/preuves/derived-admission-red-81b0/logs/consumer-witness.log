@@ -1,0 +1,17 @@
+
+running 1 test
+test missing_panel_is_rejected_before_any_builder ... 
+thread 'missing_panel_is_rejected_before_any_builder' (594861) panicked at lucivy_core/tests/test_derived_fixture_admission.rs:26:5:
+assertion `left == right` failed: an uncovered panel must be refused before the builder
+  left: 1
+ right: 0
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    missing_panel_is_rejected_before_any_builder
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.00s
+

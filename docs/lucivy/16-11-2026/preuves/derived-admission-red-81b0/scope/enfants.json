@@ -1,0 +1,365 @@
+[
+  {
+    "pid": 588658,
+    "parent": 588652,
+    "session": 588658,
+    "debut": "119729733",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p588651-i151544492.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 588659,
+    "parent": 588658,
+    "session": 588658,
+    "debut": "119729734",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p588651-i151544492.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 588660,
+    "parent": 588658,
+    "session": 588658,
+    "debut": "119729734",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p588651-i151544492.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 588670,
+    "parent": 588660,
+    "session": 588658,
+    "debut": "119729744",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p588651-i151544492.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 588683,
+    "parent": 588670,
+    "session": 588658,
+    "debut": "119729778",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p588651-i151544492.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 588686,
+    "parent": 588670,
+    "session": 588658,
+    "debut": "119729778",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p588651-i151544492.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 588687,
+    "parent": 588670,
+    "session": 588658,
+    "debut": "119729778",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p588651-i151544492.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 588689,
+    "parent": 588670,
+    "session": 588658,
+    "debut": "119729778",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p588651-i151544492.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 588717,
+    "parent": 588687,
+    "session": 588658,
+    "debut": "119729791",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p588651-i151544492.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 588718,
+    "parent": 588717,
+    "session": 588658,
+    "debut": "119729791",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p588651-i151544492.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 588719,
+    "parent": 588718,
+    "session": 588658,
+    "debut": "119729791",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p588651-i151544492.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 588724,
+    "parent": 588670,
+    "session": 588658,
+    "debut": "119729791",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p588651-i151544492.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 588747,
+    "parent": 588670,
+    "session": 588658,
+    "debut": "119729794",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p588651-i151544492.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 588758,
+    "parent": 588670,
+    "session": 588658,
+    "debut": "119729800",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p588651-i151544492.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 589419,
+    "parent": 588670,
+    "session": 588658,
+    "debut": "119729834",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p588651-i151544492.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 589446,
+    "parent": 588670,
+    "session": 588658,
+    "debut": "119729862",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p588651-i151544492.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 589460,
+    "parent": 588670,
+    "session": 588658,
+    "debut": "119729874",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p588651-i151544492.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 589705,
+    "parent": 588670,
+    "session": 588658,
+    "debut": "119729939",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p588651-i151544492.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 589720,
+    "parent": 588670,
+    "session": 588658,
+    "debut": "119729945",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p588651-i151544492.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 589754,
+    "parent": 588670,
+    "session": 588658,
+    "debut": "119730000",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p588651-i151544492.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 590436,
+    "parent": 588670,
+    "session": 588658,
+    "debut": "119730614",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p588651-i151544492.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 593649,
+    "parent": 588670,
+    "session": 588658,
+    "debut": "119732639",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p588651-i151544492.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 593652,
+    "parent": 588670,
+    "session": 588658,
+    "debut": "119732639",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p588651-i151544492.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 593653,
+    "parent": 588670,
+    "session": 588658,
+    "debut": "119732639",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p588651-i151544492.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 593919,
+    "parent": 593649,
+    "session": 588658,
+    "debut": "119732696",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p588651-i151544492.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 593922,
+    "parent": 593919,
+    "session": 588658,
+    "debut": "119732696",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p588651-i151544492.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 593923,
+    "parent": 593922,
+    "session": 588658,
+    "debut": "119732696",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p588651-i151544492.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 594047,
+    "parent": 593652,
+    "session": 588658,
+    "debut": "119732841",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p588651-i151544492.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 594051,
+    "parent": 594047,
+    "session": 588658,
+    "debut": "119732841",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p588651-i151544492.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 594053,
+    "parent": 594051,
+    "session": 588658,
+    "debut": "119732841",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p588651-i151544492.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 594830,
+    "parent": 593653,
+    "session": 588658,
+    "debut": "119732960",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p588651-i151544492.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 594831,
+    "parent": 594830,
+    "session": 588658,
+    "debut": "119732960",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p588651-i151544492.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  },
+  {
+    "pid": 594832,
+    "parent": 594831,
+    "session": 588658,
+    "debut": "119732960",
+    "cgroup": "/user.slice/user-1000.slice/user@1000.service/app.slice/run-p588651-i151544492.scope",
+    "memoire": {
+      "direct": "34359738368",
+      "effectif": 34359738368
+    }
+  }
+]

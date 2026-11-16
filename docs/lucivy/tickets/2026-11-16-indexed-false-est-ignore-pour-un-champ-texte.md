@@ -413,3 +413,22 @@ noclobber/32Ghighmaxswap0CPU4/j<=4. Compile3ELF/inventairesETledgersavant
 unique mockRust attendu101/0-1-0/left1-right0. ToutautreécartSTOPsansretry ;
 8autresmock/natifbuilder/corpus/réselection/ULP/PR42/main/tag NONautorisés.
 FinCommonTERMINE/ownedquietàattesteraprèsretour,ancien106fa/proofsconservés.
+
+GO615 exécutéUNEfois : compileoffline3ELF32.20s, ledgersELF puisinventaires
+persistésAVANTuniqueRustmock. Rougeconsommateur réellementobservé0pass/1fail/
+0ignored/8filtered,assertmockbuilderleft1/right0, rc101 ;8autresNONjoués et
+aucunbuildernatif/corpus. ELFtesté7c6f65e2e8427b53828a58cecd313d4a6c02cd7a3074f358d14ce5f2114ea9e8.
+Common588652/start119729720 TERMINE101/erreurnull/restes[]/nettoyé,scopee1p6s0dc,
+ownedCommonabsent/aucunattribuéactif/11UNKNOWNnonattribuésfinalconservés.
+Rehashphysique3ELF+copies/préflight0c9030/source81b0propre réattestés, final
+observé1197585.443130607 < CommonEND1197894.323357855 < boundEND1197897.224958866,
+START1197297.224958866(aprèsPoste),aucunreset. LedgerGlobalmaintenantprétest
+(pasréhabilitationdel’ancienlate). Vieux106faetnouvelELF7c6fpréservésROsurPC
+etportablecachepreuves, aucunpurge/deuxièmeT. Tmarkerinchangé/scratchvide.
+RésultatROUGEattendupasdelivery ; pasdecorrectifcouvertureouvertimplicitement,
+C7reçoitpreuvesavanttouteautrevision ;9HOLD/corefalse/ULP7.2/PR42inchangés.
+
+Rapport13+brutsderived-admission-red-81b0 publiés, avecELF/ledger/inventaire/
+expectedred/finCommon/owned et archivesprivées2hosts vérifiées. ActionROBanc
+preuvesseules surceGO615, sansRust/Cargo/ELF/procscan/base/service ; retourlié
+aumêmeticketavanttouteconclusiondedelivery. AucunfixcouvertureRundéduit.

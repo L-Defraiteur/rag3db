@@ -1,0 +1,1102 @@
+{
+  "allocation": "C7-LUCIVY-ADMISSION-7833-16nov615",
+  "source": "81b0e74f0254c8216864f90a460f8969842432ed",
+  "source_clean": true,
+  "observed": 1197585.443130607,
+  "validation_budget_seconds": 600,
+  "hard_envelope_seconds": 615,
+  "term_seconds": 610,
+  "kill_after_seconds": 5,
+  "deadline": 1197894.323357855,
+  "bound": {
+    "nonce": "d4f2d8cfd6d6705b2c17423ba66d91a9",
+    "start": 1197297.224958866,
+    "deadline": 1197897.224958866,
+    "uid": 1000
+  },
+  "authority": {
+    "pid": 588652,
+    "debut": "119729720",
+    "etat": "termine",
+    "echeance": 1197894.323357855,
+    "script_sha256": "6439fdd8b52c85fa4e74af0def2c667ef0bedae9b814cbbfd48e49946c4f74ea"
+  },
+  "common": {
+    "verdict": "ROUGE",
+    "code": 101,
+    "erreur": null,
+    "restes": [],
+    "prive": "/tmp/r3v-uokg_a_y",
+    "nettoye": true
+  },
+  "own_common_alive": false,
+  "assessment": {
+    "admitted": true,
+    "blocked": [],
+    "unknown": [
+      {
+        "pid": 1247,
+        "uid": 1000,
+        "start": "1022",
+        "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/init.scope",
+        "present": true,
+        "owned": false,
+        "attributed": false,
+        "exe": null,
+        "cwd": null,
+        "related_fds": [],
+        "accessible_fd_count": 0,
+        "errors": [
+          {
+            "field": "exe",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/exe'"
+          },
+          {
+            "field": "cwd",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/cwd'"
+          },
+          {
+            "field": "fd/0",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/0'"
+          },
+          {
+            "field": "fd/1",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/1'"
+          },
+          {
+            "field": "fd/2",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/2'"
+          },
+          {
+            "field": "fd/3",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/3'"
+          },
+          {
+            "field": "fd/4",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/4'"
+          },
+          {
+            "field": "fd/5",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/5'"
+          },
+          {
+            "field": "fd/6",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/6'"
+          },
+          {
+            "field": "fd/7",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/7'"
+          },
+          {
+            "field": "fd/8",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/8'"
+          },
+          {
+            "field": "fd/9",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/9'"
+          },
+          {
+            "field": "fd/10",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/10'"
+          },
+          {
+            "field": "fd/11",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/11'"
+          },
+          {
+            "field": "fd/12",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/12'"
+          },
+          {
+            "field": "fd/13",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/13'"
+          },
+          {
+            "field": "fd/14",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/14'"
+          },
+          {
+            "field": "fd/15",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/15'"
+          },
+          {
+            "field": "fd/16",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/16'"
+          },
+          {
+            "field": "fd/17",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/17'"
+          },
+          {
+            "field": "fd/18",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/18'"
+          },
+          {
+            "field": "fd/19",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/19'"
+          },
+          {
+            "field": "fd/20",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/20'"
+          },
+          {
+            "field": "fd/21",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/21'"
+          },
+          {
+            "field": "fd/22",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/22'"
+          },
+          {
+            "field": "fd/23",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/23'"
+          },
+          {
+            "field": "fd/24",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/24'"
+          },
+          {
+            "field": "fd/25",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/25'"
+          },
+          {
+            "field": "fd/26",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/26'"
+          },
+          {
+            "field": "fd/27",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/27'"
+          },
+          {
+            "field": "fd/28",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/28'"
+          },
+          {
+            "field": "fd/29",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/29'"
+          },
+          {
+            "field": "fd/30",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/30'"
+          },
+          {
+            "field": "fd/31",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/31'"
+          },
+          {
+            "field": "fd/32",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/32'"
+          },
+          {
+            "field": "fd/33",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/33'"
+          },
+          {
+            "field": "fd/34",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/34'"
+          },
+          {
+            "field": "fd/35",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/35'"
+          },
+          {
+            "field": "fd/36",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/36'"
+          },
+          {
+            "field": "fd/37",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/37'"
+          },
+          {
+            "field": "fd/38",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/38'"
+          },
+          {
+            "field": "fd/39",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/39'"
+          },
+          {
+            "field": "fd/40",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/40'"
+          },
+          {
+            "field": "fd/41",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/41'"
+          },
+          {
+            "field": "fd/42",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/42'"
+          },
+          {
+            "field": "fd/43",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/43'"
+          },
+          {
+            "field": "fd/44",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/44'"
+          },
+          {
+            "field": "fd/45",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/45'"
+          },
+          {
+            "field": "fd/46",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/46'"
+          },
+          {
+            "field": "fd/47",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/47'"
+          },
+          {
+            "field": "fd/48",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/48'"
+          },
+          {
+            "field": "fd/49",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/49'"
+          },
+          {
+            "field": "fd/50",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/50'"
+          },
+          {
+            "field": "fd/51",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/51'"
+          },
+          {
+            "field": "fd/52",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/52'"
+          },
+          {
+            "field": "fd/53",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/53'"
+          },
+          {
+            "field": "fd/54",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/54'"
+          },
+          {
+            "field": "fd/55",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/55'"
+          },
+          {
+            "field": "fd/56",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/56'"
+          },
+          {
+            "field": "fd/57",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/57'"
+          },
+          {
+            "field": "fd/58",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/58'"
+          },
+          {
+            "field": "fd/59",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/59'"
+          },
+          {
+            "field": "fd/60",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/60'"
+          },
+          {
+            "field": "fd/61",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/61'"
+          },
+          {
+            "field": "fd/62",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/62'"
+          },
+          {
+            "field": "fd/63",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/63'"
+          },
+          {
+            "field": "fd/64",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/64'"
+          },
+          {
+            "field": "fd/66",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/66'"
+          },
+          {
+            "field": "fd/68",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/68'"
+          },
+          {
+            "field": "fd/69",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/69'"
+          },
+          {
+            "field": "fd/70",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/70'"
+          },
+          {
+            "field": "fd/73",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/73'"
+          },
+          {
+            "field": "fd/74",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/74'"
+          },
+          {
+            "field": "fd/75",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/75'"
+          },
+          {
+            "field": "fd/76",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/76'"
+          },
+          {
+            "field": "fd/77",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/77'"
+          },
+          {
+            "field": "fd/78",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/78'"
+          },
+          {
+            "field": "fd/80",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/80'"
+          },
+          {
+            "field": "fd/84",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/84'"
+          },
+          {
+            "field": "fd/86",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/86'"
+          },
+          {
+            "field": "fd/87",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/87'"
+          },
+          {
+            "field": "fd/91",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/91'"
+          },
+          {
+            "field": "fd/92",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/92'"
+          },
+          {
+            "field": "fd/93",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/93'"
+          },
+          {
+            "field": "fd/94",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/94'"
+          },
+          {
+            "field": "fd/95",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/95'"
+          },
+          {
+            "field": "fd/96",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/96'"
+          },
+          {
+            "field": "fd/97",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/97'"
+          },
+          {
+            "field": "fd/98",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/98'"
+          },
+          {
+            "field": "fd/99",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/99'"
+          },
+          {
+            "field": "fd/100",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/100'"
+          },
+          {
+            "field": "fd/101",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/101'"
+          },
+          {
+            "field": "fd/102",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/102'"
+          },
+          {
+            "field": "fd/103",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/103'"
+          },
+          {
+            "field": "fd/104",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/104'"
+          },
+          {
+            "field": "fd/105",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/105'"
+          },
+          {
+            "field": "fd/106",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/106'"
+          },
+          {
+            "field": "fd/107",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/107'"
+          },
+          {
+            "field": "fd/108",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/108'"
+          },
+          {
+            "field": "fd/109",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/109'"
+          },
+          {
+            "field": "fd/118",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/118'"
+          },
+          {
+            "field": "fd/128",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/128'"
+          },
+          {
+            "field": "fd/136",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/136'"
+          },
+          {
+            "field": "fd/138",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/138'"
+          },
+          {
+            "field": "fd/139",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/139'"
+          },
+          {
+            "field": "fd/140",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/140'"
+          },
+          {
+            "field": "fd/141",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/141'"
+          },
+          {
+            "field": "fd/142",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/142'"
+          },
+          {
+            "field": "fd/144",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/144'"
+          },
+          {
+            "field": "fd/146",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/146'"
+          },
+          {
+            "field": "fd/147",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/147'"
+          },
+          {
+            "field": "fd/149",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/149'"
+          },
+          {
+            "field": "fd/152",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/152'"
+          },
+          {
+            "field": "fd/153",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/153'"
+          },
+          {
+            "field": "fd/154",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/154'"
+          },
+          {
+            "field": "fd/156",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/156'"
+          },
+          {
+            "field": "fd/160",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/160'"
+          },
+          {
+            "field": "fd/162",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/162'"
+          },
+          {
+            "field": "fd/165",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/165'"
+          },
+          {
+            "field": "fd/166",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/166'"
+          },
+          {
+            "field": "fd/167",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/167'"
+          },
+          {
+            "field": "fd/168",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/168'"
+          },
+          {
+            "field": "fd/169",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/169'"
+          },
+          {
+            "field": "fd/172",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/172'"
+          },
+          {
+            "field": "fd/173",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/173'"
+          },
+          {
+            "field": "fd/174",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/174'"
+          },
+          {
+            "field": "fd/175",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/175'"
+          },
+          {
+            "field": "fd/176",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/176'"
+          },
+          {
+            "field": "fd/179",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/179'"
+          },
+          {
+            "field": "fd/180",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/180'"
+          },
+          {
+            "field": "fd/181",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/181'"
+          },
+          {
+            "field": "fd/183",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/183'"
+          },
+          {
+            "field": "fd/184",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/184'"
+          },
+          {
+            "field": "fd/196",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/196'"
+          },
+          {
+            "field": "fd/197",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/197'"
+          }
+        ],
+        "baseline_identity": true
+      },
+      {
+        "pid": 1256,
+        "uid": 1000,
+        "start": "1023",
+        "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/init.scope",
+        "present": true,
+        "owned": false,
+        "attributed": false,
+        "exe": null,
+        "cwd": null,
+        "related_fds": [],
+        "accessible_fd_count": 0,
+        "errors": [
+          {
+            "field": "exe",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1256/exe'"
+          },
+          {
+            "field": "cwd",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1256/cwd'"
+          },
+          {
+            "field": "fd_directory",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1256/fd'"
+          }
+        ],
+        "baseline_identity": true
+      },
+      {
+        "pid": 2578,
+        "uid": 1000,
+        "start": "2807",
+        "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/plasma-kwin_wayland.service",
+        "present": true,
+        "owned": false,
+        "attributed": false,
+        "exe": null,
+        "cwd": null,
+        "related_fds": [],
+        "accessible_fd_count": 0,
+        "errors": [
+          {
+            "field": "exe",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/2578/exe'"
+          },
+          {
+            "field": "cwd",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/2578/cwd'"
+          },
+          {
+            "field": "fd_directory",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/2578/fd'"
+          }
+        ],
+        "baseline_identity": true
+      },
+      {
+        "pid": 2754,
+        "uid": 1000,
+        "start": "2866",
+        "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/background.slice/plasma-polkit-agent.service",
+        "present": true,
+        "owned": false,
+        "attributed": false,
+        "exe": null,
+        "cwd": null,
+        "related_fds": [],
+        "accessible_fd_count": 0,
+        "errors": [
+          {
+            "field": "exe",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/2754/exe'"
+          },
+          {
+            "field": "cwd",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/2754/cwd'"
+          },
+          {
+            "field": "fd_directory",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/2754/fd'"
+          }
+        ],
+        "baseline_identity": true
+      },
+      {
+        "pid": 638396,
+        "uid": 1000,
+        "start": "119758527",
+        "cgroup": "0::/user.slice/user-1000.slice/session-c989944.scope",
+        "present": true,
+        "owned": false,
+        "attributed": false,
+        "exe": null,
+        "cwd": null,
+        "related_fds": [],
+        "accessible_fd_count": 0,
+        "errors": [
+          {
+            "field": "exe",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/638396/exe'"
+          },
+          {
+            "field": "cwd",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/638396/cwd'"
+          },
+          {
+            "field": "fd_directory",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/638396/fd'"
+          }
+        ],
+        "baseline_identity": false
+      },
+      {
+        "pid": 2532216,
+        "uid": 1000,
+        "start": "17178100",
+        "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/plasma-kwin_wayland.service",
+        "present": true,
+        "owned": false,
+        "attributed": false,
+        "exe": null,
+        "cwd": null,
+        "related_fds": [],
+        "accessible_fd_count": 0,
+        "errors": [
+          {
+            "field": "exe",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/2532216/exe'"
+          },
+          {
+            "field": "cwd",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/2532216/cwd'"
+          },
+          {
+            "field": "fd_directory",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/2532216/fd'"
+          }
+        ],
+        "baseline_identity": true
+      },
+      {
+        "pid": 2532317,
+        "uid": 1000,
+        "start": "17178136",
+        "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/plasma-kwin_wayland.service",
+        "present": true,
+        "owned": false,
+        "attributed": false,
+        "exe": null,
+        "cwd": null,
+        "related_fds": [],
+        "accessible_fd_count": 0,
+        "errors": [
+          {
+            "field": "exe",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/2532317/exe'"
+          },
+          {
+            "field": "cwd",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/2532317/cwd'"
+          },
+          {
+            "field": "fd_directory",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/2532317/fd'"
+          }
+        ],
+        "baseline_identity": true
+      },
+      {
+        "pid": 2532319,
+        "uid": 1000,
+        "start": "17178136",
+        "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/plasma-kwin_wayland.service",
+        "present": true,
+        "owned": false,
+        "attributed": false,
+        "exe": null,
+        "cwd": null,
+        "related_fds": [],
+        "accessible_fd_count": 0,
+        "errors": [
+          {
+            "field": "exe",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/2532319/exe'"
+          },
+          {
+            "field": "cwd",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/2532319/cwd'"
+          },
+          {
+            "field": "fd_directory",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/2532319/fd'"
+          }
+        ],
+        "baseline_identity": true
+      },
+      {
+        "pid": 4085469,
+        "uid": 1000,
+        "start": "109325538",
+        "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+        "present": true,
+        "owned": false,
+        "attributed": false,
+        "exe": null,
+        "cwd": null,
+        "related_fds": [],
+        "accessible_fd_count": 0,
+        "errors": [
+          {
+            "field": "exe",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/4085469/exe'"
+          },
+          {
+            "field": "cwd",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/4085469/cwd'"
+          },
+          {
+            "field": "fd_directory",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/4085469/fd'"
+          }
+        ],
+        "baseline_identity": true
+      },
+      {
+        "pid": 4086221,
+        "uid": 1000,
+        "start": "109325843",
+        "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+        "present": true,
+        "owned": false,
+        "attributed": false,
+        "exe": null,
+        "cwd": null,
+        "related_fds": [],
+        "accessible_fd_count": 0,
+        "errors": [
+          {
+            "field": "exe",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/4086221/exe'"
+          },
+          {
+            "field": "cwd",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/4086221/cwd'"
+          },
+          {
+            "field": "fd_directory",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/4086221/fd'"
+          }
+        ],
+        "baseline_identity": true
+      },
+      {
+        "pid": 4086421,
+        "uid": 1000,
+        "start": "109325875",
+        "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+        "present": true,
+        "owned": false,
+        "attributed": false,
+        "exe": null,
+        "cwd": null,
+        "related_fds": [],
+        "accessible_fd_count": 0,
+        "errors": [
+          {
+            "field": "exe",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/4086421/exe'"
+          },
+          {
+            "field": "cwd",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/4086421/cwd'"
+          },
+          {
+            "field": "fd_directory",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/4086421/fd'"
+          }
+        ],
+        "baseline_identity": true
+      }
+    ],
+    "scope": "owned identities and attributable target/worktree activity only",
+    "universal_quiescence_claimed": false
+  },
+  "snapshot": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-derived-admission-red-16nov-v2/scans/final-1197585402776867.json",
+  "physical_final_artifacts": {
+    "test_derived_fixture_admission": {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_derived_fixture_admission-0bd690ba36035513",
+      "sha256": "7c6f65e2e8427b53828a58cecd313d4a6c02cd7a3074f358d14ce5f2114ea9e8"
+    },
+    "test_derived_in_ram": {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_derived_in_ram-539df445d54ae12e",
+      "sha256": "64758437584801255698598fea0db343a6528c22cfdfb5df851e79b2f5700ede"
+    },
+    "test_sfx_v3_ground_truth": {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_sfx_v3_ground_truth-32bb5ee824ccaa93",
+      "sha256": "777c911f0216529d01fb8957cd3bcfe66d80b86b7378f10e0e33f7d977e5036d"
+    }
+  },
+  "preflight_sha256": "0c90301ed5324f8a07d80641283e581ed3f427bc6355dcf1304afa14763f7325",
+  "old_elf_copies": {
+    "/home/lucied/.cache/rag3weaver-build/cx-lucivy-derived-admission-red-16nov-v1/red-core-elf": "106fa398fcc24296c1d4b94198a150ed87917fac66e46531af5c617444fcf9a2",
+    "/home/lucied/.cache/rag3weaver-build/cx-lucivy-derived-admission-red-16nov-v2/red-core-elf": "106fa398fcc24296c1d4b94198a150ed87917fac66e46531af5c617444fcf9a2"
+  },
+  "target_creator_sha256": "5a1671d22dc784bec78f60cf25c8b3003acc5f21e28290f05d0dfc22e0c394df",
+  "scratch_entries": [],
+  "inventory_counts": {
+    "test_derived_fixture_admission": {
+      "tests": 9,
+      "ignored": 0
+    },
+    "test_derived_in_ram": {
+      "tests": 1,
+      "ignored": 0
+    },
+    "test_sfx_v3_ground_truth": {
+      "tests": 12,
+      "ignored": 1
+    }
+  },
+  "elf_ledger_observed": 1197329.725521448,
+  "inventory_ledger_observed": 1197329.734893729,
+  "witness_identity": {
+    "pid": 594860,
+    "start": "119732973",
+    "argv": [
+      "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_derived_fixture_admission-0bd690ba36035513",
+      "--exact",
+      "missing_panel_is_rejected_before_any_builder",
+      "--test-threads=1",
+      "--nocapture"
+    ]
+  },
+  "witness": {
+    "passed": 0,
+    "failed": 1,
+    "ignored": 0,
+    "filtered_out": 8,
+    "exit_code": 101,
+    "diagnostic": "mock builder called once; expected zero"
+  },
+  "native_index_builders_executed": false,
+  "other_rust_mock_tests_executed": false,
+  "full_core_qualified": false
+}

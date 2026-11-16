@@ -1,0 +1,8 @@
+{
+  "pid": 594856,
+  "start": "119732972",
+  "argv": [
+    "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_derived_in_ram-539df445d54ae12e",
+    "--list"
+  ]
+}

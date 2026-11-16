@@ -1,0 +1,7 @@
+{
+  "ssh_exit_code": 1,
+  "common_code": 101,
+  "expected_red": true,
+  "allocation": "C7-LUCIVY-ADMISSION-7833-16nov615",
+  "retries": 0
+}

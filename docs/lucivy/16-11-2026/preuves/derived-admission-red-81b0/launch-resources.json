@@ -1,0 +1,21 @@
+{
+  "allocation": "C7-LUCIVY-ADMISSION-7833-16nov615",
+  "observed": 1197311.833690208,
+  "authorities": [
+    {
+      "pid": 588652,
+      "debut": "119729720",
+      "etat": "actif",
+      "echeance": 1197894.323357855,
+      "cwd": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-derived-admission-red-16nov-v2",
+      "resources": {
+        "memory.max": "34359738368",
+        "memory.high": "max",
+        "memory.swap.max": "0",
+        "cpu.max": "400000 100000"
+      }
+    }
+  ],
+  "hard_envelope_seconds": 615,
+  "validation_seconds": 600
+}

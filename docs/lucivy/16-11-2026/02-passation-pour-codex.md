@@ -343,3 +343,10 @@ Suite réservesgroupées : recette12, SOURCE81b0RORecherchefavorable/inchangé,
 pilotefinal7833/admit7649/Qv2nonce d4f2/préflight0c9030. GardesPythonautorisées
 rouge1échecréel puis6/0unefois ; pasRust/Cargo/ELF. ROBancDELTA puisGO600
 distinctencorerequis, Tunique3552/corpus/9HOLD/ULP7.2/PR42inchangés.
+
+RougeRustconsommateur81b0/7833 réellementobservé sousGO615 : rapport13/bruts,
+compile3ELF32.20s,ledgersavantunique0/1/0+8filtered,left1right0 ; pasAPIabsente,
+pasbuildernatif/corpus. Common101TERMINE/restes[]/nettoyé/ownedabsent,11UNKNOWN
+conservés,sousEND,sourcepropre. 106faet7c6fROarchivésPC+portable,T3552conservé.
+Aucunfixcouvertureouvertimplicitement ;C7informéetROBancpreuvesdemandée,
+8autresNONjoués/9HOLD/corefalse/ULP7.2/PR42inchangés.
