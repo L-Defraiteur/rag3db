@@ -22,6 +22,9 @@ mod aside;
 mod progress;
 /// Le retard de l'index sur le disque, par cellule (la montre de fichiers).
 pub mod retard;
+
+/// The `_catalog_meta` key of the observed index rate, in milliseconds per file.
+const INDEX_RATE_KEY: &str = "index_rate_ms_per_file";
 mod synchronisation;
 pub use progress::{IndexProgress, IndexState, Level, SignalState, TableProgress};
 pub use aside::{KnownVectors, SnapshotUndo, SERVICE_KNOWN_VECTORS};
@@ -1921,6 +1924,11 @@ fn read_threads() -> u64 {
     }
 
     fn initialize_storage(&mut self) -> Result<(), CatalogError> {
+        if let Ok(Some(rate)) = self.read_meta_key(INDEX_RATE_KEY) {
+            if let Ok(rate) = rate.parse::<f64>() {
+                self.file_lag().set_rate(&self.scope().clone(), rate);
+            }
+        }
         self.choisir_le_stockage_du_plein_texte();
         self.dire_l_embarqueur_absent();
         if self.lecture_seule {
@@ -5296,8 +5304,16 @@ fn read_threads() -> u64 {
     /// réindexation y efface, les lectures le disent).
     /// **A reindexed batch observed** (point 7 of Lucie's vision): `files` in
     /// `held`, for the rate the read tools estimate from.
+    /// The rate is kept in `_catalog_meta` (`index_rate_ms_per_file`), and read
+    /// back at the opening: the first read of a session has an estimate.
     pub fn observe_index_rate(&self, files: usize, held: std::time::Duration) {
-        self.file_lag().observe(&self.scope().clone(), files, held);
+        let cell = self.scope().clone();
+        self.file_lag().observe(&cell, files, held);
+        if let Some(rate) = self.file_lag().rate(&cell) {
+            if let Err(e) = self.persist_meta_key(INDEX_RATE_KEY, &format!("{rate:.3}")) {
+                eprintln!("[rag3weaver] the observed index rate is not kept: {e}");
+            }
+        }
     }
 
     pub fn file_lag(&self) -> Arc<retard::Lag> {
@@ -10736,6 +10752,7 @@ fn read_threads() -> u64 {
             pool: self.read_pool.clone(),
             sans_instantane: false,
             texte_natif,
+            file_lag: self.file_lag(),
         }));
     }
 

@@ -745,6 +745,9 @@ pub struct ReadView {
     /// Le moteur de recherche servi par la base, quand la vue en a un : la
     /// copie d'un appel le rebâtit sur sa connexion.
     pub(crate) texte_natif: bool,
+    /// The lag of the index on the disk, read by a call without the catalog's
+    /// mutex (point 7 of Lucie's vision: the wait for a lagging index).
+    pub(crate) file_lag: Arc<crate::catalog::retard::Lag>,
 }
 
 impl ReadView {
@@ -781,6 +784,7 @@ impl ReadView {
             pool: self.pool.clone(),
             sans_instantane: self.sans_instantane,
             texte_natif: self.texte_natif,
+            file_lag: self.file_lag.clone(),
         }
     }
 
