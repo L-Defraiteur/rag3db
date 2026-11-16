@@ -173,3 +173,17 @@ publier le jeton d'autorité privé. Pas de qualification de passe Rust produit.
 À cette publication, **source non compilée/non jouée**, rlib927 attendue. L'accord
 porte uniquement sur cet outil RO borné ; il ne réactive ni passe générale,
 ancien GO, migration de base vivante ou nouveau service.
+
+### Première entrée exacte : refus compilateur, arrêt conservé
+
+Rlib927 vérifiée au SHA annoncé par G :
+`aaad2d69589ffc3aea073d534ed1aa37da87431725456d2c5d2a71ea225305d5`.
+Première compilation sous vrai poste lourd32G, portée120s : E0514, compilateur
+trouvé1.98.0 contre rlib compilée1.98.1 (48a229cea, 2026-09-01). Aucun listing
+n'a joué. Arrêt sans réessai, sans rebuild/Cargo/nettoyage. Verdict commun ROUGE,
+code1, restes[], privé nettoyé. Preuves luciepc :
+`~/.cache/rag3db-banc-notes/oracle-final-16nov/validations-scanner-01/validation-7cwclvjf/` ;
+argv et compile.log sous `oracle-final-16nov/scanner-01/`.
+Alternative soumise à C7/G : retrouver le compilateur1.98.1 exact existant et
+attester sa provenance ; nouvelle recette/autorisation avant nouvelle entrée.
+Les captures02 et la rlib restent préservées. Aucun oracle matched annoncé.
