@@ -79,7 +79,7 @@ def fresh_cache(cfg):
             if s[0] == 'Z': continue
             cg = (proc / 'cgroup').read_text(); argv = [os.fsdecode(v) for v in (proc / 'cmdline').read_bytes().split(b'\0') if v]
             exe = os.readlink(proc / 'exe'); cwd = os.readlink(proc / 'cwd')
-            attributed = cg == authority['cgroup'] + '\n' or any(in_roots(v, roots) for v in argv)
+            attributed = cg.split('::', 1)[1].strip() == authority['cgroup'] or any(in_roots(v, roots) for v in argv)
             if int(proc.name) in ancestors and ancestors[int(proc.name)] == (s[19], int(s[1]), cg):
                 matches = [key for key, tail in roles.items() if argv[1:] == tail and exe == expected_exes[key] and sha(proc / 'exe') == sha(expected_exes[key]) and cwd == '/var/tmp']
                 if len(matches) == 1:
@@ -125,6 +125,13 @@ def driver():
             child = subprocess.Popen(args, cwd=C, env=env, stdout=output, stderr=subprocess.STDOUT)
             while child.poll() is None:
                 assert time.monotonic() < deadline, label+' timeout'
+                if label == 'witness':
+                    observed = (P/(label+'.log')).read_text(errors='replace')
+                    if re.search(r'^test [^\n]* \.\.\. FAILED\b|^\s*FAILED\s*$', observed, re.M):
+                        child.terminate()
+                        try: child.wait(timeout=2)
+                        except subprocess.TimeoutExpired: child.kill(); child.wait()
+                        break
                 time.sleep(.05)
             rc = child.wait()
         assert time.monotonic() < deadline
@@ -172,6 +179,8 @@ def prepare(pilot):
     assert sys.orig_argv[1:]==[str(control/REL),pilot]
     assert re.fullmatch('[0-9a-f]{40}',pilot)
     assert not P.exists() and not Q.exists()
+    for root, head in [(W, APP), (control, pilot), (OLD_W, OLD_APP)]:
+        assert git(root, 'rev-parse', 'HEAD') == head and not git(root, 'status', '--porcelain')
     old_source=json.loads((OLD/'source.json').read_text()); assert old_source['source']==OLD_APP
     receipts=list((OLD/'supervision').glob('validation-*/autorite.json')); assert len(receipts)==1
     authority=json.loads(receipts[0].read_text()); assert authority['etat']=='termine'
