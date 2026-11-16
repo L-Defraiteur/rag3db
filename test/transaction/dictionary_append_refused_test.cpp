@@ -5,7 +5,8 @@
 // agrandissement : la ligne restait comptée, non nulle, avec un indice jamais écrit. Le point de
 // reprise suivant la relisait dans StringChunkData::finalize par cet indice, et mourait dans le
 // hachage d'une chaîne sauvage. Le point de faute string-dictionary-append refuse l'ajout comme le
-// pool plein.
+// pool plein. Les tampons neufs sont empoisonnés (0xFF) : un indice jamais écrit y est faux, comme
+// dans une mémoire réutilisée, et non nul par chance comme dans une page neuve du système.
 #include <string>
 
 #include "common/test_hooks.h"
@@ -25,6 +26,7 @@ protected:
         if (inMemMode) {
             GTEST_SKIP() << "on-disk database needed";
         }
+        TestHooks::setPoisonFreshBuffers(true);
         createDBAndConn();
         run("CALL auto_checkpoint=false;");
         run("CREATE NODE TABLE T(id INT64, s STRING, PRIMARY KEY(id));");
@@ -35,6 +37,7 @@ protected:
     }
     void TearDown() override {
         TestHooks::armFailPoint(TestFailPoint::NONE);
+        TestHooks::setPoisonFreshBuffers(false);
         EmptyDBTest::TearDown();
     }
     void run(const std::string& query) {
@@ -73,12 +76,12 @@ TEST_F(DictionaryAppendRefused, ACommitRefusedInItsStringsLeavesTheGroupReadable
     TestHooks::armFailPoint(TestFailPoint::STRING_DICTIONARY_APPEND);
     auto commit = conn->query("COMMIT;");
     TestHooks::armFailPoint(TestFailPoint::NONE);
-    if (!commit->isSuccess()) {
-        conn->query("ROLLBACK;");
-    }
-    EXPECT_EQ(one("MATCH (t:T) WHERE t.id >= 2000 RETURN count(*);"),
-        commit->isSuccess() ? "100\n" : "0\n")
-        << commit->getErrorMessage();
+    // Une seule issue : le COMMIT lève dans le versement de ses chaînes.
+    ASSERT_FALSE(commit->isSuccess()) << "[check: setup] the COMMIT was not refused";
+    ASSERT_NE(commit->getErrorMessage().find("string-dictionary-append"), std::string::npos)
+        << "[check: setup] " << commit->getErrorMessage();
+    conn->query("ROLLBACK;");
+    EXPECT_EQ(one("MATCH (t:T) WHERE t.id >= 2000 RETURN count(*);"), "0\n");
     expectTheRowsReadBack("after a refused commit");
 }
 
@@ -87,7 +90,9 @@ TEST_F(DictionaryAppendRefused, ACopyRefusedInItsStringsLeavesTheTableReadable) 
     auto copy = conn->query("COPY T FROM (UNWIND range(3000, 3999) AS i RETURN i, 'copie ' + "
                             "CAST(i AS STRING));");
     TestHooks::armFailPoint(TestFailPoint::NONE);
-    EXPECT_FALSE(copy->isSuccess()) << "[check: setup] the COPY was not refused";
+    ASSERT_FALSE(copy->isSuccess()) << "[check: setup] the COPY was not refused";
+    ASSERT_NE(copy->getErrorMessage().find("string-dictionary-append"), std::string::npos)
+        << "[check: setup] " << copy->getErrorMessage();
     EXPECT_EQ(one("MATCH (t:T) WHERE t.id >= 3000 RETURN count(*);"), "0\n");
     expectTheRowsReadBack("after a refused copy");
 }
