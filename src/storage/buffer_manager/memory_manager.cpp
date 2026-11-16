@@ -1,9 +1,11 @@
 #include "storage/buffer_manager/memory_manager.h"
 
+#include <cstring>
 #include <mutex>
 
 #include "common/exception/buffer_manager.h"
 #include "common/file_system/virtual_file_system.h"
+#include "common/test_hooks.h"
 #include "common/types/types.h"
 #include "main/client_context.h"
 #include "main/database.h"
@@ -67,6 +69,9 @@ std::span<uint8_t> MemoryManager::mallocBuffer(bool initializeToZero, uint64_t s
         buffer = calloc(size, 1);
     } else {
         buffer = malloc(size);
+        if (buffer != nullptr && TestHooks::poisonFreshBuffers()) {
+            memset(buffer, 0xFF, size);
+        }
     }
     return std::span(static_cast<uint8_t*>(buffer), size);
 }
@@ -90,6 +95,8 @@ std::unique_ptr<MemoryBuffer> MemoryManager::allocateBuffer(bool initializeToZer
     auto memoryBuffer = std::make_unique<MemoryBuffer>(this, pageIdx, buffer);
     if (initializeToZero) {
         memset(memoryBuffer->getBuffer().data(), 0, pageSize);
+    } else if (TestHooks::poisonFreshBuffers()) {
+        memset(memoryBuffer->getBuffer().data(), 0xFF, pageSize);
     }
     return memoryBuffer;
 }

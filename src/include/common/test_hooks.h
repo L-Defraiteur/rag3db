@@ -69,6 +69,12 @@ struct TestHooks {
     RAG3DB_API static void armFailPoint(TestFailPoint point, uint32_t delayMs = 0);
     // Lève une RuntimeException si `point` est armé, et le désarme.
     static void failOnceIfArmed(TestFailPoint point);
+
+    // Pour un témoin : tout tampon que le gestionnaire de mémoire donne sans mise à zéro est rempli
+    // de 0xFF, comme une mémoire réutilisée, au lieu des zéros d'une page neuve du système. Une
+    // valeur lue sans avoir été écrite y devient fausse au lieu de nulle par chance.
+    RAG3DB_API static void setPoisonFreshBuffers(bool poison);
+    static bool poisonFreshBuffers();
 };
 
 } // namespace common

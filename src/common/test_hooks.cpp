@@ -38,6 +38,7 @@ TestDiePoint TestHooks::readFromEnvironment() {
 namespace {
 std::atomic<uint8_t> armedFailPoint{static_cast<uint8_t>(TestFailPoint::NONE)};
 std::atomic<uint32_t> armedFailDelayMs{0};
+std::atomic<bool> poisonFresh{false};
 } // namespace
 
 void TestHooks::armFailPointFromEnvironment() {
@@ -72,6 +73,14 @@ void TestHooks::armFailPointFromEnvironment() {
         "rel-commit-between-directions, add-column-between-chunked-groups, "
         "string-dictionary-append)\n",
         at);
+}
+
+void TestHooks::setPoisonFreshBuffers(bool poison) {
+    poisonFresh = poison;
+}
+
+bool TestHooks::poisonFreshBuffers() {
+    return poisonFresh.load(std::memory_order_relaxed);
 }
 
 void TestHooks::armFailPoint(TestFailPoint point, uint32_t delayMs) {
