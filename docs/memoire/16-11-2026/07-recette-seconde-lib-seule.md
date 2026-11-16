@@ -56,3 +56,19 @@ créneau C7/ackfrais ; aucunrestart ni API7970/baseLucie. Pasd'exécutionimplici
 autorisée par cette recette. Témoins du vrai env.updateAST/runtime_command/exec_second
 prépubliés avantessais (fauxexecve seulement), fichiersprofil/cache purs et vrais
 finalize/save/opentardif conservés. Aucune qualification Rust nouvelle en prépa.
+
+## Prépublication et résultats purs
+
+Code+témoins publiés269d43d0043046ec81deaf4a6a70c76b1fb51835 AVANTessais.
+27fonctions distinctes :4nouveaux vraisenvAST/exec/commande en0,011s,11profil-
+cache en0,008s,12qualification/watcher/finalsave en0,004s ; timeout20failfast
+parfichier. Zéroexecve réel, Cargo/Rust, /proc/signaux ou modèles/services dans
+ces témoins. Les RED imprimés par les fixtures deadline sont les résultats
+attendus de leurs contrôles négatifs, pas une qualification réelle.
+
+Préflight lectureseule PC VRAIhelpercarry : source734/reçuv2/manifestc804/
+canon0ddd/ELF6f12/buildrsRO et8657fichiersFP cohérents, restehistorique3273,5s.
+Journal second-only-carry-preflight-269d.json horsW, capture ne vaut pas future
+captureAPRÈSposte. P/Q/Sv3 et TMPv3 toujoursABSENTS, T/sourceinchangés.
+3primitiveswatcherED byteidentiques/hashesprovenancevalides,654ticketsverts.
+Code produitAPP→piloteVIDE. NouveauGOexact C7 nécessaire pour lancer.
