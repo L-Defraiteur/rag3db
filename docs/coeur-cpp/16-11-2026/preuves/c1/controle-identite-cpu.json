@@ -1,0 +1,10 @@
+{
+  "check": "actual cmake/build_id.cmake run, no C++ build/test",
+  "source_expected": "b82c06f2572892d2124c71dce87eba287f5e9f2b",
+  "engine_expected": "59ac9c86bc2b3529b590a7462ab7051e3ad26b8a",
+  "generated_header": "// G\u00e9n\u00e9r\u00e9 par cmake/build_id.cmake \u00e0 chaque b\u00e2ti ; ne pas \u00e9diter.\n#pragma once\n\n#define RAG3DB_BUILD_ID \"rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF\"\n",
+  "header_sha256": "1cf920608514b5f3c5e90952ecc580ca6170398f288dd554d00bb0bb32b03110",
+  "old_source_in_marker_guard_would_fail": true,
+  "engine_marker_guard_passed": true,
+  "native_target_run": false
+}

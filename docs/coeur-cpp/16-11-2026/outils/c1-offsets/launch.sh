@@ -4,11 +4,11 @@ out="$HOME/.cache/rag3db-moteur-notes/c1-offsets-02"
 scratch="$HOME/.cache/rag3weaver-build/cx-coeur-c1-offsets"
 [[ -d "$out" && -f "$out/controller.py" && ! -e "$out/limits.json" ]]
 [[ -d "$scratch" && -z "$(ls -A "$scratch")" ]]
-# PROPOSAL ONLY: corrected1650s stage,1640+10stop/controller1620; new C7 GO required.
+# C7 distinct corrective admission1800:1790+10stop/controller1770; first failure stops.
 POSTE_MEM_MAX=32G POSTE_SWAP_MAX=0 exec "$HOME/.cache/rag3weaver-build/poste" lourd \
  systemd-run --user --wait --pipe --unit=cx-coeur-c1-offsets-02 \
  --property=MemoryMax=34359738368 --property=MemorySwapMax=0 \
- --property=RuntimeMaxSec=1640 --property=TimeoutStopSec=10 --property=KillMode=control-group \
+ --property=RuntimeMaxSec=1790 --property=TimeoutStopSec=10 --property=KillMode=control-group \
  --property=Nice=19 --property=IOSchedulingClass=idle \
  bwrap --unshare-user --unshare-net --ro-bind / / --proc /proc --dev /dev \
  --size 34359738368 --tmpfs "$scratch" --bind "$out" "$out" \
