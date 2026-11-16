@@ -191,3 +191,14 @@ Correction source : laisser unittest.main() parser -f, qui active failfast comme
 prévu. Publication sans relance ; une nouvelle allocation CPU explicite C7
 est nécessaire pour vérifier ce source. Les trois réserves ne sont pas encore
 qualifiées. Ce rouge de lanceur ne change pas les preuves natives118 acquises.
+
+## GO renouvelé CPU2 : onze contrats hermétiques verts
+
+C7-PARSERS-PROTOCOL-CPU2-16nov60 explicite, source exacte
+c1cd48750f8178e68d24a3570bc320b458cad7d1 publiée, commande de même lot avec -f :
+11/11 exécutés,0échec/erreur/skip, rc0 en0,071854s externe. Preuves brutes et
+métadonnées aux deux hôtes, résultatSHAd87aea28824cd6a9159558a2aa0816a7e8cae3e4879bca7eb4066960c161bcdb.
+Le rouge1916 reste préservé. Rapport détaillé rust-probe/03-qualification-cpu-du-protocole.md,
+branche documentaire distincte pour ne pas déplacer le candidat épinglé.
+Pair02f919 préparée seulement, pas de Cargo/natif/autorité ni mutation target.
+RO totale Banc demandée ; aucun GO natif acquis, REGLES7 et ticket ouvert.
