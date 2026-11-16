@@ -126,3 +126,11 @@ Aucune tentativeCargo/test, aucun reçuvert créé ; preflight.json NON écrit.
 Pas d’élévation ni de contournement. Reste C7 : décider critère de quiescence
 admissible pour le réemploi avec cet accès /proc protégé, puis nouveaupréflight
 et recettefigée avant GO. Le rouge0c et son autoritéterminée restent intacts.
+
+Après arbitrage C7 : contrôle de réemploi borné, pas d’absenceuniverselle/proc.
+Nouveaupilote/relevépartiel AVANTassert, UNKNOWNnonattribués conservés, owned ou
+attribués(UNKNOWNinclus)bloquent ; nonce/UID/inodes/oldCommonTERMINE/ELFrougeSHA
+et scansfrais avant/après. Trois cas synthétiques publiés puis joués3/0,
+aucunCargo. Nouvelle recette06 et paquetvertQv4 figés (préflight12UNKNOWN,
+aucunowned/attribuéactif), Tanciennonce3552 unique, jamaispurgé ; nouvelog/scope
+encoreabsents. Source890 reste NONJOUÉE, demandeRO/GO600VERTdistinct avantCargo.
