@@ -18,6 +18,8 @@ class Environment(unittest.TestCase):
         env=self.environment(2)
         self.assertEqual(env['CARGO_BUILD_JOBS'],'2')
         self.assertEqual(env['POSTE_FILS'],'2')
+    def test_zero_poste_allocation_is_refused(self):
+        with self.assertRaises(AssertionError):self.environment(0)
     def test_larger_allocation_keeps_the_eight_job_cap(self):
         self.assertEqual(self.environment(16)['CARGO_BUILD_JOBS'],'8')
 

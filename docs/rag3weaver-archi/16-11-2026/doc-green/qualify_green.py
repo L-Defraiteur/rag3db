@@ -101,9 +101,10 @@ def driver():
     receipt = Path(os.environ['RAG3WEAVER_VALIDATION_RECU']); auth = json.loads(receipt.read_text())
     end = auth['echeance']; assert json.loads((receipt.parent / 'recette.json').read_text())['delai'] == 600
     save('authority-path.json', dict(path=str(receipt), deadline=end))
-    env = {k: os.environ[k] for k in ['HOME', 'USER', 'LOGNAME', 'PATH', 'LANG', 'LC_ALL', 'CARGO_HOME', 'RUSTUP_HOME', 'DBUS_SESSION_BUS_ADDRESS', 'RAG3WEAVER_VALIDATION_RECU', 'RAG3WEAVER_VALIDATION_JETON'] if k in os.environ}
+    env = {k: os.environ[k] for k in ['HOME', 'USER', 'LOGNAME', 'PATH', 'LANG', 'LC_ALL', 'CARGO_HOME', 'RUSTUP_HOME', 'POSTE_FILS', 'DBUS_SESSION_BUS_ADDRESS', 'RAG3WEAVER_VALIDATION_RECU', 'RAG3WEAVER_VALIDATION_JETON'] if k in os.environ}
     for label in ['tmp', 'cache', 'data', 'config', 'xdg-state', 'state-fixture', 'old-proof']: (P / label).mkdir()
-    env.update(CARGO_TARGET_DIR=str(T), CARGO_MANIFEST_DIR=str(C), CARGO_BUILD_JOBS='8', CARGO_INCREMENTAL='0',
+    jobs=min(8,int(os.environ['POSTE_FILS']));assert jobs>0, 'invalid poste allocation'
+    env.update(CARGO_TARGET_DIR=str(T), CARGO_MANIFEST_DIR=str(C), CARGO_BUILD_JOBS=str(jobs), RAYON_NUM_THREADS=str(jobs), RUST_TEST_THREADS='1', CARGO_INCREMENTAL='0',
         XDG_CACHE_HOME=str(P/'cache'), XDG_CONFIG_HOME=str(P/'config'), XDG_DATA_HOME=str(P/'data'), XDG_STATE_HOME=str(P/'xdg-state'),
         RAG3WEAVER_STATE_DIR=str(P/'state-fixture'), TMPDIR=str(P/'tmp'), RAG3DB_LIB=LIB,
         RAG3DB_LIBS_DIR=str(R.parent/'rag3db-libs'), RAG3DB_BUFFER_POOL_SIZE='1073741824')
