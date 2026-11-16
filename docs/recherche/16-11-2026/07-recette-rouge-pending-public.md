@@ -9,3 +9,9 @@ Magasin réel explicite `$HOME/.cache/rag3db-libs`, lib59ac et pin2150, SHAso fi
 Inventaires ELF complet/exact1 puis ledger avant invocation ; aucune des neuf autres fonctions n’est exécutée. Validation verte a92e à statuer séparément après archives. Témoins hermétiques argv/attestation/resolveur réel sous XDG privé écrits avant essai ; vérificateur de planchers simulé dans ce seul témoin de résolution de chemin, aucune prétention à qualifier la lib par cette fixture.
 
 Prépublication code+témoins dfc3e6e090 puis exécution hermétique : 3fonctions vertes0.022s (argv, portée7cas, résolveurXDGrefus/acceptation) sansposte/Cargo. SHA vector réel lu RO puis fixé avant entrée :1669d6392ec8067fcf92ae2ccc972fd7cd3086629fb82d1f5d254e90d72d7561. Aucun changement source préfixe.
+
+## Admission distincte v2, après rouge de setup conservé
+
+Source préfixe neuve c1b10a4993650a82e0cac9d40f4cb3567a0593d9 sur branche cx-recherche-fts-existing-fixture-red-r1, SANSfixpending : productionidentique1f816, seules fixtures des trois juges corrigées. Un constructeur commun bâtit EntityConfig/DerivedConfig Content réels body/title partagés et render non vide. Dans l’unique invocation du juge, validate source/target, contexteContent, validate_search_index_context et resolve public doivent tous réussir AVANT le marker de validation et l’assert pending. Le driver conserve red-cause.json : rouge pending qualifiant seulement si markerETmessageassert exact, jamais sur panique config.
+
+GO principe C7 reçu pour couple publié avant entrée, 1200 nouveaux après poste, scope unique/quotaPARPLACE/profil inchangé. SourceW neuve, preuves et control pending-v2 NEUFS ; target repris par garde commune depuis W1f816/reçu rouge v1 terminé/ELF e7a9... hash vérifié et freshscan. Rapport08/26fichiers conservés, aucun ancien reçu réutilisé. Pas d’autre juge, pas de fix automatique, a92 reste NONQUALIFIÉ.

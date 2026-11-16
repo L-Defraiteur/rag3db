@@ -3,7 +3,7 @@ import hashlib,json,os,subprocess,sys,time
 from pathlib import Path
 W=Path(sys.argv[1]).resolve();P=Path(sys.argv[2]).resolve();P.mkdir(exist_ok=False)
 C=W/'extension/rag3weaver'
-SOURCE='1f816fd3b366380a1f7d034a540cfbbc2aee7bd7'
+SOURCE='c1b10a4993650a82e0cac9d40f4cb3567a0593d9'
 TEST='catalog::tests::existing_fts_pending_public_entity_refuses_its_physical_target'
 LIB='rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF'
 PIN='2150fcd847b1df7de04908d357a0c78abc05e50ce599e2793ff08ab48108825d'
@@ -32,12 +32,12 @@ def attest_scope(cgroup):
 scope_profile=attest_scope(cg)
 assert int(os.environ['CARGO_BUILD_JOBS'])<=8
 T=Path(os.environ['CARGO_TARGET_DIR']);assert T.is_dir() and not T.is_symlink()
-OLD=Path.home()/'.cache/rag3weaver-build/cx-wt-recherche-fts-existing-only-red-source'
+OLD=Path.home()/'.cache/rag3weaver-build/cx-wt-recherche-fts-pending-red-source'
 marker=T/'.arbre-du-target';assert marker.is_file() and not marker.is_symlink()
 assert marker.read_text().strip()==str(OLD/'extension/rag3weaver')
-old_receipt=json.loads((Path.home()/'.cache/rag3weaver-build/cx-archive-recherche-fts-existing-red-v2/supervisor/autorite.json').read_text());assert old_receipt['etat']=='termine'
-old_ledger=json.loads((Path.home()/'.cache/rag3weaver-build/cx-archive-recherche-fts-existing-red-v2/driver/ledger.json').read_text());assert sha(old_ledger['artifact']['executable'])==old_ledger['elf_sha256']
-assert subprocess.check_output(['git','-C',str(OLD),'rev-parse','HEAD'],text=True).strip()=='187d58a7b5ebb8e4a0a59b9b57ed75623e9db9a2'
+old_receipt=json.loads((Path.home()/'.cache/rag3weaver-build/cx-archive-recherche-fts-pending-red-v1/supervisor/autorite.json').read_text());assert old_receipt['etat']=='termine'
+old_ledger=json.loads((Path.home()/'.cache/rag3weaver-build/cx-archive-recherche-fts-pending-red-v1/driver/ledger.json').read_text());assert sha(old_ledger['artifact']['executable'])==old_ledger['elf_sha256']
+assert subprocess.check_output(['git','-C',str(OLD),'rev-parse','HEAD'],text=True).strip()=='1f816fd3b366380a1f7d034a540cfbbc2aee7bd7'
 assert not subprocess.check_output(['git','-C',str(OLD),'status','--porcelain'],text=True).strip()
 assert os.environ['RAG3WEAVER_TARGET_REPRENDRE']=='1' 
 save('entry.json',dict(source=git('rev-parse','HEAD'),test=TEST,features=['rag3db-native'],target=str(T),deadline=END,cgroup=str(cg),scope_profile=scope_profile,profile={k:os.environ.get(k) for k in ['CARGO_BUILD_JOBS','CARGO_INCREMENTAL','RAG3DB_LIB','RUST_TEST_THREADS','RAG3WEAVER_TARGET_MAX_GO']},pin_sha256=PIN))
@@ -99,5 +99,9 @@ assert time.monotonic()<END-5
 code=run('witness',[str(elf),TEST,'--exact','--nocapture','--test-threads=1'],120)
 assert sha(elf)==json.loads((P/'ledger.json').read_text())['elf_sha256']
 assert time.monotonic()<END
+text=(P/'witness.log').read_text()
+schema_validated='existing_fts_fixture_schema_validated: Document/body/title -> main/Content' in text
+pending_failure='pending:Document applies to physical main despite missing pending:main' in text
+save('red-cause.json',dict(schema_validated=schema_validated,pending_assertion_failed=pending_failure,qualifies_pending_red=code==101 and schema_validated and pending_failure))
 save('observed.json',dict(returncode=code,elapsed_since_supervisor=time.monotonic()-(END-1200),only_test=TEST,source=git('rev-parse','HEAD'),next_tests_launched=False))
 sys.exit(code if code else 2) # Unexpected green is a stop, never authority for another test.
