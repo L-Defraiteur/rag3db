@@ -8,8 +8,8 @@ class WouldContactProvider(RuntimeError):pass
 def fixture():
  uid=os.getuid();authority=dict(path='/fixture/authority',pid=123,start='42',cgroup='/fixture',uid=uid,script_sha256='a'*64)
  identity=dict(job='lifecycle-provider',pilot='f'*40,allocation='fixture',authority=authority,first_red_path='/fixture/first-red.json')
- ready=dict(nonce='fixture-nonce',deadline=600.,ready_observed_monotonic=40.,grant_deadline_monotonic=100.,phase=identity)
- phase=dict(authority=dict(etat='actif',pid=123,debut='42',cgroup='/fixture',echeance=600.,script_sha256='a'*64),authority_uid=uid,process=dict(start='42',cgroup='/fixture',uid=uid,state='S'),first_red_exists=False,snapshot_stable=True)
+ ready=dict(clock='CLOCK_MONOTONIC@luciepc',nonce='fixture-nonce',deadline=600.,ready_observed_monotonic=40.,grant_deadline_monotonic=100.,phase=identity)
+ phase=dict(clock='CLOCK_MONOTONIC@luciepc',authority=dict(etat='actif',pid=123,debut='42',cgroup='/fixture',echeance=600.,script_sha256='a'*64),authority_uid=uid,process=dict(start='42',cgroup='/fixture',uid=uid,state='S'),first_red_exists=False,snapshot_stable=True,snapshot_observed_monotonic=99.)
  return ready,phase
 def driver_body():
  return next(n for n in ast.parse(Path(c.__file__).read_text()).body if isinstance(n,ast.FunctionDef) and n.name=='driver').body
