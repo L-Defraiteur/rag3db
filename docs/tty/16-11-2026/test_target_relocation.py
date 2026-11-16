@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+from relocate_target import rename_noreplace
 
 
 def relocate(source, destination, expected, owned_writers):
@@ -16,7 +17,7 @@ def relocate(source, destination, expected, owned_writers):
         raise ValueError('ownership or device')
     if (before.st_dev, before.st_ino) != expected:
         raise ValueError('source changed')
-    os.rename(source, destination)
+    rename_noreplace(source, destination)
 
 
 class RelocationTests(unittest.TestCase):
@@ -40,6 +41,18 @@ class RelocationTests(unittest.TestCase):
                 source.mkdir()  # nouvelle racine, aucun import d'artefacts
                 self.assertNotEqual(source.stat().st_ino, expected[1])
                 self.assertEqual(list(source.iterdir()), [])
+
+    def test_atomic_noreplace_refuses_even_an_empty_directory(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source, destination = root / 'source', root / 'destination'
+            source.mkdir()
+            destination.mkdir()
+            identity = destination.stat().st_ino
+            with self.assertRaises(FileExistsError):
+                rename_noreplace(source, destination)
+            self.assertTrue(source.exists())
+            self.assertEqual(destination.stat().st_ino, identity)
 
     def test_owned_writer_or_existing_destination_refuses(self):
         with tempfile.TemporaryDirectory() as temp:
