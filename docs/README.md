@@ -7,6 +7,9 @@ knowledge dump et ses tickets ouverts.
 
 ## Par où commencer
 
+0. **Depuis le 16 novembre 2026** : `docs/orchestration/16-11-2026/02-passation-pour-codex.md`, la passation
+   du lundi : les règles apprises depuis le 11, ce qui attend Lucie, et la page de chaque session avec les
+   tickets à traiter, dans l'ordre.
 1. `docs/orchestration/11-11-2026/02-knowledge-dump.md` : les règles du jeu (dépôts, postes, lib
    épinglée, passes, push, verrous, identité git, ce qu'on ne fait jamais).
 2. `docs/orchestration/11-11-2026/01-rapport-de-session.md` : l'état du projet ce jour-là, session par
