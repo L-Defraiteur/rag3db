@@ -59,9 +59,27 @@ TEST(DictionaryAppendException, OffsetAllocationFailureKeepsExistingStringsUncha
     // Comparer les valeurs réellement lisibles, pas seulement un compteur : la
     // longueur de la dernière entrée dépend du nombre d'octets du dictionnaire.
     for (uint64_t i = 0; i < before.size(); ++i) {
-        EXPECT_EQ(dictionary.getString(i), before[i]) << "existing dictionary entry " << i;
+        ASSERT_EQ(dictionary.getString(i), before[i]) << "existing dictionary entry " << i;
     }
     EXPECT_EQ(dictionary.getStringDataChunk()->getNumValues(), bytesBefore);
+
+    // Ne sonder le hash qu'après avoir vérifié que ses clés sont restées valides.
+    for (uint64_t i = 0; i < before.size(); ++i) {
+        EXPECT_EQ(dictionary.appendString(before[i]), i) << "existing dictionary hash entry " << i;
+    }
+    EXPECT_EQ(dictionary.getOffsetChunk()->getNumValues(), before.size());
+    EXPECT_EQ(dictionary.getStringDataChunk()->getNumValues(), bytesBefore);
+
+    const auto added = dictionary.appendString("delta");
+    ASSERT_EQ(added, before.size());
+    EXPECT_EQ(dictionary.getString(added), "delta");
+    for (uint64_t i = 0; i < before.size(); ++i) {
+        EXPECT_EQ(dictionary.getString(i), before[i]);
+        EXPECT_EQ(dictionary.appendString(before[i]), i);
+    }
+    EXPECT_EQ(dictionary.appendString("delta"), added);
+    EXPECT_EQ(dictionary.getOffsetChunk()->getNumValues(), before.size() + 1);
+    EXPECT_EQ(dictionary.getStringDataChunk()->getNumValues(), bytesBefore + 5);
 }
 
 } // namespace

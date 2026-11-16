@@ -148,3 +148,5 @@ Première qualification C1 privée : bâti1000étapes0 puis assertionrunnerBUILD
 ## Rouge isolé du refus des offsets, 16 novembre
 
 [Résultat et limites](../16-11-2026/03-c1-refus-offsets-rouge-et-limites.md) : sourceb82/engine59ac,1casjoué1échec0skip, réservation48octets atteinte/refusée ; anciennegamma→gammadelta et bytecount14→19,3offsetsrestants. Défaut local de garantie d’exception prouvé ; causalité SIGSEGVC1 NONétablie, aucuncorrectif256. BUILD_ID émis/ELF+archive+header sauvés et rehashés2postes. Unité155,730s, quiescenceMainPID0/cgroupvide/aucunrésidu, poste rendu ; aucunretry/fix. Ticket reste ouvert, TSan existant toujours indépendant.
+
+Défaut isolé de garantie d’exception suivi séparément par [ticket fils](2026-11-16-un-ajout-au-dictionnaire-refuse-change-la-derniere-chaine.md), rouge physique publié avant correctif. Le présent ticket C1 reste ouvert : aucune causalité SIGSEGV déduite. Branche fillecx-coeur-dictionary-append-atomic pour témoin renforcé/hash/réessai puis correctif minimal distinct, pas256.
