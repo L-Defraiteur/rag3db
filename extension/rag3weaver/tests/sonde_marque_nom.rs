@@ -89,15 +89,42 @@ fn aretes_par_marque_en_tsv() {
         fichiers(std::path::Path::new(racine), &mut v);
         v.sort();
         let porte = rag3weaver::generated::GeneratedPolicy::default();
-        let sources: Vec<(String, String)> = v
-            .iter()
-            .filter_map(|p| {
-                let c = std::fs::read_to_string(p).ok()?;
-                let rel = p.strip_prefix(racine).ok()?.display().to_string();
-                (c.len() <= 1_000_000 && admission(&rel, Some(&c), &porte).is_ok())
-                    .then_some((rel, c))
-            })
-            .collect();
+        let mut sources = Vec::new();
+        let mut input_rejections = Vec::new();
+        for path in &v {
+            let relative = path
+                .strip_prefix(racine)
+                .expect("discovered path below root")
+                .display()
+                .to_string();
+            let content = match std::fs::read_to_string(path) {
+                Ok(content) => content,
+                Err(error) => {
+                    input_rejections.push((relative, format!("read_error: {error}")));
+                    continue;
+                }
+            };
+            if content.len() > 1_000_000 {
+                input_rejections.push((relative, "size_limit".to_string()));
+                continue;
+            }
+            if let Err(error) = admission(&relative, Some(&content), &porte) {
+                input_rejections.push((relative, format!("admission: {error:?}")));
+                continue;
+            }
+            sources.push((relative, content));
+        }
+        if let Some(prefix) = &tsv {
+            std::fs::write(
+                format!("{prefix}-{n}.admission.json"),
+                serde_json::to_vec_pretty(&serde_json::json!({
+                    "discovered":v.len(),"admitted":sources.len(),"rejected":input_rejections,
+                    "admitted_paths":sources.iter().map(|(path,_)|path).collect::<Vec<_>>(),
+                }))
+                .unwrap(),
+            )
+            .unwrap();
+        }
         let admis = sources.len();
         if let Some(profile) = &probe_profile {
             assert_eq!(
