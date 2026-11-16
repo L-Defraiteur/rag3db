@@ -994,6 +994,8 @@ pub fn grep_files(
     let mut matches: Vec<GrepMatch> = Vec::new();
     let mut scope_cache: HashMap<String, Vec<ScopeRef>> = HashMap::new();
     let mut stale_cache: HashMap<String, Option<bool>> = HashMap::new();
+    // Matches per top-level directory: where a refusal tells the agent to narrow.
+    let mut per_directory: HashMap<String, usize> = HashMap::new();
 
     for path in source.list()? {
         if let Some(p) = &opts.path_prefix {
@@ -1022,6 +1024,10 @@ pub fn grep_files(
             byte_start += content[offset..].find('\n').map(|n|n+1).unwrap_or(content.len()-offset);
             let Some(found)=re.find(line) else { continue };
             total_found += 1;
+            if opts.refuse_above > 0 {
+                let directory = path.split_once('/').map(|(d, _)| format!("{d}/")).unwrap_or_else(|| "./".to_string());
+                *per_directory.entry(directory).or_default() += 1;
+            }
             if matches.len() >= max_results {
                 continue; // on compte, on ne rend plus
             }
@@ -1057,6 +1063,20 @@ pub fn grep_files(
         if enriched && matches.len()>first {
             grep_symbols::enrich_file(source,catalog,&path,&content,&mut matches[first..],&spans,opts.symbol_hierarchy_depth,&mut budget);
         }
+    }
+    // **Too many matches: refuse, return no line** (P2). Fifty lines of 5 000 are noise that costs the agent's
+    // context; the count, the threshold and where most matches are let it narrow in one step.
+    if opts.refuse_above > 0 && total_found > opts.refuse_above {
+        let mut directories: Vec<(String, usize)> = per_directory.into_iter().collect();
+        directories.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+        let most: Vec<String> = directories.iter().take(3).map(|(d, n)| format!("{d} ({n})")).collect();
+        return Err(format!(
+            "pattern `{pattern}` matches {total_found} lines in {files_searched} files, above the refusal threshold of {} (refuse_above): \
+             no line returned. Narrow with path_prefix (most matches are under {}) or with extension; for a question about meaning, \
+             use search_code.",
+            opts.refuse_above,
+            most.join(", ")
+        ));
     }
     // Aucun fichier regardé sous un préfixe : c'est le préfixe qui est faux,
     // pas le motif — et le dire vaut mieux qu'un « (no match) ».
