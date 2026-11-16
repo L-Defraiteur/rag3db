@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 16 novembre2026 — **Les outils de recherche de l'agent se choisissent mieux.** `search_code` se dit l'outil à prendre d'abord pour une question en mots, un « où est décidé… » ou un nom incertain, et `grep_files` l'outil d'une chaîne exacte seulement (descriptions en anglais, gabarits `code` et `atelier`). Au-delà de 1 000 lignes trouvées, `grep_files` refuse sans rien rendre, en disant le total, le seuil (`refuse_above`) et les dossiers où restreindre par `path_prefix`. `git rev-parse`, `git ls-files` et `git describe` tournent sans demander d'accord.
+
 - 15 novembre2026 — **Le repli d'une carte pleine peut aller vers une autre activation.** Avec
   `fallback: {"activation": "<nom>"}`, l'embarqueur d'une carte pleine (ou trop lente) lance ou rejoint une activation
   déclarée, sur sa propre carte et à sa propre `address`, au lieu d'un service posé à la main. Le repli doit être le
