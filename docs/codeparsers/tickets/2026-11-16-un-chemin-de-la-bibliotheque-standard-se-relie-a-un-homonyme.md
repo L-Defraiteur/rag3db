@@ -88,3 +88,17 @@ cx-codeparsers-rust-fix-1 ; aucun budget rouge réactivé. La ligne brute sera
 indexée une seule fois par fichier ; la position de chaque référence sera
 vérifiée en octets avant de qualifier le chemin de cette occurrence seulement.
 REGLES reste7 jusqu'à preuve verte et qualification du gitlink.
+
+### Correctif candidat, après les deux rouges observés
+
+reference_path_root lit le suffixe à la colonne AST dans la ligne complète,
+vérifie l'identifiant et sa frontière finale, puis lit uniquement le chemin
+qui le précède. Les espaces autour des :: et le préfixe absolu sont admis ;
+une position non UTF-8 ou un chemin indéterminable n'impose pas d'abstention.
+Le vecteur de lignes originales est construit une fois par fichier, pas un
+parcours du fichier par référence. Les données de provenance existantes
+qualifient la racine, aucun nouveau schéma ou liste de bibliothèques.
+
+Témoin pur ajouté pour positions UTF-8, deux occurrences, chemin espacé/absolu,
+collect/collections et F/Formatter. **NON JOUÉ**, comme les deux e2e après ce
+correctif ; aucun nouveau budget ni Cargo. REGLES reste7 jusqu'aux preuves.
