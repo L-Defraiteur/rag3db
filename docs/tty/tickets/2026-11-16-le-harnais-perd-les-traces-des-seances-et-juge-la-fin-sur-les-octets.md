@@ -166,3 +166,8 @@ toute finalisation et publication ; entrée ultime ne fait que transmettre
 le rc. Témoin sur vraie construction et finalisation bloquée, publié avant
 essai hermétique, rouge avant correction. Pas d'ajout implicite au budget,
 aucun natif/ancienEND réactivé ; nouveau Q/pin et RO totale avant GO.
+
+Le premier essai71d57 du témoin a échoué en0,046s sur son rc, sans atteindre
+la finalisation bloquée : env manquait dans le contexte AST factice. Ce n'est
+pas le rouge du budget. Fixture corrigée/publiée avant le nouvel essai ; aucune
+correction du pilote n'a encore été faite, revue groupée Mémoire en cours.
