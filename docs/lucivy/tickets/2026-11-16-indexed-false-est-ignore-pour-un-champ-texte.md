@@ -351,3 +351,16 @@ natif/aucunautretest. EnveloppebashparentcwdQ+noclobber littérale documentée.
 ActionROBanc portéeavanttransmission : codepilote/ressources/ledgeravanttest/
 nonce/provenance/oldReceipt, lectureseule sansCargo/ELF/procscan/base/service.
 C7 reçoit couple/recetteexactspourGOdistinctaprèsnouvellesRO, pasattenteancienne.
+
+RO Banc7f6f1d2407 a039/81b0/99a8/7649 : hashes/preflight/ledger600cohérents,
+deuxréservesgroupéesAVANTGO. (1) Réattester3ELF/HEAD/propreté/copies sousEND
+avant expected-red, sans exiger106fa encoreintactdansT aprèscompilation (sa
+copieROseuledoitresterintacte). (2) checkbudgetaprèsopen et avantdump final,
+refuserpublicationtardive. Action : corrigerpilote/recetteempreintes sousmême
+prépa,pasRust/Cargo/ELF/nouveauGO. FinCommon/owned resteexternalaprèsretour.
+
+Avantcorrectionpilote : témoinsPythonpurs des gardespublication préparés et
+publiésavantleurpropreexécution, ASTslicesavec fauxclock/fichiers/processus,
+aucunappelRust/proc/FSQ. Attendusrougesdeadlineaprèsopen et mutationsELF/
+copies/HEAD/propreté ; casinchangédoitpublier. Ce sont des testsduPILOTE,
+pas le témoinRustconsommateurtoujoursNONjoué. Puis correction desréservesBanc.
