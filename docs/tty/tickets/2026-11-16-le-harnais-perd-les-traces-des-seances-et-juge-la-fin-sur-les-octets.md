@@ -142,3 +142,15 @@ answerapprovedtrue dont reply_to égale **exactement** cet id. ended et state
 ended restent requis indépendamment. Aucun changement du faux hôte/du produit.
 Le paquet de relecturev2 est distinct de v1 ; gate native toujours fermée sur
 l'ENDoriginal expiré. Aucun témoin natif ni validation du run perdu déduit.
+
+## Protocole exécutable harnais seul demandé après RO8534
+
+Mémoire8534 fin totale favorable, réserve de corrélation levée ; aucun natif
+joué. C7 autorise la préparation d'un protocole **HARNAIS SEUL**, même ELF déjà
+bâti et sourceRust/SDK figés, F8 et build portés, nouveaux P/Q/S. Borne proposée
+**1200s au total**, file de poste, Common et finalisation comprises ; ce n'est
+pas une allocation. END852082.791694931 expiré reste historique et fermé.
+Préflight provenance/quiet sous vrai poste, premier rouge observé arrêté
+immédiatement via autoritéCommon propriétaire, final après TERMINE/restes[]/
+nettoye/hash physiques/quiet/publication dans nouvelle échéance éventuelle.
+Publier source/pilote/paquet puis RO avant tout GO distinct.
