@@ -118,3 +118,7 @@ Gpg_receipt.py dépend identity.sql/backend-postcheck.sql :QfinaldoitcopierSTRIC
 ## Réserve RO Gf142 sur publication entière5, avant transmission
 
 Lecturestatique PGpg_receipt.py f142db8211fef0577de8c363ade058065f85f76d : publish_observation revalidate_current avantlink, puisattestation.sha256+dernier_sync_directory etretour(path,SHA) sansnouvellelectureclock/phase. Si dernièreécriture/fsyncretardés passentdeadlineoriginal5, APIpeutretourneruneobservationadmissiblehorsborne. PorterGavantdiffcorrectif : témoinpureclockavanceauDERNIERfsync (aprèslink), observerAPIdoitREFUSER/pasretouradmissible/RAWconservés ; recheckclock/phaseaprèsI/Oetjusteavantreturn,refusalimmutable/artifact_publishedhonnête. Clarifieraussivalidate_attestation faceàartifactayantrefusal.json aprèspublicationpartielle : aucunstatutROUGEnepeutdeveniradmissiblecarleseulJSONestprésent. AucunSQL/proc/runner exécutéparRecherche,PGTOOLréeltoujoursHOLD.
+
+## Master99entrant : audit et unionNEUVE avantdiff
+
+C7master99fef92ce6ee9a0007eaf99c7c3a6a3789061c57 atterri/tourclos,4RustVertexqualifiés. APP84baseb0 nevoitplusmastercourant : conserverAPP84/T/archives8distinct11rawfigés, préparerunionbrancheWTNEUFS depuis84 sur99 aprèsfetch/auditentrants. Range-diff/modeOID/protectionmaster/4entrantstests requis avantAPPfuturepin àEmbar/G ; aucunequalificationcombinaison ni ancienF8/globalreportée. Aucunrun6000/PG/health/native/Tmutation/force/rebasebranchepubliée. Ownercommun/PGprépaindépendantecontinue,pasQfinalavantnouveaucoupleRO.
