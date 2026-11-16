@@ -74,6 +74,8 @@ pub struct OpenAiLlm {
     base_url: String,
     model: String,
     auth: Auth,
+    /// Capacité Vertex exclusive des en-têtes fixes ; jamais sérialisée.
+    vertex_tokens: Option<std::sync::Arc<dyn crate::gcp_auth::AccessTokenSource>>,
     context_len: usize,
     agent: ureq::Agent,
     /// Les extensions `extra_body.google.*` ne partent que vers Google.
@@ -100,6 +102,7 @@ impl std::fmt::Debug for OpenAiLlm {
             .field("base_url", &self.base_url)
             .field("model", &self.model)
             .field("auth", &self.auth)
+            .field("vertex_tokens", &self.vertex_tokens.as_ref().map(|_| "<redacted>"))
             .field("context_len", &self.context_len)
             .finish()
     }
@@ -114,6 +117,7 @@ impl OpenAiLlm {
             base_url: base_url.into(),
             model: model.into(),
             auth: Auth::None,
+            vertex_tokens: None,
             google_extras: false,
             stream_tool_arguments: false,
             google_validated_tool_choice: false,
@@ -184,6 +188,18 @@ impl OpenAiLlm {
             .with_google_extras()
             .with_auth(Auth::Bearer(access_token.into()))
             .with_context_len(1_000_000)
+    }
+
+    /// Vertex avec une capacité OAuth2 conservée, sans acquisition à la connexion.
+    pub fn vertex_with_source(
+        project: &str,
+        location: &str,
+        source: std::sync::Arc<dyn crate::gcp_auth::AccessTokenSource>,
+        model: impl Into<String>,
+    ) -> Self {
+        let mut client = Self::vertex(project, location, String::new(), model).with_auth(Auth::None);
+        client.vertex_tokens = Some(source);
+        client
     }
 
     /// Repointe l'endpoint sans toucher au reste — sert surtout à faire viser
@@ -350,6 +366,7 @@ impl OpenAiLlm {
     }
 
     pub fn with_auth(mut self, auth: Auth) -> Self {
+        self.vertex_tokens = None;
         self.auth = auth;
         self
     }
@@ -1147,6 +1164,7 @@ impl Llm for OpenAiLlm {
 
         // Nombre de réessais déjà effectués. `attempt + 1` tentatives faites.
         let mut retries: u32 = 0;
+        let mut vertex_refreshed = false;
         loop {
             let mut req = self
                 .agent
@@ -1158,6 +1176,9 @@ impl Llm for OpenAiLlm {
                 Auth::Bearer(t) => req.header("authorization", &format!("Bearer {t}")),
                 Auth::Header(k, v) => req.header(k.as_str(), v.as_str()),
             };
+            if let Some(source) = &self.vertex_tokens {
+                req = req.header("authorization", &format!("Bearer {}", source.token()?));
+            }
 
             // Le corps entier d'un refus HTTP, avant sa coupure à 512 caractères :
             // c'est lui que garde un refus 4xx ([`OpenAiLlm::garder_le_refus`]).
@@ -1198,7 +1219,7 @@ impl Llm for OpenAiLlm {
                                 .now()
                                 .saturating_duration_since(started)
                                 .as_millis() as u64;
-                            usage.retries = retries;
+                            usage.retries = retries + u32::from(vertex_refreshed);
                             sink.on_finish(&finish);
                             return Ok((finish, usage));
                         }
@@ -1222,6 +1243,18 @@ impl Llm for OpenAiLlm {
                     msg.truncate(512);
                     if msg.trim().is_empty() {
                         msg = "(corps d'erreur vide)".into();
+                    }
+                    // Ce renouvellement appartient à la capacité Vertex, pas au réessai
+                    // générique. Seulement un refus HTTP avant ouverture du flux200.
+                    if status == 401 {
+                        if let Some(source) = &self.vertex_tokens {
+                            if !vertex_refreshed {
+                                source.invalidate();
+                                vertex_refreshed = true;
+                                continue;
+                            }
+                            msg = "Vertex authentication rejected after refresh (HTTP 401)".into();
+                        }
                     }
                     // Deux erreurs qu'on sait typer, et qu'on rend telles
                     // quelles : ni l'une ni l'autre n'est réessayable.

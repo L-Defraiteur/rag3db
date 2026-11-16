@@ -66,6 +66,18 @@ impl Credentials {
     }
 }
 
+/// Capacité de fournir et invalider un jeton sans exposer les identifiants.
+/// Le transport conserve cette capacité ; les fixtures peuvent fournir la même interface.
+pub trait AccessTokenSource: Send + Sync {
+    fn token(&self) -> Result<String, LlmError>;
+    fn invalidate(&self);
+}
+
+impl AccessTokenSource for TokenSource {
+    fn token(&self) -> Result<String, LlmError> { TokenSource::token(self) }
+    fn invalidate(&self) { TokenSource::invalidate(self); }
+}
+
 /// Source de jetons, avec cache et renouvellement. `Send + Sync` : elle vit à
 /// côté d'un [`crate::openai_llm::OpenAiLlm`] dans le registre de services.
 pub struct TokenSource {
