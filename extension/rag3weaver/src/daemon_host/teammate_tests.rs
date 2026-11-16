@@ -1823,7 +1823,7 @@ fn a_step_that_answers_without_step_done_is_continued_without_waiting() {
 
 #[cfg(all(feature = "code", feature = "rag3db-native"))]
 #[path = "../../tests/common/documentation_fixture.rs"]
-mod documentation_fixture;
+pub(super) mod documentation_fixture;
 
 /// The real code-tree fixture must receive the declared Bac before add_files.
 #[cfg(all(feature = "code", feature = "rag3db-native"))]
