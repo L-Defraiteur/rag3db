@@ -125,3 +125,16 @@ La garde exige un worktree Git enregistré et ne juge pas un target indépendant
 STOP transmis à l'orchestration ; aucun retrait, marqueur, target neuf ou Cargo.
 Le worktree source reste intact. Attente de procédure applicable au target seul,
 sans assimiler un verdict sur le worktree à une autorisation de retrait du cache.
+
+### Alternative réversible : arrêt avant renommage
+
+L'orchestration a autorisé un relogement entier par rename même système de
+fichiers, sans réutilisation d'artefacts. Précontrôles UID/dev/type/répertoire
+source, destination absente et autorité terminée passent. Le scan frais de tous
+les processus du même UID (exe/cwd/FD) ne trouve aucun lien vers le target,
+mais rencontre des accès refusés sur les PID 5435,5438,6208,25298. L'absence de
+writer n'est donc pas établie pour eux : arrêt conservateur avant rename.
+Source encore présente, destination `retired-target` absente, aucune mutation
+du target ni Cargo. Archives aux deux postes et worktree toujours conservés.
+Prochain pas : qualifier ces inconnus avec l'orchestration avant relogement ;
+ne pas transformer « aucun lien observé » en preuve de quiescence complète.
