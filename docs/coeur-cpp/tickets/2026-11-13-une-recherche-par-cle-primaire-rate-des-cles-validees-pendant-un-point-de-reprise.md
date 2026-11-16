@@ -1,6 +1,6 @@
 # Une recherche par clé primaire rate des clés validées pendant un point de reprise
 
-- **État** : ouvert (13 novembre 2026, cœur c++) — corrigé sur master `0c41f9fe6`, à poser
+- **État** : ouvert (13 novembre 2026, cœur c++) — corrigé sur master `0c41f9fe6`, revu rouge une fois le 16 novembre (intermittent rare)
   (lib bâtie à ce hash ; se ferme quand la lib posée a passé l'e2e de G)
 - **Famille** : moteur
 - **Gravité** : lecture fausse (une rangée validée est dite absente)
@@ -221,3 +221,14 @@ depuis `build/moteur/test/transaction/concurrence`.
 L'exclusif est mesuré sous `RAG3DB_PROFILE_CHECKPOINT=1` par la ligne
 `[checkpoint-profile]   cles-primaires`. Sur 810 points de reprise du témoin, l'attente est de
 0,0 ms, et l'exclusif est tenu au plus 12,7 ms : 9 à 12 ms de recopie, 0,4 à 1,1 ms de publication.
+
+## Revu rouge une fois le 16 novembre 2026
+
+`PkLookupUnderCheckpoint.LookupsDuringInsertsAndCheckpointsDoNotCrash`, dans un `transaction_test`
+entier à luciepc, sur `256413fde` (master `08b279aaf` plus une branche du cœur qui ne touche que
+`StringChunkData` et les crochets de test) : `[check: pk-lookup-reads-right] 3: a lookup missed a
+committed key`, valeur 3. Le même cas joué seul ensuite, 30 fois sur cette tête et 30 fois sur
+celle d'avant sans le changement de `StringChunkData` : 0 rouge sur 60. Un intermittent rare, vu une
+fois dans une passe entière (journal
+`~/.cache/rag3db-moteur-notes/dict-fix2/transaction.log`). Le correctif de `0c41f9fe6` ne ferme donc
+pas tout ; à garder ouvert.
