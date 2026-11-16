@@ -21,7 +21,7 @@ use crate::common;
 use std::sync::Arc;
 use std::time::Instant;
 
-use rag3weaver::code::{analyze_source, default_scope_chunking, read_sources, register_code_schema};
+use rag3weaver::code::{analyze_source, default_scope_chunking, read_sources, register_code_schema, scope_chunks};
 use rag3weaver::code_tools::{FileSource, Snapshot};
 use rag3weaver::embedder::{DualEmbedder, Embedder};
 use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
@@ -102,10 +102,13 @@ fn combien_coute_l_indexation_de_src_dataflow() {
     };
     let total = t.elapsed();
     eprintln!("[mesure] index vectoriel {}", if en_masse { "en masse (HNSW reconstruit après)" } else { "ligne à ligne" });
-    let chunks = catalog.conn().execute("MATCH (c:Scope_Chunk) RETURN count(c)").unwrap();
+    // The scope chunks of this base's form (ticket of 13 Nov. 2026): on a versions base, Scope_Chunk is empty.
+    let scope_table = scope_chunks(&catalog).expect("the scope chunk table of this base").table;
+    let chunks = catalog.conn().execute(&format!("MATCH (c:{scope_table}) RETURN count(c)")).unwrap();
     let n_chunks = match chunks.rows[0][0] { rag3weaver::connection::CypherValue::Int(n) => n, _ => -1 };
+    assert!(n_chunks > 0, "no scope chunk read in {scope_table}: the measure would count nothing");
     // D'où viennent les chunks : par champ de contenu.
-    if let Ok(par_champ) = catalog.conn().execute("MATCH (c:Scope_Chunk) RETURN c._parent_field, count(c)") {
+    if let Ok(par_champ) = catalog.conn().execute(&format!("MATCH (c:{scope_table}) RETURN c._parent_field, count(c)")) {
         let detail: Vec<String> = par_champ.rows.iter().map(|r| format!("{}={}", r[0].as_str().unwrap_or("?"), match r[1] { rag3weaver::connection::CypherValue::Int(n) => n, _ => -1 })).collect();
         eprintln!("[mesure] chunks par champ : {}", detail.join(" "));
     }

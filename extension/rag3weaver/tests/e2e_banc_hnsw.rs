@@ -27,7 +27,7 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use rag3weaver::code::{analyze_source, default_scope_chunking, read_sources, register_code_schema, FILE, SCOPE, SYMBOL};
+use rag3weaver::code::{analyze_source, default_scope_chunking, read_sources, register_code_schema, scope_chunks, ENTITES_EN_MASSE};
 use rag3weaver::code_tools::{FileSource, Snapshot};
 use rag3weaver::connection::CypherValue;
 use rag3weaver::embedder::HashEmbedder;
@@ -63,7 +63,8 @@ fn compte(catalog: &Catalog, table: &str) -> i64 {
 }
 
 fn chunks(catalog: &Catalog) -> i64 {
-    compte(catalog, "Scope_Chunk") + compte(catalog, "File_Chunk") + compte(catalog, "Symbol_Chunk")
+    let scope = scope_chunks(catalog).expect("the scope chunk table of this base").table;
+    compte(catalog, &scope) + compte(catalog, "File_Chunk") + compte(catalog, "Symbol_Chunk")
 }
 
 /// Des fichiers Rust inédits (un nonce dans chaque corps, donc des hash
@@ -119,7 +120,7 @@ fn le_hnsw_a_l_ecriture() {
     let mut t_dedans = Duration::ZERO;
     let t = Instant::now();
     let rapport = catalog
-        .bulk_vector_index(&[SCOPE, FILE, SYMBOL], |c| {
+        .bulk_vector_index(&ENTITES_EN_MASSE, |c| {
             let t = Instant::now();
             let r = c.ingest_code(&analysis);
             t_dedans = t.elapsed();
@@ -132,7 +133,7 @@ fn le_hnsw_a_l_ecriture() {
     let n_plein = chunks(&catalog);
     // **The measure reads the scope chunks it measures** (ticket of 13 Nov. 2026, the probes that read
     // Scope_Chunk hard-coded): on a versions base they live elsewhere, and a count of zero would measure nothing.
-    let scope_chunk_count = compte(&catalog, "Scope_Chunk");
+    let scope_chunk_count = compte(&catalog, &scope_chunks(&catalog).expect("the scope chunk table of this base").table);
     assert!(scope_chunk_count > 0, "no scope chunk read: the bench would measure an empty table");
     eprintln!(
         "[hnsw] dim {dim} · {n_fichiers} fichiers, {} scopes, {n_plein} chunks · analyse {:.0} ms · ingestion index tombé {:.0} ms · reconstruction du HNSW {:.0} ms ({:.1} µs/chunk)",
@@ -141,7 +142,7 @@ fn le_hnsw_a_l_ecriture() {
 
     // La reconstruction seule, tables pleines, pour confirmer la ventilation.
     let t = Instant::now();
-    catalog.bulk_vector_index(&[SCOPE, FILE, SYMBOL], |_| ()).unwrap();
+    catalog.bulk_vector_index(&ENTITES_EN_MASSE, |_| ()).unwrap();
     let t_reconstruction_seule = t.elapsed();
     eprintln!("[hnsw] reconstruction seule (drop + create sur {n_plein} chunks) : {:.0} ms", ms(t_reconstruction_seule));
 
@@ -167,7 +168,7 @@ fn le_hnsw_a_l_ecriture() {
     let mut t_dedans_b = Duration::ZERO;
     let t = Instant::now();
     let rapport_b = catalog
-        .bulk_vector_index(&[SCOPE, FILE, SYMBOL], |c| {
+        .bulk_vector_index(&ENTITES_EN_MASSE, |c| {
             let t = Instant::now();
             let r = c.ingest_code(&analyse_b);
             t_dedans_b = t.elapsed();
