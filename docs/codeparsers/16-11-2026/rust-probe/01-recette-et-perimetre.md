@@ -60,8 +60,15 @@ rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rc
 SOb7e9fc75a3d2de04c72680b0309e8bb1df9eaadb5211ebbacf39716c6d0a2101,
 vector1669d6392ec8067fcf92ae2ccc972fd7cd3086629fb82d1f5d254e90d72d7561.
 Le pilote compose le resolver SDK déjà qualifié UNEfois puis cargo_garde test
---locked --features rag3db-native,code --test sonde_marque_nom -j8 -- --ignored
---nocapture. La sonde lit CALL BUILD_ID() du vrai moteur, l'enregistre et exige
+--locked --no-default-features --features rag3db-native,code --test sonde_marque_nom
+--no-run -j8 --message-format=json-render-diagnostics. Le nouvel ELF est sélectionné
+dans le JSON Cargo par source, cible test unique et features exactes ; une copie
+hors target est rehashée. Aucun ELF118 ne vaut pour cette phase. Le ledger de
+compilation ET cette copie doivent être présents et rehashés aux deux hôtes avant
+la première invocation, même --list. Puis les inventaires all/ignored doivent
+montrer exactement aretes_par_marque_en_tsv, et le ledger runtime avec ces
+inventaires est publié aux deux hôtes avant --exact aretes_par_marque_en_tsv
+--ignored --nocapture. Les deux ACK consomment le délai courant, sans prolongation. La sonde lit CALL BUILD_ID() du vrai moteur, l'enregistre et exige
 l'égalité au SDK annoncé. Les libs, manifests, scripts, probe et outils sont hashés.
 
 HashEmbedder64CPU, pool1GiB, RUST_TEST_THREADS=1, CARGO_INCREMENTAL=0. Profil natif
@@ -72,7 +79,16 @@ base de Lucie, bus utilisateur de Lucie ou mécanisme de C++/SDK reconstitué.
 Deux propositions d'allocation distinctes, chacune1800s : référence puis candidat,
 32GiB/high=max/quota5CPU/j<=8. Le coût sur lib59 reste inconnu ; la borne peut
 arrêter une phase, preuve partielle et diagnostic, sans retry ni prolongation.
-Les1800s incluent poste acquis→préparation privée→compilation→deuxracines→contrôles.
+Les1800s incluent poste acquis→préparation privée→compilation→publications deux
+hôtes→deuxracines→contrôles finaux→publication de classification. Composition
+reprise de recherche af11e15b9c : vrai poste, timeout1798s/TERM puis kill-after2s,
+Common1750s à l’intérieur. Le pilote réserve15s sur l’échéance Common. La
+classification complète reste sous MIN(ENDCommon, ENDtimeout), avec contrôle
+de l’horloge après open puis après flush/fsync (primitive TTY256097281b). Un vert
+écrit trop tard est réécrit ROUGE avec phase_completed=false. Maximum explicite
+des deux phases : 2×1800=3600s ; aucun contrôle natif post-Common hors borne.
+Le rapport comparatif CPU est une opération distincte, exigeant sa propre
+allocation explicite ; il n’est pas compté dans ces3600s.
 Aucun de ces budgets n'est armé par ce document ou par prepare.
 
 Target unique PC ~/.cache/rag3weaver-build/target-import-pointe-pile. Départ :
@@ -115,3 +131,51 @@ simple compteur global. Cette instrumentation a été formatée et relue mais
 **n'a pas été compilée ni exécutée** ; pas de tests Python rejoués non plus depuis
 la demande de préparation seule. La première allocation devra conserver tout
 rouge de compilation/protocole, sans relance aveugle.
+
+
+## Corrections groupées de la RO052d8a5377 (préparation suivante)
+
+Réservations inscrites dans le ticket existant au commit770f0ffd2c avant les
+modifications. Le paquet pair-01 reste conservé, sans tentative de réutilisation.
+La prochaine préparation doit utiliser un dossier neuf, par exemple pair-02,
+avec --peer-host égal au hostname du portable, et le HEAD candidat publié.
+prepare ne prend aucun verrou, ne crée aucune autorité et ne lance aucun test.
+
+Les contrôleurs sont copiés à l’identique dans preuves/control, hors des deux
+worktrees et du target : poste, Common, cargo_garde, garde_target, ancien helper,
+pilote, scanner et comparaison. Tous leurs SHA sont figés. L’entrée run fait
+exec vers cette copie AVANT de créer un parent persistant ; le SSH appelant doit
+lui-même avoir son cwd hors W/T et faire exec. Le retour extérieur ne fait que
+rendre le code de la commande bornée, sans calculer un verdict tardif.
+
+Le scan pré-Common puis après-poste est frais ; le scan final arrive après la
+relecture des sources, du corpus, des sorties et des deux copies ELF. Il lit
+exe/cwd/fd/argv/cgroup et les identités PID/start/uid avant/après. Les indices
+partiels sont conservés si une lecture ultérieure échoue ; un UNKNOWN attribué
+refuse. Les identités enfants du Common et celle du superviseur sont relues ;
+le bus privé et son répertoire doivent être absents après END terminé/nettoyé.
+Zéro exemption de chemin/FD, y compris pour les ancêtres poste. Seuls les deux
+contrôleurs aux rôles vérifiés (compose courant et son parent timeout exact)
+peuvent être reconnus dans le cgroup ; identité, exe, argv et cgroup doivent
+rester identiques. Un autre membre du cgroup fait refuser la classification.
+
+Publication entre hôtes, par les outils de la session pendant le futur délai :
+
+1. Copier PC→portable phase/build-ledger.json et phase/bin/probe-executable.
+   Ne copier ni autorite.json, ni environnement complet. Exécuter peer-ack sur
+   le portable avec --phase et --kind build : il vérifie uniquement la copie
+   locale, jamais le chemin target PC du ledger.
+2. Copier l’ACK portable→PC sous un nom temporaire puis créer le nom final par
+   lien dur exclusif ; le pilote n’observe jamais un JSON partiellement copié.
+3. Après les deux inventaires, copier runtime-ledger.json et les deux stdout
+   d’inventaire. Produire et transmettre l’ACK runtime de la même manière.
+4. Le pilote rehash source/copie à chaque ACK puis à la fin. Une absence ou un
+   échec de publication donne le premier rouge ; pas de native avant ACK.
+
+C7 autorise un seul lot CPU hermétique60s fail-fast, APRÈS publication de
+l’ensemble de ces corrections. Commande prévue depuis la racine privée :
+`timeout --signal=TERM --kill-after=2s 58s python3 -B docs/codeparsers/16-11-2026/rust-probe/test_protocol.py -f -v`.
+Ces tests utilisent des fichiers /proc factices, des horloges simulées et des
+JSON Cargo synthétiques, sans processus natif, Cargo, autorité ou bus réels.
+Aucun résultat n’est revendiqué au moment de cette publication. Au premier
+échec inattendu : arrêt, preuve et retour C7 ; pas de deuxième lot implicite.

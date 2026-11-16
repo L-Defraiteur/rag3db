@@ -7,14 +7,24 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
+import signal
+import socket
+import stat
 import subprocess
 import sys
+import time
 
-TOOL_ROOT = Path(__file__).resolve().parents[4]
-PREVIOUS = TOOL_ROOT / 'docs/codeparsers/16-11-2026/rust-red/pilot.py'
+TOOL_ROOT = Path(os.environ['RUST_PROBE_TOOL_ROOT']) if 'RUST_PROBE_TOOL_ROOT' in os.environ else Path(__file__).resolve().parents[4]
+HERE = Path(__file__).resolve().parent
+PREVIOUS = HERE / 'legacy.py' if (HERE / 'legacy.py').is_file() else TOOL_ROOT / 'docs/codeparsers/16-11-2026/rust-red/pilot.py'
 spec = importlib.util.spec_from_file_location('qualified_rust_pilot', PREVIOUS)
 base = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(base)
+guard_spec = importlib.util.spec_from_file_location('rust_physical_guard', HERE / 'physical_guard.py')
+physical = importlib.util.module_from_spec(guard_spec)
+guard_spec.loader.exec_module(physical)
+
 PRODUCTS = {'baseline': 'd395cb1f03f84c6abdfa023a0e3c7f87a7c0dab6',
             'candidate': '118cc71eea57ebdfa4c79ae01d5d5a0caf181d4b'}
 PARSERS = {'baseline': 'bd133850f89d6b12a3ca2b2f6ce238785ed37e3a',
@@ -53,11 +63,15 @@ def check_corpus(pair):
 
 
 def verify(pair, phase):
+    assert str(TOOL_ROOT) == pair['tool_root']
     assert base.git(TOOL_ROOT, 'rev-parse', 'HEAD') == pair['tool_source']
     assert not base.git(TOOL_ROOT, 'status', '--porcelain')
     assert base.digest(__file__) == pair['driver_sha256']
     assert base.digest(PREVIOUS) == pair['helper_sha256']
-    assert base.digest(Path(__file__).with_name('compare.py')) == pair['comparison_sha256']
+    assert base.digest(HERE / 'compare.py') == pair['comparison_sha256']
+    assert base.digest(HERE / 'physical_guard.py') == pair['physical_guard_sha256']
+    for name, sha in pair.get('controllers', {}).items():
+        assert base.digest(Path(pair['control']) / name) == sha
     assert base.digest(pair['historical_var_file']) == pair['historical_var_sha256']
     assert base.digest(pair['runtime_profile']) == pair['runtime_profile_sha256']
     config = pair['phases'][phase]
@@ -141,7 +155,91 @@ def check_outputs(pair, phase):
     return counts
 
 
+def save(path, value):
+    with Path(path).open('x') as stream:
+        json.dump(value, stream, indent=2)
+        stream.flush()
+        os.fsync(stream.fileno())
+
+
+def first_red(root, error):
+    try:
+        save(Path(root) / 'first-red.json', {'reason': repr(error), 'observed': time.monotonic()})
+    except FileExistsError:
+        pass
+
+
+def run_step(root, label, argv, cwd, env, end, cap):
+    deadline = min(end, time.monotonic() + cap)
+    assert deadline > time.monotonic()
+    save(root / (label + '.command.json'), {'argv': argv, 'cwd': str(cwd), 'deadline': deadline})
+    with (root / (label + '.stdout')).open('xb') as out, (root / (label + '.stderr')).open('xb') as err:
+        child = subprocess.Popen(argv, cwd=cwd, env=env, stdout=out, stderr=err)
+        try:
+            while child.poll() is None:
+                if time.monotonic() >= deadline:
+                    raise TimeoutError(label)
+                if label == 'probe':
+                    raw = (root / (label + '.stdout')).read_bytes() + (root / (label + '.stderr')).read_bytes()
+                    if re.search(rb'^test result: FAILED|^thread .*panicked at|\.\.\. FAILED', raw, re.M):
+                        raise RuntimeError('first native failure: ' + label)
+                time.sleep(.05)
+            save(root / (label + '.result.json'), {'rc': child.returncode, 'finished': time.monotonic()})
+            assert child.returncode == 0, (label, child.returncode)
+        except BaseException as error:
+            first_red(root, error)
+            if child.poll() is None:
+                child.terminate()
+                try:
+                    child.wait(timeout=1)
+                except subprocess.TimeoutExpired:
+                    child.kill()
+                    child.wait(timeout=1)
+            raise
+
+
+def choose_artifact(raw, source):
+    rows = [json.loads(line) for line in raw.splitlines() if line.startswith('{')]
+    found = [row for row in rows if row.get('reason') == 'compiler-artifact'
+        and row.get('target', {}).get('name') == 'sonde_marque_nom'
+        and row['target'].get('kind') == ['test'] and row['target'].get('src_path') == source
+        and row.get('profile', {}).get('test') and row.get('executable')]
+    assert len(found) == 1, 'expected exactly one source-bound compiler artifact'
+    assert set(found[0]['features']) == {'code', 'rag3db-native'}
+    return found[0]
+
+
+def wait_publication(pair, phase, kind, ledger, end):
+    root = Path(pair['proofs']) / phase
+    path = root / (kind + '-peer-ack.json')
+    while not path.exists():
+        assert time.monotonic() < end, 'peer publication deadline'
+        time.sleep(.1)
+    ack = json.loads(path.read_text())
+    assert ack['host'] == pair['peer_host'] and ack['phase'] == phase and ack['kind'] == kind
+    assert ack['ledger_sha256'] == base.digest(root / (kind + '-ledger.json'))
+    assert ack['elf_sha256'] == ledger['elf_sha256'] and ack['copied_and_rehashed'] is True
+    assert base.digest(ledger['source_executable']) == base.digest(ledger['copied_executable']) == ledger['elf_sha256']
+    assert time.monotonic() < end
+
+
+def fresh_quiet(pair, phase, path, final=False, authority=None, private=None):
+    roots = [TARGET, *[config['worktree'] for config in pair['phases'].values()]]
+    old = Path.home() / '.cache/codeparsers-notes/rust-followup-118cc71/authority-status.json'
+    groups = [json.loads(old.read_text())['cgroup']]
+    controls = []
+    if final:
+        controls = json.loads((Path(pair['proofs']) / phase / 'controls.json').read_text())
+        groups.append(authority['cgroup'])
+        roots.append(private)
+    record = physical.scan('/proc', roots, groups, controls)
+    save(path, record)
+    assert not record['found'] and not any(row['attributed'] for row in record['unknown'])
+    return record
+
+
 def inside(pair, phase):
+    os.chdir(Path(pair['proofs']) / phase)
     config = verify(pair, phase)
     previous_end(pair, phase)
     check_corpus(pair)
@@ -149,7 +247,7 @@ def inside(pair, phase):
     worktree = Path(config['worktree'])
     crate = worktree / 'extension/rag3weaver'
     env = {key: os.environ[key] for key in ['HOME', 'USER', 'LOGNAME', 'PATH', 'SHELL', 'LANG', 'LC_ALL',
-        'TZ', 'CARGO_HOME', 'RUSTUP_HOME', 'DBUS_SESSION_BUS_ADDRESS', 'RAG3WEAVER_VALIDATION_RECU',
+        'TZ', 'RUST_PROBE_TOOL_ROOT', 'CARGO_HOME', 'RUSTUP_HOME', 'DBUS_SESSION_BUS_ADDRESS', 'RAG3WEAVER_VALIDATION_RECU',
         'RAG3WEAVER_VALIDATION_JETON'] if key in os.environ}
     for name in ['tmp', 'config', 'data', 'cache', 'xdg-state', 'state-fixture']:
         (root / name).mkdir(mode=0o700)
@@ -161,27 +259,170 @@ def inside(pair, phase):
         XDG_CACHE_HOME=str(root / 'cache'), XDG_STATE_HOME=str(root / 'xdg-state'),
         RAG3WEAVER_STATE_DIR=str(root / 'state-fixture'), SONDE_DIRS=','.join(pair['roots']),
         SONDE_TSV=str(root / 'edges'), RUST_PROBE_PROFILE=pair['runtime_profile'])
-    assert base.record(root, 'authority-check', [sys.executable, str(crate / 'scripts/confiner_validation.py'), 'verifier'], crate, env) == 0
-    base.cache_quiet(config, root)
+    run_step(root, 'authority-check', [sys.executable, str(Path(pair['control']) / 'confiner_validation.py'), 'verifier'], root, env,
+        json.loads(Path(os.environ['RAG3WEAVER_VALIDATION_RECU']).read_text())['echeance'] - 15, 10)
+    fresh_quiet(pair, phase, root / 'cache-quiet-after-poste.json')
     assert (TARGET / '.arbre-du-target').read_text().strip() == config['previous_owner']
-    # Même resolver que l'unité native qualifiée ; un seul export, Cargo explicitement verrouillé.
-    command = ['bash', '-c', '. "$1"; exporter_la_lib || exit $?; shift; exec "$@"',
-        'real-library-resolver', str(crate / 'scripts/lib_du_magasin.sh'), sys.executable,
-        str(crate / 'scripts/cargo_garde.py'), 'test', '--locked', '--manifest-path', str(crate / 'Cargo.toml'),
-        '--features', 'rag3db-native,code', '--test', 'sonde_marque_nom', '-j8', '--', '--ignored', '--nocapture']
-    rc = base.record(root, 'probe', command, crate, env)
+    # SDK réel, compilation seule et identité du nouvel ELF avant toute invocation.
+    receipt = Path(os.environ['RAG3WEAVER_VALIDATION_RECU'])
+    authority = json.loads(receipt.read_text())
+    bus_path = os.environ['DBUS_SESSION_BUS_ADDRESS'].split(',')[0].removeprefix('unix:path=')
+    assert bus_path.startswith('/tmp/r3v-') and stat.S_ISSOCK(Path(bus_path).stat().st_mode)
+    save(root / 'authority-path.json', {'path': str(receipt), 'deadline': authority['echeance'],
+        'pid': authority['pid'], 'start': authority['debut'], 'cgroup': authority['cgroup'], 'bus_path': bus_path})
+    assert authority['etat'] == 'actif'
+    group = Path('/sys/fs/cgroup') / authority['cgroup'].lstrip('/')
+    limits = {name: (group / name).read_text().strip() for name in
+        ['memory.max', 'memory.high', 'memory.swap.max', 'cpu.max']}
+    assert limits['memory.max'] == '34359738368' and limits['memory.high'] == 'max' and limits['memory.swap.max'] == '0'
+    quota, period = limits['cpu.max'].split()
+    assert quota != 'max' and int(quota) == 5 * int(period)
+    save(root / 'envelope-observed.json', limits)
+    deadline = authority['echeance'] - 15
+    sdk_keys = ['RAG3DB_SHARED', 'RAG3DB_LIBRARY_DIR', 'RAG3DB_INCLUDE_DIR', 'LD_LIBRARY_PATH']
+    resolver = ['bash', '-c', '. "$1"; exporter_la_lib || exit $?; shift; exec "$@"', 'real-library-resolver',
+        str(crate / 'scripts/lib_du_magasin.sh'), sys.executable, '-c',
+        'import os,json;print(json.dumps({k:os.environ[k] for k in '+repr(sdk_keys)+'}))']
+    run_step(root, 'sdk-export', resolver, crate, env, deadline, 30)
+    sdk = json.loads((root / 'sdk-export.stdout').read_text())
+    expected_sdk = str(Path(config['store']) / base.LIB)
+    assert sdk['RAG3DB_LIBRARY_DIR'] == sdk['RAG3DB_INCLUDE_DIR'] == expected_sdk and sdk['RAG3DB_SHARED'] == '1'
+    env.update(sdk, CARGO_MANIFEST_DIR=str(crate))
+    build = [sys.executable, str(Path(pair['control']) / 'cargo_garde.py'), 'test', '--locked', '--no-default-features',
+        '--manifest-path', str(crate / 'Cargo.toml'), '--features', 'rag3db-native,code', '--test',
+        'sonde_marque_nom', '--no-run', '-j8', '--message-format=json-render-diagnostics']
+    run_step(root, 'compile', build, crate, env, deadline, 600)
+    artifact = choose_artifact((root / 'compile.stdout').read_text(), str(crate / 'tests/sonde_marque_nom.rs'))
+    original = Path(artifact['executable'])
+    assert original.resolve() == original and TARGET in original.parents and original.is_file()
+    (root / 'bin').mkdir(mode=0o700)
+    copied = root / 'bin/probe-executable'
+    shutil.copy2(original, copied)
+    copied.chmod(0o500)
+    elf_sha = base.digest(original)
+    assert base.digest(copied) == elf_sha
+    ledger = {'app': config['source'], 'parser': PARSERS[phase], 'artifact': artifact,
+        'source_executable': str(original), 'copied_executable': str(copied), 'elf_sha256': elf_sha,
+        'sdk': base.LIB, 'sdk_hashes': base.LIB_HASHES, 'corpus_sha256': CORPUS_SHA,
+        'features': sorted(artifact['features']), 'profile': artifact['profile'],
+        'expected_names': ['aretes_par_marque_en_tsv'], 'published_before_any_elf_invocation': time.monotonic()}
+    if phase == 'candidate':
+        prior = json.loads((Path(pair['proofs']) / 'baseline/runtime-ledger.json').read_text())
+        assert ledger['features'] == prior['features'] and ledger['profile'] == prior['profile']
+    save(root / 'build-ledger.json', ledger)
+    wait_publication(pair, phase, 'build', ledger, deadline)
+    run_step(root, 'inventory-all', [str(copied), '--list'], crate, env, deadline, 15)
+    run_step(root, 'inventory-ignored', [str(copied), '--list', '--ignored'], crate, env, deadline, 15)
+    for label in ['inventory-all', 'inventory-ignored']:
+        names = [line[:-6] for line in (root / (label + '.stdout')).read_text().splitlines() if line.endswith(': test')]
+        assert names == ['aretes_par_marque_en_tsv']
+    ledger.update(inventory_sha256=base.digest(root / 'inventory-all.stdout'),
+        ignored_inventory_sha256=base.digest(root / 'inventory-ignored.stdout'),
+        ignored_inventory_names=['aretes_par_marque_en_tsv'], published_before_test=time.monotonic())
+    assert base.digest(original) == base.digest(copied) == elf_sha
+    save(root / 'runtime-ledger.json', ledger)
+    wait_publication(pair, phase, 'runtime', ledger, deadline)
+    save(root / 'runtime-start.json', {'ledger_sha256': base.digest(root / 'runtime-ledger.json'),
+        'elf_sha256': elf_sha, 'observed': time.monotonic()})
+    run_step(root, 'probe', [str(copied), '--exact', 'aretes_par_marque_en_tsv', '--ignored', '--nocapture'],
+        crate, env, deadline, max(1, deadline - time.monotonic()))
     verify(pair, phase)
     check_corpus(pair)
-    if rc == 0:
-        (root / 'output-check.json').write_text(json.dumps(check_outputs(pair, phase), indent=2))
-    return rc
+    assert base.digest(original) == base.digest(copied) == elf_sha
+    save(root / 'output-check.json', check_outputs(pair, phase))
+    assert time.monotonic() < deadline
+    save(root / 'driver-result.json', {'status': 'PROBE_COMPLETED', 'elf_sha256': elf_sha,
+        'end': authority['echeance'], 'finished': time.monotonic()})
+    return 0
+
+
+def outer_command(pair, phase):
+    return [str(Path(pair['control']) / 'poste'), 'lourd', pair['timeout'],
+        '--signal=TERM', '--kill-after=2s', '1798s', sys.executable, '-B',
+        str(Path(pair['control']) / 'pilot.py'), 'compose', '--proofs', pair['proofs'], '--phase', phase]
+
+
+def compose(pair, phase):
+    root = Path(pair['proofs']) / phase
+    started = time.monotonic()
+    deadline = started + 1798
+    spec = importlib.util.spec_from_file_location('probe_common', Path(pair['control']) / 'confiner_validation.py')
+    common = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(common)
+    parent = physical.process_record(os.getppid())
+    assert parent['exe'] == pair['timeout'] and parent['argv'] == outer_command(pair, phase)[2:]
+    deadline = min(deadline, int(parent['start']) / os.sysconf('SC_CLK_TCK') + 1798)
+    assert base.digest(pair['timeout']) == pair['timeout_sha256']
+    assert common.poste_tenu(common.processus())
+    # Deux rôles prouvés ; aucune exemption d'ancêtre, de suffixe FD ou de chemin.
+    controls = [dict(physical.process_record(os.getpid()), role='composer'), dict(parent, role='outer-timeout')]
+    save(root / 'controls.json', controls)
+    save(root / 'outer-supervision.json', {'soft_timeout': 1798, 'kill_after': 2,
+        'common_budget': 1750, 'hardcap_per_phase': 1800, 'max_two_phases': 3600,
+        'started': started, 'timeout_identity': parent})
+    def stop(sig, frame):
+        raise TimeoutError('outer supervision signal')
+    signal.signal(signal.SIGTERM, stop)
+    record = {'verdict': 'ROUGE', 'phase_completed': False, 'phase': phase, 'global_pass': False}
+    try:
+        verify(pair, phase)
+        previous_end(pair, phase)
+        fresh_quiet(pair, phase, root / 'cache-quiet-before-common.json')
+        command = [sys.executable, str(Path(pair['control']) / 'confiner_validation.py'),
+            'lancer', '--delai', '1750', '--preuves', str(root / 'scope'), '--', sys.executable,
+            '-B', str(Path(pair['control']) / 'pilot.py'), 'inside', '--proofs', pair['proofs'], '--phase', phase]
+        rc = base.record(root, 'common', command, root, os.environ.copy())
+        info = json.loads((root / 'authority-path.json').read_text())
+        authority_path = Path(info['path'])
+        authority = json.loads(authority_path.read_text())
+        deadline = min(deadline, authority['echeance'])
+        assert rc == 0
+        completed_scope(root)
+        verdict = json.loads(authority_path.with_name('verdict.json').read_text())
+        assert not Path(info['bus_path']).exists() and not Path(verdict['prive']).exists()
+        verify(pair, phase)
+        counts = check_outputs(pair, phase)
+        ledger = json.loads((root / 'runtime-ledger.json').read_text())
+        assert base.digest(ledger['source_executable']) == base.digest(ledger['copied_executable']) == ledger['elf_sha256']
+        assert json.loads((root / 'driver-result.json').read_text())['status'] == 'PROBE_COMPLETED'
+        assert not (root / 'first-red.json').exists()
+        quiet = physical.owned_quiet(authority_path.parent)
+        save(root / 'owned-after-scope.json', quiet)
+        assert not quiet['alive'] and not quiet['unknown']
+        fresh_quiet(pair, phase, root / 'cache-quiet-final.json', True, authority, verdict['prive'])
+        record.update(verdict='VERT', phase_completed=True, common_rc=rc, counts=counts, deadline=deadline)
+    except BaseException as error:
+        first_red(root, error)
+        record.update(error=repr(error))
+    published = physical.publish_result(root / 'classification.json', record, deadline)
+    return 0 if published['verdict'] == 'VERT' else 1
+
+
+def peer_ack(pair, phase, kind):
+    # Ne jamais ouvrir sur le pair le chemin du target PC contenu dans le ledger.
+    assert socket.gethostname() == pair['peer_host'] and phase in PRODUCTS and kind in ['build', 'runtime']
+    root = Path(pair['proofs']) / phase
+    ledger_path = root / (kind + '-ledger.json')
+    ledger = json.loads(ledger_path.read_text())
+    assert base.digest(root / 'bin/probe-executable') == ledger['elf_sha256']
+    if kind == 'runtime':
+        assert base.digest(root / 'inventory-all.stdout') == ledger['inventory_sha256']
+        assert base.digest(root / 'inventory-ignored.stdout') == ledger['ignored_inventory_sha256']
+    value = {'host': socket.gethostname(), 'phase': phase, 'kind': kind,
+        'ledger_sha256': base.digest(ledger_path), 'elf_sha256': ledger['elf_sha256'], 'copied_and_rehashed': True}
+    pending = root / (kind + '-peer-ack.pending')
+    save(pending, value)
+    os.link(pending, root / (kind + '-peer-ack.json'))
+    pending.unlink()
+    return 0
 
 
 def prepare(args):
-    assert os.uname().nodename.lower() == 'luciepc'
+    assert os.uname().nodename.lower() == 'luciepc' and args.peer_host
     proofs = args.proofs.absolute()
     manifest = TOOL_ROOT / 'docs/codeparsers/16-11-2026/rust-followup/frozen-corpus.json'
-    pair = {'proofs': str(proofs), 'manifest': str(manifest), 'tool_source': args.candidate_source,
+    pair = {'tool_root': str(TOOL_ROOT), 'peer_host': args.peer_host,
+        'physical_guard_sha256': base.digest(HERE / 'physical_guard.py'), 'proofs': str(proofs), 'manifest': str(manifest), 'tool_source': args.candidate_source,
         'driver_sha256': base.digest(__file__), 'helper_sha256': base.digest(PREVIOUS), 'budget_per_phase': 1800,
         'sdk': base.LIB, 'corpus_manifest_sha256': CORPUS_SHA,
         'comparison_sha256': base.digest(Path(__file__).with_name('compare.py')),
@@ -212,6 +453,20 @@ def prepare(args):
     proofs.mkdir(mode=0o700, parents=True, exist_ok=False)
     Path(pair['runtime_profile']).write_text(json.dumps(profile, indent=2))
     pair['runtime_profile_sha256'] = base.digest(pair['runtime_profile'])
+    control = proofs / 'control'
+    control.mkdir(mode=0o700)
+    assert not any(root == control or root in control.parents for root in [TARGET, args.baseline_worktree, args.candidate_worktree])
+    pair['control'] = str(control)
+    sources = {name: HERE / name for name in ['pilot.py', 'physical_guard.py', 'compare.py']}
+    sources['legacy.py'] = PREVIOUS
+    sources.update({name: args.candidate_worktree / 'extension/rag3weaver/scripts' / name
+        for name in ['poste', 'confiner_validation.py', 'cargo_garde.py', 'garde_target.sh']})
+    pair['controllers'] = {}
+    for name, source in sources.items():
+        shutil.copy2(source, control / name)
+        pair['controllers'][name] = base.digest(control / name)
+    pair['timeout'] = str(Path(shutil.which('timeout')).resolve(strict=True))
+    pair['timeout_sha256'] = base.digest(pair['timeout'])
     for phase in PRODUCTS:
         verify(pair, phase)
         (proofs / phase).mkdir(mode=0o700)
@@ -221,55 +476,61 @@ def prepare(args):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['prepare', 'run', 'inside', 'compare'])
+    parser.add_argument('action', choices=['prepare', 'run', 'compose', 'inside', 'compare', 'peer-ack'])
     parser.add_argument('--proofs', type=Path, required=True)
     parser.add_argument('--phase', choices=list(PRODUCTS))
     parser.add_argument('--baseline-worktree', type=Path)
     parser.add_argument('--candidate-worktree', type=Path)
     parser.add_argument('--candidate-source')
     parser.add_argument('--allocation')
+    parser.add_argument('--peer-host')
+    parser.add_argument('--kind', choices=['build', 'runtime'])
     args = parser.parse_args()
     if args.action == 'prepare':
         prepare(args)
         return 0
     pair = json.loads((args.proofs / 'prepared.json').read_text())
+    if args.action == 'peer-ack':
+        return peer_ack(pair, args.phase, args.kind)
     if args.action == 'compare':
+        # Rapport CPU distinct : aucune prétention de l'inclure dans les deux phases natives.
+        assert args.allocation, 'separate explicit offline reporting allocation required'
         for phase in PRODUCTS:
             verify(pair, phase)
             completed_scope(Path(pair['proofs']) / phase)
-        comparison_spec = importlib.util.spec_from_file_location('probe_comparison', Path(__file__).with_name('compare.py'))
+        comparison_spec = importlib.util.spec_from_file_location('probe_comparison', HERE / 'compare.py')
         comparison = importlib.util.module_from_spec(comparison_spec)
         comparison_spec.loader.exec_module(comparison)
         print(comparison.compare_pair(pair, read_edges, check_outputs))
         return 0
     if args.phase is None:
-        parser.error('--phase is required for run and inside')
-    config = verify(pair, args.phase)
-    previous_end(pair, args.phase)
+        parser.error('--phase is required')
+    if args.action == 'compose':
+        return compose(pair, args.phase)
     if args.action == 'inside':
-        return inside(pair, args.phase)
+        try:
+            return inside(pair, args.phase)
+        except BaseException as error:
+            first_red(Path(pair['proofs']) / args.phase, error)
+            raise
+    # Sortir du worktree AVANT de créer un parent persistant ou d'entrer dans poste.
+    control = Path(pair['control']) / 'pilot.py'
+    if Path(__file__).resolve() != control:
+        os.chdir(pair['proofs'])
+        env = dict(os.environ, RUST_PROBE_TOOL_ROOT=pair['tool_root'])
+        os.execve(sys.executable, [sys.executable, '-B', str(control), *sys.argv[1:]], env)
+    verify(pair, args.phase)
+    previous_end(pair, args.phase)
     assert args.allocation and 'RAG3WEAVER_VALIDATION_RECU' not in os.environ
     root = Path(pair['proofs']) / args.phase
-    with (root / 'allocation.json').open('x') as stream:
-        stream.write(json.dumps({'reference': args.allocation}))
-    os.chdir(root)
+    save(root / 'allocation.json', {'reference': args.allocation})
     env = os.environ.copy()
-    env.update(POSTE_MEM_MAX='32G', POSTE_CPU_QUOTA='500%', RAG3WEAVER_BUILD_MEMORY_HIGH='0')
-    command = [sys.executable, str(Path(config['worktree']) / 'extension/rag3weaver/scripts/confiner_validation.py'),
-        'lancer', '--delai', str(pair['budget_per_phase']), '--preuves', str(root / 'scope'), '--',
-        sys.executable, '-B', str(Path(__file__).resolve()), 'inside', '--proofs', pair['proofs'], '--phase', args.phase]
-    rc = base.record(root, 'common', command, root, env)
-    accepted, reason = False, None
-    try:
-        assert rc == 0
-        completed_scope(root)
-        counts = check_outputs(pair, args.phase)
-        accepted = True
-    except (AssertionError, OSError, ValueError, KeyError) as error:
-        counts, reason = {}, repr(error)
-    (root / 'classification.json').write_text(json.dumps({'phase_completed': accepted, 'common_rc': rc,
-        'phase': args.phase, 'counts': counts, 'reason': reason, 'global_pass': False}, indent=2))
-    return 0 if accepted else 1
+    env.update(POSTE_MEM_MAX='32G', POSTE_SWAP_MAX='0', POSTE_CPU_QUOTA='500%',
+        RAG3WEAVER_BUILD_MEMORY_HIGH='0', RUST_PROBE_TOOL_ROOT=pair['tool_root'])
+    # Comme af11 : aucun scan, hash ou verdict après le retour de l'enfant borné.
+    with (root / 'outer.log').open('x') as out:
+        return subprocess.run(outer_command(pair, args.phase), cwd=pair['proofs'], env=env,
+            stdout=out, stderr=subprocess.STDOUT).returncode
 
 
 if __name__ == '__main__':
