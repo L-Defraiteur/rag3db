@@ -93,3 +93,42 @@ reste dans le budget ORIGINAL5 (pas5+5), rc0, sortie complète et stderr vide.
 Le premier stdout doit porter application_name=`g-pg-<nonce>` ; le postcheck
 n'atteste pas sa propre absence à sa sortie : quiet/reap porte TOUT le client
 hôte, dont cette seconde invocation. Toute quiescence inconnue refuse.
+
+## API stable, source pure à importer
+
+`pg_receipt.validate_receipt(receipt, *, expected, ready, now, read_raw,
+admission=True, admitted_at=None)` : version pure, ValueError au refus.
+`validate_attestation(path, expected_sha, expected_allocation, ready, now, *,
+admission=True, admitted_at=None)` : ajoute lecture bornée/UID/type/SHA du JSON
+et de ses bruts DANS le même dossier, aucun lien ni chemin de données externe.
+Retour : receipt validée, sans fabriquer un grant.
+
+`ready` est un contexte PG normalisé de CINQ clés exactement :
+`issued_monotonic, admission_deadline_monotonic, common_end_monotonic,
+active, first_red`. Issu du READY/phase98ab relus par le caller ; aucune nouvelle
+vérification de phase kernel/proc n'est inventée par ce module offline.
+
+`expected_allocation` a QUINZE clés exactement :
+`app,pilot,scope,c7_reference,g_reference,reservation_reference,nonce,
+ready_sha256,topology,children_policy,tool_qualified,allocation_active,
+sql_identity,observer_source_sha256,client_bundle_sha256`.
+`sql_identity` a les onze clés sql sauf backend_pid/application_name : toutes
+proviennent d'une attente G/C7 explicite, jamais apprises par le validateur.
+
+À admission=True, fraîcheur<=120 à now et admission AVANT deadline READY.
+Après canonique, admission=False EXIGE admitted_at fiable du grant initial
+(lié aux pins.admitted_monotonic et grant.observed par owner/R). La fraîcheur
+et deadline READY s'évaluent à CET INSTANT INITIAL ; phase, firstred et lease
+restent évalués à now. Aucun nouveau SQL, END ou TTL réinitialisé.
+
+`publish_observation(target, receipt, raw, *, expected, ready, clock, phase_check)`
+est un assembleur de pièces capturées par un observateur EXTERNE, pas une probe.
+raw a quatre clés bytes : sql-out/sql-err/check-out/check-err. Il crée un dossier
+exclusif, conserve les bruts bornés avant jugement, refuse partial/rc/SHA erronés,
+revalide phase/budget avant puis APRÈS fsync et avant lien exclusif final.
+Retour : (artifactpath,SHA). Refus : captures + refusal.json immuables, pas de
+path/SHA admissible fourni au caller. Un échec d'E/S après publication est
+explicitement enregistré, jamais effacé ; caller doit exiger le retour réussi.
+`phase_check` fournit le contexte courant sans changer les trois bornes initiales.
+`prepare_observation()` renvoie HOLD/run_authorized=false : aucun runner natif
+réel n'existe ici, sa qualification et ses pins restent un prérequis distinct.

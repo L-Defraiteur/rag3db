@@ -119,8 +119,7 @@ class ReceiptTests(unittest.TestCase):
         self.setUp();self.ready['active']=False;self.reject()
 
 
-class ArtifactTests(ReceiptTests):
-    # Ne pas hériter les onze tests : chargement explicite de ce sous-ensemble ci-dessous.
+class ArtifactTests(unittest.TestCase):
     def setUp(self):
         ReceiptTests.setUp(self)
         self.temp = tempfile.TemporaryDirectory()
@@ -204,7 +203,4 @@ class ArtifactTests(ReceiptTests):
         self.assertEqual(result['nonce'],self.body['nonce'])
 
 
-# Réutiliser seulement le setUp pour les faux disque, sans rejouer les tests hérités.
-ArtifactTests = type('ArtifactTests',(unittest.TestCase,),dict(
-    (name,value) for name,value in ArtifactTests.__dict__.items() if name not in ('__dict__','__weakref__')))
 if __name__=='__main__':unittest.main(verbosity=2)
