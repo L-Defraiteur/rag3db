@@ -95,3 +95,13 @@ imposée par `builtin_templates::state_root` sous cfg(test).
 Aucun comportement de production modifié, aucun verdict de compilation ou
 d'exécution ; seul `git diff --check` a été contrôlé. Le correctif de
 renouvellement reste NON ÉCRIT avant le rouge exécuté.
+
+## Reprise après livraison TIES : audit avant nouveaux témoins
+
+InstructionC7 de reprise aprèsmasterd395 etnettoyageTIESlivrés. WIPc642b40db2acccaab89ea5b186b97d87f29b998c propre, deux fonctions NONJOUÉES. Nouvellebranche/WT cx-ed-vertex-token-refresh-r3/rag3db-cx-ed-vertex-token-refresh-r3, basefetch **df2a5789888d16247f0dad42dcdaa3c4ceea2094**, rebase3patches= sansconflit, têtepréparatoire156986b340bcdfcdb56792a30bfd2cfc156bf281. Aucun delta des trois sources model_source.rs/openai_llm.rs/gcp_auth.rs entrebase685 etdf2 ; rechercheGit tousbranches : pas de correctif authVertex concurrent identifié. Pas de travail Claude dupliqué établi ; tout nouveau delta fera arrêter pour relecture.
+
+Embarquement confirme sa zone disjointe : model_source/activation.rs uniquement DenseTenu::called_address etsonjuge, plusratekeyembedder/catalog/progress/daemonembeddings ; aucuneéditionconnect_llm/openai_llm/gcp_auth de sonlot07731af482ac0ed65ae3775e49900215d40ee2bf. ED réserve précisément connect_llm brancheVertex, Auth/constructeurVertex/envoiHTTP401 etcapacitéTokenSource si nécessaire, pas le module entier ni un service. Aucun fichier de sonW/T/pilote touché.
+
+AVANTnouveaudiff : compléter le scénario de test par un serveur toujours401, un juge du refuspersistant (UNE invalidation/deuxrequêtes/erreurnommée) etdeuxgarde-fous positifs (BearerAPIfixe401sansrepriseauth ; SSEdéjàouvert puis401dansfluxsansrejeu ni fragmentsdupliqués). Les deux juges existants etces3nouveaux restent NONJOUÉS. Aucun correctif de production avantpremierrougeréel ; sourcefakepréserve sa frontière explicite de snapshot, raccordproductionconnect_llm/source retenue àfaireaprèsrouge. AucunvraiTokenSource::from_env ni cloud/clé/credential ne sera appelé par lesfakes.
+
+Recette rouge bornée àmatérialiser séparément : poste32G/HIGHmax/quotaPARPLACE/j8, TMPcourtprivédisk etétatsfrères, cachemagasin59réel/pin2150 vérifiés, targetsessionneuf (ancienTIESsupprimé). CompilationCPUdaemon+openai-llm sansnative, inventaire5fonctions/features/copieELF/ledgerpubavanttest ;positifsbornés puis premierrouge transportexact attendu STOP, sansretry ni patchautomatique. PasdeGOexécutiondéduit, aucunCargo/rustc/test/serveurfake/target créés àcettepréparation. C7 arbitre budget/recetteexacte avant lancement. F300resteaubanc horspérimètre.
