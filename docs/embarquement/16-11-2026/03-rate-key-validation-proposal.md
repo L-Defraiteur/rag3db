@@ -88,3 +88,24 @@ Ne pas élargir à la mesure par passe, à la table complète des débits ou au 
 six secondes. Toute erreur nouvelle est tracée avant correction/reprise. Un
 code différent de la source qualifiée doit être relu et rejoué selon la garde.
 Aucun push master sans nouveau « à toi » après qualification.
+
+
+## Lanceur préparé, pas exécuté
+
+Les sources du lanceur sont `rate-key/run-qualification.sh` et
+`rate-key/qualify.py`. La commande suivante est une recette future : aucun
+appel tant que le créneau Rust et les usages de la passe ne sont pas accordés.
+Sur le W synchronisé à luciepc, remplacer SOURCE par la tête complète revue :
+
+```bash
+bash docs/embarquement/16-11-2026/rate-key/run-qualification.sh SOURCE
+```
+
+Le lanceur acquiert lui-même `poste lourd`, puis crée la portée5400 s. Le
+pilote vérifie les hashes source/cache du pin, la source propre, le target et
+ses références lisibles, compile un seul ELF de tests, inventorie et joue
+chacun des neuf noms exacts avec compte1/0/0, puis appelle la passe officielle
+sans réinitialiser le délai. `result.json` ne dit VERT qu'après la passe entière.
+Les descripteurs illisibles restent nommés inconnus ; aucune suppression du
+cache, aucun signal envoyé à un processus, aucune ouverture des bases de Lucie.
+Seuls AST Python, syntaxe shell et diff --check ont été contrôlés à ce stade.

@@ -129,7 +129,7 @@ try:
     run('official-pass', ['bash', str(script), W.name, P.name, TESTS[0].rsplit('::', 1)[1]],
         extra=dict(CIBLE=T.name, SUITE_DU_TEMOIN='lib', SUITES='e2e_code_sync,e2e_lectures,e2e_embarqueur_a_la_demande'))
     summary = (P/'resume.log').read_text().splitlines()
-    assert summary and summary[0].startswith('commit '+SOURCE[:10]) and summary[-1] == 'VERT'
+    assert summary and summary[0].startswith('commit '+git('rev-parse', '--short', 'HEAD')+' ') and summary[-1] == 'VERT'
     assert (P/'base').read_text().strip() == git('merge-base', 'HEAD', 'origin/master')
     verdict = 'VERT'
 finally:
