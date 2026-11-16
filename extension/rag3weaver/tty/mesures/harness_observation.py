@@ -23,7 +23,7 @@ def approval_and_end(posts, mailbox, state):
 class PhaseLog:
     def __init__(self, path):
         self.path = Path(path)
-        self.lock = threading.Lock()
+        self.lock = threading.RLock()
         self.screen_count = 0
         self.record('phase-created', {}, sync=True)
 
