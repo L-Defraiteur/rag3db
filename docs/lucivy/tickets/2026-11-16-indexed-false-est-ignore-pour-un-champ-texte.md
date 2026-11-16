@@ -468,3 +468,10 @@ PropositionDURE300(TERM295+kill5),validation285postPosteinclpréflight/Commonres
 3ELFcompileonly+ledger/inventAVANT9exactsMemory. ActionROBancsurNOUVEAU
 paquetvertavantGOdistinctC7, sansCargo/ELF/proc/base/service ; nepasattendre
 l’ancienneROsource ou réactiverGO615. AucunvertRust observé àcestade.
+
+ROBanc014d5c7fb3 nouveaupaquetvert e39cc/APP1ee5/6c701/admit22550/préflight277a
+favorablePRÉPA sansautrebloqueurstatique,5SHApreuves/6sourcesGit/9nomsconformes,
+budgets285/300etgardesASTvalidés. AucunCargo/mock/ELF/proc/base/service parBanc.
+SourceRechercheetpaquetBancfavorables : dépendancesROlevées, statutportéàC7
+pourGOexactdistinct ; neuf jugesRust et finCommon/owned encoreNONobservés.
+AucunancienGO615réactivé,corefalse/9HOLD/ULP7.2/PR42préservés.
