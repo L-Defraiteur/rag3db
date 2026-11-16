@@ -32,3 +32,5 @@ Pilote rouge concret séparé publié avant admission : [recette05](../16-11-202
 ## Réserve Mémoire du pilote0bf, avant correctif
 
 La classification finale EXPECTED_RED n'exige pas scope.code101, ne transforme pas authority_terminated en condition, ne vérifie pas la disparition physique du bus ni une borne fraîche après contrôles/prépublication. Un arrêt après le rouge du driver pourrait être classé attendu à tort. Réserve consignée avant toute correction : témoin hermétique sur le vrai bloc de finalisation, puis contrôle code101/autorité terminée/bus absent/deadline fraîche. Aucun vert global à fabriquer, first-red et journaux conservés ; pilote0bf non admis/non lancé. Sourceea670 inchangée.
+
+Réserve finale pilote traitée : vrai bloc finaliseur AST publiéde844 puis rouge scope.code1 ; correctif207248 publié puis7fonctionsCPUhermétiquesvertes0,035s. Autoritéterminée/busabsent/code101/retourexterne1 et bornes posthash/prépublication stricts. Aucun test Rust encore joué ; sourceea670 et sa baseline sans superviseur intactes, rouge déterministe natif reste à observer avant fixer le refus de fixture.
