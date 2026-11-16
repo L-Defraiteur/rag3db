@@ -567,3 +567,19 @@ lui fournit client::lire_brut ; spy de la route et completion réelle pour4forme
 partielles FR/EN. Le branchementFR est volontairement intact, aucun fix anglais.
 NON JOUÉ, aucun Cargo/HTTP/metadata. CouponROUGE600 proposé, pilote exact et
 RO/GO distinct requis ; F8old6d ne qualifie pas cette union avec4entrantsVertex.
+
+### Pilote rouge du vrai collecteur, avant RO/GO
+
+Nouveaux tab_red.py/admit/driver : coupon600s total/file+Common+final/pub sous
+watchdog extérieur déjà qualifié,32G/j4, un test cratevue exact/spyroute,
+aucun HTTP serveur/7970/SDK/provider. Préparation : nouveauW99/sourcepropre,
+target unique ancienWownercapturé/ledger/quiet/reçu934TERMINE et archive des
+empreintes locales avant toute adoption. Garde commune via cargo_garde réel
+sous poste vers nouveauWtty ; pas de .arbre forgé ni nouveau target.
+
+Classifier ne confirme le rouge que si Compiling depuis nouveauW et1test joué,
+rc101/0passé/1échoué/0ignoré/cause catalogue request for /task mes. Toute erreur
+de préparation/compilation n'est pas le rouge attendu. Nouveau testELFhash et
+reçuTERMINÉ/restes[] conservés, composé ROUGE attendu/exit1, jamais un VERT.
+F8old6d/ELFcb24 sont exclusivement historiques, jamais juge de l'union99.
+NON JOUÉ ; source/pilote/paquet RO puis GO C7distinct obligatoires avant Cargo.
