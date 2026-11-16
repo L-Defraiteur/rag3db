@@ -235,6 +235,9 @@ def main():
     for number, name in enumerate(TESTS, 1):
         result = run([str(executable), '--exact', name, '--nocapture'], f'test-{number}.log')
         assert 'running 1 test' in result and re.search(r'test result: ok\. 1 passed; 0 failed; 0 ignored;', result)
+    post_scan = quiescence(admission)
+    (output / 'post-scan.json').write_text(json.dumps(post_scan, indent=2))
+    assert hashlib.sha256((target / 'validation-provenance.json').read_bytes()).hexdigest() == admission['target_creator_sha256']
     hashes = {file.name: hashlib.sha256(file.read_bytes()).hexdigest() for file in output.iterdir() if file.is_file()}
     (output / 'hashes.json').write_text(json.dumps(hashes, indent=2))
     executable_sha = hashlib.sha256(executable.read_bytes()).hexdigest()
