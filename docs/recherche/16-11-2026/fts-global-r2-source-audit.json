@@ -1,0 +1,19 @@
+{
+  "base": "b0a845bb4877328eada37951c174e3d208986630",
+  "app": "84ddeb88b7452278b0d697fad817c7e44f5fd3d3",
+  "union": "5f59dd88a2888199c5ad934f72f0debed4ba2a49",
+  "fetch_master": "b0a845bb4877328eada37951c174e3d208986630",
+  "non_doc_changed": [
+    "extension/rag3weaver/src/catalog.rs",
+    "extension/rag3weaver/src/code_sync.rs",
+    "extension/rag3weaver/src/code_sync_fts_guard_double_tests.rs",
+    "extension/rag3weaver/src/fts_existing.rs",
+    "extension/rag3weaver/src/lib.rs"
+  ],
+  "cfg_fix_only": [
+    "extension/rag3weaver/src/code_sync_fts_guard_double_tests.rs"
+  ],
+  "master_protected_entries_and_absences": 6913,
+  "master_protected_differences": [],
+  "union_product_other_paths_identical": true
+}
