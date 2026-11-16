@@ -61,6 +61,23 @@ class HarnessBudgetTests(unittest.TestCase):
             self.assertLess(time.monotonic()-started,1.0,'finalization ran outside the actual outer watchdog')
             self.assertNotEqual(result.returncode,0)
 
+    def test_actual_main_execs_watchdog_and_does_no_finalization_after_it(self):
+        from unittest.mock import patch
+        class ExecIntercept(Exception):
+            pass
+        captured = {}
+        def intercept(program, argv):
+            captured.update(program=program, argv=argv)
+            raise ExecIntercept()
+        argv = ['harness_only.py','--source','fixture','--allocation','hermetic-only']
+        with patch.object(sys,'argv',argv), patch.object(harness_only.os,'execv',side_effect=intercept):
+            with self.assertRaises(ExecIntercept):
+                harness_only.main()
+        self.assertEqual(captured['program'],'/usr/bin/timeout')
+        self.assertIn('--worker',captured['argv'])
+        self.assertIn(str(harness_only.Q/'harness_only.py'),captured['argv'])
+        self.assertEqual(captured['argv'][-3],'--worker')
+
 
 if __name__=='__main__':
     unittest.main()

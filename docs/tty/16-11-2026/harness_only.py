@@ -14,9 +14,9 @@ from launch_full import publish_result
 R = Path.home() / '.cache/rag3weaver-build'
 W = Path.home() / 'git_workspaces/cx-tty-english-aliases'
 T = R / 'target-cx-tty-english-aliases-2'
-Q = R / 'cx-tty-harness-only-controller-v1'
-P = R / 'cx-tty-harness-only-v1'
-S = R / 'cx-tty-harness-only-common-v1'
+Q = R / 'cx-tty-harness-only-controller-v2'
+P = R / 'cx-tty-harness-only-v2'
+S = R / 'cx-tty-harness-only-common-v2'
 PRODUCT = '6d886375ea4627c88d28aef918b948a23f628ab1'
 BUDGET = 1200
 
@@ -29,18 +29,28 @@ def production_identity():
     return changed
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--source', required=True)
-    parser.add_argument('--prepare-only', action='store_true')
-    parser.add_argument('--allocation')
-    args = parser.parse_args()
+def outer_watchdog_command(worker, source, allocation, started, budget=BUDGET, grace=5):
+    remaining = started + budget - time.monotonic()
+    margin = min(1.0, budget / 10)
+    soft = remaining - grace - margin
+    assert soft > 0, 'allocation expired before watchdog entry'
+    return ['/usr/bin/timeout', '--signal=TERM', f'--kill-after={grace}s', f'{soft:.6f}s',
+            sys.executable, '-B', str(worker), '--source', source, '--allocation', allocation,
+            '--worker', '--started', f'{started:.9f}']
+
+
+def allocation_worker(args):
+    if not args.prepare_only:
+        assert args.started is not None and args.allocation
+        parent = Path('/proc') / str(os.getppid())
+        assert (parent / 'exe').resolve() == Path('/usr/bin/timeout').resolve(), 'worker must be inside the outer OS watchdog'
+        assert args.started <= time.monotonic() < args.started + BUDGET
     require_source(W, args.source)
     changed = production_identity()
     assert not any(path.exists() or path.is_symlink() for path in [P, S])
     if args.prepare_only:
         Q.mkdir(mode=0o700)
-        old = R / 'cx-tty-aliases-continuation-common-v1/validation-flsb10fe'
+        old = R / 'cx-tty-aliases-continuation-common-v2/validation-flsb10fe'
         authority = json.loads((old / 'autorite.json').read_text())
         verdict = json.loads((old / 'verdict.json').read_text())
         assert authority['etat'] == 'termine' and verdict['restes'] == [] and verdict['nettoye']
@@ -87,7 +97,7 @@ def main():
         tmux = Path(shutil.which('tmux'))
         config = dict(source=args.source, product=PRODUCT, changed_harness_only=changed,
                       host=os.uname().nodename, worktree=str(W), target=str(T), proofs=str(P), scope=str(S),
-                      budget=BUDGET, controllers=hashes, carried=carried, sdk=sdk_hashes,
+                      budget=BUDGET, outer_watchdog={'path':'/usr/bin/timeout','sha256':digest('/usr/bin/timeout'),'grace':5,'entry_margin':1}, controllers=hashes, carried=carried, sdk=sdk_hashes,
                       elf=str(elf), elf_sha=elf_sha, ledger_sha=digest(Q / 'target-ledger.json'),
                       tmux={str(tmux):digest(tmux)}, old_expired_end=852082.791694931,
                       purpose='HARNESS ONLY; F8 and build carried, no lost run requalified')
@@ -101,7 +111,8 @@ def main():
     require_hashes(config['carried'])
     require_hashes(config['sdk'])
     assert digest(Q / 'target-ledger.json') == config['ledger_sha']
-    start = time.monotonic()
+    require_hashes({config['outer_watchdog']['path']:config['outer_watchdog']['sha256']})
+    start = args.started
     end = start + BUDGET  # new run only, not a continuation of the expired original run
     with (Q / 'allocation.json').open('x') as output:
         json.dump(dict(reference=args.allocation, start=start, end=end), output)
@@ -112,7 +123,7 @@ def main():
     try:
         command = [str(Q / 'poste'), 'lourd', sys.executable, str(Q / 'harness_only_admit.py')]
         (Q / 'outer-command.json').write_text(json.dumps(command))
-        rc = subprocess.run(command, env=env, timeout=max(1, math.floor(end-time.monotonic()))).returncode
+        rc = subprocess.run(command, env=env).returncode
         receipt = json.loads((P / 'authority-path.json').read_text())
         authority = json.loads(Path(receipt['path']).read_text())
         scope = json.loads((Path(receipt['path']).parent / 'verdict.json').read_text())
@@ -136,6 +147,23 @@ def main():
     print(record['verdict'], Q / 'composed-verdict.json')
     if record['verdict'] != 'VERT':
         raise SystemExit(1)
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--source', required=True)
+    parser.add_argument('--prepare-only', action='store_true')
+    parser.add_argument('--allocation')
+    parser.add_argument('--worker', action='store_true', help=argparse.SUPPRESS)
+    parser.add_argument('--started', type=float, help=argparse.SUPPRESS)
+    args = parser.parse_args()
+    if args.prepare_only or args.worker:
+        return allocation_worker(args)
+    assert args.allocation, 'a fresh exact C7 allocation is required'
+    started = time.monotonic()
+    command = outer_watchdog_command(Q / 'harness_only.py', args.source, args.allocation, started)
+    # No hashing, finalization or verdict write follows this exec in the ultimate entry.
+    os.execv(command[0], command)
 
 
 if __name__ == '__main__':
