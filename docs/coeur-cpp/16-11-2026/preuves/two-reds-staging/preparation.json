@@ -1,0 +1,73 @@
+{
+  "status": "STAGED ONLY; NO ADMISSION OR NATIVE RUN",
+  "utc": "2026-11-16T16:42:00.650048+00:00",
+  "pilot_commit": "50e2f6bfe0d04cf787977170a465d924fbfef469",
+  "directory": "/home/lucied/.cache/rag3weaver-build/cx-two-reds-01",
+  "scratch": "/home/lucied/.cache/rag3weaver-build/cx-coeur-two-reds",
+  "scratch_empty": true,
+  "raw_and_resume_absent": true,
+  "unit_state": "LoadState=not-found\nMainPID=0\nControlGroup=\n",
+  "variants": [
+    {
+      "name": "candidate",
+      "source": "ed0c3c8af57f25e83ae5c4ba004ae3393e77812e",
+      "engine": "888c81825e4cd6556261233f0e238af3b95375c9",
+      "ref": "refs/heads/cx-coeur-two-reds-diagnostic",
+      "dictionary_sha256": "8e711cf9808dfefb2c2e12a4f343999057a380bf98e5526929506e99cec014f1"
+    },
+    {
+      "name": "reference",
+      "source": "75a4ba4d467aa5f07ef83494f5393154ab2392c6",
+      "engine": "59ac9c86bc2b3529b590a7462ab7051e3ad26b8a",
+      "ref": "refs/heads/cx-coeur-two-reds-baseline",
+      "dictionary_sha256": "6a33b5ac833a296f60de6f72d976a27ac153ea329bc076cc573ac469d84261d6"
+    }
+  ],
+  "files": [
+    {
+      "path": "controller.py",
+      "sha256": "af4f0afbe47917dc9c54b90b7ad7e6bb5c2f6da33e389ce4a86a7643f733d45d",
+      "bytes": 10410
+    },
+    {
+      "path": "entry.py",
+      "sha256": "5a5795b97c6eb745a1c4929e2057e1e754a6b76d7592fd3da2a3a5f2430c755e",
+      "bytes": 8408
+    },
+    {
+      "path": "launch.sh",
+      "sha256": "7cb69f0ff68ef28e214e309f492a13483c04108c53162ef505ed6b895874b29c",
+      "bytes": 594
+    },
+    {
+      "path": "processes.py",
+      "sha256": "45f62ef55dd5722c86600d5719e9389aaf6030912a64e63247fdff7e73d8e51f",
+      "bytes": 4018
+    },
+    {
+      "path": "receipt.py",
+      "sha256": "87bceeb51c2f53c6063d369ee9983393f14a0c9a6f611cc645b4c379b1df5987",
+      "bytes": 4131
+    },
+    {
+      "path": "test_driver.py",
+      "sha256": "01524594eeee44218a90ac36a63c81034d2b9254ccbb14ba3b50c2bdd44a2ddd",
+      "bytes": 8434
+    },
+    {
+      "path": "recipe.json",
+      "sha256": "688ae35b772f315eb8c64252486eaa418dc5486569becf19d1aecd565187c70b",
+      "bytes": 2770
+    },
+    {
+      "path": "source.bundle",
+      "sha256": "fd095660bba5ca3a762739ccbfe8a4cbaadaea4fab8f745bd4071ac7d94ca2dc",
+      "bytes": 324970
+    }
+  ],
+  "bundle_verified": true,
+  "configure_build_native_tests": false,
+  "poste_acquired": false,
+  "reservation": false,
+  "command_after_distinct_go": "bash /home/lucied/.cache/rag3weaver-build/cx-two-reds-01/launch.sh"
+}
