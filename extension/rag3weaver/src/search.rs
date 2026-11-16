@@ -547,6 +547,27 @@ impl Default for SearchOptions {
 /// A single search result.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+/// **The stable order of results**: the score, then an identity that neither the base nor its history gives (lucivy's
+/// ticket of 16 November 2026). An occurrence is told apart by its path, its first line and its name — its uuid carries
+/// `_depuis` under generations, so a rewritten base and a fresh one give the same row two uuids. A result without a
+/// path (a content version, an entity of another kind) by its uuid, which its content or its key gives.
+pub fn stable_order(a: &SearchResult, b: &SearchResult) -> std::cmp::Ordering {
+    b.score.total_cmp(&a.score).then_with(|| stable_identity(a).cmp(&stable_identity(b)))
+}
+
+fn stable_identity(r: &SearchResult) -> (String, i64, String, String) {
+    let field = |k: &str| r.data.as_ref().and_then(|d| d.get(k));
+    match field("file_path").and_then(|v| v.as_str()) {
+        Some(path) => (
+            path.to_string(),
+            field("start_line").and_then(|v| v.as_i64()).unwrap_or(-1),
+            field("name").and_then(|v| v.as_str()).unwrap_or_default().to_string(),
+            r.uuid.clone(),
+        ),
+        None => (String::new(), -1, String::new(), r.uuid.clone()),
+    }
+}
+
 pub struct SearchResult {
     pub uuid: String,
     pub score: f64,
@@ -1532,7 +1553,7 @@ pub fn resolve_vector_chunks_admitted(
                 chunks: Some(acc.chunks),
             }})
             .collect();
-        resolved.sort_by(|a, b| b.score.total_cmp(&a.score).then_with(|| a.uuid.cmp(&b.uuid)));
+        resolved.sort_by(stable_order);
         return Ok(resolved);
     }
 
@@ -1579,7 +1600,7 @@ pub fn resolve_vector_chunks_admitted(
             chunks: None,
         })
         .collect();
-    resolved.sort_by(|a, b| b.score.total_cmp(&a.score).then_with(|| a.uuid.cmp(&b.uuid)));
+    resolved.sort_by(stable_order);
     Ok(resolved)
 }
 
@@ -1658,7 +1679,7 @@ pub fn project_occurrence_results(
         }
     }
     let mut result: Vec<_> = projected.into_values().collect();
-    result.sort_by(|a, b| b.score.total_cmp(&a.score).then_with(|| a.uuid.cmp(&b.uuid)));
+    result.sort_by(stable_order);
     Ok(result)
 }
 
@@ -1956,7 +1977,7 @@ pub fn search_bm25_chunked(
         finish_bm25_chunked(conn, dialect, target, hits, return_fields, result_mode, diagnostics, warnings)?;
     // The cut, on a stable order: the score, then the uuid, which the content or the key gives and the base does
     // not (lucivy's order of ties is the documents' address).
-    sortie.sort_by(|a, b| b.score.total_cmp(&a.score).then_with(|| a.uuid.cmp(&b.uuid)));
+    sortie.sort_by(stable_order);
     sortie.truncate(limit);
     marquer_la_confiance(query, &sortie, warnings);
     Ok(sortie)
