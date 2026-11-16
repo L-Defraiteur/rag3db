@@ -127,3 +127,14 @@ L'ancien GOvert2/2 est consommé, pas réactivé. Source/pilote restent à propo
 Les roots/TSV historiques sont retrouvés et hashés :290rw/1550engine,
 14sites =18couples de scopes identifiés, pas une nouvelle exécution ni14liens
 justes postulés. Profil baseline/candidat, miroir PC et budgets sonde restent à fixer.
+
+## Complément vert effectivement joué sur118cc71
+
+Allocation neuve C7-RUST-FOLLOWUP-118-16nov : mots vides Rust1/1, helper UTF8/colonnes1/1,
+filets natifs2/2 et toute suite e2e_usages41/41,0échec/0ignoré. Les quatre témoins
+stdseul/motJS/deuxordres sont vus exécutés. Scopek4rax94q terminé VERT/code0/
+erreur null/restes[]/nettoyé ; preuves et trois ELF figés aux deux postes,
+classificationSHAb6c3da20f98fe5705e1dbfa36d4c0021a1a289b8b3cae21bb9f96941e43c412d.
+Rapport rust-followup/02-resultats-unites-et-usages.md. Ce ticket reste ouvert :
+sonde14sites/18couples, intégration fraîche et passe complète encore non jouées,
+REGLES7 maintenue. Aucun ancien GO réactivé ni push master.
