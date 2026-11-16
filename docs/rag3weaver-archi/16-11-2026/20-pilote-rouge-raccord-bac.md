@@ -155,3 +155,12 @@ produit ni une preuve verte sous1935. Recette/politique/constantes finales
 1935 cohérentes ; MINENDcommon/ENDsoft par phase et final≤120/solde conservés.
 Publication du pin final précède l'unique sixCPU renouvelé et la préparation
 Git/QPC déjà autorisée ; aucun GO natif.
+
+Après publicationd195d902f7 et renouvellement explicite C7 : UNIQUE rejeu
+sixCPU timeout60/failfast, **6/6 en0,002s unittest**,0,062632786s enveloppe,
+rc0. Constructor TERM1920/KILL15/HARD1935, MINENDphase et finalsolde y sont
+jugés ; les autres frontières du harnais/environnement/postopen passent.
+RAW/codeversions horsW `cx-archi-doc-bac-red-cpu-d195`, manifesteSHA
+`062a4584a710214695b9d54e3ab61807178125326869336658a5fd35e435b69b`.
+Ancien rouge08523/e4bbdc inchangé, contrat1920dur remplacé explicitement.
+Pas de résultat natif, de garde réelle ou d'autorité consommée.
