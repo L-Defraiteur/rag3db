@@ -140,3 +140,27 @@ ensemble, puis le relevé.
 Les scripts sont dans `~/.cache/rag3weaver-build/` : `parity-migration.sh`, `b-prime.sh`,
 `b-prime-signals.sh` et `vec-cmp.py`. Le juge de pertinence est
 `~/.cache/rag3db-banc-notes/compaction/j_relevance.py`.
+
+## 10. Ajout, 6 h : l'histoire au plein texte, prouvée par l'élagage
+
+Le banc avait élagué une copie du lot de l'écrivain (794b14232), sur la base de test
+`code-rag3db-depot`. Il en avait retiré les 14 935 versions sans aucune occurrence ouverte, avec
+leurs morceaux et leurs arêtes, puis rebâti leur plein texte depuis les lignes. Le juge rendait alors
+un rappel de 0,668 contre l'index neuf, et un cas vide (`read_text · src/include/`). Ce juge
+cherchait avec 794b14232, avant le correctif « tout visible » d'ED (209bc299b9). Sur une base
+rouverte, ce code admettait les scopes fermées.
+
+Les trois mêmes bases ont été relues par master 11878bf6d2, chacune sur une copie neuve, avec le
+même manifeste, en bm25 seul :
+
+| | rappel à 10 | même premier | même classement |
+|---|---|---|---|
+| neuf contre élagué | 289 / 289 = 1,000 | 30 / 30 | 30 / 30 |
+| neuf contre lot | 260 / 289 = 0,900 | 25 / 30 | 8 / 30 |
+
+- Le cas vide a disparu. Sur la paire neuf/élagué, 257 scores sur 289 sont égaux au bit près ; les
+  autres diffèrent d'au plus 7,6e-6, sans changer un seul rang.
+- **L'écart entre un lot et un index neuf vient tout entier des versions fermées, que le plein
+  texte compte encore** : les retirer rend le classement du neuf, au rang près. C'est la cause (1)
+  du § 3, celle que lucivy 4.3.9 doit effacer sans élaguer.
+- Le 0,668 d'avant venait du défaut « tout visible », pas de l'élagage.
