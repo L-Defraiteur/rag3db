@@ -21,3 +21,9 @@ Publier les témoins avant le correctif : index absent (aucun dossier créé), c
 ## Limites et qualification
 
 Aucun Cargo/rustc/test Rust lancé ; témoins à écrire puis publier, donc aucun rouge observé à ce stade. Attendre pin G exact avant toute compilation. Inventaire RO d’Arbre distinct de l’implémentation Recherche ; un seul éditeur Catalog. Aucun service/base réelle/purge. Qualification à coordonner sous poste, premier rouge conservé ; aucun ancien GO réactivé.
+
+## Témoins publiés avant implémentation — base68590270
+
+Branche neuve `cx-recherche-fts-existing-only-r2`, W `cx-wt-recherche-fts-existing-only-r1` : aucun produit counts embarqué. Cinq fonctions `catalog::tests::existing_fts_*` appellent la vraie entrée `fts_live_ids` avec index privé Files Lucivy, deux lectures identiques, inventaire intégral avant/après ; cas absent, corrompu, générations divergente/illisible, alias public et autre cellule. Setup writer strictement limité à la construction de fixture, fermé avant observation. Connexion Callback fournit la marque de base, pas un moteur natif ni un décodage simulé. Tous NON JOUÉS ; aucun rouge observé. Refus promesse/erreur IO et validation typée à compléter avant qualification finale.
+
+Recette proposée à C7 : fenêtre CPU/native petite 1200s uniques, compilation témoin plafonnée900s sous poste32GiB/j8/HIGHmax, exécution filtre `catalog::tests::existing_fts_`120s au plus ; premier rouge conservé (attendu sur source avant correctif), pas de retry. Même target Recherche après garde commune, aucun SDK ancien, pin685/lib59ac exact, aucune base/service/modèle. Source rouge figée avant correction ; seconde admission distincte pour vert après revue du diff. Aucun lancement avant accord de recette et slot.
