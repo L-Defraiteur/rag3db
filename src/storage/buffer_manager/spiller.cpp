@@ -71,8 +71,10 @@ SpillResult Spiller::spillToDisk(ColumnChunkData& chunk) const {
     auto dataFH = getOrCreateDataFH();
     auto pageSize = dataFH->getPageSize();
     auto numPages = (buffer.buffer.size_bytes() + pageSize - 1) / pageSize;
+    std::unique_lock lock{fileMtx};
     auto startPage = dataFH->addNewPages(numPages);
     dataFH->writePagesToFile(buffer.buffer.data(), buffer.buffer.size_bytes(), startPage);
+    numBuffersOnDisk++;
     return buffer.setSpilledToDisk(startPage * pageSize);
 }
 
@@ -84,7 +86,14 @@ void Spiller::loadFromDisk(ColumnChunkData& chunk) const {
         KU_ASSERT(dataFH);
         dataFH->getFileInfo()->readFromFile(buffer.buffer.data(), buffer.buffer.size(),
             buffer.filePosition);
+        // Read back: it no longer holds the file, and its destructor will not count it again.
+        buffer.filePosition = UINT64_MAX;
+        numBuffersOnDisk--;
     }
+}
+
+void Spiller::forgetBufferOnDisk() const {
+    numBuffersOnDisk--;
 }
 
 SpillResult Spiller::claimNextGroup() {
@@ -107,6 +116,11 @@ SpillResult Spiller::claimNextGroup() {
 void Spiller::clearFile() {
     auto curDataFH = getDataFH();
     if (curDataFH) {
+        std::unique_lock lock{fileMtx};
+        if (numBuffersOnDisk.load() > 0) {
+            // A group of another query is still on the file: emptying it would lose its values.
+            return;
+        }
         // The handle's page count restarts with the file: the next spill writes from page 0.
         curDataFH->restartAtPageZero();
     }
