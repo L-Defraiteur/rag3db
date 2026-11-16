@@ -20,6 +20,8 @@ class ClassifierContract(unittest.TestCase):
   a=self.args();a[5]+='other: test\n';variants.append(a)
   a=self.args();a[0]=a[0].replace('1 passed; 0 failed; 0 ignored','0 passed; 0 failed; 1 ignored');variants.append(a)
   a=self.args();a[1]=a[1].replace('dispatch:classic','dispatch:unknown');variants.append(a)
+  a=self.args();a[0]+='\ntest other ... ok\n';variants.append(a)
+  a=self.args();a[0]+='\ntest result: ok. 1 passed; 0 failed; 0 ignored;\n';variants.append(a)
   for a in variants:
    with self.assertRaises(AssertionError):classify_classic(*a)
 if __name__=='__main__':unittest.main(failfast=True)
