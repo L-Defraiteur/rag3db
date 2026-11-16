@@ -12299,6 +12299,31 @@ mod tests {
     }
 
     #[test]
+    fn existing_fts_pending_public_entity_refuses_its_physical_target() {
+        use lucivy_core::sharded_handle::{FsShardStorage, ShardedHandle};
+        let (root, mut catalog, _) = existing_fts_fixture();
+        let directory=root.path().join("Lucivy_main");
+        let config=crate::fts_handle::build_schema_config(&["body".into()], &[], 1).unwrap();
+        let writer=ShardedHandle::create_with_storage(Box::new(FsShardStorage::new(&directory.to_string_lossy()).unwrap()), &config).unwrap();
+        crate::fts_handle::index_document(&writer,&[("body".into(),"pending target".into())],99).unwrap();
+        writer.commit().unwrap();writer.close().unwrap();drop(writer);
+        std::fs::write(directory.join(crate::fts_directory::GENERATION_FILE),b"7").unwrap();
+        catalog.entity_configs.get_mut("Document").unwrap().search_index=Some("main".into());
+        assert_eq!(catalog.resolve_search_target("Document").unwrap().parent_table,"main");
+        let pending_key=format!("{FTS_PENDING}Document");
+        catalog.conn=Arc::new(crate::connection::CallbackConnection::new(move |_, params| {
+            let key=params.iter().find(|p| p.name=="prefix").and_then(|p| p.value.as_str()).unwrap_or("");
+            let value=if key==pending_key { "1" } else if key=="fts_generation:Lucivy_main" { "7" } else { "" };
+            Ok(crate::connection::QueryResult {columns:vec![],rows:vec![vec![CypherValue::String(key.into()),CypherValue::String(value.into())]]})
+        }));
+        let before=existing_fts_manifest(root.path());
+        assert!(matches!(catalog.open_existing_fts_snapshot("main"),Err(crate::fts_existing::ExistingFtsError::Pending(_))),
+            "pending:Document applies to physical main despite missing pending:main");
+        assert_eq!(before,existing_fts_manifest(root.path()));
+        assert!(catalog.fts_handles.is_empty());
+    }
+
+    #[test]
     fn existing_fts_missing_generation_and_symlink_are_not_empty_indexes() {
         let (root, catalog, directory)=existing_fts_fixture();
         std::fs::remove_file(directory.join(crate::fts_directory::GENERATION_FILE)).unwrap();
