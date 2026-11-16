@@ -56,28 +56,42 @@ def _health_worker(deadline, context):
         connection.request('GET', '/sante')
         response = connection.getresponse()
         body = response.read(65537)
-        if len(body) > 65536: raise ValueError('health response too large')
-        print(json.dumps(dict(status=response.status, raw_hex=body.hex())))
+        oversized = len(body) > 65536
+        print(json.dumps(dict(status=response.status, raw_hex=body.hex(),
+                              oversize=oversized, prefix_only=oversized)), flush=True)
+        if oversized: raise ValueError('health response too large; received prefix preserved')
     finally:
         connection.close()
 
 
 def health_get(deadline, *, ready_path, ready_sha256, nonce, pins, trace=None):
     """Parent bounds the whole worker, including DNS-free connect/headers/body."""
+    if trace is None: trace = {}
+    trace.update(started_monotonic=time.monotonic(), deadline_monotonic=deadline,
+                 timed_out=False, returncode=None, stdout_hex='', stderr_hex='')
     remaining = deadline-time.monotonic()
     if remaining <= 0: raise ValueError('health deadline before child')
     child = subprocess.Popen([sys.executable, '-B', str(Path(__file__).resolve()),
                               '--health-worker', str(deadline)],
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE)
+    trace['worker_pid'] = child.pid
     try:
         remaining = deadline-time.monotonic()
         if remaining <= 0: raise subprocess.TimeoutExpired(child.args, 0)
         context = dict(ready_path=str(ready_path), ready_sha256=ready_sha256, nonce=nonce, pins=pins)
         out, err = child.communicate(input=json.dumps(context, allow_nan=False).encode(), timeout=remaining)
-    except BaseException:
+    except BaseException as error:
+        trace['timed_out'] = isinstance(error, subprocess.TimeoutExpired)
+        if isinstance(error, subprocess.TimeoutExpired):
+            trace.update(timeout_stdout_hex=(error.output or b'').hex(),
+                         timeout_stderr_hex=(error.stderr or b'').hex())
         child.kill()
-        child.communicate()
+        out, err = child.communicate()
+        trace.update(returncode=child.returncode, stdout_hex=out.hex(), stderr_hex=err.hex(),
+                     finished_monotonic=time.monotonic())
         raise
+    trace.update(returncode=child.returncode, stdout_hex=out.hex(), stderr_hex=err.hex(),
+                 finished_monotonic=time.monotonic())
     if child.returncode or time.monotonic() >= deadline:
         raise ValueError('health worker refused or exceeded total deadline')
     value = protocol.decode(out)
@@ -138,8 +152,9 @@ def publish_observed_grant(ready_path, destination, *, expected_ready_sha256,
     pins = protocol.decode(json.dumps(pins, allow_nan=False))
     if get_health is None:
         def get_health(deadline):
+            record['transport'] = {}
             return health_get(deadline, ready_path=ready_path, ready_sha256=expected_ready_sha256,
-                              nonce=expected_nonce, pins=pins)
+                              nonce=expected_nonce, pins=pins, trace=record['transport'])
     record = dict(kind='LIFECYCLE_NO_EMBEDDING_OWNER_OBSERVATION',
                   no_embedding_calls_authorized=True, health_margin=30,
                   total_rpc_count='unknown; usage0 is not a total RPC counter')
