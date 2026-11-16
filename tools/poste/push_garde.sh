@@ -158,6 +158,27 @@ derive() {
   fi
 }
 if [ "${1:-}" = "--derive" ]; then derive "$2"; exit 0; fi
+# **Les suites qu'exige le lot** (16 novembre 2026, ticket de c7) : master a rougi sur e2e_code_sync quand chaque passe
+# disait « e2e_code 36/36 ». `required_suites_played <base> <testé> <journaux>` lit tools/poste/required_suites.txt de
+# l'arbre (par required_suites.sh) : chaque suite qu'exige un chemin du lot doit avoir sa ligne « == <suite> » au résumé
+# et un journal <suite>.log vert. Un arbre sans la table n'exige rien, et la garde le dit. Mode
+# `--required-suites <base> <testé> <journaux>`, joué par le témoin.
+required_suites_played() {
+  local base=$1 teste=$2 J=$3 exigees ligne suite chemin manque=""
+  if [ ! -x tools/poste/required_suites.sh ]; then echo "suites exigées : pas de table dans l'arbre (tools/poste/required_suites.txt)"; return 0; fi
+  exigees=$(bash tools/poste/required_suites.sh "$base" "$teste") || { echo "ARRÊT : required_suites.sh a échoué ($base..$teste)"; return 1; }
+  [ -n "$exigees" ] || return 0
+  while read -r suite chemin; do
+    [ -n "$suite" ] || continue
+    if grep -qx "== $suite" "$J/resume.log" && grep -q '^test result: ok' "$J/$suite.log" 2>/dev/null && ! grep -q '^test result: FAILED' "$J/$suite.log"; then
+      echo "suite exigée jouée verte : $suite ($chemin)"
+    else
+      manque="$manque $suite ($chemin)"
+    fi
+  done <<< "$exigees"
+  [ -z "$manque" ] || { echo "ARRÊT : le lot exige des suites que la passe n'a pas jouées vertes :$manque"; return 1; }
+}
+if [ "${1:-}" = "--required-suites" ]; then required_suites_played "$2" "$3" "$4"; exit $?; fi
 # Master tenu pour une autre session (fenêtre de c7) : pas de push tant que le fichier existe.
 [ -e $HOME/.cache/rag3weaver-build/master-tenu ] && { echo "ARRÊT : master tenu — $(cat $HOME/.cache/rag3weaver-build/master-tenu)"; exit 1; }
 J=$HOME/.cache/rag3weaver-build/$2
@@ -166,6 +187,9 @@ derive "$PWD"
 gd=$(git rev-parse --git-dir)
 tail -1 $J/resume.log | grep -qx VERT || { echo "ARRÊT : la passe n'est pas VERTE"; exit 1; }
 teste=$(head -1 $J/resume.log | awk '{print $2}')
+# Les suites qu'exige le lot, sur la base de la passe (ou, sans elle, sur master sous le commit testé).
+base_exigees=$(cat "$J/base" 2>/dev/null || git merge-base "$teste" origin/master)
+required_suites_played "$base_exigees" "$teste" "$J" || exit 1
 if [ -n "${PILE_TESTE:-}" ]; then
   [ -n "${PILE_AVANT:-}" ] || { echo "ARRÊT : PILE_TESTE sans PILE_AVANT (la tête du lot d'avant)"; exit 1; }
   [ "$(git rev-parse -q --verify "$PILE_TESTE^{commit}")" = "$(git rev-parse -q --verify "$teste^{commit}")" ] || { echo "ARRÊT : PILE_TESTE ($PILE_TESTE) n'est pas le commit testé du résumé ($teste)"; exit 1; }

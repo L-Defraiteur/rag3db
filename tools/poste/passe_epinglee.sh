@@ -52,6 +52,15 @@ rouge() { echo "ROUGE $1" >> $R; exit 1; }
 # La règle 7 : un C++ du lot plus neuf que la lib épinglée se joue sous RAG3WEAVER_MOTEUR_ANCIEN=1, dit ici.
 [ -n "${RAG3WEAVER_MOTEUR_ANCIEN:-}" ] && echo "RAG3WEAVER_MOTEUR_ANCIEN=$RAG3WEAVER_MOTEUR_ANCIEN : le C++ du lot est plus neuf que la lib ${RAG3DB_LIB:13:9}" >> $R
 
+# **Les suites qu'exige le lot** (16 novembre 2026, ticket de c7) : master a rougi sur e2e_code_sync quand chaque passe
+# disait « e2e_code 36/36 », le seul binaire e2e_code. tools/poste/required_suites.txt, dans l'arbre du lot, dit quels
+# chemins exigent quelle suite ; elle s'ajoute à la passe, même sous SUITES, et la garde du push la redemande.
+EXIGEES=""
+if [ -x $W/tools/poste/required_suites.sh ] && [ -s $J/base ]; then
+  EXIGEES=$(bash $W/tools/poste/required_suites.sh "$(cat $J/base)" HEAD) || rouge "suites exigées : required_suites.sh a échoué"
+  [ -n "$EXIGEES" ] && echo "suites exigées par le lot : $(echo "$EXIGEES" | awk '{printf "%s%s (%s)", (NR > 1 ? ", " : ""), $1, $2}')" >> $R
+fi
+EXIGEES_NOMS=$(echo "$EXIGEES" | awk 'NF {print $1}' | tr '\n' ' ')
 echo "== témoin" >> $R
 timeout 3600 ./run_e2e.sh --features openai-llm,anthropic-llm --test ${SUITE_DU_TEMOIN:-e2e_lectures} "$FILTRE" > $J/temoins.log 2>&1; c=$?
 grep -E '^test result|panicked at' $J/temoins.log >> $R
@@ -65,11 +74,14 @@ grep -E '^test result|panicked at' $J/temoins.log >> $R
 if [ -n "${SUITES:-}" ]; then
   LISTE_DES_SUITES=$(echo "$SUITES" | tr "," " " | sed 's/^-$//')
   echo "suites réduites : ${LISTE_DES_SUITES:-aucune} (SUITES=$SUITES)" >> $R
+  LISTE_DES_SUITES="$LISTE_DES_SUITES $EXIGEES_NOMS"
 else
-  LISTE_DES_SUITES="e2e_lectures e2e_code ${SUITE_DU_TEMOIN:-} ${SUITES_EN_PLUS:-}"
+  LISTE_DES_SUITES="$EXIGEES_NOMS e2e_lectures e2e_code ${SUITE_DU_TEMOIN:-} ${SUITES_EN_PLUS:-}"
 fi
+JOUEES=""
 for suite in $(echo $LISTE_DES_SUITES | tr " " "\n" | awk 'NF && !vu[$0]++'); do
   echo "== $suite" >> $R
+  JOUEES="$JOUEES $suite"
   timeout 5400 ./run_e2e.sh --features openai-llm,anthropic-llm --test $suite > $J/$suite.log 2>&1; c=$?
   grep -E '^test result|FAILED|panicked' $J/$suite.log | head -20 >> $R
   [ $c = 0 ] || rouge "$suite (code=$c)"
@@ -105,4 +117,5 @@ elif [ -n "${5:-}" ]; then
   grep -E '^test result|panicked at' $J/navigateur.log >> $R
   [ $c = 0 ] || rouge "témoin navigateur (code=$c)"
 fi
+echo "suites jouées :${JOUEES:- aucune}" >> $R
 echo VERT >> $R

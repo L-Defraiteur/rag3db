@@ -8,6 +8,7 @@ D=$(mktemp -d -p "${TMPDIR:-$HOME/.cache}"); trap 'rm -rf "$D"' EXIT
 H=$D/home; W=$H/git_workspaces/wt/extension/rag3weaver; mkdir -p $W/scripts $W/src $D/bin
 git -C $H/git_workspaces/wt init -q 2>/dev/null || { mkdir -p $H/git_workspaces/wt && git -C $H/git_workspaces/wt init -q; }
 echo 'fn f() {}' > $W/src/lib.rs
+mkdir -p $H/git_workspaces/wt/tools/poste && cp "$(dirname "$X")/required_suites.sh" "$(dirname "$X")/required_suites.txt" $H/git_workspaces/wt/tools/poste/ 2>/dev/null
 git -C $H/git_workspaces/wt -c user.email=t@t -c user.name=t add -A > /dev/null && git -C $H/git_workspaces/wt -c user.email=t@t -c user.name=t commit -qm base
 # master sous la tête : la base, puis un commit du lot par-dessus
 git -C $H/git_workspaces/wt update-ref refs/remotes/origin/master HEAD; BASE_JOUET=$(git -C $H/git_workspaces/wt rev-parse HEAD)
@@ -65,4 +66,15 @@ passe VERT "le repli à luciepc" FAUX_HOTE=LuciePC
 grep -q 'REPLI=igpu:0' $D/trace && echo "vert   LuciePC : RAG3WEAVER_TESTS_REPLI_PERIPHERIQUE=igpu:0" || { echo "ROUGE  LuciePC sans repli : $(head -1 $D/trace | grep -o 'REPLI=[^ ]*')"; rouge=1; }
 passe VERT "pas de repli au portable" FAUX_HOTE=lucie-tablette RAG3WEAVER_TESTS_REPLI_PERIPHERIQUE=igpu:0
 grep -q 'REPLI=absent' $D/trace && echo "vert   lucie-tablette : aucun repli, même posé par l'appelant" || { echo "ROUGE  le portable a un repli : $(head -1 $D/trace | grep -o 'REPLI=[^ ]*')"; rouge=1; }
+# **Les suites qu'exige le lot** (16 novembre 2026, ticket de c7) : un lot qui touche code_sync.rs joue e2e_code_sync,
+# même sous SUITES=-, et le résumé dit les suites exigées puis toutes celles jouées.
+G="git -C $H/git_workspaces/wt -c user.email=t@t -c user.name=t"
+echo '// sync' > $W/src/code_sync.rs; $G add $W/src/code_sync.rs > /dev/null; $G commit -qm sync
+passe VERT "un lot qui touche code_sync.rs" SUITES=-
+grep -q '^e2e_code_sync ' $D/trace && grep -q '^suites exigées par le lot : e2e_code_sync (extension/rag3weaver/src/code_sync.rs)' $R && grep -q '^suites jouées : .*e2e_code_sync' $R \
+  && echo "vert   code_sync.rs touché : e2e_code_sync joué même sous SUITES=-, exigé et joué dits au résumé" \
+  || { echo "ROUGE  code_sync.rs touché : suites $(cut -d' ' -f1 $D/trace | tr '\n' ' '), résumé « $(grep -E '^suites' $R | tr '\n' ' ') »"; rouge=1; }
+$G reset -q --hard HEAD~1
+passe VERT "un lot qui ne touche que lib.rs"
+grep -q '^e2e_code_sync ' $D/trace && { echo "ROUGE  lib.rs seul : e2e_code_sync joué sans être exigé"; rouge=1; } || echo "vert   lib.rs seul : e2e_code_sync n'est pas exigé"
 exit $rouge
