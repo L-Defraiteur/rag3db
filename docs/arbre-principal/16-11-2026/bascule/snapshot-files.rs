@@ -1,5 +1,5 @@
 // Private immutable Lucivy snapshot reader: filesystem inputs are never opened by a writer.
-use std::{env,fs,path::Path};
+use std::{collections::BTreeSet,env,fs,path::Path};
 use lucivy_core::{query::SchemaConfig,sharded_handle::ShardedHandle,snapshot::{SnapshotIndex,export_snapshot_sharded}};
 fn flat_files(path:&Path)->Result<Vec<(String,Vec<u8>)>,String>{
  let mut files=Vec::new();
@@ -16,7 +16,8 @@ fn flat_files(path:&Path)->Result<Vec<(String,Vec<u8>)>,String>{
 }
 fn run()->Result<(),String>{
  let args:Vec<_>=env::args_os().collect();
- if args.len()!=2{return Err("usage: snapshot-files EXISTING_INDEX_DIRECTORY".into());}
+ let list_ids=args.len()==3&&args[2]=="--live-ids";
+ if args.len()!=2&&!list_ids{return Err("usage: snapshot-files EXISTING_INDEX_DIRECTORY [--live-ids]".into());}
  let path=Path::new(&args[1]);
  let meta=fs::symlink_metadata(path).map_err(|e|e.to_string())?;
  if !meta.is_dir(){return Err("index directory absent or symlink".into());}
@@ -46,7 +47,27 @@ fn run()->Result<(),String>{
  let handle=ShardedHandle::open_snapshot(ld_lucivy::directory::OwnedBytes::new(blob))?;
  if !handle.is_read_only(){return Err("snapshot is writable".into());}
  if handle.commit().is_ok(){return Err("snapshot accepted commit".into());}
+ let mut ids=BTreeSet::new();
+ if list_ids{
+  for i in 0..handle.num_shards(){
+   let shard=handle.shard(i).ok_or("missing shard")?;
+   let searcher=shard.reader.searcher();
+   for segment in searcher.segment_readers(){
+    let column=segment.fast_fields().u64(lucivy_core::handle::NODE_ID_FIELD).map_err(|e|e.to_string())?;
+    let alive=segment.alive_bitset();
+    for doc in 0..segment.max_doc(){
+     if alive.is_some_and(|bits|!bits.is_alive(doc)){continue;}
+     let mut values=column.values_for_doc(doc);
+     let id=values.next().ok_or("live document lacks _node_id")?;
+     if values.next().is_some(){return Err("live document has multiple _node_id values".into());}
+     if !ids.insert(id){return Err("duplicate live _node_id".into());}
+    }
+   }
+  }
+  if ids.len() as u64!=handle.num_docs(){return Err("live ID count differs from documents".into());}
+ }
  println!("IMMUTABLE_SNAPSHOT\tshards={}\tdocuments={}\tbytes={}\tcommit=REFUSED",handle.num_shards(),handle.num_docs(),bytes);
+ if list_ids{for id in ids{println!("LIVE_ID\t{id}");}}
  drop(handle);
  Ok(())
 }
