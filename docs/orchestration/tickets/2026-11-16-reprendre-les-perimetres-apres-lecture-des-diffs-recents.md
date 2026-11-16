@@ -34,3 +34,6 @@ Signalement C7 avant transmission au porteur TTY : pilote b70a22933dae28ac96ba7d
 
 
 Recherche signale avant passe globale un prérequis de fixture non posé par la CI et une collision root/label au second passage. C7 confirme statiquement ; porteur Recherche au ticket FTS existant avant diff, rouge unique sur ELF ciblé archivé à préparer sans compilation, puis racine privée/unique par invocation. Passe globale reste retenue ; cinq ciblés historiques sous profil explicite ne sont pas une qualification CI. Détails dans le rapport, aucun rouge rejoué ni nouvelle allocation à ce stade.
+
+
+Cœur50e2 : premier cas privé rc139 sans XML/BUILD_ID runtime, arrêt quiescent ; trois cas non joués. Préservation et diagnostic RO au ticket Cœur avant correctif, aucun rejeu natif sous le GO terminé ; cause non attribuée et aucune clôture C1. Rapport de reprise détaillé.
