@@ -17,6 +17,11 @@ class Observation(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
+        shared=Path(__file__).resolve().parents[3]/'orchestration/16-11-2026/coordination/provider_health_transport.py'
+        (self.root/'provider_health_transport.py').write_bytes(shared.read_bytes())
+        (self.root/'lifecycle_provider_observation.py').write_bytes(Path(owner.__file__).read_bytes())
+        location=patch.object(owner,'__file__',str(self.root/'lifecycle_provider_observation.py'))
+        location.start();self.addCleanup(location.stop)
         self.now = 80.
         uid = os.getuid()
         self.ready = dict(protocol.ready_bounds(40., 1000.), deadline=1000., nonce='nonce',
@@ -35,7 +40,8 @@ class Observation(unittest.TestCase):
             factice=False, dual=False, sparse=False, precision='Flex32',
             executable='/fixture/provider@suffix', max_chars_per_text=12000)
         self.health = dict(identity, usage=dict(baux=0, en_cours=0))
-        self.pins = dict(observation_sha256=owner.digest(owner.__file__),
+        self.pins = dict(transport_sha256=owner.digest(self.root/'provider_health_transport.py'),
+            observation_sha256=owner.digest(owner.__file__),
             protocol_sha256=owner.digest(protocol.__file__),
             producer_sha256=owner.digest(producer.__file__), pilot='f'*40,
             allocation='C7-fixture', c7_reference='C7-fixture', embar_reference='Embar-fixture',
@@ -89,6 +95,14 @@ class Observation(unittest.TestCase):
         evidence = protocol.decode(self.evidence.read_bytes())
         self.assertEqual(protocol.decode(bytes.fromhex(evidence['health_raw_hex'])), self.health)
         self.assertGreaterEqual(self.proc_reads, 2)
+
+    def test_grant_binds_exact_owner_profile_and_canonical_hash(self):
+        grant=self.publish()
+        self.assertIn('owner_pins',grant)
+        self.assertEqual(grant['owner_pins'],self.pins)
+        expected=hashlib.sha256(json.dumps(self.pins,sort_keys=True,separators=(',',':'),allow_nan=False).encode()).hexdigest()
+        self.assertEqual(grant['owner_pins_sha256'],expected)
+        self.assertTrue(grant['no_embedding_calls_authorized'])
 
     def test_http_total_budget_late_but_still_in_admission_is_refused(self):
         self.after_get = lambda:setattr(self, 'now', 85.001)
@@ -177,23 +191,40 @@ class Transport(unittest.TestCase):
         fixture = Observation('test_non_200_status_is_refused')
         fixture.setUp()
         self.addCleanup(fixture.doCleanups)
+        shared=owner.transport_module(fixture.pins)
+        patches=[patch.object(owner,'transport_module',return_value=shared),
+                 patch.object(shared,'worker_gate',side_effect=owner.worker_gate),
+                 patch.object(owner,'process_snapshot',side_effect=lambda pid:copy.deepcopy(fixture.process)),
+                 patch.object(protocol,'read_phase_state',side_effect=fixture.phase_reader)]
+        for item in patches:item.start();self.addCleanup(item.stop)
         return fixture, dict(ready_path=str(fixture.path), ready_sha256=fixture.sha,
                              nonce='nonce', pins=fixture.pins)
+
+    def test_owner_caller_runs_the_same_pinned_common_worker(self):
+        from unittest.mock import Mock
+        fixture,context=self.context()
+        child=Mock(pid=999,returncode=0)
+        child.communicate.return_value=(json.dumps(dict(status=200,raw_hex=json.dumps(fixture.health).encode().hex(),oversize=False,prefix_only=False)).encode(),b'')
+        with patch.object(owner.subprocess,'Popen',return_value=child) as spawn, \
+             patch.object(owner.time,'monotonic',return_value=80.):
+            owner.health_get(85.,ready_path=fixture.path,ready_sha256=fixture.sha,nonce='nonce',pins=fixture.pins)
+        self.assertEqual(Path(spawn.call_args.args[0][2]).name,'provider_health_transport.py')
+        self.assertEqual(child.communicate.call_args.kwargs['timeout'],4.5)
 
     def test_worker_only_fixed_health_endpoint_no_redirect_or_embedding(self):
         from unittest.mock import Mock
         fixture, context = self.context()
         connection = Mock()
         connection.getresponse.return_value.status = 200
-        connection.getresponse.return_value.read.return_value = json.dumps(fixture.health).encode()
+        connection.getresponse.return_value.read1.side_effect = [json.dumps(fixture.health).encode(), b'']
         with patch.object(owner.http.client, 'HTTPConnection', return_value=connection) as http, \
              patch.object(protocol, 'read_phase_state', side_effect=fixture.phase_reader), \
              patch.object(owner.time, 'monotonic', return_value=80.), patch('builtins.print') as printed:
             owner._health_worker(85., context)
-        http.assert_called_once_with('127.0.0.1',7878,timeout=5.)
+        http.assert_called_once_with('127.0.0.1',7878,timeout=4.5)
         connection.request.assert_called_once_with('GET','/sante')
         connection.close.assert_called_once()
-        observed = protocol.decode(printed.call_args.args[0])
+        observed = protocol.decode([c for c in printed.call_args_list if 'file' not in c.kwargs][-1].args[0])
         self.assertEqual(protocol.decode(bytes.fromhex(observed['raw_hex'])), fixture.health)
 
     def test_worker_checks_real_raccord_phase_before_http(self):
@@ -215,7 +246,7 @@ class Transport(unittest.TestCase):
             with self.assertRaises(owner.subprocess.TimeoutExpired):
                 owner.health_get(85.,ready_path=fixture.path,ready_sha256=fixture.sha,
                                  nonce='nonce',pins=fixture.pins)
-        self.assertEqual(child.communicate.call_args_list[0].kwargs['timeout'],5.)
+        self.assertEqual(child.communicate.call_args_list[0].kwargs['timeout'],4.5)
         child.kill.assert_called_once()
         self.assertEqual(child.communicate.call_count,2)
 
@@ -260,13 +291,13 @@ class Transport(unittest.TestCase):
         from unittest.mock import Mock
         fixture, context = self.context()
         connection=Mock();connection.getresponse.return_value.status=200
-        connection.getresponse.return_value.read.return_value=b'x'*65537
+        connection.getresponse.return_value.read1.side_effect=[b'x'*65537]
         with patch.object(owner.http.client,'HTTPConnection',return_value=connection), \
              patch.object(protocol,'read_phase_state',side_effect=fixture.phase_reader), \
              patch.object(owner.time,'monotonic',return_value=80.),patch('builtins.print') as printed:
             with self.assertRaises(ValueError):owner._health_worker(85.,context)
         self.assertIsNotNone(printed.call_args)
-        evidence=protocol.decode(printed.call_args.args[0])
+        evidence=protocol.decode([c for c in printed.call_args_list if 'file' not in c.kwargs][-1].args[0])
         self.assertEqual(bytes.fromhex(evidence['raw_hex']),b'x'*65537)
         self.assertTrue(evidence['oversize'])
         self.assertTrue(evidence['prefix_only'])

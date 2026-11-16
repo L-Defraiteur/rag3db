@@ -35,7 +35,7 @@ class ReadyConsumption(unittest.TestCase):
    root=Path(d);p=root/'P';p.mkdir();q=root/'Q';q.mkdir();(p/'READY_FOR_PROVIDER_COORDINATION.json').write_text(json.dumps(ready))
    grant=dict(nonce=ready['nonce'],ready_sha256=c.q.sha(p/'READY_FOR_PROVIDER_COORDINATION.json'),no_embedding_calls_authorized=True,observed_monotonic=now,valid_until_monotonic=590.)
    (q/'PROVIDER_GO.json').write_text(json.dumps(grant))
-   namespace=dict(vars(c),P=p,Q=q,ready=ready,nonce=ready['nonce'],pause=100.,end=600.,save=lambda *args:None)
+   namespace=dict(vars(c),P=p,Q=q,ready=ready,nonce=ready['nonce'],pause=100.,end=600.,save=lambda *args:None,health_context=lambda *args:{})
    with patch.object(c.time,'monotonic',return_value=now),patch.object(c.q,'validate_grant'),patch.object(c.protocol,'read_phase_state',return_value=phase,create=True),patch.object(c.q,'health',side_effect=WouldContactProvider('provider action reached')):
     exec(compile(ast.Module(body=body[start:stop+1],type_ignores=[]),'<actual-ready-consumer>','exec'),namespace)
  def test_late_grant_already_present_cannot_skip_deadline_and_contact_provider(self):

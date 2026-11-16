@@ -19,7 +19,7 @@ class LifecycleAdmission(unittest.TestCase):
  def test_manifest_has_explicit_none_signals_and_only_public_nonce_query(self):
   root=Path(__file__).parent;manifest=json.loads((root/'lifecycle.json').read_text());tool=manifest['tools']['observer_cycle_vie']
   self.assertEqual(tool['bindings']['options']['signals'],[]);self.assertEqual(tool['bindings']['options']['exige'],['data','dense'])
-  self.assertFalse(manifest['embeddings']['catch_up_on_open']);self.assertEqual(manifest['workspace']['commands'],'off');self.assertTrue(manifest['workspace']['read_only'])
+  self.assertEqual(manifest['database'],str(c.BASE));self.assertFalse(manifest['embeddings']['catch_up_on_open']);self.assertEqual(manifest['workspace']['commands'],'off');self.assertTrue(manifest['workspace']['read_only'])
   graph=(root/'lifecycle.mmd').read_text();self.assertIn('query=$nonce',graph);self.assertIn('%% result: source.meta',graph)
   for name in ['IndexNode','VectorSearchNode','BM25SearchNode','SparseSearchNode']:self.assertNotIn(name,graph)
  def test_real_driver_checks_debt_rebuild_and_bit_digest_before_writer(self):

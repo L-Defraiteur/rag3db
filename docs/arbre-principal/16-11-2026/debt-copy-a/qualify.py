@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Proposed COPY-only qualification. No runtime without exact C7 GO and fresh Embar receipt."""
 from pathlib import Path
-import argparse,collections,hashlib,importlib.util,io,json,math,os,re,shutil,signal,stat,subprocess,sys,time,urllib.request
+import argparse,collections,hashlib,importlib.util,io,json,math,os,re,shutil,signal,stat,subprocess,sys,time
 import audit,typed_rows
 HOME=Path.home();R=HOME/'.cache/rag3weaver-build/bascule-live-20261116';HERE=Path(__file__).resolve().parent
 P=R/'debt-acquittement-copy-v1';Q=R/'debt-acquittement-control-v2';S=R/'debt-acquittement-scopes-v1'
@@ -100,17 +100,32 @@ def validate_grant(grant,now,max_chars):
  if type(expected.get('max_chars_per_text')) is not int or expected['max_chars_per_text']<max_chars or not expected.get('executable') or not expected.get('precision'):raise ValueError('provider cap or provenance insufficient')
  return expected
 
-def health(grant,label,end):
- require_time(end);provider_identity(grant)
- with urllib.request.urlopen('http://127.0.0.1:7878/sante',timeout=min(5,end-time.monotonic()-15)) as response:
-  if response.status!=200:raise ValueError('provider health refused')
-  raw=response.read(1048577)
- if len(raw)>1048576:raise ValueError('oversized provider identity')
- data=json.loads(raw);save(P/(label+'.json'),data)
- for key,val in grant['identity'].items():
-  if data.get(key)!=val:raise ValueError('provider identity field changed '+key)
- if data.get('usage')!={'baux':0,'en_cours':0}:raise ValueError('provider has uncoordinated activity')
- provider_identity(grant);return data
+def health(grant,label,end,*,context=None):
+ # The common worker owns HTTP; cycle policy is pinned and checked separately.
+ require_time(end,0)
+ if context is None:raise ValueError('explicit pinned health policy required')
+ context=dict(context);now=time.monotonic()
+ context['contact_deadline']=float(min(now+5.,end,grant['valid_until_monotonic']))
+ trace=dict(no_embedding_calls_authorized=True,contact_deadline=context['contact_deadline'])
+ try:
+  policy=loadmod('lifecycle_health_policy');transport=loadmod('provider_health_transport')
+  policy.worker_gate(context)
+  response=transport.run_health_worker(context,trace)
+ except BaseException as error:
+  trace.update(error_type=type(error).__name__)
+  save(P/(label+'.transport.json'),trace)
+  raise
+ raw=response['body'];trace.update(status=response['status'],body_hex=raw.hex(),body_sha256=hashlib.sha256(raw).hexdigest())
+ # Immutable raw transport evidence exists before status/JSON/type assertions.
+ save(P/(label+'.transport.json'),trace)
+ if type(response['status']) is not int or response['status']!=200:raise ValueError('provider health refused')
+ data=transport.validate_health(raw,grant['identity'],status=response['status'])
+ policy.worker_gate(context)
+ if time.monotonic()>=context['contact_deadline']:raise ValueError('whole health observation exceeded effective deadline')
+ save(P/(label+'.json'),data)
+ policy.worker_gate(context)
+ if time.monotonic()>=context['contact_deadline']:raise ValueError('health publication exceeded effective deadline')
+ return data
 
 class Reader:
  def __init__(self,binary,end,env,timeout):self.binary=binary;self.end=end;self.env=env;self.timeout=timeout;self.counter=0

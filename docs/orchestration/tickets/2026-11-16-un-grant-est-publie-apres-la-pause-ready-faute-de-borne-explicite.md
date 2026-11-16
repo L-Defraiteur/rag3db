@@ -101,3 +101,17 @@ numérique JSON `1e999` dans une valeur supplémentaire. Si l'ensemble du corps
 est annoncé sans non-fini, compléter le décodeur et son juge discriminant.
 Ces points sont statiques, non joués ici ; 632 n'est pas intégré dans le cycle.
 Les brouillons du consommateur restent non publiés, aucun nouveau paquet ni GO.
+
+### Préparation groupée du consommateur v4
+
+Le groupe owner/common bcfd1934ac est porté strictement sur ses quatre fichiers
+seulement. Les réserves 632 sont corrigées par 443 : statut et morceaux flushés
+pendant le corps, fragment d'exception séparé borné, overflow numérique rejeté.
+Le consommateur utilise ce même worker, conserve sa trace avant validation,
+contrôle les neuf types et usage int0 via la primitive commune, puis recontrôle
+sa policy après réponse et après fsync de son résultat. La policy cycle
+recoupe le profil owner canonique avec les 19 copies préparées et contrôle
+processus/autorité/nonce/lease ; le préwriter exige également la fenêtre READY.
+Le manifeste v4 vise strictement sa nouvelle fixture avec garde correspondant.
+Publication avant CPU : pas encore de résultat consommateur vert ni paquet v4
+créé. Nouveau couple et RO totale restent requis avant arbitrage C7 distinct.

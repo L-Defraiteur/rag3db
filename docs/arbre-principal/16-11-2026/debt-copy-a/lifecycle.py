@@ -5,12 +5,13 @@ import argparse,hashlib,json,os,shutil,signal,subprocess,sys,time,uuid
 import finish_result as f
 import lifecycle_protocol as protocol
 a=f.a;q=a.q;R=a.R
-P=R/'lifecycle-copy-v3';Q=R/'lifecycle-control-v3';S=R/'lifecycle-scopes-v3'
+P=R/'lifecycle-copy-v4';Q=R/'lifecycle-control-v4';S=R/'lifecycle-scopes-v4'
 FIN=R/'debt-fin-ro-result-v1';SOURCE=FIN/'copy';BASE=P/'copy/code-principal.rag3db'
 FIN_MANIFEST=R/'debt-fin-ro-proofs-01/proof-manifest.json'
 FIN_MANIFEST_SHA='05661b1fddc82c1e66d21f218d0c8cdfd12b69d8ef16432a2c55c3b127a9462a'
 FIN_REFS=['copy-after.json','fts-observed.json','vectors-observed.json','sources-after.json','composed.json']
-a.FILES=dict(a.FILES,**{n:a.PREFIX+n for n in ['lifecycle.py','lifecycle_protocol.py','lifecycle.json','lifecycle.mmd','lifecycle-provider-go.schema.json','lifecycle-ready.schema.json','lifecycle_grant_producer.py','lifecycle_provider_observation.py']})
+a.FILES=dict(a.FILES,**{n:a.PREFIX+n for n in ['lifecycle.py','lifecycle_protocol.py','lifecycle.json','lifecycle.mmd','lifecycle-provider-go.schema.json','lifecycle-ready.schema.json','lifecycle_grant_producer.py','lifecycle_provider_observation.py','lifecycle_health_policy.py']})
+a.FILES['provider_health_transport.py']='docs/orchestration/16-11-2026/coordination/provider_health_transport.py'
 f.Q=Q;f.carried.Q=Q;a.Q=Q;a.P=P;a.S=S;a.BASE=BASE;q.Q=Q
 def save(name,value):q.save(P/name,value)
 def publish_ready(ready):
@@ -18,8 +19,12 @@ def publish_ready(ready):
  pending=P/'READY_FOR_PROVIDER_COORDINATION.pending.json';public=P/'READY_FOR_PROVIDER_COORDINATION.json'
  q.save(pending,ready);q.require_time(ready['grant_deadline_monotonic'],0)
  os.link(pending,public) # Exclusive publication of a complete, fsynced immutable file.
+def health_context(ready,grant,ready_sha256,admission):
+ policy=Q/'lifecycle_health_policy.py'
+ return dict(address='127.0.0.1:7878',expected_process=grant['owner_pins']['expected_process'],gate_module_path=str(policy),gate_module_sha256=q.sha(policy),ready_path=str(P/'READY_FOR_PROVIDER_COORDINATION.json'),ready_sha256=ready_sha256,nonce=ready['nonce'],grant=grant,admission=admission)
 def guard(cfg):
  f.guard(cfg)
+ if protocol.decode((Q/'lifecycle.json').read_bytes()).get('database')!=str(BASE):raise ValueError('manifest must target this exact fresh fixture')
  if q.sha(FIN_MANIFEST)!=FIN_MANIFEST_SHA or set(cfg['fin_refs'])!=set(FIN_REFS):raise ValueError('FIN evidence reference set differs')
  rows={x['name']:x['sha256'] for x in json.loads(FIN_MANIFEST.read_text())}
  for name,h in cfg['fin_refs'].items():
@@ -146,9 +151,9 @@ def driver():
  protocol.validate_grant_phase(ready,grant,time.monotonic(),phase_state,ready_sha256)
  save('provider-coordination.json',grant)
  phase_state=protocol.read_phase_state(ready);protocol.validate_grant_phase(ready,grant,time.monotonic(),phase_state,ready_sha256)
- q.health(grant,'provider-before',min(end,grant['valid_until_monotonic'],ready['grant_deadline_monotonic']))
+ q.health(grant,'provider-before',min(end,grant['valid_until_monotonic'],ready['grant_deadline_monotonic']),context=health_context(ready,grant,ready_sha256,True))
  if sources(fs)!=initial or fs.file_inventory(BASE.parent)!=before_writer:raise ValueError('sources or fixture changed before writer')
- guard(cfg);save('copy-just-before-writer-quiet.json',q.copy_quiet());save('source-just-before-writer-quiet.json',quiet_source());phase_state=protocol.read_phase_state(ready);protocol.validate_phase_authority(ready,time.monotonic(),phase_state);q.require_time(end,500);writer(cfg,env,profile,grant,end,nonce);q.health(grant,'provider-after',min(end,grant['valid_until_monotonic']))
+ guard(cfg);save('copy-just-before-writer-quiet.json',q.copy_quiet());save('source-just-before-writer-quiet.json',quiet_source());phase_state=protocol.read_phase_state(ready);protocol.validate_phase_authority(ready,time.monotonic(),phase_state);q.require_time(end,500);writer(cfg,env,profile,grant,end,nonce);q.health(grant,'provider-after',min(end,grant['valid_until_monotonic']),context=health_context(ready,grant,ready_sha256,False))
  # No open in recovery mode. Refuse a new/residual WAL before any cold read.
  after_writer=fs.file_inventory(BASE.parent);save('copy-after-shutdown.json',after_writer);save('copy-directories-after-shutdown.json',q.directories(BASE.parent));previous={x['path']:x for x in before_writer}
  if q.directories(BASE.parent)!=initial['fin_dirs']:raise ValueError('fixture directories changed after shutdown')

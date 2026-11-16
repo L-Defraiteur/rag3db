@@ -50,13 +50,18 @@ def validate_ready_phase(ready,now,phase):
  if now>=ready['grant_deadline_monotonic']:raise ValueError('READY grant deadline expired')
  return phase
 
-def validate_grant_phase(ready,grant,now,phase,ready_sha256):
- validate_ready_phase(ready,now,phase)
+def validate_admitted_grant_phase(ready,grant,now,phase,ready_sha256):
+ """Same timely grant binding and active lease, without reopening admission."""
+ validate_phase_authority(ready,now,phase)
  if not isinstance(grant,dict):raise ValueError('grant must be an object')
  if not isinstance(ready_sha256,str) or not re.fullmatch('[0-9a-f]{64}',ready_sha256) or grant.get('nonce')!=ready['nonce'] or grant.get('ready_sha256')!=ready_sha256 or grant.get('no_embedding_calls_authorized') is not True:raise ValueError('grant nonce/READY binding invalid')
  observed=_clock(grant.get('observed_monotonic'),'grant observation');until=_clock(grant.get('valid_until_monotonic'),'grant lease')
  if not ready['ready_observed_monotonic']<=observed<=now or observed>=ready['grant_deadline_monotonic'] or not now<until<=ready['deadline']:raise ValueError('grant admission deadline/lease invalid')
  return grant
+
+def validate_grant_phase(ready,grant,now,phase,ready_sha256):
+ validate_ready_phase(ready,now,phase)
+ return validate_admitted_grant_phase(ready,grant,now,phase,ready_sha256)
 
 def read_phase_state(ready):
  """RO snapshot on the PC; never return/log the authority's private token."""
