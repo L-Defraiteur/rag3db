@@ -164,3 +164,16 @@ runtime natif ; ancien rouge inchangé. Rapport09 propose un audit RO900 de
 la copie figée sans nouveau Source/embedding/writer, première ouverture RO
 refusée=>STOP sans recovery ; code et GO distinct restent à obtenir. Rien
 n'est lancé par cette correction ni par la proposition.
+
+Sur PREPA explicite C7, audit_result.py est maintenant matérialisé pour RO
+du futur couple : 900outer898+kill2/common830 après poste32G, P/Q/S neufs,
+copie complète du résultat potentiellement écrit avant toute ouverture,
+lecteur typé existant ELFadd01058 épinglé sans compiler, SDK/IDS et références
+du rouge373dcc épinglés. SQLgraph/FTS5/vis/gens/bijection puis TOUSvecteurs/
+marker/debt sont les mêmes primitives indépendantes ; premier refusSTOP,
+aucun writer/Source/provider/recovery/LOAD. SOURCECOPY02 et résultat figé
+jamais ouverts en DB, inventaires stricts avant/après/final. Exception
+SDK.readers0/mode0644 sur nouvelle copie seulement, WAL nouveau refusé.
+Trois fonctionsCPU de gardes hermétiques vertes0.004s, aucun natif/DB lancé.
+PréparationPC/RO/GOexact restent distincts ; succès éventuel seulement
+FROZEN_RESULT_RO_OBSERVED, pas shutdown propre ni durabilité ni LIVE.

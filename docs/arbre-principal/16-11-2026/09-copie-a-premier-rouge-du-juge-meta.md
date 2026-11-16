@@ -112,4 +112,47 @@ premierrouge et pas de contournement.
 Un succès éventuel serait seulement un état logique/physique observé RO
 après cleanup. Il ne transforme ni l'ancien scope ni l'absence de shutdown
 propre en VERT et ne qualifie pas la durabilité, migration ou LIVE. Aucun
-GO900 n'est acquis par cette proposition ; contrôleur encore non matérialisé.
+GO900 n'est acquis par cette proposition.
+
+### Contrôleur RO matérialisé pour revue
+
+`debt-copy-a/audit_result.py` implémente cette proposition séparément de la
+branche writer. P/Q/S neufs : debt-audit-ro-result-v1,
+debt-audit-ro-control-v1, debt-audit-ro-scopes-v1 sous la racine commune.
+`--prepare EXACT` ne fait que copier les7sources et épingler timeout,
+SDK/helpers et9références immuables du rouge ; pas d'ouverture DB. Le reader
+existant add01058f3b0d6efd28d936c865b1ba9071c0e2eb85f559743bf0c52aeea6371
+est réutilisé directement, sans build ni selftest natif ajouté.
+
+Le futur `--launch EXACT --allocation REF` exigera destinations neuves et
+source propre exacte. Poste réel puis timeout898+kill2 englobe compose,
+common830, copie/intégrité, toutes lectures, nettoyage, hashes finaux et
+publication. Chaque SQL90/FTS60/copie120 est borné au même END−15, pas de
+reset. L'autorité32G/HIGHmax/swap0/quota<=8 et le bus privé sont contrôlés ;
+TERMINE/ownedstartabsents/busabsent et deadline après hashes/prépublication
+conditionnent le statut FROZEN_RESULT_RO_OBSERVED.
+
+Avant la première ouverture : scan résultatfigé FD/exe/cwd/start, hash complet
+de son bundle DB+FTS+sidecars ET COPY02, copie complète reflink obligatoire,
+comparaison fichiers/modes/répertoires exacte, nouveau ledger et profil.
+COPY02 n'est jamais ouvert en DB. Les références graph-before/fts-before
+proviennent du rouge et sont épinglées à la préparation. La seule ouverture
+native vise P/copy/code-principal.rag3db. readOnly/pool1G/threads4 du helper
+préqualifié sont conservés ; aucun CLI, provider, Cargo, compilateur, recovery
+ou LOAD n'est lancé. Reader générique réutilisé uniquement par les trois
+juges explicitement listés.
+
+Après lecture et encore au final : bundles sources strictement identiques,
+copie existante octets/modes identiques, répertoires inchangés. Seul ajout
+possible : code-principal.rag3db.readers vide/mode0644/SHAempty, exclusivement
+sur nouvelle copie ; aucune suppression/modification d'un .readers existant
+ni aucun WAL nouveau admis. Les UNKNOWN globaux sont conservés comme tels.
+Premier écart immuable arrête le parcours ; nettoyage n'est pas attestant.
+
+Trois fonctions CPU hermétiques passent en0.004s : exception.readers exacte,
+refus WAL/mutation/suppression, contrôle AST des vrais raccords/commande de
+copie complète avant Reader. Un premier test d'ordre utilisait ast.walk
+(ordre en largeur) et a été corrigé pour comparer les numéros de ligne ;
+aucune correction de comportement du pilote n'en découle. Ce ne sont pas
+des tests natifs. Q/P/S ne sont pas encore créés ; préparation PC et revue
+du couple exact précéderont tout éventuel GO900 distinct.
