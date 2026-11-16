@@ -244,3 +244,23 @@ scripts contrôleurs exacts avec PID/starttime/identité de fichier et programme
 et bloquer tout autre lien attribué T/W. Le lancement sera depuis un cwd
 extérieur au worktree ; un cwd W du contrôleur n'est pas une exemption.
 Ne pas changer le pilote de relogement historique ni réinterpréter ses preuves.
+
+### Revue Mémoire/C7 b70 — trois réserves P1 regroupées avant correction
+
+1. Scan : ancêtres ignorés sans preuve d'identité, décrit ci-dessus.
+2. Provenance : le préflight enregistre les dev/inode/ELF du target actif sans
+   les comparer à un attendu figé. L'archive56aca prouve l'ancien rouge relogé,
+   pas le target recréé et qualifié6tdyny. À figer : copie/ledger du target actif,
+   identités/modes/marker/empreintes, source et reçu vert6tdyny terminé ;
+   comparer préparation==entrée après poste avant garde. Un target substitué
+   avec le même marqueur ne doit pas passer. Cette capture tardive sera nommée
+   telle quelle, sans inventer une empreinte prise au moment de la passe.
+3. Finalisation : le VERT dans Common n'est pas le verdict composé. Matérialiser
+   lanceur avec budget unique3600 et finaliseur après Common terminé/restes[]/
+   nettoye/hash/scan/délai relu. Pas de nouveau budget au dernier pas.
+
+Les trois réserves corrigent un seul pilote, pas trois lots. Publication des
+scénarios discriminants avant essais hermétiques ; aucune exécution b70, aucun
+Cargo ni nouveau cache. Le test de texte initial du scan est un premier signal,
+pas une preuve du comportement : il sera remplacé par de vrais processus factices
+avec liens contrôleur/ancêtre/target et starttime changé.
