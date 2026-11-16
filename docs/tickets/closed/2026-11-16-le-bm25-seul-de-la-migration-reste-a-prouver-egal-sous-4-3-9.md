@@ -1,7 +1,11 @@
 # Le bm25 seul de la migration reste à prouver égal sous 4.3.9
 
-- **État** : ouvert (16 novembre 2026), à prouver. Ce n'est pas un défaut constaté sous 4.3.9 : il manque la preuve
-  que la 4.3.9 corrige ce que le banc a mesuré sous 4.3.8.
+- **État** : fermé (16 novembre 2026), sans défaut de lucivy. Le banc est passé de 14/30 classements égaux sous
+  4.3.8 à 21/30 sous 4.3.9 (master fe5d81f811). Les 9 cas restants ont été départagés par `test_compare_two_indexes`
+  sur l'ensemble visible exact (61 122 ids). Les scores de lucivy sont égaux à 1,8e-3 relatif près, sous le contrat
+  de 5e-3. Les divergences sont des ex æquo stricts, ou des contenus que l'un des deux côtés n'a pas : 911 contenus
+  n'existent que dans A visible, 879 que dans B′. La suite est chez ED :
+  `docs/lucivy/tickets/2026-11-16-la-migration-et-l-index-neuf-ne-cherchent-pas-les-memes-contenus-visibles.md`.
 - **Gravité** : moyenne. Si l'égalité ne vient pas, une base qui garde son histoire (les générations d'ED) ne classe
   pas comme un index neuf des mêmes rangées visibles, et la recherche de code sur une base migrée diffère.
 - **Atteignable en service** : oui, sur toute base dont le plein texte garde des versions fermées.

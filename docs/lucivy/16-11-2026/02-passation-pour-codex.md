@@ -91,6 +91,12 @@ compile pas, ou qui saute, n'est pas verte.
 
 ### Entrée 1 : prouver le bm25 seul de la migration sous 4.3.9
 
+**Fait le 16 novembre 2026 à 11 h, sans défaut de lucivy.** Le pointeur 4.3.9 est sur master (cb4a1757a4). Le banc
+est passé de 14/30 à 21/30. Le départage montre des scores égaux au contrat près, des ex æquo, et des contenus
+différents. Le ticket est fermé (`docs/tickets/closed/2026-11-16-le-bm25-seul-de-la-migration-reste-a-prouver-egal-sous-4-3-9.md`),
+la suite est chez ED (`docs/lucivy/tickets/2026-11-16-la-migration-et-l-index-neuf-ne-cherchent-pas-les-memes-contenus-visibles.md`).
+Ce qui suit reste comme méthode, si une autre migration doit se départager.
+
 - **Ticket** : `docs/lucivy/tickets/2026-11-16-le-bm25-seul-de-la-migration-reste-a-prouver-egal-sous-4-3-9.md`.
 - **Prérequis, si le pointeur n'est pas sur master** (le demander à l'orchestration) :
   1. Dans `~/git_workspaces/rag3db-lucivy-439`, mettre `lucivy-core`, `ld-lucivy` et `sparse-vector` à `"4.3.9"`
