@@ -80,3 +80,7 @@ Nouvelle source depuis preuves8f813, anciennesAPP3ee/ELF268/fixtures/portées fi
 ## Limite RO sourcebc952 et préparation du pilote vert
 
 Hotfix favorable bornéBlobs : varianteFilesstricte propageErrrebuild_fts_step seulement ; ouvertureFiles conserveOption+note_index_failure/log, donc passtrictglobalFiles. Défautouverture àqualifier séparément si nécessaire, NONrésolu par ce lot. Pas de qualificationreadonly/in_transaction/planonly/multicellules. Pilote5exacts décritrapport23, sourceAPPbcfigée, budgetNOUVEAU1200proposé/freshGOdistinct ; aucuneautoritéancienne réactivée, aucunrun ou Tmuté.
+
+## Vert ciblé cinq juges, ticket encore OUVERT
+
+APPbc952/PILOTEaf11 unefoisGO C7-FTS-GEN-GREEN-AF11-16nov : buildrc0/ELFb23414d3/ledger512c2a avantmarkers/invent5/0ignore,5exactsDISTINCTS chacun1passed0failed0ignored etrc0. GENsurinchangé traceguard1/rebuild1 retire9000000commeclassic ; pendingcompteségaux/sourceErr/maintenanceErr validés. Rapport24/archive94SHA2postes57fbd028...eb3c ; scopeVERT0TERMINE/94ownedquiet/posterendu/Townerbcconservé. AnciennesportéesROUGES62+263/APP3ee/ELF268intactes. Pascanonical/master/globalFilesstrict/COUNTstrict/readonlyplanonly/multicellules qualifiés. PRÉPAUNIONNEUVEautoriséeC7seulement, BGE/PGnonréservés. ÉtatOUVERT.
