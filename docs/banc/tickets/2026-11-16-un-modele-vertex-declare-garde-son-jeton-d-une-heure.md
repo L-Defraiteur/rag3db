@@ -23,6 +23,12 @@ Plan : [préparer le renouvellement Vertex](../../everything-declarative/16-11-2
 Le rouge HTTP reste à écrire puis à exécuter avant tout correctif ; aucune
 preuve du banc n'est repeinte ni aucun vert annoncé sur cette préparation.
 
+Après publication du témoin NON JOUÉ et PIN FINI G : les deux commits sont
+repris sans changement produit sur base68590270 dans la branche neuve
+`cx-ed-vertex-token-refresh-r2`, tête préparatoireb402243bb7 ; rapport03
+actualisé. Le témoin de transport est écrit, son rouge reste NON OBSERVÉ,
+le raccord déclaré et le correctif restent à faire. Aucun Cargo lancé.
+
 ## Le constat
 
 La passe F300 de la mesure longue (`~/.cache/rag3db-banc-notes/compaction/long/F300-ov10-0653-20261116-0157/`
