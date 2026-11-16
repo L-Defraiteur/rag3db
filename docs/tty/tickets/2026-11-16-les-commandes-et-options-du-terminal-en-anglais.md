@@ -463,3 +463,16 @@ wasm-bindgen-macro-support et wasm-bindgen-shared0.2.130 ; wit-bindgen0.57.1.
 Aucun téléchargement de ces8paquets, aucun metadata supplémentaire.
 Liste transmise C7 avant tout élargissement ciblé. Prochaine recette doit
 préserver F8 acquis et nommer le propriétaireT réel avant un GO neuf.
+
+### Préparation de continuation autorisée, sans rejeu F8 ni budget neuf
+
+C7 autorise après ticket tous payloads manquants verrouillés du **lock tty**
+SHA9127845d654a37f4a9e0fbce59b69ef26da51c6f6d7af6a6833782fd4fecabbb,
+inventaire complet avant actions et staging/hash/extractionstricte/cacheabsent
+atomique pour les8pins déjà publiés. Aucun Cargo/build/native pendant prépa.
+Source produit6d figée ; continuation buildTTY+harnais seulement. F8 porté
+avec ses8logs/hash/sourceproduitidentique, pas rejoué. Target propriétaire
+workspace root réel, reçu93l terminé, ledger nouveau à figer avant sa garde.
+NouveauxP/Q/S/TMP, mais **même INITIAL848482.791694931 et
+END852082.791694931**, minreste calculé après vrai poste ; si expiré, fermer.
+Lecture de l'horloge avant prépa : now849100.284, reste2982,5s, non réinitialisé.

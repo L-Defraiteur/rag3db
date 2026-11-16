@@ -15,6 +15,8 @@ VERSION = '4.3.9'
 CHECKSUM = '24424a98439ff03e1fb75fc749a4d88d720ca5b9084b6c1a885dcd6cfe99afb7'
 LOCK_SHA = '090cc4e1330dc694127c0f08330d25acc656699763079400b502ba6607093fa7'
 REGISTRY = 'index.crates.io-1949cf8c6b5b557f'
+LOCK_PATH = 'extension/rag3weaver/Cargo.lock'
+STAGING_PREFIX = 'cx-tty-crate'
 
 
 def digest(path):
@@ -23,7 +25,7 @@ def digest(path):
 
 def main():
     w = Path(__file__).resolve().parents[3]
-    lock = w / 'extension/rag3weaver/Cargo.lock'
+    lock = w / LOCK_PATH
     assert digest(lock) == LOCK_SHA
     package = next(p for p in tomllib.loads(lock.read_text())['package'] if p['name'] == NAME and p['version'] == VERSION)
     assert package['source'] == 'registry+https://github.com/rust-lang/crates.io-index' and package['checksum'] == CHECKSUM
@@ -34,7 +36,7 @@ def main():
     assert cache.resolve() == cache and cache.stat().st_uid == os.getuid()
     assert not destination.exists() and not destination.is_symlink()
     assert not source.exists() and not source.is_symlink()
-    staging = Path.home() / f'.cache/rag3weaver-build/cx-tty-crate-{NAME}-439'
+    staging = Path.home() / f'.cache/rag3weaver-build/{STAGING_PREFIX}-{NAME}-{VERSION.replace(chr(43), chr(95))}'
     staging.mkdir(mode=0o700)
     proof = dict(package=package, lock_sha=LOCK_SHA, destination=str(destination),
                  before=dict(cache_absent=True, source_absent=True))
