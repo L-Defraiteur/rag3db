@@ -46,3 +46,11 @@ Réutiliser la compilation lib est une possibilité sous conditions C7 de
 pin/copie/ledger/égalité des sources et profil/env attestés, pas un acquis
 de comportement. Rien n'est rejoué automatiquement ; aucune absence de
 preuve d'environnement ne sera reconstruite comme une observation réelle.
+
+Après publicationf93feac5d7, premier CPU pur timeout60/failfast : **1FAIL**
+nommé parent/enfant, trois autres NONJOUÉS,0,008s unittest/0,054040136s
+enveloppe. Vrai main donne `e2e_equipier::documentation_fixture_uses_the_declared_private_sandbox_before_add`,
+la vraie chaîne enfant est nonqualifiée ; assertion rouge conservée avant
+fix. RAW horsW `cx-archi-doc-bac-registration-cpu-red-r1`, aucun Cargo/PID/
+DB/natif. Le refus Cargo réel précédent prouve déjà le mauvais target ; ce
+CPU isole l'autre problème qui aurait donné un enfant à zéro test.
