@@ -50,7 +50,7 @@ def active_logs(name):
     paths = [P / (name + '.log')]
     if name == 'official-pass':
         paths += [P / 'official' / (item + '.log') for item in
-                  ['temoins', 'e2e_code_sync', 'e2e_code', 'e2e_lectures', 'e2e_tx', 'check_features',
+                  ['temoins', 'e2e_code_sync', 'e2e_code', 'e2e_lectures', 'e2e_contrat_transactions', 'e2e_tx_ligne_a_ligne', 'e2e_tx_merge_puis_copy', 'e2e_tx_par_paquet_arret', 'e2e_tx_vecteurs_apres_rollback', 'check_features',
                    'preuve', 'lib', 'navigateur', 'resume']]
     return paths
 
@@ -183,11 +183,11 @@ def main():
         'initial-empty-target', str(C / 'scripts/garde_target.sh'), str(T), str(C)], env)
     assert (T / '.arbre-du-target').read_text().strip() == str(C)
     assert fingerprints == sorted(str(p.relative_to(T)) for p in T.rglob('.fingerprint'))
-    env.update(SUITE_DU_TEMOIN='lib', SUITES='e2e_code_sync,e2e_lectures,e2e_code,e2e_tx')
+    env.update(SUITE_DU_TEMOIN='lib', SUITES='e2e_code_sync,e2e_lectures,e2e_code,e2e_contrat_transactions,e2e_tx_ligne_a_ligne,e2e_tx_merge_puis_copy,e2e_tx_par_paquet_arret,e2e_tx_vecteurs_apres_rollback')
     run('official-pass', ['bash', str(R / 'passe_epinglee.sh'), W.name,
         str(P.relative_to(R) / 'official'), NAMES[0]], env)
     summary = P / 'official/resume.log'
-    for suite in ['e2e_code_sync', 'e2e_lectures', 'e2e_code', 'e2e_tx']:
+    for suite in ['e2e_code_sync', 'e2e_lectures', 'e2e_code', 'e2e_contrat_transactions', 'e2e_tx_ligne_a_ligne', 'e2e_tx_merge_puis_copy', 'e2e_tx_par_paquet_arret', 'e2e_tx_vecteurs_apres_rollback']:
         assert '== ' + suite in summary.read_text() and (P / 'official' / (suite + '.log')).is_file()
     assert summary.read_text().splitlines()[-1] == 'VERT'
     assert not (P / 'first-red.json').exists()
