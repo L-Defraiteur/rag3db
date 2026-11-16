@@ -1,0 +1,27 @@
+# Diagnostic proposé : deux branches et copie froide blobs
+
+Ticket302/301 existant complété AVANT tout nouvel adaptateur. Source rouge957/pilote9a82 native59 figés ; archives65+fixture3fichiers69b173 conservées. Aucun correctif, rejeu ou ouverture native de cette copie effectué.
+
+## Contre-exemple minimal à préparer, pas à jouer sous le GO RO
+
+Deux fixtures privées distinctes, mêmes code source/corpus Snapshot (un fichierRust, source identique), HashEmbedder16, FTSBlobs, mêmes options publiques sync_source(exigeRECHERCHE_TEXTE,relationsBulk,force). Seule forme déclarée AVANT schéma diffère : code-scope-v1/content (classique supporté) et code-scope-v1/content/generations (nouveau). Jamais retirer generations d’un catalogue déjà peuplé : cela confondrait les contrats. Même SDK59, aucun downgrade natif/base utilisateur.
+
+Pour chaque fixture, premier sync → résoudre table physique et cellule, relever IDsgraphe et IDsFTS vivants uniques, exiger égalité nonvide. Ajouter un fantôme horsensemble (9000000 seulement après contrôle absence), commitFTS réussi, relever IDsFTS=graphe∪fantôme/jeton. Deuxième sync de source INCHANGÉE par la MÊME entrée publique ; relever source_deja_indexee, état generations et branche effectivement choisie avec un témoin cfg(test) (pas une inférence de compte), nombre/appels de garde/rebuild si instrumentation nécessaire. Relever après sync les IDsgraphe/FTS/jeton, champs UUID/H/positions, métadonnées générations/couche/rangs. Attendu dans les DEUX branches : fantôme absent du FTS, égalité d’ensembles physiques, écritures saines conservées. Un appel direct au helper privé à la place du dispatch ne suffirait pas.
+
+Ce juge DOUBLE nouveau devra être publié avant fix ; exécution native sur ancien master et candidat exige GO distinct et diagnostic clair. Ce n’est PAS un retryinchangé du juge rouge, ni une dérogation à sa garde302/301. Aucune implémentation/TDDnative lancée par la présente recette RO.
+
+## Recette RO600 proposée — outils et phases exacts avant GO
+
+NOUVELLE copie de cx-archive-recherche-fts-existing-canon-fixture-v1/copy, jamais ouverture de l’archive/original. Inventaire source/copie avant et après, data/WAL strictement byteidentiques ; seule exception explicitement proposée `<base>.readers` régulierUID/0octet, conformément au code readers_lock.h. Aucun autre fichier/dossier modifié toléré par défaut. Pas de purge/reprise/warmup/index, pas de moteur écrivain, pas de modèles/PG/API7970.
+
+Outil natifPC qualifié `~/.cache/optimiseur-notes/bascule-16nov-927/read-only-query-v2-luciepc` SHA48ae2328a29676fa69154cb9c67d9125d4d04cf92b029bd2b2a09981dea95616, C++rag3db.hpp/SystemConfig.readOnly=true/pool1GiB, SDK59 soSHA b7e9fc75a3d2de04c72680b0309e8bb1df9eaadb5211ebbacf39716c6d0a2101. Portable43cffb... interditPC (ISA127 connu). Source931267...f125 à Arbre655dd0f592. SQL fixe pour formecode_scope_form, entity_config:Scope/ScopeContent, génération/couche/rangs/source et offsets physiques/cellules ; tout écart de schéma/alias/inventaire refuse, pas de repli vers table publique.
+
+Un NOUVEL adaptateur C++ à qualifier lit `_index_blobs` visibles `(b._deleted_gen IS NULL OR b._deleted_gen<0)`, typeSTRING clé/typeBLOB données, `Value::getValue<std::string>()` brut après contrôle de type (value.h501/value.cpp418), jamais toString(BLOB). Framing binaire longueurs explicites, refusnull/doublons/troncature. SelftestC++ sansDatabase avec Value(BLOB,octetsNUL/FF/newline) avant toute utilisation ; aucune fixtureDBCREATE dans la recetteRO.
+
+MatérialisationPython en répertoireNEUF : root=`index/_shard_config.json` et autres index/* SANSslash ; shards=`Lucivy_{index}/shard_i/*` (ne PAS ajouterLucivy_ à la racine, index contient déjà son nom physique). Réemploi exact du modèle open_blob_snapshot ; parser valide index, clés, paths, config.shards, inventaire et octets, aucune réécriture/schema/index writer. Tombstones exclus par SQL natif, pas par une interprétation toString.
+
+ELF Lucivy4.3.9 read_only qualifié `snapshot-files --live-ids` SHAd0dd13e6d403e614038b251f413637d5f6d02a98ba1c10509388d0be1f5e15c7, PC bascule-live-20261116/id-sets-pc-01/snapshot-files (portable ISA locale séparée). Source21528070...982b. Il ne sait PAS lire BlobStore directement ; adaptateur binaire doit être qualifié d’abord. Vérifie read_only/commitREFUSED/_node_idu64 unique/nombre=docs.
+
+Budget à soumettre C7 :600s uniques APRÈS vrai poste32GiB/HIGHmax/swap0/quotaPARPLACE, compiladaptateurC++90 (un compilateur, zéroCargo/rustc), selftest+transport60, inventairecopie+SQL90, dump/matérialisation90, decodeLucivy90, comparaisonsIDs+hash/finalisation90, tout MINEND−marge et premierrougeSTOP. Pas de partageT Cargo, scratchoutils séparé et neuf, aucun ancien reçu réactivé.
+
+Sortie : ensembles explicites IDsFTS−graphe et graphe−FTS, doublons/type/cardinalités, table/cellule/formecode, clésBlobStore/marquesobservées, BUILD_ID réel et manifestsavant/après. Une seule époque froide : ne prétend PAS tracer rétrospectivement les commits/branches avant/après le rouge. Snapshotcachedhandle et fallback ne sont pas observables dans cette copie seule ; l’instrumentation du futur juge DOUBLE est le complément requis. StatutOBSERVATIONRO, jamais réparation/qualification produit verte. Outils nouveaux encoreNONQUALIFIÉS ; pas de GO demandé tant que sources/pilote/tests ne sont pas publiés/relu.
