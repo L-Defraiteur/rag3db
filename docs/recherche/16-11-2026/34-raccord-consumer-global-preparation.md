@@ -30,3 +30,14 @@ fakes antérieurs restentpréuvepropriétaire distincte jusqu'àéventuelrejeuCP
 surcomposésourcefigée. AucunCPU/native/HTTP/PG/proc/Cargo exécutéparcecommit.
 Aprèspublication seulement : CPU60failfastborné autorisé, logsrouges et verts
 conservés, puis nouveauSHAfinalownerG+couple/paquet/ROtotales ; aucunGO6000.
+
+## Cinq témoins joués après publication, transportréel nonjoué
+
+Après PUSH394088a5ab6ca1f3f9ac94449cbd7da8c0261666 : timeout60+kill2,
+Python-B/unittestfailfast5fonctionsVERTES0.016s/rc0. Deuxcontre-exemples
+a7d/806 passent surcorrectif ; troiscomplémentsF8mutants/timeoutRAW/lease
+postcanon n'ont pas étévusrougesavantfix. MockownerAPI/protocolsnapshot/PID,
+aucunHTTP/procscan/PG/Cargo/native/Auth/poste. Bruts stdout/stderr/result
+R/cx-proofs-recherche-fts-global-consumer-cpu-v1, manifestejoint.
+Ce verdictCPU n'est pas qualificationworker/providerréel/SQLG/canonique ;
+QfinalNONcréé, ownerPGprovisoire234 remplacéstrictementaprèsSHAGstable.
