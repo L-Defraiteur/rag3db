@@ -15,8 +15,10 @@ Ici, la part de recherche : l'estimation, l'attente bornée et la réponse des o
 ## Ce que le lot ajoute (noms en anglais)
 
 1. **Le débit observé** : `Lag::observe(cell, files, held)`. `ReindexFileNode` l'appelle à la fin de
-   chaque lot. Une moyenne glissante des millisecondes par fichier se tient par cellule. Aucune
-   constante : sans observation, l'estimation est dite inconnue.
+   chaque lot, par `Catalog::observe_index_rate`. Une moyenne glissante des millisecondes par fichier se
+   tient par cellule. Aucune constante : sans observation, l'estimation est dite inconnue. **Le débit
+   se garde entre deux ouvertures** (c7) : il s'écrit dans `_catalog_meta` (`index_rate_ms_per_file`) et
+   se relit à l'ouverture. Sinon, le premier index d'une session n'aurait jamais d'eta.
 2. **L'estimation** : `Lag::estimate(cell) -> Option<IndexEstimate { pending_files, eta_ms: Option<u64> }>`,
    soit les fichiers en attente fois le débit observé.
 3. **L'attente bornée** : `Lag::wait_caught_up(cell, deadline) -> bool`, sur une `Condvar` que `done`
@@ -29,7 +31,9 @@ Ici, la part de recherche : l'estimation, l'attente bornée et la réponse des o
      rattrapé, la réponse est complète, sans un mot sur l'attente ;
    - estimation au-dessus, ou toujours en retard au bout de l'attente : l'appel répond tout de suite, sur
      ce qui est indexé. Il dit `"index": {"ready": false, "eta_s": N | null, "pending_files": k}` et une
-     ligne en tête : « index pas prêt, environ N s » (ou « durée inconnue »).
+     ligne en tête : « index pas prêt, environ N s » (ou « durée inconnue »). **Quand il a attendu**, la
+     réponse porte aussi `waited_s` (c7) : un agent ou Lucie sait que l'attente a eu lieu, et pourquoi.
+   - l'attente se fait par la vue de lecture, qui porte le registre : jamais par le mutex du catalogue.
 6. **Ce qui n'est pas ici** : la notification unique à l'index prêt, et le silence sur les propres
    écritures du pas, sont la part d'archi. `Lag::estimate` et `Lag::wait_caught_up` sont son contrat.
 
@@ -41,4 +45,10 @@ Ici, la part de recherche : l'estimation, l'attente bornée et la réponse des o
   20 s par fichier. La réponse vient en moins d'une seconde avec `index.ready` faux, `eta_s` 20 et la
   ligne « index pas prêt, environ 20 s ».
 - `a_read_without_an_observed_rate_waits_at_most_the_setting` : `index_wait_s` à 1, aucun débit,
-  réactions arrêtées. La réponse vient entre 1 et 3 s, avec `index.ready` faux et `eta_s` nul.
+  réactions arrêtées. La réponse vient entre 1 et 3 s, avec `index.ready` faux, `eta_s` nul et
+  `waited_s` 1.
+- `the_observed_rate_is_kept_across_an_opening` : une base sur disque ouverte deux fois. Le débit observé
+  par la première ouverture donne un eta à la seconde. Son témoin du témoin est fait : sans la relecture
+  à l'ouverture, il rougit.
+
+Les quatre témoins ont été vus rouges en 9bbdf68da, puis verts en dcaaf9584.
