@@ -48,3 +48,6 @@ RO preuves9a64654e7f par Banc : [rapport15](../../banc/16-11-2026/15-ro-preuves-
 
 
 RO Banc paquet verte39cc2325e : [rapport16](../../banc/16-11-2026/16-ro-paquet-vert-lucivy-admission.md), avis préparatoire favorable au couple1ee5/6c701/22550/préflight277a. CinqSHA/sixsources/neufnoms conformes, guardsAST identiques7833 ; TERM295/KILL300 et validation285 uniques, ledgers avant les neuf exacts mémoire, natifs non sélectionnés. Aucun run/ELF/proc/service par Banc ; pasGO ni vert Rust observé, ticket ouvert.
+
+
+RO preuves vert9d6451f721 : [rapport19 Banc](../../banc/16-11-2026/19-ro-preuves-neuf-juges-lucivy-verts.md),60SHA conformes, neuf exacts mémoire1/0/0 chacun, trois identités initial/final/externe égales, CommonVERT0/TERMINE propre et contrôle final sous285/CommonEND. Favorable à ce jeu mémoire après rouge discriminant ; aucun ELF ouvert ou exécuté par Banc, aucun core/corpus/FS/7.2ULPPR42 qualifié. Ticket global toujours ouvert.
