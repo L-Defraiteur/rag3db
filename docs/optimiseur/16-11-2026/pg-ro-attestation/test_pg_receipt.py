@@ -257,6 +257,17 @@ class ArtifactTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             pg.validate_attestation(path,sha,self.expected,self.ready,1000.)
 
+    def test_loader_rechecks_refusal_after_reading_raw(self):
+        path,sha=self.write_artifact();original=pg._read_regular
+        def read(candidate,root):
+            value=original(candidate,root)
+            if Path(candidate).name=='check-err':
+                (self.root/'refusal.json').write_text('{"verdict":"RED"}')
+            return value
+        with patch.object(pg,'_read_regular',read):
+            with self.assertRaises(ValueError):
+                pg.validate_attestation(path,sha,self.expected,self.ready,1000.)
+
     def test_publisher_valid_fake_is_loadable(self):
         path,sha=pg.publish_observation(self.root/'ok',self.body,self.raw,expected=self.expected,ready=self.ready,
                                        clock=lambda:1000.,phase_check=lambda:dict(self.ready))
