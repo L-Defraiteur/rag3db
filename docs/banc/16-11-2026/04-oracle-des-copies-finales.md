@@ -245,3 +245,22 @@ freeze02, lister root original et snapshot portable, revérifier hashes/états.
 Conserver les codes/sorties même en refus ISA ; première erreur arrête l'entrée.
 Aucun accès base/service. Dossier de preuves neuf `validations-scanner-03/`,
 artefacts `oracle-final-16nov/scanner-03/`. Slot non conservé pour publication.
+
+### Troisième entrée : portable joué après smoke ISA
+
+Scope RO60s32G VERT, code0, preuves locales
+`oracle-final-16nov/validations-scanner-03/validation-nntdkoeg/`. Même binaire
+SHA d6cbd33b..., fixture privée sample.rs effectivement listée/code0 avant
+l'ouverture de la racine source. Aucun Cargo, base, ingestion ou service.
+
+WorkingTree927 liste9138 chemins originaux contre9074 dans portable-02.
+Absents : 66 fichiers >1MiB (stat seulement), un `.git` d'administration et
+un `.env.example` volontairement NON LU. Aucun autre absent. Quatre archives
+`.tar.gz` de preuves apparaissent en plus dans la capture hors contexte Git,
+comme au diagnostic. Hashes source/copie et HEAD/status inchangés avant/après.
+Comparaison complète locale : `scanner-03/comparison.json`, SHA256
+`f9235f13501022e5a2cdcda9f336e1cc051ccc89272b72ad1d0e03d4bfd5db20`.
+Le poste est rendu avant publication. Les trois listings exacts sont désormais
+joués ; le premier refus E0514 reste conservé séparément. L'oracle reste
+NONMATCHED tant que manifeste/type d'admission de `.env.example` et extras ne
+sont pas prouvés comparables. Ne jamais lire/copier `.env*` pour forcer le match.
