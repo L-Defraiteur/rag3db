@@ -39,3 +39,16 @@ réécriture UNEXPECTED_FAILURE dans le même fichier exclusivement créé, flus
 de l'échec et retour de cette même valeur. Le compose imprime et rendexit1 sur
 cette valeur ; le paquet b9b/config ancien reste conservé et ne sera pas réutilisé.
 Nouveau pin/copies/RO totale requis, aucun GO600/795 reçu.
+
+Correctif exact9f3c9bcad4 publié avant rejeu : onze fonctions CPU VERTES en0.023s
+sous timeout60/failfast autorisé distinctement par C7, zéro Cargo/natif/procscan.
+Journaux hors W conservés :
+
+- rouge `cx-doc-bac-green-fsync-red-r1/tests.log`, SHA256
+  `d34a3d2d1c9d730d0fd8f04059ca4643a6079e01bf64451638cd573c82dbb507` ;
+- vert `cx-doc-bac-green-fsync-green-r1/tests.log`, SHA256
+  `94815b937c3db5ac6a1ef71f5f58a167eaa94021f8759e808d682c3c42a03830`.
+
+RO totale demandée à Banc et Mémoire sur9f3 ; attente des éventuelles réserves
+regroupées avant actualisation du contrôleur/copiestoutes neuves et pin final.
+La préparation b9b et son paquet25fichiers restent historiques et non lancés.
