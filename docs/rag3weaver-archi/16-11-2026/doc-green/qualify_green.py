@@ -41,7 +41,12 @@ def sha(path):
     with Path(path).open('rb') as f: return hashlib.file_digest(f, 'sha256').hexdigest()
 
 def save(name, value):
-    (P / name).write_text(json.dumps(value, indent=2) + '\n')
+    with (P / name).open('w') as stream:
+        if name=='result.json' and value.get('status')=='GREEN_TARGETED_ONLY' and time.monotonic()>=value['deadline']:
+            value=dict(value,status='UNEXPECTED_FAILURE',error='deadline after result open')
+        json.dump(value,stream,indent=2)
+        stream.write('\n')
+    return value
 
 def git(root, *args):
     return subprocess.check_output(['git', '-C', str(root), *args], text=True).strip()
@@ -235,7 +240,7 @@ def prepare(pilot):
         except Exception as error:outcome['error']=repr(error)
     if outcome['status']=='GREEN_TARGETED_ONLY' and time.monotonic()>=outcome['deadline']:
         outcome.update(status='UNEXPECTED_FAILURE',error='deadline before publication')
-    save('result.json',outcome);print(json.dumps(outcome));sys.exit(0 if outcome['status']=='GREEN_TARGETED_ONLY' else 1)
+    outcome=save('result.json',outcome);print(json.dumps(outcome));sys.exit(0 if outcome['status']=='GREEN_TARGETED_ONLY' else 1)
 
 
 if __name__=='__main__':
