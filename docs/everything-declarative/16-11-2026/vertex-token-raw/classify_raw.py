@@ -59,7 +59,7 @@ def inventories(value):
         names = []
         for row in rows:
             need(isinstance(row, dict) and set(row) == {'name', 'should_panic', 'status'}, 'inventory row shape')
-            need(type(row['name']) is str and bool(re.fullmatch(r'[A-Za-z0-9_:]+', row['name'])), 'inventory name type')
+            need(type(row['name']) is str and all(part.isidentifier() for part in row['name'].split('::')), 'inventory name type')
             need(type(row['should_panic']) is bool and row['status'] in ('ok', 'ignored'), 'inventory status/type')
             names.append(row['name'])
         need(len(names) == len(set(names)), 'duplicate inventory name')
