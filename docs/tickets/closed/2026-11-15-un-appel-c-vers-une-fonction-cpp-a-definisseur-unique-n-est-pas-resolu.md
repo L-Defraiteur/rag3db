@@ -83,3 +83,12 @@ Une sonde en mémoire (`tests/sonde_marque_nom.rs`, corpus figé de rag3db-garde
 → 11), aucun ne part. Le reste des 2 533 de la base du dépôt est dans des dossiers que la sonde n'a pas
 pris (`tools`, `third_party`, `extension`). La base repassée le dira, puisque REGLES_DE_L_ANALYSE monte
 avec ce lot.
+
+## La mesure sur la base du dépôt (banc, 16 novembre 2026 : deux index neufs de l'arbre 1de1f86d88 sur base vide, sans embarqueur — avant par f10336d3f2, après par 41144f8d22 ; sorties à luciepc, `~/.cache/rag3weaver-build/banc-parite/sorties/codeparsers-stack/`)
+
+- Arêtes vers l'API C (cible sous `src/c_api/`, `visibility = 'declaration'`) : 0 → 30, toutes depuis `test/`.
+- CONSUMES des mentionneurs `.c` : 892 → 1 481 (third_party 892 → 1 465, examples 0 → 16).
+- Le reste des 2 533 d'ED : sur l'arbre figé, la sonde `probe_unique_definer_misses` montre que la plupart
+  des « définisseur unique sans arête » sont des abstentions justes (valeurs d'enum, méthodes std, un
+  appel de `src/` vers un fichier de test) ; les vrais manques sont des méthodes héritées, le ticket de
+  [la définition liée à l'en-tête](../../codeparsers/tickets/2026-10-25-une-definition-cpp-se-lie-a-sa-declaration-d-en-tete.md).
