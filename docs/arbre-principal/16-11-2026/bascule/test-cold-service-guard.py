@@ -55,6 +55,11 @@ class ColdServiceGuard(unittest.TestCase):
   self.assertEqual(g.normalized_cgroup('0::/user.slice/stage'),'/user.slice/stage')
   for value in ['relative','0::/a\n0::/b','/a/../b']:
    with self.assertRaises(ValueError):g.normalized_cgroup(value)
+ def test_live_mode_requires_named_canonical_target(self):
+  base=Path.home()/'.local/share/rag3weaver/code-principal.rag3db'
+  g.validate_target_mode('live-code-principal-01','live',base,base)
+  with self.assertRaises(ValueError):g.validate_target_mode('live-code-principal-01','live',Path('/tmp/base.rag3db'),base)
+  with self.assertRaises(ValueError):g.validate_target_mode('service-guard-corrective-02','rehearsal',base,base)
  def test_local_unknown_or_new_host_cannot_green(self):
   obs=dict(previous_pid_exists=False,listeners=[],hosts=[],fd=[],maps=[],errors=[])
   for key in ['hosts','errors','fd','maps','listeners']:

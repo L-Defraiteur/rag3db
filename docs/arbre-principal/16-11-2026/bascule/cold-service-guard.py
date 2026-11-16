@@ -110,11 +110,17 @@ def local_observation(request,reply):
 def validate_local(observation):
  if observation['previous_pid_exists'] or any(observation[k] for k in ['listeners','hosts','fd','maps','errors']):raise ValueError('local cold-state observation refused')
 
-def fetch_phase_guard(root,phase,entered,base,canonical,source,common,end):
+def validate_target_mode(stage,target_kind,base,canonical):
+ if target_kind=='live':
+  if stage!='live-'+Path(canonical).stem+'-01' or Path(base)!=Path(canonical) or Path(canonical).parent!=Path.home()/'.local/share/rag3weaver' or Path(canonical).stem not in ['code-principal','code-lourd']:raise ValueError('live guard target/stage mismatch')
+ elif target_kind!='rehearsal' or stage!='service-guard-corrective-02' or Path(base)==Path(canonical):raise ValueError('rehearsal guard target/stage mismatch')
+
+def fetch_phase_guard(root,phase,entered,base,canonical,source,common,end,stage='service-guard-corrective-02',target_kind='rehearsal'):
+ validate_target_mode(stage,target_kind,base,canonical)
  # All authority checks run inside the real Common descendant/cgroup; no user bus access.
  authority=common.autorite(common.processus());receipt=Path(os.environ[common.RECU]);runner=identity(os.getpid())
  guard=root/'guard';guard.mkdir(mode=0o700,exist_ok=True)
- request=dict(schema_version=1,stage='service-guard-corrective-02',nonce=secrets.token_hex(16),phase=phase,entered_monotonic=entered,requested_monotonic=time.monotonic(),runner={k:runner[k] for k in ['pid','start','cgroup']},common_receipt=dict(path=str(receipt),sha256=digest(receipt),pid=authority['pid'],start=authority['debut'],cgroup=authority['cgroup'],deadline=authority['echeance']),canonical_base=str(canonical),target_base=str(base),source_snapshot=str(source),expected_host=dict(pid=3761669,exe_path=str(Path.home()/'.local/bin/rag3weaver-backend'),exe_sha256=CLI_SHA,source_sha=SOURCE_SHA),reply_path=str(guard/(phase+'-response.json')),reply_sha_path=str(guard/(phase+'-response.sha256')))
+ request=dict(schema_version=1,stage=stage,base=Path(canonical).stem,target_kind=target_kind,nonce=secrets.token_hex(16),phase=phase,entered_monotonic=entered,requested_monotonic=time.monotonic(),runner={k:runner[k] for k in ['pid','start','cgroup']},common_receipt=dict(path=str(receipt),sha256=digest(receipt),pid=authority['pid'],start=authority['debut'],cgroup=authority['cgroup'],deadline=authority['echeance']),canonical_base=str(canonical),target_base=str(base),source_snapshot=str(source),expected_host=dict(pid=3761669,exe_path=str(Path.home()/'.local/bin/rag3weaver-backend'),exe_sha256=CLI_SHA,source_sha=SOURCE_SHA),reply_path=str(guard/(phase+'-response.json')),reply_sha_path=str(guard/(phase+'-response.sha256')))
  path=guard/(phase+'-request.json')
  with path.open('x') as stream:json.dump(request,stream,indent=2)
  request_sha=digest(path);reply_path=Path(request['reply_path']);sha_path=Path(request['reply_sha_path']);deadline=min(end-30,time.monotonic()+30)
