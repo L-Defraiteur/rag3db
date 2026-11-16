@@ -36,8 +36,19 @@ struct RefreshServer {
     base_url: String,
 }
 
+#[derive(Clone, Copy)]
+enum ReplyMode {
+    ExpireAfterFirstCall,
+    AlwaysUnauthorized,
+    UnauthorizedAfterStreamStarts,
+}
+
 impl RefreshServer {
     fn start() -> Self {
+        Self::with_mode(ReplyMode::ExpireAfterFirstCall)
+    }
+
+    fn with_mode(mode: ReplyMode) -> Self {
         let server = Arc::new(tiny_http::Server::http("127.0.0.1:0").expect("bind fixture HTTP"));
         let base_url = format!("http://{}/v1", server.server_addr());
         let stopped = Arc::new(AtomicBool::new(false));
@@ -65,8 +76,18 @@ impl RefreshServer {
                     observed.push(authorization.clone());
                     first
                 };
-                if (first && authorization == "Bearer fixture-token-1")
-                    || authorization == "Bearer fixture-token-2"
+                if matches!(mode, ReplyMode::UnauthorizedAfterStreamStarts) {
+                    let body = concat!(
+                        "data: {\"choices\":[{\"delta\":{\"content\":\"partial\"},\"finish_reason\":null}]}\n\n",
+                        "data: {\"error\":{\"code\":401,\"status\":\"UNAUTHENTICATED\",\"message\":\"fixture stream denied\"}}\n\n"
+                    );
+                    let response = tiny_http::Response::from_string(body).with_header(
+                        tiny_http::Header::from_bytes("Content-Type", "text/event-stream").unwrap(),
+                    );
+                    let _ = request.respond(response);
+                } else if matches!(mode, ReplyMode::ExpireAfterFirstCall)
+                    && ((first && authorization == "Bearer fixture-token-1")
+                        || authorization == "Bearer fixture-token-2")
                 {
                     let body = concat!(
                         "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"},\"finish_reason\":null}]}\n\n",
@@ -146,4 +167,59 @@ fn fixture_token_source_changes_its_cached_token_only_after_invalidation() {
     assert_eq!(source.token(), "fixture-token-2");
     assert_eq!(source.acquisitions.load(Ordering::SeqCst), 3);
     assert_eq!(source.invalidations.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn vertex_persistent_unauthorized_is_named_after_one_refresh_only() {
+    let source = Arc::new(FakeTokenSource::default());
+    let server = RefreshServer::with_mode(ReplyMode::AlwaysUnauthorized);
+    let client = current_declared_vertex(&source, &server.base_url);
+    let mut sink = StringSink::default();
+    let error = client.generate(&[Turn::user("fixture request")], &GenOptions::default(), &mut sink)
+        .expect_err("a persistent 401 must remain an error");
+    assert_eq!(source.invalidations.load(Ordering::SeqCst), 1, "one invalidation only");
+    assert_eq!(
+        *server.authorizations.lock().unwrap(),
+        ["Bearer fixture-token-1", "Bearer fixture-token-2"],
+        "an authentication refresh must not become a retry loop"
+    );
+    let message = error.to_string();
+    assert!(message.contains("Vertex authentication rejected after refresh"), "{message}");
+    assert!(message.contains("401"), "{message}");
+    assert!(!message.contains("fixture-token-"), "error must not disclose a token");
+    assert!(sink.text.is_empty());
+}
+
+#[test]
+fn a_fixed_api_bearer_is_not_refreshed_after_unauthorized() {
+    let server = RefreshServer::with_mode(ReplyMode::AlwaysUnauthorized);
+    let mut client = OpenAiLlm::new(&server.base_url, "fixture-model")
+        .with_auth(Auth::Bearer("fixture-api-key".into()))
+        .without_retry();
+    client.agent = ureq::Agent::new_with_config(
+        ureq::Agent::config_builder()
+            .http_status_as_error(false)
+            .timeout_global(Some(Duration::from_secs(3)))
+            .build(),
+    );
+    let mut sink = StringSink::default();
+    let error = client.generate(&[Turn::user("fixture request")], &GenOptions::default(), &mut sink)
+        .expect_err("a fixed API key rejection is terminal");
+    assert!(error.to_string().contains("401"));
+    assert_eq!(*server.authorizations.lock().unwrap(), ["Bearer fixture-api-key"]);
+    assert!(sink.text.is_empty());
+}
+
+#[test]
+fn vertex_never_refreshes_or_replays_after_a_stream_fragment() {
+    let source = Arc::new(FakeTokenSource::default());
+    let server = RefreshServer::with_mode(ReplyMode::UnauthorizedAfterStreamStarts);
+    let client = current_declared_vertex(&source, &server.base_url);
+    let mut sink = StringSink::default();
+    let error = client.generate(&[Turn::user("fixture request")], &GenOptions::default(), &mut sink)
+        .expect_err("a denied stream must return its error");
+    assert!(error.to_string().contains("401"));
+    assert_eq!(sink.text, "partial", "an opened stream must never be emitted twice");
+    assert_eq!(source.invalidations.load(Ordering::SeqCst), 0);
+    assert_eq!(*server.authorizations.lock().unwrap(), ["Bearer fixture-token-1"]);
 }
