@@ -25,3 +25,29 @@ Témoins à publier séparément avant compilation/exécution ; correctif absent
 Lourd court à préparer sur le même cache de session, ledger/copies avant
 juges, SDK59 exact, garde et échéance neuve, arrêt au premier rouge. La
 campagne complète attend toujours nouvelle APP/pilote/RO/GO distincts.
+
+## Témoins matérialisés, NONJOUÉS
+
+La publication suivante ajoute seulement les deux entrées de test et le
+helper d'observation dans trois fichiers déjà touchés par1bd. Les vrais
+setups restent STRICTEMENT inchangés. Le helper lance le même ELF et le même
+nom exact dans un enfant isolé ; l'enfant effectue le setup, sans hôte,
+montage, service, modèle ou commande Cargo. Le parent garde ses deux sorties
+en fixture à l'échec. Les deux noms sont :
+
+- lib : `daemon_host::teammate_tests::task_fixture_uses_the_declared_private_sandbox_before_add` ;
+- e2e : `documentation_fixture_uses_the_declared_private_sandbox_before_add`.
+
+Une invocation externe de chaque nom fait une seconde invocation interne du
+même nom, typée sous-processus de préparation, pas un second juge distinct.
+ROUGE attendu : `DOCUMENTATION_PRIVATE_SANDBOX_NOT_CONNECTED_BEFORE_ADD_FILES`
+dans l'enfant, repris par `DOCUMENTATION_PRIVATE_SANDBOX_SETUP_REFUSED` dans
+le parent. Compilation cassée, zéro test, autre panic ou timeout ne sont pas
+ce rouge. Pour observer les DEUX absences avant tout correctif, une future
+recette doit demander explicitement deux rouges attendus sous une même borne,
+avec arrêt au premier défaut inattendu ; aucun droit de poursuivre un rouge
+inattendu. À défaut de cet arbitrage, un seul nom pourra être lancé.
+
+Contrôles effectués sans exécution des témoins : rustfmt sortie standard
+jetée pour chacun des trois fichiers (parse seulement), diffcheck,656tickets.
+Aucun Cargo/rustc, aucun ELF de ce source ni résultat de test revendiqué.

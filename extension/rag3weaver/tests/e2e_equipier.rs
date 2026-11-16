@@ -80,6 +80,15 @@ fn depot_de_test(d: &Path) -> (PathBuf, PathBuf, PathBuf) {
     (depot, manifeste, memoire)
 }
 
+/// The actual e2e setup must commit its private sandbox before any task exists.
+#[test]
+fn documentation_fixture_uses_the_declared_private_sandbox_before_add() {
+    documentation_fixture::witness_declared_sandbox_setup(
+        "documentation_fixture_uses_the_declared_private_sandbox_before_add",
+        |root| depot_de_test(root).1,
+    );
+}
+
 /// L'id d'un backend hébergé, par son manifeste (hébergé par un premier appel).
 fn heberger(host: &DaemonHost, manifeste: &Path) -> String {
     let s = host.open_session("le témoin", None, Vec::new(), None);
