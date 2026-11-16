@@ -94,6 +94,25 @@ impl Lag {
     }
 }
 
+/// **What a read can expect from the index of a cell** (point 7 of Lucie's
+/// vision, 16 November 2026): the files still to reindex, and the time left
+/// from the observed rate, `None` when no rate has been observed yet.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IndexEstimate {
+    pub pending_files: usize,
+    pub eta_ms: Option<u64>,
+}
+
+impl Lag {
+    /// A batch of `files` was reindexed in `held` for `cell`.
+    pub fn observe(&self, _cell: &Scope, _files: usize, _held: std::time::Duration) {}
+
+    /// The estimate of `cell`, if it lags.
+    pub fn estimate(&self, cell: &Scope) -> Option<IndexEstimate> {
+        self.summary_in(cell).map(|s| IndexEstimate { pending_files: s.files, eta_ms: None })
+    }
+}
+
 /// L'instant présent, en millisecondes Unix.
 pub fn now_ms() -> u64 {
     std::time::SystemTime::now()
