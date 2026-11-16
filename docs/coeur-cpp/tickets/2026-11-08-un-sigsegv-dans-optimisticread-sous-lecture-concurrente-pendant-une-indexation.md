@@ -3,7 +3,7 @@
 - **État** : ouvert (8 novembre 2026), en cours (cœur c++) : un mécanisme est prouvé (l'étendue, plus bas), le premier événement non ; ce qui
   suit est lu sur le core et le désassemblage.
 - **Famille** : moteur
-- **Gravité** : métadonnée fausse, dite par une erreur (16 nov., au mot de c7 ; avant : plantage, l'hôte de Lucie relancé par systemd 46 s plus tard). Depuis le lot etendue-gardes (9bae60786), une page au-delà du fichier lève une erreur au lieu de planter.
+- **Gravité** : confort (16 nov., au bout du lot de lecture borné, au mot de c7). Le défaut ne plante plus : depuis le lot etendue-gardes (9bae60786), une page au-delà du fichier lève une erreur. Seul reste inexpliqué le premier événement. Gravités d'avant : « métadonnée fausse, dite par une erreur » le matin du 16 nov., et « plantage » depuis le 8 nov. (l'hôte de Lucie relancé par systemd 46 s plus tard).
 - **Atteignable en service** : oui — vu en service le 8 novembre à 8 h 50 m 11 s.
 - **Touche rag3weaver** : par le moteur (l'hôte rag3weaver-backend meurt).
 - **Pour** : hotfixs depuis le 16 nov. (laissé par le cœur), pour le premier événement.
@@ -212,6 +212,37 @@ premier événement : ce qui a posé une entrée libre ou des pages vers 83 mill
 0 h 08 et 8 h 50 le 8 nov. La recherche est bornée à un lot de lecture (deux heures) : les commits moteur
 17a094d12..dadbf0041, avec la base etat-ferme-17h14 comme pièce. Si rien ne sort, ce premier événement passe en ticket
 de confort. Aucun code sans un témoin qui le reproduit.
+
+## Le lot de lecture du 16 novembre (hotfixs, 1 h 20 sur les deux heures accordées)
+
+**Ce que dit la pièce** (etat-ferme-17h14). Les deux segments vivants au-delà de l'étendue
+(`embedding__granite_278m_data`, 96 pages chacun) et l'entrée libre de 64 pages se suivent : 256 pages, de 83 108 096
+jusqu'à la fin du fichier, 83 108 352. Chaque segment fait exactement 128 vecteurs de 3 072 octets : ce sont des
+écritures banales, placées en fin de fichier. Le fichier comptait donc déjà 83 108 096 pages quand elles ont été
+allouées. Le premier événement est un allongement du fichier (une allocation énorme, une écriture loin, ou un compte
+de pages lu à l'ouverture sur un fichier déjà creux), antérieur à ces écritures. La page fausse lue dans l'autre base
+(82 661 836, dans code-rag3db-depot, 448 430 pages) est du même ordre : le nombre est calculé, pas tiré au hasard d'une
+mémoire écrasée.
+
+**Ce qui est écarté**, dans 17a094d12..dadbf0041 et dans les chemins qu'ils appellent :
+
+- **Le retrait des générations** (7cd11e5fa) ne fait que lâcher des références en mémoire. Il ne rend aucune page.
+- **Le budget en octets** (dadbf0041) estime des octets et n'alloue rien.
+- **Le spiller** écrit dans son propre fichier, `<base>.tmp`, pas dans le fichier de données. Sa région de cadres
+  refuse proprement de grandir au-delà de sa borne (« No more frame groups can be added »), sans prendre les cadres
+  du fichier de données.
+- **La troncature au rejeu** (`truncateWALFile`) porte sur le journal, et seulement pour le raccourcir.
+- **Les pages fantômes** sont réécrites à `originalPageIdx * RAG3DB_PAGE_SIZE`. Rien n'y allonge le fichier sans un
+  indice déjà faux.
+
+**Ce qui n'est pas lu** : l'écriture partielle du COPY borné (977c2c866, `extendFlushedHead`, l'allocateur optimiste
+et son rollback), et la reprise des segments partagés entre la tête et le groupe écrit. C'est la piste qui reste, si
+le défaut revient. Aucun relevé de service ne la désigne aujourd'hui : rien n'a changé dans ces chemins depuis
+dadbf0041, et aucune base neuve n'est creuse depuis huit jours.
+
+**Un défaut à part, trouvé en route** : `Spiller::clearFile()`, appelé après chaque requête, ramène `<base>.tmp` à
+zéro octet, mais laisse au `FileHandle` son compte de pages, ses états de page et ses groupes de cadres. Ticket
+`docs/coeur-cpp-hotfixs-tickets/tickets/2026-11-16-le-fichier-de-deversement-garde-son-compte-de-pages.md`.
 
 ## Témoin
 
