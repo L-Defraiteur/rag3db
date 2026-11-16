@@ -1179,6 +1179,9 @@ pub struct SourceSyncReport {
     /// Fichiers listés par la source, et ceux retenus pour l'analyse.
     pub files_listed: usize,
     pub files_ingested: usize,
+    /// Files the writer did not rewrite: same content and same analysis version as the indexed row (the
+    /// generations writer, page 06). `files_ingested + files_unchanged` is what a snapshot sync ingests.
+    pub files_unchanged: usize,
     pub scopes_written: usize,
     pub relations: usize,
     pub failed: usize,
@@ -1301,7 +1304,7 @@ fn synchroniser_la_source(
     let source_id = source_id.to_string();
     // **Sous les générations (2a′-2), une source déjà indexée se synchronise par l'écrivain** : la fin
     // d'instantané effacerait ce qu'aucun paquet n'a marqué, lignes publiées retirées comprises.
-    if catalog.generations.is_some() && !options.plan_only && source_deja_indexee(catalog, &source_id)? {
+    if catalog.generations.is_some() && source_deja_indexee(catalog, &source_id)? {
         return synchroniser_par_generations(catalog, source, options, progress, source_id);
     }
     let grain = BTreeMap::from([("source".to_string(), CypherValue::String(source_id.clone()))]);
@@ -1412,7 +1415,35 @@ fn synchroniser_par_generations(
     let marque = format!("relations_pending:{}/{}:{}", catalog.scope().org, catalog.scope().project, source_id);
     let tout_repasser = catalog.read_meta_key(&marque).map_err(|e| e.to_string())?.is_some_and(|v| !v.is_empty());
     let presents: BTreeSet<String> = retenus.iter().map(|p| crate::code_tools::indexed_name(source, p).1).collect();
-    let partis: Vec<String> = indexes.into_iter().filter(|p| !presents.contains(p)).collect();
+    let mut partis: Vec<String> = indexes.into_iter().filter(|p| !presents.contains(p)).collect();
+    // **The guards of a snapshot sync, before any write** (e2e_code_sync, 16 November 2026: the writer's path
+    // had none). An empty source refuses without `allow_empty`; more missing files than `maxMissingRatio`
+    // looks like a truncated source and refuses without `force`. Nothing is retired.
+    if retenus.is_empty() && !empreintes.is_empty() && !options.allow_empty {
+        return Err(format!(
+            "{FILE}: the source lists no file of the {} indexed ones; empty or truncated source, nothing is retired (allow_empty to accept it)",
+            empreintes.len()
+        ));
+    }
+    if !partis.is_empty() && !options.force {
+        let plafond = catalog.entity_config(FILE).and_then(|c| c.snapshot.as_ref()).map(|s| s.max_missing_ratio).unwrap_or(0.5);
+        let ratio = partis.len() as f64 / empreintes.len().max(1) as f64;
+        if ratio > plafond {
+            let montres: Vec<&str> = partis.iter().take(20).map(String::as_str).collect();
+            return Err(format!(
+                "{FILE}: {} missing file(s) out of {} indexed ({:.0} %), above maxMissingRatio ({:.0} %); nothing is retired (force to go past it). Missing: {}{}",
+                partis.len(),
+                empreintes.len(),
+                ratio * 100.0,
+                plafond * 100.0,
+                montres.join(", "),
+                if partis.len() > montres.len() { ", …" } else { "" }
+            ));
+        }
+    }
+    // Indexed files the admission now sets aside on their content (a generated or minified file, a rule
+    // set after the fact): they leave the index like a deleted file.
+    let mut ecartes: Vec<String> = Vec::new();
     let mut report = SourceSyncReport {
         source: source_id,
         files_listed: listed.len(),
@@ -1440,11 +1471,17 @@ fn synchroniser_par_generations(
             if let Some(c) = &contenu {
                 if let Err(raison) = crate::code::admission(path, Some(c), &options.generated) {
                     *report.files_set_aside.entry(raison.to_string()).or_default() += 1;
+                    let indexe = crate::code_tools::indexed_name(source, path).1;
+                    if empreintes.contains_key(&indexe) {
+                        ecartes.push(indexe);
+                    }
+                    continue;
                 } else if !tout_repasser
                     && empreintes
                         .get(&crate::code_tools::indexed_name(source, path).1)
                         .is_some_and(|(h, a)| *h == crate::hash::content_hash(c) && *a == version)
                 {
+                    report.files_unchanged += 1;
                     continue;
                 }
             }
@@ -1475,7 +1512,17 @@ fn synchroniser_par_generations(
             ));
         }
     }
-    if !partis.is_empty() {
+    partis.extend(ecartes);
+    partis.sort();
+    partis.dedup();
+    // **What leaves, said like a snapshot sync** : the visible `File` and `Scope` rows of the files that leave,
+    // read before they are retired. The plan alone says them and retires nothing.
+    let (files_removed, scopes_removed) = lignes_visibles_des_fichiers(catalog, &report.source, &partis)?;
+    report.files.removed = files_removed;
+    report.scopes.removed = scopes_removed;
+    report.files.applied = !options.plan_only;
+    report.scopes.applied = !options.plan_only;
+    if !partis.is_empty() && !options.plan_only {
         let lot: Vec<(String, Option<String>)> = partis.iter().map(|p| (p.clone(), None)).collect();
         let r = catalog.avec_retenue(|c| reingest_files_retenu(c, source, &lot, options.exige))?;
         report.failed += r.failed;
@@ -1483,6 +1530,27 @@ fn synchroniser_par_generations(
         progress(avancement);
     }
     Ok((report, avancement))
+}
+
+/// The `_uuid` of the visible `File` and `Scope` rows of these indexed paths, at the pending rank.
+fn lignes_visibles_des_fichiers(catalog: &Catalog, source_id: &str, chemins: &[String]) -> Result<(Vec<String>, Vec<String>), String> {
+    if chemins.is_empty() {
+        return Ok((Vec::new(), Vec::new()));
+    }
+    let lire = |table: &str, champ: &str| -> Result<Vec<String>, String> {
+        let visible = catalog.condition_visible("x").map(|c| format!(" AND {c}")).unwrap_or_default();
+        let lu = catalog
+            .execute_raw_with_params(
+                &format!("MATCH (x:`{table}`) WHERE x.source = $src AND x.`{champ}` IN $chemins{visible} RETURN x._uuid ORDER BY x._uuid"),
+                &[
+                    crate::connection::QueryParam::new("src", CypherValue::String(source_id.to_string())),
+                    crate::connection::QueryParam::new("chemins", CypherValue::List(chemins.iter().map(|c| CypherValue::String(c.clone())).collect())),
+                ],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(lu.rows.iter().filter_map(|l| l.first().and_then(|v| v.as_str()).map(str::to_string)).collect())
+    };
+    Ok((lire(FILE, "path")?, lire(SCOPE, "file_path")?))
 }
 
 /// **Le pas de l'écrivain avant une ingestion directe** (`Catalog::ingest_code_jusqu_a` hors des chemins
