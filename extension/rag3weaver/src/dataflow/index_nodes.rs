@@ -1066,6 +1066,8 @@ mod tests {
         let notes = cat.comptes_notes_du_plein_texte().expect("les comptes notés pour l'état");
         let scope = &notes[crate::code::SCOPE];
         assert!(scope["documents"].as_u64().unwrap() > 0 && scope["documents"] == scope["rows"], "{notes}");
+        assert!(scope["measured_at_ms"].is_u64(), "full index measurements need their own date: {notes}");
+        assert_eq!(scope["orphan_docs"], 0, "the successful index records a coherent physical measurement");
 
         // Un document que la base n'a pas : l'écart se compte.
         let table = cat.resolve_search_target(crate::code::SCOPE).unwrap().parent_table;

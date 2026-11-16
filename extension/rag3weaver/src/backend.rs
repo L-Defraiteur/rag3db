@@ -7722,6 +7722,109 @@ mod tests {
         );
     }
 
+    // Fixtures privées : aucun hôte, service d'embarquement ni base vivante.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    fn fts_measurement_backend() -> (tempfile::TempDir, Backend) {
+        let (dir, prepared) = fixture_code_avec("working_tree", false, json!({}), &|manifest| {
+            manifest["workspace"]["index"] = json!("code");
+        });
+        let backend = backend_de_code(dir.path(), prepared.expect("private code fixture"));
+        {
+            let source = backend.file_source.as_ref().unwrap().clone();
+            let mut catalog = backend.catalog.lock().unwrap();
+            crate::code_sync::sync_source(&mut catalog, source.as_ref(), &Default::default(), &mut |_| {})
+                .expect("fixture index");
+            catalog.noter_les_comptes_du_plein_texte(&catalog.comptes_du_plein_texte()).unwrap();
+        }
+        (dir, backend)
+    }
+
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn fts_measurement_dry_run_updates_state_without_purging() {
+        let (_dir, backend) = fts_measurement_backend();
+        let (table, handle, report, measured_before, measured_after) = {
+            let catalog = backend.catalog.lock().unwrap();
+            let table = catalog.resolve_search_target(crate::code::SCOPE).unwrap().parent_table;
+            let handle = catalog.fts_handles().get(&table).unwrap().clone();
+            handle.add_document_json(u64::MAX - 17, &json!({})).unwrap();
+            handle.commit().unwrap();
+            let token = crate::fts_maintenance::token(&handle).unwrap();
+            let measured_before = crate::catalog::retard::now_ms();
+            let report = catalog.fts_releve_a_blanc(&table).unwrap();
+            let measured_after = crate::catalog::retard::now_ms();
+            assert_eq!(report["orphans"], json!([u64::MAX - 17]));
+            assert_eq!(crate::fts_maintenance::token(&handle).unwrap(), token, "dry-run cannot purge or compact");
+            (table, handle, report, measured_before, measured_after)
+        };
+        let state = backend.index_states().unwrap();
+        let counts = &state["fts_counts"][crate::code::SCOPE];
+        assert_eq!(counts["documents"], report["live_docs"], "state must use this dry-run, not the previous full index: {state}");
+        assert_eq!(counts["rows"], report["graph_docs"]);
+        assert_eq!(counts["orphan_docs"], 1);
+        assert_eq!(counts["table"], table);
+        let at = counts["measured_at_ms"].as_u64().expect("dated measurement");
+        assert!((measured_before..=measured_after).contains(&at));
+        assert!(counts["age_ms"].is_u64());
+        assert_eq!(handle.num_docs(), report["live_docs"].as_u64().unwrap(), "reading state must not purge either");
+    }
+
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn fts_measurement_state_does_not_redate_unknown_or_old_counts() {
+        let (_dir, backend) = fts_measurement_backend();
+        for at in [None, Some(1u64)] {
+            let mut entry = json!({"documents": 1, "rows": 1});
+            if let Some(at) = at { entry["measured_at_ms"] = json!(at); }
+            let note = json!({crate::code::SCOPE: entry}).to_string();
+            backend.catalog.lock().unwrap().persist_meta_key(crate::catalog::COMPTES_DU_PLEIN_TEXTE_KEY, &note).unwrap();
+            let state = backend.index_states().unwrap();
+            let counts = &state["fts_counts"][crate::code::SCOPE];
+            assert_eq!(counts.get("measured_at_ms"), Some(&json!(at)), "unknown dates must be explicit, never replaced by now: {state}");
+            match at {
+                None => assert_eq!(counts.get("age_ms"), Some(&Value::Null)),
+                Some(_) => assert!(counts["age_ms"].as_u64().unwrap() > 0),
+            }
+            assert_eq!(backend.catalog.lock().unwrap().read_meta_key(crate::catalog::COMPTES_DU_PLEIN_TEXTE_KEY).unwrap().as_deref(), Some(note.as_str()), "reading state never refreshes its measurement");
+        }
+    }
+
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn fts_measurement_failed_read_preserves_the_previous_note() {
+        let (_dir, backend) = fts_measurement_backend();
+        let catalog = backend.catalog.lock().unwrap();
+        let table = catalog.resolve_search_target(crate::code::SCOPE).unwrap().parent_table;
+        catalog.fts_releve_a_blanc(&table).unwrap();
+        let before = catalog.read_meta_key(crate::catalog::COMPTES_DU_PLEIN_TEXTE_KEY).unwrap();
+        assert!(catalog.fts_releve_a_blanc("missing_fts_measurement_fixture").is_err());
+        assert_eq!(catalog.read_meta_key(crate::catalog::COMPTES_DU_PLEIN_TEXTE_KEY).unwrap(), before, "an unsuccessful measurement must not renew any date");
+    }
+
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn fts_measurement_nightly_pass_records_its_orphans_even_when_purge_is_refused() {
+        let (_dir, backend) = fts_measurement_backend();
+        let table = {
+            let mut catalog = backend.catalog.lock().unwrap();
+            let table = catalog.resolve_search_target(crate::code::SCOPE).unwrap().parent_table;
+            let handle = catalog.fts_handles().get(&table).unwrap();
+            handle.add_document_json(u64::MAX - 19, &json!({})).unwrap();
+            handle.commit().unwrap();
+            let now = jiff::civil::date(2026, 11, 16).at(4, 0, 0, 0);
+            let maintenance = catalog.fts_maintenance_nocturne(now, 0.0, false).unwrap();
+            let record = maintenance["tables"].as_array().unwrap().iter().find(|row| row["table"] == table).unwrap();
+            assert!(record["refused"].is_string(), "fixture forbids the purge, not its observation");
+            assert_eq!(record["purged"], 0);
+            table
+        };
+        let state = backend.index_states().unwrap();
+        let counts = &state["fts_counts"][crate::code::SCOPE];
+        assert_eq!(counts["table"], table);
+        assert_eq!(counts["orphan_docs"], 1, "maintenance must update state without a full reindex: {state}");
+        assert!(counts["measured_at_ms"].is_u64());
+    }
+
     #[cfg(all(feature = "code", feature = "rag3db-native"))]
     fn backend_qui_surveille() -> (tempfile::TempDir, Backend) {
         let tools = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates");

@@ -75,3 +75,11 @@ Pendant fenêtre G/Arbre : RO/écriture privée seulement ; aucune passe lourde,
 service, base vivante, suppression, ancien GO ou délai réactivé. La portée
 exacte d'une petite compilation du harnais CPU doit être confirmée par C7
 avant lancement ; aucune compilation ni test encore joué dans cette reprise.
+
+Clarification C7 après le plan : CPU hermétique = interpréteur déjà présent,
+AUCUN Cargo/rustc avant FINI G. Les quatre témoins backend fts_measurement_*
+et le renforcement du juge de finindex sont committés AVANT correctif mais
+NON JOUÉS ; aucun rouge observé revendiqué. L'extraction de projection JSON
+reste un choix d'implémentation, pas un prétexte pour compiler dans la fenêtre.
+Précision réservation : les comptes sont rendus par index_states_du_code,
+appelé par index_states ; seule cette section FTS et ces tests sont touchés.
