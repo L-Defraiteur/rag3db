@@ -1,0 +1,15 @@
+# Lecture FTS existante : qualification ciblée verte
+
+Source figée `04634cfed667711192efd313ff1418ef8dfd5c26`, pilote publié `d218bea07d4266d5c7c6c2bf611bf878d6e34bce` (codebaebc9b59c), RO ED/Mémoire finales et GO distinct C7. Base68590270/pin2150 ; delta masterf83 troisMDseuls audité avant entrée. Les rouges qualifiants187 (ouverture) et c1b (pending après schéma validé), ainsi que les rouges d’entrée/setup nonqualifiants, restent conservés.
+
+Compilation minimale `--no-default-features --features rag3db-native --lib --no-run` réussie31.098874s. Inventaire complet puis exact1 et module10/0, ledger ELF/source/features avant runtime. Premier positif exact **1passé/0échoué/0ignoré** en0.037863s ; puis module **10passés/0échoué/0ignoré** en0.411913s, dix noms de succès comparés à l’inventaire. Total **10juges distincts / 11invocations brutes**, pas onze juges nouveaux. Aucun first-red/runtime en erreur, aucune autre suite.
+
+Les dix juges couvrent fichiers fermés lisibles sans writer, absence sans création, corruption conservée, génération divergente/illisible/absente, symlink refusé, promesse et métadonnées en erreur typées, recontrôle génération/promesse après capture, table physique Document41 malgré mappingmain99 et dette pendingDocument attribuée à main, cellule étrangère sans repli. Comparaisons de fichiers avant/après dans les fixtures ; aucun handle writer installé par la lecture.
+
+SuperviseurPID354988/start117756175, début1177561.816307582/END1178761.816307582 ; elapsed31.964946s<1200. Unique scope poste32GiB/HIGHmax/swap0/quotaPARPLACE5, pool1GiB, lib59ac complète/magasin réel explicite, so b7e9fc75a3d2de04c72680b0309e8bb1df9eaadb5211ebbacf39716c6d0a2101 et vector1669d6392ec8067fcf92ae2ccc972fd7cd3086629fb82d1f5d254e90d72d7561 vérifiés. Pas de moteur ancien/service/modèle/7970/baseLucie. Les données du catalogue sont une Callback fixture, les index Lucivy réels ; ceci ne vaut pas qualification DBnative globale ni observation live.
+
+Verdict commun **VERT/code0/erreur=null/restes[]/nettoye=true**, reçu terminé, chemin bus privé vérifié absent après fin. Source PC propre, poste Recherche libéré (migration Arbre/G restante conservée). Target session gardé2071785640octets, aucune purge/retrait. ELF SHA256 `d1fc362705dffbacf5c82cb24aa13ddba1ee6a42e68320dc86a0468287a2dd1a`,186537360octets, réhash après tests puis archive vérifié.
+
+Archives brutes PC/local `~/.cache/rag3weaver-build/cx-archive-recherche-fts-existing-green-v1` : **30fichiers identiques**, manifeste SHA256 `df97717f2c944ccadca3246492a076db98a81d08886387d132d6bf526a38d2c9`, réhash local30/30 sans écart. Profils/commands/logs JSON compile/inventaires/ledger/2runtime/observed/contrôleurs/reçu/recette/bus/enfants/verdict inclus. Aucun verdict recomposé, aucun ancien reçu réactivé.
+
+Portée : lecture froide live_ids/dry-run seulement ; purge/compact demandent encore un handle writer ouvert. Ticket général reste **OUVERT** ; ni F8/global, e2e_code_sync/lectures, intégration master ou retrait de ressources déduits de cette passe ciblée. Counts WIP séparé, source inchangée. Suite coordonnée à C7 après revue des preuves.
