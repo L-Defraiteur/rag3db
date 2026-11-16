@@ -11,15 +11,22 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cstdlib>
 #include <fstream>
+#include <functional>
+#include <iomanip>
 #include <iostream>
+#include <memory>
+#include <mutex>
 #include <sstream>
 #include <string>
 #include <thread>
 
+#include "../flaky_checkpointer.h"
 #include "common/string_format.h"
 #include "graph_test/private_graph_test.h"
 #include "main/connection.h"
+#include "storage/checkpointer.h"
 
 using namespace rag3db::common;
 using namespace rag3db::testing;
@@ -39,6 +46,56 @@ std::string textOf(int64_t id, int64_t round) {
         out += static_cast<char>('a' + (id * 31 + i * 7 + round) % 26);
     }
     return out;
+}
+
+// Sonde privée activée explicitement ; aucun accès SQL réentrant dans le checkpoint.
+struct StringDiagnosticState {
+    std::mutex mutex;
+    std::string step = "setup";
+    std::atomic<uint64_t> checkpoints{0};
+    void setStep(std::string value) {
+        const std::lock_guard lock(mutex);
+        step = std::move(value);
+    }
+    std::string getStep() {
+        const std::lock_guard lock(mutex);
+        return step;
+    }
+};
+
+class StringDiagnosticCheckpointer final : public rag3db::storage::Checkpointer {
+public:
+    StringDiagnosticCheckpointer(rag3db::main::ClientContext& context,
+        std::shared_ptr<StringDiagnosticState> state)
+        : Checkpointer(context), state(std::move(state)) {}
+
+protected:
+    bool checkpointStorage() override {
+        std::cerr << "[string-diagnostic] checkpoint-before-storage sequence="
+                  << ++state->checkpoints << " statement=" << state->getStep() << std::endl;
+        const auto changed = Checkpointer::checkpointStorage();
+        std::cerr << "[string-diagnostic] checkpoint-after-storage sequence=" << state->checkpoints
+                  << " statement=" << state->getStep() << std::endl;
+        return changed;
+    }
+
+private:
+    std::shared_ptr<StringDiagnosticState> state;
+};
+
+std::string diagnosticValue(const Value& value) {
+    if (value.isNull()) {
+        return "NULL";
+    }
+    const auto text = value.getValue<std::string>();
+    uint64_t hash = 14695981039346656037ull;
+    std::ostringstream hex;
+    hex << std::hex << std::setfill('0');
+    for (const unsigned char byte : text) {
+        hash = (hash ^ byte) * 1099511628211ull;
+        hex << std::setw(2) << static_cast<unsigned>(byte);
+    }
+    return stringFormat("length={} fnv1a64={} hex={}", text.size(), hash, hex.str());
 }
 
 class StringRewrite : public EmptyDBTest {
@@ -157,17 +214,82 @@ protected:
     }
 
     // Les lignes [first, last) réécrites au tour 1, par lots de 64, sur la connexion donnée.
-    static void rewrite(rag3db::main::Connection& connection, int64_t first, int64_t last) {
+    static void rewrite(rag3db::main::Connection& connection, int64_t first, int64_t last,
+        const std::function<void(int64_t, int64_t, bool)>& observe = {}) {
         for (auto start = first; start < last; start += 64) {
             std::string rows;
             for (auto id = start; id < std::min(last, start + 64); ++id) {
                 rows += (rows.empty() ? "" : ", ") +
                         stringFormat("{u: 'c-{}', t: '{}', m: 'm-{}'}", id, textOf(id, 1), id);
             }
+            if (observe) {
+                observe(start, std::min(last, start + 64), false);
+            }
             auto result = connection.query("UNWIND [" + rows +
                                            "] AS r MERGE (n:Chunk {_uuid: r.u}) SET n._text = r.t, "
                                            "n.marker = r.m;");
             ASSERT_TRUE(result->isSuccess()) << result->getErrorMessage();
+            if (observe) {
+                observe(start, std::min(last, start + 64), true);
+            }
+        }
+    }
+
+    // Trois chemins SQL distincts, mêmes valeurs attendues selon le préfixe déjà réécrit.
+    void diagnose(const std::string& phase, int64_t rewrittenEnd) {
+        for (const auto& mode : {std::string("scan"), std::string("prefix")}) {
+            auto rows =
+                conn->query("MATCH (n:Chunk) " +
+                            std::string(mode == "prefix" ? "WHERE n._uuid STARTS WITH 'c-' " : "") +
+                            "RETURN n._uuid, n._text, n.marker;");
+            ASSERT_TRUE(rows->isSuccess())
+                << "[check: diagnostic-query] " << rows->getErrorMessage();
+            int64_t seen = 0;
+            int64_t wrong = 0;
+            while (rows->hasNext()) {
+                const auto row = rows->getNext();
+                const auto key = row->getValue(0)->getValue<std::string>();
+                const auto id = std::stoll(key.substr(2));
+                const auto expected = textOf(id, id < rewrittenEnd ? 1 : 0);
+                const auto* text = row->getValue(1);
+                const auto* marker = row->getValue(2);
+                const bool badText = text->isNull() || text->getValue<std::string>() != expected;
+                const bool badMarker = id < rewrittenEnd ?
+                                           marker->isNull() || marker->getValue<std::string>() !=
+                                                                   stringFormat("m-{}", id) :
+                                           !marker->isNull();
+                ++seen;
+                if (badText || badMarker) {
+                    if (wrong++ < 4) {
+                        std::cerr << "[string-diagnostic] phase=" << phase << " mode=" << mode
+                                  << " key=" << key
+                                  << " expected-text=" << diagnosticValue(Value(expected))
+                                  << " actual-text=" << diagnosticValue(*text)
+                                  << " actual-marker=" << diagnosticValue(*marker)
+                                  << " expected-marker="
+                                  << (id < rewrittenEnd ? stringFormat("m-{}", id) : "NULL")
+                                  << std::endl;
+                        auto point = conn->query(
+                            "MATCH (n:Chunk {_uuid: '" + key + "'}) RETURN n._text, n.marker;");
+                        ASSERT_TRUE(point->isSuccess())
+                            << "[check: diagnostic-point] " << point->getErrorMessage();
+                        if (point->hasNext()) {
+                            auto value = point->getNext();
+                            std::cerr << "[string-diagnostic] phase=" << phase
+                                      << " mode=point key=" << key
+                                      << " actual-text=" << diagnosticValue(*value->getValue(0))
+                                      << " actual-marker=" << diagnosticValue(*value->getValue(1))
+                                      << std::endl;
+                        } else {
+                            ADD_FAILURE() << "[check: diagnostic-point-missing] " << key;
+                        }
+                    }
+                }
+            }
+            std::cerr << "[string-diagnostic] phase=" << phase << " mode=" << mode
+                      << " seen=" << seen << " wrong=" << wrong << std::endl;
+            EXPECT_EQ(seen, NUM_ROWS) << "[check: diagnostic-cardinality] " << phase << " " << mode;
+            EXPECT_EQ(wrong, 0) << "[check: diagnostic-values] " << phase << " " << mode;
         }
     }
 
@@ -269,6 +391,15 @@ TEST_F(StringRewriteAcrossAddColumn, AnOpenWriterCommitsAfterAnAdd) {
 // lots, et un lecteur qui balaie la table pendant ce temps.
 TEST_F(StringRewriteAcrossAddColumn, AutomaticCheckpointsBetweenAddsAndDrops) {
     load();
+    const bool diagnostic = std::getenv("RAG3DB_STRING_DIAGNOSTIC") != nullptr;
+    auto state = std::make_shared<StringDiagnosticState>();
+    if (diagnostic) {
+        const FlakyCheckpointer probe([state](rag3db::main::ClientContext& context) {
+            return std::make_unique<StringDiagnosticCheckpointer>(context, state);
+        });
+        probe.setCheckpointer(*conn->getClientContext());
+        diagnose("after-load", 0);
+    }
     ok("CALL auto_checkpoint=true;");
     ok("CALL checkpoint_threshold=4096;");
     std::atomic<bool> done{false};
@@ -281,24 +412,54 @@ TEST_F(StringRewriteAcrossAddColumn, AutomaticCheckpointsBetweenAddsAndDrops) {
     });
     const auto step = NUM_ROWS / 5;
     for (int64_t round = 0; round < 5; ++round) {
-        rewrite(*conn, round * step, (round + 1) * step);
+        rewrite(*conn, round * step, (round + 1) * step,
+            diagnostic ? std::function<void(int64_t, int64_t, bool)>{[&](int64_t first,
+                                                                         int64_t last, bool after) {
+                state->setStep(stringFormat("rewrite-{}-{}", first, last));
+                diagnose(state->getStep() + (after ? "-after" : "-before"), after ? last : first);
+            }} :
+                         std::function<void(int64_t, int64_t, bool)>{});
         const auto column = "c" + std::to_string(round);
+        if (diagnostic) {
+            state->setStep("add-" + column);
+            diagnose(state->getStep() + "-before", (round + 1) * step);
+        }
         ok("ALTER TABLE Chunk ADD " + column + " STRING DEFAULT 'd-" + column + "';");
+        if (diagnostic) {
+            diagnose(state->getStep() + "-after", (round + 1) * step);
+        }
         if (round % 2 == 1) {
+            if (diagnostic) {
+                state->setStep("drop-c" + std::to_string(round - 1));
+                diagnose(state->getStep() + "-before", (round + 1) * step);
+            }
             ok("ALTER TABLE Chunk DROP c" + std::to_string(round - 1) + ";");
+            if (diagnostic) {
+                diagnose(state->getStep() + "-after", (round + 1) * step);
+            }
         }
     }
     done = true;
     reader.join();
+    if (diagnostic) {
+        diagnose("after-automatic-checkpoints", NUM_ROWS);
+        state->setStep("explicit-checkpoint");
+    }
     expectAllRight("after-automatic-checkpoints");
     ok("CHECKPOINT;");
     expectAllRight("after-checkpoint");
     expectDefault("c4", "d-c4");
+    if (diagnostic) {
+        diagnose("after-explicit-checkpoint", NUM_ROWS);
+    }
     conn.reset();
     database.reset();
     open();
     expectAllRight("after-reopen");
     expectDefault("c4", "d-c4");
+    if (diagnostic) {
+        diagnose("after-reopen", NUM_ROWS);
+    }
 }
 
 } // namespace
