@@ -5,7 +5,7 @@ import argparse,collections,hashlib,importlib.util,json,os,re,signal,stat,subpro
 HOME=Path.home();HERE=Path(__file__).resolve().parent
 CLI=HOME/'.local/bin/rag3weaver-backend';QUERY=HOME/'.cache/optimiseur-notes/bascule-16nov-927/read-only-query-v2-luciepc'
 LIB=HOME/'.cache/rag3db-libs/rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF'
-PINS={CLI:'0e310a9cfe1c9e12534f3a579b3e781dcef7e9335e37d7e57349b16d053d5288',QUERY:'48ae2328a29676fa69154cb9c67d9125d4d04cf92b029bd2b2a09981dea95616',LIB/'librag3db.so':'b7e9fc75a3d2de04c72680b0309e8bb1df9eaadb5211ebbacf39716c6d0a2101',LIB/'libvector.rag3db_extension':'1669d6392ec8067fcf92ae2ccc972fd7cd3086629fb82d1f5d254e90d72d7561',HERE/'inspect-fts.py':'b846b0991999040c04f298747eda27aa07a4aa9ad0c277f8b7dc485eb24465a8'}
+PINS={CLI:'0e310a9cfe1c9e12534f3a579b3e781dcef7e9335e37d7e57349b16d053d5288',QUERY:'48ae2328a29676fa69154cb9c67d9125d4d04cf92b029bd2b2a09981dea95616',LIB/'librag3db.so':'b7e9fc75a3d2de04c72680b0309e8bb1df9eaadb5211ebbacf39716c6d0a2101',LIB/'libvector.rag3db_extension':'1669d6392ec8067fcf92ae2ccc972fd7cd3086629fb82d1f5d254e90d72d7561',HERE/'confiner_validation.py':'6439fdd8b52c85fa4e74af0def2c667ef0bedae9b814cbbfd48e49946c4f74ea',HERE/'cold-service-guard.py':'3ba491472cf42efecb54e33fb1012eca997fdd5d7d1d0dc90f0e3ecddceb75c2',HERE/'inspect-fts.py':'b846b0991999040c04f298747eda27aa07a4aa9ad0c277f8b7dc485eb24465a8'}
 def digest(path):
  h=hashlib.sha256()
  with path.open('rb') as stream:
@@ -14,15 +14,6 @@ def digest(path):
 def check_pins():
  for path,expected in PINS.items():
   if digest(path)!=expected:raise ValueError('pin mismatch '+str(path))
-def units_inactive():
- records={}
- for unit in ['rag3weaver-daemon.service','rag3weaver-daemon.socket']:
-  result=subprocess.run(['systemctl','--user','show',unit,'--property=LoadState','--property=ActiveState'],capture_output=True,text=True,timeout=10)
-  fields=dict(line.split('=',1) for line in result.stdout.splitlines() if '=' in line)
-  if result.returncode or fields.get('LoadState')!='loaded' or fields.get('ActiveState')!='inactive':raise ValueError('API unit not inactive: '+unit)
-  records[unit]=fields
- return records
-
 def inventory_live(fs,base):
  paths=[base,*sorted(base.parent.glob(base.name+'.*'))]
  checkpoint=base.with_suffix('.checkpoints')
@@ -88,11 +79,14 @@ def main():
   rehearsal_record=json.loads(rehearsal.read_text())
   if rehearsal_record.get('verdict')!='REHEARSAL_OFFICIAL_CLI_GREEN':raise ValueError('official rehearsal not green')
  if base.resolve(strict=True)!=base or not stat.S_ISREG(base.lstat().st_mode):raise ValueError('target base identity/path invalid')
- root=data/('migration-rehearsal-01' if args.target_kind=='rehearsal' else 'migration-offline-01')/args.base;root.mkdir(mode=0o700,parents=True,exist_ok=False)
+ root=data/('migration-rehearsal-service-corrective-02' if args.target_kind=='rehearsal' else 'migration-offline-01')/args.base;root.mkdir(mode=0o700,parents=True,exist_ok=False)
  def save(name,value):
   with (root/name).open('x') as stream:json.dump(value,stream,ensure_ascii=False,indent=2)
  start=time.monotonic();end=start+(1180 if args.target_kind=='rehearsal' else 3500)
  spec=importlib.util.spec_from_file_location('inspect_fts',HERE/'inspect-fts.py');fs=importlib.util.module_from_spec(spec);spec.loader.exec_module(fs)
+ spec=importlib.util.spec_from_file_location('common',HERE/'confiner_validation.py');common=importlib.util.module_from_spec(spec);spec.loader.exec_module(common)
+ spec=importlib.util.spec_from_file_location('cold_guard',HERE/'cold-service-guard.py');guard=importlib.util.module_from_spec(spec);spec.loader.exec_module(guard)
+ common.autorite(common.processus());writer_started=False
  env=dict(os.environ)
  for key in ['RAG3WEAVER_MOTEUR_ANCIEN','RAG3WEAVER_EMBED_SERVICE']:env.pop(key,None)
  profile=dict(LD_LIBRARY_PATH=str(LIB),RAG3DB_LIB=str(LIB),RAG3DB_LIBS_DIR=str(HOME/'.cache/rag3db-libs'),RAG3DB_BUFFER_POOL_SIZE='1073741824',RAG3WEAVER_DB_THREADS='4')
@@ -100,13 +94,25 @@ def main():
   path=root/name;path.mkdir();profile[key]=str(path)
  env.update(profile);save('profile.json',profile)
  def run(argv,name,cap,writer=False):
+  nonlocal writer_started
+  binding=None
+  if writer:
+   target_before=inventory_live(fs,base);canonical_before=inventory_live(fs,canonical)
+   if normalize_inventory(fs.file_inventory(source))!=expected:raise ValueError('snapshot changed before management request')
+   if args.target_kind=='rehearsal' and canonical_before!=expected:raise ValueError('canonical live changed before rehearsal')
+   binding=guard.fetch_phase_guard(root,name,start,base,canonical,source,common,end)
+   if inventory_live(fs,base)!=target_before or inventory_live(fs,canonical)!=canonical_before or normalize_inventory(fs.file_inventory(source))!=expected:raise ValueError('source/target changed during management guard')
+   guard.final_phase_check(binding,common)
+   save(name+'-management-guard.json',dict(response_path=binding['reply_path'],response_sha256=binding['response_sha256'],request_sha256=binding['request_sha256'],nonce=binding['request']['nonce'],observed_monotonic=binding['reply']['observed_monotonic']))
   remaining=end-time.monotonic();timeout=min(cap,remaining-30)
   if timeout<=0:raise ValueError('deadline before '+name)
-  if writer:save(name+'-units.json',units_inactive())
   with (root/(name+'.stdout')).open('xb') as out,(root/(name+'.stderr')).open('xb') as err:
+   if binding:guard.validate_reply(binding['request'],binding['reply'],binding['request_sha256'],time.monotonic(),binding['raw_units'])
    process=subprocess.Popen([str(a) for a in argv],stdout=out,stderr=err,env=env,start_new_session=True)
+   if writer:writer_started=True
    began=time.monotonic();captured=False;pid_start=None
    try:
+    if binding:guard.validate_reply(binding['request'],binding['reply'],binding['request_sha256'],time.monotonic(),binding['raw_units'])
     while process.poll() is None:
      if time.monotonic()-began>=timeout:raise TimeoutError(name+' phase deadline')
      if writer and not captured:
@@ -132,7 +138,7 @@ def main():
   if '59ac9c86bc2b3529b590a7462ab7051e3ad26b8a' not in (root/(name+'.stderr')).read_text():raise ValueError('query BUILD_ID mismatch')
   return one_query_rows(text)
  try:
-  save('units-initial.json',units_inactive())
+  authority=common.autorite(common.processus());save('common-entry.json',dict(pid=authority['pid'],start=authority['debut'],cgroup=authority['cgroup'],deadline=authority['echeance'],private_bus_unchanged=True))
   if normalize_inventory(fs.file_inventory(source))!=expected:raise ValueError('snapshot changed before CLI')
   before=inventory_live(fs,base);save('live-before.json',before)
   if before!=expected:raise ValueError('live base changed since fresh snapshot')
@@ -151,7 +157,7 @@ def main():
   run([CLI,'migration','versions','--base',base],'versions',900 if args.target_kind=='rehearsal' else 1800,True)
   generation=run([CLI,'migration','generations','--base',base],'generations',120 if args.target_kind=='rehearsal' else 180,True)
   if not re.search(r'form_after:\s*"generations"',generation) or not re.search(r'read_rank:\s*Some\(\s*1,?\s*\)',generation):raise ValueError('generation report contract failed')
-  save('units-after-writers.json',units_inactive())
+  save('management-status.json',dict(source='fresh G nonce attestation immediately before each writer, local OS rechecked',private_bus_unchanged=True))
   after=inventory_live(fs,base);save('live-after-writers.json',after)
   if normalize_inventory(fs.file_inventory(source))!=expected:raise ValueError('return snapshot changed')
   copy=root/'post-copy';copy.mkdir()
@@ -210,7 +216,7 @@ def main():
    canonical_after=inventory_live(fs,canonical);save('canonical-live-after.json',canonical_after)
    if canonical_after!=expected:raise ValueError('rehearsal touched live base')
   if args.target_kind=='live' and digest(Path(g_receipt['retour']))!=g_receipt['retour_sha256']:raise ValueError('return script changed')
-  check_pins();save('units-final.json',units_inactive())
+  check_pins();common.autorite(common.processus())
   if time.monotonic()>=end:raise ValueError('deadline after final hashes')
   save('verdict.json',dict(verdict='REHEARSAL_OFFICIAL_CLI_GREEN' if args.target_kind=='rehearsal' else 'OFFLINE_GENERATIONS_AND_COLD_GATES_GREEN',base=args.base,elapsed=time.monotonic()-start,index_qualified=False,oracle_qualified=False,service_reopened=False))
  except BaseException as error:
@@ -220,5 +226,5 @@ def main():
     canonical_after=inventory_live(fs,Path(g_receipt['canonical_base']));save('failure-canonical-live-after.json',canonical_after)
     save('failure-source-audit.json',dict(snapshot_unchanged=snapshot_after==expected,canonical_live_unchanged=canonical_after==expected))
   except Exception as audit_error:save('failure-source-audit-error.json',dict(error=str(audit_error)))
-  save('verdict.json',dict(verdict='RED',error=str(error),target_kind=args.target_kind,target_may_be_partially_migrated=True,retry_authorized=False));raise
+  save('verdict.json',dict(verdict='RED',error=str(error),target_kind=args.target_kind,target_may_be_partially_migrated=writer_started,retry_authorized=False));raise
 if __name__=='__main__':main()
