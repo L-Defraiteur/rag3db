@@ -1,0 +1,14 @@
+{
+  "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-admission-red-export-17nov-v4",
+  "uid": 1000,
+  "device": 57,
+  "inode": 96727163,
+  "nonce": "500867ad66cea7eb28d662c791296d6d",
+  "source": "0f610f437a341f745e5936492114142ff3afedd4",
+  "purpose": "proof-export-not-cargo-target",
+  "files": {
+    "preflight.json": "94967917f23abc95139c6a0668892182f459a729c108e1592bc9f9dc0a6bd668",
+    "export-fs-red-ledger.py": "7c58b87f74781019774a3be48b363e19f9620a979d8b026df0b118c84f56f8bd"
+  },
+  "physical_start_end_absent": true
+}

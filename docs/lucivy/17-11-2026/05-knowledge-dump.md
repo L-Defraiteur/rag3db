@@ -40,3 +40,10 @@ invariant/--locked, pasresetce719 ; vieux265273TERMINE101 et identitépropre
 fraîche enplusdesdescendants. Reçus START/END physiques etprobesd13 publiés
 [17](17-preparation-recus-physiques-portables.md), aucun nouveau test joué.
 DeuxROtotales+nouveauGO300 avant commande18, aucun vieuxGO réactivé.
+
+État suivant : P1finalLock confirmépar2ROv3, contre-exemple37beb réellement
+observé1FAILdrift/1PASSinchangé/0ERROR avantfixgroupé. Préparation courante
+[22](22-paquet-fs-red-v4-final-lock.md), pilot4d37/admitd508/export7c58/
+préflight9496/nonce500867, source0f/seeddbdb. Deux gardes effectives finales
+sansreset/exception, preuvesCPU2+3 encoreNONJOUÉES [21](21-preparation-gardes-final-lock.md).
+DeuxROtotales/nouveauxGOCPUet300distincts requis, ne pasrelancer18/oldGO.

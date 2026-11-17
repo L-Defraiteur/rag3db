@@ -420,3 +420,23 @@ inventée, Wdbdb/Qv3/0f/old3ELF/Tintacts,0slotpris. GOCPUclos,pasretry.
 Correctifgroupé du contrôleeffectifaprèsjuges+dernierverdictDANSEND peutêtre
 préparéaprèscettepreuve ;nouveauxpins/ROtotales/futursGOCPU+300distincts.
 Journauxec619/d13toujoursSANS GO, natifFS/HOLDdemeure/zérojugeFSobservé.
+
+APRÈSrougefinalLock37beb72055 archivé2hosts, patchGROUPÉ préparé v4 :
+pilot4d37a7f3 hashW/Cargo.lock effectifaprès7juges avantresult/budgetavantaprès,
+admitd50856cc hashmêmeeffectifcontreseedcopymappin justeavantfinalaccepted
+DANSEND etpubSHA/invariant. Primitivesexistantesuniquement,0restore/reset/
+exceptionslarges. Export7c58b87f etjournalprobesdc0dd7a3 nefontquesuivreQv4
+(depuisec619/d13), mécaniquesSTART/END/ordre/durée/cleanupinchangées. Probes
+finalv233aebb44 mêmesdeuxcas/constats/asserts queffdddc, SHAentréeparamétré.
+QCPUfinalLockUID1000/dev57/ino96720614(d508/33ae),QCPUjournalUID1000/dev57/
+ino96720620(7c58/dc0) préparésNONJOUÉS. AncienGO3D00clos/aucunv2vertinventé.
+NouveauQPCv4 UID1000/dev55/ino168979687/nonce500867ad66cea7eb28d662c791296d6d,
+préflight94967917f23abc95139c6a0668892182f459a729c108e1592bc9f9dc0a6bd668.
+Portablev4 UID1000/dev57/ino96727163, export/préflightidentiques. Source0f
+propre/seeddbdbinvariant/--offline--locked/vieuxCommon265273TERMINE101/T3552
+et3oldELF conservés.9copiesPC2portable/SHA/AST/Git/marker/lockseuls contrôlés,
+0import/pilote/Cargo/test/procscan/ELF/corpus. Outputs/STARTEND/scope/logs/arm/
+ACK/backups absents,scratchscansvides,Qv3figé. Rapports17/21-22/preuvesv4.
+Actions2RO TOTALES Banc+Recherche confiées sur CEcouple4d37/d508/7c58/9496,
+puisGOCPUdistinct2finalPASS+3journalPASS siC7l’arbitre, etGO300distinctavant
+commande22. AucunCPUpréparéexécuté,natifHOLD/0jugeFS/Cargo0fnoncompilé.
