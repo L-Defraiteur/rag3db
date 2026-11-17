@@ -7,6 +7,10 @@ knowledge dump et ses tickets ouverts.
 
 ## Par où commencer
 
+**Arrêt demandé le 17 novembre, passation vers Claude** : lire d’abord la
+[synthèse et les reçus des sessions](orchestration/17-11-2026/99-passation-pour-claude.md).
+Les anciens GO/délais ne se réactivent pas ; aucune reprise automatique aux rappels.
+
 0. **Depuis le 16 novembre 2026** : `docs/orchestration/16-11-2026/02-passation-pour-codex.md`, la passation
    du lundi : les règles apprises depuis le 11, ce qui attend Lucie, et la page de chaque session avec les
    tickets à traiter, dans l'ordre.
