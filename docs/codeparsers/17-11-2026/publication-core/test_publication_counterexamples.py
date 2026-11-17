@@ -5,6 +5,7 @@ Un TypeError exact sur ce paramètre est rendu FAIL nommé, tout autre ERROR res
 une erreur de fixture à arrêter. Aucun test de ce fichier n'est encore joué.
 """
 import importlib.util
+import hashlib
 import json
 from pathlib import Path
 import tempfile
@@ -16,6 +17,37 @@ spec = importlib.util.spec_from_file_location('publication_baseline_fixtures', L
 fixtures = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fixtures)
 legacy = fixtures.module
+
+
+class FourPublicationTransport(fixtures.FakeTransport):
+    """Données réseau seules ; aucune implémentation de relais dans la fixture."""
+    labels = ('global', 'agent-red1', 'agent-green1', 'review1')
+    counts = (5, 1, 1, 1)
+    def __init__(self, clock):
+        super().__init__(clock)
+        self.index = 0
+        self.stage = self.labels[0]
+    def contents(self, kind):
+        count = self.counts[self.labels.index(kind)]
+        files = {f'elf-{n}': (kind + ':ELF:' + str(n)).encode() for n in range(count)}
+        ledger = {'source_binding': 'fixture-approved-source',
+            'elf_map': {name:hashlib.sha256(raw).hexdigest() for name,raw in files.items()}}
+        files['ledger'] = json.dumps(ledger).encode()
+        return ledger, files
+    def snapshot(self, timeout):
+        self.calls.append('snapshot')
+        ledger, files = self.contents(self.stage)
+        return {'state': 'active', 'remaining': 20, 'phase_remaining': 35,
+            'stage': self.stage, 'ledger': ledger,
+            'files': {name:hashlib.sha256(raw).hexdigest() for name,raw in files.items()}}
+    def publish_ack(self, kind, ack, timeout):
+        self.calls.append('ack:' + kind)
+        assert kind == self.labels[self.index]
+        self.index += 1
+        if self.index == len(self.labels):
+            self.phase_running = False
+        else:
+            self.stage = self.labels[self.index]
 
 
 class PublicationCounterexamples(unittest.TestCase):
@@ -59,18 +91,19 @@ class PublicationCounterexamples(unittest.TestCase):
             {'label': 'agent-red1', 'executable_count': 1},
             {'label': 'agent-green1', 'executable_count': 1},
             {'label': 'review1', 'executable_count': 1}]}
+        transport = FourPublicationTransport(self.clock)
         try:
-            relay = legacy.Relay(self.transport, self.root, self.clock, self.clock.sleep,
+            relay = legacy.Relay(transport, self.root, self.clock, self.clock.sleep,
                                   plan=plan_request)
         except TypeError as error:
             if "unexpected keyword argument 'plan'" in str(error):
                 self.fail('EXPLICIT_ORDERED_PLAN_UNSUPPORTED_BY_REAL_BASELINE: ' + str(error))
             raise
         self.assertEqual(relay.run(), 0)
-        stages = [row.removeprefix('ack:') for row in self.transport.calls if row.startswith('ack:')]
+        stages = [row.removeprefix('ack:') for row in transport.calls if row.startswith('ack:')]
         self.assertEqual(stages, ['global', 'agent-red1', 'agent-green1', 'review1'])
         # Les huit occurrences doivent toutes avoir été transférées avant leurs ACK.
-        transfers = [row for row in self.transport.calls if row.startswith('fetch:') and ':elf' in row]
+        transfers = [row for row in transport.calls if row.startswith('fetch:') and ':elf' in row]
         self.assertEqual(len(transfers), 8)
 
 

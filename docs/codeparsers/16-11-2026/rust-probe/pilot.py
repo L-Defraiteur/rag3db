@@ -495,6 +495,7 @@ def prepare(args):
     sources = {name: HERE / name for name in ['pilot.py', 'physical_guard.py', 'compare.py']}
     relay_sources = TOOL_ROOT / 'docs/codeparsers/17-11-2026/rust-probe-relay'
     sources.update({name: relay_sources / name for name in ['relay.py', 'gate.py']})
+    sources['publication_relay.py'] = TOOL_ROOT / 'extension/rag3weaver/scripts/publication_relay.py'
     sources['legacy.py'] = PREVIOUS
     sources.update({name: args.candidate_worktree / 'extension/rag3weaver/scripts' / name
         for name in ['poste', 'confiner_validation.py', 'cargo_garde.py', 'garde_target.sh']})

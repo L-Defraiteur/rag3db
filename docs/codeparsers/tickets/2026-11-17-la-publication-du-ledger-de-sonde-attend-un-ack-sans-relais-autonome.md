@@ -160,3 +160,15 @@ interhost. ValeursRust inchangées. Raccord WindowEvent explicitement sous
 PreparedContext.window_events approuvés et Lifecycle commun ; providerlecture
 seul ne peut attesterliveness. Les sources et capacités futures sont à relire
 avant adaptation/native ; aucun nouveau CPU/SSH/proc/natif/Cargo/target.
+
+### Étape constante préparée et contre-exemples déjà prépubliés
+
+Publication00e2084673 avant refactor : trois contre-exemples du vrai D45 et
+contrat WindowEvent clarifié (sourceCoreBoundary, pas de noyau factice).
+Étape suivante matérialisée dans scripts/publication_relay.py : Relay/transport,
+GateBase/gardes/cancel/final_roles et vrais CLI déplacés ; wrappers Rust sans
+boucle, fournisseur de lecture séparé ; onzième composantQ épinglé. Les36témoins
+conservent leurs assertions avec points de patch sur le vrai module partagé.
+Aucun CPU joué, capacité4/WindowEvent non implémentés. RO source/pin et budgets
+CPU distincts nécessaires avant exécution, puis capacité seulement après rouges
+et nouvelle publication ; D45/P05/ArchiQ229b inchangés.

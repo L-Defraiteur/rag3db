@@ -31,3 +31,30 @@ n'importe aucun pilote spécifique. Une politique/fournisseur Rust fournit les
 lectures de provenance ; le module garde bootstrap/active/copies/fsync/ACK/run/
 cap/cleanup/final_roles/cancel/finish/reap. Les wrappers ne conservent aucune
 seconde boucle. Les modules communs chargés sont eux-mêmes épinglés dans Q.
+
+## Étape constante matérialisée, NONEXÉCUTÉE
+
+Le module unique contient les fonctionsD45 atomic_json/digest/publish_result,
+Relay et SSHTransport, les gardes GateBase bootstrap/launcher/active/export/ack/
+cancel/final_roles, et les vrais chemins relay_main/gate_main. Les adaptateurs
+Rust relay.py/gate.py délèguent ; le seul fournisseur Rust lit/vérifie son
+ledger, sources/parser/SDK/features et inventaires. Il n'a aucune boucle ni
+copie/ACK/annulation propre. Le moteur reste explicitement celui à deux stages,
+sans plan4 ni WindowEvent runtime : cette étape ne livre pas cette capacité.
+
+Le préparateur copie et épingle publication_relay.py en plus des dix contrôleurs.
+Les gardes vérifient son chemin Q et son SHA ; la ready garde l'identité de
+l'entrée réelle relay.py, pas celle du module importé. Le wrapper source charge
+le module de ce dépôt ; le wrapper Q exige sa copie locale et le même blob,
+sans fallback PATH. Le module commun n'importe aucun pilote de domaine :
+la politique de sources/provenance arrive par l'adaptateur Rust, sous les
+contrôles effectifs de phase et de cycles de vie conservés.
+
+Les36méthodes de témoins existantes conservent leurs assertions ; seuls les
+imports/points de patch visent le module réellement exécuté, et la fixtureCLI
+contient la nouvelle copie/empreinte de module. Aucun faux noyau ni classe de
+remplacement ne fait passer ces cas. Les trois contre-exemples nouveaux restent
+NONJOUÉS et la demande4stages demeure non supportée à cette publication.
+Sa fixture de transport déclare les vrais quatre labels et huit occurrences,
+sans implémentation de copie ou noyau caché. Aucun résultat rouge/vert de cette
+étape n'est encore revendiqué ; budgetsCPU/RO exacts distincts encore requis.

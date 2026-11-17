@@ -9,6 +9,7 @@ import unittest
 spec = importlib.util.spec_from_file_location('rust_probe_relay_test', Path(__file__).with_name('relay.py'))
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
+implementation = getattr(module, "engine", module)
 
 
 class Clock:
@@ -203,10 +204,13 @@ class RelayTests(unittest.TestCase):
         relay_path.write_bytes(Path(module.__file__).read_bytes())
         timeout_path = control / 'fake-timeout'
         timeout_path.write_bytes(b'fake timeout executable, never executed')
+        core_path = control / 'publication_relay.py'
+        core_path.write_bytes(Path(implementation.__file__).read_bytes())
         (control / 'physical_guard.py').write_text(
             'def process_record(pid): return {"pid":pid,"exe":"/unbounded","argv":[],"uid":0}\n')
         pair = {'proofs': str(root), 'control': str(control), 'peer_host': 'fake-peer',
-            'controllers': {'relay.py': module.digest(relay_path)},
+            'controllers': {'relay.py': module.digest(relay_path),
+                'publication_relay.py': module.digest(core_path)},
             'peer_timeout': {'path': str(timeout_path), 'sha256': module.digest(timeout_path)},
             'relay': {'queue_budget': 300, 'transfer_cap': 30, 'control_cap': 5, 'stop_reserve': 5}}
         (root / 'prepared.json').write_text(json.dumps(pair))
@@ -215,7 +219,8 @@ class RelayTests(unittest.TestCase):
             pass
         original_cwd = Path.cwd()
         try:
-            with patch.object(module, '__file__', str(relay_path)), patch.object(module.sys, 'argv', argv), \
+            with patch.object(module, '__file__', str(relay_path)), patch.object(implementation, '__file__', str(core_path)), \
+                 patch.object(module.sys, 'argv', argv), \
                  patch.object(module.socket, 'gethostname', return_value='fake-peer'), \
                  patch.object(module.os, 'execve', side_effect=ExecTransition) as execute:
                 with self.assertRaises(ExecTransition):
@@ -239,7 +244,7 @@ class RelayTests(unittest.TestCase):
             result = original(path, record, deadline, clock)
             self.clock.now += 25
             return result
-        with patch.object(module, 'publish_result', side_effect=late):
+        with patch.object(implementation, 'publish_result', side_effect=late):
             with self.assertRaises(TimeoutError):
                 self.relay.run()
         result = json.loads((Path(self.tmp.name) / 'relay-result.json').read_text())
@@ -359,7 +364,7 @@ class GateTests(unittest.TestCase):
         self.gate.verify = lambda: None
         self.gate.launcher = lambda: {'coordinator': {'host': 'peer'}}
         original_digest = self.gate_module.digest
-        patcher = patch.object(self.gate_module, 'digest', lambda path:
+        patcher = patch.object(getattr(self.gate_module, 'engine', self.gate_module), 'digest', lambda path:
             'timeout-sha' if str(path) == '/timeout' else original_digest(path))
         patcher.start()
         self.addCleanup(patcher.stop)
