@@ -140,3 +140,8 @@ RO preuves Banc a4a2de1e1a : [rapport21](../../banc/16-11-2026/21-ro-preuves-ver
 ### Banc — preuve rouge d53d986 et correctif a797 séparés
 
 [Relecture source/preuves](../../banc/17-11-2026/02-ro-pilote-global-d6.md) : paquet rouge3/3SHA surPC/local,8SHA Git conformes,1FAIL/0ERROR/rc1/une invocation/TERM58+KILL2 observés archivés, pas de rejeu. Chronologie fix publié avant rouge isolé conservée. RO favorable PRÉPA correctif a79709034a : cadre source hors corps validateur lié au rouge acquis + égalité autre état source/index ferme cfg/homonyme.18AST/41témoins NONJOUÉS sur vert, GO CPU exact C7 encore requis ; ticket OUVERT et natif non qualifié.
+
+
+### Banc — delta harnais a0d74de5
+
+[RO favorable préparation](../../banc/17-11-2026/02-ro-pilote-global-d6.md) : une ligne chemin Provider vers le vrai porteurAPP, blob Rust identiquef1e8, codepilote inchangé. Ancienne tentative3839 relue3/3SHA PC/local :36OK1ERROR/37,4nonjoués/rc1/0retry ; aucun41verts déduit. Nouveau GO CPU41 exact C7 requis, aucun essai/natif/pinPC acquis ; ticket OUVERT.
