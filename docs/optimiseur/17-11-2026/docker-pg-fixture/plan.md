@@ -95,3 +95,41 @@ nonce032a992c3cd683319698a64f37b1d4c7. RéférenceGO en attente/runfalse,
 aucun timer/container/réseau ni credentials02 créés. L'initialisation01 est
 close, pas réutilisable ; une entrée opérationnelle distincte doit lier ces
 pins avant de lancer02. L'autorisation Lucie Docker n'est pas redemandée.
+
+## Allocation02 READY, distincte de la qualification client
+
+GO489bdd7674, source56850c3996/recettef9b74554198a71bb87e0ab09b5f119c1f97accc58fd19e328c08a62341c8e379,
+UNEentrée rc0/1.238898207s, Commonvalidation-phzaapyj VERT/restes[]/nettoye/
+etat=termine/busretiré. Source/sourcefiles inchangés. Aucun clientRustC exécuté.
+Container27cf25b3d531060337cdcf0d605424a74aabab9dd7e59d82a375805a5e1d9525,
+réseauc33ba20e08588ca034b581bd74429e593c39996c6fb7623eb4839345bb2936de,
+nonce032a992c3cd683319698a64f37b1d4c7, image17pinb0f956...552b24.
+Mapping effectif strict127.0.0.1:15433→5432 et Docker2GiB/swap2GiB/2CPU/pids128
+confirmés parsnapshot ciblé sansEnv. Données en tmpfs, aucun volumeoriginal.
+
+DBg_pg_probe_032a992c3cd6/OID16384, propriétaireg_pg_fixture_admin/OID10,
+observateurg_pg_observer/OID16385 nonowner ; tousflagsadmin/inherit/membership/
+CREATE/TEMP/schemaCreate/DML refusés selon contrôlesadminindépendants.
+CONNECT+SELECTfixture seulsgrants dédiés ; defaulttransactionreadonlyon.
+Dataset3lignes(red2/blue3/green5)/somme10 exact ; jugepsqlimage sous rôleobserver
+confirme transaction_read_only=on/count3/sum10. Serverversion170011,
+postmaster_start2026-11-17 13:37:45.187523+00. C'est l'identité de CETTEfixture,
+pas celle du PGpartagé5433 ni un identifiant global fourni par OIDseul.
+
+Timer nonce actif/waiting vérifié, limiteexpiration PCmono1270341.372028805
+auplustard (max1800aprèsstart, cleanupattribuéetbackupPID1). Ne pas prolonger
+la fixture ou recycler son allocation aprèsTTL. Réfcredentials protégée
+PCallocation-032a992c3cd6/credentials/observer-password, UID1000/mode0600 ;
+valeurs nonarchivées/noncopiées. Timercleanup seulowner retirecontainer/réseau/
+secretsnonce, autresressources inchangées. Leasegranted=false/transport=false.
+
+27preuves publiques/logssanitisés vérifiésSHA/taille deuxpostes, rootPC
+`/home/lucied/.cache/optimiseur-notes/pg-v2-fixture-20261117-r1/allocation-032a992c3cd6`,
+local voisin allocation-032a992c3cd6-public-proof. ReceiptSHA256
+16e2caf94a9fa95f55b23b668d615cc5f1337ce351b83fa3f2c61099b2d289bc ;
+allocationSHA66d974fe37e41d0142a4d2e68b3c6246ff8e416db7789b11306fe8daf4aad193 ;
+manifest39b81afa95ec491efc77fa810f8024fffbe73963e0b9f8067ae9cabe777437d9 ;
+jugeobservere75ba3c56858381e3fd2ec978e30c30ea896b4430fe1a908a06d35119d061742.
+Ancien01ROUGE conservé, aucunthéorèmegénéral surdriverDocker déduit de son
+mapping absent. READYallocation ne permet aucune connexion du futurclientC
+sans source/tests/rouge/RO/pins/GOcontactdistincts.
