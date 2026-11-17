@@ -335,3 +335,14 @@ réserves statiques sont levées, pas la qualification OS. Paquet PC r2 créé
 sans exécution, SHA256 b0795ccbb6f2d3aad0ad7b20bc19e571cd01c6071762c48a751bd45e58142780,
 chemin voisin r1 `packet-r2`. Pins et limites dans recette03. Douze témoins,
 huit cas CLI toujours NON JOUÉS. RO paquet r2 avant GO distinct ; ticket ouvert.
+
+### CPU distinct C7-G-PG-CPU-32DF-17nov60 terminé
+
+Une invocation exacte autorisée : 12 PASS/0 FAIL/0 ERROR/0 SKIP, rc0,
+unittest0.014s/commande0.089162598s, douze sources inchangées avant/après.
+Preuves identiques et SHA vérifiés aux deux postes sous cache privée
+pg-rust-tool-qual-20261117-r1/cpu-32df-17nov60-01 ; receipt SHA256
+6d594431f54494e36d931c074bd25deec5116fcb6a0ae333ae944a9fa3196906.
+Ces faux ne qualifient pas superviseur OS ni transport ; huit CLI natifs non
+joués. Aucun compiler/SQL/Docker/SDK/service ; aucun retry ni GO natif déduit.
+Ticket ouvert, qualification réelle distincte toujours attendue.

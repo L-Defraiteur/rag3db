@@ -153,3 +153,25 @@ Douze fichiers épinglés ; entrées manifest/READY identiques au premier paquet
 Douze témoins et huit parser cases NON JOUÉS, aucune compilation ni SQL.
 Le paquet r1 reste conservé historique, aucun remplacement. RO des pins r2
 requise avant nouveau GO CPU distinct et qualification compile/parse distincte.
+
+## CPU distinct acquis — C7-G-PG-CPU-32DF-17nov60
+
+GO C7 rapport17 publié c7a2bc988d ; invocation UNIQUE autorisée depuis paquet-r2 :
+`timeout --signal=TERM --kill-after=2s 58s python3 -B -m unittest -v -f test_tool_qualification`.
+Après rehash des douze fichiers : 12 PASS, 0 FAIL, 0 ERROR, 0 SKIP, rc0.
+Unittest 0.014 s ; commande 0.089162598 s. Monotoniques PC
+1257220.533717243 → 1257220.622879841. Sources avant/après strictement égales.
+Aucune relance. Preuves privées aux DEUX postes, chemin identique :
+`/home/lucied/.cache/optimiseur-notes/pg-rust-tool-qual-20261117-r1/cpu-32df-17nov60-01/`.
+Receipt SHA256 `6d594431f54494e36d931c074bd25deec5116fcb6a0ae333ae944a9fa3196906` ;
+stderr SHA256 `578818fc1669273ee90012f4bc4dd2d21dde06c97c8f5de61739697707775894`.
+stdout vide. Copie des quatre fichiers bruts/receipt vérifiée par SHA.
+Le paquet immutable garde son statut de préparation initiale ; le présent reçu
+porte la validation ultérieure distincte. Les 317 entrées/OUT_T ne sont pas modifiés.
+
+Ces verts sont exclusivement ceux des faux : supervise_phase est remplacé
+entièrement dans deux témoins. Aucun fork/pipe/scan/kill/reap réel ni borne5s
+physique n'est qualifié. Aucun compiler, rustc, SQL, Docker, SDK, service7970,
+slot ou client natif lancé. Les huit cas CLI natifs restent NON JOUÉS.
+Transport et lease PG restent NON QUALIFIÉS ; qualification native nécessite
+un GO distinct, aucun transfert de ce GO CPU.
