@@ -1,0 +1,14 @@
+{
+  "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-watchdog-entry-red-17nov-v1",
+  "uid": 1000,
+  "device": 55,
+  "inode": 168899889,
+  "hashes": {
+    "invocation.json": "d8c911782dd33c5666e57aa354356e6d64c961b87e40d03b479c5a93ae4a33df",
+    "witness.log": "810176e0ac30c71d905bfd60a72833b33f6e118a2e55715863aaf8ee6d10f458",
+    "observation.json": "514eef6e74c85d5992e8253124b678eab993e9433f5bc8086a6ae36bad4cd825",
+    "test-fs-export-watchdog-entry.py": "be4913846a3d7b3f635306c426ddcc3ad1f4d628a6a6939d954b45c8eff0f836",
+    "export-fs-red-ledger.py": "0471118fe427d8e5a52685d02c6f30c51ae5ffa2b91937f78e2caa86adf63f6f"
+  },
+  "archive_only_no_test": true
+}

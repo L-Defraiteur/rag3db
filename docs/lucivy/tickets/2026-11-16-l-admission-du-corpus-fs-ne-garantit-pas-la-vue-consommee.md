@@ -176,3 +176,13 @@ execv vérifie primitive/TERM/kill5/durée<=300/réentrée ; aucune qualificatio
 timerOS/kill/cleanup/ENDdeuxpostes. Aucun test/import/runpy/SSH/proc/T/corpus
 par Recherche, copie Q local non rehashée indépendamment par elle. HOLD047
 conservé ; GO C7 CPU60 distinct requis avant exécution. Aucun correctif.
+
+GO C7-LUCIVY-WATCHDOG-RED-EC4-17nov60 consommé UNE fois : rc1,1FAIL/0ERROR,
+0,110091704s physique, setup vrai args/préflight/SHA/JSON passé. Rouge attendu
+ordre ARMmock puis frontièreécriture, watchdog absent ; aucune ouverture log/
+réseau/process/PIDscan/Cargo/T/corpus dans le témoin. Bruts/rc/temps/deuxsources
+archivés deux postes AVANTfix, PC cx-lucivy-watchdog-entry-red-17nov-v1 fichiers
+444/cinqSHA conformes (SSH de transfert de preuves seulement APRÈStémoin).
+Rapport17/08 et preuves/watchdog-entry-red. Aucun300mesuré/OSkill/cleanupqualifié,
+315NONJOUÉ ; ancienQ/source8b/T intact. Préparationcorrectif peut suivre ;
+aucun GO de vert/exécutionnative implicite.

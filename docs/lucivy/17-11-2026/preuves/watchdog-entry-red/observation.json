@@ -1,0 +1,24 @@
+{
+  "source_sha256": "0471118fe427d8e5a52685d02c6f30c51ae5ffa2b91937f78e2caa86adf63f6f",
+  "real_cli": true,
+  "source_rewritten": false,
+  "virtual_clock": false,
+  "events": [
+    "arm-transport-mocked",
+    "post-arm-write-frontier"
+  ],
+  "real_argparse_preflight_hash_json_reached": true,
+  "boundary": [
+    {
+      "path": "launch-ssh.log",
+      "mode": "xb",
+      "actual_write": false
+    }
+  ],
+  "network_executed": false,
+  "post_arm_write_executed": false,
+  "popen_executed": false,
+  "os_timer_or_kill_qualified": false,
+  "measured_300_seconds": false,
+  "captured_stdout": "{\"exporter_armed\": true, \"nonce\": \"0123456789abcdef0123456789abcdef\"}\n"
+}
