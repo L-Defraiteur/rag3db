@@ -12,7 +12,7 @@
   },
   "files": {
     "extension/rag3weaver/scripts/execution_entry_runner.py": "8dd368ca6dc56a08d797998d15763a135b4ecd619409f68c524d70d893177c6f",
-    "docs/rag3weaver-archi/17-11-2026/execution-entry-native-protocol/test_runner_effects.py": "64286e70dc4b396d94e8e84ddcaf99e2c02f6909429eb30e5c933096bbff9ea4",
+    "docs/rag3weaver-archi/17-11-2026/execution-entry-native-protocol/test_runner_effects.py": "243cf341ae69953dbcd2f941183f3656a0337d1ce14790ea7bb2066584aaa7d0",
     "extension/rag3weaver/scripts/execution_entry.py": "565b7f39494911b65ef121f19565450c70803c93b9ef6e62599d570707dbf218"
   },
   "argv": [
@@ -25,7 +25,6 @@
     "-m",
     "unittest",
     "-v",
-    "test_runner_effects.FixtureRunnerTests.test_final_hash_crossing_end_cannot_return_positive",
     "test_runner_effects.FixtureRunnerTests.test_final_hash_crossing_end_cannot_return_positive",
     "test_runner_effects.FixtureRunnerTests.test_port_cannot_reset_original_deadline_through_request",
     "test_runner_effects.FixtureRunnerTests.test_port_cannot_promote_actual_b_into_expected_artifact",

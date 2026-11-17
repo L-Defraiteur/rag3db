@@ -318,3 +318,9 @@ Précision causale avant GO du groupe : isoler aussi l'environnement imbriqué
 SANS changer le SHA artefact, pour qu'une simple copie superficielle ne passe
 pas les témoins. Les quatre négatifs isolent borne, SHA attendu, environnement
 profond et hashfinal. Source8dd reste inchangé, aucun fix ni coupon consommé.
+
+Diagnostic harnais127e avant tout import/GO : construction argv par tranche
+conservait le premier nom et le répétait en ajoutant les quatre noms. Corriger
+la liste explicitement ; quatre sélections exactes, aucun lancement/retry.
+Les témoins vérifient aussi que la vue exposée au port n'altère pas le request
+original (borne/SHA/env), en plus de la référence interne gelée.

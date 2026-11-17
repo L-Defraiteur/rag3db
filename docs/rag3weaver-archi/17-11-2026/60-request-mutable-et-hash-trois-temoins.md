@@ -27,3 +27,9 @@ HOLD. RO puis GOrouge distinct/bruts2hôtes avant correction : snapshot profond
 privé/nonexposé, vue détachée du port, résultat puis recheck après les deux hashes.
 Callbacks noninterruptibles restent MODELED/postvalidation, pascleanupOSborné.
 Pur565b/archivesintacts ; aucunimport/test/OS/PQS/backendnatif supplémentaire.
+
+
+Avant tout GO/import, un doublon de construction argv repéré sur127e a été
+consigné au ticket puis supprimé en reconstruisant les quatre noms explicitement.
+Aucune exécution n'a eu lieu sur ce paquet. Les cas de mutation exigent aussi
+que le port reçoive une vue indépendante sans modifier le request original.

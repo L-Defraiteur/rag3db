@@ -325,6 +325,7 @@ class FixtureRunnerTests(unittest.TestCase):
         with self.assertRaises(RunnerRefusal) as caught:
             run_fixture_invocation(request, effects)
         self.assertEqual(caught.exception.code, 'operation-deadline')
+        self.assertEqual(request['end'], 120.0)
         self.assertNotIn('fork_owned', effects.calls)
 
     def test_port_cannot_promote_actual_b_into_expected_artifact(self):
@@ -339,6 +340,7 @@ class FixtureRunnerTests(unittest.TestCase):
         with self.assertRaises(RunnerRefusal) as caught:
             run_fixture_invocation(request, effects)
         self.assertEqual(caught.exception.code, 'entry-content')
+        self.assertEqual(request['artifact_sha256'], 'c' * 64)
         self.assertNotIn('release', effects.calls)
 
     def test_port_cannot_mutate_nested_expected_environment(self):
@@ -353,4 +355,5 @@ class FixtureRunnerTests(unittest.TestCase):
         with self.assertRaises(RunnerRefusal) as caught:
             run_fixture_invocation(request, effects)
         self.assertEqual(caught.exception.code, 'entry-context')
+        self.assertIsNone(request['public_environment']['LD_LIBRARY_PATH'])
         self.assertNotIn('release', effects.calls)
