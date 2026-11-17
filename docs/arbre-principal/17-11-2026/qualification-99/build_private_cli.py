@@ -38,7 +38,7 @@ def main(config_path,config_sha):
  cfg=load(config_path,config_sha);p=Path(cfg['evidence']);w=Path(cfg['source_root']);q=Path(config_path).parent
  if set(cfg['readers'])!={'typed-reader','ids','query'}:raise ValueError('exact existing reader set required')
  if cfg['app']!=APP or not cfg['allocation'] or cfg['allocation'].startswith('PENDING'):raise ValueError('exact source/allocation not frozen')
- if os.uname().nodename.lower()!='luciepc' or Path(cfg['target'])!=TARGET or p.parent!=ROOT or not p.name.startswith('qualification-cli99-'):raise ValueError('unexpected host/evidence/unique session target')
+ if os.uname().nodename.lower()!='luciepc' or Path(cfg['target'])!=TARGET or p!=ROOT/'qualification-cli99-pc-r1' or q!=ROOT/'qualification-cli99-control-r1':raise ValueError('unexpected host/evidence/unique session target')
  if any(x.resolve()!=x for x in [w,p,q,TARGET]) or p.exists() or TARGET.exists():raise ValueError('fresh canonical evidence/target required; no adoption or cleanup')
  required=[w/'extension/rag3weaver/scripts'/name for name in ['confiner_validation.py','poste','cargo_magasin.sh','cargo_garde.py','lib_du_magasin.sh','garde_target.sh']]+[q/name for name in ['grant_watch_actor.py','provider_health_transport.py','typed_rows.py']]
  if any(str(path) not in cfg['pins'] for path in required):raise ValueError('Common/Cargo/export/guard/framing helper pins missing')
@@ -52,7 +52,7 @@ def main(config_path,config_sha):
  def git(*args):return subprocess.check_output([cfg['git'],'-C',str(w),*args],text=True).strip()
  if git('rev-parse','HEAD')!=APP or git('status','--porcelain'):raise ValueError('app worktree not exact and clean')
  parser=w/'extension/rag3weaver/codeparsers'
- if git('submodule','status','--recursive').startswith(('-','+','U')) or subprocess.check_output([cfg['git'],'-C',str(parser),'rev-parse','HEAD'],text=True).strip()!='bd133850f89d6b12a3ca2b2f6ce238785ed37e3a' or subprocess.check_output([cfg['git'],'-C',str(parser),'status','--porcelain'],text=True):raise ValueError('parser checkout not exact and clean')
+ if any(line.startswith(('-','+','U')) for line in git('submodule','status','--recursive').splitlines()) or subprocess.check_output([cfg['git'],'-C',str(parser),'rev-parse','HEAD'],text=True).strip()!='bd133850f89d6b12a3ca2b2f6ce238785ed37e3a' or subprocess.check_output([cfg['git'],'-C',str(parser),'status','--porcelain'],text=True):raise ValueError('parser checkout not exact and clean')
  spec=importlib.util.spec_from_file_location('common',w/'extension/rag3weaver/scripts/confiner_validation.py');common=importlib.util.module_from_spec(spec);spec.loader.exec_module(common)
  authority=common.autorite(common.processus());end=authority['echeance']
  sys.path.insert(0,str(q));import grant_watch_actor as frames
@@ -99,6 +99,7 @@ def main(config_path,config_sha):
   if rc!=0:raise ValueError(label+' refused: '+str(rc))
   check()
  try:
+  save('authority-reference.json',dict(path=os.environ['RAG3WEAVER_VALIDATION_RECU'],pid=authority['pid'],start=authority['debut'],cgroup=authority['cgroup'],deadline=end))
   save('source-before-build.json',dict(app=APP,config_sha256=config_sha,allocation=cfg['allocation'],pins=cfg['pins'],features_expected=FEATURES,target=str(TARGET),common_end=end,sdk_runtime_loaded=False))
   save('configured-build-profile.json',dict(kind='CONFIGURED_NOT_PROCESS_OBSERVED',values={k:v for k,v in env.items() if k!='RAG3WEAVER_VALIDATION_JETON'}))
   argv=[cfg['bash'],'scripts/cargo_magasin.sh','build','--offline','--locked','--release','--bin',NAMES[0],'--bin',NAMES[1],'--features','rag3db-native,code,daemon,openai-llm','--message-format=json-render-diagnostics','--jobs','8']

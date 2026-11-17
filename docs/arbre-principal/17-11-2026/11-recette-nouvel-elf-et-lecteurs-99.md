@@ -55,6 +55,7 @@ canonique fixé, RUSTFLAGS RUNPATH explicite SDK, incremental0/jobs8.
 ## Paquet proposé et métadonnées seules effectivement relevées
 
 Sources : [driver](qualification-99/build_private_cli.py),
+[lanceur/compositeur](qualification-99/launch.py),
 [configuration proposée](qualification-99/config-proposal.json),
 [métadonnées outils PC](qualification-99/pc-tools-metadata.json) et
 [lecteurs/SDK](qualification-99/pc-readers-sdk-metadata.json).
@@ -96,21 +97,32 @@ et RAG_STATE sont frères, HOME ne sert pas de fallback d'état produit.
 
 ## Étape A exécutable proposée : build et couple statique seulement
 
-Le driver fourni est NON JOUÉ. Après préparation Q source/pins/config/allocation
-réelle et deux RO, l'enveloppe exacte à proposer à un GO serait :
+Driver et lanceur sont NON JOUÉS. Le futur --prepare exige d'abord le
+worktree APP99 existant/propre et un pilote Git propre, puis copie uniquement
+sources/helpers/config en Q neuf, gèle pilote/packetSHA/allocation proposée.
+Ce mode n'est PAS exécuté ici et aucune copie d'artefact n'est faite à la prépa.
+Après gel Q, deux RO et GO exact distinct, l'entrée unique proposée serait :
+
+```text
+/usr/bin/python3.14 -B Q/launch.py --launch SHA_PREPARED_FUTUR \
+  --allocation ALLOCATION_C7_FUTURE
+```
+
+Le lanceur produit lui-même l'enveloppe, vérifiée à l'entrée --compose :
 
 ```text
 POSTE_MEM_MAX=32G POSTE_SWAP_MAX=0 RAG3WEAVER_BUILD_MEMORY_HIGH=0 \
 PYTHONDONTWRITEBYTECODE=1 W/extension/rag3weaver/scripts/poste lourd \
   /usr/bin/timeout --signal=TERM --kill-after=2s 2398s \
-  /usr/bin/python3.14 W/extension/rag3weaver/scripts/confiner_validation.py \
-  lancer --delai 2330 --preuves S -- \
-  /usr/bin/python3.14 -B Q/build_private_cli.py \
-  --config Q/prepared.json --config-sha256 SHA_PREPARED_FUTUR
+  /usr/bin/python3.14 -B Q/launch.py --compose SHA_PREPARED_FUTUR \
+  --allocation ALLOCATION_C7_FUTURE
 ```
 
-W/Q/S désignent les chemins précis ci-dessus ; aucun shell n'est invité à
-lancer ces variables non définies. Pas de -B DEVANT Common (signatureargv),
+Le compositeur appelle ensuite Python3.14 W/scripts/confiner_validation.py
+lancer --delai2330 --preuvesS -- Python3.14-B Q/build_private_cli.py avec
+config/SHA exacts (scripts sous extension/rag3weaver). W/Q/S désignent les chemins
+précis ci-dessus ; aucun shell n'est invité à lancer des variables non définies.
+Pas de -B DEVANT Common (signatureargv),
 driver Python-B exact ; aucun watcher/provider n'est lancé dans A. Ces caps **2400 total/2330 Common/build1800/static30/
 framing15** sont PROPOSÉS, pas accordés. Horloge créée après vrai poste, chaque
 phase min(cap,END−30) avec timeout OS TERM/KILL1 ; premier refus STOP sans retry.
@@ -138,12 +150,19 @@ Chemin réel programmé :
    firstred après dernières écritures. Statut unique
    BUILT_AND_STATIC_PAIR_CHECKED_ONLY ; backend_invoked=false/DB_opened=false/
    SDK_runtime_qualified=false/reader_DB_qualified=false/live_authorized=false.
-   Composé opérationnel doit aussi relire CommonTERMINE/verdict/restes/bus ;
-   le rapport du driver seul ne certifie pas ces observations après sa sortie.
+   Le compositeur matérialisé relit CommonTERMINE/verdictVERT/codeint0/restes[]/
+   nettoyé/busabsent, identités référence/autorité, résultat strictement statique,
+   ledger complet des5artefacts et tous hashes après Common. Puis source/pins
+   et deadline/firstred, publication atomique et recheck postfsync/préretour.
+   Un retard refuse/reclasseRED ; aucun rapport driver seul ne certifie le scope.
 
-Huit témoins du VRAI select_artifacts sont écrits, NON JOUÉS : paire unique,
+Seize témoins sont écrits, NON JOUÉS : huit du VRAI select_artifacts, paire unique,
 manquant/doublon/features/bin-test/source/diagnostic-error/nonJSON. Ils ne
-qualifient pas le launcher entier. Lecture AST seulement faite, aucun import
+qualifient pas le launcher entier. Huit autres exécutent le VRAI compose avec
+Common/parents/child simulés et fichiers privés : positif statique, autorité
+active/restes/bus/artifact modifié/claim élargi refusés, deadline et premier rouge
+pendant fsync final. Ils ne qualifient pas le poste/cleanup/SDK réels.
+Lecture AST seulement faite, aucun import
 du driver, aucun test exécuté. RO puis GO CPU distinct avant leur exécution ;
 pas de PASS supposé ni de transfert des19CPU du contrat post-writer.
 

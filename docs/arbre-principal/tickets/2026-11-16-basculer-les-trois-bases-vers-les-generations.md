@@ -217,3 +217,11 @@ sélecteur écrits NONJOUÉS. Config allocationPENDING, Q non préparé, pilote
 NONJOUÉ : nouvellesRO/GOCPU et GOA distincts avant exécution. B runtime privé
 et C migration/oracle restent étapes séparées avec nouveauxpaquets/RO/GO.
 Pas de DB/copie d'artefacts/build/test/CLI/provider/service/slot/cleanup ici.
+
+Après RO PRÉPA326b R/ED/G favorables bornées, complément AVANT GO : lanceur
+prepare/seal (source APP préalable) et compose après Common matérialisés,
+références autorité/ledger complet/source/pins/ENDfirstred puis publication
+postfsync contrôlés. Huit témoins compose synthétiques ajoutés aux8sélecteur,
+16NONJOUÉS. Q/W/P/S/T toujours non créés ; configPENDING/paquetnonpréparé.
+Pas de validation ni qualification runtime déduite ; nouveau source/RO puis
+éventuel GO CPU distinct avant tests et GO A distinct avant build.

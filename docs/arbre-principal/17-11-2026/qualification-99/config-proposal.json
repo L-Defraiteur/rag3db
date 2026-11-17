@@ -7,7 +7,7 @@
   "evidence": "/home/lucied/.cache/rag3weaver-build/qualification-cli99-pc-r1",
   "sdk": "/home/lucied/.cache/rag3db-libs/rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF",
   "timeout": "/usr/bin/timeout",
-  "driver_sha256": "77627c2c67e62e021e99abdd89018989295d2857f550cd0cf3e51f3d38186c04",
+  "driver_sha256": "f13c39b3f2dce002eaa863f5a6819e763b3add794e23f3a28e630debbfe187a2",
   "pins": {
     "/home/lucied/git_workspaces/rag3db-cx-arbre-qualif-cli99-20261117-r1/extension/rag3weaver/scripts/confiner_validation.py": "6439fdd8b52c85fa4e74af0def2c667ef0bedae9b814cbbfd48e49946c4f74ea",
     "/home/lucied/git_workspaces/rag3db-cx-arbre-qualif-cli99-20261117-r1/extension/rag3weaver/scripts/poste": "79e3a8bbf457e3bc9104aa1558e7d03072216c70b68e08ae606ace6aa4584c7b",
@@ -194,5 +194,6 @@
       "mode": 493,
       "size": 958256
     }
-  }
+  },
+  "launcher_sha256": "5a1d7b4d65c524d8e29c226f351c3135762fcb305dc0e487cc348a1f4736765a"
 }
