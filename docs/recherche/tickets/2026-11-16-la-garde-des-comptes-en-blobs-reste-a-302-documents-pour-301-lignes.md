@@ -759,3 +759,11 @@ AucuneCPUjouée/rougeinventé. RéserveRustjoinRconfirmée, déjàconsignée6f0a
 fixc8d/testVRAIJoinHandle ; nouveauxpins àmettreàjour aprèssecondecorrection.
 UnitéTTL02 vérifiée not-found/inactive/dead (aucunstopnécessaire), preuve
 expiry-unit-finalSHAe31c822b796f2cc5f7979085c14f20ad0b23bbee87ff433ef1bbfca1bc929ec7 copiée2hôtes.
+
+ConsigneC7groupéepasfixavantREDobservé : Pythonstatus noncorrigé/testprépub7aa,
+C8dRust est SOURCEpréparéeantérieureNONCOMPILEEruntimejamaisappliquée. Pour
+acquérirvraiREDRustsansERRORdecompilationinventé : variantejoin_red dérivée6fdb,
+extractionSEULEanciencorpsbuggué vershelperdéléguéOwner réel, vraisJoinHandles,
+controlsReadyOk/Elapsed+ReadyJoinError attenduFAILpanic. Note04publie3tests
+RustNONCOMPILÉS et2CPUREDexactes NONJOUÉES, aucun nouveaufixstatus effectué.
+FuturGOnatifcompiler/test etGOsCPUdistincts requis,fixture02expired,pasPGcontact.
