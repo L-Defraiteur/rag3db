@@ -174,3 +174,13 @@ ordre/attestation distincte/firstcause/rc acquis, sans I/O ni clock/OS/publicati
 47fonctions prépubliées inchangées depuis2b04, NONJOUÉES ; nouveaux pins/commande
 proposée sansGO. RO source totale puis GO47 distinct avant tout test ; aucun
 backend/adaptateur CP-Common/SDK/capture/appelant livré ou admission déduite.
+
+## Réserve topologie Recherchecb290, avant témoins et correction
+
+Contre-exemples statiques, NON JOUÉS : spawned peut réutiliser le PID du Common
+owner ou common_root en transportant la même identité jusqu'au wait enfant ;
+le plan peut aussi donner au même PID root/runner deux start différents.
+Le module pur doit refuser ces topologies simultanées incohérentes, tout en
+permettant root=runner avec identité exacte si le runner est enfant direct.
+Prépublier quatre témoins avant correction ; aucun GO47 ne s'étend aux nouveaux
+cas ni au futur pin. Cette réserve ne décrit pas un défaut OS observé.

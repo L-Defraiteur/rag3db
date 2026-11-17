@@ -336,3 +336,28 @@ class EntryContract(unittest.TestCase):
     def test_published_requires_independent_attestation(self):
         plan, facts, publication = fixture()
         self.refused(plan, facts, None, 'publication-missing')
+
+    def test_child_cannot_be_the_common_owner(self):
+        plan, facts, publication = fixture()
+        for index in (1, 2, 3, 5, 6):
+            facts[index]['data'].update(pid=90, start=9)
+        self.refused(plan, facts, publication, 'child-identity')
+
+    def test_child_cannot_be_the_common_root(self):
+        plan, facts, publication = fixture()
+        for index in (1, 2, 3, 5, 6):
+            facts[index]['data'].update(pid=95, start=10)
+        self.refused(plan, facts, publication, 'child-identity')
+
+    def test_common_root_and_runner_same_pid_need_same_start(self):
+        plan, facts, publication = fixture()
+        plan['common_root'] = (plan['runner_pid'], plan['runner_start'] + 1)
+        facts[8]['data'].update(pid=plan['runner_pid'], start=plan['runner_start'] + 1)
+        self.refused(plan, facts, publication, 'plan-topology')
+
+    def test_runner_may_be_exactly_the_direct_common_root(self):
+        plan, facts, publication = fixture()
+        plan['common_root'] = (plan['runner_pid'], plan['runner_start'])
+        facts[8]['data'].update(pid=plan['runner_pid'], start=plan['runner_start'])
+        result = verify_transcript(plan, facts, publication)
+        self.assertTrue(result['invocation_complete'])
