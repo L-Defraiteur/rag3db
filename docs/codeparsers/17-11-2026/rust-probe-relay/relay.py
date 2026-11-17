@@ -23,6 +23,12 @@ else:
     sys.modules['publication_relay'] = engine
     spec.loader.exec_module(engine)
 
+def default_limits():
+    return {'whole_soft': 2098, 'whole_kill': 2, 'queue': 300, 'phase_soft': 1798,
+        'phase_kill': 2, 'common_max': 1750, 'common_margin': 30,
+        'operation_grace': 15, 'stop_reserve': 5, 'control_cap': 5, 'copy_cap': 30}
+
+
 def default_plan(pair, phase):
     config = pair['phases'][phase]
     binding = {'contract_id': 'rust-probe-ledger-v1', 'app': config['source'],

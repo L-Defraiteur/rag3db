@@ -208,3 +208,30 @@ faits observés séparés. Fixtures portées vers plans complets/headers, assert
 Window runtime/global lifecycle restent absents, bridge non livrée/admission
 impossible. WTrouge7ee figé attend GOdistinct huit casWindow avant helpers.
 Aucun Native/SSH/proc/target pendant ces modifications, D45/P05/P06/229bQ intacts.
+
+### Huit rougesWindow7ee observés AVANT helper runtime
+
+GO C7-PUBLICATION-WINDOW-RED-7EE-17nov60, source exacte
+7ee63776bbbd07f16bc854054281157ba2caae53/WTrouge propre/publié, UNE invocation
+58+2 sansfailfast :8FAIL WINDOW_LIFECYCLE_UNSUPPORTED_BY_REAL_CORE,
+0ERROR/skip,rc1,.094719s externe/.010s unittest. Bruts2hôtes avantimplantation,
+manifest74fdc8cabd5d4cf96b565f19fd672ed8c631d440c85e64be624ca5b5e510c27d,
+result020ea366206b83a887e37c39e0e6c04a6ab89e814d417fdf83da15b56453b062.
+Aucun signal/process/proc/SSH réel parfixture ni Native/Cargo/target/corpus.
+Helper commun préparé ensuite seulement, aucun nouveau CPU vert autorisé.
+
+### Reprise de préparation après confirmation C7
+
+Les helpers Window et limites restent WIP non exécuté. Porter les données des
+fixtures vers les limites explicites et le codec de descripteurs Common, sans
+remplacer les gardes du noyau ni changer les assertions historiques. La lecture
+TTY confirme une frontière : copie/hash/ACK ne prouvent pas à eux seuls la copie
+effectivement exécutée via PID/start/exe pré/post ; aucun producteur générique
+de cette preuve n'est livré ici. Cette extension ne devient pas une nouvelle
+implémentation TTY. Publier les pins puis RO avant toute demande CPU distincte.
+
+Point ouvert de préparation : CLI/chemins/roles/bootstrap restent orientés Rust ;
+le layout global P/Q/S d089 est une proposition documentaire, aucun bridge
+armable. Revoir également les clamps queue/Common au budget physique original
+et la fermeture des modules avant qualification. Publication intermédiaire ne
+vaut pas demande d'exécution ni clôture du ticket.

@@ -99,3 +99,24 @@ prototype de cette branche n'est admis ni armable. Les tests Window restent
 prépubliés avant leurs helpers, sur WTrouge figé7ee ; GOdistinct demandé pour
 observer leur absence AVANT implantation. La présente boucle de plan ne
 constitue pas une qualification4publications ni le bridgeArchi.
+
+## Préparation Window après les huit rouges acquis
+
+Le rouge7ee est conservé dans le ticket et ses bruts deux hôtes : huit FAIL
+nommés API absente, zéro ERROR/skip. Les helpers observe_active,
+record_window_start et observe_window sont désormais préparés dans le noyau
+unique : événement exclusif, rôle approuvé, PID/start/UID/argv, modules épinglés,
+ledger/plan/phase et ENDop revérifiés avant/après. Aucun résultat vert nouveau.
+
+Les limites sont déclarées explicitement ; le wrapper Rust fournit le profil
+historique. Le pilote fournit un codec de descripteurs de phase en lecture seule,
+les observations de vivacité et d'ascendance restent dans GateBase. Les fixtures
+historiques sont portées à ces données avec recette et vrai bootstrap commun
+sur processus synthétiques ; aucune assertion historique retirée.
+
+Cette publication demeure INTERMÉDIAIRE NON EXÉCUTÉE, non admissible. Restent le
+raccord complet de layout/entrées globales (CLI encore Rust, prepared.json et
+bootstrap/roles historiquement nommés), la revue des bornes et de la fermeture
+des modules, puis RO et GO CPU distinct avant les jeux 36/3/8. Ne pas utiliser
+ces fonctions comme bridge Archi livré. Le hachage d'un ELF copié et acquitté
+ne constitue pas une preuve PID/start/exe de son exécution effective.

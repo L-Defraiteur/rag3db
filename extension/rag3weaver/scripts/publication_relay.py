@@ -144,6 +144,23 @@ def context_header(plan, prepared_sha256, label):
         'binding_sha256': spec.binding_sha256}
 
 
+def publication_limits(pair):
+    limits = pair['publication_limits']
+    expected = {'whole_soft', 'whole_kill', 'queue', 'phase_soft', 'phase_kill',
+                'common_max', 'common_margin', 'operation_grace', 'stop_reserve', 'control_cap', 'copy_cap'}
+    assert set(limits) == expected
+    for value in limits.values():
+        assert isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and value > 0
+    assert limits['control_cap'] <= limits['stop_reserve'] < limits['queue'] < limits['whole_soft']
+    assert limits['operation_grace'] >= limits['stop_reserve']
+    assert limits['common_max'] < limits['whole_soft'] + limits['whole_kill']
+    return _json_frozen(limits)
+
+
+def seconds_arg(seconds):
+    return f'{seconds:g}s'
+
+
 def digest(path):
     with Path(path).open('rb') as stream:
         return hashlib.file_digest(stream, 'sha256').hexdigest()
@@ -193,7 +210,7 @@ class Relay:
         self.transport, self.root, self.clock, self.sleep = transport, Path(root), clock, sleep
         self.queue_budget, self.transfer_cap, self.control_cap = queue_budget, transfer_cap, control_cap
         self.stop_reserve = stop_reserve
-        assert 0 < stop_reserve <= control_cap < queue_budget
+        assert 0 < control_cap <= stop_reserve < queue_budget
         self.deadline = None
         self.phase_deadline = None
         started = clock()
@@ -431,7 +448,8 @@ class SSHTransport:
         remote = [sys.executable, '-B', str(self.control / 'gate.py'), action,
                   '--proofs', self.pair['proofs'], '--phase', self.phase, '--pin', self.pin, *extra]
         if action == 'launch':
-            remote = [self.pair['timeout'], '--signal=TERM', '--kill-after=2s', '2098s', *remote]
+            remote = [self.pair['timeout'], '--signal=TERM', '--kill-after=' + seconds_arg(publication_limits(self.pair)['whole_kill']),
+                seconds_arg(publication_limits(self.pair)['whole_soft']), *remote]
         elif cap is not None:
             assert 0 < cap <= 30
             remote = [self.pair['timeout'], '--signal=TERM', '--kill-after=1s', str(cap) + 's', *remote]
@@ -544,6 +562,26 @@ class SSHTransport:
 
 
 
+@dataclass(frozen=True)
+class ActivePhase:
+    execution_id: str
+    phase_id: str
+    prepared_sha256: str
+    plan_sha256: str
+    authority_pid: int
+    authority_start: str
+    authority_cgroup: str
+    phase_end_pc: float
+    operation_end_pc: float
+
+
+@dataclass(frozen=True)
+class WindowEvidence:
+    event_sha256: str
+    owner: Mapping
+    remaining: float
+
+
 class GateBase:
     def __init__(self, pair, pin, phase, *, pilot, entry_file):
         self.pair, self.pin, self.phase = pair, pin, phase
@@ -554,6 +592,10 @@ class GateBase:
         self.provider = None
         self.plan = validate_plan(pair['publication_plans'][phase])
         self.guard = self.pilot.physical
+
+    @property
+    def limits(self):
+        return publication_limits(self.pair)
 
     def verify_contract(self):
         assert socket.gethostname().lower() == 'luciepc'
@@ -583,7 +625,8 @@ class GateBase:
         hard = self.check_process(record['hard_timeout'])
         assert hard['exe'] == self.pair['timeout']
         assert digest(hard['exe']) == self.pair['timeout_sha256']
-        assert hard['argv'][:4] == [self.pair['timeout'], '--signal=TERM', '--kill-after=2s', '2098s']
+        assert hard['argv'][:4] == [self.pair['timeout'], '--signal=TERM',
+            '--kill-after=' + seconds_arg(self.limits['whole_kill']), seconds_arg(self.limits['whole_soft'])]
         return record
 
     def launcher(self):
@@ -613,48 +656,174 @@ class GateBase:
         assert timeout['argv'] == self.pilot.outer_command(self.pair, self.phase)[2:]
         assert int(timeout['start']) / os.sysconf('SC_CLK_TCK') <= self.bootstrap()['queue_end']
         assert timeout['exe'] == self.pair['timeout'] and digest(timeout['exe']) == self.pair['timeout_sha256']
-        remaining = int(timeout['start']) / os.sysconf('SC_CLK_TCK') + 1798 - time.monotonic()
-        assert remaining > 15
-        return {'state': 'starting', 'remaining': remaining - 15,
-                'phase_remaining': remaining, 'stage': 'waiting-authority'}
+        remaining = int(timeout['start']) / os.sysconf('SC_CLK_TCK') + self.limits['phase_soft'] - time.monotonic()
+        assert remaining > self.limits['operation_grace']
+        return {'state': 'starting', 'remaining': remaining - self.limits['operation_grace'],
+                'phase_remaining': remaining, 'stage': None}
 
     def active(self):
         self.verify()
         launch = self.launcher()
-        info = json.loads((self.root / 'authority-path.json').read_text())
+        # Le codec de politique lit des DESCRIPTEURS, il n'atteste jamais leur vivacité.
+        info = self.pilot.publication_phase_info(self.pair, self.phase)
         receipt = Path(info['path'])
-        assert receipt.name == 'autorite.json' and receipt.parent.parent == self.root / 'scope'
-        assert receipt.resolve(strict=True) == receipt
-        authority = json.loads(receipt.read_text())  # Le jeton ne sort jamais de ce processus.
+        assert receipt.name == 'autorite.json' and receipt.parent.parent == Path(info['scope_root'])
+        assert receipt.resolve(strict=True) == receipt and receipt.stat().st_uid == os.getuid()
+        authority = json.loads(receipt.read_text())  # Aucun jeton n'est exporté.
         assert authority['etat'] == 'actif' and not receipt.with_name('verdict.json').exists()
-        assert authority['script_sha256'] == self.pair['controllers']['confiner_validation.py']
-        assert authority['script'] == str(self.control / 'confiner_validation.py')
+        common_entry = self.control / safe_id(info['common_entry'])
+        assert authority['script_sha256'] == self.pair['controllers'][info['common_entry']]
+        assert authority['script'] == str(common_entry)
         common = self.check_process(info['supervisor_identity'])
         assert common['pid'] == authority['pid'] and common['start'] == authority['debut']
         assert common['cgroup'].split(':', 2)[-1] == authority['cgroup']
-        assert common['argv'] == json.loads((self.root / 'common.command.json').read_text())
+        assert common['argv'] == info['common_argv']
         driver = self.check_process(info['driver_identity'])
-        assert info['driver_script_sha256'] == digest(self.control / 'pilot.py') == self.pair['driver_sha256']
-        expected_driver = [sys.executable, '-B', str(self.control / 'pilot.py'), 'inside',
-            '--proofs', self.pair['proofs'], '--phase', self.phase]
-        assert driver['argv'] == expected_driver
+        entry = self.control / safe_id(info['driver_entry'])
+        assert info['driver_script_sha256'] == digest(entry) == self.pair['controllers'][info['driver_entry']]
+        assert driver['argv'] == info['driver_argv']
         cursor, seen = driver, set()
         while cursor['pid'] != common['pid']:
             assert cursor['pid'] not in seen and cursor['parent'] > 1
             seen.add(cursor['pid'])
             cursor = self.guard.process_record(cursor['parent'])
         assert cursor['start'] == common['start']
-        controls = json.loads((self.root / 'controls.json').read_text())
-        timeout = next(row for row in controls if row['role'] == 'outer-timeout')
+        controls = json.loads(Path(info['controls_path']).read_text())
+        timeout = next(row for row in controls if row['role'] == info['deadline_role'])
         self.check_process(timeout)
         assert digest(self.pair['timeout']) == self.pair['timeout_sha256']
-        assert timeout['argv'] == self.pilot.outer_command(self.pair, self.phase)[2:]
-        outer_end = int(timeout['start']) / os.sysconf('SC_CLK_TCK') + 1798
+        assert timeout['argv'] == info['deadline_argv']
+        outer_end = int(timeout['start']) / os.sysconf('SC_CLK_TCK') + self.limits['phase_soft']
         end = min(authority['echeance'], outer_end)
-        remaining = end - 15 - time.monotonic()
+        assert authority['echeance'] == info['original_common_end'], 'original Common END changed'
+        recipe = json.loads(receipt.with_name('recette.json').read_text())
+        assert 0 < recipe['delai'] <= self.limits['common_max']
+        whole = self.bootstrap()['hard_timeout']
+        hard_end = int(whole['start']) / os.sysconf('SC_CLK_TCK') + self.limits['whole_soft'] + self.limits['whole_kill']
+        assert end <= hard_end - self.limits['common_margin']
+        operation_end = end - self.limits['operation_grace']
+        remaining = operation_end - time.monotonic()
         assert remaining > 0, 'PC publication deadline'
+        self._active_epoch = {'pid': authority['pid'], 'start': authority['debut'],
+            'cgroup': authority['cgroup'], 'phase_end': end, 'operation_end': operation_end}
         return {'state': 'active', 'remaining': remaining, 'phase_remaining': end - time.monotonic(),
             'coordinator': launch['coordinator']}
+
+    def observe_active(self):
+        self.active()  # Toutes les gardes natives du noyau, pas un booléen du fournisseur.
+        assert self.pair['execution_id'] == self.plan.execution_id
+        epoch = self._active_epoch
+        return ActivePhase(self.plan.execution_id, self.phase, require_sha(self.pin), self.plan.sha256,
+            epoch['pid'], epoch['start'], epoch['cgroup'], epoch['phase_end'], epoch['operation_end'])
+
+    def revalidate_phase(self, phase):
+        assert isinstance(phase, ActivePhase)
+        current = self.observe_active()
+        assert current == phase, 'phase identity or original END changed'
+        assert time.monotonic() < current.operation_end_pc, 'operation END expired'
+        return current
+
+    def window_spec(self, spec):
+        declared = self.plan.stage(spec.label)
+        assert declared == spec and spec.window_seconds is not None
+        windows = self.pair.get('window_events', {})
+        assert spec.label in windows, 'publication window path not approved'
+        approved = windows[spec.label]
+        assert {'path', 'owner_role', 'event_kind'} <= set(approved)
+        safe_id(approved['owner_role'])
+        safe_id(approved['event_kind'])
+        path = Path(approved['path'])
+        assert path.is_absolute() and path.parent.resolve(strict=True) == path.parent
+        assert path.parent == self.root or self.root in path.parent.parents
+        safe_id(path.name)
+        assert not path.is_symlink()
+        if path.exists():
+            assert path.is_file() and path.stat().st_uid == os.getuid()
+        return approved
+
+    def window_owner(self, approved):
+        roles = self.pair.get('owner_roles', {})
+        assert approved['owner_role'] in roles, 'window owner role not approved'
+        spec = roles[approved['owner_role']]
+        descriptor = spec['descriptor']
+        safe_id(descriptor)
+        # Le layout permet un fichier de rôle approuvé ; aucune résolution depuis le ledger.
+        pointer = Path(spec.get('descriptor_path', str(self.root / 'authority-path.json')))
+        assert pointer.resolve(strict=True) == pointer and self.root in pointer.parents
+        observed = json.loads(pointer.read_text())
+        expected = observed[descriptor]
+        current = self.check_process(expected)
+        entry = self.control / safe_id(spec['entry_file'])
+        entry_sha = require_sha(spec['entry_sha256'])
+        assert entry.resolve(strict=True) == entry and digest(entry) == entry_sha
+        assert str(entry) in current['argv'], 'owner is not running the approved entry'
+        components = spec['component_hashes']
+        assert spec['entry_file'] in components and 'publication_relay.py' in components
+        for name, sha in components.items():
+            component = self.control / safe_id(name)
+            assert require_sha(sha) == self.pair['controllers'][name]
+            assert component.resolve(strict=True) == component and digest(component) == sha
+        if spec.get('exe_sha256') is not None:
+            assert digest(current['exe']) == require_sha(spec['exe_sha256'])
+        return _json_frozen({'pid': current['pid'], 'start_ticks': current['start'],
+            'uid': current['uid'], 'exe': current['exe'], 'argv': tuple(current['argv']),
+            'cgroup': current['cgroup'], 'entry_sha256': entry_sha,
+            'component_hashes': components})
+
+    def window_header(self, spec, phase, ledger_sha256):
+        header = context_header(self.plan, self.pin, spec.label)
+        header.update(ledger_sha256=require_sha(ledger_sha256), authority_pid=phase.authority_pid,
+            authority_start=phase.authority_start, authority_cgroup=phase.authority_cgroup)
+        return header
+
+    def record_window_start(self, spec, phase, ledger_sha256):
+        self.revalidate_phase(phase)
+        approved = self.window_spec(spec)
+        for prior in self.plan.stages[:self.plan.position(spec.label)]:
+            self.accepted(prior.label)
+        owner = self.window_owner(approved)
+        assert owner['pid'] == os.getpid(), 'only the actual owner may open its window'
+        now = time.monotonic()
+        end = min(phase.operation_end_pc, now + spec.window_seconds)
+        assert now < end
+        data = self.window_header(spec, phase, ledger_sha256)
+        data.update(event_kind=approved['event_kind'], owner_role=approved['owner_role'],
+            owner=_json_plain(owner), started_pc=now, operation_end_pc=phase.operation_end_pc)
+        def before_link():
+            self.revalidate_phase(phase)
+            assert self.window_owner(approved) == owner
+            assert time.monotonic() < end, 'window creation deadline'
+        atomic_json(Path(approved['path']), data, before_link)
+        self.revalidate_phase(phase)
+        assert time.monotonic() < end, 'window fsync crossed END'
+        return self.observe_window(spec, phase, ledger_sha256)
+
+    def observe_window(self, spec, phase, ledger_sha256):
+        self.revalidate_phase(phase)
+        approved = self.window_spec(spec)
+        path = Path(approved['path'])
+        before = path.read_bytes()
+        event_sha = hashlib.sha256(before).hexdigest()
+        data = json.loads(before)
+        header = self.window_header(spec, phase, ledger_sha256)
+        assert set(data) == set(header) | {'event_kind', 'owner_role', 'owner', 'started_pc', 'operation_end_pc'}
+        assert all(data[key] == value for key, value in header.items())
+        assert data['event_kind'] == approved['event_kind'] and data['owner_role'] == approved['owner_role']
+        assert data['operation_end_pc'] == phase.operation_end_pc
+        owner = self.window_owner(approved)
+        assert data['owner'] == _json_plain(owner), 'window owner identity or closure changed'
+        started = data['started_pc']
+        assert isinstance(started, (int, float)) and not isinstance(started, bool) and math.isfinite(started)
+        now = time.monotonic()
+        assert started <= now
+        end = min(phase.operation_end_pc, started + spec.window_seconds)
+        assert now < end, 'publication window expired'
+        self.revalidate_phase(phase)
+        assert path.read_bytes() == before, 'window changed during observation'
+        assert self.window_owner(approved) == owner
+        remaining = end - time.monotonic()
+        assert remaining > 0, 'publication window expired after checks'
+        return WindowEvidence(event_sha, owner, remaining)
 
     def publication_header(self, kind):
         return context_header(self.plan, self.pin, kind)
@@ -836,7 +1005,8 @@ class GateBase:
         assert bootstrap['gate_sha256'] == digest(self.control / 'gate.py') == self.pair['controllers']['gate.py']
         hard = bootstrap['hard_timeout']
         assert hard['exe'] == self.pair['timeout'] and digest(hard['exe']) == self.pair['timeout_sha256']
-        assert hard['argv'][:4] == [self.pair['timeout'], '--signal=TERM', '--kill-after=2s', '2098s']
+        assert hard['argv'][:4] == [self.pair['timeout'], '--signal=TERM',
+            '--kill-after=' + seconds_arg(self.limits['whole_kill']), seconds_arg(self.limits['whole_soft'])]
         allowed = [bootstrap['identity']['argv'], bootstrap['run_argv']]
         roles = [('remote-hard-timeout', hard, None), ('launcher', bootstrap['identity'], allowed)]
         info_path = self.root / 'authority-path.json'
@@ -929,14 +1099,15 @@ class GateBase:
             '--proofs', self.pair['proofs'], '--phase', self.phase, '--pin', self.pin, '--allocation', allocation]
         assert hard['uid'] == os.getuid() and hard['exe'] == self.pair['timeout']
         assert digest(hard['exe']) == self.pair['timeout_sha256']
-        assert hard['argv'] == [self.pair['timeout'], '--signal=TERM', '--kill-after=2s', '2098s', *expected_gate]
+        assert hard['argv'] == [self.pair['timeout'], '--signal=TERM',
+            '--kill-after=' + seconds_arg(self.limits['whole_kill']), seconds_arg(self.limits['whole_soft']), *expected_gate]
         command = [sys.executable, '-B', str(self.control / 'pilot.py'), 'run', '--proofs',
                    self.pair['proofs'], '--phase', self.phase, '--allocation', allocation]
         now = time.monotonic()
         # Seule l'identité RÉELLE Gate est publiée ; run_argv est explicitement un projet.
         atomic_json(self.root / 'relay-bootstrap.json', {'identity': identity, 'run_argv': command,
             'coordinator': ready, 'prepared_sha256': self.pin, 'hard_timeout': hard,
-            'gate_sha256': digest(self.control / 'gate.py'), 'transition_end': now + 5, 'queue_end': now + 300})
+            'gate_sha256': digest(self.control / 'gate.py'), 'transition_end': now + self.limits['control_cap'], 'queue_end': now + self.limits['queue']})
         os.chdir(self.pair['proofs'])
         os.execve(sys.executable, command, dict(os.environ, RUST_PROBE_TOOL_ROOT=self.pair['tool_root']))
 
@@ -957,12 +1128,14 @@ def relay_main(entry_file):
     assert Path(__file__).resolve() == Path(pair['control']) / 'publication_relay.py'
     assert digest(__file__) == pair['controllers']['publication_relay.py']
     assert digest(entry_file) == pair['controllers']['relay.py']
-    assert pair['relay'] == {'queue_budget': 300, 'transfer_cap': 30, 'control_cap': 5, 'stop_reserve': 5}
+    limits = publication_limits(pair)
+    assert pair['relay'] == {'queue_budget': limits['queue'], 'transfer_cap': limits['copy_cap'],
+        'control_cap': limits['control_cap'], 'stop_reserve': limits['stop_reserve']}
     os.chdir(args.proofs)
     # Vrai timeout local : groupe privé hérité par tous nos SSH, kill2 physique.
     peer_timeout = pair['peer_timeout']
     assert digest(peer_timeout['path']) == peer_timeout['sha256']
-    local_outer = [peer_timeout['path'], '--signal=TERM', '--kill-after=2s', '2098s',
+    local_outer = [peer_timeout['path'], '--signal=TERM', '--kill-after=' + seconds_arg(limits['whole_kill']), seconds_arg(limits['whole_soft']),
         sys.executable, '-B', str(Path(entry_file).resolve()), *sys.argv[1:]]
     spec = importlib.util.spec_from_file_location('local_outer_guard', Path(pair['control']) / 'physical_guard.py')
     guard = importlib.util.module_from_spec(spec)
@@ -973,14 +1146,14 @@ def relay_main(entry_file):
     assert parent['uid'] == os.getuid()
     root = args.proofs / args.phase / 'relay-local'
     root.mkdir(mode=0o700)
-    atomic_json(root / 'local-hard-supervision.json', {'identity': parent, 'hardcap': 2100,
-        'queue_budget': 300, 'phase_budget': 1800, 'timeout_sha256': peer_timeout['sha256']})
+    atomic_json(root / 'local-hard-supervision.json', {'identity': parent, 'hardcap': limits['whole_soft'] + limits['whole_kill'],
+        'queue_budget': limits['queue'], 'timeout_sha256': peer_timeout['sha256']})
     transport = SSHTransport(pair, pin, args.phase, args.allocation, args.host, root, entry_file=entry_file)
     def stop(sig, frame):
         raise TimeoutError('relay received signal ' + str(sig))
     for sig in [signal.SIGTERM, signal.SIGINT, signal.SIGHUP]:
         signal.signal(sig, stop)
-    hard_end = int(parent['start']) / os.sysconf('SC_CLK_TCK') + 2098
+    hard_end = int(parent['start']) / os.sysconf('SC_CLK_TCK') + limits['whole_soft']
     return Relay(transport, root, hard_end=hard_end, plan=transport.plan,
         prepared_sha256=pin, **pair['relay']).run()
 

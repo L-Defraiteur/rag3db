@@ -86,6 +86,20 @@ def verify(pair, phase):
     return config
 
 
+def publication_phase_info(pair, phase):
+    """Codec de descripteurs Rust : lecture seulement, pas de décision de liveness."""
+    root = Path(pair['proofs']) / phase
+    info = json.loads((root / 'authority-path.json').read_text())
+    control = Path(pair['control'])
+    return {**info, 'scope_root': str(root / 'scope'),
+        'driver_entry': 'pilot.py', 'common_entry': 'confiner_validation.py',
+        'driver_argv': [sys.executable, '-B', str(control / 'pilot.py'), 'inside',
+            '--proofs', pair['proofs'], '--phase', phase],
+        'common_argv': json.loads((root / 'common.command.json').read_text()),
+        'controls_path': str(root / 'controls.json'), 'deadline_role': 'outer-timeout',
+        'deadline_argv': outer_command(pair, phase)[2:], 'original_common_end': info['deadline']}
+
+
 def completed_scope(root):
     root = Path(root)
     scopes = list((root / 'scope').glob('validation-*/verdict.json'))
@@ -483,6 +497,7 @@ def prepare(args):
     relay_spec = importlib.util.spec_from_file_location('rust_plan_adapter', TOOL_ROOT / 'docs/codeparsers/17-11-2026/rust-probe-relay/relay.py')
     adapter = importlib.util.module_from_spec(relay_spec)
     relay_spec.loader.exec_module(adapter)
+    pair['publication_limits'] = adapter.default_limits()
     pair['publication_plans'] = {phase: adapter.default_plan(pair, phase) for phase in PRODUCTS}
     for name in scripts:
         if name != PROBE:

@@ -38,6 +38,7 @@ class FakeTransport:
         self.prepared_sha256 = '1' * 64
         self.phase = 'baseline'
         self.pair = {'execution_id': 'fixture-execution', 'sdk': 'fixture-sdk',
+            'publication_limits': module.default_limits(),
             'corpus_manifest_sha256': 'c' * 64,
             'phases': {'baseline': {'source': 'f' * 40, 'parser': 'b' * 40}}}
         self.plan = module.default_plan(self.pair, self.phase)
@@ -213,7 +214,8 @@ class RelayTests(unittest.TestCase):
     def test_launch_ssh_contains_remote_physical_timeout(self):
         import shlex
         transport = module.SSHTransport.__new__(module.SSHTransport)
-        transport.pair = {'proofs': '/proofs', 'timeout': '/usr/bin/timeout'}
+        transport.pair = {'proofs': '/proofs', 'timeout': '/usr/bin/timeout',
+            'publication_limits': module.default_limits()}
         transport.control = Path('/proofs/control')
         transport.phase, transport.pin, transport.host = 'baseline', 'pin', 'luciepc'
         argv = transport.command('launch', '--allocation', 'GO')
@@ -234,6 +236,7 @@ class RelayTests(unittest.TestCase):
         (control / 'physical_guard.py').write_text(
             'def process_record(pid): return {"pid":pid,"exe":"/unbounded","argv":[],"uid":0}\n')
         pair = {'proofs': str(root), 'control': str(control), 'peer_host': 'fake-peer',
+            'publication_limits': module.default_limits(),
             'controllers': {'relay.py': module.digest(relay_path),
                 'publication_relay.py': module.digest(core_path)},
             'peer_timeout': {'path': str(timeout_path), 'sha256': module.digest(timeout_path)},
@@ -362,9 +365,12 @@ class GateTests(unittest.TestCase):
             'echeance': 9060, 'script': str(self.control / 'confiner_validation.py'),
             'script_sha256': 'common-sha'}
         self.receipt.write_text(json.dumps(self.authority))
+        (scope / 'recette.json').write_text(json.dumps({'delai': 60}))
         pair = {'control': str(self.control), 'proofs': str(self.root.parent),
+            'publication_limits': module.default_limits(),
             'controllers': {'confiner_validation.py': 'common-sha',
-                'gate.py': module.digest(self.control / 'gate.py')}, 'timeout': '/timeout',
+                'gate.py': module.digest(self.control / 'gate.py'),
+                'pilot.py': module.digest(self.control / 'pilot.py')}, 'timeout': '/timeout',
             'timeout_sha256': 'timeout-sha', 'driver_sha256': module.digest(self.control / 'pilot.py')}
         command = ['python', str(self.control / 'confiner_validation.py'), 'lancer']
         driver_args = [self.gate_module.sys.executable, '-B', str(self.control / 'pilot.py'),
@@ -387,7 +393,23 @@ class GateTests(unittest.TestCase):
         template = FakeTransport(Clock())
         self.gate.plan = implementation.validate_plan(template.plan)
         self.gate.guard = SimpleNamespace(process_record=lambda pid: self.processes[pid])
-        self.gate.pilot = SimpleNamespace(outer_command=lambda *args: ['poste', 'lourd', *timeout_args])
+        def phase_info(*args):
+            data = json.loads((self.root / 'authority-path.json').read_text())
+            return dict(data, scope_root=str(scope.parent), common_entry='confiner_validation.py',
+                driver_entry='pilot.py', driver_argv=driver_args,
+                common_argv=json.loads((self.root / 'common.command.json').read_text()),
+                controls_path=str(self.root / 'controls.json'), deadline_role='outer-timeout',
+                deadline_argv=timeout_args, original_common_end=9060)
+        self.gate.pilot = SimpleNamespace(
+            publication_phase_info=phase_info,
+            outer_command=lambda *args: ['poste', 'lourd', *timeout_args])
+        # Données de processus seulement : bootstrap et ses gardes restent réels.
+        hard = dict(base, pid=8, start=str(9000 * os.sysconf('SC_CLK_TCK')), parent=1,
+            exe='/timeout', argv=['/timeout', '--signal=TERM', '--kill-after=2s', '2098s'])
+        self.processes[8] = hard
+        (self.root / 'relay-bootstrap.json').write_text(json.dumps({
+            'prepared_sha256': '1' * 64, 'gate_sha256': pair['controllers']['gate.py'],
+            'hard_timeout': hard}))
         self.gate.verify = lambda: None
         self.gate.launcher = lambda: {'coordinator': {'host': 'peer'}}
         original_digest = self.gate_module.digest
@@ -415,6 +437,7 @@ class GateTests(unittest.TestCase):
     def test_ended_authority_refuses_active_gate(self):
         self.authority['etat'] = 'termine'
         self.receipt.write_text(json.dumps(self.authority))
+        (scope / 'recette.json').write_text(json.dumps({'delai': 60}))
         with self.assertRaises(AssertionError):
             self.gate.active()
 
@@ -426,6 +449,7 @@ class GateTests(unittest.TestCase):
     def test_pc_expired_refuses_active_gate(self):
         self.authority['echeance'] = 9010
         self.receipt.write_text(json.dumps(self.authority))
+        (scope / 'recette.json').write_text(json.dumps({'delai': 60}))
         with self.assertRaises(AssertionError):
             self.gate.active()
 

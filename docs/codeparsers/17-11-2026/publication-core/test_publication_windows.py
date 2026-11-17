@@ -31,6 +31,9 @@ class WindowCases(unittest.TestCase):
             'owner_role': 'driver', 'event_kind': 'publication-window-opened'}}
         source = Path(engine.__file__)
         (self.control / 'publication_relay.py').write_bytes(source.read_bytes())
+        self.gate.pair['controllers'].update({
+            'pilot.py': fixtures.module.digest(self.control / 'pilot.py'),
+            'publication_relay.py': fixtures.module.digest(self.control / 'publication_relay.py')})
         self.gate.pair['owner_roles'] = {'driver': {'descriptor': 'driver_identity',
             'entry_file': 'pilot.py', 'entry_sha256': fixtures.module.digest(self.control / 'pilot.py'),
             'component_hashes': {'pilot.py': fixtures.module.digest(self.control / 'pilot.py'),
