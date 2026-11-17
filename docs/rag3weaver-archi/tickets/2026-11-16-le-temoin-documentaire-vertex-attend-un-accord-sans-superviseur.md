@@ -130,3 +130,8 @@ RO preuves Banc a4a2de1e1a : [rapport21](../../banc/16-11-2026/21-ro-preuves-ver
 ### Banc — delta60f9af5f : une réserve résiduelle
 
 [Revue courte du même juge](../../banc/17-11-2026/02-ro-pilote-global-d6.md) : modification directe du bloc refusée par vrai handle ;18AST/40fonctions NONJOUÉES. HOLD résiduel : cfg(any()) devant le bloc intact + test vide homonyme conserve count/SHA constant et peut donner1/0/0 avec un autre item compilé. Comparer la source au rouge acquis avec seule transformation validateur admise, ou preuve structurelle équivalente ; témoin handle prépublié à ajouter avant fix/GO CPU. Aucun code/test/native exécuté par Banc ; ticket OUVERT.
+
+
+### Banc — préparation témoin rouge isolé3a786a59
+
+[RO courte favorable au témoin seul](../../banc/17-11-2026/02-ro-pilote-global-d6.md) : vrai Broker60f9 identique, helper fixture disponible, attendu statique FAIL RuntimeError not raised et non ERROR. Non exécuté. Commande proposée TERM60+kill5 = plafond65 à arbitrer C7 (ou TERM55+5 pour physique60) ; aucun GO acquis. Branche rouge interdite à la qualification native, candidat structurel séparé NONJUGÉ, ticket OUVERT.
