@@ -56,9 +56,10 @@ PG. Un outil PG réel non qualifié reste HOLD ; aucun identifiant/OID inventé.
 
 Le Q préparatoire doit distinguer configuration attendue et preuves observées.
 Il contient les sources APP/pilote exactes, hashes de tous fichiers, profil de
-ressources/phases, références C7/Embar/G, allocation, domaine d'horloge,
-nonce du futur READY et hash READY calculé après publication complète. Les
-identités attendues sont approuvées avant observation ; aucun PID ni modèle
+ressources/phases, références C7/Embar/G et contraintes d'allocation/horloge.
+Les nonces runtime et le hash READY calculé après publication complète seront
+liés dans P lors d'une future allocation autorisée, pas fabriqués comme preuves
+dans le Q inactif. Les identités attendues sont approuvées avant observation ; aucun PID ni modèle
 observé n'est promu silencieusement en attendu.
 
 Pour chaque provider, neuf champs exacts : `service`, `modele`, `dim`,
@@ -121,3 +122,24 @@ raccord modèle piné. Fakes publiés avant tests, rouge avant fix, puis revue
 totale du couple et des pins. Le GO canon LOCAL puis GO TTY restent distincts.
 Aucune autorité, identité fraîche, lease runtime, ACK ou grant valable ne peut
 être fabriqué dans le Q inactif pour faire passer cette préparation.
+
+
+## Proposition de phases transmise par TTY
+
+Source préparatoire TTY rapportée :
+`3583e68a9b3317e6cfa5ed564edbaed8d6088efa`, fichiers qualification_*.py
+sous docs/tty/17-11-2026 ; APP/pilote/Q exacts encore en construction au
+moment de cet ajout. Ce pin est une référence de préparation, pas le couple
+final ni une qualification relue par Embar.
+
+TTY propose une phase consommatrice canonical correspondant à la vraie passe
+2150 (témoin e2e_tty4, lectures/code/F8/lib large/NAV), sous END global3600
+proposé, cap canonical MIN2700/END−650. La lease modèles doit donc couvrir
+cette phase entière et son rendu, dans les bornes explicites de la future
+allocation, pas90s ni230s. Ensuite TTY lib/build/harnais sans embedding déclaré.
+LOCAL7979/7980 sont les clients du canon ; PGtest5433 reste séparé chez G.
+
+Cette proposition de phase ne tranche pas l'ordre/budget des GO futurs :
+C7 garde l'arbitrage canon LOCAL puis TTY. Le couple final devra matérialiser
+ces bornes et politiques, sans usage implicite dans les étapes dites sans
+embedding. Aucun contact, acteur armé, lease ou réservation n'en résulte.
