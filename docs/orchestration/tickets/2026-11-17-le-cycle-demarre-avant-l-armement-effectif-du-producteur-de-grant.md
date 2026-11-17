@@ -131,3 +131,10 @@ exige args[2]=lancer/args[1]=script, donc refus avant ARMED. Point manqué par
 ED à la revue totale, désormais recoupé source ; P1 finaliseur levé reste
 distinct. Arbre a prépublié témoinb2bd NONJOUÉ avant correctif. Aucun ancien
 avis favorable ni GO natif transféré ; voir section corrective rapportED34.
+
+RO ED delta d22bf28c58 favorable AVANTCPUvert : seul-BCommon retiré,
+PYTHONDONTWRITEBYTECODE=1 effectif, signatures/rôles-B/finaliseur inchangés,
+PQS/manifestv7 cohérents. Témoin vraiargv/signature/envAST relu, rougeB2BD
+1FAIL0ERROR après contrôlepositif et3fichiers réhashésdeuxhôtes sansrejeu.
+Pas de vertd22, paquetQv7 ni GO900 validé ; décision CPU C7 distincte puis RO
+couple neuf. Qv6resteHOLD ; voir complément rapportED34.

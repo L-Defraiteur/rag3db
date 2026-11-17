@@ -100,3 +100,21 @@ Les124 CPU de l'armement restent l'acquisition publiée2dccc, pas un nouveau
 run de cette revue. Ces preuves ne qualifient ni processus acteur réel, ni
 DB/shutdown/LIVE. À C7 seul un éventuel GO900/slot/ressources exact distinct ;
 aucun ancien GO3c2 ni GOCPU ne vaut admission native.
+
+## Delta Common d22bf28c58, avant CPU vert
+
+RO statique favorable sur ce SEUL correctif : -B retiré uniquement devant
+Common, argv effectif désormais python/script/lancer, compatible avec les
+positions exigées par la vraie signature_superviseur inchangée. Environnement
+de cet appel pose explicitement PYTHONDONTWRITEBYTECODE=1. Le suffixe
+python/-B/lifecycle.py/--controller et rôles acteur/driver restent inchangés,
+de même que finaliseur et primitive Common. P/Q/S et manifeste passent ensemble
+àv7 ; ancien Qv6 demeure figé et HOLD, aucun paquetv7 validé par cette lecture.
+
+Le témoin lit le vrai argvAST, la vraie signatureAST et le vrai envAST, contrôle
+positif sans-B en premier puis comparaison du raccord et du suffixe contrôleur.
+RougeB2BD relu et trois fichiers taille/SHA rehashés LOCAL+PC, manifeste
+a181c7e876f82527079d3e4dbe3353f2233aacf6cef00f85528e2e56c224f894 :
+1FAIL après contrôle positif, 0ERROR/rc1/0.016s. Aucun rejeu ici, aucun vert
+d22 ni admission native déduit. Décision C7 CPU vert exacte DISTINCTE, puis
+source/paquet complets et RO avant éventuel GO900.
