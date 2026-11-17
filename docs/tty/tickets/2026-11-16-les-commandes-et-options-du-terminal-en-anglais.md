@@ -661,3 +661,13 @@ et horlogesLOCAL/PC, ARM/poll/HBavantpréflight, bornespayload et release ;
 G doit qualifier transportSQL LOCAL/identité/réservation, pas son CLI seul.
 Critère : nouveau pilote/Q source exact avec ces capacités prouvées, ROtotale
 puis GO natif distinct. Aucun test/service/contact/slot joué en préparation.
+
+### Refus de préparation Qv1, avant toute validation native
+
+Source9336b587a6 : --prepare-only refuse PermissionError sur /usr/bin/mount.nfs.
+Cause : google-chrome-stable est un wrapper régulier sous /usr/bin, non un
+symlink vers /opt/google/chrome ; parcourir son parent vise trop large.
+Qv1 partiel conservé, aucun prepared final/grant/slot/Cargo/test/contact créé.
+Correction à faire : épingler wrapper exact et distribution explicite
+/opt/google/chrome, Qv2 neuf sans modifier Qv1 ni target ; syntaxe puis
+préparation seule et ROtotale distincte. PorteurTTY, même ticketOPEN.
