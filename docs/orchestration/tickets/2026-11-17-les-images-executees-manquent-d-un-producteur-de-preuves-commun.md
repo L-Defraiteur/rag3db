@@ -376,3 +376,10 @@ Conserver le contrat de rc acquis : capturer/décoder métadonnées wait valides
 immutables AVANT copie complète, sanscallback/clockintermédiaire ; RAWmalformé
 reste refusé. PrépublierUNtémoin surcf3inchangé, GOrouge distinct/bruts2hôtes
 avantfix, HOLDGO30. Aucun effacement contractuel ou capacitéOS déduite.
+
+Rouge waitRC acquis : [rapport67](../../rag3weaver-archi/17-11-2026/67-preuve-rouge-waitrc-2df7.md).
+GO C7-ENTRY-WAITRC-RED-2DF7-17nov60 consomméUNEfois :1FAILNone!=7aprèsrefusRAW/
+0ERRORskip/rc1,.064272223s/noRetry,30autresNONJOUÉS. NeufbrutsLOCAL/PC réhash
+0écart AVANTfix, manifeste44df0cb57934e562c9cc0753764aacc72fd06ceb578f341da5e2d9365d210f45.
+PréparationRCvalided'abord puisRAWcopié/refusé sanscallback/clock, sourcespinsRO
+etGO31distinctavantverts. AucunRAWadmisparrelâchement/pur565bmodifié/OSqualifié.
