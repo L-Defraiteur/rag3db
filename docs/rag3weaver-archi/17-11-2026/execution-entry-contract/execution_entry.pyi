@@ -60,6 +60,8 @@ class Refusal(RuntimeError):
     code: str
     sequence: int | None
     invocation_returncode: int | None  # preserved if authentic child wait acquired
+    def __init__(self, code: str, *, sequence: int | None = None,
+                 invocation_returncode: int | None = None) -> None: ...
 
 # PURE future validator: no files, clocks, subprocesses, signals, publication.
 # Raises Refusal on incomplete/invalid transcript, preserving earliest failure.

@@ -136,3 +136,20 @@ L'attestation CP acquise après entrée/copie ne peut être obligatoire lors d'u
 mort avant publication. Autoriser l'absence explicite jusqu'à published ; garder
 la première cause prépublication sans ACK inventé, et refuser published sans
 attestation indépendante. Témoins à écrire avant implémentation, aucun CPU.
+
+## Préparer la première implantation pure sans faux rouge d’import
+
+Le contrat5cae3c31731dea3348be2c16fe96ed256fe567ff et ses47témoins ont troisRO exactes DOC/APIpure CP/M/TTY favorables ; aucun module runtime n’existe. Archi est autorisé à publier d’abord un module partagé **purement déclaratif/devalidation**, avec Refusal typée et une version initiale sûre de verify_transcript qui refuse explicitement «capacité non implémentée». Aucun lancement/OS ou appelant n’y est câblé.
+
+Pour voir le nominal échouer comme comportement, le témoin nominal peut convertir SEULEMENT cette Refusal fonctionnelle en self.fail (en gardant toutes ses assertions positives). ImportError, erreurs de fixture et exceptions non contractuelles restent ERROR : jamais comptées rouges. Publier cette base et l’adaptation avant toute exécution ; pin du vrai module/import, RO puis GO du seul nominal distinct. Ce sera le rouge d’une APIpure nouvelle qui refuse encore, pas un faux défaut d’un observateur déjà installé.
+
+Après ce rouge réel et conservé, implantation pure du contrat/conservation premièrecause/typesstricts/bornes/attestationCP séparée/fermetureCommon réelle permise en préparation. Publier et relire avant GO47verts distinct ; aucun kernel, fichier, clock, réseau, processus, signal ou publication réelle dans verify_transcript. Le backend, ses adaptateurs CP/Common, preuveshôte/profilstockage/handoff/SDK et les quatreappelants restent NONLIVRÉS et sans GO. Les bool/int ne doivent pas se confondre dans les champs typés. Aucun47vertsanticipé ni compétencephysique conférée par des faitsmodélisés.
+
+
+## Préparation baseline pure après autorisation09726, avant tout CPU
+
+Module partagé et nominal à publier : Refusal typée, verify_transcript refusant
+explicitement capability-not-implemented, sans effet externe. Le seul nominal
+convertit cette Refusal précise en self.fail ; import/fixture/exception autre
+reste ERROR. Les assertions positives restent présentes. Pins et RO avant
+GO nominal distinct ; aucun rouge acquis par cette préparation.

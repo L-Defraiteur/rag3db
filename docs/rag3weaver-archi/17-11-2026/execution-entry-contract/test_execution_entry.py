@@ -1,4 +1,4 @@
-"""Prepublished model witnesses. NOT RUN; future pure implementation absent.
+"""Prepublished model witnesses. NOT RUN; shared pure baseline explicitly refuses.
 
 No OS backend, process, file, real clock or signals. Successful model validation
 will never confer physical admission. Import path to be pinned in a distinct GO.
@@ -70,7 +70,12 @@ class EntryContract(unittest.TestCase):
 
     def test_confirmed_entry_result_belongs_to_invocation(self):
         plan, facts, publication = fixture()
-        result = verify_transcript(plan, facts, publication)
+        try:
+            result = verify_transcript(plan, facts, publication)
+        except Refusal as error:
+            if error.code != 'capability-not-implemented':
+                raise
+            self.fail('pure entry validation capability is not implemented')
         self.assertTrue(result['entry_confirmed'])
         self.assertTrue(result['invocation_complete'])
         self.assertEqual(result['returncode'], 0)

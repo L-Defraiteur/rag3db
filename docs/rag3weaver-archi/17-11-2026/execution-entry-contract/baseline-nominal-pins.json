@@ -1,0 +1,33 @@
+{
+  "schema": "pure-entry-refusal-baseline-v1",
+  "executed": false,
+  "go": null,
+  "nominal": "test_execution_entry.EntryContract.test_confirmed_entry_result_belongs_to_invocation",
+  "cwd": "/home/lucied/.cache/rag3weaver-build/cx-wt-archi-pas-va-au-bout-global-pilot-r2/docs/rag3weaver-archi/17-11-2026/execution-entry-contract",
+  "import_file": "/home/lucied/.cache/rag3weaver-build/cx-wt-archi-pas-va-au-bout-global-pilot-r2/extension/rag3weaver/scripts/execution_entry.py",
+  "pythonpath": "/home/lucied/.cache/rag3weaver-build/cx-wt-archi-pas-va-au-bout-global-pilot-r2/extension/rag3weaver/scripts",
+  "interpreter": {
+    "path": "/usr/bin/python3.14",
+    "sha256": "c81d88523721c462f53a98129d65bba68f67791932f0664372e1778e74fd9517"
+  },
+  "files": {
+    "extension/rag3weaver/scripts/execution_entry.py": "bb1afdb37652a6f1cce3a798388f8eba2c1892016065e040fe82bca43502ef2c",
+    "docs/rag3weaver-archi/17-11-2026/execution-entry-contract/test_execution_entry.py": "3a7fceed6e631d36b6920f8503d4c7761a219225c676ecf1a3ca9741c58f7212",
+    "docs/rag3weaver-archi/17-11-2026/execution-entry-contract/execution_entry.pyi": "902e70d3990ad23118c07be42333a08790bb3049f5426832002356da44c772f4"
+  },
+  "argv": [
+    "timeout",
+    "--signal=TERM",
+    "--kill-after=2s",
+    "58s",
+    "/usr/bin/python3.14",
+    "-B",
+    "-m",
+    "unittest",
+    "-v",
+    "-f",
+    "test_execution_entry.EntryContract.test_confirmed_entry_result_belongs_to_invocation"
+  ],
+  "expected_behavior": "one nominal FAIL from explicit Refusal, never import/fixture ERROR",
+  "physical_admission": false
+}
