@@ -1,0 +1,543 @@
+{
+  "schema_version": 1,
+  "kind": "proposal-only-not-reader-runtime-input",
+  "run_authorized": false,
+  "source": "f1e8a8d502614d10f7cdb40eaea330f08b5d3f37",
+  "pilot": null,
+  "execution_id": null,
+  "phase_id": null,
+  "prepared_sha256": null,
+  "plan_sha256": null,
+  "root": null,
+  "owner_uid": null,
+  "manifest_paths": {
+    "main": "/home/lucied/git_workspaces/rag3db-cx-archi-doc-supervisor-r1/extension/rag3weaver/Cargo.toml",
+    "tty": "/home/lucied/git_workspaces/rag3db-cx-archi-doc-supervisor-r1/extension/rag3weaver/tty/Cargo.toml"
+  },
+  "bindings": {
+    "global": {
+      "source": "f1e8a8d502614d10f7cdb40eaea330f08b5d3f37",
+      "roles": {
+        "tty": {
+          "target_name": "rag3weaver-tty",
+          "target_kind": "bin",
+          "profile_test": false,
+          "features": [
+            "default",
+            "vue"
+          ],
+          "manifest": "tty",
+          "ledger_key": "tty"
+        },
+        "host": {
+          "target_name": "rag3weaver-backend",
+          "target_kind": "bin",
+          "profile_test": false,
+          "features": [
+            "anthropic-llm",
+            "burn-autotune",
+            "burn-embedder",
+            "burn-fusion",
+            "burn-ocr",
+            "code",
+            "daemon",
+            "default",
+            "ocr",
+            "openai-llm",
+            "postgres",
+            "rag3db-native",
+            "vulkan"
+          ],
+          "manifest": "main",
+          "ledger_key": "host"
+        },
+        "large": {
+          "target_name": "rag3weaver",
+          "target_kind": "lib",
+          "profile_test": true,
+          "features": [
+            "anthropic-llm",
+            "burn-autotune",
+            "burn-embedder",
+            "burn-fusion",
+            "burn-ocr",
+            "code",
+            "daemon",
+            "default",
+            "ocr",
+            "openai-llm",
+            "postgres",
+            "rag3db-native",
+            "vulkan"
+          ],
+          "manifest": "main",
+          "ledger_key": "large"
+        },
+        "e2e": {
+          "target_name": "e2e",
+          "target_kind": "test",
+          "profile_test": true,
+          "features": [
+            "anthropic-llm",
+            "burn-autotune",
+            "burn-embedder",
+            "burn-fusion",
+            "burn-ocr",
+            "code",
+            "daemon",
+            "default",
+            "ocr",
+            "openai-llm",
+            "postgres",
+            "rag3db-native",
+            "vulkan"
+          ],
+          "manifest": "main",
+          "ledger_key": "e2e"
+        },
+        "nav": {
+          "target_name": "rag3weaver",
+          "target_kind": "lib",
+          "profile_test": true,
+          "features": [
+            "anthropic-llm",
+            "burn-autotune",
+            "burn-embedder",
+            "burn-fusion",
+            "burn-ocr",
+            "code",
+            "daemon",
+            "default",
+            "navigateur",
+            "ocr",
+            "openai-llm",
+            "postgres",
+            "rag3db-native",
+            "vulkan"
+          ],
+          "manifest": "main",
+          "ledger_key": "nav"
+        }
+      },
+      "mutation_contract": {
+        "tty": {
+          "artifact_id": "tty",
+          "source_app": "f1e8a8d502614d10f7cdb40eaea330f08b5d3f37",
+          "manifest_git_path": "extension/rag3weaver/tty/Cargo.toml",
+          "manifest_sha256": "7a57ff3d4396e3fb2ba7be2c3e5d7e4acfdba7f92b7cd268c8111e823a660ef4",
+          "cargo_target_name": "rag3weaver-tty",
+          "cargo_target_kind": "bin",
+          "profile_test": false,
+          "requested_features": [
+            "vue"
+          ],
+          "default": true,
+          "expected_root_feature_closure": [
+            "default",
+            "vue"
+          ],
+          "sdk": "rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF",
+          "native_mapping_required": false,
+          "source_contract": "frozen-app-only",
+          "runtime_sha256": null
+        },
+        "host": {
+          "artifact_id": "host",
+          "source_app": "f1e8a8d502614d10f7cdb40eaea330f08b5d3f37",
+          "manifest_git_path": "extension/rag3weaver/Cargo.toml",
+          "manifest_sha256": "b34656b80ee612bd29834b53af5b73617a00fe392845e396ff758477d13ffc71",
+          "cargo_target_name": "rag3weaver-backend",
+          "cargo_target_kind": "bin",
+          "profile_test": false,
+          "requested_features": [
+            "rag3db-native",
+            "burn-embedder",
+            "burn-ocr",
+            "code",
+            "daemon",
+            "postgres",
+            "openai-llm",
+            "anthropic-llm"
+          ],
+          "default": true,
+          "expected_root_feature_closure": [
+            "anthropic-llm",
+            "burn-autotune",
+            "burn-embedder",
+            "burn-fusion",
+            "burn-ocr",
+            "code",
+            "daemon",
+            "default",
+            "ocr",
+            "openai-llm",
+            "postgres",
+            "rag3db-native",
+            "vulkan"
+          ],
+          "sdk": "rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF",
+          "native_mapping_required": true,
+          "source_contract": "frozen-app-only",
+          "runtime_sha256": null
+        },
+        "large": {
+          "artifact_id": "large",
+          "source_app": "f1e8a8d502614d10f7cdb40eaea330f08b5d3f37",
+          "manifest_git_path": "extension/rag3weaver/Cargo.toml",
+          "manifest_sha256": "b34656b80ee612bd29834b53af5b73617a00fe392845e396ff758477d13ffc71",
+          "cargo_target_name": "rag3weaver",
+          "cargo_target_kind": "lib",
+          "profile_test": true,
+          "requested_features": [
+            "rag3db-native",
+            "burn-embedder",
+            "burn-ocr",
+            "code",
+            "daemon",
+            "postgres",
+            "openai-llm",
+            "anthropic-llm"
+          ],
+          "default": true,
+          "expected_root_feature_closure": [
+            "anthropic-llm",
+            "burn-autotune",
+            "burn-embedder",
+            "burn-fusion",
+            "burn-ocr",
+            "code",
+            "daemon",
+            "default",
+            "ocr",
+            "openai-llm",
+            "postgres",
+            "rag3db-native",
+            "vulkan"
+          ],
+          "sdk": "rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF",
+          "native_mapping_required": true,
+          "source_contract": "frozen-app-only",
+          "runtime_sha256": null
+        },
+        "e2e": {
+          "artifact_id": "e2e",
+          "source_app": "f1e8a8d502614d10f7cdb40eaea330f08b5d3f37",
+          "manifest_git_path": "extension/rag3weaver/Cargo.toml",
+          "manifest_sha256": "b34656b80ee612bd29834b53af5b73617a00fe392845e396ff758477d13ffc71",
+          "cargo_target_name": "e2e",
+          "cargo_target_kind": "test",
+          "profile_test": true,
+          "requested_features": [
+            "rag3db-native",
+            "burn-embedder",
+            "burn-ocr",
+            "code",
+            "daemon",
+            "postgres",
+            "openai-llm",
+            "anthropic-llm"
+          ],
+          "default": true,
+          "expected_root_feature_closure": [
+            "anthropic-llm",
+            "burn-autotune",
+            "burn-embedder",
+            "burn-fusion",
+            "burn-ocr",
+            "code",
+            "daemon",
+            "default",
+            "ocr",
+            "openai-llm",
+            "postgres",
+            "rag3db-native",
+            "vulkan"
+          ],
+          "sdk": "rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF",
+          "native_mapping_required": true,
+          "source_contract": "frozen-app-only",
+          "runtime_sha256": null
+        },
+        "nav": {
+          "artifact_id": "nav",
+          "source_app": "f1e8a8d502614d10f7cdb40eaea330f08b5d3f37",
+          "manifest_git_path": "extension/rag3weaver/Cargo.toml",
+          "manifest_sha256": "b34656b80ee612bd29834b53af5b73617a00fe392845e396ff758477d13ffc71",
+          "cargo_target_name": "rag3weaver",
+          "cargo_target_kind": "lib",
+          "profile_test": true,
+          "requested_features": [
+            "rag3db-native",
+            "burn-embedder",
+            "burn-ocr",
+            "code",
+            "daemon",
+            "postgres",
+            "openai-llm",
+            "anthropic-llm",
+            "navigateur"
+          ],
+          "default": true,
+          "expected_root_feature_closure": [
+            "anthropic-llm",
+            "burn-autotune",
+            "burn-embedder",
+            "burn-fusion",
+            "burn-ocr",
+            "code",
+            "daemon",
+            "default",
+            "navigateur",
+            "ocr",
+            "openai-llm",
+            "postgres",
+            "rag3db-native",
+            "vulkan"
+          ],
+          "sdk": "rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF",
+          "native_mapping_required": true,
+          "source_contract": "frozen-app-only",
+          "runtime_sha256": null
+        }
+      },
+      "ledger_contract": "global actual CargoJSON artifacts"
+    },
+    "agent-red1": {
+      "source": "f1e8a8d502614d10f7cdb40eaea330f08b5d3f37",
+      "roles": {
+        "agent-red1": {
+          "target_name": "rag3weaver",
+          "target_kind": "lib",
+          "profile_test": true,
+          "features": [
+            "code",
+            "daemon",
+            "rag3db-native"
+          ],
+          "manifest": "main",
+          "ledger_key": "task"
+        }
+      },
+      "mutation_contract": {
+        "agent-red1": {
+          "artifact_id": "agent-red1",
+          "source_app": "f1e8a8d502614d10f7cdb40eaea330f08b5d3f37",
+          "manifest_git_path": "extension/rag3weaver/Cargo.toml",
+          "manifest_sha256": "b34656b80ee612bd29834b53af5b73617a00fe392845e396ff758477d13ffc71",
+          "cargo_target_name": "rag3weaver",
+          "cargo_target_kind": "lib",
+          "profile_test": true,
+          "requested_features": [
+            "rag3db-native",
+            "code",
+            "daemon"
+          ],
+          "default": false,
+          "expected_root_feature_closure": [
+            "code",
+            "daemon",
+            "rag3db-native"
+          ],
+          "sdk": "rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF",
+          "native_mapping_required": true,
+          "source_contract": "APP plus acquired exact active D6 judge",
+          "runtime_sha256": null
+        }
+      },
+      "ledger_contract": "exact Broker admission source/patch/state and actual CargoJSON task artifact"
+    },
+    "agent-green1": {
+      "source": "f1e8a8d502614d10f7cdb40eaea330f08b5d3f37",
+      "roles": {
+        "agent-green1": {
+          "target_name": "rag3weaver",
+          "target_kind": "lib",
+          "profile_test": true,
+          "features": [
+            "code",
+            "daemon",
+            "rag3db-native"
+          ],
+          "manifest": "main",
+          "ledger_key": "task"
+        }
+      },
+      "mutation_contract": {
+        "agent-green1": {
+          "artifact_id": "agent-green1",
+          "source_app": "f1e8a8d502614d10f7cdb40eaea330f08b5d3f37",
+          "manifest_git_path": "extension/rag3weaver/Cargo.toml",
+          "manifest_sha256": "b34656b80ee612bd29834b53af5b73617a00fe392845e396ff758477d13ffc71",
+          "cargo_target_name": "rag3weaver",
+          "cargo_target_kind": "lib",
+          "profile_test": true,
+          "requested_features": [
+            "rag3db-native",
+            "code",
+            "daemon"
+          ],
+          "default": false,
+          "expected_root_feature_closure": [
+            "code",
+            "daemon",
+            "rag3db-native"
+          ],
+          "sdk": "rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF",
+          "native_mapping_required": true,
+          "source_contract": "same acquired red source outside sole validator body; all other source/index/modes unchanged",
+          "runtime_sha256": null
+        }
+      },
+      "ledger_contract": "exact Broker admission source/patch/state and actual CargoJSON task artifact"
+    },
+    "review1": {
+      "source": "f1e8a8d502614d10f7cdb40eaea330f08b5d3f37",
+      "roles": {
+        "review1": {
+          "target_name": "rag3weaver",
+          "target_kind": "lib",
+          "profile_test": true,
+          "features": [
+            "code",
+            "daemon",
+            "rag3db-native"
+          ],
+          "manifest": "main",
+          "ledger_key": "task"
+        }
+      },
+      "mutation_contract": {
+        "review1": {
+          "artifact_id": "review1",
+          "source_app": "f1e8a8d502614d10f7cdb40eaea330f08b5d3f37",
+          "manifest_git_path": "extension/rag3weaver/Cargo.toml",
+          "manifest_sha256": "b34656b80ee612bd29834b53af5b73617a00fe392845e396ff758477d13ffc71",
+          "cargo_target_name": "rag3weaver",
+          "cargo_target_kind": "lib",
+          "profile_test": true,
+          "requested_features": [
+            "rag3db-native",
+            "code",
+            "daemon"
+          ],
+          "default": false,
+          "expected_root_feature_closure": [
+            "code",
+            "daemon",
+            "rag3db-native"
+          ],
+          "sdk": "rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF",
+          "native_mapping_required": true,
+          "source_contract": "acquired agent-green source plus exact published controller REVIEW block only",
+          "runtime_sha256": null
+        }
+      },
+      "ledger_contract": "exact Broker admission source/patch/state and actual CargoJSON task artifact"
+    }
+  },
+  "stages": [
+    {
+      "label": "global",
+      "sequence": 0,
+      "binding_sha256": "3f50252ea6a0fedba0296bd7ddebc9a2dcace221efcdc4e5e996f45a5f52b4a2",
+      "files": [
+        "ledger",
+        "tty",
+        "host",
+        "large",
+        "e2e",
+        "nav"
+      ],
+      "artifacts": [
+        "tty",
+        "host",
+        "large",
+        "e2e",
+        "nav"
+      ],
+      "window_file": "global-window.json",
+      "ledger_file": "global-ledger.json",
+      "artifact_files": {
+        "tty": "tty-elf",
+        "host": "host-elf",
+        "large": "large-elf",
+        "e2e": "e2e-elf",
+        "nav": "nav-elf"
+      },
+      "broker_bound": false,
+      "source_contract": "frozen-app"
+    },
+    {
+      "label": "agent-red1",
+      "sequence": 1,
+      "binding_sha256": "eb9ad12e582d07fa1dda2cd7baa4f556b4e367c20492e70f9361552f2ade9061",
+      "files": [
+        "ledger",
+        "agent-red1"
+      ],
+      "artifacts": [
+        "agent-red1"
+      ],
+      "window_file": "agent-red1-window.json",
+      "ledger_file": "broker-ledger",
+      "artifact_files": {
+        "agent-red1": "broker-elf"
+      },
+      "broker_bound": true,
+      "source_contract": "agent-red1 acquired source"
+    },
+    {
+      "label": "agent-green1",
+      "sequence": 2,
+      "binding_sha256": "c879b0bfd4ad6edc6ee751d6cb29d0a3d2f38c03e620b288e0dd0bad415825c4",
+      "files": [
+        "ledger",
+        "agent-green1"
+      ],
+      "artifacts": [
+        "agent-green1"
+      ],
+      "window_file": "agent-green1-window.json",
+      "ledger_file": "broker-ledger",
+      "artifact_files": {
+        "agent-green1": "broker-elf"
+      },
+      "broker_bound": true,
+      "source_contract": "agent-green1 acquired source"
+    },
+    {
+      "label": "review1",
+      "sequence": 3,
+      "binding_sha256": "04077d11fc33897e71a81b1c22f65b96a7401bbabd4076c640a589edf4e1cfd7",
+      "files": [
+        "ledger",
+        "review1"
+      ],
+      "artifacts": [
+        "review1"
+      ],
+      "window_file": "review1-window.json",
+      "ledger_file": "broker-ledger",
+      "artifact_files": {
+        "review1": "broker-elf"
+      },
+      "broker_bound": true,
+      "source_contract": "review1 acquired source"
+    }
+  ],
+  "limits": {
+    "hard_soft_seconds": 7440,
+    "hard_kill_seconds": 15,
+    "queue_max_seconds": 120,
+    "queue_inside_whole": true,
+    "common_max_seconds": 7200,
+    "common_min_remaining_physical_minus_seconds": 30,
+    "operation_end_common_minus_seconds": 15,
+    "stop_reserve_seconds": 15,
+    "window_seconds": 90
+  },
+  "common_runtime_implemented": false,
+  "window_lifecycle_api_pending": true,
+  "pg_tool_qualified": false,
+  "preserved_pilot_pc": "229b397d8d1cb28b8ac3075479e49a1ab72b400b"
+}
