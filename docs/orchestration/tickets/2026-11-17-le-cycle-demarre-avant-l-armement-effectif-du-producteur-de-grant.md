@@ -33,3 +33,42 @@ La publication et consommation du grant n’ont plus besoin d’un ping humain. 
 Témoins aux vrais raccords à publier avant code : watcher jamais armé, vivant annoncé mais exited, retard avant exec/descripteur avec mauvais argv, watcher terminé après ARMED, READY arrivé avant ou après refus ; aucune action provider/writer avant admission complète. Les contrôles deadline/nonce/pins/typedhealth/firstred et noembedding restent stricts. Aucun process réel, réseau, DB ou CLI dans ces témoins hermétiques.
 
 Après source/tests publiés et RO totale du couple/pin, nouveau GO correctif distinct uniquement. L’ancien3c2 reste ROUGE ; aucune reprise n’est autorisée par ce ticket. Pas de migration LIVE, redémarrage de service ou actor de remplacement non attribué.
+
+## Partage et contrat de correction avant source acteur
+
+Base de préparation e65cbd34a582c3bbb82773bfd9fd6f9b8abff695, archives3c2
+publiées et figées. Arbre porte le contrôleur/supervision et les hooks cycle dans
+lifecycle_health_policy.py ; Embar porte le mécanisme commun
+`docs/orchestration/17-11-2026/coordination/grant_watch_actor.py` et son test.
+Recherche reprendra les mêmes octets avec sa politique globale ; aucun acteur
+PG fictif tant que l'outil réel est en HOLD. Le mécanisme ne remplace ni les
+politiques Embar ni le helper strict, n'émet aucun GET avant READY valide.
+
+CLI : `--watch CONFIG_PATH CONFIG_SHA256`, hash externe. La configuration runtime
+est créée une fois par le contrôleur dans P, à partir des sources/profils
+préalablement pinés et de son autorité common active. Elle ne se contient pas
+elle-même : le préfixe argv exclut son SHA final ; argv attendu ajoute le SHA
+externe. Actor_nonce et ready_nonce sont choisis avant le spawn, jamais depuis
+une notification tardive. Aucun jeton d'autorité ni environnement complet dans
+config, descripteurs ou journaux publics.
+
+Après vrai exec, l'acteur publie watcher-armed.json ; le parent compare à sa
+mesure OS indépendante PID/start/UID/CG/exeSHA/argv/scriptSHA, source/allocation,
+prepared/configSHA/nonces et poll vivant AVANT tout contrôle copie/DB. La lecture
+OS est partagée ; une transition R/S n'est pas un changement d'identité, deux
+états doivent rester vivants. Un fichier ARMED seul ou une session disponible
+ne constitue pas cette preuve. Un READY/grant/refus déjà présent interdit de
+simuler un armement préalable.
+
+L'acteur attend sous END ORIGINAL du même cgroup/watchdog common, sans créer un
+TTL start+900 ni un scope sœur. Refus/disparition/unexpected exit0 déclenche le
+premier rouge immuable du contrôleur immédiatement. Après le grant, pas de GET
+supplémentaire : acteur encore vivant jusqu'au watcher-release.json authentifié
+DRIVER_FINISHED ; seul le parent rend sa sortie0 attendue après driver0 et reap
+borné MIN2/END. Résultat intermédiaire watcher-grant.json et résultat terminal
+watcher-result.json sont distincts et créés exclusivement, pas réécrits.
+
+Source/fakes de ces vrais raccords à publier avant exécution CPU60 hermétique,
+puis rouge→fix→vert et revue totale. Cette préparation ne lance aucun acteur,
+processus de test natif, lecture /proc, health, DB, CLI ou nouveau cycle. Les
+preuves OS manquantes du3c2 ne sont pas reconstituées a posteriori.
