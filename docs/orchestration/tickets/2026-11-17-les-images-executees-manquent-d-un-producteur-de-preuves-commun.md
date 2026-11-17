@@ -138,3 +138,6 @@ HOLD10f753 avantGO28 : M réserve facts/exit_record mappings empruntés port enc
 
 
 GO exactC7-ENTRY-OBSERVATIONS-RED-4117-17nov60 pour deuxcontre-ex4portsMODELED, source41179fa97b9d48ef0fb6ce15faff456175574da8/moduleb925inchangé/testfc300. M/TTYfavorables+C7corps/pins/rehash ; UNEcommande2noms sansfailfast58+2,attendu2FAILégalitéfaitsDvsE/RAWacquisvsforgé,0ERRORskip/rc1,28autresnonjoués. Sources/bruts2hôtes AVANTfixobservations, nouveauxpins/RO/GO30vertsdistinct, aucunOS/CP/Common/SDK. Détails au suivi17nov.
+
+
+587HOLD30 pourrégressionTTY confirméeC7 : statutwait7 ne doit pasdisparaîtresurRAWbytearrayrefusé, faitsindépendants. GO distinct C7-ENTRY-WAITRC-RED-2DF7-17nov60/source2df73d1dc523beecc8cfe67d07e837767150fd92/runnercf3inchangé/testd9d6 : UNnominal31écrits/30exclus58+2,attendu1FAILNone!=7 aprèsobservation-types/0ERRORskiprc1,3RO+C7lecture/hashes. BrutsdeuxhôtesavantfixRCpuisRAWsanscallback/clock ;source/pins/RO/GO31vertsdistinct. AucunRAWassoupli/OS/CP/Common/LIVE, anciensGO30absents.
