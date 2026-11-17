@@ -148,6 +148,8 @@ class V2Fixtures(unittest.TestCase):
 class CredentialReferenceFixtures(unittest.TestCase):
     def setUp(self):
         import os
+        from unittest.mock import patch
+        self.addCleanup(patch.stopall);patch.object(v2,'core_disabled',return_value=True).start()
         self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
         self.cache=Path(self.tmp.name);self.root=self.cache/('allocation-'+'b'*12)
         self.root.mkdir(mode=0o700);(self.root/'credentials').mkdir(mode=0o700)

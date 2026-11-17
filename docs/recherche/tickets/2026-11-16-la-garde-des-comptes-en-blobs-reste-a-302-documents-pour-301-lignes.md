@@ -719,3 +719,10 @@ postcheck UNKNOWN vs ancienPIDidentitéconnu ; framesfailure session-explicite,
 premièrecause sansinventerabsencedePG.1legacyrougecausal reste proposé séparé,
 0testclient/natif/credentialsréelles exécuté. Les vertsallocation02 sont ceux
 des jugesimage deprovision, pas ceux de ces nouvelles sources.
+
+NoteV2sourceprépa docs/optimiseur/17-11-2026/03-pg-v2-source-preparation.md :
+20Python+8Rust+1legacyrouge causal NONJOUÉS ; commanderedexacte1FAILproposée,
+Core/adaptateurCLI disabled etbindingGO/phase/credentialowner/admissionconsumer
+encoreàraccorder, pas callbackfakevalantgrant. Guardssecrets/core0 avantlecture,
+portsprivés/separatenoncefixture, tuplesexpectedtyped.0sourceclientPGexécutée,
+fixture02READYhistoriqueTTL1270341.372 inchangé ; paquetSOURCE àpin/RO.

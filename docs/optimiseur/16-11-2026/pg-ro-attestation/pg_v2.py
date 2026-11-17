@@ -10,6 +10,7 @@ import math
 import os
 from pathlib import Path
 import re
+import resource
 import stat
 import time
 
@@ -80,9 +81,13 @@ def check_allocation(a,now):
     require(type(a['common_end_monotonic']) in (float,int) and type(a['lease_end_monotonic']) in (float,int) and math.isfinite(a['common_end_monotonic']) and math.isfinite(a['lease_end_monotonic']) and now<a['common_end_monotonic']<=a['lease_end_monotonic'],'lease_end')
 
 
+def core_disabled():return resource.getrlimit(resource.RLIMIT_CORE)==(0,0)
+
+
 def read_allocated_secret(reference,allocation,fixture_cache,*,scope_check):
     """Future GO C only: exact private fixture reference, no original credentials."""
     require(scope_check() is True,'scope_refused')
+    require(core_disabled(),'core_dump_not_disabled')
     cache=Path(fixture_cache);path=Path(reference)
     require(cache.is_absolute() and cache.resolve()==cache,'credential_cache')
     require(type(allocation.get('fixture_nonce')) is str and re.fullmatch('[0-9a-f]{32}',allocation['fixture_nonce']) is not None,'fixture_nonce')
