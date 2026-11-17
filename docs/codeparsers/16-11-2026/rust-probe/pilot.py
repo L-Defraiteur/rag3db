@@ -458,7 +458,7 @@ def prepare(args):
     scripts += [PROBE, 'extension/rag3weaver/Cargo.lock', 'extension/rag3weaver/Cargo.toml']
     assert args.peer_timeout_sha256 and re.fullmatch('[0-9a-f]{64}', args.peer_timeout_sha256)
     pair['peer_timeout'] = {'path': args.peer_timeout, 'sha256': args.peer_timeout_sha256}
-    pair['relay'] = {'queue_budget': 300, 'transfer_cap': 30, 'control_cap': 5}
+    pair['relay'] = {'queue_budget': 300, 'transfer_cap': 30, 'control_cap': 5, 'stop_reserve': 5}
     pair['phases'] = {}
     if args.prior_root:
         prior_root = args.prior_root.resolve(strict=True)

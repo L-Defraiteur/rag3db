@@ -208,7 +208,7 @@ class RelayTests(unittest.TestCase):
         pair = {'proofs': str(root), 'control': str(control), 'peer_host': 'fake-peer',
             'controllers': {'relay.py': module.digest(relay_path)},
             'peer_timeout': {'path': str(timeout_path), 'sha256': module.digest(timeout_path)},
-            'relay': {'queue_budget': 300, 'transfer_cap': 30, 'control_cap': 5}}
+            'relay': {'queue_budget': 300, 'transfer_cap': 30, 'control_cap': 5, 'stop_reserve': 5}}
         (root / 'prepared.json').write_text(json.dumps(pair))
         argv = [str(relay_path), '--proofs', str(root), '--phase', 'baseline', '--allocation', 'GO']
         class ExecTransition(Exception):
@@ -264,6 +264,38 @@ class RelayTests(unittest.TestCase):
             self.relay.run()
         self.assertIn('abort', self.transport.calls)
         self.assertLessEqual(self.clock.now, 1000300)
+    def test_exhausted_cleanup_budget_is_unknown_not_silently_quiet(self):
+        self.transport.snapshot = lambda timeout:{'state': 'active', 'remaining': 0,
+            'phase_remaining': 0, 'stage': 'build'}
+        with self.assertRaises(TimeoutError):
+            self.relay.run()
+        result = json.loads((Path(self.tmp.name) / 'cleanup-refused.json').read_text())
+        self.assertEqual(result['remote_quiet'], 'UNKNOWN')
+        self.assertNotIn('abort', self.transport.calls)
+        self.assertTrue(self.transport.closed)
+    def test_closed_native_phase_is_not_reopened_for_late_relay_refusal(self):
+        old = self.transport.finish
+        def finish(timeout):
+            result = old(timeout)
+            self.clock.now += 25
+            return result
+        self.transport.finish = finish
+        with self.assertRaises(TimeoutError):
+            self.relay.run()
+        self.assertNotIn('abort', self.transport.calls)
+        result = json.loads((Path(self.tmp.name) / 'cleanup-not-required.json').read_text())
+        self.assertEqual(result['phase_ssh_rc'], 0)
+        self.assertTrue(result['native_verdict_unchanged'])
+    def test_finish_wait_leaves_cleanup_reserve_inside_phase_deadline(self):
+        requested = []
+        old = self.transport.finish
+        def finish(timeout):
+            requested.append(timeout)
+            return old(timeout)
+        self.transport.finish = finish
+        self.assertEqual(self.relay.run(), 0)
+        self.assertLessEqual(requested[0], 15)
+        self.assertGreater(requested[0], 0)
     def test_phase_exit_before_build_is_failure(self):
         self.transport.phase_running = False
         with self.assertRaises(RuntimeError):
@@ -484,6 +516,15 @@ class GateTests(unittest.TestCase):
         result = json.loads((self.root / 'relay-cancel.json').read_text())
         self.assertFalse(result['launcher_absent'])
         self.assertTrue(result['alive_roles'])
+    def test_final_observation_keeps_unknown_instead_of_absence(self):
+        from unittest.mock import Mock
+        self.gate.role_alive = Mock(side_effect=PermissionError('fake protected process'))
+        identity = self.processes[9]
+        alive, unknown, observations = self.gate.final_roles([('watchdog', identity, None)])
+        self.assertEqual(alive, [])
+        self.assertTrue(unknown)
+        self.assertEqual(observations[0]['status'], 'UNKNOWN')
+        self.assertEqual(observations[0]['start'], identity['start'])
     def test_real_ack_gate_rechecks_after_fsync_before_link(self):
         self.gate.pair['peer_host'] = 'peer'
         state = {'coordinator': {'host': 'peer'}, 'files': {'ledger': 'ledger-sha'},

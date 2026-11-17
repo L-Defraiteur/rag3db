@@ -231,6 +231,23 @@ class Gate:
         except ProcessLookupError:
             pass
 
+    def final_roles(self, roles):
+        # Aucun garde temporel autour du constat final : non observé != absent.
+        alive, unknown, observations = [], [], []
+        for role, identity, argv in roles:
+            row = {'role': role, 'pid': identity['pid'], 'start': identity['start'], 'uid': identity['uid']}
+            try:
+                present = self.role_alive(identity, argv)
+                row['status'] = 'alive' if present else 'absent'
+                if present:
+                    alive.append(role)
+            except (OSError, AssertionError) as error:
+                row.update(status='UNKNOWN', error=repr(error))
+                unknown.append(role + ': ' + repr(error))
+            row['observed'] = time.monotonic()
+            observations.append(row)
+        return alive, unknown, observations
+
     def cancel_launcher(self, reason):
         # Annulation attribuée, y compris en file : aucun appel à active().
         self.verify_contract()
@@ -272,23 +289,28 @@ class Gate:
         if not closed:
             self.pilot.first_red(self.root, RuntimeError('relay: ' + reason))
         end = time.monotonic() + 3.4
-        # Laisser au Common réellement observé sa fermeture canonique avant le hard launcher.
-        common_roles = [row for row in roles if row[0] == 'common']
-        for _, identity, argv in common_roles:
-            self.signal_role(identity, signal.SIGTERM, argv)
-        common_end = min(end, time.monotonic() + 1.7)
-        while any(self.role_alive(identity, argv) for _, identity, argv in common_roles) and time.monotonic() < common_end:
-            time.sleep(.025)
-        for role, identity, argv in roles:
-            if role in ['phase-timeout', 'remote-hard-timeout']:
+        stop_errors = []
+        try:
+            # Laisser au Common réellement observé sa fermeture canonique avant le hard launcher.
+            common_roles = [row for row in roles if row[0] == 'common']
+            for _, identity, argv in common_roles:
                 self.signal_role(identity, signal.SIGTERM, argv)
-        alive = []
-        while time.monotonic() < end:
-            alive = [role for role, identity, argv in roles if self.role_alive(identity, argv)]
-            if not alive:
-                break
-            time.sleep(.025)
-        unknown, scope_quiet = [], None
+            common_end = min(end, time.monotonic() + 1.7)
+            while any(self.role_alive(identity, argv) for _, identity, argv in common_roles) and time.monotonic() < common_end:
+                time.sleep(.025)
+            for role, identity, argv in roles:
+                if role in ['phase-timeout', 'remote-hard-timeout']:
+                    self.signal_role(identity, signal.SIGTERM, argv)
+            while time.monotonic() < end:
+                if not any(self.role_alive(identity, argv) for _, identity, argv in roles):
+                    break
+                time.sleep(.025)
+        except (OSError, AssertionError) as error:
+            stop_errors.append('signaling not attested: ' + repr(error))
+        # Relevé frais obligatoire même si aucune boucle n'a pu faire un tour.
+        alive, unknown, observations = self.final_roles(roles)
+        unknown.extend(stop_errors)
+        scope_quiet = None
         scopes = list((self.root / 'scope').glob('validation-*'))
         if len(scopes) > 1:
             unknown.append('ambiguous Common final scopes')
@@ -301,7 +323,8 @@ class Gate:
                     unknown.append('Common owned or private scope not quiet')
             else:
                 unknown.append('Common final verdict unavailable')
-        result = {'launcher_absent': not alive, 'alive_roles': alive, 'unknown': unknown,
+        result = {'launcher_absent': not alive and not unknown, 'alive_roles': alive, 'unknown': unknown,
+            'role_observations': observations,
             'scope_quiet': scope_quiet, 'native_verdict_unchanged': True, 'observed': time.monotonic()}
         atomic_json(self.root / 'relay-cancel.json', result)
         assert result['launcher_absent'] and not unknown, 'remote cancellation not attested quiet'

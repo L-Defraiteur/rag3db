@@ -113,3 +113,13 @@ Réserver l'arrêt DANS les bornes déjà proposées (queue300/phaseEND/hard2100
 ne pas renouveler le budget opératoire. Un relevé final vivant/UNKNOWN doit
 refuser indépendamment du fait que la boucle de délai ait pu s'exécuter.
 P02 consommée, autres préparations non armées. Aucun GO natif déduit.
+
+## Trois rouges598f acquis avant correction des deux restes
+
+GO exact C7-PARSERS-RELAY-RED-598F-17nov60, HEAD598f3851227071eb61241949ba56cae7a69d3844
+propre/poussé. Trois cas ciblés chacunUNEfois-f sous58+2, trois FAIL attendus,
+0ERROR/PASSinattendu,0,801432s externe. Les quatre anciens rouges ne sont pas
+rejoués. Bruts+manifest2hôtes avant tout correctif,
+manifest90fbc0af8a6c3fbd78c6cd9ba000f0397af97944f16ec4c452f532ab1ecb9546,
+resultc4d79cd1ffb93b5e0806688fdb549522067b1258449d7131c0a3966a20a407df.
+Aucun GO vert/natif implicite ; préparation de correction groupée seulement.

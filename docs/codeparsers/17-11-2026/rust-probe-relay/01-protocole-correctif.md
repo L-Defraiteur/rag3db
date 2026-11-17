@@ -201,3 +201,38 @@ cancel_launcher avec faux pidfd et disparition des deux rôles, fsync/close
 tardifs. Ils ne lancent aucun SSH ni /proc réel. Aucun lot vert de ce correctif
 n'a encore été autorisé ou exécuté. Prochaine étape : publication, nouveau pin
 prototype propre et demande CPU verte distincte/RO totale, sans admission native.
+
+## Deux restes64d7 : correction groupée après trois nouveaux rouges
+
+Les trois témoins598f sont chacun vus FAIL sous le GO distinct
+C7-PARSERS-RELAY-RED-598F-17nov60, sansERROR/PASSinattendu,0,801432s. Bruts et
+manifest90fbc0af8a6c3fbd78c6cd9ba000f0397af97944f16ec4c452f532ab1ecb9546
+sont conservés2hôtes avant correction. Les quatre anciens rouges ne sont pas
+rejoués. Aucun résultat vert du présent correctif n'est encore revendiqué.
+
+Le relais réserve maintenant5s d'arrêt **à l'intérieur** de ses bornes : admission
+locale queued jusqu'à295s sur la file300s, opérations sous hardEND−5, attente
+finish sous MIN(phaseEND,hardEND)−5. PublicationPC demeureENDCommon−15. Sur
+premier défaut, cleanup_cap est calculé indépendamment du cap opératoire expiré,
+sur MIN(phaseEND si connue sinon queueEND,hardEND), jamais au-delà de ces END.
+Ce n'est pas un nouveau budget RPC après échéance. Le hardEND local provient du
+vrai timeout parent (start Linux+2098), pas d'un chrono réinitialisé après ready.
+
+Si le reliquat d'arrêt est lui-même épuisé, cleanup-refused.json garde explicitement
+remote_quiet=UNKNOWN et le premier défaut reste immuable. Tuer le SSH local
+n'est jamais présenté comme preuve de fermeture distante. Si finishrc0 et la
+récolte sont déjà achevés avant un refus tardif du relais, aucune RPC de phase
+n'est rouverte : cleanup-not-required le dit et le verdict natif reste inchangé.
+
+Gate.cancel relève obligatoirement chaque rôle APRÈS la boucle, même si elle
+n'a pas pu entrer. Les observations PID/start/UID et leur statut alive/absent/
+UNKNOWN sont conservés avec leur horlogePC. Une permission ou identité incohérente
+resteUNKNOWN ; un rôle non observé n'est pas déclaré absent. launcher_absent
+exige absence de vivant ET deUnknown, plus les contrôles de scope quand présent.
+Les erreurs de signalement sont conservées et interdisent également le vert.
+
+La suite proposée contient36méthodes de témoins : les trois nouveaux rouges,
+les chemins réelrun/cancel précédents, réserve finish, reliquat épuisé honnête,
+phase native déjà close et observation UNKNOWN. Tous transport/proc/signal sont
+factices ; aucun nouveau CPU n'a été exécuté après le lot rouge598f. Publication,
+RO TOTALE/pin nouveau et GO CPU vert distinct requis avant toute admission native.

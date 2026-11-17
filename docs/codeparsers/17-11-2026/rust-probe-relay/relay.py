@@ -60,20 +60,33 @@ def publish_result(path, record, deadline, clock=time.monotonic):
 class Relay:
     """Le même moteur pour SSH réel et témoins : pas de branche fake/skip."""
     def __init__(self, transport, root, clock=time.monotonic, sleep=time.sleep,
-                 queue_budget=300, transfer_cap=30, control_cap=5):
+                 queue_budget=300, transfer_cap=30, control_cap=5, stop_reserve=5, hard_end=None):
         self.transport, self.root, self.clock, self.sleep = transport, Path(root), clock, sleep
         self.queue_budget, self.transfer_cap, self.control_cap = queue_budget, transfer_cap, control_cap
+        self.stop_reserve = stop_reserve
+        assert 0 < stop_reserve <= control_cap < queue_budget
         self.deadline = None
         self.phase_deadline = None
-        self.queue_end = clock() + queue_budget
+        started = clock()
+        self.queue_end = started + queue_budget
+        self.hard_end = hard_end if hard_end is not None else started + queue_budget + 1798
         self.stage = None
 
     def cap(self, cap):
-        end = self.deadline if self.deadline is not None else self.queue_end
+        admission_end = self.deadline if self.deadline is not None else self.queue_end - self.stop_reserve
+        end = min(admission_end, self.hard_end - self.stop_reserve)
         remaining = end - self.clock()
         if remaining <= 0:
             raise TimeoutError('relay deadline')
         return min(cap, remaining)
+
+    def cleanup_cap(self):
+        # Réserve DANS la borne connue, jamais cap() de l'opération déjà expirée.
+        stop_end = self.phase_deadline if self.phase_deadline is not None else self.queue_end
+        remaining = min(stop_end, self.hard_end) - self.clock()
+        if remaining <= 0:
+            raise TimeoutError('cleanup reserve exhausted; remote quiescence UNKNOWN')
+        return min(self.control_cap, remaining)
 
     def refresh(self, expected=None):
         before = self.clock()
@@ -153,7 +166,7 @@ class Relay:
                     completed.add(stage)
                 else:
                     self.sleep(min(.1, self.cap(.1)))
-            remaining = self.phase_deadline - self.clock()
+            remaining = min(self.phase_deadline, self.hard_end) - self.stop_reserve - self.clock()
             if remaining <= 0:
                 raise TimeoutError('phase completion deadline')
             rc = self.transport.finish(remaining)
@@ -183,9 +196,17 @@ class Relay:
                 pass
             # Le refus distant est borné par le temps restant déjà reçu, pas un nouveau budget.
             try:
-                self.transport.abort(repr(error), self.cap(self.control_cap))
-            except BaseException:
-                pass
+                if stopped:
+                    # finish rc0 puis récolte déjà achevés : ne pas rouvrir la phase close.
+                    atomic_json(self.root / 'cleanup-not-required.json', {'phase_ssh_rc': 0,
+                        'reason': 'phase and local children already collected before relay refusal',
+                        'native_verdict_unchanged': True, 'observed': self.clock()})
+                else:
+                    self.transport.abort(repr(error), self.cleanup_cap())
+            except BaseException as stop_error:
+                atomic_json(self.root / 'cleanup-refused.json', {'remote_quiet': 'UNKNOWN',
+                    'reason': repr(stop_error), 'original_error': repr(error),
+                    'native_verdict_unchanged': True, 'observed': self.clock()})
             raise
         finally:
             if not stopped:
@@ -332,7 +353,7 @@ def main():
     assert socket.gethostname() == pair['peer_host']
     assert Path(__file__).resolve() == Path(pair['control']) / 'relay.py'
     assert digest(__file__) == pair['controllers']['relay.py']
-    assert pair['relay']['queue_budget'] == 300 and pair['relay']['transfer_cap'] == 30 and pair['relay']['control_cap'] == 5
+    assert pair['relay'] == {'queue_budget': 300, 'transfer_cap': 30, 'control_cap': 5, 'stop_reserve': 5}
     os.chdir(args.proofs)
     # Vrai timeout local : groupe privé hérité par tous nos SSH, kill2 physique.
     peer_timeout = pair['peer_timeout']
@@ -355,7 +376,8 @@ def main():
         raise TimeoutError('relay received signal ' + str(sig))
     for sig in [signal.SIGTERM, signal.SIGINT, signal.SIGHUP]:
         signal.signal(sig, stop)
-    return Relay(transport, root, **pair['relay']).run()
+    hard_end = int(parent['start']) / os.sysconf('SC_CLK_TCK') + 2098
+    return Relay(transport, root, hard_end=hard_end, **pair['relay']).run()
 
 
 if __name__ == '__main__':

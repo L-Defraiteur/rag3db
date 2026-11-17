@@ -59,3 +59,16 @@ Les deux premiers défauts ne sont pas rejoués. Les preuves précèdent les tro
 correctifs groupés, désormais implantés mais non exécutés. La suite compte29
 méthodes témoins, y compris CLI réel avec exec intercepté, transition snapshot,
 pidfd fictif et publication/close tardifs ; pas de nouveau vert revendiqué.
+
+## Secondes réserves64d7 et trois rouges598f
+
+La RO totale cf832/P04 apporte deux restes non couverts : cap déjà expiré avant
+abort empêche RPC ; bouclecancel non entrée laissealive=[] et inventeabsent.
+Ticket et trois témoins prépubliés598f AVANT nouveau correctif produit.
+GO C7-PARSERS-RELAY-RED-598F-17nov60 : troisFAIL attendus chacunUNEfois,
+0ERROR/PASSinattendu,0,801432s externe. Bruts et manifest2hôtes
+90fbc0af8a6c3fbd78c6cd9ba000f0397af97944f16ec4c452f532ab1ecb9546,
+resultc4d79cd1ffb93b5e0806688fdb549522067b1258449d7131c0a3966a20a407df.
+Aucun ancien rouge rejoué. La nouvelle correction réserve l'arrêt dans les
+bornes connues et relève les rôles hors boucle ;36méthodes de test proposées,
+aucun vert supplémentaire encore autorisé ni joué. P02-P04 ne sont pas réarmées.
