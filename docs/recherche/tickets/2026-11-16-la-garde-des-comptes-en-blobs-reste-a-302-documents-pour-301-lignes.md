@@ -1078,3 +1078,40 @@ bruts/records avant rethrow, identités et FDs parent, tout dans cap original.
 Runner6148 inchangé. Zéro import/parse/test/natif exécuté ; les19 restent NON
 JOUÉS. Lecture TOTALE R requise avant GO C7distinct. Le paquet privé ne sera
 qu'une copie source métadonnées vérifiées, pas une entrée test autorisée.
+
+
+### RO totale19 R7b6c — réserve helper avant fix
+
+archived_capture quitte le except CaptureRefused puis appelle write_new/sync/
+proc_state/fd_snapshot hors protection ; OSError d'archive peut remplacer le
+refus/record sans chaîne explicite. Pas d'incident runtime, zéro test observé.
+Conserver cause/record initiaux et erreur d'archive distincts, même si le FS ne
+permet aucune preuve. Prépublier contre-ex fakeIO puis rouge CPU distinct avant
+fix et avant admission19. Runner6148 et trois fix précédents non remis en cause.
+Aucun GO19, aucun RealCapture/PG autorisé.
+
+
+## HOLD19 R/C7 et quatre contre-exemples fakeIO prépubliés
+
+RO totale R7b6 réservée sur le seul helperarchive ; C7HOLD36490b1217 confirme
+AVANT fix. Réserve consignée FTS302 AVANT testdiff. Runner6148/helper0a2b
+INCHANGÉS : aucun fix ni qualification19. Les11 contrôles du paquet19 de R/C7
+conformes ne lèvent pas ce défaut source et n'autorisent aucun RealCapture.
+
+test_capture_archive_red.py appelle le VRAI archived_capture avec FAUSSE
+capture/CaptureRefused contenant record original. Quatre erreurs OSError
+injectées APRÈS capture : write stdout, sync, proc_state, fd_snapshot. Aucun
+child, pidfd, fork ou scan processus tiers. Uniquement FS/temp privé et
+métadonnées de SON unittest ; sources des fixtures capturées publiques.
+Les quatre juges exigent cause originale identité objet, record original,
+erreurarchive SECONDAIRE et __cause__ explicite. OSError sans ces pièces doit
+être4FAIL assertion (pas absorbé comme succès), import/autreexception=ERROR.
+
+archive-fakeio-red-recipe.json PROPOSE4tests seuls/-v sansfailfast, attendu
+4FAIL/0ERRORskip/rc1, Common20/OS28+2/POSTE32G, root archive-fakeio-red-06 neuf,
+neuf sources dont Common + trois outils. Source/hash/paquet/Rlecture puis
+GO C7rougeDISTINCT avant entrée. Aucun test/import/parse/enfant/PG exécuté ici.
+Les19 et8anciens sont exclus, module test_runner importé pour type du runner
+seulement, aucune classe19 sélectionnée. Après rouge conservé deux hôtes
+seulement : fix premièrecause/record+archiveerror, sans bruts inventés si
+l'écriture est impossible, puis nouvelle RO/GO fakeIOvert distinct avant19.
