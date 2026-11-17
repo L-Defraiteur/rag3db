@@ -324,3 +324,10 @@ conservait le premier nom et le répétait en ajoutant les quatre noms. Corriger
 la liste explicitement ; quatre sélections exactes, aucun lancement/retry.
 Les témoins vérifient aussi que la vue exposée au port n'altère pas le request
 original (borne/SHA/env), en plus de la référence interne gelée.
+
+Quatre rouges request/hash acquis : [rapport61](../../rag3weaver-archi/17-11-2026/61-preuves-rouges-request-hash-deee.md).
+GO C7-ENTRY-SNAPSHOT-HASH-RED-DEEE-17nov60 consomméUNEfois surdeee/module8dd
+inchangé :4FAILnotraised/0ERRORskip/rc1,0.080160344s/noRetry,24autresNONJOUÉS.
+Neuf bruts LOCAL/PC réhash0écart AVANTfix, manifeste60e1b1e219030c49d5980f6643f133512a4d02bcf2b5379d1d547fa9a8fef866.
+Correctif groupé snapshotprofond/vueportsdétachée+recheckposthash enPRÉPAseule,
+puis nouvellesources/pins/ROtotale/GO28distinct avantverts. AucunbackendOSqualifié.
