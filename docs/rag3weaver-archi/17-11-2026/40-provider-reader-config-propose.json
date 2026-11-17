@@ -539,5 +539,20 @@
   "common_runtime_implemented": false,
   "window_lifecycle_api_pending": true,
   "pg_tool_qualified": false,
-  "preserved_pilot_pc": "229b397d8d1cb28b8ac3075479e49a1ab72b400b"
+  "preserved_pilot_pc": "229b397d8d1cb28b8ac3075479e49a1ab72b400b",
+  "broker_sources": {
+    "agent-red1": {
+      "cwd": null,
+      "manifest": null
+    },
+    "agent-green1": {
+      "cwd": null,
+      "manifest": null
+    },
+    "review1": {
+      "cwd": null,
+      "manifest": null
+    }
+  },
+  "broker_sources_origin": "future independently verified task API/source role from common lifecycle; never admission.cwd actual"
 }

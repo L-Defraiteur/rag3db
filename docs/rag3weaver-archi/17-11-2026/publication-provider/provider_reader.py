@@ -39,6 +39,7 @@ def sha(value):require(type(value) is str and re.fullmatch('[0-9a-f]{64}',value)
 
 class Reader:
  def __init__(self,config):
+  self._directory_fds=[];self._root_fd=None
   self._config=canonical(config) # Own immutable bytes: caller mappings cannot mutate expectations.
   value=decode(self._config)
   require(value.get('schema_version')==1 and value.get('kind')=='archi-publication-reader','reader schema')
@@ -46,33 +47,58 @@ class Reader:
   for key in ['execution_id','phase_id']:require(type(value.get(key)) is str and value[key],'execution/phase missing')
   for key in ['prepared_sha256','plan_sha256']:sha(value[key])
   root=Path(value['root']);require(root.is_absolute() and root.resolve()==root,'private publication root must be canonical')
+  self._directory_chain=[]
+  for path in reversed((root,*root.parents)):
+   info=path.lstat();require(stat.S_ISDIR(info.st_mode),'noncanonical directory ancestor')
+   fd=os.open(path,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC);self._directory_fds.append(fd)
+   identity=self._directory_identity(info);require(self._directory_identity(os.fstat(fd))==identity,'directory changed during anchoring')
+   self._directory_chain.append((path,fd,identity))
+  self._root_fd=self._directory_fds[-1]
   require(type(value['owner_uid']) is int and value['owner_uid']>=0,'invalid owner')
   labels=[s['label'] for s in value['stages']];require(labels and len(set(labels))==len(labels) and all(n in LABELS for n in labels),'unknown or duplicate stage')
   for index,stage in enumerate(value['stages']):
-   require(stage['sequence']==index,'noncontiguous stage order');require(stage['binding_sha256']==digest(canonical(value['bindings'][stage['label']])),'source contract hash differs')
+   require(type(stage['sequence']) is int and stage['sequence']==index,'noncontiguous stage order');require(stage['binding_sha256']==digest(canonical(value['bindings'][stage['label']])),'source contract hash differs')
    for key in ['window_file','ledger_file']:leaf(stage[key])
    for name in stage['artifact_files'].values():leaf(name)
    require(set(stage['artifacts'])==set(stage['artifact_files']) and set(stage['files'])=={'ledger',*stage['artifacts']},'declared file/role set differs')
+   require(value['bindings'][stage['label']]['source']==value['source'],'source binding differs from APP')
    require(set(value['bindings'][stage['label']]['roles'])==set(stage['artifacts']),'source contract roles differ')
+   if stage['label']!='global':
+    expected=value.get('broker_sources',{}).get(stage['label']);require(type(expected) is dict and set(expected)=={'cwd','manifest'},'independent Broker source rule missing')
+    cwd=Path(expected['cwd']);require(cwd.is_absolute() and '..' not in cwd.parts and str(cwd)==expected['cwd'] and expected['manifest']==str(cwd/'Cargo.toml'),'independent Broker manifest rule invalid')
+  self._verify_root()
+ @staticmethod
+ def _directory_identity(info):return (info.st_dev,info.st_ino,info.st_uid,info.st_mode)
+ def _verify_root(self):
+  require(self._root_fd is not None,'reader directory handles closed')
+  for path,fd,identity in self._directory_chain:
+   require(self._directory_identity(path.lstat())==identity and self._directory_identity(os.fstat(fd))==identity,'publication root or canonical parent changed')
+ def close(self):
+  descriptors=self._directory_fds;self._directory_fds=[];self._root_fd=None
+  for fd in reversed(descriptors):os.close(fd)
+ def __del__(self):
+  for fd in reversed(getattr(self,'_directory_fds',[])):
+   try:os.close(fd)
+   except OSError:pass
  def _open(self,name):
-  config=decode(self._config);root=Path(config['root']);leaf(name)
-  directory=os.open(root,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+  config=decode(self._config);leaf(name);self._verify_root()
+  require(os.fstat(self._root_fd).st_uid==config['owner_uid'],'publication directory owner differs')
+  fd=os.open(name,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK,dir_fd=self._root_fd)
   try:
-   before=os.fstat(directory);require(before.st_uid==config['owner_uid'],'publication directory owner differs')
-   fd=os.open(name,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK,dir_fd=directory)
-   info=os.fstat(fd)
-   if not (stat.S_ISREG(info.st_mode) and info.st_uid==config['owner_uid']):os.close(fd);raise ValueError('publication file is not regular/owned')
+   info=os.fstat(fd);require(stat.S_ISREG(info.st_mode) and info.st_uid==config['owner_uid'],'publication file is not regular/owned');self._verify_root()
    return fd,info
-  finally:os.close(directory)
+  except BaseException:
+   os.close(fd);raise
  def _bytes(self,name,limit):
   fd,before=self._open(name)
   with os.fdopen(fd,'rb') as stream:
    require(before.st_size<=limit,'publication JSON too large');raw=stream.read(limit+1);after=os.fstat(stream.fileno())
    require(len(raw)<=limit and (before.st_dev,before.st_ino,before.st_size,before.st_mtime_ns,before.st_ctime_ns)==(after.st_dev,after.st_ino,after.st_size,after.st_mtime_ns,after.st_ctime_ns),'publication file changed during read')
-  return raw
+  self._verify_root();return raw
  def _artifact(self,name):
   fd,info=self._open(name)
-  try:return dict(size=info.st_size,mode=stat.S_IMODE(info.st_mode))
+  try:
+   self._verify_root();return dict(size=info.st_size,mode=stat.S_IMODE(info.st_mode))
   finally:os.close(fd)
  def read(self,label,phase):
   config=decode(self._config)
@@ -86,11 +112,11 @@ class Reader:
   opened=finite(window['opened_monotonic']);end=finite(window['deadline_monotonic']);operation=finite(window['operation_end_monotonic'])
   require(opened<end<=min(opened+90,operation),'owner event extends declared window')
   owner=window.get('owner',{});require(type(owner.get('pid')) is int and owner['pid']>0 and type(owner.get('start')) is str and owner['start'].isdigit(),'owner event identity missing');sha(owner['script_sha256'])
-  ledger_name=stage['ledger_file'];artifact_names=dict(stage['artifact_files']);admission=None
+  ledger_name=stage['ledger_file'];artifact_names=dict(stage['artifact_files']);admission=None;admission_raw=None;admission_name=None
   if label!='global':
    require(stage.get('broker_bound') is True and ledger_name=='broker-ledger' and set(artifact_names.values())=={'broker-elf'},'Broker path rule not explicitly declared')
    identity=window.get('admission_identity');require(type(identity) is str and re.fullmatch(r'task-[1-9][0-9]*-[0-9]+',identity) is not None,'unbound Broker admission')
-   admission=decode(self._bytes(identity+'-admission.json',LIMIT));ledger_name=identity+'-ledger.json';artifact_names={aid:identity+'-elf' for aid in stage['artifacts']}
+   admission_name=identity+'-admission.json';admission_raw=self._bytes(admission_name,LIMIT);admission=decode(admission_raw);ledger_name=identity+'-ledger.json';artifact_names={aid:identity+'-elf' for aid in stage['artifacts']}
    require(admission['identity']==identity,'another Broker identity')
   ledger_raw=self._bytes(ledger_name,LIMIT);ledger=decode(ledger_raw);require(digest(ledger_raw)==sha(window['ledger_sha256']),'original ledger byte hash differs')
   require(ledger.get('source')==config['source'] and ledger.get('pilot')==config['pilot'],'ledger source/pilot differs')
@@ -100,7 +126,9 @@ class Reader:
   if label!='global':
    expected_stage={'agent-red1':'agent-red','agent-green1':'agent-green','review1':'review'}[label]
    require(admission['identity']==identity and admission['stage']==expected_stage and ledger['stage']==expected_stage,'another Broker stage')
-   require(ledger['source_head']==config['source'] and ledger['source_state']==admission['source_state'],'ledger source state differs from admission')
+   require(ledger['source_head']==admission['source_head']==ledger['source_state']['head']==admission['source_state']['head']==binding['source']==config['source'],'APP/admission/ledger/state HEAD chain differs')
+   require(ledger['source_state']==admission['source_state'],'ledger source state differs from admission')
+   require(admission['cwd']==config['broker_sources'][label]['cwd'],'Broker cwd differs from independent expected source')
    require(ledger_name==identity+'-ledger.json','ledger is not the unique admitted identity')
    require(ledger['source_patch_sha256']==admission['patch_sha256'],'source patch differs')
   for aid,role in roles.items():
@@ -110,10 +138,12 @@ class Reader:
    require(artifact['target']['name']==role['target_name'] and artifact['target']['kind']==[role['target_kind']],'Cargo target kind/name differs')
    require(artifact['profile']['test'] is role['profile_test'],'Cargo profile differs')
    require(sorted(artifact['features'])==sorted(item['features'])==sorted(role['features']),'Cargo feature closure differs')
-   manifest=config['manifest_paths'][role['manifest']] if admission is None else str(Path(admission['cwd'])/'Cargo.toml')
+   manifest=config['manifest_paths'][role['manifest']] if admission is None else config['broker_sources'][label]['manifest']
    require(artifact['manifest_path']==manifest,'Cargo artifact from another manifest')
    size=self._artifact(name)['size'];require(type(item['size']) is int and item['size']==size,'ELF size differs')
    files[aid]=dict(path=str(root/name),sha256=sha(item['sha256']),size=size);elf_map[aid]=item['sha256']
   # Re-read immutable inputs; this layer neither hashes ELF content nor authorizes it.
   require(self._bytes(stage['window_file'],WINDOW_LIMIT)==window_raw and self._bytes(ledger_name,LIMIT)==ledger_raw,'publication metadata changed before returning')
-  return dict(label=label,sequence=stage['sequence'],binding_sha256=stage['binding_sha256'],ledger=ledger,ledger_bytes_sha256=digest(ledger_raw),window=window,window_sha256=digest(window_raw),files=files,elf_map=elf_map,admission=admission,physical_admission=False)
+  if admission_name is not None:require(self._bytes(admission_name,LIMIT)==admission_raw,'Broker admission bytes changed during read')
+  self._verify_root()
+  return dict(label=label,sequence=stage['sequence'],binding_sha256=stage['binding_sha256'],ledger=ledger,ledger_bytes_sha256=digest(ledger_raw),window=window,window_sha256=digest(window_raw),files=files,elf_map=elf_map,admission=admission,admission_bytes_sha256=None if admission_raw is None else digest(admission_raw),physical_admission=False)

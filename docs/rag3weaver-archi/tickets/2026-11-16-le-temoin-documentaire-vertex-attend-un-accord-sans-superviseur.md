@@ -289,3 +289,12 @@ enveloppe0,132463359s/0retry. Preuves3fichiersLOCAL+PCréhash0écart AVANTfix,
 R/cx-archi-reader-red-5917-17nov-r1 manifest4e73204764d69ab0c60d5065da104a45f83588fe58bf7f6ffcca84de73b26a2d.
 Rapport17nov/41 détaille5cas vraisReader. Douzeautres témoins NONJOUÉS.
 AucunCPUvert/bridge/acteur/native/transportqualifié déduit ;229bQfigés.
+
+Correctif lecteur groupé APRÈS5rouges/2copies réhashées : app/binding/admission/
+ledger/state.head tous égaux ; broker_sources[label] cwd/manifest indépendants
+et immuables, paschoisis depuisadmission. Admissionbytes/SHA puis rereadidentique.
+Dirfd ROOTetchaqueparentcanonique gardés(ancresdev/inode/UID/mode), lstat/fstat
+auxfrontières/openatleafNOFOLLOW ; root/parent remplacé refuse. Close uniquement
+propresFD, pascycleacteur/native. TroisAST/seulement17écrits NONJOUÉS surcandidat,
+9anciens+3autres nonqualifiés. Codefixàpublier/ROgroupée/GOCPUvert distinct requis.
+Aucunbridge ni responsabilitéELFhash/window/liveness/ACK déléguéeauReader ;229bQfigés.

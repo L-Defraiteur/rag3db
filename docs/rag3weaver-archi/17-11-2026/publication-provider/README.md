@@ -55,3 +55,29 @@ quatrepub8ELF/ordre/redgreenprovenance et fenêtre90 avantwait. Aucun import,
 CPU, /proc, SSH, signal, poste, ELF, exportSDK ou accès service n'a été exécuté
 pour cette préparation. L'absence de transportPG qualifié reste un HOLD avantARM,
 pas une autorisation NoEmbedding ni une lease fabriquée.
+
+
+## Correctif groupé après cinq rouges observés
+
+Rapport41/GO C7READERRED5917 : cinqFAILValueErrornotraised vus AVANTfix,
+3preuves réhashées LOCAL+PC avant modification, manifest4e7320...6a2d.
+Chaîne APP==binding.source==admission.source_head==ledger.source_head==lesdeux
+state.head obligatoire. broker_sources[label] fournit cwd et manifest attendus
+INDÉPENDANTS de l'admission ; le futur bridge doit les recevoir du rôle/source
+TaskAPI vérifié par le Lifecycle commun, jamais les apprendre depuis actual.
+Config40 les garde inconnus/null donc NONEXÉCUTABLE, pas des attentes inventées.
+Octets/SHA admission conservés et relus identiques avant retour.
+
+Le Reader ancre maintenant un dirfd pour ROOT et chaque ancêtre canonique,
+fige dev/inode/UID/mode, vérifie lstat chemin et fstat des descripteurs avant/
+après ouverture/lecture et avant retour. Ouvertures feuilles via ROOTfd piné,
+NOFOLLOW/NONBLOCK/REG/UID ; substitution parent/root refuse même à mêmeUID.
+close() libère uniquement ces propres descripteurs ; pas de cycleacteur/reap
+processus ou d'export. Ces contrôles ponctuels ne promettent pas de snapshot
+FS atomique ni de validité d'un chemin après retour : Gate revalide à son
+point d'usage, avec ses propres gardes physiques inchangées.
+
+17 fonctions écrites (9global+8Broker/races), cinq anciennes versions ont été
+vues rouges ; candidat corrigé NONJOUÉ. NouveauRO/GOCPUvert exact distinct avant
+essais. Bridge/noyau/window/liveness/ELFhash restent nonimplémentés ici,
+229b/Q inchangés, aucune qualification native/service/PG transférée.
