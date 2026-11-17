@@ -106,3 +106,20 @@ puis matérialiser l'adaptateur global et les témoins des vrais raccords avant
 nouveau pin/RO/GOCPU. Jusqu'alors préparation de contrat seulement, aucun acteur
 ARMÉ ni grant réellement productible revendiqué. Aucun health/SQL/provider/
 poste/Cargo/rustc/service/runtime/target actuel effectué. GO7455 reste retenu.
+
+
+### Précisions propriétaires après publication du plan initial
+
+G précise sourcepg_receipt commit8ddb87233a22eda7122c04f2b4ba8b1656577550,
+SHAde69 identique au blob lu808be. Postcanon ici signifie validation de la pièce
+existante avec admitted_at initial ; cela ne dispense PAS du postcheck SQL
+prévu dans la qualification du producteur/sa capture initiale (même borne5s).
+Réserve runner parent consignée b56d0ed0f5 avant correction en préparation.
+
+Codeparsers a depuis observé ses3rouges598f et prépare le correctif groupé,
+encore non qualifié. API actuelle : ready/start_phase/running/snapshot(timeout),
+fetch(stage,name,destination,timeout), publish_ack(stage,ack,timeout), finish,
+abort,stop. Le snapshot fournit remaining/phase_remaining DURÉES PC, stage,
+ledger et files{name:SHA}. Le futur manifeste ordonné global+3D6 doit composer
+cette logique commune après qualification, pas un fork ni une API4pub déjà
+livrée. Aucun nouveau run ou test n'est exécuté par Archi pour ces précisions.

@@ -38,7 +38,8 @@
       "path": "docs/optimiseur/16-11-2026/pg-ro-attestation/pg_receipt.py",
       "sha256": "de69c498b1ac38d80d4976144fea79ddbfa7d3a34ea8ce7dae1d9e4a457aeed6",
       "copied_into_Q": false,
-      "started": false
+      "started": false,
+      "owner_source_commit": "8ddb87233a22eda7122c04f2b4ba8b1656577550"
     }
   ],
   "blockers": [
@@ -55,8 +56,9 @@
       "owner": "Codeparsers",
       "kind": "publisher-shutdown-open",
       "red_test_commit": "598f3851227071eb61241949ba56cae7a69d3844",
-      "red_tests_observed": false,
-      "ticket": "docs/codeparsers/tickets/2026-11-17-la-publication-du-ledger-de-sonde-attend-un-ack-sans-relais-autonome.md"
+      "red_tests_observed": true,
+      "ticket": "docs/codeparsers/tickets/2026-11-17-la-publication-du-ledger-de-sonde-attend-un-ack-sans-relais-autonome.md",
+      "owner_update": "three reds observed by Codeparsers after initial report; corrective source pending qualification"
     }
   ],
   "requests": {
