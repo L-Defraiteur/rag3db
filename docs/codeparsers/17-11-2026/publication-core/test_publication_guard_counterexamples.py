@@ -34,6 +34,7 @@ class PublicationGuardCounterexamples(unittest.TestCase):
         prepared = Path(pair['publication_layout']['prepared'])
         prepared.write_text(json.dumps(pair))
         pin = fixtures.module.digest(prepared)
+        base.gate.pin = pin
         bootstrap_path = base.root / 'relay-bootstrap.json'
         bootstrap = json.loads(bootstrap_path.read_text())
         bootstrap['prepared_sha256'] = pin

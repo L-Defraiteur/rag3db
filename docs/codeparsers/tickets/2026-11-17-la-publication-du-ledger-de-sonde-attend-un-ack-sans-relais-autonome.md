@@ -349,3 +349,12 @@ Attendre cadrage C7 du raccord de fixture, nouveaux pins/RO/GO distinct avant
 rejeu. Les défauts moteur restent ouverts. Nuance premièrecauseRPC consignée :
 TimeoutError générique accepté ne prouve pas origine/immutabilité de la cause ;
 renforcer ce témoin avant futur correctif/vert qui revendique cette propriété.
+
+### Cadrage C7 a030139580 : préparation corrective de fixture seule
+
+Preuves CA1C seize fichiers réhashés deuxhôtes et rapport33cf conservés AVANT
+ce delta. Affecter base.gate.pin au même SHA réel déjà écrit dans bootstrap et
+retourné par gate_fixture. Garder toutes les assertions et les dix cas ; moteur
+558 inchangé. Mettre à jour uniquement pins/cwd/source du paquet et note de
+reprise ; RO ciblées M/TTY puis nouveau GO distinct avant toute invocation.
+Aucun retry CA1C ni correctif moteur autorisé par cette préparation.

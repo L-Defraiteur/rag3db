@@ -1,8 +1,8 @@
 {
-  "state": "GROUPED_RED_WITNESSES_BEFORE_FIX_NOT_RUN",
+  "state": "GROUPED_RED_FIXTURE_PIN_ONLY_NOT_RUN",
   "engine_commit": "558959a8defc3a92c29e056ef697a63a7c0f9423",
   "original_three_commit": "9e653445c1614802eaefb3125db9de6a3dfc6aaa",
-  "parent_commit": "8421500d9ad7b70ad79ace7674d2bc19b8510333",
+  "parent_commit": "33cfbed8863ffa765e0976d31181a9799275af20",
   "files": {
     "extension/rag3weaver/scripts/publication_relay.py": "d5af9318a22a892ec51af3b28cc6b1b31273e41bb1f43997cc195f253695f986",
     "docs/codeparsers/16-11-2026/rust-probe/pilot.py": "d642d51884c262a450092b07411bbddd14e0b541aab2063a901040ddec496571",
@@ -11,11 +11,12 @@
     "docs/codeparsers/17-11-2026/rust-probe-relay/relay.py": "cd31ffcd3964562237eeb9d1ad823f6fe89aebc7db18991ac40fba4c0af00510",
     "docs/codeparsers/17-11-2026/rust-probe-relay/gate.py": "c0344baf1024261b854a46b8506f4024abfcee4593365f14230a4962f3186a4b",
     "docs/codeparsers/17-11-2026/rust-probe-relay/test_relay.py": "0647706c4148caa27001897bb2af8b5b51a85b2212b1854949631b792638c255",
-    "docs/codeparsers/17-11-2026/publication-core/test_publication_guard_counterexamples.py": "b44b64e1ecc4d33bcb1313958419844678c10e89a00c30241dc0e72feda42ae4",
+    "docs/codeparsers/17-11-2026/publication-core/test_publication_guard_counterexamples.py": "a566b66d418e73fc3f31cce8ed8efebd6d77d37c2b31e453d6b8c2385ab46ae2",
     "docs/codeparsers/17-11-2026/publication-core/test_publication_guards_grouped.py": "f2683aad05651cc283b24361c204de0de9bb72a5ad071b66ffecf2553a82f4fb",
-    "docs/codeparsers/17-11-2026/publication-core/04-rouges-groupes-avant-correctifs.md": "5c56234ab2e6e0bb829b8f38d59a3c38a686a749f5237606b0c14ea1ddebedaf"
+    "docs/codeparsers/17-11-2026/publication-core/04-rouges-groupes-avant-correctifs.md": "5c56234ab2e6e0bb829b8f38d59a3c38a686a749f5237606b0c14ea1ddebedaf",
+    "docs/codeparsers/17-11-2026/publication-core/06-raccord-de-pin-fixture-sans-correctif-moteur.md": "6aa3d2475996cd52d45c6003ee99997c85bd84cef649a3d82ca2fd62d1235e8a"
   },
-  "cwd": "/home/lucied/git_workspaces/cx-codeparsers-publication-guards-grouped/docs/codeparsers/17-11-2026/publication-core",
+  "cwd": "/home/lucied/git_workspaces/cx-codeparsers-publication-guards-fixture-pin/docs/codeparsers/17-11-2026/publication-core",
   "interpreter": {
     "path": "/usr/bin/python3.14",
     "sha256": "c81d88523721c462f53a98129d65bba68f67791932f0664372e1778e74fd9517"
@@ -37,5 +38,8 @@
   "fixes_included": false,
   "expected_behavior": "ten FAIL predicted, zero ERROR/skip; not observed; any unexpected fixture/import error stays ERROR",
   "physical_admission": false,
-  "runtime_prepared": null
+  "runtime_prepared": null,
+  "prior_failed_run_commit": "ca1c9f6e25aa3906719a31946c146758566f0758",
+  "prior_proof_manifest_sha256": "41c73731458fd15c1003c378257a38f8a8c326adfb64c02a6c79df2a29874b93",
+  "fixture_only_change": "base.gate.pin = same calculated prepared/bootstrap pin; ten test bodies and assertions unchanged"
 }
