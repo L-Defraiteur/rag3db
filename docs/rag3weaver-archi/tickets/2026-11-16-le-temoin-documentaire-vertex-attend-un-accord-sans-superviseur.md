@@ -268,3 +268,17 @@ chaquelabel90 depuisownerAVANTwait/MINENDop, sans resetENDglobal ni comparaison
 absolueinterhôtes. Nouveaucode/tests prépub avant GOCPUdistinct/RO,229b/Qfigés.
 G B01 refus avant rustc HOMEprivé/lockdir, transportSQL toujoursNONQUALIFIÉ ;
 aucunGO7455/actor/lease/Vertex/PG. Aucun nouveau runtime/capture/probe autorisé.
+
+### RO lecteur e1f5 Mémoire : deux groupes avant correction
+
+HOLD métierBroker : R1 chaîner APP==binding.source==admission.source_head==
+ledger.source_head==source_state.head, pas seulement égalitéentre2states ;
+cwd/manifesteD6 attendus doivent venir d'une règle EXTERNE fixée avant lecture,
+jamais de l'admission actual. Ajouter vrais casReader Broker positifs et refus
+headétranger/identity/stage/cwd. Neuf témoins actuels GLOBALseulement NONJOUÉS.
+R2 admissionJSON lueunefois nonrelue ; conserveroctets/SHA et relectureidentique.
+Root/parents remplacés peuventrediriger _open malgré NOFOLLOWfeuille : figer
+rootdirfd/identité et parents canoniques, vérifier auxfrontières. Le témoin
+symlink existant teste FEUILLE, pas courseparent. Noyau garde physique/hashELF/
+window/liveness/ACK/export ; le lecteur ne reçoit pas ces responsabilités.
+Publier contretémoin avant fix/ROgroupée/GOCPUdistinct ; aucun essai acquis.
