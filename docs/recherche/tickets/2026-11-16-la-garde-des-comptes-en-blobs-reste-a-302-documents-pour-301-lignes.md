@@ -458,3 +458,14 @@ Receipt SHA2562093d05fbd762591eb1e7d1046abed6eace090a21bf646fae9808edec28bd84d ;
 manifest dix fichiers SHA2562c787dc7230cb72108c5d83a3b75220ba33d5550b981ff5df85393aef9d450dc.
 Copies deuxpostes vérifiées parSHA/taille ; Common public sans jeton conservé.
 OS/transport nonqualifiés,18CPUverts restent bornés aux fixtures. Ticket ouvert.
+
+### Observabilité distincte — préparation C7 après 5e4c2d980f
+
+Avant diff : préparer sonde sans compiler/metadata/SQL/Docker/contact, vraie
+Common.autorite et poste_tenu conservées. Sous futur POSTE32G/Common10s et
+OS12sTERM+2kill proposés, capturer fdinfo borné, tuples fdinfo/stat/fstat,
+identités PID/start/UID/cgroup/racine/fiche et horloges AVANT comparaison.
+Publier bruts+capture avant jugement, conserver première cause sans nouvelle
+observation après rouge, aucun garde desserré. Source/tests pinés+RO puis
+GO diagnostique distinct avant toute lecture live. Anciens GO clos, aucun
+3e essai de compilation autorisé. R3/B01/OUT_T et preuves restent immuables.
