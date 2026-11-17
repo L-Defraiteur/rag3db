@@ -663,3 +663,12 @@ recipef9b74554198a71bb87e0ab09b5f119c1f97accc58fd19e328c08a62341c8e379,
 seed5f06ec84d99f86850a11a4d990398f56905fb12357ab9b779bbb03755d7ed733,
 runfalse/référenceGOattendue,0timer/container/creds02 créés. Nouveaupérimètre
 opérationneldistinct àcoordonnerC7, aucunepermissionLuciesupplémentaire.
+
+PrépaV2indépendantecontinue : noyau pg_v2.py source injectée sansentrée live ni
+loadercreds ; SecretInputreprmasqué/payloadmémoirejamaisarchivé, whitelistevents
+etcanarissurbytes/stringsdécodées+publication, premierrougepersistéavantcleanup
+MINEND/reapquiet, rapportprobev2pasgrant. AllocationhostloopbackPORTPRIVÉdistinct
+5433 (fixture15433attendue), rôlesattendus externes nonowner, transactionsRO
+observées dansframes. AdapterOS/connect réel PASfourni/qualifié parcettebase,
+futureRustsource etraccordàpublier avantpaquetRO.12témoinsv2+1legacyrouge
+causalproposésNONJOUÉS,0client/credentials/SQL pendantprépa.

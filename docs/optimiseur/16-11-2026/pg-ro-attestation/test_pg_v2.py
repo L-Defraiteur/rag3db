@@ -13,7 +13,7 @@ CANARY='G_V2_FAKE_SECRET_CANARY'
 def allocation():
     return dict(schema_version=2,kind='pg-probe-allocation-v2',host_id='FAKE-PC',clock_domain='FAKE-PC-MONOTONIC',
                 nonce='a'*32,scope='FAKE-SCOPE',source_sha256='1'*64,client_sha256='2'*64,
-                target=dict(host='127.0.0.1',port=5433,database='g_pg_probe_fake',user='g_pg_observer'),
+                target=dict(host='127.0.0.1',port=15433,database='g_pg_probe_fake',user='g_pg_observer'),
                 expected_identity=dict(database='g_pg_probe_fake',user='g_pg_observer',session_user='g_pg_observer',
                 database_oid=101,user_oid=102,owner='g_pg_fixture_owner',owner_oid=103,server_address='127.0.0.1',
                 server_port=5432,server_version_num=170000,postmaster_start='FAKE-START'),
