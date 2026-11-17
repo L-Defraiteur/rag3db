@@ -132,3 +132,13 @@ Défaut certain en lecture seule, aucun essai exécuté : aucun rouge dynamique 
 Raccorder le témoin au vrai constructeur `Observer.cargo_profile` actuel par AST/appel,
 sans recréer un profil attendu inventé dans la fixture. Regrouper les réserves de RO
 avant nouveau pin et GO CPU distinct. Aucun GO natif ni activité réelle.
+
+### Réserves groupées Banc sur dc868, avant corrections
+
+RO totale Banc publiée 49edc50197, rapport banc17nov/02. HOLD natif conservé :
+R1 le shim lit C/scripts/garde_target.sh hors extra_read Landlock ; R2 témoin
+CPU hérité absent déjà consigné ci-dessus ; R3 `judged` accepte tout panic du
+test nommé sans preuve de cause assertion Om bre/agent.name ; R4 empreinte
+controllers de provenance périmée après normalisation EOF. Corriger et publier
+les témoins discriminants avant essais, puis revoir ensemble le couple exact.
+Aucun test, import du pilote, processus, signal ou accès cloud/DB lancé.
