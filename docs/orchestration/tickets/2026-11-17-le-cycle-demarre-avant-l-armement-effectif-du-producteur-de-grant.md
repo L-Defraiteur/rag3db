@@ -172,3 +172,14 @@ ancienQ7/D22 conservé. Sixarchives3fichiers CPU réhashées deuxhôtes, HB1vert
 acquis6c6b et sixancienscarried sansrejeu. Aucun nouveau blocage établi,
 aucunruntime/proc/DB/health/slot/native ni GO900. Ticket reste OUVERT ;
 décision C7 et vraie qualification physique distinctes.
+
+RO ED preuves immutables65eb/Q8ROUGE favorable au périmètre/RAW :
+[rapport37](../../everything-declarative/16-11-2026/37-ro-preuves-cycle-q8-rouge.md).
+103fichiers17346531B/manifest497baaf recoupés LOCAL+PC0écart ; chaîneARM/grant/
+nonce/publication/shutdownACKmêmePIDrc0/maps recoupée. Premierrouge stable_readers
+confirmé, puis acteurrefusconsécutif ;2252→2250persistés=.ecrivain/.wal retirés,
+DBSHAchangé, autresidentiques. before_writerRAM nonpersisté, aucun POSTgraph/
+FTS/bitdigest ni sourcesafter/quietindépendantaprèsrouge déduit. ScopeROUGE1/
+restes[]/nettoyé/TERMINE/busabsent et composéRED conservés, aucune innocuité/
+causalité native ou durabilité/LIVE qualifiée. ZéroDB/health/native/rejeu/fix
+par ED ; toute suite proposition/RO et décision C7 distinctes, ticket OUVERT.
