@@ -866,3 +866,9 @@ et cible erronée, causalité session/absence ; (3) stderr flood, EOF retenu et
 témoins doivent être publiés/relus puis joués sous leur recette distincte.
 Pins/secret/PsqlSession réel absents, donc non qualifiés. Aucune nouvelle panne
 runtime constatée ; import/CPU/PG toujours non joués.
+
+
+RO exacte R ab65 favorable baseline/recette nominale, rouge NON OBSERVÉ.
+Limite avant admission : source privée à copier/vérifier, Common6439 et Python
+système à épingler. Pin PC Python3.14 a38210a5…87449d ajouté à la recette
+sans changement runner/test. Pas d'import/test/PG ; GO CPU reste manquant.

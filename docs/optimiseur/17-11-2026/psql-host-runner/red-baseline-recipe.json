@@ -34,6 +34,12 @@
     "returncode": 1,
     "tests": 1
   },
+  "interpreter": {
+    "path": "/usr/bin/python3",
+    "resolved": "/usr/bin/python3.14",
+    "sha256": "a38210a53e07ac5eb912ee35c2d92ddb7eaa349301b60c188a5f496c7c87449d",
+    "version": "3.14.10 (main, Nov 13 2026, 15:10:24) [GCC 16.2.1 20260810]"
+  },
   "kind": "single-nominal-cpu-only",
   "other_13_tests": "NOT_RUN",
   "root": "/home/lucied/.cache/optimiseur-notes/psql-host-runner-20261117-r1/red-baseline-02",

@@ -77,3 +77,16 @@ sans GO CPU ni avis runtime. Avant futur vert : expiration au vrai fsync plutôt
 qu’au quatrième callback, postcheck PID/app/cible erronés, stderr flood/EOF
 retenu/cleanup en échec à couvrir. Pins/secret/native non qualifiés.
 Bundle antérieur non rejoué. Ticket reste ouvert.
+
+
+## Complément après RO exacte ab65ac242b
+
+R favorable SOURCE/recette nominale uniquement, aucun rouge observé. Le paquet
+privé source manquait lors de cette RO. Identité interpréteur relevée en
+préparation RO sur PC : /usr/bin/python3 résout /usr/bin/python3.14, SHA256
+a38210a53e07ac5eb912ee35c2d92ddb7eaa349301b60c188a5f496c7c87449d,
+version 3.14.10/GCC16.2.1. La recette porte désormais ce pin, à revalider
+avant admission. Cela ne qualifie pas toute sa fermeture dynamique. Source
+runner/test inchangée. Copier les seules sources plus Common6439 dans le root
+privé neuf, comparer chaque SHA, puis relire ce paquet avant GO distinct.
+Ni unittest ni import runner/test lancé pour cette préparation.
