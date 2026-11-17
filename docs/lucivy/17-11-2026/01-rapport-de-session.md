@@ -75,3 +75,19 @@ archivés deux postes AVANTfix, PC cx-lucivy-watchdog-entry-red-17nov-v1 fichier
 Rapport17/08 et preuves/watchdog-entry-red. Aucun300mesuré/OSkill/cleanupqualifié,
 315NONJOUÉ ; ancienQ/source8b/T intact. Préparationcorrectif peut suivre ;
 aucun GO de vert/exécutionnative implicite.
+
+Après rouge00c7 archivé deuxpostes : préparation v2 distincte, ancien047/Q/T
+inchangés. Fixe proposée export-fs-red-ledger-v2.py SHA51a9b1e2cb6f3048580588ebc9dfa6d837dadfc2a011d2b78d99f4e380b268f8,
+probes test-fs-export-boundaries-v2.py SHAc77827e75d39f1e9191b99fccca07089e20e6d1338df3e808250239d83ef5900.
+Wrapper timeout depuis shell recommandé avant Python, worker parent exact/
+CLOCK_BOOTTIME/ticks, END285 sansreset, duréePC=r−8 et ARMroundtrip<=8 sinon
+STOPsanspasse, RPC bornés au reste, enfin cleanupenfantlocal. Parentméta et
+process sont simulés dans probes ; aucun OS/SSH/proc réel par CPU proposé.
+Trois probes : ordre inchangé, parent simulé vieux40s→durée<=237, fsyncerreur
+postlaunch→terminate/wait enfantmock. Q privé v2/dev57/ino96299555, seules
+empreintes/syntaxeAST vérifiées. Nouveau paquet PC non créé. Rapport17/09.
+Action RO ciblée confiée à Recherche, Banc en complément si utile ; critères
+raccord physique/sameEND/durée conservatrice/cleanup/probes discriminants et
+pas claimOSruntime. Proposer GOCPU60 pour SEULS2nouveauxprobes sur047 (2FAIL
+attendus/0ERROR, sansrejouerEC4), puis GOdistinct fixe3PASS. Aucun de ces runs
+n’est joué ; aucune qualificationcouple/runtime/native implicite.
