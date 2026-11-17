@@ -1,0 +1,42 @@
+{
+  "schema": "fixture-runner-wait-rc-red-preparation-v1",
+  "executed": false,
+  "go": null,
+  "unchanged_runner_source": "5877852b4f6697f2da82a7b97369af7404d78e61",
+  "cwd": "/home/lucied/.cache/rag3weaver-build/cx-wt-archi-pas-va-au-bout-global-pilot-r2/docs/rag3weaver-archi/17-11-2026/execution-entry-native-protocol",
+  "pythonpath": "/home/lucied/.cache/rag3weaver-build/cx-wt-archi-pas-va-au-bout-global-pilot-r2/extension/rag3weaver/scripts",
+  "import_file": "/home/lucied/.cache/rag3weaver-build/cx-wt-archi-pas-va-au-bout-global-pilot-r2/extension/rag3weaver/scripts/execution_entry_runner.py",
+  "interpreter": {
+    "path": "/usr/bin/python3.14",
+    "sha256": "c81d88523721c462f53a98129d65bba68f67791932f0664372e1778e74fd9517"
+  },
+  "files": {
+    "extension/rag3weaver/scripts/execution_entry_runner.py": "cf3e7a41fc30eabd0ef5ff1b377efbf102ac14e3443d9796e3b3f19099cb4a0e",
+    "docs/rag3weaver-archi/17-11-2026/execution-entry-native-protocol/test_runner_effects.py": "d9d61264000941cb312bdc9f72bcd944bb364bc7b6c97cde888f10eb7880adf9",
+    "extension/rag3weaver/scripts/execution_entry.py": "565b7f39494911b65ef121f19565450c70803c93b9ef6e62599d570707dbf218"
+  },
+  "argv": [
+    "timeout",
+    "--signal=TERM",
+    "--kill-after=2s",
+    "58s",
+    "/usr/bin/python3.14",
+    "-B",
+    "-m",
+    "unittest",
+    "-v",
+    "-f",
+    "test_runner_effects.FixtureRunnerTests.test_malformed_raw_does_not_erase_acquired_child_returncode"
+  ],
+  "selected_functions": 1,
+  "other_functions_not_selected": 30,
+  "expected": "1 FAIL None != 7 / 0 ERROR/skip / rc1; NOT OBSERVED",
+  "expected_refusal": "observation-types",
+  "expected_invocation_returncode": 7,
+  "legacy_invocation_returncode": null,
+  "mode": "FIXTURE_ONLY",
+  "proof_origin": "MODELED",
+  "cp_ack": false,
+  "global_admission": false,
+  "native_backend_delivered": false
+}

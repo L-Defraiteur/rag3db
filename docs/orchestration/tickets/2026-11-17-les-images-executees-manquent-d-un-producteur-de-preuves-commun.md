@@ -367,3 +367,12 @@ avantcallback/clock, jamaisOpaquehandles ;wait/finalisation/cleanup suivent règ
 30témoinsfc300 BYTE41179inchangés NONJOUÉSsurfix, nouveauxpins/ROtotale puisGO30
 distinct avantverts. Attendusprofonds/ENDposthashconservés, pur565b/archivesfigés,
 LIVE/Commonréel/natifunsupported, callbacksnoninterruptibles/MODELEDseulement.
+
+## Réserve rc acquis/RAW malformé TTY587785, avant témoin et correction
+
+Snapshotwait complet peut refuser un RAW bytearray avant de décoder kind/code
+exit7 déjà acquis. Refusal observation-types conserve alors invrcNone au lieu7.
+Conserver le contrat de rc acquis : capturer/décoder métadonnées wait valides
+immutables AVANT copie complète, sanscallback/clockintermédiaire ; RAWmalformé
+reste refusé. PrépublierUNtémoin surcf3inchangé, GOrouge distinct/bruts2hôtes
+avantfix, HOLDGO30. Aucun effacement contractuel ou capacitéOS déduite.

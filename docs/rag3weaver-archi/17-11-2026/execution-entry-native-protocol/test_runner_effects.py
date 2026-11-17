@@ -397,3 +397,12 @@ class FixtureRunnerTests(unittest.TestCase):
         result = run_fixture_invocation(request, effects)
         self.assertEqual(result['stdout_sha256'], expected)
         self.assertEqual(result['returncode'], 0)
+
+    def test_malformed_raw_does_not_erase_acquired_child_returncode(self):
+        request, effects = self.fixture()
+        effects.exit.update(kind='exit', code=7, stdout=bytearray(b'malformed-raw'))
+        with self.assertRaises(RunnerRefusal) as caught:
+            run_fixture_invocation(request, effects)
+        self.assertEqual(caught.exception.code, 'observation-types')
+        self.assertEqual(caught.exception.invocation_returncode, 7)
+        self.assertIn('wait_child', effects.calls)
