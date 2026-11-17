@@ -70,14 +70,9 @@ class Broker:
     if stage in ['agent-red','agent-green']:policy.red_source((cwd/'src/backend.rs').read_text())
    patch=self.ctx.git(cwd,'diff','--binary');record=dict(identity=identifier,peer=row,cwd=str(cwd),target=str(target),argv=args,build_argv=build,test_argv=test,stage=stage,name=expected,source_head=source_head,source_state=source,patch_sha256=hashlib.sha256(patch.encode()).hexdigest(),done=False)
    if stage in ['agent-red','agent-green']:
-    record['validator_frame']=policy.validator_frame((cwd/'src/backend.rs').read_text())
     record['assertion_line']=policy.red_source((cwd/'src/backend.rs').read_text());record['judge_sha256']=hashlib.sha256(policy.D6_RED_TEST.encode()).hexdigest()
     if stage=='agent-red':record['red_line']=record['assertion_line']
-    else:
-     red=self.completed[0];policy.require(record['judge_sha256']==red['judge_sha256'] and record['validator_frame']==red['validator_frame'],'source outside validator body changed from acquired red')
-     normalized=json.loads(json.dumps(source));old=red['source_state']
-     if 'sha256' in normalized['files']['src/backend.rs']:normalized['files']['src/backend.rs']['sha256']=old['files']['src/backend.rs']['sha256']
-     policy.require(normalized==old,'another source/index/mode changed from acquired red')
+    else:policy.require(record['judge_sha256']==self.completed[0]['judge_sha256'],'green judge differs from original red judge')
    self.sessions[identifier]=record;self.ctx.save(identifier+'-admission.json',record)
    ld=str(Path(self.ctx.config['cargo_exe']).parent.parent/'lib')+':'+str(self.ctx.config['sdk_root'])
    self.ctx.observer.source(cwd,dict(manifest=str(cwd),ld=ld))

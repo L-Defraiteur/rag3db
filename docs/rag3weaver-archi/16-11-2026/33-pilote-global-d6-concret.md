@@ -222,3 +222,18 @@ le snapshot complet acquis à admission. Le validateur est découpé par accolad
 équilibrée/littéraux, grammaire bornée failclosed : rawstrings et commentaires de
 bloc refusés explicitement dans la demande ; ce n'est pas un parseur Rust général.
 41 fonctions écrites NONJOUÉES, aucune qualification CPU/native ni pin PC acquis.
+
+## Pin ROUGE isolé cfg/homonyme, aucune recette exécutable native
+
+Cette branche cx-archi-global-cfg-red-r1 conserve le candidat structurel a797
+et remet UNIQUEMENT broker.py au blob vulnérable60f9, pour demander le GO rouge
+ciblé. Le témoin prépub269519 `Boundaries.test_actual_broker_rejects_cfg_disabled_judge_and_empty_homonym`
+appelle le vrai Broker.handle. Le helper validator_frame reste disponible pour
+construire la preuve du rouge acquis simulé ; le Broker vulnérable ne la vérifie
+pas. Attendu AVANTessai : FAIL assertion RuntimeError not raised, pas erreur
+harnais. Aucun test joué, aucun rouge acquis ni GO déduit. Commande proposée :
+`timeout --signal=TERM --kill-after=5s 60s python3 -B -m unittest -v -f test_review_boundaries.Boundaries.test_actual_broker_rejects_cfg_disabled_judge_and_empty_homonym`
+depuis global-pass. TempDirs et faux identité/provenance uniquement, aucun vrai
+Popen/proc/signal/Git/Cargo/service/cloud. Log horsW neuf ; préserver première
+sortie même inattendue. Cette branche est un témoin vulnérable, PAS un candidat
+native et aucune pin/autorité ne doit la consommer. Produit APPf1e8 inchangé.
