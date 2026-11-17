@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "kind": "coordination-preparation-only",
+  "app": "f1e8a8d502614d10f7cdb40eaea330f08b5d3f37",
+  "frozen_pilot": "229b397d8d1cb28b8ac3075479e49a1ab72b400b",
+  "run_authorized": false,
+  "operational_admission": "HOLD",
+  "actor_armed": false,
+  "resource_grant_available": false,
+  "origins": [
+    {
+      "role": "grant_actor",
+      "commit": "96f3a2a121d0ab65e910a83844e813a0bc794925",
+      "path": "docs/orchestration/17-11-2026/coordination/grant_watch_actor.py",
+      "sha256": "789058a8a8d15815e1a1b4083c1201d6ae390a79e9471740c11ab38af31f5175",
+      "copied_into_Q": false,
+      "started": false
+    },
+    {
+      "role": "publisher_relay",
+      "commit": "cf83228cd3371fba19b1e1272714e9b7d6f5d9e8",
+      "path": "docs/codeparsers/17-11-2026/rust-probe-relay/relay.py",
+      "sha256": "2b2a9517bc2c4ed48611bb21a2dd4368b7ff74dfc7dce7dec036d7470017e16c",
+      "copied_into_Q": false,
+      "started": false
+    },
+    {
+      "role": "publisher_gate",
+      "commit": "cf83228cd3371fba19b1e1272714e9b7d6f5d9e8",
+      "path": "docs/codeparsers/17-11-2026/rust-probe-relay/gate.py",
+      "sha256": "70f6f27b0a74fc6e782c020c8fece6c70dd2c1ece670458e3cf3b406f0ca3932",
+      "copied_into_Q": false,
+      "started": false
+    },
+    {
+      "role": "pg_receipt_v1",
+      "commit": "808be0595ffd033e5ffd69d934eedfceee22d174",
+      "path": "docs/optimiseur/16-11-2026/pg-ro-attestation/pg_receipt.py",
+      "sha256": "de69c498b1ac38d80d4976144fea79ddbfa7d3a34ea8ce7dae1d9e4a457aeed6",
+      "copied_into_Q": false,
+      "started": false
+    }
+  ],
+  "blockers": [
+    {
+      "owner": "G",
+      "kind": "postgres-tool-unqualified",
+      "qualified": false,
+      "v1_transport": "private-host-psql",
+      "alternative_rust_pilot": "808be0595ffd033e5ffd69d934eedfceee22d174",
+      "alternative_compatible_with_v1": false,
+      "ticket": "docs/recherche/tickets/2026-11-16-la-garde-des-comptes-en-blobs-reste-a-302-documents-pour-301-lignes.md"
+    },
+    {
+      "owner": "Codeparsers",
+      "kind": "publisher-shutdown-open",
+      "red_test_commit": "598f3851227071eb61241949ba56cae7a69d3844",
+      "red_tests_observed": false,
+      "ticket": "docs/codeparsers/tickets/2026-11-17-la-publication-du-ledger-de-sonde-attend-un-ack-sans-relais-autonome.md"
+    }
+  ],
+  "requests": {
+    "publications": [
+      {
+        "label": "global",
+        "elf_count": 5
+      },
+      {
+        "label": "agent-red",
+        "elf_count": 1
+      },
+      {
+        "label": "agent-green",
+        "elf_count": 1
+      },
+      {
+        "label": "review",
+        "elf_count": 1
+      }
+    ],
+    "resources": [
+      "d6",
+      "canonical"
+    ],
+    "wait_cap_seconds": 90,
+    "grant_minimum": "original Common END including phase and cleanup",
+    "cross_host_clock": "duration anchored before request; never compare host absolute monotonic times"
+  },
+  "runtime_values": {
+    "nonce": null,
+    "common_end": null,
+    "allocation": null,
+    "pg_oid": null,
+    "pg_container": null,
+    "grant": null
+  }
+}

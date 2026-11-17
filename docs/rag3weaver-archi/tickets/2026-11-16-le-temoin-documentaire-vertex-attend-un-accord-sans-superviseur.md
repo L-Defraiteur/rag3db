@@ -238,3 +238,13 @@ liveness après vrai exec AVANT préflight/premierledger, même enveloppe, premi
 refus immuable/arrêt borné. 229b/Q figés ; si code nouveau, nouveaupin/ROversionnée.
 Pas de copie humaine en90s ni promesse de ping comme condition d'admission.
 Aucun health/SQL/provider/poste/Cargo/runtime/target actuel autorisé ici.
+
+Coordination après retours propriétaires : rapport17nov/36 et plan37 figent
+primitives Embar96f3/Codeparserscf832/GpgSHAde69 et4hashes, aucunecopieQ niARM.
+G confirme OUTILPGHOLD (private-host-psql absent/nonqualifié ; Rust808 incompatiblev1,
+watchdoghash/fsync àcorriger), même ticketRecherche302/301 ; aucungrantPGproductible.
+Codeparserscf832 resteHOLD2fermetures/capabort+quietnonobservé,3témoins598fnonjoués,
+ticketrelais17nov. Contrat futur : vraisARM/poll/OSpréflight, HB10s, leaseENDoriginal
+et arrêtsmêmeenveloppe, adaptateurpublication5ELF+3D6surmoteurcorrigé, pas3eprimitive.
+229b/Q/ROcode+pins restentfigés/favorables, admissionnativeRETENUE. AucunGRANT/ACK,
+health/SQL/provider/poste/Cargo/service/targetmutation/runtime ajouté ici.
