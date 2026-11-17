@@ -1223,3 +1223,36 @@ instanciés. Nativepsqlexe/env, auth/SSL/dlopen, producteur terminal réel,
 Common/lease réel et outer whole5 complets, admission v1 NON QUALIFIÉS.
 Prépa source contact distincte désormais autorisée, pas contact enchaîné ni
 fixture anticipée ; nouvelle recette/pins/RO totale/GO C7 distinct requis.
+
+
+### Suite SOURCE contact après19 verts conservés — avant diff
+
+C7 73b655 autorise préparation distincte, pas contact/fixture. La réserve R
+native subsiste : PsqlSession.__call__ accepte le record capture sans comparer
+l'exécutable observé, mapping programme, env effectif ou moment d'attestation.
+Prépublier quatre contre-ex sur ce vrai raccord avec capture FAUSSE ; bypass
+explicite constructeur pour éviter pin/secret/PG, attributs publics synthétiques
+seulement. Pas d'incident PG constaté. Runner6148/19/8/4 acquis inchangés.
+Le contrôle vivant devra se faire sous handshake avant seconde partie SQL,
+avec outerwhole5 avant imports/pins jusqu'au terminal externe après Common.
+Producteur terminal/runtime/lease et capturesenv/exe à préparer ensuite sous
+RO/GO distincts, aucun observateur Common forké ni PG anticipé.
+
+
+### Bornage R de la preuve19 — qualification inchangée
+
+R rehash LOCAL56/56 et19noms exacts favorables. CommonEND1287381.424 ;
+ownership-after observé1287546.151 donc APRÈSEND. Les8originaux absents sont
+un constat OWNER d'archivage ultérieur, PAS une preuve rétroactive d'absence
+dans la fenêtre. Les7records de capture portent leur propre contrôle parent
+et END ; holderZ est conservé. CommonTERMINE/VERT/restes[] est la preuve de
+sa portée, sans transformer le constat tardif en nouveau gate dansEND.
+Aucune freshscan R, aucune réexécution pour refaire une preuve déjà acquise.
+
+Prépublication suitecontact : native-contact-plan.md, quatre contre-exsimulés
+PsqlSession.__call__ sur double __new__ sans constructeur/capturemockée. Recipe
+native-attestation-red-recipe.json propose4FAIL/0ERROR sans enfant/PG/secret.
+Aucun fix runner ni test exécuté. R totale/GO rouge DISTINCT requis. Handshake
+vivant, actualexe/env, budget avantimports et terminalCommon externe restent
+à implémenter/qualifier après rouges. Nouvelle fixture uniquement client prêt
+et GO contact explicite, pas d'allocation anticipée ou de permission routinière.

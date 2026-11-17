@@ -215,3 +215,14 @@ instanciés. Nativepsqlexe/env, auth/SSL/dlopen, producteur terminal réel,
 Common/lease réel et outer whole5 complets, admission v1 NON QUALIFIÉS.
 Prépa source contact distincte désormais autorisée, pas contact enchaîné ni
 fixture anticipée ; nouvelle recette/pins/RO totale/GO C7 distinct requis.
+
+
+### Bornage R de la preuve19 — qualification inchangée
+
+R rehash LOCAL56/56 et19noms exacts favorables. CommonEND1287381.424 ;
+ownership-after observé1287546.151 donc APRÈSEND. Les8originaux absents sont
+un constat OWNER d'archivage ultérieur, PAS une preuve rétroactive d'absence
+dans la fenêtre. Les7records de capture portent leur propre contrôle parent
+et END ; holderZ est conservé. CommonTERMINE/VERT/restes[] est la preuve de
+sa portée, sans transformer le constat tardif en nouveau gate dansEND.
+Aucune freshscan R, aucune réexécution pour refaire une preuve déjà acquise.
