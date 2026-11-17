@@ -232,3 +232,11 @@ import risque ModuleNotFoundError sans ambiance extérieure. NON OBSERVÉ,
 16 tests jamais joués. Correction de fixture seulement : sources E9 locales
 vérifiées SHA puis helpers dans Qtemp, sys.path/sys.modules isolés par cas.
 Pas de changement driver/lanceur, pas de prétendu résultat CPU ni transfertGO.
+
+GO C7-ARBRE-CLI99-CPU16-4F17-17nov60 consommé sur4f17 propre après deux RO :
+UNEinvocation16PASS/0FAIL/ERROR/skip,0.091s unittest/rc0, processus0.245412027s.
+[Rapport12](../17-11-2026/12-preuves-cpu16-pilote-cli99.md), quatrebruts/préflight
+deuxhôtes sizeSHA0écart, manifeste cf1c3d0d43d5c927a3d11e8edcdb14d669b69a75da0488066e833de1b50c450c.
+Contrôles CPU simulés seulement : aucunposte/Commonréel/Cargo/ELF/DB/provider/
+build/slot, configA PENDING et WsourceAPP/Q/T/P/S non créés. Pas d'enchaînement
+autoA ; nouveauxpaquets/pins/RO puis GOA distinct, B/C indépendants. Parent OUVERT.
