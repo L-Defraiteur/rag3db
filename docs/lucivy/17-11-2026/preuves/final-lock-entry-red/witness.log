@@ -1,0 +1,18 @@
+test_late_lock_drift_is_refused_before_final_acceptance (__main__.FinalLock.test_late_lock_drift_is_refused_before_final_acceptance) ... FAIL
+test_unchanged_lock_can_reach_final_acceptance (__main__.FinalLock.test_unchanged_lock_can_reach_final_acceptance) ... ok
+
+======================================================================
+FAIL: test_late_lock_drift_is_refused_before_final_acceptance (__main__.FinalLock.test_late_lock_drift_is_refused_before_final_acceptance)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-final-lock-entry-17nov-v1/test-fs-final-lock-entry.py", line 169, in test_late_lock_drift_is_refused_before_final_acceptance
+    self.assertFalse(result['final_accepted'],
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+        'real final verdict accepted a changed effective Cargo.lock after the modelled seven judges')
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: True is not false : real final verdict accepted a changed effective Cargo.lock after the modelled seven judges
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.011s
+
+FAILED (failures=1)

@@ -1,0 +1,33 @@
+{
+  "source_sha256": "166d3ff6ec640539eadeb0fe82d867fa3a6d539c5e321d39108681f2889a8b03",
+  "drift": true,
+  "real_admission_main": true,
+  "common_preflight_git_process_models": true,
+  "compiler_or_judges_executed": false,
+  "events": [
+    "preflight-lock-valid",
+    "compile-and-seven-judges-modelled-success",
+    "effective-lock-mutated-after-modelled-judges"
+  ],
+  "model": {
+    "common_returned": true,
+    "source_checked": true,
+    "seed_rehashed_after_common": true
+  },
+  "source_status": 0,
+  "source_error": null,
+  "initial_lock_valid": true,
+  "seed_intact": true,
+  "effective_lock_sha256": "033ba1ff0b271b88ababbe38a2ab250c0d0cd1921bc3966923eff734a0fa0911",
+  "expected_lock_sha256": "8ab84079eb4b98b597608d10fac38c290072e74897822d4000af4efc25d3f2b5",
+  "effective_lock_changed": true,
+  "final_accepted": true,
+  "final_evidence_written": true,
+  "source_rewritten": false,
+  "virtual_clock": false,
+  "real_proc": false,
+  "real_subprocess": false,
+  "real_cargo": false,
+  "real_elf": false,
+  "real_corpus": false
+}

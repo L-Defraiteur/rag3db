@@ -1,0 +1,15 @@
+{
+  "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-final-lock-red-17nov-v1",
+  "uid": 1000,
+  "device": 55,
+  "inode": 168977958,
+  "hashes": {
+    "invocation.json": "202e17578da0e6cf0d773596ea64d935df7f8d20d6f4af8de575e168b5284baa",
+    "witness.log": "b620f0dc3e392305987f646c08641c22e7338ed1a26526868305b9c86b45b1f1",
+    "drift-observation.json": "ed7dc261759a622d49ea079ba97ab35d317901719106085004e885165a9d0c22",
+    "unchanged-observation.json": "eb667a536aa9f2f926a871c8fcd4dd9bfe0e1d80a529d2656a8b9a9d1583526e",
+    "test-fs-final-lock-entry.py": "ffdddc1f57a49f285a708c3dd6db99cf81d29f6496ce967d24c2d0bcdc3738a9",
+    "admit-fs-admission-red.py": "166d3ff6ec640539eadeb0fe82d867fa3a6d539c5e321d39108681f2889a8b03"
+  },
+  "archive_only_no_test": true
+}

@@ -407,3 +407,16 @@ persistées relus. AttenduSTATIQUE1FAILdrift+1PASSinchangé/0ERROR/rc1,
 aucunrougeobservé. Aucun import/runpy/test/réseau/process/proc/Cargo/ELF/
 corpusparBanc. DeuxROcontreexemplefavorablesreçues, GOCPU60C7exactdistinct
 encorerequis. P1/HOLDnatif/Qv3/source0f/dbdb/Tfigés ;journauxséparésSANS GO.
+
+GO C7-LUCIVY-FINALLOCK-RED-3D00-17nov60 consommé UNEfois :1FAILdrift/1PASS
+inchangé/0ERRORskip/rc1,0,146473145s physique(suite0,011), source166d/ffdddc
+byteinchangés. Vrai dernieradmit.main acceptefinalaprèsWlockTempDirmodifié/
+seedintact, setupvraiCommonmodelretour/sourcecheck/seedrehash/finalevidence
+passe ; contrôlesansdrift accepte. 0compilateur/jugesRust/Common/Git/proc/
+SSH/process/signal/ELF/T/corpusréelsparfixtures, clocknonvirtuel. Aucun
+sourceguardmodifiéAVANTrouge, bruts/2obs/rc/temps/2sourcesarchivés2postes,
+6SHArelusPC444 fs-final-lock-red-17nov-v1. Rapport17/20. Aucunedérivelockréelle
+inventée, Wdbdb/Qv3/0f/old3ELF/Tintacts,0slotpris. GOCPUclos,pasretry.
+Correctifgroupé du contrôleeffectifaprèsjuges+dernierverdictDANSEND peutêtre
+préparéaprèscettepreuve ;nouveauxpins/ROtotales/futursGOCPU+300distincts.
+Journauxec619/d13toujoursSANS GO, natifFS/HOLDdemeure/zérojugeFSobservé.
