@@ -839,3 +839,30 @@ avant constat rouge ; aucun test exécuté ni SQL autorisé. Porter : G ; RO : R
 Critère suivant : rouge sous recette CPU relue, puis raccord source, relecture
 et CPU distinct ; plus tard contact PG seulement sur GO séparé, fixture fraîche
 juste avant client prêt. Whole5 original, pas de v1 relabellisé. Ticket ouvert.
+
+
+### Refus de la recette rouge d'import — C7, avant correction source
+
+La proposition c6048fba9a importe runner.py absent au niveau module :
+FileNotFoundError avant tout juge, donc ERROR d'infrastructure et aucun rouge
+métier. C7 refuse cette entrée ; aucun CPU joué, aucun GO acquis.
+Préparation corrective autorisée : baseline importable RunnerUnavailable,
+observe refuse explicitement la capacité non implémentée. Seul le nominal
+WholeJob.test_success_publishes_new_fixture_kind_not_v1_grant capture ce type
+précis et appelle self.fail, assertions positives conservées. Toute autre
+exception reste ERROR. Les 13 autres témoins demeurent NON JOUÉS.
+Avant nouveau pin : réserves R regroupées, source/pins publiés et RO, puis
+GO distinct pour ce seul nominal. Pas d'implémentation anticipée du runner.
+
+
+### Réserves R regroupées avant nouveau pin de baseline
+
+RO statique c604 : 14 tests lus, zéro run. Publication de baseline importable
+non bloquée ; futur vert réservé : (1) remplacer le simple quatrième phase_check
+par expiration franchissant le vrai fsync/publication, vérifier refus/nonpositif ;
+(2) postcheck : ro.backend_pid contre observer_backend_pid, mauvais app/:check
+et cible erronée, causalité session/absence ; (3) stderr flood, EOF retenu et
+échec cleanup dans END, non couverts par le seul flood stdout. Avant vert ces
+témoins doivent être publiés/relus puis joués sous leur recette distincte.
+Pins/secret/PsqlSession réel absents, donc non qualifiés. Aucune nouvelle panne
+runtime constatée ; import/CPU/PG toujours non joués.

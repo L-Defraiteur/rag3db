@@ -1,0 +1,46 @@
+{
+  "argv": [
+    "/home/lucied/.cache/rag3weaver-build/poste",
+    "lourd",
+    "/usr/bin/timeout",
+    "--signal=TERM",
+    "--kill-after=2s",
+    "28s",
+    "/usr/bin/python3",
+    "/home/lucied/.cache/optimiseur-notes/psql-host-runner-20261117-r1/red-baseline-02/source/confiner_validation.py",
+    "lancer",
+    "--delai",
+    "20",
+    "--preuves",
+    "/home/lucied/.cache/optimiseur-notes/psql-host-runner-20261117-r1/red-baseline-02/common-proofs",
+    "--",
+    "/usr/bin/python3",
+    "-B",
+    "-m",
+    "unittest",
+    "test_runner.WholeJob.test_success_publishes_new_fixture_kind_not_v1_grant"
+  ],
+  "common_sha256": "6439fdd8b52c85fa4e74af0def2c667ef0bedae9b814cbbfd48e49946c4f74ea",
+  "cwd": "/home/lucied/.cache/optimiseur-notes/psql-host-runner-20261117-r1/red-baseline-02/source",
+  "environment": {
+    "POSTE_MEM_MAX": "32G",
+    "PYTHONDONTWRITEBYTECODE": "1"
+  },
+  "execution_authorized": false,
+  "expected": {
+    "errors": 0,
+    "failures": 1,
+    "reason": "RunnerUnavailable capability not implemented",
+    "returncode": 1,
+    "tests": 1
+  },
+  "kind": "single-nominal-cpu-only",
+  "other_13_tests": "NOT_RUN",
+  "root": "/home/lucied/.cache/optimiseur-notes/psql-host-runner-20261117-r1/red-baseline-02",
+  "source_files": {
+    "runner.py": "ea89505dd468571eb3d3f9595249de8dab8cdf49a98060f174470471533e626c",
+    "test_runner.py": "385e9d6938d95ea13289d3322f9872a8aea0854dfa7cb5281c24cf5270647f08"
+  },
+  "sql_authorized": false,
+  "stage": "psql-baseline-red-02"
+}

@@ -9,20 +9,29 @@ noyau chargeur distincts ; SSL/auth/dlopen/locale restent non qualifiés.
 
 ## Ordre rouge/source/CPU/relecture
 
-Cette première publication contient 14 tests, PAS runner.py. Aucun test exécuté.
-Le rouge attendu est l'absence du raccord runner, à constater sous Common avant
-implémentation. Le témoin complet, inchangé, doit ensuite exercer un vrai enfant
-Python (pipes, flood, hang, code7, reap) et le vrai publisher avec transport faux.
-Les faux ne sont pas des preuves PG. Les tests ne lancent ni psql/chargeur,
-Docker, HTTP, sockets, Cargo, PG ni fichier d'identifiants réel.
+La proposition initiale c6048fba9a a été refusée par C7 AVANT CPU : importer
+un runner absent produit ERROR, sans juge métier. Aucun test exécuté.
+Préparation corrective : baseline importable `RunnerUnavailable`, observe refuse
+la capacité non implémentée sans appeler factory/clock/phase ni créer d'artefact.
+Seul `WholeJob.test_success_publishes_new_fixture_kind_not_v1_grant` capture
+CE type et appelle self.fail ; assertions positives nominales intactes. Toute
+autre exception, notamment import/attribut/runtime, reste ERROR. Aucun catch
+large, expectedFailure ou skip. Les 13 autres témoins restent NON JOUÉS.
 
-Recette CPU rouge proposée : Python système, `-B`, unittest test_runner.py depuis
-son dossier, sous vrai POSTE32G/Common20/OS28TERM+KILL2=30MAX, une entrée sans retry.
-Source/Common et recette hashés dans une nouvelle racine privée avant entrée ;
-stdout/stderr/rc+autorité/quiescence conservés deux postes. Attendre relecture RO
-et mot C7 pour cette entrée, aucun vieux budget/token/END réutilisé.
-Après rouge constaté : implémentation et nouvelles publications, puis recette
-verte distincte relue avant son CPU. Rien ici n'autorise contact SQL/fixture.
+Recette future proposée : sélectionner UNIQUEMENT ce nominal, Python système
+`-B -m unittest test_runner.WholeJob.test_success_publishes_new_fixture_kind_not_v1_grant`
+depuis son dossier, vrai POSTE32G/Common20/OS28TERM+KILL2=30MAX, une entrée sans
+retry. Attendu : 1 test, 1 FAILURE explicite RunnerUnavailable, 0 ERROR ; rc1.
+Aucun enfant RealCapture, psql/chargeur, Docker, HTTP, socket, Cargo, PG ou
+fichier d'identifiants. Les futurs RealCapture lancent de vrais enfants Python,
+et devront avoir leur propre recette/GO ; ce ne sont pas de faux processus.
+Source/Common/recette hashés sous racine privée neuve avant toute entrée.
+Les anciennes préparations red-source-01/red-01 ne seront pas exécutées.
+R a regroupé ses réserves statiques : publication baseline non bloquée.
+Publication source/pins puis RO et
+GO C7 distinct requis pour ce nominal. Aucun GO acquis à ce stade.
+Après vrai rouge seulement : implémentation et publication source complètes,
+puis recette verte distincte relue avant son CPU. Aucun contact SQL autorisé.
 
 ## Frontières prévues
 
@@ -62,5 +71,9 @@ au lanceur ; un callback de test n'est pas une admission réelle.
 
 ## État
 
-Source des tests publiée avant CPU ; aucun rouge ni vert constaté pour ce lot,
-aucun runner livré à ce stade. Bundle antérieur non rejoué. Ticket reste ouvert.
+Tests et baseline source préparés avant CPU ; aucun rouge ni vert constaté.
+Aucun runner fonctionnel livré. R autorise la publication statique de baseline,
+sans GO CPU ni avis runtime. Avant futur vert : expiration au vrai fsync plutôt
+qu’au quatrième callback, postcheck PID/app/cible erronés, stderr flood/EOF
+retenu/cleanup en échec à couvrir. Pins/secret/native non qualifiés.
+Bundle antérieur non rejoué. Ticket reste ouvert.

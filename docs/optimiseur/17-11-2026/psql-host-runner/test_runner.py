@@ -1,6 +1,6 @@
 """Témoins publiés avant CPU. Aucun PG, psql, Docker, réseau ou secret réel.
 
-Le module runner.py est volontairement absent à la publication rouge initiale.
+La baseline runner.py est importable et refuse la capacité non implémentée.
 Les processus natifs de test sont uniquement des enfants Python privés.
 """
 import copy
@@ -149,7 +149,10 @@ class WholeJob(unittest.TestCase):
     """Observe -> capture injectée -> validation -> vrai publisher fichiers."""
     def test_success_publishes_new_fixture_kind_not_v1_grant(self):
         with tempfile.TemporaryDirectory() as temp:
-            r=fake_observe(Path(temp)/'proof')
+            try:
+                r=fake_observe(Path(temp)/'proof')
+            except runner.RunnerUnavailable as error:
+                self.fail('capacité nominale indisponible : '+str(error))
             doc=json.loads((Path(temp)/'proof/observation.json').read_text())
             self.assertEqual(doc['kind'],'psql-private-fixture-observation-1')
             self.assertIs(doc['transport_qualified'],False)
