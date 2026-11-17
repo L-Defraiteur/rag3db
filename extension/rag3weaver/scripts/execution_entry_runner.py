@@ -5,6 +5,7 @@ The pure validator execution_entry.py and its evidence are independent/frozen.
 """
 from collections.abc import Mapping
 from hashlib import sha256
+from types import MappingProxyType
 # Value predicates reused from the frozen, pinned pure validator; no facts are
 # fabricated to call verify_transcript and no physical admission is inherited.
 from execution_entry import _number as _finite, _sha, _same
@@ -22,6 +23,27 @@ class RunnerRefusal(RuntimeError):
         super().__init__(code)
 
 
+def _freeze_request(value: object) -> object:
+    if isinstance(value, Mapping):
+        if not all(type(key) is str for key in value):
+            raise RunnerRefusal('request-fields')
+        return MappingProxyType({key: _freeze_request(item) for key, item in value.items()})
+    if type(value) is tuple:
+        return tuple(_freeze_request(item) for item in value)
+    if type(value) in (str, int, float, bool, type(None)):
+        return value
+    raise RunnerRefusal('request-types')
+
+
+def _port_view(value: object) -> object:
+    # Never expose the immutable policy OR the caller's original containers.
+    if isinstance(value, Mapping):
+        return {key: _port_view(item) for key, item in value.items()}
+    if type(value) is tuple:
+        return tuple(_port_view(item) for item in value)
+    return value
+
+
 def run_fixture_invocation(request: Mapping[str, object], effects: object) -> Mapping[str, object]:
     """Orchestrate MODELED fixture ports, never issue an OS/CP admission.
 
@@ -31,6 +53,7 @@ def run_fixture_invocation(request: Mapping[str, object], effects: object) -> Ma
     """
     if not isinstance(request, Mapping) or request.get('mode') != 'FIXTURE_ONLY':
         raise RunnerRefusal('unsupported-live')
+    request = _freeze_request(request)
     required = {'mode', 'invocation', 'phase', 'declaration_sha256', 'runtime_plan_sha256',
                 'artifact_sha256', 'object_identity', 'argv', 'cwd', 'public_environment',
                 'clock_domain', 'start', 'issued', 'operation_end', 'end',
@@ -93,7 +116,7 @@ def run_fixture_invocation(request: Mapping[str, object], effects: object) -> Ma
     try:
         check()
         # Keep the token before any post-call clock/check that could fail.
-        launch = effects.prepare_owned_launch(request)
+        launch = effects.prepare_owned_launch(_port_view(request))
         require(launch is not None, 'launch-ownership')
         check()
         require(operation(effects.probe_write, launch, 'before') == 'WRITABLE',
@@ -140,7 +163,7 @@ def run_fixture_invocation(request: Mapping[str, object], effects: object) -> Ma
         require(isinstance(finish, Mapping) and _same(finish.get('mode'), 'FIXTURE_ONLY')
                 and _same(finish.get('common_origin'), 'MODELED'), 'unsupported-common-closure')
         check(final=True)
-        return {'entry_confirmed': True, 'returncode': returncode,
+        result = {'entry_confirmed': True, 'returncode': returncode,
                 'artifact_sha256': request['artifact_sha256'], 'facts_sha256': facts['sha256'],
                 'stdout_sha256': sha256(exit_record['stdout']).hexdigest(),
                 'stderr_sha256': sha256(exit_record['stderr']).hexdigest(),
@@ -148,6 +171,8 @@ def run_fixture_invocation(request: Mapping[str, object], effects: object) -> Ma
                 'cp_ack': False, 'global_admission': False, 'later_images': 'UNKNOWN',
                 'sdk': 'NOT_ATTESTED', 'original_end': request['end'],
                 'result_scope': 'reviewed-program-invocation'}
+        check(final=True)  # Fresh AFTER both hashes and full result construction.
+        return result
     except BaseException as error:
         # A known launch token survives every failure, including pre-HeldEntry.
         cleanup = {'origin': 'MODELED', 'quiet': False, 'reaped': False, 'remaining': 'UNKNOWN'}

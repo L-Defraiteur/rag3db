@@ -331,3 +331,10 @@ inchangé :4FAILnotraised/0ERRORskip/rc1,0.080160344s/noRetry,24autresNONJOUÉS.
 Neuf bruts LOCAL/PC réhash0écart AVANTfix, manifeste60e1b1e219030c49d5980f6643f133512a4d02bcf2b5379d1d547fa9a8fef866.
 Correctif groupé snapshotprofond/vueportsdétachée+recheckposthash enPRÉPAseule,
 puis nouvellesources/pins/ROtotale/GO28distinct avantverts. AucunbackendOSqualifié.
+
+Correctif groupé snapshot/hash préparé : [rapport62](../../rag3weaver-archi/17-11-2026/62-fix-groupe-snapshot-profond-hash-final.md).
+Après4rougesb3ab conservés2hôtes AVANTfix : snapshotprofondprivé +vuedétachée
+mutableports (calleroriginalintact), résultat/hashcomplets puisrecheckENDpréretour.
+28témoins243cf BYTEdeeeinchangés NONJOUÉSsurfix ;nouveauxpins/ROtotale puisGO28
+distinct avantverts. MODELED/postvalidationseulement, pascleanupOSborné ;
+LIVE/Commonréel/natifunsupported, pur565b/archivesintacts,0PQS/appelants/SDK.
