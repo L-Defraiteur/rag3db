@@ -183,3 +183,8 @@ FTS/bitdigest ni sourcesafter/quietindépendantaprèsrouge déduit. ScopeROUGE1/
 restes[]/nettoyé/TERMINE/busabsent et composéRED conservés, aucune innocuité/
 causalité native ou durabilité/LIVE qualifiée. ZéroDB/health/native/rejeu/fix
 par ED ; toute suite proposition/RO et décision C7 distinctes, ticket OUVERT.
+
+
+## RO ED des preuves Q9 — 17 novembre
+
+Avis favorable borné sur 6e97b2ff8a4dec638f0e9557e2e83f44d9d6c1f6 + précision965a284170 ; voir `docs/everything-declarative/16-11-2026/41-ro-preuves-cycle-q9-observe.md`. Réempreinte444 fichiers sur deux hôtes, canon graph et IDs FTS recalculés ; vecteurs recoupés comme sorties du joueur, sans recalcul DB. Aucun runtime/contact/scan frais. Ancien65eb ROUGE et FIN après ancien rouge inconnue, durabilité/LIVE non qualifiées. Ticket maintenu ouvert pour décision C7.
