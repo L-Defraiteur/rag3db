@@ -282,3 +282,10 @@ rootdirfd/identité et parents canoniques, vérifier auxfrontières. Le témoin
 symlink existant teste FEUILLE, pas courseparent. Noyau garde physique/hashELF/
 window/liveness/ACK/export ; le lecteur ne reçoit pas ces responsabilités.
 Publier contretémoin avant fix/ROgroupée/GOCPUdistinct ; aucun essai acquis.
+
+5ROUGES observés AVANTfix sousGO C7-ARCHI-READER-RED-5917-17nov60, EXACT5917 :
+UNEinvocationTERM58+KILL2/5FAILValueErrornotraised/0ERROR0skip/rc1/unittest0,014s/
+enveloppe0,132463359s/0retry. Preuves3fichiersLOCAL+PCréhash0écart AVANTfix,
+R/cx-archi-reader-red-5917-17nov-r1 manifest4e73204764d69ab0c60d5065da104a45f83588fe58bf7f6ffcca84de73b26a2d.
+Rapport17nov/41 détaille5cas vraisReader. Douzeautres témoins NONJOUÉS.
+AucunCPUvert/bridge/acteur/native/transportqualifié déduit ;229bQfigés.
