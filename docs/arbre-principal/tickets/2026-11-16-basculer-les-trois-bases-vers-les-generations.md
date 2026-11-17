@@ -179,3 +179,14 @@ Aucune opération7970/original/snapshot/copie/CLI/provider/compilation/test/
 native/cleanup autorisée par cette préparation ; seuls relevés RO de sources.
 Anciens GO/délais clos, toute qualification de delta produit sera distincte
 avant action. Ticket parent toujours OUVERT, aucune des trois bascules achevée.
+
+Audit exact et [plan10](../17-11-2026/10-reprise-documentaire-trois-bases.md)
+préparés :17chemins horsdocs vsCLI927(13Rust+4poste),7horscrate/docs vsSDK59,
+zéro delta src/vector/CMake/third_party ; égalité partielle pas VERT du master.
+PinCargo/lock/parseur/templates/scripts du crate recoupés. Ancienmigrate runner
+et garde périmée restent inactifs/absentsmaster, aucune relaxation.
+G a fourni référencesRETgénérateurposésourcescourantes, reçus16novhistoriques
+sans fraîcheur72h/service ; Banc corpusSTABLE_CANDIDATE/NONMATCHED et contrats
+oracle30cas/BM25RAW/vector distincts. Préparation Git/doc seulement,0test/build/
+DB/CLI/provider/snapshot/copie/service/proc/cleanup. Recette à RO pour arbitrage,
+nouveau couple/qualifications et pièces fraîches manquantes explicités.
