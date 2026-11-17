@@ -17,6 +17,7 @@ import sys
 import time
 
 COMMON_SHA='6439fdd8b52c85fa4e74af0def2c667ef0bedae9b814cbbfd48e49946c4f74ea'
+sys.dont_write_bytecode=True
 MAX_RAW=65536
 
 
@@ -75,6 +76,7 @@ def validate_go(go,packet,packet_sha,now):
 
 
 def verify_sources(packet_root,packet):
+    require({p.name for p in packet_root.iterdir()}==set(packet['source_files'])|{'packet.json','packet.sha256'},'unexpected packet entry')
     for relative,sha in packet['source_files'].items():
         path=packet_root/relative
         require(path.resolve().is_relative_to(packet_root) and not path.is_symlink() and digest(path)==sha,'source pin differs')
@@ -187,7 +189,7 @@ class NativeBackend:
                       packet_root=str(self.root),go=self.go,expected_cgroup=own_cgroup())
             req=phase/'request.json';write_new(req,body)
             env={k:os.environ[k] for k in ['RAG3WEAVER_VALIDATION_RECU','RAG3WEAVER_VALIDATION_JETON'] if k in os.environ}
-            env.update(PATH='/usr/bin:/bin',HOME=str(self.out/'home'),TMPDIR=str(self.out/'tmp'),LANG='C.UTF-8')
+            env.update(PATH='/usr/bin:/bin',HOME=str(self.out/'home'),TMPDIR=str(self.out/'tmp'),LANG='C.UTF-8',PYTHONDONTWRITEBYTECODE='1')
             process=subprocess.Popen([sys.executable,str(self.root/'tool_phase.py'),str(req),digest(req)],
                 stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.PIPE,env=env,start_new_session=True)
             try:controller_out,controller_err=process.communicate(timeout=max(.001,deadline-time.monotonic()-.35))
