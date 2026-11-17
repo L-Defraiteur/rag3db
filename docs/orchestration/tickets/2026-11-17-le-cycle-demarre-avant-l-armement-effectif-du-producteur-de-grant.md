@@ -127,3 +127,16 @@ Un résultat étranger n'est pas remplacé. Aucun changement de qualify.save
 ni primitive générique nouvelle. P/Q/S et base manifest passent ensemble v6,
 anciens v5 figés. Correctif NON JOUÉ : nouvelle RO/GO cinq verts distinct,
 puis paquet neuf/RO totale avant toute décision native. Ticket reste OUVERT.
+
+## P1 raccord argv Common avant ARM — revue totale Recherche
+
+Sur source6715/Qv6, compose passe python -B confiner_validation.py lancer.
+La vraie signature_superviseur Common exige args[2] == lancer et script en
+args[1] : refus certain avant ARM/DB. Défaut hérité de2d, non détecté par
+l'ancien test d'entrée qui vérifiait seulement --controller. Qv6 reste figé.
+Avant correction : publication d'un témoin CPU extrayant le vrai argv compose
+et la vraie fonction signature Common, avec faux fichiers proc temporaires
+et contrôle positif sans -B. Aucun import/exécution du confineur, aucun proc
+réel ni subprocess dans ce témoin. NON JOUÉ, nouvelle RO/GO CPU distinct requis.
+Correction proposée après rouge : retirer -B uniquement devant Common,
+PYTHONDONTWRITEBYTECODE=1 ; conserver les -B des rôles exacts. Aucun GO natif.
