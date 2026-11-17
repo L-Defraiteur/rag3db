@@ -21,8 +21,8 @@
     },
     {
       "id": "N04",
-      "setup": "same path changed to foreign object before exec",
-      "expected": "compare real entry FD with declared object/SHA; refuse before body; no auto-B"
+      "setup": "private path T replaced with B AFTER FD for expected A is opened; child executes original FD A",
+      "expected": "positive: confirm A/copy A despite current T=B or deleted path; no reopen T or invented B"
     },
     {
       "id": "N05",
@@ -31,8 +31,8 @@
     },
     {
       "id": "N06",
-      "setup": "attempt private fixture write while held at exec barrier",
-      "expected": "profile requires write denial; if mutation succeeds or outcome unknown refuse profile/no release"
+      "setup": "same private copied executable/UID/mount: successful write-open plus identical-byte write BEFORE fork, close writer; at EXEC barrier attempt O_WRONLY on same dev/inode; AFTER child reap/closure of execution handles retry same control",
+      "expected": "before/after write possible; during barrier observed ETXTBSY on owned operation. EACCES/EROFS/unknown or mount/object mismatch NOT qualifying; no release/profile admission if condition unproved"
     },
     {
       "id": "N07",
@@ -83,6 +83,31 @@
       "id": "N16",
       "setup": "A execs B after release",
       "expected": "future coverage UNKNOWN; result scope invocation, never claim A lifetime or all images"
+    },
+    {
+      "id": "N17",
+      "setup": "alter synthetic proc start tick origin while trusted pre-timeout monotonic origin is fixed",
+      "expected": "deadline unchanged; no extension from proc ticks; unauthenticated origin/parent mismatch refuses before ARM"
+    },
+    {
+      "id": "N18",
+      "setup": "entry-facts payload missing or canonical bytes changed but prior ledger/ACK shape present",
+      "expected": "strict 3-file StageSpec and real canonical facts SHA binding refuse before release"
+    },
+    {
+      "id": "N19",
+      "setup": "FIXTURE_ONLY controlled wrong actual executable B at EXEC while independent declaration and selected capability expect A",
+      "expected": "real entry object/SHA mismatch; preserve B facts and refuse before body; no expected B inferred from actual"
+    },
+    {
+      "id": "N20",
+      "setup": "failure immediately after fork before pidfd or HeldEntry acquisition",
+      "expected": "preallocated OwnedLaunch retains natural child ownership; gate closes, authentic wait/reap or UNKNOWN preserved; first cause not lost; no bare discovered PID signal"
+    },
+    {
+      "id": "N21",
+      "setup": "parent loss during startup gate and between TRACEME stop and EXITKILL configuration",
+      "expected": "child parent-death/gate protection plus Common closure must be evidenced; no green merely because EXITKILL was intended; unknown cleanup refuses"
     }
   ]
 }

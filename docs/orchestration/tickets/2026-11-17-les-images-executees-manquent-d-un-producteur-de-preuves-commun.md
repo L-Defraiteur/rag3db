@@ -237,3 +237,30 @@ extérieure à relier sansinférer. LIVE HOLD sur vraiCP ; fixture jamais ACKCP/
 Budget120+5/queue15/Common<=90/ENDop−15 PROPOSÉpasGO ; coûts/hôteUNKNOWN.
 ComposantsbackendNULL/absents, pas P/Q/S créé, ni OS/appelant/SDK/native/test codé
 ou exécuté. RO protocole/ports/stabilité/recette avant arbitrage C7 et toute suite.
+
+## Préconditions CPd81 à préciser avant backend, consignées avant delta
+
+1. Origine monotonic softEND extérieur attestée AVANT lancement timeout par un
+rôle de confiance ; jamais calculée depuis procstart/CLK_TCK, identité≠horloge.
+2. entry-facts.json doit être payload déclaré, ou inclus canoniquement dans
+ledger ; aucune pièce implicite hors plan, ACK lie son SHA réel.
+La finalisation CP d'une autorité Common terminée reste un port distinct à RO,
+pas une réouverture Gate.active. Aucun défaut OS observé, aucune implémentation.
+
+Delta protocole aprèsCPd81 : [rapport55](../../rag3weaver-archi/17-11-2026/55-origine-monotonic-et-faits-declares.md),
+émetteur monotonic de confiance avant Popen(timeout), paquets exclusifs origine/
+identitétimeout liés, ticksPIDjamaisborne ; StageSpec3payloadsdontfaits canoniques,
+ledgerSHAfaits/objet etACK3SHA sanscycle. Total18specsNONCODÉES/NONJOUÉES ;
+LIVE/portCPterminal HOLD, aucunbackend/appelant/PQS/OS/test créé ou exécuté.
+
+## Réserves groupées M/R/TTYd81 avant delta de protocole
+
+N04 confond renommage du chemin et vraie entrée étrangère : FD A conservé puis
+cheminB doit pouvoir entrerA ; séparer ce positif du vrai exécutableB refusé.
+N06 doit prouver causalement write-denial : copie privée mêmeprofil writable
+avant/après, writer fermé avantexec, ETXTBSY pendantbarrière ; EACCES/EROFS ou
+UNKNOWN ne qualifient pas cette exclusion. TTY : un échec aprèsfork avant retour
+HeldEntry doit conserver une ownership accessible et cleanup/premièrecause ;
+préparer un lease AVANTfork et expliciter la fenêtre pidfd/stop/EXEC.
+Recherche confirme nonchevauchement seulement, pas propriété d'implémentation.
+Réserves de spécification avantbackend, pas défaut OS observé ni nouveau test.

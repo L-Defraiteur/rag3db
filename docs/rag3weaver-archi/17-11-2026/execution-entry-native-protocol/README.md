@@ -8,16 +8,18 @@ et les archives f74/2a/892bc restent intacts. RO puis arbitrage C7 avant code.
 
 ## 1. Fichiers, entrée CLI proposée et mode de la première recette
 
-Futur module réservé à Recherche : `scripts/execution_entry_runner.py` ; aucun
+Futur module réservé par Archi après constat de nonchevauchement Recherche : `scripts/execution_entry_runner.py` ; aucun
 fichier de ce nom n'est livré. Futurs contrôleurs privés Q/native_recipe.py et
 Q/native_fixture_publisher.py également ABSENTS. Q désigne la copie extérieure
 au WT, pas un lien vers des fichiers en cours d'édition. Voir les chemins absolus
-et quatre argv dans `native-recipe.inactive.json`. Tous les SHA futurs sont NULL :
+et cinq argv dans `native-recipe.inactive.json`. Tous les SHA futurs sont NULL :
 **execution_ready=false**, mode **FIXTURE_ONLY**, aucun coupon/slot réservé.
 
-La première cible proposée est le fichier ELF `/usr/bin/printf`, dont seule la
-lecture/hash de préparation est effectuée. Commande enfant déclarée :
-`["/usr/bin/printf", "ENTRY_FIXTURE_%s\n", "A"]` ; stdout attendu exactement
+La source de la cible proposée est le fichier ELF `/usr/bin/printf`, dont seule
+la lecture/hash de préparation est effectuée. Le futur GO préparerait sa copie
+privée P/fixtures/program-A (absente actuellement), mêmeprofil/mount que le test
+de write-denial. Sa compatibilité de contexte après copie reste à qualifier. Commande enfant déclarée :
+`["P/fixtures/program-A", "ENTRY_FIXTURE_%s\n", "A"]` ; stdout attendu exactement
 `ENTRY_FIXTURE_A\n`, stderr vide, wait exit0. Aucun shell pour cette invocation,
 aucun SDK/Rust/Cargo/DB/provider. Le programme n'a PAS été exécuté pour préparer
 la recette. Son ELF, son interpréteur et le profil de stockage devront être
@@ -65,7 +67,7 @@ attendus de phase, jamais initialisé depuis les valeurs observées pour réussi
    stockage non qualifié ; vérifier hash initial. Ouvrir sinks exclusifs0600,
    sans symlink, sous preuve approuvée ; stdin=/dev/null. Pipe d'erreur séparé
    close-on-exec, non interprété comme preuve positive d'entrée.
-2. `fork()` contrôlé. Dans l'enfant : rediriger0/1/2, fermer les FD étrangers
+2. Allouer OwnedLaunch/gate/registre AVANT fork, puis `fork()` contrôlé. Dans l'enfant : rediriger0/1/2, fermer les FD étrangers
    (sauf FD ELF/pipe), TRACEME puis SIGSTOP, puis `os.execve(fd, argv, env)`.
    Une erreur syscall conserve errno via pipe si possible puis termine ; aucune
    annonce SUCCESS. Pas de PATH/shell, exec FD indisponible = refus sans fallback.
@@ -176,11 +178,15 @@ la première fixture écrit ses artefacts privés, pas un nouveau grant CP termi
 
 ## 7. Bornes concrètes proposées pour le petit pilote, pas un GO
 
-Soft timeout120s + KILL5s installé AVANT poste/file ; queue MAX15s DANS120.
+Origine logique120s émise par deadline-bootstrap AVANT Popen du timeout
+physique120s/KILL5 ; queue MAX15s DANS cette borne. Aucun tick proc ne calcule
+une échéance CLOCK_MONOTONIC. Le bootstrap reste parent du timeout et conserve
+son vrai wait ; identité et source/argv du bootstrap sont vérifiées séparément.
+Le paquet initial est immuable, le second lie son SHA au vrai Popen timeout.
 Le contrôleur outer lance poste avec le sous-mode `admit-common`. Celui-ci,
 APRÈS acquisition réelle, vérifie le timeout ancêtre et le poste, calcule le
 budget frais puis exec Common. Le budget n’est PAS calculé avant la file ;
-les quatre argv distincts outer/poste/admission-Common/enfant sont dans la recette.
+les cinq argv distincts bootstrap/outer/poste/admission-Common/enfant sont dans la recette.
 Common demandé floor(MIN(90,softENDextérieur−maintenant−15)), refus<=30.
 ENDop=ENDCommon−15, réserve arrêt/finalisation15 DANS Common. Chaque opération
 à MIN(cap,reste frais) : bootstrap/exec5, capturecopie10, publicationACK20,
@@ -216,3 +222,82 @@ nouveaux verts. Avant toute implantation : RO du protocole/API/commandes/pins,
 fermeture des liens Common et ports CP (ou isolement FIXTURE_ONLY explicitement
 accepté), puis arbitrage C7. Les sources futures et témoins exécutables devront
 être publiés/relus avant un GO CPU/native distinct. Rien n'est lancé par ce doc.
+
+
+## 9. Delta CPd81 : origine attestée et payload canonique déclaré
+
+Préconditions consignées au ticket avant ce delta. Une cinquième commande,
+`native_recipe.py deadline-bootstrap`, émet START=time.monotonic() et
+softEND=START+120 AVANT de lancer par Popen le timeout physique déclaré. Le
+bootstrap vivant, de source/Q/argv/identité préautorisés, est le producteur de
+cette origine ; JSON seul ou identité trouvée depuis son propre fichier ne
+suffisent pas. Le coordinateur/admit-common vérifie son identité complète et
+la relation parent→timeout, source/exeSHA/argv/UID/CG contre le plan indépendant.
+Les ticks proc servent seulement à la non-réutilisation du PID, JAMAIS à produire
+ou traduire la borne. Un second fichier exclusif timeout-started lie l'origine
+scellée au véritable enfant Popen, sans réécrire le premier fichier.
+
+L'origine précède Popen/exec : latence de montage ou de fsync consomme la borne
+logique ; la minuterie physique plus tardive n'accorde pas de rallonge. Tous
+les contrôles et publications gardent MIN(originalSoftEND, ENDCommon), même si
+le timeout physique tourne encore. kill_end ne donne jamais du temps de travail.
+Si le montage ne permet pas de prouver ce rôle émetteur et la chaîne réelle :
+refus AVANT ARM/queue. Le bootstrap lui-même reste sans capacité de validation
+pendant son montage ; aucun travail ne démarre avant timeout et admission.
+
+Le StageSpec proposé déclare EXACTEMENT trois pièces : entry-ledger.json
+(ledger), entry-object (executable) et entry-facts.json (data). Faits canoniques
+sérialisés comme CP canonical_sha, sans newline : digest du fichier = SHA des
+faits canoniques ; pas de SHA appris depuis une autre représentation indentée.
+Ledger contient ce SHA et le SHA objet, puis ACK.files contient les trois SHA et
+son ledger_sha256. Les faits n'incluent ni hash du ledger ni ACK futur : pas de
+cycle. Le contrat statique source_contract et les SHA de faits restent distincts.
+Les champs futurs/nulls et le mode fixture gardent ce plan NON ADMISSIBLE LIVE.
+
+Deux specs ajoutées : N17 décale artificiellement procstart sans changer l'origine
+émise (aucune rallonge), N18 payload faits omis/changé malgré ledger/ACK d'une
+ancienne représentation (refus avant release). Elles restent NON CODÉES/NONJOUÉES.
+Le raccord de finalisation CP quand Common est terminé demeure un port distinct
+non fourni : pas d'appel Gate.active sur une autorité morte. FIXTURE_ONLY écrit
+ses artefacts privés avec cp_ack/global_admission faux, sans valider ce port.
+
+
+## 10. Delta groupé M/R/TTY : cas causaux et propriété avant HeldEntry
+
+N04 devient un POSITIF : ouvrir FD A, remplacer le chemin T par B, exécuter le
+FD original puis confirmer/coller A. Le chemin T actuel n'est pas rouvert pour
+forcer un refus. N19 distingue la véritable image B au stop, injectée uniquement
+en fixture contrôlée, indépendante de la déclarationA : mismatch refuse avant
+corps, sans promouvoir B ni falsifier les faits. Aucun de ces deux cas n'est joué.
+
+N06 exige le MÊME objet privé/dev/inode/UID/montage : ouverture écriture et
+écriture de byte identique autorisées avant fork, écrivain fermé AVANT exec ;
+puis tentative d'ouverture écriture attribuée au parent pendant le stop EXEC,
+avec errno ETXTBSY observé ; enfin contrôle écriture à nouveau possible après
+reap et fermeture des références exécutantes. Seul ETXTBSY causal qualifie le
+profil ; EACCES/EROFS/fichier système non inscriptible/UNKNOWN ne suffisent pas.
+Aucune mutation de /usr/bin/printf n'est proposée. La copie privée n'existe pas,
+sa compatibilité n'est pas supposée ; tous ces contrôles nécessitent le futur GO.
+
+Le caller possède OwnedLaunch AVANT tout fork et garde cette capacité en finally.
+Immédiatement après fork, le retour PID de l'enfant naturel est enregistré AVANT
+pidfd/lecture proc/attente qui peuvent échouer. L'enfant reste sur une gate pipe
+jusqu'à l'admission de son identité/pidfd par le parent ; EOF de cette gate est
+un ordre d'abandon, jamais une preuve d'exec réussi. Échec pré-pidfd : fermer gate
+puis attendre/reaper cet enfant naturel, sans signaler un PID découvert libre.
+Si la récolte n'est pas établie : UNKNOWN/recours Common sous mêmeEND, pas vert.
+
+Protection proposée du bootstrap enfant avant gate : PR_SET_PDEATHSIG(SIGKILL)
+et contrôle getppid contre le runner après installation, puis EXITKILL au stop
+TRACEME. Ce sont des mécanismes de vie/mort locaux à qualifier, pas un changement
+de privilège/sandbox. Ils ne prouvent pas eux-mêmes le cleanup ; N21 vise leur
+fenêtre de course. Common garde son nettoyage indépendant. Après acquisition
+pidfd/identité, tout arrêt suit uniquement les références attribuées. Toute
+exception de start_and_hold lance/consigne le cleanup de OwnedLaunch ET laisse
+ce même handle au caller ; HeldEntry=None n'est jamais «aucun enfant». Première
+cause immuable, échec cleanup secondaire conservé, fin sous END original.
+
+L'avis Recherche est un nonchevauchement, pas un transfert de propriété backend.
+Archi porte cette préparation ; attribution d'implantation reste à C7. L'API
+opaque .pyi ne livre aucun constructeur OS. Total21spécifications NONCODÉES/
+NONJOUÉES, pas21tests ni qualification CP/ELF/SDK/Cargo.

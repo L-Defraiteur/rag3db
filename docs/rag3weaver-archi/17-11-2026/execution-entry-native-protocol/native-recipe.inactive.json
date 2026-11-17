@@ -139,7 +139,7 @@
   ],
   "common_budget_expression": "floor(min(90, original_outer_soft_end - fresh_now - 15)); refuse <= 30; computed only AFTER actual poste acquisition",
   "proposed_child_argv": [
-    "/usr/bin/printf",
+    "/home/lucied/.cache/rag3weaver-build/cx-entry-producer-native-protocol-v1/fixtures/program-A",
     "ENTRY_FIXTURE_%s\n",
     "A"
   ],
@@ -176,5 +176,89 @@
     "/home/lucied/.cache/rag3weaver-build/cx-entry-producer-native-control-v1/native-recipe.json",
     "--allocation",
     "NO_GO"
-  ]
+  ],
+  "proposed_bootstrap_argv": [
+    "/usr/bin/python3.14",
+    "-B",
+    "/home/lucied/.cache/rag3weaver-build/cx-entry-producer-native-control-v1/native_recipe.py",
+    "deadline-bootstrap",
+    "--recipe",
+    "/home/lucied/.cache/rag3weaver-build/cx-entry-producer-native-control-v1/native-recipe.json",
+    "--allocation",
+    "NO_GO"
+  ],
+  "deadline_origin": {
+    "clock": "CLOCK_MONOTONIC@execution-host",
+    "emitter_role": "deadline-bootstrap",
+    "origin_file": "/home/lucied/.cache/rag3weaver-build/cx-entry-producer-native-protocol-v1/deadline-origin.json",
+    "timeout_started_file": "/home/lucied/.cache/rag3weaver-build/cx-entry-producer-native-protocol-v1/timeout-started.json",
+    "start": "time.monotonic() sampled BEFORE Popen(timeout); never proc ticks",
+    "soft_end": "start + 120; original immutable",
+    "kill_end": "start + 125; final observation only, no work budget",
+    "trust": "reviewed Q source closure plus parent PID/start/UID/exeSHA/full argv/CG and parentage checked independently; no JSON trust alone",
+    "linkage": "second append-only packet binds origin SHA to actual Popen child timeout PID/start/argv/exeSHA; birth ticks identity only",
+    "publication_does_not_reset": true
+  },
+  "proposed_cp_stage": {
+    "label": "entry-printf-A",
+    "ledger_file": "entry-ledger.json",
+    "files": {
+      "entry-ledger.json": "ledger",
+      "entry-object": "executable",
+      "entry-facts.json": "data"
+    },
+    "executables": {
+      "fixture-program": {
+        "stage": "entry-printf-A",
+        "file": "entry-object"
+      }
+    },
+    "source_contract": {
+      "contract_id": "entry-invocation-v1",
+      "declared_invocation_sha256": null,
+      "artifact_sha256": "f1f741a6f28793a51bc93fe7c1900ef728ce49213b71fafc34a12b258984b1f9",
+      "features": [],
+      "mode": "FIXTURE_ONLY"
+    },
+    "window_seconds": 20
+  },
+  "canonical_entry_facts": {
+    "format": "CP canonical_sha serialization: sorted keys, compact separators, UTF-8 ensure_ascii=false, allow_nan=false; file contains these exact bytes, NO trailing newline",
+    "fields": [
+      "schema",
+      "declaration_sha256",
+      "runtime_plan_sha256",
+      "invocation",
+      "phase",
+      "child",
+      "entry_object",
+      "exec_event",
+      "captured_monotonic",
+      "copy_reference"
+    ],
+    "excludes": [
+      "authority_token",
+      "ledger_sha256",
+      "ack_sha256"
+    ],
+    "binding": "ledger stores SHA(entry-facts.json) and SHA(entry-object); CP ACK files map contains all 3 payload SHA; no cyclic hashes"
+  },
+  "private_fixture_artifact": {
+    "path": "/home/lucied/.cache/rag3weaver-build/cx-entry-producer-native-protocol-v1/fixtures/program-A",
+    "copy_from": "/usr/bin/printf",
+    "sha256": "f1f741a6f28793a51bc93fe7c1900ef728ce49213b71fafc34a12b258984b1f9",
+    "created": false,
+    "context_compatibility_qualified": false,
+    "mode": "0700",
+    "pre_exec_writer_must_be_closed": true,
+    "write_denial_expected_errno": "ETXTBSY",
+    "write_before_and_after_required": true
+  },
+  "launch_ownership": {
+    "allocated": "BEFORE fork",
+    "handle": "OwnedLaunch",
+    "startup_gate": "child cannot TRACEME/exec until parent records fork result and acquires pidfd/identity",
+    "on_pre_pidfd_failure": "close startup gate and await actual natural child; no unqualified PID signaling; UNKNOWN if reap cannot be proved",
+    "parent_death": "PR_SET_PDEATHSIG(SIGKILL) plus getppid recheck proposed before gate, then EXITKILL at trace stop; all effects require native evidence"
+  }
 }

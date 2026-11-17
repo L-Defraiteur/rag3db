@@ -29,10 +29,22 @@ class DeclaredInvocation(TypedDict):
     profile: Literal['local-regular-exec-write-denial-v1']
     mode: Mode
 
+class DeadlineOrigin(TypedDict):
+    # Trusted bootstrap samples before launching physical timeout; ticks identify
+    # processes only, never derive CLOCK_MONOTONIC deadlines.
+    origin_sha256: str
+    emitter: ProcessIdentity
+    timeout_identity: ProcessIdentity
+    clock_domain: str
+    start: float
+    soft_end: float
+    kill_end: float
+
 class AdmittedInvocation(TypedDict):
     # Constructed AFTER actual runner startup, BEFORE its child. Observed PIDs
     # are checked against declared commands/source/Common ancestry first.
     declaration_sha256: str
+    deadline_origin_sha256: str
     runtime_plan_sha256: str
     runner: ProcessIdentity
     common_owner: ProcessIdentity
@@ -44,6 +56,13 @@ class AdmittedInvocation(TypedDict):
     end: float
     cleanup_reserve: float
     public_proof_directory: str  # never exposes Common authority token
+
+class OwnedLaunch:
+    """Allocated BEFORE fork; owns startup gate and child registry immediately.
+
+    Survives start_and_hold failure. Never reconstructed from a discovered PID.
+    A launch that has not forked is distinguishable from an owned live child.
+    """
 
 class HeldEntry:
     """Opaque OS-owned capability, no constructor from a dict/PID or model bool."""
@@ -86,14 +105,16 @@ class FixtureOnlyPublicationPort(Protocol):
                           admitted: AdmittedInvocation, seal: EntrySeal) -> ReleasePermit: ...
 
 def admit_runner(declared: DeclaredInvocation) -> AdmittedInvocation: ...
-def start_and_hold(declared: DeclaredInvocation, admitted: AdmittedInvocation) -> HeldEntry: ...
+def prepare_owned_launch(declared: DeclaredInvocation, admitted: AdmittedInvocation) -> OwnedLaunch: ...
+def start_and_hold(declared: DeclaredInvocation, admitted: AdmittedInvocation,
+                   launch: OwnedLaunch) -> HeldEntry: ...
 def seal_entry(declared: DeclaredInvocation, admitted: AdmittedInvocation,
                held: HeldEntry) -> EntrySeal: ...
 def release_and_wait(declared: DeclaredInvocation, admitted: AdmittedInvocation,
                      held: HeldEntry, seal: EntrySeal, permit: ReleasePermit) -> InvocationExit: ...
 # Cleanup is bounded by admitted.end, preserves first cause, signals only owned
 # pidfd identities, waits/reaps; UNKNOWN is not success. No raw discovered PID.
-def cancel_owned(admitted: AdmittedInvocation, held: HeldEntry | None,
+def cancel_owned(admitted: AdmittedInvocation, launch: OwnedLaunch,
                  first_cause: BaseException) -> None: ...
 # This is called by an OUTSIDE coordinator after Common's own completion. It
 # consumes authentic Common facts; it never calls waitpid on a non-child runner.
