@@ -358,3 +358,20 @@ retourné par gate_fixture. Garder toutes les assertions et les dix cas ; moteur
 558 inchangé. Mettre à jour uniquement pins/cwd/source du paquet et note de
 reprise ; RO ciblées M/TTY puis nouveau GO distinct avant toute invocation.
 Aucun retry CA1C ni correctif moteur autorisé par cette préparation.
+
+### 8792 : dix rouges causaux conservés avant correction groupée
+
+GO C7-CP-GUARDS-RED-8792-17nov60/dd1e consommé UNEfois source8792propre,
+10FAIL précis/0ERRORskip/rc1,.268373769s externe/.094unittest ; clockatteint
+starting761 aprèsSHAcohérent, pasleFAILfixtureCA1C. Dix-sept fichiers réhashés
+deuxhôtes AVANTtoutdiff : manifestf7c622667ff7552402843e35a96fb79337defab907b68eb66c29f781cc86d074,
+result2aad81d4b8b43cd7b571a7c0902b7b2b60d27d5f0932b730c16ad3bcc05bd5b5.
+Rapport publication-core/07-dix-causes-rouges-conservees.md. Préparationcorrective
+source ouverte conditionnellement, aucun vert/GO d'exécution supplémentaire.
+
+Avant diff moteur, prépublier le témoin causal RPC complémentaire : communicate
+TimeoutExpired fixture-ssh suivi d'échecs de reap fixture-reap ; l'exception
+originale doit rester authentique, erreur de cleanup séparée/UNKNOWN attesté.
+Cas ajouté sur moteur558 INCHANGÉ, sans aucune exécution. Observer son rouge
+sous nouveau GO ciblé après revue, avant correction de cette causalité ; les
+dix rouges8792 restent figés sans rejeu implicite.

@@ -1,0 +1,42 @@
+{
+  "state": "RPC_FIRST_CAUSE_RED_BEFORE_FIX_NOT_RUN",
+  "parent_commit": "8792769e55844113ac2a33ad48da94bebd072541",
+  "engine_commit": "558959a8defc3a92c29e056ef697a63a7c0f9423",
+  "previous_grouped_red_commit": "8792769e55844113ac2a33ad48da94bebd072541",
+  "previous_grouped_proof_manifest": "f7c622667ff7552402843e35a96fb79337defab907b68eb66c29f781cc86d074",
+  "files": {
+    "extension/rag3weaver/scripts/publication_relay.py": "d5af9318a22a892ec51af3b28cc6b1b31273e41bb1f43997cc195f253695f986",
+    "docs/codeparsers/16-11-2026/rust-probe/pilot.py": "d642d51884c262a450092b07411bbddd14e0b541aab2063a901040ddec496571",
+    "docs/codeparsers/16-11-2026/rust-probe/physical_guard.py": "c7ef7b43b99922cd0e51f2c269443909044a84775f91f2369c00f2a2a52367c7",
+    "docs/codeparsers/16-11-2026/rust-red/pilot.py": "fdf8331dd7f9758c6f83ad310927db402e59dc341545837a81889c1b63fd46a1",
+    "docs/codeparsers/17-11-2026/rust-probe-relay/relay.py": "cd31ffcd3964562237eeb9d1ad823f6fe89aebc7db18991ac40fba4c0af00510",
+    "docs/codeparsers/17-11-2026/rust-probe-relay/gate.py": "c0344baf1024261b854a46b8506f4024abfcee4593365f14230a4962f3186a4b",
+    "docs/codeparsers/17-11-2026/rust-probe-relay/test_relay.py": "0647706c4148caa27001897bb2af8b5b51a85b2212b1854949631b792638c255",
+    "docs/codeparsers/17-11-2026/publication-core/test_publication_guard_counterexamples.py": "a566b66d418e73fc3f31cce8ed8efebd6d77d37c2b31e453d6b8c2385ab46ae2",
+    "docs/codeparsers/17-11-2026/publication-core/test_publication_guards_grouped.py": "f2683aad05651cc283b24361c204de0de9bb72a5ad071b66ffecf2553a82f4fb",
+    "docs/codeparsers/17-11-2026/publication-core/04-rouges-groupes-avant-correctifs.md": "5c56234ab2e6e0bb829b8f38d59a3c38a686a749f5237606b0c14ea1ddebedaf",
+    "docs/codeparsers/17-11-2026/publication-core/06-raccord-de-pin-fixture-sans-correctif-moteur.md": "6aa3d2475996cd52d45c6003ee99997c85bd84cef649a3d82ca2fd62d1235e8a",
+    "docs/codeparsers/17-11-2026/publication-core/test_publication_rpc_first_cause.py": "fcbd00b9323de9dfea1d9f9ba69fa3fe72281ccabf4613a4756c873de752904a",
+    "docs/codeparsers/17-11-2026/publication-core/07-dix-causes-rouges-conservees.md": "af06b86edab7423b82ec3e254192328564efe6cfd23005a33047feb4e4b6b185"
+  },
+  "cwd": "/home/lucied/git_workspaces/cx-codeparsers-publication-guards-fix/docs/codeparsers/17-11-2026/publication-core",
+  "interpreter": {
+    "path": "/usr/bin/python3.14",
+    "sha256": "c81d88523721c462f53a98129d65bba68f67791932f0664372e1778e74fd9517"
+  },
+  "argv": [
+    "timeout",
+    "--signal=TERM",
+    "--kill-after=2s",
+    "58s",
+    "/usr/bin/python3.14",
+    "-B",
+    "test_publication_rpc_first_cause.py"
+  ],
+  "expected_cases": 1,
+  "expected_behavior": "one FAIL: cleanup exception replaces original communicate exception; no ERROR/skip, not observed",
+  "executed": false,
+  "cpu_go": null,
+  "fixes_included": false,
+  "physical_admission": false
+}
