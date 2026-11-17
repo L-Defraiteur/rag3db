@@ -1,0 +1,79 @@
+{
+  "version": 1,
+  "state": "PREPARED_NOT_RUN",
+  "network_contacts_authorized": false,
+  "native_capture_mode_forbidden": true,
+  "fixture_credentials_not_canonical": true,
+  "cases": [
+    {
+      "name": "cli-refused",
+      "argv": [],
+      "stdin": "",
+      "returncode": 2,
+      "stderr_contains": "UNQUALIFIED"
+    },
+    {
+      "name": "malformed-json",
+      "argv": [
+        "--validate-request"
+      ],
+      "stdin": "{",
+      "returncode": 1,
+      "stderr_contains": "request JSON refused"
+    },
+    {
+      "name": "nonce-refused",
+      "argv": [
+        "--validate-request"
+      ],
+      "stdin": "{\"dsn\": \"postgres://rag3weaver:fixture-not-used@127.0.0.1:5433/rag3weaver_test\", \"nonce\": \"X\", \"budget_ms\": 1000}",
+      "returncode": 1,
+      "stderr_contains": "DSN or nonce refused"
+    },
+    {
+      "name": "budget-refused",
+      "argv": [
+        "--validate-request"
+      ],
+      "stdin": "{\"dsn\": \"postgres://rag3weaver:fixture-not-used@127.0.0.1:5433/rag3weaver_test\", \"nonce\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"budget_ms\": 0}",
+      "returncode": 1,
+      "stderr_contains": "budget refused"
+    },
+    {
+      "name": "database-refused",
+      "argv": [
+        "--validate-request"
+      ],
+      "stdin": "{\"dsn\": \"postgres://rag3weaver:fixture-not-used@127.0.0.1:5433/foreign_database\", \"nonce\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"budget_ms\": 1000}",
+      "returncode": 1,
+      "stderr_contains": "foreign PostgreSQL target refused"
+    },
+    {
+      "name": "host-refused",
+      "argv": [
+        "--validate-request"
+      ],
+      "stdin": "{\"dsn\": \"postgres://rag3weaver:fixture-not-used@192.0.2.1:5433/rag3weaver_test\", \"nonce\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"budget_ms\": 1000}",
+      "returncode": 1,
+      "stderr_contains": "foreign host or Unix socket refused"
+    },
+    {
+      "name": "arbitrary-sql-field-refused",
+      "argv": [
+        "--validate-request"
+      ],
+      "stdin": "{\"dsn\": \"postgres://rag3weaver:fixture-not-used@127.0.0.1:5433/rag3weaver_test\", \"nonce\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"budget_ms\": 1000, \"sql\": \"SELECT forbidden_dynamic_query\"}",
+      "returncode": 1,
+      "stderr_contains": "unexpected request fields"
+    },
+    {
+      "name": "canonical-parse-only",
+      "argv": [
+        "--validate-request"
+      ],
+      "stdin": "{\"dsn\": \"postgres://rag3weaver:fixture-not-used@127.0.0.1:5433/rag3weaver_test\", \"nonce\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"budget_ms\": 1000}",
+      "returncode": 0,
+      "stderr_contains": ""
+    }
+  ]
+}
