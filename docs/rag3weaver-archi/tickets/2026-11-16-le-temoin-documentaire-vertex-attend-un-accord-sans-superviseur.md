@@ -226,3 +226,15 @@ Qconfiguration0e6278fc...136c1, Pvide/F+TASKS+launchabsents. Paquet29fichiers
 LOCAL+PCréhash0écart manifestf5c5eb6c55f8775f1e8f45961fe351a975f58833aca52f55b9b331ae57663d77.
 Demande ROtotale code+pins/copies/T0 puis GO natif C7distinct ; ticket reste ouvert,
 aucun SDK/D6/Vertex/native/service qualifié, aucunACKressource niGO7455 déduit.
+
+### Coordination opératoire avant GO natif, réserve C7 9f1adca9b3
+
+Les3RO code+pins229b sont favorables mais ne prouvent aucun producteur vivant.
+Runner.published attend90s par ledger (global5ELF puis D6), acknowledge90s
+pour D6 et canonique ; acteur de publication/grant non encore armé = HOLD7455.
+Avant action : consulter Embar/G pour acteurs exacts/pins/grants phase+arrêt,
+Codeparsers pour mécanisme existant de publication deuxhôtes. Matérialiser
+liveness après vrai exec AVANT préflight/premierledger, même enveloppe, premier
+refus immuable/arrêt borné. 229b/Q figés ; si code nouveau, nouveaupin/ROversionnée.
+Pas de copie humaine en90s ni promesse de ping comme condition d'admission.
+Aucun health/SQL/provider/poste/Cargo/runtime/target actuel autorisé ici.
