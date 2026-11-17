@@ -156,3 +156,6 @@ RECTIFICATION C7 avant transmission du prétendu blocage lock : vérification Gi
 
 
 Auditpériodique17nov : G r4/ROtotaleachevée→seulGO CPU23 C7-G-PG-CPU-GREEN-R4-17nov60, aucunBnativeimplicite ; ArbreQ8entréeactive/acteurdoitqualifierfresh ; autresprépasactives/attentesArchietCœurrespectées. ROWSchoixCONCEPTIONseule : MRELinterne séparéeANN pourcomposerordrecommitexistant, propositionconcrète obligatoireunicité/offsets/recovery+rétentionhorizon/OID/scan+upgradecheckpointrotationWAL ; lacuneSTOP/aucuncodeouC1délégué. Mêmeticket08novavantnote/revuesM puisGOimpléventueldistinct, voirsuivi17nov.
+
+
+17novLucieautoriseDockerPGjetable. GpeutallouerinstanceTESTprivée/mêmeticketFTS302aprèsrecettepubliée,sansnouvellepermissionroutinière : imagePG17localeIDpiné/containernonce/portloopbacklibredistinct5433/limitesDockerpropres2GiB2CPU/logdisque+TTL1800cleanupattribué, setupPOSTECommon180/whole185+2. DDL/rôles/datasetprivésautorisés ;0original/servicepartagé/SDK/secretpublié. ClientRustCsource/tests/ROetGOcontactdistinctencorerequis ; Dockerdisponible≠transportqualifié. Détailsgo C7-PG-DOCKER-FIXTURE-17nov ausuivi.

@@ -401,3 +401,14 @@ Arbre rougecausal48a2acquis1FAILreadonly/0ERROR/0skip/0,008sunittest/0,144241s/r
 
 
 CorrectionentêteC7 : contrôleticketsducommit862aa5ddfd a REFUSÉFamille«validationetoutillagecommun» (seulsmoteur/produitacceptés) ; commitdéjàcréé/poussé, aucunavisvertinventé. Rectificationdoc seule versproduit, sansamend/force ; recontrôleavantattributioneffective.
+
+
+## Autorisation Lucie : PostgreSQL Docker privé pour qualification
+
+Lucie17nov : «pourpgsqlfautpashésiteràlancerundocker». L'interdictionancienneDockerphaseB ne bloquePAS une allocationjetableDISTINCTEmaintenantautorisée. C7Dockerimage lsROsurPC confirme imageslocalespostgres:17-alpine(b0f9560a2de0) et16-alpine(cf78e76683b9), pgvector17déjàutiliséeautrelotàNEPAStoucher. Aucuncontainercrééparcettelecture ; premieressaiROformatSSH a refusé arguments/aucunemutation, inventaire simple ensuite0.
+
+G propriétaire autorisé à rendre opérationnelle la fixtureTEST Docker privative sousFTS302 : publier ticket/recette/sourceprovision et identitésavantactions, puis UNEinitialisationdansallocationC7-PG-DOCKER-FIXTURE-17nov, vraiPOSTE/Commonsetup180avecwhole185TERM+KILL2 explicite. Pasd'attente de nouvelle permissionroutinière C7/Lucie si planconforme ; sinonSTOPpointconcret. PréférerimagePGlocale17 existante, épinglerIDsha256complet etprovenance, paslatest/imagepgvectorautrelot/pullinutile. Container/réseau/données strictementnouveaux/nomsnonce+labelsowner, portloopbackLIBRE distinct5433partagé, aucunbinddebaseoriginale ouvolumepartagé. PlafondsDOCKERpropres<=2GiBmemoryswapégal/2CPU/pidsbornés, disque/logsbornés ; Commonclient nepretendPASàluiseulbornerdaemonPGexterne. Supprimer/restitueruniquementressourcesnonceaprèsarchivagespreuves/logssanitisés ; duréeviePGMAX1800avecarrêtattribuéautomatique,àconfigurerAVANTdémarrage, pasdaemonoublié.
+
+CréationBDD/rôles/DDL/datasetprivéscommeALLOCATIONTESTexplicitementpermise : attentesindépendantesOID/server/droits/grants, observernonownerRO, typedfixtures+contrôlesSQLprévusuniquementsurcetteinstance. Credentialsnouveauxviafichierprivé0600/référenceprotégée,jamaisDSN/passwordstdout/argv/inspectEnv/runnerB. Aucuncredentialoriginal/copiede.env/vault. PremierrefussetupSTOP0retry/nonélargissement. Logs/identitésimage/container/PID/port/limites/fincleanupconservés, aucunelivebase/service7970/SDK/cache/migrationtouchés.
+
+Le clientRustC etsesnouveauxcontrats restentSOURCEenprépa/codepub+rouge/RO/pins/admissiondistincteavantvraiesconnexionsdepuiscetoutil. AllocationPGnequalifiePAStransport niwhole10/PGv1compat, n'autoriseaucunSQLsurpartagé ni autreDockerexistant. Le but est deleverl'absence de cibleisoléemaintenant, pasd'attendrel'implémentationclientsanspouvoirpréparerlesdonnées. G transmetrecetteSHApuisreçud'allocation/prêtourefus, sansrendez-voushumainadditionnel.
