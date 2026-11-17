@@ -344,3 +344,13 @@ Parent et enfant comparent encore leur preuve complète (deux devices inclus).
 L'ancien diagnostic garde son prédicat strict et son refus immuables.
 RO R du contrat source requise AVANT nouveau paquet/pins ; CPU puis natif
 restent soumis à GO distincts. Aucun troisième essai de compilation autorisé.
+
+L'inode seul n'est jamais l'identité globale : la liaison au fichier reste
+prouvée par FD9(stat.dev,ino)==chemin canonique. La source primaire
+[proc/fd.c](https://github.com/torvalds/linux/blob/v6.8/fs/proc/fd.c) prend
+le file du FD pour show_fd_locks ;
+[locks.c](https://github.com/torvalds/linux/blob/v6.8/fs/locks.c) filtre
+fl_file==filp et son propriétaire avant de rendre cette ligne. Le prédicat
+s'appuie donc sur la ligne attachée au FD attribué, pas sur une recherche
+globale d'un numéro d'inode. Source correctivef4e615b5bd soumise à RO R,
+aucun nouveau paquet avant cet avis. Témoins toujours NONJOUÉS.
