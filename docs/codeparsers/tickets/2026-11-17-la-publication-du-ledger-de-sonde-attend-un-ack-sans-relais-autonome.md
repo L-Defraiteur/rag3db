@@ -404,3 +404,22 @@ Rapport09/pinscorrection pour RO TOTALE avant GO CPU distinct, aucun import/pars
 test exécuté. Source/modèles ≠qualificationorigine/OS/SDK/global6rôles/portLIVE.
 Le ticket reste ouvert ; les défauts ne sont pas déclarés corrigés par ce code
 nonjoué. Tous les anciens Q/source/proofs figés, aucun BASE/CAND/target/corpus.
+
+### RO totale TTY e15 : première cause encore masquée par erreur de journal
+
+Revue cumulative source/diff/loader/fixtures/bundle/doc09/pins16, sans exécution ;
+les seize SHA correspondent et les améliorations RPC/clock/closure sont lues,
+mais aucun avis global favorable. Réserve résiduelle avant correction :
+
+- Relay.run except écrit first-red avec seul FileExistsError capturé ; un
+  OSError de disque masque l'erreur initiale et saute abort avant finally.
+- Le finally écrit local-stop-refused avec la même fragilité ; un échec de ce
+  constat remplace failure alors que la cause initiale est déjà acquise.
+
+Consigner puis prépublier les deux contre-exemples sur le VRAI Relay.run et
+une panne sélective d'atomic_json (premier journal / constat de stop), avant
+fix. Préserver le même objet d'erreur, tenter le cleanup malgré journal absent,
+conserver les secondaires/UNKNOWN sans prétendre qu'une écriture a réussi.
+Le candidat e15 reste figé/non exécuté ; attendre également les autres RO
+totales pour regrouper les correctifs, puis nouveaux pins/RO/GO ciblés avant
+rejeu ou vert. Rien corrigé ou exécuté par la présente consignation.
