@@ -135,3 +135,8 @@ C7 distinct avant exécution. Code source8b94353 inchangé.
 ### Banc — témoin final lock3d00de3f25
 
 [RO ciblée favorable préparation](../../banc/17-11-2026/03-ro-couple-fs-red.md) : vrai main166d byteexact/TempDirs/guards budget-manifeste-hash-final réels, phases amont modèles explicites. Mutation tardive seul lockeffectif/seedintact, setupguards avantassert et contrôleinchangé : attendu1FAILacceptationdrift+1PASS/0ERROR,NONJOUÉ. Qprivé dev57/inode96685390/deuxSHAffdddc1f+166d conformes. GOCPU60 C7distinct requis,HOLDnatif inchangé,aucune permission probesjournaux/ticket OUVERT.
+
+
+### Banc — couple v4 77a4703c8f
+
+[RO totale favorable préparation](../../banc/17-11-2026/03-ro-couple-fs-red.md) : rouge166d1FAILdrift+1PASSinchangé/0ERROR corroboré sansrejeu. Deuxguardes lockeffectif aprèsjuges avantresult et aprèsCommon avantfinalaccepted dansEND ferment P1SOURCE.9pinsQv4/pref94967917/portable7c58/source0f/seeddbdb/Tconformes ;deuxQCPU96720614/620 SHAconformes,5AST/0CPUjoué. Attendus2PASSfinal+3PASSjournauxNONOBSERVÉS/GOsCPUdistinctsC7 puis GO300distinct ; ticket OUVERT/aucunruntimequalifié.
