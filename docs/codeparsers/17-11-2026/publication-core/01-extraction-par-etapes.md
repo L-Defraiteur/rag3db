@@ -69,3 +69,9 @@ L'absence actuelle de l'API donne un FAIL nommé, jamais un importERROR masqué.
 Aucun de ces témoins n'est encore joué. Les seules nouvelles fonctions runtime
 à cette prépublication sont des types/validateurs de plan deepfreeze, pas les
 boucles quatre labels ni les helpers WindowEvent ; pas de capacité annoncée.
+
+Le témoin Window autonome déclare explicitement le dossier des vrais wrappers
+Rust dans sys.path, pour leur import relay quand il est lancé depuis
+publication-core. Correction de montage faite en relecture statique AVANT tout
+jeu Window, aucun ERROR observé ou effacé. API Window toujours absente, tests
+NONJOUÉS, nouveau SHA de prépublication à employer pour un éventuel GO rouge.

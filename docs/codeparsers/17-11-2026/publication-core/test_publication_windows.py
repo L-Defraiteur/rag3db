@@ -2,11 +2,14 @@
 import hashlib
 import importlib.util
 import json
+import sys
 from pathlib import Path
 import unittest
 from unittest.mock import patch
 
 BASE = Path(__file__).resolve().parent.parent / 'rust-probe-relay/test_relay.py'
+# Les wrappers du vrai Gate importent relay depuis ce dossier ; aucun module factice.
+sys.path.insert(0, str(BASE.parent))
 spec = importlib.util.spec_from_file_location('window_baseline_fixtures', BASE)
 fixtures = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fixtures)
