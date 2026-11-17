@@ -410,3 +410,18 @@ corpus/service/target/PC. Pas de lecteur replay ajouté, contrat global reste
 ouvert. Action RO TOTALE SOURCE confiée Recherche+Banc sous ce ticket ;
 ensuite piloteGREEN nouveau et paquet/RO/GO distinct avant toute exécution,
 aucune transposition du pilote sixFAIL ni anciens coupons. Porteur Lucivy.
+
+
+RO SOURCE066 réservées Recherche et Banc3c62cb73ec (4SHAconformes). Ticket
+complété avantfix : collision/troncature reçu-rapport/rapportdansinput, alias
+parent connu, identitéNone→0. Prépublication RED bdf83ad76cf73a74cdde8358affb364b857e27e2 lucivy branche
+cx-lucivy-fs-output-red-17nov, parent066 intact, rapport17/26+pins. Extraction
+BASELINE with_v3_report vraimentappelée natif (build puis File::create),
+document_ordinal vraimentappelé recherche (unwrap0 gardé), report_paths
+déclarés maisNONvalidés. 5nouveauxnégatifs+positif,16nomsinventaire ;
+attenduSTATIQUE5FAIL/1PASS,0résultatobservé. Cas flags zéroeffet/sansreçu
+proposé commeexceptionconfiguration, nonimplémenté. RO TOTALE SOURCE
+Recherche+Banc demandées avantnouveaupilote/paquetRO/GOrougeC7distinct ;
+aucunfixGROUPÉ avantrougesconservés2hosts, puisnouveauxpinsRO/GOvert.
+Aucun Cargo/test/rustfmt/ELF/proc/corpus/PC/service/target. Porteur Lucivy,
+sixrougesinitiaux acquisinchangés/replaymanquant/ticketouvert.

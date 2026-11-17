@@ -1,0 +1,63 @@
+{
+  "status": "RED_SOURCE_PREPARATION_ONLY_NO_EXECUTION",
+  "source": "bdf83ad76cf73a74cdde8358affb364b857e27e2",
+  "parent": "0668432241989dc9fac88e6df0e54e80c0f3e368",
+  "branch": "cx-lucivy-fs-output-red-17nov",
+  "repository": "L-Defraiteur/lucivy",
+  "worktree": "/home/lucied/git_workspaces/cx-lucivy-fs-admission",
+  "files": {
+    "lucivy_core/tests/common/fs_fixture.rs": "7140821153da387fe0c193a4265f2b6b854502275a76c1d6cda7f6dc33445601",
+    "lucivy_core/tests/test_fs_fixture_admission.rs": "819536e2ec32348c40dd3a93c778179e13760684677dac7b1fad3c444e62e193",
+    "lucivy_core/tests/test_sfx_v3_ground_truth.rs": "24fe0a09bd4fa13bd47706067f24689396a192b34ee7ed04642b7c18a6292f75"
+  },
+  "compiled_inventory_expected": [
+    "empty_view_is_refused_before_builder",
+    "enumeration_error_is_not_an_empty_subtree",
+    "metadata_error_is_not_a_filtered_file",
+    "read_error_is_not_a_filtered_file",
+    "invalid_utf8_is_refused_not_dropped",
+    "uncovered_panel_is_refused_before_zero_equals_zero",
+    "covered_fixture_reaches_builder_once_on_the_captured_bytes",
+    "flag_presence_is_refused_before_any_corpus_operation",
+    "absent_root_is_a_precise_refusal_without_skip",
+    "existing_receipt_prevents_recapture_after_refusal",
+    "report_receipt_collision_is_refused_before_consumer",
+    "report_inside_input_is_refused_before_consumer",
+    "aliased_output_parent_is_refused_before_consumer",
+    "missing_document_ordinal_is_not_document_zero",
+    "invalid_flags_have_no_receipt_or_corpus_effects",
+    "distinct_outputs_and_present_ordinal_reach_consumer_once"
+  ],
+  "new_exact_cases": [
+    "report_receipt_collision_is_refused_before_consumer",
+    "report_inside_input_is_refused_before_consumer",
+    "aliased_output_parent_is_refused_before_consumer",
+    "missing_document_ordinal_is_not_document_zero",
+    "invalid_flags_have_no_receipt_or_corpus_effects",
+    "distinct_outputs_and_present_ordinal_reach_consumer_once"
+  ],
+  "expected_not_observed": {
+    "semantic_failures": [
+      "report_receipt_collision_is_refused_before_consumer",
+      "report_inside_input_is_refused_before_consumer",
+      "aliased_output_parent_is_refused_before_consumer",
+      "missing_document_ordinal_is_not_document_zero",
+      "invalid_flags_have_no_receipt_or_corpus_effects"
+    ],
+    "positive": "distinct_outputs_and_present_ordinal_reach_consumer_once",
+    "per_negative": [
+      0,
+      1,
+      0,
+      15
+    ],
+    "per_positive": [
+      1,
+      0,
+      0,
+      15
+    ]
+  },
+  "correction_applied_to_new_defects": false,
+  "executions": []
+}

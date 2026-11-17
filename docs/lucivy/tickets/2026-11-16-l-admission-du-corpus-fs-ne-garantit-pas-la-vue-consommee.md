@@ -536,3 +536,27 @@ la frontière. À corriger ou exclure par une identité positive du parent avant
 qualification native, sans ouvrir/résoudre le corpus avant le refus des flags.
 Ce n’est pas une garantie déjà livrée. Le replay même chemins/SHA reste aussi
 une capacité manquante explicite ; ni lui ni ce défaut ne sont clos par source066.
+
+RO SOURCE Recherche066 réservée : alias parent connu ; nouveau défaut reçu
+V3_ADMISSION_MANIFEST identique au ground_truth_report puis File::create qui
+le tronque, ou rapport sous racine corpus ; _node_id absent devient ordinal0
+via unwrap_or(0). Constat source, aucun test. Porteur Lucivy : valider ensemble
+TOUTES sorties distinctes/hors input avant réservation/build, interdire toute
+troncature et refuser identité moteur manquante. Préparer nouvelle source/pins,
+aucun nouveau run. Critères : reçu intact, aucun effet sur corpus/alias,
+identité absente jamais assimilée à doc0 ; RO totale du nouveau pin requise.
+
+
+RO SOURCE066 réservées Recherche et Banc3c62cb73ec (4SHAconformes). Ticket
+complété avantfix : collision/troncature reçu-rapport/rapportdansinput, alias
+parent connu, identitéNone→0. Prépublication RED bdf83ad76cf73a74cdde8358affb364b857e27e2 lucivy branche
+cx-lucivy-fs-output-red-17nov, parent066 intact, rapport17/26+pins. Extraction
+BASELINE with_v3_report vraimentappelée natif (build puis File::create),
+document_ordinal vraimentappelé recherche (unwrap0 gardé), report_paths
+déclarés maisNONvalidés. 5nouveauxnégatifs+positif,16nomsinventaire ;
+attenduSTATIQUE5FAIL/1PASS,0résultatobservé. Cas flags zéroeffet/sansreçu
+proposé commeexceptionconfiguration, nonimplémenté. RO TOTALE SOURCE
+Recherche+Banc demandées avantnouveaupilote/paquetRO/GOrougeC7distinct ;
+aucunfixGROUPÉ avantrougesconservés2hosts, puisnouveauxpinsRO/GOvert.
+Aucun Cargo/test/rustfmt/ELF/proc/corpus/PC/service/target. Porteur Lucivy,
+sixrougesinitiaux acquisinchangés/replaymanquant/ticketouvert.
