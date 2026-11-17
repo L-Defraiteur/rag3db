@@ -601,3 +601,15 @@ ledger2ELF copié/fsync/rehashACK AVANTtouteinvocation, doubleguardlock/bornes/
 nettoyage inchangés. Actions2RO TOTALES COUPLE Recherche+Banc confiées, puisGO
 C7nouveau distinctavantcommande candidate ;0Cargo/test/ELF/corpus/service/ARM.
 Aucunfixgroupé avantrougesarchivés2hosts. Arbitrageflags30561conservé, ticketOPEN.
+
+
+RO TOTALE COUPLE RED EXACT e75f586146 Recherche favorable PRÉPA reçue :
+trois scripts intégralement relus, INVENTORY16 distinct de TESTS6, cinq
+FAIL101/noms/15filtered/causes/traces/octets collision et positif stricts.
+Ledger deuxELF fsync/copie/ACK avant toute invocation y compris listes,
+sauvegarde RO des cinqELF avant compile, bornes physiques/ARM/RPC/acquisition/
+poste32G/swap0/HIGHmax/quota4/jobs4/ENDMIN sans reset et double guard lock
+effectif conservés. Aucun nouveau blocage statique identifié ; résultat
+futur sixjuges NATIFS distinct des sept historiques. Aucun cinqrouges
+observé ni qualification FS/corpus déduite. Avis borné à préparation ;
+Banc puis décision GO C7 exacte distincte encore requis avant commande27.
