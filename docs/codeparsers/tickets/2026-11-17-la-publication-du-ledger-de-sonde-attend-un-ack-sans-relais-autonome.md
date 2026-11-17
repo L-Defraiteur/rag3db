@@ -423,3 +423,36 @@ conserver les secondaires/UNKNOWN sans prétendre qu'une écriture a réussi.
 Le candidat e15 reste figé/non exécuté ; attendre également les autres RO
 totales pour regrouper les correctifs, puis nouveaux pins/RO/GO ciblés avant
 rejeu ou vert. Rien corrigé ou exécuté par la présente consignation.
+
+### Fin des RO totales M/TTY e15 : deux familles regroupées
+
+Mémoire confirme les seize empreintes/source/disque/Python et l'absence de
+jeu, mais demande deux corrections avant tout GO58 ; TTY ajoute le même
+chemin stop/close à sa réserve causale. Regrouper AVANT diff correctif :
+
+- Prepared : verify_entry hashe digest(prepared), puis rouvre read_text pour
+  json.loads. Les données déterminant la fermeture peuvent différer des octets
+  hashés. Lire une seule fois, hasher et décoder le MÊME snapshot. Prépublier
+  substitution du second read sur la vraie fonction, sans thread ou effet OS.
+- Première cause : aux deux journaux Relay.run s'ajoute SSHTransport.stop :
+  failure de reap est mémorisée puis handle.close non protégé peut la remplacer.
+  Prépublier aussi ce cas ; conserver l'objet initial et les secondaires/UNKNOWN
+  malgré l'impossibilité d'écrire un constat. call seul ne suffit pas à composer
+  cette garantie jusque stop et Relay.
+
+Quatre témoins ciblés à écrire sur moteur/loader e15 INCHANGÉS : prepared
+second-read, first-red journal, local-stop-refused journal, reap puis close.
+Les assertions d'identité d'objet et de cleanup ne sont pas des marqueurs de
+réussite d'écriture ; secondaires en notes/UNKNOWN si disque refusé. Rien encore
+exécuté. Source/pins/RO ciblées avant GO distinct ; aucun58/ancienrejeu implicite.
+
+Cadrage C7 HOLD58/3a4c24b3ca reçu : familles regroupées avantfix, sourcee15
+INCHANGÉE. Ajouter le constat cleanup-refused après échec abort aux deux
+journaux Relay : total CINQ cas ciblés (prepared1, Relayjournaux3, stopclose1).
+Le futur correctif du lecteur préparé doit servir aussi relay_main/gate_main/
+pilot.main, sans rouvrir un JSON différent après pin ou contexte prévalidé.
+La seule conformité d'un préimport ne lie pas une relecture ultérieure.
+Contrat de secours proposé pour les témoins : failure_record en mémoire garde
+first_error/secondary_errors/remote_quiet UNKNOWN avant toute écriture ; même
+objet exception réémis. Ce record n'est PAS une archive réussie ou un reçu LIVE.
+Aucun patch du moteur/loader avant rouges précis conservés et nouveau cadrage.
