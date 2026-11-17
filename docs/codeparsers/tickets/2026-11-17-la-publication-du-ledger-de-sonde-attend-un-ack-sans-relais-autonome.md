@@ -54,3 +54,8 @@ implicitement à la place d'une compilation prévue par un GO.
 ## RO totale Banc du prototype782b/pair03
 
 [Rapport secondaire](../../banc/17-11-2026/01-ro-relais-sonde-rust.md) : dix pins conformes, Relay/Gate/delta pilote relus ensemble ; trois réserves groupées avant phase : TTL/arrêt de la file distante avant Common, handoff argv futur publié avant exec, fin locale sans recheck après publication et hardborne cleanup. Porteur Codeparsers ; témoins des vrais chemins à prépublier puis correction/ROdelta sous décisions C7. Aucun test ou processus réel lancé par Banc, P02 toujours consommée rouge, carry reste proposition non branchée.
+
+
+### Banc — cf83228/P04, 17 novembre
+
+[Relecture du correctif](../../banc/17-11-2026/01-ro-relais-sonde-rust.md) : P04 préparé identique deuxpostes/10copies chacun/profil81969 vérifiés sans exécution. Bootstrap aprèsexec et watchdogs physiques reconnus corrigés. HOLD natif : Relay.run coupe son RPC abort via cap expiré avant appel ; Gate.cancel peut publier launcher_absent depuis alive=[] si sa boucle finale n'a jamais pu jouer. Correctif/témoins groupés attendus ; aucun test rejoué, aucun GO déduit, ticket OUVERT.
