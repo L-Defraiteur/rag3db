@@ -17,3 +17,9 @@ SOURCE/PQSlabelv5 proposémaisINADMISSIBLE :contrôleurPCuniqueARMEDréel
 actualexec/watchervivant/provenance/pollavantpréDB/READY/RPC demandéC7,
 patterncommunArbre/Embarattendustableàréutiliser,pas3eimplRecherche.
 PGtoolSQLréelstrictHOLD,aucunflagqualifiéforgé. AucunQ5/GO6000/master/retrait.
+
+PremieressaiCPUaprèsPUSH7d2b : rc2 AVANTtouttest,option-f redondante
+refusée par unittest.main(failfast=True) duscript. ErreurCOMMANDEnonfonctionnelle,
+brutsR/cx-proofs-recherche-fts-tmp-red-v1+manifestjointconservés. Source
+niunitdrivernechangent : corrigerRECETTEenretirant-f(failfastdéjàimposé),
+publieravantnouvelessaiCPU60. Aucunredarithmetic/natif/socketprétendu.
