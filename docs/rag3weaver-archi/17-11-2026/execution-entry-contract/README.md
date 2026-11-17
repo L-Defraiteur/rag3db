@@ -114,7 +114,7 @@ source Linux explicite, pas noyau hôte relevé ni qualification du stockage.
 `execution_entry.pyi` décrit seulement `verify_transcript` : futur vérificateur
 pur d'une séquence de faits modélisés. `test_execution_entry.py` vise ce symbole
 futur ; aucun module d'implémentation n'est fourni ici et aucun import/test n'est
-exécuté. Quarante-cinq fonctions de témoins sont écrites, NON JOUÉES. Ces témoins
+exécuté. Quarante-sept fonctions de témoins sont écrites, NON JOUÉES. Ces témoins
 n'attestent jamais le noyau ou les événements réels. Le
 producteur opérationnel devra construire les faits depuis ses propres primitives,
 pas accepter un transcript fourni par le programme testé comme preuve d'OS.
@@ -241,3 +241,15 @@ des références opaques fournies par le propriétaire de confiance ; le modèle
 vérifie leurs liaisons, pas leur calcul cryptographique ou la lecture CP réelle.
 Ces opérations font partie du futur adaptateur opérationnel à spécifier/qualifier.
 Cela ne rend pas un tuple de fixture admissible comme reçu physique.
+
+
+## Delta causal TTY0bae : absence d'attestation avant publication
+
+Réserve consignée au ticket avant correction. Le troisième argument est désormais
+`PublicationAttestation | None`. Une mort/erreur avant `published` conserve sa
+première cause même sans attestation CP ; vérifier la présence d'un ACK futur
+avant de traiter ce refus serait une erreur causale. Au stade `published`, une
+attestation indépendante est obligatoire ; sinon `publication-missing` et aucune
+libération. Le témoin de mort avant entrée passe désormais None ; deux témoins
+ajoutent mort avant publication sans attestation et published sans attestation.
+Total47 fonctions NON JOUÉES, pas de faux ACK préparé pour qualifier une erreur.

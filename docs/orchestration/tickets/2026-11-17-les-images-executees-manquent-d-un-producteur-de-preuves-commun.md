@@ -129,3 +129,10 @@ Réserves documentaires/modèles ; aucun défaut OS ou test exécuté. Delta gro
 Complément TTY/CP avant le même delta groupé : une erreur/signal du producteur
 après enfant0 ne devient pas succès par quiet/reaped ; préserver le vrai rc
 invocation dans les faits et la première cause d'infrastructure séparément.
+
+## Réserve causale TTY0bae, avant correction
+
+L'attestation CP acquise après entrée/copie ne peut être obligatoire lors d'une
+mort avant publication. Autoriser l'absence explicite jusqu'à published ; garder
+la première cause prépublication sans ACK inventé, et refuser published sans
+attestation indépendante. Témoins à écrire avant implémentation, aucun CPU.

@@ -107,6 +107,7 @@ class EntryContract(unittest.TestCase):
         plan, facts, publication = fixture()
         facts[2]['kind'] = 'failure'
         facts[2]['data'] = dict(code='child-died-before-entry')
+        publication = None
         self.refused(plan, facts, publication, 'child-died-before-entry')
 
     def test_runner_pid_not_child_pid(self):
@@ -320,3 +321,13 @@ class EntryContract(unittest.TestCase):
             verify_transcript(plan, facts, publication)
         self.assertEqual(caught.exception.code, 'common-root-failed')
         self.assertEqual(caught.exception.invocation_returncode, 0)
+
+    def test_death_before_publication_does_not_require_future_ack(self):
+        plan, facts, publication = fixture()
+        facts[4]['kind'] = 'failure'
+        facts[4]['data'] = dict(code='child-died-before-publication')
+        self.refused(plan, facts, None, 'child-died-before-publication')
+
+    def test_published_requires_independent_attestation(self):
+        plan, facts, publication = fixture()
+        self.refused(plan, facts, None, 'publication-missing')

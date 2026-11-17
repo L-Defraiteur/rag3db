@@ -63,8 +63,10 @@ class Refusal(RuntimeError):
 
 # PURE future validator: no files, clocks, subprocesses, signals, publication.
 # Raises Refusal on incomplete/invalid transcript, preserving earliest failure.
+# None is valid before published; a preceding failure keeps its first cause.
+# published without an independently acquired attestation refuses.
 # Model evidence is accepted ONLY by this pure review layer, never OS admission.
-def verify_transcript(plan: InvocationPlan, facts: Sequence[Fact], publication: PublicationAttestation) -> InvocationResult: ...
+def verify_transcript(plan: InvocationPlan, facts: Sequence[Fact], publication: PublicationAttestation | None) -> InvocationResult: ...
 
 # Future operational entry point, deliberately NOT specified as a callable yet:
 # launch/observe/release/wait must implement README protocol after its RO.
