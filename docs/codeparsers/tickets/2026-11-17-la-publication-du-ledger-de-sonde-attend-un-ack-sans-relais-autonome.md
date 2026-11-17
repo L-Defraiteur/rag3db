@@ -32,3 +32,20 @@ Bruts+nouvelELF conservés2hôtes sous rust-probe-pair-02/baseline ; classificat
 CommonTERMINE/code1/restes[]/nettoyé ; bus absent, audit postmortem ownedquiet.
 TargetPC appartient désormais à BASE ; P02 est une archive consommée.
 Aucun résultat sémantique de sonde à interpréter. Parent Rust reste ouvert.
+
+## Préparation corrective autorisée par C7, avant code
+
+Préparation seulement sur branche privée cx-codeparsers-rust-relay, issue du
+rapport1be7dc3d97 ; P02 reste intouchée. C7 demande un relais autonome présent
+avant le lancement distant, deux publications sous leurs bornes, contrôles de
+phase active/PID-start/UID/scriptsSHA avant chaque transfert ou lien exclusif,
+horloges PC interprétées sur PC et durée restante bornant le travail local.
+SIG/erreur/timeout/fin de phase doivent arrêter ce relais et préserver le premier
+rouge et les sorties brutes. Aucun ACK posthume ni réactivation P02.
+
+Protocole et témoins factices du VRAI moteur de relais publiés avant implantation.
+Aucun test n'est autorisé implicitement par cette préparation ; la revue doit
+porter sur le couple relais/pilote, les pins et un budget correctif distinct.
+Le carry de l'ELF0c565 compilé sous fec est seulement proposé avec chaîne de
+provenance, END précédent et propriétaireBASE ; il ne sera jamais sélectionné
+implicitement à la place d'une compilation prévue par un GO.
