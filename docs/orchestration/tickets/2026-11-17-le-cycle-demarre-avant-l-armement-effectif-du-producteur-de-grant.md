@@ -63,3 +63,6 @@ AdmissionC7NEUVE17nov : HB1vert6c6b/manifest815077...1dd36 et deuxTOTALROED/R/Q8
 
 
 RetourQ8 : ARMautonomeavantDB/READYgrantobservés puisRED1266055.091886152 aprèsACKshutdownmêmePID. Causegardeaprèswriter : stable_readers refuse2disparitions .ecrivain/.wal dansRAWbaseline2252→2250, DBmodifiée/autresentréesidentiques ; statutglobalresteROUGE/suitesgraphFTSvecteursPOSTNONJOUÉES. Bruts103manifest497baaf3...a2d5d2hostsowner, sourceFINintacteàattester. Publicationimmuable+ticketdéfautdegarde AVANTfix/ROpreuve/propositionpostwriterdistinctreadonly ; aucunrejeuwriter/relaxation/auditnatifouancienENDréactivé. Détailsdanssuivi17nov.
+
+
+Dépassementdephase traitéauticketDISTINCTgarde docs/arbre-principal/tickets/2026-11-17-la-garde-readonly-est-utilisee-apres-le-writer-du-cycle.md (d7bccavantfix), sansclôturecycle. Contrat3c9/RRO etharnais14source48a2prépub/runtimeinchangé : GOCPUcausalSEULnominalexact C7-POSTWRITER-CAUSAL-RED-48A2-17nov60,1FAIL/0ERRORattendu,0native/rejeuDB. Matrice14NONJOUÉE horscecas, aucunequalificationPOST/innocuitéduQ8.
