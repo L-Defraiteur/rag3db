@@ -266,3 +266,26 @@ Nouveau backendSHA687de930ed499b2ced472af6e8ccba17b2b4837b6c282d60bdf5f3d01f958f
 JAMAIS invoqué ; SDKruntime/DBlecteurs/B/C/LIVE non qualifiés. Deux RO preuves
 demandées, aucun nouvelappel/installation/cleanup/sourcebase/service. AcquisED
 carried/anciensrouges inchangés. Parent OUVERT jusqu'aux trois bases jugées.
+
+
+## Préparation B autorisée après suffisance A — C7 9a771e5801
+
+A90aa9d053d583eab07a7b299d9ee3dba6dd85c50 est suffisant BUILD_STATIC_PAIR_OBSERVED
+seulement, après deux RO Recherche/ED1bb4cc301d et contrôle C7. Reprise par
+arbre-principal sur worktree neuf cx-arbre-cli99-runtime-b-20261117-r1 : préparer
+source/pilote/recette/manifest/pins et Q de métadonnées pour le runtime CLI99,
+SDK59 et lecteurs sur une COPIE PRIVÉE NEUVE de FIN froide qualifiée/pinnée.
+Réemployer les primitives Qv9/acteur/contrôleur/Common qualifiées, A et F8/lib
+acquis ; pas de rebuild/rejeu sans cause, pas de nouvel observateur CP.
+
+Avant GO B : avis complets indépendants sur source et paquet, durée/caps depuis
+coûts Qv9 observés, provenance source froide/ELF/ledger A, profils SDK réels et
+maps sur les invocations concernées, publication/ACK/shutdown rc0 au même
+PID/start, invariants graph/FTS/générations/visibilité/dette/bits et sources
+strictes avant/après. Si le protocole nécessite le service modèle, coordonner
+son empreinte ATTENDUE avec Embar ; aucune observation santé avant GO et READY.
+
+Aucune copie DATA/ELF, lecture DB, exécution native/test, provider/service7970,
+original, installation/pose ou nettoyage autorisé maintenant. Git/W privés et
+préparation Q metadata seuls inclus. B/C exigent GO distinct ; C attend toujours
+G frais, RET72h et oracle matched. Parent OUVERT, ressources A conservées.
