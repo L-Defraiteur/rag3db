@@ -81,6 +81,36 @@ class ReviewWitnesses(unittest.TestCase):
         with self.assertRaises(AssertionError):
             self.parser()(raw, passed=4)
 
+    def test_foreign_filets_cannot_precede_the_right_tty_names(self):
+        raw = block('Running tests/e2e_filets.rs', ['foreign::first', 'foreign::second']) + block('Running tests/e2e_tty.rs', TTY)
+        with self.assertRaises(AssertionError):
+            self.parser()(raw, passed=4)
+
+    def test_duplicate_name_cannot_replace_a_missing_test(self):
+        raw = block('Running tests/e2e_filets.rs', FILETS) + block('Running tests/e2e_tty.rs', [TTY[0], TTY[0], *TTY[2:]])
+        with self.assertRaises(AssertionError):
+            self.parser()(raw, passed=4)
+
+    def test_suite_cannot_run_before_its_filets(self):
+        raw = block('Running tests/e2e_tty.rs', TTY) + block('Running tests/e2e_filets.rs', FILETS)
+        with self.assertRaises(AssertionError):
+            self.parser()(raw, passed=4)
+
+    def test_should_panic_text_is_not_a_native_failure(self):
+        stopped = []
+        MemoryPath.files = {}
+        raw = "thread 'expected' panicked at fixture.rs:1:1:\nexpected panic\ntest expected - should panic ... ok\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s\n"
+
+        def backend_run(command, *, stdout, **kwargs):
+            stdout.write(raw)
+            return SimpleNamespace(returncode=0)
+
+        stage = actual('stage', dict(p=MemoryPath('evidence'), a={'end': time.monotonic()+600},
+            time=time, math=math, json=json, subprocess=SimpleNamespace(run=backend_run, STDOUT=-2),
+            request_common_stop=lambda *args, **kwargs: stopped.append(True)))
+        self.assertEqual(stage('tty-lib', ['fake-native'], MemoryPath('source'), {}, 240), raw)
+        self.assertEqual(stopped, [])
+
     def test_native_failure_stops_before_backend_continuation(self):
         stopped, continuation = [], []
         MemoryPath.files = {}
