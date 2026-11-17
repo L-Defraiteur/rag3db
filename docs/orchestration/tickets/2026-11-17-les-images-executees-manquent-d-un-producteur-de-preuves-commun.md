@@ -264,3 +264,19 @@ HeldEntry doit conserver une ownership accessible et cleanup/premièrecause ;
 préparer un lease AVANTfork et expliciter la fenêtre pidfd/stop/EXEC.
 Recherche confirme nonchevauchement seulement, pas propriété d'implémentation.
 Réserves de spécification avantbackend, pas défaut OS observé ni nouveau test.
+
+## Préparation baseline comportementale du runner après28bc, avant tout import
+
+Archi porte la préparation. Publier le module neuf execution_entry_runner.py
+avec refus fonctionnel explicite backend-not-implemented et les témoins d'effets
+modélisés avant correction. Le seul nominal peut convertir ce code précis en
+self.fail, jamais ImportError/fixtureERROR/autreexception. LIVE et Common terminal
+non qualifiés restent unsupported. Aucun OS/native/PQS/test lancé ; sources/pins
+et RO avant éventuel GO rouge distinct. Pur565b et archives inchangés.
+
+Baseline runner/témoins d'effets prépubliés : [rapport56](../../rag3weaver-archi/17-11-2026/56-baseline-runner-et-temoins-effets-prepublies.md).
+Vrai module neuf refuse backend-not-implemented avanteffets ; nominal transforme
+SEULcecode enFAIL, jamaisImportError.24fonctions correspondent21scénarios+3cas,
+NONJOUÉES ; ports/horloges/capacités sontMODELED seulement, pasOS. PinsUNnominal
+proposés sansGO,23autresnonselectionnés. RO puisGOrouge distinct avantexécution,
+preuve2hôtes avantfix ; LIVE/Commonfinal/nativeunsupported, aucunPQS créé.

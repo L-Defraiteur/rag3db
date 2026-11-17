@@ -57,7 +57,11 @@
     },
     "execution_entry_runner.py": {
       "sha256": null,
-      "delivered": false
+      "delivered": false,
+      "baseline_source_path": "extension/rag3weaver/scripts/execution_entry_runner.py",
+      "baseline_source_sha256": "bb46fb931418f487873a153a9339101c51a95ca41de85624ecb8da393145fff8",
+      "baseline_source_published": true,
+      "native_backend_delivered": false
     },
     "native_recipe.py": {
       "sha256": null,
