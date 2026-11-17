@@ -1,0 +1,23 @@
+# Lucivy — 17 novembre 2026
+
+État : préparation du rouge FS, aucun Cargo ni corpus contacté.
+
+Suite du [contrat du 16](../16-11-2026/16-qualification-native-et-contrat-fs.md),
+arbitrage C7 : capture initiale unique StdFs, ordre effectif, cap5000 et
+exclusions versionnés, CapturePlan explicite et snapshot RAM. Pas de recapture
+après REFUSED. Rejeu ultérieur par manifeste, mêmes chemins/SHA sans resélection.
+
+## Reprendre
+
+- Code : `/home/lucied/git_workspaces/cx-lucivy-fs-admission`, branche
+  `cx-lucivy-fs-admission`, poussé `8b9435363dbd8ec0e3973f2368b641189f0726eb`.
+- Documentation : `/home/lucied/git_workspaces/cx-lucivy-plan-shutdown`, branche
+  `cx-lucivy-reprise-16nov`.
+- [Préparation, limites et recette proposée](02-preparation-rouge-fs.md),
+  [pins source/lock](03-fs-red-source-pins.json).
+- [Ticket porteur](../tickets/2026-11-16-l-admission-du-corpus-fs-ne-garantit-pas-la-vue-consommee.md)
+  ouvert ; revue statique demandée à Recherche puis arbitrage C7. Aucun GO Cargo.
+
+La source 1ee5 reste qualifiée pour neuf juges mémoire seulement ; cette nouvelle
+source n'est ni compilée ni qualifiée. Natifs A/B, core complet et ses neuf HOLD,
+ULP Linux7.2 et PR42 restent HOLD. Aucun main/tag/publication/fusion.

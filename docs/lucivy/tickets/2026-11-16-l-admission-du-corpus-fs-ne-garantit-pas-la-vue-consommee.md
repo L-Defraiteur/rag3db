@@ -87,3 +87,14 @@ distinctssirevendiqués, preuveREFUSEDadmise≠reportindexavantgate. Aucunimpl/
 témoinCPU/Cargo/ELF/proc/corpusmêmemetadata/service. Les2ROcontratfavorables,
 choixcapture/transportC7avantcodeetGOtoujoursrequis ;source1ee/neufmémoire/
 core9HOLD/7.2ULPPR42inchangés.
+
+Arbitrage C7 reçu17nov : CAPTUREINITIALEUNIQUEStdFs, ordreEFFECTIF/politique
+versionnée/cap5000/exclusionsavantcorpus ;pastri/recaptureaprèsREFUSED.
+TransportCapturePlan explicite+snapshotbuffersRAM ; sinkmanifestexclusifhashé/
+fsyncavantbuilder ADMITTEDouREFUSED(pasreportindex), replaymanifestmêmespaths/
+SHA sansreselection. Prépa extractionBASELINEvraiconsommateurB+spies/4vacuïtés
+(IOenum/meta/readdistincts)+positif AUTORISÉE, fautesconservéesjusqu'auxrouges.
+SourceRED+recette300/32Gquota4/T3552/ELFJSONavanttests àpublier/RO/GOdistinct
+AVANTCargo. 0corpuscontact/natif/implgatecorrectifavant4rouges ;A/BHOLD,
+SHA2devdepversionexacte/lockaudit/offlinepascryptoDIY. Nouveau lot propre
+cx-lucivy-fs-admission àpréparerdepuis1ee5, mémoires9historiquesconservées.
