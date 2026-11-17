@@ -1,0 +1,48 @@
+[
+  {
+    "source": "01c3ae28e8218262ea545513d872f8f3370def0f",
+    "path": "docs/rag3weaver-archi/16-11-2026/doc-bac-green/cache_state.py",
+    "destination": "cache_state.py",
+    "sha256": "54c9d34275ecb54c948d37d2e7add62cdf1af049e4bc7cf4f3a6ea2bd8166c8a",
+    "destination_sha256": "54c9d34275ecb54c948d37d2e7add62cdf1af049e4bc7cf4f3a6ea2bd8166c8a"
+  },
+  {
+    "source": "01c3ae28e8218262ea545513d872f8f3370def0f",
+    "path": "docs/rag3weaver-archi/16-11-2026/doc-bac-green/source_proof.py",
+    "destination": "source742.py",
+    "sha256": "6895ea593bd7a5734d5ba891ef7ce3545f5942c036035d0304a5cab5f695da6d",
+    "destination_sha256": "6895ea593bd7a5734d5ba891ef7ce3545f5942c036035d0304a5cab5f695da6d"
+  },
+  {
+    "source": "01c3ae28e8218262ea545513d872f8f3370def0f",
+    "path": "docs/rag3weaver-archi/16-11-2026/doc-bac-green/controller_policy.py",
+    "destination": "controllers.py",
+    "sha256": "5c94748496e66f19ab31a6a80236c8e22ce471f0c10935db19f60aeff1c1fb4a",
+    "destination_sha256": "731e219bc889853c8d6694c2a895e4b89f57ccaad5e0ab4241dfdeb829b8ef17"
+  },
+  {
+    "source": "13c8bf21e6",
+    "path": "docs/recherche/13-11-2026/garde-target-union-reprise/attester.py",
+    "destination": "attester.py",
+    "sha256": "7704c3699b40c57456547f64630e255334a84bfcbcf1e1b1d7be4d6d0029831c",
+    "destination_sha256": "7704c3699b40c57456547f64630e255334a84bfcbcf1e1b1d7be4d6d0029831c"
+  },
+  {
+    "source": "4fca0dd38378d5bb31269dab76713d6bc0060ebc",
+    "path": "docs/arbre-principal/13-11-2026/couches-2b-union-observe/cargo-stop.py",
+    "destination": "cargo_stop.py",
+    "sha256": "93a94b745c90445a5a7e2a2f38aad16e1cb3bedbe96d4b2df01312f6d11507f5",
+    "destination_sha256": "93a94b745c90445a5a7e2a2f38aad16e1cb3bedbe96d4b2df01312f6d11507f5"
+  },
+  {
+    "source": "4fca0dd38378d5bb31269dab76713d6bc0060ebc",
+    "path": "docs/arbre-principal/13-11-2026/couches-2b-union-observe/test_cargo_stop.py",
+    "destination": "test_cargo_stop.py",
+    "sha256": "47dc99acb6d2ded501ed8598dedec4e7791038004994c7a08b241cf12ffdd893",
+    "adaptations": [
+      "module filename",
+      "seven selected profile keys"
+    ],
+    "destination_sha256": "3e3f7ddad9811ef294d8c1e36fc63121553f23fd5a5e6076fa5f1f2eed7a4493"
+  }
+]
