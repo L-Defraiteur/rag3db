@@ -145,3 +145,8 @@ RO preuves Banc a4a2de1e1a : [rapport21](../../banc/16-11-2026/21-ro-preuves-ver
 ### Banc — delta harnais a0d74de5
 
 [RO favorable préparation](../../banc/17-11-2026/02-ro-pilote-global-d6.md) : une ligne chemin Provider vers le vrai porteurAPP, blob Rust identiquef1e8, codepilote inchangé. Ancienne tentative3839 relue3/3SHA PC/local :36OK1ERROR/37,4nonjoués/rc1/0retry ; aucun41verts déduit. Nouveau GO CPU41 exact C7 requis, aucun essai/natif/pinPC acquis ; ticket OUVERT.
+
+
+### Banc — preuves CPU41 vertes a0d74
+
+[Preuves relues sans rejeu](../../banc/17-11-2026/02-ro-pilote-global-d6.md) : manifest3213a684/3SHA PC+local conformes, sourceGit concordante,41OK/0FAIL0ERROR0skip/rc0/une invocation0retry. Qualification bornée CPU hermétique a0d74 ; aucune qualification native/SDK/D6/service/Vertex ni GO7455. AncienERROR/RED conservés, ticket OUVERT.
