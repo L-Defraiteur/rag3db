@@ -302,3 +302,19 @@ petits fichiers privés ; aucun vrai proc/FLOCK/signal/processus par fixtures.
 Pas de six rouges unitaires historiques inventés : incidentB01 est le rouge
 réel avant correctif. OS/transport restent NONQUALIFIÉS, aucune compilation
 ou phaseB autorisée par ce GOCPU ; futurB requiert317+13pins frais et GOdistinct.
+
+## B r3 distinct refusé avant output — aucune compilation
+
+GO C7-G-PG-NATIVE-B-R3-17nov120/908bc8f457 : commande03 UNEfois après
+rehash317+13host+13sources, rc1 en0.221200096s ; Commonvalidation-uair2ryp
+ROUGE/restes[]/nettoye=true. Première autorité parent refuse
+`kernel lock inode differs`, avant création de runs/phase-b-corrective-01
+(absence vérifiée). Aucune invocation rustc, ELF/ledger ou CLI native.
+
+Les identités fdinfo/stat n'ont pas été archivées avant comparaison ; cette
+lacune et le refus sont consignés ticketFTS302, sans attribuer une cause
+filesystem ni assouplir le garde. Aucun retry/lectureproc fraîche dans cette
+étape close. Sources r3 inchangées, r2/B01 conservés, aucunPG/SQL/service.
+Preuves dixfichiers vérifiées deuxpostes ; receiptSHA256
+2093d05fbd762591eb1e7d1046abed6eace090a21bf646fae9808edec28bd84d.
+Qualification OS/transport toujours absente ; aucun lease ou GO C déduit.

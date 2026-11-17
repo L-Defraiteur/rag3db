@@ -433,3 +433,28 @@ receiptSHA1ab3bbb04061fe92be0aa48eef83df6d6e4dce8c8419d2df5b8ce14cca367478.
 FD/flock/proc/tables fictifs ; aucun vraiOS/transport qualifié, rustc/SQL/slot
 ou phaseB natif déclenché. B01/r2 intacts, pas de rougesunit inventés.
 Ticket ouvert,317inputs+13pins frais et GO B distinct requis avant natif.
+
+### B correctif r3 — refus kernel dans la première autorité parent
+
+GO distinct C7-G-PG-NATIVE-B-R3-17nov120/908bc8f457 consommé UNEfois après
+fresh317+13pins+13sources et absences. PCmono1260037.194087179→1260037.415287275,
+rc1/0.221200096s. Refus exact `ValueError: kernel lock inode differs`.
+Common validation-uair2ryp ROUGE/code1/restes[]/nettoye=true. Exception dans
+la première common_authority AVANT création output ; sortie corrective-01
+absente, aucun compile-used/request natif/ELF/ledger/CLI/rustc.
+Sources r3 inchangées. Aucun retry, fallback, SQL/PG/Docker/service ou phaseC.
+
+Le garde a accepté le FD9 stat==poste.lock et la forme FLOCKREAD/WRITE,
+puis refusé l'égalité du tuple major/minor/inode fdinfo avec stat. Les valeurs
+comparées et la ligne kernel n'ont PAS été capturées avant le refus : défaut
+d'observabilité à corriger sous ce ticket avant nouvelle recette RO distincte.
+Aucune cause filesystem/format attribuée sans ces bruts ; aucune relaxation
+de dev/inode ou verrou autorisée par le refus. Pas de lecture proc fraîche
+ni reprise de poste pour récupérer un état disparu dans cette fenêtre.
+
+Preuves originales PC P/phase-b-corrective-execution-01 ; copie locale
+P/phase-b-corrective-proof-copy-01. P=cacheprivée pg-rust-tool-qual-20261117-r1.
+Receipt SHA2562093d05fbd762591eb1e7d1046abed6eace090a21bf646fae9808edec28bd84d ;
+manifest dix fichiers SHA2562c787dc7230cb72108c5d83a3b75220ba33d5550b981ff5df85393aef9d450dc.
+Copies deuxpostes vérifiées parSHA/taille ; Common public sans jeton conservé.
+OS/transport nonqualifiés,18CPUverts restent bornés aux fixtures. Ticket ouvert.
