@@ -1,0 +1,59 @@
+{
+  "state": "DESIGN_ONLY_INACTIVE_NOT_RUNTIME_CONTRACT",
+  "ticket": "docs/tty/tickets/2026-11-16-les-commandes-et-options-du-terminal-en-anglais.md",
+  "references": [
+    {
+      "commit": "c9b84168e83caaf2aa083a53ad14b93da6c4330e",
+      "path": "extension/rag3weaver/scripts/publication_relay.py",
+      "sha256": "de8222d36e02a439c33de3a4d42d9a2b2ca42e4ac17905308d8c07f6c40921b9",
+      "status": "constant extraction, reported 36 CPU regressions; no physical exec guarantee"
+    },
+    {
+      "commit": "c2d13ffd5a091e68409ec57d6675030deff24829",
+      "path": "extension/rag3weaver/scripts/publication_relay.py",
+      "sha256": "03d93ba0d70694bea5f59479abce8d3bff372738a130fb9565e1a8c93e6bf6b6",
+      "status": "intermediate untested ordered plan/ELFmapN; NOT ADMISSIBLE"
+    },
+    {
+      "commit": "c2d13ffd5a091e68409ec57d6675030deff24829",
+      "path": "docs/codeparsers/17-11-2026/rust-probe-relay/gate.py",
+      "sha256": "c4a4d46e65b920f763a7e9d07cd81ca052babc417e5cb1f6c10cac50e4443fad",
+      "status": "Rust domain provider, source/copy/ledger checks; not actual execution evidence"
+    },
+    {
+      "commit": "00e2084673e02b37a1d7ac3314015c80ca9c96e7",
+      "path": "docs/codeparsers/17-11-2026/publication-contract/publication_contract.pyi",
+      "sha256": "cd33389963692bdefd2e34e4b377e3ea66dc6bfb5da2a213cb7c3fc0015b7571",
+      "status": "proposed interface, not runtime"
+    },
+    {
+      "commit": "229b397d8d1cb28b8ac3075479e49a1ab72b400b",
+      "path": "docs/rag3weaver-archi/16-11-2026/global-pass/runner.py",
+      "sha256": "892bc2467a94b0f1953bf18f5e28af53dde865a96bc6f9882f0420989c7eac77",
+      "status": "prepared consumer, catalogue from copied ELF"
+    },
+    {
+      "commit": "229b397d8d1cb28b8ac3075479e49a1ab72b400b",
+      "path": "docs/rag3weaver-archi/16-11-2026/global-pass/qualify.py",
+      "sha256": "31e554572dad1ee4c0c82abdb6026175ed442c25e6b7f18417374f3c19093dd0",
+      "status": "prepared final path/hash checker, not exhaustive exec observation"
+    },
+    {
+      "commit": "229b397d8d1cb28b8ac3075479e49a1ab72b400b",
+      "path": "docs/rag3weaver-archi/16-11-2026/global-pass/observe.py",
+      "sha256": "2ad6569123577da342001df73dc798293a1950bc56611c100d0b5c8b28112626",
+      "status": "prepared sampled process identity, cannot cover every exec"
+    }
+  ],
+  "execution_id": null,
+  "allocation": null,
+  "phase": null,
+  "producer_pid": null,
+  "executed_pid": null,
+  "catalogue_sha256": null,
+  "execution_evidence_sha256": null,
+  "ready_nonce": null,
+  "lease": null,
+  "physical_capture_implemented": false,
+  "code_or_tests_executed": false
+}

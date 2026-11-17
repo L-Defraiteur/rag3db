@@ -762,3 +762,14 @@ TTYad hoc. Prépublier contratproducer/consumerPIDstart/phase/SHA/inventaire/log
 bornesPCLOCAL ettémoinsrebuild/pathrestauré/copieautre avantRO etavantcode/CPU.
 PorteurTTY pourcontrat/consommateur ; capacitésmanquantes àporterexplicitement.
 AucunCargo/no-run/list/native/health/PG/slot/3600/T, runtimeglobalHOLD.
+
+### Contrat physique proposé après consultation CP/Archi
+
+Note11 + physical-execution-contract.inactive.json : Common/copieACK ne
+prouventpaschaqueexec. CP/Archi confirment APIgénériquephysiqueabsente ;
+C9constant36régressions seulement, c2dplanintermédiaireNONADMISSIBLE.
+Surfaceconditionnellecontenu/identité/occurrence et16témoinsdocumentaires
+P01-P16prépubliés, pas tests exécutables. Rebuild/postscopéparoccurrence,
+ABA/copieautre/PIDreuse/processbref/ACK/ENDPCLOCAL explicites ; canon2150
+inchangé ouHOLD. Codecommun/porteuràcadrerC7, pasobservateurTTYad hoc.
+ROdocumentaire avantcode/CPU ;14verts/Qdésarmés/Tintacts,0runtime.
