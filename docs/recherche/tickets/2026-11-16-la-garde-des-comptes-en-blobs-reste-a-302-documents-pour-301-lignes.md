@@ -91,3 +91,66 @@ APPbc952/PILOTEaf11 unefoisGO C7-FTS-GEN-GREEN-AF11-16nov : buildrc0/ELFb23414d3
 ## Union préparée après master99, qualification combinaisonNONJOUÉE
 
 Instruction/ticketglobal219b63avantdiff ; nouvellebranchecx-recherche-fts-generation-union-r2 depuis84 rebasée99 sansconflit. Report35/auditJSON/rangediff66'='/5FTSbyteidentiques84/4entrantsVertexexact99/14MDmasterpréservés/6914horsscope0écart. Ancien8distinct11raw0479 restepreuve84seulement. Sourcefuturepinaprèsreport35,ownercommon/PGprépaindépendanteglobalr3,ticketresteOUVERT/globalHOLD. AucunCargo/native/PG/health/targetmutation/ancienGOréutilisé.
+
+## Préparation globale après ciblés ROOT, sans GO
+
+C7 reprend préparation seule après0479 (8distinct/11rawverts), ROHotfix archive133 favorable. Fetchmastercourant b0 inchangé ; APP84 exact=union5f59+modulecfgtestfix, horsdocs autresproduits préservés. Nouvellebranche piloteglobalr2 ; ancien349b intact. Canoniquecommitted2150/Common6439 ; jamais recopier la copie locale divergente ni modifier cachecommun gelé.
+
+Coordination : ne pas recopier race READYB5. Réutiliser lifecycle_protocol.py98ab exactSHAc67f072ba0134f97be6150547d80b8a23174937f2c964b0bdc30bec5e0309ec0 pour ready_bounds/phase stable/firstred/PIDstartCGUIDscript et rechecks. Son joblegacy lifecycle-provider désigne admissionprovider ; purpose explicite fts-global-models-and-pg, pas qualificationcycle ni noembedding simulé. Callbackc530 reste endpoint7878/noembeddinguniquement, non transplanté au globalBGE+PG. Contratowner global devra couvrir2providers+PG/nonce/READYsha/observed/lease et rechecks communs, ROgroupéeavantnouveauGO. Aucun appelhealth/PG/service en préparation.
+
+## Réserve Embar sur globale333de822, avant correction
+
+ROcontrat partagé favorable mais implhealth() valide la phase seulement avant la boucle2providers. Premierrouge/finphase entre deuxGET peut laisser partir le second sansrecheck ; nepasadmettre333de822/Qb8a327. Corriger read_phase_state PUIS clock/validate_ready_phase avant CHAQUEGET et PG, checksaprès ; transportwhole<=5s/preuvesRAWstdoutstderr/rc/timeout. Témoinsfictifs au vrai raccord secondGET/PGtardif/firstred/phasefinie/nonce/source/linkretardé avant nouveauGO, pas de réseau réel. PGcontrat doit lierowner/C7/allocation/DB/user/freshness/réservationactive ; disponibilitéN/S n'est pas identitéSQL ni permission. AttendreROED/Hotfix pour regrouper delta, sources/ancienpaquet conservés et globalHOLD. Nouveauownerpolicy2providers+PG resteàqualifier,aucuneAPIshared àchanger.
+
+## Réserve Hotfix 7b9d9a8ecb, avant correction finale
+
+Le pilote333 exige check_features.log dernièreligne EXACTCHECK_FEATURES VERT alors que le vrai scripts/check_features.sh APP84 émet CHECK_FEATURES VERT8/8 (séparé par espace). Fauxrougefinalcertain ; publier témoinPythonpur contre la vraie forme du suffixe avantfix. Ni scriptcanonique2150 ni sourceAPP àmodifier. Raccordowner toujoursabsent : producer._ready/noembedding/worker7878 ne doivent pas être appelés au global. ROEDenattente ; groupercorrectifs quand ses réserves sont connues, maintenir333/Qb8a327HOLD.
+
+## Complément RO ED groupée, avant correction transport
+
+ED confirme lesdeuxréserves et ajoute : timeouturllib5 ne borne paswholeGET+body ; response.read peut dépasserREADY/lease. Consumer doit réutiliser transportowner worker harddeadline/killreap+RAWstdoutstderr/rc/timeout, phasecheckavant CHAQUEcontact etaprès, pas simpletimeout de socket ni outerglobal seul. PGprobeN/S déjà annoncéeprotocolONLY n'établitniidentitéSQLniexclusivité. Embar consulté pour APItransport réutilisable avantcanon(admission) etaprèscanon(leaseactive/coreautorité,pasréadmissionREADY). AucuneAPIcommonàchanger,ownerglobalconcretattendu ; regroupementfix quand ce raccord est publié. Aucunautreblocageétabli parED ; aucuneexécutionreviewer.
+
+## Frontière owner/consumer figée avant raccord globalr3
+
+Branche/WTneufs cx-recherche-fts-generation-global-pilot-r3, ancien333/Qv2préservés. APIEmbarhealth_observation(ready,pins,provider,evidence,admission,lease_end) workerhard5/RAWkillreap, modeadmissionTRUEavantcanon etauthoritycore+leaseFALSEaprèscanon. Grant.owner_pins completSANSecrets + owner_pins_sha256 SHAJSONsort_keys/separatorscompacts/allow_nanFalse. Consumer vérifiecontexteAPP84/pilotfutur/scope/nonce/READYsha/allocationC7/sourcesprotocol98ab/c530/owner etproviderscohérents, evidencefinally. Aucun fauxflagnoembedding ; PGconsumerpingretiré, artefactGSQLRO+topologie+exclusivitéC7 liénonce/READYEND, validéowneravantgrant etchaquecontact ; outilPGconcretresteHOLDavantGO. Deuxnouveauxfichiersowner stricts attendus,aucuneditparRecherche ; correctionsgroupées F88/8 + phasechaqueGET + transportwholeaprès2contre-exemplesrougespubliés806398. CPUhermétiques<=60failfastaprèspublicationcode/témoins autorisésC7 ; aucunHTTP/proc/PG/Cargo/native.
+
+## Frontière PGv1 avant assertionsconsumercomplémentaires
+
+API G validate_attestation(path,SHA,allocation,READYnormalisé,now,admission,admitted_at) attenduecopieSTRICTpg_receipt.py/hashpg_receipt_sha256 ; owner intègreASOFadmissionfiable etactiveleasecoreactualnow. Consumerdoitassert owner_pins.admitted_monotonic==grant.observed_monotonic(typeclockfinite), sourcepg_receipt_sha256==Qmodulepinné ; pas d'ASOF fabriqué parconsumer. Ajouter6etémoinVRAIowner_pins/mockfichiers avantcesasserts,puiséventuelCPUpur60bornépostpublication, pasSQL/PGtool/runtime. AucunQfinaltantqueSHAG/ownerfinal instables.
+
+## Trois fichiers PG stricts et chargement différé, avant raccordfinal
+
+Gpg_receipt.py dépend identity.sql/backend-postcheck.sql :QfinaldoitcopierSTRICTles3 etconsumercompareclés pg_receipt_sha256/pg_identity_sql_sha256/pg_postcheck_sql_sha256 AVANTimportPG. Rendreownerchargementdifféréaprèsowner_pins (sixsources98ab/c530/owner/PGpy/2SQL), aucunelectureSQLimportanticipée. TestsCPUfixturefichiersàétendreaux2SQL+loaderfictif ; fichiersGfinaltoujoursabsents,aucunsubstitut. Embarprévenu,mêmeAPIobservations/PGownerartifactrevalidé etoutilPGHOLD.
+
+## Réserve RO Gf142 sur publication entière5, avant transmission
+
+Lecturestatique PGpg_receipt.py f142db8211fef0577de8c363ade058065f85f76d : publish_observation revalidate_current avantlink, puisattestation.sha256+dernier_sync_directory etretour(path,SHA) sansnouvellelectureclock/phase. Si dernièreécriture/fsyncretardés passentdeadlineoriginal5, APIpeutretourneruneobservationadmissiblehorsborne. PorterGavantdiffcorrectif : témoinpureclockavanceauDERNIERfsync (aprèslink), observerAPIdoitREFUSER/pasretouradmissible/RAWconservés ; recheckclock/phaseaprèsI/Oetjusteavantreturn,refusalimmutable/artifact_publishedhonnête. Clarifieraussivalidate_attestation faceàartifactayantrefusal.json aprèspublicationpartielle : aucunstatutROUGEnepeutdeveniradmissiblecarleseulJSONestprésent. AucunSQL/proc/runner exécutéparRecherche,PGTOOLréeltoujoursHOLD.
+
+## Master99entrant : audit et unionNEUVE avantdiff
+
+C7master99fef92ce6ee9a0007eaf99c7c3a6a3789061c57 atterri/tourclos,4RustVertexqualifiés. APP84baseb0 nevoitplusmastercourant : conserverAPP84/T/archives8distinct11rawfigés, préparerunionbrancheWTNEUFS depuis84 sur99 aprèsfetch/auditentrants. Range-diff/modeOID/protectionmaster/4entrantstests requis avantAPPfuturepin àEmbar/G ; aucunequalificationcombinaison ni ancienF8/globalreportée. Aucunrun6000/PG/health/native/Tmutation/force/rebasebranchepubliée. Ownercommun/PGprépaindépendantecontinue,pasQfinalavantnouveaucoupleRO.
+
+## Réserve PG b554 levée bornée sur G8ddb
+
+ROstatique Recherche de8ddb87233a22eda7122c04f2b4ba8b1656577550 : aprèsdernierfsync validate_current puisphase/clockultimesavantreturn ; loaderrefusalavantETaprèsraw. Réservefinalpub/JSONrefuséLEVÉE CEfinalseul. TroisSHArecalculésde69c498b1ac38d80d4976144fea79ddbfa7d3a34ea8ce7dae1d9e4a457aeed6/f9496688a506085562a071ce25827a2a683bccd457c9edf6e944e228b7c29328/2907a86d971770275b9ff6291e9bffebdf4467d23c7c59ff2015ae6a3fb9c864.25CPUownerNONREJOUÉS ici,aucunSQL/proc/native. OutilPGSQLréel/HOLDmaintenu,modulpur/contratnequalifiepastransport. Sourcefutureglobale636nouvelleunion99audit/ROHotfixfavorables,ancien84/T8-11intacts. Commontransport/ownerfinal àporterSTRICTdansnouveaupilotebase636avantQ/RO/GO6000distinct.
+
+Prévoir garde explicitemastercourant au prochainpilote : merge-base==BASE seul restevrai mêmequandorigin/masteravance. Exiger aussiorigin/master==BASEpinnée lorsdesguardsprepa/run/final,avanttouteadmission. AucunGO/correction d'ancienne333/Q2déduits ; regrouperaveclecouplefinal.
+
+## Contrôle neuvebranche r4 base636 et septièmepin, avantdiff
+
+Nouvellebranchecx-recherche-fts-generation-global-pilot-r4 depuis636union99 ; produitcontrôledoitresterEXACT636. Réserves/docs/témoinsCPUhistorique r3 reportésappendonly,sourceAPPfuture636/BASE99 etguardorigin/master==BASEexplicite avantrun/final pournepasaccepterunstalemasterparmergebase. Common6322fichiersSTRICT (transporta851298893cc45477290a0368866374655db84902c8883f27ae40fb67b2217ce) +G8ddb3sourcesSTRICTpréparablesenrepo, PASQfinaltantque2wrappersownerfinalnonpubliés/qualifiés. transport_sha256est7epin avantlazyimport ; témoinfictiffichiersàétendreavantfix. AucunSQL/HTTP/PG/natif/Cargo/targetmutation/ancienGO. NouveauQ/P/Sàfigeraprèscompositiontotale+RO ettoolPGHOLD conservé.
+
+## Portage finalowner443/commonactualisé, avantdiffcouple
+
+Embarfinal443b5a039cc2a3ff11705b0ebaa5bfa6577d6b0e publié/39CPUownerverts
+(22global17common),0réseau/proc/SQL. CopierSTRICT4fichiersowner+test/common+test ;
+owner9d308b5bd2d1eb44dca02da8d02f8cce4a2a7717e57a246301b468c142bf6b8d,
+commonedf45f73bf97d21f2a0caab4d6e07a7d01f807fba8310c9006f442159e2bc2a6
+remplacea851historique. TroisG8ddb inchangés de69/f949/2907. APP636/BASE99
+restentfigés/produitcouplevide ;C7autoriseCPU60failfastAPRÈSpubcode/témoins
+composés, pasHTTP/SQL/PG/native. AprèscompositionCPU46attendus(22+17+7) :
+sourcefinal/pinsQv4metadataSEULE puisROtotales/GOdistinct,PGTOOLHOLDmaintenu.
+
+## Composition CPUfd780 arrêtée : dépendancefixture, avantcorrectioncommande
+
+CPU46failfastpremiercasERREURsetup/0assertfail : testowner443 attendGLOBAL_HEALTH_SOURCE ouchemincanonique orchestration. Modulecommon étaitcopiéFTSfolderpourQruntime, commandeomettaitlehookEXISTANTGLOBAL_HEALTH_SOURCE (PGhookdéjàfixé). BrutsR/cx-proofs-recherche-fts-global-composed-cpu-v1/manifestjoint ; pasnouveaurougefonctionnel/native. CorrectionbornecommandeCPUenpinnantGLOBAL_HEALTH_SOURCE=cheminexactcommonedf45(DÉJÀcopiéSTRICT),pasretoucher4blobsownerniporterdoubloninutile ; sourceCG/noactualPGinchangée. PublierrecettecorrigéeAVANTnouvelessaiCPU60,source/PQSAuthaucunecréation.

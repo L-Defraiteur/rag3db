@@ -1,0 +1,19 @@
+# ProfilTMPcourt : préparation r5, ARMEDréel toujours prérequis
+
+NouvelleAPPDOC5af94c3f983fcbdeca213b2cff100846b7922cdb/BASE99 :
+produitMODEOIDstrict636,15metadata5ticketscorrigés aprèsrouge puis661verts.
+Nouveaubranchecontrôlecx-recherche-fts-generation-global-pilot-r5baseAPPDOC,
+sourceold636/pilotefc00/Qv4/Tintacts. Report37-38/pinsr4historiques, pasQ5.
+DeuxréservesEDgroupées avantfix : TMPP/tmpdonne111octetsUnixminimum ;
+headersROOT4isolés maisSOURCEglobale15refusfixDOCseulement.
+
+BaselineTMPP/tmpestici conservée pour témoinpureVRAIenvupdateAST+suffixe
+VRAImoduleRustpont (PIDu32/Nusize64),publicationavantRED/fix. Pasbind/Rust/
+statproc/HTTP/PG/native,aucunTMPdircrééenprépa. FuturR/t5courtprivéDISQUE
+seraexclusif0700/sanssymlink/UIDown/devR etdev/inofigés ; garde/quietfinal
+incluswholeoriginal6000avantpub,pasdecleanup/nouveauGO implicite.
+
+SOURCE/PQSlabelv5 proposémaisINADMISSIBLE :contrôleurPCuniqueARMEDréel
+actualexec/watchervivant/provenance/pollavantpréDB/READY/RPC demandéC7,
+patterncommunArbre/Embarattendustableàréutiliser,pas3eimplRecherche.
+PGtoolSQLréelstrictHOLD,aucunflagqualifiéforgé. AucunQ5/GO6000/master/retrait.

@@ -1,0 +1,14 @@
+{
+  "stdout": {
+    "size": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "stderr": {
+    "size": 1403,
+    "sha256": "dbcb51d9bee2193ceee04b767aa80ca3e85efeeb5999b9e0964d43f6328e5fa0"
+  },
+  "result.json": {
+    "size": 573,
+    "sha256": "e20846655bbf9eaaf0086e1577511d6c8c422995c97c0a9a262d4d6b548a73a4"
+  }
+}

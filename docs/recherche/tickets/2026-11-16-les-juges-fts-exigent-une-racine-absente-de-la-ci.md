@@ -44,3 +44,22 @@ La copieEDROOTisolée n'étaitpaslecheckerentier. Complétercesmétadonnées
 SANSfermeture/statut/preuvedéplacés etSANSmodifRust ; sourceancienne636
 restefigée. Leschampsatteignabilitédécriventcontrat/source, pasune nouvelle
 reproductionenservice. MêmefixDOCsource/réserveTMPpilotgroupésavantGO.
+
+## Ciblés corrigés observés, pas clôture globale
+
+APP84/PILOTE2b5 sous GO C7-FTS-ROOT-GREEN-2B5-16nov1200 : 8juges distincts/11invocations toutes1/0/0, GENsansROOT+2GENsameROOT/HOMEpréservé, scopeVERT0TERMINEowned114quiet. Report31/archive133 manifestee0e1cde90660c9e210c60e3902f1c4ae3809990fca51fd722b92761fc1d101d ; sourcecfgtest corrigée ciblée, global/lib/NAV/F8/canonicalNONJOUÉS. TicketOUVERTjusqu'àrevue+suitecoordonnée,aucunmaster/retrait.
+
+## Nouveaucontrôle r5, TMPpurs avantfix et contrôleurARMED obligatoire
+
+APPDOC5af94c3f983fcbdeca213b2cff100846b7922cdb Rust/produitstrict636 :
+15metadata5ticketsvusrouges puis661verts, pasnouvellequalificationnative.
+Nouveaubranchepilote r5 depuisAPPDOC,ancienfc00/Q4resteHOLD. Baselineprofil
+TMPDIR=P/tmp reprise pourtémoinVRAIdriverAST+préfixeRustpont/PIDu32/Nusize64
+àvoirROUGEAVANTfix ; pascreate/socket/native/DB. FixproposéTMP=R/t5privé
+createx0700aprèsPOSTE/common(avantcanonical),identitéroot/dev/inode/UID/mode
+figée/guard+quietfinal,aucunsymlink/reuse/repliRAM/cleanupautomatique.
+
+C7nouvelarmementcontrôleurPCuniqueactualexec/watchervivant+provenance/poll
+AVANTprécontrôlesDB/READY/RPC resteprérequisHOLD (ticketC7du17). Réutiliser
+patternArbre/Embar, pas3eimplniARMEDdepuisdisponibilitéhumaine. AucunQ5
+finalavantcontratcontrollerstable/portage/RO,PGtoolSQLréelHOLDinchangé.

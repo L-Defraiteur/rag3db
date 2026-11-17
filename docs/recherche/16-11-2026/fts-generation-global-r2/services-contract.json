@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "kind": "global-provider-and-private-pg-coordination",
+  "shared_protocol_sha256": "c67f072ba0134f97be6150547d80b8a23174937f2c964b0bdc30bec5e0309ec0",
+  "ready_job_compatibility": "lifecycle-provider",
+  "purpose": "fts-global-models-and-pg",
+  "clock": "CLOCK_MONOTONIC@luciepc",
+  "admission": "shared ready_bounds and validate_ready_phase; no TTL restart",
+  "owner_checks": [
+    "source pins and nonce/READY sha",
+    "phase active PID/start/CG/UID/script and first-red absent before EACH first contact",
+    "exact two live provider identities/PID/start/exeSHA/usage0",
+    "private PostgreSQL test database reservation/provenance, no LIVE",
+    "phase recheck after health before fsync and exclusive grant link",
+    "actual G SQL read-only artifact and exact external allocation required; no TCP ping substituted"
+  ],
+  "grant_fields": [
+    "app",
+    "pilot",
+    "scope",
+    "ready_sha256",
+    "nonce",
+    "c7_reference",
+    "embar_reference",
+    "observed_monotonic",
+    "valid_until_monotonic",
+    "restart_authorized",
+    "providers",
+    "postgres"
+  ],
+  "providers": [
+    "127.0.0.1:7878/granite-278m/768",
+    "127.0.0.1:7879/bge-m3/1024"
+  ],
+  "postgres": "127.0.0.1:5433/rag3weaver_test",
+  "lease": "must cover original common END",
+  "service_operations_authorized": false,
+  "embedding_calls": "only canonical tests after timely admission; usage0 not total RPC counter",
+  "owner_callback": "global_services_owner.publish_services; policy 443 strictly copied, health_observation owner/consumer use the identical admitted common transport",
+  "no_go": true,
+  "shared_owner_primitive": "c530 process_snapshot only for real stable identity before/after health; never its 7878-only noembedding worker",
+  "postgres_exclusive_contract": {
+    "private_test_only": true,
+    "exclusive_reservation": true,
+    "reservation_reference": "fresh owner/C7 reference, only canonical test DB5433",
+    "qualification": "G pure receipt validated, real private SQL client/observer not qualified: HOLD, never invent tool_qualified"
+  },
+  "shared_transport_sha256": "edf45f73bf97d21f2a0caab4d6e07a7d01f807fba8310c9006f442159e2bc2a6",
+  "owner_source_sha256": "9d308b5bd2d1eb44dca02da8d02f8cce4a2a7717e57a246301b468c142bf6b8d",
+  "owner_pins": "canonical JSON SHA binds seven source files, APP/pilot/scope/C7/nonce/READY and admitted_monotonic==grant.observed_monotonic"
+}
