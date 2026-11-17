@@ -202,3 +202,13 @@ raccord physique/sameEND/durée conservatrice/cleanup/probes discriminants et
 pas claimOSruntime. Proposer GOCPU60 pour SEULS2nouveauxprobes sur047 (2FAIL
 attendus/0ERROR, sansrejouerEC4), puis GOdistinct fixe3PASS. Aucun de ces runs
 n’est joué ; aucune qualificationcouple/runtime/native implicite.
+
+RO Recherche ciblée15b2e03f94/v251a9b1/probesc77827 favorable bornée reçue :
+vraie entrée non réécrite, parentexe/argv/PIDticksBOOTTIME→END285 sansreset,
+wire=reste−8/ARMRTT<=8 avantlaunch, RPCMINreste/finally enfantSSH cohérents.
+Recette shelltimeout AVANT Python indispensable ; autoexec seul ne couvre
+passtartup. Deux nouveaux probes047 discriminants à lecture : durée300>237,
+fsyncerror sans terminate/wait→2FAIL attendus/setupgardé. V2all3PASS attendus
+NONOBSERVÉS. Aucun import/runpy/test/proc/SSH/T/corpus par Recherche, Qpins
+non rehashés par elle. Aucun OSkill/cleanupdistant/300 qualifié. PaquetPCv2
+non matérialisé. GO distinct C7 avant chaque appel ; HOLD047 conservé.
