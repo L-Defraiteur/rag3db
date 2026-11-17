@@ -175,3 +175,14 @@ propre/Tmarker3552 conformes. Scope/logs/arm/ACK/backups absents,scratch/scans
 vides, outputsportableabsents. Aucun Cargo/test/ELF/procscan/corpus/slot ;
 CPU3 nonrejoués. OSkill/300/cleanupdistant nonqualifiés, nouveauGO C7 distinct
 avant commande. RO Banc du couple encore en attente, aucun lancement.
+
+RO Banc coupleCOMPLETv2 d844a166 favorable PRÉPA reçue, rapport
+`docs/banc/17-11-2026/03-ro-couple-fs-red.md` et ticket, aucun nouveau blocage.
+TroisAST/lectureexportintégrale, PC9copies/préflight39cc/export51a9 égauxGit et
+portable, identitésQ/T/source8bpropre,scope/logs/armACKabsents,scratchscansvides.
+CommandeSHELLavantPython/flagparentexact/BOOTTIMEEND285,duréePCreste−8/RTT<=8,
+CommonMIN/final/reste/finallylocalSSH relus ; pilotea5c/admit166d inchangés,
+6rougesnomcause/traces+positif/infraSTOP etbarrièreledger avanttoutELF cohérents.
+AucunCPU/Cargo/procscan/ELF/corpus/runtime parBanc. TroisvertsCPU simulés≠
+OSkill300/cleanupdistant/FSqualifié. Les deuxROcouplev2 sont reçues, aucun
+ACKhumain attendu. TicketOPEN, paquetNONLANCÉ ; GO exact distinct C7 requis.
