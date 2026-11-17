@@ -240,3 +240,9 @@ deuxhôtes sizeSHA0écart, manifeste cf1c3d0d43d5c927a3d11e8edcdb14d669b69a75da0
 Contrôles CPU simulés seulement : aucunposte/Commonréel/Cargo/ELF/DB/provider/
 build/slot, configA PENDING et WsourceAPP/Q/T/P/S non créés. Pas d'enchaînement
 autoA ; nouveauxpaquets/pins/RO puis GOA distinct, B/C indépendants. Parent OUVERT.
+
+Q_SOURCE de revue autorisé matérialisé au PC : qualification-cli99-source-review-r1,
+8sources/JSONGit vérifiés+reçu9eentréeSHAe9b67a2ad54520679d7fa246b3307f0673553e7aeb295a673c07aa78e7fbfb97.
+Copie reçumetadata publiée avec rapport12 ; aucun prepare/launch/import exécuté,
+aucune copieDATA/ELF/SDK. WAPP/T/P/Qruntime/S absents, allocationPENDING.
+ROpreuvesCPU+Q_SOURCE demandées, aucunbudget/GOA/natif déduit.

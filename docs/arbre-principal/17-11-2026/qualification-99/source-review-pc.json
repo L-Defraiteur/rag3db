@@ -1,0 +1,70 @@
+{
+  "kind": "SOURCE_REVIEW_ONLY_NOT_EXECUTION_PACKET",
+  "app": "99fef92ce6ee9a0007eaf99c7c3a6a3789061c57",
+  "pilot": "4f17c4cc00ede65756c7b8f27e98bdc0d7ba1cca",
+  "observed_monotonic": 1283207.912502092,
+  "allocation": "PENDING",
+  "files": [
+    {
+      "name": "build_private_cli.py",
+      "source": "4f17c4cc00ede65756c7b8f27e98bdc0d7ba1cca",
+      "path": "docs/arbre-principal/17-11-2026/qualification-99/build_private_cli.py",
+      "size": 12653,
+      "sha256": "f13c39b3f2dce002eaa863f5a6819e763b3add794e23f3a28e630debbfe187a2"
+    },
+    {
+      "name": "launch.py",
+      "source": "4f17c4cc00ede65756c7b8f27e98bdc0d7ba1cca",
+      "path": "docs/arbre-principal/17-11-2026/qualification-99/launch.py",
+      "size": 9356,
+      "sha256": "5a1d7b4d65c524d8e29c226f351c3135762fcb305dc0e487cc348a1f4736765a"
+    },
+    {
+      "name": "config-proposal.json",
+      "source": "4f17c4cc00ede65756c7b8f27e98bdc0d7ba1cca",
+      "path": "docs/arbre-principal/17-11-2026/qualification-99/config-proposal.json",
+      "size": 10446,
+      "sha256": "94cc6fc9f356cbc3176ca1a99135aa2b2de960d37cb0e29b8ae06c84164f7d5d"
+    },
+    {
+      "name": "test_select_artifacts.py",
+      "source": "4f17c4cc00ede65756c7b8f27e98bdc0d7ba1cca",
+      "path": "docs/arbre-principal/17-11-2026/qualification-99/test_select_artifacts.py",
+      "size": 2395,
+      "sha256": "4e73be0ad44e6650f9c8f9274fb023d946340f2334385c314aa556299d79d008"
+    },
+    {
+      "name": "test_compose.py",
+      "source": "4f17c4cc00ede65756c7b8f27e98bdc0d7ba1cca",
+      "path": "docs/arbre-principal/17-11-2026/qualification-99/test_compose.py",
+      "size": 5841,
+      "sha256": "5daa34fa9ce5fe0a35623435cf3da20b8de126ce25dce643099e2bc53974fcc3"
+    },
+    {
+      "name": "grant_watch_actor.py",
+      "source": "e9f037be2aa25da2c7f6c76f79e2eb57b6c676c9",
+      "path": "docs/orchestration/17-11-2026/coordination/grant_watch_actor.py",
+      "size": 18973,
+      "sha256": "7d7db5a0c7d9ac762eed74ade2d0b9ee256b8499d0029ae970feac916de76612"
+    },
+    {
+      "name": "provider_health_transport.py",
+      "source": "e9f037be2aa25da2c7f6c76f79e2eb57b6c676c9",
+      "path": "docs/orchestration/16-11-2026/coordination/provider_health_transport.py",
+      "size": 12185,
+      "sha256": "edf45f73bf97d21f2a0caab4d6e07a7d01f807fba8310c9006f442159e2bc2a6"
+    },
+    {
+      "name": "typed_rows.py",
+      "source": "e9f037be2aa25da2c7f6c76f79e2eb57b6c676c9",
+      "path": "docs/arbre-principal/16-11-2026/debt-copy-a/typed_rows.py",
+      "size": 1938,
+      "sha256": "41314cda227b3511f2daed3695d894bec150f3ee3dfc2fd7b6fa268db1374916"
+    }
+  ],
+  "limits": [
+    "No prepare/import/test/build/native/CLI/ELF invocation",
+    "No data/SDK/ELF/base copied",
+    "Actual Q execution/source APP worktree/target/P/S not created"
+  ]
+}

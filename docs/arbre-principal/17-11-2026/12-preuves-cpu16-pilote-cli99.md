@@ -46,3 +46,18 @@ levé la réserve d'import statiquement avant ce GO ; le présent résultat donn
 désormais le témoin CPU réel, sans convertir l'ancien risque statique en rouge.
 Paquet/source/pins à geler et relire, puis éventuel GO A DISTINCT ; B runtime
 et C trois bases/oracle restent indépendants. Parent toujours OUVERT.
+
+## Paquet SOURCE de revue, sans préparer l'exécution A
+
+Sous autorisation PRÉPA Q_SOURCE de C7 : PC
+~/.cache/rag3weaver-build/qualification-cli99-source-review-r1,
+huit copies de sources/JSON vérifiées Git4f17 ou helpersE9, neuf entrées avec
+source-review.json SHAe9b67a2ad54520679d7fa246b3307f0673553e7aeb295a673c07aa78e7fbfb97.
+Copie du reçu [source-review-pc.json](qualification-99/source-review-pc.json).
+kind=SOURCE_REVIEW_ONLY_NOT_EXECUTION_PACKET, allocationPENDING ; driver/
+launcher SHA conformes à la configuration proposée. Aucun import ni mode
+prepare/launch exécuté. Aucune donnée/ELF/SDK/base copiée.
+WsourceAPP/T/P/Qexecution/S réattestés ABSENTS en métadonnées après ce dépôt.
+Ce Q_SOURCE ne remplace pas Qruntime : launch.prepare attend toujours APP99
+existant, conditions/pins et allocation exacts ; leur admission n'est pas
+déduite du présent paquet. Deux RO preuvesCPU/Q_SOURCE demandées avant suite.
