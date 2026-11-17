@@ -640,3 +640,13 @@ VERT_CIBLE, Common91mmtf2u VERT0/TERMINE/restes[]/nettoye true,10,609s.
 Preuves et RAW2hosts : docs/tty/17-11-2026/02-vert-cible-completion.md.
 Ticket toujours ouvert : qualification du lot union99 non acquise. Aucun
 second test, F8, service, SDK, HTTP ou push master effectué.
+
+### Préparation de qualification complète, sans runtime
+
+Recette/pins : docs/tty/17-11-2026/03-recette-qualification-complete.md
+et qualification-plan.json. Master99 inchangé, même branche7/targetLOCAL.
+Canon cache==dépôt ; e2e_tty4/lectures/code/F8/liblarge/navigateur puis
+libtty/build/harnais18phases proposés. Canonj8, ttyj4,32G/3600TOTALproposé.
+Capacités LOCAL7979/7980/PG5433 à faire accepter explicitement par C7 ;
+aucun service appelé, test/build/Cargo/PCruntime/SDKmutation effectué.
+RO de recette puis pilote/Q exact+ROtotale+GOdistinct avant exécution.

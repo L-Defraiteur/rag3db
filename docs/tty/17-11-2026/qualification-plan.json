@@ -1,0 +1,106 @@
+{
+  "status": "PREPARATION_ONLY_NOT_EXECUTABLE_GO",
+  "candidate": "4bc72fdeb1677a7da65f82a6cc26361b46e13c29",
+  "product_fix": "36b121e6c009adf1b51f31a0780e67e8c195a974",
+  "base": "99fef92ce6ee9a0007eaf99c7c3a6a3789061c57",
+  "worktree": "/home/lucied/git_workspaces/cx-tty-english-aliases-union-99",
+  "branch": "cx-tty-english-aliases-7",
+  "target": "/home/lucied/.cache/rag3weaver-build/target-cx-tty-english-aliases-2",
+  "target_owner": "/home/lucied/git_workspaces/cx-tty-english-aliases-union-99/extension/rag3weaver/tty",
+  "target_mib": 2294,
+  "source_files_sha256": {
+    "tools/poste/passe_epinglee.sh": "2150fcd847b1df7de04908d357a0c78abc05e50ce599e2793ff08ab48108825d",
+    "tools/poste/required_suites.sh": "dc0879f04c53d3eb22fa69c752393913e64fdb3a27a1bd5dd21bcff2d59dc92d",
+    "tools/poste/required_suites.txt": "0d96a1d33eac20897b27e33b709736069937c6bf9b237a8f3e184f7acbadfd66",
+    "extension/rag3weaver/run_e2e.sh": "72ae1e1f2dc9694fa24fea59617a2d9cdd1fbc3390c2b60b852d90f7a0298d9f",
+    "extension/rag3weaver/scripts/check_features.sh": "623363f607b0d0b7a09c2b6bfc36330e08d46d82d369e30b6e98500a0f77fce5",
+    "extension/rag3weaver/scripts/temoins_navigateur.sh": "5fcc01e787afc1c08dc11e6f99fd6278444ee68d04c43d2d6cb5ce61707a3668",
+    "extension/rag3weaver/scripts/cargo_garde.py": "7aae73ed75aff311f40ec4237751f3bb2cd87aa23978387714482ebde48be9f3",
+    "extension/rag3weaver/scripts/garde_target.sh": "43ff9c80e14d9970adf94da2db74a6d0e9ca2d90d54a2b08c8f37d61ea3d5a37",
+    "extension/rag3weaver/scripts/confiner_validation.py": "6439fdd8b52c85fa4e74af0def2c667ef0bedae9b814cbbfd48e49946c4f74ea",
+    "extension/rag3weaver/tty/Cargo.lock": "9127845d654a37f4a9e0fbce59b69ef26da51c6f6d7af6a6833782fd4fecabbb",
+    "extension/rag3weaver/Cargo.lock": "090cc4e1330dc694127c0f08330d25acc656699763079400b502ba6607093fa7",
+    "extension/rag3weaver/tty/mesures/mesure.py": "999353787bfded9054b1e2d41365decf11eade419d4541b66d42e963803c09cc",
+    "extension/rag3weaver/tty/mesures/harness_observation.py": "83cdd39a8d02e1b1c1a7dad57639599261b176bc510e18e73dc51c8f5297925d",
+    "extension/rag3weaver/tty/mesures/faux_hote.py": "8f18ad986cf76138880d3e30efe296ef9c2b7cbe53cfb26a8d498f161e1af449"
+  },
+  "canonical_cache_sha256": "2150fcd847b1df7de04908d357a0c78abc05e50ce599e2793ff08ab48108825d",
+  "cores": 32,
+  "proposed_budget_seconds": 3600,
+  "canonical_jobs": 8,
+  "tty_jobs": 4,
+  "memory": "32G",
+  "high": 0,
+  "stages": [
+    {
+      "name": "canonical",
+      "argv": [
+        "bash",
+        "/home/lucied/.cache/rag3weaver-build/passe_epinglee.sh",
+        "cx-tty-english-aliases-union-99",
+        "cx-tty-union99-canonical-v1",
+        "",
+        "-"
+      ],
+      "env": {
+        "CIBLE": "target-cx-tty-english-aliases-2",
+        "SUITE_DU_TEMOIN": "e2e_tty",
+        "SUITES": "e2e_lectures,e2e_code",
+        "CARGO_NET_OFFLINE": "true",
+        "RAG3WEAVER_EXIGER_NAVIGATEUR": "1"
+      }
+    },
+    {
+      "name": "tty-lib",
+      "cwd": "/home/lucied/git_workspaces/cx-tty-english-aliases-union-99/extension/rag3weaver/tty",
+      "argv": [
+        "python3",
+        "-B",
+        "../scripts/cargo_garde.py",
+        "test",
+        "--offline",
+        "--locked",
+        "-j4",
+        "--lib"
+      ]
+    },
+    {
+      "name": "tty-build",
+      "cwd": "/home/lucied/git_workspaces/cx-tty-english-aliases-union-99/extension/rag3weaver/tty",
+      "argv": [
+        "python3",
+        "-B",
+        "../scripts/cargo_garde.py",
+        "build",
+        "--offline",
+        "--locked",
+        "-j4",
+        "--bin",
+        "rag3weaver-tty"
+      ]
+    },
+    {
+      "name": "harness",
+      "recipe": "same reviewed first-red pidfd protocol and private state transform as 934; new ELF from preceding build only"
+    }
+  ],
+  "declared_consumers": [
+    "127.0.0.1:7979 embedding",
+    "127.0.0.1:7980 embedding",
+    "localhost:5433 isolated test PostgreSQL default used by run_e2e",
+    "private fakehost 17990",
+    "private tmux",
+    "headless browser with private Common bus"
+  ],
+  "forbidden": [
+    "real provider",
+    "Google credentials",
+    "SDK mutation",
+    "service restart",
+    "PC runtime",
+    "master push",
+    "target deletion"
+  ],
+  "required_suites_added": [],
+  "runtime_performed": false
+}
