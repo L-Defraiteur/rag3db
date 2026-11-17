@@ -256,3 +256,15 @@ Aucunfork ni fakebundle ; extractionnoyauunique/migration36assertionsD45 puis
 adaptateurglobal+ownerwindow90 encoreNONIMPLANTÉS, accordinterface/limitesC7
 avantcode. Acteursréelspublication+grant distincts/probePGnonqualifiéeHOLD.
 D45/P05 et229b/Qfigés ; aucunCPU/SSH/proc/SQL/health/Cargo/provider/run ajouté.
+
+### Accord C7 PRÉPA provider lecteur, avant nouveaux fichiers
+
+C7 accord1cc2b726c3 sur interface2c8d/manifeste7416. Codeparsers SEUL porte
+noyau publication_relay/adaptRust/36assertions+nouveauxcas ; Archi prépare
+provider LECTURE/validation et manifeste, sans boucle/copie/export/ACK native.
+Bornes : watchdog7440TERM+15KILL avant queue/ARM ; queueMAX120 DANSwhole ;
+CommonMAX7200 MINrestephysique−30 ; ENDop=CommonEND−15/réservearrêt15 DANSCommon ;
+chaquelabel90 depuisownerAVANTwait/MINENDop, sans resetENDglobal ni comparaison
+absolueinterhôtes. Nouveaucode/tests prépub avant GOCPUdistinct/RO,229b/Qfigés.
+G B01 refus avant rustc HOMEprivé/lockdir, transportSQL toujoursNONQUALIFIÉ ;
+aucunGO7455/actor/lease/Vertex/PG. Aucun nouveau runtime/capture/probe autorisé.
