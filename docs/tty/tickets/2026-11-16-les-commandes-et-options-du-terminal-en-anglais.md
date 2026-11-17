@@ -752,3 +752,13 @@ ELF_PROVENANCEVIDE et Q4executionfalse avant allocation/slot. Q2/Q3/rouges/T
 conservés, aucunrejeu/Cargo/no-run/list/native/contact/slot/3600.
 Reste : capturephysiqueetbindingallocation+acteurs/identités/payload/PG/release,
 qualificationcomplèteréelle puislandingC7 ; pasclôture depuiscefauxruntime.
+
+### Raccord physique : prochain périmètre documentaire seulement
+
+Après14verts/ROpreuves4a6cc, autorisationC7df5e5ee7e1 : retracer catalogue→
+contenuELFréellementexécuté/copiejouée→après souscanoninchangé. Consulter
+Archi/CP noyauunique ; composer Common/publication/snapshots, pasobservateur
+TTYad hoc. Prépublier contratproducer/consumerPIDstart/phase/SHA/inventaire/log,
+bornesPCLOCAL ettémoinsrebuild/pathrestauré/copieautre avantRO etavantcode/CPU.
+PorteurTTY pourcontrat/consommateur ; capacitésmanquantes àporterexplicitement.
+AucunCargo/no-run/list/native/health/PG/slot/3600/T, runtimeglobalHOLD.
