@@ -118,3 +118,12 @@ effectif conservés. Aucun nouveau blocage statique identifié ; résultat
 futur sixjuges NATIFS distinct des sept historiques. Aucun cinqrouges
 observé ni qualification FS/corpus déduite. Avis borné à préparation ;
 Banc puis décision GO C7 exacte distincte encore requis avant commande27.
+
+
+Complément RO Recherche : rehash indépendant des neuf copies PC, Q UID1000/
+dev55/inode169037256, préflight54ebf...97a14 ; sourcebdf propre, lockDBDB,
+T inode164536077/marker5a1671 et cinqELF conformes. Portable deux copies
+conformes, Q UID1000/dev57/inode97253752. Scope/logs/ARM/ACK/backup/final
+absents, scratch/scans vides ; sorties portables absentes. OldCommon terminé
+relu comme métadonnées seules, pas de procscan ni quiétude actuelle déduite.
+Aucun Cargo/test/ELF/ARM/proc/corpus/DB/mutationtarget par Recherche.
