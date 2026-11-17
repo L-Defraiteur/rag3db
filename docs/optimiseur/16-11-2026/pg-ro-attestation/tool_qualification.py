@@ -7,6 +7,8 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import math
+import re
 import os
 from pathlib import Path
 import signal
@@ -56,10 +58,12 @@ def common_authority(packet_root,packet):
 
 
 def validate_go(go,packet,packet_sha,now):
+    require(type(go) is dict and set(go)=={'kind','run_authorized','packet_sha256','reference','nonce','inputs_manifest_sha256','deadline_monotonic','sql_authorized','docker_authorized','output'},'GO schema differs')
+    require(type(go.get('reference')) is str and bool(go['reference']) and type(go.get('nonce')) is str and re.fullmatch('[0-9a-f]{32}',go['nonce']) is not None,'GO identity missing')
     require(go.get('kind')=='pg-rust-compile-and-parse-only' and go.get('run_authorized') is True,'no exact tool GO')
     require(go.get('packet_sha256')==packet_sha and go.get('reference') and go.get('nonce'),'unbound GO')
     require(go.get('sql_authorized') is False and go.get('docker_authorized') is False,'contacts not allowed in this tool')
-    require(type(go.get('deadline_monotonic')) in (float,int) and now<go['deadline_monotonic'],'GO expired')
+    require(type(go.get('deadline_monotonic')) in (float,int) and math.isfinite(go['deadline_monotonic']) and now<go['deadline_monotonic'],'GO expired')
     require(go.get('inputs_manifest_sha256')==packet.get('inputs_manifest_sha256'),'GO inputs differ')
     return go
 
@@ -117,6 +121,10 @@ def orchestrate(config,backend):
     return results
 
 
+def own_cgroup():
+    return Path('/proc/self/cgroup').read_text().strip()
+
+
 def group_members(group):
     members=[];unknown=[]
     for proc in Path('/proc').iterdir():
@@ -170,7 +178,7 @@ class NativeBackend:
             require(time.monotonic()<deadline-.5,'preflight exhausted whole cap')
             from tool_phase import identity
             body=dict(parent=identity(os.getpid()),request=request,started=started,deadline=deadline,phase=str(phase),packet_sha=self.packet_sha,
-                      packet_root=str(self.root),go=self.go,expected_cgroup=Path('/proc/self/cgroup').read_text().strip())
+                      packet_root=str(self.root),go=self.go,expected_cgroup=own_cgroup())
             req=phase/'request.json';write_new(req,body)
             env={k:os.environ[k] for k in ['RAG3WEAVER_VALIDATION_RECU','RAG3WEAVER_VALIDATION_JETON'] if k in os.environ}
             env.update(PATH='/usr/bin:/bin',HOME=str(self.out/'home'),TMPDIR=str(self.out/'tmp'),LANG='C.UTF-8')
@@ -210,7 +218,7 @@ class NativeBackend:
             return result
         except Exception:
             if process is not None:
-                stop_group(process.pid,Path('/proc/self/cgroup').read_text().strip())
+                stop_group(process.pid,own_cgroup())
                 try:process.wait(timeout=max(.001,deadline-time.monotonic()))
                 except subprocess.TimeoutExpired:pass
             raise

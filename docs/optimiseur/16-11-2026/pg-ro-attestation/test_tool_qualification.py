@@ -1,6 +1,13 @@
 """Faux préparés avant runner : AUCUNE exécution autorisée par ce fichier."""
 import copy
 import unittest
+import hashlib
+import json
+import tempfile
+from pathlib import Path
+from unittest.mock import patch
+from contextlib import ExitStack
+import tool_phase
 import tool_qualification as tool
 
 
@@ -61,6 +68,64 @@ class QualificationFakes(unittest.TestCase):
                 result=original(request);result[key]=(key=='timed_out');return result
             backend.run=run
             with self.assertRaises(ValueError):tool.orchestrate(self.config,backend)
+
+
+class NativeBoundaryFakes(unittest.TestCase):
+    """Vrai NativeBackend avec frontières OS fausses : aucun proc/Popen réel."""
+    def setUp(self):
+        self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
+        self.out=Path(self.temp.name);(self.out/'home').mkdir();(self.out/'tmp').mkdir()
+        self.clock=[1000.];self.stops=[]
+        self.packet={'inputs_manifest_sha256':'1'*64}
+        self.go=dict(kind='pg-rust-compile-and-parse-only',run_authorized=True,packet_sha256='2'*64,
+                     reference='FAKE-NOT-C7',nonce='a'*32,inputs_manifest_sha256='1'*64,
+                     deadline_monotonic=2000.,sql_authorized=False,docker_authorized=False,output=str(self.out))
+        self.request=dict(name='compile',kind='compile',argv=['PINNED_RUSTC'],stdin='',cap=60,expected_code=0,expected_stderr='')
+        self.backend=tool.NativeBackend(self.out,self.packet,'2'*64,self.go,self.out)
+    def install(self,stack,*,timeout=False,late_fsync=False):
+        outer=self
+        class Process:
+            pid=4321
+            returncode=0
+            def __init__(self,*args,**kwargs):pass
+            def communicate(self,timeout=None):
+                if timeout is not None and timeout<0:raise AssertionError('negative remaining budget')
+                if timeout_flag[0]:
+                    timeout_flag[0]=False;outer.clock[0]=1059.7
+                    raise tool.subprocess.TimeoutExpired('FAKE',timeout)
+                phase=outer.out/'compile'
+                (phase/'stdout.raw').write_bytes(b'');(phase/'stderr.raw').write_bytes(b'')
+                tool.write_new(phase/'phase-result.json',dict(returncode=0,native_reaped=True,raw_published=True,
+                              within_whole=True,stdin_started_inside_whole=True,native_invoked=True))
+                (outer.out/'client').write_bytes(b'FAKE-ELF-NOT-NATIVE')
+                return b'',b''
+            def wait(self,timeout=None):return 0
+        timeout_flag=[timeout]
+        stack.enter_context(patch.object(tool.time,'monotonic',lambda:outer.clock[0]))
+        stack.enter_context(patch.object(tool,'common_authority',lambda *a:dict(end=2000.)))
+        stack.enter_context(patch.object(tool,'verify_sources',lambda *a:None))
+        stack.enter_context(patch.object(tool,'verify_inputs',lambda *a:None))
+        stack.enter_context(patch.object(tool,'compile_argv',lambda *a:['PINNED_RUSTC']))
+        stack.enter_context(patch.object(tool,'own_cgroup',lambda:'0::/fake'))
+        stack.enter_context(patch.object(tool_phase,'identity',lambda pid:dict(pid=pid,start=1,uid=1000,cgroup='0::/fake')))
+        stack.enter_context(patch.object(tool,'group_members',lambda *a:([],[])))
+        stack.enter_context(patch.object(tool,'stop_group',lambda group,cg:outer.stops.append((group,cg))))
+        stack.enter_context(patch.object(tool.subprocess,'Popen',Process))
+        if late_fsync:
+            real=tool.sync_dir
+            def sync(path):real(path);outer.clock[0]=1061.
+            stack.enter_context(patch.object(tool,'sync_dir',sync))
+    def test_final_publication_after_cap_cannot_be_success(self):
+        with ExitStack() as stack:
+            self.install(stack,late_fsync=True)
+            result=self.backend.run(self.request)
+        self.assertIs(result['within_whole'],False)
+    def test_timeout_calls_owned_group_cleanup_not_a_retry(self):
+        with ExitStack() as stack:
+            self.install(stack,timeout=True)
+            result=self.backend.run(self.request)
+        self.assertIs(result['timed_out'],True)
+        self.assertEqual(self.stops,[(4321,'0::/fake')])
 
 
 if __name__=='__main__':unittest.main(verbosity=2)
