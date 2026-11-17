@@ -34,3 +34,7 @@ Exporteur portable autonome armé avant lancement, aucune dépendance humaine
 pour ACK ; timeout physique300 incluant acquisition/retour poste, END unique
 CommonMIN/final. Neuf copies vérifiées et syntaxe AST uniquement, aucun
 Cargo/ELF/proc/corpus. RO couple exact puis GO distinct restent requis.
+
+RO Banc du couple6a16c7220f favorable PRÉPA SEULE : c3cba8417c, rapport
+`docs/banc/17-11-2026/03-ro-couple-fs-red.md`. Copies/AST/bornes/barrière
+autonome et attribution des juges cohérentes à lecture. Aucun run/GO déduit.

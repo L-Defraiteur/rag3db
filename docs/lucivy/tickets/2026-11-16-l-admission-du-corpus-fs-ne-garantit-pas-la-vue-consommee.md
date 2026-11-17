@@ -122,3 +122,11 @@ complément sur budget/attribution des rouges/barrière autonome. Critères :
 cohérence source8b,9copies,300physique/CommonMIN/final, ledger2ELF copié et
 rehashé avant tests sans ACKhumain, six causes exactes/positif, infraSTOP.
 Porteur exécution future Lucivy après GO C7 distinct ; aucun run autorisé ici.
+
+RO Banc couple exact6a16c7220f favorable PRÉPA SEULE reçue : c3cba8417c,
+rapport docs/banc/17-11-2026/03-ro-couple-fs-red.md. Trois AST/neuf copies PC
+conformes, préflight79adf115 et export047111 identiques portable. ARM15/
+physical300/ENDmin−12, ledger fsync/rehash/ACK avant toutELF, six causes et
+positif, finCommon/scan/rehash/retourSSH cohérents à lecture. Lock ignoré et
+delta explicite. Aucun test/pilote/proc/corpus/DB/service par Banc. Aucun
+résultat/qualificationFS/read-once/global ; GO C7 exact distinct requis.
