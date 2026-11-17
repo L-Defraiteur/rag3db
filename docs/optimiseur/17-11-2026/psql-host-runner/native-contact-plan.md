@@ -161,3 +161,25 @@ parent/auth/SSL/dlopen/nativeenv effectif/outerwhole5avantimports et terminal
 réel à produire/qualifier séparément. Pas de fixture allouée avant clientPRÊT
 et GOcontact. Aucun v1grant/canonicalprofil relabellisé, aucun service/original
 /lib/SDK/buildCLI99 ou ancien jeton/réservation réactivé.
+
+
+## Contrat parent23 VERTS simulés — GOb2d0c64e15
+
+UNE entrée source65447d0aaa/recipe50cd268d25ca2e054b3dddba312045c2fcfa4acccfc15dd9d63c3c1c2214da8e.
+Common validation-a5rkgdd5 VERTint0/erreur null, terminé/nettoyé/restes[],
+bus privé absent.23noms verbose/23PASS/0FAILERRORskip/rc0 ; unittest0.004s,
+entrée0.2334217040333897s.2positifs acceptés/16mutants+canariPUBLIC refusés et
+4anciens inchangés refusés par preuve manquante. Pas de rejet général.
+
+21preuves taille/SHA comparées sur deuxhôtes AVANTsuite : PC
+psql-host-runner-20261117-r1/native-contract-cpu-10,portable même parent
+/native-contract-cpu-10-proof. Manifeste
+d02ae81efec60f7c948e7ff5ba0be6de1e6495c098759c015eed5a09977a21ee ; archive
+6186ac5776991a2f36a087691a33e255d95197908438d8105b7db0adc61efd2f.
+
+Qualification strictement SEMANTIQUE sur objet__new__FAUXsansinit/capture
+mockée, aucun processus/secret/passfile/bundle/psql/PG ouvert.19+8+4anciens
+nonrejoués. Les quatre rougesc90 et toutes preuves antérieures restent figés.
+Collecteur OS/handshake/outerwhole5avantimports/terminalruntime NONLIVRÉS et
+NONQUALIFIÉS, aucun v1grant/fixture anticipée/GOcontact. Prépa source de ces
+raccords désormais autorisée C7, revue/GOdistinct avant leurs tests ou contact.
