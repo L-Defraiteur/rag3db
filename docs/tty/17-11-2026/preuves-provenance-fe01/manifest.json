@@ -1,0 +1,10 @@
+{
+  "source": "fe01a69a5ca22aa4116403baea109fbd799302e9",
+  "archive_two_hosts": "archives/cx-tty-provenance-green-fe01/evidence.tar",
+  "archive_sha256": "4e3566019ebd4098e8deb84cb33790a502027061a3cd930db52b83597f568a5b",
+  "files": {
+    "before.json": "816ebc04494f7e45cc4cb8f409fddc364dbbf3ff9d2164b97a6096d94704784d",
+    "raw.log": "5575c36c2ed49f50f1c557e529f78ebd1d9a08b0018d00afc1be6d669def578f",
+    "result.json": "81921be77bb806ac0a36a8e4ce93f31a111bfce0c0b58ccdb5eb1139157df2aa"
+  }
+}

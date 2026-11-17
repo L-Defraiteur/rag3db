@@ -1,0 +1,14 @@
+{
+  "verdict": "VERT_VALIDATEUR_HERMETIQUE",
+  "rc": 0,
+  "start": 877463.166508654,
+  "finished": 877463.253058784,
+  "elapsed": 0.08655012992676347,
+  "counts": {
+    "ok": 14,
+    "FAIL": 0,
+    "ERROR": 0,
+    "skipped": 0
+  },
+  "source": "fe01a69a5ca22aa4116403baea109fbd799302e9"
+}

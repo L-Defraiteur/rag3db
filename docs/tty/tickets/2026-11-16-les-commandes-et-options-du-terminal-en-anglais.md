@@ -741,3 +741,14 @@ defiltrer. Témoinsd998/564393 inchangés. AST/SHA/diffseuls, pasCPUgreen.
 CaptureELFcanonRÉELLE nonlivrée : ELF_PROVENANCEvide/refus, HOLD explicite
 aucontratinactif ; nepasfabriquerlesreçusdepuiscatalogues. Docs09/Qv4futur
 désarmé/ROtotale puisGOCPU14distinct ; aucunactivation/native/service/slot.
+
+### Vert hermétique14 réellement acquis, ticket encore OPEN
+
+GO C7-TTY-PROVENANCE-GREEN-FE01-17nov60/sourcefe01a69a5c : UNEinvocation
+14PASS0FAIL0ERROR0skip/rc0,0,086550s. Témoinsd998/564393 inchangés après
+rougesc004/eeb. Rapport10/preuves ; RAW2hostsréhash4e356601…568a5b.
+AucunecaptureELFréelle ni pipelinecanon/service/PG/PCLOCAL qualifiés ;
+ELF_PROVENANCEVIDE et Q4executionfalse avant allocation/slot. Q2/Q3/rouges/T
+conservés, aucunrejeu/Cargo/no-run/list/native/contact/slot/3600.
+Reste : capturephysiqueetbindingallocation+acteurs/identités/payload/PG/release,
+qualificationcomplèteréelle puislandingC7 ; pasclôture depuiscefauxruntime.
