@@ -164,3 +164,14 @@ ActionROcouplecomplet confiée à Banc + Recherche ciblée budget/temps/attribut
 critères neufpins/39cc/51a9/a5c/166d, parentCLIexact, pasclockcrosshost,ledger
 copiérehashACK avanttoutELF, sixrougesRustnomcause+positif/infraSTOP,finréelle.
 NouveauGO C7 distinct AVANTcommande14 ; aucunrunRuntime/natif implicite.
+
+RO Recherche coupleCOMPLET PREPA d844a166a0/v2 favorable bornée reçue :
+commande shelltimeout295/KILL5 AVANTPython/sans-B conforme parentargv51a9,
+ENDparentticks+285/wireR−8/ARMRTT<=8/bail15/PCMIN/Commonreste−12/final/retour/
+cleanup relus ; ACKcopiéfsyncrehash nonceSHA avant inventaire et attribution
+sixRust101+positif/infraSTOP cohérents. Vérification indépendante2postes :
+préflight39cc/export51a9 identiques, PC9/9SHA/UID/dev/inodes/noncee356/source8b
+propre/Tmarker3552 conformes. Scope/logs/arm/ACK/backups absents,scratch/scans
+vides, outputsportableabsents. Aucun Cargo/test/ELF/procscan/corpus/slot ;
+CPU3 nonrejoués. OSkill/300/cleanupdistant nonqualifiés, nouveauGO C7 distinct
+avant commande. RO Banc du couple encore en attente, aucun lancement.
