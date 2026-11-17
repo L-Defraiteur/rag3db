@@ -328,3 +328,14 @@ Gitbruts+PC4bruts/2sources,aucunrejeu.9copiesQv4/pref9496portable=Git/export
 DeuxPASSfinal et3PASSjournaux NONOBSERVÉS,anciens51a9nontransférés ; aucun
 Cargo/procscan/ELF/corpus/test/runtimeparBanc. ROtotaleRechercheencoreattendue,
 GOCPUexactsdistinctsC7 puisGO300distinct restent requis. Qv3figé/ticketOPEN.
+
+RO TOTALE Recherche77a4703c8f/v4 favorable bornée PREPA reçue : P1FINALLOCK
+levéeSTATIQUEMENT, guardWlockaprès7/pilot4d37 etdernierverdict/admitd508
+contreseedlui-mêmevérifié/tempsprépost/SHApubsansreset. Budgetphysique/ARMdurée/
+oldCommon/ACKavantELF/6causes+positif/infraSTOP maintenus. RO indépendante
+PC+local : pref9496/export7c58identiques,9/9SHA/UIDdevinodes/nonce500867,
+W0fclean/lockDBDBseed/T3552conformes,outputsSTARTEND/armACKabsents/scansscratch
+vides ;2QCPU/inodes confirmés,probes33ae2+dc0 3relusNONJOUÉS. Aucun test/
+import/Cargo/proc/ELF/corpusR. DeuxROtotalesfavorablesreçues,P1statiquelevé,
+GOCPU2puis3+GO300C7distincts requis,0OSkill/300/cleanupdistantqualifiés.
+Oldv3HOLD/rougesfigés,ticketOPEN,aucunlancementimplicite.
