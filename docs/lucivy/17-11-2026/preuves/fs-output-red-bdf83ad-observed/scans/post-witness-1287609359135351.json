@@ -1,0 +1,4135 @@
+{
+  "phase": "post-witness",
+  "observed_at": 1287609.359137868,
+  "records": [
+    {
+      "pid": 1247,
+      "uid": 1000,
+      "start": "1022",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/init.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": null,
+      "cwd": null,
+      "related_fds": [],
+      "accessible_fd_count": 0,
+      "errors": [
+        {
+          "field": "exe",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/exe'"
+        },
+        {
+          "field": "cwd",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/cwd'"
+        },
+        {
+          "field": "fd/0",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/0'"
+        },
+        {
+          "field": "fd/1",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/1'"
+        },
+        {
+          "field": "fd/2",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/2'"
+        },
+        {
+          "field": "fd/3",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/3'"
+        },
+        {
+          "field": "fd/4",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/4'"
+        },
+        {
+          "field": "fd/5",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/5'"
+        },
+        {
+          "field": "fd/6",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/6'"
+        },
+        {
+          "field": "fd/7",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/7'"
+        },
+        {
+          "field": "fd/8",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/8'"
+        },
+        {
+          "field": "fd/9",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/9'"
+        },
+        {
+          "field": "fd/10",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/10'"
+        },
+        {
+          "field": "fd/11",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/11'"
+        },
+        {
+          "field": "fd/12",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/12'"
+        },
+        {
+          "field": "fd/13",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/13'"
+        },
+        {
+          "field": "fd/14",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/14'"
+        },
+        {
+          "field": "fd/15",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/15'"
+        },
+        {
+          "field": "fd/16",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/16'"
+        },
+        {
+          "field": "fd/17",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/17'"
+        },
+        {
+          "field": "fd/18",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/18'"
+        },
+        {
+          "field": "fd/19",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/19'"
+        },
+        {
+          "field": "fd/20",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/20'"
+        },
+        {
+          "field": "fd/21",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/21'"
+        },
+        {
+          "field": "fd/22",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/22'"
+        },
+        {
+          "field": "fd/23",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/23'"
+        },
+        {
+          "field": "fd/24",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/24'"
+        },
+        {
+          "field": "fd/25",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/25'"
+        },
+        {
+          "field": "fd/26",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/26'"
+        },
+        {
+          "field": "fd/27",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/27'"
+        },
+        {
+          "field": "fd/28",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/28'"
+        },
+        {
+          "field": "fd/29",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/29'"
+        },
+        {
+          "field": "fd/30",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/30'"
+        },
+        {
+          "field": "fd/31",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/31'"
+        },
+        {
+          "field": "fd/32",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/32'"
+        },
+        {
+          "field": "fd/33",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/33'"
+        },
+        {
+          "field": "fd/34",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/34'"
+        },
+        {
+          "field": "fd/35",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/35'"
+        },
+        {
+          "field": "fd/36",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/36'"
+        },
+        {
+          "field": "fd/37",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/37'"
+        },
+        {
+          "field": "fd/38",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/38'"
+        },
+        {
+          "field": "fd/39",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/39'"
+        },
+        {
+          "field": "fd/40",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/40'"
+        },
+        {
+          "field": "fd/41",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/41'"
+        },
+        {
+          "field": "fd/42",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/42'"
+        },
+        {
+          "field": "fd/43",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/43'"
+        },
+        {
+          "field": "fd/44",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/44'"
+        },
+        {
+          "field": "fd/45",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/45'"
+        },
+        {
+          "field": "fd/46",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/46'"
+        },
+        {
+          "field": "fd/47",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/47'"
+        },
+        {
+          "field": "fd/48",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/48'"
+        },
+        {
+          "field": "fd/49",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/49'"
+        },
+        {
+          "field": "fd/50",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/50'"
+        },
+        {
+          "field": "fd/51",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/51'"
+        },
+        {
+          "field": "fd/52",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/52'"
+        },
+        {
+          "field": "fd/53",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/53'"
+        },
+        {
+          "field": "fd/54",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/54'"
+        },
+        {
+          "field": "fd/55",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/55'"
+        },
+        {
+          "field": "fd/56",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/56'"
+        },
+        {
+          "field": "fd/57",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/57'"
+        },
+        {
+          "field": "fd/58",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/58'"
+        },
+        {
+          "field": "fd/59",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/59'"
+        },
+        {
+          "field": "fd/60",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/60'"
+        },
+        {
+          "field": "fd/61",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/61'"
+        },
+        {
+          "field": "fd/62",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/62'"
+        },
+        {
+          "field": "fd/63",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/63'"
+        },
+        {
+          "field": "fd/64",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/64'"
+        },
+        {
+          "field": "fd/65",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/65'"
+        },
+        {
+          "field": "fd/66",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/66'"
+        },
+        {
+          "field": "fd/68",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/68'"
+        },
+        {
+          "field": "fd/69",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/69'"
+        },
+        {
+          "field": "fd/70",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/70'"
+        },
+        {
+          "field": "fd/73",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/73'"
+        },
+        {
+          "field": "fd/74",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/74'"
+        },
+        {
+          "field": "fd/75",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/75'"
+        },
+        {
+          "field": "fd/76",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/76'"
+        },
+        {
+          "field": "fd/77",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/77'"
+        },
+        {
+          "field": "fd/78",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/78'"
+        },
+        {
+          "field": "fd/80",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/80'"
+        },
+        {
+          "field": "fd/84",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/84'"
+        },
+        {
+          "field": "fd/86",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/86'"
+        },
+        {
+          "field": "fd/87",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/87'"
+        },
+        {
+          "field": "fd/91",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/91'"
+        },
+        {
+          "field": "fd/92",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/92'"
+        },
+        {
+          "field": "fd/93",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/93'"
+        },
+        {
+          "field": "fd/94",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/94'"
+        },
+        {
+          "field": "fd/95",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/95'"
+        },
+        {
+          "field": "fd/96",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/96'"
+        },
+        {
+          "field": "fd/97",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/97'"
+        },
+        {
+          "field": "fd/98",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/98'"
+        },
+        {
+          "field": "fd/99",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/99'"
+        },
+        {
+          "field": "fd/100",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/100'"
+        },
+        {
+          "field": "fd/101",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/101'"
+        },
+        {
+          "field": "fd/102",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/102'"
+        },
+        {
+          "field": "fd/103",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/103'"
+        },
+        {
+          "field": "fd/104",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/104'"
+        },
+        {
+          "field": "fd/105",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/105'"
+        },
+        {
+          "field": "fd/106",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/106'"
+        },
+        {
+          "field": "fd/107",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/107'"
+        },
+        {
+          "field": "fd/108",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/108'"
+        },
+        {
+          "field": "fd/109",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/109'"
+        },
+        {
+          "field": "fd/118",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/118'"
+        },
+        {
+          "field": "fd/128",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/128'"
+        },
+        {
+          "field": "fd/136",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/136'"
+        },
+        {
+          "field": "fd/138",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/138'"
+        },
+        {
+          "field": "fd/139",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/139'"
+        },
+        {
+          "field": "fd/140",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/140'"
+        },
+        {
+          "field": "fd/141",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/141'"
+        },
+        {
+          "field": "fd/142",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/142'"
+        },
+        {
+          "field": "fd/144",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/144'"
+        },
+        {
+          "field": "fd/146",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/146'"
+        },
+        {
+          "field": "fd/147",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/147'"
+        },
+        {
+          "field": "fd/149",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/149'"
+        },
+        {
+          "field": "fd/152",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/152'"
+        },
+        {
+          "field": "fd/153",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/153'"
+        },
+        {
+          "field": "fd/154",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/154'"
+        },
+        {
+          "field": "fd/156",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/156'"
+        },
+        {
+          "field": "fd/160",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/160'"
+        },
+        {
+          "field": "fd/162",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/162'"
+        },
+        {
+          "field": "fd/165",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/165'"
+        },
+        {
+          "field": "fd/166",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/166'"
+        },
+        {
+          "field": "fd/167",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/167'"
+        },
+        {
+          "field": "fd/168",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/168'"
+        },
+        {
+          "field": "fd/169",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/169'"
+        },
+        {
+          "field": "fd/172",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/172'"
+        },
+        {
+          "field": "fd/173",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/173'"
+        },
+        {
+          "field": "fd/174",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/174'"
+        },
+        {
+          "field": "fd/175",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/175'"
+        },
+        {
+          "field": "fd/176",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/176'"
+        },
+        {
+          "field": "fd/179",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/179'"
+        },
+        {
+          "field": "fd/180",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/180'"
+        },
+        {
+          "field": "fd/181",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/181'"
+        },
+        {
+          "field": "fd/183",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/183'"
+        },
+        {
+          "field": "fd/184",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/184'"
+        },
+        {
+          "field": "fd/196",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/196'"
+        },
+        {
+          "field": "fd/197",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1247/fd/197'"
+        }
+      ]
+    },
+    {
+      "pid": 1256,
+      "uid": 1000,
+      "start": "1023",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/init.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": null,
+      "cwd": null,
+      "related_fds": [],
+      "accessible_fd_count": 0,
+      "errors": [
+        {
+          "field": "exe",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1256/exe'"
+        },
+        {
+          "field": "cwd",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1256/cwd'"
+        },
+        {
+          "field": "fd_directory",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/1256/fd'"
+        }
+      ]
+    },
+    {
+      "pid": 1310,
+      "uid": 1000,
+      "start": "1031",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/seat1-input-monitor.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/python3.14",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 4,
+      "errors": []
+    },
+    {
+      "pid": 2463,
+      "uid": 1000,
+      "start": "2784",
+      "cgroup": "0::/user.slice/user-1000.slice/session-3.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/ksecretd",
+      "cwd": "/",
+      "related_fds": [],
+      "accessible_fd_count": 15,
+      "errors": []
+    },
+    {
+      "pid": 2464,
+      "uid": 1000,
+      "start": "2784",
+      "cgroup": "0::/user.slice/user-1000.slice/session-3.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/startplasma-wayland",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 7,
+      "errors": []
+    },
+    {
+      "pid": 2566,
+      "uid": 1000,
+      "start": "2795",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/dbus-broker.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/dbus-broker-launch",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 15,
+      "errors": []
+    },
+    {
+      "pid": 2567,
+      "uid": 1000,
+      "start": "2796",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/dbus-broker.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/dbus-broker",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 131,
+      "errors": []
+    },
+    {
+      "pid": 2574,
+      "uid": 1000,
+      "start": "2807",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/plasma-kwin_wayland.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/kwin_wayland_wrapper",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 17,
+      "errors": []
+    },
+    {
+      "pid": 2578,
+      "uid": 1000,
+      "start": "2807",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/plasma-kwin_wayland.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": null,
+      "cwd": null,
+      "related_fds": [],
+      "accessible_fd_count": 0,
+      "errors": [
+        {
+          "field": "exe",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/2578/exe'"
+        },
+        {
+          "field": "cwd",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/2578/cwd'"
+        },
+        {
+          "field": "fd_directory",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/2578/fd'"
+        }
+      ]
+    },
+    {
+      "pid": 2580,
+      "uid": 1000,
+      "start": "2808",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/plasma-ksmserver.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/ksmserver",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 11,
+      "errors": []
+    },
+    {
+      "pid": 2583,
+      "uid": 1000,
+      "start": "2808",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/plasma-kded6.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/kded6",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 50,
+      "errors": []
+    },
+    {
+      "pid": 2589,
+      "uid": 1000,
+      "start": "2809",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/plasma-plasmashell.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/plasmashell",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 175,
+      "errors": []
+    },
+    {
+      "pid": 2722,
+      "uid": 1000,
+      "start": "2840",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/pipewire.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/pipewire",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 81,
+      "errors": []
+    },
+    {
+      "pid": 2723,
+      "uid": 1000,
+      "start": "2840",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/wireplumber.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/wireplumber",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 48,
+      "errors": []
+    },
+    {
+      "pid": 2749,
+      "uid": 1000,
+      "start": "2865",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/background.slice/plasma-kactivitymanagerd.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/lib/kactivitymanagerd",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 22,
+      "errors": []
+    },
+    {
+      "pid": 2752,
+      "uid": 1000,
+      "start": "2866",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/background.slice/plasma-gmenudbusmenuproxy.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/gmenudbusmenuproxy",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 11,
+      "errors": []
+    },
+    {
+      "pid": 2753,
+      "uid": 1000,
+      "start": "2866",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/background.slice/plasma-kaccess.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/kaccess",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 10,
+      "errors": []
+    },
+    {
+      "pid": 2754,
+      "uid": 1000,
+      "start": "2866",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/background.slice/plasma-polkit-agent.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": null,
+      "cwd": null,
+      "related_fds": [],
+      "accessible_fd_count": 0,
+      "errors": [
+        {
+          "field": "exe",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/2754/exe'"
+        },
+        {
+          "field": "cwd",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/2754/cwd'"
+        },
+        {
+          "field": "fd_directory",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/2754/fd'"
+        }
+      ]
+    },
+    {
+      "pid": 2755,
+      "uid": 1000,
+      "start": "2866",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/background.slice/plasma-powerdevil.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/lib/org_kde_powerdevil",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 30,
+      "errors": []
+    },
+    {
+      "pid": 2756,
+      "uid": 1000,
+      "start": "2866",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/background.slice/plasma-xembedsniproxy.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/xembedsniproxy",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 10,
+      "errors": []
+    },
+    {
+      "pid": 2764,
+      "uid": 1000,
+      "start": "2867",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/plasma-kwin_wayland.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/Xwayland",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 27,
+      "errors": []
+    },
+    {
+      "pid": 2836,
+      "uid": 1000,
+      "start": "2872",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/dconf.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/lib/dconf-service",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 7,
+      "errors": []
+    },
+    {
+      "pid": 2837,
+      "uid": 1000,
+      "start": "2872",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/at-spi-dbus-bus.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/lib/at-spi-bus-launcher",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 12,
+      "errors": []
+    },
+    {
+      "pid": 2867,
+      "uid": 1000,
+      "start": "2873",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/at-spi-dbus-bus.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/dbus-broker-launch",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 15,
+      "errors": []
+    },
+    {
+      "pid": 2869,
+      "uid": 1000,
+      "start": "2873",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/at-spi-dbus-bus.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/dbus-broker",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 25,
+      "errors": []
+    },
+    {
+      "pid": 2877,
+      "uid": 1000,
+      "start": "2875",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-dbus\\x2d:1.23\\x2dorg.a11y.atspi.Registry.slice/dbus-:1.23-org.a11y.atspi.Registry@0.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/lib/at-spi2-registryd",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 9,
+      "errors": []
+    },
+    {
+      "pid": 2921,
+      "uid": 1000,
+      "start": "2877",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/pipewire-pulse.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/pipewire",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 68,
+      "errors": []
+    },
+    {
+      "pid": 2986,
+      "uid": 1000,
+      "start": "2908",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/plasma-kded6.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/xsettingsd",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 4,
+      "errors": []
+    },
+    {
+      "pid": 2988,
+      "uid": 1000,
+      "start": "2909",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/obex.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/lib/bluetooth/obexd",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 10,
+      "errors": []
+    },
+    {
+      "pid": 3169,
+      "uid": 1000,
+      "start": "2954",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-dbus\\x2d:1.2\\x2dorg.kde.kdeconnect.slice/dbus-:1.2-org.kde.kdeconnect@0.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/kdeconnectd",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 19,
+      "errors": []
+    },
+    {
+      "pid": 3253,
+      "uid": 1000,
+      "start": "2999",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-limine\\x2dsnapper\\x2dnotify@autostart.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/bash",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 6,
+      "errors": []
+    },
+    {
+      "pid": 3254,
+      "uid": 1000,
+      "start": "2999",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-megasync@autostart.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/megasync",
+      "cwd": "/home/lucied/.local/share/data/Mega Limited/MEGAsync",
+      "related_fds": [],
+      "accessible_fd_count": 79,
+      "errors": []
+    },
+    {
+      "pid": 3266,
+      "uid": 1000,
+      "start": "3000",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-remmina\\x2dapplet@autostart.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/remmina",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 21,
+      "errors": []
+    },
+    {
+      "pid": 3268,
+      "uid": 1000,
+      "start": "3000",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-sunshine\\x2dbureau@autostart.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/sunshine",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 38,
+      "errors": []
+    },
+    {
+      "pid": 3273,
+      "uid": 1000,
+      "start": "3000",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/xdg-desktop-portal.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/lib/xdg-desktop-portal",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 36,
+      "errors": []
+    },
+    {
+      "pid": 3280,
+      "uid": 1000,
+      "start": "3000",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-limine\\x2dsnapper\\x2dnotify@autostart.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/journalctl",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 46,
+      "errors": []
+    },
+    {
+      "pid": 3311,
+      "uid": 1000,
+      "start": "3001",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/xdg-permission-store.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/lib/xdg-permission-store",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 7,
+      "errors": []
+    },
+    {
+      "pid": 3333,
+      "uid": 1000,
+      "start": "3002",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/xdg-document-portal.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/lib/xdg-document-portal",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 11,
+      "errors": []
+    },
+    {
+      "pid": 3335,
+      "uid": 1000,
+      "start": "3002",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-org.kde.konsole-3335.scope/main.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/konsole",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 34,
+      "errors": []
+    },
+    {
+      "pid": 3356,
+      "uid": 1000,
+      "start": "3003",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/xdg-desktop-portal-gtk.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/lib/xdg-desktop-portal-gtk",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 15,
+      "errors": []
+    },
+    {
+      "pid": 3398,
+      "uid": 1000,
+      "start": "3007",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/plasma-xdg-desktop-portal-kde.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/lib/xdg-desktop-portal-kde",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 31,
+      "errors": []
+    },
+    {
+      "pid": 3455,
+      "uid": 1000,
+      "start": "3012",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-org.kde.konsole-3335.scope/tab(3455).scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/fish",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 7,
+      "errors": []
+    },
+    {
+      "pid": 3508,
+      "uid": 1000,
+      "start": "3014",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-megasync@autostart.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/gsettings",
+      "cwd": "/home/lucied/.local/share/data/Mega Limited/MEGAsync",
+      "related_fds": [],
+      "accessible_fd_count": 9,
+      "errors": []
+    },
+    {
+      "pid": 3598,
+      "uid": 1000,
+      "start": "3027",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-megasync@autostart.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/mega-desktop-app-gfxworker",
+      "cwd": "/home/lucied/.local/share/data/Mega Limited/MEGAsync",
+      "related_fds": [],
+      "accessible_fd_count": 12,
+      "errors": []
+    },
+    {
+      "pid": 4839,
+      "uid": 1000,
+      "start": "3304",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-arch\\x2dupdate\\x2dtray@autostart.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/lib/arch-update/arch-update-tray",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 19,
+      "errors": []
+    },
+    {
+      "pid": 8135,
+      "uid": 1000,
+      "start": "11172",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-org.kde.konsole-3335.scope/tab(3455).scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/home/lucied/.local/lib/node_modules/@anthropic-ai/.claude-code-vswb92wd/bin/claude.exe",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 17,
+      "errors": []
+    },
+    {
+      "pid": 8485,
+      "uid": 1000,
+      "start": "12887",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-dbus\\x2d:1.2\\x2dorg.kde.kwalletd6.slice/dbus-:1.2-org.kde.kwalletd6@0.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/kwalletd6",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 17,
+      "errors": []
+    },
+    {
+      "pid": 79013,
+      "uid": 1000,
+      "start": "63335",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/plasma-kwin_wayland.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/gdbus",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 27,
+      "errors": []
+    },
+    {
+      "pid": 126305,
+      "uid": 1000,
+      "start": "141851",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/background.slice/plasma-baloorunner.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/lib/baloorunner",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 13,
+      "errors": []
+    },
+    {
+      "pid": 126830,
+      "uid": 1000,
+      "start": "142365",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-org.kde.dolphin@e19efd75e3974fae8b5b7b9bc3faf09d.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/dolphin",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 30,
+      "errors": []
+    },
+    {
+      "pid": 186030,
+      "uid": 1000,
+      "start": "128760517",
+      "cgroup": "0::/user.slice/user-1000.slice/session-c1058424.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": null,
+      "cwd": null,
+      "related_fds": [],
+      "accessible_fd_count": 0,
+      "errors": [
+        {
+          "field": "exe",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/186030/exe'"
+        },
+        {
+          "field": "cwd",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/186030/cwd'"
+        },
+        {
+          "field": "fd_directory",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/186030/fd'"
+        }
+      ]
+    },
+    {
+      "pid": 186050,
+      "uid": 1000,
+      "start": "128760519",
+      "cgroup": "0::/user.slice/user-1000.slice/session-c1058424.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/timeout",
+      "cwd": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-output-red-17nov-v1",
+      "related_fds": [],
+      "accessible_fd_count": 3,
+      "errors": []
+    },
+    {
+      "pid": 186097,
+      "uid": 1000,
+      "start": "128760526",
+      "cgroup": "0::/user.slice/user-1000.slice/session-c1058424.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/bash",
+      "cwd": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-output-red-17nov-v1",
+      "related_fds": [],
+      "accessible_fd_count": 5,
+      "errors": []
+    },
+    {
+      "pid": 186147,
+      "uid": 1000,
+      "start": "128760530",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/run-p186147-i163642249.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/timeout",
+      "cwd": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-output-red-17nov-v1",
+      "related_fds": [],
+      "accessible_fd_count": 3,
+      "errors": []
+    },
+    {
+      "pid": 186148,
+      "uid": 1000,
+      "start": "128760530",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/run-p186147-i163642249.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/python3.14",
+      "cwd": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-output-red-17nov-v1",
+      "related_fds": [],
+      "accessible_fd_count": 3,
+      "errors": []
+    },
+    {
+      "pid": 186154,
+      "uid": 1000,
+      "start": "128760537",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/run-p186147-i163642249.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/python3.14",
+      "cwd": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-output-red-17nov-v1",
+      "related_fds": [],
+      "accessible_fd_count": 3,
+      "errors": []
+    },
+    {
+      "pid": 186159,
+      "uid": 1000,
+      "start": "128760542",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/run-p186147-i163642249.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/dbus-run-session",
+      "cwd": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-output-red-17nov-v1",
+      "related_fds": [],
+      "accessible_fd_count": 3,
+      "errors": []
+    },
+    {
+      "pid": 186160,
+      "uid": 1000,
+      "start": "128760542",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/run-p186147-i163642249.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/dbus-daemon",
+      "cwd": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-output-red-17nov-v1",
+      "related_fds": [],
+      "accessible_fd_count": 8,
+      "errors": []
+    },
+    {
+      "pid": 186161,
+      "uid": 1000,
+      "start": "128760542",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/run-p186147-i163642249.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/python3.14",
+      "cwd": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-output-red-17nov-v1",
+      "related_fds": [],
+      "accessible_fd_count": 3,
+      "errors": []
+    },
+    {
+      "pid": 186469,
+      "uid": 1000,
+      "start": "128760696",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/seat1-idle-watchdog.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/sleep",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 3,
+      "errors": []
+    },
+    {
+      "pid": 187469,
+      "uid": 1000,
+      "start": "128760920",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/run-p2000529-i98452764.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/sleep",
+      "cwd": "/home/lucied/.cache/rag3weaver-build/wt-scope-version/extension/rag3weaver",
+      "related_fds": [],
+      "accessible_fd_count": 3,
+      "errors": []
+    },
+    {
+      "pid": 187470,
+      "uid": 1000,
+      "start": "128760920",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/run-p1883798-i98283493.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/sleep",
+      "cwd": "/home/lucied/.cache/rag3weaver-build/wt-scope-version/extension/rag3weaver",
+      "related_fds": [],
+      "accessible_fd_count": 3,
+      "errors": []
+    },
+    {
+      "pid": 187511,
+      "uid": 1000,
+      "start": "128760931",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/dash",
+      "cwd": "/home/lucied/.local/share/Steam",
+      "related_fds": [],
+      "accessible_fd_count": 22,
+      "errors": []
+    },
+    {
+      "pid": 187512,
+      "uid": 1000,
+      "start": "128760932",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/steam-runtime-launch-client",
+      "cwd": "/home/lucied/.local/share/Steam",
+      "related_fds": [],
+      "accessible_fd_count": 27,
+      "errors": []
+    },
+    {
+      "pid": 187517,
+      "uid": 1000,
+      "start": "128760932",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/wpctl",
+      "cwd": "/home/lucied/.local/share/Steam",
+      "related_fds": [],
+      "accessible_fd_count": 11,
+      "errors": []
+    },
+    {
+      "pid": 209212,
+      "uid": 1000,
+      "start": "238162",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/plasma-kwin_wayland.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/gdbus",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 28,
+      "errors": []
+    },
+    {
+      "pid": 453827,
+      "uid": 1000,
+      "start": "109535245",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/steam-runtime-launch-client",
+      "cwd": "/home/lucied/Applications",
+      "related_fds": [],
+      "accessible_fd_count": 32,
+      "errors": []
+    },
+    {
+      "pid": 453830,
+      "uid": 1000,
+      "start": "109535248",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/home/lucied/.local/share/Steam/steamrt64/pv-runtime/steam-runtime-steamrt/pressure-vessel/bin/steam-runtime-supervisor",
+      "cwd": "/home/lucied/Applications",
+      "related_fds": [],
+      "accessible_fd_count": 3,
+      "errors": []
+    },
+    {
+      "pid": 453831,
+      "uid": 1000,
+      "start": "109535248",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-steam-app4106156779-453831.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/home/lucied/.local/share/Steam/steamrt64/reaper",
+      "cwd": "/home/lucied/Applications",
+      "related_fds": [],
+      "accessible_fd_count": 8,
+      "errors": []
+    },
+    {
+      "pid": 453832,
+      "uid": 1000,
+      "start": "109535251",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-steam-app4106156779-453831.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/bash",
+      "cwd": "/home/lucied/.config/EmuDeck/backend",
+      "related_fds": [],
+      "accessible_fd_count": 9,
+      "errors": []
+    },
+    {
+      "pid": 455188,
+      "uid": 1000,
+      "start": "109535747",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-steam-app4106156779-453831.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/home/lucied/Applications/ES-DE.AppImage",
+      "cwd": "/home/lucied/.config/EmuDeck/backend",
+      "related_fds": [],
+      "accessible_fd_count": 8,
+      "errors": []
+    },
+    {
+      "pid": 455199,
+      "uid": 1000,
+      "start": "109535748",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-steam-app4106156779-453831.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/memfd:squashfuse",
+      "cwd": "/",
+      "related_fds": [],
+      "accessible_fd_count": 7,
+      "errors": []
+    },
+    {
+      "pid": 455201,
+      "uid": 1000,
+      "start": "109535749",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-steam-app4106156779-453831.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/tmp/.mount_ESDEremp17513281206175725659/usr/bin/es-de",
+      "cwd": "/home/lucied/.config/EmuDeck/backend",
+      "related_fds": [],
+      "accessible_fd_count": 28,
+      "errors": []
+    },
+    {
+      "pid": 469815,
+      "uid": 1000,
+      "start": "109542588",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/lib/flatpak-session-helper",
+      "cwd": "/",
+      "related_fds": [],
+      "accessible_fd_count": 8,
+      "errors": []
+    },
+    {
+      "pid": 469820,
+      "uid": 1000,
+      "start": "109542588",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/lib/p11-kit/p11-kit-server",
+      "cwd": "/",
+      "related_fds": [],
+      "accessible_fd_count": 2,
+      "errors": []
+    },
+    {
+      "pid": 469850,
+      "uid": 1000,
+      "start": "109542614",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/gamemoded",
+      "cwd": "/",
+      "related_fds": [],
+      "accessible_fd_count": 6,
+      "errors": []
+    },
+    {
+      "pid": 878963,
+      "uid": 1000,
+      "start": "35758014",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/bioscrack-api.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/python3.14",
+      "cwd": "/home/lucied/bioscrack",
+      "related_fds": [],
+      "accessible_fd_count": 7,
+      "errors": []
+    },
+    {
+      "pid": 962042,
+      "uid": 1000,
+      "start": "109707382",
+      "cgroup": null,
+      "present": false,
+      "owned": false,
+      "attributed": false,
+      "exe": null,
+      "cwd": null,
+      "related_fds": [],
+      "accessible_fd_count": 0,
+      "errors": [],
+      "state": "exited_zombie"
+    },
+    {
+      "pid": 962057,
+      "uid": 1000,
+      "start": "109707383",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-flatpak-org.libretro.RetroArch-2646125721.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/bwrap",
+      "cwd": "/home/lucied/.config/EmuDeck/backend",
+      "related_fds": [],
+      "accessible_fd_count": 5,
+      "errors": []
+    },
+    {
+      "pid": 962079,
+      "uid": 1000,
+      "start": "109707389",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-flatpak-org.libretro.RetroArch-2646125721.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/bwrap",
+      "cwd": "/home/lucied/.config/EmuDeck/backend",
+      "related_fds": [],
+      "accessible_fd_count": 4,
+      "errors": []
+    },
+    {
+      "pid": 962089,
+      "uid": 1000,
+      "start": "109707390",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-flatpak-org.libretro.RetroArch-2646125721.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/xdg-dbus-proxy",
+      "cwd": "/home/lucied/.config/EmuDeck/backend",
+      "related_fds": [],
+      "accessible_fd_count": 19,
+      "errors": []
+    },
+    {
+      "pid": 962097,
+      "uid": 1000,
+      "start": "109707390",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-flatpak-org.libretro.RetroArch-2646125721.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/bwrap",
+      "cwd": "/home/lucied/.config/EmuDeck/backend",
+      "related_fds": [],
+      "accessible_fd_count": 9,
+      "errors": []
+    },
+    {
+      "pid": 962106,
+      "uid": 1000,
+      "start": "109707391",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-flatpak-org.libretro.RetroArch-2646125721.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/app/bin/retroarch",
+      "cwd": "/home/lucied/.config/EmuDeck/backend",
+      "related_fds": [],
+      "accessible_fd_count": 43,
+      "errors": []
+    },
+    {
+      "pid": 1883819,
+      "uid": 1000,
+      "start": "95602282",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/run-p1883798-i98283493.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/bash",
+      "cwd": "/home/lucied/.cache/rag3weaver-build/wt-scope-version/extension/rag3weaver",
+      "related_fds": [],
+      "accessible_fd_count": 3,
+      "errors": []
+    },
+    {
+      "pid": 1883820,
+      "uid": 1000,
+      "start": "95602282",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/run-p1883798-i98283493.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/sort",
+      "cwd": "/home/lucied/.cache/rag3weaver-build/wt-scope-version/extension/rag3weaver",
+      "related_fds": [],
+      "accessible_fd_count": 3,
+      "errors": []
+    },
+    {
+      "pid": 1995782,
+      "uid": 1000,
+      "start": "75816751",
+      "cgroup": "0::/user.slice/user-1000.slice/session-54.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/fish",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 7,
+      "errors": []
+    },
+    {
+      "pid": 2000642,
+      "uid": 1000,
+      "start": "95633544",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/run-p2000529-i98452764.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/bash",
+      "cwd": "/home/lucied/.cache/rag3weaver-build/wt-scope-version/extension/rag3weaver",
+      "related_fds": [],
+      "accessible_fd_count": 3,
+      "errors": []
+    },
+    {
+      "pid": 2000643,
+      "uid": 1000,
+      "start": "95633544",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/run-p2000529-i98452764.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/sort",
+      "cwd": "/home/lucied/.cache/rag3weaver-build/wt-scope-version/extension/rag3weaver",
+      "related_fds": [],
+      "accessible_fd_count": 3,
+      "errors": []
+    },
+    {
+      "pid": 2472785,
+      "uid": 1000,
+      "start": "116753312",
+      "cgroup": "0::/user.slice/user-1000.slice/session-61.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/fish",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 7,
+      "errors": []
+    },
+    {
+      "pid": 2531430,
+      "uid": 1000,
+      "start": "17141927",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-systemsettings@bddfad0785684e02811437f9e48189fa.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/systemsettings",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 33,
+      "errors": []
+    },
+    {
+      "pid": 2532216,
+      "uid": 1000,
+      "start": "17178100",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/plasma-kwin_wayland.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": null,
+      "cwd": null,
+      "related_fds": [],
+      "accessible_fd_count": 0,
+      "errors": [
+        {
+          "field": "exe",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/2532216/exe'"
+        },
+        {
+          "field": "cwd",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/2532216/cwd'"
+        },
+        {
+          "field": "fd_directory",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/2532216/fd'"
+        }
+      ]
+    },
+    {
+      "pid": 2532223,
+      "uid": 1000,
+      "start": "17178105",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/plasma-plasmashell.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/bash",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 22,
+      "errors": []
+    },
+    {
+      "pid": 2532225,
+      "uid": 1000,
+      "start": "17178105",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/plasma-plasmashell.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/gdbus",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 25,
+      "errors": []
+    },
+    {
+      "pid": 2532226,
+      "uid": 1000,
+      "start": "17178105",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/plasma-plasmashell.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/tail",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 23,
+      "errors": []
+    },
+    {
+      "pid": 2532227,
+      "uid": 1000,
+      "start": "17178105",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/plasma-plasmashell.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/bash",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 21,
+      "errors": []
+    },
+    {
+      "pid": 2532317,
+      "uid": 1000,
+      "start": "17178136",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/plasma-kwin_wayland.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": null,
+      "cwd": null,
+      "related_fds": [],
+      "accessible_fd_count": 0,
+      "errors": [
+        {
+          "field": "exe",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/2532317/exe'"
+        },
+        {
+          "field": "cwd",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/2532317/cwd'"
+        },
+        {
+          "field": "fd_directory",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/2532317/fd'"
+        }
+      ]
+    },
+    {
+      "pid": 2532319,
+      "uid": 1000,
+      "start": "17178136",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/plasma-kwin_wayland.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": null,
+      "cwd": null,
+      "related_fds": [],
+      "accessible_fd_count": 0,
+      "errors": [
+        {
+          "field": "exe",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/2532319/exe'"
+        },
+        {
+          "field": "cwd",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/2532319/cwd'"
+        },
+        {
+          "field": "fd_directory",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/2532319/fd'"
+        }
+      ]
+    },
+    {
+      "pid": 2532373,
+      "uid": 1000,
+      "start": "17178155",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/plasma-kwin_wayland.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/bash",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 26,
+      "errors": []
+    },
+    {
+      "pid": 2532375,
+      "uid": 1000,
+      "start": "17178155",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/plasma-kwin_wayland.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/gdbus",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 29,
+      "errors": []
+    },
+    {
+      "pid": 2532376,
+      "uid": 1000,
+      "start": "17178155",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/plasma-kwin_wayland.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/tail",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 27,
+      "errors": []
+    },
+    {
+      "pid": 2532377,
+      "uid": 1000,
+      "start": "17178155",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/plasma-kwin_wayland.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/bash",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 25,
+      "errors": []
+    },
+    {
+      "pid": 3904390,
+      "uid": 1000,
+      "start": "111725627",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-rag3weaver\\x2dembeddings.slice/rag3weaver-embeddings@bge-m3.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/home/lucied/.local/bin/rag3weaver-embeddings",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 28,
+      "errors": []
+    },
+    {
+      "pid": 3906704,
+      "uid": 1000,
+      "start": "111727101",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/app-rag3weaver\\x2dembeddings.slice/rag3weaver-embeddings@granite-278m.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/home/lucied/.local/bin/rag3weaver-embeddings",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 26,
+      "errors": []
+    },
+    {
+      "pid": 4037173,
+      "uid": 1000,
+      "start": "51042032",
+      "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/app.slice/seat1-idle-watchdog.service",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/bash",
+      "cwd": "/home/lucied",
+      "related_fds": [],
+      "accessible_fd_count": 4,
+      "errors": []
+    },
+    {
+      "pid": 4085460,
+      "uid": 1000,
+      "start": "109325534",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/bash",
+      "cwd": "/",
+      "related_fds": [],
+      "accessible_fd_count": 4,
+      "errors": []
+    },
+    {
+      "pid": 4085469,
+      "uid": 1000,
+      "start": "109325538",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": null,
+      "cwd": null,
+      "related_fds": [],
+      "accessible_fd_count": 0,
+      "errors": [
+        {
+          "field": "exe",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/4085469/exe'"
+        },
+        {
+          "field": "cwd",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/4085469/cwd'"
+        },
+        {
+          "field": "fd_directory",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/4085469/fd'"
+        }
+      ]
+    },
+    {
+      "pid": 4085470,
+      "uid": 1000,
+      "start": "109325538",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/tee",
+      "cwd": "/",
+      "related_fds": [],
+      "accessible_fd_count": 4,
+      "errors": []
+    },
+    {
+      "pid": 4085472,
+      "uid": 1000,
+      "start": "109325538",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/pipewire",
+      "cwd": "/",
+      "related_fds": [],
+      "accessible_fd_count": 74,
+      "errors": []
+    },
+    {
+      "pid": 4085501,
+      "uid": 1000,
+      "start": "109325638",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/wireplumber",
+      "cwd": "/",
+      "related_fds": [],
+      "accessible_fd_count": 31,
+      "errors": []
+    },
+    {
+      "pid": 4085502,
+      "uid": 1000,
+      "start": "109325638",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/pipewire",
+      "cwd": "/",
+      "related_fds": [],
+      "accessible_fd_count": 54,
+      "errors": []
+    },
+    {
+      "pid": 4086157,
+      "uid": 1000,
+      "start": "109325839",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/dbus-run-session",
+      "cwd": "/",
+      "related_fds": [],
+      "accessible_fd_count": 3,
+      "errors": []
+    },
+    {
+      "pid": 4086158,
+      "uid": 1000,
+      "start": "109325839",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/dbus-daemon",
+      "cwd": "/",
+      "related_fds": [],
+      "accessible_fd_count": 207,
+      "errors": []
+    },
+    {
+      "pid": 4086159,
+      "uid": 1000,
+      "start": "109325839",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/startplasma-wayland",
+      "cwd": "/",
+      "related_fds": [],
+      "accessible_fd_count": 9,
+      "errors": []
+    },
+    {
+      "pid": 4086193,
+      "uid": 1000,
+      "start": "109325841",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/plasma_session",
+      "cwd": "/",
+      "related_fds": [],
+      "accessible_fd_count": 33,
+      "errors": []
+    },
+    {
+      "pid": 4086199,
+      "uid": 1000,
+      "start": "109325842",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/kwin_wayland_wrapper",
+      "cwd": "/",
+      "related_fds": [],
+      "accessible_fd_count": 17,
+      "errors": []
+    },
+    {
+      "pid": 4086221,
+      "uid": 1000,
+      "start": "109325843",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": null,
+      "cwd": null,
+      "related_fds": [],
+      "accessible_fd_count": 0,
+      "errors": [
+        {
+          "field": "exe",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/4086221/exe'"
+        },
+        {
+          "field": "cwd",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/4086221/cwd'"
+        },
+        {
+          "field": "fd_directory",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/4086221/fd'"
+        }
+      ]
+    },
+    {
+      "pid": 4086228,
+      "uid": 1000,
+      "start": "109325843",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/kded6",
+      "cwd": "/",
+      "related_fds": [],
+      "accessible_fd_count": 45,
+      "errors": []
+    },
+    {
+      "pid": 4086232,
+      "uid": 1000,
+      "start": "109325844",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/lib/xdg-desktop-portal",
+      "cwd": "/",
+      "related_fds": [],
+      "accessible_fd_count": 36,
+      "errors": []
+    },
+    {
+      "pid": 4086238,
+      "uid": 1000,
+      "start": "109325844",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/lib/xdg-permission-store",
+      "cwd": "/",
+      "related_fds": [],
+      "accessible_fd_count": 7,
+      "errors": []
+    },
+    {
+      "pid": 4086256,
+      "uid": 1000,
+      "start": "109325845",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/lib/xdg-desktop-portal-gtk",
+      "cwd": "/",
+      "related_fds": [],
+      "accessible_fd_count": 15,
+      "errors": []
+    },
+    {
+      "pid": 4086389,
+      "uid": 1000,
+      "start": "109325872",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/lib/at-spi-bus-launcher",
+      "cwd": "/",
+      "related_fds": [],
+      "accessible_fd_count": 12,
+      "errors": []
+    },
+    {
+      "pid": 4086395,
+      "uid": 1000,
+      "start": "109325872",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/dbus-daemon",
+      "cwd": "/",
+      "related_fds": [],
+      "accessible_fd_count": 43,
+      "errors": []
+    },
+    {
+      "pid": 4086396,
+      "uid": 1000,
+      "start": "109325873",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/ksmserver",
+      "cwd": "/",
+      "related_fds": [],
+      "accessible_fd_count": 11,
+      "errors": []
+    },
+    {
+      "pid": 4086398,
+      "uid": 1000,
+      "start": "109325874",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/lib/at-spi2-registryd",
+      "cwd": "/",
+      "related_fds": [],
+      "accessible_fd_count": 9,
+      "errors": []
+    },
+    {
+      "pid": 4086403,
+      "uid": 1000,
+      "start": "109325874",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/lib/xdg-desktop-portal-kde",
+      "cwd": "/",
+      "related_fds": [],
+      "accessible_fd_count": 20,
+      "errors": []
+    },
+    {
+      "pid": 4086412,
+      "uid": 1000,
+      "start": "109325874",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/lib/dconf-service",
+      "cwd": "/",
+      "related_fds": [],
+      "accessible_fd_count": 7,
+      "errors": []
+    },
+    {
+      "pid": 4086418,
+      "uid": 1000,
+      "start": "109325875",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/xembedsniproxy",
+      "cwd": "/",
+      "related_fds": [],
+      "accessible_fd_count": 10,
+      "errors": []
+    },
+    {
+      "pid": 4086419,
+      "uid": 1000,
+      "start": "109325875",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/kaccess",
+      "cwd": "/",
+      "related_fds": [],
+      "accessible_fd_count": 10,
+      "errors": []
+    },
+    {
+      "pid": 4086420,
+      "uid": 1000,
+      "start": "109325875",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/lib/org_kde_powerdevil",
+      "cwd": "/",
+      "related_fds": [],
+      "accessible_fd_count": 31,
+      "errors": []
+    },
+    {
+      "pid": 4086421,
+      "uid": 1000,
+      "start": "109325875",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": null,
+      "cwd": null,
+      "related_fds": [],
+      "accessible_fd_count": 0,
+      "errors": [
+        {
+          "field": "exe",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/4086421/exe'"
+        },
+        {
+          "field": "cwd",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/4086421/cwd'"
+        },
+        {
+          "field": "fd_directory",
+          "errno": 13,
+          "error": "[Errno 13] Permission denied: '/proc/4086421/fd'"
+        }
+      ]
+    },
+    {
+      "pid": 4086422,
+      "uid": 1000,
+      "start": "109325875",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/plasmashell",
+      "cwd": "/",
+      "related_fds": [],
+      "accessible_fd_count": 61,
+      "errors": []
+    },
+    {
+      "pid": 4086430,
+      "uid": 1000,
+      "start": "109325876",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/Xwayland",
+      "cwd": "/",
+      "related_fds": [],
+      "accessible_fd_count": 27,
+      "errors": []
+    },
+    {
+      "pid": 4086444,
+      "uid": 1000,
+      "start": "109325877",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/lib/kactivitymanagerd",
+      "cwd": "/",
+      "related_fds": [],
+      "accessible_fd_count": 21,
+      "errors": []
+    },
+    {
+      "pid": 4086520,
+      "uid": 1000,
+      "start": "109325884",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/gmenudbusmenuproxy",
+      "cwd": "/",
+      "related_fds": [],
+      "accessible_fd_count": 11,
+      "errors": []
+    },
+    {
+      "pid": 4086522,
+      "uid": 1000,
+      "start": "109325884",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/kdeconnectd",
+      "cwd": "/",
+      "related_fds": [],
+      "accessible_fd_count": 19,
+      "errors": []
+    },
+    {
+      "pid": 4086526,
+      "uid": 1000,
+      "start": "109325884",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/bash",
+      "cwd": "/",
+      "related_fds": [],
+      "accessible_fd_count": 6,
+      "errors": []
+    },
+    {
+      "pid": 4086529,
+      "uid": 1000,
+      "start": "109325884",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/gamescope",
+      "cwd": "/",
+      "related_fds": [],
+      "accessible_fd_count": 1102,
+      "errors": []
+    },
+    {
+      "pid": 4086538,
+      "uid": 1000,
+      "start": "109325885",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/journalctl",
+      "cwd": "/",
+      "related_fds": [],
+      "accessible_fd_count": 45,
+      "errors": []
+    },
+    {
+      "pid": 4086550,
+      "uid": 1000,
+      "start": "109325886",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/konsole",
+      "cwd": "/",
+      "related_fds": [],
+      "accessible_fd_count": 25,
+      "errors": []
+    },
+    {
+      "pid": 4086670,
+      "uid": 1000,
+      "start": "109325897",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/fish",
+      "cwd": "/",
+      "related_fds": [],
+      "accessible_fd_count": 7,
+      "errors": []
+    },
+    {
+      "pid": 4086684,
+      "uid": 1000,
+      "start": "109325900",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/lib/bluetooth/obexd",
+      "cwd": "/",
+      "related_fds": [],
+      "accessible_fd_count": 10,
+      "errors": []
+    },
+    {
+      "pid": 4087068,
+      "uid": 1000,
+      "start": "109326188",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/lib/arch-update/arch-update-tray",
+      "cwd": "/",
+      "related_fds": [],
+      "accessible_fd_count": 14,
+      "errors": []
+    },
+    {
+      "pid": 4087169,
+      "uid": 1000,
+      "start": "109326295",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/Xwayland",
+      "cwd": "/",
+      "related_fds": [],
+      "accessible_fd_count": 51,
+      "errors": []
+    },
+    {
+      "pid": 4087170,
+      "uid": 1000,
+      "start": "109326295",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/Xwayland",
+      "cwd": "/",
+      "related_fds": [],
+      "accessible_fd_count": 25,
+      "errors": []
+    },
+    {
+      "pid": 4087193,
+      "uid": 1000,
+      "start": "109326301",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/gamescopereaper",
+      "cwd": "/",
+      "related_fds": [],
+      "accessible_fd_count": 3,
+      "errors": []
+    },
+    {
+      "pid": 4087195,
+      "uid": 1000,
+      "start": "109326301",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/bin/bash",
+      "cwd": "/home/lucied/.local/share/Steam",
+      "related_fds": [],
+      "accessible_fd_count": 4,
+      "errors": []
+    },
+    {
+      "pid": 4087212,
+      "uid": 1000,
+      "start": "109326302",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/home/lucied/.local/share/Steam/steamrt64/pv-runtime/steam-runtime-steamrt/pressure-vessel/libexec/steam-runtime-tools-0/srt-logger",
+      "cwd": "/home/lucied/.local/share/Steam/logs",
+      "related_fds": [],
+      "accessible_fd_count": 5,
+      "errors": []
+    },
+    {
+      "pid": 4087239,
+      "uid": 1000,
+      "start": "109326314",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/home/lucied/.local/share/Steam/steamrt64/steam",
+      "cwd": "/home/lucied/.local/share/Steam",
+      "related_fds": [],
+      "accessible_fd_count": 3,
+      "errors": []
+    },
+    {
+      "pid": 4087315,
+      "uid": 1000,
+      "start": "109326341",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/home/lucied/.local/share/Steam/steamrt64/pv-runtime/steam-runtime-steamrt/pressure-vessel/libexec/steam-runtime-tools-0/srt-client-container",
+      "cwd": "/home/lucied/.local/share/Steam",
+      "related_fds": [],
+      "accessible_fd_count": 7,
+      "errors": []
+    },
+    {
+      "pid": 4087328,
+      "uid": 1000,
+      "start": "109326342",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/home/lucied/.local/share/Steam/steamrt64/pv-runtime/steam-runtime-steamrt/pressure-vessel/libexec/steam-runtime-tools-0/x86_64-linux-gnu-srt-launcher-service",
+      "cwd": "/home/lucied/.local/share/Steam",
+      "related_fds": [],
+      "accessible_fd_count": 8,
+      "errors": []
+    },
+    {
+      "pid": 4087333,
+      "uid": 1000,
+      "start": "109326342",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/home/lucied/.local/share/Steam/steamrt64/pv-runtime/steam-runtime-steamrt/pressure-vessel/libexec/steam-runtime-tools-0/srt-bwrap",
+      "cwd": "/home/lucied/.local/share/Steam",
+      "related_fds": [],
+      "accessible_fd_count": 4,
+      "errors": []
+    },
+    {
+      "pid": 4087422,
+      "uid": 1000,
+      "start": "109326389",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/usr/lib/pressure-vessel/from-host/libexec/steam-runtime-tools-0/pv-adverb",
+      "cwd": "/home/lucied/.local/share/Steam",
+      "related_fds": [],
+      "accessible_fd_count": 6,
+      "errors": []
+    },
+    {
+      "pid": 4087499,
+      "uid": 1000,
+      "start": "109326402",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/home/lucied/.local/share/Steam/steamrt64/steam",
+      "cwd": "/home/lucied/.local/share/Steam",
+      "related_fds": [],
+      "accessible_fd_count": 377,
+      "errors": []
+    },
+    {
+      "pid": 4088153,
+      "uid": 1000,
+      "start": "109326442",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/home/lucied/.local/share/Steam/steamrt64/steamwebhelper",
+      "cwd": "/home/lucied/.local/share/Steam/steamrt64",
+      "related_fds": [],
+      "accessible_fd_count": 226,
+      "errors": []
+    },
+    {
+      "pid": 4088160,
+      "uid": 1000,
+      "start": "109326450",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/home/lucied/.local/share/Steam/steamrt64/steamwebhelper",
+      "cwd": "/home/lucied/.local/share/Steam/steamrt64",
+      "related_fds": [],
+      "accessible_fd_count": 12,
+      "errors": []
+    },
+    {
+      "pid": 4088161,
+      "uid": 1000,
+      "start": "109326450",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/home/lucied/.local/share/Steam/steamrt64/steamwebhelper",
+      "cwd": "/proc/4088162/fdinfo",
+      "related_fds": [],
+      "accessible_fd_count": 12,
+      "errors": []
+    },
+    {
+      "pid": 4088163,
+      "uid": 1000,
+      "start": "109326452",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/home/lucied/.local/share/Steam/steamrt64/steamwebhelper",
+      "cwd": "/proc/4088162/fdinfo",
+      "related_fds": [],
+      "accessible_fd_count": 13,
+      "errors": []
+    },
+    {
+      "pid": 4088191,
+      "uid": 1000,
+      "start": "109326459",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/home/lucied/.local/share/Steam/steamrt64/steamwebhelper",
+      "cwd": "/home/lucied/.local/share/Steam/steamrt64",
+      "related_fds": [],
+      "accessible_fd_count": 74,
+      "errors": []
+    },
+    {
+      "pid": 4088236,
+      "uid": 1000,
+      "start": "109326491",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/home/lucied/.local/share/Steam/steamrt64/steamwebhelper",
+      "cwd": "/home/lucied/.local/share/Steam/steamrt64",
+      "related_fds": [],
+      "accessible_fd_count": 38,
+      "errors": []
+    },
+    {
+      "pid": 4088238,
+      "uid": 1000,
+      "start": "109326492",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/home/lucied/.local/share/Steam/steamrt64/steamwebhelper",
+      "cwd": "/proc/4088162/fdinfo",
+      "related_fds": [],
+      "accessible_fd_count": 37,
+      "errors": []
+    },
+    {
+      "pid": 4088431,
+      "uid": 1000,
+      "start": "109326522",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/home/lucied/.local/share/Steam/steamrt64/steamwebhelper",
+      "cwd": "/proc/4088162/fdinfo",
+      "related_fds": [],
+      "accessible_fd_count": 73,
+      "errors": []
+    },
+    {
+      "pid": 4088786,
+      "uid": 1000,
+      "start": "109326600",
+      "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+      "present": true,
+      "owned": false,
+      "attributed": false,
+      "exe": "/home/lucied/.local/share/Steam/steamrt64/steamwebhelper",
+      "cwd": "/home/lucied/.local/share/Steam/steamrt64",
+      "related_fds": [],
+      "accessible_fd_count": 25,
+      "errors": []
+    }
+  ],
+  "assessment": {
+    "admitted": true,
+    "blocked": [],
+    "unknown": [
+      {
+        "pid": 1247,
+        "uid": 1000,
+        "start": "1022",
+        "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/init.scope",
+        "present": true,
+        "owned": false,
+        "attributed": false,
+        "exe": null,
+        "cwd": null,
+        "related_fds": [],
+        "accessible_fd_count": 0,
+        "errors": [
+          {
+            "field": "exe",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/exe'"
+          },
+          {
+            "field": "cwd",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/cwd'"
+          },
+          {
+            "field": "fd/0",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/0'"
+          },
+          {
+            "field": "fd/1",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/1'"
+          },
+          {
+            "field": "fd/2",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/2'"
+          },
+          {
+            "field": "fd/3",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/3'"
+          },
+          {
+            "field": "fd/4",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/4'"
+          },
+          {
+            "field": "fd/5",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/5'"
+          },
+          {
+            "field": "fd/6",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/6'"
+          },
+          {
+            "field": "fd/7",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/7'"
+          },
+          {
+            "field": "fd/8",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/8'"
+          },
+          {
+            "field": "fd/9",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/9'"
+          },
+          {
+            "field": "fd/10",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/10'"
+          },
+          {
+            "field": "fd/11",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/11'"
+          },
+          {
+            "field": "fd/12",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/12'"
+          },
+          {
+            "field": "fd/13",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/13'"
+          },
+          {
+            "field": "fd/14",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/14'"
+          },
+          {
+            "field": "fd/15",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/15'"
+          },
+          {
+            "field": "fd/16",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/16'"
+          },
+          {
+            "field": "fd/17",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/17'"
+          },
+          {
+            "field": "fd/18",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/18'"
+          },
+          {
+            "field": "fd/19",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/19'"
+          },
+          {
+            "field": "fd/20",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/20'"
+          },
+          {
+            "field": "fd/21",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/21'"
+          },
+          {
+            "field": "fd/22",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/22'"
+          },
+          {
+            "field": "fd/23",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/23'"
+          },
+          {
+            "field": "fd/24",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/24'"
+          },
+          {
+            "field": "fd/25",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/25'"
+          },
+          {
+            "field": "fd/26",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/26'"
+          },
+          {
+            "field": "fd/27",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/27'"
+          },
+          {
+            "field": "fd/28",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/28'"
+          },
+          {
+            "field": "fd/29",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/29'"
+          },
+          {
+            "field": "fd/30",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/30'"
+          },
+          {
+            "field": "fd/31",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/31'"
+          },
+          {
+            "field": "fd/32",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/32'"
+          },
+          {
+            "field": "fd/33",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/33'"
+          },
+          {
+            "field": "fd/34",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/34'"
+          },
+          {
+            "field": "fd/35",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/35'"
+          },
+          {
+            "field": "fd/36",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/36'"
+          },
+          {
+            "field": "fd/37",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/37'"
+          },
+          {
+            "field": "fd/38",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/38'"
+          },
+          {
+            "field": "fd/39",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/39'"
+          },
+          {
+            "field": "fd/40",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/40'"
+          },
+          {
+            "field": "fd/41",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/41'"
+          },
+          {
+            "field": "fd/42",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/42'"
+          },
+          {
+            "field": "fd/43",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/43'"
+          },
+          {
+            "field": "fd/44",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/44'"
+          },
+          {
+            "field": "fd/45",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/45'"
+          },
+          {
+            "field": "fd/46",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/46'"
+          },
+          {
+            "field": "fd/47",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/47'"
+          },
+          {
+            "field": "fd/48",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/48'"
+          },
+          {
+            "field": "fd/49",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/49'"
+          },
+          {
+            "field": "fd/50",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/50'"
+          },
+          {
+            "field": "fd/51",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/51'"
+          },
+          {
+            "field": "fd/52",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/52'"
+          },
+          {
+            "field": "fd/53",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/53'"
+          },
+          {
+            "field": "fd/54",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/54'"
+          },
+          {
+            "field": "fd/55",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/55'"
+          },
+          {
+            "field": "fd/56",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/56'"
+          },
+          {
+            "field": "fd/57",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/57'"
+          },
+          {
+            "field": "fd/58",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/58'"
+          },
+          {
+            "field": "fd/59",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/59'"
+          },
+          {
+            "field": "fd/60",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/60'"
+          },
+          {
+            "field": "fd/61",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/61'"
+          },
+          {
+            "field": "fd/62",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/62'"
+          },
+          {
+            "field": "fd/63",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/63'"
+          },
+          {
+            "field": "fd/64",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/64'"
+          },
+          {
+            "field": "fd/65",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/65'"
+          },
+          {
+            "field": "fd/66",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/66'"
+          },
+          {
+            "field": "fd/68",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/68'"
+          },
+          {
+            "field": "fd/69",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/69'"
+          },
+          {
+            "field": "fd/70",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/70'"
+          },
+          {
+            "field": "fd/73",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/73'"
+          },
+          {
+            "field": "fd/74",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/74'"
+          },
+          {
+            "field": "fd/75",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/75'"
+          },
+          {
+            "field": "fd/76",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/76'"
+          },
+          {
+            "field": "fd/77",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/77'"
+          },
+          {
+            "field": "fd/78",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/78'"
+          },
+          {
+            "field": "fd/80",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/80'"
+          },
+          {
+            "field": "fd/84",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/84'"
+          },
+          {
+            "field": "fd/86",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/86'"
+          },
+          {
+            "field": "fd/87",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/87'"
+          },
+          {
+            "field": "fd/91",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/91'"
+          },
+          {
+            "field": "fd/92",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/92'"
+          },
+          {
+            "field": "fd/93",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/93'"
+          },
+          {
+            "field": "fd/94",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/94'"
+          },
+          {
+            "field": "fd/95",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/95'"
+          },
+          {
+            "field": "fd/96",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/96'"
+          },
+          {
+            "field": "fd/97",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/97'"
+          },
+          {
+            "field": "fd/98",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/98'"
+          },
+          {
+            "field": "fd/99",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/99'"
+          },
+          {
+            "field": "fd/100",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/100'"
+          },
+          {
+            "field": "fd/101",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/101'"
+          },
+          {
+            "field": "fd/102",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/102'"
+          },
+          {
+            "field": "fd/103",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/103'"
+          },
+          {
+            "field": "fd/104",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/104'"
+          },
+          {
+            "field": "fd/105",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/105'"
+          },
+          {
+            "field": "fd/106",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/106'"
+          },
+          {
+            "field": "fd/107",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/107'"
+          },
+          {
+            "field": "fd/108",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/108'"
+          },
+          {
+            "field": "fd/109",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/109'"
+          },
+          {
+            "field": "fd/118",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/118'"
+          },
+          {
+            "field": "fd/128",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/128'"
+          },
+          {
+            "field": "fd/136",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/136'"
+          },
+          {
+            "field": "fd/138",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/138'"
+          },
+          {
+            "field": "fd/139",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/139'"
+          },
+          {
+            "field": "fd/140",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/140'"
+          },
+          {
+            "field": "fd/141",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/141'"
+          },
+          {
+            "field": "fd/142",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/142'"
+          },
+          {
+            "field": "fd/144",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/144'"
+          },
+          {
+            "field": "fd/146",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/146'"
+          },
+          {
+            "field": "fd/147",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/147'"
+          },
+          {
+            "field": "fd/149",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/149'"
+          },
+          {
+            "field": "fd/152",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/152'"
+          },
+          {
+            "field": "fd/153",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/153'"
+          },
+          {
+            "field": "fd/154",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/154'"
+          },
+          {
+            "field": "fd/156",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/156'"
+          },
+          {
+            "field": "fd/160",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/160'"
+          },
+          {
+            "field": "fd/162",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/162'"
+          },
+          {
+            "field": "fd/165",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/165'"
+          },
+          {
+            "field": "fd/166",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/166'"
+          },
+          {
+            "field": "fd/167",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/167'"
+          },
+          {
+            "field": "fd/168",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/168'"
+          },
+          {
+            "field": "fd/169",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/169'"
+          },
+          {
+            "field": "fd/172",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/172'"
+          },
+          {
+            "field": "fd/173",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/173'"
+          },
+          {
+            "field": "fd/174",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/174'"
+          },
+          {
+            "field": "fd/175",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/175'"
+          },
+          {
+            "field": "fd/176",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/176'"
+          },
+          {
+            "field": "fd/179",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/179'"
+          },
+          {
+            "field": "fd/180",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/180'"
+          },
+          {
+            "field": "fd/181",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/181'"
+          },
+          {
+            "field": "fd/183",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/183'"
+          },
+          {
+            "field": "fd/184",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/184'"
+          },
+          {
+            "field": "fd/196",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/196'"
+          },
+          {
+            "field": "fd/197",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1247/fd/197'"
+          }
+        ],
+        "baseline_identity": true
+      },
+      {
+        "pid": 1256,
+        "uid": 1000,
+        "start": "1023",
+        "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/init.scope",
+        "present": true,
+        "owned": false,
+        "attributed": false,
+        "exe": null,
+        "cwd": null,
+        "related_fds": [],
+        "accessible_fd_count": 0,
+        "errors": [
+          {
+            "field": "exe",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1256/exe'"
+          },
+          {
+            "field": "cwd",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1256/cwd'"
+          },
+          {
+            "field": "fd_directory",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/1256/fd'"
+          }
+        ],
+        "baseline_identity": true
+      },
+      {
+        "pid": 2578,
+        "uid": 1000,
+        "start": "2807",
+        "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/plasma-kwin_wayland.service",
+        "present": true,
+        "owned": false,
+        "attributed": false,
+        "exe": null,
+        "cwd": null,
+        "related_fds": [],
+        "accessible_fd_count": 0,
+        "errors": [
+          {
+            "field": "exe",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/2578/exe'"
+          },
+          {
+            "field": "cwd",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/2578/cwd'"
+          },
+          {
+            "field": "fd_directory",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/2578/fd'"
+          }
+        ],
+        "baseline_identity": true
+      },
+      {
+        "pid": 2754,
+        "uid": 1000,
+        "start": "2866",
+        "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/background.slice/plasma-polkit-agent.service",
+        "present": true,
+        "owned": false,
+        "attributed": false,
+        "exe": null,
+        "cwd": null,
+        "related_fds": [],
+        "accessible_fd_count": 0,
+        "errors": [
+          {
+            "field": "exe",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/2754/exe'"
+          },
+          {
+            "field": "cwd",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/2754/cwd'"
+          },
+          {
+            "field": "fd_directory",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/2754/fd'"
+          }
+        ],
+        "baseline_identity": true
+      },
+      {
+        "pid": 186030,
+        "uid": 1000,
+        "start": "128760517",
+        "cgroup": "0::/user.slice/user-1000.slice/session-c1058424.scope",
+        "present": true,
+        "owned": false,
+        "attributed": false,
+        "exe": null,
+        "cwd": null,
+        "related_fds": [],
+        "accessible_fd_count": 0,
+        "errors": [
+          {
+            "field": "exe",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/186030/exe'"
+          },
+          {
+            "field": "cwd",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/186030/cwd'"
+          },
+          {
+            "field": "fd_directory",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/186030/fd'"
+          }
+        ],
+        "baseline_identity": false
+      },
+      {
+        "pid": 2532216,
+        "uid": 1000,
+        "start": "17178100",
+        "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/plasma-kwin_wayland.service",
+        "present": true,
+        "owned": false,
+        "attributed": false,
+        "exe": null,
+        "cwd": null,
+        "related_fds": [],
+        "accessible_fd_count": 0,
+        "errors": [
+          {
+            "field": "exe",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/2532216/exe'"
+          },
+          {
+            "field": "cwd",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/2532216/cwd'"
+          },
+          {
+            "field": "fd_directory",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/2532216/fd'"
+          }
+        ],
+        "baseline_identity": true
+      },
+      {
+        "pid": 2532317,
+        "uid": 1000,
+        "start": "17178136",
+        "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/plasma-kwin_wayland.service",
+        "present": true,
+        "owned": false,
+        "attributed": false,
+        "exe": null,
+        "cwd": null,
+        "related_fds": [],
+        "accessible_fd_count": 0,
+        "errors": [
+          {
+            "field": "exe",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/2532317/exe'"
+          },
+          {
+            "field": "cwd",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/2532317/cwd'"
+          },
+          {
+            "field": "fd_directory",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/2532317/fd'"
+          }
+        ],
+        "baseline_identity": true
+      },
+      {
+        "pid": 2532319,
+        "uid": 1000,
+        "start": "17178136",
+        "cgroup": "0::/user.slice/user-1000.slice/user@1000.service/session.slice/plasma-kwin_wayland.service",
+        "present": true,
+        "owned": false,
+        "attributed": false,
+        "exe": null,
+        "cwd": null,
+        "related_fds": [],
+        "accessible_fd_count": 0,
+        "errors": [
+          {
+            "field": "exe",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/2532319/exe'"
+          },
+          {
+            "field": "cwd",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/2532319/cwd'"
+          },
+          {
+            "field": "fd_directory",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/2532319/fd'"
+          }
+        ],
+        "baseline_identity": true
+      },
+      {
+        "pid": 4085469,
+        "uid": 1000,
+        "start": "109325538",
+        "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+        "present": true,
+        "owned": false,
+        "attributed": false,
+        "exe": null,
+        "cwd": null,
+        "related_fds": [],
+        "accessible_fd_count": 0,
+        "errors": [
+          {
+            "field": "exe",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/4085469/exe'"
+          },
+          {
+            "field": "cwd",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/4085469/cwd'"
+          },
+          {
+            "field": "fd_directory",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/4085469/fd'"
+          }
+        ],
+        "baseline_identity": true
+      },
+      {
+        "pid": 4086221,
+        "uid": 1000,
+        "start": "109325843",
+        "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+        "present": true,
+        "owned": false,
+        "attributed": false,
+        "exe": null,
+        "cwd": null,
+        "related_fds": [],
+        "accessible_fd_count": 0,
+        "errors": [
+          {
+            "field": "exe",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/4086221/exe'"
+          },
+          {
+            "field": "cwd",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/4086221/cwd'"
+          },
+          {
+            "field": "fd_directory",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/4086221/fd'"
+          }
+        ],
+        "baseline_identity": true
+      },
+      {
+        "pid": 4086421,
+        "uid": 1000,
+        "start": "109325875",
+        "cgroup": "0::/user.slice/user-1000.slice/session-60.scope",
+        "present": true,
+        "owned": false,
+        "attributed": false,
+        "exe": null,
+        "cwd": null,
+        "related_fds": [],
+        "accessible_fd_count": 0,
+        "errors": [
+          {
+            "field": "exe",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/4086421/exe'"
+          },
+          {
+            "field": "cwd",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/4086421/cwd'"
+          },
+          {
+            "field": "fd_directory",
+            "errno": 13,
+            "error": "[Errno 13] Permission denied: '/proc/4086421/fd'"
+          }
+        ],
+        "baseline_identity": true
+      }
+    ],
+    "scope": "owned identities and attributable target/worktree activity only",
+    "universal_quiescence_claimed": false,
+    "old_common_identity": {
+      "pid": 2593434,
+      "expected_start": "127640555",
+      "same_live_identity": false
+    }
+  }
+}

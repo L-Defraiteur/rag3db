@@ -1,0 +1,37 @@
+{
+  "schema": 1,
+  "role": "portable",
+  "clock": "CLOCK_BOOTTIME",
+  "watchdog_pid": 3083866,
+  "watchdog_start": 941309.28,
+  "worker_pid": 3083881,
+  "observed": 941309.329884167,
+  "work_deadline": 941594.28,
+  "physical_term": 941604.28,
+  "physical_kill": 941609.28,
+  "parent_command": [
+    "/usr/bin/timeout",
+    "--signal=TERM",
+    "--kill-after=5s",
+    "295s",
+    "/usr/bin/python3",
+    "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-output-red-export-17nov-v1/export-fs-red-ledger.py",
+    "--_physical-watchdog-child",
+    "--preflight",
+    "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-output-red-export-17nov-v1/preflight.json",
+    "--output",
+    "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-output-red-export-17nov-v1/elf-ledger.json",
+    "--launch-log",
+    "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-output-red-export-17nov-v1/launch-ssh.log"
+  ],
+  "worker_argv": [
+    "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-output-red-export-17nov-v1/export-fs-red-ledger.py",
+    "--preflight",
+    "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-output-red-export-17nov-v1/preflight.json",
+    "--output",
+    "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-output-red-export-17nov-v1/elf-ledger.json",
+    "--launch-log",
+    "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-output-red-export-17nov-v1/launch-ssh.log"
+  ],
+  "exporter_sha256": "56e99ad94c46b927d4e935750257c797cc14415b3ba54c9f2f4dc821a011b40f"
+}

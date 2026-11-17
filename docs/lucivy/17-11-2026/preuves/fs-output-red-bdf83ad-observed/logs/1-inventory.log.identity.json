@@ -1,0 +1,8 @@
+{
+  "pid": 187501,
+  "start": "128760929",
+  "argv": [
+    "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_sfx_v3_ground_truth-71572a69e410ce61",
+    "--list"
+  ]
+}

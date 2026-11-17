@@ -1,0 +1,18 @@
+
+running 1 test
+test missing_document_ordinal_is_not_document_zero ... document_ordinal(None,1)=Ok(0)
+
+thread 'missing_document_ordinal_is_not_document_zero' (187510) panicked at lucivy_core/tests/test_fs_fixture_admission.rs:307:5:
+assertion `left == right` failed: missing identity was admitted as document zero
+  left: Ok(0)
+ right: Err(Missing)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    missing_document_ordinal_is_not_document_zero
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 15 filtered out; finished in 0.00s
+

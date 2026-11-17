@@ -502,3 +502,26 @@ proc/corpus/service/ARM/target/GO par Banc ; pas de freshprocscan.
 Deux RO TOTALES COUPLE favorables désormais reçues ; décision GO exact C7
 requise avant commande27, aucun lancement implicite. Source RED, pas fix ;
 archives deux hôtes avant correctif groupé puis nouveaux pins/RO/GO verts.
+
+
+GO C7-LUCIVY-FS-OUTPUT-RED-E75-17nov300/acfd30 consommé UNEfois, commande27
+exacte/session19943rc0. Sourcebdf deuxELFcompilés3.22s/inventaire16 ;sixjuges
+RUSTNATIFSréels=5FAILcausaux+1PASS0ignored15filtered/0infra,0bodysecond/
+dixanciens/index/corpus. Collisionoctetségaux/ADMITTEDinputalias/NoneID0/
+FlagsavecManifestREFUSED réellement observés ; gate défectueuse PASréparée.
+Ledgerb42ec21d copiefsynchronerehashACK avantinventaires/sixexacts, lockDBDB
+doubleguard/sourceclean/9copies/T/scratchconformes. Common186154/start128760537
+TERMINEVERT0/erreurnull/restes[]/nettoyé/ownabsent/0bloqué11UNKNOWN ;final
+1287609.509<CommonEND1287864.412<admissionEND1287877.044. Portableparent3083866
+start941309.28/END941314.237170273=4.957170273s<END941594.28,SSH3083906réapé0/
+cleanupnull/retourposteSSHréel ; restitutionC7+R AVANTarchives. Rapport17/28+
+preuves/fs-output-red-bdf83ad-observed (57PC+6portableSHA). DeuxnouveauxELF
+542924c1/a50adc24 +sources/outils=18copies444/17108104octets conservés et
+rehashés PC+portable fs-output-red-bdf83ad-17nov-v1 AVANTfix. CinqoldELF
+backupsROrehashés,originalscibles0fdansT désormaisbdf/histoirepréservée.
+Archiveaprèsretourcommande maisavantdeadlinenominale, pasnouveauprocscan/
+budget ;collisionnompublic FileExistsError sansécrasement,repriseCOPIESseules
+sous-observed/pastests. Autoritépublique seule/captokenjamaisexporté.
+ActionsROPREUVES R+Banc demandées sansrejeu/DB/proc/OS/corpus souscemêmeticket.
+FixGROUPÉ peutsepréparer APRÈSconservation, nouveauxpins/RO/GOvertdistinctavant
+exécution ;flagsinvalideszéroeffet/zéroreçu arbitrage30561. GOclos/ticketOPEN.

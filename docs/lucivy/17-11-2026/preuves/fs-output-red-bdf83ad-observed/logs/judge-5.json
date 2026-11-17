@@ -1,0 +1,15 @@
+{
+  "name": "distinct_outputs_and_present_ordinal_reach_consumer_once",
+  "expected_semantic_red": false,
+  "passed": 1,
+  "failed": 0,
+  "ignored": 0,
+  "filtered_out": 15,
+  "cause": {
+    "positive": true,
+    "distinct_outputs": true,
+    "builder_calls": 1,
+    "present_ordinal": 0
+  },
+  "log_sha256": "18cf12a99d6f3a73b62af4b46ae2307cc807a2f50438560f5c16c7223c045c7a"
+}

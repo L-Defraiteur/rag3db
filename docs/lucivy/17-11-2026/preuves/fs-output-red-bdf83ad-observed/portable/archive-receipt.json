@@ -1,0 +1,16 @@
+{
+  "archive": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-output-red-bdf83ad-17nov-v1",
+  "public_files": 57,
+  "private_files": 18,
+  "bytes_private": 17108104,
+  "archival_resume_reason": "public_destination_name_already_used_by_source_preparation_no_overwrite_no_test_rerun",
+  "local_archive": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-output-red-bdf83ad-17nov-v1",
+  "local_private_files_rehashed": 18,
+  "portable_checks_pc": {
+    "physical-start.json": "a415eafdc28fe6e57da7b92f17c450ccb46955d92bf889be19614f7474d0fd09",
+    "physical-end.json": "ffc491108eac8404e67a87b63f669bd906908f7924423c6f24f7a64c05232a3a",
+    "exported-final.json": "442b9df9cef4960063fbe52dad2fa97f6fa7c77bd4d5a8fbf3e92c48c743cac1",
+    "elf-ledger.json": "b42ec21d4edfa1c2da29b4089764cfc6878852220ac8818af0c05b466b4af95a",
+    "launch-ssh.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

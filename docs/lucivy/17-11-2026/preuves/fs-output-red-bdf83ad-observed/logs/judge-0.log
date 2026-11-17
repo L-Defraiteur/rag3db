@@ -1,0 +1,16 @@
+
+running 1 test
+test report_receipt_collision_is_refused_before_consumer ... output_fault=Collision expected_refusal=true result=Ok(Ok(1)) builds=1 events=[Manifest("/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-output-red-17nov-v1/scratch/lucivy-test-fs-admission-mzh3z0/admission.json"), Metadata("/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-output-red-17nov-v1/scratch/lucivy-test-fs-admission-f3s5By"), Enumerate("/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-output-red-17nov-v1/scratch/lucivy-test-fs-admission-f3s5By"), Metadata("/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-output-red-17nov-v1/scratch/lucivy-test-fs-admission-f3s5By/covered.txt"), Read("/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-output-red-17nov-v1/scratch/lucivy-test-fs-admission-f3s5By/covered.txt"), Builder, Report] manifest=Some([105, 110, 100, 101, 120, 45, 114, 101, 112, 111, 114, 116, 32, 100, 111, 99, 117, 109, 101, 110, 116, 115, 61, 49, 10]) report=Some([105, 110, 100, 101, 120, 45, 114, 101, 112, 111, 114, 116, 32, 100, 111, 99, 117, 109, 101, 110, 116, 115, 61, 49, 10])
+
+thread 'report_receipt_collision_is_refused_before_consumer' (187504) panicked at lucivy_core/tests/test_fs_fixture_admission.rs:273:9:
+unsafe declared outputs accepted before consumer: Collision result=Ok(Ok(1))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    report_receipt_collision_is_refused_before_consumer
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 15 filtered out; finished in 0.00s
+

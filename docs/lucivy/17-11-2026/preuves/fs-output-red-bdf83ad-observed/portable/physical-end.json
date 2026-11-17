@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "role": "portable",
+  "clock": "CLOCK_BOOTTIME",
+  "watchdog_pid": 3083866,
+  "watchdog_start": 941309.28,
+  "worker_pid": 3083881,
+  "observed": 941314.237170273,
+  "work_deadline": 941594.28,
+  "context": {
+    "source": "bdf83ad76cf73a74cdde8358affb364b857e27e2",
+    "nonce": "075f5217e494870ab9515663beb234db"
+  },
+  "result": 0,
+  "error_type": null,
+  "cleanup_error_type": null,
+  "known_local_children": [
+    {
+      "pid": 3083906,
+      "code": 0
+    }
+  ],
+  "known_local_children_reaped": true,
+  "universal_quiescence_claimed": false
+}

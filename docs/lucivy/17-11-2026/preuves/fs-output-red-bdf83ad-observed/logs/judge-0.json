@@ -1,0 +1,15 @@
+{
+  "name": "report_receipt_collision_is_refused_before_consumer",
+  "expected_semantic_red": true,
+  "passed": 0,
+  "failed": 1,
+  "ignored": 0,
+  "filtered_out": 15,
+  "cause": {
+    "expected_refusal": "Plan.output_collision",
+    "actual": "Collision",
+    "assertion": "unsafe declared outputs accepted before consumer",
+    "infrastructure_error": false
+  },
+  "log_sha256": "268dcd2e4cbfde5880808fda8e0f474e783696856f9427ab61a5da7311cb2515"
+}

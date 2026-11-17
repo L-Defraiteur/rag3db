@@ -1,0 +1,46 @@
+{
+  "source": "bdf83ad76cf73a74cdde8358affb364b857e27e2",
+  "observed": 1287609.303076012,
+  "inventories": {
+    "test_fs_fixture_admission": {
+      "tests": [
+        "absent_root_is_a_precise_refusal_without_skip",
+        "aliased_output_parent_is_refused_before_consumer",
+        "covered_fixture_reaches_builder_once_on_the_captured_bytes",
+        "distinct_outputs_and_present_ordinal_reach_consumer_once",
+        "empty_view_is_refused_before_builder",
+        "enumeration_error_is_not_an_empty_subtree",
+        "existing_receipt_prevents_recapture_after_refusal",
+        "flag_presence_is_refused_before_any_corpus_operation",
+        "invalid_flags_have_no_receipt_or_corpus_effects",
+        "invalid_utf8_is_refused_not_dropped",
+        "metadata_error_is_not_a_filtered_file",
+        "missing_document_ordinal_is_not_document_zero",
+        "read_error_is_not_a_filtered_file",
+        "report_inside_input_is_refused_before_consumer",
+        "report_receipt_collision_is_refused_before_consumer",
+        "uncovered_panel_is_refused_before_zero_equals_zero"
+      ],
+      "ignored": []
+    },
+    "test_sfx_v3_ground_truth": {
+      "tests": [
+        "baseline_fuzzy_regex",
+        "debug_struct_fp",
+        "fuzzy_finds_an_occurrence_that_straddles_tokens",
+        "perf_shape_executor",
+        "perf_shape_sharded",
+        "regex_v2_vs_v3",
+        "v3_distributed_coherence",
+        "v3_distributed_two_nodes",
+        "v3_ground_truth_coherence",
+        "v3_ground_truth_contains",
+        "v3_ground_truth_demo",
+        "v3_sharded_filter_delete_delta"
+      ],
+      "ignored": [
+        "v3_ground_truth_demo"
+      ]
+    }
+  }
+}

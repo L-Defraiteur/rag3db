@@ -1,0 +1,20 @@
+{
+  "source": "bdf83ad76cf73a74cdde8358affb364b857e27e2",
+  "observed_pc_monotonic": 1287720.809376657,
+  "outside_validation_window": true,
+  "no_new_process_scan": true,
+  "source_clean": true,
+  "nine_frozen_copies_rehashed": true,
+  "lock_effective_and_seed_identical": true,
+  "target_marker_identical": true,
+  "scratch_empty": true,
+  "five_old_elf_backups_rehashed": {
+    "test_fs_fixture_admission-9128a97001eece0d": "0801ea5ecc0d02844edff7ef032c2aafff6a25ad4dab712b4f2d65106c23bea9",
+    "test_sfx_v3_ground_truth-71572a69e410ce61": "ee1965d705b1e41e85fbf7645d856793a235b9024686a41af0c95685d7890a04",
+    "test_derived_fixture_admission-0bd690ba36035513": "0a61a812a09a4adaead13cab8f5344965c390144bba1c6508804bff595525961",
+    "test_derived_in_ram-539df445d54ae12e": "78fef16a51b354336989c4031f1032f14cd4883fab1ffbcc0762a382f7e17f17",
+    "test_sfx_v3_ground_truth-32bb5ee824ccaa93": "917928a151c81a22324ca93eeb007a9aa17338781c7d2131c407f8d4fd5f14d4"
+  },
+  "private_files": 18,
+  "raw_authority_capability_exported": false
+}

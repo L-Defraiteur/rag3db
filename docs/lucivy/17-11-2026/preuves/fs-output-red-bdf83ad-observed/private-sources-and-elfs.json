@@ -1,0 +1,79 @@
+{
+  "private_archive": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-output-red-bdf83ad-17nov-v1",
+  "source": "bdf83ad76cf73a74cdde8358affb364b857e27e2",
+  "files": {
+    "sources/tools/qualify-fs-admission-red.py": {
+      "sha256": "336deb03b25b8c7469bd98ff46a8693c8acebc9b8f56f6f28c793b78c08ff704",
+      "bytes": 20483
+    },
+    "sources/tools/admit-fs-admission-red.py": {
+      "sha256": "d1d52774f7a1d53d93ee6f9236cd6b6f07f5b95308c53d04881ff44d1cffe3be",
+      "bytes": 6150
+    },
+    "sources/tools/export-fs-red-ledger.py": {
+      "sha256": "56e99ad94c46b927d4e935750257c797cc14415b3ba54c9f2f4dc821a011b40f",
+      "bytes": 12044
+    },
+    "sources/tools/qualify-indexed-false-core.py": {
+      "sha256": "2fa59faafe18634a055da4e770a96d4eb87da79864332f8d2a5d8ed222a8fa14",
+      "bytes": 21001
+    },
+    "sources/tools/qualify-indexed-false-red.py": {
+      "sha256": "0a269dd90b0ca745811713e21f66b45fda563074bfc06dd6993f04ab03bd2352",
+      "bytes": 9274
+    },
+    "sources/tools/source-pins.json": {
+      "sha256": "d78c7d84927921e4412e92d3a2a295d7d818ecb5c85bad9a44d873e4c08b797c",
+      "bytes": 2586
+    },
+    "sources/tools/Cargo.lock.seed": {
+      "sha256": "dbdb560202562f17536624472a0e730627df163f4bb00c53b2baf604e77637f6",
+      "bytes": 86693
+    },
+    "sources/tools/support/confiner_validation.py": {
+      "sha256": "6439fdd8b52c85fa4e74af0def2c667ef0bedae9b814cbbfd48e49946c4f74ea",
+      "bytes": 17667
+    },
+    "sources/tools/support/poste": {
+      "sha256": "79e3a8bbf457e3bc9104aa1558e7d03072216c70b68e08ae606ace6aa4584c7b",
+      "bytes": 26869
+    },
+    "sources/rust/README.md": {
+      "sha256": "4acaa259300f482b6ee29564d9fa6b9ef6fc5ae9fa6369834517992b9f2c350f",
+      "bytes": 41306
+    },
+    "sources/rust/lucivy_core/tests/common/mod.rs": {
+      "sha256": "2515d7de5304790520af58cf47214ca92bcbf70d88be2ed20bdff19263164b9a",
+      "bytes": 6474
+    },
+    "sources/rust/lucivy_core/tests/common/fs_fixture.rs": {
+      "sha256": "7140821153da387fe0c193a4265f2b6b854502275a76c1d6cda7f6dc33445601",
+      "bytes": 13528
+    },
+    "sources/rust/lucivy_core/tests/common/corpus_oracle.rs": {
+      "sha256": "eeed6ea286fe6b4161fb901b843083611367dfac8e1c6ed491edc09d323bf6f1",
+      "bytes": 3841
+    },
+    "sources/rust/lucivy_core/tests/common/derived_fixture.rs": {
+      "sha256": "19bdebf13aba8a314e0a7ec74788e0cdcf9c53a7778b29ace3944a0f6361797b",
+      "bytes": 5466
+    },
+    "sources/rust/lucivy_core/tests/test_fs_fixture_admission.rs": {
+      "sha256": "819536e2ec32348c40dd3a93c778179e13760684677dac7b1fad3c444e62e193",
+      "bytes": 15795
+    },
+    "sources/rust/lucivy_core/tests/test_sfx_v3_ground_truth.rs": {
+      "sha256": "24fe0a09bd4fa13bd47706067f24689396a192b34ee7ed04642b7c18a6292f75",
+      "bytes": 132735
+    },
+    "elf/test_fs_fixture_admission": {
+      "sha256": "542924c1e30da42ea95f4d208ee34fa300020910107d31549130552a191fa056",
+      "bytes": 2038112
+    },
+    "elf/test_sfx_v3_ground_truth": {
+      "sha256": "a50adc2473feebc94e52a9335686e2c5241485a3801b39ab9515dc43c013c470",
+      "bytes": 14648080
+    }
+  },
+  "rehashed": true
+}

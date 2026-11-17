@@ -1,0 +1,13 @@
+{
+  "effective_lock_sha256": "dbdb560202562f17536624472a0e730627df163f4bb00c53b2baf604e77637f6",
+  "lock_invariant": true,
+  "source": "bdf83ad76cf73a74cdde8358affb364b857e27e2",
+  "nonce": "075f5217e494870ab9515663beb234db",
+  "observed": 1287609.509280635,
+  "deadline": 1287877.043666828,
+  "semantic_reds": 5,
+  "positive": 1,
+  "physical_elf_rehash": true,
+  "frozen_copies_rechecked": true,
+  "actual_poste_return_pending": true
+}

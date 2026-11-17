@@ -1,0 +1,15 @@
+{
+  "source": "bdf83ad76cf73a74cdde8358affb364b857e27e2",
+  "observed": 1287608.893214784,
+  "artifacts": {
+    "test_fs_fixture_admission": {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_fs_fixture_admission-9128a97001eece0d",
+      "sha256": "542924c1e30da42ea95f4d208ee34fa300020910107d31549130552a191fa056"
+    },
+    "test_sfx_v3_ground_truth": {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_sfx_v3_ground_truth-71572a69e410ce61",
+      "sha256": "a50adc2473feebc94e52a9335686e2c5241485a3801b39ab9515dc43c013c470"
+    }
+  },
+  "native_builders_executed": false
+}

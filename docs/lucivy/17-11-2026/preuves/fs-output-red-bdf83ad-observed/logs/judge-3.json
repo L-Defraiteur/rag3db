@@ -1,0 +1,15 @@
+{
+  "name": "missing_document_ordinal_is_not_document_zero",
+  "expected_semantic_red": true,
+  "passed": 0,
+  "failed": 1,
+  "ignored": 0,
+  "filtered_out": 15,
+  "cause": {
+    "expected_refusal": "OrdinalError.Missing",
+    "actual": "Ok(0)",
+    "assertion": "missing identity was admitted as document zero",
+    "infrastructure_error": false
+  },
+  "log_sha256": "6caea3cbf13dc021028b72bd322d58a7a0b684406c57fce7f1637e7103cee1f4"
+}

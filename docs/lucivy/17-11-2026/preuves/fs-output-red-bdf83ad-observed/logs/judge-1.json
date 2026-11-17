@@ -1,0 +1,15 @@
+{
+  "name": "report_inside_input_is_refused_before_consumer",
+  "expected_semantic_red": true,
+  "passed": 0,
+  "failed": 1,
+  "ignored": 0,
+  "filtered_out": 15,
+  "cause": {
+    "expected_refusal": "Plan.report_inside_input",
+    "actual": "InsideInput",
+    "assertion": "unsafe declared outputs accepted before consumer",
+    "infrastructure_error": false
+  },
+  "log_sha256": "5382f28cf65ad9f0a86b67611525705ac3f0d6c4605834055084ee6a0eb98b77"
+}
