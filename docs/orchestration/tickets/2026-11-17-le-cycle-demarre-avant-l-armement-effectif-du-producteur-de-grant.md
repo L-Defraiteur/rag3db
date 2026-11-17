@@ -135,3 +135,25 @@ SHA256 finaux : acteur
 tests `015091dfd05d235cd189ca5769cb9b209d7b1a961154918eaa0350877acfe568`.
 Ownerbcfd inchangé ; qualification totale du couple et RO restent requises,
 aucun acteur réel, /proc réel, health, slot ou nouveau GO exécuté.
+
+### Refus des chemins protégés avant hachage
+
+Dernière source acteur/tests : 4f54eef8af693c17e5401d1adc9d4c9062b315d3.
+Le sampler --watch pouvait encore hacher le script de argv avant refus de son
+identité. Il refuse désormais tout composant contenant .env ou .vault,
+y compris la cible résolue des liens, avant lecture de contenu/hachage.
+Les rôles Python attendus et digest partagent cette protection ; aucune ABI
+publique ni ownerbcfd modifiée. Résolution de liens = métadonnées seulement.
+
+Témoin c1b622 initialement incomplet (faux exe absent, FileNotFoundError),
+corrigé dans les fixtures publiées ae75f55139 AVANT correction du code :
+rouge pertinent AssertionError ValueError not raised, 1 test0.002s.
+Tous les hachages sont espions dans ce témoin ; aucun contenu protégé lu.
+Fix publié4f54, puis 20/20 CPU verts0.008s, zéro skip, même CPU60/failfast.
+Les trois chemins .env/.env.local/part.vault sont refusés avec zéro appel
+digest dans les deux samplers. Aucun /proc réel, acteur lancé, health ou slot.
+
+SHA finaux acteur
+`7d7db5a0c7d9ac762eed74ade2d0b9ee256b8499d0029ae970feac916de76612`,
+tests `9a7bbe30d040ece0c3f016fd429beca1a1e6e28b17f6d5c68ef4204588121899`.
+Qualification groupée du contrôleur et revue totale toujours requises avant GO.
