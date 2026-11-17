@@ -307,6 +307,7 @@ class GateTests(unittest.TestCase):
         relay = self.control / 'relay.py'
         relay.write_text('synthetic relay')
         self.gate.pair['peer_host'] = 'peer'
+        self.gate.pair['tool_root'] = '/fake/tool-root'
         self.gate.pair['controllers']['relay.py'] = module.digest(relay)
         identity = {'pid': os.getpid(), 'uid': os.getuid(), 'start': '1234',
             'state': 'R', 'exe': '/python', 'cgroup': '0::/scope', 'parent': os.getppid(),

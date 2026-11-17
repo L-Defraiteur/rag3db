@@ -68,3 +68,18 @@ Banc1cdd0babda relève trois défauts non couverts, inscrits avant correction :
 couple/pin et nouveau budget CPU C7 distinct. P03 non armé, P02 reste rouge.
 Choix du futur protocole : Cargo --no-runJSON sur FEC/ownerBASE, cache permis,
 pas de modecarry custom ni compilation forcée. Pas de nouvelle phase autorisée.
+
+## Lot rouge dda9 : deux défauts observés, puis erreur de fixture, STOP
+
+Sur dda9b7ea4d16f0f4b55e9233943a404a2eb6d381 publié/propre, lot CPU distinct
+borné58+2 : launch sans TTL distant et abort queued exigeant actif sont chacun
+vus FAIL unefois. Le cas bootstrap rencontre ensuite ERROR KeyError tool_root
+manquant dans sa Fakepair, avant assertion comportementale. STOP immédiat,
+aucun cas finish joué et aucun correctif produit encore appliqué.
+Bruts+manifest conservés2hôtes sous rust-relay-red-dda9b7ea4d avant correction ;
+lot0,293424s, pas de SSH/proc réel/Cargo/natif/autorité pendant le lot.
+
+Correction de fixture seule : ajouter la clé factice tool_root requise par le
+vrai Gate.launch. Pas de relance ; un GO CPU rouge complémentaire distinct est
+demandé pour les deux cas restant à constater. Les deux rouges acquis ne seront
+pas rejoués sous cette demande. Correction produit groupée encore différée.
