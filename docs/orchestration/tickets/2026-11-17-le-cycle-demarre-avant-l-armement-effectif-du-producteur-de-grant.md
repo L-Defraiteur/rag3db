@@ -112,3 +112,26 @@ Qualification limitée à la préparation : raccord contrôleur/protocole/politi
 porté par Arbre, qualification totale et RO du nouveau couple restent requis.
 Aucun RUN, health, lecture /proc réelle, DB, modèle, slot ou nouveau GO.
 L'ancien 3c2 demeure ROUGE et ses archives restent inchangées.
+
+### Raccord des rôles Python avant intégration
+
+Le contrôleur a besoin d'observer aussi --controller et --driver, que le sampler
+--watch refusait correctement. Témoins publiés1dddf58545, rouge observé
+AttributeError basic_process absent, 1 test0.002s avant correction. Source
+finale des deux fichiers db04b43ac3f3c4bcbac208953c86784c8b55fb3f ;
+19/19 CPU verts0.010s, zéro skip, même commande CPU60 après publication.
+
+`basic_process(pid,*,clock=...)` expose la double lecture minimale stable
+PID/start/UID/cgroup avec deux états vivants ;
+`python_role_snapshot(pid,expected_script_path,*,proc_root=...,clock=...)`
+partage la double lecture complète et exige le chemin du script attendu AVANT
+son hachage. Seules les formes Python script et Python -B script sont acceptées,
+pas -c/-m/env/autres options. Aucun environnement n'est lu ou retourné ; le
+contrôleur conserve la politique d'environnement de lancement.
+`process_snapshot` garde la spécialisation --watch du même mécanisme.
+
+SHA256 finaux : acteur
+`db1838bef339ad06f3c58be98b062e81c7c039a8905864c62b38d6334a900914`,
+tests `015091dfd05d235cd189ca5769cb9b209d7b1a961154918eaa0350877acfe568`.
+Ownerbcfd inchangé ; qualification totale du couple et RO restent requises,
+aucun acteur réel, /proc réel, health, slot ou nouveau GO exécuté.
