@@ -1016,3 +1016,21 @@ fix+nouveaux témoins avant recette CPU distincte (huit seuls fake/FS proposés,
 pas RealCapture) et éventuel GO C7. Aucune qualification verte acquise.
 Réserves native exe/env et outer whole5/import/fsync tardif maintenues ; aucun
 GO contact/secret/PG/fixture, aucun service/original/lib/SDK changé.
+
+
+## RO fix d787 favorable SOURCE, recette CPU huit seuls proposée
+
+R a levé STATIQUEMENT les trois réserves initiales dans la frontière fix3 :
+premièrecause/record/consumerterminal. Aucun de ces résultats n'est un vert
+runtime. Deux anciens contre-exemples consumer sont désormais refusés aussi
+pour manque de terminal, les quatre nouveaux vérifient non-vacuité et pièces.
+Producteur terminal réel/non falsifiable, exécution/env natives, outer whole5
+et limites EOF/arbre restent hors qualification.
+
+fix-cpu-recipe.json sélectionne UNIQUEMENT test_review_regressions (8 tests),
+attendu8/0échec/0ERROR/0skip/rc0, même Common20/OS28+2/POSTE32G. Popen/pidfd faux,
+FS/fsync/observer/consumer réels privés et pièces terminales SYNTHÉTIQUES.
+Les19 autres NON sélectionnés, PsqlSession non instanciée, aucun child natif,
+client, secret, PG, Docker, provider ou service. Paquet source et outils à
+matérialiser/rehash sous racine neuve fix-cpu-04, puis RO et GO C7 DISTINCT
+avant entrée. Aucun GO CPU acquis ni exécution de ce correctif à ce stade.
