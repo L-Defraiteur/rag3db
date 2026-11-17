@@ -328,5 +328,90 @@
     "G PostgreSQL transport not qualified",
     "no real resource lease or actor ARMED",
     "new exact code/pin/Q/RO and distinct C7 GO required"
-  ]
+  ],
+  "prepared_contract": {
+    "path": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-controller-r2/configuration.json",
+    "source_field": "app",
+    "pilot_field": "pilot",
+    "component_sha_field": "copies",
+    "tool_identity_field": "tools",
+    "budget_field": "budget",
+    "expected_sha_origin": "future independent prepare/pin/RO; never learn expected hash from changed actual",
+    "force_rust_prepared_schema": false
+  },
+  "grant_actor_roles": {
+    "d6": {
+      "owner_role": "driver",
+      "entry": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-controller-r2/grant_watch_actor.py",
+      "policy": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-controller-r2/global_grant_policy.py",
+      "config": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-v2/actors/d6/config.json",
+      "paths": {
+        "armed": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-v2/actors/d6/armed.json",
+        "heartbeat": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-v2/actors/d6/heartbeat.json",
+        "ready": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-v2/actors/d6/ready.json",
+        "grant": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-v2/actors/d6/grant.json",
+        "release": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-v2/actors/d6/release.json",
+        "result": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-v2/actors/d6/result.json"
+      },
+      "argv": [
+        {
+          "runtime_field": "python_argv0"
+        },
+        "-B",
+        "/home/lucied/.cache/rag3weaver-build/cx-archi-global-controller-r2/grant_watch_actor.py",
+        "--watch",
+        "/home/lucied/.cache/rag3weaver-build/cx-archi-global-v2/actors/d6/config.json",
+        {
+          "runtime_field": "d6_actor_config_sha256"
+        }
+      ],
+      "clock": "CLOCK_MONOTONIC@luciepc",
+      "end": "original Common END, no extension",
+      "arm_before": "business preflight or first ledger",
+      "lease": "covers original Common END including phase and bounded stop",
+      "armed": false
+    },
+    "canonical": {
+      "owner_role": "driver",
+      "entry": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-controller-r2/grant_watch_actor.py",
+      "policy": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-controller-r2/global_grant_policy.py",
+      "config": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-v2/actors/canonical/config.json",
+      "paths": {
+        "armed": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-v2/actors/canonical/armed.json",
+        "heartbeat": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-v2/actors/canonical/heartbeat.json",
+        "ready": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-v2/actors/canonical/ready.json",
+        "grant": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-v2/actors/canonical/grant.json",
+        "release": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-v2/actors/canonical/release.json",
+        "result": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-v2/actors/canonical/result.json"
+      },
+      "argv": [
+        {
+          "runtime_field": "python_argv0"
+        },
+        "-B",
+        "/home/lucied/.cache/rag3weaver-build/cx-archi-global-controller-r2/grant_watch_actor.py",
+        "--watch",
+        "/home/lucied/.cache/rag3weaver-build/cx-archi-global-v2/actors/canonical/config.json",
+        {
+          "runtime_field": "canonical_actor_config_sha256"
+        }
+      ],
+      "clock": "CLOCK_MONOTONIC@luciepc",
+      "end": "original Common END, no extension",
+      "arm_before": "business preflight or first ledger",
+      "lease": "covers original Common END including phase and bounded stop",
+      "armed": false
+    }
+  },
+  "publication_peer_contract": {
+    "platform": "local plus PC gate",
+    "entry_sha256": null,
+    "component_hashes": null,
+    "owner_window_role": "driver on PC",
+    "physical_ready": "actual post-exec self snapshot, held local watchdog and child poll before phase/preflight; PC bound bootstrap and actual driver descriptor",
+    "ready_pc_copy": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-v2/publication-peer-ready.json",
+    "do_not_compare_absolute_monotonic_between_hosts": true,
+    "armed": false,
+    "closure_cannot_use_d45_or_c9_as_fake_capacity4": true
+  }
 }

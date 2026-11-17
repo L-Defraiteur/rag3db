@@ -126,3 +126,9 @@ au provider une échappatoire activebool/retourdictionnaire. Futurbridge seuleme
 sur API RUNTIME pinée et relue. AucunCPU/import/proc/health/SQL/Cargo/SDK/acteur/
 providercloud/poste/service/target créé ou lancé dans cette préparation.
 Ticketporteur et HOLDPG restent ouverts ; aucunGO7455 ni admission transposée.
+
+Complément de génération : première commande de complémentJSON a été refusée
+SyntaxError(keywordarmed répété : chemin etbooléen), aucun runtime n'a été
+exécuté. Complément corrigé avanthandoff : paths.armed porte le chemin et
+armed=false l'état déclaré. JSON chargé en lecture et formes6rôles/4fenêtres/
+2watchersfalse vérifiées ; ce contrôle de données n'est pas un essai du noyau.
