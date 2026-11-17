@@ -620,3 +620,8 @@ C7GO986d autoriseinitialisationaprèspub : timerat1750avantstart+backupPID1TERM1
 KILL1750/autoRM, ownerlabelstrictcleanupnonce/secrets ;Common180OS185kill2.
 Credentialsneufs0600sansvaleursargv/Envinspect/logs ; adminDDL+jugesdataset
 imageautorisésfixtureseule,aucunclientRustC. Sourcepub/recetteSHA avantentrée.
+
+Avantentréefixture : readiness exige PID1postgres (pas serveurtemporaireinitdb)
+puispg_isready0 ; 1/2 restentattentebornéeattenduepasréinitialisation. Expiry
+calculée sur reçu horloge d'installationtimer réelle+1782s (<1800aprèsstart),
+pas timestampprépa pouvantvieillir. Sourcepub et ASTseul, aucunecréationencore.

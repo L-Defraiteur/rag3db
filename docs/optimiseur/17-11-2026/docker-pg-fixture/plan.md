@@ -35,7 +35,7 @@ archiveactions même si l'opérateur a fini. Les ancienscontainers sont exclus.
 Setup : vraiPOSTE32G→Common6439 délai180s→timeoutOS185sTERM+KILL2 (187MAX
 aprèsPOSTE). Provisionneur réserve au moins10sEND et captravail150s ; cleanup
 attribué20s au premierrefus, aucun retry/recréation/pull/substitution. Readiness
-poll pg_isready0/1/2 est attente bornée60s sur CETTEinstance, pas une nouvelle
+poll PID1=postgres puis pg_isready0/1/2 est attente bornée60s sur CETTEinstance, pas une nouvelle
 initialisation ; toute erreur inattendueSTOP. Timer+backup restent en sécurité.
 
 ## Cible/credentials/dataset et vérification indépendante

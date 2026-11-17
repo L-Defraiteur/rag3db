@@ -64,8 +64,9 @@ def main():
         call(['/usr/bin/docker','start',cid])
         ready_end=min(end,time.monotonic()+60)
         while True:
-            r=call(['/usr/bin/docker','exec',cid,'pg_isready','-q','-U','g_pg_fixture_admin','-d',seed['database']],cap=5,expected=(0,1,2))
-            if r.returncode==0:break
+            final=call(['/usr/bin/docker','exec',cid,'/bin/sh','-c','test "$(cat /proc/1/comm)" = postgres'],cap=5,expected=(0,1))
+            r=call(['/usr/bin/docker','exec',cid,'pg_isready','-q','-U','g_pg_fixture_admin','-d',seed['database']],cap=5,expected=(0,1,2)) if final.returncode==0 else None
+            if r is not None and r.returncode==0:break
             assert time.monotonic()<ready_end,'fixture readiness deadline';time.sleep(.5)
         base=['/usr/bin/docker','exec','-i','--user','0',cid,'psql','-X','-q','-v','ON_ERROR_STOP=1','-U','g_pg_fixture_admin','-d',seed['database']]
         call([*base,'-v','fixture_db='+seed['database']],data=(source/'provision.sql').read_bytes())
@@ -90,7 +91,7 @@ def main():
         publish('observer-fixture-judge.json',json.loads(observer.stdout))
         logs=call(['/usr/bin/docker','logs','--tail','120',cid],expected=(0,));publish('server-log.json',dict(stdout=steps[-1]['stdout'],stderr=steps[-1]['stderr']))
         common.autorite(common.processus());assert time.monotonic()<end
-        publish('allocation.json',dict(kind='private-docker-pg-allocation-not-a-transport-grant',status='READY',nonce=seed['nonce'],container_id=cid,network_id=nid,image_id=seed['image_id'],host='127.0.0.1',port=seed['port'],sql_expectations=value,credential_reference=str(private/'observer-password'),credential_mode='0600',readonly_role='g_pg_observer',ttl_max_seconds=1800,expires_no_later_monotonic=seed['timer_armed_monotonic']+1800,transport_qualified=False,lease_granted=False))
+        publish('allocation.json',dict(kind='private-docker-pg-allocation-not-a-transport-grant',status='READY',nonce=seed['nonce'],container_id=cid,network_id=nid,image_id=seed['image_id'],host='127.0.0.1',port=seed['port'],sql_expectations=value,credential_reference=str(private/'observer-password'),credential_mode='0600',readonly_role='g_pg_observer',ttl_max_seconds=1800,expires_no_later_monotonic=timer['installed_monotonic']+1782,transport_qualified=False,lease_granted=False))
     except BaseException as error:
         reason=str(error)
         for password in passwords:reason=reason.replace(password,'[REDACTED]')
