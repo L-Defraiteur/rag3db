@@ -396,3 +396,15 @@ Common autorite/enfants copiés version publique sans jeton, manifestSHA256
 912ee17837b9e6c00cef10799671c5b62a9d913142ccb59d573fea696aec773f.
 Sources r2 inchangées, entrées/OUT_T conservées. Aucun SQL/PG/Docker/capture,
 service, phaseC ou lease ; transport_qualified=false. Ticket toujours ouvert.
+
+### Correctif B01 — préparation autorisée C7 après 8b941b379b
+
+Avant diff produit : préparer témoins du vrai constructeur d'environnement et
+Common6439.poste_tenu, y compris HOME privé, racine verrou inattendue, fiche
+seule sans FD/flock, identité PID/start modifiée et absence de jeton côté natif.
+Le parent devra attester via l'autorité Common le vrai poste ancêtre, racine
+canonique attendue externe, fiche UID/inode/SHA et FD9 du même poste.lock avec
+ligne kernel FLOCK ADVISORY READ/WRITE ; l'enfant recontrôle ces identités.
+POSTE_LOCK_DIR ne sera transmis qu'au contrôleur, HOME reste privé. Gardes
+Common/signature/ascendance/cgroup/plafond inchangées ; aucune fiche fabriquée.
+Tests à publier avant fix, aucune exécution CPU/natif avant GO distinct.
