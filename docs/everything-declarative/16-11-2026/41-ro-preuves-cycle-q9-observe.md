@@ -1,7 +1,7 @@
 # RO ED — preuves Q9 immuables
 
-Avis favorable borné sur **6e97b2ff8a4dec638f0e9557e2e83f44d9d6c1f6**,
-avec précision documentaire **965a284170**. Cet avis est indépendant de la RO B9.
+Avis favorable borné sur **6e97b2ff8a6a8f4e4ca095ce3033fce10ceb8549**,
+avec précision documentaire **965a2841706782d74aa7a4e8272445e20dfb6a56**. Cet avis est indépendant de la RO B9.
 Source exécutée e9f037be2aa25da2c7f6c76f79e2eb57b6c676c9 ; prepared Q9
 96ebc22e7fae474f812273e0bf2f8d41b3f24b5205c6e4f21d4594fbbd0f3099.
 
