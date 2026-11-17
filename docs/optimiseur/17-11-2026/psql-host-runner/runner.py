@@ -434,6 +434,88 @@ def read_fixture_observation(path, digest, profile, *, terminal_receipt=None, te
     return body
 
 
+def validate_native_attestation(record, expected, *, now):
+    """Pure semantic validation of a PARENT-supplied held-process observation.
+
+    This function cannot attest the OS itself. A separately qualified collector
+    must obtain the values while its own child is held after the readonly row.
+    Synthetic CPU records do not qualify that collector or a PG transport.
+    """
+    proof=record.get('native_attestation')
+    require(type(proof) is dict, 'native evidence missing')
+    v1.shape(proof,set('schema_version stage pid start cgroup kernel_entry maps map_files environment readonly_stdout_sha256 readonly_backend_pid observed_monotonic alive_before alive_after'.split()),'native schema')
+    require(type(proof['schema_version']) is int and proof['schema_version']==1,'native schema')
+    require(record.get('observed_unknown') is False and v1.positive(record.get('pid')) and
+        type(record.get('start')) is str and record['start'].isdigit() and int(record['start'])>0 and
+        type(proof['pid']) is int and proof['pid']==record['pid'] and
+        type(proof['start']) is str and proof['start']==record['start'] and
+        record.get('exe')==expected['kernel_path'],'native identity')
+    require(proof['stage']=='held-after-readonly' and proof['alive_before'] is True and
+        proof['alive_after'] is True,'native stage')
+    require(proof['cgroup']==expected['cgroup'],'native cgroup')
+    require(type(proof['environment']) is dict and proof['environment']==expected['environment'],'native environment')
+    require(all(finite(x) for x in [record['started_monotonic'],proof['observed_monotonic'],
+        record['ended_monotonic'],now,expected['call_started'],expected['deadline']]) and
+        expected['call_started']<=record['started_monotonic']<=proof['observed_monotonic']<=
+        record['ended_monotonic']<=now<expected['deadline'],'native timing')
+    require(type(record.get('stdout')) is bytes and len(record['stdout'])<=MAX_BYTES,'native readonly binding')
+    lines=record['stdout'].splitlines()
+    require(len(lines)==2 and hashlib.sha256(lines[0]).hexdigest()==proof['readonly_stdout_sha256'] and
+        v1.positive(proof['readonly_backend_pid']) and
+        v1.decode(lines[0]).get('backend_pid')==proof['readonly_backend_pid'],'native readonly binding')
+    files=expected['allowed_files']
+    require(type(files) is dict and expected['kernel_path'] in files and expected['program_path'] in files,
+        'native expected files missing')
+    meta_keys={'sha256','device_major','device_minor','inode'}
+    def file_identity(meta):
+        return (type(meta.get('device_major')) is int and meta['device_major']>=0 and
+            type(meta.get('device_minor')) is int and meta['device_minor']>=0 and
+            v1.positive(meta.get('inode')) and v1.hex_value(meta.get('sha256'),64))
+    v1.shape(proof['kernel_entry'],meta_keys|{'path'},'native kernel')
+    require(proof['kernel_entry']==dict(path=expected['kernel_path'],**files[expected['kernel_path']]) and
+        file_identity(proof['kernel_entry']),'native kernel')
+    raw_maps=proof['maps']
+    require(type(raw_maps) is str and 0<len(raw_maps.encode())<=MAX_BYTES and raw_maps.endswith('\n'),
+        'native maps frame')
+    mapped={};previous_end=0
+    for line in raw_maps.splitlines():
+        fields=line.split(None,5)
+        try:
+            require(len(fields)>=5,'native maps syntax')
+            begin,end=[int(x,16) for x in fields[0].split('-')]
+            offset=int(fields[2],16)
+            major,minor=[int(x,16) for x in fields[3].split(':')]
+            inode=int(fields[4])
+            require(begin>=previous_end and end>begin and offset>=0 and major>=0 and minor>=0 and inode>=0 and
+                re.fullmatch('[r-][w-][x-][ps]',fields[1]) is not None,'native maps syntax')
+            previous_end=end
+        except (ValueError,IndexError) as error:
+            raise ValueError('native maps syntax') from error
+        path=fields[5] if len(fields)==6 else ''
+        if path.startswith('/'):
+            require(path in files and not path.endswith(' (deleted)'),'native map outside pinned bundle')
+            require(inode>0,'native map identity')
+            identity=(major,minor,inode)
+            require(path not in mapped or mapped[path]==identity,'native map identity')
+            mapped[path]=identity
+        else:
+            require(inode==0 and (not path or path.startswith('[') and path.endswith(']')),'native map outside pinned bundle')
+    require(type(proof['map_files']) is list and len(proof['map_files'])<=len(files),'native map identity')
+    listed={}
+    for item in proof['map_files']:
+        v1.shape(item,meta_keys|{'path'},'native map identity')
+        path=item['path']
+        require(type(path) is str and path not in listed and path in mapped and path in files,
+            'native map identity')
+        require(file_identity(item) and {k:item[k] for k in meta_keys}==files[path] and
+            (item['device_major'],item['device_minor'],item['inode'])==mapped[path],'native map identity')
+        listed[path]=item['sha256']
+    require(set(listed)==set(mapped),'native map identity')
+    require(expected['kernel_path'] in listed and expected['program_path'] in listed and
+        expected['required_shas'].issubset(set(listed.values())),'native required maps')
+    return proof
+
+
 class PsqlSession:
     """Native fixture session factory product; SOURCE only until separate GO.
 
@@ -460,11 +542,15 @@ class PsqlSession:
         require(ledger_sha256 == '824b5913054898e735d88980cd9eb9505dbb0364d8384bfdcadf49c2d076c4a6', 'unqualified CLI ledger')
         ledger = v1.decode(ledger_path.read_bytes())
         require(self.bundle.resolve() == self.bundle and self.bundle.name == 'bundle', 'bundle location')
+        self.native_map_files={}
         for name, rec in ledger['files'].items():
             q = self.bundle/name
             require(q.is_relative_to(self.bundle) and q.resolve() == q and q.is_file() and
                     q.stat().st_uid == os.getuid() and q.stat().st_size == rec['size'] and
                     sha(q) == rec['sha256'], 'bundle file pin')
+            info=q.stat()
+            self.native_map_files[str(q)]=dict(sha256=rec['sha256'],device_major=os.major(info.st_dev),
+                device_minor=os.minor(info.st_dev),inode=info.st_ino)
             self.check_authority()
         self.program = self.bundle/'bin/psql'
         self.loader = self.bundle/'loader/ld-musl-x86_64.so.1'
@@ -472,6 +558,7 @@ class PsqlSession:
                 str(self.loader) == ledger['kernel_entry_requested']['path'], 'bundle relocation not qualified')
         self.program_sha256 = sha(self.program)
         self.loader_sha256 = sha(self.loader)
+        self.native_required_map_shas={x['sha256'] for x in ledger['provenance'].values()}|{self.program_sha256,self.loader_sha256}
         self.check_authority()
         cache = Path(fixture_cache).absolute()
         credential = Path(credential_reference).absolute()
@@ -514,12 +601,17 @@ class PsqlSession:
 
     def check_authority(self):
         a = self.authority()
-        v1.shape(a, set('active first_red common_end lease_end fixture_nonce profile_sha256'.split()), 'native authority')
+        v1.shape(a, set('active first_red common_end lease_end fixture_nonce profile_sha256 common_cgroup'.split()), 'native authority')
         require(a['active'] is True and a['first_red'] is False and
                 finite(a['common_end']) and finite(a['lease_end']) and
                 self.clock() < self.deadline <= a['common_end'] <= a['lease_end'] and
                 a['fixture_nonce'] == self.profile['fixture_nonce'] and
                 a['profile_sha256'] == self.profile_sha256, 'native authority/lease refused')
+        group=a['common_cgroup']
+        require(type(group) is str and group.startswith('/') and '\n' not in group and '\r' not in group and
+            '..' not in Path(group).parts,'native cgroup authority')
+        require(not hasattr(self,'native_cgroup') or self.native_cgroup==group,'native cgroup authority changed')
+        self.native_cgroup=group
 
     def __call__(self, *, identity=None):
         self.check_authority()
@@ -544,12 +636,34 @@ class PsqlSession:
             '-X', '--no-password', '-qAt', '-v', 'ON_ERROR_STOP=1',
             '-h', '127.0.0.1', '-p', '15433', '-U', p['user'], '-d', p['database'], '-f', '-']
         sql = b'BEGIN READ ONLY;\n'+READONLY+(POSTCHECK if identity is not None else IDENTITY)+b'ROLLBACK;\n'
+        call_started=self.clock()
+        call_deadline=min(self.deadline,call_started+1.5)
         try:
-            rec = capture(argv, env=env, stdin=sql, deadline=min(self.deadline, self.clock()+1.5), clock=self.clock)
+            rec = capture(argv, env=env, stdin=sql, deadline=call_deadline, clock=self.clock)
         except CaptureRefused as error:
             self.scrub(error.record)
             raise
         self.scrub(rec)
+        try:
+            require(type(rec.get('native_attestation')) is dict,'native evidence missing')
+            require(type(getattr(self,'native_map_files',None)) is dict and
+                type(getattr(self,'native_required_map_shas',None)) is set and
+                type(getattr(self,'native_cgroup',None)) is str,'native expected configuration missing')
+            require(type(rec['returncode']) is int and rec['returncode']==0 and rec['reaped'] is True and
+                rec['partial'] is False and rec['truncated'] is False and rec['timed_out'] is False,
+                'native capture failed')
+            expected=dict(kernel_path=str(self.loader),program_path=str(self.program),
+                allowed_files=self.native_map_files,required_shas=self.native_required_map_shas,
+                environment=env,cgroup=self.native_cgroup,call_started=call_started,deadline=call_deadline)
+            validate_native_attestation(rec,expected,now=self.clock())
+            validate_session(rec['stdout'],p,identity=identity)
+            require(self.clock()<call_deadline,'native timing')
+        except ValueError as error:
+            rec['native_refusal']=str(error)
+            rec['first_error']=rec.get('first_error') or type(error).__name__
+            raise CaptureRefused(rec) from error
+        rec['native_attestation_checked']=True  # Semantic contract only, not OS qualification.
+        rec['transport_qualified']=False
         rec.update(argv=argv, kernel_entry_requested=str(self.loader), kernel_entry_sha256=self.loader_sha256,
                    program_requested=str(self.program), program_sha256=self.program_sha256,
                    executed_sql_sha256=hashlib.sha256(sql).hexdigest())
@@ -557,10 +671,26 @@ class PsqlSession:
         return rec
 
     def scrub(self, rec):
-        if any(self.secret in rec.get(k, b'') for k in ['stdout', 'stderr']):
-            rec['stdout'] = b'[REDACTED secret-bearing output]\n'
-            rec['stderr'] = b'[REDACTED secret-bearing output]\n'
-            rec['partial'] = True
+        # New native metadata must be scrubbed too, before any error record can
+        # be archived. Whole unsafe fields are removed/redacted, never copied
+        # as a purported complete OS proof. No secret is printed by this path.
+        def unsafe(value,depth=0):
+            if depth>16:return True
+            if type(value) is bytes:return len(value)>MAX_BYTES or self.secret in value
+            if type(value) is str:return len(value.encode())>MAX_BYTES or self.secret.decode() in value
+            if type(value) is dict:
+                return any(unsafe(k,depth+1) or unsafe(v,depth+1) for k,v in value.items())
+            if type(value) in (list,tuple):return any(unsafe(v,depth+1) for v in value)
+            return False
+        bad=[key for key,value in rec.items() if unsafe(key) or unsafe(value)]
+        if bad:
+            for key in bad:
+                if unsafe(key):del rec[key]
+                else:rec[key]='[REDACTED unsafe capture metadata]'
+            rec['stdout']=b'[REDACTED unsafe capture]\n'
+            rec['stderr']=b'[REDACTED unsafe capture]\n'
+            rec['partial']=True
+            rec['native_refusal']='native secret-bearing or unbounded capture'
             raise CaptureRefused(rec)
 
     def close(self):

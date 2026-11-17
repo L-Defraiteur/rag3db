@@ -120,3 +120,44 @@ dans CaptureRefused.record, pas juste n'importe quel rejet. Les2positifs devront
 passer, faute de quoi pas de correction par blocage général. Les4contre-ex
 rouges originaux sont inchangés.18NONJOUÉS, aucun checker encore modifié dans
 cette prépublication ; fixsource et RO totale avant recette22fauxCPU distincte.
+
+
+## Checker SOURCE du contrat parent après rouges, NON JOUÉ
+
+Après20preuves2hôtes et prépubd53542e9d5(18témoins), nouveau checker pur
+validate_native_attestation et raccord __call__. Cinq fonctions bytecorps
+identiques au source qualifié c90dd/6148 (liste/SHA native-carry-functions.json) :
+validate_profile/validate_session/capture/observe/read_fixture_observation.
+19/8/4anciens acquis non relancés par réflexe ; ce n'est pas un nouveau verdict
+runtime du fichier runner entier. V1/Rust/SQL/constants inchangés.
+
+Checker : schema fermé/typé, PID/start/exe connus, stageheld-after-readonly/alive
+stricts, cgroup externe stable, environnement EXACT, intervalle capture original
+et SHA/PID du frameRO. Maps Linux complet borné64KiB, fichiers autorisés seulement,
+SHA/dev/inode cohérents au snapshot attendu, chargeur ET programme ET fermeture
+required par SHA présents ; alias libc=selfloader accepté par hash et non un
+mappinghost inventé. Attestation incohérente → CaptureRefused record/cause
+conservés ; native_attestation_checked signifie validation SEMANTIQUE seulement,
+transport_qualified resteFalse. Scrub étendu aux métadonnées avant archive de
+refus, avec test canariPUBLIC ; aucun secret réel lu pour cette préparation.
+
+Le constructeur futur retient dev/inode/SHA de chaque fichier vérifié et une
+common_cgroup externe stable, exigée par l'autorité. Il n'a PAS été exécuté.
+Le collecteur actuel capture ne produit PAS de native_attestation : le chemin
+réel demeure HOLD/failclosed, pas un checker qui auto-fabrique une preuve.
+Collecteur OS/handshake vivant/importbudget/terminalruntime encore NON LIVRÉS.
+
+Deux bases positives (identité/postcheck),16mutants isolés plus1canariPUBLIC =
+19tests de contrat, tous NON JOUÉS. Avec4anciens contre-ex INCHANGÉS, recette
+native-contract-cpu-recipe.json PROPOSE23fauxCPU seuls/-v-f, Common20/OS28+2
+après POSTE32G. Les nouveaux mutants exigent CaptureRefused+raison spécifique,
+pas rejetgénéral ; bases positives doivent vraiment être acceptées. Captures/
+authority fake et objets__new__ sansinit, aucun chemin bundle/secret ouvert,
+aucun processus/client/PG. Paquet à matérialiser/hash puis Rtotale/GO distinct
+avant éventuel vert. Aucun import/parse/test de ce checker effectué.
+
+Limites inchangées : preuves simulées ≠ observations OS, livecollector/PIDfd
+parent/auth/SSL/dlopen/nativeenv effectif/outerwhole5avantimports et terminal
+réel à produire/qualifier séparément. Pas de fixture allouée avant clientPRÊT
+et GOcontact. Aucun v1grant/canonicalprofil relabellisé, aucun service/original
+/lib/SDK/buildCLI99 ou ancien jeton/réservation réactivé.

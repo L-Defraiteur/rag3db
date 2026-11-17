@@ -125,5 +125,11 @@ class NativeAttestationContract(unittest.TestCase):
     def test_boolean_schema_version_refused(self):
         self.refused(lambda o,r:r['native_attestation'].update(schema_version=True),'native schema')
 
+    def test_public_canary_in_metadata_is_not_exported(self):
+        def mutate(o,r):r['native_attestation']['environment']['UNEXPECTED']=o.secret.decode()
+        with self.assertRaises(runner.CaptureRefused) as ctx:self.run_fixture(mutate)
+        self.assertNotIn('f'*64,repr(ctx.exception.record))
+        self.assertIs(ctx.exception.record['partial'],True)
+
 
 if __name__=='__main__':unittest.main()

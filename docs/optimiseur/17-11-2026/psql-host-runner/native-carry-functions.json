@@ -1,0 +1,22 @@
+{
+  "capture": {
+    "sha256": "f4da7252c20b311f8874b326fb6f31beba34bffb6d9df5a57df116f0a755169a",
+    "unchanged": true
+  },
+  "observe": {
+    "sha256": "042255ef8d890e83c54bf6b890cd76796dfae1e8fcfd48ca2c6f461d09886943",
+    "unchanged": true
+  },
+  "read_fixture_observation": {
+    "sha256": "1d25e44c5938cdbaf604448f7176361dd4313f2f2b8f01022687641cb776611b",
+    "unchanged": true
+  },
+  "validate_profile": {
+    "sha256": "b3c5326c06ba9351dcf1677c79de598626cd758d1d701fa0590cec5ce2413553",
+    "unchanged": true
+  },
+  "validate_session": {
+    "sha256": "7caec5ad1f57b48b07f1c1723964902a78b582bcbabc3857c5e347c2545cb293",
+    "unchanged": true
+  }
+}
