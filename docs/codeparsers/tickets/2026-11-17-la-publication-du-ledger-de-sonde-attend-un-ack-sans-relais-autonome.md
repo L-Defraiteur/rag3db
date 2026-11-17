@@ -333,3 +333,19 @@ les enveloppes CLOCK_MONOTONIC proposées et les limites de ce modèle. Le moteu
 et ses contrôleurs sont inchangés par rapport à558 ; pas de correction cachée.
 Prévision dix FAIL non observés, zéro résultat CPU revendiqué. RO ciblées M/TTY
 et cadrage C7 exigés avant une invocation future de ce seul paquet.
+
+### GO ca1 consommé, motif de fixture inattendu : STOP sans correction
+
+C7-CP-GUARDS-RED-CA1C-17nov60/d72aa, UNEinvocation ca1 exacte/propre, dixSHA
+et Python frais. 10FAIL/0ERRORskip/rc1,.150396768s externe/.048unittest, MAIS
+9motifs attendus et1FAILfixture : Gate.pin reste1*64 tandis que helper écrit
+preparedSHA réel ; read_bootstrap refuse avant la comparaison clock visée.
+Pas dix rouges précis, donc pas autorisation corrective conditionnelle acquise.
+STOP0retry/0fix ; sources558/9e/842/ca1 restent figées. Rapport
+publication-core/05-rouges-groupes-arret-sur-fixture.md. RAW+source+pins+argv/rc/
+temps et manifeste16fichiers réhashés deuxhôtes AVANTtoutdiff documentaire :
+manifest41c73731458fd15c1003c378257a38f8a8c326adfb64c02a6c79df2a29874b93.
+Attendre cadrage C7 du raccord de fixture, nouveaux pins/RO/GO distinct avant
+rejeu. Les défauts moteur restent ouverts. Nuance premièrecauseRPC consignée :
+TimeoutError générique accepté ne prouve pas origine/immutabilité de la cause ;
+renforcer ce témoin avant futur correctif/vert qui revendique cette propriété.
