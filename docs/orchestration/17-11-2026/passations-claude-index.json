@@ -1,0 +1,104 @@
+{
+  "date": "2026-11-17",
+  "state": "STOP_NO_AUTOMATIC_RESUME",
+  "nonconsumed_go": "REVOKED",
+  "old_deadlines": "NOT_REACTIVATABLE",
+  "orchestration": {
+    "branch": "cx-orchestration-reprise-16nov-r1",
+    "path": "docs/orchestration/17-11-2026/99-passation-pour-claude.md"
+  },
+  "peers": [
+    {
+      "n": "ED",
+      "sha": "c7cb3f28ee9bc1d7f24427f452860d342c9e4ca9",
+      "branch": "cx-ed-vertex-landing-docs-r1",
+      "path": "docs/everything-declarative/17-11-2026/99-passation-pour-claude.md",
+      "remote_verified": true
+    },
+    {
+      "n": "Banc",
+      "sha": "ed90b371a9340e87953ae0457f4942e17b89e063",
+      "branch": "cx-banc-lucivy-indexed-ro-20261116",
+      "path": "docs/banc/17-11-2026/99-passation-pour-claude.md",
+      "remote_verified": true
+    },
+    {
+      "n": "TTY",
+      "sha": "af6a7447ce1017ac496b9e0092907cb3795c9622",
+      "branch": "cx-tty-english-aliases-7",
+      "path": "docs/tty/17-11-2026/99-passation-pour-claude.md",
+      "remote_verified": true
+    },
+    {
+      "n": "Recherche",
+      "sha": "950075d794ecc26b9972c3dd783acc9796b1089f",
+      "branch": "cx-recherche-passation-claude-20261117-r1",
+      "path": "docs/recherche/17-11-2026/99-passation-pour-claude.md",
+      "remote_verified": true
+    },
+    {
+      "n": "Lucivy",
+      "sha": "fa9923683cc97de6530c104d93ae1036e11b29c2",
+      "branch": "cx-lucivy-reprise-16nov",
+      "path": "docs/lucivy/17-11-2026/99-passation-pour-claude.md",
+      "remote_verified": true
+    },
+    {
+      "n": "Archi",
+      "sha": "282937a171377a7557c2ad63fc8fa9b3c9373d06",
+      "branch": "cx-archi-pas-va-au-bout-global-pilot-r2",
+      "path": "docs/rag3weaver-archi/17-11-2026/99-passation-pour-claude.md",
+      "remote_verified": true
+    },
+    {
+      "n": "Mémoire",
+      "sha": "b3f6b6faec143593bf9e27d39239ed67d09ced4e",
+      "branch": "cx-memoire-passation-claude-17nov-r1",
+      "path": "docs/memoire/17-11-2026/99-passation-pour-claude.md",
+      "remote_verified": true
+    },
+    {
+      "n": "Arbre",
+      "sha": "c34f16373ecc6541ea78997410cffb415203fdee",
+      "branch": "cx-arbre-cli99-runtime-b-20261117-r1",
+      "path": "docs/arbre-principal/17-11-2026/99-passation-pour-claude.md",
+      "remote_verified": true
+    },
+    {
+      "n": "Hotfix",
+      "sha": "2d1c8f93e3dac3bcccf5bcb4be5b38a726b399e3",
+      "branch": "cx-hotfixs-rows-outside-graph-red-pilot-v2",
+      "path": "docs/coeur-cpp-hotfixs-tickets/17-11-2026/99-passation-pour-claude.md",
+      "remote_verified": true
+    },
+    {
+      "n": "Embar",
+      "sha": "eaefcf1022cdaaad6ecaf82b875b156fe0ea7f18",
+      "branch": "cx-embar-passation-20261117-r1",
+      "path": "docs/embarquement/17-11-2026/99-passation-pour-claude.md",
+      "remote_verified": true
+    },
+    {
+      "n": "G/Optimiseur",
+      "sha": "a9e39f86e46d3fc9b3f2fab18b27fb7176744837",
+      "branch": "cx-optimiseur-psql-runner-source-20261117-r1",
+      "path": "docs/optimiseur/17-11-2026/99-passation-pour-claude.md",
+      "remote_verified": true
+    },
+    {
+      "n": "Codeparsers",
+      "sha": "e08bb138d2170fc3163789172a74ddbdb08924b9",
+      "branch": "cx-codeparsers-publication-snapshot-cause-fix",
+      "path": "docs/codeparsers/17-11-2026/99-passation-pour-claude.md",
+      "remote_verified": true
+    }
+  ],
+  "core": {
+    "thread": "01a1cb5e-4d27-7cd1-aff3-a7ddbf7d1665",
+    "status": "systemError",
+    "handoff": "section in orchestration synthesis",
+    "resumed": false
+  },
+  "codeparsers_wip": "d5b4d9764c1a5fb28d84985ffe3a5f4592cccb3e",
+  "arbre_saved_old_wip": "fdf62741ba9363f8d360e7258de420d672646182"
+}

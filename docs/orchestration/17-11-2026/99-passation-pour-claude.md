@@ -22,7 +22,7 @@ La consigne du 17 prime sur les historiques du 13 et du 16 et les anciens rappel
   datées du 17 sont leurs successeurs ; ne pas transformer une réserve ancienne
   en défaut d'une source ultérieure déjà qualifiée.
 
-[Ticket de cet arrêt](../tickets/2026-11-17-arreter-les-sessions-et-publier-les-passations-de-reprise.md).
+[Ticket de cet arrêt terminé](../../tickets/closed/2026-11-17-arreter-les-sessions-et-publier-les-passations-de-reprise.md).
 Le [suivi détaillé](01-suivi-des-lots.md) contient les décisions et preuves.
 Sa longue chronologie ne vaut jamais un coupon courant.
 
@@ -177,25 +177,28 @@ sanscallback/clock entre acquisition et snapshot, sanscopierhandlesopaques.
 - CacheVertex : plan de mesure, aucun99% présumé, pas prompt_cache_key Vertex
   documentée ni benchmark payant autorisé. Mistral éventuel reste futur.
 
-## Passations des pairs — collecte en cours
+## Passations des pairs — 12 rapports poussés et vérifiés
 
 STOP/passation transmis aux12pairs accessibles. Chacun publie
 `docs/<session>/17-11-2026/99-passation-pour-claude.md` ou indique son chemin exact.
-La table de reçus ci-dessous sera complétée uniquement après réception, sans
-inventer des rapports terminés. C1 est couvert par la section de blocage ci-dessus.
+Les12 rapports ci-dessous existent et leurs SHA ont été comparés directement aux
+refs distantes après réception. C1 est couvert par la section de blocage ci-dessus ;
+son état systemError a été relu sans le relancer. Les notifications MCP G/CP
+pouvaient rester en attente : leurs rapports ont été retrouvés par Git et vérifiés,
+sans réveiller de qualification.
 
 | Porteur | SHA du rapport / branche / chemin | État du reçu |
 |---|---|---|
-| Arbre | à recevoir | STOP transmis |
+| Arbre | [c34f16373ecc6541ea78997410cffb415203fdee](https://github.com/L-Defraiteur/rag3db/blob/c34f16373ecc6541ea78997410cffb415203fdee/docs/arbre-principal/17-11-2026/99-passation-pour-claude.md) — `origin/cx-arbre-cli99-runtime-b-20261117-r1` | Rapport poussé, ref distante vérifiée ; aucun WIP non poussé/actif OWNED annoncé |
 | ED | [c7cb3f28ee9bc1d7f24427f452860d342c9e4ca9](https://github.com/L-Defraiteur/rag3db/blob/c7cb3f28ee9bc1d7f24427f452860d342c9e4ca9/docs/everything-declarative/17-11-2026/99-passation-pour-claude.md) — `origin/cx-ed-vertex-landing-docs-r1` | Rapport poussé, ref distante vérifiée ; aucun WIP non poussé/actif OWNED annoncé |
-| G/Optimiseur | à recevoir | STOP transmis |
+| G/Optimiseur | [a9e39f86e46d3fc9b3f2fab18b27fb7176744837](https://github.com/L-Defraiteur/rag3db/blob/a9e39f86e46d3fc9b3f2fab18b27fb7176744837/docs/optimiseur/17-11-2026/99-passation-pour-claude.md) — `origin/cx-optimiseur-psql-runner-source-20261117-r1` | Rapport poussé, ref distante vérifiée ; aucun WIP non poussé/actif OWNED annoncé |
 | Recherche | [950075d794ecc26b9972c3dd783acc9796b1089f](https://github.com/L-Defraiteur/rag3db/blob/950075d794ecc26b9972c3dd783acc9796b1089f/docs/recherche/17-11-2026/99-passation-pour-claude.md) — `origin/cx-recherche-passation-claude-20261117-r1` | Rapport poussé, ref distante vérifiée ; aucun WIP non poussé/actif OWNED annoncé |
 | Archi | [282937a171377a7557c2ad63fc8fa9b3c9373d06](https://github.com/L-Defraiteur/rag3db/blob/282937a171377a7557c2ad63fc8fa9b3c9373d06/docs/rag3weaver-archi/17-11-2026/99-passation-pour-claude.md) — `origin/cx-archi-pas-va-au-bout-global-pilot-r2` | Rapport poussé, ref distante vérifiée ; aucun WIP non poussé/actif OWNED annoncé |
-| Hotfix | à recevoir | STOP transmis |
+| Hotfix | [2d1c8f93e3dac3bcccf5bcb4be5b38a726b399e3](https://github.com/L-Defraiteur/rag3db/blob/2d1c8f93e3dac3bcccf5bcb4be5b38a726b399e3/docs/coeur-cpp-hotfixs-tickets/17-11-2026/99-passation-pour-claude.md) — `origin/cx-hotfixs-rows-outside-graph-red-pilot-v2` | Rapport poussé, ref distante vérifiée ; aucun WIP non poussé/actif OWNED annoncé |
 | Mémoire | [b3f6b6faec143593bf9e27d39239ed67d09ced4e](https://github.com/L-Defraiteur/rag3db/blob/b3f6b6faec143593bf9e27d39239ed67d09ced4e/docs/memoire/17-11-2026/99-passation-pour-claude.md) — `origin/cx-memoire-passation-claude-17nov-r1` | Rapport poussé, ref distante vérifiée ; aucun WIP non poussé/actif OWNED annoncé |
-| Embar | à recevoir | STOP transmis |
+| Embar | [eaefcf1022cdaaad6ecaf82b875b156fe0ea7f18](https://github.com/L-Defraiteur/rag3db/blob/eaefcf1022cdaaad6ecaf82b875b156fe0ea7f18/docs/embarquement/17-11-2026/99-passation-pour-claude.md) — `origin/cx-embar-passation-20261117-r1` | Rapport poussé, ref distante vérifiée ; aucun WIP non poussé/actif OWNED annoncé |
 | TTY | [af6a7447ce1017ac496b9e0092907cb3795c9622](https://github.com/L-Defraiteur/rag3db/blob/af6a7447ce1017ac496b9e0092907cb3795c9622/docs/tty/17-11-2026/99-passation-pour-claude.md) — `origin/cx-tty-english-aliases-7` | Rapport poussé, ref distante vérifiée ; aucun WIP non poussé/actif OWNED annoncé |
-| Codeparsers | à recevoir | STOP transmis |
+| Codeparsers | [e08bb138d2170fc3163789172a74ddbdb08924b9](https://github.com/L-Defraiteur/rag3db/blob/e08bb138d2170fc3163789172a74ddbdb08924b9/docs/codeparsers/17-11-2026/99-passation-pour-claude.md) — `origin/cx-codeparsers-publication-snapshot-cause-fix` | Rapport poussé, ref distante vérifiée ; aucun WIP non poussé/actif OWNED annoncé |
 | Banc | [ed90b371a9340e87953ae0457f4942e17b89e063](https://github.com/L-Defraiteur/rag3db/blob/ed90b371a9340e87953ae0457f4942e17b89e063/docs/banc/17-11-2026/99-passation-pour-claude.md) — `origin/cx-banc-lucivy-indexed-ro-20261116` | Rapport poussé, ref distante vérifiée ; aucun WIP non poussé/actif OWNED annoncé |
 | Lucivy | [fa9923683cc97de6530c104d93ae1036e11b29c2](https://github.com/L-Defraiteur/rag3db/blob/fa9923683cc97de6530c104d93ae1036e11b29c2/docs/lucivy/17-11-2026/99-passation-pour-claude.md) — `origin/cx-lucivy-reprise-16nov` | Rapport poussé, ref distante vérifiée ; aucun WIP non poussé/actif OWNED annoncé |
 
@@ -223,3 +226,27 @@ git show origin/cx-orchestration-reprise-16nov-r1:docs/orchestration/17-11-2026/
 Ne pas copier une ancienne commande --launch/timeout/ARM/provider depuis le suivi
 sans reconstituer source/pins/recette et nouvelle autorité. Ce rapport ne donne
 aucune reprise automatique, aucune clôture des tickets produit et aucun déploiement.
+
+
+Arbre a également sauvegardé son ancien WIP retour non suivi, sans exécution, dans
+`fdf62741ba9363f8d360e7258de420d672646182` ; détail et branche dans sa passation.
+Aucun correctif implicite ni qualification de ces scripts par leur push.
+
+
+## Fin de collecte — arrêt maintenu
+
+Les12passations accessibles et les WIP sont poussés sur branches NONmaster,
+références distantes vérifiées par C7. Aucun WIP non poussé ou calcul OWNED actif
+n'est annoncé par leurs propriétaires. Ceci ne certifie pas l'absence globale
+de services/PID tiers ; les services partagés et toutes ressources conservées
+restent intacts. C1 est en systemError et n'a pas été relancé.
+
+Le WIP source CP inachevé `d5b4d9764c1a5fb28d84985ffe3a5f4592cccb3e`
+est bien ancêtre du rapport distant e08bb138 : il est sauvegardé. Les nouveaux
+pins du fix63 n'existent PAS encore, aucune revue finale ou exécution63.
+Le WIP retour Arbre fdf627 est également poussé selon sa passation, non exécuté.
+
+L'[index JSON](passations-claude-index.json) porte les12SHA/branches/chemins.
+Aucune clôture produit ni intégration master par cette clôture de collecte.
+Les petits messages de reçus ne sont pas des demandes de reprise ; attendre
+une instruction explicite de Lucie, pas un rappel automatique.

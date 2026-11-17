@@ -1,6 +1,6 @@
 # Arrêter les sessions et publier les passations de reprise
 
-- **État** : en cours, 17 novembre 2026 ; arrêt explicite de Lucie, rapports de passation et pushes WIP seuls autorisés.
+- **État** : fait, 17 novembre 2026 ; douze passations poussées et refs distantes vérifiées, synthèse et index de reprise publiés sur branche. Arrêt maintenu.
 - **Famille** : produit
 - **Gravité** : planification ; préserver le travail avant épuisement du quota.
 - **Atteignable en service** : non, coordination des sessions.
@@ -27,6 +27,9 @@ preuves ajouté à Git ; manifestes et chemins durables seulement.
 
 ## Fin attendue
 
-Rapports/WIP poussés et référencés dans la [synthèse](../17-11-2026/99-passation-pour-claude.md),
-restes non poussés et activité résiduelle explicités. Ce ticket reste ouvert
-pendant la collecte ; les tickets produit ouverts ne ferment pas pour un arrêt.
+Rapports/WIP poussés et référencés dans la [synthèse](../../orchestration/17-11-2026/99-passation-pour-claude.md),
+restes non poussés et activité résiduelle explicités. Les douze rapports existent aux SHA de l’index, chaque ref distante a été vérifiée
+par C7 ; code WIP CP sauvegardé et accessible depuis le rapport distant, ancien
+WIP Arbre sauvegardé. Aucun calcul OWNED ou WIP non poussé déclaré. C1 relu
+systemError, sans nouvelle exécution. Cette collecte est terminée ; les tickets
+produit restent ouverts, tous anciens GO/délais inertes et l’arrêt maintenu.
