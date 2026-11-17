@@ -74,10 +74,10 @@ class Pure(unittest.TestCase):
    build,test=policy.split_test(policy.d6_command(name));self.assertIn('--no-run',build);self.assertIn('--offline',build);self.assertEqual(test,[name,'--exact','--nocapture','--test-threads=1'])
   with self.assertRaises(RuntimeError):policy.split_test(['test','another'])
  def test_real_rust_red_is_exact_not_a_compile_failure_or_zero_test(self):
-  name=policy.D6_NAME;text='running 1 test\ntest '+name+' ... FAILED\nthread x panicked at actual.rs:2\n'+summary(passed=0,failed=1)
-  self.assertEqual(policy.judged(text,name,True)['failed'],1)
+  name=policy.D6_NAME;text='running 1 test\ntest '+name+' ... FAILED\nthread x panicked at src/backend.rs:2\n'+policy.D6_RED_MESSAGE+'\n'+summary(passed=0,failed=1)
+  self.assertEqual(policy.judged(text,name,True,2)['failed'],1)
   for bad in [text.replace(name,'another',1),text.replace('1 failed','0 failed'),text+'error: could not compile anything']:
-   with self.assertRaises(RuntimeError):policy.judged(bad,name,True)
+   with self.assertRaises(RuntimeError):policy.judged(bad,name,True,2)
  def test_independent_inventory_and_strict_phase_refuse_zero_duplicate_or_foreign(self):
   inv=evidence.inventory('module::case: test\nmodule::skip: test\n','module::skip: test\n');self.assertEqual(len(inv['names']),2)
   self.assertEqual(evidence.phase(output(total=2),['module::case'],[],2)['summary'],[1,0,0,0,1])

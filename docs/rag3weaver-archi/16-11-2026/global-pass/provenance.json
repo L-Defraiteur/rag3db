@@ -18,7 +18,7 @@
     "path": "docs/rag3weaver-archi/16-11-2026/doc-bac-green/controller_policy.py",
     "destination": "controllers.py",
     "sha256": "5c94748496e66f19ab31a6a80236c8e22ce471f0c10935db19f60aeff1c1fb4a",
-    "destination_sha256": "731e219bc889853c8d6694c2a895e4b89f57ccaad5e0ab4241dfdeb829b8ef17"
+    "destination_sha256": "f763f5a9cf8800576f910d498c2d905e0ffdc50b2f9dddf3d90f67d9e2cfe916"
   },
   {
     "source": "13c8bf21e6",
@@ -41,8 +41,9 @@
     "sha256": "47dc99acb6d2ded501ed8598dedec4e7791038004994c7a08b241cf12ffdd893",
     "adaptations": [
       "module filename",
-      "seven selected profile keys"
+      "seven selected profile keys",
+      "actual global Observer methods extracted by AST; no obsolete driver profile"
     ],
-    "destination_sha256": "3e3f7ddad9811ef294d8c1e36fc63121553f23fd5a5e6076fa5f1f2eed7a4493"
+    "destination_sha256": "d706ba543cc8ad1ea29cf73c216190a63eb288a872262321aa97eb4d16413abe"
   }
 ]

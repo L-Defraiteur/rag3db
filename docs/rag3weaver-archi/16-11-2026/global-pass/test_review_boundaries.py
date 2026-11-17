@@ -49,6 +49,6 @@ class Boundaries(unittest.TestCase):
   policy.red_source(source)
   with self.assertRaises(RuntimeError):policy.red_source(source.replace('is_err()','is_ok()'))
   text='running 1 test\ntest '+policy.D6_NAME+' ... FAILED\nthread x panicked at src/backend.rs:1\n'+policy.D6_RED_MESSAGE+'\ntest result: FAILED. 0 passed; 1 failed; 0 ignored;'
-  policy.judged(text,policy.D6_NAME,True)
-  with self.assertRaises(RuntimeError):policy.judged(text.replace(policy.D6_RED_MESSAGE,'another assertion'),policy.D6_NAME,True)
+  policy.judged(text,policy.D6_NAME,True,1)
+  with self.assertRaises(RuntimeError):policy.judged(text.replace(policy.D6_RED_MESSAGE,'another assertion'),policy.D6_NAME,True,1)
 if __name__=='__main__':unittest.main(failfast=True)

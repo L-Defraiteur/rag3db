@@ -6,7 +6,7 @@ from settings import *
 
 class Broker:
  def __init__(self,context):
-  self.ctx=context;self.mode='d6';self.cwd=None;self.target=None;self.review=False;self.completed=[];self.sessions={};self.error=None;self.socket=None;self.thread=None;self.stop=threading.Event();self.serial=0
+  self.ctx=context;self.mode='d6';self.cwd=None;self.target=None;self.review=False;self.completed=[];self.sessions={};self.error=None;self.socket=None;self.thread=None;self.stop=threading.Event();self.serial=0;self.active_connection=None
  def bind(self):
   root=F/'private-controller';root.mkdir(mode=0o700);path=root/'cargo.sock'
   policy.require(len(os.fsencode(path))<=107 and not path.exists(),'broker path not fresh/too long')
@@ -28,6 +28,7 @@ class Broker:
     if self.stop.is_set():break
     raise
    with connection:
+    self.active_connection=connection
     try:
      connection.settimeout(900);peer=struct.unpack('3i',connection.getsockopt(socket.SOL_SOCKET,socket.SO_PEERCRED,12))
      request=json.loads(connection.makefile('rb').readline(2*1024*1024));response=self.handle(request,peer)
@@ -36,6 +37,7 @@ class Broker:
      self.error=repr(error);self.ctx.fail('private Cargo refusal',dict(error=self.error,request=request if 'request' in locals() else None))
      try:connection.sendall((json.dumps(dict(ok=False,error=self.error))+'\n').encode())
      except OSError:pass
+    finally:self.active_connection=None
  def identity(self,request,peer):
   policy.require(peer[0]==request['pid'] and peer[1]==os.getuid(),'Unix peer identity differs')
   proc=Path('/proc')/str(peer[0]);row=self.ctx.observer.identity(proc)
@@ -60,7 +62,14 @@ class Broker:
     policy.require(args in [['test'],['test','--lib'],['test','--locked','--offline'],['test','--lib','--locked','--offline']],'unsupported documentary support command')
     stage='documentary-'+str(self.serial);expected=None;build=['test','--lib','--locked','--offline','--no-run','--message-format=json-render-diagnostics'];test=['--nocapture','--test-threads=1'];source_head=self.ctx.git(cwd,'rev-parse','HEAD')
    self.serial+=1;identifier='task-'+str(self.serial)+'-'+row['starttime']
-   patch=self.ctx.git(cwd,'diff','--binary');record=dict(identity=identifier,peer=row,cwd=str(cwd),target=str(target),argv=args,build_argv=build,test_argv=test,stage=stage,name=expected,source_head=source_head,patch_sha256=hashlib.sha256(patch.encode()).hexdigest(),done=False)
+   source=evidence.source_state(cwd,lambda *args:self.ctx.git(cwd,*args))
+   if self.mode=='d6':
+    policy.require(not self.ctx.git(cwd,'diff','--cached','--name-only'),'staged D6 source is not admitted')
+    policy.require(not any(v.get('untracked') for v in source['files'].values()),'untracked D6 source is not admitted')
+    policy.require(self.ctx.git(cwd,'diff','HEAD','--name-only').splitlines()==['extension/rag3weaver/src/backend.rs'],'D6 source delta has undeclared paths')
+    if stage=='agent-red':policy.red_source((cwd/'src/backend.rs').read_text())
+   patch=self.ctx.git(cwd,'diff','--binary');record=dict(identity=identifier,peer=row,cwd=str(cwd),target=str(target),argv=args,build_argv=build,test_argv=test,stage=stage,name=expected,source_head=source_head,source_state=source,patch_sha256=hashlib.sha256(patch.encode()).hexdigest(),done=False)
+   if stage=='agent-red':record['red_line']=policy.red_source((cwd/'src/backend.rs').read_text())
    self.sessions[identifier]=record;self.ctx.save(identifier+'-admission.json',record)
    ld=str(Path(self.ctx.config['cargo_exe']).parent.parent/'lib')+':'+str(self.ctx.config['sdk_root'])
    self.ctx.observer.source(cwd,dict(manifest=str(cwd),ld=ld))
@@ -83,17 +92,18 @@ class Broker:
    if value['name']:policy.require(sorted(artifact['features'])==policy.feature_closure(cwd/'Cargo.toml',policy.D6_FEATURES,False),'D6 feature closure differs')
    else:policy.require(not artifact['features'],'documentary toy unexpectedly has features')
    binary=Path(artifact['executable']);policy.require(binary.is_relative_to(target) and binary.resolve()==binary,'task ELF target differs')
-   policy.require(hashlib.sha256(self.ctx.git(cwd,'diff','--binary').encode()).hexdigest()==value['patch_sha256'],'source changed during Cargo')
+   policy.require(evidence.source_state(cwd,lambda *args:self.ctx.git(cwd,*args))==value['source_state'],'complete source/index changed during Cargo')
    copy=P/(value['identity']+'-elf');shutil.copy2(binary,copy);sha=evidence.sha(copy);policy.require(sha==evidence.sha(binary),'task ELF changed during copy')
    self.ctx.observer.executable(binary,cwd,value['stage'].startswith('agent') or value['stage']=='review',value['stage'],ld=str(Path(self.ctx.config['cargo_exe']).parent.parent/'lib')+':'+str(self.ctx.config['sdk_root']))
    item=dict(binary=str(binary),copy=str(copy),sha256=sha,size=copy.stat().st_size,features=artifact['features'],cargo_artifact=artifact)
-   ledger=dict(source=policy.APP,pilot=self.ctx.config['pilot'],stage=value['stage'],source_head=value['source_head'],source_patch_sha256=value['patch_sha256'],created=time.monotonic(),artifacts={'task':item})
+   ledger=dict(source=policy.APP,pilot=self.ctx.config['pilot'],stage=value['stage'],source_head=value['source_head'],source_patch_sha256=value['patch_sha256'],source_state=value['source_state'],created=time.monotonic(),artifacts={'task':item})
    self.ctx.published(value['identity'],ledger);value['binary']=str(binary);value['runtime_permitted']=time.monotonic();self.ctx.save(value['identity']+'-runtime-permitted.json',value)
    return dict(binary=str(binary))
   if request['kind']=='tested':
+   policy.require(evidence.source_state(cwd,lambda *args:self.ctx.git(cwd,*args))==value['source_state'],'source/index changed during test')
    text=Path(value['test_log']).read_text();expected_red=value['stage']=='agent-red'
    if value['name']:
-    result=policy.judged(text,value['name'],expected_red);policy.require(request['code']==(101 if expected_red else 0),'real Rust test code differs')
+    result=policy.judged(text,value['name'],expected_red,value.get('red_line'));policy.require(request['code']==(101 if expected_red else 0),'real Rust test code differs')
    else:
     policy.require(request['code']==0 and not re.search(r'^test result: FAILED|^test .*FAILED$',text,re.M),'documentary support command failed')
     result=dict(support_only=True,not_a_qualification_judge=True)
@@ -106,5 +116,10 @@ class Broker:
  def close(self):
   self.stop.set()
   if self.socket:self.socket.close()
-  if self.thread:self.thread.join(timeout=2)
+  if self.active_connection:
+   try:self.active_connection.shutdown(socket.SHUT_RDWR)
+   except OSError:pass
+  limit=min(self.ctx.end,self.ctx.phase_deadline,time.monotonic()+2)
+  if self.thread:self.thread.join(timeout=max(0,limit-time.monotonic()))
+  self.ctx.save('broker-close.json',dict(observed=time.monotonic(),deadline=limit,thread_alive=bool(self.thread and self.thread.is_alive())))
   policy.require(not self.thread or not self.thread.is_alive(),'broker thread did not stop')

@@ -166,3 +166,35 @@ qui les matérialiseront APRÈS publication/retour CPU/RO. Les paquets et preuve
 hermétique60 distinct, et préparationpinsPC/Gitonly déjàautorisée ; ensuite
 ROcopies+metadata et GO7455C7exact distinct AVANT tout natif/modèle/service.
 Cette publication n'est ni suffisanceNative, ni ÀTOI/master/retrait/nettoyage.
+
+
+## Correctif groupé après RO totales dc868 (avant tout essai)
+
+Banc49ed/EDcdd29/Mémoire/C7 repris dans le ticket existant AVANTdiff.
+Témoins prépubliés8a22/305d/f416, NONJOUÉS : vrais raccords guard/sandbox,
+constructeur global/probe, source/index/non-suivis, bracket runtime archivé,
+première cause et schéma Provider APP. Le contrôle schéma est une confrontation
+statique de l'affectation réelle à l'enum Rust et à la branche Compatible/vertex,
+pas une désérialisation Rust ni une qualification native.
+
+Montage D6 compatible/protocolvertex. Lecture Landlock ajoutée pour le SEUL
+script garde_target.sh source APP, pas son répertoire. Rouge : bloc Rust exact
+préannoncé dans la demande, source relue à admission, assertion Om bre/is_err
++ message agent.name, ligne exacte liée au panic runtime ; autre panic refusé.
+Snapshot complet source HEAD/index/modes/contenus/non-suivis (y compris ignorés),
+gitlinks initialisés propres, recontrôlé avant ledger et après test. D6 refuse
+staging/non-suivis et delta hors backend.rs ; snapshot agent figé avant reviewer.
+
+Runtime : environ/maps encadrés par identité/start/UID/CG/exeSHA/argv/cwd,
+frame archivé avant assertions. Erreur de lecture archivée non qualifiante.
+Arrêt : contexte préserve première cause dès refus avant cleanup, notes erreurs
+cleanup séparées ; arrêt privé/reap host+TTY sous MINEND/15s, fermeture broker
+socket/thread sous MINEND/2s, aucune capture SDK en cleanup. Common reste autorité
+pour descendant résiduel ; aucun succès n'est fabriqué si arrêt incomplet.
+
+Ancien témoin CPU13nov remplacé par vrai constructeur global (SDK hérité),
+aucune politique six-absences transposée. Provenance contrôleur/test adaptée
+réempreintée. 39 fonctions écrites au total (34 précédentes +5 nouvelles),
+NONJOUÉES ; AST seulement. Pas de rouge dynamique ni vert revendiqués sur ce
+correctif. Pas de pin PC/Q/T0 ni ACK/GO acquis ; nouvelle RO groupée et GOCPU
+exact distinct requis avant essais, aucun GO7455.

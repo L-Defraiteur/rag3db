@@ -1,6 +1,6 @@
 """Bounded writes, independent test inventories and strict phase classification."""
 from pathlib import Path
-import hashlib,json,os,re,time
+import hashlib,json,os,re,time,contextlib,stat
 import policy
 SUMMARY=re.compile(r'^test result: (ok|FAILED)\. (\d+) passed; (\d+) failed; (\d+) ignored; (\d+) measured; (\d+) filtered out; finished in [0-9.]+s$',re.M)
 EVENT=re.compile(r'^test (\S+?)( - should panic)? \.\.\. (ok|FAILED|ignored(?:, .*)?)$')
@@ -115,3 +115,49 @@ def canonical(root,inventories,nav_names,suites):
   policy.require(markers==(['CHECK_FEATURES VERT 8/8','preuve : rag3weaver revérifié'] if header=='== check_features' else []),'proof/F8 markers in wrong block')
  policy.require(resume[-2:]==['suites jouées : '+' '.join(suites),'VERT'],'canonical final verdict differs')
  return results
+
+
+@contextlib.contextmanager
+def preserve_failure(latch,cleanup):
+ primary=None
+ try:
+  yield
+ except BaseException as error:
+  primary=error
+  try:latch('primary refusal before cleanup',repr(error))
+  except BaseException as failure:error.add_note('latch refused: '+repr(failure))
+  raise
+ finally:
+  try:cleanup()
+  except BaseException as error:
+   try:latch('cleanup refusal',repr(error))
+   except BaseException as failure:error.add_note('cleanup latch refused: '+repr(failure))
+   if primary is None:raise
+   primary.add_note('cleanup refusal preserved separately: '+repr(error))
+
+
+def source_state(root,git):
+ root=Path(root);head=git('rev-parse','HEAD');index=git('ls-files','--stage','-z');others=git('ls-files','--others','-z')
+ entries={}
+ for record in index.split('\0'):
+  if not record:continue
+  meta,name=record.split('\t',1);mode,oid,stage=meta.split(' ')
+  policy.require(stage=='0','unmerged source index')
+  entries[name]=dict(index_mode=mode,index_oid=oid)
+ for name in others.split('\0'):
+  if name:entries.setdefault(name,dict(untracked=True))
+ for name,row in entries.items():
+  relative=Path(name);policy.require(not relative.is_absolute() and '..' not in relative.parts,'unsafe source inventory path')
+  path=root/relative
+  if row.get('index_mode')=='160000':
+   # Gitlink source content must be the exact initialized, clean linked checkout.
+   import subprocess
+   sub=lambda *args:subprocess.check_output(['git','-C',str(path),*args],text=True).strip()
+   row['submodule_head']=sub('rev-parse','HEAD');row['submodule_status']=sub('status','--porcelain','--untracked-files=all')
+   policy.require(row['submodule_head']==row['index_oid'] and not row['submodule_status'],'dirty or mismatched source gitlink')
+  elif path.is_symlink():row.update(kind='symlink',target=os.readlink(path))
+  elif path.exists():
+   st=path.lstat();policy.require(stat.S_ISREG(st.st_mode),'unsupported source file type')
+   row.update(kind='file',mode=stat.S_IMODE(st.st_mode),sha256=sha(path))
+  else:row['kind']='missing'
+ return dict(head=head,index=index,files=entries)

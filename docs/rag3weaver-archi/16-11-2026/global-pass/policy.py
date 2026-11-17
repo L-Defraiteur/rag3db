@@ -15,6 +15,12 @@ D6_FEATURES=['rag3db-native','code','daemon']
 SUITES=['e2e_lectures','e2e_code','e2e_demon_hote','e2e_hooks_claude_code','e2e_equipier']
 KEYS=['RAG3DB_LIB','RAG3DB_SHARED','RAG3DB_LIBRARY_DIR','RAG3DB_INCLUDE_DIR','LD_LIBRARY_PATH','RAG3DB_BUFFER_POOL_SIZE','CARGO_MANIFEST_DIR']
 D6_NAME='backend::tests::agent_name_rejects_an_inner_space'
+D6_RED_MESSAGE='D6_ASSERTION: Om bre accepted; agent.name must reject interior whitespace'
+D6_RED_TEST='#[test]\nfn agent_name_rejects_an_inner_space() {\n    assert!(valider_le_nom_de_l_agent("Om bre").is_err(), "D6_ASSERTION: Om bre accepted; agent.name must reject interior whitespace");\n}'
+
+def red_source(source):
+ require(source.count(D6_RED_TEST)==1,'predeclared D6 assertion source missing or changed')
+ return source[:source.index(D6_RED_TEST)].count('\n')+3
 REVIEW_NAME='backend::cx_d6_review::interior_whitespace_contract'
 BUDGET=7200;TERM=7440;HARD=7455;FINAL=120
 CAPS={'preflight':120,'builds':900,'tty':240,'publication':90,'d6':1800,'canonical':3900,'final':120}
@@ -61,7 +67,8 @@ def validate_profile(snapshot):
 def sandbox(manifest,q,socket_root,sdk,fils):
  result=json.loads(json.dumps(manifest));w=result['workspace'];s=w['sandbox']
  require(w['commands']=='approval' and s.get('mode','landlock')=='landlock' and not s.get('network',False) and not s.get('extra_write',[]),'unsafe sandbox declaration')
- for path in [q,socket_root,sdk]:
+ from settings import C
+ for path in [q,socket_root,sdk,C/'scripts/garde_target.sh']:
   text=str(canonical(path))
   if text not in s['extra_read']:s['extra_read'].append(text)
  s['env'].update(CARGO_TARGET_DIR='{repo_target}',TMPDIR='{task_dir}/tmp',CARGO_NET_OFFLINE='true',CARGO_BUILD_JOBS=str(jobs(fils)))
@@ -90,13 +97,16 @@ def split_test(argv):
  cut=argv.index('--');before=argv[:cut];name=before[-1]
  return before[:-1]+['--no-run','--message-format=json-render-diagnostics'],[name,*argv[cut+1:]]
 
-def judged(text,name,failed=False):
+def judged(text,name,failed=False,red_line=None):
  require('error: could not compile' not in text and '"level":"error"' not in text,'compile failure is not a test result')
  rows=re.findall(r'^test result: (ok|FAILED)\. (\d+) passed; (\d+) failed; (\d+) ignored;',text,re.M)
  want=('FAILED','0','1','0') if failed else ('ok','1','0','0')
  require(rows==[want],'one exact judged test required')
  require(re.findall(r'^test (.+?)(?: - should panic)? \.\.\. ',text,re.M)==[name],'another test ran')
- if failed:require('panicked at' in text,'TDD failure must be a real Rust assertion')
+ if failed:
+  require('panicked at' in text and D6_RED_MESSAGE in text,'TDD failure must be the predeclared Om bre assertion')
+  require(isinstance(red_line,int) and red_line>0,'predeclared D6 assertion line missing')
+  require(re.search(r'panicked at (?:[^\n]*[/\\])?src/backend\.rs:'+str(red_line)+r'(?::|\b)',text) is not None,'D6 panic is not at the predeclared assertion line')
  return dict(name=name,passed=0 if failed else 1,failed=1 if failed else 0,ignored=0)
 
 def private_environment(inherited,p,tmp,targets,fils):

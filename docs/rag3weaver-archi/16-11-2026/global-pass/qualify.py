@@ -142,7 +142,7 @@ def driver(pilot):
  context.tick();ledger=dict(source=policy.APP,pilot=pilot,created=time.monotonic(),artifacts=context.artifacts,inventories=context.inventories)
  check_artifacts(ledger);context.start_phase('publication',90);context.published('global',ledger);context.save('runtime-permitted.json',dict(ledger_sha256=evidence.sha(P/'global-ledger.json'),observed=time.monotonic()))
  context.start_phase('d6',policy.CAPS['d6']);service=__import__('broker').Broker(context);service.bind()
- try:
+ with evidence.preserve_failure(context.fail,service.close):
   # These are paths only; the controller never reads the service-account file.
   context.env.update(GOOGLE_APPLICATION_CREDENTIALS=str(Path.home()/'git_workspaces/rag3db/.vault/vertex-sa.json'),GOOGLE_CLOUD_PROJECT='lr-hub-472010',GOOGLE_CLOUD_LOCATION='global',RAG3WEAVER_EXIGER_GEMINI='1')
   d6.run(context,service);context.tick()
@@ -166,7 +166,6 @@ def driver(pilot):
   context.tick();policy.require(all(value.get('done') for value in service.sessions.values()),'unjudged fixture Cargo invocation remains')
   check_artifacts(ledger,live=True);guard(config);context.observer.complete()
   context.save('driver-result.json',dict(status='GREEN_GLOBAL_D6_AND_CANONICAL',source=policy.APP,pilot=pilot,finished=time.monotonic(),deadline=end,d6=json.loads((P/'d6-result.json').read_text()),ledger_sha256=evidence.sha(P/'global-ledger.json'),publications=context.ledgers,canonical=dict(path=str(official),summary_sha256=evidence.sha(official/'resume.log')),not_a_master_permission=True))
- finally:service.close()
  return 0
 
 def main():

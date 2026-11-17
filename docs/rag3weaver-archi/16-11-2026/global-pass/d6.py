@@ -39,7 +39,7 @@ def setup(ctx):
  policy.require(ctx.git(root,'rev-parse','HEAD')==policy.APP and not ctx.git(root,'status','--porcelain'),'D6 copy not exact')
  runtime=F/'runtime';source_templates=runtime/'config'/'code-source'/'templates';source_templates.parent.mkdir(parents=True,exist_ok=True);shutil.copytree(C/'templates',source_templates)
  source=source_templates/'backends/code/backend.json';value=policy.sandbox(json.loads(source.read_text()),Q,F/'private-controller',Path(ctx.config['sdk_root']),os.environ['POSTE_FILS'])
- value['database']=str(runtime/'data'/'source-code.rag3db');value['models']['llm']=dict(provider='vertex',model='gemini-3.8-flash',params=dict(project='lr-hub-472010',location='global'))
+ value['database']=str(runtime/'data'/'source-code.rag3db');value['models']['llm']=dict(provider='compatible',protocol='vertex',model='gemini-3.8-flash',params=dict(project='lr-hub-472010',location='global'))
  value['agent']=dict(name='Algareth')
  memory=source_templates/'backends/memory/backend.json';m=json.loads(memory.read_text());m['database']=str(runtime/'data'/'d6-judges.rag3db');memory.write_text(json.dumps(m,indent=2))
  value['bilans']=dict(memoire=str(memory));source.write_text(json.dumps(value,indent=2))
@@ -69,8 +69,25 @@ def run(ctx,service):
  host_log=P/'d6-host.log';endpoint_path=Path(env['RAG3WEAVER_DAEMON_DIR'])/'daemon.json'
  policy.require(not endpoint_path.exists(),'private host endpoint already exists')
  host_output=host_log.open('x');host=subprocess.Popen([ctx.artifacts['host']['copy'],'daemon','--address','127.0.0.1:0','--threads','8'],cwd=C,env=env,stdout=host_output,stderr=subprocess.STDOUT)
- endpoint=None;tty=None
- try:
+ endpoint=None;tty=None;tty_log=None
+ def cleanup():
+  limit=min(end,time.monotonic()+15);errors=[]
+  if endpoint:
+   try:request(endpoint,'/arret',{},end=limit,cap=15)
+   except BaseException as error:errors.append(repr(error))
+  for label,child in [('tty',tty),('host',host)]:
+   if child is None:continue
+   try:
+    while child.poll() is None:
+     policy.require(time.monotonic()<limit,'private '+label+' did not stop within original END');time.sleep(.05)
+    code=child.wait(timeout=max(.001,limit-time.monotonic()));ctx.save('d6-'+label+'-reaped.json',dict(pid=child.pid,code=code,observed=time.monotonic(),deadline=limit))
+    policy.require(code==0,'private '+label+' failed')
+   except BaseException as error:errors.append(repr(error))
+  host_output.close()
+  if tty_log is not None:tty_log.close()
+  if errors:
+   ctx.save('d6-cleanup-errors.json',dict(errors=errors,deadline=limit));raise RuntimeError('private D6 cleanup refused: '+repr(errors))
+ with evidence.preserve_failure(ctx.fail,cleanup):
   while not endpoint_path.exists():
    ctx.tick();policy.require(host.poll() is None and time.monotonic()<end,'host did not start');time.sleep(.1)
   endpoint=json.loads(endpoint_path.read_text());policy.require(endpoint['pid']==host.pid,'private daemon PID mismatch')
@@ -87,7 +104,7 @@ def run(ctx,service):
   ctx.save('d6-task-admitted.json',dict(cwd=str(task_cwd),target=str(target),source=policy.APP,sandbox=declaration,parent_head=ctx.git(config_root,'rev-parse','HEAD'),task_head=ctx.git(task_cwd,'rev-parse','HEAD')))
   command=shlex.join(['cargo',*policy.d6_command(policy.D6_NAME)])
   prompt=("Dans src/backend.rs, ajoute dans le module tests le test nommé agent_name_rejects_an_inner_space : valider_le_nom_de_l_agent doit refuser le nom Om bre (blanc intérieur) avec une erreur nommant agent.name. "
-          "Joue d'abord EXACTEMENT "+command+" via run_command, timeout_s=900, et vois ce test ROUGE pour cette assertion. "
+          "Le corps du test doit être exactement : "+policy.D6_RED_TEST+". Joue d'abord EXACTEMENT "+command+" via run_command, timeout_s=900, et vois ce test ROUGE pour cette assertion. "
           "Corrige ensuite le validateur pour ce contrat en préservant le trim des bords, le refus vide et des retours ligne ; rejoue EXACTEMENT la même commande VERT. "
           "Rends le diff et Ready. Une seule demande : travaille jusqu'au bout. Pas de commit/push, pas de suppression du Cargo.lock, pas d'autres commandes Cargo, pas de lecture de secrets ou de configuration personnelle.")
   ctx.save('d6-request-before-model.json',dict(text=prompt,expected_test=policy.D6_NAME,expected_argv=policy.d6_command(policy.D6_NAME),expected_red='one real failing Rust assertion before the validator fix'))
@@ -112,6 +129,8 @@ def run(ctx,service):
   if tty.poll() is None:
    while tty.poll() is None:ctx.tick();policy.require(time.monotonic()<end,'TTY did not finish');time.sleep(.1)
   policy.require(tty.wait()==0,'TTY return code');tty_log.close()
+  source=evidence.source_state(task_cwd,lambda *args:ctx.git(task_cwd,*args));policy.require(source==service.completed[-1]['source_state'],'agent source changed since green test')
+  ctx.save('d6-agent-source-before-review.json',source)
   diff=ctx.git(task_cwd,'diff','--binary');names=ctx.git(task_cwd,'diff','--name-only').splitlines()
   policy.require(names==['extension/rag3weaver/src/backend.rs'],'D6 changed another source path')
   policy.require(ctx.git(root,'rev-parse','HEAD')==policy.APP and not ctx.git(root,'status','--porcelain'),'parent D6 source mutated')
@@ -144,10 +163,3 @@ def run(ctx,service):
   policy.require(any(r['label']=='host' and r['pid']==host.pid for r in ctx.observer.runtimes),'private daemon SDK identity was not observed')
   policy.require(any(r['label']=='tty' and r['pid']==tty.pid for r in ctx.observer.runtimes),'real TTY runtime profile was not observed')
   ctx.save('d6-result.json',dict(status='GREEN_D6_ONLY',agent_cargo_stages=['agent-red','agent-green'],controller_review='review',source=policy.APP,request_count=1,journal_count=len(journals),events=len(events),observed_running=observed_running,finished=time.monotonic(),not_integrated=True))
- finally:
-  if endpoint:
-   try:request(endpoint,'/arret',{},end=min(end,time.monotonic()+15))
-   except Exception as error:ctx.save('d6-host-stop-error.json',dict(error=repr(error)));raise
-  if host.poll() is None:
-   while host.poll() is None:policy.require(time.monotonic()<end,'private host did not stop');time.sleep(.1)
-  policy.require(host.wait()==0,'private host failed');host_output.close()

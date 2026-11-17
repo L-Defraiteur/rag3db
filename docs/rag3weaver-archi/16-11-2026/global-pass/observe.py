@@ -49,6 +49,17 @@ class Observer:
   # Rustup prepends its lib directory; raw direct Cargo in the D6 shim is given this declared value too.
   ld=':'.join([str(self.rustlib),*[x for x in ld.split(':') if x and x!=str(self.rustlib)]])
   return policy.profile(R.parent/'rag3db-libs',manifest,ld)
+ def runtime_snapshot(self,proc,before,expected,path):
+  value=dict(before=before,phase=self.phase,expected=expected)
+  try:
+   value['profile']=policy.selected((proc/'environ').read_bytes(),expected)
+   value['maps']=(proc/'maps').read_text();value['after']=self.identity(proc)
+  except BaseException as error:
+   value['error']=repr(error);evidence.save(path,value);raise RuntimeError('runtime coherent snapshot refused') from error
+  evidence.save(path,value)
+  policy.require(all(before[k]==value['after'][k] for k in ['pid','starttime','uid','cgroup','exe','exe_sha256','argv','cwd']),'runtime identity changed during env/maps capture')
+  policy.validate_profile(value['profile'])
+  return value
  def tick(self,cleanup=False):
   if cleanup:raise RuntimeError('cleanup may not perform SDK/profile qualification')
   policy.require(time.monotonic()<self.end,'observer deadline')
@@ -81,17 +92,14 @@ class Observer:
     self.seen[key]=str(path);self.cargo.append(dict(path=str(path),phase=self.phase,cwd=row['cwd'],argv=attempt['argv'],profile=expected))
    if row['exe'] in self.allowed and key not in self.seen:
     entry=self.allowed[row['exe']];policy.require(row['exe_sha256']==entry['sha256'],'runtime ELF changed')
-    data=(proc/'environ').read_bytes();actual=policy.selected(data,policy.profile(R.parent/'rag3db-libs',Path(entry['manifest']),entry.get('ld') or str(self.root)))
-    # The runtime mode is declared by its launcher ancestry, never chosen from the observed values.
+    expected=policy.profile(R.parent/'rag3db-libs',Path(entry['manifest']),entry.get('ld') or str(self.root))
     ancestors=self.ancestors(row)
-    if any(r['exe']==self.config['cargo_exe'] for r in ancestors):actual=policy.selected(data,policy.profile(R.parent/'rag3db-libs',Path(entry['manifest']),self.runtime_ld(str(self.root)+':/usr/local/cuda/lib64' if any(any(a.endswith('/run_e2e.sh') for a in r['argv']) for r in ancestors) else None)))
-    elif self.phase=='canonical' and entry['label']=='e2e':actual=policy.selected(data,policy.profile(R.parent/'rag3db-libs',Path(entry['manifest']),str(self.root)+':/usr/local/cuda/lib64'))
-    maps=(proc/'maps').read_text();native=[line for line in maps.splitlines() if 'librag3db.so' in line]
+    if any(r['exe']==self.config['cargo_exe'] for r in ancestors):expected=policy.profile(R.parent/'rag3db-libs',Path(entry['manifest']),self.runtime_ld(str(self.root)+':/usr/local/cuda/lib64' if any(any(a.endswith('/run_e2e.sh') for a in r['argv']) for r in ancestors) else None))
+    elif self.phase=='canonical' and entry['label']=='e2e':expected=policy.profile(R.parent/'rag3db-libs',Path(entry['manifest']),str(self.root)+':/usr/local/cuda/lib64')
+    path=P/'observations'/('runtime-'+str(row['pid'])+'-'+row['starttime']+'-'+str(time.monotonic_ns())+'.json')
+    value=self.runtime_snapshot(proc,row,expected,path);native=[line for line in value['maps'].splitlines() if 'librag3db.so' in line]
     if entry['native'] and not native:continue
-    value=dict(identity=row,phase=self.phase,profile=actual,native=native,expected_elf=entry)
-    path=P/'observations'/('runtime-'+str(row['pid'])+'-'+row['starttime']+'.json');evidence.save(path,value)
-    policy.validate_profile(actual)
-    if entry['native']:policy.require(native and all(str(self.root/'librag3db.so') in line for line in native),'runtime SDK maps differ')
+    if entry['native']:policy.require(all(str(self.root/'librag3db.so') in line for line in native),'runtime SDK maps differ')
     self.seen[key]=str(path);self.runtimes.append(dict(path=str(path),label=entry['label'],phase=self.phase,argv=row['argv'],pid=row['pid'],start=row['starttime']))
  def complete(self):
   policy.require(self.cargo,'no actual Cargo profile was observed')
