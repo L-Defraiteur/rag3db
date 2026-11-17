@@ -156,3 +156,26 @@ sources et clone inchangés. État FIN-RO borné conservé, anciens rouges intac
 cycle/shutdown/durabilité/LIVE toujours non qualifiés. Préparation contrôleur
 coordonné seulement autorisée dans le nouveau ticket C7, sans nouveau GO.
 État de ce ticket : OUVERT.
+
+## 17 novembre : Qv9 suffisant sur copie, reprise préparation documentaire
+
+C7b27e1b37c7 retient la suffisance bornée des preuves
+6e97b2ff8a6a8f4e4ca095ce3033fce10ceb8549 +doc965a284170 après deux RO
+Recherche/ED3997924332 (référence corrigée ED9cdab843eb). Cycle CLI927/SDK59
+observé sur UNE copie FIN : shutdown mêmePID/maps/ACKrc0, PRE/POSTphysique,
+graph/FTS/bits/sources et COLD passés. Pas de durabilité crash/LIVE/master/
+retrait ; ancien65eb/Qv8 reste ROUGE et ses POST non joués. FIN après ancien
+rouge non qualifiée rétroactivement,11UNKNOWNglobaux conservés, computed/
+reused UNKNOWN. Deux tickets cycle et postwriter restent ouverts.
+
+Reprise autorisée ici : PRÉPARATION DOCUMENTAIRE du plan12cfad seulement.
+Fetch master frais fait :99fef92ce6ee9a0007eaf99c7c3a6a3789061c57.
+Première comparaison sourceCLI927→master :13 fichiers Rust produit modifiés,
+donc aucun réétiquetage du binaire927 en master ni transfert de qualification.
+Audit exact à publier avec arbres/pins, outils à requalifier, RET_v2/72h
+courants coordonnés G, oracle contemporain Banc et recettes/gates par base.
+
+Aucune opération7970/original/snapshot/copie/CLI/provider/compilation/test/
+native/cleanup autorisée par cette préparation ; seuls relevés RO de sources.
+Anciens GO/délais clos, toute qualification de delta produit sera distincte
+avant action. Ticket parent toujours OUVERT, aucune des trois bascules achevée.
