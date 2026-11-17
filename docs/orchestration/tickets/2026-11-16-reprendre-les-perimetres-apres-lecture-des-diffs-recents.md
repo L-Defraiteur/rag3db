@@ -18,6 +18,36 @@ Les audits ont notamment écarté une duplication du témoin ADD COLUMN déjà l
 
 EDd395 est intégré et son tour fermé après trois contrôles lus aux deux postes. Un défaut nouveau du parseur de garde pile a son ticket ED241c53a5dd, attribué à G avant correction ; prochaines intégrations pile retenues, validations privées permises. Le blocage Archi par observations opaques et les corpus/autorisations manquantes de lucivy restent conservés. Le rapport distingue activité, attente de pilote/revue, dépendance levée et lot livré ; aucun travail n'est créé pour occuper les sessions.
 
+## Admission du global Archi : acteurs de coordination à matérialiser
+
+17novembre, APPf1e8/PILOTEPC229b397d8d1cb28b8ac3075479e49a1ab72b400b :
+trois ROtotalescode+paquet favorables PRÉPA,41CPUhermétiques verts.
+C7 relit ensuite Runner.published et Runner.acknowledge : attente90s pour
+publication/copies2hôtes et pour chacun des accords d6/canonical ; le paquet
+de préparation ne prouve aucun acteur de publication ou de grant vivant.
+Les brokers D6 demandent eux aussi une publication avant chaque nouvel ELF.
+Ces consommateurs bornés ne suffisent pas à rendre les producteurs disponibles.
+
+Avant GO7455, matérialiser la coordination autonome réelle, avec les rôles
+autorisés, pins, armement APRÈSexec et liveness prouvée AVANT précontrôles/READY
+ou premier ledger, premierrouge immuable et nettoyage sous la même enveloppe.
+La disponibilité d'une session ou un futur message humain ne vaut pas armement,
+comme l'ont montré BASEP02 et cycle3c2. Composer les mécanismes de publication
+et de grant en cours chez Codeparsers/Arbre/Embar ; éviter une troisième variante.
+
+Les accords doivent porter sur les ressources réellement utilisées par phase,
+avec identité et durée de réservation couvrant l'exécution, pas seulement la
+fenêtre90s d'attente du fichier. Distinguer modèles locaux, fixturePG et usage
+Vertex autorisé ; aucun faux noembedding ni zéroSQL/health supposé. La présence
+d'un JSONapproved ne qualifie pas l'outil SQL PG encore non joué.
+
+Porteurs : Archi pour son contrôleur/recette, Embar et G pour leurs contrats
+d'accord, orchestration pour l'ordre des admissions. Préparation et revue seules,
+aucun contactservice/SQL/provider, poste, Cargo, source/Tmodifiés ou GO7455 ici.
+Le couple229b et ses paquets restent figés ; un changement de code ou de pins
+demande une version neuve et sa revue. Les RO de préparation restent valides
+dans leur périmètre, aucune admission native n'en est déduite.
+
 ## Critères de fin
 
 - Audits des treize périmètres reçus, écarts et éventuels blocages consignés.
