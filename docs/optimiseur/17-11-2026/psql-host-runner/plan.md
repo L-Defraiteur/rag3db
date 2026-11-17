@@ -200,3 +200,26 @@ cancel/completion fictif, observation refusée. SSL/auth/dlopen/locale/transport
 réels demeurent non qualifiés. Aucun nouveau PG à allouer avant client prêt et
 GO contact séparé. R doit relire ce raccord et les réserves regroupées avant
 nouveaux pins/GO CPU, puis résultats réels avant toute proposition de fixture.
+
+
+## Réserves source R regroupées et quatre contre-exemples prépubliés
+
+9a3 reste inchangé : pas de fix avant rouge. Réserves1/2+2/2 consignées au
+ticket AVANT modifications des seuls témoins/documentation. Nouveau module
+test_review_regressions.py : première cause capture malgré close en échec ;
+exception pidfd sans perte de record ; vrai consommateur face à sidecar absent ;
+expiration au vrai fsync après lien avec panne d'écriture refusal puis vrai
+consommateur. Popen/pidfd sont FAUX pour le test OS, aucun enfant natif réel.
+Les écritures/fsync/observer/consumer sont réels sur TemporaryDirectory.
+
+Recette PROPOSÉE regression-red-recipe.json : quatre seuls contre-exemples,
+attendu4FAIL/0ERROR/0skip/rc1, Common20/OS28+2 après vrai POSTE32G. Sept sources
+pinnées dont quatre v1 figées, plus Common et outils identiques à l'entrée
+nominale. Sources privées PAS encore copiées ni recette admise, aucun GO CPU
+acquis ; R doit lire ces contre-exemples puis C7 décider. Les 19 autres témoins
+ne font pas partie de cette entrée proposée et restent NON JOUÉS.
+
+Le témoin SIGTERM des19 est complété par HANDLER_READY et returncode=-SIGKILL
+pour prouver la causalité ; NON JOUÉ. Native exeSHA/env/pins module et portée
+whole5 complète restent non qualifiés avant tout GO contact. Les quatre
+contre-exemples ne ferment pas ces autres limites, ni l'ancienne réserve OS.

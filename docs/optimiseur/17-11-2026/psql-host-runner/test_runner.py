@@ -7,6 +7,7 @@ import copy
 import importlib.util
 import json
 import os
+import signal
 from pathlib import Path
 import sys
 import tempfile
@@ -149,9 +150,11 @@ class RealCapture(unittest.TestCase):
         end=time.monotonic()+.8
         with self.assertRaises(runner.CaptureRefused) as ctx:
             runner.capture([sys.executable,'-I','-c',
-                'import signal,time;signal.signal(signal.SIGTERM,signal.SIG_IGN);time.sleep(30)'],
+                'import os,signal,time;signal.signal(signal.SIGTERM,signal.SIG_IGN);os.write(1,b"HANDLER_READY\\n");time.sleep(30)'],
                 env=dict(PATH='/usr/bin:/bin'),stdin=b'',deadline=end)
         self.assertIs(ctx.exception.record['reaped'],True)
+        self.assertEqual(ctx.exception.record['stdout'],b'HANDLER_READY\n')
+        self.assertEqual(ctx.exception.record['returncode'],-signal.SIGKILL)
         self.assertLessEqual(ctx.exception.record['ended_monotonic'],end)
         with self.assertRaises(ProcessLookupError):os.kill(ctx.exception.record['pid'],0)
 

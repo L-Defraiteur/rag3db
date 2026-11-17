@@ -925,3 +925,36 @@ et réserves regroupées avant recette CPU/GO distinct. Trois réserves précéd
 restent ouvertes tant que leurs témoins ne sont pas effectivement jugés. Lanceur
 Common/lease réel non qualifié, erreurs sans preuve absence backend, fermeture
 dynamique/auth/SSL non qualifiées. Aucun GO fixture ni admission v1 délivré.
+
+
+### RO totale R 9a3d3f94b4 — réserves source 1/2 avant corrections
+
+Zéro exécution. (1) finally closer peut remplacer la première CaptureRefused/
+validation : conserver première cause et cleanup distinct. (2) exceptions hors
+CaptureRefused (pidfd/proc/selector/signal race) perdent record/bruts côté observe :
+conserver capture+cause sur tout refus sans blanchir la race. (3) lien observation
+avant SHA/fsync/gate final ; interruption sans refusal peut laisser une pièce
+incomplète consommable par read_fixture_observation. Exiger une terminaison/
+pièce finale admise, absence de refusal insuffisante. Attente regroupement R 2/2
+avant correction ; aucun incident runtime ni test prétendu joué.
+
+
+### RO totale R 9a3 — regroupement 2/2 avant tout fix
+
+SPEC19 améliore PID/app/cible, flood stderr et frontière vraie sync_directory,
+mais expiration doit vérifier le VRAI consommateur et SIGTERM ignoré exige
+handshake/statut de signal causal. Native : capture /proc unique après Popen,
+UNKNOWN admis et absence de comparaison exeSHA/env => exécution native psql
+NON attestée, à traiter avant GO contact. Whole5 commence après import/pins de
+module et fsync de refus peut finir tard ; lanceur externe réel toujours requis.
+Avis SOURCE réservé, zéro test/import/proc/natif/secret. Prépublication de
+contre-exemples ciblés puis RO/GO CPU rouge distinct avant corrections, aucun
+rejeu bundle/nominal a5c2. Ne pas qualifier ce source par les anciens résultats.
+
+
+Quatre contre-exemples source prépubliés (test_review_regressions.py), recette
+CPU rouge proposée distincte4FAIL/0ERROR sans enfant réel/Psql/PG. Premier
+regroupement couvert premièrecause/record/completionconsumer, expiration vraie
+et consumer ; handshake SIGTERM complété dans19 NON JOUÉS. Runner9a3 inchangé.
+Aucun test/import/parse ou fix effectué. Relecture R puis GO CPU C7 manquants ;
+sources à copier/hash vérifier avant admission. Limitsnative/outerwhole5 restent.
