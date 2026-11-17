@@ -248,3 +248,11 @@ ticketrelais17nov. Contrat futur : vraisARM/poll/OSpréflight, HB10s, leaseENDor
 et arrêtsmêmeenveloppe, adaptateurpublication5ELF+3D6surmoteurcorrigé, pas3eprimitive.
 229b/Q/ROcode+pins restentfigés/favorables, admissionnativeRETENUE. AucunGRANT/ACK,
 health/SQL/provider/poste/Cargo/service/targetmutation/runtime ajouté ici.
+
+Interface commune fournisseur2c8d1df84ae1ea0af6b2da58892bc3a57c7d89a0 relue :
+rapport17nov/38 favorablecontratPRÉPA, manifeste39 NONEXÉCUTABLE fournit8identités,
+4labels/files/sourcebindings/closures2/13/13/13/14/3/3/3, futursSHAledgerELFabsents.
+Aucunfork ni fakebundle ; extractionnoyauunique/migration36assertionsD45 puis
+adaptateurglobal+ownerwindow90 encoreNONIMPLANTÉS, accordinterface/limitesC7
+avantcode. Acteursréelspublication+grant distincts/probePGnonqualifiéeHOLD.
+D45/P05 et229b/Qfigés ; aucunCPU/SSH/proc/SQL/health/Cargo/provider/run ajouté.
