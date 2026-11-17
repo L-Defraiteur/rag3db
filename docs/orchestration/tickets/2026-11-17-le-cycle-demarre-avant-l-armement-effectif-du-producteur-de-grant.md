@@ -138,3 +138,12 @@ PQS/manifestv7 cohérents. Témoin vraiargv/signature/envAST relu, rougeB2BD
 1FAIL0ERROR après contrôlepositif et3fichiers réhashésdeuxhôtes sansrejeu.
 Pas de vertd22, paquetQv7 ni GO900 validé ; décision CPU C7 distincte puis RO
 couple neuf. Qv6resteHOLD ; voir complément rapportED34.
+
+RO ED TOTALE neuve D22/Qv7prepared22eb favorable :
+[rapport35](../../everything-declarative/16-11-2026/35-ro-totale-cycle-d22-qv7.md).
+Chaîne entière Commonargv/ARM/liveness/policy/actions/driver/final relue et
+22copies==prepared==Git/HEADclean/P-S-allocation-grantabsents contrôlés PC.
+Common1PASSD22 et cinqfinaux6715carried relus sansrejeu ; quatrearchives3fichiers
+réhashées LOCAL+PC0écart. Q6/WT6715/Q5 conservés. P1final+argv levés code/CPU
+surCEcouple seulement, aucune activité native/DB/health/proc/slot ni GO900.
+Ticket reste OUVERT, vraie qualification et décision C7 distinctes à venir.
