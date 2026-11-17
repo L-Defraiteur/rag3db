@@ -22,7 +22,7 @@ class PrewriterPersistence(unittest.TestCase):
     if call.func.id=='writer':selected.append(node);break
   self.assertTrue(selected);self.assertEqual(selected[-1].value.func.id,'writer')
   with tempfile.TemporaryDirectory() as d:
-   root=Path(d);files=[dict(path='fixture.rag3db',size=100,mode=420,sha256='a'*64)];dirs=[dict(path='fts',mode=493)]
+   root=Path(d);files=[dict(path='fixture.rag3db',size=100,mode=420,sha256='a'*64)];dirs=[dict(path='fts',mode=493,uid=os.getuid())]
    synced=[];observations=[];real_sync=os.fsync
    def fsync(fd):real_sync(fd);synced.append(os.fstat(fd).st_ino)
    def writer(*args):

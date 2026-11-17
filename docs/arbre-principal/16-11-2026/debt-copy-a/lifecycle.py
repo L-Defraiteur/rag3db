@@ -7,7 +7,7 @@ import lifecycle_protocol as protocol
 import grant_watch_actor as watch_actor
 import grant_watch_controller as watch_control
 a=f.a;q=a.q;R=a.R
-P=R/'lifecycle-copy-v8';Q=R/'lifecycle-control-v8';S=R/'lifecycle-scopes-v8'
+P=R/'lifecycle-copy-v9';Q=R/'lifecycle-control-v9';S=R/'lifecycle-scopes-v9'
 FIN=R/'debt-fin-ro-result-v1';SOURCE=FIN/'copy';BASE=P/'copy/code-principal.rag3db'
 FIN_MANIFEST=R/'debt-fin-ro-proofs-01/proof-manifest.json'
 FIN_MANIFEST_SHA='05661b1fddc82c1e66d21f218d0c8cdfd12b69d8ef16432a2c55c3b127a9462a'
@@ -17,6 +17,67 @@ a.FILES['provider_health_transport.py']='docs/orchestration/16-11-2026/coordinat
 for name in ['grant_watch_actor.py','grant_watch_controller.py']:a.FILES[name]='docs/orchestration/17-11-2026/coordination/'+name
 f.Q=Q;f.carried.Q=Q;a.Q=Q;a.P=P;a.S=S;a.BASE=BASE;q.Q=Q
 def save(name,value):q.save(P/name,value)
+def postwriter_scope(end):
+ if (P/'first-red.json').exists():raise ValueError('first red forbids post-writer admission')
+ q.require_time(end,0)
+ if (P/'first-red.json').exists():raise ValueError('first red during post-writer observation')
+def postwriter_inventory(before,after,before_dirs,after_dirs,cfg,profile,nonce,end):
+ """Physical admission only; logical/FTS/vector/source judges remain mandatory."""
+ postwriter_scope(end)
+ try:
+  def read(name):return watch_control.read_owned(P/name)[0]
+  context=read('prewriter-context.json')
+  expected_context=dict(database=str(BASE),pilot=cfg['pilot'],prepared_sha256=q.sha(Q/'prepared.json'),nonce=nonce,deadline=end,cgroup=cfg['active_cgroup'],profile=profile,inventory_sha256=q.sha(P/'copy-before-writer.json'),directories_sha256=q.sha(P/'copy-directories-before-writer.json'))
+  if context!=expected_context or read('copy-before-writer.json')!=before or read('copy-directories-before-writer.json')!=before_dirs:raise ValueError('pre-writer baseline/context substituted or belongs to another cycle')
+  identity=read('writer-process.json');closed=read('writer-closed.json');publication=read('response-publication.json');shutdown=read('shutdown-request.json');runtime=read('writer-runtime-profile.json')
+  if type(identity.get('pid')) is not int or identity['pid']<=0 or not isinstance(identity.get('start'),str) or not identity['start'].isdigit() or identity.get('exe')!=str(q.CLI) or identity.get('exe_sha256')!=q.PINS[q.CLI]:raise ValueError('writer identity not the pinned executable/process')
+  if any(record.get('process')!=identity for record in [closed,publication,shutdown]):raise ValueError('writer/publication/shutdown process binding differs')
+  if closed.get('shutdown_acknowledged') is not True or closed.get('state')!='CLOSED' or type(closed.get('rc')) is not int or closed['rc']!=0:raise ValueError('same writer shutdown/return unqualified')
+  if runtime.get('pid')!=identity['pid'] or type(runtime.get('pid')) is not int or runtime.get('start')!=identity['start'] or runtime.get('start_after')!=identity['start'] or runtime.get('exe_sha256')!=identity['exe_sha256'] or runtime.get('exe_after')!=identity['exe']:raise ValueError('writer runtime identity differs')
+  expected_cgroup='0::'+cfg['active_cgroup']+'\n'
+  if runtime.get('cgroup')!=expected_cgroup or runtime.get('cgroup_after')!=expected_cgroup or runtime.get('expected')!=profile or runtime.get('actual')!=profile or runtime.get('diff')!={}:raise ValueError('writer runtime profile/cgroup differs')
+  maps=runtime.get('maps')
+  if not isinstance(maps,str) or any(str(q.LIB/name) not in {line.split()[-1] for line in maps.splitlines() if line.split()} for name in ['librag3db.so','libvector.rag3db_extension']):raise ValueError('actual writer SDK maps absent')
+  if publication.get('database')!=str(BASE) or publication.get('manifest_sha256')!=cfg['files']['lifecycle.json'] or publication.get('graph_sha256')!=cfg['files']['lifecycle.mmd']:raise ValueError('publication database/source differs')
+  if publication.get('request')!=dict(op='call',name='observer_cycle_vie',arguments=dict(nonce=nonce)) or shutdown.get('request')!={'op':'shutdown'} or shutdown.get('publication_sha256')!=q.sha(P/'response-publication.json'):raise ValueError('request/publication-before-shutdown binding differs')
+  path=P/'writer.stdout'
+  if path.is_symlink() or not path.is_file() or path.stat().st_uid!=os.getuid():raise ValueError('writer response is not owned/regular')
+  raw=path.read_bytes()
+  if len(raw)>1048576 or not raw.endswith(b'\n') or len(raw.splitlines(keepends=True))!=2:raise ValueError('writer response framing differs')
+  call,ack=raw.splitlines(keepends=True);session=protocol.Session(nonce)
+  observed=session.call_response(call,lambda value:None)
+  if observed!=publication.get('observation'):raise ValueError('persisted public response differs from raw frame')
+  session.shutdown_request();session.closed_response(ack);result=session.finish(closed['rc'])
+  if any(closed.get(key)!=value for key,value in result.items()):raise ValueError('closed nonce/run/state differs from raw session')
+  def inventory(rows,directories=False):
+   if not isinstance(rows,list):raise ValueError('inventory must be complete list')
+   result={};keys={'path','mode','uid'} if directories else {'path','size','mode','sha256'}
+   for row in rows:
+    if not isinstance(row,dict) or set(row)!=keys:raise ValueError('inventory row shape differs')
+    name=row['path']
+    if not isinstance(name,str) or not name or Path(name).is_absolute() or any(x in ['.','..','.env','.vault'] for x in name.split('/')) or name in result:raise ValueError('duplicate/ambiguous/protected inventory path')
+    if type(row['mode']) is not int or not 0<=row['mode']<=4095:raise ValueError('inventory mode invalid')
+    if directories:
+     if type(row['uid']) is not int or row['uid']!=os.getuid():raise ValueError('foreign directory')
+    elif type(row['size']) is not int or row['size']<0 or not isinstance(row['sha256'],str) or len(row['sha256'])!=64 or any(x not in '0123456789abcdef' for x in row['sha256']):raise ValueError('inventory size/SHA invalid')
+    result[name]=row
+   return result
+  old=inventory(before);new=inventory(after)
+  if inventory(before_dirs,True)!=inventory(after_dirs,True):raise ValueError('post-writer directories differ')
+  name=BASE.name
+  if name not in old or name not in new or new[name]['size']<=0 or new[name]['mode']!=old[name]['mode']:raise ValueError('main database absent/empty/mode changed')
+  for suffix in ['.wal','.ecrivain']:
+   if name+suffix in new:raise ValueError('writer WAL/mark remains after acknowledged shutdown')
+   old.pop(name+suffix,None)
+  old.pop(name);new.pop(name)
+  readers=name+'.readers'
+  if readers not in old and readers in new:
+   if new[readers]!=dict(path=readers,size=0,mode=420,sha256=hashlib.sha256(b'').hexdigest()):raise ValueError('new readers file not empty/canonical')
+   new.pop(readers)
+  if old!=new:raise ValueError('unrelated post-writer files changed/added/removed')
+  postwriter_scope(end)
+  return dict(physical_delta_admitted=True,logical_integrity_qualified=False)
+ except (OSError,KeyError,TypeError) as error:raise ValueError('post-writer evidence absent/malformed: '+type(error).__name__) from error
 def finalize_composed(record):
  path=P/'composed.json'
  if path.exists():raise FileExistsError('refuse to replace an existing composed result')
@@ -205,7 +266,12 @@ def driver():
  vectors_before=full_vector_digest(reader);save('vectors-bits-before.json',vectors_before)
  expected=json.loads((FIN/'vectors-observed.json').read_text())
  if vectors_before['count']!=expected['total_vectors_checked'] or expected['debt']!=0:raise ValueError('fixture vector count differs')
- before_writer=fs.file_inventory(BASE.parent);a.stable_readers(initial['fin_files'],before_writer);save('copy-before-writer-quiet.json',q.copy_quiet());producer_state=require_producer();nonce=producer_state['config']['ready_nonce']
+ before_writer=fs.file_inventory(BASE.parent);a.stable_readers(initial['fin_files'],before_writer)
+ save('copy-before-writer.json',before_writer);save('copy-directories-before-writer.json',q.directories(BASE.parent))
+ save('copy-before-writer-quiet.json',q.copy_quiet());producer_state=require_producer();nonce=producer_state['config']['ready_nonce']
+ postwriter_scope(end)
+ save('prewriter-context.json',dict(database=str(BASE),pilot=cfg['pilot'],prepared_sha256=q.sha(Q/'prepared.json'),nonce=nonce,deadline=end,cgroup=cfg['active_cgroup'],profile=profile,inventory_sha256=q.sha(P/'copy-before-writer.json'),directories_sha256=q.sha(P/'copy-directories-before-writer.json')))
+ postwriter_scope(end)
  phase_identity=dict(job='lifecycle-provider',pilot=cfg['pilot'],allocation=json.loads((Q/'allocation.json').read_text())['reference'],authority=dict(path=os.environ['RAG3WEAVER_VALIDATION_RECU'],pid=authority['pid'],start=authority['debut'],cgroup=authority['cgroup'],uid=os.getuid(),script_sha256=authority['script_sha256']),first_red_path=str(P/'first-red.json'),producer_watcher=producer_descriptor(producer_state))
  ready=dict(nonce=nonce,deadline=end,phase=phase_identity,no_embedding_calls_authorized=True,expected_embedding_calculations=0,health_required=True,max_chars=0,manifest_sha256=q.sha(Q/'lifecycle.json'),graph_sha256=q.sha(Q/'lifecycle.mmd'),fixture_vector_digest_sha256=q.sha(P/'vectors-bits-before.json'),**protocol.ready_bounds(time.monotonic(),end))
  publish_ready(ready)
@@ -224,11 +290,11 @@ def driver():
  if sources(fs)!=initial or fs.file_inventory(BASE.parent)!=before_writer:raise ValueError('sources or fixture changed before writer')
  guard(cfg);save('copy-just-before-writer-quiet.json',q.copy_quiet());save('source-just-before-writer-quiet.json',quiet_source());phase_state=protocol.read_phase_state(ready);protocol.validate_phase_authority(ready,time.monotonic(),phase_state);q.require_time(end,500);writer(cfg,env,profile,grant,end,nonce);q.health(grant,'provider-after',min(end,grant['valid_until_monotonic']),context=health_context(ready,grant,ready_sha256,False))
  # No open in recovery mode. Refuse a new/residual WAL before any cold read.
- after_writer=fs.file_inventory(BASE.parent);save('copy-after-shutdown.json',after_writer);save('copy-directories-after-shutdown.json',q.directories(BASE.parent));previous={x['path']:x for x in before_writer}
- if q.directories(BASE.parent)!=initial['fin_dirs']:raise ValueError('fixture directories changed after shutdown')
- for row in after_writer:
-  if row['path'].startswith(BASE.name+'.wal') and previous.get(row['path'])!=row:raise ValueError('new/changed WAL remains after acknowledged shutdown')
- a.stable_readers([x for x in before_writer if x['path']!=BASE.name],[x for x in after_writer if x['path']!=BASE.name])
+ postwriter_scope(end)
+ after_writer=fs.file_inventory(BASE.parent);save('copy-after-shutdown.json',after_writer)
+ after_dirs=q.directories(BASE.parent);save('copy-directories-after-shutdown.json',after_dirs)
+ physical=postwriter_inventory(before_writer,after_writer,initial['fin_dirs'],after_dirs,cfg,profile,nonce,end)
+ save('postwriter-physical-admission.json',physical);postwriter_scope(end)
  save('copy-after-shutdown-quiet.json',q.copy_quiet())
  vectors_after=full_vector_digest(reader);save('vectors-bits-after.json',vectors_after)
  if not a.same_graph_publication(vectors_before,vectors_after):raise ValueError('vector bits/markers/claims changed on debt-zero fixture')

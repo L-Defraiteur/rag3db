@@ -76,3 +76,30 @@ avant son appel, sans aucun proc ni writer réel. Quatorze fonctions écrites
 au total dans ces deux modules, toutes NON JOUÉES. Une preuve manquante devra
 être convertie en refus ValueError explicite dans le futur contrat, sinon
 ERROR et STOP, jamais un vert. Aucun exécutable modifié.
+
+## Rouge causal puis correctif local prépublié
+
+GO C7-POSTWRITER-CAUSAL-RED-48A2-17nov60 consommé sur48a2 propre : nominal
+exact seul, 1 FAIL readonlycopychanged capturé→assert, 0 ERROR/skip,0.008s,
+rc1/0.144241s. Treize autres NON JOUÉS. Bruts/reçu/manifeste hors WT
+postwriter-causal-red-48a2-20261117-01 sur deux hôtes, trois size/SHA conformes ;
+manifeste046c89cf87dbc61fd319f01ba024f47b48dc198a3f503cc29e53c6be2e5c1d64.
+
+Correctif local lifecycle.postwriter_inventory prépublié après ce rouge :
+deux inventaires fsync avant writer et contexte liant base/pilot/prepared/
+nonce/END/cgroup/profil et SHA inventaires. Garde post-writer exige ce lien,
+les preuves mêmePID/publication/shutdownACK/rc0/profil/maps et valide les deux
+frames brutes par Session existante. Contrat physique distinct : DB conservée
+et mode stable, WAL/marque absents, autres fichiers stricts sauf .readers0
+initialement absent, répertoires/UID stricts, doublons/types invalides refusés.
+END/premier rouge avant/après collecte et admission. Stable_readers readonly
+inchangé. Admission physique ne qualifie jamais l'intégrité logique.
+
+Réserves ED686ba30827 traitées avant demande de vert : baseline/context
+substitués, bool/int ACK/rc, vrai UID fixture, doublon sur inventaire NEUTRE
+sans WAL/marque, contrôle readonly inchangé. Le harnais impose un appel du
+vrai postwriter_inventory : sauter la garde ne suffit pas à rendre les juges
+verts. Seize fonctions désormais (15 postwriter +1 prewriter), NON JOUÉES
+après correctif. P/Q/S+manifest v9, Qv8/65eb/ancien budget clos conservés.
+Nouvelles RO et GO CPU distinct nécessaires avant toute exécution ; aucun
+GO auditRO/900/natif/DB/provider/writer/recovery acquis par ce correctif.

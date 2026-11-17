@@ -6,7 +6,7 @@ their passing alone never qualifies a future post-writer branch.
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
-import ast,copy,hashlib,json,tempfile,unittest
+import ast,copy,hashlib,json,os,tempfile,unittest
 import lifecycle as c
 
 class PostwriterInventory(unittest.TestCase):
@@ -16,7 +16,7 @@ class PostwriterInventory(unittest.TestCase):
   def row(name,tag='a'):return dict(path=name,size=100,mode=420,sha256=tag*64)
   self.before=[row(self.base.name),row(self.base.name+'.wal'),row(self.base.name+'.ecrivain'),row('fts/shard_0')]
   self.after=[row(self.base.name,'b'),row('fts/shard_0')]
-  self.dirs=[dict(path='fts',mode=493)]
+  self.dirs=[dict(path='fts',mode=493,uid=os.getuid())]
  def gate(self,after=None,before=None,dirs=None,evidence_mutator=None,clock_mode=None):
   evidence=Path(tempfile.mkdtemp(prefix='observation-',dir=self.root))
   control=evidence/'Q';control.mkdir();now=[100.1 if clock_mode=='expired' else 99.]
@@ -24,10 +24,14 @@ class PostwriterInventory(unittest.TestCase):
   profile=dict(LD_LIBRARY_PATH=str(c.q.LIB),RAG3DB_BUFFER_POOL_SIZE='1073741824',RAG3WEAVER_DB_THREADS='4')
   for name in ['lifecycle.json','lifecycle.mmd']:(control/name).write_bytes(Path(c.__file__).with_name(name).read_bytes())
   hashes={n:hashlib.sha256((control/n).read_bytes()).hexdigest() for n in ['lifecycle.json','lifecycle.mmd']}
+  cfg=dict(files=hashes,active_cgroup='/fixture',pilot='f'*40)
+  (control/'prepared.json').write_text(json.dumps(cfg))
   response=json.loads(Path(c.__file__).with_name('writer-meta-response.json').read_bytes());response['result']['result']['query']=nonce
   raw=json.dumps(response).encode()+b'\n';observation=c.protocol.public_call(raw,nonce)
   publication=dict(observation=observation,process=identity,manifest_sha256=hashes['lifecycle.json'],graph_sha256=hashes['lifecycle.mmd'],database=str(self.base),request=dict(op='call',name='observer_cycle_vie',arguments=dict(nonce=nonce)))
   def write(name,value):(evidence/name).write_text(json.dumps(value))
+  write('copy-before-writer.json',self.before if before is None else before);write('copy-directories-before-writer.json',self.dirs)
+  write('prewriter-context.json',dict(database=str(self.base),pilot=cfg['pilot'],prepared_sha256=hashlib.sha256((control/'prepared.json').read_bytes()).hexdigest(),nonce=nonce,deadline=100.,cgroup='/fixture',profile=profile,inventory_sha256=hashlib.sha256((evidence/'copy-before-writer.json').read_bytes()).hexdigest(),directories_sha256=hashlib.sha256((evidence/'copy-directories-before-writer.json').read_bytes()).hexdigest()))
   write('writer-process.json',identity);write('response-publication.json',publication)
   write('shutdown-request.json',dict(process=identity,request=dict(op='shutdown'),publication_sha256=hashlib.sha256((evidence/'response-publication.json').read_bytes()).hexdigest()))
   write('writer-closed.json',dict(process=identity,state='CLOSED',rc=0,run=observation['run'],nonce=nonce,shutdown_acknowledged=True))
@@ -44,11 +48,15 @@ class PostwriterInventory(unittest.TestCase):
   end=next(i for i,n in enumerate(driver.body[start:],start) if isinstance(n,ast.Expr) and isinstance(n.value,ast.Call) and isinstance(n.value.func,ast.Name) and n.value.func.id=='save' and n.value.args and isinstance(n.value.args[0],ast.Constant) and n.value.args[0].value=='copy-after-shutdown-quiet.json')
   body=driver.body[start:end]+[ast.Return(value=ast.Constant(True))]
   function=ast.FunctionDef(name='actual_postwriter_inventory_gate',args=ast.arguments(posonlyargs=[],args=[],vararg=None,kwonlyargs=[],kw_defaults=[],kwarg=None,defaults=[]),body=body,decorator_list=[],type_params=[])
-  namespace=dict(vars(c),BASE=self.base,Q=control,nonce=nonce,end=100.,env=profile,profile=profile,cfg=dict(files=hashes,active_cgroup='/fixture'),before_writer=copy.deepcopy(self.before if before is None else before),initial=dict(fin_dirs=self.dirs),fs=SimpleNamespace(file_inventory=lambda _:copy.deepcopy(self.after if after is None else after)))
+  calls=[]
+  def checked(*args):calls.append(True);return c.postwriter_inventory(*args)
+  namespace=dict(vars(c),BASE=self.base,Q=control,postwriter_inventory=checked,nonce=nonce,end=100.,env=profile,profile=profile,cfg=cfg,before_writer=copy.deepcopy(self.before if before is None else before),initial=dict(fin_dirs=self.dirs),fs=SimpleNamespace(file_inventory=lambda _:copy.deepcopy(self.after if after is None else after)))
   exec(compile(ast.fix_missing_locations(ast.Module(body=[function],type_ignores=[])),'<actual-postwriter-inventory>','exec'),namespace)
-  with patch.object(c,'P',evidence),patch.object(c,'Q',control),patch.object(c.a,'P',evidence),patch.object(c.a,'BASE',self.base),patch.object(c.q,'P',evidence),patch.object(c.q,'ACTION_GUARD',None),patch.object(c.time,'monotonic',side_effect=lambda:now[0]),patch.object(c.q,'directories',side_effect=directories):
-   try:return namespace['actual_postwriter_inventory_gate'](),None
-   except ValueError as error:return False,str(error)
+  with patch.object(c,'P',evidence),patch.object(c,'Q',control),patch.object(c,'BASE',self.base),patch.object(c.a,'P',evidence),patch.object(c.a,'BASE',self.base),patch.object(c.q,'P',evidence),patch.object(c.q,'ACTION_GUARD',None),patch.object(c.time,'monotonic',side_effect=lambda:now[0]),patch.object(c.q,'directories',side_effect=directories):
+   try:result=(namespace['actual_postwriter_inventory_gate'](),None)
+   except ValueError as error:result=(False,str(error))
+  self.assertEqual(len(calls),1,'actual driver must call the real post-writer guard exactly once')
+  return result
  def test_exact_writer_auxiliary_removal_is_not_a_readonly_mutation(self):
   accepted,reason=self.gate();self.assertTrue(accepted,reason)
  def test_unrelated_fts_removal_is_refused(self):
@@ -65,13 +73,12 @@ class PostwriterInventory(unittest.TestCase):
   accepted,_=self.gate(after=self.after+[dict(self.before[1],path='unexpected')]);self.assertFalse(accepted)
   accepted,_=self.gate(dirs=[]);self.assertFalse(accepted)
  def test_duplicate_inventory_paths_cannot_be_silently_collapsed(self):
-  # Unlike the nominal writer case this keeps all auxiliaries: the existing
-  # dictionary conversion silently collapses the duplicate instead of refusing.
-  accepted,_=self.gate(before=self.before,after=self.before+[copy.deepcopy(self.before[-1])]);self.assertFalse(accepted)
+  # No residual WAL/mark: only the duplicate can trigger this refusal.
+  accepted,_=self.gate(before=self.after,after=self.after+[copy.deepcopy(self.after[-1])]);self.assertFalse(accepted)
  def test_neutral_inventory_with_complete_writer_evidence_is_a_positive_control(self):
   accepted,reason=self.gate(before=self.after,after=self.after);self.assertTrue(accepted,reason)
  def test_missing_or_discordant_writer_evidence_cannot_hide_behind_inventory_refusal(self):
-  cases=[('writer-closed.json','shutdown_acknowledged',False),('writer-closed.json','rc',1),('writer-closed.json','nonce','foreign'),('writer-closed.json','run','foreign'),('shutdown-request.json','publication_sha256','0'*64),('writer-runtime-profile.json','pid',43),('writer-runtime-profile.json','start','foreign'),('writer-runtime-profile.json','exe_sha256','0'*64),('writer-runtime-profile.json','cgroup','0::/foreign\n'),('writer-runtime-profile.json','maps',''),('writer-runtime-profile.json','diff',{'unexpected':True})]
+  cases=[('writer-closed.json','shutdown_acknowledged',False),('writer-closed.json','shutdown_acknowledged',1),('writer-closed.json','rc',1),('writer-closed.json','rc',False),('writer-closed.json','nonce','foreign'),('writer-closed.json','run','foreign'),('shutdown-request.json','publication_sha256','0'*64),('writer-runtime-profile.json','pid',43),('writer-runtime-profile.json','start','foreign'),('writer-runtime-profile.json','exe_sha256','0'*64),('writer-runtime-profile.json','cgroup','0::/foreign\n'),('writer-runtime-profile.json','maps',''),('writer-runtime-profile.json','diff',{'unexpected':True})]
   for name,key,value in cases:
    with self.subTest(file=name,field=key):
     def mutate(root):
@@ -100,5 +107,17 @@ class PostwriterInventory(unittest.TestCase):
  def test_initially_absent_zero_byte_readers_is_allowed(self):
   readers=dict(path=self.base.name+'.readers',size=0,mode=420,sha256=hashlib.sha256(b'').hexdigest())
   accepted,reason=self.gate(before=self.after,after=self.after+[readers]);self.assertTrue(accepted,reason)
+ def test_pre_writer_baseline_or_cycle_context_substitution_is_refused(self):
+  for name in ['copy-before-writer.json','prewriter-context.json']:
+   with self.subTest(file=name):
+    def mutate(root):
+     path=root/name;record=json.loads(path.read_text())
+     if isinstance(record,list):record[0]['sha256']='0'*64
+     else:record['nonce']='foreign'
+     path.write_text(json.dumps(record))
+    accepted,_=self.gate(before=self.after,after=self.after,evidence_mutator=mutate);self.assertFalse(accepted)
+ def test_readonly_guard_still_refuses_exact_auxiliary_removal(self):
+  with patch.object(c.a,'BASE',self.base),self.assertRaisesRegex(ValueError,'read-only copy changed'):
+   c.a.stable_readers(self.before,self.after)
 
 if __name__=='__main__':unittest.main()
