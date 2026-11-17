@@ -18,3 +18,16 @@ GO C7-FTS-ROOT-C438-16nov120 consommé : preuve b414d84d27e6cce0d8a0705356d0fa97
 C7 autorise PREPA microfix cfg(test) uniquement, brancheneuve basée union5f59 (masterb0 préservé). Primitive existante tempfile::Builder::tempdir_in(...).keep() comme daemon_host/chat_qui_code.rs ; résolution standard CARGO_TARGET_DIR sinon env!CARGO_MANIFEST_DIR/target comme code_tree.rs. Pas de HOME ou /tmp par défaut. ROOT explicite doit déjà exister/canonique/absolue/répertoire sans symlink, aucun fallback si invalide. Mode absent : sous-parent privé fts-double-fixtures sous target, validation sans symlink de tout chemin ; enfant unique par invocation et bases conservées. Aucun TempDir supprimé avant Catalog.
 
 Avant impl : témoins filesystem explicitROOT 2invocations même label distinctes+contenu préservé, mode absent parent target sansHOME, refus racine relative/symlink. Nonjoués jusqu'à GO. Recette native future : mêmes5juges, GEN sansROOT puis2GEN mêmeROOT, profils et ELF/ledger publiés avant tests ; aucunecompilation autorisée maintenant. Tickets restent ouverts/globalHOLD.
+
+## ROEDfc00 TMPsocket et quatre métadonnées, avantcorrectifdoc/profil
+
+RéservesEDa5cc/33b enlecturetotalecouple APP636/PILOTfc00/Q47631 :
+TMPDIR=P/tmp transmet111octetsminimum(pontPID1N0/ecoute/pont.sock),
+117PID7 ;bibliothèquecfgtestpasNAVonly,UnixListener::binddirect. Aucun
+socketnatif exécuté, pasdéfautmoteurFTS. Quatreheadersduprésentticket
+invalides pourcheck_tickets/F8 (Famille+Gravité/Atteignable/Touche).
+CopieEDvueROUGEavantpropositiondoc33b. Portageenchâssé : nouveaubranche
+sourceDOCdepuis636/produitMODEOIDexact,pasmuter636figée ; corriger4headers
+comme33b,puisnouveauprofilTMPcourtprivéR/t5souspostevrai/répertoireexclusif
+ettémoinVRAIenvdriver+suffixeRUSTbornepureAVANTfix,pasdebind/Rust/PG.
+Oldfc00/Q4/TpréservésHOLD,PGTOOLréelHOLD ; aucunGO6000 ni900déduit.
