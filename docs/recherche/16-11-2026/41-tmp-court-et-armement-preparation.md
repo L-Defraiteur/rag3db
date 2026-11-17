@@ -30,3 +30,14 @@ AprèsRECETTE8ffpub(failfastdansscript,sans-fredondant), témoinVRAIenvupdate
 conservés/manifestjoint. Nouveaux2témoinsfilesystemcréationexclusive/
 identité/devUIDmode/symlinkrefus publiésAVANThelperimplmaisNONJOUÉSavantfix ;
 ilsutilisentpetitsdossiersfixturesPython, jamaisrépertoireprofilR/t5réel.
+
+## FixprofilTMP, sourceRuststrictementinchangée
+
+AprèsrougearithmétiquePUB19ba, TMPDIR=R/t5courtdisque(privécachemêmest_dev),
+créationexclusive0700uniquementdriverAPRÈSautorité/common/poste32validés.
+Chemincanonique/sanssymlink/UID/dev/mode/inoetborneRust≤107 relevésdans
+P/tmp-profile.json,guardrevalideidentitéàchaquephaseetfinal,scanquietTMP
+supplémentaireaprèscommon incluswhole/prépub. Aucunreuse/purge/chmodréparateur,
+pasdetmpdirP/tmpdansprofilcanonical. R/t5RÉELn'estPAScrééparlaprépa/CPU ;
+les2nouveauxtémoins utilisentpetitsTempDirfixturesPythonprêtsavantimpl.
+ContrôleurARMEDetPGtooltoujoursHOLD,nouveauPILOTE pasadmis/Q5noncréé.

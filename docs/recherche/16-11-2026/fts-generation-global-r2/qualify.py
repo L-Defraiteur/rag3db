@@ -7,6 +7,7 @@ import lifecycle_protocol as ready_protocol
 import lifecycle_provider_observation as owner_observation
 import argparse,hashlib,importlib.util,json,math,os,re,shutil,signal,socket,stat,subprocess,sys,time,urllib.request
 R=Path.home()/'.cache/rag3weaver-build';Q=R/'cx-control-recherche-fts-generation-global-v5';P=R/'cx-proofs-recherche-fts-generation-global-v5';S=R/'cx-scope-recherche-fts-generation-global-v5'
+SHORT_TMP=R/'t5'
 APP='5af94c3f983fcbdeca213b2cff100846b7922cdb';BASE='99fef92ce6ee9a0007eaf99c7c3a6a3789061c57'
 W=Path.home()/'git_workspaces/rag3db-cx-recherche-fts-generation-source-doc-r3';OLD=R/'cx-wt-recherche-fts-fixture-root-source-v1';OLD_SHA='84ddeb88b7452278b0d697fad817c7e44f5fd3d3';T=R/'cx-target-recherche-fts-counts-freshness'
 ARCHIVE=R/'cx-archive-recherche-fts-fixture-root-green-v1';MANIFEST='ee0e1cde90660c9e210c60e3902f1c4ae3809990fca51fd722b92761fc1d101d'
@@ -63,7 +64,29 @@ def cache_contract():
  ledger=json.loads((ARCHIVE/'proofs/ledger.json').read_text());assert ledger['app']==OLD_SHA and ledger['elf_sha256']=='23da1279965f9a882373f0c185e6ec635b7bd0419ea6abd595ce903e100b9461'
  for key in ['source_executable','copied_executable']:assert sha(ledger[key])==ledger['elf_sha256']
  return dict(marker=dict(dev=m.st_dev,ino=m.st_ino,mode=m.st_mode,uid=m.st_uid,value=marker.read_text()),selected=selected,old=OLD_SHA,authority=auth,scope=scope)
+def tmp_socket_lengths(root):
+ source=(W/'extension/rag3weaver/src/pont_navigateur/temoins_relai.rs').read_text()
+ prefix=re.search(r'format!\("([^"\n]+)", std::process::id\(\), N.fetch_add',source).group(1)
+ suffix=re.search(r'let sock = d.join\("([^"\n]+)"\).join\("([^"\n]+)"\)',source)
+ assert prefix.count('{}')==2 and suffix is not None
+ return [len(os.fsencode(root/prefix.format(pid,n)/suffix[1]/suffix[2])) for pid,n in [(1,0),(9999999,0),(2**32-1,2**64-1)]]
+def tmp_state():
+ assert SHORT_TMP.resolve()==SHORT_TMP and not SHORT_TMP.is_symlink()
+ meta=SHORT_TMP.lstat();assert stat.S_ISDIR(meta.st_mode) and meta.st_uid==os.getuid() and stat.S_IMODE(meta.st_mode)==0o700 and meta.st_dev==R.stat().st_dev
+ sizes=tmp_socket_lengths(SHORT_TMP);assert all(n<=107 for n in sizes)
+ return dict(path=str(SHORT_TMP),dev=meta.st_dev,ino=meta.st_ino,uid=meta.st_uid,mode=stat.S_IMODE(meta.st_mode),socket_lengths=sizes)
+def create_private_tmp():
+ assert SHORT_TMP.resolve()==SHORT_TMP
+ assert all(n<=107 for n in tmp_socket_lengths(SHORT_TMP))
+ SHORT_TMP.mkdir(mode=0o700) # Exclusive: no reuse/repair or cleanup of a prior lot.
+ save(P,'tmp-profile.json',tmp_state())
+def private_tmp_guard():
+ receipt=P/'tmp-profile.json'
+ if receipt.exists():assert tmp_state()==json.loads(receipt.read_text())
+ else:assert not SHORT_TMP.exists() and not SHORT_TMP.is_symlink(),'private TMP already exists without this scope receipt'
+
 def guard(cfg):
+ private_tmp_guard()
  for root,value in [(W,APP),(Path(cfg['control']),cfg['pilot'])]:assert git(root,'rev-parse','HEAD')==value and not git(root,'status','--porcelain')
  assert git(W,'rev-parse','origin/master')==BASE,'published master moved; review a new union before execution'
  assert git(W,'merge-base','HEAD','origin/master')==BASE,'master changed; review before any new pass'
@@ -130,11 +153,12 @@ def driver():
  cg=Path('/sys/fs/cgroup')/auth['cgroup'].lstrip('/');limits={n:(cg/n).read_text().strip() for n in ['memory.max','memory.high','memory.swap.max','cpu.max']}
  assert limits=={'memory.max':'34359738368','memory.high':'max','memory.swap.max':'0','cpu.max':'500000 100000'}
  save(P,'authority-path.json',dict(path=str(receipt),deadline=end,initial=end-5900,limits=limits))
+ create_private_tmp()
  base=module('base_controller');base.OLD=OLD
  contract=cache_contract();save(P,'cache-after-poste.json',contract);assert contract==cfg['cache_contract'];save(P,'cache-quiet-after-poste.json',base.cache_quiet({'source_root':str(W)}))
  C=W/'extension/rag3weaver';env={k:os.environ[k] for k in ['HOME','USER','LOGNAME','PATH','LANG','LC_ALL','CARGO_HOME','RUSTUP_HOME','DBUS_SESSION_BUS_ADDRESS','RAG3WEAVER_VALIDATION_RECU','RAG3WEAVER_VALIDATION_JETON'] if k in os.environ}
- for n in ['tmp','config','data','cache','xdg-state','state-fixture']:(P/n).mkdir(mode=0o700)
- env.pop('RAG3WEAVER_FTS_DOUBLE_ROOT',None);env.update(canonical_overrides());env.update(TMPDIR=str(P/'tmp'),XDG_CONFIG_HOME=str(P/'config'),XDG_DATA_HOME=str(P/'data'),XDG_CACHE_HOME=str(P/'cache'),XDG_STATE_HOME=str(P/'xdg-state'),RAG3WEAVER_STATE_DIR=str(P/'state-fixture'))
+ for n in ['config','data','cache','xdg-state','state-fixture']:(P/n).mkdir(mode=0o700)
+ env.pop('RAG3WEAVER_FTS_DOUBLE_ROOT',None);env.update(canonical_overrides());env.update(TMPDIR=str(SHORT_TMP),XDG_CONFIG_HOME=str(P/'config'),XDG_DATA_HOME=str(P/'data'),XDG_CACHE_HOME=str(P/'cache'),XDG_STATE_HOME=str(P/'xdg-state'),RAG3WEAVER_STATE_DIR=str(P/'state-fixture'))
  def run_guard(label,owner,resume):
   deadline=min(end-15,time.monotonic()+120);assert deadline>time.monotonic();phase_env=dict(env,RAG3WEAVER_TARGET_REPRENDRE=resume)
   argv=['bash','-c','. "$1"; garder_le_target "$2" "$3"','target-guard',str(Q/'garde_target.sh'),str(T),str(owner)]
@@ -210,7 +234,7 @@ def compose():
  try:
   guard(cfg);rc=subprocess.run([sys.executable,str(Q/'confiner_validation.py'),'lancer','--delai','5900','--preuves',str(S),'--',sys.executable,str(Q/'qualify.py'),'--driver'],cwd='/var/tmp').returncode
   path=Path(json.loads((P/'authority-path.json').read_text())['path']);auth=json.loads(path.read_text());scope=json.loads((path.parent/'verdict.json').read_text());base=module('base_controller');base.OLD=OLD;quiet=base.owned_quiet(path.parent)
-  save(P,'owned-after-scope.json',quiet);save(P,'cache-quiet-after-scope.json',base.cache_quiet({'source_root':str(W)}));record.update(code=rc,scope=scope,owned=quiet,authority_state=auth['etat'])
+  save(P,'owned-after-scope.json',quiet);save(P,'cache-quiet-after-scope.json',base.cache_quiet({'source_root':str(W)}));save(P,'tmp-quiet-after-scope.json',base.cache_quiet({'source_root':str(SHORT_TMP)}));record.update(code=rc,scope=scope,owned=quiet,authority_state=auth['etat'])
   assert rc==0 and scope['verdict']=='VERT' and scope['code']==0 and not scope['restes'] and scope['nettoye'] and auth['etat']=='termine' and not Path(scope['prive']).exists()
   assert not quiet['alive'] and not quiet['unknown'] and not (P/'first-red.json').exists()
   assert json.loads((P/'driver-result.json').read_text())['status']=='CANONICAL_PASSED';guard(cfg)
