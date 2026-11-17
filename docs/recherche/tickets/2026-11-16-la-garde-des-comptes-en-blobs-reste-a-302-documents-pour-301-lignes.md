@@ -213,3 +213,22 @@ Rapport `docs/optimiseur/16-11-2026/pg-ro-attestation/02-rust-archives-ro.md`.
 Aucun client/recette de compilation inventé avant paquet pinnable ; futur
 transportRust n'est pas admis par v1/private-host-psql sans revue contractuelle.
 HOLD outil maintenu,0PG/DockerAPI/slot/service/SDK/RET/compilation.
+
+## Copie ED finalisée : préparation source standalone, AVANT code/recette
+
+CopieOUT_T `~/.cache/rag3weaver-build/cx-ed-vertex-deps-b472-v1` finalisée parED,
+manifestSHAde797438448c79ae54a1bc313003b0fdead4e37b70b180298ce21690b320c945,
+sourceb472,14428fichiers/5,526,823,298octets. G ne lit QUE cette copie.
+Audit de sélection74artefacts/fingerprints recoupés/SHA : aucune arête manquante
+après résolution des vrais alias Cargo postgres-types serde_json_1→serde_json
+etserde_1→serde_core. Directs : PG3179/Tokio64cf/serdeJSON452f. Lock090/compiler
+fichier859/cache1.98.1 ; compatibilité/link et provenance compiler PRÉBUILD
+restent NONQUALIFIÉS, nativebuild/out.a noncopiés. Audit privé ed-b472/audit-v2.json
+SHAaa80f31a1e50550bcae6fd7126c0b3bd267f8360dbebedf43c3d6e63696ad394.
+
+Suite PREPA C7 : publier vecteurs fake NONJOUÉS avant source Rust et recette.
+Client standalone ne dépendra que des vraies bibliothèques déjà archivées,
+NoTls/SQL2constantes, startupRO et timeouts/application_name nonce, deux sessions
+avec drop/reap pilote de liaison avant postcheck. Parent hard5 et kill/reap
+restent à qualifier sous futurGOoutil. Aucune intégration au transport v1,
+aucun Cargo/rustc/native, SQL ou Docker exécuté pour cette préparation.

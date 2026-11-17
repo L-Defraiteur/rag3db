@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "qualification": "NOT_RUN_REQUIRES_DISTINCT_TOOL_GO",
+  "run_authorized": false,
+  "cases": [
+    {"name": "canonical_read_only_two_queries", "expected": "identity then postcheck, one row each, complete driver shutdown, no writes"},
+    {"name": "wrong_database_or_remote_host", "expected": "refuse before connecting; never rewrite a foreign DSN silently"},
+    {"name": "nonce_or_budget_invalid", "expected": "refuse before connecting"},
+    {"name": "query_error_or_extra_row", "expected": "nonzero, partial stdout preserved; no attestation"},
+    {"name": "identity_connection_not_closed", "expected": "same deadline expires; no postcheck success or quiet claim"},
+    {"name": "backend_still_present", "expected": "captured negative postcheck; pure validator refuses admission"},
+    {"name": "worker_exceeds_parent_whole5", "expected": "owner kills and reaps exact child, preserves partial raw, no grant; not qualified by this file"},
+    {"name": "docker_inspect_identity", "expected": "future bounded inspect FORMAT Id/Image/NetworkSettings.Ports only, never Env or docker exec"}
+  ]
+}
