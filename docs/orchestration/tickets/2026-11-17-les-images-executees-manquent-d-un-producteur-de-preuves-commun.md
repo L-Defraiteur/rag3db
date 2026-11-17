@@ -184,3 +184,13 @@ Le module pur doit refuser ces topologies simultanées incohérentes, tout en
 permettant root=runner avec identité exacte si le runner est enfant direct.
 Prépublier quatre témoins avant correction ; aucun GO47 ne s'étend aux nouveaux
 cas ni au futur pin. Cette réserve ne décrit pas un défaut OS observé.
+
+## Trois rouges topologie vus avant correction, archives conservées deux hôtes
+
+[Rapport51](../../rag3weaver-archi/17-11-2026/51-preuves-rouges-topologie-bd0d.md).
+GO C7-ENTRY-TOPOLOGY-RED-BD0D-17nov60 consommé UNE fois surbd0d/modulecb290
+inchangé :3FAIL «Refusal not raised»/0ERROR/skip/rc1, enveloppe0.060808234s,
+48autres NONJOUÉS. Neuf bruts LOCAL/PC réhash0écart AVANTfix, manifeste
+3572a359673f698f96ce04a424721f6b4877c726cb88b450d2bbff8505ec22a2.
+Préparation du seul correctif pur autorisée ; nouveau source/pins/RO puis GO51
+distinct avant tests. Aucun backend ou qualification physique acquis.
