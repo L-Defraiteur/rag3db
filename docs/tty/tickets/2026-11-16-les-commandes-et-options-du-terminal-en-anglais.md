@@ -692,3 +692,14 @@ Une invocation : 2PASScontrôles(filetsTTY/should_panic)+6FAILattendus,
 rapport/preuves docs/tty/17-11-2026/05-rouge-pipeline-hermetique.md.
 Aucunfix/green/native/contact/slot/targetmuté ; Qc003INACTIF préservé.
 Suite R1/R2 attend nouveau périmètre correctif puis source/pins/RO/GOdistinct.
+
+### Correctif groupé R1/R2 préparé, pas rejoué
+
+Après autorisation908bc8f457 et vrai rouge c004/archives8850 :
+stage observe pendantappel et demande arrêt de Common attribué/pidfd avec
+premièrecauseimmuable ; results réconcilie blocs/noms/filets/ignored et
+catalogues antérieurs liés aux ELF/srcCargo. F8jeux8/sourcepreuveexact.
+8témoinsSHAd998 inchangés, AST/diff seulement ; aucun CPUgreen exécuté.
+Détail/coûtsnatifsajoutés/HOLD : docs/tty/17-11-2026/06-correctif-pipeline-sans-rejeu.md.
+Qv3 futur resteINACTIF, Qv2c003/target/preuvesrouges inchangés ; ROtotale
+puis GOCPUdistinct avant vert, aucunGO3600niadmissionservices déduit.
