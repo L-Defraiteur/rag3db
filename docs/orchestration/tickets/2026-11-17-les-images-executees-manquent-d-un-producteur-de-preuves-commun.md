@@ -34,3 +34,28 @@ Aucun code ou prototype de producteur, réservation de chemins, test/CPU/process
 ## Fin du ticket
 
 Un raccord commun effectivement qualifié par témoins publiés avant correction, admission distincte du vrai montage, artefacts physiques source/exec/générations/bornes/cleanup relus, et intégration dans le consommateur autorisé ; ou abandon explicite documenté remplacé par une garantie plus limitée acceptée. Une étude documentaire ou un seul validateur virtuel ne ferme pas ce ticket.
+
+
+## Arbitrage C7 après étude a5281ec4e4 et contrelectures
+
+Rapport45 relu par C7 ; avis documentaires exacts TTY et Mémoire favorables à son bornage, pas à une capacité livrée. Le candidat ptrace événementiel persistant ne démontre pas sa couverture des descendants (`CLONE_UNTRACED`, détachement). Nous retenons pour le prochain lot une **invocation d’artefact déclaré avec confirmation de son image d’entrée**.
+
+La preuve lie le catalogue/source/profil préautorisés, l’objet effectivement entré, une copie de son contenu, les arguments et le contexte, le PID/start de l’invocation, ses sinks RAW et son vrai wait. L’entrée doit être confirmée au vrai raccord : un FD, une intention d’appel ou un EOF de pipe ne constituent pas seuls cette confirmation. La stabilité des bytes jusqu’à cette confirmation reste à établir ; une barrière au premier exec réussi est une piste concrète, avant libération du programme.
+
+Le résultat est celui de **l’invocation du programme lancé depuis cette entrée**. Son wait n’est pas présenté comme le code de retour d’une image A restée inchangée pendant toute sa vie ; les octets des sorties ne sont pas attribués individuellement à un PID écrivain. Les programmes et sources qualifiés sont déclarés et revus ; leurs sous-processus peuvent faire partie du comportement du test. Cette qualification n’est pas une preuve contre un programme arbitraire fabriquant ses propres sorties. Ressources et arrêt du sous-arbre restent portés par le confinement, indépendamment de l’exhaustivité d’une trace d’images.
+
+### Changement explicite de contrat pour TTY
+
+Les vingt spécifications de961 restent une proposition historique plus forte. **Le suivi exhaustif des futurs exec et descendants de P17–P20 ne sera pas une condition implicite de livraison du lot anglais.** Le consommateur doit publier une nouvelle version du contrat indiquant ce bornage. Aucun de ces quatre points n’est déclaré satisfait par la preuve d’entrée ; la couverture ultérieure reste UNKNOWN. L’observation positive d’une image d’entrée étrangère au plan refuse, et un B ne devient pas attendu depuis l’actual pour sauver la passe. Les garanties de P01–P16 applicables aux racines et aux copies restent à porter au vrai raccord, avec une table explicite de portée ; les spécifications non remplies ne sont pas comptées vertes.
+
+L’observation exhaustive de toute génération, si un usage futur la requiert, devra faire l’objet d’un lot et de coûts explicites. Aucune implémentation ptrace permanente, seccomp, privilège, sandbox ou journal de tous les syscall n’est autorisée pour contourner le problème dans ce lot.
+
+### Surface autorisée à préparer
+
+Archi porte le contrat/API et les témoins du producteur partagé ; TTY reste consommateur et CP garde publication/ACK/Window. Préparer un module commun de validation sous scripts/, sans boucle de publication parallèle ni logique anglaise. Le mécanisme concret de confirmation doit venir avec son protocole précis avant implantation ; considérer les barrières de démarrage déjà utilisées (exec/main, libération avant tests, parent naturel et wait réel) comme sources réutilisables, jamais comme réactivation de leurs anciens pilotes, délais ou preuves.
+
+Les quatre sites directs de run_e2e et le raccord Cargo runner sont acceptés comme **surface transitive proposée** du lot, à réserver avec Recherche avant de les modifier. Le SHA2150 conservé ne sera pas annoncé comme preuve d’un parcours inchangé. Chaque phase doit déclarer la propagation d’environnement (notamment LD modifié par Cargo), argv, PID du runner/enfant, sources/features, sorties et signaux. Les faits SDK chargés restent séparés au PID et au point réellement observés. Une racine non couverte n’est pas qualifiée par les autres ; auxiliaires et descendants non observés ne sont pas inventoriés fictivement.
+
+Premier travail autorisé : publier un contrat exécutable/API minimale et des témoins hermétiques préalables au vrai futur raccord, avec tableau de portée et limites. Prévoir substitution de chemin/contenu, succès d’entrée à confirmer, échec/mort avant confirmation, copie/RAW/wait liés, erreur et disparition du producteur, END pendant copie/attente/finalisation, puis limite explicite A→B après libération. Des observations de processus sont des modèles dans cette première étape ; elles ne qualifient pas le noyau. Publier avant toute exécution, RO puis GO CPU distinct. Aucune implantation opérationnelle ou modification des quatre appelants avant cette revue de protocole/surface, aucun prototype OS/native/build/proc/signal/test par cette seule préparation. Un futur petit pilote réel et les passes des appelants auront leurs sources, pins, budget et GO propres.
+
+Le ticket reste ouvert. Cet arbitrage choisit la sémantique d’invocation et ses limites ; il ne fournit encore ni API physique qualifiée ni GO global TTY/Archi, ni autorisation de master ou de retrait.
