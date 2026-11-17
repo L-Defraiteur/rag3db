@@ -45,7 +45,7 @@ def main():
             with os.fdopen(fd,'w') as f:f.write(password+'\n')
         # No secret in argv, input logs or docker Config.Env; only _FILE references.
         nid=call(['/usr/bin/docker','network','create','--internal','--label','g.pg.fixture.owner=G','--label','g.pg.fixture.nonce='+seed['nonce'],seed['network_name']]).stdout.decode().strip()
-        argv=['/usr/bin/docker','create','--name',seed['container_name'],'--rm','--network',nid,
+        argv=['/usr/bin/docker','create','--pull=never','--name',seed['container_name'],'--rm','--network',nid,
               '--label','g.pg.fixture.owner=G','--label','g.pg.fixture.nonce='+seed['nonce'],
               '--memory','2g','--memory-swap','2g','--cpus','2','--pids-limit','128','--shm-size','64m','--read-only',
               '--security-opt','no-new-privileges','--log-driver','json-file','--log-opt','max-size=1m','--log-opt','max-file=2',
