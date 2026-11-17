@@ -75,3 +75,37 @@ avec ELF/source/inputs/bruts/PID et phases réellement joués. Il ne rendra PAS
 transport_qualified=true. Nouveau transport Rust incompatiblev1 ; pas de
 renommage private-host-psql, pas d'adaptation Q/owner figés à la volée.
 Armement global Arbre/Embar est distinct, aucun ARM/READY/grant global ici.
+
+## Paquet physique pour RO totale — 17 novembre
+
+Source code publiée : `808be0595ffd033e5ffd69d934eedfceee22d174`.
+Paquet PC privé :
+`/home/lucied/.cache/optimiseur-notes/pg-rust-tool-qual-20261117-r1/packet-r1`.
+`packet.json` SHA256 :
+`b9b0e8ea52e83cf39da7969354f7d99c9e76584ce590fb9752a10838b382389c`.
+Ses douze fichiers sources sont épinglés individuellement ; le modèle GO est
+inactif, délai zéro, et le futur GO exact doit rester extérieur au paquet.
+La documentation embarquée est la version du commit source ci-dessus.
+
+Entrées privées voisines `inputs/` : 317 fichiers, 660534109 octets,
+compiler/sysroot et 74 artefacts dépendants. Manifest SHA256
+`bf6b72be485227fadfdda40c133c5b52d4a8a31e7dba1855821c2b34f85d8e25` ;
+READY final SHA256
+`39e9152c204d5c966307eef4586c7ef278031a82ee58e04c0c237eaeeaccadb4`.
+Provenance OUT_T ED manifeste
+`de797438448c79ae54a1bc313003b0fdead4e37b70b180298ce21690b320c945`.
+Les treize pins linker/runtime hôte seront revérifiés avant toute phase ;
+ils ne constituent pas une qualification exhaustive du chargeur.
+
+Contrôles effectués : syntaxe AST et JSON uniquement, fichiers réguliers privés
+sans liens vers les sources. Dix témoins CPU préparés, huit cas CLI/DSN préparés,
+**aucun joué**. Aucun compiler, client natif, SQL, Docker, health ou service lancé.
+Les budgets restent proposés : CPU distinct 60 s, compilation unique 60 s,
+huit workers 5 s chacun incluant stdin/démarrage/publication, Common 120 s,
+OS 125 s puis kill 2 s. Le ledger ELF est publié avant les cas CLI.
+Le fonctionnement réel du watchdog, de la compilation et du nettoyage reste
+NON QUALIFIÉ jusqu'aux validations autorisées distinctement.
+
+RO totale demandée sur ce code et ce paquet avant tout nouveau GO.
+Le transport Rust reste incompatible avec le contrat PGv1 figé ; aucune
+qualification d'accès PG ni activation globale ne découle de ce paquet.

@@ -284,3 +284,15 @@ après toutes I/O avant retour. Ceci est SOURCE À RELIRE, pas preuve OS acquise
 Paquet+RO totale puis nouveauGO restent requis AVANT CPU/native. Aucun Cargo,
 rustc, testCPU, binaire natif, SQL, DockerAPI, service, réservation, SDK/RET ici.
 Les25fakes du modulePGpur acquis restent distincts ; sources/pins inchangés.
+
+### 17 novembre — préparation physique du pilote outil, sans exécution
+
+Code `808be0595ffd033e5ffd69d934eedfceee22d174`, paquet PC
+`/home/lucied/.cache/optimiseur-notes/pg-rust-tool-qual-20261117-r1/packet-r1`,
+descripteur SHA256 `b9b0e8ea52e83cf39da7969354f7d99c9e76584ce590fb9752a10838b382389c`.
+Recette et pins complets dans
+`docs/optimiseur/16-11-2026/pg-ro-attestation/03-tool-qualification-proposal.md`.
+Dix témoins CPU et huit cas parser préparés NON JOUÉS ; compiler/sysroot et
+74 dépendances archivés hors OUT_T. RO totale avant GO distinct ; aucune
+compilation, SQL, Docker ou opération de service. Ticket toujours ouvert,
+transport réel NON QUALIFIÉ, aucun accord global automatique produit.
