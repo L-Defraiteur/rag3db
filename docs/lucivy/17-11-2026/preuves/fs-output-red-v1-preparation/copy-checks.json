@@ -1,0 +1,24 @@
+{
+  "new_script_hashes": {
+    "qualify-fs-output-red-v1.py": "336deb03b25b8c7469bd98ff46a8693c8acebc9b8f56f6f28c793b78c08ff704",
+    "admit-fs-output-red-v1.py": "d1d52774f7a1d53d93ee6f9236cd6b6f07f5b95308c53d04881ff44d1cffe3be",
+    "export-fs-output-red-v1.py": "56e99ad94c46b927d4e935750257c797cc14415b3ba54c9f2f4dc821a011b40f"
+  },
+  "three_ast_parses": true,
+  "imports_or_tests": false,
+  "pc_nine_frozen_copies": {
+    "qualify-fs-admission-red.py": "336deb03b25b8c7469bd98ff46a8693c8acebc9b8f56f6f28c793b78c08ff704",
+    "admit-fs-admission-red.py": "d1d52774f7a1d53d93ee6f9236cd6b6f07f5b95308c53d04881ff44d1cffe3be",
+    "export-fs-red-ledger.py": "56e99ad94c46b927d4e935750257c797cc14415b3ba54c9f2f4dc821a011b40f",
+    "qualify-indexed-false-core.py": "2fa59faafe18634a055da4e770a96d4eb87da79864332f8d2a5d8ed222a8fa14",
+    "qualify-indexed-false-red.py": "0a269dd90b0ca745811713e21f66b45fda563074bfc06dd6993f04ab03bd2352",
+    "source-pins.json": "d78c7d84927921e4412e92d3a2a295d7d818ecb5c85bad9a44d873e4c08b797c",
+    "Cargo.lock.seed": "dbdb560202562f17536624472a0e730627df163f4bb00c53b2baf604e77637f6",
+    "support/confiner_validation.py": "6439fdd8b52c85fa4e74af0def2c667ef0bedae9b814cbbfd48e49946c4f74ea",
+    "support/poste": "79e3a8bbf457e3bc9104aa1558e7d03072216c70b68e08ae606ace6aa4584c7b"
+  },
+  "source_clean_pc": true,
+  "lock_unchanged_pc": true,
+  "new_source_does_not_have_local_cargo_lock": true,
+  "no_process_scan_or_current_quiet_claim": true
+}

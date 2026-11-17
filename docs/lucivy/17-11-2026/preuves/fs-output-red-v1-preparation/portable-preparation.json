@@ -1,0 +1,11 @@
+{
+  "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-output-red-export-17nov-v1",
+  "uid": 1000,
+  "dev": 57,
+  "inode": 97253752,
+  "hashes": {
+    "preflight.json": "54ebfdf06bd12071287cb211e787923ea708de2bcfc4f0fb498cc78296a97a14",
+    "export-fs-red-ledger.py": "56e99ad94c46b927d4e935750257c797cc14415b3ba54c9f2f4dc821a011b40f"
+  },
+  "outputs_absent": true
+}

@@ -439,3 +439,30 @@ après rouge acquis. Aucun Cargo/rustfmt/import/parse/test/ELF/proc/corpus/PC
 par Recherche. Banc encore attendu ; paquet/pilote et RO couple puis GO
 sixcas distinct requis. Pas de correctif groupé avant rouges conservés ;
 replay/contrat FS global toujours ouverts.
+
+
+RO TOTALE SOURCE RED Banc favorable PRÉPA reçue, publiée d1ecbb37e3 :
+parent066/3SHA/16nomsordre exacts, raccords réels et défauts conservés, cinq
+causes/positif/octets avantassert relus. Aucun autre blocage statique pour
+RED ; résultats NONOBSERVÉS. Aucun exec/import/build/test/PC/DB/proc/corpus/
+ELF/target/service/GO par Banc. Deux RO source favorables désormais reçues.
+Arbitrage C7 30561f8229 : flags invalides doivent refuser AVANT toute metadata/
+enumerate/read/réservation/output, donc zéro reçu fichier ; refus données
+IO/UTF8/panel gardent REFUSED sur sorties prévalidées. Ancien témoin flags
+à aligner seulement après rouge causal conservé dans correctif groupé.
+Préparation du nouveau paquet/pilote/Qmetadata autorisée, aucun Cargo/test/
+natif/mutationtarget ; RO couple puis GO exact distinct avant cinqFAIL+positif.
+
+
+Paquet/PILOTE RED exact v1 préparé aprèsdeuxROsource bdf : rapport17/27,
+preuves/fs-output-red-v1-preparation. Pilote336deb03/admitd1d52774/export56e99ad9,
+pref54ebfdf06bd12071287cb211e787923ea708de2bcfc4f0fb498cc78296a97a14,nonce075f5217e494870ab9515663beb234db,
+QPCinode169037256/portableinode97253752. 9copiesPC/2portable
+conformes,3ASTsansimport, miroirPCbdfpropre/lockDBDB/T3552 conformes,5ELFanciens
+rehachés sansmutationT. Scope/logs/ARM/ACK/START-END absents,scratch/scansvides.
+OldCommon2593434TERMINE0 métadonnées seules,pasfreshprocscan/quietclaim.
+Inventaire16/6juges proposés,5FAILattendus+positifNONOBSERVÉS,15filtered ;
+ledger2ELF copié/fsync/rehashACK AVANTtouteinvocation, doubleguardlock/bornes/
+nettoyage inchangés. Actions2RO TOTALES COUPLE Recherche+Banc confiées, puisGO
+C7nouveau distinctavantcommande candidate ;0Cargo/test/ELF/corpus/service/ARM.
+Aucunfixgroupé avantrougesarchivés2hosts. Arbitrageflags30561conservé, ticketOPEN.
