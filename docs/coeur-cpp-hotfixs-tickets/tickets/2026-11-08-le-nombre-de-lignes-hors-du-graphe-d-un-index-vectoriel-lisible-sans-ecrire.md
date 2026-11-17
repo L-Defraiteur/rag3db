@@ -180,3 +180,12 @@ et tables/pages selon catalogue courant, rétention avant première capture non
 append sans nouveau FormatRecord dans cette branche ; bump seul non prouvé.
 Note consolidée APIs/lacunes/périmètres/coûts/témoins à suivre ; aucun défaut
 natif reproduit ni prototype/écriture produit/test/DB/build/SDK/format réservé.
+
+[Note consolidée de faisabilité RO](../17-11-2026/02-membership-feasibility-readonly.md)
+préparée sur99 après rattachement95e0bc : APIs et lacunes attestées pour les trois
+prérequis. NodeTable dérivée non couverte par collecte locale figée ; oldtx
+rétention holders/tables/pages et recherche ancienneOID avant traversal non
+assurées ; recovery ancienWAL conserve brancheCOMMIT et bump seul insuffisant.
+Périmètres minimaux/alternatives/coûts/témoins à prépublier détaillés, STOP avant
+réservation/code. Ce sont constats source, pas défauts natifs reproduits ni
+validation d'une implémentation absente. Aucun prototype/test/DB/build/SDK/C1.
