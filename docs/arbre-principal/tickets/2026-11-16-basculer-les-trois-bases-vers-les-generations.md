@@ -230,3 +230,11 @@ Pas de validation ni qualification runtime déduite ; nouveau source/RO puis
 ## RO ED ec891 — dépendance CPU avant GO
 
 Raccord composition postCommon relu, hashes driver/launcher conformes. Réserve de préparation CPU : `test_compose.py` crée Q vide et remplace seulement Common ; le vrai compose importe `grant_watch_actor` après insertion de ce Q. Le module est ailleurs (`docs/orchestration/17-11-2026/coordination/`) et aucun PYTHONPATH/module de test explicite ne le fournit. Porter une dépendance hermétique explicite au vrai helper épinglé (sans import ambiant) avant GOCPU ; faire ensuite juger le positif et les sept refus sans qualifier poste/cleanup réels. Aucun test joué par ED, erreur non observée à ce stade. Voir rapport43 ED.
+
+## RO ED CPU16 et Q_SOURCE — 17 novembre
+
+Rapport44 ED : preuves2681929abe/source4f17, quatre fichiers CPU réempreintés
+sur deux hôtes, seize noms PASS recoupés, sept pins préflight Git conformes.
+Q_SOURCE e9b67/8copies+record conformes à Git/UID/taille/SHA, PENDING et sans
+extra. Avis favorable borné, aucune qualification native ni GOA/WAPP. Réserve
+d'import43 couverte par ces résultats sans inventer un ancien rouge.
