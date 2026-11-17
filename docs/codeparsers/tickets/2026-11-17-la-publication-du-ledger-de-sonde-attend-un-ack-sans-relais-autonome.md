@@ -74,3 +74,8 @@ implicitement à la place d'une compilation prévue par un GO.
 ### Banc — extraction constante C9/P06
 
 [RO totale favorable préparation étape1](../../banc/17-11-2026/07-ro-extraction-constante-publication.md) : Relay/primitives ASTidentiquesD45,36méthodes/assertions conservées, gardes/transport/CLI déplacés unique module et wrappers sans boucle. Pins wrapper+noyau effectifs ; P06 prepared36d01271/11copies chacunPC-local/profil81969 conformes,corede8222 Gitégal. AucunCPUjoué,36et3contre-exemples NONJOUÉS sur nouveaupin ; WindowAPI/plan4runtime nonimplantés. GOsCPU C7 distincts puis nouvellecapacité/pin/RO requis, D45/P05/229bQ figés, ticket OUVERT.
+
+
+### Banc — preuves C9 vert36 puis rouges3
+
+[Preuves corroborées sans rejeu](../../banc/17-11-2026/07-ro-extraction-constante-publication.md) : deuxlots/GOdistincts,manifest6fc71736 etce154c52/4SHA chacunPC+local conformes. CPU36VERT/rc0 puis3FAILattendus0ERROR/rc1 dont planabsentFAILnommé. P06 actuel11pins/corede8222 inchangés ; aucun suivi continu inventé. Cap4/Windowruntimeabsents, pasSSH/native/BASECAND qualifiés. Futurecapacité branche/pin/ROdistincts, ticket OUVERT.
