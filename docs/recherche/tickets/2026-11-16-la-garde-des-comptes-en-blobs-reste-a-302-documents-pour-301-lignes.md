@@ -329,3 +329,9 @@ Correction préparée : finally avant dernier check temporel et retour ; cgroup
 attendu injecté depuis setup global et revérifié dans le worker. AST uniquement,
 aucun CPU joué. Nouvelle RO requise ; aucune garantie de latence du nettoyage
 ni qualification native déduite.
+
+RO R favorable bornée sur32df1b7fdc2fc4d10d8e100c2dcd3a741eef5153 : les deux
+réserves statiques sont levées, pas la qualification OS. Paquet PC r2 créé
+sans exécution, SHA256 b0795ccbb6f2d3aad0ad7b20bc19e571cd01c6071762c48a751bd45e58142780,
+chemin voisin r1 `packet-r2`. Pins et limites dans recette03. Douze témoins,
+huit cas CLI toujours NON JOUÉS. RO paquet r2 avant GO distinct ; ticket ouvert.

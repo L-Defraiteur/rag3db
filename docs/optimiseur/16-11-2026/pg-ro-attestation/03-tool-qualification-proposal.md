@@ -132,3 +132,24 @@ scan ni de lecture de fichier. Le cgroup attendu est capturé au setup global
 par le pilote, injecté au backend ; sa revalidation est dans le worker supervisé.
 Cela prépare le refus d'un nettoyage tardif ; la latence réelle du scan proc
 et le kill/reap restent à qualifier, sans garantie OS déduite d'une lecture.
+
+## Paquet r2 — après levée des deux réserves statiques
+
+RO R favorable bornée au code exact
+`32df1b7fdc2fc4d10d8e100c2dcd3a741eef5153` : nettoyage avant dernier check,
+cgroup injecté au setup et revérifié worker. Cela ne qualifie pas les opérations
+OS réelles ; une latence proc peut dépasser le cap, mais ne doit plus rendre VERT.
+Le Common extérieur demeure le filet physique.
+
+Nouveau paquet PC :
+`/home/lucied/.cache/optimiseur-notes/pg-rust-tool-qual-20261117-r1/packet-r2`.
+Descripteur packet.json SHA256 :
+`b0795ccbb6f2d3aad0ad7b20bc19e571cd01c6071762c48a751bd45e58142780`.
+Code embarqué : commit exact ci-dessus ; runner SHA256
+`61cc3231d2488ca2b6d2cda92720f2d78c4a3316be2f0d324d24ecdaf03f3af7` ;
+témoins SHA256
+`1baa764d3c7668ca55b1067b8145366f57b9cec8776434b27a3391a4e0578629`.
+Douze fichiers épinglés ; entrées manifest/READY identiques au premier paquet.
+Douze témoins et huit parser cases NON JOUÉS, aucune compilation ni SQL.
+Le paquet r1 reste conservé historique, aucun remplacement. RO des pins r2
+requise avant nouveau GO CPU distinct et qualification compile/parse distincte.
