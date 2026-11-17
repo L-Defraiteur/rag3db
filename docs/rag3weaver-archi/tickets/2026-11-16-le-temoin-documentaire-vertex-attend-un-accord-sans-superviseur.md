@@ -137,3 +137,12 @@ preuves historiques, traiter ensemble avant nouveau couple/pins/RO et décision
 C7 distincte. Aucun nouveau GO ni témoin rouge réellement joué par cette RO.
 Critère : chemins de garde réellement admis et épinglés, cause rouge discriminée,
 témoins raccordés au code actuel et provenance exacte, nouvelles preuves bornées.
+
+RO ED du correctif groupé4461/APPf1e8 : [rapport31](../../everything-declarative/16-11-2026/31-ro-delta-global-archi-4461.md),
+les quatre réserves ED sont levées statiquement (capacité garde minimale,
+cause/source/ligne rouge, vrai Observer au témoin profil, six hashes finaux
+recoupés). ModelSource compatible/protocolvertex et nouvelles gardes source/
+runtime/premièrecause lus, aucun nouveau blocage établi. 39fonctionsNONJOUÉES,
+aucunCPU-fixture/proc/native/Cargo/Vertex/DB/service ni pinPC validé. CPU60,
+paquet exact puis RO et GO natif7455 restent décisions C7 distinctes ; ticket
+OUVERT, aucune qualification réelle ni ancien rouge repeint.
