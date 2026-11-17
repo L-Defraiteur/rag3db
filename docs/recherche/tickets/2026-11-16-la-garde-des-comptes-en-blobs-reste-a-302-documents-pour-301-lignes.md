@@ -296,3 +296,15 @@ Dix témoins CPU et huit cas parser préparés NON JOUÉS ; compiler/sysroot et
 74 dépendances archivés hors OUT_T. RO totale avant GO distinct ; aucune
 compilation, SQL, Docker ou opération de service. Ticket toujours ouvert,
 transport réel NON QUALIFIÉ, aucun accord global automatique produit.
+
+### RO R du 17 novembre — réserve bloquante de borne parent
+
+La RO statique du code808be059 relève que NativeBackend.run fait les hashes,
+mkdir et fsync dans le parent. Son délai mesuré commence avant ces opérations,
+mais seul le subprocess est interrompu : un I/O parent bloqué peut dépasser
+5/60 secondes avant le refus. Le paquet b9b0e8ea reste historique NON QUALIFIÉ.
+Correctif requis avant nouveau paquet/GO : superviseur extérieur sans I/O de
+phase, englobant worker/préflight/compilation ou CLI/publication et retour ;
+kill/reap du groupe attribué dans la même enveloppe. Témoins préparés à ajouter
+pour blocage avant Popen et après retour natif. Aucun témoin exécuté, donc aucun
+rouge runtime revendiqué ; défaut démontré par lecture du chemin d'exécution.
