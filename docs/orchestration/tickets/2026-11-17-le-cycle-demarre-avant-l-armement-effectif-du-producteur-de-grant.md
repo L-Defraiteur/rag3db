@@ -106,3 +106,11 @@ assertion explicite rc non nul/JSON RED sans exception, octets vides nonqualifi�
 annotation late-link contrat futur exacte. Réserve harnais levée statiquement,
 P1 runtime2dccc inchangé et cinq fonctions NONJOUÉES par ED. C7 décide CPU60
 distinct ; pas de GO correctif/native/runtime transféré.
+
+RO ED correctif local6715c17ed9 favorable avant CPU : vrai tail→finalize_composed,
+garde END/first-red après file/dir fsync/link/staging cleanup et avant retour0,
+refus latché puis composéRED/rc1 ; q.save/commun inchangés. Rattrapage positif
+limité aux octets canoniques du record attendu, contenu différent refusé ;
+pas de preuve d'origine inode contre mêmeUIDhostile déduite. P/Q/S/manifestv6
+cohérents, v5figé ; cinq témoins NONJOUÉS par ED, pinQv6 nonvalidé, décision
+C7 CPU5/60 et tout GO natif distincts. P1 levé statiquement sur6715 seulement.

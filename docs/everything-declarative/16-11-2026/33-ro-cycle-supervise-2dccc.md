@@ -104,3 +104,22 @@ donc à un FAIL d'assertion, sans être qualifié comme refus correct. Late-link
 est annoté comme contrat futur, sans causalité historique. Exécutable2dccc
 inchangé ; cinq fonctions toujours NON JOUÉES par ED, décision CPU60 distincte
 à C7 et aucun GO natif déduit.
+
+## RO du correctif local6715, avant les cinq témoins
+
+Avis statique favorable sur `6715c17ed9`, delta d31d3e5749 : le tail réel
+appelle désormais finalize_composed. Pour un positif, garde END/first-red
+avant écriture, callback avant link dans write_frame, puis nouvelle garde
+APRÈS file fsync/link/directory fsync et nettoyage staging, avant retour0.
+Le refus est latché sans écraser first-red ; publication d'un composé RED
+et retour1. Un composé présent à l'entrée refuse ; lors du rattrapage, le
+remplacement n'est admis que si ses octets égalent la sérialisation canonique
+du record attendu, tout contenu différent refuse. Ce contrôle est une égalité
+de contenu, pas une preuve d'origine par inode contre un acteur mêmeUID hostile.
+
+q.save et la primitive partagée sont inchangés. Les trois racines P/Q/S et
+le manifeste visent ensemble v6, v5 reste figé. Les cinq témoins du vrai tail
+lisent maintenant ce raccord, notamment late-link réellement sollicité par
+le nouveau finaliseur ; ils restent NON JOUÉS par ED. Le P1 postfsync est
+levé statiquement sur ce correctif, sans déduire cinq verts, pin Qv6 ou GO
+natif. Décision CPU5/60 distincte à C7 ; nouveau paquet/RO après qualification.
