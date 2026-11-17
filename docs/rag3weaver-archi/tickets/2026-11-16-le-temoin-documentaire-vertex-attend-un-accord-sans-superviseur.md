@@ -150,3 +150,8 @@ RO preuves Banc a4a2de1e1a : [rapport21](../../banc/16-11-2026/21-ro-preuves-ver
 ### Banc — preuves CPU41 vertes a0d74
 
 [Preuves relues sans rejeu](../../banc/17-11-2026/02-ro-pilote-global-d6.md) : manifest3213a684/3SHA PC+local conformes, sourceGit concordante,41OK/0FAIL0ERROR0skip/rc0/une invocation0retry. Qualification bornée CPU hermétique a0d74 ; aucune qualification native/SDK/D6/service/Vertex ni GO7455. AncienERROR/RED conservés, ticket OUVERT.
+
+
+### Banc — paquet PC229b et APPf1e8
+
+[RO totale code/pins favorable préparation](../../banc/17-11-2026/05-ro-paquet-pc-global-d6.md) : code identique CPUa0d74 ;29/29SHA PC/local,21copiesQ conformes/config0e6278,5captures préparation/pins/Git cohérents. Contrôleur/source/archive propres/gitlinksbd133 distincts ; T0capturéstrictementégal13416/5246, identitéactuelle dev55/inode164550643.72preuves anciennes rehashPC conformes. Outils dont Cargo1.98.1 et3fichiersSDK hashés sans exécution. Pvide/F,TASKS,launchabsents. Pas de réinventaire actuel completT ni scanproc ; pas de CPU/build/native/SDKexport/service/cloud/DB/poste lancé. GO7455/ACKs frais demeurent distincts, ticket OUVERT.
