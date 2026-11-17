@@ -160,3 +160,12 @@ refuser les anciens écrivains ; anciens index restent sans capacitéNULL,
 reconstruction seulement explicite. Invariants de toutes les écritures/rollback/
 checkpoint/reopen/oldtx, coûts et chemins proposés détaillés pour RO cœur/C7.
 Réservation et implémentation non acquises ; aucun build/DB/natif/SDK ni C1.
+
+RO totale Mémoire de588 reçue : orientation favorable uniquement, trois
+préconditions de faisabilité consolidées dans le même document17nov :
+(1) mutateurs/idempotence et écritureM réellement intégrée aux frontières
+commit/WAL/rollback ; (2) acquisition et rétention Table/colonnes/pages sous
+oldtx/DROP/checkpoint/GC, avant capture comme pendant scan ; (3) transition
+anciennebase+WALnonvide durable avant écritureM, pas simple bump de constante.
+Témoins et coûts complets explicités, annulation distincte de NULL ; aucun
+résultat acquis/chemin réservé. C7 doit arbitrer la suite, ticket ouvert.

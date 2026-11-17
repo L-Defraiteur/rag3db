@@ -174,3 +174,89 @@ colonne const0. Voir chaque témoin pertinent rouge avant fix, puis vert ; aucun
 liste de résultats inventée depuis les quatre cas0 historiques. Bâtis/SDK et
 expériences de crash exigent une recette isolée, RO et GO distincts ultérieurs.
 Cette recommandation n'en demande ni ne les autorise.
+
+## Revue indépendante Mémoire : trois préconditions avant décision
+
+Revue totale de 588284a313dba223f2a3906dcea3415e89182cf9 reçue en trois
+groupes. Orientation table interne MVCC favorable seulement ; **faisabilité
+non démontrée et aucun chemin réservé**. Les points ci-dessous précisent les
+obligations de la recommandation, sans annoncer que le moteur les remplit.
+
+### 1. Mutateurs, idempotence et vraie frontière de commit
+
+Cartographier explicitement commitInsert (hnsw_index.cpp:775), finalize:813,
+catchUpCommittedAfter:847, updateInternal:1276, delete_/finalizeDelete et les
+réparations qui peuvent réincorporer un même offset. La clé primaire seule ne
+rend pas le protocole idempotent : un ajout répété ne doit ni créer un doublon
+ni faire échouer une réinsertion légitime. Définir les opérations sémantiques
+« assurer présent » / « assurer absent » au snapshot d'écriture, et leur ordre
+avec les arêtes, sans transformer une erreur réelle en succès silencieux.
+Le mécanisme concret doit être choisi après lecture des API de table, pas par
+un INSERT/ignore arbitraire. Les réparations topologiques sans changement de
+membre doivent conserver M.
+
+La possibilité d'écrire M depuis les callbacks existants doit être démontrée
+par l'ordre réel de collecte des tables locales, de production WAL, de commit
+et de rollback. Passer le même Transaction* ne prouve pas qu'une table touchée
+à ce stade sera intégrée au commit ou annulée correctement. Si le callback se
+situe après cette frontière, STOP et nouvelle proposition de périmètre cœur.
+
+Témoins à prépublier : offset source sparse incorporé au bâti puis au catch-up,
+UPDATE répété de ce même offset sans doublon ni erreur PK ; rollback injecté
+après écriture M mais avant fin des relations, vérifiant restauration de M,
+des arêtes et de E pour l'appelant et les autres snapshots. Le transfert du
+bâti utilise la sélection d'offsets SOURCE avant reset, jamais les offsets
+physiques des lignes de M.
+
+### 2. Ancien snapshot, DROP/checkpoint/GC et acquisition possédée
+
+Point relevé par Mémoire sur la source de revue :
+StorageManager::reclaimDroppedTables:172–214 appelle reclaimStorage puis retire
+la table du conteneur sur la vue catalogue DUMMY. Un shared_ptr<Index> ne prouve
+pas la rétention de Table, colonnes et pages de M. La recommandation dépend donc
+d'une garantie réelle de rétention MVCC, pas d'une simple prolongation du holder.
+
+Exiger deux témoins distincts :
+
+- Ancien snapshot ouvert **sans capture préalable de M**, puis DROP/reCREATE,
+  checkpoint et GC ; sa première lecture doit encore acquérir l'ancienne table
+  et ses pages à partir des OIDs de son instance.
+- Observation déjà acquise, scan suspendu entre deux lots, puis même séquence
+  DROP/reCREATE/checkpoint/GC ; la reprise garde l'ancien E et l'ancien M.
+
+Le nouveau lecteur distingue les nouvelles OIDs ; l'ancien compte reste inchangé,
+aucune consultation par nom courant. L'observation possédée doit couvrir tous
+les objets/pages nécessaires ou s'appuyer sur une garantie de rétention déjà
+prouvée avant acquisition. Si cette garantie manque, STOP et proposition
+explicite des changements cœur ; pas de verrou écrivain pour masquer la lacune,
+ni NULL silencieux d'une capacité annoncée complète. Aucun changement à
+reclaimDroppedTables autorisé par cette préparation.
+
+### 3. Transition de format/WAL et totalité du budget
+
+Observation Mémoire : WAL::initWriter ne crée FormatRecord que pour un fichier
+vide. Cela ne démontre ni défaut avéré ni barrière suffisante dans le scénario
+upgrade d'ancienne base avec WAL déjà non vide. Avant d'ajouter M, démontrer
+recovery/vidage/transition durable vers la nouvelle version **avant la première
+écriture de la capacité**. Une constante de version changée ne suffit pas.
+
+Témoins : ancienne base/WAL non vide, ouverture par nouveau moteur, création de
+capacité et crash avant checkpoint ; ancien moteur lecteur ET écrivain refusent
+la nouvelle représentation. Tester aussi crashes après T_A, pendant T_B et autour
+de READY, reopen/recovery, anciens index toujours NULL, payload tronqué/version
+inconnue refusés. Rien de cela n'est joué dans cette préparation. Le numéro de
+format, son protocole d'upgrade et tout chemin WAL supplémentaire restent à
+arbitrer avant réservation.
+
+Le budget commun couvre construction de M, allocations réelles du set, examen
+des versions et index primaire, scan E et vecteurs, et tous les index du même
+SHOW_INDEXES. Prévoir plusieurs index et instruction préparée réutilisée entre
+snapshots ; ne pas cacher ces coûts dans une étape dite préalable. Dépassement
+=> NULL sans compte partiel ; corruption/I/O restent erreurs, annulation reste
+annulation (ne pas la convertir en inconnu). E vient de la visibilité et du
+validateur réel, jamais du degré ni du watermark. Les plafonds proposés ne sont
+pas une mesure de latence ou une preuve d'annulation d'I/O.
+
+Ces trois groupes épuisent la revue reçue ; ils ne lèvent pas leurs préconditions.
+Attente de l'arbitrage C7 sur la prochaine lecture autorisée et le périmètre.
+Aucun code, format, réservation, prototype, DB, build ou natif engagé.
