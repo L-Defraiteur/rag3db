@@ -62,7 +62,7 @@
       "baseline_source_sha256": "bb46fb931418f487873a153a9339101c51a95ca41de85624ecb8da393145fff8",
       "baseline_source_published": true,
       "native_backend_delivered": false,
-      "effect_orchestration_source_sha256": "b9257a00764a2992c65e17d291aba47588b6ba45f482ba70f9c1747fef8e6d31",
+      "effect_orchestration_source_sha256": "cf3e7a41fc30eabd0ef5ff1b377efbf102ac14e3443d9796e3b3f19099cb4a0e",
       "effect_orchestration_proof_origin": "MODELED"
     },
     "native_recipe.py": {

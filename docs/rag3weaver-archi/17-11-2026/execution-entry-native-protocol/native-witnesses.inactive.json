@@ -111,9 +111,9 @@
     }
   ],
   "modeled_effect_tests_prepublished": true,
-  "modeled_effect_functions": 28,
+  "modeled_effect_functions": 30,
   "modeled_effect_source": "test_runner_effects.py",
-  "modeled_effect_source_sha256": "243cf341ae69953dbcd2f941183f3656a0337d1ce14790ea7bb2066584aaa7d0",
+  "modeled_effect_source_sha256": "fc300f7da84ceec5db024f701895d19b78c1461342cca660d2ac1e947d2256eb",
   "native_tests_implemented": false,
   "native_executed": false,
   "modeled_effects_executed_on_fix": false

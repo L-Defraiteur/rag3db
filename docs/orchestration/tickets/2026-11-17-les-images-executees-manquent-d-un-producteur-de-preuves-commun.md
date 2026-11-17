@@ -360,3 +360,10 @@ GO C7-ENTRY-OBSERVATIONS-RED-4117-17nov60 consomméUNEfois :2FAILégalité/
 0écart AVANTfix, manifestc13bb055e8ceaa1507f466e5fdf9ee701e745874223d6e49eb4d8ccd8aa43e12.
 PrépaSnapshotDONNÉESavantcallback/clock,pasOpaquehandles ;sourcespinsROtotale
 puisGO30distinct avantverts. Aucun OS/CP/Common/native/PQS déduit, purintact.
+
+Correctif observations préparé : [rapport65](../../rag3weaver-archi/17-11-2026/65-capture-observations-avant-callbacks.md).
+Après2rougesb511 réhash2hôtes AVANTfix : données copiées récursivement àacquisition
+avantcallback/clock, jamaisOpaquehandles ;wait/finalisation/cleanup suivent règle.
+30témoinsfc300 BYTE41179inchangés NONJOUÉSsurfix, nouveauxpins/ROtotale puisGO30
+distinct avantverts. Attendusprofonds/ENDposthashconservés, pur565b/archivesfigés,
+LIVE/Commonréel/natifunsupported, callbacksnoninterruptibles/MODELEDseulement.

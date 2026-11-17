@@ -44,6 +44,29 @@ def _port_view(value: object) -> object:
     return value
 
 
+def _snapshot_observation(value: object) -> object:
+    # Private recursive data copy, never passed back to any port. Preserve
+    # container types and immutable bytes; never copy an opaque capability.
+    if isinstance(value, Mapping):
+        if not all(type(key) is str for key in value):
+            raise RunnerRefusal('observation-fields')
+        return {key: _snapshot_observation(item) for key, item in value.items()}
+    if type(value) is tuple:
+        return tuple(_snapshot_observation(item) for item in value)
+    if type(value) is list:
+        return [_snapshot_observation(item) for item in value]
+    if type(value) in (str, int, float, bool, bytes, type(None)):
+        return value
+    raise RunnerRefusal('observation-types')
+
+
+def _snapshot_pair(value: object) -> tuple[object, object]:
+    if type(value) is not tuple or len(value) != 2:
+        raise RunnerRefusal('observation-shape')
+    # First member is Owned/Held/Seal/Permit identity: deliberately untouched.
+    return value[0], _snapshot_observation(value[1])
+
+
 def run_fixture_invocation(request: Mapping[str, object], effects: object) -> Mapping[str, object]:
     """Orchestrate MODELED fixture ports, never issue an OS/CP admission.
 
@@ -107,9 +130,11 @@ def run_fixture_invocation(request: Mapping[str, object], effects: object) -> Ma
         end = request['end'] if final else request['operation_end']
         require(clock() < end, 'final-deadline' if final else 'operation-deadline')
 
-    def operation(method, *args, final: bool = False):
+    def operation(method, *args, final: bool = False, capture=None):
         check(final)
         value = method(*args)
+        if capture is not None:
+            value = capture(value)  # Before the next callback, including clock().
         check(final)
         return value
 
@@ -123,7 +148,7 @@ def run_fixture_invocation(request: Mapping[str, object], effects: object) -> Ma
                 'storage-profile-unqualified')
         operation(effects.fork_owned, launch)
         operation(effects.acquire_identity_and_pidfd, launch)
-        held, actual = operation(effects.start_and_hold, launch)
+        held, actual = operation(effects.start_and_hold, launch, capture=_snapshot_pair)
         require(held is not None and isinstance(actual, Mapping), 'entry-event')
         require(_same(actual.get('event'), 'EXEC_SUCCESS'), 'entry-event')
         require(_same(actual.get('object_identity'), request['object_identity']), 'entry-object')
@@ -133,11 +158,11 @@ def run_fixture_invocation(request: Mapping[str, object], effects: object) -> Ma
                 and _same(actual.get('environment'), request['public_environment']), 'entry-context')
         require(operation(effects.probe_write, launch, 'held') == 'ETXTBSY',
                 'storage-profile-unqualified')
-        seal, facts = operation(effects.seal_entry, launch, held)
+        seal, facts = operation(effects.seal_entry, launch, held, capture=_snapshot_pair)
         require(seal is not None and isinstance(facts, Mapping)
                 and facts.get('declared_payload') is True and _sha(facts.get('sha256')),
                 'publication-payload')
-        permit, binding = operation(effects.edit_fixture_only, launch, seal)
+        permit, binding = operation(effects.edit_fixture_only, launch, seal, capture=_snapshot_pair)
         require(permit is not None and isinstance(binding, Mapping)
                 and set(binding) == {'mode', 'declaration_sha256', 'runtime_plan_sha256', 'facts_sha256'}
                 and _same(binding['mode'], 'FIXTURE_ONLY')
@@ -146,7 +171,7 @@ def run_fixture_invocation(request: Mapping[str, object], effects: object) -> Ma
                 and _same(binding['facts_sha256'], facts['sha256']), 'publication-binding')
         operation(effects.release, launch, held, permit)
         check()
-        exit_record = effects.wait_child(launch)
+        exit_record = _snapshot_observation(effects.wait_child(launch))
         require(isinstance(exit_record, Mapping), 'wait-kind')
         kind, code = exit_record.get('kind'), exit_record.get('code')
         require(type(kind) is str and kind in ('exit', 'signal') and type(code) is int,
@@ -159,7 +184,7 @@ def run_fixture_invocation(request: Mapping[str, object], effects: object) -> Ma
                 'raw-binding')
         require(operation(effects.probe_write, launch, 'after') == 'WRITABLE',
                 'storage-profile-unqualified')
-        finish = operation(effects.finish_fixture, launch, final=True)
+        finish = operation(effects.finish_fixture, launch, final=True, capture=_snapshot_observation)
         require(isinstance(finish, Mapping) and _same(finish.get('mode'), 'FIXTURE_ONLY')
                 and _same(finish.get('common_origin'), 'MODELED'), 'unsupported-common-closure')
         check(final=True)
@@ -178,7 +203,7 @@ def run_fixture_invocation(request: Mapping[str, object], effects: object) -> Ma
         cleanup = {'origin': 'MODELED', 'quiet': False, 'reaped': False, 'remaining': 'UNKNOWN'}
         if launch is not None:
             try:
-                observed = effects.cancel_owned(launch, error)
+                observed = _snapshot_observation(effects.cancel_owned(launch, error))
                 if (isinstance(observed, Mapping) and observed.get('origin') == 'MODELED'
                         and type(observed.get('quiet')) is bool
                         and type(observed.get('reaped')) is bool):

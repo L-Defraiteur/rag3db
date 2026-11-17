@@ -1,0 +1,82 @@
+{
+  "schema": "fixture-runner-observation-capture-fix-preparation-v1",
+  "executed": false,
+  "go": null,
+  "owner": "Archi",
+  "mode": "FIXTURE_ONLY",
+  "proof_origin": "MODELED",
+  "cp_ack": false,
+  "global_admission": false,
+  "red_proof": "b5113587e7d9dd5a2c07e8ca2a047b9756ab32c6",
+  "red_manifest_sha256": "c13bb055e8ceaa1507f466e5fdf9ee701e745874223d6e49eb4d8ccd8aa43e12",
+  "prior_red_proofs": [
+    "b40a819d23ebc21a99a9fd20f9ec648fb950931e",
+    "b3ab49f8b7fe1b3ce5b41b727aaa8d2f988ae92c"
+  ],
+  "prepublished_tests_source": "41179fa97b9d48ef0fb6ce15faff456175574da8",
+  "cwd": "/home/lucied/.cache/rag3weaver-build/cx-wt-archi-pas-va-au-bout-global-pilot-r2/docs/rag3weaver-archi/17-11-2026/execution-entry-native-protocol",
+  "pythonpath": "/home/lucied/.cache/rag3weaver-build/cx-wt-archi-pas-va-au-bout-global-pilot-r2/extension/rag3weaver/scripts",
+  "import_file": "/home/lucied/.cache/rag3weaver-build/cx-wt-archi-pas-va-au-bout-global-pilot-r2/extension/rag3weaver/scripts/execution_entry_runner.py",
+  "interpreter": {
+    "path": "/usr/bin/python3.14",
+    "sha256": "c81d88523721c462f53a98129d65bba68f67791932f0664372e1778e74fd9517"
+  },
+  "files": {
+    "extension/rag3weaver/scripts/execution_entry_runner.py": "cf3e7a41fc30eabd0ef5ff1b377efbf102ac14e3443d9796e3b3f19099cb4a0e",
+    "docs/rag3weaver-archi/17-11-2026/execution-entry-native-protocol/test_runner_effects.py": "fc300f7da84ceec5db024f701895d19b78c1461342cca660d2ac1e947d2256eb",
+    "extension/rag3weaver/scripts/execution_entry.py": "565b7f39494911b65ef121f19565450c70803c93b9ef6e62599d570707dbf218"
+  },
+  "private_pure_dependencies": [
+    "_number",
+    "_sha",
+    "_same"
+  ],
+  "argv": [
+    "timeout",
+    "--signal=TERM",
+    "--kill-after=2s",
+    "58s",
+    "/usr/bin/python3.14",
+    "-B",
+    "-m",
+    "unittest",
+    "-v",
+    "-f",
+    "test_runner_effects"
+  ],
+  "proposed_function_count": 30,
+  "proposed_functions": [
+    "test_n01_nominal_seals_before_release_and_wait_fixture_only",
+    "test_n02_eof_never_confirms_exec",
+    "test_n03_death_before_entry_does_not_require_future_receipt",
+    "test_n04_original_fd_a_survives_path_replacement_with_b",
+    "test_n05_same_inode_changed_content_refuses",
+    "test_n06_write_denial_needs_writable_controls_and_etxtbsy",
+    "test_n07_partial_or_failed_seal_never_releases",
+    "test_n08_wrong_permit_facts_refuses_before_release",
+    "test_n09_fixture_port_cannot_provide_live_grant",
+    "test_n10_parent_loss_cannot_be_made_quiet_by_cleanup_claim",
+    "test_n11_nonzero_child_status_belongs_to_invocation",
+    "test_n12_dbus_root_is_not_falsely_waited_as_runner",
+    "test_n13_unknown_common_final_is_unsupported_not_fixture_fallback",
+    "test_n14_late_ack_and_unknown_residue_never_leave_green",
+    "test_n15_undeclared_phase_environment_refuses",
+    "test_n16_future_images_remain_unknown_after_release",
+    "test_n17_proc_ticks_do_not_extend_monotonic_origin",
+    "test_n18_facts_must_be_declared_payload_before_release",
+    "test_n19_real_entry_b_refuses_without_promoting_expected_a",
+    "test_n20_failure_after_fork_preserves_preheld_ownership",
+    "test_n21_cleanup_failure_never_overwrites_first_cause",
+    "test_sigtrap_without_exec_event_is_not_confirmation",
+    "test_signaled_child_is_not_debugger_rc_zero",
+    "test_nonwritable_before_control_cannot_qualify_exec_write_denial",
+    "test_final_hash_crossing_end_cannot_return_positive",
+    "test_port_cannot_reset_original_deadline_through_request",
+    "test_port_cannot_promote_actual_b_into_expected_artifact",
+    "test_port_cannot_mutate_nested_expected_environment",
+    "test_sealed_facts_return_retains_acquired_sha_after_port_reuses_mapping",
+    "test_wait_raw_retains_acquired_bytes_after_port_reuses_mapping"
+  ],
+  "native_backend_delivered": false,
+  "recipe_ready": false
+}
