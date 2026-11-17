@@ -7,11 +7,11 @@ from test_provider import fixture,encoded,sha
 
 def broker_fixture(root):
  config,ledger,window,phase=fixture(root);identity='task-1-123';label='agent-red1'
- role=config['bindings']['global']['roles']['host'];role['ledger_key']='task'
+ role=config['bindings']['global']['roles']['host'];role.update(ledger_key='task',target_name='rag3weaver',target_kind='lib',profile_test=True,features=['code','daemon','rag3db-native'])
  binding=dict(source=config['source'],roles={label:role});binding_sha=sha(encoded(binding))
  config['bindings']={label:binding};config['broker_sources']={label:dict(cwd='/private/task',manifest='/private/task/Cargo.toml')}
  config['stages']=[dict(label=label,sequence=0,binding_sha256=binding_sha,files=['ledger',label],artifacts=[label],window_file=label+'-window.json',ledger_file='broker-ledger',artifact_files={label:'broker-elf'},broker_bound=True,source_contract='acquired agent source')]
- artifact=ledger['artifacts']['host'];artifact['copy']=str(root/(identity+'-elf'));artifact['cargo_artifact']=artifact.pop('artifact');artifact['cargo_artifact']['manifest_path']='/private/task/Cargo.toml'
+ artifact=ledger['artifacts']['host'];artifact['copy']=str(root/(identity+'-elf'));artifact['cargo_artifact']=artifact.pop('artifact');artifact['cargo_artifact'].update(manifest_path='/private/task/Cargo.toml',target=dict(name='rag3weaver',kind=['lib']),profile=dict(test=True),features=role['features']);artifact['features']=role['features']
  ledger.update(stage='agent-red',source_head=config['source'],source_patch_sha256='f'*64,source_state=dict(head=config['source'],index='fixture',files={}),artifacts={'task':artifact})
  admission=dict(identity=identity,stage='agent-red',source_head=config['source'],source_state=copy.deepcopy(ledger['source_state']),patch_sha256='f'*64,cwd='/private/task')
  (root/'host-elf').rename(root/(identity+'-elf'))
@@ -29,11 +29,11 @@ class Reserves(unittest.TestCase):
    self.assertEqual(value['admission'],admission);self.assertFalse(value['physical_admission'])
  def test_real_reader_refuses_foreign_admission_head(self):
   with tempfile.TemporaryDirectory() as tmp:
-   root=Path(tmp);config,ledger,window,phase,admission,write=broker_fixture(root);admission['source_head']='z'*40;write()
+   root=Path(tmp);config,ledger,window,phase,admission,write=broker_fixture(root);admission['source_head']='f'*40;write()
    with self.assertRaises(ValueError):p.Reader(config).read('agent-red1',phase)
  def test_real_reader_refuses_matching_states_with_foreign_head(self):
   with tempfile.TemporaryDirectory() as tmp:
-   root=Path(tmp);config,ledger,window,phase,admission,write=broker_fixture(root);ledger['source_state']['head']='z'*40;admission['source_state']['head']='z'*40;write()
+   root=Path(tmp);config,ledger,window,phase,admission,write=broker_fixture(root);ledger['source_state']['head']='f'*40;admission['source_state']['head']='f'*40;write()
    with self.assertRaises(ValueError):p.Reader(config).read('agent-red1',phase)
  def test_real_reader_refuses_bad_broker_identity_and_stage(self):
   for key,bad in [('identity','task-2-123'),('stage','agent-green')]:
@@ -48,7 +48,7 @@ class Reserves(unittest.TestCase):
   with tempfile.TemporaryDirectory() as tmp:
    root=Path(tmp);config,ledger,window,phase,admission,write=broker_fixture(root);reader=p.Reader(config);original=reader._artifact
    def mutate(name):
-    value=original(name);admission['source_head']='z'*40;write();return value
+    value=original(name);admission['source_head']='f'*40;write();return value
    with patch.object(reader,'_artifact',side_effect=mutate),self.assertRaises(ValueError):reader.read('agent-red1',phase)
  def test_real_reader_refuses_parent_symlink_substituted_after_construction(self):
   with tempfile.TemporaryDirectory() as tmp:
