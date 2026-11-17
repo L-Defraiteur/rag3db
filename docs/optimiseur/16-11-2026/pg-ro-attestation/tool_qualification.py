@@ -214,8 +214,6 @@ def supervise_phase(action,cap,go_end,expected_cgroup):
         members,unknown=group_members(pid)
         require(status==0 and eof and not members and not unknown,'worker timeout/refusal or group not quiet')
         value=json.loads(raw)
-        require(time.monotonic()<deadline,'late supervised return')
-        return value
     finally:
         os.close(reader)
         if status is None:
@@ -224,19 +222,23 @@ def supervise_phase(action,cap,go_end,expected_cgroup):
         stop_group(pid,expected_cgroup)
         # Aucun wait bloquant hors enveloppe : le Common externe reste autorité.
         if status is None:os.waitpid(pid,os.WNOHANG)
+    # Tout nettoyage et toute observation précèdent le verdict temporel final.
+    require(time.monotonic()<deadline,'late supervised return')
+    return value
 
 
 class NativeBackend:
-    def __init__(self,root,packet,packet_sha,go,out):
+    def __init__(self,root,packet,packet_sha,go,out,scope_cgroup):
         self.root=root;self.packet=packet;self.packet_sha=packet_sha;self.go=go;self.out=out
-        self.compiled=False;self.client_sha=None
+        self.compiled=False;self.client_sha=None;self.scope_cgroup=scope_cgroup
     def run(self,request):
         def work():
             self.supervised=True
+            require(own_cgroup()==self.scope_cgroup,'worker cgroup changed')
             result=self._run(request)
             result['stdout']=result['stdout'].hex();result['stderr']=result['stderr'].hex()
             return dict(result=result,compiled=self.compiled,client_sha=self.client_sha)
-        value=supervise_phase(work,request['cap'],self.go['deadline_monotonic'],own_cgroup())
+        value=supervise_phase(work,request['cap'],self.go['deadline_monotonic'],self.scope_cgroup)
         self.compiled=value['compiled'];self.client_sha=value['client_sha']
         result=value['result'];result['stdout']=bytes.fromhex(result['stdout']);result['stderr']=bytes.fromhex(result['stderr'])
         return result
@@ -333,7 +335,7 @@ def main():
     config=dict(compile_argv=compile_argv(packet,out),client_path=str(out/'client'),compile_cap=60,worker_cap=5,
                 sql_authorized=False,docker_authorized=False,cases=cases)
     try:
-        results=orchestrate(config,NativeBackend(root,packet,args.packet_sha,go,out))
+        results=orchestrate(config,NativeBackend(root,packet,args.packet_sha,go,out,own_cgroup()))
         summary=[{k:v for k,v in x.items() if k not in ('stdout','stderr')} for x in results]
         write_new(out/'qualification.pending.json',{'verdict':'VERT','kind':'compile-and-parse-only','phases':summary,
                   'sql_executed':False,'transport_qualified':False,'client_sha256':digest(out/'client')})

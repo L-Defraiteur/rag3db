@@ -125,3 +125,10 @@ sans processus réels ; ils ne prouvent pas encore le comportement OS du fork,
 du pipe et du nettoyage. Aucun rouge runtime ni vert n'est revendiqué.
 Cette nouvelle source doit recevoir sa RO avant création d'un paquet r2 ;
 aucun nouveau GO n'est demandé sur l'ancien paquet.
+
+Seconde réserve R consignée avant correction : le nettoyage du finally
+précède maintenant le dernier check temporel, puis le retour ne fait plus de
+scan ni de lecture de fichier. Le cgroup attendu est capturé au setup global
+par le pilote, injecté au backend ; sa revalidation est dans le worker supervisé.
+Cela prépare le refus d'un nettoyage tardif ; la latence réelle du scan proc
+et le kill/reap restent à qualifier, sans garantie OS déduite d'une lecture.

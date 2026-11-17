@@ -324,3 +324,8 @@ correction : effectuer tout nettoyage avant le dernier check, puis retour sans
 nouvelle observation ; capturer le cgroup attendu au setup global hors phases,
 et le revérifier dans le worker supervisé. Ancien paquet toujours historique,
 aucun témoin exécuté ni qualification revendiquée.
+
+Correction préparée : finally avant dernier check temporel et retour ; cgroup
+attendu injecté depuis setup global et revérifié dans le worker. AST uniquement,
+aucun CPU joué. Nouvelle RO requise ; aucune garantie de latence du nettoyage
+ni qualification native déduite.

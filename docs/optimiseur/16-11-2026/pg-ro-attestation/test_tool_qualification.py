@@ -81,7 +81,7 @@ class NativeBoundaryFakes(unittest.TestCase):
                      reference='FAKE-NOT-C7',nonce='a'*32,inputs_manifest_sha256='1'*64,
                      deadline_monotonic=2000.,sql_authorized=False,docker_authorized=False,output=str(self.out))
         self.request=dict(name='compile',kind='compile',argv=['PINNED_RUSTC'],stdin='',cap=60,expected_code=0,expected_stderr='')
-        self.backend=tool.NativeBackend(self.out,self.packet,'2'*64,self.go,self.out)
+        self.backend=tool.NativeBackend(self.out,self.packet,'2'*64,self.go,self.out,'0::/fake')
     def install(self,stack,*,timeout=False,late_fsync=False):
         outer=self
         stack.enter_context(patch.dict(tool.os.environ,{},clear=True))
@@ -131,12 +131,12 @@ class NativeBoundaryFakes(unittest.TestCase):
 
 class WholePhaseSupervisorFakes(unittest.TestCase):
     def test_preflight_block_refuses_without_parent_hash(self):
-        backend=tool.NativeBackend(Path('/fake'),{},'fake',{'deadline_monotonic':2000.},Path('/fake'))
+        backend=tool.NativeBackend(Path('/fake'),{},'fake',{'deadline_monotonic':2000.},Path('/fake'),'/fake')
         with patch.object(tool,'own_cgroup',return_value='/fake'), patch.object(tool,'supervise_phase',side_effect=TimeoutError('preflight blocked')) as supervisor, patch.object(tool,'verify_inputs') as hashes:
             with self.assertRaises(TimeoutError):backend.run({'cap':5})
             supervisor.assert_called_once();hashes.assert_not_called()
     def test_final_fsync_block_cannot_return_worker_success(self):
-        backend=tool.NativeBackend(Path('/fake'),{},'fake',{'deadline_monotonic':2000.},Path('/fake'))
+        backend=tool.NativeBackend(Path('/fake'),{},'fake',{'deadline_monotonic':2000.},Path('/fake'),'/fake')
         with patch.object(tool,'own_cgroup',return_value='/fake'), patch.object(tool,'supervise_phase',side_effect=TimeoutError('final fsync blocked')):
             with self.assertRaises(TimeoutError):backend.run({'cap':60})
             self.assertIsNone(backend.client_sha)
