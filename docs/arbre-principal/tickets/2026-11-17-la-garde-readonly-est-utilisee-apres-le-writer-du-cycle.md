@@ -67,3 +67,12 @@ ajoutés. Tous NON JOUÉS, aucune garde modifiée. Les champs/directories sont
 des fixtures, pas attestations OS. RO harnais complet avant GO CPU distinct.
 Le rouge causal readonly doit cibler la seule fonction nominale exacte,
 pas le module failfast qui peut rencontrer le doublon en premier.
+
+Complément RO Recherche de809 avant fix : positif .readers initialement
+absent/vide ajouté et juge test_prewriter_persistence au vrai ordre AST
+assignment before_writer/save inventaires/appel writer (spy, autres actions
+exclues explicitement). Le spy exige fichiers/dirs exacts et fsync terminé
+avant son appel, sans aucun proc ni writer réel. Quatorze fonctions écrites
+au total dans ces deux modules, toutes NON JOUÉES. Une preuve manquante devra
+être convertie en refus ValueError explicite dans le futur contrat, sinon
+ERROR et STOP, jamais un vert. Aucun exécutable modifié.

@@ -97,5 +97,8 @@ class PostwriterInventory(unittest.TestCase):
    with self.subTest(change=change):
     accepted,_=self.gate(before=self.after,after=self.after+[dict(readers,**change)]);self.assertFalse(accepted)
   accepted,_=self.gate(before=self.after+[readers],after=self.after);self.assertFalse(accepted)
+ def test_initially_absent_zero_byte_readers_is_allowed(self):
+  readers=dict(path=self.base.name+'.readers',size=0,mode=420,sha256=hashlib.sha256(b'').hexdigest())
+  accepted,reason=self.gate(before=self.after,after=self.after+[readers]);self.assertTrue(accepted,reason)
 
 if __name__=='__main__':unittest.main()
