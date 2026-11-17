@@ -185,5 +185,84 @@ class Loop(unittest.TestCase):
         self.exercise('authority')
 
 
+class BoundInputs(unittest.TestCase):
+    def test_all_prepared_sources_verified_before_policy(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            actor = root/'actor.py'
+            policy = root/'policy.py'
+            dependency = root/'dependency.py'
+            for file in (actor, policy, dependency):
+                file.write_bytes(b'pinned source')
+            prepared = root/'prepared.json'
+            prepared.write_text(json.dumps(dict(pilot='pilot', files={p.name:a.digest(p) for p in (actor, policy, dependency)})))
+            config = dict(pilot='pilot', prepared_path=str(prepared), prepared_sha256=a.digest(prepared),
+                          actor=dict(script_path=str(actor),script_sha256=a.digest(actor)),
+                          policy=dict(path=str(policy),sha256=a.digest(policy)))
+            path = root/'config.json'
+            path.write_text(json.dumps(config))
+            sha = a.digest(path)
+            a.verify_inputs(path, sha, config)
+            dependency.write_bytes(b'changed')
+            with self.assertRaisesRegex(ValueError, 'source changed'):
+                a.verify_inputs(path, sha, config)
+            with self.assertRaisesRegex(ValueError, 'digest changed'):
+                a.verify_inputs(path, '0'*64, config)
+
+    def test_exclusive_frame_cannot_overwrite_first_refusal(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp)/'firstred.json'
+            a.write_frame(path, dict(first='immutable'))
+            with self.assertRaises(FileExistsError):
+                a.write_frame(path, dict(second='forbidden'))
+            self.assertEqual(json.loads(path.read_text()), dict(first='immutable'))
+            self.assertEqual(len(list(Path(temp).iterdir())), 1)
+
+    def test_last_guard_before_link_prevents_publication(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp)/'armed.json'
+            def refuse():
+                raise ValueError('firstred appeared during staging')
+            with self.assertRaisesRegex(ValueError, 'firstred'):
+                a.write_frame(path, {}, guard=refuse)
+            self.assertFalse(path.exists())
+            self.assertEqual(list(Path(temp).iterdir()), [])
+
+    def test_sanitized_scope_checks_both_processes_and_refusal(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            authority = root/'authority.json'
+            uid = root.stat().st_uid
+            public = dict(etat='actif',pid=60,debut='100',cgroup='/scope',echeance=900.,script_sha256='f'*64)
+            authority.write_text(json.dumps(dict(public, secret_token='MUST_NOT_RETURN')))
+            config = dict(authority=dict(path=str(authority), pid=60,start='100',uid=uid,cgroup='/scope',script_sha256='f'*64),
+                          controller=dict(pid=61,start='101'), common_end_monotonic=900.,
+                          paths=dict(first_red=str(root/'firstred.json')))
+            def process(pid):
+                return dict(pid=pid,start='100' if pid==60 else '101',state='S',uid=uid,cgroup='/scope')
+            with patch.object(a.os, 'uname', return_value=SimpleNamespace(nodename='luciepc')), patch.object(a, '_basic_process', side_effect=process):
+                self.assertIsNone(a.check_scope(config))
+                config['controller']['start'] = 'wrong'
+                with self.assertRaisesRegex(ValueError, 'process identity'):
+                    a.check_scope(config)
+                config['controller']['start'] = '101'
+                Path(config['paths']['first_red']).write_text('{}')
+                with self.assertRaisesRegex(ValueError, 'first red'):
+                    a.check_scope(config)
+
+    def test_ready_expired_or_other_authority_never_admitted(self):
+        c, _, _, _ = fixture()
+        c['paths'] = dict(first_red='/firstred')
+        ready = dict(clock=a.CLOCK,nonce=c['ready_nonce'],deadline=900.,ready_observed_monotonic=11.,grant_deadline_monotonic=131.,
+                     phase=dict(pilot=c['pilot'],allocation=c['allocation'],authority=c['authority'],first_red_path='/firstred'))
+        a.validate_ready(c,ready,12.)
+        with self.assertRaises(ValueError):
+            a.validate_ready(c,ready,131.)
+        wrong = copy.deepcopy(ready)
+        wrong['phase']['authority']['start']='other'
+        with self.assertRaises(ValueError):
+            a.validate_ready(c,wrong,12.)
+
+
 if __name__ == '__main__':
     unittest.main()
