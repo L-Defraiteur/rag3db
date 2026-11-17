@@ -49,3 +49,28 @@ Avant ce futur GO : RO totale source/tests/paquet/recette, puis GO CPUdistinct
 pour UNEinvocation des six témoins ; lecture live exige encore un autre GO
 diagnostique. Les verts18 de4a ne qualifient pas cette source. Aucun slot pris
 ni vraie lectureproc/kernel lancée pendant la préparation.
+
+## Paquet diagnostique01 épinglé
+
+Source exacte ae2011135c8c74d06f555716928d5dcdb092d056.
+P=`/home/lucied/.cache/optimiseur-notes/pg-rust-tool-qual-20261117-r1`.
+PC P/diagnostic-packet-01/diagnostic-packet.json SHA256
+`43cf8c537d7ad1fb6081594af08b0df39bc4ac8fc51de404de3892331ef94677`.
+Dix sources pinées, dont Common6439 sous ses deux noms réguliers indépendants,
+sonde, six témoins et modules de fixtures. Les modules de compilation sont
+présents uniquement pour charger les fixtures historiques sans exécution.
+La sonde n'importe pas ces modules et n'a aucun appel de compilateur/metadata.
+
+Recette P/diagnostic-preparation-01/recipe.json copiée aux deux postes SHA256
+`546986a6b79c1a70941351108600ea7067da513f888980d4617e2b325e079fb4`.
+Commande absolue proposée POSTE32G→timeout12sTERM+kill2→Common10s→sonde,
+sans-B devant Common, BYTEDONTWRITE par env ; -B autorisé devant la sonde.
+GOinactif/runfalse/deadline0/noncezéro et sortie exclusive
+P/diagnostic-runs/kernel-lock-01 absente, Commonproofs absentes.
+CPU proposé distinct : timeout58s+kill2 python3-Bunittest-v-f
+`test_poste_lock_diagnostic` uniquement, sixcas attendus. Aucun CPU joué.
+
+Source+paquet+recette soumis à RO totale avant GO CPU et GO diagnostique
+séparés. Aucune lecture live/proc/FLOCK, allocation, compiler ou SQL effectués
+pour la préparation ; fichiers r3/B01/OUT_T inchangés. Un futur diagnostic
+MATCH/REFUS ne qualifie toujours aucun transport ou compilateur.

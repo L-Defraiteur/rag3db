@@ -477,3 +477,11 @@ outputexclusif/GOdiagnostique neuf requis. Proposal04 décrit Common10/OS12kill2
 et limites, aucun essai de compilation. Ajustement découverte unittest :
 fixture importée comme module, pas classeTestCase, pour sixcas exactement.
 Préparationpaquet/RO à venir, aucunCPU/proc réel/slot/native/SQL exécuté.
+
+Paquet diagnostic DISTINCT01 préparé : sourceae2011135c8c74d06f555716928d5dcdb092d056,
+packetSHA43cf8c537d7ad1fb6081594af08b0df39bc4ac8fc51de404de3892331ef94677,
+recipeSHA546986a6b79c1a70941351108600ea7067da513f888980d4617e2b325e079fb4.
+Pprivé/diagnostic-packet-01 et diagnostic-preparation-01 ; dixsources pinées,
+GOinactif/outputkernel-lock-01absent, Common10/OS12kill2 seulement proposés.
+SixCPU NONJOUÉS, aucune vraie lectureproc/flock ni slot acquis. RO totale
+requise avantGOCPU+GOdiagnostic distincts. Anciens paquets et GO restent clos.
