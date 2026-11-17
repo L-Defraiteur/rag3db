@@ -289,3 +289,14 @@ Aucune copie DATA/ELF, lecture DB, exécution native/test, provider/service7970,
 original, installation/pose ou nettoyage autorisé maintenant. Git/W privés et
 préparation Q metadata seuls inclus. B/C exigent GO distinct ; C attend toujours
 G frais, RET72h et oracle matched. Parent OUVERT, ressources A conservées.
+
+
+Préparation B source4e3fc8402eb308a9b9693fd68f88593e826c3e88 publiée,
+[recette15](../17-11-2026/15-preparation-runtime-cli99-sur-copie.md) : adaptateur
+primitivesQv9E9 inchangées+CLI99/typed/IDs privésA. Douze fonctions CPU nouvelles
+écrites NON JOUÉES pour frontière première querytyped GDBsameinvocation ; aucun
+transfert de qualification SDK29. Metadata PC seulement : Wpilot4e3 propre,
+Q29sources+prepared30e entrée SHA1d1441034dc2f811239bfd9688a63ebc3244cf65173890080b04171205f5737d,
+P/S/allocation/outer absents, zéro ELF/test/DB/provider/copieDATA. Deux RO TOTALES
+source+paquet demandées avant GO CPU et éventuel GO B distinct. Query/portable/C
+et services/originaux/RET frais restent hors paquet. Parent OUVERT.

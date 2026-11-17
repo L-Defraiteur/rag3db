@@ -134,3 +134,21 @@ ne sont ni allocation réservée ni commande à lancer maintenant.
 B reste NON JOUÉ/NON QUALIFIÉ. C (trois bases) requiert toujours G/fenêtre/
 snapshot/RET72h frais, corpus oracle matched et GO distinct. Anciennes fenêtres
 et rouges restent clos/intacts ; aucun original, service ou pose anticipés.
+
+## Paquet metadata effectivement préparé, aucun GO
+
+Source pilote PC EXACT4e3fc8402eb308a9b9693fd68f88593e826c3e88 propre,
+W privé rag3db-cx-arbre-cli99-runtime-b-control-20261117-r1 ; ce HEAD reste
+figé même si la branche documentaire de revue avance. Appel metadata seul :
+Python3.14-B W/docs/arbre-principal/17-11-2026/runtime-99/lifecycle.py --prepare,
+rc0. Ce chemin importe uniquement la bibliothèque standard ; aucun import
+de lifecycle_v9/Reader/GDB ni exécution d'ELF ou contact. Copie de29 sources/
+helpers/JSON en Q0700/UID1000, fichiers0600/UID1000, prepared en30e entrée.
+SHA prepared EXACT
+**1d1441034dc2f811239bfd9688a63ebc3244cf65173890080b04171205f5737d**.
+[Copie Git prepared](runtime-99/prepared-pc.json) identique, [inventaire](runtime-99/preparation-pc.json)
+30entrées avec modes/UID/tailles/SHA. P/S absents, allocation/outer absents.
+Le statut metadata n'est pas une autorité C7 ; aucune allocation réservée ici.
+Deux RO TOTALES demandées sur CE couple source4e3/Q1d144 et les douze témoins
+NON JOUÉS. Pas de compilation/test/GDB/proc frais/DB/copieDATA/ELF/provider/
+service/original/retrait ; A et toutes ressources conservés.

@@ -1,0 +1,228 @@
+{
+  "kind": "B_METADATA_PREPARED_NO_GO",
+  "pilot": "4e3fc8402eb308a9b9693fd68f88593e826c3e88",
+  "pilot_root": "/home/lucied/git_workspaces/rag3db-cx-arbre-cli99-runtime-b-control-20261117-r1",
+  "Q": "/home/lucied/.cache/rag3weaver-build/bascule-live-20261116/cli99-runtime-b-control-r1",
+  "Q_mode": 448,
+  "Q_uid": 1000,
+  "entries": [
+    {
+      "name": "audit.py",
+      "mode": 384,
+      "uid": 1000,
+      "size": 8775,
+      "sha256": "b50bc4ed04e55bfdc49a7fc17bda6e89bfb55b74d6bd343e1a9a670a1058b72c"
+    },
+    {
+      "name": "audit_result.py",
+      "mode": 384,
+      "uid": 1000,
+      "size": 13948,
+      "sha256": "5a04f976f0933958d3ee7e994860f44656517ce20d9bea5a04d75abb15ac0ea1"
+    },
+    {
+      "name": "confiner_validation.py",
+      "mode": 384,
+      "uid": 1000,
+      "size": 17667,
+      "sha256": "6439fdd8b52c85fa4e74af0def2c667ef0bedae9b814cbbfd48e49946c4f74ea"
+    },
+    {
+      "name": "continue_result.py",
+      "mode": 384,
+      "uid": 1000,
+      "size": 10831,
+      "sha256": "f1b6ec411985853673fe8125148168446a757d921c690070be2ddf719f0325da"
+    },
+    {
+      "name": "finish_result.py",
+      "mode": 384,
+      "uid": 1000,
+      "size": 12460,
+      "sha256": "d88c05d2c572e0541643062a9e89a8c6982a796db4f04085f905c20916ef71b6"
+    },
+    {
+      "name": "grant_watch_actor.py",
+      "mode": 384,
+      "uid": 1000,
+      "size": 18973,
+      "sha256": "7d7db5a0c7d9ac762eed74ade2d0b9ee256b8499d0029ae970feac916de76612"
+    },
+    {
+      "name": "grant_watch_controller.py",
+      "mode": 384,
+      "uid": 1000,
+      "size": 10476,
+      "sha256": "362f7128f20256036dda2363f20d2784ee619c256dc6f47e026edc6af3efd7e8"
+    },
+    {
+      "name": "helper-origins.json",
+      "mode": 384,
+      "uid": 1000,
+      "size": 5442,
+      "sha256": "32b4e32d2fb759c3a77ea9c36ac7fe01697fb830aa8e4e9f61cd0f7b11f62469"
+    },
+    {
+      "name": "inspect-fts.py",
+      "mode": 384,
+      "uid": 1000,
+      "size": 2863,
+      "sha256": "b846b0991999040c04f298747eda27aa07a4aa9ad0c277f8b7dc485eb24465a8"
+    },
+    {
+      "name": "lifecycle-provider-expectations.json",
+      "mode": 384,
+      "uid": 1000,
+      "size": 980,
+      "sha256": "0ce4548bcc0ccbc44357f6c9f71cbd8301afce7dd9740bdeb5680178947a5e8c"
+    },
+    {
+      "name": "lifecycle-provider-go.schema.json",
+      "mode": 384,
+      "uid": 1000,
+      "size": 2499,
+      "sha256": "d313d62eaf62937171d18575efb337ff5808630193b21114231e42e5beb0cb04"
+    },
+    {
+      "name": "lifecycle-ready.schema.json",
+      "mode": 384,
+      "uid": 1000,
+      "size": 3441,
+      "sha256": "a03c7d1326b3ccf6cd517f2e5df00c06b01708be929888e3211b8547bf347661"
+    },
+    {
+      "name": "lifecycle-v9.json",
+      "mode": 384,
+      "uid": 1000,
+      "size": 1514,
+      "sha256": "b697db847203316985f42928e411949b9eb2706bdd6ed8584e8bbae07e5e37cb"
+    },
+    {
+      "name": "lifecycle.json",
+      "mode": 384,
+      "uid": 1000,
+      "size": 1521,
+      "sha256": "d22ecc52140aa634ecbd933c08fa59db3de5af94fd27a03d303a3baf768c2c76"
+    },
+    {
+      "name": "lifecycle.mmd",
+      "mode": 384,
+      "uid": 1000,
+      "size": 437,
+      "sha256": "7d729f06fd3c4865e798852c5ece3b3941dd3ee5abeb498afbb6bb6dc0f882df"
+    },
+    {
+      "name": "lifecycle.py",
+      "mode": 384,
+      "uid": 1000,
+      "size": 10318,
+      "sha256": "7fd1ece29295a04013595af65ef7e8a3119d559924cf579be353038f6ec4d072"
+    },
+    {
+      "name": "lifecycle_grant_producer.py",
+      "mode": 384,
+      "uid": 1000,
+      "size": 3455,
+      "sha256": "f17cdf81d78b71b6d1273e9f719a077848872ebd7b3f0341e604d56d8a244652"
+    },
+    {
+      "name": "lifecycle_health_policy.py",
+      "mode": 384,
+      "uid": 1000,
+      "size": 6748,
+      "sha256": "56d9c708d5b25c1c5b477a463842f6c01e4e21462ba61f3967bb48c658cd42ce"
+    },
+    {
+      "name": "lifecycle_protocol.py",
+      "mode": 384,
+      "uid": 1000,
+      "size": 13373,
+      "sha256": "00b168686bc5820e582e5e52acedba6c95c901ac8bb3424976369ee2d45de7fb"
+    },
+    {
+      "name": "lifecycle_provider_observation.py",
+      "mode": 384,
+      "uid": 1000,
+      "size": 12748,
+      "sha256": "83139ebb329a59f19aa881f7f9678a7e6bf87c39abd3ff0ab7d20ecc15c0ba00"
+    },
+    {
+      "name": "lifecycle_v9.py",
+      "mode": 384,
+      "uid": 1000,
+      "size": 35347,
+      "sha256": "16ca9a5b8a83bb05eeafc086ff960098016eb32b313b134e0ec120bf587f759a"
+    },
+    {
+      "name": "poste",
+      "mode": 384,
+      "uid": 1000,
+      "size": 26869,
+      "sha256": "79e3a8bbf457e3bc9104aa1558e7d03072216c70b68e08ae606ace6aa4584c7b"
+    },
+    {
+      "name": "prepared.json",
+      "mode": 384,
+      "uid": 1000,
+      "size": 6794,
+      "sha256": "1d1441034dc2f811239bfd9688a63ebc3244cf65173890080b04171205f5737d"
+    },
+    {
+      "name": "provider_health_transport.py",
+      "mode": 384,
+      "uid": 1000,
+      "size": 12185,
+      "sha256": "edf45f73bf97d21f2a0caab4d6e07a7d01f807fba8310c9006f442159e2bc2a6"
+    },
+    {
+      "name": "q9-prepared-reference.json",
+      "mode": 384,
+      "uid": 1000,
+      "size": 5948,
+      "sha256": "96ebc22e7fae474f812273e0bf2f8d41b3f24b5205c6e4f21d4594fbbd0f3099"
+    },
+    {
+      "name": "qualify.py",
+      "mode": 384,
+      "uid": 1000,
+      "size": 30314,
+      "sha256": "513ab4978c75389f28d4f89be2fb682e65cb99378e869a865e3c207d237e1239"
+    },
+    {
+      "name": "reader_capture.py",
+      "mode": 384,
+      "uid": 1000,
+      "size": 3590,
+      "sha256": "02a9257d5906f21a7be36b11214fa498b9cf51954cbbdb36dc17396ecc84d6fe"
+    },
+    {
+      "name": "reader_exec.py",
+      "mode": 384,
+      "uid": 1000,
+      "size": 882,
+      "sha256": "c1239224835915630bc515ab9b502ee669404a2f5a9b96b5202f42974d355733"
+    },
+    {
+      "name": "reader_runtime.py",
+      "mode": 384,
+      "uid": 1000,
+      "size": 4620,
+      "sha256": "39b2214369f96526e3f61079ba6280465811869b8b1ee74f86243919151e3c75"
+    },
+    {
+      "name": "typed_rows.py",
+      "mode": 384,
+      "uid": 1000,
+      "size": 1938,
+      "sha256": "41314cda227b3511f2daed3695d894bec150f3ee3dfc2fd7b6fa268db1374916"
+    }
+  ],
+  "P_absent": true,
+  "S_absent": true,
+  "allocation_exists": false,
+  "outer_exists": false,
+  "DB_opened": false,
+  "ELF_invoked": false,
+  "provider_contact": false,
+  "tests_run": false
+}
