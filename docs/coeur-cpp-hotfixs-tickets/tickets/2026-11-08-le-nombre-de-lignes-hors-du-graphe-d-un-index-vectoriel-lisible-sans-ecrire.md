@@ -189,3 +189,10 @@ assurées ; recovery ancienWAL conserve brancheCOMMIT et bump seul insuffisant.
 Périmètres minimaux/alternatives/coûts/témoins à prépublier détaillés, STOP avant
 réservation/code. Ce sont constats source, pas défauts natifs reproduits ni
 validation d'une implémentation absente. Aucun prototype/test/DB/build/SDK/C1.
+
+Arbitrage conception seule C7/02b916fda7 rattaché AVANT nouvelle note : orientation
+REL membership distincte ANN, pas nouvelle phase NODE globale. Lecture API
+RelTable insert/scan/delete, multiplicitéONE et collecteREL existantes ; contrat
+idempotence/unicité/offsets finaux à expliciter avec STOP si sérialisation/vue
+d'écriture non prouvées. Rétention avant capture et upgrade durable restent
+prérequis cœur. Aucune réservation/implémentation/prototype/test/DB/build/format.
