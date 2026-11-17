@@ -1,0 +1,449 @@
+{
+  "version": 1,
+  "status": "SOURCE_CANDIDATE_UNCOMPILED",
+  "compile_authorized": false,
+  "native_execution_authorized": false,
+  "sql_authorized": false,
+  "transport_qualified": false,
+  "source_files": {
+    "pg_ro_client.rs": "92edf7421e2323ec4f5531a9ed6db5888f13a6cbe755e69f60efd7b14263ee93",
+    "identity.sql": "f9496688a506085562a071ce25827a2a683bccd457c9edf6e944e228b7c29328",
+    "backend-postcheck.sql": "2907a86d971770275b9ff6291e9bffebdf4467d23c7c59ff2015ae6a3fb9c864"
+  },
+  "dependency_root": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-deps-b472-v1",
+  "archive_manifest_sha256": "de797438448c79ae54a1bc313003b0fdead4e37b70b180298ce21690b320c945",
+  "dependency_source": "b472035a4e2944a9d90727817c95290cc0fba1ea",
+  "cargo_lock_sha256": "090cc4e1330dc694127c0f08330d25acc656699763079400b502ba6607093fa7",
+  "compiler_path": "/home/lucied/.rustup/toolchains/1.98.1-x86_64-unknown-linux-gnu/bin/rustc",
+  "compiler_observed_sha256": "859254978c0a0402c32f949f6de0d99aee73be8d15f45aac00ae1448aac51e74",
+  "compiler_prebuild_attestation": false,
+  "toolchain_sysroot_fresh_audit_required": true,
+  "selected": {
+    "tokio_postgres": [
+      {
+        "path": "deps/libtokio_postgres-3179df43d80295e0.rlib",
+        "sha256": "02280b8ffdf885a831c878f549fb14d1d9f65de7c991aac6ad457c249431cd28",
+        "size": 3701518
+      }
+    ],
+    "tokio": [
+      {
+        "path": "deps/libtokio-64cfcb92dcf41713.rlib",
+        "sha256": "0dcfafaddd3e85ca419fb8b3944899826b50ec35623d64316a47678b5c6f0882",
+        "size": 11648142
+      }
+    ],
+    "serde_json": [
+      {
+        "path": "deps/libserde_json-452ff4526b3b8a08.rlib",
+        "sha256": "94f6a90becfcbae008aeb632b39c39af8ea5d0403e72bb86634a2fe1f3e37ccc",
+        "size": 2835872
+      }
+    ]
+  },
+  "closure_artifacts": [
+    {
+      "path": "deps/libtokio_postgres-3179df43d80295e0.rlib",
+      "sha256": "02280b8ffdf885a831c878f549fb14d1d9f65de7c991aac6ad457c249431cd28",
+      "size": 3701518
+    },
+    {
+      "path": "deps/libfutures_channel-34f01b30ce64694d.rlib",
+      "sha256": "250135e605cd73227d41c585b3614523fb7307c607a7c414d1d79e5e7117b36f",
+      "size": 331574
+    },
+    {
+      "path": "deps/libfutures_core-e76c4807662b2966.rlib",
+      "sha256": "a4a4973e1f6b1f2b9c90a198a62107f3184d2a405f1051025f95b4731ba43bdc",
+      "size": 73380
+    },
+    {
+      "path": "deps/libfutures_sink-975c2ffbc9800cb2.rlib",
+      "sha256": "99de928eab7a93abcfb12b4de840c7bae0eaf97ee8fc77e6a80f828aa021ef80",
+      "size": 35014
+    },
+    {
+      "path": "deps/libpin_project_lite-9d71323622727aed.rlib",
+      "sha256": "7d356231ef5b1debcfce6e2b8f7226fa3e67d1c7bd4eaed4856f450ee67708a6",
+      "size": 96854
+    },
+    {
+      "path": "deps/libtokio-64cfcb92dcf41713.rlib",
+      "sha256": "0dcfafaddd3e85ca419fb8b3944899826b50ec35623d64316a47678b5c6f0882",
+      "size": 11648142
+    },
+    {
+      "path": "deps/libbytes-824dc46879c43df7.rlib",
+      "sha256": "1b706faf88cab22fd9c98729d42036039e4a9b3677ff037a391beb722fa6aa42",
+      "size": 1201320
+    },
+    {
+      "path": "deps/libtokio_macros-48c838adb6e8e83c.so",
+      "sha256": "c2d259bfbb5e9397d8d7d5ccaa609b2bd70dc4e3bd465902756b871ea96d5dd4",
+      "size": 3554952
+    },
+    {
+      "path": "deps/libsyn-93c2ed768f763049.rlib",
+      "sha256": "eaa98b64d90ae986e382cc49469c51c84ea1ad9332e6330e484d5699aa7fb936",
+      "size": 11189486
+    },
+    {
+      "path": "deps/libproc_macro2-d3a71337790a28b8.rlib",
+      "sha256": "8a36e3ac2d7bbbf8353c5eb72b9e89a48b8aaa4b9a7180ad390eb961a0775078",
+      "size": 1100836
+    },
+    {
+      "path": "deps/libunicode_ident-ea768a5c413977b6.rlib",
+      "sha256": "4263d25b6dd2267869b0595543b2da0a7c48e703bdb9da2ea5d7819210615597",
+      "size": 49760
+    },
+    {
+      "path": "deps/libquote-63d0844d06ff88a9.rlib",
+      "sha256": "ff00f563b7df6411bae7a471c1149b098feb6201e1c8e20b24e1c4cdec672bc9",
+      "size": 454978
+    },
+    {
+      "path": "deps/libsignal_hook_registry-d6a86bdfc56c22da.rlib",
+      "sha256": "fa9c41f490f1993de5a313fdbcf8c71847c3324cd0c21f8e018e02b5f1547c5a",
+      "size": 141084
+    },
+    {
+      "path": "deps/liberrno-cd00b95ec5f24742.rlib",
+      "sha256": "7f59839b615f71778386ba3848e9eb45ccffd99444e80723ce63411a6e193ea6",
+      "size": 36164
+    },
+    {
+      "path": "deps/liblibc-5f5c9c794c26cc3d.rlib",
+      "sha256": "f1801bf7d9762997b70ede928f6d48735c2f92c52ee4051337da667f5561abfe",
+      "size": 4228062
+    },
+    {
+      "path": "deps/libsocket2-0326f6e5f326d6e7.rlib",
+      "sha256": "35d33e9ac9667e482565b3a652ce46c313a01da02b72a4adbb99b223c43bb40f",
+      "size": 727502
+    },
+    {
+      "path": "deps/libmio-fe67d380d1e5090c.rlib",
+      "sha256": "3719332cd29fa504924c4560ad78b3b8fcfdc49fb8199f02876eaecda65d3cef",
+      "size": 704732
+    },
+    {
+      "path": "deps/liblog-7cecec3c1d6e045e.rlib",
+      "sha256": "87b422a0bcfdea79ae2f84e65e2ea7a958e0cc12dd4dc0f5f6c4650fd5842b4b",
+      "size": 235956
+    },
+    {
+      "path": "deps/libpostgres_types-b659363af695a610.rlib",
+      "sha256": "c334f2b790f60ac7b65c3c1fdc1e8a1b3f24bc56f1e0aa5545aced4b7637452f",
+      "size": 1162464
+    },
+    {
+      "path": "deps/libserde_json-452ff4526b3b8a08.rlib",
+      "sha256": "94f6a90becfcbae008aeb632b39c39af8ea5d0403e72bb86634a2fe1f3e37ccc",
+      "size": 2835872
+    },
+    {
+      "path": "deps/libmemchr-7da598870a7c091f.rlib",
+      "sha256": "29c293e1f23f0d256ab42a13a2022e510fa3922cb027db724815f490a254f0de",
+      "size": 1543408
+    },
+    {
+      "path": "deps/libitoa-1b22e880ea71d563.rlib",
+      "sha256": "77e064c4f1d403d3612f1764cb505c62ac076ab77885ee3902fa040059b94b5b",
+      "size": 81626
+    },
+    {
+      "path": "deps/libserde_core-d59a1148f6c5dbf1.rlib",
+      "sha256": "89e561380dbbf4322462bfdec990fbef2289a40d6cd9c92bb1123c504e051767",
+      "size": 5482820
+    },
+    {
+      "path": "deps/libzmij-4c768bdc716b9d5a.rlib",
+      "sha256": "c7b213e7bfa5e66fa63bafad1b9094ab32079abb718d17968ce7f1d6e784b610",
+      "size": 408056
+    },
+    {
+      "path": "deps/libpostgres_protocol-e1891ac5b48f6698.rlib",
+      "sha256": "145ff4c205a706dc737262c9a3c7700b2beafbd93bc675e1ac95f6adcf083dde",
+      "size": 733106
+    },
+    {
+      "path": "deps/libstringprep-05d2779a172b94b2.rlib",
+      "sha256": "1fe1693444846188c954e9a89f3ec6d5d4d12871df7eb64e562a2a656441ab2b",
+      "size": 669324
+    },
+    {
+      "path": "deps/libunicode_normalization-fe9dcc1bc69883fe.rlib",
+      "sha256": "1636fb548af6555d880ffc00c88f63b93c0e13891a0c50a01409fe1e8ad907ed",
+      "size": 1939810
+    },
+    {
+      "path": "deps/libtinyvec-f004111646f6b94b.rlib",
+      "sha256": "84a9d3b850a0786f0cff760ca8cab10bf88ce46023e843d5f5b5409104224764",
+      "size": 842404
+    },
+    {
+      "path": "deps/libtinyvec_macros-4c335b4df5e96e8c.rlib",
+      "sha256": "6801bd4547421716579c2f428a0d8cdd08940f05ca039eea49f3fdbf098fb4bc",
+      "size": 5130
+    },
+    {
+      "path": "deps/libunicode_bidi-7d5acfc28961a0d9.rlib",
+      "sha256": "a078042ee4e20951327f94d90665a2d0fc71da43fd9837d94fceca5c65c3ded0",
+      "size": 832542
+    },
+    {
+      "path": "deps/libunicode_properties-fc27ffae55066c23.rlib",
+      "sha256": "108a063432c9b1f6dabfa200088304fd3daa33a674f37e7bcedd3bb69ed012d1",
+      "size": 559740
+    },
+    {
+      "path": "deps/libbyteorder-f259b138de493de0.rlib",
+      "sha256": "aebccfc10446ad46f0ab0ac076916328774553b09904ab835b8aa1ec0edba37c",
+      "size": 358218
+    },
+    {
+      "path": "deps/libmd5-0e4454173efa47d9.rlib",
+      "sha256": "c13a7278d5074ada732fffe0c471ceee43584d11f69f53c390263d9ef582b2f4",
+      "size": 85144
+    },
+    {
+      "path": "deps/libcfg_if-59faf7df93e3dc75.rlib",
+      "sha256": "ecf1add65848d5e84803f1c5ad4688d82aada2524ddbe42cabe1a08db89e5847",
+      "size": 7706
+    },
+    {
+      "path": "deps/libdigest-80641d611b8fbb13.rlib",
+      "sha256": "a0ca720bf9ecdae246a5aab758da049ce85b8512f617e5c98d0496701536f38b",
+      "size": 240884
+    },
+    {
+      "path": "deps/libcrypto_common-85bd9c388273c814.rlib",
+      "sha256": "1ef2aaf3ce2e173bb3f55da40691eb3e4de0c345911d98ac4b9c3c1a15b46ba5",
+      "size": 34234
+    },
+    {
+      "path": "deps/libtypenum-cbe6df23cdff6476.rlib",
+      "sha256": "9afbf75aab89316219754cce262a358e7dbf99d4e64168de4c7b1030a19c2c6e",
+      "size": 3682740
+    },
+    {
+      "path": "deps/libgeneric_array-fcd6a0b889f634f9.rlib",
+      "sha256": "3a7f7c5cb026e827115bf03dd4520da415b70ca33984ad313fce033711cd00bd",
+      "size": 1020004
+    },
+    {
+      "path": "deps/libblock_buffer-f6a6bf4280d003eb.rlib",
+      "sha256": "1f33e300797db1b22c39ce805644a1fc9f6b629203409eeb009ca6c97be7b809",
+      "size": 72886
+    },
+    {
+      "path": "deps/libsubtle-4b7c09f55468f420.rlib",
+      "sha256": "28cb16c6163b86a530ba37fd9ae208fe7e40d08a86ab5b403efbffc9150d8689",
+      "size": 139666
+    },
+    {
+      "path": "deps/libhmac-ad678d6d42f9a00b.rlib",
+      "sha256": "a58696f014bdfbdab461ec76cf8acb064d74bbc79eb4639f318d7fa51deff932",
+      "size": 61350
+    },
+    {
+      "path": "deps/libsha2-8a523f38c111683b.rlib",
+      "sha256": "0cf72bcbfaeec23ff04bb19da2944ba43555bd0745802a879a039f1544550209",
+      "size": 717876
+    },
+    {
+      "path": "deps/libcpufeatures-d2c3ca746cda4bf1.rlib",
+      "sha256": "9bece8e50843a45791ddcbe5f8135f5373170199917da8afbf55c831aa659368",
+      "size": 41556
+    },
+    {
+      "path": "deps/librand-3830e3fd23120337.rlib",
+      "sha256": "ad349814db38a92cd302fff42589cf4c98108aa1ae494e000f34c593fc9e2847",
+      "size": 1203264
+    },
+    {
+      "path": "deps/librand_chacha-ed44ca132ed1198e.rlib",
+      "sha256": "8b2a285a24997465df21d7d6e2acf6262ee820f359f5137281883bb0d9530dce",
+      "size": 190212
+    },
+    {
+      "path": "deps/librand_core-c8b3a6ed0c1ce610.rlib",
+      "sha256": "3e382e8216ee3744eacec8b88e030ab89f6612f01e4177d32661ccd27ed70a76",
+      "size": 184328
+    },
+    {
+      "path": "deps/libgetrandom-0f02d86c8e935736.rlib",
+      "sha256": "1bee7060c4fe5aaa704e723aed39b67512a6181a2ba048e857782ee07b691c59",
+      "size": 119498
+    },
+    {
+      "path": "deps/libppv_lite86-7c3b3601dc914a5f.rlib",
+      "sha256": "94df042d6ade84384c133c2918096b4c47346db504dcdda0b171d9b5366a0bfb",
+      "size": 1151842
+    },
+    {
+      "path": "deps/libzerocopy-fc04078fa5af398b.rlib",
+      "sha256": "d4c78e8fe6faefbed2b03a1baaeff14055f4eb03636e8e071ebd49e838b63c19",
+      "size": 15123494
+    },
+    {
+      "path": "deps/libzerocopy_derive-79b310fd37b4dce2.so",
+      "sha256": "54215c7d8e744de3f12781d26c5a0822a87c443e5cf58f6efaa3bfed7e4a60bf",
+      "size": 4149456
+    },
+    {
+      "path": "deps/libsyn-3c2b60de5d4cbd09.rlib",
+      "sha256": "5a15e71d2260096f90554bdb5d564fd7e6bc97fb86bfd173207279bce900eff7",
+      "size": 12036114
+    },
+    {
+      "path": "deps/libbase64-2df481f7515babd5.rlib",
+      "sha256": "2bcd514204f57c5e730adc3b978718c2931b7b55513885f3e9ebdd711a318756",
+      "size": 389582
+    },
+    {
+      "path": "deps/libfallible_iterator-b3d30f57ad58c2cf.rlib",
+      "sha256": "de940fdc7190292c34085abe0bc293c2e1fa757043d73a3fd165e998f1efc270",
+      "size": 490040
+    },
+    {
+      "path": "deps/libpostgres_derive-f71dba814e9598e6.so",
+      "sha256": "7c04b67e6e15c5ac424427fc50b85e1046cf4f8dea2777df38cedc8113df6e01",
+      "size": 3500104
+    },
+    {
+      "path": "deps/libheck-bc6044727b9efb4d.rlib",
+      "sha256": "8333cf6b47f7f226550069e68bf714d3428f1e82f28cc67c42ef7d367d3e274c",
+      "size": 149288
+    },
+    {
+      "path": "deps/libtokio_util-9720f99402a86428.rlib",
+      "sha256": "f707df338354ff119addf8bce2fca43a933c1e40bd0cc8bdbaa7f52fcbd92766",
+      "size": 1208574
+    },
+    {
+      "path": "deps/libfutures_util-7cecd23b0206dc5b.rlib",
+      "sha256": "13d19def82a03bb17df39772a3316b654b9aa4a0e720e28a40f057c1fa745370",
+      "size": 6599870
+    },
+    {
+      "path": "deps/libfutures_macro-7c7ca738df73b2df.so",
+      "sha256": "cdb83e1975a506e9491de073f68834b255e1c138c9487592700a864454411e00",
+      "size": 3480288
+    },
+    {
+      "path": "deps/libfutures_io-cbcd0bcac7c9207f.rlib",
+      "sha256": "34bf66359a6e6eabeb89b8d438894cb1b1ed663b832b782d2c0a5d8d432b5724",
+      "size": 89790
+    },
+    {
+      "path": "deps/libfutures_task-2d64b898c9113ea4.rlib",
+      "sha256": "a52ad06cd44439a56049ab7f28b90ba9bb24bb4b8d8a7c5eeee97cc73b841c78",
+      "size": 115192
+    },
+    {
+      "path": "deps/libslab-b4aace0e7ba2a6e3.rlib",
+      "sha256": "21e80a1c1ed09085309eb93ab245d3b186ce38745d7459388e18c364da775f4f",
+      "size": 189628
+    },
+    {
+      "path": "deps/libpercent_encoding-81e5850c00af34d8.rlib",
+      "sha256": "86992f951dd9f5d8fa0a8990c8c099f664880269ae5d4b66aabb4611a9e61fc0",
+      "size": 79558
+    },
+    {
+      "path": "deps/libphf-d20d9c77f1dedb2f.rlib",
+      "sha256": "cfb0b8969271092b95cafbeb48b518795b7f15590d4bbd078f02c6ba08f852c3",
+      "size": 202780
+    },
+    {
+      "path": "deps/libphf_shared-e7fa616c4de878dc.rlib",
+      "sha256": "6a4e2e8af240c4dd1e4257e4813d57e2cdae2eff06b69b8e36d2506c135f4dcb",
+      "size": 493146
+    },
+    {
+      "path": "deps/libsiphasher-f224ff158249d310.rlib",
+      "sha256": "d45877f7c6a4da688849f3780bb343df95dff04d65c290bf3a7f6d2ff2a5690e",
+      "size": 227992
+    },
+    {
+      "path": "deps/libwhoami-d54df1f1320b5557.rlib",
+      "sha256": "3390451f05ba33f43c1f7bd5b2f7e47c58bb8cabaf01f9faece4265e6237ded2",
+      "size": 375930
+    },
+    {
+      "path": "deps/libparking_lot-ac5a8073157fa2f0.rlib",
+      "sha256": "831aa504546a3d74b6bfd10072daf49b1b81024bca837d4e21365a7d6e099823",
+      "size": 361048
+    },
+    {
+      "path": "deps/liblock_api-d0e60bacf1425d2e.rlib",
+      "sha256": "bdf171a8777d13f1e5434676d54148fb70a4e2c977cddfd303865780e3db2107",
+      "size": 402780
+    },
+    {
+      "path": "deps/libscopeguard-8bef05b9eacdb9c4.rlib",
+      "sha256": "de331e6bfd91bcecbade78660abe75043744a02b439fc1b23b2250904a8ebd5b",
+      "size": 28698
+    },
+    {
+      "path": "deps/libparking_lot_core-31b13bdf4ac8e352.rlib",
+      "sha256": "bb671c803c23ee23dd101ecc5850711097789a2e323ccb82ec16191449ff975b",
+      "size": 234316
+    },
+    {
+      "path": "deps/libsmallvec-6b4061fa39149fbe.rlib",
+      "sha256": "3de2e047609379fb5ce7e0ca64d992f1b5e7f55ff668e5204c8a6cf4fcaad64e",
+      "size": 297014
+    },
+    {
+      "path": "deps/libserde-491f12206ae5c750.rlib",
+      "sha256": "a8d5a7924e99d156c7f4f9ecc69635d094d0ea4ecf7fe28ef1b770522bb9ddb7",
+      "size": 976700
+    },
+    {
+      "path": "deps/libserde_derive-f1dc32db0429fed1.so",
+      "sha256": "7f6833959560a0e08593ce31d6c0224d5072f0f34830facec92f5047b17339aa",
+      "size": 4433288
+    },
+    {
+      "path": "deps/libasync_trait-5277241200e6023c.so",
+      "sha256": "84be0467bf62ee3724cd8270d50915c01256451afab4b4ed7177c2caae75361f",
+      "size": 4335384
+    }
+  ],
+  "native_build_outputs_copied": false,
+  "native_link_qualified": false,
+  "future_compile_argv_NOT_EXECUTED": [
+    "/home/lucied/.rustup/toolchains/1.98.1-x86_64-unknown-linux-gnu/bin/rustc",
+    "--edition=2021",
+    "--crate-name",
+    "pg_ro_client",
+    "pg_ro_client.rs",
+    "-L",
+    "dependency=/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-deps-b472-v1/deps",
+    "--extern",
+    "tokio_postgres=/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-deps-b472-v1/deps/libtokio_postgres-3179df43d80295e0.rlib",
+    "--extern",
+    "tokio=/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-deps-b472-v1/deps/libtokio-64cfcb92dcf41713.rlib",
+    "--extern",
+    "serde_json=/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-deps-b472-v1/deps/libserde_json-452ff4526b3b8a08.rlib",
+    "-C",
+    "opt-level=1",
+    "-C",
+    "codegen-units=1",
+    "-o",
+    "/home/lucied/.cache/optimiseur-notes/pg-ro-attestation-20261116/future-client/pg-ro-client"
+  ],
+  "cwd": "docs/optimiseur/16-11-2026/pg-ro-attestation",
+  "parent_hard5_and_kill_reap_NOT_QUALIFIED": true,
+  "docker_identity_future": {
+    "command": "docker inspect",
+    "template": "{{json .Id}} {{json .Image}} {{json .NetworkSettings.Ports}}",
+    "timeout_and_reap_NOT_QUALIFIED": true,
+    "env_or_exec_requested": false
+  },
+  "admission_v1_compatible": false,
+  "future_transport_name": "standalone-tokio-postgres"
+}
