@@ -170,3 +170,8 @@ RO preuves Banc a4a2de1e1a : [rapport21](../../banc/16-11-2026/21-ro-preuves-ver
 ### Banc — lecteur corrigé6e12d6c8
 
 [RO groupée favorable préparation](../../banc/17-11-2026/06-ro-provider-lecture-publication.md) : cinq rouges5917 relus3/3SHA PC+local/4SHA Git/5FAIL0ERROR, pas de rejeu. Chaîne complète des heads/cwd-manifeste indépendants, admissionbytesSHA+reread et dirfdroot/parents/identités auxfrontières traitent les réserves.3AST/17témoins inchangés NONJOUÉS sur vert ; GO CPU exact C7 encore requis. Readerphysicalfalse/bridgeabsent/229bQfigés/config40NONEXEC ; ticket OUVERT.
+
+
+### Banc — preuves lecteur17 vertes6e12
+
+[Preuves relues sans rejeu](../../banc/17-11-2026/06-ro-provider-lecture-publication.md) : manifestdc0d2ec9/3SHA PC+local conformes, empreintes sourceGit égales,17OK/0FAIL0ERROR0skip/rc0/1invocation0retry. Qualification bornée CPU lecteur6e12/physicalfalse ; pas de bridge/windowruntime/ELFhash/liveness/transportACK/acteur/PG/natif. Cinq rouges5917 avantfix préservés ; ticket OUVERT.
