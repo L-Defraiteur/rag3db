@@ -152,3 +152,19 @@ Le témoin juge aussi environnement et argv contrôleur réels. Aucun changement
 du Common ni du finaliseur6715. P/Q/S et manifest passent ensemble v7,
 Qv6 reste figé. Correctif NON JOUÉ : nouvelle RO/GO CPU distinct avant vert,
 puis nouveau paquet et revue totale ; aucun lancement natif autorisé.
+
+## P1 ordre heartbeat/horloge — revue totale Recherche d22/Qv7
+
+Dans la boucle driver de grant_watch_controller.supervise, now=check_scope
+précède read_owned(heartbeat). Un acteur sain peut publier entre ces deux
+instructions : seen devient supérieur à l'ancien now et le validateur refuse
+un heartbeat pourtant présent avant sa validation. Défaut hérité2d, consigné
+ici AVANT correction. Qv7/sourceD22 figés, revue totale réservée.
+
+Témoin prépublié test_controller_heartbeat_order : vrai superviseur et vrai
+read_owned ; FakeWorld existant sans OS/process réels, publication heartbeat
+à now+.01 intercalée dans sa lecture seulement après création du faux driver.
+Le juge exige l'entrelacement effectivement injecté, retour0/sans premier
+rouge/release. NON JOUÉ : nouvelle RO/GO CPU rouge distinct avant test.
+Correction attendue après rouge : horloge fraîche APRÈS lecture heartbeat,
+avec contrôles END/premier rouge ; aucun assouplissement future/âge.
