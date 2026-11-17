@@ -74,3 +74,37 @@ Source+paquet+recette soumis à RO totale avant GO CPU et GO diagnostique
 séparés. Aucune lecture live/proc/FLOCK, allocation, compiler ou SQL effectués
 pour la préparation ; fichiers r3/B01/OUT_T inchangés. Un futur diagnostic
 MATCH/REFUS ne qualifie toujours aucun transport ou compilateur.
+
+## Deux GO distincts exécutés — CPU vert, observation complète refusée
+
+C7c7cabacd87 : C7-G-LOCK-CPU-AE201-17nov60 UNEinvocation autorisée,6PASS/
+0FAIL0ERROR0SKIP rc0, unittest0.039s/commande0.125182674s ; dix sources avant/
+après identiques. Bruts/receipt vérifiés deuxhôtes P/lock-cpu-ae201-17nov60-01,
+receiptSHA4523f15f12897853fb03ff450e6194ca81ba88926a476055557fd7e902ad3b52.
+Aucun vrai proc/FD/flock/processus par fixtures.
+
+Après ces preuves et rehash outils/sources+absence sorties, GO CONDITIONNEL
+C7-G-LOCK-OBSERVE-AE201-17nov14 consommé UNEfois, commande exacte Common10/
+OS12kill2. rc1 en0.247230880s, Commonvalidation-oi4xhyw1 ROUGE/restes[]/nettoye.
+Sources inchangées ; aucune seconde collecte ni compiler/metadata/PG/contact.
+
+Cette fois fdinfo.raw et capture.json+SHA sont complets, nontronqués et
+publiés AVANT la comparaison. Capturemonotonic1261858.942493451→1261858.947753927,
+firstred1261858.949728756 : kernel lock inode differs. Tuple attendustat/fstat
+`(0,55,30976078)` ; tuplefdinfo `(0,38,30976078)`, ligne
+`lock: 1: FLOCK ADVISORY READ 268849 00:26:30976078 0 EOF`.
+Le même inode concorde ; le minor device diffère (0x26=38, pas55).
+Root/fiche/lock/FD9 stat=fstat, FD9 et poste.lock dev55/inode30976078 ; poste
+PID268792/start126185875/UID1000/CGsession-c1024770 reste identique avant/après.
+Ce sont les faits de CETTE collecte, pas une requalification rétrospective B-R3
+ni une attribution filesystem. Aucune comparaison supprimée ou normalisée.
+
+Preuves originales PC P/lock-observe-ae201-17nov14-01 et
+P/diagnostic-runs/kernel-lock-01 ; copie locale P/lock-observe-proof-copy-01.
+Quatorzefichiers vérifiésSHA/taille aux deuxhôtes, Commonpublic sansjeton :
+receiptSHA7503df460ada2dd60f024cc312d857c9941717c15c8c28b3f75f84dd20f605fa ;
+manifestSHA817f5e4c9ea112081b6cd4baf45bcccff89f829fdbbb0abf6c397632692a7412 ;
+captureSHA7a1c1a455efe1e404b2b6cebb389247d1d921b032bca5da3f415da080ef64f90.
+Sous-cause kernel/filesystem reste à établir par sources/documentation et
+contrat explicite avant tout correctif de garde. Diagnostic fermé après son
+premier refus, aucun GOcompilation, OS/transport/lease acquis par ces pièces.

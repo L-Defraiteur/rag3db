@@ -485,3 +485,19 @@ Pprivé/diagnostic-packet-01 et diagnostic-preparation-01 ; dixsources pinées,
 GOinactif/outputkernel-lock-01absent, Common10/OS12kill2 seulement proposés.
 SixCPU NONJOUÉS, aucune vraie lectureproc/flock ni slot acquis. RO totale
 requise avantGOCPU+GOdiagnostic distincts. Anciens paquets et GO restent clos.
+
+### Diagnostic distinct AE201 achevé, comparaison stricte refusée avec bruts
+
+GOCPUc7cabacd87 :6PASS0FAILERRORSKIP rc0,uneinvocation/0.125182674s,
+preuves2hôtes receipt4523f15f12897853fb03ff450e6194ca81ba88926a476055557fd7e902ad3b52.
+GOOBSERVEconditionnel ensuiteUNEfois après toutesgates :rc1/0.247230880s,
+Commonvalidation-oi4xhyw1 ROUGE/restes[]/nettoye,0retry/contact/compiler.
+Capture complète avant firstred : tupleStat(0,55,30976078) vs tupleKernel
+(0,38,30976078), FLOCK ADVISORY READ présent ; inodeidentique,minor différent.
+Stat=fstat root/fiche/lock/FD9, FD9==poste.lock, PID/start/UID/CGstable dans
+CETTEcapture. Aucun garde relaxé, aucune souscauseFS attribuée ni réécritureB-R3.
+Détails et14preuvesSHA/taille deuxhôtes dansproposal04 ; captureSHA
+7a1c1a455efe1e404b2b6cebb389247d1d921b032bca5da3f415da080ef64f90,
+receipt7503df460ada2dd60f024cc312d857c9941717c15c8c28b3f75f84dd20f605fa.
+Reste à établir le contratkernel valide par source/revue, pas par suppression
+de comparaison pour obtenirVERT. AucunGOcompilation/SQL/PG/service/lease déduit.
