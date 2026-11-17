@@ -601,3 +601,13 @@ Préparer sourcev2/whitelisttraces/injectioncredentials mémoire et filets
 connectavantPID/transactionRO/constantes/CancelToken-drop-join/postcheckMINEND/
 premièrecause/reap/secrets. AucunCPU/rustc/ELF/DBDDL/connect/creds/SQL/service
 pendant préparation ; code/pins/RO puis GOsdistincts CPU/natif/PG requis.
+
+### Autorisation explicite Lucie Docker — inventaire puis plan avant entrée
+
+C7 relaie « pour pgsql faut pas hésiter à lancer un docker » : allocation TEST
+privée jetable autorisée, distincte PGpartagé5433/originaux/SDK/caches/services.
+Avant action : inventaireRO moteur/images et portloopbackproposé15433 libre ;
+plan pin imageDIGEST/labelsnonce/baseTEST/rôleROnonowner/credentials0600 privés,
+32GMAX/CPU/disque-logs/timeout/cleanup et preuves. Publication plan avantcréation,
+aucun clientC/candidatnative/GOPG implicite ; source/testsclients restent soumis
+publication/rouge/RO/GOdistinct. Pas de nouvelle approbation Lucie à demander.
