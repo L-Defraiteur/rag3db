@@ -781,3 +781,7 @@ Ajouter génération/occurrenceexec, pertescapture/descendants/execéchoué ;
 finimage≠rcwaitprocessus. Neufracinesn’impliquentpasexhaustivité. CP garde
 relais/ACK/Window, ne reprendpasimplicitementproducteurphysique ; attribution
 C7séparée. Miseàjourdocumentaireseule, aucun code/CPU/runtime autorisé.
+
+RO M6c96 favorable frontièreDOC ; précision intégrée : SHAimageELF seul
+nequalifiepasSDKdynamique chargé. Profilruntime réel àrelierparsonporteur ;
+bracketsArchi229b nonempruntéscommequalification physique. Aucun code/CPU.

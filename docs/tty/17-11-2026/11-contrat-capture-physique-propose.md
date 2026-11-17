@@ -153,6 +153,19 @@ la recette canonique, la condition reste HOLD. Toute extension du canon ou de
 ses entrées transitives doit être exposée à C7 et à son porteur, témoins rouges
 avant code ; pas de réécriture locale « équivalente » ni de canon simulé.
 
+## Profil chargé : autre preuve que le seul ELF
+
+Le SHA de l'image principale ne qualifie pas à lui seul les bibliothèques
+SDK dynamiques effectivement chargées. Le contrat source/profil et les pins
+SDK attendus doivent être reliés à la preuve du profil runtime réel par leur
+porteur : environnement autorisé et résolution/chargements réellement observés,
+avec leur périmètre et leurs limites. Les brackets env/maps préparés côté
+Archi229b sont une référence à consulter, pas une qualification physique
+empruntée ici ni une preuve exhaustive de chaque chargement ultérieur.
+Une image A correcte avec un profil SDK non prouvé reste HOLD pour la
+qualification native ; aucun contenu d'environnement partagé ou secret n'est
+à lire par la présente préparation.
+
 ## END et frontières LOCAL/PC
 
 Capture et tests sont proposés LOCAL, sous leur Common réel. Les sources
