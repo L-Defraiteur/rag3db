@@ -72,3 +72,43 @@ Source/fakes de ces vrais raccords à publier avant exécution CPU60 hermétique
 puis rouge→fix→vert et revue totale. Cette préparation ne lance aucun acteur,
 processus de test natif, lecture /proc, health, DB, CLI ou nouveau cycle. Les
 preuves OS manquantes du3c2 ne sont pas reconstituées a posteriori.
+
+## Préparation acteur commun publiée (Embar, 17 novembre)
+
+Source des deux fichiers `grant_watch_actor.py` et
+`test_grant_watch_actor.py` : ff69dcbd1fcbd7b807c4880a7a556b539c8069d2,
+branche cx-embar-grant-watch-actor-20261117-r1. Code acteur strictement identique
+à 96f3a2a121. SHA256 acteur
+`789058a8a8d15815e1a1b4083c1201d6ae390a79e9471740c11ab38af31f5175`,
+tests `cd0f3f4691148ac8f9ed4dfc65ddc20a88e46a20350c535fd11c664f82264d11`.
+
+Témoins publiés 5a0cbc5997 avant exécution : premier témoin d'admission
+physique vu rouge, ValueError « actor admission not implemented », 1 test,
+0.004s sous timeout60/failfast. Après correction publiée96f3 : 12/12 verts
+0.061s. Extension de témoins publiéeff69 : 17/17 verts0.015s, aucun skip.
+Commandes : `timeout --signal=TERM --kill-after=2s 60s python3 -B -m unittest
+-f test_grant_watch_actor`, depuis le dossier coordination. Aucun acteur OS
+ni sous-processus de test lancé ; faux proc, horloges, autorité et politique.
+Les fichiers temporaires des témoins ne sont pas des ressources du cycle.
+
+ARMED est créé exclusivement dans la première boucle après les contrôles,
+avec process complet, loop_counter et loop_observed_monotonic. Le parent
+réutilise process_snapshot/validate_armed et doit vérifier son propre poll ;
+le reçu seul ne suffit pas. Heartbeat remplaçable borné à10s,
+phases WAIT_READY/PUBLISHING/WAIT_RELEASE. L'ACK intermédiaire et le résultat
+terminal restent distincts. Après publication du grant, aucun second contact :
+attente du release DRIVER_FINISHED lié à configSHA/nonces/pilot/allocation
+jusqu'à END original. Release anticipé, firstred, changement de processus ou
+sources entraînent refus, sans écrasement du premier rouge.
+
+Tous les fichiers Q sont vérifiés avant import de la politique et chaque
+contrôle d'action ; prepared et config restent liés par SHA externe.
+`paths.grant` reste dans Q ; les traces acteur sont dans P. La politique
+préépinglée porte les contrats services, lease, GET et flags ; le mécanisme
+commun ne transpose pas no_embedding du cycle vers la politique globale.
+Les hooks sont preflight(config) et publish_ready(config,path,sha,nonce).
+
+Qualification limitée à la préparation : raccord contrôleur/protocole/politique
+porté par Arbre, qualification totale et RO du nouveau couple restent requis.
+Aucun RUN, health, lecture /proc réelle, DB, modèle, slot ou nouveau GO.
+L'ancien 3c2 demeure ROUGE et ses archives restent inchangées.
