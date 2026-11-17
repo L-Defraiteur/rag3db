@@ -90,3 +90,52 @@ brut transféré. Les SHA suivants ont été comparés et concordent :
 Le SHA du nouvel ELF original sous target a aussi été relu sur PC et égale celui
 des deux copies. Cet ELF n'a jamais été exécuté dans ce lot. Les ELF118 restent
 séparés et ne sont pas employés comme preuve de cette sonde.
+
+## Diagnostic demandé par C7 : heures PC et responsabilité de publication
+
+Collecte **sur le PC** le17novembre à07:12:02.241181UTC,
+monotonicPC1245417.350911825. Les mtime UTC des fichiers originaux PC, conservées
+avec leur epoch_ns dans timeline-pc.json, donnent :
+
+| Preuve PC | UTC du16novembre |
+|---|---|
+| allocation.json | 19:46:39.556058Z |
+| outer-supervision.json | 19:46:39.654078Z |
+| compile.command.json | 19:46:40.445619Z |
+| compile.result.json | 19:47:14.311408Z |
+| build-ledger.json | 19:47:14.475387Z |
+| first-red.json | 20:15:35.006390Z |
+| common.result.json | 20:15:35.127612Z |
+| classification.json | 20:15:35.127765Z |
+
+Ce sont les mtime des preuves PC, pas des timestamps du portable. Elles
+corroborent la chronologie monotone PC, sans convertir une horloge monotone
+entre machines. La date de l'environnement passant au17novembre n'explique pas
+l'échec ; le refus a déjà été écrit le16 à20:15UTC.
+SHA timeline-pc.json, identique aux deux hôtes :
+e22ea024cc44ee87e913f0705af0146fb82c87799e623707f2ec7fc1d98fcd4a.
+
+**Qui attendait ?** Le pilote inside sur PC, dans wait_publication(build),
+attendait baseline/build-peer-ack.json, vérifiant l'horloge jusqu'à END−15.
+Le second ACK runtime n'a jamais été atteint. Aucun ledger runtime n'a été
+fabriqué après coup.
+
+**Qui devait copier ?** La session devait appeler ses outils scp après détection
+du build-ledger, copier ledger+ELF au portable, y appeler peer-ack puis publier
+l'ACK atomiquement sur PC. Ce chemin était documenté mais aucun relais autonome
+n'avait été lancé. Les transferts conservatoires ont été faits après le rouge ;
+ils ne satisfont pas l'ACK attendu et aucun ACK posthume n'a été créé.
+
+**Dernier état vu et réseau ?** L'entrée distante exec directQ a été suivie d'un
+monitor PC montrant compile.command/stdout/stderr et pas encore build-ledger.
+Le retour suivant de la sessionSSH89603 a signalé Connection reset by peer puis
+255 ; une nouvelle lecture distante a trouvé le rouge publié. Les preuves PC
+n'enregistrent pas l'instant exact de la coupure SSH ni sa cause ; aucune
+causalité réseau n'est déduite. La configuration SSH effective relue en mode
+local ssh-G indique actuellement lucied@luciepc,port22 : ce n'est pas une preuve
+de transport pendant le lot ni un diagnostic de port. Aucune sonde réseau,
+installation de service ou validation native supplémentaire n'a été lancée.
+
+Les GO BASE consommé et CAND/REPORT conditionnels sont clos/non armables après
+ce rouge. Ce diagnostic précède toute proposition de reprise ; il n'alloue ni
+worker ni nouveau temps de compilation.
