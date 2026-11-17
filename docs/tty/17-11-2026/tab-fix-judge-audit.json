@@ -1,0 +1,8 @@
+{
+  "red_source": "bc8ab075813cb882c9876dffbc2f3bb8128da560",
+  "test_function": "tui::tests::partial_english_and_legacy_commands_collect_catalogue_before_completion",
+  "judge_text_unchanged": true,
+  "judge_sha256": "175ce9b2f2ee0119eb241af9d6fc7d5128dc50f2155f936f79df763fdf4e4027",
+  "action_completer_callback_unchanged": true,
+  "change": "canonical command parser selects model/task/repository candidate capabilities before Sources"
+}

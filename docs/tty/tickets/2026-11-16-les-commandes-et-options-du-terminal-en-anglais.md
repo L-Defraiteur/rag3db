@@ -608,3 +608,15 @@ RAW2hosts archives/cx-tty-tab-bc8-red/evidence.tar SHA6f1ab9a07133b659d58de38407
 preuves choisies/rapport `docs/tty/17-11-2026/01-rapport-de-session.md`.
 Aucun fix/retry/secondtest/F8/provider/HTTP/SDK/PCrun/master ; ancien934/RAW/ELF
 conservés. Correction et qualification suivantes attendent les consignes C7.
+
+### Correctif produit préparé après rouge confirmé, pas rejoué
+
+C7 autorise après archivesBC8 rehashées2hosts et ticket publié9eab76ff61 :
+`source_de` compose désormais commandes::lire AVANT Sources, décide les
+capacités par Modele/Tache/Depot canoniques. Pas de seconde table de préfixes,
+arguments/aliasFR conservés par le parseur déjà livré. ActionCompleter et
+le juge réel sont textuellement inchangés, hash/audit
+`docs/tty/17-11-2026/tab-fix-judge-audit.json`.
+Aucun test, Cargo, build, metadata, F8, service ou HTTP rejoué sur l'ancienGO600.
+Le target reste propriétaire nouveauWtty avec le testELFrougeBC8 ; nouveau
+coupon vert/source/pin et RO/GO distinct avant qualification.

@@ -363,13 +363,15 @@ pub fn dossier_de_commande(manifeste: Option<&str>) -> std::path::PathBuf {
 
 /// Ce que Tab peut proposer pour `debut`.
 fn sources_de(debut: &str, agent: &ureq::Agent, ep: &Endpoint, tache: &Tache, load_state: &dyn Fn(&str) -> Result<Value, String>) -> crate::commandes::Sources {
+    use crate::commandes::Commande;
+    let command = crate::commandes::lire(debut).0;
     let mut s = crate::commandes::Sources { themes: crate::theme::THEMES.iter().map(|(n, _)| n.to_string()).collect(), ..Default::default() };
-    if debut.starts_with("/model") {
+    if matches!(command.as_ref(), Some(Commande::Modele(_))) {
         if let Ok(v) = modeles_de_tache(agent, ep, tache) {
             s.modeles = v["models"].as_array().into_iter().flatten().filter_map(|m| m["name"].as_str().map(str::to_string)).collect();
         }
     }
-    if debut.starts_with("/tache") || debut.starts_with("/depot") {
+    if matches!(command.as_ref(), Some(Commande::Tache(_)) | Some(Commande::Depot(_))) {
         if let Ok(etat) = load_state("/ide/etat") {
             for b in etat["backends"].as_array().cloned().unwrap_or_default() {
                 match b["tache"]["nom"].as_str() {
