@@ -796,3 +796,14 @@ producteuretadaptationCommon nonattribuésimplicitement. Aucun code/prototype
 ouCPU/process/traceur/slot/runtime autorisé. PasdechantierobservateurTTY
 parallèle ; repriseconsommateursousnouveaucadrageC7aprèsétude. Ticketparent
 resteOPEN,14vertshérmétiques≠qualificationglobale, Qexecutionfalse inchangé.
+
+### Arbitrage C793c44be2d6 : nouveau contrat invocation/entrée, DOCseule
+
+Ticketcommun8b1version93c44be2d6 lu : retenueinvocationprogrammeREVU depuis
+imageENTRÉECONFIRMÉE+copie+wait/RAWdel’invocation, pasrcimageAinaltérée
+niPIDauteurdechaqueoctet. Couverturefuturesexec/descendantsP17-P20UNKNOWN
+NONconditionimpliciteanglais, pas20verts. Préparer versionneuvecontratDOC
+ettableP01-P16bornéeracines, Bpréautoriséseulement ; sourcehistorique961
+conservée. ArchiAPI/témoins/confirmationréelle, CPpubACKWindow ;4sitese2e
++CargorunnersurfaceacceptéeàréserverRecherche, aucunappelantmodifié.
+Aucuncode/CPU/native/Qactivation/slot/GO3600, APIabsentejusqu’auxpreuves.
