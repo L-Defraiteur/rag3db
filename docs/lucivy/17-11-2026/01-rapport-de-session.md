@@ -38,3 +38,12 @@ Cargo/ELF/proc/corpus. RO couple exact puis GO distinct restent requis.
 RO Banc du couple6a16c7220f favorable PRÉPA SEULE : c3cba8417c, rapport
 `docs/banc/17-11-2026/03-ro-couple-fs-red.md`. Copies/AST/bornes/barrière
 autonome et attribution des juges cohérentes à lecture. Aucun run/GO déduit.
+
+RO Recherche statique du couple6a16c7220f/source8b reçue favorable bornée :
+admit166d/pilota5c/export047 et recette/préflight79ad relus. Arm avant launch,
+physicalEND arm+300 incluant poste, Commonreste−12/finalpostCommon, ledger
+copié/rehashé/ACK avant inventory, six causes/traces/compteurs stricts puis
+positif, infraSTOP cohérents à lecture. DeltaLock strict et backups conservés.
+Aucun Cargo/test/proc/corpus/contact/SSH par Recherche ; copies PC non rehashées
+indépendamment par elle (Banc les a vérifiées). Aucun GO/runtime ni qualification
+natif0=0/FSfix/readonce/sink/fullcore. Les deux RO du couple sont reçues.

@@ -130,3 +130,12 @@ physical300/ENDmin−12, ledger fsync/rehash/ACK avant toutELF, six causes et
 positif, finCommon/scan/rehash/retourSSH cohérents à lecture. Lock ignoré et
 delta explicite. Aucun test/pilote/proc/corpus/DB/service par Banc. Aucun
 résultat/qualificationFS/read-once/global ; GO C7 exact distinct requis.
+
+RO Recherche statique du couple6a16c7220f/source8b reçue favorable bornée :
+admit166d/pilota5c/export047 et recette/préflight79ad relus. Arm avant launch,
+physicalEND arm+300 incluant poste, Commonreste−12/finalpostCommon, ledger
+copié/rehashé/ACK avant inventory, six causes/traces/compteurs stricts puis
+positif, infraSTOP cohérents à lecture. DeltaLock strict et backups conservés.
+Aucun Cargo/test/proc/corpus/contact/SSH par Recherche ; copies PC non rehashées
+indépendamment par elle (Banc les a vérifiées). Aucun GO/runtime ni qualification
+natif0=0/FSfix/readonce/sink/fullcore. Les deux RO du couple sont reçues.
