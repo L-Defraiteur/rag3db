@@ -300,3 +300,23 @@ Q29sources+prepared30e entrée SHA1d1441034dc2f811239bfd9688a63ebc3244cf65173890
 P/S/allocation/outer absents, zéro ELF/test/DB/provider/copieDATA. Deux RO TOTALES
 source+paquet demandées avant GO CPU et éventuel GO B distinct. Query/portable/C
 et services/originaux/RET frais restent hors paquet. Parent OUVERT.
+
+
+### Réserves groupées Recherche sur préparation B7a783/4e3/Q1d144
+
+Avis EDd667f001ca favorable borné conservé, mais préparation B RETIRÉE des
+candidats GO après contre-exemples statiques Recherche : (R1) first_query
+utilise q.sha(reader.binary) courant comme SHA attendu, au lieu de la référence
+indépendante A/add010 (fenêtre ABA non fermée par gardes avant/final). (R2)
+reader_exec contrôle END avant hash/open, pas juste avant exec ; first_query
+calcule durée/deadline avec deux now et ne contrôle pas fraîchement juste avant
+Popen. Un coût hash/open peut franchir END avant début du natif.
+
+Ces constats sont SOURCE, sans exécution ni attribution de runtime. Arbre
+prépare AVANT correctif cinq témoins causaux CPU sur les vrais corps actuels :
+promotionSHA, expiration pendant hash, expiration pendant open, deux now qui
+étendent END-15, expiration juste avant Popen. Pas de correction avant rouges
+observés sous GO CPU exact distinct ; source/tests/pins/RO avant ce GO. Puis
+correctif GROUPÉ référence indépendante+deadline unique/rechecks tardifs,
+nouvelles RO et verts distincts ; nouveau paquet Q/pilote B, anciens r1 gardés.
+Aucune exécution/native/DB/provider/DATAcopy/ELF autorisée par cette réserve.

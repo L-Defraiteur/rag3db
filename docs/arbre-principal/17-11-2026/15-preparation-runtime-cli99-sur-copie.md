@@ -152,3 +152,25 @@ Le statut metadata n'est pas une autorité C7 ; aucune allocation réservée ici
 Deux RO TOTALES demandées sur CE couple source4e3/Q1d144 et les douze témoins
 NON JOUÉS. Pas de compilation/test/GDB/proc frais/DB/copieDATA/ELF/provider/
 service/original/retrait ; A et toutes ressources conservés.
+
+## Retrait du candidat B après réserves Recherche, avant correctif
+
+EDd667f001ca favorable borné sur la préparation est conservé comme avis reçu.
+Recherche relève deux défauts SOURCE du nouveau Reader : SHA courant promu
+en attendu ; fenêtre de délai hash/open/exec et deux now duration/deadline,
+sans contrôle frais juste avant Popen. Le candidat4e3/Q1d144 est RETIRÉ du GO.
+Pas de résultat CPU/runtime, ni réparation de son Q figé. Parent annoté avant
+édition ; cinq [témoins causaux](runtime-99/test_reader_boundaries.py) ajoutés
+SANS modifier reader_runtime/reader_exec/adapter ni les douze tests existants.
+
+[Pins proposés](runtime-99/red-boundary-pins.json) : cinq noms exacts, source
+et Python/timeout LOCAL, cwd propre du pilote, timeoutTERM58/KILL2 soit60s.
+Invocation proposée Python3.14-B -m unittest -v avec les CINQ noms listés,
+SANS failfast : attendu5FAIL/0ERROR/0skip/rc1. Douze autres non sélectionnés.
+Chaque juge appelle les vrais first_query/reader_exec, clocks/proc/subprocess/
+exec fictifs seulement. Promotion attendue : refus avant native ; hash/open
+tardifs : ValueError avant exec ; deux now : deadline<=END-15 ; Popen tardif :
+zéro lancement, même si un postcheck refuse après coup. Aucun contre-exemple
+exécuté ici. RO ciblée puis GO5RED C7 distinct avant toute exécution/fix.
+Après cinq rouges causaux conservés, correctif GROUPÉ/pins/RO puis GO verts
+distinct, nouveau Q/W pilote B ; anciens A/Qr1 et rouges restent conservés.

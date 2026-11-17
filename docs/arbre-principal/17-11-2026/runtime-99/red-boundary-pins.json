@@ -1,0 +1,46 @@
+{
+  "kind": "PROPOSED_CPU_RED_FIVE_NOT_RUN",
+  "source_base": "7a78310d6db34c86cb708b5a2b7df5a5a9665ad0",
+  "files": [
+    {
+      "path": "docs/arbre-principal/17-11-2026/runtime-99/reader_runtime.py",
+      "sha256": "39b2214369f96526e3f61079ba6280465811869b8b1ee74f86243919151e3c75"
+    },
+    {
+      "path": "docs/arbre-principal/17-11-2026/runtime-99/reader_exec.py",
+      "sha256": "c1239224835915630bc515ab9b502ee669404a2f5a9b96b5202f42974d355733"
+    },
+    {
+      "path": "docs/arbre-principal/17-11-2026/runtime-99/test_reader_boundaries.py",
+      "sha256": "cbff7fde809ae1d9e52c5fc045d38d75dd17e6831fec05fc71d60c0a84070850"
+    }
+  ],
+  "python": {
+    "path": "/usr/bin/python3.14",
+    "sha256": "c81d88523721c462f53a98129d65bba68f67791932f0664372e1778e74fd9517"
+  },
+  "timeout": {
+    "path": "/usr/bin/timeout",
+    "sha256": "ccecc427cae6d6c091964a9ec140d83933a60900533daf46b74f8288551e29c3"
+  },
+  "cwd": "/home/lucied/git_workspaces/rag3db-cx-arbre-cli99-runtime-b-20261117-r1/docs/arbre-principal/17-11-2026/runtime-99",
+  "names": [
+    "test_reader_boundaries.ReaderBoundaries.test_current_elf_hash_must_not_be_promoted_to_expected_pin",
+    "test_reader_boundaries.ReaderBoundaries.test_hash_crossing_deadline_must_refuse_before_exec",
+    "test_reader_boundaries.ReaderBoundaries.test_open_crossing_deadline_must_refuse_before_exec",
+    "test_reader_boundaries.ReaderBoundaries.test_duration_and_deadline_must_use_one_observation",
+    "test_reader_boundaries.ReaderBoundaries.test_deadline_crossed_before_popen_must_not_start_native"
+  ],
+  "expected": {
+    "tests": 5,
+    "failures": 5,
+    "errors": 0,
+    "skips": 0,
+    "rc": 1
+  },
+  "outer_seconds": 60,
+  "term_seconds": 58,
+  "kill_seconds": 2,
+  "other_12_not_selected": true,
+  "native": false
+}
