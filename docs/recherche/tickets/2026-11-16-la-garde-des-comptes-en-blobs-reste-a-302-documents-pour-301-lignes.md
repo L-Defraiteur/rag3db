@@ -751,3 +751,11 @@ reste sourcehistorique nonexécutée ; nouveaupin+RO requis aprèscorrection.
 Correctifsourceprépa join_driver : helperréel+testRustpartagé ne repoll jamais
 ReadyErrconsommé ; timeoutseulabort/joinmêmeEND.9RustNONCOMPILÉS,20Python+1legacy
 NONJOUÉS. Packetsource02/RO àactualiser, aucunclient/credential/natifPG exécuté.
+
+Avantfix RRO6fPython : status==dict(reaped=True,quiet=True,returncode=0) accepte
+aliases1/1/False parégalitéPython. Consigner puispublier testvraiobserve sur
+FakeTransportstatutmaltypé ; exiger boolEXACTS etintEXACTnonbool, shapeexacte.
+AucuneCPUjouée/rougeinventé. RéserveRustjoinRconfirmée, déjàconsignée6f0avant
+fixc8d/testVRAIJoinHandle ; nouveauxpins àmettreàjour aprèssecondecorrection.
+UnitéTTL02 vérifiée not-found/inactive/dead (aucunstopnécessaire), preuve
+expiry-unit-finalSHAe31c822b796f2cc5f7979085c14f20ad0b23bbee87ff433ef1bbfca1bc929ec7 copiée2hôtes.

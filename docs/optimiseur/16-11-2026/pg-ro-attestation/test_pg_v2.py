@@ -110,6 +110,10 @@ class V2Fixtures(unittest.TestCase):
         def finish(*args,**kwargs):now[0]=1011.;return old_finish(*args,**kwargs)
         transport.finish=finish
         with self.assertRaises(v2.Refused):self.run_probe(transport,clock=lambda:now[0])
+    def test_finish_status_rejects_boolean_integer_aliases(self):
+        transport=FakeTransport()
+        transport.finish=lambda deadline,stop:dict(reaped=1,quiet=1,returncode=False)
+        with self.assertRaises(v2.Refused):self.run_probe(transport)
     def test_finish_failure_is_not_retried(self):
         transport=FakeTransport()
         def finish(deadline,*,stop):
