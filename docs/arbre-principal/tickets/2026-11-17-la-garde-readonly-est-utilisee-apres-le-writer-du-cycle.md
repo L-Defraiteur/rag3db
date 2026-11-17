@@ -103,3 +103,14 @@ verts. Seize fonctions désormais (15 postwriter +1 prewriter), NON JOUÉES
 après correctif. P/Q/S+manifest v9, Qv8/65eb/ancien budget clos conservés.
 Nouvelles RO et GO CPU distinct nécessaires avant toute exécution ; aucun
 GO auditRO/900/natif/DB/provider/writer/recovery acquis par ce correctif.
+
+## P2 raccord readonly après lectures froides — avant correction
+
+RO Recherche0e4c favorable bloc post-writer, mais le raccord final compare
+encore after_reads!=after_writer strictement. Un .readers initialement absent
+et vide serait refusé, contrairement au contrat readonly inchangé prévu au
+nouvel étage. Déjà présent dans code ancien, pas un résultat natif nouveau.
+Trois témoins du vrai bloc AST after_reads→avant sources-after prépubliés,
+mutants .readers non vide et DB bytes modifiés avec positif .readers vide.
+NON JOUÉS ; aucun correctif P2 ni transfert GO depuis les16autres.
+GO CPU causal exact distinct à demander avant test, puis revue/correctif/vert.
