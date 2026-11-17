@@ -245,6 +245,25 @@ class RelayTests(unittest.TestCase):
         result = json.loads((Path(self.tmp.name) / 'relay-result.json').read_text())
         self.assertEqual(result['verdict'], 'ROUGE')
         self.assertTrue(result['native_verdict_unchanged'])
+    def test_publication_expiry_still_requests_remote_stop_in_reserved_phase_time(self):
+        def expired(timeout):
+            return {'state': 'active', 'remaining': 0, 'phase_remaining': 15, 'stage': 'build'}
+        self.transport.snapshot = expired
+        with self.assertRaises(TimeoutError):
+            self.relay.run()
+        self.assertIn('abort', self.transport.calls)
+        self.assertTrue(self.transport.closed)
+    def test_queue_expiry_uses_stop_reserve_inside_queue_deadline(self):
+        old = self.transport.start_phase
+        def late_queue():
+            old()
+            self.clock.now += 296
+        self.transport.start_phase = late_queue
+        self.transport.snapshot = lambda timeout: {'state': 'waiting'}
+        with self.assertRaises(TimeoutError):
+            self.relay.run()
+        self.assertIn('abort', self.transport.calls)
+        self.assertLessEqual(self.clock.now, 1000300)
     def test_phase_exit_before_build_is_failure(self):
         self.transport.phase_running = False
         with self.assertRaises(RuntimeError):
@@ -439,6 +458,32 @@ class GateTests(unittest.TestCase):
         self.assertEqual(result['unknown'], [])
         self.assertEqual(sent[0][0], 9)
         self.gate.active.assert_not_called()
+    def test_cancel_with_spent_loop_budget_never_invents_remote_quiet(self):
+        from unittest.mock import patch
+        import os, shutil
+        hard = dict(self.processes[9], exe='/timeout', argv=['/timeout', '--signal=TERM', '--kill-after=2s', '2098s'])
+        launcher = dict(self.processes[11], argv=['python', str(self.control / 'pilot.py'), 'run'])
+        self.processes = {9: hard, 11: launcher}
+        self.gate.guard.process_record = lambda pid:self.processes[pid]
+        self.gate.verify_contract = lambda: None
+        self.gate.pilot.first_red = lambda root, error: module.atomic_json(root / 'first-red.json', {'reason': repr(error)})
+        (self.root / 'authority-path.json').unlink()
+        (self.root / 'controls.json').unlink()
+        shutil.rmtree(self.root / 'scope')
+        (self.root / 'relay-bootstrap.json').write_text(json.dumps({'identity': launcher,
+            'run_argv': launcher['argv'], 'hard_timeout': hard, 'prepared_sha256': 'pin',
+            'gate_sha256': self.gate.pair['controllers']['gate.py']}))
+        ticks = iter([0, 0, 4, 4, 4])
+        original_close = os.close
+        with patch.object(self.gate_module.time, 'monotonic', side_effect=lambda:next(ticks, 4)), \
+             patch.object(self.gate_module.os, 'pidfd_open', side_effect=lambda pid:100000+pid), \
+             patch.object(self.gate_module.signal, 'pidfd_send_signal'), \
+             patch.object(self.gate_module.os, 'close', side_effect=lambda fd:None if fd>=100000 else original_close(fd)):
+            with self.assertRaises(AssertionError):
+                self.gate.cancel_launcher('expired cancellation, roles still alive')
+        result = json.loads((self.root / 'relay-cancel.json').read_text())
+        self.assertFalse(result['launcher_absent'])
+        self.assertTrue(result['alive_roles'])
     def test_real_ack_gate_rechecks_after_fsync_before_link(self):
         self.gate.pair['peer_host'] = 'peer'
         state = {'coordinator': {'host': 'peer'}, 'files': {'ledger': 'ledger-sha'},

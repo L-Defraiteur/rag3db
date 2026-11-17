@@ -94,3 +94,22 @@ manifest62abd2eb60ce11324055510d0df7386c81f2a43725937efffe9e42c53e963699,
 result3f693d1d2237e07caa09018cb1aac025eeb9389870136239ad13a1bff56ecc2f.
 Les trois réserves/quatre témoins sont désormais vus rouges ; aucune réussite
 corrective n'est encore revendiquée et aucun nouveau lot CPU/natif autorisé.
+
+## RO totale64d7d45597 : deux restes groupés avant nouveau correctif
+
+P04prepared7fec/profil81969/10copies conformes. Bootstrap après exec, hard2098+2
+et fermeture postclose reconnus statiquement. Aucun nouveau CPU vert cf832 joué.
+Deux défauts de fermeture sont consignés AVANT modification :
+
+1. Relay.run except calcule cap() déjà expiré avant abort : aux expirations de
+   file/publication, l'appel d'arrêt distant n'a jamais lieu.
+2. Gate.cancel initialisealive=[] et ne relève les rôles que dans while(now<end).
+   Un budget déjà consommé avant le premier tour peut donc annoncer
+   launcher_absentTrue sans aucun relevé final, notamment queued sansscope.
+
+Prépublier témoins des vrais run expiry/queued et cancel clock épuisée, puis
+budget CPU rouge distinct C7, fixgroupé et nouveau CPU vert/ROtotale/pin.
+Réserver l'arrêt DANS les bornes déjà proposées (queue300/phaseEND/hard2100),
+ne pas renouveler le budget opératoire. Un relevé final vivant/UNKNOWN doit
+refuser indépendamment du fait que la boucle de délai ait pu s'exécuter.
+P02 consommée, autres préparations non armées. Aucun GO natif déduit.
