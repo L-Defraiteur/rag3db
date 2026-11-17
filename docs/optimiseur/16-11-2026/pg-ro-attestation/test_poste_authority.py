@@ -63,4 +63,45 @@ class PosteAuthorityFixtures(unittest.TestCase):
         self.assertNotIn('RAG3WEAVER_VALIDATION_RECU',env)
 
 
+class KernelDeviceContractFixtures(unittest.TestCase):
+    def setUp(self):PosteAuthorityFixtures.setUp(self)
+    def proof(self):return tool.attest_poste(self.common,self.table,str(self.root))
+    def test_captured_55_vs_38_is_accepted_by_real_predicate_without_hardcode(self):
+        real=tool.Path.stat
+        def stat_fixture(path,*args,**kwargs):
+            value=real(path,*args,**kwargs)
+            if path in (self.lock,self.proc/'4242/fd/9'):
+                fields=list(value);fields[2]=os.makedev(0,55)
+                # os.stat_result recalculé uniquement dans la fixture privée.
+                return os.stat_result(fields)
+            return value
+        (self.proc/'4242/fdinfo/9').write_text(f'lock: 1: FLOCK ADVISORY READ 0 00:26:{self.lock.stat().st_ino} 0 EOF\n')
+        with patch.object(tool.Path,'stat',stat_fixture):proof=self.proof()
+        self.assertEqual(proof['lock']['device'],os.makedev(0,55))
+        self.assertEqual(proof['lock']['kernel_device'],[0,38])
+    def test_foreign_kernel_inode_is_still_refused(self):
+        st=self.lock.stat()
+        (self.proc/'4242/fdinfo/9').write_text(f'lock: 1: FLOCK ADVISORY READ 0 00:26:{st.st_ino+1} 0 EOF\n')
+        with self.assertRaises(ValueError):self.proof()
+    def test_fd9_pointing_to_other_file_is_still_refused(self):
+        other=self.root/'other.lock';other.write_bytes(b'')
+        fd=self.proc/'4242/fd/9';fd.unlink();fd.symlink_to(other)
+        with self.assertRaises(ValueError):self.proof()
+    def test_wrong_flock_mode_or_range_is_still_refused(self):
+        for changed in [self.lockline.replace('READ','WRITE'),self.lockline.replace('0 EOF','1 EOF')]:
+            with self.subTest(line=changed):
+                (self.proc/'4242/fdinfo/9').write_text(changed)
+                with self.assertRaises(ValueError):self.proof()
+    def test_foreign_owner_is_still_refused(self):
+        real=tool.Path.stat
+        def stat_fixture(path,*args,**kwargs):
+            value=real(path,*args,**kwargs)
+            if path==self.lock:
+                fields=list(value);fields[4]=os.getuid()+1
+                return os.stat_result(fields)
+            return value
+        with patch.object(tool.Path,'stat',stat_fixture):
+            with self.assertRaises(ValueError):self.proof()
+
+
 if __name__=='__main__':unittest.main(verbosity=2)

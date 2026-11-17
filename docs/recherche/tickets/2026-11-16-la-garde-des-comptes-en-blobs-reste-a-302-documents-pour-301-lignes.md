@@ -501,3 +501,19 @@ Détails et14preuvesSHA/taille deuxhôtes dansproposal04 ; captureSHA
 receipt7503df460ada2dd60f024cc312d857c9941717c15c8c28b3f75f84dd20f605fa.
 Reste à établir le contratkernel valide par source/revue, pas par suppression
 de comparaison pour obtenirVERT. AucunGOcompilation/SQL/PG/service/lease déduit.
+
+### Contrat devices séparés — arbitrage PRÉPA C7 786afef624, avant fix
+
+C7 rapporte Btrfs/noyau7.3.1-1-cachyos ; sources primaires Linuxv6.8 relues :
+btrfs_getattr assigne stat.dev depuis root.anon_dev, tandis que le rendu
+verrou prend inode.i_sb.s_dev. Donc égalité croisée de ces devices nonportable.
+Cela explique une possibilité cohérente avec55vs38, pas une preuve du binaire
+7.3 exact ni réhabilitation de B-R3 sans ses bruts.
+
+Avantfix : publier témoins du vrai prédicat attest_poste avec capture55/38,
+négatifs FDcanonique/inodekernel/FLOCK/UID/PIDstart. Le prédicat conserve
+Common/signature/ascendance/CG/plafond/racinecanon/fiche/PIDstartUID/FD9stat==
+pathcanonique(devETinode)/FLOCKmode-range/inodekernel==inodeFD stricts ; seuls
+les devices kernel etstat restent archivés séparément au lieu d'être comparés.
+Aucun hardcode55/38 ni essais natifs autorisés. ROcontratsource avant nouveaux
+pins/CPU/natifGO distincts. Diagnostic01/anciens paquets restent immuables.
