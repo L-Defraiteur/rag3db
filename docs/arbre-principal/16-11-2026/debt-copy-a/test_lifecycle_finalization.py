@@ -1,4 +1,7 @@
-"""Real compose tail and real filesystem publication; clock/fsync fakes only."""
+"""Actual compose tail; late-link specifies a future atomic publication contract.
+
+Only late-fsync demonstrates the existing publication crossing its deadline.
+"""
 from pathlib import Path
 from unittest.mock import patch
 import ast,copy,json,tempfile,unittest
@@ -32,10 +35,20 @@ class LifecycleFinalization(unittest.TestCase):
  def test_actual_fsync_crossing_common_end_cannot_publish_positive_and_return_zero(self):
   self.assertNotEqual(self.finalize('late-fsync'),0);self.assertEqual(self.result()['status'],'RED');self.assertTrue((self.root/'first-red.json').exists())
  def test_deadline_already_passed_is_a_red_result_and_nonzero_return(self):
-  self.now=100.1;self.assertNotEqual(self.finalize(),0);self.assertEqual(self.result()['status'],'RED')
+  self.now=100.1;rc=None;refusal=None;decoded=None;decode_error=None
+  try:rc=self.finalize()
+  except ValueError as error:refusal=repr(error)
+  path=self.root/'composed.json';raw=path.read_bytes() if path.exists() else None
+  if raw is not None:
+   try:decoded=json.loads(raw)
+   except (ValueError,UnicodeError) as error:decode_error=repr(error)
+  observed=dict(rc=rc,refusal=refusal,raw=raw,decode_error=decode_error)
+  self.assertTrue(isinstance(rc,int) and rc!=0 and refusal is None and isinstance(decoded,dict) and decoded.get('status')=='RED',observed)
  def test_first_red_created_during_final_fsync_is_preserved(self):
   self.assertNotEqual(self.finalize('first-red-during-fsync'),0);self.assertEqual(self.result()['status'],'RED');self.assertEqual((self.root/'first-red.json').read_bytes(),b'{"reason":"original refusal"}')
  def test_late_atomic_publication_is_reclassified_before_return(self):
+  # Existing q.save never calls link: this is a future contract, not a
+  # causal witness of a late link in the current implementation.
   self.assertNotEqual(self.finalize('late-link'),0);self.assertEqual(self.result()['status'],'RED')
 
 if __name__=='__main__':unittest.main()

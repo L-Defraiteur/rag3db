@@ -97,3 +97,15 @@ par ED ; pas de GO3c2 reporté ni de budget remis à zéro. Ticket reste OUVERT.
 ED612c778aca relève sur source2dccc070f1564d8ca9d22a59fcb2b73222f415e5/Qv5e3741c89 : lifecycle.compose contrôle END puis appelle qualify.save, qui ne contrôle END qu'avant JSON/flush/fsync. C7 confirme en lecture ces deux vrais raccords. Une publication franchissant END peut donc laisser un composé favorable et rc0 après la borne Common830 ; l'enveloppe OS900 ne prouve pas le respect de cette borne interne. Aucun franchissement runtime n'est déclaré : le couple n'a pas été lancé.
 
 HOLD de ce couple avant tout GO. Même ticket et ancien paquet conservés ; publier un témoin aux vraies instructions finales avant correction, puis rendre cohérents publication, horloge finale et code de retour. Nouveau source/paquet et revue totale avant nouvelle admission. Les contrôles d'armement, liveness et action sont favorables en lecture mais ne lèvent pas cette réserve finale. Aucune DB/provider/CLI/autorité supplémentaire admise.
+
+## Harnais final précisé avant CPU — réserves ED1320e637c8 / C7 8b941b379b
+
+Le cas END déjà passé capture désormais le ValueError réel hors try final,
+le retour et les octets/JSON éventuels avant de juger explicitement le contrat
+retour non nul + composé RED. Une exception avec JSON vide est ainsi un FAIL
+discriminant du contrat, jamais un refus qualifié ni une erreur du harnais.
+Le cas late-link spécifie la future publication atomique : q.save actuel
+n'appelle pas link, donc aucune causalité de lien tardif ancien n'est revendiquée.
+Le cas late-fsync reste le contre-exemple causal prévu au vrai raccord actuel.
+Ces cinq fonctions restent NON JOUÉES ; runtime2dccc inchangé. Nouvelle RO puis
+GO CPU distinct requis avant toute exécution ; aucun correctif runtime encore.
