@@ -96,3 +96,11 @@ future publication atomique ; son futur FAIL actuel ne serait pas une
 preuve causale d'un link tardif réellement exercé. Le libeller distinctement
 dans le bilan, garder late-fsync comme témoin du défaut constaté. Tous cinq
 NON JOUÉS ici ; aucune RO source corrigée ni GO CPU/natif déduit.
+
+RO delta harnais d31d3e5749 favorable : le cas lateentry capture ValueError,
+conserve rc/octets/erreur de décodage et exige explicitement retour entier
+non nul sans exception ET objet JSON RED. Le fichier vide actuel conduit
+donc à un FAIL d'assertion, sans être qualifié comme refus correct. Late-link
+est annoté comme contrat futur, sans causalité historique. Exécutable2dccc
+inchangé ; cinq fonctions toujours NON JOUÉES par ED, décision CPU60 distincte
+à C7 et aucun GO natif déduit.

@@ -100,3 +100,9 @@ fonctionnel demandé, sans modifier l'exécutable. Late-link n'est pas appelé
 par le tail actuel, contrat futur distinct d'une preuve causale du bug fsync.
 Voir complément rapportED33 ; les trois cas ontime/fsynclate/firstred visent
 bien le vrai raccord. Pas de CPU60/GO correctif accordé par cette lecture.
+
+RO ED du harnais seul d31d3e5749 favorable : exception lateentry capturée puis
+assertion explicite rc non nul/JSON RED sans exception, octets vides nonqualifiés ;
+annotation late-link contrat futur exacte. Réserve harnais levée statiquement,
+P1 runtime2dccc inchangé et cinq fonctions NONJOUÉES par ED. C7 décide CPU60
+distinct ; pas de GO correctif/native/runtime transféré.
