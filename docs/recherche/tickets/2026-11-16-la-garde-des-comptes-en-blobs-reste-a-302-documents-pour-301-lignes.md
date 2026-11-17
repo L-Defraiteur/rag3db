@@ -1364,3 +1364,16 @@ nonrejoués. Les quatre rougesc90 et toutes preuves antérieures restent figés.
 Collecteur OS/handshake/outerwhole5avantimports/terminalruntime NONLIVRÉS et
 NONQUALIFIÉS, aucun v1grant/fixture anticipée/GOcontact. Prépa source de ces
 raccords désormais autorisée C7, revue/GOdistinct avant leurs tests ou contact.
+
+
+## STOP quota Lucie — passation Claude17nov, priorité sur toutes anciennes suites
+
+Arrêt G demandé par C7 : aucun nouveau calcul/test/health/provider/master/tag/
+nettoyage. Tous coupons non consommés révoqués, aucun END/lease réactivable.
+Dernier23fakeCPU af6 est acquis/conservé deuxhôtes ; collecteur/handshake/outer5/
+terminalréel/nativePG restent NON LIVRÉS/NON QUALIFIÉS. Aucun travail actif G
+à reprendre, aucun code WIP non poussé trouvé dans ses worktrees contrôlés.
+Rapport autonome : docs/optimiseur/17-11-2026/99-passation-pour-claude.md.
+Ticket reste OUVERT pour ces manques, aucune fermeture ou admission de transport.
+Ne pas reprendre sur rappel automatique ; Claude/C7 exigeront nouvelles consignes
+et GO distincts. Après sauvegarde/push de passation, G STOP.
