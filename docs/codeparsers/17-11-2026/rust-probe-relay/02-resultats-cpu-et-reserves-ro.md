@@ -42,3 +42,20 @@ ownerBASE connu. Cargo peut réutiliser son cache, y compris les mêmes bits0c56
 sans rebuild forcé. Le modecarry custom n'est pas branché et n'est pas nécessaire
 pour corriger le protocole. P02 reste le rouge d'ACK, P03 un prototype non armé.
 Aucun GO natif, aucune source de production changée, REGLES7.
+
+## Rouges complémentaires puis préparation du correctif, pas encore de vert
+
+Surdda9 : deux FAIL attendus (TTL launch et abortqueued), puis ERROR de fixture
+bootstrap (tool_root absent), STOP avant le dernier cas. Bruts conservés2hôtes,
+manifest9e4d7f0ef3bdc3db32a0955673def5b45fce5721ebd7587611448ecd1701c8b4.
+La fixture seule est corrigée/poussée57fac avant toute nouvelle prise.
+
+GO C7-PARSERS-RELAY-57FAC-17nov60 : les deux cas restants sont chacun vus FAIL
+unefois (futureargv exposé avant exec ; TimeoutError absent après finishlate),
+0ERROR/PASSinattendu,0,179711s externe. Manifest2hôtes
+62abd2eb60ce11324055510d0df7386c81f2a43725937efffe9e42c53e963699 et résultat
+3f693d1d2237e07caa09018cb1aac025eeb9389870136239ad13a1bff56ecc2f.
+Les deux premiers défauts ne sont pas rejoués. Les preuves précèdent les trois
+correctifs groupés, désormais implantés mais non exécutés. La suite compte29
+méthodes témoins, y compris CLI réel avec exec intercepté, transition snapshot,
+pidfd fictif et publication/close tardifs ; pas de nouveau vert revendiqué.

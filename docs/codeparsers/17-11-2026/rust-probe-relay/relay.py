@@ -39,6 +39,24 @@ def atomic_json(path, value, before_link=lambda: None):
         os.unlink(pending)
 
 
+def publish_result(path, record, deadline, clock=time.monotonic):
+    # Primitive TTY256 : horloge fraîche après open puis fsync, résultat du RELAIS seul.
+    with Path(path).open('x') as stream:
+        if clock() >= deadline:
+            record.update(verdict='ROUGE', error='relay publication already late')
+        json.dump(record, stream, indent=2)
+        stream.flush()
+        os.fsync(stream.fileno())
+        if clock() >= deadline:
+            record.update(verdict='ROUGE', error='relay publication fsync crossed deadline')
+            stream.seek(0)
+            stream.truncate()
+            json.dump(record, stream, indent=2)
+            stream.flush()
+            os.fsync(stream.fileno())
+    return record
+
+
 class Relay:
     """Le même moteur pour SSH réel et témoins : pas de branche fake/skip."""
     def __init__(self, transport, root, clock=time.monotonic, sleep=time.sleep,
@@ -62,9 +80,12 @@ class Relay:
         state = self.transport.snapshot(self.cap(self.control_cap))
         if state['state'] == 'waiting':
             assert expected is None, 'active phase disappeared'
+            assert self.deadline is None, 'active phase regressed to queued'
+            if 'queue_remaining' in state:
+                self.queue_end = min(self.queue_end, before + state['queue_remaining'])
             self.cap(self.control_cap)
             return state
-        assert state['state'] == 'active', 'phase is no longer active'
+        assert state['state'] in ['starting', 'active'], 'phase is no longer active'
         # Durée PC ancrée AVANT le RPC : sa latence ne rallonge jamais le délai.
         end = before + state['remaining']
         self.deadline = min(self.deadline, end) if self.deadline is not None else end
@@ -116,6 +137,7 @@ class Relay:
 
     def run(self):
         completed = set()
+        stopped = False
         try:
             self.transport.ready()
             self.transport.start_phase()
@@ -137,6 +159,22 @@ class Relay:
             rc = self.transport.finish(remaining)
             if rc:
                 raise RuntimeError('phase returned ' + str(rc))
+            # La récolte/fermeture des enfants et des logs précède le verdict final.
+            self.transport.stop()
+            stopped = True
+            if self.clock() >= self.phase_deadline:
+                raise TimeoutError('phase deadline crossed during finish or cleanup')
+            result = publish_result(self.root / 'relay-result.json', {'verdict': 'VERT',
+                'phase_ssh_rc': rc, 'native_verdict_unchanged': True}, self.phase_deadline, self.clock)
+            if result['verdict'] != 'VERT' or self.clock() >= self.phase_deadline:
+                # Un close tardif ne laisse pas un fichier vert comme dernier état du relais.
+                result.update(verdict='ROUGE', error='relay final publication deadline')
+                with (self.root / 'relay-result.json').open('r+') as stream:
+                    json.dump(result, stream, indent=2)
+                    stream.truncate()
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                raise TimeoutError('relay final publication deadline')
             return rc
         except BaseException as error:
             try:
@@ -150,7 +188,8 @@ class Relay:
                 pass
             raise
         finally:
-            self.transport.stop()
+            if not stopped:
+                self.transport.stop()
 
 
 class SSHTransport:
@@ -160,6 +199,7 @@ class SSHTransport:
         self.active_call = None
         self.handles = []
         self.ready_record = None
+        self.remote_cancelled = False
         self.control = Path(pair['control'])
         spec = importlib.util.spec_from_file_location('relay_physical_guard', self.control / 'physical_guard.py')
         self.guard = importlib.util.module_from_spec(spec)
@@ -168,7 +208,9 @@ class SSHTransport:
     def command(self, action, *extra, cap=None):
         remote = [sys.executable, '-B', str(self.control / 'gate.py'), action,
                   '--proofs', self.pair['proofs'], '--phase', self.phase, '--pin', self.pin, *extra]
-        if cap is not None:
+        if action == 'launch':
+            remote = [self.pair['timeout'], '--signal=TERM', '--kill-after=2s', '2098s', *remote]
+        elif cap is not None:
             assert 0 < cap <= 30
             remote = [self.pair['timeout'], '--signal=TERM', '--kill-after=1s', str(cap) + 's', *remote]
         # Un seul argv distant quoté ; pas d'interpolation de shell ni de parent argv W/T.
@@ -188,7 +230,7 @@ class SSHTransport:
         output = Path(destination) if destination else stem.with_suffix('.stdout')
         with output.open('xb') as out, stem.with_suffix('.stderr').open('xb') as err:
             child = subprocess.Popen(argv, stdin=subprocess.PIPE if payload else subprocess.DEVNULL,
-                stdout=out, stderr=err, start_new_session=True)
+                stdout=out, stderr=err, start_new_session=False)
             self.active_call = child
             try:
                 child.communicate(json.dumps(payload).encode() if payload else None, timeout=timeout)
@@ -234,7 +276,7 @@ class SSHTransport:
         stem = self.paths('launch', argv)
         out, err = stem.with_suffix('.stdout').open('xb'), stem.with_suffix('.stderr').open('xb')
         self.handles.extend([out, err])
-        self.child = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=out, stderr=err, start_new_session=True)
+        self.child = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=out, stderr=err, start_new_session=False)
         self.child.stdin.write(json.dumps(self.ready_record).encode())
         self.child.stdin.close()
 
@@ -263,7 +305,10 @@ class SSHTransport:
 
     def abort(self, reason, timeout):
         if self.child is not None:
-            self.call('abort', timeout, payload={'reason': reason})
+            result = self.call('abort', timeout, payload={'reason': reason})
+            assert result['launcher_absent'] is True and not result['unknown']
+            self.remote_cancelled = True
+            atomic_json(self.root / 'remote-cancel-attested.json', result)
 
     def stop(self):
         if self.active_call is not None:
@@ -289,14 +334,27 @@ def main():
     assert digest(__file__) == pair['controllers']['relay.py']
     assert pair['relay']['queue_budget'] == 300 and pair['relay']['transfer_cap'] == 30 and pair['relay']['control_cap'] == 5
     os.chdir(args.proofs)
+    # Vrai timeout local : groupe privé hérité par tous nos SSH, kill2 physique.
+    peer_timeout = pair['peer_timeout']
+    assert digest(peer_timeout['path']) == peer_timeout['sha256']
+    local_outer = [peer_timeout['path'], '--signal=TERM', '--kill-after=2s', '2098s',
+        sys.executable, '-B', str(Path(__file__).resolve()), *sys.argv[1:]]
+    spec = importlib.util.spec_from_file_location('local_outer_guard', Path(pair['control']) / 'physical_guard.py')
+    guard = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(guard)
+    parent = guard.process_record(os.getppid())
+    if parent['exe'] != peer_timeout['path'] or parent['argv'] != local_outer:
+        os.execve(peer_timeout['path'], local_outer, os.environ.copy())
+    assert parent['uid'] == os.getuid()
     root = args.proofs / args.phase / 'relay-local'
     root.mkdir(mode=0o700)
+    atomic_json(root / 'local-hard-supervision.json', {'identity': parent, 'hardcap': 2100,
+        'queue_budget': 300, 'phase_budget': 1800, 'timeout_sha256': peer_timeout['sha256']})
     transport = SSHTransport(pair, pin, args.phase, args.allocation, args.host, root)
     def stop(sig, frame):
         raise TimeoutError('relay received signal ' + str(sig))
-    for sig in [signal.SIGTERM, signal.SIGINT, signal.SIGHUP, signal.SIGALRM]:
+    for sig in [signal.SIGTERM, signal.SIGINT, signal.SIGHUP]:
         signal.signal(sig, stop)
-    signal.setitimer(signal.ITIMER_REAL, 2100)
     return Relay(transport, root, **pair['relay']).run()
 
 

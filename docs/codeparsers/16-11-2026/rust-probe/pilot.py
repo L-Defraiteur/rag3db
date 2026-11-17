@@ -198,6 +198,7 @@ def first_red(root, error):
 def run_step(root, label, argv, cwd, env, end, cap):
     deadline = min(end, time.monotonic() + cap)
     assert deadline > time.monotonic()
+    assert not (root / 'first-red.json').exists(), 'external first red'
     save(root / (label + '.command.json'), {'argv': argv, 'cwd': str(cwd), 'deadline': deadline})
     with (root / (label + '.stdout')).open('xb') as out, (root / (label + '.stderr')).open('xb') as err:
         child = subprocess.Popen(argv, cwd=cwd, env=env, stdout=out, stderr=err)
@@ -401,6 +402,7 @@ def compose(pair, phase):
     signal.signal(signal.SIGTERM, stop)
     record = {'verdict': 'ROUGE', 'phase_completed': False, 'phase': phase, 'global_pass': False}
     try:
+        assert not (root / 'first-red.json').exists(), 'launcher already refused'
         verify(pair, phase)
         previous_end(pair, phase)
         fresh_quiet(pair, phase, root / 'cache-quiet-before-common.json')
@@ -454,6 +456,8 @@ def prepare(args):
     scripts = ['extension/rag3weaver/scripts/' + name for name in
         ['confiner_validation.py', 'poste', 'cargo_garde.py', 'garde_target.sh', 'lib_du_magasin.sh']]
     scripts += [PROBE, 'extension/rag3weaver/Cargo.lock', 'extension/rag3weaver/Cargo.toml']
+    assert args.peer_timeout_sha256 and re.fullmatch('[0-9a-f]{64}', args.peer_timeout_sha256)
+    pair['peer_timeout'] = {'path': args.peer_timeout, 'sha256': args.peer_timeout_sha256}
     pair['relay'] = {'queue_budget': 300, 'transfer_cap': 30, 'control_cap': 5}
     pair['phases'] = {}
     if args.prior_root:
@@ -517,6 +521,8 @@ def main():
     parser.add_argument('--candidate-source')
     parser.add_argument('--tool-source')
     parser.add_argument('--prior-root', type=Path)
+    parser.add_argument('--peer-timeout', default='/usr/bin/timeout')
+    parser.add_argument('--peer-timeout-sha256')
     parser.add_argument('--allocation')
     parser.add_argument('--peer-host')
     args = parser.parse_args()
@@ -551,19 +557,60 @@ def main():
         os.chdir(pair['proofs'])
         env = dict(os.environ, RUST_PROBE_TOOL_ROOT=pair['tool_root'])
         os.execve(sys.executable, [sys.executable, '-B', str(control), *sys.argv[1:]], env)
+    root = Path(pair['proofs']) / args.phase
+    bootstrap = json.loads((root / 'relay-bootstrap.json').read_text())
+    assert bootstrap['prepared_sha256'] == base.digest(Path(pair['proofs']) / 'prepared.json')
+    assert bootstrap['gate_sha256'] == base.digest(Path(pair['control']) / 'gate.py') == pair['controllers']['gate.py']
+    actual = physical.process_record(os.getpid())
+    assert actual['argv'] == bootstrap['run_argv']
+    assert all(actual[key] == bootstrap['identity'][key] for key in ['pid', 'start', 'uid', 'exe', 'cgroup'])
+    assert time.monotonic() < bootstrap['transition_end']
+    # Rendez-vous APRÈS le véritable exec, avant toute vérification susceptible de durer.
+    save(root / 'relay-launch.json', {'identity': actual, 'prepared_sha256': bootstrap['prepared_sha256'],
+        'coordinator': bootstrap['coordinator'], 'launcher_script_sha256': base.digest(__file__)})
     verify(pair, args.phase)
     previous_end(pair, args.phase)
-    assert (Path(pair['proofs']) / args.phase / 'relay-launch.json').exists(), 'autonomous relay required'
     assert args.allocation and 'RAG3WEAVER_VALIDATION_RECU' not in os.environ
     root = Path(pair['proofs']) / args.phase
     save(root / 'allocation.json', {'reference': args.allocation})
     env = os.environ.copy()
     env.update(POSTE_MEM_MAX='32G', POSTE_SWAP_MAX='0', POSTE_CPU_QUOTA='500%',
-        RAG3WEAVER_BUILD_MEMORY_HIGH='0', RUST_PROBE_TOOL_ROOT=pair['tool_root'])
+        RAG3WEAVER_BUILD_MEMORY_HIGH='0', POSTE_LOURD_ATTENTE_MAX='300', RUST_PROBE_TOOL_ROOT=pair['tool_root'])
     # Comme af11 : aucun scan, hash ou verdict après le retour de l'enfant borné.
+    def interrupted(sig, frame):
+        raise TimeoutError('remote launcher interrupted ' + str(sig))
+    for sig in [signal.SIGTERM, signal.SIGINT, signal.SIGHUP]:
+        signal.signal(sig, interrupted)
     with (root / 'outer.log').open('x') as out:
-        return subprocess.run(outer_command(pair, args.phase), cwd=pair['proofs'], env=env,
-            stdout=out, stderr=subprocess.STDOUT).returncode
+        child = subprocess.Popen(outer_command(pair, args.phase), cwd=pair['proofs'], env=env,
+            stdout=out, stderr=subprocess.STDOUT)
+        try:
+            identity = physical.process_record(child.pid)
+            save(root / 'poste-child.json', {'identity': identity, 'queue_end': bootstrap['queue_end']})
+            acquired = False
+            while child.poll() is None:
+                marker = root / 'outer-supervision.json'
+                if not acquired and marker.exists():
+                    began = json.loads(marker.read_text())['timeout_identity']
+                    assert int(began['start']) / os.sysconf('SC_CLK_TCK') <= bootstrap['queue_end']
+                    acquired = True
+                if not acquired and time.monotonic() >= bootstrap['queue_end']:
+                    raise TimeoutError('PC poste queue deadline')
+                if not acquired and (root / 'first-red.json').exists():
+                    raise RuntimeError('queued launcher refused')
+                time.sleep(.05)
+            return child.returncode
+        except BaseException as error:
+            first_red(root, error)
+            # Popen conserve l'identité de cet enfant non récolté ; poste gère son attente.
+            if child.poll() is None:
+                child.terminate()
+                try:
+                    child.wait(timeout=.7)
+                except subprocess.TimeoutExpired:
+                    child.kill()
+                    child.wait(timeout=.7)
+            raise
 
 
 if __name__ == '__main__':

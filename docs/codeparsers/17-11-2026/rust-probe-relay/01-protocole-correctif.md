@@ -149,3 +149,55 @@ Common ; bootstrap réel et transition bornée5s puis identité Qrun publiée AP
 exec ; résultat du relais sous phaseDeadline fraîche après finish/fsync, jamais
 une mutation du verdict natif fermé. Les nouveaux témoins et le budget CPU rouge
 puis vert doivent être explicitement autorisés par C7 ; pas de reprise native.
+
+## Correctif groupé après quatre rouges observés, encore non rejoué
+
+Les quatre témoins sont vus rouges AVANT le correctif : deux FAIL surdda9,
+ERROR de fixture conservée puis deux FAIL complémentaires sur57fac sous GO
+C7-PARSERS-RELAY-57FAC-17nov60. Manifest complémentaire2hôtes
+62abd2eb60ce11324055510d0df7386c81f2a43725937efffe9e42c53e963699.
+Aucun de ces rouges n'est remplacé par une réussite imaginée.
+
+Le vrai CLI local vérifie son parent timeout ou fait exec sous
+`timeout --signal=TERM --kill-after=2s 2098s`; le SHA du timeout portable est une
+entrée explicite du futur prepare (--peer-timeout-sha256). Tous ses SSH héritent
+de ce groupe privé, sans ControlMaster partagé. Le launch distant porte le même
+2098+kill2 physique AVANT le poste. Chaque contrôle/copie reste aussi borné
+5/30s côté distant. Les logs de contrôle sont ouverts avant spawn ; la preuve
+du watchdog local précède le ready et le bootstrap PC durable précède exec.
+
+Le pilote PC réutilise POSTE_LOURD_ATTENTE_MAX=300 du vrai poste et surveille
+l'acquisition depuis la même horlogePC : deadlinequeue300, premierrefus avant
+arrêt de son Popen attribué, aucun recalcul du budget natif. L'outer1798+2 et
+Common1750 commencent après poste ; le hardtotal2100 inclut attente et phase,
+et peut refuser tôt si la marge de transport manque. Il ne promet pas du temps
+supplémentaire. Aucun ancien GO ou chrono interhost n'est réemployé.
+
+Gate.launch publie maintenant relay-bootstrap : identité **réelle Gate**, projet
+run_argv explicitement séparé, identité du watchdog distant vérifiée et délai
+transition5s. Snapshot accepte uniquement ce PID/start/UID/exe/cgroup et l'un des
+deux argv connus dans cette transition bornée. Après le vrai exec, Qpilot.run
+publie relay-launch avec son argv réellement lu dans /proc et son scriptSHA,
+avant les vérifications longues et avant spawn poste. L'état starting sous le
+vrai timeout déjà acquis ne permet aucun export/ACK avant l'autorité du pilote.
+
+L'annulation ne requiert plus active() : contrat/pins et identités attribuées
+sont vérifiés même en file, puis refus immuable et signaux via pidfd avec
+relecture PID/start/UID/exe/argv/cgroup. Le Common observé reçoit d'abord TERM
+pour sa fermeture canonique ; les deux watchdogs attribués sont ensuite arrêtés.
+La réponse doit attester launcher/roles absents et, si Common existait,
+ownedquiet/verdict final/privé absent. Unknown, perte réseau ou absence de preuve
+donne un refus, jamais une quiescence inventée. Le hard distant reste indépendant
+si le client SSH disparaît. Aucun signal à un PID découvert seulement par nom.
+
+Après finish ET fsync des logs SSH, tous les Popen/handles locaux sont récoltés
+AVANT publication finale. L'horloge est relue ; relay-result se publie suivant
+la primitive TTY après open et fsync sous phaseDeadline reçue, bornée par le
+physique. Une fermeture tardive réécrit seulement ce résultat du relais en
+ROUGE, conserve first-red et ne modifie jamais le verdict natif clos.
+
+Les nouveaux témoins étendent les vrais chemins CLI, snapshot de transition,
+cancel_launcher avec faux pidfd et disparition des deux rôles, fsync/close
+tardifs. Ils ne lancent aucun SSH ni /proc réel. Aucun lot vert de ce correctif
+n'a encore été autorisé ou exécuté. Prochaine étape : publication, nouveau pin
+prototype propre et demande CPU verte distincte/RO totale, sans admission native.

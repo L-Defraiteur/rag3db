@@ -83,3 +83,14 @@ Correction de fixture seule : ajouter la clé factice tool_root requise par le
 vrai Gate.launch. Pas de relance ; un GO CPU rouge complémentaire distinct est
 demandé pour les deux cas restant à constater. Les deux rouges acquis ne seront
 pas rejoués sous cette demande. Correction produit groupée encore différée.
+
+## Rouges complémentaires57fac observés avant correctif produit groupé
+
+GO C7-PARSERS-RELAY-57FAC-17nov60, source exacte57facb0b8b4ffaa09645948d0f327b99117a04c5
+propre/poussée, deux cas restants chacunUNEfois sous58+2 : bootstrap publie
+futureargv vu FAIL ; finishlate retourne0 vu FAIL.0ERROR/PASSinattendu,0,179711s.
+Les deux FAILdda9 ne sont pas rejoués. Bruts+manifest2hôtes AVANTfix,
+manifest62abd2eb60ce11324055510d0df7386c81f2a43725937efffe9e42c53e963699,
+result3f693d1d2237e07caa09018cb1aac025eeb9389870136239ad13a1bff56ecc2f.
+Les trois réserves/quatre témoins sont désormais vus rouges ; aucune réussite
+corrective n'est encore revendiquée et aucun nouveau lot CPU/natif autorisé.

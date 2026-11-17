@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import socket
+import signal
 import sys
 import time
 
@@ -28,12 +29,15 @@ class Gate:
         self.pilot = load_pilot(pair)
         self.guard = self.pilot.physical
 
-    def verify(self):
+    def verify_contract(self):
         assert socket.gethostname().lower() == 'luciepc'
         assert digest(Path(self.pair['proofs']) / 'prepared.json') == self.pin
         assert Path(__file__).resolve() == self.control / 'gate.py'
         assert digest(__file__) == self.pair['controllers']['gate.py']
         self.pilot.verify(self.pair, self.phase)
+
+    def verify(self):
+        self.verify_contract()
         for name in ['first-red.json', 'relay-abort.json', 'classification.json']:
             assert not (self.root / name).exists(), 'phase has already refused or ended'
 
@@ -44,11 +48,47 @@ class Gate:
         assert all(actual[k] == expected[k] for k in ['pid', 'start', 'uid', 'exe', 'argv', 'cgroup'])
         return actual
 
+    def bootstrap(self):
+        record = json.loads((self.root / 'relay-bootstrap.json').read_text())
+        assert record['prepared_sha256'] == self.pin
+        assert record['gate_sha256'] == digest(self.control / 'gate.py') == self.pair['controllers']['gate.py']
+        hard = self.check_process(record['hard_timeout'])
+        assert hard['exe'] == self.pair['timeout']
+        assert digest(hard['exe']) == self.pair['timeout_sha256']
+        assert hard['argv'][:4] == [self.pair['timeout'], '--signal=TERM', '--kill-after=2s', '2098s']
+        return record
+
     def launcher(self):
+        bootstrap = self.bootstrap()
         record = json.loads((self.root / 'relay-launch.json').read_text())
         self.check_process(record['identity'])
-        assert record['prepared_sha256'] == self.pin
+        assert record['launcher_script_sha256'] == digest(self.control / 'pilot.py') == self.pair['driver_sha256']
+        assert record['identity']['argv'] == bootstrap['run_argv']
+        assert record['identity']['pid'] == bootstrap['identity']['pid']
+        assert record['identity']['start'] == bootstrap['identity']['start']
+        assert record['prepared_sha256'] == self.pin and record['coordinator'] == bootstrap['coordinator']
         return record
+
+    def waiting_transition(self):
+        bootstrap = self.bootstrap()
+        observed = self.guard.process_record(bootstrap['identity']['pid'])
+        expected = bootstrap['identity']
+        assert all(observed[k] == expected[k] for k in ['pid', 'start', 'uid', 'exe', 'cgroup'])
+        assert observed['argv'] in [expected['argv'], bootstrap['run_argv']]
+        assert observed['state'] != 'Z' and time.monotonic() < bootstrap['transition_end']
+        return {'state': 'waiting', 'queue_remaining': bootstrap['queue_end'] - time.monotonic()}
+
+    def starting(self):
+        controls = json.loads((self.root / 'controls.json').read_text())
+        timeout = next(row for row in controls if row['role'] == 'outer-timeout')
+        self.check_process(timeout)
+        assert timeout['argv'] == self.pilot.outer_command(self.pair, self.phase)[2:]
+        assert int(timeout['start']) / os.sysconf('SC_CLK_TCK') <= self.bootstrap()['queue_end']
+        assert timeout['exe'] == self.pair['timeout'] and digest(timeout['exe']) == self.pair['timeout_sha256']
+        remaining = int(timeout['start']) / os.sysconf('SC_CLK_TCK') + 1798 - time.monotonic()
+        assert remaining > 15
+        return {'state': 'starting', 'remaining': remaining - 15,
+                'phase_remaining': remaining, 'stage': 'waiting-authority'}
 
     def active(self):
         self.verify()
@@ -121,10 +161,14 @@ class Gate:
     def snapshot(self):
         self.verify()
         if not (self.root / 'relay-launch.json').exists():
+            if (self.root / 'relay-bootstrap.json').exists():
+                return self.waiting_transition()
             return {'state': 'waiting'}
         self.launcher()
         if not (self.root / 'authority-path.json').exists():
-            return {'state': 'waiting'}
+            if (self.root / 'outer-supervision.json').exists():
+                return self.starting()
+            return {'state': 'waiting', 'queue_remaining': self.bootstrap()['queue_end'] - time.monotonic()}
         for kind in ['build', 'runtime']:
             if (self.root / (kind + '-ledger.json')).exists() and not (self.root / (kind + '-peer-ack.json')).exists():
                 return self.stage(kind)[0]
@@ -162,10 +206,109 @@ class Gate:
         self.active()
         return {'accepted': True}
 
+    def role_alive(self, expected, allowed_argv=None):
+        try:
+            actual = self.guard.process_record(expected['pid'])
+        except (FileNotFoundError, ProcessLookupError):
+            return False
+        if actual['start'] != expected['start'] or actual['state'] == 'Z':
+            return False
+        assert expected['uid'] == actual['uid'] == os.getuid()
+        assert all(actual[k] == expected[k] for k in ['exe', 'cgroup'])
+        assert actual['argv'] in (allowed_argv or [expected['argv']])
+        return True
+
+    def signal_role(self, expected, sig, allowed_argv=None):
+        if not self.role_alive(expected, allowed_argv):
+            return
+        try:
+            fd = os.pidfd_open(expected['pid'])
+            try:
+                if self.role_alive(expected, allowed_argv):
+                    signal.pidfd_send_signal(fd, sig)
+            finally:
+                os.close(fd)
+        except ProcessLookupError:
+            pass
+
+    def cancel_launcher(self, reason):
+        # Annulation attribuée, y compris en file : aucun appel à active().
+        self.verify_contract()
+        bootstrap = json.loads((self.root / 'relay-bootstrap.json').read_text())
+        assert bootstrap['prepared_sha256'] == self.pin
+        assert bootstrap['gate_sha256'] == digest(self.control / 'gate.py') == self.pair['controllers']['gate.py']
+        hard = bootstrap['hard_timeout']
+        assert hard['exe'] == self.pair['timeout'] and digest(hard['exe']) == self.pair['timeout_sha256']
+        assert hard['argv'][:4] == [self.pair['timeout'], '--signal=TERM', '--kill-after=2s', '2098s']
+        allowed = [bootstrap['identity']['argv'], bootstrap['run_argv']]
+        roles = [('remote-hard-timeout', hard, None), ('launcher', bootstrap['identity'], allowed)]
+        info_path = self.root / 'authority-path.json'
+        if info_path.exists():
+            info = json.loads(info_path.read_text())
+            assert info['driver_script_sha256'] == digest(self.control / 'pilot.py') == self.pair['driver_sha256']
+            assert info['supervisor_identity']['argv'] == json.loads((self.root / 'common.command.json').read_text())
+            roles.append(('common', info['supervisor_identity'], None))
+        elif (self.root / 'scope').exists():
+            # Fenêtre Common lancé mais pilote pas encore au rendez-vous authority-path.
+            receipts = list((self.root / 'scope').glob('validation-*/autorite.json'))
+            assert len(receipts) <= 1, 'ambiguous Common cancellation'
+            if receipts:
+                authority = json.loads(receipts[0].read_text())
+                assert authority['script_sha256'] == self.pair['controllers']['confiner_validation.py']
+                try:
+                    common = self.guard.process_record(authority['pid'])
+                except (FileNotFoundError, ProcessLookupError):
+                    common = None
+                if common and common['start'] == authority['debut']:
+                    assert common['uid'] == os.getuid()
+                    assert common['argv'] == json.loads((self.root / 'common.command.json').read_text())
+                    roles.append(('common', common, None))
+        controls_path = self.root / 'controls.json'
+        if controls_path.exists():
+            phase_outer = next(row for row in json.loads(controls_path.read_text()) if row['role'] == 'outer-timeout')
+            assert phase_outer['argv'] == self.pilot.outer_command(self.pair, self.phase)[2:]
+            roles.append(('phase-timeout', phase_outer, None))
+        closed = (self.root / 'classification.json').exists()
+        if not closed:
+            self.pilot.first_red(self.root, RuntimeError('relay: ' + reason))
+        end = time.monotonic() + 3.4
+        # Laisser au Common réellement observé sa fermeture canonique avant le hard launcher.
+        common_roles = [row for row in roles if row[0] == 'common']
+        for _, identity, argv in common_roles:
+            self.signal_role(identity, signal.SIGTERM, argv)
+        common_end = min(end, time.monotonic() + 1.7)
+        while any(self.role_alive(identity, argv) for _, identity, argv in common_roles) and time.monotonic() < common_end:
+            time.sleep(.025)
+        for role, identity, argv in roles:
+            if role in ['phase-timeout', 'remote-hard-timeout']:
+                self.signal_role(identity, signal.SIGTERM, argv)
+        alive = []
+        while time.monotonic() < end:
+            alive = [role for role, identity, argv in roles if self.role_alive(identity, argv)]
+            if not alive:
+                break
+            time.sleep(.025)
+        unknown, scope_quiet = [], None
+        scopes = list((self.root / 'scope').glob('validation-*'))
+        if len(scopes) > 1:
+            unknown.append('ambiguous Common final scopes')
+        for scope in scopes:
+            if (scope / 'verdict.json').exists():
+                scope_quiet = self.guard.owned_quiet(scope)
+                verdict = json.loads((scope / 'verdict.json').read_text())
+                authority = json.loads((scope / 'autorite.json').read_text())
+                if authority['etat'] != 'termine' or scope_quiet['alive'] or scope_quiet['unknown'] or verdict['restes'] or not verdict['nettoye'] or Path(verdict['prive']).exists():
+                    unknown.append('Common owned or private scope not quiet')
+            else:
+                unknown.append('Common final verdict unavailable')
+        result = {'launcher_absent': not alive, 'alive_roles': alive, 'unknown': unknown,
+            'scope_quiet': scope_quiet, 'native_verdict_unchanged': True, 'observed': time.monotonic()}
+        atomic_json(self.root / 'relay-cancel.json', result)
+        assert result['launcher_absent'] and not unknown, 'remote cancellation not attested quiet'
+        return result
+
     def abort(self, reason):
-        self.active()
-        self.pilot.first_red(self.root, RuntimeError('relay: ' + reason))
-        return {'refused': True}
+        return self.cancel_launcher(reason)
 
     def launch(self, allocation, ready):
         self.verify()
@@ -177,12 +320,20 @@ class Gate:
         assert ready['identity']['pid'] > 1 and ready['identity']['start'].isdigit()
         assert ready['identity']['argv'][:3] == [sys.executable, '-B', str(self.control / 'relay.py')]
         assert digest(self.control / 'relay.py') == ready['script_sha256']
-        expected = self.guard.process_record(os.getpid())
+        identity = self.guard.process_record(os.getpid())
+        hard = self.guard.process_record(os.getppid())
+        expected_gate = [sys.executable, '-B', str(self.control / 'gate.py'), 'launch',
+            '--proofs', self.pair['proofs'], '--phase', self.phase, '--pin', self.pin, '--allocation', allocation]
+        assert hard['uid'] == os.getuid() and hard['exe'] == self.pair['timeout']
+        assert digest(hard['exe']) == self.pair['timeout_sha256']
+        assert hard['argv'] == [self.pair['timeout'], '--signal=TERM', '--kill-after=2s', '2098s', *expected_gate]
         command = [sys.executable, '-B', str(self.control / 'pilot.py'), 'run', '--proofs',
                    self.pair['proofs'], '--phase', self.phase, '--allocation', allocation]
-        expected['argv'] = command
-        atomic_json(self.root / 'relay-launch.json', {'identity': expected,
-            'coordinator': ready, 'prepared_sha256': self.pin})
+        now = time.monotonic()
+        # Seule l'identité RÉELLE Gate est publiée ; run_argv est explicitement un projet.
+        atomic_json(self.root / 'relay-bootstrap.json', {'identity': identity, 'run_argv': command,
+            'coordinator': ready, 'prepared_sha256': self.pin, 'hard_timeout': hard,
+            'gate_sha256': digest(self.control / 'gate.py'), 'transition_end': now + 5, 'queue_end': now + 300})
         os.chdir(self.pair['proofs'])
         os.execve(sys.executable, command, dict(os.environ, RUST_PROBE_TOOL_ROOT=self.pair['tool_root']))
 

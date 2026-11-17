@@ -193,6 +193,58 @@ class RelayTests(unittest.TestCase):
         argv = transport.command('launch', '--allocation', 'GO')
         remote = shlex.split(argv[-1].removeprefix('exec '))
         self.assertEqual(remote[:4], ['/usr/bin/timeout', '--signal=TERM', '--kill-after=2s', '2098s'])
+    def test_real_cli_execs_physical_timeout_before_creating_relay(self):
+        from unittest.mock import patch
+        import os
+        root = Path(self.tmp.name)
+        control = root / 'control'
+        control.mkdir()
+        relay_path = control / 'relay.py'
+        relay_path.write_bytes(Path(module.__file__).read_bytes())
+        timeout_path = control / 'fake-timeout'
+        timeout_path.write_bytes(b'fake timeout executable, never executed')
+        (control / 'physical_guard.py').write_text(
+            'def process_record(pid): return {"pid":pid,"exe":"/unbounded","argv":[],"uid":0}\n')
+        pair = {'proofs': str(root), 'control': str(control), 'peer_host': 'fake-peer',
+            'controllers': {'relay.py': module.digest(relay_path)},
+            'peer_timeout': {'path': str(timeout_path), 'sha256': module.digest(timeout_path)},
+            'relay': {'queue_budget': 300, 'transfer_cap': 30, 'control_cap': 5}}
+        (root / 'prepared.json').write_text(json.dumps(pair))
+        argv = [str(relay_path), '--proofs', str(root), '--phase', 'baseline', '--allocation', 'GO']
+        class ExecTransition(Exception):
+            pass
+        original_cwd = Path.cwd()
+        try:
+            with patch.object(module, '__file__', str(relay_path)), patch.object(module.sys, 'argv', argv), \
+                 patch.object(module.socket, 'gethostname', return_value='fake-peer'), \
+                 patch.object(module.os, 'execve', side_effect=ExecTransition) as execute:
+                with self.assertRaises(ExecTransition):
+                    module.main()
+                command = execute.call_args.args[1]
+                self.assertEqual(command[:4], [str(timeout_path), '--signal=TERM', '--kill-after=2s', '2098s'])
+                self.assertFalse((root / 'baseline/relay-local').exists())
+        finally:
+            os.chdir(original_cwd)
+    def test_fsync_during_relay_publication_cannot_leave_green(self):
+        from unittest.mock import patch
+        path = Path(self.tmp.name) / 'result.json'
+        ticks = iter([9, 10])
+        result = module.publish_result(path, {'verdict': 'VERT'}, 10, lambda: next(ticks))
+        self.assertEqual(result['verdict'], 'ROUGE')
+        self.assertEqual(json.loads(path.read_text())['verdict'], 'ROUGE')
+    def test_late_close_after_publication_rewrites_only_relay_red(self):
+        from unittest.mock import patch
+        original = module.publish_result
+        def late(path, record, deadline, clock):
+            result = original(path, record, deadline, clock)
+            self.clock.now += 25
+            return result
+        with patch.object(module, 'publish_result', side_effect=late):
+            with self.assertRaises(TimeoutError):
+                self.relay.run()
+        result = json.loads((Path(self.tmp.name) / 'relay-result.json').read_text())
+        self.assertEqual(result['verdict'], 'ROUGE')
+        self.assertTrue(result['native_verdict_unchanged'])
     def test_phase_exit_before_build_is_failure(self):
         self.transport.phase_running = False
         with self.assertRaises(RuntimeError):
@@ -221,6 +273,7 @@ class GateTests(unittest.TestCase):
         self.control = self.root / 'control'
         self.control.mkdir()
         (self.control / 'pilot.py').write_text('synthetic source')
+        (self.control / 'gate.py').write_bytes(Path(self.gate_module.__file__).read_bytes())
         scope = self.root / 'scope/validation-fake'
         scope.mkdir(parents=True)
         self.receipt = scope / 'autorite.json'
@@ -229,7 +282,8 @@ class GateTests(unittest.TestCase):
             'script_sha256': 'common-sha'}
         self.receipt.write_text(json.dumps(self.authority))
         pair = {'control': str(self.control), 'proofs': str(self.root.parent),
-            'controllers': {'confiner_validation.py': 'common-sha'}, 'timeout': '/timeout',
+            'controllers': {'confiner_validation.py': 'common-sha',
+                'gate.py': module.digest(self.control / 'gate.py')}, 'timeout': '/timeout',
             'timeout_sha256': 'timeout-sha', 'driver_sha256': module.digest(self.control / 'pilot.py')}
         command = ['python', str(self.control / 'confiner_validation.py'), 'lancer']
         driver_args = [self.gate_module.sys.executable, '-B', str(self.control / 'pilot.py'),
@@ -329,6 +383,62 @@ class GateTests(unittest.TestCase):
         self.assertFalse((self.gate.root / 'relay-launch.json').exists(), 'future argv exposed before exec')
         bootstrap = json.loads((self.gate.root / 'relay-bootstrap.json').read_text())
         self.assertEqual(bootstrap['identity']['argv'], identity['argv'])
+    def test_real_snapshot_accepts_bounded_exec_transition(self):
+        hard = dict(self.processes[9], exe='/timeout', argv=['/timeout', '--signal=TERM', '--kill-after=2s', '2098s'])
+        identity = dict(self.processes[11], argv=['python', str(self.control / 'gate.py'), 'launch'])
+        planned = ['python', str(self.control / 'pilot.py'), 'run']
+        self.processes[9], self.processes[11] = hard, identity
+        bootstrap = {'identity': identity, 'run_argv': planned, 'hard_timeout': hard,
+            'prepared_sha256': 'pin', 'gate_sha256': self.gate.pair['controllers']['gate.py'],
+            'coordinator': {'host': 'peer'}, 'transition_end': 9005, 'queue_end': 9300}
+        (self.root / 'relay-bootstrap.json').write_text(json.dumps(bootstrap))
+        # Employer les vraies méthodes de rendez-vous, pas le stub de l'ancienne fixture active.
+        self.gate.launcher = self.gate_module.Gate.launcher.__get__(self.gate)
+        self.assertEqual(self.gate.snapshot()['state'], 'waiting')
+        self.processes[11] = dict(identity, argv=planned)
+        self.assertEqual(self.gate.snapshot()['state'], 'waiting')
+        (self.root / 'authority-path.json').unlink()
+        (self.root / 'relay-launch.json').write_text(json.dumps({'identity': self.processes[11],
+            'prepared_sha256': 'pin', 'coordinator': bootstrap['coordinator'],
+            'launcher_script_sha256': self.gate.pair['driver_sha256']}))
+        self.assertEqual(self.gate.snapshot()['state'], 'waiting')
+        self.processes[11]['start'] = 'reused'
+        with self.assertRaises(AssertionError):
+            self.gate.snapshot()
+    def test_real_queued_cancel_uses_pidfd_and_attests_both_roles_gone(self):
+        from unittest.mock import patch, Mock
+        import os
+        hard = dict(self.processes[9], exe='/timeout', argv=['/timeout', '--signal=TERM', '--kill-after=2s', '2098s'])
+        launcher = dict(self.processes[11], argv=['python', str(self.control / 'pilot.py'), 'run'])
+        self.processes = {9: hard, 11: launcher}
+        def process(pid):
+            if pid not in self.processes:
+                raise FileNotFoundError()
+            return self.processes[pid]
+        self.gate.guard.process_record = process
+        self.gate.verify_contract = lambda: None
+        self.gate.active = Mock(side_effect=AssertionError('no native authority'))
+        self.gate.pilot.first_red = lambda root, error: module.atomic_json(root / 'first-red.json', {'reason': repr(error)})
+        (self.root / 'authority-path.json').unlink()
+        (self.root / 'controls.json').unlink()
+        import shutil
+        shutil.rmtree(self.root / 'scope')  # Une vraie attente queued n'a pas créé Common.
+        bootstrap = {'identity': launcher, 'run_argv': launcher['argv'], 'hard_timeout': hard,
+            'prepared_sha256': 'pin', 'gate_sha256': self.gate.pair['controllers']['gate.py']}
+        (self.root / 'relay-bootstrap.json').write_text(json.dumps(bootstrap))
+        sent = []
+        def send(fd, sig):
+            sent.append((fd - 100000, sig))
+            self.processes.clear()  # Faux timeout : son groupe attribué se termine, pas de signal OS.
+        original_close = os.close
+        with patch.object(self.gate_module.os, 'pidfd_open', side_effect=lambda pid:100000+pid), \
+             patch.object(self.gate_module.signal, 'pidfd_send_signal', side_effect=send), \
+             patch.object(self.gate_module.os, 'close', side_effect=lambda fd:None if fd>=100000 else original_close(fd)):
+            result = self.gate.cancel_launcher('queue interrupted')
+        self.assertTrue(result['launcher_absent'])
+        self.assertEqual(result['unknown'], [])
+        self.assertEqual(sent[0][0], 9)
+        self.gate.active.assert_not_called()
     def test_real_ack_gate_rechecks_after_fsync_before_link(self):
         self.gate.pair['peer_host'] = 'peer'
         state = {'coordinator': {'host': 'peer'}, 'files': {'ledger': 'ledger-sha'},
