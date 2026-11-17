@@ -169,3 +169,14 @@ oldtx/DROP/checkpoint/GC, avant capture comme pendant scan ; (3) transition
 anciennebase+WALnonvide durable avant écritureM, pas simple bump de constante.
 Témoins et coûts complets explicités, annulation distincte de NULL ; aucun
 résultat acquis/chemin réservé. C7 doit arbitrer la suite, ticket ouvert.
+
+Reprise faisabilité SOURCE SEULE autorisée C7/55c59a3875, rattachée avant note :
+base fraîche fetch origin/master figée99fef92ce6ee9a0007eaf99c7c3a6a3789061c57,
+diff avec71fbe vide sur stockage/transactions/headers associés/vector.
+Lecture statique : liste NodeTable locales figée avant callbacks HNSW ; ajout
+M en NodeTable pendant commit non couvert. Checkpoint retire holders dropped
+et tables/pages selon catalogue courant, rétention avant première capture non
+établie. Recovery conserve WAL nonvide tronqué au dernier commit, initWriter
+append sans nouveau FormatRecord dans cette branche ; bump seul non prouvé.
+Note consolidée APIs/lacunes/périmètres/coûts/témoins à suivre ; aucun défaut
+natif reproduit ni prototype/écriture produit/test/DB/build/SDK/format réservé.
