@@ -374,3 +374,19 @@ slot/compiler/metadata/SQL/service lancé pendant préparation.
 Demande RO totale code/r4/recette04, puis GOCPU et GO B séparés éventuels,
 avec317inputs/13pins frais avant natif. Aucun ancien GO réutilisé, ni3e essai
 de compilation autorisé par la création du paquet. r3/B01/diagnostic conservés.
+
+## CPU r4 — GO distinct02b916fda7 acquis
+
+C7-G-PG-CPU-GREEN-R4-17nov60, UNEinvocation exacte autorisée depuis packet-r4 :
+`timeout --signal=TERM --kill-after=2s 58s python3 -B -m unittest -v -f test_tool_qualification test_poste_authority`.
+23PASS/0FAIL/0ERROR/0SKIP rc0, unittest0.051s, commande0.127564181s,
+PCmono1266149.065202492→1266149.192766673. Treize sources avant/après identiques,
+aucune relance. Quatre fichiers preuves vérifiés deuxpostes même chemin
+P/cpu-green-r4-17nov60-01 ; receiptSHA256
+`682fd5b5eb0f54f3c23ddecad0e50d5adbb10b68c7da854ef2bdb872748d6ebb` ;
+stderrSHA256 `9bb2dbb821d36b849a3b671e762e1047fcde59831086b2b9d83fa6e17355277e`.
+Le vrai prédicat55vs38 et ses négatifs sont verts sur fixtures privées, pas
+sur proc/FLOCK réels. Aucun rouge unitaire préalable inventé ; incidents
+B-R3 et diagnostic restent refusés immuables. Aucun poste/slot, natif/rustc,
+SQL/PG/service exécuté. OS/transport NONQUALIFIÉS ; futurGO B distinct absent,
+317inputs/13pins hôte frais encore requis avant entrée native.

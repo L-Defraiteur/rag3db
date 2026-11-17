@@ -534,3 +534,11 @@ copiée deuxhôtes.13sources/23témoins NONJOUÉS,GOinactif/outputkernel-contrac
 absent. ROtotale code+paquet+recette demandée ; CPU/natifGO distincts requis,
 317inputs/13hostpins frais avantnatifs. Aucuneexécution/ancienGO réemployé,
 r3/B01/diagnostic/OUT_T immuables. Contratv6.8≠qualificationOS7.3 outransport.
+
+CPU r4 GO02b916fda7 exécutéUNEfois :23PASS/0FAIL0ERROR0SKIP rc0,unittest.051s/
+commande.127564181s,13sourcesavant=après. Preuves2hôtes vérifiées
+P/cpu-green-r4-17nov60-01 receiptSHA
+682fd5b5eb0f54f3c23ddecad0e50d5adbb10b68c7da854ef2bdb872748d6ebb.
+Prédicat55vs38 positif+négatifs surfixturesseulement ;0proc/FLOCKréel/slot/
+compiler/SQL/PG/service. Anciennespreuvesrougesconservées,aucunGOBdistinct
+déduit ;317inputs/13hôtepins frais requis avantfuturnatif. Ticketouvert.
