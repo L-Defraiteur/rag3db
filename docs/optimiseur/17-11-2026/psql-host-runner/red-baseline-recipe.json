@@ -48,5 +48,19 @@
     "test_runner.py": "385e9d6938d95ea13289d3322f9872a8aea0854dfa7cb5281c24cf5270647f08"
   },
   "sql_authorized": false,
-  "stage": "psql-baseline-red-02"
+  "stage": "psql-baseline-red-02",
+  "tools": [
+    {
+      "path": "/usr/bin/timeout",
+      "resolved": "/usr/bin/timeout",
+      "sha256": "9c3e4dc9a71ba25ed23e56774c003d3e16043479c48c9fd5c6943734eb1942b7",
+      "uid": 0
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/poste",
+      "resolved": "/home/lucied/.cache/rag3weaver-build/poste",
+      "sha256": "79e3a8bbf457e3bc9104aa1558e7d03072216c70b68e08ae606ace6aa4584c7b",
+      "uid": 1000
+    }
+  ]
 }

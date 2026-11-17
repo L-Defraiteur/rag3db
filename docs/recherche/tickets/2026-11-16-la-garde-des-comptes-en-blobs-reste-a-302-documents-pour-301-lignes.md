@@ -872,3 +872,8 @@ RO exacte R ab65 favorable baseline/recette nominale, rouge NON OBSERVÉ.
 Limite avant admission : source privée à copier/vérifier, Common6439 et Python
 système à épingler. Pin PC Python3.14 a38210a5…87449d ajouté à la recette
 sans changement runner/test. Pas d'import/test/PG ; GO CPU reste manquant.
+
+
+Avant admission nominale : C7 demande également pins timeout/poste et UID/
+inventaire/absence ancienne autorité. Métadonnées privées vérifiées RO puis
+recette complétée, ancienne recipe.json conservée. Aucun CPU/PG exécuté.

@@ -90,3 +90,12 @@ avant admission. Cela ne qualifie pas toute sa fermeture dynamique. Source
 runner/test inchangée. Copier les seules sources plus Common6439 dans le root
 privé neuf, comparer chaque SHA, puis relire ce paquet avant GO distinct.
 Ni unittest ni import runner/test lancé pour cette préparation.
+
+
+Complément final C7 avant admission : timeout SHA9c3e4dc9…1942b7 et poste
+SHA79e3a8bb…584c7b (chemins résolus/UID dans recette) ajoutés après lecture RO
+de leurs seuls octets. Racine privée PC uid1000/mode700, trois sources uid1000
+conformes, aucun common-proofs ni ancienne autorité d'entrée dans cette racine.
+La recette précédente recipe.json/bb5 reste conservée ; nouvelle recette finale
+à poser sous recipe-final.json, sans réécrire les anciens reçus de préparation.
+Ces métadonnées ne sont pas un reçu d'autorité actif ni un GO CPU.
