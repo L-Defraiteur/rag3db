@@ -179,3 +179,16 @@ rouge, échantillonner monotonic frais, valider strictement heartbeat puis
 revérifier scope. Tolérances inchangées. P/Q/S+manifest v8, Qv7 figé.
 Correctif NON JOUÉ, nouvelle RO/GO CPU vert distinct avant test ; aucun rejeu
 des six juges acquis sans cause, aucune qualification native/GO900.
+
+## Qv8 natif : rouge conservé après shutdown, avant suite
+
+GO C7-LIFECYCLE-HB6C6-Q8-17nov900 consommé sur6c6b/Qv8a5d861 : ARM/admission,
+READY/grant autonomes puis réponse publique et shutdownACK/mêmePID/rc0 observés.
+Premier rouge1266055.091886152 stable_readers après shutdown ; scopeROUGE1,
+restes[]/nettoyé/autoritéterminée. Aucun retry, aucun assouplissement du juge.
+[Rapport06](../../arbre-principal/17-11-2026/06-cycle-q8-rouge-apres-shutdown.md)
+et manifeste Git :103 bruts conservés/réempreintés sur deux hôtes avant
+diagnostic. Inventaires persistés : retraits .ecrivain/.wal, DB SHA changé
+à taille constante, autres entrées identiques ; cause/innocuité NON QUALIFIÉES.
+Suites vecteurs/graph/FTS après rouge NON JOUÉES. Aucune DB/health/recovery
+nouvelle autorisée ; proposition RO puis revue avant tout éventuel GO distinct.
