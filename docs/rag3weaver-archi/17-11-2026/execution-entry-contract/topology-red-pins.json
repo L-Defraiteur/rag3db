@@ -1,0 +1,41 @@
+{
+  "schema": "pure-entry-topology-red-preparation-v1",
+  "executed": false,
+  "go": null,
+  "module_unchanged_from": "cb2906f48c01e7cce39907c7aaf4547e546f492f",
+  "prepublished_tests": "80c68e53de31976e5d846e9d8130b779b8a0d915",
+  "cwd": "/home/lucied/.cache/rag3weaver-build/cx-wt-archi-pas-va-au-bout-global-pilot-r2/docs/rag3weaver-archi/17-11-2026/execution-entry-contract",
+  "import_file": "/home/lucied/.cache/rag3weaver-build/cx-wt-archi-pas-va-au-bout-global-pilot-r2/extension/rag3weaver/scripts/execution_entry.py",
+  "pythonpath": "/home/lucied/.cache/rag3weaver-build/cx-wt-archi-pas-va-au-bout-global-pilot-r2/extension/rag3weaver/scripts",
+  "interpreter": {
+    "path": "/usr/bin/python3.14",
+    "sha256": "c81d88523721c462f53a98129d65bba68f67791932f0664372e1778e74fd9517"
+  },
+  "files": {
+    "extension/rag3weaver/scripts/execution_entry.py": "8b6de03703a1b2a2de8f30c90a93a01d247d0b3be436e57215b1603981cb0697",
+    "docs/rag3weaver-archi/17-11-2026/execution-entry-contract/test_execution_entry.py": "35b93db8d3c4198a59f9316a6fd9f9c6e0ee53f7334e0dbb64a0048060e52627",
+    "docs/rag3weaver-archi/17-11-2026/execution-entry-contract/execution_entry.pyi": "902e70d3990ad23118c07be42333a08790bb3049f5426832002356da44c772f4"
+  },
+  "argv": [
+    "timeout",
+    "--signal=TERM",
+    "--kill-after=2s",
+    "58s",
+    "/usr/bin/python3.14",
+    "-B",
+    "-m",
+    "unittest",
+    "-v",
+    "test_execution_entry.EntryContract.test_child_cannot_be_the_common_owner",
+    "test_execution_entry.EntryContract.test_child_cannot_be_the_common_root",
+    "test_execution_entry.EntryContract.test_common_root_and_runner_same_pid_need_same_start"
+  ],
+  "proposed_functions": [
+    "test_child_cannot_be_the_common_owner",
+    "test_child_cannot_be_the_common_root",
+    "test_common_root_and_runner_same_pid_need_same_start"
+  ],
+  "expected": "3 FAIL (Refusal not raised), 0 ERROR/skip, rc1; NOT OBSERVED",
+  "other_functions_not_selected": 48,
+  "physical_admission": false
+}
