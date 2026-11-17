@@ -589,3 +589,15 @@ attributionpartielle/cleanupMINEND sanssuccèsaprèsrouge. Deuxfiletsfuturs ajou
 P2doc R régularisé : identitéSQL f949 existante a13clés, pas14. Correction
 comptage seule,aucunquatorzièmechamp historique inventé. MatriceC reste
 proposée NONÉCRITE/NONJOUÉE,contratconceptuelseulement,pasGOimpl/runtime.
+
+### V2 source/hermétique — préparation C7 5b838bda7a, branche distincte
+
+NouveauWT/branche cx-optimiseur-pg-v2-preparation-20261117-r1 depuis99b11dee22,
+sans target ni exécution. Avantfix : publier témoin causal legacy B réel+canari
+fictif dansstdin ; une AssertionError FAIL attendue sur son request.json,
+pas ERROR compilation/import. Module rouge dédié sans import du futurv2 ;
+commandeCPU future distincte à approuver. GarderB immuable, corriger dans C.
+Préparer sourcev2/whitelisttraces/injectioncredentials mémoire et filets
+connectavantPID/transactionRO/constantes/CancelToken-drop-join/postcheckMINEND/
+premièrecause/reap/secrets. AucunCPU/rustc/ELF/DBDDL/connect/creds/SQL/service
+pendant préparation ; code/pins/RO puis GOsdistincts CPU/natif/PG requis.
