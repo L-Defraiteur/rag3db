@@ -387,3 +387,12 @@ locks DBDB et fins Common/physique corroborés ; pending bruts complétés sans
 réécriture, 11UNKNOWN nonattribués. Aucun rejeu/import/test/proc/OS/DB/corpus
 par Recherche. Détail rapport17/24. Gate toujours RED ; Banc attendu, puis
 nouveau pin/RO/GO distinct avant toute exécution. Ticket reste ouvert.
+
+
+RO Banc des preuves bb570 favorable bornée publiée d32884b667 : 62+7 SHA FS,
+5+6 CPU conformes ; 16 copies privées sources/outils/2ELF rehachées PC ET
+portable sans écart. Sept logs/argv/causes, ledgerACK/doublelock/fins réelles
+corroborés ; lecture/hash seuls, sans rejeu/test/DB/procscan/service/corpus.
+Deux RO preuves favorables désormais reçues. Gate toujours défectueuse,
+ticket ouvert ; préparation source admise, nouveaux pins/RO/GO distincts
+avant exécution. Détail rapport17/24.

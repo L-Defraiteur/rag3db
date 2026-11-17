@@ -123,3 +123,23 @@ sont bien du Rust natif exécuté. Aucun corps groundtruth/index/corpus exécut�
 Aucun rejeu, import, test, proc, OS, DB ou corpus par Recherche. Cette revue
 permet la préparation source ; **elle ne qualifie pas la gate FS corrigée**.
 Revue Banc encore attendue ; nouveau pin, RO et GO distincts avant exécution.
+
+
+## Revue Banc des preuves bb5707c6a5
+
+Avis favorable borné publié par Banc dans **d32884b667**, rapport
+`docs/banc/17-11-2026/03-ro-couple-fs-red.md`, section « Preuves exécutées v4 ».
+Les 62+7 entrées publiques FS et 5+6 CPU sont conformes aux blobs Git.
+Banc a rehaché indépendamment les **16 fichiers privés sur PC et portable**,
+sources/outils/deux ELF : zéro écart. Les sept logs et argv exacts corroborent
+six FAIL sémantiques et un PASS ; ledger/ACK avant inventaires/juges et deux
+verdicts lock effectif DBDB sont cohérents. Les fins Common et physique,
+retour SSH réapé0 et pending complétés sans réécriture sont corroborés.
+Les 11 UNKNOWN restent inconnus ; aucune expiration du timeout ou quiétude
+universelle n’est qualifiée. Lecture/hash seulement, aucun rejeu, test,
+import, build, DB, procscan, service ou corpus par Banc.
+
+**Les deux revues des preuves sont maintenant favorables**, chacune dans sa
+portée explicite. La gate reste défectueuse ; le ticket reste ouvert.
+La préparation source peut poursuivre le contrat C7. Nouveau pin, nouvelles
+RO et GO distinct avant toute exécution ; aucun ancien GO réutilisable.
