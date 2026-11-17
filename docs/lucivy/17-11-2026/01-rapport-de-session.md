@@ -121,3 +121,12 @@ UID1000/dev57/ino96308148 ; seulementSHA/AST, aucun import/runpy/test.
 Action RO delta confiée à Recherche, puis nouveauGOCPU60 C7 pour seuls2cas
 nouveaux047, attendus2FAIL/0ERROR. AncienGO15B2clos, aucun retry implicite,
 aucun v2vert/315/native/target/corpus. Rapport17/11 et marqueurv3 préparés.
+
+RO Recherche delta180a5628cf/a99f28 favorable bornée reçue : Path.open(mode='r')
+consomme correctement l’argument nommé de read_bytes/read_text, scenario
+extérieur distinct, forwarding conforme. Discriminants ordre/durée/cleanup
+inchangés. L’avis15b2 n’avait pas détecté cette faute ; les2ERROR313c restent
+setup, jamais rouges fonctionnels. Deux nouveaux probes047 :2FAIL/0ERROR
+attendus NONOBSERVÉS. Aucun import/test/runpy/proc/SSH/T/corpus par Recherche,
+aucune qualificationOS. GO15B2 épuisé, nouveauGOCPU60 C7 distinct requis ;
+niEC4rejoué ni3PASSv2 autorisés. Harnaisv3 toujours nonexécuté.
