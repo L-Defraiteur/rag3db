@@ -295,3 +295,12 @@ pur565b prédicatsépinglésréutilisés sansmutation.24témoins92467 inchangés
 NONJOUÉSsurfix, pinsGO24 proposés sansGO. LIVE/Commonfinal/CLI natif restent
 unsupported, aucun OS/capacitéphysique ajouté. ROsource/pins puisGOdistinct
 avanttest ; aucunappelant/PQS/SDK/service/target, archivesintactes.
+
+## Réserve hash final Mémoire5e3b, avant témoin et correction
+
+Le dernier check(final=True) précède sha256(stdout/stderr) dans le retour ;
+un délai pendant ces hashes peut laisser retourner un positif après END.
+Prépublier un témoin causal sur le vrai runner8dd inchangé et horlogeMODELED
+avançant dans sha256, GOrouge distinct/conservation2hôtes AVANTfix. Puis résultat
+construit et contrôle frais après les deux hashes juste avant retour. GO24 HOLD,
+aucunvert ou backendOS acquis. LimiteTTY callbacks noninterruptibles conservée.

@@ -295,3 +295,19 @@ class FixtureRunnerTests(unittest.TestCase):
         effects.write_controls['before'] = 'EROFS'
         self.refuse(request, effects, 'storage-profile-unqualified')
         self.assertNotIn('fork_owned', effects.calls)
+
+    def test_final_hash_crossing_end_cannot_return_positive(self):
+        from unittest.mock import patch
+        import execution_entry_runner as runner_module
+        request, effects = self.fixture()
+        original = runner_module.sha256
+        def delayed_hash(raw):
+            value = original(raw)
+            effects.clock = request['end'] + 1.0  # delay only inside final hashes
+            return value
+        with patch.object(runner_module, 'sha256', side_effect=delayed_hash):
+            with self.assertRaises(RunnerRefusal) as caught:
+                run_fixture_invocation(request, effects)
+        self.assertEqual(caught.exception.code, 'final-deadline')
+        self.assertEqual(caught.exception.invocation_returncode, 0)
+        self.assertIn('wait_child', effects.calls)

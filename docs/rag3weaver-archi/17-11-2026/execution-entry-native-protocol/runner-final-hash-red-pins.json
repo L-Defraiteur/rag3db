@@ -1,0 +1,39 @@
+{
+  "schema": "fixture-runner-final-hash-red-preparation-v1",
+  "executed": false,
+  "go": null,
+  "source_runner_unchanged_from": "5e3b2006dd20ad2f03e300b002a4132eafcd6567",
+  "cwd": "/home/lucied/.cache/rag3weaver-build/cx-wt-archi-pas-va-au-bout-global-pilot-r2/docs/rag3weaver-archi/17-11-2026/execution-entry-native-protocol",
+  "pythonpath": "/home/lucied/.cache/rag3weaver-build/cx-wt-archi-pas-va-au-bout-global-pilot-r2/extension/rag3weaver/scripts",
+  "import_file": "/home/lucied/.cache/rag3weaver-build/cx-wt-archi-pas-va-au-bout-global-pilot-r2/extension/rag3weaver/scripts/execution_entry_runner.py",
+  "interpreter": {
+    "path": "/usr/bin/python3.14",
+    "sha256": "c81d88523721c462f53a98129d65bba68f67791932f0664372e1778e74fd9517"
+  },
+  "files": {
+    "extension/rag3weaver/scripts/execution_entry_runner.py": "8dd368ca6dc56a08d797998d15763a135b4ecd619409f68c524d70d893177c6f",
+    "docs/rag3weaver-archi/17-11-2026/execution-entry-native-protocol/test_runner_effects.py": "eb4f98ff0e1c264fd868b2b450fc62c9107891de15fd54f82ef15811854a614b",
+    "extension/rag3weaver/scripts/execution_entry.py": "565b7f39494911b65ef121f19565450c70803c93b9ef6e62599d570707dbf218"
+  },
+  "argv": [
+    "timeout",
+    "--signal=TERM",
+    "--kill-after=2s",
+    "58s",
+    "/usr/bin/python3.14",
+    "-B",
+    "-m",
+    "unittest",
+    "-v",
+    "-f",
+    "test_runner_effects.FixtureRunnerTests.test_final_hash_crossing_end_cannot_return_positive"
+  ],
+  "selected_functions": 1,
+  "other_functions_not_selected": 24,
+  "expected": "1 FAIL RunnerRefusal not raised / 0 ERROR/skip / rc1; NOT OBSERVED",
+  "mode": "FIXTURE_ONLY",
+  "proof_origin": "MODELED",
+  "cp_ack": false,
+  "global_admission": false,
+  "native_backend_delivered": false
+}
