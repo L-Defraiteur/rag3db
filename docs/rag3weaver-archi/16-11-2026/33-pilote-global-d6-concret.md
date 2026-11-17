@@ -198,3 +198,14 @@ réempreintée. 39 fonctions écrites au total (34 précédentes +5 nouvelles),
 NONJOUÉES ; AST seulement. Pas de rouge dynamique ni vert revendiqués sur ce
 correctif. Pas de pin PC/Q/T0 ni ACK/GO acquis ; nouvelle RO groupée et GOCPU
 exact distinct requis avant essais, aucun GO7455.
+
+
+### Delta unique après RO4461
+
+ED7f048/Banc46b071 favorables PRÉPA, Mémoire conserve la seule réserve
+identité du juge vert. Ticket et témoin VRAI Broker.handle prépubliés1d279
+AVANTfix, NONJOUÉS. Admission agent-green exige le bloc D6_RED_TEST inchangé,
+son hash égal au juge agent-red acquis ; les frontières built/tested relisent
+également ce bloc pour les deux étapes, en plus du snapshot source complet.
+Le validateur peut changer ; le juge reste identique. 40 fonctions écrites,
+NONJOUÉES ; aucun GO CPU/natif/pin PC acquis. Autres points4461 non rouverts.

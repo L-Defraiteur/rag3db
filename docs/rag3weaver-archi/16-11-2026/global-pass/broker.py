@@ -67,9 +67,12 @@ class Broker:
     policy.require(not self.ctx.git(cwd,'diff','--cached','--name-only'),'staged D6 source is not admitted')
     policy.require(not any(v.get('untracked') for v in source['files'].values()),'untracked D6 source is not admitted')
     policy.require(self.ctx.git(cwd,'diff','HEAD','--name-only').splitlines()==['extension/rag3weaver/src/backend.rs'],'D6 source delta has undeclared paths')
-    if stage=='agent-red':policy.red_source((cwd/'src/backend.rs').read_text())
+    if stage in ['agent-red','agent-green']:policy.red_source((cwd/'src/backend.rs').read_text())
    patch=self.ctx.git(cwd,'diff','--binary');record=dict(identity=identifier,peer=row,cwd=str(cwd),target=str(target),argv=args,build_argv=build,test_argv=test,stage=stage,name=expected,source_head=source_head,source_state=source,patch_sha256=hashlib.sha256(patch.encode()).hexdigest(),done=False)
-   if stage=='agent-red':record['red_line']=policy.red_source((cwd/'src/backend.rs').read_text())
+   if stage in ['agent-red','agent-green']:
+    record['assertion_line']=policy.red_source((cwd/'src/backend.rs').read_text());record['judge_sha256']=hashlib.sha256(policy.D6_RED_TEST.encode()).hexdigest()
+    if stage=='agent-red':record['red_line']=record['assertion_line']
+    else:policy.require(record['judge_sha256']==self.completed[0]['judge_sha256'],'green judge differs from original red judge')
    self.sessions[identifier]=record;self.ctx.save(identifier+'-admission.json',record)
    ld=str(Path(self.ctx.config['cargo_exe']).parent.parent/'lib')+':'+str(self.ctx.config['sdk_root'])
    self.ctx.observer.source(cwd,dict(manifest=str(cwd),ld=ld))
@@ -81,6 +84,8 @@ class Broker:
   if request['kind'] in ['begin','test-begin']:return {}
   if request['kind']=='compile-failed':raise RuntimeError('real fixture Cargo compilation failed before test')
   if request['kind']=='built':
+   if value['stage'] in ['agent-red','agent-green']:
+    policy.red_source((cwd/'src/backend.rs').read_text());policy.require(value['judge_sha256']==hashlib.sha256(policy.D6_RED_TEST.encode()).hexdigest(),'agent judge changed before ledger')
    policy.require(any(row['cwd']==str(cwd) and row['argv'][1:]==value['build_argv'] for row in self.ctx.observer.cargo),'actual task Cargo compilation SDK frame missing')
    text=Path(value['compile_log']).read_text();rows=[]
    for line in text.splitlines():
@@ -100,6 +105,8 @@ class Broker:
    self.ctx.published(value['identity'],ledger);value['binary']=str(binary);value['runtime_permitted']=time.monotonic();self.ctx.save(value['identity']+'-runtime-permitted.json',value)
    return dict(binary=str(binary))
   if request['kind']=='tested':
+   if value['stage'] in ['agent-red','agent-green']:
+    policy.red_source((cwd/'src/backend.rs').read_text());policy.require(value['judge_sha256']==hashlib.sha256(policy.D6_RED_TEST.encode()).hexdigest(),'agent judge changed before result')
    policy.require(evidence.source_state(cwd,lambda *args:self.ctx.git(cwd,*args))==value['source_state'],'source/index changed during test')
    text=Path(value['test_log']).read_text();expected_red=value['stage']=='agent-red'
    if value['name']:
