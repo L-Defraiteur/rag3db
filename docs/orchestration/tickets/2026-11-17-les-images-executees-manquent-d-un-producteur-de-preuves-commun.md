@@ -194,3 +194,12 @@ inchangé :3FAIL «Refusal not raised»/0ERROR/skip/rc1, enveloppe0.060808234s,
 3572a359673f698f96ce04a424721f6b4877c726cb88b450d2bbff8505ec22a2.
 Préparation du seul correctif pur autorisée ; nouveau source/pins/RO puis GO51
 distinct avant tests. Aucun backend ou qualification physique acquis.
+
+## Correctif pur de topologie préparé après rouges conservés, avant GO51
+
+[Rapport52](../../rag3weaver-archi/17-11-2026/52-correctif-pur-topologie-avant-51.md).
+Après3rouges2a acquis/réhashés2hôtes avantfix, seul le module pur est corrigé :
+enfant distinct de owner/root/runner ; root=runner autorisé seulement même
+PID/start. Témoins51 BYTEidentiques àprépublication, aucunjeu surfix. Pins51
+proposés sansGO ; RO source totale puis GO51 distinct avant toute exécution.
+Aucune capacité physique/adaptateur/appelant/SDK/native livré ou autorisé.

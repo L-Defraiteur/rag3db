@@ -145,6 +145,9 @@ def _check_plan(plan: InvocationPlan) -> None:
             and plan['common_owner'][0] not in (plan['common_root'][0], plan['runner_pid'])
             and plan['storage_profile'] == 'local-regular-exec-write-denial-v1'):
         raise Refusal('plan-types')
+    if (plan['common_root'][0] == plan['runner_pid']
+            and plan['common_root'][1] != plan['runner_start']):
+        raise Refusal('plan-topology')
     fields = ('start', 'issued', 'end', 'operation_end', 'cleanup_reserve')
     if not all(_number(plan[key]) for key in fields):
         raise Refusal('clock')
@@ -219,7 +222,9 @@ def verify_transcript(plan: InvocationPlan, facts: Sequence[Fact],
         elif kind == 'spawned':
             demand(_record(data, {'pid', 'start', 'uid', 'cgroup', 'ppid',
                                   'runner_pid', 'runner_start'}), 'child-identity')
-            demand(_integer(data['pid'], 2) and data['pid'] != plan['runner_pid']
+            demand(_integer(data['pid'], 2)
+                   and data['pid'] not in (plan['runner_pid'], plan['common_owner'][0],
+                                           plan['common_root'][0])
                    and _integer(data['start'], 1) and _integer(data['uid'])
                    and _same(data['uid'], plan['uid'])
                    and _same(data['cgroup'], plan['cgroup'])
