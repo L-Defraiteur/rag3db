@@ -298,3 +298,12 @@ auxfrontières/openatleafNOFOLLOW ; root/parent remplacé refuse. Close uniqueme
 propresFD, pascycleacteur/native. TroisAST/seulement17écrits NONJOUÉS surcandidat,
 9anciens+3autres nonqualifiés. Codefixàpublier/ROgroupée/GOCPUvert distinct requis.
 Aucunbridge ni responsabilitéELFhash/window/liveness/ACK déléguéeauReader ;229bQfigés.
+
+Lecteur6e12 : GO C7-ARCHI-READER-GREEN-6E12-17nov60 consommé UNEfois surWTdédié
+pinexactpropre/poussé ;17PASS/0FAIL0ERROR0skip,0,016sunittest/0,091897800s
+enveloppe/rc0/0retry. Rapport17nov42,3preuvesLOCAL+PCréhash0écart AVANTsuite,
+manifestdc0d2ec9e8ea0bf8749889f755d7489548fef333073de98335f37f711d461337,
+R/cx-archi-reader-green-6e12-17nov-r1.5rouges5917avantfix restentintacts ;12autres
+jouésmaintenantseulement. QualificationLECTEURdomaineCPU, pasbridge/windowkernel/
+ELFhash/liveness/transport/ACK/native.229bQ/config40NONEXEC figés/PGtoolHOLD,
+aucunARM/lease/provider/healthSQL/Cargo/service/target actuel. TicketOPEN.
