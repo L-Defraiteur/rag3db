@@ -1,0 +1,8 @@
+{
+  "reason": "outer physical timeout includes poste acquisition and return",
+  "previous_preflight_sha256": "8c1e671ad089a6cb030d69f165f03edf237aa9445fe731737b43c0f8d0f54b2a",
+  "new_preflight_sha256": "79adf115e7096644c32cf6be31286d89e03ce54c160fe5da538c933afeac15db",
+  "old_exporter_sha256": "68b593392cd95a7b3e177c5b2b4c67d1921736341ea44e37b11ff12727949440",
+  "new_exporter_sha256": "0471118fe427d8e5a52685d02c6f30c51ae5ffa2b91937f78e2caa86adf63f6f",
+  "all_unexecuted": true
+}

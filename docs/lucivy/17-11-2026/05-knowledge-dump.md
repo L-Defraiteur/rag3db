@@ -1,0 +1,21 @@
+# Lucivy — repères du 17 novembre
+
+- Le contrat FS C7 est une capture initiale unique en ordre effectif StdFs,
+  cap5000/exclusions versionnés, jamais une resélection pour obtenir des hits.
+- Les six rouges proposés de8b94353 sont des refus avant continuation espion,
+  pas une comparaison index/oracle réelle. Quatre familles, trois sous-cas IO.
+- Le positif FS impose panel15, builder1/read1 et hash des mêmes bytes ; il ne
+  qualifie ni natif ni sink ni refus des flags dangereux. Ces fautes sont encore
+  présentes volontairement avant le rouge observé.
+- Sha2 exact0.11.0 est déjà dans le lock PC. Seul le futur Cargo offline peut
+  ajouter la dépendance directe core au lock ignoré ; archiver avant/après et
+  refuser tout autre delta. Aucun Cargo de résolution pendant la préparation.
+- Un ledger sur le PC seulement ne vaut pas sa copie sur le portable. Le
+  couple lanceur/exporteur doit être autonome et armé avant lancement ; jamais
+  attendre un collègue humain pendant une fenêtre de validation de300s.
+- END physique comprend poste et sa restitution, pas seulement le pilote.
+  Le timeout extérieur borne l’acquisition/retour, le timeout intérieur reste
+  sous poste, Common reçoit MIN du reste moins réserve pour final. Aucun reset.
+- La syntaxe AST n’importe pas le script et ne joue aucun test ; une lecture
+  favorable reste bornée à ce qui a été réellement lu.
+- Paquet exact et limites : [04](04-paquet-rouge-fs.md). Ticket FS ouvert.

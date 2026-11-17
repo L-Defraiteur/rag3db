@@ -106,3 +106,12 @@ statiquement discriminants ; compilation plausible mais NONvérifiée. Delta
 lock offline à archiver strictement. Aucun Cargo/rustfmt/test/ELF/proc/corpus/
 service par Recherche. PasGO300 ni qualificationFS/native ; pilote concret,
 RO et GO C7 distinct restent requis. Ticket reste ouvert.
+
+C7 poursuit autorisation PRÉPARATION du paquet/piloteRED17nov sous ce ticket,
+aucun Cargo/testnatif/corpus. Proposition300 conservée (release/offline mêmeT),
+END physique unique incluant préflight/CommonMIN/final ; ledger2ELF copié sur
+portable avant toutELF via exporteur autonome armé AVANT lancement, ACK
+source/nonce/SHA sans dépendance humaine. Bail lancement15s, échec si poste
+nonacquis dans ce délai ; aucune attente sans borne ni GO implicite. Six
+rouges par noms/causes/traces, infraSTOP ; contrôlepositif. ROcouple puis GO
+C7 distinct avant exécution. Code source8b94353 inchangé.

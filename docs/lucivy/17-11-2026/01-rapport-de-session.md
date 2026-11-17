@@ -26,3 +26,11 @@ RO Recherche reçue sur source exacte8b94353 et docs c987957426 : favorable
 bornée à la baseline et à la recette proposée ; aucun blocage statique établi.
 Compilation non vérifiée. Suite : pilote concret avec delta lock offline
 archivé, puis RO et GO C7 distinct avant toute exécution.
+
+Paquet concret préparé, sans exécution : [recette exacte](04-paquet-rouge-fs.md).
+Q PC fs-admission-red-17nov-v1, W PC fs-admission-17nov/source8b94353 ;
+préflight79adf115e7096644c32cf6be31286d89e03ce54c160fe5da538c933afeac15db.
+Exporteur portable autonome armé avant lancement, aucune dépendance humaine
+pour ACK ; timeout physique300 incluant acquisition/retour poste, END unique
+CommonMIN/final. Neuf copies vérifiées et syntaxe AST uniquement, aucun
+Cargo/ELF/proc/corpus. RO couple exact puis GO distinct restent requis.
