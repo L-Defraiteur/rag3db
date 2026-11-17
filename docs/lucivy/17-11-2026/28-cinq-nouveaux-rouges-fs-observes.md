@@ -110,3 +110,15 @@ explicite de l’ancien témoin flags/reçu sur l’exception configuration sans
 reçu, pas de contradiction cachée. Nouvelle source/pins/RO totales et nouveau
 GO vert distinct avant exécution. Replay absent/globalFS/core/neufHOLD/A-B/
 corpus natif/ULP7.2/PR42 restent ouverts, aucune qualification par ces six.
+
+
+Deux RO PREUVES5094 favorables bornées reçues avant publication du fix groupé.
+Banc d6c49ffecf : Git57+6 et public57/portable6 rehachés deuxpostes ;18privés/
+17108104B/SHA/modes444 conformes PC+portable. Recherche : Git57+6 et18privés
+LOCAUX conformes, pas de rehash PC intégral privé indépendant revendiqué.
+Six journaux/rows/argv/cinqcauses+positif/octets collision/ADMITTEDinputalias/
+None0/FlagsREFUSED+Manifest/ledgerACK/doublelock/fins Common et physique
+corroborés,0rejeu/import/test/proc/OS/DB/corpus. Nuance archive aprèsretour
+AVANTdeadline confirmée ; refusFileExistsinitial rapporté par porteur, pas
+observé directement par Banc/R, reprisecopies seulement/intégrité finale
+confirmée. Conservation suffisante pour préparation source, pasFSréparée.

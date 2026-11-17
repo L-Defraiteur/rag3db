@@ -1,6 +1,6 @@
 # L’admission du corpus FS ne garantit pas la vue consommée
 
-- **État** : ouvert ; sourcebdf compilée, cinq nouveaux rouges sorties/identité/flags et positif réellement observés, après les six rouges0f ; correctif groupé non fait. Preuves deux hôtes conservées, revue demandée.
+- **État** : ouvert ; sourcebdf compilée, cinq nouveaux rouges sorties/identité/flags et positif réellement observés, après les six rouges0f ; correctif groupé source13298f7 préparé, non compilé/non exécuté. Preuves deux hôtes conservées et relues, RO source demandée.
 - **Gravité** : moyenne ; une réussite de test peut masquer une vue vide, des lectures perdues ou un index réutilisé.
 - **Famille** : validation
 - **Pour** : lucivy
@@ -660,3 +660,28 @@ sous-observed/pastests. Autoritépublique seule/captokenjamaisexporté.
 ActionsROPREUVES R+Banc demandées sansrejeu/DB/proc/OS/corpus souscemêmeticket.
 FixGROUPÉ peutsepréparer APRÈSconservation, nouveauxpins/RO/GOvertdistinctavant
 exécution ;flagsinvalideszéroeffet/zéroreçu arbitrage30561. GOclos/ticketOPEN.
+
+
+Deux RO PREUVES5094 favorables bornées reçues avant publication du fix groupé.
+Banc d6c49ffecf : Git57+6 et public57/portable6 rehachés deuxpostes ;18privés/
+17108104B/SHA/modes444 conformes PC+portable. Recherche : Git57+6 et18privés
+LOCAUX conformes, pas de rehash PC intégral privé indépendant revendiqué.
+Six journaux/rows/argv/cinqcauses+positif/octets collision/ADMITTEDinputalias/
+None0/FlagsREFUSED+Manifest/ledgerACK/doublelock/fins Common et physique
+corroborés,0rejeu/import/test/proc/OS/DB/corpus. Nuance archive aprèsretour
+AVANTdeadline confirmée ; refusFileExistsinitial rapporté par porteur, pas
+observé directement par Banc/R, reprisecopies seulement/intégrité finale
+confirmée. Conservation suffisante pour préparation source, pasFSréparée.
+
+
+PrépaSOURCEGROUPÉE après conservation2hosts et deuxROpreuves : lucivy
+13298f7db3443956ea01e088b0c014fd8c60c2ff, branche cx-lucivy-fs-output-fix-17nov parentbdf,
+rapport17/29+pins4fichiers/16noms conservés. InvocationPaths input+manifest+
+reports résolus/distincts/horsinput avantTOUTEreserve, flagsinvalideszéroeffet/
+zéroreçu30561, ancienflag_presence aligné explicitement aprèsrouge. Reçu
+pins+paths/hashfsync ;helperrapport slotvalidé/create_new SANS mkdir AVANT
+builder ;nativeV3_CORRECTNESS_REPORT déclaré. document_ordinalNone→Missing,
+borne/conversionexplicites. 0Cargo/rustfmt/test/ELF/PC/proc/corpus/service/target.
+DeuxRO TOTALES SOURCE Recherche+Banc confiées avantnouveaupiloteGREEN/paquetRO/
+GOvertdistinct ;16PASS attendusNONOBSERVÉS. PasFDancêtres ancrés/garantie
+namespacehostile, replaytoujoursabsent/globalFS ouvert. Porteur Lucivy.

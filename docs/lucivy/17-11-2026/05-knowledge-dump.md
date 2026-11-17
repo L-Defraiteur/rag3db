@@ -55,3 +55,28 @@ Ne pasrelancer22/GOconsommés. DernierCommon2593434TERMINE0/quietbornée, double
 lockdbdbconfirmé. GateFS NONréparée,0corpsindexgroundtruth/corpus ;7jugesFS
 sontbienRUSTNATIFSéxécutés. Préparationfixsourceautoriséeaprèspreuves,
 ROpreuvesR+Bancsansrerun,puisnouveaupin/RO/GOdistinctavanttouteexécution.
+
+
+État courant après GO E75/acfd30, une invocation consommée : [28](28-cinq-nouveaux-rouges-fs-observes.md),
+preuves5094f2b29e. Sourcebdf compilée3.22s/deuxELF542924c1+a50adc24 ; cinq
+NOUVEAUX FAILsémantiques+positif,6juges RustNATIFS réels/15filtered,0index/
+secondbody/dixanciens/corpus. Collision reçu réellement tronqué, rapportdans
+input, parentalias, ordinalNone→0, flagsavecoutput acquis. Common186154/
+start128760537TERMINE0/11UNKNOWN, retoursréels dans4.957170273sparentportable ;
+place restituée AVANTarchives. 57+6SHA et18copies privées/17108104B en444
+deuxhôtes,fs-output-red-bdf83ad-17nov-v1. Banc d6c49ffecf2hôtes etRecherche
+Git+LOCAL relus ; pas attribuerR un rehashPC privéintégral. Archive horsinvocation
+MAISavantdeadline, reprisecopies-observed aprèsFileExists sansréessayertests.
+
+Prépa SOURCEGROUPÉE courante : [29](29-correctif-groupe-sorties-identite-source.md),
+**13298f7db3443956ea01e088b0c014fd8c60c2ff**, branche lucivy
+cx-lucivy-fs-output-fix-17nov, WTportable cx-lucivy-fs-admission propre. PC
+WT cx-lucivy-fs-admission-17nov restebdf/sourceRED et lockDBDB ; ne pas
+confondre ELFdeT(sourcebdf) etsourcefix13298 encore NONCOMPILÉE/NONJOUÉE.
+InvocationPaths input/manifest/reports résolus ensemble, flagsinvalideszéro
+FS/reçu30561, helperrapport slot/create_new sansmkdir avantengine, identité
+Missingexplicite. Ancien témoinflags aligné aprèsrouge ;16noms conservés,
+16verts seulementattendus. PasdeFDancêtres ancrés/garantiehostilerename,
+replaymanifestencoreABSENT, gateglobalecore/corpus nonqualifiée. ROtotales
+SOURCE R+Banc demandées, futurpiloteGREEN/paquet/pinsROcouple et nouveauGO
+vert distinct AVANTtouteexécution. Ne pasrelancerpaquet27/e75/ancienGO.

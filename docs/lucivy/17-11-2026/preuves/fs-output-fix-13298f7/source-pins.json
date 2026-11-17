@@ -1,0 +1,45 @@
+{
+  "status": "SOURCE_ONLY_NOT_COMPILED_NOT_EXECUTED",
+  "source": "13298f7db3443956ea01e088b0c014fd8c60c2ff",
+  "parent": "bdf83ad76cf73a74cdde8358affb364b857e27e2",
+  "repository": "L-Defraiteur/lucivy",
+  "branch": "cx-lucivy-fs-output-fix-17nov",
+  "worktree": "/home/lucied/git_workspaces/cx-lucivy-fs-admission",
+  "files": {
+    "README.md": "3f971c0c8c4fe6dd12bdd0be39860433b0278a423cb59825374add603e30c8cb",
+    "lucivy_core/tests/common/fs_fixture.rs": "fdc9cf3b10de57fb2cbb2c72455115884a0580417c76b06ea1e2ce0996f9bee7",
+    "lucivy_core/tests/test_fs_fixture_admission.rs": "e03d84080346134b69dcd45202f17f9501ed950929c5d9451693fc23661e1746",
+    "lucivy_core/tests/test_sfx_v3_ground_truth.rs": "f908cf8c333231508f19e155bef442017e69f9bfdf70553228e0cdc965aa4c20"
+  },
+  "expected_inventory": [
+    "empty_view_is_refused_before_builder",
+    "enumeration_error_is_not_an_empty_subtree",
+    "metadata_error_is_not_a_filtered_file",
+    "read_error_is_not_a_filtered_file",
+    "invalid_utf8_is_refused_not_dropped",
+    "uncovered_panel_is_refused_before_zero_equals_zero",
+    "covered_fixture_reaches_builder_once_on_the_captured_bytes",
+    "flag_presence_is_refused_before_any_corpus_operation",
+    "absent_root_is_a_precise_refusal_without_skip",
+    "existing_receipt_prevents_recapture_after_refusal",
+    "report_receipt_collision_is_refused_before_consumer",
+    "report_inside_input_is_refused_before_consumer",
+    "aliased_output_parent_is_refused_before_consumer",
+    "missing_document_ordinal_is_not_document_zero",
+    "invalid_flags_have_no_receipt_or_corpus_effects",
+    "distinct_outputs_and_present_ordinal_reach_consumer_once"
+  ],
+  "expected_not_observed": {
+    "passed": 16,
+    "failed": 0,
+    "ignored": 0,
+    "per_exact_filtered": 15
+  },
+  "red_proofs": [
+    "bb5707c6a5c74825e894595d53ba80351d27d4ad",
+    "5094f2b29eaafd22159ecebd01fbb9372af5ab7b"
+  ],
+  "flags_arbitration": "30561f8229",
+  "executions": [],
+  "replay_implemented": false
+}
