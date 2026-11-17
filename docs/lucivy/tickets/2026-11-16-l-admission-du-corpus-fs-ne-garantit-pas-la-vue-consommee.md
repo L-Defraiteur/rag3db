@@ -150,3 +150,20 @@ physique locale et durées restantes conservatrices vers PC, sans comparer
 les horloges des hôtes ni étendre300. Aucun Cargo/index/corpus/natif ; pas de
 nouvelle primitive de relais générique. Porteur Lucivy, RO ciblée et nouveau
 GO après nouveau pin. La recette04 reste historique et NON lançable.
+
+C7 n’admet pas le témoin315 pour l’instant : préparer un témoin COURT sur
+vraie entrée CLI/main/args/hash/JSON, SSH/Popen simulés, sentinelle avant
+réseau/écriture postARM ; exiger le watchdog physique avant cette frontière.
+Rouge d’ordre/raccord, pas ERROR de fixture ni preuve OSkill/300 mesurés.
+Témoin long300 reste NONJOUÉ ; publier le court avantfix puis RO/GOCPU60
+distinct. Aucun clock virtuel ni copie047 remaniée, aucun vraiSSH/proc/T/
+corpus/natif. Porteur Lucivy, même ticket, ancien paquet intact.
+
+Témoin court préparé : test-fs-export-watchdog-entry.py SHAbe4913846a3d7b3f635306c426ddcc3ad1f4d628a6a6939d954b45c8eff0f836,
+Q local cx-lucivy-fs-export-watchdog-entry-17nov-v1, copie047 inchangée.
+Vrai __main__/args/préflight/SHA/JSON, ARM simulé, Path.open postARM arrêté
+AVANT ouverture/écriture ; Popen interdit et execv timeout simulé, aucun
+process/réseau/proc/T/corpus. Trace brute avant assertion d’ordre watchdog.
+Action RO courte confiée à Recherche ; critères setup réel atteint puis FAIL
+ordre (pas ERROR), pas prétention OSkill/300mesurés. C7 donne GOCPU60 distinct
+après revue ; aucun test ni correctif encore joué. Source du témoin prépub.

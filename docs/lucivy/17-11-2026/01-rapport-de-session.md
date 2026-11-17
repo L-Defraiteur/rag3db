@@ -52,3 +52,7 @@ HOLD C7 452dd0ccfc : absence de watchdog physique portable dans export047111.
 Ancien paquet figé/nonconsommé, commande04 HOLD. [Contre-exemple CLI proposé
 avant correction](06-hold-borne-physique-portable.md),300s réels/fauxSSH/fsync
 bloqué/secours302. Aucune exécution du témoin ni correctif encore effectué.
+
+Témoin315 nonadmis pour l’instant. [Témoin court du vrai raccord CLI](07-temoin-court-raccord-watchdog.md)
+préparé/prépub avantfix, source047 intacte, SHA témoinbe491384. Seuls SHA/AST
+vérifiés ; attente RO Recherche puis GOCPU60 distinct. Aucun timerOS qualifié.

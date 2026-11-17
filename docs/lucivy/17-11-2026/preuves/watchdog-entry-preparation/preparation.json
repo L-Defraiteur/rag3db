@@ -1,0 +1,12 @@
+{
+  "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-export-watchdog-entry-17nov-v1",
+  "uid": 1000,
+  "device": 57,
+  "inode": 96230440,
+  "preparation_only": true,
+  "executed": false,
+  "files": {
+    "test-fs-export-watchdog-entry.py": "be4913846a3d7b3f635306c426ddcc3ad1f4d628a6a6939d954b45c8eff0f836",
+    "export-fs-red-ledger.py": "0471118fe427d8e5a52685d02c6f30c51ae5ffa2b91937f78e2caa86adf63f6f"
+  }
+}
