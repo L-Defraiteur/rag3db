@@ -97,6 +97,43 @@ class PhysicalSampler(unittest.TestCase):
             self.assertEqual(value['script_sha256'], hashlib.sha256(b'fake actor').hexdigest())
 
 
+class RoleSampler(unittest.TestCase):
+    def test_generic_python_role_uses_expected_script_before_hash(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp)
+            proc=root/'72'
+            proc.mkdir()
+            executable=root/'python3'
+            executable.write_bytes(b'python executable')
+            (proc/'exe').symlink_to(executable)
+            script=root/'lifecycle.py'
+            script.write_bytes(b'expected lifecycle')
+            fields=['R','60']+['0']*17+['123']
+            (proc/'stat').write_text('72 (python role) '+' '.join(fields))
+            (proc/'cgroup').write_text('0::/scope\n')
+            for argv in (['/python3','-B',str(script),'--controller'], ['/python3',str(script),'--driver']):
+                (proc/'cmdline').write_bytes(('\0'.join(argv)+'\0').encode())
+                value=a.python_role_snapshot(72, str(script), proc_root=root, clock=lambda:11.)
+                self.assertEqual(value['argv'],argv)
+                self.assertEqual(value['script_path'],str(script))
+                self.assertEqual(value['script_sha256'],a.digest(script))
+            for argv in (['/python3','-c',str(script)], ['/python3','-m',str(script)],
+                         ['/env',str(script)], ['/python3',str(root/'unapproved.py')]):
+                (proc/'cmdline').write_bytes(('\0'.join(argv)+'\0').encode())
+                with self.subTest(argv=argv), self.assertRaises(ValueError):
+                    a.python_role_snapshot(72, str(script), proc_root=root, clock=lambda:11.)
+
+    def test_basic_process_is_public_stable_and_live(self):
+        sample=dict(pid=72,start='123',uid=1000,cgroup='/scope',state='R')
+        with patch.object(a,'_basic_process',side_effect=[sample,dict(sample,state='S')]):
+            value=a.basic_process(72,clock=lambda:11.)
+        self.assertEqual(value['state'],'S')
+        self.assertEqual(value['observed_monotonic'],11.)
+        with patch.object(a,'_basic_process',side_effect=[sample,dict(sample,start='124')]):
+            with self.assertRaises(ValueError):
+                a.basic_process(72,clock=lambda:11.)
+
+
 class Loop(unittest.TestCase):
     def exercise(self, mode):
         with tempfile.TemporaryDirectory() as temp:
