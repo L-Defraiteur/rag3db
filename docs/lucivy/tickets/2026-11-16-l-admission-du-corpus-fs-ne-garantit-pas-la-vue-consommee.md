@@ -130,3 +130,8 @@ C7 distinct avant exécution. Code source8b94353 inchangé.
 ### Banc — couple total v3 eb2f27652c : un reste final
 
 [RO totale v3](../../banc/17-11-2026/03-ro-couple-fs-red.md) :9copies/preflighte986/identitésQ/T/source0f/lockdbdb conformes, STARTavantARM/ENDaprèscleanup/clock/réserve/guardoldCommon reconnus ;probesd13 préparés NONJOUÉS. HOLD verdictfinal : lock effectif contrôlépréflight+postcompile seulement, pas aprèsjuges ni avantfinal-accepted alorsque recette18étape6 annonce rehashlock. Gitstatus ne couvre pas ce lock ignoré (pas de contradiction lock/Gitpropre). Ajouter contrôlefinaleffectif dansEND+témoin TempDir mutationtardive avantfix, nouveauxpins/RO. Aucunrun/procscan/Cargo/ELF/corpus,GO300distinctnonacquis/ticket OUVERT.
+
+
+### Banc — témoin final lock3d00de3f25
+
+[RO ciblée favorable préparation](../../banc/17-11-2026/03-ro-couple-fs-red.md) : vrai main166d byteexact/TempDirs/guards budget-manifeste-hash-final réels, phases amont modèles explicites. Mutation tardive seul lockeffectif/seedintact, setupguards avantassert et contrôleinchangé : attendu1FAILacceptationdrift+1PASS/0ERROR,NONJOUÉ. Qprivé dev57/inode96685390/deuxSHAffdddc1f+166d conformes. GOCPU60 C7distinct requis,HOLDnatif inchangé,aucune permission probesjournaux/ticket OUVERT.
