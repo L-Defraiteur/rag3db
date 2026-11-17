@@ -103,3 +103,17 @@ non identifiables refusent, jamais fallback/silence/résultat accepté.
 Le replay depuis manifeste n’est toujours PAS implémenté. Ce diff ne qualifie
 pas la construction moteur réelle, une parité corpus, l’exécution secondELF,
 core/neufHOLD/A-B/ULP7.2/PR42. Ticket reste ouvert ; aucune livraison main/tag.
+
+
+RO TOTALE SOURCE13298f7 Banc favorable PRÉPA publiée c7e2e5d381, rapportBanc03.
+Quatre SHA Git conformes/seize noms conservés, diff complet relu : InvocationPaths
+root/reçu/reports résolus/uniques/horsinput/absents avantreserve ; callback
+snapshot+paths, rapport slot/create_new sansmkdir avantengine, None→Missing/
+OutsideView sansfallback0, validateFlags avant toute résolution/metadata/output
+et alignement30561 explicite. Cinq assertions rouges conservées et positif
+renforcé. Aucun nouveau blocage statique identifié ; namespace observé sans
+FDancêtres/garantiehostilerename et replay absent restent explicites.
+Seize verts NONOBSERVÉS, aucune compilation/import/parse/test/PC/proc/DB/
+corpus/ELF/target/service par Banc. Recherche encore attendue ; nouveau paquet
+GREEN/pins/ROcouple/GO C7 distinct requis, dixanciens+sixnouveaux à jouer
+réellement, barrières ledgerACK/doublelock/physique à conserver. Ticket ouvert.
