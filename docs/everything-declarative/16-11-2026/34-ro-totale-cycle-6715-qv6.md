@@ -3,9 +3,28 @@
 Source PC/exécutable **6715c17ed98ca708edeaecfe068d9eb881b6f722**,
 prepared **7bf5cd553e2836b20446f77200647991f0884c1a62f2a1d015e2ab9c3c9cf9c0**.
 Rapport documentaire03 de5840a759d4, sans déplacement du pin exécutable.
-Avis **favorable statique, preuves CPU et métadonnées**, sur CE couple entier,
-pas seulement sur la correction du finaliseur. Aucun nouveau blocage établi.
+Avis initial765c93e47e favorable, **CORRIGÉ EN RÉSERVÉ/HOLD** : le raccord
+argv Common avec -B est incompatible avec la signature du vrai superviseur.
+La levée du P1 finalisation et les vérifications de fichiers restent bornées
+à leurs propres preuves ; elles ne qualifient pas cette entrée Common.
 Suite de la [RO33](33-ro-cycle-supervise-2dccc.md) et même ticket C7 OUVERT.
+
+## Correction de l'avis : P1 de signature Common confirmé
+
+Recherche a identifié le défaut et Arbre l'a consigné avant correction,
+témoin b2bd689bf5 NONJOUÉ. ED l'a manqué dans la RO totale initiale ; lecture
+indépendante confirme : lifecycle.compose appelle
+`[python, '-B', confiner_validation.py, 'lancer', ...]`, alors que
+`signature_superviseur`, vrai confineur6439 lignes138-140, exige args[2] égal
+à lancer et le script à args[1]. Le reçu est donc refusé avant ARMED.
+Cette conclusion remplace la suffisance du couple revendiquée ci-dessous,
+sans effacer les vérifications réalisées ni transformer les CPU en natif.
+
+6715/Qv6 restent HOLD. Proposition propriétaire APRÈS rouge exact autorisé :
+retirer -B seulement devant Common et utiliser PYTHONDONTWRITEBYTECODE=1,
+rôles acteur/contrôleur/driver inchangés. Aucun correctif mis en œuvre ici,
+aucun test ou runtime lancé. Nouvelle source/paquet/RO et décision C7 distincts
+nécessaires ; aucun GO900 ne découle de l'avis765.
 
 ## Chaîne complète relue
 

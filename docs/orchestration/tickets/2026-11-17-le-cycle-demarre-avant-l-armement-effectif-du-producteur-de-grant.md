@@ -124,3 +124,10 @@ conformes ; Q5figé. Archives rougeD31unique1FAIL et6715cinqverts rehashées
 3+3fichiers surdeuxhôtes sansrejeu. P1levé surcecouple, aucun nouveau blocage
 établi ; zéro runtime/proc/DB/health/service/slot/native. Ticket reste OUVERT :
 GO900C7 exact distinct et vraie qualification cycle/shutdown restent à décider.
+
+Correction avis ED765 : RÉSERVÉ/HOLD6715/Qv6 après P1 Recherche confirmé.
+Vrai argv compose=python,-B,confiner,lancer ; vraie signature_superviseur
+exige args[2]=lancer/args[1]=script, donc refus avant ARMED. Point manqué par
+ED à la revue totale, désormais recoupé source ; P1 finaliseur levé reste
+distinct. Arbre a prépublié témoinb2bd NONJOUÉ avant correctif. Aucun ancien
+avis favorable ni GO natif transféré ; voir section corrective rapportED34.
