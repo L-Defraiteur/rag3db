@@ -1,0 +1,180 @@
+{
+  "schema": "entry-native-protocol-proposal-v1",
+  "execution_ready": false,
+  "executed": false,
+  "go": null,
+  "mode": "FIXTURE_ONLY",
+  "cp_ack": false,
+  "global_admission": false,
+  "shared_sources_modified": false,
+  "source_refs": {
+    "pure_source": "68eab84d95c8346c6dfe51ec4f3a7f0d79a093c3",
+    "pure_proof": "892bc4271fec9b387142954358c4110a58ff2bdd",
+    "c7_scope": "d72aa02288"
+  },
+  "paths": {
+    "control": "/home/lucied/.cache/rag3weaver-build/cx-entry-producer-native-control-v1",
+    "proofs": "/home/lucied/.cache/rag3weaver-build/cx-entry-producer-native-protocol-v1",
+    "scope": "/home/lucied/.cache/rag3weaver-build/cx-entry-producer-native-protocol-v1/scope",
+    "invocation": "/home/lucied/.cache/rag3weaver-build/cx-entry-producer-native-protocol-v1/invocation-printf-A",
+    "runtime_created": false
+  },
+  "components": {
+    "python": {
+      "path": "/usr/bin/python3.14",
+      "sha256": "c81d88523721c462f53a98129d65bba68f67791932f0664372e1778e74fd9517"
+    },
+    "fixture_elf": {
+      "path": "/usr/bin/printf",
+      "sha256": "f1f741a6f28793a51bc93fe7c1900ef728ce49213b71fafc34a12b258984b1f9",
+      "size": 92472,
+      "executed": false
+    },
+    "pure_validator": {
+      "source_path": "extension/rag3weaver/scripts/execution_entry.py",
+      "sha256": "565b7f39494911b65ef121f19565450c70803c93b9ef6e62599d570707dbf218",
+      "qualified_for_this_backend": false
+    },
+    "common": {
+      "source_path": "extension/rag3weaver/scripts/confiner_validation.py",
+      "sha256": "6439fdd8b52c85fa4e74af0def2c667ef0bedae9b814cbbfd48e49946c4f74ea",
+      "qualified_for_this_backend": false
+    },
+    "poste": {
+      "source_path": "extension/rag3weaver/scripts/poste",
+      "sha256": "79e3a8bbf457e3bc9104aa1558e7d03072216c70b68e08ae606ace6aa4584c7b",
+      "qualified_for_this_backend": false
+    },
+    "historical_natural_wait": {
+      "source_path": "docs/recherche/13-11-2026/garde-target-union/superviser-elf.py",
+      "sha256": "b1c41a62891e2ee7cee76e33b0175be29d3aa4d6d16f20099b6487aba2eb3945",
+      "qualified_for_this_backend": false
+    },
+    "historical_capture": {
+      "source_path": "docs/recherche/13-11-2026/garde-target-union/capture-stable.py",
+      "sha256": "7a4a09af73c46063532bb5c624dd01a4c12d9688d0f6013e04c54f09ad15e391",
+      "qualified_for_this_backend": false
+    },
+    "execution_entry_runner.py": {
+      "sha256": null,
+      "delivered": false
+    },
+    "native_recipe.py": {
+      "sha256": null,
+      "delivered": false
+    },
+    "native_fixture_publisher.py": {
+      "sha256": null,
+      "delivered": false
+    },
+    "live_cp_adapter": {
+      "sha256": null,
+      "delivered": false
+    },
+    "runtime_linker": {
+      "sha256": null,
+      "delivered": false
+    },
+    "storage_profile_attestation": {
+      "sha256": null,
+      "delivered": false
+    }
+  },
+  "proposed_limits": {
+    "outer_soft": 120,
+    "outer_kill": 5,
+    "queue": 15,
+    "common_max": 90,
+    "common_margin": 15,
+    "operation_grace": 15,
+    "stop_and_finalize_reserve": 15,
+    "bootstrap_exec_cap": 5,
+    "capture_copy_cap": 10,
+    "publication_cap": 20,
+    "program_wait_cap": 5,
+    "finalize_cap": 10,
+    "cost": "UNKNOWN"
+  },
+  "poste_environment": {
+    "POSTE_MEM_MAX": "2G",
+    "POSTE_SWAP_MAX": "0",
+    "POSTE_CPU_QUOTA": "100%",
+    "POSTE_LOURD_ATTENTE_MAX": "15",
+    "RAG3WEAVER_BUILD_MEMORY_HIGH": "0"
+  },
+  "proposed_outer_argv": [
+    "/usr/bin/timeout",
+    "--signal=TERM",
+    "--kill-after=5s",
+    "120s",
+    "/usr/bin/python3.14",
+    "-B",
+    "/home/lucied/.cache/rag3weaver-build/cx-entry-producer-native-control-v1/native_recipe.py",
+    "outer",
+    "--recipe",
+    "/home/lucied/.cache/rag3weaver-build/cx-entry-producer-native-control-v1/native-recipe.json",
+    "--allocation",
+    "NO_GO"
+  ],
+  "proposed_common_argv": [
+    "/usr/bin/python3.14",
+    "/home/lucied/.cache/rag3weaver-build/cx-entry-producer-native-control-v1/confiner_validation.py",
+    "lancer",
+    "--delai",
+    "ADMITTED_COMMON_BUDGET",
+    "--preuves",
+    "/home/lucied/.cache/rag3weaver-build/cx-entry-producer-native-protocol-v1/scope",
+    "--",
+    "/usr/bin/python3.14",
+    "-B",
+    "/home/lucied/.cache/rag3weaver-build/cx-entry-producer-native-control-v1/execution_entry_runner.py",
+    "run",
+    "--declaration",
+    "/home/lucied/.cache/rag3weaver-build/cx-entry-producer-native-control-v1/declared-invocation.json",
+    "--mode",
+    "FIXTURE_ONLY",
+    "--proofs",
+    "/home/lucied/.cache/rag3weaver-build/cx-entry-producer-native-protocol-v1/invocation-printf-A",
+    "--authority-from-common-env"
+  ],
+  "common_budget_expression": "floor(min(90, original_outer_soft_end - fresh_now - 15)); refuse <= 30; computed only AFTER actual poste acquisition",
+  "proposed_child_argv": [
+    "/usr/bin/printf",
+    "ENTRY_FIXTURE_%s\n",
+    "A"
+  ],
+  "fixture_expectation": {
+    "stdout_hex": "454e5452595f464958545552455f410a",
+    "stderr_hex": "",
+    "returncode": 0,
+    "cp_ack": false,
+    "global_admission": false
+  },
+  "publication_files": {
+    "stage": "entry-printf-A",
+    "ledger": "entry-ledger.json",
+    "object": "entry-object",
+    "facts": "entry-facts.json",
+    "window_owner": "runner-parent"
+  },
+  "live_blockers": [
+    "CP guards and LIVE adapter not qualified",
+    "backend/recipe/editor sources absent",
+    "CP canonical seal/ACK binding pending RO",
+    "Common root/wait evidence link pending RO",
+    "storage/kernel/ABI/linker profile not qualified",
+    "runtime pins and coupon absent"
+  ],
+  "proposed_poste_argv": [
+    "/home/lucied/.cache/rag3weaver-build/cx-entry-producer-native-control-v1/poste",
+    "lourd",
+    "/usr/bin/python3.14",
+    "-B",
+    "/home/lucied/.cache/rag3weaver-build/cx-entry-producer-native-control-v1/native_recipe.py",
+    "admit-common",
+    "--recipe",
+    "/home/lucied/.cache/rag3weaver-build/cx-entry-producer-native-control-v1/native-recipe.json",
+    "--allocation",
+    "NO_GO"
+  ]
+}

@@ -1,0 +1,88 @@
+{
+  "schema": "entry-native-witness-specs-v1",
+  "implemented_as_tests": false,
+  "executed": false,
+  "existing_51_replayed": false,
+  "cases": [
+    {
+      "id": "N01",
+      "setup": "one expected EXEC_SUCCESS on owned child; SHA/object/copy and fixture receipt match",
+      "expected": "entry observed before body; detached; exact stdout marker; child wait0; external Common closure; FIXTURE_ONLY no CP grant"
+    },
+    {
+      "id": "N02",
+      "setup": "child pipe EOF or SIGTRAP without EXEC event",
+      "expected": "no entry confirmation/no release; first refusal and owned reap"
+    },
+    {
+      "id": "N03",
+      "setup": "exec syscall fails or child dies before entry",
+      "expected": "errno/death preserved without future publication receipt; no success from EOF"
+    },
+    {
+      "id": "N04",
+      "setup": "same path changed to foreign object before exec",
+      "expected": "compare real entry FD with declared object/SHA; refuse before body; no auto-B"
+    },
+    {
+      "id": "N05",
+      "setup": "content changes under same inode before entry",
+      "expected": "real entry SHA mismatch refuses; no expected SHA learned from actual"
+    },
+    {
+      "id": "N06",
+      "setup": "attempt private fixture write while held at exec barrier",
+      "expected": "profile requires write denial; if mutation succeeds or outcome unknown refuse profile/no release"
+    },
+    {
+      "id": "N07",
+      "setup": "partial copy or END during copy/fsync",
+      "expected": "no seal/ACK/release; preserve bytes and first cause under original END"
+    },
+    {
+      "id": "N08",
+      "setup": "CP or fixture permit wrong plan/phase/facts/child or timeout",
+      "expected": "no release; no new window/global budget"
+    },
+    {
+      "id": "N09",
+      "setup": "FIXTURE_ONLY permit supplied to LIVE invocation",
+      "expected": "refuse before detach; cp_ack/global_admission never true"
+    },
+    {
+      "id": "N10",
+      "setup": "runner dies while its child is stopped",
+      "expected": "EXITKILL effect plus Common cleanup independently verified; no quiet from effect assumed; final UNKNOWN if not attributable"
+    },
+    {
+      "id": "N11",
+      "setup": "invocation exits nonzero/signaled after confirmed entry",
+      "expected": "authentic raw wait status/rc preserved, no debugger returncode or stop as exit"
+    },
+    {
+      "id": "N12",
+      "setup": "Common root is dbus-run-session and runner its descendant",
+      "expected": "Common owns root wait, runner owns invocation wait; outside never waitpid(nonchild)"
+    },
+    {
+      "id": "N13",
+      "setup": "Common root receipt missing/ambiguous or authority already ended before admission",
+      "expected": "refuse/UNKNOWN; no inferred PID or relaunch authority"
+    },
+    {
+      "id": "N14",
+      "setup": "deadline during ACK/wait/reap/final hash/publication",
+      "expected": "first cause immutable and no positive terminal proof outside original END"
+    },
+    {
+      "id": "N15",
+      "setup": "Cargo adjusts LD or appends arguments for later integration",
+      "expected": "compare to independent phase profile; reject undeclared values, do not promote observed profile"
+    },
+    {
+      "id": "N16",
+      "setup": "A execs B after release",
+      "expected": "future coverage UNKNOWN; result scope invocation, never claim A lifetime or all images"
+    }
+  ]
+}

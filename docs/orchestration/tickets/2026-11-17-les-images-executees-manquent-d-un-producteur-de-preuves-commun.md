@@ -215,3 +215,25 @@ Rougesnominalf74/topologie2a etsourcesconservés ; aucunrepeint. Seule la couche
 PURE est éprouvée : adaptateurs CP/Common, entrée/stabilité/SDK/OS/appelants
 NONLIVRÉS/nonqualifiés, aucune admission physique. RO preuves puis arbitrageC7,
 aucun code/test opérationnel supplémentaire autorisé ; ticket reste ouvert.
+
+## Préparation du protocole concret après suffisance pure d72aa, avant backend
+
+C7d72aa02288 juge les preuves892bc suffisantes pour la couche pure51 et autorise
+protocole opérationnel/API minimale/recette/pins avant codeOS. La préparation
+sépare plan déclaré, admission réelle du runner avant fork, EXEC/copie/ACK avant
+release, wait naturel enfant et clôture Common externe. Common actuel lance
+DBus comme racine directe, pas nécessairement le runner. LIVE reste HOLD sur
+adaptateur CP/gardes non qualifiés ; éditeur éventuel FIXTURE_ONLY/physicalfalse,
+sans claim ACK CP. Aucun backend/appelant/Cargo/SDK/OS exécuté ou codé ici.
+
+## Protocole concret publié pour RO avant tout backend
+
+[Rapport54](../../rag3weaver-archi/17-11-2026/54-protocole-producteur-concret-avant-backend.md)
+et dossier execution-entry-native-protocol : API .pyi, argv outer/Common/enfant,
+recette INACTIVE printf ELF/FIXTURE_ONLY, profils/pins de sources et16spécifications
+NON ÉCRITES EN TESTS/NON JOUÉES. Déclaration/admission avantfork distinctes ;
+EXEC/copie/ACK avantrelease, vrai parent enfant, racineCommonDBus/wait/closure
+extérieure à relier sansinférer. LIVE HOLD sur vraiCP ; fixture jamais ACKCP/grant.
+Budget120+5/queue15/Common<=90/ENDop−15 PROPOSÉpasGO ; coûts/hôteUNKNOWN.
+ComposantsbackendNULL/absents, pas P/Q/S créé, ni OS/appelant/SDK/native/test codé
+ou exécuté. RO protocole/ports/stabilité/recette avant arbitrage C7 et toute suite.
