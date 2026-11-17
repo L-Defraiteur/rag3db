@@ -168,3 +168,14 @@ Le juge exige l'entrelacement effectivement injecté, retour0/sans premier
 rouge/release. NON JOUÉ : nouvelle RO/GO CPU rouge distinct avant test.
 Correction attendue après rouge : horloge fraîche APRÈS lecture heartbeat,
 avec contrôles END/premier rouge ; aucun assouplissement future/âge.
+
+GO C7-CYCLE-HB-RED-13AE-17nov60 consommé sur13ae propre : injection unique
+confirmée puis 1 FAIL rc1!=0, 0 ERROR, 0.007s ; stdout atteste refus heartbeat
+stale/future/outside original scope. Processus rc1 en0.194917s. Bruts hors WT
+cycle-hb-red-13ae-20261117-01 sur deux hôtes, trois size/SHA conformes ;
+manifeste776aa3f6833826f3ec700b3d563739ca314989d91199a2628fa60a673a7cac74.
+Correctif ensuite prépublié : lire heartbeat, revérifier scope END/premier
+rouge, échantillonner monotonic frais, valider strictement heartbeat puis
+revérifier scope. Tolérances inchangées. P/Q/S+manifest v8, Qv7 figé.
+Correctif NON JOUÉ, nouvelle RO/GO CPU vert distinct avant test ; aucun rejeu
+des six juges acquis sans cause, aucune qualification native/GO900.

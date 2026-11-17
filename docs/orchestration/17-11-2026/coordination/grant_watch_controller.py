@@ -128,7 +128,10 @@ def supervise(config_path,config_sha256,driver_argv):
    while True:
     now=check_scope(config)
     if child.poll() is not None:raise ValueError('producer disappeared while driver was active')
-    heartbeat,_=read_owned(config['paths']['heartbeat']);actor.validate_heartbeat(receipt,config,heartbeat,now)
+    heartbeat,_=read_owned(config['paths']['heartbeat'])
+    check_scope(config);now=time.monotonic()
+    actor.validate_heartbeat(receipt,config,heartbeat,now)
+    check_scope(config)
     if now-last_full>=1.:
      check_armed(config,config_sha256,child);last_full=now
     rc=driver.poll()

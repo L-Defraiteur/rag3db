@@ -7,7 +7,7 @@ import lifecycle_protocol as protocol
 import grant_watch_actor as watch_actor
 import grant_watch_controller as watch_control
 a=f.a;q=a.q;R=a.R
-P=R/'lifecycle-copy-v7';Q=R/'lifecycle-control-v7';S=R/'lifecycle-scopes-v7'
+P=R/'lifecycle-copy-v8';Q=R/'lifecycle-control-v8';S=R/'lifecycle-scopes-v8'
 FIN=R/'debt-fin-ro-result-v1';SOURCE=FIN/'copy';BASE=P/'copy/code-principal.rag3db'
 FIN_MANIFEST=R/'debt-fin-ro-proofs-01/proof-manifest.json'
 FIN_MANIFEST_SHA='05661b1fddc82c1e66d21f218d0c8cdfd12b69d8ef16432a2c55c3b127a9462a'
