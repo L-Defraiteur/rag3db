@@ -320,3 +320,17 @@ observés sous GO CPU exact distinct ; source/tests/pins/RO avant ce GO. Puis
 correctif GROUPÉ référence indépendante+deadline unique/rechecks tardifs,
 nouvelles RO et verts distincts ; nouveau paquet Q/pilote B, anciens r1 gardés.
 Aucune exécution/native/DB/provider/DATAcopy/ELF autorisée par cette réserve.
+
+
+### STOP Lucie quota — passation Claude17nov, aucun coupon actif
+
+C7 relaie STOP prioritaire : aucune reprise aux rappels. Tous coupons non
+consommés RÉVOQUÉS, anciens END NON RÉACTIVABLES. A statique suffisamment
+prouvé reste acquis, Qv9 historique borné conservé ; B HOLD R1/R2,17fonctions
+écrites NON JOUÉES dont5prérouges3240, correctif non appliqué. ED550893 avis
+PRÉPArouges, ROcibléeRecherche attendue au STOP. Aucun GO5/12/B/900/native/DB/
+provider/service/original/pose/retrait ; aucun processus B lancé à arrêter.
+[Passation autonome Claude](../17-11-2026/99-passation-pour-claude.md) et
+inventaires Git2hôtes donnent SHA/branches/chemins/preuves/limites et trois pas
+INACTIFS à nouveau GO. Sauvegarde WIP ancien fdf62741ba9363f8d360e7258de420d672646182
+poussée sansqualification, aucune perte connue ni nettoyage. Parent OUVERT.

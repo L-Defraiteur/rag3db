@@ -1,0 +1,110 @@
+{
+  "kind": "STOP_HANDOFF_GIT_METADATA_ONLY",
+  "host": "luciepc",
+  "worktrees": [
+    {
+      "path": "/home/lucied/git_workspaces/rag3db-cx-arbre-audit-ro-dette-20261116-r1",
+      "branch": "cx-arbre-audit-ro-dette-20261116-r1",
+      "head": "cc18bc7d1dd513c71407f07e887134871af0576e",
+      "status": "",
+      "origin_sha": "cc18bc7d1dd513c71407f07e887134871af0576e",
+      "origin_equal": true
+    },
+    {
+      "path": "/home/lucied/git_workspaces/rag3db-cx-arbre-cli99-pilot-control-20261117-r1",
+      "branch": "cx-arbre-cli99-pilot-control-20261117-r1",
+      "head": "4f17c4cc00ede65756c7b8f27e98bdc0d7ba1cca",
+      "status": "",
+      "origin_sha": null,
+      "origin_equal": false
+    },
+    {
+      "path": "/home/lucied/git_workspaces/rag3db-cx-arbre-cli99-runtime-b-control-20261117-r1",
+      "branch": "cx-arbre-cli99-runtime-b-control-20261117-r1",
+      "head": "4e3fc8402eb308a9b9693fd68f88593e826c3e88",
+      "status": "",
+      "origin_sha": null,
+      "origin_equal": false
+    },
+    {
+      "path": "/home/lucied/git_workspaces/rag3db-cx-arbre-cycle-common-argv-20261117-r1",
+      "branch": "cx-arbre-cycle-common-argv-20261117-r1",
+      "head": "d22bf28c580910e9b1bea1065297028f9cfc75bf",
+      "status": "",
+      "origin_sha": null,
+      "origin_equal": false
+    },
+    {
+      "path": "/home/lucied/git_workspaces/rag3db-cx-arbre-cycle-finaliseur-borne-20261117-r1",
+      "branch": "cx-arbre-cycle-finaliseur-borne-20261117-r1",
+      "head": "6715c17ed98ca708edeaecfe068d9eb881b6f722",
+      "status": "",
+      "origin_sha": "4bb773925e10d20d443346d8a387f96cfada708f",
+      "origin_equal": false
+    },
+    {
+      "path": "/home/lucied/git_workspaces/rag3db-cx-arbre-cycle-hb-order-20261117-r1",
+      "branch": "cx-arbre-cycle-hb-order-20261117-r1",
+      "head": "6c6b968832d53d76f50ae5244454fe076a8e29c2",
+      "status": "",
+      "origin_sha": null,
+      "origin_equal": false
+    },
+    {
+      "path": "/home/lucied/git_workspaces/rag3db-cx-arbre-cycle-postwriter-20261117-r1",
+      "branch": "cx-arbre-cycle-postwriter-20261117-r1",
+      "head": "e9f037be2aa25da2c7f6c76f79e2eb57b6c676c9",
+      "status": "",
+      "origin_sha": null,
+      "origin_equal": false
+    },
+    {
+      "path": "/home/lucied/git_workspaces/rag3db-cx-arbre-cycle-producer-controller-20261117-r1",
+      "branch": "cx-arbre-cycle-producer-controller-20261117-r1",
+      "head": "2dccc070f1564d8ca9d22a59fcb2b73222f415e5",
+      "status": "",
+      "origin_sha": "2dccc070f1564d8ca9d22a59fcb2b73222f415e5",
+      "origin_equal": true
+    },
+    {
+      "path": "/home/lucied/git_workspaces/rag3db-cx-arbre-cycle-ready-borne-20261116-r1",
+      "branch": "cx-arbre-cycle-ready-borne-20261116-r1",
+      "head": "3c2a93ca38ba5729b4414a5d813467f916cbf905",
+      "status": "",
+      "origin_sha": "3c2a93ca38ba5729b4414a5d813467f916cbf905",
+      "origin_equal": true
+    },
+    {
+      "path": "/home/lucied/git_workspaces/rag3db-cx-arbre-cycle-vie-copie-20261116-r1",
+      "branch": "cx-arbre-cycle-vie-copie-20261116-r1",
+      "head": "b5e32aa171e0ee0e6a2cba249593f52d1625095c",
+      "status": "",
+      "origin_sha": "2e38a947650d639b2b37aecd11f8514f427421ea",
+      "origin_equal": false
+    },
+    {
+      "path": "/home/lucied/git_workspaces/rag3db-cx-arbre-dette-copie-a-20261116-r1",
+      "branch": "cx-arbre-dette-copie-a-20261116-r1",
+      "head": "9a2cbf5449a7a4e823447ec9a4bb49f9b9a9bae6",
+      "status": "",
+      "origin_sha": "cc18bc7d1dd513c71407f07e887134871af0576e",
+      "origin_equal": false
+    },
+    {
+      "path": "/home/lucied/git_workspaces/rag3db-cx-arbre-fin-ro-dette-20261116-r1",
+      "branch": "cx-arbre-fin-ro-dette-20261116-r1",
+      "head": "5b7a4b00a8e006cca50022a007837c300bb60d68",
+      "status": "",
+      "origin_sha": "cfad6fe555cdc3041579472c736400fea3fb9b7d",
+      "origin_equal": false
+    },
+    {
+      "path": "/home/lucied/git_workspaces/rag3db-cx-arbre-qualif-cli99-20261117-r1",
+      "branch": "cx-arbre-qualif-cli99-20261117-r1",
+      "head": "99fef92ce6ee9a0007eaf99c7c3a6a3789061c57",
+      "status": "",
+      "origin_sha": null,
+      "origin_equal": false
+    }
+  ]
+}

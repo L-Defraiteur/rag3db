@@ -1,0 +1,121 @@
+{
+  "kind": "STOP_HANDOFF_GIT_METADATA_ONLY",
+  "host": "local",
+  "recorded_before_handoff_commit": true,
+  "worktrees": [
+    {
+      "path": "/home/lucied/git_workspaces/rag3db-cx-arbre-bascule-bases-20261116-r1",
+      "branch": "cx-arbre-bascule-bases-20261116-r1",
+      "head": "fdf62741ba9363f8d360e7258de420d672646182",
+      "status": "",
+      "origin_sha": "fdf62741ba9363f8d360e7258de420d672646182",
+      "origin_equal": true,
+      "wip_saved_at_stop": true
+    },
+    {
+      "path": "/home/lucied/git_workspaces/rag3db-cx-arbre-cli99-runtime-b-20261117-r1",
+      "branch": "cx-arbre-cli99-runtime-b-20261117-r1",
+      "head": "3240c0a4693aecabf45ddafbeadd5547752766b2",
+      "status": "",
+      "origin_sha": "3240c0a4693aecabf45ddafbeadd5547752766b2",
+      "origin_equal": true
+    },
+    {
+      "path": "/home/lucied/git_workspaces/rag3db-cx-arbre-cli99-static-a-preuves-20261117-r1",
+      "branch": "cx-arbre-cli99-static-a-preuves-20261117-r1",
+      "head": "90aa9d053d583eab07a7b299d9ee3dba6dd85c50",
+      "status": "",
+      "origin_sha": "90aa9d053d583eab07a7b299d9ee3dba6dd85c50",
+      "origin_equal": true
+    },
+    {
+      "path": "/home/lucied/git_workspaces/rag3db-cx-arbre-contrat-postwriter-20261117-r1",
+      "branch": "cx-arbre-contrat-postwriter-20261117-r1",
+      "head": "7fb1d68ffbd1fd071a7a9b322241f74eb9c0c945",
+      "status": "",
+      "origin_sha": "7fb1d68ffbd1fd071a7a9b322241f74eb9c0c945",
+      "origin_equal": true
+    },
+    {
+      "path": "/home/lucied/git_workspaces/rag3db-cx-arbre-cycle-finaliseur-borne-20261117-r1",
+      "branch": "cx-arbre-cycle-finaliseur-borne-20261117-r1",
+      "head": "4bb773925e10d20d443346d8a387f96cfada708f",
+      "status": "",
+      "origin_sha": "4bb773925e10d20d443346d8a387f96cfada708f",
+      "origin_equal": true
+    },
+    {
+      "path": "/home/lucied/git_workspaces/rag3db-cx-arbre-cycle-producer-controller-20261117-r1",
+      "branch": "cx-arbre-cycle-producer-controller-20261117-r1",
+      "head": "2dccc070f1564d8ca9d22a59fcb2b73222f415e5",
+      "status": "",
+      "origin_sha": "2dccc070f1564d8ca9d22a59fcb2b73222f415e5",
+      "origin_equal": true
+    },
+    {
+      "path": "/home/lucied/git_workspaces/rag3db-cx-arbre-cycle-ready-borne-20261116-r1",
+      "branch": "cx-arbre-cycle-v4-rouge-preuves-20261117-r1",
+      "head": "e65cbd34a582c3bbb82773bfd9fd6f9b8abff695",
+      "status": "",
+      "origin_sha": "e65cbd34a582c3bbb82773bfd9fd6f9b8abff695",
+      "origin_equal": true
+    },
+    {
+      "path": "/home/lucied/git_workspaces/rag3db-cx-arbre-cycle-v8-rouge-preuves-20261117-r1",
+      "branch": "cx-arbre-cycle-v8-rouge-preuves-20261117-r1",
+      "head": "65eb82372e4dec638f0e9557e2e83f44d9d6c1f6",
+      "status": "",
+      "origin_sha": "65eb82372e4dec638f0e9557e2e83f44d9d6c1f6",
+      "origin_equal": true
+    },
+    {
+      "path": "/home/lucied/git_workspaces/rag3db-cx-arbre-cycle-v9-precisions-20261117-r1",
+      "branch": "cx-arbre-cycle-v9-precisions-20261117-r1",
+      "head": "965a2841706782d74aa7a4e8272445e20dfb6a56",
+      "status": "",
+      "origin_sha": "965a2841706782d74aa7a4e8272445e20dfb6a56",
+      "origin_equal": true
+    },
+    {
+      "path": "/home/lucied/git_workspaces/rag3db-cx-arbre-cycle-v9-preuves-20261117-r1",
+      "branch": "cx-arbre-cycle-v9-preuves-20261117-r1",
+      "head": "6e97b2ff8a6a8f4e4ca095ce3033fce10ceb8549",
+      "status": "",
+      "origin_sha": "6e97b2ff8a6a8f4e4ca095ce3033fce10ceb8549",
+      "origin_equal": true
+    },
+    {
+      "path": "/home/lucied/git_workspaces/rag3db-cx-arbre-cycle-vie-copie-20261116-r1",
+      "branch": "cx-arbre-cycle-vie-copie-20261116-r1",
+      "head": "2e38a947650d639b2b37aecd11f8514f427421ea",
+      "status": "",
+      "origin_sha": "2e38a947650d639b2b37aecd11f8514f427421ea",
+      "origin_equal": true
+    },
+    {
+      "path": "/home/lucied/git_workspaces/rag3db-cx-arbre-dette-copie-a-20261116-r1",
+      "branch": "cx-arbre-dette-copie-a-20261116-r1",
+      "head": "cc18bc7d1dd513c71407f07e887134871af0576e",
+      "status": "",
+      "origin_sha": "cc18bc7d1dd513c71407f07e887134871af0576e",
+      "origin_equal": true
+    },
+    {
+      "path": "/home/lucied/git_workspaces/rag3db-cx-arbre-fin-ro-dette-20261116-r1",
+      "branch": "cx-arbre-fin-ro-dette-20261116-r1",
+      "head": "cfad6fe555cdc3041579472c736400fea3fb9b7d",
+      "status": "",
+      "origin_sha": "cfad6fe555cdc3041579472c736400fea3fb9b7d",
+      "origin_equal": true
+    },
+    {
+      "path": "/home/lucied/git_workspaces/rag3db-cx-arbre-prepa-trois-bases-20261117-r1",
+      "branch": "cx-arbre-prepa-trois-bases-20261117-r1",
+      "head": "02fecfa4905893531cfbf4fa859f10c599fd22b8",
+      "status": "",
+      "origin_sha": "02fecfa4905893531cfbf4fa859f10c599fd22b8",
+      "origin_equal": true
+    }
+  ],
+  "historical_untracked_four_saved": "fdf62741ba9363f8d360e7258de420d672646182"
+}
