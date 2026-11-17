@@ -206,3 +206,9 @@ Rétention avant première capture/scan possédé/GC et upgrade replay→checkpo
 nouveau durable→rotation→capacité détaillés, READONLY sansupgrade. Périmètres
 conditionnels/coûts/témoins prépubliables ; STOP si préconditions manquantes.
 Aucune réservation/implémentation/prototype/test/DB/format/SDK/C1.
+
+RO documentaire Mémoire de269 favorable orientation CONDITIONNELLE : correction
+terminologique portée avant tout avis code, ONE_ONE/FWD impose AU PLUS1,
+zéro reste possible ; ni présence/complétude ni o→o ne viennent de la contrainte.
+Protocole0→insert/1→noop conservé, idempotence globale toujours non établie.
+Aucun code, réservation ou résultat natif supplémentaire.

@@ -36,8 +36,9 @@ Briques réellement lues :
   (node_table.cpp:196) fournit startNodeOffset+i à commitInsert, donc offsets
   SOURCE finaux ; ne pas remplacer par un offset physique de M.
 
-Choix à prouver : ONE_ONE avec FWD garantit au moins un marqueur sortant par
-source, mais ni cette contrainte ni le nom de multiplicité ne vérifie o→o.
+Choix à prouver : ONE_ONE avec FWD limite à AU PLUS un marqueur sortant par
+source/direction stockée ; zéro reste possible. Ni cette contrainte ni le nom
+de multiplicité ne garantit la présence, la complétude ou o→o.
 Le code doit vérifier les endpoints, l'OID de table et exactement0 ou1 relation
 visible. Doubles marqueurs, destination différente ou identité invalide sont
 une erreur nommée. Aucun scan brut des degrés CSR comme preuve de membre.
