@@ -128,6 +128,9 @@ class RoleSampler(unittest.TestCase):
             root=Path(temp)
             proc=root/'72'
             proc.mkdir()
+            executable=root/'python3'
+            executable.write_bytes(b'fake executable')
+            (proc/'exe').symlink_to(executable)
             fields=['R','60']+['0']*17+['123']
             (proc/'stat').write_text('72 (python role) '+' '.join(fields))
             (proc/'cgroup').write_text('0::/scope\n')
