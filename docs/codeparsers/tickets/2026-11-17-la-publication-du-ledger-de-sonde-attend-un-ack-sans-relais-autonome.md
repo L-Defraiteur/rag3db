@@ -172,3 +172,19 @@ conservent leurs assertions avec points de patch sur le vrai module partagé.
 Aucun CPU joué, capacité4/WindowEvent non implémentés. RO source/pin et budgets
 CPU distincts nécessaires avant exécution, puis capacité seulement après rouges
 et nouvelle publication ; D45/P05/ArchiQ229b inchangés.
+
+### C9 constante verte et trois rouges avant capacité, preuves préservées
+
+GO C7-PUBLICATION-CORE-C9-CPU36-17nov60 :36PASS/0FAIL/ERROR/skip rc0 .217897s,
+manifest2hosts6fc717365b4fcf1d01476fd1e3a6ec458e4420a1d06decd9a5408609e3ee560d.
+EnsuiteGO conditionnel distinct C7-PUBLICATION-CORE-C9-RED3-17nov60 armé après
+copiepreuve2hosts/C9P06inchangés :3FAIL attendus/0ERROR/skip rc1 .122832s,
+manifest2hostsce154c521ded16e3fe1e9a8999a0486769f89b84dd2da35b427b76396e63573d.
+Rapport publication-core/02-resultats-constante-et-contre-exemples.md.
+
+BrancheNEUVEcx-codeparsers-publication-capacity depuisC9 pour consignerAVANT
+code et préparer la capacité ; C9/P06/D45/P05/Archi229bQ figés. Aucun CPU vert
+nouveau ni native/transport qualifié par ces contre-exemples. L'expectedbinding
+est un contrat statique ; ne jamais le confondre avec le SHA des faits observés
+ou d'un patch futur. Plan deepfreeze, refs vers seuls ACK antérieurs et tous
+modules épinglés restent des garanties à implémenter/relire sur le vrai noyau.
