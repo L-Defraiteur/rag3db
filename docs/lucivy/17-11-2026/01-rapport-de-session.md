@@ -56,3 +56,12 @@ bloqué/secours302. Aucune exécution du témoin ni correctif encore effectué.
 Témoin315 nonadmis pour l’instant. [Témoin court du vrai raccord CLI](07-temoin-court-raccord-watchdog.md)
 préparé/prépub avantfix, source047 intacte, SHA témoinbe491384. Seuls SHA/AST
 vérifiés ; attente RO Recherche puis GOCPU60 distinct. Aucun timerOS qualifié.
+
+RO Recherche ec4f97a83c/témoinbe491384 reçue favorable bornée : vraie entrée
+runpy/argparse/SHA047/JSON, ARM seul simulé, Popen interdit, sentinelle avant
+ouverture du log et observation avant assertion d’ordre. Sur047, ARM puis
+frontière donnent le FAIL attendu après setup, pas un faux ERROR. Le double
+execv vérifie primitive/TERM/kill5/durée<=300/réentrée ; aucune qualification
+timerOS/kill/cleanup/ENDdeuxpostes. Aucun test/import/runpy/SSH/proc/T/corpus
+par Recherche, copie Q local non rehashée indépendamment par elle. HOLD047
+conservé ; GO C7 CPU60 distinct requis avant exécution. Aucun correctif.

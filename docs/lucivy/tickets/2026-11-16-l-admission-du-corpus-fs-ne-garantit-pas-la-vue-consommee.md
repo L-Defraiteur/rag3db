@@ -167,3 +167,12 @@ process/réseau/proc/T/corpus. Trace brute avant assertion d’ordre watchdog.
 Action RO courte confiée à Recherche ; critères setup réel atteint puis FAIL
 ordre (pas ERROR), pas prétention OSkill/300mesurés. C7 donne GOCPU60 distinct
 après revue ; aucun test ni correctif encore joué. Source du témoin prépub.
+
+RO Recherche ec4f97a83c/témoinbe491384 reçue favorable bornée : vraie entrée
+runpy/argparse/SHA047/JSON, ARM seul simulé, Popen interdit, sentinelle avant
+ouverture du log et observation avant assertion d’ordre. Sur047, ARM puis
+frontière donnent le FAIL attendu après setup, pas un faux ERROR. Le double
+execv vérifie primitive/TERM/kill5/durée<=300/réentrée ; aucune qualification
+timerOS/kill/cleanup/ENDdeuxpostes. Aucun test/import/runpy/SSH/proc/T/corpus
+par Recherche, copie Q local non rehashée indépendamment par elle. HOLD047
+conservé ; GO C7 CPU60 distinct requis avant exécution. Aucun correctif.
