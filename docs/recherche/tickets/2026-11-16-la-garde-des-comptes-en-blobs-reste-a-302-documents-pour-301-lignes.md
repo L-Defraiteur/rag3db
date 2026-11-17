@@ -625,3 +625,30 @@ Avantentréefixture : readiness exige PID1postgres (pas serveurtemporaireinitdb)
 puispg_isready0 ; 1/2 restentattentebornéeattenduepasréinitialisation. Expiry
 calculée sur reçu horloge d'installationtimer réelle+1782s (<1800aprèsstart),
 pas timestampprépa pouvantvieillir. Sourcepub et ASTseul, aucunecréationencore.
+
+### AllocationDocker01 986d refusée — publication absente, cleanup acquis
+
+Sourcec8fe61c3e4/recettef2f30d29fe8106a1072afd70f4f57575f3049bb90cfd49302e84cba1b45750dc,
+nonce0491f613c35b02762dedcdf4fc3dd7d5. UNEinitialisation180/185kill2,
+rc1/2.251759218s ; Commonvalidation-ufigr84y ROUGE/restes[]/nettoye.
+Imageexacte/limits2GiB2CPU128pids et DDLadmin/roles/dataset3,sum10 ont passé,
+mais Dockeridentity archivée NetworkSettings.Ports={5432/tcp:null} après réseau
+--internal : le gardepublicationloopback a refusé, PAS d'allocationREADY.
+Le premierrefus est AssertionError sans message, garde identifié par lecture
+source+dernierdockerinspectfigé. Jugeobserverpostbinding NONJOUÉ, clientC0.
+
+Cleanupnonce confirmé : container3f0ba5ad5736b71521a91a7216f9da4336c9c2ae8ff2d1c6e3ee232b5380defb
+et réseau e4409091a359a48ab2e6f90b12c1910d42b58a6819da095b5333a90ecb09bf8a
+rmrc0, absentsvérifiés ;2credentialsneufs supprimés ; timer/service nonce
+stoprc0. AucunautreDocker/service/5433 touché. 23piècespubliques sanssecret
+vérifiées2postes cacheprivée pg-v2-fixture-20261117-r1/allocation-0491f613c35b
+(PC) et allocation-0491f613c35b-public-proof (local), receiptSHA
+ d978f3727f5c22aca6afb0fb749411ac394e90031236ed9c148ca56b7ce6aff1 ;
+manifestc79f395136151cf07fe890631f16053662c255d5f30f75b31231e904a73421f6.
+
+Avantfix : préparer bridge PRIVÉ NEUF normal (pas--internal) afin de publier
+127.0.0.1:15433, toujours gardePorts exact/nonce/image/identités/limites. Aucun
+assouplissement du garde ni retrycréation surGOclos ; nouvelleentrée distincte
+requise. Autredéfautobservabilité : serveur logs n'a PAS été archivé avant
+cleanupforcé du refus ; conserverceconstat, ajouter capturelogsborne/sanitisée
+avantcleanup pour suite. Ne pas inventer ces logsaprèsdisparition.

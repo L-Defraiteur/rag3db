@@ -65,3 +65,14 @@ fin. Credential_reference pointe seulement le fichier privé de ce propriétaire
 AllocationREADY jusqu'àTTL est distincte de transport_qualified=false/leasefalse.
 Au TTL/cleanup : uniquement ressourcesnonce, logs/reçus conservés, secrets
 inactivés/supprimés. Tout premierrefus garde causebruts et termine la tentative.
+
+## Tentative01 close ROUGE, correction à relire avant nouvelle entrée
+
+Recettef2f30d29/nonce0491f613c35b : rôles/dataset et plafonds vérifiés, puis
+NetworkSettings.Ports 5432/tcp:null sous réseauinternal. Le garde publication
+refuse ; aucune allocationREADY. Cleanupcontainer+réseau+deuxsecrets acquis,
+timerown arrêté, CommonROUGE/restes[]/nettoyé,23preuves sanssecret deuxpostes.
+Les logsserveur n'ont pas été capturés avant suppression : lacune conservée,
+aucune reconstitution. CorrectionSOURCE à préparer : bridge normal nouveau,
+portloopback toujours vérifié strict, logs bornés/sanitisés avantcleanup.
+Pas de nouvel essai sous l'ancien GO ; recette/source/nonce nouveaux distincts.
