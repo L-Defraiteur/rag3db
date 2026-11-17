@@ -66,3 +66,6 @@ RetourQ8 : ARMautonomeavantDB/READYgrantobservés puisRED1266055.091886152 aprè
 
 
 Dépassementdephase traitéauticketDISTINCTgarde docs/arbre-principal/tickets/2026-11-17-la-garde-readonly-est-utilisee-apres-le-writer-du-cycle.md (d7bccavantfix), sansclôturecycle. Contrat3c9/RRO etharnais14source48a2prépub/runtimeinchangé : GOCPUcausalSEULnominalexact C7-POSTWRITER-CAUSAL-RED-48A2-17nov60,1FAIL/0ERRORattendu,0native/rejeuDB. Matrice14NONJOUÉE horscecas, aucunequalificationPOST/innocuitéduQ8.
+
+
+AdmissioncorrectiveDISTINCTEQ9C7-LIFECYCLE-POSTWRITER-E9-Q9-17nov900 : sourcee9exact/Q96eb...3099/19CPUverts+deuxRO TOTALES NEUVES R/ED/22SHA C7fresh/absences. PREpersisté/POSTphysiquedistinctRO/COLDreadonlyDBincluse ; ARMautonomeavantDB+nonceleasefresh/0embedding/samePIDpubshutdown0/POSTgraphFTSbits/sourcesquiet/finalENDfirstred. VraiPOSTE32G/outer898+2/Common830nouveauxaprèsPOSTE,0original/7970/service/master. AncienQ8/65ebROUGE figé,pasinnocuité/durabilitéLIVEdéduite, premierrougeSTOP0retry. Tousdétailsausuivi17nov.
