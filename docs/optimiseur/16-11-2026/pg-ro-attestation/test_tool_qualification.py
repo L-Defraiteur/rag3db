@@ -76,7 +76,7 @@ class NativeBoundaryFakes(unittest.TestCase):
         self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
         self.out=Path(self.temp.name);(self.out/'home').mkdir();(self.out/'tmp').mkdir()
         self.clock=[1000.];self.stops=[]
-        self.packet={'inputs_manifest_sha256':'1'*64}
+        self.packet={'inputs_manifest_sha256':'1'*64,'source_code_commit':'FAKE-NOT-RUNTIME','source_files':{'pg_ro_client.rs':'FAKE-SOURCE'}}
         self.go=dict(kind='pg-rust-compile-and-parse-only',run_authorized=True,packet_sha256='2'*64,
                      reference='FAKE-NOT-C7',nonce='a'*32,inputs_manifest_sha256='1'*64,
                      deadline_monotonic=2000.,sql_authorized=False,docker_authorized=False,output=str(self.out))

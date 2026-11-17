@@ -217,9 +217,16 @@ class NativeBackend:
             write_new(phase/'result.json',result);sync_dir(phase)
             # Dernières opérations fsync/phase/horloge également dans la borne unique.
             common_authority(self.root,self.packet)
-            if request['kind']=='compile' and result['returncode']==0 and (self.out/'client').is_file():
+            if request['kind']=='compile' and result['returncode']==0:
+                require((self.out/'client').is_file() and not (self.out/'client').is_symlink(),'compiler returned no exclusive executable')
                 self.client_sha=digest(self.out/'client')
                 verify_inputs(self.packet,True)
+                write_new(self.out/'compiled-elf-before-parsers.json',{'compiled_elf_attested_before_tests':True,
+                    'path':str(self.out/'client'),'sha256':self.client_sha,'source_commit':self.packet['source_code_commit'],
+                    'source_sha256':self.packet['source_files']['pg_ro_client.rs'],
+                    'inputs_manifest_sha256':self.packet['inputs_manifest_sha256'],'go_reference':self.go['reference'],
+                    'observed_monotonic':time.monotonic(),'compile_scope_returncode':result['returncode']})
+                sync_dir(self.out)
             common_authority(self.root,self.packet)
             result['within_whole']=result['within_whole'] and time.monotonic()<=deadline
             result.update(stdout=stdout,stderr=stderr)
