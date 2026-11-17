@@ -114,3 +114,13 @@ limité aux octets canoniques du record attendu, contenu différent refusé ;
 pas de preuve d'origine inode contre mêmeUIDhostile déduite. P/Q/S/manifestv6
 cohérents, v5figé ; cinq témoins NONJOUÉS par ED, pinQv6 nonvalidé, décision
 C7 CPU5/60 et tout GO natif distincts. P1 levé statiquement sur6715 seulement.
+
+RO ED TOTALE source6715/Qv6prepared7bf5 favorable :
+[rapport34](../../everything-declarative/16-11-2026/34-ro-totale-cycle-6715-qv6.md).
+Chaîne entière ARM/liveness/profil/action/driver/final relue, pas seulement
+delta ;22copies==Git==prepared/HEADclean/23entrées et P-S-allocation-grantabsents
+recoupés PC. Manifestev6, Python/timeout,19refs+8carry, outils/SDKhash seuls
+conformes ; Q5figé. Archives rougeD31unique1FAIL et6715cinqverts rehashées
+3+3fichiers surdeuxhôtes sansrejeu. P1levé surcecouple, aucun nouveau blocage
+établi ; zéro runtime/proc/DB/health/service/slot/native. Ticket reste OUVERT :
+GO900C7 exact distinct et vraie qualification cycle/shutdown restent à décider.
