@@ -162,6 +162,9 @@ qualifient pas le launcher entier. Huit autres exécutent le VRAI compose avec
 Common/parents/child simulés et fichiers privés : positif statique, autorité
 active/restes/bus/artifact modifié/claim élargi refusés, deadline et premier rouge
 pendant fsync final. Ils ne qualifient pas le poste/cleanup/SDK réels.
+Le Qtemp de chaque cas contient les deux helpers E9 vérifiés par SHA contre
+config-proposal, sys.path/sys.modules sont isolés et les imports antérieurs
+retirés : aucune dépendance à un helper trouvé par hasard dans l'ambiance.
 Lecture AST seulement faite, aucun import
 du driver, aucun test exécuté. RO puis GO CPU distinct avant leur exécution ;
 pas de PASS supposé ni de transfert des19CPU du contrat post-writer.

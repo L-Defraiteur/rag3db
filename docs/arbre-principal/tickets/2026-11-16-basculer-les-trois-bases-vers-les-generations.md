@@ -225,3 +225,10 @@ postfsync contrôlés. Huit témoins compose synthétiques ajoutés aux8sélecte
 16NONJOUÉS. Q/W/P/S/T toujours non créés ; configPENDING/paquetnonpréparé.
 Pas de validation ni qualification runtime déduite ; nouveau source/RO puis
 éventuel GO CPU distinct avant tests et GO A distinct avant build.
+
+Réserve harnais RO Recherche ec891 consignée AVANT correction : Qtemp du
+test compose ne contient pas grant_watch_actor/provider_health_transport,
+import risque ModuleNotFoundError sans ambiance extérieure. NON OBSERVÉ,
+16 tests jamais joués. Correction de fixture seulement : sources E9 locales
+vérifiées SHA puis helpers dans Qtemp, sys.path/sys.modules isolés par cas.
+Pas de changement driver/lanceur, pas de prétendu résultat CPU ni transfertGO.

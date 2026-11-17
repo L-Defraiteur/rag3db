@@ -5,7 +5,7 @@ Does not qualify real poste, process cleanup, Cargo, readers or SDK runtime.
 from pathlib import Path as RealPath
 from types import SimpleNamespace
 from unittest.mock import patch
-import hashlib,json,os,tempfile,unittest
+import hashlib,json,os,sys,tempfile,unittest
 import launch as l
 import build_private_cli as driver
 
@@ -13,6 +13,12 @@ class Composition(unittest.TestCase):
  def execute(self,mode):
   with tempfile.TemporaryDirectory() as d:
    root=RealPath(d);q=root/'Q';q.mkdir();p=root/'P';s=root/'S';t=root/'target';app=root/'app';scripts=app/'extension/rag3weaver/scripts';scripts.mkdir(parents=True)
+   repo=RealPath(__file__).resolve().parents[4]
+   origins=json.loads(RealPath(__file__).with_name('config-proposal.json').read_text())['helper_origins']
+   for name in ['grant_watch_actor.py','provider_health_transport.py']:
+    source=origins[name];raw=(repo/source['path']).read_bytes()
+    self.assertEqual(hashlib.sha256(raw).hexdigest(),source['sha256'],'fixture must use pinned E9 helper bytes')
+    (q/name).write_bytes(raw)
    (scripts/'confiner_validation.py').write_text('def poste_tenu(table): return True\ndef processus(): return {}\n')
    now=[99.];allocation='fixture';cfg=dict(source_root=str(app),allocation=allocation,timeout='/fixture/timeout',launcher_sha256=hashlib.sha256(RealPath(l.__file__).read_bytes()).hexdigest())
    (q/'prepared.json').write_text(json.dumps(cfg));config_sha=hashlib.sha256((q/'prepared.json').read_bytes()).hexdigest()
@@ -44,7 +50,8 @@ class Composition(unittest.TestCase):
      fired.append(True)
      if mode=='deadline-during-final-fsync':now[0]=100.1
      if mode=='first-red-during-final-fsync':(p/'first-red.json').write_bytes(b'{"reason":"original refusal"}')
-   with patch.object(l,'P',p),patch.object(l,'Q',q),patch.object(l,'S',s),patch.object(l,'T',t),patch.object(l,'Path',side_effect=path),patch.object(l,'guard'),patch.object(l.os,'getppid',return_value=123),patch.object(l.os,'readlink',return_value=cfg['timeout']),patch.object(l.subprocess,'run',side_effect=run),patch.object(l.time,'monotonic',side_effect=lambda:now[0]),patch.object(os,'fsync',side_effect=fsync):
+   with patch.dict(sys.modules),patch.object(sys,'path',list(sys.path)),patch.object(sys,'dont_write_bytecode',True),patch.object(l,'P',p),patch.object(l,'Q',q),patch.object(l,'S',s),patch.object(l,'T',t),patch.object(l,'Path',side_effect=path),patch.object(l,'guard'),patch.object(l.os,'getppid',return_value=123),patch.object(l.os,'readlink',return_value=cfg['timeout']),patch.object(l.subprocess,'run',side_effect=run),patch.object(l.time,'monotonic',side_effect=lambda:now[0]),patch.object(os,'fsync',side_effect=fsync):
+    for name in ['grant_watch_actor','provider_health_transport']:sys.modules.pop(name,None)
     rc=l.compose(config_sha,allocation)
    result=json.loads((q/'composed.json').read_text());red=(p/'first-red.json').read_bytes() if (p/'first-red.json').exists() else None
    return rc,result,red
