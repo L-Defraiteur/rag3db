@@ -1,0 +1,16 @@
+{
+  "verdict": "ROUGE_ASSERTION_CONFIRME",
+  "source": "bc8ab075813cb882c9876dffbc2f3bb8128da560",
+  "start": 862766.044719747,
+  "end": 863366.044719747,
+  "scope": {
+    "verdict": "ROUGE",
+    "code": 1,
+    "erreur": null,
+    "restes": [],
+    "prive": "/tmp/r3v-ewtjw967",
+    "nettoye": true
+  },
+  "rc": 1,
+  "finished": 862774.213254369
+}

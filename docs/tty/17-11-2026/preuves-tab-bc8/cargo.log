@@ -1,0 +1,22 @@
+▸ target repris de /home/lucied/git_workspaces/cx-tty-english-aliases/extension/rag3weaver/tty : empreintes effacées pour rag3weaver-tty
+   Compiling rag3weaver-tty v0.1.0 (/home/lucied/git_workspaces/cx-tty-english-aliases-union-99/extension/rag3weaver/tty)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.80s
+     Running unittests src/lib.rs (/home/lucied/.cache/rag3weaver-build/target-cx-tty-english-aliases-2/debug/deps/rag3weaver_tty-1c558104928fb10c)
+
+running 1 test
+test tui::tests::partial_english_and_legacy_commands_collect_catalogue_before_completion ... 
+thread 'tui::tests::partial_english_and_legacy_commands_collect_catalogue_before_completion' (1232933) panicked at src/tui.rs:843:13:
+assertion `left == right` failed: catalogue request for /task mes
+  left: []
+ right: ["/ide/etat"]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    tui::tests::partial_english_and_legacy_commands_collect_catalogue_before_completion
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 113 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--lib`

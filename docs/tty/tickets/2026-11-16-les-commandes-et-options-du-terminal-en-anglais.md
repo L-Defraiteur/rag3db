@@ -592,3 +592,19 @@ ni binding, donc E0425 avant le juge. Ce n'est pas le rouge d'assertion demandé
 et aucun Cargo n'a été lancé. Rétablir client::lire_brut dans connaitre seulement,
 conserver seam ActionCompleter/sources_de et préfixesFR inchangés ; nouveau
 Q/source pour ROdelta. AncienQv1 et target restent conservés.
+
+### 17 novembre : rouge du vrai collecteur BC8 réellement acquis
+
+GO C7-TTY-TAB-BC8-17nov600/sourcebc8ab075813cb882c9876dffbc2f3bb8128da560,
+base99, worktreeunionneuf. Compilation depuis ce chemin attestée ;1test exact,
+0passé/1échoué/0ignoré,113filtrés,Cargo101. Assertion précise
+`catalogue request for /task mes` gauche[]/droite[/ide/etat], après les2casFR.
+Nouveau testELFSHAc7d834…76b4f2 ; pas d'HTTP réel ni serveur, aucune erreur
+compile présentée comme rouge. Composé ROUGE_ASSERTION_CONFIRME/rc1,
+Commonp8xp1kn3TERMINE/ROUGE1/erreur null/restes[]/nettoye true,8,169s<600.
+Quietfound[]/4UNKNOWNnonattribués, source propre ; markerT désormaisWuniontty.
+
+RAW2hosts archives/cx-tty-tab-bc8-red/evidence.tar SHA6f1ab9a07133b659d58de384079f3a9556f0f18838088427d0940f23bc4d1f13,
+preuves choisies/rapport `docs/tty/17-11-2026/01-rapport-de-session.md`.
+Aucun fix/retry/secondtest/F8/provider/HTTP/SDK/PCrun/master ; ancien934/RAW/ELF
+conservés. Correction et qualification suivantes attendent les consignes C7.

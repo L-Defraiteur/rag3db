@@ -1,0 +1,15 @@
+{
+  "source": "bc8ab075813cb882c9876dffbc2f3bb8128da560",
+  "base": "99fef92ce6ee9a0007eaf99c7c3a6a3789061c57",
+  "allocation": "C7-TTY-TAB-BC8-17nov600",
+  "archive_two_hosts": "archives/cx-tty-tab-bc8-red/evidence.tar",
+  "archive_sha256": "6f1ab9a07133b659d58de384079f3a9556f0f18838088427d0940f23bc4d1f13",
+  "files": {
+    "test-result.json": "d54fdac4da08edc06664c4e455ac31c71c829fb147d341e95074f4c25e9dac50",
+    "composed-verdict.json": "3b666417e0fb5b325d6663fa9bc7c38b720fb9e463be8b34f394fc30497fde77",
+    "scope-verdict.json": "e6e8839b33d26e69accd895f8e23875203d2b89d86cfa7247dcba146690a98f0",
+    "quiet-after-common.json": "1d653def80e8d06feed28b3abd64179ed17c4871a9f9bb1cd74e00d1afa692ad",
+    "cargo.log": "1b4440c0bbd301b4ba4836c54f785d90b5128554854af22fc200bda27afcbd3c"
+  },
+  "interpretation": "one expected failing Rust assertion; not a compilation failure, not a green qualification"
+}

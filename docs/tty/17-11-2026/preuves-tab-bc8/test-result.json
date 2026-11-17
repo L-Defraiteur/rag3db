@@ -1,0 +1,9 @@
+{
+  "verdict": "ROUGE_ASSERTION_ATTENDUE",
+  "rc": 101,
+  "compiled_from_new_worktree": true,
+  "filter": "tui::tests::partial_english_and_legacy_commands_collect_catalogue_before_completion",
+  "no_live_http_server_required": true,
+  "test_elf": "/home/lucied/.cache/rag3weaver-build/target-cx-tty-english-aliases-2/debug/deps/rag3weaver_tty-1c558104928fb10c",
+  "test_elf_sha256": "c7d8341c16499bf0a2e21513fe39d2dcfa3f911f2cc056e4f115c56a5776b4f2"
+}
