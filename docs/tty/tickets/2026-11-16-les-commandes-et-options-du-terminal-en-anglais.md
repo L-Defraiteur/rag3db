@@ -650,3 +650,14 @@ libtty/build/harnais18phases proposés. Canonj8, ttyj4,32G/3600TOTALproposé.
 Capacités LOCAL7979/7980/PG5433 à faire accepter explicitement par C7 ;
 aucun service appelé, test/build/Cargo/PCruntime/SDKmutation effectué.
 RO de recette puis pilote/Q exact+ROtotale+GOdistinct avant exécution.
+
+### Pilote complet préparé désarmé, raccord commun restant
+
+Sources/pins/limites : docs/tty/17-11-2026/04-pilote-inactif-qualification.md.
+Canonréel/TTY/gardes/ENDtotal matérialisés ; execution_ready=false refuse
+AVANT slot/allocation/contacts. Contrats G85c96 et Embarec5e inactifs épinglés.
+Reste porté TTY avec G/Embar/Arbre : composition acteurPC4f54/politiqueTTY
+et horlogesLOCAL/PC, ARM/poll/HBavantpréflight, bornespayload et release ;
+G doit qualifier transportSQL LOCAL/identité/réservation, pas son CLI seul.
+Critère : nouveau pilote/Q source exact avec ces capacités prouvées, ROtotale
+puis GO natif distinct. Aucun test/service/contact/slot joué en préparation.

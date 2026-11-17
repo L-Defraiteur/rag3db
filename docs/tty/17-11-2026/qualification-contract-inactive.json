@@ -1,0 +1,76 @@
+{
+  "state": "INACTIVE",
+  "allocation": null,
+  "nonce": null,
+  "issued": null,
+  "expires": null,
+  "models_expected": {
+    "service": "rag3weaver-embeddings",
+    "precision": "Flex32",
+    "models": [
+      {
+        "modele": "granite-278m",
+        "dim": 768,
+        "factice": false,
+        "dual": false,
+        "sparse": false
+      },
+      {
+        "modele": "bge-m3",
+        "dim": 1024,
+        "factice": false,
+        "dual": true,
+        "sparse": true
+      }
+    ],
+    "executable": null,
+    "max_chars_per_text": null,
+    "process5": null
+  },
+  "phases": [
+    {
+      "name": "canonical",
+      "cap_seconds": 2700,
+      "end_rule": "MIN(now+2700, original_END-650)",
+      "resources": [
+        "PC7878/7879 via LOCAL7979/7980",
+        "LOCAL PGtest5433",
+        "private browser/React"
+      ]
+    },
+    {
+      "name": "tty",
+      "resources": [
+        "private fakehost17990",
+        "private tmux"
+      ],
+      "provider_calls_authorized": false
+    }
+  ],
+  "actor": {
+    "source": "4f54eef8af693c17e5401d1adc9d4c9062b315d3",
+    "clock": "CLOCK_MONOTONIC@luciepc",
+    "local_clock_binding": null,
+    "policy_tty": null,
+    "armed": null,
+    "heartbeat": null
+  },
+  "postgres": {
+    "owner": "G",
+    "host": "LOCAL distinct from PC",
+    "database": "rag3weaver_test",
+    "user": "rag3weaver",
+    "identity": null,
+    "sql_qualified": false
+  },
+  "required_before_execution": [
+    "common PC actor/controller composed with TTY policy; independent ARM/poll/heartbeat before preflight/ledger",
+    "cross-host clock binding without numeric comparison",
+    "G LOCAL tunnel topology and real PostgreSQL transport/identity qualification",
+    "Embar exact nine fields and OS process5 expectations fixed before observations",
+    "payload character bounds on real canonical clients",
+    "fresh READY/nonce/owner grants covering full phase and release; continuous actor supervision",
+    "controller authenticated DRIVER_FINISHED/release, first red and quiet within original END"
+  ],
+  "forbidden": "No slot/contact/native/service/tunnel/SQL/GET/actor launch from this inactive preparation"
+}
