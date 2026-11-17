@@ -456,3 +456,17 @@ Contrat de secours proposé pour les témoins : failure_record en mémoire garde
 first_error/secondary_errors/remote_quiet UNKNOWN avant toute écriture ; même
 objet exception réémis. Ce record n'est PAS une archive réussie ou un reçu LIVE.
 Aucun patch du moteur/loader avant rouges précis conservés et nouveau cadrage.
+
+### Cinq rouges résiduels exacts conservés avant fix unifié
+
+GO C7-CP-RESIDUAL-RED-6F47-17nov60/d10a consommé UNEfois source6f47 propre/
+pins18+Python frais :5FAIL5causes précises/0ERRORskip/rc1,.235670384s externe/
+.036unittest. Quatre assertIS surmasquages journaux/close ; JSONB nonlié au
+SHAa. Vingt-quatre payloads +manifest=25fichiers réhashés deuxhôtes AVANT
+toutdiff ; manifest68d76af23699734d51df594d9cd71343dfbdb9d6a47f598c141d2e5fc3d1e42a,
+result778c1434d1c421511536bf0188c97310dc60ca4a40ea30a769fe66566786b2a7.
+Rapport11. Préparationcorrectivegroupée SOURCE ouverte : read_prepared commun
+bytes/hash/JSONmêmesbytes pourloader/relay/gate/pilot, capturepremièrecause
+AVANTIO etsecondaires/UNKNOWNmémoire qui n'empêchentpasabort/stop. Les63cas
+proposés restent NONJOUÉS jusqu'àsources/pins/ROtotale etGOvertdistinct.
+Ancienssources/preuves/Q restentinchangés, aucun35/58/anciensrejeu ni Native.
