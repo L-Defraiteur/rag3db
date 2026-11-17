@@ -365,3 +365,34 @@ phase-b-preparation-02/recipe.json SHA256
 25715b699a72eea34d6adc8e8a32b479d9d19f7d93fc618d31d33a2a65a7b2d4.
 GO inactif deadline0, sortie absente ; aucune allocation/compilation ni faux
 rejoué. Demande RO totale aprèsCPU sur32df/r2b079/recette02 avant GO distinct.
+
+### Phase B autorisée C7-G-PG-NATIVE-B-32DF-17nov120 — ROUGE avant rustc
+
+GO publié a3da7a954b ; recette02 exacte lancée une fois après rehash317+13+12,
+source propre, sortie/proofs absents. Monotoniques PC1258249.447844547→
+1258249.967990586, rc1, aucun retry. Common scope validation-_je8hi1g ROUGE,
+code1/restes[]/nettoye=true. Controller compile rc1 :
+`Refus: reçu sans superviseur/poste réel dans notre ascendance`.
+Résultat native_invoked=false/raw_published=false/returncode=null ; rustc n'a
+PAS été invoqué, aucun ELF/ledger ni parser CLI produit. compile-used est un
+marqueur consommé, pas une preuve d'exécution du compilateur.
+
+Diagnostic statique : NativeBackend._run passe un HOME privé au contrôleur
+et ne transmet pas POSTE_LOCK_DIR ; Common.poste_tenu cherche par défaut
+Path.home()/.cache/rag3weaver-build/fiches. Le parent/worker hérite du HOME
+réel et passe son contrôle, le contrôleur n'a plus le même chemin de fiches.
+C'est une explication cohérente par lecture, pas un sous-verdict Common capturé.
+À corriger/qualifier séparément : fournir le chemin canonique du vrai verrou
+au contrôleur autorisé, sans transmettre le jeton Common au client natif,
+sans fabriquer reçu/fiche et sans relâcher autorite. Aucun fix ni retry ici.
+
+Preuves originales PC : cache privée pg-rust-tool-qual-20261117-r1/
+phase-b-execution-01 et runs/phase-b-32df-01 ; copie vérifiée locale dans
+phase-b-proof-copy-01. Receipt SHA256
+5d3044612e97d8e6cbf1bd607b8f6fd968c9bed6bd425fefeca96fdb3e05390e ;
+manifest12preuves SHA256
+963f443fce670313ff00a177ef8bbd2092d5f193ee9cfe3e024845f1784dd254.
+Common autorite/enfants copiés version publique sans jeton, manifestSHA256
+912ee17837b9e6c00cef10799671c5b62a9d913142ccb59d573fea696aec773f.
+Sources r2 inchangées, entrées/OUT_T conservées. Aucun SQL/PG/Docker/capture,
+service, phaseC ou lease ; transport_qualified=false. Ticket toujours ouvert.

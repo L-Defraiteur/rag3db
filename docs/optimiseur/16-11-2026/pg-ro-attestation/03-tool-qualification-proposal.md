@@ -225,3 +225,18 @@ aucun renouvellement après attente de poste. Le runner refuse si son délai
 excède END Common ou est épuisé. Rehash et absence sortie sont à refaire au GO.
 RO totale R source+paquet+recette après CPU demandée avant qualification native.
 Les douze faux ne sont pas rejoués. Aucun compiler/SQL/Docker/service déclenché.
+
+## B01 rouge avant compilation — aucun retry
+
+GO distinct C7-G-PG-NATIVE-B-32DF-17nov120/a3da7a954b consommé une fois ;
+recette02 exécutée, rc1 en0.520146039s. Common validation-_je8hi1g ROUGE,
+restes[]/nettoye=true. Contrôleur refuse l'autorité avant native Popen ;
+rustc NON INVOQUÉ, aucun ELF/ledger/cas CLI natif. Sources r2 inchangées.
+La lecture pointe HOMEprivé sans POSTE_LOCK_DIR transmis au contrôleur,
+Common.poste_tenu utilisant HOME pour retrouver les fiches du vrai poste.
+Diagnostic consigné dans ticketFTS302 avant toute correction ; pas de retry,
+pas d'invention de sous-cause attestée par le refus générique.
+Bruts/GO/identités du request/receipt/firstred/verdict conservés aux deux postes ;
+receiptSHA2565d3044612e97d8e6cbf1bd607b8f6fd968c9bed6bd425fefeca96fdb3e05390e.
+Copie Common publique sans jeton incluse. OS/transport toujours NONQUALIFIÉS,
+aucun SQL/PG/Docker/service/phaseC lancé, aucun lease produit.
