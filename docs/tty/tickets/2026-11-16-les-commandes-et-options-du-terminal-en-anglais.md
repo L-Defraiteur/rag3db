@@ -807,3 +807,12 @@ ettableP01-P16bornéeracines, Bpréautoriséseulement ; sourcehistorique961
 conservée. ArchiAPI/témoins/confirmationréelle, CPpubACKWindow ;4sitese2e
 +CargorunnersurfaceacceptéeàréserverRecherche, aucunappelantmodifié.
 Aucuncode/CPU/native/Qactivation/slot/GO3600, APIabsentejusqu’auxpreuves.
+
+### Contrat consommateur v2 publié documentairement
+
+Note13+invocation-entry-contract-v2.inactive.json appliquent93c44be2d6 :
+invocationprogrammeREVUdepuisimageentréeCONFIRMÉE/copiejouée/RAWetwaitdu
+processus ; tableau20spécificationsP01-P16bornéesracines/P17-P20UNKNOWN
+nonconditionsimplicitesanglais, jamais20verts. Historique961préservé.
+API/mécanismeArchiabsentsavantpreuves, appelantssurfaceàréserverRecherche ;
+aucuncode/CPU/native/Q/Tmodifié. ROportée puisalignementAPI/témoinsavantcode.

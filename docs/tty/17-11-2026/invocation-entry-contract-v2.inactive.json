@@ -1,0 +1,22 @@
+{
+  "state": "DOCUMENTARY_V2_INACTIVE_NO_API",
+  "version": 2,
+  "decision_commit": "93c44be2d6a20193d2b4e48bd09bb31d887e0617",
+  "prior_contract_commit": "961c873bb9d74408aa892d7d6799737047882650",
+  "scope": "reviewed program invocation from confirmed initial ELF image, preserved content copy and actual process wait",
+  "future_exec_and_descendants": "UNKNOWN_NOT_IMPLICIT_ENGLISH_LOT_DELIVERY_CONDITION_NOT_SATISFIED",
+  "raw_scope": "declared invocation sinks, not individual writer attribution per byte",
+  "wait_scope": "final process result, not initial image remaining unchanged",
+  "confirmation_mechanism": null,
+  "producer_api": null,
+  "producer_pid": null,
+  "invocation_pid": null,
+  "entry_evidence": null,
+  "allocation": null,
+  "nonce": null,
+  "common_end": null,
+  "runtime_grants": null,
+  "physical_qualified": false,
+  "source_code_changed": false,
+  "tests_executed": false
+}
