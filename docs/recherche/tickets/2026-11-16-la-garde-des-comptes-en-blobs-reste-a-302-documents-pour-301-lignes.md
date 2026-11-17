@@ -611,3 +611,12 @@ plan pin imageDIGEST/labelsnonce/baseTEST/rôleROnonowner/credentials0600 privé
 32GMAX/CPU/disque-logs/timeout/cleanup et preuves. Publication plan avantcréation,
 aucun clientC/candidatnative/GOPG implicite ; source/testsclients restent soumis
 publication/rouge/RO/GOdistinct. Pas de nouvelle approbation Lucie à demander.
+
+Recette/source fixture prêtessous docs/optimiseur/17-11-2026/docker-pg-fixture :
+plan/provision.py/cleanup.py/entrypoint/provisionSQL/verifySQL. Image17locale
+sha256b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24,
+port15433libreRO, nouveautésnonce/réseaunouveau/dataTMPFS/2GiB2CPU/logbornés.
+C7GO986d autoriseinitialisationaprèspub : timerat1750avantstart+backupPID1TERM1740/
+KILL1750/autoRM, ownerlabelstrictcleanupnonce/secrets ;Common180OS185kill2.
+Credentialsneufs0600sansvaleursargv/Envinspect/logs ; adminDDL+jugesdataset
+imageautorisésfixtureseule,aucunclientRustC. Sourcepub/recetteSHA avantentrée.
