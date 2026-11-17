@@ -100,3 +100,25 @@ Ce document n'implante rien et ne qualifie pas la sourceCargoprod ou le natif.
 outilPGG toujoursNONQUALIFIÉ. Aucun actorARM/GET/SQL/health/provider/poste/Cargo/
 rustc/SDKexport/service/targetmutation ou nouvelleactiviténative dans cetteprépa.
 Ticketporteur documentaire et ticketspropriétaires du rapport36 restent ouverts.
+
+### WindowAPI00e208 relue, contrat fermé sans bridge livré
+
+Source exacte00e2084673e02b37a1d7ac3314015c80ca9c96e7 relue en lectureGit,
+aucun import/exécution du noyau. PreparedContext.window_events mappe chaque
+label à WindowEventSpec(pathPpréapprouvé,owner_role,event_kind), Rust mappingvide.
+PhaseLifecycle.record_window_start/observe_window relient ledgerSHAoriginal,
+ordre/ACKprécédent, owner réel et ENDop ; WindowEvidence retourne eventSHA,
+owner vérifié et duréePC. StageHeaderSHA attaché par Gate APRÈS contrôlekernel,
+pas par une affirmation du provider. Cela répond au manque d'entrée signalé.
+Avis Archi favorable au CONTRAT PRÉPA, pas à un comportement runtime absent.
+
+Codeparsers publie extractionétape1constante c9b84168e8, D45 déplacé au noyau
+unique+wrappersRust :36assertions encoreNONREJOUÉES à son annonce. Cette étape
+n'implémente NIquatrepublications NIWindowEventruntime. Le Reader domaine6e12
+reste indépendant/NONJOUÉ aprèsfix ; aucun bridgePublicationSource n'est créé
+pour contourner ces absences. Son format prototype windowJSON n'est pas une
+normalisationruntime OwnerIdentity : notamment start/script_sha n'impose pas
+au noyau les alias de son interface OwnerIdentity(start_ticks/entry_sha256/
+component_hashes). Le futur bridge utilisera le schéma réellement publié et
+validé par le noyau, avec nouveaupin/tests/RO, sans second juge de liveness.
+229b/Q restent figés, outilPG nonqualifié et GO7455 toujours absents.
