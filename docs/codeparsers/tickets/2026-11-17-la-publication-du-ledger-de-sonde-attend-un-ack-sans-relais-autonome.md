@@ -64,3 +64,8 @@ implicitement à la place d'une compilation prévue par un GO.
 ### Banc — d45aefbd/P05 après correction des deux restes64d7
 
 [RO totale favorable préparation](../../banc/17-11-2026/01-ro-relais-sonde-rust.md) : cleanup_cap distinct borné dans queue/phase/hardEND, réserve5 et UNKNOWN si épuisé, pas de réouverture nativeclose0 ; final_roles obligatoire horswhile/statusUNKNOWN et launcher_absent0alive0unknown. P05 prepared20d59962/10copies PC+local chacun/profil81969 conformes.36témoins NONJOUÉS par Banc ; GO CPU vert exact C7 puis natif distinct requis. P02–P04 nonréarmés/carrynoncâblé/BASEfecCANDc1cd conservés, ticket OUVERT.
+
+
+### Banc — preuves CPU D45 vertes
+
+[RO des bruts sans rejeu](../../banc/17-11-2026/01-ro-relais-sonde-rust.md) : manifestd8270ccf/4fichiers taillesSHA conformes PC+local,36OK/0FAIL0ERROR0skip/rc0/unecommande T58+K2. CPU hermétique36 qualifié sur D45 ; raccord SSH/natif et phases BASE/CAND non qualifiés/non autorisés. P05 reste préparation seule, ticket OUVERT.
