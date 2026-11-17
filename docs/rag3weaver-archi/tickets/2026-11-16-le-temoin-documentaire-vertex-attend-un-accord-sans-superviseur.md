@@ -193,3 +193,10 @@ cet historique. Préparer branche/WT rouge neuf, vrai Broker60f9 vulnérable ave
 le témoin cfg/homonyme prépub269519 et helper frame disponible (prérequis du
 harnais, pas le contrôle Broker corrigé). Puis RO/GO CPU ciblé distinct avant
 exécution ; aucun vert ni native autorisé. Conserver a797 comme candidat nonjoué.
+
+Rouge cfg/homonyme acquis sous GO C7-ARCHI-CFG-RED-3A786-17nov60,
+EXACT3a786 : UNE invocation,1FAIL/0ERROR RuntimeError not raised via vraiHandle,
+rc1/0,002s unittest/0,183236793s enveloppe. Aucun retry. Preuves3fichiers double
+hôte réhash0écart manifest350ddb1e7bb69219fdb8148b83fccca3318c4caec153a1e29181eb185e5da0ed,
+R/cx-archi-cfg-red-3a786-17nov-r1. Correctif a797 préexistait ce rouge : aucune
+réécriture chronologique. Candidat vert nonjoué, aucun GO natif ni pin PC acquis.

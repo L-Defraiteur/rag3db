@@ -237,3 +237,21 @@ depuis global-pass. TempDirs et faux identité/provenance uniquement, aucun vrai
 Popen/proc/signal/Git/Cargo/service/cloud. Log horsW neuf ; préserver première
 sortie même inattendue. Cette branche est un témoin vulnérable, PAS un candidat
 native et aucune pin/autorité ne doit la consommer. Produit APPf1e8 inchangé.
+
+### Rouge observé, GO C7-ARCHI-CFG-RED-3A786-17nov60
+
+Pin exécuté EXACT3a786a5933c924a46d99d8898652be9b85b3bb81 propre/poussé.
+UNE invocation ciblée, timeoutTERM58+KILL2 (physiqueMAX60), python3-B unittest
+failfast. Résultat : 1FAIL/0ERROR, `AssertionError: RuntimeError not raised`
+dans le VRAI Broker.handle(admit), aucune session refusée par le Broker vulnérable.
+Unittest0,002s, enveloppe commande mesurée0,183236793s, rc1, attenduROUGE.
+Aucun retry, autre test, processus/signal réel par la fixture, Cargo/native/SDK/
+Vertex/DB/service/target/PCpin. Le correctif a797 avait DÉJÀ été publié AVANT ce
+rouge ; cette chronologie reste explicite, pas de red-before-fix historique inventé.
+
+Bruts/sourceJSON/rc préservés horsW local ET PC :
+R/cx-archi-cfg-red-3a786-17nov-r1 ; manifest350ddb1e7bb69219fdb8148b83fccca3318c4caec153a1e29181eb185e5da0ed,
+3fichiers réhashés sur chaque hôte,0écart. SourceJSON contient pinAPP/pilote,
+8SHA fichiers, argvexact/cwd/GO ; sourcegit publiée inchangée. Aucun autre run
+avant doublecopie/réhash. Candidatstructurel séparé NONJUGÉ ; GO vert distinct
+nécessaire. Ce rouge prouve le contournement cfg/homonyme, pas un vert de lot.
