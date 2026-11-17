@@ -48,6 +48,30 @@ Le couple229b et ses paquets restent figés ; un changement de code ou de pins
 demande une version neuve et sa revue. Les RO de préparation restent valides
 dans leur périmètre, aucune admission native n'en est déduite.
 
+## Admission Lucivy FS : borner aussi le lanceur/exporteur portable
+
+C7 relit le couple6a16c7220f88d7771948dfffb75ed46c486acee9/source8b943,
+malgré deux avisfavorablesPRÉPA. export-fs-red-ledger.py n'arme aucun watchdog
+physique portable autour de son rôle. Après ARMPC, local_deadline=now+300 est
+recalculé APRÈSlaunch ; les SSHtimeouts8 et les testsmonotonic de boucle ne
+bornent pas les écritures/fsync/hash/retourSSH et publicationfinale du parent.
+La portée physique distante300 ne prouve donc pas l'enveloppe complète des
+deux rôles annoncée par la recette. Aucun run n'est lancé pour découvrir ce
+constatstatique et aucun premierrougenatif n'est inventé.
+
+Avant GO : une seule borne physique de coordination couvrant le lanceur réel,
+les I/O/export/ACK/final/retour et son cleanup ; budget restant PC conservateur
+issu de durées et pas comparaison d'horloges absolues interpostes. Un timeoutsocket
+ou SSH seul ne suffit pas ; une erreur ne doit pas laisser d'activité distante
+déclarée quiescente sans preuve. Préparer le correctif groupé du vrai cheminCLI
+et un contre-exemple pertinent avant code, puis nouveaupin/RO/GOdistinct.
+Pas de prolongation implicite300 ni de nouvelle exigence sur le corpus : les
+six rouges FS/positif, ledger et distinction indexnatifNONJOUÉ restent inchangés.
+
+Porteur Lucivy, ticketFS existant complété avantdiff. Vieuxpaquetpréparé reste
+nonconsommé/figé ; aucune mutation du source8b943, target3552, Cargo.lock,
+proc/processus, poste, corpus ou native par cette retenue.
+
 ## Critères de fin
 
 - Audits des treize périmètres reçus, écarts et éventuels blocages consignés.
