@@ -86,6 +86,25 @@ def verify(pair, phase):
     return config
 
 
+def publication_control_roles(pair, phase):
+    command = outer_command(pair, phase)
+    return {'outer-timeout': command[2:], 'composer': command[6:]}
+
+
+def publication_deadline_info(pair, phase):
+    """Descripteur attendu ; la vivacité et la borne sont vérifiées par le noyau."""
+    return {'role': 'outer-timeout', 'argv': outer_command(pair, phase)[2:]}
+
+
+def publication_launch_command(pair, phase, allocation):
+    return [sys.executable, '-B', str(Path(pair['control']) / 'pilot.py'), 'run',
+        '--proofs', pair['proofs'], '--phase', phase, '--allocation', allocation]
+
+
+def publication_launch_environment(pair, phase):
+    return {'RUST_PROBE_TOOL_ROOT': pair['tool_root']}
+
+
 def publication_phase_info(pair, phase):
     """Codec de descripteurs Rust : lecture seulement, pas de décision de liveness."""
     root = Path(pair['proofs']) / phase
@@ -420,8 +439,14 @@ def compose(pair, phase):
         verify(pair, phase)
         previous_end(pair, phase)
         fresh_quiet(pair, phase, root / 'cache-quiet-before-common.json')
+        # Le même noyau vérifie le watchdog et borne la demande avant Common.
+        import relay
+        common_budget = relay.engine.common_request_budget(pair,
+            base.digest(Path(pair['proofs']) / 'prepared.json'), phase, physical)
+        save(root / 'common-request.json', {'requested': common_budget,
+            'observed': time.monotonic(), 'common_max': pair['publication_limits']['common_max']})
         command = [sys.executable, str(Path(pair['control']) / 'confiner_validation.py'),
-            'lancer', '--delai', '1750', '--preuves', str(root / 'scope'), '--', sys.executable,
+            'lancer', '--delai', str(common_budget), '--preuves', str(root / 'scope'), '--', sys.executable,
             '-B', str(Path(pair['control']) / 'pilot.py'), 'inside', '--proofs', pair['proofs'], '--phase', phase]
         rc = base.record(root, 'common', command, root, os.environ.copy())
         info = json.loads((root / 'authority-path.json').read_text())
@@ -499,6 +524,7 @@ def prepare(args):
     relay_spec.loader.exec_module(adapter)
     pair['publication_limits'] = adapter.default_limits()
     pair['publication_plans'] = {phase: adapter.default_plan(pair, phase) for phase in PRODUCTS}
+    pair['publication_layout'] = adapter.default_layout(pair)
     for name in scripts:
         if name != PROBE:
             assert pair['phases']['baseline']['scripts'][name] == pair['phases']['candidate']['scripts'][name], 'configuration differs'

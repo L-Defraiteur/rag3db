@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Boucles et gardes extraites de D45 ; premier déplacement à comportement constant.
 
-Ce module ne livre pas encore le plan quatre publications ni WindowEvent.
+Plan et WindowEvent préparés, qualification encore requise avant admission.
 Les politiques de ledger et les entrées de source restent dans les adaptateurs.
 """
 import argparse
@@ -153,8 +153,95 @@ def publication_limits(pair):
         assert isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and value > 0
     assert limits['control_cap'] <= limits['stop_reserve'] < limits['queue'] < limits['whole_soft']
     assert limits['operation_grace'] >= limits['stop_reserve']
-    assert limits['common_max'] < limits['whole_soft'] + limits['whole_kill']
+    assert limits['common_max'] <= limits['phase_soft'] <= limits['whole_soft']
+    assert limits['common_margin'] >= limits['operation_grace']
     return _json_frozen(limits)
+
+
+def publication_layout(pair):
+    """Disposition approuvée, indépendante des noms et phases des fournisseurs."""
+    value = pair['publication_layout']
+    assert set(value) == {'prepared', 'execution_host', 'entries', 'phases'}
+    assert isinstance(value['execution_host'], str) and value['execution_host']
+    entries = value['entries']
+    assert set(entries) == {'coordinator', 'gate', 'launcher', 'driver', 'common', 'guard'}
+    for name in entries.values():
+        safe_id(name)
+    prepared = Path(value['prepared'])
+    proofs = Path(pair['proofs'])
+    assert prepared.is_absolute() and prepared.parent in {proofs, Path(pair['control'])}
+    assert prepared.name not in {'.env', 'autorite.json'}
+    assert value['phases'] and set(value['phases']) == set(pair['publication_plans'])
+    for phase, paths in value['phases'].items():
+        safe_id(phase)
+        assert set(paths) == {'root', 'peer', 'scope', 'files'}
+        root = Path(paths['root'])
+        assert root.is_absolute() and (root == proofs or proofs in root.parents)
+        assert set(paths['files']) == {'bootstrap', 'launch', 'authority', 'controls',
+            'outer_supervision', 'common_command', 'allocation', 'first_red', 'abort', 'classification',
+            'peer_ready', 'peer_supervision'}
+        selected = [paths['peer'], paths['scope'], *paths['files'].values()]
+        assert len(set(selected)) == len(selected)
+        for item in selected:
+            path = Path(item)
+            assert path.is_absolute() and root in path.parents
+            assert '..' not in path.parts and path.name not in {'.env', '.vault', 'autorite.json'}
+    return _json_frozen(value)
+
+
+def layout_entry(pair, role):
+    return Path(pair['control']) / publication_layout(pair)['entries'][role]
+
+
+def verify_components(pair):
+    """Fermer les octets des contrôleurs avant leur import et chaque opération."""
+    layout = publication_layout(pair)
+    required = set(layout['entries'].values()) | {'publication_relay.py'}
+    assert required <= set(pair['controllers'])
+    control = Path(pair['control'])
+    prepared = Path(layout['prepared'])
+    assert prepared.resolve(strict=True) == prepared and prepared.is_file()
+    assert prepared.stat().st_uid == os.getuid()
+    assert control.is_absolute() and control.resolve(strict=True) == control
+    for name, sha in pair['controllers'].items():
+        path = control / safe_id(name)
+        assert path.resolve(strict=True) == path and path.is_file()
+        assert path.stat().st_uid == os.getuid() and digest(path) == require_sha(sha)
+
+
+def check_process(guard, expected):
+    assert expected['uid'] == os.getuid()
+    actual = guard.process_record(expected['pid'])
+    assert actual['state'] != 'Z'
+    assert all(actual[key] == expected[key] for key in ['pid', 'start', 'uid', 'exe', 'argv', 'cgroup'])
+    return actual
+
+
+def read_bootstrap(pair, pin, phase, guard):
+    layout = publication_layout(pair)
+    record = json.loads(Path(layout['phases'][phase]['files']['bootstrap']).read_text())
+    assert record['prepared_sha256'] == pin
+    gate = layout_entry(pair, 'gate')
+    assert record['gate_sha256'] == digest(gate) == pair['controllers'][gate.name]
+    hard = check_process(guard, record['hard_timeout'])
+    assert hard['exe'] == pair['timeout'] and digest(hard['exe']) == pair['timeout_sha256']
+    limits = publication_limits(pair)
+    assert hard['argv'][:4] == [pair['timeout'], '--signal=TERM',
+        '--kill-after=' + seconds_arg(limits['whole_kill']), seconds_arg(limits['whole_soft'])]
+    return record
+
+
+def common_request_budget(pair, pin, phase, guard):
+    """Durée à demander au Common ; aucun nouveau budget ni nouveau superviseur."""
+    verify_components(pair)
+    assert digest(publication_layout(pair)['prepared']) == pin
+    hard = read_bootstrap(pair, pin, phase, guard)['hard_timeout']
+    limits = publication_limits(pair)
+    end = int(hard['start']) / os.sysconf('SC_CLK_TCK') + limits['whole_soft']
+    remaining = end - time.monotonic() - limits['common_margin']
+    requested = math.floor(min(limits['common_max'], remaining))
+    assert requested > limits['operation_grace'] + limits['stop_reserve'], 'Common admission budget exhausted'
+    return requested
 
 
 def seconds_arg(seconds):
@@ -215,7 +302,9 @@ class Relay:
         self.phase_deadline = None
         started = clock()
         self.queue_end = started + queue_budget
-        self.hard_end = hard_end if hard_end is not None else started + queue_budget + 1798
+        assert isinstance(hard_end, (int, float)) and not isinstance(hard_end, bool) and math.isfinite(hard_end)
+        self.hard_end = hard_end
+        assert started < self.hard_end
         self.stage = None
         self.plan = validate_plan(plan)
         self.prepared_sha256 = require_sha(prepared_sha256)
@@ -432,6 +521,8 @@ class SSHTransport:
     def __init__(self, pair, pin, phase, allocation, host, root, *, entry_file=None):
         self.pair, self.pin, self.phase, self.allocation = pair, pin, phase, allocation
         self.root, self.host, self.child, self.counter = Path(root), host, None, 0
+        assert self.root == Path(publication_layout(pair)['phases'][phase]['peer'])
+        assert host == publication_layout(pair)['execution_host']
         self.active_call = None
         self.handles = []
         self.ready_record = None
@@ -439,19 +530,21 @@ class SSHTransport:
         self.control = Path(pair['control'])
         self.plan = validate_plan(pair['publication_plans'][phase])
         self.prepared_sha256 = require_sha(pin)
-        self.entry_file = Path(entry_file) if entry_file is not None else self.control / 'relay.py'
-        spec = importlib.util.spec_from_file_location('relay_physical_guard', self.control / 'physical_guard.py')
+        self.entry_file = Path(entry_file) if entry_file is not None else layout_entry(self.pair, 'coordinator')
+        verify_components(pair)
+        spec = importlib.util.spec_from_file_location('relay_physical_guard', layout_entry(self.pair, 'guard'))
         self.guard = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(self.guard)
 
     def command(self, action, *extra, cap=None):
-        remote = [sys.executable, '-B', str(self.control / 'gate.py'), action,
-                  '--proofs', self.pair['proofs'], '--phase', self.phase, '--pin', self.pin, *extra]
+        remote = [sys.executable, '-B', str(layout_entry(self.pair, 'gate')), action,
+                  '--proofs', self.pair['proofs'], '--prepared', publication_layout(self.pair)['prepared'],
+                  '--phase', self.phase, '--pin', self.pin, *extra]
         if action == 'launch':
             remote = [self.pair['timeout'], '--signal=TERM', '--kill-after=' + seconds_arg(publication_limits(self.pair)['whole_kill']),
                 seconds_arg(publication_limits(self.pair)['whole_soft']), *remote]
         elif cap is not None:
-            assert 0 < cap <= 30
+            assert 0 < cap <= publication_limits(self.pair)['copy_cap']
             remote = [self.pair['timeout'], '--signal=TERM', '--kill-after=1s', str(cap) + 's', *remote]
         # Un seul argv distant quoté ; pas d'interpolation de shell ni de parent argv W/T.
         return ['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=5', '-o', 'ControlMaster=no',
@@ -500,13 +593,14 @@ class SSHTransport:
         identity = self.guard.process_record(os.getpid())
         self.ready_record = {'host': socket.gethostname(), 'identity': identity,
             'script_sha256': digest(self.entry_file), 'prepared_sha256': self.pin, 'phase': self.phase}
-        atomic_json(self.root / 'ready.json', self.ready_record)
+        atomic_json(Path(publication_layout(self.pair)['phases'][self.phase]['files']['peer_ready']), self.ready_record)
 
     def check_coordinator(self):
-        assert digest(self.entry_file) == self.pair['controllers']['relay.py']
+        verify_components(self.pair)
+        assert digest(self.entry_file) == self.pair['controllers'][layout_entry(self.pair, 'coordinator').name]
         assert Path(__file__).resolve() == self.control / 'publication_relay.py'
         assert digest(__file__) == self.pair['controllers']['publication_relay.py']
-        assert digest(Path(self.pair['proofs']) / 'prepared.json') == self.pin
+        assert digest(publication_layout(self.pair)['prepared']) == self.pin
         actual = self.guard.process_record(os.getpid())
         expected = self.ready_record['identity']
         assert actual['state'] != 'Z' and all(actual[k] == expected[k] for k in
@@ -585,7 +679,7 @@ class WindowEvidence:
 class GateBase:
     def __init__(self, pair, pin, phase, *, pilot, entry_file):
         self.pair, self.pin, self.phase = pair, pin, phase
-        self.root = Path(pair['proofs']) / phase
+        self.root = Path(publication_layout(pair)['phases'][phase]['root'])
         self.control = Path(pair['control'])
         self.pilot = pilot
         self.entry_file = Path(entry_file)
@@ -593,47 +687,40 @@ class GateBase:
         self.plan = validate_plan(pair['publication_plans'][phase])
         self.guard = self.pilot.physical
 
+    def path(self, name):
+        paths = publication_layout(self.pair)['phases'][self.phase]
+        return Path(paths[name] if name in {'scope', 'peer'} else paths['files'][name])
+
     @property
     def limits(self):
         return publication_limits(self.pair)
 
     def verify_contract(self):
-        assert socket.gethostname().lower() == 'luciepc'
-        assert digest(Path(self.pair['proofs']) / 'prepared.json') == self.pin
-        assert self.entry_file.resolve() == self.control / 'gate.py'
+        verify_components(self.pair)
+        assert socket.gethostname().lower() == publication_layout(self.pair)['execution_host'].lower()
+        assert digest(publication_layout(self.pair)['prepared']) == self.pin
+        assert self.entry_file.resolve() == layout_entry(self.pair, 'gate')
         assert Path(__file__).resolve() == self.control / 'publication_relay.py'
         assert digest(__file__) == self.pair['controllers']['publication_relay.py']
-        assert digest(self.entry_file) == self.pair['controllers']['gate.py']
+        assert digest(self.entry_file) == self.pair['controllers'][layout_entry(self.pair, 'gate').name]
         self.pilot.verify(self.pair, self.phase)
 
     def verify(self):
         self.verify_contract()
-        for name in ['first-red.json', 'relay-abort.json', 'classification.json']:
-            assert not (self.root / name).exists(), 'phase has already refused or ended'
+        for name in ['first_red', 'abort', 'classification']:
+            assert not self.path(name).exists(), 'phase has already refused or ended'
 
     def check_process(self, expected):
-        assert expected['uid'] == os.getuid()
-        actual = self.guard.process_record(expected['pid'])
-        assert actual['state'] != 'Z'
-        assert all(actual[k] == expected[k] for k in ['pid', 'start', 'uid', 'exe', 'argv', 'cgroup'])
-        return actual
+        return check_process(self.guard, expected)
 
     def bootstrap(self):
-        record = json.loads((self.root / 'relay-bootstrap.json').read_text())
-        assert record['prepared_sha256'] == self.pin
-        assert record['gate_sha256'] == digest(self.control / 'gate.py') == self.pair['controllers']['gate.py']
-        hard = self.check_process(record['hard_timeout'])
-        assert hard['exe'] == self.pair['timeout']
-        assert digest(hard['exe']) == self.pair['timeout_sha256']
-        assert hard['argv'][:4] == [self.pair['timeout'], '--signal=TERM',
-            '--kill-after=' + seconds_arg(self.limits['whole_kill']), seconds_arg(self.limits['whole_soft'])]
-        return record
+        return read_bootstrap(self.pair, self.pin, self.phase, self.guard)
 
     def launcher(self):
         bootstrap = self.bootstrap()
-        record = json.loads((self.root / 'relay-launch.json').read_text())
+        record = json.loads((self.path('launch')).read_text())
         self.check_process(record['identity'])
-        assert record['launcher_script_sha256'] == digest(self.control / 'pilot.py') == self.pair['driver_sha256']
+        assert record['launcher_script_sha256'] == digest(layout_entry(self.pair, 'launcher')) == self.pair['controllers'][layout_entry(self.pair, 'launcher').name]
         assert record['identity']['argv'] == bootstrap['run_argv']
         assert record['identity']['pid'] == bootstrap['identity']['pid']
         assert record['identity']['start'] == bootstrap['identity']['start']
@@ -649,11 +736,28 @@ class GateBase:
         assert observed['state'] != 'Z' and time.monotonic() < bootstrap['transition_end']
         return {'state': 'waiting', 'queue_remaining': bootstrap['queue_end'] - time.monotonic()}
 
+    def control_descriptors(self):
+        expected = self.pilot.publication_control_roles(self.pair, self.phase)
+        rows = json.loads(self.path('controls').read_text())
+        assert len(rows) == len(expected) and {row['role'] for row in rows} == set(expected)
+        for row in rows:
+            safe_id(row['role'])
+            assert row['uid'] == os.getuid() and row['argv'] == expected[row['role']]
+        return rows
+
+    def deadline_spec(self):
+        spec = self.pilot.publication_deadline_info(self.pair, self.phase)
+        safe_id(spec['role'])
+        assert spec['argv'][:4] == [self.pair['timeout'], '--signal=TERM',
+            '--kill-after=' + seconds_arg(self.limits['phase_kill']), seconds_arg(self.limits['phase_soft'])]
+        return spec
+
     def starting(self):
-        controls = json.loads((self.root / 'controls.json').read_text())
-        timeout = next(row for row in controls if row['role'] == 'outer-timeout')
+        controls = self.control_descriptors()
+        deadline = self.deadline_spec()
+        timeout = next(row for row in controls if row['role'] == deadline['role'])
         self.check_process(timeout)
-        assert timeout['argv'] == self.pilot.outer_command(self.pair, self.phase)[2:]
+        assert timeout['argv'] == deadline['argv']
         assert int(timeout['start']) / os.sysconf('SC_CLK_TCK') <= self.bootstrap()['queue_end']
         assert timeout['exe'] == self.pair['timeout'] and digest(timeout['exe']) == self.pair['timeout_sha256']
         remaining = int(timeout['start']) / os.sysconf('SC_CLK_TCK') + self.limits['phase_soft'] - time.monotonic()
@@ -667,7 +771,8 @@ class GateBase:
         # Le codec de politique lit des DESCRIPTEURS, il n'atteste jamais leur vivacité.
         info = self.pilot.publication_phase_info(self.pair, self.phase)
         receipt = Path(info['path'])
-        assert receipt.name == 'autorite.json' and receipt.parent.parent == Path(info['scope_root'])
+        assert Path(info['scope_root']) == self.path('scope')
+        assert receipt.name == 'autorite.json' and receipt.parent.parent == self.path('scope')
         assert receipt.resolve(strict=True) == receipt and receipt.stat().st_uid == os.getuid()
         authority = json.loads(receipt.read_text())  # Aucun jeton n'est exporté.
         assert authority['etat'] == 'actif' and not receipt.with_name('verdict.json').exists()
@@ -680,6 +785,8 @@ class GateBase:
         assert common['argv'] == info['common_argv']
         driver = self.check_process(info['driver_identity'])
         entry = self.control / safe_id(info['driver_entry'])
+        assert entry == layout_entry(self.pair, 'driver')
+        assert common_entry == layout_entry(self.pair, 'common')
         assert info['driver_script_sha256'] == digest(entry) == self.pair['controllers'][info['driver_entry']]
         assert driver['argv'] == info['driver_argv']
         cursor, seen = driver, set()
@@ -688,18 +795,22 @@ class GateBase:
             seen.add(cursor['pid'])
             cursor = self.guard.process_record(cursor['parent'])
         assert cursor['start'] == common['start']
-        controls = json.loads(Path(info['controls_path']).read_text())
+        assert Path(info['controls_path']) == self.path('controls')
+        deadline = self.deadline_spec()
+        assert info['deadline_role'] == deadline['role'] and info['deadline_argv'] == deadline['argv']
+        controls = self.control_descriptors()
         timeout = next(row for row in controls if row['role'] == info['deadline_role'])
         self.check_process(timeout)
         assert digest(self.pair['timeout']) == self.pair['timeout_sha256']
         assert timeout['argv'] == info['deadline_argv']
         outer_end = int(timeout['start']) / os.sysconf('SC_CLK_TCK') + self.limits['phase_soft']
-        end = min(authority['echeance'], outer_end)
+        end = authority['echeance']
+        assert math.isfinite(end) and end <= outer_end
         assert authority['echeance'] == info['original_common_end'], 'original Common END changed'
         recipe = json.loads(receipt.with_name('recette.json').read_text())
         assert 0 < recipe['delai'] <= self.limits['common_max']
         whole = self.bootstrap()['hard_timeout']
-        hard_end = int(whole['start']) / os.sysconf('SC_CLK_TCK') + self.limits['whole_soft'] + self.limits['whole_kill']
+        hard_end = int(whole['start']) / os.sysconf('SC_CLK_TCK') + self.limits['whole_soft']
         assert end <= hard_end - self.limits['common_margin']
         operation_end = end - self.limits['operation_grace']
         remaining = operation_end - time.monotonic()
@@ -748,7 +859,7 @@ class GateBase:
         descriptor = spec['descriptor']
         safe_id(descriptor)
         # Le layout permet un fichier de rôle approuvé ; aucune résolution depuis le ledger.
-        pointer = Path(spec.get('descriptor_path', str(self.root / 'authority-path.json')))
+        pointer = Path(spec.get('descriptor_path', str(self.path('authority'))))
         assert pointer.resolve(strict=True) == pointer and self.root in pointer.parents
         observed = json.loads(pointer.read_text())
         expected = observed[descriptor]
@@ -895,13 +1006,13 @@ class GateBase:
 
     def snapshot(self):
         self.verify()
-        if not (self.root / 'relay-launch.json').exists():
-            if (self.root / 'relay-bootstrap.json').exists():
+        if not (self.path('launch')).exists():
+            if (self.path('bootstrap')).exists():
                 return self.waiting_transition()
             return {'state': 'waiting'}
         self.launcher()
-        if not (self.root / 'authority-path.json').exists():
-            if (self.root / 'outer-supervision.json').exists():
+        if not (self.path('authority')).exists():
+            if (self.path('outer_supervision')).exists():
                 return self.starting()
             return {'state': 'waiting', 'queue_remaining': self.bootstrap()['queue_end'] - time.monotonic()}
         for spec in self.plan.stages:
@@ -924,8 +1035,8 @@ class GateBase:
         before = time.monotonic()
         with path.open('rb') as stream:
             while chunk := stream.read(1 << 20):
-                assert time.monotonic() - before < min(30, state['remaining'])
-                assert not any((self.root / name).exists() for name in ['first-red.json', 'relay-abort.json', 'classification.json'])
+                assert time.monotonic() - before < min(self.limits['copy_cap'], state['remaining'])
+                assert not any(self.path(name).exists() for name in ['first_red', 'abort', 'classification'])
                 out.write(chunk)
             out.flush()
         fresh, _ = self.stage(kind)
@@ -940,7 +1051,7 @@ class GateBase:
         assert ack['header'] == state['header'] and ack['files'] == state['files']
         assert ack['file_sizes'] == state['file_sizes'] and ack['elf_map'] == state['elf_map']
         assert ack['observed_binding_sha256'] == state['observed_binding_sha256']
-        assert ack['peer_files'] == {name: str(self.root / 'relay-local' / kind / name) for name in names}
+        assert ack['peer_files'] == {name: str(self.path('peer') / kind / name) for name in names}
         assert ack['ledger_sha256'] == state['files'][spec.ledger_file]
         assert ack['copied_and_rehashed'] is True
         if len(state['elf_map']) == 1:
@@ -1000,44 +1111,52 @@ class GateBase:
     def cancel_launcher(self, reason):
         # Annulation attribuée, y compris en file : aucun appel à active().
         self.verify_contract()
-        bootstrap = json.loads((self.root / 'relay-bootstrap.json').read_text())
+        bootstrap = json.loads((self.path('bootstrap')).read_text())
         assert bootstrap['prepared_sha256'] == self.pin
-        assert bootstrap['gate_sha256'] == digest(self.control / 'gate.py') == self.pair['controllers']['gate.py']
+        assert bootstrap['gate_sha256'] == digest(layout_entry(self.pair, 'gate')) == self.pair['controllers'][layout_entry(self.pair, 'gate').name]
         hard = bootstrap['hard_timeout']
         assert hard['exe'] == self.pair['timeout'] and digest(hard['exe']) == self.pair['timeout_sha256']
         assert hard['argv'][:4] == [self.pair['timeout'], '--signal=TERM',
             '--kill-after=' + seconds_arg(self.limits['whole_kill']), seconds_arg(self.limits['whole_soft'])]
         allowed = [bootstrap['identity']['argv'], bootstrap['run_argv']]
         roles = [('remote-hard-timeout', hard, None), ('launcher', bootstrap['identity'], allowed)]
-        info_path = self.root / 'authority-path.json'
+        info_path = self.path('authority')
         if info_path.exists():
-            info = json.loads(info_path.read_text())
-            assert info['driver_script_sha256'] == digest(self.control / 'pilot.py') == self.pair['driver_sha256']
-            assert info['supervisor_identity']['argv'] == json.loads((self.root / 'common.command.json').read_text())
+            info = self.pilot.publication_phase_info(self.pair, self.phase)
+            assert info['driver_entry'] == layout_entry(self.pair, 'driver').name
+            assert info['driver_script_sha256'] == digest(layout_entry(self.pair, 'driver')) == self.pair['controllers'][info['driver_entry']]
+            assert info['supervisor_identity']['argv'] == info['common_argv']
             roles.append(('common', info['supervisor_identity'], None))
-        elif (self.root / 'scope').exists():
+        elif (self.path('scope')).exists():
             # Fenêtre Common lancé mais pilote pas encore au rendez-vous authority-path.
-            receipts = list((self.root / 'scope').glob('validation-*/autorite.json'))
+            receipts = list((self.path('scope')).glob('validation-*/autorite.json'))
             assert len(receipts) <= 1, 'ambiguous Common cancellation'
             if receipts:
                 authority = json.loads(receipts[0].read_text())
-                assert authority['script_sha256'] == self.pair['controllers']['confiner_validation.py']
+                assert authority['script_sha256'] == self.pair['controllers'][layout_entry(self.pair, 'common').name]
                 try:
                     common = self.guard.process_record(authority['pid'])
                 except (FileNotFoundError, ProcessLookupError):
                     common = None
                 if common and common['start'] == authority['debut']:
                     assert common['uid'] == os.getuid()
-                    assert common['argv'] == json.loads((self.root / 'common.command.json').read_text())
+                    assert common['argv'] == json.loads((self.path('common_command')).read_text())
                     roles.append(('common', common, None))
-        controls_path = self.root / 'controls.json'
+        controls_path = self.path('controls')
         if controls_path.exists():
-            phase_outer = next(row for row in json.loads(controls_path.read_text()) if row['role'] == 'outer-timeout')
-            assert phase_outer['argv'] == self.pilot.outer_command(self.pair, self.phase)[2:]
-            roles.append(('phase-timeout', phase_outer, None))
-        closed = (self.root / 'classification.json').exists()
+            deadline = self.deadline_spec()
+            descriptors = self.control_descriptors()
+            phase_outer = next(row for row in descriptors if row['role'] == deadline['role'])
+            assert phase_outer['argv'] == deadline['argv']
+            roles.extend(('phase-timeout' if row['role'] == deadline['role'] else row['role'], row, None)
+                for row in descriptors)
+        closed = (self.path('classification')).exists()
         if not closed:
-            self.pilot.first_red(self.root, RuntimeError('relay: ' + reason))
+            try:
+                atomic_json(self.path('first_red'), {'reason': repr(RuntimeError('relay: ' + reason)),
+                    'observed': time.monotonic()})
+            except FileExistsError:
+                pass
         end = time.monotonic() + 3.4
         stop_errors = []
         try:
@@ -1061,7 +1180,7 @@ class GateBase:
         alive, unknown, observations = self.final_roles(roles)
         unknown.extend(stop_errors)
         scope_quiet = None
-        scopes = list((self.root / 'scope').glob('validation-*'))
+        scopes = list((self.path('scope')).glob('validation-*'))
         if len(scopes) > 1:
             unknown.append('ambiguous Common final scopes')
         for scope in scopes:
@@ -1085,49 +1204,58 @@ class GateBase:
 
     def launch(self, allocation, ready):
         self.verify()
-        assert allocation and not (self.root / 'allocation.json').exists()
-        assert not (self.root / 'scope').exists() and not (self.root / 'relay-launch.json').exists()
+        assert allocation and not (self.path('allocation')).exists()
+        assert not (self.path('scope')).exists() and not (self.path('launch')).exists()
         assert ready['host'] == self.pair['peer_host'] and ready['identity']['uid'] == os.getuid()
         assert ready['prepared_sha256'] == self.pin and ready['phase'] == self.phase
-        assert ready['script_sha256'] == self.pair['controllers']['relay.py']
+        assert ready['script_sha256'] == self.pair['controllers'][layout_entry(self.pair, 'coordinator').name]
         assert ready['identity']['pid'] > 1 and ready['identity']['start'].isdigit()
-        assert ready['identity']['argv'][:3] == [sys.executable, '-B', str(self.control / 'relay.py')]
-        assert digest(self.control / 'relay.py') == ready['script_sha256']
+        assert ready['identity']['argv'][:3] == [sys.executable, '-B', str(layout_entry(self.pair, 'coordinator'))]
+        assert digest(layout_entry(self.pair, 'coordinator')) == ready['script_sha256']
         identity = self.guard.process_record(os.getpid())
         hard = self.guard.process_record(os.getppid())
-        expected_gate = [sys.executable, '-B', str(self.control / 'gate.py'), 'launch',
-            '--proofs', self.pair['proofs'], '--phase', self.phase, '--pin', self.pin, '--allocation', allocation]
+        expected_gate = [sys.executable, '-B', str(layout_entry(self.pair, 'gate')), 'launch',
+            '--proofs', self.pair['proofs'], '--prepared', publication_layout(self.pair)['prepared'],
+            '--phase', self.phase, '--pin', self.pin, '--allocation', allocation]
         assert hard['uid'] == os.getuid() and hard['exe'] == self.pair['timeout']
         assert digest(hard['exe']) == self.pair['timeout_sha256']
         assert hard['argv'] == [self.pair['timeout'], '--signal=TERM',
             '--kill-after=' + seconds_arg(self.limits['whole_kill']), seconds_arg(self.limits['whole_soft']), *expected_gate]
-        command = [sys.executable, '-B', str(self.control / 'pilot.py'), 'run', '--proofs',
-                   self.pair['proofs'], '--phase', self.phase, '--allocation', allocation]
+        command = self.pilot.publication_launch_command(self.pair, self.phase, allocation)
+        assert isinstance(command, list) and all(isinstance(item, str) for item in command)
+        assert str(layout_entry(self.pair, 'launcher')) in command
         now = time.monotonic()
+        queue_end = min(now + self.limits['queue'],
+            int(hard['start']) / os.sysconf('SC_CLK_TCK') + self.limits['queue'])
+        assert now < queue_end, 'queue budget already exhausted before ARM'
         # Seule l'identité RÉELLE Gate est publiée ; run_argv est explicitement un projet.
-        atomic_json(self.root / 'relay-bootstrap.json', {'identity': identity, 'run_argv': command,
+        atomic_json(self.path('bootstrap'), {'identity': identity, 'run_argv': command,
             'coordinator': ready, 'prepared_sha256': self.pin, 'hard_timeout': hard,
-            'gate_sha256': digest(self.control / 'gate.py'), 'transition_end': now + self.limits['control_cap'], 'queue_end': now + self.limits['queue']})
+            'gate_sha256': digest(layout_entry(self.pair, 'gate')), 'transition_end': now + self.limits['control_cap'], 'queue_end': queue_end})
         os.chdir(self.pair['proofs'])
-        os.execve(sys.executable, command, dict(os.environ, RUST_PROBE_TOOL_ROOT=self.pair['tool_root']))
+        os.execve(sys.executable, command, dict(os.environ, **self.pilot.publication_launch_environment(self.pair, self.phase)))
 
 
 
 def relay_main(entry_file):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--proofs', type=Path, required=True)
-    parser.add_argument('--phase', choices=['baseline', 'candidate'], required=True)
+    parser.add_argument('--prepared', type=Path)
+    parser.add_argument('--phase', required=True)
     parser.add_argument('--allocation', required=True)
     parser.add_argument('--host', default='luciepc')
     args = parser.parse_args()
-    path = args.proofs / 'prepared.json'
+    path = args.prepared if args.prepared is not None else args.proofs / 'prepared.json'
     pair, pin = json.loads(path.read_text()), digest(path)
-    assert args.host == 'luciepc'
+    assert args.host == publication_layout(pair)['execution_host']
+    assert str(path) == publication_layout(pair)['prepared']
+    assert str(args.proofs) == pair['proofs']
+    verify_components(pair)
     assert socket.gethostname() == pair['peer_host']
-    assert Path(entry_file).resolve() == Path(pair['control']) / 'relay.py'
+    assert Path(entry_file).resolve() == layout_entry(pair, 'coordinator')
     assert Path(__file__).resolve() == Path(pair['control']) / 'publication_relay.py'
     assert digest(__file__) == pair['controllers']['publication_relay.py']
-    assert digest(entry_file) == pair['controllers']['relay.py']
+    assert digest(entry_file) == pair['controllers'][layout_entry(pair, 'coordinator').name]
     limits = publication_limits(pair)
     assert pair['relay'] == {'queue_budget': limits['queue'], 'transfer_cap': limits['copy_cap'],
         'control_cap': limits['control_cap'], 'stop_reserve': limits['stop_reserve']}
@@ -1137,16 +1265,16 @@ def relay_main(entry_file):
     assert digest(peer_timeout['path']) == peer_timeout['sha256']
     local_outer = [peer_timeout['path'], '--signal=TERM', '--kill-after=' + seconds_arg(limits['whole_kill']), seconds_arg(limits['whole_soft']),
         sys.executable, '-B', str(Path(entry_file).resolve()), *sys.argv[1:]]
-    spec = importlib.util.spec_from_file_location('local_outer_guard', Path(pair['control']) / 'physical_guard.py')
+    spec = importlib.util.spec_from_file_location('local_outer_guard', layout_entry(pair, 'guard'))
     guard = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(guard)
     parent = guard.process_record(os.getppid())
     if parent['exe'] != peer_timeout['path'] or parent['argv'] != local_outer:
         os.execve(peer_timeout['path'], local_outer, os.environ.copy())
     assert parent['uid'] == os.getuid()
-    root = args.proofs / args.phase / 'relay-local'
+    root = Path(publication_layout(pair)['phases'][args.phase]['peer'])
     root.mkdir(mode=0o700)
-    atomic_json(root / 'local-hard-supervision.json', {'identity': parent, 'hardcap': limits['whole_soft'] + limits['whole_kill'],
+    atomic_json(Path(publication_layout(pair)['phases'][args.phase]['files']['peer_supervision']), {'identity': parent, 'hardcap': limits['whole_soft'] + limits['whole_kill'],
         'queue_budget': limits['queue'], 'timeout_sha256': peer_timeout['sha256']})
     transport = SSHTransport(pair, pin, args.phase, args.allocation, args.host, root, entry_file=entry_file)
     def stop(sig, frame):
@@ -1162,15 +1290,19 @@ def gate_main(gate_factory):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action', choices=['launch', 'snapshot', 'export', 'ack', 'abort'])
     parser.add_argument('--proofs', type=Path, required=True)
+    parser.add_argument('--prepared', type=Path)
     parser.add_argument('--pin', required=True)
-    parser.add_argument('--phase', choices=['baseline', 'candidate'], required=True)
+    parser.add_argument('--phase', required=True)
     parser.add_argument('--allocation')
-    parser.add_argument('--kind', choices=['build', 'runtime'])
-    parser.add_argument('--file', choices=['ledger', 'elf', 'all', 'ignored'])
+    parser.add_argument('--kind')
+    parser.add_argument('--file')
     args = parser.parse_args()
-    pair_path = args.proofs / 'prepared.json'
+    pair_path = args.prepared if args.prepared is not None else args.proofs / 'prepared.json'
     assert digest(pair_path) == args.pin
     pair = json.loads(pair_path.read_text())
+    assert str(pair_path) == publication_layout(pair)['prepared']
+    assert str(args.proofs) == pair['proofs']
+    verify_components(pair)
     os.chdir(args.proofs)
     gate = gate_factory(pair, args.pin, args.phase)
     if args.action == 'launch':

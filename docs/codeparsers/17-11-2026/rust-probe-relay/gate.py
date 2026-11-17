@@ -13,8 +13,9 @@ from relay import engine, atomic_json, digest
 
 
 def load_pilot(pair):
+    engine.verify_components(pair)
     os.environ['RUST_PROBE_TOOL_ROOT'] = pair['tool_root']
-    spec = importlib.util.spec_from_file_location('relay_gate_pilot', Path(pair['control']) / 'pilot.py')
+    spec = importlib.util.spec_from_file_location('relay_gate_pilot', engine.layout_entry(pair, 'launcher'))
     pilot = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(pilot)
     return pilot

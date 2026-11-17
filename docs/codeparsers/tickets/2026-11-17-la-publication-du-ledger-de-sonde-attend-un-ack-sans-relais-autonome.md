@@ -235,3 +235,24 @@ le layout global P/Q/S d089 est une proposition documentaire, aucun bridge
 armable. Revoir également les clamps queue/Common au budget physique original
 et la fermeture des modules avant qualification. Publication intermédiaire ne
 vaut pas demande d'exécution ni clôture du ticket.
+
+### Assemblage source repris sur demande C7 après les RO communes
+
+F494 reste intermédiaire non exécuté. Finir dans le noyau unique le layout
+déclaré (prepared, racines de phase/peer/scope, fichiers de rendez-vous, entrées
+par rôle), CLI sans labels Rust et vérification de tous les composants avant
+leur import/utilisation. Les codecs Rust construisent des descripteurs/argv,
+jamais une décision de vivacité. Garder les mêmes boucles et gardes communes.
+Porter les fixtures existantes sans changer les assertions ; une insertion de
+recette répétée hors setUp repérée en lecture est à retirer avant tout jeu.
+Les adaptateurs globaux ne sont pas inventés : le layout d089 et les limites
+restent une proposition à raccorder aux producteurs réels sous revue distincte.
+Aucun test, import de code de lot, compilation, observation proc ou activation.
+
+Candidat assemblé en source : layout générique P/Q/S, prepared configurable,
+CLI IDs de plan, rôles/argv indépendants, closure modules avant import,
+annulation mêmes chemins/observations, Common demandé depuis watchdog original
+moins marge. Documentation publication-core/03-layout-et-admission-source.md ;
+pins source/test publication-capacity-pins.json. Aucun import/parser/test joué.
+Revue totale puis GO CPU distinct nécessaires ; rôle global/adaptateur/Q réel
+encore absents, aucune qualification ni fermeture du ticket.

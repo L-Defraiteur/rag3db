@@ -1,0 +1,45 @@
+{
+  "state": "SOURCE_CANDIDATE_NOT_EXECUTED_NOT_ADMITTED",
+  "parent_commit": "f494d8ecbe3288696e7e558c0180aaa4570a2ee4",
+  "files": {
+    "extension/rag3weaver/scripts/publication_relay.py": "d5af9318a22a892ec51af3b28cc6b1b31273e41bb1f43997cc195f253695f986",
+    "docs/codeparsers/16-11-2026/rust-probe/pilot.py": "d642d51884c262a450092b07411bbddd14e0b541aab2063a901040ddec496571",
+    "docs/codeparsers/17-11-2026/rust-probe-relay/relay.py": "cd31ffcd3964562237eeb9d1ad823f6fe89aebc7db18991ac40fba4c0af00510",
+    "docs/codeparsers/17-11-2026/rust-probe-relay/gate.py": "c0344baf1024261b854a46b8506f4024abfcee4593365f14230a4962f3186a4b",
+    "docs/codeparsers/17-11-2026/rust-probe-relay/test_relay.py": "0647706c4148caa27001897bb2af8b5b51a85b2212b1854949631b792638c255",
+    "docs/codeparsers/17-11-2026/publication-core/test_publication_counterexamples.py": "62a5061ab037c71f4443657a5cc934400f77730028e994a7ca4cf21b23832793",
+    "docs/codeparsers/17-11-2026/publication-core/test_publication_windows.py": "8588e36e10ace6773fd5bf7bc262823162caf3e038994b6e06ca9ba5472527e3",
+    "docs/codeparsers/17-11-2026/publication-core/03-layout-et-admission-source.md": "439ec8b11bf960f9bc09d7e960bdfab3d8e33bd9bacb76c07879be13d868cf52"
+  },
+  "cpu_go": null,
+  "executed": false,
+  "runtime_prepared": null,
+  "global_adapter": null,
+  "preserved_proof_commits": {
+    "constant_36_and_red_3": "c9b84168e83caaf2aa083a53ad14b93da6c4330e",
+    "window_red_8": "7ee63776bbbd07f16bc854054281157ba2caae53"
+  },
+  "review_scope": [
+    "single_engine",
+    "ordered_plan_and_executable_map",
+    "window_owner_and_original_end",
+    "layout_cli_bootstrap_roles",
+    "limits_common_budget",
+    "module_closure",
+    "rust_adapters_and_36_3_8_fixtures"
+  ],
+  "future_cpu_suites": [
+    {
+      "path": "docs/codeparsers/17-11-2026/rust-probe-relay/test_relay.py",
+      "expected_cases": 36
+    },
+    {
+      "path": "docs/codeparsers/17-11-2026/publication-core/test_publication_counterexamples.py",
+      "expected_cases": 3
+    },
+    {
+      "path": "docs/codeparsers/17-11-2026/publication-core/test_publication_windows.py",
+      "expected_cases": 8
+    }
+  ]
+}

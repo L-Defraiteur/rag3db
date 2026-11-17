@@ -29,6 +29,23 @@ def default_limits():
         'operation_grace': 15, 'stop_reserve': 5, 'control_cap': 5, 'copy_cap': 30}
 
 
+def default_layout(pair):
+    proofs = Path(pair['proofs'])
+    names = {'bootstrap': 'relay-bootstrap.json', 'launch': 'relay-launch.json',
+        'authority': 'authority-path.json', 'controls': 'controls.json',
+        'outer_supervision': 'outer-supervision.json', 'common_command': 'common.command.json',
+        'allocation': 'allocation.json', 'first_red': 'first-red.json',
+        'abort': 'relay-abort.json', 'classification': 'classification.json',
+        'peer_ready': 'relay-local/ready.json', 'peer_supervision': 'relay-local/local-hard-supervision.json'}
+    return {'prepared': str(proofs / 'prepared.json'), 'execution_host': 'luciepc',
+        'entries': {'coordinator': 'relay.py', 'gate': 'gate.py', 'launcher': 'pilot.py',
+            'driver': 'pilot.py', 'common': 'confiner_validation.py', 'guard': 'physical_guard.py'},
+        'phases': {phase: {'root': str(proofs / phase), 'peer': str(proofs / phase / 'relay-local'),
+            'scope': str(proofs / phase / 'scope'),
+            'files': {key: str(proofs / phase / name) for key, name in names.items()}}
+            for phase in pair['publication_plans']}}
+
+
 def default_plan(pair, phase):
     config = pair['phases'][phase]
     binding = {'contract_id': 'rust-probe-ledger-v1', 'app': config['source'],
@@ -51,6 +68,8 @@ class Relay(engine.Relay):
                  queue_budget=300, transfer_cap=30, control_cap=5, stop_reserve=5,
                  hard_end=None, *, plan=None):
         declared = transport.plan if plan is None else plan
+        if hard_end is None:
+            hard_end = clock() + default_limits()['whole_soft']
         super().__init__(transport, root, clock, sleep, queue_budget=queue_budget,
             transfer_cap=transfer_cap, control_cap=control_cap, stop_reserve=stop_reserve,
             hard_end=hard_end, plan=declared, prepared_sha256=transport.prepared_sha256)

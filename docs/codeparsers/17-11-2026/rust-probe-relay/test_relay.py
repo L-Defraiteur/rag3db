@@ -216,6 +216,9 @@ class RelayTests(unittest.TestCase):
         transport = module.SSHTransport.__new__(module.SSHTransport)
         transport.pair = {'proofs': '/proofs', 'timeout': '/usr/bin/timeout',
             'publication_limits': module.default_limits()}
+        transport.pair['publication_plans'] = {'baseline': {}}
+        transport.pair['publication_layout'] = module.default_layout(transport.pair)
+        transport.pair['control'] = '/proofs/control'
         transport.control = Path('/proofs/control')
         transport.phase, transport.pin, transport.host = 'baseline', 'pin', 'luciepc'
         argv = transport.command('launch', '--allocation', 'GO')
@@ -241,6 +244,13 @@ class RelayTests(unittest.TestCase):
                 'publication_relay.py': module.digest(core_path)},
             'peer_timeout': {'path': str(timeout_path), 'sha256': module.digest(timeout_path)},
             'relay': {'queue_budget': 300, 'transfer_cap': 30, 'control_cap': 5, 'stop_reserve': 5}}
+        pair['publication_plans'] = {'baseline': {}}
+        pair['publication_layout'] = module.default_layout(pair)
+        for name in pair['publication_layout']['entries'].values():
+            path = control / name
+            if not path.exists():
+                path.write_bytes(b'synthetic controller, never executed')
+            pair['controllers'][name] = module.digest(path)
         (root / 'prepared.json').write_text(json.dumps(pair))
         argv = [str(relay_path), '--proofs', str(root), '--phase', 'baseline', '--allocation', 'GO']
         class ExecTransition(Exception):
@@ -366,7 +376,7 @@ class GateTests(unittest.TestCase):
             'script_sha256': 'common-sha'}
         self.receipt.write_text(json.dumps(self.authority))
         (scope / 'recette.json').write_text(json.dumps({'delai': 60}))
-        pair = {'control': str(self.control), 'proofs': str(self.root.parent),
+        pair = {'control': str(self.control), 'proofs': str(self.root),
             'publication_limits': module.default_limits(),
             'controllers': {'confiner_validation.py': 'common-sha',
                 'gate.py': module.digest(self.control / 'gate.py'),
@@ -392,6 +402,15 @@ class GateTests(unittest.TestCase):
         self.gate.root, self.gate.control = self.root, self.control
         template = FakeTransport(Clock())
         self.gate.plan = implementation.validate_plan(template.plan)
+        pair['publication_plans'] = {'baseline': template.plan}
+        pair['proofs'] = str(self.root)
+        pair['publication_layout'] = module.default_layout(pair)
+        paths = pair['publication_layout']['phases']['baseline']
+        prefix = Path(pair['proofs']) / 'baseline'
+        for key in ('root', 'peer', 'scope'):
+            paths[key] = str(self.root / Path(paths[key]).relative_to(prefix))
+        paths['files'] = {key: str(self.root / Path(value).relative_to(prefix))
+            for key, value in paths['files'].items()}
         self.gate.guard = SimpleNamespace(process_record=lambda pid: self.processes[pid])
         def phase_info(*args):
             data = json.loads((self.root / 'authority-path.json').read_text())
@@ -402,6 +421,12 @@ class GateTests(unittest.TestCase):
                 deadline_argv=timeout_args, original_common_end=9060)
         self.gate.pilot = SimpleNamespace(
             publication_phase_info=phase_info,
+            publication_control_roles=lambda *args: {'outer-timeout': timeout_args},
+            publication_deadline_info=lambda *args: {'role': 'outer-timeout', 'argv': timeout_args},
+            publication_launch_command=lambda pair, phase, allocation: [self.gate_module.sys.executable,
+                '-B', str(self.control / 'pilot.py'), 'run', '--proofs', pair['proofs'],
+                '--phase', phase, '--allocation', allocation],
+            publication_launch_environment=lambda *args: {},
             outer_command=lambda *args: ['poste', 'lourd', *timeout_args])
         # Données de processus seulement : bootstrap et ses gardes restent réels.
         hard = dict(base, pid=8, start=str(9000 * os.sysconf('SC_CLK_TCK')), parent=1,
@@ -437,7 +462,6 @@ class GateTests(unittest.TestCase):
     def test_ended_authority_refuses_active_gate(self):
         self.authority['etat'] = 'termine'
         self.receipt.write_text(json.dumps(self.authority))
-        (scope / 'recette.json').write_text(json.dumps({'delai': 60}))
         with self.assertRaises(AssertionError):
             self.gate.active()
 
@@ -449,7 +473,6 @@ class GateTests(unittest.TestCase):
     def test_pc_expired_refuses_active_gate(self):
         self.authority['echeance'] = 9010
         self.receipt.write_text(json.dumps(self.authority))
-        (scope / 'recette.json').write_text(json.dumps({'delai': 60}))
         with self.assertRaises(AssertionError):
             self.gate.active()
 
@@ -465,6 +488,11 @@ class GateTests(unittest.TestCase):
         import os
         self.gate.root = self.root / 'fresh-phase'
         self.gate.root.mkdir()
+        paths = self.gate.pair['publication_layout']['phases']['baseline']
+        for key in ('root', 'peer', 'scope'):
+            paths[key] = str(self.gate.root / Path(paths[key]).relative_to(self.root))
+        paths['files'] = {key: str(self.gate.root / Path(value).relative_to(self.root))
+            for key, value in paths['files'].items()}
         relay = self.control / 'relay.py'
         relay.write_text('synthetic relay')
         self.gate.pair['peer_host'] = 'peer'
@@ -476,9 +504,11 @@ class GateTests(unittest.TestCase):
         self.processes[os.getpid()] = identity
         prefix = ['/timeout', '--signal=TERM', '--kill-after=2s', '2098s']
         args = [self.gate_module.sys.executable, '-B', str(self.control / 'gate.py'), 'launch',
-            '--proofs', self.gate.pair['proofs'], '--phase', 'baseline', '--pin', '1' * 64, '--allocation', 'GO']
+            '--proofs', self.gate.pair['proofs'], '--prepared',
+            self.gate.pair['publication_layout']['prepared'],
+            '--phase', 'baseline', '--pin', '1' * 64, '--allocation', 'GO']
         self.processes[os.getppid()] = dict(identity, pid=os.getppid(), parent=1,
-            argv=prefix + args, exe='/timeout')
+            start=str(9000 * os.sysconf('SC_CLK_TCK')), argv=prefix + args, exe='/timeout')
         ready = {'host': 'peer', 'identity': {'uid': os.getuid(), 'pid': 123, 'start': '1234',
                  'argv': [self.gate_module.sys.executable, '-B', str(relay)]},
                  'prepared_sha256': '1' * 64, 'phase': 'baseline', 'script_sha256': module.digest(relay)}

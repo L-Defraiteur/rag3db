@@ -120,3 +120,11 @@ bootstrap/roles historiquement nommés), la revue des bornes et de la fermeture
 des modules, puis RO et GO CPU distinct avant les jeux 36/3/8. Ne pas utiliser
 ces fonctions comme bridge Archi livré. Le hachage d'un ELF copié et acquitté
 ne constitue pas une preuve PID/start/exe de son exécution effective.
+
+## Assemblage source du layout et des admissions
+
+Le candidat suivant f494 consomme désormais chemins/entrées/rôles déclarés et
+CLI sans labels métier. Module closure et budget Common sont communs, codecs
+Rust sans boucle de publication. Détails, limites et état non exécuté dans
+03-layout-et-admission-source.md et publication-capacity-pins.json. Aucun
+adaptateur global opérationnel, contexte Q ou résultat nouveau n'est inféré.
