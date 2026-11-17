@@ -101,3 +101,13 @@ fsyncerror sans terminate/wait→2FAIL attendus/setupgardé. V2all3PASS attendus
 NONOBSERVÉS. Aucun import/runpy/test/proc/SSH/T/corpus par Recherche, Qpins
 non rehashés par elle. Aucun OSkill/cleanupdistant/300 qualifié. PaquetPCv2
 non matérialisé. GO distinct C7 avant chaque appel ; HOLD047 conservé.
+
+GO C7-LUCIVY-NEW-RED-15B2-17nov60 consommé une fois : REFUS2ERRORharnais,
+0FAILsémantique, rc1,0,088187572s. Signature Path.open(mode_arg,**kwargs)
+du double reçoit mode nommé de pathlib.read_text puis le redonne positionnel :
+TypeError multiple values'mode' avantsetup. Aucune observation créée. STOP0retry,
+fixe51a9NONexécutée. Bruts/temps/rc/troissources conservés2postesAVANTcorrection,
+PC watchdog-new-probes-error-17nov-v1/5SHArelus444 ; transfertSSHpreuvesseulement.
+Rapport17/10. Défaut harnais à corriger sousce ticket (Lucivy), nouveaupin/RO/
+GO requis pour retenter les deux nouveaux probes ; GO15B2 épuisé. Aucun rouge
+nouveau ni vert acquis ; EC4ancien valide/oldQ/T/nativeHOLD inchangés.
