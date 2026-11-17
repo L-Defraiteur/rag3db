@@ -124,3 +124,25 @@ Préparation d'implémentation désormais autorisée par C7, après cette conser
 de preuves. Les trois réserves R de couverture restent ouvertes ; nouveaux
 témoins à publier avant implémentation dédiée, nouvelle RO et GO CPU distinct
 avant un éventuel vert. Aucun GO SQL/fixture déduit.
+
+
+## Témoins de réserves R prépubliés avant implémentation
+
+19 tests source désormais, tous nouveaux témoins NON JOUÉS. Le rouge acquis
+reste celui de l'ancien paquet a5c2 privé immuable, jamais transféré au nouveau
+test_runner. La recette red-baseline est HISTORIQUE et ses pins ne sont pas
+ceux de ces tests complétés ; elle ne sera pas rejouée. runner.py reste la
+baseline au refus explicite, aucune implémentation anticipée dans ce commit.
+
+Expiration : wrapper de sync_directory appelle le vrai fsync puis franchit
+END du faux clock ; le témoin exige que cette frontière ait réellement été
+franchie et un refusal non positif. Ce n'est plus le quatrième phase_check.
+Postcheck : désaccord PID RO/observer, mauvais PID cible, application originale
+et suffixe:check, user/base de la session. Capture : flood stderr, SIGTERM
+ignoré, parent fini avant EOF détenu par petit-enfant privé borné .35s ; ces
+futurs tests lancent de vrais enfants Python sous recette/GO distincts.
+Publication : captures non reaped/partielles/tronquées/tardives/timedout/code
+booléen refusées avant observation positive. Injection de métadonnées négatives
+ne prouve pas à elle seule le nettoyage OS, à qualifier par les témoins réels.
+Ces témoins ne ferment aucune réserve tant qu'ils ne sont pas passés sur le
+raccord implémenté ; relecture source demandée avant future qualification.

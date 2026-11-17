@@ -12,6 +12,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 
 HERE = Path(__file__).resolve().parent
 spec = importlib.util.spec_from_file_location('psql_runner', HERE/'runner.py')
@@ -86,6 +87,18 @@ class Profiles(unittest.TestCase):
             with self.subTest(bad=bad),self.assertRaises(ValueError):
                 runner.validate_session(encode(ro,dict(row,**bad)),profile(),identity=identity)
 
+    def test_postcheck_session_pid_application_and_target_binding(self):
+        p=profile();identity=rows(p)[1];ro,row=rows(p,check=True,identity=identity)
+        variants=[(dict(ro,backend_pid=303),row),
+            (ro,dict(row,backend_pid=999)),
+            (ro,dict(row,application_name='g-pg-'+('c'*32))),
+            (ro,dict(row,observer_application_name='g-pg-'+p['nonce'])),
+            (dict(ro,database='another_database'),row),
+            (dict(ro,user='another_user'),row)]
+        for ro_bad,row_bad in variants:
+            with self.subTest(ro=ro_bad,row=row_bad),self.assertRaises(ValueError):
+                runner.validate_session(encode(ro_bad,row_bad),p,identity=identity)
+
 
 class RealCapture(unittest.TestCase):
     def call(self,code,*,stdin=b'',seconds=1,env=None):
@@ -125,24 +138,62 @@ class RealCapture(unittest.TestCase):
             runner.capture([sys.executable,'-I','-c','raise Exception("must not run")'],
                 env={},stdin=b'',deadline=time.monotonic()-1)
 
+    def test_stderr_flood_is_bounded_and_refused(self):
+        with self.assertRaises(runner.CaptureRefused) as ctx:
+            self.call('import os;os.write(2,b"x"*1000000)')
+        rec=ctx.exception.record
+        self.assertIs(rec['truncated'],True);self.assertIs(rec['reaped'],True)
+        self.assertLessEqual(len(rec['stderr']),65536)
 
-def fake_observe(out, *, expire=False):
+    def test_ignoring_term_does_not_escape_original_end(self):
+        end=time.monotonic()+.8
+        with self.assertRaises(runner.CaptureRefused) as ctx:
+            runner.capture([sys.executable,'-I','-c',
+                'import signal,time;signal.signal(signal.SIGTERM,signal.SIG_IGN);time.sleep(30)'],
+                env=dict(PATH='/usr/bin:/bin'),stdin=b'',deadline=end)
+        self.assertIs(ctx.exception.record['reaped'],True)
+        self.assertLessEqual(ctx.exception.record['ended_monotonic'],end)
+        with self.assertRaises(ProcessLookupError):os.kill(ctx.exception.record['pid'],0)
+
+    def test_child_exit_with_pipe_retained_is_partial_not_success(self):
+        # Futur CPU distinct : vrai petit-enfant privé, durée bornée .35 s.
+        # Le parent sort0 avant EOF ; le détenteur finit seul avant END.
+        code=('import os,time;pid=os.fork();'
+              'time.sleep(.35) if pid==0 else None;os._exit(0)')
+        with self.assertRaises(runner.CaptureRefused) as ctx:
+            self.call(code,seconds=1)
+        self.assertIs(ctx.exception.record['partial'],True)
+        self.assertIs(ctx.exception.record['reaped'],True)
+
+
+def fake_observe(out, *, expire=False, capture_patch=None):
     # Même raccord observe/publisher que le client réel ; seul le transport est faux.
     now=[100.0]; p=profile();ready=dict(active=True,first_red=False,common_end=120.0)
     def factory(deadline):
         def session(identity=None):
             ro,row=rows(p,check=identity is not None,identity=identity)
             now[0]+=.1
-            return dict(stdout=encode(ro,row),stderr=b'',returncode=0,reaped=True,
+            rec=dict(stdout=encode(ro,row),stderr=b'',returncode=0,reaped=True,
                 partial=False,truncated=False,timed_out=False,pid=900+(identity is not None),
                 started_monotonic=now[0]-.1,ended_monotonic=now[0])
+            rec.update(capture_patch or {})
+            return rec
         return session
-    calls=[0]
-    def phase_check():
-        calls[0]+=1
-        if expire and calls[0]>=4:now[0]=106.0
-        return ready.copy()
-    return runner.observe(p,out,session_factory=factory,clock=lambda:now[0],phase_check=phase_check)
+    def phase_check():return ready.copy()
+    if not expire:
+        return runner.observe(p,out,session_factory=factory,clock=lambda:now[0],phase_check=phase_check)
+    actual_sync=runner.sync_directory
+    crossed=[False]
+    def real_fsync_then_expire(path):
+        actual_sync(path)
+        crossed[0]=True
+        now[0]=106.0
+    try:
+        with patch.object(runner,'sync_directory',side_effect=real_fsync_then_expire):
+            return runner.observe(p,out,session_factory=factory,clock=lambda:now[0],phase_check=phase_check)
+    finally:
+        if not crossed[0]:raise AssertionError('expiration must cross real publisher fsync')
+
 
 
 class WholeJob(unittest.TestCase):
@@ -167,6 +218,16 @@ class WholeJob(unittest.TestCase):
             refusal=json.loads((out/'refusal.json').read_text())
             self.assertIs(refusal['grant_authorized'],False)
             self.assertNotIn('artifact_sha256',refusal)
+
+    def test_cleanup_or_late_capture_never_publishes_positive(self):
+        for bad in [dict(reaped=False),dict(ended_monotonic=106.0),dict(partial=True),
+                    dict(truncated=True),dict(timed_out=True),dict(returncode=True)]:
+            with self.subTest(bad=bad),tempfile.TemporaryDirectory() as temp:
+                out=Path(temp)/'proof'
+                with self.assertRaises(ValueError):fake_observe(out,capture_patch=bad)
+                refusal=json.loads((out/'refusal.json').read_text())
+                self.assertIs(refusal['grant_authorized'],False)
+                self.assertFalse((out/'observation.json').exists())
 
 
 if __name__=='__main__':unittest.main()

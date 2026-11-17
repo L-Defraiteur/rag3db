@@ -902,3 +902,13 @@ Préparation d'implémentation désormais autorisée par C7, après cette conser
 de preuves. Les trois réserves R de couverture restent ouvertes ; nouveaux
 témoins à publier avant implémentation dédiée, nouvelle RO et GO CPU distinct
 avant un éventuel vert. Aucun GO SQL/fixture déduit.
+
+
+### Témoins supplémentaires R à prépublier avant implémentation dédiée
+
+Préparation SOURCE seule après rouge métier conservé : expiration déclenchée
+après le vrai appel fsync du publisher, postcheck PID/app/cible, stderr flood,
+EOF retenu par enfant privé borné, SIGTERM ignoré, capture non reaped ou hors
+END. Tous nouveaux témoins NON JOUÉS, aucun incident runtime allégué.
+Le nettoyage d'arbre réel devra être qualifié ; ces assertions source ne sont
+pas une preuve de quiescence. Baseline inchangée jusqu'à publication des tests.
