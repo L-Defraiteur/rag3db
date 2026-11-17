@@ -154,7 +154,10 @@ Le départage stable nouveau99fef doit être couvert, pas hérité du CLI927.
 3. **Fenêtre G distincte** : G décide hold/arrêt contrôlé et atteste services ET
    sockets sans réveil implicite7970. Management hors Common, consommateur
    nonce/identités/validité sous portée privée, pas de bus user réinjecté.
-   Source/runtime/retour72h frais avant snapshot/copie/écriture. Aucun ancien
+   Préflight frais source/runtime, outils de retour et engagement de rétention
+   avant création du snapshot ; puis reçu d'identités et inventaires snapshot/
+   RET APRÈS snapshot cohérent et AVANT writer, avec rétention72h après opération.
+   Aucune attestation d'un snapshot futur n'est supposée avant sa création. Aucun ancien
    gatefresh733,API13:37,backends[] ou hold ne vaut état actuel.
 4. **Diagnostic froid sur nouvelle copie du snapshot G** : identités/ensemble
    files/dirs/UID/modes/SHA, schéma dynamique REL0/multiplicité, deux sens,
