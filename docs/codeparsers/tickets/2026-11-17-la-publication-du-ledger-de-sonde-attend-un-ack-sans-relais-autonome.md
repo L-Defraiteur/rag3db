@@ -123,3 +123,16 @@ rejoués. Bruts+manifest2hôtes avant tout correctif,
 manifest90fbc0af8a6c3fbd78c6cd9ba000f0397af97944f16ec4c452f532ab1ecb9546,
 resultc4d79cd1ffb93b5e0806688fdb549522067b1258449d7131c0a3966a20a407df.
 Aucun GO vert/natif implicite ; préparation de correction groupée seulement.
+
+## Lot vertD45 : trente-six témoins CPU et RO favorable préparation
+
+GO C7-PARSERS-RELAY-GREEN-D45-17nov60, source exacteD45 propre/publiée, UNEfois
+commande58+2/-f depuis dossier publié :36/36exécutés,0FAIL/ERROR/skip,rc0,
+0,187111s externe/0,095s unittest. Bruts+manifest2hôtes
+~/.cache/codeparsers-notes/rust-relay-green-d45aefbdf8/,
+manifestd8270ccf4d7ddb9ac1a425dbee6da5fc673e8928ea95e16bac27631df6688e0f.
+Rapport03-resultats-qualification-cpu.md sur brancheDOCdistincte, D45/P05inchangés.
+RO TOTALE BancP05favorablePRÉPA reçue ; pas de qualification SSH/native ni GO.
+Tous rouges précédents et erreur de fixture conservés. Ce ticket reste ouvert
+jusqu'à qualification du raccord réel sous allocation distincte ; P02-P04 non
+réarmés, P05prototype jamais armé. Aucun carrycustom ni globale automatique.
