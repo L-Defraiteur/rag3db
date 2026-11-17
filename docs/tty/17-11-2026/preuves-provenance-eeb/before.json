@@ -1,0 +1,20 @@
+{
+  "source": "eeb635a07e9bea8495507a832aa58f3a6059ea32",
+  "status": "",
+  "pins": {
+    "test_qualification_provenance.py": "564393fa107da39aa97259bcacd1367c3031fac75d029eaea1be8db26ce476aa",
+    "test_qualification_review.py": "d998cea23ccb9a92a555134fae983769020cb027da74dd37546bda952144fb6f",
+    "qualification_driver.py": "2069707415f525473b06d1524d0956526d41d06934fad6eca8d83e41aacdb951"
+  },
+  "allocation": "C7-TTY-PROVENANCE-RED-EEB-17nov60",
+  "cwd": "/home/lucied/git_workspaces/cx-tty-english-aliases-union-99",
+  "argv": [
+    "timeout",
+    "--signal=TERM",
+    "--kill-after=2s",
+    "58s",
+    "python3",
+    "-B",
+    "docs/tty/17-11-2026/test_qualification_provenance.py"
+  ]
+}

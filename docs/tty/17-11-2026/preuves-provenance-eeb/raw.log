@@ -1,0 +1,55 @@
+test_duplicate_name_cannot_replace_a_missing_test (original_eight.ReviewWitnesses.test_duplicate_name_cannot_replace_a_missing_test) ... ok
+test_foreign_filets_cannot_precede_the_right_tty_names (original_eight.ReviewWitnesses.test_foreign_filets_cannot_precede_the_right_tty_names) ... ok
+test_four_other_names_cannot_qualify_tty (original_eight.ReviewWitnesses.test_four_other_names_cannot_qualify_tty) ... ok
+test_full_filets_then_tty_is_a_positive_control (original_eight.ReviewWitnesses.test_full_filets_then_tty_is_a_positive_control) ... ok
+test_native_failure_stops_before_backend_continuation (original_eight.ReviewWitnesses.test_native_failure_stops_before_backend_continuation) ... ok
+test_positive_filets_cannot_mask_zero_test_suite (original_eight.ReviewWitnesses.test_positive_filets_cannot_mask_zero_test_suite) ... ok
+test_should_panic_text_is_not_a_native_failure (original_eight.ReviewWitnesses.test_should_panic_text_is_not_a_native_failure) ... ok
+test_suite_cannot_run_before_its_filets (original_eight.ReviewWitnesses.test_suite_cannot_run_before_its_filets) ... ok
+test_content_changed_after_execution_is_refused (__main__.ProvenanceWitnesses.test_content_changed_after_execution_is_refused) ... FAIL
+test_exact_eight_feature_games_are_a_positive_control (__main__.ProvenanceWitnesses.test_exact_eight_feature_games_are_a_positive_control) ... ok
+test_extra_feature_game_cannot_hide_before_the_eight_of_eight_tail (__main__.ProvenanceWitnesses.test_extra_feature_game_cannot_hide_before_the_eight_of_eight_tail) ... FAIL
+test_restoring_source_path_cannot_erase_wrong_executed_contents (__main__.ProvenanceWitnesses.test_restoring_source_path_cannot_erase_wrong_executed_contents) ... FAIL
+test_same_catalogued_and_executed_contents_are_a_positive_control (__main__.ProvenanceWitnesses.test_same_catalogued_and_executed_contents_are_a_positive_control) ... ok
+test_same_path_and_names_cannot_replace_the_catalogued_elf (__main__.ProvenanceWitnesses.test_same_path_and_names_cannot_replace_the_catalogued_elf) ... FAIL
+
+======================================================================
+FAIL: test_content_changed_after_execution_is_refused (__main__.ProvenanceWitnesses.test_content_changed_after_execution_is_refused)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/lucied/git_workspaces/cx-tty-english-aliases-union-99/docs/tty/17-11-2026/test_qualification_provenance.py", line 50, in test_content_changed_after_execution_is_refused
+    with self.assertRaises(AssertionError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+AssertionError: AssertionError not raised
+
+======================================================================
+FAIL: test_extra_feature_game_cannot_hide_before_the_eight_of_eight_tail (__main__.ProvenanceWitnesses.test_extra_feature_game_cannot_hide_before_the_eight_of_eight_tail)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/lucied/git_workspaces/cx-tty-english-aliases-union-99/docs/tty/17-11-2026/test_qualification_provenance.py", line 59, in test_extra_feature_game_cannot_hide_before_the_eight_of_eight_tail
+    with self.assertRaises(AssertionError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+AssertionError: AssertionError not raised
+
+======================================================================
+FAIL: test_restoring_source_path_cannot_erase_wrong_executed_contents (__main__.ProvenanceWitnesses.test_restoring_source_path_cannot_erase_wrong_executed_contents)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/lucied/git_workspaces/cx-tty-english-aliases-union-99/docs/tty/17-11-2026/test_qualification_provenance.py", line 46, in test_restoring_source_path_cannot_erase_wrong_executed_contents
+    with self.assertRaises(AssertionError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+AssertionError: AssertionError not raised
+
+======================================================================
+FAIL: test_same_path_and_names_cannot_replace_the_catalogued_elf (__main__.ProvenanceWitnesses.test_same_path_and_names_cannot_replace_the_catalogued_elf)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/lucied/git_workspaces/cx-tty-english-aliases-union-99/docs/tty/17-11-2026/test_qualification_provenance.py", line 42, in test_same_path_and_names_cannot_replace_the_catalogued_elf
+    with self.assertRaises(AssertionError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+AssertionError: AssertionError not raised
+
+----------------------------------------------------------------------
+Ran 14 tests in 0.053s
+
+FAILED (failures=4)

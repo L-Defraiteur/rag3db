@@ -1,0 +1,14 @@
+{
+  "verdict": "ROUGE_PROVENANCE_F8_ATTENDU",
+  "rc": 1,
+  "start": 876895.827184342,
+  "finished": 876895.923017168,
+  "elapsed": 0.09583282598759979,
+  "counts": {
+    "ok": 10,
+    "FAIL": 4,
+    "ERROR": 0,
+    "skipped": 0
+  },
+  "source": "eeb635a07e9bea8495507a832aa58f3a6059ea32"
+}

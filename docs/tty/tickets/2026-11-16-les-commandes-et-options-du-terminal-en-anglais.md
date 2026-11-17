@@ -724,3 +724,11 @@ même chemin, restauration et mutationpost sont fakes, pas reçus runtime.
 Prévision14cas=10PASS4FAIL0ERROR0skip, aucune exécution ; ASTseulement.
 Détail docs/tty/17-11-2026/07-temoins-provenance-et-f8.md ; pins/RO/GOCPU
 distinct avant rouges puisfix ; Qv2/Qv3INACTIFSpréservés, aucunGO3600.
+
+### Baseline14 réelle :10PASS4FAILattendus, pas qualification native
+
+GO C7-TTY-PROVENANCE-RED-EEB-17nov60/sourceeeb635a07e, uneinvocation.
+8anciens+2positifsnouveaux passent ;3refusELF+1F8extra échouent surrefus
+nonlevé,0ERROR0skip/rc1,0,095833s. Preuves/rapport08 ; RAW2hostsréhash
+438f1fd6…a9737e. Aucuncoupon8isolé/retry/fixaprèsrouge/CPUgreen/native/service
+ouactivation. Suite groupéeR2 aprèsROpreuves etnouveauxpins/RO/GOdistincts.

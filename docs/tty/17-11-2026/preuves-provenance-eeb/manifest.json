@@ -1,0 +1,10 @@
+{
+  "source": "eeb635a07e9bea8495507a832aa58f3a6059ea32",
+  "archive_two_hosts": "archives/cx-tty-provenance-red-eeb/evidence.tar",
+  "archive_sha256": "438f1fd61280bb877295ea712c70b251801e9c43c1a21ee6b4fc42470ea9737e",
+  "files": {
+    "before.json": "0c8c0ee669628aa43edf47bd8caa2c5f5395579f9cb02ce366e64ddbaeca7418",
+    "raw.log": "7b8172ea275bb21187cd3942cfe21feb080cecff2fc229fac144d8639858e703",
+    "result.json": "526acef3087b763a8093fe0d59549951b41b7762ab244e76e28cb638e2ac4cdb"
+  }
+}
