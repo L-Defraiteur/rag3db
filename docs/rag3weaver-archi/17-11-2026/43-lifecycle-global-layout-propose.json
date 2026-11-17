@@ -1,0 +1,332 @@
+{
+  "schema_version": 1,
+  "kind": "LifecycleGlobal-preparation-layout-only",
+  "run_authorized": false,
+  "paths_created": false,
+  "source_app": "f1e8a8d502614d10f7cdb40eaea330f08b5d3f37",
+  "frozen_native_pilot": "229b397d8d1cb28b8ac3075479e49a1ab72b400b",
+  "interface_commit": "00e2084673e02b37a1d7ac3314015c80ca9c96e7",
+  "future_pilot_sha40": null,
+  "roots": {
+    "P": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-v2",
+    "Q": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-controller-r2",
+    "S": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-v2/supervision",
+    "control": "/home/lucied/git_workspaces/rag3db-cx-archi-global-pilot-r3",
+    "source": "/home/lucied/git_workspaces/rag3db-cx-archi-doc-supervisor-r1",
+    "crate": "/home/lucied/git_workspaces/rag3db-cx-archi-doc-supervisor-r1/extension/rag3weaver",
+    "T": "/home/lucied/.cache/rag3weaver-build/target-cx-archi-pas-va-au-bout-r2/native-doc-ea670-v1",
+    "task_targets": "/home/lucied/.cache/rag3weaver-build/target-cx-archi-pas-va-au-bout-r2/task-targets",
+    "private_runtime": "/home/lucied/.cache/rag3weaver-build/pg9"
+  },
+  "approved_files": {
+    "prepared": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-controller-r2/configuration.json",
+    "launch": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-controller-r2/launch.json",
+    "whole_budget": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-v2/whole-budget.json",
+    "common_pointer": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-v2/authority-path.json",
+    "driver_after_exec": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-v2/driver-entered.json",
+    "supervisor_observation": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-v2/supervisor-observed.json",
+    "controls": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-v2/controls.json",
+    "operation_budget": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-v2/operation-budget.json",
+    "initial_guard_complete": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-v2/preflight-guard-complete.json",
+    "first_red": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-v2/first-red.json",
+    "driver_result": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-v2/driver-result.json",
+    "compose_result": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-v2/result.json",
+    "peer_ready": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-v2/publication-peer-ready.json"
+  },
+  "authority_selector": {
+    "pointer_file": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-v2/authority-path.json",
+    "pointer_key": "path",
+    "scope_parent": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-v2/supervision",
+    "scope_basename_pattern": "validation-[a-z0-9_]+",
+    "authority_leaf": "autorite.json",
+    "recipe_leaf": "recette.json",
+    "verdict_leaf": "verdict.json",
+    "children_leaf": "enfants.json",
+    "lookup": "bound pointer only, never glob or newest",
+    "required_owner_uid": 1000,
+    "mode": "private regular no links, validated by common lifecycle",
+    "export_raw_authority": false,
+    "export_token": false
+  },
+  "entry_constructors": {
+    "launcher": {
+      "argv": [
+        "python3",
+        "/home/lucied/git_workspaces/rag3db-cx-archi-global-pilot-r3/docs/rag3weaver-archi/16-11-2026/global-pass/qualify.py",
+        "--launch",
+        {
+          "runtime_field": "future_pilot_sha40"
+        }
+      ],
+      "exe_role": "python3",
+      "entry": "/home/lucied/git_workspaces/rag3db-cx-archi-global-pilot-r3/docs/rag3weaver-archi/16-11-2026/global-pass/qualify.py",
+      "cwd": "/var/tmp",
+      "placement": "outside-common ancestor"
+    },
+    "outer_watchdog": {
+      "argv": [
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=15s",
+        "7440s",
+        {
+          "runtime_field": "python_argv0"
+        },
+        "/home/lucied/.cache/rag3weaver-build/cx-archi-global-controller-r2/qualify.py",
+        "--arm",
+        {
+          "runtime_field": "future_pilot_sha40"
+        }
+      ],
+      "exe_role": "timeout",
+      "entry": null,
+      "cwd": "/var/tmp",
+      "placement": "outside-common ancestor; before queue and ARM"
+    },
+    "poste": {
+      "argv": [
+        "/bin/sh",
+        "/home/lucied/git_workspaces/rag3db-cx-archi-doc-supervisor-r1/extension/rag3weaver/scripts/poste",
+        "mesure",
+        {
+          "runtime_field": "python_argv0"
+        },
+        "/home/lucied/.cache/rag3weaver-build/cx-archi-global-controller-r2/qualify.py",
+        "--admit",
+        {
+          "runtime_field": "future_pilot_sha40"
+        }
+      ],
+      "exe_role": "resolved-poste-shebang",
+      "entry": "/home/lucied/git_workspaces/rag3db-cx-archi-doc-supervisor-r1/extension/rag3weaver/scripts/poste",
+      "cwd": "/var/tmp",
+      "placement": "true exclusive poste ancestor"
+    },
+    "admitter": {
+      "argv": [
+        {
+          "runtime_field": "python_argv0"
+        },
+        "/home/lucied/.cache/rag3weaver-build/cx-archi-global-controller-r2/qualify.py",
+        "--admit",
+        {
+          "runtime_field": "future_pilot_sha40"
+        }
+      ],
+      "exe_role": "python3",
+      "entry": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-controller-r2/qualify.py",
+      "cwd": "/var/tmp",
+      "placement": "true-poste child before Common"
+    },
+    "common_supervisor": {
+      "argv": [
+        {
+          "runtime_field": "python_argv0"
+        },
+        "/home/lucied/.cache/rag3weaver-build/cx-archi-global-controller-r2/confiner_validation.py",
+        "lancer",
+        "--mode",
+        "mesure",
+        "--delai",
+        {
+          "runtime_field": "common_requested_seconds"
+        },
+        "--preuves",
+        "/home/lucied/.cache/rag3weaver-build/cx-archi-global-v2/supervision",
+        "--",
+        "bash",
+        "-c",
+        ". \"$1\"; exporter_la_lib || exit 2; shift; exec \"$@\"",
+        "driver-sdk",
+        "/home/lucied/git_workspaces/rag3db-cx-archi-doc-supervisor-r1/extension/rag3weaver/scripts/lib_du_magasin.sh",
+        {
+          "runtime_field": "python_argv0"
+        },
+        "/home/lucied/.cache/rag3weaver-build/cx-archi-global-controller-r2/qualify.py",
+        "--driver",
+        {
+          "runtime_field": "future_pilot_sha40"
+        }
+      ],
+      "exe_role": "python3",
+      "entry": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-controller-r2/confiner_validation.py",
+      "cwd": "/var/tmp",
+      "placement": "Common authority owner; active process in its declared cgroup"
+    },
+    "driver": {
+      "argv": [
+        {
+          "runtime_field": "python_argv0"
+        },
+        "/home/lucied/.cache/rag3weaver-build/cx-archi-global-controller-r2/qualify.py",
+        "--driver",
+        {
+          "runtime_field": "future_pilot_sha40"
+        }
+      ],
+      "exe_role": "python3",
+      "entry": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-controller-r2/qualify.py",
+      "cwd": "/var/tmp",
+      "placement": "same Common cgroup, below dbus-run-session and SDK shell exec"
+    }
+  },
+  "window_events": {
+    "global": {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-v2/global-window.json",
+      "owner_role": "driver",
+      "event_kind": "publication-wait-start",
+      "sequence": 0,
+      "ledger_locator": "global-ledger.json",
+      "window_seconds": 90
+    },
+    "agent-red1": {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-v2/agent-red1-window.json",
+      "owner_role": "driver",
+      "event_kind": "publication-wait-start",
+      "sequence": 1,
+      "ledger_locator": "unique Broker stage admission identity -> identity-ledger.json",
+      "window_seconds": 90
+    },
+    "agent-green1": {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-v2/agent-green1-window.json",
+      "owner_role": "driver",
+      "event_kind": "publication-wait-start",
+      "sequence": 2,
+      "ledger_locator": "unique Broker stage admission identity -> identity-ledger.json",
+      "window_seconds": 90
+    },
+    "review1": {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-v2/review1-window.json",
+      "owner_role": "driver",
+      "event_kind": "publication-wait-start",
+      "sequence": 3,
+      "ledger_locator": "unique Broker stage admission identity -> identity-ledger.json",
+      "window_seconds": 90
+    }
+  },
+  "required_identity_fields": [
+    "pid",
+    "ppid",
+    "start_ticks",
+    "uid",
+    "cgroup",
+    "exe",
+    "exe_sha256",
+    "argv",
+    "cwd",
+    "entry_path",
+    "entry_sha256",
+    "component_hashes",
+    "state",
+    "observed_monotonic"
+  ],
+  "runtime_fields": {
+    "python_argv0": null,
+    "python_exe_sha256": null,
+    "common_requested_seconds": null,
+    "allocation": null,
+    "execution_id": null,
+    "authority_path": null,
+    "authority_pid": null,
+    "authority_start_ticks": null,
+    "common_cgroup": null,
+    "common_end_monotonic": null,
+    "whole_soft_end_monotonic": null,
+    "whole_hard_end_monotonic": null,
+    "driver_pid": null,
+    "driver_start_ticks": null
+  },
+  "limits": {
+    "clock": "CLOCK_MONOTONIC@luciepc",
+    "whole_term_seconds": 7440,
+    "whole_kill_seconds": 15,
+    "queue_max_seconds": 120,
+    "queue_inside_whole": true,
+    "common_max_seconds": 7200,
+    "common_budget_formula": "MIN(7200, remaining_physical_seconds - 30); actual authority END must satisfy same approved original envelope",
+    "operation_end_formula": "original Common END - 15",
+    "stop_reserve_seconds": 15,
+    "stop_reserve_inside_common": true,
+    "publication_window_seconds": 90,
+    "window_end_formula": "MIN(owner event observed + 90, operation END)",
+    "reset_whole_on_queue_arm_or_label": false,
+    "compare_absolute_monotonic_between_hosts": false
+  },
+  "descriptor_rules": {
+    "driver": "written only after real --driver exec and actual Common receipt/identity recheck, before actor ARM and business preflight; kernel independently resamples",
+    "supervisor": "driver may record observation of real receipt owner PID; never invent that supervisor itself published a descriptor; kernel independently samples actual Common process and compares receipt pid/debut/cgroup/script/echeance",
+    "controls": "actual full identities for the six declared roles, kernel revalidated; no planned argv reported as actual before exec",
+    "whole": "real held watchdog observed before queue/ARM, original monotonic deadlines immutable; OS may stop earlier",
+    "operation": "actual original authority echeance, immutable; op END minus 15; no recomputation from remaining at each label",
+    "window": "common record_window_start only, actual owner caller verified, sealed ledger bytes SHA, sequence and previous ACK, unique fsync/link before wait; observe_window never opens or resets it"
+  },
+  "new_owner_files_not_in_229b": [
+    "whole-budget.json",
+    "driver-entered.json",
+    "supervisor-observed.json",
+    "controls.json",
+    "operation-budget.json",
+    "preflight-guard-complete.json",
+    "publication-peer-ready.json",
+    "global-window.json",
+    "agent-red1-window.json",
+    "agent-green1-window.json",
+    "review1-window.json"
+  ],
+  "preserved_229b_reference": {
+    "control": "/home/lucied/git_workspaces/rag3db-cx-archi-global-pilot-r2",
+    "P": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-v1",
+    "Q": "/home/lucied/.cache/rag3weaver-build/cx-archi-global-controller-r1",
+    "configuration_sha256": "0e6278fc874ee3d9723e0388ebffd4e2b469a2dc5887d7d0e3a610356fe136c1",
+    "tools": {
+      "python3": {
+        "path": "/usr/bin/python3.14",
+        "sha256": "a38210a53e07ac5eb912ee35c2d92ddb7eaa349301b60c188a5f496c7c87449d"
+      },
+      "bash": {
+        "path": "/usr/bin/bash",
+        "sha256": "917e986de64e7d36e42bef7aff5db73b7ecef5b58477bdb990e595e8dfc930b2"
+      },
+      "timeout": {
+        "path": "/usr/bin/timeout",
+        "sha256": "9c3e4dc9a71ba25ed23e56774c003d3e16043479c48c9fd5c6943734eb1942b7"
+      },
+      "git": {
+        "path": "/usr/bin/git",
+        "sha256": "0da72c00a915c06b9e7062e2dc999afe323223d000fef63111a94f522afd8ecf"
+      },
+      "rustup": {
+        "path": "/home/lucied/.cargo/bin/rustup",
+        "sha256": "b1c8cb14e30889e7e2999e6b69e62d9e9b9ffc0f4df8180564d306d9680e6c55"
+      },
+      "zstd": {
+        "path": "/usr/bin/zstd",
+        "sha256": "4f8335318c5471e1b481bbb9eebdcc9cd9a31b0bcfb5e2393857d656f33160e8"
+      },
+      "cargo": {
+        "path": "/home/lucied/.rustup/toolchains/1.98.1-x86_64-unknown-linux-gnu/bin/cargo",
+        "sha256": "da77c8b33849312255ccde3179198ada4c8deb370488d050286146b1d1b27e14"
+      }
+    },
+    "common_sha256": "6439fdd8b52c85fa4e74af0def2c667ef0bedae9b814cbbfd48e49946c4f74ea",
+    "qualify_sha256": "31e554572dad1ee4c0c82abdb6026175ed442c25e6b7f18417374f3c19093dd0",
+    "controllers_sha256": "f763f5a9cf8800576f910d498c2d905e0ffdc50b2f9dddf3d90f67d9e2cfe916",
+    "reuse_as_future_pins": false
+  },
+  "future_component_closure": {
+    "publication_relay": null,
+    "global_driver": null,
+    "global_wrapper": null,
+    "global_lifecycle_layout": null,
+    "global_provider_bridge": null,
+    "grant_watch_actor": "789058a8a8d15815e1a1b4083c1201d6ae390a79e9471740c11ab38af31f5175",
+    "current_common_must_be_revalidated": "6439fdd8b52c85fa4e74af0def2c667ef0bedae9b814cbbfd48e49946c4f74ea"
+  },
+  "operational_holds": [
+    "shared runtime capacity4 and WindowEvent not delivered yet",
+    "bridge not implemented",
+    "G PostgreSQL transport not qualified",
+    "no real resource lease or actor ARMED",
+    "new exact code/pin/Q/RO and distinct C7 GO required"
+  ]
+}

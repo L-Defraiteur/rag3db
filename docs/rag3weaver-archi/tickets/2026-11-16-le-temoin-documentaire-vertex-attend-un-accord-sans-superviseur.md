@@ -318,3 +318,11 @@ inconnues, aucune créationP2Q2 ni changement229bQ. Distinguer chemins existants
 observe/vérifie lui-même supervisor/driver/controls/END/owner ; aucunactivebool
 provider/valeursPIDfabriquées. BornesC7queue120/7440+15/Common7200MINreste−30/
 opEND−15/window90 figées au layout. Sourcefuture/pinRO avant bridge ;0run/actor.
+
+LayoutLifecycleGlobal43+notes44 préparés enDONNÉES : P2/Q2/Scontrolr3/adresses
+fixes proposéesmaisNONCRÉÉES,6rôles/constructeursargv et4événementsownerdriver,
+sourceReçuCommon parpointeurexact+nouveauxdescripteursAPRÈSexec (absents229b),
+7outilshistoriques229bréférencés reusefalse/futursSHA/PID/ENDnull. Kernel doit
+observerréellement,vérifierbornesC7/ordre/ledger/event,ReaderaucunOS. WatcherD6+
+canoniqueEmbargrantsdéclarés armedfalse/PGtoolHOLD ;0autoritéouconfigvivante.
+Pasbridge ni nouveaupilot/Q ;Codeparserscapacitécommuneenprépa,229bfigé.
