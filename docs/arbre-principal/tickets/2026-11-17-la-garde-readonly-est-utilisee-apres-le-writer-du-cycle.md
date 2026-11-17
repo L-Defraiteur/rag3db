@@ -114,3 +114,14 @@ Trois témoins du vrai bloc AST after_reads→avant sources-after prépubliés,
 mutants .readers non vide et DB bytes modifiés avec positif .readers vide.
 NON JOUÉS ; aucun correctif P2 ni transfert GO depuis les16autres.
 GO CPU causal exact distinct à demander avant test, puis revue/correctif/vert.
+
+GO C7-POSTWRITER-COLD-RED-336C-17nov60 consommé sur336c propre : nominal COLD
+seul, 1 FAIL `sources or cold read-only fixture mutated` capturé→assert,
+0 ERROR/skip,0.007s,rc1/0.110809s ; dix-huit autres NON JOUÉS.
+Archive postwriter-cold-red-336c-20261117-01 sur deux hôtes, trois size/SHA
+conformes, manifeste0ece970a239988394f7ebe05952b0a8b066c957e8ce13ab88271026f17f4488f.
+Puis correctif raccord prépublié : sources/répertoires restent stricts et
+stable_readers EXISTANT juge after_writer→after_reads, sans exclure DB.
+Pas de modification du validateur readonly lui-même ; Qv8/65eb restent figés.
+Ensemble19 NON JOUÉ après ce correctif : nouvelle RO/GO CPU vert distinct,
+aucune autorisation native/DB/provider/ancien budget déduite.

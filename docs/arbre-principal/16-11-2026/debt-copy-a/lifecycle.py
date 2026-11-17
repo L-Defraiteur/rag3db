@@ -304,7 +304,8 @@ def driver():
  if fts!=json.loads((FIN/'fts-observed.json').read_text()):raise ValueError('FTS files/IDs/generations changed')
  final=a.audit.finished(reader,cohort);save('vectors-final.json',final);no_fts_rebuild(reader,'fts-pending-after.json')
  after_reads=fs.file_inventory(BASE.parent)
- if sources(fs)!=initial or after_reads!=after_writer or q.directories(BASE.parent)!=initial['fin_dirs']:raise ValueError('sources or cold read-only fixture mutated')
+ if sources(fs)!=initial or q.directories(BASE.parent)!=initial['fin_dirs']:raise ValueError('sources or cold read-only fixture mutated')
+ a.stable_readers(after_writer,after_reads)
  save('sources-after.json',initial);save('copy-after.json',after_reads);guard(cfg);q.require_time(end,5)
  save('driver-result.json',dict(status='LIFECYCLE_FIXTURE_JUDGES_PASSED',clean_shutdown_observed=True,fixture_only=True,durability_qualified=False,live_authorized=False))
 
