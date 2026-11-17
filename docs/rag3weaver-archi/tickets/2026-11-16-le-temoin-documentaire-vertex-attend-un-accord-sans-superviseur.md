@@ -184,3 +184,12 @@ Comparer au rouge acquis tout le backend hors CORPS de la seule fonction validat
 et tout autre source/index/mode ; aucune modification du juge/attributs autorisée.
 Écrire avant fix un témoin réel Broker.handle cfg/homonyme refusé avant session.
 Pas de test exécuté ni de GO reporté ; APPf1e8 et anciens rouges préservés.
+
+### Séquence rouge demandée C7, croisement avec publication a797
+
+Le fix structurel a797 vient d'être publié quand arrive la consigne C7 d'obtenir
+GO rouge exact avant fix. Aucun essai ni rouge dynamique acquis ; ne pas réécrire
+cet historique. Préparer branche/WT rouge neuf, vrai Broker60f9 vulnérable avec
+le témoin cfg/homonyme prépub269519 et helper frame disponible (prérequis du
+harnais, pas le contrôle Broker corrigé). Puis RO/GO CPU ciblé distinct avant
+exécution ; aucun vert ni native autorisé. Conserver a797 comme candidat nonjoué.
