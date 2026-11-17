@@ -148,6 +148,18 @@ def results(log, passed=None, allow_ignored=False, kind=None):
         binding = (r'^▸ binaire e2e : ' + binary + r' \(' if len(expected) == 2 else
                    r'^\s*Running unittests src/lib\.rs \(' + binary + r'\)')
         assert re.search(binding, log, re.M), 'result not bound to inventoried ELF'
+        assert kind in globals().get('ELF_PROVENANCE', {}), 'no actual execution-content provenance'
+        provenance = ELF_PROVENANCE[kind]
+        catalogue, execution = provenance['catalogue'], provenance['execution']
+        original, copy = catalogue['path'], execution['executed_path']
+        expected_sha = catalogue['sha256']
+        assert re.fullmatch(r'[0-9a-f]{64}',expected_sha)
+        assert original == ELF_EXPECTED[kind] == execution['source_path']
+        assert copy != original, 'execution must be bound to the preserved content copy'
+        assert all(execution[field] == expected_sha for field in ['before_sha256','after_sha256','copy_sha256'])
+        # Physical digest is the existing boundary, replaced only by virtual-file
+        # bytes in the hermetic witness. Receipt fields alone never suffice.
+        assert digest(copy) == digest(original) == expected_sha
     assert labels == (['e2e_filets', kind] if len(expected) == 2 else ['src/lib.rs']), labels
     blocks = re.split(r'^\s*running (\d+) tests?\s*$', log, flags=re.M)
     assert len(blocks) == 1 + 2 * len(expected), 'wrong number or order of Rust blocks'
@@ -197,8 +209,17 @@ def request_common_stop(cause):
 
 
 def feature_results(log, games):
-    # Isolated for a witness of the remaining extra-game defect, not fixed here.
-    assert [row for row in re.findall(r'^VERT  (.+)$',log,re.M) if row in games]==games
+    rows, started = [], False
+    for row in re.findall(r'^VERT  (.+)$',log,re.M):
+        # The script first runs these two named guards. They are not feature
+        # games; recognise their exact grammar only before the games begin.
+        ticket_guard = re.fullmatch(r'tickets : \d+ en-têtes valides \(\d+ ouverts, \d+ fermés\)',row)
+        analysis_guard = row == "règles de l'analyse : le lot ne touche pas l'analyse"
+        if not started and (ticket_guard or analysis_guard):
+            continue
+        started = True
+        rows.append(row)
+    assert rows == games, 'missing, extra, duplicated or reordered feature game'
     assert log.splitlines()[-1]=='CHECK_FEATURES VERT 8/8'
 
 
@@ -268,6 +289,9 @@ assert nav_filters
 INVENTORIES['navigateur']=[[n for n in nav_lib['names'] if any(f in n for f in nav_filters)]]
 ELF_EXPECTED={name:e2e['binary'] for name in ['e2e_tty','e2e_lectures','e2e_code']}
 ELF_EXPECTED.update(lib=root_lib['binary'],navigateur=nav_lib['binary'])
+# A real execution-capture producer must populate this from observed/copy-bound
+# executions. Never manufacture receipts from the catalogue to satisfy results.
+ELF_PROVENANCE={}
 (p/'expected-inventories.json').write_text(json.dumps(dict(inventories=INVENTORIES,
     ignored={k:sorted(v) for k,v in IGNORED_EXPECTED.items()},elf=ELF_EXPECTED),indent=2))
 (p/'feature-games').mkdir(mode=0o700)

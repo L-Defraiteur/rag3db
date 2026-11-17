@@ -732,3 +732,12 @@ GO C7-TTY-PROVENANCE-RED-EEB-17nov60/sourceeeb635a07e, uneinvocation.
 nonlevé,0ERROR0skip/rc1,0,095833s. Preuves/rapport08 ; RAW2hostsréhash
 438f1fd6…a9737e. Aucuncoupon8isolé/retry/fixaprèsrouge/CPUgreen/native/service
 ouactivation. Suite groupéeR2 aprèsROpreuves etnouveauxpins/RO/GOdistincts.
+
+### Correctif validateur R2 préparé après rouge14, sans rejeu
+
+Autorisationcbffc3122e : results exigeSHAcatalogue/pré/post/copiejouée et
+digestdesbytes actuels ; feature_results refuse toutjeuVERTextra au lieu
+defiltrer. Témoinsd998/564393 inchangés. AST/SHA/diffseuls, pasCPUgreen.
+CaptureELFcanonRÉELLE nonlivrée : ELF_PROVENANCEvide/refus, HOLD explicite
+aucontratinactif ; nepasfabriquerlesreçusdepuiscatalogues. Docs09/Qv4futur
+désarmé/ROtotale puisGOCPU14distinct ; aucunactivation/native/service/slot.
