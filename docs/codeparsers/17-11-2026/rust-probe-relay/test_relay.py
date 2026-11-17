@@ -35,6 +35,12 @@ class FakeTransport:
         self.latency = 0
         self.remaining = 20.0
         self.payload = b'ELF synthetic bytes'
+        self.prepared_sha256 = '1' * 64
+        self.phase = 'baseline'
+        self.pair = {'execution_id': 'fixture-execution', 'sdk': 'fixture-sdk',
+            'corpus_manifest_sha256': 'c' * 64,
+            'phases': {'baseline': {'source': 'f' * 40, 'parser': 'b' * 40}}}
+        self.plan = module.default_plan(self.pair, self.phase)
     def contents(self, kind):
         ledger = {'elf_sha256': hashlib.sha256(self.payload).hexdigest()}
         files = {'elf': self.payload} if kind == 'build' else {'all': b'test: test', 'ignored': b'test: test'}
@@ -55,8 +61,27 @@ class FakeTransport:
         if self.expired:
             return {'state': 'active', 'remaining': 0, 'stage': self.stage}
         ledger, files = self.contents(self.stage)
-        return {'state': 'active', 'remaining': self.remaining, 'stage': self.stage,
-                'ledger': ledger, 'files': {k:hashlib.sha256(v).hexdigest() for k,v in files.items()}}
+        return self.wire(self.stage, ledger, files)
+    def wire(self, label, ledger, files):
+        plan = implementation.validate_plan(self.plan)
+        declared = plan.stage(label)
+        header = {'protocol_version': 1, 'execution_id': plan.execution_id,
+            'phase_id': plan.phase_id, 'sequence': plan.position(label), 'stage': label,
+            'prepared_sha256': self.prepared_sha256, 'plan_sha256': plan.sha256,
+            'binding_sha256': declared.binding_sha256}
+        observed = {'fixture_stage': label, 'ledger_keys': sorted(ledger)}
+        return {'state': 'active', 'remaining': self.remaining, 'phase_remaining': self.remaining,
+            'stage': label, 'ledger': ledger, 'header': header,
+            'files': {k:hashlib.sha256(v).hexdigest() for k,v in files.items()},
+            'file_sizes': {k:len(v) for k,v in files.items()},
+            'observed_binding': observed,
+            'observed_binding_sha256': hashlib.sha256(json.dumps(observed,sort_keys=True,
+                separators=(',', ':')).encode()).hexdigest(),
+            'elf_map': {artifact: {'stage': ref['stage'], 'file': ref['file'],
+                'sha256': hashlib.sha256(self.contents(ref['stage'])[1][ref['file']]).hexdigest()}
+                for artifact,ref in declared.executables.items()},
+            'window': None, 'publication_remaining': None,
+            'coordinator': {'host': 'peer'}}
     def fetch(self, kind, name, destination, timeout):
         self.calls.append('fetch:' + kind + ':' + name)
         if name == self.failed_file:
@@ -357,8 +382,10 @@ class GateTests(unittest.TestCase):
         (self.root / 'common.command.json').write_text(json.dumps(command))
         (self.root / 'controls.json').write_text(json.dumps([timeout]))
         self.gate = self.gate_module.Gate.__new__(self.gate_module.Gate)
-        self.gate.pair, self.gate.pin, self.gate.phase = pair, 'pin', 'baseline'
+        self.gate.pair, self.gate.pin, self.gate.phase = pair, '1' * 64, 'baseline'
         self.gate.root, self.gate.control = self.root, self.control
+        template = FakeTransport(Clock())
+        self.gate.plan = implementation.validate_plan(template.plan)
         self.gate.guard = SimpleNamespace(process_record=lambda pid: self.processes[pid])
         self.gate.pilot = SimpleNamespace(outer_command=lambda *args: ['poste', 'lourd', *timeout_args])
         self.gate.verify = lambda: None
@@ -425,12 +452,12 @@ class GateTests(unittest.TestCase):
         self.processes[os.getpid()] = identity
         prefix = ['/timeout', '--signal=TERM', '--kill-after=2s', '2098s']
         args = [self.gate_module.sys.executable, '-B', str(self.control / 'gate.py'), 'launch',
-            '--proofs', self.gate.pair['proofs'], '--phase', 'baseline', '--pin', 'pin', '--allocation', 'GO']
+            '--proofs', self.gate.pair['proofs'], '--phase', 'baseline', '--pin', '1' * 64, '--allocation', 'GO']
         self.processes[os.getppid()] = dict(identity, pid=os.getppid(), parent=1,
             argv=prefix + args, exe='/timeout')
         ready = {'host': 'peer', 'identity': {'uid': os.getuid(), 'pid': 123, 'start': '1234',
                  'argv': [self.gate_module.sys.executable, '-B', str(relay)]},
-                 'prepared_sha256': 'pin', 'phase': 'baseline', 'script_sha256': module.digest(relay)}
+                 'prepared_sha256': '1' * 64, 'phase': 'baseline', 'script_sha256': module.digest(relay)}
         class ExecTransition(Exception):
             pass
         with patch.object(self.gate_module.os, 'execve', side_effect=ExecTransition):
@@ -445,7 +472,7 @@ class GateTests(unittest.TestCase):
         planned = ['python', str(self.control / 'pilot.py'), 'run']
         self.processes[9], self.processes[11] = hard, identity
         bootstrap = {'identity': identity, 'run_argv': planned, 'hard_timeout': hard,
-            'prepared_sha256': 'pin', 'gate_sha256': self.gate.pair['controllers']['gate.py'],
+            'prepared_sha256': '1' * 64, 'gate_sha256': self.gate.pair['controllers']['gate.py'],
             'coordinator': {'host': 'peer'}, 'transition_end': 9005, 'queue_end': 9300}
         (self.root / 'relay-bootstrap.json').write_text(json.dumps(bootstrap))
         # Employer les vraies méthodes de rendez-vous, pas le stub de l'ancienne fixture active.
@@ -455,7 +482,7 @@ class GateTests(unittest.TestCase):
         self.assertEqual(self.gate.snapshot()['state'], 'waiting')
         (self.root / 'authority-path.json').unlink()
         (self.root / 'relay-launch.json').write_text(json.dumps({'identity': self.processes[11],
-            'prepared_sha256': 'pin', 'coordinator': bootstrap['coordinator'],
+            'prepared_sha256': '1' * 64, 'coordinator': bootstrap['coordinator'],
             'launcher_script_sha256': self.gate.pair['driver_sha256']}))
         self.assertEqual(self.gate.snapshot()['state'], 'waiting')
         self.processes[11]['start'] = 'reused'
@@ -480,7 +507,7 @@ class GateTests(unittest.TestCase):
         import shutil
         shutil.rmtree(self.root / 'scope')  # Une vraie attente queued n'a pas créé Common.
         bootstrap = {'identity': launcher, 'run_argv': launcher['argv'], 'hard_timeout': hard,
-            'prepared_sha256': 'pin', 'gate_sha256': self.gate.pair['controllers']['gate.py']}
+            'prepared_sha256': '1' * 64, 'gate_sha256': self.gate.pair['controllers']['gate.py']}
         (self.root / 'relay-bootstrap.json').write_text(json.dumps(bootstrap))
         sent = []
         def send(fd, sig):
@@ -508,7 +535,7 @@ class GateTests(unittest.TestCase):
         (self.root / 'controls.json').unlink()
         shutil.rmtree(self.root / 'scope')
         (self.root / 'relay-bootstrap.json').write_text(json.dumps({'identity': launcher,
-            'run_argv': launcher['argv'], 'hard_timeout': hard, 'prepared_sha256': 'pin',
+            'run_argv': launcher['argv'], 'hard_timeout': hard, 'prepared_sha256': '1' * 64,
             'gate_sha256': self.gate.pair['controllers']['gate.py']}))
         ticks = iter([0, 0, 4, 4, 4])
         original_close = os.close
@@ -532,12 +559,15 @@ class GateTests(unittest.TestCase):
         self.assertEqual(observations[0]['start'], identity['start'])
     def test_real_ack_gate_rechecks_after_fsync_before_link(self):
         self.gate.pair['peer_host'] = 'peer'
-        state = {'coordinator': {'host': 'peer'}, 'files': {'ledger': 'ledger-sha'},
-            'ledger': {'elf_sha256': 'elf-sha'}}
-        expected_files = {name: str(self.root / 'relay-local/build' / name) for name in ['ledger', 'elf']}
-        ack = {'kind': 'build', 'phase': 'baseline', 'host': 'peer', 'prepared_sha256': 'pin',
+        template = FakeTransport(Clock())
+        state = template.snapshot(5)
+        expected_files = {name: str(self.root / 'relay-local/build' / name) for name in state['files']}
+        ack = {'kind': 'build', 'phase': 'baseline', 'host': 'peer', 'prepared_sha256': '1' * 64,
             'coordinator': state['coordinator'], 'peer_files': expected_files,
-            'ledger_sha256': 'ledger-sha', 'elf_sha256': 'elf-sha', 'copied_and_rehashed': True}
+            'header': state['header'], 'files': state['files'], 'file_sizes': state['file_sizes'],
+            'elf_map': state['elf_map'], 'observed_binding_sha256': state['observed_binding_sha256'],
+            'ledger_sha256': state['files']['ledger'], 'elf_sha256': state['elf_map']['probe']['sha256'],
+            'copied_and_rehashed': True}
         from unittest.mock import Mock
         self.gate.stage = Mock(side_effect=[(state, {}), AssertionError('phase ended before link')])
         with self.assertRaisesRegex(AssertionError, 'phase ended before link'):

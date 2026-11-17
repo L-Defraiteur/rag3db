@@ -197,3 +197,14 @@ réutilisent la fixture d'identités/clockD45, sans noyau factice/OS/provideract
 API absente signalée FAILnommé ; rien encore exécuté. Types/validateurs de plan
 commencent la préparation de capacité, mais aucune boucle4/Windowruntime livrée
 à ce point. Nouveaux budgetsCPU/RO distincts nécessaires avant essais.
+
+### Publication intermédiaire du plan consommé, sans nouveau résultat
+
+Après trois rougesC9 préservés, préparation du rejet de fichiers supplémentaires,
+des ACK hérités et du plan ordonné dans la seule boucle commune. DefaultRust
+construit dans son wrapper, Gate/transport IDs partagés, bindings attendus et
+faits observés séparés. Fixtures portées vers plans complets/headers, assertions
+36+ordre/cardi5+1+1+1 conservés ; aucun CPU joué de ces changements.
+Window runtime/global lifecycle restent absents, bridge non livrée/admission
+impossible. WTrouge7ee figé attend GOdistinct huit casWindow avant helpers.
+Aucun Native/SSH/proc/target pendant ces modifications, D45/P05/P06/229bQ intacts.

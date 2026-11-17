@@ -6,6 +6,7 @@ une erreur de fixture à arrêter. Aucun test de ce fichier n'est encore joué.
 """
 import importlib.util
 import hashlib
+import copy
 import json
 from pathlib import Path
 import tempfile
@@ -27,6 +28,12 @@ class FourPublicationTransport(fixtures.FakeTransport):
         super().__init__(clock)
         self.index = 0
         self.stage = self.labels[0]
+        self.plan = {'protocol_version': 1, 'execution_id': 'fixture-execution', 'phase_id': 'baseline',
+            'stages': [{'label': label, 'ledger_file': 'ledger',
+                'files': {'ledger': 'ledger', **{f'elf-{n}': 'executable' for n in range(count)}},
+                'executables': {f'{label}-artifact-{n}': {'stage': label, 'file': f'elf-{n}'} for n in range(count)},
+                'source_contract': {'contract_id': 'fixture-four-publications'}, 'window_seconds': None}
+                for label,count in zip(self.labels,self.counts)]}
     def contents(self, kind):
         count = self.counts[self.labels.index(kind)]
         files = {f'elf-{n}': (kind + ':ELF:' + str(n)).encode() for n in range(count)}
@@ -37,9 +44,9 @@ class FourPublicationTransport(fixtures.FakeTransport):
     def snapshot(self, timeout):
         self.calls.append('snapshot')
         ledger, files = self.contents(self.stage)
-        return {'state': 'active', 'remaining': 20, 'phase_remaining': 35,
-            'stage': self.stage, 'ledger': ledger,
-            'files': {name:hashlib.sha256(raw).hexdigest() for name,raw in files.items()}}
+        state = self.wire(self.stage, ledger, files)
+        state['phase_remaining'] = 35
+        return state
     def publish_ack(self, kind, ack, timeout):
         self.calls.append('ack:' + kind)
         assert kind == self.labels[self.index]
@@ -86,12 +93,8 @@ class PublicationCounterexamples(unittest.TestCase):
     def test_explicit_four_stage_plan_is_not_silently_reduced_to_two(self):
         # Forme d'entrée de demande ; l'adaptateur de construction sera porté
         # vers les types validés, sans changer ces labels/cardinalités/ordre.
-        plan_request = {'protocol_version': 1, 'stages': [
-            {'label': 'global', 'executable_count': 5},
-            {'label': 'agent-red1', 'executable_count': 1},
-            {'label': 'agent-green1', 'executable_count': 1},
-            {'label': 'review1', 'executable_count': 1}]}
         transport = FourPublicationTransport(self.clock)
+        plan_request = copy.deepcopy(transport.plan)
         try:
             relay = legacy.Relay(transport, self.root, self.clock, self.clock.sleep,
                                   plan=plan_request)

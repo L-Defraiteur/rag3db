@@ -23,7 +23,33 @@ else:
     sys.modules['publication_relay'] = engine
     spec.loader.exec_module(engine)
 
-Relay = engine.Relay
+def default_plan(pair, phase):
+    config = pair['phases'][phase]
+    binding = {'contract_id': 'rust-probe-ledger-v1', 'app': config['source'],
+        'parser': config['parser'], 'sdk': pair['sdk'],
+        'corpus_sha256': pair['corpus_manifest_sha256'], 'features': ['code', 'rag3db-native']}
+    return {'protocol_version': 1, 'execution_id': pair['execution_id'], 'phase_id': phase,
+        'stages': [{'label': 'build', 'ledger_file': 'ledger',
+            'files': {'ledger': 'ledger', 'elf': 'executable'},
+            'executables': {'probe': {'stage': 'build', 'file': 'elf'}},
+            'source_contract': binding, 'window_seconds': None},
+            {'label': 'runtime', 'ledger_file': 'ledger',
+            'files': {'ledger': 'ledger', 'all': 'data', 'ignored': 'data'},
+            'executables': {'probe': {'stage': 'build', 'file': 'elf'}},
+            'source_contract': binding, 'window_seconds': None}]}
+
+
+class Relay(engine.Relay):
+    """Défaut Rust strict ; toutes les boucles restent dans le noyau commun."""
+    def __init__(self, transport, root, clock=time.monotonic, sleep=time.sleep,
+                 queue_budget=300, transfer_cap=30, control_cap=5, stop_reserve=5,
+                 hard_end=None, *, plan=None):
+        declared = transport.plan if plan is None else plan
+        super().__init__(transport, root, clock, sleep, queue_budget=queue_budget,
+            transfer_cap=transfer_cap, control_cap=control_cap, stop_reserve=stop_reserve,
+            hard_end=hard_end, plan=declared, prepared_sha256=transport.prepared_sha256)
+
+
 SSHTransport = engine.SSHTransport
 digest = engine.digest
 atomic_json = engine.atomic_json

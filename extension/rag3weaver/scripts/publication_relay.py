@@ -96,10 +96,10 @@ class PublicationPlan:
 
 def validate_plan(value):
     if isinstance(value, PublicationPlan):
-        return value
+        value = value.value
     value = _json_frozen(value)
     assert set(value) == {'protocol_version', 'execution_id', 'phase_id', 'stages'}
-    assert value['protocol_version'] == 1
+    assert type(value['protocol_version']) is int and value['protocol_version'] == 1
     safe_id(value['execution_id'])
     safe_id(value['phase_id'])
     assert value['stages'], 'empty publication plan'
@@ -189,7 +189,7 @@ def publish_result(path, record, deadline, clock=time.monotonic):
 class Relay:
     """Le même moteur pour SSH réel et témoins : pas de branche fake/skip."""
     def __init__(self, transport, root, clock=time.monotonic, sleep=time.sleep,
-                 queue_budget=300, transfer_cap=30, control_cap=5, stop_reserve=5, hard_end=None):
+                 queue_budget=300, transfer_cap=30, control_cap=5, stop_reserve=5, hard_end=None, *, plan, prepared_sha256):
         self.transport, self.root, self.clock, self.sleep = transport, Path(root), clock, sleep
         self.queue_budget, self.transfer_cap, self.control_cap = queue_budget, transfer_cap, control_cap
         self.stop_reserve = stop_reserve
@@ -200,10 +200,16 @@ class Relay:
         self.queue_end = started + queue_budget
         self.hard_end = hard_end if hard_end is not None else started + queue_budget + 1798
         self.stage = None
+        self.plan = validate_plan(plan)
+        self.prepared_sha256 = require_sha(prepared_sha256)
+        self.acknowledged = {}
+        self.window_ends = {}
 
     def cap(self, cap):
         admission_end = self.deadline if self.deadline is not None else self.queue_end - self.stop_reserve
         end = min(admission_end, self.hard_end - self.stop_reserve)
+        if self.stage in self.window_ends:
+            end = min(end, self.window_ends[self.stage])
         remaining = end - self.clock()
         if remaining <= 0:
             raise TimeoutError('relay deadline')
@@ -220,6 +226,10 @@ class Relay:
     def refresh(self, expected=None):
         before = self.clock()
         state = self.transport.snapshot(self.cap(self.control_cap))
+        for field in ['remaining', 'phase_remaining', 'queue_remaining']:
+            if field in state:
+                value = state[field]
+                assert isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
         if state['state'] == 'waiting':
             assert expected is None, 'active phase disappeared'
             assert self.deadline is None, 'active phase regressed to queued'
@@ -233,31 +243,85 @@ class Relay:
         self.deadline = min(self.deadline, end) if self.deadline is not None else end
         phase_end = before + state.get('phase_remaining', state['remaining'])
         self.phase_deadline = min(self.phase_deadline, phase_end) if self.phase_deadline is not None else phase_end
+        label = state.get('stage')
+        if label in {spec.label for spec in self.plan.stages}:
+            spec = self.plan.stage(label)
+            if spec.window_seconds is not None:
+                window_remaining = state['publication_remaining']
+                assert isinstance(window_remaining, (int, float)) and math.isfinite(window_remaining)
+                window_end = before + window_remaining
+                self.window_ends[label] = min(self.window_ends.get(label, window_end), window_end)
         self.cap(self.control_cap)
         if expected is not None:
             assert state['stage'] == expected, 'publication stage changed'
         return state
 
+    def expected_header(self, label):
+        return context_header(self.plan, self.prepared_sha256, label)
+
+    def verify_publication(self, label, state):
+        spec = self.plan.stage(label)
+        header = dict(state['header'])
+        assert type(header.get('protocol_version')) is int and type(header.get('sequence')) is int
+        event_sha = header.pop('window_event_sha256', None)
+        assert header == self.expected_header(label), 'publication identity or expected contract changed'
+        assert set(state['files']) == set(spec.files), 'missing or extra publication payload'
+        assert set(state['file_sizes']) == set(spec.files)
+        for name, sha in state['files'].items():
+            require_sha(sha)
+            size = state['file_sizes'][name]
+            assert isinstance(size, int) and not isinstance(size, bool) and size >= 0
+        assert canonical_sha(state['observed_binding']) == require_sha(state['observed_binding_sha256'])
+        # Le contrat statique et les faits observés sont distincts, pas des SHA à égaler.
+        assert set(state['elf_map']) == set(spec.executables)
+        for artifact, declared in spec.executables.items():
+            actual = state['elf_map'][artifact]
+            assert set(actual) == {'stage', 'file', 'sha256'}
+            assert actual['stage'] == declared['stage'] and actual['file'] == declared['file']
+            sha = require_sha(actual['sha256'])
+            if actual['stage'] == label:
+                assert sha == state['files'][actual['file']]
+            else:
+                assert actual['stage'] in self.acknowledged, 'inherited executable requires prior ACK'
+                prior = self.acknowledged[actual['stage']]
+                assert sha == prior['files'][actual['file']]
+                copied = self.root / actual['stage'] / actual['file']
+                assert not copied.is_symlink() and digest(copied) == sha
+        if spec.window_seconds is None:
+            assert event_sha is None and state.get('window') is None
+        else:
+            window = state['window']
+            assert require_sha(event_sha) == window['event_sha256']
+            assert window['ledger_sha256'] == state['files'][spec.ledger_file]
+            assert state['publication_remaining'] > 0
+        return spec
+
     def publish(self, kind, state):
-        files = ['ledger', 'elf'] if kind == 'build' else ['ledger', 'all', 'ignored']
+        spec = self.plan.stage(kind)
+        assert self.plan.position(kind) == len(self.acknowledged), 'publication out of order'
+        self.verify_publication(kind, state)
+        self.stage = kind
         folder = self.root / kind
         folder.mkdir(mode=0o700)
-        for name in files:
+        for name in spec.files:
             current = self.refresh(kind)
-            assert current['files'] == state['files'] and current['ledger'] == state['ledger']
+            self.verify_publication(kind, current)
+            assert current['header'] == state['header'] and current['files'] == state['files']
+            assert current['ledger'] == state['ledger'] and current['elf_map'] == state['elf_map']
+            assert current['observed_binding_sha256'] == state['observed_binding_sha256']
             pending = folder / (name + '.pending')
             actual = self.transport.fetch(kind, name, pending, self.cap(self.transfer_cap))
             with pending.open('rb') as stream:
                 os.fsync(stream.fileno())
             assert actual == digest(pending) == current['files'][name], 'copied file hash differs'
-            if name == 'ledger':
+            assert pending.stat().st_size == current['file_sizes'][name]
+            if name == spec.ledger_file:
                 assert json.loads(pending.read_text()) == current['ledger']
-            elif name == 'elf':
-                assert actual == current['ledger']['elf_sha256']
             fresh = self.refresh(kind)
-            assert fresh['files'] == current['files'], 'payload changed before local publication'
+            self.verify_publication(kind, fresh)
+            assert fresh['files'] == current['files'] and fresh['header'] == current['header']
             self.cap(self.control_cap)
-            if name == 'elf':
+            if spec.files[name] == 'executable':
                 pending.chmod(0o500)
             os.link(pending, folder / name)
             directory = os.open(folder, os.O_RDONLY | os.O_DIRECTORY)
@@ -266,16 +330,21 @@ class Relay:
             finally:
                 os.close(directory)
             pending.unlink()
-        if kind == 'runtime':
-            assert digest(folder / 'all') == state['ledger']['inventory_sha256']
-            assert digest(folder / 'ignored') == state['ledger']['ignored_inventory_sha256']
-            assert digest(self.root / 'build/elf') == state['ledger']['elf_sha256']
+        # Les références antérieures sont rehashées dans verify_publication avant l'ACK.
         fresh = self.refresh(kind)
+        self.verify_publication(kind, fresh)
         assert fresh['files'] == state['files'] and fresh['ledger'] == state['ledger']
-        ack = {'kind': kind, 'ledger_sha256': state['files']['ledger'],
-               'elf_sha256': state['ledger']['elf_sha256'], 'copied_and_rehashed': True}
+        assert fresh['header'] == state['header'] and fresh['elf_map'] == state['elf_map']
+        ack = {'kind': kind, 'header': _json_plain(state['header']),
+               'ledger_sha256': state['files'][spec.ledger_file], 'files': dict(state['files']),
+               'file_sizes': dict(state['file_sizes']), 'elf_map': _json_plain(state['elf_map']),
+               'observed_binding_sha256': state['observed_binding_sha256'], 'copied_and_rehashed': True}
+        if len(state['elf_map']) == 1:
+            ack['elf_sha256'] = next(iter(state['elf_map'].values()))['sha256']
         self.transport.publish_ack(kind, ack, self.cap(self.control_cap))
         atomic_json(folder / 'ack-accepted.json', ack, lambda: self.cap(self.control_cap))
+        self.acknowledged[kind] = _json_frozen(state)
+        self.stage = None
 
     def run(self):
         completed = set()
@@ -283,14 +352,14 @@ class Relay:
         try:
             self.transport.ready()
             self.transport.start_phase()
-            while len(completed) != 2:
+            while len(completed) != len(self.plan.stages):
                 if not self.transport.running():
                     raise RuntimeError('phase exited before both publications')
                 state = self.refresh()
                 stage = state.get('stage')
-                if state['state'] == 'active' and stage in ['build', 'runtime']:
+                if state['state'] == 'active' and stage is not None:
                     assert stage not in completed
-                    assert stage == 'build' or completed == {'build'}, 'runtime before build'
+                    assert stage == self.plan.stages[len(completed)].label, 'undeclared or out-of-order publication'
                     self.publish(stage, state)
                     completed.add(stage)
                 else:
@@ -351,6 +420,8 @@ class SSHTransport:
         self.ready_record = None
         self.remote_cancelled = False
         self.control = Path(pair['control'])
+        self.plan = validate_plan(pair['publication_plans'][phase])
+        self.prepared_sha256 = require_sha(pin)
         self.entry_file = Path(entry_file) if entry_file is not None else self.control / 'relay.py'
         spec = importlib.util.spec_from_file_location('relay_physical_guard', self.control / 'physical_guard.py')
         self.guard = importlib.util.module_from_spec(spec)
@@ -441,7 +512,7 @@ class SSHTransport:
         return digest(destination)
 
     def publish_ack(self, kind, ack, timeout):
-        names = ['ledger', 'elf'] if kind == 'build' else ['ledger', 'all', 'ignored']
+        names = self.plan.stage(kind).files
         ack['peer_files'] = {name: str(self.root / kind / name) for name in names}
         ack.update(host=socket.gethostname(), phase=self.phase, prepared_sha256=self.pin,
             coordinator=self.ready_record)
@@ -481,6 +552,7 @@ class GateBase:
         self.pilot = pilot
         self.entry_file = Path(entry_file)
         self.provider = None
+        self.plan = validate_plan(pair['publication_plans'][phase])
         self.guard = self.pilot.physical
 
     def verify_contract(self):
@@ -584,17 +656,72 @@ class GateBase:
         return {'state': 'active', 'remaining': remaining, 'phase_remaining': end - time.monotonic(),
             'coordinator': launch['coordinator']}
 
+    def publication_header(self, kind):
+        return context_header(self.plan, self.pin, kind)
+
+    def accepted(self, kind):
+        path = self.root / (kind + '-peer-ack.json')
+        assert path.is_file() and not path.is_symlink(), 'prior ACK is absent'
+        ack = json.loads(path.read_text())
+        header = dict(ack['header'])
+        event_sha = header.pop('window_event_sha256', None)
+        assert header == self.publication_header(kind), 'prior ACK belongs to another execution'
+        spec = self.plan.stage(kind)
+        assert set(ack['files']) == set(spec.files) and ack['copied_and_rehashed'] is True
+        assert ack['prepared_sha256'] == self.pin and ack['phase'] == self.phase
+        assert ack['host'] == self.pair['peer_host']
+        assert ack['ledger_sha256'] == ack['files'][spec.ledger_file]
+        if spec.window_seconds is not None:
+            approved = self.window_spec(spec)
+            assert digest(approved['path']) == require_sha(event_sha), 'prior window changed after ACK'
+        else:
+            assert event_sha is None
+        return ack
+
     def stage(self, kind):
         state = self.active()
-        assert kind in ['build', 'runtime']
+        spec = self.plan.stage(kind)
         assert not (self.root / (kind + '-peer-ack.json')).exists(), 'stage already acknowledged'
-        if kind == 'runtime':
-            assert (self.root / 'build-peer-ack.json').exists()
-        ledger, files = self.provider.read(kind)
+        for prior in self.plan.stages[:self.plan.position(kind)]:
+            self.accepted(prior.label)
+        ledger, files, observed_binding = self.provider.read(kind)
+        assert set(files) == set(spec.files), 'provider returned missing or extra files'
+        for path in files.values():
+            path = Path(path)
+            assert path.resolve(strict=True) == path and path.is_file() and not path.is_symlink()
+            assert self.root in path.parents and path.stat().st_uid == os.getuid()
+            assert not any(part in ['.env', '.vault', 'autorite.json'] for part in path.relative_to(self.root).parts)
         hashes = {name: digest(path) for name, path in files.items()}
+        sizes = {name: Path(path).stat().st_size for name, path in files.items()}
+        assert json.loads(Path(files[spec.ledger_file]).read_text()) == ledger
+        elf_map = {}
+        for artifact, ref in spec.executables.items():
+            if ref['stage'] == kind:
+                sha = hashes[ref['file']]
+            else:
+                prior = self.accepted(ref['stage'])
+                sha = prior['files'][ref['file']]
+                # Le résolveur hérité est déclaré par le fournisseur, jamais un chemin de ledger libre.
+                inherited = self.provider.inherited(ref['stage'], ref['file'])
+                assert Path(inherited).resolve(strict=True) == Path(inherited)
+                assert self.root in Path(inherited).parents and digest(inherited) == sha
+            elf_map[artifact] = {'stage': ref['stage'], 'file': ref['file'], 'sha256': sha}
+        header = self.publication_header(kind)
+        window = None
+        publication_remaining = None
+        if spec.window_seconds is not None:
+            phase = self.observe_active()
+            evidence = self.observe_window(spec, phase, hashes[spec.ledger_file])
+            window = {'event_sha256': evidence.event_sha256, 'ledger_sha256': hashes[spec.ledger_file],
+                'owner': _json_plain(evidence.owner)}
+            publication_remaining = evidence.remaining
+            header['window_event_sha256'] = evidence.event_sha256
         after = self.active()
         state.update(remaining=after['remaining'], phase_remaining=after['phase_remaining'],
-            stage=kind, ledger=ledger, files=hashes)
+            stage=kind, ledger=ledger, files=hashes, file_sizes=sizes, header=header,
+            elf_map=elf_map, observed_binding=_json_plain(observed_binding),
+            observed_binding_sha256=canonical_sha(observed_binding), window=window,
+            publication_remaining=publication_remaining)
         return state, files
 
     def snapshot(self):
@@ -608,11 +735,17 @@ class GateBase:
             if (self.root / 'outer-supervision.json').exists():
                 return self.starting()
             return {'state': 'waiting', 'queue_remaining': self.bootstrap()['queue_end'] - time.monotonic()}
-        for kind in ['build', 'runtime']:
-            if (self.root / (kind + '-ledger.json')).exists() and not (self.root / (kind + '-peer-ack.json')).exists():
-                return self.stage(kind)[0]
+        for spec in self.plan.stages:
+            kind = spec.label
+            ledger = self.provider.ledger_path(kind)
+            if not (self.root / (kind + '-peer-ack.json')).exists():
+                if ledger.is_file():
+                    if spec.window_seconds is not None and not Path(self.window_spec(spec)['path']).exists():
+                        break  # Le propriétaire n'a pas encore scellé son événement, pas de reset.
+                    return self.stage(kind)[0]
+                break
         state = self.active()
-        state['stage'] = 'running-test' if (self.root / 'runtime-peer-ack.json').exists() else 'waiting-ledger'
+        state['stage'] = None
         return state
 
     def export(self, kind, name, out):
@@ -633,13 +766,21 @@ class GateBase:
         state, _ = self.stage(kind)
         assert ack['kind'] == kind and ack['phase'] == self.phase and ack['host'] == self.pair['peer_host']
         assert ack['prepared_sha256'] == self.pin and ack['coordinator'] == state['coordinator']
-        names = ['ledger', 'elf'] if kind == 'build' else ['ledger', 'all', 'ignored']
+        spec = self.plan.stage(kind)
+        names = spec.files
+        assert ack['header'] == state['header'] and ack['files'] == state['files']
+        assert ack['file_sizes'] == state['file_sizes'] and ack['elf_map'] == state['elf_map']
+        assert ack['observed_binding_sha256'] == state['observed_binding_sha256']
         assert ack['peer_files'] == {name: str(self.root / 'relay-local' / kind / name) for name in names}
-        assert ack['ledger_sha256'] == state['files']['ledger']
-        assert ack['elf_sha256'] == state['ledger']['elf_sha256'] and ack['copied_and_rehashed'] is True
+        assert ack['ledger_sha256'] == state['files'][spec.ledger_file]
+        assert ack['copied_and_rehashed'] is True
+        if len(state['elf_map']) == 1:
+            assert ack['elf_sha256'] == next(iter(state['elf_map'].values()))['sha256']
         def before_link():
             fresh, _ = self.stage(kind)
             assert fresh['files'] == state['files'] and fresh['coordinator'] == state['coordinator']
+            assert fresh['header'] == state['header'] and fresh['elf_map'] == state['elf_map']
+            assert fresh['observed_binding_sha256'] == state['observed_binding_sha256']
         atomic_json(self.root / (kind + '-peer-ack.json'), ack, before_link)
         # Le pilote vérifie aussi son END après observation du fichier ACK.
         self.active()
@@ -840,7 +981,8 @@ def relay_main(entry_file):
     for sig in [signal.SIGTERM, signal.SIGINT, signal.SIGHUP]:
         signal.signal(sig, stop)
     hard_end = int(parent['start']) / os.sysconf('SC_CLK_TCK') + 2098
-    return Relay(transport, root, hard_end=hard_end, **pair['relay']).run()
+    return Relay(transport, root, hard_end=hard_end, plan=transport.plan,
+        prepared_sha256=pin, **pair['relay']).run()
 
 
 def gate_main(gate_factory):

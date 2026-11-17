@@ -75,3 +75,27 @@ Rust dans sys.path, pour leur import relay quand il est lancé depuis
 publication-core. Correction de montage faite en relecture statique AVANT tout
 jeu Window, aucun ERROR observé ou effacé. API Window toujours absente, tests
 NONJOUÉS, nouveau SHA de prépublication à employer pour un éventuel GO rouge.
+
+## Préparation de capacité : boucle de plan, encore sans Window runtime
+
+La branche de capacité prépare désormais une boucle unique consommant un plan
+validé/deepfreeze : ordre exact, fichiers/tailles/SHA déclarés, ELFmapN et refs
+vers seules publications acquittées. Le wrapper Rust construit son défaut
+build/runtime strict ; aucun inventaire fictif global n'est créé. Le Gate et
+le transport utilisent les mêmes IDs de fichiers. Le contrat de provenance
+attendu est hashé séparément des faits observés ; le noyau ne les compare pas
+comme s'ils étaient la même identité.
+
+Les fixtures de construction portent le plan complet et les nouveaux headers,
+sans changer les assertions des36témoins ni les cardinalités5+1+1+1 du contre-
+exemple. Le plan minimal de demande, volontairement non supporté en baseline,
+a été porté vers des IDs/roles/contrat explicites, pas accepté par inférence
+sur ce que le transport fournit. Les fakes restent des données/horloges,
+aucun noyau ou procédure de copie de remplacement.
+
+Cette publication est INTERMÉDIAIRE/NONEXÉCUTÉE : WindowEvent runtime et le
+raccord de lifecycle global/limites7440+15 restent à terminer et relire. Aucun
+prototype de cette branche n'est admis ni armable. Les tests Window restent
+prépubliés avant leurs helpers, sur WTrouge figé7ee ; GOdistinct demandé pour
+observer leur absence AVANT implantation. La présente boucle de plan ne
+constitue pas une qualification4publications ni le bridgeArchi.

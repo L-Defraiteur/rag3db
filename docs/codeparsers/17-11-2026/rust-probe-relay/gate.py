@@ -25,6 +25,13 @@ class RustPublicationProvider:
     def __init__(self, gate):
         self.root, self.pair, self.phase, self.pilot = gate.root, gate.pair, gate.phase, gate.pilot
 
+    def ledger_path(self, kind):
+        return self.root / (kind + '-ledger.json')
+
+    def inherited(self, stage, file_id):
+        assert stage == 'build' and file_id == 'elf'
+        return self.root / 'bin/probe-executable'
+
     def read(self, kind):
         ledger_path = self.root / (kind + '-ledger.json')
         ledger = json.loads(ledger_path.read_text())
@@ -44,7 +51,9 @@ class RustPublicationProvider:
             files.update(all=self.root / 'inventory-all.stdout', ignored=self.root / 'inventory-ignored.stdout')
             assert digest(files['all']) == ledger['inventory_sha256']
             assert digest(files['ignored']) == ledger['ignored_inventory_sha256']
-        return ledger, files
+        observed = {key: ledger[key] for key in ['app', 'parser', 'sdk', 'sdk_hashes',
+            'features', 'corpus_sha256', 'profile', 'artifact']}
+        return ledger, files, observed
 
 
 class Gate(engine.GateBase):

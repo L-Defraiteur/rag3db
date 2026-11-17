@@ -440,7 +440,7 @@ def prepare(args):
     assert os.uname().nodename.lower() == 'luciepc' and args.peer_host
     proofs = args.proofs.absolute()
     manifest = TOOL_ROOT / 'docs/codeparsers/16-11-2026/rust-followup/frozen-corpus.json'
-    pair = {'tool_root': str(TOOL_ROOT), 'peer_host': args.peer_host,
+    pair = {'execution_id': proofs.name, 'tool_root': str(TOOL_ROOT), 'peer_host': args.peer_host,
         'physical_guard_sha256': base.digest(HERE / 'physical_guard.py'), 'proofs': str(proofs), 'manifest': str(manifest), 'tool_source': args.tool_source or base.git(TOOL_ROOT, 'rev-parse', 'HEAD'),
         'driver_sha256': base.digest(__file__), 'helper_sha256': base.digest(PREVIOUS), 'budget_per_phase': 1800,
         'sdk': base.LIB, 'corpus_manifest_sha256': CORPUS_SHA,
@@ -477,9 +477,13 @@ def prepare(args):
         previous_owner = str(args.candidate_worktree.resolve() / 'extension/rag3weaver') if phase == 'baseline' else str(args.baseline_worktree.resolve() / 'extension/rag3weaver')
         if phase == 'baseline' and args.prior_root:
             previous_owner = str(args.baseline_worktree.resolve() / 'extension/rag3weaver')
-        pair['phases'][phase] = {'worktree': str(worktree), 'source': source, 'target': str(TARGET),
+        pair['phases'][phase] = {'parser': PARSERS[phase], 'worktree': str(worktree), 'source': source, 'target': str(TARGET),
             'store': str(Path.home() / '.cache/rag3db-libs'), 'budget': 1800, 'previous_owner': previous_owner,
             'pilot_sha256': base.digest(PREVIOUS), 'scripts': {name: base.digest(worktree / name) for name in scripts}}
+    relay_spec = importlib.util.spec_from_file_location('rust_plan_adapter', TOOL_ROOT / 'docs/codeparsers/17-11-2026/rust-probe-relay/relay.py')
+    adapter = importlib.util.module_from_spec(relay_spec)
+    relay_spec.loader.exec_module(adapter)
+    pair['publication_plans'] = {phase: adapter.default_plan(pair, phase) for phase in PRODUCTS}
     for name in scripts:
         if name != PROBE:
             assert pair['phases']['baseline']['scripts'][name] == pair['phases']['candidate']['scripts'][name], 'configuration differs'
