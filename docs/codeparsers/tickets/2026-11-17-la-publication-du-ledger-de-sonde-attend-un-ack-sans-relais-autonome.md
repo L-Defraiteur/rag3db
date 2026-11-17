@@ -283,3 +283,32 @@ Common à phase+60, fermeture locale après hardEND mais avant phaseEND, et
 remplacement des seuls octets du moteur avant import wrapper. Aucun import/test
 joué. Le dernier cas ne convertit que la sentinelle exacte d'exécution non
 épinglée en FAIL ; toute autre exception de montage reste ERROR. Rien corrigé.
+
+### RO totale TTY558 reçue en quatre parties, avant nouveau correctif
+
+Trois réserves groupées supplémentaires/étendues, sans exécution :
+
+- Horloges : start ticks de procstat sert d'identité PID, pas d'origine garantie
+  CLOCK_MONOTONIC. Linuxv6.18 fs/proc/array.c utilise start_boottime, BOOTTIME
+  inclut la veille alors que MONOTONIC ne l'inclut pas. Les calculs de
+  common_request_budget/starting/active/launch/relay_main et pilot.compose
+  mélangeant ticks/CLK_TCK et monotonic sont à remplacer par une enveloppe
+  d'origine attestée dans le même domaine. Prépublier un témoin de décalage
+  avant correction ; les clocks synthétiques égales9000 ne couvrent pas ce cas.
+- Fermeture avant import : confirme R3 Mémoire et l'étend aux entrées Gate et
+  pilote, qui évaluent relay/moteur et legacy/physical_guard avant vérification.
+  Un prévalidateur externe absent ne peut être supposé pour une CLI autonome.
+  Prépublier les cas top-level altéré sur ces vraies entrées/helpers Q, garder
+  l'ancrage de confiance explicite et aucune seconde boucle métier.
+- RPC/récolte : timeout distant soft(T−.1)+KILL1 peut dépasser T, communicate(T)
+  est suivi de TERM.5/KILL.5 dans reap ; stop final n'a pas d'échéance originale
+  transmise. Réserver grâces/récolte DANS les bornes et propager la même fin.
+  Prépublier un témoin fakePopen avec récolte lente, préserver première cause
+  et UNKNOWN quand absence non attestée. Aucun faux VERT physique établi.
+
+Sources primaires citées par la revue : Linuxv6.18 fs/proc/array.c do_task_stat,
+man7 clock_gettime CLOCK_BOOTTIME/CLOCK_MONOTONIC et docsPython3.14 time.monotonic.
+Pas de qualification du noyau ou de l'horloge de l'hôte par ces lectures.
+Le pin9e653 et ses trois témoins restent inchangés, toujours NONJOUÉS ; ces
+nouvelles réserves ne sont pas couvertes par leur seule sélection. Attendre
+cadrage C7 des témoins complémentaires et budgets distincts, aucun fix anticipé.
