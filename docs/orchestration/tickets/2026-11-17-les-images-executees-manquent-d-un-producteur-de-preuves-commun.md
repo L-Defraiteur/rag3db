@@ -132,3 +132,6 @@ RéserveR TOTALE5e3 additionnelle avantfix : request validée reste mutable et t
 
 
 GO distinct C7-ENTRY-SNAPSHOT-HASH-RED-DEEE-17nov60 : deeea4501ee04594986363db62175dc5aa841dba/témoins243cf/pins4noms sansfailfast58+2, module8ddinchangé. 3RO M/R/TTY+C7lecture/hashes/WTclean, attendu4FAILprécis/0ERRORskip/rc1 ;hashfinal+resetEND+promotionSHA+ENVimbriquée seule,24anciensNONJOUÉS. Bruts2hôtes avantfixgroupé snapshotprofondprivé/copiedétachée et contrôlefrais posthash, sources/revues/GOvertsdistinct requis. Aucun native/CP/Common admission, détails au suivi17nov.
+
+
+HOLD10f753 avantGO28 : M réserve facts/exit_record mappings empruntés port encoremutables aprèsseal/wait et avantlecturefinale, C7 brancheconfirmée. Snapshotobservations immuable dèsacquisition AVANTcallbacksuivant/checkclock, pas les opaqueshandles ; nouveauxcontre-ex prépubliés avantfix/pins/RO/GOrouges séparés. Requestsnapshot et hashfinal déjàcorrects,28NONJOUÉS ; aucuneadmission OS/CP/Common. Détails au suivi17nov, ticketresteouvert.
