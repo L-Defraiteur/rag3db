@@ -180,3 +180,38 @@ runner/tests/helperfrozenCommon/outils, puis GO C7distinct requis. Aucun
 RealCapture/fork fixture/natifPG/secret/service/SDK ou buildCLI99 effectué.
 Les limitations PG/terminalréel/exe-env/outerwhole5 ne sont pas levées par
 les4fakeverts ni par cette préparation.
+
+
+## Dix-neuf VERTS observés — GO73b655e88d
+
+UNE entrée C7-PSQL-RUNNER19-7D0A-17nov30,source7d0a8af15a/recipe362426c66321f90a46317f2fb467f48323748b740efdb1ca29ce410467668baf.
+Common validation-falzqtsw VERTint0/erreur null, terminé/nettoyé/restes[],
+bus privé ABSENT.19noms verbose/19PASS/0FAILERRORskip/rc0. unittest1.561s ;
+entrée orchestrée1.8377472627907991s (inclut acquisition/setup poste/Common).
+Aucun reset des caps0.5/0.8/1s ni calibration/retry.8fakeFS+4fakeIO exclus.
+
+Sept vrais enfants Python privés plus UN détenteur EOF fixture : les sept
+records ont PID/start/exe connus, Python demandé conforme, FDs parent égaux,
+reaped=True/first_error=null/cleanup_errors=[], captures et archivages avant
+END. Floods stdout/stderr limités65536 et refusés, timeoutTERM et TERMignoré
+handshake HANDLER_READY+SIGKILL=-9 acquis. Parent EOFrc0 classé PARTIEL,
+pas succès de capture. Détenteur144983/start128736150 pgrp/session144982 :
+Z observé DANS le test, conservé explicitement ; relevé frais après portée
+montre absence de cet original. Les sept enfants directs sont aussi absents.
+Ces PID sont HISTORIQUES après contrôle, pas de nouvelle autorité vivante.
+Aucun scan d'autres sessions, aucun observateur Common forké.
+
+56preuves (sources/bruts/records/argv/envpublic/pins/temps/FD/ownership/Common
+sans jeton) comparées taille/SHA aux deux postes AVANTsuite : PC
+psql-host-runner-20261117-r1/runner19-fixed-cpu-08,portable même parent
+/runner19-fixed-cpu-08-proof. Manifeste
+a5b29479956b57ddb1ba44e6074fe111d480a41c5e87618550f24e68f1707cc5 ; archive
+661e598f47dca859d822676c2970ac1b7a02b66000b0c49cafc79b8605712311.
+Les rouges et8+4verts précédents restent immuables, aucun transfert rétroactif.
+
+Qualification limitée aux19et aux fixtures Python de CETTE entrée. Ni
+PsqlSession, psql/chargeur, secret, SQL/PG/Docker/provider/service/DB réelle
+instanciés. Nativepsqlexe/env, auth/SSL/dlopen, producteur terminal réel,
+Common/lease réel et outer whole5 complets, admission v1 NON QUALIFIÉS.
+Prépa source contact distincte désormais autorisée, pas contact enchaîné ni
+fixture anticipée ; nouvelle recette/pins/RO totale/GO C7 distinct requis.
