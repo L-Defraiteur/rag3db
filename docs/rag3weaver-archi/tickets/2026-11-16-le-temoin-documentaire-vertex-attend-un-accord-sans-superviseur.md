@@ -109,3 +109,17 @@ jobs8 ; proposer vrai poste mode mesureEXCLUSIF avec quota800%/POSTE_FILS>=8,
 refus avantmutation si place plus petite, aucunshimPATHcanonique/interception
 ou faux profiljobs5. Coût de réservation exclusive et7200/7455 à arbitrer C7,
 aucune entrée/poste/activité réelle effectuée.
+
+### Matérialisation du pilote global, après RO totale recette32
+
+C7 arbitre PREPA7200Common/7440TERM+15KILL, mesureexclusif/quota800%/FILS>=8,
+MémoireROtotalef1e8 favorable. Nouvelle branche/WT
+cx-archi-pas-va-au-bout-global-pilot-r2/cx-wt-archi-pas-va-au-bout-global-pilot-r2,
+APPf1e8 figée. Avant code : corriger une imprécision du rapport32 : rag3daemon
+sert une base, pas DaemonHost ; le vrai hôte D6 est rag3weaver-backend daemon
+--address127.0.0.1:0, construit de l'APP, avec son répertoire daemon privé.
+Le pilote doit vérifier cet argv dans les vrais Cargo/main/CLI et ne pas
+inventer une route TaskService. TaskAPI réelle ouvrir_une_tache_nommee, TTY réel
+crate tty/featurevue. SourceRust/APIprod intouchées. Piloteseul sous docs,
+publication/témoinshermétiques/ROcoupleexacte AVANT tout Cargo/Vertex/service/
+PCtransition/T0mutation. APP742/P01c3/72preuves gardés. Aucun GO7455.
