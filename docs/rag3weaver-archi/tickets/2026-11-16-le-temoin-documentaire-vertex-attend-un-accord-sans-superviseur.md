@@ -208,3 +208,11 @@ Avant correction : raccorder lecture schéma au source APP du worktree porteur
 comme test_contracts.C(HERE.parents[3]/extension/rag3weaver), pas au futur C PC.
 Code pilote inchangé ; publier correctif harnais puis nouveauRO/GOCPUdistinct.
 Aucune préparationPC, native, target, service ou Vertex déduite de cet essai.
+
+GO CPU distinct C7-ARCHI-CPU-GREEN-A0D74-17nov60 consommé : EXACTa0d74,
+UNEinvocation41OK/0FAIL/0ERROR/0skip(18+16+7), unittest0,062s/enveloppe
+0,286407600s/rc0/0retry. Preuves3fichiers doublehôte réhash0écart,
+R/cx-archi-cpu-green-a0d74-17nov-r1 manifest3213a6842a455c7837f10005216416b77b0ad37a3602ed5687e29d8d86c3d957.
+AncienERROR3839 et rougecfg3a786 préservés avec chronologie a797avantRED.
+PrépaPCcode/métadonnées/paquet autorisée, ROtotale nouveaupinQ puis GO natif
+distinct toujours requis. Aucun runtime/service/SDK/target qualifié par ce vertCPU.

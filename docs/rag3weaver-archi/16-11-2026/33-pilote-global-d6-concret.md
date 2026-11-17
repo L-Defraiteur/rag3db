@@ -235,3 +235,21 @@ premier ERROR, aucun41verts. Aucun retry. R/cx-archi-cpu-green-3839-17nov-r1,
 3fichiers doublehôte réhash0écart ; manifest2cd32197e837834b48bcbdc52730c752709ac14404b3d0d2c29f5e712627abf1.
 Le GO est consommé, pas de prépaPC/native/SDK/service/Vertex/target autorisée
 par ce résultat. Historique rouge3a786 et publicationa797avantRED conservés.
+
+### Ensemble a0d74 vert sous GO exact distinct
+
+GO C7-ARCHI-CPU-GREEN-A0D74-17nov60, EXACTa0d74de57fe8bec364372264e4520b0b736a28a8
+propre/poussé, UNE invocation exacte3modules/41méthodes(18+16+7)/failfast,
+TERM58+KILL2. Résultat41OK/0FAIL/0ERROR/0skip, unittest0,062s,
+enveloppe0,286407600s/rc0,0retry. Simulations hermétiques seulement ; aucune
+exécution Cargo/native/SDK/proc/signal réel par fixtures/Vertex/DB/service/target.
+Ancien383936OK1ERROR+4nonjoués reste intact ; rouge3a786 exécuté APRÈS
+publicationfixa797 reste décrit sans réécriture historique.
+
+Preuves3fichiers horsW local+PC R/cx-archi-cpu-green-a0d74-17nov-r1,
+réhash0écart chacun ; manifest3213a6842a455c7837f10005216416b77b0ad37a3602ed5687e29d8d86c3d957,
+log4b24cdef631eded092c23b23aa0fb5b56ea79dd668cc9533c5f70356f9e91f87.
+SourceJSON pin/19SHA/argv/cwd/GO, résultatJSON rc/horloges conservés avant
+aucune autre activité. Suite autorisée : PRÉPA PC métadonnées/code/paquet,
+puis nouveaupinQ/ROtotale code+pins avant éventuel GO natif7455 distinct.
+Aucun natif ni réservation poste ne découle de ces41verts ; ticket reste ouvert.
