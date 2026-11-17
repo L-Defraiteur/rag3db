@@ -165,3 +165,8 @@ RO preuves Banc a4a2de1e1a : [rapport21](../../banc/16-11-2026/21-ro-preuves-ver
 ### Banc — pin rouge lecteur77659fb7
 
 [RO ciblée favorable préparation](../../banc/17-11-2026/06-ro-provider-lecture-publication.md) : Reader byte-identiquee1f5,8nouveauxcas/17NONJOUÉS ; vrais Reader/JSONTempDirs, attendu statique5FAIL ValueErrornotraised pour heads/admissionmutée/parent/root, aucune observation dynamique. Futur cas head40hex valide recommandé pour distinguer égalité de format. GO CPU rouge exact distinct à C7, aucun bridge/natif/229bQ changé ; ticket OUVERT.
+
+
+### Banc — lecteur corrigé6e12d6c8
+
+[RO groupée favorable préparation](../../banc/17-11-2026/06-ro-provider-lecture-publication.md) : cinq rouges5917 relus3/3SHA PC+local/4SHA Git/5FAIL0ERROR, pas de rejeu. Chaîne complète des heads/cwd-manifeste indépendants, admissionbytesSHA+reread et dirfdroot/parents/identités auxfrontières traitent les réserves.3AST/17témoins inchangés NONJOUÉS sur vert ; GO CPU exact C7 encore requis. Readerphysicalfalse/bridgeabsent/229bQfigés/config40NONEXEC ; ticket OUVERT.
