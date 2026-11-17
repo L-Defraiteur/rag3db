@@ -683,3 +683,11 @@ manifest39b81afa95ec491efc77fa810f8024fffbe73963e0b9f8067ae9cabe777437d9.
 Paths/identités/proofsha dansplanfixture. AllocationREADY≠transport/lease,
 0clientRustCexécuté/aucunPG5433ouserviceoriginaltouché ; suiteC source/tests/
 rouge/RO/pins/GOcontactdistincts requis.01rougecleanupconservé,0retry02.
+
+Avantloadernouveau : troisfiletscredentialsréférences fixtureprivée, mode0600,
+refuspréopenhorsscope/horsnonce etreprmasqué écritsNONJOUÉS. Aucunfichierréel
+lu : fichierscanarisfutureCPUuniquement. PréparerlectureAPIgatedsousfutureGOC,
+pathfixturecachecanonique/nonce/rootprivate/UID0600nlink1,DSNmémoireLoopback
+portprivé/roleDBexternes/sslmode=disable. Pasd'entréeCLIactive ni chargement
+implicite du secret. Sous-sourceCnouvellecontratfieldfixture_nonce distingue
+nonceallocationDocker du nonceprobeREADY ; aucune fixturehistorique réétiquetée.

@@ -12,9 +12,9 @@ CANARY='G_V2_FAKE_SECRET_CANARY'
 
 def allocation():
     return dict(schema_version=2,kind='pg-probe-allocation-v2',host_id='FAKE-PC',clock_domain='FAKE-PC-MONOTONIC',
-                nonce='a'*32,scope='FAKE-SCOPE',source_sha256='1'*64,client_sha256='2'*64,
-                target=dict(host='127.0.0.1',port=15433,database='g_pg_probe_fake',user='g_pg_observer'),
-                expected_identity=dict(database='g_pg_probe_fake',user='g_pg_observer',session_user='g_pg_observer',
+                nonce='a'*32,fixture_nonce='b'*32,scope='FAKE-SCOPE',source_sha256='1'*64,client_sha256='2'*64,
+                target=dict(host='127.0.0.1',port=15433,database='g_pg_probe_bbbbbbbbbbbb',user='g_pg_observer'),
+                expected_identity=dict(database='g_pg_probe_bbbbbbbbbbbb',user='g_pg_observer',session_user='g_pg_observer',
                 database_oid=101,user_oid=102,owner='g_pg_fixture_owner',owner_oid=103,server_address='127.0.0.1',
                 server_port=5432,server_version_num=170000,postmaster_start='FAKE-START'),
                 reservation_reference='FAKE-RESERVATION',role_readonly_attested=True,private_test=True,
@@ -25,7 +25,7 @@ def frames():
     identity=dict(allocation()['expected_identity'],backend_pid=201,application_name='g-pg-'+'a'*32)
     state=dict(transaction_read_only=True,default_transaction_read_only=True,superuser=False,createdb=False,
                createrole=False,replication=False,bypassrls=False,database_owner=False,
-               user='g_pg_observer',database='g_pg_probe_fake',backend_pid=201)
+               user='g_pg_observer',database='g_pg_probe_bbbbbbbbbbbb',backend_pid=201)
     return [dict(event='connected',session='identity',cancel_token_acquired=True),
             dict(event='readonly',session='identity',state=state),dict(event='identity',row=identity),
             dict(event='closed',session='identity',driver_joined=True),
@@ -110,12 +110,41 @@ class V2Fixtures(unittest.TestCase):
         def finish(*args,**kwargs):now[0]=1011.;return old_finish(*args,**kwargs)
         transport.finish=finish
         with self.assertRaises(v2.Refused):self.run_probe(transport,clock=lambda:now[0])
+    def test_finish_failure_is_not_retried(self):
+        transport=FakeTransport()
+        def finish(deadline,*,stop):
+            transport.calls.append(('finish',deadline,stop));raise TimeoutError(CANARY)
+        transport.finish=finish
+        with self.assertRaises(v2.Refused):self.run_probe(transport)
+        self.assertEqual(sum(x[0]=='finish' for x in transport.calls),1)
+        self.assertNotIn(CANARY,(self.out/'first-red.json').read_text())
     def test_duplicates_and_overflow_refuse(self):
         for name,raw in [('dup',b'{"event":"connected","event":"complete"}\n'),('big',b'x'*65537)]:
             with self.subTest(name=name):
                 self.out=Path(self.tmp.name)/name;self.out.mkdir()
                 transport=FakeTransport();transport.capture=lambda *a:iter([raw])
                 with self.assertRaises(v2.Refused):self.run_probe(transport)
+
+
+class CredentialReferenceFixtures(unittest.TestCase):
+    def setUp(self):
+        import os
+        self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
+        self.cache=Path(self.tmp.name);self.root=self.cache/('allocation-'+'b'*12)
+        self.root.mkdir(mode=0o700);(self.root/'credentials').mkdir(mode=0o700)
+        self.path=self.root/'credentials/observer-password';self.path.write_text('c'*64+'\n');self.path.chmod(0o600)
+    def test_allocated_file_is_memory_only_and_repr_is_masked(self):
+        secret=v2.read_allocated_secret(self.path,allocation(),self.cache,scope_check=lambda:True)
+        self.assertIn('port=15433',secret.dsn);self.assertNotIn('c'*64,repr(secret))
+    def test_wrong_mode_is_refused(self):
+        self.path.chmod(0o644)
+        with self.assertRaises(v2.Refused):v2.read_allocated_secret(self.path,allocation(),self.cache,scope_check=lambda:True)
+    def test_unrelated_path_or_inactive_scope_refuses_before_open(self):
+        from unittest.mock import patch
+        with patch.object(Path,'open',side_effect=AssertionError('must not read')) as opened:
+            with self.assertRaises(v2.Refused):v2.read_allocated_secret(self.path,allocation(),self.cache,scope_check=lambda:False)
+            with self.assertRaises(v2.Refused):v2.read_allocated_secret(self.cache/'unrelated',allocation(),self.cache,scope_check=lambda:True)
+            opened.assert_not_called()
 
 
 if __name__=='__main__':unittest.main(verbosity=2)
