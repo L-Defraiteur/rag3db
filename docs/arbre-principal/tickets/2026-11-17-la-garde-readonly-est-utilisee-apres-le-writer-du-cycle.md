@@ -133,3 +133,14 @@ fichiers/m manifeste bc6272eb...af557 conformes sur deux hôtes.
 prepared96ebc22e7fae474f812273e0bf2f8d41b3f24b5205c6e4f21d4594fbbd0f3099 :
 22copiesSHA/guardrc0/HEADsourceexactpropre/P-S-allocation-grantabsents.
 Deux RO totales demandées, aucun GO natif/auditfreeze/rewrite. Ticket OUVERT.
+
+## Qv9 corrective observée, preuves à revue
+
+GO C7-LIFECYCLE-POSTWRITER-E9-Q9-17nov900 consommé UNE fois surE9/Q9 exacts :
+rc0/composéLIFECYCLE_FIXTURE_OBSERVED,acteurRELEASED,scopeVERT0/restes[]nettoyé.
+PRE persisté puis POST physique distinct et COLD readonly observés ;
+bits97247/graph38tables/FTS5/dette0/sources/quiet jugés. Quiet11UNKNOWNglobaux
+conservés, pas d'innocuité mondiale ni durabilité/LIVE. [Rapport09](../17-11-2026/09-cycle-q9-observe-preuves.md)
+et manifeste444fichiers315611900octets réempreintés sur deux hôtes avant revue.
+Ancien65eb/Qv8 reste ROUGE. Ticket OUVERT en attente des deux RO preuves et
+de la décision C7 ; aucune autorisation de retrait/intégration/relance.

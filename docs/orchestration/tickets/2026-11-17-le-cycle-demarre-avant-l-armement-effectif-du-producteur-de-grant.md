@@ -192,3 +192,11 @@ diagnostic. Inventaires persistés : retraits .ecrivain/.wal, DB SHA changé
 à taille constante, autres entrées identiques ; cause/innocuité NON QUALIFIÉES.
 Suites vecteurs/graph/FTS après rouge NON JOUÉES. Aucune DB/health/recovery
 nouvelle autorisée ; proposition RO puis revue avant tout éventuel GO distinct.
+
+Qv9/sourceE9 corrective distincte a ensuite consommé GO
+C7-LIFECYCLE-POSTWRITER-E9-Q9-17nov900 : cycle privé observé rc0/acteurRELEASED,
+postwriterphysique+POSTlogiques/COLD et finaliseur passés ;
+[rapport09](../../arbre-principal/17-11-2026/09-cycle-q9-observe-preuves.md),
+444bruts/manifeste feb5ec...9edf réempreintés deux hôtes. Deux RO preuves
+demandées ; ancienQv8/65eb reste ROUGE, aucune qualification rétroactive.
+Ticket reste OUVERT jusqu'à arbitrageC7, aucun LIVE/durabilité/retrait déduit.
