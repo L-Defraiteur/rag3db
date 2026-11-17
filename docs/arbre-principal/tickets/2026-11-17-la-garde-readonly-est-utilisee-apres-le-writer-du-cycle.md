@@ -39,3 +39,11 @@ Un futur inventaire avant-writer doit être persisté avant l'action concernée.
 Aucune nouvelle DB/health/writer/recovery/service/retour natif autorisée.
 Une proposition de qualification RO éventuelle nécessite source/paquet neufs,
 revues et GO exact distinct ; les anciens rouges et leur paquet restent figés.
+
+Deux RO preuves reçues : Recherche favorable bornée et ED4cb7cbd277, sans
+innocuité ni qualification logique. [Proposition07](../17-11-2026/07-proposition-contrat-postwriter.md)
+prépare le contrat physique distinct, les préconditions writer attestées et
+les mutants du vrai raccord. Contrat à relire avant écriture du harnais ;
+témoins NON ÉCRITS/NON JOUÉS, aucune garde modifiée. La cause directe du refus
+Qv8 est le retrait .wal/.ecrivain ; le changement SHA DB est exclu de CE juge.
+Pas de sources-after/postquiet capturés : FIN après rouge non qualifiée.
