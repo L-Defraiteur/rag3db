@@ -125,3 +125,8 @@ C7 distinct avant exécution. Code source8b94353 inchangé.
 ### Banc — RO couple complet FSREDv2 d844a166
 
 [RO favorable préparation v2](../../banc/17-11-2026/03-ro-couple-fs-red.md) :9pinsPC/preflight39ccf66b/export51a9 portable-Git conformes,identitésQ/T/source cohérentes. Timeout shell avant Python/workerargv/BOOTTIME, duréePCreste−8 etARMRTT<=8,CommonMIN/finale/ACKautonome avantELF vérifiés par lecture ;6rougesnomcause+positif/infraSTOP maintenus.3AST/0runBanc ;3CPUverts simulés ne qualifient pasOSkill300/cleanup distant/admissionFS. GO C7 exact distinct requis,ticket OUVERT.
+
+
+### Banc — couple total v3 eb2f27652c : un reste final
+
+[RO totale v3](../../banc/17-11-2026/03-ro-couple-fs-red.md) :9copies/preflighte986/identitésQ/T/source0f/lockdbdb conformes, STARTavantARM/ENDaprèscleanup/clock/réserve/guardoldCommon reconnus ;probesd13 préparés NONJOUÉS. HOLD verdictfinal : lock effectif contrôlépréflight+postcompile seulement, pas aprèsjuges ni avantfinal-accepted alorsque recette18étape6 annonce rehashlock. Gitstatus ne couvre pas ce lock ignoré (pas de contradiction lock/Gitpropre). Ajouter contrôlefinaleffectif dansEND+témoin TempDir mutationtardive avantfix, nouveauxpins/RO. Aucunrun/procscan/Cargo/ELF/corpus,GO300distinctnonacquis/ticket OUVERT.
