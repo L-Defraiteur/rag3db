@@ -123,3 +123,12 @@ inventer une route TaskService. TaskAPI réelle ouvrir_une_tache_nommee, TTY ré
 crate tty/featurevue. SourceRust/APIprod intouchées. Piloteseul sous docs,
 publication/témoinshermétiques/ROcoupleexacte AVANT tout Cargo/Vertex/service/
 PCtransition/T0mutation. APP742/P01c3/72preuves gardés. Aucun GO7455.
+
+### Réserve statique C7 sur le témoin CPU du pilote dc868, avant correction
+
+Le témoin importé `test_real_cpu_profile_requires_six_absent_fields_and_rustup_ld`
+cherche encore `driver.py` et ses anciennes constantes, absents du pilote global.
+Défaut certain en lecture seule, aucun essai exécuté : aucun rouge dynamique revendiqué.
+Raccorder le témoin au vrai constructeur `Observer.cargo_profile` actuel par AST/appel,
+sans recréer un profil attendu inventé dans la fixture. Regrouper les réserves de RO
+avant nouveau pin et GO CPU distinct. Aucun GO natif ni activité réelle.
