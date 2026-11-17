@@ -100,3 +100,26 @@ La préparation du fix source est dans le périmètre C7, avec admission avant
 consommation/refus précis/UTF8/couverture15/absence sans skip ; nouveau pin,
 RO et GO distinct avant toute nouvelle exécution. GO3 est clos, aucun natif
 corpus/A-B ou « vert FS » n'en découle.
+
+
+## Revue Recherche des preuves bb5707c6a5
+
+Verdict reçu : favorable borné **aux preuves RED FS**, sans rejeu. Recherche a
+rehashé les objets Git des quatre listes : 62 entrées PC, 7 portables,
+5 CPU lock et 6 CPU journal, soit **80 entrées conformes**. Elle a aussi
+rehashé les 16 copies de l’archive privée **locale** (sources et deux ELF,
+16 801 267 octets), sans écart. La conservation PC reste ici la preuve du
+porteur ; Recherche ne revendique pas de rehash PC intégral indépendant.
+
+Les sept journaux et leurs SHA corroborent les six FAIL101 sémantiques précis
+et le PASS, avec les compteurs attendus. Ledger/ACK avant inventaires et juges,
+lock effectif et seed DBDB, derniers recontrôles, fins Common et physique,
+retour SSH réapé0 et cleanup sans erreur sont cohérents à sa lecture.
+Les champs pending historiques restent intacts, complétés par les reçus
+ultérieurs. Les 11 UNKNOWN globaux ne prouvent aucune quiétude universelle.
+Les cinq PASS CPU concernent leurs modèles annoncés ; les sept juges FS
+sont bien du Rust natif exécuté. Aucun corps groundtruth/index/corpus exécuté.
+
+Aucun rejeu, import, test, proc, OS, DB ou corpus par Recherche. Cette revue
+permet la préparation source ; **elle ne qualifie pas la gate FS corrigée**.
+Revue Banc encore attendue ; nouveau pin, RO et GO distincts avant exécution.

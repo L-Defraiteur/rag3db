@@ -496,3 +496,13 @@ correcte/corpusqualifiés. RédactionfixsourceadmiseparC7 APRÈSconservation,
 contratadmissionavantconsommation/refus/absence-sansskip/UTF8/couverture15 à
 expliciter ; nouveaupin/RO/GOdistinctavanttouteexécution. ActionsROpreuves
 Recherche+Banc demandées SANSrejeu/DB/OS/proc/corpus. GO3clos/ticketOPEN.
+
+
+RO Recherche des preuves exactes bb5707c6a5 favorable bornée RED FS reçue :
+80 entrées Git conformes (62PC+7portable+5CPUlock+6CPUjournal), 16 copies
+privées locales sources/2ELF conformes (16801267 octets). Pas de rehash PC
+intégral indépendant revendiqué. Sept journaux/causes/compteurs, ledger/ACK,
+locks DBDB et fins Common/physique corroborés ; pending bruts complétés sans
+réécriture, 11UNKNOWN nonattribués. Aucun rejeu/import/test/proc/OS/DB/corpus
+par Recherche. Détail rapport17/24. Gate toujours RED ; Banc attendu, puis
+nouveau pin/RO/GO distinct avant toute exécution. Ticket reste ouvert.
