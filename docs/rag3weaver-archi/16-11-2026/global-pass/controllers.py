@@ -169,4 +169,3 @@ def scan(expected, roots, old_cgroup, proc_root=Path('/proc'), current_pid=None,
     return dict(found=found, unknown=unknown, controllers=controllers, ancestors=ancestors,
                 ancestor_errors=ancestor_errors, expected=expected, roots=[str(r) for r in roots],
                 observed=time.monotonic(), historical_pid_56584_attribution='UNRESOLVED')
-
