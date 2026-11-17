@@ -3,6 +3,9 @@
 - **État** : ouvert, qualification ciblée verte, canonique union à jouer.
 - **Pour** : Recherche.
 - **Famille** : produit
+- **Gravité** : haute pour la maintenance : une lecture froide ne doit pas modifier les index existants.
+- **Atteignable en service** : possible via les lectures physiques du catalogue ; les preuves présentes sont ciblées, pas une qualification du service.
+- **Touche rag3weaver** : oui ; catalogue et lecteur physique FTS sans writer.
 - **Parent** : [maintenance générale](2026-11-16-la-maintenance-du-plein-texte-ne-peut-pas-ouvrir-un-index-existant.md), qui reste ouvert pour l’exigence d’un writer de purge/compact.
 
 Portée distincte : ouvrir en snapshot public read_only les fichiers existants de la table physique/cellule exacte pour live_ids et dry-run. Aucune redirection publique du chemin, aucun writer/create/rebuild/reprise, refus absent/corrompu/IO/métadonnées/génération/promesse/pending et recontrôle après relevé entier. Ce ticket ne livre pas la purge froide.

@@ -3,6 +3,9 @@
 - **État** : ouvert, canonique arrêtée au premier rouge, attribution NON ÉTABLIE.
 - **Pour** : Recherche, revue Hotfixs/ED coordonnée C7 avant action.
 - **Famille** : produit
+- **Gravité** : haute pour la qualification : le nombre de documents diverge du graphe après synchronisation.
+- **Atteignable en service** : possible via Catalog/sync_source ; attribution de la trace historique et reproduction en service non qualifiées.
+- **Touche rag3weaver** : oui ; garde FTS du catalogue et synchronisation de source.
 - **Parent** : [maintenance générale](2026-11-16-la-maintenance-du-plein-texte-ne-peut-pas-ouvrir-un-index-existant.md), ouvert ; [lecture sans writer](2026-11-16-lire-un-index-plein-texte-existant-sans-writer.md), cible verte mais canonique non qualifiée.
 
 ## Preuve exacte avant tout correctif

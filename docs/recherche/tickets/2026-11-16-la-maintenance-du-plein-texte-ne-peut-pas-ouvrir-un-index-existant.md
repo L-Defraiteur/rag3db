@@ -3,6 +3,8 @@
 - **État** : ouvert, 16 novembre 2026, demande C7.
 - **Pour** : Recherche ; coordination G/Arbre pour copies privées de migration.
 - **Famille** : produit
+- **Atteignable en service** : oui ; demande /backend/fts-live-ids rapportée en refus422 sur hôte927, sans nouvelle exécution ici.
+- **Touche rag3weaver** : oui ; catalogue, ouverture des index et maintenance physique.
 - **Gravité** : maintenance bloquée ; une ouverture ordinaire peut modifier la preuve.
 
 ## Constat et liens

@@ -2,6 +2,9 @@
 
 - **État** : ouvert, constat statique NONQUALIFIÉ runtime.
 - **Famille** : produit
+- **Gravité** : haute : une erreur de compte confondue avec zéro peut provoquer une maintenance injustifiée.
+- **Atteignable en service** : possible via Catalog ; constat statique du compteur, pas reproduction en service qualifiée.
+- **Touche rag3weaver** : oui ; catalog/progress.rs et garde des comptes FTS.
 - **Pour** : Recherche/C7, arbitrage séparé du bypassgénérations.
 - **Parent** : [garde302/301](2026-11-16-la-garde-des-comptes-en-blobs-reste-a-302-documents-pour-301-lignes.md).
 
