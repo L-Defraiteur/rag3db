@@ -143,3 +143,14 @@ Cette proposition de phase ne tranche pas l'ordre/budget des GO futurs :
 C7 garde l'arbitrage canon LOCAL puis TTY. Le couple final devra matérialiser
 ces bornes et politiques, sans usage implicite dans les étapes dites sans
 embedding. Aucun contact, acteur armé, lease ou réservation n'en résulte.
+
+Référence topologie/PG G inactive publiée après cette proposition :
+`85c96a59be`, `docs/optimiseur/17-11-2026/01-tty-local-resource-contract.md`
+et `tty-local-resources.inactive.json`, même ticket TTY. Mapping nominal
+LOCAL7979/7980→PC7878/7879 seulement ; PGtest LOCAL5433 distinct de PC.
+OID/image/container/horloge LOCAL/réservation restent UNKNOWN ; aucune
+transposition de PGv1 CLOCKPC/private-host-psql vers LOCAL sans revue. Le
+profil n'arme rien ; outil requis absent = HOLD avant ARM. Source/pilote/Q,
+nonce/scope/END/lease/release restent absents des preuves runtime actuelles.
+G impose lease PG couvrant END et admitted_at original ; la durée effective
+et les domaines d'horloge restent à matérialiser dans le couple final.
