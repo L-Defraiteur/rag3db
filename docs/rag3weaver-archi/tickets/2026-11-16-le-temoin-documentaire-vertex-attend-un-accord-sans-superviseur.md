@@ -146,3 +146,9 @@ runtime/premièrecause lus, aucun nouveau blocage établi. 39fonctionsNONJOUÉES
 aucunCPU-fixture/proc/native/Cargo/Vertex/DB/service ni pinPC validé. CPU60,
 paquet exact puis RO et GO natif7455 restent décisions C7 distinctes ; ticket
 OUVERT, aucune qualification réelle ni ancien rouge repeint.
+
+Delta résiduel60f9 relu ED statiquement favorable, suite rapport31 : bloc/hash
+du juge rouge exigé aussi au vert avant session, relu built/tested ; source/
+index comparés et validateur modifiable. Témoin vrai Broker.handle altération
+vert écrit NONJOUÉ ; 40fonctions sans résultat CPU déduit. Aucun pinPC/GOCPU60/
+GOnatif7455 validé ou transféré ; ticket inchangé OUVERT.

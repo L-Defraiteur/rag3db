@@ -46,3 +46,19 @@ modèle ou transition/cache PC. Seules lectures Git et hashes des blobs. Paquet
 PC final et pins toujours absents de cette demande : aucune validation de
 copie/configuration réelle. À C7 la décision CPU60 distincte ; GO natif7455,
 ACK services et admission réelle restent entièrement distincts.
+
+## Delta résiduel60f9
+
+RO courte favorable sur PILOTE `60f9af5f342d9a24adea8b718ad48d0d5e337f85`,
+APPf1e8 inchangée. Seuls broker/témoin et documents changent depuis4461.
+L'admission des DEUX étapes agent impose le bloc D6_RED_TEST unique ; le vert
+compare son hash à celui du rouge réellement acquis avant d'inscrire la session.
+Les branches built/tested relisent le bloc et gardent la comparaison complète
+source/index autour de la compilation et du test. Le validateur reste
+modifiable entre rouge et vert, le reviewer séparé n'est pas employé pour
+reconstruire la cause rouge. Le nouveau témoin appelle le vrai Broker.handle
+avec corps vert altéré et exige refus avant création de session.
+
+Lecture seule, témoin NON JOUÉ, 40 fonctions écrites sans résultat CPU déduit.
+Aucun nouveau blocage établi sur ce delta. Les limites de la RO4461 restent
+valables : pas de paquet PC/pins validés, pas de GO CPU60 ni natif7455 transféré.
