@@ -8,6 +8,11 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import math
+import re
+from collections.abc import Mapping
+from dataclasses import dataclass
+from types import MappingProxyType
 import os
 from pathlib import Path
 import shlex
@@ -17,6 +22,126 @@ import subprocess
 import sys
 import tempfile
 import time
+
+
+def _json_plain(value):
+    if isinstance(value, Mapping):
+        return {key: _json_plain(item) for key, item in value.items()}
+    if isinstance(value, tuple):
+        return [_json_plain(item) for item in value]
+    return value
+
+
+def _json_frozen(value):
+    if isinstance(value, Mapping):
+        assert all(isinstance(key, str) for key in value)
+        return MappingProxyType({key: _json_frozen(item) for key, item in value.items()})
+    if isinstance(value, (list, tuple)):
+        return tuple(_json_frozen(item) for item in value)
+    assert value is None or isinstance(value, (str, bool, int, float)), 'non-JSON plan value'
+    if isinstance(value, float):
+        assert math.isfinite(value), 'non-finite plan value'
+    return value
+
+
+def canonical_sha(value):
+    raw = json.dumps(_json_plain(value), sort_keys=True, separators=(',', ':'),
+                     ensure_ascii=False, allow_nan=False).encode('utf-8')
+    return hashlib.sha256(raw).hexdigest()
+
+
+def safe_id(value):
+    assert isinstance(value, str) and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,95}', value)
+    assert value not in ['.', '..']
+    return value
+
+
+def require_sha(value):
+    assert isinstance(value, str) and re.fullmatch('[0-9a-f]{64}', value), 'invalid SHA256'
+    return value
+
+
+@dataclass(frozen=True)
+class StageSpec:
+    label: str
+    ledger_file: str
+    files: Mapping
+    executables: Mapping
+    source_contract: Mapping
+    window_seconds: float | None
+
+    @property
+    def binding_sha256(self):
+        # Identité du CONTRAT attendu, jamais SHA d'un patch ou fait observé.
+        return canonical_sha(self.source_contract)
+
+
+@dataclass(frozen=True)
+class PublicationPlan:
+    protocol_version: int
+    execution_id: str
+    phase_id: str
+    stages: tuple
+    sha256: str
+    value: Mapping
+
+    def stage(self, label):
+        found = [spec for spec in self.stages if spec.label == label]
+        assert len(found) == 1, 'undeclared publication label'
+        return found[0]
+
+    def position(self, label):
+        return tuple(spec.label for spec in self.stages).index(label)
+
+
+def validate_plan(value):
+    if isinstance(value, PublicationPlan):
+        return value
+    value = _json_frozen(value)
+    assert set(value) == {'protocol_version', 'execution_id', 'phase_id', 'stages'}
+    assert value['protocol_version'] == 1
+    safe_id(value['execution_id'])
+    safe_id(value['phase_id'])
+    assert value['stages'], 'empty publication plan'
+    stages, previous = [], {}
+    for raw in value['stages']:
+        assert set(raw) == {'label', 'ledger_file', 'files', 'executables', 'source_contract', 'window_seconds'}
+        label = safe_id(raw['label'])
+        assert label not in previous, 'repeated publication label'
+        files = raw['files']
+        assert isinstance(files, Mapping) and files
+        for name, role in files.items():
+            safe_id(name)
+            assert role in ['ledger', 'data', 'executable']
+        ledger = safe_id(raw['ledger_file'])
+        assert files.get(ledger) == 'ledger'
+        assert sum(role == 'ledger' for role in files.values()) == 1
+        assert isinstance(raw['source_contract'], Mapping) and raw['source_contract']
+        window = raw['window_seconds']
+        assert window is None or isinstance(window, (int, float)) and not isinstance(window, bool) and math.isfinite(window) and window > 0
+        refs = raw['executables']
+        assert isinstance(refs, Mapping)
+        for artifact, ref in refs.items():
+            safe_id(artifact)
+            assert set(ref) == {'stage', 'file'}
+            target_label, file_id = safe_id(ref['stage']), safe_id(ref['file'])
+            target_files = files if target_label == label else previous.get(target_label)
+            assert target_files is not None, 'reference to a future or unknown publication'
+            assert target_files.get(file_id) == 'executable', 'reference to non-executable payload'
+        declared_execs = {name for name, role in files.items() if role == 'executable'}
+        used_execs = {ref['file'] for ref in refs.values() if ref['stage'] == label}
+        assert declared_execs == used_execs, 'executable without a logical identity'
+        stages.append(StageSpec(label, ledger, files, refs, raw['source_contract'], window))
+        previous[label] = files
+    return PublicationPlan(1, value['execution_id'], value['phase_id'], tuple(stages), canonical_sha(value), value)
+
+
+def context_header(plan, prepared_sha256, label):
+    spec = plan.stage(label)
+    return {'protocol_version': plan.protocol_version, 'execution_id': plan.execution_id,
+        'phase_id': plan.phase_id, 'sequence': plan.position(label), 'stage': label,
+        'prepared_sha256': require_sha(prepared_sha256), 'plan_sha256': plan.sha256,
+        'binding_sha256': spec.binding_sha256}
 
 
 def digest(path):

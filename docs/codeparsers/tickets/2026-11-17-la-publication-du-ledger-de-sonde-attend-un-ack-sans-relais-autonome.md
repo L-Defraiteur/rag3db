@@ -188,3 +188,12 @@ nouveau ni native/transport qualifié par ces contre-exemples. L'expectedbinding
 est un contrat statique ; ne jamais le confondre avec le SHA des faits observés
 ou d'un patch futur. Plan deepfreeze, refs vers seuls ACK antérieurs et tous
 modules épinglés restent des garanties à implémenter/relire sur le vrai noyau.
+
+### Prépublication de huit témoins WindowEvent avant implantation
+
+Après accordC7c7cabacd87 en continuité1cc2, ajouter les contre-exemples de
+fenêtrage/owner/gardes avant helpers s'ils sont absents : huit cas du vrai Gate
+réutilisent la fixture d'identités/clockD45, sans noyau factice/OS/provideractive.
+API absente signalée FAILnommé ; rien encore exécuté. Types/validateurs de plan
+commencent la préparation de capacité, mais aucune boucle4/Windowruntime livrée
+à ce point. Nouveaux budgetsCPU/RO distincts nécessaires avant essais.

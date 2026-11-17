@@ -58,3 +58,14 @@ NONJOUÉS et la demande4stages demeure non supportée à cette publication.
 Sa fixture de transport déclare les vrais quatre labels et huit occurrences,
 sans implémentation de copie ou noyau caché. Aucun résultat rouge/vert de cette
 étape n'est encore revendiqué ; budgetsCPU/RO exacts distincts encore requis.
+
+## Prépublication des fenêtres, avant helper runtime
+
+Huit témoins du vrai Gate sont écrits avant record/observe_window : clamp à
+ENDopPC, caller réel déclaré, PID réutilisé, autreledger, autrephase, unicité,
+expiration sans reset et absence de chemin approuvé. Ils réutilisent les vraies
+fixtures Gate/processReader/horlogeD45 ; aucun noyau factice ou provideractive.
+L'absence actuelle de l'API donne un FAIL nommé, jamais un importERROR masqué.
+Aucun de ces témoins n'est encore joué. Les seules nouvelles fonctions runtime
+à cette prépublication sont des types/validateurs de plan deepfreeze, pas les
+boucles quatre labels ni les helpers WindowEvent ; pas de capacité annoncée.
