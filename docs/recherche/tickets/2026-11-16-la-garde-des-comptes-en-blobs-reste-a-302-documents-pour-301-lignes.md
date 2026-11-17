@@ -517,3 +517,11 @@ pathcanonique(devETinode)/FLOCKmode-range/inodekernel==inodeFD stricts ; seuls
 les devices kernel etstat restent archivés séparément au lieu d'être comparés.
 Aucun hardcode55/38 ni essais natifs autorisés. ROcontratsource avant nouveaux
 pins/CPU/natifGO distincts. Diagnostic01/anciens paquets restent immuables.
+
+Cinq témoins publiés AVANTfix d2151d61d5. Prédicat attest_poste préparé :
+FD9stat(dev,inode)==pathcanonique toujours strict, FLOCKmode/range et inode
+kernel==inodeFD stricts ; devices kernel/stat archivés séparément, aucun
+hardcode. Toutes gardes Common/identités/propriétaire/fiche/CG/plafond restent.
+SourcesLinuxv6.8 btrfs_getattr/lock_get_status citées dansproposal03 ; pas de
+preuve du kernel7.3 exact ni réhabilitationB-R3. ROcontrat source demandée
+avant nouveauxpins/CPU/natifGOdistincts, aucunCPU/proc réel/compiler exécuté.

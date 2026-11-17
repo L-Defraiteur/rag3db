@@ -81,13 +81,19 @@ def attest_poste(common,table,expected_root):
     fields=lines[0].split()
     require(len(fields)==9 and fields[2:5]==['FLOCK','ADVISORY',mode] and fields[7:]==['0','EOF'],'wrong kernel file lock kind')
     device=fields[6].split(':')
-    require(len(device)==3 and (int(device[0],16),int(device[1],16),int(device[2]))==(os.major(ls.st_dev),os.minor(ls.st_dev),ls.st_ino),'kernel lock inode differs')
+    require(len(device)==3,'kernel device tuple shape differs')
+    kernel_device=[int(device[0],16),int(device[1],16)];kernel_inode=int(device[2])
+    require(all(x>=0 for x in kernel_device) and kernel_inode>0,'invalid kernel device/inode')
+    # Btrfs stat.dev=root.anon_dev ; fdinfo verrou utilise inode.i_sb.s_dev.
+    # Le lien strict reste FD9 stat(dev,inode)==path canonique, puis inode kernel.
+    require(kernel_inode==fd.st_ino,'kernel lock inode differs')
     require(common.processus().get(pid)==row,'poste identity changed during attestation')
     stable=lambda st:(st.st_dev,st.st_ino,st.st_uid,st.st_mode,st.st_size,st.st_mtime_ns,st.st_ctime_ns)
     require(stable(fiche.stat())==stable(fs) and stable(lock.stat())==stable(ls),'poste files changed during attestation')
     return dict(lock_root=str(root),pid=pid,start=row['debut'],cgroup=row['cgroup'],uid=os.getuid(),
                 fiche=dict(path=str(fiche),device=fs.st_dev,inode=fs.st_ino,sha256=hashlib.sha256(text.encode()).hexdigest()),
-                lock=dict(path=str(lock),device=ls.st_dev,inode=ls.st_ino,fd=9,mode=mode,kernel_line=lines[0]))
+                lock=dict(path=str(lock),device=ls.st_dev,inode=ls.st_ino,fd=9,mode=mode,
+                          kernel_device=kernel_device,kernel_inode=kernel_inode,kernel_line=lines[0]))
 
 
 def common_authority(packet_root,packet):

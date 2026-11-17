@@ -318,3 +318,29 @@ filesystem ni assouplir le garde. Aucun retry/lectureproc fraîche dans cette
 Preuves dixfichiers vérifiées deuxpostes ; receiptSHA256
 2093d05fbd762591eb1e7d1046abed6eace090a21bf646fae9808edec28bd84d.
 Qualification OS/transport toujours absente ; aucun lease ou GO C déduit.
+
+## Contrat kernel/stat corrigé — préparation source seulement
+
+Arbitrage C7 786afef624, après capture complète distincte. Sources primaires
+Linuxv6.8 relues : btrfs_getattr renseigne stat.dev avec root.anon_dev
+([inode.c](https://github.com/torvalds/linux/blob/v6.8/fs/btrfs/inode.c)) ;
+lock_get_status rend le device inode.i_sb.s_dev dans fdinfo
+([locks.c](https://github.com/torvalds/linux/blob/v6.8/fs/locks.c)).
+Ces deux devices n'ont donc pas de garantie d'égalité générale.
+C7 a relevé Btrfs/noyau7.3.1-1-cachyos surPC ; ces sourcesv6.8 ne constituent
+pas une preuve du binaire7.3 exact, ni des valeurs perdues de B-R3.
+
+Cinq témoins du vrai attest_poste publiés AVANTfix d2151d61d5 : cas55vs38,
+inodekernelétranger, FD9autrefichier, FLOCKmode/rangeerroné, propriétaireétranger.
+Ils complètent les sixcas existants racine/PIDstart/FLOCK/FD/absenceautorité
+native. Tous NON JOUÉS sur cette source, aucun rouge unitaire inventé.
+
+Le correctif de préparation maintient stricts Common/signature/ascendance/
+cgroup/plafond, racine externe canonique, PIDstartUIDCG/fiche stable, FD9
+stat(dev,inode)==poste.lock canonique, FLOCK ADVISORY mode/range et
+inodekernel==inodeFD9. Les devices kernel etstat sont archivés séparément
+avec la ligne brute ; aucun hardcode55/38 ni suppression de preuve d'identité.
+Parent et enfant comparent encore leur preuve complète (deux devices inclus).
+L'ancien diagnostic garde son prédicat strict et son refus immuables.
+RO R du contrat source requise AVANT nouveau paquet/pins ; CPU puis natif
+restent soumis à GO distincts. Aucun troisième essai de compilation autorisé.
