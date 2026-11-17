@@ -1,0 +1,180 @@
+[
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-blobs-diagnostic-r1",
+    "HEAD": "c5d83cbc714b2dca39638558eee6450b3d39c561",
+    "status": "",
+    "origin_head": null,
+    "head_equals_origin": false,
+    "head_is_ancestor_of_origin": null,
+    "ancestry_note": "Not established: PC-only object may be absent locally; unequal HEAD is not proof of unpushed work."
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-double-gen-pilot-r1",
+    "HEAD": "ba5db6d3510bf7f7900785b3d155343f4aed45b4",
+    "status": "",
+    "origin_head": null,
+    "head_equals_origin": false,
+    "head_is_ancestor_of_origin": null,
+    "ancestry_note": "Not established: PC-only object may be absent locally; unequal HEAD is not proof of unpushed work."
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-double-pilot-r1",
+    "HEAD": "4d5265fc11151dd78c69355f26d214075b66ab8d",
+    "status": "",
+    "origin_head": null,
+    "head_equals_origin": false,
+    "head_is_ancestor_of_origin": null,
+    "ancestry_note": "Not established: PC-only object may be absent locally; unequal HEAD is not proof of unpushed work."
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-double-source-v1",
+    "HEAD": "3ee1e117cc0c9ff7e9de1f08263c26cb4e907c79",
+    "status": "",
+    "origin_head": null,
+    "head_equals_origin": false,
+    "head_is_ancestor_of_origin": null,
+    "ancestry_note": "Not established: PC-only object may be absent locally; unequal HEAD is not proof of unpushed work."
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-existing-canon-pilot-r1",
+    "HEAD": "9a82d4c8d331096bc681aefdfc53c918e0f995d2",
+    "status": "",
+    "origin_head": null,
+    "head_equals_origin": false,
+    "head_is_ancestor_of_origin": null,
+    "ancestry_note": "Not established: PC-only object may be absent locally; unequal HEAD is not proof of unpushed work."
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-existing-green-source",
+    "HEAD": "04634cfed667711192efd313ff1418ef8dfd5c26",
+    "status": "",
+    "origin_head": null,
+    "head_equals_origin": false,
+    "head_is_ancestor_of_origin": null,
+    "ancestry_note": "Not established: PC-only object may be absent locally; unequal HEAD is not proof of unpushed work."
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-existing-only-red-source",
+    "HEAD": "187d58a7b5ebb8e4a0a59b9b57ed75623e9db9a2",
+    "status": "",
+    "origin_head": null,
+    "head_equals_origin": false,
+    "head_is_ancestor_of_origin": null,
+    "ancestry_note": "Not established: PC-only object may be absent locally; unequal HEAD is not proof of unpushed work."
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-fixture-root-pilot-r1",
+    "HEAD": "2b5c39adb4f76b313117048835a7d6690cacaf7e",
+    "branch": "refs/heads/cx-recherche-fts-fixture-root-pilot-pc-r1",
+    "status": "",
+    "origin_head": null,
+    "head_equals_origin": false,
+    "head_is_ancestor_of_origin": null,
+    "ancestry_note": "Not established: PC-only object may be absent locally; unequal HEAD is not proof of unpushed work."
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-fixture-root-red-pilot-r1",
+    "HEAD": "c4387ec96d17b910de2ca1f4f222152679691fc7",
+    "branch": "refs/heads/cx-recherche-fts-fixture-root-red-pc-r1",
+    "status": "",
+    "origin_head": null,
+    "head_equals_origin": false,
+    "head_is_ancestor_of_origin": null,
+    "ancestry_note": "Not established: PC-only object may be absent locally; unequal HEAD is not proof of unpushed work."
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-fixture-root-source-v1",
+    "HEAD": "84ddeb88b7452278b0d697fad817c7e44f5fd3d3",
+    "branch": "refs/heads/cx-recherche-fts-fixture-root-source-pc-r1",
+    "status": "",
+    "origin_head": null,
+    "head_equals_origin": false,
+    "head_is_ancestor_of_origin": null,
+    "ancestry_note": "Not established: PC-only object may be absent locally; unequal HEAD is not proof of unpushed work."
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-generation-global-pilot-r2",
+    "HEAD": "333de82220cc6d4fef9bb400526b23fe3d7d1255",
+    "branch": "refs/heads/cx-recherche-fts-generation-global-pilot-pc-r2",
+    "status": "",
+    "origin_head": null,
+    "head_equals_origin": false,
+    "head_is_ancestor_of_origin": null,
+    "ancestry_note": "Not established: PC-only object may be absent locally; unequal HEAD is not proof of unpushed work."
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-generation-global-pilot-r4",
+    "HEAD": "fc00f836226e5ff41892260e8731504fee6c0c29",
+    "branch": "refs/heads/cx-recherche-fts-generation-global-pilot-pc-r4",
+    "status": "",
+    "origin_head": null,
+    "head_equals_origin": false,
+    "head_is_ancestor_of_origin": null,
+    "ancestry_note": "Not established: PC-only object may be absent locally; unequal HEAD is not proof of unpushed work."
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-generation-guard-pilot-r1",
+    "HEAD": "af11e15b9c0b3512f0f1f56680f9a02dd7384250",
+    "status": "",
+    "origin_head": null,
+    "head_equals_origin": false,
+    "head_is_ancestor_of_origin": null,
+    "ancestry_note": "Not established: PC-only object may be absent locally; unequal HEAD is not proof of unpushed work."
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-generation-guard-source-v1",
+    "HEAD": "bc9526408ea3a48320b4a27e7644075dcf7307b0",
+    "status": "",
+    "origin_head": null,
+    "head_equals_origin": false,
+    "head_is_ancestor_of_origin": null,
+    "ancestry_note": "Not established: PC-only object may be absent locally; unequal HEAD is not proof of unpushed work."
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-pending-red-source",
+    "HEAD": "1f816fd3b366380a1f7d034a540cfbbc2aee7bd7",
+    "status": "",
+    "origin_head": null,
+    "head_equals_origin": false,
+    "head_is_ancestor_of_origin": null,
+    "ancestry_note": "Not established: PC-only object may be absent locally; unequal HEAD is not proof of unpushed work."
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-pending-schema-red-source",
+    "HEAD": "c1b10a4993650a82e0cac9d40f4cb3567a0593d9",
+    "status": "",
+    "origin_head": null,
+    "head_equals_origin": false,
+    "head_is_ancestor_of_origin": null,
+    "ancestry_note": "Not established: PC-only object may be absent locally; unequal HEAD is not proof of unpushed work."
+  },
+  {
+    "worktree": "/home/lucied/git_workspaces/rag3db-cx-recherche-fts-existing-union-r1",
+    "HEAD": "9576079d62c3f46bdf241cd19c9ab30e9218333e",
+    "status": "",
+    "origin_head": null,
+    "head_equals_origin": false,
+    "head_is_ancestor_of_origin": null,
+    "ancestry_note": "Not established: PC-only object may be absent locally; unequal HEAD is not proof of unpushed work."
+  },
+  {
+    "worktree": "/home/lucied/git_workspaces/rag3db-cx-recherche-fts-generation-root-global-r1",
+    "HEAD": "84ddeb88b7452278b0d697fad817c7e44f5fd3d3",
+    "branch": "refs/heads/cx-recherche-fts-generation-root-global-pc-r1",
+    "status": "",
+    "origin_head": null,
+    "head_equals_origin": false,
+    "head_is_ancestor_of_origin": null,
+    "ancestry_note": "Not established: PC-only object may be absent locally; unequal HEAD is not proof of unpushed work."
+  },
+  {
+    "worktree": "/home/lucied/git_workspaces/rag3db-cx-recherche-fts-generation-union-r2",
+    "HEAD": "6365396b6323b03dc3441cb1f650c8804e53bdeb",
+    "branch": "refs/heads/cx-recherche-fts-generation-union-source-pc-r2",
+    "status": "",
+    "origin_head": null,
+    "head_equals_origin": false,
+    "head_is_ancestor_of_origin": null,
+    "ancestry_note": "Not established: PC-only object may be absent locally; unequal HEAD is not proof of unpushed work."
+  }
+]

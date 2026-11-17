@@ -1,0 +1,290 @@
+[
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-blobs-diagnostic-r1",
+    "HEAD": "149a108bcb66d41ea135629e91efdb0be5071204",
+    "branch": "refs/heads/cx-recherche-fts-blobs-ro-proofs-r1",
+    "origin_head": "149a108bcb66d41ea135629e91efdb0be5071204",
+    "head_equals_origin": true,
+    "status": "",
+    "head_is_ancestor_of_origin": true
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-counts-freshness-r1",
+    "HEAD": "a092707cb0d47c72b2f41dad146a3e08c03cfcd0",
+    "branch": "refs/heads/cx-recherche-fts-counts-freshness-r1",
+    "origin_head": "a092707cb0d47c72b2f41dad146a3e08c03cfcd0",
+    "head_equals_origin": true,
+    "status": "",
+    "head_is_ancestor_of_origin": true
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-double-gen-pilot-r1",
+    "HEAD": "ba5db6d3510bf7f7900785b3d155343f4aed45b4",
+    "branch": "refs/heads/cx-recherche-fts-double-gen-pilot-r1",
+    "origin_head": "ba5db6d3510bf7f7900785b3d155343f4aed45b4",
+    "head_equals_origin": true,
+    "status": "",
+    "head_is_ancestor_of_origin": true
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-double-gen-proofs-r1",
+    "HEAD": "8f813bf051bca4e9d2187fd5f4396fc5b6edd11b",
+    "branch": "refs/heads/cx-recherche-fts-double-gen-proofs-r1",
+    "origin_head": "8f813bf051bca4e9d2187fd5f4396fc5b6edd11b",
+    "head_equals_origin": true,
+    "status": "",
+    "head_is_ancestor_of_origin": true
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-double-pilot-r1",
+    "HEAD": "4d5265fc11151dd78c69355f26d214075b66ab8d",
+    "branch": "refs/heads/cx-recherche-fts-double-pilot-r1",
+    "origin_head": "4d5265fc11151dd78c69355f26d214075b66ab8d",
+    "head_equals_origin": true,
+    "status": "",
+    "head_is_ancestor_of_origin": true
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-double-proofs-r1",
+    "HEAD": "69a280635eaa0b8b7fe05cba5852d1f931d12fb6",
+    "branch": "refs/heads/cx-recherche-fts-double-proofs-r1",
+    "origin_head": "69a280635eaa0b8b7fe05cba5852d1f931d12fb6",
+    "head_equals_origin": true,
+    "status": "",
+    "head_is_ancestor_of_origin": true
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-double-r1",
+    "HEAD": "3ee1e117cc0c9ff7e9de1f08263c26cb4e907c79",
+    "branch": "refs/heads/cx-recherche-fts-double-r1",
+    "origin_head": "3ee1e117cc0c9ff7e9de1f08263c26cb4e907c79",
+    "head_equals_origin": true,
+    "status": "",
+    "head_is_ancestor_of_origin": true
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-existing-canon-pilot-r1",
+    "HEAD": "c16f1a4075cd81ee92518e62076bb36f97efe339",
+    "branch": "refs/heads/cx-recherche-fts-existing-canon-proofs-r1",
+    "origin_head": "c16f1a4075cd81ee92518e62076bb36f97efe339",
+    "head_equals_origin": true,
+    "status": "",
+    "head_is_ancestor_of_origin": true
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-existing-fixture-red-r1",
+    "HEAD": "c1b10a4993650a82e0cac9d40f4cb3567a0593d9",
+    "branch": "refs/heads/cx-recherche-fts-existing-fixture-red-r1",
+    "origin_head": "c1b10a4993650a82e0cac9d40f4cb3567a0593d9",
+    "head_equals_origin": true,
+    "status": "",
+    "head_is_ancestor_of_origin": true
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-existing-green-r1",
+    "HEAD": "04634cfed667711192efd313ff1418ef8dfd5c26",
+    "branch": "refs/heads/cx-recherche-fts-existing-green-r1",
+    "origin_head": "04634cfed667711192efd313ff1418ef8dfd5c26",
+    "head_equals_origin": true,
+    "status": "",
+    "head_is_ancestor_of_origin": true
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-existing-only-r1",
+    "HEAD": "a92e262fcb65b40e1b947fed8d7566212ae1176d",
+    "branch": "refs/heads/cx-recherche-fts-existing-only-r2",
+    "origin_head": "a92e262fcb65b40e1b947fed8d7566212ae1176d",
+    "head_equals_origin": true,
+    "status": "",
+    "head_is_ancestor_of_origin": true
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-existing-only-red-pilot-r1",
+    "HEAD": "47a8fde4c060b72defdd2a6d394b1458359c22cb",
+    "branch": "refs/heads/cx-recherche-fts-existing-green-pilot-r1",
+    "origin_head": "47a8fde4c060b72defdd2a6d394b1458359c22cb",
+    "head_equals_origin": true,
+    "status": "",
+    "head_is_ancestor_of_origin": true
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-fixture-root-fix-r1",
+    "HEAD": "84ddeb88b7452278b0d697fad817c7e44f5fd3d3",
+    "branch": "refs/heads/cx-recherche-fts-fixture-root-fix-r1",
+    "origin_head": "84ddeb88b7452278b0d697fad817c7e44f5fd3d3",
+    "head_equals_origin": true,
+    "status": "",
+    "head_is_ancestor_of_origin": true
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-fixture-root-pilot-r1",
+    "HEAD": "2b5c39adb4f76b313117048835a7d6690cacaf7e",
+    "branch": "refs/heads/cx-recherche-fts-fixture-root-pilot-r1",
+    "origin_head": "2b5c39adb4f76b313117048835a7d6690cacaf7e",
+    "head_equals_origin": true,
+    "status": "",
+    "head_is_ancestor_of_origin": true
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-fixture-root-proofs-r1",
+    "HEAD": "0479ccee4bfaffaec86d9e21c71798cba8a0c3d7",
+    "branch": "refs/heads/cx-recherche-fts-fixture-root-proofs-r1",
+    "origin_head": "0479ccee4bfaffaec86d9e21c71798cba8a0c3d7",
+    "head_equals_origin": true,
+    "status": "",
+    "head_is_ancestor_of_origin": true
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-fixture-root-red-pilot-r1",
+    "HEAD": "b414d84d27e6cce0d8a0705356d0fa975993a147",
+    "branch": "refs/heads/cx-recherche-fts-fixture-root-red-pilot-r1",
+    "origin_head": "b414d84d27e6cce0d8a0705356d0fa975993a147",
+    "head_equals_origin": true,
+    "status": "",
+    "head_is_ancestor_of_origin": true
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-generation-global-pilot-r1",
+    "HEAD": "4d1b44392a1ce6e656c97527bcd4c3fab338f173",
+    "branch": "refs/heads/cx-recherche-fts-generation-global-pilot-r1",
+    "origin_head": "4d1b44392a1ce6e656c97527bcd4c3fab338f173",
+    "head_equals_origin": true,
+    "status": "",
+    "head_is_ancestor_of_origin": true
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-generation-global-pilot-r2",
+    "HEAD": "50fe3ad8683084622baf6c54c0770e52e8eb77d0",
+    "branch": "refs/heads/cx-recherche-fts-generation-global-pilot-r2",
+    "origin_head": "50fe3ad8683084622baf6c54c0770e52e8eb77d0",
+    "head_equals_origin": true,
+    "status": "",
+    "head_is_ancestor_of_origin": true
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-generation-global-pilot-r3",
+    "HEAD": "ac182014c9981fc43c36c7d36976da02f98b473f",
+    "branch": "refs/heads/cx-recherche-fts-generation-global-pilot-r3",
+    "origin_head": "ac182014c9981fc43c36c7d36976da02f98b473f",
+    "head_equals_origin": true,
+    "status": "",
+    "head_is_ancestor_of_origin": true
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-generation-global-pilot-r4",
+    "HEAD": "fc00f836226e5ff41892260e8731504fee6c0c29",
+    "branch": "refs/heads/cx-recherche-fts-generation-global-pilot-r4",
+    "origin_head": "fc00f836226e5ff41892260e8731504fee6c0c29",
+    "head_equals_origin": true,
+    "status": "",
+    "head_is_ancestor_of_origin": true
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-generation-global-pilot-r5",
+    "HEAD": "46078c4ff1097f65351b68009fa45bc8b5a1c2ec",
+    "branch": "refs/heads/cx-recherche-fts-generation-global-pilot-r5",
+    "origin_head": "46078c4ff1097f65351b68009fa45bc8b5a1c2ec",
+    "head_equals_origin": true,
+    "status": "",
+    "head_is_ancestor_of_origin": true
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-generation-global-preuves-r4",
+    "HEAD": "fcd2d5c3f1a2321d7e65a604d83c4c655cc64b04",
+    "branch": "refs/heads/cx-recherche-fts-generation-global-preuves-r4",
+    "origin_head": "fcd2d5c3f1a2321d7e65a604d83c4c655cc64b04",
+    "head_equals_origin": true,
+    "status": "",
+    "head_is_ancestor_of_origin": true
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-generation-guard-pilot-r1",
+    "HEAD": "af11e15b9c0b3512f0f1f56680f9a02dd7384250",
+    "branch": "refs/heads/cx-recherche-fts-generation-guard-pilot-r1",
+    "origin_head": "af11e15b9c0b3512f0f1f56680f9a02dd7384250",
+    "head_equals_origin": true,
+    "status": "",
+    "head_is_ancestor_of_origin": true
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-generation-guard-proofs-r1",
+    "HEAD": "6f9aea98336a93499cce371511bf36e5cdf2d642",
+    "branch": "refs/heads/cx-recherche-fts-generation-guard-proofs-r1",
+    "origin_head": "6f9aea98336a93499cce371511bf36e5cdf2d642",
+    "head_equals_origin": true,
+    "status": "",
+    "head_is_ancestor_of_origin": true
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-generation-guard-r1",
+    "HEAD": "bc9526408ea3a48320b4a27e7644075dcf7307b0",
+    "branch": "refs/heads/cx-recherche-fts-generation-guard-r1",
+    "origin_head": "bc9526408ea3a48320b4a27e7644075dcf7307b0",
+    "head_equals_origin": true,
+    "status": "",
+    "head_is_ancestor_of_origin": true
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-generation-source-doc-r3",
+    "HEAD": "5af94c3f983fcbdeca213b2cff100846b7922cdb",
+    "branch": "refs/heads/cx-recherche-fts-generation-source-doc-r3",
+    "origin_head": "5af94c3f983fcbdeca213b2cff100846b7922cdb",
+    "head_equals_origin": true,
+    "status": "",
+    "head_is_ancestor_of_origin": true
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-generation-union-r1",
+    "HEAD": "5f59dd88a2888199c5ad934f72f0debed4ba2a49",
+    "branch": "refs/heads/cx-recherche-fts-generation-union-r1",
+    "origin_head": "5f59dd88a2888199c5ad934f72f0debed4ba2a49",
+    "head_equals_origin": true,
+    "status": "",
+    "head_is_ancestor_of_origin": true
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-generation-union-r2",
+    "HEAD": "6365396b6323b03dc3441cb1f650c8804e53bdeb",
+    "branch": "refs/heads/cx-recherche-fts-generation-union-r2",
+    "origin_head": "6365396b6323b03dc3441cb1f650c8804e53bdeb",
+    "head_equals_origin": true,
+    "status": "",
+    "head_is_ancestor_of_origin": true
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-garde-target-reliquat-cloture-r1",
+    "HEAD": "a6c23af93fa60cf064f1491ac90babb45e1055c3",
+    "branch": "refs/heads/cx-recherche-garde-target-reliquat-cloture-r1",
+    "origin_head": "a6c23af93fa60cf064f1491ac90babb45e1055c3",
+    "head_equals_origin": true,
+    "status": "",
+    "head_is_ancestor_of_origin": true
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-passation-claude-20261117-r1",
+    "HEAD": "927941a67a5805450d49f1e04b39fdd542a6059b",
+    "branch": "refs/heads/cx-recherche-passation-claude-20261117-r1",
+    "origin_head": null,
+    "head_equals_origin": false,
+    "status": "",
+    "head_is_ancestor_of_origin": false
+  },
+  {
+    "worktree": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-passation-weekend-13nov-r1",
+    "HEAD": "9cb6de90ada183869a4a15bef636ee9739822d32",
+    "branch": "refs/heads/cx-recherche-passation-weekend-13nov-r1",
+    "origin_head": "9cb6de90ada183869a4a15bef636ee9739822d32",
+    "head_equals_origin": true,
+    "status": "",
+    "head_is_ancestor_of_origin": true
+  },
+  {
+    "worktree": "/home/lucied/git_workspaces/rag3db-cx-recherche-fts-existing-union-r1",
+    "HEAD": "9576079d62c3f46bdf241cd19c9ab30e9218333e",
+    "branch": "refs/heads/cx-recherche-fts-existing-union-r1",
+    "origin_head": "9576079d62c3f46bdf241cd19c9ab30e9218333e",
+    "head_equals_origin": true,
+    "status": "",
+    "head_is_ancestor_of_origin": true
+  }
+]

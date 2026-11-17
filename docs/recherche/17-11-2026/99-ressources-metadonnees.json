@@ -1,0 +1,2167 @@
+{
+  "local": [
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-arret-passe.sh",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 54804862,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-arret-rejeu.sh",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 54804863,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-arret-push.sh",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 54834523,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-arret-temoins.sh",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 54836346,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-arret-passe-v2.sh",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 54836347,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-arret-rejeu-r3.sh",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 54868374,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-arret-verifier-r3.py",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 54870807,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-arret-audit.sh",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 54918640,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-arret-audit-vert.sh",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 54918916,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-arret-passe-v3.sh",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 54919167,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-arret-rejeu-r4.sh",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 54919168,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-arret-verifier-r4.py",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 54919169,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-juge-cible.sh",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 54919433,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-juge-cible-lancer.sh",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 54919434,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-arret-rejeu-r5.sh",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 55003893,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-arret-verifier-r5.py",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 55003894,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-r5-reconstruire-nav.sh",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 55038546,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-r5-nav-cibles.sh",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 55038637,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-r5-nav-complet.sh",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 55047472,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-arret-verifier-r5-agrege.py",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 57,
+      "inode": 55047475,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-lucivy433-rouge.sh",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 55091379,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-lucivy433-passe.sh",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 55103925,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-lucivy433-verifier.py",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 57,
+      "inode": 55103960,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-lucivy433-push.sh",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 55105452,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-diag-journal-nettoyage-23c064b80",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 55955057,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-journal-embarquement-rouge.log",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 57,
+      "inode": 55964199,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-journal-embarquement-vert-1.log",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 57,
+      "inode": 55964223,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-journal-embarquement-vert-2.log",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 57,
+      "inode": 55964253,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-journal-embarquement-regressions.log",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 57,
+      "inode": 55964261,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-journal-embarquement-avant",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 55964264,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-journal-embarquement-rouge-2.log",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 57,
+      "inode": 55964276,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-journal-embarquement-vert-rebase.log",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 57,
+      "inode": 55964651,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-journal-deux-lancements-rouge.log",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 57,
+      "inode": 55965342,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-journal-deux-lancements-vert.log",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 57,
+      "inode": 55965378,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-journal-quiescence-vert.log",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 57,
+      "inode": 55965405,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-journal-quiescence-regressions.log",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 57,
+      "inode": 55965407,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-journal-quiescence-vert-2.log",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 57,
+      "inode": 55965436,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-journal-quiescence-regressions-2.log",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 57,
+      "inode": 55965439,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-journal-plan-43b57eb78.json",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 57,
+      "inode": 55965551,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-journal-plan-43b57eb78-v2.json",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 57,
+      "inode": 55965620,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-journal-passe-12nov.py",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 57,
+      "inode": 55965621,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/journaux-cx-recherche-journal-12nov",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 55966055,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-journal-nettoyer.py",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 57,
+      "inode": 55997350,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-journal-pousser.sh",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 55997351,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/journaux-cx-recherche-fts-close-12nov",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 56211807,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-fts-close-prefixe.py",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 57,
+      "inode": 56245758,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/journaux-cx-recherche-lectures-12nov",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 56528370,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-lectures-prefixe.py",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 57,
+      "inode": 56528702,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-lectures-attestation.py",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 57,
+      "inode": 56529347,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-lectures-suite.py",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 57,
+      "inode": 56535466,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-lectures-attestation-v2.py",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 57,
+      "inode": 56535475,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-lectures-integration.py",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 57,
+      "inode": 56616522,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-chromium-preflight-unique.py",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 57,
+      "inode": 56627362,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-chromium-preflight-dbus.py",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 57,
+      "inode": 56636331,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-preflight-dbus-config.xml",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 57,
+      "inode": 56636332,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-lectures-finalisation.py",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 57,
+      "inode": 56636372,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-lectures-push.sh",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 56653973,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-lectures-nettoyage.py",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 57,
+      "inode": 56654448,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/journaux-cx-recherche-confinement-12nov",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 57248942,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/journaux-cx-recherche-garde-deinit-13nov",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 57697277,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/journaux-cx-recherche-garde-target-13nov",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 58031830,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-garde-target-reliquat-cloture-r1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 58585344,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-passation-weekend-13nov-r1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 58679191,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/recherche-orphelins",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 79491089,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-counts-freshness-r1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 92191720,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-existing-only-r1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 92855325,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-existing-only-red-pilot-r1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 92926659,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-proofs-recherche-fts-existing-red-v1-local",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 92937383,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-archive-recherche-fts-existing-red-v2",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 92963396,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-archive-recherche-fts-pending-red-v1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 93279210,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-existing-fixture-red-r1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 93326298,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-archive-recherche-fts-pending-red-v2",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 93358812,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-existing-green-r1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 93365174,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-archive-recherche-fts-existing-green-v1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 93407619,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-existing-canon-pilot-r1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 93585854,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-archive-recherche-fts-existing-canon-v1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 93824925,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-archive-recherche-fts-existing-canon-fixture-v1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 93836761,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-blobs-diagnostic-r1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 93850462,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-archive-recherche-fts-blobs-ro-v2",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 93960978,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-double-r1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 94018078,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-double-pilot-r1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 94468742,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-proofs-recherche-fts-double-controller-cpu-v2",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 94491118,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-archive-recherche-fts-double-v1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 94513456,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-double-proofs-r1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 94513584,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-double-gen-pilot-r1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 94557955,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-proofs-recherche-fts-double-classifier-v1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 94568631,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-archive-recherche-fts-double-gen-v1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 94570035,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-double-gen-proofs-r1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 94570394,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-generation-guard-r1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 94592042,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-generation-guard-pilot-r1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 94613528,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-archive-recherche-fts-generation-guard-v1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 94635469,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-generation-guard-proofs-r1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 94646166,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-generation-union-r1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 94657086,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-generation-global-pilot-r1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 94669789,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-proofs-recherche-fts-global-service-binding",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 94754094,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-fixture-root-red-pilot-r1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 94936404,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-archive-recherche-fts-fixture-root-red-v1",
+      "mode": "0o40700",
+      "uid": 1000,
+      "device": 57,
+      "inode": 95072502,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-fixture-root-fix-r1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 95097062,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-fixture-root-pilot-r1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 95108012,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-archive-recherche-fts-fixture-root-green-v1",
+      "mode": "0o40700",
+      "uid": 1000,
+      "device": 57,
+      "inode": 95130763,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-fixture-root-proofs-r1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 95131023,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-generation-global-pilot-r2",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 95141872,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-proofs-recherche-fts-global-reserves-red-v1",
+      "mode": "0o40700",
+      "uid": 1000,
+      "device": 57,
+      "inode": 95184755,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-generation-global-pilot-r3",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 95227064,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-proofs-recherche-fts-global-consumer-cpu-v1",
+      "mode": "0o40700",
+      "uid": 1000,
+      "device": 57,
+      "inode": 95238019,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-proofs-recherche-fts-global-admitted-red-v1",
+      "mode": "0o40700",
+      "uid": 1000,
+      "device": 57,
+      "inode": 95238161,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-proofs-recherche-fts-global-consumer-cpu-v2",
+      "mode": "0o40700",
+      "uid": 1000,
+      "device": 57,
+      "inode": 95238237,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-proofs-recherche-fts-global-sql-pins-red-v1",
+      "mode": "0o40700",
+      "uid": 1000,
+      "device": 57,
+      "inode": 95238445,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-proofs-recherche-fts-global-consumer-cpu-v3",
+      "mode": "0o40700",
+      "uid": 1000,
+      "device": 57,
+      "inode": 95238511,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-generation-union-r2",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 95249795,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-generation-global-pilot-r4",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 95435243,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-proofs-recherche-fts-global-transport-pin-red-v1",
+      "mode": "0o40700",
+      "uid": 1000,
+      "device": 57,
+      "inode": 95458629,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-proofs-recherche-fts-global-consumer-cpu-v4",
+      "mode": "0o40700",
+      "uid": 1000,
+      "device": 57,
+      "inode": 95458666,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-proofs-recherche-fts-global-composed-cpu-v1",
+      "mode": "0o40700",
+      "uid": 1000,
+      "device": 57,
+      "inode": 95459068,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-proofs-recherche-fts-global-composed-cpu-v2",
+      "mode": "0o40700",
+      "uid": 1000,
+      "device": 57,
+      "inode": 95459120,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-generation-global-preuves-r4",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 95471269,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-archive-recherche-fts-global-preparation-v4",
+      "mode": "0o40700",
+      "uid": 1000,
+      "device": 57,
+      "inode": 95481924,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-generation-source-doc-r3",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 95520185,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-proofs-recherche-fts-tickets-red-v1",
+      "mode": "0o40700",
+      "uid": 1000,
+      "device": 57,
+      "inode": 95530790,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-proofs-recherche-fts-tickets-green-v1",
+      "mode": "0o40700",
+      "uid": 1000,
+      "device": 57,
+      "inode": 95543167,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-generation-global-pilot-r5",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 95653301,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-proofs-recherche-fts-tmp-red-v1",
+      "mode": "0o40700",
+      "uid": 1000,
+      "device": 57,
+      "inode": 95676693,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-proofs-recherche-fts-tmp-arithmetic-red-v1",
+      "mode": "0o40700",
+      "uid": 1000,
+      "device": 57,
+      "inode": 95683118,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-passation-claude-20261117-r1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 57,
+      "inode": 97344550,
+      "is_symlink": false
+    }
+  ],
+  "pc": [
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/recherches-rouge.log",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 55,
+      "inode": 74060343,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/recherches-rouge2.log",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 55,
+      "inode": 74345840,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/journaux-recherches",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 74487873,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/journaux-recherches2",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 74803553,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-arret-passe.sh",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 90102477,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-arret-rejeu.sh",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 90102478,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-arret-lancement.log",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 55,
+      "inode": 90172433,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/journaux-cx-recherche-arret-11nov",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 90172439,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/journaux-recherche-arret-reprise-sans-derogation",
+      "mode": "0o120777",
+      "uid": 1000,
+      "device": 55,
+      "inode": 90288901,
+      "is_symlink": true
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/journaux-recherche-arret-reprise-interrompue",
+      "mode": "0o120777",
+      "uid": 1000,
+      "device": 55,
+      "inode": 90288957,
+      "is_symlink": true
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-arret-temoins.sh",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 91280265,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-arret-passe-v2.sh",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 91280267,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-arret-rejeu-r3.sh",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 91471157,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-arret-temoins-lancement.log",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 55,
+      "inode": 91524738,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-arret-r3-lancement.log",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 55,
+      "inode": 91525115,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/journaux-cx-recherche-arret-11nov-r3",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 91525118,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-arret-verifier-r3.py",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 91605359,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-arret-push.sh",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 91605360,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-arret-audit.sh",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 93813440,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-arret-audit.log",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 55,
+      "inode": 93813442,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-arret-audit-vert.sh",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 93814062,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-arret-audit-vert.log",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 55,
+      "inode": 93814100,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-arret-passe-v3.sh",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 93851466,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-arret-rejeu-r4.sh",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 93851467,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-arret-verifier-r4.py",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 93851468,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-arret-r4-lancement.log",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 55,
+      "inode": 93851581,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/journaux-cx-recherche-arret-11nov-r4",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 93851584,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-juge-cible.sh",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 94031402,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-juge-cible-lancer.sh",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 94031403,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-juge-cible-lancement.log",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 55,
+      "inode": 94031579,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-arret-rejeu-r5.sh",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 94313827,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-arret-verifier-r5.py",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 94313828,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-arret-r5-lancement.log",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 55,
+      "inode": 94313913,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/journaux-cx-recherche-arret-11nov-r5",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 94313916,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-r5-reconstruire-nav.sh",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 95540382,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-r5-reconstruction-lancement.log",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 55,
+      "inode": 95540384,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-r5-nav-cibles.sh",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 95541188,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-r5-nav-cibles-lancement.log",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 55,
+      "inode": 95541190,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-r5-nav-complet.sh",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 95542720,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-r5-nav-complet-lancement.log",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 55,
+      "inode": 95542722,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-arret-verifier-r5-agrege.py",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 55,
+      "inode": 95542785,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-lucivy433-rouge.sh",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 95663928,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-lucivy433-rouge-lancement.log",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 55,
+      "inode": 95664698,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/journaux-cx-recherche-lucivy-433-11nov",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 95664701,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-lucivy433-passe.sh",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 95698352,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-lucivy433-verifier.py",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 55,
+      "inode": 95698354,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-lucivy433-passe-lancement.log",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 55,
+      "inode": 95699411,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-lucivy433-push.sh",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 96162208,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/journaux-cx-recherche-journal-12nov",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 99796414,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-journal-passe-12nov.py",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 55,
+      "inode": 99806399,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-journal-plan-43b57eb78-v2.json",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 55,
+      "inode": 99806400,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-journal-passe-12nov-lancement.log",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 55,
+      "inode": 99806403,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-journal-nettoyer.py",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 55,
+      "inode": 99942240,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-journal-pousser.sh",
+      "mode": "0o100755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 99942241,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-fts-close-prefixe.py",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 55,
+      "inode": 102416732,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-fts-close-prefixe-lancement.log",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 55,
+      "inode": 102416734,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/journaux-cx-recherche-fts-close-12nov",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 102416737,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-lectures-prefixe.py",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 55,
+      "inode": 104781672,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-lectures-prefixe-lancement.log",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 55,
+      "inode": 104781674,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/journaux-cx-recherche-lectures-12nov",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 104781677,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-lectures-attestation.py",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 55,
+      "inode": 104895348,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-lectures-suite.py",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 55,
+      "inode": 104905914,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-lectures-attestation-v2.py",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 55,
+      "inode": 104905964,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-lectures-integration.py",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 55,
+      "inode": 105015615,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-chromium-preflight-unique.py",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 55,
+      "inode": 105217663,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-chromium-preflight-dbus.py",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 55,
+      "inode": 105218781,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-lectures-finalisation.py",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 55,
+      "inode": 105219153,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-recherche-lectures-nettoyage.py",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 55,
+      "inode": 105288080,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/journaux-cx-recherche-confinement-12nov",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 105944744,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/journaux-cx-recherche-garde-deinit-13nov",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 111290399,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/journaux-cx-recherche-garde-target-13nov",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 113947562,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/journaux-recherche-pile",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 131481493,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/sonde-in-recherche.log",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 55,
+      "inode": 138996850,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-existing-only-red-source",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 163471222,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-control-recherche-fts-existing-red-v1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 163482246,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-launch-recherche-fts-existing-red-v1.log",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 55,
+      "inode": 163482764,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-control-recherche-fts-existing-red-v2",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 163492903,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-launch-recherche-fts-existing-red-v2.log",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 55,
+      "inode": 163493099,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-proofs-recherche-fts-existing-red-v2-supervisor",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 163493102,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-proofs-recherche-fts-existing-red-v2",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 163493107,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-target-recherche-fts-counts-freshness",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 163493115,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-archive-recherche-fts-existing-red-v2",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 163516681,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-pending-red-source",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 163802603,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-control-recherche-fts-pending-red-v1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 163813359,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-launch-recherche-fts-pending-red-v1.log",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 55,
+      "inode": 163813395,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-proofs-recherche-fts-pending-red-v1-supervisor",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 163813398,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-proofs-recherche-fts-pending-red-v1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 163813403,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-archive-recherche-fts-pending-red-v1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 163813754,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-pending-schema-red-source",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 163921351,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-control-recherche-fts-pending-red-v2",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 163932108,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-launch-recherche-fts-pending-red-v2.log",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 55,
+      "inode": 163932135,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-proofs-recherche-fts-pending-red-v2-supervisor",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 163932138,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-proofs-recherche-fts-pending-red-v2",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 163932143,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-archive-recherche-fts-pending-red-v2",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 163959805,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-existing-green-source",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 164424325,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-control-recherche-fts-existing-green-v1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 164435104,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-launch-recherche-fts-existing-green-v1.log",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 55,
+      "inode": 164435149,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-proofs-recherche-fts-existing-green-v1-supervisor",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 164435153,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-proofs-recherche-fts-existing-green-v1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 164435158,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-archive-recherche-fts-existing-green-v1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 164435496,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-existing-canon-pilot-r1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 164511254,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-control-recherche-fts-existing-canon-v1",
+      "mode": "0o40700",
+      "uid": 1000,
+      "device": 55,
+      "inode": 164521897,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-control-recherche-fts-existing-canon-v2",
+      "mode": "0o40700",
+      "uid": 1000,
+      "device": 55,
+      "inode": 164553967,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-launch-recherche-fts-existing-canon-v2.log",
+      "mode": "0o100644",
+      "uid": 1000,
+      "device": 55,
+      "inode": 164905343,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-scope-recherche-fts-existing-canon-v1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 164905357,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-archive-recherche-fts-existing-canon-v1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 165399646,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-archive-recherche-fts-existing-canon-fixture-v1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 165798028,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-blobs-diagnostic-r1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 166627641,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-control-recherche-fts-blobs-ro-v2",
+      "mode": "0o40700",
+      "uid": 1000,
+      "device": 55,
+      "inode": 166638122,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-proofs-recherche-fts-blobs-ro-v2",
+      "mode": "0o40700",
+      "uid": 1000,
+      "device": 55,
+      "inode": 166638170,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-scope-recherche-fts-blobs-ro-v2",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 166638173,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-archive-recherche-fts-blobs-ro-v2",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 166641467,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-double-source-v1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 167664141,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-double-pilot-r1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 167674618,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-control-recherche-fts-double-v1",
+      "mode": "0o40700",
+      "uid": 1000,
+      "device": 55,
+      "inode": 167685445,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-control-recherche-fts-double-v2",
+      "mode": "0o40700",
+      "uid": 1000,
+      "device": 55,
+      "inode": 167688763,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-proofs-recherche-fts-double-v1",
+      "mode": "0o40700",
+      "uid": 1000,
+      "device": 55,
+      "inode": 167710822,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-scope-recherche-fts-double-v1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 167710827,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-archive-recherche-fts-double-v1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 167723572,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-double-gen-pilot-r1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 167776078,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-control-recherche-fts-double-gen-v1",
+      "mode": "0o40700",
+      "uid": 1000,
+      "device": 55,
+      "inode": 167786588,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-proofs-recherche-fts-double-gen-v1",
+      "mode": "0o40700",
+      "uid": 1000,
+      "device": 55,
+      "inode": 167815360,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-scope-recherche-fts-double-gen-v1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 167815367,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-archive-recherche-fts-double-gen-v1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 167819860,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-generation-guard-source-v1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 167852793,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-generation-guard-pilot-r1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 167863297,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-control-recherche-fts-generation-guard-v1",
+      "mode": "0o40700",
+      "uid": 1000,
+      "device": 55,
+      "inode": 167874152,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-proofs-recherche-fts-generation-guard-v1",
+      "mode": "0o40700",
+      "uid": 1000,
+      "device": 55,
+      "inode": 167874428,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-scope-recherche-fts-generation-guard-v1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 167874433,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-archive-recherche-fts-generation-guard-v1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 167878725,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-fixture-root-red-pilot-r1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 168556505,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-control-recherche-fts-fixture-root-red-v1",
+      "mode": "0o40700",
+      "uid": 1000,
+      "device": 55,
+      "inode": 168567059,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-proofs-recherche-fts-fixture-root-red-v1",
+      "mode": "0o40700",
+      "uid": 1000,
+      "device": 55,
+      "inode": 168567526,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-scope-recherche-fts-fixture-root-red-v1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 168567530,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-archive-recherche-fts-fixture-root-red-v1",
+      "mode": "0o40700",
+      "uid": 1000,
+      "device": 55,
+      "inode": 168567615,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-fixture-root-source-v1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 168579901,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-fixture-root-pilot-r1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 168590449,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-control-recherche-fts-fixture-root-green-v1",
+      "mode": "0o40700",
+      "uid": 1000,
+      "device": 55,
+      "inode": 168601344,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-proofs-recherche-fts-fixture-root-green-v1",
+      "mode": "0o40700",
+      "uid": 1000,
+      "device": 55,
+      "inode": 168614239,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-scope-recherche-fts-fixture-root-green-v1",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 168614244,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-archive-recherche-fts-fixture-root-green-v1",
+      "mode": "0o40700",
+      "uid": 1000,
+      "device": 55,
+      "inode": 168632049,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-generation-global-pilot-r2",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 168643649,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-control-recherche-fts-generation-global-v2",
+      "mode": "0o40700",
+      "uid": 1000,
+      "device": 55,
+      "inode": 168654570,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-wt-recherche-fts-generation-global-pilot-r4",
+      "mode": "0o40755",
+      "uid": 1000,
+      "device": 55,
+      "inode": 168782842,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-control-recherche-fts-generation-global-v4",
+      "mode": "0o40700",
+      "uid": 1000,
+      "device": 55,
+      "inode": 168793791,
+      "is_symlink": false
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/cx-archive-recherche-fts-global-preparation-v4",
+      "mode": "0o40700",
+      "uid": 1000,
+      "device": 55,
+      "inode": 168794478,
+      "is_symlink": false
+    }
+  ],
+  "scope": "top-level names+lstat only; no recursive inventory, size, process or service scan"
+}
