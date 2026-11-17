@@ -177,3 +177,6 @@ Modèle commun68ea/51témoins qualifiés PUR uniquement, preuves892bc C7+Mémoir
 
 
 STOPCPCA1C : compteur10FAIL mais un montage pinGate incohérent avant juge clock, pas dix rouges métier ; C7/M/TTY revue manquée consignée. Preuves33cfbed886/deuxhôtes conservées, seule préparation du delta de fixture autorisée, aucune garde SHA relâchée/fixkernel/retry. Arbre ec891 harnais import manquant signalé AVANTCPU, corrigé4f17c avec vraies dépendances fermées et deuxRO favorables,16toujoursNONJOUÉS. G quatre rouges5DD6 vus conservésfb3d/RLOCAL19/19, fixsource d787 en revue avant nouveauGO. Détails au suivi, tickets restent ouverts et aucun original/PG/service touché.
+
+
+CouponsCPU nouveaux après diagnostics/pins/revues : CP8792-60, seule fixturepin corrigée/10rouges causaux attendus ; PSQL691E-30,8fixturesvalidant3correctifs/19autresexclus ; Arbre4F17-60,16juges des outils/aucunbuildA. Sources, commandes et limites au suivi17nov, premierinattenduSTOP0retry et preuves2hôtes. Aucun couponCA1C réutilisé, aucune action SQL/PG/backend/DB/service/original/native. ProtocoleArchi69db en revue avant codeOS, ownerArchi explicite/Recherche nonengagécommeimplémenteur ; réserves originesclock/FDrename/causaldenial/OwnedLaunch/payloadCP à traiter groupées, pas de GO natif.
