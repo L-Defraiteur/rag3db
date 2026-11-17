@@ -59,3 +59,8 @@ implicitement à la place d'une compilation prévue par un GO.
 ### Banc — cf83228/P04, 17 novembre
 
 [Relecture du correctif](../../banc/17-11-2026/01-ro-relais-sonde-rust.md) : P04 préparé identique deuxpostes/10copies chacun/profil81969 vérifiés sans exécution. Bootstrap aprèsexec et watchdogs physiques reconnus corrigés. HOLD natif : Relay.run coupe son RPC abort via cap expiré avant appel ; Gate.cancel peut publier launcher_absent depuis alive=[] si sa boucle finale n'a jamais pu jouer. Correctif/témoins groupés attendus ; aucun test rejoué, aucun GO déduit, ticket OUVERT.
+
+
+### Banc — d45aefbd/P05 après correction des deux restes64d7
+
+[RO totale favorable préparation](../../banc/17-11-2026/01-ro-relais-sonde-rust.md) : cleanup_cap distinct borné dans queue/phase/hardEND, réserve5 et UNKNOWN si épuisé, pas de réouverture nativeclose0 ; final_roles obligatoire horswhile/statusUNKNOWN et launcher_absent0alive0unknown. P05 prepared20d59962/10copies PC+local chacun/profil81969 conformes.36témoins NONJOUÉS par Banc ; GO CPU vert exact C7 puis natif distinct requis. P02–P04 nonréarmés/carrynoncâblé/BASEfecCANDc1cd conservés, ticket OUVERT.
