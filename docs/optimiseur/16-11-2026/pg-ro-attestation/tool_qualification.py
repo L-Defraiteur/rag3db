@@ -116,7 +116,7 @@ def orchestrate(config,backend):
     for request in requests:
         result=backend.run(request);results.append(result)
         require(result['returncode']==request['expected_code'] and result['timed_out'] is False,'native result refused')
-        for key in ['quiet','raw_published','within_whole','stdin_started_inside_whole']:
+        for key in ['quiet','raw_published','within_whole','stdin_started_inside_whole','native_invoked']:
             require(result[key] is True,'whole OS/cleanup/publication unknown: '+key)
         if request['expected_stderr']:require(request['expected_stderr'].encode() in result['stderr'],'wrong CLI refusal')
         if request['kind']=='parse-only':

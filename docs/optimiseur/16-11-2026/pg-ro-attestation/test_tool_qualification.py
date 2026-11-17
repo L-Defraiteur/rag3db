@@ -44,7 +44,7 @@ class QualificationFakes(unittest.TestCase):
         with self.assertRaises(ValueError):tool.orchestrate(self.config,backend)
         self.assertEqual(len(backend.calls),2)
     def test_whole_deadline_covers_raw_publication_and_stdin(self):
-        for key in ['quiet','raw_published','within_whole','stdin_started_inside_whole']:
+        for key in ['quiet','raw_published','within_whole','stdin_started_inside_whole','native_invoked']:
             backend=FakeBackend();original=backend.run
             def run(request,key=key):
                 result=original(request);result[key]=False;return result
@@ -84,6 +84,7 @@ class NativeBoundaryFakes(unittest.TestCase):
         self.backend=tool.NativeBackend(self.out,self.packet,'2'*64,self.go,self.out)
     def install(self,stack,*,timeout=False,late_fsync=False):
         outer=self
+        stack.enter_context(patch.dict(tool.os.environ,{},clear=True))
         class Process:
             pid=4321
             returncode=0
