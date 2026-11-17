@@ -57,3 +57,11 @@ POST puis lecteurs doublés ; refuspréalable nonqualifiant ; rougecausal captur
 puisFAIL, pasERROR ; mutants fauxfixskip/tousretraits/toutDBréussi refusés.
 TémoinsNONÉCRITS/NONJOUÉS par ED, aucun fix/GOCPU/natif/DB/health autorisé.
 Prépublication puis RO/GO C7 distincts, Qv8rouge et ses limites préservés.
+
+RO ED subsetinventaires8a29 favorable statique/bornée : sixfonctions vrai
+blocdriverAST/save/readonly,ValueError→ASSERT,dossierspreuvesfreshparcas,
+exécutableinchangé et NONJOUÉ ici. Pas de qualification d'ensemble : négatifs
+peuvent refuser en amont. Le doublon causal ancien conserveWAL/marque ; ajouter
+pourfuturvert doublon sur POST autrementadmissible sanscesauxiliaires, motif/
+branchevérifiés. Contrôle readonly positif+compteurs+preuvesACK/PID/nonce/
+clock/firstred encoreàécrire avantfix, commeannoncé ; suite rapportED38.

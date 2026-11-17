@@ -50,3 +50,28 @@ le vrai harnais avant correction ; RO et GO CPU exact distinct à C7 avant
 exécution. Source/paquet neuf et deux RO totales avant tout éventuel natif.
 Ni RO native de Qv8, ni recovery/health/service/writer/SDK/Cargo/target/retrait
 autorisé par cet avis ; toutes les anciennes limites/proofs restent conservées.
+
+## Sous-ensemble inventaires8a29c5c293
+
+RO statique favorable à ce périmètre de préparation : six fonctions écrites,
+vrai bloc AST lifecycle.driver after_writer→avant quiet, vrais save et
+stable_readers, inventaires/répertoires seuls doublés. ValueError capturé
+puis assertion ; dossier d'evidence neuf par gate/sous-cas depuis8a29, pas
+de FileExistsError pris pour un refus de garde. Exécutable inchangé, aucun
+témoin joué par ED.
+
+Les deux cas causaux possibles sur l'ancien raccord sont l'admission nominale
+POST attendue mais refusée readonly et le doublon silencieusement collapsé.
+Les négatifs peuvent refuser en amont : leurs verts éventuels ne qualifient
+pas encore le bon mutant. Point concret pour la suite : le cas doublon
+actuel garde WAL/.ecrivain pour exposer l'ancien collapse ; après correction,
+leur présence pourra elle-même refuser. Conserver ce rouge historique et
+ajouter un cas doublon sur baseline POST autrement admissible (deux auxiliaires
+retirés) avec branche/motif attendu vérifié. Ce dernier seul établira que
+la duplication est vraiment jugée, sans se satisfaire du refus WAL.
+
+Le contrôle readonly positif intact, les compteurs de passage et les mutants
+ACK/PID/start/nonce/run/publication/profil/maps/clock/firstred restent à écrire
+AVANT le fix comme annoncé. Ce sous-ensemble n'est pas une suffisance du
+harnais global, encore moins une qualification native. À C7 seul le choix
+des témoins CPU exacts après prépublication/RO ; aucun lancement ici.
