@@ -287,3 +287,11 @@ GO C7-ENTRY-RUNNER-BASELINE-F7EC-17nov60 consomméUNEfois :1FAIL attendu/
 LOCAL+PC0écart AVANTfix, manifestedb4805bc3165f0a617a083121f82adea82bea3bf2033d52d07b0583c86067528.
 PréparationcorpsFIXTURE_ONLY seule autorisée, sources/pins/RO puisGOdistinct
 avantverts. Aucun OS/CP/Common/natif qualifié, pur565b/archivesintacts.
+
+Corps d'effets runner préparé : [rapport58](../../rag3weaver-archi/17-11-2026/58-corps-runner-effets-modeled-avant-24.md).
+Aprèsrougeb40 conservé2hôtes/M+C7suffisancef34, orchestration FIXTURE_ONLY des
+portsMODELED/ownership/entrée/seal/permis/wait/cleanup/firstcause etbornes ;
+pur565b prédicatsépinglésréutilisés sansmutation.24témoins92467 inchangés,
+NONJOUÉSsurfix, pinsGO24 proposés sansGO. LIVE/Commonfinal/CLI natif restent
+unsupported, aucun OS/capacitéphysique ajouté. ROsource/pins puisGOdistinct
+avanttest ; aucunappelant/PQS/SDK/service/target, archivesintactes.
