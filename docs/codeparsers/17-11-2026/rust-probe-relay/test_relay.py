@@ -175,6 +175,24 @@ class RelayTests(unittest.TestCase):
         with self.assertRaises(TimeoutError):
             module.atomic_json(path, {}, expired)
         self.assertFalse(path.exists())
+    def test_finish_past_phase_deadline_never_returns_success(self):
+        old = self.transport.finish
+        def finish(timeout):
+            self.clock.now += 25
+            return old(timeout)
+        self.transport.finish = finish
+        with self.assertRaises(TimeoutError):
+            self.relay.run()
+        self.assertTrue(self.transport.closed)
+    def test_launch_ssh_contains_remote_physical_timeout(self):
+        import shlex
+        transport = module.SSHTransport.__new__(module.SSHTransport)
+        transport.pair = {'proofs': '/proofs', 'timeout': '/usr/bin/timeout'}
+        transport.control = Path('/proofs/control')
+        transport.phase, transport.pin, transport.host = 'baseline', 'pin', 'luciepc'
+        argv = transport.command('launch', '--allocation', 'GO')
+        remote = shlex.split(argv[-1].removeprefix('exec '))
+        self.assertEqual(remote[:4], ['/usr/bin/timeout', '--signal=TERM', '--kill-after=2s', '2098s'])
     def test_phase_exit_before_build_is_failure(self):
         self.transport.phase_running = False
         with self.assertRaises(RuntimeError):
@@ -274,6 +292,42 @@ class GateTests(unittest.TestCase):
         with self.assertRaises(AssertionError):
             self.gate.active()
 
+    def test_waiting_abort_does_not_require_active_native_authority(self):
+        from unittest.mock import Mock
+        self.gate.active = Mock(side_effect=AssertionError('not active yet'))
+        self.gate.cancel_launcher = Mock(return_value={'launcher_absent': True})
+        result = self.gate.abort('queue interrupted')
+        self.assertTrue(result['launcher_absent'])
+        self.gate.active.assert_not_called()
+    def test_launch_does_not_publish_future_argv_as_live_identity(self):
+        from unittest.mock import patch
+        import os
+        self.gate.root = self.root / 'fresh-phase'
+        self.gate.root.mkdir()
+        relay = self.control / 'relay.py'
+        relay.write_text('synthetic relay')
+        self.gate.pair['peer_host'] = 'peer'
+        self.gate.pair['controllers']['relay.py'] = module.digest(relay)
+        identity = {'pid': os.getpid(), 'uid': os.getuid(), 'start': '1234',
+            'state': 'R', 'exe': '/python', 'cgroup': '0::/scope', 'parent': os.getppid(),
+            'argv': [self.gate_module.sys.executable, '-B', str(self.control / 'gate.py'), 'launch']}
+        self.processes[os.getpid()] = identity
+        prefix = ['/timeout', '--signal=TERM', '--kill-after=2s', '2098s']
+        args = [self.gate_module.sys.executable, '-B', str(self.control / 'gate.py'), 'launch',
+            '--proofs', self.gate.pair['proofs'], '--phase', 'baseline', '--pin', 'pin', '--allocation', 'GO']
+        self.processes[os.getppid()] = dict(identity, pid=os.getppid(), parent=1,
+            argv=prefix + args, exe='/timeout')
+        ready = {'host': 'peer', 'identity': {'uid': os.getuid(), 'pid': 123, 'start': '1234',
+                 'argv': [self.gate_module.sys.executable, '-B', str(relay)]},
+                 'prepared_sha256': 'pin', 'phase': 'baseline', 'script_sha256': module.digest(relay)}
+        class ExecTransition(Exception):
+            pass
+        with patch.object(self.gate_module.os, 'execve', side_effect=ExecTransition):
+            with self.assertRaises(ExecTransition):
+                self.gate.launch('GO', ready)
+        self.assertFalse((self.gate.root / 'relay-launch.json').exists(), 'future argv exposed before exec')
+        bootstrap = json.loads((self.gate.root / 'relay-bootstrap.json').read_text())
+        self.assertEqual(bootstrap['identity']['argv'], identity['argv'])
     def test_real_ack_gate_rechecks_after_fsync_before_link(self):
         self.gate.pair['peer_host'] = 'peer'
         state = {'coordinator': {'host': 'peer'}, 'files': {'ledger': 'ledger-sha'},

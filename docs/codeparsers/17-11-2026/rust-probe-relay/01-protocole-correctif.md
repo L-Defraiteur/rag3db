@@ -133,3 +133,19 @@ autorité réelle. Aucun GO n'est déduit de cette proposition. Première erreur
 CPU ne sont pas rejoués par cette proposition. Aucun budget natif n'est demandé
 sur un paquet non qualifié ; la nouvelle paire et les pins seront relus avant
 un éventuel GO futur de phase. P02 ne reçoit aucun ACK.
+
+## Trois réserves Banc1cdd : témoins prépubliés avant correction groupée
+
+Le paquet782b/20tests ne qualifie pas trois raccords révélés à la RO totale.
+Quatre nouveaux témoins appellent les vrais run/command/launch/abort : finish
+consommant son échéance doit refuser, SSHlaunch doit contenir un timeout distant
+physique, launch ne doit pas publier une identité à argv futur avant exec, et
+abort en attente ne doit pas exiger une autorité native active. Ils sont publiés
+avant le correctif groupé, sans avoir été exécutés.
+
+Correction prévue : timeout physique2098+kill2 sur le coordinateur local ET le
+lanceur distant, plafond file300 PC et annulation attribuée/attestée même avant
+Common ; bootstrap réel et transition bornée5s puis identité Qrun publiée APRÈS
+exec ; résultat du relais sous phaseDeadline fraîche après finish/fsync, jamais
+une mutation du verdict natif fermé. Les nouveaux témoins et le budget CPU rouge
+puis vert doivent être explicitement autorisés par C7 ; pas de reprise native.
