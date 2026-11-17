@@ -256,3 +256,13 @@ C7-CLI99-STATIC-A-17nov2400 PASGO. [Rapport13](../17-11-2026/13-paquet-a-scelle-
 et copiesJSONmetadata publiés ; T/P/S absents/Q_SOURCEconservé. DeuxROTOTAL
 demandéesavantGOAdistinct, aucunlaunch/compose/Common/build/ELF/DB/provider/
 copieDATA/SDK/service/slot/cleanup effectué. Parent OUVERT.
+
+GO A C7-CLI99-STATIC-A-17nov2400 accordé8b54 puis consommé UNEfois :
+APP99/PILOT4f17/Qf886, build2binsrc0/features5exactes, ledger5copiesAVANT
+checkerstatique+typedgoldenrc0 ;composéBUILD_STATIC_PAIR_OBSERVED/sessionrc0,
+CommonVERT0/TERMINE/restes[]nettoyé/busabsent. [Rapport14](../17-11-2026/14-preuves-cli99-statique-a.md)
+et manifeste34fichiers117387802octets réempreintés deuxhôtes/0écart.
+Nouveau backendSHA687de930ed499b2ced472af6e8ccba17b2b4837b6c282d60bdf5f3d01f958f78
+JAMAIS invoqué ; SDKruntime/DBlecteurs/B/C/LIVE non qualifiés. Deux RO preuves
+demandées, aucun nouvelappel/installation/cleanup/sourcebase/service. AcquisED
+carried/anciensrouges inchangés. Parent OUVERT jusqu'aux trois bases jugées.

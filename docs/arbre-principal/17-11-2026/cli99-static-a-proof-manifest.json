@@ -1,0 +1,172 @@
+[
+  {
+    "name": "artifacts/ids",
+    "size": 14321096,
+    "sha256": "d0dd13e6d403e614038b251f413637d5f6d02a98ba1c10509388d0be1f5e15c7"
+  },
+  {
+    "name": "artifacts/query",
+    "size": 22680,
+    "sha256": "48ae2328a29676fa69154cb9c67d9125d4d04cf92b029bd2b2a09981dea95616"
+  },
+  {
+    "name": "artifacts/rag3db-check-lib",
+    "size": 5288112,
+    "sha256": "c587d700ee4cf08d45c87e21742898c0962c365604acf7f7cea3aaa460298a86"
+  },
+  {
+    "name": "artifacts/rag3weaver-backend",
+    "size": 96896456,
+    "sha256": "687de930ed499b2ced472af6e8ccba17b2b4837b6c282d60bdf5f3d01f958f78"
+  },
+  {
+    "name": "artifacts/typed-reader",
+    "size": 52552,
+    "sha256": "add01058f3b0d6efd28d936c865b1ba9071c0e2eb85f559743bf0c52aeea6371"
+  },
+  {
+    "name": "client/authority-reference.json",
+    "size": 271,
+    "sha256": "d3540042b45f7716d63d997245b0b45c056cd34959da83117de9b9e036a8d0a1"
+  },
+  {
+    "name": "client/build-process.json",
+    "size": 359,
+    "sha256": "8f77bce72ab7c8a8ac5a185499196443296a4e7c8f2e01d4aa1e674d9b914913"
+  },
+  {
+    "name": "client/build.stderr",
+    "size": 28344,
+    "sha256": "4b438c3a665dc9a37d1640b5df9c06d28a98200faf65a91b90bdba4bb4d03084"
+  },
+  {
+    "name": "client/build.stdout",
+    "size": 446925,
+    "sha256": "4b68f1ab4ebb63457947aca62f9b961d862d8b24861194c4f38dbcacb4dc9d43"
+  },
+  {
+    "name": "client/configured-build-profile.json",
+    "size": 1613,
+    "sha256": "2a3a9b54ed186f8878eb76e0f4c2ed98f201472e71c55d888f9ab9cd854b8007"
+  },
+  {
+    "name": "client/configured-invocation-profile.json",
+    "size": 1901,
+    "sha256": "a15a932e413698e4c8bb953e89390ce60214cead01bf899dc2a931cf90cb8ce5"
+  },
+  {
+    "name": "client/ledger-before-first-invocation.json",
+    "size": 3932,
+    "sha256": "02b6117e36374de7d1b0bf8eb98192b8ad637a991c7df6d638aa2b18a455da31"
+  },
+  {
+    "name": "client/result.json",
+    "size": 276,
+    "sha256": "61f5eaa32f13b8ccec3a26816ab878bbef04897e6816def2d70d8035498e28b9"
+  },
+  {
+    "name": "client/source-before-build.json",
+    "size": 4436,
+    "sha256": "7289306d484420bc2e324ec61ff53ce0211b1b76de3a06ea90e5c1cfd97cd51b"
+  },
+  {
+    "name": "client/static-pair-process.json",
+    "size": 455,
+    "sha256": "bbfb0db7886b26be7d63e4ee32c9adf1af1e2d879844046751217bd2f6482a55"
+  },
+  {
+    "name": "client/static-pair.stderr",
+    "size": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "name": "client/static-pair.stdout",
+    "size": 129,
+    "sha256": "47ca7a7b0880fa7a553df9274a09df86c750f47e61b804ef9ddf085e0545a95e"
+  },
+  {
+    "name": "client/typed-framing-process.json",
+    "size": 209,
+    "sha256": "880c421a6fd81915ccdf260247893e59bf715be041c13e56b41d20860b6d04f9"
+  },
+  {
+    "name": "client/typed-framing.stderr",
+    "size": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "name": "client/typed-framing.stdout",
+    "size": 104,
+    "sha256": "c9ad9f109b8b1902d5d57fda38bde388d5d721ecd164321a39f84b2070b93c24"
+  },
+  {
+    "name": "controller/build_private_cli.py",
+    "size": 12653,
+    "sha256": "f13c39b3f2dce002eaa863f5a6819e763b3add794e23f3a28e630debbfe187a2"
+  },
+  {
+    "name": "controller/composed.json",
+    "size": 403,
+    "sha256": "d1a012752afbb6be280e30bafcdf65a2246fbae58b9097cdf0bc20b384b03483"
+  },
+  {
+    "name": "controller/grant_watch_actor.py",
+    "size": 18973,
+    "sha256": "7d7db5a0c7d9ac762eed74ade2d0b9ee256b8499d0029ae970feac916de76612"
+  },
+  {
+    "name": "controller/launch.py",
+    "size": 9356,
+    "sha256": "5a1d7b4d65c524d8e29c226f351c3135762fcb305dc0e487cc348a1f4736765a"
+  },
+  {
+    "name": "controller/outer.log",
+    "size": 117,
+    "sha256": "4159636b25d9eff3c277abbea4005afb83449c85ba8ef6e1ab9d5f6d655860f3"
+  },
+  {
+    "name": "controller/poste-entry.json",
+    "size": 93,
+    "sha256": "144ed57e4f20536427220766451a42eebaa30b10d8273d1c4967d700db4879ff"
+  },
+  {
+    "name": "controller/prepared.json",
+    "size": 11080,
+    "sha256": "f88671ab5b27d3d6723dfbdc7e1bbee08734077def4d4911a07954a1b4ff6eb5"
+  },
+  {
+    "name": "controller/provider_health_transport.py",
+    "size": 12185,
+    "sha256": "edf45f73bf97d21f2a0caab4d6e07a7d01f807fba8310c9006f442159e2bc2a6"
+  },
+  {
+    "name": "controller/typed_rows.py",
+    "size": 1938,
+    "sha256": "41314cda227b3511f2daed3695d894bec150f3ee3dfc2fd7b6fa268db1374916"
+  },
+  {
+    "name": "scope/authority-sanitized.json",
+    "size": 423,
+    "sha256": "162d72b867b8843f64efaf6c026f0bec74c22b33df972d0a2b8ef9edbc91e325"
+  },
+  {
+    "name": "scope/bus.xml",
+    "size": 239,
+    "sha256": "450d47dae34d33799612006d293a6652ac87e12c57f78f43640a0e01ea5dd140"
+  },
+  {
+    "name": "scope/enfants.json",
+    "size": 249409,
+    "sha256": "5f13d93bd9fddc599f59877099f5396f17f052f5a60d98ed802dc0c5a5281b55"
+  },
+  {
+    "name": "scope/recette.json",
+    "size": 962,
+    "sha256": "d75907022e168c830d5efcd54f332599aba203a85050327f65e5ec38f87fa9f5"
+  },
+  {
+    "name": "scope/verdict.json",
+    "size": 121,
+    "sha256": "119eaa5bbaa39963752a81af62fc5144f23efb9a177324f2af69a6e756ac72b2"
+  }
+]
