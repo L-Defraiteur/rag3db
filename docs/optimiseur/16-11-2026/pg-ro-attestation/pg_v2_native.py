@@ -26,6 +26,7 @@ class NativeFramesDriver:
         v2.require(not any(x in ('.env','.vault') for x in self.client.parts),'client_path')
         with self.client.open('rb') as stream:actual=hashlib.file_digest(stream,'sha256').hexdigest()
         v2.require(actual==self.client_sha256,'client_pin')
+        for name in ['home','tmp']:(self.out/name).mkdir(mode=0o700,exist_ok=True)
         data=v2.encode(payload);v2.require(len(data)<=8192,'request_bound')
         env=dict(PATH='/usr/bin:/bin',HOME=str(self.out/'home'),TMPDIR=str(self.out/'tmp'),LANG='C.UTF-8',LC_ALL='C.UTF-8',RUST_BACKTRACE='0')
         # Payload stays in memory/pipe; neither request.json nor argv/env contains it.
@@ -44,6 +45,7 @@ class NativeFramesDriver:
             for key,_ in self.selector.select(max(0.,min(.05,deadline-time.monotonic()))):
                 if key.data=='stdin':
                     try:position+=os.write(key.fd,data[position:])
+                    except BlockingIOError:continue
                     except BrokenPipeError:position=len(data)
                     if position==len(data):self.selector.unregister(key.fileobj);key.fileobj.close()
                     continue

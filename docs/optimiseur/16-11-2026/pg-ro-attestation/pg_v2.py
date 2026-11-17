@@ -191,6 +191,7 @@ def observe(allocation,secret,transport,*,out,clock=time.monotonic,scope_check):
     def gate():require(scope_check() is True,'scope_refused');require(clock()<deadline,'original_deadline')
     try:
         check_allocation(allocation,started)
+        require(getattr(transport,'client_sha256',None)==allocation['client_sha256'],'client_pin')
         require(isinstance(secret,SecretInput) and secret.secret_fragments and secret.dsn and re.fullmatch('[A-Za-z0-9_.-]+',secret.provider_id) is not None,'secret_provider_incomplete')
         deadline=min(started+10.,allocation['common_end_monotonic']);gate()
         publish(out/'invocation.json',dict(kind='pg-tool-probe-v2',schema_version=2,scope=allocation['scope'],nonce=allocation['nonce'],

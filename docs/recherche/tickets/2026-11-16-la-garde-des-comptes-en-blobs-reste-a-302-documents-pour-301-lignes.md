@@ -703,3 +703,10 @@ Référencessecretstrictnoncefixture/root700/file0600UIDnlink1/O_NOFOLLOW,
 modeprobeportprivé!=5433,noncefixture distinctREADY.16testsPython vertsproposés
 +rougecausallegacy1seul (avantcode4b770), tousNONJOUÉS. PasRust/ELF/PG/source
 compilée ni connexioncandidate àfixture02. LesquatreRustpasqualifiésparPython.
+
+MatriceV2précisée :19témoinsPython (16sémantiques+3référencecredential), tous
+NONJOUÉS ;4RustsourcesNONCOMPILÉS et1legacyrougecausal distinct. Ajout
+Refuscancel-sanstoken/attributionunknown/clientSHAliéallocation avanttransport.
+TypedPID/OID/flags boolstricts, driverfinishpasréessayéaprèséchec ; loader
+credentialsfuturnonce/root/mode exacts. PasCnative, aucuneconnexionfixture02,
+aucunsecretlu malgréfonctionsdelectureprésentesensource. RuntimeCLI désactivé.

@@ -39,7 +39,7 @@ def frames():
 class FakeTransport:
     def __init__(self,events=None,error=None,quiet=True,reaped=True):
         self.events=frames() if events is None else events;self.error=error
-        self.quiet=quiet;self.reaped=reaped;self.calls=[]
+        self.quiet=quiet;self.reaped=reaped;self.calls=[];self.client_sha256='2'*64
     def capture(self,payload,deadline):
         self.calls.append(('capture',deadline))
         self.payload=payload
@@ -118,6 +118,19 @@ class V2Fixtures(unittest.TestCase):
         with self.assertRaises(v2.Refused):self.run_probe(transport)
         self.assertEqual(sum(x[0]=='finish' for x in transport.calls),1)
         self.assertNotIn(CANARY,(self.out/'first-red.json').read_text())
+    def test_cancel_without_token_is_refused(self):
+        cleanup=dict(cancel_token_acquired=False,cancel_attempted=True,cancel_complete=False,client_dropped=False,driver_joined=False,backend_pid=None,backend_absent=None)
+        transport=FakeTransport([dict(event='failure',code='connect_before_attribution',cleanup=cleanup)])
+        with self.assertRaises(v2.Refused):self.run_probe(transport)
+        self.assertIn('cancel_without_token',(self.out/'first-red.json').read_text())
+    def test_wire_failure_before_attribution_stays_unknown(self):
+        cleanup=dict(cancel_token_acquired=False,cancel_attempted=False,cancel_complete=False,client_dropped=False,driver_joined=False,backend_pid=None,backend_absent=None)
+        with self.assertRaises(v2.Refused):self.run_probe(FakeTransport([dict(event='failure',code='connect_before_attribution',cleanup=cleanup)]))
+        red=json.loads((self.out/'first-red.json').read_text());self.assertFalse(red['server_attributed']);self.assertIsNone(red['backend_absent'])
+    def test_client_pin_must_match_external_allocation(self):
+        transport=FakeTransport();transport.client_sha256='3'*64
+        with self.assertRaises(v2.Refused):self.run_probe(transport)
+        self.assertEqual(transport.calls,[])
     def test_duplicates_and_overflow_refuse(self):
         for name,raw in [('dup',b'{"event":"connected","event":"complete"}\n'),('big',b'x'*65537)]:
             with self.subTest(name=name):
