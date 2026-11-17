@@ -196,3 +196,13 @@ RelTable insert/scan/delete, multiplicitéONE et collecteREL existantes ; contra
 idempotence/unicité/offsets finaux à expliciter avec STOP si sérialisation/vue
 d'écriture non prouvées. Rétention avant capture et upgrade durable restent
 prérequis cœur. Aucune réservation/implémentation/prototype/test/DB/build/format.
+
+[Contrat concret REL conditionnel](../17-11-2026/03-membership-relational-contract.md)
+consolidé après rattachement417978 : troisièmeREL distincteANN, marqueur o→o,
+ONE_ONE garde seulement ; scan validated+local/relID, assurerprésent/absent
+idempotents sans catchignore, vue de maintenance/sérialisation à prouver pour
+chaque mutateur. CollecteREL existante évite phaseNODE, pas preuve globale.
+Rétention avant première capture/scan possédé/GC et upgrade replay→checkpoint
+nouveau durable→rotation→capacité détaillés, READONLY sansupgrade. Périmètres
+conditionnels/coûts/témoins prépubliables ; STOP si préconditions manquantes.
+Aucune réservation/implémentation/prototype/test/DB/format/SDK/C1.
