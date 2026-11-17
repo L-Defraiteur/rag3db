@@ -469,3 +469,11 @@ Publier bruts+capture avant jugement, conserver première cause sans nouvelle
 observation après rouge, aucun garde desserré. Source/tests pinés+RO puis
 GO diagnostique distinct avant toute lecture live. Anciens GO clos, aucun
 3e essai de compilation autorisé. R3/B01/OUT_T et preuves restent immuables.
+
+Sonde distincte sourcec150039ea5 préparée après six témoins5d36dc88c9, NONJOUÉS.
+Capture/tuples/stat-fstat/identités/horloges sont publiés avant comparaison
+stricte, première cause conservée sans relecture aprèsrouge ; Common réel et
+outputexclusif/GOdiagnostique neuf requis. Proposal04 décrit Common10/OS12kill2
+et limites, aucun essai de compilation. Ajustement découverte unittest :
+fixture importée comme module, pas classeTestCase, pour sixcas exactement.
+Préparationpaquet/RO à venir, aucunCPU/proc réel/slot/native/SQL exécuté.

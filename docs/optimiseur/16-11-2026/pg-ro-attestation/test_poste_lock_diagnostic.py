@@ -3,13 +3,13 @@ import json
 from pathlib import Path
 import unittest
 from unittest.mock import patch
-from test_poste_authority import PosteAuthorityFixtures
+import test_poste_authority as poste_fixtures
 import poste_lock_diagnostic as diagnostic
 
 
 class LockDiagnosticFixtures(unittest.TestCase):
     def setUp(self):
-        PosteAuthorityFixtures.setUp(self)
+        poste_fixtures.PosteAuthorityFixtures.setUp(self)
         self.out=self.base/'capture';self.out.mkdir()
     def snapshot(self):
         return diagnostic.collect_snapshot(self.common,self.table,str(self.root),self.proc)
