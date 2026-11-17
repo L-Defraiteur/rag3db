@@ -98,7 +98,20 @@ def completed_scope(root):
 
 
 def previous_end(pair, phase):
-    if phase == 'baseline':
+    if phase == 'baseline' and pair.get('prior_end'):
+        prior = pair['prior_end']
+        root = Path(prior['root'])
+        assert base.digest(root / 'classification.json') == prior['classification_sha256']
+        assert base.digest(root / 'build-ledger.json') == prior['ledger_sha256']
+        scopes = list((root / 'scope').glob('validation-*/verdict.json'))
+        assert len(scopes) == 1
+        verdict = json.loads(scopes[0].read_text())
+        authority = json.loads(scopes[0].with_name('autorite.json').read_text())
+        assert verdict['code'] == prior['code'] and verdict['verdict'] == prior['verdict']
+        assert not verdict['restes'] and verdict['nettoye'] and authority['etat'] == 'termine'
+        assert authority['cgroup'] == prior['cgroup'] and not Path(verdict['prive']).exists()
+        assert base.digest(root / 'bin/probe-executable') == prior['elf_sha256']
+    elif phase == 'baseline':
         root = Path.home() / '.cache/codeparsers-notes/rust-followup-118cc71'
         assert json.loads((root / 'classification.json').read_text())['followup_units_and_usages'] is True
         completed_scope(root)
@@ -156,10 +169,23 @@ def check_outputs(pair, phase):
 
 
 def save(path, value):
-    with Path(path).open('x') as stream:
-        json.dump(value, stream, indent=2)
-        stream.flush()
-        os.fsync(stream.fileno())
+    # Les ledgers ne deviennent visibles qu'après fsync, par lien exclusif.
+    import tempfile
+    path = Path(path)
+    fd, pending = tempfile.mkstemp(prefix='.' + path.name + '-', dir=path.parent)
+    try:
+        with os.fdopen(fd, 'w') as stream:
+            json.dump(value, stream, indent=2)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.link(pending, path)
+        directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+    finally:
+        os.unlink(pending)
 
 
 def first_red(root, error):
@@ -177,6 +203,7 @@ def run_step(root, label, argv, cwd, env, end, cap):
         child = subprocess.Popen(argv, cwd=cwd, env=env, stdout=out, stderr=err)
         try:
             while child.poll() is None:
+                assert not (root / 'first-red.json').exists(), 'external first red'
                 if time.monotonic() >= deadline:
                     raise TimeoutError(label)
                 if label == 'probe':
@@ -213,9 +240,13 @@ def wait_publication(pair, phase, kind, ledger, end):
     root = Path(pair['proofs']) / phase
     path = root / (kind + '-peer-ack.json')
     while not path.exists():
+        assert not (root / 'first-red.json').exists(), 'external first red'
         assert time.monotonic() < end, 'peer publication deadline'
         time.sleep(.1)
     ack = json.loads(path.read_text())
+    assert ack['prepared_sha256'] == base.digest(Path(pair['proofs']) / 'prepared.json')
+    assert ack['coordinator'] == json.loads((root / 'relay-launch.json').read_text())['coordinator']
+    assert not (root / 'first-red.json').exists(), 'external first red'
     assert ack['host'] == pair['peer_host'] and ack['phase'] == phase and ack['kind'] == kind
     assert ack['ledger_sha256'] == base.digest(root / (kind + '-ledger.json'))
     assert ack['elf_sha256'] == ledger['elf_sha256'] and ack['copied_and_rehashed'] is True
@@ -227,6 +258,8 @@ def fresh_quiet(pair, phase, path, final=False, authority=None, private=None):
     roots = [TARGET, *[config['worktree'] for config in pair['phases'].values()]]
     old = Path.home() / '.cache/codeparsers-notes/rust-followup-118cc71/authority-status.json'
     groups = [json.loads(old.read_text())['cgroup']]
+    if pair.get('prior_end'):
+        groups.append(pair['prior_end']['cgroup'])
     controls = []
     if final:
         controls = json.loads((Path(pair['proofs']) / phase / 'controls.json').read_text())
@@ -269,7 +302,10 @@ def inside(pair, phase):
     bus_path = os.environ['DBUS_SESSION_BUS_ADDRESS'].split(',')[0].removeprefix('unix:path=')
     assert bus_path.startswith('/tmp/r3v-') and stat.S_ISSOCK(Path(bus_path).stat().st_mode)
     save(root / 'authority-path.json', {'path': str(receipt), 'deadline': authority['echeance'],
-        'pid': authority['pid'], 'start': authority['debut'], 'cgroup': authority['cgroup'], 'bus_path': bus_path})
+        'pid': authority['pid'], 'start': authority['debut'], 'cgroup': authority['cgroup'], 'bus_path': bus_path,
+        'driver_identity': physical.process_record(os.getpid()),
+        'supervisor_identity': physical.process_record(authority['pid']),
+        'driver_script_sha256': base.digest(__file__)})
     assert authority['etat'] == 'actif'
     group = Path('/sys/fs/cgroup') / authority['cgroup'].lstrip('/')
     limits = {name: (group / name).read_text().strip() for name in
@@ -398,31 +434,12 @@ def compose(pair, phase):
     return 0 if published['verdict'] == 'VERT' else 1
 
 
-def peer_ack(pair, phase, kind):
-    # Ne jamais ouvrir sur le pair le chemin du target PC contenu dans le ledger.
-    assert socket.gethostname() == pair['peer_host'] and phase in PRODUCTS and kind in ['build', 'runtime']
-    root = Path(pair['proofs']) / phase
-    ledger_path = root / (kind + '-ledger.json')
-    ledger = json.loads(ledger_path.read_text())
-    assert base.digest(root / 'bin/probe-executable') == ledger['elf_sha256']
-    if kind == 'runtime':
-        assert base.digest(root / 'inventory-all.stdout') == ledger['inventory_sha256']
-        assert base.digest(root / 'inventory-ignored.stdout') == ledger['ignored_inventory_sha256']
-    value = {'host': socket.gethostname(), 'phase': phase, 'kind': kind,
-        'ledger_sha256': base.digest(ledger_path), 'elf_sha256': ledger['elf_sha256'], 'copied_and_rehashed': True}
-    pending = root / (kind + '-peer-ack.pending')
-    save(pending, value)
-    os.link(pending, root / (kind + '-peer-ack.json'))
-    pending.unlink()
-    return 0
-
-
 def prepare(args):
     assert os.uname().nodename.lower() == 'luciepc' and args.peer_host
     proofs = args.proofs.absolute()
     manifest = TOOL_ROOT / 'docs/codeparsers/16-11-2026/rust-followup/frozen-corpus.json'
     pair = {'tool_root': str(TOOL_ROOT), 'peer_host': args.peer_host,
-        'physical_guard_sha256': base.digest(HERE / 'physical_guard.py'), 'proofs': str(proofs), 'manifest': str(manifest), 'tool_source': args.candidate_source,
+        'physical_guard_sha256': base.digest(HERE / 'physical_guard.py'), 'proofs': str(proofs), 'manifest': str(manifest), 'tool_source': args.tool_source or base.git(TOOL_ROOT, 'rev-parse', 'HEAD'),
         'driver_sha256': base.digest(__file__), 'helper_sha256': base.digest(PREVIOUS), 'budget_per_phase': 1800,
         'sdk': base.LIB, 'corpus_manifest_sha256': CORPUS_SHA,
         'comparison_sha256': base.digest(Path(__file__).with_name('compare.py')),
@@ -437,11 +454,25 @@ def prepare(args):
     scripts = ['extension/rag3weaver/scripts/' + name for name in
         ['confiner_validation.py', 'poste', 'cargo_garde.py', 'garde_target.sh', 'lib_du_magasin.sh']]
     scripts += [PROBE, 'extension/rag3weaver/Cargo.lock', 'extension/rag3weaver/Cargo.toml']
+    pair['relay'] = {'queue_budget': 300, 'transfer_cap': 30, 'control_cap': 5}
     pair['phases'] = {}
+    if args.prior_root:
+        prior_root = args.prior_root.resolve(strict=True)
+        verdict_paths = list((prior_root / 'scope').glob('validation-*/verdict.json'))
+        assert len(verdict_paths) == 1
+        verdict = json.loads(verdict_paths[0].read_text())
+        authority = json.loads(verdict_paths[0].with_name('autorite.json').read_text())
+        old_ledger = json.loads((prior_root / 'build-ledger.json').read_text())
+        assert old_ledger['app'] == BASELINE_SOURCE and old_ledger['parser'] == PARSERS['baseline']
+        pair['prior_end'] = {'root': str(prior_root), 'verdict': verdict['verdict'], 'code': verdict['code'],
+            'cgroup': authority['cgroup'], 'classification_sha256': base.digest(prior_root / 'classification.json'),
+            'ledger_sha256': base.digest(prior_root / 'build-ledger.json'), 'elf_sha256': old_ledger['elf_sha256']}
     for phase, worktree, source in [('baseline', args.baseline_worktree, BASELINE_SOURCE),
             ('candidate', args.candidate_worktree, args.candidate_source)]:
         worktree = worktree.resolve(strict=True)
         previous_owner = str(args.candidate_worktree.resolve() / 'extension/rag3weaver') if phase == 'baseline' else str(args.baseline_worktree.resolve() / 'extension/rag3weaver')
+        if phase == 'baseline' and args.prior_root:
+            previous_owner = str(args.baseline_worktree.resolve() / 'extension/rag3weaver')
         pair['phases'][phase] = {'worktree': str(worktree), 'source': source, 'target': str(TARGET),
             'store': str(Path.home() / '.cache/rag3db-libs'), 'budget': 1800, 'previous_owner': previous_owner,
             'pilot_sha256': base.digest(PREVIOUS), 'scripts': {name: base.digest(worktree / name) for name in scripts}}
@@ -458,6 +489,8 @@ def prepare(args):
     assert not any(root == control or root in control.parents for root in [TARGET, args.baseline_worktree, args.candidate_worktree])
     pair['control'] = str(control)
     sources = {name: HERE / name for name in ['pilot.py', 'physical_guard.py', 'compare.py']}
+    relay_sources = TOOL_ROOT / 'docs/codeparsers/17-11-2026/rust-probe-relay'
+    sources.update({name: relay_sources / name for name in ['relay.py', 'gate.py']})
     sources['legacy.py'] = PREVIOUS
     sources.update({name: args.candidate_worktree / 'extension/rag3weaver/scripts' / name
         for name in ['poste', 'confiner_validation.py', 'cargo_garde.py', 'garde_target.sh']})
@@ -476,22 +509,21 @@ def prepare(args):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['prepare', 'run', 'compose', 'inside', 'compare', 'peer-ack'])
+    parser.add_argument('action', choices=['prepare', 'run', 'compose', 'inside', 'compare'])
     parser.add_argument('--proofs', type=Path, required=True)
     parser.add_argument('--phase', choices=list(PRODUCTS))
     parser.add_argument('--baseline-worktree', type=Path)
     parser.add_argument('--candidate-worktree', type=Path)
     parser.add_argument('--candidate-source')
+    parser.add_argument('--tool-source')
+    parser.add_argument('--prior-root', type=Path)
     parser.add_argument('--allocation')
     parser.add_argument('--peer-host')
-    parser.add_argument('--kind', choices=['build', 'runtime'])
     args = parser.parse_args()
     if args.action == 'prepare':
         prepare(args)
         return 0
     pair = json.loads((args.proofs / 'prepared.json').read_text())
-    if args.action == 'peer-ack':
-        return peer_ack(pair, args.phase, args.kind)
     if args.action == 'compare':
         # Rapport CPU distinct : aucune prétention de l'inclure dans les deux phases natives.
         assert args.allocation, 'separate explicit offline reporting allocation required'
@@ -521,6 +553,7 @@ def main():
         os.execve(sys.executable, [sys.executable, '-B', str(control), *sys.argv[1:]], env)
     verify(pair, args.phase)
     previous_end(pair, args.phase)
+    assert (Path(pair['proofs']) / args.phase / 'relay-launch.json').exists(), 'autonomous relay required'
     assert args.allocation and 'RAG3WEAVER_VALIDATION_RECU' not in os.environ
     root = Path(pair['proofs']) / args.phase
     save(root / 'allocation.json', {'reference': args.allocation})

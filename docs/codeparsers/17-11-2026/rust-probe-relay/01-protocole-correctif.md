@@ -82,3 +82,54 @@ ACK AVANT toute invocation. P02 reste un refus, aucune ancienne autorité valide
 La revue doit épingler le manifeste de carry et ses preuves ; le candidat aura
 ensuite son nouvel ELF compilé sous son propre GO conditionnel. Cette première
 préparation du relais ne branche pas automatiquement ce carry.
+
+## Paquet implanté pour relecture, non exécuté
+
+Le couple relay.py/gate.py est raccordé au pilote existant : nouveau prepare
+copie les dix contrôleurs dans Q ; tool_source est indépendant du candidat
+c1cd. --prior-root permet de figer la fermeture rougeP02 et le propriétaire
+BASE réel, sans réarmer cette archive. Les noms finaux JSON/ledgers du pilote
+sont atomiques, les identités superviseur/pilote sont inscrites et le premier
+refus distant est observé pendant compilation, attente et test. L'ancienne
+commande manuelle peer-ack a été supprimée de cette version du pilote.
+
+Le transport ouvre les logs avant chaque SSH, désactive les connexions SSH
+partagées, conserve argv/stdout/stderr/rc et n'arrête que ses propres Popen.
+Les contrôles distants sont aussi enveloppés par le vrai timeout PC
+(signalTERM/kill1s), avec5s maximum pour les métadonnées et30s pour les données.
+Le coordinateur porte une borne totale2100s =300s attente poste +1800s phase,
+et réduit chaque copie au temps restantPC reçu avant le RPC. Ce ne sont pas
+1800s natifs renouvelables par publication. La phase distante garde les bornes
+post/Common déjà relues. Le refus du coordinateur reste une preuve distincte,
+jamais une réécriture d'un résultat natif déjà fermé.
+
+Les tests publiés ont été complétés : données de ledger réellement sérialisées,
+hash de copie et d'inventaires, refus au retour d'une copie si PCrouge, absence
+de lien après fsync si garde refuse, Gate.active réel avec faux /proc/scope,
+PID réutilisé, source changée, autorité terminée/verdict final/PCexpiré, et
+Gate.acknowledge réel qui recontrôle l'état après fsync avant link.
+Aucun de ces tests n'a encore été exécuté ; il ne s'agit pas d'une preuve verte.
+
+carry-proposal.json fige les pièces de provenance de0c565 (JSONcompiler-artifact,
+source/profil/scripts/SDK/corpus, SHA des preuves P02 et ownerBASE requis).
+Le statut reste proposal_only_not_executable ; aucun modecarry n'est branché.
+Il faudra une décision explicite et une revue du chemin carry avant tout GO
+qui s'appuierait sur l'absence de Cargo.
+
+## Relecture et budget correctif proposés
+
+Demande : RO TOTALE du couple, du delta pilote depuisc1cd et du protocole
+horloges/arrêt/deux liensACK ; pas seulement une revue du moteur générique.
+Après publication des SHA, proposition d'UN lot CPU correctif **distinct** :
+
+```sh
+timeout --signal=TERM --kill-after=2s 58s python3 -B docs/codeparsers/17-11-2026/rust-probe-relay/test_relay.py -f -v
+```
+
+L'option-f active failfast du vrai unittest.main(). Les témoins remplacent
+transport/process_records/horloge, sans SSH, /proc réel, Cargo, ELF natif ou
+autorité réelle. Aucun GO n'est déduit de cette proposition. Première erreur,
+échec ou timeout : STOP et preuves, aucun retry implicite. Les11anciens tests
+CPU ne sont pas rejoués par cette proposition. Aucun budget natif n'est demandé
+sur un paquet non qualifié ; la nouvelle paire et les pins seront relus avant
+un éventuel GO futur de phase. P02 ne reçoit aucun ACK.

@@ -184,3 +184,8 @@ Le lot CPU prévu a ensuite été tenté sur1916b3553f : rouge de parsingCLI rc2
 0,065s, zéro test exécuté (-f répété avec failfast=True dans main). Correction
 publiée : unittest.main() laisse -f commander failfast. Pas de relance implicite ;
 source corrigé encore non vérifié, nouvelle allocation CPU C7 nécessaire.
+
+Pour le correctif du17novembre, cette recette manuelle de publication est
+historique (P02 rouge à l'ACK). Le nouveau pilote retire peer-ack et exige le
+relais autonome : voir17-11-2026/rust-probe-relay/01-protocole-correctif.md.
+Aucun test/run de cette nouvelle version n'a été autorisé implicitement.

@@ -1,0 +1,99 @@
+{
+  "status": "proposal_only_not_executable",
+  "source": "fec35198b64b7e9da0496de6b01a7232fa7a8390",
+  "parser": "bd133850f89d6b12a3ca2b2f6ce238785ed37e3a",
+  "elf_sha256": "0c565ace3bf6bd0d972447466df2842610a9d76a6f59c5bc2928599bd7f8b63b",
+  "artifact": {
+    "reason": "compiler-artifact",
+    "package_id": "path+file:///home/lucied/git_workspaces/cx-codeparsers-rust-probe-baseline/extension/rag3weaver#0.1.0",
+    "manifest_path": "/home/lucied/git_workspaces/cx-codeparsers-rust-probe-baseline/extension/rag3weaver/Cargo.toml",
+    "target": {
+      "kind": [
+        "test"
+      ],
+      "crate_types": [
+        "bin"
+      ],
+      "name": "sonde_marque_nom",
+      "src_path": "/home/lucied/git_workspaces/cx-codeparsers-rust-probe-baseline/extension/rag3weaver/tests/sonde_marque_nom.rs",
+      "edition": "2021",
+      "doc": false,
+      "doctest": false,
+      "test": true
+    },
+    "profile": {
+      "opt_level": "0",
+      "debuginfo": "line-tables-only",
+      "debug_assertions": true,
+      "overflow_checks": true,
+      "test": true
+    },
+    "features": [
+      "code",
+      "rag3db-native"
+    ],
+    "filenames": [
+      "/home/lucied/.cache/rag3weaver-build/target-import-pointe-pile/debug/deps/sonde_marque_nom-7d442e5571365b1a"
+    ],
+    "executable": "/home/lucied/.cache/rag3weaver-build/target-import-pointe-pile/debug/deps/sonde_marque_nom-7d442e5571365b1a",
+    "fresh": false
+  },
+  "sdk": "rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF",
+  "sdk_hashes": {
+    "librag3db.so": "b7e9fc75a3d2de04c72680b0309e8bb1df9eaadb5211ebbacf39716c6d0a2101",
+    "libvector.rag3db_extension": "1669d6392ec8067fcf92ae2ccc972fd7cd3086629fb82d1f5d254e90d72d7561"
+  },
+  "corpus_sha256": "0a6c9af21e3666ff95427ecb44ea253d10907cd5619f96b0a96e91e6c1297185",
+  "features": [
+    "code",
+    "rag3db-native"
+  ],
+  "profile": {
+    "opt_level": "0",
+    "debuginfo": "line-tables-only",
+    "debug_assertions": true,
+    "overflow_checks": true,
+    "test": true
+  },
+  "runtime_profile_sha256": "81969f85c1cc6384ef67283fb6486cff22bbbcc8c5a795026339b7dbb13c4192",
+  "probe_sha256": "f5de4f03dec0dc2290f103ca98d65f675e93ada801b79d38847f8ba0244a879e",
+  "source_files": {
+    "extension/rag3weaver/scripts/confiner_validation.py": "6439fdd8b52c85fa4e74af0def2c667ef0bedae9b814cbbfd48e49946c4f74ea",
+    "extension/rag3weaver/scripts/poste": "79e3a8bbf457e3bc9104aa1558e7d03072216c70b68e08ae606ace6aa4584c7b",
+    "extension/rag3weaver/scripts/cargo_garde.py": "7aae73ed75aff311f40ec4237751f3bb2cd87aa23978387714482ebde48be9f3",
+    "extension/rag3weaver/scripts/garde_target.sh": "43ff9c80e14d9970adf94da2db74a6d0e9ca2d90d54a2b08c8f37d61ea3d5a37",
+    "extension/rag3weaver/scripts/lib_du_magasin.sh": "6843c315ebf3fc35a95dbf8e7f87b6d19a91375a312e3f2a987149b5c370e18e",
+    "extension/rag3weaver/tests/sonde_marque_nom.rs": "f5de4f03dec0dc2290f103ca98d65f675e93ada801b79d38847f8ba0244a879e",
+    "extension/rag3weaver/Cargo.lock": "090cc4e1330dc694127c0f08330d25acc656699763079400b502ba6607093fa7",
+    "extension/rag3weaver/Cargo.toml": "b34656b80ee612bd29834b53af5b73617a00fe392845e396ff758477d13ffc71"
+  },
+  "archive": "/home/lucied/.cache/codeparsers-notes/rust-probe-pair-02/baseline",
+  "proof_hashes": {
+    "compile.command.json": "cc7e3643106f613763250a23dff5eee4cbce683a99800b24c6593a3e39b76d79",
+    "compile.stdout": "608d19842d9cb0f42600f58052a3841969c2a7643ff6cd2d21b40c888bc78d68",
+    "compile.stderr": "91cc5887d6d93c79f60fa4d7d7b6fdf43f66b5878ac3b7f477de56fed359fd78",
+    "compile.result.json": "7449cdbef62923ec70f488986ea08cba6a279fb124f2869f16277ffc3afe439d",
+    "build-ledger.json": "86edbbaf52bea6181cf238e3671bb7931c9323a7a2bf30a6ceb17654048bb113",
+    "first-red.json": "3d563bee4a59084d0aa02ffbeb5a0e4597a8b4d27ddb0e34b5fb94d708f7865d",
+    "classification.json": "077e33f1dff091c3a583ae1131841354677cc57c6b49f8455a17751410166a71",
+    "authority-status.json": "ea078b0a7c238ddd505e571810ded33d4e2ac7a9e6d72d5cf928d3dbe13cd31f",
+    "postmortem-quiet.json": "a917d1d894209c56f7be303b3d2028c311597cc65576eacb355cf727f2bd3555"
+  },
+  "previous_scope": {
+    "path": "/home/lucied/.cache/codeparsers-notes/rust-probe-pair-02/baseline/scope/validation-rvm1cxyv",
+    "verdict": "ROUGE",
+    "code": 1,
+    "authority_state": "termine",
+    "restes": [],
+    "nettoye": true
+  },
+  "required_target_owner": "/home/lucied/git_workspaces/cx-codeparsers-rust-probe-baseline/extension/rag3weaver",
+  "required_fresh_checks": [
+    "source/parser/probe/scripts/lock/toml exact",
+    "actual SDK hashes",
+    "both copied ELF hashes and original artifact SHA",
+    "previous TERMINE/quiet/private absent",
+    "same target owner before and after poste",
+    "fresh active phase and two new ACK before any ELF invocation"
+  ]
+}
