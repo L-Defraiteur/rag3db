@@ -41,8 +41,17 @@ def decode(raw):
     return json.loads(raw, object_pairs_hook=pairs, parse_constant=constant)
 
 
+def _unprotected_path(path):
+    path = Path(path)
+    # Inspect names/symlink metadata only, never protected file contents.
+    for candidate in (path, path.resolve(strict=False)):
+        if any('.env' in part or '.vault' in part for part in candidate.parts):
+            raise ValueError('protected path refused before content read')
+    return path
+
+
 def digest(path):
-    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    return hashlib.sha256(_unprotected_path(path).read_bytes()).hexdigest()
 
 
 def load_bound(path, sha):
@@ -66,6 +75,8 @@ def exists(path):
 
 def _python_snapshot(pid, expected_script_path, watch, proc_root, clock):
     root = Path(proc_root)/str(pid)
+    if expected_script_path is not None:
+        _unprotected_path(expected_script_path)
     if expected_script_path is not None and not Path(expected_script_path).is_absolute():
         raise ValueError('expected Python script must be absolute')
     def sample():
@@ -78,6 +89,7 @@ def _python_snapshot(pid, expected_script_path, watch, proc_root, clock):
         if len(argv) <= index or not Path(argv[index]).is_absolute():
             raise ValueError('Python role must execute an absolute script, no -c/-m/other flags')
         script_path = argv[index]
+        _unprotected_path(script_path)
         if expected_script_path is not None and script_path != str(expected_script_path):
             raise ValueError('Python role script differs BEFORE hashing script content')
         if watch and (len(argv) != index+4 or argv[index+1] != '--watch'):
