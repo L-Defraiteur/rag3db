@@ -18,7 +18,7 @@ R = Path.home()/'.cache/rag3weaver-build'
 W = Path.home()/'git_workspaces/cx-tty-english-aliases-union-99'
 OLD = Path.home()/'git_workspaces/cx-tty-english-aliases'
 T = R/'target-cx-tty-english-aliases-2'
-Q = R/'cx-tty-union99-controller-v1'
+Q = R/'cx-tty-union99-controller-v2'
 P = R/'cx-tty-union99-stages-v1'
 S = R/'cx-tty-union99-common-v1'
 CANON = R/'cx-tty-union99-canonical-v1'
@@ -94,7 +94,11 @@ def prepare(source):
     assert (react/'react-refresh/package.json').is_file()
     runtime={str(path):digest(path) for path in sorted(react.rglob('*')) if path.is_file()}
     runtime[browser]=digest(browser)
-    for path in sorted(Path(browser).resolve().parent.rglob('*')):
+    chrome_distribution = Path('/opt/google/chrome')
+    assert browser == '/usr/bin/google-chrome-stable'
+    assert 'exec /opt/google/chrome/google-chrome ' in Path(browser).read_text()
+    assert (chrome_distribution/'chrome').is_file()
+    for path in sorted(chrome_distribution.rglob('*')):
         if path.is_file():
             runtime[str(path)] = digest(path)
     for path in [W/'tools/poste/required_suites.txt',W/'tools/poste/required_suites.sh',canonical]:

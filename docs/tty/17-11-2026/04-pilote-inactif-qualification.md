@@ -69,3 +69,11 @@ pas repris ni nettoyé. Les anciens WIP et toutes preuves restent conservés.
 Suite : RO TOTALE de ce couple désarmé et de ses pins, puis composition commune
 avec les porteurs G/Embar/Arbre sous le même ticket. Pas de demande de GO native
 sur ce Q ; aucune ancienne fenêtre600 ni vieux vert n'est réutilisé.
+
+## Préparation v1 refusée, v2 explicite
+
+La lecture réelle du wrapper /usr/bin/google-chrome-stable a révélé un script
+régulier exécutant /opt/google/chrome/google-chrome. Parcourir son parent
+avait visé /usr/bin et refusé PermissionError mount.nfs, avant prepared final.
+Qv1 partiel conservé ; Qv2 épingle uniquement ce wrapper et la distribution
+/opt/google/chrome explicite. Aucun lancement du navigateur ni targetmuté.
