@@ -1,0 +1,1443 @@
+{
+  "kind": "VERTEX_CLEANUP_PREPARATION_ONLY_NO_REMOVAL_AUTHORITY",
+  "session": "2026-11-16",
+  "prepared_date": "2026-11-17",
+  "master_landed": "99fef92ce6ee9a0007eaf99c7c3a6a3789061c57",
+  "guard": {
+    "path_existing_private": "/home/lucied/.cache/rag3weaver-build/cx-ed-ties-guard6f3-preserved.py",
+    "sha256": "6f3dfceb17c9703029d2f4f26385f9aa21820c84bc79c518e1338b6d0f36188c",
+    "mutated": false,
+    "requires_new_report_before_each_removal": true
+  },
+  "archives": {
+    "root_on_both_hosts": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1",
+    "files": {
+      "portable-archives.tar.zst": {
+        "size": 2218369564,
+        "sha256": "e25dfdd3f2eda8de9ac01f58507c55f30871d6ed07591d43b918ac0382e859dc"
+      },
+      "pc-archives.tar.zst": {
+        "size": 1117789441,
+        "sha256": "8a08edbba998ae6006b5c6c035f297471ea80cf60f95bdebb0a84f8733707f1c"
+      },
+      "G-deps-b472-v1.tar.zst": {
+        "size": 1270521826,
+        "sha256": "c47fcbeca06d1ef8705ebca151f7c80fa7ab6374844c875873e9e75e35a300e0"
+      },
+      "target-fixtures.tar.zst": {
+        "size": 9802168,
+        "sha256": "130039eae1f0b96a515b151f87b87e5e9c8ed1ff2b884c5b007b66cf4f56ff3c"
+      }
+    },
+    "G_dependencies_archive": {
+      "file": "G-deps-b472-v1.tar.zst",
+      "size": 1270521826,
+      "sha256": "c47fcbeca06d1ef8705ebca151f7c80fa7ab6374844c875873e9e75e35a300e0"
+    },
+    "target_fixtures_archive": {
+      "git_roots": 10,
+      "external_users": 0,
+      "source_entries": 5649,
+      "tar_size": 9802168,
+      "tar_sha256": "130039eae1f0b96a515b151f87b87e5e9c8ed1ff2b884c5b007b66cf4f56ff3c"
+    },
+    "both_hosts_verified": true,
+    "source_copy_fidelity": "before_source == after_source == preserved_copy for mode/uid/gid/mtime_ns/contentSHA or symlink readlink; cp-a reflink, no dereference"
+  },
+  "hosts": {
+    "lucie-tablette": {
+      "worktrees": [
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-integration-r1",
+          "head": "b472035a4e2944a9d90727817c95290cc0fba1ea",
+          "branch": "refs/heads/cx-ed-vertex-integration-r1",
+          "status": "",
+          "admin": "/home/lucied/git_workspaces/rag3db/.git/worktrees/rag3db-cx-ed-vertex-integration-r1",
+          "common": "/home/lucied/git_workspaces/rag3db/.git",
+          "root_identity": {
+            "dev": 57,
+            "ino": 95152833,
+            "mode": 16877,
+            "uid": 1000
+          },
+          "retain": false,
+          "submodule_initialized": false
+        },
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-integration-r2",
+          "head": "99fef92ce6ee9a0007eaf99c7c3a6a3789061c57",
+          "branch": "refs/heads/cx-ed-vertex-integration-r2",
+          "status": "",
+          "admin": "/home/lucied/git_workspaces/rag3db/.git/worktrees/rag3db-cx-ed-vertex-integration-r2",
+          "common": "/home/lucied/git_workspaces/rag3db/.git",
+          "root_identity": {
+            "dev": 57,
+            "ino": 95212206,
+            "mode": 16877,
+            "uid": 1000
+          },
+          "retain": false,
+          "submodule_initialized": false
+        },
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-raw-classifier-r1",
+          "head": "3bddcdb4841b8f04846ec0c904bec739a14fd656",
+          "branch": "refs/heads/cx-ed-vertex-raw-classifier-r1",
+          "status": "",
+          "admin": "/home/lucied/git_workspaces/rag3db/.git/worktrees/rag3db-cx-ed-vertex-raw-classifier-r1",
+          "common": "/home/lucied/git_workspaces/rag3db/.git",
+          "root_identity": {
+            "dev": 57,
+            "ino": 95119625,
+            "mode": 16877,
+            "uid": 1000
+          },
+          "retain": false,
+          "submodule_initialized": false
+        },
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-fix-r1",
+          "head": "c38fc3e4ddd8c806de904c7d08eb43b4988fec99",
+          "branch": "refs/heads/cx-ed-vertex-token-fix-r1",
+          "status": "",
+          "admin": "/home/lucied/git_workspaces/rag3db/.git/worktrees/rag3db-cx-ed-vertex-token-fix-r1",
+          "common": "/home/lucied/git_workspaces/rag3db/.git",
+          "root_identity": {
+            "dev": 57,
+            "ino": 94446487,
+            "mode": 16877,
+            "uid": 1000
+          },
+          "retain": false,
+          "submodule_initialized": false
+        },
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-green-pilot-r1",
+          "head": "441002d11bd07b7e8b77b0351d6e522ac5a9c6db",
+          "branch": "refs/heads/cx-ed-vertex-token-green-pilot-r1",
+          "status": "",
+          "admin": "/home/lucied/git_workspaces/rag3db/.git/worktrees/rag3db-cx-ed-vertex-token-green-pilot-r1",
+          "common": "/home/lucied/git_workspaces/rag3db/.git",
+          "root_identity": {
+            "dev": 57,
+            "ino": 94458209,
+            "mode": 16877,
+            "uid": 1000
+          },
+          "retain": false,
+          "submodule_initialized": false
+        },
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-green-preuves-r1",
+          "head": "c599a189b59a56052df4713c135dca1cff7685b3",
+          "branch": "refs/heads/cx-ed-vertex-token-green-preuves-r1",
+          "status": "",
+          "admin": "/home/lucied/git_workspaces/rag3db/.git/worktrees/rag3db-cx-ed-vertex-token-green-preuves-r1",
+          "common": "/home/lucied/git_workspaces/rag3db/.git",
+          "root_identity": {
+            "dev": 57,
+            "ino": 94581534,
+            "mode": 16877,
+            "uid": 1000
+          },
+          "retain": false,
+          "submodule_initialized": false
+        },
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-red-pilot-r1",
+          "head": "eb026f0a3c7c4143b511175b2bc92bd4f65c2db4",
+          "branch": "refs/heads/cx-ed-vertex-token-red-pilot-r1",
+          "status": "",
+          "admin": "/home/lucied/git_workspaces/rag3db/.git/worktrees/rag3db-cx-ed-vertex-token-red-pilot-r1",
+          "common": "/home/lucied/git_workspaces/rag3db/.git",
+          "root_identity": {
+            "dev": 57,
+            "ino": 93917041,
+            "mode": 16877,
+            "uid": 1000
+          },
+          "retain": false,
+          "submodule_initialized": false
+        },
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-red-preuves-r1",
+          "head": "5d6e3f873f5e9cedcaa47669f4f97a30a8a52819",
+          "branch": "refs/heads/cx-ed-vertex-token-red-preuves-r1",
+          "status": "",
+          "admin": "/home/lucied/git_workspaces/rag3db/.git/worktrees/rag3db-cx-ed-vertex-token-red-preuves-r1",
+          "common": "/home/lucied/git_workspaces/rag3db/.git",
+          "root_identity": {
+            "dev": 57,
+            "ino": 93996727,
+            "mode": 16877,
+            "uid": 1000
+          },
+          "retain": false,
+          "submodule_initialized": false
+        },
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-refresh-r1",
+          "head": "d148fe0e8701f1653f6261d9ce601a3e4cbc5dd5",
+          "branch": "refs/heads/cx-ed-vertex-token-refresh-r1",
+          "status": "",
+          "admin": "/home/lucied/git_workspaces/rag3db/.git/worktrees/rag3db-cx-ed-vertex-token-refresh-r1",
+          "common": "/home/lucied/git_workspaces/rag3db/.git",
+          "root_identity": {
+            "dev": 57,
+            "ino": 92346859,
+            "mode": 16877,
+            "uid": 1000
+          },
+          "retain": false,
+          "submodule_initialized": false
+        },
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-refresh-r2",
+          "head": "c642b40db2acccaab89ea5b186b97d87f29b998c",
+          "branch": "refs/heads/cx-ed-vertex-token-refresh-r2",
+          "status": "",
+          "admin": "/home/lucied/git_workspaces/rag3db/.git/worktrees/rag3db-cx-ed-vertex-token-refresh-r2",
+          "common": "/home/lucied/git_workspaces/rag3db/.git",
+          "root_identity": {
+            "dev": 57,
+            "ino": 92907845,
+            "mode": 16877,
+            "uid": 1000
+          },
+          "retain": false,
+          "submodule_initialized": false
+        },
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-refresh-r3",
+          "head": "fe40b640eb0cc54645cbd552aa13b065ed1d2fa7",
+          "branch": "refs/heads/cx-ed-vertex-token-refresh-r3",
+          "status": "",
+          "admin": "/home/lucied/git_workspaces/rag3db/.git/worktrees/rag3db-cx-ed-vertex-token-refresh-r3",
+          "common": "/home/lucied/git_workspaces/rag3db/.git",
+          "root_identity": {
+            "dev": 57,
+            "ino": 93825348,
+            "mode": 16877,
+            "uid": 1000
+          },
+          "retain": false,
+          "submodule_initialized": false
+        },
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-union-observation-r1",
+          "head": "28e883be76c25e30302fc36955e8c9c7bafc2e90",
+          "branch": "refs/heads/cx-ed-vertex-token-union-observation-r1",
+          "status": "",
+          "admin": "/home/lucied/git_workspaces/rag3db/.git/worktrees/rag3db-cx-ed-vertex-token-union-observation-r1",
+          "common": "/home/lucied/git_workspaces/rag3db/.git",
+          "root_identity": {
+            "dev": 57,
+            "ino": 94796936,
+            "mode": 16877,
+            "uid": 1000
+          },
+          "retain": false,
+          "submodule_initialized": false
+        },
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-union-pilot-r1",
+          "head": "968f1843337bbd9931940fc068df2ec2d40bdb68",
+          "branch": "refs/heads/cx-ed-vertex-token-union-pilot-r1",
+          "status": "",
+          "admin": "/home/lucied/git_workspaces/rag3db/.git/worktrees/rag3db-cx-ed-vertex-token-union-pilot-r1",
+          "common": "/home/lucied/git_workspaces/rag3db/.git",
+          "root_identity": {
+            "dev": 57,
+            "ino": 94624696,
+            "mode": 16877,
+            "uid": 1000
+          },
+          "retain": false,
+          "submodule_initialized": false
+        },
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-union-r1",
+          "head": "b472035a4e2944a9d90727817c95290cc0fba1ea",
+          "branch": "refs/heads/cx-ed-vertex-token-union-r1",
+          "status": "",
+          "admin": "/home/lucied/git_workspaces/rag3db/.git/worktrees/rag3db-cx-ed-vertex-token-union-r1",
+          "common": "/home/lucied/git_workspaces/rag3db/.git",
+          "root_identity": {
+            "dev": 57,
+            "ino": 94602725,
+            "mode": 16877,
+            "uid": 1000
+          },
+          "retain": false,
+          "submodule_initialized": false
+        }
+      ],
+      "archive_guards": [
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-integration-r1",
+          "head": "b472035a4e2944a9d90727817c95290cc0fba1ea",
+          "archive": {
+            "source": {
+              "path": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/portable-snapshot/rag3db-cx-ed-vertex-integration-r1/source",
+              "entries": 10457,
+              "fingerprint_sha256": "3900aff7143494e7b00d3b7555ff583703c61592d93e7e9497cc44e04c0c9cad"
+            },
+            "admin": {
+              "path": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/portable-snapshot/rag3db-cx-ed-vertex-integration-r1/admin",
+              "entries": 9,
+              "fingerprint_sha256": "df23bb78af4475851c99ecd51eae019faac8b7dd9b6a16ebfe46e62b6d075f8b"
+            }
+          },
+          "guard_rc": 0,
+          "guard_verdict": "VERT",
+          "refus": [],
+          "private_module_users": []
+        },
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-integration-r2",
+          "head": "99fef92ce6ee9a0007eaf99c7c3a6a3789061c57",
+          "archive": {
+            "source": {
+              "path": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/portable-snapshot/rag3db-cx-ed-vertex-integration-r2/source",
+              "entries": 10463,
+              "fingerprint_sha256": "52cfee591d12655e6ad2f2c97a9e4ac3645b60902ebf165f1532a6b112bb9373"
+            },
+            "admin": {
+              "path": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/portable-snapshot/rag3db-cx-ed-vertex-integration-r2/admin",
+              "entries": 11,
+              "fingerprint_sha256": "2ba36f70fc91a798f3e3eb83f718baffa25a840dcb344b609ffdbea8f81e340b"
+            }
+          },
+          "guard_rc": 0,
+          "guard_verdict": "VERT",
+          "refus": [],
+          "private_module_users": []
+        },
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-raw-classifier-r1",
+          "head": "3bddcdb4841b8f04846ec0c904bec739a14fd656",
+          "archive": {
+            "source": {
+              "path": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/portable-snapshot/rag3db-cx-ed-vertex-raw-classifier-r1/source",
+              "entries": 10477,
+              "fingerprint_sha256": "320a2f41f210a4d7cd89ce876d1e59c7e2dc742ba81258cc23473b8e22d078c3"
+            },
+            "admin": {
+              "path": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/portable-snapshot/rag3db-cx-ed-vertex-raw-classifier-r1/admin",
+              "entries": 11,
+              "fingerprint_sha256": "13111495936a29015b66384def1872f7f1abdeec7a5f7f37abd9da6de5d6a465"
+            }
+          },
+          "guard_rc": 0,
+          "guard_verdict": "VERT",
+          "refus": [],
+          "private_module_users": []
+        },
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-fix-r1",
+          "head": "c38fc3e4ddd8c806de904c7d08eb43b4988fec99",
+          "archive": {
+            "source": {
+              "path": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/portable-snapshot/rag3db-cx-ed-vertex-token-fix-r1/source",
+              "entries": 10427,
+              "fingerprint_sha256": "5b6531da9d9a879fd9cc6f42b17f0b30879aa705bab8cac6956b870d3aba68a2"
+            },
+            "admin": {
+              "path": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/portable-snapshot/rag3db-cx-ed-vertex-token-fix-r1/admin",
+              "entries": 10,
+              "fingerprint_sha256": "88026222339a5faf88c3ca23384596a66355e06ad631a06312a02c5bf28cbab9"
+            }
+          },
+          "guard_rc": 0,
+          "guard_verdict": "VERT",
+          "refus": [],
+          "private_module_users": []
+        },
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-green-pilot-r1",
+          "head": "441002d11bd07b7e8b77b0351d6e522ac5a9c6db",
+          "archive": {
+            "source": {
+              "path": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/portable-snapshot/rag3db-cx-ed-vertex-token-green-pilot-r1/source",
+              "entries": 10433,
+              "fingerprint_sha256": "d9d0733b5f426b6157f5cc3c6e505dc467af263a5eed9b14d422b7cc371f940b"
+            },
+            "admin": {
+              "path": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/portable-snapshot/rag3db-cx-ed-vertex-token-green-pilot-r1/admin",
+              "entries": 10,
+              "fingerprint_sha256": "caecc71a7dbc2424af45ce3d4c544bd48c01dde1b82dd5ff64863635ee2e540f"
+            }
+          },
+          "guard_rc": 0,
+          "guard_verdict": "VERT",
+          "refus": [],
+          "private_module_users": []
+        },
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-green-preuves-r1",
+          "head": "c599a189b59a56052df4713c135dca1cff7685b3",
+          "archive": {
+            "source": {
+              "path": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/portable-snapshot/rag3db-cx-ed-vertex-token-green-preuves-r1/source",
+              "entries": 10435,
+              "fingerprint_sha256": "72131346aab23c95ba76fbe0c86e21a339d6270925356ece4377fcb3a24368e6"
+            },
+            "admin": {
+              "path": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/portable-snapshot/rag3db-cx-ed-vertex-token-green-preuves-r1/admin",
+              "entries": 11,
+              "fingerprint_sha256": "e2973dca261e4e767dfb6bee0885b01338372fb4d151ee47f7c574ecf8040ca2"
+            }
+          },
+          "guard_rc": 0,
+          "guard_verdict": "VERT",
+          "refus": [],
+          "private_module_users": []
+        },
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-red-pilot-r1",
+          "head": "eb026f0a3c7c4143b511175b2bc92bd4f65c2db4",
+          "archive": {
+            "source": {
+              "path": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/portable-snapshot/rag3db-cx-ed-vertex-token-red-pilot-r1/source",
+              "entries": 10429,
+              "fingerprint_sha256": "e9e4906c22e7b4619ffa8e1626ed79a16430e13a165515ddad4df5abd22ff915"
+            },
+            "admin": {
+              "path": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/portable-snapshot/rag3db-cx-ed-vertex-token-red-pilot-r1/admin",
+              "entries": 10,
+              "fingerprint_sha256": "e5537e1d54fd5865bf7f238592ac7f8b216e972bb0f11952778e8145829ca25c"
+            }
+          },
+          "guard_rc": 0,
+          "guard_verdict": "VERT",
+          "refus": [],
+          "private_module_users": []
+        },
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-red-preuves-r1",
+          "head": "5d6e3f873f5e9cedcaa47669f4f97a30a8a52819",
+          "archive": {
+            "source": {
+              "path": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/portable-snapshot/rag3db-cx-ed-vertex-token-red-preuves-r1/source",
+              "entries": 10431,
+              "fingerprint_sha256": "ff0c693bd50334622c90a3ac05b80c5095defddc3b08fc6d8261fc02326467dc"
+            },
+            "admin": {
+              "path": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/portable-snapshot/rag3db-cx-ed-vertex-token-red-preuves-r1/admin",
+              "entries": 10,
+              "fingerprint_sha256": "90fb9742452a02c9842f686a2a1eb7f107b23fce02c0b0659a4cc8981a0c3e9a"
+            }
+          },
+          "guard_rc": 0,
+          "guard_verdict": "VERT",
+          "refus": [],
+          "private_module_users": []
+        },
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-refresh-r1",
+          "head": "d148fe0e8701f1653f6261d9ce601a3e4cbc5dd5",
+          "archive": {
+            "source": {
+              "path": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/portable-snapshot/rag3db-cx-ed-vertex-token-refresh-r1/source",
+              "entries": 10403,
+              "fingerprint_sha256": "9814f176fd58f35d35883254cda620656269ea05d7761f85aa807413c6cc483d"
+            },
+            "admin": {
+              "path": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/portable-snapshot/rag3db-cx-ed-vertex-token-refresh-r1/admin",
+              "entries": 10,
+              "fingerprint_sha256": "2b426707209e19d7d994dc1f85ecbca9ec74f93ba11cf2d097de0a9859fc5402"
+            }
+          },
+          "guard_rc": 0,
+          "guard_verdict": "VERT",
+          "refus": [],
+          "private_module_users": []
+        },
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-refresh-r2",
+          "head": "c642b40db2acccaab89ea5b186b97d87f29b998c",
+          "archive": {
+            "source": {
+              "path": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/portable-snapshot/rag3db-cx-ed-vertex-token-refresh-r2/source",
+              "entries": 10404,
+              "fingerprint_sha256": "804d8a9469865fbf574137a17e566337be1a4f42432725965fc0a59dd9f75cb6"
+            },
+            "admin": {
+              "path": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/portable-snapshot/rag3db-cx-ed-vertex-token-refresh-r2/admin",
+              "entries": 10,
+              "fingerprint_sha256": "16dd8c420e3f37b0b01bb273e0c44e5e0d3b0b518b48ea9bf5cb43236be43ebe"
+            }
+          },
+          "guard_rc": 0,
+          "guard_verdict": "VERT",
+          "refus": [],
+          "private_module_users": []
+        },
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-refresh-r3",
+          "head": "fe40b640eb0cc54645cbd552aa13b065ed1d2fa7",
+          "archive": {
+            "source": {
+              "path": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/portable-snapshot/rag3db-cx-ed-vertex-token-refresh-r3/source",
+              "entries": 10426,
+              "fingerprint_sha256": "56cd52118d1e619eef3af7fa969ba1b929f71618f30b81a2f0dd64ed6c881737"
+            },
+            "admin": {
+              "path": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/portable-snapshot/rag3db-cx-ed-vertex-token-refresh-r3/admin",
+              "entries": 10,
+              "fingerprint_sha256": "156cd8c28fdf06b14d552c65d04f41c713d9919f5dd36b04878442b98ad88682"
+            }
+          },
+          "guard_rc": 0,
+          "guard_verdict": "VERT",
+          "refus": [],
+          "private_module_users": []
+        },
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-union-observation-r1",
+          "head": "28e883be76c25e30302fc36955e8c9c7bafc2e90",
+          "archive": {
+            "source": {
+              "path": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/portable-snapshot/rag3db-cx-ed-vertex-token-union-observation-r1/source",
+              "entries": 10466,
+              "fingerprint_sha256": "05d894e9c80a0f3cff0bb878ce4d2a05be5a202ac0d3560f0590ecd089665132"
+            },
+            "admin": {
+              "path": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/portable-snapshot/rag3db-cx-ed-vertex-token-union-observation-r1/admin",
+              "entries": 10,
+              "fingerprint_sha256": "3494f2df2f64bd59d4ebf28d9c36a53db67cb55caa10885aaf89b28d52217f72"
+            }
+          },
+          "guard_rc": 0,
+          "guard_verdict": "VERT",
+          "refus": [],
+          "private_module_users": []
+        },
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-union-pilot-r1",
+          "head": "968f1843337bbd9931940fc068df2ec2d40bdb68",
+          "archive": {
+            "source": {
+              "path": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/portable-snapshot/rag3db-cx-ed-vertex-token-union-pilot-r1/source",
+              "entries": 10470,
+              "fingerprint_sha256": "12c219e9ccbebd44fa2a5a72f6c9df8257bc6a623471ef1c3e844bcaed259190"
+            },
+            "admin": {
+              "path": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/portable-snapshot/rag3db-cx-ed-vertex-token-union-pilot-r1/admin",
+              "entries": 10,
+              "fingerprint_sha256": "096d31833ef39769ceb9c0db62eb4bc9b3b3478d3630a0a94fd90b232df9f399"
+            }
+          },
+          "guard_rc": 2,
+          "guard_verdict": "ROUGE",
+          "refus": [
+            "fichiers ou index non préservés dans les sources : /home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-union-pilot-r1"
+          ],
+          "private_module_users": []
+        },
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-union-r1",
+          "head": "b472035a4e2944a9d90727817c95290cc0fba1ea",
+          "archive": {
+            "source": {
+              "path": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/portable-snapshot/rag3db-cx-ed-vertex-token-union-r1/source",
+              "entries": 10457,
+              "fingerprint_sha256": "9a89134f097a0c3377f3d21746468cc0739f13775b8632d4a176e3722d49b518"
+            },
+            "admin": {
+              "path": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/portable-snapshot/rag3db-cx-ed-vertex-token-union-r1/admin",
+              "entries": 10,
+              "fingerprint_sha256": "0cbbb680caf2e6ee76701b70f00e47be2ed13cbd0ff53b05ca4db145ba3d435a"
+            }
+          },
+          "guard_rc": 0,
+          "guard_verdict": "VERT",
+          "refus": [],
+          "private_module_users": []
+        }
+      ],
+      "ignored_assets": [
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-union-pilot-r1/docs/everything-declarative/16-11-2026/vertex-token-union/__pycache__",
+          "worktree": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-union-pilot-r1",
+          "dev": 57,
+          "ino": 94669524,
+          "uid": 1000,
+          "mode": 16877,
+          "archived_source": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/portable-snapshot/rag3db-cx-ed-vertex-token-union-pilot-r1/source",
+          "archived_entries": 5,
+          "archive_subtree_fingerprint": "78f0fb98df9c3a83f299c7c896e0cbee4709bb0c6531256c04df11a342a76b0f",
+          "proposed_action": "rename-to-private-quarantine-ONLY-after-distinct-C7-GO; not executed"
+        }
+      ],
+      "quiescence": {
+        "host": "lucie-tablette",
+        "found": 0,
+        "global_unknown": 496,
+        "owned_pairs": 0,
+        "owned_alive": 0,
+        "owned_unknown": 0
+      },
+      "proofs": [
+        {
+          "root": "/home/lucied/.cache/rag3weaver-build/cx-preuves-ed-vertex-token-red-v1-local",
+          "files": 39,
+          "manifest": "141a63c6d1c0172d01a17077de5deb341ff303d107aaf0e0c7f04e644097524b",
+          "all_size_sha_match": true
+        },
+        {
+          "root": "/home/lucied/.cache/rag3weaver-build/cx-preuves-ed-vertex-token-green-v1-local",
+          "files": 59,
+          "manifest": "7a73c248158fe1587cb0045db06aca68f63589528b716416e37fbe2b38cba0a6",
+          "all_size_sha_match": true
+        },
+        {
+          "root": "/home/lucied/.cache/rag3weaver-build/cx-preuves-ed-vertex-token-union-red-v1-local",
+          "files": 54,
+          "manifest": "2754c91e37815873fbdfd4bbeff2800ca2b3f259f1f24397b2038c88a5a9ddde",
+          "all_size_sha_match": true
+        }
+      ],
+      "branches_preserved": [
+        "refs/heads/cx-ed-vertex-integration-r1 b472035a4e2944a9d90727817c95290cc0fba1ea",
+        "refs/heads/cx-ed-vertex-integration-r2 99fef92ce6ee9a0007eaf99c7c3a6a3789061c57",
+        "refs/heads/cx-ed-vertex-landing-docs-r1 0fc2129cb5659b5b7918639d87638b4b0ea89874",
+        "refs/heads/cx-ed-vertex-raw-classifier-r1 3bddcdb4841b8f04846ec0c904bec739a14fd656",
+        "refs/heads/cx-ed-vertex-token-fix-r1 c38fc3e4ddd8c806de904c7d08eb43b4988fec99",
+        "refs/heads/cx-ed-vertex-token-green-pilot-r1 441002d11bd07b7e8b77b0351d6e522ac5a9c6db",
+        "refs/heads/cx-ed-vertex-token-green-preuves-r1 c599a189b59a56052df4713c135dca1cff7685b3",
+        "refs/heads/cx-ed-vertex-token-red-pilot-r1 eb026f0a3c7c4143b511175b2bc92bd4f65c2db4",
+        "refs/heads/cx-ed-vertex-token-red-preuves-r1 5d6e3f873f5e9cedcaa47669f4f97a30a8a52819",
+        "refs/heads/cx-ed-vertex-token-refresh-r1 d148fe0e8701f1653f6261d9ce601a3e4cbc5dd5",
+        "refs/heads/cx-ed-vertex-token-refresh-r2 c642b40db2acccaab89ea5b186b97d87f29b998c",
+        "refs/heads/cx-ed-vertex-token-refresh-r3 fe40b640eb0cc54645cbd552aa13b065ed1d2fa7",
+        "refs/heads/cx-ed-vertex-token-union-observation-r1 28e883be76c25e30302fc36955e8c9c7bafc2e90",
+        "refs/heads/cx-ed-vertex-token-union-pilot-r1 968f1843337bbd9931940fc068df2ec2d40bdb68",
+        "refs/heads/cx-ed-vertex-token-union-r1 b472035a4e2944a9d90727817c95290cc0fba1ea",
+        "refs/remotes/origin/cx-ed-vertex-integration-r2 99fef92ce6ee9a0007eaf99c7c3a6a3789061c57",
+        "refs/remotes/origin/cx-ed-vertex-landing-docs-r1 0fc2129cb5659b5b7918639d87638b4b0ea89874",
+        "refs/remotes/origin/cx-ed-vertex-raw-classifier-r1 3bddcdb4841b8f04846ec0c904bec739a14fd656",
+        "refs/remotes/origin/cx-ed-vertex-token-fix-r1 c38fc3e4ddd8c806de904c7d08eb43b4988fec99",
+        "refs/remotes/origin/cx-ed-vertex-token-green-pilot-r1 441002d11bd07b7e8b77b0351d6e522ac5a9c6db",
+        "refs/remotes/origin/cx-ed-vertex-token-green-preuves-r1 c599a189b59a56052df4713c135dca1cff7685b3",
+        "refs/remotes/origin/cx-ed-vertex-token-red-pilot-r1 eb026f0a3c7c4143b511175b2bc92bd4f65c2db4",
+        "refs/remotes/origin/cx-ed-vertex-token-red-preuves-r1 5d6e3f873f5e9cedcaa47669f4f97a30a8a52819",
+        "refs/remotes/origin/cx-ed-vertex-token-refresh-r1 d148fe0e8701f1653f6261d9ce601a3e4cbc5dd5",
+        "refs/remotes/origin/cx-ed-vertex-token-refresh-r2 c642b40db2acccaab89ea5b186b97d87f29b998c",
+        "refs/remotes/origin/cx-ed-vertex-token-refresh-r3 fe40b640eb0cc54645cbd552aa13b065ed1d2fa7",
+        "refs/remotes/origin/cx-ed-vertex-token-union-observation-r1 28e883be76c25e30302fc36955e8c9c7bafc2e90",
+        "refs/remotes/origin/cx-ed-vertex-token-union-pilot-r1 968f1843337bbd9931940fc068df2ec2d40bdb68",
+        "refs/remotes/origin/cx-ed-vertex-token-union-r1 b472035a4e2944a9d90727817c95290cc0fba1ea"
+      ]
+    },
+    "LuciePC": {
+      "worktrees": [
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-integration-r2",
+          "head": "99fef92ce6ee9a0007eaf99c7c3a6a3789061c57",
+          "branch": "refs/heads/cx-ed-vertex-integration-r2",
+          "status": "",
+          "admin": "/home/lucied/git_workspaces/rag3db/.git/worktrees/rag3db-cx-ed-vertex-integration-r2",
+          "common": "/home/lucied/git_workspaces/rag3db/.git",
+          "root_identity": {
+            "dev": 55,
+            "ino": 168659863,
+            "mode": 16877,
+            "uid": 1000
+          },
+          "retain": false,
+          "submodule_initialized": false
+        },
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-fix-r1",
+          "head": "c38fc3e4ddd8c806de904c7d08eb43b4988fec99",
+          "branch": null,
+          "status": "",
+          "admin": "/home/lucied/git_workspaces/rag3db/.git/worktrees/rag3db-cx-ed-vertex-token-fix-r1",
+          "common": "/home/lucied/git_workspaces/rag3db/.git",
+          "root_identity": {
+            "dev": 55,
+            "ino": 167688933,
+            "mode": 16877,
+            "uid": 1000
+          },
+          "retain": false,
+          "submodule_initialized": true,
+          "submodule": {
+            "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-fix-r1/extension/rag3weaver/codeparsers",
+            "head": "bd133850f89d6b12a3ca2b2f6ce238785ed37e3a",
+            "status": "",
+            "admin": "/home/lucied/git_workspaces/rag3db/.git/worktrees/rag3db-cx-ed-vertex-token-fix-r1/modules/extension/rag3weaver/codeparsers",
+            "common": "/home/lucied/git_workspaces/rag3db/.git/worktrees/rag3db-cx-ed-vertex-token-fix-r1/modules/extension/rag3weaver/codeparsers",
+            "worktree_list": "worktree /home/lucied/git_workspaces/rag3db/.git/worktrees/rag3db-cx-ed-vertex-token-fix-r1/modules/extension/rag3weaver/codeparsers\nHEAD bd133850f89d6b12a3ca2b2f6ce238785ed37e3a\ndetached"
+          }
+        },
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-green-pilot-r1",
+          "head": "441002d11bd07b7e8b77b0351d6e522ac5a9c6db",
+          "branch": null,
+          "status": "",
+          "admin": "/home/lucied/git_workspaces/rag3db/.git/worktrees/rag3db-cx-ed-vertex-token-green-pilot-r1",
+          "common": "/home/lucied/git_workspaces/rag3db/.git",
+          "root_identity": {
+            "dev": 55,
+            "ino": 167699732,
+            "mode": 16877,
+            "uid": 1000
+          },
+          "retain": false,
+          "submodule_initialized": false
+        },
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-red-pilot-r1",
+          "head": "eb026f0a3c7c4143b511175b2bc92bd4f65c2db4",
+          "branch": "refs/heads/cx-ed-vertex-token-red-pilot-r1",
+          "status": "",
+          "admin": "/home/lucied/git_workspaces/rag3db/.git/worktrees/rag3db-cx-ed-vertex-token-red-pilot-r1",
+          "common": "/home/lucied/git_workspaces/rag3db/.git",
+          "root_identity": {
+            "dev": 55,
+            "ino": 166653107,
+            "mode": 16877,
+            "uid": 1000
+          },
+          "retain": false,
+          "submodule_initialized": false
+        },
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-refresh-r3",
+          "head": "fe40b640eb0cc54645cbd552aa13b065ed1d2fa7",
+          "branch": "refs/heads/cx-ed-vertex-token-refresh-r3",
+          "status": "",
+          "admin": "/home/lucied/git_workspaces/rag3db/.git/worktrees/rag3db-cx-ed-vertex-token-refresh-r3",
+          "common": "/home/lucied/git_workspaces/rag3db/.git",
+          "root_identity": {
+            "dev": 55,
+            "ino": 166642660,
+            "mode": 16877,
+            "uid": 1000
+          },
+          "retain": false,
+          "submodule_initialized": true,
+          "submodule": {
+            "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-refresh-r3/extension/rag3weaver/codeparsers",
+            "head": "bd133850f89d6b12a3ca2b2f6ce238785ed37e3a",
+            "status": "",
+            "admin": "/home/lucied/git_workspaces/rag3db/.git/worktrees/rag3db-cx-ed-vertex-token-refresh-r3/modules/extension/rag3weaver/codeparsers",
+            "common": "/home/lucied/git_workspaces/rag3db/.git/worktrees/rag3db-cx-ed-vertex-token-refresh-r3/modules/extension/rag3weaver/codeparsers",
+            "worktree_list": "worktree /home/lucied/git_workspaces/rag3db/.git/worktrees/rag3db-cx-ed-vertex-token-refresh-r3/modules/extension/rag3weaver/codeparsers\nHEAD bd133850f89d6b12a3ca2b2f6ce238785ed37e3a\ndetached"
+          }
+        },
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-union-pilot-r1",
+          "head": "968f1843337bbd9931940fc068df2ec2d40bdb68",
+          "branch": null,
+          "status": "",
+          "admin": "/home/lucied/git_workspaces/rag3db/.git/worktrees/rag3db-cx-ed-vertex-token-union-pilot-r1",
+          "common": "/home/lucied/git_workspaces/rag3db/.git",
+          "root_identity": {
+            "dev": 55,
+            "ino": 167904010,
+            "mode": 16877,
+            "uid": 1000
+          },
+          "retain": false,
+          "submodule_initialized": false
+        },
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-union-r1",
+          "head": "b472035a4e2944a9d90727817c95290cc0fba1ea",
+          "branch": null,
+          "status": "",
+          "admin": "/home/lucied/git_workspaces/rag3db/.git/worktrees/rag3db-cx-ed-vertex-token-union-r1",
+          "common": "/home/lucied/git_workspaces/rag3db/.git",
+          "root_identity": {
+            "dev": 55,
+            "ino": 167893197,
+            "mode": 16877,
+            "uid": 1000
+          },
+          "retain": false,
+          "submodule_initialized": true,
+          "submodule": {
+            "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-union-r1/extension/rag3weaver/codeparsers",
+            "head": "bd133850f89d6b12a3ca2b2f6ce238785ed37e3a",
+            "status": "",
+            "admin": "/home/lucied/git_workspaces/rag3db/.git/worktrees/rag3db-cx-ed-vertex-token-union-r1/modules/extension/rag3weaver/codeparsers",
+            "common": "/home/lucied/git_workspaces/rag3db/.git/worktrees/rag3db-cx-ed-vertex-token-union-r1/modules/extension/rag3weaver/codeparsers",
+            "worktree_list": "worktree /home/lucied/git_workspaces/rag3db/.git/worktrees/rag3db-cx-ed-vertex-token-union-r1/modules/extension/rag3weaver/codeparsers\nHEAD bd133850f89d6b12a3ca2b2f6ce238785ed37e3a\ndetached"
+          }
+        }
+      ],
+      "archive_guards": [
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-integration-r2",
+          "head": "99fef92ce6ee9a0007eaf99c7c3a6a3789061c57",
+          "archive": {
+            "source": {
+              "path": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/pc-snapshot/rag3db-cx-ed-vertex-integration-r2/source",
+              "entries": 10463,
+              "fingerprint_sha256": "2f47a29bc50bf910ae2cd374a7ff6b261d96b706a7caeab3b632ceeb9f611be8"
+            },
+            "admin": {
+              "path": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/pc-snapshot/rag3db-cx-ed-vertex-integration-r2/admin",
+              "entries": 10,
+              "fingerprint_sha256": "4c2490da924214959ec62f4ce8f415bef12fe8d5a34258e6a1b49d364267d2d2"
+            }
+          },
+          "guard_rc": 0,
+          "guard_verdict": "VERT",
+          "refus": [],
+          "private_module_users": []
+        },
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-fix-r1",
+          "head": "c38fc3e4ddd8c806de904c7d08eb43b4988fec99",
+          "archive": {
+            "source": {
+              "path": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/pc-snapshot/rag3db-cx-ed-vertex-token-fix-r1/source",
+              "entries": 10693,
+              "fingerprint_sha256": "d87352fb8b0f1249b264c2bb824f9f2aa4e0ab54944ce3b93af01c4ea027dab6"
+            },
+            "admin": {
+              "path": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/pc-snapshot/rag3db-cx-ed-vertex-token-fix-r1/admin",
+              "entries": 56,
+              "fingerprint_sha256": "7296009b31b569e2bdb6e31c5171c49f9e2a4c0e05cab229f21fa7ab38715417"
+            }
+          },
+          "guard_rc": 0,
+          "guard_verdict": "VERT",
+          "refus": [],
+          "private_module_users": [
+            {
+              "common": "/home/lucied/git_workspaces/rag3db/.git/worktrees/rag3db-cx-ed-vertex-token-fix-r1/modules/extension/rag3weaver/codeparsers",
+              "worktrees": [
+                "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-fix-r1/extension/rag3weaver/codeparsers"
+              ],
+              "state": "initialise"
+            }
+          ]
+        },
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-green-pilot-r1",
+          "head": "441002d11bd07b7e8b77b0351d6e522ac5a9c6db",
+          "archive": {
+            "source": {
+              "path": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/pc-snapshot/rag3db-cx-ed-vertex-token-green-pilot-r1/source",
+              "entries": 10435,
+              "fingerprint_sha256": "5c6b61e907a5a5fe6a4c8a2f2024aa609548951355f779cb49f2b1836e495b6a"
+            },
+            "admin": {
+              "path": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/pc-snapshot/rag3db-cx-ed-vertex-token-green-pilot-r1/admin",
+              "entries": 10,
+              "fingerprint_sha256": "e6bdc53f81f444c8a9c5ce6bb667187fe8bcc38d66d5f4d50c44c159bb5260ad"
+            }
+          },
+          "guard_rc": 2,
+          "guard_verdict": "ROUGE",
+          "refus": [
+            "fichiers ou index non préservés dans les sources : /home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-green-pilot-r1"
+          ],
+          "private_module_users": []
+        },
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-red-pilot-r1",
+          "head": "eb026f0a3c7c4143b511175b2bc92bd4f65c2db4",
+          "archive": {
+            "source": {
+              "path": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/pc-snapshot/rag3db-cx-ed-vertex-token-red-pilot-r1/source",
+              "entries": 10429,
+              "fingerprint_sha256": "52f1b2ce8efca35f7fef2390d4947889482a7c28c1e398d3d2d462a773914467"
+            },
+            "admin": {
+              "path": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/pc-snapshot/rag3db-cx-ed-vertex-token-red-pilot-r1/admin",
+              "entries": 9,
+              "fingerprint_sha256": "1fbe7879a2a50e644e2714d782f581a8148cfff55419c7bd337fda28d346044e"
+            }
+          },
+          "guard_rc": 0,
+          "guard_verdict": "VERT",
+          "refus": [],
+          "private_module_users": []
+        },
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-refresh-r3",
+          "head": "fe40b640eb0cc54645cbd552aa13b065ed1d2fa7",
+          "archive": {
+            "source": {
+              "path": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/pc-snapshot/rag3db-cx-ed-vertex-token-refresh-r3/source",
+              "entries": 10692,
+              "fingerprint_sha256": "73a4b55d3ed3bb42e509fccea621b609c760a9c220c5077665abb0901e753220"
+            },
+            "admin": {
+              "path": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/pc-snapshot/rag3db-cx-ed-vertex-token-refresh-r3/admin",
+              "entries": 56,
+              "fingerprint_sha256": "cfb81b7ded60cbb9a167ba53b12d85e7523561a3d8eb1e6fcb6175efcf8240f0"
+            }
+          },
+          "guard_rc": 0,
+          "guard_verdict": "VERT",
+          "refus": [],
+          "private_module_users": [
+            {
+              "common": "/home/lucied/git_workspaces/rag3db/.git/worktrees/rag3db-cx-ed-vertex-token-refresh-r3/modules/extension/rag3weaver/codeparsers",
+              "worktrees": [
+                "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-refresh-r3/extension/rag3weaver/codeparsers"
+              ],
+              "state": "initialise"
+            }
+          ]
+        },
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-union-pilot-r1",
+          "head": "968f1843337bbd9931940fc068df2ec2d40bdb68",
+          "archive": {
+            "source": {
+              "path": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/pc-snapshot/rag3db-cx-ed-vertex-token-union-pilot-r1/source",
+              "entries": 10467,
+              "fingerprint_sha256": "0950c4295b0d649713169c1198100941ceffb9d1082c81169b59d2dd14ca88e6"
+            },
+            "admin": {
+              "path": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/pc-snapshot/rag3db-cx-ed-vertex-token-union-pilot-r1/admin",
+              "entries": 9,
+              "fingerprint_sha256": "5c4ce920792afbb37bf9b1ce6fd36f9db09a4817e0f068ef0ab505e36588f439"
+            }
+          },
+          "guard_rc": 2,
+          "guard_verdict": "ROUGE",
+          "refus": [
+            "fichiers ou index non préservés dans les sources : /home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-union-pilot-r1"
+          ],
+          "private_module_users": []
+        },
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-union-r1",
+          "head": "b472035a4e2944a9d90727817c95290cc0fba1ea",
+          "archive": {
+            "source": {
+              "path": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/pc-snapshot/rag3db-cx-ed-vertex-token-union-r1/source",
+              "entries": 10726,
+              "fingerprint_sha256": "eb1cc6583431111521be3377a00909fd0865655f72dea7caef8b68fe5d261f4c"
+            },
+            "admin": {
+              "path": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/pc-snapshot/rag3db-cx-ed-vertex-token-union-r1/admin",
+              "entries": 56,
+              "fingerprint_sha256": "06978476e63acbb58832165c60229c821eeb84f653af00ebda11c814c9951e60"
+            }
+          },
+          "guard_rc": 2,
+          "guard_verdict": "ROUGE",
+          "refus": [
+            "fichiers ou index non préservés dans les sources : /home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-union-r1"
+          ],
+          "private_module_users": [
+            {
+              "common": "/home/lucied/git_workspaces/rag3db/.git/worktrees/rag3db-cx-ed-vertex-token-union-r1/modules/extension/rag3weaver/codeparsers",
+              "worktrees": [
+                "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-union-r1/extension/rag3weaver/codeparsers"
+              ],
+              "state": "initialise"
+            }
+          ]
+        }
+      ],
+      "ignored_assets": [
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-green-pilot-r1/docs/everything-declarative/16-11-2026/vertex-token-green/__pycache__",
+          "worktree": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-green-pilot-r1",
+          "dev": 55,
+          "ino": 167820279,
+          "uid": 1000,
+          "mode": 16877,
+          "archived_source": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/pc-snapshot/rag3db-cx-ed-vertex-token-green-pilot-r1/source",
+          "archived_entries": 2,
+          "archive_subtree_fingerprint": "a7878509e58459f1db3f3241b18a2679d2804d4d107dbe604f6c636856e9600a",
+          "proposed_action": "rename-to-private-quarantine-ONLY-after-distinct-C7-GO; not executed"
+        },
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-union-pilot-r1/docs/everything-declarative/16-11-2026/vertex-token-union/__pycache__",
+          "worktree": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-union-pilot-r1",
+          "dev": 55,
+          "ino": 167914490,
+          "uid": 1000,
+          "mode": 16877,
+          "archived_source": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/pc-snapshot/rag3db-cx-ed-vertex-token-union-pilot-r1/source",
+          "archived_entries": 2,
+          "archive_subtree_fingerprint": "a7bb9cca903273e54e6e005e5a1c04d7074bd71f9389dec783dafc6d0632e155",
+          "proposed_action": "rename-to-private-quarantine-ONLY-after-distinct-C7-GO; not executed"
+        },
+        {
+          "path": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-union-r1/extension/rag3weaver/target",
+          "worktree": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-union-r1",
+          "dev": 55,
+          "ino": 167915478,
+          "uid": 1000,
+          "mode": 16877,
+          "archived_source": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-cleanup-contract-v1/pc-snapshot/rag3db-cx-ed-vertex-token-union-r1/source",
+          "archived_entries": 3,
+          "archive_subtree_fingerprint": "bfcdacd9eeea2a4a5ff130f4e88f4941ad0745961c8d6e1999ed8aa9c8c396f8",
+          "proposed_action": "rename-to-private-quarantine-ONLY-after-distinct-C7-GO; not executed"
+        }
+      ],
+      "quiescence": {
+        "host": "LuciePC",
+        "found": 0,
+        "global_unknown": 541,
+        "owned_pairs": 7088,
+        "owned_alive": 0,
+        "owned_unknown": 0
+      },
+      "proofs": [
+        {
+          "root": "/home/lucied/.cache/rag3weaver-build/cx-preuves-ed-vertex-token-red-v1",
+          "files": 39,
+          "manifest": "141a63c6d1c0172d01a17077de5deb341ff303d107aaf0e0c7f04e644097524b",
+          "all_size_sha_match": true
+        },
+        {
+          "root": "/home/lucied/.cache/rag3weaver-build/cx-preuves-ed-vertex-token-green-v1",
+          "files": 59,
+          "manifest": "7a73c248158fe1587cb0045db06aca68f63589528b716416e37fbe2b38cba0a6",
+          "all_size_sha_match": true
+        },
+        {
+          "root": "/home/lucied/.cache/rag3weaver-build/cx-preuves-ed-vertex-token-union-red-v1",
+          "files": 54,
+          "manifest": "2754c91e37815873fbdfd4bbeff2800ca2b3f259f1f24397b2038c88a5a9ddde",
+          "all_size_sha_match": true
+        }
+      ],
+      "branches_preserved": [
+        "refs/heads/cx-ed-vertex-integration-r2 99fef92ce6ee9a0007eaf99c7c3a6a3789061c57",
+        "refs/heads/cx-ed-vertex-token-red-pilot-r1 eb026f0a3c7c4143b511175b2bc92bd4f65c2db4",
+        "refs/heads/cx-ed-vertex-token-refresh-r3 fe40b640eb0cc54645cbd552aa13b065ed1d2fa7",
+        "refs/remotes/origin/cx-ed-vertex-integration-r2 99fef92ce6ee9a0007eaf99c7c3a6a3789061c57",
+        "refs/remotes/origin/cx-ed-vertex-token-fix-r1 c38fc3e4ddd8c806de904c7d08eb43b4988fec99",
+        "refs/remotes/origin/cx-ed-vertex-token-green-pilot-r1 441002d11bd07b7e8b77b0351d6e522ac5a9c6db",
+        "refs/remotes/origin/cx-ed-vertex-token-red-pilot-r1 eb026f0a3c7c4143b511175b2bc92bd4f65c2db4",
+        "refs/remotes/origin/cx-ed-vertex-token-refresh-r1 d148fe0e8701f1653f6261d9ce601a3e4cbc5dd5",
+        "refs/remotes/origin/cx-ed-vertex-token-refresh-r2 c642b40db2acccaab89ea5b186b97d87f29b998c",
+        "refs/remotes/origin/cx-ed-vertex-token-refresh-r3 fe40b640eb0cc54645cbd552aa13b065ed1d2fa7",
+        "refs/remotes/origin/cx-ed-vertex-token-union-pilot-r1 968f1843337bbd9931940fc068df2ec2d40bdb68",
+        "refs/remotes/origin/cx-ed-vertex-token-union-r1 b472035a4e2944a9d90727817c95290cc0fba1ea"
+      ]
+    }
+  },
+  "target": {
+    "path": "/home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity",
+    "dev": 55,
+    "ino": 166664078,
+    "mode": 16877,
+    "uid": 1000,
+    "owner": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-union-r1/extension/rag3weaver",
+    "marker_sha256": "ebf75e4c2462a66de7ae20e809ca46ebdaf4a15dba3a343af7799de7589fd868",
+    "counts": {
+      "dir": 4302,
+      "regular": 19763,
+      "symlink": 6
+    },
+    "regular_bytes": 10140571541,
+    "links": [
+      {
+        "path": "debug/build/rag3db-c5d0cd4507b4c51a/out/cxxbridge/crate/rag3db",
+        "readlink": "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-union-r1/tools/rust_api"
+      },
+      {
+        "path": "debug/build/rag3db-c5d0cd4507b4c51a/out/cxxbridge/include/rust/cxx.h",
+        "readlink": "/home/lucied/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cxx-1.0.138/include/cxx.h"
+      },
+      {
+        "path": "debug/build/rag3db-c5d0cd4507b4c51a/out/cxxbridge/include/rag3db/src/ffi.rs",
+        "readlink": "/home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/debug/build/rag3db-c5d0cd4507b4c51a/out/cxxbridge/include/rag3db/src/ffi.rs.h"
+      },
+      {
+        "path": "cxxbridge/rust/cxx.h",
+        "readlink": "/home/lucied/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cxx-1.0.138/include/cxx.h"
+      },
+      {
+        "path": "cxxbridge/rag3db/src/ffi.rs.h",
+        "readlink": "/home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/debug/build/rag3db-c5d0cd4507b4c51a/out/cxxbridge/include/rag3db/src/ffi.rs.h"
+      },
+      {
+        "path": "cxxbridge/rag3db/src/ffi.rs.cc",
+        "readlink": "/home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/debug/build/rag3db-c5d0cd4507b4c51a/out/cxxbridge/sources/rag3db/src/ffi.rs.cc"
+      }
+    ],
+    "special": [],
+    "git_entries": [
+      "code-tree-tests/add/config/code-rag3db-pk/.git",
+      "code-tree-tests/add/config/code-rag3db-pk/.git/HEAD",
+      "code-tree-tests/add/arbres/rag3db-pk/.git",
+      "code-tree-tests/add/arbres/rag3db-pk/.git/HEAD",
+      "code-tree-tests/as/config/code-coeur/.git",
+      "code-tree-tests/as/config/code-coeur/.git/HEAD",
+      "code-tree-tests/as/arbres/rag3db-pk/.git",
+      "code-tree-tests/as/arbres/rag3db-pk/.git/HEAD",
+      "code-tree-tests/from-rag3db-json/config/code-par-nom/.git",
+      "code-tree-tests/from-rag3db-json/config/code-par-nom/.git/HEAD",
+      "code-tree-tests/from-rag3db-json/config/code-par-chemin/.git",
+      "code-tree-tests/from-rag3db-json/config/code-par-chemin/.git/HEAD",
+      "code-tree-tests/from-rag3db-json/arbres/rag3db-pk/.git",
+      "code-tree-tests/from-rag3db-json/arbres/rag3db-pk/.git/HEAD",
+      "code-tree-tests/from-rag3db-json/arbres/rag3db-pk-2/.git",
+      "code-tree-tests/from-rag3db-json/arbres/rag3db-pk-2/.git/HEAD",
+      "code-tree-tests/remove/data/code-rag3db-pk.retire-1794847341/config/.git",
+      "code-tree-tests/remove/data/code-rag3db-pk.retire-1794847341/config/.git/HEAD",
+      "code-tree-tests/remove/arbres/rag3db-pk/.git",
+      "code-tree-tests/remove/arbres/rag3db-pk/.git/HEAD"
+    ],
+    "protected": [],
+    "foreign_uid": [],
+    "du_sb_counting_hardlinks_once_observed": 8851604066,
+    "portable_target_absent": true,
+    "scope_Git_fixtures": [
+      {
+        "source": "/home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/code-tree-tests/add/config/code-rag3db-pk",
+        "gitdir": {
+          "rc": 0,
+          "stdout": "/home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/code-tree-tests/add/config/code-rag3db-pk/.git",
+          "stderr": ""
+        },
+        "common": {
+          "rc": 0,
+          "stdout": "/home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/code-tree-tests/add/config/code-rag3db-pk/.git",
+          "stderr": ""
+        },
+        "head": {
+          "rc": 0,
+          "stdout": "b5ebe73872ddc2657ff7a86bff91c5cf8ce4a78d",
+          "stderr": ""
+        },
+        "status": {
+          "rc": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        "worktrees": {
+          "rc": 0,
+          "stdout": "worktree /home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/code-tree-tests/add/config/code-rag3db-pk\nHEAD b5ebe73872ddc2657ff7a86bff91c5cf8ce4a78d\nbranch refs/heads/master",
+          "stderr": ""
+        }
+      },
+      {
+        "source": "/home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/code-tree-tests/add/arbres/rag3db-pk",
+        "gitdir": {
+          "rc": 0,
+          "stdout": "/home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/code-tree-tests/add/arbres/rag3db-pk/.git",
+          "stderr": ""
+        },
+        "common": {
+          "rc": 0,
+          "stdout": "/home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/code-tree-tests/add/arbres/rag3db-pk/.git",
+          "stderr": ""
+        },
+        "head": {
+          "rc": 128,
+          "stdout": "",
+          "stderr": "fatal : Une seule révision attendue"
+        },
+        "status": {
+          "rc": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        "worktrees": {
+          "rc": 0,
+          "stdout": "worktree /home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/code-tree-tests/add/arbres/rag3db-pk\nHEAD 0000000000000000000000000000000000000000\nbranch refs/heads/master",
+          "stderr": ""
+        }
+      },
+      {
+        "source": "/home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/code-tree-tests/as/config/code-coeur",
+        "gitdir": {
+          "rc": 0,
+          "stdout": "/home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/code-tree-tests/as/config/code-coeur/.git",
+          "stderr": ""
+        },
+        "common": {
+          "rc": 0,
+          "stdout": "/home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/code-tree-tests/as/config/code-coeur/.git",
+          "stderr": ""
+        },
+        "head": {
+          "rc": 0,
+          "stdout": "7a9a4f6cfc01416fa83081e5963e8cf9d0afbdd1",
+          "stderr": ""
+        },
+        "status": {
+          "rc": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        "worktrees": {
+          "rc": 0,
+          "stdout": "worktree /home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/code-tree-tests/as/config/code-coeur\nHEAD 7a9a4f6cfc01416fa83081e5963e8cf9d0afbdd1\nbranch refs/heads/master",
+          "stderr": ""
+        }
+      },
+      {
+        "source": "/home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/code-tree-tests/as/arbres/rag3db-pk",
+        "gitdir": {
+          "rc": 0,
+          "stdout": "/home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/code-tree-tests/as/arbres/rag3db-pk/.git",
+          "stderr": ""
+        },
+        "common": {
+          "rc": 0,
+          "stdout": "/home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/code-tree-tests/as/arbres/rag3db-pk/.git",
+          "stderr": ""
+        },
+        "head": {
+          "rc": 128,
+          "stdout": "",
+          "stderr": "fatal : Une seule révision attendue"
+        },
+        "status": {
+          "rc": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        "worktrees": {
+          "rc": 0,
+          "stdout": "worktree /home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/code-tree-tests/as/arbres/rag3db-pk\nHEAD 0000000000000000000000000000000000000000\nbranch refs/heads/master",
+          "stderr": ""
+        }
+      },
+      {
+        "source": "/home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/code-tree-tests/from-rag3db-json/config/code-par-nom",
+        "gitdir": {
+          "rc": 0,
+          "stdout": "/home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/code-tree-tests/from-rag3db-json/config/code-par-nom/.git",
+          "stderr": ""
+        },
+        "common": {
+          "rc": 0,
+          "stdout": "/home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/code-tree-tests/from-rag3db-json/config/code-par-nom/.git",
+          "stderr": ""
+        },
+        "head": {
+          "rc": 0,
+          "stdout": "e6c93d60899db257916f65a6f60385302e6a522d",
+          "stderr": ""
+        },
+        "status": {
+          "rc": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        "worktrees": {
+          "rc": 0,
+          "stdout": "worktree /home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/code-tree-tests/from-rag3db-json/config/code-par-nom\nHEAD e6c93d60899db257916f65a6f60385302e6a522d\nbranch refs/heads/master",
+          "stderr": ""
+        }
+      },
+      {
+        "source": "/home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/code-tree-tests/from-rag3db-json/config/code-par-chemin",
+        "gitdir": {
+          "rc": 0,
+          "stdout": "/home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/code-tree-tests/from-rag3db-json/config/code-par-chemin/.git",
+          "stderr": ""
+        },
+        "common": {
+          "rc": 0,
+          "stdout": "/home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/code-tree-tests/from-rag3db-json/config/code-par-chemin/.git",
+          "stderr": ""
+        },
+        "head": {
+          "rc": 0,
+          "stdout": "6888c8bfddf2f4cef9790c3711bb0a601ddb464f",
+          "stderr": ""
+        },
+        "status": {
+          "rc": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        "worktrees": {
+          "rc": 0,
+          "stdout": "worktree /home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/code-tree-tests/from-rag3db-json/config/code-par-chemin\nHEAD 6888c8bfddf2f4cef9790c3711bb0a601ddb464f\nbranch refs/heads/master",
+          "stderr": ""
+        }
+      },
+      {
+        "source": "/home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/code-tree-tests/from-rag3db-json/arbres/rag3db-pk",
+        "gitdir": {
+          "rc": 0,
+          "stdout": "/home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/code-tree-tests/from-rag3db-json/arbres/rag3db-pk/.git",
+          "stderr": ""
+        },
+        "common": {
+          "rc": 0,
+          "stdout": "/home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/code-tree-tests/from-rag3db-json/arbres/rag3db-pk/.git",
+          "stderr": ""
+        },
+        "head": {
+          "rc": 128,
+          "stdout": "",
+          "stderr": "fatal : Une seule révision attendue"
+        },
+        "status": {
+          "rc": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        "worktrees": {
+          "rc": 0,
+          "stdout": "worktree /home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/code-tree-tests/from-rag3db-json/arbres/rag3db-pk\nHEAD 0000000000000000000000000000000000000000\nbranch refs/heads/master",
+          "stderr": ""
+        }
+      },
+      {
+        "source": "/home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/code-tree-tests/from-rag3db-json/arbres/rag3db-pk-2",
+        "gitdir": {
+          "rc": 0,
+          "stdout": "/home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/code-tree-tests/from-rag3db-json/arbres/rag3db-pk-2/.git",
+          "stderr": ""
+        },
+        "common": {
+          "rc": 0,
+          "stdout": "/home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/code-tree-tests/from-rag3db-json/arbres/rag3db-pk-2/.git",
+          "stderr": ""
+        },
+        "head": {
+          "rc": 128,
+          "stdout": "",
+          "stderr": "fatal : Une seule révision attendue"
+        },
+        "status": {
+          "rc": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        "worktrees": {
+          "rc": 0,
+          "stdout": "worktree /home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/code-tree-tests/from-rag3db-json/arbres/rag3db-pk-2\nHEAD 0000000000000000000000000000000000000000\nbranch refs/heads/master",
+          "stderr": ""
+        }
+      },
+      {
+        "source": "/home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/code-tree-tests/remove/data/code-rag3db-pk.retire-1794847341/config",
+        "gitdir": {
+          "rc": 0,
+          "stdout": "/home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/code-tree-tests/remove/data/code-rag3db-pk.retire-1794847341/config/.git",
+          "stderr": ""
+        },
+        "common": {
+          "rc": 0,
+          "stdout": "/home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/code-tree-tests/remove/data/code-rag3db-pk.retire-1794847341/config/.git",
+          "stderr": ""
+        },
+        "head": {
+          "rc": 0,
+          "stdout": "79fe7acb06f854326e10a1be30557555a463633c",
+          "stderr": ""
+        },
+        "status": {
+          "rc": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        "worktrees": {
+          "rc": 0,
+          "stdout": "worktree /home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/code-tree-tests/remove/data/code-rag3db-pk.retire-1794847341/config\nHEAD 79fe7acb06f854326e10a1be30557555a463633c\nbranch refs/heads/master",
+          "stderr": ""
+        }
+      },
+      {
+        "source": "/home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/code-tree-tests/remove/arbres/rag3db-pk",
+        "gitdir": {
+          "rc": 0,
+          "stdout": "/home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/code-tree-tests/remove/arbres/rag3db-pk/.git",
+          "stderr": ""
+        },
+        "common": {
+          "rc": 0,
+          "stdout": "/home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/code-tree-tests/remove/arbres/rag3db-pk/.git",
+          "stderr": ""
+        },
+        "head": {
+          "rc": 128,
+          "stdout": "",
+          "stderr": "fatal : Une seule révision attendue"
+        },
+        "status": {
+          "rc": 0,
+          "stdout": "",
+          "stderr": ""
+        },
+        "worktrees": {
+          "rc": 0,
+          "stdout": "worktree /home/lucied/.cache/rag3weaver-build/target-cx-ed-stable-tie-identity/code-tree-tests/remove/arbres/rag3db-pk\nHEAD 0000000000000000000000000000000000000000\nbranch refs/heads/master",
+          "stderr": ""
+        }
+      }
+    ],
+    "nested_git_roots_checked": 10,
+    "nested_git_external_users": 0,
+    "no_native_execution": true,
+    "retirement_authorized": false
+  },
+  "G_handoff": {
+    "path_PC": "/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-deps-b472-v1",
+    "manifest_sha256": "de797438448c79ae54a1bc313003b0fdead4e37b70b180298ce21690b320c945",
+    "files": 14428,
+    "bytes": 5526823298,
+    "current_compiler_file_sha256": "859254978c0a0402c32f949f6de0d99aee73be8d15f45aac00ae1448aac51e74",
+    "original_prebuild_compiler_attested": false,
+    "standalone_compile_or_SQL_qualified": false,
+    "G_audit_reported_sha256": "aa80f31a1e50550bcae6fd7126c0b3bd267f8360dbebedf43c3d6e63696ad394",
+    "G_selected_artifacts_reported": 74,
+    "G_direct_target_reader": false,
+    "retain_outside_cleanup": true
+  },
+  "proposed_actions": {
+    "budget_seconds_per_host": 600,
+    "C7_GO_required": true,
+    "refresh_checks": [
+      "HEAD+tracked/untracked/ignored status exact",
+      "source root/admin canonical UID/dev/ino; hashes match archived admin",
+      "T root UID/dev/ino/marker/hash and known symlinks/nested Git current",
+      "archives hashes still equal on both hosts",
+      "process exe/cwd/fd/argv attribution and PC owned PID/start set; no attributed unknown",
+      "private guard6f3 fresh VERT after explicit ignored quarantine, before any worktree removal"
+    ],
+    "ignored_quarantine": {
+      "only_exact_four_paths": true,
+      "not_executed": true,
+      "requires_explicit_C7_GO": true,
+      "method": "rename exact typed/inventoried directories to fresh private quarantine outside all W/admin/T; keep, no deletion; then recheck status and fresh6f3"
+    },
+    "ordinary_worktree_removal": "git worktree remove <exact absolute W>; no branch deletion/prune/glob",
+    "structural_force_not_authorized": {
+      "paths": [
+        "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-fix-r1",
+        "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-refresh-r3",
+        "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-token-union-r1"
+      ],
+      "condition_for_future_C7_decision": "ONLY if normal Git refuses specifically initialized submodules and sources intact, private-module users solely own source, faithful archives verified both hosts, quiescence and fresh6f3 VERT; any other refusal STOP. --force requires explicit named-path authorization, not inferred from prior TIES"
+    },
+    "target_retirement_not_authorized": "Only exact PC target captured here; after new C7 GO and all fresh checks incl 10 nested Git scopes, rename to a new typed private retirement path then remove only that captured root without following symlinks. No SDK/registry/source/shared-cache deletion. No net-byte saving claimed due to preserved snapshots/COW/Gdeps.",
+    "stop_on_any_new_dirty_or_ownership_or_archive_or_guard_or_shared_user_or_process_mismatch": true
+  },
+  "protected_resources": [
+    "Lucie's main worktree and its shared .git; every peer worktree/admin/corpus",
+    "all local/remote branches; no git branch -d/-D and no remote delete",
+    "/home/lucied/git_workspaces/rag3db-cx-ed-vertex-landing-docs-r1 (active follow-up, not in removal list)",
+    "all original P/Q/S, bus receipts, RAW, red/green/intermediate proof archives and private TMP roots",
+    "all cleanup source/admin snapshots, tar archives and quarantine artifacts",
+    "OUT_T Gdeps snapshot and its archive; compiler/sysroot/Cargo registry",
+    "all shared cache scripts/guards/passe; no SCP/install/repair of shared cache",
+    "SDK store/courant, live services7878/7879/7970, PostgreSQL5433 and LIVE databases"
+  ],
+  "operations_performed": {
+    "removed": [],
+    "quarantined": [],
+    "signals_sent": [],
+    "branches_deleted": [],
+    "shared_cache_mutated": false,
+    "native_tests": false,
+    "Cargo": false,
+    "rustc": false,
+    "SQL": false
+  }
+}

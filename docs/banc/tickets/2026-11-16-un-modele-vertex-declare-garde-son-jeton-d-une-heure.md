@@ -1,6 +1,6 @@
 # Un modèle Vertex déclaré garde son jeton d'une heure
 
-- **État** : ouvert ; correctif proposé c38 qualifié CPU/faux HTTP seulement ; union et intégration NON QUALIFIÉES.
+- **État** : ouvert pour OAuth/from_env/F300 et limites restantes ; transport fauxHTTP/TokenSource conservée intégré sur master99fef92ce6 après canonique verte acceptée C7 ; composé historique rouge conservé.
 - **Famille** : produit
 - **Gravité** : haute pour toute passe longue. Au bout d'une heure, chaque appel au modèle rend 401, et la
   décision est perdue sans que la passe s'arrête.
@@ -154,3 +154,13 @@ trace incidentlanceurpréfetchSyntaxError conservé puisfixopAST2posts,
 composéREDscopeROUGE historiques restent distincts. PasOAuth/from_env/F300,
 commentaireobsolète et72ignored nonacquittés, ticketOUVERT ; aucunservice/
 CIrerun/natif/cleanup. ArchivesWT/Tpréservés avant contratnettoyageC7distinct.
+
+
+## Contrat de nettoyage préparé, aucun retrait
+
+[Contrat27 et liste typée](../../everything-declarative/16-11-2026/27-contrat-nettoyage-vertex-preparation-seule.md) :14WTportable+7PC/admins et1Tcache ;archivesfidèles2hosts,
+17gardesVERT/4ROUGEignorés inchangés,3sousmodulesPCprivés,10GitfixturesT
+archivés sanspair extérieur. CopieGOUT_T14428+audit74 préservés2hosts, pas
+decompile/SQL/SDK. Quarantaine4etforce3 éventuels NONAUTORISÉS tantqueC7
+n'a pasdonnéGOexact ;0suppression/signal/cachecommun modifié. Ticketreste
+OUVERT/OAuthF300nonqualifiés ; aucuncleanup/canoniqueVERTcomposéinventé.
