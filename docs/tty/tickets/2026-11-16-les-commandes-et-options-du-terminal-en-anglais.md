@@ -620,3 +620,14 @@ le juge réel sont textuellement inchangés, hash/audit
 Aucun test, Cargo, build, metadata, F8, service ou HTTP rejoué sur l'ancienGO600.
 Le target reste propriétaire nouveauWtty avec le testELFrougeBC8 ; nouveau
 coupon vert/source/pin et RO/GO distinct avant qualification.
+
+### Coupon vert distinct préparé, pas exécuté
+
+Nouveaux tab_green.py/admit/driver : même test exact/juge inchangé,600sTOTAL
+OS/poste32G/j4/Commonreste/final/pub ;1passé/0échoué/0ignoré+compilationdepuisW
+obligatoires, sinon refus. Verdict VERT_CIBLE uniquement, pas passe complète99.
+Préparation garde le rougebc8/source/ELFc7d834/ledgerpost/reçuTERMINE et copie
+ce testELFavant recompilation. Towner attendu déjà nouveauWtty ; vraie garde
+cargo_garde et aucun nouveau target, préfixe ancienT non repris artificiellement.
+Pas HTTPserveur/7970/SDK/provider ; sourcecallbacks ActionCompleter inchangée.
+Aucun ancien600 réactivé. Source/pin/Qneuf puisRO/GOdistinct avant Cargo/test.
