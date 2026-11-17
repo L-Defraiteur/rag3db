@@ -96,3 +96,13 @@ chevauchement déclaré pour le futur module commun et surface des appelants.
 Aucune implantation/OS/proc/signal/native/test ni modification des appelants.
 RO protocole puis décision C7 avant code et GO CPU distinct avant exécution.
 Ticket reste ouvert ; aucune preuve physique ou autorisation de passe déduite.
+
+## Réserves CP sur contrat377c94, consignées avant correction
+
+RO source seule, aucun import/test/OS : le booléen ACK ne décrit pas une référence
+CP liée aux faits exacts/phase/séquence/ledger ; les témoins doivent refuser les
+ACK étrangers. La fin d'invocation produite par le runner ne peut pas attester
+la clôture complète de Common, son ancêtre encore actif. Séparer enfant wait/RAW,
+retour du runner, puis clôture Common attestée par le propriétaire extérieur.
+Aucun défaut OS attribué. Corrections du contrat/témoins seulement, avant RO
+neuve et GO CPU distinct ; pas d'implantation ou d'exécution par cette réserve.

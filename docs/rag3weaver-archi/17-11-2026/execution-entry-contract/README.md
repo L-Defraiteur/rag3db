@@ -74,8 +74,11 @@ La compatibilité du profil est à qualifier, pas un fait acquis sur l'hôte.
    une terminaison ; distinguer sortie normale et signal, sans transformer une
    sortie par signal en rc0 ni perdre sa nature dans un shell. Le wait et les
    sinks hashés se rapportent à l'invocation, pas à une image restée A.
-8. Après le wait, préservation/finalisation RAW et reçu, quiet/reap Common et
-   publication finale respectent END initial et réserve. Mort du runner n'est
+8. Après le wait enfant, le runner préserve/finalise RAW et faits de
+   l’invocation puis retourne. Il ne déclare PAS son ancêtre Common quiet. Un
+   propriétaire extérieur préadmis attend le runner réel, puis atteste la
+   clôture Common (quiet/reap du sous-arbre attribué, excluant le contrôleur
+   extérieur) et sa publication. Toutes ces étapes respectent END initial et réserve. Mort du runner n'est
    pas terminée proprement par déduction ; Common conserve cause et collecte.
    Aucun reçu positif si cleanup/reap inconnu, pas de remise à zéro ni retry TTL.
 
@@ -111,15 +114,15 @@ source Linux explicite, pas noyau hôte relevé ni qualification du stockage.
 `execution_entry.pyi` décrit seulement `verify_transcript` : futur vérificateur
 pur d'une séquence de faits modélisés. `test_execution_entry.py` vise ce symbole
 futur ; aucun module d'implémentation n'est fourni ici et aucun import/test n'est
-exécuté. Trente et une fonctions de témoins sont écrites, NON JOUÉES. Ces témoins
+exécuté. Trente-sept fonctions de témoins sont écrites, NON JOUÉES. Ces témoins
 n'attestent jamais le noyau ou les événements réels. Le
 producteur opérationnel devra construire les faits depuis ses propres primitives,
 pas accepter un transcript fourni par le programme testé comme preuve d'OS.
 
 Séquence modèle obligatoire : `selected`, `spawned`, `exec_stop`, `copied`,
-`published`, `released`, `waited`, `finalized`. IDs invocation/clock stables,
+`published`, `released`, `waited`, `finalized`, `runner_waited`, `common_closed`. IDs invocation/clock stables,
 séquences strictement croissantes/temps non décroissants et finis. Toute phase
-jusqu'au wait doit rester < operation_end ; finalisation < end, avec
+jusqu'au wait doit rester < operation_end ; clôtures finale et externe < end, avec
 operation_end <= end-cleanup_reserve. Champs manquants, types incorrects,
 floats non finis et événements inattendus refusés. Événement `failure` conserve
 le premier code ; des événements cleanup après ne l'effacent jamais.
@@ -130,10 +133,12 @@ le premier code ; des événements cleanup après ne l'effacent jamais.
 |spawned|runner PID/start distinct enfant PID/start ; PPID enfant=runner, UID/CG autorisés au plan de lancement lié|
 |exec_stop|kind EXEC_SUCCESS (modèle seulement), enfant/start/CG/UID inchangés, objet réel dev/inode/SHA=objet choisi, stabilité qualifiée, argv/cwd/env attendus|
 |copied|source_object=objet réel de exec_stop, copie complète, SHA avant/après=artifact ; aucune réouverture du chemin|
-|published|ACK lié exactement invocation/copied SHA et catalogue, sans pouvoir changer attendu|
+|published|Référence CP exacte verified independently : prepared/plan/phase/allocation/nonce/sequence/ledger SHA/entry facts SHA/ACK receipt SHA, invocation/copied SHA/catalogue ; pas booléen ACK|
 |released|même enfant, detach réussi avant userland selon protocole, pas promesse d'absence de traceur future|
 |waited|même enfant/start, parent runner, kind exit/signal, code exit>=0 ou signal>0 ; pas stop|
-|finalized|RAW sinks exacts liés/hashés, Common quiet/reap confirmé et fin de publication sous end|
+|finalized|RAW sinks exacts liés/hashés et clôture de l’invocation seulement, sans quiet Common anticipé|
+|runner_waited|Vrai wait du runner par propriétaire extérieur préadmis, PID/start exacts, après finalized|
+|common_closed|Propriétaire extérieur common_owner exact, autorité liée, quiet/reap/publication attestés après runner_waited sous end|
 
 Les champs runner_pid/runner_start/uid/cgroup du plan sont fournis par admission
 Common indépendante, non choisis par le transcript. Le PID enfant est lié au vrai
@@ -156,3 +161,27 @@ RO requise : protocole de stabilité/barrière, type d'identité Common/ACK et s
 propagation Cargo, puis surface des quatre appels. Coût capture/copie/hash,
 latence startup, waits/cleanup, SDK et compatibilité stockage UNKNOWN. Aucun
 budget d'exécution proposé comme acquis. Aucun appelant ni canon modifié ici.
+
+## Delta après réserves CP377c94, avant implantation
+
+Les réserves ont été consignées au ticket avant ce delta. Le booléen ACK est
+remplacé par une référence CP exacte : prepared, plan, phase, allocation, nonce,
+séquence, SHA ledger, SHA faits d'entrée, SHA reçu ACK. Le futur adaptateur CP
+vérifiera cette référence avec les primitives de publication du propriétaire CP ;
+le modèle pur compare une référence déjà vérifiée indépendamment du programme
+et du transcript soumis. Ce n'est PAS une API CP inventée ou une vérification de
+signature/lecture de reçu livrée. Une table d'adaptation au schéma CP réel reste
+à relire avant implémentation ; aucune référence n'est fabriquée depuis actual.
+La liaison SHA faits d'entrée doit porter sur leur représentation canonique
+réelle choisie avec CP, pas sur une chaîne arbitraire du programme testé.
+
+`finalized` est la clôture de l'invocation (enfant wait/RAW), pas celle de Common.
+Le contrôleur extérieur Common attend ensuite le runner puis clôt le sous-arbre.
+L'identité common_owner vient de l'admission et doit être extérieure à ce
+sous-arbre ; la validation de modèle ne qualifie pas cette appartenance OS.
+La fonction de revue pure consomme une séquence composite : son dernier segment
+vient du contrôleur, jamais du runner qui attesterait sa propre disparition.
+La production du reçu terminal ne doit pas démarrer de tâche dans le sous-arbre
+qu'elle déclare quiet. Absence/refus de clôture externe reste rouge/incomplet.
+Six témoins additionnels écrits, NON JOUÉS : ACK autre phase/autres faits/booléen,
+closer runner interdit, clôture avant wait runner, clôture externe manquante.

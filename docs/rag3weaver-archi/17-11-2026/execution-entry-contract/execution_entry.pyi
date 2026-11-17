@@ -17,6 +17,8 @@ class InvocationPlan(TypedDict):
     stdout: str
     stderr: str
     authority: str
+    publication: Mapping[str, object]  # exact independently verified CP reference
+    common_owner: tuple[int, int]  # external closer PID/start, outside owned subtree
     runner_pid: int  # independently admitted by Common, not from actual facts
     runner_start: int
     uid: int

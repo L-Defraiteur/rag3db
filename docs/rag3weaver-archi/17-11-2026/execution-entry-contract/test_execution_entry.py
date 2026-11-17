@@ -20,7 +20,13 @@ def fixture():
                 runner_pid=100, runner_start=11, uid=1000, cgroup='scope-1',
                 clock='host-1', end=100.0, operation_end=90.0,
                 cleanup_reserve=10.0,
-                storage_profile='local-regular-exec-write-denial-v1')
+                storage_profile='local-regular-exec-write-denial-v1',
+                common_owner=(90, 9),
+                publication=dict(prepared='prepared-1', plan='plan-1', phase='lib',
+                                 allocation='allocation-1', nonce='nonce-1',
+                                 sequence=1, ledger_sha256='d' * 64,
+                                 entry_facts_sha256='e' * 64,
+                                 ack_receipt_sha256='f' * 64))
     identity = dict(pid=101, start=12, uid=1000, cgroup='scope-1')
     obj = dict(dev=1, inode=2, sha256='a' * 64)
     chosen = {key: deepcopy(plan[key]) for key in
@@ -37,12 +43,17 @@ def fixture():
         ('copied', dict(identity, source_object=deepcopy(obj), complete=True,
                         sha256='a' * 64, rehash='a' * 64)),
         ('published', dict(invocation='inv-1', catalogue='catalogue-A',
-                           copied_sha256='a' * 64, ack=True)),
+                           copied_sha256='a' * 64,
+                           reference=deepcopy(plan['publication']))),
         ('released', dict(identity, detach_success=True)),
         ('waited', dict(identity, parent_pid=100, kind='exit', code=0)),
         ('finalized', dict(stdout='raw-stdout', stderr='raw-stderr',
                            stdout_sha256='b' * 64, stderr_sha256='c' * 64,
-                           quiet=True, reaped=True, published=True)),
+                           published=True)),
+        ('runner_waited', dict(pid=100, start=11, kind='exit', code=0,
+                               observed_by=(90, 9))),
+        ('common_closed', dict(owner=(90, 9), authority='common-1',
+                               quiet=True, reaped=True, published=True)),
     ]
     facts = [dict(sequence=i, invocation='inv-1', clock='host-1',
                   at=float(i + 1), kind=kind, data=data)
@@ -176,7 +187,7 @@ class EntryContract(unittest.TestCase):
 
     def test_unknown_cleanup_is_not_quiet(self):
         plan, facts = fixture()
-        facts[7]['data']['quiet'] = None
+        facts[9]['data']['quiet'] = None
         self.refused(plan, facts, 'cleanup')
 
     def test_missing_confirmation_never_inferred_from_rc_zero(self):
@@ -227,3 +238,33 @@ class EntryContract(unittest.TestCase):
         plan, facts = fixture()
         facts[3]['data']['rehash'] = 'd' * 64
         self.refused(plan, facts, 'copy-content')
+
+    def test_ack_from_other_phase_is_not_a_binding(self):
+        plan, facts = fixture()
+        facts[4]['data']['reference']['phase'] = 'other-phase'
+        self.refused(plan, facts, 'publication-binding')
+
+    def test_ack_for_other_entry_facts_is_not_a_binding(self):
+        plan, facts = fixture()
+        facts[4]['data']['reference']['entry_facts_sha256'] = '0' * 64
+        self.refused(plan, facts, 'publication-binding')
+
+    def test_boolean_ack_cannot_replace_exact_cp_reference(self):
+        plan, facts = fixture()
+        facts[4]['data']['reference'] = True
+        self.refused(plan, facts, 'publication-binding')
+
+    def test_runner_cannot_close_its_own_common_ancestor(self):
+        plan, facts = fixture()
+        facts[9]['data']['owner'] = (100, 11)
+        self.refused(plan, facts, 'closure-owner')
+
+    def test_common_closure_cannot_precede_runner_wait(self):
+        plan, facts = fixture()
+        del facts[8]
+        self.refused(plan, facts, 'event-order')
+
+    def test_missing_external_closure_never_inferred_from_child_rc(self):
+        plan, facts = fixture()
+        del facts[9]
+        self.refused(plan, facts, 'event-order')

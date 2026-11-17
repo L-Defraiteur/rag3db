@@ -3,7 +3,7 @@
 Après arbitrage C7 **93c44be2d6**, publication SOURCE/API/TÉMOINS seulement :
 [protocole et portée](execution-entry-contract/README.md),
 [API proposée](execution-entry-contract/execution_entry.pyi),
-[31 fonctions de témoins hermétiques NON JOUÉES](execution-entry-contract/test_execution_entry.py).
+[37 fonctions de témoins hermétiques NON JOUÉES](execution-entry-contract/test_execution_entry.py).
 Pas de module opérationnel ni de producteur livré. Ticket commun ouvert,
 [source45](45-etude-source-producteur-images-executees.md) conservée.
 
@@ -40,3 +40,10 @@ puis décision C7 avant implantation ; GO CPU distinct avant toute exécution.
 Coûts/compatibilité hôte et stockage UNKNOWN. Pas de build/native/proc/signal,
 slot, Q actif, ressource OS ou nouvelle autorité consommés. Diff documentaire
 et sources de témoins seulement, vérification d'espaces Git sans exécuter tests.
+
+
+Delta CP377c94 : référence de publication exacte au lieu d’un ACK booléen ;
+clôture invocation distincte de runner_waited puis common_closed extérieur.
+Réserves consignées au ticket avant correction, six témoins additionnels non
+joués (37 fonctions au total). Adaptation aux vrais types/reçus CP à relire ;
+aucun acquittement ou quiet physique acquis. Source contractuelle uniquement.
