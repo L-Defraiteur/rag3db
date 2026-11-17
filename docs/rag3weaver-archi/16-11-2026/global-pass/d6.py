@@ -105,7 +105,7 @@ def run(ctx,service):
   command=shlex.join(['cargo',*policy.d6_command(policy.D6_NAME)])
   prompt=("Dans src/backend.rs, ajoute dans le module tests le test nommé agent_name_rejects_an_inner_space : valider_le_nom_de_l_agent doit refuser le nom Om bre (blanc intérieur) avec une erreur nommant agent.name. "
           "Le corps du test doit être exactement : "+policy.D6_RED_TEST+". Joue d'abord EXACTEMENT "+command+" via run_command, timeout_s=900, et vois ce test ROUGE pour cette assertion. "
-          "Corrige ensuite le validateur pour ce contrat en préservant le trim des bords, le refus vide et des retours ligne ; rejoue EXACTEMENT la même commande VERT. "
+          "Modifie ensuite uniquement le corps de valider_le_nom_de_l_agent ; conserve strictement tous les autres octets du source, y compris le juge et ses attributs. Évite commentaires de bloc et chaînes brutes dans ce corps (grammaire de cette recette). Corrige ce validateur pour ce contrat en préservant le trim des bords, le refus vide et des retours ligne ; rejoue EXACTEMENT la même commande VERT. "
           "Rends le diff et Ready. Une seule demande : travaille jusqu'au bout. Pas de commit/push, pas de suppression du Cargo.lock, pas d'autres commandes Cargo, pas de lecture de secrets ou de configuration personnelle.")
   ctx.save('d6-request-before-model.json',dict(text=prompt,expected_test=policy.D6_NAME,expected_argv=policy.d6_command(policy.D6_NAME),expected_red='one real failing Rust assertion before the validator fix'))
   tty_env=dict(env,CARGO_MANIFEST_DIR=str(C/'tty'));tty_log=(P/'d6-tty.log').open('x')

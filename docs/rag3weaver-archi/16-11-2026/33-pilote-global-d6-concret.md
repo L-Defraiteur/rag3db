@@ -209,3 +209,16 @@ son hash égal au juge agent-red acquis ; les frontières built/tested relisent
 également ce bloc pour les deux étapes, en plus du snapshot source complet.
 Le validateur peut changer ; le juge reste identique. 40 fonctions écrites,
 NONJOUÉES ; aucun GO CPU/natif/pin PC acquis. Autres points4461 non rouverts.
+
+
+### Delta Banc : activation du même juge, pas seulement sa sous-chaîne
+
+Réserve eac608/ticket et vrai témoin Broker cfg(any())+homonyme prépub269519
+AVANTfix, NONJOUÉ. Le vert compare au rouge ACQUIS tous les octets hors corps
+unique du validateur (préfixe/suffixe SHA), plus état source/index/modes complet
+avec seule empreinte backend autorisée différente. Ainsi attributs cfg, homonymes,
+imports et autres sources ne peuvent changer. Les frontières built/tested gardent
+le snapshot complet acquis à admission. Le validateur est découpé par accolade
+équilibrée/littéraux, grammaire bornée failclosed : rawstrings et commentaires de
+bloc refusés explicitement dans la demande ; ce n'est pas un parseur Rust général.
+41 fonctions écrites NONJOUÉES, aucune qualification CPU/native ni pin PC acquis.

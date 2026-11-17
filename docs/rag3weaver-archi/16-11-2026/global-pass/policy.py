@@ -116,3 +116,24 @@ def private_environment(inherited,p,tmp,targets,fils):
  for key,leaf in {'XDG_CONFIG_HOME':'config','XDG_DATA_HOME':'data','XDG_CACHE_HOME':'cache','XDG_STATE_HOME':'xdg-state','RAG3WEAVER_STATE_DIR':'state-fixture','RAG3WEAVER_CONFIG_DIR':'config','RAG3WEAVER_DATA_DIR':'data','RAG3WEAVER_DAEMON_DIR':'daemon','RAG3WEAVER_BUILTIN_TEMPLATES_DIR':'templates','RAG3WEAVER_RUNS_DIR':'runs','RAG3WEAVER_TACHES_DIR':'tasks','RAG3WEAVER_CHATS_DIR':'chats','RAG3WEAVER_JOURNAUX_DIR':'journals','RAG3WEAVER_CACHE_DIR':'cache'}.items():env[key]=str(p/leaf)
  for suffix in ['','_EMBEDDER','_RERANKER','_OCR']:env['RAG3WEAVER_BURN_DEVICE'+suffix]='cpu'
  return env
+
+def validator_frame(source):
+ """Freeze every byte outside the sole validator body; reject ambiguous Rust syntax."""
+ signature='pub fn valider_le_nom_de_l_agent(nom: &str) -> Result<String, String> {'
+ require(source.count(signature)==1,'validator signature is not unique')
+ opening=source.index(signature)+len(signature)-1;i=opening+1;depth=1
+ while i<len(source) and depth:
+  if source.startswith('//',i):
+   end=source.find('\n',i);require(end>=0,'unterminated validator comment');i=end+1;continue
+  require(not source.startswith('/*',i),'block comments are outside the admitted validator grammar')
+  require(re.match(r'(?:br|r)\#*"',source[i:]) is None,'raw strings are outside the admitted validator grammar')
+  if source[i] in ['"',"'"]:
+   quote=source[i];i+=1
+   while i<len(source) and source[i]!=quote:
+    i+=2 if source[i]=='\\' else 1
+   require(i<len(source),'unterminated validator literal');i+=1;continue
+  if source[i]=='{':depth+=1
+  elif source[i]=='}':depth-=1
+  i+=1
+ require(depth==0,'unterminated validator body')
+ return dict(prefix_sha256=hashlib.sha256(source[:opening+1].encode()).hexdigest(),suffix_sha256=hashlib.sha256(source[i-1:].encode()).hexdigest())
