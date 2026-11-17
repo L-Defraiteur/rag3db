@@ -123,3 +123,22 @@ rejoués. Bruts+manifest2hôtes avant tout correctif,
 manifest90fbc0af8a6c3fbd78c6cd9ba000f0397af97944f16ec4c452f532ab1ecb9546,
 resultc4d79cd1ffb93b5e0806688fdb549522067b1258449d7131c0a3966a20a407df.
 Aucun GO vert/natif implicite ; préparation de correction groupée seulement.
+
+## Proposition commune demandée par Archi, hors outillage D45 figé
+
+Après D45/36CPUverts et RO favorable P05, Archi demande une proposition de
+point d'extraction commun pour quatre publications global/D6 (5ELF puis3x1),
+sans troisième fork. Préparation documentaire/interface sur branche distincte
+cx-codeparsers-publication-contract issue deD45 ; aucune modification D45/P05,
+aucun run/CPU/SSH/natif ni extraction runtime exécutée. Ticket consommateur :
+docs/rag3weaver-archi/tickets/2026-11-16-le-temoin-documentaire-vertex-attend-un-accord-sans-superviseur.md,
+lu dans son worktree documentaire, avec ses admissions séparées.
+
+Le contrat proposé doit préserver le plan ordonné et le verrou de phase, la
+liaison source/ledger/ELFmap, les copies deuxhôtes et fsync/link avant ACK, les
+END et réserves, le bootstrap aprèsexec et l'arrêt attesté. Rust garde son plan
+strict build/runtime par défaut dans son adaptateur. Le module commun ne peut
+être remplacé par une boucle de copie spécifique D6 ni des inventaires factices.
+Le présent travail propose seulement l'API à relire et son emplacement, pas une
+primitive déjà implémentée ou qualifiée pour D6. Contrat/sourcepins futurs et
+budgets distincts nécessaires avant extraction, tests ou calibration réelle.
