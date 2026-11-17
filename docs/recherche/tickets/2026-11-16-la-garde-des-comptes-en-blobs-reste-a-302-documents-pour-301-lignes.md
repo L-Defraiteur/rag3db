@@ -525,3 +525,12 @@ hardcode. Toutes gardes Common/identités/propriétaire/fiche/CG/plafond restent
 SourcesLinuxv6.8 btrfs_getattr/lock_get_status citées dansproposal03 ; pas de
 preuve du kernel7.3 exact ni réhabilitationB-R3. ROcontrat source demandée
 avant nouveauxpins/CPU/natifGOdistincts, aucunCPU/proc réel/compiler exécuté.
+
+RO Rcontratsourcef4e favorable bornée obtenue AVANT nouveauxpins. Paquetr4
+sourcef4e615b5bd781810fc03358b2d7e3cd6363f2a5d préparé SHA256
+32039b57ab5f7671877095bd518bdc0e242c12e4fdf4b61ca6f9daba8d34d2d3 ;
+recette04 SHA256b25d3d47bbb21743fc482c4e6a47ee2a2765aef50ee315c122012e311dfc671f
+copiée deuxhôtes.13sources/23témoins NONJOUÉS,GOinactif/outputkernel-contract01
+absent. ROtotale code+paquet+recette demandée ; CPU/natifGO distincts requis,
+317inputs/13hostpins frais avantnatifs. Aucuneexécution/ancienGO réemployé,
+r3/B01/diagnostic/OUT_T immuables. Contratv6.8≠qualificationOS7.3 outransport.

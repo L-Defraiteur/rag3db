@@ -354,3 +354,23 @@ fl_file==filp et son propriétaire avant de rendre cette ligne. Le prédicat
 s'appuie donc sur la ligne attachée au FD attribué, pas sur une recherche
 globale d'un numéro d'inode. Source correctivef4e615b5bd soumise à RO R,
 aucun nouveau paquet avant cet avis. Témoins toujours NONJOUÉS.
+
+## r4 après RO du contrat source — préparation sans exécution
+
+RO R source f4e615b5bd781810fc03358b2d7e3cd6363f2a5d favorable bornée au
+contrat primairev6.8. Elle ne qualifie pas le binaire kernel7.3 ni le runtime.
+Nouveau paquet PC P/packet-r4/packet.json SHA256
+`32039b57ab5f7671877095bd518bdc0e242c12e4fdf4b61ca6f9daba8d34d2d3` ;
+sourcecode exacte f4e615b5bd781810fc03358b2d7e3cd6363f2a5d,13sources pinées.
+Recette04 copiée deuxpostes P/phase-b-preparation-04/recipe.json SHA256
+`b25d3d47bbb21743fc482c4e6a47ee2a2765aef50ee315c122012e311dfc671f`.
+P reste cache privée pg-rust-tool-qual-20261117-r1. GOinactif, nouvelle sortie
+P/runs/phase-b-kernel-contract-01 et Commonproofs04 absentes.
+
+Douze témoins pilote + onze témoins POSTE =23 préparés, NONJOUÉS sur f4e.
+Les18verts de4a ne sont pas reportés sur cette source. Les cinqnouveaux
+n'inventent aucun rouge unitaire historique. ASTseul,0import/test/proc réel,
+slot/compiler/metadata/SQL/service lancé pendant préparation.
+Demande RO totale code/r4/recette04, puis GOCPU et GO B séparés éventuels,
+avec317inputs/13pins frais avant natif. Aucun ancien GO réutilisé, ni3e essai
+de compilation autorisé par la création du paquet. r3/B01/diagnostic conservés.
