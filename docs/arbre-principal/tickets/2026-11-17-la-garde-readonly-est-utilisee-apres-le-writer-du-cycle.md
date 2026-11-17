@@ -125,3 +125,11 @@ stable_readers EXISTANT juge after_writer→after_reads, sans exclure DB.
 Pas de modification du validateur readonly lui-même ; Qv8/65eb restent figés.
 Ensemble19 NON JOUÉ après ce correctif : nouvelle RO/GO CPU vert distinct,
 aucune autorisation native/DB/provider/ancien budget déduite.
+
+GO CPU C7-POSTWRITER-GREEN-E9F0-17nov60 consommé :19 PASS/0FAIL/ERROR/skip,
+0.356s/rc0 sur e9f0 propre, anciens sept juges non rejoués. Bruts trois
+fichiers/m manifeste bc6272eb...af557 conformes sur deux hôtes.
+[Rapport08](../17-11-2026/08-postwriter-cpu-et-preparation-v9.md) et Qv9metadata
+prepared96ebc22e7fae474f812273e0bf2f8d41b3f24b5205c6e4f21d4594fbbd0f3099 :
+22copiesSHA/guardrc0/HEADsourceexactpropre/P-S-allocation-grantabsents.
+Deux RO totales demandées, aucun GO natif/auditfreeze/rewrite. Ticket OUVERT.
