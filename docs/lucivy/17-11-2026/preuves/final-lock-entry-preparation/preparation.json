@@ -1,0 +1,15 @@
+{
+  "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-final-lock-entry-17nov-v1",
+  "uid": 1000,
+  "device": 57,
+  "inode": 96685390,
+  "files": {
+    "test-fs-final-lock-entry.py": "ffdddc1f57a49f285a708c3dd6db99cf81d29f6496ce967d24c2d0bcdc3738a9",
+    "admit-fs-admission-red.py": "166d3ff6ec640539eadeb0fe82d867fa3a6d539c5e321d39108681f2889a8b03"
+  },
+  "prepared_only": true,
+  "executed": false,
+  "subject_is_exact_published_admission": true,
+  "common_git_process_metadata_modelled": true,
+  "no_final_lock_fix_yet": true
+}

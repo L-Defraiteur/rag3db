@@ -1,5 +1,7 @@
 # Paquet FS RED v3 — locked, reçus physiques, NON LANCÉ
 
+**HOLD final lock effectif après les juges/avant acceptation : [19](19-hold-final-lock-et-temoin.md). Ne pas lancer cette recette.**
+
 [Ticket FS](../tickets/2026-11-16-l-admission-du-corpus-fs-ne-garantit-pas-la-vue-consommee.md).
 Le refus E0277 source8b et la restitution réelle sont archivés3759. Le correctif
 hex **0f610f437a341f745e5936492114142ff3afedd4** a sa RO source favorable,

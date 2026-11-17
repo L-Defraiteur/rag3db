@@ -1,8 +1,9 @@
 # Lucivy — 17 novembre 2026
 
 État : passe FS v2 refusée à la compilation (E0277 LowerHex), aucun juge FS
-exécuté. Correctif hex0f610f4 relu, noncompilé ; paquetv3/journal préparés,
-aucun nouveau GO. Deux RO totales et GO distinct attendus.
+exécuté. Hex0f610f4 relu, noncompilé ; paquetv3 HOLD sur lockeffectif final.
+Deux RO regroupées réservées sur ce point ; témoinTempDir préparé, nonjoué.
+Aucun GO CPUjournaux/contre-exemple/natif en cours.
 Aucun corpus réel contacté. Les trois raccords CPU de l’exporteur sont verts.
 
 Contrat C7 conservé : capture initiale unique StdFs, ordre effectif, cap5000/
@@ -24,7 +25,8 @@ après REFUSED. La gate reste volontairement fautive avant les rouges Rust.
 - [Ticket porteur](../tickets/2026-11-16-l-admission-du-corpus-fs-ne-garantit-pas-la-vue-consommee.md)
   ouvert. Paquetv3 et commande complète [18](18-paquet-fs-red-v3-locked-et-journalise.md),
   reçus/probes [17](17-preparation-recus-physiques-portables.md). Préflighte986,
-  nonceecf77 ; seeddbdbinvariant, Common265273TERMINE101. ROtotales/GO avantCargo.
+  nonceecf77 ; seeddbdb, Common265273TERMINE101. HOLDfinalLock et témoin
+  [19](19-hold-final-lock-et-temoin.md) ; pas de commande18 avant levée/RO/GO.
 
 Neuf juges mémoire source1ee qualifiés seulement pour leur portée. Nouveaux
 six négatifs FS et positif NONJOUÉS. Natifs A/B/core/neufHOLD/ULP7.2/PR42
@@ -244,3 +246,24 @@ ActionsROtotalesBanc+Recherche confiées surCEcouple Source0f/pilot43d/admit166d
 exportec619/préflighte986/seeddbdb/journalphysique etprobesd13. GOCPU60distinct
 pour3probesprépub siC7ledécide, puisGO300distinct après2ROtotales ;pasreplay
 GOv2/315/natifs/tag/master/corpus.6rougesRust+positifrestentNONOBSERVÉS.
+
+
+ROtotales regroupées eb2f/v3 : Banc P1FINALLOCK CONFIRMÉ par Recherche,
+qui révise sonavisinitialfavorable en RÉSERVÉ surceseulpoint. Source0f/seeddbdb/
+Qv3/T3ELF/anciensrouges conservés, aucune dérivelockréelle inventée. C7HOLD
+521411c889, CPUjournal resteSANS GO, aucun300autorisé. Sourcepipeline166d/43d
+NONcorrigée pourfinalLock avant contre-exempleprépub.
+Témoin vrai admit.main166d préparé test-fs-final-lock-entry.py
+SHAffdddc1f57a49f285a708c3dd6db99cf81d29f6496ce967d24c2d0bcdc3738a9,
+Qlocal UID1000/dev57/ino96685390. Admission166dcopiéeoctetsinchangés, TempDir,
+Common/preflight/Git/proc simulés pouratteindrevraivernier final ; modèlesne
+lancentaucuncompilateur/juges/process/SSH/proc/T/ELF/corpus. Lockeffectif
+1.0→2.0 tardif TOMLvalide/seedintact ; contrôlesréelsmain/budget/manifest/SHA/
+copies/verdict final. Observation avantassertion, spiesfinalréservésauxvrais
+appelsduconsumer ;constatspostérieursnepolluentpasevents/model.
+Deuxcasproposés sousnouveauGOCPU60 : mutation→1FAILacceptationfinaleinjustifiée,
+contrôlelockinchangé→1PASS,0ERROR. ERROR/setup/motifinattenduSTOP0retry.
+Rapport17/19+preuveprep. ActionsROcontreexemple Recherche/Banc confiées,
+puisC7arbitreGOCPUdistinct. APRÈSrouge seulementguardlockeffectifcontreseed
+au dernierverdictDANSEND, patchgroupé/nouveauxpins/2ROtotales/GO300. Pasreset/
+restorelock ni exceptionslarges, pas315/native/tag/master.

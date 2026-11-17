@@ -356,3 +356,35 @@ ActionsROtotalesBanc+Recherche confiées surCEcouple Source0f/pilot43d/admit166d
 exportec619/préflighte986/seeddbdb/journalphysique etprobesd13. GOCPU60distinct
 pour3probesprépub siC7ledécide, puisGO300distinct après2ROtotales ;pasreplay
 GOv2/315/natifs/tag/master/corpus.6rougesRust+positifrestentNONOBSERVÉS.
+
+RO TOTALE Banc eb2f : HOLDfinalLock. Pilote43d vérifielock effectif préflight/
+aprèscompile maispasaprès7juges ; admit166d finalrehash seulementseedcopié,
+pasW/Cargo.lock avant final-accepted. Gitcleanneprouvepasinvariancefichier
+ignoré ; contrat18étape6 réclamehashlockfinal. Toutautrecouplereconnu(neuf
+copies/pins/QT/source0f/dbdb/reçus/superviseurunknownbloquant). AucunCPU/Rust/
+proc/corpusparBanc. ActionLucivy sousce ticket AVANTfix : témoinTempDir
+mutationtardive surVRAIadmit.main166d/dernierverdict, sourceinchangée,
+Common/identités/git simulés/pasproc-processréel. Prépub/RO/GOCPU60distinct,
+FAILsioldfinalaccepted malgréWlockmodifié/seedintact ; pasERRORsetup. Puis
+seulementguardfinalDANSEND/nouveauxpins/2ROtotales/GO300distinct. Qv3figé,
+GO300NONautorisé, probesjournalCPU peuventêtredécidés séparémentparC7.
+
+ROtotales regroupées eb2f/v3 : Banc P1FINALLOCK CONFIRMÉ par Recherche,
+qui révise sonavisinitialfavorable en RÉSERVÉ surceseulpoint. Source0f/seeddbdb/
+Qv3/T3ELF/anciensrouges conservés, aucune dérivelockréelle inventée. C7HOLD
+521411c889, CPUjournal resteSANS GO, aucun300autorisé. Sourcepipeline166d/43d
+NONcorrigée pourfinalLock avant contre-exempleprépub.
+Témoin vrai admit.main166d préparé test-fs-final-lock-entry.py
+SHAffdddc1f57a49f285a708c3dd6db99cf81d29f6496ce967d24c2d0bcdc3738a9,
+Qlocal UID1000/dev57/ino96685390. Admission166dcopiéeoctetsinchangés, TempDir,
+Common/preflight/Git/proc simulés pouratteindrevraivernier final ; modèlesne
+lancentaucuncompilateur/juges/process/SSH/proc/T/ELF/corpus. Lockeffectif
+1.0→2.0 tardif TOMLvalide/seedintact ; contrôlesréelsmain/budget/manifest/SHA/
+copies/verdict final. Observation avantassertion, spiesfinalréservésauxvrais
+appelsduconsumer ;constatspostérieursnepolluentpasevents/model.
+Deuxcasproposés sousnouveauGOCPU60 : mutation→1FAILacceptationfinaleinjustifiée,
+contrôlelockinchangé→1PASS,0ERROR. ERROR/setup/motifinattenduSTOP0retry.
+Rapport17/19+preuveprep. ActionsROcontreexemple Recherche/Banc confiées,
+puisC7arbitreGOCPUdistinct. APRÈSrouge seulementguardlockeffectifcontreseed
+au dernierverdictDANSEND, patchgroupé/nouveauxpins/2ROtotales/GO300. Pasreset/
+restorelock ni exceptionslarges, pas315/native/tag/master.
