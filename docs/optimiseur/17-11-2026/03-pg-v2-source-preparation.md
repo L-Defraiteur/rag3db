@@ -108,3 +108,29 @@ jamais prolongé pour lui ; preuves/setupconnues ne sont pas un ACKactuel.
 AvantCcontact : allocation/identités/leasefresh/domaineclockPC/attentesSQLdont
 adressebackendTCP dérivée de sourceindépendante (pas du candidat), packet/
 ELF/pinsqueries/RO/GO exact. Ni fixtureexpirée ni PGpartagé5433 en fallback.
+
+## Paquet source01 et recette CPU proposés
+
+Code exact `6fdb9cddfc096a4ba595d244485d6867bd016edd` (sourcecandidate, pas un ELF).
+PCroot `/home/lucied/.cache/optimiseur-notes/pg-v2-source-20261117-r1`.
+`source-packet-01/source-packet.json` SHA256
+`8194fafe5f237235f47d98b4c12a5d59298276db5450f59bf70571d2215af195` ;
+19fichiers pinés, deuxCommon6439 réguliers, queries/go/allocation/compileplan
+inactifs inclus, aucun secret ou référence active copié de la fixture.
+`recipe-01.json` SHA256
+`dbf22ff9b733708bcff9791de948cb85b7dc852ad33f65cab1b5ffdd0002de7d`.
+Métadonnées source/recette copiées localement, sourcecopiée depuis blobsGit
+explicites (jamais depuis credential/privatefixture). Source/go/status tous
+PREPARED_NOT_RUN/run/compile/connect/credential_read=false, live_entry=false.
+
+Nouveaushaconstante readonly-session-v2.sql :
+`f40eb6ebc867839303aa51229497e7d533c6708854bea9b63bcfe67f2012b8b9`.
+Identitéf949/postcheck2907 inchangés. Compileplan inactif utilise quatreexterns
+archivés et propose DEUX sorties/bâtis distincts (testsRust puisclientV2),
+aucun de ces deux rustc n'est autorisé ni exécuté. Pasréutilisation09ba commev2.
+
+Demande RO totale source/19copies/recette/rougecausal avant GO CPUred exact,
+puisGOgreen20 séparé. Aucun import/unittest/rustc/ELF/exécutionC/credential
+réelle aprèscréationpaquet. Les8Rust exigent autreGo native ; aucunGOPGcontact.
+Les claimsmetadata n'impliquent pas un runner admissionC livré : les bindings
+Common/READY/owner/GoC restent à raccorder sousnouveauxpins etrevue avantcontact.

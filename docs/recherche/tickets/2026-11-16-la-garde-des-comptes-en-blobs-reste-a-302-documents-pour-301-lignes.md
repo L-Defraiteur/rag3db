@@ -726,3 +726,11 @@ Core/adaptateurCLI disabled etbindingGO/phase/credentialowner/admissionconsumer
 encoreàraccorder, pas callbackfakevalantgrant. Guardssecrets/core0 avantlecture,
 portsprivés/separatenoncefixture, tuplesexpectedtyped.0sourceclientPGexécutée,
 fixture02READYhistoriqueTTL1270341.372 inchangé ; paquetSOURCE àpin/RO.
+
+V2paquetSOURCE01 matérialisé/code6fdb9cddfc096a4ba595d244485d6867bd016edd,
+19fichiersSHA8194fafe5f237235f47d98b4c12a5d59298276db5450f59bf70571d2215af195,
+recipe01SHAdbf22ff9b733708bcff9791de948cb85b7dc852ad33f65cab1b5ffdd0002de7d.
+Nouveaurootcachepg-v2-source-20261117-r1, 20Python+8Rust+1legacyrouge NONJOUÉS,
+sourcepubavantcode4b770causal, ROtotale demandée. CLI/liveentryfalse et
+bindingsadmissionencoremanquants explicites ;0import/CPU/client/natif/credentials
+réelles decesource, pasGOPGcontact. Fixture02/oldB/proofsrougesintacts/TTLinchangé.
