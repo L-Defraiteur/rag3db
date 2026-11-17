@@ -19,6 +19,7 @@ class PostwriterInventory(unittest.TestCase):
   self.after=[row(self.base.name,'b'),row('fts/shard_0')]
   self.dirs=[dict(path='fts',mode=493)]
  def gate(self,after=None,before=None,dirs=None):
+  evidence=Path(tempfile.mkdtemp(prefix='observation-',dir=self.root))
   tree=ast.parse(Path(c.__file__).read_text());driver=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='driver')
   start=next(i for i,n in enumerate(driver.body) if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='after_writer' for t in n.targets))
   end=next(i for i,n in enumerate(driver.body[start:],start) if isinstance(n,ast.Expr) and isinstance(n.value,ast.Call) and isinstance(n.value.func,ast.Name) and n.value.func.id=='save' and n.value.args and isinstance(n.value.args[0],ast.Constant) and n.value.args[0].value=='copy-after-shutdown-quiet.json')
@@ -26,7 +27,7 @@ class PostwriterInventory(unittest.TestCase):
   function=ast.FunctionDef(name='actual_postwriter_inventory_gate',args=ast.arguments(posonlyargs=[],args=[],vararg=None,kwonlyargs=[],kw_defaults=[],kwarg=None,defaults=[]),body=body,decorator_list=[],type_params=[])
   namespace=dict(vars(c),BASE=self.base,before_writer=copy.deepcopy(self.before if before is None else before),initial=dict(fin_dirs=self.dirs),fs=SimpleNamespace(file_inventory=lambda _:copy.deepcopy(self.after if after is None else after)))
   exec(compile(ast.fix_missing_locations(ast.Module(body=[function],type_ignores=[])),'<actual-postwriter-inventory>','exec'),namespace)
-  with patch.object(c,'P',self.root),patch.object(c.a,'P',self.root),patch.object(c.a,'BASE',self.base),patch.object(c.q,'P',self.root),patch.object(c.q,'directories',return_value=self.dirs if dirs is None else dirs):
+  with patch.object(c,'P',evidence),patch.object(c.a,'P',evidence),patch.object(c.a,'BASE',self.base),patch.object(c.q,'P',evidence),patch.object(c.q,'directories',return_value=self.dirs if dirs is None else dirs):
    try:return namespace['actual_postwriter_inventory_gate'](),None
    except ValueError as error:return False,str(error)
  def test_exact_writer_auxiliary_removal_is_not_a_readonly_mutation(self):
