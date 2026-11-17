@@ -877,3 +877,28 @@ sans changement runner/test. Pas d'import/test/PG ; GO CPU reste manquant.
 Avant admission nominale : C7 demande également pins timeout/poste et UID/
 inventaire/absence ancienne autorité. Métadonnées privées vérifiées RO puis
 recette complétée, ancienne recipe.json conservée. Aucun CPU/PG exécuté.
+
+
+## Rouge nominal effectivement observé — GO3215b9ec5d
+
+Entrée UNIQUE C7-PSQL-BASELINE-A5C2-17nov30, sourcea5c23cd7d8317ea34afdf59e800e54899b4bbd47,
+recette finale99251084fd6e6033697d55bd07dc47efec0e15c3ef0be0ec1e6ccf4796a956ab.
+Portée `validation-cniyids7` : Common ROUGE/code1, erreur superviseur null,
+état terminé/nettoyé, restes[]. 1 test, 1 FAILURE explicite capacité nominale
+indisponible / RunnerUnavailable, 0 ERROR, 0 skip ; rc1.
+Monotone1278263.786415292→1278264.045580457, elapsed0.259165165014565s.
+Ce rouge métier ne devient pas un vert ; les 13 autres restent NON JOUÉS.
+Aucun RealCapture, natif psql, SQL, Docker, PG, provider, service ou secret.
+
+Preuves PC : ~/.cache/optimiseur-notes/psql-host-runner-20261117-r1/red-baseline-02/ ;
+portable : même parent/red-baseline-02-proof/. 16 fichiers comparés taille/SHA
+sur les deux postes, Common public sans jeton et bruts/recettes/sources présents.
+Manifeste e7c4dd95f00a95040c593ab90f95bca3d513a29e13cc50238cd3f3da17d403dc ;
+archive617a8394a66079790f81cb558cb94048c274b819de038a1766957e281760e4d3.
+L'autorité brute Common demeure privée sur le PC ; aucune autorité active ni
+grant n'est transféré. Aucun rejeu effectué.
+
+Préparation d'implémentation désormais autorisée par C7, après cette conservation
+de preuves. Les trois réserves R de couverture restent ouvertes ; nouveaux
+témoins à publier avant implémentation dédiée, nouvelle RO et GO CPU distinct
+avant un éventuel vert. Aucun GO SQL/fixture déduit.
