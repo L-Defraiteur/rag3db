@@ -68,3 +68,59 @@ Pour la topologie, éventuel futur Dockerinspect sous borne séparée : FORMAT
 ID/image/binding UNIQUEMENT, jamais Env. Aucun inspect ou programme client ici.
 Tant que les archives ne sont pas pinnables : TOOL_UNQUALIFIED/HOLD, sans
 client inventé ni wire maison. Sources/API lisibles ne réservent aucun PG.
+
+## Copie ED b472-v1 finalisée et sélection RO — 17 novembre
+
+READY final reçu :14428fichiers/5,526,823,298octets ; manifestSHA
+`de797438448c79ae54a1bc313003b0fdead4e37b70b180298ce21690b320c945`.
+Audit G UNIQUEMENT dans la copie OUT_T, jamais le T. Graphe des fingerprints
+résolu,74artefacts et74fingerprints recoupés aux SHA du manifeste ; aucun
+manque/ambiguïté après résolution des alias Cargo postgres-types :
+serde_json_1=serde_json ; serde_1=serde_core. La première lecture avant
+résolution d'alias est conservée, pas maquillée en paquet manquant définitif.
+
+Directs sélectionnés par le graphe, pas au hasard dans les variantes :
+- libtokio_postgres-3179df43d80295e0.rlib :
+  02280b8ffdf885a831c878f549fb14d1d9f65de7c991aac6ad457c249431cd28 ;
+- libtokio-64cfcb92dcf41713.rlib :
+  0dcfafaddd3e85ca419fb8b3944899826b50ec35623d64316a47678b5c6f0882 ;
+- libserde_json-452ff4526b3b8a08.rlib :
+  94f6a90becfcbae008aeb632b39c39af8ea5d0403e72bb86634a2fe1f3e37ccc.
+
+Tous ces fingerprints portent le même identifiant compiler, lock090 et
+cache version1.98.1 recoupés. Rustc859 fichier actuel et copie témoin égaux,
+mais aucune preuve prébuild ni compatibilité LINK native déduite. Build/out
+natif.a absent ; les scripts de build rencontrés restent listés dans l'audit,
+leurs produits éventuels ne sont pas présumés dispensables à tout link.
+Rapport RO `~/.cache/optimiseur-notes/pg-ro-attestation-20261116/ed-b472/audit-v2.json`,
+SHAaa80f31a1e50550bcae6fd7126c0b3bd267f8360dbebedf43c3d6e63696ad394.
+ED conserve le snapshot entier ; G ne maintient aucun lecteur ou hold sur T.
+
+## Source candidate et recette, NON EXÉCUTÉES
+
+Vecteurs rust-client-fakes.json publiés a2c7fd0ac1 AVANT code, huit cas
+NONJOUÉS ; aucune qualification native par ces exemples. Source pg_ro_client.rs
+et rust-client-plan.json publiées cedf2546b1. Le client emploie les vraies API
+Tokio/Postgres/serde_json, pas de wire/auth/crypto maison. Mode explicite,
+DSN stdin borné et non journalisé, cible canonique stricte, startupreadonly/
+statement/lock/connecttimeouts, deadline intérieure unique<=4s, deux SQL
+constantes et fermeture du pilote de liaison avant postcheck. Sans mode,
+aucun contact implicite. Ce programme source n'a PAS été compilé ou exécuté.
+
+La deadline intérieure commence après lecture stdin : ELLE NE QUALIFIE PAS
+startup/lecture/sortie/reap sous hard5. Le superviseur extérieur hard5/killreap,
+les vecteurs fakes et l'attribution backend DOIVENT encore être éprouvés sous
+nouveau GO outil. Pas d'affirmation « transport prêt » à partir de la source.
+
+Recette rustc single-file proposée dans le JSON, utilisant uniquement la copie
+OUT_T et les trois --extern. Aucun Cargo, exportSDK, C++/build.rs, install ou
+changement magasin. Réaudit frais du sysroot/compiler et des pins requis avant
+GO, sortie dans un NOUVEAU dossier privé exclusif, refus de réécrire un artefact.
+Un échec de link par sortie native manquante sera conservé sans repli automatique
+vers Cargo ni rebuild de dépendances. Coût de compile/exécution : NON MESURÉ.
+Dockerinspect futur : FORMAT Id/Image/NetworkSettings.Ports uniquement, borne
+et quiescence propres encore NONJUGÉES ; aucune lecture Env, aucun dockerexec.
+
+Le module pur/SQLv1 de69/f949/2907 et ses25fakes acquis restent bitidentiques.
+Admission de ce nouveau transport Rust reste INCOMPATIBLEv1, à revoir avec
+owner/consumer après qualification. Aucune probe, DB, réservation ou GO accordé.

@@ -232,3 +232,15 @@ NoTls/SQL2constantes, startupRO et timeouts/application_name nonce, deux session
 avec drop/reap pilote de liaison avant postcheck. Parent hard5 et kill/reap
 restent à qualifier sous futurGOoutil. Aucune intégration au transport v1,
 aucun Cargo/rustc/native, SQL ou Docker exécuté pour cette préparation.
+
+## Source candidate Rust après audit, toujours sans GO natif
+
+EDOUT_T final audité74artefacts/SHA, sélectionPG3179/Tokio64cf/serdeJSON452f
+cohérente ; aucun GlecteurT, rapportaa80f31a…ad394. Fakes a2c7fd0ac1 publiés
+avant source/recette cedf2546b1. Client Rust standalone source + JSON --extern
+concrets, NON COMPILÉS/NON EXÉCUTÉS, huit vecteurs NONJOUÉS. Aucun client natif
+n'est qualifié : compile/typecheck/link, sysroot et produits natifs éventuels,
+supervision extérieurehard5/reap et inspectFORMAT restent prérequis de futurs
+GOoutil distincts. Pas de Cargo/C++/SDK/build, aucun SQL/health/DockerAPI.
+Le nouveau transport n'est pas faussement déclaré private-host-psql v1 ;
+helper pur et trois SHA de69/f949/2907 inchangés. Parent FTS ouvert/HOLD.

@@ -445,5 +445,6 @@
     "env_or_exec_requested": false
   },
   "admission_v1_compatible": false,
-  "future_transport_name": "standalone-tokio-postgres"
+  "future_transport_name": "standalone-tokio-postgres",
+  "output_policy": "exclusive fresh private directory required; never overwrite an old executable"
 }
