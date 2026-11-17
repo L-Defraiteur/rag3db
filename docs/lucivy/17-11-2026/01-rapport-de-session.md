@@ -186,3 +186,21 @@ CommonMIN/final/reste/finallylocalSSH relus ; pilotea5c/admit166d inchangés,
 AucunCPU/Cargo/procscan/ELF/corpus/runtime parBanc. TroisvertsCPU simulés≠
 OSkill300/cleanupdistant/FSqualifié. Les deuxROcouplev2 sont reçues, aucun
 ACKhumain attendu. TicketOPEN, paquetNONLANCÉ ; GO exact distinct C7 requis.
+
+GO C7-LUCIVY-FS-RED-V2-17nov300 consommé UNEfois : refusCOMPILE101 E0277
+fs_fixture.rs88, digest sha2.11 Array sansLowerHex. Deuxtargets échoués,
+0ledger/list/jugesFS/rougeadmission/positif. Exporteur/session6720rc1 constate
+SSH/posteretourné1 avantledger ;0retry. Common265273/start126184561 TERMINE101,
+erreurnull/restes[]/nettoyétrue/ownabsent,final1261875.336975631<CommonEND
+1262104.663907156<ENDadmit1262117.154189434 ;scan0bloqué12UNKNOWNconservés.
+RestitutionRÉELLE C7+Recherche aprèsretours, pasplacegardée pourarchives.
+Bruts2hostsAVANTfix rapport17/15 etpreuves/fs-red-v2-compile-refusal,receipt
+cap nonexporté. Archivefresh1262191.736>END explicitementhorsvalidation,
+0bloqué11UNKNOWN, pasextension. Début/duréetotalportable nonjournalisés,
+noninventés ; stdoutoutilretour1, journalSSHvidearchivé. Critèrepreuvefuture
+portable : conserver début/finphysiques, sansfauxjournalaprès. Seedce719→
+lockdbdb560202562f17536624472a0e730627df163f4bb00c53b2baf604e77637f6,
+seulajoutdirectsha2 vérifiéAPRÈSrefus.9copies/source8bclean/markerTscratch
+conformes,3oldELF1eeRO+originauxSHAidentiques. PréparationfixAPIhex standard
+sousce ticket (Lucivy), préserverdéfautsFS etpanel ;nouveauxpins/RO/GOavant
+Cargo,aucunGOv2réactivé. AucuneFS/native/OSkill300/globalqualifiée.

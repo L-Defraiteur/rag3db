@@ -1,0 +1,19 @@
+{
+  "pid": 265308,
+  "start": "126184584",
+  "argv": [
+    "cargo",
+    "test",
+    "--offline",
+    "--release",
+    "-j4",
+    "-p",
+    "lucivy-core",
+    "--test",
+    "test_fs_fixture_admission",
+    "--test",
+    "test_sfx_v3_ground_truth",
+    "--no-run",
+    "--message-format=json-render-diagnostics"
+  ]
+}

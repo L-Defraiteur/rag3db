@@ -1,0 +1,35 @@
+{
+  "observed": 1262191.73628472,
+  "source": "8b9435363dbd8ec0e3973f2368b641189f0726eb",
+  "source_clean": true,
+  "copies": {
+    "qualify-fs-admission-red.py": true,
+    "admit-fs-admission-red.py": true,
+    "export-fs-red-ledger.py": true,
+    "qualify-indexed-false-core.py": true,
+    "qualify-indexed-false-red.py": true,
+    "source-pins.json": true,
+    "Cargo.lock.seed": true,
+    "support/confiner_validation.py": true,
+    "support/poste": true
+  },
+  "marker_sha256": "5a1671d22dc784bec78f60cf25c8b3003acc5f21e28290f05d0dfc22e0c394df",
+  "scratch_entries": [],
+  "common": {
+    "pid": 265273,
+    "start": "126184561",
+    "state": "termine",
+    "owned_present": false
+  },
+  "assessment": {
+    "admitted": true,
+    "blocked_count": 0,
+    "unknown_count": 11
+  },
+  "physical_scope_deadline": 1262117.154189434,
+  "validation_result": "COMPILE_REFUSAL_NOT_SEMANTIC_RED",
+  "elf_ledger_present": false,
+  "native_test_bodies_executed": false,
+  "fs_judges_executed": 0,
+  "universal_quiescence_claimed": false
+}
