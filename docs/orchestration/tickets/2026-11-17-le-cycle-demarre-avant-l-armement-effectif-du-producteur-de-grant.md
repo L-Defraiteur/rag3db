@@ -33,3 +33,9 @@ La publication et consommation du grant n’ont plus besoin d’un ping humain. 
 Témoins aux vrais raccords à publier avant code : watcher jamais armé, vivant annoncé mais exited, retard avant exec/descripteur avec mauvais argv, watcher terminé après ARMED, READY arrivé avant ou après refus ; aucune action provider/writer avant admission complète. Les contrôles deadline/nonce/pins/typedhealth/firstred et noembedding restent stricts. Aucun process réel, réseau, DB ou CLI dans ces témoins hermétiques.
 
 Après source/tests publiés et RO totale du couple/pin, nouveau GO correctif distinct uniquement. L’ancien3c2 reste ROUGE ; aucune reprise n’est autorisée par ce ticket. Pas de migration LIVE, redémarrage de service ou actor de remplacement non attribué.
+
+## Réserve finale sur la publication du composé — 17 novembre
+
+ED612c778aca relève sur source2dccc070f1564d8ca9d22a59fcb2b73222f415e5/Qv5e3741c89 : lifecycle.compose contrôle END puis appelle qualify.save, qui ne contrôle END qu'avant JSON/flush/fsync. C7 confirme en lecture ces deux vrais raccords. Une publication franchissant END peut donc laisser un composé favorable et rc0 après la borne Common830 ; l'enveloppe OS900 ne prouve pas le respect de cette borne interne. Aucun franchissement runtime n'est déclaré : le couple n'a pas été lancé.
+
+HOLD de ce couple avant tout GO. Même ticket et ancien paquet conservés ; publier un témoin aux vraies instructions finales avant correction, puis rendre cohérents publication, horloge finale et code de retour. Nouveau source/paquet et revue totale avant nouvelle admission. Les contrôles d'armement, liveness et action sont favorables en lecture mais ne lèvent pas cette réserve finale. Aucune DB/provider/CLI/autorité supplémentaire admise.
