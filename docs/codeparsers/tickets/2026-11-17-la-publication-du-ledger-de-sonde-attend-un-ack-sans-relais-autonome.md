@@ -276,3 +276,10 @@ verdict CPU. Préparer les témoins réels groupés AVANT corrections, puis revu
 du pin de rouges et GO CPU distinct pour observer ces refus. Le candidat558959
 reste figé ; nouvelle branche guard-red réservée aux témoins et à ce constat.
 Aucune des réserves n'est corrigée ni réputée levée par cette consignation.
+
+Trois témoins groupés prépubliés dans publication-core/
+test_publication_guard_counterexamples.py sur moteur558959 INCHANGÉ : demande
+Common à phase+60, fermeture locale après hardEND mais avant phaseEND, et
+remplacement des seuls octets du moteur avant import wrapper. Aucun import/test
+joué. Le dernier cas ne convertit que la sentinelle exacte d'exécution non
+épinglée en FAIL ; toute autre exception de montage reste ERROR. Rien corrigé.
