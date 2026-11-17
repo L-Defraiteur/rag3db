@@ -71,3 +71,28 @@ pidfd/signal, CPU-fixture, Cargo/rustc, SDK chargé, service/cloud, SQL ou DB
 runtime ; aucune création de runtime/autorité/allocation ni mutation target.
 Le paquet concordant ne lève pas le P1 de son code. Nouveau GO900 correctif
 et toute activité réelle restent exclusivement à C7, après correction/RO.
+
+## RO statique des cinq témoins33ae, avant CPU
+
+Source `33ae49f0cc089488c0c025a444f216cd3cd1be54`, témoin prépublié2d948,
+exécutable inchangé. Le test extrait bien le VRAI tail de compose après son
+dernier try et appelle le VRAI q.save ; seules horloge/fsync/link sont doublées,
+tempfiles JSON et fsync de ces fichiers, sans processus/health/DB. Le cas
+ontime est un contrôle positif utile ; late-fsync et first-red-during-fsync
+exposent les absences de recheck, sans remplacer le finaliseur par une copie.
+
+Réserve témoin P2 à grouper avant admission CPU : lateentry laisse remonter
+le ValueError du vrai q.save (hors try dans ce tail), avant assertNotEqual et
+avant result(). Le fichier vient d'être ouvert et reste vide. Sans capture
+explicite dans le témoin, résultat prévisible ERROR, pas un échec d'assertion
+discriminant ; aucun résultat réel n'a été observé par ED. Capturer ce refus
+dans le témoin, puis juger explicitement le contrat résultat/rc/JSON, sans
+changer le code executable pour fabriquer le rouge ; prépublier cette seule
+correction de harnais avant éventuelle décision C7 CPU60 exacte.
+
+Late-link : le code courant n'appelle pas os.link au tail, donc le hook
+n'est jamais déclenché. Ce cas est un contrat de non-régression pour une
+future publication atomique ; son futur FAIL actuel ne serait pas une
+preuve causale d'un link tardif réellement exercé. Le libeller distinctement
+dans le bilan, garder late-fsync comme témoin du défaut constaté. Tous cinq
+NON JOUÉS ici ; aucune RO source corrigée ni GO CPU/natif déduit.

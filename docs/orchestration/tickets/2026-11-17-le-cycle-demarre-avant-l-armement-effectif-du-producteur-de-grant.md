@@ -91,3 +91,12 @@ Critère : vrai finaliseur refusant un dépassement postfsync/préretour avec
 verdict/code concordants et premier rouge conservé, témoin prépublié/rouge puis
 fix/couple/paquet/RO neufs avant décision C7. Zéro test/proc/native/DB/health
 par ED ; pas de GO3c2 reporté ni de budget remis à zéro. Ticket reste OUVERT.
+
+RO ED statique témoins33ae/2d948 avant CPU : vraie fin compose/vrai q.save bien
+exercés, aucun témoin joué. P2harnais lateentry laisse actuellement ValueError
+remonter avant assert et composed reste vide => ERROR prévisible, pas rouge
+d'assertion ; capturer/juger explicitement ce contrat avant pin CPU si rouge
+fonctionnel demandé, sans modifier l'exécutable. Late-link n'est pas appelé
+par le tail actuel, contrat futur distinct d'une preuve causale du bug fsync.
+Voir complément rapportED33 ; les trois cas ontime/fsynclate/firstred visent
+bien le vrai raccord. Pas de CPU60/GO correctif accordé par cette lecture.
