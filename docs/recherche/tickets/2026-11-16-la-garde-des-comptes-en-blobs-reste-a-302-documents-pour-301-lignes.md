@@ -308,3 +308,9 @@ phase, englobant worker/préflight/compilation ou CLI/publication et retour ;
 kill/reap du groupe attribué dans la même enveloppe. Témoins préparés à ajouter
 pour blocage avant Popen et après retour natif. Aucun témoin exécuté, donc aucun
 rouge runtime revendiqué ; défaut démontré par lecture du chemin d'exécution.
+
+Correctif source préparé après consignation : superviseur fork/pipe extérieur
+au worker portant tous les I/O de phase, groupe unique avec les sous-processus,
+retour borné et refus si quiescence inconnue. Deux témoins de frontière ajoutés,
+12 préparés NON JOUÉS. RO requise avant nouveau paquet ; l'ancien b9b0e8ea ne
+porte pas ce correctif. Aucune qualification OS ou autorisation déduite.

@@ -12,6 +12,7 @@ import re
 import os
 from pathlib import Path
 import signal
+import select
 import subprocess
 import sys
 import time
@@ -159,11 +160,87 @@ def stop_group(group,expected_cgroup):
         except ProcessLookupError:pass
 
 
+def supervise_phase(action,cap,go_end,expected_cgroup):
+    """Linux: le parent ne fait aucun hash/fsync de phase. Tout est dans le fils.
+
+    Pipe privé borné ; fork sans exec/chargement disque dans le superviseur.
+    Le groupe du fils contient aussi ses clients/linkers (aucun setsid interne).
+    Réserve .4 s pour arrêt/reap ; absence de preuve à la borne = refus.
+    """
+    started=time.monotonic();deadline=min(started+cap,go_end)
+    require(deadline-started>.6,'insufficient supervisor budget')
+    reader,writer=os.pipe2(os.O_CLOEXEC|os.O_NONBLOCK)
+    pid=os.fork()
+    if pid==0:
+        os.close(reader)
+        try:
+            os.setsid()
+            value=action()
+            raw=json.dumps(value,allow_nan=False).encode()
+            require(len(raw)<=512*1024,'oversized private phase result')
+            offset=0
+            while offset<len(raw):
+                try:offset+=os.write(writer,raw[offset:])
+                except BlockingIOError:select.select([], [writer], [], max(0.,deadline-time.monotonic()))
+                require(time.monotonic()<deadline-.4,'late worker result')
+            os.close(writer);os._exit(0)
+        except BaseException:
+            os._exit(1)
+    os.close(writer);raw=bytearray();status=None;eof=False
+    try:
+        while time.monotonic()<deadline-.4:
+            remain=deadline-.4-time.monotonic()
+            if select.select([reader],[],[],max(0.,remain))[0]:
+                block=os.read(reader,65536)
+                if not block:eof=True
+                else:raw.extend(block)
+                require(len(raw)<=512*1024,'oversized worker result')
+            if status is None:
+                got,observed=os.waitpid(pid,os.WNOHANG)
+                if got:status=observed
+            if eof and status is not None:break
+        # Le PID direct reste attribuable même avant setsid. Aucun retry natif.
+        if status is None:
+            try:os.kill(pid,signal.SIGKILL)
+            except ProcessLookupError:pass
+        stop_group(pid,expected_cgroup)
+        while time.monotonic()<deadline-.05:
+            if status is None:
+                got,observed=os.waitpid(pid,os.WNOHANG)
+                if got:status=observed
+            members,unknown=group_members(pid)
+            if status is not None and not members and not unknown:break
+            time.sleep(.002)
+        members,unknown=group_members(pid)
+        require(status==0 and eof and not members and not unknown,'worker timeout/refusal or group not quiet')
+        value=json.loads(raw)
+        require(time.monotonic()<deadline,'late supervised return')
+        return value
+    finally:
+        os.close(reader)
+        if status is None:
+            try:os.kill(pid,signal.SIGKILL)
+            except ProcessLookupError:pass
+        stop_group(pid,expected_cgroup)
+        # Aucun wait bloquant hors enveloppe : le Common externe reste autorité.
+        if status is None:os.waitpid(pid,os.WNOHANG)
+
+
 class NativeBackend:
     def __init__(self,root,packet,packet_sha,go,out):
         self.root=root;self.packet=packet;self.packet_sha=packet_sha;self.go=go;self.out=out
         self.compiled=False;self.client_sha=None
     def run(self,request):
+        def work():
+            self.supervised=True
+            result=self._run(request)
+            result['stdout']=result['stdout'].hex();result['stderr']=result['stderr'].hex()
+            return dict(result=result,compiled=self.compiled,client_sha=self.client_sha)
+        value=supervise_phase(work,request['cap'],self.go['deadline_monotonic'],own_cgroup())
+        self.compiled=value['compiled'];self.client_sha=value['client_sha']
+        result=value['result'];result['stdout']=bytes.fromhex(result['stdout']);result['stderr']=bytes.fromhex(result['stderr'])
+        return result
+    def _run(self,request):
         started=time.monotonic();deadline=min(started+request['cap'],self.go['deadline_monotonic'])
         phase=self.out/request['name'];phase.mkdir(mode=0o700)
         process=None;timed=False;quiet=False
@@ -191,15 +268,15 @@ class NativeBackend:
             env={k:os.environ[k] for k in ['RAG3WEAVER_VALIDATION_RECU','RAG3WEAVER_VALIDATION_JETON'] if k in os.environ}
             env.update(PATH='/usr/bin:/bin',HOME=str(self.out/'home'),TMPDIR=str(self.out/'tmp'),LANG='C.UTF-8',PYTHONDONTWRITEBYTECODE='1')
             process=subprocess.Popen([sys.executable,str(self.root/'tool_phase.py'),str(req),digest(req)],
-                stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.PIPE,env=env,start_new_session=True)
+                stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.PIPE,env=env,start_new_session=not getattr(self,'supervised',False))
             try:controller_out,controller_err=process.communicate(timeout=max(.001,deadline-time.monotonic()-.35))
             except subprocess.TimeoutExpired:
-                timed=True;stop_group(process.pid,body['expected_cgroup'])
+                timed=True;process.kill() if getattr(self,'supervised',False) else stop_group(process.pid,body['expected_cgroup'])
                 controller_out,controller_err=process.communicate(timeout=max(.001,deadline-time.monotonic()-.1))
-            members,unknown=group_members(process.pid)
+            members,unknown=([],[]) if getattr(self,'supervised',False) else group_members(process.pid)
             if members:stop_group(process.pid,body['expected_cgroup'])
             while time.monotonic()<deadline-.05:
-                members,unknown=group_members(process.pid)
+                members,unknown=([],[]) if getattr(self,'supervised',False) else group_members(process.pid)
                 if not members:break
                 time.sleep(.005)
             quiet=not members and not unknown and process.returncode is not None
@@ -233,7 +310,7 @@ class NativeBackend:
             return result
         except Exception:
             if process is not None:
-                stop_group(process.pid,own_cgroup())
+                process.kill() if getattr(self,'supervised',False) else stop_group(process.pid,own_cgroup())
                 try:process.wait(timeout=max(.001,deadline-time.monotonic()))
                 except subprocess.TimeoutExpired:pass
             raise

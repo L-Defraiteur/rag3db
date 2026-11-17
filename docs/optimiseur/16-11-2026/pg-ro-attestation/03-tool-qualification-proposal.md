@@ -109,3 +109,19 @@ NON QUALIFIÉ jusqu'aux validations autorisées distinctement.
 RO totale demandée sur ce code et ce paquet avant tout nouveau GO.
 Le transport Rust reste incompatible avec le contrat PGv1 figé ; aucune
 qualification d'accès PG ni activation globale ne découle de ce paquet.
+
+### Réserve RO parent et correctif préparé
+
+Le paquet b9b0e8ea est désormais historique : la RO R a relevé que le parent
+pouvait bloquer en hash/fsync hors interruption malgré son contrôle de temps.
+Le correctif source prépare un superviseur Linux fork/pipe borné ; toutes les
+opérations de phase sont dans le worker, ses sous-processus restent dans son
+groupe. Le parent ne lit pas les fichiers de phase et réserve .4 s pour
+kill/reap ; manque de résultat complet, descendant restant ou retour tardif
+refusent la phase. Les deux anciens témoins NativeBackend testent maintenant
+explicitement le corps interne, pas la supervision externe.
+Deux témoins supplémentaires de délégation/refus sont préparés (12 au total),
+sans processus réels ; ils ne prouvent pas encore le comportement OS du fork,
+du pipe et du nettoyage. Aucun rouge runtime ni vert n'est revendiqué.
+Cette nouvelle source doit recevoir sa RO avant création d'un paquet r2 ;
+aucun nouveau GO n'est demandé sur l'ancien paquet.

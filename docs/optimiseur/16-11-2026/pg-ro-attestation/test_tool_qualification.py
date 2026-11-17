@@ -119,14 +119,27 @@ class NativeBoundaryFakes(unittest.TestCase):
     def test_final_publication_after_cap_cannot_be_success(self):
         with ExitStack() as stack:
             self.install(stack,late_fsync=True)
-            result=self.backend.run(self.request)
+            result=self.backend._run(self.request)
         self.assertIs(result['within_whole'],False)
     def test_timeout_calls_owned_group_cleanup_not_a_retry(self):
         with ExitStack() as stack:
             self.install(stack,timeout=True)
-            result=self.backend.run(self.request)
+            result=self.backend._run(self.request)
         self.assertIs(result['timed_out'],True)
         self.assertEqual(self.stops,[(4321,'0::/fake')])
+
+
+class WholePhaseSupervisorFakes(unittest.TestCase):
+    def test_preflight_block_refuses_without_parent_hash(self):
+        backend=tool.NativeBackend(Path('/fake'),{},'fake',{'deadline_monotonic':2000.},Path('/fake'))
+        with patch.object(tool,'own_cgroup',return_value='/fake'), patch.object(tool,'supervise_phase',side_effect=TimeoutError('preflight blocked')) as supervisor, patch.object(tool,'verify_inputs') as hashes:
+            with self.assertRaises(TimeoutError):backend.run({'cap':5})
+            supervisor.assert_called_once();hashes.assert_not_called()
+    def test_final_fsync_block_cannot_return_worker_success(self):
+        backend=tool.NativeBackend(Path('/fake'),{},'fake',{'deadline_monotonic':2000.},Path('/fake'))
+        with patch.object(tool,'own_cgroup',return_value='/fake'), patch.object(tool,'supervise_phase',side_effect=TimeoutError('final fsync blocked')):
+            with self.assertRaises(TimeoutError):backend.run({'cap':60})
+            self.assertIsNone(backend.client_sha)
 
 
 if __name__=='__main__':unittest.main(verbosity=2)
