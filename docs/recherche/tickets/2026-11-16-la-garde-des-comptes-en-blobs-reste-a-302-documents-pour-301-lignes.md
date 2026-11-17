@@ -767,3 +767,17 @@ extractionSEULEanciencorpsbuggué vershelperdéléguéOwner réel, vraisJoinHand
 controlsReadyOk/Elapsed+ReadyJoinError attenduFAILpanic. Note04publie3tests
 RustNONCOMPILÉS et2CPUREDexactes NONJOUÉES, aucun nouveaufixstatus effectué.
 FuturGOnatifcompiler/test etGOsCPUdistincts requis,fixture02expired,pasPGcontact.
+
+### PRIORITÉ psqlHOST — arbitrage b9139349d2, RustV2 gelé
+
+NouveauWT/branche cx-optimiseur-psql-host-bundle-20261117-r1 depuisa28f7a,
+Rust/WIP/proofs conservés sansnouveaux tests/fix. SousGO OUTILLAGE DISTINCT
+C7-PSQL-HOST-BUNDLE-17nov90 aprèsrecette/source/pins : stoppedcontainerownerG
+nonce,image17b0f956...552b24,--pullnever/entrypointtrue/networknone/tmpfsPGDATA,
+JAMAISstartPG. Extraireexe/usr/local/bin/psql+libs/supports image parDockerCP,
+résolutionsymlinksuniquementDANScapture (absolus remappés, pasHost), parseELF
+Python64LE/x86_64/DT_NEEDED/PT_INTERP sans exécuteroutil. DéclarerABI muslattendu
+Alpine, closureflat copiéeREGULIÈRE/pins. Ledgerphysiquefsync AVANTkernelELF
+loaderprivé --list/psql--version/--help(minimalenv/HOMEprivé), caps5MINEND.
+POSTE32G/Common75/OS88TERM+KILL2=90MAX,cleanupseulstoppedCID/volumesown.
+0Rust/Cargo/SQL/PG/creds/OSinstall/shared/SDK ; autreABI/besoin=>STOPsansfallback.
