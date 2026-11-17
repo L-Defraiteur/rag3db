@@ -91,4 +91,44 @@ class ReviewRegressions(unittest.TestCase):
                 runner.read_fixture_observation(out/'observation.json',digest,p)
 
 
+class TerminalAdmission(unittest.TestCase):
+    """Pièces terminales SYNTHÉTIQUES CPU ; aucune portée réelle admise."""
+    def terminal(self,out,path,digest,**patches):
+        body=dict(kind='psql-fixture-terminal-admission-1',artifact_path=str(path),artifact_sha256=digest,
+            common_state='termine',common_verdict='VERT',common_code=0,common_remaining=[],
+            common_cleaned=True,publication_complete_sha256=runner.sha(out/'publication-complete.json'),
+            observed_monotonic=110.)
+        body.update(patches)
+        terminal=out/'terminal-admission.json';terminal.write_bytes(encode(body))
+        return dict(terminal_receipt=terminal,terminal_sha256=runner.sha(terminal))
+
+    def test_complete_observation_and_terminal_admission_are_readable(self):
+        with tempfile.TemporaryDirectory() as temp:
+            out=Path(temp)/'proof';path,digest=fake_observe(out)
+            pins=self.terminal(out,path,digest)
+            body=runner.read_fixture_observation(path,digest,profile(),**pins)
+            self.assertEqual(body['identity'],rows()[1])
+            self.assertIs(body['grant_authorized'],False)
+
+    def test_red_terminal_scope_is_not_accepted(self):
+        with tempfile.TemporaryDirectory() as temp:
+            out=Path(temp)/'proof';path,digest=fake_observe(out)
+            pins=self.terminal(out,path,digest,common_verdict='ROUGE',common_code=1)
+            with self.assertRaises(ValueError):runner.read_fixture_observation(path,digest,profile(),**pins)
+
+    def test_sidecar_required_even_with_valid_terminal(self):
+        with tempfile.TemporaryDirectory() as temp:
+            out=Path(temp)/'proof';path,digest=fake_observe(out)
+            pins=self.terminal(out,path,digest)
+            (out/'observation.sha256').unlink()
+            with self.assertRaises(ValueError):runner.read_fixture_observation(path,digest,profile(),**pins)
+
+    def test_completion_required_even_with_valid_terminal(self):
+        with tempfile.TemporaryDirectory() as temp:
+            out=Path(temp)/'proof';path,digest=fake_observe(out)
+            pins=self.terminal(out,path,digest)
+            (out/'publication-complete.json').unlink()
+            with self.assertRaises(ValueError):runner.read_fixture_observation(path,digest,profile(),**pins)
+
+
 if __name__=='__main__':unittest.main()

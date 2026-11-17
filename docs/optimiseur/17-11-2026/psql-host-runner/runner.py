@@ -116,17 +116,21 @@ def capture(argv, *, env, stdin, deadline, clock=time.monotonic):
     record = dict(stdout=b'', stderr=b'', returncode=None, pid=None, start=None,
         exe=None, maps=None, observed_unknown=True, reaped=False, partial=False,
         truncated=False, timed_out=False, started_monotonic=started, ended_monotonic=None)
-    child = subprocess.Popen(argv, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE, start_new_session=True, close_fds=True)
-    record['pid'] = child.pid
+    child = None
     pidfd = None
-    selector = selectors.DefaultSelector()
+    selector = None
+    failure = None
+    record.update(first_error=None, cleanup_errors=[])
     pending = memoryview(stdin)
     closing = False
     killed = False
     term_at = None
     work_end = deadline-.12
     try:
+        child = subprocess.Popen(argv, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, start_new_session=True, close_fds=True)
+        record['pid'] = child.pid
+        selector = selectors.DefaultSelector()
         pidfd = os.pidfd_open(child.pid)
         try:
             proc = Path('/proc')/str(child.pid)
@@ -200,34 +204,58 @@ def capture(argv, *, env, stdin, deadline, clock=time.monotonic):
                 record['partial'] = True
         if pending:
             record['partial'] = True
+    except BaseException as error:
+        failure = error
+        record['first_error'] = type(error).__name__
+        record['partial'] = True
     finally:
-        # Failure to open pidfd must still reap the exactly owned Popen child.
-        if child.poll() is None:
-            if pidfd is not None:
+        # Every cleanup step is best-effort and recorded separately. Never
+        # replace the first cause; never claim reap merely because cleanup ran.
+        def cleanup_error(error):
+            record['cleanup_errors'].append(type(error).__name__)
+        if child is not None:
+            alive = True
+            try:
+                alive = child.poll() is None
+            except BaseException as error:
+                cleanup_error(error)
+            if alive:
                 try:
-                    signal.pidfd_send_signal(pidfd, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
-            else:
-                child.kill()  # Direct child not yet waited, PID cannot be reused.
-            remaining = deadline-clock()
-            if remaining > 0:
+                    if pidfd is not None:
+                        signal.pidfd_send_signal(pidfd, signal.SIGKILL)
+                    else:
+                        child.kill()  # Exactly owned direct child, not yet waited.
+                except BaseException as error:
+                    cleanup_error(error)
+                remaining = deadline-clock()
+                if remaining > 0:
+                    try:
+                        child.wait(timeout=remaining)
+                    except BaseException as error:
+                        cleanup_error(error)
+            record['returncode'] = child.returncode
+            record['reaped'] = child.returncode is not None
+            for stream in [child.stdin, child.stdout, child.stderr]:
                 try:
-                    child.wait(timeout=remaining)
-                except subprocess.TimeoutExpired:
-                    pass
-        record['returncode'] = child.returncode
-        record['reaped'] = child.returncode is not None
-        for stream in [child.stdin, child.stdout, child.stderr]:
-            if not stream.closed:
-                stream.close()
-        selector.close()
+                    if stream is not None and not stream.closed:
+                        stream.close()
+                except BaseException as error:
+                    cleanup_error(error)
+        if selector is not None:
+            try:
+                selector.close()
+            except BaseException as error:
+                cleanup_error(error)
         if pidfd is not None:
-            os.close(pidfd)
+            try:
+                os.close(pidfd)
+            except BaseException as error:
+                cleanup_error(error)
         record['ended_monotonic'] = clock()
-    if (not record['reaped'] or record['partial'] or record['truncated'] or
-            record['timed_out'] or record['ended_monotonic'] > deadline):
-        raise CaptureRefused(record)
+    if (failure is not None or record['cleanup_errors'] or not record['reaped'] or
+            record['partial'] or record['truncated'] or record['timed_out'] or
+            record['ended_monotonic'] > deadline):
+        raise CaptureRefused(record) from failure
     return record
 
 
@@ -248,6 +276,8 @@ def observe(profile, out, *, session_factory, clock, phase_check):
     out.mkdir(mode=0o700)
     phase = None
     captures = []
+    first_error = None
+    cleanup_error = None
     def gate():
         nonlocal phase, deadline
         current = phase_check()
@@ -270,13 +300,16 @@ def observe(profile, out, *, session_factory, clock, phase_check):
                 try:
                     rec = session(identity=identity)
                 except CaptureRefused as error:
+                    first_error = error
                     rec = error.record
+                    v1._write_exclusive(out/(name+'.capture.json'), _encode({k:v for k,v in rec.items() if k not in ('stdout','stderr')}))
                     for channel in ['stdout', 'stderr']:
                         data = rec.get(channel, b'')
                         if type(data) is bytes:
                             v1._write_exclusive(out/(name+'.'+channel), data[:MAX_BYTES])
                     raise
                 captures.append(rec)
+                v1._write_exclusive(out/(name+'.capture.json'), _encode({k:v for k,v in rec.items() if k not in ('stdout','stderr')}))
                 for channel in ['stdout', 'stderr']:
                     require(type(rec.get(channel)) is bytes, 'missing capture bytes')
                     v1._write_exclusive(out/(name+'.'+channel), rec[channel][:MAX_BYTES])
@@ -290,13 +323,22 @@ def observe(profile, out, *, session_factory, clock, phase_check):
                 if identity is None:
                     identity = row
                 gate()
+        except BaseException as error:
+            if first_error is None:
+                first_error = error
+            raise
         finally:
             closer = getattr(session, 'close', None)
             if closer is not None:
-                closer()  # Native passfile removal/fsync is inside the original whole5.
+                try:
+                    closer()  # Passfile removal/fsync inside original whole5.
+                except BaseException as error:
+                    cleanup_error = error
+                    if first_error is None:
+                        raise
         gate()
         files = {p.name: dict(path=str(p), sha256=sha(p), size=p.stat().st_size)
-                 for p in out.iterdir() if p.is_file()}
+                 for p in out.iterdir() if p.is_file() and p.suffix in ('.stdout','.stderr')}
         body = dict(kind='psql-private-fixture-observation-1', profile=profile,
             identity=identity, postcheck=row, started_monotonic=start,
             deadline_monotonic=deadline, ended_monotonic=clock(),
@@ -319,9 +361,16 @@ def observe(profile, out, *, session_factory, clock, phase_check):
         v1._write_exclusive(out/'observation.sha256', (digest+'\n').encode())
         sync_directory(out)
         gate()  # Final fsync included. A refusal marker invalidates published bytes.
+        completed = dict(kind='psql-fixture-publication-complete-1',
+            artifact_sha256=digest, completed_monotonic=clock(), deadline_monotonic=deadline)
+        v1._write_exclusive(out/'publication-complete.json', _encode(completed))
+        sync_directory(out)
+        gate()  # A terminal external receipt is still mandatory after this return.
         return target, digest
     except BaseException as error:
-        refusal = dict(verdict='RED', reason=type(error).__name__,
+        refusal = dict(verdict='RED', reason=type(first_error or error).__name__,
+            first_error=type(first_error or error).__name__,
+            cleanup_error=type(cleanup_error).__name__ if cleanup_error is not None else None,
             observed_monotonic=clock(), artifact_published=(out/'observation.json').exists(),
             grant_authorized=False)
         v1._write_exclusive(out/'refusal.json', _encode(refusal))
@@ -329,16 +378,46 @@ def observe(profile, out, *, session_factory, clock, phase_check):
         raise ValueError('fixture observation refused') from error
 
 
-def read_fixture_observation(path, digest, profile):
-    """RO consumer rejects any refusal marker, including a late publication."""
+def read_fixture_observation(path, digest, profile, *, terminal_receipt=None, terminal_sha256=None):
+    """Requires externally pinned TERMINAL admission, never writer-only evidence.
+
+    Only the separate, reviewed supervisor may produce/admit this terminal
+    receipt after successful command AND Common termination. CPU fake receipts
+    are not real admission. No producer of such a runtime receipt is qualified
+    by this source; no inference from a mutable caller boolean.
+    """
     path = Path(path).absolute()
+    require(terminal_receipt is not None and v1.hex_value(terminal_sha256, 64), 'missing terminal admission')
+    terminal_path = Path(terminal_receipt).absolute()
+    terminal_raw = v1._read_regular(terminal_path, terminal_path.parent)
+    require(hashlib.sha256(terminal_raw).hexdigest() == terminal_sha256, 'terminal SHA differs')
+    terminal = v1.decode(terminal_raw)
+    v1.shape(terminal, set('kind artifact_path artifact_sha256 common_state common_verdict common_code common_remaining common_cleaned publication_complete_sha256 observed_monotonic'.split()), 'terminal receipt')
+    require(terminal['kind'] == 'psql-fixture-terminal-admission-1' and
+        terminal['artifact_path'] == str(path) and terminal['artifact_sha256'] == digest and
+        terminal['common_state'] == 'termine' and terminal['common_verdict'] == 'VERT' and
+        type(terminal['common_code']) is int and terminal['common_code'] == 0 and
+        terminal['common_remaining'] == [] and terminal['common_cleaned'] is True and
+        finite(terminal['observed_monotonic']), 'terminal scope not successfully completed')
     require(not (path.parent/'refusal.json').exists(), 'refused observation')
+    sidecar = v1._read_regular(path.parent/'observation.sha256', path.parent)
+    require(sidecar == (digest+'\n').encode(), 'missing or different artifact sidecar')
+    complete_raw = v1._read_regular(path.parent/'publication-complete.json', path.parent)
+    require(hashlib.sha256(complete_raw).hexdigest() == terminal['publication_complete_sha256'], 'completion SHA differs')
+    complete = v1.decode(complete_raw)
+    v1.shape(complete, {'kind','artifact_sha256','completed_monotonic','deadline_monotonic'}, 'completion')
+    require(complete['kind'] == 'psql-fixture-publication-complete-1' and complete['artifact_sha256'] == digest and
+        finite(complete['completed_monotonic']) and finite(complete['deadline_monotonic']) and
+        complete['completed_monotonic'] < complete['deadline_monotonic'] and
+        complete['completed_monotonic'] <= terminal['observed_monotonic'], 'invalid publication completion')
     raw = v1._read_regular(path, path.parent)
     require(hashlib.sha256(raw).hexdigest() == digest, 'observation SHA')
     body = v1.decode(raw)
     require(body['kind'] == 'psql-private-fixture-observation-1' and body['profile'] == profile and
         body['grant_authorized'] is False and body['transport_qualified'] is False, 'fixture evidence only')
     validate_profile(profile)
+    require(body['deadline_monotonic'] == complete['deadline_monotonic'] and
+        body['started_monotonic'] <= body['ended_monotonic'] <= complete['completed_monotonic'], 'completion outside observation')
     identity = validate_session(v1._read_regular(path.parent/'identity.stdout', path.parent), profile)
     check = validate_session(v1._read_regular(path.parent/'postcheck.stdout', path.parent), profile, identity=identity)
     require(identity == body['identity'] and check == body['postcheck'], 'raw identity differs')
@@ -349,7 +428,9 @@ def read_fixture_observation(path, digest, profile):
         require(hashlib.sha256(raw_file).hexdigest() == item['sha256'] and len(raw_file) == item['size'], 'raw changed')
         if name.endswith('.stderr'):
             require(raw_file == b'', 'stderr differs')
-    require(not (path.parent/'refusal.json').exists(), 'refused during read')
+    require(not (path.parent/'refusal.json').exists() and
+        v1._read_regular(terminal_path, terminal_path.parent) == terminal_raw and
+        v1._read_regular(path.parent/'publication-complete.json', path.parent) == complete_raw, 'changed/refused during read')
     return body
 
 

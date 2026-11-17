@@ -244,3 +244,40 @@ Les reçus Common transférés sont sans jeton, autorité brute PC privée.
 Préparation fix des trois défauts maintenant autorisée C7 ; nouvelle publication
 source/RO et GO CPU distinct nécessaires avant éventuel vert. Les limites
 natives/exe/env/outerwhole5 restent non qualifiées et sans GO contact.
+
+
+## Fix source des trois défauts après quatre rouges — NON EXÉCUTÉ
+
+Conservation deux hôtes et rouge fb3d acquis AVANT ces changements.
+Capture englobe Popen/selector/pidfd/loop/cleanup : première cause et erreurs
+de cleanup séparées dans CaptureRefused.record, flags partiel/inconnu sans
+blanchiment d'une race. Nettoyage ne remplace pas la cause initiale. Observe
+archive capture.json et bruts sur refus comme sur succès ; sa fermeture garde
+first_error et cleanup_error distincts dans le refusal.
+
+Publication : sidecar et publication-complete.json après lien/fsync/gates ;
+un dernier gate après fsync completion reste obligatoire. Ce marqueur INTERNE
+ne suffit pas au lecteur : read_fixture_observation exige terminal_receipt +
+terminal_sha256 EXTERNES, pièce bornée/pinnée attestant Common TERMINÉ/VERT/rc0/
+nettoyé/restes[] et liant artifact path/SHA et completionSHA. Pièce, sidecar,
+completion, timings et bruts vérifiés, marqueur refusal refusé avant/après.
+Une interruption laissant un lien mais sans terminaison externe admise ne
+produit donc pas de lecture admissible. Le producteur réel de cette admission
+terminale n'est PAS livré/qualifié ici et doit venir du superviseur extérieur
+après sortie et quiescence réelles. Un booléen du writer ne le remplace pas.
+Les erreurs tardives sans refusal restent rouges, même si des fichiers subsistent.
+
+Quatre témoins complémentaires SOURCE (8 dans test_review_regressions) :
+lecture positive de pièce COMPLETE + terminal SYNTHÉTIQUE, scope terminal ROUGE
+refusé, sidecar requis même avec terminal, completion requise même avec terminal.
+Ils empêchent de confondre toujours-refuser et consommateur fonctionnel. Ces
+pièces synthétiques ne sont pas une admission réelle. Les quatre rouges
+préexistants sont conservés inchangés dans ce module ; tous huit NON JOUÉS sur
+le nouveau source, 19autres NON JOUÉS aussi. Aucune importation/parse/CPU/natif.
+
+Pins source dans fix-source-manifest.json. Anciennes recettes rouges et preuves
+restent immuables et NE SERONT PAS REJOUÉES sur ces nouveaux pins. R doit relire
+fix+nouveaux témoins avant recette CPU distincte (huit seuls fake/FS proposés,
+pas RealCapture) et éventuel GO C7. Aucune qualification verte acquise.
+Réserves native exe/env et outer whole5/import/fsync tardif maintenues ; aucun
+GO contact/secret/PG/fixture, aucun service/original/lib/SDK changé.
