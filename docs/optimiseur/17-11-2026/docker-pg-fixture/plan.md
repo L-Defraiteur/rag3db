@@ -133,3 +133,19 @@ jugeobservere75ba3c56858381e3fd2ec978e30c30ea896b4430fe1a908a06d35119d061742.
 Ancien01ROUGE conservé, aucunthéorèmegénéral surdriverDocker déduit de son
 mapping absent. READYallocation ne permet aucune connexion du futurclientC
 sans source/tests/rouge/RO/pins/GOcontactdistincts.
+
+## Expiration02 acquise — aucune cible encore allouée
+
+Le cleanup automatique nonce a terminé PCmono1270310.630210527, donc avant
+la borne1270341.372028805. Son reçu : container déjà absent (backupTTL/autoRM),
+réseauown vérifié par ID/labels puis rmrc0, secrets supprimés. Vérification
+ultérieure des seuls nomsnonce : container ET réseau absents, deux fichiers
+credentials absents. Aucun redémarrage/prolongation, aucun clientC lancé.
+
+Deuxpiècescleanup/final SHA/taille vérifiées deuxpostes, cacheprivée
+allocation-032a992c3cd6/expiry-final (PC), allocation-032a992c3cd6-expiry-final
+(local). finalSHA2565c050dbebf2e3dc07f0d7e7b503fb90ac63104c6532539b453c8720ab22bb6ec ;
+manifest61ff4f7fa1d8eea9e2781ac663c5a16f09be365b78ad0bbbc983c33a8272453f.
+READY02 n'est désormais qu'une preuve historique de provisionnement. Toute
+futureC exige nouvelleallocation/nonce/identités/proofs/borne distincts,
+aucune réutilisation desOID16384/16385 comme identité globale.

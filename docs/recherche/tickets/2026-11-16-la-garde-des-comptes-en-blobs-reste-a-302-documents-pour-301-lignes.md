@@ -734,3 +734,16 @@ Nouveaurootcachepg-v2-source-20261117-r1, 20Python+8Rust+1legacyrouge NONJOUÉS,
 sourcepubavantcode4b770causal, ROtotale demandée. CLI/liveentryfalse et
 bindingsadmissionencoremanquants explicites ;0import/CPU/client/natif/credentials
 réelles decesource, pasGOPGcontact. Fixture02/oldB/proofsrougesintacts/TTLinchangé.
+
+Fixture02TTL rendu automatiquement PCmono1270310.630<1270341.372borne : CID
+absent, réseauownrm0 puisabsencesCID/réseau/secretsconfirmées, aucunrestart
+niCclient. Deuxpreuvescleanup/final2hôteshashvalidés finalSHA
+5c050dbebf2e3dc07f0d7e7b503fb90ac63104c6532539b453c8720ab22bb6ec.
+READY02historique seulement, aucuneallocationPGactiveproclamée.
+
+AvantfixsourceV2 : lecture détecte join_driver doublepoll si premièreawait
+JoinHandle rend READYErr (JoinError ou erreurconnexion) puiscodeabort+await
+encore. Aucunruntimeobservé/rougeinventé. Extrairejoinhelper partagé : ReadyErr
+estconsommé/refusdirectsansrepoll ; seulTimeout encorepending autoriseabort+
+attentemêmeEND. AjoutertestRusttâcheannulée sansPG,NONCOMPILÉ. Ancienpaquet6f
+reste sourcehistorique nonexécutée ; nouveaupin+RO requis aprèscorrection.
