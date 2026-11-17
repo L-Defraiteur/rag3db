@@ -515,3 +515,24 @@ corroborés ; lecture/hash seuls, sans rejeu/test/DB/procscan/service/corpus.
 Deux RO preuves favorables désormais reçues. Gate toujours défectueuse,
 ticket ouvert ; préparation source admise, nouveaux pins/RO/GO distincts
 avant exécution. Détail rapport17/24.
+
+
+Prépa SOURCE après conservation et deux RO preuves : source lucivy
+0668432241989dc9fac88e6df0e54e80c0f3e368 publiée branche neuve
+cx-lucivy-fs-gate-fix-17nov, parent0f. Rapport17/25+pins4fichiers. Admission
+Result<R> sans succèsvide, reçu exclusif/hash/fsync avant consommateur,
+erreurs/UTF8/couverture15, oracle snapshot partagé, plan builder RAM sans
+capacité de reuse/delete/persist et plafondsearch explicite. Politique v2
+exclut privé/liens, cap5000/ordre effectif conservés. Six témoins gardés,
+positif renforcé et3complémentaires NONJOUÉS ; aucun Cargo/rustfmt/test/ELF/
+corpus/service/target/PC. Pas de lecteur replay ajouté, contrat global reste
+ouvert. Action RO TOTALE SOURCE confiée Recherche+Banc sous ce ticket ;
+ensuite piloteGREEN nouveau et paquet/RO/GO distinct avant toute exécution,
+aucune transposition du pilote sixFAIL ni anciens coupons. Porteur Lucivy.
+
+Limite connue de cette prépa : sortie/entrée ne sont séparées que lexicalement ;
+un parent de reçu aliasé par lien vers la racine candidate pourrait contourner
+la frontière. À corriger ou exclure par une identité positive du parent avant
+qualification native, sans ouvrir/résoudre le corpus avant le refus des flags.
+Ce n’est pas une garantie déjà livrée. Le replay même chemins/SHA reste aussi
+une capacité manquante explicite ; ni lui ni ce défaut ne sont clos par source066.

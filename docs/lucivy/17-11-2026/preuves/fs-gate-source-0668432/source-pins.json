@@ -1,0 +1,38 @@
+{
+  "status": "SOURCE_ONLY_NOT_COMPILED_NOT_EXECUTED",
+  "source": "0668432241989dc9fac88e6df0e54e80c0f3e368",
+  "parent": "0f610f437a341f745e5936492114142ff3afedd4",
+  "repository": "L-Defraiteur/lucivy",
+  "branch": "cx-lucivy-fs-gate-fix-17nov",
+  "worktree": "/home/lucied/git_workspaces/cx-lucivy-fs-admission",
+  "files": {
+    "README.md": "4acaa259300f482b6ee29564d9fa6b9ef6fc5ae9fa6369834517992b9f2c350f",
+    "lucivy_core/tests/common/fs_fixture.rs": "0603b6bdef0123e3689228ac6494086ad5b3560034a41b1000d0748893ddc31e",
+    "lucivy_core/tests/test_fs_fixture_admission.rs": "f1ab3d0cedfcdb48f403c32988501cf136ed655e712cb38cd4956186a8f92933",
+    "lucivy_core/tests/test_sfx_v3_ground_truth.rs": "6cc39c351598cc7237839fe955d7c390d409578e93de5931903e33d31124f993"
+  },
+  "fs_test_names": [
+    "empty_view_is_refused_before_builder",
+    "enumeration_error_is_not_an_empty_subtree",
+    "metadata_error_is_not_a_filtered_file",
+    "read_error_is_not_a_filtered_file",
+    "invalid_utf8_is_refused_not_dropped",
+    "uncovered_panel_is_refused_before_zero_equals_zero",
+    "covered_fixture_reaches_builder_once_on_the_captured_bytes",
+    "flag_presence_is_refused_before_any_corpus_operation",
+    "absent_root_is_a_precise_refusal_without_skip",
+    "existing_receipt_prevents_recapture_after_refusal"
+  ],
+  "policy": "v3-contains/fs-effective-order-v2",
+  "panel_rows": 15,
+  "cap": 5000,
+  "lock_effective_future_pc": "dbdb560202562f17536624472a0e730627df163f4bb00c53b2baf604e77637f6",
+  "local_cargo_lock_present": false,
+  "executions": [],
+  "baseline_proofs_commit": "bb5707c6a5c74825e894595d53ba80351d27d4ad",
+  "evidence_reviews": {
+    "recherche_record": "ab9e84d09b",
+    "banc_review": "d32884b667",
+    "banc_record": "e7979ba585"
+  }
+}
