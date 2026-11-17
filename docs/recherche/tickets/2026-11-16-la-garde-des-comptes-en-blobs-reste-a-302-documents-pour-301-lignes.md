@@ -657,3 +657,9 @@ CorrectionSOURCEaprèsrefusconservéfe198e : réseau--driverbridge nouveau norma
 gardePortsexact inchangé/erreurnommée ; captureserveurlogsborne/sanitiséeavant
 cleanup, premierrefusfigé. Aucun nouveau Dockerstart ou GO01 réutilisé pendant
 cecorrectif ; préparerrecette/nonce02 avantentréeopérationnelledistincte.
+
+Recettecorrective02pub avantentrée : source56850c3996, privateallocation032a992c3cd6,
+recipef9b74554198a71bb87e0ab09b5f119c1f97accc58fd19e328c08a62341c8e379,
+seed5f06ec84d99f86850a11a4d990398f56905fb12357ab9b779bbb03755d7ed733,
+runfalse/référenceGOattendue,0timer/container/creds02 créés. Nouveaupérimètre
+opérationneldistinct àcoordonnerC7, aucunepermissionLuciesupplémentaire.

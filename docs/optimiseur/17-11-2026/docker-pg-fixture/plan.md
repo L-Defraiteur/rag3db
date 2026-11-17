@@ -83,3 +83,15 @@ explicitement effective_loopback_port_binding_mismatch. Aucun portpartagé,
 aucun réseau existant modifié. Au rouge, dockerlogs120lignes bornées/sanitisées
 capturés AVANT cleanup si container encore disponible, sans modifierpremièrecause.
 Cette source seule ne réouvre pas le GO01 ; nouvelle recette/nonce nécessaires.
+
+## Recette corrective02 préparée, pas de nouvelle entrée
+
+Source56850c399619df7cdf0752f9908292e224b14a65, bridge neuf normal et garde
+portstrict inchangé/logsrefusavantcleanup. PCcacheprivée allocation-032a992c3cd6,
+recipe.json SHA256
+f9b74554198a71bb87e0ab09b5f119c1f97accc58fd19e328c08a62341c8e379 ;
+seedSHA5f06ec84d99f86850a11a4d990398f56905fb12357ab9b779bbb03755d7ed733,
+nonce032a992c3cd683319698a64f37b1d4c7. RéférenceGO en attente/runfalse,
+aucun timer/container/réseau ni credentials02 créés. L'initialisation01 est
+close, pas réutilisable ; une entrée opérationnelle distincte doit lier ces
+pins avant de lancer02. L'autorisation Lucie Docker n'est pas redemandée.
