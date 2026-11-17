@@ -22,5 +22,9 @@ class CommonEntrySignature(unittest.TestCase):
    self.assertTrue(accepts([sys.executable,str(script),'lancer']),'positive control of actual signature')
    argv=eval(compile(ast.Expression(argv_node),'<actual-compose-argv>','eval'),dict(cfg={'python':sys.executable},Q=root,S=root/'scope'))
    self.assertTrue(accepts(argv),repr(argv))
+   self.assertEqual(argv[-4:],[sys.executable,'-B',str(root/'lifecycle.py'),'--controller'])
+   environment=next(k.value for k in entry.value.value.keywords if k.arg=='env')
+   actual_env=eval(compile(ast.Expression(environment),'<actual-common-env>','eval'),dict(os=os))
+   self.assertEqual(actual_env['PYTHONDONTWRITEBYTECODE'],'1')
 
 if __name__=='__main__':unittest.main()

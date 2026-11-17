@@ -140,3 +140,15 @@ et contrôle positif sans -B. Aucun import/exécution du confineur, aucun proc
 réel ni subprocess dans ce témoin. NON JOUÉ, nouvelle RO/GO CPU distinct requis.
 Correction proposée après rouge : retirer -B uniquement devant Common,
 PYTHONDONTWRITEBYTECODE=1 ; conserver les -B des rôles exacts. Aucun GO natif.
+
+GO C7-CYCLE-COMMON-RED-B2BD-17nov60 consommé sur b2bd propre : contrôle
+positif passé, unique juge FAIL sur argv réel avec -B, 0 ERROR, 0.016s,
+processus rc1/0.168871s. Archive cycle-common-red-b2bd-20261117-01 hors WT
+sur deux hôtes, trois fichiers size/SHA conformes ; manifeste SHA256
+a181c7e876f82527079d3e4dbe3353f2233aacf6cef00f85528e2e56c224f894.
+Puis correctif prépublié : -B retiré uniquement devant Common, environnement
+PYTHONDONTWRITEBYTECODE=1 explicite, contrôleur/driver/acteur -B conservés.
+Le témoin juge aussi environnement et argv contrôleur réels. Aucun changement
+du Common ni du finaliseur6715. P/Q/S et manifest passent ensemble v7,
+Qv6 reste figé. Correctif NON JOUÉ : nouvelle RO/GO CPU distinct avant vert,
+puis nouveau paquet et revue totale ; aucun lancement natif autorisé.

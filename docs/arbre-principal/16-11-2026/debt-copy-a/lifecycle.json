@@ -1,8 +1,8 @@
 {
   "version": 1,
   "kind": "code",
-  "name": "qualification-cycle-vie-copie-fin-v6",
-  "database": "/home/lucied/.cache/rag3weaver-build/bascule-live-20261116/lifecycle-copy-v6/copy/code-principal.rag3db",
+  "name": "qualification-cycle-vie-copie-fin-v7",
+  "database": "/home/lucied/.cache/rag3weaver-build/bascule-live-20261116/lifecycle-copy-v7/copy/code-principal.rag3db",
   "buffer_pool": 1073741824,
   "vector_extension": "/home/lucied/.cache/rag3db-libs/rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF/libvector.rag3db_extension",
   "embeddings": {

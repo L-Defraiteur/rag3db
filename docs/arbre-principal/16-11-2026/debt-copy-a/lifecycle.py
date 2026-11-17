@@ -7,7 +7,7 @@ import lifecycle_protocol as protocol
 import grant_watch_actor as watch_actor
 import grant_watch_controller as watch_control
 a=f.a;q=a.q;R=a.R
-P=R/'lifecycle-copy-v6';Q=R/'lifecycle-control-v6';S=R/'lifecycle-scopes-v6'
+P=R/'lifecycle-copy-v7';Q=R/'lifecycle-control-v7';S=R/'lifecycle-scopes-v7'
 FIN=R/'debt-fin-ro-result-v1';SOURCE=FIN/'copy';BASE=P/'copy/code-principal.rag3db'
 FIN_MANIFEST=R/'debt-fin-ro-proofs-01/proof-manifest.json'
 FIN_MANIFEST_SHA='05661b1fddc82c1e66d21f218d0c8cdfd12b69d8ef16432a2c55c3b127a9462a'
@@ -249,7 +249,7 @@ def compose():
  def stop(sig,frame):a.red('lifecycle outer deadline');raise RuntimeError('lifecycle stopped')
  signal.signal(signal.SIGTERM,stop)
  try:
-  guard(cfg);rc=subprocess.run([cfg['python'],'-B',str(Q/'confiner_validation.py'),'lancer','--delai','830','--preuves',str(S),'--',cfg['python'],'-B',str(Q/'lifecycle.py'),'--controller'],cwd='/var/tmp').returncode
+  guard(cfg);rc=subprocess.run([cfg['python'],str(Q/'confiner_validation.py'),'lancer','--delai','830','--preuves',str(S),'--',cfg['python'],'-B',str(Q/'lifecycle.py'),'--controller'],cwd='/var/tmp',env=dict(os.environ,PYTHONDONTWRITEBYTECODE='1')).returncode
   path=Path(json.loads((P/'authority-path.json').read_text())['path']);auth=json.loads(path.read_text());scope=json.loads((path.parent/'verdict.json').read_text())
   if rc or scope['verdict']!='VERT' or scope['code'] or scope['restes'] or not scope['nettoye'] or auth['etat']!='termine' or Path(scope['prive']).exists():raise ValueError('lifecycle scope not green quiet')
   for row in json.loads((path.parent/'enfants.json').read_text()):
