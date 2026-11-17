@@ -353,3 +353,10 @@ backslash+n au lieu du byte LF réellement déclaré dans FakeEffects. Le témoi
 lui-même calcule déjà son attendu depuis la fixture correcte ; corriger la seule
 métadonnée depuis bytesfixes connus, pas depuis une observation d'exécution.
 Aucun coupon consommé, aucun test rejoué, source runner/test inchangée.
+
+Deux rouges observations acquis : [rapport64](../../rag3weaver-archi/17-11-2026/64-preuves-rouges-observations-4117.md).
+GO C7-ENTRY-OBSERVATIONS-RED-4117-17nov60 consomméUNEfois :2FAILégalité/
+0ERRORskip/rc1,.109049513s,noRetry,28autresNONJOUÉS. Neuf bruts LOCAL/PC réhash
+0écart AVANTfix, manifestc13bb055e8ceaa1507f466e5fdf9ee701e745874223d6e49eb4d8ccd8aa43e12.
+PrépaSnapshotDONNÉESavantcallback/clock,pasOpaquehandles ;sourcespinsROtotale
+puisGO30distinct avantverts. Aucun OS/CP/Common/native/PQS déduit, purintact.
