@@ -33,3 +33,31 @@ La publication et consommation du grant n’ont plus besoin d’un ping humain. 
 Témoins aux vrais raccords à publier avant code : watcher jamais armé, vivant annoncé mais exited, retard avant exec/descripteur avec mauvais argv, watcher terminé après ARMED, READY arrivé avant ou après refus ; aucune action provider/writer avant admission complète. Les contrôles deadline/nonce/pins/typedhealth/firstred et noembedding restent stricts. Aucun process réel, réseau, DB ou CLI dans ces témoins hermétiques.
 
 Après source/tests publiés et RO totale du couple/pin, nouveau GO correctif distinct uniquement. L’ancien3c2 reste ROUGE ; aucune reprise n’est autorisée par ce ticket. Pas de migration LIVE, redémarrage de service ou actor de remplacement non attribué.
+
+## Préparation indépendante après conservation complète
+
+Preuves natives rouges publiées e65cbd34a582c3bbb82773bfd9fd6f9b8abff695,
+84 fichiers PC/local réempreintés0écart, manifeste8087ab5db59b8f48bdfb98579f0743acecb1d7831197781a981c0fde814e55de.
+RO preuves ED+Recherche favorables bornées au refus et à la conservation ;
+aucune qualification du cycle. Nouveau WT de préparation distinct
+cx-arbre-cycle-producer-controller-20261117-r1, aucun code dans les anciens
+P/Q/S ni dans la source PC3c2.
+
+19dd4ec680 publie six contre-exemples du VRAI `lifecycle.publish_ready` puis
+ils échouent tous en0.004s : jamais armé, annoncé vivant mais exited, argv
+incorrect/exec retardé, boucle non engagée, disparition après ARMED, premier
+rouge présent. Le code courant ignore les états simulés et publie READY.
+Ces témoins constatent l'absence de garde à ce raccord ; ils ne constituent
+pas encore une qualification des futurs validateurs PID/ARMED ni du futur
+contrôleur. Des fixtures complètes et un parcours positif seront nécessaires,
+ainsi que les vrais fakes du parent/superviseur. Aucun process/proc/service,
+réseau, DB, CLI ou signal réel dans ces témoins.
+
+Interface commune Arbre/Embar convenue avant code : acteur versionné
+grant_watch_actor.py, politique cycle dans lifecycle_health_policy.py et
+politique globale distincte. Config SHA externe en argv (non circulaire),
+source/allocation/prepared et deux nonces prédéclarés. ARMED après vrai exec
+et première itération vivante, processus OS indépendant et poll contrôlés,
+heartbeat borné sous END original ; grant ACK intermédiaire puis acteur
+reste vivant jusqu'à RELEASE surveillé. Même common cgroup/watchdog ;
+aucun TTL900 propre au watcher, aucun nouveau GO ni runtime correctif.
