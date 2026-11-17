@@ -244,3 +244,17 @@ supervision extérieurehard5/reap et inspectFORMAT restent prérequis de futurs
 GOoutil distincts. Pas de Cargo/C++/SDK/build, aucun SQL/health/DockerAPI.
 Le nouveau transport n'est pas faussement déclaré private-host-psql v1 ;
 helper pur et trois SHA de69/f949/2907 inchangés. Parent FTS ouvert/HOLD.
+
+## Pilote de qualification Rust : nouvelle PRÉPA C7 avant code
+
+C7 autorise maintenant pilote/runner/fakes/exactpins, SANS exécution. Archive
+compiler/lib/sysroot et74dépendances à figer horsOUT_T, jamais lire le T ED.
+Mode Rust supplémentaire de validation pure des requêtes CLI/DSN : aucun appel
+connect ni runtime dans ce mode, phase PG réelle distincte sous futurRO+GO.
+Publier huit vecteurs et raccords avant CPU ; compilation rustc UNEfois capcourt,
+sortie exclusive, sansCargo/SDK/build.rs/C++, échec linkSTOPsansrepli.
+Borne OS extérieure couvre entrée/stdin/startup/worker5/kill/reap/raw/fsync,
+la borneintérieure4poststdin ne remplace pas5. Faux de retards/partial/quiescence
+avant toute qualification native, paquet+RO total puis nouveauGO requis.
+Postcheck futur = SELECT attribué sur PG EXISTANT, aucun serveur/backend lancé.
+Armement Arbre/Embar de la futureglobale est distinct de cet outillage.
