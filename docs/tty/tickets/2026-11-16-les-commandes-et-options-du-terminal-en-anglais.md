@@ -683,3 +683,12 @@ PorteurTTY : préparer surveillance des vrais logs/blocs au premier rouge et
 parseur strict inventaires/noms/compteurs/ignored/source ; témoins parser sur
 fauxRAW publiés avant éventuelle exécution CPU, nouveauQ/ROtotale avantGO.
 R1/R2 distincts des HOLDacteur/politique/PG ; désarmement conservé.
+
+### Rouge hermétique R1/R2 réellement acquis
+
+GO C7-TTY-PIPELINE-RED-C004-17nov60/sourcec004ad6356/testd998/driver9a0inchangé.
+Une invocation : 2PASScontrôles(filetsTTY/should_panic)+6FAILattendus,
+0ERROR/0skip,rc1,0,067449s englobantes. RAWarchives2hostsSHA5b9f1363…ff153,
+rapport/preuves docs/tty/17-11-2026/05-rouge-pipeline-hermetique.md.
+Aucunfix/green/native/contact/slot/targetmuté ; Qc003INACTIF préservé.
+Suite R1/R2 attend nouveau périmètre correctif puis source/pins/RO/GOdistinct.

@@ -1,0 +1,67 @@
+test_duplicate_name_cannot_replace_a_missing_test (__main__.ReviewWitnesses.test_duplicate_name_cannot_replace_a_missing_test) ... FAIL
+test_foreign_filets_cannot_precede_the_right_tty_names (__main__.ReviewWitnesses.test_foreign_filets_cannot_precede_the_right_tty_names) ... FAIL
+test_four_other_names_cannot_qualify_tty (__main__.ReviewWitnesses.test_four_other_names_cannot_qualify_tty) ... FAIL
+test_full_filets_then_tty_is_a_positive_control (__main__.ReviewWitnesses.test_full_filets_then_tty_is_a_positive_control) ... ok
+test_native_failure_stops_before_backend_continuation (__main__.ReviewWitnesses.test_native_failure_stops_before_backend_continuation) ... FAIL
+test_positive_filets_cannot_mask_zero_test_suite (__main__.ReviewWitnesses.test_positive_filets_cannot_mask_zero_test_suite) ... FAIL
+test_should_panic_text_is_not_a_native_failure (__main__.ReviewWitnesses.test_should_panic_text_is_not_a_native_failure) ... ok
+test_suite_cannot_run_before_its_filets (__main__.ReviewWitnesses.test_suite_cannot_run_before_its_filets) ... FAIL
+
+======================================================================
+FAIL: test_duplicate_name_cannot_replace_a_missing_test (__main__.ReviewWitnesses.test_duplicate_name_cannot_replace_a_missing_test)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/lucied/git_workspaces/cx-tty-english-aliases-union-99/docs/tty/17-11-2026/test_qualification_review.py", line 91, in test_duplicate_name_cannot_replace_a_missing_test
+    with self.assertRaises(AssertionError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+AssertionError: AssertionError not raised
+
+======================================================================
+FAIL: test_foreign_filets_cannot_precede_the_right_tty_names (__main__.ReviewWitnesses.test_foreign_filets_cannot_precede_the_right_tty_names)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/lucied/git_workspaces/cx-tty-english-aliases-union-99/docs/tty/17-11-2026/test_qualification_review.py", line 86, in test_foreign_filets_cannot_precede_the_right_tty_names
+    with self.assertRaises(AssertionError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+AssertionError: AssertionError not raised
+
+======================================================================
+FAIL: test_four_other_names_cannot_qualify_tty (__main__.ReviewWitnesses.test_four_other_names_cannot_qualify_tty)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/lucied/git_workspaces/cx-tty-english-aliases-union-99/docs/tty/17-11-2026/test_qualification_review.py", line 81, in test_four_other_names_cannot_qualify_tty
+    with self.assertRaises(AssertionError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+AssertionError: AssertionError not raised
+
+======================================================================
+FAIL: test_native_failure_stops_before_backend_continuation (__main__.ReviewWitnesses.test_native_failure_stops_before_backend_continuation)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/lucied/git_workspaces/cx-tty-english-aliases-union-99/docs/tty/17-11-2026/test_qualification_review.py", line 133, in test_native_failure_stops_before_backend_continuation
+    self.assertTrue(stopped, 'no stop requested while the backend was still executing')
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: [] is not true : no stop requested while the backend was still executing
+
+======================================================================
+FAIL: test_positive_filets_cannot_mask_zero_test_suite (__main__.ReviewWitnesses.test_positive_filets_cannot_mask_zero_test_suite)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/lucied/git_workspaces/cx-tty-english-aliases-union-99/docs/tty/17-11-2026/test_qualification_review.py", line 76, in test_positive_filets_cannot_mask_zero_test_suite
+    with self.assertRaises(AssertionError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+AssertionError: AssertionError not raised
+
+======================================================================
+FAIL: test_suite_cannot_run_before_its_filets (__main__.ReviewWitnesses.test_suite_cannot_run_before_its_filets)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/lucied/git_workspaces/cx-tty-english-aliases-union-99/docs/tty/17-11-2026/test_qualification_review.py", line 96, in test_suite_cannot_run_before_its_filets
+    with self.assertRaises(AssertionError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+AssertionError: AssertionError not raised
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.018s
+
+FAILED (failures=6)

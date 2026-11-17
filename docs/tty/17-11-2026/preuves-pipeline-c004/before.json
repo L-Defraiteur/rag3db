@@ -1,0 +1,19 @@
+{
+  "source": "c004ad63560e7f883a6fd72139b7bb292fa8d2b1",
+  "status": "",
+  "pins": {
+    "test_qualification_review.py": "d998cea23ccb9a92a555134fae983769020cb027da74dd37546bda952144fb6f",
+    "qualification_driver.py": "9a0b5032bb07fd4b4130cfed57a2643990adf8cab93910ce51c504c60631352e"
+  },
+  "allocation": "C7-TTY-PIPELINE-RED-C004-17nov60",
+  "cwd": "/home/lucied/git_workspaces/cx-tty-english-aliases-union-99",
+  "argv": [
+    "timeout",
+    "--signal=TERM",
+    "--kill-after=2s",
+    "58s",
+    "python3",
+    "-B",
+    "docs/tty/17-11-2026/test_qualification_review.py"
+  ]
+}

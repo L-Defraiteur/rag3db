@@ -1,0 +1,14 @@
+{
+  "verdict": "ROUGE_MECANISMES_ATTENDU",
+  "rc": 1,
+  "start": 871646.767809808,
+  "finished": 871646.835258793,
+  "elapsed": 0.0674489849479869,
+  "counts": {
+    "ok": 2,
+    "FAIL": 6,
+    "ERROR": 0,
+    "skipped": 0
+  },
+  "source": "c004ad63560e7f883a6fd72139b7bb292fa8d2b1"
+}

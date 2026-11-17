@@ -1,0 +1,10 @@
+{
+  "source": "c004ad63560e7f883a6fd72139b7bb292fa8d2b1",
+  "archive_two_hosts": "archives/cx-tty-pipeline-red-c004/evidence.tar",
+  "archive_sha256": "5b9f1363d2cf588312a84aa6bcb266a0c3ebb6eb3780febf11c7e6ea621ff153",
+  "files": {
+    "before.json": "7661a36bff7d456b794ce11db7fd591938e05816a3183e42439840fac58d52bd",
+    "raw.log": "c1b274431c482960b9a30e8181e32b4b42bf27d01305bc3ce66ee002f00e9b8a",
+    "result.json": "e8d0d94b2ad9ddac0fe2837ef6ee6eed3ed3f39ba0845947ab3631ba13210a7e"
+  }
+}
