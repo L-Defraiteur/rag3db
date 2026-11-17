@@ -1,0 +1,17 @@
+{
+  "verdict": "VERT_CIBLE",
+  "source": "1944b44dfd060619562ec6a83c01952ecafdb1e5",
+  "start": 865477.880878214,
+  "end": 866077.880878214,
+  "scope": {
+    "verdict": "VERT",
+    "code": 0,
+    "erreur": null,
+    "restes": [],
+    "prive": "/tmp/r3v-howbeh1m",
+    "nettoye": true
+  },
+  "limited_to": "tui::tests::partial_english_and_legacy_commands_collect_catalogue_before_completion",
+  "rc": 0,
+  "finished": 865488.490197759
+}

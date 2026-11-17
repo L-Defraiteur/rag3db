@@ -1,0 +1,12 @@
+{
+  "source": "1944b44dfd060619562ec6a83c01952ecafdb1e5",
+  "archive_two_hosts": "archives/cx-tty-tab-1944-green/evidence.tar",
+  "archive_sha256": "4767b917b834c06a16abec89b57a97b80104f3c63df870b24f9ba1f3a35625c2",
+  "files": {
+    "cargo.log": "32091921994d4aa7ade3b70ce96e5fba50676a917b96f6c049ac42d6d2a09584",
+    "composed-verdict.json": "e7b3d60f7f942e256f0a590dd805eb8b39ab27fd38f812cbbbab34b9c704bf46",
+    "quiet-after-common.json": "36b06a979d272cd56eed460f0bab44c849b4bb7bfb1feed9d5f75b23f0b3bcb9",
+    "test-result.json": "eeb54d2bd01d88271aa840e685c8d26fd62ab3df2461ad55c372d0719b7228dc",
+    "verdict.json": "59ba6dcef7beb0385dddbac9fd7b91f07856001e8fdededbe64d83f70a9bde89"
+  }
+}

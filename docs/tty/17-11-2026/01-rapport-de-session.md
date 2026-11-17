@@ -6,8 +6,8 @@ Ticket porteur tty **ouvert** :
 `docs/tty/tickets/2026-11-16-les-commandes-et-options-du-terminal-en-anglais.md`.
 Nouveau worktree `~/git_workspaces/cx-tty-english-aliases-union-99`, branche
 cx-tty-english-aliases-7, base99fef92ce6 ; source jouée
-bc8ab075813cb882c9876dffbc2f3bb8128da560. Aucun correctif anglais du
-collecteur appliqué après le rouge ; pas de second test ni nouvelle passe.
+bc8ab075813cb882c9876dffbc2f3bb8128da560. État historique du rouge ci-dessous ; le correctif et son unique vert ciblé
+sont désormais documentés dans [le rapport suivant](02-vert-cible-completion.md).
 
 ## Rouge réellement observé
 

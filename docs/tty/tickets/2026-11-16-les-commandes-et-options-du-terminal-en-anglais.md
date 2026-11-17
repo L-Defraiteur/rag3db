@@ -631,3 +631,12 @@ ce testELFavant recompilation. Towner attendu déjà nouveauWtty ; vraie garde
 cargo_garde et aucun nouveau target, préfixe ancienT non repris artificiellement.
 Pas HTTPserveur/7970/SDK/provider ; sourcecallbacks ActionCompleter inchangée.
 Aucun ancien600 réactivé. Source/pin/Qneuf puisRO/GOdistinct avant Cargo/test.
+
+### Vert ciblé 1944 réellement acquis
+
+GO C7-TTY-TAB-GREEN-1944-17nov600, un seul test exact inchangé après rougebc8.
+1passé/0échoué/0ignoré, Cargo0, compilation nouveauW attestée ; composé
+VERT_CIBLE, Common91mmtf2u VERT0/TERMINE/restes[]/nettoye true,10,609s.
+Preuves et RAW2hosts : docs/tty/17-11-2026/02-vert-cible-completion.md.
+Ticket toujours ouvert : qualification du lot union99 non acquise. Aucun
+second test, F8, service, SDK, HTTP ou push master effectué.

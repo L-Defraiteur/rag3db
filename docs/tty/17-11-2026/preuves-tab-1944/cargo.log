@@ -1,0 +1,10 @@
+▸ target noté pour cet arbre, mais un build.rs vise un autre arbre (/home/lucied/git_workspaces/cx-tty-english-aliases/extension/rag3weaver/templates : un bâti hors garde ; 8 sortie(s) retirée(s)) : empreintes effacées pour rag3weaver-tty
+   Compiling rag3weaver-tty v0.1.0 (/home/lucied/git_workspaces/cx-tty-english-aliases-union-99/extension/rag3weaver/tty)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.07s
+     Running unittests src/lib.rs (/home/lucied/.cache/rag3weaver-build/target-cx-tty-english-aliases-2/debug/deps/rag3weaver_tty-1c558104928fb10c)
+
+running 1 test
+test tui::tests::partial_english_and_legacy_commands_collect_catalogue_before_completion ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 113 filtered out; finished in 0.00s
+

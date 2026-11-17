@@ -1,0 +1,9 @@
+{
+  "verdict": "VERT_CIBLE_ATTENDU",
+  "rc": 0,
+  "compiled_from_new_worktree": true,
+  "filter": "tui::tests::partial_english_and_legacy_commands_collect_catalogue_before_completion",
+  "no_live_http_server_required": true,
+  "test_elf": "/home/lucied/.cache/rag3weaver-build/target-cx-tty-english-aliases-2/debug/deps/rag3weaver_tty-1c558104928fb10c",
+  "test_elf_sha256": "8cee742e9a393845a10f1ce5abb6f5d3c51f6a2e871a5cb5065fa9ff95f2203c"
+}
