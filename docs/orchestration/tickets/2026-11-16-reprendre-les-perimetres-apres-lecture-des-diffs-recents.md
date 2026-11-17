@@ -153,3 +153,6 @@ RECTIFICATION C7 avant transmission du prétendu blocage lock : vérification Gi
 
 
 17nov : Gdiagnosticréel55vs38/mêmeinode surBtrfs archivé e90021ab55 ; sourcesLinuxprimaires réfutentégalitéuniversellestatdev/kerneldev. Préparationcorrective et revuebornéesFTS302 avant nouveaupin/GO ; aucunecompilation réadmise, B-R3 resteNONATTRIBUÉ. LucivycompileE0277/0jugeFS3759 conservé, hex0f610prépa/golden/Rfavorables/newseeddbdb strict/nouveaupaquetRO avantGO. DeuxadmissionsCPU distinctes : TTY14baselineeeb (10PASS4FAIL attendus) ; PublicationWindow8baseline7ee (8FAILAPIabsente attendus), brutsdeuxhôtesavantfix/0ERROR/0retry. Q/runtimes globaux inactifs inchangés ; tousdétailsau suivi17nov.
+
+
+Auditpériodique17nov : G r4/ROtotaleachevée→seulGO CPU23 C7-G-PG-CPU-GREEN-R4-17nov60, aucunBnativeimplicite ; ArbreQ8entréeactive/acteurdoitqualifierfresh ; autresprépasactives/attentesArchietCœurrespectées. ROWSchoixCONCEPTIONseule : MRELinterne séparéeANN pourcomposerordrecommitexistant, propositionconcrète obligatoireunicité/offsets/recovery+rétentionhorizon/OID/scan+upgradecheckpointrotationWAL ; lacuneSTOP/aucuncodeouC1délégué. Mêmeticket08novavantnote/revuesM puisGOimpléventueldistinct, voirsuivi17nov.
