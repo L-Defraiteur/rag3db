@@ -82,3 +82,24 @@ temps et GO C7 explicitement contact. Aucun v1grant par ce profil fixture. Le
 publisher/validator v1 et Rust restent gelés ; ne pas muter leurs noms/ports.
 La recette de cette page n'autorise ni test actuel, ni PG, ni service7970,
 ni originalDB/migration/snapshot/retour, ni lib/SDK/buildCLI99/target/cache partagé.
+
+
+## Quatre rouges attestation acquis — GO80186cbd04
+
+UNE entrée source3f5cc73519/recipe7d34940cc36f74966c9f01525e644ebe2b42f458024ae05716f50635934c3b0e.
+Common validation-ej17nv6e ROUGE/code1/erreur null, terminé/nettoyé/restes[],
+bus absent.4tests nommés/4FAIL ValueError non levé exactement/0ERRORskip/rc1 ;
+elapsed0.23387712892144918s. C'est UNE frontière manquante couverte par4cas,
+pas quatre défautsPG runtime. Objet__new__FAUXsansinit/captureauthoritymocks,
+0secret/bundle/loader/processus/PG réels.19+8+4autres exclus,0retry.
+
+20preuves source/bruts/argv/pins/temps/Common public sans jeton vérifiées
+taille/SHA aux deux postes AVANTfix : PCpsql-host-runner-20261117-r1/
+native-attestation-red-09,portable même parent/native-attestation-red-09-proof.
+Manifeste2e668f9b5a2b66197e50dc0bb81586638d3b3ee3f4b2ce0acd3a79ae7d0b008c ;
+archive3e14115b2121d21cf54c05a192e71a7e0feb92b34af7922e9cc51903835542cb.
+
+Prépa fix source désormais autorisée, BASE VALIDE/positifs/mutants isolés
+nécessaires ; pas rendre ces4verts par refus général. Aucun test/fixqualifié
+ni GO contact déduit, handshake/actualcollector/outer5/terminalréel encore à
+livrer/qualifier sous nouvelles sources/RO/GO CPU distincts.
