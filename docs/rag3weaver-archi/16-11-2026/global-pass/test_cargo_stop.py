@@ -79,18 +79,29 @@ class CargoStop(unittest.TestCase):
   _,row,resume=self.run_case('profile_diff',True);self.assertEqual(len(row['diff']),1);self.assertTrue(resume['continued'])
  def test_resume_failure_cannot_return_a_green_capture(self):
   _,_,resume=self.run_case('cont_failure',True);self.assertIn('error',resume)
- def test_real_cpu_profile_requires_six_absent_fields_and_rustup_ld(self):
-  tree=ast.parse((HERE/'driver.py').read_text())
-  sdk=next(n for n in tree.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='SDK_PROFILE' for t in n.targets))
-  rust=next(n for n in tree.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='RUST_LIB' for t in n.targets))
-  statements=[n for n in tree.body if isinstance(n,ast.Assign) and any((isinstance(t,ast.Name) and t.id=='METADATA_BEFORE_EXPORT') or (isinstance(t,ast.Subscript) and isinstance(t.value,ast.Name) and t.value.id=='METADATA_BEFORE_EXPORT') for t in n.targets)]
-  env=dict(SDK_PROFILE={k.arg:'irrelevant' for k in sdk.value.keywords},RUST_LIB=ast.literal_eval(rust.value))
-  exec(compile(ast.Module(body=statements,type_ignores=[]),'real-cpu-profile','exec'),env)
-  profile=env['METADATA_BEFORE_EXPORT'];self.assertEqual(sum(v is None for v in profile.values()),6)
+ def test_real_global_metadata_profile_uses_declared_sdk_and_rustup_ld(self):
+  import policy
+  from types import SimpleNamespace
+  from settings import C,R,T
+  tree=ast.parse((HERE/'observe.py').read_text())
+  owner=next(n for n in tree.body if isinstance(n,ast.ClassDef) and n.name=='Observer')
+  methods=[n for n in owner.body if isinstance(n,ast.FunctionDef) and n.name in ['cargo_profile','runtime_ld']]
+  self.assertEqual(len(methods),2)
+  cls=ast.ClassDef(name='ActualObserver',bases=[],keywords=[],body=methods,decorator_list=[])
+  ns=dict(Path=Path,policy=policy,C=C,R=R,T=T)
+  exec(compile(ast.fix_missing_locations(ast.Module(body=[cls],type_ignores=[])),'actual-global-profile','exec'),ns)
+  observer=ns['ActualObserver']();observer.source_roles={};observer.phase='canonical';observer.root=R.parent/'rag3db-libs'/policy.LIB;observer.rustlib=Path('/fixture/toolchain/lib');observer.allowed={}
+  row=dict(cwd=str(C),argv=['cargo','metadata','--format-version','1','--all-features'])
+  profile=observer.cargo_profile(row,[])
+  self.assertEqual(set(profile),set(policy.KEYS));self.assertTrue(all(v is not None for v in profile.values()))
+  self.assertEqual(profile['LD_LIBRARY_PATH'],str(observer.rustlib));self.assertEqual(profile['CARGO_MANIFEST_DIR'],str(C))
+  self.assertEqual(profile['RAG3DB_LIB'],policy.LIB)
+  guarded=observer.cargo_profile(row,[dict(argv=['python3',str(C/'scripts/cargo_garde.py')],exe='/python')])
+  self.assertEqual(guarded['LD_LIBRARY_PATH'],str(observer.rustlib)+':'+str(observer.root))
   ops=FakeOps();ops.profile=profile
-  with tempfile.TemporaryDirectory(prefix='cx-cargo-cpu-fixture-') as tmp:
-   row=probe['observe'](99,EXPECTED,profile,Path(tmp)/'attempt.json',100.,ops)
-  self.assertEqual(row['status'],'OBSERVED_CARGO');self.assertEqual(row['present'],{k:v is not None for k,v in profile.items()});self.assertEqual(row['diff'],{})
+  with tempfile.TemporaryDirectory(prefix='cx-global-metadata-fixture-') as tmp:
+   captured=probe['observe'](99,EXPECTED,profile,Path(tmp)/'attempt.json',100.,ops)
+  self.assertEqual(captured['status'],'OBSERVED_CARGO');self.assertTrue(all(captured['present'].values()));self.assertEqual(captured['diff'],{})
  def test_real_snapshot_preserves_empty_argv_and_publishes_only_selected_keys(self):
   raw=b'RAG3DB_LIB=sdk29\0SECRET_KEY=do-not-publish\0';argv=b'cargo\0check\0--features\0\0'
   class FixturePath:
