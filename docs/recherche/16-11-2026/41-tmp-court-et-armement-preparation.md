@@ -23,3 +23,10 @@ refusée par unittest.main(failfast=True) duscript. ErreurCOMMANDEnonfonctionnel
 brutsR/cx-proofs-recherche-fts-tmp-red-v1+manifestjointconservés. Source
 niunitdrivernechangent : corrigerRECETTEenretirant-f(failfastdéjàimposé),
 publieravantnouvelessaiCPU60. Aucunredarithmetic/natif/socketprétendu.
+
+AprèsRECETTE8ffpub(failfastdansscript,sans-fredondant), témoinVRAIenvupdate
++suffixeRustestbienROUGE :1assertfail/0error0.005s,longueurs111/117/139
+(PID1N0/PID7N0/PIDu32maxNusize64max),sansbind. Brutsarithmetic-red-v1
+conservés/manifestjoint. Nouveaux2témoinsfilesystemcréationexclusive/
+identité/devUIDmode/symlinkrefus publiésAVANThelperimplmaisNONJOUÉSavantfix ;
+ilsutilisentpetitsdossiersfixturesPython, jamaisrépertoireprofilR/t5réel.
