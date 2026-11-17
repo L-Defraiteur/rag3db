@@ -1,0 +1,16 @@
+{
+  "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-watchdog-new-probes-red-17nov-v1",
+  "uid": 1000,
+  "device": 55,
+  "inode": 168913491,
+  "hashes": {
+    "invocation.json": "0b72c4c742424da463b7755a14863042702ccd1c64eb1001ee6c7a35cfebedaa",
+    "witness.log": "dcef0b75db1f681545ea4d712e152b7d3db969db0691d8248fd2a3c55745531c",
+    "duration-observation.json": "3d15731badc3d9e84decfb1280107620df08d32e75c085a76bb5fdca975a8411",
+    "io-error-observation.json": "31d8736b549235309cc69ea0f416fb8455883f92646c3b720c41a9b347bd3143",
+    "test-fs-export-boundaries-v3.py": "a99f28c3de2506e05dd03452006e170392ea359a3221863593f2e17b644db8aa",
+    "exporter-baseline.py": "0471118fe427d8e5a52685d02c6f30c51ae5ffa2b91937f78e2caa86adf63f6f",
+    "exporter-fixed.py": "51a9b1e2cb6f3048580588ebc9dfa6d837dadfc2a011d2b78d99f4e380b268f8"
+  },
+  "archive_only_no_test": true
+}

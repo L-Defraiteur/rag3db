@@ -241,3 +241,13 @@ setup, jamais rouges fonctionnels. Deux nouveaux probes047 :2FAIL/0ERROR
 attendus NONOBSERVÉS. Aucun import/test/runpy/proc/SSH/T/corpus par Recherche,
 aucune qualificationOS. GO15B2 épuisé, nouveauGOCPU60 C7 distinct requis ;
 niEC4rejoué ni3PASSv2 autorisés. Harnaisv3 toujours nonexécuté.
+
+GO C7-LUCIVY-NEW-RED-180A-17nov60 consommé UNE fois :2FAILattendus/0ERROR,
+rc1,0,102601622s physique (suite0,006), setup réels args/préflight/SHA/JSON
+atteints. Durée047=300>237 ; fsyncerror aprèslaunchmock laisse enfantmockactif
+sans terminate/wait. Observations/bruts/rc/temps/troissources2hosts archivés
+avanttoutesuite,7SHArelusPC444 watchdog-new-probes-red-17nov-v1. Rapport17/12.
+0EC4rerun/0fixe51exécutée/0réseau-proc-signaux-processfixture/Cargo/T/corpus.
+SSHseulementtransfertpreuvesAPRÈS.2ERROR313c conservés sansrequalification,
+rougeEC4valide. GO180A épuisé ; trois verts51a9/a99 attendent GOdistinct,
+aucuneOSkill/cleanupdistant/300/FSnativequalifiée. AncienQ/source8b/T intacts.
