@@ -47,3 +47,8 @@ positif, infraSTOP cohérents à lecture. DeltaLock strict et backups conservés
 Aucun Cargo/test/proc/corpus/contact/SSH par Recherche ; copies PC non rehashées
 indépendamment par elle (Banc les a vérifiées). Aucun GO/runtime ni qualification
 natif0=0/FSfix/readonce/sink/fullcore. Les deux RO du couple sont reçues.
+
+HOLD C7 452dd0ccfc : absence de watchdog physique portable dans export047111.
+Ancien paquet figé/nonconsommé, commande04 HOLD. [Contre-exemple CLI proposé
+avant correction](06-hold-borne-physique-portable.md),300s réels/fauxSSH/fsync
+bloqué/secours302. Aucune exécution du témoin ni correctif encore effectué.

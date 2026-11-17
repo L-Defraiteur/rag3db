@@ -1,5 +1,7 @@
 # Paquet exact RED FS — préparation seule
 
+**HOLD C7 avant GO : borne physique locale manquante. Voir [06](06-hold-borne-physique-portable.md). Ne pas lancer la commande ci-dessous.**
+
 [Ticket porteur ouvert](../tickets/2026-11-16-l-admission-du-corpus-fs-ne-garantit-pas-la-vue-consommee.md).
 Source rouge inchangée **8b9435363dbd8ec0e3973f2368b641189f0726eb**.
 RO Recherche favorable bornée source/recette c987957426. C7 autorise la

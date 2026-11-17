@@ -139,3 +139,14 @@ positif, infraSTOP cohérents à lecture. DeltaLock strict et backups conservés
 Aucun Cargo/test/proc/corpus/contact/SSH par Recherche ; copies PC non rehashées
 indépendamment par elle (Banc les a vérifiées). Aucun GO/runtime ni qualification
 natif0=0/FSfix/readonce/sink/fullcore. Les deux RO du couple sont reçues.
+
+HOLD C7 avant GO (452dd0ccfc) : export047111 n’a pas de watchdog physique
+LOCAL. local_deadline démarre après ARM/launch ; fsync/hash/écritureACK/final/
+retour peuvent bloquer hors borne. Les deux RO restent favorables à leur
+périmètre lu, aucune garantie deux rôles300 acquise. Ancien Q/nonce/source8b/T
+figés, NONconsommés. Préparation autorisée sur ce même ticket : contre-exemple
+pertinent sur vraie entrée CLI à publier AVANT correctif, puis enveloppe
+physique locale et durées restantes conservatrices vers PC, sans comparer
+les horloges des hôtes ni étendre300. Aucun Cargo/index/corpus/natif ; pas de
+nouvelle primitive de relais générique. Porteur Lucivy, RO ciblée et nouveau
+GO après nouveau pin. La recette04 reste historique et NON lançable.
