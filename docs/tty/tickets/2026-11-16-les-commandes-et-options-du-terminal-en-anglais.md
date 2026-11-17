@@ -785,3 +785,14 @@ C7séparée. Miseàjourdocumentaireseule, aucun code/CPU/runtime autorisé.
 RO M6c96 favorable frontièreDOC ; précision intégrée : SHAimageELF seul
 nequalifiepasSDKdynamique chargé. Profilruntime réel àrelierparsonporteur ;
 bracketsArchi229b nonempruntéscommequalification physique. Aucun code/CPU.
+
+### Dépendance commune attribuée par C7, étude source uniquement
+
+Ticketenfantcommun : docs/orchestration/tickets/2026-11-17-les-images-executees-manquent-d-un-producteur-de-preuves-commun.md
+créé862aa5ddfdcf232f6da2b753ddd24dae0881a8b1, famillecorrigée8b1bdcb0e53ed70e17382f4b158d1586848a126a.
+Lu : Archi étudiefaisabilitésource/runnerconstructifvsimageobservée/canon/coûts
+ouSTOP. TTY resteconsommateur/contrat961P01-P20, CPpublication/ACK/Window ;
+producteuretadaptationCommon nonattribuésimplicitement. Aucun code/prototype
+ouCPU/process/traceur/slot/runtime autorisé. PasdechantierobservateurTTY
+parallèle ; repriseconsommateursousnouveaucadrageC7aprèsétude. Ticketparent
+resteOPEN,14vertshérmétiques≠qualificationglobale, Qexecutionfalse inchangé.
