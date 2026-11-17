@@ -1,0 +1,45 @@
+{
+  "schema": "fixture-runner-snapshot-hash-red-preparation-v1",
+  "executed": false,
+  "go": null,
+  "unchanged_runner_source": "5e3b2006dd20ad2f03e300b002a4132eafcd6567",
+  "cwd": "/home/lucied/.cache/rag3weaver-build/cx-wt-archi-pas-va-au-bout-global-pilot-r2/docs/rag3weaver-archi/17-11-2026/execution-entry-native-protocol",
+  "pythonpath": "/home/lucied/.cache/rag3weaver-build/cx-wt-archi-pas-va-au-bout-global-pilot-r2/extension/rag3weaver/scripts",
+  "import_file": "/home/lucied/.cache/rag3weaver-build/cx-wt-archi-pas-va-au-bout-global-pilot-r2/extension/rag3weaver/scripts/execution_entry_runner.py",
+  "interpreter": {
+    "path": "/usr/bin/python3.14",
+    "sha256": "c81d88523721c462f53a98129d65bba68f67791932f0664372e1778e74fd9517"
+  },
+  "files": {
+    "extension/rag3weaver/scripts/execution_entry_runner.py": "8dd368ca6dc56a08d797998d15763a135b4ecd619409f68c524d70d893177c6f",
+    "docs/rag3weaver-archi/17-11-2026/execution-entry-native-protocol/test_runner_effects.py": "6bb9c1c54d76d403684423cf42250e67539b0c23e603dfc1df14f2cff24b779e",
+    "extension/rag3weaver/scripts/execution_entry.py": "565b7f39494911b65ef121f19565450c70803c93b9ef6e62599d570707dbf218"
+  },
+  "argv": [
+    "timeout",
+    "--signal=TERM",
+    "--kill-after=2s",
+    "58s",
+    "/usr/bin/python3.14",
+    "-B",
+    "-m",
+    "unittest",
+    "-v",
+    "test_runner_effects.FixtureRunnerTests.test_final_hash_crossing_end_cannot_return_positive",
+    "test_runner_effects.FixtureRunnerTests.test_port_cannot_reset_original_deadline_through_request",
+    "test_runner_effects.FixtureRunnerTests.test_port_cannot_promote_actual_b_into_expected_artifact_and_environment"
+  ],
+  "selected_functions": [
+    "test_final_hash_crossing_end_cannot_return_positive",
+    "test_port_cannot_reset_original_deadline_through_request",
+    "test_port_cannot_promote_actual_b_into_expected_artifact_and_environment"
+  ],
+  "other_functions_not_selected": 24,
+  "expected": "3 FAIL RunnerRefusal not raised / 0 ERROR/skip / rc1; NOT OBSERVED",
+  "supersedes_unconsumed_pin": "runner-final-hash-red-pins.json",
+  "mode": "FIXTURE_ONLY",
+  "proof_origin": "MODELED",
+  "cp_ack": false,
+  "global_admission": false,
+  "native_backend_delivered": false
+}

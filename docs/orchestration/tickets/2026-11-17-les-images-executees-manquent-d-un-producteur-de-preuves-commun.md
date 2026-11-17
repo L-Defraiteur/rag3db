@@ -304,3 +304,12 @@ Prépublier un témoin causal sur le vrai runner8dd inchangé et horlogeMODELED
 avançant dans sha256, GOrouge distinct/conservation2hôtes AVANTfix. Puis résultat
 construit et contrôle frais après les deux hashes juste avant retour. GO24 HOLD,
 aucunvert ou backendOS acquis. LimiteTTY callbacks noninterruptibles conservée.
+
+## Réserve request mutable Recherche5e3b, avant témoins et correction groupée
+
+Le request validé est passé au port prepare_owned_launch puis relu pour bornes/
+artifact/environnement. Un port peut ainsi déplacer operation_end/end ou rendre
+B attendu depuis ses propres mutations. Figement profond privé requis, jamais
+exposé aux ports (vue détachée). Prépublier deux témoins causaux resetborne et
+promotionartifact/env sur8dd inchangé ; grouper avec hashfinal M/R. Trois rouges
+ciblés/pins/RO/GOdistinct etbruts2hôtes avantfix. GO24 HOLD, pasbackendOSqualifié.

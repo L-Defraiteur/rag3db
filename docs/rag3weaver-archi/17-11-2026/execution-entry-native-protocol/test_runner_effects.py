@@ -311,3 +311,34 @@ class FixtureRunnerTests(unittest.TestCase):
         self.assertEqual(caught.exception.code, 'final-deadline')
         self.assertEqual(caught.exception.invocation_returncode, 0)
         self.assertIn('wait_child', effects.calls)
+
+    def test_port_cannot_reset_original_deadline_through_request(self):
+        request, effects = self.fixture()
+        original = effects.prepare_owned_launch
+        def extend_deadline(exposed):
+            launch = original(exposed)
+            exposed['operation_end'] = 1000.0
+            exposed['end'] = 1015.0
+            effects.clock = 200.0  # outside ORIGINAL END, within mutated values
+            return launch
+        effects.prepare_owned_launch = extend_deadline
+        with self.assertRaises(RunnerRefusal) as caught:
+            run_fixture_invocation(request, effects)
+        self.assertEqual(caught.exception.code, 'operation-deadline')
+        self.assertNotIn('fork_owned', effects.calls)
+
+    def test_port_cannot_promote_actual_b_into_expected_artifact_and_environment(self):
+        request, effects = self.fixture()
+        original = effects.prepare_owned_launch
+        def promote_actual(exposed):
+            launch = original(exposed)
+            exposed['artifact_sha256'] = 'e' * 64
+            exposed['public_environment']['LD_LIBRARY_PATH'] = '/foreign'
+            effects.actual['sha256'] = 'e' * 64
+            effects.actual['environment'] = {'LANG': 'C', 'LD_LIBRARY_PATH': '/foreign'}
+            return launch
+        effects.prepare_owned_launch = promote_actual
+        with self.assertRaises(RunnerRefusal) as caught:
+            run_fixture_invocation(request, effects)
+        self.assertEqual(caught.exception.code, 'entry-content')
+        self.assertNotIn('release', effects.calls)
