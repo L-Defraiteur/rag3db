@@ -151,3 +151,12 @@ scalaires sans ensemble MVCC : aucune marque complète versionnée établie.
 Option membership persistant exige arbitrage cœur/C7 sur maintenance et
 compatibilité ; sinon compte inconnuNULL, ticket ouvert/fourfixturesinchangées.
 Aucun chemin réservé/édition production/DB/natif, aucune analyse C1 suppléée.
+
+Arbitrage C7 ef10c00f62 reconnu : prérequis persistant/MVCC, pas une colonne
+NULL vendue comme besoin résolu. [Comparaison et recommandation documentaire](../17-11-2026/01-membership-persistent-options.md)
+préparée AVANT tout diff produit : table interne par instance composée avec
+MVCC/WAL/catalogue, trailer HNSW versionné et barrière globale de format pour
+refuser les anciens écrivains ; anciens index restent sans capacitéNULL,
+reconstruction seulement explicite. Invariants de toutes les écritures/rollback/
+checkpoint/reopen/oldtx, coûts et chemins proposés détaillés pour RO cœur/C7.
+Réservation et implémentation non acquises ; aucun build/DB/natif/SDK ni C1.
