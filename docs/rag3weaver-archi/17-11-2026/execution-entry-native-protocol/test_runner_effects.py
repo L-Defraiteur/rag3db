@@ -327,18 +327,30 @@ class FixtureRunnerTests(unittest.TestCase):
         self.assertEqual(caught.exception.code, 'operation-deadline')
         self.assertNotIn('fork_owned', effects.calls)
 
-    def test_port_cannot_promote_actual_b_into_expected_artifact_and_environment(self):
+    def test_port_cannot_promote_actual_b_into_expected_artifact(self):
         request, effects = self.fixture()
         original = effects.prepare_owned_launch
         def promote_actual(exposed):
             launch = original(exposed)
             exposed['artifact_sha256'] = 'e' * 64
-            exposed['public_environment']['LD_LIBRARY_PATH'] = '/foreign'
             effects.actual['sha256'] = 'e' * 64
-            effects.actual['environment'] = {'LANG': 'C', 'LD_LIBRARY_PATH': '/foreign'}
             return launch
         effects.prepare_owned_launch = promote_actual
         with self.assertRaises(RunnerRefusal) as caught:
             run_fixture_invocation(request, effects)
         self.assertEqual(caught.exception.code, 'entry-content')
+        self.assertNotIn('release', effects.calls)
+
+    def test_port_cannot_mutate_nested_expected_environment(self):
+        request, effects = self.fixture()
+        original = effects.prepare_owned_launch
+        def mutate_nested(exposed):
+            launch = original(exposed)
+            exposed['public_environment']['LD_LIBRARY_PATH'] = '/foreign'
+            effects.actual['environment'] = {'LANG': 'C', 'LD_LIBRARY_PATH': '/foreign'}
+            return launch
+        effects.prepare_owned_launch = mutate_nested
+        with self.assertRaises(RunnerRefusal) as caught:
+            run_fixture_invocation(request, effects)
+        self.assertEqual(caught.exception.code, 'entry-context')
         self.assertNotIn('release', effects.calls)

@@ -313,3 +313,8 @@ B attendu depuis ses propres mutations. Figement profond privé requis, jamais
 exposé aux ports (vue détachée). Prépublier deux témoins causaux resetborne et
 promotionartifact/env sur8dd inchangé ; grouper avec hashfinal M/R. Trois rouges
 ciblés/pins/RO/GOdistinct etbruts2hôtes avantfix. GO24 HOLD, pasbackendOSqualifié.
+
+Précision causale avant GO du groupe : isoler aussi l'environnement imbriqué
+SANS changer le SHA artefact, pour qu'une simple copie superficielle ne passe
+pas les témoins. Les quatre négatifs isolent borne, SHA attendu, environnement
+profond et hashfinal. Source8dd reste inchangé, aucun fix ni coupon consommé.
