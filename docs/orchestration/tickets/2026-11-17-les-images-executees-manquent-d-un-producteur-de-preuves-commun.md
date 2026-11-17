@@ -347,3 +347,9 @@ après permisD et faire retournerE ; il peut aussi changer les RAW du wait avant
 hash final. Capturer/copier les données acquises AVANT callback/check suivant,
 sans copier les handles opaques. Prépublier deux témoins causaux surb925inchangé,
 GOrouge distinct/conservation2hôtes avantfix. GO28HOLD, aucunbackendOSqualifié.
+
+Diagnostic pinscfe avant tout import/GO : l'attendu SHAstdout du paquet codait
+backslash+n au lieu du byte LF réellement déclaré dans FakeEffects. Le témoin
+lui-même calcule déjà son attendu depuis la fixture correcte ; corriger la seule
+métadonnée depuis bytesfixes connus, pas depuis une observation d'exécution.
+Aucun coupon consommé, aucun test rejoué, source runner/test inchangée.

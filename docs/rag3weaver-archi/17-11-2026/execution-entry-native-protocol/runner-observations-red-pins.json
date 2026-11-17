@@ -36,11 +36,12 @@
   "expected": "2 FAIL equality mismatch / 0 ERROR/skip / rc1; NOT OBSERVED",
   "expected_facts_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
   "legacy_returned_facts_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-  "expected_stdout_sha256": "60a3a1f6c4fd1a3e6915f526f737af4f3a0141b3a7a16fbe1439ecbd3957fe5f",
+  "expected_stdout_sha256": "d4169ac586761c1e922c624e2655466dea2b3266c3c9af4c88b08908f8a12ce8",
   "legacy_returned_stdout_sha256": "f853a54a6abaa98afa695de93211f811306974641d8b5049aa392f981f2355cc",
   "mode": "FIXTURE_ONLY",
   "proof_origin": "MODELED",
   "cp_ack": false,
   "global_admission": false,
-  "native_backend_delivered": false
+  "native_backend_delivered": false,
+  "expected_stdout_bytes_hex": "6d61726b65720a"
 }
