@@ -1,0 +1,52 @@
+{
+  "kind": "SOURCE_PREPARATION_NOT_QUALIFICATION",
+  "app": "99fef92ce6ee9a0007eaf99c7c3a6a3789061c57",
+  "q9_reference": "e9f037be2aa25da2c7f6c76f79e2eb57b6c676c9",
+  "files": [
+    {
+      "path": "docs/arbre-principal/17-11-2026/runtime-99/helper-origins.json",
+      "size": 5442,
+      "sha256": "32b4e32d2fb759c3a77ea9c36ac7fe01697fb830aa8e4e9f61cd0f7b11f62469"
+    },
+    {
+      "path": "docs/arbre-principal/17-11-2026/runtime-99/lifecycle.json",
+      "size": 1521,
+      "sha256": "d22ecc52140aa634ecbd933c08fa59db3de5af94fd27a03d303a3baf768c2c76"
+    },
+    {
+      "path": "docs/arbre-principal/17-11-2026/runtime-99/lifecycle.py",
+      "size": 10318,
+      "sha256": "7fd1ece29295a04013595af65ef7e8a3119d559924cf579be353038f6ec4d072"
+    },
+    {
+      "path": "docs/arbre-principal/17-11-2026/runtime-99/q9-prepared-reference.json",
+      "size": 5948,
+      "sha256": "96ebc22e7fae474f812273e0bf2f8d41b3f24b5205c6e4f21d4594fbbd0f3099"
+    },
+    {
+      "path": "docs/arbre-principal/17-11-2026/runtime-99/reader_capture.py",
+      "size": 3590,
+      "sha256": "02a9257d5906f21a7be36b11214fa498b9cf51954cbbdb36dc17396ecc84d6fe"
+    },
+    {
+      "path": "docs/arbre-principal/17-11-2026/runtime-99/reader_exec.py",
+      "size": 882,
+      "sha256": "c1239224835915630bc515ab9b502ee669404a2f5a9b96b5202f42974d355733"
+    },
+    {
+      "path": "docs/arbre-principal/17-11-2026/runtime-99/reader_runtime.py",
+      "size": 4620,
+      "sha256": "39b2214369f96526e3f61079ba6280465811869b8b1ee74f86243919151e3c75"
+    },
+    {
+      "path": "docs/arbre-principal/17-11-2026/runtime-99/test_first_query.py",
+      "size": 4501,
+      "sha256": "d5c9b7fe3aae378a8139e397368b6b4003f6be0ca22681b189ed61eb7051880d"
+    },
+    {
+      "path": "docs/arbre-principal/17-11-2026/runtime-99/test_reader_runtime.py",
+      "size": 3728,
+      "sha256": "d6b32efe5c1e6704fab8a4507745c96b62da085ea6b11d91bd5201a5fafe770e"
+    }
+  ]
+}

@@ -1,0 +1,112 @@
+{
+  "audit_result.py": {
+    "ref": "e9f037be2aa25da2c7f6c76f79e2eb57b6c676c9",
+    "path": "docs/arbre-principal/16-11-2026/debt-copy-a/audit_result.py",
+    "sha256": "5a04f976f0933958d3ee7e994860f44656517ce20d9bea5a04d75abb15ac0ea1"
+  },
+  "qualify.py": {
+    "ref": "e9f037be2aa25da2c7f6c76f79e2eb57b6c676c9",
+    "path": "docs/arbre-principal/16-11-2026/debt-copy-a/qualify.py",
+    "sha256": "513ab4978c75389f28d4f89be2fb682e65cb99378e869a865e3c207d237e1239"
+  },
+  "audit.py": {
+    "ref": "e9f037be2aa25da2c7f6c76f79e2eb57b6c676c9",
+    "path": "docs/arbre-principal/16-11-2026/debt-copy-a/audit.py",
+    "sha256": "b50bc4ed04e55bfdc49a7fc17bda6e89bfb55b74d6bd343e1a9a670a1058b72c"
+  },
+  "typed_rows.py": {
+    "ref": "e9f037be2aa25da2c7f6c76f79e2eb57b6c676c9",
+    "path": "docs/arbre-principal/16-11-2026/debt-copy-a/typed_rows.py",
+    "sha256": "41314cda227b3511f2daed3695d894bec150f3ee3dfc2fd7b6fa268db1374916"
+  },
+  "inspect-fts.py": {
+    "ref": "e9f037be2aa25da2c7f6c76f79e2eb57b6c676c9",
+    "path": "docs/arbre-principal/16-11-2026/bascule/inspect-fts.py",
+    "sha256": "b846b0991999040c04f298747eda27aa07a4aa9ad0c277f8b7dc485eb24465a8"
+  },
+  "confiner_validation.py": {
+    "ref": "e9f037be2aa25da2c7f6c76f79e2eb57b6c676c9",
+    "path": "extension/rag3weaver/scripts/confiner_validation.py",
+    "sha256": "6439fdd8b52c85fa4e74af0def2c667ef0bedae9b814cbbfd48e49946c4f74ea"
+  },
+  "poste": {
+    "ref": "e9f037be2aa25da2c7f6c76f79e2eb57b6c676c9",
+    "path": "extension/rag3weaver/scripts/poste",
+    "sha256": "79e3a8bbf457e3bc9104aa1558e7d03072216c70b68e08ae606ace6aa4584c7b"
+  },
+  "continue_result.py": {
+    "ref": "e9f037be2aa25da2c7f6c76f79e2eb57b6c676c9",
+    "path": "docs/arbre-principal/16-11-2026/debt-copy-a/continue_result.py",
+    "sha256": "f1b6ec411985853673fe8125148168446a757d921c690070be2ddf719f0325da"
+  },
+  "finish_result.py": {
+    "ref": "e9f037be2aa25da2c7f6c76f79e2eb57b6c676c9",
+    "path": "docs/arbre-principal/16-11-2026/debt-copy-a/finish_result.py",
+    "sha256": "d88c05d2c572e0541643062a9e89a8c6982a796db4f04085f905c20916ef71b6"
+  },
+  "lifecycle_v9.py": {
+    "ref": "e9f037be2aa25da2c7f6c76f79e2eb57b6c676c9",
+    "path": "docs/arbre-principal/16-11-2026/debt-copy-a/lifecycle.py",
+    "sha256": "16ca9a5b8a83bb05eeafc086ff960098016eb32b313b134e0ec120bf587f759a"
+  },
+  "lifecycle_protocol.py": {
+    "ref": "e9f037be2aa25da2c7f6c76f79e2eb57b6c676c9",
+    "path": "docs/arbre-principal/16-11-2026/debt-copy-a/lifecycle_protocol.py",
+    "sha256": "00b168686bc5820e582e5e52acedba6c95c901ac8bb3424976369ee2d45de7fb"
+  },
+  "lifecycle-v9.json": {
+    "ref": "e9f037be2aa25da2c7f6c76f79e2eb57b6c676c9",
+    "path": "docs/arbre-principal/16-11-2026/debt-copy-a/lifecycle.json",
+    "sha256": "b697db847203316985f42928e411949b9eb2706bdd6ed8584e8bbae07e5e37cb"
+  },
+  "lifecycle.mmd": {
+    "ref": "e9f037be2aa25da2c7f6c76f79e2eb57b6c676c9",
+    "path": "docs/arbre-principal/16-11-2026/debt-copy-a/lifecycle.mmd",
+    "sha256": "7d729f06fd3c4865e798852c5ece3b3941dd3ee5abeb498afbb6bb6dc0f882df"
+  },
+  "lifecycle-provider-go.schema.json": {
+    "ref": "e9f037be2aa25da2c7f6c76f79e2eb57b6c676c9",
+    "path": "docs/arbre-principal/16-11-2026/debt-copy-a/lifecycle-provider-go.schema.json",
+    "sha256": "d313d62eaf62937171d18575efb337ff5808630193b21114231e42e5beb0cb04"
+  },
+  "lifecycle-ready.schema.json": {
+    "ref": "e9f037be2aa25da2c7f6c76f79e2eb57b6c676c9",
+    "path": "docs/arbre-principal/16-11-2026/debt-copy-a/lifecycle-ready.schema.json",
+    "sha256": "a03c7d1326b3ccf6cd517f2e5df00c06b01708be929888e3211b8547bf347661"
+  },
+  "lifecycle_grant_producer.py": {
+    "ref": "e9f037be2aa25da2c7f6c76f79e2eb57b6c676c9",
+    "path": "docs/arbre-principal/16-11-2026/debt-copy-a/lifecycle_grant_producer.py",
+    "sha256": "f17cdf81d78b71b6d1273e9f719a077848872ebd7b3f0341e604d56d8a244652"
+  },
+  "lifecycle_provider_observation.py": {
+    "ref": "e9f037be2aa25da2c7f6c76f79e2eb57b6c676c9",
+    "path": "docs/arbre-principal/16-11-2026/debt-copy-a/lifecycle_provider_observation.py",
+    "sha256": "83139ebb329a59f19aa881f7f9678a7e6bf87c39abd3ff0ab7d20ecc15c0ba00"
+  },
+  "lifecycle_health_policy.py": {
+    "ref": "e9f037be2aa25da2c7f6c76f79e2eb57b6c676c9",
+    "path": "docs/arbre-principal/16-11-2026/debt-copy-a/lifecycle_health_policy.py",
+    "sha256": "56d9c708d5b25c1c5b477a463842f6c01e4e21462ba61f3967bb48c658cd42ce"
+  },
+  "lifecycle-provider-expectations.json": {
+    "ref": "e9f037be2aa25da2c7f6c76f79e2eb57b6c676c9",
+    "path": "docs/arbre-principal/16-11-2026/debt-copy-a/lifecycle-provider-expectations.json",
+    "sha256": "0ce4548bcc0ccbc44357f6c9f71cbd8301afce7dd9740bdeb5680178947a5e8c"
+  },
+  "provider_health_transport.py": {
+    "ref": "e9f037be2aa25da2c7f6c76f79e2eb57b6c676c9",
+    "path": "docs/orchestration/16-11-2026/coordination/provider_health_transport.py",
+    "sha256": "edf45f73bf97d21f2a0caab4d6e07a7d01f807fba8310c9006f442159e2bc2a6"
+  },
+  "grant_watch_actor.py": {
+    "ref": "e9f037be2aa25da2c7f6c76f79e2eb57b6c676c9",
+    "path": "docs/orchestration/17-11-2026/coordination/grant_watch_actor.py",
+    "sha256": "7d7db5a0c7d9ac762eed74ade2d0b9ee256b8499d0029ae970feac916de76612"
+  },
+  "grant_watch_controller.py": {
+    "ref": "e9f037be2aa25da2c7f6c76f79e2eb57b6c676c9",
+    "path": "docs/orchestration/17-11-2026/coordination/grant_watch_controller.py",
+    "sha256": "362f7128f20256036dda2363f20d2784ee619c256dc6f47e026edc6af3efd7e8"
+  }
+}
