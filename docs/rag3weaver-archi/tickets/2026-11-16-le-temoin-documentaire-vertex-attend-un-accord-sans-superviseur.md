@@ -142,3 +142,27 @@ test nommé sans preuve de cause assertion Om bre/agent.name ; R4 empreinte
 controllers de provenance périmée après normalisation EOF. Corriger et publier
 les témoins discriminants avant essais, puis revoir ensemble le couple exact.
 Aucun test, import du pilote, processus, signal ou accès cloud/DB lancé.
+
+### RO totale Mémoire dc868 : groupe complet avant corrections
+
+HOLD confirmé, six points reçus ensemble avant édition du code :
+- Montage D6 provider vertex invalide : APP attend Provider Local/Service/Compatible,
+  Vertex étant un protocole de Compatible. Tester le vrai schéma de l'APP.
+- Témoin CPU hérité : traité par témoin du vrai constructeur global, NONJOUÉ ;
+  six absences anciennes ne sont pas une précondition du global SDK hérité.
+- Rouge D6 causal : nom+panic+0/1/0 insuffisants. Exiger assertion métier préattendue
+  Om bre/agent.name, vraie source et contre-exemple panic d'une autre assertion.
+- Provenance broker : git diff --binary ignore index et non-suivis. Capturer HEAD,
+  index et état source complet pertinent ; comparer avant/après build, puis attribution
+  agent avant ajout du reviewer. Refuser toute mutation non attribuée.
+- Runtime : environnement/maps relus après identity sans bracket final. Archiver un
+  frame cohérent identité/start/exeSHA/CG avant/après, avant assertions ; aucune
+  attestation reconstruite en cleanup ni déduite de l'inventaire.
+- Première cause : d6 finally arrêt/wait et qualify finally service.close peuvent
+  masquer l'erreur initiale. Latcher au refus, préserver cause immuable ; cleanup
+  séparé borné MINEND avec host/TTY/broker/reap explicites, sans profil SDK.
+
+Split no-run/ELF accepté en principe sous vérification des vrais raccords ; aucun
+pin PC/Q/T0 ni ACK services/Vertex acquis. Budget/CLI/watchdog/finalfsync relus
+sans réserve supplémentaire dans ce périmètre. Aucun import/CPU/native/SDK/proc/
+signal/cloud/DB/HTTP exécuté par cette RO. Attendre groupe ED avant pin correctif.
