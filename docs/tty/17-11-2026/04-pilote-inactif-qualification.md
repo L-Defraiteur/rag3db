@@ -77,3 +77,16 @@ régulier exécutant /opt/google/chrome/google-chrome. Parcourir son parent
 avait visé /usr/bin et refusé PermissionError mount.nfs, avant prepared final.
 Qv1 partiel conservé ; Qv2 épingle uniquement ce wrapper et la distribution
 /opt/google/chrome explicite. Aucun lancement du navigateur ni targetmuté.
+
+## Témoins préparés sur les réserves de revue
+
+R1/R2 consignés au ticket avant suite711560c55b.
+`test_qualification_review.py` extrait uniquement les fonctions stage/results
+du vrai driver par AST, sans importer son entrée ni appeler de processus.
+Contrôle positif : deux filets puis les quatre vrais nomsTTY. Contre-exemples :
+filets verts masquant suite0test, quatre noms étrangers, FAILED émis pendant
+un backend simulé avant sa continuation. Aucun de ces témoins exécuté.
+Le pilote est inchangé avant observation rouge ; pas de correctif déclaré.
+Le Qv2 désarmé reste conservé. Suite : revue des témoins puis autorisation
+CPU hermétique distincte avant rouge, correction et vert ; aucune demande
+Cargo/native/service/slot global ne se déduit de ces fichiers de test.
