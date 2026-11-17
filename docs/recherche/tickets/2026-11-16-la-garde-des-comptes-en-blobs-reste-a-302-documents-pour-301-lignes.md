@@ -912,3 +912,16 @@ EOF retenu par enfant privé borné, SIGTERM ignoré, capture non reaped ou hors
 END. Tous nouveaux témoins NON JOUÉS, aucun incident runtime allégué.
 Le nettoyage d'arbre réel devra être qualifié ; ces assertions source ne sont
 pas une preuve de quiescence. Baseline inchangée jusqu'à publication des tests.
+
+### Raccord psql source après rouge et témoins prépubliés
+
+Après e5a68 rouge réel conservé deux postes et 10d48cf6ec témoins prépubliés,
+runner source écrit : capture bornée, validation GUC/identité/postcheck,
+publisher/consommateur fixture distincts et PsqlSession native sans entrée live.
+Primitives/SQL v1 réutilisés sans modification ; Rust gelé intact. Manifeste six
+sources dans psql-host-runner/source-preparation-manifest.json. Aucun import,
+parse, test, secret, client ou PG exécuté pour ce raccord. À R : relecture source
+et réserves regroupées avant recette CPU/GO distinct. Trois réserves précédentes
+restent ouvertes tant que leurs témoins ne sont pas effectivement jugés. Lanceur
+Common/lease réel non qualifié, erreurs sans preuve absence backend, fermeture
+dynamique/auth/SSL non qualifiées. Aucun GO fixture ni admission v1 délivré.

@@ -1,0 +1,8 @@
+{
+  "docs/optimiseur/16-11-2026/pg-ro-attestation/backend-postcheck.sql": "2907a86d971770275b9ff6291e9bffebdf4467d23c7c59ff2015ae6a3fb9c864",
+  "docs/optimiseur/16-11-2026/pg-ro-attestation/identity.sql": "f9496688a506085562a071ce25827a2a683bccd457c9edf6e944e228b7c29328",
+  "docs/optimiseur/16-11-2026/pg-ro-attestation/pg_receipt.py": "de69c498b1ac38d80d4976144fea79ddbfa7d3a34ea8ce7dae1d9e4a457aeed6",
+  "docs/optimiseur/16-11-2026/pg-ro-attestation/readonly-session-v2.sql": "f40eb6ebc867839303aa51229497e7d533c6708854bea9b63bcfe67f2012b8b9",
+  "docs/optimiseur/17-11-2026/psql-host-runner/runner.py": "5ae54f23fdc4173bbdde767961c5e71daf0bafaca6348602eb0b12d35313a2af",
+  "docs/optimiseur/17-11-2026/psql-host-runner/test_runner.py": "b4cd034f3d7bc40816cc0a71aa30f46d6a293474f0a31e7c9699e8ecd33d681a"
+}

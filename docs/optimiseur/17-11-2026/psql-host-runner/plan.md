@@ -146,3 +146,57 @@ booléen refusées avant observation positive. Injection de métadonnées négat
 ne prouve pas à elle seule le nettoyage OS, à qualifier par les témoins réels.
 Ces témoins ne ferment aucune réserve tant qu'ils ne sont pas passés sur le
 raccord implémenté ; relecture source demandée avant future qualification.
+
+## Raccord source après prépublication19tests — non exécuté
+
+`runner.py` remplace la baseline après le vrai rouge métier et la prépublication
+10d48cf6ec. Aucune importation, compilation Python, unittest ou invocation native
+pour ce raccord. Six pins source dans source-preparation-manifest.json. Le vieux
+paquet a5c2 et sa recette rouge restent immuables ; pas de transfert de résultat.
+
+Composition : pg_receipt.py/de69 et identity/postcheck exacts inchangés ; réemploi
+explicite decode/shape/sql_shape et écriture exclusive/fsync/lecteur borné. Le SQL
+RO existant f40eb6ebc867839303aa51229497e7d533c6708854bea9b63bcfe67f2012b8b9
+est réutilisé sans modifier le code Rust/v2 gelé. Le publisher v1 reste intact,
+non appelé avec des identités de fixture. Le nouveau publisher/consommateur
+fixture ont leur type propre, aucun grant ou admission v1.
+
+Capture : pipes non bloquants64KiB/canal, fin de travail avant réserve cleanup,
+TERM puis KILL par pidfd du seul enfant attribué, wait borné au même END ;
+EOF retenu après sortie directe = partiel. `/proc/exe/start/maps` observés si
+possible, UNKNOWN sinon ; maps prefix16KiB explicitement incomplet. Un détenteur
+de pipe descendant inconnu n'est pas prétendu arrêté par le reap du parent :
+refus conservé et portée Common externe doit attester quiescence. Tout résidu,
+nettoyage tardif ou inconnu interdit une qualification positive. Cette source
+n'est pas une preuve de ces garanties, en attente de tests/RO/GO dédiés.
+
+`observe` : whole5 avant factory/pins/secret jusqu'au dernier fsync + contrôle
+phase ; captures et postcheck dans cet END, cleanup natif passfile avant
+publication, marqueur refusal invalide même une pièce liée juste avant refus.
+`read_fixture_observation` relit les bruts bornés dans le même répertoire et
+refuse le marqueur avant/après. Le champ ended du corps est un instant pré-fsync ;
+le dernier gate garantit seulement publication avant deadline, pas un fsync
+physiquement instantané. Les nouvelles réserves de couverture restent OPEN.
+
+`PsqlSession` prépare un vrai argv psql/chargeur du SEUL ledger qualifié824b59,
+non relocalisé ; rehash299fichiers et garde externe avant chaque stade.
+Identifiants uniquement de la future allocation privée par nonce, fichier
+observer-password600/UID/nlink vérifiés, jamais utilisateur/.env/.vault.
+PGPASSFILE600 neuf, HOME/TMP700, environnement liste blanche, -X/--no-password/
+ON_ERROR_STOP. Mot de passe absent des argv/SQL/stdin/logs ; sortie contenant son
+canari remplacée intégralement avant refus. Aucune de ces lectures secrètes ou
+écritures de passfile exécutée à ce stade. Core0 doit être posé par le lanceur.
+GUC/defaultRO mesurés sous BEGIN READ ONLY, timeout serveur/connect/lock/idle
+bornés, postcheck PID OU app depuis une session distincte, retrait passfile dans
+la fermeture du même whole5. Ce source ne contacte rien à son import ; sa seule
+entrée script termine SOURCE ONLY, sans chemin live.
+
+**Manques explicites** : lanceur d'admission réelle Common/lease/allocation
+encore à qualifier (callbacks des faux ne le remplacent pas), recette CPU verte
+exacte pas encore publiée ni GO acquis, fixtures/PGPASS synthétiques et raccord
+native à tester, profils officiels v1 non exécutés, aucune vraie session PG.
+Après erreur de connexion/query, l'absence backend n'est PAS attestée ; pas de
+cancel/completion fictif, observation refusée. SSL/auth/dlopen/locale/transport
+réels demeurent non qualifiés. Aucun nouveau PG à allouer avant client prêt et
+GO contact séparé. R doit relire ce raccord et les réserves regroupées avant
+nouveaux pins/GO CPU, puis résultats réels avant toute proposition de fixture.
