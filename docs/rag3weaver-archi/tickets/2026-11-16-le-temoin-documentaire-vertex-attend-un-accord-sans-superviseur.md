@@ -155,3 +155,8 @@ RO preuves Banc a4a2de1e1a : [rapport21](../../banc/16-11-2026/21-ro-preuves-ver
 ### Banc — paquet PC229b et APPf1e8
 
 [RO totale code/pins favorable préparation](../../banc/17-11-2026/05-ro-paquet-pc-global-d6.md) : code identique CPUa0d74 ;29/29SHA PC/local,21copiesQ conformes/config0e6278,5captures préparation/pins/Git cohérents. Contrôleur/source/archive propres/gitlinksbd133 distincts ; T0capturéstrictementégal13416/5246, identitéactuelle dev55/inode164550643.72preuves anciennes rehashPC conformes. Outils dont Cargo1.98.1 et3fichiersSDK hashés sans exécution. Pvide/F,TASKS,launchabsents. Pas de réinventaire actuel completT ni scanproc ; pas de CPU/build/native/SDKexport/service/cloud/DB/poste lancé. GO7455/ACKs frais demeurent distincts, ticket OUVERT.
+
+
+### Banc — provider lecteur e1f5c074
+
+[RO courte code/contrat](../../banc/17-11-2026/06-ro-provider-lecture-publication.md) : séparation physical_admission=false/bridge absent reconnue ; deux réserves lecteur à traiter : root/parents non ancrés après init (NOFOLLOW dernier composant seul), D6 admission.source_head/head interne non liés au pin alors que README l'exige. Neuf témoins actuels global seul/non joués ; ajouter TempDirs substitution et D6 positif/négatifs, sans faux noyau ni transport. Aucun run/import/CPU/native fait par Banc ;229b/Qfigés/ticket OUVERT.
