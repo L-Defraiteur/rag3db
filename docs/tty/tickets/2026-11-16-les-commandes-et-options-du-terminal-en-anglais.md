@@ -47,3 +47,15 @@ Ajouter un nom anglais à chaque `/commande` et option française, en gardant l'
 ## Taille et blocage
 
 3 heures. Rien ne le bloque.
+
+## Préparation ressources G — suivi C7 5b6ade163c
+
+Contrat inactif publié dans
+`docs/optimiseur/17-11-2026/01-tty-local-resource-contract.md` et JSON voisin
+`tty-local-resources.inactive.json`. Mapping documentaire LOCAL7979/7980 vers
+PC7878/7879 ; PGtest LOCAL5433 distinct du PGPC, identité/OID/topologie réelle
+UNKNOWN. PorteurG transport/identité/allocation, Embar modèles, TTY pilote/Q,
+C7 admission. Aucun ACK/GO3600/lease/ARM inventé, SQL/service/tunnel lancé.
+Le contrat PGv1 PC ne devient pas LOCAL sans revue du domaine d'horloge et
+transport qualifié. Préflight avant ARM reste HOLD si outil manquant ; le
+pilote/Q peut se construire désarmé. Travail préparatoire, pas une clôture.

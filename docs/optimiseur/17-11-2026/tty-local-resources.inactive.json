@@ -1,0 +1,45 @@
+{
+  "armed": false,
+  "common_end_monotonic": null,
+  "endpoints": [
+    {
+      "client": "http://127.0.0.1:7979",
+      "nominal_pc_service": "http://127.0.0.1:7878",
+      "observed": false
+    },
+    {
+      "client": "http://127.0.0.1:7980",
+      "nominal_pc_service": "http://127.0.0.1:7879",
+      "observed": false
+    }
+  ],
+  "kind": "tty-local-resources-preparation",
+  "lease": null,
+  "local_host_identity": null,
+  "nonce": null,
+  "pilot": null,
+  "postgres": {
+    "binding": null,
+    "clock_domain": null,
+    "container_id": null,
+    "database": "rag3weaver_test",
+    "database_oid": null,
+    "host": "127.0.0.1",
+    "image_id": null,
+    "observed": false,
+    "owner_oid": null,
+    "port": 5433,
+    "postmaster_start": null,
+    "user": "rag3weaver",
+    "user_oid": null
+  },
+  "q_sha256": null,
+  "release": null,
+  "reservation_reference": null,
+  "run_authorized": false,
+  "schema_version": 1,
+  "scope": null,
+  "source": null,
+  "status": "INACTIVE_NOT_AN_ALLOCATION_OR_GRANT",
+  "transport_qualified": false
+}
