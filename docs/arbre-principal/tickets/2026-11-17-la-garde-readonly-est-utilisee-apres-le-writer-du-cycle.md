@@ -47,3 +47,13 @@ les mutants du vrai raccord. Contrat à relire avant écriture du harnais ;
 témoins NON ÉCRITS/NON JOUÉS, aucune garde modifiée. La cause directe du refus
 Qv8 est le retrait .wal/.ecrivain ; le changement SHA DB est exclu de CE juge.
 Pas de sources-after/postquiet capturés : FIN après rouge non qualifiée.
+
+Premier harnais inventaires prépublié : test_postwriter_inventory, six
+fonctions au vrai bloc AST lifecycle.driver entre capture after_writer et
+première quiescence post-shutdown. Inventaires/dirs synthétiques seulement,
+refus ValueError capturé puis jugé explicitement. Cas nominal deux retraits,
+mutants FTS/retraits/octets/modes/WAL/ajout/répertoire et doublon de chemin.
+NON JOUÉ ; les négatifs peuvent être refusés par l'ancienne mauvaise garde
+avant la branche visée, donc aucun succès de ces seuls cas ne la qualifie.
+Préconditions preuves writer/horloge et autres mutants de proposition07
+restent À ÉCRIRE avant tout correctif. Aucun exécutable modifié.
