@@ -119,10 +119,13 @@ impl SessionClose for Owner {
     fn backend_pid(&self)->Option<u64>{self.pid}
     async fn cancel_query(&mut self,end:Instant)->bool{matches!(timeout_at(end,self.cancel.cancel_query(NoTls)).await,Ok(Ok(())))}
     fn drop_client(&mut self){drop(self.client.take());}
-    async fn join_driver(&mut self,end:Instant)->bool{
-        let joined=matches!(timeout_at(end,&mut self.driver).await,Ok(Ok(Ok(()))));
-        if !joined{self.driver.abort();let _=timeout_at(end,&mut self.driver).await;}
-        joined
+    async fn join_driver(&mut self,end:Instant)->bool{join_connection_driver(&mut self.driver,end).await}
+}
+async fn join_connection_driver(driver:&mut JoinHandle<Result<(),Error>>,end:Instant)->bool{
+    match timeout_at(end,&mut *driver).await{
+        Ok(Ok(Ok(())))=>true,
+        Ok(_)=>false, // completed error is consumed; never poll the handle twice
+        Err(_)=>{driver.abort();let _=timeout_at(end,&mut *driver).await;false},
     }
 }
 async fn finish_owned<C:SessionClose>(owner:&mut C,failed:bool,end:Instant)->Value{
@@ -199,5 +202,13 @@ mod tests {
     #[test] fn first_failure_cleanup_uses_cancel_drop_join_and_same_end(){let mut o=fake(true);let end=Instant::now()+Duration::from_secs(1);run_close(&mut o,end);assert_eq!(o.calls,vec!["cancel","drop","join"]);assert!(o.deadlines.iter().all(|x|*x==end));}
     #[test] fn expired_end_is_never_renewed_for_cancel(){let mut o=fake(true);let end=Instant::now()-Duration::from_secs(1);run_close(&mut o,end);assert_eq!(o.calls,vec!["drop","join"]);assert!(o.deadlines.iter().all(|x|*x==end));}
     #[test] fn unknown_pid_or_unjoined_driver_is_not_absence_proof(){let mut o=fake(true);o.joined=false;let v=run_close(&mut o,Instant::now()+Duration::from_secs(1));assert_eq!(v["backend_pid"],Value::Null);assert_eq!(v["backend_absent"],Value::Null);assert_eq!(v["driver_joined"],false);}
+
+    #[test] fn completed_join_error_is_not_polled_twice(){
+        tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap().block_on(async{
+            let mut driver=tokio::spawn(async{std::future::pending::<Result<(),Error>>().await});
+            driver.abort();tokio::task::yield_now().await;
+            assert!(!join_connection_driver(&mut driver,Instant::now()+Duration::from_secs(1)).await);
+        });
+    }
 
 }

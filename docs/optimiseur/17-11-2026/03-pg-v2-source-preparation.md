@@ -77,8 +77,8 @@ CPU GREEN proposé aprèsvrairouge+RO/pins/GO distinct :
 `python3 -B -m unittest -v -f test_pg_v2`, cap58TERM+KILL2,20PASSattendus,
 zéroFAIL/ERROR/SKIP, sans modulelegacyrouge ni anciennes23suites.
 
-8 #[test] Rust SOURCES NONCOMPILÉES :4parsing/doublons/portpartagé/erreursecrets,
-4finisher sans-token/cancel-drop-join-sameEND/ENDexpiré/pidinconnu-joinfalse.
+9 #[test] Rust SOURCES NONCOMPILÉES :4parsing/doublons/portpartagé/erreursecrets,
+5finisher sans-token/cancel-drop-join-sameEND/ENDexpiré/pidinconnu-joinfalse/joinErrorREADYnonrepolled.
 La compilationtest/ELF sera une qualificationNATIVE distincte, pas un résultat
 CPU Python. Les cheminsréels connect/cancel/query/postcheck/OSkill/reap/EOF/
 stderr/fsync et scalaires serveur restent à qualifier sous GOs appropriés.
@@ -131,6 +131,13 @@ aucun de ces deux rustc n'est autorisé ni exécuté. Pasréutilisation09ba comm
 
 Demande RO totale source/19copies/recette/rougecausal avant GO CPUred exact,
 puisGOgreen20 séparé. Aucun import/unittest/rustc/ELF/exécutionC/credential
-réelle aprèscréationpaquet. Les8Rust exigent autreGo native ; aucunGOPGcontact.
+réelle aprèscréationpaquet. Les9Rust exigent autreGo native ; aucunGOPGcontact.
 Les claimsmetadata n'impliquent pas un runner admissionC livré : les bindings
 Common/READY/owner/GoC restent à raccorder sousnouveauxpins etrevue avantcontact.
+
+
+Correction prépa après consignation6f0c604ca7 : join_connection_driver partagé
+par l'Owner réel et un nouveau testRust ne repoll pas un handle consommé en
+ReadyErr. Timeoutpending seul autoriseabort+join dans le mêmeEND.9Rustsources
+restent NONCOMPILÉES,20Python etrougelegacy toujoursNONJOUÉS. Paquet01code6fdb
+reste conservé historique ; paquet02 deSOURCE etnouvelleRO àémettre.

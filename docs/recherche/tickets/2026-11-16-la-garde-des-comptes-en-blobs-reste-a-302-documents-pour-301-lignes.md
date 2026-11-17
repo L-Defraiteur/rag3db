@@ -747,3 +747,7 @@ encore. Aucunruntimeobservé/rougeinventé. Extrairejoinhelper partagé : ReadyE
 estconsommé/refusdirectsansrepoll ; seulTimeout encorepending autoriseabort+
 attentemêmeEND. AjoutertestRusttâcheannulée sansPG,NONCOMPILÉ. Ancienpaquet6f
 reste sourcehistorique nonexécutée ; nouveaupin+RO requis aprèscorrection.
+
+Correctifsourceprépa join_driver : helperréel+testRustpartagé ne repoll jamais
+ReadyErrconsommé ; timeoutseulabort/joinmêmeEND.9RustNONCOMPILÉS,20Python+1legacy
+NONJOUÉS. Packetsource02/RO àactualiser, aucunclient/credential/natifPG exécuté.
