@@ -1,0 +1,78 @@
+{
+  "argv": [
+    "/home/lucied/.cache/rag3weaver-build/poste",
+    "lourd",
+    "/usr/bin/timeout",
+    "--signal=TERM",
+    "--kill-after=2s",
+    "28s",
+    "/usr/bin/python3",
+    "/home/lucied/.cache/optimiseur-notes/psql-host-runner-20261117-r1/runner19-fixed-cpu-08/source/confiner_validation.py",
+    "lancer",
+    "--delai",
+    "20",
+    "--preuves",
+    "/home/lucied/.cache/optimiseur-notes/psql-host-runner-20261117-r1/runner19-fixed-cpu-08/common-proofs",
+    "--",
+    "/usr/bin/python3",
+    "-B",
+    "-m",
+    "unittest",
+    "-v",
+    "-f",
+    "test_runner"
+  ],
+  "common_sha256": "6439fdd8b52c85fa4e74af0def2c667ef0bedae9b814cbbfd48e49946c4f74ea",
+  "cwd": "/home/lucied/.cache/optimiseur-notes/psql-host-runner-20261117-r1/runner19-fixed-cpu-08/source",
+  "environment": {
+    "POSTE_MEM_MAX": "32G",
+    "PSQL_CPU_CAPTURE_PROOFS": "/home/lucied/.cache/optimiseur-notes/psql-host-runner-20261117-r1/runner19-fixed-cpu-08/child-proofs",
+    "PSQL_CPU_PYTHON_SHA256": "a38210a53e07ac5eb912ee35c2d92ddb7eaa349301b60c188a5f496c7c87449d",
+    "PYTHONDONTWRITEBYTECODE": "1"
+  },
+  "excluded_tests": "8 prior fakeFS and 4 archive fakeIO tests excluded; neither review module included",
+  "execution_authorized": false,
+  "expected": {
+    "errors": 0,
+    "failures": 0,
+    "returncode": 0,
+    "skipped": 0,
+    "tests": 19
+  },
+  "expected_direct_python_children": 7,
+  "expected_fixture_descendants": 1,
+  "interpreter": {
+    "path": "/usr/bin/python3",
+    "resolved": "/usr/bin/python3.14",
+    "sha256": "a38210a53e07ac5eb912ee35c2d92ddb7eaa349301b60c188a5f496c7c87449d",
+    "version": "3.14.10 (main, Nov 13 2026, 15:10:24) [GCC 16.2.1 20260810]"
+  },
+  "real_capture_children": true,
+  "real_psql_or_pg": false,
+  "root": "/home/lucied/.cache/optimiseur-notes/psql-host-runner-20261117-r1/runner19-fixed-cpu-08",
+  "source_files": {
+    "capture_evidence.py": "76d72ff39f38ba4e39b31e75ff970b3d12e8e642c30a973e63e1e8bbe4a34daa",
+    "frozen-v1/backend-postcheck.sql": "2907a86d971770275b9ff6291e9bffebdf4467d23c7c59ff2015ae6a3fb9c864",
+    "frozen-v1/identity.sql": "f9496688a506085562a071ce25827a2a683bccd457c9edf6e944e228b7c29328",
+    "frozen-v1/pg_receipt.py": "de69c498b1ac38d80d4976144fea79ddbfa7d3a34ea8ce7dae1d9e4a457aeed6",
+    "frozen-v1/readonly-session-v2.sql": "f40eb6ebc867839303aa51229497e7d533c6708854bea9b63bcfe67f2012b8b9",
+    "runner.py": "6148fa830bbea4482e8ba263ed310935b15f66a12e1217010e79472f1a4959f3",
+    "test_runner.py": "c0689c1adcb96b05dc3096f0cf3ca919e67ccbf406e5bb2e499611aad66b623e"
+  },
+  "sql_authorized": false,
+  "stage": "psql-runner19-fixed-cpu-08",
+  "tools": [
+    {
+      "path": "/usr/bin/timeout",
+      "resolved": "/usr/bin/timeout",
+      "sha256": "9c3e4dc9a71ba25ed23e56774c003d3e16043479c48c9fd5c6943734eb1942b7",
+      "uid": 0
+    },
+    {
+      "path": "/home/lucied/.cache/rag3weaver-build/poste",
+      "resolved": "/home/lucied/.cache/rag3weaver-build/poste",
+      "sha256": "79e3a8bbf457e3bc9104aa1558e7d03072216c70b68e08ae606ace6aa4584c7b",
+      "uid": 1000
+    }
+  ]
+}

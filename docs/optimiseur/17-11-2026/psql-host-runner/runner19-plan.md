@@ -164,3 +164,19 @@ Les quatre rouges précédents restent intacts ; résultat limité aux quatre
 raccords fakeIO. Prépa nouveau paquet19/helperfix désormais autorisée par C7,
 PAS exécution19 enchaînée. Nouvelle recette/pins et Rtotal puis GO C7DISTINCT
 nécessaires. Native/PG/terminalréel/exe-env/outerwhole5 restent non qualifiés.
+
+
+## Nouveau Q19 source après helperfakeIO4 verts, aucun test enchaîné
+
+runner19-fixed-cpu-recipe.json : racine NEUVE runner19-fixed-cpu-08, même
+sélection19/-v-f, mêmes caps20/28+2/32G et contrôles d'ownership/RAW/EOF/TERM,
+seul helper76d72 remplace0a2b. Runner6148 et tests19c0689 inchangés. Sept
+sources +Common6439 à copier et rehash, Python/timeout/poste pins explicites.
+Ancien Q19-05/recette4425 et tous rouges/verts restent immuables.
+
+Les19 sont toujours NON JOUÉS, les8fakeFS+4fakeIO exclus (leurs modules non
+copiés). Paquet privé source/métadonnées seulement ; R lecture TOTALE du chemin
+runner/tests/helperfrozenCommon/outils, puis GO C7distinct requis. Aucun
+RealCapture/fork fixture/natifPG/secret/service/SDK ou buildCLI99 effectué.
+Les limitations PG/terminalréel/exe-env/outerwhole5 ne sont pas levées par
+les4fakeverts ni par cette préparation.
