@@ -190,3 +190,18 @@ sans fraîcheur72h/service ; Banc corpusSTABLE_CANDIDATE/NONMATCHED et contrats
 oracle30cas/BM25RAW/vector distincts. Préparation Git/doc seulement,0test/build/
 DB/CLI/provider/snapshot/copie/service/proc/cleanup. Recette à RO pour arbitrage,
 nouveau couple/qualifications et pièces fraîches manquantes explicités.
+
+## Choix C7 du couple pour préparer ELF et lecteurs — avant outils
+
+C7f104d58c02 choisit99fef92ce6ee9a0007eaf99c7c3a6a3789061c57/SDK59ac9c86bc2b3529b590a7462ab7051e3ad26b8a
+pour PRÉPARER la recette exécutable du nouvel ELF et des lecteurs nécessaires.
+Plan0033086c00 relu R/ED, bornesOPS/RET G favorables. Recette à composer AVECG,
+features/artifactJSON/source/SDK/profil/targetunique/provenances/existants/
+copiesavantinvocation/caps à proposer ; acquis déjà qualifiés ED sur ce produit
+à attribuer explicitement, pas de F8/lib rejoués par réflexe ni ELF927 renommé.
+Parent complété ici AVANT écriture d'outils. Références sources demandées G/ED,
+aucun nouveau relevé runtime ni calcul. Corpusmatched Banc reste indépendant.
+
+Aucun GO build/test/CLI/provider/original/snapshot/copie/service/slot/cleanup.
+Publier recette/pins et RO avant proposition opérationnelle à GO distinct.
+Anciens budgets/retours clos, psql reste portée propre de G. Ticket OUVERT.
