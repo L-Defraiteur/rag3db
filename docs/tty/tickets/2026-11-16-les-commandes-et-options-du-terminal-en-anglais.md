@@ -816,3 +816,17 @@ processus ; tableau20spécificationsP01-P16bornéesracines/P17-P20UNKNOWN
 nonconditionsimplicitesanglais, jamais20verts. Historique961préservé.
 API/mécanismeArchiabsentsavantpreuves, appelantssurfaceàréserverRecherche ;
 aucuncode/CPU/native/Q/Tmodifié. ROportée puisalignementAPI/témoinsavantcode.
+
+### STOP du 17 novembre — passation autonome pour Claude
+
+STOP Lucie transmis par C7 : tous coupons non consommés révoqués, anciens END
+non réactivables. Aucun test/calcul/GO/natif/master/tag/nettoyage supplémentaire.
+Sauvegarde documentaire seulement :
+`docs/tty/17-11-2026/99-passation-pour-claude.md`.
+Le rapport conserve les sources, preuves, NONJOUÉS, réserves et ressources.
+Dernière réserve tty : rc enfant7 perdu par snapshot RAW invalide sur runner5877852,
+témoin2df73d prépublié/relu mais NON OBSERVÉ à la dernière revue ; pas de GO31.
+CP annonce cinq rouges résiduels6f471fe ; archive pas personnellement réauditée
+par tty. Ticket reste OPEN, pas de qualification globale ni activation Q.
+Reprise uniquement sous nouvel accord explicite après lecture de la synthèse C7
+et des passations du17nov, qui priment les instructions historiques.
