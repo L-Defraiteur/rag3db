@@ -28,6 +28,23 @@ class Boundaries(unittest.TestCase):
    self.assertNotEqual(before,evidence.source_state(root,git))
    others[0]='';stage[0]=stage[0].replace('a'*40,'b'*40)
    self.assertNotEqual(before,evidence.source_state(root,git))
+ def test_actual_broker_rejects_a_changed_green_test_body(self):
+  with tempfile.TemporaryDirectory() as tmp:
+   root=Path(tmp).resolve();cwd=root/'source';(cwd/'src').mkdir(parents=True);target=root/'targets/task';target.mkdir(parents=True)
+   (cwd/'src/backend.rs').write_text(policy.D6_RED_TEST.replace('.is_err()', '.is_ok()'))
+   def git(path,*args):
+    if args==('rev-parse','HEAD'):return policy.APP
+    if args==('diff','--cached','--name-only'):return ''
+    if args==('diff','HEAD','--name-only'):return 'extension/rag3weaver/src/backend.rs'
+    if args==('diff','--binary'):return 'fixture delta'
+    raise AssertionError(args)
+   ctx=SimpleNamespace(tick=lambda:None,git=git,config=dict(cargo_exe='/fixture/toolchain/bin/cargo',sdk_root='/fixture/sdk'),save=lambda *a:None,observer=SimpleNamespace(source=lambda *a:None))
+   actual=broker.Broker(ctx);actual.cwd=cwd;actual.target=target;actual.completed=[dict(stage='agent-red')]
+   actual.identity=lambda *a:dict(pid=99,starttime='123')
+   request=dict(kind='admit',cwd=str(cwd),target=str(target),argv=policy.d6_command(policy.D6_NAME),pid=99)
+   with patch.object(broker,'TASKS',root/'targets'),patch.object(evidence,'source_state',return_value=dict(head=policy.APP,files={'src/backend.rs':dict(kind='file')},index='fixture')):
+    with self.assertRaises(RuntimeError):actual.handle(request,(99,42,0))
+   self.assertEqual(actual.sessions,{})
  def test_runtime_snapshot_archives_changed_identity_before_refusal(self):
   with tempfile.TemporaryDirectory() as tmp:
    root=Path(tmp);proc=root/'99';proc.mkdir();(proc/'environ').write_bytes(b'irrelevant=x\0');(proc/'maps').write_text('map')

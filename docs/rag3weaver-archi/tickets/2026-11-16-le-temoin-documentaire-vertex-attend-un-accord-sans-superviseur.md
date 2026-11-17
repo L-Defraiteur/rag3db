@@ -166,3 +166,12 @@ Split no-run/ELF accepté en principe sous vérification des vrais raccords ; au
 pin PC/Q/T0 ni ACK services/Vertex acquis. Budget/CLI/watchdog/finalfsync relus
 sans réserve supplémentaire dans ce périmètre. Aucun import/CPU/native/SDK/proc/
 signal/cloud/DB/HTTP exécuté par cette RO. Attendre groupe ED avant pin correctif.
+
+### RO delta Mémoire 4461 : juge rouge→vert, réserve avant correction
+
+HOLD sur réserve résiduelle unique : `red_source` est appelé seulement pour
+agent-red ; agent-green peut garder le nom et remplacer le corps par assert true.
+Le reviewer final n'atteste pas l'identité du juge rouge→vert. Exiger D6_RED_TEST
+inchangé à admission/built/tested pour les deux étapes agent, validateur seul
+modifiable ; témoin au vrai Broker.handle refusant l'admission verte altérée,
+publié avant correctif et NONJOUÉ sans GO CPU. APPf1e8 inchangée.
