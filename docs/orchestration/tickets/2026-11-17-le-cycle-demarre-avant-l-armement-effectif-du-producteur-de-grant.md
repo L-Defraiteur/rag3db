@@ -60,3 +60,6 @@ Rouge13AE réellement observé : injectionunique puis1FAILrc1!=0/0ERROR/0,007s, 
 
 
 AdmissionC7NEUVE17nov : HB1vert6c6b/manifest815077...1dd36 et deuxTOTALROED/R/Q8a5d861...b445 vérifiés ; source6c6bexacte/22copiesPCréempreintées/P-S-allocation-grantabsents. GO C7-LIFECYCLE-HB6C6-Q8-17nov900 UNEcopieFINsansdette/vraiPOSTE32G/outer898+2/Common830/acteurautonomeARMavantDB ; strictnonce/lease/9identity/usage0/noEmbeddingCalls/publication→shutdownACKmêmePID/postgraphFTSbitdigest/sourcesimmuables/firstredSTOP0retry/doublefinalbornes. Détailscompletsau suivi17nov ; aucunancienGO/ENDnioriginal/service/master/nettoyage. Revues/CPUrestentbornées ; résultatphysiqueàobserver.
+
+
+RetourQ8 : ARMautonomeavantDB/READYgrantobservés puisRED1266055.091886152 aprèsACKshutdownmêmePID. Causegardeaprèswriter : stable_readers refuse2disparitions .ecrivain/.wal dansRAWbaseline2252→2250, DBmodifiée/autresentréesidentiques ; statutglobalresteROUGE/suitesgraphFTSvecteursPOSTNONJOUÉES. Bruts103manifest497baaf3...a2d5d2hostsowner, sourceFINintacteàattester. Publicationimmuable+ticketdéfautdegarde AVANTfix/ROpreuve/propositionpostwriterdistinctreadonly ; aucunrejeuwriter/relaxation/auditnatifouancienENDréactivé. Détailsdanssuivi17nov.
