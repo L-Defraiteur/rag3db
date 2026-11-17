@@ -115,3 +115,10 @@ source/nonce/SHA sans dépendance humaine. Bail lancement15s, échec si poste
 nonacquis dans ce délai ; aucune attente sans borne ni GO implicite. Six
 rouges par noms/causes/traces, infraSTOP ; contrôlepositif. ROcouple puis GO
 C7 distinct avant exécution. Code source8b94353 inchangé.
+
+Paquet exact publié6a16c7220f : pilotea5c746/admit166d3f/export047111/
+préflight79adf115. Action de RO couple confiée à Banc, avec Recherche en
+complément sur budget/attribution des rouges/barrière autonome. Critères :
+cohérence source8b,9copies,300physique/CommonMIN/final, ledger2ELF copié et
+rehashé avant tests sans ACKhumain, six causes exactes/positif, infraSTOP.
+Porteur exécution future Lucivy après GO C7 distinct ; aucun run autorisé ici.
