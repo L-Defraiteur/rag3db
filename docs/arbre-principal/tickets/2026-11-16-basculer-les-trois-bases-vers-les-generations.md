@@ -262,3 +262,10 @@ Q30entrées0600UID1000/hashconformes, pilotepropre/P-S-allocation-outerabsents.
 Adaptateur+capturepremièrequery+12témoinsNONJOUÉS relus, aucun nouveau blocage
 établi. CaptureEXEC/MAIN/eventexit sousGDB bornée≠detach/mapsqueriesultérieures.
 GOCPU et B distincts restent C7 ; aucune exécution/test/DB/service/ELF par ED.
+
+## RO ED des cinq contre-exemples B — 17 novembre
+
+Rapport48 sur3240c0a469 : causalité/harnais/pins favorables pour préparer cinq
+rouges, sans run. R1/R2 fondées, manquées par ED47 ; ancien avis historique,
+4e3/Q1d144 non recevables au GO. Trois pins/deux corps inchangés/cinq noms
+recoupés Git/AST ; résultats attendus non acquis, GOCPU distinct C7 requis.
