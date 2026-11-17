@@ -338,3 +338,12 @@ mutableports (calleroriginalintact), résultat/hashcomplets puisrecheckENDprére
 28témoins243cf BYTEdeeeinchangés NONJOUÉSsurfix ;nouveauxpins/ROtotale puisGO28
 distinct avantverts. MODELED/postvalidationseulement, pascleanupOSborné ;
 LIVE/Commonréel/natifunsupported, pur565b/archivesintacts,0PQS/appelants/SDK.
+
+## Réserve observations mutables Mémoire10f753, avant témoins et correction
+
+facts renvoyés par seal_entry et exit_record de wait_child restent mappings du
+port, relus après d'autres callbacks. Un finish peut changer F.sha256 deDàE
+après permisD et faire retournerE ; il peut aussi changer les RAW du wait avant
+hash final. Capturer/copier les données acquises AVANT callback/check suivant,
+sans copier les handles opaques. Prépublier deux témoins causaux surb925inchangé,
+GOrouge distinct/conservation2hôtes avantfix. GO28HOLD, aucunbackendOSqualifié.

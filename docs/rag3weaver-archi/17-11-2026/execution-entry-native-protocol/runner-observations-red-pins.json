@@ -1,0 +1,46 @@
+{
+  "schema": "fixture-runner-observation-alias-red-preparation-v1",
+  "executed": false,
+  "go": null,
+  "unchanged_runner_source": "10f7534f24e1334634801a8c924a918dec44b553",
+  "cwd": "/home/lucied/.cache/rag3weaver-build/cx-wt-archi-pas-va-au-bout-global-pilot-r2/docs/rag3weaver-archi/17-11-2026/execution-entry-native-protocol",
+  "pythonpath": "/home/lucied/.cache/rag3weaver-build/cx-wt-archi-pas-va-au-bout-global-pilot-r2/extension/rag3weaver/scripts",
+  "import_file": "/home/lucied/.cache/rag3weaver-build/cx-wt-archi-pas-va-au-bout-global-pilot-r2/extension/rag3weaver/scripts/execution_entry_runner.py",
+  "interpreter": {
+    "path": "/usr/bin/python3.14",
+    "sha256": "c81d88523721c462f53a98129d65bba68f67791932f0664372e1778e74fd9517"
+  },
+  "files": {
+    "extension/rag3weaver/scripts/execution_entry_runner.py": "b9257a00764a2992c65e17d291aba47588b6ba45f482ba70f9c1747fef8e6d31",
+    "docs/rag3weaver-archi/17-11-2026/execution-entry-native-protocol/test_runner_effects.py": "fc300f7da84ceec5db024f701895d19b78c1461342cca660d2ac1e947d2256eb",
+    "extension/rag3weaver/scripts/execution_entry.py": "565b7f39494911b65ef121f19565450c70803c93b9ef6e62599d570707dbf218"
+  },
+  "argv": [
+    "timeout",
+    "--signal=TERM",
+    "--kill-after=2s",
+    "58s",
+    "/usr/bin/python3.14",
+    "-B",
+    "-m",
+    "unittest",
+    "-v",
+    "test_runner_effects.FixtureRunnerTests.test_sealed_facts_return_retains_acquired_sha_after_port_reuses_mapping",
+    "test_runner_effects.FixtureRunnerTests.test_wait_raw_retains_acquired_bytes_after_port_reuses_mapping"
+  ],
+  "selected_functions": [
+    "test_sealed_facts_return_retains_acquired_sha_after_port_reuses_mapping",
+    "test_wait_raw_retains_acquired_bytes_after_port_reuses_mapping"
+  ],
+  "other_functions_not_selected": 28,
+  "expected": "2 FAIL equality mismatch / 0 ERROR/skip / rc1; NOT OBSERVED",
+  "expected_facts_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "legacy_returned_facts_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "expected_stdout_sha256": "60a3a1f6c4fd1a3e6915f526f737af4f3a0141b3a7a16fbe1439ecbd3957fe5f",
+  "legacy_returned_stdout_sha256": "f853a54a6abaa98afa695de93211f811306974641d8b5049aa392f981f2355cc",
+  "mode": "FIXTURE_ONLY",
+  "proof_origin": "MODELED",
+  "cp_ack": false,
+  "global_admission": false,
+  "native_backend_delivered": false
+}

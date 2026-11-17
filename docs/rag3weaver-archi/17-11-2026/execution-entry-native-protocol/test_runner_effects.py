@@ -357,3 +357,43 @@ class FixtureRunnerTests(unittest.TestCase):
         self.assertEqual(caught.exception.code, 'entry-context')
         self.assertIsNone(request['public_environment']['LD_LIBRARY_PATH'])
         self.assertNotIn('release', effects.calls)
+
+    def test_sealed_facts_return_retains_acquired_sha_after_port_reuses_mapping(self):
+        request, effects = self.fixture()
+        acquired = {}
+        original_seal = effects.seal_entry
+        original_finish = effects.finish_fixture
+        def capture_seal(launch, held):
+            seal, facts = original_seal(launch, held)
+            acquired['facts'] = facts
+            return seal, facts
+        def reuse_mapping(launch):
+            result = original_finish(launch)
+            acquired['facts']['sha256'] = 'e' * 64  # AFTER permit D acceptance
+            return result
+        effects.seal_entry = capture_seal
+        effects.finish_fixture = reuse_mapping
+        result = run_fixture_invocation(request, effects)
+        self.assertEqual(result['facts_sha256'], 'd' * 64)
+        self.assertEqual(effects.permit_binding['facts_sha256'], 'd' * 64)
+
+    def test_wait_raw_retains_acquired_bytes_after_port_reuses_mapping(self):
+        from hashlib import sha256
+        request, effects = self.fixture()
+        acquired = {}
+        expected = sha256(effects.exit['stdout']).hexdigest()
+        original_wait = effects.wait_child
+        original_finish = effects.finish_fixture
+        def capture_wait(launch):
+            record = original_wait(launch)
+            acquired['wait'] = record
+            return record
+        def reuse_mapping(launch):
+            result = original_finish(launch)
+            acquired['wait']['stdout'] = b'forged-output'
+            return result
+        effects.wait_child = capture_wait
+        effects.finish_fixture = reuse_mapping
+        result = run_fixture_invocation(request, effects)
+        self.assertEqual(result['stdout_sha256'], expected)
+        self.assertEqual(result['returncode'], 0)
