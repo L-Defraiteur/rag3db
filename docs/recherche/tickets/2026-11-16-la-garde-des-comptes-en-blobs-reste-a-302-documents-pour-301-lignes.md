@@ -417,3 +417,11 @@ contrôleur POSTE_LOCK_DIR, HOME privé conservé ; recontrôle enfant égalpare
 avant Popen natif, environnement natif sans jeton/reçu/lockdir. Aucun vrai
 proc/flock/service/SQL/CPU/natif exécuté pour ce correctif. Préparationr3+RO
 et GO distincts requis ; aucune modification paquetr2/recette02/preuvesB01.
+
+Paquet correctif r3 préparé de4a90268d78e2af1d2236fb08e0623123b4d89e,
+SHA7c0f3f46fa0dd9e20895496fecd57ad71846a631a98e9bd35665e1434bf75302 ;
+recette03 SHA950786b463c212c5b919a0fff09f55569ab9211b0840e7461d91821345d4cd01
+copiée deuxhôtes. Racine attendue réelle fixée, autorité vérifiée runtime,
+18témoins NON JOUÉS surcettesource. R3/sortiecorrective01/proofs03 distincts,
+GOinactif ; r2/B01 inchangés. RO totale avant GO CPU/natif séparés ; aucun
+rejeuancienGO120, poste/proc réel/rustc/SQL/service lancé pour cette préparation.

@@ -263,3 +263,25 @@ ou verrou acquis par ce mécanisme : lecture seule des preuves du vrai poste.
 Les nouveaux champs et sources exigent un paquet r3 distinct, une nouvelle
 recette/sortie/GO, RO totale et GO CPU/natif distincts. r2/recette02/B01 restent
 immuables. Le correctif n'est ni exécuté ni qualifié ; pas de retryB01/ancien120.
+
+### Paquet correctif r3 et recette03 — préparés, NON EXÉCUTÉS
+
+Code exact de4a90268d78e2af1d2236fb08e0623123b4d89e ; témoins préfix7e4f02afb7.
+PC : `P/packet-r3/packet.json` SHA256
+`7c0f3f46fa0dd9e20895496fecd57ad71846a631a98e9bd35665e1434bf75302`.
+Treize fichiers sources pinés ; poste_lock_root attendu externe fixé au chemin
+canonique `/home/lucied/.cache/rag3weaver-build`. Ce champ n'atteste pas à lui
+seul une autorité : Common+PID/start/fiche/FD9/flock sont exigés à l'exécution.
+
+Recette aux deux postes `P/phase-b-preparation-03/recipe.json` SHA256
+`950786b463c212c5b919a0fff09f55569ab9211b0840e7461d91821345d4cd01`.
+P reste `/home/lucied/.cache/optimiseur-notes/pg-rust-tool-qual-20261117-r1`.
+GO inactif, nouvelle sortie `P/runs/phase-b-corrective-01` absente,
+preuves Common03 absentes ; aucun remplacement d'un ancien paquet/GO.
+Les compteurs d'audit317/13 antérieurs ne sont pas présentés comme audit r3 :
+la recette exige leur requalification avant futur GO. Aucun source importé,
+CPU, proc/fdinfo réel, poste, rustc, SQL ou service lancé ici.
+
+Dix-huit témoins préparés (douze existants adaptés plus six nouveaux), tous
+NON JOUÉS sur cette source. Demande RO totale code/r3/recette03 avant tout
+GO CPU puis natif distinct ; les verts32df ne se reportent pas sur de4a.
