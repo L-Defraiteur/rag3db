@@ -4,8 +4,9 @@
 C7-LIFECYCLE-POSTWRITER-E9-Q9-17nov900 (C7ad8d8cd11d).
 Source **e9f037be2aa25da2c7f6c76f79e2eb57b6c676c9** ; Qv9 prepared
 **96ebc22e7fae474f812273e0bf2f8d41b3f24b5205c6e4f21d4594fbbd0f3099**.
-Une seule entrée après garde fraîche ; aucun retry/reset, calcul embedding,
-compilation, intervention service/original/master ou nettoyage manuel.
+Une seule entrée après garde fraîche ; aucun retry/reset, compilation,
+intervention service/original/master ou nettoyage manuel. Aucun appel embedding
+autorisé par la recette ; aucun compteur global zéro calcul n'est revendiqué.
 Ce rapport documentaire ne change aucun exécutable ni le SHA du joueur.
 
 ## Chaîne effectivement observée
@@ -48,6 +49,12 @@ Les469 claims restent opérationnels, SHA
 3cb2698397b5537c6d123e33520ee01d45e47d2a989df30138e03ccb2df76472,
 distincts de la dette vectorielle. computed_count/reused_count restent UNKNOWN,
 aucun minimum de calculs ni74réemplois historiques acquis par cette passe.
+
+Portée de la revue indépendante Recherche : IDs FTS reparsés depuis les dix
+stdout bruts archivés, canon JSON recalculé et artefacts vectoriels comparés.
+Digests/finite768/dette0/claims/indexREADY sont des preuves du joueur exact,
+sans recalcul des vecteurs depuis une DB rouverte ni bruts vectoriels complets
+dans l'archive. Les compteurs UNKNOWN et les limites des preuves sont conservés.
 
 ## Fin, bornes et limites
 
