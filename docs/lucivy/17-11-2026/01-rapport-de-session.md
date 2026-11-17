@@ -140,3 +140,13 @@ avanttoutesuite,7SHArelusPC444 watchdog-new-probes-red-17nov-v1. Rapport17/12.
 SSHseulementtransfertpreuvesAPRÈS.2ERROR313c conservés sansrequalification,
 rougeEC4valide. GO180A épuisé ; trois verts51a9/a99 attendent GOdistinct,
 aucuneOSkill/cleanupdistant/300/FSnativequalifiée. AncienQ/source8b/T intacts.
+
+GO C7-LUCIVY-BOUNDARIES-GREEN-180A-17nov60 consommé UNE fois :3PASS/0FAIL/
+0ERROR/0skip,rc0,0,102948729sphysique (suite0,013), fixe51a9/harnaisa99f28.
+Setupvrai3cas, wrapperavantARM ; durée236,991636704<=237 parentmock40s ;
+fsyncerror→terminate/waitmock et enfantmockinactif. Bruts/3obs/rc/temps/sources
+archivés2postes,8SHArelusPC444 watchdog-boundaries-green-17nov-v1, rapport17/13.
+0SSH/proc/signal/processréelparfixtures,SSHtransfertpreuvesAPRÈSseulement.
+AucunOSkill/cleanupdistant/300/FSnativequalifié. RougesEC4/180A+2ERROR313c
+conservés. PréparationPCQv2/recettecomplète/pins/RO maintenant autorisée par
+C7 siVERT, mais aucun futurGO implicite ; ancienQ047/source8b/T inchangés.

@@ -1,0 +1,25 @@
+{
+  "source_sha256": "51a9b1e2cb6f3048580588ebc9dfa6d837dadfc2a011d2b78d99f4e380b268f8",
+  "mode": "order",
+  "events": [
+    "physical-watchdog-wrapper",
+    "arm-transport-mocked",
+    "post-arm-write-frontier"
+  ],
+  "real_args_hash_json_reached": true,
+  "parent_metadata_age_seconds": 0,
+  "transmitted_durations": [
+    276.99548498902004
+  ],
+  "error": "post-arm-write-frontier",
+  "local_mock_child_running": null,
+  "source_rewritten": false,
+  "virtual_clock": false,
+  "real_proc_read": false,
+  "real_ssh": false,
+  "real_popen": false,
+  "real_signal": false,
+  "real_remote_body": false,
+  "os_timer_kill_or_cleanup_qualified": false,
+  "captured_stdout": "{\"exporter_armed\": true, \"nonce\": \"0123456789abcdef0123456789abcdef\"}\n"
+}

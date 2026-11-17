@@ -1,0 +1,31 @@
+{
+  "go": "C7-LUCIVY-BOUNDARIES-GREEN-180A-17nov60",
+  "source_commit": "180a5628cf8e1bdc8af26db70e1da8e8e1d580d4",
+  "argv": [
+    "timeout",
+    "--signal=TERM",
+    "--kill-after=5s",
+    "55s",
+    "python3",
+    "-B",
+    "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-export-boundaries-17nov-v3/test-fs-export-boundaries-v3.py",
+    "--exporter",
+    "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-export-boundaries-17nov-v3/exporter-fixed.py",
+    "--exporter-sha256",
+    "51a9b1e2cb6f3048580588ebc9dfa6d837dadfc2a011d2b78d99f4e380b268f8",
+    "--proof",
+    "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-export-boundaries-17nov-v3/proof-green-all",
+    "--case",
+    "all"
+  ],
+  "start": 872073.385756712,
+  "end": 872073.488705441,
+  "elapsed": 0.10294872894883156,
+  "wall_start": 1794914128.4511163,
+  "code": 0,
+  "source_sha256": {
+    "exporter-baseline.py": "0471118fe427d8e5a52685d02c6f30c51ae5ffa2b91937f78e2caa86adf63f6f",
+    "exporter-fixed.py": "51a9b1e2cb6f3048580588ebc9dfa6d837dadfc2a011d2b78d99f4e380b268f8",
+    "test-fs-export-boundaries-v3.py": "a99f28c3de2506e05dd03452006e170392ea359a3221863593f2e17b644db8aa"
+  }
+}

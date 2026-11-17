@@ -1,0 +1,17 @@
+{
+  "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-watchdog-boundaries-green-17nov-v1",
+  "uid": 1000,
+  "device": 55,
+  "inode": 168924852,
+  "hashes": {
+    "invocation.json": "7942def83706bb0f4bcaa0b40b0a4f4dc82159630d287f590506158e99e33c99",
+    "witness.log": "41aa5ca5bb0ec6053b2749d5ed4eaf42be89ab270f60b018e110b547b7420fc8",
+    "test-fs-export-boundaries-v3.py": "a99f28c3de2506e05dd03452006e170392ea359a3221863593f2e17b644db8aa",
+    "exporter-baseline.py": "0471118fe427d8e5a52685d02c6f30c51ae5ffa2b91937f78e2caa86adf63f6f",
+    "exporter-fixed.py": "51a9b1e2cb6f3048580588ebc9dfa6d837dadfc2a011d2b78d99f4e380b268f8",
+    "order-observation.json": "3bfbb8fcc37c3318a3fcf6a3cca5e3887d59a930bfd13d852a99b0bd441674f4",
+    "duration-observation.json": "85443fcd9223278b3f66f7e26ac511b06d8e7b7ad8b274fec1cb58ed83c4cd52",
+    "io-error-observation.json": "6f165aaf3802eb9208ec07ea0e26ee54079526f095da1c3c07d0f7f8f443d97c"
+  },
+  "archive_only_no_test": true
+}
