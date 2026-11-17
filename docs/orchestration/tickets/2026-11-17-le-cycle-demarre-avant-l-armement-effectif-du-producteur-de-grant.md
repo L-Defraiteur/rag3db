@@ -162,3 +162,13 @@ check_scope avant/après validation, tolérances strictes inchangées ; PQS/mani
 cohérents, Q7figé. Rouge13ae1FAIL0ERROR/3fichiers réhashés LOCAL+PC sansrejeu.
 Seul témoinHB vert à décider C7 distinctement, pas rejeu sixanciens déduit ;
 paquetQ8/ROtotale/GO900 toujours distincts. Suite rapportED35.
+
+RO ED TOTALE neuve6c6b/Qv8prepareda5d8 favorable :
+[rapport36](../../everything-declarative/16-11-2026/36-ro-totale-cycle-6c6b-qv8.md).
+Chaîne entière Common/ARM/OS/liveness/HB/policy/actions/driver/final relue,
+pas seulement delta.22copies==Git==prepared/HEADclean/23entrées et
+P-S-allocation-grantabsents recoupés PC ; références/outils/SDKhash conformes,
+ancienQ7/D22 conservé. Sixarchives3fichiers CPU réhashées deuxhôtes, HB1vert
+acquis6c6b et sixancienscarried sansrejeu. Aucun nouveau blocage établi,
+aucunruntime/proc/DB/health/slot/native ni GO900. Ticket reste OUVERT ;
+décision C7 et vraie qualification physique distinctes.
