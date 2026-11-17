@@ -710,3 +710,12 @@ Refuscancel-sanstoken/attributionunknown/clientSHAliéallocation avanttransport.
 TypedPID/OID/flags boolstricts, driverfinishpasréessayéaprèséchec ; loader
 credentialsfuturnonce/root/mode exacts. PasCnative, aucuneconnexionfixture02,
 aucunsecretlu malgréfonctionsdelectureprésentesensource. RuntimeCLI désactivé.
+
+Prépa testsliés au vrai finisherRust : SessionClose/finish_owned sont utilisés
+par Owner réel et faux unitairesRust, annulation si tokenacquis/ENDrestant,
+drop puisjoin mêmeEND ;8Rust#[test] écritsNONCOMPILÉS (4parse+4lifecycle).
+MatricePython20NONJOUÉS (17cœur+3credential) avec distinction échecconnexion
+postcheck UNKNOWN vs ancienPIDidentitéconnu ; framesfailure session-explicite,
+premièrecause sansinventerabsencedePG.1legacyrougecausal reste proposé séparé,
+0testclient/natif/credentialsréelles exécuté. Les vertsallocation02 sont ceux
+des jugesimage deprovision, pas ceux de ces nouvelles sources.

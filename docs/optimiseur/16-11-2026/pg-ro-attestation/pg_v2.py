@@ -126,7 +126,7 @@ def safe_frame(raw,secret):
     require(type(f) is dict and f.get('event') in ('connected','readonly','identity','closed','postcheck','complete','failure'),'unknown_frame')
     keys={'connected':['event','session','cancel_token_acquired'],'readonly':['event','session','state'],
           'identity':['event','row'],'closed':['event','session','driver_joined'],
-          'postcheck':['event','row'],'complete':['event','transport_qualified'],'failure':['event','code','cleanup']}[f['event']]
+          'postcheck':['event','row'],'complete':['event','transport_qualified'],'failure':['event','session','code','cleanup']}[f['event']]
     exact(f,keys)
     if 'session' in f:require(f['session'] in ('identity','postcheck'),'session')
     if f['event']=='failure':
@@ -148,10 +148,10 @@ def safe_frame(raw,secret):
 class FrameState:
     expected=[('connected','identity'),('readonly','identity'),('identity',None),('closed','identity'),
               ('connected','postcheck'),('readonly','postcheck'),('postcheck',None),('closed','postcheck'),('complete',None)]
-    def __init__(self,allocation):self.a=allocation;self.position=0;self.identity=None;self.check=None;self.pid=None;self.check_pid=None
+    def __init__(self,allocation):self.a=allocation;self.position=0;self.identity=None;self.check=None;self.pid=None;self.check_pid=None;self.failed_session=None;self.failed_pid=None
     def accept(self,f):
         if f['event']=='failure':
-            if f['cleanup']['backend_pid'] is not None:self.pid=f['cleanup']['backend_pid']
+            self.failed_session=f['session'];self.failed_pid=f['cleanup']['backend_pid']
             raise Refused('native_'+f['code'])
         require(self.position<len(self.expected) and (f['event'],f.get('session'))==self.expected[self.position],'frame_order')
         event=f['event'];app='g-pg-'+self.a['nonce']
@@ -217,7 +217,9 @@ def observe(allocation,secret,transport,*,out,clock=time.monotonic,scope_check):
     except BaseException as error:
         # Aucun message d'exception externe : il peut contenir le DSN/canari.
         code=error.code if isinstance(error,Refused) and type(error.code) is str and re.fullmatch('[a-z_]+',error.code) and not contains_secret(error.code,secret) else 'transport_error'
-        marker=dict(reason=code,error_class=type(error).__name__ if type(error) in (Refused,ValueError,TimeoutError,OSError) else 'Exception',server_attributed=tracker.pid is not None,
+        failed_session=tracker.failed_session or ('identity' if tracker.position<4 else 'postcheck')
+        failed_pid=tracker.failed_pid if tracker.failed_session else tracker.pid if failed_session=='identity' else tracker.check_pid
+        marker=dict(reason=code,error_class=type(error).__name__ if type(error) in (Refused,ValueError,TimeoutError,OSError) else 'Exception',server_attributed=failed_pid is not None,failed_session=failed_session,failed_session_backend_pid=failed_pid,identity_backend_pid=tracker.pid,postcheck_backend_pid=tracker.check_pid,
                     backend_absent=None,transport_qualified=False,lease_granted=False)
         if not (out/'first-red.json').exists():publish(out/'first-red.json',marker)
         if attempted and not finished:

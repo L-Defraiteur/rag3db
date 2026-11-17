@@ -106,27 +106,45 @@ impl Owner{
         timeout_at(end,self.client()?.batch_execute("COMMIT")).await.map_err(|_|"timeout")?.map_err(|_|"query")?;
         Ok(value)
     }
-    async fn finish(mut self,failed:bool,end:Instant)->Value{
-        let mut attempted=false;let mut cancelled=false;
-        if failed&&Instant::now()<end{attempted=true;cancelled=matches!(timeout_at(end,self.cancel.cancel_query(NoTls)).await,Ok(Ok(())));}
-        drop(self.client.take());
+ }
+trait SessionClose {
+    fn token_acquired(&self)->bool;
+    fn backend_pid(&self)->Option<u64>;
+    async fn cancel_query(&mut self,end:Instant)->bool;
+    fn drop_client(&mut self);
+    async fn join_driver(&mut self,end:Instant)->bool;
+}
+impl SessionClose for Owner {
+    fn token_acquired(&self)->bool{true}
+    fn backend_pid(&self)->Option<u64>{self.pid}
+    async fn cancel_query(&mut self,end:Instant)->bool{matches!(timeout_at(end,self.cancel.cancel_query(NoTls)).await,Ok(Ok(())))}
+    fn drop_client(&mut self){drop(self.client.take());}
+    async fn join_driver(&mut self,end:Instant)->bool{
         let joined=matches!(timeout_at(end,&mut self.driver).await,Ok(Ok(Ok(()))));
         if !joined{self.driver.abort();let _=timeout_at(end,&mut self.driver).await;}
-        json!({"cancel_token_acquired":true,"cancel_attempted":attempted,"cancel_complete":cancelled,"client_dropped":true,"driver_joined":joined,"backend_pid":self.pid,"backend_absent":null})
+        joined
     }
 }
+async fn finish_owned<C:SessionClose>(owner:&mut C,failed:bool,end:Instant)->Value{
+    let token=owner.token_acquired();let mut attempted=false;let mut cancelled=false;
+    if failed&&token&&Instant::now()<end{attempted=true;cancelled=owner.cancel_query(end).await;}
+    owner.drop_client();let joined=owner.join_driver(end).await;
+    json!({"cancel_token_acquired":token,"cancel_attempted":attempted,"cancel_complete":cancelled,
+           "client_dropped":true,"driver_joined":joined,"backend_pid":owner.backend_pid(),"backend_absent":null})
+}
+
 fn no_owner()->Value{json!({"cancel_token_acquired":false,"cancel_attempted":false,"cancel_complete":false,"client_dropped":false,"driver_joined":false,"backend_pid":null,"backend_absent":null})}
 async fn session(config:Config,sql:&'static str,p:&Prepared,kind:&str,end:Instant)->Result<(Value,Value),&'static str>{
-    let mut owner=match Owner::open(config,end).await{Ok(v)=>v,Err(code)=>{emit(json!({"event":"failure","code":code,"cleanup":no_owner()}))?;return Err(code);}};
+    let mut owner=match Owner::open(config,end).await{Ok(v)=>v,Err(code)=>{emit(json!({"event":"failure","session":kind,"code":code,"cleanup":no_owner()}))?;return Err(code);}};
     let result=async {
         emit(json!({"event":"connected","session":kind,"cancel_token_acquired":true}))?;
         owner.transaction(sql,&p.user,&p.database,kind,end).await
     }.await;
-    let cleanup=owner.finish(result.is_err(),end).await;
+    let cleanup=finish_owned(&mut owner,result.is_err(),end).await;
     match result{
         Ok(value) if cleanup["driver_joined"].as_bool()==Some(true)=>Ok((value,cleanup)),
-        Ok(_)=>{emit(json!({"event":"failure","code":"driver_join","cleanup":cleanup}))?;Err("driver_join")},
-        Err(code)=>{emit(json!({"event":"failure","code":code,"cleanup":cleanup}))?;Err(code)},
+        Ok(_)=>{emit(json!({"event":"failure","session":kind,"code":"driver_join","cleanup":cleanup}))?;Err("driver_join")},
+        Err(code)=>{emit(json!({"event":"failure","session":kind,"code":code,"cleanup":cleanup}))?;Err(code)},
     }
 }
 async fn capture(p:Prepared)->Result<(),&'static str>{
@@ -167,4 +185,19 @@ mod tests {
     #[test] fn private_fixture_is_syntax_only_until_capture(){assert!(prepare(&request(15433)).is_ok());}
     #[test] fn shared_bootstrap_port_is_never_fallback(){assert!(prepare(&request(5433)).is_err());}
     #[test] fn parse_error_never_contains_secret(){let mut value=request(15433);value["nonce"]=json!("bad");let reason=prepare(&value).err().unwrap();assert!(!reason.contains("RUST_FAKE_CANARY"));}
+    struct FakeClose{token:bool,pid:Option<u64>,joined:bool,calls:Vec<&'static str>,deadlines:Vec<Instant>}
+    impl SessionClose for FakeClose{
+        fn token_acquired(&self)->bool{self.token}
+        fn backend_pid(&self)->Option<u64>{self.pid}
+        async fn cancel_query(&mut self,end:Instant)->bool{self.calls.push("cancel");self.deadlines.push(end);true}
+        fn drop_client(&mut self){self.calls.push("drop");}
+        async fn join_driver(&mut self,end:Instant)->bool{self.calls.push("join");self.deadlines.push(end);self.joined}
+    }
+    fn fake(token:bool)->FakeClose{FakeClose{token,pid:None,joined:true,calls:vec![],deadlines:vec![]}}
+    fn run_close(owner:&mut FakeClose,end:Instant)->Value{tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap().block_on(finish_owned(owner,true,end))}
+    #[test] fn no_token_never_attempts_cancel(){let mut o=fake(false);let v=run_close(&mut o,Instant::now()+Duration::from_secs(1));assert_eq!(o.calls,vec!["drop","join"]);assert_eq!(v["cancel_attempted"],false);}
+    #[test] fn first_failure_cleanup_uses_cancel_drop_join_and_same_end(){let mut o=fake(true);let end=Instant::now()+Duration::from_secs(1);run_close(&mut o,end);assert_eq!(o.calls,vec!["cancel","drop","join"]);assert!(o.deadlines.iter().all(|x|*x==end));}
+    #[test] fn expired_end_is_never_renewed_for_cancel(){let mut o=fake(true);let end=Instant::now()-Duration::from_secs(1);run_close(&mut o,end);assert_eq!(o.calls,vec!["drop","join"]);assert!(o.deadlines.iter().all(|x|*x==end));}
+    #[test] fn unknown_pid_or_unjoined_driver_is_not_absence_proof(){let mut o=fake(true);o.joined=false;let v=run_close(&mut o,Instant::now()+Duration::from_secs(1));assert_eq!(v["backend_pid"],Value::Null);assert_eq!(v["backend_absent"],Value::Null);assert_eq!(v["driver_joined"],false);}
+
 }

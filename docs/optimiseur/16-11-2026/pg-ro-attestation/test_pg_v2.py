@@ -120,13 +120,19 @@ class V2Fixtures(unittest.TestCase):
         self.assertNotIn(CANARY,(self.out/'first-red.json').read_text())
     def test_cancel_without_token_is_refused(self):
         cleanup=dict(cancel_token_acquired=False,cancel_attempted=True,cancel_complete=False,client_dropped=False,driver_joined=False,backend_pid=None,backend_absent=None)
-        transport=FakeTransport([dict(event='failure',code='connect_before_attribution',cleanup=cleanup)])
+        transport=FakeTransport([dict(event='failure',session='identity',code='connect_before_attribution',cleanup=cleanup)])
         with self.assertRaises(v2.Refused):self.run_probe(transport)
         self.assertIn('cancel_without_token',(self.out/'first-red.json').read_text())
     def test_wire_failure_before_attribution_stays_unknown(self):
         cleanup=dict(cancel_token_acquired=False,cancel_attempted=False,cancel_complete=False,client_dropped=False,driver_joined=False,backend_pid=None,backend_absent=None)
-        with self.assertRaises(v2.Refused):self.run_probe(FakeTransport([dict(event='failure',code='connect_before_attribution',cleanup=cleanup)]))
+        with self.assertRaises(v2.Refused):self.run_probe(FakeTransport([dict(event='failure',session='identity',code='connect_before_attribution',cleanup=cleanup)]))
         red=json.loads((self.out/'first-red.json').read_text());self.assertFalse(red['server_attributed']);self.assertIsNone(red['backend_absent'])
+    def test_postcheck_connect_timeout_is_not_attributed_to_old_identity_pid(self):
+        cleanup=dict(cancel_token_acquired=False,cancel_attempted=False,cancel_complete=False,client_dropped=False,driver_joined=False,backend_pid=None,backend_absent=None)
+        events=frames()[:4]+[dict(event='failure',session='postcheck',code='connect_before_attribution',cleanup=cleanup)]
+        with self.assertRaises(v2.Refused):self.run_probe(FakeTransport(events))
+        red=json.loads((self.out/'first-red.json').read_text())
+        self.assertEqual(red['identity_backend_pid'],201);self.assertFalse(red['server_attributed']);self.assertIsNone(red['failed_session_backend_pid'])
     def test_client_pin_must_match_external_allocation(self):
         transport=FakeTransport();transport.client_sha256='3'*64
         with self.assertRaises(v2.Refused):self.run_probe(transport)
