@@ -106,3 +106,27 @@ Conserver le rouge ancien et ses limites. Compléter aussi les types exacts
 passage attendues ; pas de vert d'ensemble à partir de refus en amont. Le
 choix CPU est exclusivement C7, les12 n'ont pas été exécutées par ED ; aucun
 fix, DB/health/native/service/SDK/target ni ancien GO reporté.
+
+## Complément48a2cfcdc1 : quatorze fonctions prépubliées
+
+RO statique favorable au témoin préwriter ajouté : extrait les vraies
+instructions assignmentbefore_writer/save deuxinventaires/appelwriter dans
+l'ordre source ; le writer est un spy, toutes les autres actions du driver
+sont explicitement exclues. À l'instant de cet appel, contrôle présence,
+contenu relu et inode observé dans le vrai fsync des fichiers temporaires.
+La réserve sur l'ordre baseline→writer a maintenant un oracle écrit, sans
+résultat CPU déduit. L'ancien code sans sauvegarde doit faire FAIL sur ces
+observations, pas invoquer une DB pour en apporter la preuve.
+
+Le positif .readers absent→vide a aussi été ajouté. Total13fonctions
+inventaire +1préwriter, toutes NONJOUÉES ici, exécutable6c6b inchangé. Pour
+le seul rouge causal sollicité, cibler EXACTEMENT
+test_postwriter_inventory.PostwriterInventory.test_exact_writer_auxiliary_removal_is_not_a_readonly_mutation ;
+un module entier failfast pourrait s'arrêter sur un autre défaut attendu.
+
+Les points restant avant suffisance verte restent ceux ci-dessus : mutant
+baseline substitué/lien au cycle, doublon POST autrement admissible et motif/
+compteur, types exacts et UID des répertoires synthétiques. Le nouvel oracle
+d'ordre ne qualifie pas à lui seul les autres14branches. Favorable pour la
+préparation et ce ciblage CPU si C7 l'admet ; aucun GO donné par ED, aucun
+test/fix/runtime/native/DB/health/service effectué.

@@ -74,3 +74,11 @@ mutantsubstitutionbaseline ; doublonPOST autrementadmissible et motif/compteur
 atteint ; self.dirs doit inclure uid du vrai q.directories. AssertFalse/refus
 amont ne qualifie pas le mutant visé. Contrôle readonly intact/typesbool-int
 à compléter avant qualification globale. Aucun lancement/fix/GO par ED.
+
+RO ED complément48a2 : oracleordre préwriter réel (assignment/save2inventaires/
+writer sourceordre, spyvérifieprésence-contenu-inodefsyncAVANTappel) favorable
+statiquement ; positif.readers ajouté.13inventaire+1préwriter NONJOUÉES,
+runtime6c6b inchangé. Rouge causal à cibler EXACT nominalauxiliaires, pasmodule
+failfastpourprétendrecettecausalité. Restentpourvert : baseline substitution/
+liencycle,doublonPOSTnonmasqué,motif-compteurs,typesstricts/dirsUID. Aucun test
+oufix/GO accordé par ED ; complément rapportED38, C7seuladmissionCPUdistincte.
