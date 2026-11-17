@@ -123,6 +123,25 @@ class RoleSampler(unittest.TestCase):
                 with self.subTest(argv=argv), self.assertRaises(ValueError):
                     a.python_role_snapshot(72, str(script), proc_root=root, clock=lambda:11.)
 
+    def test_protected_script_is_refused_before_any_digest(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp)
+            proc=root/'72'
+            proc.mkdir()
+            fields=['R','60']+['0']*17+['123']
+            (proc/'stat').write_text('72 (python role) '+' '.join(fields))
+            (proc/'cgroup').write_text('0::/scope\n')
+            for script in ('/secret/.env', '/secret/.env.local', '/secret/part.vault/actor.py'):
+                argv=['/python3','-B',script,'--watch','/config','c'*64]
+                (proc/'cmdline').write_bytes(('\0'.join(argv)+'\0').encode())
+                with self.subTest(script=script), patch.object(a, 'digest') as spy:
+                    with self.assertRaisesRegex(ValueError, 'protected'):
+                        a.process_snapshot(72,proc_root=root,clock=lambda:11.)
+                    spy.assert_not_called()
+                    with self.assertRaisesRegex(ValueError, 'protected'):
+                        a.python_role_snapshot(72,script,proc_root=root,clock=lambda:11.)
+                    spy.assert_not_called()
+
     def test_basic_process_is_public_stable_and_live(self):
         sample=dict(pid=72,start='123',uid=1000,cgroup='/scope',state='R')
         with patch.object(a,'_basic_process',side_effect=[sample,dict(sample,state='S')]):
