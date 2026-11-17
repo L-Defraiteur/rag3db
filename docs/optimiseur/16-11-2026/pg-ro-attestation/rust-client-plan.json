@@ -1,12 +1,12 @@
 {
   "version": 1,
-  "status": "SOURCE_CANDIDATE_UNCOMPILED",
+  "status": "SUPERSEDED_BY_PREPARED_TOOL_QUALIFICATION_PACKET",
   "compile_authorized": false,
   "native_execution_authorized": false,
   "sql_authorized": false,
   "transport_qualified": false,
   "source_files": {
-    "pg_ro_client.rs": "92edf7421e2323ec4f5531a9ed6db5888f13a6cbe755e69f60efd7b14263ee93",
+    "pg_ro_client.rs": "86b10a135b1c09a859e0abd4c5ab78d126cc624069e143b9e5f22afeae9095ce",
     "identity.sql": "f9496688a506085562a071ce25827a2a683bccd457c9edf6e944e228b7c29328",
     "backend-postcheck.sql": "2907a86d971770275b9ff6291e9bffebdf4467d23c7c59ff2015ae6a3fb9c864"
   },
@@ -416,25 +416,7 @@
   "native_build_outputs_copied": false,
   "native_link_qualified": false,
   "future_compile_argv_NOT_EXECUTED": [
-    "/home/lucied/.rustup/toolchains/1.98.1-x86_64-unknown-linux-gnu/bin/rustc",
-    "--edition=2021",
-    "--crate-name",
-    "pg_ro_client",
-    "pg_ro_client.rs",
-    "-L",
-    "dependency=/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-deps-b472-v1/deps",
-    "--extern",
-    "tokio_postgres=/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-deps-b472-v1/deps/libtokio_postgres-3179df43d80295e0.rlib",
-    "--extern",
-    "tokio=/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-deps-b472-v1/deps/libtokio-64cfcb92dcf41713.rlib",
-    "--extern",
-    "serde_json=/home/lucied/.cache/rag3weaver-build/cx-ed-vertex-deps-b472-v1/deps/libserde_json-452ff4526b3b8a08.rlib",
-    "-C",
-    "opt-level=1",
-    "-C",
-    "codegen-units=1",
-    "-o",
-    "/home/lucied/.cache/optimiseur-notes/pg-ro-attestation-20261116/future-client/pg-ro-client"
+    "SEE_PACKET_compile_argv_WITH_PRIVATE_SYSROOT_AND_FRESH_GO_OUTPUT"
   ],
   "cwd": "docs/optimiseur/16-11-2026/pg-ro-attestation",
   "parent_hard5_and_kill_reap_NOT_QUALIFIED": true,
@@ -446,5 +428,7 @@
   },
   "admission_v1_compatible": false,
   "future_transport_name": "standalone-tokio-postgres",
-  "output_policy": "exclusive fresh private directory required; never overwrite an old executable"
+  "output_policy": "exclusive fresh private directory required; never overwrite an old executable",
+  "qualification_proposal": "03-tool-qualification-proposal.md",
+  "all_legacy_instructions_nonexecutable": true
 }

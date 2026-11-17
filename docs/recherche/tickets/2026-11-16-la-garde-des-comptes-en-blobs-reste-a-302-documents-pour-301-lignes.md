@@ -258,3 +258,29 @@ la borneintérieure4poststdin ne remplace pas5. Faux de retards/partial/quiescen
 avant toute qualification native, paquet+RO total puis nouveauGO requis.
 Postcheck futur = SELECT attribué sur PG EXISTANT, aucun serveur/backend lancé.
 Armement Arbre/Embar de la futureglobale est distinct de cet outillage.
+
+## Raccords de qualification matérialisés, toujours NON EXÉCUTÉS
+
+Vecteurs8 CLI/DSN +huit faux initiaux publiésd3dfa3c777 AVANT runner9f350 ;
+frontières OS fausses et contrôles pubc04bb3 ; proposition225d8. Dix faux
+préparés au total, NONJOUÉS. Un seul compile puis huit parse-only autorisables,
+aucun mode capture dans le pilote. Nouveau mode Rust --validate-request retourne
+AVANT runtime/connect ; la future lecturePG reste distincte.
+
+Entrées archivées G :317fichiers/660534109octets avec compiler+lib+sysroot+74deps,
+manifestbf6b72be485227fadfdda40c133c5b52d4a8a31e7dba1855821c2b34f85d8e25,
+READY39e9152c204d5c966307eef4586c7ef278031a82ee58e04c0c237eaeeaccadb4 ;
+source et copie comparées globalement après copie, zéro alias T. Aucune de ces
+archives n'a été exécutée. Treize pins hôte relevés, loader natif NONQUALIFIÉ.
+
+tool_qualification.py exige GO fichier/SHA externe + vrai Common6439/poste,
+sources/inputs frais, sortie exclusive/compile-used, premièreerreurSTOP. Phase
+Python interne+Rustc/parser dans groupeOS privé supervisé ; stdin/startup/kill/
+reap/captures/fsync inclus dans cap60compile/cap5parser, ENDoriginal borne tout.
+Raw partiels/refus/identités conservés ; jamais considérer une qualification
+JSON si first-red présent ou code/Common nonVERT. Dernières horloge/autorité
+après toutes I/O avant retour. Ceci est SOURCE À RELIRE, pas preuve OS acquise.
+
+Paquet+RO totale puis nouveauGO restent requis AVANT CPU/native. Aucun Cargo,
+rustc, testCPU, binaire natif, SQL, DockerAPI, service, réservation, SDK/RET ici.
+Les25fakes du modulePGpur acquis restent distincts ; sources/pins inchangés.
