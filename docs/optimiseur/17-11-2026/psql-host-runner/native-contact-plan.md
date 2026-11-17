@@ -103,3 +103,20 @@ Prépa fix source désormais autorisée, BASE VALIDE/positifs/mutants isolés
 nécessaires ; pas rendre ces4verts par refus général. Aucun test/fixqualifié
 ni GO contact déduit, handshake/actualcollector/outer5/terminalréel encore à
 livrer/qualifier sous nouvelles sources/RO/GO CPU distincts.
+
+
+## Base valide et18 témoins source prépubliés avant checker
+
+test_native_attestation_contract.py ajoute2positifs (identité/postcheck) et
+16mutants isolés : identité PID/start/inconnu, kernelSHA, cgroup, HOME/LD_PRELOAD,
+stage/alive typé, temps, SHA frameRO, requiredprogram, inode/hashfile, mapping
+externe et schema bool. Fixture complète synthétique : cartes Linux plausibles,
+file metadata SHA/dev/inode attendues externes, env EXACT reçu par la capture
+FAUSSE, sessionRO, PIDstart/cgroup et alive-stage. Aucun chemin fixture ouvert.
+
+Le VRAI __call__ reste sur double__new__SANSinit, constructor/factory/authority
+faux, capturemockée ; pas de qualifOS/PG. Les mutants exigent une raison précise
+dans CaptureRefused.record, pas juste n'importe quel rejet. Les2positifs devront
+passer, faute de quoi pas de correction par blocage général. Les4contre-ex
+rouges originaux sont inchangés.18NONJOUÉS, aucun checker encore modifié dans
+cette prépublication ; fixsource et RO totale avant recette22fauxCPU distincte.
