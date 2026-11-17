@@ -120,3 +120,8 @@ RO preuves Banc a4a2de1e1a : [rapport21](../../banc/16-11-2026/21-ro-preuves-ver
 ## Relecture Banc du pilote global dc868252 — 17 novembre
 
 [Revue totale source seule](../../banc/17-11-2026/02-ro-pilote-global-d6.md) : HOLD natif, quatre réserves regroupées : garde C/scripts hors lectures Landlock de la tâche ; témoin CPU dépendant de driver.py absent ; rouge D6 accepté pour tout panic du test nommé sans preuve de la cause contractuelle ; SHA destination controllers.py périmé dans provenance.json. Aucun test exécuté par Banc,17AST/31fonctions seulement. Porteur Archi pour correctif/témoins, C7 pour GO distinct ; ticket toujours OUVERT.
+
+
+### Banc — delta groupé4461c338, 17 novembre
+
+[Relecture favorable de préparation](../../banc/17-11-2026/02-ro-pilote-global-d6.md) : R1–R4 traitées dans le code,18AST/39fonctions NONJOUÉES,6provenances conformes, APPf1e8/diff produit vide. Revue également du raccord Compatible/vertex, source/index/non-suivis avant/après, bracket runtime et première cause/cleanup borné. Aucun test ni natif/SDK/proc/DB/target/service contacté. C7 arbitre CPU60 puis suite distincte ; aucun GO7455, ticket OUVERT.
