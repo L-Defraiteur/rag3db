@@ -196,6 +196,12 @@ def request_common_stop(cause):
         os.close(fd)
 
 
+def feature_results(log, games):
+    # Isolated for a witness of the remaining extra-game defect, not fixed here.
+    assert [row for row in re.findall(r'^VERT  (.+)$',log,re.M) if row in games]==games
+    assert log.splitlines()[-1]=='CHECK_FEATURES VERT 8/8'
+
+
 def inventory_build(label, features, targets, phase_end, directory):
     """Compile without playing tests; bind catalogue to Cargo's real artifact/source."""
     build = stage(label+'-compile', ['bash', str(w/'extension/rag3weaver/scripts/cargo_magasin.sh'),
@@ -276,8 +282,7 @@ results((canonical/'lib.log').read_text(), allow_ignored=True,kind='lib')
 f8=(canonical/'check_features.log').read_text()
 games=['sans-feature','daemon','rag3db-native,daemon','rag3db-native,burn-embedder,burn-ocr,code,daemon,postgres',
        features,'rag3db-native,code,daemon,openai-llm','rag3db-native,code','rag3db-native']
-assert [row for row in re.findall(r'^VERT  (.+)$',f8,re.M) if row in games]==games
-assert f8.splitlines()[-1]=='CHECK_FEATURES VERT 8/8'
+feature_results(f8,games)
 for game in games:
     assert (p/'feature-games'/(game.replace(',','+')+'.log')).is_file()
 proof = (canonical/'preuve.log').read_text()

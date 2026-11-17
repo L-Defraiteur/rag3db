@@ -714,3 +714,13 @@ PorteurTTY : témoins sur vrais raccords/RAW avant nouveaux correctifs, chaîne
 catalogue→copieSHA→ELFexécuté/prépost et sourceAPP exacte. Huit assertionsd998
 et sixrouges acquis conservés. Nouveauxpins/RO/GOCPUdistinct avant baseline
 élargie ; aucunCPUgreen/natif/no-run/list/service/slot/3600 autorisé.
+
+### Baseline élargie préparée, pas exécutée
+
+Nouveau test_qualification_provenance.py : huit assertionsd998 inchangées
++sixcas(2positifs/4contreexemples) sur vrais results/feature_results AST.
+RaccordF8 extrait sanscorriger son filtre ; SHA/bytesELFvirtuel changé au
+même chemin, restauration et mutationpost sont fakes, pas reçus runtime.
+Prévision14cas=10PASS4FAIL0ERROR0skip, aucune exécution ; ASTseulement.
+Détail docs/tty/17-11-2026/07-temoins-provenance-et-f8.md ; pins/RO/GOCPU
+distinct avant rouges puisfix ; Qv2/Qv3INACTIFSpréservés, aucunGO3600.
