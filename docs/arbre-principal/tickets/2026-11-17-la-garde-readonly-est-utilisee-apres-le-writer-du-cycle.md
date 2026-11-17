@@ -65,3 +65,12 @@ peuvent refuser en amont. Le doublon causal ancien conserveWAL/marque ; ajouter
 pourfuturvert doublon sur POST autrementadmissible sanscesauxiliaires, motif/
 branchevérifiés. Contrôle readonly positif+compteurs+preuvesACK/PID/nonce/
 clock/firstred encoreàécrire avantfix, commeannoncé ; suite rapportED38.
+
+RO ED ensemblede809 bornée :12fonctions écrites NONJOUÉES, exécutableinchangé,
+neutrepositif+preuvesJSON/deuxframes réelles/profils synthétiques+vraibloc/validateurs
+cohérents pour préparer le rougecausal exact. Réserves suffisance à grouper :
+preuve du baseline persisté/hashé AVANTwriter noncouverte (bloccommenceafter_writer),
+mutantsubstitutionbaseline ; doublonPOST autrementadmissible et motif/compteur
+atteint ; self.dirs doit inclure uid du vrai q.directories. AssertFalse/refus
+amont ne qualifie pas le mutant visé. Contrôle readonly intact/typesbool-int
+à compléter avant qualification globale. Aucun lancement/fix/GO par ED.

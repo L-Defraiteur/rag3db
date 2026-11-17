@@ -75,3 +75,34 @@ ACK/PID/start/nonce/run/publication/profil/maps/clock/firstred restent à écrir
 AVANT le fix comme annoncé. Ce sous-ensemble n'est pas une suffisance du
 harnais global, encore moins une qualification native. À C7 seul le choix
 des témoins CPU exacts après prépublication/RO ; aucun lancement ici.
+
+## Ensemblede809c288a avant fix : avis borné
+
+Les12 fonctions restent NON JOUÉES, exécutable6c6b inchangé. Le harnais
+fabrique JSON writer/publication/ACK/deux frames/profil, appelle public_call
+réel pour le fixture, puis le VRAI blocdriver/save/readonly. Dossier fresh
+par sous-cas et capture ValueError→ASSERT conservés. L'inventaire neutre
+positif est utile : les mutations ACK/rc/PID/start/nonce/run/exeSHA/CG/
+pubSHA/maps/diff et END/firstred ne se cachent plus derrière les deux retraits
+physiques. Le nom causal demandé cible bien l'admission POST readonly refusée.
+
+Avis favorable à la préparation de CE rouge causal exact ; **réserve sur la
+suffisance de l'ensemble** avant qualification verte, à grouper avant fix :
+
+- L'extraction commence à after_writer. Elle ne prouve pas encore que le
+  futur inventaire complet est persisté/relu/hashé AVANT l'appel writer ;
+  ajouter un témoin du vrai raccord préwriter et le mutant baseline substitué,
+  faute de quoi une persistance après l'action échapperait à ces12 fonctions.
+- Le doublon conserve les deux auxiliaires ; au futur vert leur présence
+  pourrait suffire au refus. Ajouter le doublon POST autrement admissible,
+  vérifier motif/compteur du validateur visé. Plus généralement assertFalse
+  seul ne prouve pas que la branche attendue a été atteinte.
+- q.directories réel produit path/mode/uid ; self.dirs actuel n'a pas uid.
+  Aligner cette donnée synthétique sur le format réel avant un validateur
+  strict, pour ne pas produire un refus d'entrée qui masque tous les mutants.
+
+Conserver le rouge ancien et ses limites. Compléter aussi les types exacts
+(rc=False ne vaut pas entier0), le contrôle readonly intact et les traces de
+passage attendues ; pas de vert d'ensemble à partir de refus en amont. Le
+choix CPU est exclusivement C7, les12 n'ont pas été exécutées par ED ; aucun
+fix, DB/health/native/service/SDK/target ni ancien GO reporté.
