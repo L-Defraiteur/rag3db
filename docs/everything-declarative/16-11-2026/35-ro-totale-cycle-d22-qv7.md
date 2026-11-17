@@ -3,9 +3,33 @@
 Source exécutable/PC **d22bf28c580910e9b1bea1065297028f9cfc75bf**,
 prepared **22ebca7c46c645f6a7bfd90b7cb6689dc1432a4832d5669ca2eb4a2f87493f5b**.
 Rapport documentaire04 d980bbdfb4 séparé de ce pin exécutable.
-Avis **favorable code, preuves CPU et métadonnées**, sur ce nouveau couple
-entier. Aucun nouveau blocage établi. L'avis corrigé/HOLD6715-Q6 reste
+Avis initial9020572d02 favorable, **CORRIGÉ EN RÉSERVÉ/HOLD** sur la course
+horloge/lecture heartbeat identifiée ensuite par Recherche et consignée Arbre.
+Les preuves CPU/métadonnées restent bornées à leurs constats. L'avis corrigé/HOLD6715-Q6 reste
 historique, sans transfert favorable automatique.
+
+## Réserve heartbeat et RO du témoin prépublié13ae
+
+Vrai grant_watch_controller.py:129 capture now via check_scope AVANT lecture
+du heartbeat ligne131, puis valide la date de publication contre cet ancien
+now. Une publication parfaitement vivante entre ces deux opérations peut
+donc sembler future et faire refuser le driver. Lecture indépendante confirme
+la course, sans la jouer ; cet avis ne vaut plus suffisance D22/Qv7.
+
+Témoin13ae4a9ab8 lu statiquement : vrai superviseur et vrai read_owned,
+FakeWorld déjà publié pour les seuls enfants/OS/clock. Après le spawn fictif
+du driver, première lecture HB intercalée : horloge+.01 puis nouveau HB daté
+de cette heure ; le vrai lecteur consomme ce nouveau JSON. Assertion injection
+unique en premier, puis rc0/premierrouge absent/release présent. Le défaut
+actuel produit donc un refus au vrai raccord, pas un résultat fabriqué par
+un double de validation. Aucun témoin exécuté par ED ; avis favorable au
+harnais pour la décision CPU rouge C7 exacte DISTINCTE, pas un GO donné ici.
+Les deux PYTHONPATH coordination permettent son import même depuis le cwd
+debt-copy-a annoncé. Aucune DB/health/CLI/native/proc/slot réelle nécessaire.
+
+La réserve est consignée sous le même ticket17 avant correction. Prépublication
+du fix après rouge, nouveau couple/pins et RO totale requis avant tout GO900.
+Le finaliseur et le raccord Common corrigés gardent leurs acquis séparés.
 
 ## Chaîne entière, dont la frontière Common
 

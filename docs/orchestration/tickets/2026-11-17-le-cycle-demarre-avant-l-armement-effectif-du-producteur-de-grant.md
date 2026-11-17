@@ -147,3 +147,12 @@ Common1PASSD22 et cinqfinaux6715carried relus sansrejeu ; quatrearchives3fichier
 réhashées LOCAL+PC0écart. Q6/WT6715/Q5 conservés. P1final+argv levés code/CPU
 surCEcouple seulement, aucune activité native/DB/health/proc/slot ni GO900.
 Ticket reste OUVERT, vraie qualification et décision C7 distinctes à venir.
+
+Avis ED902 corrigé RÉSERVÉ/HOLDD22-Qv7 après P1 heartbeatRecherche consigné
+Arbre : now échantillonné avant read_owned(HB), publication concurrente
+plus récente faussement future lors de validate_heartbeat(nowancien).
+RO statique témoin13ae favorable : vrai superviseur/read_owned, FakeWorld
+OS/enfants/clock seulement, injection+0.01 sur première lecture après spawn
+fictifdriver, compteur injecté puis assertions rc0/no-firstred/release. Nonjoué
+par ED, décision rougeCPU60 distincte à C7 avantfix ; aucune suffisance native
+ni GO900 tiré de l'ancien avis. Voir section corrective rapportED35.
