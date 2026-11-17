@@ -1,0 +1,25 @@
+# Extraction constante du relais : RO totale de l'étape1
+
+Pin exact **c9b84168e83caaf2aa083a53ad14b93da6c4330e**, branche cx-codeparsers-publication-core. **Avis favorable à la préparation de l'extraction constante**, sans capacité plan4/Window runtime ni CPU vert acquis au nouveau pin. [Ticket relais porteur ouvert](../../codeparsers/tickets/2026-11-17-la-publication-du-ledger-de-sonde-attend-un-ack-sans-relais-autonome.md). D45/P05 et229b/Q restent des références figées distinctes.
+
+## Comparaison du code réellement déplacé
+
+Lecture des wrappers, du module unique746lignes, du préparateur, du contrat par étapes et des trois contre-exemples ; comparaison AST avec D45 sans import/exécution. **Relay, atomic_json, digest, publish_result sont AST-identiques**. SSHTransport conserve toutes ses méthodes, avec entry_file explicite pour identifier relay.py et des vérifications supplémentaires chemin/SHA du module commun. ready publie bien le SHA du wrapper réellement lancé, pas celui du module importé. relay_main construit le même watchdog autour du wrapper et vérifie séparément wrapper+noyau ; hardEND parent et réserve5 D45 conservés.
+
+GateBase garde verify/active/bootstrap/transition/export/ack/cancel/final_roles et leurs gardes ; la partie de stage qui lisait/vérifiait ledger app/parser/SDK/features/source/copied ELF/inventaires est déplacée telle quelle dans RustPublicationProvider.read, appelée APRÈS active et contrôle kind/ordre par le noyau, puis rehash et nouvel active par celui-ci. Le fournisseur n'a pas de seconde boucle/export/ACK/annulation. Le hash ELF effectué dans le fournisseur est celui déjà présent dans la validation Rust D45, pas une nouvelle qualification physique d'un provider générique. GateBase reçoit pilote/politique via injection, n'importe pas un pilote métier lui-même.
+
+relay.py ne fait que charger le noyau puis déléguer main ; gate.py instancie GateBase et le fournisseur Rust, puis délègue gate_main. En source, le chemin du dépôt est explicitement contrôlé ; en Q, la copie commune locale est requise (le fallback source ne correspondrait pas au chemin Q et refuse). Chemin/SHA de publication_relay.py sont jugés dans les entrées et gardes effectives ; aucun fallback PATH ni noyau factice introduit.
+
+Les **36 méthodes et toutes leurs assertions sont conservées à l'AST** depuis D45 : aucune assertion self.assert* changée. Les différences de harnais portent sur import/point de patch du module réellement exécuté et la copie/empreinte commune dans la fixture CLI. Lecture des fixtures Gate existantes : vrais chemins de garde, signaux/proc factices et mêmes préconditions. Les cinq fichiers Python principaux (noyau/wrappers/témoins36/contre-exemples) sont syntaxiquement acceptés par AST ; aucune fonction importée ou jouée. Le CPU36 D45 reste au pin D45 : il n'est pas attribué automatiquement à cette extraction.
+
+## P06 : provenance et copies
+
+Prototype neuf R~/.cache/codeparsers-notes/rust-probe-publication-core-06 lu sur PC ET local. prepared SHA **36d0127104ebd8f290b42305b9ee85b557b6a7dedc34cea1b43706f89ee580fd**,tool_source=c9b84168, **11/11 copies conformes sur chaque poste**. Noyau SHA **de8222d36e02a439c33de3a4d42d9a2b2ca42e4ac17905308d8c07f6c40921b9**, égal au blob Git relu. Profil **81969f85c1cc6384ef67283fb6486cff22bbbcc8c5a795026339b7dbb13c4192** identique deux postes. BASEfec35198b64b7e9da0496de6b01a7232fa7a8390/CANDc1cd48750f8178e68d24a3570bc320b458cad7d1 et ownerBASE sont déclarés inchangés. Aucune phase native armée ni propriétaire/target changé par Banc.
+
+## Capacité nouvelle volontairement absente
+
+Le moteur à deux stages build/runtime reste explicite. Les trois contre-exemples prépubliés visent la vraie classe Relay : charge supplémentaire, référence héritée sans ACK acquis, et demande plan4labels/8occurrences. Ils sont NONJOUÉS ; le dernier transforme précisément l'absence du paramètre plan en FAIL nommé, pas un ERROR d'import. Les deux premiers évaluent une future garantie du noyau devant un fournisseur défectueux ; ils ne constituent pas une faille native qualifiée du pipeline Rust dont Gate impose déjà le domaine. Aucun faux bundle/inventaire pour remplir les deux slots, aucune migration discrète vers quatre stages.
+
+WindowAPI runtime, ownerEvent/lifecycle, plan4 et adaptation Archi sont **non implantés et non qualifiés**. La prochaine étape doit acquérir les trois rouges sous GO exact distinct puis préparer la capacité commune avec nouveau pin/RO. La suite36 d'extraction exige elle aussi son GO CPU distinct : aucune exécution autorisée par cet avis. La transition de constante à capacité doit rester visible, pas absorbée dans le refactor.
+
+Aucun nouveau blocage identifié pour cette étape1 de préparation. Aucun CPU/import, SSH de relais, /proc, signal, Cargo, ELF natif, modèle/GPU, service/DB, SDKexport ou autorité exécuté/chargé par cette revue. Les SSH de lecture de P06 n'ont fait que hacher des fichiers du paquet. Aucun GO BASE/CAND ou global7455, master/intégration/cleanup déduit ; ticket OUVERT.

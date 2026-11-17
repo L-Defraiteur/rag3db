@@ -69,3 +69,8 @@ implicitement à la place d'une compilation prévue par un GO.
 ### Banc — preuves CPU D45 vertes
 
 [RO des bruts sans rejeu](../../banc/17-11-2026/01-ro-relais-sonde-rust.md) : manifestd8270ccf/4fichiers taillesSHA conformes PC+local,36OK/0FAIL0ERROR0skip/rc0/unecommande T58+K2. CPU hermétique36 qualifié sur D45 ; raccord SSH/natif et phases BASE/CAND non qualifiés/non autorisés. P05 reste préparation seule, ticket OUVERT.
+
+
+### Banc — extraction constante C9/P06
+
+[RO totale favorable préparation étape1](../../banc/17-11-2026/07-ro-extraction-constante-publication.md) : Relay/primitives ASTidentiquesD45,36méthodes/assertions conservées, gardes/transport/CLI déplacés unique module et wrappers sans boucle. Pins wrapper+noyau effectifs ; P06 prepared36d01271/11copies chacunPC-local/profil81969 conformes,corede8222 Gitégal. AucunCPUjoué,36et3contre-exemples NONJOUÉS sur nouveaupin ; WindowAPI/plan4runtime nonimplantés. GOsCPU C7 distincts puis nouvellecapacité/pin/RO requis, D45/P05/229bQ figés, ticket OUVERT.
