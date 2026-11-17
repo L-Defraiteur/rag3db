@@ -19,3 +19,10 @@
 - La syntaxe AST n’importe pas le script et ne joue aucun test ; une lecture
   favorable reste bornée à ce qui a été réellement lu.
 - Paquet exact et limites : [04](04-paquet-rouge-fs.md). Ticket FS ouvert.
+
+Actualisation : le paquet04 est HOLD (watchdog portable absent), pas une
+recette à lancer. RougeEC4, deuxERRORharnais archivés, puis deuxrouges180A et
+troisvertsCPU51a9/a99 sont réellement observés et séparés. Le nouveau paquet
+v2 et sa vraie commande physique sont [14](14-paquet-fs-red-v2-physique.md),
+préflight39cc/noncee356, encore NONLANCÉS. Les verts CPU ne qualifient pas
+OSkill/300/cleanupdistant ; futurs tests Rust FS requièrent leur propre GO.

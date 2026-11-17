@@ -261,3 +261,17 @@ archivés2postes,8SHArelusPC444 watchdog-boundaries-green-17nov-v1, rapport17/13
 AucunOSkill/cleanupdistant/300/FSnativequalifié. RougesEC4/180A+2ERROR313c
 conservés. PréparationPCQv2/recettecomplète/pins/RO maintenant autorisée par
 C7 siVERT, mais aucun futurGO implicite ; ancienQ047/source8b/T inchangés.
+
+Après3vertsCPU15cee4adaa, nouveau paquetPCv2 préparé sansrun : Q PC
+cx-lucivy-fs-admission-red-17nov-v2 UID1000/dev55/ino168935806,
+nonce e356dfe059756ae8358eab49872ecbb9, préflight39ccf66b3f503dbe4f535b435ea3f5dc539794230ec4f8b72a491060ed30e4f4.
+Portable export-v2 UID1000/dev57/ino96410663, export51a9/préflight39ccidentiques.
+Pilotea5c/admit166d/Common6439/poste79e3 inchangés, neufcopiesPC vérifiées,
+SHA/AST/source8bpropre/markerT/lockseed seulement ; aucun Cargo/procscan/ELF/
+corpus/service. Scope/logs/arm/ACK/ELFbackupabsents,scratch/scansvides,oldQfigé.
+Rapport17/14 contientCOMMANDEPHYSIQUEtimeoutAVANTPython/flagworker/argvexact,
+ENDlocal285 et duréePCrestante−8/ARMRTT<=8,PCCommonMIN/final/réservesetcleanup.
+ActionROcouplecomplet confiée à Banc + Recherche ciblée budget/temps/attribution ;
+critères neufpins/39cc/51a9/a5c/166d, parentCLIexact, pasclockcrosshost,ledger
+copiérehashACK avanttoutELF, sixrougesRustnomcause+positif/infraSTOP,finréelle.
+NouveauGO C7 distinct AVANTcommande14 ; aucunrunRuntime/natif implicite.
