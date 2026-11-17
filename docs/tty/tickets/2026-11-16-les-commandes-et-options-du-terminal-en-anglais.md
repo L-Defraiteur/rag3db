@@ -671,3 +671,15 @@ Qv1 partiel conservé, aucun prepared final/grant/slot/Cargo/test/contact créé
 Correction à faire : épingler wrapper exact et distribution explicite
 /opt/google/chrome, Qv2 neuf sans modifier Qv1 ni target ; syntaxe puis
 préparation seule et ROtotale distincte. PorteurTTY, même ticketOPEN.
+
+### RO totale c003 : deux réserves du pipeline avant activation
+
+Désarmement/Qpins validés, pas admissibiliténative. R1 : stage() attend
+subprocess.run jusqu’au retour/cap ; aucun arrêt actif au premier FAILED
+canon/libtty/build, seul harnais le réalise. R2 : results() accepte un résumé
+positif quelconque ; manque inventaire attendu, noms/ordre/blocs et attribution
+source réelle de la preuve. Un bloc0passé masqué par1passé peut passer.
+PorteurTTY : préparer surveillance des vrais logs/blocs au premier rouge et
+parseur strict inventaires/noms/compteurs/ignored/source ; témoins parser sur
+fauxRAW publiés avant éventuelle exécution CPU, nouveauQ/ROtotale avantGO.
+R1/R2 distincts des HOLDacteur/politique/PG ; désarmement conservé.
