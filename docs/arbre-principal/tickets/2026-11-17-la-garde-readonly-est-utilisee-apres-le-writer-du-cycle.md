@@ -82,3 +82,13 @@ runtime6c6b inchangé. Rouge causal à cibler EXACT nominalauxiliaires, pasmodul
 failfastpourprétendrecettecausalité. Restentpourvert : baseline substitution/
 liencycle,doublonPOSTnonmasqué,motif-compteurs,typesstricts/dirsUID. Aucun test
 oufix/GO accordé par ED ; complément rapportED38, C7seuladmissionCPUdistincte.
+
+RO ED code+harnais e9f037be2a favorable statique, [rapport39](../../everything-declarative/16-11-2026/39-ro-postwriter-et-cold-e9f.md) :
+POST0e4c distinct/readonlybyteinchangé, deuxsnapshots+contextefsyncpréwriter,
+preuvesrejouéesSession/identité/profil/maps/typeACK-rc/nonce/pubSHA puisdeltas
+physiquesexactssansqualificationlogique. Réserves ED baseline/bool/UID/
+doublonneutre/compteur traitées. COLD utilisevrai stable_readers surPOSTnouveau
+avecDBincluse,sources/dirsstrictes.19fonctions(15POST+1PRE+3COLD)NONJOUÉES,
+rouges48a2/336c3+3fichiersréhashdeuxhôtes0écart ;pasdevert/paquetQ9validé.
+Décision C7 CPU19distincte,puisROsource/paquet avantnatif ;aucuneDB/provider/
+writer/recovery/runtime/ancienGO utilisépar ED,ticketOUVERT et65ebrougeconservé.
