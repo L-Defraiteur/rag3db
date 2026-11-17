@@ -828,3 +828,14 @@ Reçu de scope SHA256
 Qualification limitée à ce préflight ISA/ABI/CLI ; transport, SQL, RO mesuré,
 lease et whole5 restent à réaliser sous recette distincte. Aucun service,
 original, restauration ou ancienne fenêtre de migration réactivé.
+
+
+### Suite psql HOST : témoins source avant CPU, 17 novembre
+
+C7 b9139349d2 autorise la préparation du raccord réel hors Rust. Nouveau lot
+`cx-optimiseur-psql-runner-source-20261117-r1`, contrat/recette et 14 tests dans
+`docs/optimiseur/17-11-2026/psql-host-runner/`. Runner volontairement absent
+avant constat rouge ; aucun test exécuté ni SQL autorisé. Porter : G ; RO : R.
+Critère suivant : rouge sous recette CPU relue, puis raccord source, relecture
+et CPU distinct ; plus tard contact PG seulement sur GO séparé, fixture fraîche
+juste avant client prêt. Whole5 original, pas de v1 relabellisé. Ticket ouvert.
