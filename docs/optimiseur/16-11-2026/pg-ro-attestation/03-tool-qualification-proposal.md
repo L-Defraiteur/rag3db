@@ -175,3 +175,53 @@ physique n'est qualifié. Aucun compiler, rustc, SQL, Docker, SDK, service7970,
 slot ou client natif lancé. Les huit cas CLI natifs restent NON JOUÉS.
 Transport et lease PG restent NON QUALIFIÉS ; qualification native nécessite
 un GO distinct, aucun transfert de ce GO CPU.
+
+## Phase B concrète après CPU — préparation02, sans GO
+
+Le premier exemple de lancement par common-confiner.py est invalide et ne doit
+pas être utilisé : signature_superviseur exige le basename confiner_validation.py
+ET argv[2]=lancer. Une option -B devant ce script décalerait cette signature.
+Le module chargé par le runner et le superviseur exécuté peuvent avoir deux
+chemins différents : la primitive vérifie leur SHA identique, et la signature
+vérifie le chemin réellement exécuté contre le reçu. Aucun changement Common.
+
+Recette privée versionnée aux deux postes :
+`/home/lucied/.cache/optimiseur-notes/pg-rust-tool-qual-20261117-r1/phase-b-preparation-02/recipe.json`.
+SHA256 `25715b699a72eea34d6adc8e8a32b479d9d19f7d93fc618d31d33a2a65a7b2d4`.
+La préparation01 est conservée historique ; elle n'a pas été exécutée.
+La02 contient argv POSTE absolu, argv rustc unique intégral, huit cas CLI,
+GO externe inactif, hashes poste/Python/timeout et copie régulière du Common6439
+nommée confiner_validation.py. Le paquet-r2/code32df reste figé.
+
+Audit RO PC : 317/317 fichiers des entrées rehashés, taille et chemin résolu
+conformes ; 13/13 pins hôte rehashés ; 12/12 sources r2 rehashées conformes.
+Monotoniques audit1257943.367455839→1257943.710505389.
+Le manifeste bf6b72be et READY39e9152c sont inchangés. Poste cache SHA256
+`79e3a8bbf457e3bc9104aa1558e7d03072216c70b68e08ae606ace6aa4584c7b` ;
+Python /usr/bin/python3→python3.14 SHA256
+`a38210a53e07ac5eb912ee35c2d92ddb7eaa349301b60c188a5f496c7c87449d`.
+La fermeture complète du chargeur n'est pas qualifiée par ces treize fichiers.
+
+Commande proposée, NON EXÉCUTÉE (P désigne le parent privé pg-rust-tool-qual-20261117-r1) :
+
+```bash
+POSTE_MEM_MAX=32G PYTHONDONTWRITEBYTECODE=1 \
+/home/lucied/.cache/rag3weaver-build/poste lourd \
+/usr/bin/timeout --signal=TERM --kill-after=2s 125s \
+/usr/bin/python3 "$P/phase-b-preparation-02/confiner_validation.py" \
+lancer --delai 120 --preuves "$P/phase-b-preparation-02/common-proofs" -- \
+/usr/bin/python3 -B "$P/packet-r2/tool_qualification.py" --run \
+--packet-sha b0795ccbb6f2d3aad0ad7b20bc19e571cd01c6071762c48a751bd45e58142780 \
+--go EXTERNAL_FRESH_AUTHORIZED_GO_PATH --go-sha EXTERNAL_FRESH_AUTHORIZED_GO_SHA256
+```
+
+La sortie exclusive proposée `P/runs/phase-b-32df-01` et les preuves Common
+sont absentes ; aucun poste/slot n'a été pris. go.inactive.json reste run=false,
+deadline0, nonce zéro ; SHA256
+`a4c91289eab68db4721357f59e66bca067a9e380b41ffef5842d69cd9875d81d`.
+Il ne peut être transformé sur place en autorisation. Le futur GO distinct
+lie packetSHA, inputSHA, référence, nonce frais, deadline absolue et cette sortie ;
+aucun renouvellement après attente de poste. Le runner refuse si son délai
+excède END Common ou est épuisé. Rehash et absence sortie sont à refaire au GO.
+RO totale R source+paquet+recette après CPU demandée avant qualification native.
+Les douze faux ne sont pas rejoués. Aucun compiler/SQL/Docker/service déclenché.

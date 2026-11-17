@@ -356,3 +356,12 @@ régulière du même Common6439 nommée confiner_validation.py, pinée et distin
 pour la commande POSTE réelle ; ne modifier ni Common ni paquet r2 figés.
 Compléter avant RO totale : rehash317entrées/13pins hôte, commande exacte,
 GO externe inactif et sortie exclusive absente. Aucune acquisition de poste.
+
+PréparationB concrète02 publiée : auditRO317/317entrées+13/13pins hôte+12/12sources
+conformes, copie Common6439 canonique hors paquet, argv sans-B devant Common
+(la signature exige argv[2]=lancer), POSTE/Common120/OS125kill2 proposés,
+compileargv unique intégral et8cas parser. Recette privée deux postes
+phase-b-preparation-02/recipe.json SHA256
+25715b699a72eea34d6adc8e8a32b479d9d19f7d93fc618d31d33a2a65a7b2d4.
+GO inactif deadline0, sortie absente ; aucune allocation/compilation ni faux
+rejoué. Demande RO totale aprèsCPU sur32df/r2b079/recette02 avant GO distinct.
