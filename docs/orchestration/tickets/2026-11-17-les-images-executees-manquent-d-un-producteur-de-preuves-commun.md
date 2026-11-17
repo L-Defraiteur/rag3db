@@ -124,3 +124,8 @@ Sourcef7ec23843801b1972244f493aa242977c19db593, troisRO M/R/TTY et lecture/rehas
 
 
 Baseline runnerF7EC consommée UNEfois : preuvesb40a819d23ebc21a99a9fd20f9ec648fb950931e, UNnominal1FAIL exact RunnerRefusal backend-not-implemented puis self.fail/0ERRORskip/rc1,0,044592498s enveloppe (unittest0.000 distinct). Les23autres NONJOUÉS ; aucune opération OS du protocole. C7 réempreinte personnellement9/9 fichiers LOCAL+PC,0écart/aucunextra, manifestedb4805bc3165f0a617a083121f82adea82bea3bf2033d52d07b0583c86067528 ; lit RAW et rapport57. M réhash deuxhôtes, R/TTYLOCAL favorables bornés. Rouge comportemental suffisant pour PRÉPA du corps FIXTURE_ONLY, archivesavantfix conservées ; nouveauxsource/pins/RO et GO24verts distinct requis. Aucune preuve OS/CP/Common/native/LIVE ni fallback, pur565b reste intact.
+
+
+MODELED5e3b aprèsrougeb40 en revue, pasGO24 : réserveMémoire confirméeC7, checkfinal avantSHAstdout/stderr et aucune relectureENDaprès permet retour tardif positif. Prépublier témoin causal réelrunner/clockmodélisé auhash, source/pins/RO/GOrouge séparé avantfix, puis contrôlefrais aprèsconstructionrésultat/préretour. Grouper autresrevues ; limiteTTYpostchecks/cancel_owned noninterruptibles ne qualifie pascleanupOSborné. Sources/refusBaseline/pur intacts.
+
+RéserveR TOTALE5e3 additionnelle avantfix : request validée reste mutable et transmise tellequelle à prepare_owned_launch, ensuite relue comme attente/END. Mutation parport peut promouvoirautreimage/prolonger borne ; référence interne profondément figée non exposée/copieauxports, contre-ex mutations et END groupés avec hashfinal avantfix. C7 confirme branche source, aucun essai effectué/GO24 accordé.
