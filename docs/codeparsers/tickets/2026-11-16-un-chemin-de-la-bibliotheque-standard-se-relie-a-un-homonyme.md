@@ -202,3 +202,15 @@ Le rouge1916 reste préservé. Rapport détaillé rust-probe/03-qualification-cp
 branche documentaire distincte pour ne pas déplacer le candidat épinglé.
 Pair02f919 préparée seulement, pas de Cargo/natif/autorité ni mutation target.
 RO totale Banc demandée ; aucun GO natif acquis, REGLES7 et ticket ouvert.
+
+## Référence P02 autorisée puis refusée à la publication
+
+GO exact C7-PARSERS-HIST-BASE-P02-16nov1800 consommé unefois : compile-only rc0,
+puis premierrouge peer publication deadline àEND−15, sansACK et AVANT toute
+invocation ELF. Aucun inventaire ni test sonde joué ; candidat et comparaison
+conditionnels non lancés. CommonTERMINE/code1/restes[]/nettoyé,privéabsent,
+auditpostmortemownedquietdistinct. ELF0c565ace et bruts/ENDfiltré conservés2hôtes.
+TargetPC owner désormais BASE ; pas de retry sur ancienne préparation.
+Rapport17-11-2026/rust-probe/01-reference-refusee-a-la-publication.md et ticket
+2026-11-17-la-publication-du-ledger-de-sonde-attend-un-ack-sans-relais-autonome.md.
+REGLES7, verdicts natifs118 inchangés ; ce ticket reste ouvert.
