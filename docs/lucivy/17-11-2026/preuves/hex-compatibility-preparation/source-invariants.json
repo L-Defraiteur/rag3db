@@ -1,0 +1,33 @@
+{
+  "source": "0f610f437a341f745e5936492114142ff3afedd4",
+  "parent": "8b9435363dbd8ec0e3973f2368b641189f0726eb",
+  "changed_files": [
+    "lucivy_core/tests/common/fs_fixture.rs",
+    "lucivy_core/tests/test_fs_fixture_admission.rs"
+  ],
+  "unchanged_regions_sha256": {
+    "panel15": "b657c3420f6a0c18a87305a5855e04cd406e6c8b3d835babe1d10592251a4630",
+    "capture_baseline": "c4f8e99e32e1e9ad701ea17eef9c8c43436713bf79ee87ea4191b36685990539",
+    "with_v3_contains": "e06c887ad97f7e67ac24b8f0bc13f39d56e8389abb7d188fea97b6e2089ae663"
+  },
+  "negative_test_prefix_unchanged": true,
+  "test_names": [
+    "empty_view_is_refused_before_builder",
+    "enumeration_error_is_not_an_empty_subtree",
+    "metadata_error_is_not_a_filtered_file",
+    "read_error_is_not_a_filtered_file",
+    "invalid_utf8_is_refused_not_dropped",
+    "uncovered_panel_is_refused_before_zero_equals_zero",
+    "covered_fixture_reaches_builder_once_on_the_captured_bytes"
+  ],
+  "sha2_dependency_unchanged": true,
+  "golden_vectors": {
+    "": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "abc": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+  },
+  "source_files_sha256": {
+    "lucivy_core/tests/common/fs_fixture.rs": "813a3a32fd5529e947d3c8a9e32946f9b6bf34b3efdc9f794354d46eefa69712",
+    "lucivy_core/tests/test_fs_fixture_admission.rs": "6d3a8a4a54386a0cb607bd2dc7f596e877dd4d578e52b7905be6d309a448fd13"
+  },
+  "Cargo_rustfmt_Rust_tests_executed_after_fix": false
+}

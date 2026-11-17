@@ -1,6 +1,6 @@
 # L’admission du corpus FS ne garantit pas la vue consommée
 
-- **État** : ouvert (16 novembre 2026), découvert pendant la reprise native après les neuf juges mémoire.
+- **État** : ouvert ; au17nov, compilation FS refusée E0277, six rouges nonobservés, compatibilité hex0f610f4 préparée noncompilée.
 - **Gravité** : moyenne ; une réussite de test peut masquer une vue vide, des lectures perdues ou un index réutilisé.
 - **Famille** : validation
 - **Pour** : lucivy
@@ -315,3 +315,15 @@ seulajoutdirectsha2 vérifiéAPRÈSrefus.9copies/source8bclean/markerTscratch
 conformes,3oldELF1eeRO+originauxSHAidentiques. PréparationfixAPIhex standard
 sousce ticket (Lucivy), préserverdéfautsFS etpanel ;nouveauxpins/RO/GOavant
 Cargo,aucunGOv2réactivé. AucuneFS/native/OSkill300/globalqualifiée.
+
+Compatibilitéhex PUB0f610f437a341f745e5936492114142ff3afedd4, parent8b :
+seul affichage par octets standard du digest Sha256, sansLowerHex surArray,
+plus références SHA256 empty/abc dans positif existant. Deux fichiers/6lignes+
+1ligne−, aucune dépendance/crypto/index/gate modifiée. Invariants panel15/
+capture_baseline/with_v3_contains/préfixe6négatifs/7noms strictementidentiques,
+preuves hex-compatibility-preparation et rapport17/16. AucunCargo/rustfmt/test
+aprèsfix. ActionROexacte Recherche sur0f610f4 : encodage/leadingzeros/vecteurs/
+invariants, pas compilationdéduite. Futurpaquet doitpinnerlockdbdb déjàsha2
+(--offline--locked), ancienCommon265273TERMINE101, nouveaunonce/pins/RO/GO,
+et journaliser début/finportable danswrapper. WPC encore8b/ancienQ clos,
+source0f portableproprepoussée, aucunrun Rust/natif implicite.

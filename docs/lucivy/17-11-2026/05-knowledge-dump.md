@@ -26,3 +26,10 @@ troisvertsCPU51a9/a99 sont réellement observés et séparés. Le nouveau paquet
 v2 et sa vraie commande physique sont [14](14-paquet-fs-red-v2-physique.md),
 préflight39cc/noncee356, encore NONLANCÉS. Les verts CPU ne qualifient pas
 OSkill/300/cleanupdistant ; futurs tests Rust FS requièrent leur propre GO.
+
+Dernier état : paquet14 consommé une fois, refus de compilation E0277 sha2
+LowerHex avant tout juge FS ; voir15. Correctif hex0f610f4 préparé noncompilé,
+voir16. Ne pas relancer14. Lock PC effectifdbdb déjàsha2, ancienCommon265273
+terminé101 ; nouveaux pins/nonce/RO/GO requis. Début portable nonpersisté dans
+le refus précédent : aucune durée locale inventée, journalisation future
+à poser dans l’enveloppe physique. Reprise actuelle en tête du rapport01.

@@ -1,26 +1,34 @@
 # Lucivy — 17 novembre 2026
 
-État : préparation du rouge FS, aucun Cargo ni corpus contacté.
+État : passe FS v2 refusée à la compilation (E0277 LowerHex), aucun juge FS
+exécuté. Correctif de compatibilité hex0f610f4 publié, non compilé ; RO en attente.
+Aucun corpus réel contacté. Les trois raccords CPU de l’exporteur sont verts.
 
-Suite du [contrat du 16](../16-11-2026/16-qualification-native-et-contrat-fs.md),
-arbitrage C7 : capture initiale unique StdFs, ordre effectif, cap5000 et
-exclusions versionnés, CapturePlan explicite et snapshot RAM. Pas de recapture
-après REFUSED. Rejeu ultérieur par manifeste, mêmes chemins/SHA sans resélection.
+Contrat C7 conservé : capture initiale unique StdFs, ordre effectif, cap5000/
+exclusions versionnés, CapturePlan explicite/snapshot RAM ; aucune resélection
+après REFUSED. La gate reste volontairement fautive avant les rouges Rust.
 
 ## Reprendre
 
-- Code : `/home/lucied/git_workspaces/cx-lucivy-fs-admission`, branche
-  `cx-lucivy-fs-admission`, poussé `8b9435363dbd8ec0e3973f2368b641189f0726eb`.
+- Code portable : `/home/lucied/git_workspaces/cx-lucivy-fs-admission`, branche
+  `cx-lucivy-fs-admission`, poussé `0f610f437a341f745e5936492114142ff3afedd4`.
+- W PC : `/home/lucied/git_workspaces/cx-lucivy-fs-admission-17nov`, encore8b94353,
+  source propre ; lock ignoréGit dbdb560...37f6 après ajout direct sha2 audité.
 - Documentation : `/home/lucied/git_workspaces/cx-lucivy-plan-shutdown`, branche
-  `cx-lucivy-reprise-16nov`.
-- [Préparation, limites et recette proposée](02-preparation-rouge-fs.md),
-  [pins source/lock](03-fs-red-source-pins.json).
+  `cx-lucivy-reprise-16nov`. [Refus et fin réelle](15-refus-compilation-sha2-lowerhex.md),
+  [source hex préparée](16-preparation-compatibilite-hex-sha2.md).
+- Ancien Qv2 terminé/refusé, GOclos, pas de retry. Common265273/start126184561
+  terminé101/nettoyé/restes[], retour SSH/poste et exporteur observés.
+- T unique3552 conservé ; trois anciens ELF1ee RO et SHA préservés deux postes.
 - [Ticket porteur](../tickets/2026-11-16-l-admission-du-corpus-fs-ne-garantit-pas-la-vue-consommee.md)
-  ouvert ; revue statique demandée à Recherche puis arbitrage C7. Aucun GO Cargo.
+  ouvert. RO0f610f4 puis nouveau paquet/nonce/pins/RO/GO distinct avant Cargo.
+  Prévoir seed lockdbdb invariant et fin/début portable journalisés dans la borne.
 
-La source 1ee5 reste qualifiée pour neuf juges mémoire seulement ; cette nouvelle
-source n'est ni compilée ni qualifiée. Natifs A/B, core complet et ses neuf HOLD,
-ULP Linux7.2 et PR42 restent HOLD. Aucun main/tag/publication/fusion.
+Neuf juges mémoire source1ee qualifiés seulement pour leur portée. Nouveaux
+six négatifs FS et positif NONJOUÉS. Natifs A/B/core/neufHOLD/ULP7.2/PR42
+restent HOLD. Aucun main/tag/publication/fusion.
+
+## Historique des étapes, déclarations à leur date
 
 RO Recherche reçue sur source exacte8b94353 et docs c987957426 : favorable
 bornée à la baseline et à la recette proposée ; aucun blocage statique établi.
