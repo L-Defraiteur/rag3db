@@ -44,7 +44,7 @@ def main():
             fd=os.open(private/name,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
             with os.fdopen(fd,'w') as f:f.write(password+'\n')
         # No secret in argv, input logs or docker Config.Env; only _FILE references.
-        nid=call(['/usr/bin/docker','network','create','--internal','--label','g.pg.fixture.owner=G','--label','g.pg.fixture.nonce='+seed['nonce'],seed['network_name']]).stdout.decode().strip()
+        nid=call(['/usr/bin/docker','network','create','--driver','bridge','--label','g.pg.fixture.owner=G','--label','g.pg.fixture.nonce='+seed['nonce'],seed['network_name']]).stdout.decode().strip()
         argv=['/usr/bin/docker','create','--pull=never','--name',seed['container_name'],'--rm','--network',nid,
               '--label','g.pg.fixture.owner=G','--label','g.pg.fixture.nonce='+seed['nonce'],
               '--memory','2g','--memory-swap','2g','--cpus','2','--pids-limit','128','--shm-size','64m','--read-only',
@@ -82,7 +82,7 @@ def main():
             item,n=decoder.raw_decode(text.lstrip());parts.append(item);text=text.lstrip()[n:]
         assert parts[0]==cid and parts[1]==seed['image_id']
         assert parts[3:7]==[2147483648,2147483648,2000000000,128]
-        assert parts[7]['5432/tcp']==[dict(HostIp='127.0.0.1',HostPort=str(seed['port']))]
+        assert parts[7].get('5432/tcp')==[dict(HostIp='127.0.0.1',HostPort=str(seed['port']))],'effective_loopback_port_binding_mismatch'
         assert parts[8]['g.pg.fixture.nonce']==seed['nonce']
         assert value['memberships']==[] and 'default_transaction_read_only=on' in value['role_settings']
         observer_query=b"SELECT json_build_object('user',current_user,'transaction_read_only',current_setting('transaction_read_only'),'rows',(SELECT count(*) FROM fixture.samples),'weight_sum',(SELECT sum(weight) FROM fixture.samples));\n"
@@ -96,6 +96,16 @@ def main():
         reason=str(error)
         for password in passwords:reason=reason.replace(password,'[REDACTED]')
         publish('first-red.json',dict(reason=type(error).__name__+': '+reason,container_id=cid,network_id=nid,transport_qualified=False))
+        # Capture owned server logs BEFORE destructive cleanup; never replace first cause.
+        if cid:
+            try:
+                logs=subprocess.run(['/usr/bin/docker','logs','--tail','120',cid],env=env,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=3)
+                values=[]
+                for raw in [logs.stdout,logs.stderr]:
+                    for password in passwords:raw=raw.replace(password.encode(),b'[REDACTED]')
+                    values.append(raw[:65536].decode(errors='replace'))
+                publish('failure-server-log.json',dict(code=logs.returncode,stdout=values[0],stderr=values[1]))
+            except BaseException:pass
         # Attributed cleanup outside the failed job; no second initialization.
         subprocess.run(['/usr/bin/python3',str(source/'cleanup.py'),'--seed',str(args.seed),'--seed-sha',args.seed_sha],timeout=25,check=False)
         raise SystemExit(1)

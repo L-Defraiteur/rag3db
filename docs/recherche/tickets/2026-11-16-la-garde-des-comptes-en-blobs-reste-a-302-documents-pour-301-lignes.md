@@ -652,3 +652,8 @@ assouplissement du garde ni retrycréation surGOclos ; nouvelleentrée distincte
 requise. Autredéfautobservabilité : serveur logs n'a PAS été archivé avant
 cleanupforcé du refus ; conserverceconstat, ajouter capturelogsborne/sanitisée
 avantcleanup pour suite. Ne pas inventer ces logsaprèsdisparition.
+
+CorrectionSOURCEaprèsrefusconservéfe198e : réseau--driverbridge nouveau normal,
+gardePortsexact inchangé/erreurnommée ; captureserveurlogsborne/sanitiséeavant
+cleanup, premierrefusfigé. Aucun nouveau Dockerstart ou GO01 réutilisé pendant
+cecorrectif ; préparerrecette/nonce02 avantentréeopérationnelledistincte.

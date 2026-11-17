@@ -15,7 +15,7 @@ reste intact. Inventaire brut sélectif sansEnv dans cacheprivée
 ## Une initialisation, bornes et TTL avant start
 
 Nonce32hex frais, noms/labels ownerG et nonce pour container ET réseau bridge
-internal nouveaux. Aucun volume/bind de données existantes : PGDATA tmpfs512M,
+normal nouveaux. Aucun volume/bind de données existantes : PGDATA tmpfs512M,
 run16M/tmp32M/shm64M, rootfsreadonly. Binds uniquement sourceRO/credentialsRO
 nouveaux et minusculejournalLifecycleRW privé. Docker2GiB+swap2GiB/2CPU/
 pids128/logsjson1MiB×2, aucun privileged ni socketDocker monté dans le container.
@@ -76,3 +76,10 @@ Les logsserveur n'ont pas été capturés avant suppression : lacune conservée,
 aucune reconstitution. CorrectionSOURCE à préparer : bridge normal nouveau,
 portloopback toujours vérifié strict, logs bornés/sanitisés avantcleanup.
 Pas de nouvel essai sous l'ancien GO ; recette/source/nonce nouveaux distincts.
+
+Sourcecorrective : réseau --driverbridge NEUF normal, pas --internal ; même
+publication127.0.0.1:15433 et garde NetworkSettings.Ports exact, refus nommé
+explicitement effective_loopback_port_binding_mismatch. Aucun portpartagé,
+aucun réseau existant modifié. Au rouge, dockerlogs120lignes bornées/sanitisées
+capturés AVANT cleanup si container encore disponible, sans modifierpremièrecause.
+Cette source seule ne réouvre pas le GO01 ; nouvelle recette/nonce nécessaires.
