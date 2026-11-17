@@ -135,3 +135,6 @@ GO distinct C7-ENTRY-SNAPSHOT-HASH-RED-DEEE-17nov60 : deeea4501ee04594986363db62
 
 
 HOLD10f753 avantGO28 : M réserve facts/exit_record mappings empruntés port encoremutables aprèsseal/wait et avantlecturefinale, C7 brancheconfirmée. Snapshotobservations immuable dèsacquisition AVANTcallbacksuivant/checkclock, pas les opaqueshandles ; nouveauxcontre-ex prépubliés avantfix/pins/RO/GOrouges séparés. Requestsnapshot et hashfinal déjàcorrects,28NONJOUÉS ; aucuneadmission OS/CP/Common. Détails au suivi17nov, ticketresteouvert.
+
+
+GO exactC7-ENTRY-OBSERVATIONS-RED-4117-17nov60 pour deuxcontre-ex4portsMODELED, source41179fa97b9d48ef0fb6ce15faff456175574da8/moduleb925inchangé/testfc300. M/TTYfavorables+C7corps/pins/rehash ; UNEcommande2noms sansfailfast58+2,attendu2FAILégalitéfaitsDvsE/RAWacquisvsforgé,0ERRORskip/rc1,28autresnonjoués. Sources/bruts2hôtes AVANTfixobservations, nouveauxpins/RO/GO30vertsdistinct, aucunOS/CP/Common/SDK. Détails au suivi17nov.
