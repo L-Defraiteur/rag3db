@@ -14,6 +14,7 @@ import tempfile
 import time
 import unittest
 from unittest.mock import patch
+from capture_evidence import archived_capture, proc_state, write_new, sync
 
 HERE = Path(__file__).resolve().parent
 spec = importlib.util.spec_from_file_location('psql_runner', HERE/'runner.py')
@@ -103,7 +104,7 @@ class Profiles(unittest.TestCase):
 
 class RealCapture(unittest.TestCase):
     def call(self,code,*,stdin=b'',seconds=1,env=None):
-        return runner.capture([sys.executable,'-I','-c',code],
+        return archived_capture(runner,self.id().split('.')[-1],[sys.executable,'-I','-c',code],
             env=env or dict(PATH='/usr/bin:/bin',LANG='C'),stdin=stdin,
             deadline=time.monotonic()+seconds)
 
@@ -116,7 +117,7 @@ class RealCapture(unittest.TestCase):
     def test_hung_child_is_killed_and_reaped_under_original_end(self):
         end=time.monotonic()+.5
         with self.assertRaises(runner.CaptureRefused) as ctx:
-            runner.capture([sys.executable,'-I','-c','import time;time.sleep(30)'],
+            archived_capture(runner,self.id().split('.')[-1],[sys.executable,'-I','-c','import time;time.sleep(30)'],
                 env=dict(PATH='/usr/bin:/bin'),stdin=b'',deadline=end)
         rec=ctx.exception.record
         self.assertIs(rec['timed_out'],True);self.assertIs(rec['reaped'],True)
@@ -135,9 +136,11 @@ class RealCapture(unittest.TestCase):
         self.assertEqual(r['returncode'],7);self.assertIs(r['reaped'],True)
 
     def test_expired_end_refuses_before_child(self):
-        with self.assertRaises(ValueError):
-            runner.capture([sys.executable,'-I','-c','raise Exception("must not run")'],
-                env={},stdin=b'',deadline=time.monotonic()-1)
+        with patch.object(runner.subprocess,'Popen',side_effect=AssertionError('unexpected child')) as spawn:
+            with self.assertRaises(ValueError):
+                runner.capture([sys.executable,'-I','-c','raise Exception("must not run")'],
+                    env={},stdin=b'',deadline=time.monotonic()-1)
+            spawn.assert_not_called()
 
     def test_stderr_flood_is_bounded_and_refused(self):
         with self.assertRaises(runner.CaptureRefused) as ctx:
@@ -149,7 +152,7 @@ class RealCapture(unittest.TestCase):
     def test_ignoring_term_does_not_escape_original_end(self):
         end=time.monotonic()+.8
         with self.assertRaises(runner.CaptureRefused) as ctx:
-            runner.capture([sys.executable,'-I','-c',
+            archived_capture(runner,self.id().split('.')[-1],[sys.executable,'-I','-c',
                 'import os,signal,time;signal.signal(signal.SIGTERM,signal.SIG_IGN);os.write(1,b"HANDLER_READY\\n");time.sleep(30)'],
                 env=dict(PATH='/usr/bin:/bin'),stdin=b'',deadline=end)
         self.assertIs(ctx.exception.record['reaped'],True)
@@ -159,14 +162,36 @@ class RealCapture(unittest.TestCase):
         with self.assertRaises(ProcessLookupError):os.kill(ctx.exception.record['pid'],0)
 
     def test_child_exit_with_pipe_retained_is_partial_not_success(self):
-        # Futur CPU distinct : vrai petit-enfant privé, durée bornée .35 s.
-        # Le parent sort0 avant EOF ; le détenteur finit seul avant END.
-        code=('import os,time;pid=os.fork();'
-              'time.sleep(.35) if pid==0 else None;os._exit(0)')
+        # Futur CPU distinct : vrai petit-enfant privé, borné .35 s.
+        # Le parent attend son identité/handshake AVANT de sortir0 ; EOF reste
+        # détenu dans le même process group/session privées. Pas d'observateur.
+        code="""import os,json,time
+readfd,writefd=os.pipe()
+pid=os.fork()
+if pid==0:
+ os.close(readfd)
+ start=open('/proc/self/stat').read().rsplit(')',1)[1].split()[19]
+ row=dict(pid=os.getpid(),start=start,pgrp=os.getpgrp(),session=os.getsid(0))
+ os.write(1,(json.dumps(row)+'\\n').encode())
+ os.write(writefd,b'1');os.close(writefd)
+ time.sleep(.35);os._exit(0)
+os.close(writefd);os.read(readfd,1);os.close(readfd);os._exit(0)
+"""
         with self.assertRaises(runner.CaptureRefused) as ctx:
             self.call(code,seconds=1)
-        self.assertIs(ctx.exception.record['partial'],True)
-        self.assertIs(ctx.exception.record['reaped'],True)
+        rec=ctx.exception.record
+        self.assertIs(rec['partial'],True)
+        self.assertIs(rec['reaped'],True)
+        holder=json.loads(rec['stdout'])
+        self.assertEqual(holder['pgrp'],rec['pid'])
+        self.assertEqual(holder['session'],rec['pid'])
+        state=proc_state(holder['pid'],holder['start'])
+        target=Path(os.environ['PSQL_CPU_CAPTURE_PROOFS'])/self.id().split('.')[-1]
+        write_new(target/'holder-after.json',encode(dict(identity=holder,observed=state)))
+        sync(target)
+        # A zombie is retained as such in the proof, not declared nonexistent.
+        self.assertTrue(state['original'].startswith('ABSENT') or state['state']=='Z',state)
+
 
 
 def fake_observe(out, *, expire=False, capture_patch=None):

@@ -1060,3 +1060,21 @@ Common/lease réelle de la factory native, preuve exe/env, outer whole5 imports/
 fsync, auth/SSL/dlopen et transportPG NON QUALIFIÉS. v1grant non délivré.
 Aucun test supplémentaire enchaîné, aucun GO contact/fixture déduit.
 Ticket FTS302 ouvert : les manques natifs exigent prépa source/RO/GO séparés.
+
+
+### Suite autorisée audit C7 8b54d1bbac — préparation19 tests seulement
+
+Après8fakeFS verts, préparer source/recette/pins19autres sans exécution.
+Distinguer12sans enfant réel et7RealCapture lançant Python privés (un cas a
+un petit-enfant détenteur EOF borné). Identités PID/start/ownership, pipes/EOF,
+TERM/reap/END et bruts archivés avant propagation du refus ; aucun refus absorbé.
+Même ticket, R lecture totale avant nouveau GO. Aucun test/RealCapture/PG/
+secret/Docker/service autorisé par cette préparation, aucune fixture à allouer.
+Pas de fork d'observateur Common, pas de terminal runtime qualifié.
+
+Préparation19 source dans runner19-plan.md/runner19-cpu-recipe.json : sélection
+verbose/failfast,12sans enfant/7vraisPython+1détenteur EOF. Nouveau helper archive
+bruts/records avant rethrow, identités et FDs parent, tout dans cap original.
+Runner6148 inchangé. Zéro import/parse/test/natif exécuté ; les19 restent NON
+JOUÉS. Lecture TOTALE R requise avant GO C7distinct. Le paquet privé ne sera
+qu'une copie source métadonnées vérifiées, pas une entrée test autorisée.
