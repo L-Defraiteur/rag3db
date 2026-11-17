@@ -17,6 +17,11 @@ dossiers ne tiennent plus ; l'histoire est là, pas l'état).
 
 ## Les visions de novembre 2026 (pages de conception, laissées dans leurs dossiers de session)
 
+- **Catégories nommées comme fiches de mémoire** — demande et clarification de Lucie
+  du17novembre : déclarations elles-mêmes recherchables, valeurs partagées et références
+  permettant de filtrer les autres fiches par catégorie ou par valeur. Vision future,
+  aucune implémentation lancée :
+  [intention et relations](2026-11-17-des-categories-nommees-comme-fiches-de-memoire.md).
 - **Résidence des modèles et préchauffage** — demande de Lucie du 12 novembre :
   garder chauds les usages courants, charger et libérer les besoins ponctuels,
   composer ModelSource et Serveur avec une politique de ressources commune :
