@@ -40,6 +40,26 @@ class Pure(unittest.TestCase):
    for key,bad in [('network',True),('mode','off'),('extra_write',['/shared'])]:
     broken=json.loads(json.dumps(manifest));broken['workspace']['sandbox'][key]=bad
     with self.assertRaises(RuntimeError):policy.sandbox(broken,root,root,root,10)
+ def test_real_shim_guard_is_readable_by_the_actual_sandbox_declaration(self):
+  import broker
+  from settings import C as actual_c
+  with tempfile.TemporaryDirectory() as tmp:
+   root=Path(tmp).resolve();manifest=dict(workspace=dict(commands='approval',sandbox=dict(extra_read=[],env={})))
+   value=policy.sandbox(manifest,root,root,root,8)
+   tree=ast.parse(Path(broker.__file__).read_text())
+   guards=[n.value for n in ast.walk(tree) if isinstance(n,ast.keyword) and n.arg=='guard']
+   self.assertEqual(len(guards),1)
+   actual=Path(eval(compile(ast.Expression(guards[0]),'actual-broker-guard','eval'),dict(C=actual_c,str=str)))
+   self.assertTrue(any(actual==Path(r) or actual.is_relative_to(Path(r)) for r in value['workspace']['sandbox']['extra_read']))
+ def test_named_red_rejects_an_unrelated_real_panic(self):
+  text='running 1 test\ntest '+policy.D6_NAME+' ... FAILED\nthread x panicked at src/backend.rs:2\nunrelated storage panic\n'+summary(passed=0,failed=1)
+  with self.assertRaises(RuntimeError):policy.judged(text,policy.D6_NAME,True)
+ def test_published_primitive_hashes_match_the_actual_local_files(self):
+  import hashlib
+  rows=json.loads((HERE/'provenance.json').read_text())
+  for row in rows:
+   with self.subTest(destination=row['destination']):
+    self.assertEqual(hashlib.sha256((HERE/row['destination']).read_bytes()).hexdigest(),row['destination_sha256'])
  def test_real_host_and_tty_entries_match_actual_cargo_and_cli(self):
   import tomllib
   cargo=tomllib.loads((C/'Cargo.toml').read_text());bins={b['name']:b for b in cargo['bin']}
