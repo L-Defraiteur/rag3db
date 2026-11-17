@@ -61,3 +61,19 @@ et première itération vivante, processus OS indépendant et poll contrôlés,
 heartbeat borné sous END original ; grant ACK intermédiaire puis acteur
 reste vivant jusqu'à RELEASE surveillé. Même common cgroup/watchdog ;
 aucun TTL900 propre au watcher, aucun nouveau GO ni runtime correctif.
+
+## Groupe correctif publié, CPU seulement
+
+84a61e6934 : contrôleur commun supervisant acteur avant driver/copie/DB,
+ARMED réel + heartbeat/process OS aux actions, nouveau descripteur obligatoire
+dans READY/phase, deux nonces préchoisis et lease distincte, release terminal
+sous même END. Acteur4f54 strict, helperowner83139/transportedf45 inchangés.
+Après publication :124 fonctions CPU vertes0.283s,0skip/rc0, timeout59+kill1.
+Les six rouges initiaux sont désormais verts, avec chemin positif, vrais
+fakes parent/entrée/policy et les20 de l'acteur. Aucune action OS/proc/health/
+DB/CLI ou service réelle dans ces tests.
+
+Voir [préparation02](../../arbre-principal/17-11-2026/02-preparation-controleur-et-producteur-supervise.md).
+Qv5/22 sources et Python à préparer en métadonnées, puis RO totale avant
+tout nouveau GO C7. Ancien3c2/PQS4/FIN restent figés et ROUGE conservé.
+Le ticket reste OUVERT : aucune qualification native du cycle/shutdown/LIVE.

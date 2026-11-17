@@ -64,3 +64,32 @@ le vrai raccord AST common→contrôleur, la publication READY et les hooks
 policy sans contacts. Le groupe assemblé est NONJOUÉ avant publication.
 Aucun dossier de runtime, processus acteur, DB, service, health, CLI, slot ou
 GO correctif n'est créé par ce code publié de préparation.
+
+## Qualification CPU du groupe publié
+
+Groupe source84a61e6934 publié/poussé avant exécution :124 fonctions distinctes
+vertes en0.283s, rc0, sans skip. Timeout59s+kill1, PYTHONPATH limité aux deux
+dossiers coordination16/17 nécessaires au groupe. Les messages ValueError
+du superviseur sont les refus attendus des scénarios négatifs, pas des essais
+natifs ni des échecs ignorés. Les six contre-exemples initiaux sont verts,
+avec fixtures complètes et parcours positif ajouté.
+
+Le parent est exercé par sept fakes, le vrai raccord AST common→contrôleur
+par deux autres, la policy statique par quatre et l'acteur partagé par20.
+Les autres cas conservent framing, borne READY, nonce, lease, profil/types,
+raw/refus et source des étapes précédentes. Le total124 est un compte de
+fonctions, pas de sous-cas ni de scénarios natifs. Les données artificielles
+ne constituent pas une qualification physique. Zéro Popen/proc/signal réel,
+réseau, health, DB ou CLI dans ces témoins ; aucun Cargo/target/service.
+
+Acteur final porté strictement depuis4f54eef8af693c17e5401d1adc9d4c9062b315d3 :
+SHA7d7db5a0c7d9ac762eed74ade2d0b9ee256b8499d0029ae970feac916de76612,
+testSHA9a7bbe30d040ece0c3f016fd429beca1a1e6e28b17f6d5c68ef4204588121899.
+Les fixtures sampler reflètent les rôles watcher/contrôleur/driver distincts,
+avec chemins protégés refusés avant lecture. Owner83139 et transportedf45
+restent strictement byte-identiques.
+
+La publication documentaire suivante ne modifie aucun code exécuté/testé.
+Paquet22 sources/donnée et Python exact sur PC, RO totale du couple/pin,
+puis arbitrage C7 distinct seront nécessaires. Aucun GO correctif ni slot
+n'est ouvert par les124 verts ou par la préparation metadata du paquet.
