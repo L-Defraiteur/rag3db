@@ -140,3 +140,10 @@ C7 distinct avant exécution. Code source8b94353 inchangé.
 ### Banc — couple v4 77a4703c8f
 
 [RO totale favorable préparation](../../banc/17-11-2026/03-ro-couple-fs-red.md) : rouge166d1FAILdrift+1PASSinchangé/0ERROR corroboré sansrejeu. Deuxguardes lockeffectif aprèsjuges avantresult et aprèsCommon avantfinalaccepted dansEND ferment P1SOURCE.9pinsQv4/pref94967917/portable7c58/source0f/seeddbdb/Tconformes ;deuxQCPU96720614/620 SHAconformes,5AST/0CPUjoué. Attendus2PASSfinal+3PASSjournauxNONOBSERVÉS/GOsCPUdistinctsC7 puis GO300distinct ; ticket OUVERT/aucunruntimequalifié.
+
+
+### Revue Banc du candidat0668432 — sorties à compléter
+
+RO source totale, publication e62b8aed2a, quatreSHA Git conformes ; aucun test/build/import/DB/corpus exécuté. Voir docs/banc/17-11-2026/03-ro-couple-fs-red.md, « RO totale source0668432 ». Réserve : seul le reçu est séparé lexicalement de l'entrée ; le rapport fixe via common::report_path/File::create ne l'est pas et peut être exactement V3_ADMISSION_MANIFEST. Après ADMITTED durable et builder, ce File::create tronque alors le reçu ; un rapport sous racine d'entrée peut aussi être écrit sans refus préalable. Aucun alias/course n'est nécessaire au premier cas. Le parent aliasé déjà connu s'ajoute à cette même frontière incomplète.
+
+Porteur Lucivy : déclarer/valider toutes sorties, distinction reçu/rapport et exclusion entrée avant effets ; préparer témoins de collision et rapport dans entrée/alias, rouges avant correction sous GO distinct. Aucun builder réel requis pour prouver la prévalidation de chemins. Replay de manifeste et qualification réelle restent ouverts ; dix résultats candidat non observés, aucun GO transféré. Avis source réservé sur cette frontière, structure refus/snapshot/plan frais favorable à la lecture.
