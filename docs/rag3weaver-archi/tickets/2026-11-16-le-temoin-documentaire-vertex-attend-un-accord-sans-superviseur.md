@@ -175,3 +175,12 @@ Le reviewer final n'atteste pas l'identité du juge rouge→vert. Exiger D6_RED_
 inchangé à admission/built/tested pour les deux étapes agent, validateur seul
 modifiable ; témoin au vrai Broker.handle refusant l'admission verte altérée,
 publié avant correctif et NONJOUÉ sans GO CPU. APPf1e8 inchangée.
+
+### RO Banc 60f9 : activation du juge, avant correction
+
+HOLD résiduel eac60810b4 : substring/hashconstant ne prouvent pas le juge actif.
+Ajouter cfg(any()) avant bloc intact et un homonyme vide peut contourner le vert.
+Comparer au rouge acquis tout le backend hors CORPS de la seule fonction validateur,
+et tout autre source/index/mode ; aucune modification du juge/attributs autorisée.
+Écrire avant fix un témoin réel Broker.handle cfg/homonyme refusé avant session.
+Pas de test exécuté ni de GO reporté ; APPf1e8 et anciens rouges préservés.
