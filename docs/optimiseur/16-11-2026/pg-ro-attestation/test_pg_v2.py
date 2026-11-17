@@ -141,7 +141,7 @@ class CredentialReferenceFixtures(unittest.TestCase):
         with self.assertRaises(v2.Refused):v2.read_allocated_secret(self.path,allocation(),self.cache,scope_check=lambda:True)
     def test_unrelated_path_or_inactive_scope_refuses_before_open(self):
         from unittest.mock import patch
-        with patch.object(Path,'open',side_effect=AssertionError('must not read')) as opened:
+        with patch.object(v2.os,'open',side_effect=AssertionError('must not read')) as opened:
             with self.assertRaises(v2.Refused):v2.read_allocated_secret(self.path,allocation(),self.cache,scope_check=lambda:False)
             with self.assertRaises(v2.Refused):v2.read_allocated_secret(self.cache/'unrelated',allocation(),self.cache,scope_check=lambda:True)
             opened.assert_not_called()

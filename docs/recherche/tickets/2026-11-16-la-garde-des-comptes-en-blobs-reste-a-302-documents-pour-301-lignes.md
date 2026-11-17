@@ -691,3 +691,15 @@ pathfixturecachecanonique/nonce/rootprivate/UID0600nlink1,DSNmémoireLoopback
 portprivé/roleDBexternes/sslmode=disable. Pasd'entréeCLIactive ni chargement
 implicite du secret. Sous-sourceCnouvellecontratfieldfixture_nonce distingue
 nonceallocationDocker du nonceprobeREADY ; aucune fixturehistorique réétiquetée.
+
+PrépaV2suiteSOURCE : candidatRustpg_ro_client_v2.rs etconstanteSQLsessionRO,
+4testsRustsources NONCOMPILÉS ; serde_core déjàarchivé89e561...1767 requis
+pourdécodeurJSONbibliothèqueantidoublons. OwnerRustattrappeerreursavantclose,
+CancelTokensi acquis/tempsrestant puisdrop/join ; préconnecttimeoutproducUNKNOWN.
+NouveaudriverPythonstdinpipe/argv-envwhitelist/traceframescanoniquessansecrets,
+PIDstartCG/groupe dédié/reapquiet, àcomposer avecsuperviseurexterne10/Common30/
+OS35kill2proposés. EntréesCLI Pythonrefusées PREPAONLY ; loaderscopeAPI seul.
+Référencessecretstrictnoncefixture/root700/file0600UIDnlink1/O_NOFOLLOW,
+modeprobeportprivé!=5433,noncefixture distinctREADY.16testsPython vertsproposés
++rougecausallegacy1seul (avantcode4b770), tousNONJOUÉS. PasRust/ELF/PG/source
+compilée ni connexioncandidate àfixture02. LesquatreRustpasqualifiésparPython.
