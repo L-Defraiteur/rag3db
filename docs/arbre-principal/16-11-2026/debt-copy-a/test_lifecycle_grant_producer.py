@@ -9,11 +9,12 @@ import unittest
 from unittest.mock import patch
 import lifecycle_grant_producer as producer
 import lifecycle_protocol as protocol
+from test_producer_fixture import producer_state
 
 
 def fixture():
     uid = os.getuid()
-    ready = dict(protocol.ready_bounds(40., 600.), deadline=600., nonce='fixture',
+    ready = dict(protocol.ready_bounds(40., 600.), deadline=600., nonce='b'*32,
                  no_embedding_calls_authorized=True, phase=dict(
                      job='lifecycle-provider', pilot='f'*40, allocation='fixture',
                      authority=dict(path='/fixture/authority', pid=123, start='42',
@@ -24,6 +25,7 @@ def fixture():
                                 echeance=600., script_sha256='a'*64),
                  authority_uid=uid, process=dict(start='42', cgroup='/fixture', uid=uid, state='S'),
                  first_red_exists=False, snapshot_stable=True)
+    phase['producer_watcher']=producer_state(ready,80.)
     return ready, phase
 
 
@@ -44,7 +46,7 @@ class Producer(unittest.TestCase):
 
     def snapshot(self, ready):
         self.phase_reads += 1
-        return dict(copy.deepcopy(self.phase), snapshot_observed_monotonic=self.now)
+        return dict(copy.deepcopy(self.phase), snapshot_observed_monotonic=self.now,producer_watcher=producer_state(ready,self.now))
 
     def observe(self, ready):
         self.healths += 1
@@ -56,7 +58,7 @@ class Producer(unittest.TestCase):
 
     def run_publish(self, **extra):
         return producer.publish_grant(self.path, self.dest, expected_sha256=self.sha,
-                                      expected_nonce='fixture',
+                                      expected_nonce='b'*32,
                                       expected_protocol_sha256=hashlib.sha256(Path(protocol.__file__).read_bytes()).hexdigest(),
                                       observe_provider=self.observe,
                                       clock=lambda: self.now, phase_reader=self.snapshot, **extra)

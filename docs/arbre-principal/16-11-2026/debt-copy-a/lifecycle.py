@@ -4,17 +4,22 @@ from pathlib import Path
 import argparse,hashlib,json,os,shutil,signal,subprocess,sys,time,uuid
 import finish_result as f
 import lifecycle_protocol as protocol
+import grant_watch_actor as watch_actor
+import grant_watch_controller as watch_control
 a=f.a;q=a.q;R=a.R
-P=R/'lifecycle-copy-v4';Q=R/'lifecycle-control-v4';S=R/'lifecycle-scopes-v4'
+P=R/'lifecycle-copy-v5';Q=R/'lifecycle-control-v5';S=R/'lifecycle-scopes-v5'
 FIN=R/'debt-fin-ro-result-v1';SOURCE=FIN/'copy';BASE=P/'copy/code-principal.rag3db'
 FIN_MANIFEST=R/'debt-fin-ro-proofs-01/proof-manifest.json'
 FIN_MANIFEST_SHA='05661b1fddc82c1e66d21f218d0c8cdfd12b69d8ef16432a2c55c3b127a9462a'
 FIN_REFS=['copy-after.json','fts-observed.json','vectors-observed.json','sources-after.json','composed.json']
-a.FILES=dict(a.FILES,**{n:a.PREFIX+n for n in ['lifecycle.py','lifecycle_protocol.py','lifecycle.json','lifecycle.mmd','lifecycle-provider-go.schema.json','lifecycle-ready.schema.json','lifecycle_grant_producer.py','lifecycle_provider_observation.py','lifecycle_health_policy.py']})
+a.FILES=dict(a.FILES,**{n:a.PREFIX+n for n in ['lifecycle.py','lifecycle_protocol.py','lifecycle.json','lifecycle.mmd','lifecycle-provider-go.schema.json','lifecycle-ready.schema.json','lifecycle_grant_producer.py','lifecycle_provider_observation.py','lifecycle_health_policy.py','lifecycle-provider-expectations.json']})
 a.FILES['provider_health_transport.py']='docs/orchestration/16-11-2026/coordination/provider_health_transport.py'
+for name in ['grant_watch_actor.py','grant_watch_controller.py']:a.FILES[name]='docs/orchestration/17-11-2026/coordination/'+name
 f.Q=Q;f.carried.Q=Q;a.Q=Q;a.P=P;a.S=S;a.BASE=BASE;q.Q=Q
 def save(name,value):q.save(P/name,value)
 def publish_ready(ready):
+ state=require_producer()
+ if ready['nonce']!=state['config']['ready_nonce'] or ready['phase'].get('producer_watcher')!=producer_descriptor(state):raise ValueError('READY must bind the independently admitted live producer')
  # The observation is sampled before this write; no fsync-completion time claimed.
  pending=P/'READY_FOR_PROVIDER_COORDINATION.pending.json';public=P/'READY_FOR_PROVIDER_COORDINATION.json'
  q.save(pending,ready);q.require_time(ready['grant_deadline_monotonic'],0)
@@ -22,9 +27,51 @@ def publish_ready(ready):
 def health_context(ready,grant,ready_sha256,admission):
  policy=Q/'lifecycle_health_policy.py'
  return dict(address='127.0.0.1:7878',expected_process=grant['owner_pins']['expected_process'],gate_module_path=str(policy),gate_module_sha256=q.sha(policy),ready_path=str(P/'READY_FOR_PROVIDER_COORDINATION.json'),ready_sha256=ready_sha256,nonce=ready['nonce'],grant=grant,admission=admission)
+def producer_descriptor(state):
+ return dict(admission_path=str(P/'watcher-admission.json'),admission_sha256=state['admission_sha256'])
+def scope_reference(authority):
+ return dict(path=os.environ['RAG3WEAVER_VALIDATION_RECU'],pid=authority['pid'],start=authority['debut'],uid=os.getuid(),cgroup=authority['cgroup'],script_sha256=authority['script_sha256'])
+def install_action_guard(cfg,authority):
+ expected_authority=scope_reference(authority);expected_end=authority['echeance'];admission_path=P/'watcher-admission.json';expected_admission=q.sha(admission_path);prepared_sha=q.sha(Q/'prepared.json');allocation=protocol.decode((Q/'allocation.json').read_bytes())['reference']
+ def action_guard():
+  try:
+   state=watch_control.read_admission(admission_path,expected_admission);config=state['config']
+   if config['prepared_path']!=str(Q/'prepared.json') or config['prepared_sha256']!=prepared_sha or config['pilot']!=cfg['pilot'] or config['allocation']!=allocation:raise ValueError('producer source/allocation is not this exact job')
+   if config['authority']!=expected_authority or config['common_end_monotonic']!=expected_end:raise ValueError('producer belongs to another authority/deadline')
+   if config['paths']['ready']!=str(P/'READY_FOR_PROVIDER_COORDINATION.json') or config['paths']['grant']!=str(Q/'PROVIDER_GO.json'):raise ValueError('producer READY/grant targets another job')
+   if config['actor']['script_path']!=str(Q/'grant_watch_actor.py') or config['actor']['script_sha256']!=cfg['files']['grant_watch_actor.py'] or config['actor']['exe']!=cfg['python'] or config['actor']['exe_sha256']!=cfg['python_sha256']:raise ValueError('producer executable/source differs from prepared role')
+   own=watch_actor.python_role_snapshot(os.getpid(),str(Q/'lifecycle.py'))
+   if own['ppid']!=config['controller']['pid'] or own['exe']!=cfg['python'] or own['exe_sha256']!=cfg['python_sha256'] or own['argv']!=[cfg['python'],'-B',str(Q/'lifecycle.py'),'--driver'] or own['script_sha256']!=cfg['files']['lifecycle.py'] or own['uid']!=os.getuid() or own['cgroup']!=expected_authority['cgroup'] or own['state'] not in ['R','S','D','I']:raise ValueError('DB driver not the exact owned source/interpreter/argv role')
+   return state
+  except BaseException as error:
+   a.red(error)
+   raise RuntimeError('producer admission refused before action') from error
+ q.ACTION_GUARD=action_guard
+ return action_guard()
+def require_producer():
+ if q.ACTION_GUARD is None:raise ValueError('producer has not been independently admitted before READY/action')
+ return q.ACTION_GUARD()
+def active_scope():
+ common=q.loadmod('confiner_validation');authority=common.autorite(common.processus());end=authority['echeance']
+ if json.loads((Path(os.environ['RAG3WEAVER_VALIDATION_RECU']).parent/'recette.json').read_text())['delai']!=830:raise ValueError('lifecycle budget differs')
+ cg=Path('/sys/fs/cgroup')/authority['cgroup'].lstrip('/');limits={n:(cg/n).read_text().strip() for n in ['memory.max','memory.high','memory.swap.max','cpu.max']};quota,period=limits['cpu.max'].split()
+ if limits['memory.max']!='34359738368' or limits['memory.high']!='max' or limits['memory.swap.max']!='0' or quota=='max' or not 0<int(quota)<=8*int(period):raise ValueError('lifecycle resource contract differs')
+ return authority,end,limits
+def controller():
+ cfg=protocol.decode((Q/'prepared.json').read_bytes());guard(cfg);a.bind();authority,end,limits=active_scope();own=watch_actor.python_role_snapshot(os.getpid(),str(Q/'lifecycle.py'))
+ expected_argv=[cfg['python'],'-B',str(Q/'lifecycle.py'),'--controller']
+ if own['exe']!=cfg['python'] or own['exe_sha256']!=cfg['python_sha256'] or own['argv']!=expected_argv or own['script_sha256']!=cfg['files']['lifecycle.py'] or own['cgroup']!=authority['cgroup'] or own['uid']!=os.getuid():raise ValueError('controller OS role is not exact')
+ save('controller-authority-path.json',dict(path=os.environ['RAG3WEAVER_VALIDATION_RECU'],deadline=end,limits=limits,process=own))
+ now=time.monotonic();arm_due=min(now+10.,end-500.)
+ if arm_due<=now:raise ValueError('no original budget for producer admission')
+ config_path=P/'watcher-config.json';paths=dict(ready=str(P/'READY_FOR_PROVIDER_COORDINATION.json'),grant=str(Q/'PROVIDER_GO.json'),armed=str(P/'watcher-armed.json'),heartbeat=str(P/'watcher-heartbeat.json'),grant_ack=str(P/'watcher-grant.json'),result=str(P/'watcher-result.json'),release=str(P/'watcher-release.json'),first_red=str(P/'first-red.json'),evidence=str(P/'watcher-owner-evidence.json'))
+ config=dict(clock=protocol.READY_CLOCK,pilot=cfg['pilot'],allocation=protocol.decode((Q/'allocation.json').read_bytes())['reference'],prepared_path=str(Q/'prepared.json'),prepared_sha256=q.sha(Q/'prepared.json'),actor_nonce=uuid.uuid4().hex,ready_nonce=uuid.uuid4().hex,issued_monotonic=now,arm_deadline_monotonic=arm_due,common_end_monotonic=end,controller=dict(pid=own['pid'],start=own['start']),authority=scope_reference(authority),actor=dict(script_path=str(Q/'grant_watch_actor.py'),script_sha256=cfg['files']['grant_watch_actor.py'],exe=cfg['python'],exe_sha256=cfg['python_sha256'],argv_prefix=[cfg['python'],'-B',str(Q/'grant_watch_actor.py'),'--watch',str(config_path)]),paths=paths,policy=dict(path=str(Q/'lifecycle_health_policy.py'),sha256=cfg['files']['lifecycle_health_policy.py']),policy_context=dict(expected_provider_path=str(Q/'lifecycle-provider-expectations.json'),expected_provider_sha256=cfg['files']['lifecycle-provider-expectations.json']))
+ q.save(config_path,config)
+ return watch_control.supervise(config_path,q.sha(config_path),[cfg['python'],'-B',str(Q/'lifecycle.py'),'--driver'])
 def guard(cfg):
  f.guard(cfg)
  if protocol.decode((Q/'lifecycle.json').read_bytes()).get('database')!=str(BASE):raise ValueError('manifest must target this exact fresh fixture')
+ if q.sha(cfg['python'])!=cfg['python_sha256'] or str(Path(cfg['python']).resolve())!=cfg['python']:raise ValueError('prepared Python interpreter differs')
  if q.sha(FIN_MANIFEST)!=FIN_MANIFEST_SHA or set(cfg['fin_refs'])!=set(FIN_REFS):raise ValueError('FIN evidence reference set differs')
  rows={x['name']:x['sha256'] for x in json.loads(FIN_MANIFEST.read_text())}
  for name,h in cfg['fin_refs'].items():
@@ -108,10 +155,7 @@ def writer(cfg,env,profile,grant,end,nonce):
  return result
 
 def driver():
- cfg=json.loads((Q/'prepared.json').read_text());guard(cfg);a.bind();common=q.loadmod('confiner_validation');authority=common.autorite(common.processus());end=authority['echeance'];cfg['active_cgroup']=authority['cgroup']
- if json.loads((Path(os.environ['RAG3WEAVER_VALIDATION_RECU']).parent/'recette.json').read_text())['delai']!=830:raise ValueError('lifecycle budget differs')
- cg=Path('/sys/fs/cgroup')/authority['cgroup'].lstrip('/');limits={n:(cg/n).read_text().strip() for n in ['memory.max','memory.high','memory.swap.max','cpu.max']};quota,period=limits['cpu.max'].split()
- if limits['memory.max']!='34359738368' or limits['memory.high']!='max' or limits['memory.swap.max']!='0' or quota=='max' or not 0<int(quota)<=8*int(period):raise ValueError('resource contract differs')
+ cfg=json.loads((Q/'prepared.json').read_text());guard(cfg);a.bind();authority,end,limits=active_scope();cfg['active_cgroup']=authority['cgroup'];producer_state=install_action_guard(cfg,authority)
  save('authority-path.json',dict(path=os.environ['RAG3WEAVER_VALIDATION_RECU'],deadline=end,limits=limits,fixture_only=True))
  fs=q.loadmod('inspect-fts');save('source-before-quiet.json',quiet_source());initial=sources(fs)
  if initial['fin_files']!=json.loads((FIN/'copy-after.json').read_text()) or initial['previous']!=json.loads((FIN/'sources-after.json').read_text()):raise ValueError('FIN or previous sources changed')
@@ -136,12 +180,12 @@ def driver():
  vectors_before=full_vector_digest(reader);save('vectors-bits-before.json',vectors_before)
  expected=json.loads((FIN/'vectors-observed.json').read_text())
  if vectors_before['count']!=expected['total_vectors_checked'] or expected['debt']!=0:raise ValueError('fixture vector count differs')
- before_writer=fs.file_inventory(BASE.parent);a.stable_readers(initial['fin_files'],before_writer);save('copy-before-writer-quiet.json',q.copy_quiet());nonce=uuid.uuid4().hex
- phase_identity=dict(job='lifecycle-provider',pilot=cfg['pilot'],allocation=json.loads((Q/'allocation.json').read_text())['reference'],authority=dict(path=os.environ['RAG3WEAVER_VALIDATION_RECU'],pid=authority['pid'],start=authority['debut'],cgroup=authority['cgroup'],uid=os.getuid(),script_sha256=authority['script_sha256']),first_red_path=str(P/'first-red.json'))
+ before_writer=fs.file_inventory(BASE.parent);a.stable_readers(initial['fin_files'],before_writer);save('copy-before-writer-quiet.json',q.copy_quiet());producer_state=require_producer();nonce=producer_state['config']['ready_nonce']
+ phase_identity=dict(job='lifecycle-provider',pilot=cfg['pilot'],allocation=json.loads((Q/'allocation.json').read_text())['reference'],authority=dict(path=os.environ['RAG3WEAVER_VALIDATION_RECU'],pid=authority['pid'],start=authority['debut'],cgroup=authority['cgroup'],uid=os.getuid(),script_sha256=authority['script_sha256']),first_red_path=str(P/'first-red.json'),producer_watcher=producer_descriptor(producer_state))
  ready=dict(nonce=nonce,deadline=end,phase=phase_identity,no_embedding_calls_authorized=True,expected_embedding_calculations=0,health_required=True,max_chars=0,manifest_sha256=q.sha(Q/'lifecycle.json'),graph_sha256=q.sha(Q/'lifecycle.mmd'),fixture_vector_digest_sha256=q.sha(P/'vectors-bits-before.json'),**protocol.ready_bounds(time.monotonic(),end))
  publish_ready(ready)
  while not (Q/'PROVIDER_GO.json').exists():
-  if time.monotonic()>=ready['grant_deadline_monotonic']:raise ValueError('fresh lifecycle provider coordination deadline expired')
+  q.require_time(ready['grant_deadline_monotonic'],0)
   time.sleep(.2)
  path=Q/'PROVIDER_GO.json';info=path.lstat()
  import stat
@@ -174,13 +218,13 @@ def driver():
  save('driver-result.json',dict(status='LIFECYCLE_FIXTURE_JUDGES_PASSED',clean_shutdown_observed=True,fixture_only=True,durability_qualified=False,live_authorized=False))
 
 def compose():
- cfg=json.loads((Q/'prepared.json').read_text());common=q.loadmod('confiner_validation');parent=Path('/proc')/str(os.getppid());expected=[cfg['timeout'],'--signal=TERM','--kill-after=2s','898s',sys.executable,str(Q/'lifecycle.py'),'--compose']
+ cfg=json.loads((Q/'prepared.json').read_text());common=q.loadmod('confiner_validation');parent=Path('/proc')/str(os.getppid());expected=[cfg['timeout'],'--signal=TERM','--kill-after=2s','898s',cfg['python'],'-B',str(Q/'lifecycle.py'),'--compose']
  if os.readlink(parent/'exe')!=cfg['timeout'] or [os.fsdecode(v) for v in (parent/'cmdline').read_bytes().split(b'\0') if v]!=expected or not common.poste_tenu(common.processus()):raise ValueError('real lifecycle outer/poste absent')
  P.mkdir(mode=0o700);a.bind();record=dict(status='RED')
  def stop(sig,frame):a.red('lifecycle outer deadline');raise RuntimeError('lifecycle stopped')
  signal.signal(signal.SIGTERM,stop)
  try:
-  guard(cfg);rc=subprocess.run([sys.executable,str(Q/'confiner_validation.py'),'lancer','--delai','830','--preuves',str(S),'--',sys.executable,str(Q/'lifecycle.py'),'--driver'],cwd='/var/tmp').returncode
+  guard(cfg);rc=subprocess.run([cfg['python'],'-B',str(Q/'confiner_validation.py'),'lancer','--delai','830','--preuves',str(S),'--',cfg['python'],'-B',str(Q/'lifecycle.py'),'--controller'],cwd='/var/tmp').returncode
   path=Path(json.loads((P/'authority-path.json').read_text())['path']);auth=json.loads(path.read_text());scope=json.loads((path.parent/'verdict.json').read_text())
   if rc or scope['verdict']!='VERT' or scope['code'] or scope['restes'] or not scope['nettoye'] or auth['etat']!='termine' or Path(scope['prive']).exists():raise ValueError('lifecycle scope not green quiet')
   for row in json.loads((path.parent/'enfants.json').read_text()):
@@ -202,18 +246,22 @@ def prepare(root,pilot):
  Q.mkdir(mode=0o700)
  for name,path in a.FILES.items():shutil.copy2(root/path,Q/name)
  timeout=str(Path(shutil.which('timeout')).resolve());cfg=dict(source_root=str(root),pilot=pilot,files={n:q.sha(Q/n) for n in a.FILES},timeout=timeout,timeout_sha=q.sha(timeout),old_proofs={n:q.sha(a.OLD/n) for n in a.OLD_REFERENCES},audit_refs={n:q.sha(f.carried.PRIOR/n) for n in f.carried.REFERENCES},fin_refs={n:q.sha(FIN/n) for n in FIN_REFS})
- cfg['carry']=f.carry(cfg);q.save(Q/'prepared.json',cfg);guard(cfg);print(json.dumps(dict(prepared_sha256=q.sha(Q/'prepared.json'),database_opened=False,provider_contact=False)))
+ cfg['python']=str(Path(sys.executable).resolve());cfg['python_sha256']=q.sha(cfg['python']);cfg['carry']=f.carry(cfg);q.save(Q/'prepared.json',cfg);guard(cfg);print(json.dumps(dict(prepared_sha256=q.sha(Q/'prepared.json'),database_opened=False,provider_contact=False)))
 def launch(pilot,allocation):
  cfg=json.loads((Q/'prepared.json').read_text());guard(cfg)
  if pilot!=cfg['pilot'] or not allocation or P.exists() or S.exists() or (Q/'PROVIDER_GO.json').exists() or 'RAG3WEAVER_VALIDATION_RECU' in os.environ:raise ValueError('exact new lifecycle allocation and fresh provider grant required')
  q.save(Q/'allocation.json',dict(reference=allocation,fixture_only=True,budget_proposed=900,live_authorized=False))
  env={k:os.environ[k] for k in ['HOME','USER','PATH','LANG','XDG_RUNTIME_DIR','DBUS_SESSION_BUS_ADDRESS'] if k in os.environ};env.update(POSTE_MEM_MAX='32G',POSTE_SWAP_MAX='0',RAG3WEAVER_BUILD_MEMORY_HIGH='0',CARGO_BUILD_JOBS='8')
- with (Q/'outer.log').open('x') as out:return subprocess.run([str(Q/'poste'),'lourd',cfg['timeout'],'--signal=TERM','--kill-after=2s','898s',sys.executable,str(Q/'lifecycle.py'),'--compose'],env=env,cwd='/var/tmp',stdout=out,stderr=subprocess.STDOUT).returncode
+ with (Q/'outer.log').open('x') as out:return subprocess.run([str(Q/'poste'),'lourd',cfg['timeout'],'--signal=TERM','--kill-after=2s','898s',cfg['python'],'-B',str(Q/'lifecycle.py'),'--compose'],env=env,cwd='/var/tmp',stdout=out,stderr=subprocess.STDOUT).returncode
 if __name__=='__main__':
- ap=argparse.ArgumentParser();ap.add_argument('--prepare');ap.add_argument('--launch');ap.add_argument('--allocation');ap.add_argument('--compose',action='store_true');ap.add_argument('--driver',action='store_true');args=ap.parse_args()
+ ap=argparse.ArgumentParser();ap.add_argument('--prepare');ap.add_argument('--launch');ap.add_argument('--allocation');ap.add_argument('--compose',action='store_true');ap.add_argument('--driver',action='store_true');ap.add_argument('--controller',action='store_true');args=ap.parse_args()
  if args.prepare:prepare(Path(__file__).resolve().parents[4],args.prepare)
  elif args.launch:sys.exit(launch(args.launch,args.allocation))
  elif args.compose:sys.exit(compose())
+ elif args.controller:
+  try:rc=controller()
+  except BaseException as error:a.red(error);raise
+  sys.exit(rc)
  elif args.driver:
   try:driver()
   except BaseException as error:a.red(error);raise

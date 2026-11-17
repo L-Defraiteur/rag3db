@@ -4,11 +4,12 @@ from unittest.mock import patch
 import copy,hashlib,json,os,tempfile,unittest
 import lifecycle_health_policy as policy
 from test_ready_consumption import fixture
+from test_producer_fixture import producer_state
 
 class ConsumerHealthPolicy(unittest.TestCase):
  def setUp(self):
   self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup);root=Path(self.tmp.name)
-  self.ready,self.phase=fixture();self.ready.update(no_embedding_calls_authorized=True,expected_embedding_calculations=0);self.phase['snapshot_observed_monotonic']=150.
+  self.ready,self.phase=fixture();self.ready.update(no_embedding_calls_authorized=True,expected_embedding_calculations=0);self.phase['snapshot_observed_monotonic']=150.;self.phase['producer_watcher']=producer_state(self.ready,150.)
   self.process=dict(pid=456,uid=os.getuid(),start='77',exe='/fixture/provider',exe_sha256='d'*64)
   hashes={}
   for name in ['lifecycle_protocol.py','lifecycle_grant_producer.py','lifecycle_provider_observation.py','provider_health_transport.py']:

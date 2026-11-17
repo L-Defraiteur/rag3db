@@ -42,7 +42,8 @@
         "pilot",
         "allocation",
         "authority",
-        "first_red_path"
+        "first_red_path",
+        "producer_watcher"
       ],
       "properties": {
         "job": {
@@ -97,6 +98,24 @@
         "first_red_path": {
           "type": "string",
           "pattern": "^/"
+        },
+        "producer_watcher": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "admission_path",
+            "admission_sha256"
+          ],
+          "properties": {
+            "admission_path": {
+              "type": "string",
+              "pattern": "^/"
+            },
+            "admission_sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          }
         }
       }
     },

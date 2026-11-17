@@ -1,0 +1,27 @@
+{
+  "kind": "EXPECTED_PROVIDER_ONLY_NOT_FRESH_HEALTH",
+  "expected_process": {
+    "pid": 3906704,
+    "uid": 1000,
+    "start": "111727101",
+    "exe": "/home/lucied/.local/bin/rag3weaver-embeddings",
+    "exe_sha256": "a70f1e462bd9df9516b30b052e90f60d064bafacadcd6adb39e3b1f44be31028"
+  },
+  "identity": {
+    "service": "rag3weaver-embeddings",
+    "modele": "granite-278m",
+    "dim": 768,
+    "factice": false,
+    "dual": false,
+    "sparse": false,
+    "executable": "/home/lucied/.local/bin/rag3weaver-embeddings@1794771361",
+    "precision": "Flex32",
+    "max_chars_per_text": 12000
+  },
+  "provenance": {
+    "path": "/home/lucied/.cache/embarquement-notes/vertex-union-968/fresh-window-2.json",
+    "sha256": "f1bfcab2664b82692c5b608552824604138168b529584e3a895c425f0b06c4f1",
+    "meaning": "authorized expected fingerprint only; never a fresh health claim or actual-as-expected fallback",
+    "expected_uid_provenance": "C7 approved user1000 service baseline"
+  }
+}

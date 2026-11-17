@@ -53,8 +53,12 @@ def directories(root):
   if path.is_dir():rows.append(dict(path=str(path.relative_to(root)),mode=stat.S_IMODE(info.st_mode),uid=info.st_uid))
  return rows
 
+ACTION_GUARD=None
 def require_time(end,margin=15):
  if time.monotonic()>=end-margin:raise ValueError('allocation deadline')
+ if ACTION_GUARD is not None:
+  ACTION_GUARD()
+  if time.monotonic()>=end-margin:raise ValueError('allocation deadline after producer observation')
 def process_identity(pid):
  p=Path('/proc')/str(pid);raw=(p/'stat').read_text().rsplit(') ',1)[1].split()
  return dict(pid=pid,start=raw[19],state=raw[0],exe=os.readlink(p/'exe'),exe_sha256=sha(p/'exe'))
@@ -102,10 +106,10 @@ def validate_grant(grant,now,max_chars):
 
 def health(grant,label,end,*,context=None):
  # The common worker owns HTTP; cycle policy is pinned and checked separately.
- require_time(end,0)
+ began=time.monotonic();require_time(end,0)
  if context is None:raise ValueError('explicit pinned health policy required')
  context=dict(context);now=time.monotonic()
- context['contact_deadline']=float(min(now+5.,end,grant['valid_until_monotonic']))
+ context['contact_deadline']=float(min(began+5.,end,grant['valid_until_monotonic']))
  trace=dict(no_embedding_calls_authorized=True,contact_deadline=context['contact_deadline'])
  try:
   policy=loadmod('lifecycle_health_policy');transport=loadmod('provider_health_transport')

@@ -10,6 +10,7 @@ from unittest.mock import patch
 import lifecycle_provider_observation as owner
 import lifecycle_protocol as protocol
 import lifecycle_grant_producer as producer
+from test_producer_fixture import producer_state
 
 
 class Observation(unittest.TestCase):
@@ -24,7 +25,7 @@ class Observation(unittest.TestCase):
         location.start();self.addCleanup(location.stop)
         self.now = 80.
         uid = os.getuid()
-        self.ready = dict(protocol.ready_bounds(40., 1000.), deadline=1000., nonce='nonce',
+        self.ready = dict(protocol.ready_bounds(40., 1000.), deadline=1000., nonce='b'*32,
             no_embedding_calls_authorized=True, phase=dict(job='lifecycle-provider',
             pilot='f'*40, allocation='C7-fixture', first_red_path='/fixture/first-red.json',
             authority=dict(path='/fixture/auth', pid=123, start='42', cgroup='/fixture',
@@ -34,6 +35,7 @@ class Observation(unittest.TestCase):
                            echeance=1000., script_sha256='a'*64), authority_uid=uid,
             process=dict(start='42', cgroup='/fixture', uid=uid, state='S'),
             first_red_exists=False, snapshot_stable=True)
+        self.phase['producer_watcher']=producer_state(self.ready,self.now)
         self.process = dict(pid=321, uid=uid, start='77', exe='/fixture/provider',
                             exe_sha256='b'*64, state='S')
         identity = dict(service='rag3weaver-embeddings', modele='granite-278m', dim=768,
@@ -58,7 +60,7 @@ class Observation(unittest.TestCase):
         self.status = 200
 
     def phase_reader(self, ready):
-        return dict(copy.deepcopy(self.phase), snapshot_observed_monotonic=self.now)
+        return dict(copy.deepcopy(self.phase), snapshot_observed_monotonic=self.now,producer_watcher=producer_state(ready,self.now))
 
     def process_reader(self, pid):
         self.proc_reads += 1
@@ -74,7 +76,7 @@ class Observation(unittest.TestCase):
 
     def publish(self):
         return owner.publish_observed_grant(self.path, self.dest,
-            expected_ready_sha256=self.sha, expected_nonce='nonce', pins=self.pins,
+            expected_ready_sha256=self.sha, expected_nonce='b'*32, pins=self.pins,
             evidence_path=self.evidence, clock=lambda:self.now,
             phase_reader=self.phase_reader, process_reader=self.process_reader,
             get_health=self.get)
@@ -198,7 +200,7 @@ class Transport(unittest.TestCase):
                  patch.object(protocol,'read_phase_state',side_effect=fixture.phase_reader)]
         for item in patches:item.start();self.addCleanup(item.stop)
         return fixture, dict(ready_path=str(fixture.path), ready_sha256=fixture.sha,
-                             nonce='nonce', pins=fixture.pins)
+                             nonce='b'*32, pins=fixture.pins)
 
     def test_owner_caller_runs_the_same_pinned_common_worker(self):
         from unittest.mock import Mock
@@ -207,7 +209,7 @@ class Transport(unittest.TestCase):
         child.communicate.return_value=(json.dumps(dict(status=200,raw_hex=json.dumps(fixture.health).encode().hex(),oversize=False,prefix_only=False)).encode(),b'')
         with patch.object(owner.subprocess,'Popen',return_value=child) as spawn, \
              patch.object(owner.time,'monotonic',return_value=80.):
-            owner.health_get(85.,ready_path=fixture.path,ready_sha256=fixture.sha,nonce='nonce',pins=fixture.pins)
+            owner.health_get(85.,ready_path=fixture.path,ready_sha256=fixture.sha,nonce='b'*32,pins=fixture.pins)
         self.assertEqual(Path(spawn.call_args.args[0][2]).name,'provider_health_transport.py')
         self.assertEqual(child.communicate.call_args.kwargs['timeout'],4.5)
 
@@ -245,7 +247,7 @@ class Transport(unittest.TestCase):
              patch.object(owner.time,'monotonic',return_value=80.):
             with self.assertRaises(owner.subprocess.TimeoutExpired):
                 owner.health_get(85.,ready_path=fixture.path,ready_sha256=fixture.sha,
-                                 nonce='nonce',pins=fixture.pins)
+                                 nonce='b'*32,pins=fixture.pins)
         self.assertEqual(child.communicate.call_args_list[0].kwargs['timeout'],4.5)
         child.kill.assert_called_once()
         self.assertEqual(child.communicate.call_count,2)
@@ -260,7 +262,7 @@ class Transport(unittest.TestCase):
              patch.object(owner.time,'monotonic',return_value=80.):
             with self.assertRaises(ValueError):
                 owner.health_get(85.,ready_path=fixture.path,ready_sha256=fixture.sha,
-                                 nonce='nonce',pins=fixture.pins,trace=trace)
+                                 nonce='b'*32,pins=fixture.pins,trace=trace)
         self.assertIn('stdout_hex',trace)
         self.assertEqual(bytes.fromhex(trace['stdout_hex']),b'partial health raw')
         self.assertEqual(bytes.fromhex(trace['stderr_hex']),b'worker failure')
@@ -278,7 +280,7 @@ class Transport(unittest.TestCase):
              patch.object(owner.time,'monotonic',return_value=80.):
             with self.assertRaises(owner.subprocess.TimeoutExpired):
                 owner.health_get(85.,ready_path=fixture.path,ready_sha256=fixture.sha,
-                                 nonce='nonce',pins=fixture.pins,trace=trace)
+                                 nonce='b'*32,pins=fixture.pins,trace=trace)
         self.assertIn('stdout_hex',trace)
         self.assertEqual(bytes.fromhex(trace['stdout_hex']),b'partial plus tail')
         self.assertEqual(bytes.fromhex(trace['timeout_stdout_hex']),b'partial')

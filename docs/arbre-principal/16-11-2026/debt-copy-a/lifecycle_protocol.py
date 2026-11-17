@@ -1,6 +1,7 @@
 """Strict public CLI framing/correlation; local observation, not a DB permit."""
 import hashlib,json,math,os,re,stat,time
 from pathlib import Path
+import grant_watch_controller as producer_control
 
 READY_CLOCK='CLOCK_MONOTONIC@luciepc'
 READY_CAP_SECONDS=120
@@ -29,6 +30,27 @@ def _descriptor(ready):
   if not isinstance(value,str) or not value.startswith('/'):raise ValueError('READY authority/first-red path invalid')
  return phase,expected
 
+def producer_descriptor(ready):
+ phase,_=_descriptor(ready);descriptor=phase.get('producer_watcher')
+ if not isinstance(descriptor,dict) or set(descriptor)!=set(['admission_path','admission_sha256']):raise ValueError('required producer watcher admission absent')
+ if not isinstance(descriptor['admission_path'],str) or not descriptor['admission_path'].startswith('/') or Path(descriptor['admission_path']).parent!=Path(phase['first_red_path']).parent or not isinstance(descriptor['admission_sha256'],str) or not re.fullmatch('[0-9a-f]{64}',descriptor['admission_sha256']):raise ValueError('producer admission path/hash invalid')
+ return descriptor
+
+def validate_producer_state(ready,state,now):
+ descriptor=producer_descriptor(ready)
+ if not isinstance(state,dict) or state.get('admission_sha256')!=descriptor['admission_sha256']:raise ValueError('producer observation differs from admitted descriptor')
+ config=state['config'];admission=state['admission'];phase,authority=_descriptor(ready)
+ for key,expected in [('clock',ready['clock']),('pilot',phase['pilot']),('allocation',phase['allocation']),('ready_nonce',ready['nonce']),('common_end_monotonic',ready['deadline'])]:
+  if type(config.get(key)) is not type(expected) or config[key]!=expected:raise ValueError('producer scope binding differs '+key)
+ if config['authority']!=authority or config['paths']['first_red']!=phase['first_red_path']:raise ValueError('producer authority binding differs')
+ if config['prepared_sha256']!=admission['prepared_sha256'] or config['pilot']!=admission['pilot'] or config['allocation']!=admission['allocation'] or config['actor_nonce']!=admission['actor_nonce'] or config['ready_nonce']!=admission['ready_nonce'] or state['config_sha256']!=admission['config_sha256']:raise ValueError('producer admission source/nonce binding differs')
+ if state['receipt_sha256']!=admission['armed_sha256']:raise ValueError('producer ARMED binding differs')
+ observed=_clock(state['observed_monotonic'],'producer observation');actual=state['actual']
+ if not observed<=now or not _clock(actual['observed_monotonic'],'producer process observation')<=observed:raise ValueError('producer observation after current clock')
+ producer_control.actor.validate_armed(state['receipt'],config,state['config_sha256'],actual,expected_pid=admission['expected_pid'])
+ producer_control.actor.validate_heartbeat(state['receipt'],config,state['heartbeat'],now)
+ return state
+
 def validate_phase_authority(ready,now,phase):
  """Scope authority gate, also usable after timely admission during its lease."""
  if not isinstance(ready,dict) or not isinstance(phase,dict):raise ValueError('READY/phase snapshot must be objects')
@@ -42,6 +64,7 @@ def validate_phase_authority(ready,now,phase):
  if not isinstance(current,dict) or not isinstance(process,dict):raise ValueError('authority/process snapshots must be objects')
  if current.get('etat')!='actif' or type(current.get('pid')) is not int or current.get('pid')!=expected['pid'] or current.get('debut')!=expected['start'] or current.get('cgroup')!=expected['cgroup'] or current.get('script_sha256')!=expected['script_sha256'] or _clock(current.get('echeance'),'authority deadline')!=end:raise ValueError('READY authority not active/exact')
  if type(phase.get('authority_uid')) is not int or phase['authority_uid']!=expected['uid'] or type(process.get('uid')) is not int or process['uid']!=expected['uid'] or process.get('start')!=expected['start'] or process.get('cgroup')!=expected['cgroup'] or process.get('state') not in ['R','S','D','I','W','P']:raise ValueError('READY process identity unknown or changed')
+ validate_producer_state(ready,phase.get('producer_watcher'),now)
  return phase
 
 def validate_ready_phase(ready,now,phase):
@@ -79,9 +102,9 @@ def read_phase_state(ready):
   root=Path('/proc')/str(expected['pid']);info=root.stat();fields=(root/'stat').read_text().rsplit(') ',1)[1].split();groups=(root/'cgroup').read_text().splitlines();groups=[line[3:] for line in groups if line.startswith('0::')]
   if len(groups)!=1:raise ValueError('authority cgroup unknown')
   return dict(start=fields[19],cgroup=groups[0],uid=info.st_uid,state=fields[0])
- refused_before=refusal_exists();first,uid,identity=authority();before=process();last,last_uid,last_identity=authority();after=process();refused_after=refusal_exists()
+ refused_before=refusal_exists();first,uid,identity=authority();before=process();descriptor=producer_descriptor(ready);producer_state=producer_control.read_admission(descriptor['admission_path'],descriptor['admission_sha256']);last,last_uid,last_identity=authority();after=process();refused_after=refusal_exists()
  stable=first==last and uid==last_uid and identity==last_identity and all(before[k]==after[k] for k in ['start','cgroup','uid'])
- return dict(clock=READY_CLOCK,authority=last,authority_uid=last_uid,process=after,first_red_exists=refused_before or refused_after,snapshot_stable=stable,snapshot_observed_monotonic=time.monotonic())
+ return dict(clock=READY_CLOCK,authority=last,authority_uid=last_uid,process=after,producer_watcher=producer_state,first_red_exists=refused_before or refused_after,snapshot_stable=stable,snapshot_observed_monotonic=time.monotonic())
 
 def decode(raw):
  def nonfinite(value):raise ValueError('nonfinite JSON scalar')

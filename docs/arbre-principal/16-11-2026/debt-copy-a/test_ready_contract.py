@@ -4,6 +4,7 @@ import copy,json,os,tempfile,types,unittest
 from unittest.mock import patch
 import lifecycle_protocol as p
 from test_ready_consumption import fixture
+from test_producer_fixture import producer_state
 
 class ReadyContract(unittest.TestCase):
  def test_bounds_are_calculated_from_prepublication_observation_once(self):
@@ -27,7 +28,7 @@ class ReadyContract(unittest.TestCase):
    with self.subTest(key=key),self.assertRaises(ValueError):p.validate_grant_phase(ready,dict(grant,**{key:value}),99.,phase,'a'*64)
   with self.assertRaises(ValueError):p.validate_grant_phase(ready,grant,100.,phase,'a'*64)
   # A timely admitted lease can still have an active scope after admission closes.
-  later=copy.deepcopy(phase);later['snapshot_observed_monotonic']=150.;p.validate_phase_authority(ready,150.,later)
+  later=copy.deepcopy(phase);later['snapshot_observed_monotonic']=150.;later['producer_watcher']=producer_state(ready,150.);p.validate_phase_authority(ready,150.,later)
  def test_real_loader_filters_private_token_and_checks_first_refusal(self):
   ready,_=fixture();uid=os.getuid()
   class Proc:
@@ -41,8 +42,8 @@ class ReadyContract(unittest.TestCase):
   with tempfile.TemporaryDirectory() as d:
    root=RealPath(d);authority=root/'authority.json';red=root/'first-red.json';ready['phase']['authority']['path']=str(authority);ready['phase']['first_red_path']=str(red)
    authority.write_text(json.dumps(dict(etat='actif',pid=123,debut='42',cgroup='/fixture',echeance=600.,script_sha256='a'*64,jeton='PRIVATE-FIXTURE-TOKEN')))
-   with patch.object(p,'Path',lambda value:Proc('/proc') if str(value)=='/proc' else RealPath(value)),patch.object(p.os,'uname',return_value=types.SimpleNamespace(nodename='luciepc')),patch.object(p.time,'monotonic',return_value=99.):
-    observed=p.read_phase_state(ready);self.assertNotIn('PRIVATE-FIXTURE-TOKEN',json.dumps(observed));p.validate_ready_phase(ready,99.,observed)
+   with patch.object(p,'Path',lambda value:Proc('/proc') if str(value)=='/proc' else RealPath(value)),patch.object(p.os,'uname',return_value=types.SimpleNamespace(nodename='luciepc')),patch.object(p.time,'monotonic',return_value=99.),patch.object(p.producer_control,'read_admission',side_effect=lambda *a:producer_state(ready,99.)):
+    producer_state(ready,99.);observed=p.read_phase_state(ready);self.assertNotIn('PRIVATE-FIXTURE-TOKEN',json.dumps(observed));p.validate_ready_phase(ready,99.,observed)
     red.write_text('immutable refusal');refused=p.read_phase_state(ready)
     with self.assertRaises(ValueError):p.validate_ready_phase(ready,99.,refused)
    self.assertEqual(red.read_text(),'immutable refusal')

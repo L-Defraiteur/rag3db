@@ -5,6 +5,7 @@ from unittest.mock import patch
 import ast,importlib.util,json,tempfile,unittest
 import lifecycle as c
 from test_ready_consumption import fixture,driver_body
+from test_producer_fixture import producer_state
 import qualify as q
 
 IDENTITY=dict(service='rag3weaver-embeddings',modele='granite-278m',dim=768,factice=False,dual=False,sparse=False,precision='Flex32',executable='/fixture/embeddings',max_chars_per_text=12000)
@@ -66,7 +67,7 @@ class ConsumerHealth(unittest.TestCase):
   body=driver_body()
   start=next(i for i,n in enumerate(body) if isinstance(n,ast.Expr) and isinstance(n.value,ast.Call) and ast.unparse(n.value.func)=='writer')
   stop=next(i for i in range(start,len(body)) if isinstance(body[i],ast.Expr) and isinstance(body[i].value,ast.Call) and ast.unparse(body[i].value.func)=='q.health')
-  ready,phase=fixture();phase['authority']['etat']='termine';phase['snapshot_observed_monotonic']=150.
+  ready,phase=fixture();phase['authority']['etat']='termine';phase['snapshot_observed_monotonic']=150.;phase['producer_watcher']=producer_state(ready,150.)
   grant=dict(identity=IDENTITY,valid_until_monotonic=590.,nonce=ready['nonce'],ready_sha256='a'*64,no_embedding_calls_authorized=True,observed_monotonic=98.)
   def gate(context):
    self.assertIs(context['admission'],False)
