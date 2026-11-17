@@ -285,3 +285,20 @@ CPU, proc/fdinfo réel, poste, rustc, SQL ou service lancé ici.
 Dix-huit témoins préparés (douze existants adaptés plus six nouveaux), tous
 NON JOUÉS sur cette source. Demande RO totale code/r3/recette03 avant tout
 GO CPU puis natif distinct ; les verts32df ne se reportent pas sur de4a.
+
+## CPU r3 acquis — GO distinct70007963cf
+
+C7-G-PG-CPU-GREEN-R3-17nov60 : UNE invocation exacte depuis packet-r3 :
+`timeout --signal=TERM --kill-after=2s 58s python3 -B -m unittest -v -f test_tool_qualification test_poste_authority`.
+18 PASS/0 FAIL/0 ERROR/0 SKIP, rc0 ; unittest0.039s, commande0.118352132s,
+PCmono1259594.263645308→1259594.381997440. Treize sources rehash avant/après
+égales ; sourcecode de4a/paquetr3 inchangés. Aucun retry.
+Preuves mêmes chemins deux postes : P/cpu-green-r3-17nov60-01/ ; receiptSHA
+`1ab3bbb04061fe92be0aa48eef83df6d6e4dce8c8419d2df5b8ce14cca367478`,
+stderrSHA `8abef598f6655411a83d4dcacdbebad5dca67ee851cdc7de2a7d10bade16fb87`.
+Copies quatre fichiers et sources avant/après contrôlées. Les six nouveaux cas
+emploient le vrai constructeurenv/Common avec proc/FD/flock/tables fictifs et
+petits fichiers privés ; aucun vrai proc/FLOCK/signal/processus par fixtures.
+Pas de six rouges unitaires historiques inventés : incidentB01 est le rouge
+réel avant correctif. OS/transport restent NONQUALIFIÉS, aucune compilation
+ou phaseB autorisée par ce GOCPU ; futurB requiert317+13pins frais et GOdistinct.

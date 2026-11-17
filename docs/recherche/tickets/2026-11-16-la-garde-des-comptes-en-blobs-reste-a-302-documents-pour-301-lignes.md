@@ -425,3 +425,11 @@ copiée deuxhôtes. Racine attendue réelle fixée, autorité vérifiée runtime
 18témoins NON JOUÉS surcettesource. R3/sortiecorrective01/proofs03 distincts,
 GOinactif ; r2/B01 inchangés. RO totale avant GO CPU/natif séparés ; aucun
 rejeuancienGO120, poste/proc réel/rustc/SQL/service lancé pour cette préparation.
+
+CPU r3 C7-G-PG-CPU-GREEN-R3-17nov60/70007963cf : UNEinvocationexacte autorisée,
+18PASS/0FAIL0ERROR0SKIP rc0, unittest0.039s/commande0.118352132s,13sources
+avant/après inchangées. Preuves vérifiées2postes P/cpu-green-r3-17nov60-01,
+receiptSHA1ab3bbb04061fe92be0aa48eef83df6d6e4dce8c8419d2df5b8ce14cca367478.
+FD/flock/proc/tables fictifs ; aucun vraiOS/transport qualifié, rustc/SQL/slot
+ou phaseB natif déclenché. B01/r2 intacts, pas de rougesunit inventés.
+Ticket ouvert,317inputs+13pins frais et GO B distinct requis avant natif.
