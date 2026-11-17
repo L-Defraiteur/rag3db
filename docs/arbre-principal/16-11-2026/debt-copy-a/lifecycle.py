@@ -7,7 +7,7 @@ import lifecycle_protocol as protocol
 import grant_watch_actor as watch_actor
 import grant_watch_controller as watch_control
 a=f.a;q=a.q;R=a.R
-P=R/'lifecycle-copy-v5';Q=R/'lifecycle-control-v5';S=R/'lifecycle-scopes-v5'
+P=R/'lifecycle-copy-v6';Q=R/'lifecycle-control-v6';S=R/'lifecycle-scopes-v6'
 FIN=R/'debt-fin-ro-result-v1';SOURCE=FIN/'copy';BASE=P/'copy/code-principal.rag3db'
 FIN_MANIFEST=R/'debt-fin-ro-proofs-01/proof-manifest.json'
 FIN_MANIFEST_SHA='05661b1fddc82c1e66d21f218d0c8cdfd12b69d8ef16432a2c55c3b127a9462a'
@@ -17,6 +17,31 @@ a.FILES['provider_health_transport.py']='docs/orchestration/16-11-2026/coordinat
 for name in ['grant_watch_actor.py','grant_watch_controller.py']:a.FILES[name]='docs/orchestration/17-11-2026/coordination/'+name
 f.Q=Q;f.carried.Q=Q;a.Q=Q;a.P=P;a.S=S;a.BASE=BASE;q.Q=Q
 def save(name,value):q.save(P/name,value)
+def finalize_composed(record):
+ path=P/'composed.json'
+ if path.exists():raise FileExistsError('refuse to replace an existing composed result')
+ def positive_guard():
+  if (P/'first-red.json').exists():raise ValueError('first red forbids positive finalization')
+  deadline=record['deadline']
+  if not isinstance(deadline,(int,float)) or not float('-inf')<deadline<float('inf') or time.monotonic()>=deadline:raise ValueError('lifecycle final publication deadline expired')
+ try:
+  if record['status']!='LIFECYCLE_FIXTURE_OBSERVED':
+   watch_actor.write_frame(path,record);return 1
+  positive_guard()
+  watch_actor.write_frame(path,record,guard=positive_guard)
+  # Includes file fsync, exclusive link, directory fsync and staging cleanup.
+  positive_guard()
+  return 0
+ except BaseException as error:
+  a.red(error)
+  refusal=dict(status='RED',error=str(error),live_authorized=False)
+  if path.exists():
+   # Only reclassify our own complete positive frame, never a foreign result.
+   expected=json.dumps(record,sort_keys=True,separators=(',',':'),allow_nan=False).encode()
+   if path.read_bytes()!=expected:raise RuntimeError('foreign composed result cannot be replaced') from error
+   watch_actor.write_frame(path,refusal,replace=True)
+  else:watch_actor.write_frame(path,refusal)
+  return 1
 def publish_ready(ready):
  state=require_producer()
  if ready['nonce']!=state['config']['ready_nonce'] or ready['phase'].get('producer_watcher')!=producer_descriptor(state):raise ValueError('READY must bind the independently admitted live producer')
@@ -239,7 +264,7 @@ def compose():
   save('copy-final-quiet.json',q.copy_quiet());save('source-final-quiet.json',quiet_source());guard(cfg);q.require_time(auth['echeance'],0)
   record=dict(status='LIFECYCLE_FIXTURE_OBSERVED',deadline=auth['echeance'],scope=scope,clean_shutdown_observed=True,fixture_only=True,durability_qualified=False,live_authorized=False,old_copya_verdict='RED',old_audit_verdict='RED',independent_review_pending=True)
  except BaseException as error:a.red(error);record=dict(status='RED',error=str(error),live_authorized=False)
- q.save(P/'composed.json',record,deadline=record.get('deadline'));return 0 if record['status']=='LIFECYCLE_FIXTURE_OBSERVED' else 1
+ return finalize_composed(record)
 def prepare(root,pilot):
  if os.uname().nodename.lower()!='luciepc' or q.git(root,'rev-parse','HEAD')!=pilot or q.git(root,'status','--porcelain') or any(x.exists() for x in [P,Q,S]):raise ValueError('exact clean lifecycle source/new P-Q-S required')
  if any(x.resolve()!=x for x in [P,Q,S,SOURCE]):raise ValueError('canonical lifecycle paths required')

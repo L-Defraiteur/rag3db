@@ -109,3 +109,21 @@ n'appelle pas link, donc aucune causalité de lien tardif ancien n'est revendiqu
 Le cas late-fsync reste le contre-exemple causal prévu au vrai raccord actuel.
 Ces cinq fonctions restent NON JOUÉES ; runtime2dccc inchangé. Nouvelle RO puis
 GO CPU distinct requis avant toute exécution ; aucun correctif runtime encore.
+
+## Rouge final observé puis correctif local prépublié
+
+GO C7-CYCLE-FINAL-RED-D31-17nov60 consommé sur d31d3e57496945fdd13637bd6b933270240dc823 propre : une invocation du seul témoin fsync tardif,
+1 FAIL (`0 == 0`), 0 ERROR, 0.006s unittest ; processus rc1 en 0.124370s.
+Les quatre autres fonctions restent NON JOUÉES. Bruts/reçu/manifeste hors WT
+sur les deux hôtes : ~/.cache/rag3weaver-build/cycle-final-red-d31-20261117-01,
+trois fichiers size/SHA conformes ; SHA manifeste
+d098d0a93cf366e8c0a6c70c3ad054afe9efaa7237d31bc6b5558482231fd846.
+
+Correctif local lifecycle.finalize_composed réutilise write_frame existant,
+vérifie deadline effective/premier rouge avant publication et après tous les
+fsync/nettoyages juste avant retour. Un dépassement reclassifie atomiquement
+son propre composé RED et retourne 1 ; premier rouge existant conservé.
+Un résultat étranger n'est pas remplacé. Aucun changement de qualify.save
+ni primitive générique nouvelle. P/Q/S et base manifest passent ensemble v6,
+anciens v5 figés. Correctif NON JOUÉ : nouvelle RO/GO cinq verts distinct,
+puis paquet neuf/RO totale avant toute décision native. Ticket reste OUVERT.
