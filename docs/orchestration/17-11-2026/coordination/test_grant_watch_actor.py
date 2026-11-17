@@ -6,6 +6,9 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
+from types import SimpleNamespace
+import os
 
 spec = importlib.util.spec_from_file_location('actor', Path(__file__).with_name('grant_watch_actor.py'))
 a = importlib.util.module_from_spec(spec)
@@ -64,6 +67,122 @@ class Admission(unittest.TestCase):
             with self.subTest(key=key, bad=bad):
                 with self.assertRaises(ValueError):
                     a.validate_heartbeat(r, c, dict(h, **{key: bad}), 12.)
+
+
+class PhysicalSampler(unittest.TestCase):
+    def test_real_sampler_on_fake_proc_accepts_R_then_S(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            process = root/'72'
+            process.mkdir()
+            executable = root/'python'
+            executable.write_bytes(b'fake executable')
+            (process/'exe').symlink_to(executable)
+            script = root/'actor.py'
+            script.write_bytes(b'fake actor')
+            argv = ['/python', '-B', str(script), '--watch', '/config', 'c'*64]
+            (process/'cmdline').write_bytes(('\0'.join(argv)+'\0').encode())
+            (process/'cgroup').write_text('0::/scope\n')
+            original = Path.read_text
+            states = iter(('R', 'S'))
+            def read(path, *args, **kwargs):
+                if path == process/'stat':
+                    fields = [next(states), '60']+['0']*17+['123']
+                    return '72 (fake name) '+' '.join(fields)
+                return original(path, *args, **kwargs)
+            with patch.object(Path, 'read_text', read):
+                value = a.process_snapshot(72, proc_root=root, clock=lambda: 11.)
+            self.assertEqual(value['state'], 'S')
+            self.assertEqual(value['start'], '123')
+            self.assertEqual(value['script_sha256'], hashlib.sha256(b'fake actor').hexdigest())
+
+
+class Loop(unittest.TestCase):
+    def exercise(self, mode):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            config, _, physical, _ = fixture()
+            keys = ('ready', 'grant', 'armed', 'grant_ack', 'result', 'release', 'first_red', 'evidence', 'heartbeat')
+            config['paths'] = {k: str(root/(k+'.json')) for k in keys}
+            path = root/'config.json'
+            raw = json.dumps(config).encode()
+            path.write_bytes(raw)
+            sha = hashlib.sha256(raw).hexdigest()
+            physical['argv'][-1] = sha
+            tick = [11.]
+            calls = []
+            def snapshot(pid):
+                self.assertEqual(pid, 72)
+                return dict(physical, observed_monotonic=tick[0])
+            def scope(_):
+                calls.append('scope')
+                if mode == 'authority':
+                    raise ValueError('authority changed')
+            def publish(cfg, ready_path, ready_sha, nonce):
+                self.assertTrue(Path(cfg['paths']['armed']).exists())
+                self.assertEqual(json.loads(Path(cfg['paths']['heartbeat']).read_text())['phase'], 'PUBLISHING')
+                self.assertEqual(nonce, config['ready_nonce'])
+                calls.append('contact')
+                grant = dict(nonce=nonce, ready_sha256=ready_sha)
+                Path(cfg['paths']['grant']).write_text(json.dumps(grant))
+                return grant
+            policy = SimpleNamespace(preflight=lambda c: calls.append('preflight'), publish_ready=publish)
+            def sleeper(delay):
+                tick[0] += delay
+                if mode == 'red':
+                    Path(config['paths']['first_red']).write_text('{}')
+                elif mode == 'dead':
+                    physical['state'] = 'Z'
+                elif mode == 'release_early':
+                    Path(config['paths']['release']).write_text('{}')
+                elif not Path(config['paths']['ready']).exists():
+                    ready = dict(clock=a.CLOCK, nonce=config['ready_nonce'], deadline=900.,
+                                 ready_observed_monotonic=tick[0], grant_deadline_monotonic=tick[0]+120,
+                                 phase=dict(pilot=config['pilot'], allocation=config['allocation'],
+                                            authority=config['authority'], first_red_path=config['paths']['first_red']))
+                    Path(config['paths']['ready']).write_text(json.dumps(ready))
+                else:
+                    release = dict(kind='DRIVER_FINISHED', actor_nonce=config['actor_nonce'],
+                                   config_sha256=sha, pilot=config['pilot'], allocation=config['allocation'])
+                    Path(config['paths']['release']).write_text(json.dumps(release))
+            if mode == 'late_exec':
+                tick[0] = 21.
+            if mode == 'ready_before_arm':
+                Path(config['paths']['ready']).write_text('{}')
+            with patch.object(a.os, 'getpid', return_value=72):
+                invoke = lambda: a.run_actor(path, sha, clock=lambda: tick[0], sleeper=sleeper,
+                                            snapshot=snapshot, scope_check=scope,
+                                            policy_loader=lambda c: policy, inputs_check=lambda *args: None)
+                if mode == 'success':
+                    self.assertEqual(invoke()['kind'], 'RELEASED')
+                    self.assertEqual(calls.count('contact'), 1)
+                    self.assertEqual(json.loads(Path(config['paths']['grant_ack']).read_text())['kind'], 'GRANT')
+                else:
+                    with self.assertRaises(ValueError):
+                        invoke()
+                    self.assertNotIn('contact', calls)
+                    self.assertEqual(json.loads(Path(config['paths']['result']).read_text())['kind'], 'REFUSED')
+
+    def test_arm_ready_single_publish_then_authenticated_release(self):
+        self.exercise('success')
+
+    def test_firstred_during_wait(self):
+        self.exercise('red')
+
+    def test_actor_dies_after_arm(self):
+        self.exercise('dead')
+
+    def test_release_cannot_precede_grant(self):
+        self.exercise('release_early')
+
+    def test_late_exec_before_any_contact(self):
+        self.exercise('late_exec')
+
+    def test_ready_cannot_precede_physical_arm(self):
+        self.exercise('ready_before_arm')
+
+    def test_authority_refusal_before_policy_import(self):
+        self.exercise('authority')
 
 
 if __name__ == '__main__':
