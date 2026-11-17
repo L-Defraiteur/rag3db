@@ -135,3 +135,8 @@ RO preuves Banc a4a2de1e1a : [rapport21](../../banc/16-11-2026/21-ro-preuves-ver
 ### Banc — préparation témoin rouge isolé3a786a59
 
 [RO courte favorable au témoin seul](../../banc/17-11-2026/02-ro-pilote-global-d6.md) : vrai Broker60f9 identique, helper fixture disponible, attendu statique FAIL RuntimeError not raised et non ERROR. Non exécuté. Commande proposée TERM60+kill5 = plafond65 à arbitrer C7 (ou TERM55+5 pour physique60) ; aucun GO acquis. Branche rouge interdite à la qualification native, candidat structurel séparé NONJUGÉ, ticket OUVERT.
+
+
+### Banc — preuve rouge d53d986 et correctif a797 séparés
+
+[Relecture source/preuves](../../banc/17-11-2026/02-ro-pilote-global-d6.md) : paquet rouge3/3SHA surPC/local,8SHA Git conformes,1FAIL/0ERROR/rc1/une invocation/TERM58+KILL2 observés archivés, pas de rejeu. Chronologie fix publié avant rouge isolé conservée. RO favorable PRÉPA correctif a79709034a : cadre source hors corps validateur lié au rouge acquis + égalité autre état source/index ferme cfg/homonyme.18AST/41témoins NONJOUÉS sur vert, GO CPU exact C7 encore requis ; ticket OUVERT et natif non qualifié.
