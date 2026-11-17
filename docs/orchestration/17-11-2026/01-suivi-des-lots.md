@@ -213,3 +213,6 @@ TTY présente le couple INACTIFc003eaa86f5fef5f3870916df91461e5ce67128a/Qv2prepa
 
 
 TTYc003/Q6ea : Mémoire réempreinte24contrôleurs/6SDK/345runtime/tmux/timeout/troisarchives et codeGit conformes ; désarmementavantallocation prouvéenlecture, aucunGO. DeuxrestesPIPELINE à corriger ensemble au ticketanglais AVANTactivation : attenteRCseule sans premièreFAILEDnative observée, et n'importe quel résumé positif accepté sans aligner vrais blocs/inventaires/noms/ignored/filets/provenance de preuve. Exiger témoins aux vrais stage/results et source/buildproof avantqualification, sans transformer les paniques should_panic légitimes en échec. Gardescurrentes/inactivité conservées ; aucunCPU/test/slot/canon3600 ni contratde services actualisé par cette RO.
+
+
+GO15B2 consomméUNEfois : DEUXERRORharnais/0FAILsémantique,rc1/0,088187572s. DoublePath.open(mode_arg) retransmet mode='r' en motclé ET argumentpositionnel vers vraiopen ; TypeError avantsetup/args/hashJSON. Deuxcontre-exemples durée/cleanup restent donc NONOBSERVÉS ; niEC4rejoué ni v2vert. Bruts/temps/rc/troissources conservésdeuxhôtes avec cinqSHA relusPC déclarésowner, observationabsente fidèlement. Correction de signatureHARNAIS seule après ticketFSavantdiff, puis nouveaupin/RO/GOdistinct pour ces deuxseulscas ; aucun ancien budget recyclé/Cargo/native/OSkill mesuré. Q/T et ancienrougeEC4 intacts.
