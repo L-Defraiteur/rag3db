@@ -222,3 +222,16 @@ le snapshot complet acquis à admission. Le validateur est découpé par accolad
 équilibrée/littéraux, grammaire bornée failclosed : rawstrings et commentaires de
 bloc refusés explicitement dans la demande ; ce n'est pas un parseur Rust général.
 41 fonctions écrites NONJOUÉES, aucune qualification CPU/native ni pin PC acquis.
+
+### Ensemble3839 arrêté : erreur de chemin dans le harnais
+
+GO C7-ARCHI-CPU-GREEN-3839-17nov60, UNEinvocation exacte failfast TERM58+KILL2.
+Résultat36OK/1ERROR/0FAIL sur37méthodes,4nonjouées ; rc1/unittest0,040s,
+enveloppe0,166063224s. Schéma Provider lit settings.C destiné au futur PC,
+model_source.rs absent sur le poste local : FileNotFoundError. Source/pilote
+aucun défaut runtime déduit ; correction du harnais à publier avant autreGO.
+Deux vrais témoins Broker (corps altéré et cfg/homonyme) ont passé avant ce
+premier ERROR, aucun41verts. Aucun retry. R/cx-archi-cpu-green-3839-17nov-r1,
+3fichiers doublehôte réhash0écart ; manifest2cd32197e837834b48bcbdc52730c752709ac14404b3d0d2c29f5e712627abf1.
+Le GO est consommé, pas de prépaPC/native/SDK/service/Vertex/target autorisée
+par ce résultat. Historique rouge3a786 et publicationa797avantRED conservés.

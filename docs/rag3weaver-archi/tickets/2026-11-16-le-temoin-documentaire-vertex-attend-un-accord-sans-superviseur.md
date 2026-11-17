@@ -193,3 +193,18 @@ cet historique. Préparer branche/WT rouge neuf, vrai Broker60f9 vulnérable ave
 le témoin cfg/homonyme prépub269519 et helper frame disponible (prérequis du
 harnais, pas le contrôle Broker corrigé). Puis RO/GO CPU ciblé distinct avant
 exécution ; aucun vert ni native autorisé. Conserver a797 comme candidat nonjoué.
+
+### Premier essai ensemble3839 : ERROR harnais avant correction
+
+GO C7-ARCHI-CPU-GREEN-3839-17nov60 consommé UNEinvocation timeoutTERM58+KILL2.
+37méthodes jugées :36OK/0FAIL/1ERROR, failfast avant4restantes, unittest0,040s,
+enveloppe0,166063224s/rc1. test_actual_d6_model_assignment_matches_the_rust_provider_schema
+importe settings.C (chemin canonique PC) puis lit model_source.rs absent ici.
+FileNotFoundError harnais ; aucune validation serde/runtime acquise. Témoins vrai
+Broker altéré/cfg passent avant ERROR, pas41verts. Aucun retry ni autre run.
+Bruts/source/rc3fichiers doublehôte réhash0écart, R/cx-archi-cpu-green-3839-17nov-r1,
+manifest2cd32197e837834b48bcbdc52730c752709ac14404b3d0d2c29f5e712627abf1.
+Avant correction : raccorder lecture schéma au source APP du worktree porteur
+comme test_contracts.C(HERE.parents[3]/extension/rag3weaver), pas au futur C PC.
+Code pilote inchangé ; publier correctif harnais puis nouveauRO/GOCPUdistinct.
+Aucune préparationPC, native, target, service ou Vertex déduite de cet essai.
