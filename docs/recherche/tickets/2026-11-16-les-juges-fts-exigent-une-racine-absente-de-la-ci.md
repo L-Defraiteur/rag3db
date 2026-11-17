@@ -31,3 +31,13 @@ sourceDOCdepuis636/produitMODEOIDexact,pasmuter636figée ; corriger4headers
 comme33b,puisnouveauprofilTMPcourtprivéR/t5souspostevrai/répertoireexclusif
 ettémoinVRAIenvdriver+suffixeRUSTbornepureAVANTfix,pasdebind/Rust/PG.
 Oldfc00/Q4/TpréservésHOLD,PGTOOLréelHOLD ; aucunGO6000 ni900déduit.
+
+## Checker sourcecomplète rouge avantrectification desentêtes
+
+Aprèspublication42d5c5ece7, check_ticketsSURARBREsource(636+appendbody) :
+15refus etnon4, les4ROOTconfirmés plus3main302/2maintenance/3reader/3COUNT0,
+TOUSles5ticketsduLOTRecherche ; brutR/cx-proofs-recherche-fts-tickets-red-v1.
+La copieEDROOTisolée n'étaitpaslecheckerentier. Complétercesmétadonnées
+SANSfermeture/statut/preuvedéplacés etSANSmodifRust ; sourceancienne636
+restefigée. Leschampsatteignabilitédécriventcontrat/source, pasune nouvelle
+reproductionenservice. MêmefixDOCsource/réserveTMPpilotgroupésavantGO.
