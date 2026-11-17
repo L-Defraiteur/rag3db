@@ -1,7 +1,7 @@
 # Les images exécutées manquent d’un producteur de preuves commun
 
 - **État** : ouvert, 17 novembre 2026 ; frontière documentaire relue, faisabilité et mécanisme physique non établis.
-- **Famille** : validation et outillage commun.
+- **Famille** : produit
 - **Gravité** : P2, bloque la qualification globale TTY ; aucun défaut d’ELF effectivement exécuté attribué.
 - **Atteignable en service** : non établi ; cette demande concerne les passes de qualification attribuées.
 - **Touche rag3weaver** : oui, ses pilotes et preuves de qualification, pas une fonctionnalité utilisateur livrée.

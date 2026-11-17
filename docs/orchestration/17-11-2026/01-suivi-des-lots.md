@@ -398,3 +398,6 @@ Arbrepostwritercontrat3c9fb etsubset8a29 reçoiventRROsourcebornée ; ensemble12
 TTYcontratDOC961c873bb9 reluCP/M/Archi favorable borné, P17–P20 ajoutés/P01–P16préservés, producer_ownerNULL/APIabsente. AttributionC7 maintenantlimitéeÉTUDESOURCEArchi sousNOUVEAUticketcommun orchestration/17novles-images-executees-manquent-d-un-producteur-de-preuves-commun (AVANTtransmission) liéparentanglais : primitivesexistantes/preuveconstructivevsimageobservée/canoninchangé/coûtperturbation/uniquepropositionminimaleouSTOP. TTYconsommateur, CPpublication/ACK/Windowseul ; aucunproducteurcode/CPU/traceur/privilege/procpeer/native/service/slot ouglobaladmis. Finréelledu ticket exigequalificationraccord, pasdoc.
 
 Arbre rougecausal48a2acquis1FAILreadonly/0ERROR/0skip/0,008sunittest/0,144241s/rc1 ;troisbruts2hostsmanifest046c89cf87dbc61fd319f01ba024f47b48dc198a3f503cc29e53c6be2e5c1d64 avantfixowner.13autresNONJOUÉS, prépacorrectivepostwriter/persistbeforewriter souscontratpublié,stable_readersinchangé, nouvelleRO/GO14verts distincts ;aucunnatif/rewriter/provider.
+
+
+CorrectionentêteC7 : contrôleticketsducommit862aa5ddfd a REFUSÉFamille«validationetoutillagecommun» (seulsmoteur/produitacceptés) ; commitdéjàcréé/poussé, aucunavisvertinventé. Rectificationdoc seule versproduit, sansamend/force ; recontrôleavantattributioneffective.
