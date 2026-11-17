@@ -26,7 +26,9 @@ class PublicationGuardCounterexamples(unittest.TestCase):
         pair = base.gate.pair
         core = base.control / 'publication_relay.py'
         core.write_bytes(Path(engine.__file__).read_bytes())
-        for name in set(pair['publication_layout']['entries'].values()) | {'publication_relay.py'}:
+        (base.control / 'publication_loader.py').write_bytes(
+            Path(engine.__file__).with_name('publication_loader.py').read_bytes())
+        for name in set(pair['publication_layout']['entries'].values()) | {'publication_relay.py', 'publication_loader.py'}:
             path = base.control / name
             if not path.exists():
                 path.write_bytes(b'synthetic controller bytes, not imported')
@@ -38,7 +40,11 @@ class PublicationGuardCounterexamples(unittest.TestCase):
         bootstrap_path = base.root / 'relay-bootstrap.json'
         bootstrap = json.loads(bootstrap_path.read_text())
         bootstrap['prepared_sha256'] = pin
-        bootstrap_path.write_text(json.dumps(bootstrap))
+        bootstrap['whole_window']['prepared_sha256'] = pin
+        base.write_bootstrap(bootstrap)
+        phase_window = json.loads((base.root / 'outer-supervision.json').read_text())['window']
+        phase_window['prepared_sha256'] = pin
+        base.write_phase_window(phase_window)
         return base, pair, pin
 
     def test_common_request_respects_phase_watchdog_as_well_as_whole(self):
@@ -56,8 +62,8 @@ class PublicationGuardCounterexamples(unittest.TestCase):
         self.addCleanup(base.doCleanups)
         base.relay.hard_end = base.clock.now + 10
         original = base.transport.stop
-        def late_close():
-            original()
+        def late_close(*, deadline=None):
+            original(deadline=deadline)
             base.clock.now += 11
         base.transport.stop = late_close
         with self.assertRaises(TimeoutError):
@@ -80,7 +86,8 @@ class PublicationGuardCounterexamples(unittest.TestCase):
         loader = importlib.util.spec_from_file_location('unpinned_wrapper_probe', wrapper)
         module = importlib.util.module_from_spec(loader)
         argv = [str(wrapper), '--proofs', pair['proofs'], '--prepared', str(prepared),
-                '--phase', 'baseline', '--allocation', 'fixture-only-not-a-runtime-grant']
+                '--phase', 'baseline', '--allocation', 'fixture-only-not-a-runtime-grant',
+                '--pin', fixtures.module.digest(prepared)]
         try:
             with patch.object(sys, 'argv', argv):
                 try:

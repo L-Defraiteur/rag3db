@@ -34,10 +34,19 @@ class WindowCases(unittest.TestCase):
         self.gate.pair['controllers'].update({
             'pilot.py': fixtures.module.digest(self.control / 'pilot.py'),
             'publication_relay.py': fixtures.module.digest(self.control / 'publication_relay.py')})
+        loader = self.control / 'publication_loader.py'
+        loader.write_bytes(source.with_name('publication_loader.py').read_bytes())
+        self.gate.pair['controllers']['publication_loader.py'] = fixtures.module.digest(loader)
+        for name in self.gate.pair['controllers']:
+            path = self.control / name
+            if not path.exists():
+                path.write_bytes(b'synthetic controller source, not executed')
+            self.gate.pair['controllers'][name] = fixtures.module.digest(path)
+        self.base.authority['script_sha256'] = self.gate.pair['controllers']['confiner_validation.py']
+        self.base.receipt.write_text(json.dumps(self.base.authority))
         self.gate.pair['owner_roles'] = {'driver': {'descriptor': 'driver_identity',
             'entry_file': 'pilot.py', 'entry_sha256': fixtures.module.digest(self.control / 'pilot.py'),
-            'component_hashes': {'pilot.py': fixtures.module.digest(self.control / 'pilot.py'),
-                'publication_relay.py': fixtures.module.digest(self.control / 'publication_relay.py')}}}
+            'component_hashes': dict(self.gate.pair['controllers'])}}
 
     def window_api(self):
         required = ['observe_active', 'record_window_start', 'observe_window']

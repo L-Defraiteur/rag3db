@@ -1,5 +1,22 @@
 #!/usr/bin/env python3
 """Fournisseur de ledger Rust pour la porte commune ; aucune seconde boucle."""
+# Racine d'import minimale : le loader est épinglé LITTÉRALEMENT avant exec_module.
+import hashlib as _bootstrap_hashlib
+import importlib.util as _bootstrap_importlib
+from pathlib import Path as _BootstrapPath
+_bootstrap_entry = _BootstrapPath(__file__).absolute()
+assert _bootstrap_entry.resolve(strict=True) == _bootstrap_entry
+_bootstrap_source = (_bootstrap_entry.parents[4] / 'docs/codeparsers/17-11-2026/rust-probe-relay/gate.py'
+    if tuple(_bootstrap_entry.parts[-5:]) == tuple(_BootstrapPath('docs/codeparsers/17-11-2026/rust-probe-relay/gate.py').parts) else None)
+_bootstrap_loader = (_bootstrap_entry.parents[4] / 'extension/rag3weaver/scripts/publication_loader.py'
+    if _bootstrap_source is not None else _bootstrap_entry.parent / 'publication_loader.py')
+_bootstrap_loader_bytes = _bootstrap_loader.read_bytes()
+assert _bootstrap_hashlib.sha256(_bootstrap_loader_bytes).hexdigest() == '5ee566f69c978f1444bd3b9d685145e2cfc68cc263f9ef48553780c54f593d4b'
+_bootstrap_spec = _bootstrap_importlib.spec_from_file_location('verified_publication_loader', _bootstrap_loader)
+_bootstrap_module = _bootstrap_importlib.module_from_spec(_bootstrap_spec)
+exec(compile(_bootstrap_loader_bytes, str(_bootstrap_loader), 'exec'), _bootstrap_module.__dict__)
+_bootstrap_context = _bootstrap_module.verify_entry(_bootstrap_entry, source_entry=_bootstrap_source)
+
 import importlib.util
 import json
 import os
@@ -9,16 +26,18 @@ import socket
 import sys
 import time
 
-from relay import engine, atomic_json, digest
+_relay_path = (_BootstrapPath(_bootstrap_context[0]['control']) / _bootstrap_context[0]['publication_layout']['entries']['coordinator']
+    if _bootstrap_context is not None else _BootstrapPath(__file__).with_name('relay.py'))
+_relay = _bootstrap_module.load_module('relay', _relay_path, context=_bootstrap_context)
+engine, atomic_json, digest = _relay.engine, _relay.atomic_json, _relay.digest
 
 
 def load_pilot(pair):
     engine.verify_components(pair)
     os.environ['RUST_PROBE_TOOL_ROOT'] = pair['tool_root']
-    spec = importlib.util.spec_from_file_location('relay_gate_pilot', engine.layout_entry(pair, 'launcher'))
-    pilot = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(pilot)
-    return pilot
+    entry = engine.layout_entry(pair, 'launcher')
+    return _bootstrap_module.load_module('relay_gate_pilot', entry, context=_bootstrap_context,
+        expected_sha=pair['controllers'][entry.name])
 
 
 class RustPublicationProvider:

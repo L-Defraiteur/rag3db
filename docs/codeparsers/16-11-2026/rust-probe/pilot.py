@@ -1,5 +1,22 @@
 #!/usr/bin/env python3
 """Préparer un A/B figé puis jouer une phase explicitement allouée, sans budget reconduit."""
+# Racine d'import minimale : le loader est épinglé LITTÉRALEMENT avant exec_module.
+import hashlib as _bootstrap_hashlib
+import importlib.util as _bootstrap_importlib
+from pathlib import Path as _BootstrapPath
+_bootstrap_entry = _BootstrapPath(__file__).absolute()
+assert _bootstrap_entry.resolve(strict=True) == _bootstrap_entry
+_bootstrap_source = (_bootstrap_entry.parents[4] / 'docs/codeparsers/16-11-2026/rust-probe/pilot.py'
+    if tuple(_bootstrap_entry.parts[-5:]) == tuple(_BootstrapPath('docs/codeparsers/16-11-2026/rust-probe/pilot.py').parts) else None)
+_bootstrap_loader = (_bootstrap_entry.parents[4] / 'extension/rag3weaver/scripts/publication_loader.py'
+    if _bootstrap_source is not None else _bootstrap_entry.parent / 'publication_loader.py')
+_bootstrap_loader_bytes = _bootstrap_loader.read_bytes()
+assert _bootstrap_hashlib.sha256(_bootstrap_loader_bytes).hexdigest() == '5ee566f69c978f1444bd3b9d685145e2cfc68cc263f9ef48553780c54f593d4b'
+_bootstrap_spec = _bootstrap_importlib.spec_from_file_location('verified_publication_loader', _bootstrap_loader)
+_bootstrap_module = _bootstrap_importlib.module_from_spec(_bootstrap_spec)
+exec(compile(_bootstrap_loader_bytes, str(_bootstrap_loader), 'exec'), _bootstrap_module.__dict__)
+_bootstrap_context = _bootstrap_module.verify_entry(_bootstrap_entry, source_entry=_bootstrap_source)
+
 import argparse
 from collections import Counter
 import importlib.util
@@ -18,12 +35,8 @@ import time
 TOOL_ROOT = Path(os.environ['RUST_PROBE_TOOL_ROOT']) if 'RUST_PROBE_TOOL_ROOT' in os.environ else Path(__file__).resolve().parents[4]
 HERE = Path(__file__).resolve().parent
 PREVIOUS = HERE / 'legacy.py' if (HERE / 'legacy.py').is_file() else TOOL_ROOT / 'docs/codeparsers/16-11-2026/rust-red/pilot.py'
-spec = importlib.util.spec_from_file_location('qualified_rust_pilot', PREVIOUS)
-base = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(base)
-guard_spec = importlib.util.spec_from_file_location('rust_physical_guard', HERE / 'physical_guard.py')
-physical = importlib.util.module_from_spec(guard_spec)
-guard_spec.loader.exec_module(physical)
+base = _bootstrap_module.load_module('qualified_rust_pilot', PREVIOUS, context=_bootstrap_context)
+physical = _bootstrap_module.load_module('rust_physical_guard', HERE / 'physical_guard.py', context=_bootstrap_context)
 
 PRODUCTS = {'baseline': 'd395cb1f03f84c6abdfa023a0e3c7f87a7c0dab6',
             'candidate': '118cc71eea57ebdfa4c79ae01d5d5a0caf181d4b'}
@@ -86,19 +99,27 @@ def verify(pair, phase):
     return config
 
 
+def publication_engine():
+    path = (Path(_bootstrap_context[0]['control']) /
+        _bootstrap_context[0]['publication_layout']['entries']['coordinator']
+        if _bootstrap_context is not None else
+        TOOL_ROOT / 'docs/codeparsers/17-11-2026/rust-probe-relay/relay.py')
+    return _bootstrap_module.load_module('relay', path, context=_bootstrap_context)
+
+
 def publication_control_roles(pair, phase):
-    command = outer_command(pair, phase)
-    return {'outer-timeout': command[2:], 'composer': command[6:]}
+    command = phase_timeout_command(pair, phase)
+    return {'outer-timeout': command, 'composer': command[4:]}
 
 
 def publication_deadline_info(pair, phase):
-    """Descripteur attendu ; la vivacité et la borne sont vérifiées par le noyau."""
-    return {'role': 'outer-timeout', 'argv': outer_command(pair, phase)[2:]}
+    return {'role': 'outer-timeout', 'argv': phase_timeout_command(pair, phase)}
 
 
 def publication_launch_command(pair, phase, allocation):
     return [sys.executable, '-B', str(Path(pair['control']) / 'pilot.py'), 'run',
-        '--proofs', pair['proofs'], '--phase', phase, '--allocation', allocation]
+        '--proofs', pair['proofs'], '--phase', phase, '--pin',
+        base.digest(Path(pair['proofs']) / 'prepared.json'), '--allocation', allocation]
 
 
 def publication_launch_environment(pair, phase):
@@ -113,10 +134,11 @@ def publication_phase_info(pair, phase):
     return {**info, 'scope_root': str(root / 'scope'),
         'driver_entry': 'pilot.py', 'common_entry': 'confiner_validation.py',
         'driver_argv': [sys.executable, '-B', str(control / 'pilot.py'), 'inside',
-            '--proofs', pair['proofs'], '--phase', phase],
+            '--proofs', pair['proofs'], '--phase', phase, '--pin',
+            base.digest(Path(pair['proofs']) / 'prepared.json')],
         'common_argv': json.loads((root / 'common.command.json').read_text()),
         'controls_path': str(root / 'controls.json'), 'deadline_role': 'outer-timeout',
-        'deadline_argv': outer_command(pair, phase)[2:], 'original_common_end': info['deadline']}
+        'deadline_argv': phase_timeout_command(pair, phase), 'original_common_end': info['deadline']}
 
 
 def completed_scope(root):
@@ -306,6 +328,7 @@ def fresh_quiet(pair, phase, path, final=False, authority=None, private=None):
 
 
 def inside(pair, phase):
+    assert Path(__file__).resolve() == Path(pair['control']) / 'pilot.py'
     os.chdir(Path(pair['proofs']) / phase)
     config = verify(pair, phase)
     previous_end(pair, phase)
@@ -406,22 +429,49 @@ def inside(pair, phase):
     return 0
 
 
+def phase_timeout_command(pair, phase):
+    return [pair['timeout'], '--signal=TERM', '--kill-after=2s', '1798s',
+        sys.executable, '-B', str(Path(pair['control']) / 'pilot.py'), 'compose',
+        '--proofs', pair['proofs'], '--phase', phase, '--pin',
+        base.digest(Path(pair['proofs']) / 'prepared.json')]
+
+
 def outer_command(pair, phase):
-    return [str(Path(pair['control']) / 'poste'), 'lourd', pair['timeout'],
-        '--signal=TERM', '--kill-after=2s', '1798s', sys.executable, '-B',
-        str(Path(pair['control']) / 'pilot.py'), 'compose', '--proofs', pair['proofs'], '--phase', phase]
+    # Poste est acquis AVANT de produire l'origine du watchdog de phase.
+    return [str(Path(pair['control']) / 'poste'), 'lourd', sys.executable, '-B',
+        str(Path(pair['control']) / 'pilot.py'), 'phase-arm', '--proofs', pair['proofs'],
+        '--phase', phase, '--pin', base.digest(Path(pair['proofs']) / 'prepared.json')]
+
+
+def phase_arm(pair, phase):
+    relay = publication_engine()
+    relay.engine.verify_components(pair)
+    assert socket.gethostname().lower() == relay.engine.publication_layout(pair)['execution_host'].lower()
+    assert relay.engine.layout_entry(pair, 'launcher') == Path(__file__).resolve()
+    pin = base.digest(Path(pair['proofs']) / 'prepared.json')
+    emitter = physical.process_record(os.getpid())
+    window = relay.engine.make_window(pair, pin, phase, 'phase', emitter, time.monotonic())
+    path = Path(relay.engine.publication_layout(pair)['phases'][phase]['files']['phase_origin'])
+    save(path, window)
+    assert base.digest(pair['timeout']) == pair['timeout_sha256']
+    command = phase_timeout_command(pair, phase)
+    os.execve(pair['timeout'], command, os.environ.copy())
 
 
 def compose(pair, phase):
+    assert Path(__file__).resolve() == Path(pair['control']) / 'pilot.py'
     root = Path(pair['proofs']) / phase
     started = time.monotonic()
-    deadline = started + 1798
-    spec = importlib.util.spec_from_file_location('probe_common', Path(pair['control']) / 'confiner_validation.py')
-    common = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(common)
+    relay = publication_engine()
+    pin = base.digest(Path(pair['proofs']) / 'prepared.json')
+    origin_path = Path(relay.engine.publication_layout(pair)['phases'][phase]['files']['phase_origin'])
+    origin = json.loads(origin_path.read_text())
+    deadline = origin['soft_end']
+    common = _bootstrap_module.load_module('probe_common', Path(pair['control']) / 'confiner_validation.py',
+        context=_bootstrap_context, expected_sha=pair['controllers']['confiner_validation.py'])
     parent = physical.process_record(os.getppid())
-    assert parent['exe'] == pair['timeout'] and parent['argv'] == outer_command(pair, phase)[2:]
-    deadline = min(deadline, int(parent['start']) / os.sysconf('SC_CLK_TCK') + 1798)
+    assert parent['exe'] == pair['timeout'] and parent['argv'] == phase_timeout_command(pair, phase)
+    relay.engine.window_end(pair, pin, phase, 'phase', origin, parent)
     assert base.digest(pair['timeout']) == pair['timeout_sha256']
     assert common.poste_tenu(common.processus())
     # Deux rôles prouvés ; aucune exemption d'ancêtre, de suffixe FD ou de chemin.
@@ -429,7 +479,8 @@ def compose(pair, phase):
     save(root / 'controls.json', controls)
     save(root / 'outer-supervision.json', {'soft_timeout': 1798, 'kill_after': 2,
         'common_budget': 1750, 'hardcap_per_phase': 1800, 'max_two_phases': 3600,
-        'started': started, 'timeout_identity': parent})
+        'started': started, 'timeout_identity': parent, 'window': dict(origin, identity=parent),
+        'phase_origin_sha256': base.digest(origin_path)})
     def stop(sig, frame):
         raise TimeoutError('outer supervision signal')
     signal.signal(signal.SIGTERM, stop)
@@ -440,14 +491,15 @@ def compose(pair, phase):
         previous_end(pair, phase)
         fresh_quiet(pair, phase, root / 'cache-quiet-before-common.json')
         # Le même noyau vérifie le watchdog et borne la demande avant Common.
-        import relay
+        relay = publication_engine()
         common_budget = relay.engine.common_request_budget(pair,
             base.digest(Path(pair['proofs']) / 'prepared.json'), phase, physical)
         save(root / 'common-request.json', {'requested': common_budget,
             'observed': time.monotonic(), 'common_max': pair['publication_limits']['common_max']})
         command = [sys.executable, str(Path(pair['control']) / 'confiner_validation.py'),
             'lancer', '--delai', str(common_budget), '--preuves', str(root / 'scope'), '--', sys.executable,
-            '-B', str(Path(pair['control']) / 'pilot.py'), 'inside', '--proofs', pair['proofs'], '--phase', phase]
+            '-B', str(Path(pair['control']) / 'pilot.py'), 'inside', '--proofs', pair['proofs'], '--phase', phase, '--pin',
+        base.digest(Path(pair['proofs']) / 'prepared.json')]
         rc = base.record(root, 'common', command, root, os.environ.copy())
         info = json.loads((root / 'authority-path.json').read_text())
         authority_path = Path(info['path'])
@@ -519,9 +571,8 @@ def prepare(args):
         pair['phases'][phase] = {'parser': PARSERS[phase], 'worktree': str(worktree), 'source': source, 'target': str(TARGET),
             'store': str(Path.home() / '.cache/rag3db-libs'), 'budget': 1800, 'previous_owner': previous_owner,
             'pilot_sha256': base.digest(PREVIOUS), 'scripts': {name: base.digest(worktree / name) for name in scripts}}
-    relay_spec = importlib.util.spec_from_file_location('rust_plan_adapter', TOOL_ROOT / 'docs/codeparsers/17-11-2026/rust-probe-relay/relay.py')
-    adapter = importlib.util.module_from_spec(relay_spec)
-    relay_spec.loader.exec_module(adapter)
+    adapter = _bootstrap_module.load_module('rust_plan_adapter',
+        TOOL_ROOT / 'docs/codeparsers/17-11-2026/rust-probe-relay/relay.py')
     pair['publication_limits'] = adapter.default_limits()
     pair['publication_plans'] = {phase: adapter.default_plan(pair, phase) for phase in PRODUCTS}
     pair['publication_layout'] = adapter.default_layout(pair)
@@ -541,6 +592,7 @@ def prepare(args):
     relay_sources = TOOL_ROOT / 'docs/codeparsers/17-11-2026/rust-probe-relay'
     sources.update({name: relay_sources / name for name in ['relay.py', 'gate.py']})
     sources['publication_relay.py'] = TOOL_ROOT / 'extension/rag3weaver/scripts/publication_relay.py'
+    sources['publication_loader.py'] = TOOL_ROOT / 'extension/rag3weaver/scripts/publication_loader.py'
     sources['legacy.py'] = PREVIOUS
     sources.update({name: args.candidate_worktree / 'extension/rag3weaver/scripts' / name
         for name in ['poste', 'confiner_validation.py', 'cargo_garde.py', 'garde_target.sh']})
@@ -559,9 +611,11 @@ def prepare(args):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['prepare', 'run', 'compose', 'inside', 'compare'])
+    parser.add_argument('action', choices=['prepare', 'run', 'phase-arm', 'compose', 'inside', 'compare'])
     parser.add_argument('--proofs', type=Path, required=True)
     parser.add_argument('--phase', choices=list(PRODUCTS))
+    parser.add_argument('--prepared', type=Path)
+    parser.add_argument('--pin')
     parser.add_argument('--baseline-worktree', type=Path)
     parser.add_argument('--candidate-worktree', type=Path)
     parser.add_argument('--candidate-source')
@@ -582,13 +636,14 @@ def main():
         for phase in PRODUCTS:
             verify(pair, phase)
             completed_scope(Path(pair['proofs']) / phase)
-        comparison_spec = importlib.util.spec_from_file_location('probe_comparison', HERE / 'compare.py')
-        comparison = importlib.util.module_from_spec(comparison_spec)
-        comparison_spec.loader.exec_module(comparison)
+        comparison = _bootstrap_module.load_module('probe_comparison', HERE / 'compare.py',
+            context=_bootstrap_context, expected_sha=pair['comparison_sha256'])
         print(comparison.compare_pair(pair, read_edges, check_outputs))
         return 0
     if args.phase is None:
         parser.error('--phase is required')
+    if args.action == 'phase-arm':
+        return phase_arm(pair, args.phase)
     if args.action == 'compose':
         return compose(pair, args.phase)
     if args.action == 'inside':
@@ -602,7 +657,10 @@ def main():
     if Path(__file__).resolve() != control:
         os.chdir(pair['proofs'])
         env = dict(os.environ, RUST_PROBE_TOOL_ROOT=pair['tool_root'])
-        os.execve(sys.executable, [sys.executable, '-B', str(control), *sys.argv[1:]], env)
+        launch_args = sys.argv[1:]
+        if '--pin' not in launch_args:
+            launch_args = [*launch_args, '--pin', base.digest(Path(pair['proofs']) / 'prepared.json')]
+        os.execve(sys.executable, [sys.executable, '-B', str(control), *launch_args], env)
     root = Path(pair['proofs']) / args.phase
     bootstrap = json.loads((root / 'relay-bootstrap.json').read_text())
     assert bootstrap['prepared_sha256'] == base.digest(Path(pair['proofs']) / 'prepared.json')
@@ -638,7 +696,10 @@ def main():
                 marker = root / 'outer-supervision.json'
                 if not acquired and marker.exists():
                     began = json.loads(marker.read_text())['timeout_identity']
-                    assert int(began['start']) / os.sysconf('SC_CLK_TCK') <= bootstrap['queue_end']
+                    phase_origin = json.loads((root / 'phase-origin.json').read_text())
+                    relay = publication_engine()
+                    relay.engine.window_end(pair, args.pin, args.phase, 'phase', phase_origin, began)
+                    assert phase_origin['started'] <= bootstrap['queue_end']
                     acquired = True
                 if not acquired and time.monotonic() >= bootstrap['queue_end']:
                     raise TimeoutError('PC poste queue deadline')

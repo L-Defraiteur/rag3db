@@ -63,16 +63,14 @@ class AdditionalPublicationGuards(unittest.TestCase):
         hard['start'] = str((9000 + offset) * os.sysconf('SC_CLK_TCK'))
         base.processes[hard['pid']]['start'] = hard['start']
         bootstrap['queue_end'] = 9300
-        bootstrap['whole_window'] = dict(clock='CLOCK_MONOTONIC', host='luciepc',
-            started=9000, soft_end=11098, kill_end=11100, identity=dict(hard))
-        bootstrap_path.write_text(json.dumps(bootstrap))
+        bootstrap['whole_window']['identity'] = dict(hard)
+        bootstrap['whole_window']['emitter']['start'] = hard['start']
+        base.write_bootstrap(bootstrap)
         outer = base.processes[9]
         outer['exe'] = '/timeout'
         outer['start'] = str((9000 + offset) * os.sysconf('SC_CLK_TCK'))
         (base.root / 'controls.json').write_text(json.dumps([outer]))
-        (base.root / 'outer-supervision.json').write_text(json.dumps({
-            'clock': 'CLOCK_MONOTONIC', 'started': 9000, 'soft_end': 10798,
-            'kill_end': 10800, 'timeout_identity': outer}))
+        base.write_phase_window(base.fixture_window(outer, 'phase'))
 
     def test_proc_identity_offset_cannot_inflate_whole_remaining(self):
         base, pair, pin = self.gate_fixture()
@@ -106,7 +104,8 @@ class AdditionalPublicationGuards(unittest.TestCase):
         module = importlib.util.module_from_spec(module_spec)
         cached = {name: sys.modules.pop(name, None) for name in ('relay', 'publication_relay')}
         argv = [str(base.control / entry), '--proofs', pair['proofs'], '--prepared', str(prepared),
-                '--phase', 'baseline', '--allocation', 'fixture-only-not-a-runtime-grant']
+                '--phase', 'baseline', '--allocation', 'fixture-only-not-a-runtime-grant',
+                '--pin', fixtures.module.digest(prepared)]
         try:
             with patch.object(sys, 'path', [str(base.control), *sys.path]), \
                  patch.object(sys, 'argv', argv), \

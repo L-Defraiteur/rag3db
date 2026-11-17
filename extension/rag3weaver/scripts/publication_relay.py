@@ -174,12 +174,13 @@ def publication_layout(pair):
     assert value['phases'] and set(value['phases']) == set(pair['publication_plans'])
     for phase, paths in value['phases'].items():
         safe_id(phase)
-        assert set(paths) == {'root', 'peer', 'scope', 'files'}
+        assert set(paths) == {'root', 'peer', 'scope', 'deadline_role', 'files'}
+        safe_id(paths['deadline_role'])
         root = Path(paths['root'])
         assert root.is_absolute() and (root == proofs or proofs in root.parents)
         assert set(paths['files']) == {'bootstrap', 'launch', 'authority', 'controls',
             'outer_supervision', 'common_command', 'allocation', 'first_red', 'abort', 'classification',
-            'peer_ready', 'peer_supervision'}
+            'peer_ready', 'peer_supervision', 'whole_origin', 'peer_origin', 'phase_origin', 'launch_input'}
         selected = [paths['peer'], paths['scope'], *paths['files'].values()]
         assert len(set(selected)) == len(selected)
         for item in selected:
@@ -196,7 +197,7 @@ def layout_entry(pair, role):
 def verify_components(pair):
     """Fermer les octets des contrôleurs avant leur import et chaque opération."""
     layout = publication_layout(pair)
-    required = set(layout['entries'].values()) | {'publication_relay.py'}
+    required = set(layout['entries'].values()) | {'publication_relay.py', 'publication_loader.py'}
     assert required <= set(pair['controllers'])
     control = Path(pair['control'])
     prepared = Path(layout['prepared'])
@@ -228,16 +229,87 @@ def read_bootstrap(pair, pin, phase, guard):
     limits = publication_limits(pair)
     assert hard['argv'][:4] == [pair['timeout'], '--signal=TERM',
         '--kill-after=' + seconds_arg(limits['whole_kill']), seconds_arg(limits['whole_soft'])]
+    origin_path = Path(layout['phases'][phase]['files']['whole_origin'])
+    assert record['whole_origin_sha256'] == digest(origin_path)
+    assert json.loads(origin_path.read_text()) == {key: value for key, value in record['whole_window'].items() if key != 'identity'}
+    window_end(pair, pin, phase, 'whole', record['whole_window'], hard)
     return record
 
 
+def make_window(pair, pin, phase, role, emitter, started):
+    """Paquet d'origine AVANT exec, sans identité physique future inventée."""
+    limits = publication_limits(pair)
+    assert role in {'whole', 'peer', 'phase'}
+    soft = limits['phase_soft'] if role == 'phase' else limits['whole_soft']
+    kill = limits['phase_kill'] if role == 'phase' else limits['whole_kill']
+    entry_role = 'launcher' if role == 'phase' else ('coordinator' if role == 'peer' else 'gate')
+    return {'clock': 'CLOCK_MONOTONIC', 'host': pair['peer_host'] if role == 'peer' else publication_layout(pair)['execution_host'],
+        'phase': phase, 'role': role, 'prepared_sha256': pin,
+        'entry_sha256': pair['controllers'][layout_entry(pair, entry_role).name],
+        'emitter': _json_plain(emitter), 'started': started, 'soft_end': started + soft,
+        'kill_end': started + soft + kill}
+
+
+def window_end(pair, pin, phase, role, window, actual):
+    limits = publication_limits(pair)
+    assert window['clock'] == 'CLOCK_MONOTONIC' and window['role'] == role
+    assert window['phase'] == phase and window['prepared_sha256'] == pin
+    host = pair['peer_host'] if role == 'peer' else publication_layout(pair)['execution_host']
+    assert window['host'] == host
+    entry_role = 'launcher' if role == 'phase' else ('coordinator' if role == 'peer' else 'gate')
+    entry = layout_entry(pair, entry_role)
+    assert window['entry_sha256'] == pair['controllers'][entry.name] == digest(entry)
+    issuer = window['emitter']
+    assert str(entry) in issuer['argv'], 'origin emitter was not the approved entry'
+    assert all(issuer[key] == actual[key] for key in ['pid', 'start', 'uid']), 'origin/timeout exec identity changed'
+    assert actual['uid'] == os.getuid()
+    if 'identity' in window:
+        assert all(window['identity'][key] == actual[key] for key in ['pid', 'start', 'uid', 'exe', 'argv', 'cgroup'])
+    for key in ['started', 'soft_end', 'kill_end']:
+        assert isinstance(window[key], (int, float)) and not isinstance(window[key], bool) and math.isfinite(window[key])
+    soft = limits['phase_soft'] if role == 'phase' else limits['whole_soft']
+    kill = limits['phase_kill'] if role == 'phase' else limits['whole_kill']
+    assert window['soft_end'] == window['started'] + soft
+    assert window['kill_end'] == window['soft_end'] + kill
+    assert window['started'] <= time.monotonic(), 'origin clock is in the future'
+    return window['soft_end']
+
+
+def phase_window(pair, pin, phase, guard):
+    paths = publication_layout(pair)['phases'][phase]
+    rows = json.loads(Path(paths['files']['controls']).read_text())
+    matches = [row for row in rows if row['role'] == paths['deadline_role']]
+    assert len(matches) == 1
+    actual = check_process(guard, matches[0])
+    limits = publication_limits(pair)
+    assert actual['exe'] == pair['timeout'] and digest(actual['exe']) == pair['timeout_sha256']
+    assert actual['argv'][:4] == [pair['timeout'], '--signal=TERM',
+        '--kill-after=' + seconds_arg(limits['phase_kill']), seconds_arg(limits['phase_soft'])]
+    record = json.loads(Path(paths['files']['outer_supervision']).read_text())
+    window = record['window']
+    role = window['role']
+    assert role in {'phase', 'whole'}
+    origin_path = Path(paths['files']['phase_origin' if role == 'phase' else 'whole_origin'])
+    assert record['phase_origin_sha256'] == digest(origin_path)
+    assert json.loads(origin_path.read_text()) == {key: value for key, value in window.items() if key != 'identity'}
+    if role == 'whole':
+        # Une seule enveloppe physique peut porter les deux bornes logiques,
+        # seulement si identité ET limites préautorisées désignent le même objet.
+        whole = read_bootstrap(pair, pin, phase, guard)
+        assert all(actual[key] == whole['hard_timeout'][key] for key in ['pid', 'start', 'uid', 'exe', 'argv', 'cgroup'])
+        assert limits['phase_soft'] == limits['whole_soft'] and limits['phase_kill'] == limits['whole_kill']
+    window_end(pair, pin, phase, role, window, actual)
+    return window
+
+
 def common_request_budget(pair, pin, phase, guard):
-    """Durée à demander au Common ; aucun nouveau budget ni nouveau superviseur."""
+    """Les DEUX enveloppes homologuées bornent la demande avant Common."""
     verify_components(pair)
     assert digest(publication_layout(pair)['prepared']) == pin
-    hard = read_bootstrap(pair, pin, phase, guard)['hard_timeout']
+    whole = read_bootstrap(pair, pin, phase, guard)['whole_window']
+    phase_budget = phase_window(pair, pin, phase, guard)
     limits = publication_limits(pair)
-    end = int(hard['start']) / os.sysconf('SC_CLK_TCK') + limits['whole_soft']
+    end = min(whole['soft_end'], phase_budget['soft_end'])
     remaining = end - time.monotonic() - limits['common_margin']
     requested = math.floor(min(limits['common_max'], remaining))
     assert requested > limits['operation_grace'] + limits['stop_reserve'], 'Common admission budget exhausted'
@@ -327,7 +399,7 @@ class Relay:
         remaining = min(stop_end, self.hard_end) - self.clock()
         if remaining <= 0:
             raise TimeoutError('cleanup reserve exhausted; remote quiescence UNKNOWN')
-        return min(self.control_cap, remaining)
+        return min(self.stop_reserve, remaining)
 
     def refresh(self, expected=None):
         before = self.clock()
@@ -455,6 +527,7 @@ class Relay:
     def run(self):
         completed = set()
         stopped = False
+        failure = None
         try:
             self.transport.ready()
             self.transport.start_phase()
@@ -477,13 +550,14 @@ class Relay:
             if rc:
                 raise RuntimeError('phase returned ' + str(rc))
             # La récolte/fermeture des enfants et des logs précède le verdict final.
-            self.transport.stop()
+            final_end = min(self.phase_deadline, self.hard_end)
+            self.transport.stop(deadline=final_end)
             stopped = True
-            if self.clock() >= self.phase_deadline:
+            if self.clock() >= final_end:
                 raise TimeoutError('phase deadline crossed during finish or cleanup')
             result = publish_result(self.root / 'relay-result.json', {'verdict': 'VERT',
-                'phase_ssh_rc': rc, 'native_verdict_unchanged': True}, self.phase_deadline, self.clock)
-            if result['verdict'] != 'VERT' or self.clock() >= self.phase_deadline:
+                'phase_ssh_rc': rc, 'native_verdict_unchanged': True}, final_end, self.clock)
+            if result['verdict'] != 'VERT' or self.clock() >= final_end:
                 # Un close tardif ne laisse pas un fichier vert comme dernier état du relais.
                 result.update(verdict='ROUGE', error='relay final publication deadline')
                 with (self.root / 'relay-result.json').open('r+') as stream:
@@ -494,6 +568,7 @@ class Relay:
                 raise TimeoutError('relay final publication deadline')
             return rc
         except BaseException as error:
+            failure = error
             try:
                 atomic_json(self.root / 'first-red.json', {'reason': repr(error), 'observed': self.clock()})
             except FileExistsError:
@@ -514,7 +589,18 @@ class Relay:
             raise
         finally:
             if not stopped:
-                self.transport.stop()
+                end = min(self.hard_end, self.phase_deadline if self.phase_deadline is not None else self.hard_end)
+                try:
+                    self.transport.stop(deadline=end)
+                except BaseException as stop_error:
+                    try:
+                        atomic_json(self.root / 'local-stop-refused.json', {'remote_quiet': 'UNKNOWN',
+                            'original_error': repr(failure), 'error': repr(stop_error),
+                            'native_verdict_unchanged': True, 'observed': self.clock()})
+                    except FileExistsError:
+                        pass
+                    if failure is None:
+                        raise
 
 
 class SSHTransport:
@@ -532,20 +618,21 @@ class SSHTransport:
         self.prepared_sha256 = require_sha(pin)
         self.entry_file = Path(entry_file) if entry_file is not None else layout_entry(self.pair, 'coordinator')
         verify_components(pair)
-        spec = importlib.util.spec_from_file_location('relay_physical_guard', layout_entry(self.pair, 'guard'))
-        self.guard = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(self.guard)
+        path = layout_entry(self.pair, 'guard')
+        self.guard = _load_verified_module('relay_physical_guard', path,
+            expected_sha=pair['controllers'][path.name])
 
     def command(self, action, *extra, cap=None):
         remote = [sys.executable, '-B', str(layout_entry(self.pair, 'gate')), action,
                   '--proofs', self.pair['proofs'], '--prepared', publication_layout(self.pair)['prepared'],
                   '--phase', self.phase, '--pin', self.pin, *extra]
         if action == 'launch':
-            remote = [self.pair['timeout'], '--signal=TERM', '--kill-after=' + seconds_arg(publication_limits(self.pair)['whole_kill']),
-                seconds_arg(publication_limits(self.pair)['whole_soft']), *remote]
+            # L'entrée arm scelle l'origine AVANT exec du vrai timeout.
+            remote[3] = 'arm'
         elif cap is not None:
             assert 0 < cap <= publication_limits(self.pair)['copy_cap']
-            remote = [self.pair['timeout'], '--signal=TERM', '--kill-after=1s', str(cap) + 's', *remote]
+            remote = [self.pair['timeout'], '--signal=TERM',
+                '--kill-after=' + seconds_arg(cap * .1), seconds_arg(cap * .8), *remote]
         # Un seul argv distant quoté ; pas d'interpolation de shell ni de parent argv W/T.
         return ['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=5', '-o', 'ControlMaster=no',
                 '-o', 'ControlPath=none', self.host, 'exec ' + shlex.join(remote)]
@@ -557,37 +644,88 @@ class SSHTransport:
         return stem
 
     def call(self, action, timeout, extra=(), payload=None, destination=None):
+        assert math.isfinite(timeout) and timeout > 0
+        end = time.monotonic() + timeout
         self.check_coordinator()
-        argv = self.command(action, *extra, cap=max(.001, timeout - .1))
+        remaining = end - time.monotonic()
+        assert remaining > 0, 'RPC admission deadline'
+        reserve = min(1.0, remaining / 3)
+        argv = self.command(action, *extra, cap=remaining - reserve)
         stem = self.paths(action, argv)
         output = Path(destination) if destination else stem.with_suffix('.stdout')
-        with output.open('xb') as out, stem.with_suffix('.stderr').open('xb') as err:
-            child = subprocess.Popen(argv, stdin=subprocess.PIPE if payload else subprocess.DEVNULL,
-                stdout=out, stderr=err, start_new_session=False)
-            self.active_call = child
-            try:
-                child.communicate(json.dumps(payload).encode() if payload else None, timeout=timeout)
-                atomic_json(stem.with_suffix('.result.json'), {'rc': child.returncode, 'finished': time.monotonic()})
-                if child.returncode:
-                    raise RuntimeError('SSH gate ' + action + ' returned ' + str(child.returncode))
-            finally:
-                self.reap(child)
-                if not stem.with_suffix('.result.json').exists():
-                    atomic_json(stem.with_suffix('.result.json'), {'rc': child.returncode, 'finished': time.monotonic(),
-                        'interrupted': True})
-                self.active_call = None
+        primary, cleanup_error, local_quiet = None, None, False
+        cleanup_errors = []
+        child = None
+        try:
+            with output.open('xb') as out, stem.with_suffix('.stderr').open('xb') as err:
+                try:
+                    assert time.monotonic() < end - reserve, 'RPC startup deadline'
+                    child = subprocess.Popen(argv, stdin=subprocess.PIPE if payload else subprocess.DEVNULL,
+                        stdout=out, stderr=err, start_new_session=False)
+                    self.active_call = child
+                    duration = end - reserve - time.monotonic()
+                    assert duration > 0, 'RPC communicate admission deadline'
+                    child.communicate(json.dumps(payload).encode() if payload else None, timeout=duration)
+                    if child.returncode:
+                        raise RuntimeError('SSH gate ' + action + ' returned ' + str(child.returncode))
+                except BaseException as error:
+                    primary = error
+                finally:
+                    if child is not None:
+                        try:
+                            self.reap(child, deadline=end)
+                            local_quiet = child.poll() is not None
+                        except BaseException as error:
+                            cleanup_error = error
+                            cleanup_errors.append(repr(error))
+                        if local_quiet:
+                            self.active_call = None
+        except BaseException as close_error:
+            cleanup_errors.append(repr(close_error))
+            if cleanup_error is None:
+                cleanup_error = close_error
+            if primary is None:
+                primary = close_error
+        if primary is None and (cleanup_error is not None or time.monotonic() >= end):
+            primary = cleanup_error if cleanup_error is not None else TimeoutError('RPC final close deadline')
+        try:
+            atomic_json(stem.with_suffix('.result.json'), {
+                'rc': child.returncode if child is not None else None, 'finished': time.monotonic(),
+                'interrupted': primary is not None, 'original_error': repr(primary) if primary is not None else None,
+                'cleanup': {'local_quiet': local_quiet, 'remote_quiet': 'UNKNOWN',
+                    'error': '; '.join(cleanup_errors) if cleanup_errors else None}})
+        except BaseException as metadata_error:
+            if primary is not None:
+                raise primary from metadata_error
+            raise
+        if primary is not None:
+            # Réémettre LE même objet, pas l'erreur secondaire de récolte.
+            if cleanup_error is not None and cleanup_error is not primary:
+                raise primary from cleanup_error
+            raise primary
+        if time.monotonic() >= end:
+            raise TimeoutError('RPC result fsync deadline')
         return None if destination else json.loads(output.read_text())
 
     @staticmethod
-    def reap(child):
-        # L'objet Popen non récolté identifie cet enfant ; aucun PID découvert par nom.
-        if child.poll() is None:
-            child.terminate()
-            try:
-                child.wait(timeout=.5)
-            except subprocess.TimeoutExpired:
-                child.kill()
-                child.wait(timeout=.5)
+    def reap(child, *, deadline):
+        # L'identité appartient au Popen non récolté ; toute grâce tient dans END.
+        if child.poll() is not None:
+            return
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError('local child quiescence UNKNOWN at original deadline')
+        child.terminate()
+        try:
+            child.wait(timeout=min(.5, remaining / 2))
+        except subprocess.TimeoutExpired:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError('local child quiescence UNKNOWN before KILL')
+            child.kill()
+            child.wait(timeout=min(.5, remaining))
+        if time.monotonic() > deadline:
+            raise TimeoutError('local child reap crossed original deadline')
 
     def ready(self):
         identity = self.guard.process_record(os.getpid())
@@ -646,14 +784,22 @@ class SSHTransport:
             self.remote_cancelled = True
             atomic_json(self.root / 'remote-cancel-attested.json', result)
 
-    def stop(self):
-        if self.active_call is not None:
-            self.reap(self.active_call)
-        if self.child is not None:
-            self.reap(self.child)
+    def stop(self, *, deadline):
+        failure = None
+        for child in (self.active_call, self.child):
+            if child is None:
+                continue
+            try:
+                self.reap(child, deadline=deadline)
+            except BaseException as error:
+                if failure is None:
+                    failure = error
         for handle in self.handles:
             handle.close()
-
+        if failure is not None:
+            raise failure
+        if time.monotonic() > deadline:
+            raise TimeoutError('local child/log close crossed original deadline')
 
 
 @dataclass(frozen=True)
@@ -748,6 +894,7 @@ class GateBase:
     def deadline_spec(self):
         spec = self.pilot.publication_deadline_info(self.pair, self.phase)
         safe_id(spec['role'])
+        assert spec['role'] == publication_layout(self.pair)['phases'][self.phase]['deadline_role']
         assert spec['argv'][:4] == [self.pair['timeout'], '--signal=TERM',
             '--kill-after=' + seconds_arg(self.limits['phase_kill']), seconds_arg(self.limits['phase_soft'])]
         return spec
@@ -758,9 +905,10 @@ class GateBase:
         timeout = next(row for row in controls if row['role'] == deadline['role'])
         self.check_process(timeout)
         assert timeout['argv'] == deadline['argv']
-        assert int(timeout['start']) / os.sysconf('SC_CLK_TCK') <= self.bootstrap()['queue_end']
+        phase_origin = phase_window(self.pair, self.pin, self.phase, self.guard)
+        assert phase_origin['started'] <= self.bootstrap()['queue_end']
         assert timeout['exe'] == self.pair['timeout'] and digest(timeout['exe']) == self.pair['timeout_sha256']
-        remaining = int(timeout['start']) / os.sysconf('SC_CLK_TCK') + self.limits['phase_soft'] - time.monotonic()
+        remaining = min(phase_origin['soft_end'], self.bootstrap()['whole_window']['soft_end']) - time.monotonic()
         assert remaining > self.limits['operation_grace']
         return {'state': 'starting', 'remaining': remaining - self.limits['operation_grace'],
                 'phase_remaining': remaining, 'stage': None}
@@ -803,14 +951,13 @@ class GateBase:
         self.check_process(timeout)
         assert digest(self.pair['timeout']) == self.pair['timeout_sha256']
         assert timeout['argv'] == info['deadline_argv']
-        outer_end = int(timeout['start']) / os.sysconf('SC_CLK_TCK') + self.limits['phase_soft']
+        outer_end = phase_window(self.pair, self.pin, self.phase, self.guard)['soft_end']
         end = authority['echeance']
         assert math.isfinite(end) and end <= outer_end
         assert authority['echeance'] == info['original_common_end'], 'original Common END changed'
         recipe = json.loads(receipt.with_name('recette.json').read_text())
         assert 0 < recipe['delai'] <= self.limits['common_max']
-        whole = self.bootstrap()['hard_timeout']
-        hard_end = int(whole['start']) / os.sysconf('SC_CLK_TCK') + self.limits['whole_soft']
+        hard_end = self.bootstrap()['whole_window']['soft_end']
         assert end <= hard_end - self.limits['common_margin']
         operation_end = end - self.limits['operation_grace']
         remaining = operation_end - time.monotonic()
@@ -870,6 +1017,8 @@ class GateBase:
         assert str(entry) in current['argv'], 'owner is not running the approved entry'
         components = spec['component_hashes']
         assert spec['entry_file'] in components and 'publication_relay.py' in components
+        assert 'publication_loader.py' in components
+        assert dict(components) == dict(self.pair['controllers']), 'owner source closure is incomplete'
         for name, sha in components.items():
             component = self.control / safe_id(name)
             assert require_sha(sha) == self.pair['controllers'][name]
@@ -1120,12 +1269,16 @@ class GateBase:
             '--kill-after=' + seconds_arg(self.limits['whole_kill']), seconds_arg(self.limits['whole_soft'])]
         allowed = [bootstrap['identity']['argv'], bootstrap['run_argv']]
         roles = [('remote-hard-timeout', hard, None), ('launcher', bootstrap['identity'], allowed)]
+        common_end_original = None
         info_path = self.path('authority')
         if info_path.exists():
             info = self.pilot.publication_phase_info(self.pair, self.phase)
             assert info['driver_entry'] == layout_entry(self.pair, 'driver').name
             assert info['driver_script_sha256'] == digest(layout_entry(self.pair, 'driver')) == self.pair['controllers'][info['driver_entry']]
             assert info['supervisor_identity']['argv'] == info['common_argv']
+            receipt = Path(info['path'])
+            assert receipt.resolve(strict=True) == receipt and receipt.parent.parent == self.path('scope')
+            common_end_original = json.loads(receipt.read_text())['echeance']
             roles.append(('common', info['supervisor_identity'], None))
         elif (self.path('scope')).exists():
             # Fenêtre Common lancé mais pilote pas encore au rendez-vous authority-path.
@@ -1157,18 +1310,24 @@ class GateBase:
                     'observed': time.monotonic()})
             except FileExistsError:
                 pass
-        end = time.monotonic() + 3.4
+        whole_end = window_end(self.pair, self.pin, self.phase, 'whole', bootstrap['whole_window'], hard)
+        end = min(time.monotonic() + max(.001, self.limits['stop_reserve'] - 1.6), whole_end)
+        if common_end_original is not None:
+            assert math.isfinite(common_end_original)
+            end = min(end, common_end_original)
         stop_errors = []
         try:
             # Laisser au Common réellement observé sa fermeture canonique avant le hard launcher.
             common_roles = [row for row in roles if row[0] == 'common']
             for _, identity, argv in common_roles:
+                if time.monotonic() >= end:
+                    break
                 self.signal_role(identity, signal.SIGTERM, argv)
             common_end = min(end, time.monotonic() + 1.7)
             while any(self.role_alive(identity, argv) for _, identity, argv in common_roles) and time.monotonic() < common_end:
                 time.sleep(.025)
             for role, identity, argv in roles:
-                if role in ['phase-timeout', 'remote-hard-timeout']:
+                if role in ['phase-timeout', 'remote-hard-timeout'] and time.monotonic() < end:
                     self.signal_role(identity, signal.SIGTERM, argv)
             while time.monotonic() < end:
                 if not any(self.role_alive(identity, argv) for _, identity, argv in roles):
@@ -1179,6 +1338,8 @@ class GateBase:
         # Relevé frais obligatoire même si aucune boucle n'a pu faire un tour.
         alive, unknown, observations = self.final_roles(roles)
         unknown.extend(stop_errors)
+        if time.monotonic() >= end:
+            unknown.append('cancellation observation crossed original deadline')
         scope_quiet = None
         scopes = list((self.path('scope')).glob('validation-*'))
         if len(scopes) > 1:
@@ -1201,6 +1362,31 @@ class GateBase:
 
     def abort(self, reason):
         return self.cancel_launcher(reason)
+
+    def arm(self, allocation, ready):
+        # Pas de corpus/preflight/acteur avant l'installation du watchdog.
+        verify_components(self.pair)
+        assert digest(publication_layout(self.pair)['prepared']) == self.pin
+        assert socket.gethostname().lower() == publication_layout(self.pair)['execution_host'].lower()
+        assert allocation and ready['prepared_sha256'] == self.pin and ready['phase'] == self.phase
+        assert self.entry_file.resolve() == layout_entry(self.pair, 'gate')
+        assert Path(__file__).resolve() == self.control / 'publication_relay.py'
+        emitter = self.guard.process_record(os.getpid())
+        assert str(self.entry_file) in emitter['argv']
+        now = time.monotonic()
+        origin = make_window(self.pair, self.pin, self.phase, 'whole', emitter, now)
+        atomic_json(self.path('whole_origin'), origin)
+        assert digest(self.pair['timeout']) == self.pair['timeout_sha256']
+        command = [self.pair['timeout'], '--signal=TERM',
+            '--kill-after=' + seconds_arg(self.limits['whole_kill']), seconds_arg(self.limits['whole_soft']),
+            sys.executable, '-B', str(layout_entry(self.pair, 'gate')), 'launch',
+            '--proofs', self.pair['proofs'], '--prepared', publication_layout(self.pair)['prepared'],
+            '--phase', self.phase, '--pin', self.pin, '--allocation', allocation]
+        # ready reste sur stdin du même processus, pas un nouveau rendez-vous libre.
+        atomic_json(self.path('launch_input'), ready)
+        with self.path('launch_input').open('rb') as stream:
+            os.dup2(stream.fileno(), 0)
+        os.execve(self.pair['timeout'], command, os.environ.copy())
 
     def launch(self, allocation, ready):
         self.verify()
@@ -1225,12 +1411,14 @@ class GateBase:
         assert isinstance(command, list) and all(isinstance(item, str) for item in command)
         assert str(layout_entry(self.pair, 'launcher')) in command
         now = time.monotonic()
-        queue_end = min(now + self.limits['queue'],
-            int(hard['start']) / os.sysconf('SC_CLK_TCK') + self.limits['queue'])
+        origin = json.loads(self.path('whole_origin').read_text())
+        window_end(self.pair, self.pin, self.phase, 'whole', origin, hard)
+        queue_end = origin['started'] + self.limits['queue']
         assert now < queue_end, 'queue budget already exhausted before ARM'
         # Seule l'identité RÉELLE Gate est publiée ; run_argv est explicitement un projet.
         atomic_json(self.path('bootstrap'), {'identity': identity, 'run_argv': command,
             'coordinator': ready, 'prepared_sha256': self.pin, 'hard_timeout': hard,
+            'whole_window': dict(origin, identity=hard), 'whole_origin_sha256': digest(self.path('whole_origin')),
             'gate_sha256': digest(layout_entry(self.pair, 'gate')), 'transition_end': now + self.limits['control_cap'], 'queue_end': queue_end})
         os.chdir(self.pair['proofs'])
         os.execve(sys.executable, command, dict(os.environ, **self.pilot.publication_launch_environment(self.pair, self.phase)))
@@ -1241,12 +1429,14 @@ def relay_main(entry_file):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--proofs', type=Path, required=True)
     parser.add_argument('--prepared', type=Path)
+    parser.add_argument('--pin', required=True)
     parser.add_argument('--phase', required=True)
     parser.add_argument('--allocation', required=True)
     parser.add_argument('--host', default='luciepc')
     args = parser.parse_args()
     path = args.prepared if args.prepared is not None else args.proofs / 'prepared.json'
     pair, pin = json.loads(path.read_text()), digest(path)
+    assert args.pin == pin
     assert args.host == publication_layout(pair)['execution_host']
     assert str(path) == publication_layout(pair)['prepared']
     assert str(args.proofs) == pair['proofs']
@@ -1265,11 +1455,14 @@ def relay_main(entry_file):
     assert digest(peer_timeout['path']) == peer_timeout['sha256']
     local_outer = [peer_timeout['path'], '--signal=TERM', '--kill-after=' + seconds_arg(limits['whole_kill']), seconds_arg(limits['whole_soft']),
         sys.executable, '-B', str(Path(entry_file).resolve()), *sys.argv[1:]]
-    spec = importlib.util.spec_from_file_location('local_outer_guard', layout_entry(pair, 'guard'))
-    guard = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(guard)
+    path_guard = layout_entry(pair, 'guard')
+    guard = _load_verified_module('local_outer_guard', path_guard,
+        expected_sha=pair['controllers'][path_guard.name])
     parent = guard.process_record(os.getppid())
     if parent['exe'] != peer_timeout['path'] or parent['argv'] != local_outer:
+        identity = guard.process_record(os.getpid())
+        origin = make_window(pair, pin, args.phase, 'peer', identity, time.monotonic())
+        atomic_json(Path(publication_layout(pair)['phases'][args.phase]['files']['peer_origin']), origin)
         os.execve(peer_timeout['path'], local_outer, os.environ.copy())
     assert parent['uid'] == os.getuid()
     root = Path(publication_layout(pair)['phases'][args.phase]['peer'])
@@ -1281,14 +1474,16 @@ def relay_main(entry_file):
         raise TimeoutError('relay received signal ' + str(sig))
     for sig in [signal.SIGTERM, signal.SIGINT, signal.SIGHUP]:
         signal.signal(sig, stop)
-    hard_end = int(parent['start']) / os.sysconf('SC_CLK_TCK') + limits['whole_soft']
+    origin = json.loads(Path(publication_layout(pair)['phases'][args.phase]['files']['peer_origin']).read_text())
+    # Le timeout local est distinct du timeout PC, seule l'horloge locale est comparée.
+    hard_end = window_end(pair, pin, args.phase, 'peer', origin, parent)
     return Relay(transport, root, hard_end=hard_end, plan=transport.plan,
         prepared_sha256=pin, **pair['relay']).run()
 
 
 def gate_main(gate_factory):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['launch', 'snapshot', 'export', 'ack', 'abort'])
+    parser.add_argument('action', choices=['arm', 'launch', 'snapshot', 'export', 'ack', 'abort'])
     parser.add_argument('--proofs', type=Path, required=True)
     parser.add_argument('--prepared', type=Path)
     parser.add_argument('--pin', required=True)
@@ -1305,7 +1500,9 @@ def gate_main(gate_factory):
     verify_components(pair)
     os.chdir(args.proofs)
     gate = gate_factory(pair, args.pin, args.phase)
-    if args.action == 'launch':
+    if args.action == 'arm':
+        gate.arm(args.allocation, json.load(sys.stdin))
+    elif args.action == 'launch':
         gate.launch(args.allocation, json.load(sys.stdin))
     elif args.action == 'snapshot':
         print(json.dumps(gate.snapshot()))

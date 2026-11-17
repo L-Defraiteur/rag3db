@@ -389,3 +389,18 @@ temps indépendante, deuxwatchdogs/admissionCommon, hardENDpublicationfinale,
 fermetureavantimports et RPCgrâces/reap/stop/premièrecause/UNKNOWN restent les
 critères source. Sourcef3d/8792/ca1 etpreuves restent figées. Les comptes
 précédents17/16 désignaient les PAYLOADS :8792=18TOTAL,CA1C=17TOTAL.
+
+### Candidat SOURCE correctif groupé, aucun nouveau test
+
+Implantation préparée après preuves8792+f3d conservées : origines MONOTONIC
+avant watchdog, liaison PID/start identité seule, deuxbornes Common, finalEND
+MINlocal/phase, loader octetsépinglésAVANTimports/mêmesbytesexécutées, RPCgrâces/
+récolte/stopdansEND et mêmeobjetpremièrecause+erreursecondaire/UNKNOWN. Loader
+commun est une nouvelle primitive : une fermeture et un snapshot de bytes pour
+relay/Gate/pilot, coût1contrôleur+préludesépinglés ; pasdeuxièmebouclepublication.
+Fixtures portées avec vrais loader/pins/enveloppes ; assertpréfixetimeout conservé
+à la frontière réelle arm→exec, pasretiré. Bundleproposé58=36+3+8+10+1.
+Rapport09/pinscorrection pour RO TOTALE avant GO CPU distinct, aucun import/parser/
+test exécuté. Source/modèles ≠qualificationorigine/OS/SDK/global6rôles/portLIVE.
+Le ticket reste ouvert ; les défauts ne sont pas déclarés corrigés par ce code
+nonjoué. Tous les anciens Q/source/proofs figés, aucun BASE/CAND/target/corpus.

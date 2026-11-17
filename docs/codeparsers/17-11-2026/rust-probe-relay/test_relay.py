@@ -104,7 +104,7 @@ class FakeTransport:
         return 0
     def abort(self, reason, timeout):
         self.calls.append('abort')
-    def stop(self):
+    def stop(self, *, deadline=None):
         self.calls.append('stop')
         self.closed = True
 
@@ -213,17 +213,59 @@ class RelayTests(unittest.TestCase):
         self.assertTrue(self.transport.closed)
     def test_launch_ssh_contains_remote_physical_timeout(self):
         import shlex
+        from unittest.mock import patch
         transport = module.SSHTransport.__new__(module.SSHTransport)
         transport.pair = {'proofs': '/proofs', 'timeout': '/usr/bin/timeout',
-            'publication_limits': module.default_limits()}
-        transport.pair['publication_plans'] = {'baseline': {}}
+            'publication_limits': module.default_limits(), 'control': '/proofs/control',
+            'publication_plans': {'baseline': {}}}
         transport.pair['publication_layout'] = module.default_layout(transport.pair)
-        transport.pair['control'] = '/proofs/control'
         transport.control = Path('/proofs/control')
         transport.phase, transport.pin, transport.host = 'baseline', 'pin', 'luciepc'
         argv = transport.command('launch', '--allocation', 'GO')
-        remote = shlex.split(argv[-1].removeprefix('exec '))
+        arm = shlex.split(argv[-1].removeprefix('exec '))
+        self.assertEqual(arm[:4], [module.sys.executable, '-B', '/proofs/control/gate.py', 'arm'])
+        # Same physical-prefix assertion, at the real arm->exec boundary. This
+        # now also proves the source origin is emitted BEFORE that timeout.
+        base = GateTests('test_real_active_gate_returns_pc_remaining_duration')
+        base.setUp()
+        self.addCleanup(base.doCleanups)
+        pair = base.gate.pair
+        for name in ('publication_relay.py', 'publication_loader.py'):
+            (base.control / name).write_bytes(Path(implementation.__file__).with_name(name).read_bytes())
+        for name in set(pair['publication_layout']['entries'].values()) | {'publication_relay.py', 'publication_loader.py'}:
+            path = base.control / name
+            if not path.exists():
+                path.write_bytes(b'synthetic controller, never imported')
+            pair['controllers'][name] = module.digest(path)
+        phase = pair['publication_layout']['phases']['baseline']
+        fresh = base.root / 'arm-phase'
+        fresh.mkdir()
+        for key in ('root', 'peer', 'scope'):
+            phase[key] = str(fresh / Path(phase[key]).relative_to(base.root))
+        phase['files'] = {key: str(fresh / Path(value).relative_to(base.root))
+            for key, value in phase['files'].items()}
+        pair['timeout'] = '/usr/bin/timeout'
+        prepared = Path(pair['publication_layout']['prepared'])
+        prepared.write_text(json.dumps(pair))
+        base.gate.pin = module.digest(prepared)
+        base.gate.root, base.gate.entry_file = fresh, base.control / 'gate.py'
+        base.processes[11]['argv'] = [module.sys.executable, '-B', str(base.gate.entry_file), 'arm']
+        class ExecTransition(Exception):
+            pass
+        digest = implementation.digest
+        with patch.object(implementation, '__file__', str(base.control / 'publication_relay.py')), \
+             patch.object(implementation.os, 'getpid', return_value=11), \
+             patch.object(implementation.os, 'dup2'), \
+             patch.object(implementation.socket, 'gethostname', return_value='luciepc'), \
+             patch.object(implementation, 'digest', side_effect=lambda path: 'timeout-sha'
+                if str(path) == '/usr/bin/timeout' else digest(path)), \
+             patch.object(implementation.os, 'execve', side_effect=ExecTransition) as execute:
+            with self.assertRaises(ExecTransition):
+                base.gate.arm('GO', {'prepared_sha256': base.gate.pin, 'phase': 'baseline'})
+            remote = execute.call_args.args[1]
         self.assertEqual(remote[:4], ['/usr/bin/timeout', '--signal=TERM', '--kill-after=2s', '2098s'])
+        self.assertTrue(base.gate.path('whole_origin').is_file())
+
     def test_real_cli_execs_physical_timeout_before_creating_relay(self):
         from unittest.mock import patch
         import os
@@ -236,12 +278,16 @@ class RelayTests(unittest.TestCase):
         timeout_path.write_bytes(b'fake timeout executable, never executed')
         core_path = control / 'publication_relay.py'
         core_path.write_bytes(Path(implementation.__file__).read_bytes())
+        loader_path = control / 'publication_loader.py'
+        loader_path.write_bytes(Path(implementation.__file__).with_name('publication_loader.py').read_bytes())
+        (root / 'baseline').mkdir()
         (control / 'physical_guard.py').write_text(
-            'def process_record(pid): return {"pid":pid,"exe":"/unbounded","argv":[],"uid":0}\n')
+            'import os, sys\ndef process_record(pid): return {"pid":pid,"start":"1234","exe":"/unbounded","argv":[sys.executable,"-B",*sys.argv],"uid":os.getuid(),"cgroup":"0::/fixture","state":"S"}\n')
         pair = {'proofs': str(root), 'control': str(control), 'peer_host': 'fake-peer',
             'publication_limits': module.default_limits(),
             'controllers': {'relay.py': module.digest(relay_path),
-                'publication_relay.py': module.digest(core_path)},
+                'publication_relay.py': module.digest(core_path),
+                'publication_loader.py': module.digest(loader_path)},
             'peer_timeout': {'path': str(timeout_path), 'sha256': module.digest(timeout_path)},
             'relay': {'queue_budget': 300, 'transfer_cap': 30, 'control_cap': 5, 'stop_reserve': 5}}
         pair['publication_plans'] = {'baseline': {}}
@@ -252,7 +298,8 @@ class RelayTests(unittest.TestCase):
                 path.write_bytes(b'synthetic controller, never executed')
             pair['controllers'][name] = module.digest(path)
         (root / 'prepared.json').write_text(json.dumps(pair))
-        argv = [str(relay_path), '--proofs', str(root), '--phase', 'baseline', '--allocation', 'GO']
+        argv = [str(relay_path), '--proofs', str(root), '--phase', 'baseline', '--allocation', 'GO',
+            '--pin', module.digest(root / 'prepared.json')]
         class ExecTransition(Exception):
             pass
         original_cwd = Path.cwd()
@@ -389,7 +436,7 @@ class GateTests(unittest.TestCase):
         common = dict(base, pid=10, start='1000', parent=1, argv=command)
         driver = dict(base, pid=11, start='1001', parent=10, argv=driver_args)
         timeout_args = ['/timeout', '--signal=TERM', '--kill-after=2s', '1798s']
-        timeout = dict(base, pid=9, start=str(9000 * os.sysconf('SC_CLK_TCK')), parent=1,
+        timeout = dict(base, exe='/timeout', pid=9, start=str(9000 * os.sysconf('SC_CLK_TCK')), parent=1,
             argv=timeout_args, role='outer-timeout')
         self.processes = {10: dict(common), 11: dict(driver), 9: dict(timeout)}
         info = {'path': str(self.receipt), 'driver_identity': driver, 'supervisor_identity': common,
@@ -432,9 +479,11 @@ class GateTests(unittest.TestCase):
         hard = dict(base, pid=8, start=str(9000 * os.sysconf('SC_CLK_TCK')), parent=1,
             exe='/timeout', argv=['/timeout', '--signal=TERM', '--kill-after=2s', '2098s'])
         self.processes[8] = hard
-        (self.root / 'relay-bootstrap.json').write_text(json.dumps({
-            'prepared_sha256': '1' * 64, 'gate_sha256': pair['controllers']['gate.py'],
-            'hard_timeout': hard}))
+        self.write_bootstrap({'prepared_sha256': '1' * 64,
+            'gate_sha256': pair['controllers']['gate.py'], 'hard_timeout': hard,
+            'whole_window': self.fixture_window(hard, 'whole')})
+        phase_origin = self.fixture_window(timeout, 'phase')
+        self.write_phase_window(phase_origin)
         self.gate.verify = lambda: None
         self.gate.launcher = lambda: {'coordinator': {'host': 'peer'}}
         original_digest = self.gate_module.digest
@@ -445,6 +494,31 @@ class GateTests(unittest.TestCase):
         timer = patch.object(self.gate_module.time, 'monotonic', return_value=9000)
         timer.start()
         self.addCleanup(timer.stop)
+
+    def write_bootstrap(self, bootstrap):
+        if 'whole_window' not in bootstrap:
+            bootstrap['whole_window'] = self.fixture_window(bootstrap['hard_timeout'], 'whole')
+        window = bootstrap['whole_window']
+        origin = {key: value for key, value in window.items() if key != 'identity'}
+        path = self.gate.path('whole_origin')
+        path.write_text(json.dumps(origin))
+        bootstrap['whole_origin_sha256'] = module.digest(path)
+        self.gate.path('bootstrap').write_text(json.dumps(bootstrap))
+
+    def write_phase_window(self, window):
+        origin = {key: value for key, value in window.items() if key != 'identity'}
+        path = self.gate.path('phase_origin')
+        path.write_text(json.dumps(origin))
+        self.gate.path('outer_supervision').write_text(json.dumps({
+            'window': window, 'phase_origin_sha256': module.digest(path)}))
+
+    def fixture_window(self, hard, role):
+        entry_role = 'launcher' if role == 'phase' else 'gate'
+        emitter = dict(hard, exe=self.gate_module.sys.executable,
+            argv=[self.gate_module.sys.executable, '-B', str(self.control /
+                ('pilot.py' if role == 'phase' else 'gate.py')), 'phase-arm' if role == 'phase' else 'arm'])
+        return dict(implementation.make_window(self.gate.pair, self.gate.pin, 'baseline', role, emitter, 9000),
+            identity=dict(hard))
 
     def test_real_active_gate_returns_pc_remaining_duration(self):
         self.assertEqual(self.gate.active()['remaining'], 45)
@@ -509,6 +583,8 @@ class GateTests(unittest.TestCase):
             '--phase', 'baseline', '--pin', '1' * 64, '--allocation', 'GO']
         self.processes[os.getppid()] = dict(identity, pid=os.getppid(), parent=1,
             start=str(9000 * os.sysconf('SC_CLK_TCK')), argv=prefix + args, exe='/timeout')
+        origin = self.fixture_window(self.processes[os.getppid()], 'whole')
+        (self.gate.root / 'whole-origin.json').write_text(json.dumps(origin))
         ready = {'host': 'peer', 'identity': {'uid': os.getuid(), 'pid': 123, 'start': '1234',
                  'argv': [self.gate_module.sys.executable, '-B', str(relay)]},
                  'prepared_sha256': '1' * 64, 'phase': 'baseline', 'script_sha256': module.digest(relay)}
@@ -527,8 +603,9 @@ class GateTests(unittest.TestCase):
         self.processes[9], self.processes[11] = hard, identity
         bootstrap = {'identity': identity, 'run_argv': planned, 'hard_timeout': hard,
             'prepared_sha256': '1' * 64, 'gate_sha256': self.gate.pair['controllers']['gate.py'],
-            'coordinator': {'host': 'peer'}, 'transition_end': 9005, 'queue_end': 9300}
-        (self.root / 'relay-bootstrap.json').write_text(json.dumps(bootstrap))
+            'coordinator': {'host': 'peer'}, 'transition_end': 9005, 'queue_end': 9300,
+            'whole_window': self.fixture_window(hard, 'whole')}
+        self.write_bootstrap(bootstrap)
         # Employer les vraies méthodes de rendez-vous, pas le stub de l'ancienne fixture active.
         self.gate.launcher = self.gate_module.Gate.launcher.__get__(self.gate)
         self.assertEqual(self.gate.snapshot()['state'], 'waiting')
@@ -562,7 +639,7 @@ class GateTests(unittest.TestCase):
         shutil.rmtree(self.root / 'scope')  # Une vraie attente queued n'a pas créé Common.
         bootstrap = {'identity': launcher, 'run_argv': launcher['argv'], 'hard_timeout': hard,
             'prepared_sha256': '1' * 64, 'gate_sha256': self.gate.pair['controllers']['gate.py']}
-        (self.root / 'relay-bootstrap.json').write_text(json.dumps(bootstrap))
+        self.write_bootstrap(bootstrap)
         sent = []
         def send(fd, sig):
             sent.append((fd - 100000, sig))
@@ -588,12 +665,12 @@ class GateTests(unittest.TestCase):
         (self.root / 'authority-path.json').unlink()
         (self.root / 'controls.json').unlink()
         shutil.rmtree(self.root / 'scope')
-        (self.root / 'relay-bootstrap.json').write_text(json.dumps({'identity': launcher,
+        self.write_bootstrap({'identity': launcher,
             'run_argv': launcher['argv'], 'hard_timeout': hard, 'prepared_sha256': '1' * 64,
-            'gate_sha256': self.gate.pair['controllers']['gate.py']}))
-        ticks = iter([0, 0, 4, 4, 4])
+            'gate_sha256': self.gate.pair['controllers']['gate.py']})
+        ticks = iter([9000, 9000, 9004, 9004, 9004])
         original_close = os.close
-        with patch.object(self.gate_module.time, 'monotonic', side_effect=lambda:next(ticks, 4)), \
+        with patch.object(self.gate_module.time, 'monotonic', side_effect=lambda:next(ticks, 9004)), \
              patch.object(self.gate_module.os, 'pidfd_open', side_effect=lambda pid:100000+pid), \
              patch.object(self.gate_module.signal, 'pidfd_send_signal'), \
              patch.object(self.gate_module.os, 'close', side_effect=lambda fd:None if fd>=100000 else original_close(fd)):
