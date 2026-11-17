@@ -1,0 +1,15 @@
+{
+  "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-export-boundaries-17nov-v3",
+  "uid": 1000,
+  "device": 57,
+  "inode": 96308148,
+  "files": {
+    "exporter-baseline.py": "0471118fe427d8e5a52685d02c6f30c51ae5ffa2b91937f78e2caa86adf63f6f",
+    "exporter-fixed.py": "51a9b1e2cb6f3048580588ebc9dfa6d837dadfc2a011d2b78d99f4e380b268f8",
+    "test-fs-export-boundaries-v3.py": "a99f28c3de2506e05dd03452006e170392ea359a3221863593f2e17b644db8aa"
+  },
+  "prepared_only": true,
+  "executed": false,
+  "previous_error": "313cba1e95",
+  "exporters_unchanged": true
+}

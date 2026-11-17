@@ -111,3 +111,13 @@ PC watchdog-new-probes-error-17nov-v1/5SHArelus444 ; transfertSSHpreuvesseulemen
 Rapport17/10. Défaut harnais à corriger sousce ticket (Lucivy), nouveaupin/RO/
 GO requis pour retenter les deux nouveaux probes ; GO15B2 épuisé. Aucun rouge
 nouveau ni vert acquis ; EC4ancien valide/oldQ/T/nativeHOLD inchangés.
+
+Après archivage erreur313cba1e95 et avant toute relance, signature harnais
+corrigée dans test-fs-export-boundaries-v3.py SHAa99f28c3de2506e05dd03452006e170392ea359a3221863593f2e17b644db8aa.
+Double Path.open(mode='r') consomme le mot-clé une fois ; scénario extérieur
+renommé scenario pour éviter masquage. Assertions order/duration/io-error
+inchangées, exporteurs047/51a9 strictement identiques. Nouveau Q privé v3
+UID1000/dev57/ino96308148 ; seulementSHA/AST, aucun import/runpy/test.
+Action RO delta confiée à Recherche, puis nouveauGOCPU60 C7 pour seuls2cas
+nouveaux047, attendus2FAIL/0ERROR. AncienGO15B2clos, aucun retry implicite,
+aucun v2vert/315/native/target/corpus. Rapport17/11 et marqueurv3 préparés.
