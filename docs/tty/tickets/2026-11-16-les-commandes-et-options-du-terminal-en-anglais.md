@@ -703,3 +703,14 @@ catalogues antérieurs liés aux ELF/srcCargo. F8jeux8/sourcepreuveexact.
 Détail/coûtsnatifsajoutés/HOLD : docs/tty/17-11-2026/06-correctif-pipeline-sans-rejeu.md.
 Qv3 futur resteINACTIF, Qv2c003/target/preuvesrouges inchangés ; ROtotale
 puis GOCPUdistinct avant vert, aucunGO3600niadmissionservices déduit.
+
+### R2 complémentaire : contenu exécuté et jeux F8 supplémentaires
+
+RO cafd favorable CPU8 borné uniquement ; C7 diffère ce coupon (32b9388439).
+Constats : results lie au chemin log mais ne compare pas SHA catalogue au
+contenuELF réellement joué, notamment après F8/touch/rebâti canon ; F8 filtre
+les lignesVERT inconnues au lieu de refuser un jeu supplémentaire.
+PorteurTTY : témoins sur vrais raccords/RAW avant nouveaux correctifs, chaîne
+catalogue→copieSHA→ELFexécuté/prépost et sourceAPP exacte. Huit assertionsd998
+et sixrouges acquis conservés. Nouveauxpins/RO/GOCPUdistinct avant baseline
+élargie ; aucunCPUgreen/natif/no-run/list/service/slot/3600 autorisé.
