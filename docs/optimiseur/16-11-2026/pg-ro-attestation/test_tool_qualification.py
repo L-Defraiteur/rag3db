@@ -11,7 +11,7 @@ class FakeBackend:
         self.calls.append(copy.deepcopy(request))
         result=dict(name=request['name'],returncode=request['expected_code'],timed_out=False,
                     quiet=True,raw_published=True,within_whole=True,stdin_started_inside_whole=True,
-                    native_invoked=True,stdout=b'{"request_valid":true,"pg_contact":false}\n',stderr=request['expected_stderr'].encode())
+                    native_invoked=True,stdout=(b'{"request_valid":true,"pg_contact":false}\n' if request['expected_code']==0 else b''),stderr=request['expected_stderr'].encode())
         if request['name']==self.bad:
             result['returncode']=127
         return result

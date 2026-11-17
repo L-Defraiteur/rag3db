@@ -59,7 +59,7 @@ async fn query_closed(config: Config, sql: &'static str, deadline: Instant) -> R
     row.ok_or("missing SQL row")
 }
 
-async fn capture(request: Value) -> Result<(), &'static str> {
+fn prepare_config(request: &Value) -> Result<(Config, String, u64), &'static str> {
     let object = request.as_object().ok_or("request must be an object")?;
     if object.len() != 3 || !["dsn", "nonce", "budget_ms"].iter().all(|k| object.contains_key(*k)) {
         return Err("unexpected request fields");
@@ -70,9 +70,7 @@ async fn capture(request: Value) -> Result<(), &'static str> {
         return Err("DSN or nonce refused");
     }
     let budget = request["budget_ms"].as_u64().filter(|n| (1..=4000).contains(n)).ok_or("budget refused")?;
-    // Une seule échéance intérieure ; le parent inclut startup/stdin/hash/reap dans hard5.
-    let deadline = Instant::now() + Duration::from_millis(budget);
-    let mut config: Config = dsn.parse().map_err(|_| "canonical DSN parse refused")?;
+    let config: Config = dsn.parse().map_err(|_| "canonical DSN parse refused")?;
     if config.get_user() != Some("rag3weaver") || config.get_dbname() != Some("rag3weaver_test")
         || config.get_ports() != [5433] || config.get_hosts().len() != 1
         || config.get_options().is_some() || !config.get_hostaddrs().is_empty() {
@@ -82,6 +80,13 @@ async fn capture(request: Value) -> Result<(), &'static str> {
         Host::Tcp(host) if host == "127.0.0.1" => (),
         _ => return Err("foreign host or Unix socket refused"),
     }
+    Ok((config, nonce.to_owned(), budget))
+}
+
+async fn capture(request: Value) -> Result<(), &'static str> {
+    let started = Instant::now();
+    let (mut config, nonce, budget) = prepare_config(&request)?;
+    let deadline = started + Duration::from_millis(budget);
     let application = format!("g-pg-{nonce}");
     config.hostaddr(IpAddr::V4(Ipv4Addr::LOCALHOST)).ssl_mode(SslMode::Disable)
         .connect_timeout(Duration::from_millis(1200)).application_name(application.clone()).options(OPTIONS);
@@ -103,7 +108,9 @@ async fn capture(request: Value) -> Result<(), &'static str> {
 
 fn main() {
     // Pas d'action implicite, de DSN en argv, de psqlrc, de shell ou d'outil Docker.
-    if std::env::args().skip(1).collect::<Vec<_>>() != ["--capture-readonly"] {
+    let args = std::env::args().skip(1).collect::<Vec<_>>();
+    let validate_only = args == ["--validate-request"];
+    if !validate_only && args != ["--capture-readonly"] {
         eprintln!("UNQUALIFIED preparation candidate; explicit authorized mode required");
         std::process::exit(2);
     }
@@ -112,6 +119,13 @@ fn main() {
         io::stdin().take(8193).read_to_end(&mut raw).map_err(|_| "request read failed")?;
         if raw.len() > 8192 { return Err("request exceeds bound"); }
         let request = serde_json::from_slice(&raw).map_err(|_| "request JSON refused")?;
+        if validate_only {
+            // Mode purement syntaxique : aucun runtime, connect, query ou postcheck.
+            let _prepared = prepare_config(&request)?;
+            println!("{{\"request_valid\":true,\"pg_contact\":false}}");
+            io::stdout().flush().map_err(|_| "validation flush failed")?;
+            return Ok(());
+        }
         let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().map_err(|_| "runtime refused")?;
         runtime.block_on(capture(request))
     })();
