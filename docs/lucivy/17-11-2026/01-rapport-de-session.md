@@ -267,3 +267,13 @@ Rapport17/19+preuveprep. ActionsROcontreexemple Recherche/Banc confiées,
 puisC7arbitreGOCPUdistinct. APRÈSrouge seulementguardlockeffectifcontreseed
 au dernierverdictDANSEND, patchgroupé/nouveauxpins/2ROtotales/GO300. Pasreset/
 restorelock ni exceptionslarges, pas315/native/tag/master.
+
+RO Recherche contre-exempleFINAL3d00de3f25/ffdddc favorable bornée reçue :
+vraie entrée admit166d.main byteexact, TempDir/préflightCommonGitproc modèles,
+budget/SHA/copies/finalpublication réels. Mutation lockeffectif APRÈScompile/
+7jugesmodélisés, seedintact/Gitignoré ; setupcommun/source/seed/finalevidence
+avantassertion discriminante, pasposthashspurious. Baseline attendue1FAILdrift/
+1PASSinchangé/0ERROR NONOBSERVÉS. Path.open(mode) conforme, call/check_output
+doublés, aucuneautresourcemodifiée. Aucun import/test/CPU/proc/SSH/ELF/T/corpus
+par Recherche, pinQnonréhashéparelle. RO Banc encoreenattente, GOCPU60 C7
+ distinct avantlesdeuxcas ; P1FINALLOCK/HOLDnatiftoujours, aucunfixanticipé.
