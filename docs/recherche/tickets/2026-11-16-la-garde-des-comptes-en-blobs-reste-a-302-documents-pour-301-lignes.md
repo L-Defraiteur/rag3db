@@ -557,3 +557,25 @@ Détails/paths/ledgerSHA dansproposal03. Sourcef4e/r4 inchangés,anciennespreuve
 rouges intactes. Acquis compile+parse SANS contact uniquement, paspromessePG5s
 ni transport_qualified. AucunSQL/connect/capture/PG/Docker/service/SDK/metadata/
 phaseC/lease ; ticketouvert, futurcontrat/RO/allocation/GOdistinct nécessaires.
+
+### Phase C concrète — préparation SOURCE/DOC seule autorisée 3bbea030cf
+
+Avant note : lire candidatRust/SQL/validateurPGv1/fixturebootstrap, puis figer
+cible privée et rôleRO attendus externes, session/transactionRO, requêtes
+constantes, annulation/reap/postcheck mêmeEND, protocolev2 explicite si transport
+ou borne changent, owner/lease et références credentials protégées sans lecture.
+Risques source déjà vus : modecapture n'a pas été joué ; query_closed renvoie
+sur erreur avant join explicite ; requeststdin B est archivé donc ne doit
+jamais recevoir le DSN réel ; rolebootstrap peutavoirCREATEDB et n'est pas une
+identitéreadonly déduite des options. Aucun DB/DDL/contact/native/credential
+lu pour cette préparation ; contrat/paquet/RO/GO C distinct avant connexion.
+
+PréparationC SOURCE/DOC publiée docs/optimiseur/17-11-2026/02-pg-phase-c-preparation.md
+et JSONinactif voisin. PropositionciblePCtestallouée/roleROnonowner/dbprobeprivée,
+identitésruntime/credentialsréférencesUNKNOWN ; candidatactuelrefuserait rôle/DB,
+sourcefuture requise. SessiontransactionsRO/constantes+droits/postcheck/CancelToken-
+joincleanup manquants nommés, harnessBstdinarchivé INTERDIT poursecret.
+Propositionv2Rust/whole10/Common30/OS35kill2 explicite incompatiblev1psql5s,
+aucune adaptation Qgelés ; filets et ordrecode/RO/pins/CPU/GO C distincts listés.
+AucunDB/DDL/connect/contact/credentials/SQL/native/proc/service pendantprépa.
+FTS302ouvert, paslease/grant produit niacquisphaseC déduit deB.
