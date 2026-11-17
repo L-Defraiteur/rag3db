@@ -542,3 +542,18 @@ P/cpu-green-r4-17nov60-01 receiptSHA
 Prédicat55vs38 positif+négatifs surfixturesseulement ;0proc/FLOCKréel/slot/
 compiler/SQL/PG/service. Anciennespreuvesrougesconservées,aucunGOBdistinct
 déduit ;317inputs/13hôtepins frais requis avantfuturnatif. Ticketouvert.
+
+### B r4 GO distinct b5b4bec37e terminé VERT, transport toujours nonqualifié
+
+Aprèsfresh317+13pins+13sources/outils/absences, UNEentrée recette04 rc0 en
+3.336130222s ; Commonvalidation-jx0k4fld VERT/restes[]/nettoye/etat=termine,
+busprivé absent. UNrustc rc0 produit ELF09ba7f2e20843e8bc085099a11ff3d4cfe9f7b5a282c380c62ac287e41924e2c,
+ledgerpub AVANT8CLI ; septrefusattendus+canonicalparse rc0 tous exacts.
+NeufPID/start/exe/CG etphasesquiet/reaped/bornes/bruts conservés ;0firstred.
+81fichiers/ELFpreuves vérifiés2hôtes,receiptSHA
+c18da9ba9f09e22ac213a2afe7285d8c82b766d25307e18e5d98305d48f647cc,
+manifest0783912dc85ebc06f25cd63cb3bf846634deec19bb3e6e608afbdb587a947f70.
+Détails/paths/ledgerSHA dansproposal03. Sourcef4e/r4 inchangés,anciennespreuves
+rouges intactes. Acquis compile+parse SANS contact uniquement, paspromessePG5s
+ni transport_qualified. AucunSQL/connect/capture/PG/Docker/service/SDK/metadata/
+phaseC/lease ; ticketouvert, futurcontrat/RO/allocation/GOdistinct nécessaires.

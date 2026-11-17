@@ -390,3 +390,46 @@ sur proc/FLOCK réels. Aucun rouge unitaire préalable inventé ; incidents
 B-R3 et diagnostic restent refusés immuables. Aucun poste/slot, natif/rustc,
 SQL/PG/service exécuté. OS/transport NONQUALIFIÉS ; futurGO B distinct absent,
 317inputs/13pins hôte frais encore requis avant entrée native.
+
+## B r4 acquis — compilation unique et huit CLI sans contact
+
+GO distinct C7-G-PG-NATIVE-B-R4-17nov120/b5b4bec37e consommé UNEentrée recette04,
+après fresh317inputs+13pins hôte+13sources/outils et absences. Sourcef4e/r4
+inchangés avant/après, aucun retry/fallback/Cargo. PCmono1266341.957660920→
+1266345.293791142, rc0/3.336130222s. Commonvalidation-jx0k4fld VERT/code0,
+restes[]/nettoye=true ; autorité etat=termine et busprivé absent vérifiés.
+
+Rustc privé PID963869/start126634236, invocation UNIQUE cap60, rc0. Client ELF
+6184384octets SHA256
+`09ba7f2e20843e8bc085099a11ff3d4cfe9f7b5a282c380c62ac287e41924e2c`.
+Source Rust SHA86b10a135b1c09a859e0abd4c5ab78d126cc624069e143b9e5f22afeae9095ce ;
+compiler859254978c0a0402c32f949f6de0d99aee73be8d15f45aac00ae1448aac51e74,
+inputsmanifestbf6b/OUT_Tde797 inchangés. Aucun SDK/lib produit utilisé pour bâtir.
+
+Ledger ELF publié avant parsers, observed1266344.024101683 ; premier parser
+started1266344.063866238, dernier1266345.048487019. LedgerSHA256
+`c22359e2f56c4b82c03ccaadfc5b8e1bfe740cae1e8d3bb6a4b30e923d8aeb96`.
+Huit cas natifs acquis exactement : cli-refused rc2 ; malformed-json,
+nonce-refused, budget-refused, database-refused, host-refused,
+arbitrary-sql-field-refused rc1 ; canonical-parse-only rc0 avec request_valid
+true/pg_contactfalse. Les sept refus attendus sont ceux de la recette.
+Neuf identités natives PID/start/exe/cgroup conservées, neuf phases
+native_invoked/reaped/quiet/raw_published/within_whole=true, aucunfirstred.
+ELFsha identique ledger/final/copie. QualificationSHA256
+`9923310bb09fa4c41c9b9ef16b41029759075d5421e628dd73fd8eed548d5459`.
+
+Preuves81fichiers/6241344octets (ELF inclus), SHA/taille vérifiés deuxpostes :
+PC P/phase-b-kernel-execution-01 + P/runs/phase-b-kernel-contract-01 ;
+local P/phase-b-kernel-proof-copy-01. Common copie publique sansjeton incluse.
+ReceiptSHA256 `c18da9ba9f09e22ac213a2afe7285d8c82b766d25307e18e5d98305d48f647cc` ;
+manifestSHA256 `0783912dc85ebc06f25cd63cb3bf846634deec19bb3e6e608afbdb587a947f70`.
+Audit des neufPID/temps/ledger/quiescenceSHA256
+`efc3229a4fdc473d85782c69290890403b13f0fbe4c93225843721597c22ed09`.
+
+Portée acquise : build/link et CLI/parsing sans contact sur CE code/ELF/entrée.
+Les bornes et quiescences observées ne généralisent pas la garantie physique5s
+à PG ni à toute latenceproc. Aucune invocation --capture-readonly, connexion,
+SQL/PG/Docker/service, metadata compiler, phaseC ou lease. transport_qualified
+reste false ; Rust n'est toujours pas private-host-psql v1. Anciens B01/B-R3/
+diagnostic restent ROUGE et immuables. TicketFTS302 reste ouvert pour la suite
+réelle, qui exige contrat/RO/allocation et GO distincts.
