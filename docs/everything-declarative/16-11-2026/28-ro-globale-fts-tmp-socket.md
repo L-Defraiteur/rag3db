@@ -31,3 +31,11 @@ Cargo/rustc/SDK/service exécuté. ArchivescleanupED séparées préparées sans
 retrait ; cette RO ne change aucun de leurs droits. Cycle3c2a93/Qv4 est
 un AUTREcouple relu favorable, sansGO900 ; ne pas lui reporter cette réserve
 TMPDIR puisque son chemin/CLI/juges natifs ne sont pas cette globale.
+
+Contrôle des en-têtes sur la copie exacte du ticket fc00 :4refus de metadata
+(Famille tests/qualification invalide ; Gravité/Atteignable enservice/Touche
+rag3weaver absents). Rouge consigné a5ccdc448b AVANT correction proposée
+DOCSEULE sur cette brancheED ; aucun fichier du WT Recherche modifié.
+Le porteur doit aussi reprendre ces champs pour que F8/check_tickets de la
+source candidate ne reste pas rouge. Cette correction de copie ne vaut pas
+un résultat du checker sur leur source figée tant qu'elle n'est pas portée.

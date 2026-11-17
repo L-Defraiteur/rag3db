@@ -1,7 +1,10 @@
 # Les juges FTS exigent une racine absente de la CI
 
 - **État** : ouvert, constat statique ; aucun nouveau run natif autorisé.
-- **Famille** : tests/qualification
+- **Famille** : produit
+- **Gravité** : haute pour la qualification : ROOT requis puis TMPDIR trop long font rougir le lancement avant son verdict complet.
+- **Atteignable en service** : non ; fixtures et profil du pilote de qualification seulement.
+- **Touche rag3weaver** : oui ; témoins FTS, lib de tests et pilote global, sans nouvelle attribution au moteur.
 - **Pour** : Recherche, arbitrage C7 avant nouveau ROOT-red/fixturefix.
 - **Parent** : [garde302/301](2026-11-16-la-garde-des-comptes-en-blobs-reste-a-302-documents-pour-301-lignes.md).
 
