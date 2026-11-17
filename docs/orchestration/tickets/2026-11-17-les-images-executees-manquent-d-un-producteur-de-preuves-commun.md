@@ -203,3 +203,15 @@ enfant distinct de owner/root/runner ; root=runner autorisé seulement même
 PID/start. Témoins51 BYTEidentiques àprépublication, aucunjeu surfix. Pins51
 proposés sansGO ; RO source totale puis GO51 distinct avant toute exécution.
 Aucune capacité physique/adaptateur/appelant/SDK/native livré ou autorisé.
+
+## Vert51 du validateur pur acquis sous GO distinct, pas backend physique
+
+[Rapport53](../../rag3weaver-archi/17-11-2026/53-preuves-pures-51-vertes-68ea.md).
+GO C7-ENTRY-PURE-GREEN-68EA-17nov60/8a77890716 consommé UNE fois sur68eab :
+51PASS/0FAILERRORskip/rc0,51noms exacts sansabsent/extra/doublon,
+enveloppe0.079794829s/noRetry. Neuf bruts LOCAL/PC réhash0écart, manifeste
+003ca193ffc17c0d54eb6366aee549ce54b5a07f5e5ddc5d7d9fb1d015a671b3.
+Rougesnominalf74/topologie2a etsourcesconservés ; aucunrepeint. Seule la couche
+PURE est éprouvée : adaptateurs CP/Common, entrée/stabilité/SDK/OS/appelants
+NONLIVRÉS/nonqualifiés, aucune admission physique. RO preuves puis arbitrageC7,
+aucun code/test opérationnel supplémentaire autorisé ; ticket reste ouvert.
