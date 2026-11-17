@@ -375,3 +375,17 @@ originale doit rester authentique, erreur de cleanup séparée/UNKNOWN attesté.
 Cas ajouté sur moteur558 INCHANGÉ, sans aucune exécution. Observer son rouge
 sous nouveau GO ciblé après revue, avant correction de cette causalité ; les
 dix rouges8792 restent figés sans rejeu implicite.
+
+### Rouge causal RPC conservé avant correction moteur groupée
+
+GO C7-CP-RPC-FIRST-RED-F3D0-17nov60/003950 consommé UNEfois sourcef3d exacte
+propre/pins13+Python frais :1FAILprécis assertIS objet fixture-reap≠objet original
+fixture-ssh,0ERRORskip/rc1,.175979993s externe/.010unittest.19payloads+manifest
+(20fichiersTOTAL) réhashés deuxhôtes AVANTtoutdiff : manifest
+8c2fa5bc8e3b174ee98a827f665c68a3b181208624db29af4b4a82916be7f956,
+result71cb48ee54647567b221b29a720ab74778650e02c2237af15e3c5c9478622352.
+PréparationgroupéefixM/TTY ouverte ; aucuneexécutionverte autorisée. Origine
+temps indépendante, deuxwatchdogs/admissionCommon, hardENDpublicationfinale,
+fermetureavantimports et RPCgrâces/reap/stop/premièrecause/UNKNOWN restent les
+critères source. Sourcef3d/8792/ca1 etpreuves restent figées. Les comptes
+précédents17/16 désignaient les PAYLOADS :8792=18TOTAL,CA1C=17TOTAL.
