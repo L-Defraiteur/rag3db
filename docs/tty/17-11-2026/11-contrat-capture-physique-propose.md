@@ -48,11 +48,38 @@ PID avant réutilisation. Aucun hook Linux, traceur, wrapper Cargo ou observateu
 TTY n'est ajouté ici. Une simple ouverture du chemin avant exec suivie d'un
 exec par chemin garderait une fenêtre de remplacement : elle ne suffirait pas.
 
+## Identité de processus et génération d'image
+
+Une même paire PID/start peut subir plusieurs exec sans fork ni nouveau
+start. Elle ne suffit donc pas à identifier l'image courante. Le contrat doit
+lier chaque occurrence à une génération d'image/événement exec réellement
+capturé, dans la séquence garantie par le producteur commun. Un compteur
+incrémenté uniquement aux sondages réussis ne prouverait pas cette garantie.
+Changement d'image, ordre non certain ou événement perdu : conserver les
+faits partiels et refuser la qualification, sans reconstruire depuis les logs.
+
+Fin d'image et fin de processus sont différentes. L'image A remplacée par B
+n'a pas nécessairement de rc wait propre ; le rc final du processus ne doit
+pas devenir celui d'une suite prétendument terminée sous A. Il faut relever
+la raison de fin d'image (remplacement, sortie ou signal) et lier le rc wait
+seulement à l'état de processus auquel il appartient. Une transition non
+prévue par le rôle de test empêche d'en inférer son succès.
+
+Un exec tenté mais refusé ne crée pas une image B exécutée : A peut continuer.
+Il faut distinguer tentative/échec d'exec et changement d'image effectif,
+sans promouvoir une copie B ou un argv visé en preuve d'exécution de B.
+La couverture des descendants et la perte éventuelle d'événements font partie
+du contrat de capture, séparément des neuf positions de racine proposées.
+Les rôles auxiliaires et toutes images successives doivent être déclarés ou
+explicitement refusés ; neuf racines vues ne rendent jamais une capture complète.
+
 ## Surface conditionnelle producteur → publication → consommateur
 
 Ces obligations sont proposées, **pas des nouvelles fonctions livrées**.
 Le portage commun serait à cadrer par C7 avec CP/Archi ; TTY fournit son profil
 et consomme les preuves, sans seconde boucle ni client d'observation propre.
+CP reste porteur relais/ACK/Window uniquement : le producteur physique n'a
+aucun porteur attribué implicitement. Une attribution C7 séparée est requise.
 
 1. **Contrat attendu avant observation.** Source APP/pilote/Q, fermeture des
    manifestes/locks/features/defaults/SDK, rôles d'exécutables et invocations,
@@ -85,7 +112,8 @@ et consomme les preuves, sans seconde boucle ni client d'observation propre.
 La première surface à faire approuver contient donc : identifiants contenu,
 publication/catalogue, occurrence et phase ; contrat source/profil ; identité
 producteur et processus ; lien à l'image/copie ; pré/exec/post ; RAW/rc ;
-première cause et état terminal. Les champs runtime restent NULL dans le
+première cause et état terminal. Génération d'image, pertes/complétude de capture, tentatives exec et raison
+de fin d'image doivent également être liés aux faits. Les champs runtime restent NULL dans le
 manifeste joint. Aucun format de reçu consommable n'est fabriqué maintenant.
 
 ## Canon inchangé et reconstructions
@@ -167,6 +195,10 @@ API absente : manque nommé/HOLD ; un ERROR d'import ne vaut pas son rouge.
 | P14 | Première cause entre capture et ACK/release, puis chemin restauré | Rouge immuable, arrêt attribué et RAW/reap sous END |
 | P15 | Ordre/noms/filets/ignored ou logs non liés au catalogue de l'occurrence | Refus, pas ANYrésumé |
 | P16 | Précontrôles connus puis F8extra/duplicate et fin8/8 | Refus du jeu supplémentaire |
+| P17 | Deux exec A puis B, même PID/start ; seule l'identité processus est stable | Deux générations distinctes exigées, pas une occurrence A positive |
+| P18 | Perte d'événement ou descendant/image sans rôle, malgré neuf racines vues | Capture incomplète, HOLD et faits partiels conservés |
+| P19 | Exec B refusé, image A continuant ; copie B et argv intentionnels présents | Aucune preuve d'image B exécutée |
+| P20 | A remplacée par B puis processus sort rc0 | Ne pas attribuer rc0 à la fin de tests sous A |
 
 Les positifs conditionnels ne peuvent être verts tant que l'API physique
 n'existe pas et que son raccord canon n'est pas couvert. Les14témoins déjà
@@ -178,3 +210,12 @@ RO documentaire de cette frontière et des témoins ; avis CP/Archi sur capacit�
 commune et compatibilité canon, puis attribution C7 des capacités manquantes.
 Aucun code producteur/consommateur, test CPU, Cargo/no-run/list/native, health,
 PG, acteur, slot, mutation target ou activation Q n'est autorisé par cette note.
+
+## Réception CP après première publication
+
+RO CP6c96 favorable à la frontière documentaire/inactive, sept pins relus.
+Les précisions ci-dessus sur générations, pertes et fins d'image ne sont pas
+une API livrée. CP ne reprend pas implicitement le producteur physique.
+Son pin f494d8ecbe signalé ensuite reste intermédiaire NONEXÉCUTÉ : il ne
+remplace pas les références historiques de la présente proposition et n'est
+pas une capacité admise par analogie.

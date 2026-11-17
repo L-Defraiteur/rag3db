@@ -773,3 +773,11 @@ P01-P16prépubliés, pas tests exécutables. Rebuild/postscopéparoccurrence,
 ABA/copieautre/PIDreuse/processbref/ACK/ENDPCLOCAL explicites ; canon2150
 inchangé ouHOLD. Codecommun/porteuràcadrerC7, pasobservateurTTYad hoc.
 ROdocumentaire avantcode/CPU ;14verts/Qdésarmés/Tintacts,0runtime.
+
+### Précisions RO documentaire CP6c96 avant toute surface/code
+
+PID/start≠générationimage : plusieurs exec gardent le même processus.
+Ajouter génération/occurrenceexec, pertescapture/descendants/execéchoué ;
+finimage≠rcwaitprocessus. Neufracinesn’impliquentpasexhaustivité. CP garde
+relais/ACK/Window, ne reprendpasimplicitementproducteurphysique ; attribution
+C7séparée. Miseàjourdocumentaireseule, aucun code/CPU/runtime autorisé.

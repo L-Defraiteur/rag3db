@@ -55,5 +55,10 @@
   "ready_nonce": null,
   "lease": null,
   "physical_capture_implemented": false,
-  "code_or_tests_executed": false
+  "code_or_tests_executed": false,
+  "producer_owner": null,
+  "exec_image_generation": null,
+  "capture_completeness": null,
+  "image_end_reason": null,
+  "process_wait_result": null
 }
