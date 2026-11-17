@@ -280,3 +280,10 @@ SEULcecode enFAIL, jamaisImportError.24fonctions correspondent21scénarios+3cas,
 NONJOUÉES ; ports/horloges/capacités sontMODELED seulement, pasOS. PinsUNnominal
 proposés sansGO,23autresnonselectionnés. RO puisGOrouge distinct avantexécution,
 preuve2hôtes avantfix ; LIVE/Commonfinal/nativeunsupported, aucunPQS créé.
+
+Rouge runner baselinef7ec acquis : [rapport57](../../rag3weaver-archi/17-11-2026/57-preuve-rouge-baseline-runner-f7ec.md).
+GO C7-ENTRY-RUNNER-BASELINE-F7EC-17nov60 consomméUNEfois :1FAIL attendu/
+0ERRORskip/rc1,0.044592498s,noRetry ;23autresNONJOUÉS. Neuf bruts réhashés
+LOCAL+PC0écart AVANTfix, manifestedb4805bc3165f0a617a083121f82adea82bea3bf2033d52d07b0583c86067528.
+PréparationcorpsFIXTURE_ONLY seule autorisée, sources/pins/RO puisGOdistinct
+avantverts. Aucun OS/CP/Common/natif qualifié, pur565b/archivesintacts.
