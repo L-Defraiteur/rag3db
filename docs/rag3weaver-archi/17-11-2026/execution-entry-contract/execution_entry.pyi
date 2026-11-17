@@ -17,8 +17,9 @@ class InvocationPlan(TypedDict):
     stdout: str
     stderr: str
     authority: str
-    publication: Mapping[str, object]  # exact independently verified CP reference
-    common_owner: tuple[int, int]  # external closer PID/start, outside owned subtree
+    plan_sha256: str  # frozen initial plan reference, excludes future facts/ACK
+    common_owner: tuple[int, int]  # confiner owning its direct child, outside owned subtree
+    common_root: tuple[int, int]  # direct Common child, NOT necessarily runner
     runner_pid: int  # independently admitted by Common, not from actual facts
     runner_start: int
     uid: int
@@ -30,6 +31,11 @@ class InvocationPlan(TypedDict):
     operation_end: float
     cleanup_reserve: float
     storage_profile: Literal['local-regular-exec-write-denial-v1']
+
+class PublicationAttestation(TypedDict):
+    # Acquired AFTER entry/copy by CP owner, independently from submitted facts.
+    plan_sha256: str
+    reference: Mapping[str, object]
 
 class Fact(TypedDict):
     # A fact is producer-owned, never supplied by the tested program as evidence.
@@ -53,11 +59,12 @@ class InvocationResult(TypedDict):
 class Refusal(RuntimeError):
     code: str
     sequence: int | None
+    invocation_returncode: int | None  # preserved if authentic child wait acquired
 
 # PURE future validator: no files, clocks, subprocesses, signals, publication.
 # Raises Refusal on incomplete/invalid transcript, preserving earliest failure.
 # Model evidence is accepted ONLY by this pure review layer, never OS admission.
-def verify_transcript(plan: InvocationPlan, facts: Sequence[Fact]) -> InvocationResult: ...
+def verify_transcript(plan: InvocationPlan, facts: Sequence[Fact], publication: PublicationAttestation) -> InvocationResult: ...
 
 # Future operational entry point, deliberately NOT specified as a callable yet:
 # launch/observe/release/wait must implement README protocol after its RO.

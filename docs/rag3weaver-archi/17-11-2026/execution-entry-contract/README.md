@@ -75,9 +75,9 @@ La compatibilité du profil est à qualifier, pas un fait acquis sur l'hôte.
    sortie par signal en rc0 ni perdre sa nature dans un shell. Le wait et les
    sinks hashés se rapportent à l'invocation, pas à une image restée A.
 8. Après le wait enfant, le runner préserve/finalise RAW et faits de
-   l’invocation puis retourne. Il ne déclare PAS son ancêtre Common quiet. Un
-   propriétaire extérieur préadmis attend le runner réel, puis atteste la
-   clôture Common (quiet/reap du sous-arbre attribué, excluant le contrôleur
+   l’invocation puis retourne. Il ne déclare PAS son ancêtre Common quiet. Le
+   Common propriétaire de sa racine directe attend cette racine (pas le
+   runner descendant de Cargo/shell), puis atteste la clôture Common (quiet/reap du sous-arbre attribué, excluant le contrôleur
    extérieur) et sa publication. Toutes ces étapes respectent END initial et réserve. Mort du runner n'est
    pas terminée proprement par déduction ; Common conserve cause et collecte.
    Aucun reçu positif si cleanup/reap inconnu, pas de remise à zéro ni retry TTL.
@@ -114,13 +114,13 @@ source Linux explicite, pas noyau hôte relevé ni qualification du stockage.
 `execution_entry.pyi` décrit seulement `verify_transcript` : futur vérificateur
 pur d'une séquence de faits modélisés. `test_execution_entry.py` vise ce symbole
 futur ; aucun module d'implémentation n'est fourni ici et aucun import/test n'est
-exécuté. Quarante fonctions de témoins sont écrites, NON JOUÉES. Ces témoins
+exécuté. Quarante-cinq fonctions de témoins sont écrites, NON JOUÉES. Ces témoins
 n'attestent jamais le noyau ou les événements réels. Le
 producteur opérationnel devra construire les faits depuis ses propres primitives,
 pas accepter un transcript fourni par le programme testé comme preuve d'OS.
 
 Séquence modèle obligatoire : `selected`, `spawned`, `exec_stop`, `copied`,
-`published`, `released`, `waited`, `finalized`, `runner_waited`, `common_closed`. IDs invocation/clock stables,
+`published`, `released`, `waited`, `finalized`, `common_root_waited`, `common_closed`. IDs invocation/clock stables,
 séquences strictement croissantes/temps non décroissants et finis. Toute phase
 jusqu'au wait doit rester < operation_end ; clôtures finale et externe < end, avec
 operation_end <= end-cleanup_reserve. Champs manquants, types incorrects,
@@ -137,8 +137,8 @@ le premier code ; des événements cleanup après ne l'effacent jamais.
 |released|même enfant, detach réussi avant userland selon protocole, pas promesse d'absence de traceur future|
 |waited|même enfant/start, parent runner, kind exit/signal, code exit>=0 ou signal>0 ; pas stop|
 |finalized|RAW sinks exacts liés/hashés et clôture de l’invocation seulement, sans quiet Common anticipé|
-|runner_waited|Vrai wait du runner par propriétaire extérieur préadmis, PID/start exacts, après finalized|
-|common_closed|Propriétaire extérieur common_owner exact, autorité liée, quiet/reap/publication attestés après runner_waited sous end|
+|common_root_waited|Vrai wait de la racine DIRECTE Common par son parent naturel Common, PID/start exacts, après finalized ; pas waitpid du runner descendant|
+|common_closed|Common owner exact hors de son sous-arbre attribué, autorité liée, runner absent et quiet/reap/publication attestés après common_root_waited sous end|
 
 Les champs runner_pid/runner_start/uid/cgroup du plan sont fournis par admission
 Common indépendante, non choisis par le transcript. Le PID enfant est lié au vrai
@@ -162,7 +162,7 @@ propagation Cargo, puis surface des quatre appels. Coût capture/copie/hash,
 latence startup, waits/cleanup, SDK et compatibilité stockage UNKNOWN. Aucun
 budget d'exécution proposé comme acquis. Aucun appelant ni canon modifié ici.
 
-## Delta après réserves CP377c94, avant implantation
+## Historique du delta CP377c94 (précisé par le delta groupé ci-dessous)
 
 Les réserves ont été consignées au ticket avant ce delta. Le booléen ACK est
 remplacé par une référence CP exacte : prepared, plan, phase, allocation, nonce,
@@ -176,15 +176,17 @@ La liaison SHA faits d'entrée doit porter sur leur représentation canonique
 réelle choisie avec CP, pas sur une chaîne arbitraire du programme testé.
 
 `finalized` est la clôture de l'invocation (enfant wait/RAW), pas celle de Common.
-Le contrôleur extérieur Common attend ensuite le runner puis clôt le sous-arbre.
+Common attend ensuite sa propre racine directe puis clôt le sous-arbre ;
+le parent naturel du runner reste Cargo ou shell, sans waitpid inventé pour
+Common sur ce descendant.
 L'identité common_owner vient de l'admission et doit être extérieure à ce
 sous-arbre ; la validation de modèle ne qualifie pas cette appartenance OS.
 La fonction de revue pure consomme une séquence composite : son dernier segment
-vient du contrôleur, jamais du runner qui attesterait sa propre disparition.
+vient du Common, jamais du runner qui attesterait sa propre disparition.
 La production du reçu terminal ne doit pas démarrer de tâche dans le sous-arbre
 qu'elle déclare quiet. Absence/refus de clôture externe reste rouge/incomplet.
 Six témoins additionnels écrits, NON JOUÉS : ACK autre phase/autres faits/booléen,
-closer runner interdit, clôture avant wait runner, clôture externe manquante.
+closer runner interdit, clôture avant wait de la racine Common, clôture externe manquante.
 
 
 ## Delta après réserve TTY377 : fenêtre d'origine
@@ -198,3 +200,44 @@ ne recrée ni start ni END depuis son propre premier événement. Les faits avan
 émission sont refusés avant tout effet dépendant ; une émission hors fenêtre
 n'accorde pas de nouveau budget. Trois témoins écrits, NON JOUÉS, portent ces
 cas. Total40 fonctions ; aucune erreur d'import n'est une preuve rouge TDD.
+
+
+## Delta groupé Mémoire052 et complément TTY, après ticket
+
+Le plan initial NE contient plus la publication future. `plan_sha256` référence
+la sérialisation canonique du plan initial, hors ce champ de référence lui-même.
+L'attestation CP est un troisième argument distinct de `verify_transcript`,
+acquis APRÈS exec_stop/copied par le propriétaire CP et vérifié indépendamment
+du transcript soumis. Elle lie le SHA du plan initial et la référence CP exacte.
+La référence lie les faits d'entrée réels et copie avant release ; leurs SHA ne
+sont jamais prédits avant lancement ni promus depuis le programme testé. Le
+schéma canonique et l'adaptateur CP réel restent préconditions à relire. Les
+fixtures fournissent uniquement ces valeurs MODÉLISÉES, sans preuve cryptographique.
+
+La topologie précédente exigeant un wait runner par un extérieur était fausse
+pour Cargo/shell. Le fait final s'appelle désormais `common_root_waited` : il
+vient du vrai parent Common sur SA racine directe common_root, pas sur le runner.
+Le runner garde le wait de SON enfant d'invocation ; Cargo/shell gardent leur
+rôle de parents du runner sans nouveau reparentage. Common clôt son sous-arbre
+après son propre wait, arrêt/reap et observation d'absence du runner. Cela ne
+prouve pas un wait individuel de tous les descendants et n'en revendique pas.
+Le raccord aux vrais faits Common et la publication hors du sous-arbre sont à
+relire avant opérationnel, pas livrés par tuples/bools des modèles.
+
+Une erreur producteur après wait enfant ou sortie/signal anormal de la racine
+Common interdit la clôture positive même enfant0/quiet. Le rc authentique de
+l'invocation reste conservé séparément dans les faits et `Refusal.invocation_returncode`
+si acquis ; il n'est pas réécrit pour cacher la première erreur d'infrastructure.
+La réussite d'un modèle n'est pas le jugement métier «tests verts».
+
+Les deux témoins deadline maintiennent désormais TOUS les timestamps suivants
+croissants, afin d'isoler le délai et pas une régression d'horloge. Cinq nouveaux
+témoins (attestation future distincte/plan lié/racine non runner/erreur producteur/
+signal racine après enfant0) portent le total à45 fonctions NON JOUÉES. Aucun
+import/parser/CPU/OS exécuté, aucune API de lancement opérationnelle implémentée.
+
+Dans le vérificateur purement modélisé, les empreintes de plan/faits/reçu sont
+des références opaques fournies par le propriétaire de confiance ; le modèle
+vérifie leurs liaisons, pas leur calcul cryptographique ou la lecture CP réelle.
+Ces opérations font partie du futur adaptateur opérationnel à spécifier/qualifier.
+Cela ne rend pas un tuple de fixture admissible comme reçu physique.

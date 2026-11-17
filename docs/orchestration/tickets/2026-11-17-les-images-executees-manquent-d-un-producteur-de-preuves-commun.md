@@ -113,3 +113,19 @@ Le plan ne porte pas encore start/issued Common ; ordre et END ne refusent pas
 une séquence antérieure à l'allocation. Ajouter origine et émission de l'autorité
 indépendante, dans le même domaine d'horloge, et témoins avant émission/fenêtre.
 Réserve de contrat, pas défaut OS observé ; aucune exécution autorisée.
+
+## Trois réserves Mémoire052, consignées ensemble avant correction
+
+1. Le plan initial ne peut connaître SHA faits d'entrée/ACK futurs : séparer plan
+immuable et attestation CP ultérieure indépendante, liée au plan et faits réels.
+2. Le contrôleur extérieur n'est pas nécessairement parent naturel du runner
+(Cargo ou shell le sont) : ne pas lui inventer waitpid(runner). Séparer wait
+naturel de l'enfant d'invocation, wait réel de la racine Common et clôture externe.
+3. Deux témoins de délais régressent dans le temps après ajout des faits finaux :
+maintenir tous les horodatages suivants croissants pour isoler le refus délai.
+Réserves documentaires/modèles ; aucun défaut OS ou test exécuté. Delta groupé
+à publier et relire avant implantation/exécution distinctement autorisées.
+
+Complément TTY/CP avant le même delta groupé : une erreur/signal du producteur
+après enfant0 ne devient pas succès par quiet/reaped ; préserver le vrai rc
+invocation dans les faits et la première cause d'infrastructure séparément.
