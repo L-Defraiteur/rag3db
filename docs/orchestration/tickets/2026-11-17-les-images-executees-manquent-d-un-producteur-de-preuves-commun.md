@@ -153,3 +153,14 @@ explicitement capability-not-implemented, sans effet externe. Le seul nominal
 convertit cette Refusal précise en self.fail ; import/fixture/exception autre
 reste ERROR. Les assertions positives restent présentes. Pins et RO avant
 GO nominal distinct ; aucun rouge acquis par cette préparation.
+
+## Rouge nominal baseline2b04 acquis, preuves conservées avant implantation
+
+[Rapport48](../../rag3weaver-archi/17-11-2026/48-preuve-rouge-nominal-baseline-2b04.md).
+GO C7-ENTRY-PURE-BASELINE-2B04-17nov60/5e2dfd8bbe consommé une fois :1FAIL,
+0ERROR/skip,rc1 sur refus explicite, enveloppe0.048796813s ;46autres NONJOUÉS.
+Neuf bruts hors WT copiés et réhashés LOCAL/PC0écart, manifeste
+d977e605e15ad599ccf9f1869e06305c171e013f85d615bc7ae60bceb94ebadb.
+Aucune implantation pure complète avant conservation. Sa préparation seule peut
+suivre09726 ; nouvelle source/pins/RO et GO47 distinct avant tests. Aucun backend
+physique, adaptateur CP/Common, SDK/native/appelant autorisé par ce rouge.
