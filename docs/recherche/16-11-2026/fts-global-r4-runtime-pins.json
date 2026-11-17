@@ -1,0 +1,17 @@
+{
+  "qualify.py": "3ad493d0b4fd56b9a3e36fac2b12ca0b3dbfc4038faa7dab16f3b13c629faad9",
+  "lifecycle_protocol.py": "c67f072ba0134f97be6150547d80b8a23174937f2c964b0bdc30bec5e0309ec0",
+  "services-contract.json": "817c674ca97ce87efb7280bdfa51334ff030ec97aa4548798b0f1ed27ef1282d",
+  "lifecycle_grant_producer.py": "f17cdf81d78b71b6d1273e9f719a077848872ebd7b3f0341e604d56d8a244652",
+  "lifecycle_provider_observation.py": "95729d4d2eabaaf6b92fef72f2754c43cc1675c76107bffede86c893c90f8618",
+  "global_services_owner.py": "9d308b5bd2d1eb44dca02da8d02f8cce4a2a7717e57a246301b468c142bf6b8d",
+  "provider_health_transport.py": "edf45f73bf97d21f2a0caab4d6e07a7d01f807fba8310c9006f442159e2bc2a6",
+  "pg_receipt.py": "de69c498b1ac38d80d4976144fea79ddbfa7d3a34ea8ce7dae1d9e4a457aeed6",
+  "identity.sql": "f9496688a506085562a071ce25827a2a683bccd457c9edf6e944e228b7c29328",
+  "backend-postcheck.sql": "2907a86d971770275b9ff6291e9bffebdf4467d23c7c59ff2015ae6a3fb9c864",
+  "base_controller.py": "dd7e5127627ba25e4a0acc1bade9fcb9936273b0f317d104d06a84faf5f3a826",
+  "passe_epinglee.sh": "2150fcd847b1df7de04908d357a0c78abc05e50ce599e2793ff08ab48108825d",
+  "confiner_validation.py": "6439fdd8b52c85fa4e74af0def2c667ef0bedae9b814cbbfd48e49946c4f74ea",
+  "poste": "79e3a8bbf457e3bc9104aa1558e7d03072216c70b68e08ae606ace6aa4584c7b",
+  "garde_target.sh": "43ff9c80e14d9970adf94da2db74a6d0e9ca2d90d54a2b08c8f37d61ea3d5a37"
+}
