@@ -80,3 +80,14 @@ Missingexplicite. Ancien témoinflags aligné aprèsrouge ;16noms conservés,
 replaymanifestencoreABSENT, gateglobalecore/corpus nonqualifiée. ROtotales
 SOURCE R+Banc demandées, futurpiloteGREEN/paquet/pinsROcouple et nouveauGO
 vert distinct AVANTtouteexécution. Ne pasrelancerpaquet27/e75/ancienGO.
+
+
+STOP prioritaire Lucie quota relayé C7 : travaux arrêtés, tous coupons non
+consommés révoqués/anciensEND nonréactivables. Passation autonome Claude :
+[99-passation-pour-claude.md](99-passation-pour-claude.md),17nov primehistorique.
+Source13298poussée propre/NONCOMPILÉE-NONJOUÉE, RO Banc favorable/R attendue ;
+PCbdfpropre/ELFsrouges préservés,0WIPnonpoussé/0exécutionoutil active danscefil.
+DernierCommon186154TERMINE0/ownabsent selon reçus de fin,0nouveauscanproc après
+STOP,11UNKNOWN conservés. Aucun test/GO/corpus/service/target/nettoyage repris.
+Ne pas reprendre au rappelautomatique ; futuresétapes nécessitent reprise
+explicitement autorisée et nouveauxpaquet/RO/GOdistincts.

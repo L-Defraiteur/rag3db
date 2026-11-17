@@ -564,3 +564,14 @@ Seize verts NONOBSERVÉS, aucune compilation/import/parse/test/PC/proc/DB/
 corpus/ELF/target/service par Banc. Recherche encore attendue ; nouveau paquet
 GREEN/pins/ROcouple/GO C7 distinct requis, dixanciens+sixnouveaux à jouer
 réellement, barrières ledgerACK/doublelock/physique à conserver. Ticket ouvert.
+
+
+STOP prioritaire Lucie quota relayé C7 : travaux arrêtés, tous coupons non
+consommés révoqués/anciensEND nonréactivables. Passation autonome Claude :
+[99-passation-pour-claude.md](99-passation-pour-claude.md),17nov primehistorique.
+Source13298poussée propre/NONCOMPILÉE-NONJOUÉE, RO Banc favorable/R attendue ;
+PCbdfpropre/ELFsrouges préservés,0WIPnonpoussé/0exécutionoutil active danscefil.
+DernierCommon186154TERMINE0/ownabsent selon reçus de fin,0nouveauscanproc après
+STOP,11UNKNOWN conservés. Aucun test/GO/corpus/service/target/nettoyage repris.
+Ne pas reprendre au rappelautomatique ; futuresétapes nécessitent reprise
+explicitement autorisée et nouveauxpaquet/RO/GOdistincts.
