@@ -487,3 +487,18 @@ conformes, Q UID1000/dev57/inode97253752. Scope/logs/ARM/ACK/backup/final
 absents, scratch/scans vides ; sorties portables absentes. OldCommon terminé
 relu comme métadonnées seules, pas de procscan ni quiétude actuelle déduite.
 Aucun Cargo/test/ELF/ARM/proc/corpus/DB/mutationtarget par Recherche.
+
+
+RO TOTALE COUPLE RED Banc favorable PRÉPA publiée cffe5fff6d, rapportBanc03 :
+pilote336deb03/admitd1d52774/export56e99ad9 et préflight54ebfdf0 Git=PC=portable,
+nonce075f/QPC169037256/Qportable97253752, neuf copies PC et deux portables
+conformes ; PCbdf propre/lockDBDB/T/marker et cinqELF conformes, sorties
+absentes/scratchscans vides. Inventaire16/TESTS6 et attribution cinqFAIL/positif
+relus, résultats NONOBSERVÉS. Backup des cinq anciens ELF avant build puis
+rehash final sur leurs COPIES ; deux nouveaux ELF via JSON/ledger/copiefsync/
+rehash/ACK avant toute invocation. END285/TERM295/KILL300/ARMduréeR−8/CommonMIN/
+retours réels/double lock conservés. Aucun exec/parse/import/build/test/DB/
+proc/corpus/service/ARM/target/GO par Banc ; pas de freshprocscan.
+Deux RO TOTALES COUPLE favorables désormais reçues ; décision GO exact C7
+requise avant commande27, aucun lancement implicite. Source RED, pas fix ;
+archives deux hôtes avant correctif groupé puis nouveaux pins/RO/GO verts.
