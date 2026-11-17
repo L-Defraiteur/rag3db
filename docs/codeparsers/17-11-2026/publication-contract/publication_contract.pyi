@@ -98,6 +98,29 @@ class Limits:
     copy_call_seconds: float
 
 @dataclass(frozen=True)
+class OwnerIdentity:
+    pid: int
+    start_ticks: str
+    uid: int
+    exe: str
+    argv: tuple[str, ...]
+    cgroup: str
+    entry_sha256: SHA256
+    component_hashes: Mapping[str, SHA256]
+
+@dataclass(frozen=True)
+class WindowEventSpec:
+    path: Path
+    owner_role: str
+    event_kind: str
+
+@dataclass(frozen=True)
+class WindowEvidence:
+    event_sha256: SHA256
+    owner: OwnerIdentity
+    remaining: float
+
+@dataclass(frozen=True)
 class PreparedContext:
     prepared_path: Path
     proofs: Path
@@ -105,6 +128,7 @@ class PreparedContext:
     plan_sha256: SHA256
     component_hashes: Mapping[str, SHA256]
     limits: Limits
+    window_events: Mapping[StageLabel, WindowEventSpec]
 
 @dataclass(frozen=True)
 class Acknowledgement:
@@ -157,6 +181,8 @@ class PhaseLifecycle:
     """Implémentation commune concrète, pas un callback active=True du fournisseur."""
     def __init__(self, context: PreparedContext, clock: Callable[[], float] = ...) -> None: ...
     def observe_active(self) -> ActivePhase: ...
+    def record_window_start(self, spec: StageSpec, phase: ActivePhase, ledger_sha256: SHA256) -> WindowEvidence: ...
+    def observe_window(self, spec: StageSpec, phase: ActivePhase, ledger_sha256: SHA256) -> WindowEvidence: ...
     def snapshot(self) -> Snapshot: ...
     def cancel(self, reason: str) -> CancellationEvidence: ...
 

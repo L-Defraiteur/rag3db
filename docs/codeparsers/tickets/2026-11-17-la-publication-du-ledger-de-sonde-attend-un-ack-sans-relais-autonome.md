@@ -142,3 +142,21 @@ strict build/runtime par défaut dans son adaptateur. Le module commun ne peut
 Le présent travail propose seulement l'API à relire et son emplacement, pas une
 primitive déjà implémentée ou qualifiée pour D6. Contrat/sourcepins futurs et
 budgets distincts nécessaires avant extraction, tests ou calibration réelle.
+
+## Extraction commune autorisée C7, avant code
+
+AccordPRÉPA1cc2b726c3 après API2c8d/manifestArchi7416. Codeparsers est porteur
+unique de scripts/publication_relay.py. Branche neuve
+cx-codeparsers-publication-core, D45/P05/Archi229bQ figés. Déplacer les vraies
+boucles, gardes et arrêt dans un seul module ; wrapperRust sans seconde copie,
+36assertions conservées. Séparer refactorconstant de capacité4publications.
+Nouveaux contre-exemples du vrai D45 prépubliés avant cette capacité ; code et
+tests à publier avant toute RO/GO CPU distinct, aucune exécution implicite.
+
+Arbitrage global :7440TERM+15KILL avantqueue/ARM, queueMAX120DANSwhole ;
+CommonMAX7200 et MINsoldephysique−30, ENDopCommon−15/réserve15DANSCommon ;
+fenêtres90owneravantwait/MINENDop, aucun reset global ni comparaison absolue
+interhost. ValeursRust inchangées. Raccord WindowEvent explicitement sous
+PreparedContext.window_events approuvés et Lifecycle commun ; providerlecture
+seul ne peut attesterliveness. Les sources et capacités futures sont à relire
+avant adaptation/native ; aucun nouveau CPU/SSH/proc/natif/Cargo/target.

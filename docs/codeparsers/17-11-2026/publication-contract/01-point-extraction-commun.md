@@ -199,3 +199,37 @@ n'a pas à fabriquer un faux prepared.json Rust si son manifeste approuvé a un
 autre nom. Les paramètres clock/sleep existent pour les témoins du vrai moteur ;
 le vrai CLI impose les horloges monotones et watchdogs réellement observés,
 sans flag permettant de choisir un modefake lors d'une admission.
+
+## Précision WindowEvent après question Archi et arbitrage C7
+
+Raccord retenu dans la proposition typée :
+PreparedContext.window_events{label:WindowEventSpec(path,owner_role,event_kind)}.
+Chemins sousP et rôles sont préapprouvés/hashés ; aucun chemin libre tiré d'un
+ledger. Le plan Rust conservewindowNone et mappingvide. Le fournisseur domaine
+reste lecture seulement, sans OS/proc ni champ activebool.
+
+Le propriétaire réel appelle le helper commun record_window_start AVANT son
+attente published90, après scellement du ledger dont il lie le SHA original.
+Le noyau exige callerPID/start/UID/exe/argv/entrée+fermeturemodulesSHA égaux au
+rôle propriétaire actif, la phase/autorité/END et le prochain label/priorACK.
+Il écrit l'événement unefois par fsync/link exclusif ; aucun snapshot ne peut
+créer ou redémarrer cette fenêtre.
+
+Lifecycle.observe_window(spec,phase,ledgerSHA) est commun : lire les octets et
+leurSHA au chemin déclaré, revérifier avant/après execution/phase/label/index/
+ledger et propriétaire vivant/PIDstartUID/scriptSHA, autorité et ENDop. La durée
+retournée est calculée uniquement sur PC, MIN(ENDop,startedPC+90)−nowPC. Le local
+n'utilise que cette durée ancrée avant RPC. L'ENDglobal ne repart jamais.
+
+WindowEvidence porte eventSHA, identité propriétaire vérifiée et remaining.
+Le Gate commun attache le SHA dans StageHeader seulement après ce contrôle ;
+le retour purement documentaire d'un provider n'atteste jamais une présence
+physique. Un event absent, tardif, déjà consommé, d'une autre phase ou au ledger
+modifié refuse ; il ne gagne pas un nouveau90s. L'event et son propriétaire
+font partie du même raccord à relire que le vrai appel published.
+
+C7 a fixé le profil global de préparation :7440TERM+15KILL avantqueue/ARM,
+queueMAX120DANSwhole ; CommonMAX7200 et MINsoldephysique−30, ENDopCommon−15,
+réserve15DANSCommon. Ces valeurs ne remplacent pas celles de Rust et ne sont
+pas une allocation d'exécution. Le présent ajout ferme le contrat d'entrée du
+Lifecycle avant bridgeArchi ; il n'implémente ni helper ni callback runtime.
