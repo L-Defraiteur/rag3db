@@ -11,7 +11,7 @@ _bootstrap_source = (_bootstrap_entry.parents[4] / 'docs/codeparsers/17-11-2026/
 _bootstrap_loader = (_bootstrap_entry.parents[4] / 'extension/rag3weaver/scripts/publication_loader.py'
     if _bootstrap_source is not None else _bootstrap_entry.parent / 'publication_loader.py')
 _bootstrap_loader_bytes = _bootstrap_loader.read_bytes()
-assert _bootstrap_hashlib.sha256(_bootstrap_loader_bytes).hexdigest() == '5ee566f69c978f1444bd3b9d685145e2cfc68cc263f9ef48553780c54f593d4b'
+assert _bootstrap_hashlib.sha256(_bootstrap_loader_bytes).hexdigest() == 'bfdc8ab3bcaac209d644a8e25e71c79765d36a736eac68141219f4eec491093e'
 _bootstrap_spec = _bootstrap_importlib.spec_from_file_location('verified_publication_loader', _bootstrap_loader)
 _bootstrap_module = _bootstrap_importlib.module_from_spec(_bootstrap_spec)
 exec(compile(_bootstrap_loader_bytes, str(_bootstrap_loader), 'exec'), _bootstrap_module.__dict__)
@@ -78,6 +78,7 @@ class RustPublicationProvider:
 
 class Gate(engine.GateBase):
     def __init__(self, pair, pin, phase):
+        engine.verify_bound_context(pair, pin)
         super().__init__(pair, pin, phase, pilot=load_pilot(pair), entry_file=__file__)
         self.provider = RustPublicationProvider(self)
 

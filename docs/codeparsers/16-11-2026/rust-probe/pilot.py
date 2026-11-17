@@ -11,7 +11,7 @@ _bootstrap_source = (_bootstrap_entry.parents[4] / 'docs/codeparsers/16-11-2026/
 _bootstrap_loader = (_bootstrap_entry.parents[4] / 'extension/rag3weaver/scripts/publication_loader.py'
     if _bootstrap_source is not None else _bootstrap_entry.parent / 'publication_loader.py')
 _bootstrap_loader_bytes = _bootstrap_loader.read_bytes()
-assert _bootstrap_hashlib.sha256(_bootstrap_loader_bytes).hexdigest() == '5ee566f69c978f1444bd3b9d685145e2cfc68cc263f9ef48553780c54f593d4b'
+assert _bootstrap_hashlib.sha256(_bootstrap_loader_bytes).hexdigest() == 'bfdc8ab3bcaac209d644a8e25e71c79765d36a736eac68141219f4eec491093e'
 _bootstrap_spec = _bootstrap_importlib.spec_from_file_location('verified_publication_loader', _bootstrap_loader)
 _bootstrap_module = _bootstrap_importlib.module_from_spec(_bootstrap_spec)
 exec(compile(_bootstrap_loader_bytes, str(_bootstrap_loader), 'exec'), _bootstrap_module.__dict__)
@@ -99,6 +99,16 @@ def verify(pair, phase):
     return config
 
 
+def prepared_pin(pair):
+    # Toujours le pin indépendant admis, jamais un nouveau SHA promu depuis P.
+    expected = _bootstrap_context[1] if _bootstrap_context is not None else _bootstrap_module.option('--pin')
+    path = Path(pair['publication_layout']['prepared'])
+    approved = _bootstrap_module.read_prepared(path, expected)
+    assert json.dumps(approved, sort_keys=True, ensure_ascii=False, allow_nan=False) == json.dumps(
+        pair, sort_keys=True, ensure_ascii=False, allow_nan=False), 'prepared data differ from admitted snapshot'
+    return expected
+
+
 def publication_engine():
     path = (Path(_bootstrap_context[0]['control']) /
         _bootstrap_context[0]['publication_layout']['entries']['coordinator']
@@ -119,7 +129,7 @@ def publication_deadline_info(pair, phase):
 def publication_launch_command(pair, phase, allocation):
     return [sys.executable, '-B', str(Path(pair['control']) / 'pilot.py'), 'run',
         '--proofs', pair['proofs'], '--phase', phase, '--pin',
-        base.digest(Path(pair['proofs']) / 'prepared.json'), '--allocation', allocation]
+        prepared_pin(pair), '--allocation', allocation]
 
 
 def publication_launch_environment(pair, phase):
@@ -135,7 +145,7 @@ def publication_phase_info(pair, phase):
         'driver_entry': 'pilot.py', 'common_entry': 'confiner_validation.py',
         'driver_argv': [sys.executable, '-B', str(control / 'pilot.py'), 'inside',
             '--proofs', pair['proofs'], '--phase', phase, '--pin',
-            base.digest(Path(pair['proofs']) / 'prepared.json')],
+            prepared_pin(pair)],
         'common_argv': json.loads((root / 'common.command.json').read_text()),
         'controls_path': str(root / 'controls.json'), 'deadline_role': 'outer-timeout',
         'deadline_argv': phase_timeout_command(pair, phase), 'original_common_end': info['deadline']}
@@ -300,7 +310,7 @@ def wait_publication(pair, phase, kind, ledger, end):
         assert time.monotonic() < end, 'peer publication deadline'
         time.sleep(.1)
     ack = json.loads(path.read_text())
-    assert ack['prepared_sha256'] == base.digest(Path(pair['proofs']) / 'prepared.json')
+    assert ack['prepared_sha256'] == prepared_pin(pair)
     assert ack['coordinator'] == json.loads((root / 'relay-launch.json').read_text())['coordinator']
     assert not (root / 'first-red.json').exists(), 'external first red'
     assert ack['host'] == pair['peer_host'] and ack['phase'] == phase and ack['kind'] == kind
@@ -433,14 +443,14 @@ def phase_timeout_command(pair, phase):
     return [pair['timeout'], '--signal=TERM', '--kill-after=2s', '1798s',
         sys.executable, '-B', str(Path(pair['control']) / 'pilot.py'), 'compose',
         '--proofs', pair['proofs'], '--phase', phase, '--pin',
-        base.digest(Path(pair['proofs']) / 'prepared.json')]
+        prepared_pin(pair)]
 
 
 def outer_command(pair, phase):
     # Poste est acquis AVANT de produire l'origine du watchdog de phase.
     return [str(Path(pair['control']) / 'poste'), 'lourd', sys.executable, '-B',
         str(Path(pair['control']) / 'pilot.py'), 'phase-arm', '--proofs', pair['proofs'],
-        '--phase', phase, '--pin', base.digest(Path(pair['proofs']) / 'prepared.json')]
+        '--phase', phase, '--pin', prepared_pin(pair)]
 
 
 def phase_arm(pair, phase):
@@ -448,7 +458,7 @@ def phase_arm(pair, phase):
     relay.engine.verify_components(pair)
     assert socket.gethostname().lower() == relay.engine.publication_layout(pair)['execution_host'].lower()
     assert relay.engine.layout_entry(pair, 'launcher') == Path(__file__).resolve()
-    pin = base.digest(Path(pair['proofs']) / 'prepared.json')
+    pin = prepared_pin(pair)
     emitter = physical.process_record(os.getpid())
     window = relay.engine.make_window(pair, pin, phase, 'phase', emitter, time.monotonic())
     path = Path(relay.engine.publication_layout(pair)['phases'][phase]['files']['phase_origin'])
@@ -463,7 +473,7 @@ def compose(pair, phase):
     root = Path(pair['proofs']) / phase
     started = time.monotonic()
     relay = publication_engine()
-    pin = base.digest(Path(pair['proofs']) / 'prepared.json')
+    pin = prepared_pin(pair)
     origin_path = Path(relay.engine.publication_layout(pair)['phases'][phase]['files']['phase_origin'])
     origin = json.loads(origin_path.read_text())
     deadline = origin['soft_end']
@@ -493,13 +503,13 @@ def compose(pair, phase):
         # Le même noyau vérifie le watchdog et borne la demande avant Common.
         relay = publication_engine()
         common_budget = relay.engine.common_request_budget(pair,
-            base.digest(Path(pair['proofs']) / 'prepared.json'), phase, physical)
+            prepared_pin(pair), phase, physical)
         save(root / 'common-request.json', {'requested': common_budget,
             'observed': time.monotonic(), 'common_max': pair['publication_limits']['common_max']})
         command = [sys.executable, str(Path(pair['control']) / 'confiner_validation.py'),
             'lancer', '--delai', str(common_budget), '--preuves', str(root / 'scope'), '--', sys.executable,
             '-B', str(Path(pair['control']) / 'pilot.py'), 'inside', '--proofs', pair['proofs'], '--phase', phase, '--pin',
-        base.digest(Path(pair['proofs']) / 'prepared.json')]
+        prepared_pin(pair)]
         rc = base.record(root, 'common', command, root, os.environ.copy())
         info = json.loads((root / 'authority-path.json').read_text())
         authority_path = Path(info['path'])
@@ -629,7 +639,9 @@ def main():
     if args.action == 'prepare':
         prepare(args)
         return 0
-    pair = json.loads((args.proofs / 'prepared.json').read_text())
+    prepared = args.prepared if args.prepared is not None else args.proofs / 'prepared.json'
+    assert args.pin is not None, 'independent prepared pin required outside prepare'
+    pair = _bootstrap_module.read_prepared(prepared, args.pin)
     if args.action == 'compare':
         # Rapport CPU distinct : aucune prétention de l'inclure dans les deux phases natives.
         assert args.allocation, 'separate explicit offline reporting allocation required'
@@ -659,11 +671,11 @@ def main():
         env = dict(os.environ, RUST_PROBE_TOOL_ROOT=pair['tool_root'])
         launch_args = sys.argv[1:]
         if '--pin' not in launch_args:
-            launch_args = [*launch_args, '--pin', base.digest(Path(pair['proofs']) / 'prepared.json')]
+            launch_args = [*launch_args, '--pin', prepared_pin(pair)]
         os.execve(sys.executable, [sys.executable, '-B', str(control), *launch_args], env)
     root = Path(pair['proofs']) / args.phase
     bootstrap = json.loads((root / 'relay-bootstrap.json').read_text())
-    assert bootstrap['prepared_sha256'] == base.digest(Path(pair['proofs']) / 'prepared.json')
+    assert bootstrap['prepared_sha256'] == prepared_pin(pair)
     assert bootstrap['gate_sha256'] == base.digest(Path(pair['control']) / 'gate.py') == pair['controllers']['gate.py']
     actual = physical.process_record(os.getpid())
     assert actual['argv'] == bootstrap['run_argv']

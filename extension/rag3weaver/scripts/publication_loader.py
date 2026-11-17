@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import re
+import stat
 import sys
 
 
@@ -21,6 +22,21 @@ def option(name):
     values = [sys.argv[index + 1] for index, value in enumerate(sys.argv[:-1]) if value == name]
     assert len(values) <= 1, 'duplicate bootstrap option'
     return values[0] if values else None
+
+
+def read_prepared(path, expected_sha):
+    """Même FD/bytes pour identité, empreinte et JSON ; aucun second décodage."""
+    path = Path(path)
+    assert path.is_absolute() and path.resolve(strict=True) == path
+    assert not {'.env', '.vault', 'autorite.json'} & set(path.parts)
+    assert isinstance(expected_sha, str) and re.fullmatch('[0-9a-f]{64}', expected_sha)
+    descriptor = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
+    with os.fdopen(descriptor, 'rb') as stream:
+        info = os.fstat(stream.fileno())
+        assert stat.S_ISREG(info.st_mode) and info.st_uid == os.getuid()
+        payload = stream.read()
+    assert hashlib.sha256(payload).hexdigest() == expected_sha, 'prepared pin changed before decoding'
+    return json.loads(payload)
 
 
 def verify_entry(entry, *, source_entry):
@@ -38,8 +54,7 @@ def verify_entry(entry, *, source_entry):
     assert expected is not None and re.fullmatch('[0-9a-f]{64}', expected), 'independent prepared pin required'
     assert prepared.is_absolute() and prepared.resolve(strict=True) == prepared
     assert prepared.is_file() and prepared.stat().st_uid == os.getuid()
-    assert digest(prepared) == expected, 'prepared pin changed before import'
-    pair = json.loads(prepared.read_text())
+    pair = read_prepared(prepared, expected)
     control = Path(pair['control'])
     assert control.resolve(strict=True) == control == entry.parent
     layout = pair['publication_layout']
@@ -71,6 +86,7 @@ def load_module(name, path, *, context=None, expected_sha=None):
     # Dataclasses et imports récursifs voient uniquement le module dont les
     # octets viennent d'être vérifiés. Aucun corps n'est lu par SourceFileLoader.
     module._load_verified_module = load_module
+    module._read_verified_prepared = read_prepared
     sys.modules[name] = module
     try:
         exec(compile(payload, str(path), 'exec'), module.__dict__)

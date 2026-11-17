@@ -1,6 +1,6 @@
 """Exact regression selection for the corrected source candidate. NOT RUN.
 
-36 inherited +3 plan +8 windows +10 grouped guards +1 causal RPC =58.
+36 inherited +3 plan +8 windows +10 grouped guards +1 causal RPC +5 residual =63.
 No backend, replacement engine or additional executable case lives here.
 """
 import importlib.util
@@ -16,6 +16,7 @@ SOURCES = (
     (HERE / 'test_publication_windows.py', 8),
     (HERE / 'test_publication_guards_grouped.py', 10),
     (HERE / 'test_publication_rpc_first_cause.py', 1),
+    (HERE / 'test_publication_residual_counterexamples.py', 5),
 )
 
 
@@ -28,7 +29,7 @@ def load_tests(loader, tests, pattern):
         selected = loader.loadTestsFromModule(module)
         assert selected.countTestCases() == expected, 'unexpected regression selection: ' + str(path)
         suite.addTests(selected)
-    assert suite.countTestCases() == 58
+    assert suite.countTestCases() == 63
     return suite
 
 

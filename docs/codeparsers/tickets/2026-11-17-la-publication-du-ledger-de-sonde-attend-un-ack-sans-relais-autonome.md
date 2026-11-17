@@ -470,3 +470,14 @@ bytes/hash/JSONmêmesbytes pourloader/relay/gate/pilot, capturepremièrecause
 AVANTIO etsecondaires/UNKNOWNmémoire qui n'empêchentpasabort/stop. Les63cas
 proposés restent NONJOUÉS jusqu'àsources/pins/ROtotale etGOvertdistinct.
 Ancienssources/preuves/Q restentinchangés, aucun35/58/anciensrejeu ni Native.
+
+### Candidat SOURCE du fix unifié après cinq rouges6f47
+
+read_prepared partage un seulFD/payload pourSHA/JSON, réutilisé loader/relay/
+gate/pilot ; contexte/pin indépendants liés, paspinpromu depuisfichierdécouvert.
+capture_failure/persist_failure conservent premierobjet+record mémoire avantIO ;
+journaux/abort/stop/reap/close/échéance gardentsecondairesUNKNOWN sansmasquage et
+continuentcleanup. Notes imbriquées conservées, pasfauxsuccèsarchivedepuismémoire.
+Témoins5INCHANGÉS, sélectionseule58→63. Rapport12/pinssnapshot-cause pourRO
+TOTALE avantGOvertdistinct. Aucun import/parser/test effectué, aucunequalification
+Q/global6rôles/LIVE/native/SDK ni fermeture du ticket.

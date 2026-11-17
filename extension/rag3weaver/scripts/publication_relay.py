@@ -210,6 +210,12 @@ def verify_components(pair):
         assert path.stat().st_uid == os.getuid() and digest(path) == require_sha(sha)
 
 
+def verify_bound_context(pair, pin):
+    approved = _read_verified_prepared(publication_layout(pair)['prepared'], pin)
+    assert canonical_sha(pair) == canonical_sha(approved), 'prepared data differ from admitted snapshot'
+    verify_components(pair)
+
+
 def check_process(guard, expected):
     assert expected['uid'] == os.getuid()
     actual = guard.process_record(expected['pid'])
@@ -304,8 +310,7 @@ def phase_window(pair, pin, phase, guard):
 
 def common_request_budget(pair, pin, phase, guard):
     """Les DEUX enveloppes homologuées bornent la demande avant Common."""
-    verify_components(pair)
-    assert digest(publication_layout(pair)['prepared']) == pin
+    verify_bound_context(pair, pin)
     whole = read_bootstrap(pair, pin, phase, guard)['whole_window']
     phase_budget = phase_window(pair, pin, phase, guard)
     limits = publication_limits(pair)
@@ -342,6 +347,43 @@ def atomic_json(path, value, before_link=lambda: None):
             os.close(directory)
     finally:
         os.unlink(pending)
+
+
+def capture_failure(owner, error, *, stage):
+    """Premier objet/record capturés AVANT tout constat faillible."""
+    first = getattr(owner, '_first_error', None)
+    if first is None:
+        owner._first_error = error
+        owner.failure_record = MappingProxyType({'first_error': repr(error),
+            'secondary_errors': [], 'remote_quiet': 'UNKNOWN'})
+        return error
+    if error is not first:
+        record_secondary(owner, stage, error)
+    return first
+
+
+def record_secondary(owner, stage, error):
+    first = owner._first_error
+    notes = list(getattr(error, '__notes__', ())) if error is not first else []
+    owner.failure_record['secondary_errors'].append({'stage': stage, 'error': repr(error), 'notes': notes})
+    # Ces notes survivent sur la vraie exception quand le disque refuse tout.
+    first.add_note(stage + ' UNKNOWN: ' + repr(error))
+    for note in notes:
+        first.add_note(stage + ': ' + note)
+
+
+def persist_failure(owner, path, build_value, *, stage):
+    """Un constat raté n'interrompt jamais l'annulation de la cause initiale."""
+    try:
+        value = build_value()
+        value['failure_record'] = _json_plain(owner.failure_record)
+        atomic_json(path, value)
+        return True
+    except FileExistsError:
+        return False  # Le premier fichier n'est jamais réécrit.
+    except BaseException as error:
+        record_secondary(owner, stage, error)
+        return False
 
 
 def publish_result(path, record, deadline, clock=time.monotonic):
@@ -382,6 +424,7 @@ class Relay:
         self.prepared_sha256 = require_sha(prepared_sha256)
         self.acknowledged = {}
         self.window_ends = {}
+        self._first_error, self.failure_record = None, None
 
     def cap(self, cap):
         admission_end = self.deadline if self.deadline is not None else self.queue_end - self.stop_reserve
@@ -568,39 +611,44 @@ class Relay:
                 raise TimeoutError('relay final publication deadline')
             return rc
         except BaseException as error:
-            failure = error
-            try:
-                atomic_json(self.root / 'first-red.json', {'reason': repr(error), 'observed': self.clock()})
-            except FileExistsError:
-                pass
-            # Le refus distant est borné par le temps restant déjà reçu, pas un nouveau budget.
+            failure = capture_failure(self, error, stage='run')
+            persist_failure(self, self.root / 'first-red.json', lambda: {
+                'reason': repr(failure), 'observed': self.clock()}, stage='write-first-red')
+            # Le journal absent n'empêche pas cette tentative de fermeture.
             try:
                 if stopped:
-                    # finish rc0 puis récolte déjà achevés : ne pas rouvrir la phase close.
-                    atomic_json(self.root / 'cleanup-not-required.json', {'phase_ssh_rc': 0,
+                    persist_failure(self, self.root / 'cleanup-not-required.json', lambda: {
+                        'phase_ssh_rc': 0,
                         'reason': 'phase and local children already collected before relay refusal',
-                        'native_verdict_unchanged': True, 'observed': self.clock()})
+                        'native_verdict_unchanged': True, 'observed': self.clock()}, stage='write-cleanup-not-required')
                 else:
-                    self.transport.abort(repr(error), self.cleanup_cap())
+                    self.transport.abort(repr(failure), self.cleanup_cap())
             except BaseException as stop_error:
-                atomic_json(self.root / 'cleanup-refused.json', {'remote_quiet': 'UNKNOWN',
-                    'reason': repr(stop_error), 'original_error': repr(error),
-                    'native_verdict_unchanged': True, 'observed': self.clock()})
-            raise
+                record_secondary(self, 'abort', stop_error)
+                persist_failure(self, self.root / 'cleanup-refused.json', lambda: {
+                    'remote_quiet': 'UNKNOWN', 'reason': repr(stop_error),
+                    'original_error': repr(failure), 'native_verdict_unchanged': True,
+                    'observed': self.clock()}, stage='write-cleanup-refused')
+            raise failure
         finally:
             if not stopped:
                 end = min(self.hard_end, self.phase_deadline if self.phase_deadline is not None else self.hard_end)
                 try:
                     self.transport.stop(deadline=end)
                 except BaseException as stop_error:
-                    try:
-                        atomic_json(self.root / 'local-stop-refused.json', {'remote_quiet': 'UNKNOWN',
-                            'original_error': repr(failure), 'error': repr(stop_error),
-                            'native_verdict_unchanged': True, 'observed': self.clock()})
-                    except FileExistsError:
-                        pass
+                    stop_was_first = failure is None
                     if failure is None:
-                        raise
+                        failure = capture_failure(self, stop_error, stage='stop')
+                    else:
+                        record_secondary(self, 'stop', stop_error)
+                    persist_failure(self, self.root / 'local-stop-refused.json', lambda: {
+                        'remote_quiet': 'UNKNOWN', 'original_error': repr(failure),
+                        'error': repr(stop_error), 'native_verdict_unchanged': True,
+                        'observed': self.clock()}, stage='write-local-stop-refused')
+                    # Même objet d'origine, malgré l'échec éventuel du constat.
+                    if stop_was_first:
+                        raise failure
+
 
 
 class SSHTransport:
@@ -614,6 +662,7 @@ class SSHTransport:
         self.ready_record = None
         self.remote_cancelled = False
         self.control = Path(pair['control'])
+        verify_bound_context(pair, pin)
         self.plan = validate_plan(pair['publication_plans'][phase])
         self.prepared_sha256 = require_sha(pin)
         self.entry_file = Path(entry_file) if entry_file is not None else layout_entry(self.pair, 'coordinator')
@@ -734,7 +783,7 @@ class SSHTransport:
         atomic_json(Path(publication_layout(self.pair)['phases'][self.phase]['files']['peer_ready']), self.ready_record)
 
     def check_coordinator(self):
-        verify_components(self.pair)
+        verify_bound_context(self.pair, self.pin)
         assert digest(self.entry_file) == self.pair['controllers'][layout_entry(self.pair, 'coordinator').name]
         assert Path(__file__).resolve() == self.control / 'publication_relay.py'
         assert digest(__file__) == self.pair['controllers']['publication_relay.py']
@@ -792,14 +841,19 @@ class SSHTransport:
             try:
                 self.reap(child, deadline=deadline)
             except BaseException as error:
-                if failure is None:
-                    failure = error
+                failure = capture_failure(self, error, stage='reap')
         for handle in self.handles:
-            handle.close()
+            try:
+                handle.close()
+            except BaseException as error:
+                failure = capture_failure(self, error, stage='close-log')
+        try:
+            if time.monotonic() > deadline:
+                raise TimeoutError('local child/log close crossed original deadline')
+        except BaseException as error:
+            failure = capture_failure(self, error, stage='stop-deadline')
         if failure is not None:
             raise failure
-        if time.monotonic() > deadline:
-            raise TimeoutError('local child/log close crossed original deadline')
 
 
 @dataclass(frozen=True)
@@ -842,7 +896,7 @@ class GateBase:
         return publication_limits(self.pair)
 
     def verify_contract(self):
-        verify_components(self.pair)
+        verify_bound_context(self.pair, self.pin)
         assert socket.gethostname().lower() == publication_layout(self.pair)['execution_host'].lower()
         assert digest(publication_layout(self.pair)['prepared']) == self.pin
         assert self.entry_file.resolve() == layout_entry(self.pair, 'gate')
@@ -1365,7 +1419,7 @@ class GateBase:
 
     def arm(self, allocation, ready):
         # Pas de corpus/preflight/acteur avant l'installation du watchdog.
-        verify_components(self.pair)
+        verify_bound_context(self.pair, self.pin)
         assert digest(publication_layout(self.pair)['prepared']) == self.pin
         assert socket.gethostname().lower() == publication_layout(self.pair)['execution_host'].lower()
         assert allocation and ready['prepared_sha256'] == self.pin and ready['phase'] == self.phase
@@ -1435,8 +1489,8 @@ def relay_main(entry_file):
     parser.add_argument('--host', default='luciepc')
     args = parser.parse_args()
     path = args.prepared if args.prepared is not None else args.proofs / 'prepared.json'
-    pair, pin = json.loads(path.read_text()), digest(path)
-    assert args.pin == pin
+    pin = args.pin
+    pair = _read_verified_prepared(path, pin)
     assert args.host == publication_layout(pair)['execution_host']
     assert str(path) == publication_layout(pair)['prepared']
     assert str(args.proofs) == pair['proofs']
@@ -1493,8 +1547,7 @@ def gate_main(gate_factory):
     parser.add_argument('--file')
     args = parser.parse_args()
     pair_path = args.prepared if args.prepared is not None else args.proofs / 'prepared.json'
-    assert digest(pair_path) == args.pin
-    pair = json.loads(pair_path.read_text())
+    pair = _read_verified_prepared(pair_path, args.pin)
     assert str(pair_path) == publication_layout(pair)['prepared']
     assert str(args.proofs) == pair['proofs']
     verify_components(pair)
