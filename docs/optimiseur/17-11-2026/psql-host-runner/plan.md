@@ -223,3 +223,24 @@ Le témoin SIGTERM des19 est complété par HANDLER_READY et returncode=-SIGKILL
 pour prouver la causalité ; NON JOUÉ. Native exeSHA/env/pins module et portée
 whole5 complète restent non qualifiés avant tout GO contact. Les quatre
 contre-exemples ne ferment pas ces autres limites, ni l'ancienne réserve OS.
+
+
+## Quatre rouges de relecture observés — GOd72aa02288
+
+Entrée UNIQUE C7-PSQL-REGRESSIONS-RED-5DD6-17nov30, source5dd661bf70,
+recette9e4b2154b92f3ef01e227a65ed10e840718ee6c91a356adbc3f53d378c0a68ce.
+Common validation-3xm6hlp5 ROUGE/code1/erreur null, terminé/nettoyé/restes[].
+4 tests/4 FAILURE précis/0 ERROR/0skip/rc1, elapsed0.2648362130858004s.
+Deux ValueError non levés côté consumer, première cause absente après cleanup,
+OSError pidfd sans record confirmé. Ce sont les quatre rouges attendus, pas
+un vert.19autres NON JOUÉS ; Popen/pidfd faux,0enfantnatif/PG/SQL/service.
+
+19 fichiers de preuve conservés et vérifiés taille/SHA sur les deux postes,
+AVANT fix : PCpsql-host-runner-20261117-r1/regression-red-03 ; portable même
+parent/regression-red-03-proof. Manifeste
+d42e78e677012e4cee5e6abdbda20d600bff74f03c5c2b33b7c1cc41b50df86a ; archive
+d70049acf3cf65a61d08cecbc63e830946e652fa358774104f2f104d87ff041c.
+Les reçus Common transférés sont sans jeton, autorité brute PC privée.
+Préparation fix des trois défauts maintenant autorisée C7 ; nouvelle publication
+source/RO et GO CPU distinct nécessaires avant éventuel vert. Les limites
+natives/exe/env/outerwhole5 restent non qualifiées et sans GO contact.
