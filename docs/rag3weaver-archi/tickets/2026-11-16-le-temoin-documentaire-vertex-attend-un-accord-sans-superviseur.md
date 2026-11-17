@@ -160,3 +160,8 @@ RO preuves Banc a4a2de1e1a : [rapport21](../../banc/16-11-2026/21-ro-preuves-ver
 ### Banc — provider lecteur e1f5c074
 
 [RO courte code/contrat](../../banc/17-11-2026/06-ro-provider-lecture-publication.md) : séparation physical_admission=false/bridge absent reconnue ; deux réserves lecteur à traiter : root/parents non ancrés après init (NOFOLLOW dernier composant seul), D6 admission.source_head/head interne non liés au pin alors que README l'exige. Neuf témoins actuels global seul/non joués ; ajouter TempDirs substitution et D6 positif/négatifs, sans faux noyau ni transport. Aucun run/import/CPU/native fait par Banc ;229b/Qfigés/ticket OUVERT.
+
+
+### Banc — pin rouge lecteur77659fb7
+
+[RO ciblée favorable préparation](../../banc/17-11-2026/06-ro-provider-lecture-publication.md) : Reader byte-identiquee1f5,8nouveauxcas/17NONJOUÉS ; vrais Reader/JSONTempDirs, attendu statique5FAIL ValueErrornotraised pour heads/admissionmutée/parent/root, aucune observation dynamique. Futur cas head40hex valide recommandé pour distinguer égalité de format. GO CPU rouge exact distinct à C7, aucun bridge/natif/229bQ changé ; ticket OUVERT.
