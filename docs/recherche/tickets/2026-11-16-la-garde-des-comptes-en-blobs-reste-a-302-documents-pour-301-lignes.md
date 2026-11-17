@@ -346,3 +346,13 @@ pg-rust-tool-qual-20261117-r1/cpu-32df-17nov60-01 ; receipt SHA256
 Ces faux ne qualifient pas superviseur OS ni transport ; huit CLI natifs non
 joués. Aucun compiler/SQL/Docker/SDK/service ; aucun retry ni GO natif déduit.
 Ticket ouvert, qualification réelle distincte toujours attendue.
+
+### Préparation B après CPU — raccordement Common à corriger avant lancement
+
+Relecture du Common6439 : signature_superviseur exige un script exécuté nommé
+confiner_validation.py ; l'exemple historique lançait common-confiner.py et
+serait refusé. Aucune exécution B tentée. Préparer hors paquet r2 une copie
+régulière du même Common6439 nommée confiner_validation.py, pinée et distincte,
+pour la commande POSTE réelle ; ne modifier ni Common ni paquet r2 figés.
+Compléter avant RO totale : rehash317entrées/13pins hôte, commande exacte,
+GO externe inactif et sortie exclusive absente. Aucune acquisition de poste.
