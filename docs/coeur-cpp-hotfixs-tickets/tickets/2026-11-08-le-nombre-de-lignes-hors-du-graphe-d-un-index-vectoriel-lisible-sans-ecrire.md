@@ -212,3 +212,9 @@ terminologique portée avant tout avis code, ONE_ONE/FWD impose AU PLUS1,
 zéro reste possible ; ni présence/complétude ni o→o ne viennent de la contrainte.
 Protocole0→insert/1→noop conservé, idempotence globale toujours non établie.
 Aucun code, réservation ou résultat natif supplémentaire.
+
+STOP prioritaire Lucie17nov/quota : travaux arrêtés, coupons nonconsommés
+révoqués/anciensENDnonréactivables. [Passation autonome Claude](../17-11-2026/99-passation-pour-claude.md)
+regroupe état/preuves/branches propres/périmètres conditionnels/7témoinsNONJOUÉS.
+Aucun code ou natif actif, aucune réservation ; reprise seulement sur nouvelle
+instruction C7/Lucie, pas sur rappels automatiques. Ticket reste ouvert.
