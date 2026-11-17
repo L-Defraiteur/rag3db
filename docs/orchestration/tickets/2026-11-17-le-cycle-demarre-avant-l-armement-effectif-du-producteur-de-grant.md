@@ -156,3 +156,9 @@ OS/enfants/clock seulement, injection+0.01 sur première lecture après spawn
 fictifdriver, compteur injecté puis assertions rc0/no-firstred/release. Nonjoué
 par ED, décision rougeCPU60 distincte à C7 avantfix ; aucune suffisance native
 ni GO900 tiré de l'ancien avis. Voir section corrective rapportED35.
+
+RO ED delta6c6b968832 favorable AVANTCPUvert : HB lu avant horloge fraîche,
+check_scope avant/après validation, tolérances strictes inchangées ; PQS/manifestv8
+cohérents, Q7figé. Rouge13ae1FAIL0ERROR/3fichiers réhashés LOCAL+PC sansrejeu.
+Seul témoinHB vert à décider C7 distinctement, pas rejeu sixanciens déduit ;
+paquetQ8/ROtotale/GO900 toujours distincts. Suite rapportED35.

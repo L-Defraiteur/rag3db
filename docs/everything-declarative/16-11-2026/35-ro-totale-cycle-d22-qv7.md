@@ -112,3 +112,20 @@ P1final et P1argv sont levés sur ce couple au niveau code/CPU, pas par une
 exécution physique. Avis transmis Arbre+C7 sous le ticket17 toujours OUVERT.
 Tout GO900 natif/slot/coordination réelle relève exclusivement d'une décision
 C7 exacte DISTINCTE ; aucun ancienGO3c2/CPU ou favorable765 n'est reporté.
+
+## RO du delta heartbeat6c6b, avant CPU vert
+
+Avis statique favorable sur `6c6b968832` : lecture du HB d'abord,
+check_scope puis nouvel instant monotonic pour validate_heartbeat strict,
+nouveau check_scope après validation. Plus de comparaison avec l'heure
+antérieure à la lecture. Tolérance10s/absence de futur et bindings restent
+inchangés ; Common, finaliseur, acteur, rôles et budgets non élargis.
+P/Q/S et manifeste visent ensemblev8 ; Q7 reste figé/HOLD.
+
+Rouge13ae lu, trois fichiers taille/SHA rehashés sur LOCAL+PC, manifeste
+776aa3f6833826f3ec700b3d563739ca314989d91199a2628fa60a673a7cac74 :
+injection unique puis FAIL1!=0/0ERROR/rc1/0.007s, refus heartbeat stale/future
+attendu sur l'ancien code. Aucun rejeu ni vert6c6b observé par cette RO.
+Décision C7 CPU vert du SEUL test_controller_heartbeat_order DISTINCTE,
+aucun besoin déduit de rejouer les six anciens. PaquetQ8 et RO totale restent
+à venir avant décision native900 ; aucun favorable D22/Q7 reporté.
