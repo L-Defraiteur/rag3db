@@ -1,0 +1,36 @@
+{
+  "previous_app": "6365396b6323b03dc3441cb1f650c8804e53bdeb",
+  "doc_fix_head": "0eebc3599b3f372ca6b7af5455503287de0c6717",
+  "non_doc_entries": 6919,
+  "non_doc_differences": [],
+  "raw_metadata": {
+    "red": {
+      "stdout": {
+        "size": 2192,
+        "sha256": "15bbcce279ef281d10be11a77f45c5bc5f403f181435f5072b379ae0a972a6f2"
+      },
+      "stderr": {
+        "size": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "result.json": {
+        "size": 174,
+        "sha256": "0f52278de79fa0ddf09ba40a1fcd918ce45d95b8a4edcac7240e7d3a323a9ba0"
+      }
+    },
+    "green": {
+      "stdout": {
+        "size": 65,
+        "sha256": "49b861d9c429600efa88e61c736057f984f3a2887e072e72837b78ec4dd52bf8"
+      },
+      "stderr": {
+        "size": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "result.json": {
+        "size": 174,
+        "sha256": "283cccbe7efb959fb21a93c66ea305a011692ecee91abb8e766cae781837441b"
+      }
+    }
+  }
+}
