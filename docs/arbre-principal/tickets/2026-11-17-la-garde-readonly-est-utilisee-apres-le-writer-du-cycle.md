@@ -57,3 +57,13 @@ NON JOUÉ ; les négatifs peuvent être refusés par l'ancienne mauvaise garde
 avant la branche visée, donc aucun succès de ces seuls cas ne la qualifie.
 Préconditions preuves writer/horloge et autres mutants de proposition07
 restent À ÉCRIRE avant tout correctif. Aucun exécutable modifié.
+
+Complément prépublié avant tout correctif : douze fonctions désormais,
+preuves synthétiques complètes et contrôle positif d'inventaire neutre.
+Les discordances ACK/rc/PID/start/nonce/run/exeSHA/cgroup/publication/profil/
+maps et END/premier rouge sont injectées sur inventaire neutre, sans retrait
+amont masquant. DB absente/mode modifié, marque résiduelle et .readers bornés
+ajoutés. Tous NON JOUÉS, aucune garde modifiée. Les champs/directories sont
+des fixtures, pas attestations OS. RO harnais complet avant GO CPU distinct.
+Le rouge causal readonly doit cibler la seule fonction nominale exacte,
+pas le module failfast qui peut rencontrer le doublon en premier.

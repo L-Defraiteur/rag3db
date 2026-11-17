@@ -78,8 +78,18 @@ dépassée/premier rouge intervenant pendant la collecte. Un faux fix qui
 ignore tous les retraits, ou qui saute la garde post-writer, doit être refusé
 par ces juges ; un refus préalable ne qualifie pas une branche ultérieure.
 
-Ces témoins sont spécifiés ici, NON ÉCRITS/NON JOUÉS. Après revue du contrat,
-publier le vrai harnais avant correction et demander son GO CPU exact distinct.
+La première publication du contrat ne contenait aucun témoin écrit. Le harnais
+test_postwriter_inventory en contient maintenant douze, tous NON JOUÉS :
+inventaires et preuves writer synthétiques sur le vrai bloc AST, avec contrôle
+positif d'inventaire neutre et mauvais ACK/PID/start/nonce/run/exeSHA/cgroup/
+publication/profil/maps ou horloge testés sur ce même inventaire neutre.
+Ces cas ne peuvent pas être masqués par les deux retraits des auxiliaires.
+Un saut total du bloc constitue un mutant de raccord à confronter à ces
+refus ; aucun succès de mutation ni couverture complète n'est revendiqué.
+Le harnais et ses limites doivent être relus avant le GO CPU exact distinct.
+Pour le rouge causal ancien readonly/postwriter, viser UNIQUEMENT la fonction
+test_exact_writer_auxiliary_removal_is_not_a_readonly_mutation : le failfast
+sur tout le module pourrait s'arrêter sur le doublon avant ce cas nominal.
 Puis correctif minimal du raccord, publication, RO/GO CPU vert distinct et
 paquet neuf/deux RO totales avant toute décision native. Aucun nettoyage,
 DB/service/health/writer/recovery/SDK/Cargo/target autorisé par ce document.
