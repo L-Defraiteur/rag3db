@@ -73,7 +73,7 @@ les catalogues sont lus, pas une valeur déduite d'un ancien SHOW ou de l'env.
 Les frontières START/COMMIT changent les CommandComplete attendus : le parseur
 actuel exige un seul commandement/une ligne, donc doit être revu/testé avant C.
 
-Plan de constantes séparées et SHA à publier : identité14champs existante ;
+Plan de constantes séparées et SHA à publier : identité13champs existante ;
 étatRO (transaction_read_only, default_transaction_read_only, session_user,
 current_user, superuser/CREATEDB/CREATEROLE/REPLICATION/BYPASSRLS, rôle/DBOID,
 propriété et droits effectifs attendus) ; postcheck existant lié PID+nonce.

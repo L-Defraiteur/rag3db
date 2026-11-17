@@ -585,3 +585,7 @@ timeoutconnectavantPID/CancelToken→serveurUNKNOWN/refus,annulationimpossible
 jamaisinventée/absenceparnonce≠preuveglobale. TokenacquismaisPIDabsent reste
 attributionpartielle/cleanupMINEND sanssuccèsaprèsrouge. Deuxfiletsfuturs ajoutés
 àlapréparation,0code/runtime/credentials/connect/SQL. AucunGOC/lease déduit.
+
+P2doc R régularisé : identitéSQL f949 existante a13clés, pas14. Correction
+comptage seule,aucunquatorzièmechamp historique inventé. MatriceC reste
+proposée NONÉCRITE/NONJOUÉE,contratconceptuelseulement,pasGOimpl/runtime.
