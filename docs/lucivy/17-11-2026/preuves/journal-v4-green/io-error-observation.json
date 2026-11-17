@@ -1,0 +1,91 @@
+{
+  "source_sha256": "7c58b87f74781019774a3be48b363e19f9620a979d8b026df0b118c84f56f8bd",
+  "mode": "io-error",
+  "start_receipt": {
+    "schema": 1,
+    "role": "portable",
+    "clock": "CLOCK_BOOTTIME",
+    "watchdog_pid": 424242,
+    "watchdog_start": 929145.11,
+    "worker_pid": 2476005,
+    "observed": 929145.122043173,
+    "work_deadline": 929430.11,
+    "physical_term": 929440.11,
+    "physical_kill": 929445.11,
+    "parent_command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=5s",
+      "295s",
+      "/usr/bin/python3",
+      "/tmp/lucivy-fs-boundaries-we_y83t2/export-fs-red-ledger.py",
+      "--_physical-watchdog-child",
+      "--preflight",
+      "/tmp/lucivy-fs-boundaries-we_y83t2/preflight.json",
+      "--output",
+      "/tmp/lucivy-fs-boundaries-we_y83t2/elf-ledger.json",
+      "--launch-log",
+      "/tmp/lucivy-fs-boundaries-we_y83t2/launch-ssh.log"
+    ],
+    "worker_argv": [
+      "/tmp/lucivy-fs-boundaries-we_y83t2/export-fs-red-ledger.py",
+      "--preflight",
+      "/tmp/lucivy-fs-boundaries-we_y83t2/preflight.json",
+      "--output",
+      "/tmp/lucivy-fs-boundaries-we_y83t2/elf-ledger.json",
+      "--launch-log",
+      "/tmp/lucivy-fs-boundaries-we_y83t2/launch-ssh.log"
+    ],
+    "exporter_sha256": "7c58b87f74781019774a3be48b363e19f9620a979d8b026df0b118c84f56f8bd"
+  },
+  "end_receipt": {
+    "schema": 1,
+    "role": "portable",
+    "clock": "CLOCK_BOOTTIME",
+    "watchdog_pid": 424242,
+    "watchdog_start": 929145.11,
+    "worker_pid": 2476005,
+    "observed": 929145.12280499,
+    "work_deadline": 929430.11,
+    "context": {
+      "source": "0f610f437a341f745e5936492114142ff3afedd4",
+      "nonce": "0123456789abcdef0123456789abcdef"
+    },
+    "result": null,
+    "error_type": "OSError",
+    "cleanup_error_type": null,
+    "known_local_children": [
+      {
+        "pid": null,
+        "code": 0
+      }
+    ],
+    "known_local_children_reaped": true,
+    "universal_quiescence_claimed": false
+  },
+  "events": [
+    "physical-watchdog-wrapper",
+    "arm-transport-mocked",
+    "launch-child-mocked",
+    "ledger-transport-mocked",
+    "ledger-fsync-error-injected",
+    "terminate-local-child-mocked",
+    "wait-local-child-mocked"
+  ],
+  "real_args_hash_json_reached": true,
+  "parent_metadata_age_seconds": 0,
+  "transmitted_durations": [
+    276.98752002895344
+  ],
+  "error": "controlled ledger fsync error",
+  "local_mock_child_running": false,
+  "source_rewritten": false,
+  "virtual_clock": false,
+  "real_proc_read": false,
+  "real_ssh": false,
+  "real_popen": false,
+  "real_signal": false,
+  "real_remote_body": false,
+  "os_timer_kill_or_cleanup_qualified": false,
+  "captured_stdout": "{\"exporter_armed\": true, \"nonce\": \"0123456789abcdef0123456789abcdef\"}\n"
+}

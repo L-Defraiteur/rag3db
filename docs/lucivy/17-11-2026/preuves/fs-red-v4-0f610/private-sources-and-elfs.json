@@ -1,0 +1,23 @@
+{
+  "source": "0f610f437a341f745e5936492114142ff3afedd4",
+  "tool_source_commit": "77a4703c8fb87cbe7e1142191e273c9a65eabbc0",
+  "purpose": "immutable sources and two ELF proofs, not Cargo target",
+  "files": {
+    "sources/tools/qualify-fs-admission-red.py": "4d37a7f3ec4a2c90bbdc4286ea1da10df394147611baed4a0bea4de38f31403d",
+    "sources/tools/admit-fs-admission-red.py": "d50856ccf19e1be02ba2a6c6e93fe4c88c6f236e10b70e8f0d4609265348647b",
+    "sources/tools/export-fs-red-ledger.py": "7c58b87f74781019774a3be48b363e19f9620a979d8b026df0b118c84f56f8bd",
+    "sources/tools/qualify-indexed-false-core.py": "2fa59faafe18634a055da4e770a96d4eb87da79864332f8d2a5d8ed222a8fa14",
+    "sources/tools/qualify-indexed-false-red.py": "0a269dd90b0ca745811713e21f66b45fda563074bfc06dd6993f04ab03bd2352",
+    "sources/tools/source-pins.json": "aa393d0c2e5d13443a8daa0064f4944eeb272225ad12c1d3c720502097b73e01",
+    "sources/tools/Cargo.lock.seed": "dbdb560202562f17536624472a0e730627df163f4bb00c53b2baf604e77637f6",
+    "sources/tools/support/confiner_validation.py": "6439fdd8b52c85fa4e74af0def2c667ef0bedae9b814cbbfd48e49946c4f74ea",
+    "sources/tools/support/poste": "79e3a8bbf457e3bc9104aa1558e7d03072216c70b68e08ae606ace6aa4584c7b",
+    "sources/rust/lucivy_core/Cargo.toml": "733579f72e08affa69d7e3a158cc819db3d247481620031915790951e6467442",
+    "sources/rust/lucivy_core/tests/common/mod.rs": "2515d7de5304790520af58cf47214ca92bcbf70d88be2ed20bdff19263164b9a",
+    "sources/rust/lucivy_core/tests/common/fs_fixture.rs": "813a3a32fd5529e947d3c8a9e32946f9b6bf34b3efdc9f794354d46eefa69712",
+    "sources/rust/lucivy_core/tests/test_fs_fixture_admission.rs": "6d3a8a4a54386a0cb607bd2dc7f596e877dd4d578e52b7905be6d309a448fd13",
+    "sources/rust/lucivy_core/tests/test_sfx_v3_ground_truth.rs": "a2e7dd7493ca3c5787107353b18c9cdb033c7a4216470d4cc5bffa8fbbfb7184",
+    "elf/test_fs_fixture_admission": "0801ea5ecc0d02844edff7ef032c2aafff6a25ad4dab712b4f2d65106c23bea9",
+    "elf/test_sfx_v3_ground_truth": "ee1965d705b1e41e85fbf7645d856793a235b9024686a41af0c95685d7890a04"
+  }
+}

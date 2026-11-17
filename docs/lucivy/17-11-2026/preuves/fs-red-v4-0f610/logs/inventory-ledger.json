@@ -1,0 +1,37 @@
+{
+  "source": "0f610f437a341f745e5936492114142ff3afedd4",
+  "observed": 1276409.161644828,
+  "inventories": {
+    "test_fs_fixture_admission": {
+      "tests": [
+        "covered_fixture_reaches_builder_once_on_the_captured_bytes",
+        "empty_view_is_refused_before_builder",
+        "enumeration_error_is_not_an_empty_subtree",
+        "invalid_utf8_is_refused_not_dropped",
+        "metadata_error_is_not_a_filtered_file",
+        "read_error_is_not_a_filtered_file",
+        "uncovered_panel_is_refused_before_zero_equals_zero"
+      ],
+      "ignored": []
+    },
+    "test_sfx_v3_ground_truth": {
+      "tests": [
+        "baseline_fuzzy_regex",
+        "debug_struct_fp",
+        "fuzzy_finds_an_occurrence_that_straddles_tokens",
+        "perf_shape_executor",
+        "perf_shape_sharded",
+        "regex_v2_vs_v3",
+        "v3_distributed_coherence",
+        "v3_distributed_two_nodes",
+        "v3_ground_truth_coherence",
+        "v3_ground_truth_contains",
+        "v3_ground_truth_demo",
+        "v3_sharded_filter_delete_delta"
+      ],
+      "ignored": [
+        "v3_ground_truth_demo"
+      ]
+    }
+  }
+}

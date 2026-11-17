@@ -1,0 +1,16 @@
+{
+  "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-journal-v4-green-proof-17nov-v1",
+  "uid": 1000,
+  "device": 55,
+  "inode": 168989889,
+  "hashes": {
+    "invocation.json": "130ab95e131436d41408f1ae413af922c2cacfb1f740031012e79b8410760f1c",
+    "witness.log": "b99dddcda3d9bef1d7c65105f64ef4f4444fd73eb12627fca99a2ddb1d931271",
+    "test-fs-export-boundaries-v5.py": "dc0dd7a3a1e8a126d1ef11d828dc94ccc11584ac53a2742d566c2eba692f2006",
+    "export-fs-red-ledger-v4.py": "7c58b87f74781019774a3be48b363e19f9620a979d8b026df0b118c84f56f8bd",
+    "order-observation.json": "5f8cacec5d9bb90c2b11972584bcb85b1a9aa1d7d9c7bfd71eb30b04729360c2",
+    "duration-observation.json": "e535465cc71a141892cd064515274549d03abd787df88db2d22142c4fe61201d",
+    "io-error-observation.json": "3a8d7cb9fb5963998ee0612b971598dd39a62fd51f62ff4284983cd0e4e6017f"
+  },
+  "archive_only": true
+}

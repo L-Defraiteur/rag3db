@@ -1,0 +1,15 @@
+{
+  "name": "invalid_utf8_is_refused_not_dropped",
+  "expected_semantic_red": true,
+  "passed": 0,
+  "failed": 1,
+  "ignored": 0,
+  "filtered_out": 6,
+  "cause": {
+    "expected_refusal": "Utf8.valid_up_to0",
+    "actual": "Ok(Some(1))",
+    "assertion": "missing precise REFUSED before builder",
+    "infrastructure_error": false
+  },
+  "log_sha256": "b9632666bc1f9a2b8103e9bcada5eab14872c12ea5a4900b94e2fea8be3eb401"
+}

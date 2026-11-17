@@ -1,9 +1,10 @@
 # Lucivy — 17 novembre 2026
 
-État : passe Rustv2 refusée à la compilation, aucun juge FS exécuté. Source
-hex0f relue noncompilée. Rouge final-lock réel37beb observé avant patch ;
-paquetv4/gardes groupées et probes préparés NONJOUÉS, deux RO totales attendues.
-Aucun GO CPU ou natif en cours, anciens GO clos.
+État : source0f compilée, six rouges Rust FS attendus observés + positif vert,
+sans index/corpus réel. GO1/GO2 CPU et GO3 FS consommés une fois, finis ;
+preuves et deux ELF conservés deux postes avant fix. Gate FS non réparée.
+Revue des preuves demandée, préparation corrective source dans le périmètre ;
+aucune nouvelle exécution sous les anciens GO.
 
 Contrat C7 conservé : capture initiale unique StdFs, ordre effectif, cap5000/
 exclusions versionnés, CapturePlan explicite/snapshot RAM ; aucune resélection
@@ -22,12 +23,14 @@ après REFUSED. La gate reste volontairement fautive avant les rouges Rust.
   terminé101/nettoyé/restes[], retour SSH/poste et exporteur observés.
 - T unique3552 conservé ; trois anciens ELF1ee RO et SHA préservés deux postes.
 - [Ticket porteur](../tickets/2026-11-16-l-admission-du-corpus-fs-ne-garantit-pas-la-vue-consommee.md)
-  ouvert. Paquetv4 complet [22](22-paquet-fs-red-v4-final-lock.md), patch/probes
-  [21](21-preparation-gardes-final-lock.md), préflight9496/nonce500867,
-  seeddbdb/Common265273TERMINE101. Qv3 reste figé/HOLD ; GO distinct avant22.
+  ouvert. [Cinq contrôles CPU](23-cinq-controles-cpu-v4-verts.md),
+  [six rouges FS réels et fin physique](24-six-rouges-rust-fs-observes.md).
+  Qv4 clos/consommé, code0f encore baseline fautive, seeddbdb invariant.
+  Dernier Common2593434/start127640555TERMINE0 ; deuxELF0801/ee196 RO deuxpostes.
+  Nouveaupin/RO/GO distinct pour correction ; ne pas relancer22.
 
-Neuf juges mémoire source1ee qualifiés seulement pour leur portée. Nouveaux
-six négatifs FS et positif NONJOUÉS. Natifs A/B/core/neufHOLD/ULP7.2/PR42
+Neuf juges mémoire source1ee qualifiés seulement pour leur portée. Sept juges
+FS source0f joués : six FAILsémantiques+unPASS, gate toujours fautive. Natifs A/B/core/neufHOLD/ULP7.2/PR42
 restent HOLD. Aucun main/tag/publication/fusion.
 
 ## Historique des étapes, déclarations à leur date
@@ -339,3 +342,38 @@ vides ;2QCPU/inodes confirmés,probes33ae2+dc0 3relusNONJOUÉS. Aucun test/
 import/Cargo/proc/ELF/corpusR. DeuxROtotalesfavorablesreçues,P1statiquelevé,
 GOCPU2puis3+GO300C7distincts requis,0OSkill/300/cleanupdistantqualifiés.
 Oldv3HOLD/rougesfigés,ticketOPEN,aucunlancementimplicite.
+
+
+Admissions09726 consommées chacuneUNEfois/sansretry/couple77ainchangé :
+GO1 FINALLOCKGREENv4=2PASS0FAILERRORskip/rc0,.078369030sphys(suite.004),
+d508/33ae/budget-vraimainmodèles,refusdrift etacceptinchangé.6fichiersbruts/
+sources2hosts AVANTGO2. GO2 JOURNALGREENv4=3PASS0FAILERRORskip/rc0,.100854246s
+phys(suite.016),7c58/dc0/STARTEND+parentRPCmodèles/Rootallcontextsattendus,
+7fichiers2hosts AVANTGO3. Rapport17/23/preuves final-lock-entry-green+journal-v4-green.
+GO3 FSREDv4 :2ELF0f compilés2.98s,7jugesRUSTNATIFSréellementjoués,
+6FAILsémantiquesattendus+1PASS0ignoredskip/0infra.4famillescomplètesavec
+I/Oenum/meta/read séparés ; positifread1/buildercontinuation1/panel15/
+SHAemptyabc.0indexconstruit/0autrecorpsgroundtruth/corpus. Bilansémantique
+REDpasFSréparée. Ledger2ELFs PC1276408.851 avantcopiefsynchronerehashACK
+nonce500867/SHA1ab5164...813b puisinventaires1276409.161 avant7exacts.
+ELFs actuels0801ea5ecc0d02844edff7ef032c2aafff6a25ad4dab712b4f2d65106c23bea9
+etee1965d705b1e41e85fbf7645d856793a235b9024686a41af0c95685d7890a04
+rehashfinalphysiqueidentiques,doublerootlockeffectifdbdbinvariant/pref9496/
+source0fclean/9copies/markerT/scratchconformes.3oldELF1eeRO+originauxSHApréservés.
+Common2593434/start127640555TERMINE0/erreurnull/restes[]/nettoyé/ownabsent/
+0bloqué11UNKNOWN,finalexterne1276409.312<CommonEND1276664.592<END1276677.104.
+RetourPOSTE-SSHréel/session81490rc0,receiptsportablesréelswatchdog2502082/
+startBOOT930110.51,end930115.077669<deadline930395.51,finobservée4.567668558s,
+worker2502097/enfantSSH2502107réapé0. RestitutionRÉELLE C7+Recherche AVANTarchives.
+Rapport17/24+preuves fs-red-v4-0f610(2manifests),privésPC+portable fs-red-v4-
+17nov-v1/2ELF+9outils/seed+5Rust=16copies444 reluesSHA AVANTtoutfixgate.
+SourceettempsCommon/physiques conservés2hosts,aucuncapreceiptpublié ; archival
+1276981>END estHORSvalidationexplicite/pasresetbudget,source/copies/locks/T/
+quiet0bloqué11UNKNOWNtoujoursconformes. Pasdeclockabsolucomparentrehôtes.
+Champsbrutsnative_test_bodiesfalse signifient0corpscomparaison/indexationdu
+secondELF, PAS0Rustnatif(les7FSréels). Pendingpréliminairesrésolusparreceipts
+ultérieurs,anciensbrutsnonréécrits. AucunOSkill/300expirés/cleanupuniversel/FS
+correcte/corpusqualifiés. RédactionfixsourceadmiseparC7 APRÈSconservation,
+contratadmissionavantconsommation/refus/absence-sansskip/UTF8/couverture15 à
+expliciter ; nouveaupin/RO/GOdistinctavanttouteexécution. ActionsROpreuves
+Recherche+Banc demandées SANSrejeu/DB/OS/proc/corpus. GO3clos/ticketOPEN.

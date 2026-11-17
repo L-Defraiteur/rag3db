@@ -47,3 +47,11 @@ observé1FAILdrift/1PASSinchangé/0ERROR avantfixgroupé. Préparation courante
 préflight9496/nonce500867, source0f/seeddbdb. Deux gardes effectives finales
 sansreset/exception, preuvesCPU2+3 encoreNONJOUÉES [21](21-preparation-gardes-final-lock.md).
 DeuxROtotales/nouveauxGOCPUet300distincts requis, ne pasrelancer18/oldGO.
+
+État courant après chaîne09726 : GO1 finalLock2PASS puisGO2journal3PASS avec
+preuves2hosts, puisGO3FS réel6FAILsémantiques+1PASS0skip etretourréel/ENDdurables.
+Voir23/24, source0fcompilée2ELFs0801/ee196 préservésavec16sources/outilsdeuxposts.
+Ne pasrelancer22/GOconsommés. DernierCommon2593434TERMINE0/quietbornée, double
+lockdbdbconfirmé. GateFS NONréparée,0corpsindexgroundtruth/corpus ;7jugesFS
+sontbienRUSTNATIFSéxécutés. Préparationfixsourceautoriséeaprèspreuves,
+ROpreuvesR+Bancsansrerun,puisnouveaupin/RO/GOdistinctavanttouteexécution.

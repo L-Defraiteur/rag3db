@@ -1,0 +1,16 @@
+
+running 1 test
+test invalid_utf8_is_refused_not_dropped ... admission=Ok(Some(1)); events=[Enumerate("/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-admission-red-17nov-v4/scratch/lucivy-test-fs-admission-7qaV7P"), Metadata("/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-admission-red-17nov-v4/scratch/lucivy-test-fs-admission-7qaV7P/covered.txt"), Read("/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-admission-red-17nov-v4/scratch/lucivy-test-fs-admission-7qaV7P/covered.txt"), Metadata("/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-admission-red-17nov-v4/scratch/lucivy-test-fs-admission-7qaV7P/invalid.txt"), Read("/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-admission-red-17nov-v4/scratch/lucivy-test-fs-admission-7qaV7P/invalid.txt"), Builder, Report]
+
+thread 'invalid_utf8_is_refused_not_dropped' (2594990) panicked at lucivy_core/tests/test_fs_fixture_admission.rs:61:5:
+missing precise REFUSED before builder: Ok(Some(1))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    invalid_utf8_is_refused_not_dropped
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+

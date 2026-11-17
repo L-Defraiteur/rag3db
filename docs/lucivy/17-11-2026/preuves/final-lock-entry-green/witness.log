@@ -1,0 +1,7 @@
+test_late_lock_drift_is_refused_before_final_acceptance (__main__.FinalLock.test_late_lock_drift_is_refused_before_final_acceptance) ... ok
+test_unchanged_lock_can_reach_final_acceptance (__main__.FinalLock.test_unchanged_lock_can_reach_final_acceptance) ... ok
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.004s
+
+OK

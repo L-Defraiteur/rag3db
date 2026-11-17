@@ -1,0 +1,15 @@
+{
+  "name": "read_error_is_not_a_filtered_file",
+  "expected_semantic_red": true,
+  "passed": 0,
+  "failed": 1,
+  "ignored": 0,
+  "filtered_out": 6,
+  "cause": {
+    "expected_refusal": "Io.read.PermissionDenied",
+    "actual": "Ok(Some(1))",
+    "assertion": "missing precise REFUSED before builder",
+    "infrastructure_error": false
+  },
+  "log_sha256": "e6abf878ab18a7da5e83175dac3a02af705ad86a8716db62377cae6896bf9d03"
+}

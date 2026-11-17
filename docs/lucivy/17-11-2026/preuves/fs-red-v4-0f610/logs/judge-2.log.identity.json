@@ -1,0 +1,11 @@
+{
+  "pid": 2594985,
+  "start": "127640916",
+  "argv": [
+    "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov/release/deps/test_fs_fixture_admission-9128a97001eece0d",
+    "--exact",
+    "metadata_error_is_not_a_filtered_file",
+    "--test-threads=1",
+    "--nocapture"
+  ]
+}

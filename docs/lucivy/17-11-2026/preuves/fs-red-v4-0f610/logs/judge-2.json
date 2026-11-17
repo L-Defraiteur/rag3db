@@ -1,0 +1,15 @@
+{
+  "name": "metadata_error_is_not_a_filtered_file",
+  "expected_semantic_red": true,
+  "passed": 0,
+  "failed": 1,
+  "ignored": 0,
+  "filtered_out": 6,
+  "cause": {
+    "expected_refusal": "Io.metadata.PermissionDenied",
+    "actual": "Ok(Some(1))",
+    "assertion": "missing precise REFUSED before builder",
+    "infrastructure_error": false
+  },
+  "log_sha256": "82383c426f3db420a68e2fac79a7c84f8aa7d7132b25424520b1ae9056a8bf49"
+}

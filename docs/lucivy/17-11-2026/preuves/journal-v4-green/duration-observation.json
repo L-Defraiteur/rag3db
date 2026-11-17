@@ -1,0 +1,82 @@
+{
+  "source_sha256": "7c58b87f74781019774a3be48b363e19f9620a979d8b026df0b118c84f56f8bd",
+  "mode": "duration",
+  "start_receipt": {
+    "schema": 1,
+    "role": "portable",
+    "clock": "CLOCK_BOOTTIME",
+    "watchdog_pid": 424242,
+    "watchdog_start": 929105.11,
+    "worker_pid": 2476005,
+    "observed": 929145.11696691,
+    "work_deadline": 929390.11,
+    "physical_term": 929400.11,
+    "physical_kill": 929405.11,
+    "parent_command": [
+      "timeout",
+      "--signal=TERM",
+      "--kill-after=5s",
+      "295s",
+      "/usr/bin/python3",
+      "/tmp/lucivy-fs-boundaries-nxqkn2w_/export-fs-red-ledger.py",
+      "--_physical-watchdog-child",
+      "--preflight",
+      "/tmp/lucivy-fs-boundaries-nxqkn2w_/preflight.json",
+      "--output",
+      "/tmp/lucivy-fs-boundaries-nxqkn2w_/elf-ledger.json",
+      "--launch-log",
+      "/tmp/lucivy-fs-boundaries-nxqkn2w_/launch-ssh.log"
+    ],
+    "worker_argv": [
+      "/tmp/lucivy-fs-boundaries-nxqkn2w_/export-fs-red-ledger.py",
+      "--preflight",
+      "/tmp/lucivy-fs-boundaries-nxqkn2w_/preflight.json",
+      "--output",
+      "/tmp/lucivy-fs-boundaries-nxqkn2w_/elf-ledger.json",
+      "--launch-log",
+      "/tmp/lucivy-fs-boundaries-nxqkn2w_/launch-ssh.log"
+    ],
+    "exporter_sha256": "7c58b87f74781019774a3be48b363e19f9620a979d8b026df0b118c84f56f8bd"
+  },
+  "end_receipt": {
+    "schema": 1,
+    "role": "portable",
+    "clock": "CLOCK_BOOTTIME",
+    "watchdog_pid": 424242,
+    "watchdog_start": 929105.11,
+    "worker_pid": 2476005,
+    "observed": 929145.118096697,
+    "work_deadline": 929390.11,
+    "context": {
+      "source": "0f610f437a341f745e5936492114142ff3afedd4",
+      "nonce": "0123456789abcdef0123456789abcdef"
+    },
+    "result": null,
+    "error_type": "Frontier",
+    "cleanup_error_type": null,
+    "known_local_children": [],
+    "known_local_children_reaped": true,
+    "universal_quiescence_claimed": false
+  },
+  "events": [
+    "physical-watchdog-wrapper",
+    "arm-transport-mocked",
+    "post-arm-write-frontier"
+  ],
+  "real_args_hash_json_reached": true,
+  "parent_metadata_age_seconds": 40,
+  "transmitted_durations": [
+    236.99252843495924
+  ],
+  "error": "post-arm-write-frontier",
+  "local_mock_child_running": null,
+  "source_rewritten": false,
+  "virtual_clock": false,
+  "real_proc_read": false,
+  "real_ssh": false,
+  "real_popen": false,
+  "real_signal": false,
+  "real_remote_body": false,
+  "os_timer_kill_or_cleanup_qualified": false,
+  "captured_stdout": "{\"exporter_armed\": true, \"nonce\": \"0123456789abcdef0123456789abcdef\"}\n"
+}

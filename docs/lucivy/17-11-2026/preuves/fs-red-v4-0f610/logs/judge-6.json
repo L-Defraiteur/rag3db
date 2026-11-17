@@ -1,0 +1,15 @@
+{
+  "name": "covered_fixture_reaches_builder_once_on_the_captured_bytes",
+  "expected_semantic_red": false,
+  "passed": 1,
+  "failed": 0,
+  "ignored": 0,
+  "filtered_out": 6,
+  "cause": {
+    "positive": true,
+    "covered_queries": 15,
+    "builder_calls": 1,
+    "reads": 1
+  },
+  "log_sha256": "e825589cb7067810c2708ef967703d3b1e73fefa7f823ef1c8844f26570c973e"
+}

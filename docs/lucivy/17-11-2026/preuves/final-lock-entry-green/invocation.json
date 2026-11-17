@@ -1,0 +1,28 @@
+{
+  "go": "C7-LUCIVY-FINALLOCK-GREEN-V4-17nov60",
+  "source_commit": "77a4703c8fb87cbe7e1142191e273c9a65eabbc0",
+  "argv": [
+    "timeout",
+    "--signal=TERM",
+    "--kill-after=5s",
+    "55s",
+    "python3",
+    "-B",
+    "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-final-lock-green-17nov-v1/test-fs-final-lock-entry-v2.py",
+    "--admission",
+    "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-final-lock-green-17nov-v1/admit-fs-admission-red-v4.py",
+    "--admission-sha256",
+    "d50856ccf19e1be02ba2a6c6e93fe4c88c6f236e10b70e8f0d4609265348647b",
+    "--proof",
+    "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-final-lock-green-17nov-v1/proof-green-final-lock"
+  ],
+  "start": 885727.154898568,
+  "end": 885727.233267598,
+  "elapsed": 0.07836902991402894,
+  "wall_start": 1794929390.695651,
+  "code": 0,
+  "source_sha256": {
+    "test-fs-final-lock-entry-v2.py": "33aebb44da043a188b4990e7262b95d647efedd8e6a8e65a4739a58d09ba9693",
+    "admit-fs-admission-red-v4.py": "d50856ccf19e1be02ba2a6c6e93fe4c88c6f236e10b70e8f0d4609265348647b"
+  }
+}

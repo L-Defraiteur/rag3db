@@ -1,0 +1,16 @@
+
+running 1 test
+test uncovered_panel_is_refused_before_zero_equals_zero ... admission=Ok(Some(1)); events=[Enumerate("/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-admission-red-17nov-v4/scratch/lucivy-test-fs-admission-aPEHdY"), Metadata("/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-admission-red-17nov-v4/scratch/lucivy-test-fs-admission-aPEHdY/negative.txt"), Read("/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-admission-red-17nov-v4/scratch/lucivy-test-fs-admission-aPEHdY/negative.txt"), Builder, Report]
+
+thread 'uncovered_panel_is_refused_before_zero_equals_zero' (2594992) panicked at lucivy_core/tests/test_fs_fixture_admission.rs:61:5:
+missing precise REFUSED before builder: Ok(Some(1))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    uncovered_panel_is_refused_before_zero_equals_zero
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+

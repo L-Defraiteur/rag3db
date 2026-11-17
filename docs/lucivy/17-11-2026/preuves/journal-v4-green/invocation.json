@@ -1,0 +1,30 @@
+{
+  "go": "C7-LUCIVY-JOURNAL-GREEN-V4-17nov60",
+  "source_commit": "77a4703c8fb87cbe7e1142191e273c9a65eabbc0",
+  "argv": [
+    "timeout",
+    "--signal=TERM",
+    "--kill-after=5s",
+    "55s",
+    "python3",
+    "-B",
+    "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-export-journal-17nov-v2/test-fs-export-boundaries-v5.py",
+    "--exporter",
+    "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-export-journal-17nov-v2/export-fs-red-ledger-v4.py",
+    "--exporter-sha256",
+    "7c58b87f74781019774a3be48b363e19f9620a979d8b026df0b118c84f56f8bd",
+    "--proof",
+    "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-export-journal-17nov-v2/proof-green-journals",
+    "--case",
+    "all"
+  ],
+  "start": 885880.136229865,
+  "end": 885880.237084111,
+  "elapsed": 0.10085424594581127,
+  "wall_start": 1794929543.6769826,
+  "code": 0,
+  "source_sha256": {
+    "test-fs-export-boundaries-v5.py": "dc0dd7a3a1e8a126d1ef11d828dc94ccc11584ac53a2742d566c2eba692f2006",
+    "export-fs-red-ledger-v4.py": "7c58b87f74781019774a3be48b363e19f9620a979d8b026df0b118c84f56f8bd"
+  }
+}

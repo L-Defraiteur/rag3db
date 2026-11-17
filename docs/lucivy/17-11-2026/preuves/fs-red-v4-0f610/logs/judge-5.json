@@ -1,0 +1,15 @@
+{
+  "name": "uncovered_panel_is_refused_before_zero_equals_zero",
+  "expected_semantic_red": true,
+  "passed": 0,
+  "failed": 1,
+  "ignored": 0,
+  "filtered_out": 6,
+  "cause": {
+    "expected_refusal": "Uncovered.panel15",
+    "actual": "Ok(Some(1))",
+    "assertion": "missing precise REFUSED before builder",
+    "infrastructure_error": false
+  },
+  "log_sha256": "d1437296d1774bdcf8aa2d250e17b48308cca97a4e3830781c8405891463b0de"
+}

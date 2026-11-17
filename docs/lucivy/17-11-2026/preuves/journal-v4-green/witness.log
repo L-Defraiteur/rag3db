@@ -1,0 +1,8 @@
+test_1_watchdog_precedes_post_arm_write (__main__.Boundaries.test_1_watchdog_precedes_post_arm_write) ... ok
+test_2_elapsed_budget_is_not_reset_when_sent_to_pc (__main__.Boundaries.test_2_elapsed_budget_is_not_reset_when_sent_to_pc) ... ok
+test_3_post_launch_fsync_error_cleans_local_child (__main__.Boundaries.test_3_post_launch_fsync_error_cleans_local_child) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.016s
+
+OK

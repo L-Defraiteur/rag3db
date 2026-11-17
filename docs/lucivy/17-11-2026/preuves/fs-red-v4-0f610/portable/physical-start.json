@@ -1,0 +1,37 @@
+{
+  "schema": 1,
+  "role": "portable",
+  "clock": "CLOCK_BOOTTIME",
+  "watchdog_pid": 2502082,
+  "watchdog_start": 930110.51,
+  "worker_pid": 2502097,
+  "observed": 930110.60605282,
+  "work_deadline": 930395.51,
+  "physical_term": 930405.51,
+  "physical_kill": 930410.51,
+  "parent_command": [
+    "/usr/bin/timeout",
+    "--signal=TERM",
+    "--kill-after=5s",
+    "295s",
+    "/usr/bin/python3",
+    "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-admission-red-export-17nov-v4/export-fs-red-ledger.py",
+    "--_physical-watchdog-child",
+    "--preflight",
+    "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-admission-red-export-17nov-v4/preflight.json",
+    "--output",
+    "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-admission-red-export-17nov-v4/elf-ledger.json",
+    "--launch-log",
+    "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-admission-red-export-17nov-v4/launch-ssh.log"
+  ],
+  "worker_argv": [
+    "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-admission-red-export-17nov-v4/export-fs-red-ledger.py",
+    "--preflight",
+    "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-admission-red-export-17nov-v4/preflight.json",
+    "--output",
+    "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-admission-red-export-17nov-v4/elf-ledger.json",
+    "--launch-log",
+    "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-admission-red-export-17nov-v4/launch-ssh.log"
+  ],
+  "exporter_sha256": "7c58b87f74781019774a3be48b363e19f9620a979d8b026df0b118c84f56f8bd"
+}

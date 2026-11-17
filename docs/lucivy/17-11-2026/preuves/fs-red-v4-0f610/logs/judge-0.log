@@ -1,0 +1,16 @@
+
+running 1 test
+test empty_view_is_refused_before_builder ... admission=Ok(None); events=[Enumerate("/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-admission-red-17nov-v4/scratch/lucivy-test-fs-admission-pbSL3b")]
+
+thread 'empty_view_is_refused_before_builder' (2594982) panicked at lucivy_core/tests/test_fs_fixture_admission.rs:61:5:
+missing precise REFUSED before builder: Ok(None)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    empty_view_is_refused_before_builder
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+

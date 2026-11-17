@@ -1,0 +1,15 @@
+{
+  "name": "enumeration_error_is_not_an_empty_subtree",
+  "expected_semantic_red": true,
+  "passed": 0,
+  "failed": 1,
+  "ignored": 0,
+  "filtered_out": 6,
+  "cause": {
+    "expected_refusal": "Io.enumerate.PermissionDenied",
+    "actual": "Ok(Some(1))",
+    "assertion": "missing precise REFUSED before builder",
+    "infrastructure_error": false
+  },
+  "log_sha256": "c2dad368b8c0aadc29e79eb1a9ebde7b3f1b90003b6be2eae5904e067f74fce9"
+}

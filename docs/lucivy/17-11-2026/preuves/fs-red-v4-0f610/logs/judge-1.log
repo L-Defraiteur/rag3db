@@ -1,0 +1,16 @@
+
+running 1 test
+test enumeration_error_is_not_an_empty_subtree ... admission=Ok(Some(1)); events=[Enumerate("/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-admission-red-17nov-v4/scratch/lucivy-test-fs-admission-h1b4In"), Metadata("/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-admission-red-17nov-v4/scratch/lucivy-test-fs-admission-h1b4In/covered.txt"), Read("/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-admission-red-17nov-v4/scratch/lucivy-test-fs-admission-h1b4In/covered.txt"), Metadata("/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-admission-red-17nov-v4/scratch/lucivy-test-fs-admission-h1b4In/unreadable-directory"), Enumerate("/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-admission-red-17nov-v4/scratch/lucivy-test-fs-admission-h1b4In/unreadable-directory"), Builder, Report]
+
+thread 'enumeration_error_is_not_an_empty_subtree' (2594984) panicked at lucivy_core/tests/test_fs_fixture_admission.rs:61:5:
+missing precise REFUSED before builder: Ok(Some(1))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    enumeration_error_is_not_an_empty_subtree
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+

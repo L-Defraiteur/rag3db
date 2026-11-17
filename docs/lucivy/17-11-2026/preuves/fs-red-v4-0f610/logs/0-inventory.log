@@ -1,0 +1,9 @@
+covered_fixture_reaches_builder_once_on_the_captured_bytes: test
+empty_view_is_refused_before_builder: test
+enumeration_error_is_not_an_empty_subtree: test
+invalid_utf8_is_refused_not_dropped: test
+metadata_error_is_not_a_filtered_file: test
+read_error_is_not_a_filtered_file: test
+uncovered_panel_is_refused_before_zero_equals_zero: test
+
+7 tests, 0 benchmarks

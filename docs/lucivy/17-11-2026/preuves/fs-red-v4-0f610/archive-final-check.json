@@ -1,0 +1,37 @@
+{
+  "observed": 1276981.213101054,
+  "archive_after_scope_deadline": true,
+  "source": "0f610f437a341f745e5936492114142ff3afedd4",
+  "source_clean": true,
+  "copies": {
+    "qualify-fs-admission-red.py": true,
+    "admit-fs-admission-red.py": true,
+    "export-fs-red-ledger.py": true,
+    "qualify-indexed-false-core.py": true,
+    "qualify-indexed-false-red.py": true,
+    "source-pins.json": true,
+    "Cargo.lock.seed": true,
+    "support/confiner_validation.py": true,
+    "support/poste": true
+  },
+  "marker_sha256": "5a1671d22dc784bec78f60cf25c8b3003acc5f21e28290f05d0dfc22e0c394df",
+  "effective_lock_sha256": "dbdb560202562f17536624472a0e730627df163f4bb00c53b2baf604e77637f6",
+  "scratch_entries": [],
+  "common": {
+    "pid": 2593434,
+    "start": "127640555",
+    "state": "termine",
+    "owned_present": false
+  },
+  "assessment": {
+    "admitted": true,
+    "blocked": 0,
+    "unknown": 11
+  },
+  "semantic_reds": 6,
+  "positive": 1,
+  "fs_judges_executed": 7,
+  "native_test_bodies_executed": false,
+  "real_corpus_qualified": false,
+  "universal_quiescence_claimed": false
+}

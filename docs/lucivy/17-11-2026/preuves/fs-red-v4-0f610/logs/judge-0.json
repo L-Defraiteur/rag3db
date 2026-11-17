@@ -1,0 +1,15 @@
+{
+  "name": "empty_view_is_refused_before_builder",
+  "expected_semantic_red": true,
+  "passed": 0,
+  "failed": 1,
+  "ignored": 0,
+  "filtered_out": 6,
+  "cause": {
+    "expected_refusal": "Empty",
+    "actual": "Ok(None)",
+    "assertion": "missing precise REFUSED before builder",
+    "infrastructure_error": false
+  },
+  "log_sha256": "28d2dce80e044a8d3bb5a5ecf68ca5ab07f9bd39ab34f362d8ca0af0ef583b7b"
+}
