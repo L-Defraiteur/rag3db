@@ -120,3 +120,8 @@ C7 distinct avant exécution. Code source8b94353 inchangé.
 ### Banc — couple RED préparé6a16c7220f, 17 novembre
 
 [RO source/paquet favorable bornée](../../banc/17-11-2026/03-ro-couple-fs-red.md) : troisAST, neuf copies PC/preflight79adf115 et exporteur portable conformes ; barrière ledger2ELF avant exécution, ARM15/physical300, causes sixrouges et positif vérifiés par lecture. Aucun pilote/test/proc/corpus/DB contacté/exécuté par Banc. GO C7 distinct requis ; ticket OUVERT et FS corrigée/global non qualifiés.
+
+
+### Banc — RO couple complet FSREDv2 d844a166
+
+[RO favorable préparation v2](../../banc/17-11-2026/03-ro-couple-fs-red.md) :9pinsPC/preflight39ccf66b/export51a9 portable-Git conformes,identitésQ/T/source cohérentes. Timeout shell avant Python/workerargv/BOOTTIME, duréePCreste−8 etARMRTT<=8,CommonMIN/finale/ACKautonome avantELF vérifiés par lecture ;6rougesnomcause+positif/infraSTOP maintenus.3AST/0runBanc ;3CPUverts simulés ne qualifient pasOSkill300/cleanup distant/admissionFS. GO C7 exact distinct requis,ticket OUVERT.
