@@ -327,3 +327,12 @@ invariants, pas compilationdéduite. Futurpaquet doitpinnerlockdbdb déjàsha2
 (--offline--locked), ancienCommon265273TERMINE101, nouveaunonce/pins/RO/GO,
 et journaliser début/finportable danswrapper. WPC encore8b/ancienQ clos,
 source0f portableproprepoussée, aucunrun Rust/natif implicite.
+
+RO Recherche SOURCE exacte0f610f437a341f745e5936492114142ff3afedd4 favorable
+bornée reçue : Sha2Digest seulecrypto, encodage standard2hexminuscules/octet,
+zérospréservés/concat64digits, refs empty/abc correctes danspositifexistant.
+Sixnégatifs/septnoms/panel15/capture/withconsumer/gates/spies/deps inchangés,
+aucunFSfix. Diffcheck RO conforme ; aucunCargo/rustfmt/rustc/test/proc/corpus
+par Recherche. API plausible statiquement, compilation NONqualifiée. E0277
+historique/zérojuge conservés, ancienGOclos ; nouveaupaquet/seedlock/pins/RO
+et GOdistinctavantCargo restent requis. WPC encore8b, aucun testaprès0f.

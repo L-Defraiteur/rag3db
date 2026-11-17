@@ -212,3 +212,12 @@ seulajoutdirectsha2 vérifiéAPRÈSrefus.9copies/source8bclean/markerTscratch
 conformes,3oldELF1eeRO+originauxSHAidentiques. PréparationfixAPIhex standard
 sousce ticket (Lucivy), préserverdéfautsFS etpanel ;nouveauxpins/RO/GOavant
 Cargo,aucunGOv2réactivé. AucuneFS/native/OSkill300/globalqualifiée.
+
+RO Recherche SOURCE exacte0f610f437a341f745e5936492114142ff3afedd4 favorable
+bornée reçue : Sha2Digest seulecrypto, encodage standard2hexminuscules/octet,
+zérospréservés/concat64digits, refs empty/abc correctes danspositifexistant.
+Sixnégatifs/septnoms/panel15/capture/withconsumer/gates/spies/deps inchangés,
+aucunFSfix. Diffcheck RO conforme ; aucunCargo/rustfmt/rustc/test/proc/corpus
+par Recherche. API plausible statiquement, compilation NONqualifiée. E0277
+historique/zérojuge conservés, ancienGOclos ; nouveaupaquet/seedlock/pins/RO
+et GOdistinctavantCargo restent requis. WPC encore8b, aucun testaprès0f.
