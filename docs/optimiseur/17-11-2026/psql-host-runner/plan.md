@@ -299,3 +299,29 @@ Les19 autres NON sélectionnés, PsqlSession non instanciée, aucun child natif,
 client, secret, PG, Docker, provider ou service. Paquet source et outils à
 matérialiser/rehash sous racine neuve fix-cpu-04, puis RO et GO C7 DISTINCT
 avant entrée. Aucun GO CPU acquis ni exécution de ce correctif à ce stade.
+
+
+## Huit témoins fake/FS VERTS — GOdd1e21a57a
+
+UNE entrée C7-PSQL-FIX-CPU8-691E-17nov30, source691eea025b7465f27b1d221ae6b09e9aeb058ee3,
+recette9f06963284db583d1ad8c7345f888c771bc73260fe008abd8ebf581dad0286a5.
+Scope validation-x2mj1p0o CommonVERT/code0/erreur null, terminé/nettoyé/restes[],
+répertoire privé bus ABSENT vérifié après terminaison.8tests/0FAIL/0ERROR/0skip,
+rc0, elapsed0.2712423631455749s. Source runner6148/testreview6a8 inchangés
+après épreuve, hashes relus. Les quatre anciens rouges restent conservés,
+pas réécrits en vert. Les quatre nouveaux contrôles incluent le consommateur
+positif sur pièces terminales SYNTHÉTIQUES et les refus de pièces/scope erronés.
+
+19preuves source/bruts/recettes/autorité publique sans jeton conservées et
+vérifiées taille/SHA aux deux postes : PCpsql-host-runner-20261117-r1/fix-cpu-04,
+portable même parent/fix-cpu-04-proof. Manifeste
+86ced1c90c10c83e51121e2772815b82a0344160cb3d1d802188c3b0fd8b3350 ; archive
+5f5ee13f7f68b6a1625f04e9034e756edb363273c5e00f763083175899d7a5b4.
+
+Qualification ACQUISE : fix3 et ces huit raccords fake/FS dans CETTE entrée.
+19autres témoins NON JOUÉS, aucun vrai enfant Capture/PsqlSession/PG/SQL/secret,
+aucun service/original/SDK/buildCLI99 touché. Producteur terminal réel, autorité
+Common/lease réelle de la factory native, preuve exe/env, outer whole5 imports/
+fsync, auth/SSL/dlopen et transportPG NON QUALIFIÉS. v1grant non délivré.
+Aucun test supplémentaire enchaîné, aucun GO contact/fixture déduit.
+Ticket FTS302 ouvert : les manques natifs exigent prépa source/RO/GO séparés.
