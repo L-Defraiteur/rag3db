@@ -216,3 +216,13 @@ R/cx-archi-cpu-green-a0d74-17nov-r1 manifest3213a6842a455c7837f10005216416b77b0a
 AncienERROR3839 et rougecfg3a786 préservés avec chronologie a797avantRED.
 PrépaPCcode/métadonnées/paquet autorisée, ROtotale nouveaupinQ puis GO natif
 distinct toujours requis. Aucun runtime/service/SDK/target qualifié par ce vertCPU.
+
+PrépaPC autorisée réalisée APRÈS41verts, rapport17nov/34+manifest35 : APPf1e8,
+PILOTE229b397d8d1cb28b8ac3075479e49a1ab72b400b figéPC/codea0d74identique.
+Archive742 privée/initpropre, transitionGit mêmeC versAPPf1e8/brancheNEUVE,
+T0avant/après13416/5246entréesstrictégal/dev55/inode164550643/UID1000.
+72preuves anciennes réhashées/intactes ; aucun targetmuté/garde/Cargo/runtime.
+Qconfiguration0e6278fc...136c1, Pvide/F+TASKS+launchabsents. Paquet29fichiers
+LOCAL+PCréhash0écart manifestf5c5eb6c55f8775f1e8f45961fe351a975f58833aca52f55b9b331ae57663d77.
+Demande ROtotale code+pins/copies/T0 puis GO natif C7distinct ; ticket reste ouvert,
+aucun SDK/D6/Vertex/native/service qualifié, aucunACKressource niGO7455 déduit.
