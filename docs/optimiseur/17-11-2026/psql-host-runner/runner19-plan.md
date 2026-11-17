@@ -145,3 +145,22 @@ quatre passent ensuite, les19 restent NON JOUÉS : nouveau helper oblige à
 refaire pins/RO/GO19 après fakeverts, pas modifier ancien paquet19-05 gelé.
 L'ancien helper rouge et les anciens8fakeverts restent immuables. Nativeexe/
 env/outerwhole5/terminalréel/PG non qualifiés, aucun grant v1.
+
+
+## Helper fakeIO quatre VERTS — GO544d27a211
+
+UNE entrée source3a6fb3a0c9/recipebdfc0f262a0e87b82e996f6e866a124b890241563a6e4938e2945d4662b4767a.
+Common validation-aif6ktio VERT/code0/erreur null, terminé/nettoyé/restes[],
+bus privé absent.4tests nommés/4PASS/0FAILERRORskip/rc0,elapsed0.24126804806292057s.
+Source/helper76d72/4juges344df inchangés après épreuve. Aucune capture réelle,
+aucun19+8 rejoué, aucun PG/client/secret/service.
+
+20preuves comparées taille/SHA sur les deux postes AVANTsuite : PC
+psql-host-runner-20261117-r1/archive-fakeio-fix-07,portable même parent
+/archive-fakeio-fix-07-proof. Manifeste
+10fe1584b2a35502c73fbded5b442b26c2564ecee95f43b07a36730daf548732 ; archive
+fd197845709c0034dd0817d6889a7c4d7f7070c6ec3d876cc9cfdd0cf0f54619.
+Les quatre rouges précédents restent intacts ; résultat limité aux quatre
+raccords fakeIO. Prépa nouveau paquet19/helperfix désormais autorisée par C7,
+PAS exécution19 enchaînée. Nouvelle recette/pins et Rtotal puis GO C7DISTINCT
+nécessaires. Native/PG/terminalréel/exe-env/outerwhole5 restent non qualifiés.
