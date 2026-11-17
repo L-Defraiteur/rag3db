@@ -1,0 +1,208 @@
+{
+  "kind": "PREPARED_NOT_EXECUTED",
+  "allocation": "C7-CLI99-STATIC-A-17nov2400",
+  "app": "99fef92ce6ee9a0007eaf99c7c3a6a3789061c57",
+  "source_root": "/home/lucied/git_workspaces/rag3db-cx-arbre-qualif-cli99-20261117-r1",
+  "target": "/home/lucied/.cache/rag3weaver-build/target-arbre-principal-qualif",
+  "evidence": "/home/lucied/.cache/rag3weaver-build/qualification-cli99-pc-r1",
+  "sdk": "/home/lucied/.cache/rag3db-libs/rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF",
+  "timeout": "/usr/bin/timeout",
+  "driver_sha256": "f13c39b3f2dce002eaa863f5a6819e763b3add794e23f3a28e630debbfe187a2",
+  "pins": {
+    "/home/lucied/git_workspaces/rag3db-cx-arbre-qualif-cli99-20261117-r1/extension/rag3weaver/scripts/confiner_validation.py": "6439fdd8b52c85fa4e74af0def2c667ef0bedae9b814cbbfd48e49946c4f74ea",
+    "/home/lucied/git_workspaces/rag3db-cx-arbre-qualif-cli99-20261117-r1/extension/rag3weaver/scripts/poste": "79e3a8bbf457e3bc9104aa1558e7d03072216c70b68e08ae606ace6aa4584c7b",
+    "/home/lucied/git_workspaces/rag3db-cx-arbre-qualif-cli99-20261117-r1/extension/rag3weaver/scripts/cargo_magasin.sh": "de964d940ae898f94525dd355df4fc9c082cd4c958b04905188a7ee5a5344b60",
+    "/home/lucied/git_workspaces/rag3db-cx-arbre-qualif-cli99-20261117-r1/extension/rag3weaver/scripts/cargo_garde.py": "7aae73ed75aff311f40ec4237751f3bb2cd87aa23978387714482ebde48be9f3",
+    "/home/lucied/git_workspaces/rag3db-cx-arbre-qualif-cli99-20261117-r1/extension/rag3weaver/scripts/lib_du_magasin.sh": "6843c315ebf3fc35a95dbf8e7f87b6d19a91375a312e3f2a987149b5c370e18e",
+    "/home/lucied/git_workspaces/rag3db-cx-arbre-qualif-cli99-20261117-r1/extension/rag3weaver/scripts/garde_target.sh": "43ff9c80e14d9970adf94da2db74a6d0e9ca2d90d54a2b08c8f37d61ea3d5a37",
+    "/home/lucied/.cache/rag3weaver-build/qualification-cli99-control-r1/grant_watch_actor.py": "7d7db5a0c7d9ac762eed74ade2d0b9ee256b8499d0029ae970feac916de76612",
+    "/home/lucied/.cache/rag3weaver-build/qualification-cli99-control-r1/provider_health_transport.py": "edf45f73bf97d21f2a0caab4d6e07a7d01f807fba8310c9006f442159e2bc2a6",
+    "/home/lucied/.cache/rag3weaver-build/qualification-cli99-control-r1/typed_rows.py": "41314cda227b3511f2daed3695d894bec150f3ee3dfc2fd7b6fa268db1374916",
+    "/home/lucied/.cache/rag3db-libs/rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF/librag3db.so": "b7e9fc75a3d2de04c72680b0309e8bb1df9eaadb5211ebbacf39716c6d0a2101",
+    "/home/lucied/.cache/rag3db-libs/rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF/libvector.rag3db_extension": "1669d6392ec8067fcf92ae2ccc972fd7cd3086629fb82d1f5d254e90d72d7561",
+    "/home/lucied/.cache/rag3db-libs/rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF/rag3db.hpp": "4e25a659ce070ec38023ec90c1ced5a806fdcdaeda5eb96eda799feafa5806ba",
+    "/home/lucied/.cache/rag3weaver-build/bascule-live-20261116/debt-acquittement-copy-v1/read-typed": "add01058f3b0d6efd28d936c865b1ba9071c0e2eb85f559743bf0c52aeea6371",
+    "/home/lucied/.cache/rag3weaver-build/bascule-live-20261116/id-sets-pc-01/snapshot-files": "d0dd13e6d403e614038b251f413637d5f6d02a98ba1c10509388d0be1f5e15c7",
+    "/home/lucied/.cache/optimiseur-notes/bascule-16nov-927/read-only-query-v2-luciepc": "48ae2328a29676fa69154cb9c67d9125d4d04cf92b029bd2b2a09981dea95616",
+    "/usr/bin/python3.14": "a38210a53e07ac5eb912ee35c2d92ddb7eaa349301b60c188a5f496c7c87449d",
+    "/usr/bin/timeout": "9c3e4dc9a71ba25ed23e56774c003d3e16043479c48c9fd5c6943734eb1942b7",
+    "/home/lucied/.cargo/bin/rustup": "b1c8cb14e30889e7e2999e6b69e62d9e9b9ffc0f4df8180564d306d9680e6c55",
+    "/usr/bin/g++": "e43525244f7c819664fdbc75f7c48ac2ca61213a268f19f9b32d43da5a706073",
+    "/usr/bin/gcc": "b0b49531b313e70aee0254fb5e69b050a781506184e16ebee6ebe68eee94a145",
+    "/usr/bin/ld": "7bd5014a8b3184c41943da0529ab0451592a5581750a73a9f4a77e4f4e26aa0a",
+    "/usr/bin/du": "13fa69b2cdade1ffab766046b982922d0e40eec4c8bd849a404ec440eff6956a",
+    "/usr/bin/git": "0da72c00a915c06b9e7062e2dc999afe323223d000fef63111a94f522afd8ecf",
+    "/usr/bin/bash": "917e986de64e7d36e42bef7aff5db73b7ecef5b58477bdb990e595e8dfc930b2",
+    "/home/lucied/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo": "ff3022fcbd13b08434ea7afde9a0ef9d5b3f5c17b5fc7a40031be3ee000a6a24",
+    "/home/lucied/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc": "3690cc576ede140504698405d5d8fa3826aaadbe71699c6c4ed0a565d6f493e2",
+    "/home/lucied/.cache/rag3db-libs/rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF/include/common/build_id.h": "1cf920608514b5f3c5e90952ecc580ca6170398f288dd554d00bb0bb32b03110"
+  },
+  "readers": {
+    "typed-reader": {
+      "path": "/home/lucied/.cache/rag3weaver-build/bascule-live-20261116/debt-acquittement-copy-v1/read-typed",
+      "sha256": "add01058f3b0d6efd28d936c865b1ba9071c0e2eb85f559743bf0c52aeea6371",
+      "scope": "PC SDK59 historical native readOnly; this stage checks framing only"
+    },
+    "ids": {
+      "path": "/home/lucied/.cache/rag3weaver-build/bascule-live-20261116/id-sets-pc-01/snapshot-files",
+      "sha256": "d0dd13e6d403e614038b251f413637d5f6d02a98ba1c10509388d0be1f5e15c7",
+      "scope": "Lucivy4.3.9 immutable ID sets historical; no invocation this stage"
+    },
+    "query": {
+      "path": "/home/lucied/.cache/optimiseur-notes/bascule-16nov-927/read-only-query-v2-luciepc",
+      "sha256": "48ae2328a29676fa69154cb9c67d9125d4d04cf92b029bd2b2a09981dea95616",
+      "scope": "PC SDK59 historical query readOnly; no invocation this stage"
+    }
+  },
+  "caps": {
+    "build": 1800,
+    "static_pair": 30,
+    "reader_self_test": 15
+  },
+  "helper_origins": {
+    "grant_watch_actor.py": {
+      "ref": "e9f037be2aa25da2c7f6c76f79e2eb57b6c676c9",
+      "path": "docs/orchestration/17-11-2026/coordination/grant_watch_actor.py",
+      "sha256": "7d7db5a0c7d9ac762eed74ade2d0b9ee256b8499d0029ae970feac916de76612"
+    },
+    "provider_health_transport.py": {
+      "ref": "e9f037be2aa25da2c7f6c76f79e2eb57b6c676c9",
+      "path": "docs/orchestration/16-11-2026/coordination/provider_health_transport.py",
+      "sha256": "edf45f73bf97d21f2a0caab4d6e07a7d01f807fba8310c9006f442159e2bc2a6"
+    },
+    "typed_rows.py": {
+      "ref": "e9f037be2aa25da2c7f6c76f79e2eb57b6c676c9",
+      "path": "docs/arbre-principal/16-11-2026/debt-copy-a/typed_rows.py",
+      "sha256": "41314cda227b3511f2daed3695d894bec150f3ee3dfc2fd7b6fa268db1374916"
+    }
+  },
+  "proposal": {
+    "total_outer_seconds": 2400,
+    "outer_term_seconds": 2398,
+    "outer_kill_seconds": 2,
+    "common_seconds": 2330,
+    "allocation_authorized": false,
+    "runtime_backend_or_DB_authorized": false,
+    "tools_to_pin_before_GO": [],
+    "scope_evidence": "/home/lucied/.cache/rag3weaver-build/qualification-cli99-scopes-r1",
+    "remaining_preparation": [
+      "Create exact clean source99 worktree/submodule under separate admission",
+      "Prepare private Q copies of pinned scripts/config, externally freeze config SHA and allocation",
+      "Reattest input/tool metadata immediately before exact GO; no dynamic closure inferred"
+    ]
+  },
+  "git": "/usr/bin/git",
+  "bash": "/usr/bin/bash",
+  "du": "/usr/bin/du",
+  "rustc": "/home/lucied/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc",
+  "rustup_toolchain": "stable-x86_64-unknown-linux-gnu",
+  "path_tools": {
+    "cargo": "/home/lucied/.cargo/bin/rustup",
+    "rustc": "/home/lucied/.cargo/bin/rustup",
+    "python3": "/usr/bin/python3.14",
+    "cc": "/usr/bin/gcc",
+    "ld": "/usr/bin/ld"
+  },
+  "file_metadata": {
+    "/usr/bin/python3.14": {
+      "uid": 0,
+      "mode": 493,
+      "size": 14424
+    },
+    "/usr/bin/timeout": {
+      "uid": 0,
+      "mode": 493,
+      "size": 68320
+    },
+    "/home/lucied/.cargo/bin/rustup": {
+      "uid": 1000,
+      "mode": 493,
+      "size": 21347088
+    },
+    "/usr/bin/g++": {
+      "uid": 0,
+      "mode": 493,
+      "size": 2455144
+    },
+    "/usr/bin/gcc": {
+      "uid": 0,
+      "mode": 493,
+      "size": 2451048
+    },
+    "/usr/bin/ld": {
+      "uid": 0,
+      "mode": 493,
+      "size": 1644584
+    },
+    "/usr/bin/du": {
+      "uid": 0,
+      "mode": 493,
+      "size": 145712
+    },
+    "/usr/bin/git": {
+      "uid": 0,
+      "mode": 493,
+      "size": 5926648
+    },
+    "/usr/bin/bash": {
+      "uid": 0,
+      "mode": 493,
+      "size": 1268912
+    },
+    "/home/lucied/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo": {
+      "uid": 1000,
+      "mode": 493,
+      "size": 40688400
+    },
+    "/home/lucied/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc": {
+      "uid": 1000,
+      "mode": 493,
+      "size": 645016
+    },
+    "/home/lucied/.cache/rag3db-libs/rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF/include/common/build_id.h": {
+      "uid": 1000,
+      "mode": 420,
+      "size": 227
+    },
+    "/home/lucied/.cache/rag3db-libs/rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF/rag3db.hpp": {
+      "uid": 1000,
+      "mode": 420,
+      "size": 341786
+    },
+    "/home/lucied/.cache/rag3weaver-build/bascule-live-20261116/debt-acquittement-copy-v1/read-typed": {
+      "uid": 1000,
+      "mode": 493,
+      "size": 52552
+    },
+    "/home/lucied/.cache/rag3weaver-build/bascule-live-20261116/id-sets-pc-01/snapshot-files": {
+      "uid": 1000,
+      "mode": 493,
+      "size": 14321096
+    },
+    "/home/lucied/.cache/optimiseur-notes/bascule-16nov-927/read-only-query-v2-luciepc": {
+      "uid": 1000,
+      "mode": 493,
+      "size": 22680
+    },
+    "/home/lucied/.cache/rag3db-libs/rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF/librag3db.so": {
+      "uid": 1000,
+      "mode": 493,
+      "size": 26495792
+    },
+    "/home/lucied/.cache/rag3db-libs/rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF/libvector.rag3db_extension": {
+      "uid": 1000,
+      "mode": 493,
+      "size": 958256
+    }
+  },
+  "launcher_sha256": "5a1d7b4d65c524d8e29c226f351c3135762fcb305dc0e487cc348a1f4736765a",
+  "pilot_root": "/home/lucied/git_workspaces/rag3db-cx-arbre-cli99-pilot-control-20261117-r1",
+  "pilot": "4f17c4cc00ede65756c7b8f27e98bdc0d7ba1cca",
+  "packet": {
+    "launch.py": "5a1d7b4d65c524d8e29c226f351c3135762fcb305dc0e487cc348a1f4736765a",
+    "build_private_cli.py": "f13c39b3f2dce002eaa863f5a6819e763b3add794e23f3a28e630debbfe187a2",
+    "grant_watch_actor.py": "7d7db5a0c7d9ac762eed74ade2d0b9ee256b8499d0029ae970feac916de76612",
+    "provider_health_transport.py": "edf45f73bf97d21f2a0caab4d6e07a7d01f807fba8310c9006f442159e2bc2a6",
+    "typed_rows.py": "41314cda227b3511f2daed3695d894bec150f3ee3dfc2fd7b6fa268db1374916"
+  }
+}

@@ -246,3 +246,13 @@ Q_SOURCE de revue autorisé matérialisé au PC : qualification-cli99-source-rev
 Copie reçumetadata publiée avec rapport12 ; aucun prepare/launch/import exécuté,
 aucune copieDATA/ELF/SDK. WAPP/T/P/Qruntime/S absents, allocationPENDING.
 ROpreuvesCPU+Q_SOURCE demandées, aucunbudget/GOA/natif déduit.
+
+C7 28bc/003950c01b autoriseensuite GitAPP+parseurprivé et vrai preparemetadata :
+APP99fef/PILOTE4f17 propres surbranchesneuves, parseurbd133adminprivée,
+configGitpartagéecomparéeinchangée. Qexecution CONTRÔLEURSSEULS scellé
+preparedf88671ab5b27d3d6723dfbdc7e1bbee08734077def4d4911a07954a1b4ff6eb5,
+5scripts+JSON/6entrées,kindPREPARED_NOT_EXECUTED. LabelRÉSERVÉ
+C7-CLI99-STATIC-A-17nov2400 PASGO. [Rapport13](../17-11-2026/13-paquet-a-scelle-sans-go.md)
+et copiesJSONmetadata publiés ; T/P/S absents/Q_SOURCEconservé. DeuxROTOTAL
+demandéesavantGOAdistinct, aucunlaunch/compose/Common/build/ELF/DB/provider/
+copieDATA/SDK/service/slot/cleanup effectué. Parent OUVERT.

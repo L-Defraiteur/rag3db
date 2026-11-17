@@ -1,0 +1,107 @@
+{
+  "kind": "PREPARED_METADATA_ONLY_NOT_AUTHORIZED",
+  "observed_monotonic": 1284625.232774149,
+  "prepared_sha256": "f88671ab5b27d3d6723dfbdc7e1bbee08734077def4d4911a07954a1b4ff6eb5",
+  "reserved_allocation_not_GO": "C7-CLI99-STATIC-A-17nov2400",
+  "source_state": {
+    "APP": {
+      "path": "/home/lucied/git_workspaces/rag3db-cx-arbre-qualif-cli99-20261117-r1",
+      "head": "99fef92ce6ee9a0007eaf99c7c3a6a3789061c57",
+      "clean": true
+    },
+    "PILOT": {
+      "path": "/home/lucied/git_workspaces/rag3db-cx-arbre-cli99-pilot-control-20261117-r1",
+      "head": "4f17c4cc00ede65756c7b8f27e98bdc0d7ba1cca",
+      "clean": true
+    },
+    "PARSER": {
+      "head": "bd133850f89d6b12a3ca2b2f6ce238785ed37e3a",
+      "gitdir": "/home/lucied/git_workspaces/rag3db/.git/worktrees/rag3db-cx-arbre-qualif-cli99-20261117-r1/modules/codeparsers"
+    }
+  },
+  "packet": [
+    {
+      "name": "build_private_cli.py",
+      "size": 12653,
+      "uid": 1000,
+      "mode": 384,
+      "sha256": "f13c39b3f2dce002eaa863f5a6819e763b3add794e23f3a28e630debbfe187a2"
+    },
+    {
+      "name": "grant_watch_actor.py",
+      "size": 18973,
+      "uid": 1000,
+      "mode": 384,
+      "sha256": "7d7db5a0c7d9ac762eed74ade2d0b9ee256b8499d0029ae970feac916de76612"
+    },
+    {
+      "name": "launch.py",
+      "size": 9356,
+      "uid": 1000,
+      "mode": 384,
+      "sha256": "5a1d7b4d65c524d8e29c226f351c3135762fcb305dc0e487cc348a1f4736765a"
+    },
+    {
+      "name": "prepared.json",
+      "size": 11080,
+      "uid": 1000,
+      "mode": 384,
+      "sha256": "f88671ab5b27d3d6723dfbdc7e1bbee08734077def4d4911a07954a1b4ff6eb5"
+    },
+    {
+      "name": "provider_health_transport.py",
+      "size": 12185,
+      "uid": 1000,
+      "mode": 384,
+      "sha256": "edf45f73bf97d21f2a0caab4d6e07a7d01f807fba8310c9006f442159e2bc2a6"
+    },
+    {
+      "name": "typed_rows.py",
+      "size": 1938,
+      "uid": 1000,
+      "mode": 384,
+      "sha256": "41314cda227b3511f2daed3695d894bec150f3ee3dfc2fd7b6fa268db1374916"
+    }
+  ],
+  "expected_environment": "configured only; no future process profile observed",
+  "caps": {
+    "build": 1800,
+    "static_pair": 30,
+    "reader_self_test": 15
+  },
+  "whole_caps": {
+    "total_outer_seconds": 2400,
+    "outer_term_seconds": 2398,
+    "outer_kill_seconds": 2,
+    "common_seconds": 2330,
+    "allocation_authorized": false,
+    "runtime_backend_or_DB_authorized": false,
+    "tools_to_pin_before_GO": [],
+    "scope_evidence": "/home/lucied/.cache/rag3weaver-build/qualification-cli99-scopes-r1",
+    "remaining_preparation": [
+      "Create exact clean source99 worktree/submodule under separate admission",
+      "Prepare private Q copies of pinned scripts/config, externally freeze config SHA and allocation",
+      "Reattest input/tool metadata immediately before exact GO; no dynamic closure inferred"
+    ]
+  },
+  "paths": {
+    "/home/lucied/.cache/rag3weaver-build/target-arbre-principal-qualif": {
+      "exists": false,
+      "symlink": false
+    },
+    "/home/lucied/.cache/rag3weaver-build/qualification-cli99-pc-r1": {
+      "exists": false,
+      "symlink": false
+    },
+    "/home/lucied/.cache/rag3weaver-build/qualification-cli99-scopes-r1": {
+      "exists": false,
+      "symlink": false
+    }
+  },
+  "limits": [
+    "prepare reported rc0; no launch/compose/Common",
+    "No Cargo/build/test/ELF/backend/DB/provider/data/SDK copy",
+    "Shared Git config unchanged during worktree/private-submodule creation",
+    "ISA/loaded SDK/dynamic closure not qualified"
+  ]
+}
