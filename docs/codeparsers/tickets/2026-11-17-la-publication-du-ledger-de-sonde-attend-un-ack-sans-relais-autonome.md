@@ -49,3 +49,22 @@ porter sur le couple relais/pilote, les pins et un budget correctif distinct.
 Le carry de l'ELF0c565 compilé sous fec est seulement proposé avec chaîne de
 provenance, END précédent et propriétaireBASE ; il ne sera jamais sélectionné
 implicitement à la place d'une compilation prévue par un GO.
+
+## Vingt témoins CPU verts782b, trois réserves groupées RO avant correction
+
+GO C7-PARSERS-RELAY-782B-17nov60, source exacte782b propre/poussée, UNEfois :
+20/20vus exécutés/0échec/erreur/skip,rc0 en0,094184s externe ; bruts+manifest
+2hôtes,manifest2a89eb01fdc1e3ffa25652f365ee9cf9d03662e7bf1bbaee2e013daf9e463567.
+Rapport rust-probe-relay/02-resultats-cpu-et-reserves-ro.md.
+
+Banc1cdd0babda relève trois défauts non couverts, inscrits avant correction :
+1. Pas de TTL distant au SSHlaunch et abort non actif impossible : attente poste
+   distante non attestée close en tuant seulement le SSH local.
+2. PIDrelay-launch publié avec argv futur avant exec : course normale de snapshot.
+3. Retour0 après finish/fsync sans recheck de phaseDeadline ; ITIMERsoft seul
+   insuffisant pour erreur/cleanup. Refus relais tardif distinct du natif fermé.
+
+À corriger ensemble avec témoins des vrais chemins prépubliés, puis RO totale
+couple/pin et nouveau budget CPU C7 distinct. P03 non armé, P02 reste rouge.
+Choix du futur protocole : Cargo --no-runJSON sur FEC/ownerBASE, cache permis,
+pas de modecarry custom ni compilation forcée. Pas de nouvelle phase autorisée.
