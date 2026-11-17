@@ -53,3 +53,15 @@ restentfigés ; ciblefixture nécessitera profil explicite, pas noms/portrelabel
 Manifeste, ELF/bibliothèques/supports, stdout/stderr/rc/argv/tempsetCommonfinal
 conservés deuxhôtes, nonsecretseulement. Aucun nouveauPGfixture tantqueclientSQL
 n'estpas prêt, aucuneprolongationancienne02(expirée/restituée).
+
+## Pins de l'entrée autorisée01
+
+Source08d436ed2c8f75b10923508d7265c2cb7c6032ac, branche
+cx-optimiseur-psql-host-bundle-20261117-r1. PCrootneuf
+`/home/lucied/.cache/optimiseur-notes/psql-host-bundle-20261117-r1/bundle-b630342a7eb1`.
+RecipeSHA2562e4b62917c3f683ebc704e28c3f8ec1caeb07ac9665565622331cd44aea3a64b,
+commandSHA273deeb581ed1ef890e6caa1a861b3c4a2026915e9de366e9beb449a801fb458,
+nonceb630342a7eb1f4ec9475cccc4360c18b. Source/copiepinspréparées sanscontainer
+ni exécutionELF. ABI déclaréavantentrée : muslELF64LEx86_64, autreABIrefus.
+GO b9139349d2 autorise UNEentrée Common75/OS88kill2 après cettepublication,
+aucune nouvelle permission attendue, aucunPG/credential/admission autorisé.

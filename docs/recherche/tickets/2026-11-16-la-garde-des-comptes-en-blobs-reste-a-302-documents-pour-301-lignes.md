@@ -781,3 +781,10 @@ Alpine, closureflat copiéeREGULIÈRE/pins. Ledgerphysiquefsync AVANTkernelELF
 loaderprivé --list/psql--version/--help(minimalenv/HOMEprivé), caps5MINEND.
 POSTE32G/Common75/OS88TERM+KILL2=90MAX,cleanupseulstoppedCID/volumesown.
 0Rust/Cargo/SQL/PG/creds/OSinstall/shared/SDK ; autreABI/besoin=>STOPsansfallback.
+
+PsqlHOST outillage01source08d436ed2c/pubplanavantentrée, rootneufbundle-b630342a7eb1,
+recipeSHA2e4b62917c3f683ebc704e28c3f8ec1caeb07ac9665565622331cd44aea3a64b,
+command273deeb581ed1ef890e6caa1a861b3c4a2026915e9de366e9beb449a801fb458.
+StoppedDocker/muslABI/PT_INTERP/closureprivée/symlinkscapture etexceptionnomSELF
+--listdocumentésavantnatif, ledgerfsyncavant3CLI, caps75/88+2. GO b913 armable
+sansrépermissionhumaine ;0SQL/creds/Rust/SDK/serverstart, binHOST≠dockerexec.
