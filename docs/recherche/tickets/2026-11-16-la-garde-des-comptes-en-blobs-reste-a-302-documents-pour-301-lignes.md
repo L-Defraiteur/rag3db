@@ -314,3 +314,13 @@ au worker portant tous les I/O de phase, groupe unique avec les sous-processus,
 retour borné et refus si quiescence inconnue. Deux témoins de frontière ajoutés,
 12 préparés NON JOUÉS. RO requise avant nouveau paquet ; l'ancien b9b0e8ea ne
 porte pas ce correctif. Aucune qualification OS ou autorisation déduite.
+
+### Seconde RO R — contrôle final encore après le verdict temporel
+
+Sur2fe84b600c, le finally exécute encore stop_group/scan proc après le dernier
+check avant return ; une lenteur peut rendre un résultat après le cap sans
+refus. own_cgroup est aussi évalué avant STARTsupervise. Défaut consigné avant
+correction : effectuer tout nettoyage avant le dernier check, puis retour sans
+nouvelle observation ; capturer le cgroup attendu au setup global hors phases,
+et le revérifier dans le worker supervisé. Ancien paquet toujours historique,
+aucun témoin exécuté ni qualification revendiquée.
