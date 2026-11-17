@@ -13,6 +13,16 @@ import sys
 import time
 
 
+class CaptureArchiveRefused(OSError):
+    """Actual in-memory outcome retained; disk completeness is NOT asserted."""
+    def __init__(self,first_error,record,archive_error):
+        self.first_error=first_error
+        self.record=record
+        self.archive_error=archive_error
+        self.archive_complete=False
+        super().__init__('capture evidence archive failed: '+type(archive_error).__name__)
+
+
 def write_new(path, raw):
     fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
     with os.fdopen(fd,'wb') as stream:
@@ -74,26 +84,31 @@ def archived_capture(runner,test_name,argv,*,env,stdin,deadline):
     except runner.CaptureRefused as caught:
         error=caught;record=caught.record
     # Other exceptions are not caught or interpreted as a correct refusal.
-    for channel in ['stdout','stderr']:
-        raw=record.get(channel)
-        if type(raw) is not bytes:raise ValueError('missing bounded capture raw')
-        write_new(target/channel,raw)
-    after_fds=fd_snapshot()
-    meta={k:v for k,v in record.items() if k not in ('stdout','stderr')}
-    observed_exe=record.get('exe')
-    observed_matches=(observed_exe==requested['requested_python'] and record.get('observed_unknown') is False)
-    meta.update(capture_refused=error is not None,observed_python_matches_requested=observed_matches,
-        parent_fds_after=after_fds,parent_fds_equal=before_fds==after_fds,
-        stdout_sha256=hashlib.sha256(record['stdout']).hexdigest(),
-        stderr_sha256=hashlib.sha256(record['stderr']).hexdigest(),
-        original_process_after_capture=proc_state(record['pid'],record['start'])
-            if record.get('pid') and record.get('start') else dict(original='UNKNOWN',state=None))
-    write_new(target/'capture.json',(json.dumps(meta,sort_keys=True,allow_nan=False)+'\n').encode())
-    sync(target)
-    completed=time.monotonic()
-    write_new(target/'archived.json',(json.dumps(dict(ended_monotonic=completed,
-        within_original_deadline=completed<deadline,original_capture_refusal=error is not None))+'\n').encode())
-    sync(target);sync(root)
+    try:
+        for channel in ['stdout','stderr']:
+            raw=record.get(channel)
+            if type(raw) is not bytes:raise ValueError('missing bounded capture raw')
+            write_new(target/channel,raw)
+        after_fds=fd_snapshot()
+        meta={k:v for k,v in record.items() if k not in ('stdout','stderr')}
+        observed_exe=record.get('exe')
+        observed_matches=(observed_exe==requested['requested_python'] and record.get('observed_unknown') is False)
+        meta.update(capture_refused=error is not None,observed_python_matches_requested=observed_matches,
+            parent_fds_after=after_fds,parent_fds_equal=before_fds==after_fds,
+            stdout_sha256=hashlib.sha256(record['stdout']).hexdigest(),
+            stderr_sha256=hashlib.sha256(record['stderr']).hexdigest(),
+            original_process_after_capture=proc_state(record['pid'],record['start'])
+                if record.get('pid') and record.get('start') else dict(original='UNKNOWN',state=None))
+        write_new(target/'capture.json',(json.dumps(meta,sort_keys=True,allow_nan=False)+'\n').encode())
+        sync(target)
+        completed=time.monotonic()
+        write_new(target/'archived.json',(json.dumps(dict(ended_monotonic=completed,
+            within_original_deadline=completed<deadline,original_capture_refusal=error is not None))+'\n').encode())
+        sync(target);sync(root)
+    except BaseException as archive_error:
+        combined=CaptureArchiveRefused(error,record,archive_error)
+        # No fallback raw, invented receipt, or implicit successful archive.
+        raise combined from (error if error is not None else archive_error)
     # Evidence latency is inside the original cap as well, not a fresh budget.
     if time.monotonic()>=deadline:
         raise AssertionError('capture evidence exceeded original deadline') from error

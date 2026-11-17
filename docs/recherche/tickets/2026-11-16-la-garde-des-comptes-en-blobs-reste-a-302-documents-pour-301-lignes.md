@@ -1133,3 +1133,23 @@ a54dc9a20b4cb32cd138100784d535efa1ce06ef0f17d1d3808295a9d6b1c443.
 Fix source helper désormais autorisé : cause/record inchangés et archiveerror
 secondaire explicite sans bruts inventés si FS impossible. Publication/RO/GO
 fakeIOvert distinct avant toute entrée19. Tous anciens rouges/verts conservés.
+
+
+## Fix SOURCE minimal helper après quatre rouges fakeIO — NON JOUÉ
+
+Après conservation5019ad71f4 deux hôtes, seul capture_evidence.py change :
+CaptureArchiveRefused(OSError) garde first_error OBJET, record OBJET inchangé,
+archive_error distinct et archive_complete=False. Bloc d'archivage post-capture
+protégé ; raise explicitement chaîné sur le refus initial quand présent, sinon
+sur l'erreur d'archive. Aucune tentative d'inventer ou remplacer des bruts quand
+l'écriture échoue, aucune autorisation/vert converti. Hors archivage, deadline/
+identity/FD refusent toujours ; runner6148 et les quatre juges344df inchangés.
+
+archive-fakeio-fix-recipe.json PROPOSE les quatre mêmes seuls juges, attendu
+4PASS/0FAILERRORskip/rc0, -v -f, POSTE32G/Common20/OS28+2, racine NEUVE
+archive-fakeio-fix-07. Source/paquet privé/R total puis GO C7 distinct requis,
+zéro test/import/parse/RealCapture/PG pour cette préparation. Même si ces
+quatre passent ensuite, les19 restent NON JOUÉS : nouveau helper oblige à
+refaire pins/RO/GO19 après fakeverts, pas modifier ancien paquet19-05 gelé.
+L'ancien helper rouge et les anciens8fakeverts restent immuables. Nativeexe/
+env/outerwhole5/terminalréel/PG non qualifiés, aucun grant v1.
