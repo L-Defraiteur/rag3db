@@ -115,3 +115,8 @@ RO totale Banc01c3ae28e8 : configure_controller pur/OUTER_SECONDS780 fixe/aucune
 
 
 RO preuves Banc a4a2de1e1a : [rapport21](../../banc/16-11-2026/21-ro-preuves-vert-cible-archi-bac.md),72sizeSHA et2ELF/prefixes conformes, ledgerpub avantmarker puis2positifs=2juges4invocs1/0/0, SandboxHEAD réellement assertés, fin scope0 propre et post132ownedgone. Favorable aux deux setups seulement, pasboucle/D6Vertex/global/master/retrait ; aucun test/proc/service lancé par Banc, ticket ouvert.
+
+
+## Relecture Banc du pilote global dc868252 — 17 novembre
+
+[Revue totale source seule](../../banc/17-11-2026/02-ro-pilote-global-d6.md) : HOLD natif, quatre réserves regroupées : garde C/scripts hors lectures Landlock de la tâche ; témoin CPU dépendant de driver.py absent ; rouge D6 accepté pour tout panic du test nommé sans preuve de la cause contractuelle ; SHA destination controllers.py périmé dans provenance.json. Aucun test exécuté par Banc,17AST/31fonctions seulement. Porteur Archi pour correctif/témoins, C7 pour GO distinct ; ticket toujours OUVERT.
