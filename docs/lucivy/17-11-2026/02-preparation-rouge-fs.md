@@ -111,3 +111,13 @@ quatre familles (avec les trois sous-cas IO annoncés) aient réellement rougi.
 
 Prochaine étape : RO statique de la source et de cette recette. Ensuite préparer
 le pilote concret selon les remarques, le faire relire et attendre le GO distinct.
+
+## Précisions de la RO Recherche
+
+Avis favorable borné sur8b94353/c987957426 ; aucune compilation vérifiée.
+Les six rouges doivent être attribués par nom, cause et traces, pas six codes
+retour seuls. Le témoin panel exige le refus avant la continuation espion ;
+il ne joue pas la comparaison native zéro= zéro. Au futur vert, conserver
+le manifeste ou exporter son brut et son hash avant le remove_file des
+fixtures : la suppression actuelle ne doit pas faire disparaître la preuve.
+Échec compilation/infrastructure/publication : arrêt, pas rouge sémantique.
