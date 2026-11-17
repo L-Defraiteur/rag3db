@@ -336,3 +336,23 @@ aucunFSfix. Diffcheck RO conforme ; aucunCargo/rustfmt/rustc/test/proc/corpus
 par Recherche. API plausible statiquement, compilation NONqualifiée. E0277
 historique/zérojuge conservés, ancienGOclos ; nouveaupaquet/seedlock/pins/RO
 et GOdistinctavantCargo restent requis. WPC encore8b, aucun testaprès0f.
+
+Préparation corrective conformeautorisationC7 : nouveauQPCv3 UID1000/dev55/
+ino168958729, nonceecf77bd44c67d49b27b3cbcaf2373d18, préflighte986a9ec92086c46c1df5298ef143d087a4e0bf91b2c575dcb64e460d7de952d.
+WPC avancéFF8b→0f propre, lockdbdbstrictinchangé/nonesetce719, ancienCommon
+265273/start126184561TERMINE101 comme référence. Pilot43d6c14b (--offline
+--locked/seedinvariant, contrôlefreshsuperviseurpropre carabsentdes23enfants),
+admit166dinchangé, exportec619e41 journalisephysicalSTARTavantARM/ENDaprès
+cleanupdanswatchdog ; BEGINparentticks/END285/duréePCreste−8/RTT<=8 sansreset.
+Portablev3 UID1000/dev57/ino96560015, export/préflightidentiques.9copiesPC/
+2portable etsource0f/seeddbdb/Tmarker/SHA/AST vérifiés,aucunCodeimporté,
+Cargo/rustfmt/test/pilote/procscan/ELF/corpus exécuté enprépa. Nouveauxreceipts/
+outputs/scope/log/armACKabsents,scratch/scansvides. AncienQv2closintact.
+Probesjournalv4d13f6b47 préparés QCPUlocal UID1000/dev57/ino96524117 : mêmes
+ordre/durée/erreurIO et assertionsSTART/END ; parents/transport doublés.
+Aucun deces3verts revendiqué (anciens3verts51a9/a99restentdansleurportée).
+Rapports17/17-18/preuves fs-red-v3-preparation+journal-v3-cpu-preparation.
+ActionsROtotalesBanc+Recherche confiées surCEcouple Source0f/pilot43d/admit166d/
+exportec619/préflighte986/seeddbdb/journalphysique etprobesd13. GOCPU60distinct
+pour3probesprépub siC7ledécide, puisGO300distinct après2ROtotales ;pasreplay
+GOv2/315/natifs/tag/master/corpus.6rougesRust+positifrestentNONOBSERVÉS.

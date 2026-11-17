@@ -1,7 +1,8 @@
 # Lucivy — 17 novembre 2026
 
 État : passe FS v2 refusée à la compilation (E0277 LowerHex), aucun juge FS
-exécuté. Correctif de compatibilité hex0f610f4 publié, non compilé ; RO en attente.
+exécuté. Correctif hex0f610f4 relu, noncompilé ; paquetv3/journal préparés,
+aucun nouveau GO. Deux RO totales et GO distinct attendus.
 Aucun corpus réel contacté. Les trois raccords CPU de l’exporteur sont verts.
 
 Contrat C7 conservé : capture initiale unique StdFs, ordre effectif, cap5000/
@@ -12,7 +13,7 @@ après REFUSED. La gate reste volontairement fautive avant les rouges Rust.
 
 - Code portable : `/home/lucied/git_workspaces/cx-lucivy-fs-admission`, branche
   `cx-lucivy-fs-admission`, poussé `0f610f437a341f745e5936492114142ff3afedd4`.
-- W PC : `/home/lucied/git_workspaces/cx-lucivy-fs-admission-17nov`, encore8b94353,
+- W PC : `/home/lucied/git_workspaces/cx-lucivy-fs-admission-17nov`, avancéFF0f610f4,
   source propre ; lock ignoréGit dbdb560...37f6 après ajout direct sha2 audité.
 - Documentation : `/home/lucied/git_workspaces/cx-lucivy-plan-shutdown`, branche
   `cx-lucivy-reprise-16nov`. [Refus et fin réelle](15-refus-compilation-sha2-lowerhex.md),
@@ -21,8 +22,9 @@ après REFUSED. La gate reste volontairement fautive avant les rouges Rust.
   terminé101/nettoyé/restes[], retour SSH/poste et exporteur observés.
 - T unique3552 conservé ; trois anciens ELF1ee RO et SHA préservés deux postes.
 - [Ticket porteur](../tickets/2026-11-16-l-admission-du-corpus-fs-ne-garantit-pas-la-vue-consommee.md)
-  ouvert. RO0f610f4 puis nouveau paquet/nonce/pins/RO/GO distinct avant Cargo.
-  Prévoir seed lockdbdb invariant et fin/début portable journalisés dans la borne.
+  ouvert. Paquetv3 et commande complète [18](18-paquet-fs-red-v3-locked-et-journalise.md),
+  reçus/probes [17](17-preparation-recus-physiques-portables.md). Préflighte986,
+  nonceecf77 ; seeddbdbinvariant, Common265273TERMINE101. ROtotales/GO avantCargo.
 
 Neuf juges mémoire source1ee qualifiés seulement pour leur portée. Nouveaux
 six négatifs FS et positif NONJOUÉS. Natifs A/B/core/neufHOLD/ULP7.2/PR42
@@ -221,3 +223,24 @@ aucunFSfix. Diffcheck RO conforme ; aucunCargo/rustfmt/rustc/test/proc/corpus
 par Recherche. API plausible statiquement, compilation NONqualifiée. E0277
 historique/zérojuge conservés, ancienGOclos ; nouveaupaquet/seedlock/pins/RO
 et GOdistinctavantCargo restent requis. WPC encore8b, aucun testaprès0f.
+
+
+Préparation corrective conformeautorisationC7 : nouveauQPCv3 UID1000/dev55/
+ino168958729, nonceecf77bd44c67d49b27b3cbcaf2373d18, préflighte986a9ec92086c46c1df5298ef143d087a4e0bf91b2c575dcb64e460d7de952d.
+WPC avancéFF8b→0f propre, lockdbdbstrictinchangé/nonesetce719, ancienCommon
+265273/start126184561TERMINE101 comme référence. Pilot43d6c14b (--offline
+--locked/seedinvariant, contrôlefreshsuperviseurpropre carabsentdes23enfants),
+admit166dinchangé, exportec619e41 journalisephysicalSTARTavantARM/ENDaprès
+cleanupdanswatchdog ; BEGINparentticks/END285/duréePCreste−8/RTT<=8 sansreset.
+Portablev3 UID1000/dev57/ino96560015, export/préflightidentiques.9copiesPC/
+2portable etsource0f/seeddbdb/Tmarker/SHA/AST vérifiés,aucunCodeimporté,
+Cargo/rustfmt/test/pilote/procscan/ELF/corpus exécuté enprépa. Nouveauxreceipts/
+outputs/scope/log/armACKabsents,scratch/scansvides. AncienQv2closintact.
+Probesjournalv4d13f6b47 préparés QCPUlocal UID1000/dev57/ino96524117 : mêmes
+ordre/durée/erreurIO et assertionsSTART/END ; parents/transport doublés.
+Aucun deces3verts revendiqué (anciens3verts51a9/a99restentdansleurportée).
+Rapports17/17-18/preuves fs-red-v3-preparation+journal-v3-cpu-preparation.
+ActionsROtotalesBanc+Recherche confiées surCEcouple Source0f/pilot43d/admit166d/
+exportec619/préflighte986/seeddbdb/journalphysique etprobesd13. GOCPU60distinct
+pour3probesprépub siC7ledécide, puisGO300distinct après2ROtotales ;pasreplay
+GOv2/315/natifs/tag/master/corpus.6rougesRust+positifrestentNONOBSERVÉS.

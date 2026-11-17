@@ -1,0 +1,26 @@
+[
+  {
+    "role": "portable",
+    "uid": 1000,
+    "device": 57,
+    "inode": 96560015,
+    "pins_checked": 2,
+    "AST_only": true,
+    "physical_receipts_and_outputs_absent": true,
+    "no_execution": true
+  },
+  {
+    "role": "PC",
+    "uid": 1000,
+    "device": 55,
+    "inode": 168958729,
+    "pins_checked": 9,
+    "AST_only": true,
+    "outputs_absent": true,
+    "scratch_scans_empty": true,
+    "source": "0f610f437a341f745e5936492114142ff3afedd4",
+    "source_clean": true,
+    "lock_not_reset": true,
+    "no_Cargo_ELF_proc_scan_corpus": true
+  }
+]

@@ -1,0 +1,32 @@
+{
+  "status": "PREPARATION_ONLY_NO_CARGO_NO_CORPUS_CONTACT",
+  "source": "0f610f437a341f745e5936492114142ff3afedd4",
+  "parent": "8b9435363dbd8ec0e3973f2368b641189f0726eb",
+  "branch": "cx-lucivy-fs-admission",
+  "target": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-target-16nov",
+  "target_nonce": "3552903efab590b44f44cd8002f7b028",
+  "target_marker_sha256": "5a1671d22dc784bec78f60cf25c8b3003acc5f21e28290f05d0dfc22e0c394df",
+  "lock_audit": {
+    "path": "/home/lucied/git_workspaces/cx-lucivy-fs-admission-17nov/Cargo.lock",
+    "sha256": "dbdb560202562f17536624472a0e730627df163f4bb00c53b2baf604e77637f6",
+    "sha2": {
+      "version": "0.11.0",
+      "checksum": "446ba717509524cb3f22f17ecc096f10f4822d76ab5c0b9822c5f9c284e825f4"
+    },
+    "digest": {
+      "version": "0.11.3",
+      "checksum": "f1dd6dbb5841937940781866fa1281a1ff7bd3bf827091440879f9994983d5c2"
+    }
+  },
+  "expected_not_observed": {
+    "negative": 6,
+    "positive": 1
+  },
+  "source_files": {
+    "lucivy_core/Cargo.toml": "733579f72e08affa69d7e3a158cc819db3d247481620031915790951e6467442",
+    "lucivy_core/tests/common/mod.rs": "2515d7de5304790520af58cf47214ca92bcbf70d88be2ed20bdff19263164b9a",
+    "lucivy_core/tests/common/fs_fixture.rs": "813a3a32fd5529e947d3c8a9e32946f9b6bf34b3efdc9f794354d46eefa69712",
+    "lucivy_core/tests/test_fs_fixture_admission.rs": "6d3a8a4a54386a0cb607bd2dc7f596e877dd4d578e52b7905be6d309a448fd13",
+    "lucivy_core/tests/test_sfx_v3_ground_truth.rs": "a2e7dd7493ca3c5787107353b18c9cdb033c7a4216470d4cc5bffa8fbbfb7184"
+  }
+}

@@ -33,3 +33,10 @@ voir16. Ne pas relancer14. Lock PC effectifdbdb déjàsha2, ancienCommon265273
 terminé101 ; nouveaux pins/nonce/RO/GO requis. Début portable nonpersisté dans
 le refus précédent : aucune durée locale inventée, journalisation future
 à poser dans l’enveloppe physique. Reprise actuelle en tête du rapport01.
+
+Nouvelle préparation actuelle : [18](18-paquet-fs-red-v3-locked-et-journalise.md),
+Source0f/pilot43d/exportec619/préflighte986/nonceecf77. WPC FF0f et seeddbdb
+invariant/--locked, pasresetce719 ; vieux265273TERMINE101 et identitépropre
+fraîche enplusdesdescendants. Reçus START/END physiques etprobesd13 publiés
+[17](17-preparation-recus-physiques-portables.md), aucun nouveau test joué.
+DeuxROtotales+nouveauGO300 avant commande18, aucun vieuxGO réactivé.

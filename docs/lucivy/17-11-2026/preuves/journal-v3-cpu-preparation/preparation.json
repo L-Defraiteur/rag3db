@@ -1,0 +1,13 @@
+{
+  "path": "/home/lucied/.cache/rag3weaver-build/cx-lucivy-fs-export-journal-17nov-v1",
+  "uid": 1000,
+  "device": 57,
+  "inode": 96524117,
+  "files": {
+    "export-fs-red-ledger-v3.py": "ec619e418b4d0c8eabddadc717a01c728f9cdfc58e7c86315e0415f7688338d7",
+    "test-fs-export-boundaries-v4.py": "d13f6b479d223f4fb1861cdd1fc65bcd02eb7f87ccfe43b8fe4465bd6e0eadbd"
+  },
+  "prepared_only": true,
+  "executed": false,
+  "fixtures_use_fake_parent_and_transport": true
+}
