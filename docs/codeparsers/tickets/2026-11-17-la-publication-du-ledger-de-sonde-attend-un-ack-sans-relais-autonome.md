@@ -312,3 +312,24 @@ Pas de qualification du noyau ou de l'horloge de l'hôte par ces lectures.
 Le pin9e653 et ses trois témoins restent inchangés, toujours NONJOUÉS ; ces
 nouvelles réserves ne sont pas couvertes par leur seule sélection. Attendre
 cadrage C7 des témoins complémentaires et budgets distincts, aucun fix anticipé.
+
+### Cadrage C7 groupé, avant prépublication complémentaire
+
+Conserver 558/9e653/842 figés et NONJOUÉS, pas de GO3 immédiat. Nouvelle branche
+guards-grouped depuis842 pour sept témoins complémentaires : deux horloges
+(start PID décalé BOOTTIME, bornes MONOTONIC indépendantes), trois imports
+(Gate/moteur, pilote/legacy, pilote/physical_guard), appel RPC/récolte lente et
+stop sans échéance transmise. Dix cas au total avec les trois précédents
+INCHANGÉS, noyau558 INCHANGÉ. Aucun module de remplacement pour les boucles ;
+seuls octets adverses, clocks/process records et Popen fictif aux frontières.
+Les champs d'enveloppe d'origine des fixtures sont une proposition de contrat
+à relire, pas une attestation produite sur l'hôte. Prépublication/pins puis
+RO ciblée M/TTY avant GO CPU distinct. Aucun fix anticipé ni effet OS/SSH/natif.
+
+Paquet source groupé écrit : test_publication_guards_grouped.py charge
+explicitement les trois cas inchangés et sept nouveaux (10 exacts). Document
+04-rouges-groupes-avant-correctifs.md et pins groupés décrivent les montages,
+les enveloppes CLOCK_MONOTONIC proposées et les limites de ce modèle. Le moteur
+et ses contrôleurs sont inchangés par rapport à558 ; pas de correction cachée.
+Prévision dix FAIL non observés, zéro résultat CPU revendiqué. RO ciblées M/TTY
+et cadrage C7 exigés avant une invocation future de ce seul paquet.
