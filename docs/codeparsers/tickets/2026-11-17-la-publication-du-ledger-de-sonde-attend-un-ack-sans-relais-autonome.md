@@ -256,3 +256,23 @@ moins marge. Documentation publication-core/03-layout-et-admission-source.md ;
 pins source/test publication-capacity-pins.json. Aucun import/parser/test joué.
 Revue totale puis GO CPU distinct nécessaires ; rôle global/adaptateur/Q réel
 encore absents, aucune qualification ni fermeture du ticket.
+
+### RO totale Mémoire du candidat exact 558959a8de : trois réserves
+
+Constat source reçu avant correction, sans import/parse/test :
+
+- R1 : common_request_budget ne borne que le watchdog whole. Avec démarrage
+  phase t0 et demande Common t60, 1750 s dépassent ENDphase1798. Borner la
+  demande par les deux watchdogs et garder leurs marges avant admission.
+- R2 : après finish/stop, publication finale contrôlée par phase_deadline seule.
+  Conserver MIN(phase_deadline,hard_end local), y compris fsync et close finaux.
+- R3 : le wrapper relay.py importe/exécute publication_relay avant verify_components.
+  L'affirmation de fermeture avant import n'est donc pas établie pour le moteur.
+  Prévalidation indépendante des pins avant exec_module ou contrat externe
+  explicite à revoir, y compris le chemin d'import Gate.
+
+Les huit SHA concordent et les méthodes36/3/8 existent ; cela n'est pas un
+verdict CPU. Préparer les témoins réels groupés AVANT corrections, puis revue
+du pin de rouges et GO CPU distinct pour observer ces refus. Le candidat558959
+reste figé ; nouvelle branche guard-red réservée aux témoins et à ce constat.
+Aucune des réserves n'est corrigée ni réputée levée par cette consignation.
