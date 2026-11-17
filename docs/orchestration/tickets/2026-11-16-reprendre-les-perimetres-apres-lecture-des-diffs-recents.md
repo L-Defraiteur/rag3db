@@ -159,3 +159,6 @@ Auditpériodique17nov : G r4/ROtotaleachevée→seulGO CPU23 C7-G-PG-CPU-GREEN-R
 
 
 17novLucieautoriseDockerPGjetable. GpeutallouerinstanceTESTprivée/mêmeticketFTS302aprèsrecettepubliée,sansnouvellepermissionroutinière : imagePG17localeIDpiné/containernonce/portloopbacklibredistinct5433/limitesDockerpropres2GiB2CPU/logdisque+TTL1800cleanupattribué, setupPOSTECommon180/whole185+2. DDL/rôles/datasetprivésautorisés ;0original/servicepartagé/SDK/secretpublié. ClientRustCsource/tests/ROetGOcontactdistinctencorerequis ; Dockerdisponible≠transportqualifié. Détailsgo C7-PG-DOCKER-FIXTURE-17nov ausuivi.
+
+
+Arbitrage17novPG : psqlHOSTprivé prioritaire, Rustv2 option/WIPpréservé horscritique. Aucunblocage fonctionneln'imposeRust ; PGv1publisher/25fakes/HOLDn'estpasrunner. GFTS302 préparebundledepuisimage+vrairunner SQLconstants/GUCROsession/PGPASSFILE/type/status/reap/postcheck WHOLE5failclosed etprofilsfixture≠canonical v1 inchangé. AllocationOUTILLAGE C7-PSQL-HOST-BUNDLE-17nov90 aprèsrecettepub : extraitstoppedcontainerowned/pinsbundleavant--version/helpSANSCONTACT,POSTECommon75OS88+2,pasSQL/DB/secret/provision. Fixture02expiréerestituée,cibleCIDabsentC7metadata ; futureallocationfreshjusteavanttestsprêts,aucuneextension implicite. Détailsausuivi17nov,aucunRusttest/native/PGaccordéparcechoix.
