@@ -34,7 +34,12 @@ def read_json(path,sha=None):
     require(path.resolve()==path and path.is_file() and path.stat().st_uid==os.getuid(),'linked/unowned input')
     require(path.stat().st_size<=4*1024*1024,'oversized input')
     if sha is not None:require(digest(path)==sha,'input SHA differs')
-    return json.loads(path.read_text())
+    def pairs(items):
+        value={}
+        for key,item in items:
+            require(key not in value,'duplicate JSON key');value[key]=item
+        return value
+    return json.loads(path.read_text(),object_pairs_hook=pairs)
 
 
 def write_new(path,value):
@@ -60,6 +65,7 @@ def common_authority(packet_root,packet):
 def validate_go(go,packet,packet_sha,now):
     require(type(go) is dict and set(go)=={'kind','run_authorized','packet_sha256','reference','nonce','inputs_manifest_sha256','deadline_monotonic','sql_authorized','docker_authorized','output'},'GO schema differs')
     require(type(go.get('reference')) is str and bool(go['reference']) and type(go.get('nonce')) is str and re.fullmatch('[0-9a-f]{32}',go['nonce']) is not None,'GO identity missing')
+    require(type(go.get('output')) is str and bool(go['output']),'GO output missing')
     require(go.get('kind')=='pg-rust-compile-and-parse-only' and go.get('run_authorized') is True,'no exact tool GO')
     require(go.get('packet_sha256')==packet_sha and go.get('reference') and go.get('nonce'),'unbound GO')
     require(go.get('sql_authorized') is False and go.get('docker_authorized') is False,'contacts not allowed in this tool')
@@ -243,9 +249,12 @@ def main():
     try:
         results=orchestrate(config,NativeBackend(root,packet,args.packet_sha,go,out))
         summary=[{k:v for k,v in x.items() if k not in ('stdout','stderr')} for x in results]
-        write_new(out/'qualification.json',{'verdict':'VERT','kind':'compile-and-parse-only','phases':summary,
+        write_new(out/'qualification.pending.json',{'verdict':'VERT','kind':'compile-and-parse-only','phases':summary,
                   'sql_executed':False,'transport_qualified':False,'client_sha256':digest(out/'client')})
         common_authority(root,packet);require(time.monotonic()<min(go['deadline_monotonic'],authority['end']),'late tool completion')
+        os.link(out/'qualification.pending.json',out/'qualification.json');sync_dir(out)
+        common_authority(root,packet)
+        require(time.monotonic()<min(go['deadline_monotonic'],authority['end']),'late final qualification publication')
     except Exception as error:
         marker=out/'first-red.json'
         if not marker.exists():write_new(marker,{'first_red_monotonic':time.monotonic(),'reason':type(error).__name__+': '+str(error)})
