@@ -103,6 +103,10 @@ def main():
         remove_owned();cid=None
         files={str(p.relative_to(bundle)):dict(size=p.stat().st_size,sha256=sha(p),mode=stat.S_IMODE(p.stat().st_mode)) for p in bundle.rglob('*') if p.is_file()}
         require(all(not p.is_symlink() for p in bundle.rglob('*')),'bundle symlink')
+        for path in bundle.rglob('*'):
+            if path.is_file():
+                with path.open('rb') as stream:os.fsync(stream.fileno())
+        for directory in sorted((p for p in bundle.rglob('*') if p.is_dir()),key=lambda p:len(p.parts),reverse=True):sync(directory)
         ledger=dict(kind='psql-host-cli-bundle-before-execution',image_id=r['image_id'],nonce=r['nonce'],program_elf=dict(path=str(program),sha256=sha(program),elf=pm),kernel_entry_requested=dict(path=str(loader),sha256=sha(loader),role='explicit-musl-loader-not-psql-program'),container_interpreter_name=interp,closure=closure,provenance=provenance,files=files,environment=cli_env,native_executed=False,transport_qualified=False)
         write(root/'bundle-ledger.json',ledger);write(root/'bundle-ledger.sha256.json',dict(sha256=sha(root/'bundle-ledger.json')));sync(bundle);sync(root)
         write(root/'ledger-complete.json',dict(ledger_sha256=sha(root/'bundle-ledger.json'),completed_monotonic=time.monotonic()));sync(root)
@@ -127,6 +131,7 @@ def main():
         require(all(sha(bundle/name)==row['sha256'] for name,row in files.items()),'bundle changed after CLI')
         common.autorite(common.processus());require(time.monotonic()<end,'late final bundle')
         write(root/'result.json',dict(verdict='HOST_CLI_PREFLIGHT_PASS',ledger_sha256=sha(root/'bundle-ledger.json'),program_elf_sha256=sha(program),kernel_entry_sha256=sha(loader),steps=steps,transport_qualified=False,sql_executed=False,started_monotonic=started,ended_monotonic=time.monotonic()))
+        sync(root);common.autorite(common.processus());require(time.monotonic()<end,'late final publication')
     except BaseException as error:
         write(root/'first-red.json',dict(reason=type(error).__name__+': '+str(error),container_id=cid,transport_qualified=False))
         if cid is not None:
