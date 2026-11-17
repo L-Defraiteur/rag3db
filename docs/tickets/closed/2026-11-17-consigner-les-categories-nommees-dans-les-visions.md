@@ -1,6 +1,6 @@
 # Consigner les catégories nommées et leurs références dans les visions
 
-- **État** : ouvert, demande documentaire de Lucie du17novembre2026, avant rédaction de la vision.
+- **État** : fait, vision et index publiés en1d7971592a le17novembre2026 ; demande documentaire réalisée, aucune implémentation revendiquée.
 - **Famille** : produit
 - **Gravité** : planification ; conserver une direction de conception sans la présenter comme une fonctionnalité livrée.
 - **Atteignable en service** : non pour ce lot documentaire ; future capacité de mémoire structurée.
@@ -28,3 +28,15 @@ la conversation personnelle ni en tirer une autorisation d'implémentation.
 - Vérification des liens locaux et des en-têtes ; commit publié sur la branche.
 
 Aucun code, schéma effectif, migration, test natif ou service à modifier.
+
+## Réalisation
+
+Vision [Des catégories nommées qui sont elles-mêmes des fiches](../../orchestration/visions/2026-11-17-des-categories-nommees-comme-fiches-de-memoire.md),
+indexée dans le README des visions, commit1d7971592a publié sur la branche
+cx-orchestration-reprise-16nov-r1. Le document reprend la distinction de Lucie
+entre définition recherchable, référence de catégorie et référence de valeur.
+La conversation complète et ses éléments personnels ne sont pas recopiés.
+
+Contrôle des fichiers et du lien d'index VERT ; deux filtres distincts et statut
+de vision future relus, gitdiffcheck VERT. Ce ticket ferme la consignation,
+pas une future capacité de mémoire structurée, qui n'a pas été implémentée.
