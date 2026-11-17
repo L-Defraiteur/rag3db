@@ -107,3 +107,21 @@ Les19 et8anciens sont exclus, module test_runner importé pour type du runner
 seulement, aucune classe19 sélectionnée. Après rouge conservé deux hôtes
 seulement : fix premièrecause/record+archiveerror, sans bruts inventés si
 l'écriture est impossible, puis nouvelle RO/GO fakeIOvert distinct avant19.
+
+
+## Quatre rouges fakeIO acquis — GO57f223ab29, avant fix helper
+
+UNE entrée sourceb6586cbc1a/recipe2bf184348d035759a5b6298b83a6a2998462df7f94cbce3e4c5b8c5ae9d73b00.
+Scope validation-2ag211uv CommonROUGE/code1/erreur null, terminé/nettoyé/restes[],
+bus privé absent.4tests/4FAIL first_error absent précisément/0ERRORskip/rc1,
+elapsed0.3040391611866653s. Write/sync/proc/fd étaient FAUX refus sur capture
+FAUSSE, aucun enfant/Psql/PG.19+8autres NON JOUÉS, aucun retry.
+
+20preuves sources/bruts/pins/recettes/temps/Common sans jeton vérifiées SHA/
+taille aux deux postes AVANTfix : PCpsql-host-runner-20261117-r1/archive-fakeio-red-06,
+portable même parent/archive-fakeio-red-06-proof. Manifeste
+13996ea3dd97b346c26cc36a9c8909129b99580e96a016de9bc31ca5d7818e2e ; archive
+a54dc9a20b4cb32cd138100784d535efa1ce06ef0f17d1d3808295a9d6b1c443.
+Fix source helper désormais autorisé : cause/record inchangés et archiveerror
+secondaire explicite sans bruts inventés si FS impossible. Publication/RO/GO
+fakeIOvert distinct avant toute entrée19. Tous anciens rouges/verts conservés.
