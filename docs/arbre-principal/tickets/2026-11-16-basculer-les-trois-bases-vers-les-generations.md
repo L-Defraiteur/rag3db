@@ -205,3 +205,15 @@ aucun nouveau relevé runtime ni calcul. Corpusmatched Banc reste indépendant.
 Aucun GO build/test/CLI/provider/original/snapshot/copie/service/slot/cleanup.
 Publier recette/pins et RO avant proposition opérationnelle à GO distinct.
 Anciens budgets/retours clos, psql reste portée propre de G. Ticket OUVERT.
+
+[Recette11](../17-11-2026/11-recette-nouvel-elf-et-lecteurs-99.md) et premier
+pilote/config proposés : sources99 exactes G (pas ancienlanceurpartagé),
+acquis ED6add/sourceb472==99 réemployables sansF8/lib parréflexe. Métadonnées
+PC autorisées par C7 : resolve/lstat/SHA outils/lecteurs/SDK, AUCUN EXEC ;
+nouveaux chemins target/PQS/W constatésabsents sans création. PhaseA proposée
+build2bins/artifactJSON/features/27pins/copiesledger AVANTcheckpairstatique+
+framing typed, statut borné sansbackendinvocation/SDKruntime/DB. Huit témoins
+sélecteur écrits NONJOUÉS. Config allocationPENDING, Q non préparé, pilote
+NONJOUÉ : nouvellesRO/GOCPU et GOA distincts avant exécution. B runtime privé
+et C migration/oracle restent étapes séparées avec nouveauxpaquets/RO/GO.
+Pas de DB/copie d'artefacts/build/test/CLI/provider/service/slot/cleanup ici.

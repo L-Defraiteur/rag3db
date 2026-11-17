@@ -1,0 +1,269 @@
+{
+  "kind": "METADATA_ONLY_NO_TOOL_EXECUTION",
+  "observed_utc": "2026-11-17T16:22:03.073251+00:00",
+  "host": "LuciePC",
+  "tools": {
+    "python3": {
+      "path": "/usr/bin/python3",
+      "link": "python3.14",
+      "lstat_mode": 511,
+      "lstat_uid": 0,
+      "real_path": "/usr/bin/python3.14",
+      "real_mode": 493,
+      "real_uid": 0,
+      "size": 14424,
+      "sha256": "a38210a53e07ac5eb912ee35c2d92ddb7eaa349301b60c188a5f496c7c87449d"
+    },
+    "timeout": {
+      "path": "/usr/bin/timeout",
+      "link": null,
+      "lstat_mode": 493,
+      "lstat_uid": 0,
+      "real_path": "/usr/bin/timeout",
+      "real_mode": 493,
+      "real_uid": 0,
+      "size": 68320,
+      "sha256": "9c3e4dc9a71ba25ed23e56774c003d3e16043479c48c9fd5c6943734eb1942b7"
+    },
+    "cargo": {
+      "path": "/home/lucied/.cargo/bin/cargo",
+      "link": "rustup",
+      "lstat_mode": 511,
+      "lstat_uid": 1000,
+      "real_path": "/home/lucied/.cargo/bin/rustup",
+      "real_mode": 493,
+      "real_uid": 1000,
+      "size": 21347088,
+      "sha256": "b1c8cb14e30889e7e2999e6b69e62d9e9b9ffc0f4df8180564d306d9680e6c55"
+    },
+    "rustc": {
+      "path": "/home/lucied/.cargo/bin/rustc",
+      "link": "rustup",
+      "lstat_mode": 511,
+      "lstat_uid": 1000,
+      "real_path": "/home/lucied/.cargo/bin/rustup",
+      "real_mode": 493,
+      "real_uid": 1000,
+      "size": 21347088,
+      "sha256": "b1c8cb14e30889e7e2999e6b69e62d9e9b9ffc0f4df8180564d306d9680e6c55"
+    },
+    "rustup": {
+      "path": "/home/lucied/.cargo/bin/rustup",
+      "link": null,
+      "lstat_mode": 493,
+      "lstat_uid": 1000,
+      "real_path": "/home/lucied/.cargo/bin/rustup",
+      "real_mode": 493,
+      "real_uid": 1000,
+      "size": 21347088,
+      "sha256": "b1c8cb14e30889e7e2999e6b69e62d9e9b9ffc0f4df8180564d306d9680e6c55"
+    },
+    "g++": {
+      "path": "/usr/bin/g++",
+      "link": null,
+      "lstat_mode": 493,
+      "lstat_uid": 0,
+      "real_path": "/usr/bin/g++",
+      "real_mode": 493,
+      "real_uid": 0,
+      "size": 2455144,
+      "sha256": "e43525244f7c819664fdbc75f7c48ac2ca61213a268f19f9b32d43da5a706073"
+    },
+    "gcc": {
+      "path": "/usr/bin/gcc",
+      "link": null,
+      "lstat_mode": 493,
+      "lstat_uid": 0,
+      "real_path": "/usr/bin/gcc",
+      "real_mode": 493,
+      "real_uid": 0,
+      "size": 2451048,
+      "sha256": "b0b49531b313e70aee0254fb5e69b050a781506184e16ebee6ebe68eee94a145"
+    },
+    "cc": {
+      "path": "/usr/bin/cc",
+      "link": "gcc",
+      "lstat_mode": 511,
+      "lstat_uid": 0,
+      "real_path": "/usr/bin/gcc",
+      "real_mode": 493,
+      "real_uid": 0,
+      "size": 2451048,
+      "sha256": "b0b49531b313e70aee0254fb5e69b050a781506184e16ebee6ebe68eee94a145"
+    },
+    "ld": {
+      "path": "/usr/bin/ld",
+      "link": null,
+      "lstat_mode": 493,
+      "lstat_uid": 0,
+      "real_path": "/usr/bin/ld",
+      "real_mode": 493,
+      "real_uid": 0,
+      "size": 1644584,
+      "sha256": "7bd5014a8b3184c41943da0529ab0451592a5581750a73a9f4a77e4f4e26aa0a"
+    },
+    "du": {
+      "path": "/usr/bin/du",
+      "link": null,
+      "lstat_mode": 493,
+      "lstat_uid": 0,
+      "real_path": "/usr/bin/du",
+      "real_mode": 493,
+      "real_uid": 0,
+      "size": 145712,
+      "sha256": "13fa69b2cdade1ffab766046b982922d0e40eec4c8bd849a404ec440eff6956a"
+    },
+    "git": {
+      "path": "/usr/bin/git",
+      "link": null,
+      "lstat_mode": 493,
+      "lstat_uid": 0,
+      "real_path": "/usr/bin/git",
+      "real_mode": 493,
+      "real_uid": 0,
+      "size": 5926648,
+      "sha256": "0da72c00a915c06b9e7062e2dc999afe323223d000fef63111a94f522afd8ecf"
+    },
+    "bash": {
+      "path": "/usr/bin/bash",
+      "link": null,
+      "lstat_mode": 493,
+      "lstat_uid": 0,
+      "real_path": "/usr/bin/bash",
+      "real_mode": 493,
+      "real_uid": 0,
+      "size": 1268912,
+      "sha256": "917e986de64e7d36e42bef7aff5db73b7ecef5b58477bdb990e595e8dfc930b2"
+    }
+  },
+  "rustup_default": "stable-x86_64-unknown-linux-gnu",
+  "rustup_overrides": {},
+  "toolchain_candidates": {
+    "1.100.0-x86_64-unknown-linux-gnu": {
+      "cargo": {
+        "path": "/home/lucied/.rustup/toolchains/1.100.0-x86_64-unknown-linux-gnu/bin/cargo",
+        "link": null,
+        "lstat_mode": 493,
+        "lstat_uid": 1000,
+        "real_path": "/home/lucied/.rustup/toolchains/1.100.0-x86_64-unknown-linux-gnu/bin/cargo",
+        "real_mode": 493,
+        "real_uid": 1000,
+        "size": 36100400,
+        "sha256": "84d55d77232a921da96bcf2e1f78532ef5c5221803aae4448d9e220d48ebd808"
+      },
+      "rustc": {
+        "path": "/home/lucied/.rustup/toolchains/1.100.0-x86_64-unknown-linux-gnu/bin/rustc",
+        "link": null,
+        "lstat_mode": 493,
+        "lstat_uid": 1000,
+        "real_path": "/home/lucied/.rustup/toolchains/1.100.0-x86_64-unknown-linux-gnu/bin/rustc",
+        "real_mode": 493,
+        "real_uid": 1000,
+        "size": 647568,
+        "sha256": "5073422953727c9427a76b7fce03aa9404da46315e5a1e4965389512a41e8db0"
+      }
+    },
+    "1.98.1-x86_64-unknown-linux-gnu": {
+      "cargo": {
+        "path": "/home/lucied/.rustup/toolchains/1.98.1-x86_64-unknown-linux-gnu/bin/cargo",
+        "link": null,
+        "lstat_mode": 493,
+        "lstat_uid": 1000,
+        "real_path": "/home/lucied/.rustup/toolchains/1.98.1-x86_64-unknown-linux-gnu/bin/cargo",
+        "real_mode": 493,
+        "real_uid": 1000,
+        "size": 40680304,
+        "sha256": "da77c8b33849312255ccde3179198ada4c8deb370488d050286146b1d1b27e14"
+      },
+      "rustc": {
+        "path": "/home/lucied/.rustup/toolchains/1.98.1-x86_64-unknown-linux-gnu/bin/rustc",
+        "link": null,
+        "lstat_mode": 493,
+        "lstat_uid": 1000,
+        "real_path": "/home/lucied/.rustup/toolchains/1.98.1-x86_64-unknown-linux-gnu/bin/rustc",
+        "real_mode": 493,
+        "real_uid": 1000,
+        "size": 645952,
+        "sha256": "859254978c0a0402c32f949f6de0d99aee73be8d15f45aac00ae1448aac51e74"
+      }
+    },
+    "nightly-x86_64-unknown-linux-gnu": {
+      "cargo": {
+        "path": "/home/lucied/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/cargo",
+        "link": null,
+        "lstat_mode": 493,
+        "lstat_uid": 1000,
+        "real_path": "/home/lucied/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/cargo",
+        "real_mode": 493,
+        "real_uid": 1000,
+        "size": 36077216,
+        "sha256": "935e08e36cfb722f39861f7f64292e0039a411da4108cae127fd4e0c85f6b834"
+      },
+      "rustc": {
+        "path": "/home/lucied/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rustc",
+        "link": null,
+        "lstat_mode": 493,
+        "lstat_uid": 1000,
+        "real_path": "/home/lucied/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rustc",
+        "real_mode": 493,
+        "real_uid": 1000,
+        "size": 645928,
+        "sha256": "77e93eb6a4e4f7591d03760182b04501955a239f0472413d1d0989b0af53ca44"
+      }
+    },
+    "stable-x86_64-unknown-linux-gnu": {
+      "cargo": {
+        "path": "/home/lucied/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+        "link": null,
+        "lstat_mode": 493,
+        "lstat_uid": 1000,
+        "real_path": "/home/lucied/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo",
+        "real_mode": 493,
+        "real_uid": 1000,
+        "size": 40688400,
+        "sha256": "ff3022fcbd13b08434ea7afde9a0ef9d5b3f5c17b5fc7a40031be3ee000a6a24"
+      },
+      "rustc": {
+        "path": "/home/lucied/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc",
+        "link": null,
+        "lstat_mode": 493,
+        "lstat_uid": 1000,
+        "real_path": "/home/lucied/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc",
+        "real_mode": 493,
+        "real_uid": 1000,
+        "size": 645016,
+        "sha256": "3690cc576ede140504698405d5d8fa3826aaadbe71699c6c4ed0a565d6f493e2"
+      }
+    }
+  },
+  "sdk_headers": {
+    "include/common/build_id.h": {
+      "path": "/home/lucied/.cache/rag3db-libs/rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF/include/common/build_id.h",
+      "link": null,
+      "lstat_mode": 420,
+      "lstat_uid": 1000,
+      "real_path": "/home/lucied/.cache/rag3db-libs/rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF/include/common/build_id.h",
+      "real_mode": 420,
+      "real_uid": 1000,
+      "size": 227,
+      "sha256": "1cf920608514b5f3c5e90952ecc580ca6170398f288dd554d00bb0bb32b03110"
+    },
+    "rag3db.hpp": {
+      "path": "/home/lucied/.cache/rag3db-libs/rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF/rag3db.hpp",
+      "link": null,
+      "lstat_mode": 420,
+      "lstat_uid": 1000,
+      "real_path": "/home/lucied/.cache/rag3db-libs/rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF/rag3db.hpp",
+      "real_mode": 420,
+      "real_uid": 1000,
+      "size": 341786,
+      "sha256": "4e25a659ce070ec38023ec90c1ced5a806fdcdaeda5eb96eda799feafa5806ba"
+    }
+  },
+  "limits": [
+    "No --version, metadata, compiler or candidate execution",
+    "No dynamic dependency closure/ISA/runtime/maps qualification",
+    "No target/cache mutation or artifact copy",
+    "No guarantee of later path/override stability"
+  ]
+}

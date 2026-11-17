@@ -1,0 +1,76 @@
+{
+  "kind": "METADATA_ONLY_NO_READER_OR_LIBRARY_EXECUTION",
+  "artifacts": {
+    "typed-reader": {
+      "path": "/home/lucied/.cache/rag3weaver-build/bascule-live-20261116/debt-acquittement-copy-v1/read-typed",
+      "real_path": "/home/lucied/.cache/rag3weaver-build/bascule-live-20261116/debt-acquittement-copy-v1/read-typed",
+      "uid": 1000,
+      "mode": 493,
+      "size": 52552,
+      "sha256": "add01058f3b0d6efd28d936c865b1ba9071c0e2eb85f559743bf0c52aeea6371",
+      "symlink": false
+    },
+    "ids": {
+      "path": "/home/lucied/.cache/rag3weaver-build/bascule-live-20261116/id-sets-pc-01/snapshot-files",
+      "real_path": "/home/lucied/.cache/rag3weaver-build/bascule-live-20261116/id-sets-pc-01/snapshot-files",
+      "uid": 1000,
+      "mode": 493,
+      "size": 14321096,
+      "sha256": "d0dd13e6d403e614038b251f413637d5f6d02a98ba1c10509388d0be1f5e15c7",
+      "symlink": false
+    },
+    "query": {
+      "path": "/home/lucied/.cache/optimiseur-notes/bascule-16nov-927/read-only-query-v2-luciepc",
+      "real_path": "/home/lucied/.cache/optimiseur-notes/bascule-16nov-927/read-only-query-v2-luciepc",
+      "uid": 1000,
+      "mode": 493,
+      "size": 22680,
+      "sha256": "48ae2328a29676fa69154cb9c67d9125d4d04cf92b029bd2b2a09981dea95616",
+      "symlink": false
+    },
+    "library": {
+      "path": "/home/lucied/.cache/rag3db-libs/rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF/librag3db.so",
+      "real_path": "/home/lucied/.cache/rag3db-libs/rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF/librag3db.so",
+      "uid": 1000,
+      "mode": 493,
+      "size": 26495792,
+      "sha256": "b7e9fc75a3d2de04c72680b0309e8bb1df9eaadb5211ebbacf39716c6d0a2101",
+      "symlink": false
+    },
+    "vector": {
+      "path": "/home/lucied/.cache/rag3db-libs/rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF/libvector.rag3db_extension",
+      "real_path": "/home/lucied/.cache/rag3db-libs/rag3db-build-59ac9c86bc2b3529b590a7462ab7051e3ad26b8a-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF/libvector.rag3db_extension",
+      "uid": 1000,
+      "mode": 493,
+      "size": 958256,
+      "sha256": "1669d6392ec8067fcf92ae2ccc972fd7cd3086629fb82d1f5d254e90d72d7561",
+      "symlink": false
+    }
+  },
+  "proposed_paths": {
+    "/home/lucied/.cache/rag3weaver-build/target-arbre-principal-qualif": {
+      "exists": false,
+      "symlink": false
+    },
+    "/home/lucied/.cache/rag3weaver-build/qualification-cli99-pc-r1": {
+      "exists": false,
+      "symlink": false
+    },
+    "/home/lucied/.cache/rag3weaver-build/qualification-cli99-control-r1": {
+      "exists": false,
+      "symlink": false
+    },
+    "/home/lucied/.cache/rag3weaver-build/qualification-cli99-scopes-r1": {
+      "exists": false,
+      "symlink": false
+    },
+    "/home/lucied/git_workspaces/rag3db-cx-arbre-qualif-cli99-20261117-r1": {
+      "exists": false,
+      "symlink": false
+    }
+  },
+  "limits": [
+    "No ISA or dynamic dependencies/SDK load checked",
+    "No file/target/cache changes; no copies"
+  ]
+}
