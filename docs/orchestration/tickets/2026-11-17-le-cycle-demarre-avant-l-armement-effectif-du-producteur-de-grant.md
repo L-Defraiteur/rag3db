@@ -34,6 +34,64 @@ Témoins aux vrais raccords à publier avant code : watcher jamais armé, vivant
 
 Après source/tests publiés et RO totale du couple/pin, nouveau GO correctif distinct uniquement. L’ancien3c2 reste ROUGE ; aucune reprise n’est autorisée par ce ticket. Pas de migration LIVE, redémarrage de service ou actor de remplacement non attribué.
 
+## Préparation indépendante après conservation complète
+
+Preuves natives rouges publiées e65cbd34a582c3bbb82773bfd9fd6f9b8abff695,
+84 fichiers PC/local réempreintés0écart, manifeste8087ab5db59b8f48bdfb98579f0743acecb1d7831197781a981c0fde814e55de.
+RO preuves ED+Recherche favorables bornées au refus et à la conservation ;
+aucune qualification du cycle. Nouveau WT de préparation distinct
+cx-arbre-cycle-producer-controller-20261117-r1, aucun code dans les anciens
+P/Q/S ni dans la source PC3c2.
+
+19dd4ec680 publie six contre-exemples du VRAI `lifecycle.publish_ready` puis
+ils échouent tous en0.004s : jamais armé, annoncé vivant mais exited, argv
+incorrect/exec retardé, boucle non engagée, disparition après ARMED, premier
+rouge présent. Le code courant ignore les états simulés et publie READY.
+Ces témoins constatent l'absence de garde à ce raccord ; ils ne constituent
+pas encore une qualification des futurs validateurs PID/ARMED ni du futur
+contrôleur. Des fixtures complètes et un parcours positif seront nécessaires,
+ainsi que les vrais fakes du parent/superviseur. Aucun process/proc/service,
+réseau, DB, CLI ou signal réel dans ces témoins.
+
+Interface commune Arbre/Embar convenue avant code : acteur versionné
+grant_watch_actor.py, politique cycle dans lifecycle_health_policy.py et
+politique globale distincte. Config SHA externe en argv (non circulaire),
+source/allocation/prepared et deux nonces prédéclarés. ARMED après vrai exec
+et première itération vivante, processus OS indépendant et poll contrôlés,
+heartbeat borné sous END original ; grant ACK intermédiaire puis acteur
+reste vivant jusqu'à RELEASE surveillé. Même common cgroup/watchdog ;
+aucun TTL900 propre au watcher, aucun nouveau GO ni runtime correctif.
+
+## Groupe correctif publié, CPU seulement
+
+84a61e6934 : contrôleur commun supervisant acteur avant driver/copie/DB,
+ARMED réel + heartbeat/process OS aux actions, nouveau descripteur obligatoire
+dans READY/phase, deux nonces préchoisis et lease distincte, release terminal
+sous même END. Acteur4f54 strict, helperowner83139/transportedf45 inchangés.
+Après publication :124 fonctions CPU vertes0.283s,0skip/rc0, timeout59+kill1.
+Les six rouges initiaux sont désormais verts, avec chemin positif, vrais
+fakes parent/entrée/policy et les20 de l'acteur. Aucune action OS/proc/health/
+DB/CLI ou service réelle dans ces tests.
+
+Voir [préparation02](../../arbre-principal/17-11-2026/02-preparation-controleur-et-producteur-supervise.md).
+Qv5/22 sources et Python à préparer en métadonnées, puis RO totale avant
+tout nouveau GO C7. Ancien3c2/PQS4/FIN restent figés et ROUGE conservé.
+Le ticket reste OUVERT : aucune qualification native du cycle/shutdown/LIVE.
+
+## RO ED totale source2dccc/Qv5, réserve finale avant nouveau GO
+
+[Rapport ED33](../../everything-declarative/16-11-2026/33-ro-cycle-supervise-2dccc.md) :
+copie22/prepared e3741/HEADpropres/P-S-allocation-grantabsents recoupés PC,
+contrôleur→ARMEDindépendant→driver/actions et RELEASE borné relus. Aucun run.
+P1final hérité constaté : lifecycle.py239-242 rend positif après q.save,
+qualify.py17-20 ne contrôle END qu'AVANTdump/flush/fsync. Si fsync traverse
+END, composed positif et rc0 restent possibles après sa deadline ; outer900
+n'impose pas la frontière Common830. Porteur Arbre, consigné avant correctif.
+Critère : vrai finaliseur refusant un dépassement postfsync/préretour avec
+verdict/code concordants et premier rouge conservé, témoin prépublié/rouge puis
+fix/couple/paquet/RO neufs avant décision C7. Zéro test/proc/native/DB/health
+par ED ; pas de GO3c2 reporté ni de budget remis à zéro. Ticket reste OUVERT.
+
 ## Réserve finale sur la publication du composé — 17 novembre
 
 ED612c778aca relève sur source2dccc070f1564d8ca9d22a59fcb2b73222f415e5/Qv5e3741c89 : lifecycle.compose contrôle END puis appelle qualify.save, qui ne contrôle END qu'avant JSON/flush/fsync. C7 confirme en lecture ces deux vrais raccords. Une publication franchissant END peut donc laisser un composé favorable et rc0 après la borne Common830 ; l'enveloppe OS900 ne prouve pas le respect de cette borne interne. Aucun franchissement runtime n'est déclaré : le couple n'a pas été lancé.
