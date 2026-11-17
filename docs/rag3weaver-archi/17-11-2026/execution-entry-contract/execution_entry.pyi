@@ -24,6 +24,8 @@ class InvocationPlan(TypedDict):
     uid: int
     cgroup: str
     clock: str  # all timestamps in this transcript must share this host clock
+    start: float  # original Common window, never reset on publication
+    issued: float  # authority issuance, independently admitted on the same clock
     end: float
     operation_end: float
     cleanup_reserve: float

@@ -18,7 +18,7 @@ def fixture():
                 environment={'LD_LIBRARY_PATH': '/private/sdk'},
                 stdout='raw-stdout', stderr='raw-stderr', authority='common-1',
                 runner_pid=100, runner_start=11, uid=1000, cgroup='scope-1',
-                clock='host-1', end=100.0, operation_end=90.0,
+                clock='host-1', start=0.0, issued=0.5, end=100.0, operation_end=90.0,
                 cleanup_reserve=10.0,
                 storage_profile='local-regular-exec-write-denial-v1',
                 common_owner=(90, 9),
@@ -268,3 +268,18 @@ class EntryContract(unittest.TestCase):
         plan, facts = fixture()
         del facts[9]
         self.refused(plan, facts, 'event-order')
+
+    def test_facts_before_authority_issuance_are_not_in_window(self):
+        plan, facts = fixture()
+        plan['issued'] = 1.5
+        self.refused(plan, facts, 'before-issuance')
+
+    def test_authority_cannot_predate_original_common_window(self):
+        plan, facts = fixture()
+        plan['issued'] = -1.0
+        self.refused(plan, facts, 'authority-window')
+
+    def test_new_issuance_after_operation_end_cannot_reset_budget(self):
+        plan, facts = fixture()
+        plan['issued'] = 91.0
+        self.refused(plan, facts, 'authority-window')

@@ -106,3 +106,10 @@ la clôture complète de Common, son ancêtre encore actif. Séparer enfant wait
 retour du runner, puis clôture Common attestée par le propriétaire extérieur.
 Aucun défaut OS attribué. Corrections du contrat/témoins seulement, avant RO
 neuve et GO CPU distinct ; pas d'implantation ou d'exécution par cette réserve.
+
+## Réserve TTY377 sur borne inférieure, avant correction
+
+Le plan ne porte pas encore start/issued Common ; ordre et END ne refusent pas
+une séquence antérieure à l'allocation. Ajouter origine et émission de l'autorité
+indépendante, dans le même domaine d'horloge, et témoins avant émission/fenêtre.
+Réserve de contrat, pas défaut OS observé ; aucune exécution autorisée.

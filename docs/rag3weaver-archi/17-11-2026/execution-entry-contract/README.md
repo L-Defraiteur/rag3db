@@ -114,7 +114,7 @@ source Linux explicite, pas noyau hôte relevé ni qualification du stockage.
 `execution_entry.pyi` décrit seulement `verify_transcript` : futur vérificateur
 pur d'une séquence de faits modélisés. `test_execution_entry.py` vise ce symbole
 futur ; aucun module d'implémentation n'est fourni ici et aucun import/test n'est
-exécuté. Trente-sept fonctions de témoins sont écrites, NON JOUÉES. Ces témoins
+exécuté. Quarante fonctions de témoins sont écrites, NON JOUÉES. Ces témoins
 n'attestent jamais le noyau ou les événements réels. Le
 producteur opérationnel devra construire les faits depuis ses propres primitives,
 pas accepter un transcript fourni par le programme testé comme preuve d'OS.
@@ -185,3 +185,16 @@ La production du reçu terminal ne doit pas démarrer de tâche dans le sous-arb
 qu'elle déclare quiet. Absence/refus de clôture externe reste rouge/incomplet.
 Six témoins additionnels écrits, NON JOUÉS : ACK autre phase/autres faits/booléen,
 closer runner interdit, clôture avant wait runner, clôture externe manquante.
+
+
+## Delta après réserve TTY377 : fenêtre d'origine
+
+Consignée au ticket avant correction. Le plan contient désormais `start` Common
+original et `issued` d'émission de l'autorité indépendante, avec son identifiant
+et même horloge. Contrôler tous les nombres finis et
+start <= issued < operation_end <= end-cleanup_reserve < end, réserve positive ;
+chaque fait doit être >= issued, jamais seulement inférieur à END. La phase
+ne recrée ni start ni END depuis son propre premier événement. Les faits avant
+émission sont refusés avant tout effet dépendant ; une émission hors fenêtre
+n'accorde pas de nouveau budget. Trois témoins écrits, NON JOUÉS, portent ces
+cas. Total40 fonctions ; aucune erreur d'import n'est une preuve rouge TDD.
