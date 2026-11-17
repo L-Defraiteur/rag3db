@@ -11,7 +11,7 @@ class Boundaries(unittest.TestCase):
   assignment=next(n for n in ast.walk(tree) if isinstance(n,ast.Assign) and any(isinstance(t,ast.Subscript) and ast.unparse(t)=="value['models']['llm']" for t in n.targets))
   ns=dict(value=dict(models={}))
   exec(compile(ast.Module(body=[assignment],type_ignores=[]),'actual-model-declaration','exec'),ns)
-  from settings import C
+  C=HERE.parents[3]/'extension/rag3weaver' # APP source in this carrier worktree, not the future PC path.
   rust=(C/'src/model_source.rs').read_text();enum=rust.split('pub enum Provider {',1)[1].split('\n}',1)[0]
   variants={v.lower() for v in re.findall(r'^    ([A-Z][a-z]+),',enum,re.M)}
   model=ns['value']['models']['llm'];self.assertIn(model['provider'],variants)
