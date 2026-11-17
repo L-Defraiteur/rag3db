@@ -55,3 +55,25 @@ Les autres corrections groupées sont raccordées : models.llm porte provider=co
 Observer.runtime_snapshot archive environ sélectionné/maps et identité avant/après (PID/start/UID/CG/exe/SHA/argv/cwd) avant de juger égalité et profil. Une lecture impossible reste un refus archivé, jamais une qualification. Le polling conserve sa limite annoncée ; on n'en fait pas une trace exhaustive des exec. preserve_failure appelle le latch avant cleanup, conserve l'exception primaire et lui ajoute les erreurs de fermeture ; host/TTY sont attendus/réapés dans MIN(ENDD6,now+15), broker socket/thread dans MIN(END,ENDphase,now+2). Un résidu/timeout reste un refus et relève ensuite du Common ; aucune capture SDK n'est ajoutée au nettoyage.
 
 **Avis favorable au delta de préparation**, sans nouveau blocage identifié à cette lecture. Cela lève les quatre réserves source initiales de Banc, pas le ticket documentaire ni les exigences globales. Les39 fonctions sont ÉCRITES/NONJOUÉES : ni rouge dynamique ni CPU vert attesté par Banc. C7 arbitre CPU60 exact distinct, puis pins/copies/metadata et nouvelle revue avant tout GO7455 natif/modèle/service. Anciennes742/01c3/72preuves préservées, aucun master/intégration/nettoyage acquis.
+
+
+## Delta résiduel60f9af5f — identité du juge vert encore à fermer
+
+Pin exact **60f9af5f342d9a24adea8b718ad48d0d5e337f85** ; APPf1e8 inchangée. Lecture du seul delta Broker.handle et du témoin prépublié,18AST/40fonctions présentes **NONJOUÉES**, produit hors docs inchangé. Le refus à l'admission verte est désormais raccordé au vrai handle, avant création de session : modifier directement le texte .is_err() est bien refusé. built/tested recontrôlent le bloc et l'état source capturé. Les avis favorables4461 précédents restent à leur périmètre.
+
+**Une réserve résiduelle, HOLD sur la garantie “même juge exécuté”.** policy.red_source vérifie seulement count(D6_RED_TEST)==1 puis sa ligne ; judge_sha256 est l'empreinte de cette constante. Cela ne vérifie pas que le bloc est actif dans la source Rust verte. Contre-exemple statique à placer dans le même module tests :
+
+```rust
+#[cfg(any())] // désactive le bloc conservé sans modifier ses octets
+#[test]
+fn agent_name_rejects_an_inner_space() {
+    assert!(valider_le_nom_de_l_agent("Om bre").is_err(), "D6_ASSERTION: Om bre accepted; agent.name must reject interior whitespace");
+}
+
+#[test]
+fn agent_name_rejects_an_inner_space() {}
+```
+
+La constante D6_RED_TEST apparaît exactement une fois ; son SHA est donc celui du rouge acquis. Le premier item est conditionnellement désactivé, le second garde le nom exact avec un corps vide. Les contrôles d'admission autorisent les différences dans backend.rs avant Cargo ; le snapshot complet fige ensuite cet état sans le comparer sémantiquement au juge rouge. Le filtre Rust exact peut ainsi obtenir1/0/0 sur l'autre item, alors que l'assertion originelle n'a pas été exécutée verte. Le validateur peut être corrigé en parallèle et passer la revue indépendante : cela ne reconstitue toujours pas le vert de ce juge initial. **Aucune compilation ni test de ce contre-exemple n'a été effectué ici** ; c'est le chemin non exclu par les conditions de code, pas un rouge dynamique observé.
+
+Attendu pour fermer : lier la source verte à la source rouge acquise en n'autorisant que la modification du validateur admise, ou une autre preuve structurelle effective préservant item/attributs/contexte actif du test. Le simple hash de la sous-chaîne constante n'ajoute pas cette garantie. Publier un témoin du vrai Broker.handle où le bloc inchangé est désactivé et remplacé par un homonyme, à refuser AVANT session/Cargo, puis garder la relecture et le GO CPU C7 distincts. Aucun nouveau mécanisme produit/parsing imposé par cette revue. Ticket toujours ouvert, aucun CPU/native/pinPC/GO7455 déduit.

@@ -125,3 +125,8 @@ RO preuves Banc a4a2de1e1a : [rapport21](../../banc/16-11-2026/21-ro-preuves-ver
 ### Banc — delta groupé4461c338, 17 novembre
 
 [Relecture favorable de préparation](../../banc/17-11-2026/02-ro-pilote-global-d6.md) : R1–R4 traitées dans le code,18AST/39fonctions NONJOUÉES,6provenances conformes, APPf1e8/diff produit vide. Revue également du raccord Compatible/vertex, source/index/non-suivis avant/après, bracket runtime et première cause/cleanup borné. Aucun test ni natif/SDK/proc/DB/target/service contacté. C7 arbitre CPU60 puis suite distincte ; aucun GO7455, ticket OUVERT.
+
+
+### Banc — delta60f9af5f : une réserve résiduelle
+
+[Revue courte du même juge](../../banc/17-11-2026/02-ro-pilote-global-d6.md) : modification directe du bloc refusée par vrai handle ;18AST/40fonctions NONJOUÉES. HOLD résiduel : cfg(any()) devant le bloc intact + test vide homonyme conserve count/SHA constant et peut donner1/0/0 avec un autre item compilé. Comparer la source au rouge acquis avec seule transformation validateur admise, ou preuve structurelle équivalente ; témoin handle prépublié à ajouter avant fix/GO CPU. Aucun code/test/native exécuté par Banc ; ticket OUVERT.
