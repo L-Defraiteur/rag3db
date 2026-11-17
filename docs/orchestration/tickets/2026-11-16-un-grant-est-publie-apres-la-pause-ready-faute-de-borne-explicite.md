@@ -29,3 +29,8 @@ Cette étape est une PRÉPARATION seulement : ancien GO B5 terminé et grant ré
 ## Critères de fin
 
 Contrat de borne partagé effectivement exercé par producteur et consommateur avec témoins discriminants rouges puis verts ; aucune action après refus ni preuve perdue. Une éventuelle qualification native du cycle restera distincte de la durabilité générale et du LIVE. L'incident ne se ferme pas sur l'envoi d'un message ou le seul renommage du grant.
+
+
+## Nouvel incident de coordination, 17 novembre
+
+Cycle3c2/GO900 refusé avant tout writer ou health : watcher armé après l’entrée maximale owner. Les bornes explicites ont correctement refusé le retard ; le travail restant est le couplage préalable des acteurs, pas leur relâchement. Ticket fils : [armement effectif](2026-11-17-le-cycle-demarre-avant-l-armement-effectif-du-producteur-de-grant.md), créé avant correction ; anciennes preuves/grants/délais conservés.
