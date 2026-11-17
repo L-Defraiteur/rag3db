@@ -183,3 +183,22 @@ qualificationprocessus/fixture isolée sous GO distinct ; allocation/attentesRO
 et référence credential protégée ; paquet/RO/GO C précis avant connexion.
 Aucune étape n'est implicitement autorisée par ce document. Les anciens rouges
 et les verts B sont conservés dans leur portée exacte ; FTS302 reste ouvert.
+
+## Complément RO R — timeout avant attribution serveur
+
+RO contrat ea3bb178e7 favorable bornée source/doc/inactif, aucun runtime admis.
+Si connect expire AVANT acquisition PID et CancelToken, ni serveur attribué
+ni jeton d'annulation n'existent côté observateur. Le statut serveur est
+UNKNOWN : ne pas inventer une annulation possible, un PID, backend_absent=true
+ou une quiescence globale depuis la fermeture du socket client. Arrêt/reap
+attribués côté OS et conservation des pièces restent requis dans END ; résultat
+REFUSED, aucun grant ou lease admis. Une recherche négative par application_name
+nonce n'est pas une preuve globale d'absence ni d'exclusivité du serveur.
+
+Si CancelToken existe mais pas encore le PID (connexion réussie, SELECTidentité
+non terminé), seul le token réellement acquis peut servir au cleanupMINEND ;
+l'attribution PID reste UNKNOWN. Même avec un cleanup apparemment réussi,
+le rouge initial ne devient pas vert et aucun backend_absent complet n'est
+inféré. Ajouter les deux cas au futur harnais source/fixtures avant correction,
+avec bruts partiels et preuve qu'aucun appel cancel n'est fait sans token.
+Le présent ajout est documentaire : aucune connexion ou query n'a été tentée.

@@ -579,3 +579,9 @@ Propositionv2Rust/whole10/Common30/OS35kill2 explicite incompatiblev1psql5s,
 aucune adaptation Qgelés ; filets et ordrecode/RO/pins/CPU/GO C distincts listés.
 AucunDB/DDL/connect/contact/credentials/SQL/native/proc/service pendantprépa.
 FTS302ouvert, paslease/grant produit niacquisphaseC déduit deB.
+
+RO RcontratCea3bb favorable bornée source/doc/inactif ; complémentconsigné :
+timeoutconnectavantPID/CancelToken→serveurUNKNOWN/refus,annulationimpossible
+jamaisinventée/absenceparnonce≠preuveglobale. TokenacquismaisPIDabsent reste
+attributionpartielle/cleanupMINEND sanssuccèsaprèsrouge. Deuxfiletsfuturs ajoutés
+àlapréparation,0code/runtime/credentials/connect/SQL. AucunGOC/lease déduit.
