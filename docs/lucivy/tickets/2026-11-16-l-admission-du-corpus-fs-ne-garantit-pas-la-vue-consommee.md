@@ -98,3 +98,11 @@ SourceRED+recette300/32Gquota4/T3552/ELFJSONavanttests àpublier/RO/GOdistinct
 AVANTCargo. 0corpuscontact/natif/implgatecorrectifavant4rouges ;A/BHOLD,
 SHA2devdepversionexacte/lockaudit/offlinepascryptoDIY. Nouveau lot propre
 cx-lucivy-fs-admission àpréparerdepuis1ee5, mémoires9historiquesconservées.
+
+RO Recherche reçue17nov sur source exacte8b9435363dbd8ec0e3973f2368b641189f0726eb
++docs c987957426 : favorable BORNÉE baseline/recette proposée, aucun blocage
+statique établi. VraiB/seamStdFsSpy/panel15 inchangé,6négatifs4familles+positif
+statiquement discriminants ; compilation plausible mais NONvérifiée. Delta
+lock offline à archiver strictement. Aucun Cargo/rustfmt/test/ELF/proc/corpus/
+service par Recherche. PasGO300 ni qualificationFS/native ; pilote concret,
+RO et GO C7 distinct restent requis. Ticket reste ouvert.

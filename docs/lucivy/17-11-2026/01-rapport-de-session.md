@@ -21,3 +21,8 @@ après REFUSED. Rejeu ultérieur par manifeste, mêmes chemins/SHA sans resélec
 La source 1ee5 reste qualifiée pour neuf juges mémoire seulement ; cette nouvelle
 source n'est ni compilée ni qualifiée. Natifs A/B, core complet et ses neuf HOLD,
 ULP Linux7.2 et PR42 restent HOLD. Aucun main/tag/publication/fusion.
+
+RO Recherche reçue sur source exacte8b94353 et docs c987957426 : favorable
+bornée à la baseline et à la recette proposée ; aucun blocage statique établi.
+Compilation non vérifiée. Suite : pilote concret avec delta lock offline
+archivé, puis RO et GO C7 distinct avant toute exécution.
