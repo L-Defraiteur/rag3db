@@ -124,3 +124,17 @@ fixture seule publiée 3f3af87898 : policy4 verts0.006s, groupe84 verts0.431s.
 Les sept rouges initiaux sont verts sur ce dernier groupe ; le premier essai
 erroné reste rouge. Témoins hermétiques seulement, aucun health/proc/DB/CLI
 réel, créneau ou GO900. Le ticket reste ouvert jusqu'à qualification distincte.
+
+## 17 novembre : cycle 3c2 refusé avant armement effectif
+
+GO distinct C7-LIFECYCLE-3C2-17nov900 consommé ROUGE. READYobs1246927.830043659,
+entrymax owner1247017.830043659, watcher armé1247046.19743902/refus1247046.199404131
+avant helper/GET, firstredpilote1247047.917505952 aprèsdue1247047.830043659.
+Le message « veille active » erroné est corrigé par Embar. Zéro grant/santé dédiée/
+writer ; pas de causalité transport inventée, armement précoce non démontré.
+ScopeTERMINE/ROUGE1/restes[]/nettoyé/busabsent/owned0, clone et sources identiques,
+UNKNOWNglobaux11 conservés. [Rapport et84preuves](../../arbre-principal/17-11-2026/01-cycle-3c2-rouge-avant-armement-producteur.md),
+manifest8087ab5db59b8f48bdfb98579f0743acecb1d7831197781a981c0fde814e55de.
+[Nouveau ticket C7 avant fix](2026-11-17-le-cycle-demarre-avant-l-armement-effectif-du-producteur-de-grant.md) :
+préparation contrôleur/watch réellement armé autorisée, pas de runtime ni
+nouveau GO. Ce ticket reste ouvert, anciens rouges conservés.

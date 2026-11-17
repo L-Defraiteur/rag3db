@@ -291,3 +291,14 @@ du whileabsent sans nouveauchecktime ; PAS événement consommé ici. Préparer
 régression vraiebranchegrantprésent+tardif rougeavantfix, ensuite gateborne
 avantconsommer. Aucunretry/nouveauGO/extension par cette préparation ;
 FINRO reste acquis borné, cycle/shutdown/durabilité/LIVE restent NONQUALIFIÉS.
+
+## 17 novembre : cycle v4 non qualifié, armement tardif du producteur
+
+GO C7-LIFECYCLE-3C2-17nov900 consommé ROUGE avant grant/santé/writer :
+watcher armé après entrymax, refus owner puis borne stricte du pilote.
+[Rapport et preuves v4](../17-11-2026/01-cycle-3c2-rouge-avant-armement-producteur.md) :
+84 fichiers manifestés réempreintés0écart, scope terminé/nettoyé/busabsent/owned0,
+sources et clone inchangés. État FIN-RO borné conservé, anciens rouges intacts ;
+cycle/shutdown/durabilité/LIVE toujours non qualifiés. Préparation contrôleur
+coordonné seulement autorisée dans le nouveau ticket C7, sans nouveau GO.
+État de ce ticket : OUVERT.
