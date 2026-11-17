@@ -79,3 +79,6 @@ Blocage Cœur détaillé identifié : refus contrôleplateforme«possible cybers
 
 
 Codeparsers troisréservesROtotalelevées+onzeCPUverts/C7lecturepilotscanneretPC8copies/pinP02sourcespropres/phasesvides : deuxGOHISTBASEP02 puisCANDP02 conditionnels1800APRÈSpostechacun, CsiBVERTquiescentpubliéuniquement, troisièmecomparaisonPURE60conditionnelle. Voirrapportpourallocationscomplètes/ACK2ledgers/limitesempreintes/profile/corpus1840/4oraclesmanuels ; pasREGLES8/push/globalreplay. HotfixROWSpoursuitROsourceindépendant ; Cœur refusplateformeresteSTOP, aucuntransfertC1.
+
+
+Suivi17novdans ../17-11-2026/01-suivi-des-lots.md : CodeparsersBASEcompilémaisACKabsent→ROUGEscopequiescent, CAND/REPORTnonarmables, relaisautonomeprépaauchild17avantfixpasretry. Lucivychoixcaptureinitiale/manifestsnapshotreadoncefigéavantbaseline/testrouge ; pasnativeA/B. CycleArbre3c2nouveauQ19/ROtotalesED+R/C7pinscode+PCréattestés/Embarprépadisponible : GOdistinctC7-LIFECYCLE-3C2-17nov900 copieFINsansdetteSEULE, outer898+2/Common830POSTposte/READY120+strictowneretconsumer/noembedding/shutdownACK+postinvariants, 0baseLIVE/7970/service. AucunancienGO/délairejetéréactivéni vertanticipé, firstredSTOP0retry. Cœur refusplateformeresteSTOP, pasdecontournement.
