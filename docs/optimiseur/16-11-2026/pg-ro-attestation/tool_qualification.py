@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import signal
 import select
+import stat
 import subprocess
 import sys
 import time
@@ -20,6 +21,7 @@ import time
 COMMON_SHA='6439fdd8b52c85fa4e74af0def2c667ef0bedae9b814cbbfd48e49946c4f74ea'
 sys.dont_write_bytecode=True
 MAX_RAW=65536
+PROC=Path('/proc')
 
 
 def require(ok,message):
@@ -56,12 +58,52 @@ def sync_dir(path):
     finally:os.close(fd)
 
 
+def attest_poste(common,table,expected_root):
+    """Identité du vrai ancêtre Common + fiche ET verrou kernel FD9."""
+    root=Path(os.environ.get('POSTE_LOCK_DIR',str(Path.home()/'.cache/rag3weaver-build'))).absolute()
+    require(str(root)==expected_root and root.resolve()==root and root.is_dir() and root.stat().st_uid==os.getuid(),'unexpected poste lock root')
+    pid=common.poste_tenu(table)
+    require(pid is not None and pid in table,'no actual poste ancestor')
+    row=dict(table[pid]);proc=PROC/str(pid)
+    require(proc.stat().st_uid==os.getuid(),'poste UID changed')
+    fiche=root/'fiches'/str(pid);lock=root/'poste.lock'
+    require(fiche.resolve()==fiche and lock.resolve()==lock,'linked poste evidence')
+    fs=fiche.stat();ls=lock.stat()
+    require(stat.S_ISREG(fs.st_mode) and stat.S_ISREG(ls.st_mode) and fs.st_uid==ls.st_uid==os.getuid() and fs.st_size<=4096,'invalid poste evidence')
+    text=fiche.read_text();mode='READ' if text.startswith('tient lourd ') else 'WRITE' if text.startswith('tient mesure ') else None
+    require(mode is not None,'poste not holding slot')
+    fd=(proc/'fd/9').stat()
+    require((fd.st_dev,fd.st_ino)==(ls.st_dev,ls.st_ino),'poste FD9 does not hold expected lock file')
+    info=(proc/'fdinfo/9').read_text()
+    require(len(info)<=16384,'oversized fdinfo')
+    lines=[line for line in info.splitlines() if line.startswith('lock:')]
+    require(len(lines)==1,'missing/ambiguous kernel file lock')
+    fields=lines[0].split()
+    require(len(fields)==9 and fields[2:5]==['FLOCK','ADVISORY',mode] and fields[7:]==['0','EOF'],'wrong kernel file lock kind')
+    device=fields[6].split(':')
+    require(len(device)==3 and (int(device[0],16),int(device[1],16),int(device[2]))==(os.major(ls.st_dev),os.minor(ls.st_dev),ls.st_ino),'kernel lock inode differs')
+    require(common.processus().get(pid)==row,'poste identity changed during attestation')
+    stable=lambda st:(st.st_dev,st.st_ino,st.st_uid,st.st_mode,st.st_size,st.st_mtime_ns,st.st_ctime_ns)
+    require(stable(fiche.stat())==stable(fs) and stable(lock.stat())==stable(ls),'poste files changed during attestation')
+    return dict(lock_root=str(root),pid=pid,start=row['debut'],cgroup=row['cgroup'],uid=os.getuid(),
+                fiche=dict(path=str(fiche),device=fs.st_dev,inode=fs.st_ino,sha256=hashlib.sha256(text.encode()).hexdigest()),
+                lock=dict(path=str(lock),device=ls.st_dev,inode=ls.st_ino,fd=9,mode=mode,kernel_line=lines[0]))
+
+
 def common_authority(packet_root,packet):
     path=packet_root/'common-confiner.py';require(digest(path)==COMMON_SHA,'Common source differs')
     spec=importlib.util.spec_from_file_location('qualified_common',path)
     module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
-    receipt=module.autorite(module.processus())
-    return {'pid':receipt['pid'],'start':receipt['debut'],'cgroup':receipt['cgroup'],'end':receipt['echeance']}
+    table=module.processus();receipt=module.autorite(table)
+    poste=attest_poste(module,table,packet['poste_lock_root'])
+    return {'pid':receipt['pid'],'start':receipt['debut'],'cgroup':receipt['cgroup'],'end':receipt['echeance'],'poste':poste}
+
+
+def controller_environment(out,poste):
+    # Le contrôleur garde HOME privé. Seule la racine attestée des fiches est transmise.
+    env={k:os.environ[k] for k in ['RAG3WEAVER_VALIDATION_RECU','RAG3WEAVER_VALIDATION_JETON'] if k in os.environ}
+    env.update(PATH='/usr/bin:/bin',HOME=str(out/'home'),TMPDIR=str(out/'tmp'),LANG='C.UTF-8',PYTHONDONTWRITEBYTECODE='1',POSTE_LOCK_DIR=poste['lock_root'])
+    return env
 
 
 def validate_go(go,packet,packet_sha,now):
@@ -265,10 +307,9 @@ class NativeBackend:
             require(time.monotonic()<deadline-.5,'preflight exhausted whole cap')
             from tool_phase import identity
             body=dict(parent=identity(os.getpid()),request=request,started=started,deadline=deadline,phase=str(phase),packet_sha=self.packet_sha,
-                      packet_root=str(self.root),go=self.go,expected_cgroup=own_cgroup())
+                      packet_root=str(self.root),go=self.go,expected_cgroup=own_cgroup(),poste_authority=authority['poste'])
             req=phase/'request.json';write_new(req,body)
-            env={k:os.environ[k] for k in ['RAG3WEAVER_VALIDATION_RECU','RAG3WEAVER_VALIDATION_JETON'] if k in os.environ}
-            env.update(PATH='/usr/bin:/bin',HOME=str(self.out/'home'),TMPDIR=str(self.out/'tmp'),LANG='C.UTF-8',PYTHONDONTWRITEBYTECODE='1')
+            env=controller_environment(self.out,authority['poste'])
             process=subprocess.Popen([sys.executable,str(self.root/'tool_phase.py'),str(req),digest(req)],
                 stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.PIPE,env=env,start_new_session=not getattr(self,'supervised',False))
             try:controller_out,controller_err=process.communicate(timeout=max(.001,deadline-time.monotonic()-.35))

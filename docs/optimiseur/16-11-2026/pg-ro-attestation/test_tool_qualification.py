@@ -103,7 +103,7 @@ class NativeBoundaryFakes(unittest.TestCase):
             def wait(self,timeout=None):return 0
         timeout_flag=[timeout]
         stack.enter_context(patch.object(tool.time,'monotonic',lambda:outer.clock[0]))
-        stack.enter_context(patch.object(tool,'common_authority',lambda *a:dict(end=2000.)))
+        stack.enter_context(patch.object(tool,'common_authority',lambda *a:dict(end=2000.,poste={'lock_root':'/fake'})))
         stack.enter_context(patch.object(tool,'verify_sources',lambda *a:None))
         stack.enter_context(patch.object(tool,'verify_inputs',lambda *a:None))
         stack.enter_context(patch.object(tool,'compile_argv',lambda *a:['PINNED_RUSTC']))

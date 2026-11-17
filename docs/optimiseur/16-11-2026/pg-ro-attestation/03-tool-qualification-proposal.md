@@ -240,3 +240,26 @@ Bruts/GO/identités du request/receipt/firstred/verdict conservés aux deux post
 receiptSHA2565d3044612e97d8e6cbf1bd607b8f6fd968c9bed6bd425fefeca96fdb3e05390e.
 Copie Common publique sans jeton incluse. OS/transport toujours NONQUALIFIÉS,
 aucun SQL/PG/Docker/service/phaseC lancé, aucun lease produit.
+
+## Correctif Common B01 — préparation après refus, aucun rejeu
+
+Témoins publiés AVANTfix7e4f02afb7 : six nouveaux cas test_poste_authority.py,
+constructeur controller_environment et Common6439.poste_tenu réels, proc/fdinfo
+et fiches uniquement fixtures privées. Ils couvrent HOMEprivé+racinelock,
+racine arbitraire, fiche sans FLOCK ou FD correspondant, changement PID/start,
+absence d'autorité côté natif. NON JOUÉS ; aucun rouge CPU revendiqué.
+
+Le correctif prépare une attestation depuis Common.autorite et poste_tenu :
+racine POSTE canonique attendue EXTERNE au paquet (`poste_lock_root`), ancêtre
+PID/start/UID/cgroup, fiche régulière UID/inode/SHA, FD9 même dev/inode que
+poste.lock et fdinfo kernel FLOCK ADVISORY READ (lourd) ou WRITE (mesure),
+identité et métadonnées stables après lecture. Atime est exclu de la stabilité,
+puisque la lecture elle-même peut le modifier. Le contrôleur reçoit cette seule
+racine dans POSTE_LOCK_DIR, garde HOME privé et refait Common+attestation ;
+sa preuve doit égaler celle du parent avant toute invocation native.
+Le natif reçoit une whitelist sans reçu/jeton/lockdir Common. Aucune fiche créée
+ou verrou acquis par ce mécanisme : lecture seule des preuves du vrai poste.
+
+Les nouveaux champs et sources exigent un paquet r3 distinct, une nouvelle
+recette/sortie/GO, RO totale et GO CPU/natif distincts. r2/recette02/B01 restent
+immuables. Le correctif n'est ni exécuté ni qualifié ; pas de retryB01/ancien120.

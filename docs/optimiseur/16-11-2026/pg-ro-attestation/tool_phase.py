@@ -21,10 +21,17 @@ def identity(pid):
     except (FileNotFoundError,ProcessLookupError):return {'pid':pid,'exited_before_snapshot':True}
 
 
+def native_environment(out):
+    # Aucune autorité Common/POSTE héritée par rustc ou le client natif.
+    return dict(PATH='/usr/bin:/bin',HOME=str(out/'home'),TMPDIR=str(out/'tmp'),LANG='C.UTF-8',LC_ALL='C.UTF-8',RUST_BACKTRACE='0')
+
+
 def main():
     request_path=Path(sys.argv[1]).absolute();body=tool.read_json(request_path,sys.argv[2])
     root=Path(__file__).resolve().parent;packet=tool.read_json(root/'packet.json',body['packet_sha'])
-    tool.common_authority(root,packet);tool.verify_sources(root,packet)
+    authority=tool.common_authority(root,packet)
+    tool.require(authority['poste']==body['poste_authority'],'poste identity/file lock differs from parent')
+    tool.verify_sources(root,packet)
     tool.validate_go(body['go'],packet,body['packet_sha'],time.monotonic())
     actual_parent=identity(os.getppid())
     for key in ['pid','start','uid','cgroup']:
@@ -45,7 +52,7 @@ def main():
     try:
         for name in buffers:
             fds.append(os.open(phase/(name+'.raw'),os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600))
-        env=dict(PATH='/usr/bin:/bin',HOME=str(out/'home'),TMPDIR=str(out/'tmp'),LANG='C.UTF-8',LC_ALL='C.UTF-8',RUST_BACKTRACE='0')
+        env=native_environment(out)
         payload=req['stdin'].encode('utf-8')
         tool.require(len(payload)<=8193,'fixture stdin exceeds declared bound')
         native=subprocess.Popen(expected,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,env=env)

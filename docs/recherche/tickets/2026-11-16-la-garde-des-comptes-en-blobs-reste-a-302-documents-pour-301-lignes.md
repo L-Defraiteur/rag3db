@@ -408,3 +408,12 @@ ligne kernel FLOCK ADVISORY READ/WRITE ; l'enfant recontrôle ces identités.
 POSTE_LOCK_DIR ne sera transmis qu'au contrôleur, HOME reste privé. Gardes
 Common/signature/ascendance/cgroup/plafond inchangées ; aucune fiche fabriquée.
 Tests à publier avant fix, aucune exécution CPU/natif avant GO distinct.
+
+Six témoins publiés avantfix7e4f02afb7 (NON JOUÉS). Correctif préparé :
+Common.autorite→poste_tenu→attestation racine canonique attendue/PID/start/UID/CG,
+fiche UID/inode/SHA, FD9 du poste.lock+FLOCK kernel READ/WRITE dev/inode,
+relecture identité/métadonnées stables horsatime. Racine transmise au seul
+contrôleur POSTE_LOCK_DIR, HOME privé conservé ; recontrôle enfant égalparent
+avant Popen natif, environnement natif sans jeton/reçu/lockdir. Aucun vrai
+proc/flock/service/SQL/CPU/natif exécuté pour ce correctif. Préparationr3+RO
+et GO distincts requis ; aucune modification paquetr2/recette02/preuvesB01.
