@@ -307,3 +307,14 @@ R/cx-archi-reader-green-6e12-17nov-r1.5rouges5917avantfix restentintacts ;12autr
 jouésmaintenantseulement. QualificationLECTEURdomaineCPU, pasbridge/windowkernel/
 ELFhash/liveness/transport/ACK/native.229bQ/config40NONEXEC figés/PGtoolHOLD,
 aucunARM/lease/provider/healthSQL/Cargo/service/target actuel. TicketOPEN.
+
+### Données LifecycleGlobal demandées par Codeparsers, avant layout
+
+C9constant36verts+3contreexemplesrouges acquis par propriétaire, rapport62a67 ;
+préparation capacitécommune maintenant chezCodeparsers. Archi fournit layout
+P/Q/S/roles/argv/WindowEvents purementdéclaratif : runtimeidentités/authority
+inconnues, aucune créationP2Q2 ni changement229bQ. Distinguer chemins existants
+229b des NOUVEAUXdescripteurs aprèsexec à produire par futurdriver. Le kernel
+observe/vérifie lui-même supervisor/driver/controls/END/owner ; aucunactivebool
+provider/valeursPIDfabriquées. BornesC7queue120/7440+15/Common7200MINreste−30/
+opEND−15/window90 figées au layout. Sourcefuture/pinRO avant bridge ;0run/actor.
