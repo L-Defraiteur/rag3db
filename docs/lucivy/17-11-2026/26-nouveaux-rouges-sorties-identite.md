@@ -87,3 +87,17 @@ outputs complets/distincts/hors input et non-troncature, traitement alias,
 identité manquante, flags sans effet ; nouvelle source/pins/RO puis GO vert
 séparé. Le lecteur replay reste manquant ; contrat global FS, corpus natif,
 core/neufHOLD/A-B/ULP7.2/PR42 restent ouverts/non qualifiés.
+
+
+RO TOTALE SOURCE RED Recherche bdf83ad/eab297 favorable PRÉPA sixcas reçue :
+trois SHA Git conformes, tous initialiseurs ManifestSink recoupés, vrais
+raccords natifs with_v3_report/build/File::create et document_ordinal/unwrap0
+restés défectueux ; report_paths toujours non validés. Causalité des cinq
+négatifs et contrôle positif relue, octets avant assertion sans parse du
+reçu tronqué. Aucun autre blocage statique identifié pour cette extraction.
+Inventaire16/attendu5FAIL+1PASS/15filtered NONOBSERVÉS ; dix anciens non
+sélectionnés. Ancienne attente flags/reçu historique explicitement à aligner
+après rouge acquis. Aucun Cargo/rustfmt/import/parse/test/ELF/proc/corpus/PC
+par Recherche. Banc encore attendu ; paquet/pilote et RO couple puis GO
+sixcas distinct requis. Pas de correctif groupé avant rouges conservés ;
+replay/contrat FS global toujours ouverts.
