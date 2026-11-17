@@ -9,6 +9,7 @@ import importlib.util
 import json
 import math
 import os
+import re
 from pathlib import Path
 import stat
 import sys
@@ -63,25 +64,45 @@ def exists(path):
         return False
 
 
-def process_snapshot(pid, *, proc_root=Path('/proc'), clock=time.monotonic):
-    """Double sample stable identity, accepting two different live states."""
+def _python_snapshot(pid, expected_script_path, watch, proc_root, clock):
     root = Path(proc_root)/str(pid)
+    if expected_script_path is not None and not Path(expected_script_path).is_absolute():
+        raise ValueError('expected Python script must be absolute')
     def sample():
         fields = (root/'stat').read_text().rsplit(')', 1)[1].split()
         groups = [x[3:] for x in (root/'cgroup').read_text().splitlines() if x.startswith('0::')]
         argv = (root/'cmdline').read_bytes().rstrip(b'\0').decode('utf-8').split('\0')
-        if len(groups) != 1 or '--watch' not in argv or argv.index('--watch') < 1:
-            raise ValueError('watcher cgroup/argv unknown')
-        script_path = argv[argv.index('--watch')-1]
-        if not Path(script_path).is_absolute():
-            raise ValueError('watcher script must be absolute')
+        if len(groups) != 1 or not argv or not re.fullmatch(r'python(?:[0-9]+(?:\.[0-9]+)*)?', Path(argv[0]).name):
+            raise ValueError('Python role cgroup/interpreter unknown')
+        index = 2 if len(argv) > 1 and argv[1] == '-B' else 1
+        if len(argv) <= index or not Path(argv[index]).is_absolute():
+            raise ValueError('Python role must execute an absolute script, no -c/-m/other flags')
+        script_path = argv[index]
+        if expected_script_path is not None and script_path != str(expected_script_path):
+            raise ValueError('Python role script differs BEFORE hashing script content')
+        if watch and (len(argv) != index+4 or argv[index+1] != '--watch'):
+            raise ValueError('watcher argv unknown')
         return dict(pid=pid, ppid=int(fields[1]), start=fields[19], uid=root.stat().st_uid,
                     cgroup=groups[0], exe=os.readlink(root/'exe'), exe_sha256=digest(root/'exe'),
                     argv=argv, script_path=script_path, script_sha256=digest(script_path), state=fields[0])
     before, after = sample(), sample()
     if any(before[k] != after[k] for k in IDENTITY) or any(x['state'] not in LIVE for x in (before, after)):
-        raise ValueError('watcher process changed or not live')
+        raise ValueError('Python role process changed or not live')
     return dict(after, observed_monotonic=clock())
+
+
+def process_snapshot(pid, *, proc_root=Path('/proc'), clock=time.monotonic):
+    """Strict watcher argv; full stable identity and two living states."""
+    return _python_snapshot(pid, None, True, proc_root, clock)
+
+
+def python_role_snapshot(pid, expected_script_path, *, proc_root=Path('/proc'), clock=time.monotonic):
+    """Controller/driver sampler: bind the expected script BEFORE hashing it.
+
+    Only direct Python script invocation, optionally with -B, is accepted.
+    No environment is read or returned; launch-environment policy is the parent.
+    """
+    return _python_snapshot(pid, expected_script_path, False, proc_root, clock)
 
 
 def validate_armed(receipt, config, configsha, actual, expected_pid):
@@ -140,6 +161,15 @@ def _basic_process(pid):
     if len(groups) != 1:
         raise ValueError('scope cgroup unknown')
     return dict(pid=pid, start=fields[19], state=fields[0], uid=root.stat().st_uid, cgroup=groups[0])
+
+
+def basic_process(pid, *, clock=time.monotonic):
+    """Public minimal stable OS identity; no executable/script assumptions."""
+    before, after = _basic_process(pid), _basic_process(pid)
+    keys = ('pid', 'start', 'uid', 'cgroup')
+    if any(before[k] != after[k] for k in keys) or any(x['state'] not in LIVE for x in (before, after)):
+        raise ValueError('basic process changed or not live')
+    return dict(after, observed_monotonic=clock())
 
 
 def check_scope(config):
