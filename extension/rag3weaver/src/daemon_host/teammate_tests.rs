@@ -1931,7 +1931,7 @@ fn the_next_step_sees_what_the_previous_step_read() {
                     seen.lock().unwrap().1 = results.clone();
                 }
                 match (step_of(turns), results.len()) {
-                    (1, 0) => answer(turns, opts, sink, "", calls(&[("read_file", json!({ "path": "src/lib.rs", "offset": 1, "length": 20 }))])),
+                    (1, 0) => answer(turns, opts, sink, "", calls(&[("read_file", json!({ "path": "src/lib.rs", "offset": 1, "limit": 20 }))])),
                     (1, _) => answer(turns, opts, sink, "I read src/lib.rs; next I edit its first line.", vec![]),
                     (2, 0) => answer(turns, opts, sink, "", calls(&[("replace_lines", json!({ "path": "src/lib.rs", "from": 1, "to": 1, "text": "//! A small crate.\n" }))])),
                     _ => answer(turns, opts, sink, "Done.", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "first line documented", "remaining": "" }))])),
@@ -1954,3 +1954,45 @@ fn the_next_step_sees_what_the_previous_step_read() {
     assert!(step2_results.first().is_some_and(|r| !r.contains("\"ok\":false") && !r.contains("error")), "replace_lines passes without a new read: {step2_results:?}");
     assert_eq!(mailbox.iter().find(|l| l["kind"] == "ended").unwrap()["text"], "fait sans plan", "{mailbox:#?}");
 }
+
+/// **A read of 5 lines covers 5 lines** (found with S2, 18 Nov 2026): the task's read_file (the
+/// code backend's) takes `limit`, and the read imprint only knew `length` — a read of 5 lines was
+/// counted as 200, and a replace_lines on a line never read passed.
+#[test]
+fn a_read_with_a_limit_covers_only_its_lines() {
+    let d = tempfile::tempdir().unwrap();
+    let (depot, manifeste) = depot_inscrit(d.path(), true);
+    let lines: String = (1..=30).map(|n| format!("// line {n}\n")).collect();
+    std::fs::write(depot.join("src/long.rs"), &lines).unwrap();
+    let git = |args: &[&str]| assert!(std::process::Command::new("git").arg("-C").arg(&depot).args(args).output().unwrap().status.success());
+    git(&["add", "src/long.rs"]);
+    git(&["commit", "-q", "-m", "a long file"]);
+    let seen = Arc::new(Mutex::new(Vec::<String>::new()));
+    let model: ChatModel = {
+        let seen = seen.clone();
+        Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let seen = seen.clone();
+            Ok(Arc::new(CallbackLlm::new("read-limit", 8192, move |turns, opts, sink| {
+                let results = tool_results(turns);
+                if step_of(turns) == 1 {
+                    *seen.lock().unwrap() = results.clone();
+                }
+                match (step_of(turns), results.len()) {
+                    (1, 0) => answer(turns, opts, sink, "", calls(&[("read_file", json!({ "path": "src/long.rs", "offset": 1, "limit": 5 }))])),
+                    (1, 1) => answer(turns, opts, sink, "", calls(&[("replace_lines", json!({ "path": "src/long.rs", "from": 20, "to": 20, "text": "// changed\n" }))])),
+                    _ => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "tried", "remaining": "" }))])),
+                }
+            })))
+        })
+    };
+    let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("the parent opens");
+    host.post_to_teammate(&h.id, "doc", "lucie", "request", None, "Change line 20 of src/long.rs.", &Value::Null).expect("the request");
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    attendre_dans(&files, "the end", &|b| b.iter().any(|l| l["kind"] == "ended"));
+    let results = seen.lock().unwrap().clone();
+    assert!(results[0].contains("line 5") && !results[0].contains("\"error\""), "the read passes with limit: {results:?}");
+    assert!(results[1].contains("relis d'abord"), "line 20 was not read: replace_lines is refused: {results:?}");
+}
+
