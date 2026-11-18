@@ -485,14 +485,27 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
       } else if (ev.kind === "ToolCallFinished") {
         const ok = ev.ok !== false;
         const excerpt = typeof ev.result_excerpt === "string" ? ev.result_excerpt : undefined;
-        live((m) => ({
+        const call = String(ev.call_id);
+        const finish = (m: Message): Message => ({
           ...m,
           parts: m.parts.map((p) =>
-            p.kind === "tool" && p.id === String(ev.call_id)
+            p.kind === "tool" && p.id === call
               ? { ...p, ok, metadata: ev.metadata, result: excerpt ?? (ok ? "" : `refusé (${ev.error_kind ?? "erreur"})`), truncated: ev.truncated === true, end: p.at !== undefined && typeof ev.ms === "number" ? p.at + ev.ms : d.at_ms, ui: Array.isArray(ev.ui) ? (ev.ui as UiComposant[]) : p.ui }
               : p,
           ),
-        }));
+        });
+        // **A late finish still lands on its card** (18 Nov 2026, under four heavy passes at
+        // luciepc): when the model fails right after a tool, the turn's request can answer in
+        // error before the bus delivers ToolCallFinished; the bubble is no longer live, and the
+        // card stayed at « read_file… ». The live bubble first, else the last one that holds
+        // this call (call ids may repeat from one turn to the next).
+        follow.current = true;
+        setItems((cur) => {
+          const holds = (i: (typeof cur)[number]) => i.kind === "message" && i.parts.some((p) => p.kind === "tool" && p.id === call);
+          let at = cur.findIndex((i) => i.kind === "message" && i.live && holds(i));
+          if (at < 0) at = cur.map(holds).lastIndexOf(true);
+          return at < 0 ? cur : cur.map((i, k) => (k === at && i.kind === "message" ? finish(i) : i));
+        });
       } else if (ev.kind === "PropositionChanged" && ev.change === "proposed") {
         live((m) => (m.propositions.some((p) => p.id === ev.id) ? m : { ...m, propositions: [...m.propositions, { id: Number(ev.id), paths: ev.paths as string[] | undefined, accepted: ev.accepted as boolean | undefined }] }));
       } else if (ev.kind === "RunFinished" && ev.run === runRef.current) {
