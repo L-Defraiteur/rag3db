@@ -36,7 +36,7 @@ use std::sync::Mutex;
 use burn::nn::{Linear, LinearConfig};
 use burn::prelude::*;
 use burn::tensor::activation::relu;
-use tokenizers::{PaddingParams, PaddingStrategy, Tokenizer};
+use tokenizers::{PaddingParams, PaddingStrategy, Tokenizer, TruncationParams};
 
 use crate::bge_m3_onnx::Model as BgeM3Graph;
 use crate::embedder::{DualEmbedder, EmbedError, Embedder, SparseEmbedder};
@@ -110,6 +110,10 @@ pub struct BurnBgeM3Embedder {
     graph: BgeM3Graph,
     sparse_head: SparseHead,
     tokenizer: Mutex<Tokenizer>,
+    /// The window a text is cut at, in tokens (at most [`MAX_TOKENS`]).
+    max_tokens: usize,
+    /// Texts cut at that window since the embedder was built.
+    troncatures: std::sync::atomic::AtomicUsize,
     device: Device,
 }
 
@@ -132,6 +136,12 @@ impl BurnBgeM3Embedder {
             pad_id: PAD_TOKEN_ID,
             ..Default::default()
         }));
+        // **The window, in tokens** (18 November 2026) : without it, a text
+        // denser than its character cap reached the graph whole, and 11 002
+        // tokens panicked on the card (« Expand 8194 != 11002 »).
+        tokenizer
+            .with_truncation(Some(TruncationParams { max_length: MAX_TOKENS, ..Default::default() }))
+            .map_err(|e| EmbedError::ProviderError(format!("tokenizer truncation: {e}")))?;
 
         // **Les poids dans la précision demandée.** Le fichier est en f32 ;
         // sans adaptateur ils le restent, quoi que la carte ait pour défaut —
@@ -164,14 +174,27 @@ impl BurnBgeM3Embedder {
             graph,
             sparse_head,
             tokenizer: Mutex::new(tokenizer),
+            max_tokens: MAX_TOKENS,
+            troncatures: std::sync::atomic::AtomicUsize::new(0),
             device,
         })
     }
 
     /// **Cuts every text at `n` tokens** (at most [`MAX_TOKENS`]), counted by
-    /// `troncatures()`. Stub : no truncation yet.
-    pub fn with_max_tokens(self, n: usize) -> Result<Self, EmbedError> {
-        let _ = n;
+    /// `troncatures()`. A smaller window bounds the attention's memory on the
+    /// card, which grows as the square of the tokens.
+    pub fn with_max_tokens(mut self, n: usize) -> Result<Self, EmbedError> {
+        if n == 0 || n > MAX_TOKENS {
+            return Err(EmbedError::ProviderError(format!(
+                "bge-m3 : a window of {n} tokens is outside 1..={MAX_TOKENS}"
+            )));
+        }
+        self.tokenizer
+            .get_mut()
+            .map_err(|_| EmbedError::ProviderError("tokenizer mutex poisoned".into()))?
+            .with_truncation(Some(TruncationParams { max_length: n, ..Default::default() }))
+            .map_err(|e| EmbedError::ProviderError(format!("tokenizer truncation: {e}")))?;
+        self.max_tokens = n;
         Ok(self)
     }
 
@@ -204,6 +227,10 @@ impl BurnBgeM3Embedder {
             .encode_batch(refs, true)
             .map_err(|e| EmbedError::ProviderError(format!("tokenizer: {e}")))?;
         drop(tokenizer);
+        let truncated = encodings.iter().filter(|e| !e.get_overflowing().is_empty()).count();
+        if truncated > 0 {
+            self.troncatures.fetch_add(truncated, std::sync::atomic::Ordering::Relaxed);
+        }
 
         let batch = encodings.len();
         let seq = encodings
@@ -351,6 +378,10 @@ impl Embedder for BurnBgeM3Embedder {
     /// Le nom devient porteur dès qu'un démon le sert : c'est ce que
     /// `GET /sante` déclare, et ce sur quoi un client vérifie qu'il parle bien
     /// au modèle qu'il croit (`crate::daemon`).
+    fn troncatures(&self) -> Option<(usize, usize)> {
+        Some((self.troncatures.load(std::sync::atomic::Ordering::Relaxed), self.max_tokens))
+    }
+
     fn name(&self) -> &str {
         "bge-m3"
     }
