@@ -55,7 +55,7 @@ Un texte dégénéré, en accents, en emojis ou en hexadécimal, coûte **3 fois
 | 3 | Troncature de granite (`src/burn_granite_embedder.rs:36, 106`) | jetons, 512 | 512 | coupe comptée (`troncatures()`, avertissement du catalogue) | aucun ; coupe silencieuse mais comptée | laisser |
 | 4 | Troncature de minilm et multilingual-minilm (`burn_minilm_embedder.rs:73`, `burn_multilingual_minilm_embedder.rs:110`) | jetons, 512 et 128 | 512 | coupe comptée | aucun | laisser |
 | 5 | Le découpeur, `max_size` (`src/chunker.rs:69`, `src/config.rs:209`) | **octets** au test d'entrée et en `Fixed`/`Lines` ; caractères (non vérifié) dans `text-splitter` ; 1 500, recouvrement 200 | bge-m3 : 8 192 ; granite : 512 | rien ne coupe un morceau trop gros (`Lines` admet jusqu'à 3 fois `max_size`) ; le préfixe de titre (`title_max_chars` 256) n'est pas retranché | bge-m3 : sûr (au plus 4 500 jetons). **Granite : coupe à 512** dès qu'un morceau de 1 500 octets dépasse 0,34 jeton par octet (code dense, symboles, CJK) ; la fin n'est pas cherchable par le vecteur | **Estimer avec une marge**, puis mesurer : lire le compte `troncatures()` (déjà au journal d'index) sur un vrai corpus avant de changer quoi que ce soit (point C) |
-| 6 | Budget de lot, `EMBED_CHAR_BUDGET` 8 192 (`src/embedder.rs:1069`), `RAG3WEAVER_EMBED_CHAR_BUDGET`, `lot_budget_si` (`:1145`), `burst::next_batch` (`burst.rs:325`) | octets (`text.len()`) estimés à 3 par jeton ; aire d'attention `seq × jetons² / 2` | la mémoire de la carte, pas une fenêtre | un texte seul au-dessus du budget forme son lot | aire sous-estimée jusqu'à **9 fois** pour un lot dense (jetons sous-estimés 3 fois, au carré) : saturation de la carte, pas de panique de positions | **Compter en jetons côté service** : `par_lots` encode déjà chaque texte ; planifier les lots sur le vrai compte de jetons (point B). Côté client, laisser l'estimation |
+| 6 | Budget de lot, `EMBED_CHAR_BUDGET` 8 192 (`src/embedder.rs:1069`), `RAG3WEAVER_EMBED_CHAR_BUDGET`, `lot_budget_si` (`:1145`), `burst::next_batch` (`burst.rs:325`) | octets (`text.len()`) estimés à 3 par jeton. Le service : budget **linéaire** (`budget_batches`, `daemon/embeddings.rs:500`) ou durée mesurée (`burst::next_paced_batch`). Le client local : aire d'attention `seq × jetons² / 2` (`stable_batches`) | la mémoire de la carte, pas une fenêtre | un texte seul au-dessus du budget forme son lot | **service : jusqu'à 3 fois** les jetons prévus par lot (aire bornée par budget × fenêtre) ; **client local : aire sous-estimée jusqu'à 9 fois** (jetons sous-estimés 3 fois, au carré). Saturation possible, pas de panique de positions | **Différé** (c7, 18 novembre) : voir le point B et son ticket |
 | 7 | `query_max_chars` (`src/search.rs:987`), validation `query_max_chars ≤ context_tokens × 3` (`src/backend.rs:1516`) | caractères, 6 000 | celle du modèle de requête | coupe sur une frontière de mot, avec avertissement | la validation est **dans le mauvais sens** : au pire ratio, il faut `≤ context_tokens − 2`. Sans danger tant que le point A tient | **Estimer avec une marge** : valider à `context_tokens − 2` (sûr), ou garder ×3 en le nommant « estimation » (point D) |
 | 8 | `HttpEmbedder`, fournisseur `compatible` (`src/http_embedder.rs:92`) | **aucune** | celle du fournisseur (8 192 jetons chez OpenAI, par exemple) | erreur du fournisseur | une passe en échec, nommée par le fournisseur | **Laisser**, avec une option : un `max_chars_per_text` déclarable au manifeste, appliqué comme `within_cap` (point E) |
 | 9 | Rerankers burn (`burn_reranker.rs:49`, `burn_xlmr_reranker.rs:62`) ; `/rerank` coupé à 12 000 caractères (`daemon/embeddings.rs:866`) ; `DaemonReranker` sans borne côté client | jetons, 512, `OnlySecond` | 512 | passage coupé en silence ; une requête qui dépasse seule rend une `EmbedError` | aucun ; le plafond de 12 000 caractères n'y protège rien | laisser |
@@ -83,12 +83,19 @@ panique** ; il est atteint le 18 novembre, et c'est le ticket du plafond en jeto
 Le plafond en caractères reste en garde grossière, avant tout encodage. Témoin, rouge d'abord : 11 000 « é » rendent un
 vecteur et une coupe comptée, jamais une panique. **Taille : une demi-journée.**
 
-**B. Les lots du service planifiés sur le vrai compte de jetons** (borne 6). `par_lots` encode déjà ; l'aire
-`seq × jetons²` se calcule alors exactement, au lieu de `octets / 3`. Cela enlève la sous-estimation de 9 fois pour un
-lot dense. **Taille : une demi-journée**, après A, puisque c'est le même encodage.
+**B. Les lots planifiés sur le vrai compte de jetons** (borne 6). **Corrigé le 18 au soir, et différé par c7.** La
+première version de cette page disait « `par_lots` encode déjà » et « 9 fois » : c'est faux pour le service.
+`par_lots` n'encode pas (c'est l'embarqueur qui encode), et son budget est linéaire. Un lot du service porte au pire 3
+fois les jetons prévus, et l'aire reste bornée par budget × fenêtre ; depuis A, un texte ne dépasse plus la fenêtre. Le
+« 9 fois » vaut pour `stable_batches`, côté client avec un embarqueur local. Le vrai compte demanderait un
+`count_tokens` au trait, soit un second encodage. Ticket « souhait » :
+`embarquement/tickets/2026-11-18-les-lots-d-embarquement-se-taillent-a-trois-octets-par-jeton.md`, avec la version
+la moins chère (1 jeton par octet, sans encodage) et sa mesure de débit à faire d'abord.
 
-**C. Le découpeur sous granite** (borne 5). Ne rien changer avant d'avoir mesuré. Le compte de troncatures est au
-journal d'index depuis ca3120fb70 : un index de rag3db sous granite-278m dira combien de morceaux sont coupés à 512.
+**C. Le découpeur sous granite** (borne 5). Ne rien changer avant d'avoir mesuré. **La mesure, choisie le 18 au
+soir** : depuis A, l'identité d'un service dit `truncated_texts`, que granite remplit par sa troncature à 512. Une fois
+le binaire de A posé sur le 7878, son `/sante` comptera sur le trafic réel les morceaux coupés à 512 jetons ; il sera
+lu le lendemain, sans index de mesure ni essai sur le service.
 S'ils sont nombreux, `text-splitter` sait dimensionner par un tokenizer, et `max_size` peut alors se dire en jetons
 par modèle. **Taille : une mesure, puis à décider.**
 
