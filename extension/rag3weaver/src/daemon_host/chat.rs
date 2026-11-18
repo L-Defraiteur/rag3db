@@ -658,6 +658,10 @@ impl DaemonHost {
         }
         self.write_chat(backend_id)?;
         self.publier_l_etat_du_chat(backend_id, depuis, &run_id, &resultat);
+        // The session archived as it goes (the teammate's steps come with the next lot).
+        if step.is_none() {
+            self.ranger_apres_le_tour(&hosted, backend_id, depuis);
+        }
         resultat
     }
 
