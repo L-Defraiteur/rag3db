@@ -55,6 +55,18 @@ passe, appels, jetons d'entrée et part du cache), avec les définitions du § 4
 ingrédients restent à leur réglage par défaut et sont écrits avec chaque passe. La matrice se joue après la page de
 la session mémoire qui pose la forme.
 
+## Le centre de gravité (c7, 18 novembre)
+
+Lucie soupçonne un effet « centre de gravité » : une grosse fiche qui absorbe ce qui est distinct. Deux nombres sont
+relevés sur chaque réglage, sans calcul de plus au modèle :
+- **la concentration** : la part des L1 rangés dans la plus grosse fiche, et un coefficient de Gini des tailles de
+  fiches ;
+- **la cohésion intra-fiche** : la dispersion des vecteurs des L1 autour du centroïde de leur fiche (distance cosinus
+  moyenne au centroïde, par fiche puis pondérée par la taille).
+
+Une fiche à la fois grosse et dispersée est le signe de l'absorption. La forme des données (L1, fiches, vecteurs) est
+décrite par la session mémoire.
+
 ## Le rappel des décisions rares (c7, 18 novembre, au mot de Lucie d'après un avis extérieur)
 
 Une métrique de plus pour chaque réglage : **le rappel des décisions rares**. C'est P3 (« perdu au milieu ») rendu
