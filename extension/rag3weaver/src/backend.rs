@@ -1863,6 +1863,20 @@ impl PreparedBackend {
         }
         for (name, relation) in &manifest.relations {
             crate::schema::validate_identifier(name, "relation").map_err(|e| e.to_string())?;
+            // **A relation is not named like an entity or another relation, case ignored**
+            // (ticket 2026-10-18): the engine does not tell their tables apart by case, and the
+            // clash broke at the first link, far from the manifest.
+            if let Some(entity) = schema.entities.keys().find(|e| e.eq_ignore_ascii_case(name)) {
+                return Err(format!(
+                    "relation « {name} » : le moteur ne distingue pas son nom de l'entité « {entity} » (la casse près) — renommez la relation"
+                ));
+            }
+            if let Some(other) = manifest.relations.keys().find(|r| *r != name && r.eq_ignore_ascii_case(name)) {
+                let (a, b) = if other < name { (other, name) } else { (name, other) };
+                return Err(format!(
+                    "relations « {a} » et « {b} » : le moteur ne distingue pas leurs noms (la casse près) — renommez l'une des deux"
+                ));
+            }
             if !schema.entities.contains_key(relation.from.as_str()) || !schema.entities.contains_key(relation.to.as_str()) {
                 return Err(format!("{name}: unknown relation endpoint"));
             }
