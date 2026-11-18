@@ -197,7 +197,12 @@ fn lancer(o: Options) -> Result<(), String> {
     let releve = {
         let (ep, agent, arret, lues, boite_au_flux, ecrire, task_manifest) = (ep.clone(), agent.clone(), arret.clone(), lues.clone(), boite_au_flux.clone(), ecrire.clone(), task_manifest.clone());
         let chemin = chemin.clone();
+        let (repo_id, task_name) = (backend.clone(), o.task.clone());
         std::thread::spawn(move || {
+            // **The end of a request** (ticket of 16 nov., 18 nov.): the host writes `ended` once per run, but a
+            // supervisor line that came in during the last step restarts the teammate right after. An `ended`
+            // is the end only when no line has followed it for RESUME_GRACE and the task is no longer running.
+            let mut end_seen: Option<std::time::Instant> = None;
             while !arret.load(Ordering::SeqCst) {
                 if let Ok(v) = client::lire(&agent, &ep, &chemin) {
                     // La tâche peut naître de la demande : son manifeste se lit dès qu'il existe.
@@ -209,11 +214,17 @@ fn lancer(o: Options) -> Result<(), String> {
                         if !boite_au_flux.load(Ordering::SeqCst) {
                             ecrire(&plain::ligne_de_boite(l));
                         }
-                        if l["kind"] == "ended" {
-                            arret.store(true, Ordering::SeqCst);
-                        }
+                        end_seen = (l["kind"] == "ended").then(std::time::Instant::now);
                     }
                     lues.store(lignes.len(), Ordering::SeqCst);
+                }
+                if let Some(t) = end_seen {
+                    let state = client::lire(&agent, &ep, "/ide/teammate/list?supervisor=supervisor").ok().and_then(|v| {
+                        v["teammates"].as_array().into_iter().flatten().find(|x| x["task"].as_str() == Some(task_name.as_str()) && x["parent"].as_str().is_none_or(|p| p == repo_id)).and_then(|x| x["state"].as_str().map(str::to_string))
+                    });
+                    if run_is_over(t.elapsed(), state.as_deref()) {
+                        arret.store(true, Ordering::SeqCst);
+                    }
                 }
                 std::thread::sleep(Duration::from_secs(2));
             }
@@ -266,6 +277,29 @@ fn lancer(o: Options) -> Result<(), String> {
         return Err(e);
     }
     rendu.map(|_| ())
+}
+
+/// How long an `ended` must stay the last line before the plain mode takes it for the end of its request.
+const RESUME_GRACE: Duration = Duration::from_secs(2);
+
+/// **Is the request over**, an `ended` having been the last line for `since`, the task's state being `state`
+/// (`None` when the host could not say)? Not while the host runs the teammate again, nor before the grace.
+fn run_is_over(since: Duration, state: Option<&str>) -> bool {
+    since >= RESUME_GRACE && state != Some("running")
+}
+
+#[cfg(test)]
+mod run_end_tests {
+    use super::*;
+
+    #[test]
+    fn an_end_is_the_end_only_after_the_grace_and_when_the_task_no_longer_runs() {
+        assert!(!run_is_over(Duration::from_millis(500), Some("ended")), "too early: a restart may follow");
+        assert!(!run_is_over(Duration::from_secs(3), Some("running")), "the host runs the teammate again");
+        assert!(run_is_over(Duration::from_secs(3), Some("ended")));
+        assert!(run_is_over(Duration::from_secs(3), Some("waiting")));
+        assert!(run_is_over(Duration::from_secs(3), None), "the host cannot say: the end stands");
+    }
 }
 
 #[cfg(test)]
