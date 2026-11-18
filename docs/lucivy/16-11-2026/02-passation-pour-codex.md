@@ -156,6 +156,8 @@ faire pour Codex. La suite reprend à l'entrée 3.
 
 ### Entrée 3 : un ulp d'écart de score entre profils en `parse`
 
+**Faite le 18 novembre 2026** : PR lucivy #43, main 3933431, `-p lucivy-core` vert sur le corpus rag3db et linux v7.2 ; ticket fermé. Historique de l'arrêt du 16 :
+
 **Arrêtée le 16 novembre 2026 à 10 h 20, sur le mot de Lucie : correctif fait, preuve incomplète.**
 
 - **La cause.** `parse` devient un OU de `contains`. L'union (`src/query/union/buffered_union.rs`, `refill`) retire
@@ -190,7 +192,7 @@ faire pour Codex. La suite reprend à l'entrée 3.
   5. ensuite, le banc du profil léger sur une copie (`test_light_profile`, `parse` seul) pour voir disparaître
      `SCORES DIFFER`, puis fermer le ticket. C'est une pièce de la 4.3.10 (entrée 5), sans tag.
 
-- **Ticket** : `docs/lucivy/tickets/2026-11-14-un-ulp-d-ecart-de-score-entre-profils-en-parse.md`.
+- **Ticket** : `docs/tickets/closed/2026-11-14-un-ulp-d-ecart-de-score-entre-profils-en-parse.md`.
 - **Ce qu'il faut faire** : rendre la somme des clauses d'un OU indépendante de l'ordre de réponse des segments et des
   dictionnaires.
   - `parse` sur une valeur simple devient un OU de `contains` par mot et par champ.
@@ -213,7 +215,9 @@ faire pour Codex. La suite reprend à l'entrée 3.
 
 ### Entrée 4 : `indexed: false` ignoré pour un champ texte ou `string`
 
-- **Ticket** : `docs/lucivy/tickets/2026-11-16-indexed-false-est-ignore-pour-un-champ-texte.md`.
+**Faite** : par Codex le 16 novembre, qualifiée le 18 par la session lucivy, PR #44, main e3c9753 ; ticket fermé.
+
+- **Ticket** : `docs/tickets/closed/2026-11-16-indexed-false-est-ignore-pour-un-champ-texte.md`.
 - **Ce qu'il faut faire** :
   - un avertissement et la doc, pas davantage ;
   - une fonction pure `schema_warnings(&SchemaConfig) -> Vec<String>` (anglais), appelée par `build_schema`

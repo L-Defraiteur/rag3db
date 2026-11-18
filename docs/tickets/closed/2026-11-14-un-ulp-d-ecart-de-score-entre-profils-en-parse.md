@@ -1,6 +1,10 @@
 # Un ulp d'écart de score entre profils en `parse`
 
-- **État** : ouvert (14 novembre 2026).
+- **État** : corrigé (18 novembre 2026), dans lucivy main 3933431 (PR #43), à publier avec la 4.3.10 (au mot de Lucie).
+  La cause : l'union retirait une clause épuisée par `swap_remove`, ce qui changeait l'ordre des clauses restantes ;
+  la somme f32 d'un document suivait donc la disposition des segments. Le correctif somme en f64 et arrondit une
+  fois (`SumCombiner`, `DisjunctionMaxCombiner`, `block_wand`). Témoin `test_parse_scores_identical_across_layouts` :
+  rouge sur main (4 scores sur 41 à un ulp), vert ensuite. `-p lucivy-core` vert sur le corpus rag3db et linux v7.2.
 - **Gravité** : faible. Mêmes documents, et un écart d'un ulp de f32 sur le score. Mais la doc de lucivy promet
   des scores identiques, et le juge de banc de rag3db exige la parité au bit près.
 - **Atteignable en service** : seulement si un index change de profil (`positions`, `shared_dictionary`), ce que

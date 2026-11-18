@@ -1,6 +1,9 @@
 # `indexed: false` est ignoré pour un champ texte
 
-- **État** : ouvert (16 novembre 2026). Noté le 14 novembre au ticket du poids du plein texte, jamais ouvert à part.
+- **État** : corrigé (18 novembre 2026), dans lucivy main e3c9753 (PR #44), à publier avec la 4.3.10. Lot écrit par
+  Codex le 16 novembre (`schema_warnings`, l'avertissement, la doc, trois témoins), qualifié le 18 par la session
+  lucivy : `-p lucivy-core` vert sur le corpus rag3db et linux v7.2. Honorer `indexed: false` reste une décision de
+  Lucie, hors de ce ticket.
 - **Gravité** : faible, mais silencieuse. Un appelant qui déclare un champ texte `indexed: false`, pour le stocker
   sans le chercher, paie quand même son index entier (dictionnaire, postings, positions). Et rien ne le lui dit.
 - **Atteignable en service** : seulement si un manifeste ou un appelant pose `indexed: false` sur un champ `text`.
