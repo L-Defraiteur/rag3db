@@ -64,6 +64,10 @@ pub struct ReactTransitionConfig {
     pub transition: String,
     /// Plafond de lignes transitionnées par exécution.
     pub limit: usize,
+    /// **Only events of this change count** (`change` of an `EntitiesChanged`: `ingested`, `updated`,
+    /// `definition`…); empty, every change. Ticket of 18 November 2026 (categories, question 2): a citation
+    /// rewrites a Ref, and only a changed definition must flag the fiches anchored to it.
+    pub change: String,
 }
 
 impl Default for ReactTransitionConfig {
@@ -75,6 +79,7 @@ impl Default for ReactTransitionConfig {
             target: String::new(),
             transition: String::new(),
             limit: DEFAULT_LIMIT,
+            change: String::new(),
         }
     }
 }
@@ -145,6 +150,7 @@ impl Node for ReactTransitionNode {
             "target": self.cfg.target,
             "transition": self.cfg.transition,
             "limit": self.cfg.limit,
+            "change": self.cfg.change,
         })))
     }
     /// **Les ports d'entrée se déclarent ici aussi, pas seulement au schéma.**
@@ -396,6 +402,7 @@ impl NodeFactory for ReactTransitionNodeFactory {
                 .and_then(|v| v.as_u64())
                 .map(|l| (l as usize).clamp(1, DEFAULT_LIMIT))
                 .unwrap_or(DEFAULT_LIMIT),
+            change: texte("change"),
         };
         // Vérifié à la **construction** et pas seulement à l'exécution : un
         // gabarit fautif se refuse quand on le pose, pas la première fois qu'un
@@ -516,6 +523,21 @@ mod tests {
             serde_json::json!({ "kind": "EntitiesChanged", "entity": "Subject" }),
         ];
         assert_eq!(n.uuids_des_evenements(&events), vec!["a".to_string(), "b".to_string()]);
+    }
+
+    /// **A change filter keeps only the events of that change** (ticket of 18 November 2026, categories,
+    /// question 2): a citation rewrites a Ref (`ingested`, `updated`); only a changed definition (`definition`)
+    /// must flag the fiches anchored to it. Empty, every change counts, as before.
+    #[test]
+    fn a_change_filter_keeps_only_the_events_of_that_change() {
+        let n = ReactTransitionNode::new("r", ReactTransitionConfig { change: "definition".into(), ..cfg() });
+        let events = vec![
+            serde_json::json!({ "kind": "EntitiesChanged", "entity": "Subject", "change": "ingested", "uuids": ["cited"] }),
+            serde_json::json!({ "kind": "EntitiesChanged", "entity": "Subject", "change": "definition", "uuids": ["defined"] }),
+        ];
+        assert_eq!(n.uuids_des_evenements(&events), vec!["defined".to_string()]);
+        let every = ReactTransitionNode::new("r", cfg());
+        assert_eq!(every.uuids_des_evenements(&events), vec!["cited".to_string(), "defined".to_string()]);
     }
 
     /// Source vide : n'importe quelle entité déclenche. C'est le cas d'un
