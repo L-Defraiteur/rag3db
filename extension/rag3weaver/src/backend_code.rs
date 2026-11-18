@@ -697,6 +697,9 @@ pub fn allowed_nodes(policy: &ToolPolicy) -> Vec<&'static str> {
     }
     if policy.call_models {
         nodes.extend_from_slice(MODEL_NODES);
+        // LlmNode runs under call_models too, at the top of a tool graph as in a cited one; the
+        // load-time check (validate_tool_policy) still refuses it without its response_schema.
+        nodes.push("LlmNode");
     }
     if policy.attach_worktrees {
         nodes.extend_from_slice(WORKTREE_NODES);
@@ -963,9 +966,10 @@ mod tests {
         assert!(e.contains("Decide") && e.contains("\"policy\": {\"call_models\": true}"), "{e}");
         let avec = ToolPolicy { call_models: true, ..ToolPolicy::default() };
         validate_tool_policy("archive", types(), &avec, None).expect("Decide avec call_models");
-        // LlmNode n'est dans aucune liste : sans schéma il reste hors de toute politique, avec son
-        // schéma il passe sous call_models (backend_opening_tests, a_tool_llm_node_needs_its_schema_and_call_models).
-        assert!(!allowed_nodes(&avec).contains(&"LlmNode"), "LlmNode n'est permis par aucune liste de nœuds");
+        // LlmNode is allowed under call_models at run time; at load, validate_tool_policy refuses it
+        // without its response_schema (backend_opening_tests, a_tool_llm_node_needs_its_schema_and_call_models).
+        assert!(allowed_nodes(&avec).contains(&"LlmNode"), "LlmNode runs under call_models");
+        assert!(!allowed_nodes(&ToolPolicy::default()).contains(&"LlmNode"), "and only under call_models");
         validate_tool_policy("t", ["Route", "SplitSections"].map(|t| (t.to_string(), serde_json::Value::Null)), &ToolPolicy::default(), None)
             .expect("Route et SplitSections sont de la base");
     }
