@@ -6450,4 +6450,30 @@ mod tests_de_l_ecrivain {
             assert_eq!(cat.au_rang(m, |c| miroirs_manquants(c)), (vec![], vec![]), "au rang publié aussi (f réécrit d'abord : {f_change_d_abord})");
         }
     }
+
+    /// The live `scope_type` of the scopes of a name in a file: the rows not retired (`_jusqu_a` unset).
+    fn live_kinds(cat: &Catalog, name: &str, path: &str) -> Vec<String> {
+        let r = cat
+            .conn()
+            .execute_with_params(
+                "MATCH (s:Scope) WHERE s.name = $n AND s.file_path ENDS WITH $p AND s._jusqu_a IS NULL RETURN s.scope_type",
+                &[QueryParam::new("n", CypherValue::String(name.into())), QueryParam::new("p", CypherValue::String(path.into()))],
+            )
+            .unwrap();
+        r.rows.iter().map(|l| texte(&l[0])).collect()
+    }
+
+    /// **A method defined in another file than its class is a method** (ticket of 16 November 2026, from
+    /// codeparsers): `void Foo::f() {}` in foo.cpp, `class Foo` in foo.h. In the file, its parent does not
+    /// resolve, so the analysis leaves it `function`; the writer decides the kind from the visible classes of
+    /// the source. Without a visible class of that name, it stays a function.
+    #[test]
+    fn a_method_defined_in_another_file_than_its_class_is_a_method() {
+        let (mut cat, src) = base();
+        sauver(&mut cat, &src, "foo.h", "class Foo {\npublic:\n    void f();\n};\n");
+        sauver(&mut cat, &src, "foo.cpp", "#include \"foo.h\"\n\nvoid Foo::f() {}\n");
+        assert_eq!(live_kinds(&cat, "f", "foo.cpp"), vec!["method".to_string()], "Foo is a visible class of the source");
+        sauver(&mut cat, &src, "bar.cpp", "void Bar::g() {}\n");
+        assert_eq!(live_kinds(&cat, "g", "bar.cpp"), vec!["function".to_string()], "no visible class Bar");
+    }
 }
