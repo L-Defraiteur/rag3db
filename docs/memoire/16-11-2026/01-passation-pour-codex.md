@@ -10,6 +10,14 @@ Le contexte long est ailleurs :
 - les pages du 14 novembre : `docs/memoire/14-11-2026/` ;
 - les cinq pages du 15 novembre : `docs/memoire/15-11-2026/01` à `05`.
 
+> **Reprise du 18 novembre 2026.**
+>
+> - L'entrée **2.1 est faite par Codex** : le code en `7b3a88e13b`, atterri par `b0a845bb48`, et
+>   le ticket fermé sous `docs/tickets/closed/`.
+> - Les entrées 2.2 à 2.13 sont **intactes**, à reprendre dans l'ordre.
+> - La lib des passes est maintenant `59ac9c86bc` : plus de `RAG3WEAVER_MOTEUR_ANCIEN`.
+> - L'évaluation est dans `docs/memoire/18-11-2026/01-evaluation-du-travail-de-codex.md`.
+
 ## 1. État
 
 ### Sur master, de cette session
