@@ -294,6 +294,34 @@ C'est un gain de 1,5 à 2, **pas la quinzaine de secondes** visée : l'analyse (
   - l'image bâtie **au premier appel** d'un outil de référence.
   - Ticket : `docs/recherche/tickets/2026-11-18-les-outils-de-reference-par-des-tables-a-soi-avant-l-index.md`.
 
+## C écrite et mesurée (recherche, 18 novembre 2026, 18 h 50)
+
+**Le lot** : branche `relations-before-derivations`.
+- Les témoins rouges : ec77f1d77a, puis a0e9a35d6c et 9ba2da7d79 pour qu'ils compilent.
+- Le correctif : 47166b6818.
+- Ce qu'il fait : en masse, les dérivées de chaque paquet (`ScopeContent`, le plein texte du code) sont retenues.
+  Leur dette part en base tout de suite, et leur rendu se joue après les relations, dans une phase à elle
+  (`SyncPhase::Derivations`).
+- La passe `passe-c-182905` est VERTE : e2e_code_sync 26, e2e_code 36, e2e_lectures 28, lib 2 628, navigateur
+  45/45, 0 non jugé.
+
+**La mesure** : la sonde `probe_index_timeline` sur la branche (`probe-on-c`), mêmes réglages qu'au §7. Journaux :
+`probe-index-c2-rw-src.log` et `probe-index-c2-depot.log` à luciepc.
+
+| | Avant C | Avec C |
+|---|---|---|
+| rag3weaver/src : `usages Catalog` complet | 42 s | **26 s** |
+| rag3weaver/src : index entier | 42 s | 43 s |
+| dépôt : `usages Catalog` complet (704-708 lignes) | 151 s (relations posées à 196 s) | **89 s** (relations posées à 94 s) |
+| dépôt : index entier | 196 s | 169 s |
+
+- Le gain correspond à l'estimation (~27 s, ~95 s). L'index entier ne ralentit pas : il gagne même 27 s sur le dépôt.
+- Le journal le dit dans l'ordre : « fichiers et scopes posés · relations : N liens à poser », puis « relations
+  posées · plein texte du code : rendu en cours », puis « plein texte prêt ».
+- **Ce qui reste sur le chemin** : l'analyse (12,6 s, puis 34,8 s), et la pose des liens (8,8 s, puis 34,4 s, dont
+  environ 60 % de MERGE évitables d'après codeparsers, dans son ticket
+  `codeparsers/tickets/2026-11-18-la-pose-des-liens-de-la-resolution-repasse-par-merge.md`).
+
 ## Questions pour Lucie (posées avant sa décision)
 
 1. ~~Mesurer d'abord C ?~~ **Tranché par c7 : oui.** C est mesurée au §7. Réordonner l'index donne ~27 s sur
