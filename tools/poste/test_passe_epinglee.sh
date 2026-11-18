@@ -8,7 +8,10 @@ D=$(mktemp -d -p "${TMPDIR:-$HOME/.cache}"); trap 'rm -rf "$D"' EXIT
 H=$D/home; W=$H/git_workspaces/wt/extension/rag3weaver; mkdir -p $W/scripts $W/src $D/bin
 git -C $H/git_workspaces/wt init -q 2>/dev/null || { mkdir -p $H/git_workspaces/wt && git -C $H/git_workspaces/wt init -q; }
 echo 'fn f() {}' > $W/src/lib.rs
-mkdir -p $H/git_workspaces/wt/tools/poste && cp "$(dirname "$X")/required_suites.sh" "$(dirname "$X")/required_suites.txt" $H/git_workspaces/wt/tools/poste/ 2>/dev/null
+# La table des suites exigées se prend à côté du témoin, dans le dépôt, et non à côté de la passe jugée : la copie du
+# cache n'a pas de voisin (16 novembre 2026, ticket de G). Absente, le témoin s'arrête au lieu de rougir plus loin.
+ICI_TEMOIN=$(dirname "$(realpath "$0")")
+mkdir -p $H/git_workspaces/wt/tools/poste && cp "$ICI_TEMOIN/required_suites.sh" "$ICI_TEMOIN/required_suites.txt" $H/git_workspaces/wt/tools/poste/ || { echo "ROUGE  la table des suites exigées manque à côté du témoin ($ICI_TEMOIN)"; exit 1; }
 git -C $H/git_workspaces/wt -c user.email=t@t -c user.name=t add -A > /dev/null && git -C $H/git_workspaces/wt -c user.email=t@t -c user.name=t commit -qm base
 # master sous la tête : la base, puis un commit du lot par-dessus
 git -C $H/git_workspaces/wt update-ref refs/remotes/origin/master HEAD; BASE_JOUET=$(git -C $H/git_workspaces/wt rev-parse HEAD)
