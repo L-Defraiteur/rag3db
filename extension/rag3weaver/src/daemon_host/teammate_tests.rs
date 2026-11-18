@@ -1999,3 +1999,49 @@ fn a_read_with_a_limit_covers_only_its_lines() {
     assert!(results[1].contains("relis d'abord"), "line 20 was not read: replace_lines is refused: {results:?}");
 }
 
+/// **A follow-up request adds to the open request** (S3, D6 campaign of 16 Nov 2026: a short
+/// « continue » became the request, and the agent went looking for the brief in a vision page).
+/// The frontier after a « continue » carries the first request first, then the follow-up, and
+/// the step_done of the step before it.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn a_follow_up_request_adds_to_the_open_request() {
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let frontiers = Arc::new(Mutex::new(Vec::<String>::new()));
+    let model = |frontiers: Arc<Mutex<Vec<String>>>, files: Option<super::teammate::TeammateFiles>| -> ChatModel {
+        Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let (frontiers, files) = (frontiers.clone(), files.clone());
+            Ok(Arc::new(CallbackLlm::new("follow-up", 8192, move |turns, opts, sink| {
+                let results = tool_results(turns);
+                if results.is_empty() {
+                    frontiers.lock().unwrap().push(last_user(turns));
+                }
+                match (step_of(turns), results.len()) {
+                    (1, 0) => {
+                        // The supervisor sends « continue » while step 1 runs.
+                        if let Some(f) = &files {
+                            f.append("lucie", "request", None, "continue").unwrap();
+                        }
+                        answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": false, "done": "the test is written", "remaining": "run it" }))]))
+                    }
+                    _ => answer(turns, opts, sink, "The test passes.", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "the test runs green", "remaining": "" }))])),
+                }
+            })))
+        })
+    };
+    let host = hote(d.path(), model(frontiers.clone(), None)).with_runs_root(d.path().join("runs"));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("the parent opens");
+    host.ouvrir_une_tache(&h.id, "doc").expect("the task opens");
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    let host = host.with_chat_model(model(frontiers.clone(), Some(files.clone())));
+    files.append("lucie", "request", None, "Write a test for bonjour").unwrap();
+    host.run_teammate(&h.id, "doc").expect("the teammate runs");
+    let frontiers = frontiers.lock().unwrap().clone();
+    let second = frontiers.get(1).cloned().unwrap_or_default();
+    let first_at = second.find("Write a test for bonjour");
+    let follow_at = second.find("Follow-up: continue");
+    assert!(first_at.is_some() && follow_at.is_some() && first_at < follow_at, "the first request, then the follow-up: {second}");
+    assert!(second.contains("the test is written"), "the step_done before the follow-up is kept: {second}");
+}
