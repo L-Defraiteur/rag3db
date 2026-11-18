@@ -2407,7 +2407,7 @@ mod tests {
         let mut sink = StringSink::default();
         agent.run(&mut turns, &mut sink).unwrap();
 
-        let rx = cursor.lock().unwrap();
+        let mut rx = cursor.lock().unwrap();
         let call = std::iter::from_fn(|| rx.try_recv().ok())
             .map(|e| e.to_json())
             .find(|j| j["kind"] == "LlmCall")
