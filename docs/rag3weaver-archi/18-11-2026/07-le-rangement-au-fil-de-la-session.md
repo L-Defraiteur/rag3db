@@ -206,9 +206,16 @@ Le lot 1 passe à 4 jours au lieu de 1,5, avec les champs des tours et les filtr
     le message utilisateur, puis l'assistant, puis chaque retour d'outil.
 - **`archive_slice(run, from_turn, to_turn, context, contenu?)`** rend `{report,
   archived_through_turn}`.
-  - L'hôte passe toujours `contenu`, la tranche en Markdown avec un `## turn <n>` par tour : cela
-    marche avant que les `Turn` existent.
-  - Sans `contenu`, l'outil lit les `Turn` lui-même, et refuse si aucun ne couvre l'intervalle.
+  - **Une seule forme d'entrée, écrite dans le gabarit** (accord du 18 au soir). Le script
+    `render_turns` fait, des `Turn` de l'intervalle, le texte de la tranche : un `## turn <n>`
+    par tour, un `### <role> · <heure>` par message, et pour un appel d'outil son nom, son
+    statut, ses paramètres et son résultat, bornés et masqués. `archive_slice` range ce texte et
+    l'écrit comme Source de tranche.
+  - L'hôte n'écrit ni ne passe aucun texte : il appelle `put_turn` à chaque fin de tour, puis
+    `archive_slice(run, from_turn, to_turn, context)`.
+  - Avec `index_turns` éteint, l'hôte ne ferme aucune tranche et le dit une fois dans l'état du
+    chat. Sans `Turn` qui couvre l'intervalle, `archive_slice` refuse en le disant.
+  - Le banc passe la même forme dans `contenu`.
   - `archived_through_turn` vaut `to_turn` quand le commit est fait et le rapport sans erreur,
     sinon `from_turn - 1`.
   - La Source de tranche est `sources/<run en slug>-turns-<a>-<b>.md`.
