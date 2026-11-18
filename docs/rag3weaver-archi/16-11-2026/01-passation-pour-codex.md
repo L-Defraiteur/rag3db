@@ -63,6 +63,7 @@ recommandé : la tâche d'écriture de la campagne D6 (`docs/orchestration/16-11
 doit passer avant le reste.
 
 1. Faire atterrir **`pas-va-au-bout`** (ci-dessus) : 1 h.
+   **Fait par archi le 18 novembre : `9057cad4e` sur master** (pas-va-au-bout-6, avec le superviseur d'e2e_equipier ; voir `18-11-2026/02-pas-va-au-bout-3.md`). Ci-dessous, l'état du 16 :
    **En cours par archi, prêt au push** (16 novembre, 10 h 12). La branche est reposée sur master
    sous le nom **`pas-va-au-bout-2`**, tête **`5e25a110d`** (worktree
    `~/.cache/rag3weaver-build/wt-delegate`), base testée `6b672afa6`. Le rejeu court est **vert** :

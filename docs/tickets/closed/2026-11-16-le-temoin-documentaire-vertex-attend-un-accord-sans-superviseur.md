@@ -1,6 +1,6 @@
 # Le témoin documentaire Vertex attend un accord sans superviseur
 
-- **État** : ouvert, le 16 novembre 2026 ; en cours par archi depuis le 18 novembre (branche `pas-va-au-bout-3`).
+- **État** : fermé le 18 novembre 2026 par `9057cad4e` (pas-va-au-bout-6, sur master) ; e2e_equipier vert sous Vertex, deux tirages, dont un avec l'accord `rm Cargo.lock` refusé puis la fin.
 - **Famille** : produit
 - **Pour** : archi
 - **Gravité** : bloque le landing de `pas-va-au-bout` : e2e_equipier est une suite exigée pour tout lot qui touche l'équipier.
@@ -44,3 +44,7 @@ données. La conception est à la page `docs/rag3weaver-archi/18-11-2026/02-pas-
 
 e2e_equipier vert sous Vertex et la lib épinglée, deux tirages, dans le rejeu complet du lot. Puis le
 lot est poussé sur master, et ce ticket est fermé avec le hash.
+
+## Fermeture
+
+Poussé sur master le 18 novembre 2026 : `4b9926dea`, `09ed83d33`, `9057cad4e`. e2e_equipier a été joué sous Vertex sur `f20762821` (base `560b2d403`, lib 59ac épinglée), en deux tirages à 2/0. Au tirage 1, Gemini a demandé l'accord `rm Cargo.lock` : le superviseur du témoin l'a refusé, puis l'équipier a fini (« fait sans plan », 2 pas, 41 s). Au tirage 2, aucune demande d'accord. Le rejeu court sur la tête poussée a été joué à luciepc.
