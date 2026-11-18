@@ -738,6 +738,98 @@ fn a_split_that_is_not_json_is_refused_by_name() {
     assert!(apports_de(&b, "la reprise").is_empty(), "rien n'est rangé");
 }
 
+/// A slice of six turns, in the single form rendered from `Turn` rows: one `## turn <n>` per
+/// turn, one `### <role> · <time>` per message, a tool call with its name, status, params and
+/// result.
+fn slice_of_six_turns() -> String {
+    let mut s = String::from("# run chat:test, turns 1-6\n\n");
+    let said = [
+        "SLICEONE la reprise du journal relit chaque enregistrement.",
+        "SLICETWO le WAL se rejoue avant toute écriture.",
+        "SLICETHREE le compositeur figeait à cent pour cent.",
+        "SLICEFOUR à soixante-dix pour cent l’écran reste utilisable.",
+        "SLICEFIVE la reprise ne relit pas deux fois un enregistrement validé.",
+        "SLICESIX le banc mesure le cache de Vertex.",
+    ];
+    for (i, t) in said.iter().enumerate() {
+        let n = i + 1;
+        s.push_str(&format!("## turn {n}\n\n### user · 2026-11-18T20:0{n}:00Z\n\n{t}\n\n### assistant · 2026-11-18T20:0{n}:30Z\n\nCompris.\n\n"));
+        if n == 3 {
+            s.push_str("### tool · 2026-11-18T20:03:40Z · read_file · ok\n\nparams:\n```json\n{\"path\": \"src/compositor.rs\"}\n```\n\nresult:\n```\nfn duty() -> u8 { 70 }\n```\n\n");
+        }
+    }
+    s
+}
+
+/// **The two-step archivist on a slice** (18 November 2026, Lucie's form): one structured
+/// extraction over the whole slice (no base, no candidates), then one Decide per extracted topic.
+/// A topic may span two ranges; a turn no topic covers and no `not_filed` reason sets aside goes
+/// to a residual « reste » segment, filed like the others — nothing falls silently.
+#[test]
+#[ignore]
+fn slice_files_one_l1_per_topic_and_a_residual_for_uncovered_turns() {
+    let extraction = r#"{"slice_summary": "SUMMARYMARK la reprise et le compositeur", "topics": [
+        {"title": "la reprise du journal", "turns": [{"from": 1, "to": 2}, {"from": 5, "to": 5}], "said": "SAIDREPRISE le journal se rejoue, sans relire deux fois", "open": false, "attributes": [{"dimension": "couche", "value": "moteur"}]},
+        {"title": "le compositeur", "turns": [{"from": 3, "to": 4}], "said": "SAIDCOMPOSITEUR il figeait à 100 %, utilisable à 70 %", "open": true, "attributes": []}
+    ], "not_filed": []}"#;
+    let serveur = FakeServer::start_sequence(vec![
+        text_reply(extraction),
+        etiquette_decrite("create", "La reprise du journal", "Comment le moteur rejoue son journal à l’ouverture."),
+        etiquette_decrite("create", "Le compositeur du portable", "Le compositeur de l’écran du portable et son rapport cyclique."),
+        etiquette_decrite("create", "Le cache de Vertex", "Ce que le cache de Vertex sert sur une fenêtre du banc."),
+    ]);
+    let adresse = serveur.url.clone();
+    let dir = tempfile::tempdir().expect("dossier");
+    let b = ouvrir(dir.path(), |m| {
+        m["models"]["llm"] = json!({"provider": "compatible", "protocol": "openai", "model": "faux", "address": adresse});
+    });
+    let r = appel(&b, "archive_slice", json!({"titre": "run chat:test, turns 1-6", "contenu": slice_of_six_turns(), "jour": "2026-11-18", "allow_create": true, "trace": true}));
+    assert_eq!(r["result"]["errors"], json!([]), "{r}");
+    // Step 1: one extraction call, under a schema, over numbered turns, with no candidate fiche.
+    let first: Value = serde_json::from_str(&serveur.request.recv().unwrap()).unwrap();
+    let schema = &first["response_format"]["json_schema"]["schema"]["properties"];
+    assert!(schema["topics"].is_object() && schema["slice_summary"].is_object(), "the extraction schema: {schema}");
+    let prompt = first["messages"].to_string();
+    assert!(prompt.contains("turn 6") && prompt.contains("SLICESIX"), "the whole slice goes to the extraction");
+    assert!(!prompt.contains("Fiches candidates") && !prompt.contains("candidate_1"), "no candidate in step 1: {prompt}");
+    // Step 2: one Decide per topic, plus the residual.
+    assert_eq!(serveur.connections.load(std::sync::atomic::Ordering::SeqCst), 4, "1 extraction + 3 Decide");
+    for (fiche, section, inside, outside) in [
+        ("La reprise du journal", "turns 1-5 · la reprise du journal", "SLICEFIVE", "SLICETHREE"),
+        ("Le compositeur du portable", "turns 3-4 · le compositeur", "SLICEFOUR", "SLICEFIVE"),
+        ("Le cache de Vertex", "turns 6-6 · reste", "SLICESIX", "SLICEONE"),
+    ] {
+        let a = apports_de(&b, fiche);
+        assert_eq!(a.len(), 1, "{fiche}: {a:?}");
+        assert_eq!(a[0]["section"], json!(section), "{fiche}");
+        let t = a[0]["texte"].as_str().unwrap();
+        assert!(t.contains(inside) && !t.contains(outside), "{fiche}: its own turns only: {t}");
+    }
+    // The default step2_input is `both`: the extracted `said`, then the raw turns.
+    let reprise = &apports_de(&b, "La reprise du journal")[0]["texte"];
+    assert!(reprise.as_str().unwrap().contains("SAIDREPRISE") && reprise.as_str().unwrap().contains("SLICEONE"), "said and raw turns: {reprise}");
+    // The report carries what the extraction said about the whole slice.
+    assert!(r["result"]["slice_summary"].as_str().is_some_and(|s| s.contains("SUMMARYMARK")), "{r}");
+    assert_eq!(r["result"]["open"], json!(["le compositeur"]), "{r}");
+}
+
+/// An extraction that is not the requested JSON is refused, naming response_schema: nothing is
+/// guessed and nothing is filed.
+#[test]
+#[ignore]
+fn a_slice_extraction_that_is_not_json_is_refused_by_name() {
+    let serveur = FakeServer::start_sequence(vec![text_reply("Les sujets sont la reprise et le compositeur.")]);
+    let adresse = serveur.url.clone();
+    let dir = tempfile::tempdir().expect("dossier");
+    let b = ouvrir(dir.path(), |m| {
+        m["models"]["llm"] = json!({"provider": "compatible", "protocol": "openai", "model": "faux", "address": adresse});
+    });
+    let r = b.call("archive_slice", json!({"titre": "run chat:test, turns 1-6", "contenu": slice_of_six_turns(), "jour": "2026-11-18", "allow_create": true}));
+    let said = match r { Ok(v) => v.to_string(), Err(e) => e.to_string() };
+    assert!(said.contains("response_schema"), "the refusal names response_schema: {said}");
+    assert!(apports_de(&b, "La reprise du journal").is_empty(), "nothing filed");
+}
+
 /// **Un apport recopié sort des rappels par défaut, et se voit en ôtant le filtre** (15 novembre 2026,
 /// les gestes de Lucie : scinder ou rejoindre une fiche recopie ses apports sous la fiche issue, et
 /// l'exemplaire d'origine reste comme provenance). L'état `recopied` (la transition `recopy` du cycle
