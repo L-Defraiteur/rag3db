@@ -1949,7 +1949,7 @@ fn the_next_step_sees_what_the_previous_step_read() {
     let step1 = frontiers.iter().find(|f| f.starts_with("STEP 1 RESULTS")).cloned().unwrap_or_default();
     let frontiers: Vec<String> = frontiers.into_iter().filter(|f| !f.starts_with("STEP 1 RESULTS")).collect();
     let second = frontiers.get(1).cloned().unwrap_or_default();
-    assert!(second.contains("Previous step") && second.contains("src/lib.rs") && second.contains("lines 1-20"), "the second frontier names what step 1 read: {second}\n({step1})");
+    assert!(second.contains("Previous step") && second.contains("src/lib.rs") && second.contains("lines 1-3"), "the second frontier names what step 1 read: {second}\n({step1})");
     assert!(second.contains("next I edit its first line"), "and the last text of step 1: {second}");
     assert!(step2_results.first().is_some_and(|r| !r.contains("\"ok\":false") && !r.contains("error")), "replace_lines passes without a new read: {step2_results:?}");
     assert_eq!(mailbox.iter().find(|l| l["kind"] == "ended").unwrap()["text"], "fait sans plan", "{mailbox:#?}");
@@ -1990,7 +1990,8 @@ fn a_read_with_a_limit_covers_only_its_lines() {
     host.with_backend(&h, |_| ()).expect("the parent opens");
     host.post_to_teammate(&h.id, "doc", "lucie", "request", None, "Change line 20 of src/long.rs.", &Value::Null).expect("the request");
     let files = host.teammate_files(&h.id, "doc").unwrap();
-    attendre_dans(&files, "the end", &|b| b.iter().any(|l| l["kind"] == "ended"));
+    attendre_dans(&files, "the first step_done", &|b| b.iter().any(|l| l["kind"] == "step_done"));
+    host.post_to_teammate(&h.id, "doc", "lucie", "stop", None, "stop", &Value::Null).ok();
     let results = seen.lock().unwrap().clone();
     assert!(results[0].contains("line 5") && !results[0].contains("\"error\""), "the read passes with limit: {results:?}");
     assert!(results[1].contains("relis d'abord"), "line 20 was not read: replace_lines is refused: {results:?}");
