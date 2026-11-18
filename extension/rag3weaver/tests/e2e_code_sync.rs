@@ -591,6 +591,44 @@ fn held_derivations_wait_for_their_release() {
     assert!(count(&catalog, &contents) > 0, "the release renders the contents");
 }
 
+/// **`usages` does not show the declaration of a retired container** (ticket
+/// `docs/recherche/tickets/2026-11-18-usages-lit-des-conteneurs-sans-la-borne-des-generations.md`). Under
+/// generations (2a′), a retired row stays in its table. A C++ class declares `bar` in a header, with no definition
+/// indexed: `usages bar` shows the declaration. An edit removes the class, the writer retires its scope: `usages bar`
+/// must not show it any more — the lookup by content of the containers has to be bounded to the visible rows.
+#[test]
+#[ignore]
+fn usages_does_not_show_the_declaration_of_a_retired_container() {
+    use rag3weaver::dataflow::graph_tool::GraphTool;
+    use rag3weaver::dataflow::node_factories::register_builtins;
+    use rag3weaver::dataflow::node_registry::NodeRegistry;
+    use rag3weaver::dataflow::ServiceRegistry;
+    use std::sync::{Arc, Mutex};
+    let catalog = Arc::new(Mutex::new(catalogue()));
+    let header = |body: &str| vec![("foo.h".to_string(), body.to_string()), ("main.cpp".to_string(), "int main() { return 0; }\n".to_string())];
+    sync_source(&mut catalog.lock().unwrap(), &Snapshot::new("depot", header("class Foo {\npublic:\n    int bar(int x) const;\n};\n")), &SourceSyncOptions::default(), &mut |_| {}).unwrap();
+    let usages = |catalog: &Arc<Mutex<Catalog>>| {
+        let mut registry = NodeRegistry::new();
+        register_builtins(&mut registry);
+        let tool = GraphTool::from_mermaid(include_str!("../templates/tools/usages.mmd")).unwrap().bind(&registry).unwrap();
+        let mut services = ServiceRegistry::new();
+        services.register("catalog", catalog.clone());
+        tool.execute(&registry, Arc::new(services), &serde_json::json!({ "name": "bar" })).unwrap()
+    };
+    let before = usages(&catalog);
+    assert!(before.contains("Foo"), "the declaration in Foo is shown first: {before}");
+    sync_source(&mut catalog.lock().unwrap(), &Snapshot::new("depot", header("int other();\n")), &SourceSyncOptions::default(), &mut |_| {}).unwrap();
+    let retired = catalog
+        .lock()
+        .unwrap()
+        .execute_raw("MATCH (s:Scope) WHERE s.name = 'Foo' RETURN count(s)")
+        .unwrap()
+        .rows;
+    eprintln!("[visibility] rows of Foo still in the table after the edit: {retired:?}");
+    let after = usages(&catalog);
+    assert!(!after.contains("Foo"), "the retired class is not shown: {after}");
+}
+
 // ─── L'édition pendant l'indexation ─────────────────────────────────────────
 //
 // Une indexation tient le catalogue de bout en bout ; une édition ne l'attend
