@@ -1503,6 +1503,22 @@ std::optional<IndexBuildState> NodeTable::getIndexBuildState(const std::string& 
     return std::nullopt;
 }
 
+std::optional<uint64_t> NodeTable::getIndexRowsOutsideGraphAtMost(const std::string& name,
+    const Transaction* transaction) const {
+    std::shared_lock lck{indexesMtx};
+    for (const auto& holder : indexes) {
+        if (holder.isDetached() || !isIndexVisible(holder, transaction) ||
+            !StringUtils::caseInsensitiveEquals(holder.getName(), name)) {
+            continue;
+        }
+        if (!holder.isLoaded()) {
+            return std::nullopt;
+        }
+        return holder.getIndex()->getRowsScannedOutsideGraph(transaction);
+    }
+    return std::nullopt;
+}
+
 void NodeTable::addIndexInState(std::unique_ptr<Index> index, Transaction* transaction,
     IndexBuildState state, std::weak_ptr<void> builderToken) {
     std::unique_lock lck{indexesMtx};
