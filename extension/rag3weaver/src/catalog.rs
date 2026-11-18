@@ -8544,6 +8544,7 @@ fn read_threads() -> u64 {
     /// batch would have. A no-op when nothing was held.
     pub fn release_deferred_derivations(&mut self, _exige: crate::disponibilite::Disponibilites) -> FlushResult {
         self.defer_derivations = false;
+        self.deferred_derivations.clear();
         FlushResult::default()
     }
 
