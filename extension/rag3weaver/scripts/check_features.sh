@@ -67,6 +67,10 @@ fi
 if ! python3 "$ICI/scripts/test_check_regles_de_l_analyse.py" > /dev/null 2>&1; then
   refuser test_check_regles_de_l_analyse
 fi
+# The search_code parity comparator (the bench's judge): its witness, on hand-written relevés.
+if ! python3 -B "$ICI/scripts/test_parite_search_code.py" > /dev/null 2>&1; then
+  refuser test_parite_search_code
+fi
 # Le lanceur possède et libère son état de fixture ; le garde doit rester
 # rouge pour les résidus étrangers et les défauts de nettoyage.
 if ! timeout 60 bash "$ICI/scripts/test_etat_suite_e2e.sh"; then
