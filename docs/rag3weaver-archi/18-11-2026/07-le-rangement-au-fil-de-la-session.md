@@ -87,6 +87,19 @@ La part gabarit est décrite par mémoire. La part hôte :
    tours (`from`, `to`, et `chat` : la conversation de la tranche par défaut), rendue comme la
    tranche, bornée en caractères, en lecture seule. Il n'est offert qu'au pas de l'archiviste, et
    à aucun autre agent sans déclaration.
+9 quater. **Les tours cherchables par le temps, et les appels d'outils filtrables** (Lucie :
+   revoir « ce qui a mal marché », vérifier qu'un outil a bien été appelé la veille).
+   - **Ce que l'hôte écrit pour chaque tour** : un `Turn` avec `at`, `run`, `turn` et `role`.
+   - **Pour chaque appel d'outil** : `tool_name`, `params` (le JSON des arguments, borné),
+     `result` (le texte rendu, borné) et `status` (`ok`, `error`, `refused`, `interrupted`, lus
+     sur le retour : `ok: false`, `error`, un refus de la porte ou des bornes du pas, un appel
+     orphelin refermé).
+   - **La garde de l'exclusion** vaut aussi pour `params` et `result`.
+   - **`search_turns` passe les filtres** `since`, `until`, `role`, `tool_name` et `status` au
+     rappel du memory (forme du gabarit : mémoire).
+   - **Les bornes** de `params` et `result` sont des réglages (`memory.turn_params_chars`,
+     `memory.turn_result_chars`, 2 000 et 4 000 par défaut).
+
 9 ter. **Suivre la chaîne à la main** (Lucie) : un L1 mène à sa tranche, puis à son intervalle
    de tours, puis au tour exact, tant que le TTL ne l'a pas effacé.
    - **`read_turns` prend `(run, from_turn, to_turn)`.** Il lit l'entité `Turn` du memory si elle
@@ -145,7 +158,7 @@ Cela agrandit le lot 1 :
 - le pas et `read_turns` : une demi-journée ;
 - l'indexation des tours au fil du run (plein texte par tour, dense par tranche, TTL) et `search_turns` : 1,5 jour.
 
-Le lot 1 passe à 3,5 jours au lieu de 1,5.
+Le lot 1 passe à 4 jours au lieu de 1,5, avec les champs des tours et les filtres (une demi-journée).
 
 ## La preuve, rouge d'abord (demain)
 
