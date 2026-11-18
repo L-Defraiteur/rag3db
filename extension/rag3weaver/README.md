@@ -536,7 +536,7 @@ rag3weaver is not a library an agent calls; it is where the agent runs.
 - **The model is a service**, like the embedder: `LlmNode`, a `decider`
   (a text, a closed list of options, a probability per option), an
   OpenAI-compatible client, the Anthropic Messages API (`anthropic-llm`,
-  `"protocol": "anthropic"` in `models.llm`) or a local server, all behind the
+  `"provider": "anthropic"` in `models.llm`) or a local server, all behind the
   same `Llm` trait; streaming is in the trait, and a model may declare its
   reasoning budget (`models.llm.reasoning`). A refused call (429, 503) is
   retried after a minute, then twice as long each time, ten minutes and five
