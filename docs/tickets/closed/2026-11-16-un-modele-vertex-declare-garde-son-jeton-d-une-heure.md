@@ -1,6 +1,9 @@
 # Un modèle Vertex déclaré garde son jeton d'une heure
 
-- **État** : ouvert ; correctif proposé c38 qualifié CPU/faux HTTP seulement ; union et intégration NON QUALIFIÉES.
+- **État** : fermé (18 novembre 2026, banc) — le correctif d'ED (4b32256693 : le client garde la `TokenSource`, un 401
+  renouvelle une fois) est prouvé sur une passe réelle : F300 rejouée entière par un backend de master 29f5e50f6c,
+  1 h 16 de passe, **244 décisions, aucun 401, aucune erreur** (`long/F300-ov10-master-20261118-1733`). Page du 15,
+  § 11.
 - **Famille** : produit
 - **Gravité** : haute pour toute passe longue. Au bout d'une heure, chaque appel au modèle rend 401, et la
   décision est perdue sans que la passe s'arrête.

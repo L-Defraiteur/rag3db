@@ -354,7 +354,7 @@ erreur du modèle. Elle est sur le même binaire que les variantes, ce qui lève
   - mais **un quart de doublons** (8 couples), un p90 de 72 s par décision, et trois fois plus de jetons que F 25 % ;
   - la fenêtre de 300 k ne vaut pas son prix ici.
 - **F300 ne se juge que sur 198 tours** : du tour 199 au tour 244, chaque décision a reçu un 401 `ACCESS_TOKEN_EXPIRED`
-  (`docs/banc/tickets/2026-11-16-un-modele-vertex-declare-garde-son-jeton-d-une-heure.md`). Le correctif est sur
+  (`docs/tickets/closed/2026-11-16-un-modele-vertex-declare-garde-son-jeton-d-une-heure.md`). Le correctif est sur
   master (ED, 4b32256693). F300 rejouée entière le qualifiera.
 - **Le script de la mesure longue** (`x_archive_long.py`, à luciepc) marquait `"ok": true` un tour dont la réponse
   portait une erreur du modèle. Il arrête désormais la passe :
@@ -370,3 +370,20 @@ coûte un peu moins.
 
 Sorties à luciepc, sous `~/.cache/rag3db-banc-notes/compaction/long/` : `juge-*-contre-Nr.json`, `rien-*-contre-Nr.json`.
 Le script est `../juge-nr.sh`.
+
+## 11. F300 entière, sur le master du 18 (18 novembre 2026, 17 h 33 – 18 h 49)
+
+**Ce qui change** : le backend est rebâti depuis le master du 18 (29f5e50f6c, lib 3d706f709), qui porte le
+renouvellement du jeton Vertex (4b32256693). Les gabarits restent ceux des autres variantes (0653a6aeff). Le script
+s'arrête sur une erreur du modèle.
+
+- **244 décisions, aucune erreur, aucun 401**, sur 1 h 16 de passe. Le jeton d'une heure est renouvelé :
+  le ticket `docs/tickets/closed/2026-11-16-un-modele-vertex-declare-garde-son-jeton-d-une-heure.md` est fermé.
+- Contre la N rejouée : **P1 0,907** (49/54), **P2 1 doublon** (0,021), et 48 fiches. Les « rien » : aide 23, endort 8,
+  accord 17. Les sujets perdus : « Intégration de la pile archi », « Intégration de la pile de l'atelier »,
+  « Validation de la pile de l'atelier ».
+- Coût : 27,0 M de jetons d'invite, dont 28 % servis par le cache.
+- **À lire avec réserve** : le F300 du § 10 (0,848 sur 198 tours, 8 doublons) tournait sur le binaire de 0653a6aeff.
+  Celui-ci a deux jours de master de plus : la comparaison mêle la fenêtre et le code. Pour juger la fenêtre de 300 k
+  contre S 50, il faut les rejouer sur le même binaire. C'est la matrice du ticket
+  `docs/banc/tickets/2026-11-18-mesurer-la-variante-r-de-l-archiviste.md`, dans la forme en deux étapes.
