@@ -303,6 +303,35 @@ schéma.
    - le gain de « fiches du même type » : pour un échantillon de fiches, le nombre de fiches
      sans lien direct que `cited_by` d'une valeur fait retrouver, et combien sont justes.
 
+### Une esquisse : le centre de gravité sémantique d'une fiche
+
+Lucie : « un effet centre de gravité sémantique, qui absorbe des sujets si trop proches du
+centre ». C'est la version mesurable de « sujet proche : réutiliser ou justifier ». Ce n'est pas
+un lot : c'est un ticket souhait,
+`docs/memoire/tickets/2026-11-18-un-centre-de-gravite-semantique-par-fiche.md`.
+
+- **Ce que porte chaque fiche** (et chaque catégorie) :
+  - un **centroïde**, la moyenne des vecteurs de ses L1 (de ses valeurs, pour une catégorie), mise
+    à jour à chaque ajout par une moyenne incrémentale ;
+  - une **dispersion** : le rayon, c'est-à-dire la distance moyenne ou le 90e centile des L1 au
+    centroïde.
+- **Au rangement** (étape 2), un sujet est **absorbé** par une fiche si sa distance au centroïde
+  est sous le rayon, **et** si la cohésion de la fiche ne baisse pas au-delà d'un seuil une fois le
+  sujet ajouté. Sinon, c'est une fiche neuve, ou l'une des autres candidates.
+- **Deux usages** :
+  - **le rappel par centroïde** : une comparaison par fiche, au lieu d'un rappel sur tous ses L1.
+    C'est moins cher, et c'est un premier tri des candidates ;
+  - **la garde contre le riche qui s'enrichit** : une grosse fiche au rayon large avale ce qui est
+    distinct. Quand la dispersion d'une fiche dépasse un seuil, la consolidation propose
+    `scinder_fiche`, qui existe. Deux centroïdes trop proches font proposer `rejoindre_fiches`,
+    qui existe aussi. Ce sont des propositions, jamais des gestes faits seuls.
+- **Ce qui existe déjà et n'est pas cela** : `CohesionNode` et `CohesionBoostNode` mesurent une
+  cohésion **de graphe** entre candidates (les sauts le long des relations déclarées), et non une
+  dispersion de vecteurs. Le centroïde est neuf.
+- **Ce que le banc mesure**, sur la session de Lucie rangée :
+  - la distribution des tailles de fiches : une fiche avale-t-elle 40 % des L1 ?
+  - la cohésion intra-fiche (la dispersion), avant et après la garde.
+
 ### Une mémoire qui ne se valide pas elle-même : révoquer
 
 Le risque, dit par l'avis extérieur : une interprétation approximative devient un L1, puis une
