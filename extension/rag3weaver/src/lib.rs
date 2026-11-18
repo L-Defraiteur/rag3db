@@ -21,6 +21,7 @@ pub mod builtin_templates;
 pub mod couches;
 pub mod suivies;
 pub mod views;
+pub mod memory_image;
 pub mod template_plan;
 pub mod fusion;
 pub mod en_tete;
