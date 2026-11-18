@@ -1,0 +1,52 @@
+%% tool: archive_slice
+%% description: Files one slice of a conversation in two steps (18 November 2026, Lucie's form). Step 1, a structured extraction over the whole slice, without the base: the model returns the slice summary, its topics (title, turn ranges, what is said, whether it is still open, free attributes) and the turns set aside. Step 2, one Decide per topic against the recalled fiches, as `archive` does for a section. A turn that no topic covers and no reason sets aside goes to a residual « reste » segment: nothing falls silently. The slice is kept as its Source (L0, written once). Each L1 has the section « turns a-b · <title> ». The report adds `slice_summary` and `open` (the topics still open at the end of the slice). An extraction that is not the requested JSON fails the call, naming response_schema.
+%% param: titre string! -- The slice title (e.g. « run <run>, turns a-b »).
+%% param: contenu string! -- The slice, in the single form rendered from Turn rows: one « ## turn <n> » per turn, one « ### <role> · <time> » per message.
+%% param: chemin string! -- The path of the slice Source, e.g. sources/<run slug>-turns-<a>-<b>.md.
+%% param: origine string = "run_trace" -- The origin of the Source.
+%% param: jour string! -- The day, AAAA-MM-JJ.
+%% param: candidates int = 5 -- Candidate fiches recalled per topic.
+%% param: search_options json = {"limit": 8} -- The options of the candidate search.
+%% param: allow_create bool = false -- create allowed (off by default, as in archive).
+%% param: instruction string = "Tu ranges une section d’un document sous l’une des fiches candidates. Une section va sous une fiche si elle parle de ce que la fiche décrit ; une règle va sous le domaine où elle s’applique. Partager un mot ne suffit pas. Si aucune candidate ne convient, réponds none ; si le sujet est net et qu’aucune fiche ne le porte, réponds create, et donne dans name le nom de ce sujet en quelques mots, comme le titre d’une fiche de mémoire, pas le titre de la section. Un sujet est un chantier, une chose ou une règle, jamais une date, un jour ou un moment. En create, donne aussi dans about une phrase complète d’au moins six mots qui dit ce que la fiche couvre, pas la première phrase de la section. Hors de create, name et about sont vides." -- The meaning of the label for the step 2 Decide (the same as archive).
+%% param: context string = "" -- What precedes the slice, shown to the model and never filed.
+%% param: context_title string = "Ce qui précède (déjà rangé, ne pas ranger) :" -- The title before context in the step 2 prompt.
+%% param: query_chars int = 4000 -- The bound of the candidate search query.
+%% param: step2_input string = "both" -- What step 2 reads for a topic: extracted (the extracted « said »), raw_turns (its raw turns) or both.
+%% param: raw_turns_max_tokens int = 12000 -- The bound of the raw turns of one topic, in estimated tokens (characters / 4).
+%% param: extract_max_tokens int = 8192 -- The output bound of the extraction call.
+%% param: schema json = {"type": "object", "properties": {"slice_summary": {"type": "string"}, "topics": {"type": "array", "items": {"type": "object", "properties": {"title": {"type": "string"}, "turns": {"type": "array", "items": {"type": "object", "properties": {"from": {"type": "integer"}, "to": {"type": "integer"}}, "required": ["from", "to"], "additionalProperties": false}}, "said": {"type": "string"}, "open": {"type": "boolean"}, "attributes": {"type": "array", "items": {"type": "object", "properties": {"dimension": {"type": "string"}, "value": {"type": "string"}}, "required": ["dimension", "value"], "additionalProperties": false}}}, "required": ["title", "turns", "said", "open", "attributes"], "additionalProperties": false}}, "not_filed": {"type": "array", "items": {"type": "object", "properties": {"from": {"type": "integer"}, "to": {"type": "integer"}, "reason": {"type": "string"}}, "required": ["from", "to", "reason"], "additionalProperties": false}}}, "required": ["slice_summary", "topics", "not_filed"], "additionalProperties": false} -- The shape of the extraction reply.
+%% param: trace bool = false -- The report also carries `results`, one entry per topic (as archive).
+%% param: source json = {} -- Reserved: the Source is composed from titre, contenu, chemin and origine.
+%% result: rapport.result
+
+graph LR
+    genre["CreateRefTypeNode(name='doc', description='La section d&#39;un source Markdown, provenance d&#39;un apport : doc:<chemin du source>#<titre de la section>.', forme='doc:<chemin du source>#<titre>', confirm=true, types_entity='RefType')"]
+    prompt["RhaiNode(script_id=archive_slice_prompt, inputs='contenu', contenu=$contenu)"]
+    extract["LlmNode(response_schema=$schema, max_tokens=$extract_max_tokens, temperature=0)"]
+    build["RhaiNode(script_id=archive_slice_build, inputs='contenu,chemin,titre,origine,step2_input,raw_turns_max_tokens', contenu=$contenu, chemin=$chemin, titre=$titre, origine=$origine, step2_input=$step2_input, raw_turns_max_tokens=$raw_turns_max_tokens)"]
+    decide["ForEachNode(graph='@builtin:backends/memory/graphs/archive_decide.mmd', on_error='report', carry='proposed', report_results=true, candidates=$candidates, allow_create=$allow_create, instruction=$instruction, search_options=$search_options, context=$context, context_title=$context_title, query_chars=$query_chars)"]
+    decided["Route(key='stage', routes='decided')"]
+    subject["ForEachNode(graph='@builtin:backends/memory/graphs/archive_subject.mmd')"]
+    route["Route(key='kind', routes='none|create|fiche')"]
+    write["ForEachNode(graph='@builtin:backends/memory/graphs/archive_write.mmd', on_error='report')"]
+    create["ForEachNode(graph='@builtin:backends/memory/graphs/archive_create.mmd', on_error='report')"]
+    refs["ForEachNode(graph='@builtin:backends/memory/graphs/archive_link.mmd', on_error='report')"]
+    refs_new["ForEachNode(graph='@builtin:backends/memory/graphs/archive_link.mmd', on_error='report')"]
+    sourcer["RhaiNode(script_id=archive_params, inputs='titre,contenu,chemin,origine,jour', titre=$titre, contenu=$contenu, chemin=$chemin, origine=$origine, jour=$jour)"]
+    source["EntityRecordNode(entity='Source', action='put', record=$source)"]
+    rapport["RhaiNode(script_id=archive_slice_rapport, inputs='trace', trace=$trace)"]
+    genre -->|report:value| prompt
+    prompt -->|result:value| extract
+    extract -->|json:value| build
+    build -->|result:elements| decide
+    decide -->|report:value| rapport
+    decide -->|report:value| sourcer
+    sourcer -->|result:record| source
+    decide -->|results:element| decided
+    decided -->|decided:elements| subject
+    subject -->|results:element| route
+    route -->|fiche:elements| write
+    route -->|create:elements| create
+    write -->|results:elements| refs
+    create -->|results:elements| refs_new
