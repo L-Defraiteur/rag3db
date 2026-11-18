@@ -1,6 +1,15 @@
 # `maintain` et `fts-live-ids` refusent un index plein texte qui n'est pas encore ouvert
 
-- **État** : ouvert (18 novembre 2026), relevé par arbre principal dans le travail de Codex du 16 novembre.
+- **État** : corrigé (18 novembre 2026), sur master en 9bb06d5c80 (lot de lucivy, branche `fts-open-on-demand-6`).
+  `Catalog::fts_handle_nomme` ouvre l'index plein texte à la demande, par `open_fts_handles_for` comme la recherche ;
+  `fts_live_ids` et `fts_releve_a_blanc` prennent `&mut self`. Une table sans plein texte est refusée par son nom
+  (« la table « X » n'a pas d'index plein texte »), et un index à rebâtir n'est pas maintenu. La maintenance nocturne,
+  de même racine, ouvre d'abord les index du mode fichiers sans rien rebâtir (`open_fts_files`) : juste après un
+  redémarrage, elle ne voyait aucune table. Témoins `e2e_demon_hote::maintenance_routes_open_the_index_after_a_host_restart`
+  et `nightly_maintenance_covers_tables_no_search_has_opened`. Ils étaient rouges sur f2bb4c1ba5 (« pas d'index plein
+  texte ouvert pour « Fiche » (ouverts : []) » ; la nuit ne maintenait aucune base), et le témoin de nuit corrigé à
+  30 fiches a été revu rouge contre le catalog.rs de master. Passe sur la lib 3d706f709 sans drapeau, tout vert,
+  e2e_code_sync comprise.
 - **Famille** : produit
 - **Gravité** : la maintenance de lucivy (purge des orphelins, compact) est le premier pas de la bascule des bases de
   Lucie ; elle échoue en HTTP 422 sur un backend fraîchement ouvert par l'hôte, et la bascule s'arrête là.
