@@ -57,11 +57,17 @@ std::unique_ptr<FileInfo> VirtualFileSystem::openFile(const std::string& path, F
     // system, the one databases live on.
     const bool mayCreate =
         flags.flags & (FileFlags::CREATE_IF_NOT_EXISTS | FileFlags::CREATE_AND_TRUNCATE_IF_EXISTS);
-    const bool creates =
-        mayCreate && fileSystem == defaultFS.get() && !fileSystem->fileOrPathExists(path, context);
+    // The path the file system really opens: it expands « ~ » itself (ticket
+    // 2026-11-18-la-synchronisation-du-repertoire-ne-developpe-pas-le-tilde). The existence test
+    // and the directory to sync are taken from it, not from the raw path.
+    const auto openedPath = (context != nullptr && path.starts_with('~')) ?
+                                fileSystem->expandPath(context, path) :
+                                path;
+    const bool creates = mayCreate && fileSystem == defaultFS.get() &&
+                         !fileSystem->fileOrPathExists(openedPath, context);
     auto fileHandle = fileSystem->openFile(path, flags, context);
     if (creates) {
-        fileSystem->syncDirectory(std::filesystem::path(path).parent_path().string());
+        fileSystem->syncDirectory(std::filesystem::path(openedPath).parent_path().string());
     }
     if (compressionType == FileCompressionType::UNCOMPRESSED) {
         return fileHandle;
