@@ -5,9 +5,9 @@
 // ASAN, in NullMask::isNull), and their vectors past the cached data (ticket
 // 2026-11-08-le-create-vector-index-concurrent-lit-une-ligne-au-dela-de-la-colonne-en-cache).
 //
-// The witness replays, one statement at a time, the query that rewriteCreateHNSWQuery
-// (extension/vector/src/function/create_hnsw_index.cpp) builds, and commits rows from a second
-// connection right between the cache and the build. Deterministic, no thread.
+// The witness sends the query that rewriteCreateHNSWQuery
+// (extension/vector/src/function/create_hnsw_index.cpp) builds, with rows inserted right between
+// the cache and the build. Deterministic, no thread.
 
 #include <filesystem>
 #include <string>
@@ -64,27 +64,29 @@ protected:
 TEST_F(VectorIndexCachedColumn, RowsCommittedAfterTheColumnIsCachedAreNotReadPastIt) {
     const auto id = tableID();
     const std::string params = "metric := 'l2', cache_embeddings := true";
-    // The internal functions and graph tables of the rewrite, for the whole connection (a single
-    // query's flag, setUseInternalCatalogEntry, is reset after each query).
+    // The query that rewriteCreateHNSWQuery builds, sent as one query as it is (the NOTED entry's
+    // token lives as long as that query), with LATE_ROWS rows inserted by T_B itself between the
+    // cache and the build: the build's bind counts them (getNumTotalRows counts the local rows),
+    // the cached column does not have them.
     ok(*conn, "CALL enable_internal_catalog=true;");
-    // T_A: the entry and its NOTED holder.
-    ok(*conn, "BEGIN TRANSACTION;");
-    ok(*conn, "CREATE REL TABLE _" + id +
-                  "_doc_index_UPPER (FROM Doc TO Doc) WITH (storage_direction='fwd');");
-    ok(*conn, "CREATE REL TABLE _" + id +
-                  "_doc_index_LOWER (FROM Doc TO Doc) WITH (storage_direction='fwd');");
-    ok(*conn, "CALL _CREATE_HNSW_NOTE('Doc', 'doc_index', 'vec', " + params + ");");
-    ok(*conn, "COMMIT;");
-    ok(*conn, "CALL _WAIT_HNSW_WRITERS('Doc', 'doc_index');");
-    // T_B: the column is cached at CACHED_ROWS rows.
-    ok(*conn, "BEGIN TRANSACTION;");
-    ok(*conn, "CALL _CACHE_ARRAY_COLUMN_LOCALLY('Doc', 'vec');");
-    // Another connection commits LATE_ROWS rows after the cache, before the build.
-    Connection writer{database.get()};
-    ok(writer, insertRows(CACHED_ROWS, LATE_ROWS));
-    // The build: its bind counts CACHED_ROWS + LATE_ROWS rows.
-    ok(*conn, "CALL _CREATE_HNSW_INDEX('Doc', 'doc_index', 'vec', " + params + ");");
-    ok(*conn, "COMMIT;");
+    ok(*conn, "BEGIN TRANSACTION;"
+              "CREATE REL TABLE _" +
+                  id +
+                  "_doc_index_UPPER (FROM Doc TO Doc) WITH (storage_direction='fwd');"
+                  "CREATE REL TABLE _" +
+                  id +
+                  "_doc_index_LOWER (FROM Doc TO Doc) WITH (storage_direction='fwd');"
+                  "CALL _CREATE_HNSW_NOTE('Doc', 'doc_index', 'vec', " +
+                  params +
+                  ");"
+                  "COMMIT;"
+                  "CALL _WAIT_HNSW_WRITERS('Doc', 'doc_index');"
+                  "BEGIN TRANSACTION;"
+                  "CALL _CACHE_ARRAY_COLUMN_LOCALLY('Doc', 'vec');" +
+                  insertRows(CACHED_ROWS, LATE_ROWS) +
+                  "CALL _CREATE_HNSW_INDEX('Doc', 'doc_index', 'vec', " + params +
+                  ");"
+                  "COMMIT;");
     ok(*conn, "CALL enable_internal_catalog=false;");
 
     // Every row, cached or late, is found first at its exact vector.
