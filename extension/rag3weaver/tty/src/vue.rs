@@ -670,6 +670,16 @@ impl Vue {
         self.nom_agent.as_deref()
     }
 
+    /// How many entries Ctrl-O can open (tool calls and session messages).
+    pub fn openable_count(&self) -> usize {
+        0
+    }
+
+    /// The whole of the `i`-th openable entry.
+    pub fn openable_lines(&self, _i: usize) -> Vec<Validee> {
+        Vec::new()
+    }
+
     /// Une note du terminal lui-même (une coupure du flux, un refus).
     pub fn note(&mut self, t: &str) {
         self.clore();
@@ -1835,6 +1845,71 @@ mod tests {
         let mut late = Vue::new(120, true);
         late.ligne_de_boite(&json!({ "id": "d/t:2", "from": "teammate", "kind": "report", "origin": "host_copy", "text": "Voici la réponse." }));
         assert_eq!(written(&mut late), vec!["[équipier · compte rendu] Voici la réponse.".to_string()]);
+    }
+
+    fn session_line(id: &str, direction: &str, peer: &str, text: &str, extra: Value) -> Value {
+        let mut l = json!({ "id": id, "from": "session", "kind": "message", "direction": direction, "peer": peer, "text": text });
+        if let (Some(o), Some(e)) = (l.as_object_mut(), extra.as_object()) {
+            for (k, v) in e {
+                o.insert(k.clone(), v.clone());
+            }
+        }
+        l
+    }
+
+    /// **A message received from a Claude session is folded** (vision of 16 nov., c7's decision): one line
+    /// in the history, « › Message de @<peer> : <its start>… (Ctrl-O pour tout lire) » when it is longer than
+    /// that line, whole when it fits; its arrival also on the muted top line.
+    #[test]
+    fn a_received_session_message_is_folded_with_a_hint_to_open_it() {
+        let mut v = Vue::new(120, true);
+        let written = |v: &mut Vue| v.prendre_lignes().into_iter().map(|l| l.texte).collect::<Vec<_>>();
+        let long = format!("ED → c7 : la tête corrigée de l'écrivain est 5081d2281, {}\net une seconde ligne", "x".repeat(100));
+        v.ligne_de_boite(&session_line("s/1", "in", "everything declarative", &long, json!({})));
+        let lines = written(&mut v);
+        assert_eq!(lines.len(), 1, "{lines:?}");
+        assert!(lines[0].starts_with("› Message de @everything declarative : ED → c7 : la tête corrigée"), "{lines:?}");
+        assert!(lines[0].ends_with("… (Ctrl-O pour tout lire)"), "{lines:?}");
+        assert_eq!(v.discret.as_deref(), Some("message de @everything declarative"));
+        v.ligne_de_boite(&session_line("s/2", "in", "rag3db-5a", "à toi", json!({})));
+        assert_eq!(written(&mut v), vec!["› Message de @rag3db-5a : à toi".to_string()], "short: whole, no hint");
+        v.ligne_de_boite(&session_line("s/2", "in", "rag3db-5a", "à toi", json!({})));
+        assert_eq!(written(&mut v), Vec::<String>::new(), "a line is written once");
+    }
+
+    /// **A message the agent sends says where it went**, then its delivery: « “<start>…” → envoyé à <peer> »,
+    /// a later `delivery` line (reply_to the send) says « ⎿ refusé : <reason> » or « ⎿ en file »; delivered
+    /// with the send says nothing more.
+    #[test]
+    fn a_sent_session_message_says_where_it_went_and_its_delivery() {
+        let mut v = Vue::new(120, true);
+        let written = |v: &mut Vue| v.prendre_lignes().into_iter().map(|l| l.texte).collect::<Vec<_>>();
+        v.ligne_de_boite(&session_line("s/3", "out", "rag3db-5a", "prêt : cx-tty-21-4", json!({ "delivery": "delivered", "name": "Algareth" })));
+        assert_eq!(written(&mut v), vec!["“prêt : cx-tty-21-4” → envoyé à rag3db-5a".to_string()]);
+        assert_eq!(v.discret.as_deref(), Some("envoyé à rag3db-5a"));
+        v.ligne_de_boite(&session_line("s/4", "out", "banc", &"y".repeat(200), json!({})));
+        let lines = written(&mut v);
+        assert!(lines[0].starts_with("“yyyy") && lines[0].ends_with("…” → envoyé à banc"), "{lines:?}");
+        v.ligne_de_boite(&json!({ "id": "s/5", "from": "session", "kind": "delivery", "reply_to": "s/4", "peer": "banc", "delivery": "refused", "delivery_reason": "la session dort" }));
+        assert_eq!(written(&mut v), vec!["  ⎿ refusé : la session dort".to_string()]);
+        v.ligne_de_boite(&json!({ "id": "s/6", "from": "session", "kind": "delivery", "reply_to": "s/4", "peer": "banc", "delivery": "queued" }));
+        assert_eq!(written(&mut v), vec!["  ⎿ en file".to_string()]);
+    }
+
+    /// **Ctrl-O opens a message whole**, like a tool call: the viewer's entries are the calls and the messages,
+    /// in the order they came.
+    #[test]
+    fn ctrl_o_opens_the_whole_message_among_the_calls() {
+        let mut v = Vue::new(120, true);
+        v.ligne_de_boite(&session_line("s/1", "in", "everything declarative", "première ligne\nseconde ligne", json!({})));
+        assert_eq!(v.touche(Touche::CtrlO), Some(Action::Ouvrir), "a message alone opens");
+        v.trame(&json!({ "evenement": { "kind": "ToolCallStarted", "tool": "read_file", "arguments": "{\"path\":\"a.rs\"}" } }));
+        assert_eq!(v.openable_count(), 2);
+        let first: Vec<String> = v.openable_lines(0).into_iter().map(|l| l.texte).collect();
+        assert!(first.iter().any(|l| l.contains("Message de @everything declarative")), "{first:?}");
+        assert!(first.iter().any(|l| l == "première ligne") && first.iter().any(|l| l == "seconde ligne"), "{first:?}");
+        let second: Vec<String> = v.openable_lines(1).into_iter().map(|l| l.texte).collect();
+        assert!(second[0].starts_with("» read_file a.rs"), "{second:?}");
     }
 
     fn ligne_b(n: usize, from: &str, kind: &str, extra: Value) -> Value {
