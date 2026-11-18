@@ -151,6 +151,35 @@ Le seuil (`compaction.ratio`, 0.8), la borne (`compaction.timeout_s`, 120) et le
 lisent dans `chat_state()["context"]["compaction"]`. Le témoin est
 `tests/e2e_compaction_archiviste.rs`.
 
+## Le réglage par défaut : S 50 (Lucie, 18 novembre 2026)
+
+Lucie retient **S 50** pour la compaction par l'archiviste, contre F 25 %. Le banc le confirmera sur
+sa F300 entière.
+
+**Ce que c'est** (banc, `docs/banc/15-11-2026/02-jusqu-ou-l-archiviste-voit.md`, § 3 et 10) : des
+fenêtres de **50 k jetons, sans chevauchement**. Chaque décision du Decide voit en plus de sa
+section :
+
+- sa place (« fenêtre n sur N, tours a-b ») ;
+- les résumés des fenêtres d'avant (les L1 et le bilan composés par `compose_restart`) ;
+- le bout de la fenêtre en cours qui précède la section.
+
+Les sections restent par tour.
+
+**Pourquoi.** Contre la N rejouée, S 50 tient le même rappel que F 25 % (0,84 contre 0,86), avec 14 %
+de jetons en moins et un p90 plus court. La variante de consigne et la fenêtre de 300 k sont
+écartées.
+
+**Dans le code à venir** (le lot d'archi, puis le gabarit memory), c'est la valeur par défaut :
+
+- la taille de la fenêtre, 50 000 jetons ;
+- le chevauchement, 0 ;
+- la consigne d'origine ;
+- `context` d'`archive` porte la place, puis les résumés au budget, puis le bout de la fenêtre en
+  cours.
+
+Ces réglages vont au manifeste, avec ces défauts. Ce ne sont pas des constantes.
+
 ## Ce qui suit
 
 1. Le mot de c7 sur cette page, puis Lucie, à qui c7 la montre.

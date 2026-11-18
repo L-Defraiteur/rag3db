@@ -42,3 +42,14 @@ le périmètre effectivement livré, ou explique l’abandon décidé et son év
 Le socle M4 et son correctif sont livrés sous `41526b29a` ; la [note de preuve](../11-11-2026/04-alias-candidats.md) conserve les passes et le premier document traité sur copie, sept sections sans refus. Ce résultat ne prouve pas le raccord automatique, ni la synthèse L2.
 
 Le repère examiné doit progresser aussi après une abstention, sans devenir un repère de rangement fictif. Une erreur ou des effets partiels ne constituent pas une réussite complète. Fiches/version et génération de contexte bornent le rappel avant le tour visé ; un nouveau message en cours de passage doit conserver sa propre frontière. Ces points sont des critères de la conception à vérifier, pas des garanties livrées. Le suivi est porté par mémoire, sans lot d’implémentation ouvert.
+
+
+## Le réglage par défaut retenu, le 18 novembre 2026
+
+Lucie retient **S 50** pour la compaction par l'archiviste, contre F 25 %. Ce sont des fenêtres de
+50 k jetons sans chevauchement. Chaque décision voit sa place, les résumés des fenêtres d'avant
+(`compose_restart`) et le bout de la fenêtre en cours. Le banc le confirmera sur sa F300 entière.
+
+C'est le défaut des réglages du manifeste, et non une constante. Voir
+`docs/memoire/15-11-2026/03-la-compaction-est-l-archiviste.md`, section « Le réglage par défaut :
+S 50 ».
