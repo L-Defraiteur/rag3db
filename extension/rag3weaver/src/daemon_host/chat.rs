@@ -658,10 +658,15 @@ impl DaemonHost {
         }
         self.write_chat(backend_id)?;
         self.publier_l_etat_du_chat(backend_id, depuis, &run_id, &resultat);
-        // The session archived as it goes (the teammate's steps come with the next lot).
-        if step.is_none() {
+        // The session archived as it goes: the chat's run is `chat:<backend>`, a teammate's is
+        // `<task>:<parent>` (agreed with mémoire, 18 Nov 2026).
+        {
+            let run = match step {
+                Some(s) => s.files.key.split_once('/').map(|(parent, task)| format!("{task}:{parent}")).unwrap_or_else(|| s.files.key.clone()),
+                None => format!("chat:{backend_id}"),
+            };
             let turns = self.chats.lock().unwrap_or_else(|p| p.into_inner()).get(backend_id).map(|e| e.session.turns.clone()).unwrap_or_default();
-            self.ranger_apres_le_tour(&hosted, backend_id, depuis, turns);
+            self.ranger_apres_le_tour(&hosted, backend_id, &run, depuis, turns);
         }
         resultat
     }
