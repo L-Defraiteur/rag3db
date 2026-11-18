@@ -1,6 +1,6 @@
 # La voie des suites C++ transférables ignore `tools/shell`
 
-- **État** : ouvert (16 novembre 2026) — pour Codex, à la passation de G
+- **État** : fait (18 novembre 2026, branche shell-cpp-transferable) : tools/shell/ entre dans CHEMINS_MOTEUR et dans le case de cpp_transferable ; deux cas neufs au témoin (un lot du shell seul passe par la voie transférable, rouge avant ; un lot du shell avec du Rust reste arrêté), 53 vert
 - **Famille** : produit (outillage : `tools/poste/push_garde.sh`)
 - **Gravité** : temps perdu. Un lot du shell C++ rejoue ses suites quand seul du Rust a atterri.
 - **Atteignable en service** : non (la garde du push)
