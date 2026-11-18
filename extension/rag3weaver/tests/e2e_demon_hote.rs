@@ -1242,3 +1242,63 @@ fn la_maintenance_nocturne_se_desactive_au_manifeste() {
     host.shutdown();
     let _ = std::fs::remove_dir_all(d);
 }
+
+// ─── La maintenance juste après un redémarrage de l'hôte (18 novembre 2026) ──
+//
+// Le catalogue ouvre ses index plein texte à la demande : avant ce correctif, `fts-live-ids` et `maintain`
+// cherchaient seulement parmi les index déjà ouverts, et refusaient en 422 (« pas d'index plein texte ouvert ») une
+// table qu'aucune recherche n'avait encore ouverte — le premier pas de la bascule des bases, juste après la pose
+// d'une lib et le redémarrage de l'hôte. La nuit, elle, ne maintenait que les tables déjà ouvertes.
+
+/// Un backend écrit (trois fiches, et un orphelin posé au plein texte à 900 000), puis l'hôte arrêté : le
+/// manifeste, un hôte neuf et sa session, sans aucune recherche.
+fn restarted_host(d: &Path, label: &str) -> (PathBuf, DaemonHost, String) {
+    let m = manifeste_plein_texte(d);
+    let first = DaemonHost::new();
+    let s = first.open_session("témoin", None, vec![], None);
+    let id = ok(&first.open(Some(&s), &m))["id"].as_str().unwrap().to_string();
+    for titre in ["une", "deux", "trois"] {
+        ok(&put(&first, &s, &m, "put_fiche", &format!("{label} {titre}")));
+    }
+    orphelins(&first, &id, 900_000..900_001);
+    first.shutdown();
+    drop(first);
+    let host = DaemonHost::new();
+    let s = host.open_session("témoin", None, vec![], None);
+    (m, host, s)
+}
+
+#[test]
+#[ignore]
+fn maintenance_routes_open_the_index_after_a_host_restart() {
+    let d = dossier("maintenance-after-restart");
+    let (m, host, s) = restarted_host(&d, "restart");
+    ok(&host.open(Some(&s), &m));
+    // No search before: the live ids open the index themselves.
+    let (live, token) = releve(&host, &s, &m);
+    assert_eq!(live.len(), 4, "[check: live-ids-after-restart] {live:?}");
+    let dry = route_maintenance(&host, &s, "/backend/maintain", json!({"manifest": m, "table": "Fiche", "dry_run": true}));
+    assert_eq!(ok(&dry)["orphans"], json!([900_000]), "[check: dry-run-after-restart] {dry}");
+    let report = maintain(&host, &s, &m, &token, &[900_000]);
+    assert_eq!((ok(&report)["live_docs"].as_u64(), ok(&report)["purged"].as_u64()), (Some(4), Some(1)), "[check: maintain-after-restart] {report}");
+    // A table without a full-text index stays a refusal, and says so by name.
+    let r = route_maintenance(&host, &s, "/backend/fts-live-ids", json!({"manifest": m, "table": "NoSuchTable"}));
+    assert_eq!(r["ok"], json!(false), "[check: unknown-table-refused] {r}");
+    assert!(r["error"].as_str().is_some_and(|e| e.contains("n'a pas d'index plein texte")), "[check: unknown-table-named] {r}");
+    host.shutdown();
+    let _ = std::fs::remove_dir_all(d);
+}
+
+#[test]
+#[ignore]
+fn nightly_maintenance_covers_tables_no_search_has_opened() {
+    let d = dossier("maintenance-nightly-after-restart");
+    let (m, host, s) = restarted_host(&d, "nightly");
+    ok(&host.open(Some(&s), &m));
+    let done = host.maintenance_periodique(a("03:31"));
+    assert_eq!(done.len(), 1, "[check: nightly-after-restart] {done:?}");
+    assert!(done[0].contains("1 orphelin"), "[check: nightly-purges-after-restart] {done:?}");
+    assert_eq!(releve(&host, &s, &m).0.len(), 3, "[check: orphan-gone-after-restart]");
+    host.shutdown();
+    let _ = std::fs::remove_dir_all(d);
+}
