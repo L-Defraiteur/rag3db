@@ -19,7 +19,11 @@ cd "$D/author" && git config user.email luciedefraiteur@gmail.com && git config 
 mkdir -p docs tools/poste extension/rag3weaver/src src
 echo '# notes' > docs/notes.md
 printf '#!/bin/bash\necho ok\n' > tools/poste/foo.sh
-printf '#!/bin/bash\ngrep -q "echo ok" "$(dirname "$0")/foo.sh"\n' > tools/poste/test_foo.sh
+printf '#!/bin/bash\ngrep -q "echo ok" "${1:-$(dirname "$0")/foo.sh}"\n' > tools/poste/test_foo.sh
+printf 'tools/poste/foo.sh foo.sh tools/poste/test_foo.sh\ntools/poste/bar.sh bar.sh tools/poste/test_bar.sh\n' > tools/poste/cache_copies.txt
+# bar.sh's witness goes red against a cache copy when $BREAK_COPY exists: a copy that behaves otherwise at the cache.
+printf '#!/bin/bash\necho bar\n' > tools/poste/bar.sh
+printf '#!/bin/bash\n[ -n "${1:-}" ] && [ -e "${BREAK_COPY:-/nonexistent}" ] && exit 1\nexit 0\n' > tools/poste/test_bar.sh
 cp "$HERE/push_garde.sh" tools/poste/push_garde.sh
 echo 'fn main() {}' > extension/rag3weaver/src/lib.rs
 echo 'int main() {}' > src/engine.cpp
@@ -49,6 +53,7 @@ case "$o" in
   *) echo "$o" >> "$J/resume.log"; exit 1 ;;
 esac
 P
+echo "# RAG3DB_LIB=rag3db-build-$BASE0-Release" >> "$D/pass.sh"
 # The guard double: the real --code-apporte; otherwise the push of the worktree, as the guard ends.
 cat > "$D/guard.sh" <<'G'
 #!/bin/bash
@@ -59,7 +64,9 @@ tail -1 "$PUSHER_JOURNALS_ROOT/$2/resume.log" | grep -qx VERT || { echo "ARRÊT 
 git push -q origin HEAD:master || { echo "ARRÊT : push refusé"; exit 1; }
 echo POUSSE
 G
-export PUSHER_DIR=$D/pusher PUSHER_WORKSPACES=$D/ws PUSHER_WT_NAME=wt PUSHER_JOURNALS_ROOT=$D/journals \
+mkdir -p "$D/cache" && cp "$D/author/tools/poste/foo.sh" "$D/author/tools/poste/bar.sh" "$D/cache/"
+export BREAK_COPY=$D/break-copy
+export PUSHER_CACHE=$D/cache PUSHER_PEERS= PUSHER_DIR=$D/pusher PUSHER_WORKSPACES=$D/ws PUSHER_WT_NAME=wt PUSHER_JOURNALS_ROOT=$D/journals \
   PUSHER_PASS=$D/pass.sh PUSHER_GUARD=$D/guard.sh PUSHER_POSTE= PUSHER_MASTER_HELD=$D/master-tenu \
   REAL_GUARD=$HERE/push_garde.sh OUTCOMES=$D/outcomes PASS_CALLS=$D/pass_calls GUARD_CALLS=$D/guard_calls
 : > "$D/outcomes"; : > "$D/pass_calls"; : > "$D/guard_calls"
@@ -99,6 +106,15 @@ h=$(lot scripts-1 tools/poste/foo.sh '#!/bin/bash
 echo ok; echo more')
 P enqueue scripts-1 scripts-1 "$h" scripts - - - - author-b > /dev/null && P step > /dev/null 2>&1
 on_master scripts-1 && ok "scripts : témoin vert, poussé" || ko "scripts au témoin vert : pas poussé"
+grep -q 'echo more' "$D/cache/foo.sh" && [ -f "$D/cache/foo.sh.avant-scripts-1" ] && grep -q "	scripts-1	recopié	foo.sh .*témoin vert" "$D/pusher/log.tsv" \
+  && ok "recopie au cache : copie neuve, ancienne gardée, témoin joué contre la copie" || ko "recopie au cache : absente ou incomplète"
+h=$(lot bar-1 tools/poste/bar.sh '#!/bin/bash
+echo bar, new')
+touch "$D/break-copy"
+P enqueue bar-1 bar-1 "$h" scripts - - - - author-b > /dev/null && P step > /dev/null 2>&1
+on_master bar-1 && ! grep -q 'bar, new' "$D/cache/bar.sh" && grep -q 'recopie de bar.sh' "$D/pusher/paused" 2>/dev/null \
+  && ok "témoin rouge contre la copie : ancienne copie remise, file en pause" || ko "témoin rouge contre la copie : copie neuve gardée, ou file pas en pause"
+rm -f "$D/break-copy" "$D/pusher/paused"
 h=$(lot scripts-2 tools/poste/foo.sh '#!/bin/bash
 echo broken')
 P enqueue scripts-2 scripts-2 "$h" scripts - - - - author-b > /dev/null && P step > /dev/null 2>&1
@@ -183,4 +199,20 @@ printf 'ROUGE e2e_code\nROUGE e2e_code\n' >> "$D/outcomes"
 P step > /dev/null 2>&1
 grep -q "^rouge	pa-1	code	" "$D/pusher/inbox/author-c.txt" && grep -q "^rouge	pa-2	parent rouge	" "$D/pusher/inbox/author-c.txt" && [ -z "$(grep -v '^#' "$D/pusher/queue.tsv")" ] \
   && ok "l'enfant d'un lot rouge est rendu avec lui" || ko "l'enfant d'un lot rouge : pas rendu, ou resté dans la file"
+
+# Lot 3. 15. C++ lands on master after the pinned lib: a Rust lot waits in the queue without a pass, a docs lot
+# deposited behind it passes; after the bascule (the pass names a lib on the new master), the Rust lot passes.
+git -C "$D/author" fetch -q origin && git -C "$D/author" checkout -q -B cpp-lands origin/master
+echo 'int main() { return 2; }' > "$D/author/src/engine.cpp"
+git -C "$D/author" commit -qam cpp-lands && git -C "$D/author" push -q origin HEAD:master
+hr=$(lot late-r extension/rag3weaver/src/late.rs 'fn late() {}'); hd=$(lot late-d docs/late.md '# late')
+P enqueue late-r late-r "$hr" rust e2e_code e2e - - author-c > /dev/null; P enqueue late-d late-d "$hd" docs - - - - author-a > /dev/null
+c0=$(calls "$D/pass_calls")
+P step > /dev/null 2>&1
+on_master late-d && ! on_master late-r && [ "$(calls "$D/pass_calls")" = "$c0" ] && grep -q "^late-r	" "$D/pusher/queue.tsv" && [ -s "$D/pusher/lib-late" ] \
+  && ok "lib en retard : lot rust suspendu dans la file, docs poussés, c7 prévenu (lib-late)" || ko "lib en retard : lot rust joué ou sorti, ou docs bloqués"
+sed -i "s/rag3db-build-$BASE0-/rag3db-build-$(master)-/" "$D/pass.sh"
+echo VERT >> "$D/outcomes"
+P step > /dev/null 2>&1
+on_master late-r && [ ! -e "$D/pusher/lib-late" ] && ok "après la bascule : le lot rust passe, lib-late retiré" || ko "après la bascule : lot rust pas poussé, ou lib-late resté"
 exit $red

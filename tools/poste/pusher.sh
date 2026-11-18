@@ -28,6 +28,11 @@ GUARD=${PUSHER_GUARD:-$CACHE/push_garde.sh}
 POSTE=${PUSHER_POSTE-$CACHE/poste}
 HELD=${PUSHER_MASTER_HELD:-$CACHE/master-tenu}
 TARGET=${PUSHER_TARGET:-target-pusher}
+# Where the cache copies of the poste's scripts live, and the other postes that hold the same copies.
+CACHE_DIR=${PUSHER_CACHE:-$CACHE}
+PEERS=${PUSHER_PEERS-lucie-tablette}
+# What the pinned lib is built from: a change here on master after the lib's commit makes the lib late.
+LIB_PATHS=${PUSHER_LIB_PATHS:-src/ extension/vector/}
 EMAIL=luciedefraiteur@gmail.com
 ENGINE_PATHS='^(src|test|extension/vector|tools/rust_api|tools/shell)/'
 Q=$D/queue.tsv
@@ -237,14 +242,80 @@ push_train() { # <line>…
   return $r
 }
 
+# ── The lib and the cache (lot 3) ─────────────────────────────────────────────────────────────────────────────
+# The pinned lib is the one the pass names (RAG3DB_LIB=rag3db-build-<commit>-…). It is late when master has changed
+# what it is built from since its commit: the Rust lots wait, c7 is told (lib-late), the bascule stays a window.
+# Prints the reason when late, nothing when the lib is up to date.
+lib_late() {
+  local lc changed
+  lc=$(grep -om1 'rag3db-build-[0-9a-f]\{40\}' "$PASS" | sed 's/rag3db-build-//')
+  [ -n "$lc" ] || { echo "la passe ($PASS) ne nomme aucune lib"; return; }
+  g cat-file -e "$lc^{commit}" 2>/dev/null || { echo "la lib épinglée $lc n'est pas un commit connu du worktree"; return; }
+  # shellcheck disable=SC2086
+  changed=$(g diff --name-only "$lc" origin/master -- $LIB_PATHS | head -3 | paste -sd' ')
+  [ -z "$changed" ] || echo "lib épinglée sur ${lc:0:10}, master a changé le moteur depuis ($changed…) : bascule à faire"
+}
+
+# After a pushed train: the cache copies of what it changed, by the table tools/poste/cache_copies.txt of the pushed
+# tree (« <source> <name in the cache> <witness> »). The old copy is kept as <name>.avant-<label>, the new one
+# installed, its witness played against the copy; a red witness puts the old copy back and pauses the queue. The other
+# postes get the same bytes, proved by their sha256. Returns 3 when pusher.sh itself was recopied (run re-executes).
+recopy() { # <label>
+  local label=$1 src name witness sum peer rc=0 table
+  table=$(g show HEAD:tools/poste/cache_copies.txt 2>/dev/null | grep -vE '^[[:space:]]*(#|$)') || return 0
+  while read -r src name witness; do
+    g diff --quiet "$BASE" HEAD -- "$src" && continue
+    [ -f "$CACHE_DIR/$name" ] && cp -p "$CACHE_DIR/$name" "$CACHE_DIR/$name.avant-$label"
+    install -m 755 "$WT/$src" "$CACHE_DIR/$name.neuf" && mv "$CACHE_DIR/$name.neuf" "$CACHE_DIR/$name"
+    sum=$(sha256sum "$CACHE_DIR/$name" | cut -c1-16)
+    if (cd "$WT" && bash "$witness" "$CACHE_DIR/$name") > "$D/last-recopy.log" 2>&1; then
+      log "$label" recopié "$name $sum, témoin vert"
+    else
+      [ -f "$CACHE_DIR/$name.avant-$label" ] && mv "$CACHE_DIR/$name.avant-$label" "$CACHE_DIR/$name"
+      log "$label" "recopie refusée" "$name : témoin rouge contre la copie ($D/last-recopy.log), ancienne copie remise"
+      echo "recopie de $name refusée : témoin rouge contre la copie (lot $label) ; appeler c7" > "$D/paused"
+      return 1
+    fi
+    for peer in $PEERS; do
+      if scp -q "$CACHE_DIR/$name" "$peer:.cache/rag3weaver-build/$name.neuf" && \
+         ssh -o BatchMode=yes "$peer" bash -s "$name" "$label" "$sum" > "$D/last-peer.log" 2>&1 <<'PEER'
+cd ~/.cache/rag3weaver-build || exit 1
+[ -f "$1" ] && cp -p "$1" "$1.avant-$2"
+chmod 755 "$1.neuf" && mv "$1.neuf" "$1" && [ "$(sha256sum "$1" | cut -c1-16)" = "$3" ]
+PEER
+      then log "$label" "recopié chez $peer" "$name $sum"
+      else log "$label" "recopie refusée chez $peer" "$name ($D/last-peer.log)"; echo "recopie de $name chez $peer refusée (lot $label) ; appeler c7" > "$D/paused"; return 1
+      fi
+    done
+    [ "$name" = pusher.sh ] && rc=3
+  done <<< "$table"
+  return $rc
+}
+
 step() {
   [ -e "$D/paused" ] && { echo "file en pause : $(cat "$D/paused")"; return 0; }
   [ -e "$HELD" ] && { echo "master tenu : $(cat "$HELD")"; return 0; }
   [ "$(g config user.email)" = "$EMAIL" ] || { echo "identité git du worktree : $(g config user.email)" > "$D/paused"; echo "pause : identité git"; return 1; }
   local -a train=() kept=() part=()
-  local line id branch author refs="" n half reposed=0
-  while IFS= read -r line; do [ ${#train[@]} -lt "$TRAIN_MAX" ] && train+=("$line"); done < <(queue_lines)
-  [ ${#train[@]} -gt 0 ] || { echo "file vide"; return 0; }
+  local line id branch author refs="" n half reposed=0 late="" skipped=" "
+  [ -n "$(queue_lines)" ] || { echo "file vide"; return 0; }
+  g fetch -q origin master || { log train "fetch de master refusé, rejoué au pas suivant"; return 0; }
+  late=$(lib_late)
+  if [ -n "$late" ]; then
+    [ -s "$D/lib-late" ] || log lib "en retard : $late"
+    echo "$late" > "$D/lib-late"
+  else
+    [ -e "$D/lib-late" ] && { rm -f -- "$D/lib-late"; log lib "à jour : les lots rust reprennent"; }
+  fi
+  # The train: up to TRAIN_MAX lots in queue order; under a late lib, the Rust lots and their children stay queued.
+  while IFS= read -r line; do
+    id=$(f_ "$line" 1)
+    if { [ -n "$late" ] && [ "$(f_ "$line" 4)" = rust ]; } || [[ "$skipped" == *" $(f_ "$line" 8) "* ]]; then
+      skipped="$skipped$id "; continue
+    fi
+    [ ${#train[@]} -lt "$TRAIN_MAX" ] && train+=("$line")
+  done < <(queue_lines)
+  [ ${#train[@]} -gt 0 ] || { echo "lots rust suspendus : lib en retard ($late)"; return 0; }
   for line in "${train[@]}"; do
     branch=$(f_ "$line" 2); refs="$refs +refs/heads/$branch:refs/remotes/origin/$branch"
     log "$(f_ "$line" 1)" pris "$branch $(f_ "$line" 4), train de ${#train[@]}"
@@ -305,7 +376,9 @@ step() {
   done
   push_train "${part[@]}"
   case $? in
-    0) for line in "${part[@]}"; do pushed "$(f_ "$line" 1)" "$(f_ "$line" 9)" "$(f_ "$line" 2)"; done ;;
+    0) for line in "${part[@]}"; do pushed "$(f_ "$line" 1)" "$(f_ "$line" 9)" "$(f_ "$line" 2)"; done
+       # A refused recopy has paused the queue already; 3 means pusher.sh itself was recopied.
+       recopy "$TRAIN_LABEL"; [ $? = 3 ] && return 3 ;;
     1) log "$TRAIN_LABEL" "master a bougé : reposé au pas suivant" ;;
     *) for line in "${part[@]}"; do red_family "$(f_ "$line" 1)" "$(f_ "$line" 9)" garde "$(cat "$D/last-red.txt" 2>/dev/null)"; done ;;
   esac
@@ -316,6 +389,11 @@ case "${1:-}" in
   enqueue) shift; enqueue "$@" ;;
   dequeue) dequeue "$2" ;;
   step) step ;;
-  run) while :; do out=$(step); echo "$out"; case "$out" in "file vide"|"file en pause"*|"master tenu"*) sleep "${PUSHER_IDLE:-60}" ;; "pause : "*) exit 1 ;; esac; done ;;
+  run) while :; do
+         out=$(step); rc=$?; echo "$out"
+         # pusher.sh recopied by the train it just pushed: the new copy takes over.
+         [ $rc = 3 ] && exec bash "$CACHE_DIR/pusher.sh" run
+         case "$out" in "file vide"|"file en pause"*|"master tenu"*|"lots rust suspendus"*) sleep "${PUSHER_IDLE:-60}" ;; "pause : "*) exit 1 ;; esac
+       done ;;
   *) sed -n '2,20p' "$0"; exit 2 ;;
 esac

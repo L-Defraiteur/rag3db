@@ -1,0 +1,6 @@
+# The cache copies that the pusher recopies after a pushed train that changes their source (tools/poste/pusher.sh,
+# recopy). One line: <source in the repository> <name under ~/.cache/rag3weaver-build/> <witness, given the copy>.
+tools/poste/push_garde.sh push_garde.sh tools/poste/test_push_garde.sh
+tools/poste/passe_epinglee.sh passe_epinglee.sh tools/poste/test_passe_epinglee.sh
+tools/poste/pusher.sh pusher.sh tools/poste/test_pusher.sh
+extension/rag3weaver/scripts/poste poste extension/rag3weaver/scripts/test_poste.sh

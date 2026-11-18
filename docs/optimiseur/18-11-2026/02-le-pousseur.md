@@ -88,9 +88,11 @@ Le pousseur est un script, `pusher.sh run`, en boucle sous `poste push pusher` �
    contrôles. Les commits arrivent sur master tels que reposés : un par commit d'auteur, rien de fusionné.
 6. **Écrire.** Une ligne au journal et une dans la boîte de chaque auteur : « poussé <id> <hash> » ou
    « rouge <id> <raison> <journal> ». La session-pousseur lit le journal et prévient l'auteur.
-7. **Se recopier.** Si le train a changé `push_garde.sh`, `passe_epinglee.sh`, `poste`, `pusher.sh` ou leurs
-   tables, le pousseur les recopie au cache des deux postes (`.avant-<id>`, `install`, sha256), joue leurs témoins
-   contre la copie, puis repart. Un rouge ici met la file en pause et appelle c7.
+7. **Se recopier.** Si le train a changé un script que tient le cache (la table `tools/poste/cache_copies.txt` :
+   `push_garde.sh`, `passe_epinglee.sh`, `pusher.sh`, `poste`), le pousseur le recopie au cache (`.avant-<lot>`,
+   `install`, sha256), joue son témoin contre la copie, puis pose les mêmes octets chez le portable, prouvés par leur
+   sha256. Un témoin rouge remet l'ancienne copie, met la file en pause et appelle c7. Un `pusher.sh` recopié prend
+   la main : la boucle se relance sur la copie neuve.
 
 ## Les rouges
 
