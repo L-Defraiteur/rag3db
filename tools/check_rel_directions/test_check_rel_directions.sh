@@ -13,6 +13,28 @@
 # La base est une copie reflink, jamais l'instantané ni une base en service (l'outil l'ouvre en lecture seule). Sortie 0
 # si tout est vert ; une base absente est un ROUGE (« non joué »), jamais un vert.
 set -u
+# **Le mode --one-direction** (18 novembre 2026, ticket de G) : la base « un seul sens » du cœur (fabriquée le 15 novembre
+# à 1 h 18, à luciepc, ~/.cache/optimiseur-mesure/un-seul-sens-copie/), table R de 12 relations validées. Relue par l'outil
+# ancré sous la lib 3d706f709 : avant 10, arrière 12, union 12, perdues d'un seul sens 2 — 1:111 (0:8 -> 0:2101) et 1:60
+# (0:7 -> 0:2100), lisibles au seul sens arrière. ATTENDU.txt disait 11 et 1 : il ne relisait pas 1:60 ancré après la
+# réouverture. Les comptes sont exacts, pas des bornes.
+# Usage : test_check_rel_directions.sh --one-direction <source .cpp> <dossier de la lib> <copie jetable de base.kz>
+if [ "${1:-}" = --one-direction ]; then
+  SRC=$(realpath "${2:?source}"); LIB=${3:?lib}; BASE=${4:?base}
+  [ -e "$BASE" ] || { echo "ROUGE  non joué : pas de base $BASE"; exit 1; }
+  D=$(mktemp -d); trap 'rm -rf "$D"' EXIT
+  nice -n 15 g++ -std=c++20 -O2 -I "$LIB" "$SRC" -L "$LIB" -lrag3db -Wl,-rpath,"$LIB" -o "$D/outil" || { echo "ROUGE  bâti"; exit 1; }
+  "$D/outil" "$BASE" R > "$D/sortie" 2>&1; rc=$?
+  rouge=0
+  [ $rc = 1 ] && grep -q '^R : .* — ÉCART' "$D/sortie" && echo "vert   R rend un écart (code 1)" || { echo "ROUGE  R : code $rc, $(grep '^R' "$D/sortie")"; rouge=1; }
+  grep -qx "    comptes : avant 10, arrière 12, union 12, perdues d'un seul sens 2" "$D/sortie" \
+    && echo "vert   les comptes exacts : avant 10, arrière 12, union 12, perdues 2" || { echo "ROUGE  comptes : $(grep 'comptes' "$D/sortie")"; rouge=1; }
+  for r in "relation 1:111, 0:8 -> 0:2101" "relation 1:60, 0:7 -> 0:2100"; do
+    grep -qF "au seul sens arrière : $r" "$D/sortie" && echo "vert   au seul sens arrière : $r" || { echo "ROUGE  manque au seul sens arrière : $r"; rouge=1; }
+  done
+  [ "$(grep -c 'au seul sens' "$D/sortie")" = 2 ] && echo "vert   aucune autre relation d'un seul côté" || { echo "ROUGE  $(grep -c 'au seul sens' "$D/sortie") relations d'un seul côté au lieu de 2"; rouge=1; }
+  exit $rouge
+fi
 SRC=$(realpath "${1:?source}"); LIB=${2:?lib}; BASE=${3:?base}
 [ -e "$BASE" ] || { echo "ROUGE  non joué : pas de base $BASE"; exit 1; }
 D=$(mktemp -d); trap 'rm -rf "$D"' EXIT
