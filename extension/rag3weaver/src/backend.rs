@@ -5256,6 +5256,11 @@ impl Backend {
         // registre par celui de la vue (une couche), et l'inscription s'y
         // perdait — l'arrêt depuis la page ne trouvait pas le run.
         services.register(crate::dataflow::RUNS_IN_FLIGHT_SERVICE, self.runs_in_flight.clone());
+        // **The view the call asked for** (`view`, 2b-C), for the nodes: a search under an explicit
+        // view never falls back on a scan of unmasked files, even before any index (Lucie, 18 November 2026).
+        if let Some(requested) = CALL_VIEW.with(|v| v.borrow().clone()) {
+            services.register(crate::views::REQUESTED_VIEW_SERVICE, requested);
+        }
         services
     }
     /// **Sème les lignes déclarées par `seed`** qui manquent (voir
