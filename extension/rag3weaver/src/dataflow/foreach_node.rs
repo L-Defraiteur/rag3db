@@ -163,7 +163,8 @@ fn script_qui_lit(config: &Value, element: &str) -> Option<String> {
     let marque = format!("${element}");
     match config {
         Value::Object(o) => o.iter().find_map(|(k, v)| match v {
-            Value::String(s) if k.contains("script") && s.contains(&marque) => Some(k.clone()),
+            // The exact `script` key only: « description » contains « script » and is not one.
+            Value::String(s) if k == "script" && s.contains(&marque) => Some(k.clone()),
             Value::Object(_) | Value::Array(_) => script_qui_lit(v, element),
             _ => None,
         }),
