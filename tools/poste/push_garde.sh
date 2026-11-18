@@ -177,6 +177,11 @@ required_suites_played() {
   while read -r suite chemin; do
     [ -n "$suite" ] || continue
     if grep -qx "== $suite" "$J/resume.log" && grep -q '^test result: ok' "$J/$suite.log" 2>/dev/null && ! grep -q '^test result: FAILED' "$J/$suite.log"; then
+      # Un test qui dit « non jugé » et rend la main compte parmi les passés de cargo (18 novembre 2026, ticket de c7).
+      if grep -q '^non jugé : ' "$J/$suite.log"; then
+        manque="$manque $suite ($chemin) : $(grep -c '^non jugé : ' "$J/$suite.log") test(s) non jugé(s)"
+        continue
+      fi
       echo "suite exigée jouée verte : $suite ($chemin)"
     else
       manque="$manque $suite ($chemin)"
