@@ -1,6 +1,6 @@
 # L'écrivain décide le genre d'une méthode définie dans un autre fichier que sa classe
 
-- **État** : ouvert (16 novembre 2026)
+- **État** : fermé (18 novembre 2026, ED) — `code_sync::decide_methods_defined_elsewhere`, appelée avant l'écrivain (`reingest_file` et le lot) : une définition `function` dont le parent attend le rendez-vous devient `method` quand la source a, visible au rang en attente ou dans le lot, exactement une classe de ce nom. Témoin `code::tests_de_l_ecrivain::a_method_defined_in_another_file_than_its_class_is_a_method`, ROUGE sur 3891c5e1ee (`function`), vert avec le correctif. Limite dite dans le code et la nouveauté : la classe indexée après la définition, dans un lot suivant, ne la change pas avant sa réécriture.
 - **Famille** : produit
 - **Gravité** : basse. `void Foo::f() {}` dans un `.cpp`, quand `Foo` est déclarée dans un `.h`, reste `function` au lieu de
   `method`. L'arbre compact (`outline`) montre une fonction là où il y a une méthode.
