@@ -90,10 +90,26 @@ fn servir() -> Result<(), Box<dyn std::error::Error>> {
     // passe. `RAG3WEAVER_BURN_DEVICE_EMBEDDER=gpu:N` le déplace ; sans elle on
     // reste sur le défaut, comme avant.
     let carte = BurnDevice::for_role(BurnRole::Embedder);
+    // The window of a text in tokens (18 November 2026) : bge-m3 only ; granite
+    // truncates at its own 512.
+    let max_tokens = rag3weaver::daemon::embeddings::max_tokens_from(
+        std::env::var(rag3weaver::daemon::embeddings::MAX_TOKENS_VARIABLE).ok().as_deref(),
+    )?;
+    if max_tokens.is_some() && nom != "bge-m3" {
+        return Err(format!(
+            "{} ne règle que bge-m3 ; {nom} tronque à sa propre fenêtre",
+            rag3weaver::daemon::embeddings::MAX_TOKENS_VARIABLE
+        )
+        .into());
+    }
     let demon = match nom.as_str() {
         "bge-m3" => {
             let modele = BurnBgeM3Embedder::from_bytes(&octets, &tokenizer, carte)
                 .map_err(|e| format!("construction du modèle : {e}"))?;
+            let modele = match max_tokens {
+                Some(n) => modele.with_max_tokens(n).map_err(|e| format!("fenêtre en jetons : {e}"))?,
+                None => modele,
+            };
             let modele = Arc::new(modele);
             eprintln!("  chargé en {:?}", debut.elapsed());
             // Le même objet des trois côtés : BGE-M3 rend dense et creux en une

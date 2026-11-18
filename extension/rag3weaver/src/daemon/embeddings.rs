@@ -140,8 +140,10 @@ pub struct Identite {
     /// pas lancé par une activation (les services posés à la main).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub relances: Option<u64>,
-    /// **Le plafond d'un texte**, en caractères : au-delà, le texte est refusé
-    /// (413 nommé) sans calcul. Une requête de 8 000 jetons demandait 4 Go
+    /// **Le plafond d'un texte**, en caractères : au-delà, le texte est coupé
+    /// et compté (`cut_texts`, depuis 828ff28153 ; avant, un 413 nommé). Une
+    /// garde grossière : la fenêtre du modèle se dit en jetons
+    /// (`max_tokens_per_text`). Une requête de 8 000 jetons demandait 4 Go
     /// d'attention à la carte (le 7879, 15 novembre 2026). Absent : un
     /// fournisseur d'avant ce plafond.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -625,8 +627,8 @@ impl EmbedDaemon {
             max_chars_per_text: Some(self.max_chars),
             chars_per_token: Some(CARACTERES_PAR_JETON),
             cut_texts: Some(self.cut_texts.load(std::sync::atomic::Ordering::Relaxed)),
-            max_tokens_per_text: None,
-            truncated_texts: None,
+            max_tokens_per_text: self.embedder.troncatures().map(|(_, window)| window),
+            truncated_texts: self.embedder.troncatures().map(|(count, _)| count as u64),
         }
     }
 
@@ -709,10 +711,14 @@ pub const MAX_TOKENS_VARIABLE: &str = "RAG3WEAVER_EMBED_MAX_TOKENS";
 
 /// **The token window read from the environment** : absent or empty, `None`
 /// (the model's own window) ; a positive integer, it ; anything else, a named
-/// refusal at start. Stub.
+/// refusal at start (a badly written setting never falls back in silence).
 pub fn max_tokens_from(value: Option<&str>) -> Result<Option<usize>, String> {
-    let _ = value;
-    Ok(None)
+    match value.map(str::trim).filter(|v| !v.is_empty()) {
+        None => Ok(None),
+        Some(v) => v.parse::<usize>().ok().filter(|n| *n > 0).map(Some).ok_or_else(|| {
+            format!("{MAX_TOKENS_VARIABLE}={v} : a positive number of tokens expected (default : the model's window)")
+        }),
+    }
 }
 
 #[derive(Deserialize)]
