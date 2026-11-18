@@ -1,6 +1,7 @@
 # L'état d'index ne voit pas les orphelins du plein texte : `fts_counts` date du dernier index complet
 
-- **État** : ouvert (15 novembre 2026, session recherche, à la demande de c7).
+- **État** : fermé (18 novembre 2026, session recherche) : les comptes notés portent leur date, la maintenance nocturne les rafraîchit avec ses orphelins, et l'avertissement de l'état dit l'âge du relevé.
+- **Ouvert le** : 15 novembre 2026, session recherche, à la demande de c7.
 - **Pour** : recherche (l'état d'index), sur le relevé à sec de lucivy (`POST /backend/maintain` avec
   `dry_run: true`, lot confié à lucivy par c7).
 - **Famille** : produit
@@ -37,3 +38,20 @@ backend pour en prendre une copie fidèle.
 - Un chiffre ancien se dit ancien : « relevé du <date> », jamais présenté comme l'état présent.
 - Le témoin : un orphelin posé dans un test (une suppression lucivy non validée, comme avant 262be6fc4),
   puis l'état relu, qui doit le compter sans index complet entre les deux.
+
+## Ce qui le ferme (18 novembre 2026, recherche)
+
+- **La date** : `Catalog::noter_les_comptes_du_plein_texte` écrit `measured_at_ms` pour chaque entité.
+- **Le relevé vivant** : `Catalog::fts_maintenance_nocturne` réécrit ces comptes après son relevé à blanc. Pour
+  chaque entité dont la table a été relevée sans erreur, il note les documents restés après la purge, les
+  lignes du graphe, les orphelins restants (`orphans`) et la date. Les autres entités gardent leurs comptes.
+- **L'âge** : l'avertissement de l'état d'index dit « au relevé d'il y a N min », avec le nombre d'orphelins.
+  Sans date, il dit « au dernier index (relevé non daté) ».
+- **Le témoin** :
+  `dataflow::index_nodes::tests::the_nightly_maintenance_refreshes_the_noted_counts_with_their_orphans_and_date`.
+  Il est rouge en cae301918a (« the end of an index dates its counts » : aucune date), puis vert.
+- **La passe** : `passe-comptes-130302` à luciepc. e2e_code_sync 21, e2e_code 36, e2e_lectures 27, check_features
+  8/8, lib 2 613, navigateur 45.
+
+La lecture d'un index sur un backend fermé (`fts_existing.rs`, branche de Codex
+`cx-recherche-fts-existing-canon-proofs-r1`) reste à part : elle ne sert qu'à une maintenance de base fermée.
