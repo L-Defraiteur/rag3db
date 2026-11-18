@@ -1552,6 +1552,12 @@ impl PreparedBackend {
             return Err("unsupported backend manifest version".into());
         }
         let embed = manifest.embed_source()?;
+        for (capability, source) in manifest.models.iter() {
+            source.check_log(&format!("models.{}", format!("{capability:?}").to_lowercase()))?;
+        }
+        for source in manifest.models.modeles_de_langage() {
+            source.check_log("models.llm")?;
+        }
         // **Le repli par activation est le même fournisseur, au placement près** (décision
         // de c7) : un écart hors placement se refuse au chargement, nommé.
         for (capacite, source) in manifest.models.iter() {
@@ -2645,11 +2651,20 @@ impl PreparedBackend {
                 "aucun service déclaré — donnez models.embed.address (ou embeddings.address), ou \
                  RAG3WEAVER_SERVICE_EMBED (alias RAG3WEAVER_EMBED_SERVICE)"
             ),
-            _ => format!(
-                "service déclaré mais pas joint ({}) — démarrez-le ; il est repris dès qu'il \
-                 répond, et l'index suivant rattrape la dette : {erreur}",
-                adresses.join(", ")
-            ),
+            // A service posed by hand that names its log : its stop cause, said
+            // (18 November 2026, entry 7).
+            _ => match self.embed.stop_cause() {
+                Some(cause) => format!(
+                    "service d'embarquement arrêté : {cause} ({}) — il est repris dès qu'il répond, \
+                     et l'index suivant rattrape la dette : {erreur}",
+                    adresses.join(", ")
+                ),
+                None => format!(
+                    "service déclaré mais pas joint ({}) — démarrez-le ; il est repris dès qu'il \
+                     répond, et l'index suivant rattrape la dette : {erreur}",
+                    adresses.join(", ")
+                ),
+            },
         }
     }
     /// Ce que le backend dit quand il déclare du vecteur et démarre sans
