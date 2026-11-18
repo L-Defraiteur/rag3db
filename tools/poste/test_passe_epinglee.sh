@@ -23,6 +23,7 @@ cat > $W/run_e2e.sh <<'F'
 s=""; while [ $# -gt 0 ]; do [ "$1" = --test ] && s=$2; [ "$1" = --lib ] && s=lib; shift; done
 echo "$s EMBED=$RAG3WEAVER_EMBED_SERVICE LIB=$RAG3DB_LIB REPLI=${RAG3WEAVER_TESTS_REPLI_PERIPHERIQUE:-absent}" >> "$FAUX_TRACE"
 [ "${FAUX_NON_JOUEES:-}" = "$s" ] && echo "▸ ⚠ 1 suites NON JOUÉES faute de feature"
+[ "${FAUX_NON_JUGE:-}" = "$s" ] && echo "non jugé : la lib n'a pas la colonne state (format 43 requis), bascule à venir"
 [ "${FAUX_ROUGE:-}" = "$s" ] && { echo "test result: FAILED. 0 passed; 1 failed"; exit 101; }
 echo "test result: ok. 1 passed; 0 failed"
 F
@@ -97,4 +98,14 @@ sortie=$(HOME=$H PATH=$D/bin:$PATH FAUX_TRACE=$D/trace bash "$X" wt j filtre tem
 # `run_e2e.sh --lib <filtre>`, et la lib n'est pas rejouée comme une suite e2e ensuite.
 passe VERT "SUITE_DU_TEMOIN=lib" SUITE_DU_TEMOIN=lib
 [ "$(cut -d' ' -f1 $D/trace | tr '\n' ' ')" = "lib e2e_lectures e2e_code " ] && echo "vert   SUITE_DU_TEMOIN=lib : le témoin par --lib, puis e2e_lectures et e2e_code" || { echo "ROUGE  SUITE_DU_TEMOIN=lib, suites jouées : $(cut -d' ' -f1 $D/trace | tr '\n' ' ')"; rouge=1; }
+# **Un test non jugé n'est pas un test passé** (18 novembre 2026, ticket de c7) : un test qui dit « non jugé : … » et rend
+# la main compte parmi les passés de cargo. Le résumé les liste à part, et un non-jugé du témoin ou d'une suite exigée
+# rend la passe rouge.
+passe VERT "un non-jugé dans e2e_code, suite non exigée" FAUX_NON_JUGE=e2e_code
+grep -q "^non jugés dans e2e_code : 1 — non jugé : la lib n'a pas la colonne state" $R && grep -q '^tests non jugés : 1$' $R \
+  && echo "vert   un non-jugé est listé à part au résumé, avec sa raison, et compté" \
+  || { echo "ROUGE  non-jugé d'e2e_code : résumé « $(grep -iE 'non jug' $R | tr '\n' ' ') »"; rouge=1; }
+passe "ROUGE témoin : 1 test non jugé" "un non-jugé dans le témoin rend la passe rouge" FAUX_NON_JUGE=e2e_lectures
+passe VERT "aucun non-jugé"
+grep -q '^tests non jugés : 0$' $R && echo "vert   sans non-jugé, le résumé dit 0" || { echo "ROUGE  sans non-jugé : « $(grep -iE 'non jug' $R | tr '\n' ' ') »"; rouge=1; }
 exit $rouge
