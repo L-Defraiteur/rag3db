@@ -1,5 +1,11 @@
 # Nouveautés
 
+- 18 novembre 2026 — **Un texte trop dense pour bge-m3 est coupé, plus de panique sur la carte.** 11 000 « é » passent
+  sous le plafond de 12 000 caractères, mais font 11 002 jetons, plus que les 8 194 positions de bge-m3 : le calcul
+  paniquait sur la carte et le service s'arrêtait. bge-m3 coupe désormais chaque texte à sa fenêtre en jetons (8 192)
+  et compte la coupe ; le service dit sa fenêtre et ses coupes dans son identité, et `RAG3WEAVER_EMBED_MAX_TOKENS`
+  la resserre.
+
 - 18 novembre 2026 — **Une méthode définie hors du fichier de sa classe est une méthode.** `void Foo::f() {}` dans un `.cpp`, quand `class Foo` est dans un `.h` de la même source, s'écrit `method` et non plus `function` : l'arbre compact montre une méthode. Une limite : si le `.h` est indexé après le `.cpp`, dans un lot suivant, la définition reste une fonction jusqu'à la prochaine réécriture du `.cpp`.
 
 - 18 novembre 2026 — **Un embarquement par un fournisseur `compatible` peut estimer et indexer.** Depuis la clé du
