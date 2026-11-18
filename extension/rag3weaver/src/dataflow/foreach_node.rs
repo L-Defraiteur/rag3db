@@ -1029,6 +1029,33 @@ mod tests {
         assert!(e.contains("graphs/script.mmd") && e.contains("script"), "{e}");
     }
 
+    /// **Only a real script key is guarded** (ticket 2026-11-15, la garde des scripts prend
+    /// `description` pour un script): « description » contains « script », and a sub-graph that
+    /// substitutes `$element` into a node's `description` was refused as if it were a script. The
+    /// guard reads the exact `script` key; a real `script` that substitutes `$element` is still
+    /// refused.
+    #[test]
+    fn substituted_description_key_is_not_taken_for_a_script() {
+        let reg = registre();
+        let outil = |config: &str| {
+            GraphTool::from_mermaid(&format!(
+                "%% tool: archive\n%% description: d\n%% result: chaque.report\n\ngraph LR\n    chaque[\"ForEachNode({config})\"]\n"
+            ))
+            .unwrap()
+        };
+        let lire = |chemin: &str| -> Result<String, String> {
+            match chemin {
+                "graphs/genre.mmd" => Ok("%% tool: g\n%% description: d\n%% param: element json! -- x\n%% result: r.report\n\ngraph LR\n    r[\"CreateRefTypeNode(name='doc', description=$element.title, forme='x', confirm=true, types_entity='RefType')\"]\n".into()),
+                "graphs/script.mmd" => Ok("%% tool: s\n%% description: d\n%% param: element json! -- x\n%% result: r.result\n\ngraph LR\n    r[\"RhaiNode(script='let t = \\\"$element\\\"; t')\"]\n".into()),
+                autre => Err(format!("fichier introuvable : {autre}")),
+            }
+        };
+        resoudre_les_sous_graphes(&mut outil("graph='@graphs/genre.mmd'"), &lire, &reg)
+            .unwrap_or_else(|e| panic!("a substituted description is not a script: {e}"));
+        let e = resoudre_les_sous_graphes(&mut outil("graph='@graphs/script.mmd'"), &lire, &reg).unwrap_err();
+        assert!(e.contains("graphs/script.mmd") && e.contains("script"), "a real script is still refused: {e}");
+    }
+
     /// **Les paramètres du parent n'entrent pas dans le graphe cité** (96, 7 novembre
     /// 2026, archive) : un parent qui déclare `candidates` et le donne à un
     /// `ForEachNode` dont le graphe cité déclare et emploie aussi `candidates`. À
