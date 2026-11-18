@@ -149,14 +149,17 @@ impl Addresses {
     }
 }
 
-/// **La déclaration d'un modèle**, la même pour toute capacité.
+/// **La déclaration d'un modèle**, la même pour toute capacité. Elle se lit et s'écrit avec `access` (la
+/// manière d'accéder) et `provider` (le fournisseur) ; l'ancienne forme, `provider` pour la manière et
+/// `protocol` pour le fournisseur, se lit encore jusqu'au 29 novembre 2026 ([`ModelSourceWire`]). Dans le code,
+/// les champs gardent leurs noms : `provider` porte la manière d'accéder, `protocol` le fournisseur.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(try_from = "ModelSourceWire")]
 pub struct ModelSource {
     /// Activation locale explicite ; absente, le service est seulement joint.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub activation: Option<activation::Activation>,
-    #[serde(default)]
+    #[serde(default, rename = "access")]
     pub provider: Provider,
     /// Le modèle attendu. Un service à nous dit ce qu'il sert ; s'il sert
     /// autre chose, c'est un refus.
@@ -164,8 +167,8 @@ pub struct ModelSource {
     /// Absente : elle vient de l'environnement ([`Capability::variables`]).
     #[serde(default, skip_serializing_if = "Addresses::is_empty")]
     pub address: Addresses,
-    /// Pour `compatible` : `openai`, `llama_server`, `vertex`, `anthropic`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// Pour `compatible` : `openai`, `llama_server`, `vertex`, `anthropic`. Écrit `provider`.
+    #[serde(default, rename = "provider", skip_serializing_if = "Option::is_none")]
     pub protocol: Option<String>,
     /// Le **nom** de la variable qui porte la clé, jamais la clé.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -217,6 +220,100 @@ pub struct ModelSource {
     /// **Le modèle de langage par défaut** d'une liste `models.llm` : un seul l'est.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub default: bool,
+}
+
+/// **A declared model as written in a manifest**, in either form (ticket of 15 November 2026, « provider et
+/// protocol »): the new one, `access` and `provider`, or the old one, `provider` for the access and `protocol`
+/// for the provider, read until 29 November 2026. A model that mixes both is refused, naming both words.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ModelSourceWire {
+    #[serde(default)]
+    activation: Option<activation::Activation>,
+    #[serde(default)]
+    access: Option<Provider>,
+    #[serde(default)]
+    provider: Option<String>,
+    #[serde(default)]
+    protocol: Option<String>,
+    model: String,
+    #[serde(default)]
+    address: Addresses,
+    #[serde(default)]
+    api_key_env: Option<String>,
+    #[serde(default)]
+    fallback: Fallback,
+    #[serde(default)]
+    dimensions: Option<usize>,
+    #[serde(default)]
+    context_tokens: Option<usize>,
+    #[serde(default)]
+    query_max_chars: Option<usize>,
+    #[serde(default)]
+    params: std::collections::BTreeMap<String, String>,
+    #[serde(default)]
+    timeout_secs: Option<u64>,
+    #[serde(default)]
+    reasoning: Option<crate::llm::ReasoningEffort>,
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    max_output_tokens: Option<usize>,
+    #[serde(default)]
+    restart_budget_tokens: Option<usize>,
+    #[serde(default)]
+    default: bool,
+}
+
+/// The words of the old form for the access: a `provider` with one of these values is the old form.
+const OLD_ACCESS_WORDS: [&str; 4] = ["local", "service", "daemon", "compatible"];
+
+impl TryFrom<ModelSourceWire> for ModelSource {
+    type Error = String;
+    fn try_from(w: ModelSourceWire) -> Result<Self, String> {
+        let old_access = w.provider.as_deref().filter(|p| OLD_ACCESS_WORDS.contains(p));
+        let (provider, protocol) = match (w.access, old_access, w.protocol) {
+            (Some(_), _, Some(_)) => {
+                return Err("un modèle mêle les deux formes : `access` (la forme neuve) et `protocol` (l'ancienne) ; \
+                            écrire `access` et `provider` (le fournisseur)".into())
+            }
+            (Some(_), Some(p), None) => {
+                return Err(format!(
+                    "un modèle mêle les deux formes : `access` (la forme neuve) et `provider: {p}` (l'ancien sens, la manière \
+                     d'accéder) ; écrire `access: {p}`, et le fournisseur sous `provider`"
+                ))
+            }
+            (Some(access), None, None) => (access, w.provider),
+            // The old form: `provider` is the access, `protocol` the provider.
+            (None, Some(p), protocol) => (Provider::deserialize(serde::de::value::StrDeserializer::<serde::de::value::Error>::new(p)).map_err(|e| e.to_string())?, protocol),
+            (None, None, Some(protocol)) => {
+                if w.provider.is_some() {
+                    return Err("un modèle mêle les deux formes : `provider` au sens neuf (le fournisseur) et `protocol` (l'ancienne forme) ; écrire `provider` seul".into());
+                }
+                (Provider::default(), Some(protocol))
+            }
+            (None, None, None) => (Provider::default(), w.provider),
+        };
+        Ok(Self {
+            activation: w.activation,
+            provider,
+            model: w.model,
+            address: w.address,
+            protocol,
+            api_key_env: w.api_key_env,
+            fallback: w.fallback,
+            dimensions: w.dimensions,
+            context_tokens: w.context_tokens,
+            query_max_chars: w.query_max_chars,
+            params: w.params,
+            timeout_secs: w.timeout_secs,
+            reasoning: w.reasoning,
+            name: w.name,
+            max_output_tokens: w.max_output_tokens,
+            restart_budget_tokens: w.restart_budget_tokens,
+            default: w.default,
+        })
+    }
 }
 
 impl ModelSource {

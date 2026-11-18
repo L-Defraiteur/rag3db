@@ -54,7 +54,7 @@ pub(super) fn liste_des_modeles(modeles: &crate::model_source::Modeles, choix: O
         .iter()
         .map(|s| {
             let n = Modeles::nom(s);
-            json!({ "name": n, "model": s.model, "provider": s.provider, "protocol": s.protocol, "default": defaut.as_deref() == Some(n), "current": courant.as_deref() == Some(n) })
+            json!({ "name": n, "model": s.model, "access": s.provider, "provider": s.protocol, "default": defaut.as_deref() == Some(n), "current": courant.as_deref() == Some(n) })
         })
         .collect();
     json!({ "models": liste, "current": courant, "current_unknown": inconnu, "default": defaut })
