@@ -1721,6 +1721,30 @@ mod tests {
         assert_eq!(ecrites(&mut v), vec!["[toi · consigne] depuis l'IDE".to_string()], "venue d'ailleurs, elle s'écrit");
     }
 
+    /// **The host's copy is known by its field** (`origin: "host_copy"`, on master since 18 nov.): it carries the
+    /// model's last answer only, so it is not shown again when the text streamed over the run contains it (the
+    /// run may have said « Je lis le fichier. » before a tool and « Voici la réponse. » after); with nothing
+    /// streamed (a terminal opened later), it is shown as the agent's answer.
+    #[test]
+    fn the_host_copy_is_known_by_its_field_and_not_shown_again_when_streamed() {
+        let mut v = Vue::new(120, true);
+        let written = |v: &mut Vue| v.prendre_lignes().into_iter().map(|l| l.texte).collect::<Vec<_>>();
+        v.ligne_de_boite(&json!({ "id": "d/t:1", "from": "supervisor", "kind": "request", "text": "lis a.rs" }));
+        v.trame(&json!({ "evenement": { "kind": "RunStarted" } }));
+        v.trame(&json!({ "evenement": { "kind": "Token", "text": "Je lis le fichier.\n" } }));
+        v.trame(&json!({ "evenement": { "kind": "ToolCallStarted", "tool": "read_file", "arguments": "{\"path\":\"a.rs\"}" } }));
+        v.trame(&json!({ "evenement": { "kind": "ToolCallFinished", "tool": "read_file", "ok": true, "ms": 3 } }));
+        v.trame(&json!({ "evenement": { "kind": "Token", "text": "Voici la réponse.\n" } }));
+        v.trame(&json!({ "evenement": { "kind": "RunFinished" } }));
+        written(&mut v);
+        v.ligne_de_boite(&json!({ "id": "d/t:2", "from": "teammate", "kind": "report", "origin": "host_copy", "text": "Voici la réponse." }));
+        assert_eq!(written(&mut v), Vec::<String>::new(), "the copy of the last answer, already streamed");
+        // A terminal opened after the run: nothing streamed, the copy is the answer.
+        let mut late = Vue::new(120, true);
+        late.ligne_de_boite(&json!({ "id": "d/t:2", "from": "teammate", "kind": "report", "origin": "host_copy", "text": "Voici la réponse." }));
+        assert_eq!(written(&mut late), vec!["[équipier · compte rendu] Voici la réponse.".to_string()]);
+    }
+
     fn ligne_b(n: usize, from: &str, kind: &str, extra: Value) -> Value {
         let mut l = json!({ "id": format!("a1/doc:{n}"), "from": from, "kind": kind, "text": format!("texte {n}") });
         if let (Some(o), Some(e)) = (l.as_object_mut(), extra.as_object()) {
