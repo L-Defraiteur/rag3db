@@ -153,6 +153,13 @@ pub struct Identite {
     /// refusing their batch. Absent : a service from before the cut.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cut_texts: Option<u64>,
+    /// **The model's window in tokens** : a text above it is cut there, in
+    /// tokens. Absent : a service from before, or a model that does not say.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_tokens_per_text: Option<usize>,
+    /// **Texts the model truncated to that window** since the service started.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub truncated_texts: Option<u64>,
 }
 
 /// La politique de déchargement d'un fournisseur, telle qu'il la déclare.
@@ -618,6 +625,8 @@ impl EmbedDaemon {
             max_chars_per_text: Some(self.max_chars),
             chars_per_token: Some(CARACTERES_PAR_JETON),
             cut_texts: Some(self.cut_texts.load(std::sync::atomic::Ordering::Relaxed)),
+            max_tokens_per_text: None,
+            truncated_texts: None,
         }
     }
 
@@ -693,6 +702,17 @@ pub fn max_chars_depuis(valeur: Option<&str>) -> Result<usize, String> {
             format!("{MAX_CHARS_VARIABLE}={v} : un entier positif de caractères attendu (défaut {MAX_CHARS_PAR_TEXTE})")
         }),
     }
+}
+
+/// The variable that sets the window of a text in tokens, at the service's binary.
+pub const MAX_TOKENS_VARIABLE: &str = "RAG3WEAVER_EMBED_MAX_TOKENS";
+
+/// **The token window read from the environment** : absent or empty, `None`
+/// (the model's own window) ; a positive integer, it ; anything else, a named
+/// refusal at start. Stub.
+pub fn max_tokens_from(value: Option<&str>) -> Result<Option<usize>, String> {
+    let _ = value;
+    Ok(None)
 }
 
 #[derive(Deserialize)]
@@ -1747,6 +1767,39 @@ mod tests {
     /// had the 7878 refuse every batch of 512, and a whole index stayed
     /// without vectors). The identity says the cap and its ratio (12 000
     /// characters by default, about 3 per token).
+    /// **The service says its model's window in tokens, and what it truncated
+    /// there** (18 November 2026 : 11 000 « é », under the 12 000-character cap,
+    /// are 11 002 tokens ; bge-m3 has 8 194 positions and panicked on the card).
+    #[test]
+    fn the_identity_says_the_token_window_and_the_truncated_texts() {
+        struct Windowed;
+        impl Embedder for Windowed {
+            fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
+                Ok(texts.iter().map(|_| vec![0.5; 4]).collect())
+            }
+            fn dim(&self) -> usize { 4 }
+            fn name(&self) -> &str { "windowed" }
+            fn troncatures(&self) -> Option<(usize, usize)> { Some((2, 8192)) }
+        }
+        let identity = EmbedDaemon::new(Arc::new(Windowed)).identite();
+        assert_eq!(identity.max_tokens_per_text, Some(8192), "the window, in tokens");
+        assert_eq!(identity.truncated_texts, Some(2), "what the model truncated there");
+        let identity = EmbedDaemon::new(Arc::new(LengthRecorder::default())).identite();
+        assert_eq!((identity.max_tokens_per_text, identity.truncated_texts), (None, None), "a model that does not say");
+    }
+
+    /// **`RAG3WEAVER_EMBED_MAX_TOKENS` is read, and a bad value refuses the start.**
+    #[test]
+    fn the_token_window_setting_is_read_and_a_bad_value_is_refused() {
+        assert_eq!(max_tokens_from(None), Ok(None));
+        assert_eq!(max_tokens_from(Some(" ")), Ok(None));
+        assert_eq!(max_tokens_from(Some("4096")), Ok(Some(4096)));
+        for bad in ["0", "-1", "huit mille", "4096 jetons"] {
+            let e = max_tokens_from(Some(bad)).expect_err(bad);
+            assert!(e.contains(MAX_TOKENS_VARIABLE), "{e}");
+        }
+    }
+
     #[test]
     fn the_cap_is_declared_and_an_oversized_text_is_cut_not_refused() {
         let recorder = Arc::new(LengthRecorder::default());
