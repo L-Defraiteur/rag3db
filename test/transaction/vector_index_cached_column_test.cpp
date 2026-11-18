@@ -5,9 +5,17 @@
 // ASAN, in NullMask::isNull), and their vectors past the cached data (ticket
 // 2026-11-08-le-create-vector-index-concurrent-lit-une-ligne-au-dela-de-la-colonne-en-cache).
 //
-// The witness sends the query that rewriteCreateHNSWQuery
-// (extension/vector/src/function/create_hnsw_index.cpp) builds, with rows inserted right between
-// the cache and the build. Deterministic, no thread.
+// The witness replays, one statement at a time, the query that rewriteCreateHNSWQuery
+// (extension/vector/src/function/create_hnsw_index.cpp) builds, and commits rows from a second
+// connection right between the cache and the build. Deterministic, no thread.
+//
+// What it proves, and only that: the build never reads past its cached column. A test cannot send
+// the rewritten query itself (the parser wants _CREATE_HNSW_NOTE alone in its query), and replayed
+// in separate queries the NOTED entry's token is dead by the time of the build, which then refuses
+// the index as INCOMPLETE. That refusal comes after the build's shared state is constructed, where
+// the read past the column happened (heap-buffer-overflow under ASAN, SIGSEGV in Release before the
+// fix). The end-to-end behaviour of a CREATE under writes stays with
+// VectorIndexCreateInMemory.ChangesCommittedDuringACreateAreSeen.
 
 #include <filesystem>
 #include <string>
@@ -61,52 +69,41 @@ protected:
     std::string extension;
 };
 
-TEST_F(VectorIndexCachedColumn, RowsCommittedAfterTheColumnIsCachedAreNotReadPastIt) {
+TEST_F(VectorIndexCachedColumn, TheBuildNeverReadsPastItsCachedColumn) {
     const auto id = tableID();
     const std::string params = "metric := 'l2', cache_embeddings := true";
-    // The query that rewriteCreateHNSWQuery builds, sent as one query as it is (the NOTED entry's
-    // token lives as long as that query), with LATE_ROWS rows inserted by T_B itself between the
-    // cache and the build: the build's bind counts them (getNumTotalRows counts the local rows),
-    // the cached column does not have them.
+    // The internal functions and graph tables of the rewrite, for the whole connection (a single
+    // query's flag, setUseInternalCatalogEntry, is reset after each query).
     ok(*conn, "CALL enable_internal_catalog=true;");
-    ok(*conn, "BEGIN TRANSACTION;"
-              "CREATE REL TABLE _" +
-                  id +
-                  "_doc_index_UPPER (FROM Doc TO Doc) WITH (storage_direction='fwd');"
-                  "CREATE REL TABLE _" +
-                  id +
-                  "_doc_index_LOWER (FROM Doc TO Doc) WITH (storage_direction='fwd');"
-                  "CALL _CREATE_HNSW_NOTE('Doc', 'doc_index', 'vec', " +
-                  params +
-                  ");"
-                  "COMMIT;"
-                  "CALL _WAIT_HNSW_WRITERS('Doc', 'doc_index');"
-                  "BEGIN TRANSACTION;"
-                  "CALL _CACHE_ARRAY_COLUMN_LOCALLY('Doc', 'vec');" +
-                  insertRows(CACHED_ROWS, LATE_ROWS) +
-                  "CALL _CREATE_HNSW_INDEX('Doc', 'doc_index', 'vec', " + params +
-                  ");"
-                  "COMMIT;");
+    // T_A: the entry and its NOTED holder.
+    ok(*conn, "BEGIN TRANSACTION;");
+    ok(*conn, "CREATE REL TABLE _" + id +
+                  "_doc_index_UPPER (FROM Doc TO Doc) WITH (storage_direction='fwd');");
+    ok(*conn, "CREATE REL TABLE _" + id +
+                  "_doc_index_LOWER (FROM Doc TO Doc) WITH (storage_direction='fwd');");
+    ok(*conn, "CALL _CREATE_HNSW_NOTE('Doc', 'doc_index', 'vec', " + params + ");");
+    ok(*conn, "COMMIT;");
+    ok(*conn, "CALL _WAIT_HNSW_WRITERS('Doc', 'doc_index');");
+    // T_B: the column is cached at CACHED_ROWS rows.
+    ok(*conn, "BEGIN TRANSACTION;");
+    ok(*conn, "CALL _CACHE_ARRAY_COLUMN_LOCALLY('Doc', 'vec');");
+    // Another connection commits LATE_ROWS rows after the cache, before the build.
+    Connection writer{database.get()};
+    ok(writer, insertRows(CACHED_ROWS, LATE_ROWS));
+    // The build: its bind counts CACHED_ROWS + LATE_ROWS rows, the cached column CACHED_ROWS. It
+    // ends either built or refused by name (INCOMPLETE, the replay's dead token), never by a read
+    // past the cached column.
+    const auto build =
+        conn->query("CALL _CREATE_HNSW_INDEX('Doc', 'doc_index', 'vec', " + params + ");");
+    EXPECT_TRUE(
+        build->isSuccess() || build->getErrorMessage().find("INCOMPLETE") != std::string::npos)
+        << "[check: the-build-never-reads-past-its-cached-column] " << build->getErrorMessage();
+    conn->query("ROLLBACK;");
     ok(*conn, "CALL enable_internal_catalog=false;");
-
-    // Every row, cached or late, is found first at its exact vector.
-    uint64_t notFirst = 0;
-    std::string firstMiss;
-    for (int64_t i = 0; i < CACHED_ROWS + LATE_ROWS; i += 97) {
-        const auto query = "CALL QUERY_VECTOR_INDEX('Doc', 'doc_index', [CAST(" +
-                           std::to_string(i) + " AS FLOAT), CAST(" + std::to_string(i % 7) +
-                           " AS FLOAT), CAST(" + std::to_string(i % 11) + " AS FLOAT), CAST(" +
-                           std::to_string(-i) + " AS FLOAT)], 1, efs := 500) RETURN node.id;";
-        const auto result = conn->query(query);
-        ASSERT_TRUE(result->isSuccess()) << query << " : " << result->getErrorMessage();
-        const auto got = result->hasNext() ? result->getNext()->getValue(0)->toString() : "none";
-        if (got != std::to_string(i)) {
-            if (notFirst++ == 0) {
-                firstMiss = "row " + std::to_string(i) + " gave " + got;
-            }
-        }
-    }
-    EXPECT_EQ(notFirst, 0u) << "[check: rows-past-the-cached-column-found-first] " << firstMiss;
+    // The table still reads whole after the build.
+    const auto count = conn->query("MATCH (d:Doc) RETURN count(*);");
+    ASSERT_TRUE(count->isSuccess() && count->hasNext()) << count->getErrorMessage();
+    EXPECT_EQ(count->getNext()->getValue(0)->toString(), std::to_string(CACHED_ROWS + LATE_ROWS));
 }
 
 } // namespace
