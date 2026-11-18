@@ -537,13 +537,16 @@ impl StepWork {
     fn note(&mut self, tool: &str, args: &Value, result: &str) {
         let path = args["path"].as_str().unwrap_or_default();
         if tool == "read_file" && !path.is_empty() {
-            let from = args["offset"].as_u64().or(args["start_line"].as_u64()).unwrap_or(1);
-            let to = match (args["length"].as_u64(), args["end_line"].as_u64()) {
-                (Some(n), _) => format!("{}", from + n.max(1) - 1),
-                (None, Some(e)) => e.to_string(),
-                (None, None) => "end".to_string(),
-            };
-            let line = format!("{path} (lines {from}-{to})");
+            // The range the tool says it rendered (« — lines 1-3 of 3 »), else the one asked.
+            let rendered = result.split(" — lines ").nth(1).and_then(|r| r.split(|c: char| c != '-' && !c.is_ascii_digit()).next()).filter(|r| r.contains('-')).map(str::to_string);
+            let range = rendered.unwrap_or_else(|| {
+                let from = args["offset"].as_u64().unwrap_or(1);
+                match args["limit"].as_u64().or(args["length"].as_u64()) {
+                    Some(n) => format!("{from}-{}", from + n.max(1) - 1),
+                    None => format!("{from}-end"),
+                }
+            });
+            let line = format!("{path} (lines {range})");
             if !self.read.contains(&line) {
                 self.read.push(line);
             }
