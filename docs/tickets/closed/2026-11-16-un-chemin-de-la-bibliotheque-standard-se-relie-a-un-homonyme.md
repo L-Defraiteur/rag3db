@@ -1,6 +1,6 @@
 # Un chemin de la bibliothèque standard se relie à un homonyme du projet
 
-- **État** : ouvert (16 novembre 2026) — trouvé par la sonde du lot des mots vides de Rust, avant son « prêt »
+- **État** : corrigé (18 novembre 2026, branche `codeparsers/rust-stop-words-4`) : la racine du chemin se lit à la position exacte de la mention (`reference_path_root`, repris de Codex) ; une racine `builtin` ou de provenance sûre ne prend pas de rendez-vous par le nom
 - **Famille** : produit
 - **Gravité** : réponse fausse (une arête « nom » vers une fonction homonyme du projet)
 - **Atteignable en service** : oui, dès que le lot des mots vides de Rust atterrit (branche rag3db
@@ -46,3 +46,30 @@ projet nu sur la même ligne, puis ordre inverse avec préfixe UTF-8. **NON JOU�
 (pas de Cargo/rustc/test pendant la fenêtre de bascule). Le rouge est à observer
 sur la forme 5ef avant de remplacer ce filtrage ; aucun vert n'est revendiqué.
 Les rouges historiques et les 14 pertes de la première sonde restent conservés.
+
+## Fermeture, 18 novembre 2026
+
+Le correctif posé lit la racine du chemin **à la colonne de la mention** dans la ligne brute
+(`reference_path_root`, de Codex, branche `cx-codeparsers-rust-fix-1`), et non plus dans toute la ligne :
+`std::fs::remove_file(…)` ne se relie plus à un `remove_file` du projet, et un appel nu du projet écrit sur
+la même ligne qu'un chemin de std reste relié. Les deux rouges de Codex (deux ordres d'appel sur une ligne,
+0 passé sur 2, « the project call must remain visible ») sont devenus les témoins
+`a_standard_library_path_does_not_hide_a_bare_project_call_on_the_same_line` et
+`a_bare_project_call_before_a_library_path_on_the_same_line_remains_visible` ; le premier rouge du ticket
+est `a_path_into_the_standard_library_is_not_a_project_homonym`.
+
+Sonde de marque sur l'arbre figé (`rag3db-garde`, 290 fichiers de rag3weaver/src, 1 550 du moteur), avant =
+master (codeparsers bd13385), après = la branche (34c74e4) :
+
+| | avant | après |
+|---|---|---|
+| rag3weaver, `nom` | 8 701 | 8 453 |
+| rag3weaver, `type` | 9 691 | 9 884 |
+| rag3weaver, `fichier` | 18 970 | 19 094 |
+| moteur | — | identique au couple près |
+
+258 arêtes retirées, toutes un chemin de std vers un homonyme du projet (`std::process::id` 78,
+`std::fs::remove_file` 49, `std::fs::metadata` 37, `std::sync::mpsc::channel` 37, `std::fs::copy` 22,
+`std::sync::atomic` 19, `std::env::args` 6, `std::path::Component`, `hash_map::Entry`, `std::ptr::eq`,
+`std::task::Context`). Aucune vraie arête perdue à la lecture des 258.
+
