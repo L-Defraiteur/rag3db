@@ -72,7 +72,7 @@ pub fn view_settings(tracked: Option<&Value>) -> Result<ViewSettings, String> {
 
 /// Les tombstones d'une génération : `[]` ou une liste de clés (l'écriture de la génération 0), ou
 /// `{"keys": [...], "files": [...]}`.
-fn read_tombstones(couche: &str, rang: i64, texte: &str) -> Result<(BTreeSet<String>, BTreeSet<String>), String> {
+pub(crate) fn read_tombstones(couche: &str, rang: i64, texte: &str) -> Result<(BTreeSet<String>, BTreeSet<String>), String> {
     let refus = || format!("vue {couche}:{rang} : tombstones illisibles ({texte})");
     let liste = |v: Option<&Value>| -> Result<BTreeSet<String>, String> {
         match v {
