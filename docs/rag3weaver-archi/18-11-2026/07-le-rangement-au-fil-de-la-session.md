@@ -41,10 +41,15 @@ part de l'hôte, et se relira quand elle sera posée.
 
    Le tour suivant ne l'attend pas : un fil à part, un seul à la fois par conversation. Un nouveau
    tour pendant un rangement le laisse finir.
-3. **La marque, un seul rédacteur.** Le `ChatFile` gagne `archived_through: Option<usize>` (le
-   dernier tour rangé) et `slices: Vec<{from, to, source, ok}>`. Seul l'hôte les écrit, sous le
-   verrou des chats, à la fin d'un rangement réussi. Un rangement raté garde la marque où elle
-   était : la tranche repartira, avec la suivante.
+3. **La marque, un seul rédacteur** (forme validée par c7 le 18 novembre). La trace reste le
+   `ChatFile`. La marque vit à côté, dans `chats/<backend>.rangement.json` :
+   - `archived_through_turn` ;
+   - `slices` : `{from_turn, to_turn, ok, error?}` ;
+   - `last_error`.
+
+   Son seul rédacteur est le fil de rangement. Le rangement de fond ne prend donc ni le verrou
+   des sessions ni la réécriture du `ChatFile`. Un rangement raté garde la marque où elle était :
+   la tranche repartira, avec la suivante.
 3 bis. **La marque n'avance qu'après le commit** (contrat avec mémoire, 18 novembre). Le rangement
    rend `{report, archived_through_turn}`. L'hôte n'écrit `archived_through_turn` dans le
    `ChatFile` que si deux conditions sont réunies :
