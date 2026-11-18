@@ -81,7 +81,7 @@ ciblé. Les décisions rares sont :
 - chaque phrase porte une décision au sens net, et son sens attendu est écrit à côté, dans le jeu ;
 - pour chaque réglage, la mesure rend la part des phrases retrouvées dans un L1 **avec le bon sens**, par position.
   Une contrainte négative retrouvée à l'envers compte comme perdue ;
-- le juge lit les L1, sans savoir quelles phrases ont été plantées ni où.
+- le juge lit les L1 sans savoir quel réglage les a produits (il sait quelle phrase il cherche).
 
 **Où la jouer** : sur chaque réglage de la matrice, et aussi sur le mode « tours bruts par segment » que la session
 mémoire ajoute (`archivist.step2.input = raw_turns`).
@@ -104,6 +104,27 @@ jusqu'à 100. Cela donne trois nombres au lieu d'un, et les erreurs que l'agent 
 
 **Les combinaisons** : seulement des combinaisons informatives (un ingrédient de plus ou de moins à la fois autour de
 S 50), pas toutes les permutations.
+
+## Ce qui est préparé (18 novembre au soir, sans calcul)
+
+Tout est à luciepc, sous `~/.cache/rag3db-banc-notes/compaction/`, avec une copie sur la tablette :
+- **le jeu de phrases plantées** : `planted-set.json` (sha256 `6cc5406d…`), 24 phrases, dont 8 contraintes négatives, 8
+  changements d'intention et 8 décisions brèves, chacune avec son sens attendu ;
+- **l'implantation** : `plant_corpus.py`, avec son témoin `test_plant_corpus.py`, vu rouge puis vert.
+  - Le corpus planté est `corpus/c7-99bc8451-f5-planted/`, avec `corpus.jsonl` (sha256 `9cfaaebc…`) et le manifeste
+    `planted-positions.json`.
+  - Les 24 phrases se répartissent sur les 19 fenêtres de 50 k, 8 en début, 8 au milieu et 8 en fin.
+  - Les fenêtres sont identiques avant et après l'implantation ;
+- **le juge des décisions rares** : `j_rare.py`, avec son témoin `test_j_rare.py` sur un modèle simulé (`JUDGE_STUB`),
+  vu rouge puis vert.
+  - Il prend les L1 d'une passe sous la forme neutre `[{fiche, text}]` ; l'adaptateur viendra avec la forme de la
+    session mémoire.
+  - Il rend le rappel, les phrases inversées, et le compte par position et par type.
+  - Le juge sait quelle phrase il cherche. Il ne sait pas quel réglage a produit les L1 ;
+- **les distances d'après compaction** : `x_frontieres.py` prend `DISTANCES=10,30,100`. Le défaut reste 60 et 20, et
+  l'ancienne version est gardée en `x_frontieres.py.avant-distances`. Le bilan dit, pour chaque frontière, combien de
+  tours chaque fenêtre contient vraiment. Essayé sur un transcript de 17 frontières : la 17ᵉ n'a que 18 tours après elle ;
+- **reste** : le lanceur de la matrice. Il attend les noms des réglages que la session mémoire déclarera.
 
 ## Pour fermer
 
