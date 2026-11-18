@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 
 #include "common/serializer/buffer_writer.h"
 #include "common/types/types.h"
@@ -203,6 +204,13 @@ public:
     }
     virtual void finalize(main::ClientContext*) {
         // DO NOTHING.
+    }
+    // The rows a search scans one by one outside the index's graph, at the transaction's snapshot:
+    // an upper bound, for the product to decide a rebuild (SHOW_INDEXES,
+    // rows_outside_graph_at_most). An index without a graph has none to say.
+    virtual std::optional<uint64_t> getRowsScannedOutsideGraph(
+        const transaction::Transaction* /*transaction*/) const {
+        return std::nullopt;
     }
 
     std::span<uint8_t> getStorageBuffer() const {

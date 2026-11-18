@@ -274,6 +274,10 @@ public:
     // L'état de construction de l'exemplaire de ce nom visible à la transaction (SHOW_INDEXES).
     std::optional<IndexBuildState> getIndexBuildState(const std::string& name,
         const transaction::Transaction* transaction) const;
+    // The rows a search of the index of that name scans outside its graph (SHOW_INDEXES), or
+    // nothing for an index not loaded, detached, or without a graph.
+    std::optional<uint64_t> getIndexRowsOutsideGraphAtMost(const std::string& name,
+        const transaction::Transaction* transaction) const;
     // Les noms des refus d'une recherche sur un index en construction ou à refaire.
     static constexpr const char* INDEX_UNDER_CONSTRUCTION = "is under construction";
     static constexpr const char* INDEX_INCOMPLETE = "is incomplete";

@@ -809,6 +809,15 @@ void OnDiskHNSWIndex::rollbackInsert(common::offset_t firstRolledBackOffset) {
     }
 }
 
+std::optional<uint64_t> OnDiskHNSWIndex::getRowsScannedOutsideGraph(
+    const Transaction* transaction) const {
+    // An upper bound: rows of that range already linked by a CREATE's catch-up, or without a
+    // vector, are counted too; it is what every search scans one by one.
+    const auto numTotalRows = nodeTable.getNumTotalRows(transaction);
+    const auto numCheckpointedNodes = storageInfo->cast<HNSWStorageInfo>().numCheckpointedNodes;
+    return numTotalRows > numCheckpointedNodes ? numTotalRows - numCheckpointedNodes : 0;
+}
+
 void OnDiskHNSWIndex::finalize(main::ClientContext* context) {
     auto& hnswStorageInfo = storageInfo->cast<HNSWStorageInfo>();
     const auto numTotalRows = nodeTable.getNumTotalRows(&DUMMY_CHECKPOINT_TRANSACTION);
