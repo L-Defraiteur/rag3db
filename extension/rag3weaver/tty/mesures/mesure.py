@@ -672,6 +672,41 @@ finally:
     tunnel.terminate()
     hote_arreter()
 
+# 1i. The L1 of the run and their turns (18 nov.): /memory lists them with their range and fiche, /turns 1 opens
+#     the turns of the first in the viewer, each with its state, a gone turn said.
+hote_demarrer()
+tunnel = subprocess.Popen(["sleep", "86400"] if LOCAL else ["ssh", "-N", "-o", "BatchMode=yes", "-L", f"{TUNNEL}:127.0.0.1:{PORT}", HOTE])
+time.sleep(1.5)
+try:
+    t = Terminal("COLORTERM=truecolor TERM=xterm-256color", "daemon")
+    if t.attendre(b"attend ton accord", borne=40) is None:
+        rouge("memoire : la demande d'accord ne paraît pas en 40 s")
+    t0 = t.ecrire(b"/memory\r")
+    liste = t.attendre("fiche:tty-terminal".encode(), apres=t0, borne=10) is not None
+    plage = t.attendre("tours 12 à 15".encode(), apres=t0, borne=10) is not None
+    time.sleep(0.5)
+    t.ecrire(b"/turns 1\r")
+    time.sleep(1.5)
+    ecran = ecran_tmux()
+    if ecran is None:
+        ecran = t.tout().decode("utf8", "replace")
+    tours = "tour 12 · indexed" in ecran and "tour 13 · from_chat_file" in ecran
+    parti = "tour 14 · gone" in ecran
+    t.ecrire(b"\x1b")
+    time.sleep(1.0)
+    resultats["memoire"] = {"liste": liste, "plage": plage, "tours_avec_etat": tours, "tour_parti_dit": parti}
+    for cle, vu in resultats["memoire"].items():
+        if not vu:
+            rouge(f"memoire : {cle}")
+    if not (tours and parti):
+        resultats["memoire_ecran"] = ecran
+    t.ecrire(b"\x03")
+    time.sleep(0.5)
+    t.arreter()
+finally:
+    tunnel.terminate()
+    hote_arreter()
+
 # 2. Les couleurs de chaque thème, en couleur vraie puis en 256 couleurs.
 couleurs = []
 for nom, th in themes.items():
