@@ -141,9 +141,10 @@ _Après la fenêtre, sous `poste lourd`._
 
 | Arbre | Fichiers | Parsing | Tables | Choix | Mémoire | A (catalogue en mémoire) | Relations lisibles dans l'index | Index complet |
 |---|---|---|---|---|---|---|---|---|
-| `extension/rag3weaver/src` | 311 (17 387 scopes) | | | | | | 46 s | 46 s (plein texte seul) |
-| dépôt entier | 8 585 (82 393 scopes) | | | | | | partiel dès 99 s ; 704 lignes sur 705 à 143 s ; tout à 192 s | 194 s (plein texte seul) |
-| noyau Linux (ordre de grandeur) | | | | | | | | |
+| `extension/rag3weaver/src` | 311 (17 387 scopes) ; sonde : 290 (16 222) | 7,6 s | 3,5 s | 0,25 s | 960 Mio (analyse) ; 6,0 Gio (A) | 428 s, dont 302 s de dérivations ; symboles 11,3 s | 46 s | 46 s (plein texte seul) |
+| `src/` du moteur (sonde) | 1 550 (19 057 scopes) | 2,5 s | 1,5 s | 0,3 s | 685 Mio (analyse) ; 5,0 Gio (A) | 298 s, dont 212 s de dérivations ; symboles 8,7 s | | |
+| dépôt entier | 8 585 (82 393 scopes) ; sonde : 3 821 fichiers de code suivis par git (73 324 scopes) | 22,5 s | non mesuré | non mesuré | **8,7 Gio** (analyse seule) | non joué (ne tient pas : environ 6 Gio pour 16 000 scopes) | partiel dès 99 s ; 704 lignes sur 705 à 143 s ; tout à 192 s | 194 s (plein texte seul) |
+| noyau Linux (ordre de grandeur) | en-têtes installés (7.3.4) : 8 829 (88 783 scopes, 57 Mo) ; noyau entier : environ 63 000 fichiers, environ 1,1 Go | 5,2 s (en-têtes) ; environ 100 s (noyau entier, au même débit) | | | 1,4 Gio (en-têtes) ; environ 25 Gio (noyau entier, au prorata des octets) | hors de portée | | |
 
 ### Ce que dit la chronologie d'un premier index (recherche, 18 novembre 2026)
 
@@ -172,6 +173,31 @@ toutes les deux secondes. Journaux : `~/.cache/rag3weaver-build/probe-index-rw-s
   « index en cours » vaut aussi pour une réponse qui vient de l'index partiel ;
 - un relevé à faire avec la sonde de codeparsers : **A sur le dépôt entier**. Si l'ingestion en mémoire, sans
   plein texte ni morceaux, tient en une dizaine de secondes, le repli bat l'index d'un facteur 10 à 20.
+
+### Ce que disent les mesures de codeparsers (18 novembre 2026)
+
+**Le relevé** : sonde `tests/probe_fallback_cost.rs` (branche `codeparsers/fallback-cost-probe`), lib 3d706f709, une
+racine par processus, sous `poste lourd`. Arbre figé `rag3db-garde`. « Parsing » est `analyze` (le parsing et la
+résolution dans le fichier). « Tables » est la lecture des `DEFINES`, des `MENTIONS`, des parents et des types
+différés dans le catalogue en mémoire ; « Choix » est `symboles · choisir et lier`. « Mémoire » est le `VmHWM` du
+processus après l'étape. Journaux : `~/.cache/rag3weaver-build/cout/`.
+
+- **A telle quelle perd contre l'index réel** : 428 s et 6 Gio sur rag3weaver/src, contre 46 s. Un seul
+  `ingest_code` de toute la vue paie les dérivations (morceaux, plein texte, leur drain : 302 s), dont le repli n'a
+  pas besoin, et l'insertion d'un bloc des fichiers et des scopes (environ 114 s de plus). La résolution elle-même
+  ne pèse pas : 11,3 s pour toute l'étape des symboles, dont 3,5 s de lectures et 0,25 s de choix.
+- **A allégée n'est pas mesurée** : aucun réglage n'ôte les morceaux sans changer le code. Sa borne, par
+  soustraction : environ 126 s sur rag3weaver/src, dont environ 11 s de symboles. Elle ne bat l'index que si
+  l'insertion des scopes passe aussi par le chemin rapide de l'index (par paquets), à mesurer une fois écrite.
+- **B, sans base** : la borne basse est le parsing plus la résolution, environ 7,6 s + quelques secondes sur
+  rag3weaver/src. Elle bat l'index d'un facteur 4 à 5.
+- **La mémoire décide de la borne** : `analyze` garde toute la vue. 960 Mio pour 10 Mo de source sur rag3weaver,
+  8,7 Gio pour 40 Mo sur le dépôt, 1,4 Gio pour les 57 Mo d'en-têtes C du noyau. Le C coûte peu par octet, le Rust
+  et le C++ beaucoup (environ 60 à 120 Kio par scope). Un repli sur le dépôt entier demanderait près de 9 Gio pour
+  la seule analyse : il faut soit une borne d'environ quelques centaines de fichiers, soit des tables compactes
+  bâties fichier par fichier (relâcher chaque `CodeAnalysis` une fois ses définisseurs et ses mentions retenus).
+- **Le noyau entier est hors de portée** : environ 100 s d'analyse au même débit, et environ 25 Gio si la vue est
+  gardée entière.
 
 ## 5. Ce que le repli n'a pas (recherche)
 
