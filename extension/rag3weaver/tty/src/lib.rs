@@ -26,6 +26,8 @@ pub mod code;
 #[cfg(feature = "vue")]
 pub mod coquille;
 #[cfg(feature = "vue")]
+pub mod memory;
+#[cfg(feature = "vue")]
 pub mod outils;
 #[cfg(feature = "vue")]
 pub mod saisie;

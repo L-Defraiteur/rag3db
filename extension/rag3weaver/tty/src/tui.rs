@@ -502,6 +502,34 @@ fn executer(c: crate::commandes::Commande, terminal: &mut ratatui::DefaultTermin
             }
             Err(e) => vue.note(&format!("/model {n} : {e}")),
         },
+        // The L1 of the task's run (« <task>:<parent> », archi, 18 nov.), and the turns they came from.
+        Commande::Memory => {
+            let run = format!("{}:{}", tache.task, tache.depot.id);
+            match client::lire(agent, ep, &format!("/ide/l1?backend={}&run={}", client::encoder(&tache.depot.id), client::encoder(&run))) {
+                Ok(v) => {
+                    crate::memory::l1_lines(&v).iter().for_each(|l| vue.note(l));
+                    vue.memory = Some(v);
+                }
+                Err(e) => vue.note(&format!("/memory : {e}")),
+            }
+        }
+        Commande::Turns(n) => {
+            let n = n.as_deref().and_then(|s| s.trim().parse::<usize>().ok());
+            let apport = n.and_then(|n| vue.memory.as_ref().and_then(|m| crate::memory::nth_apport(m, n)));
+            match (n, apport) {
+                (None, _) => vue.note("/turns <n> : le numéro d'un L1 de /memory"),
+                (Some(n), None) => vue.note(&format!("/turns {n} : pas de L1 {n} (/memory les liste)")),
+                (Some(n), Some(apport)) => match client::poster(agent, ep, "/ide/turns/read", &json!({ "backend": tache.depot.id, "apport": apport })) {
+                    Ok(v) => {
+                        let range = vue.memory.as_ref().map(|m| crate::memory::range(&m["l1"][n - 1])).unwrap_or_default();
+                        vue.open_document(&format!("L1 {n} · {range}"), crate::memory::turns_lines(&v));
+                        let colorer = |texte: &str, langue: &str| if langue.is_empty() { None } else { client::surligner(agent, ep, texte, langue) };
+                        visionner(vue, &colorer)?;
+                    }
+                    Err(e) => vue.note(&format!("/turns {n} : {e}")),
+                },
+            }
+        }
         Commande::Nom(None) => vue.note(&match vue.nom_de_l_agent() {
             Some(n) => format!("l'agent de la tâche s'appelle « {n} » (/nom <x> le renomme)"),
             None => "l'agent n'a pas encore dit son nom (/nom <x> le nomme)".to_string(),
