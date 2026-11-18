@@ -430,3 +430,24 @@ fn a_tool_llm_node_needs_its_schema_and_call_models() {
     let e = attempt(true, false).err().expect("sans call_models, refusé");
     assert!(e.contains("call_models"), "le refus dit la ligne à ajouter : {e}");
 }
+
+/// **A relation is not named like an entity or another relation, case ignored** (ticket
+/// 2026-10-18, une relation au nom d'une entité casse au premier lien): the engine does not tell
+/// their tables apart by case, so `NOTE` next to an entity `Note` broke at the first link, far from
+/// the manifest. It is refused at load, naming both.
+#[test]
+fn manifest_refuses_relation_named_like_entity_case_insensitive() {
+    let (dir, mut m) = manifest();
+    m["relations"] = json!({"ONE": {"from": "One", "to": "Two"}});
+    let e = prepare(dir.path(), &m).err().expect("a relation named like an entity is refused");
+    assert!(e.contains("ONE") && e.contains("One"), "the refusal names both: {e}");
+
+    let (dir, mut m) = manifest();
+    m["relations"] = json!({"LINKS": {"from": "One", "to": "Two"}, "links": {"from": "Two", "to": "Three"}});
+    let e = prepare(dir.path(), &m).err().expect("two relations differing only by case are refused");
+    assert!(e.contains("LINKS") && e.contains("links"), "the refusal names both: {e}");
+
+    let (dir, mut m) = manifest();
+    m["relations"] = json!({"ONE_TO_TWO": {"from": "One", "to": "Two"}});
+    prepare(dir.path(), &m).unwrap_or_else(|e| panic!("a distinct relation name loads: {e}"));
+}
