@@ -517,6 +517,71 @@ pub struct Step {
     pub woke_by: Option<String>,
     /// Les outils de travail aboutis pendant ce pas (sans erreur), par leur nom.
     succeeded_tools: Mutex<Vec<String>>,
+    /// What the step did, for the next frontier (S2): `read <path> (lines a-b)`, `wrote <path>`,
+    /// and the last command with the end of its output.
+    work: Mutex<StepWork>,
+}
+
+/// What a step did with its work tools, kept for the next frontier (S2, 18 Nov 2026).
+#[derive(Default)]
+struct StepWork {
+    read: Vec<String>,
+    wrote: Vec<String>,
+    command: Option<(String, String)>,
+}
+
+/// The tools that write a file, by their name.
+const WRITING_TOOLS: [&str; 5] = ["write", "replace_text", "replace_lines", "insert_lines", "edit_file"];
+
+impl StepWork {
+    fn note(&mut self, tool: &str, args: &Value, result: &str) {
+        let path = args["path"].as_str().unwrap_or_default();
+        if tool == "read_file" && !path.is_empty() {
+            let from = args["offset"].as_u64().or(args["start_line"].as_u64()).unwrap_or(1);
+            let to = match (args["length"].as_u64(), args["end_line"].as_u64()) {
+                (Some(n), _) => format!("{}", from + n.max(1) - 1),
+                (None, Some(e)) => e.to_string(),
+                (None, None) => "end".to_string(),
+            };
+            let line = format!("{path} (lines {from}-{to})");
+            if !self.read.contains(&line) {
+                self.read.push(line);
+            }
+        } else if WRITING_TOOLS.contains(&tool) && !path.is_empty() {
+            if !self.wrote.iter().any(|p| p == path) {
+                self.wrote.push(path.to_string());
+            }
+        } else if tool == "run_command" {
+            let command = args["command"].as_str().unwrap_or_default().to_string();
+            let tail: String = { let c: Vec<char> = result.chars().collect(); c[c.len().saturating_sub(1500)..].iter().collect() };
+            self.command = Some((command, tail));
+        }
+    }
+
+    fn block(&self, number: usize, last_text: &str, budget: usize) -> String {
+        if self.read.is_empty() && self.wrote.is_empty() && self.command.is_none() && last_text.trim().is_empty() {
+            return String::new();
+        }
+        let mut b = format!("\n## Previous step (step {number})\n");
+        if !self.read.is_empty() {
+            b.push_str(&format!("Read: {}\n", self.read.join(", ")));
+        }
+        if !self.wrote.is_empty() {
+            b.push_str(&format!("Wrote: {}\n", self.wrote.join(", ")));
+        }
+        if let Some((c, out)) = &self.command {
+            b.push_str(&format!("Last command: {c}\nIts output ends with:\n{out}\n"));
+        }
+        if !last_text.trim().is_empty() {
+            b.push_str(&format!("Your last text: {}\n", last_text.trim()));
+        }
+        b.push_str("Lines you read in that step can be replaced now without reading them again.\n");
+        if b.chars().count() > budget {
+            let cut: String = b.chars().take(budget.saturating_sub(80)).collect();
+            b = format!("{cut}\n[Previous step cut at {budget} characters: teammate.carry_over_chars]\n");
+        }
+        b
+    }
 }
 
 impl Step {
@@ -537,6 +602,7 @@ impl Step {
             decided: Mutex::new(None),
             woke_by: None,
             succeeded_tools: Mutex::new(Vec::new()),
+            work: Mutex::new(StepWork::default()),
         }
     }
 
@@ -578,7 +644,15 @@ impl Step {
         let echec = v["ok"] == false || !v["error"].is_null();
         if !echec {
             self.succeeded_tools.lock().unwrap_or_else(|p| p.into_inner()).push(call.name.clone());
+            let args: Value = serde_json::from_str(&call.arguments).unwrap_or(Value::Null);
+            self.work.lock().unwrap_or_else(|p| p.into_inner()).note(&call.name, &args, &turn.content);
         }
+    }
+
+    /// The `Previous step` block of the next frontier: what this step read, wrote and ran, and
+    /// its last text, within `budget` characters.
+    pub fn carry_over(&self, last_text: &str, budget: usize) -> String {
+        self.work.lock().unwrap_or_else(|p| p.into_inner()).block(self.number, last_text, budget)
     }
 
     /// Les outils de travail aboutis pendant ce pas.
@@ -1427,6 +1501,8 @@ impl DaemonHost {
         let mut trace = false;
         let mut relancee: Option<usize> = None;
         let mut relance: Option<String> = None;
+        // What the last step did, carried to the next frontier (S2).
+        let mut previous_step = String::new();
         let mut attente_bornee: Option<std::time::Instant> = None;
         let request = files.mailbox().iter().find(|l| l["kind"] == "request").and_then(|l| l["text"].as_str()).unwrap_or_default().to_string();
         // `number` numérote les pas joués ; `counted` ne compte pas ceux qui
@@ -1521,6 +1597,7 @@ impl DaemonHost {
             if let Some(r) = relance.take() {
                 message.push_str(&format!("\n{r}\n"));
             }
+            message.push_str(&previous_step);
             let mut step = Step::new(files.clone(), task, &request, bus.clone(), number).with_policy(&policy);
             step.woke_by = woke_by.take();
             // **Un pas qui n'aboutit pas ne termine pas l'équipier** : l'échec va
@@ -1530,6 +1607,7 @@ impl DaemonHost {
                 Ok(r) => {
                     failed = 0;
                     unavailable = 0;
+                    previous_step = step.carry_over(r["text"].as_str().unwrap_or_default(), policy.carry_over_chars);
                     r
                 }
                 Err(e) if refus_du_fournisseur(&e).is_some() => {
