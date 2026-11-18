@@ -6,6 +6,7 @@
 //! `Rag3dbConnection::in_memory`, `HashEmbedder` of dimension 64), with the ingestion stages of
 //! `ingest_profile`. Memory: the process high-water mark (`VmHWM`) after each step, and the resident size.
 //! One tree per process, so that each peak is its own. `PROBE_GIT_FILES=1`: the files git tracks under the root.
+//! `PROBE_ANALYZE_ONLY=1`: stops after `analyze` (a tree whose form A would not fit the memory envelope).
 //!
 //! Run with: PROBE_ROOT=… cargo test --release --features rag3db-native,code --test probe_fallback_cost -- --ignored --nocapture
 
@@ -106,6 +107,9 @@ fn fallback_cost_of_one_tree() {
         analysis.skipped.len()
     );
 
+    if std::env::var_os("PROBE_ANALYZE_ONLY").is_some() {
+        return;
+    }
     let t = Instant::now();
     let mut cat = setup();
     let setup_ms = t.elapsed().as_millis();
