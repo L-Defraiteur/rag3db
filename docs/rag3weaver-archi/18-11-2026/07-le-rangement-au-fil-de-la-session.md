@@ -87,25 +87,50 @@ La part gabarit est décrite par mémoire. La part hôte :
    tours (`from`, `to`, et `chat` : la conversation de la tranche par défaut), rendue comme la
    tranche, bornée en caractères, en lecture seule. Il n'est offert qu'au pas de l'archiviste, et
    à aucun autre agent sans déclaration.
-9 bis. **`search_turns`, chercher avant de lire** (Lucie : « pas seulement relire, mais
-   chercher »). C'est un outil de l'hôte, au même accès que `read_turns`.
-   - **Ce qu'il fait** : il cherche sur les tours de la trace (`query`, `chat`, `limit`) et rend
-     des intervalles de tours (`from`, `to`, et un extrait autour du passage).
-   - **Lexical par défaut** : un index plein texte des tours, tenu par l'hôte à côté du
-     `ChatFile`, mis à jour à la fin de chaque tour. On regardera s'il vaut mieux lucivy en
-     mémoire ou un simple balayage borné.
-   - **Dense quand le run a un index** : les tranches déjà rangées ont leurs L1 dans la mémoire,
-     que `recall_apports` cherche par sens. `search_turns` y ajoute les tours qu'elles citent
-     (`turns a-b`).
-   - **Ce qu'il ne fait pas** : il n'embarque rien lui-même, et une trace sans index reste en
-     lexical.
+9 bis. **`search_turns`, chercher avant de lire : les tours eux-mêmes sont indexés au fil du run**
+   (Lucie : « pas seulement relire, mais chercher » ; « les L0, les vrais tours, doivent quand
+   même être indexés au fil de l'eau, avec un TTL »).
+   - **La Source de la trace.** La trace du run entre dans le memory déclaré comme une Source,
+     avec une section par tour (l'identité d'un Apport : la source et le tour). Son chemin est
+     `runs/<chat>/<jour>.md`.
+   - **Le plein texte, à chaque fin de tour** : la section du tour s'écrit et s'indexe en plein
+     texte. C'est local, par le writer du memory.
+   - **Le dense, par lot, à la fermeture de la tranche** : un appel au service d'embarquement de
+     la vue pour toute la tranche, jamais un embarquement par tour.
+   - **Le TTL** (`memory.l0_ttl_days`) purge les entrées d'index et les vecteurs des tours
+     anciens. Le `ChatFile` reste sur disque, et les L1 gardent leur intervalle de tours en
+     citation : `read_turns` marche toujours après la purge.
+   - **`search_turns`** devient un `recall_sources` ordinaire sur ces sections, filtré sur la
+     trace du run : il rend des intervalles de tours avec un extrait. L'archiviste cherche, puis
+     lit par `read_turns`.
 
-   L'archiviste cherche, puis lit par `read_turns`.
+   **Ce qui me gêne, et que la page de mémoire doit trancher.**
+   1. **Le L0 du gabarit est immuable, écrit une fois** (`archive` : « immuable, écrite une fois
+      les sections décidées »). Une Source qui gagne une section à chaque tour est donc une autre
+      espèce de Source : ajout seul, jamais réécrite. Il faut la nommer dans le gabarit (une
+      origine `run_trace` ?), sinon les deux contrats se contredisent.
+   2. **Le writer.** Le memory n'a qu'un rédacteur. L'écriture du tour, le rangement en fond et
+      l'archiviste en pas s'y succèdent : l'hôte les met en file sur le même writer, et une
+      écriture de tour ne doit jamais attendre un rangement de plusieurs minutes. Les tours
+      passent donc avant le rangement, qui se fait par petites transactions.
+   3. **Le coût au fil du run.** Le plein texte local à chaque fin de tour ne me gêne pas : une
+      section par tour, quelques Ko. Le dense par tranche, par le service de la vue, ne me gêne
+      pas non plus : un lot toutes les 50 k jetons. Mais il doit attendre sa fenêtre comme
+      l'équipier quand le service est saturé, sans bloquer le tour.
+   4. **Ce que la trace contient.** Les retours d'outils portent le code lu et des sorties de
+      commandes. Les indexer dans une mémoire durable, même sous TTL, doit rester débrayable
+      (`memory.index_turns`, éteint tant que Lucie ne l'allume pas pour un dépôt). Un fichier
+      exclu par les règles d'exclusion ne doit pas y entrer non plus.
+
 10. **La preuve en plus.** Faux modèle : le pas de l'archiviste appelle `read_turns` sur des
    tours d'avant sa tranche, puis range. Ses bornes l'arrêtent proprement. Débrayé, le graphe
    seul tourne.
 
-Cela agrandit le lot 1 : le pas et `read_turns` (une demi-journée), `search_turns` (une journée). Il passe à 3 jours au lieu de 1,5.
+Cela agrandit le lot 1 :
+- le pas et `read_turns` : une demi-journée ;
+- l'indexation des tours au fil du run (plein texte par tour, dense par tranche, TTL) et `search_turns` : 1,5 jour.
+
+Le lot 1 passe à 3,5 jours au lieu de 1,5.
 
 ## La preuve, rouge d'abord (demain)
 
