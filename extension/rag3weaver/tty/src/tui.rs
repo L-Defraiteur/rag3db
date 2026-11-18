@@ -601,7 +601,7 @@ pub fn modeles_dits(v: &Value) -> Vec<String> {
         out.push(format!("  ▸ {} (inconnu) — le choix de la tâche ne désigne plus aucun modèle déclaré", v["current"].as_str().unwrap_or("?")));
     }
     for m in modeles {
-        let acces: Vec<&str> = [m["provider"].as_str(), m["protocol"].as_str()].into_iter().flatten().collect();
+        let acces: Vec<&str> = [m["access"].as_str(), m["provider"].as_str()].into_iter().flatten().collect();
         let acces = if acces.is_empty() { String::new() } else { format!(" ({})", acces.join(", ")) };
         let mut marques = Vec::new();
         if m["current"] == true {
@@ -991,8 +991,8 @@ mod tests {
     #[test]
     fn model_lists_names_and_models_marking_the_default_and_the_current() {
         let v = json!({ "models": [
-            { "name": "rapide", "model": "gemini-3.8-flash", "provider": "compatible", "protocol": "vertex", "default": false, "current": true },
-            { "name": "fin", "model": "claude-opus-5-5", "provider": "compatible", "protocol": "anthropic", "default": true, "current": false }
+            { "name": "rapide", "model": "gemini-3.8-flash", "access": "compatible", "provider": "vertex", "default": false, "current": true },
+            { "name": "fin", "model": "claude-opus-5-5", "access": "compatible", "provider": "anthropic", "default": true, "current": false }
         ], "current": "rapide", "default": "fin" });
         assert_eq!(modeles_dits(&v), vec![
             "les modèles de la tâche (/model <nom> en change) :".to_string(),

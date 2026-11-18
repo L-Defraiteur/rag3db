@@ -10,7 +10,7 @@
   },
   "models": {
     "sparse": {
-      "provider": "service",
+      "access": "service",
       "model": "bge-m3"
     }
   },
