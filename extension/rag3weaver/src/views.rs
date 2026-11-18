@@ -8,6 +8,9 @@ use std::collections::BTreeSet;
 
 use serde_json::Value;
 
+/// The service under which a graph finds the [`ViewRequest`] of its call, when the call asked for one.
+pub const REQUESTED_VIEW_SERVICE: &str = "requested_view";
+
 /// Une vue demandée : la couche (son id stable) et le rang ; sans rang, la dernière génération publiée.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ViewRequest {

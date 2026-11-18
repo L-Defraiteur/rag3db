@@ -3448,12 +3448,14 @@ mod tests {
         services.register("catalog", Arc::new(Mutex::new(cat)));
         let files: Arc<dyn crate::code_tools::FileSource> = Arc::new(crate::code_tools::Snapshot::new("scan", Vec::<(String, String)>::new()));
         services.register(crate::code_tools::FILE_SOURCE_SERVICE, files);
+        // Under an explicit view (Lucie, 18 November 2026): without one, a never-indexed base scans.
+        services.register(crate::views::REQUESTED_VIEW_SERVICE, crate::views::ViewRequest { layer: "backend".into(), rank: None });
         let services = Arc::new(services);
         let mut ctx = NodeContext::with_services(services.clone());
         SearchSourceNode::new("source", "Origin", "needle", SearchOptions::default()).execute(&mut ctx).unwrap();
         let outputs = ctx.drain_outputs();
         let query = outputs["query"].downcast::<QueryPayload>().unwrap();
-        assert!(!query.scan, "auto must preserve the occurrence admission mask even for an empty index");
+        assert!(!query.scan, "under an explicit view, auto must preserve the occurrence admission mask even for an empty index");
         assert!(query.target.as_ref().unwrap().occurrence_projection.is_some());
         let mut ctx = NodeContext::with_services(services);
         let error = SearchSourceNode::new("source", "Origin", "needle", SearchOptions::default())
