@@ -169,6 +169,17 @@ mod tests {
         worker.join().unwrap();
         assert_eq!(actual, vec![vec![1., 2.], vec![3., 4.]]);
     }
+    /// **A `compatible` provider says the address it calls** (18 November 2026) :
+    /// without it, its embedding rate has no provenance and was refused. The
+    /// address is the base URL, without a trailing slash and without the
+    /// credentials a URL may carry : it becomes part of a catalog key.
+    #[test]
+    fn the_called_address_is_the_base_url_without_credentials() {
+        let e = HttpEmbedder::new("http://127.0.0.1:8080/v1/", "model", 2, None).unwrap();
+        assert_eq!(e.called_address().as_deref(), Some("http://127.0.0.1:8080/v1"));
+        let e = HttpEmbedder::new("https://user:secret@embed.example:443/v1", "model", 2, None).unwrap();
+        assert_eq!(e.called_address().as_deref(), Some("https://embed.example:443/v1"));
+    }
     #[test]
     fn indexed_response_is_reordered_and_invalid_batches_fail() {
         let e = HttpEmbedder::new("http://localhost/v1", "model", 2, None).unwrap();
