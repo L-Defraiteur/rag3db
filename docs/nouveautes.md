@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 18 novembre2026 — Le terminal de l'agent a ses commandes et ses options en anglais, à côté des françaises qui marchent toujours : `/help`, `/steps`, `/name`, `/task`, `/repo`, `/log`, `/clear`…, et `--repo`, `--task`, `--request`, `--log`, `--steps`… Tab complète maintenant l'argument de `/task` et de `/repo`.
+
 - 16 novembre2026 — **L'ordre des ex æquo tient aussi d'une base réécrite à une base neuve.** Deux résultats au même score se départagent par leur chemin, leur ligne et leur nom (une version par son identité de contenu), et non plus par un identifiant que la réécriture d'une ligne change. Une base qui a son histoire et un index neuf du même arbre rendent la même liste.
 
 - 16 novembre2026 — **Une fonction définie plusieurs fois donne le type de celle que le fichier importe.** `let host = hote(…); host.hosted()`, où `hote` existe dans quatre modules avec quatre types de retour, n'était relié à rien ; c'est maintenant la méthode du type que rend le `hote` importé. Sur rag3weaver, 86 appels de plus sont reliés par le type. **Toutes les bases repassent une fois** (`REGLES_DE_L_ANALYSE` monte à 7 ; pointeur codeparsers : le module du retour, `bd13385`).

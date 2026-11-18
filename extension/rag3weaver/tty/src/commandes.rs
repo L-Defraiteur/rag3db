@@ -32,16 +32,25 @@ pub enum Commande {
 
 /// Les commandes `/`, avec leur aide, dans l'ordre de `/aide`.
 pub const COMMANDES: &[(&str, &str)] = &[
+    ("help", "les touches et les commandes (ancien : /aide)"),
     ("aide", "les touches et les commandes"),
+    ("stop", "arrête l'équipier (comme Ctrl-G) (ancien : /arreter)"),
     ("arreter", "arrête l'équipier (comme Ctrl-G)"),
     ("context", "le remplissage du contexte du modèle de l'équipier"),
+    ("repo", "<nom> : passe à un autre dépôt (ancien : /depot)"),
     ("depot", "<nom> : passe à un autre dépôt"),
+    ("clear", "efface l'écran visible ; « /clear history » efface l'historique des envois (ancien : /effacer)"),
     ("effacer", "efface l'écran visible ; « /effacer historique » efface l'historique des envois"),
+    ("steps", "montre ou cache dans l'historique les appels d'outil et les étapes de l'équipier (ancien : /etapes)"),
     ("etapes", "montre ou cache dans l'historique les appels d'outil et les étapes de l'équipier"),
+    ("log", "où relire la séance (ancien : /journal)"),
     ("journal", "où relire la séance"),
     ("model", "<nom> : change le modèle de la tâche ; seul, les modèles déclarés"),
+    ("name", "<x> : nomme l'agent de la tâche ; seul, son nom ; « /nom - » reprend celui du dépôt (ancien : /nom)"),
     ("nom", "<x> : nomme l'agent de la tâche ; seul, son nom ; « /nom - » reprend celui du dépôt"),
+    ("quit", "quitte le terminal (ancien : /quitter)"),
     ("quitter", "quitte le terminal"),
+    ("task", "<nom> : passe à une autre tâche (ancien : /tache)"),
     ("tache", "<nom> : passe à une autre tâche"),
     ("theme", "<nom> : change de thème"),
 ];
@@ -59,19 +68,21 @@ pub fn lire(texte: &str) -> (Option<Commande>, Option<String>) {
         let arg: Vec<&str> = mots.collect();
         let arg = (!arg.is_empty()).then(|| arg.join(" "));
         let c = match nom {
-            "aide" => Commande::Aide,
-            "quitter" => Commande::Quitter,
-            "arreter" => Commande::Arreter,
+            "aide" | "help" => Commande::Aide,
+            "quitter" | "quit" => Commande::Quitter,
+            "arreter" | "stop" => Commande::Arreter,
             "theme" => Commande::Theme(arg),
-            "tache" => Commande::Tache(arg),
-            "depot" => Commande::Depot(arg),
-            "journal" => Commande::Journal,
+            "tache" | "task" => Commande::Tache(arg),
+            "depot" | "repo" => Commande::Depot(arg),
+            "journal" | "log" => Commande::Journal,
+            "clear" if arg.as_deref() == Some("history") => Commande::EffacerHistorique,
+            "clear" => Commande::Effacer,
             "effacer" if arg.as_deref() == Some("historique") => Commande::EffacerHistorique,
             "effacer" => Commande::Effacer,
             "context" | "contexte" => Commande::Contexte,
-            "etapes" => Commande::Etapes,
+            "etapes" | "steps" => Commande::Etapes,
             "model" | "modele" => Commande::Modele(arg),
-            "nom" => Commande::Nom(arg),
+            "nom" | "name" => Commande::Nom(arg),
             autre => Commande::Inconnue(autre.to_string()),
         };
         return (Some(c), None);
@@ -147,10 +158,11 @@ pub fn completer(texte: &str, s: &Sources) -> Option<Completion> {
             let nom = reste.split_whitespace().next().unwrap_or_default();
             let liste = match nom {
                 "theme" => s.themes.clone(),
-                "tache" => s.taches.clone(),
-                "depot" => s.depots.clone(),
+                "tache" | "task" => s.taches.clone(),
+                "depot" | "repo" => s.depots.clone(),
                 "model" => s.modeles.clone(),
                 "effacer" => vec!["historique".to_string()],
+                "clear" => vec!["history".to_string()],
                 _ => return None,
             };
             let (m, c) = completer_mot(mot, &liste, false)?;
