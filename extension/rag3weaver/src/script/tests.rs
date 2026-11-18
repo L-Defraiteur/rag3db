@@ -328,3 +328,23 @@ fn rhai_messages_are_unchanged() {
     .unwrap_err();
     assert_eq!(err.to_string(), "Rhai input or host limit invalid/exceeded");
 }
+
+/// **The secret filter of put_turn** (18 November 2026): a host function, `mask_secrets`, masks
+/// the known shapes of a secret (provider keys, tokens, a PEM private key, a Bearer header) and
+/// counts them; an ordinary word that only starts like one is kept.
+#[test]
+fn rhai_masks_known_secret_shapes_and_counts_them() {
+    let text = "key sk-ant-api03-AbCdEf0123456789xyzXYZ0123, then ghp_0123456789abcdefABCDEF0123456789abcd \
+and AKIAIOSFODNN7EXAMPLE; Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.abcdefghijklmnop\n\
+-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAA\n-----END OPENSSH PRIVATE KEY-----\n\
+ordinary words: sk-short, hf_ alone, a risk-free plan.";
+    let out = evaluate("rhai", "mask_secrets(input.text)", &json!({"text": text}), &limits())
+        .unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(out["count"], json!(5), "{out}");
+    let masked = out["text"].as_str().unwrap();
+    for secret in ["AbCdEf0123456789", "0123456789abcdefABCDEF", "IOSFODNN7EXAMPLE", "eyJhbGciOiJIUzI1NiJ9", "b3BlbnNzaC1rZXktdjEAAAA"] {
+        assert!(!masked.contains(secret), "{secret} stays: {masked}");
+    }
+    assert_eq!(masked.matches("[masked secret]").count(), 5, "{masked}");
+    assert!(masked.contains("sk-short") && masked.contains("hf_ alone") && masked.contains("risk-free"), "{masked}");
+}
