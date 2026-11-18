@@ -1,6 +1,6 @@
 # `banc_etage_qui_perd` tombe à son installation : changement d'index public refusé
 
-- **État** : corrigé en branche le 18 novembre 2026 (`cx-memoire-banc-etage`, 65960ae7a), vert sur la lib 3d706f709 ; à fermer à son atterrissage. **Le diagnostic d'origine était faux**, voir « Diagnostic corrigé ».
+- **État** : ouvert, le correctif est en branche depuis le 18 novembre 2026 (`cx-memoire-banc-etage`, 65960ae7a), vert sur la lib 3d706f709 ; il se ferme à son atterrissage. **Le diagnostic d'origine était faux**, voir « Diagnostic corrigé ».
 - **Famille** : produit. Le défaut est dans un banc e2e du crate, pas dans le catalogue : c'est la
   règle du catalogue qui a raison, et le banc qui ne la suit pas.
 - **Gravité** : un banc de la batterie est rouge sur master à chaque passe qui le joue. Il est rouge
