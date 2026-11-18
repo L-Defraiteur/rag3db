@@ -17,6 +17,9 @@ mesure.
 
 La même tête, reposée sur 411be25cb2, est repassée à 14 h 03 : 45/45.
 
+**Deuxième occurrence, le même jour** : recherche l'a vu rougir à l'identique, même ligne et même assertion. C'était
+le seul rouge de la passe de `view-lag-2` (895a584016), un lot qui ne touche pas le chat.
+
 ## Ce qu'il faut pour le fermer
 
 Rejouer le témoin en boucle sous charge (des lourds en parallèle) jusqu'à le voir rouge. Puis départager :
