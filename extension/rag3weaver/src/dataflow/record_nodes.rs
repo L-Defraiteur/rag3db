@@ -1018,7 +1018,7 @@ fn copier_les_liens(
     resolved: &[ResolvedLink],
     items: &[RelationRecord],
     presents_connus: &mut HashMap<String, HashSet<String>>,
-) -> Result<Option<Vec<usize>>, String> {
+) -> Result<Option<(Vec<usize>, Vec<usize>)>, String> {
     // **Les colonnes du COPY** : celles que le groupe fournit, puis les autres
     // propriétés déclarées de la relation, au mot NULL convenu. Sans liste, le
     // moteur attend toutes les colonnes de la table (« expected 12 values per
@@ -1140,16 +1140,18 @@ fn copier_les_liens(
     // sautait la paire déjà là : une mention `CONSUMES` puis `INHERITS_FROM`
     // (la clause d'héritage, poussée après la référence) restait `CONSUMES`, et
     // la résolution posait `CONSUMES` au lieu de l'héritage. Une paire déjà là
-    // avec des propriétés à écrire renvoie donc le groupe au chemin par lots ;
-    // et le dédoublonnage parcourt le groupe à rebours.
-    if !prop_keys.is_empty()
-        && indices.iter().any(|&ri| deja.get(resolved[ri].from_uuid.as_str()).is_some_and(|tos| tos.contains(resolved[ri].to_uuid.as_str())))
-    {
-        if profil {
-            eprintln!("[link-profile] {rel_name} : des paires déjà en base reçoivent leurs propriétés : chemin par lots");
-        }
-        return Ok(None);
-    }
+    // avec des propriétés à écrire va donc au chemin par lots ; et le
+    // dédoublonnage parcourt le groupe à rebours.
+    // **Seules ces paires-là** (18 novembre 2026, ticket
+    // `2026-11-18-la-pose-des-liens-de-la-resolution-repasse-par-merge`) : une seule paire déjà en
+    // base renvoyait tout le groupe au MERGE, 64 979 paires et 4,4 s sur rag3weaver/src. Les paires
+    // neuves partent par COPY ; celles qui sont déjà en base, toutes leurs occurrences, sont rendues
+    // à l'appelant pour le chemin par lots, qui leur donne la valeur de leur dernière occurrence.
+    let a_merger: Vec<usize> = if prop_keys.is_empty() {
+        Vec::new()
+    } else {
+        indices.iter().copied().filter(|&ri| deja.get(resolved[ri].from_uuid.as_str()).is_some_and(|tos| tos.contains(resolved[ri].to_uuid.as_str()))).collect()
+    };
     let mut vues: HashSet<(&str, &str)> = HashSet::with_capacity(indices.len());
     let mut ecrites = 0usize;
     let mut ecrites_indices: Vec<usize> = Vec::new();
@@ -1196,9 +1198,10 @@ fn copier_les_liens(
     let _ = std::fs::remove_file(&chemin);
     if profil {
         eprintln!(
-            "[link-profile] {rel_name} : {} arêtes, {} déjà là ou en double, {absents} sans bout, {bouts_prouves} bouts prouvés, existence {} ms, csv {} ms, COPY {} ms{}",
+            "[link-profile] {rel_name} : {} arêtes, {} déjà là ou en double, {} déjà là à mettre à jour par lots, {absents} sans bout, {bouts_prouves} bouts prouvés, existence {} ms, csv {} ms, COPY {} ms{}",
             ecrites,
-            indices.len() - ecrites - absents,
+            indices.len() - ecrites - absents - a_merger.len(),
+            a_merger.len(),
             t_existence.as_millis(),
             t_csv.as_millis(),
             t1.elapsed().as_millis(),
@@ -1207,10 +1210,11 @@ fn copier_les_liens(
     }
     resultat?;
     ctx.metric("copied", ecrites as f64);
-    ctx.metric("already_linked", (indices.len() - ecrites - absents) as f64);
+    ctx.metric("already_linked", (indices.len() - ecrites - absents - a_merger.len()) as f64);
+    ctx.metric("to_update_by_batch", a_merger.len() as f64);
     ctx.metric("dangling", absents as f64);
     ctx.metric("proven_ends", bouts_prouves as f64);
-    Ok(Some(ecrites_indices))
+    Ok(Some((ecrites_indices, a_merger)))
 }
 
 impl Node for LinkRecordNode {
@@ -1375,11 +1379,13 @@ impl Node for LinkRecordNode {
             // les paires déjà posées écartées quand la table n'est pas vide.
             // L'état d'une référence doit aussi être mis à jour sur les paires
             // existantes ; le COPY écarte ces paires, le MERGE les met à jour.
+            // Les paires que le COPY rend au chemin par lots (déjà en base, des propriétés à écrire).
+            let mut reste_par_lots: Option<Vec<usize>> = None;
             let reference_state = prop_keys.iter().any(|p| p == crate::config::DerivedConfig::RENDER_HASH);
             if indices.len() >= copy_seuil(ctx) && !reference_state {
                 if let Some((from, to)) = ends.as_ref() {
                     match copier_les_liens(ctx, conn.as_ref(), dialect.as_ref(), rel_name, (from, to), prop_keys, indices, &resolved, &items, &mut presents_connus) {
-                        Ok(Some(ecrites_ici)) => {
+                        Ok(Some((ecrites_ici, a_merger))) => {
                             // Le journal ne note que les paires écrites : une
                             // paire reposée n'est pas un lien neuf.
                             if journalisee {
@@ -1391,13 +1397,21 @@ impl Node for LinkRecordNode {
                                     crees.entry(rel_name.clone()).or_default().push((de.clone(), vers.clone()));
                                 }
                             }
+                            // Les paires rendues au chemin par lots s'y résolvent.
+                            let par_lots: HashSet<usize> = a_merger.iter().copied().collect();
                             for &ri in indices {
+                                if par_lots.contains(&ri) {
+                                    continue;
+                                }
                                 let rl = &resolved[ri];
                                 if let Some(resolver) = items[rl.index].take_resolver() {
                                     resolver.resolve(rl.from_uuid.clone(), rl.to_uuid.clone());
                                 }
                             }
-                            continue;
+                            if a_merger.is_empty() {
+                                continue;
+                            }
+                            reste_par_lots = Some(a_merger);
                         }
                         Ok(None) => {}
                         Err(cause) if conn.must_reopen().is_some() => {
@@ -1410,6 +1424,7 @@ impl Node for LinkRecordNode {
                 }
             }
 
+            let indices: &Vec<usize> = reste_par_lots.as_ref().unwrap_or(indices);
             // **Par tranches.** Un seul UNWIND de 225 000 éléments prenait
             // 97 s là où 30 000 en prenaient 1,2 s : superlinéaire au-delà de
             // quelques dizaines de milliers (6 septembre 2026, cœur C++ de
