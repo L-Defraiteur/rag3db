@@ -660,7 +660,8 @@ impl DaemonHost {
         self.publier_l_etat_du_chat(backend_id, depuis, &run_id, &resultat);
         // The session archived as it goes (the teammate's steps come with the next lot).
         if step.is_none() {
-            self.ranger_apres_le_tour(&hosted, backend_id, depuis);
+            let turns = self.chats.lock().unwrap_or_else(|p| p.into_inner()).get(backend_id).map(|e| e.session.turns.clone()).unwrap_or_default();
+            self.ranger_apres_le_tour(&hosted, backend_id, depuis, turns);
         }
         resultat
     }
