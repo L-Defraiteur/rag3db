@@ -11,7 +11,9 @@ fn turn_blocks(text) {
     for line in text.split("\n") {
         if line.starts_with("## turn ") {
             if current != () { blocks[current] = buf; }
-            let n = parse_int(line.sub_string(8).trim_text());
+            let num = line.sub_string(8);
+            num.trim();
+            let n = parse_int(num);
             current = n.to_string();
             order.push(n);
             buf = line + "\n";
@@ -22,7 +24,6 @@ fn turn_blocks(text) {
     if current != () { blocks[current] = buf; }
     #{ blocks: blocks, order: order }
 }
-fn trim_text(s) { let t = s; t.trim(); t }
 let x = input.value;
 if x == () || x.topics == () { throw "archive_slice : the extraction returned no topics"; }
 let tb = turn_blocks(input.contenu);
