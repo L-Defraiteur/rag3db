@@ -67,3 +67,10 @@ rag3db-garde ; avant = master, codeparsers `6291939`) :
 | src/ du moteur | 19 057 | 0 | 0 |
 
 Le nombre de scopes ne change pas, et aucun couple CONSUMES ne naît ni ne part, sur aucun des quatre.
+
+## Confirmé sur une vraie base, 18 novembre 2026
+
+La mesure du banc sous le manifeste de Lucie (`docs/banc/18-11-2026/02-la-pile-de-codeparsers-sous-le-manifeste-de-lucie.md`,
+698efc4f3a ; arbre 1de1f86d88, index neuf par le master du 18, lib 3d706f709) retrouve reliées par leur fichier les
+27 lambdas Python et la lambda de spdlog que l'index du 16 laissait sans `DEFINED_IN`.
+
