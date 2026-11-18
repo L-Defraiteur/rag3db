@@ -1,6 +1,6 @@
 # `provider` et `protocol` : les mots d'un modèle déclaré sont à l'envers de l'usage
 
-- **État** : ouvert (15 novembre 2026). Demande de Lucie : « il faut être cohérent sur les wording ». Après l'atterrissage de `models.llm` en liste (2b3340520), et avec lui si le lot n'est pas encore poussé.
+- **État** : fermé (18 novembre 2026, ED) — un modèle déclaré se lit et s'écrit avec `access` et `provider` (`ModelSourceWire`, `TryFrom`) ; l'ancienne forme (`provider` pour la manière, `protocol` pour le fournisseur) se lit jusqu'au 29 novembre 2026, un mélange des deux est refusé en nommant les deux mots. Les champs Rust gardent leurs noms (règle : pas de renommage du code existant). Gabarit `templates/backends/code/backend.json`, README, la liste de `/model` (`access`, `provider`) et sa lecture par tty dans la forme neuve. Témoin `model_source::tests::modeles_de_langage::access_and_provider_read_like_the_old_provider_and_protocol`, ROUGE sur 7a585adc24 (`unknown field access`), vert avec le correctif. **Reste** : le retrait des alias, en lot à part, après le 29 novembre ; les manifestes de Lucie hors du dépôt sont à c7.
 - **Famille** : produit
 - **Gravité** : planification. Aucune panne : un vocabulaire qui trompe celui qui écrit un manifeste et celui qui lit `/model`.
 - **Atteignable en service** : non, c'est un choix de noms.
