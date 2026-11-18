@@ -94,7 +94,9 @@ heures de travail.
 
 ### Entrée 2. Ranger le juge de parité sur master
 
-- **Ticket** : `docs/banc/tickets/2026-11-16-ranger-le-juge-de-parite-de-search-code-sur-master.md`
+**Fait par banc le 18 novembre**, ticket fermé : sur master en 1cd1845303 et 918a09f88f.
+
+- **Ticket** : `docs/tickets/closed/2026-11-16-ranger-le-juge-de-parite-de-search-code-sur-master.md`
 - **À faire** : une branche `cx-banc-juge-de-parite` depuis master, qui reprend quatre éléments de
   `banc-parite-search-code` : la sonde, le comparateur, le jeu et l'entrée `[[test]]`. Elle les fait
   compiler sur master, avec un témoin du comparateur.
@@ -110,7 +112,9 @@ heures de travail.
 
 ### Entrée 3. La tolérance de score dans le comparateur
 
-- **Ticket** : `docs/banc/tickets/2026-11-16-la-tolerance-de-score-dans-le-comparateur-de-parite.md`
+**Fait par banc le 18 novembre**, ticket fermé : sur master en 5da078924a.
+
+- **Ticket** : `docs/tickets/closed/2026-11-16-la-tolerance-de-score-dans-le-comparateur-de-parite.md`
 - **À faire** :
   - `--score-tolerance` dans `parite_search_code.py` ;
   - un script neuf `scripts/vector_parity.py`, repris de `~/.cache/rag3weaver-build/vec-cmp.py`

@@ -1,6 +1,9 @@
 # Ranger le juge de parité de search_code sur master
 
-- **État** : ouvert.
+- **État** : fermé (18 novembre 2026, banc) — le juge est sur master : 1cd1845303 (la sonde, le comparateur, le jeu de
+  30 cas, l'entrée `[[test]]`) et 918a09f88f (la feature `daemon` exigée). Le témoin du comparateur a été vu rouge,
+  puis il est joué par `check_features`. Un relevé réel de B′ a été rejoué par la branche telle quelle. Rejeu de passe
+  VERT (e2e_code 36/36, check_features 8/8, lib 2 631).
 - **Famille** : produit
 - **Gravité** : moyenne. Le juge qui a servi à toutes les parités du 14 au 16 novembre ne vit que
   sur une branche à 1 400 commits de retard. Chaque mesure le recopie à la main dans un worktree.

@@ -1,6 +1,9 @@
 # La tolérance de score dans le comparateur de parité
 
-- **État** : ouvert ; après le ticket `2026-11-16-ranger-le-juge-de-parite-de-search-code-sur-master.md`.
+- **État** : fermé (18 novembre 2026, banc) — sur master en 5da078924a : `--score-tolerance` dans le comparateur et
+  `scripts/vector_parity.py`, leurs témoins vus rouges et joués par `check_features`. Sur les vrais relevés : neuf
+  contre élagué ROUGE sans option, VERT à 1e-5 ; les vecteurs de A contre B′ VERT (cosinus minimal 0,999999908).
+  La preuve de parité des services reste à embarquement, qui reprend le script.
 - **Famille** : produit
 - **Gravité** : faible. Aujourd'hui, une parité entre deux bases embarquées à des moments
   différents dit ROUGE pour des scores qui ne diffèrent qu'à la cinquième décimale.
