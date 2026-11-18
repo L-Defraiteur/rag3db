@@ -1869,6 +1869,20 @@ fn une_erreur_du_modele_garde_les_actions_du_chat_et_permet_la_reprise() {
     let action = "!!document.querySelector('.outil[data-outil=read_file]') && document.querySelector('.outil[data-outil=read_file]').textContent.includes('fn main()')";
     // The tool card and the error status come by two pushes: under load (four heavy passes at
     // luciepc, 18 Nov 2026) the status was shown first. Wait for the card, bounded.
+    // What the host kept of the turn, printed for a red (stdout is shown on failure): the roles
+    // of the session's turns and whether the tool result holds the file.
+    {
+        let mut r = crate::daemon::agent_de_temoin()
+            .get(format!("{racine}/ide/chat?backend={id}"))
+            .header("Cookie", "rag3weaver_ide=j")
+            .call()
+            .unwrap();
+        let v: Value = serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap();
+        let turns = v["result"]["turns"].as_array().cloned().unwrap_or_default();
+        let roles: Vec<String> = turns.iter().map(|t| format!("{}{}", t["role"].as_str().unwrap_or("?"), if t["role"] == "tool" { format!("({})", t["content"].as_str().is_some_and(|c| c.contains("fn main()"))) } else { String::new() })).collect();
+        println!("HOST TURNS after the error: {roles:?}");
+        println!("PAGE ITEMS: {}", n.evaluer("[...document.querySelectorAll('.outil')].map(e => e.dataset.outil + ':' + (e.dataset.ok ?? 'none') + ':' + e.textContent.length).join(' | ')"));
+    }
     n.attendre(action, "une panne n'efface pas la lecture déjà exécutée");
     let proposes = vus.lock().unwrap().first().cloned().unwrap();
     println!("INVENTAIRE navigateur dépôt hors tâche : {proposes:?}");
