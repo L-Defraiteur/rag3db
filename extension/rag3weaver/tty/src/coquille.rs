@@ -267,6 +267,37 @@ mod tests {
         assert!(!c.contains("s3cr3t") && c.contains("lu 16 caractères") && c.contains("(code 0)"), "{c}");
     }
 
+    /// **A password typed before the prompt never reaches the kept output** (ticket of 15 nov.): typed while
+    /// the echo is still on, the pty echoes it to the screen like any terminal, but what is typed is never
+    /// kept; the command still reads it, and its own output is kept.
+    #[test]
+    fn a_password_typed_before_the_prompt_never_reaches_the_kept_output() {
+        let fake_sudo = "sleep 0.3; stty -echo; printf 'Mot de passe : '; read p; stty echo; echo; echo \"lu ${#p} caractères\"";
+        let mut screen = Vec::new();
+        let e = tube(b"s3cr3t-tres-long\n", 0);
+        let r = lancer(fake_sudo, Path::new("/"), 80, 24, e, &mut screen).unwrap();
+        unsafe { close(e) };
+        let kept = String::from_utf8_lossy(&r.sortie);
+        assert!(kept.contains("Mot de passe :") && kept.contains("lu 16 caractères"), "the command read it: {kept:?}");
+        assert!(!kept.contains("s3cr3t"), "the password typed early is in the kept output: {kept:?}");
+        let c = consigne(fake_sudo, Path::new("/"), &r);
+        assert!(!c.contains("s3cr3t"), "{c}");
+    }
+
+    /// What is typed while the echo is on is shown, not kept; the command's own output is kept whole.
+    #[test]
+    fn what_is_typed_is_shown_but_not_kept() {
+        let mut screen = Vec::new();
+        let e = tube(b"oui\n", 200);
+        let r = lancer("printf 'Continuer ? '; read a; echo \"réponse : $a\"", Path::new("/"), 80, 24, e, &mut screen).unwrap();
+        unsafe { close(e) };
+        let kept = String::from_utf8_lossy(&r.sortie).replace('\r', "");
+        let shown = String::from_utf8_lossy(&screen).replace('\r', "");
+        assert!(shown.contains("Continuer ? oui\n"), "the echo is on the screen: {shown:?}");
+        assert!(kept.contains("Continuer ? ") && kept.contains("réponse : oui"), "{kept:?}");
+        assert!(!kept.contains("Continuer ? oui"), "the typed answer is not kept: {kept:?}");
+    }
+
     /// La sortie pour l'équipier : sans couleurs, curseur ni retours chariot, et
     /// coupée au milieu quand elle est trop longue.
     #[test]
