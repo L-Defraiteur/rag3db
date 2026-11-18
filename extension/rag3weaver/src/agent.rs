@@ -2379,6 +2379,46 @@ mod tests {
     /// `confirm_pause` — pas une réplique, donc rien qui appelle une réponse,
     /// et c'est ce qui tue la boucle de politesses ; et une pause sans raison
     /// est refusée.
+    /// **The reason of each model refusal is kept** (ticket 2026-11-09, le code d'un refus du
+    /// modèle n'est gardé nulle part): `LlmCall` only counted `retries`, while each `RetryEvent`
+    /// carries why (« HTTP 429 »), how long and whether the wait came from the provider. The
+    /// event keeps one entry per scheduled retry; the `Waiting` ticks are not logged.
+    #[test]
+    fn llm_call_event_keeps_each_retry_reason_and_wait() {
+        let bus = crate::events::EventBus::new(64);
+        let cursor = bus.cursor(crate::events::topic::AGENT, "retry-witness");
+        let llm = CallbackLlm::new("refuses-then-answers", 4096, |turns, opts, sink| {
+            let retry = |phase, wait_ms: u64| RetryEvent {
+                phase,
+                attempt: 1,
+                max_attempts: 3,
+                wait: std::time::Duration::from_millis(wait_ms),
+                elapsed: std::time::Duration::ZERO,
+                reason: "HTTP 429",
+                from_server: true,
+            };
+            sink.on_retry(&retry(crate::llm::RetryPhase::Scheduled, 2000));
+            sink.on_retry(&retry(crate::llm::RetryPhase::Waiting, 1000));
+            MockLlm::new("ok").generate(turns, opts, sink)
+        });
+        let tools = toolbox(vec![]);
+        let agent = Agent::new(&llm, &tools).with_events(bus.clone()).with_run_id("retry-run");
+        let mut turns = vec![Turn::user("hello")];
+        let mut sink = StringSink::default();
+        agent.run(&mut turns, &mut sink).unwrap();
+
+        let rx = cursor.lock().unwrap();
+        let call = std::iter::from_fn(|| rx.try_recv().ok())
+            .map(|e| e.to_json())
+            .find(|j| j["kind"] == "LlmCall")
+            .expect("an LlmCall event");
+        assert_eq!(
+            call["retry_log"],
+            serde_json::json!([{"reason": "HTTP 429", "wait_ms": 2000, "from_server": true}]),
+            "one entry per scheduled retry: {call}"
+        );
+    }
+
     #[test]
     fn an_agent_can_fall_silent_and_the_peer_is_told_not_replied_to() {
         let bus = crate::events::EventBus::new(64);
