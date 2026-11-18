@@ -82,6 +82,11 @@ pub struct TeammatePolicy {
     /// (the host's chat turn defaults to 12 otherwise). At most 100. Default: 40.
     #[serde(default = "TeammatePolicy::max_model_calls_per_step_default")]
     pub max_model_calls_per_step: usize,
+    /// **The next step sees what the previous one did** (S2, 18 Nov 2026): the `Previous step`
+    /// block of the next frontier (files read with their range, files written, the last command
+    /// and the end of its output, the last text) is bounded by these characters. Default: 8 000.
+    #[serde(default = "TeammatePolicy::carry_over_chars_default")]
+    pub carry_over_chars: usize,
 }
 
 impl TeammatePolicy {
@@ -112,6 +117,9 @@ impl TeammatePolicy {
     fn max_model_calls_per_step_default() -> usize {
         40
     }
+    fn carry_over_chars_default() -> usize {
+        8_000
+    }
 }
 
 impl Default for TeammatePolicy {
@@ -126,6 +134,7 @@ impl Default for TeammatePolicy {
             step_context_tokens: Self::step_context_tokens_default(),
             max_tool_calls_per_step: Self::max_tool_calls_per_step_default(),
             max_model_calls_per_step: Self::max_model_calls_per_step_default(),
+            carry_over_chars: Self::carry_over_chars_default(),
         }
     }
 }
