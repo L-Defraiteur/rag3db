@@ -7031,7 +7031,11 @@ fn read_threads() -> u64 {
                 let t = std::time::Instant::now();
                 let mut derivations = self.derivations_pour_racine(entity_name, &uuids_ingeres);
                 derivations.extend(self.derivations_pour_voisine(entity_name, &uuids_ingeres));
-                if !derivations.is_empty() {
+                if !derivations.is_empty() && self.defer_derivations {
+                    // **Held back** (decision C): the debt goes to the base now, the rendering after the relations.
+                    self.marquer_la_dette_des_derivations(&derivations);
+                    self.deferred_derivations.extend(derivations);
+                } else if !derivations.is_empty() {
                     self.mettre_en_file_les_derivations_avec_dette(derivations);
                     kb_failed += self
                         .drainer(avec_embarquement, Self::decoupage_pour(exige), Some((entity_name, true)))
@@ -7491,8 +7495,15 @@ fn read_threads() -> u64 {
         if derivations.is_empty() {
             return;
         }
+        self.marquer_la_dette_des_derivations(&derivations);
+        self.mettre_en_file_les_derivations(derivations);
+    }
+
+    /// The debt of `derivations`, put in the base (`_render_hash` emptied, or the references marked pending in a
+    /// transaction), without queueing them: their rendering is owed, whoever drains them later.
+    fn marquer_la_dette_des_derivations(&mut self, derivations: &[crate::records::Derivation]) {
         let mut par_entite: BTreeMap<String, Vec<CypherValue>> = BTreeMap::new();
-        for d in &derivations {
+        for d in derivations {
             par_entite.entry(d.entity.clone()).or_default().push(CypherValue::String(d.root_uuid.clone()));
         }
         for (entite, uuids) in par_entite {
@@ -7512,7 +7523,6 @@ fn read_threads() -> u64 {
             }
         }
         self.peut_devoir_un_rendu = true;
-        self.mettre_en_file_les_derivations(derivations);
     }
 
     /// **La passe de rattrapage du rendu** (pas B du repli des KB) : les
@@ -8525,13 +8535,6 @@ fn read_threads() -> u64 {
         self.fresh_ingest.as_ref().is_some_and(|f| f.written.contains_key(entity_name))
     }
 
-    /// **Retenir la poussée des blobs du plein texte**, le temps d'une
-    /// première indexation : chaque poussée faisait réécrire toute la table
-    /// `_index_blobs` au point de reprise suivant (≈ 4 s chacun, mesuré par
-    /// la session cœur C++ le 4 octobre 2026). À n'allumer qu'avec la marque
-    /// durable posée ([`mark_fts_pending`](Self::mark_fts_pending)) : un arrêt
-    /// brutal laisse alors des lignes sans leur plein texte, et la marque le
-    /// dit.
     /// **Hold the derivations back** for the batches of a first index (the reference tools before the index,
     /// decision C of Lucie, 18 November 2026): the relations of the code do not read the derived entities, and
     /// draining them per batch kept the relations waiting (15 s of 42 on rag3weaver/src, 96 s of 196 on the whole
@@ -8542,12 +8545,23 @@ fn read_threads() -> u64 {
 
     /// **The derivations held back, drained now**, after the relations: turns the hold off and drains them like a
     /// batch would have. A no-op when nothing was held.
-    pub fn release_deferred_derivations(&mut self, _exige: crate::disponibilite::Disponibilites) -> FlushResult {
+    pub fn release_deferred_derivations(&mut self, exige: crate::disponibilite::Disponibilites) -> FlushResult {
         self.defer_derivations = false;
-        self.deferred_derivations.clear();
-        FlushResult::default()
+        let held = std::mem::take(&mut self.deferred_derivations);
+        if held.is_empty() {
+            return FlushResult::default();
+        }
+        self.mettre_en_file_les_derivations(held);
+        self.drainer(exige.dense() || exige.sparse(), Self::decoupage_pour(exige), None)
     }
 
+    /// **Retenir la poussée des blobs du plein texte**, le temps d'une
+    /// première indexation : chaque poussée faisait réécrire toute la table
+    /// `_index_blobs` au point de reprise suivant (≈ 4 s chacun, mesuré par
+    /// la session cœur C++ le 4 octobre 2026). À n'allumer qu'avec la marque
+    /// durable posée ([`mark_fts_pending`](Self::mark_fts_pending)) : un arrêt
+    /// brutal laisse alors des lignes sans leur plein texte, et la marque le
+    /// dit.
     pub fn defer_blob_push(&mut self, on: bool) {
         self.defer_blob_push = on;
     }
