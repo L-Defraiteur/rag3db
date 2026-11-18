@@ -41,3 +41,28 @@ du schéma de code en porte une, c'est la cause. Ce n'est pas vérifié : la rec
 - Voulue : `essai.js` et la démo disent la nouvelle réponse, et l'assertion « avant l'index » est
   réécrite. Régression : le balayage revient pour la `Scope` du code, rouge d'abord, et la rouge
   connue d'`essai.js` verdit.
+
+## Le départage (recherche, 18 novembre 2026)
+
+**La piste est la bonne.** La condition `has_source && !projected` vient de c67ca39c6 (11 novembre, « Isoler
+les files par cellule… »). Elle est **voulue** : son témoin `projected_search_never_falls_back_to_unmasked_files`
+(`dataflow/generic_search_nodes.rs`) dit « auto must preserve the occurrence admission mask even for an empty
+index ». Un balayage des fichiers ignore le masque d'admission des occurrences, et donc la vue d'un appel
+(2b-C).
+
+**Ce que ça coûte.** Depuis les versions de scope, la cible `Scope` du code porte une `occurrence_projection`
+sur toute base neuve. La règle supprime donc le balayage avant index pour **tout** backend de code, pas
+seulement pour une vue demandée. C'est ce que la démo et `bindings/nodejs/test/essai.js` voient.
+
+**La proposition, à trancher par Lucie, portée par c7** :
+- **Quand rien n'est encore indexé** (`text: never`) **et qu'aucune `view` n'est demandée**, le masque
+  d'admission n'existe pas encore : la seule vue possible est le worktree du backend, et ses fichiers sont
+  exactement ce que le balayage lit. Le balayage peut alors revenir, en le disant, comme avant ;
+- **sous une `view` explicite**, ou dès qu'un index existe, la règle de c67ca39c6 reste : pas de repli sur des
+  fichiers non masqués ;
+- les témoins : `projected_search_never_falls_back_to_unmasked_files` garde son cas sous vue et son refus du
+  mode `scan`. Un témoin neuf, rouge d'abord, attend : un backend de code neuf, sans index et sans vue,
+  `search_code` trouve un mot d'un fichier par balayage. La rouge connue d'`essai.js` verdit alors.
+
+**Sinon**, si Lucie garde la règle telle quelle : `essai.js` et la démo disent la réponse d'aujourd'hui
+(« jamais construit — lancez `index` avant de chercher »), avec embarquement.
