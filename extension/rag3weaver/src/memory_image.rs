@@ -8,7 +8,7 @@
 //! [`MemoryImage::index_field`] (a symbol by its name). [`MemoryImage::remove_file`] takes a file out, both directions
 //! of its relations included, and gives back the names of the symbols its nodes defined or mentioned, to resolve again.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::connection::CypherValue;
 
@@ -30,10 +30,76 @@ pub struct RemovedFile {
     pub symbol_names: BTreeSet<String>,
 }
 
+type Sym = u32;
+
+/// The strings of the image, each kept once.
+#[derive(Debug, Default)]
+struct Interner {
+    ids: HashMap<Box<str>, Sym>,
+    names: Vec<Box<str>>,
+}
+
+impl Interner {
+    fn intern(&mut self, s: &str) -> Sym {
+        if let Some(id) = self.ids.get(s) {
+            return *id;
+        }
+        let id = self.names.len() as Sym;
+        self.names.push(s.into());
+        self.ids.insert(s.into(), id);
+        id
+    }
+
+    fn get(&self, s: &str) -> Option<Sym> {
+        self.ids.get(s).copied()
+    }
+
+    fn name(&self, id: Sym) -> &str {
+        &self.names[id as usize]
+    }
+}
+
+/// A property value, its text interned.
+#[derive(Debug, Clone, PartialEq)]
+enum Compact {
+    Str(Sym),
+    Other(CypherValue),
+}
+
+#[derive(Debug)]
+struct Node {
+    table: Sym,
+    uuid: Sym,
+    file: Option<Sym>,
+    props: Vec<(Sym, Compact)>,
+    alive: bool,
+}
+
+#[derive(Debug)]
+struct Rel {
+    rel: Sym,
+    from: u32,
+    to: u32,
+    props: Vec<(Sym, Compact)>,
+    alive: bool,
+}
+
 /// The image. See the module.
 #[derive(Debug, Default)]
 pub struct MemoryImage {
-    _lot: (),
+    strings: Interner,
+    nodes: Vec<Node>,
+    rels: Vec<Rel>,
+    by_uuid: HashMap<Sym, u32>,
+    by_file: HashMap<Sym, Vec<u32>>,
+    by_table: HashMap<Sym, Vec<u32>>,
+    outgoing: HashMap<(Sym, u32), Vec<u32>>,
+    incoming: HashMap<(Sym, u32), Vec<u32>>,
+    /// The relations touching each node, either end, by node id.
+    touching: Vec<Vec<u32>>,
+    /// `(table, field)` → value → nodes.
+    indexes: HashMap<(Sym, Sym), HashMap<Sym, Vec<u32>>>,
+    symbol_table: Option<(Sym, Sym)>,
 }
 
 impl MemoryImage {
@@ -43,68 +109,290 @@ impl MemoryImage {
 
     /// The table of the symbols and the field of their name: [`remove_file`](Self::remove_file) gives back these
     /// names. Also indexes that field.
-    pub fn set_symbol_table(&mut self, _table: &str, _name_field: &str) {
-        unimplemented!("memory image: lot 2a")
+    pub fn set_symbol_table(&mut self, table: &str, name_field: &str) {
+        self.index_field(table, name_field);
+        self.symbol_table = Some((self.strings.intern(table), self.strings.intern(name_field)));
     }
 
     /// Index `table.field` (a text field) for [`find`](Self::find).
-    pub fn index_field(&mut self, _table: &str, _field: &str) {
-        unimplemented!("memory image: lot 2a")
+    pub fn index_field(&mut self, table: &str, field: &str) {
+        let key = (self.strings.intern(table), self.strings.intern(field));
+        if self.indexes.contains_key(&key) {
+            return;
+        }
+        let mut index: HashMap<Sym, Vec<u32>> = HashMap::new();
+        for id in self.by_table.get(&key.0).into_iter().flatten() {
+            let node = &self.nodes[*id as usize];
+            if let Some(Compact::Str(v)) = node.alive.then(|| prop(&node.props, key.1)).flatten() {
+                index.entry(*v).or_default().push(*id);
+            }
+        }
+        self.indexes.insert(key, index);
+    }
+
+    fn compact(&mut self, props: BTreeMap<String, CypherValue>) -> Vec<(Sym, Compact)> {
+        props
+            .into_iter()
+            .map(|(k, v)| {
+                let v = match v {
+                    CypherValue::String(t) => Compact::Str(self.strings.intern(&t)),
+                    other => Compact::Other(other),
+                };
+                (self.strings.intern(&k), v)
+            })
+            .collect()
+    }
+
+    fn expand(&self, props: &[(Sym, Compact)]) -> BTreeMap<String, CypherValue> {
+        props
+            .iter()
+            .map(|(k, v)| {
+                let v = match v {
+                    Compact::Str(t) => CypherValue::String(self.strings.name(*t).to_string()),
+                    Compact::Other(o) => o.clone(),
+                };
+                (self.strings.name(*k).to_string(), v)
+            })
+            .collect()
+    }
+
+    fn live(&self, uuid: &str) -> Option<u32> {
+        let id = *self.by_uuid.get(&self.strings.get(uuid)?)?;
+        self.nodes[id as usize].alive.then_some(id)
+    }
+
+    fn unindex(&mut self, id: u32) {
+        let (table, props) = {
+            let n = &self.nodes[id as usize];
+            (n.table, n.props.clone())
+        };
+        for ((t, field), index) in self.indexes.iter_mut() {
+            if *t != table {
+                continue;
+            }
+            if let Some(Compact::Str(v)) = prop(&props, *field) {
+                if let Some(ids) = index.get_mut(v) {
+                    ids.retain(|x| *x != id);
+                }
+            }
+        }
     }
 
     /// Insert a node, or replace the properties and file of the node of this uuid.
-    pub fn insert_node(&mut self, _table: &str, _uuid: &str, _file: Option<&str>, _props: BTreeMap<String, CypherValue>) {
-        unimplemented!("memory image: lot 2a")
+    pub fn insert_node(&mut self, table: &str, uuid: &str, file: Option<&str>, props: BTreeMap<String, CypherValue>) {
+        let table = self.strings.intern(table);
+        let uuid = self.strings.intern(uuid);
+        let file = file.map(|f| self.strings.intern(f));
+        let props = self.compact(props);
+        let id = match self.by_uuid.get(&uuid).copied() {
+            Some(id) => {
+                self.unindex(id);
+                let old_file = self.nodes[id as usize].file;
+                if let Some(f) = old_file {
+                    if let Some(ids) = self.by_file.get_mut(&f) {
+                        ids.retain(|x| *x != id);
+                    }
+                }
+                let was_alive = self.nodes[id as usize].alive;
+                let old_table = self.nodes[id as usize].table;
+                if was_alive && old_table != table {
+                    if let Some(list) = self.by_table.get_mut(&old_table) {
+                        list.retain(|x| *x != id);
+                    }
+                }
+                let n = &mut self.nodes[id as usize];
+                n.table = table;
+                n.file = file;
+                n.props = props;
+                n.alive = true;
+                if !was_alive || old_table != table {
+                    self.by_table.entry(table).or_default().push(id);
+                }
+                id
+            }
+            None => {
+                let id = self.nodes.len() as u32;
+                self.nodes.push(Node { table, uuid, file, props, alive: true });
+                self.touching.push(Vec::new());
+                self.by_uuid.insert(uuid, id);
+                self.by_table.entry(table).or_default().push(id);
+                id
+            }
+        };
+        if let Some(f) = file {
+            self.by_file.entry(f).or_default().push(id);
+        }
+        for ((t, field), index) in self.indexes.iter_mut() {
+            if *t != table {
+                continue;
+            }
+            if let Some(Compact::Str(v)) = prop(&self.nodes[id as usize].props, *field) {
+                index.entry(*v).or_default().push(id);
+            }
+        }
     }
 
     /// Insert a relation between two nodes of the image, as a MERGE: a pair `(rel, from, to)` already there takes
     /// the new properties (the last wins) and is not doubled. `false` when one end is missing.
-    pub fn insert_rel(&mut self, _rel: &str, _from: &str, _to: &str, _props: BTreeMap<String, CypherValue>) -> bool {
-        unimplemented!("memory image: lot 2a")
+    pub fn insert_rel(&mut self, rel: &str, from: &str, to: &str, props: BTreeMap<String, CypherValue>) -> bool {
+        let (Some(from), Some(to)) = (self.live(from), self.live(to)) else { return false };
+        let rel = self.strings.intern(rel);
+        let props = self.compact(props);
+        let existing = self
+            .outgoing
+            .get(&(rel, from))
+            .and_then(|ids| ids.iter().copied().find(|r| self.rels[*r as usize].to == to));
+        match existing {
+            Some(r) => self.rels[r as usize].props = props,
+            None => {
+                let r = self.rels.len() as u32;
+                self.rels.push(Rel { rel, from, to, props, alive: true });
+                self.outgoing.entry((rel, from)).or_default().push(r);
+                self.incoming.entry((rel, to)).or_default().push(r);
+                self.touching[from as usize].push(r);
+                if to != from {
+                    self.touching[to as usize].push(r);
+                }
+            }
+        }
+        true
     }
 
-    pub fn node(&self, _uuid: &str) -> Option<NodeView> {
-        unimplemented!("memory image: lot 2a")
+    pub fn node(&self, uuid: &str) -> Option<NodeView> {
+        let n = &self.nodes[self.live(uuid)? as usize];
+        Some(NodeView {
+            table: self.strings.name(n.table).to_string(),
+            uuid: self.strings.name(n.uuid).to_string(),
+            file: n.file.map(|f| self.strings.name(f).to_string()),
+            props: self.expand(&n.props),
+        })
+    }
+
+    fn follow(&self, map: &HashMap<(Sym, u32), Vec<u32>>, rel: &str, at: &str, out: bool) -> Vec<(String, BTreeMap<String, CypherValue>)> {
+        let (Some(rel), Some(at)) = (self.strings.get(rel), self.live(at)) else { return Vec::new() };
+        map.get(&(rel, at))
+            .into_iter()
+            .flatten()
+            .map(|r| &self.rels[*r as usize])
+            .filter(|r| r.alive)
+            .map(|r| {
+                let other = if out { r.to } else { r.from };
+                (self.strings.name(self.nodes[other as usize].uuid).to_string(), self.expand(&r.props))
+            })
+            .collect()
     }
 
     /// The relations `rel` leaving `from`: the uuid reached and the properties of the relation.
-    pub fn outgoing(&self, _rel: &str, _from: &str) -> Vec<(String, BTreeMap<String, CypherValue>)> {
-        unimplemented!("memory image: lot 2a")
+    pub fn outgoing(&self, rel: &str, from: &str) -> Vec<(String, BTreeMap<String, CypherValue>)> {
+        self.follow(&self.outgoing, rel, from, true)
     }
 
     /// The relations `rel` reaching `to`: the uuid it leaves and the properties of the relation.
-    pub fn incoming(&self, _rel: &str, _to: &str) -> Vec<(String, BTreeMap<String, CypherValue>)> {
-        unimplemented!("memory image: lot 2a")
+    pub fn incoming(&self, rel: &str, to: &str) -> Vec<(String, BTreeMap<String, CypherValue>)> {
+        self.follow(&self.incoming, rel, to, false)
+    }
+
+    fn uuids(&self, ids: impl IntoIterator<Item = u32>) -> Vec<String> {
+        ids.into_iter()
+            .filter(|id| self.nodes[*id as usize].alive)
+            .map(|id| self.strings.name(self.nodes[id as usize].uuid).to_string())
+            .collect()
     }
 
     /// The uuids of the nodes of `table` whose `field` is `value` (by its index when declared, else by a scan).
-    pub fn find(&self, _table: &str, _field: &str, _value: &CypherValue) -> Vec<String> {
-        unimplemented!("memory image: lot 2a")
+    pub fn find(&self, table: &str, field: &str, value: &CypherValue) -> Vec<String> {
+        let (Some(t), Some(f)) = (self.strings.get(table), self.strings.get(field)) else { return Vec::new() };
+        if let (Some(index), CypherValue::String(v)) = (self.indexes.get(&(t, f)), value) {
+            return match self.strings.get(v) {
+                Some(v) => self.uuids(index.get(&v).into_iter().flatten().copied()),
+                None => Vec::new(),
+            };
+        }
+        let wanted: Option<Compact> = match value {
+            CypherValue::String(v) => match self.strings.get(v) {
+                Some(v) => Some(Compact::Str(v)),
+                None => return Vec::new(),
+            },
+            other => Some(Compact::Other(other.clone())),
+        };
+        self.uuids(
+            self.by_table
+                .get(&t)
+                .into_iter()
+                .flatten()
+                .copied()
+                .filter(|id| prop(&self.nodes[*id as usize].props, f) == wanted.as_ref()),
+        )
     }
 
     /// The uuids of the nodes of `table` (all of them, in insertion order).
-    pub fn nodes_of_table(&self, _table: &str) -> Vec<String> {
-        unimplemented!("memory image: lot 2a")
+    pub fn nodes_of_table(&self, table: &str) -> Vec<String> {
+        let Some(t) = self.strings.get(table) else { return Vec::new() };
+        self.uuids(self.by_table.get(&t).into_iter().flatten().copied().filter(|id| self.nodes[*id as usize].table == t))
     }
 
-    pub fn nodes_of_file(&self, _path: &str) -> Vec<String> {
-        unimplemented!("memory image: lot 2a")
+    pub fn nodes_of_file(&self, path: &str) -> Vec<String> {
+        let Some(f) = self.strings.get(path) else { return Vec::new() };
+        self.uuids(self.by_file.get(&f).into_iter().flatten().copied())
     }
 
     /// Take `path` out: its nodes and all their relations, both directions.
-    pub fn remove_file(&mut self, _path: &str) -> RemovedFile {
-        unimplemented!("memory image: lot 2a")
+    pub fn remove_file(&mut self, path: &str) -> RemovedFile {
+        let mut removed = RemovedFile::default();
+        let Some(f) = self.strings.get(path) else { return removed };
+        let ids: Vec<u32> = self.by_file.remove(&f).unwrap_or_default().into_iter().filter(|id| self.nodes[*id as usize].alive).collect();
+        let mut rels: Vec<u32> = ids.iter().flat_map(|id| self.touching[*id as usize].iter().copied()).filter(|r| self.rels[*r as usize].alive).collect();
+        rels.sort_unstable();
+        rels.dedup();
+        for r in &rels {
+            let (rel, from, to) = (self.rels[*r as usize].rel, self.rels[*r as usize].from, self.rels[*r as usize].to);
+            for end in [from, to] {
+                let n = &self.nodes[end as usize];
+                if let Some((table, field)) = self.symbol_table {
+                    if n.table == table {
+                        if let Some(Compact::Str(name)) = prop(&n.props, field) {
+                            removed.symbol_names.insert(self.strings.name(*name).to_string());
+                        }
+                    }
+                }
+            }
+            self.rels[*r as usize].alive = false;
+            if let Some(list) = self.outgoing.get_mut(&(rel, from)) {
+                list.retain(|x| x != r);
+            }
+            if let Some(list) = self.incoming.get_mut(&(rel, to)) {
+                list.retain(|x| x != r);
+            }
+            for end in [from, to] {
+                self.touching[end as usize].retain(|x| x != r);
+            }
+        }
+        for id in &ids {
+            self.unindex(*id);
+            self.nodes[*id as usize].alive = false;
+            let t = self.nodes[*id as usize].table;
+            if let Some(list) = self.by_table.get_mut(&t) {
+                list.retain(|x| x != id);
+            }
+        }
+        removed.nodes = ids.len();
+        removed.relations = rels.len();
+        removed
     }
 
     /// The live nodes and relations.
     pub fn counts(&self) -> (usize, usize) {
-        unimplemented!("memory image: lot 2a")
+        (self.nodes.iter().filter(|n| n.alive).count(), self.rels.iter().filter(|r| r.alive).count())
     }
 
     /// The interned strings, to see that the image does not repeat them.
     pub fn interned_strings(&self) -> usize {
-        unimplemented!("memory image: lot 2a")
+        self.strings.names.len()
     }
+}
+
+fn prop(props: &[(Sym, Compact)], key: Sym) -> Option<&Compact> {
+    props.iter().find(|(k, _)| *k == key).map(|(_, v)| v)
 }
 
 #[cfg(test)]
