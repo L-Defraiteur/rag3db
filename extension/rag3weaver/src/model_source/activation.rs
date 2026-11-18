@@ -1046,12 +1046,9 @@ impl<C: Send + 'static> Drop for Tenue<C> {
 /// est à l'autre poste). Lue avant la relance, qui écrit à la suite.
 #[cfg(feature = "daemon")]
 fn cause_d_arret(source: &super::ModelSource) -> Option<String> {
-    let a = source.activation.as_ref().filter(|a| a.hote.is_none())?;
-    let journal = a.journal.join(format!("{}.log", crate::daemon::embeddings::SERVICE));
-    let texte = std::fs::read_to_string(journal).ok()?;
-    let ligne = texte.lines().rev().find(|l| !l.trim().is_empty())?.trim();
-    let cause = ligne.strip_prefix("✗ arrêt : ")?;
-    Some(cause.split(" (code ").next().unwrap_or(cause).to_string())
+    // Alias kept : the reading is `ModelSource::stop_cause` since 18 November 2026.
+    source.activation.as_ref().filter(|a| a.hote.is_none())?;
+    source.stop_cause()
 }
 
 /// Le fournisseur n'est plus là : le message d'un appel qui n'a trouvé personne.
