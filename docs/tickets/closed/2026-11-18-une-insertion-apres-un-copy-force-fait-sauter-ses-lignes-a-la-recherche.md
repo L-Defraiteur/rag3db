@@ -1,13 +1,14 @@
 # Une insertion validée après un COPY forcé fait sauter ses lignes à la recherche
 
-- **État** : ouvert (18 novembre 2026, session hotfixs ; trouvé en écrivant le lot (a) du ticket
-  [le nombre de lignes hors du graphe](2026-11-08-le-nombre-de-lignes-hors-du-graphe-d-un-index-vectoriel-lisible-sans-ecrire.md))
+- **État** : fermé (18 novembre 2026, branche `insert-after-forced-copy-keeps-rows-scanned`) ;
+  ouvert le même jour par la session hotfixs, trouvé en écrivant le lot (a) du ticket
+  [le nombre de lignes hors du graphe](../../coeur-cpp-hotfixs-tickets/tickets/2026-11-08-le-nombre-de-lignes-hors-du-graphe-d-un-index-vectoriel-lisible-sans-ecrire.md)
 - **Famille** : moteur
 - **Gravité** : réponse fausse — des lignes validées ne sont plus jamais rendues par la recherche
   vectorielle, sans erreur, jusqu'à la reconstruction de l'index
 - **Atteignable en service** : dès qu'un COPY forcé valide juste après un CREATE_VECTOR_INDEX (la
   recette du ticket du 18 octobre,
-  [les lignes d'un COPY forcé… restent hors du graphe](../../tickets/2026-10-18-les-lignes-d-un-copy-force-valide-apres-un-create-restent-hors-du-graphe.md)),
+  [les lignes d'un COPY forcé… restent hors du graphe](../2026-10-18-les-lignes-d-un-copy-force-valide-apres-un-create-restent-hors-du-graphe.md)),
   puis qu'une insertion ordinaire suit ; plus largement, dès qu'un trou existe entre le graphe et
   la fin de la table
 - **Touche rag3weaver** : oui — ses recherches perdent ces lignes, et la colonne
@@ -40,3 +41,13 @@ La borne n'avance que d'une ligne qui la suit immédiatement : une ligne reliée
 ligne sans vecteur (elle n'est jamais un résultat ; un SET qui lui donne un vecteur passe par
 `update` et la relie). Une ligne reliée au-delà d'un trou reste aussi dans la plage balayée ; le
 balayage ne rend pas deux fois une ligne déjà rendue par le graphe.
+
+## La fermeture
+
+`OnDiskHNSWIndex::commitInsert` n'avance plus `numCheckpointedNodes` que d'une ligne qui la suit
+(reliée, ou sans vecteur). À luciepc (Release), sur e7fff2c5d7 puis avec le correctif :
+- `AnInsertAfterAForcedCopyKeepsItsRowsReachable` : rouge sans (« 20001/21001 reached »), vert avec
+  (« 21001/21001 reached ») ;
+- `VectorIndexDiagnosticsTest` : les lignes sans vecteur ne sont plus laissées au balayage, rouge
+  sans (150 au lieu de 0), vert avec ;
+- `AForcedCopyCommittedRightAfterACreateIsReached` reste vert (les mille lignes du COPY comptées).
