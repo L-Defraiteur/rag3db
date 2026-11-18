@@ -325,6 +325,8 @@ pub struct DaemonHost {
     /// The calls to the memory for the session archived as it goes; `None`: the memory of
     /// `bilans.memoire`, through the host.
     rangeur: Option<Arc<dyn rangement::Rangeur>>,
+    /// The conversations whose slice is being filed (one at a time each).
+    rangements_en_vol: Arc<Mutex<std::collections::HashSet<String>>>,
     /// Le modèle de langage nommé qu'une tâche a choisi, connecté (lot tty-14).
     modele_nomme: chat::ModeleNomme,
     /// Ce que les chats ont consommé, par run et par slug.
@@ -504,6 +506,7 @@ impl DaemonHost {
             chats_root: chat::default_chats_root(),
             chat_model: chat::default_chat_model(),
             rangeur: None,
+            rangements_en_vol: Arc::new(Mutex::new(Default::default())),
             modele_nomme: chat::default_modele_nomme(),
             chat_meter: Arc::new(crate::meter::Meter::new()),
             journal: journal_des_runs::JournalDesRuns::par_defaut(),
