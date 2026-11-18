@@ -119,10 +119,11 @@ La part gabarit est décrite par mémoire. La part hôte :
       section par tour, quelques Ko. Le dense par tranche, par le service de la vue, ne me gêne
       pas non plus : un lot toutes les 50 k jetons. Mais il doit attendre sa fenêtre comme
       l'équipier quand le service est saturé, sans bloquer le tour.
-   4. **Ce que la trace contient.** Les retours d'outils portent le code lu et des sorties de
-      commandes. Les indexer dans une mémoire durable, même sous TTL, doit rester débrayable
-      (`memory.index_turns`, éteint tant que Lucie ne l'allume pas pour un dépôt). Un fichier
-      exclu par les règles d'exclusion ne doit pas y entrer non plus.
+   4. **Ce que la trace contient** (tranché par Lucie, 18 novembre au soir). La trace porte le
+      code lu et des sorties de commandes. `memory.index_turns` est **allumé par défaut**. La
+      seule garde est l'exclusion des fichiers du dépôt : un contenu d'un fichier exclu par les
+      règles d'exclusion est remplacé par « exclu du dépôt » avant l'écriture (forme décidée par
+      mémoire).
 
 10. **La preuve en plus.** Faux modèle : le pas de l'archiviste appelle `read_turns` sur des
    tours d'avant sa tranche, puis range. Ses bornes l'arrêtent proprement. Débrayé, le graphe
