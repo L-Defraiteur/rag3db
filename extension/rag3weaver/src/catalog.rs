@@ -12403,6 +12403,21 @@ mod tests {
         assert_eq!(calls.load(std::sync::atomic::Ordering::Relaxed), 0);
     }
 
+    /// **A probe without a known provenance measures, and notes nothing** (18
+    /// November 2026) : the estimate of a backend whose embedder is remote
+    /// without an address failed on « embedding rate provenance is unknown ».
+    #[cfg(feature = "rag3db-native")]
+    #[test]
+    fn a_probe_without_a_known_provenance_measures_and_notes_nothing() {
+        let mut catalog = catalog_calling(Some("127.0.0.1:7999"));
+        let (_address, calls) = set_mutable_rate_provider(&mut catalog, None);
+        catalog.probe_embedding_rate(&["pub fn a() {}\n".repeat(50)]).expect("the estimate goes on without a known provenance");
+        assert!(calls.load(std::sync::atomic::Ordering::Relaxed) > 0, "the probe still measures");
+        assert_eq!(catalog.embedding_rate("rate-model", "service").unwrap(), None, "nothing under the old key");
+        assert_eq!(catalog.embedding_rate("rate-model", "local").unwrap(), None, "nothing under a local key");
+        assert_eq!(catalog.known_embedding_rate().unwrap(), None, "nothing noted at all");
+    }
+
     #[cfg(feature = "rag3db-native")]
     #[test]
     fn rate_keys_keep_addresses_and_client_hosts_isolated() {
