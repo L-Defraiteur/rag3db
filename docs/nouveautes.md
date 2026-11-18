@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 18 novembre 2026 — **Un llama-server déclaré a le budget d'un modèle local.** Déclaré `compatible`/`openai` à une adresse de ce poste (`127.0.0.1`, `localhost` ou `::1`), un modèle de langage repart après une compaction avec la moitié de sa fenêtre, et non plus avec les 100 000 jetons d'un modèle du cloud.
+
 - 18 novembre 2026 — **Une méthode définie hors du fichier de sa classe est une méthode.** `void Foo::f() {}` dans un `.cpp`, quand `class Foo` est dans un `.h` de la même source, s'écrit `method` et non plus `function` : l'arbre compact montre une méthode. Une limite : si le `.h` est indexé après le `.cpp`, dans un lot suivant, la définition reste une fonction jusqu'à la prochaine réécriture du `.cpp`.
 
 - 18 novembre 2026 — **Un embarquement par un fournisseur `compatible` peut estimer et indexer.** Depuis la clé du
