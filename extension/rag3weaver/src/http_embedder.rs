@@ -5,6 +5,9 @@ use serde_json::{json, Value};
 
 pub struct HttpEmbedder {
     endpoint: String,
+    /// The base URL, without its trailing slash nor credentials : the address
+    /// under which this provider's embedding rate is noted.
+    address: String,
     model: String,
     dimensions: usize,
     key: Option<String>,
@@ -38,6 +41,7 @@ impl HttpEmbedder {
             .transpose()?;
         Ok(Self {
             endpoint: format!("{}/embeddings", base_url.trim_end_matches('/')),
+            address: address_without_credentials(base_url.trim_end_matches('/')),
             model: model.into(),
             dimensions,
             key,
@@ -131,6 +135,19 @@ impl Embedder for HttpEmbedder {
     fn distant(&self) -> bool {
         true
     }
+    fn called_address(&self) -> Option<String> {
+        Some(self.address.clone())
+    }
+}
+
+/// `scheme://user:secret@host/path` → `scheme://host/path` : an address that
+/// goes into a catalog key never carries credentials.
+fn address_without_credentials(url: &str) -> String {
+    let Some((scheme, rest)) = url.split_once("://") else { return url.to_string() };
+    let authority_end = rest.find('/').unwrap_or(rest.len());
+    let (authority, path) = rest.split_at(authority_end);
+    let host = authority.rsplit_once('@').map_or(authority, |(_, host)| host);
+    format!("{scheme}://{host}{path}")
 }
 #[cfg(test)]
 mod tests {

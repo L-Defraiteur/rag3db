@@ -631,7 +631,10 @@ impl Catalog {
         self.check_reopen()?;
         let Some(embedder) = &self.embedder else { return Ok(None) };
         let rate = crate::estimate::probe_rate(embedder.as_ref(), samples).map_err(CatalogError::DbError)?;
-        if let Some(rate) = rate {
+        // A remote embedder without an address has no place to note its rate
+        // under : the estimate uses the measure and notes nothing (18 November
+        // 2026 : it failed on « embedding rate provenance is unknown »).
+        if let Some(rate) = rate.filter(|_| Self::embedding_rate_place(embedder.as_ref()).is_some()) {
             self.note_measured_embedding_rate(rate)?;
         }
         Ok(rate)
