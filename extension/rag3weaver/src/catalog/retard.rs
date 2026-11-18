@@ -16,7 +16,7 @@
 //! catalogue (le bus et les services de `mount_reactions`) ; la clé de cellule
 //! est là pour le jour où une montre servira une autre cellule.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Condvar, Mutex};
 
 use crate::scope::Scope;
@@ -79,6 +79,8 @@ pub struct Lag {
     changed: Condvar,
     /// Cell → observed milliseconds per reindexed file (a moving average).
     rates: Mutex<HashMap<Scope, f64>>,
+    /// The layers an index is writing right now (`set_writing`).
+    writing: Mutex<HashSet<LagKey>>,
 }
 
 impl Lag {
@@ -243,6 +245,51 @@ impl Lag {
     }
 }
 
+impl Lag {
+    fn writing(&self) -> std::sync::MutexGuard<'_, HashSet<LagKey>> {
+        self.writing.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// **An index writes the layer of `key`** (`true`), or no longer does (`false`). Set by the index path,
+    /// which alone knows when it writes; read by `views::view_state`.
+    pub fn set_writing(&self, key: &LagKey, on: bool) {
+        // RED STUB: the mark folds into the cell (the backend's layer), whatever the layer.
+        let key = LagKey::backend(&key.cell);
+        if on {
+            self.writing().insert(key);
+        } else {
+            self.writing().remove(&key);
+        }
+        self.changed.notify_all();
+    }
+
+    /// Whether an index writes the layer of `key` right now.
+    pub fn is_writing(&self, key: &LagKey) -> bool {
+        // RED STUB: any layer of the cell.
+        self.writing().iter().any(|k| k.cell == key.cell)
+    }
+
+    /// **The mark held for a scope**: `set_writing(key, true)` now, `false` when the guard drops, whatever the
+    /// exit of the index (finished, failed, stopped, panicked).
+    pub fn writing_guard(self: &std::sync::Arc<Self>, key: LagKey) -> WritingGuard {
+        self.set_writing(&key, true);
+        WritingGuard { lag: self.clone(), key }
+    }
+}
+
+/// See [`Lag::writing_guard`].
+#[derive(Debug)]
+pub struct WritingGuard {
+    lag: std::sync::Arc<Lag>,
+    key: LagKey,
+}
+
+impl Drop for WritingGuard {
+    fn drop(&mut self) {
+        self.lag.set_writing(&self.key, false);
+    }
+}
+
 /// L'instant présent, en millisecondes Unix.
 pub fn now_ms() -> u64 {
     std::time::SystemTime::now()
@@ -257,6 +304,23 @@ mod tests {
 
     fn cell(org: &str) -> Scope {
         Scope { org: org.into(), project: "p".into() }
+    }
+
+    /// **The writing mark is per layer**: an index writing layer `a` of a cell does not mark layer `b` of the
+    /// same cell, nor the backend's layer; the guard clears it at its drop.
+    #[test]
+    fn the_writing_mark_is_per_layer_and_the_guard_clears_it() {
+        let lag = std::sync::Arc::new(Lag::new());
+        let c = cell("o");
+        let a = LagKey { cell: c.clone(), layer: LayerId("a".into()) };
+        let b = LagKey { cell: c.clone(), layer: LayerId("b".into()) };
+        {
+            let _g = lag.writing_guard(a.clone());
+            assert!(lag.is_writing(&a), "the layer being written is not marked");
+            assert!(!lag.is_writing(&b), "layer b is marked while only layer a is written");
+            assert!(!lag.is_writing(&LagKey::backend(&c)), "the backend's layer is marked while only layer a is written");
+        }
+        assert!(!lag.is_writing(&a), "the mark outlives its guard");
     }
 
     /// **Par cellule** : le retard d'une cellule n'est pas celui d'une autre ;
