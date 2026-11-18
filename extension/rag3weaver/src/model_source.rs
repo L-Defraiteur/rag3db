@@ -1005,6 +1005,32 @@ mod tests {
             assert_eq!(lookalike.get(&Capability::Llm).unwrap().budget_de_reprise(), 100_000, "a host that only starts like localhost is not local");
         }
 
+        /// **`access` and `provider`, the words of a declared model** (ticket of 15 November 2026, decided by Lucie):
+        /// `access` says how the model is reached (`local`, `service`, `compatible`), `provider` who serves it
+        /// (`openai`, `vertex`…). The old form (`provider: compatible`, `protocol: vertex`) still reads, into the
+        /// same declaration, until 29 November 2026; a model that mixes both forms is refused, naming both words.
+        /// A declaration is written back in the new form.
+        #[test]
+        fn access_and_provider_read_like_the_old_provider_and_protocol() {
+            let new = lire(r#"{"llm": {"access": "compatible", "provider": "vertex", "model": "g", "params": {"project": "p"}}}"#).expect("the new form");
+            let old = lire(r#"{"llm": {"provider": "compatible", "protocol": "vertex", "model": "g", "params": {"project": "p"}}}"#).expect("the old form");
+            assert_eq!(new.get(&Capability::Llm), old.get(&Capability::Llm), "the same declaration");
+            let s = new.get(&Capability::Llm).unwrap();
+            assert_eq!((s.provider, s.protocol.as_deref()), (Provider::Compatible, Some("vertex")));
+            let local_new = lire(r#"{"embed": {"access": "local", "model": "e"}}"#).expect("access alone");
+            let local_old = lire(r#"{"embed": {"provider": "local", "model": "e"}}"#).expect("the old provider alone");
+            assert_eq!(local_new.get(&Capability::Embed), local_old.get(&Capability::Embed));
+            for mixed in [
+                r#"{"llm": {"access": "compatible", "protocol": "openai", "model": "m"}}"#,
+                r#"{"llm": {"access": "compatible", "provider": "compatible", "model": "m"}}"#,
+            ] {
+                let e = lire(mixed).expect_err("a mixed form");
+                assert!(e.contains("access") && (e.contains("protocol") || e.contains("provider")), "the refusal names both words: {e}");
+            }
+            let written = serde_json::to_value(s).unwrap();
+            assert_eq!((written.get("access"), written.get("provider"), written.get("protocol")), (Some(&serde_json::json!("compatible")), Some(&serde_json::json!("vertex")), None), "{written}");
+        }
+
         #[test]
         fn seul_models_llm_se_declare_en_liste() {
             let e = lire(r#"{"embed": [{"name": "a", "model": "m1", "default": true}]}"#).expect_err("embed en liste");
