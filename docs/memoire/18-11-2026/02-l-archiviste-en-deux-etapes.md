@@ -484,7 +484,7 @@ Lucie : « les L0, les vrais tours, doivent être indexés au fil de l'eau avec 
   | `tool_name` | pour un appel d'outil, le nom de l'outil |
   | `params` | ses paramètres, en JSON, bornés à 4 000 caractères (« … » et la taille d'origine au-delà) |
   | `result` | son résultat, en texte, borné à 8 000 caractères de même |
-  | `status` | `ok` ou `error`, pour un appel d'outil |
+  | `status` | pour un appel d'outil : `ok`, `error`, `refused` (refusé par la politique ou l'hôte) ou `interrupted` (coupé par une annulation ou un arrêt), les quatre cas réels de l'hôte (accordé avec archi) |
   | `source`, `section` | la Source de sa tranche et `turn <n>`, pour la chaîne vers les L1 |
 
   Le plein texte indexe `text`, `tool_name` et `params`.
