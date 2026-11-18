@@ -1,5 +1,5 @@
 //! Embedding-rate calibration through the host's service client.
-//! WIP: the measurement is deliberately empty until the witness has been seen red.
+//! The witness was seen red (measurement empty) on 18 Nov. 2026 before `measure` was written.
 //! No installed service, GPU, model weights or catalog is used by this target.
 
 use std::net::TcpListener;
@@ -68,9 +68,32 @@ impl Measurement {
     }
 }
 
-fn measure(_client: &DaemonEmbedder, _texts: &[String], _max_items: usize) -> Result<Measurement, String> {
-    // RED stage: do not replace before observing the witness fail here.
-    Err("embedding-rate measurement is not implemented".into())
+/// Embeds `texts` through the host's service client, in the batches the catalog would form
+/// (`stable_batches` under the service's advised budget), and times the embedding calls only.
+/// `sent_chars` counts what reaches the service: each text cut to its `max_chars_per_text`.
+fn measure(client: &DaemonEmbedder, texts: &[String], max_items: usize) -> Result<Measurement, String> {
+    if texts.is_empty() {
+        return Err("no text to measure: a rate needs at least one text".into());
+    }
+    let lengths: Vec<usize> = texts.iter().map(|text| text.chars().count()).collect();
+    let cap = client.identite().max_chars_per_text.unwrap_or(usize::MAX);
+    let ranges = stable_batches(&lengths, lot_budget(client.budget_conseille(), max_items));
+    let mut elapsed = Duration::ZERO;
+    for range in &ranges {
+        let started = Instant::now();
+        let vectors = client.embed(&texts[range.clone()]).map_err(|error| format!("embedding a batch of {}: {error}", range.len()))?;
+        elapsed += started.elapsed();
+        if vectors.len() != range.len() {
+            return Err(format!("the service returned {} vectors for {} texts", vectors.len(), range.len()));
+        }
+    }
+    Ok(Measurement {
+        input_chars: lengths.iter().sum(),
+        sent_chars: lengths.iter().map(|&length| length.min(cap)).sum(),
+        texts: texts.len(),
+        batches: ranges.iter().map(|range| range.len()).collect(),
+        elapsed,
+    })
 }
 
 #[test]
