@@ -1997,3 +1997,92 @@ fn a_code_backend_speaks_first_as_a_code_agent() {
     let projet = super::system_prompt_du_backend(Some(BackendKind::Project), ModeDeclarations::Auto, true);
     assert!(projet.starts_with("You work on a declared backend"), "{projet}");
 }
+
+/// A fake memory for the session archived as it goes: it records `put_turn` and `archive_slice`,
+/// holds each `archive_slice` until the witness releases it, and answers with the report given.
+struct FauxRangeur {
+    turns: Mutex<Vec<Value>>,
+    slices: Mutex<Vec<Value>>,
+    release: Mutex<std::sync::mpsc::Receiver<Value>>,
+}
+
+impl crate::daemon_host::rangement::Rangeur for FauxRangeur {
+    fn put_turn(&self, _memoire: &Path, line: &Value) -> Result<Value, String> {
+        self.turns.lock().unwrap().push(line.clone());
+        Ok(json!({ "written": true, "masked": [], "cut": [] }))
+    }
+    fn archive_slice(&self, _memoire: &Path, args: &Value) -> Result<Value, String> {
+        self.slices.lock().unwrap().push(args.clone());
+        let answer = self.release.lock().unwrap().recv_timeout(Duration::from_secs(30)).map_err(|e| e.to_string())?;
+        Ok(answer)
+    }
+}
+
+/// The bench for the session archived as it goes: a `code` backend whose manifest declares a
+/// memory (`bilans.memoire`) and a tiny slice (`memory.slice_tokens` = 30), a model that answers
+/// 200 characters, and the fake memory.
+fn banc_du_rangement() -> (tempfile::TempDir, DaemonHost, String, Arc<FauxRangeur>, std::sync::mpsc::Sender<Value>) {
+    let model: ChatModel = Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> { Ok(Arc::new(MockLlm::new(&"x".repeat(200)))) });
+    let (d, host, _m, id) = banc_avec(model, |m| {
+        m["bilans"] = json!({ "memoire": "memoire/backend.json" });
+        m["memory"] = json!({ "slice_tokens": 30 });
+    });
+    let (release, recv) = std::sync::mpsc::channel();
+    let faux = Arc::new(FauxRangeur { turns: Mutex::new(Vec::new()), slices: Mutex::new(Vec::new()), release: Mutex::new(recv) });
+    let host = host.with_rangeur(faux.clone());
+    (d, host, id, faux, release)
+}
+
+fn marque(d: &Path, id: &str) -> Value {
+    std::fs::read(d.join("chats").join(format!("{id}.rangement.json"))).ok().and_then(|o| serde_json::from_slice(&o).ok()).unwrap_or(Value::Null)
+}
+
+/// **Each turn goes to the memory, each slice to the archivist in the background** (Lucie, 18 Nov
+/// 2026). After a turn longer than the slice, `archive_slice` is called for turns 1-1 while the
+/// next turn runs without waiting; the mark moves to 1 only once the archivist answers without
+/// error.
+#[test]
+fn a_slice_is_filed_in_the_background_and_the_mark_moves_after_the_commit() {
+    let (d, host, id, faux, release) = banc_du_rangement();
+    host.chat_turn(&id, "first question").expect("turn 1");
+    // Turn 2 runs while slice 1-1 is held by the archivist.
+    host.chat_turn(&id, "second question").expect("turn 2 does not wait for the archivist");
+    let turns = faux.turns.lock().unwrap().clone();
+    let run = format!("chat:{id}");
+    assert!(turns.iter().any(|t| t["run"] == run.as_str() && t["turn"] == 1 && t["seq"] == 0 && t["role"] == "user" && t["text"] == "first question"), "put_turn of the user message: {turns:#?}");
+    assert!(turns.iter().any(|t| t["turn"] == 1 && t["role"] == "assistant"), "put_turn of the answer: {turns:#?}");
+    let slices = faux.slices.lock().unwrap().clone();
+    assert_eq!(slices.first().map(|s| (s["run"].clone(), s["from_turn"].clone(), s["to_turn"].clone())), Some((json!(run), json!(1), json!(1))), "{slices:#?}");
+    assert!(marque(d.path(), &id)["archived_through_turn"].is_null(), "no mark before the commit");
+    release.send(json!({ "report": { "ok": true, "errors": [] }, "archived_through_turn": 1 })).unwrap();
+    let fin = Instant::now() + Duration::from_secs(10);
+    while marque(d.path(), &id)["archived_through_turn"] != json!(1) {
+        assert!(Instant::now() < fin, "the mark moves to 1: {}", marque(d.path(), &id));
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+/// **A report with errors leaves the mark where it was** (contract with mémoire, 18 Nov 2026):
+/// the slice is filed again with the next one.
+#[test]
+fn a_report_with_errors_leaves_the_mark_and_the_slice_is_filed_again() {
+    let (d, host, id, faux, release) = banc_du_rangement();
+    host.chat_turn(&id, "first question").expect("turn 1");
+    release.send(json!({ "report": { "ok": false, "errors": ["the model refused"] }, "archived_through_turn": 0 })).unwrap();
+    let fin = Instant::now() + Duration::from_secs(10);
+    while faux.slices.lock().unwrap().len() < 1 || !marque(d.path(), &id)["last_error"].is_string() {
+        assert!(Instant::now() < fin, "the failed slice is said: {}", marque(d.path(), &id));
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    assert!(marque(d.path(), &id)["archived_through_turn"].is_null(), "the mark does not move: {}", marque(d.path(), &id));
+    host.chat_turn(&id, "second question").expect("turn 2");
+    let fin = Instant::now() + Duration::from_secs(10);
+    while faux.slices.lock().unwrap().len() < 2 {
+        assert!(Instant::now() < fin, "a second slice is asked");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let second = faux.slices.lock().unwrap()[1].clone();
+    assert_eq!((second["from_turn"].clone(), second["to_turn"].clone()), (json!(1), json!(2)), "the failed turn goes again with the next one: {second}");
+    release.send(json!({ "report": { "ok": true, "errors": [] }, "archived_through_turn": 2 })).unwrap();
+}
+
