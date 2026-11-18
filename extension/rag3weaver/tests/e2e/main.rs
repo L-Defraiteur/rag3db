@@ -96,6 +96,8 @@ mod e2e_checkpoint;
 mod e2e_chemin_de_masse;
 #[path = "../e2e_cited_by.rs"]
 mod e2e_cited_by;
+#[path = "../e2e_definition_signal.rs"]
+mod e2e_definition_signal;
 #[path = "../e2e_cloud_code_agent.rs"]
 mod e2e_cloud_code_agent;
 #[path = "../e2e_cloud_schema_probe.rs"]
