@@ -5941,6 +5941,51 @@ mod tests_de_l_ecrivain {
         r.rows[0][0].as_i64().unwrap()
     }
 
+    /// What `lire` reads under the view of `couche` (its last published rank): the stack loaded from
+    /// `_generation`, composed with the catalog's visibility, as a tool call with `view` does.
+    fn dans_la_vue<T>(cat: &mut Catalog, couche: &str, lire: impl FnOnce(&Catalog) -> T) -> T {
+        let pile = crate::views::load_stack(cat, &crate::views::ViewRequest { layer: couche.into(), rank: None }, &Default::default())
+            .unwrap_or_else(|e| panic!("la vue {couche} : {e}"));
+        let avant = cat.generations.clone();
+        cat.generations = avant.as_ref().map(|v| v.with_stack(&pile));
+        let rendu = lire(cat);
+        cat.generations = avant;
+        rendu
+    }
+
+    /// **2a′-3, lot 1: two layers in one catalog, each view sees its own.** A write in layer `t`, pinned on the
+    /// backend's published rank, changes `f`: a read without view (the backend's) still gives the old `f`; the
+    /// view of `t` gives the new one, and `a`, which `t` does not rewrite, from its parent; the view of the
+    /// backend gives the old one. The generation of `t` names its parent and tombstones the file it rewrote.
+    #[test]
+    fn two_layers_in_one_catalog_each_view_sees_its_own() {
+        let (mut cat, src) = base();
+        let n = cat.publier_la_generation("c1", 0).expect("publier");
+        let t = crate::catalog::LayerWrite { layer: "t".into(), parent: Some((crate::generations::COUCHE_DU_BACKEND.into(), n)) };
+        let rang_t = cat
+            .write_in_layer(&t, |c| {
+                sauver(c, &src, "b.rs", F2);
+                c.publier_la_generation("c-t", 0)
+            })
+            .expect("l'écriture dans t")
+            .expect("publier t");
+        assert_eq!(fins_visibles(&cat, "f"), vec![3], "a read without view sees layer t's f");
+        assert_eq!(cat.rang_publie(), Some(n), "the backend's published rank moved with layer t");
+        assert_eq!(dans_la_vue(&mut cat, crate::generations::COUCHE_DU_BACKEND, |c| fins_visibles(c, "f")), vec![3], "the backend's view sees t's f");
+        assert_eq!(dans_la_vue(&mut cat, "t", |c| fins_visibles(c, "f")), vec![4], "the view of t does not see its own f");
+        assert_eq!(dans_la_vue(&mut cat, "t", |c| fins_visibles(c, "a")), vec![3], "the view of t loses a, which its parent holds");
+        let g = cat
+            .conn()
+            .execute_with_params(
+                &format!("MATCH (g:{}) WHERE g.couche = 't' AND g.rang = $r RETURN g.parente_couche, g.parente_rang, g.tombstones", crate::generations::TABLE),
+                &[QueryParam::new("r", CypherValue::Int(rang_t))],
+            )
+            .unwrap();
+        assert_eq!(g.rows.len(), 1, "no generation of t at {rang_t}");
+        assert_eq!((texte(&g.rows[0][0]), g.rows[0][1].as_i64()), (crate::generations::COUCHE_DU_BACKEND.to_string(), Some(n)), "the parent of t");
+        assert!(texte(&g.rows[0][2]).contains("b.rs"), "t does not tombstone the file it rewrote: {}", texte(&g.rows[0][2]));
+    }
+
     /// **Témoin 1 : l'ancre garde son passé.** Après une réindexation qui change `f` et un commit, la
     /// génération d'avant rend l'ancien `f`, et la courante le neuf. Aucune ligne n'est effacée.
     #[test]
