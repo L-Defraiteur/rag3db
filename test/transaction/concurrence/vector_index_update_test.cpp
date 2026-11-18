@@ -2273,6 +2273,40 @@ TEST_F(VectorIndexUpdate, AForcedCopyCommittedRightAfterACreateIsReached) {
     EXPECT_EQ(rowsOutsideGraph(), 0) << "[check: a-rebuild-takes-them-into-the-graph]";
 }
 
+// Les lignes du COPY forcé restent hors du graphe, lues par le balayage de
+// [numCheckpointedNodes, numTotalRows). Une insertion ordinaire validée ensuite entre dans le
+// graphe à son commit, et commitInsert pose numCheckpointedNodes juste après elle : la plage
+// balayée saute alors les mille lignes du COPY, qui ne sont ni dans le graphe ni balayées.
+TEST_F(VectorIndexUpdate, AnInsertAfterAForcedCopyKeepsItsRowsReachable) {
+    table = "C";
+    mustRun("CREATE NODE TABLE C(id INT64 PRIMARY KEY, vec FLOAT[16]);");
+    mustRun(
+        "UNWIND range(0, 19999) AS i CREATE (:C {id: i, vec: [i % 17, i % 23, i % 29, i % 31, "
+        "i % 37, i % 41, i % 43, i % 47, i % 53, i % 59, i % 61, i % 67, i % 71, i % 73, i % 79, "
+        "i / 1000.0]});");
+    rag3db::main::Connection creator(database.get());
+    rag3db::main::Connection copier(database.get());
+    ASSERT_TRUE(copier.query("CALL copy_journal_threshold=1;")->isSuccess());
+    auto creating = std::async(std::launch::async, [&] {
+        auto result =
+            creator.query("CALL CREATE_VECTOR_INDEX('C', 'c_index', 'vec', metric := 'l2');");
+        return result->isSuccess() ? std::string("ok") : result->getErrorMessage();
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    auto copied = copier.query("COPY C FROM (UNWIND range(200000, 200999) AS i RETURN i, [i % 17, "
+                               "i % 23, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, i / 1000.0]);");
+    const auto outcome = creating.get();
+    ASSERT_TRUE(copied->isSuccess()) << "[check: setup] " << copied->getErrorMessage();
+    ASSERT_EQ(outcome, "ok") << "[check: setup] " << outcome;
+    const auto before = checkAfterCreateUnderWrites(WritesDuringCreate{});
+    ASSERT_TRUE(before.empty()) << "[check: setup] " << checksOf(before);
+    mustRun("CREATE (:C {id: 300000, vec: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, "
+            "16]});");
+    const auto failed = checkAfterCreateUnderWrites(WritesDuringCreate{});
+    EXPECT_TRUE(failed.empty()) << "[check: rows-of-a-forced-copy-stay-reachable-after-an-insert] "
+                                << checksOf(failed);
+}
+
 // Des lignes déplacées ensemble pendant un CREATE, par un écrivain ouvert avant lui. Le
 // rattrapage les reprenait une à une contre une table où toutes portaient déjà leur nouveau
 // vecteur : une ligne réinsérée se liait à des voisines « proches » à leur nouvelle place mais
