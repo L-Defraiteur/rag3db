@@ -76,6 +76,29 @@ fn depot_de_test(d: &Path) -> (PathBuf, PathBuf, PathBuf) {
     (depot, manifeste, memoire)
 }
 
+/// The supervisor's answers in a test: every teammate `question` or `approval` without a
+/// `reply_to` answer gets one. An approval is denied whatever its command; a question is
+/// sent back to the teammate. Returns what was answered, for the log.
+fn answer_pending(host: &Arc<DaemonHost>, id: &str, task: &str) -> Vec<String> {
+    let Ok(files) = host.teammate_files(id, task) else { return Vec::new() };
+    let mailbox = files.mailbox();
+    let mut done = Vec::new();
+    for line in mailbox.iter().filter(|l| l["from"] == "teammate" && matches!(l["kind"].as_str(), Some("question" | "approval"))) {
+        let Some(line_id) = line["id"].as_str() else { continue };
+        if mailbox.iter().any(|r| r["reply_to"] == line_id) {
+            continue;
+        }
+        let (text, extra) = if line["kind"] == "approval" {
+            ("Denied: do not run this command. Finish the request without it.", json!({ "reply_to": line_id, "approved": false }))
+        } else {
+            ("No preference: decide yourself and finish the request.", json!({ "reply_to": line_id }))
+        };
+        host.post_to_teammate(id, task, "c7", "answer", None, text, &extra).expect("the supervisor's answer is posted");
+        done.push(format!("{} {}", line["kind"].as_str().unwrap_or(""), line["command"].as_str().unwrap_or("")));
+    }
+    done
+}
+
 /// L'id d'un backend hébergé, par son manifeste (hébergé par un premier appel).
 fn heberger(host: &DaemonHost, manifeste: &Path) -> String {
     let s = host.open_session("le témoin", None, Vec::new(), None);
@@ -125,7 +148,11 @@ fn l_equipier_ecrit_la_doc_d_un_depot_de_test_par_pas_juges() {
     assert_eq!(r["started"], true, "{r}");
     let t = host.tache(&id, "doc").expect("la tâche est ouverte");
     let fin = Instant::now() + Duration::from_secs(900);
+    let mut answered: Vec<String> = Vec::new();
     while host.teammate_running(&id, "doc") {
+        // The test plays the supervisor: a pending question or approval gets an answer, an
+        // approval is always denied (18 Nov 2026: Vertex asked for `rm Cargo.lock` and waited 900 s).
+        answered.extend(answer_pending(&host, &id, "doc"));
         if Instant::now() >= fin {
             // La boîte d'abord : le dossier de la tâche part avec le tempdir.
             for l in host.teammate_files(&id, "doc").map(|f| f.mailbox()).unwrap_or_default() {
@@ -139,7 +166,8 @@ fn l_equipier_ecrit_la_doc_d_un_depot_de_test_par_pas_juges() {
     let boite = files.mailbox();
     let pas: Vec<&Value> = boite.iter().filter(|l| l["kind"] == "step_done").collect();
     let fin_de_run = boite.iter().find(|l| l["kind"] == "ended").map(|l| l["text"].as_str().unwrap_or("").to_string()).unwrap_or_default();
-    eprintln!("MESURE équipier sur Gemini : {} pas, {} s, fin « {fin_de_run} »", pas.len(), debut.elapsed().as_secs());
+    eprintln!("MESURE équipier sur Gemini : {} pas, {} s, fin « {fin_de_run} », {} réponse(s) du superviseur {answered:?}", pas.len(), debut.elapsed().as_secs(), answered.len());
+    assert!(!boite.iter().any(|l| l["approved"] == true), "no command is granted: {boite:?}");
     for l in &boite {
         eprintln!("boîte : {} {}{} : {}", l["from"].as_str().unwrap_or(""), l["kind"].as_str().unwrap_or(""), l["item"].as_str().map(|i| format!(" [{i}]")).unwrap_or_default(), l["text"].as_str().unwrap_or("").replace('\n', " ").chars().take(300).collect::<String>());
     }
