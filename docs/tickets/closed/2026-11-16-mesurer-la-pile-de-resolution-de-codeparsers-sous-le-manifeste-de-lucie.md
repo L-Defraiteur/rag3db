@@ -1,6 +1,8 @@
 # Mesurer la pile de résolution de codeparsers sous le manifeste de Lucie
 
-- **État** : ouvert.
+- **État** : fermé (18 novembre 2026, banc) — mesuré sous le manifeste de Lucie, à fichiers égaux : 3 779 Scope sans
+  `DEFINED_IN` avant, **0** après (master du 18) ; l'exclusion n'écarte que `app.js` et `utf8proc_data.h`. Page
+  `docs/banc/18-11-2026/02-la-pile-de-codeparsers-sous-le-manifeste-de-lucie.md`.
 - **Famille** : produit
 - **Gravité** : faible. Les chiffres livrés à codeparsers le 16 novembre viennent d'un manifeste sans
   l'exclusion de Lucie : 35 des 63 scopes sans `DEFINED_IN` sont un artefact de ce manifeste.

@@ -123,7 +123,9 @@ heures de travail.
 
 ### Entrée 4. La pile de résolution de codeparsers sous le manifeste de Lucie
 
-- **Ticket** : `docs/banc/tickets/2026-11-16-mesurer-la-pile-de-resolution-de-codeparsers-sous-le-manifeste-de-lucie.md`
+**Fait par banc le 18 novembre**, ticket fermé : 0 Scope sans `DEFINED_IN` après la pile, sous le manifeste de Lucie, à fichiers égaux (page du 18, 02).
+
+- **Ticket** : `docs/tickets/closed/2026-11-16-mesurer-la-pile-de-resolution-de-codeparsers-sous-le-manifeste-de-lucie.md`
 - **À faire** : deux index neufs de 284cc00c0b, avant (f10336d3f2) et après (tête de master), avec
   `workspace.index_exclude` de Lucie. Puis les comptes, et la liste des Scope sans `DEFINED_IN`.
 - **Ce qui ne se touche pas** : le manifeste de Lucie lui-même (on le copie) et les bases de
