@@ -22,6 +22,8 @@ pub mod couches;
 pub mod suivies;
 pub mod views;
 pub mod memory_image;
+pub mod memory_dialect;
+pub mod memory_connection;
 pub mod template_plan;
 pub mod fusion;
 pub mod en_tete;

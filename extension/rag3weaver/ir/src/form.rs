@@ -22,7 +22,7 @@ pub enum Direction {
 
 /// Écarter des arêtes par la valeur d'un de leurs champs : une arête est
 /// gardée si le champ est nul **ou** hors des valeurs écartées.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EdgeExclusion {
     pub field: String,
     pub values: Vec<String>,
@@ -263,7 +263,7 @@ pub enum Offset {
 ///
 /// Les colonnes rendues : l'uuid de départ, puis [`Hop::returns`] dans
 /// l'ordre.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Hop {
     /// La table du nœud de départ (celle des uuids donnés) ; `None` : un
     /// nœud de n'importe quelle table, retrouvé par son seul uuid.
@@ -662,7 +662,7 @@ impl Select {
 /// Les variantes suivantes (`Update`, `Mark`, `Delete`, `Unlink`, `Load`)
 /// viendront à leur tour ; voir
 /// `docs/8-octobre-2026-16h29/embarquements/05-write-et-tx.md`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Write {
     /// Créer ou remplacer des lignes par leur `_uuid`, en rendant
     /// `(identifiant interne, _uuid)` pour chacune.
@@ -696,7 +696,7 @@ pub enum Write {
 }
 
 /// Ce qu'un [`Write::Load`] remplit.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LoadTarget {
     /// Des lignes, colonnes dans l'ordre du fichier.
     Nodes { table: String, columns: Vec<String> },
