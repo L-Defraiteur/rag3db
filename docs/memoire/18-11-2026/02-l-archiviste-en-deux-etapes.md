@@ -471,8 +471,23 @@ liste vide garde l'appel simple, et la mesure d'aujourd'hui ne bouge pas.
 Lucie : « les L0, les vrais tours, doivent être indexés au fil de l'eau avec un TTL ». C'est ce que
 `search_turns` cherche.
 
-- **Où ils vivent** : une entité neuve du gabarit memory, `Turn`, avec une ligne par tour :
-  `{source, section, run, text, created_at}`.
+- **Où ils vivent** : une entité neuve du gabarit memory, `Turn`, avec **une ligne par message**
+  d'un tour, « cherchable par tout » comme les autres entités (Lucie : « les tours sont aussi
+  cherchables par temporalité, comme tout ; et les appels d'outils filtrables si possible ») :
+
+  | Champ | Ce qu'il porte |
+  | --- | --- |
+  | `run`, `turn`, `seq` | le run, le numéro du tour, le rang du message dans le tour |
+  | `at` | l'heure du message (ms) : le filtre temporel |
+  | `role` | `user`, `assistant` ou `tool` |
+  | `text` | le texte du message |
+  | `tool_name` | pour un appel d'outil, le nom de l'outil |
+  | `params` | ses paramètres, en JSON, bornés à 4 000 caractères (« … » et la taille d'origine au-delà) |
+  | `result` | son résultat, en texte, borné à 8 000 caractères de même |
+  | `status` | `ok` ou `error`, pour un appel d'outil |
+  | `source`, `section` | la Source de sa tranche et `turn <n>`, pour la chaîne vers les L1 |
+
+  Le plein texte indexe `text`, `tool_name` et `params`.
   - `source` est le chemin de la transcription du run, une Source comme aujourd'hui.
   - `section` vaut `turn <n>`. C'est déjà la forme de l'identité d'un Apport
     (`{fiche, source, section}`), si bien qu'un L1 cite une plage de tours sans dépendre des lignes
@@ -488,7 +503,16 @@ Lucie : « les L0, les vrais tours, doivent être indexés au fil de l'eau avec 
     dette », rattrapés à l'index suivant). Reste **à vérifier** qu'il se déclenche à la fermeture
     d'une tranche, plutôt qu'à chaque écriture.
 - **`search_turns(query, options)`** est le `recall` générique (`search_structured.mmd`) sur
-  `Turn`, filtré par `run`, avec une option pour écarter la tranche courante.
+  `Turn`. Ses filtres :
+  - `since`, `until` (sur `at`) ;
+  - `run`, `role`, `tool_name`, `status` ;
+  - une option pour écarter la tranche courante.
+
+  **Sans texte**, c'est une liste par le temps (`select_structured`, triée par `at`). C'est ce que
+  veut Lucie pour « revoir un truc qui aurait mal marché, vérifier que la veille on a bien appelé
+  tel outil, quel est son résultat, quels paramètres ». Par exemple, `tool_name: "archive",
+  status: "error", since: <hier>` rend les appels de la veille qui ont échoué, avec leurs
+  paramètres et leur résultat.
 - **Le rappel ordinaire ne les trouve jamais** (Lucie : « le filtre par défaut de la recherche
   mémoire ne les trouve pas ; il faut préciser qu'on veut chercher dedans »). C'est vrai par
   construction : `Turn` est une entité à part, et `recall_fiches`, `recall_apports`,
@@ -592,6 +616,8 @@ Lucie : « il faut qu'on sache relier : ce L1 venait de telle plage ; telle plag
 
 Les témoins :
 
+- un appel d'outil en erreur d'hier se retrouve par `search_turns` sans texte, avec
+  `tool_name`, `status: "error"` et `since`, et rend ses paramètres et son résultat ;
 - un L1 rangé depuis une tranche rend `run`, `from_turn` et `to_turn` par `get_fiche` ;
 - `read_turns` sur ce L1 rend ses tours `indexed` ;
 - après la purge du TTL, le même appel rend `from_chat_file` par l'hôte, ou `gone` hors de l'hôte.
