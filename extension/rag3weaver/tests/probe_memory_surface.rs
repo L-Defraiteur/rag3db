@@ -138,7 +138,13 @@ fn the_statements_a_first_index_of_code_executes() {
     let t = std::time::Instant::now();
     catalog.initialize().unwrap();
     log.lock().unwrap().phase = "2 register the code schema".into();
-    register_code_schema(&mut catalog, default_scope_chunking()).unwrap();
+    // The schema of the fallback: without `ScopeContent`, so without chunks, vectors or full text (codeparsers,
+    // `memory_resolution::register_code_schema_for_references`). `PROBE_FULL_SCHEMA=1` measures the full one.
+    if std::env::var("PROBE_FULL_SCHEMA").as_deref() == Ok("1") {
+        register_code_schema(&mut catalog, default_scope_chunking()).unwrap();
+    } else {
+        rag3weaver::memory_resolution::register_code_schema_for_references(&mut catalog).unwrap();
+    }
     log.lock().unwrap().phase = "3 first sync".into();
     let n = files.len();
     let report = sync_source(&mut catalog, &Snapshot::new("probe", files), &SourceSyncOptions::default(), &mut |_| {}).unwrap();
