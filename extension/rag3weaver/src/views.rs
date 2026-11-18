@@ -70,6 +70,26 @@ pub fn view_settings(tracked: Option<&Value>) -> Result<ViewSettings, String> {
     Ok(r)
 }
 
+/// **The settings of the writes of layers** (2a′-3, lot 5), under `tracked.writes` of the manifest.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WriteSettings {
+    /// How many work layers are written at most; a new one beyond is refused, naming this setting.
+    pub max_work_layers: usize,
+}
+
+impl Default for WriteSettings {
+    fn default() -> Self {
+        WriteSettings { max_work_layers: 32 }
+    }
+}
+
+/// **The settings of the writes** from `tracked` (the key `writes`); absent, the defaults.
+pub fn write_settings(tracked: Option<&Value>) -> Result<WriteSettings, String> {
+    // RED STUB: the key is not read.
+    let _ = tracked;
+    Ok(WriteSettings::default())
+}
+
 /// Les tombstones d'une génération : `[]` ou une liste de clés (l'écriture de la génération 0), ou
 /// `{"keys": [...], "files": [...]}`.
 pub(crate) fn read_tombstones(couche: &str, rang: i64, texte: &str) -> Result<(BTreeSet<String>, BTreeSet<String>), String> {
