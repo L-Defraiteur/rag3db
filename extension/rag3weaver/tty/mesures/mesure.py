@@ -625,6 +625,53 @@ finally:
     hote_arreter()
     ssh(f"rm -f {DOSSIER}/jamais-1 {DOSSIER}/jamais-2")
 
+# 1h. The messages exchanged with Claude sessions (vision of 16 nov.): a long message received is folded with
+#     « (Ctrl-O pour tout lire) », a message sent says « → envoyé à <peer> » and its refused delivery, and Ctrl-O
+#     opens the received message whole.
+def session_line(body):
+    req = urllib.request.Request(f"http://127.0.0.1:{TUNNEL}/faux/session", data=json.dumps(body).encode(), headers={"Authorization": "Bearer jeton-de-mesure", "Content-Type": "application/json"}, method="POST")
+    return json.load(urllib.request.urlopen(req, timeout=10))["result"]
+
+
+hote_demarrer()
+tunnel = subprocess.Popen(["sleep", "86400"] if LOCAL else ["ssh", "-N", "-o", "BatchMode=yes", "-L", f"{TUNNEL}:127.0.0.1:{PORT}", HOTE])
+time.sleep(1.5)
+try:
+    t = Terminal("COLORTERM=truecolor TERM=xterm-256color", "daemon")
+    if t.attendre(b"attend ton accord", borne=40) is None:
+        rouge("sessions : la demande d'accord ne paraît pas en 40 s")
+    t0 = time.monotonic()
+    session_line({"peer": "everything declarative", "direction": "in", "text": "ED → c7 : la tête corrigée de l'écrivain est 5081d2281, " + "z" * 90 + "\nseconde ligne du message"})
+    recu = t.attendre("Message de @everything declarative".encode(), apres=t0, borne=10) is not None
+    replie = t.attendre("(Ctrl-O pour tout lire)".encode(), apres=t0, borne=10) is not None
+    envoi = session_line({"peer": "banc", "direction": "out", "text": "prêt : la passe est verte"})
+    session_line({"peer": "banc", "kind": "delivery", "reply_to": envoi["id"], "delivery": "refused", "delivery_reason": "la session dort"})
+    emis = t.attendre("→ envoyé à banc".encode(), apres=t0, borne=10) is not None
+    refus = t.attendre("refusé : la session dort".encode(), apres=t0, borne=10) is not None
+    time.sleep(0.5)
+    t0 = t.ecrire(b"\x0f")
+    time.sleep(0.5)
+    t.ecrire(b"\x1b[D")
+    # Under tmux, tmux redraws the screen itself: judge on the screen it shows, the bytes elsewhere.
+    time.sleep(1.0)
+    ecran = ecran_tmux()
+    ouvert = ("seconde ligne du message" in ecran) if ecran is not None else t.attendre("seconde ligne du message".encode(), apres=t0, borne=5) is not None
+    if not ouvert:
+        resultats["sessions_ecran"] = ecran
+    time.sleep(0.6)
+    t.ecrire(b"\x1b")
+    time.sleep(1.0)
+    resultats["sessions"] = {"recu": recu, "replie": replie, "emis": emis, "refus_dit": refus, "ouvert_par_ctrl_o": ouvert}
+    for cle, vu in resultats["sessions"].items():
+        if not vu:
+            rouge(f"sessions : {cle}")
+    t.ecrire(b"\x03")
+    time.sleep(0.5)
+    t.arreter()
+finally:
+    tunnel.terminate()
+    hote_arreter()
+
 # 2. Les couleurs de chaque thème, en couleur vraie puis en 256 couleurs.
 couleurs = []
 for nom, th in themes.items():
