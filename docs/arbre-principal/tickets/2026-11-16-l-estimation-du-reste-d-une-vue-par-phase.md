@@ -30,6 +30,15 @@ fonde sur le premier paquet, qui ne compte ni les paquets plus lourds ni la phas
    le seuil. Un débit de départ viendra du banc d'étalonnage de Lucie (banc et embarquement) ; sans lui, pas de
    promesse avant le premier paquet.
 
+## La forme du reste, au mot de Lucie (18 novembre, par c7)
+
+L'attente bornée (6 s) compte aussi les vecteurs dus quand la recherche demande le signal `vector` :
+- **le texte** : les fichiers qui restent × le temps par fichier observé ;
+- **les vecteurs** : les morceaux dus de la vue × leur taille moyenne ÷ le débit du service d'embarquement de cette vue.
+
+Le débit d'un service vient du banc d'étalonnage (banc et embarquement) ; le code attend ce débit, sans constante à
+sa place.
+
 ## Ce qu'il faut pour le fermer
 
 Un témoin rouge d'abord : sur un index de N paquets dont le premier est rapide et les suivants lents (un faux
