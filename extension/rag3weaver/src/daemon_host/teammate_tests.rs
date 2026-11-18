@@ -1924,7 +1924,7 @@ fn the_next_step_sees_what_the_previous_step_read() {
                 if results.is_empty() {
                     seen.lock().unwrap().0.push(last_user(turns));
                 }
-                if step_of(turns) == 2 {
+                if step_of(turns) == 2 || (step_of(turns) == 1 && !results.is_empty()) {
                     seen.lock().unwrap().1 = results.clone();
                 }
                 match (step_of(turns), results.len()) {
@@ -1944,7 +1944,7 @@ fn the_next_step_sees_what_the_previous_step_read() {
     let mailbox = attendre_dans(&files, "the end", &|b| b.iter().any(|l| l["kind"] == "ended"));
     let (frontiers, step2_results) = seen.lock().unwrap().clone();
     let second = frontiers.get(1).cloned().unwrap_or_default();
-    assert!(second.contains("Previous step") && second.contains("src/lib.rs") && second.contains("lines 1-20"), "the second frontier names what step 1 read: {second}");
+    assert!(second.contains("Previous step") && second.contains("src/lib.rs") && second.contains("lines 1-20"), "the second frontier names what step 1 read: {second}\n(last tool results seen: {step2_results:?})");
     assert!(second.contains("next I edit its first line"), "and the last text of step 1: {second}");
     assert!(step2_results.first().is_some_and(|r| !r.contains("\"ok\":false") && !r.contains("error")), "replace_lines passes without a new read: {step2_results:?}");
     assert_eq!(mailbox.iter().find(|l| l["kind"] == "ended").unwrap()["text"], "fait sans plan", "{mailbox:#?}");
