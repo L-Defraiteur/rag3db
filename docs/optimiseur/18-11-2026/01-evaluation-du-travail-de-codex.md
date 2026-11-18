@@ -115,3 +115,25 @@ le quota d'une session sur deux jours. À dire à c7 et à recherche : la questi
 
 Il m'a fallu relire l'état aux deux postes pour savoir ce qui était fait. Une passation devrait le dire en tête, en
 phrases simples.
+
+## 6. Suites données, au mot de c7 (18 novembre, 11 h 4x)
+
+- **Les quatre copies anciennes de luciepc**, recopiées depuis master caeba78bdf à 11 h 47 (`install -m 755` en
+  `.neuf` puis `mv`, anciennes en `.avant-recopie-18nov`) :
+
+  | copie | avant | après (= master) |
+  |---|---|---|
+  | `controle-des-deux-sens.sh` | d46666e32fbab03e | 284f33e5c4dd37e0 |
+  | `nuit-verdict.sh` | 4b0e288558b0780f | 220662a05d964625 |
+  | `test_poste.sh` | 4c25409647eb9951 | 0733c2555744f829 |
+  | `mesure_e2e.sh` | 207d2d3f36dd428e | 98444e2bac27fff0 |
+
+- **Le binaire des services d'embarquement**, rebâti sur master caeba78bdf (Cargo.toml et Cargo.lock neufs) à luciepc,
+  de 11 h 47 à 11 h 57, dans `~/.cache/rag3weaver-build/nuit-caeba78bdf/rag3weaver-embeddings` : sha256
+  831529bb4e42c149. Les champs `max_chars_per_text` et `chars_per_token` de `/sante` sont dans le binaire. **Non
+  posé** : la pose attend le mot d'embarquement et une fenêtre sans embarquement. Elle se fera en place, par
+  `docs/optimiseur/scripts/poser-embarquement.sh caeba78bdf bge-m3 granite-278m`, vecteur témoin au bit près, retour
+  automatique si rouge. Le binaire de 3177d2489e (6196fbe7102ad533) est abandonné.
+- **PostgreSQL : rien à poursuivre.** La question FTS302 revient à recherche, dans son lot 1
+  (`cx-recherche-fts-generation-union-r2`). Recherche a vérifié que le Rust des branches `cx-optimiseur-pg-*`/`psql-*`
+  est identique au sien et n'en prend rien de plus. Les quatre branches restent sur `origin`, sans suite.
