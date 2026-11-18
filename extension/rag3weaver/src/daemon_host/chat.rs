@@ -988,7 +988,9 @@ impl<'a> OutilsDuChat<'a> {
             #[cfg(feature = "code")]
             "read_file" => {
                 let de = args["offset"].as_u64().unwrap_or(1).max(1) as usize;
-                let longueur = args["length"].as_u64().map(|l| l as usize).unwrap_or(crate::dataflow::fichier_nodes::LIGNES_MAX);
+                // The atelier's read_file takes `length`, the code backend's `limit` (18 Nov 2026:
+                // a read of 5 lines by `limit` was counted as 200).
+                let longueur = args["length"].as_u64().or(args["limit"].as_u64()).map(|l| l as usize).unwrap_or(crate::dataflow::fichier_nodes::LIGNES_MAX);
                 let longueur = longueur.clamp(1, crate::dataflow::fichier_nodes::LIGNES_MAX);
                 let chemin = super::empreintes::cle_vraie(racine.as_deref(), path);
                 // Les lignes rendues, bornées à la fin du fichier, et le fichier tel que lu.
