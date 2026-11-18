@@ -4260,7 +4260,12 @@ fn read_threads() -> u64 {
         let mut rendues = 0usize;
         for table in self.vector_tables() {
             let requete = self.dialect.rendre_reclamations(&table);
-            if let Ok(r) = self.conn.execute_with_params(&requete, &[QueryParam::new("mien", CypherValue::String(mien.clone()))]) {
+            let r = if self.fautes_de_test.release {
+                Err(crate::connection::DbError::QueryError("échec simulé de la libération".into()))
+            } else {
+                self.conn.execute_with_params(&requete, &[QueryParam::new("mien", CypherValue::String(mien.clone()))])
+            };
+            if let Ok(r) = r {
                 rendues += r.rows.first().and_then(|l| l.first()).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
             }
         }
@@ -10160,6 +10165,26 @@ fn read_threads() -> u64 {
     /// (à partir de 0), sur ce catalogue seulement : le crochet des témoins de
     /// l'arrêt, qui lisaient `RAG3WEAVER_TEST_STOP_AFTER_BATCH` pour tout le
     /// processus. `None` le retire.
+    /// **Arms a release fault for a witness**: the release of this writer's claims fails on every vector
+    /// table of this catalog.
+    pub fn inject_release_fault(&mut self) {
+        self.fautes_de_test.release = true;
+    }
+
+    /// **Arms a debt-read fault for a witness**: the debt read at the end of an index
+    /// ([`Self::end_of_index_progress`]) fails on this catalog.
+    pub fn inject_debt_read_fault(&mut self) {
+        self.fautes_de_test.debt_read = true;
+    }
+
+    /// **The debt read at the end of an index**: [`Self::index_progress`], or the fault a witness armed.
+    pub fn end_of_index_progress(&self) -> Result<crate::catalog::IndexProgress, CatalogError> {
+        if self.fautes_de_test.debt_read {
+            return Err(CatalogError::DbError("échec simulé de la lecture de la dette".into()));
+        }
+        self.index_progress()
+    }
+
     pub fn stop_after_batch(&mut self, rang: Option<usize>) {
         self.fautes_de_test.stop_after_batch = rang;
     }
