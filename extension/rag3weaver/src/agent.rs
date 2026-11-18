@@ -740,6 +740,8 @@ impl AgentRun {
 struct TeeSink<'a> {
     inner: &'a mut dyn TokenSink,
     text: String,
+    /// Each scheduled retry of this call, for the `LlmCall` event.
+    retries: Vec<crate::events::RetryRecord>,
 }
 
 impl TokenSink for TeeSink<'_> {
@@ -752,6 +754,13 @@ impl TokenSink for TeeSink<'_> {
     }
     fn on_finish(&mut self, _reason: &Finish) {}
     fn on_retry(&mut self, event: &RetryEvent<'_>) -> Flow {
+        if event.phase == crate::llm::RetryPhase::Scheduled {
+            self.retries.push(crate::events::RetryRecord {
+                reason: event.reason.to_string(),
+                wait_ms: event.wait.as_millis() as u64,
+                from_server: event.from_server,
+            });
+        }
         self.inner.on_retry(event)
     }
 }
@@ -1703,9 +1712,10 @@ impl<'a> Agent<'a> {
             // réécrivent, et elles le font ici, à un seul endroit.
             self.absorb_history(turns);
             self.refresh_waiting_block(turns);
-            let mut tee = TeeSink { inner: sink, text: String::new() };
+            let mut tee = TeeSink { inner: sink, text: String::new(), retries: Vec::new() };
             let mut generated = self.llm.generate(turns, &opts, &mut tee);
             let mut text = std::mem::take(&mut tee.text);
+            let mut retry_log = std::mem::take(&mut tee.retries);
 
             // **Une fenêtre refusée n'est pas une fin de course.** Si une
             // session tient les contenus entiers, on serre d'un cran — tout
@@ -1741,9 +1751,10 @@ impl<'a> Agent<'a> {
                         kept: c.kept,
                         dropped: c.dropped,
                     });
-                    let mut tee = TeeSink { inner: sink, text: String::new() };
+                    let mut tee = TeeSink { inner: sink, text: String::new(), retries: Vec::new() };
                     generated = self.llm.generate(turns, &opts, &mut tee);
                     text = std::mem::take(&mut tee.text);
+                    retry_log.append(&mut tee.retries);
                 }
             }
 
@@ -1813,6 +1824,7 @@ impl<'a> Agent<'a> {
                 completion_tokens: usage.completion_tokens,
                 ms: usage.ms,
                 retries: usage.retries,
+                retry_log: retry_log.clone(),
                 finish: format!("{:?}", finish.reason),
                 tool_calls: finish.tool_calls.len(),
             });
