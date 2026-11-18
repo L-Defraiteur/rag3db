@@ -783,7 +783,7 @@ fn slice_files_one_l1_per_topic_and_a_residual_for_uncovered_turns() {
     let b = ouvrir(dir.path(), |m| {
         m["models"]["llm"] = json!({"provider": "compatible", "protocol": "openai", "model": "faux", "address": adresse});
     });
-    let r = appel(&b, "archive_slice", json!({"titre": "run chat:test, turns 1-6", "contenu": slice_of_six_turns(), "jour": "2026-11-18", "allow_create": true, "trace": true}));
+    let r = appel(&b, "archive_slice", json!({"titre": "run chat:test, turns 1-6", "chemin": "sources/chat-test-turns-1-6.md", "contenu": slice_of_six_turns(), "jour": "2026-11-18", "allow_create": true, "trace": true}));
     assert_eq!(r["result"]["errors"], json!([]), "{r}");
     // Step 1: one extraction call, under a schema, over numbered turns, with no candidate fiche.
     let first: Value = serde_json::from_str(&serveur.request.recv().unwrap()).unwrap();
@@ -824,7 +824,7 @@ fn a_slice_extraction_that_is_not_json_is_refused_by_name() {
     let b = ouvrir(dir.path(), |m| {
         m["models"]["llm"] = json!({"provider": "compatible", "protocol": "openai", "model": "faux", "address": adresse});
     });
-    let r = b.call("archive_slice", json!({"titre": "run chat:test, turns 1-6", "contenu": slice_of_six_turns(), "jour": "2026-11-18", "allow_create": true}));
+    let r = b.call("archive_slice", json!({"titre": "run chat:test, turns 1-6", "chemin": "sources/chat-test-turns-1-6.md", "contenu": slice_of_six_turns(), "jour": "2026-11-18", "allow_create": true}));
     let said = match r { Ok(v) => v.to_string(), Err(e) => e.to_string() };
     assert!(said.contains("response_schema"), "the refusal names response_schema: {said}");
     assert!(apports_de(&b, "La reprise du journal").is_empty(), "nothing filed");
