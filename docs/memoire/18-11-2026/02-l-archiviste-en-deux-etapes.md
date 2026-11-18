@@ -513,10 +513,10 @@ Lucie : « les L0, les vrais tours, doivent être indexés au fil de l'eau avec 
   Les fichiers exclus du dépôt (ignorés par git, `.vault/`, les secrets) n'y entrent pas. L'hôte
   remplace leur contenu par « exclu du dépôt » avant l'écriture du tour. Le témoin vérifie qu'un
   `read_file` sur un fichier ignoré laisse dans `Turn` la mention, et jamais le contenu.
-- **L'indexation des tours est un réglage**, `memory.index_turns`. Archi le propose **éteint par
-  défaut**, puis allumé dépôt par dépôt par Lucie. **La question du défaut est posée à Lucie par
-  c7.** Éteint, il n'y a ni ligne `Turn` ni `search_turns`, et l'archiviste range quand même ses
-  tranches (Sources et L1).
+- **L'indexation des tours est un réglage**, `memory.index_turns`, **allumé par défaut** (Lucie,
+  18 novembre) : « il peut servir à l'archiviste, ou à un composeur de contexte au début ». La
+  garde reste l'exclusion des fichiers du dépôt, ci-dessus. Éteint dépôt par dépôt, il n'y a ni
+  ligne `Turn` ni `search_turns`, et l'archiviste range quand même ses tranches (Sources et L1).
 - **Le TTL** : `memory.l0_ttl_days`, dans les bindings du gabarit memory (30 jours proposés). Une
   ligne `Turn` plus ancienne est effacée, avec ses morceaux, son index et ses vecteurs. **Ne se
   touchent pas** : le `ChatFile` (l'hôte le garde), la Source de la transcription (le L0 immuable)
@@ -565,6 +565,19 @@ appels, et le p90 par décision.
   qui appelle un outil puis `decide`.
 - Le branchement des outils de la session et du code par l'hôte : la part d'archi, à chiffrer
   avec lui.
+
+### Une graine, pas un lot : le composeur de contexte de début de session
+
+Lucie, le 18 novembre : « un agent spécialiste d'organiser un début de session pour l'agent ».
+
+À l'ouverture d'une tâche, ou après une compaction, un **pas d'agent** compose le contexte de
+départ au lieu d'une composition fixe. Il choisit, avec ses outils, l'identité, la fiche de tâche,
+le bilan, les L1 qui comptent, et les tours qu'il a cherchés par `search_turns`. C'est
+`compose_restart` devenu un pas avec outils : les mêmes ingrédients et les mêmes bornes
+(`restart.context.*`, le budget), la même forme rendue. Il repose sur l'`AgentStepNode` de cette
+section, et sur les tours indexés.
+
+Rien n'est à concevoir ce soir : la graine est notée ici pour qu'on ne la perde pas.
 
 ## (h) L'ordre et les lots : qui fait quoi
 
