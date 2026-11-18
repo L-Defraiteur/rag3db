@@ -1,6 +1,7 @@
 # `usages` lit des conteneurs sans la borne des générations
 
-- **État** : ouvert (18 novembre 2026, session recherche). C'est un défaut supposé, pas encore prouvé par un rouge.
+- **État** : fermé (18 novembre 2026, session recherche). Défaut prouvé par un rouge, puis corrigé.
+- **Ouvert le** : 18 novembre 2026, session recherche.
 - **Pour** : recherche
 - **Famille** : produit
 - **Gravité** : à départager. Sous les générations (2a′), une réponse de `usages` pourrait montrer la déclaration
@@ -31,3 +32,11 @@ nom.
   retire et la synchronisation la retire. Puis `usages bar` ne montre pas la déclaration retirée.
 - **Le correctif** : les six lectures passent par `traduire_select`. Le dialecte mémoire de B en a besoin de toute
   façon : il remplace la traduction à cet endroit.
+
+## Ce qui le ferme (18 novembre 2026, recherche)
+
+- **Le rouge** : `e2e_code_sync::usages_does_not_show_the_declaration_of_a_retired_container` (f560496d6d,
+  passe `passe-visibilite-201031` à luciepc). Après l'édition, la ligne de `Foo` reste dans sa table, retirée.
+  `usages bar` rendait encore « déclaré dans Foo — foo.h:3 : `int bar(int x) const` ».
+- **Le correctif** : les six sélections de `usage_nodes.rs` passent par `ReadCatalog::traduire_select`, qui les borne
+  aux lignes visibles, comme les sauts de `neighborhood_nodes.rs`.
