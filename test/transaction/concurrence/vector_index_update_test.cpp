@@ -2253,6 +2253,24 @@ TEST_F(VectorIndexUpdate, AForcedCopyCommittedRightAfterACreateIsReached) {
     ASSERT_EQ(outcome, "ok") << "[check: setup] " << outcome;
     const auto failed = checkAfterCreateUnderWrites(WritesDuringCreate{});
     EXPECT_TRUE(failed.empty()) << checksOf(failed);
+    // SHOW_INDEXES dit la borne de ce que chaque recherche balaie hors du graphe (choix (a) de
+    // Lucie, 18 nov.) : les mille lignes du COPY, jusqu'à la reconstruction de l'index.
+    rag3db::main::Connection reader(database.get());
+    const auto rowsOutsideGraph = [&]() -> int64_t {
+        auto shown = reader.query("CALL SHOW_INDEXES() WHERE index_name = 'c_index' RETURN "
+                                  "rows_outside_graph_at_most;");
+        if (!shown->isSuccess() || !shown->hasNext()) {
+            ADD_FAILURE() << "[check: rows-outside-graph-at-most-is-readable] "
+                          << shown->getErrorMessage();
+            return -2;
+        }
+        const auto value = shown->getNext()->getValue(0);
+        return value->isNull() ? -1 : static_cast<int64_t>(value->getValue<uint64_t>());
+    };
+    EXPECT_EQ(rowsOutsideGraph(), 1000) << "[check: rows-of-the-forced-copy-are-counted]";
+    mustRun("CALL DROP_VECTOR_INDEX('C', 'c_index');");
+    mustRun("CALL CREATE_VECTOR_INDEX('C', 'c_index', 'vec', metric := 'l2');");
+    EXPECT_EQ(rowsOutsideGraph(), 0) << "[check: a-rebuild-takes-them-into-the-graph]";
 }
 
 // Des lignes déplacées ensemble pendant un CREATE, par un écrivain ouvert avant lui. Le
