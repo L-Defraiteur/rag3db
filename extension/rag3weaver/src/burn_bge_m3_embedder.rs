@@ -99,6 +99,9 @@ impl SparseHead {
     }
 }
 
+/// **The model's window in tokens** : 8 194 positions, minus the XLM-R offset of 2.
+pub const MAX_TOKENS: usize = 8192;
+
 /// BGE-M3 embedder running on burn.
 ///
 /// Implements [`Embedder`], [`SparseEmbedder`] and [`DualEmbedder`], so it is a drop-in
@@ -163,6 +166,13 @@ impl BurnBgeM3Embedder {
             tokenizer: Mutex::new(tokenizer),
             device,
         })
+    }
+
+    /// **Cuts every text at `n` tokens** (at most [`MAX_TOKENS`]), counted by
+    /// `troncatures()`. Stub : no truncation yet.
+    pub fn with_max_tokens(self, n: usize) -> Result<Self, EmbedError> {
+        let _ = n;
+        Ok(self)
     }
 
     /// Convenience: read the burnpack from disk, then [`Self::from_bytes`].

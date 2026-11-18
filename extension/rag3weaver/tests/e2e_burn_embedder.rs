@@ -282,3 +282,36 @@ fn burn_sparse_only_retrieves() {
     eprintln!("[burn-sparse] top='{}'", top);
     assert_eq!(top, "Machine Learning", "sparse should rank the ML doc first");
 }
+
+/// **A text denser than the window is cut in tokens, never a panic** (18
+/// November 2026 : 11 000 « é », under the service's 12 000-character cap,
+/// are 11 002 tokens ; bge-m3 has 8 194 positions and its computation panicked
+/// on the 7879 : « Expand 8194 != 11002 »).
+///
+/// The model is loaded **here**, on the tests' fallback device
+/// (`RAG3WEAVER_TESTS_REPLI_PERIPHERIQUE`, `igpu:0` at luciepc) and never
+/// through a service : this text poisons a service from before the fix. The
+/// window is set to 512 for the witness to stay cheap ; the default window is
+/// checked as well.
+#[test]
+#[ignore]
+fn a_text_denser_than_the_window_is_cut_in_tokens_not_a_panic() {
+    use rag3weaver::burn_bge_m3_embedder::{BurnBgeM3Embedder, BurnDevice, MAX_TOKENS};
+    use rag3weaver::embedder::Embedder;
+    let device = std::env::var("RAG3WEAVER_TESTS_REPLI_PERIPHERIQUE")
+        .expect("RAG3WEAVER_TESTS_REPLI_PERIPHERIQUE : the device to load bge-m3 on (igpu:0 at luciepc)");
+    let device = BurnDevice::parse(&device).expect("a device");
+    let home = std::path::PathBuf::from(std::env::var("HOME").expect("HOME")).join(".cache/rag3weaver/bge-m3");
+    let bpk = std::env::var("RAG3WEAVER_BGE_M3_BPK").map(std::path::PathBuf::from).unwrap_or_else(|_| home.join("model.bpk"));
+    let tok = std::env::var("RAG3WEAVER_BGE_M3_TOKENIZER").map(std::path::PathBuf::from).unwrap_or_else(|_| home.join("tokenizer.json"));
+    let embedder = BurnBgeM3Embedder::from_files(&bpk, &tok, device).expect("bge-m3 here");
+    let default_window = embedder.troncatures().map(|(_, window)| window);
+    let embedder = embedder.with_max_tokens(512).expect("a window of 512");
+    let dense = "é".repeat(11_000);
+    let vectors = embedder.embed(&[dense, "un texte court".to_string()]).expect("a vector, not a panic");
+    assert_eq!(vectors.len(), 2);
+    assert!(vectors.iter().all(|v| v.len() == Embedder::dim(&embedder) && v.iter().all(|x| x.is_finite())));
+    assert_eq!(embedder.troncatures(), Some((1, 512)), "the dense text is truncated at the window, and counted");
+    assert_eq!(default_window, Some(MAX_TOKENS), "the default window is the model's, 8 192 tokens");
+    assert!(embedder.with_max_tokens(MAX_TOKENS + 1).is_err(), "a window above the model's is refused");
+}
