@@ -672,7 +672,15 @@ fn run_index(
     if let Some(measured) = Rate::from_sample(embedded * chars_per_chunk, t.elapsed()) {
         if embedded >= 512 {
             let guard = catalog.lock().map_err(|_| "catalogue empoisonné".to_string())?;
-            guard.note_measured_embedding_rate(measured).map_err(|e| e.to_string())?;
+            // The vectors are written : a rate that cannot be noted (a remote
+            // embedder without an address) is said, and the index still ends
+            // (18 November 2026).
+            if let Err(e) = guard.note_measured_embedding_rate(measured) {
+                log(journal, &format!(
+                    "débit d'embarquement mesuré non noté ({:.0} caractères/s) : {e}",
+                    measured.chars_per_second
+                ));
+            }
         }
     }
     // **Ce qui reste dû, dit** : les morceaux restés sans réponse (nommés), et
