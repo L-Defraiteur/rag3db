@@ -13,6 +13,7 @@
   mort avant de répondre » quel que soit le programme lancé par l'activation (une fixture, un fournisseur tiers, une
   copie renommée). Il nomme désormais le programme à côté du type de service : « « rag3weaver-embeddings »
   (fournisseur.py) est mort avant de répondre (code 70) ». De même pour un fournisseur qui vit sans répondre.
+- 18 novembre2026 — **Les relations d'un premier index se posent plus vite.** Quand une seule paire d'un paquet de liens existait déjà, tout le paquet passait par le chemin lent ; seules ces paires-là y passent maintenant. La pose des liens tombe de 7,5 à 4,6 s sur rag3weaver et de 26,5 à 17,8 s sur le dépôt, et les arêtes ne changent pas. Les bases ne repassent pas.
 
 - 18 novembre2026 — **En Python et en C, une fonction nommée `default`, `from` ou `of` est un appel.** Les mots ignorés de Python et de C étaient ceux de JavaScript ; ils viennent maintenant du langage (les mots-clés de Python, les mots réservés de la grammaire C). Sur les fichiers Python du dépôt, 3 liens de plus ; le C ne change pas. **Toutes les bases repassent une fois** (pointeur codeparsers : les mots vides en données, `72ab7a8`).
 
