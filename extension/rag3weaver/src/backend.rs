@@ -405,6 +405,7 @@ impl EmbeddingService {
             name: None,
             max_output_tokens: None,
             restart_budget_tokens: None,
+            log: None,
             default: false,
         }
     }
@@ -7362,6 +7363,71 @@ mod tests {
         let e = p.err().expect("un creux d'une autre dimension que le dense se refuse");
         // La dimension du dense est celle du gabarit de la fixture (1024) : le refus dit les deux.
         assert!(e.contains("models.sparse") && e.contains("(384)") && e.contains("diffère de la dimension du dense ("), "le refus dit les deux dimensions : {e}");
+    }
+
+    /// **The stop cause of a service posed by hand is said from its log**
+    /// (entry 7, design `docs/embarquement/18-11-2026/03-conception-cause-d-arret-d-un-service-pose.md`) :
+    /// the fixture, posed apart and stopped by its first `/embed` (`--arret-nomme`),
+    /// writes « ✗ arrêt : … (code 70) » as its last line ; the declaration that
+    /// names its log has the reason « service d'embarquement arrêté : <cause> »,
+    /// and one without stays « pas joint ». A relative log, or a log with an
+    /// activation, is refused at load.
+    #[cfg(all(feature = "code", feature = "daemon", unix))]
+    #[test]
+    fn a_posed_service_stop_cause_is_said_from_its_log() {
+        use std::io::{Read, Write};
+        let place = tempfile::tempdir().unwrap();
+        let events = place.path().join("events.jsonl");
+        let log = place.path().join("service.log");
+        let mut child = std::process::Command::new(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/residence/fournisseur.py"))
+            .args(["--adresse", "127.0.0.1:0", "--generation", "posed-stop", "--modele", "bge-m3", "--dim", "1024", "--journal"])
+            .arg(&events)
+            .arg("--arret-nomme")
+            .arg(place.path().join("marker"))
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::fs::File::create(&log).unwrap())
+            .spawn()
+            .expect("the fixture posed by hand");
+        let start = std::time::Instant::now();
+        let address = loop {
+            let text = std::fs::read_to_string(&events).unwrap_or_default();
+            if let Some(a) = text.lines().filter_map(|l| serde_json::from_str::<Value>(l).ok())
+                .find(|v| v["event"] == "pret").and_then(|v| v["adresse"].as_str().map(String::from)) {
+                break a;
+            }
+            assert!(start.elapsed() < std::time::Duration::from_secs(10), "the fixture said ready : {text}");
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        };
+        // Its first /embed stops it, with its stop line.
+        let mut s = std::net::TcpStream::connect(&address).unwrap();
+        let body = r#"{"texts":["x"]}"#;
+        write!(s, "POST /embed HTTP/1.0\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}", body.len()).unwrap();
+        let _ = s.read_to_string(&mut String::new());
+        let stopped = loop {
+            if let Some(status) = child.try_wait().unwrap() { break status; }
+            assert!(start.elapsed() < std::time::Duration::from_secs(20), "the fixture stops");
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        };
+        assert_eq!(stopped.code(), Some(70));
+
+        let declare = |extra: Value| {
+            let address = address.clone();
+            move |m: &mut Value| embed_declare(m, {
+                let mut e = json!({"address": address.clone()});
+                for (k, v) in extra.as_object().unwrap() { e[k] = v.clone(); }
+                e
+            })
+        };
+        let (_d, p) = fixture_code_avec("working_tree", false, json!({}), &declare(json!({"log": log.display().to_string()})));
+        let reason = p.unwrap().embedder_or_absent().1.expect("a reason");
+        assert!(reason.contains("service d'embarquement arrêté : le calcul a paniqué"), "the cause from the log : {reason}");
+        let (_d, p) = fixture_code_avec("working_tree", false, json!({}), &declare(json!({})));
+        let reason = p.unwrap().embedder_or_absent().1.expect("a reason");
+        assert!(reason.contains("pas joint"), "without a log, as before : {reason}");
+        let (_d, p) = fixture_code_avec("working_tree", false, json!({}), &declare(json!({"log": "relative/service.log"})));
+        let e = p.err().expect("a relative log is refused at load");
+        assert!(e.contains("log") && e.contains("relative/service.log"), "{e}");
     }
 
     /// Un Backend sans base réelle, comme `search_verbs_…` : le catalogue
