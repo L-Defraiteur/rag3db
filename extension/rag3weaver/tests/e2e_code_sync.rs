@@ -529,7 +529,7 @@ fn le_mode_des_relations_se_choisit_selon_la_source() {
     let mut phases = Vec::new();
     let premiere = sync_source(&mut catalog, &Snapshot::new("depot", source_reliee()), &SourceSyncOptions { batch_files: 2, ..Default::default() }, &mut |p| phases.push(p.phase)).unwrap();
     assert_eq!(premiere.relations_mode, Some(RelationsMode::Bulk));
-    assert_eq!(phases, [SyncPhase::Nodes, SyncPhase::Nodes, SyncPhase::Relations, SyncPhase::Done], "{phases:?}");
+    assert_eq!(phases, [SyncPhase::Nodes, SyncPhase::Nodes, SyncPhase::Relations, SyncPhase::Derivations, SyncPhase::Done], "{phases:?}");
     let marques = catalog
         .execute_raw("MATCH (m:_catalog_meta) WHERE m._key STARTS WITH 'relations_pending:' AND m._value <> '' RETURN m._key")
         .unwrap()
@@ -727,7 +727,7 @@ fn une_edition_apres_le_passage_du_fichier_est_reprise_a_la_fin() {
         assert!(avancements.iter().any(|p| p.phase == SyncPhase::Nodes && p.files_to_resume == 1), "{mode:?} : l'avancement compte la reprise : {avancements:?}");
         let phases: Vec<SyncPhase> = avancements.iter().map(|p| p.phase).filter(|p| *p != SyncPhase::Nodes).collect();
         let attendu = match mode {
-            Some(RelationsMode::Bulk) => vec![SyncPhase::Relations, SyncPhase::Resume, SyncPhase::Resume, SyncPhase::Done],
+            Some(RelationsMode::Bulk) => vec![SyncPhase::Relations, SyncPhase::Derivations, SyncPhase::Resume, SyncPhase::Resume, SyncPhase::Done],
             _ => vec![SyncPhase::Resume, SyncPhase::Resume, SyncPhase::Done],
         };
         assert_eq!(phases, attendu, "{mode:?}");
