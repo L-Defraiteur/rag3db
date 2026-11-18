@@ -276,7 +276,25 @@ C'est un gain de 1,5 à 2, **pas la quinzaine de secondes** visée : l'analyse (
 - ou passer par B, qui n'a que l'analyse et la résolution (~12 s sur rag3weaver), avec son second chemin de lecture
   et sa mémoire.
 
-## Questions pour Lucie
+## La décision de Lucie (18 novembre 2026, vers 17 h 45, relayée par c7)
+
+« **C d'abord, puis B quand même.** »
+
+- **C, tout de suite, en lot, rouge d'abord** : l'index pose fichiers, scopes, symboles et relations avant les
+  dérivations. Le partage :
+  - **recherche** : sortir le drain des dérivations du chemin des paquets (`Catalog::ingest_entities`, qui les draine
+    aujourd'hui entité par entité), et le jouer après la pose des relations, dans la passe de `code_sync`. Aussi la
+    ligne de journal et d'état qui dit « relations prêtes, dérivations en cours », et le témoin de bout en bout ;
+  - **codeparsers** : la part d'ingestion du code (`code.rs`), c'est-à-dire ce qui doit rester dans le paquet (les
+    symboles et leurs rendez-vous) et la pose des liens à la fin (`drain · liens`, 7 s sur rag3weaver, 27 s sur le
+    dépôt), si elle se raccourcit.
+- **B, ensuite** : des tables à soi, bâties par le parsing. Lucie n'a pas tranché le détail ; c7 recommande, et la
+  page retient :
+  - des **tables compactes**, bâties fichier par fichier, plutôt qu'une borne en nombre de fichiers ;
+  - l'image bâtie **au premier appel** d'un outil de référence.
+  - Ticket : `docs/recherche/tickets/2026-11-18-les-outils-de-reference-par-des-tables-a-soi-avant-l-index.md`.
+
+## Questions pour Lucie (posées avant sa décision)
 
 1. ~~Mesurer d'abord C ?~~ **Tranché par c7 : oui.** C est mesurée au §7. Réordonner l'index donne ~27 s sur
    rag3weaver et ~95 s sur le dépôt, pas une quinzaine de secondes. **La question devient** : C seule (un seul
