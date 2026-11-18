@@ -63,13 +63,14 @@ if [ "${1:-}" = "--code-apporte" ]; then code_apporte "$2" "$3"; exit 0; fi
 # base, n'a pas à rejouer ses suites C++ (35 minutes) parce que du Rust a atterri : elles ne lient pas le Rust. Vrai si
 # le lot (base..tête) ne touche que les chemins du moteur, plus des .md, et si master n'a rien changé sous ces chemins
 # depuis la base. Le symétrique (un lot Rust quand seul du C++ a atterri) passe déjà : `code_apporte` ne regarde pas src/.
-CHEMINS_MOTEUR="src/ test/ extension/vector/ tools/rust_api/"
+# tools/shell/ (18 novembre 2026, ticket de c7) : le shell C++ ne lie que la lib du moteur, jamais le crate Rust.
+CHEMINS_MOTEUR="src/ test/ extension/vector/ tools/rust_api/ tools/shell/"
 cpp_transferable() { # <base> <master> <tête du lot>
   local base=$1 maitre=$2 tete=$3 f hors=""
   [ -z "$(git diff --name-only "$base" "$maitre" -- $CHEMINS_MOTEUR)" ] || return 1
   while IFS= read -r f; do
     [ -n "$f" ] || continue
-    case "$f" in *.md|src/*|test/*|extension/vector/*|tools/rust_api/*) ;; *) hors="$hors $f" ;; esac
+    case "$f" in *.md|src/*|test/*|extension/vector/*|tools/rust_api/*|tools/shell/*) ;; *) hors="$hors $f" ;; esac
   done < <(git diff --name-only "$base" "$tete")
   [ -z "$hors" ]
 }
