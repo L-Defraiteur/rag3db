@@ -376,6 +376,49 @@ bâtie au premier appel.
 4. **recherche** : la porte, l'aiguillage et la ligne. Le témoin de bout en bout, rouge d'abord : sur un backend
    neuf, `usages` répond avant l'index et le dit.
 
+## B : l'essai borné qui tranche la forme (recherche, 18 novembre 2026, 23 h 30)
+
+**Les deux formes** :
+- **la mienne** : une face de lecture seule (l'IR exécutée sur l'image), et une résolution à deux faces chez
+  codeparsers ;
+- **celle de codeparsers** : la connexion mémoire exécute aussi les écritures. Un `Catalog` posé dessus remplit
+  l'image par le chemin d'ingestion lui-même : une seule résolution, une parité par construction.
+
+c7 a demandé de mesurer avant de trancher.
+
+**L'essai** : la sonde `tests/probe_memory_surface.rs`.
+- Branche `probe-surface-on-refs` (f67a64f5d9), sur `codeparsers/memory-image-resolution`.
+- Une connexion qui enregistre chaque instruction enveloppe une base rag3db en mémoire.
+- Un `Catalog` y fait `initialize`, puis `register_code_schema_for_references` (le schéma sans `ScopeContent` de
+  codeparsers), puis une première synchronisation de rag3weaver/src.
+- Journal : `~/.cache/rag3weaver-build/probe-memory-surface.log` à luciepc.
+
+**Le relevé** : 308 fichiers, 17 366 scopes, **254 instructions en 96 formes distinctes, 25,6 s** (build de test
+non optimisé). Elles tiennent en huit familles :
+
+| Famille | Formes | Pour une connexion mémoire |
+|---|---|---|
+| DDL : tables de nœuds et de relations, `show_tables` | ~37 | déclarer le schéma de l'image |
+| méta clé-valeur (`_catalog_meta`, `_Org`, `_Project`) | 6 | une table clé-valeur |
+| transactions, point de reprise forcé | 3 | rien |
+| `COPY` de nœuds et de relations (`Write::Load`) | 15 | charger des lignes |
+| comptes | 13 | compter |
+| sélections et sauts (`MATCH … RETURN`, `UNWIND … MATCH`) | ~17 | lire l'image |
+| pose des liens (`UNWIND $items … MERGE`) | 1, en 17 appels | `insert_rel` en MERGE |
+| mise de côté (`_snapshot_aside`) | 3 | vide sur une image neuve |
+
+**Le verdict** : une traîne courte et simple. **La forme de codeparsers est retenue.**
+- Le dialecte mémoire rend, pour chacune de ces familles, une forme que la connexion mémoire exécute sur
+  `MemoryImage`. Les autres méthodes du dialecte (133 en tout) refusent en se nommant.
+- La lecture des outils vient avec : les sélections et les sauts sont les mêmes familles.
+- La résolution reste unique. La sonde de parité de codeparsers (`the_image_draws_the_same_links_as_the_base`) juge
+  au couple près.
+
+**Un chiffre de plus** : la même ingestion sur une base rag3db **en mémoire** prend 25,6 s, autant que l'index réel
+après C (26 s). Le disque ne coûte presque rien ici. Le gain de B ne viendra donc que d'une connexion qui n'est pas
+un moteur : pas de `COPY` par fichier CSV, pas de MERGE en Cypher, pas de points de reprise. Il reste à le mesurer
+une fois écrite. Si elle ne descend pas nettement sous l'index, il faudra le dire avant d'aller plus loin.
+
 ## Questions pour Lucie (posées avant sa décision)
 
 1. ~~Mesurer d'abord C ?~~ **Tranché par c7 : oui.** C est mesurée au §7. Réordonner l'index donne ~27 s sur
