@@ -322,6 +322,60 @@ C'est un gain de 1,5 à 2, **pas la quinzaine de secondes** visée : l'analyse (
   environ 60 % de MERGE évitables d'après codeparsers, dans son ticket
   `codeparsers/tickets/2026-11-18-la-pose-des-liens-de-la-resolution-repasse-par-merge.md`).
 
+## B : la conception courte (recherche, 18 novembre 2026, 19 h 50)
+
+C est sur master (e6c0307291). B vient ensuite : des tables à soi, bâties par le parsing, compactes, et une image
+bâtie au premier appel.
+
+### Ce que les outils lisent vraiment
+
+`usages`, `callees` et `impact` (`UsagesNode`, `NeighborhoodNode`, 2 650 lignes) lisent tous par le trait
+`ReadCatalog`, de deux façons :
+- **par l'IR** (`rag3weaver_ir` : `Select`, `Hop`, `Count`, `Plan`, 2 400 lignes), traduite par le **dialecte**
+  (`traduire_hop`, `run_plan` → `translate(dialect, form)`), puis exécutée sur la connexion. Il existe déjà deux
+  dialectes, rag3db et Postgres ;
+- **par quatre lectures en Cypher écrit à la main** (`usage_nodes.rs` 152, 323, 533, 582 ; `neighborhood_nodes.rs`
+  391, 455, 822).
+
+### La forme retenue : un troisième dialecte, « mémoire »
+
+- **Le dialecte mémoire** traduit une forme de l'IR en elle-même (sa forme sérialisée), sans fusion.
+- **La connexion mémoire** (un `DbConnection`) exécute ces formes sur une image : des tables de nœuds et de
+  relations, avec les lignes et les propriétés que l'ingestion écrirait (File, Scope, Symbol, DEFINES, MENTIONS,
+  CONSUMES, HAS_PARENT, IMPLEMENTS, INHERITS_FROM, LOCKS, QUERIES…). Les chaînes y sont internées et les ids
+  compacts.
+- **Un `ReadCatalog` sur ce dialecte et cette connexion** : les outils, l'exécuteur de plan et les rendus ne
+  changent pas.
+- **Ce qui change d'abord**, et que l'on peut prouver sans B : les sept lectures en Cypher écrit à la main passent
+  par l'IR. La parité se lit sur la base : les mêmes réponses avant et après, sur rag3weaver/src. Une forme que le
+  dialecte mémoire ne sait pas est refusée en la nommant (`untranslated`), jamais devinée.
+- **Pourquoi pas une lecture ad hoc par outil** : on garderait deux chemins par outil, à tenir ensemble. Un
+  dialecte sert aussi tout schéma déclaré (la généricité des schémas), pas seulement le code.
+
+### L'image, bâtie au premier appel
+
+- **codeparsers** : depuis les `CodeAnalysis` de la vue, fichier par fichier, il produit les lignes (nœuds,
+  relations de l'analyse, rendez-vous) et relâche chaque `CodeAnalysis`. Puis il résout par les mêmes fonctions de
+  choix (`choose_target`, `choose_inherited`, `departager`), derrière son lecteur de symboles à deux faces. Il
+  écrit la sonde de parité : arêtes de l'image contre arêtes de la base, au couple près.
+- **recherche** :
+  - la porte (index de la vue absent ou en retard, aucune autre vue explicite) ;
+  - l'image bâtie au premier appel d'un outil de référence qui passe la porte, sous un verrou, une seule fois ;
+  - le `ReadCatalog` mémoire branché à la place de l'instantané ;
+  - la ligne « par l'analyse en mémoire, index en cours : ~N s » ;
+  - l'invalidation par la montre (un fichier écrit → ses lignes remplacées, ses symboles rematérialisés) ;
+  - l'image lâchée quand la vue est à jour.
+
+### L'ordre des lots
+
+1. **recherche** : les sept lectures en Cypher écrit à la main passent par l'IR. Prouvé par les témoins actuels
+   des outils, sans changement de réponse.
+2. **recherche** : le dialecte et la connexion mémoire, avec un témoin par forme de l'IR. Rouge d'abord : une image
+   à deux scopes, un `Hop` qui ne rend rien.
+3. **codeparsers** : l'image depuis l'analyse, et le lecteur de symboles à deux faces, avec sa sonde de parité.
+4. **recherche** : la porte, l'aiguillage et la ligne. Le témoin de bout en bout, rouge d'abord : sur un backend
+   neuf, `usages` répond avant l'index et le dit.
+
 ## Questions pour Lucie (posées avant sa décision)
 
 1. ~~Mesurer d'abord C ?~~ **Tranché par c7 : oui.** C est mesurée au §7. Réordonner l'index donne ~27 s sur
