@@ -6236,8 +6236,14 @@ impl Backend {
         if let Some(Value::Object(comptes)) = cat.comptes_notes_du_plein_texte() {
             for (entite, c) in &comptes {
                 if c["documents"] != c["rows"] {
+                    // The age of the reading: a figure from an old index is said old, never as the present state.
+                    let when = match c["measured_at_ms"].as_u64() {
+                        Some(at) => format!("au relevé d'il y a {} min", crate::catalog::retard::now_ms().saturating_sub(at) / 60_000),
+                        None => "au dernier index (relevé non daté)".to_string(),
+                    };
+                    let orphans = c["orphans"].as_u64().map(|n| format!(", dont {n} orphelin(s)")).unwrap_or_default();
                     avertissements.push(format!(
-                        "plein texte de « {entite} » au dernier index : {} documents pour {} lignes — des écritures ont été perdues",
+                        "plein texte de « {entite} » {when} : {} documents pour {} lignes{orphans} — des écritures ont été perdues",
                         c["documents"], c["rows"]
                     ));
                 }

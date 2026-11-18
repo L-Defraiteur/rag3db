@@ -1340,13 +1340,50 @@ fn read_threads() -> u64 {
         comptes
     }
 
-    /// Les comptes relevés à la fin du dernier index, pour l'état.
+    /// Les comptes relevés à la fin du dernier index, pour l'état. Each entity carries `measured_at_ms`, the
+    /// date of the reading: a figure from an old index says its age instead of passing for the present state.
     pub fn noter_les_comptes_du_plein_texte(&self, comptes: &[(String, u64, u64)]) -> Result<(), CatalogError> {
+        let at = crate::catalog::retard::now_ms();
         let v: serde_json::Map<String, serde_json::Value> = comptes
             .iter()
-            .map(|(e, d, l)| (e.clone(), serde_json::json!({ "documents": d, "rows": l })))
+            .map(|(e, d, l)| (e.clone(), serde_json::json!({ "documents": d, "rows": l, "measured_at_ms": at })))
             .collect();
         self.persist_meta_key(COMPTES_DU_PLEIN_TEXTE_KEY, &serde_json::Value::Object(v).to_string())
+    }
+
+    /// **The noted counts, refreshed by a maintenance reading** (ticket of 15 November 2026: the state never
+    /// saw orphans born after the last full index). For every entity whose full-text table was read without
+    /// error: the documents left after the purge, the graph rows, the orphans still there, and the date.
+    /// The other entities keep their noted counts.
+    fn refresh_noted_counts_from_maintenance(&self, readings: &[serde_json::Value]) -> Result<(), CatalogError> {
+        let at = crate::catalog::retard::now_ms();
+        let mut noted = match self.comptes_notes_du_plein_texte() {
+            Some(serde_json::Value::Object(m)) => m,
+            _ => serde_json::Map::new(),
+        };
+        for reading in readings {
+            let (Some(table), Some(live), Some(rows), Some(found)) = (
+                reading["table"].as_str(),
+                reading["live_docs"].as_u64(),
+                reading["graph_docs"].as_u64(),
+                reading["orphans_found"].as_u64(),
+            ) else {
+                continue;
+            };
+            let purged = reading["purged"].as_u64().unwrap_or(0);
+            let table = table.strip_prefix(crate::fts_handle::INDEX_PREFIX).unwrap_or(table);
+            for entity in self.entity_configs.keys() {
+                if self.resolve_search_target(entity).is_ok_and(|t| t.parent_table == table) {
+                    noted.insert(entity.clone(), serde_json::json!({
+                        "documents": live.saturating_sub(purged),
+                        "rows": rows,
+                        "orphans": found.saturating_sub(purged),
+                        "measured_at_ms": at,
+                    }));
+                }
+            }
+        }
+        self.persist_meta_key(COMPTES_DU_PLEIN_TEXTE_KEY, &serde_json::Value::Object(noted).to_string())
     }
 
     /// Les comptes du dernier index, s'il y en a eu un.
@@ -1484,6 +1521,9 @@ fn read_threads() -> u64 {
         });
         if let Err(e) = self.persist_meta_key(FTS_MAINTENANCE_KEY, &note.to_string()) {
             eprintln!("[rag3weaver] maintenance nocturne : la note ne s'écrit pas ({e})");
+        }
+        if let Err(e) = self.refresh_noted_counts_from_maintenance(&rendus) {
+            eprintln!("[rag3weaver] maintenance nocturne : les comptes notés ne se rafraîchissent pas ({e})");
         }
         Some(note)
     }
