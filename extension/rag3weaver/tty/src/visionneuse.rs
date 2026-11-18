@@ -54,8 +54,13 @@ impl Visionneuse {
 
 /// Les lignes d'écran d'un appel, à `largeur` colonnes.
 pub fn lignes(appel: &Appel, theme: &Theme, cap: Capacites, largeur: usize, colorer: Colorer) -> Vec<Line<'static>> {
+    entry_lines(appel.complet(), theme, cap, largeur, colorer)
+}
+
+/// The screen lines of any openable entry (a tool call, a session message), from its whole lines.
+pub fn entry_lines(entry: Vec<crate::vue::Validee>, theme: &Theme, cap: Capacites, largeur: usize, colorer: Colorer) -> Vec<Line<'static>> {
     let mut out = Vec::new();
-    for v in appel.complet() {
+    for v in entry {
         let spans = if v.genre == crate::vue::Genre::Code && !v.langue.is_empty() && v.langue != "diff" { colorer(&v.texte, &v.langue) } else { None };
         out.extend(crate::code::lignes(&v, theme, cap, largeur, spans.as_deref()));
     }
@@ -65,6 +70,11 @@ pub fn lignes(appel: &Appel, theme: &Theme, cap: Capacites, largeur: usize, colo
 /// Dessine l'appel montré : son rang en tête, ses lignes depuis le défilement,
 /// et les touches en pied.
 pub fn dessiner(f: &mut Frame, v: &Visionneuse, n_appels: usize, lignes: &[Line<'static>], theme: &Theme, cap: Capacites) {
+    dessiner_entree(f, v, n_appels, "appel d'outil", lignes, theme, cap)
+}
+
+/// Draws the shown entry, its kind (`label`) in the header.
+pub fn dessiner_entree(f: &mut Frame, v: &Visionneuse, n_appels: usize, label: &str, lignes: &[Line<'static>], theme: &Theme, cap: Capacites) {
     use ratatui::layout::Rect;
     use ratatui::style::{Modifier, Style};
     use ratatui::text::Span;
@@ -78,12 +88,12 @@ pub fn dessiner(f: &mut Frame, v: &Visionneuse, n_appels: usize, lignes: &[Line<
     let sourdine = style(&theme.couleurs.sourdine);
     let corps = zone.height as usize - 2;
     let fin = (v.defilement + corps).min(lignes.len());
-    let tete = format!("⟨{}/{}⟩ appel d'outil · lignes {}-{} sur {}", v.index + 1, n_appels, (v.defilement + 1).min(fin), fin, lignes.len());
+    let tete = format!("⟨{}/{}⟩ {label} · lignes {}-{} sur {}", v.index + 1, n_appels, (v.defilement + 1).min(fin), fin, lignes.len());
     f.render_widget(Paragraph::new(Line::from(Span::styled(tete, accent))), Rect { height: 1, ..zone });
     let montrees: Vec<Line> = lignes.get(v.defilement..fin).unwrap_or(&[]).to_vec();
     f.render_widget(Paragraph::new(montrees), Rect { y: zone.y + 1, height: corps as u16, ..zone });
     // La touche qui ferme d'abord : un écran étroit coupe la fin du pied.
-    let pied = "Échap fermer · ↑ ↓ défiler · Pg préc. Pg suiv. une page · ← → appel d'avant, d'après";
+    let pied = "Échap fermer · ↑ ↓ défiler · Pg préc. Pg suiv. une page · ← → entrée d'avant, d'après";
     f.render_widget(Paragraph::new(Line::from(Span::styled(pied, sourdine))), Rect { y: zone.y + zone.height - 1, height: 1, ..zone });
 }
 

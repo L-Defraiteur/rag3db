@@ -151,6 +151,12 @@ class Gestion(http.server.BaseHTTPRequestHandler):
             # Une ligne de boîte venue d'ailleurs que la saisie (tty-13) : l'équipier qui écrit « !… ».
             ligne(corps.get("kind", "report"), corps.get("text", ""), de=corps.get("from", "teammate"))
             self.json({"ok": True, "result": {}})
+        elif self.path == "/faux/session":
+            # A line exchanged with a Claude session (vision of 16 nov.): {peer, direction, text, kind?, delivery?,
+            # delivery_reason?, reply_to?}.
+            extra = {k: corps[k] for k in ("peer", "direction", "delivery", "delivery_reason", "reply_to") if k in corps}
+            ligne(corps.get("kind", "message"), corps.get("text", ""), de="session", **extra)
+            self.json({"ok": True, "result": {"id": boite[-1]["id"]}})
         elif self.path == "/faux/marque":
             publier("tokens", {"kind": "Token", "run": "r1", "node": "chat", "seq": 5000, "text": corps.get("texte", ""), "count": 1})
             self.json({"ok": True, "result": {}})
