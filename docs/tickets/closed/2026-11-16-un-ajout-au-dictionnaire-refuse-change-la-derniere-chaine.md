@@ -1,6 +1,6 @@
 # Un ajout au dictionnaire refusé change la dernière chaîne existante
 
-- **État** : ouvert (16 novembre2026), rouge isolé acquis, correctif à qualifier
+- **État** : corrigé sur master `9fa16affff` (18 novembre 2026, cœur c++) : `DictionaryChunk::appendString` réserve ses offsets avant de publier les octets
 - **Famille** : moteur
 - **Gravité** : valeur fausse après refus d’allocation ; portée transactionnelle à établir
 - **Atteignable en service** : à établir ; BufferManager::reserve peut refuser l’agrandissement des offsets sous pool plein
@@ -31,3 +31,17 @@ La [référence75/59 seule, sans sonde](../16-11-2026/24-reference-chaines-verte
 La [qualification globale888 du16novembre](../16-11-2026/11-qualification-globale-arretee-sur-deux-rouges.md) s'arrête ROUGE sur deux nouveaux rouges de concurrence : offsets1/1 et transactions393passés, mais comparateurknown_red refusé. Chaînes dédiées/E2E non joués, poste rendu, aucune intégration. Le présent ticket reste ouvert ; ces rouges ne sont pas attribués au correctif append.
 
 [Résultat cinq cas et preuves](../16-11-2026/05-refus-offsets-cinq-cibles-vertes.md) : source/moteur033ffb92068f31cdae6338db876d23e6bced3567,1offsets+2finalize+2split,0failure/error/skip/disabled. Assertions48octets/3strings/hash/retry gardées, BUILD_ID033 réellement émis. Unité145,114s success, poste rendu/MainPID0/cgroupvide/aucunrésidu,37fichierspaquet2postes+3ELF/archive/headerrehashés. Ticket reste ouvert avant suites/intégration, parentC1crashnonattribué, aucun stdunordered_setinsertgarantieforte/master/libposée.
+
+## Fermé (18 novembre 2026)
+
+Le témoin et le correctif de Codex (`70ee2719f`, `888c81825`), reposés sur master par le cœur
+(branche `dictionary-append-reserves-first`) : `DictionaryAppendException.OffsetAllocationFailureKeepsExistingStringsUnchanged`
+rouge sur le témoin seul (`8e9596069`), vert avec le correctif (`814a8c6e4`, BUILD_ID
+`rag3db-build-814a8c6e414ecbe91e666bdc62560f6b9dbe11dc`). `transaction_test` entier 393 verts,
+known_red vert, `e2e_test` 1 866 verts avec les deux rouges de master admis sous leurs tickets
+(`DropNodeTableReclaim`, `CopyFilesWithHomeDir`). Poussé par la voie des suites C++ transférables,
+master `9fa16affff`.
+
+Ce correctif ne règle pas le SIGSEGV du dictionnaire au point de reprise (le ticket parent reste
+ouvert) : Codex l'a reproduit avec ce correctif dans
+`StringRewriteAcrossAddColumn.AutomaticCheckpointsBetweenAddsAndDrops`.
