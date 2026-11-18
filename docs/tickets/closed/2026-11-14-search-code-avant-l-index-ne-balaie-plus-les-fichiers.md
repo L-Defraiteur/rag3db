@@ -1,6 +1,7 @@
 # search_code avant tout index ne balaie plus les fichiers
 
-- **État** : ouvert (14 novembre 2026, relevé par embarquement en jouant `bindings/nodejs/test/essai.js`, ticket remis à recherche par c7)
+- **État** : fermé (18 novembre 2026, session recherche) : sans index et sans `view`, `search_code` balaie de nouveau les fichiers et le dit ; sous une `view` explicite, la règle de c67ca39c6 reste.
+- **Ouvert le** : 14 novembre 2026, relevé par embarquement en jouant `bindings/nodejs/test/essai.js`, ticket remis à recherche par c7.
 - **Pour** : recherche
 - **Famille** : produit
 - **Gravité** : réponse vide en apparence. Avant le premier index, `search_code` rendait les fichiers
@@ -66,3 +67,23 @@ seulement pour une vue demandée. C'est ce que la démo et `bindings/nodejs/test
 
 **Sinon**, si Lucie garde la règle telle quelle : `essai.js` et la démo disent la réponse d'aujourd'hui
 (« jamais construit — lancez `index` avant de chercher »), avec embarquement.
+
+## Ce qui le ferme (18 novembre 2026, recherche)
+
+Lucie a choisi la proposition du départage (« oui », portée par c7).
+
+- **La vue de l'appel, pour les nœuds** : `Backend::build_services` pose la `ViewRequest` de l'appel sous
+  `views::REQUESTED_VIEW_SERVICE` quand l'appel en demande une.
+- **La décision** : en mode auto, `SearchSourceNode` balaie si le plein texte de la cible est `never` et
+  qu'aucune vue n'est demandée, même pour une projection d'occurrences. Sinon la règle de c67ca39c6 reste :
+  une projection ne se replie pas sur des fichiers non masqués, et le mode `scan` explicite est refusé.
+- **Les témoins** :
+  - `e2e_lectures::search_code_before_any_index_scans_the_files_unless_a_view_is_asked`, sur le gabarit de
+    code et une base neuve : le fichier trouvé par balayage et « balayage » dit ; sous `view`, ni l'un ni
+    l'autre. Rouge en 6aff2afac8 (« jamais construit — lancez `index` avant de chercher », `results: []`),
+    puis vert ;
+  - `projected_search_never_falls_back_to_unmasked_files` garde son cas, désormais sous une vue explicite,
+    et son refus du mode `scan`.
+- **`bindings/nodejs/test/essai.js`** : sa rouge connue « search_code avant tout index balaie les fichiers »
+  dira « VERTE » au premier essai sur un binaire bâti avec ce lot. Elle reste une rouge connue tant
+  qu'embarquement ne l'a pas vue verte, puis devient une assertion.

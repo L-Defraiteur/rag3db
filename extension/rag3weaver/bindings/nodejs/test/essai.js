@@ -97,7 +97,7 @@ async function main() {
   const search = await backend.call('search_code', { query: 'bonjour', options: {} });
   const s = JSON.stringify(search);
   rougeConnue('search_code avant tout index balaie les fichiers',
-    'docs/recherche/tickets/2026-11-14-search-code-avant-l-index-ne-balaie-plus-les-fichiers.md',
+    'docs/tickets/closed/2026-11-14-search-code-avant-l-index-ne-balaie-plus-les-fichiers.md',
     s.includes('main.rs') || s.includes('README.md'), s.slice(0, 300));
 
   // Indexer les trois fichiers (plein texte seul), puis chercher dans l'index.
