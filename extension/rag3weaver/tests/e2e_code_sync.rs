@@ -134,6 +134,70 @@ fn fichiers(catalog: &Catalog) -> Vec<String> {
     v
 }
 
+/// Puts a full-text document with no row (a ghost) into every full-text table, and commits it.
+fn put_full_text_ghosts(catalog: &Catalog) {
+    for handle in catalog.fts_handles().values() {
+        handle.add_document_json(u64::MAX - 7, &serde_json::json!({})).expect("a ghost document");
+        handle.commit().expect("commit");
+    }
+}
+
+/// The full-text tables whose documents do not match their rows.
+fn full_text_gaps(catalog: &Catalog) -> Vec<(String, u64, u64)> {
+    catalog.comptes_du_plein_texte().into_iter().filter(|(_, documents, rows)| documents != rows).collect()
+}
+
+/// The shared resync of the three witnesses below: the source indexed once, `prepare` applied to the
+/// catalogue, then the same source synchronized again.
+fn resync_after(catalog: &mut Catalog, prepare: impl FnOnce(&Catalog)) {
+    let source = Snapshot::new("depot", source_a_trois_fichiers());
+    sync_source(catalog, &source, &SourceSyncOptions::default(), &mut |_| {}).expect("the first index");
+    assert!(full_text_gaps(catalog).is_empty(), "the first index leaves no gap: {:?}", full_text_gaps(catalog));
+    prepare(catalog);
+    sync_source(catalog, &source, &SourceSyncOptions::default(), &mut |_| {}).expect("the resync");
+}
+
+/// **Under generations, a resync removes a full-text ghost** (found by Codex on 16 November 2026,
+/// `docs/recherche/18-11-2026/01-evaluation-du-travail-de-codex.md`): an already indexed source is
+/// synchronized by the generations writer, which skipped the full-text counts guard that the snapshot
+/// path runs first. A document with no row stayed, and came back in searches.
+#[test]
+#[ignore]
+fn under_generations_a_resync_removes_a_full_text_ghost() {
+    let mut catalog = catalogue();
+    resync_after(&mut catalog, |c| {
+        put_full_text_ghosts(c);
+        assert!(!full_text_gaps(c).is_empty(), "the ghost is counted before the resync");
+    });
+    assert!(full_text_gaps(&catalog).is_empty(), "the resync removes the ghost: {:?}", full_text_gaps(&catalog));
+}
+
+/// **Without generations, the same resync removes the ghost**: the snapshot path, as a control.
+#[test]
+#[ignore]
+fn without_generations_a_resync_removes_a_full_text_ghost() {
+    let mut catalog = catalogue_sans_generations();
+    resync_after(&mut catalog, |c| {
+        put_full_text_ghosts(c);
+        assert!(!full_text_gaps(c).is_empty(), "the ghost is counted before the resync");
+    });
+    assert!(full_text_gaps(&catalog).is_empty(), "the resync removes the ghost: {:?}", full_text_gaps(&catalog));
+}
+
+/// **Under generations, a resync rebuilds a full text marked pending** (a first index stopped before its
+/// final push leaves that mark): the snapshot path rebuilds it first; the generations path did not.
+#[test]
+#[ignore]
+fn under_generations_a_resync_rebuilds_a_pending_full_text() {
+    let mut catalog = catalogue();
+    resync_after(&mut catalog, |c| {
+        c.mark_fts_pending(&[SCOPE]).expect("the pending mark");
+        assert_eq!(c.fts_pending_entities().unwrap(), vec![SCOPE.to_string()]);
+    });
+    assert!(catalog.fts_pending_entities().unwrap().is_empty(), "the resync rebuilds the pending full text");
+    assert!(full_text_gaps(&catalog).is_empty(), "{:?}", full_text_gaps(&catalog));
+}
+
 fn source_a_trois_fichiers() -> Vec<(String, String)> {
     vec![
         ("a.rs".to_string(), "pub fn alpha() {}\n".to_string()),
