@@ -83,6 +83,30 @@ Le L1 a pour section `turns a-b · <title>`. Son identité reste unique, et le b
 `compose_restart` lit toujours le premier tour. Son texte est fait de `said`, suivi du texte des
 tours cités.
 
+### Le risque de l'extraction, et le mode où le rangement lit les tours bruts
+
+Un avis extérieur, relayé par Lucie : « un seul appel d'extraction sur 50 k jetons peut
+sous-représenter des sujets brefs mais importants (une contrainte négative dite une fois au milieu
+du débogage) ; si l'extraction l'oublie, toute la chaîne est aveugle ».
+
+La réponse de Lucie est un mode de plus : **l'extraction ne sert qu'à la sous-découpe**. Elle
+rend les segments par sujet, avec leurs intervalles de tours. **L'étape 2 lit alors les tours
+bruts de chaque segment**, bornés, au lieu de la structure extraite. L'étape 1 devient moins
+critique : elle découpe, elle ne résume plus seule.
+
+- **Le réglage** : `archivist.step2.input`, qui vaut `extracted` (le `said` de l'extraction),
+  `raw_turns` (les tours du segment, tels quels) ou `both` (le `said`, puis les tours). La borne
+  des tours bruts est `archivist.step2.raw_turns_max_tokens` (12 000 proposés). Un segment plus
+  long se coupe à ses tours entiers, et la trace le dit.
+- **La garde de couverture**, qui vaut dans tous les modes : chaque tour de la tranche est dans au
+  moins un segment, ou dans `not_filed` avec une raison. Un tour qu'aucun segment ne couvre et
+  qu'aucune raison n'écarte va dans un **segment résiduel**, `turns a-b · reste`, rangé comme les
+  autres par l'étape 2. Rien ne tombe sans être dit.
+- **Le défaut proposé** est `both`, jusqu'à la mesure : le banc compare `extracted`, `raw_turns`
+  et `both` sur le rappel des sujets brefs. Ceux-là se jugent à part, par une liste de contraintes
+  dites une seule fois, relevée à la main dans le corpus. Il compte aussi les jetons et les
+  doublons.
+
 ### Entre deux fenêtres : le rapport de l'archiviste à lui-même (variante R)
 
 Il n'y a pas de chevauchement. À la fin de chaque plage rangée, l'archiviste rend **un rapport
@@ -300,6 +324,8 @@ sauf le chevauchement, qui est un pourcentage.
 | `overlap_percent` | le chevauchement : le bout de la tranche d'avant, en % de la fenêtre (la forme F) | 1 | 0 |
 | `ordered_bilan` | le bilan ordonné de la session (une ligne par pas, `fiche:<nom>`) | 1 et 2 | éteint ; 2 000 |
 | `candidate_fiches` | les fiches rappelées pour un sujet, dont celles déjà touchées de `previous_report` | 2 | allumé ; 5 fiches |
+| `archivist.step2.input` | ce que lit le rangement : `extracted`, `raw_turns` ou `both` (§ b, le risque de l'extraction) | 2 | `both` |
+| `archivist.step2.raw_turns_max_tokens` | la borne des tours bruts d'un segment | 2 | 12 000 |
 | `candidate_categories` | les catégories et valeurs rappelées pour une paire (dimension, valeur) | 2 | allumé ; 5 valeurs |
 
 Plus la taille de la fenêtre elle-même : `archivist.window_tokens`, 50 000 par défaut.
