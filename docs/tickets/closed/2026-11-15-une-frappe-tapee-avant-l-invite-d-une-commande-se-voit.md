@@ -1,6 +1,6 @@
 # Une frappe tapée avant l'invite d'une commande `!` se voit
 
-- **État** : ouvert, souhait. Relevé par la session tty le 15 nov. 2026 (lot tty-13), dit dans `docs/tty/15-11-2026/04-les-commandes.md`.
+- **État** : corrigé. Lot tty-24 (18 nov. 2026) : l'écho d'une frappe faite écho ouvert se montre et ne se garde plus ; page `docs/tty/18-11-2026/05-tty-24-frappe-avant-l-invite.md`.
 - **Famille** : produit
 - **Gravité** : gêne, et un risque léger : un mot de passe tapé trop tôt s'affiche à l'écran, et entre dans la sortie gardée, donc dans la consigne envoyée à l'équipier.
 - **Atteignable en service** : oui, si l'on tape le mot de passe d'un `!sudo …` avant que `sudo` ait affiché son invite (et coupé l'écho).
