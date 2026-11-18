@@ -139,7 +139,11 @@ commandes de la partie 4 valent pour toutes les entrées.
 
 ### 8. Le débit par service — `2026-11-16-le-debit-d-embarquement-par-service-pour-le-seuil-de-6-s.md`
 
-**En cours par embarquement**, arrêté à la demande de Lucie le 16 novembre à 10 h 5x : branche **`rate-key`**,
+**Fait pour la clé, par Codex**, sur master à bef0b27cb3 (évaluation :
+`docs/embarquement/18-11-2026/01-evaluation-du-travail-de-codex.md`). Restent au ticket la mesure par passe et la
+table enrichie. **Un défaut s'y ajoute** : un embarqueur distant sans adresse (`provider: compatible`) fait échouer
+l'estimation et l'index (`docs/embarquement/tickets/2026-11-18-un-embarqueur-distant-sans-adresse-fait-echouer-l-estimation-et-l-index.md`).
+Historique : en cours par embarquement, arrêté à la demande de Lucie le 16 novembre à 10 h 5x : branche **`rate-key`**,
 tête **`0aecc6b70b`**, worktree `~/git_workspaces/rag3db-rate-key` à luciepc, gardé pour la reprise. Le périmètre
 pris est la clé seule ; la mesure par passe reste au ticket.
 - **Fait** : la clé est convenue avec le banc, `embedding_rate:{model}:{address}@{host}`, l'ancienne
