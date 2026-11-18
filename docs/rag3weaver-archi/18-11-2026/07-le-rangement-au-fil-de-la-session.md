@@ -97,8 +97,11 @@ La part gabarit est décrite par mémoire. La part hôte :
    - **La garde de l'exclusion** vaut aussi pour `params` et `result`.
    - **`search_turns` passe les filtres** `since`, `until`, `role`, `tool_name` et `status` au
      rappel du memory (forme du gabarit : mémoire).
-   - **Les bornes** de `params` et `result` sont des réglages (`memory.turn_params_chars`,
-     `memory.turn_result_chars`, 2 000 et 4 000 par défaut).
+   - **Les bornes** sont celles du gabarit memory, qui fait foi (accord avec mémoire, 18
+     novembre) : `params` à 4 000 caractères, `result` à 8 000. Au-delà, le texte finit par
+     « … » suivi de sa taille d'origine. Le dense découpe en morceaux de 1 500 : ces bornes
+     limitent la place et ce qu'on relit, pas l'embarqueur. L'hôte les lit dans le gabarit et ne
+     les redéclare pas.
 
 9 ter. **Suivre la chaîne à la main** (Lucie) : un L1 mène à sa tranche, puis à son intervalle
    de tours, puis au tour exact, tant que le TTL ne l'a pas effacé.
