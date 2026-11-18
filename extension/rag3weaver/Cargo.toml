@@ -617,6 +617,10 @@ name = "sonde_clause_sans_filtre"
 path = "tests/sonde_clause_sans_filtre.rs"
 required-features = ["rag3db-native"]
 [[test]]
+name = "probe_memory_surface"
+path = "tests/probe_memory_surface.rs"
+required-features = ["rag3db-native", "code"]
+[[test]]
 name = "sonde_recherche_sans_filtre"
 path = "tests/sonde_recherche_sans_filtre.rs"
 required-features = ["rag3db-native", "code"]
