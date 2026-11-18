@@ -55,6 +55,18 @@ passe, appels, jetons d'entrée et part du cache), avec les définitions du § 4
 ingrédients restent à leur réglage par défaut et sont écrits avec chaque passe. La matrice se joue après la page de
 la session mémoire qui pose la forme.
 
+## Le contexte d'après compaction, réglable aussi (c7, 18 novembre)
+
+Le contexte qu'une session reçoit après une compaction se compose lui aussi d'ingrédients. Trois profils sont à juger
+**contre la compaction de Claude Code**, sur des transcripts réels, dans la mesure prévue à la page
+`docs/banc/15-11-2026/01-l-archiviste-contre-la-compaction.md` :
+- les L1 seuls, dans l'ordre des tours ;
+- le résumé global des tranches seul ;
+- les deux.
+
+**La vérité de terrain** est ce que les tours suivants ont eu besoin de savoir. Chaque profil est jugé sur la part de ce
+besoin qu'il couvre, et sur son coût en jetons. Cela se fait après la page de la session mémoire.
+
 ## Pour fermer
 
-Les quatre réglages de la matrice joués dans la forme en deux étapes, jugés contre N en P1, P2 et P5, et le résultat écrit dans la page de la mesure longue.
+Les quatre réglages de la matrice joués dans la forme en deux étapes, jugés contre N en P1, P2 et P5 ; les trois profils d'après compaction jugés contre la compaction de Claude Code ; les deux résultats écrits dans leurs pages.
