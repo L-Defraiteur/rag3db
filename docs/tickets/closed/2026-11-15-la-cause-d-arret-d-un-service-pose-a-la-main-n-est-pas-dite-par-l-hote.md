@@ -1,6 +1,6 @@
 # La cause d'arrêt d'un service posé à la main n'est pas dite par l'hôte
 
-- **État** : ouvert (15 novembre 2026, embarquement)
+- **État** : corrigé (18 novembre 2026, embarquement, branche `posed-stop-cause`, 88b76c27cc) ; ouvert (15 novembre 2026, embarquement)
 - **Pour** : embarquement
 - **Famille** : produit
 - **Gravité** : manque. Pour un service posé à la main (le 7879 et le 7878 de luciepc), l'hôte dit « injoignable »,
@@ -23,3 +23,17 @@ Un champ optionnel de la déclaration, `journal` : le chemin du journal du servi
 ligne, comme pour une activation. Ou bien le service garderait sa dernière cause d'arrêt dans un fichier connu, à côté
 de son adresse. Témoin : un service posé, arrêté avec sa ligne, et la déclaration qui nomme son journal ;
 l'état d'index dit « service d'embarquement arrêté : <cause> ».
+
+## Correction (18 novembre 2026)
+
+Conception `docs/embarquement/18-11-2026/03-conception-cause-d-arret-d-un-service-pose.md`, acceptée par c7.
+- **`models.<capacité>.log`** : le chemin absolu du journal d'un service posé à la main. Refusé au chargement s'il est
+  relatif, ou avec une activation (qui a son journal).
+- **`ModelSource::stop_cause`** lit la dernière ligne « ✗ arrêt : <cause> » du journal de l'activation locale, sinon de
+  `log` ; `cause_d_arret` reste comme alias.
+- **La raison d'un service pas joint** dit alors « service d'embarquement arrêté : <cause> (adresse) — il est repris
+  dès qu'il répond » ; sans cause, « pas joint » comme avant. Elle va au reçu, à l'état d'index et à la retente.
+- Témoin `a_posed_service_stop_cause_is_said_from_its_log` (`src/backend.rs`) : vu rouge (« pas joint »), puis vert.
+- **Pour les services de luciepc** : leurs unités écrivent dans
+  `~/.cache/rag3weaver-unites-embarquement/journal-<instance>.log` (drop-in `journal.conf`). Ajouter `"log"` à un
+  manifeste réel est la décision de sa propriétaire ; rien n'est changé ici.
