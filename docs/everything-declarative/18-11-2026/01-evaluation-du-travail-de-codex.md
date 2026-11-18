@@ -135,15 +135,15 @@ Trois restent en avance avec du code :
 - cx-ed-carte-index-fixture : +19, dont 5 fichiers hors docs ;
 - cx-ed-ci-writer-diagnostic-r1 : +2, docs seulement.
 
-Aucune n'est dans la passation comme travail à reprendre, et je ne les ai pas relues ici. Ma page du 16 les
-tenait déjà pour closes. Si c7 veut un verdict sur ces trois, c'est une demi-heure de plus.
+La passation cite les deux dernières (« autres lots ED anciens… rapports historiques à relire ») sans dire quoi en
+faire ; je ne les ai pas relues ici. Si c7 veut un verdict sur ces trois, c'est une demi-heure de plus.
 
 **Aucune branche n'est nuisible, et aucune n'est à effacer.** On n'efface pas une branche distante.
 
 ## 4. Ce que cela change à ma page du 16 novembre
 
-- **2.A est fait.** Le lot est sur master, à l'identique, et la passe a été rejouée sur la lib 59ac. Le ticket de lucivy (`les-ex-aequo-de-la-recherche-n-ont-pas-d-ordre-stable`)
-  est dans `docs/tickets/closed/`. Dans ma page, 2.A passe en « posé par 032d273942..3e771bc260 ».
+- **2.A est fait.** Le lot est sur master, à l'identique, et la passe a été rejouée sur la lib 59ac. Le ticket de
+  lucivy (`les-ex-aequo-de-la-recherche-n-ont-pas-d-ordre-stable`) est dans `docs/tickets/closed/`. Dans ma page, 2.A passe en « posé par 032d273942..3e771bc260 ».
 - **2.B est fait pour le code**, pas pour la preuve en service. Il reste :
   - les deux commentaires périmés, en un petit lot de mon côté : rien que des commentaires ; pas de témoin rouge
     possible, et je le dis dans le message ;
