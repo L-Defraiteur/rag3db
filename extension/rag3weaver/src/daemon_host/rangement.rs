@@ -134,7 +134,7 @@ impl DaemonHost {
     /// `memory.slice_tokens` since the mark, the slice goes to the archivist in the background,
     /// one at a time per conversation. Nothing here makes the turn fail: what goes wrong is
     /// written as `last_error` in the conversation's state.
-    pub(super) fn ranger_apres_le_tour(&self, hosted: &Arc<super::Hosted>, backend_id: &str, depuis: usize, turns: Vec<crate::llm::Turn>) {
+    pub(super) fn ranger_apres_le_tour(&self, hosted: &Arc<super::Hosted>, backend_id: &str, run: &str, depuis: usize, turns: Vec<crate::llm::Turn>) {
         let Ok((reglage, bilans)) = self.with_backend(hosted, |b| (b.prepared().manifest.memory.clone().unwrap_or_default(), b.prepared().manifest.bilans.clone())) else { return };
         let Some(bilans) = bilans else { return };
         if !reglage.index_turns {
@@ -142,7 +142,7 @@ impl DaemonHost {
         }
         let memoire = if bilans.memoire.is_absolute() { bilans.memoire.clone() } else { hosted.manifest.parent().map(|p| p.join(&bilans.memoire)).unwrap_or(bilans.memoire.clone()) };
         let Some(rangeur) = self.rangeur.clone().or_else(|| self.soi.get().map(|w| Arc::new(RangeurDeLHote { hote: w.clone() }) as Arc<dyn Rangeur>)) else { return };
-        let run = format!("chat:{backend_id}");
+        let run = run.to_string();
         let numerotes = numeroter(&turns);
         let appels: std::collections::HashMap<String, (String, String)> = turns.iter().flat_map(|t| t.tool_calls.iter().map(|c| (c.id.clone(), (c.name.clone(), c.arguments.clone())))).collect();
         let chemin = chemin_de_l_etat(&self.chats_root, backend_id);
