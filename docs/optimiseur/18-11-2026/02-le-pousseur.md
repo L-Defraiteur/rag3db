@@ -37,7 +37,9 @@ commit de master. Les noms de fichiers et de champs sont en anglais (règle de L
 | `log.tsv` | le journal : une ligne par événement (pris, reposé, rejoué, poussé, rouge), jamais réécrit |
 | `inbox/<author>.txt` | la boîte de l'auteur : ses lots poussés ou rouges, une ligne chacun |
 | `paused` | présent : la file est en pause (la raison dans le fichier) |
-| `worktree/`, `target/` | le worktree unique et son target chaud |
+
+Le worktree unique est `~/git_workspaces/rag3db-pusher` et son target chaud `~/.cache/rag3weaver-build/target-pusher` :
+la passe et la garde prennent un nom de worktree sous `~/git_workspaces` et un nom de journaux sous le cache.
 
 Une ligne de `queue.tsv` porte, séparés par des tabulations :
 
@@ -174,9 +176,9 @@ Ces deux modes ne s'activent que si le train laisse encore de l'attente mesurée
 
 | lot | contenu | témoin, rouge d'abord |
 |---|---|---|
-| **1** | `pusher.sh` : `enqueue`, `dequeue`, `run` pour un train d'**un** lot ; la repose dans le worktree unique ; le rejeu par `kind` ; le journal ; la boîte par auteur ; `memory.peak` au journal | `tools/poste/test_pusher.sh` : un dépôt jetable et un origin local, `push_garde.sh` et `passe_epinglee.sh` remplacés par des doublures ; dépôt refusé (id doublon, tête bougée, kind faux, cpp), docs poussés sans rejeu, scripts rejoués, conflit rouge, rouge de code, rouge d'environnement rejoué une fois, `paused` respecté |
+| **1** | `pusher.sh` : `enqueue`, `dequeue`, `step`, `run` pour un train d'**un** lot ; la repose dans le worktree unique ; le rejeu par `kind` ; le journal ; la boîte par auteur ; `memory.peak` au journal | `tools/poste/test_pusher.sh` : un dépôt jetable et un origin local, `push_garde.sh` et `passe_epinglee.sh` remplacés par des doublures ; dépôt refusé (id doublon, tête bougée, kind faux, cpp), docs poussés sans rejeu, scripts rejoués, conflit rouge, rouge de code, rouge d'environnement rejoué une fois, `paused` respecté |
 | **2** | le train de `k` lots et la bissection | train de quatre lots dont le troisième rouge : trois poussés, un rendu |
-| **3** | la suspension des lots Rust sous une lib en retard | lib plus vieille que le moteur de master : `rust` suspendu, `docs` poussé |
+| **3** | la suspension des lots Rust sous une lib en retard ; la recopie de soi (pas 7) | lib plus vieille que le moteur de master : `rust` suspendu, `docs` poussé ; un lot qui change `pusher.sh` : recopié au cache, témoin joué contre la copie, puis le lot suivant |
 | **4** | la session-pousseur : lire le journal, prévenir les auteurs, dire un rouge en clair | essai à blanc sur un journal rejoué |
 | **5** | N créneaux, si le journal montre de l'attente | à écrire après la mesure |
 
