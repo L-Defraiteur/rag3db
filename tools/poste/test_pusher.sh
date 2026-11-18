@@ -144,4 +144,43 @@ P step > /dev/null 2>&1
 # 10. The repose is under a new name, pushed to origin; the log has one line per event.
 git -C "$D/author" ls-remote -q origin 'refs/heads/pusher/*' | grep -q . && ok "repose poussée sous un nom neuf (pusher/…)" || ko "aucune branche pusher/… sur origin"
 grep -q "^.*	docs-1	pris" "$D/pusher/log.tsv" && grep -q "	docs-1	poussé	" "$D/pusher/log.tsv" && ok "journal : pris puis poussé" || ko "journal incomplet"
+
+# Lot 2, the train. 11. Three docs lots deposited before one step: one step pushes all three, no pass.
+c0=$(calls "$D/pass_calls")
+h1=$(lot tr-a docs/a.md '# a'); h2=$(lot tr-b docs/b.md '# b'); h3=$(lot tr-c docs/c.md '# c')
+for x in "tr-a $h1" "tr-b $h2" "tr-c $h3"; do set -- $x; P enqueue "$1" "$1" "$2" docs - - - - author-a > /dev/null; done
+P step > /dev/null 2>&1
+on_master tr-a && on_master tr-b && on_master tr-c && [ "$(calls "$D/pass_calls")" = "$c0" ] && ok "train de trois lots de docs poussé en un pas" || ko "train de docs : pas tout poussé en un pas"
+
+# 12. A Rust train of four, the third red: the train is red, its first half green and pushed; then C,D red, C alone
+# red and returned; then D pushed. Five passes in all, A, B and D on master, C returned.
+c0=$(calls "$D/pass_calls")
+ha=$(lot bi-a extension/rag3weaver/src/a.rs 'fn a() {}'); hb=$(lot bi-b extension/rag3weaver/src/b.rs 'fn b() {}')
+hc=$(lot bi-c extension/rag3weaver/src/c.rs 'fn c() {}'); hd=$(lot bi-d extension/rag3weaver/src/d.rs 'fn d() {}')
+for x in "bi-a $ha" "bi-b $hb" "bi-c $hc" "bi-d $hd"; do set -- $x; P enqueue "$1" "$1" "$2" rust e2e_code e2e - - author-c > /dev/null; done
+printf 'ROUGE e2e_code
+VERT
+ROUGE e2e_code
+ROUGE e2e_code
+VERT
+' >> "$D/outcomes"
+P step > /dev/null 2>&1; P step > /dev/null 2>&1; P step > /dev/null 2>&1
+on_master bi-a && on_master bi-b && on_master bi-d && ! on_master bi-c && [ "$(( $(calls "$D/pass_calls") - c0 ))" = 5 ] \
+  && grep -q "^rouge	bi-c	code	" "$D/pusher/inbox/author-c.txt" && ok "bissection : A, B, D poussés, C rendu, cinq passes" || ko "bissection : mauvais lots poussés ou mauvais nombre de passes ($(( $(calls "$D/pass_calls") - c0 )))"
+
+# 13. A conflict in the middle of a train: the middle lot returned, the two others pushed in the same step.
+m0=$(master)
+h1=$(lot cf-a docs/notes.md '# notes, by a'); h2=$(FROM=$m0 lot cf-b docs/notes.md '# notes, a third way'); h3=$(lot cf-c docs/cf-c.md '# c')
+for x in "cf-a $h1" "cf-b $h2" "cf-c $h3"; do set -- $x; P enqueue "$1" "$1" "$2" docs - - - - author-a > /dev/null; done
+P step > /dev/null 2>&1
+on_master cf-a && on_master cf-c && ! on_master cf-b && grep -q "^rouge	cf-b	conflit	" "$D/pusher/inbox/author-a.txt" && ok "conflit au milieu du train : rendu, les deux autres poussés" || ko "conflit au milieu du train : mal traité"
+
+# 14. The child of a red lot is returned with it.
+hp=$(lot pa-1 extension/rag3weaver/src/p.rs 'fn p() {}')
+hk=$(FROM=pa-1 lot pa-2 extension/rag3weaver/src/k.rs 'fn k() {}')
+P enqueue pa-1 pa-1 "$hp" rust e2e_code e2e - - author-c > /dev/null; P enqueue pa-2 pa-2 "$hk" rust e2e_code e2e - pa-1 author-c > /dev/null
+printf 'ROUGE e2e_code\nROUGE e2e_code\n' >> "$D/outcomes"
+P step > /dev/null 2>&1
+grep -q "^rouge	pa-1	code	" "$D/pusher/inbox/author-c.txt" && grep -q "^rouge	pa-2	parent rouge	" "$D/pusher/inbox/author-c.txt" && [ -z "$(grep -v '^#' "$D/pusher/queue.tsv")" ] \
+  && ok "l'enfant d'un lot rouge est rendu avec lui" || ko "l'enfant d'un lot rouge : pas rendu, ou resté dans la file"
 exit $red

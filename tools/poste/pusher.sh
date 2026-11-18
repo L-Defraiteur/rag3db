@@ -118,7 +118,7 @@ replay_scripts() { # <id> → 0 green, 1 red (the failing witness on stdout)
       fi
     done
     [ -n "$played" ] || log "$1" témoin "$f sans témoin (compté comme doc, comme la garde)"
-  done < <(g diff --name-only origin/master HEAD)
+  done < <(g diff --name-only "$BASE" HEAD)
   return 0
 }
 
@@ -150,61 +150,164 @@ push_plain() { # <base> → 0 pushed, 1 master moved, 2 refused
   [ -z "$(g status --porcelain)" ] && [ ! -d "$(g rev-parse --git-dir)/rebase-merge" ] && [ "$(g rev-parse FETCH_HEAD)" = "$(g rev-parse HEAD)" ]
 }
 
+# ── The train (lot 2) ────────────────────────────────────────────────────────────────────────────────────────────
+# A step takes up to PUSHER_TRAIN_MAX lots from the head of the queue (4 by default), reposes them in order on
+# master, replays the train once and pushes it all when green. When red, the bisection: the first half is reposed
+# and replayed alone, down to one lot; a green prefix is pushed, and what follows it stays at the head of the queue
+# for the next step. A red lot leaves the queue with its children (a lot written on it).
+TRAIN_MAX=${PUSHER_TRAIN_MAX:-4}
+f_() { printf '%s\n' "$1" | cut -f"$2"; }   # <queue line> <field number>
+kind_rank() { case "$1" in docs) echo 0 ;; scripts) echo 1 ;; *) echo 2 ;; esac; }
+
+# A red lot and, through the queue, its children and theirs.
+red_family() { # <id> <author> <reason> <detail>
+  local child
+  red "$1" "$2" "$3" "$4"
+  queue_lines | awk -F'\t' -v p="$1" '$8 == p {print $1 "\t" $9}' | while IFS=$'\t' read -r child author; do
+    red_family "$child" "$author" "parent rouge" "son parent $1 est rouge"
+  done
+}
+
+# Repose the given lines on BASE, in the pusher's worktree, under the branch RB. Prints the id of the lot whose
+# cherry-pick conflicts and returns 1; returns 0 when every lot is reposed.
+repose() { # <line>…
+  local line id head commits
+  g checkout -q -f -B "$RB" "$BASE" && g clean -q -fd
+  for line in "$@"; do
+    id=$(f_ "$line" 1); head=$(f_ "$line" 3)
+    commits=$(g rev-list --reverse --no-merges "HEAD..$head")
+    [ -n "$commits" ] || continue
+    if ! g cherry-pick --empty=drop $commits > "$D/last-repose.log" 2>&1; then
+      g cherry-pick --abort 2>/dev/null
+      echo "$id"; return 1
+    fi
+  done
+  return 0
+}
+
+# Replay the reposed train by its heaviest kind: 0 green, 1 code red, 2 environment red. JNAME receives the journals
+# name of a Rust pass, for the guard.
+replay_train() { # <line>…
+  local line rank=0 r first="" suite=e2e extra="" w s x
+  for line in "$@"; do r=$(kind_rank "$(f_ "$line" 4)"); [ "$r" -gt "$rank" ] && rank=$r; done
+  case $rank in
+    0) return 0 ;;
+    1) replay_scripts "$TRAIN_LABEL" > "$D/last-red.txt" && return 0; return 1 ;;
+  esac
+  # A Rust train: one pass. Its witness is the first Rust lot's; the other Rust lots' witnesses (e2e suites) and
+  # every lot's extra suites join SUITES_EN_PLUS; a lib witness is covered by the whole lib that the pass plays.
+  for line in "$@"; do
+    [ "$(f_ "$line" 4)" = rust ] || continue
+    w=$(f_ "$line" 5); s=$(f_ "$line" 6); x=$(f_ "$line" 7)
+    if [ -z "$first" ]; then first=$w; [ "$s" = - ] || suite=$s
+    elif [ "$s" != lib ]; then extra="$extra,$w"; fi
+    [ "$x" = - ] || extra="$extra,$x"
+  done
+  extra=$(echo "${extra#,}" | tr ',' '\n' | awk 'NF && !seen[$0]++' | paste -sd,)
+  JNAME=pusher-$STAMP-$TRAIN_LABEL
+  replay_rust "$TRAIN_LABEL" "$JNAME" "$first" "$suite" "${extra:--}"
+  case $? in
+    0) return 0 ;;
+    1) tail -1 "$JR/$JNAME/resume.log" > "$D/last-red.txt" 2>/dev/null; return 1 ;;
+  esac
+  log "$TRAIN_LABEL" "rouge d'environnement, rejeu"
+  JNAME=$JNAME-2
+  replay_rust "$TRAIN_LABEL" "$JNAME" "$first" "$suite" "${extra:--}"
+  case $? in
+    0) return 0 ;;
+    1) tail -1 "$JR/$JNAME/resume.log" > "$D/last-red.txt" 2>/dev/null; return 1 ;;
+    *) return 2 ;;
+  esac
+}
+
+# Push the reposed train: a Rust train through the guard, the others by the pusher itself. 0 pushed, 1 master moved
+# (the lots stay at the head of the queue), 2 refused (the message in $D/last-red.txt).
+push_train() { # <line>…
+  local line rank=0 r out
+  for line in "$@"; do r=$(kind_rank "$(f_ "$line" 4)"); [ "$r" -gt "$rank" ] && rank=$r; done
+  if [ "$rank" = 2 ]; then
+    out=$(poste_push bash "$GUARD" "$WTN" "$JNAME" 2>&1)
+    log "$TRAIN_LABEL" garde "$(echo "$out" | tail -1)"
+    [ "$(echo "$out" | tail -1)" = POUSSE ] && return 0
+    echo "$out" | grep -qE 'master a apporté du code|push refusé' && return 1
+    echo "$out" | grep -m1 'ARRÊT' > "$D/last-red.txt"; return 2
+  fi
+  push_plain "$BASE"; r=$?
+  [ $r = 2 ] && echo "push refusé ou contrôles faux après le push" > "$D/last-red.txt"
+  return $r
+}
+
 step() {
   [ -e "$D/paused" ] && { echo "file en pause : $(cat "$D/paused")"; return 0; }
   [ -e "$HELD" ] && { echo "master tenu : $(cat "$HELD")"; return 0; }
   [ "$(g config user.email)" = "$EMAIL" ] || { echo "identité git du worktree : $(g config user.email)" > "$D/paused"; echo "pause : identité git"; return 1; }
-  local line id branch head kind witness suite extra parent author base commits rb n J out
-  line=$(queue_lines | head -1)
-  [ -n "$line" ] || { echo "file vide"; return 0; }
-  IFS=$'\t' read -r id branch head kind witness suite extra parent author <<< "$line"
-  log "$id" pris "$branch $kind"
-  g fetch -q origin master "+refs/heads/$branch:refs/remotes/origin/$branch" || { red "$id" "$author" environnement "fetch de $branch"; return 0; }
-  [ "$(g rev-parse "origin/$branch")" = "$head" ] || { red "$id" "$author" "tête bougée" "$branch est sur $(g rev-parse --short "origin/$branch"), déposé à $(g rev-parse --short "$head") : redéposer"; return 0; }
-  # The repose: the lot's commits, cherry-picked on master under a new name. A conflict is the author's to resolve.
-  base=$(g rev-parse origin/master)
-  n=$(date +%Y%m%d-%H%M%S)
-  rb="pusher/$n-$id"
-  g checkout -q -f -B "$rb" "$base" && g clean -q -fd
-  commits=$(g rev-list --reverse --no-merges "$base..$head")
-  if [ -n "$commits" ] && ! g cherry-pick --empty=drop $commits > "$D/last-repose.log" 2>&1; then
-    g cherry-pick --abort 2>/dev/null
-    red "$id" "$author" conflit "la repose sur master $(g rev-parse --short "$base") bute : $(grep -m1 -E 'CONFLICT|error' "$D/last-repose.log")"
-    return 0
-  fi
-  [ "$(g rev-parse HEAD)" = "$base" ] && { log "$id" "déjà sur master"; pushed "$id" "$author" "$branch"; return 0; }
-  g push -q origin "HEAD:refs/heads/$rb" || { red "$id" "$author" environnement "push de la repose $rb"; return 0; }
-  log "$id" reposé "$rb $(g rev-parse --short HEAD) sur $(g rev-parse --short "$base")"
-  case "$kind" in
-    docs) ;;
-    scripts)
-      out=$(replay_scripts "$id") || { red "$id" "$author" code "témoin rouge : $out ($D/last-witness.log)"; return 0; } ;;
-    rust)
-      J=pusher-$n-$id
-      replay_rust "$id" "$J" "$witness" "$suite" "$extra"
-      case $? in
-        0) ;;
-        1) red "$id" "$author" code "passe rouge : $(tail -1 "$JR/$J/resume.log" 2>/dev/null) ($JR/$J)"; return 0 ;;
-        2) log "$id" "rouge d'environnement, rejeu"
-           J=$J-2
-           replay_rust "$id" "$J" "$witness" "$suite" "$extra"
-           case $? in
-             0) ;;
-             1) red "$id" "$author" code "passe rouge au rejeu : $(tail -1 "$JR/$J/resume.log" 2>/dev/null) ($JR/$J)"; return 0 ;;
-             *) red "$id" "$author" environnement "deux rouges d'environnement ($JR/$J)"; return 0 ;;
-           esac ;;
-      esac
-      out=$(poste_push bash "$GUARD" "$WTN" "$J" 2>&1)
-      log "$id" garde "$(echo "$out" | tail -1)"
-      if [ "$(echo "$out" | tail -1)" = POUSSE ]; then pushed "$id" "$author" "$branch"; return 0; fi
-      if echo "$out" | grep -qE 'master a apporté du code|push refusé'; then log "$id" "master a bougé : reposé au pas suivant"; return 0; fi
-      red "$id" "$author" garde "$(echo "$out" | grep -m1 'ARRÊT')"; return 0 ;;
-  esac
-  push_plain "$base"
+  local -a train=() kept=() part=()
+  local line id branch author refs="" n half reposed=0
+  while IFS= read -r line; do [ ${#train[@]} -lt "$TRAIN_MAX" ] && train+=("$line"); done < <(queue_lines)
+  [ ${#train[@]} -gt 0 ] || { echo "file vide"; return 0; }
+  for line in "${train[@]}"; do
+    branch=$(f_ "$line" 2); refs="$refs +refs/heads/$branch:refs/remotes/origin/$branch"
+    log "$(f_ "$line" 1)" pris "$branch $(f_ "$line" 4), train de ${#train[@]}"
+  done
+  # shellcheck disable=SC2086
+  g fetch -q origin master $refs || { echo "fetch du train" > "$D/last-red.txt"; log train "fetch refusé, rejoué au pas suivant"; return 0; }
+  # A branch that moved since its deposit: returned, with its children.
+  for line in "${train[@]}"; do
+    id=$(f_ "$line" 1); branch=$(f_ "$line" 2); author=$(f_ "$line" 9)
+    in_queue "$id" || continue
+    if [ "$(g rev-parse "origin/$branch")" != "$(f_ "$line" 3)" ]; then
+      red_family "$id" "$author" "tête bougée" "$branch est sur $(g rev-parse --short "origin/$branch"), déposé à $(g rev-parse --short "$(f_ "$line" 3)") : redéposer"
+    else kept+=("$line"); fi
+  done
+  BASE=$(g rev-parse origin/master)
+  STAMP=$(date +%Y%m%d-%H%M%S)
+  # The repose: a conflicting lot leaves the train (and the queue, with its children), the rest is reposed again.
+  while :; do
+    train=(); for line in "${kept[@]}"; do in_queue "$(f_ "$line" 1)" && train+=("$line"); done
+    [ ${#train[@]} -gt 0 ] || return 0
+    TRAIN_LABEL=$(f_ "${train[0]}" 1); [ ${#train[@]} -gt 1 ] && TRAIN_LABEL="$TRAIN_LABEL+$(( ${#train[@]} - 1 ))"
+    RB="pusher/$STAMP-$TRAIN_LABEL"
+    id=$(repose "${train[@]}") && break
+    for line in "${train[@]}"; do [ "$(f_ "$line" 1)" = "$id" ] && author=$(f_ "$line" 9); done
+    red_family "$id" "$author" conflit "la repose sur master $(g rev-parse --short "$BASE") bute : $(grep -m1 -E 'CONFLICT|error' "$D/last-repose.log")"
+    kept=("${train[@]}")
+  done
+  # The replay, with the bisection: part is the prefix under test.
+  part=("${train[@]}")
+  while :; do
+    if [ "$reposed" = 1 ]; then
+      TRAIN_LABEL=$(f_ "${part[0]}" 1); [ ${#part[@]} -gt 1 ] && TRAIN_LABEL="$TRAIN_LABEL+$(( ${#part[@]} - 1 ))"
+      RB="pusher/$STAMP-$TRAIN_LABEL"
+      repose "${part[@]}" > /dev/null || { log "$TRAIN_LABEL" "repose d'une moitié refusée"; return 0; }
+    fi
+    reposed=1
+    # Every commit of the part already on master (pushed by another way): nothing to replay or push.
+    if [ "$(g rev-parse HEAD)" = "$BASE" ]; then
+      for line in "${part[@]}"; do log "$(f_ "$line" 1)" "déjà sur master"; pushed "$(f_ "$line" 1)" "$(f_ "$line" 9)" "$(f_ "$line" 2)"; done
+      return 0
+    fi
+    g push -q origin "HEAD:refs/heads/$RB" || { log "$TRAIN_LABEL" "push de la repose $RB refusé, rejoué au pas suivant"; return 0; }
+    log "$TRAIN_LABEL" reposé "$RB $(g rev-parse --short HEAD) sur $(g rev-parse --short "$BASE")"
+    replay_train "${part[@]}"
+    case $? in
+      0) break ;;
+      2) for line in "${part[@]}"; do red_family "$(f_ "$line" 1)" "$(f_ "$line" 9)" environnement "deux rouges d'environnement pour le train $TRAIN_LABEL : appeler c7"; done
+         return 0 ;;
+    esac
+    n=${#part[@]}
+    if [ "$n" = 1 ]; then
+      red_family "$(f_ "${part[0]}" 1)" "$(f_ "${part[0]}" 9)" code "$(cat "$D/last-red.txt" 2>/dev/null)"
+      return 0
+    fi
+    half=$(( n / 2 ))
+    log "$TRAIN_LABEL" bissection "rouge sur $n lots, rejoue les $half premiers"
+    part=("${part[@]:0:$half}")
+  done
+  push_train "${part[@]}"
   case $? in
-    0) pushed "$id" "$author" "$branch" ;;
-    1) log "$id" "master a bougé : reposé au pas suivant" ;;
-    *) red "$id" "$author" environnement "push refusé ou contrôles faux après le push" ;;
+    0) for line in "${part[@]}"; do pushed "$(f_ "$line" 1)" "$(f_ "$line" 9)" "$(f_ "$line" 2)"; done ;;
+    1) log "$TRAIN_LABEL" "master a bougé : reposé au pas suivant" ;;
+    *) for line in "${part[@]}"; do red_family "$(f_ "$line" 1)" "$(f_ "$line" 9)" garde "$(cat "$D/last-red.txt" 2>/dev/null)"; done ;;
   esac
   return 0
 }
