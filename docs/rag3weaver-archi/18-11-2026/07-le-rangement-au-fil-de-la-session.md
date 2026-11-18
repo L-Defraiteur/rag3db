@@ -123,8 +123,10 @@ La part gabarit est décrite par mémoire. La part hôte :
    - **La garde de l'exclusion** vaut aussi pour `params` et `result`.
    - **Le filtre des motifs de secrets** (clés, jetons, mots de passe) passe sur `text`,
      `params` et `result` avant l'écriture d'un `Turn`. Il tourne **dans le gabarit**, à
-     l'écriture, comme la garde de l'exclusion. L'hôte écrit les `Turn` par l'outil du gabarit
-     (forme : mémoire, page du 18, section g), si bien qu'un seul endroit couvre tous les
+     l'écriture, comme la garde de l'exclusion. L'hôte écrit les `Turn` par l'outil `put_turn` du
+     gabarit (run, turn, seq, at, role, text ; pour un appel d'outil : tool_name, params, result,
+     status ; il rend la ligne écrite, avec ce qui a été masqué ou coupé ; mémoire, page du 18,
+     section g), si bien qu'un seul endroit couvre tous les
      rédacteurs (l'hôte, les hooks Claude Code, l'archiviste). L'hôte ne garde pas de liste de
      motifs.
    - **`search_turns` passe les filtres** `since`, `until`, `role`, `tool_name` et `status` au
