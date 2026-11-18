@@ -1519,16 +1519,18 @@ impl PreparedBackend {
             }
         }
         // **Le plafond d'une requête embarquée** ne dépasse pas ce que le modèle
-        // accepte (décision de c7, 15 novembre 2026) : environ trois caractères
-        // par jeton de `context_tokens`.
+        // accepte, au pire ratio (18 novembre 2026, point D de la page des bornes) :
+        // un jeton par caractère (accents, emojis, CJK, hexadécimal), plus les deux
+        // jetons spéciaux. Le 15 novembre, la borne supposait trois caractères par
+        // jeton : vraie pour la prose et le code, fausse d'un facteur 3 au pire.
         if let Some(q) = embed.query_max_chars {
             if q == 0 {
                 return Err("models.embed.query_max_chars doit être positif".into());
             }
-            if let Some(haut) = embed.context_tokens.map(|c| c * 3) {
+            if let Some(haut) = embed.context_tokens.map(|c| c.saturating_sub(2)) {
                 if q > haut {
                     return Err(format!(
-                        "models.embed.query_max_chars ({q}) dépasse context_tokens × 3 ({haut}) : le modèle n'accepte pas une requête aussi longue"
+                        "models.embed.query_max_chars ({q}) dépasse context_tokens − 2 ({haut}) : au pire, un caractère vaut un jeton (accents, emojis, CJK), et le modèle couperait la requête"
                     ));
                 }
             }
