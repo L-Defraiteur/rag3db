@@ -139,6 +139,36 @@ impl Default for TeammatePolicy {
     }
 }
 
+/// **The session archived as it goes** (page 07 of 18 Nov 2026, rag3weaver-archi): the `memory`
+/// key of a backend manifest. The host writes each turn to the memory of `bilans.memoire`
+/// (`put_turn`) and, past `slice_tokens` since the last archived turn, has the archivist file the
+/// slice in the background (`archive_slice`).
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct SessionArchive {
+    /// The tokens of a slice (ceil(characters / 4) of the session's turns). Default: 50 000.
+    #[serde(default = "SessionArchive::slice_tokens_default")]
+    pub slice_tokens: usize,
+    /// The turns are written to the memory and its index. Off: no slice closes. Default: on.
+    #[serde(default = "SessionArchive::on")]
+    pub index_turns: bool,
+}
+
+impl SessionArchive {
+    fn slice_tokens_default() -> usize {
+        50_000
+    }
+    fn on() -> bool {
+        true
+    }
+}
+
+impl Default for SessionArchive {
+    fn default() -> Self {
+        SessionArchive { slice_tokens: Self::slice_tokens_default(), index_turns: Self::on() }
+    }
+}
+
 /// La clé `bilans` d'un manifeste : la mémoire où le juge range ses fiches.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -326,6 +356,10 @@ pub struct BackendManifest {
     /// **La politique de l'équipier** d'une tâche ouverte sur ce backend.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub teammate: Option<TeammatePolicy>,
+    /// **The session archived as it goes** (18 Nov 2026): the slices of the conversation that
+    /// the archivist of `bilans.memoire` files in the background. Absent: the defaults.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub memory: Option<SessionArchive>,
     /// Creation-time Lucivy option; existing indexes retain their persisted setting.
     #[serde(default)]
     pub fts_positions: Option<bool>,
