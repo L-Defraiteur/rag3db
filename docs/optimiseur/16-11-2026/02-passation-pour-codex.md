@@ -163,6 +163,17 @@ Ticket : `docs/optimiseur/tickets/2026-11-16-le-plafond-par-defaut-de-poste-lour
 bâti à froid de `build/moteur` (session cœur) et d'un bâti à froid de la lib du magasin, puis le mot de c7. Si les
 deux tiennent sous 24 Gio, le défaut passe à 32G ; sinon, le ticket se ferme sur les chiffres.
 
+### 8. Les suites écartées de l'e2e entier, en passe de nuit — 4 h (ajoutée le 18 novembre, au mot de c7)
+
+Ticket : `docs/optimiseur/tickets/2026-11-18-les-suites-ecartees-de-l-e2e-entier-ne-tournent-jamais.md`. Une passe de nuit
+joue seules les 18 suites que `run_e2e.sh` écarte (carte locale, vrai modèle, banc à services), avec un journal daté par
+suite et un verdict lu le matin. Elle passe après l'entrée 2.
+
+### 9. `e2e_tx_par_paquet_arret` exigée par les chemins de l'écrivain et de la reprise — 1 h, **après le commit fautif d'ED**
+
+Ticket : `docs/optimiseur/tickets/2026-11-18-e2e-tx-par-paquet-arret-n-est-exigee-par-aucun-chemin.md`. Une ligne de
+`tools/poste/required_suites.txt`, son témoin rouge d'abord ; pas de code avant le mot d'ED.
+
 ### Hors de Codex, pour mémoire
 
 - `docs/optimiseur/tickets/2026-11-08-le-plein-texte-de-code-lourd-compte-plus-de-documents-que-de-lignes.md` est aux
