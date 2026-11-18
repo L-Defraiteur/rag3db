@@ -1,6 +1,8 @@
 # La voie C++ de la garde ignore `tools/shell` et le reste de `tools/` compilé
 
-- **État** : ouvert (16 novembre 2026, hotfixs, au mot de c7)
+- **État** : fermé (18 novembre 2026) par c8613fb1c7 : le shell C++ (`tools/shell`) entre dans la voie des
+  suites C++ transférables. Jumeau fermé : `2026-11-16-la-voie-cpp-transferable-ignore-tools-shell.md`. Ouvert le 16
+  novembre 2026 par hotfixs, au mot de c7
 - **Famille** : produit
 - **Gravité** : un lot qui touche le code du shell (`tools/shell/*.cpp`) n'entre dans aucune voie de la garde. Le mode
   tests seuls le refuse, puisque ce n'est pas `tools/shell/test`, et la voie C++ ne compte pas `tools/shell` parmi
