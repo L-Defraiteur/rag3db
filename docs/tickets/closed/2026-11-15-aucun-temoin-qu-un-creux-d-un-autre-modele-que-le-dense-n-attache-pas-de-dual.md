@@ -1,6 +1,6 @@
 # Aucun témoin qu'un creux d'un autre modèle que le dense n'attache pas de dual
 
-- **État** : ouvert (15 novembre 2026, embarquement ; relevé avec c7 après le lot du dual)
+- **État** : fait (18 novembre 2026, embarquement, branche `dual-witness`, b3627412ae) ; ouvert (15 novembre 2026, embarquement ; relevé avec c7 après le lot du dual)
 - **Pour** : embarquement
 - **Famille** : produit
 - **Gravité** : témoin manquant. Le comportement est juste dans le code d'aujourd'hui, mais rien ne
@@ -31,3 +31,12 @@ Un témoin qui ouvre un backend avec un dense granite et un `models.sparse` bge-
 dimension et sur la fixture. Il vérifie que le catalogue n'a pas de dual (`has_dual` faux) et que la
 requête dense passe par le dense, pas par `/embed_dual`. Puis le même backend avec un creux du même
 modèle que le dense : le dual est attaché. Le témoin doit être rouge si la condition du backend tombe.
+
+## Fait (18 novembre 2026)
+
+Témoin `a_sparse_of_another_model_attaches_no_dual_and_the_same_model_does` (`src/backend.rs`, tests) : un backend de
+code, dense « fixture-dense » à 384, creux activé à la demande sur la fixture (`--sparse --dual`) à la même dimension.
+Un creux « fixture-other » n'attache pas de dual ; un creux « fixture-dense » l'attache ; l'ouverture ne lance aucun
+fournisseur. **Son rouge, vu à la main** : la condition `source.model == self.embed.model` retirée, le cas
+« fixture-other » attache un dual ; la condition remise à l'identique. `Catalog::has_dual` dit si un dual est attaché.
+La requête dense n'est pas éprouvée par un appel : sans dual attaché, elle n'a pas d'autre chemin que le dense.
