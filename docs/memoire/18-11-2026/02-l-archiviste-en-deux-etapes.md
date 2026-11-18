@@ -247,6 +247,13 @@ schéma.
   description)`. Avant de l'écrire, il compare le nom aux valeurs déjà définies par le voisinage
   des mots qui sert déjà aux fiches (`sujets_voisins`). Une valeur proche ou en doublon est
   rendue : on la réutilise, on n'en crée pas une sœur.
+- **Le signal d'une définition changée, accordé avec ED** (sa page 02, § 6) : un verbe dédié,
+  `define_ref`, est le seul à écrire le champ `definition` d'une Ref. Il émet
+  `change: "definition"`, et `review_anchored` comme `ReactTransitionNode` prennent un filtre
+  facultatif `change`. Une citation par `add_ref` (qui réécrit la Ref, `dit_comme` compris) ne
+  fait donc plus passer à revoir les fiches ancrées : seul un changement de définition le fait. Je
+  ne retiens pas l'autre voie, où `EntitiesChanged` porterait les champs changés : elle toucherait
+  tous les émetteurs, quand celle-ci n'en touche qu'un.
 - **Une définition qui change** (la description d'une valeur réécrite, une valeur retirée) : les
   Refs qui la portent passent à `a_revoir`. C'est l'état qui existe déjà. Les fiches dépendantes se
   listent par `cited_by` et se signalent : rien n'est réécrit en silence.
