@@ -63,6 +63,36 @@ part de l'hôte, et se relira quand elle sera posée.
    (pas dans le code) : `slice_tokens`, `compact_at`, `archive_in_background`, plus les
    ingrédients de la page de mémoire. Le banc les joue.
 
+## L'archiviste qui lit ce qui lui chante (ajout de Lucie, 18 novembre au soir)
+
+Si on le branche, l'archiviste peut relire :
+- la trace de la session hors de sa tranche ;
+- la mémoire (`recall_fiches`, `get_fiche`, `recall_apports`) ;
+- le code (`search_code`, `read_file`).
+
+La part gabarit est décrite par mémoire. La part hôte :
+
+8. **Le rangement d'une tranche peut être un pas d'agent du socle**, au lieu d'un seul graphe.
+   - L'étape déclarée par le gabarit dit `mode: "step"`, sa liste d'outils et ses bornes. Elle
+     est débrayée par défaut ; débrayée, l'étape reste le graphe.
+   - L'hôte la joue comme un pas de l'équipier : `Step` et ses bornes de S1
+     (`step_context_tokens`, `max_tool_calls_per_step`, `max_model_calls_per_step`, propres à
+     l'archiviste : `memory.archivist_*`), plus une durée bornée (`memory.archivist_step_s`, 600
+     par défaut).
+   - Seuls les outils déclarés sont offerts : lecture seule, sauf les écritures de la mémoire
+     que l'étape 2 fait déjà.
+   - Il y a toujours un rangement à la fois par conversation. Le pas finit par `step_done`, ou
+     par sa borne, qui est un échec nommé : la marque reste où elle était.
+9. **`read_turns`, un outil de l'hôte.** Il lit la trace de la conversation par intervalle de
+   tours (`from`, `to`, et `chat` : la conversation de la tranche par défaut), rendue comme la
+   tranche, bornée en caractères, en lecture seule. Il n'est offert qu'au pas de l'archiviste, et
+   à aucun autre agent sans déclaration.
+10. **La preuve en plus.** Faux modèle : le pas de l'archiviste appelle `read_turns` sur des
+   tours d'avant sa tranche, puis range. Ses bornes l'arrêtent proprement. Débrayé, le graphe
+   seul tourne.
+
+Cela agrandit le lot 1 d'une demi-journée (le pas et `read_turns`) : 2 jours au lieu de 1,5.
+
 ## La preuve, rouge d'abord (demain)
 
 - **Faux modèle, `slice_tokens` petit.** Après assez de tours, l'outil `archive` du memory du
