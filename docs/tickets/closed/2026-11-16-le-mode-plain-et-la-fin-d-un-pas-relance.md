@@ -1,6 +1,6 @@
 # Le mode plain et la fin d'un pas que l'hôte relance
 
-- **État** : ouvert, à surveiller. Le défaut T1 est corrigé (tty-20, 9f0cbe7ce4) ; un retour anticipé reste possible quand l'hôte relance un pas après sa fin (session tty, 16 nov. 2026).
+- **État** : corrigé. Lot tty-22 (18 nov. 2026) : le cas réel n'était pas une relance après `ended`, mais un run repris après sa fin ; page `docs/tty/18-11-2026/03-tty-22-plain-et-run-repris.md`.
 - **Famille** : produit
 - **Gravité** : gêne pour les scripts (la campagne d'essais de c7) : le terminal rendrait la main avant la vraie réponse, et le journal serait incomplet.
 - **Atteignable en service** : oui, en mode `--plain --demande`, quand l'hôte relance l'agent après un `ended` (règle (B) : « un pas ne finit jamais sans réponse »).
@@ -23,3 +23,9 @@ Le nouveau témoin rouge puis vert ; `plain_stays_attached.py` toujours vert ; l
 ## Taille et blocage
 
 2 à 4 heures. Rien ne bloque le témoin ; le correctif propre peut attendre un champ d'archi.
+
+## Ce qu'a montré la lecture de l'hôte (18 nov.)
+
+- La relance « ta demande attend une réponse… » se fait **dans** la boucle de l'équipier, avant son `ended` (`src/daemon_host/teammate.rs`, `teammate_loop`). Le cas écrit plus haut, une fin puis une relance, n'arrive donc pas.
+- `ended` s'écrit une fois, à la fin de `run_teammate`. Mais une ligne du superviseur arrivée pendant le dernier pas fait repartir l'équipier juste après : c'est la relance de `start_teammate`, avec l'état de la tâche de nouveau à `running`. C'est ce cas que le mode `--plain` manquait.
+- Le correctif (tty-22) : un `ended` ne vaut la fin de la demande que si aucune ligne ne l'a suivi depuis 2 s et que la tâche n'est plus `running` (`GET /ide/teammate/list`). Le témoin est `mesures/plain_waits_for_a_resumed_run.py`, sur la route `/faux/end-then-resume` du faux hôte. Il a été vu rouge sur le binaire de master, puis vert.
