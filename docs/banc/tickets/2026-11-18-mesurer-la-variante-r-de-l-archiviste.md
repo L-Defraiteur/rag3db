@@ -55,6 +55,25 @@ passe, appels, jetons d'entrée et part du cache), avec les définitions du § 4
 ingrédients restent à leur réglage par défaut et sont écrits avec chaque passe. La matrice se joue après la page de
 la session mémoire qui pose la forme.
 
+## Le rappel des décisions rares (c7, 18 novembre, au mot de Lucie d'après un avis extérieur)
+
+Une métrique de plus pour chaque réglage : **le rappel des décisions rares**. C'est P3 (« perdu au milieu ») rendu
+ciblé. Les décisions rares sont :
+- les contraintes négatives dites une fois (« ne jamais laisser un agent supprimer cette donnée sans confirmation ») ;
+- les changements d'intention ;
+- les décisions brèves noyées dans 50 k de débogage.
+
+**La forme** :
+- un jeu de phrases **plantées** dans une copie du corpus, à des positions connues : début, milieu et fin de
+  fenêtre ;
+- chaque phrase porte une décision au sens net, et son sens attendu est écrit à côté, dans le jeu ;
+- pour chaque réglage, la mesure rend la part des phrases retrouvées dans un L1 **avec le bon sens**, par position.
+  Une contrainte négative retrouvée à l'envers compte comme perdue ;
+- le juge lit les L1, sans savoir quelles phrases ont été plantées ni où.
+
+**Où la jouer** : sur chaque réglage de la matrice, et aussi sur le mode « tours bruts par segment » que la session
+mémoire ajoute (`archivist.step2.input = raw_turns`).
+
 ## Le contexte d'après compaction, réglable aussi (c7, 18 novembre)
 
 Le contexte qu'une session reçoit après une compaction se compose lui aussi d'ingrédients. Trois profils sont à juger
