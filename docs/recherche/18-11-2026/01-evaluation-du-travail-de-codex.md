@@ -13,7 +13,7 @@ Codex n'a rien posé sur master sous `docs/recherche/`. Trois séries de code to
 | commits | quoi | à qui | verdict |
 |---|---|---|---|
 | 032d273942, e9febedb0e, 3e771bc260 | l'ordre stable des ex æquo (`search.rs`, `stable_order`) : rouge d'abord, puis le correctif | everything declarative (`docs/everything-declarative/16-11-2026/02-candidat-stable-tie-identity.md`) | **utile, à garder**, sous la réserve d'ED. Rouge d'abord tenu, identifiants anglais. Je n'ai pas vérifié sa passe ; c'est l'évaluation d'ED |
-| d1fd2191cc, 739072de8a, 68edcc2af6, 4574948e67 | la clé du débit d'embarquement par adresse et par poste (`catalog.rs`, `catalog/progress.rs`, `embedder.rs`, `model_source/activation.rs`, `daemon/embeddings.rs`) | embarquement (ticket `docs/embarquement/tickets/2026-11-16-le-debit-d-embarquement-par-service-pour-le-seuil-de-6-s.md`) | **utile mais à requalifier, d'urgence**. Son propre ticket dit « correctif préparé, non qualifié » et « les nouveaux témoins ne sont pas encore joués ; aucun vert ou compilation n'est prétendu ». Il touche `catalog.rs` et `catalog/progress.rs`, qui exigent `e2e_code_sync` : une suite non jouée est rouge. Trois messages de commit sans préfixe (« Éprouver… », « Séparer… », « Tracer… ») |
+| d1fd2191cc, 739072de8a, 68edcc2af6, 4574948e67 | la clé du débit d'embarquement par adresse et par poste (`catalog.rs`, `catalog/progress.rs`, `embedder.rs`, `model_source/activation.rs`, `daemon/embeddings.rs`) | embarquement (ticket `docs/embarquement/tickets/2026-11-16-le-debit-d-embarquement-par-service-pour-le-seuil-de-6-s.md`) | **utile, à garder** (corrigé le 18 novembre). J'avais lu son ticket, écrit avant sa passe. La passe existe et elle est verte : `luciepc:~/.cache/rag3weaver-build/cx-rate-key-59ac-v1/resume.log`, tête testée 07731af482 (code identique à bef0b27cb3), lib 59ac9c86b, e2e_code_sync 21, e2e_lectures 27, check_features 8/8, lib 2 604, témoins navigateur 45, dernière ligne VERT. Je l'ai relue. Restent trois messages de commit sans préfixe |
 | 936f13daa2, 5ed1961d6b, efb9aba736, 4b32256693, 7b3a88e13b | le jeton Vertex renouvelé ; l'écriture des scripts de fixture (`codex_threads.rs`) | ED et G, archi | hors de mon périmètre |
 
 ### Les branches `cx-` du rôle, du 16 et du 17 novembre
@@ -44,8 +44,7 @@ sur le code empilé. Aucun force push, et aucun lot de ce périmètre n'a attein
   son rouge. La maintenance d'un index existant sans écrivain, bien bornée.
 - **Ce qui est du papier** : onze pages sur douze, la pile « global pilot » r1 à r5, les manifestes et pins
   de preuves. 12 000 lignes de docs pour 790 de code.
-- **Ce qui gêne** : du code d'embarquement sur master sans compilation ni témoin joués, de son propre aveu.
-  Et trente-cinq branches empilées, qui rendent la tête utile dure à trouver.
+- **Ce qui gêne** : trente-cinq branches empilées, qui rendent la tête utile dure à trouver.
 - **Le style** : la prose de Codex est souvent compressée jusqu'à l'illisible (« SourceAPP6365…/master99
   audités, ROHotfixmodeOID66'=' favorable »). Elle ne tient pas notre règle d'une prose française lisible.
 - **À faire** : extraire les deux lots utiles en lots normaux, et requalifier le débit par embarquement.
@@ -73,5 +72,5 @@ elles-mêmes, comme cette page l'a fait.
    `cx-recherche-fts-generation-union-r2`, je le repose sur master et je retire les crochets de test du
    code de production au profit d'un compteur. Son rouge sera revu, puis la passe jouée avec e2e_code_sync.
 2. **Un lot** : l'ouverture d'un index existant sans écrivain (`fts_existing.rs`), puis l'entrée 1 sur elle.
-3. **Embarquement** requalifie sa clé du débit (rouge, puis vert, e2e_code_sync, lib). Je ne la touche pas.
+3. La clé du débit d'embarquement est qualifiée (corrigé le 18 novembre) : rien à faire.
 4. Ma page du 16 reprend à l'entrée 2.
