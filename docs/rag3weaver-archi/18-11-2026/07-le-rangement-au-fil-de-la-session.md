@@ -197,6 +197,22 @@ Cela agrandit le lot 1 :
 
 Le lot 1 passe à 4 jours au lieu de 1,5, avec les champs des tours et les filtres (une demi-journée).
 
+## Les signatures, accordées avec mémoire (18 novembre au soir)
+
+- **`put_turn(run, turn, seq, at, role, text, tool_name?, params?, result?, status?)`** rend
+  `{written, masked, cut}`.
+  - `run` vaut `<chat>:<backend_id>` pour le chat, `<tâche>:<parent>` pour l'équipier.
+  - `turn` est le numéro du tour utilisateur. `seq` est le rang du message dans le tour : 0 pour
+    le message utilisateur, puis l'assistant, puis chaque retour d'outil.
+- **`archive_slice(run, from_turn, to_turn, context, contenu?)`** rend `{report,
+  archived_through_turn}`.
+  - L'hôte passe toujours `contenu`, la tranche en Markdown avec un `## turn <n>` par tour : cela
+    marche avant que les `Turn` existent.
+  - Sans `contenu`, l'outil lit les `Turn` lui-même, et refuse si aucun ne couvre l'intervalle.
+  - `archived_through_turn` vaut `to_turn` quand le commit est fait et le rapport sans erreur,
+    sinon `from_turn - 1`.
+  - La Source de tranche est `sources/<run en slug>-turns-<a>-<b>.md`.
+
 ## La preuve, rouge d'abord (demain)
 
 - **Faux modèle, `slice_tokens` petit.** Après assez de tours, l'outil `archive` du memory du
