@@ -160,4 +160,6 @@ let out = #{
 if s.usage != () { out.usage = s.usage; }
 // La longueur de la requête de la recherche des candidates, pour la trace.
 if s.query_chars != () { out.query_chars = s.query_chars; }
+// The slice meta of archive_slice, for its report.
+if s.slice_summary != () { out.slice_summary = s.slice_summary; out.slice_open = s.slice_open; }
 out
