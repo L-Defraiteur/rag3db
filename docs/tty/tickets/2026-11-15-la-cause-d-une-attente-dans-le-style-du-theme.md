@@ -1,6 +1,6 @@
 # La cause d'une attente, dans le style du thème et telle que l'hôte la dit
 
-- **État** : ouvert. Le premier morceau est fait (session tty, 15 nov. 2026) : à côté de l'animation, le terminal nomme ce qu'il sait. Le reste attend un événement de l'hôte.
+- **État** : ouvert. Le style du thème est fait (tty-25, 18 nov. 2026, page `docs/tty/18-11-2026/06-tty-25-la-cause-dans-le-style-du-theme.md`) ; restent les attentes que seul l'hôte connaît, qui attendent son événement `waiting`.
 - **Famille** : produit
 - **Gravité** : gêne (Lucie ne voit pas ce que l'équipier attend quand c'est un quota ou l'index).
 - **Atteignable en service** : oui, à chaque tour de l'équipier.
