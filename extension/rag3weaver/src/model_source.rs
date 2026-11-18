@@ -774,8 +774,8 @@ pub fn connect_ocr(source: &ModelSource) -> Result<(std::sync::Arc<dyn crate::oc
 /// - `vertex` : Gemini par Vertex AI. Pas d'adresse : elle se construit du
 ///   projet (`params.project`, sinon `GOOGLE_CLOUD_PROJECT`) et du lieu
 ///   (`params.location`, `global` par défaut) ; le jeton vient de
-///   `gcp_auth::TokenSource`. **Limite** : il est pris à la connexion et dure
-///   une heure.
+///   `gcp_auth::TokenSource`, gardée par le client : un jeton à chaque appel, et
+///   un 401 avant le flux le renouvelle une fois.
 /// - `anthropic` : l'API Messages d'Anthropic (feature `anthropic-llm`). Pas
 ///   d'adresse (ou une, pour un mandataire) ; la clé vient de la variable
 ///   nommée par `api_key_env`, `ANTHROPIC_API_KEY` par défaut.
