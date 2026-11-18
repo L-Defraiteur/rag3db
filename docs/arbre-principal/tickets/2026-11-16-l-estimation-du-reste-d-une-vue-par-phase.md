@@ -35,3 +35,14 @@ fonde sur le premier paquet, qui ne compte ni les paquets plus lourds ni la phas
 Un témoin rouge d'abord : sur un index de N paquets dont le premier est rapide et les suivants lents (un faux
 embarqueur lent), l'estimation à mi-chemin tombe à moins de 25 % du réel. Puis la passe épinglée avec
 `e2e_code_sync` si un fichier de `tools/poste/required_suites.txt` est touché.
+
+## Le mot de Lucie sur l'embarquement dans l'attente (18 novembre 2026, relayé par c7)
+
+« Oui pour ta suggestion » : l'attente sous `search.index_wait_s` compte aussi les morceaux dus quand la
+recherche utilise le signal vector. Trois nuances, décidées avec la forme :
+- **service absent** : pas d'attente, et la cause est dite ;
+- **hybride** : `text_eta_s` et `vectors_eta_s` à part ;
+- **outils sans vecteurs** : jamais d'attente pour l'embarquement.
+
+Le détail est dans `docs/recherche/tickets/2026-11-16-l-attente-d-index-se-compte-par-cellule-et-pas-par-vue.md`.
+Le code attend le débit du banc d'étalonnage.

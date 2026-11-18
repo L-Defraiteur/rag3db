@@ -58,4 +58,5 @@ restriction aux fichiers de la vue et le départ du débit au banc.
 3. **Les outils sans signal vector** (`usages`, `outline`, `read_file`, `grep_files`) ne comptent jamais
    l'embarquement.
 
-**Bloqué par** : le débit du banc, et le mot de Lucie sur cette forme. Rien ne se code avant.
+**Décidé par Lucie** (18 novembre 2026, « oui pour ta suggestion », relayé par c7) : la forme et les trois
+nuances ci-dessus. **Bloqué par** : le débit du banc d'étalonnage seulement. Rien ne se code avant.
