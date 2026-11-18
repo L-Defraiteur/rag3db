@@ -206,6 +206,12 @@ impl DaemonHost {
         self
     }
 
+    /// The calls to the memory of the session archived as it goes (a witness plays them).
+    pub fn with_rangeur(mut self, rangeur: Arc<dyn super::rangement::Rangeur>) -> Self {
+        self.rangeur = Some(rangeur);
+        self
+    }
+
     /// Le modèle nommé qu'emploie le chat d'une tâche qui en a choisi un (les témoins).
     pub fn with_modele_nomme(mut self, f: ModeleNomme) -> Self {
         self.modele_nomme = f;

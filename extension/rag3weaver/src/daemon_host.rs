@@ -322,6 +322,9 @@ pub struct DaemonHost {
     chats_root: PathBuf,
     /// Ce qui donne le modèle d'un backend.
     chat_model: chat::ChatModel,
+    /// The calls to the memory for the session archived as it goes; `None`: the memory of
+    /// `bilans.memoire`, through the host.
+    rangeur: Option<Arc<dyn rangement::Rangeur>>,
     /// Le modèle de langage nommé qu'une tâche a choisi, connecté (lot tty-14).
     modele_nomme: chat::ModeleNomme,
     /// Ce que les chats ont consommé, par run et par slug.
@@ -346,6 +349,9 @@ pub mod taches;
 
 /// Le chat de l'atelier dans l'IDE : l'agent des gabarits, par backend.
 pub mod chat;
+
+/// The session archived as it goes: each turn to the memory, each slice to the archivist.
+pub mod rangement;
 
 /// Le journal des runs de l'hôte : un fichier par run racine, borné.
 pub mod journal_des_runs;
@@ -497,6 +503,7 @@ impl DaemonHost {
             accords: Mutex::new(Default::default()),
             chats_root: chat::default_chats_root(),
             chat_model: chat::default_chat_model(),
+            rangeur: None,
             modele_nomme: chat::default_modele_nomme(),
             chat_meter: Arc::new(crate::meter::Meter::new()),
             journal: journal_des_runs::JournalDesRuns::par_defaut(),
