@@ -63,7 +63,8 @@ Les témoins de parité du chemin d'écriture (`chemin_d_ecriture_tests`) et du 
 
 Sur le dépôt, l'index complet n'a pas baissé (217,7 s puis 232,5 s). L'écart vient des « dérivations », 106 s puis
 124 s : une étape que ce lot ne touche pas, et dont les liens n'ont pas de propriétés, donc restaient déjà sur le
-COPY. Cette variation est attribuée à la charge du poste, sans preuve. Le gain mesurable est celui de `drain · liens`.
+COPY. Cette variation n'est pas attribuée : **à revérifier sur un poste calme** (c7, 18 novembre), avant de
+la dire due à la charge du poste. Le gain mesurable est celui de `drain · liens`.
 
 **La parité** : sonde de marque, seuil du COPY à 1 (tout groupe par COPY), avant contre après. Les TSV sont
 identiques au couple et à la marque près sur rag3weaver/src (290 fichiers) et sur `src/` du moteur (1 550 fichiers).
