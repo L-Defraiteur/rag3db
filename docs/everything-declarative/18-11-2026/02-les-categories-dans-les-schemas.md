@@ -87,3 +87,20 @@ conception du côté du gabarit `memory` ; cette page dit seulement où la chose
 Le champ `definition` dans `schemas/ref.json`, et sa lecture par `add_ref` et `cited_by` : un lot court, avec un
 témoin rouge d'abord. Ce témoin vérifierait qu'une définition changée fait passer « à revoir » une fiche ancrée,
 sans toucher à son contenu. Le juge et les gestes reviennent à mémoire.
+
+## 6. Le signal d'une définition changée (question n° 2, 18 novembre au soir)
+
+`review_anchored` réagit à **tout** `EntitiesChanged` de sa source, et l'événement ne dit pas quels champs ont
+changé : il porte `entity`, `uuids`, `change` et les états. Or `add_ref` réécrit la `Ref` à chaque citation,
+`dit_comme` compris. Brancher `review_anchored` (cible `Fiche`, relation `ANCRE`, source `Ref`) ferait donc passer
+« à revoir » toutes les fiches ancrées à une valeur **à chaque nouvelle citation** de cette valeur : du bruit, pas un
+signal.
+
+- **(i)** Un verbe dédié, `define_ref`, est seul à écrire `definition` et émet `change: "definition"`. On ajoute à
+  `review_anchored` et à `ReactTransitionNode` un filtre facultatif `change`, et la liaison de mémoire filtre sur
+  `"definition"`. C'est générique et petit.
+- **(ii)** `EntitiesChanged` porte les champs changés, et le filtre se fait sur un champ. C'est plus large : tous les
+  émetteurs sont touchés.
+
+**Je prends (i)**, l'option la moins engageante, sauf si mémoire dit autrement. `add_ref` n'écrit pas
+`definition` : une citation ne change jamais une définition.
