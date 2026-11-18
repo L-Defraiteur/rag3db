@@ -24,15 +24,35 @@ impl GitCommitSource {
     }
 }
 
+/// `git -C <root> <args>`, read-only: its stdout, or the refusal with git's stderr.
+fn git(root: &Path, args: &[&str]) -> Result<Vec<u8>, String> {
+    let out = std::process::Command::new("git").arg("-C").arg(root).args(args).output().map_err(|e| format!("git {args:?} : {e}"))?;
+    if !out.status.success() {
+        return Err(format!("git {args:?} : {}", String::from_utf8_lossy(&out.stderr).trim()));
+    }
+    Ok(out.stdout)
+}
+
+/// The paths of a `-z` output, in order.
+fn paths_z(out: &[u8]) -> Vec<String> {
+    out.split(|b| *b == 0).filter(|p| !p.is_empty()).map(|p| String::from_utf8_lossy(p).into_owned()).collect()
+}
+
 impl FileSource for GitCommitSource {
     fn cursor(&self) -> String {
         format!("worktree:{}", self.root.display())
     }
     fn list(&self) -> Result<Vec<String>, String> {
-        Err("RED STUB".into())
+        let mut paths = paths_z(&git(&self.root, &["ls-tree", "-r", "--name-only", "-z", &self.commit])?);
+        paths.sort();
+        Ok(paths)
     }
-    fn read(&self, _path: &str) -> Result<Option<String>, String> {
-        Err("RED STUB".into())
+    /// The blob of `path` at the commit; `None` when the commit has no such file, or when it is not text.
+    fn read(&self, path: &str) -> Result<Option<String>, String> {
+        match git(&self.root, &["cat-file", "blob", &format!("{}:{path}", self.commit)]) {
+            Ok(bytes) => Ok(String::from_utf8(bytes).ok()),
+            Err(_) => Ok(None),
+        }
     }
 }
 
@@ -40,8 +60,49 @@ impl FileSource for GitCommitSource {
 /// publish it: its rank. The files written are those changed since the layer's last generation, or since its
 /// parent's generation for a first one, or the whole tree for a root layer.
 pub fn write_history_generation(catalog: &mut Catalog, root: &Path, layer: &LayerWrite, commit: &str) -> Result<i64, String> {
-    let _ = (catalog, root, layer, commit);
-    Err("RED STUB: history layers are not written yet".into())
+    let source = GitCommitSource::new(root, commit);
+    let base = match generation_commit(catalog, &layer.layer, None)? {
+        Some(c) => Some(c),
+        None => match &layer.parent {
+            Some((couche, rang)) => generation_commit(catalog, couche, Some(*rang))?,
+            None => None,
+        },
+    };
+    let paths = match &base {
+        Some(b) => paths_z(&git(root, &["diff-tree", "-r", "--name-only", "-z", "--no-renames", b, commit])?),
+        None => source.list()?,
+    };
+    let mut files = Vec::with_capacity(paths.len());
+    for p in paths {
+        let content = source.read(&p)?;
+        files.push((p, content));
+    }
+    catalog
+        .write_in_layer(layer, |c| {
+            crate::code_sync::reingest_files(c, &source, &files, crate::disponibilite::Disponibilites::TOUT)?;
+            c.publier_la_generation(commit, 0).map_err(|e| e.to_string())
+        })
+        .map_err(|e| e.to_string())?
+}
+
+/// The commit of a published generation of `layer`: at `rank`, or its last one; `None` when there is none, or when
+/// it was published outside git (an empty commit).
+fn generation_commit(catalog: &Catalog, layer: &str, rank: Option<i64>) -> Result<Option<String>, String> {
+    use crate::connection::{CypherValue, QueryParam};
+    let (filtre, mut params) = (
+        if rank.is_some() { "AND g.rang = $rang" } else { "" },
+        vec![QueryParam::new("couche", CypherValue::String(layer.to_string()))],
+    );
+    if let Some(r) = rank {
+        params.push(QueryParam::new("rang", CypherValue::Int(r)));
+    }
+    let lu = catalog
+        .execute_raw_with_params(
+            &format!("MATCH (g:{}) WHERE g.couche = $couche {filtre} RETURN g.commit ORDER BY g.rang DESC LIMIT 1", crate::generations::TABLE),
+            &params,
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(lu.rows.first().and_then(|r| r.first()).and_then(|c| c.as_str()).filter(|c| !c.is_empty()).map(str::to_string))
 }
 
 #[cfg(all(test, feature = "rag3db-native"))]
