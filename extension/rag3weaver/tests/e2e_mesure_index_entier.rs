@@ -18,7 +18,6 @@ use rag3weaver::connection::{DbConnection, QueryParam};
 use rag3weaver::embedder::HashEmbedder;
 use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
 
-/// La copie de l'index, ou `None` en le disant.
 /// **The empty-chunk measures read the form of before** (ticket of 13 Nov. 2026): they count `Scope_Chunk`,
 /// which a versions base leaves empty, and would then measure zero without failing. They say so, and refuse a
 /// versions base by name.
@@ -34,6 +33,7 @@ fn require_the_form_of_before(conn: &Rag3dbConnection) {
     );
 }
 
+/// La copie de l'index, ou `None` en le disant.
 fn base() -> Option<String> {
     let b = std::env::var("RAG3WEAVER_MESURE_BASE").ok();
     if b.is_none() {
