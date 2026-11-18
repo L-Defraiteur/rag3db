@@ -252,10 +252,87 @@ pub fn texte(t: &Theme, q: Quelle, n: u64, graine: u64, cap: Capacites) -> Strin
 pub fn ligne(t: &Theme, q: Quelle, n: u64, graine: u64, cap: Capacites, suite: &str) -> Line<'static> {
     let mut spans: Vec<Span<'static>> = morceaux(q.de(t), n, graine).into_iter().map(|(s, r)| Span::styled(adapter(t, &s, r, cap.glyphes, n), style(t, r, cap.couleurs))).collect();
     if !suite.is_empty() {
-        let sourdine = couleur(&t.couleurs.sourdine, cap.couleurs).map(|c| Style::default().fg(c)).unwrap_or_default();
-        spans.push(Span::styled(format!(" {suite}"), sourdine));
+        spans.extend(cause_spans(t, q.de(t), n, graine, cap, suite));
     }
     Line::from(spans)
+}
+
+/// **The cause in the theme's style** (Lucie, 15 nov. : « à côté mais là aussi des glitchs ou selon le
+/// thème »), after the frame: a glitch animation turns one of its characters into one of the theme's
+/// glyphs every third frame, drawn by the seed, the rest in the muted colour; a circle or a transmutation
+/// shows it in the halo's colour, framed by a glyph of the frame. In ASCII, or without colours, it stays
+/// as it is, muted.
+fn cause_spans(t: &Theme, a: &Animation, n: u64, graine: u64, cap: Capacites, cause: &str) -> Vec<Span<'static>> {
+    let sourdine = couleur(&t.couleurs.sourdine, cap.couleurs).map(|c| Style::default().fg(c)).unwrap_or_default();
+    let halo = couleur(t.couleurs.halo.first().unwrap_or(&t.couleurs.texte), cap.couleurs).map(|c| Style::default().fg(c)).unwrap_or_default();
+    if cap.glyphes == Glyphes::Ascii || cap.couleurs == Niveau::Aucune || a.glyphes.is_empty() {
+        return vec![Span::styled(format!(" {cause}"), sourdine)];
+    }
+    let glyph = |i: usize| adapter(t, &a.glyphes[i % a.glyphes.len()], Role::Glyphe, cap.glyphes, n);
+    match a.forme {
+        Forme::Glitch => {
+            let chars: Vec<char> = cause.chars().collect();
+            // What the cause names (the tool, its target, the model, the time) stays readable: the glitch takes
+            // only the word marked with « … » (« travaille… », « répond… »), or any character if none is.
+            let verb: Vec<usize> = match chars.iter().position(|c| *c == '…') {
+                Some(end) => {
+                    let start = chars[..end].iter().rposition(|c| c.is_whitespace()).map_or(0, |i| i + 1);
+                    (start..end).collect()
+                }
+                None => Vec::new(),
+            };
+            let candidates: Vec<usize> = if verb.is_empty() { chars.iter().enumerate().filter(|(_, c)| !c.is_whitespace()).map(|(i, _)| i).collect() } else { verb };
+            // The glitch of the cause moves every third frame: at every frame it cost 23 259 bytes for 100 frames,
+            // over the glitch's 20 000 (tui::tests::mesure_des_octets_par_image_d_animation).
+            let slot = n / 3;
+            let mut alea = xorshift(graine ^ slot.wrapping_mul(0xA24B_AED4_963E_E407) ^ 0x9FB2_1C65_1E98_DF25);
+            let mut draw = |m: usize| {
+                alea = xorshift(alea);
+                (alea % m.max(1) as u64) as usize
+            };
+            // One character at a time: two cost more than the glitch's byte budget allows.
+            let count = 1;
+            let mut glitched: Vec<(usize, String)> = Vec::new();
+            for _ in 0..count {
+                if candidates.is_empty() {
+                    break;
+                }
+                let at = candidates[draw(candidates.len())];
+                let g = glyph(draw(a.glyphes.len()));
+                if !glitched.iter().any(|(i, _)| *i == at) && g.chars().count() == 1 && !g.starts_with(chars[at]) {
+                    glitched.push((at, g));
+                }
+            }
+            if glitched.is_empty() {
+                if let Some(&at) = candidates.first() {
+                    let g = (0..a.glyphes.len()).map(glyph).find(|g| g.chars().count() == 1 && !g.starts_with(chars[at]));
+                    if let Some(g) = g {
+                        glitched.push((at, g));
+                    }
+                }
+            }
+            let mut out = vec![Span::styled(" ".to_string(), sourdine)];
+            let mut plain = String::new();
+            for (i, c) in chars.iter().enumerate() {
+                match glitched.iter().find(|(at, _)| *at == i) {
+                    Some((_, g)) => {
+                        if !plain.is_empty() {
+                            out.push(Span::styled(std::mem::take(&mut plain), sourdine));
+                        }
+                        out.push(Span::styled(g.clone(), halo));
+                    }
+                    None => plain.push(*c),
+                }
+            }
+            if !plain.is_empty() {
+                out.push(Span::styled(plain, sourdine));
+            }
+            out
+        }
+        // The frame's first glyph, fixed: a glyph that changed at each frame cost 11 239 bytes for 100 frames of the
+        // circle, over its 10 500 (tty::tests::mesure_des_octets_par_image_d_animation).
+        Forme::Cercle | Forme::Transmutation => vec![Span::styled(format!(" {} ", glyph(0)), halo), Span::styled(cause.to_string(), halo)],
+    }
 }
 
 #[cfg(test)]
