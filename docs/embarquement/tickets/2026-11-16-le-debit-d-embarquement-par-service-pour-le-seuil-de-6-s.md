@@ -1,6 +1,10 @@
 # Le débit d'embarquement par service, pour le seuil de 6 s
 
-- **État** : ouvert (16 novembre 2026, embarquement ; partage décidé par c7, f338855abf)
+- **État** : ouvert (16 novembre 2026, embarquement ; partage décidé par c7, f338855abf). **La clé est faite et
+  qualifiée** (18 novembre, relu par embarquement et c7) : sur master à bef0b27cb3, dont le code est celui de
+  07731af482, joué VERT le 16 à 14 h 23 sur la lib 59ac9c86b
+  (`luciepc:~/.cache/rag3weaver-build/cx-rate-key-59ac-v1/resume.log`). **Restent** le point 1 (la mesure
+  par passe et par adresse appelée) et le point 3 (la table `Catalog::embedding_rates()`).
 - **Pour** : embarquement (la table par service et sa lecture) ; le banc (le jeu de lots fixe et la mesure) ;
   l'arbre (la conversion reste × débit par phase)
 - **Famille** : produit
@@ -84,6 +88,8 @@ les seuls rouges déjà exécutés. Anciennes autorisations et échéances caduq
 
 ### Correctif de clé préparé, non qualifié
 
+*Dépassé par la qualification* : voir la section « Qualification source07731 acquise » et l'état en tête.
+
 Branche `cx-rate-key-20261116-r1`, correctif e0c5dbfdd25a6fd70b417c2f9f3cdd3178c015e1
 poussé après contrat3e3187b53d et compléments de testsff24e447b8. C7 confirme
 la conservation des API historiques explicites. Cinq chemins réservés seulement,
@@ -99,6 +105,8 @@ Aucune qualification avant « FINI G », nouvelle recette et source courante.
 
 ### Après le pin de la bascule
 
+*Dépassé par la qualification* : voir la section « Qualification source07731 acquise » et l'état en tête.
+
 WIP reposé sans conflit sur master68590270e21d00285b29800bd9cdecf0cb921461,
 branche neuve `cx-rate-key-20261116-r2`. Diff produit r1→r2 vide ; SDK59ac
 et copie de passe SHA2150fcd… relus. Aucun build ou test lancé.
@@ -110,6 +118,8 @@ n'est pas une admission. Attendre le cadrage courant, aucun ancien GO ou pin.
 
 ### Préparation du couple post-ED, non lancé
 
+*Dépassé par la qualification* : voir la section « Qualification source07731 acquise » et l'état en tête.
+
 ED intégré masterd395cb1f03f84c6abdfa023a0e3c7f87a7c0dab6 ; rebase neuf
 sur `cx-rate-key-20261116-r3`, sans conflit. Cinq chemins réservés inchangés
 à l'amont, mais union backend/search à qualifier réellement. Le pilote reste
@@ -120,6 +130,8 @@ ni base de Lucie ; slotPG fixture aussi coordonné. Source/pilote doivent être
 admis ensemble. Aucun Cargo ou runtime n'a été lancé pendant la préparation.
 
 ### Réserve de profil avant admission — couple5e889 non autorisé
+
+*Dépassé par la qualification* : voir la section « Qualification source07731 acquise » et l'état en tête.
 
 Revue C7 du piloteb04a : le dictionnaire hérité ne fixait pas les racines XDG
 state/config/data/cache ou TMP privées ; seul RAG3WEAVER_STATE_DIR était posé.
