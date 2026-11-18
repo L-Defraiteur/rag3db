@@ -84,6 +84,29 @@ lecture du cache et `buildStartTS` ne sont donc pas le même pour ces rangs ; à
 T_A (NOTED, qui ne reçoit pas les écritures), l'attente `_WAIT_HNSW_WRITERS` et le début de T_B, et
 pourquoi seulement en mémoire (sur disque, la validation de T_A est un point de reprise forcé).
 
+### Le 18 novembre au soir : les lectures sont justes, le lien manque
+
+Une sonde moteur (non commitée, `RAG3DB_PROBE_E3`), 96 répétitions deux fois (4 puis 2 rouges),
+date chaque étape pour les décalages impairs 1 à 69 :
+- **Le départ de T_B** (`buildStartTS`) vaut 9 à 12 : l'écrivain n'a encore rien validé, sauf
+  parfois son premier SET (le rang 1, j = 0). Tous les autres SET des rangs déplacés valident après
+  (`hasCommittedUpdateAfter` vrai).
+- **La colonne mise en cache** lit le rang 1 à 500, son nouveau vecteur, quand son SET a validé
+  avant T_B ; les autres à leur ancienne valeur. C'est juste : c'est l'instantané de T_B.
+- **Le rattrapage** réinsère chaque rang déplacé après `buildStartTS` à son nouveau vecteur (501,
+  502…). Juste aussi.
+
+Le défaut n'est donc ni dans la lecture du cache ni dans celle du rattrapage, mais dans le lien. Au
+bâti, le rang 1 est seul à `[500, 0, …, -1]`, et ses voisins les plus proches sont dans le nuage
+d'origine : le bâti l'y relie, à juste titre. Le rattrapage bâtit ensuite le nuage des rangs
+déplacés à côté de lui, à distance 1,4, sans jamais le relier : ni arête sortante du rang 1 vers ce
+nuage, ni arête entrante depuis lui. Une recherche qui entre dans le nuage s'arrête au rang 3. Le
+même schéma vaut pour les rangs 25 et 27 d'un autre relevé, réinsérés eux aussi.
+
+Les questions suivantes : la recherche d'insertion du rattrapage atteint-elle le rang 1 (les
+voisins du nuage d'origine qui pointent vers lui) ? Si oui, pourquoi l'arête est-elle perdue, à la
+sélection des voisins ou à un élagage (`shrinkForNode`) ? Et pourquoi seulement en mémoire ?
+
 ## Pour avancer
 
 1. ~~Lire pourquoi le rang n'est rendu qu'au troisième rang~~ : il est resté à son ancien vecteur
