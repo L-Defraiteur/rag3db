@@ -8,6 +8,15 @@
 #   scripts/test_run_e2e.sh <script>   (un autre, pour prouver le rouge d'avant)
 set -u
 ICI="$(cd "$(dirname "$0")/.." && pwd)"
+# **Le témoin tient la place du poste une fois** (16 novembre 2026, ticket de G) : chaque cas passe par
+# confiner_validation.py, donc par `poste lourd`. Lancé hors du poste, chaque cas attendait sa place dans la file, et son
+# `timeout 120` comptait cette attente : un cas rendait 124 dès qu'un autre lourd tenait l'unique place du portable. Le
+# témoin se relance une fois sous `poste lourd` (32G, le plafond des validations) ; ses cas trouvent le poste tenu par un
+# ancêtre (poste_tenu) et ne font plus la file. Leur délai ne compte que leur travail.
+if [ -z "${TEST_RUN_E2E_HOLDS_POSTE:-}" ]; then
+  export TEST_RUN_E2E_HOLDS_POSTE=1
+  exec env POSTE_MEM_MAX="${POSTE_MEM_MAX:-32G}" "$ICI/scripts/poste" lourd bash "$(realpath "$0")" "$@"
+fi
 SCRIPT="${1:-$ICI/run_e2e.sh}"
 T="$(mktemp -d "${TMPDIR:-/tmp}/test-run-e2e.XXXXXX")"
 trap 'rm -rf "$T"' EXIT
