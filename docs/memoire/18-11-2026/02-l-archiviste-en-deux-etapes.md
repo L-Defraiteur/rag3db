@@ -485,7 +485,7 @@ Lucie : « les L0, les vrais tours, doivent être indexés au fil de l'eau avec 
   | `params` | ses paramètres, en JSON, bornés à 4 000 caractères (« … » et la taille d'origine au-delà) |
   | `result` | son résultat, en texte, borné à 8 000 caractères de même |
   | `status` | pour un appel d'outil : `ok`, `error`, `refused` (refusé par la politique ou l'hôte) ou `interrupted` (coupé par une annulation ou un arrêt), les quatre cas réels de l'hôte (accordé avec archi) |
-  | `source`, `section` | la Source de sa tranche et `turn <n>`, pour la chaîne vers les L1 |
+  | `section` | `turn <n>`. La tranche d'un tour n'est pas un champ : elle se calcule (ci-dessous) |
 
   Le plein texte indexe `text`, `tool_name` et `params`.
   - `source` est le chemin de la transcription du run, une Source comme aujourd'hui.
@@ -528,8 +528,7 @@ Lucie : « les L0, les vrais tours, doivent être indexés au fil de l'eau avec 
     fermeture, sans TTL : c'est elle que citent les L1 ;
   - **la trace en cours** est une espèce à part, en **ajout seul** : les lignes `Turn` d'origine
     `run_trace`, une par tour, qui ne se réécrivent jamais. Elles s'effacent au TTL, et rien
-    d'autre ne les modifie. Leur `source` est le chemin de la Source de leur tranche, connu dès
-    l'ouverture de la tranche.
+    d'autre ne les modifie.
 - **Un seul écrivain** : l'écriture du tour (`Turn`) passe avant le rangement. Le rangement de la
   tranche avance par petites transactions (un sujet, ses écritures), si bien qu'il ne tient jamais
   la base longtemps devant l'écriture du tour suivant.
@@ -627,18 +626,17 @@ Les témoins :
 Lucie : « la tranche de tours a une référence à une session ou une tranche, et cette tranche a une
 référence vers les L1 de l'archiviste ».
 
-1. **Un tour connaît sa tranche dès son écriture, sans réécriture.** Le `source` d'une ligne `Turn`
-   est le chemin de la Source de sa tranche (`sources/<run>-turns-<a>-<b>.md`), fixé à
-   l'**ouverture** de la tranche. `Turn` reste en ajout seul : on n'écrit rien sur lui à la
-   fermeture. Ce qui distingue une tranche ouverte d'une tranche fermée, c'est l'existence de sa
-   Source (écrite à la fermeture), et non un champ du tour. Archi n'a donc pas d'écriture de
-   tranche à faire sur `Turn`.
+1. **La tranche d'un tour se calcule, elle ne s'écrit pas** (la forme d'archi, retenue par c7) :
+   c'est la Source du même run dont l'intervalle `[from_turn, to_turn]` contient le tour. `Turn`
+   reste en ajout seul, et rien ne s'écrit sur lui à la fermeture. Une tranche ratée, puis rangée
+   avec la suivante ou refaite, n'a jamais laissé de chemin mort dans un tour. « Pas encore rangé »
+   est vrai par construction : aucune Source du run ne contient encore ce tour.
 2. **La Source de tranche est l'entité navigable** : son run, son intervalle, son
    `slice_summary`, le rapport de l'archiviste rendu sur elle (§ b), et **la liste des L1 qu'elle a
    produits**, chacun avec sa fiche. `cited_by` sur une Source la donne déjà. Un outil
-   `get_slice(path)` la rend **en clair** :
+   `get_slice` (par son chemin, ou par `{run, from_turn}`) la rend **en clair** :
    `{run, from_turn, to_turn, state: "open" | "closed", slice_summary, report, l1: [{apport, section, fiche}]}`.
-   Une tranche encore ouverte rend `state: "open"`, avec ses tours et sans L1.
+   Un tour qu'aucune Source ne contient encore rend `state: "open"`, avec ses tours et sans L1.
 3. **Le run liste ses tranches dans l'ordre** : `list_slices(run)`, par `from_turn`, avec pour
    chacune son état et le nombre de ses L1.
 4. **En un appel, depuis un tour, « d'où vient-il et qu'en a-t-on retenu »** :
