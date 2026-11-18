@@ -123,7 +123,9 @@ name; `/name` alone says the last name the agent's lines carried).
 this machine. The screen goes to the command, on a pseudo-terminal of its own (`posix_openpt`, through
 the libc the standard library already links), so `sudo` can ask for its password and an interactive
 tool can be answered. Only what the command writes is kept, never what is typed: a password read with
-echo off reaches neither the kept output, nor the teammate, nor the session journal. Then the output
+echo off reaches neither the kept output, nor the teammate, nor the session journal; what is typed while
+the echo is still on (a password typed before `sudo` shows its prompt) is echoed on the screen, like in any
+terminal, and left out of the kept output. Then the output
 goes to the teammate as an instruction (« L'utilisateur a lancé la commande … ; voici le retour »),
 without terminal sequences, cut in the middle beyond 8 KB. A `!` command only comes from what is typed
 and sent with Enter: a mailbox line or a paste never runs one. Unix only for now.

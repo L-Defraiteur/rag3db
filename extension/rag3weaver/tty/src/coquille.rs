@@ -34,6 +34,7 @@ pub fn lancer(cmd: &str, dossier: &Path, colonnes: u16, lignes: u16, entree: i32
     if maitre < 0 || unsafe { pty::grantpt(maitre) } != 0 || unsafe { pty::unlockpt(maitre) } != 0 {
         return Err(format!("le pseudo-terminal ne s'ouvre pas : {}", std::io::Error::last_os_error()));
     }
+    pty::close_on_exec(maitre);
     let nom = unsafe { std::ffi::CStr::from_ptr(pty::ptsname(maitre)) }.to_string_lossy().into_owned();
     let taille = pty::Taille { lignes, colonnes, x: 0, y: 0 };
     unsafe { pty::ioctl(maitre, pty::TIOCSWINSZ, &taille as *const pty::Taille) };
@@ -59,6 +60,9 @@ pub fn lancer(cmd: &str, dossier: &Path, colonnes: u16, lignes: u16, entree: i32
     };
     let mut m = unsafe { std::fs::File::from_raw_fd(maitre) };
     let mut sortie = Vec::new();
+    // Ce qui se tape n'est jamais gardé (ticket du 15 nov.) : l'écho d'une frappe faite écho ouvert,
+    // un mot de passe tapé avant que sudo coupe l'écho compris, se montre et ne se garde pas.
+    let mut echo = ExpectedEcho::default();
     let mut tampon = [0u8; 8192];
     let mut code = None;
     let mut fini = false;
@@ -73,7 +77,7 @@ pub fn lancer(cmd: &str, dossier: &Path, colonnes: u16, lignes: u16, entree: i32
                     }
                 }
                 Ok(k) => {
-                    sortie.extend_from_slice(&tampon[..k]);
+                    sortie.extend(echo.keep(&tampon[..k]));
                     let _ = ecran.write_all(&tampon[..k]);
                     let _ = ecran.flush();
                     continue;
@@ -83,6 +87,9 @@ pub fn lancer(cmd: &str, dossier: &Path, colonnes: u16, lignes: u16, entree: i32
         if n > 0 && fds[0].revents & pty::POLLIN != 0 {
             let k = unsafe { pty::read(entree, tampon.as_mut_ptr(), tampon.len()) };
             if k > 0 {
+                if pty::echo_on(maitre) {
+                    echo.typed(&tampon[..k as usize]);
+                }
                 let _ = m.write_all(&tampon[..k as usize]);
             }
         }
@@ -145,6 +152,72 @@ mod pty {
         pub fn setsid() -> c_int;
         pub fn poll(fds: *mut PollFd, n: c_ulong, attente: c_int) -> c_int;
         pub fn read(fd: c_int, tampon: *mut u8, n: usize) -> isize;
+        pub fn tcgetattr(fd: c_int, termios: *mut u8) -> c_int;
+        pub fn fcntl(fd: c_int, cmd: c_int, ...) -> c_int;
+    }
+
+    /// Closes `fd` in the processes this one starts (`FD_CLOEXEC`, the same values on Linux and macOS): a command
+    /// does not inherit the pty's master, nor another command's (seen with the tests run side by side: a child
+    /// holding another pty refused `TIOCSCTTY`, or kept its line from being read).
+    pub fn close_on_exec(fd: c_int) {
+        const F_SETFD: c_int = 2;
+        const FD_CLOEXEC: c_int = 1;
+        unsafe { fcntl(fd, F_SETFD, FD_CLOEXEC) };
+    }
+
+    /// **Is the pty's echo on** (`ECHO` in its local flags), read on the master, which gives the slave's
+    /// settings. `struct termios` is laid out by the platform: four `tcflag_t` first, `c_lflag` the fourth,
+    /// 32 bits on Linux and 64 on macOS and the BSDs; `ECHO` is 0o10 on both. A failed read says « on »:
+    /// what is typed is then not kept, which errs on the side of the secret.
+    pub fn echo_on(fd: c_int) -> bool {
+        let mut buffer = [0u64; 16];
+        if unsafe { tcgetattr(fd, buffer.as_mut_ptr() as *mut u8) } != 0 {
+            return true;
+        }
+        #[cfg(target_os = "linux")]
+        let lflag = { let words: [u32; 32] = unsafe { std::mem::transmute(buffer) }; words[3] as u64 };
+        #[cfg(not(target_os = "linux"))]
+        let lflag = buffer[3];
+        lflag & 0o10 != 0
+    }
+}
+
+/// **The echo the terminal expects back** for what it relayed while the echo was on: printable bytes come back
+/// as themselves, a line end as `\r\n`. A control byte echoes otherwise (`^C`, the erasing of a character):
+/// the expectation stops there, and the kept output is then left as it comes.
+#[derive(Debug, Default)]
+struct ExpectedEcho {
+    bytes: std::collections::VecDeque<u8>,
+    lost: bool,
+}
+
+impl ExpectedEcho {
+    fn typed(&mut self, typed: &[u8]) {
+        for &b in typed {
+            match b {
+                b'\r' | b'\n' => self.bytes.extend(*b"\r\n"),
+                0x20..=0x7e | 0x80..=0xff => self.bytes.push_back(b),
+                _ => {
+                    self.bytes.clear();
+                    self.lost = true;
+                }
+            }
+        }
+    }
+
+    /// What of `output` the command wrote itself, the expected echo taken out.
+    fn keep(&mut self, output: &[u8]) -> Vec<u8> {
+        let mut kept = Vec::with_capacity(output.len());
+        for &b in output {
+            if self.bytes.front() == Some(&b) {
+                self.bytes.pop_front();
+            } else {
+                // The echo did not come as expected: stop expecting, keep as it comes.
+                self.bytes.clear();
+                kept.push(b);
+            }
+        }
+        kept
     }
 }
 
@@ -217,11 +290,18 @@ mod tests {
         fn close(fd: i32) -> i32;
     }
 
+    /// **One pty test at a time**: a command's session and controlling terminal are process-wide state, and
+    /// commands started side by side by the test threads got in each other's way (`TIOCSCTTY` refused, a line
+    /// never read). The terminal itself runs one `!` command at a time.
+    static PTY: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     /// Un tube dont on écrit `entree` après `apres` millisecondes, comme une
     /// frappe venue après l'invite : le bout lu sert d'entrée.
     fn tube(entree: &[u8], apres: u64) -> i32 {
         let mut fds = [0i32; 2];
         assert_eq!(unsafe { pipe(fds.as_mut_ptr()) }, 0);
+        pty::close_on_exec(fds[0]);
+        pty::close_on_exec(fds[1]);
         let mut w = unsafe { <std::fs::File as std::os::unix::io::FromRawFd>::from_raw_fd(fds[1]) };
         let entree = entree.to_vec();
         std::thread::spawn(move || {
@@ -235,6 +315,7 @@ mod tests {
     /// garde, et son code de sortie revient.
     #[test]
     fn a_command_runs_in_its_folder_shows_and_keeps_its_output_and_its_code() {
+        let _pty = PTY.lock().unwrap_or_else(|p| p.into_inner());
         let d = std::env::temp_dir().join(format!("tty-coquille-{}", std::process::id()));
         std::fs::create_dir_all(&d).unwrap();
         let mut ecran = Vec::new();
@@ -253,6 +334,7 @@ mod tests {
     /// passe ; le secret ne paraît ni dans la sortie gardée, ni dans la consigne.
     #[test]
     fn a_password_read_with_echo_off_never_reaches_the_kept_output() {
+        let _pty = PTY.lock().unwrap_or_else(|p| p.into_inner());
         let faux_sudo = "stty -echo; printf 'Mot de passe : '; read p; stty echo; echo; echo \"lu ${#p} caractères\"";
         let mut ecran = Vec::new();
         // La frappe vient après l'invite, quand l'écho est coupé (une frappe tapée
@@ -272,6 +354,7 @@ mod tests {
     /// kept; the command still reads it, and its own output is kept.
     #[test]
     fn a_password_typed_before_the_prompt_never_reaches_the_kept_output() {
+        let _pty = PTY.lock().unwrap_or_else(|p| p.into_inner());
         let fake_sudo = "sleep 0.3; stty -echo; printf 'Mot de passe : '; read p; stty echo; echo; echo \"lu ${#p} caractères\"";
         let mut screen = Vec::new();
         let e = tube(b"s3cr3t-tres-long\n", 0);
@@ -287,6 +370,7 @@ mod tests {
     /// What is typed while the echo is on is shown, not kept; the command's own output is kept whole.
     #[test]
     fn what_is_typed_is_shown_but_not_kept() {
+        let _pty = PTY.lock().unwrap_or_else(|p| p.into_inner());
         let mut screen = Vec::new();
         let e = tube(b"oui\n", 200);
         let r = lancer("printf 'Continuer ? '; read a; echo \"réponse : $a\"", Path::new("/"), 80, 24, e, &mut screen).unwrap();
