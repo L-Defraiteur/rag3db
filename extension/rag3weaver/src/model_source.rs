@@ -970,6 +970,22 @@ mod tests {
             assert_eq!(seul.get(&Capability::Llm).unwrap().budget_de_reprise(), 80_000);
         }
 
+        /// **A llama-server declared on a loopback address is local** (ticket of 15 November 2026, « un
+        /// llama-server déclaré est classé cloud ») : it is declared `compatible`/`openai` at its address, not by a
+        /// protocol of its own, and it was given the cloud budget. A loopback address, with or without a port,
+        /// makes it local; any other address stays cloud.
+        #[test]
+        fn a_llama_server_on_a_loopback_address_has_a_local_budget() {
+            for address in ["http://127.0.0.1:8080/v1", "http://localhost:8080/v1", "http://[::1]:8080/v1", "http://localhost/v1"] {
+                let m = lire(&format!(r#"{{"llm": {{"provider": "compatible", "protocol": "openai", "address": "{address}", "model": "qwen", "context_tokens": 32000}}}}"#)).expect("a llama-server");
+                assert_eq!(m.get(&Capability::Llm).unwrap().budget_de_reprise(), 16_000, "{address} is a loopback address");
+            }
+            let distant = lire(r#"{"llm": {"provider": "compatible", "protocol": "openai", "address": "https://api.example.com/v1", "model": "m", "context_tokens": 32000}}"#).unwrap();
+            assert_eq!(distant.get(&Capability::Llm).unwrap().budget_de_reprise(), 100_000, "a remote address stays cloud");
+            let lookalike = lire(r#"{"llm": {"provider": "compatible", "protocol": "openai", "address": "http://localhost.example.com/v1", "model": "m", "context_tokens": 32000}}"#).unwrap();
+            assert_eq!(lookalike.get(&Capability::Llm).unwrap().budget_de_reprise(), 100_000, "a host that only starts like localhost is not local");
+        }
+
         #[test]
         fn seul_models_llm_se_declare_en_liste() {
             let e = lire(r#"{"embed": [{"name": "a", "model": "m1", "default": true}]}"#).expect_err("embed en liste");
