@@ -1,6 +1,7 @@
 # Un plafond par texte en jetons, exact
 
-- **État** : ouvert (15 novembre 2026, embarquement ; décision de c7, option b)
+- **État** : corrigé (18 novembre 2026, embarquement, branche `token-cap`) ; ouvert le 15 novembre (décision de c7,
+  option b)
 - **Pour** : embarquement
 - **Famille** : produit
 - **Gravité** : haute depuis le 18 novembre (souhait avant) : un texte sous le plafond en caractères a fait paniquer
@@ -48,3 +49,21 @@ sur la carte : Expand 8194 != 11002 ». bge-m3 n'a que 8 194 positions.
 - **Témoin à écrire, rouge d'abord** : un texte de 11 000 « é » envoyé à l'embarqueur bge-m3 (ou au service) rend un
   vecteur coupé à la fenêtre du modèle, ou un refus nommé, jamais une panique.
 - Pas de code avant le tour d'embarquement (c7, 18 novembre).
+
+## Correction (18 novembre 2026)
+
+Point A de `docs/embarquement/18-11-2026/02-bornes-en-caracteres-et-limites-en-jetons.md`, au mot de c7.
+- **bge-m3 coupe en jetons à sa fenêtre** : son tokenizer tronque à 8 192 jetons (`MAX_TOKENS`, les 8 194 positions
+  moins le décalage XLM-R), comme granite à 512. Chaque texte coupé est compté (`troncatures()`). La panique « Expand
+  8194 != 11002 » devient une coupe dite.
+- **Le service dit sa fenêtre** : `max_tokens_per_text` et `truncated_texts` dans son identité.
+- **`RAG3WEAVER_EMBED_MAX_TOKENS`** resserre la fenêtre de bge-m3 au binaire du service (1 à 8 192 ; mal écrite ou
+  posée pour un autre modèle, refus nommé au démarrage). Absente : 8 192. Une fenêtre de 4 096 bornerait la mémoire
+  d'attention visée par les 12 000 caractères ; c'est un choix de pose, laissé au propriétaire des services.
+- **Pas de `count_tokens` au trait** : la troncature du tokenizer coupe et compte déjà en jetons, sans second
+  encodage. Le refus nommé (413) de l'option b n'a plus lieu d'être : le service coupe depuis 828ff28153.
+- Témoins, vus rouges puis verts : `a_text_denser_than_the_window_is_cut_in_tokens_not_a_panic` (e2e, bge-m3 chargé
+  sur `igpu:0`, jamais par un service ; rouge : la panique « Expand »),
+  `the_identity_says_the_token_window_and_the_truncated_texts`,
+  `the_token_window_setting_is_read_and_a_bad_value_is_refused`.
+- **Reste à poser** : le binaire des services, à la prochaine fenêtre de G.
