@@ -1459,28 +1459,40 @@ fn read_threads() -> u64 {
         self.fts_handles.get(table).cloned()
     }
 
-    /// Le handle plein texte ouvert d'une table, par le nom de sa table ou de
-    /// son index (`Scope` ou `Lucivy_Scope`).
-    fn fts_handle_nomme(&self, table: &str) -> Result<Arc<lucivy_core::sharded_handle::ShardedHandle>, String> {
-        let nom = table.strip_prefix(crate::fts_handle::INDEX_PREFIX).unwrap_or(table);
-        self.fts_handles.get(nom).cloned().ok_or_else(|| {
-            let mut connues: Vec<&String> = self.fts_handles.keys().collect();
-            connues.sort();
-            format!("pas d'index plein texte ouvert pour « {table} » (ouverts : {connues:?})")
+    /// Le handle plein texte d'une table, par le nom de sa table ou de son
+    /// index (`Scope` ou `Lucivy_Scope`), **ouvert à la demande** par le même
+    /// chemin que la recherche (`open_fts_handles_for`). Le catalogue ouvre ses
+    /// index paresseusement : juste après un redémarrage de l'hôte, aucune
+    /// recherche n'a encore ouvert la table, et la maintenance refusait en 422
+    /// (ticket d'arbre principal du 18 novembre 2026). Une table sans plein
+    /// texte reste un refus nommé ; un index à rebâtir n'est pas maintenu.
+    fn fts_handle_nomme(&mut self, table: &str) -> Result<Arc<lucivy_core::sharded_handle::ShardedHandle>, String> {
+        let nom = table.strip_prefix(crate::fts_handle::INDEX_PREFIX).unwrap_or(table).to_string();
+        if !self.fts_handles.contains_key(&nom) {
+            let Some(entite) = self.entity_of_fts_table(&nom) else {
+                return Err(format!("la table « {table} » n'a pas d'index plein texte"));
+            };
+            self.open_fts_handles_for(&[entite]);
+        }
+        if self.fts_rebuild.contains(&nom) {
+            return Err(format!("le plein texte de « {table} » est à rebâtir : la maintenance attend le rebâti"));
+        }
+        self.fts_handles.get(&nom).cloned().ok_or_else(|| {
+            format!("l'index plein texte de « {table} » ne s'ouvre pas (la raison est dans l'état des index)")
         })
     }
 
     /// Les documents vivants du plein texte d'une table et le jeton du même
     /// lecteur (`fts_maintenance::live_ids`) : le premier temps d'une
     /// maintenance, avant la lecture du graphe.
-    pub fn fts_live_ids(&self, table: &str) -> Result<(Vec<u64>, String), String> {
+    pub fn fts_live_ids(&mut self, table: &str) -> Result<(Vec<u64>, String), String> {
         crate::fts_maintenance::live_ids(&self.fts_handle_nomme(table)?)
     }
 
     /// **Le relevé à blanc** du plein texte d'une table (`fts_maintenance::releve_a_blanc`) :
     /// ses vivants, ses lignes (les décalages que le graphe porte, toutes cellules) et ses
     /// orphelins, sans rien effacer.
-    pub fn fts_releve_a_blanc(&self, table: &str) -> Result<serde_json::Value, String> {
+    pub fn fts_releve_a_blanc(&mut self, table: &str) -> Result<serde_json::Value, String> {
         let handle = self.fts_handle_nomme(table)?;
         let nom = table.strip_prefix(crate::fts_handle::INDEX_PREFIX).unwrap_or(table);
         let decalage = self.dialect.node_offset_expr("n");
@@ -1498,7 +1510,10 @@ fn read_threads() -> u64 {
     /// table par table, notée dans ses métas (`FTS_MAINTENANCE_KEY`) avec la date de la nuit : l'hôte ne
     /// la rejoue pas la même nuit, et l'état d'index la lit. `None` : aucune table au plein texte.
     pub fn fts_maintenance_nocturne(&mut self, maintenant: jiff::civil::DateTime, max_purge_ratio: f64, compact: bool) -> Option<serde_json::Value> {
-        let mut tables: Vec<String> = self.fts_handles.keys().cloned().collect();
+        // Toutes les tables, pas seulement celles qu'une recherche a déjà ouvertes : juste après un
+        // redémarrage de l'hôte, aucune ne l'est. En mode fichiers, sans rien rebâtir (`open_fts_files`).
+        self.open_fts_files();
+        let mut tables: Vec<String> = self.fts_handles.keys().filter(|t| !self.fts_rebuild.contains(*t)).cloned().collect();
         if tables.is_empty() {
             return None;
         }
