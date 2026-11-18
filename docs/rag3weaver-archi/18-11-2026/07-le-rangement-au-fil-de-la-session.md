@@ -87,6 +87,24 @@ La part gabarit est décrite par mémoire. La part hôte :
    tours (`from`, `to`, et `chat` : la conversation de la tranche par défaut), rendue comme la
    tranche, bornée en caractères, en lecture seule. Il n'est offert qu'au pas de l'archiviste, et
    à aucun autre agent sans déclaration.
+9 quinquies. **La chaîne inverse** (Lucie) : d'un tour, remonter à sa tranche et à son run,
+   puis aux L1 que l'archiviste en a tirés.
+   - **La Source de tranche** porte `run`, son intervalle (`from_turn`, `to_turn`),
+     `slice_summary` et le rapport de l'archiviste.
+   - **La tranche d'un tour se calcule depuis l'intervalle** : c'est la Source de tranche du même
+     `run` dont l'intervalle contient le tour. Les `Turn` ne reçoivent pas d'identifiant de
+     tranche après coup. C'est mon choix, pour deux raisons :
+     1. une entité en ajout seul le reste, sans exception ;
+     2. une tranche ratée puis rangée avec la suivante, ou une tranche refaite, ne laisse aucun
+        `Turn` pointer vers une tranche qui n'existe pas ou plus.
+
+     Les intervalles des tranches réussies d'un run ne se chevauchent pas : l'hôte n'avance la
+     marque qu'après un rangement réussi. La réponse est donc unique. Un tour sans tranche est
+     « pas encore rangé ».
+   - **Les L1 de la tranche** viennent de `cited_by` sur la Source de tranche (gabarit :
+     mémoire). L'hôte offre `turn_origin(run, turn)` : la tranche, son run et ses L1, ou « pas
+     encore rangé ». C'est en lecture seule, offert au chat, à l'archiviste et à l'IDE.
+
 9 quater. **Les tours cherchables par le temps, et les appels d'outils filtrables** (Lucie :
    revoir « ce qui a mal marché », vérifier qu'un outil a bien été appelé la veille).
    - **Ce que l'hôte écrit pour chaque tour** : un `Turn` avec `at`, `run`, `turn` et `role`.
