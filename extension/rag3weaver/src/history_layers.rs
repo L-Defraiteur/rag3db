@@ -181,6 +181,27 @@ fn last_tombstoned_files(catalog: &Catalog, layer: &str) -> Result<std::collecti
     Ok(crate::views::read_tombstones(layer, rang, texte)?.1)
 }
 
+/// A worktree whose work layer is to be written: its layer id (the stable id of the tracked sources), its path,
+/// and the history layer of its branch.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkLayerToWrite {
+    pub layer: String,
+    pub worktree: PathBuf,
+    pub branch_layer: String,
+}
+
+/// **Write the work layers of `worktrees`**, under the cap `tracked.writes.max_work_layers`: a layer already written
+/// is written again; a new one beyond the cap is refused, naming the setting. Each worktree's outcome, in order.
+pub fn refresh_work_layers(
+    catalog: &mut Catalog,
+    worktrees: &[WorkLayerToWrite],
+    settings: &crate::views::WriteSettings,
+) -> Vec<(String, Result<i64, String>)> {
+    // RED STUB: no cap.
+    let _ = settings;
+    worktrees.iter().map(|w| (w.layer.clone(), write_work_generation(catalog, &w.worktree, &w.layer, &w.branch_layer))).collect()
+}
+
 #[cfg(all(test, feature = "rag3db-native"))]
 mod tests {
     use super::*;
@@ -319,6 +340,40 @@ mod tests {
         git(&wt, &["commit", "-q", "-m", "h"]);
         let refus = write_work_generation(&mut cat, &wt, &couche, "refs/heads/travail").expect_err("a HEAD without generation of its branch is written");
         assert!(refus.contains("tip"), "the refusal does not say the work layer waits for tip: {refus}");
+    }
+
+    /// **Témoin 4 : the cap of the work layers.** Under `tracked.writes.max_work_layers: 2`, three worktrees: the
+    /// first two are written, the third is refused naming the setting, and written again later neither; the two
+    /// written ones are written again. The manifest accepts the key, and refuses an unknown one under `writes`.
+    #[test]
+    fn the_cap_of_the_work_layers_refuses_the_one_beyond_naming_the_setting() {
+        let tracked = serde_json::json!({"sources": [], "writes": {"max_work_layers": 2}});
+        crate::suivies::declaration_du_manifeste(Some(&tracked)).expect("tracked refuses the key writes");
+        let settings = crate::views::write_settings(Some(&tracked)).expect("the settings of the writes");
+        assert_eq!(settings.max_work_layers, 2, "the cap is not read from tracked.writes");
+        let mauvais = serde_json::json!({"writes": {"plafond": 2}});
+        let refus = crate::views::write_settings(Some(&mauvais)).expect_err("an unknown key under writes is accepted");
+        assert!(refus.contains("plafond"), "{refus}");
+        let (d, c1, _, _) = depot();
+        let (mut cat, n) = base(d.path(), &c1);
+        let branche = LayerWrite { layer: "refs/heads/main".into(), parent: Some((crate::generations::COUCHE_DU_BACKEND.into(), n)) };
+        write_history_generation(&mut cat, d.path(), &branche, &c1).expect("la génération de main@c1");
+        let dossiers = tempfile::tempdir().unwrap();
+        let worktrees: Vec<WorkLayerToWrite> = (0..3)
+            .map(|i| {
+                let wt = dossiers.path().join(format!("wt{i}"));
+                git(d.path(), &["worktree", "add", "-q", "--detach", wt.to_str().unwrap(), &c1]);
+                std::fs::write(wt.join(format!("n{i}.rs")), format!("pub fn n{i}() -> u32 {{\n    {i}\n}}\n")).unwrap();
+                WorkLayerToWrite { layer: format!("travail-{i}"), worktree: wt, branch_layer: "refs/heads/main".into() }
+            })
+            .collect();
+        for tour in 0..2 {
+            let issues = refresh_work_layers(&mut cat, &worktrees, &settings);
+            assert!(issues[0].1.is_ok() && issues[1].1.is_ok(), "tour {tour}: the first two are not written: {issues:?}");
+            let refus = issues[2].1.as_ref().expect_err(&format!("tour {tour}: the third work layer is written beyond the cap"));
+            assert!(refus.contains("tracked.writes.max_work_layers") && refus.contains('2'), "tour {tour}: the refusal does not name the setting: {refus}");
+        }
+        assert!(fins_dans_la_vue(&mut cat, "travail-1", "n1") == vec![3], "the second work layer is not read");
     }
 
     /// **Témoin 2 : a history layer is written without checkout.** Writing the generations of branch `b` (never
