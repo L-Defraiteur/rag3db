@@ -72,6 +72,9 @@ Mailbox lines start with a header in the theme's accent, in French: `[équipier 
 `[toi · consigne]`, `[équipier · compte rendu]`, `[hôte · fini]`… A teammate line that carries the
 agent's `name` is headed by it: `[Algareth · compte rendu]`.
 A line received twice (once by re-reading the mailbox, once from the stream) is written once.
+A line exchanged with a Claude session (`from: "session"`, with `peer`, `direction`, `text`) is folded:
+`› Message de @<peer> : <start>… (Ctrl-O pour tout lire)` when received, `“<start>…” → envoyé à <peer>` when
+sent, then its delivery (`⎿ refusé : <reason>`, `⎿ en file`); Ctrl-O opens it whole, among the tool calls.
 The text after the header, like the model's own text, is prose: in the terminal's colour, folded
 between words, with common Markdown rendered without its marks (`#` titles in bold accent, `-`/`*`/`+`
 bullets as `•`, `**bold**`, `*italic*`, `` `inline code` `` tinted). An asterisk only counts when it

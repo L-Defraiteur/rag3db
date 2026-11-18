@@ -213,6 +213,10 @@ pub struct Vue {
     pub sous_tmux: bool,
     /// Les appels d'outil de la séance, dans l'ordre (tty-11).
     pub appels: Vec<crate::outils::Appel>,
+    /// The messages exchanged with Claude sessions (vision of 16 nov.), whole, for Ctrl-O.
+    pub messages: Vec<SessionMessage>,
+    /// What Ctrl-O can open, in the order it came: a tool call or a session message.
+    openables: Vec<Openable>,
     /// Les candidats d'une complétion, dits sur la ligne du haut jusqu'à la touche suivante.
     pub propositions: Option<String>,
     /// Montrer la plomberie de l'équipier dans l'historique (`--etapes`) : ses étapes faites, la fin
@@ -269,6 +273,8 @@ impl Vue {
             maj_entree: false,
             sous_tmux: false,
             appels: Vec::new(),
+            messages: Vec::new(),
+            openables: Vec::new(),
             propositions: None,
             montrer_etapes: false,
             repondu: true,
@@ -493,6 +499,7 @@ impl Vue {
                     self.discret = Some(appel.ligne());
                 }
                 self.appels.push(appel);
+                self.openables.push(Openable::Call(self.appels.len() - 1));
                 self.changer(Etat::Agit(outil));
             }
             "ToolCallFinished" => {
@@ -550,6 +557,10 @@ impl Vue {
             (Some(r), Some(oui)) => self.boite.attentes().iter().find(|a| a.id == r && a.kind == "approval").map(|a| format!("{} : {}", if oui { "accordé" } else { "refusé" }, a.command.clone().unwrap_or_default())),
             _ => None,
         };
+        if l["from"] == "session" {
+            self.session_line(l);
+            return;
+        }
         self.boite.ligne(l);
         if let Some(n) = l["name"].as_str().filter(|n| !n.trim().is_empty() && l["from"] == "teammate") {
             self.nom_agent = Some(n.to_string());
@@ -672,12 +683,60 @@ impl Vue {
 
     /// How many entries Ctrl-O can open (tool calls and session messages).
     pub fn openable_count(&self) -> usize {
-        0
+        self.openables.len()
     }
 
     /// The whole of the `i`-th openable entry.
-    pub fn openable_lines(&self, _i: usize) -> Vec<Validee> {
-        Vec::new()
+    pub fn openable_lines(&self, i: usize) -> Vec<Validee> {
+        match self.openables.get(i) {
+            Some(Openable::Call(j)) => self.appels[*j].complet(),
+            Some(Openable::Message(j)) => {
+                let m = &self.messages[*j];
+                let mut v = vec![Validee { genre: Genre::Boite, texte: m.header.clone(), langue: String::new(), tete: m.header.len() }];
+                v.extend(crate::outils::blocs(&m.text, Genre::Boite));
+                v
+            }
+            None => Vec::new(),
+        }
+    }
+
+    /// The kind of the `i`-th openable entry, for the viewer's header.
+    pub fn openable_label(&self, i: usize) -> &'static str {
+        match self.openables.get(i) {
+            Some(Openable::Message(_)) => "message",
+            _ => "appel d'outil",
+        }
+    }
+
+    /// **A line exchanged with a Claude session** (`from: "session"`, vision of 16 nov.): folded in the
+    /// history, its arrival or its sending on the muted top line, the whole of it for Ctrl-O.
+    fn session_line(&mut self, l: &Value) {
+        let peer = l["peer"].as_str().unwrap_or("?").to_string();
+        let text = l["text"].as_str().unwrap_or("");
+        if l["kind"] == "delivery" {
+            if let Some(d) = delivery_said(l) {
+                self.clore();
+                self.valider(Genre::Boite, format!("  ⎿ {d}"));
+            }
+            return;
+        }
+        let (start, cut) = fold(text, SESSION_FOLD);
+        self.clore();
+        if l["direction"] == "out" {
+            self.valider(Genre::Boite, format!("“{start}{}” → envoyé à {peer}", if cut { "…" } else { "" }));
+            if let Some(d) = delivery_said(l) {
+                self.valider(Genre::Boite, format!("  ⎿ {d}"));
+            }
+            self.discret = Some(format!("envoyé à {peer}"));
+            self.messages.push(SessionMessage { header: format!("Message envoyé à @{peer}"), text: text.to_string() });
+        } else {
+            let head = format!("› Message de @{peer} : ");
+            let body = if cut { format!("{start}… (Ctrl-O pour tout lire)") } else { start };
+            self.valider_avec_tete(Genre::Boite, &head, &body);
+            self.discret = Some(format!("message de @{peer}"));
+            self.messages.push(SessionMessage { header: format!("› Message de @{peer}"), text: text.to_string() });
+        }
+        self.openables.push(Openable::Message(self.messages.len() - 1));
     }
 
     /// Une note du terminal lui-même (une coupure du flux, un refus).
@@ -758,7 +817,7 @@ impl Vue {
             // Une saisie en cours se vide d'abord, comme dans un shell.
             Touche::CtrlC if !self.saisie.est_vide() => self.edite(crate::saisie::Saisie::vider),
             Touche::CtrlC => Some(Action::Quitter),
-            Touche::CtrlO if !self.appels.is_empty() => Some(Action::Ouvrir),
+            Touche::CtrlO if !self.openables.is_empty() => Some(Action::Ouvrir),
             Touche::CtrlO => {
                 self.note("aucun appel d'outil à ouvrir");
                 None
@@ -1035,6 +1094,46 @@ impl Vue {
         let x = zone.x + ((2 + a.colonne) as u16).min(zone.width.saturating_sub(1));
         let y = zone.y + (2 + a.ligne as u16).min(zone.height.saturating_sub(1));
         f.set_cursor_position((x, y));
+    }
+}
+
+/// A message exchanged with a Claude session, kept whole for Ctrl-O.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionMessage {
+    pub header: String,
+    pub text: String,
+}
+
+/// What Ctrl-O can open: the index of a tool call, or of a session message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Openable {
+    Call(usize),
+    Message(usize),
+}
+
+/// How many characters of a session message the history shows before folding it.
+const SESSION_FOLD: usize = 80;
+
+/// The start of `text` the history shows (its first line, at most `max` characters), and whether it was cut.
+fn fold(text: &str, max: usize) -> (String, bool) {
+    let mut lines = text.lines();
+    let first = lines.next().unwrap_or_default();
+    let more = lines.next().is_some();
+    let start: String = first.chars().take(max).collect();
+    let cut = more || first.chars().count() > max;
+    (start, cut)
+}
+
+/// The delivery of a sent message, said in French; nothing when it was delivered with the sending.
+fn delivery_said(l: &Value) -> Option<String> {
+    match l["delivery"].as_str()? {
+        "refused" => Some(match l["delivery_reason"].as_str() {
+            Some(r) if !r.is_empty() => format!("refusé : {r}"),
+            _ => "refusé".to_string(),
+        }),
+        "queued" => Some("en file".to_string()),
+        "delivered" if l["kind"] == "delivery" => Some("remis".to_string()),
+        _ => None,
     }
 }
 
