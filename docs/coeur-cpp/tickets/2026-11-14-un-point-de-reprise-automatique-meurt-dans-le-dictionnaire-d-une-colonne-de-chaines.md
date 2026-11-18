@@ -136,3 +136,25 @@ schéma qui n'a rien écrit. Core 3079782 (02:55:41), binaire à côté :
 
 Un point de reprise demandé par un COMMIT. 1 tour sur 12 sous 200 Mio ; 0 sur 10 sous 2 Gio avec le
 pool corrigé. La pression du pool semble l'aider. La suite reste la passe sous ASan, en fenêtre.
+
+## Le 18 novembre : le petit test de Codex, mesuré
+
+Codex avait vu une fois le SIGSEGV de cette famille dans
+`StringRewriteAcrossAddColumn.AutomaticCheckpointsBetweenAddsAndDrops` (branche
+`cx-coeur-dictionary-append-atomic`, pages 15, 21, 24), avec la pile `Hashtable<DictionaryEntry>::_M_find_tr`
+← `DictionaryChunk::appendString` ← `StringChunkData::write` ← `Column::checkpointSegment`. Cela
+désigne une écriture de chaîne pendant le point de reprise, et non `finalize`.
+
+Le même test joué à luciepc sur master `05c54aab8` (le correctif des offsets `9fa16affff` compris),
+chaque tour dans son propre processus, journaux sous `~/.cache/rag3db-moteur-notes/c1-rate/` :
+
+| variante | tours | verts | rouges | morts |
+|---|---|---|---|---|
+| tel quel (fil lecteur, ADD et DROP de colonnes, points de reprise automatiques à 4 Kio) | 100 | 100 | 0 | 0 |
+| sans le fil lecteur | 100 | 100 | 0 | 0 |
+| sans les DROP | 100 | 100 | 0 | 0 |
+| tel quel, sous l'environnement de Codex (MAX_NUM_THREADS=2, OMP et OPENBLAS à 5, `taskset -c 0-4`) | 100 | 100 | 0 | 0 |
+
+Rien en 400 tours : le petit test ne le reproduit pas à une fréquence utile. Le défaut reste rare
+partout : une fois sur 12 sous `DdlEveryMinute` à 200 Mio, une fois chez Codex, jamais sous ASan
+(7 tours) ni sous TSan (6 tours). C'est cohérent avec une course qui demande un entrelacement précis.
