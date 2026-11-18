@@ -68,6 +68,20 @@ pub struct TeammatePolicy {
     /// muet ne suspend pas son superviseur pour toujours. Défaut : 1800.
     #[serde(default = "TeammatePolicy::mille_huit_cents")]
     pub reply_wait_s: u64,
+    /// **What bounds a step is its context** (S1, 18 Nov 2026): once the last model call of a
+    /// step carried more tokens than this (prompt and completion, as the provider counts them),
+    /// work tools are refused and the teammate is told to declare step_done. The steps of the
+    /// D6 campaign peaked at 14 to 21 k. Default: 64 000.
+    #[serde(default = "TeammatePolicy::step_context_tokens_default")]
+    pub step_context_tokens: usize,
+    /// A safety bound on the work tool calls of a step, against a loop that never ends.
+    /// Default: 60 (the former fixed budget was 12).
+    #[serde(default = "TeammatePolicy::max_tool_calls_per_step_default")]
+    pub max_tool_calls_per_step: usize,
+    /// A safety bound on the model calls of a step, passed as the step's `max_iterations`
+    /// (the host's chat turn defaults to 12 otherwise). At most 100. Default: 40.
+    #[serde(default = "TeammatePolicy::max_model_calls_per_step_default")]
+    pub max_model_calls_per_step: usize,
 }
 
 impl TeammatePolicy {
@@ -89,6 +103,15 @@ impl TeammatePolicy {
     fn mille_huit_cents() -> u64 {
         1800
     }
+    fn step_context_tokens_default() -> usize {
+        64_000
+    }
+    fn max_tool_calls_per_step_default() -> usize {
+        60
+    }
+    fn max_model_calls_per_step_default() -> usize {
+        40
+    }
 }
 
 impl Default for TeammatePolicy {
@@ -100,6 +123,9 @@ impl Default for TeammatePolicy {
             quota_wait_s: Self::soixante(),
             max_unavailable_steps: Self::dix(),
             reply_wait_s: Self::mille_huit_cents(),
+            step_context_tokens: Self::step_context_tokens_default(),
+            max_tool_calls_per_step: Self::max_tool_calls_per_step_default(),
+            max_model_calls_per_step: Self::max_model_calls_per_step_default(),
         }
     }
 }

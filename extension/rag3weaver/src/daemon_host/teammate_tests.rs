@@ -4,7 +4,7 @@
 
 use super::chat::ChatModel;
 use super::chat_qui_code::{depot_inscrit, hote};
-use super::teammate::{PlanState, Status, STEP_BUDGET};
+use super::teammate::{PlanState, Status};
 use crate::llm::{CallbackLlm, Llm, MockLlm, Turn};
 use serde_json::{json, Value};
 use std::sync::{Arc, Mutex};
@@ -61,7 +61,7 @@ fn three_items(seen: Arc<Mutex<Seen>>, mailbox: std::path::PathBuf) -> ChatModel
                 seen.lock().unwrap().frontiers.push(last_user(turns));
             }
             for r in &results {
-                if r.contains("budget du pas") {
+                if r.contains("declare step_done now") {
                     seen.lock().unwrap().refusals.push(r.clone());
                 }
             }
@@ -85,10 +85,10 @@ fn three_items(seen: Arc<Mutex<Seen>>, mailbox: std::path::PathBuf) -> ChatModel
                 }
                 (1, _) => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "readme", "succeeded": true, "done": "README écrit", "remaining": "" }))])),
                 // Pas 2 : la réponse est là ; l'élément « titre » devient faisable ;
-                // treize lectures d'un coup, le budget refuse la treizième.
+                // la borne de sûreté plus une lectures d'un coup : la dernière est refusée.
                 (2, 0) => {
                     let mut v: Vec<(String, String)> = vec![("edit_plan".into(), json!({ "item": { "id": "titre", "status": "todo", "alone": true, "reason": "le superviseur a répondu" } }).to_string())];
-                    for _ in 0..STEP_BUDGET {
+                    for _ in 0..crate::backend::TeammatePolicy::default().max_tool_calls_per_step {
                         v.push(("read_file".into(), json!({ "path": "src/lib.rs" }).to_string()));
                     }
                     answer(turns, opts, sink, "", v)
@@ -164,7 +164,7 @@ fn the_teammate_works_a_three_item_plan_step_by_step() {
     let seen = seen.lock().unwrap();
     assert!(seen.frontiers[1].contains("Le titre : « Petit dépôt »") && seen.frontiers[1].starts_with("[Pas 2]"), "{}", seen.frontiers[1]);
     assert!(seen.frontiers[0].contains("Réponds ou agis"), "{}", seen.frontiers[0]);
-    // Le budget : la treizième lecture refusée, en nommant step_done.
+    // La borne de sûreté : la dernière lecture refusée, en nommant step_done.
     assert_eq!(seen.refusals.len(), 1, "{:?}", seen.refusals);
     assert!(seen.refusals[0].contains("step_done"));
     assert!(seen.frontiers[3].contains("Oui, vas-y pour le CONTRIBUTING") && seen.frontiers[3].contains("(élément contrib)"), "{}", seen.frontiers[3]);
@@ -1855,7 +1855,7 @@ fn a_step_reads_fifteen_times_then_writes_and_finishes_in_one_step() {
     let files = host.teammate_files(&h.id, "doc").unwrap();
     let mailbox = attendre_dans(&files, "the end", &|b| b.iter().any(|l| l["kind"] == "ended"));
     let (steps, results) = seen.lock().unwrap().clone();
-    assert!(!results.iter().any(|r| r.contains("budget")), "no call is refused: {results:#?}");
+    assert!(!results.iter().any(|r| r.contains("declare step_done now")), "no call is refused: {results:#?}");
     assert!(steps.iter().all(|&n| n == 1), "one step only: {steps:?}");
     assert_eq!(mailbox.iter().filter(|l| l["kind"] == "step_done").count(), 1, "{mailbox:#?}");
     assert_eq!(mailbox.iter().find(|l| l["kind"] == "ended").unwrap()["text"], "fait sans plan", "{mailbox:#?}");

@@ -8,7 +8,7 @@
 //!   autre. Un plan clos part dans `plans/<n>.json`, puis en L1 sur la fiche de
 //!   session (plus tard dans ce lot).
 //! - Un pas est un tour de chat dans la tâche : l'agent travaille, puis appelle
-//!   `step_done`, un outil qui termine la boucle. Au-delà de [`STEP_BUDGET`]
+//!   `step_done`, un outil qui termine la boucle. Au-delà des bornes du pas (`teammate.step_context_tokens`, `max_tool_calls_per_step`)
 //!   appels sans `step_done`, tout autre appel est refusé.
 //! - La boîte est `<dossier de la tâche>/mailbox.jsonl`, une ligne par message,
 //!   publiée aussi sur le sujet `mailbox.<task>` du bus de la tâche. Le
@@ -34,8 +34,6 @@ pub const STEP_DONE: &str = "step_done";
 pub const REPORT: &str = "report";
 /// `propose` est pris par les propositions de déclaration : l'outil du hors-plan s'appelle `suggest`.
 pub const SUGGEST: &str = "suggest";
-/// Les appels d'outil permis dans un pas avant que `step_done` soit exigé.
-pub const STEP_BUDGET: usize = 12;
 /// Les pas d'un équipier lancé, au plus (un garde-fou, pas un réglage du grain).
 const MAX_STEPS: usize = 40;
 /// Les pas de suite sans `step_done` réussi avant que l'équipier s'arrête et le
@@ -502,6 +500,13 @@ pub struct Step {
     pub bus: Option<crate::events::EventBus>,
     pub number: usize,
     calls: AtomicUsize,
+    /// The step's bounds (S1, 18 Nov 2026), from `teammate.*` in the manifest.
+    max_tool_calls: usize,
+    context_tokens: usize,
+    max_model_calls: usize,
+    /// The tokens of the last model call of the step (prompt and completion), from
+    /// `generation_end`.
+    last_context: std::sync::Arc<AtomicUsize>,
     /// Ce que `step_done` a déclaré.
     done: Mutex<Option<Value>>,
     /// Les plans clos pendant ce pas (à ranger en L1).
@@ -523,6 +528,10 @@ impl Step {
             bus,
             number,
             calls: AtomicUsize::new(0),
+            max_tool_calls: crate::backend::TeammatePolicy::default().max_tool_calls_per_step,
+            context_tokens: crate::backend::TeammatePolicy::default().step_context_tokens,
+            max_model_calls: crate::backend::TeammatePolicy::default().max_model_calls_per_step,
+            last_context: std::sync::Arc::new(AtomicUsize::new(0)),
             done: Mutex::new(None),
             closed: Mutex::new(Vec::new()),
             decided: Mutex::new(None),
@@ -530,6 +539,38 @@ impl Step {
             succeeded_tools: Mutex::new(Vec::new()),
         }
     }
+
+    /// The step's bounds, from the backend's `teammate` policy.
+    pub fn with_policy(mut self, policy: &crate::backend::TeammatePolicy) -> Self {
+        self.max_tool_calls = policy.max_tool_calls_per_step.max(1);
+        self.context_tokens = policy.step_context_tokens.max(1);
+        self.max_model_calls = policy.max_model_calls_per_step.clamp(1, 100);
+        self
+    }
+
+    /// The `max_iterations` of the step's chat turn.
+    pub fn max_model_calls(&self) -> usize {
+        self.max_model_calls
+    }
+
+    /// Where the turn's event handler records the tokens of each model call of the step.
+    pub fn context_meter(&self) -> std::sync::Arc<AtomicUsize> {
+        self.last_context.clone()
+    }
+}
+
+/// Records the tokens of a model call (prompt and completion) from a `generation_end` event
+/// of a step's turn.
+pub fn record_context(meter: &AtomicUsize, ev: &Value) {
+    if ev["event"] == "generation_end" {
+        let tokens = ev["prompt_tokens"].as_u64().unwrap_or(0) + ev["completion_tokens"].as_u64().unwrap_or(0);
+        if tokens > 0 {
+            meter.store(tokens as usize, Ordering::SeqCst);
+        }
+    }
+}
+
+impl Step {
 
     /// Note un outil de travail abouti : son rendu n'est pas une erreur.
     fn note_tool(&self, call: &ToolCall, turn: &Turn) {
@@ -748,23 +789,29 @@ impl Step {
         }
     }
 
+    /// The refusal of a work tool past a bound of the step, `None` under them.
     fn refusal(&self, call: &ToolCall) -> Option<Turn> {
+        let context = self.last_context.load(Ordering::SeqCst);
+        let why = if context > self.context_tokens {
+            format!("the context of the step is full ({context} tokens, teammate.step_context_tokens = {})", self.context_tokens)
+        } else if self.calls.load(Ordering::SeqCst) > self.max_tool_calls {
+            format!("the step reached its tool calls ({}, teammate.max_tool_calls_per_step)", self.max_tool_calls)
+        } else {
+            return None;
+        };
         Some(Turn::tool_result(
             &call.id,
             &call.name,
-            json!({ "ok": false, "error": format!("budget du pas atteint ({STEP_BUDGET} appels) : déclare d'abord step_done (réussi ou non, ce qui est fait, ce qui reste) ; le pas suivant reprendra") }).to_string(),
+            json!({ "ok": false, "error": format!("{why}: declare step_done now (succeeded or not, what is done, what remains); the next step resumes from there") }).to_string(),
         ))
     }
 
-    /// **Le budget du pas** : chaque appel aux outils de travail est compté, et
-    /// refusé au-delà. Le refus est une réponse d'outil : l'agent le lit.
+    /// **The bounds of the step** (S1, 18 Nov 2026): its context, read on the last model
+    /// call, and a count of work tool calls far above a real step. Past either, a work tool is
+    /// refused; the refusal is a tool result, and the agent reads it.
     fn gate(&self, call: &ToolCall) -> Option<Turn> {
-        let n = self.calls.fetch_add(1, Ordering::SeqCst) + 1;
-        if n > STEP_BUDGET {
-            self.refusal(call)
-        } else {
-            None
-        }
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        self.refusal(call)
     }
 
     pub fn tool_defs() -> Vec<ToolDef> {
@@ -843,7 +890,7 @@ impl Step {
 }
 
 /// **Les outils d'un pas** : ceux du chat dans la tâche, plus `edit_plan`,
-/// `step_done` et `report`, sous le budget du pas.
+/// `step_done` et `report`, sous les bornes du pas.
 pub struct StepTools<'a> {
     pub inner: &'a (dyn crate::agent::ToolBox + Sync),
     pub step: &'a Step,
@@ -1474,7 +1521,7 @@ impl DaemonHost {
             if let Some(r) = relance.take() {
                 message.push_str(&format!("\n{r}\n"));
             }
-            let mut step = Step::new(files.clone(), task, &request, bus.clone(), number);
+            let mut step = Step::new(files.clone(), task, &request, bus.clone(), number).with_policy(&policy);
             step.woke_by = woke_by.take();
             // **Un pas qui n'aboutit pas ne termine pas l'équipier** : l'échec va
             // dans la boîte et le pas suivant repart de la frontière ; seuls
@@ -1903,13 +1950,13 @@ mod tests {
     fn past_the_budget_only_step_done_passes() {
         let d = tempfile::tempdir().unwrap();
         let s = step(d.path());
-        for _ in 0..STEP_BUDGET {
+        for _ in 0..crate::backend::TeammatePolicy::default().max_tool_calls_per_step {
             assert!(s.gate(&call("read_file", json!({}))).is_none());
         }
         let refus = s.gate(&call("read_file", json!({}))).expect("refusé");
         assert!(refus.content.contains("step_done"), "{}", refus.content);
         let refus = s.ours(&call(EDIT_PLAN, json!({ "continue": true }))).unwrap();
-        assert!(refus.content.contains("budget"), "{}", refus.content);
+        assert!(refus.content.contains("teammate.max_tool_calls_per_step"), "{}", refus.content);
         assert!(s.ours(&call(STEP_DONE, json!({ "item": "", "succeeded": false, "done": "", "remaining": "tout" }))).unwrap().content.contains("\"ok\":true"));
     }
 }

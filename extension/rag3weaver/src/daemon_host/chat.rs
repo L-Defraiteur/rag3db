@@ -720,17 +720,27 @@ impl DaemonHost {
         }
         let state_dir = self.chats_root.join(backend_id);
         std::fs::create_dir_all(&state_dir).map_err(|e| format!("{} : {e}", state_dir.display()))?;
-        let config: ChatConfig = serde_json::from_value(json!({
+        let mut config = json!({
             "name": format!("chat:{backend_id}"),
             "system_prompt": prompt,
             "state_dir": state_dir,
-        }))
+        });
+        // A step's turn takes its bound on model calls from the teammate policy (S1, 18 Nov
+        // 2026: the default of 12 cut half of the D6 steps).
+        if let Some(s) = step {
+            config["max_iterations"] = json!(s.max_model_calls());
+        }
+        let config: ChatConfig = serde_json::from_value(config)
         .map_err(|e| e.to_string())?;
         let bus = tour.bus.clone();
         // Les jetons du tour, sur `tokens` : le flux de l'IDE les relaie.
         let events: EventHandler = {
             let (bus, run, rang) = (bus.clone(), run_id.to_string(), Arc::new(AtomicU64::new(0)));
+            let meter = step.map(|s| s.context_meter());
             Arc::new(move |ev: Value| {
+                if let Some(m) = &meter {
+                    super::teammate::record_context(m, &ev);
+                }
                 let Some(bus) = &bus else { return };
                 if ev["event"] == "token" {
                     if let Some(text) = ev["text"].as_str() {
