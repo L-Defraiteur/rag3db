@@ -605,6 +605,10 @@ path = "tests/sonde_reclassement.rs"
 name = "sonde_identifiants_lucivy"
 path = "tests/sonde_identifiants_lucivy.rs"
 [[test]]
+name = "sonde_parite_search_code"
+path = "tests/sonde_parite_search_code.rs"
+required-features = ["rag3db-native", "code"]
+[[test]]
 name = "sonde_cout_du_predicat"
 path = "tests/sonde_cout_du_predicat.rs"
 required-features = ["rag3db-native"]
