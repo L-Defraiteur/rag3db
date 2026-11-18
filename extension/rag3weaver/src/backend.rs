@@ -7295,20 +7295,24 @@ mod tests {
         m["models"]["embed"] = e;
     }
 
-    /// **5. Un `query_max_chars` au-dessus de `context_tokens × 3` se refuse au
-    /// chargement** (décision de c7, 15 novembre 2026), en disant les deux.
+    /// **5. Un `query_max_chars` au-dessus de `context_tokens − 2` se refuse au
+    /// chargement**, en disant les deux. Le 15 novembre, la borne était
+    /// `context_tokens × 3` (trois caractères par jeton) ; le 18, le pire ratio
+    /// mesuré vaut un jeton par caractère (accents, emojis, CJK, hexadécimal :
+    /// `docs/embarquement/18-11-2026/02-bornes-en-caracteres-et-limites-en-jetons.md`,
+    /// point D), plus les deux jetons spéciaux.
     #[cfg(feature = "code")]
     #[test]
     fn plafond_de_requete_au_dessus_du_contexte_se_refuse_au_chargement() {
         let (_d, p) = fixture_code_avec("working_tree", false, json!({}), &|m: &mut Value| {
-            embed_declare(m, json!({"context_tokens": 8192, "query_max_chars": 30000}));
+            embed_declare(m, json!({"context_tokens": 8192, "query_max_chars": 8191}));
         });
-        let e = p.err().expect("un plafond au-dessus du contexte se refuse");
-        assert!(e.contains("query_max_chars (30000)") && e.contains("24576"), "le refus dit les deux : {e}");
+        let e = p.err().expect("a cap above the window at one token per character is refused");
+        assert!(e.contains("query_max_chars (8191)") && e.contains("8190"), "the refusal says both : {e}");
         let (_d, p) = fixture_code_avec("working_tree", false, json!({}), &|m: &mut Value| {
-            embed_declare(m, json!({"context_tokens": 8192, "query_max_chars": 20000}));
+            embed_declare(m, json!({"context_tokens": 8192, "query_max_chars": 8190}));
         });
-        assert!(p.is_ok(), "sous le plafond haut, il passe : {:?}", p.err());
+        assert!(p.is_ok(), "at the window minus the special tokens, it passes : {:?}", p.err());
     }
 
     /// **6. L'état dit le plafond de la requête et sa source.**
