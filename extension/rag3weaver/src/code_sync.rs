@@ -1436,6 +1436,24 @@ fn synchroniser_la_source(
     resultat
 }
 
+/// **The full text, prepared before a source is synchronized**, on both paths (the snapshot one and the
+/// generations writer): the counts guard (a document with no row, a row with no document) marks an index to
+/// rebuild; the folder left by a killed process is checked; and a full text left pending by a first index
+/// stopped before its final push is rebuilt from the rows. Found missing on the generations path by Codex
+/// on 16 November 2026 (`docs/recherche/18-11-2026/01-evaluation-du-travail-de-codex.md`): a ghost stayed in
+/// searches (302 documents for 301 rows). Returns when a rebuild started, for the sync profile.
+fn prepare_full_text_for_source_sync(catalog: &mut Catalog) -> Result<Option<std::time::Instant>, String> {
+    let guard_started = std::time::Instant::now();
+    let gaps = catalog.check_fts_counts().map_err(|e| e.to_string())?;
+    if !gaps.is_empty() {
+        eprintln!("[rag3weaver] garde des comptes : {} index à rebâtir ({:?})", gaps.len(), guard_started.elapsed());
+    }
+    catalog.verify_fts_files();
+    let rebuild_started = std::time::Instant::now();
+    let rebuilt = catalog.rebuild_pending_fts().map_err(|e| e.to_string())?;
+    Ok((!rebuilt.is_empty()).then_some(rebuild_started))
+}
+
 /// **La synchronisation d'une source déjà indexée, sous les générations** : les fichiers retenus par
 /// paquets, puis ceux que la couche voit encore au rang en attente et que la source ne liste plus, tous
 /// par [`reingest_files_par_generations`] — l'écrivain décide, rien n'est effacé d'une génération
@@ -1447,6 +1465,9 @@ fn synchroniser_par_generations(
     progress: &mut dyn FnMut(SourceSyncProgress),
     source_id: String,
 ) -> Result<(SourceSyncReport, SourceSyncProgress), String> {
+    // The same guard as the snapshot path, before anything is listed: an unchanged source is resynchronized
+    // without a single batch, so no batch would run it later.
+    prepare_full_text_for_source_sync(catalog)?;
     let listed = source.list()?;
     let manifestes = crate::manifestes::Manifestes::lire(&listed, |c| source.read(c).ok().flatten());
     catalog.note_manifestes(&manifestes).map_err(|e| e.to_string())?;
@@ -1655,16 +1676,7 @@ fn synchroniser(
     source_id: String,
     (transaction, coupee): (bool, Option<String>),
 ) -> Result<(SourceSyncReport, SourceSyncProgress), String> {
-    // Le plein texte se vérifie avant la première transaction : la garde des
-    // comptes (un document sans ligne, une ligne sans document) marque à
-    // rebâtir ; un dossier d'un processus tué se rebâtit ici, pas au milieu
-    // d'un paquet.
-    let t_garde = std::time::Instant::now();
-    let ecarts = catalog.check_fts_counts().map_err(|e| e.to_string())?;
-    if !ecarts.is_empty() {
-        eprintln!("[rag3weaver] garde des comptes : {} index à rebâtir ({:?})", ecarts.len(), t_garde.elapsed());
-    }
-    catalog.verify_fts_files();
+    let rebuild_started = prepare_full_text_for_source_sync(catalog)?;
     let cursor = source.cursor();
     let (root, virtual_source) = match crate::workspace_path::worktree_root(&cursor) {
         Some(root) => (root.to_string(), false),
@@ -1675,13 +1687,8 @@ fn synchroniser(
     // aucune ligne de profil (180 s sur 643, mesuré le 3 octobre 2026). Des
     // temps cumulés, publiés à la fin ; aucun changement de comportement.
     let mut profil = SyncProfile::default();
-    // **Un premier index arrêté avant sa poussée finale** a laissé des lignes
-    // sans leur plein texte, et sa marque : il est rebâti d'abord, depuis les
-    // lignes. D'ici là, l'état d'index disait « mots : en cours ».
-    let t = std::time::Instant::now();
-    let rebatis = catalog.rebuild_pending_fts().map_err(|e| e.to_string())?;
-    if !rebatis.is_empty() {
-        profil.add("rebâtir le plein texte laissé par un arrêt", t);
+    if let Some(started) = rebuild_started {
+        profil.add("rebâtir le plein texte laissé par un arrêt", started);
     }
     let t = std::time::Instant::now();
     let listed = source.list()?;
