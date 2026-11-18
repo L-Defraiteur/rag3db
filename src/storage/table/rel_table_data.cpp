@@ -216,11 +216,16 @@ bool RelTableData::delete_(Transaction* transaction, ValueVector& boundNodeIDVec
 
 void RelTableData::addColumn(TableAddColumnState& addColumnState, PageAllocator& pageAllocator) {
     auto& definition = addColumnState.propertyDefinition;
-    columns.push_back(ColumnFactory::createColumn(definition.getName(), definition.getType().copy(),
-        pageAllocator.getDataFH(), mm, shadowFile, enableCompression));
+    {
+        auto column = ColumnFactory::createColumn(definition.getName(), definition.getType().copy(),
+            pageAllocator.getDataFH(), mm, shadowFile, enableCompression);
+        std::unique_lock lck{columnsMtx};
+        columns.push_back(std::move(column));
+    }
     try {
         nodeGroups->addColumn(addColumnState, &pageAllocator);
     } catch (...) {
+        std::unique_lock lck{columnsMtx};
         columns.pop_back();
         throw;
     }
@@ -228,7 +233,10 @@ void RelTableData::addColumn(TableAddColumnState& addColumnState, PageAllocator&
 
 void RelTableData::rollbackAddColumn(PageAllocator& pageAllocator) {
     KU_ASSERT(!columns.empty());
-    columns.pop_back();
+    {
+        std::unique_lock lck{columnsMtx};
+        columns.pop_back();
+    }
     nodeGroups->removeLastColumn(&pageAllocator);
 }
 
@@ -335,9 +343,12 @@ void RelTableData::checkpoint(const std::vector<column_id_t>& columnIDs,
     state.oldestReaderTS = oldestReaderTS;
     nodeGroups->checkpoint(*mm, state);
     // Les numéros ne bougent pas : une colonne supprimée laisse un trou à son numéro.
-    for (auto columnID = 0u; columnID < columns.size(); columnID++) {
-        if (std::find(columnIDs.begin(), columnIDs.end(), columnID) == columnIDs.end()) {
-            columns[columnID].reset();
+    {
+        std::unique_lock lck{columnsMtx};
+        for (auto columnID = 0u; columnID < columns.size(); columnID++) {
+            if (std::find(columnIDs.begin(), columnIDs.end(), columnID) == columnIDs.end()) {
+                columns[columnID].reset();
+            }
         }
     }
 }

@@ -828,8 +828,12 @@ bool NodeTable::delete_(Transaction* transaction, TableDeleteState& deleteState)
 void NodeTable::addColumn(Transaction* transaction, TableAddColumnState& addColumnState,
     PageAllocator& pageAllocator) {
     auto& definition = addColumnState.propertyDefinition;
-    columns.push_back(ColumnFactory::createColumn(definition.getName(), definition.getType().copy(),
-        pageAllocator.getDataFH(), memoryManager, shadowFile, enableCompression));
+    {
+        auto column = ColumnFactory::createColumn(definition.getName(), definition.getType().copy(),
+            pageAllocator.getDataFH(), memoryManager, shadowFile, enableCompression);
+        std::unique_lock lck{columnsMtx};
+        columns.push_back(std::move(column));
+    }
     LocalTable* localTable = nullptr;
     if (transaction->getLocalStorage()) {
         localTable = transaction->getLocalStorage()->getLocalTable(tableID);
@@ -842,6 +846,7 @@ void NodeTable::addColumn(Transaction* transaction, TableAddColumnState& addColu
     try {
         nodeGroups->addColumn(addColumnState, &pageAllocator);
     } catch (...) {
+        std::unique_lock lck{columnsMtx};
         columns.pop_back();
         throw;
     }
@@ -852,7 +857,10 @@ void NodeTable::addColumn(Transaction* transaction, TableAddColumnState& addColu
 void NodeTable::rollbackAddColumn(main::ClientContext* context) {
     KU_ASSERT(!columns.empty());
     // Le stockage local de la transaction a reçu la colonne aussi ; il est jeté juste après.
-    columns.pop_back();
+    {
+        std::unique_lock lck{columnsMtx};
+        columns.pop_back();
+    }
     nodeGroups->removeLastColumn(PageManager::Get(*context));
 }
 
@@ -1032,9 +1040,12 @@ bool NodeTable::checkpoint(main::ClientContext* context, TableCatalogEntry* tabl
         storageManager->markCheckpointChangedMemory();
         // Les numéros ne bougent pas : une colonne supprimée laisse son numéro vide (un trou),
         // les autres restent où elles sont. Plus de renumérotation du catalogue.
-        for (auto columnID = 0u; columnID < columns.size(); columnID++) {
-            if (std::find(columnIDs.begin(), columnIDs.end(), columnID) == columnIDs.end()) {
-                columns[columnID].reset();
+        {
+            std::unique_lock lck{columnsMtx};
+            for (auto columnID = 0u; columnID < columns.size(); columnID++) {
+                if (std::find(columnIDs.begin(), columnIDs.end(), columnID) == columnIDs.end()) {
+                    columns[columnID].reset();
+                }
             }
         }
         for (auto& index : indexes) {
