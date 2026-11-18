@@ -735,7 +735,7 @@ fn run_index(
         // **Une dette qui reste sans muet ni échec** : des morceaux réclamés par un autre
         // écrivain (une passe d'avant, d'un catalogue fermé ou d'un autre processus),
         // repris quand leur réclamation périme ; la fin le dit au lieu de « terminée » sec.
-        let dus = catalog.lock().ok().and_then(|g| g.index_progress().ok()).map(|p| p.dense_missing()).unwrap_or(0);
+        let dus = catalog.lock().ok().and_then(|g| g.end_of_index_progress().ok()).map(|p| p.dense_missing()).unwrap_or(0);
         if dus > 0 {
             return Ok(Some(format!("reste dû : {dus} morceau(x) sans vecteur — sans service d'embarquement, ou réclamés par un autre écrivain ; repris à l'index suivant")));
         }
@@ -743,7 +743,7 @@ fn run_index(
     }
     let dus = {
         let guard = catalog.lock().map_err(|_| "catalogue empoisonné".to_string())?;
-        guard.index_progress().map(|p| p.dense_missing()).unwrap_or(0)
+        guard.end_of_index_progress().map(|p| p.dense_missing()).unwrap_or(0)
     };
     Ok(Some(format!("{dus} morceau(x) non embarqué(s), à reprendre (relancer index)")))
 }
@@ -1050,6 +1050,40 @@ mod tests {
         assert_eq!(etat.text, crate::catalog::Level::Failed, "{etat:?}");
         let raisons = catalog.lock().unwrap().index_failures_for(Some(crate::code::SCOPE));
         assert!(raisons.iter().any(|(g, r)| g == crate::catalog::PLEIN_TEXTE_INDEX && r.contains("plein texte")), "{raisons:?}");
+    }
+
+    /// **A release or debt-read error is said at the end of an index** (ticket of 11 November 2026, « les erreurs
+    /// de libération des réclamations et de lecture de dette sont masquées »): the release of the claims swallowed
+    /// its error and returned zero, and an unreadable debt was said « 0 ». Six files without an embedder leave a
+    /// debt. With the release fault, the end line keeps its cause (`terminée — reste dû …`) and adds the release
+    /// error with its table; with the debt-read fault, it says the debt is unknown, never a number.
+    #[cfg(all(feature = "rag3db-native", feature = "code"))]
+    #[test]
+    fn release_and_debt_read_errors_are_said_at_the_end_of_an_index() {
+        let index = |arm: &dyn Fn(&mut Catalog)| -> Vec<String> {
+            let fichiers: Vec<(String, String)> = (0..6).map(|i| (format!("src/f{i}.rs"), format!("pub fn f{i}() -> u32 {{ {i} }}\n"))).collect();
+            let source: Arc<dyn FileSource> = Arc::new(Snapshot::new("depot", fichiers));
+            let conn = crate::Rag3dbConnection::in_memory().expect("in-memory base");
+            let config = crate::CatalogConfig { name: Some("faults".into()), embedding_dim: 4, ..Default::default() };
+            let mut catalog = Catalog::new(Box::new(conn), Box::new(crate::embedder::AbsentEmbedder::new("absent", 4)), config);
+            catalog.initialize().unwrap();
+            crate::code::register_code_schema(&mut catalog, crate::code::default_scope_chunking()).unwrap();
+            arm(&mut catalog);
+            let catalog = Arc::new(Mutex::new(catalog));
+            let journal = new_index_journal().expect("journal");
+            spawn_index(catalog, source, journal.clone(), 0, Default::default()).join().expect("the index thread");
+            let lines: Vec<String> = std::fs::read_to_string(&journal).unwrap().lines().map(String::from).collect();
+            let _ = std::fs::remove_file(&journal);
+            lines
+        };
+        let released = index(&|c| c.inject_release_fault());
+        let end = released.last().cloned().unwrap_or_default();
+        assert!(end.starts_with(&format!("{DONE_LINE} — reste dû : 12 morceau(x)")), "the cause of the end is kept: {released:?}");
+        assert!(end.contains("libération des réclamations") && end.contains("Scope_Chunk") && end.contains("échec simulé"), "the release error and its table are said: {released:?}");
+        let unreadable = index(&|c| c.inject_debt_read_fault());
+        let end = unreadable.last().cloned().unwrap_or_default();
+        assert!(end.contains("dette inconnue") && end.contains("échec simulé"), "an unreadable debt is said unknown: {unreadable:?}");
+        assert!(!end.contains("reste dû : 0") && !end.contains(" 0 morceau"), "never a debt of zero: {unreadable:?}");
     }
 
     /// **La garde des comptes du plein texte, dite à la fin d'un index**
