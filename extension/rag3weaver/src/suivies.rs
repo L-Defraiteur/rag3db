@@ -95,11 +95,12 @@ pub fn declaration_du_manifeste(tracked: Option<&Value>) -> Result<Declaration, 
     };
     let objet = tracked.as_object().ok_or("tracked : un objet {root, sources} attendu")?;
     for cle in objet.keys() {
-        if cle != "root" && cle != "sources" && cle != "views" {
-            return Err(format!("tracked : clé inconnue « {cle} » (root, sources, views)"));
+        if cle != "root" && cle != "sources" && cle != "views" && cle != "writes" {
+            return Err(format!("tracked : clé inconnue « {cle} » (root, sources, views, writes)"));
         }
     }
     crate::views::view_settings(Some(tracked))?;
+    crate::views::write_settings(Some(tracked))?;
     let root = match objet.get("root") {
         None => Racine::Calculee,
         Some(Value::String(s)) if s == "computed" => Racine::Calculee,

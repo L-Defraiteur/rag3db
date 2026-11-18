@@ -197,9 +197,41 @@ pub fn refresh_work_layers(
     worktrees: &[WorkLayerToWrite],
     settings: &crate::views::WriteSettings,
 ) -> Vec<(String, Result<i64, String>)> {
-    // RED STUB: no cap.
-    let _ = settings;
-    worktrees.iter().map(|w| (w.layer.clone(), write_work_generation(catalog, &w.worktree, &w.layer, &w.branch_layer))).collect()
+    let mut written: usize = worktrees.iter().filter(|w| has_generation(catalog, &w.layer).unwrap_or(false)).count();
+    let mut issues = Vec::with_capacity(worktrees.len());
+    for w in worktrees {
+        let known = has_generation(catalog, &w.layer);
+        let issue = match known {
+            Err(e) => Err(e),
+            Ok(false) if written >= settings.max_work_layers => Err(format!(
+                "plafond des couches de travail atteint : {}, tracked.writes.max_work_layers ; la couche {} ({}) n'est pas écrite",
+                settings.max_work_layers,
+                w.layer,
+                w.worktree.display()
+            )),
+            Ok(known) => {
+                let r = write_work_generation(catalog, &w.worktree, &w.layer, &w.branch_layer);
+                if r.is_ok() && !known {
+                    written += 1;
+                }
+                r
+            }
+        };
+        issues.push((w.layer.clone(), issue));
+    }
+    issues
+}
+
+/// Whether `layer` has a published generation.
+fn has_generation(catalog: &Catalog, layer: &str) -> Result<bool, String> {
+    use crate::connection::{CypherValue, QueryParam};
+    let lu = catalog
+        .execute_raw_with_params(
+            &format!("MATCH (g:{}) WHERE g.couche = $couche RETURN count(*)", crate::generations::TABLE),
+            &[QueryParam::new("couche", CypherValue::String(layer.to_string()))],
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(lu.rows.first().and_then(|r| r.first()).and_then(|v| v.as_i64()).unwrap_or(0) > 0)
 }
 
 #[cfg(all(test, feature = "rag3db-native"))]

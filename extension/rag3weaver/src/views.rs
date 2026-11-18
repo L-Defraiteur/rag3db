@@ -85,9 +85,17 @@ impl Default for WriteSettings {
 
 /// **The settings of the writes** from `tracked` (the key `writes`); absent, the defaults.
 pub fn write_settings(tracked: Option<&Value>) -> Result<WriteSettings, String> {
-    // RED STUB: the key is not read.
-    let _ = tracked;
-    Ok(WriteSettings::default())
+    let mut r = WriteSettings::default();
+    let Some(writes) = tracked.and_then(|t| t.get("writes")) else { return Ok(r) };
+    let objet = writes.as_object().ok_or_else(|| format!("tracked.writes : un objet {{max_work_layers?}} attendu, pas {writes}"))?;
+    for (cle, v) in objet {
+        match (cle.as_str(), v.as_u64().filter(|n| *n > 0)) {
+            ("max_work_layers", Some(n)) => r.max_work_layers = n as usize,
+            ("max_work_layers", None) => return Err(format!("tracked.writes.max_work_layers : un entier positif attendu, pas {v}")),
+            _ => return Err(format!("tracked.writes : clé inconnue « {cle} » (max_work_layers)")),
+        }
+    }
+    Ok(r)
 }
 
 /// Les tombstones d'une génération : `[]` ou une liste de clés (l'écriture de la génération 0), ou
