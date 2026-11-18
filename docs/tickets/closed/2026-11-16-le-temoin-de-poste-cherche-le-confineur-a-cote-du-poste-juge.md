@@ -1,6 +1,6 @@
 # Le témoin de `poste` cherche le confineur à côté du `poste` qu'il juge
 
-- **État** : ouvert (16 novembre 2026) — à G, dans son prochain lot
+- **État** : fait (18 novembre 2026, branche temoin-cherche-a-cote) : test_poste.sh lit confiner_validation.py et test_passe_epinglee.sh la table des suites exigées à côté du témoin, dans le dépôt ; joués contre des copies seules, 35 OK et 30 vert, rouges avant ; required_suites.sh et .txt à retirer du cache des deux postes après l atterrissage
 - **Famille** : produit (outillage : `extension/rag3weaver/scripts/test_poste.sh`)
 - **Gravité** : faux rouge, au seul témoin. Joué contre la copie du cache, un cas rougit sans défaut de `poste`.
 - **Atteignable en service** : non
