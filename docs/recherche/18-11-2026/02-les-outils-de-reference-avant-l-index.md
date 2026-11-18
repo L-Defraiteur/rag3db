@@ -220,5 +220,44 @@ processus après l'étape. Journaux : `~/.cache/rag3weaver-build/cout/`.
 
 ## Questions pour Lucie
 
-_Après la mesure : A ou B, la borne de taille, et le moment où l'image se bâtit (au premier appel ou à
-l'ouverture)._
+### Ce qui est déjà fait, sans repli
+
+Le lot 3 du state par vue (`view-wait-by-state`, recherche, 18 novembre 2026) : pendant un index complet de la
+vue, une lecture ne se tait plus. Elle répond tout de suite par `index: {ready: false, indexing: true}` et dit « un
+index écrit ta vue, durée inconnue — la réponse porte sur ce qui est déjà indexé ». L'agent sait qu'un `usages`
+vide n'est pas une réponse. Le temps d'attente, lui, ne change pas.
+
+### La lecture des chiffres (recherche)
+
+| Forme | rag3weaver/src | Dépôt entier | Second chemin de lecture des outils | Mémoire |
+|---|---|---|---|---|
+| Index réel, aujourd'hui | 46 s | 192 s (partiel dès 99 s) | non | sur disque |
+| A, telle quelle | 428 s | ne tient pas | non | 6 Gio |
+| A, allégée (estimée) | ~126 s | ? | non | ? |
+| B, borne basse | ~12 s (7,6 s d'analyse et ~4 s de résolution) | ~30 s d'analyse et de résolution | **oui** | 960 Mio ; 8,7 Gio sans tables compactes |
+
+- **A ne bat pas l'index** : elle passe par `ingest_code`, plus lent que le chemin par paquets de l'index réel. A
+  n'a de sens que reconstruite sur ce chemin, et alors elle ne gagne que le disque et le plein texte.
+- **B bat l'index d'un facteur 4** sur rag3weaver. Elle coûte deux choses : un second chemin de lecture pour
+  `usages`, `callees` et `impact` (aujourd'hui des nœuds Cypher génériques), et des tables compactes bâties
+  fichier par fichier, sans quoi le dépôt demande près de 9 Gio.
+- **Une troisième voie, C, n'est pas mesurée** : faire publier les relations plus tôt par l'index réel lui-même.
+  Sur rag3weaver, 36 s passent avant que la première relation croisée soit lisible, et 10 s ensuite. Si l'essentiel
+  des 36 s est le plein texte et les morceaux, l'index pourrait poser les scopes et les relations d'abord, puis le
+  plein texte. Ce serait un seul chemin, sans repli à tenir à jour. Pour le savoir, il suffit d'une mesure : le
+  profil par phase (`[sync-profile]`) d'un premier index, qui n'apparaît pas aujourd'hui dans la sortie de la
+  sonde.
+
+## Questions pour Lucie
+
+1. **Avant de choisir A ou B** : d'accord pour mesurer d'abord C (une passe de sonde, sans code de produit) ? Si
+   l'index réel peut rendre les relations en une quinzaine de secondes sur rag3weaver, il n'y a pas de second
+   chemin à écrire.
+2. **Si B** : une borne en nombre de fichiers (quelques centaines, puis l'index), ou des tables compactes sans
+   borne (plus de code, et tout dépôt couvert) ?
+3. **Si B** : l'image se bâtit au premier appel d'un outil de référence, qui attend alors une dizaine de secondes,
+   ou dès l'ouverture d'un backend jamais indexé, qui tient alors de la mémoire pour rien si personne ne demande ?
+
+**Ma recommandation (recherche)** : 1 d'abord. B seulement si C ne descend pas sous une quinzaine de secondes. Dans
+ce cas, des tables compactes, et l'image bâtie au premier appel. codeparsers penche pour B avec des tables
+compactes, ou une borne de quelques centaines de fichiers.
