@@ -1025,6 +1025,9 @@ fn not_ready_line(state: &Value) -> String {
         return format!("index : ta vue est à jour{others}.");
     }
     let files = state["pending_files"].as_u64().unwrap_or(0);
+    if state["indexing"] == json!(true) {
+        return format!("index pas prêt : un index écrit ta vue, durée inconnue — la réponse porte sur ce qui est déjà indexé ({files} fichier(s) en attente){others}.");
+    }
     let when = match state["eta_s"].as_u64() {
         Some(n) => format!("environ {n} s"),
         None => "durée inconnue".to_string(),
@@ -4843,25 +4846,38 @@ impl Backend {
     /// **By view** (Lucie, 18 November 2026): the wait reads the lag of the layer the call reads — the layer
     /// of its `view`, else the backend's — and never waits for another layer. The other layers that lag are
     /// named (`other_views`), and then the answer says its own view is up to date (`ready: true`).
+    /// The files noted in the layer of `key`: waited for under `search.index_wait_s` when the estimate fits in it,
+    /// or said at once (`None` when the layer caught up within the wait).
+    fn wait_for_noted_files(&self, prepared: &PreparedBackend, lag: &crate::catalog::retard::Lag, key: &crate::catalog::retard::LagKey) -> Option<Value> {
+        let estimate = lag.estimate_of(key)?;
+        let wait_s = prepared.manifest.search.as_ref().map_or_else(default_index_wait_s, |s| s.index_wait_s);
+        let eta_s = estimate.eta_ms.map(|ms| ms.div_ceil(1000));
+        if estimate.eta_ms.is_some_and(|ms| ms > wait_s * 1000) {
+            return Some(json!({"ready": false, "eta_s": eta_s, "pending_files": estimate.pending_files}));
+        }
+        let start = std::time::Instant::now();
+        if lag.wait_caught_up_of(key, start + std::time::Duration::from_secs(wait_s)) {
+            return None;
+        }
+        let pending = lag.estimate_of(key).map_or(estimate.pending_files, |e| e.pending_files);
+        Some(json!({"ready": false, "eta_s": eta_s, "pending_files": pending, "waited_s": start.elapsed().as_secs()}))
+    }
+
     fn wait_for_a_lagging_index(&self, prepared: &PreparedBackend) -> Option<Value> {
         use crate::catalog::retard::{LagKey, LayerId};
         let vue = self.read_view.current()?;
         let cell = CELL_OF_CALL.with(|c| c.borrow().clone()).unwrap_or_else(|| vue.scope.clone());
         let layer = CALL_VIEW.with(|v| v.borrow().as_ref().map(|r| LayerId(r.layer.clone()))).unwrap_or_else(LayerId::backend);
         let key = LagKey { cell: cell.clone(), layer: layer.clone() };
-        let own = vue.file_lag.estimate_of(&key).and_then(|estimate| {
-            let wait_s = prepared.manifest.search.as_ref().map_or_else(default_index_wait_s, |s| s.index_wait_s);
-            let eta_s = estimate.eta_ms.map(|ms| ms.div_ceil(1000));
-            if estimate.eta_ms.is_some_and(|ms| ms > wait_s * 1000) {
-                return Some(json!({"ready": false, "eta_s": eta_s, "pending_files": estimate.pending_files}));
-            }
-            let start = std::time::Instant::now();
-            if vue.file_lag.wait_caught_up_of(&key, start + std::time::Duration::from_secs(wait_s)) {
-                return None;
-            }
-            let pending = vue.file_lag.estimate_of(&key).map_or(estimate.pending_files, |e| e.pending_files);
-            Some(json!({"ready": false, "eta_s": eta_s, "pending_files": pending, "waited_s": start.elapsed().as_secs()}))
-        });
+        // **An index writes this view** (the view's state, `views::ViewState::indexing`, 18 November 2026): a full
+        // index notes no file in the lag, and its length is unknown. The read answers at once and says so; before,
+        // it kept silent for the whole index (46 s on rag3weaver/src, about 3 min on the whole repository).
+        let own = if vue.file_lag.is_writing(&key) {
+            let pending = vue.file_lag.summary_of(&key).map_or(0, |s| s.files);
+            Some(json!({"ready": false, "indexing": true, "eta_s": null, "pending_files": pending}))
+        } else {
+            self.wait_for_noted_files(prepared, &vue.file_lag, &key)
+        };
         let others: Vec<Value> = vue
             .file_lag
             .layers_behind(&cell)
