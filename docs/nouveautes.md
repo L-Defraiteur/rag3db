@@ -10,6 +10,8 @@
   et compte la coupe ; le service dit sa fenêtre et ses coupes dans son identité, et `RAG3WEAVER_EMBED_MAX_TOKENS`
   la resserre.
 
+- 18 novembre2026 — `rag3weaver-tty --plain --demande …` attend aussi un run que l'hôte reprend juste après sa fin (une consigne arrivée pendant le dernier pas) : la fin d'une demande, c'est une fin qu'aucune ligne ne suit depuis 2 s, la tâche n'étant plus en cours.
+
 - 18 novembre 2026 — **Une méthode définie hors du fichier de sa classe est une méthode.** `void Foo::f() {}` dans un `.cpp`, quand `class Foo` est dans un `.h` de la même source, s'écrit `method` et non plus `function` : l'arbre compact montre une méthode. Une limite : si le `.h` est indexé après le `.cpp`, dans un lot suivant, la définition reste une fonction jusqu'à la prochaine réécriture du `.cpp`.
 
 - 18 novembre 2026 — **Un embarquement par un fournisseur `compatible` peut estimer et indexer.** Depuis la clé du
