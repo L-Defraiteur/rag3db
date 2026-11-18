@@ -197,9 +197,11 @@ mod tests {
     }
 
     /// A fingerprint of everything a checkout would touch: HEAD, the index file, the status, and every file of the
-    /// worktree with its content and mtime.
+    /// worktree with its content and mtime. The status is read with `--no-optional-locks`: a plain `git status`
+    /// refreshes the index itself when files share its second (racy git), and the fingerprint then changed with no
+    /// write of ours (red once in the whole lib, 18 November 2026, alone it passed).
     fn empreinte(root: &Path) -> String {
-        let mut e = vec![git(root, &["rev-parse", "HEAD"]), git(root, &["status", "--porcelain=v2"])];
+        let mut e = vec![git(root, &["rev-parse", "HEAD"]), git(root, &["--no-optional-locks", "status", "--porcelain=v2"])];
         let index = root.join(".git/index");
         e.push(format!("{:?} {:?}", std::fs::read(&index).unwrap(), std::fs::metadata(&index).unwrap().modified().unwrap()));
         for p in ["f.rs", "g.rs"] {
