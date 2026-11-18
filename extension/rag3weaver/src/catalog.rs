@@ -1987,6 +1987,11 @@ fn read_threads() -> u64 {
     }
 
     fn initialize_storage(&mut self) -> Result<(), CatalogError> {
+        // The COPY files a killed process left behind (ticket of 11 November 2026).
+        let swept = crate::dataflow::record_nodes::sweep_dead_copy_files();
+        if swept > 0 {
+            eprintln!("[rag3weaver] {swept} fichier(s) CSV de COPY d'un processus mort retiré(s) du dossier temporaire");
+        }
         if let Ok(Some(rate)) = self.read_meta_key(INDEX_RATE_KEY) {
             if let Ok(rate) = rate.parse::<f64>() {
                 self.file_lag().set_rate(&self.scope().clone(), rate);

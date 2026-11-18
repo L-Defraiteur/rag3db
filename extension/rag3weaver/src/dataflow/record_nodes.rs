@@ -699,6 +699,38 @@ fn fichier_csv(prefixe: &str, table: &str) -> std::path::PathBuf {
     ))
 }
 
+/// **The COPY files of dead processes, swept** (ticket of 11 November 2026: a process killed during a COPY
+/// never removes its CSV, and the temporary folder keeps it). A file of [`fichier_csv`] names its process:
+/// `rag3weaver-(lignes|liens)-<pid>-…csv`. It is removed when that process no longer runs; the file of a
+/// live process, this one included, is never touched. Linux only (`/proc`); elsewhere nothing is swept.
+/// Returns how many files were removed.
+pub(crate) fn sweep_dead_copy_files() -> usize {
+    if !cfg!(target_os = "linux") {
+        return 0;
+    }
+    let me = std::process::id();
+    let Ok(entries) = std::fs::read_dir(std::env::temp_dir()) else { return 0 };
+    let mut removed = 0;
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else { continue };
+        if !name.ends_with(".csv") {
+            continue;
+        }
+        let Some(rest) = name.strip_prefix("rag3weaver-lignes-").or_else(|| name.strip_prefix("rag3weaver-liens-")) else {
+            continue;
+        };
+        let Some(pid) = rest.split('-').next().and_then(|p| p.parse::<u32>().ok()) else { continue };
+        if pid == me || std::path::Path::new(&format!("/proc/{pid}")).exists() {
+            continue;
+        }
+        if std::fs::remove_file(entry.path()).is_ok() {
+            removed += 1;
+        }
+    }
+    removed
+}
+
 /// Une valeur Cypher dans une cellule CSV, entre guillemets doublés au besoin.
 fn cellule_csv(v: &CypherValue) -> String {
     let brut = match v {
