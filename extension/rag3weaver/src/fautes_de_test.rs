@@ -29,4 +29,9 @@ pub struct FautesDeTest {
     /// partir de 0), comme sur une demande d'arrêt. Avant le 19 octobre 2026,
     /// `RAG3WEAVER_TEST_STOP_AFTER_BATCH`, pour tout le processus.
     pub stop_after_batch: Option<usize>,
+    /// **The release of this writer's claims fails** (ticket of 11 November 2026, « les erreurs de libération
+    /// des réclamations et de lecture de dette sont masquées »): every vector table's release query errs.
+    pub release: bool,
+    /// **The debt read at the end of an index fails** (same ticket): the remaining debt cannot be read.
+    pub debt_read: bool,
 }
