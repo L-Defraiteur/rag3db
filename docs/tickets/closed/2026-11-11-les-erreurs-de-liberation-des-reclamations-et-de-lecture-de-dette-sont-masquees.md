@@ -1,6 +1,6 @@
 # Les erreurs de libération des réclamations et de lecture de dette sont masquées
 
-- **État** : ouvert (11 novembre 2026), relevé à la relecture du lot réclamations ; porteur everything declarative.
+- **État** : fermé (18 novembre 2026, ED) — `Catalog::rendre_mes_reclamations` rend `Result<usize, String>` (table et cause de chaque échec, les autres tables libérées quand même) ; la fin d'un index garde sa cause et ajoute « libération des réclamations en échec : … » ; une dette illisible se dit « dette inconnue », jamais un nombre ; la dette lue avant une passe de vecteurs arrête l'index en le nommant au lieu de valoir `usize::MAX`. Témoin `dataflow::index_nodes::tests::release_and_debt_read_errors_are_said_at_the_end_of_an_index` (fautes armées sur le catalogue du test), ROUGE sur 7f69fee929, vert avec le correctif.
 - **Famille** : produit
 - **Gravité** : un échec SQL peut être présenté comme une libération réussie ou une fin sans dette.
 - **Atteignable en service** : oui, si l'exécution SQL, la lecture du catalogue ou sa prise de verrou échoue.

@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 18 novembre 2026 — **La fin d'un index dit une libération ou une dette qu'elle n'a pas pu faire.** Une erreur en rendant les réclamations d'embarquement s'ajoute à la dernière ligne du journal, avec sa table et sa cause, sans en effacer la cause de fin ; une dette restante illisible se dit « dette inconnue », plus jamais « 0 ».
+
 - 18 novembre 2026 — **Un modèle déclaré dit `access` et `provider`.** `access` dit la manière d'y accéder (`local`, `service`, `compatible`), `provider` le fournisseur (`openai`, `vertex`, `anthropic`, `llama_server`). L'ancienne forme, `provider` pour la manière et `protocol` pour le fournisseur, se lit encore **jusqu'au 29 novembre 2026** ; un modèle qui mêle les deux est refusé, en nommant les deux mots. `/model` rend les deux mots neufs.
 
 - 18 novembre 2026 — **Un llama-server déclaré a le budget d'un modèle local.** Déclaré `compatible`/`openai` à une adresse de ce poste (`127.0.0.1`, `localhost` ou `::1`), un modèle de langage repart après une compaction avec la moitié de sa fenêtre, et non plus avec les 100 000 jetons d'un modèle du cloud.
