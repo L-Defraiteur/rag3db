@@ -1,6 +1,6 @@
 # Un gros paquet défait puis repris ne redonne pas les mêmes arêtes que le témoin
 
-- **État** : ouvert (18 novembre 2026, session recherche, en jouant la passe du lot de la garde des comptes).
+- **État** : fermé (18 novembre 2026, ED) — cause bissectée à 365dc75f74 (une première passe interrompue reprenait par l'écrivain des générations, le paquet repris naissait au rang 1) ; correctif `code_sync::first_pass_interrupted` (branche first-sync-resumes-by-snapshot) ; le test, rouge sur master et sur 365dc75f74, vert avec le correctif.
 - **Gravité** : divergence de données après une reprise. Les comptes sont égaux, mais onze tables d'arêtes
   diffèrent par leur empreinte ; aucun uuid n'est introuvable par sa clé.
 - **Atteignable en service** : oui, après l'arrêt d'un gros paquet en cours d'écriture puis sa reprise.
@@ -66,7 +66,7 @@ générations »). Bissection à luciepc, lib 59ac, avec ce seul test :
 | 483479fc57 | vert |
 | 3ad8950c4f | vert |
 | d82ec8c916 | vert |
-| de006b6de0 | (en cours) |
+| de006b6de0 | vert |
 | 365dc75f74 | rouge |
 | 9556cb949b | rouge |
 | 513ed0d54a | rouge |
