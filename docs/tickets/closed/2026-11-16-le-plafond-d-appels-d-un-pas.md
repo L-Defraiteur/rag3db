@@ -1,6 +1,6 @@
 # Un pas d'équipier s'épuise en lecture : le plafond de 12 appels
 
-- **État** : ouvert, le 16 novembre 2026 ; à faire par Codex (passation d'archi).
+- **État** : fermé le 18 novembre 2026 par `53879cf74` (plafond-du-pas-2, sur master).
 - **Famille** : produit
 - **Pour** : archi (passation à Codex)
 - **Gravité** : bloquant pour une tâche d'écriture : la lecture épuise le pas, rien n'est écrit (D6).
@@ -39,3 +39,17 @@ garde B (`request_without_a_line`).
 
 4 h. Aucun blocage. Se pose après l'atterrissage de `pas-va-au-bout`.
 
+## Fermeture
+
+La mesure a corrigé ce ticket. Il y avait deux plafonds à 12 : celui des appels d'outils, et
+`max_iterations` du tour de chat que l'hôte laissait au défaut. Un cumul de 60 000 jetons aurait
+coupé plus tôt qu'avant : les pas D6 cumulaient déjà de 125 à 153 k. Ce qui est posé (conception :
+`docs/rag3weaver-archi/18-11-2026/03-s1-le-plafond-du-pas.md`) :
+- `teammate.step_context_tokens` (64 000) borne le contexte du dernier appel au modèle ;
+- `max_tool_calls_per_step` (60) et `max_model_calls_per_step` (40, passé en `max_iterations`
+  du tour d'un pas) sont deux bornes de sûreté.
+
+Les témoins `a_step_reads_fifteen_times_then_writes_and_finishes_in_one_step` et
+`a_step_whose_context_is_full_is_told_to_declare_step_done` ont été vus rouges sur `7f1c48d16`.
+Passe complète verte sur `53c82ed8a` (lib entière 2616/0, e2e_equipier sous Vertex 2/0), rejeu
+court vert sur la tête poussée. Poussé depuis luciepc : `249244a0d`, `53879cf74`.

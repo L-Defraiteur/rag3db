@@ -78,7 +78,7 @@ doit passer avant le reste.
       dernière ligne `VERT`) et `base` (`6b672afa6`).
    2. Pousser par la garde au « à toi » de l'orchestration. La garde rejoue si du code est arrivé
       sur master depuis `6b672afa6`.
-2. `2026-11-16-le-plafond-d-appels-d-un-pas.md` (S1) : 4 h.
+2. `2026-11-16-le-plafond-d-appels-d-un-pas.md` (S1) : 4 h. **Fait par archi le 18 novembre : `53879cf74` sur master.**
 3. `2026-11-16-le-pas-suivant-ne-voit-pas-les-retours-d-outils.md` (S2) : 1 jour.
 4. `2026-11-16-une-request-remplace-la-demande-en-cours.md` (S3) : 3 h.
 5. `2026-11-16-la-garde-b-pour-une-consigne.md` : 3 h.
