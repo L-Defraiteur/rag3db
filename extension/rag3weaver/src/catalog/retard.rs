@@ -253,20 +253,17 @@ impl Lag {
     /// **An index writes the layer of `key`** (`true`), or no longer does (`false`). Set by the index path,
     /// which alone knows when it writes; read by `views::view_state`.
     pub fn set_writing(&self, key: &LagKey, on: bool) {
-        // RED STUB: the mark folds into the cell (the backend's layer), whatever the layer.
-        let key = LagKey::backend(&key.cell);
         if on {
-            self.writing().insert(key);
+            self.writing().insert(key.clone());
         } else {
-            self.writing().remove(&key);
+            self.writing().remove(key);
         }
         self.changed.notify_all();
     }
 
     /// Whether an index writes the layer of `key` right now.
     pub fn is_writing(&self, key: &LagKey) -> bool {
-        // RED STUB: any layer of the cell.
-        self.writing().iter().any(|k| k.cell == key.cell)
+        self.writing().contains(key)
     }
 
     /// **The mark held for a scope**: `set_writing(key, true)` now, `false` when the guard drops, whatever the
