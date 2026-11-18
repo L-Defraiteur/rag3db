@@ -679,6 +679,33 @@ mod tests {
 
     /// Le cas le plus fréquent en vrai : le serveur démarre, meurt, et la
     /// raison est dans le journal — donc l'erreur doit le nommer.
+    /// **A dead start names the program launched**, next to the type of service
+    /// (ticket `2026-11-14-le-refus-est-mort-avant-de-repondre-nomme-le-type-de-service.md`) :
+    /// on 14 November, the fixture `fournisseur.py` died at start and the refusal
+    /// said only « rag3weaver-embeddings ».
+    #[test]
+    fn a_dead_start_names_the_program() {
+        let dossier = tempfile::tempdir().expect("a temporary directory");
+        let marqueur = dossier.path().join("arret");
+        std::fs::write(&marqueur, "mort").unwrap();
+        let programme = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/residence/fournisseur.py");
+        let s = Serveur::new("rag3weaver-embeddings", port_sourd(), programme)
+            .arg("--adresse")
+            .arg(port_sourd())
+            .args(["--generation", "dead-start", "--journal"])
+            .arg(dossier.path().join("fixture.jsonl").display().to_string())
+            .arg("--arret-nomme")
+            .arg(marqueur.display().to_string())
+            .sante("/sante", "rag3weaver-embeddings")
+            .journal_dans(dossier.path())
+            .attente(Duration::from_secs(10));
+        let e = s.assurer().expect_err("the fixture dies at start (code 70)");
+        assert!(matches!(e, ServeurError::Mort { code: Some(70), .. }), "a dead start : {e:?}");
+        let dit = e.to_string();
+        assert!(dit.contains("fournisseur.py"), "the refusal names the program : {dit}");
+        assert!(dit.contains("rag3weaver-embeddings"), "and the type of service : {dit}");
+    }
+
     #[test]
     fn un_serveur_qui_meurt_renvoie_a_son_journal() {
         let dossier = std::env::temp_dir().join("rag3weaver-tests-serveur");
