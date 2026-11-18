@@ -151,6 +151,19 @@ class Gestion(http.server.BaseHTTPRequestHandler):
             # Une ligne de boîte venue d'ailleurs que la saisie (tty-13) : l'équipier qui écrit « !… ».
             ligne(corps.get("kind", "report"), corps.get("text", ""), de=corps.get("from", "teammate"))
             self.json({"ok": True, "result": {}})
+        elif self.path == "/faux/end-then-resume":
+            # The host's end of a run, then a restart (a supervisor line came in during the last step):
+            # the task runs again for 3 s, answers, and ends for good.
+            def reprise():
+                ligne("ended", "plus rien à faire : compte rendu", de="host")
+                etat["state"] = "running"
+                time.sleep(3)
+                ligne("report", corps.get("text", "la réponse de la reprise"))
+                time.sleep(0.5)
+                ligne("ended", "plus rien à faire : compte rendu", de="host")
+                etat["state"] = "ended"
+            threading.Thread(target=reprise, daemon=True).start()
+            self.json({"ok": True, "result": {}})
         elif self.path == "/faux/marque":
             publier("tokens", {"kind": "Token", "run": "r1", "node": "chat", "seq": 5000, "text": corps.get("texte", ""), "count": 1})
             self.json({"ok": True, "result": {}})
