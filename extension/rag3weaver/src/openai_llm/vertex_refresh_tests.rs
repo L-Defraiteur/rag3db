@@ -1,5 +1,5 @@
 //! Token refresh contracts on the real Vertex transport and declared connector.
-//! Prepared only: no execution or compilation verdict yet.
+//! Played by the crate's unit tests (`cargo test --lib`, features `daemon` and `openai-llm`).
 
 use super::*;
 use crate::llm::StringSink;
