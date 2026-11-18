@@ -7364,6 +7364,52 @@ mod tests {
         assert!(e.contains("models.sparse") && e.contains("(384)") && e.contains("diffère de la dimension du dense ("), "le refus dit les deux dimensions : {e}");
     }
 
+    /// **A sparse of another model than the dense attaches no dual ; one of the
+    /// same model does** (ticket
+    /// `2026-11-15-aucun-temoin-qu-un-creux-d-un-autre-modele-que-le-dense-n-attache-pas-de-dual.md`).
+    /// At the same dimension, nothing refuses the manifest : only the condition
+    /// `source.model == self.embed.model` in `open_with_reason` keeps a dense
+    /// « fixture-dense » from receiving vectors of « fixture-other » by the dual.
+    /// The sparse is activated on demand on the fixture provider : opening
+    /// launches nothing, and the witness checks it.
+    #[cfg(all(feature = "code", feature = "rag3db-native", feature = "daemon", unix))]
+    #[test]
+    fn a_sparse_of_another_model_attaches_no_dual_and_the_same_model_does() {
+        for (sparse_model, dual_expected) in [("fixture-other", false), ("fixture-dense", true)] {
+            let place = tempfile::tempdir().unwrap();
+            let journal = place.path().join("events.jsonl");
+            let (_d, p) = fixture_code_avec("working_tree", false, json!({}), &|m: &mut Value| {
+                embed_declare(m, json!({"model": "fixture-dense", "dimensions": 384}));
+                m["workspace"]["index"] = json!("code");
+                m["workspace"]["index_signals"] = json!({"Scope": ["bm25", "vector", "sparse"]});
+                m["models"]["sparse"] = json!({
+                    "provider": "service", "model": sparse_model, "address": "127.0.0.1:0", "timeout_secs": 5, "dimensions": 384,
+                    "activation": {
+                        "nom": "groupe", "modele": sparse_model,
+                        "programme": concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/residence/fournisseur.py"),
+                        "args": ["--journal", journal.display().to_string(), "--generation", "dual-witness", "--modele", sparse_model, "--sparse", "--dual"],
+                        "profil": "fixture-cpu", "peripherique": "cpu",
+                        "coordination": place.path().join("coordination").display().to_string(),
+                        "journal": place.path().join("journaux").display().to_string(),
+                        "budget_activation_secs": 10, "budget_attente_secs": 10,
+                        "residence": {"a_demande": {"inactivite_secs": 60, "rendre_le_bail_secs": 30}},
+                    },
+                });
+            });
+            let prepared = p.unwrap_or_else(|e| panic!("a sparse « {sparse_model} » at the dense's dimension loads : {e}"));
+            let conn = crate::Rag3dbConnection::in_memory().expect("in-memory base");
+            conn.execute(&format!("LOAD EXTENSION '{}'", extension_vector_de_test())).unwrap();
+            let backend = prepared.open(Box::new(conn), None).unwrap_or_else(|e| panic!("the backend opens : {e}"));
+            assert_eq!(
+                backend.catalog.lock().unwrap().has_dual(),
+                dual_expected,
+                "sparse « {sparse_model} », dense « fixture-dense » : a dual attached is {dual_expected}"
+            );
+            let launched = std::fs::read_to_string(&journal).unwrap_or_default().matches("constructeur_demarre").count();
+            assert_eq!(launched, 0, "opening launches no provider");
+        }
+    }
+
     /// Un Backend sans base réelle, comme `search_verbs_…` : le catalogue
     /// répond à vide, la source vient du manifeste — ce qu'on éprouve est la
     /// politique et le chemin des fichiers, pas la persistance.
