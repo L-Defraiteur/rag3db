@@ -1251,6 +1251,9 @@ pub enum SyncPhase {
     Nodes,
     /// Le chargement final des relations et la résolution (`Bulk`).
     Relations,
+    /// The derived entities of a first index (`ScopeContent`, the full text of the code), drained after the
+    /// relations (`Bulk`).
+    Derivations,
     /// La reprise des fichiers édités après leur passage.
     Resume,
     /// Tout est posé.
