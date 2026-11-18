@@ -87,8 +87,17 @@ std::unique_ptr<GetEmbeddingsScanState> InMemEmbeddings::constructScanState() co
 
 static bool isNull(common::offset_t offset, CachedColumn* data) {
     auto [nodeGroupIdx, offsetInGroup] = StorageUtils::getNodeGroupIdxAndOffsetInChunk(offset);
-    KU_ASSERT(nodeGroupIdx < data->columnChunks.size());
+    // A row past the cached column was committed after the cache was taken: the cache did not see
+    // it, as it does not see a deleted row, so it has no vector here (ticket
+    // 2026-11-08-le-create-vector-index-concurrent-lit-une-ligne-au-dela-de-la-colonne-en-cache).
+    // The build is bounded by a row count read later, at its bind.
+    if (nodeGroupIdx >= data->columnChunks.size()) {
+        return true;
+    }
     const auto& listChunk = data->columnChunks[nodeGroupIdx]->cast<ListChunkData>();
+    if (offsetInGroup >= listChunk.getNumValues()) {
+        return true;
+    }
     return listChunk.isNull(offsetInGroup);
 }
 
