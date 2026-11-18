@@ -566,6 +566,36 @@ appels, et le p90 par décision.
 - Le branchement des outils de la session et du code par l'hôte : la part d'archi, à chiffrer
   avec lui.
 
+### La chaîne, du L1 jusqu'au tour, écrite en clair et outillée
+
+Lucie : « il faut qu'on sache relier : ce L1 venait de telle plage ; telle plage allait de tel tour
+à tel tour ; si je veux, je relis exactement tel tour s'il n'a pas encore disparu par le TTL ».
+
+1. **Le L1 dit sa plage en clair.** L'Apport gagne trois champs optionnels : `run`, `from_turn` et
+   `to_turn`. Ils sont posés par l'archiviste pour tout L1 tiré d'une trace, et nuls pour un L1
+   tiré d'un document. `get_fiche` et `recall_apports` les rendent tels quels : on ne les déduit
+   pas du titre de section. La section garde `turns a-b · <title>`, pour l'identité de l'Apport.
+2. **La Source de tranche dit son intervalle** : les mêmes `run`, `from_turn` et `to_turn`, posés
+   à sa création (fermeture de la tranche). La plage d'un L1 est toujours contenue dans celle de
+   sa Source.
+3. **Un outil suit la chaîne** : `read_turns`, sur un Apport (son uuid) ou sur `{run, from, to}`.
+   Il rend les tours dans l'ordre, chacun avec son **état** :
+   - `indexed` : lu dans l'entité `Turn` (encore sous le TTL) ;
+   - `from_chat_file` : hors de l'index (TTL passé, ou `index_turns` éteint), mais lu dans le
+     `ChatFile` par l'hôte ;
+   - `gone` : ni dans l'index, ni dans le fichier. L'outil le dit, il ne rend pas un vide muet.
+
+   La part du gabarit lit `Turn`. La part de l'hôte (archi) complète par le `ChatFile` ce que
+   l'index n'a plus, et expose l'outil aux agents.
+4. **La même chaîne s'affiche dans tty et dans l'IDE** : un L1 montre sa plage (« run …, tours
+   12 à 15 »), et un geste ouvre les tours par `read_turns`, avec leur état.
+
+Les témoins :
+
+- un L1 rangé depuis une tranche rend `run`, `from_turn` et `to_turn` par `get_fiche` ;
+- `read_turns` sur ce L1 rend ses tours `indexed` ;
+- après la purge du TTL, le même appel rend `from_chat_file` par l'hôte, ou `gone` hors de l'hôte.
+
 ### Une graine, pas un lot : le composeur de contexte de début de session
 
 Lucie, le 18 novembre : « un agent spécialiste d'organiser un début de session pour l'agent ».
