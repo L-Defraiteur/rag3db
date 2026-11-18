@@ -322,17 +322,28 @@ public:
         const transaction::Transaction* transaction);
 
     // Le nombre de numéros de colonnes, trous compris ; hasColumn dit si le numéro est vivant.
-    common::column_id_t getNumColumns() const { return columns.size(); }
+    // Le vecteur des colonnes grandit sous un ADD COLUMN pendant que des lecteurs, qui ne prennent
+    // pas le verrou de schéma de la table, le lisent : sa structure se lit sous columnsMtx partagé
+    // et ne change que sous columnsMtx exclusif. Une Column ne bouge pas quand le vecteur se
+    // réalloue, et la référence rendue reste bonne après le verrou rendu (ticket de l'ADD COLUMN
+    // qui réalloue les colonnes d'une table sous un lecteur, 18 novembre 2026).
+    common::column_id_t getNumColumns() const {
+        std::shared_lock lck{columnsMtx};
+        return columns.size();
+    }
     bool hasColumn(common::column_id_t columnID) const {
+        std::shared_lock lck{columnsMtx};
         return columnID < columns.size() && columns[columnID] != nullptr;
     }
     static std::vector<common::LogicalType> getColumnTypesBySlot(
         const catalog::TableCatalogEntry& entry);
     Column& getColumn(common::column_id_t columnID) {
+        std::shared_lock lck{columnsMtx};
         KU_ASSERT(columnID < columns.size());
         return *columns[columnID];
     }
     const Column& getColumn(common::column_id_t columnID) const {
+        std::shared_lock lck{columnsMtx};
         KU_ASSERT(columnID < columns.size());
         return *columns[columnID];
     }
@@ -423,6 +434,7 @@ private:
 
 private:
     std::vector<std::unique_ptr<Column>> columns;
+    mutable std::shared_mutex columnsMtx;
     std::unique_ptr<NodeGroupCollection> nodeGroups;
     common::column_id_t pkColumnID;
     std::vector<IndexHolder> indexes;
