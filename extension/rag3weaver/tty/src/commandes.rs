@@ -25,6 +25,10 @@ pub enum Commande {
     Modele(Option<String>),
     /// `/nom` : le nom de l'agent de la tâche, ou le changer (c7, 15 nov.).
     Nom(Option<String>),
+    /// `/memory`: the L1 of the run (18 nov.).
+    Memory,
+    /// `/turns <n>`: open the turns of the n-th L1 of `/memory`.
+    Turns(Option<String>),
     /// `!…` : une commande lancée là où tourne le terminal.
     Shell(String),
     Inconnue(String),
@@ -45,12 +49,14 @@ pub const COMMANDES: &[(&str, &str)] = &[
     ("etapes", "montre ou cache dans l'historique les appels d'outil et les étapes de l'équipier"),
     ("log", "où relire la séance (ancien : /journal)"),
     ("journal", "où relire la séance"),
+    ("memory", "les L1 du run de la tâche, avec leurs tours et leur fiche"),
     ("model", "<nom> : change le modèle de la tâche ; seul, les modèles déclarés"),
     ("name", "<x> : nomme l'agent de la tâche ; seul, son nom ; « /nom - » reprend celui du dépôt (ancien : /nom)"),
     ("nom", "<x> : nomme l'agent de la tâche ; seul, son nom ; « /nom - » reprend celui du dépôt"),
     ("quit", "quitte le terminal (ancien : /quitter)"),
     ("quitter", "quitte le terminal"),
     ("task", "<nom> : passe à une autre tâche (ancien : /tache)"),
+    ("turns", "<n> : ouvre les tours du n-ième L1 de /memory"),
     ("tache", "<nom> : passe à une autre tâche"),
     ("theme", "<nom> : change de thème"),
 ];
@@ -83,6 +89,8 @@ pub fn lire(texte: &str) -> (Option<Commande>, Option<String>) {
             "etapes" | "steps" => Commande::Etapes,
             "model" | "modele" => Commande::Modele(arg),
             "nom" | "name" => Commande::Nom(arg),
+            "memory" => Commande::Memory,
+            "turns" => Commande::Turns(arg),
             autre => Commande::Inconnue(autre.to_string()),
         };
         return (Some(c), None);
@@ -234,6 +242,8 @@ mod tests {
         assert_eq!(c("/model rapide"), Some(Commande::Modele(Some("rapide".into()))));
         assert_eq!(c("/nom Ombre"), Some(Commande::Nom(Some("Ombre".into()))), "c7 : nommer l'agent de la tâche");
         assert_eq!(c("/nom"), Some(Commande::Nom(None)));
+        assert_eq!(c("/memory"), Some(Commande::Memory), "the L1 of the run");
+        assert_eq!(c("/turns 2"), Some(Commande::Turns(Some("2".into()))));
         assert_eq!(c("/arreter"), Some(Commande::Arreter));
         assert_eq!(c("/journal"), Some(Commande::Journal));
         assert_eq!(c("/nimporte"), Some(Commande::Inconnue("nimporte".into())));

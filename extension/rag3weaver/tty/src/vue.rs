@@ -201,6 +201,10 @@ pub struct Vue {
     pub messages: Vec<SessionMessage>,
     /// What Ctrl-O can open, in the order it came: a tool call or a session message.
     openables: Vec<Openable>,
+    /// Documents opened on demand (the turns of an L1, `/turns`): their label and their lines.
+    documents: Vec<(String, Vec<Validee>)>,
+    /// The last answer of `GET /ide/l1` (`/memory`), that `/turns <n>` reads.
+    pub memory: Option<Value>,
     /// Les candidats d'une complétion, dits sur la ligne du haut jusqu'à la touche suivante.
     pub propositions: Option<String>,
     /// Montrer la plomberie de l'équipier dans l'historique (`--etapes`) : ses étapes faites, la fin
@@ -258,6 +262,8 @@ impl Vue {
             appels: Vec::new(),
             messages: Vec::new(),
             openables: Vec::new(),
+            documents: Vec::new(),
+            memory: None,
             propositions: None,
             montrer_etapes: false,
             repondu: true,
@@ -657,14 +663,22 @@ impl Vue {
                 v.extend(crate::outils::blocs(&m.text, Genre::Boite));
                 v
             }
+            Some(Openable::Document(j)) => self.documents[*j].1.clone(),
             None => Vec::new(),
         }
     }
 
+    /// Adds a document to what Ctrl-O opens (the turns of an L1); it is the last entry, the one Ctrl-O shows first.
+    pub fn open_document(&mut self, label: &str, lines: Vec<Validee>) {
+        self.documents.push((label.to_string(), lines));
+        self.openables.push(Openable::Document(self.documents.len() - 1));
+    }
+
     /// The kind of the `i`-th openable entry, for the viewer's header.
-    pub fn openable_label(&self, i: usize) -> &'static str {
+    pub fn openable_label(&self, i: usize) -> &str {
         match self.openables.get(i) {
             Some(Openable::Message(_)) => "message",
+            Some(Openable::Document(j)) => &self.documents[*j].0,
             _ => "appel d'outil",
         }
     }
@@ -1051,6 +1065,7 @@ pub struct SessionMessage {
 enum Openable {
     Call(usize),
     Message(usize),
+    Document(usize),
 }
 
 /// How many characters of a session message the history shows before folding it.
@@ -1893,6 +1908,17 @@ mod tests {
         assert!(first.iter().any(|l| l == "première ligne") && first.iter().any(|l| l == "seconde ligne"), "{first:?}");
         let second: Vec<String> = v.openable_lines(1).into_iter().map(|l| l.texte).collect();
         assert!(second[0].starts_with("» read_file a.rs"), "{second:?}");
+    }
+
+    /// A document (the turns of an L1) opens in the viewer like a call, labelled by its range.
+    #[test]
+    fn a_document_opens_in_the_viewer_like_a_call() {
+        let mut v = Vue::new(120, true);
+        let lines = vec![Validee { genre: Genre::Boite, texte: "tour 12 · indexed".into(), langue: String::new(), tete: 0 }];
+        v.open_document("tours 12 à 15", lines);
+        assert_eq!(v.openable_count(), 1);
+        assert_eq!(v.openable_label(0), "tours 12 à 15");
+        assert_eq!(v.openable_lines(0)[0].texte, "tour 12 · indexed");
     }
 
     fn ligne_b(n: usize, from: &str, kind: &str, extra: Value) -> Value {
