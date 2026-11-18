@@ -73,8 +73,8 @@ impl LagKey {
 /// Le registre, partagé par la montre, la réindexation et les lectures.
 #[derive(Debug, Default)]
 pub struct Lag {
-    /// Cellule → chemin → (premier changement en attente, dernier changement).
-    pending: Mutex<HashMap<Scope, BTreeMap<String, (u64, u64)>>>,
+    /// (Cellule, couche) → chemin → (premier changement en attente, dernier changement).
+    pending: Mutex<HashMap<LagKey, BTreeMap<String, (u64, u64)>>>,
     /// Woken at every `done`: a read waiting for its cell to catch up.
     changed: Condvar,
     /// Cell → observed milliseconds per reindexed file (a moving average).
@@ -86,34 +86,28 @@ impl Lag {
         Self::default()
     }
 
-    fn pending(&self) -> std::sync::MutexGuard<'_, HashMap<Scope, BTreeMap<String, (u64, u64)>>> {
+    fn pending(&self) -> std::sync::MutexGuard<'_, HashMap<LagKey, BTreeMap<String, (u64, u64)>>> {
         self.pending.lock().unwrap_or_else(|e| e.into_inner())
     }
 
     /// `path` a changé dans `cell` à `at_ms`. Un chemin déjà en attente garde
     /// son premier instant (le retard compte depuis le plus ancien) et avance
     /// son dernier.
+    ///
+    /// The backend's layer: an alias of [`Self::note_in`] that dies with 2a′-3, when every watch notes with the
+    /// id of its worktree's layer.
     pub fn note(&self, cell: &Scope, path: &str, at_ms: u64) {
-        let mut pending = self.pending();
-        let entry = pending.entry(cell.clone()).or_default().entry(path.to_string()).or_insert((at_ms, at_ms));
-        entry.1 = entry.1.max(at_ms);
+        self.note_in(&LagKey::backend(cell), path, at_ms)
     }
 
     /// `path` a été réindexé (ou retiré, ou mis en reprise) d'après le disque
     /// **lu à `read_at_ms`**. L'attente ne tombe que si aucun changement n'est
     /// venu après cette lecture : une édition arrivée pendant la réindexation
     /// du même fichier garde son retard, et la montre relancera la réaction.
+    ///
+    /// The backend's layer: an alias of [`Self::done_in`] that dies with 2a′-3.
     pub fn done(&self, cell: &Scope, path: &str, read_at_ms: u64) {
-        let mut pending = self.pending();
-        if let Some(paths) = pending.get_mut(cell) {
-            if paths.get(path).is_some_and(|&(_, last)| last <= read_at_ms) {
-                paths.remove(path);
-            }
-            if paths.is_empty() {
-                pending.remove(cell);
-            }
-        }
-        self.changed.notify_all();
+        self.done_in(&LagKey::backend(cell), path, read_at_ms)
     }
 
     /// **Combien de fichiers attendent leur réindexation, toutes cellules** : un
@@ -122,10 +116,16 @@ impl Lag {
         self.pending().values().map(BTreeMap::len).sum()
     }
 
-    /// Le retard de `cell`, s'il y en a un.
+    /// Le retard de `cell`, s'il y en a un : la couche du backend, un alias de [`Self::summary_of`] qui meurt
+    /// avec 2a′-3.
     pub fn summary_in(&self, cell: &Scope) -> Option<LagSummary> {
+        self.summary_of(&LagKey::backend(cell))
+    }
+
+    /// The lag of the layer of `key`, if it lags.
+    pub fn summary_of(&self, key: &LagKey) -> Option<LagSummary> {
         let pending = self.pending();
-        let paths = pending.get(cell).filter(|p| !p.is_empty())?;
+        let paths = pending.get(key).filter(|p| !p.is_empty())?;
         Some(LagSummary { files: paths.len(), since_ms: paths.values().map(|&(first, _)| first).min().unwrap_or_default() })
     }
 }
@@ -168,19 +168,23 @@ impl Lag {
         }
     }
 
-    /// The estimate of `cell`, if it lags.
+    /// The estimate of the backend's layer of `cell`, if it lags: an alias of [`Self::estimate_of`] that dies
+    /// with 2a′-3.
     pub fn estimate(&self, cell: &Scope) -> Option<IndexEstimate> {
-        let s = self.summary_in(cell)?;
-        let eta_ms = self.rate(cell).map(|r| (s.files as f64 * r).ceil() as u64);
-        Some(IndexEstimate { pending_files: s.files, eta_ms })
+        self.estimate_of(&LagKey::backend(cell))
     }
 
     /// Waits until `cell` has nothing left to reindex, or `deadline`: `true`
     /// if it caught up.
     pub fn wait_caught_up(&self, cell: &Scope, deadline: std::time::Instant) -> bool {
+        self.wait_caught_up_of(&LagKey::backend(cell), deadline)
+    }
+
+    /// Waits until the layer of `key` has nothing left to reindex, or `deadline`: `true` if it caught up.
+    pub fn wait_caught_up_of(&self, key: &LagKey, deadline: std::time::Instant) -> bool {
         let mut pending = self.pending();
         loop {
-            if pending.get(cell).is_none_or(|p| p.is_empty()) {
+            if pending.get(key).is_none_or(|p| p.is_empty()) {
                 return true;
             }
             let now = std::time::Instant::now();
@@ -196,29 +200,46 @@ impl Lag {
 }
 
 impl Lag {
-    /// `path` changed in the layer of `key` at `at_ms`.
+    /// `path` changed in the layer of `key` at `at_ms`. A path already pending keeps its first instant (the
+    /// lag counts from the oldest) and moves its last.
     pub fn note_in(&self, key: &LagKey, path: &str, at_ms: u64) {
-        self.note(&key.cell, path, at_ms)
+        let mut pending = self.pending();
+        let entry = pending.entry(key.clone()).or_default().entry(path.to_string()).or_insert((at_ms, at_ms));
+        entry.1 = entry.1.max(at_ms);
     }
 
-    /// `path` was reindexed in the layer of `key`, from the disk read at `read_at_ms`.
+    /// `path` was reindexed (or removed, or deferred) in the layer of `key`, from the disk **read at
+    /// `read_at_ms`**: the lag falls only if no change came after that reading.
     pub fn done_in(&self, key: &LagKey, path: &str, read_at_ms: u64) {
-        self.done(&key.cell, path, read_at_ms)
+        let mut pending = self.pending();
+        if let Some(paths) = pending.get_mut(key) {
+            if paths.get(path).is_some_and(|&(_, last)| last <= read_at_ms) {
+                paths.remove(path);
+            }
+            if paths.is_empty() {
+                pending.remove(key);
+            }
+        }
+        self.changed.notify_all();
     }
 
-    /// The estimate of the layer of `key`, if it lags.
+    /// The estimate of the layer of `key`, if it lags: its files times the cell's observed rate.
     pub fn estimate_of(&self, key: &LagKey) -> Option<IndexEstimate> {
-        self.estimate(&key.cell)
+        let s = self.summary_of(key)?;
+        let eta_ms = self.rate(&key.cell).map(|r| (s.files as f64 * r).ceil() as u64);
+        Some(IndexEstimate { pending_files: s.files, eta_ms })
     }
 
-    /// Waits until the layer of `key` has caught up, or `deadline`.
-    pub fn wait_caught_up_of(&self, key: &LagKey, deadline: std::time::Instant) -> bool {
-        self.wait_caught_up(&key.cell, deadline)
-    }
-
-    /// The layers of `cell` that lag, with their pending files.
-    pub fn layers_behind(&self, _cell: &Scope) -> Vec<(LayerId, usize)> {
-        Vec::new()
+    /// The layers of `cell` that lag, with their pending files, by layer id.
+    pub fn layers_behind(&self, cell: &Scope) -> Vec<(LayerId, usize)> {
+        let mut behind: Vec<(LayerId, usize)> = self
+            .pending()
+            .iter()
+            .filter(|(k, paths)| &k.cell == cell && !paths.is_empty())
+            .map(|(k, paths)| (k.layer.clone(), paths.len()))
+            .collect();
+        behind.sort();
+        behind
     }
 }
 
