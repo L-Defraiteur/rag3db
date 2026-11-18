@@ -592,7 +592,9 @@ Lucie : « les L0, les vrais tours, doivent être indexés au fil de l'eau avec 
 - **Les secrets, filtrés avant l'écriture** : les sorties d'outils portent parfois des secrets
   venus d'ailleurs que des fichiers exclus (un jeton dans une réponse HTTP, une variable
   d'environnement affichée). Un **filtre de motifs** passe sur `text`, `params` et `result` avant
-  l'écriture de `Turn` : les clés d'API, les jetons (`Bearer …`, `ghp_…`, `sk-…`), les mots de
+  l'écriture de `Turn`. Il vit **dans le gabarit**, dans l'outil d'écriture **`put_turn`**, par
+  lequel passent tous les rédacteurs (l'hôte, les hooks de Claude Code, l'archiviste). L'hôte ne
+  garde aucune liste de motifs (accordé avec archi, 5b1dcc58e). Les motifs : les clés d'API, les jetons (`Bearer …`, `ghp_…`, `sk-…`), les mots de
   passe dans une URL ou une affectation. Chaque motif est remplacé par « secret masqué
   (<genre>) ». Le témoin écrit un tour qui contient un faux jeton, et vérifie que ni `Turn`, ni le
   plein texte, ni les vecteurs ne le portent. C'est la graine « fuites de secrets » de Lucie (13
