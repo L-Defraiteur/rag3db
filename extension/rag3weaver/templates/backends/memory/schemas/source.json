@@ -34,7 +34,7 @@
         "migration",
         "run_trace"
       ],
-      "description": "envoi : Claude l'a envoyé ; filet : un crochet de Claude Code l'a produit depuis la transcription ; migration : repris d'une fiche d'avant ce modèle."
+      "description": "envoi: sent by an agent; filet: produced by a Claude Code hook from the transcript; migration: taken from a fiche older than this model; run_trace: one slice of a run's trace, filed by archive_slice."
     },
     "session": {
       "type": "string",
