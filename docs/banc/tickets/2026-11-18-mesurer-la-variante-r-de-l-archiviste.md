@@ -28,6 +28,33 @@
 - Le témoin d'abord : N contre N, P1 = 1.
 - Le script s'arrête sur une erreur du modèle (`x_archive_long.py`, depuis le 18 novembre).
 
+## Une boîte à outils, pas des variantes (c7, 18 novembre, au mot de Lucie)
+
+Le contexte de l'archiviste se compose d'**ingrédients déclarés et débrayables**, chacun avec sa borne :
+- le rapport de la tranche d'avant ;
+- le résumé de la tranche d'avant, par l'extraction ;
+- le résumé courant ;
+- les résumés de S ;
+- le chevauchement de F, en % ;
+- le bilan ;
+- les candidates.
+
+F, S, R et leurs mélanges deviennent des **réglages** joués sur le même corpus, pas des variantes codées à part.
+
+**La matrice à mesurer d'abord** (S 50 comme forme de fenêtre, la forme en deux étapes) :
+
+| réglage | rapport de la tranche d'avant | résumé de la tranche d'avant |
+|---|---|---|
+| S 50 nu | non | non |
+| S 50 + rapport (R) | oui | non |
+| S 50 + résumé de tranche | non | oui |
+| S 50 + les deux | oui | oui |
+
+Chaque réglage est jugé contre la N rejouée, en **P1** (rappel des sujets), **P2** (doublons) et **P5** (coût : temps de
+passe, appels, jetons d'entrée et part du cache), avec les définitions du § 4 de la page du 15. Les autres
+ingrédients restent à leur réglage par défaut et sont écrits avec chaque passe. La matrice se joue après la page de
+la session mémoire qui pose la forme.
+
 ## Pour fermer
 
-R et S 50 jouées dans la forme en deux étapes, jugées contre N, et le résultat écrit dans la page de la mesure longue.
+Les quatre réglages de la matrice joués dans la forme en deux étapes, jugés contre N en P1, P2 et P5, et le résultat écrit dans la page de la mesure longue.
