@@ -1,6 +1,6 @@
 # Un llama-server déclaré est classé cloud par `budget_de_reprise`
 
-- **État** : ouvert (15 novembre 2026)
+- **État** : fermé (18 novembre 2026, ED) — `ModelSource::budget_de_reprise` tient pour local un modèle `compatible` dont toutes les adresses sont des adresses de boucle (`127.0.0.0/8`, `localhost`, `::1`, `is_loopback_address`) ; le protocole `llama_server` n'en est plus le signe (`connect_llm` le refuse pour un modèle de langage). Témoin `model_source::tests::modeles_de_langage::a_llama_server_on_a_loopback_address_has_a_local_budget`, ROUGE sur 81c0a895b4 (100 000 au lieu de 16 000), vert avec le correctif.
 - **Famille** : produit
 - **Gravité** : coût. Un modèle local reçoit le budget de reprise d'un modèle cloud (100 000 jetons) au
   lieu de la moitié de sa fenêtre ; sur une petite fenêtre, la compaction repartirait au-dessus de ce
