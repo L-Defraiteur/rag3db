@@ -64,8 +64,9 @@ protected:
 TEST_F(VectorIndexCachedColumn, RowsCommittedAfterTheColumnIsCachedAreNotReadPastIt) {
     const auto id = tableID();
     const std::string params = "metric := 'l2', cache_embeddings := true";
-    // The internal names of the two graph tables, as rewriteCreateHNSWQuery writes them.
-    conn->getClientContext()->setUseInternalCatalogEntry(true);
+    // The internal functions and graph tables of the rewrite, for the whole connection (a single
+    // query's flag, setUseInternalCatalogEntry, is reset after each query).
+    ok(*conn, "CALL enable_internal_catalog=true;");
     // T_A: the entry and its NOTED holder.
     ok(*conn, "BEGIN TRANSACTION;");
     ok(*conn, "CREATE REL TABLE _" + id +
@@ -84,7 +85,7 @@ TEST_F(VectorIndexCachedColumn, RowsCommittedAfterTheColumnIsCachedAreNotReadPas
     // The build: its bind counts CACHED_ROWS + LATE_ROWS rows.
     ok(*conn, "CALL _CREATE_HNSW_INDEX('Doc', 'doc_index', 'vec', " + params + ");");
     ok(*conn, "COMMIT;");
-    conn->getClientContext()->setUseInternalCatalogEntry(false);
+    ok(*conn, "CALL enable_internal_catalog=false;");
 
     // Every row, cached or late, is found first at its exact vector.
     uint64_t notFirst = 0;
