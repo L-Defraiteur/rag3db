@@ -45,6 +45,14 @@ protected:
         ASSERT_TRUE(result->isSuccess()) << query << " : " << result->getErrorMessage();
     }
 
+    // Rows without a vector: an ordinary insert links a row to the graph at its commit and moves
+    // the graph's bound past it (commitInsert), but a NULL vector is skipped and the bound stays,
+    // so these rows lie in the range every search scans one by one (searchFromUnCheckpointed).
+    static std::string insertRowsWithoutVector(int64_t from, int64_t count) {
+        return "UNWIND range(" + std::to_string(from) + ", " + std::to_string(from + count - 1) +
+               ") AS i CREATE (:Doc {id: i});";
+    }
+
     static std::string insertRows(int64_t from, int64_t count) {
         return "UNWIND range(" + std::to_string(from) + ", " + std::to_string(from + count - 1) +
                ") AS i CREATE (:Doc {id: i, vec: [CAST(i AS FLOAT), 1.0, 2.0, 3.0]});";
@@ -81,15 +89,18 @@ TEST_F(VectorIndexDiagnosticsTest, AFreshIndexReportsZeroAndTheColumnsKeepTheirO
     EXPECT_EQ(schema->getColumnNames(), names) << "[check: the-eight-columns-keep-their-order]";
 }
 
-TEST_F(VectorIndexDiagnosticsTest, RowsInsertedSinceTheLastCheckpointAreCountedThenFolded) {
-    ok(insertRows(400, 150));
-    EXPECT_EQ(rowsOutsideGraphAtMost(), 150) << "[check: rows-after-the-checkpoint-are-counted]";
-    ok("CHECKPOINT;");
-    EXPECT_EQ(rowsOutsideGraphAtMost(), 0) << "[check: a-checkpoint-folds-them-into-the-graph]";
+TEST_F(VectorIndexDiagnosticsTest, RowsAfterTheGraphAreCountedUntilAVectorFollowsThem) {
+    ok(insertRows(400, 10));
+    EXPECT_EQ(rowsOutsideGraphAtMost(), 0) << "[check: rows-with-a-vector-enter-the-graph]";
+    ok(insertRowsWithoutVector(410, 150));
+    EXPECT_EQ(rowsOutsideGraphAtMost(), 150) << "[check: rows-after-the-graph-are-counted]";
+    ok(insertRows(560, 1));
+    EXPECT_EQ(rowsOutsideGraphAtMost(), 0)
+        << "[check: a-row-with-a-vector-moves-the-bound-past-them]";
 }
 
 TEST_F(VectorIndexDiagnosticsTest, TheReadTakesNoLockInAReadOnlyTransaction) {
-    ok(insertRows(400, 20));
+    ok(insertRowsWithoutVector(400, 20));
     ok("BEGIN TRANSACTION READ ONLY;");
     auto* context = getClientContext(*conn);
     auto* transaction = transaction::Transaction::Get(*context);
