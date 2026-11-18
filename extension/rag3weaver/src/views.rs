@@ -255,9 +255,7 @@ pub fn view_state(
             }
         }
     };
-    // RED STUB: the layer folds into the backend's.
-    let _ = LayerId(vue.layer.clone());
-    let key = LagKey::backend(cell);
+    let key = LagKey { cell: cell.clone(), layer: LayerId(vue.layer.clone()) };
     let indexing = lag.is_writing(&key);
     let behind = lag.summary_of(&key);
     let files_behind = behind.map_or(0, |b| b.files);
