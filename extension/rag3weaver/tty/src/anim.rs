@@ -266,6 +266,58 @@ mod tests {
         Capacites { couleurs: c, glyphes: g }
     }
 
+    /// The text after the animation's frame (its cause), from a styled line.
+    fn cause_of(l: &Line<'static>, frame_len: usize) -> String {
+        l.spans[frame_len..].iter().map(|s| s.content.to_string()).collect()
+    }
+
+    /// **The cause in the theme's style** (ticket of 15 nov.): in a glitch animation, one or two of its
+    /// characters become the theme's glyphs at each frame, the rest stays readable; two seeds glitch
+    /// differently.
+    #[test]
+    fn a_glitch_animation_glitches_its_cause_and_keeps_it_readable() {
+        let t = Theme::par_nom("alien").unwrap();
+        let cause = "run_command cargo check travaille… (40 s)";
+        let c = cap(Niveau::Vraie, Glyphes::Tous);
+        let frame_len = morceaux(Quelle::Ecrit.de(&t), 0, 42).len();
+        let glyphs: Vec<char> = t.animations.ecrit.glyphes.iter().flat_map(|g| g.chars()).collect();
+        let mut seen = std::collections::HashSet::new();
+        for n in 0..10 {
+            let shown = cause_of(&ligne(&t, Quelle::Ecrit, n, 42, c, cause), frame_len);
+            let shown = shown.trim_start();
+            assert_eq!(shown.chars().count(), cause.chars().count(), "{shown:?}");
+            let changed: Vec<char> = shown.chars().zip(cause.chars()).filter(|(a, b)| a != b).map(|(a, _)| a).collect();
+            assert!((1..=2).contains(&changed.len()), "one or two glitched characters: {shown:?}");
+            assert!(changed.iter().all(|g| glyphs.contains(g)), "glitched into the theme's glyphs: {shown:?}");
+            seen.insert(shown.to_string());
+        }
+        assert!(seen.len() > 3, "the glitch moves from frame to frame: {seen:?}");
+        let other: Vec<String> = (0..10).map(|n| cause_of(&ligne(&t, Quelle::Ecrit, n, 7, c, cause), frame_len)).collect();
+        let first: Vec<String> = (0..10).map(|n| cause_of(&ligne(&t, Quelle::Ecrit, n, 42, c, cause), frame_len)).collect();
+        assert_ne!(other, first, "another seed, another glitch");
+    }
+
+    /// In a circle or a transmutation, the cause takes the halo's colour, framed by a glyph of the frame;
+    /// in ASCII it stays as it is, plain.
+    #[test]
+    fn a_circle_frames_its_cause_in_the_halo_and_ascii_leaves_it_plain() {
+        let t = Theme::daemon();
+        let cause = "le modèle répond… (12 s)";
+        let c = cap(Niveau::Vraie, Glyphes::Tous);
+        let frame_len = morceaux(Quelle::Reflechit.de(&t), 0, 1).len();
+        let l = ligne(&t, Quelle::Reflechit, 0, 1, c, cause);
+        let after = &l.spans[frame_len..];
+        let text: String = after.iter().map(|s| s.content.to_string()).collect();
+        assert!(text.ends_with(cause), "{text:?}");
+        let glyphs: Vec<String> = t.animations.reflechit.glyphes.clone();
+        assert!(glyphs.iter().any(|g| text.trim_start().starts_with(g.as_str())), "framed by a glyph: {text:?}");
+        let halo = couleur(&t.couleurs.halo[0], Niveau::Vraie);
+        assert!(after.iter().any(|s| s.content.contains(cause) && s.style.fg == halo), "the cause in the halo's colour: {after:?}");
+        let ascii = cap(Niveau::Vraie, Glyphes::Ascii);
+        let la = ligne(&t, Quelle::Reflechit, 0, 1, ascii, cause);
+        assert_eq!(cause_of(&la, frame_len), format!(" {cause}"), "ASCII: the cause as it is");
+    }
+
     #[test]
     fn the_circle_turns_like_the_original_page() {
         let t = Theme::daemon();
