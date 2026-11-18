@@ -1904,3 +1904,50 @@ fn a_step_whose_context_is_full_is_told_to_declare_step_done() {
     assert!(!results[0].contains("step_context_tokens"), "the first read passes: {results:#?}");
     assert!(results[1].contains("step_context_tokens") && results[1].contains("step_done"), "the second read is refused by the context bound: {results:#?}");
 }
+
+/// A memory that only records `put_turn` (the teammate's witness of the session archived as it
+/// goes).
+struct TurnsOnly(Mutex<Vec<Value>>);
+
+impl crate::daemon_host::rangement::Rangeur for TurnsOnly {
+    fn put_turn(&self, _memoire: &std::path::Path, line: &Value) -> Result<Value, String> {
+        self.0.lock().unwrap().push(line.clone());
+        Ok(json!({ "written": true }))
+    }
+    fn archive_slice(&self, _memoire: &std::path::Path, args: &Value) -> Result<Value, String> {
+        Ok(json!({ "report": { "ok": true, "errors": [] }, "archived_through_turn": args["to_turn"] }))
+    }
+}
+
+/// **The teammate's steps are archived as they go too** (18 Nov 2026): each step's messages go
+/// to the memory under the run `<task>:<parent>`.
+#[test]
+fn the_teammate_steps_go_to_the_memory_as_they_go() {
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let mut m: Value = serde_json::from_str(&std::fs::read_to_string(&manifeste).unwrap()).unwrap();
+    m["bilans"] = json!({ "memoire": "memoire/backend.json" });
+    m["memory"] = json!({ "slice_tokens": 30 });
+    std::fs::write(&manifeste, serde_json::to_string_pretty(&m).unwrap()).unwrap();
+    let model: ChatModel = Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+        Ok(Arc::new(CallbackLlm::new("archived-steps", 8192, |turns, opts, sink| {
+            answer(turns, opts, sink, &"y".repeat(200), calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "said hello", "remaining": "" }))]))
+        })))
+    });
+    let memory = Arc::new(TurnsOnly(Mutex::new(Vec::new())));
+    let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")).with_rangeur(memory.clone()));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("the parent opens");
+    host.post_to_teammate(&h.id, "doc", "lucie", "request", None, "Say hello.", &json!({ "expects": "none" })).expect("the request");
+    let fin = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    let run = format!("doc:{}", h.id);
+    loop {
+        let lines = memory.0.lock().unwrap().clone();
+        if lines.iter().any(|l| l["run"] == run.as_str() && l["turn"] == 1 && l["seq"] == 0 && l["role"] == "user") && lines.iter().any(|l| l["role"] == "tool" && l["tool_name"] == "step_done") {
+            break;
+        }
+        assert!(std::time::Instant::now() < fin, "the step's messages under {run}: {lines:#?}");
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+}
+
