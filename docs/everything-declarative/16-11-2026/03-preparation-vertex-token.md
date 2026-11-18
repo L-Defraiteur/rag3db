@@ -16,7 +16,7 @@ Le rouge exact utilisera `run_e2e.sh --lib`/la vraie passe
 coordonner. Les slots actuels restent Recherche/Archi puis ED, pas de Cargo
 automatique au seul reçu de FINI G.
 
-Ticket : [un modèle Vertex déclaré garde son jeton d'une heure](../../banc/tickets/2026-11-16-un-modele-vertex-declare-garde-son-jeton-d-une-heure.md).
+Ticket : [un modèle Vertex déclaré garde son jeton d'une heure](../../tickets/closed/2026-11-16-un-modele-vertex-declare-garde-son-jeton-d-une-heure.md).
 Préparation après audit de master927941a67, branche `cx-ed-vertex-token-refresh-r1`.
 Aucun Cargo, faux serveur lancé, service, cloud ou lecture d'identifiants. La
 fenêtre G/Arbre reste prioritaire. Le lot d'ordre stable doit atterrir avant.

@@ -109,7 +109,9 @@ NON JOUÉE, créneau ED après les slots Recherche/Archi selon C7.
 
 ### 2.B Un modèle Vertex déclaré garde son jeton d'une heure — 4 h, rien ne bloque, gravité haute
 
-Ticket : `docs/banc/tickets/2026-11-16-un-modele-vertex-declare-garde-son-jeton-d-une-heure.md`, confirmé pour ED par c7.
+**Fermé le 18 novembre 2026** : le correctif 4b32256693 est prouvé sur une passe réelle, F300 entière par un backend de master (29f5e50f6c) : 1 h 16, 244 décisions, aucun 401 (banc, 4bf43dcb23).
+
+Ticket : `docs/tickets/closed/2026-11-16-un-modele-vertex-declare-garde-son-jeton-d-une-heure.md`, confirmé pour ED par c7.
 - **Le problème** : `connect_llm` (`src/model_source.rs`), en protocole vertex, prend le jeton une fois et le pose en
   `Auth::Bearer` fixe dans `OpenAiLlm::vertex` (`src/openai_llm.rs`). Au bout d'une heure, chaque appel rend 401
   `ACCESS_TOKEN_EXPIRED`, et une passe longue perd ses décisions sans s'arrêter : 45 de perdues dans la passe F300 de banc.
