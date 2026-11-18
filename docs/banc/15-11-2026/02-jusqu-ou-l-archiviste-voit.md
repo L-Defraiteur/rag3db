@@ -328,3 +328,45 @@ changé à la fois, donc la passe ne sépare pas leurs effets.
 
 **La suite** : la même passe avec la variante de consigne (la page 05 de la session mémoire) tourne,
 puis S 50, puis 300 k. Une référence N rejouée sur le même binaire lèverait la réserve.
+
+## 10. Toutes les variantes contre la N rejouée (18 novembre 2026)
+
+**La référence change.** Jusqu'au § 9, les variantes se jugeaient contre une N jouée le 15 sur l'ancien binaire, avec
+les pannes du 7879. La N rejouée sur 0653a6aeff (`long/ref-N-0653-20261116-0305`) est propre : 244 décisions, aucune
+erreur du modèle. Elle est sur le même binaire que les variantes, ce qui lève la réserve du § 9.
+
+**Le témoin d'abord** : N jugée contre elle-même rend P1 = 1,0 (54 sur 54), et N bornée à 198 tours aussi (47 sur 47).
+
+| variante, contre la N rejouée | décisions : créer, rejoindre, rien | fiches | P1 | P2 (doublons) | « rien » : aide, endort, accord | s par décision p50 ; p90 | jetons d'invite ; dont cache |
+|---|---|---|---|---|---|---|---|
+| F 50 k, 25 % | 40, 160, 43 (+1 sans étiquette) | 31 | **0,86** (43/50) | 2 (0,065) | 20, **5**, 18 | 7,7 ; 18,4 | 6,20 M ; 10 % |
+| F 50 k, 25 %, variante de consigne | 63, 162, 19 | 19 | **0,685** (37/54) | 0 | 1, 3, 15 | 6,7 ; 17,9 | 6,29 M ; 12 % |
+| S 50 | 42, 149, 53 | 32 | **0,84** (42/50) | 1 (0,031) | 24, 9, 20 | 6,7 ; 14,3 | 5,33 M ; 9 % |
+| F 300 k, 10 %, **198 tours** | 38, 139, 21 | 32 | **0,848** (39/46) | **8 (0,25)** | 10, 3, 8 | 8,7 ; **72,3** | 19,6 M ; 22 % |
+
+- **Contre la bonne référence, F 25 % passe le seuil** : 0,86, contre 0,77 face à l'ancienne N. L'écart du § 9 venait en
+  partie de la référence.
+- **S 50 est au même niveau** (0,84), pour 14 % de jetons en moins et un p90 plus court.
+- **La variante de consigne recule nettement** (0,685) : elle crée 63 fiches pour n'en garder que 19, et ne dit presque
+  plus jamais « rien ». C'est la moins bonne des quatre.
+- **F300 couvre bien, mais coûte** :
+  - un rappel de 0,848 sur ses 198 premiers tours, contre les mêmes 198 tours de N ;
+  - mais **un quart de doublons** (8 couples), un p90 de 72 s par décision, et trois fois plus de jetons que F 25 % ;
+  - la fenêtre de 300 k ne vaut pas son prix ici.
+- **F300 ne se juge que sur 198 tours** : du tour 199 au tour 244, chaque décision a reçu un 401 `ACCESS_TOKEN_EXPIRED`
+  (`docs/banc/tickets/2026-11-16-un-modele-vertex-declare-garde-son-jeton-d-une-heure.md`). Le correctif est sur
+  master (ED, 4b32256693). F300 rejouée entière le qualifiera.
+- **Le script de la mesure longue** (`x_archive_long.py`, à luciepc) marquait `"ok": true` un tour dont la réponse
+  portait une erreur du modèle. Il arrête désormais la passe :
+  - sur un 401 ou un 403 ;
+  - sur trois tours en erreur de suite.
+
+  L'ancienne version est gardée en `x_archive_long.py.avant-arret-sur-erreur`. Ce changement n'a pas été rejoué sur une
+  passe.
+
+**Ce que ça dit pour l'archiviste** : F à 50 k avec 25 % de chevauchement, ou S 50, avec la consigne d'origine. Pas la
+variante de consigne, et pas la fenêtre de 300 k. Le choix entre F 25 % et S 50 revient à Lucie : même rappel, et S 50
+coûte un peu moins.
+
+Sorties à luciepc, sous `~/.cache/rag3db-banc-notes/compaction/long/` : `juge-*-contre-Nr.json`, `rien-*-contre-Nr.json`.
+Le script est `../juge-nr.sh`.

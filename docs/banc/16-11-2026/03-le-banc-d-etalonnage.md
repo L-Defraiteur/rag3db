@@ -219,3 +219,16 @@ le débit par 15 (granite) ou par 4 (bge-m3). Les lots du catalogue tiennent dé
   prouver par `[montre]` ;
 - le pas 5, l'écriture sous la clé `embedding_rate:{modèle}:{adresse}@{poste}`. Elle attend la lecture de la clé
   par embarquement.
+
+**Le pas 4, lu le 18 novembre** : l'index de B′ (16 novembre, 7878) a noté lui-même
+`embedding_rate:granite-278m:service = 92 152` caractères/s dans `_catalog_meta`, soit **47 %** du débit du banc
+(194 422). Ce chiffre compte la réclamation, l'écriture des vecteurs et la reconstruction de l'index, et ses caractères
+sont estimés par la taille moyenne d'un morceau ; le banc ne compte que les appels au service. L'écart dépasse les
+30 % du § 4. **Le journal du démon de luciepc n'a aucune ligne `[montre]`** : la part de l'écriture se prouvera par une
+réindexation réelle sous l'hôte, journal gardé. Mon estimation de 68 % écrite plus haut est remplacée par ce relevé.
+
+**Le débit en jetons/s** (c7, 18 novembre, d'après `docs/embarquement/18-11-2026/02-bornes-en-caracteres-et-limites-en-jetons.md`,
+point F) : le rapport caractères par jeton va d'environ 1 (+2) sur les tokenizers XLM-R au pire, à environ 4 pour du
+français. Un débit en caractères/s n'a donc de sens que pour un type de corpus. Aux pas 4 et 5, le banc rend aussi les
+jetons/s (comptés par le service s'il les rend, sinon par le tokenizer), et la table dit le rapport caractères/jeton du
+jeu figé.

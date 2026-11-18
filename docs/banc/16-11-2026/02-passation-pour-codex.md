@@ -68,6 +68,8 @@ heures de travail.
 
 ### Entrée 1. Juger F300 et N rejouée de la mesure longue
 
+**Fait par banc le 18 novembre** : toutes les variantes jugées contre la N rejouée (page du 15, § 10), F300 sur ses 198 tours. Le script s'arrête désormais sur une erreur du modèle. Il reste à rejouer F300 entière pour qualifier le correctif Vertex.
+
 **Commencé par banc, arrêté le 16 novembre à 11 h** :
 - **la cause des 45 décisions vides de F300 est trouvée** : du tour 199 au tour 244, chaque Decide rend
   `HTTP 401 ACCESS_TOKEN_EXPIRED`. Le jeton Vertex d'un `models.llm` est pris une fois et dure une heure ;
