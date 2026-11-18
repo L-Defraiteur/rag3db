@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 18 novembre2026 — Dans le terminal de l'agent, ce qu'on tape pendant une commande `!` ne se garde plus jamais dans sa sortie, même tapé avant que la commande coupe l'écho : un mot de passe tapé avant l'invite de `sudo` se voit à l'écran, comme dans tout terminal, mais n'entre ni dans la consigne envoyée à l'équipier, ni dans le journal.
+
 - 18 novembre2026 — **En Python et en C, une fonction nommée `default`, `from` ou `of` est un appel.** Les mots ignorés de Python et de C étaient ceux de JavaScript ; ils viennent maintenant du langage (les mots-clés de Python, les mots réservés de la grammaire C). Sur les fichiers Python du dépôt, 3 liens de plus ; le C ne change pas. **Toutes les bases repassent une fois** (pointeur codeparsers : les mots vides en données, `72ab7a8`).
 
 - 18 novembre2026 — **En Rust, `Settings::default()` est un appel, et `std::fs::remove_file(…)` n'est plus un appel du projet.** La liste des mots ignorés de Rust était celle de JavaScript : `default`, `new` ou `from` n'étaient jamais relevés. Elle vient maintenant de la documentation de std. Et un chemin de la bibliothèque standard ne se relie plus à une fonction homonyme du dépôt, même avec un appel du projet sur la même ligne. Sur rag3weaver, 287 appels de plus sont reliés et 258 liens faux disparaissent. **Toutes les bases repassent une fois** (`REGLES_DE_L_ANALYSE` monte à 8 ; pointeur codeparsers : les mots vides en données, `34c74e4`).
