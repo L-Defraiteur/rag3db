@@ -1,6 +1,6 @@
 # Les messages entre sessions dans le terminal de l'agent
 
-- **État** : ouvert. Conçu côté affichage (session tty, 16 nov. 2026) ; la forme des lignes attend le relevé du bus des sessions par archi.
+- **État** : ouvert. Le rendu est fait sur le faux hôte (tty-23, 18 nov. 2026, branche `cx-tty-23`, page `docs/tty/18-11-2026/04-tty-23-messages-entre-sessions.md`) ; il attend la forme d'archi pour aller sur master.
 - **Famille** : produit
 - **Gravité** : manque. Sans lui, Lucie ne voit pas ce qu'Algareth envoie aux sessions Claude ni ce qu'il en reçoit (vision `docs/orchestration/visions/16-11-2026-algareth-pair-des-sessions-claude.md`, point 2).
 - **Atteignable en service** : oui, dès que le mode pair d'archi pose des messages dans la boîte d'une tâche.

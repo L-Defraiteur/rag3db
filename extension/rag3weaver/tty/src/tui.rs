@@ -668,16 +668,16 @@ fn visionner(vue: &Vue, colorer: Colorer) -> Result<(), String> {
     ratatui::crossterm::execute!(std::io::stdout(), EnterAlternateScreen).map_err(|e| e.to_string())?;
     let rendu = (|| -> Result<(), String> {
         let mut t = ratatui::Terminal::new(ratatui::backend::CrosstermBackend::new(std::io::stdout())).map_err(|e| e.to_string())?;
-        let mut v = crate::visionneuse::Visionneuse::sur_le_dernier(vue.appels.len());
+        let mut v = crate::visionneuse::Visionneuse::sur_le_dernier(vue.openable_count());
         let mut cache: std::collections::HashMap<(usize, u16), Vec<ratatui::text::Line<'static>>> = std::collections::HashMap::new();
         loop {
             let taille = t.size().map_err(|e| e.to_string())?;
-            let lignes = cache.entry((v.index, taille.width)).or_insert_with(|| crate::visionneuse::lignes(&vue.appels[v.index], &vue.theme, vue.capacites, taille.width as usize, colorer)).clone();
-            t.draw(|f| crate::visionneuse::dessiner(f, &v, vue.appels.len(), &lignes, &vue.theme, vue.capacites)).map_err(|e| e.to_string())?;
+            let lignes = cache.entry((v.index, taille.width)).or_insert_with(|| crate::visionneuse::entry_lines(vue.openable_lines(v.index), &vue.theme, vue.capacites, taille.width as usize, colorer)).clone();
+            t.draw(|f| crate::visionneuse::dessiner_entree(f, &v, vue.openable_count(), vue.openable_label(v.index), &lignes, &vue.theme, vue.capacites)).map_err(|e| e.to_string())?;
             match event::read().map_err(|e| e.to_string())? {
                 Event::Key(k) if k.kind == KeyEventKind::Press => {
                     if let Some(touche) = touche_de(k) {
-                        if !v.touche(&touche, vue.appels.len(), lignes.len(), taille.height as usize) {
+                        if !v.touche(&touche, vue.openable_count(), lignes.len(), taille.height as usize) {
                             return Ok(());
                         }
                     }
