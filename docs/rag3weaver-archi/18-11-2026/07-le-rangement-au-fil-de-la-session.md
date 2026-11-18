@@ -87,11 +87,25 @@ La part gabarit est décrite par mémoire. La part hôte :
    tours (`from`, `to`, et `chat` : la conversation de la tranche par défaut), rendue comme la
    tranche, bornée en caractères, en lecture seule. Il n'est offert qu'au pas de l'archiviste, et
    à aucun autre agent sans déclaration.
+9 bis. **`search_turns`, chercher avant de lire** (Lucie : « pas seulement relire, mais
+   chercher »). C'est un outil de l'hôte, au même accès que `read_turns`.
+   - **Ce qu'il fait** : il cherche sur les tours de la trace (`query`, `chat`, `limit`) et rend
+     des intervalles de tours (`from`, `to`, et un extrait autour du passage).
+   - **Lexical par défaut** : un index plein texte des tours, tenu par l'hôte à côté du
+     `ChatFile`, mis à jour à la fin de chaque tour. On regardera s'il vaut mieux lucivy en
+     mémoire ou un simple balayage borné.
+   - **Dense quand le run a un index** : les tranches déjà rangées ont leurs L1 dans la mémoire,
+     que `recall_apports` cherche par sens. `search_turns` y ajoute les tours qu'elles citent
+     (`turns a-b`).
+   - **Ce qu'il ne fait pas** : il n'embarque rien lui-même, et une trace sans index reste en
+     lexical.
+
+   L'archiviste cherche, puis lit par `read_turns`.
 10. **La preuve en plus.** Faux modèle : le pas de l'archiviste appelle `read_turns` sur des
    tours d'avant sa tranche, puis range. Ses bornes l'arrêtent proprement. Débrayé, le graphe
    seul tourne.
 
-Cela agrandit le lot 1 d'une demi-journée (le pas et `read_turns`) : 2 jours au lieu de 1,5.
+Cela agrandit le lot 1 : le pas et `read_turns` (une demi-journée), `search_turns` (une journée). Il passe à 3 jours au lieu de 1,5.
 
 ## La preuve, rouge d'abord (demain)
 
