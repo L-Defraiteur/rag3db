@@ -498,6 +498,25 @@ Lucie : « les L0, les vrais tours, doivent être indexés au fil de l'eau avec 
   rappels, qui deviendrait un jour un défaut oublié. Le témoin le vérifie : des tours indexés dont
   le texte répond à la requête n'apparaissent ni dans `recall_fiches` ni dans `recall_apports`, et
   apparaissent dans `search_turns`.
+- **Deux espèces de L0, à ne pas confondre** (relecture d'archi, 5eaeef3e7) :
+  - **la Source du gabarit** reste « immuable, écrite une fois ». Chaque **tranche fermée**
+    s'archive comme une Source neuve, `sources/<run>-turns-<a>-<b>.md`, écrite une fois à la
+    fermeture, sans TTL : c'est elle que citent les L1 ;
+  - **la trace en cours** est une espèce à part, en **ajout seul** : les lignes `Turn` d'origine
+    `run_trace`, une par tour, qui ne se réécrivent jamais. Elles s'effacent au TTL, et rien
+    d'autre ne les modifie. Leur `source` est le chemin de la Source de leur tranche, connu dès
+    l'ouverture de la tranche.
+- **Un seul écrivain** : l'écriture du tour (`Turn`) passe avant le rangement. Le rangement de la
+  tranche avance par petites transactions (un sujet, ses écritures), si bien qu'il ne tient jamais
+  la base longtemps devant l'écriture du tour suivant.
+- **Ce qui n'entre jamais dans la trace** : la trace porte le code lu et les sorties de commandes.
+  Les fichiers exclus du dépôt (ignorés par git, `.vault/`, les secrets) n'y entrent pas. L'hôte
+  remplace leur contenu par « exclu du dépôt » avant l'écriture du tour. Le témoin vérifie qu'un
+  `read_file` sur un fichier ignoré laisse dans `Turn` la mention, et jamais le contenu.
+- **L'indexation des tours est un réglage**, `memory.index_turns`. Archi le propose **éteint par
+  défaut**, puis allumé dépôt par dépôt par Lucie. **La question du défaut est posée à Lucie par
+  c7.** Éteint, il n'y a ni ligne `Turn` ni `search_turns`, et l'archiviste range quand même ses
+  tranches (Sources et L1).
 - **Le TTL** : `memory.l0_ttl_days`, dans les bindings du gabarit memory (30 jours proposés). Une
   ligne `Turn` plus ancienne est effacée, avec ses morceaux, son index et ses vecteurs. **Ne se
   touchent pas** : le `ChatFile` (l'hôte le garde), la Source de la transcription (le L0 immuable)
