@@ -1,3 +1,5 @@
+#include <optional>
+
 #include "binder/binder.h"
 #include "catalog/catalog.h"
 #include "catalog/catalog_entry/index_catalog_entry.h"
@@ -26,14 +28,17 @@ struct IndexInfo {
     std::string indexDefinition;
     std::string state;
     std::string extensionError;
+    std::optional<uint64_t> rowsOutsideGraphAtMost;
 
     IndexInfo(std::string tableName, std::string indexName, std::string indexType,
         std::vector<std::string> properties, bool dependencyLoaded, std::string indexDefinition,
-        std::string state, std::string extensionError)
+        std::string state, std::string extensionError,
+        std::optional<uint64_t> rowsOutsideGraphAtMost)
         : tableName{std::move(tableName)}, indexName{std::move(indexName)},
           indexType{std::move(indexType)}, properties{std::move(properties)},
           dependencyLoaded{dependencyLoaded}, indexDefinition{std::move(indexDefinition)},
-          state{std::move(state)}, extensionError{std::move(extensionError)} {}
+          state{std::move(state)}, extensionError{std::move(extensionError)},
+          rowsOutsideGraphAtMost{rowsOutsideGraphAtMost} {}
 };
 
 struct ShowIndexesBindData final : TableFuncBindData {
@@ -68,6 +73,13 @@ static offset_t internalTableFunc(const TableFuncMorsel& morsel, const TableFunc
         output.getValueVectorMutable(5).setValue(i, indexInfo.indexDefinition);
         output.getValueVectorMutable(6).setValue(i, indexInfo.state);
         output.getValueVectorMutable(7).setValue(i, indexInfo.extensionError);
+        if (indexInfo.rowsOutsideGraphAtMost.has_value()) {
+            output.getValueVectorMutable(8).setNull(i, false);
+            output.getValueVectorMutable(8).setValue<uint64_t>(i,
+                *indexInfo.rowsOutsideGraphAtMost);
+        } else {
+            output.getValueVectorMutable(8).setNull(i, true);
+        }
     }
     return numTuplesToOutput;
 }
@@ -98,6 +110,12 @@ static binder::expression_vector bindColumns(const TableFuncBindInput& input) {
     // échecs de l'ouverture sont rendus.
     columnNames.emplace_back("extension_error");
     columnTypes.emplace_back(LogicalType::STRING());
+    // For a vector index, the rows every search scans one by one outside the graph, at the
+    // caller's snapshot: an upper bound (rows already linked by a CREATE's catch-up, or without a
+    // vector, are counted too), from which the product decides a rebuild. NULL for an index
+    // without a graph, or not loaded.
+    columnNames.emplace_back("rows_outside_graph_at_most");
+    columnTypes.emplace_back(LogicalType::UINT64());
     columnNames = TableFunction::extractYieldVariables(columnNames, input.yieldVariables);
     return input.binder->createVariables(columnNames, columnTypes);
 }
@@ -134,8 +152,12 @@ static std::unique_ptr<TableFuncBindData> bindFunc(const main::ClientContext* co
             indexDefinition = auxInfo.toCypher(*indexEntry, info);
         }
         std::string state = storage::indexBuildStateToString(storage::IndexBuildState::INCOMPLETE);
+        std::optional<uint64_t> rowsOutsideGraphAtMost;
         auto* table = storage::StorageManager::Get(*context)->getTable(indexEntry->getTableID());
         if (table->getTableType() == TableType::NODE) {
+            rowsOutsideGraphAtMost =
+                table->cast<storage::NodeTable>().getIndexRowsOutsideGraphAtMost(indexName,
+                    transaction);
             const auto buildState =
                 table->cast<storage::NodeTable>().getIndexBuildState(indexName, transaction);
             if (buildState.has_value()) {
@@ -144,7 +166,8 @@ static std::unique_ptr<TableFuncBindData> bindFunc(const main::ClientContext* co
         }
         indexesInfo.emplace_back(std::move(tableName), std::move(indexName), std::move(indexType),
             std::move(propertyNames), dependencyLoaded, std::move(indexDefinition),
-            std::move(state), dependencyLoaded ? std::string() : loadFailures);
+            std::move(state), dependencyLoaded ? std::string() : loadFailures,
+            rowsOutsideGraphAtMost);
     }
     return std::make_unique<ShowIndexesBindData>(indexesInfo, bindColumns(*input),
         indexesInfo.size());

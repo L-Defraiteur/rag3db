@@ -419,6 +419,9 @@ public:
     }
 
     void finalize(main::ClientContext*) override;
+    // The range searchFromUnCheckpointed scans: [numCheckpointedNodes, numTotalRows).
+    std::optional<uint64_t> getRowsScannedOutsideGraph(
+        const transaction::Transaction* transaction) const override;
     void checkpoint(main::ClientContext* context, storage::PageAllocator& pageAllocator) override;
 
     // Le rattrapage d'un index bâti à l'instantané buildStartTS de la transaction qui le crée :
