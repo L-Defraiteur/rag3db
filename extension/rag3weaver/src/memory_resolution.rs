@@ -13,6 +13,13 @@ pub fn memory_image_of(_analysis: &CodeAnalysis) -> MemoryImage {
     MemoryImage::new()
 }
 
+/// **The code schema for the reference tools**: files, scopes, libraries, symbols and their relations, without
+/// the derived content (`ScopeContent`), chunks, vectors or full text. What the fallback needs, and nothing it
+/// would have to derive.
+pub fn register_code_schema_for_references(catalog: &mut crate::Catalog) -> Result<(), crate::catalog::CatalogError> {
+    crate::code::register_code_schema(catalog, crate::code::default_scope_chunking())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -27,14 +34,23 @@ mod tests {
         ]
     }
 
+    fn catalog(d: &std::path::Path) -> Catalog {
+        let conn = Rag3dbConnection::new(&d.join("base.rag3db")).expect("the base");
+        let mut cat = Catalog::new(Box::new(conn), Box::new(HashEmbedder::new(8)), CatalogConfig { allow_mock_embedder: true, embedding_dim: 8, ..Default::default() });
+        cat.initialize().unwrap();
+        cat
+    }
+
     /// `(from file, from name, to name, to file, mark)` of every `CONSUMES`, sorted.
     fn by_the_base(analysis: &CodeAnalysis) -> Vec<String> {
         let d = tempfile::tempdir().unwrap();
-        let conn = Rag3dbConnection::new(&d.path().join("base.rag3db")).expect("the base");
-        let mut cat = Catalog::new(Box::new(conn), Box::new(HashEmbedder::new(8)), CatalogConfig { allow_mock_embedder: true, embedding_dim: 8, ..Default::default() });
-        cat.initialize().unwrap();
+        let mut cat = catalog(d.path());
         crate::code::register_code_schema(&mut cat, crate::code::default_scope_chunking()).unwrap();
         cat.ingest_code(analysis).unwrap();
+        consumes_of(&cat)
+    }
+
+    fn consumes_of(cat: &Catalog) -> Vec<String> {
         let r = cat.execute_raw("MATCH (a:Scope)-[r:CONSUMES]->(b:Scope) RETURN a.file_path, a.name, b.name, b.file_path, r.resolution").unwrap();
         let mut out: Vec<String> = r.rows.iter().map(|x| (0..5).map(|i| x.get(i).and_then(|v| v.as_str()).unwrap_or("").to_string()).collect::<Vec<_>>().join("\t")).collect();
         out.sort();
@@ -62,5 +78,20 @@ mod tests {
         assert!(base.iter().any(|l| l.contains("\tstart\thelper\t")), "the base links the call across files: {base:#?}");
         let image = by_the_image(&memory_image_of(&analysis));
         assert_eq!(image, base, "the image has the base's links, mark for mark");
+    }
+
+    #[test]
+    fn the_references_schema_draws_the_same_links_without_derived_content() {
+        let analysis = crate::code::analyze("/virtual", project());
+        let d = tempfile::tempdir().unwrap();
+        let mut cat = catalog(d.path());
+        register_code_schema_for_references(&mut cat).unwrap();
+        assert!(cat.entity_config(crate::code::SCOPE_CONTENT).is_none(), "no derived content");
+        for name in ["File", "Scope", "Library", "Symbol"] {
+            let config = cat.entity_config(name).unwrap_or_else(|| panic!("{name} is registered"));
+            assert!(config.chunked != Some(true) && config.derived.is_none(), "{name} has no chunks and derives nothing");
+        }
+        cat.ingest_code(&analysis).unwrap();
+        assert_eq!(consumes_of(&cat), by_the_base(&analysis), "the same links as the full schema, mark for mark");
     }
 }
