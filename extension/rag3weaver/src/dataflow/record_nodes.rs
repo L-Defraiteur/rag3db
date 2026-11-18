@@ -4598,6 +4598,34 @@ fn reindex_fts_rows(
 #[cfg(test)]
 mod tests {
 
+    /// **Opening a catalogue sweeps the COPY files of a dead process** (ticket
+    /// `docs/recherche/tickets/2026-11-11-un-copy-tue-laisse-son-csv-dans-le-dossier-temporaire.md`):
+    /// a process killed during a COPY never removes its CSV. The next opening removes the CSV of a
+    /// process that no longer runs, and never one of a live process, its own included.
+    #[cfg(feature = "rag3db-native")]
+    #[test]
+    fn opening_a_catalog_sweeps_the_copy_files_of_a_dead_process() {
+        // A pid above any `pid_max` of Linux (4 194 304 at most): never a live process.
+        let dead = std::env::temp_dir().join(format!("rag3weaver-lignes-{}-0-Scope-1.csv", u32::MAX - 1));
+        let dead_links = std::env::temp_dir().join(format!("rag3weaver-liens-{}-0-CALLS-1.csv", u32::MAX - 2));
+        let mine = super::fichier_csv("lignes", "Scope");
+        for f in [&dead, &dead_links, &mine] {
+            std::fs::write(f, "x\n").unwrap();
+        }
+        let conn = crate::Rag3dbConnection::in_memory().expect("in-memory base");
+        let config = crate::CatalogConfig { embedding_dim: 4, ..Default::default() };
+        let mut catalog = crate::Catalog::new(Box::new(conn), Box::new(crate::embedder::AbsentEmbedder::new("absent", 4)), config);
+        catalog.initialize().unwrap();
+        let (dead_left, links_left, mine_left) = (dead.exists(), dead_links.exists(), mine.exists());
+        for f in [&dead, &dead_links, &mine] {
+            let _ = std::fs::remove_file(f);
+        }
+        assert!(!dead_left, "the rows CSV of a dead process is swept: {}", dead.display());
+        assert!(!links_left, "the links CSV of a dead process is swept: {}", dead_links.display());
+        assert!(mine_left, "the CSV of a live process is kept: {}", mine.display());
+    }
+
+
     /// **L'annulation d'un lot de liens ne retire que ce qu'il a créé, et
     /// repose une déliaison avec ses propriétés** (ticket « l'annulation d'un
     /// lot de liens retire aussi les paires qui existaient avant lui »,
