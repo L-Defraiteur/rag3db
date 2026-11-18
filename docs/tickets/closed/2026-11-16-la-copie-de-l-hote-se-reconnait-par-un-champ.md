@@ -1,6 +1,6 @@
 # La copie de l'hôte se reconnaît par un champ, pas par son texte français
 
-- **État** : ouvert. Relevé par la session tty le 16 nov. 2026 ; attend un champ d'archi.
+- **État** : corrigé. Lot tty-28 (18 nov. 2026) : le champ `origin: "host_copy"` est sur master (archi, `pas-va-au-bout`), et le terminal le lit ; page `docs/tty/18-11-2026/09-tty-28-la-copie-de-l-hote-par-son-champ.md`.
 - **Famille** : produit
 - **Gravité** : gêne latente. Si l'hôte passe ses textes en anglais (règle de Lucie du 16 nov.), le préfixe « le pas N s'est terminé sans step_done ; sa réponse : » réapparaît à l'écran.
 - **Atteignable en service** : oui, à chaque pas fini sans `step_done` qui a répondu en texte.
