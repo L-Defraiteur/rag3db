@@ -16,8 +16,15 @@
 
 ## Ce qui serait juste
 
-1. Chaque fiche (et chaque catégorie) porte un centroïde (la moyenne incrémentale des vecteurs de
-   ses L1) et une dispersion (son rayon).
+1. Chaque fiche porte :
+   - un centroïde, la moyenne incrémentale des vecteurs de ses L1 ;
+   - une dispersion, son rayon ;
+   - une ancre, le vecteur de sa description, fixé à la création.
+
+   La **dérive** (la distance du centroïde à l'ancre) au-delà d'un seuil fait proposer de relire
+   ou de scinder. Les catégories n'ont pas de dispersion comme critère : leurs valeurs se
+   définissent par leurs différences, et leur qualité se juge par le modèle (une même question,
+   des valeurs qui s'excluent).
 2. Au rangement, un sujet est absorbé sous le rayon, si la cohésion ne baisse pas au-delà d'un
    seuil.
 3. Le rappel des candidates se fait d'abord par centroïde.
@@ -30,7 +37,8 @@
 Le banc relève, sur la session de Lucie rangée :
 
 - la distribution des tailles de fiches (une fiche avale-t-elle 40 % des L1 ?) ;
-- la dispersion intra-fiche.
+- la dispersion intra-fiche ;
+- la dérive des fiches à leur ancre.
 
 Les seuils se posent sur ces chiffres, pas avant.
 

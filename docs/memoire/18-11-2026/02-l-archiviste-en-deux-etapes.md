@@ -279,8 +279,11 @@ schéma.
    c7). Une catégorie ou une valeur reste « proposée » jusqu'à l'un de deux chemins :
    - **la confirmation automatique** : au moins k fiches la portent, **et** son utilité est
      constatée (elle a servi au moins un rappel ou un `cited_by` qui a rendu une fiche juste),
-     **et** sa qualité sémantique est jugée : ses valeurs décrivent une même dimension cohérente,
-     sans recouvrement. C'est le même juge que les fiches ;
+     **et** sa qualité sémantique est jugée : **ses valeurs répondent à une même question et
+     s'excluent mutuellement**. C'est le modèle qui en juge, sur leurs descriptions, et **pas la
+     proximité de leurs vecteurs** : « bloqué », « terminé » et « en cours » sont loin l'une de
+     l'autre par construction, puisque les valeurs d'un enum se définissent par leurs
+     différences ;
    - **la relecture**, par `confirmer_fiche`, pour tout le reste.
 
    Il n'y a pas de règle « jamais de confirmation automatique » : une confirmation à la main seule
@@ -310,11 +313,18 @@ centre ». C'est la version mesurable de « sujet proche : réutiliser ou justif
 un lot : c'est un ticket souhait,
 `docs/memoire/tickets/2026-11-18-un-centre-de-gravite-semantique-par-fiche.md`.
 
-- **Ce que porte chaque fiche** (et chaque catégorie) :
-  - un **centroïde**, la moyenne des vecteurs de ses L1 (de ses valeurs, pour une catégorie), mise
-    à jour à chaque ajout par une moyenne incrémentale ;
+- **Ce que porte chaque fiche** (les fiches seulement : pour une catégorie, la dispersion de ses
+  valeurs n'est pas un critère, voir plus haut) :
+  - un **centroïde**, la moyenne des vecteurs de ses L1, mise à jour à chaque ajout par une
+    moyenne incrémentale ;
   - une **dispersion** : le rayon, c'est-à-dire la distance moyenne ou le 90e centile des L1 au
-    centroïde.
+    centroïde ;
+  - une **ancre sémantique** : le vecteur de sa description (`about`), fixé à la création et
+    changé seulement par une édition explicite de la description.
+- **La dérive** est la distance entre le centroïde courant, qui bouge avec les L1, et l'ancre. Une
+  dérive au-dessus d'un seuil dit que **la fiche a changé de sens en silence** : la consolidation
+  propose de la relire ou de la scinder. C'est le signal le moins cher contre la mémoire qui se
+  valide elle-même (voir « révoquer », plus bas).
 - **Au rangement** (étape 2), un sujet est **absorbé** par une fiche si sa distance au centroïde
   est sous le rayon, **et** si la cohésion de la fiche ne baisse pas au-delà d'un seuil une fois le
   sujet ajouté. Sinon, c'est une fiche neuve, ou l'une des autres candidates.
@@ -330,7 +340,9 @@ un lot : c'est un ticket souhait,
   dispersion de vecteurs. Le centroïde est neuf.
 - **Ce que le banc mesure**, sur la session de Lucie rangée :
   - la distribution des tailles de fiches : une fiche avale-t-elle 40 % des L1 ?
-  - la cohésion intra-fiche (la dispersion), avant et après la garde.
+  - la cohésion intra-fiche (la dispersion), avant et après la garde ;
+  - la dérive des fiches à l'ancre, et combien de fiches à forte dérive une relecture juge
+    vraiment glissées.
 
 ### Une mémoire qui ne se valide pas elle-même : révoquer
 
