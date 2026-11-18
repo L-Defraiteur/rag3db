@@ -507,6 +507,11 @@ fn write_batch_by_generations(catalog: &mut Catalog, fichiers: &[FileToWrite]) -
         })
         .collect();
     ecrire_la_table(catalog, FILE, "path", "path", &lignes_file, &mut e)?;
+    // In another layer than the backend's (2a′-3), each file written is a tombstone of its generation: the
+    // parent's rows of that file are masked under the layer's view.
+    if let Some(state) = catalog.layer_write.as_mut() {
+        state.files.extend(fichiers.iter().map(|f| f.chemin.clone()));
+    }
     Ok(e)
 }
 
