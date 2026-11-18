@@ -1,6 +1,6 @@
 # Le genre d'une méthode définie dans un autre fichier que sa classe reste « function »
 
-- **État** : ouvert (15 novembre 2026)
+- **État** : fermé (18 novembre 2026) — la part d'ED, `docs/tickets/closed/2026-11-16-l-ecrivain-decide-le-genre-d-une-methode-definie-dans-un-autre-fichier.md`, porte le correctif et son témoin.
 - **Famille** : produit
 - **Gravité** : basse. Le genre est faux d'un mot ; la navigation ne s'appuie pas sur lui (elle lit
   `parent_name`), mais l'arbre compact montre une fonction là où il y a une méthode.
