@@ -1,6 +1,6 @@
 # Un cas known_red qui passe une fois par effet d'ordre rougit le juge
 
-- **État** : ouvert (15 novembre 2026, cœur c++, au mot de c7) — à G, dans sa file après ses quatre lots
+- **État** : fait (18 novembre 2026, branche known-red-intermittent) : un connu rouge qui passe une fois devient une ligne STATUS « known red passed this time (intermittent?) », comptée dans « bench matches … N intermittent », sans faire échouer le juge ; test/transaction/concurrence/confirm_known_red_fixed.sh <banc> <cas> [N=3] joue le cas seul N fois, chaque fois dans un processus neuf, et ne demande le retrait de la ligne qu'à N/N verts ; trois cas neufs au témoin, rouges d'abord
 - **Famille** : moteur (le juge des tests du moteur)
 - **Gravité** : gêne (un lot vert se lit rouge ; sans le mot de c7, il ne pousse pas)
 - **Atteignable en service** : non
