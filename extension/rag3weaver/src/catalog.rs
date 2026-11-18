@@ -962,6 +962,11 @@ fn read_threads() -> u64 {
     ///
     /// Un montage qui veut vraiment ça — éprouver la plomberie du dual sans
     /// charger un modèle — le déclare par `CatalogConfig.allow_mock_embedder`.
+    /// **Is a dual attached ?** The dense queries go through it when it is.
+    pub fn has_dual(&self) -> bool {
+        self.dual_embedder.is_some()
+    }
+
     pub fn set_dual_embedder(&mut self, embedder: Arc<dyn DualEmbedder>) {
         self.dual_embedder = Some(embedder);
         self.warn_mock_query_embedder();
