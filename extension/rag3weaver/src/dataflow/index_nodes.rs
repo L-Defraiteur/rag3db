@@ -386,6 +386,13 @@ fn spawn_index_with_stop(
     watch: Arc<EmbedWatch>,
 ) -> std::thread::JoinHandle<()> {
     std::thread::spawn(move || {
+        // **The layer this index writes is marked** for the whole index, whatever its exit (the guard): a view of
+        // another layer stays up to date meanwhile (`views::view_state`). Today the index writes the backend's
+        // layer; a worktree layer's index (2a′-3) marks its own.
+        let ecrit = catalog.lock().ok().map(|cat| {
+            let cell = cat.scope().clone();
+            cat.file_lag().writing_guard(crate::catalog::retard::LagKey::backend(&cell))
+        });
         let fin = indexer_et_dire(&catalog, source, &journal, kept_bytes, generated, &watch);
         // **Les réclamations de cet index, rendues** quelle que soit la sortie (finie,
         // en échec, arrêtée entre deux passes) : sinon l'écrivain suivant les saute
@@ -399,6 +406,8 @@ fn spawn_index_with_stop(
         // l'hôte, pas dans ce journal : le journal d'index ne dit que l'index, et
         // sa dernière ligne reste celle de la fin (le contrat de ce module).
         crate::allocateur::rendre_au_systeme("fin d'index");
+        // The mark falls before the end line: who reads « terminée » reads the layer as no longer written.
+        drop(ecrit);
         log(&journal, &fin);
     })
 }
