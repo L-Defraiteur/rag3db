@@ -31,7 +31,8 @@
       "enum": [
         "envoi",
         "filet",
-        "migration"
+        "migration",
+        "run_trace"
       ],
       "description": "envoi : Claude l'a envoyé ; filet : un crochet de Claude Code l'a produit depuis la transcription ; migration : repris d'une fiche d'avant ce modèle."
     },
