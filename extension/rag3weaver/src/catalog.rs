@@ -4255,9 +4255,12 @@ fn read_threads() -> u64 {
     /// [`Self::MARQUE_PERIMEE_MS`] ; un rattrapage fini dans ce délai se disait
     /// « terminé » sur une dette laissée (9 novembre 2026). Rend combien, quand le
     /// dialecte sait le dire.
-    pub fn rendre_mes_reclamations(&mut self) -> usize {
+    pub fn rendre_mes_reclamations(&mut self) -> Result<usize, String> {
         let mien = format!("|{}", self.writer_id);
         let mut rendues = 0usize;
+        // **An error is said, table and cause** (ticket of 11 November 2026): it used to be swallowed, and the
+        // release returned zero. The other tables are still released.
+        let mut erreurs: Vec<String> = Vec::new();
         for table in self.vector_tables() {
             let requete = self.dialect.rendre_reclamations(&table);
             let r = if self.fautes_de_test.release {
@@ -4265,11 +4268,12 @@ fn read_threads() -> u64 {
             } else {
                 self.conn.execute_with_params(&requete, &[QueryParam::new("mien", CypherValue::String(mien.clone()))])
             };
-            if let Ok(r) = r {
-                rendues += r.rows.first().and_then(|l| l.first()).and_then(|v| v.as_i64()).unwrap_or(0) as usize;
+            match r {
+                Ok(r) => rendues += r.rows.first().and_then(|l| l.first()).and_then(|v| v.as_i64()).unwrap_or(0) as usize,
+                Err(e) => erreurs.push(format!("{table} : {e}")),
             }
         }
-        rendues
+        if erreurs.is_empty() { Ok(rendues) } else { Err(erreurs.join(" ; ")) }
     }
 
     /// [`Self::reclamer_le_retard`], sans les morceaux de `exclus` : ceux qu'un

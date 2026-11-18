@@ -397,9 +397,11 @@ fn spawn_index_with_stop(
         // **Les réclamations de cet index, rendues** quelle que soit la sortie (finie,
         // en échec, arrêtée entre deux passes) : sinon l'écrivain suivant les saute
         // une minute, et son rattrapage se dit fini sur une dette (9 novembre 2026).
-        if let Ok(mut g) = catalog.lock() {
-            g.rendre_mes_reclamations();
-        }
+        // Its error is said on the end line, after the end's own cause, which it does not replace.
+        let liberation = match catalog.lock() {
+            Ok(mut g) => g.rendre_mes_reclamations().err(),
+            Err(_) => Some("catalogue empoisonné".to_string()),
+        };
         // Un index retient des Go que glibc garde une fois libérés : rendus ici
         // (ticket « l'hôte ne rend pas la mémoire d'un gros index », 19 octobre
         // 2026), avant la ligne de fin. Le rendu se dit sur la sortie d'erreur de
@@ -408,6 +410,10 @@ fn spawn_index_with_stop(
         crate::allocateur::rendre_au_systeme("fin d'index");
         // The mark falls before the end line: who reads « terminée » reads the layer as no longer written.
         drop(ecrit);
+        let fin = match liberation {
+            Some(e) => format!("{fin} — libération des réclamations en échec : {e}"),
+            None => fin,
+        };
         log(&journal, &fin);
     })
 }
@@ -634,7 +640,7 @@ fn run_index(
         let muets_avant = watch.silent.lock().unwrap_or_else(|p| p.into_inner()).len();
         let (n, progress, dus_avant) = {
             let mut guard = catalog.lock().map_err(|_| "catalogue empoisonné".to_string())?;
-            let dus_avant = guard.index_progress().map(|p| dette(&p)).unwrap_or(usize::MAX);
+            let dus_avant = guard.index_progress().map(|p| dette(&p)).map_err(|e| format!("la dette avant la passe ne se lit pas : {e}"))?;
             let n = guard.embarquer_le_retard_suivi(Disponibilites::TOUT, 512, None, Some(watch)).map_err(|e| e.to_string())?;
             dire_la_provenance(&guard, journal, watch);
             // Chaque passe rafraîchit les états : « en cours » reste cru tant
@@ -731,7 +737,15 @@ fn run_index(
         // **Une dette qui reste sans muet ni échec** : des morceaux réclamés par un autre
         // écrivain (une passe d'avant, d'un catalogue fermé ou d'un autre processus),
         // repris quand leur réclamation périme ; la fin le dit au lieu de « terminée » sec.
-        let dus = catalog.lock().ok().and_then(|g| g.end_of_index_progress().ok()).map(|p| p.dense_missing()).unwrap_or(0);
+        // **An unreadable debt is unknown, never zero** (ticket of 11 November 2026).
+        let dus = match catalog.lock() {
+            Ok(g) => g.end_of_index_progress().map(|p| p.dense_missing()).map_err(|e| e.to_string()),
+            Err(_) => Err("catalogue empoisonné".to_string()),
+        };
+        let dus = match dus {
+            Ok(d) => d,
+            Err(e) => return Ok(Some(format!("dette inconnue : la dette restante ne se lit pas ({e}) ; relancer index la reprend"))),
+        };
         if dus > 0 {
             return Ok(Some(format!("reste dû : {dus} morceau(x) sans vecteur — sans service d'embarquement, ou réclamés par un autre écrivain ; repris à l'index suivant")));
         }
@@ -739,9 +753,12 @@ fn run_index(
     }
     let dus = {
         let guard = catalog.lock().map_err(|_| "catalogue empoisonné".to_string())?;
-        guard.end_of_index_progress().map(|p| p.dense_missing()).unwrap_or(0)
+        guard.end_of_index_progress().map(|p| p.dense_missing())
     };
-    Ok(Some(format!("{dus} morceau(x) non embarqué(s), à reprendre (relancer index)")))
+    match dus {
+        Ok(dus) => Ok(Some(format!("{dus} morceau(x) non embarqué(s), à reprendre (relancer index)"))),
+        Err(e) => Ok(Some(format!("dette inconnue : la dette restante ne se lit pas ({e}) ; relancer index la reprend"))),
+    }
 }
 
 /// La dette d'embarquement d'un relevé : les vecteurs denses et creux dus.
@@ -1075,7 +1092,7 @@ mod tests {
         let released = index(&|c| c.inject_release_fault());
         let end = released.last().cloned().unwrap_or_default();
         assert!(end.starts_with(&format!("{DONE_LINE} — reste dû : 12 morceau(x)")), "the cause of the end is kept: {released:?}");
-        assert!(end.contains("libération des réclamations") && end.contains("Scope_Chunk") && end.contains("échec simulé"), "the release error and its table are said: {released:?}");
+        assert!(end.contains("libération des réclamations") && end.contains("ScopeContent_Chunk") && end.contains("échec simulé"), "the release error and its table are said: {released:?}");
         let unreadable = index(&|c| c.inject_debt_read_fault());
         let end = unreadable.last().cloned().unwrap_or_default();
         assert!(end.contains("dette inconnue") && end.contains("échec simulé"), "an unreadable debt is said unknown: {unreadable:?}");
