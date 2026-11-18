@@ -741,17 +741,18 @@ fn a_split_that_is_not_json_is_refused_by_name() {
 /// A slice of six turns, in the single form rendered from `Turn` rows: one `## turn <n>` per
 /// turn, one `### <role> · <time>` per message, a tool call with its name, status, params and
 /// result.
+const SIX_TURNS: [&str; 6] = [
+    "SLICEONE la reprise du journal relit chaque enregistrement.",
+    "SLICETWO le WAL se rejoue avant toute écriture.",
+    "SLICETHREE le compositeur figeait à cent pour cent.",
+    "SLICEFOUR à soixante-dix pour cent l’écran reste utilisable.",
+    "SLICEFIVE la reprise ne relit pas deux fois un enregistrement validé.",
+    "SLICESIX le banc mesure le cache de Vertex.",
+];
+
 fn slice_of_six_turns() -> String {
     let mut s = String::from("# run chat:test, turns 1-6\n\n");
-    let said = [
-        "SLICEONE la reprise du journal relit chaque enregistrement.",
-        "SLICETWO le WAL se rejoue avant toute écriture.",
-        "SLICETHREE le compositeur figeait à cent pour cent.",
-        "SLICEFOUR à soixante-dix pour cent l’écran reste utilisable.",
-        "SLICEFIVE la reprise ne relit pas deux fois un enregistrement validé.",
-        "SLICESIX le banc mesure le cache de Vertex.",
-    ];
-    for (i, t) in said.iter().enumerate() {
+    for (i, t) in SIX_TURNS.iter().enumerate() {
         let n = i + 1;
         s.push_str(&format!("## turn {n}\n\n### user · 2026-11-18T20:0{n}:00Z\n\n{t}\n\n### assistant · 2026-11-18T20:0{n}:30Z\n\nCompris.\n\n"));
         if n == 3 {
@@ -811,6 +812,118 @@ fn slice_files_one_l1_per_topic_and_a_residual_for_uncovered_turns() {
     // The report carries what the extraction said about the whole slice.
     assert!(r["result"]["slice_summary"].as_str().is_some_and(|s| s.contains("SUMMARYMARK")), "{r}");
     assert_eq!(r["result"]["open"], json!(["le compositeur"]), "{r}");
+}
+
+/// The same six turns, written as `Turn` rows by put_turn, the way the host writes them at the end
+/// of each turn: seq 0 is the user message.
+fn put_six_turns(b: &Backend) {
+    for (i, t) in SIX_TURNS.iter().enumerate() {
+        let n = i as i64 + 1;
+        appel(b, "put_turn", json!({"run": "chat:test", "turn": n, "seq": 0, "at": format!("2026-11-18T20:0{n}:00Z"), "role": "user", "text": t}));
+        appel(b, "put_turn", json!({"run": "chat:test", "turn": n, "seq": 1, "at": format!("2026-11-18T20:0{n}:30Z"), "role": "assistant", "text": "Compris."}));
+        if n == 3 {
+            appel(b, "put_turn", json!({"run": "chat:test", "turn": 3, "seq": 2, "at": "2026-11-18T20:03:40Z", "role": "tool", "text": "",
+                "tool_name": "read_file", "params": "{\"path\": \"src/compositor.rs\"}", "result": "fn duty() -> u8 { 70 }", "status": "ok"}));
+        }
+    }
+}
+
+/// **put_turn** (18 November 2026): one row per message, keyed by (run, turn, seq): written again,
+/// it stays one row. Secrets are masked before anything is stored, a tool's params are bounded at
+/// 4000 characters and its result at 8000, with the original size said; the call says what it did.
+#[test]
+#[ignore]
+fn put_turn_masks_secrets_bounds_tool_payloads_and_keeps_one_row_per_message() {
+    let dir = tempfile::tempdir().expect("dossier");
+    let b = ouvrir(dir.path(), |_| {});
+    let said = appel(&b, "put_turn", json!({"run": "chat:t", "turn": 1, "seq": 0, "at": "2026-11-18T21:00:00Z", "role": "user",
+        "text": "my token is ghp_0123456789abcdefABCDEF0123456789abcd, keep it"}));
+    assert_eq!(said["result"], json!({"written": true, "masked": 1, "cut": false}), "{said}");
+    appel(&b, "put_turn", json!({"run": "chat:t", "turn": 1, "seq": 0, "at": "2026-11-18T21:00:00Z", "role": "user",
+        "text": "my token is ghp_0123456789abcdefABCDEF0123456789abcd, keep it"}));
+    let long = "x".repeat(9000);
+    let said = appel(&b, "put_turn", json!({"run": "chat:t", "turn": 1, "seq": 1, "at": "2026-11-18T21:00:05Z", "role": "tool", "text": "",
+        "tool_name": "grep_files", "params": format!("{{\"pattern\": \"{}\"}}", "p".repeat(5000)), "result": long, "status": "error"}));
+    assert_eq!(said["result"], json!({"written": true, "masked": 0, "cut": true}), "{said}");
+    let r = appel(&b, "render_turns", json!({"run": "chat:t", "from_turn": 1, "to_turn": 1}));
+    let text = r["result"]["text"].as_str().unwrap();
+    assert_eq!(r["result"]["messages"], json!(2), "one row per (run, turn, seq): {text}");
+    assert_eq!(text.matches("### user").count(), 1, "{text}");
+    assert!(!text.contains("ghp_0123456789") && text.contains("[masked secret]"), "{text}");
+    assert!(text.contains("### tool · 2026-11-18T21:00:05Z · grep_files · error"), "{text}");
+    assert!(text.contains("… (9000 characters)") && !text.contains(&"x".repeat(8001)), "the result is bounded at 8000");
+    assert!(text.contains("characters)") && !text.contains(&"p".repeat(4001)), "the params are bounded at 4000");
+}
+
+/// **One form, written in one place** (archi and mémoire, 18 November 2026): render_turns makes the
+/// slice from the `Turn` rows, and its text is exactly the form the banc sends in `contenu`.
+#[test]
+#[ignore]
+fn render_turns_gives_exactly_the_form_the_banc_sends() {
+    let dir = tempfile::tempdir().expect("dossier");
+    let b = ouvrir(dir.path(), |_| {});
+    put_six_turns(&b);
+    let r = appel(&b, "render_turns", json!({"run": "chat:test", "from_turn": 1, "to_turn": 6}));
+    assert_eq!(r["result"]["text"].as_str().unwrap(), slice_of_six_turns());
+    assert_eq!(r["result"]["turns"], json!([1, 2, 3, 4, 5, 6]));
+    let r = appel(&b, "render_turns", json!({"run": "chat:test", "from_turn": 3, "to_turn": 4}));
+    let t = r["result"]["text"].as_str().unwrap();
+    assert!(t.starts_with("# run chat:test, turns 3-4\n\n## turn 3\n") && t.contains("SLICEFOUR") && !t.contains("SLICEFIVE"), "{t}");
+}
+
+/// **archive_slice by range**, the host's call: no text passes; the tool renders the turns from
+/// their rows, keeps that text as the slice Source (sources/<run slug>-turns-<a>-<b>.md, origin
+/// run_trace), files it in two steps, and says how far the run is archived.
+#[test]
+#[ignore]
+fn archive_slice_by_range_files_the_rendered_turns_and_says_how_far() {
+    let extraction = r#"{"slice_summary": "SUMMARYMARK", "topics": [
+        {"title": "la reprise du journal", "turns": [{"from": 1, "to": 2}, {"from": 5, "to": 5}], "said": "SAIDREPRISE", "open": false, "attributes": []},
+        {"title": "le compositeur", "turns": [{"from": 3, "to": 4}], "said": "SAIDCOMPOSITEUR", "open": true, "attributes": []}
+    ], "not_filed": []}"#;
+    let serveur = FakeServer::start_sequence(vec![
+        text_reply(extraction),
+        etiquette_decrite("create", "La reprise du journal", "Comment le moteur rejoue son journal à l’ouverture."),
+        etiquette_decrite("create", "Le compositeur du portable", "Le compositeur de l’écran du portable et son rapport cyclique."),
+        etiquette_decrite("create", "Le cache de Vertex", "Ce que le cache de Vertex sert sur une fenêtre du banc."),
+    ]);
+    let adresse = serveur.url.clone();
+    let dir = tempfile::tempdir().expect("dossier");
+    let b = ouvrir(dir.path(), |m| {
+        m["models"]["llm"] = json!({"provider": "compatible", "protocol": "openai", "model": "faux", "address": adresse});
+    });
+    put_six_turns(&b);
+    let r = appel(&b, "archive_slice", json!({"run": "chat:test", "from_turn": 1, "to_turn": 6, "jour": "2026-11-18", "allow_create": true}));
+    assert_eq!(r["result"]["errors"], json!([]), "{r}");
+    assert_eq!(r["result"]["archived_through_turn"], json!(6), "{r}");
+    let first: Value = serde_json::from_str(&serveur.request.recv().unwrap()).unwrap();
+    assert!(first["messages"].to_string().contains("read_file · ok"), "the tool call reaches the extraction");
+    let s = appel(&b, "select_sources", json!({"filter": {"field": {"key": "chemin", "value": "sources/chat-test-turns-1-6.md"}}}));
+    let rows = s["result"].as_array().cloned().unwrap_or_default();
+    assert_eq!(rows.len(), 1, "the slice Source: {s}");
+    assert_eq!(rows[0]["data"]["contenu"].as_str().unwrap(), slice_of_six_turns(), "the Source is the rendered slice");
+    assert_eq!(rows[0]["data"]["origine"], json!("run_trace"));
+    assert_eq!(apports_de(&b, "Le cache de Vertex")[0]["section"], json!("turns 6-6 · reste"));
+}
+
+/// A slice whose filing reports an error is not counted as archived: archived_through_turn stays
+/// before it (from_turn - 1), and the host files it again.
+#[test]
+#[ignore]
+fn archive_slice_with_an_error_does_not_advance() {
+    let extraction = r#"{"slice_summary": "s", "topics": [
+        {"title": "la reprise du journal", "turns": [{"from": 1, "to": 6}], "said": "SAIDREPRISE", "open": false, "attributes": []}
+    ], "not_filed": []}"#;
+    let serveur = FakeServer::start_sequence(vec![text_reply(extraction), text_reply("not a label")]);
+    let adresse = serveur.url.clone();
+    let dir = tempfile::tempdir().expect("dossier");
+    let b = ouvrir(dir.path(), |m| {
+        m["models"]["llm"] = json!({"provider": "compatible", "protocol": "openai", "model": "faux", "address": adresse});
+    });
+    put_six_turns(&b);
+    let r = appel(&b, "archive_slice", json!({"run": "chat:test", "from_turn": 1, "to_turn": 6, "jour": "2026-11-18", "allow_create": true}));
+    assert_ne!(r["result"]["errors"], json!([]), "{r}");
+    assert_eq!(r["result"]["archived_through_turn"], json!(0), "{r}");
 }
 
 /// An extraction that is not the requested JSON is refused, naming response_schema: nothing is
