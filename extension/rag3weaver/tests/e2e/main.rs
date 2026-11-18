@@ -126,6 +126,8 @@ mod e2e_drain_unified;
 mod e2e_embarqueur_a_la_demande;
 #[path = "../e2e_embarqueur_absent.rs"]
 mod e2e_embarqueur_absent;
+#[path = "../e2e_embed_parity.rs"]
+mod e2e_embed_parity;
 #[path = "../e2e_entites_derivees.rs"]
 mod e2e_entites_derivees;
 #[path = "../e2e_equipier.rs"]
