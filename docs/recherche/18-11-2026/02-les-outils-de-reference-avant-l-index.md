@@ -77,9 +77,43 @@ duplique rien. B ne vaut son second chemin de lecture que si A coûte trop. À t
 
 ### Le côté codeparsers (codeparsers)
 
-_À écrire par codeparsers : le lecteur de symboles à deux faces, la parité mémoire contre base (sonde, au couple
-près), l'invalidation fichier par fichier (refaire le `CodeAnalysis` d'un fichier, remplacer ses définisseurs et ses
-mentions, rematérialiser les symboles touchés), la borne de taille._
+**Ce qui existe déjà, pour A.** Les sondes de codeparsers (`tests/sonde_marque_nom.rs`) font exactement la forme A :
+`Rag3dbConnection::in_memory`, `register_code_schema`, puis `ingest_code(&analyze(racine, sources))`, avec un
+`HashEmbedder` de dimension 64 à la place du modèle. L'invalidation fichier par fichier existe aussi : c'est le chemin
+de la montre, `code_sync::reingest_file` / `reingest_files` / `remove_file`, qui rappelle `ingest_code_jusqu_a` sur le
+`CodeAnalysis` du fichier. `materialiser_les_symboles(uuids, lot)` ne relit alors que les symboles du lot : une
+mention n'est relue que si sa cible ou son mentionneur est dans le lot (le commentaire « Ne relire que ce qui concerne
+le lot », `code.rs`). A n'a donc rien à écrire côté codeparsers pour exister ; il reste à mesurer et à couper ce que
+l'ingestion fait en trop pour le repli (les morceaux et leurs vecteurs, le plein texte, s'ils ne sont pas déjà
+optionnels).
+
+**B, le lecteur de symboles à deux faces.** `materialiser_les_symboles` lit le `Catalog` par une dizaine d'appels :
+`linked_from_many("DEFINES")`, `linked_from_many_with_kind` / `linked_from_many_where("MENTIONS")`,
+`resoudre_les_types_differes`, `parents_et_fichiers` (parents, fichiers, genres, origines, défaut de trait),
+`base_types_of` (héritage, profondeur `RAG3WEAVER_INHERITANCE_DEPTH`), `noms_des_symboles`. Ces lectures passeraient
+derrière un trait, avec la face « base » d'aujourd'hui et une face « mémoire » bâtie depuis les `CodeAnalysis` de la
+vue : `DEFINES` et `MENTIONS` par symbole, et les rendez-vous qualifiés (`pending_qualifier_types`,
+`pending_import_modules`, `pending_self_types`, `pending_sites`). Le choix ne bouge pas (`choose_target`,
+`choose_inherited`, `departager`). La sortie serait une liste d'arêtes `(de, vers, genre, marque, sites)` au lieu
+d'appels à `link_jusqu_a`. Les outils en voudraient ensuite une lecture de graphe (section 3, B) : c'est le gros du
+coût de B, pas la résolution.
+
+**La parité**, pour l'une et l'autre forme : la sonde de marque compare déjà deux états au couple près (TSV
+`fichier, ligne, scope, nom, cible, marque`). Pour B, elle comparerait les arêtes de la face mémoire à celles de la base
+sur le même arbre ; vert = zéro couple de différence sur rag3weaver/src et le moteur. Pour A, la parité est celle du
+code, mais un témoin reste utile : la même sonde, index réel contre catalogue en mémoire.
+
+**L'invalidation en B.** `analyze` est déjà par fichier. Un fichier écrit : refaire son `CodeAnalysis`, retirer de
+la face mémoire ses définisseurs et ses mentions, ajouter les nouveaux, puis rematérialiser les symboles qu'il définit
+**ou** mentionne, avant comme après (un nom qu'il ne définit plus change la cible des autres). C'est la règle de lot
+de `materialiser_les_symboles`, à recopier, avec le même piège : une définition qui disparaît change les arêtes de
+fichiers que l'on n'a pas relus.
+
+**La borne de taille.** La mémoire est à peu près proportionnelle au nombre de scopes et de mentions. La mesure de la
+section 4 donnera un coût par scope (octets, millisecondes). La borne se fixera dessus : un nombre de fichiers ou
+d'octets de source tel que le repli se bâtisse en quelques secondes et tienne sous quelques centaines de Mio.
+Sur l'arbre figé de la sonde, rag3weaver/src compte 290 fichiers et 16 222 scopes ; `src/` du moteur, 1 550 fichiers
+et 19 057 scopes.
 
 ### Le cycle de vie (recherche)
 
@@ -121,7 +155,10 @@ _Après la fenêtre, sous `poste lourd`._
 
 - **recherche** : la porte et la ligne de réponse, l'aiguillage des outils vers l'image, le cycle de vie, la borne,
   les témoins de bout en bout (rouge d'abord : un backend neuf, `usages` répond avant l'index et le dit).
-- **codeparsers** : _à écrire par codeparsers (le lecteur de symboles, la parité, l'invalidation, les chiffres)._
+- **codeparsers** : les chiffres de la section 4 (une sonde de coût, sous `poste lourd`, après la fenêtre) ; pour A,
+  la liste de ce que l'ingestion fait en trop pour le repli et comment le couper ; pour B, si la mesure le choisit,
+  le lecteur de symboles à deux faces et sa sonde de parité, rouge d'abord (une face mémoire vide ne rend aucune
+  arête là où la base en rend). Aucun code avant le mot de Lucie.
 
 ## Questions pour Lucie
 
