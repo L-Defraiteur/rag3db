@@ -297,6 +297,7 @@ fn reingest_file_retenu(
     // une ligne neuve pour une ligne publiée qui change, la ligne en attente réécrite sur place.
     if catalog.generations.is_some() {
         catalog.naissances.clear();
+        decide_methods_defined_elsewhere(catalog, &mut analysis, &source_id, &BTreeSet::from([indexed_path.clone()]))?;
         let scopes: Vec<&crate::code::ScopeRecord> = analysis.scopes.iter().collect();
         let fichier = analysis.files.iter().find(|f| crate::workspace_path::slash(&f.path) == indexed_path);
         let ecriture = ecrire_par_generations(catalog, &scopes, fichier, &source_id, &indexed_path)?;
@@ -405,6 +406,75 @@ fn ecrire_par_generations(
 ) -> Result<EcritureParGenerations, String> {
     let un = FileToWrite { source_id: source_id.to_string(), chemin: indexed_path.to_string(), scopes: scopes.to_vec(), fichier };
     write_batch_by_generations(catalog, std::slice::from_ref(&un))
+}
+
+/// **A definition outside its class's file is a method** (ticket of 16 November 2026, « l'écrivain décide le
+/// genre d'une méthode définie dans un autre fichier ») : `void Foo::f() {}` in foo.cpp, `class Foo` in foo.h.
+/// The analysis decides the kind only when the parent resolves in the file (code.rs); a parent from another
+/// file waits for the symbol rendezvous, after the row is written, and `scope_type` is a version field: it is
+/// decided here, before the writer, from the classes of the source visible at the pending rank and those of
+/// the batch. Exactly one class of that name makes it a method; none, or several, leave it a function.
+///
+/// **The limit:** if the class's file is indexed after the definition's, in a later batch of the same pass,
+/// the definition stays a function until it is rewritten. No retroactive rewrite: it would make a version
+/// outside the writer.
+fn decide_methods_defined_elsewhere(
+    catalog: &Catalog,
+    analysis: &mut crate::code::CodeAnalysis,
+    source_id: &str,
+    batch_paths: &BTreeSet<String>,
+) -> Result<(), String> {
+    let parent_elsewhere: HashMap<&str, &str> = analysis
+        .pending
+        .iter()
+        .filter(|(_, _, rel)| rel == "HAS_PARENT")
+        .map(|(key, name, _)| (key.as_str(), name.as_str()))
+        .collect();
+    let candidates: Vec<(usize, String)> = analysis
+        .scopes
+        .iter()
+        .enumerate()
+        .filter(|(_, sc)| sc.scope_type == "function")
+        .filter_map(|(i, sc)| parent_elsewhere.get(sc.key.as_str()).map(|name| (i, name.to_string())))
+        .collect();
+    if candidates.is_empty() {
+        return Ok(());
+    }
+    let names: BTreeSet<String> = candidates.iter().map(|(_, n)| n.clone()).collect();
+    // The classes of each name, by key: those of the batch, and the visible ones of the files outside it.
+    let mut classes: HashMap<String, BTreeSet<String>> = HashMap::new();
+    for sc in analysis.scopes.iter().filter(|sc| sc.scope_type == "class" && names.contains(&sc.name)) {
+        classes.entry(sc.name.clone()).or_default().insert(sc.key.clone());
+    }
+    if let Some(v) = catalog.generations.clone() {
+        let visible = catalog.dialect_arc().condition_visible_sur("s", &v.couche, v.rang).ok_or("ce dialecte ne sait pas les générations")?;
+        let p = |n: &str, x: CypherValue| crate::connection::QueryParam::new(n, x);
+        let lu = catalog
+            .execute_raw_with_params(
+                &format!(
+                    "MATCH (s:`{SCOPE}`) WHERE s.source = $src AND s.scope_type = 'class' AND s.name IN $names AND s._couche = $couche AND ({visible}) RETURN s.name, s.key, s.file_path"
+                ),
+                &[
+                    p("src", CypherValue::String(source_id.to_string())),
+                    p("names", CypherValue::List(names.iter().cloned().map(CypherValue::String).collect())),
+                    p("couche", CypherValue::String(v.couche.clone())),
+                ],
+            )
+            .map_err(|e| e.to_string())?;
+        for row in lu.rows {
+            let text = |i: usize| row.get(i).and_then(|x| x.as_str()).unwrap_or("").to_string();
+            if batch_paths.contains(&text(2)) {
+                continue;
+            }
+            classes.entry(text(0)).or_default().insert(text(1));
+        }
+    }
+    for (i, name) in candidates {
+        if classes.get(&name).is_some_and(|keys| keys.len() == 1) {
+            analysis.scopes[i].scope_type = "method".to_string();
+        }
+    }
+    Ok(())
 }
 
 /// Un fichier du lot de l'écrivain : son grain, ses scopes analysés (aucun pour un fichier qui part)
@@ -887,7 +957,7 @@ fn reingest_files_retenu(
     let presents: Vec<(String, String)> =
         files.iter().filter_map(|(p, c)| c.as_ref().map(|c| (p.clone(), c.clone()))).collect();
     // Une analyse pour tous les présents, la liste du projet lue une fois.
-    let analysis = if presents.is_empty() {
+    let mut analysis = if presents.is_empty() {
         None
     } else {
         let t = std::time::Instant::now();
@@ -914,6 +984,10 @@ fn reingest_files_retenu(
         })
         .collect();
     if catalog.generations.is_some() {
+        if let (Some(a), Some(premier)) = (analysis.as_mut(), fichiers.first()) {
+            let chemins: BTreeSet<String> = fichiers.iter().map(|f| f.indexed_path.clone()).collect();
+            decide_methods_defined_elsewhere(catalog, a, &premier.source_id, &chemins)?;
+        }
         return reingest_files_par_generations(catalog, analysis.as_ref(), &fichiers, exige);
     }
     let mut scopes_par_fichier: HashMap<String, Vec<String>> = HashMap::new();

@@ -2072,8 +2072,8 @@ pub fn analyze_in_project_avec(
     // **Une définition hors de sa classe est une méthode** (15 novembre 2026, voie (a) de l'orchestration) :
     // `void Foo::f() {}` arrive de codeparsers en `function`, puisque `kz::f()` (une fonction d'un namespace)
     // a la même forme. Le genre se décide ici, quand le parent résolu dans le fichier est une classe ;
-    // sous un namespace, elle reste une fonction. (Le parent d'un autre fichier, résolu au rendez-vous, ne
-    // change pas le genre d'une ligne publiée : ticket du même jour.)
+    // sous un namespace, elle reste une fonction. (Le parent d'un autre fichier : l'écrivain en décide avant
+    // d'écrire, sur les classes visibles de la source, `code_sync::decide_methods_defined_elsewhere`.)
     let vers_une_classe: std::collections::HashSet<String> = analysis
         .relations
         .iter()
