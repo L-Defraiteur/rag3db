@@ -26,6 +26,8 @@ mod meta;
 mod read;
 
 /// A declared relation table: its two ends and its properties.
+// Read by the families as they are written (the skeleton refuses them all).
+#[allow(dead_code)]
 #[derive(Debug, Clone, Default)]
 pub(crate) struct RelTable {
     pub from: String,
@@ -34,6 +36,7 @@ pub(crate) struct RelTable {
 }
 
 /// What the connection holds: the image, the meta, and the tables the DDL declared.
+#[allow(dead_code)]
 #[derive(Debug, Default)]
 pub(crate) struct State {
     pub image: MemoryImage,
@@ -65,6 +68,7 @@ pub(crate) fn not_written(family: &str, op: &str) -> DbError {
 }
 
 /// The value of a named parameter.
+#[allow(dead_code)]
 pub(crate) fn param<'a>(params: &'a [QueryParam], name: &str) -> Option<&'a crate::connection::CypherValue> {
     params.iter().find(|p| p.name == name).map(|p| &p.value)
 }
