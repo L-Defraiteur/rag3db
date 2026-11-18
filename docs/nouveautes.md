@@ -9,6 +9,10 @@
 - 18 novembre2026 — Dans le terminal de l'agent, ce qu'on tape pendant une commande `!` ne se garde plus jamais dans sa sortie, même tapé avant que la commande coupe l'écho : un mot de passe tapé avant l'invite de `sudo` se voit à l'écran, comme dans tout terminal, mais n'entre ni dans la consigne envoyée à l'équipier, ni dans le journal.
 
 - 18 novembre2026 — Dans le terminal de l'agent, ce qu'il attend se dit dans le style du thème : pendant une écriture, le verbe de la cause se déforme en glyphes du thème, un caractère à la fois ; pendant une réflexion ou une lecture, la cause prend la couleur du halo. Ce qu'elle nomme (outil, cible, modèle, durée) reste lisible.
+- 18 novembre 2026 — **Un fournisseur mort au démarrage est nommé.** Le refus disait « « rag3weaver-embeddings » est
+  mort avant de répondre » quel que soit le programme lancé par l'activation (une fixture, un fournisseur tiers, une
+  copie renommée). Il nomme désormais le programme à côté du type de service : « « rag3weaver-embeddings »
+  (fournisseur.py) est mort avant de répondre (code 70) ». De même pour un fournisseur qui vit sans répondre.
 
 - 18 novembre2026 — **En Python et en C, une fonction nommée `default`, `from` ou `of` est un appel.** Les mots ignorés de Python et de C étaient ceux de JavaScript ; ils viennent maintenant du langage (les mots-clés de Python, les mots réservés de la grammaire C). Sur les fichiers Python du dépôt, 3 liens de plus ; le C ne change pas. **Toutes les bases repassent une fois** (pointeur codeparsers : les mots vides en données, `72ab7a8`).
 
