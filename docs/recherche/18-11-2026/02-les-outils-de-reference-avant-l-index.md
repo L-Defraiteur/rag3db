@@ -141,9 +141,37 @@ _Après la fenêtre, sous `poste lourd`._
 
 | Arbre | Fichiers | Parsing | Tables | Choix | Mémoire | A (catalogue en mémoire) | Relations lisibles dans l'index | Index complet |
 |---|---|---|---|---|---|---|---|---|
-| `extension/rag3weaver/src` | | | | | | | | |
-| dépôt entier | | | | | | | | |
+| `extension/rag3weaver/src` | 311 (17 387 scopes) | | | | | | 46 s | 46 s (plein texte seul) |
+| dépôt entier | 8 585 (82 393 scopes) | | | | | | partiel dès 99 s ; 704 lignes sur 705 à 143 s ; tout à 192 s | 194 s (plein texte seul) |
 | noyau Linux (ordre de grandeur) | | | | | | | | |
+
+### Ce que dit la chronologie d'un premier index (recherche, 18 novembre 2026)
+
+**Le relevé** : sonde `probe_index_timeline` à luciepc, lib 3d706f709, sans service d'embarquement (plein texte seul,
+vecteurs en dette), sur une base neuve. La sonde lit l'état d'index chaque seconde et appelle `usages Catalog`
+toutes les deux secondes. Journaux : `~/.cache/rag3weaver-build/probe-index-rw-src.log` et `probe-index-depot.log`.
+
+**`extension/rag3weaver/src`** (311 fichiers, 17 387 scopes) :
+- de 0 à 36 s, le plein texte se pose (analyse et ingestion) ;
+- de 36 à 46 s, les relations : 269 292 liens en file, 86 525 relations posées ;
+- `usages Catalog` rend **0 ligne jusqu'à 46 s**, puis 236 lignes. Pendant tout l'index, l'état ne dit que
+  « occupé ».
+
+**Le dépôt entier** (8 585 fichiers indexés, 82 393 scopes, 291 288 relations) :
+- le plein texte est posé à 164 s, et les dernières relations à 192 s ;
+- les relations arrivent **paquet par paquet**, pas seulement à la fin. `usages Catalog` rend 3 lignes à 99 s,
+  704 sur 705 à 143 s (quand les paquets de rag3weaver sont passés), puis 705 à 192 s ;
+- un agent qui cherche un nom attend donc entre une et trois minutes selon l'ordre des paquets, sans savoir si la
+  réponse est complète.
+
+**Ce que ça dit pour la conception** :
+- **la durée à battre** : 46 s sur rag3weaver seul, environ 3 min sur le dépôt. Les vecteurs n'y comptent pas : les
+  relations n'attendent pas l'embarquement ;
+- **l'index réel répond déjà en partie avant la fin**, sans le dire. La porte du §2 doit couvrir ce cas : les
+  relations sont partielles (`relations` pas `ready`, ou la couche a du retard) et pas seulement absentes. La ligne
+  « index en cours » vaut aussi pour une réponse qui vient de l'index partiel ;
+- un relevé à faire avec la sonde de codeparsers : **A sur le dépôt entier**. Si l'ingestion en mémoire, sans
+  plein texte ni morceaux, tient en une dizaine de secondes, le repli bat l'index d'un facteur 10 à 20.
 
 ## 5. Ce que le repli n'a pas (recherche)
 
