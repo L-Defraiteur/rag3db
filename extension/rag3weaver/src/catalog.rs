@@ -323,6 +323,12 @@ pub struct Catalog {
     /// les segments lucivy restent dans le tampon, et partent en une fois
     /// (`push_deferred_blobs`).
     defer_blob_push: bool,
+    /// **The derivations are held back** (`defer_derivations`): during the batches of a first index, the derived
+    /// entities of a batch (`ScopeContent` for the code) are queued here with their debt, not drained, so that the
+    /// relations are posed first; `release_deferred_derivations` drains them after.
+    defer_derivations: bool,
+    /// The derivations held back by `defer_derivations`, in the order they came.
+    deferred_derivations: Vec<crate::records::Derivation>,
     /// **Les tables de nœuds repliées sur MERGE dans la transaction en
     /// cours** : elles y restent jusqu'à sa validation. Le moteur refuse un
     /// COPY dans une table où la même transaction a déjà inséré des lignes
@@ -758,6 +764,8 @@ fn read_threads() -> u64 {
             checkpoints_in_transaction: false,
             fresh_ingest: None,
             defer_blob_push: false,
+            defer_derivations: false,
+            deferred_derivations: Vec::new(),
             merge_in_transaction: HashSet::new(),
             fts_tampon: None,
             peut_devoir_un_redecoupage: false,
@@ -8524,6 +8532,21 @@ fn read_threads() -> u64 {
     /// durable posée ([`mark_fts_pending`](Self::mark_fts_pending)) : un arrêt
     /// brutal laisse alors des lignes sans leur plein texte, et la marque le
     /// dit.
+    /// **Hold the derivations back** for the batches of a first index (the reference tools before the index,
+    /// decision C of Lucie, 18 November 2026): the relations of the code do not read the derived entities, and
+    /// draining them per batch kept the relations waiting (15 s of 42 on rag3weaver/src, 96 s of 196 on the whole
+    /// repository). Turned off by [`release_deferred_derivations`](Self::release_deferred_derivations).
+    pub fn defer_derivations(&mut self, on: bool) {
+        self.defer_derivations = on;
+    }
+
+    /// **The derivations held back, drained now**, after the relations: turns the hold off and drains them like a
+    /// batch would have. A no-op when nothing was held.
+    pub fn release_deferred_derivations(&mut self, _exige: crate::disponibilite::Disponibilites) -> FlushResult {
+        self.defer_derivations = false;
+        FlushResult::default()
+    }
+
     pub fn defer_blob_push(&mut self, on: bool) {
         self.defer_blob_push = on;
     }
