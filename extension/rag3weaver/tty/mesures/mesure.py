@@ -210,6 +210,29 @@ resultats = {"hote": HOTE, "lanceur": LANCEUR, "date": time.strftime("%Y-%m-%d %
 themes = json.load(open(THEMES))
 
 
+def ecran_tmux():
+    if not LANCEUR.startswith("tmux"):
+        return None
+    nom = seance[-1]
+    cmd = f"tmux -L {nom} capture-pane -p -t {nom}"
+    if LANCEUR in ("tmux-local", "tmux-local-ouvert"):
+        return subprocess.run(cmd.split(), capture_output=True, text=True).stdout
+    return ssh(cmd)
+
+
+def voir(t, texte, apres=0.0, borne=20.0):
+    """**Waits until `texte` is visible** (screen_oracle, 18 nov.): under tmux, on the screen tmux shows,
+    since tmux redraws itself and sends only what changed; elsewhere, in the bytes received after `apres`."""
+    from screen_oracle import visible
+    fin = time.monotonic() + borne
+    while time.monotonic() < fin:
+        ecran = ecran_tmux() if LANCEUR.startswith("tmux") else None
+        if visible(texte, t.tout(), ecran, LANCEUR.startswith("tmux")) and (ecran is not None or t.attendre(texte.encode(), apres=apres, borne=0.1) is not None):
+            return time.monotonic()
+        time.sleep(0.2)
+    return None
+
+
 def rouge(quoi):
     resultats["rouges"].append(quoi)
     print("ROUGE", quoi, flush=True)
@@ -501,16 +524,6 @@ for kitty in (True, False):
 # 1f. Les appels d'outil qu'on lit (tty-11) : numérotés, l'extrait coupé qui le dit, et Ctrl-O qui ouvre la
 #     visionneuse dans un écran alterné ; ← l'appel d'avant, Fin, Échap. Sous tmux, l'écran principal capturé
 #     avant et après doit être le même : la visionneuse ne l'a pas touché.
-def ecran_tmux():
-    if not LANCEUR.startswith("tmux"):
-        return None
-    nom = seance[-1]
-    cmd = f"tmux -L {nom} capture-pane -p -t {nom}"
-    if LANCEUR in ("tmux-local", "tmux-local-ouvert"):
-        return subprocess.run(cmd.split(), capture_output=True, text=True).stdout
-    return ssh(cmd)
-
-
 hote_demarrer()
 tunnel = subprocess.Popen(["sleep", "86400"] if LOCAL else ["ssh", "-N", "-o", "BatchMode=yes", "-L", f"{TUNNEL}:127.0.0.1:{PORT}", HOTE])
 time.sleep(1.5)
@@ -526,13 +539,13 @@ try:
     avant = ecran_tmux()
     t0 = t.ecrire(b"\x0f")
     entre = t.attendre(b"\x1b[?1049h", apres=t0, borne=5) is not None
-    deux = t.attendre("⟨2/2⟩".encode(), apres=t0, borne=5) is not None
+    deux = voir(t, "⟨2/2⟩", apres=t0, borne=5) is not None
     t0 = t.ecrire(b"\x1b[D")
     # ratatui ne réécrit que les cellules qui changent : « ⟨1/2⟩ » ne part pas entier ; une ligne que
     # seule la lecture porte, si.
-    un = t.attendre(b"let x1 = 1;", apres=t0, borne=5) is not None
+    un = voir(t, "let x1 = 1;", apres=t0, borne=5) is not None
     t0 = t.ecrire(b"\x1b[F")
-    fin_vue = t.attendre("extrait, 4 Ko sur 16 Ko".encode(), apres=t0, borne=5) is not None
+    fin_vue = voir(t, "extrait, 4 Ko sur 16 Ko", apres=t0, borne=5) is not None
     time.sleep(0.6)
     t0 = t.ecrire(b"\x1b")
     sort = t.attendre(b"\x1b[?1049l", apres=t0, borne=5) is not None

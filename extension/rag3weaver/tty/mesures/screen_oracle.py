@@ -3,5 +3,8 @@ judges, since tmux redraws the screen itself and only sends what changed; elsewh
 
 
 def visible(text, raw, screen, under_tmux):
-    """Is `text` visible: on `screen` (the text of `capture-pane`) under tmux, else in `raw` (the bytes)."""
-    return False
+    """Is `text` visible: on `screen` (the text of `capture-pane`) under tmux, else in `raw` (the bytes).
+    Under tmux without a screen (the session already closed), the bytes say what they can."""
+    if under_tmux and screen is not None:
+        return text in screen
+    return text.encode() in raw
