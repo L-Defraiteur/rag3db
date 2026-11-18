@@ -69,6 +69,18 @@ if [ -x $W/tools/poste/required_suites.sh ] && [ -s $J/base ]; then
   [ -n "$EXIGEES" ] && echo "suites exigées par le lot : $(echo "$EXIGEES" | awk '{printf "%s%s (%s)", (NR > 1 ? ", " : ""), $1, $2}')" >> $R
 fi
 EXIGEES_NOMS=$(echo "$EXIGEES" | awk 'NF {print $1}' | tr '\n' ' ')
+# **Un test non jugé n'est pas un test passé** (18 novembre 2026, ticket de c7) : un test qui dit « non jugé : … » et rend
+# la main compte parmi les passés de cargo (e2e_lectures, sous une lib d'avant le format 43). Chaque journal est relu : ses
+# non-jugés sont listés à part, comptés, et un non-jugé du témoin ou d'une suite exigée rend la passe rouge.
+NON_JUGES=0
+non_juges() { # <journal> <nom> : ajoute au résumé les non-jugés du journal, et rend leur nombre
+  local n; n=$(grep -c '^non jugé : ' "$1" 2>/dev/null); n=${n:-0}
+  if [ "$n" -gt 0 ]; then
+    echo "non jugés dans $2 : $n — $(grep -m1 '^non jugé : ' "$1")" >> $R
+    NON_JUGES=$((NON_JUGES + n))
+  fi
+  return "$n"
+}
 echo "== témoin" >> $R
 # SUITE_DU_TEMOIN=lib (15 novembre 2026, ticket d'hotfixs) : le témoin est un test de la lib, joué par `run_e2e.sh --lib`.
 if [ "${SUITE_DU_TEMOIN:-}" = lib ]; then
@@ -79,6 +91,7 @@ fi
 grep -E '^test result|panicked at' $J/temoins.log >> $R
 [ "$SEUL" = temoins ] && { echo "TEMOINS code=$c" >> $R; exit $c; }
 [ $c = 0 ] || rouge "témoin (code=$c)"
+non_juges $J/temoins.log témoin || rouge "témoin : $(grep -c '^non jugé : ' $J/temoins.log) test non jugé (un témoin doit juger)"
 
 # SUITES=<liste> (14 novembre 2026, au mot de c7) : la liste des suites e2e remplace celle par défaut
 # (e2e_lectures, e2e_code, SUITE_DU_TEMOIN, SUITES_EN_PLUS) ; SUITES=- n'en joue aucune. Le témoin,
@@ -101,6 +114,9 @@ for suite in $(echo $LISTE_DES_SUITES | tr " " "\n" | awk 'NF && !vu[$0]++'); do
   [ $c = 0 ] || rouge "$suite (code=$c)"
   # Une suite non jouée faute de feature est rouge (procédure, 7 novembre 2026).
   grep -q 'NON JOUÉES' $J/$suite.log && rouge "$suite : des suites non jouées faute de feature"
+  if ! non_juges $J/$suite.log $suite && echo " $EXIGEES_NOMS " | grep -q " $suite "; then
+    rouge "$suite : suite exigée par le lot, et un de ses tests est non jugé"
+  fi
 done
 
 echo "== check_features" >> $R
@@ -132,4 +148,5 @@ elif [ -n "${5:-}" ]; then
   [ $c = 0 ] || rouge "témoin navigateur (code=$c)"
 fi
 echo "suites jouées :${JOUEES:- aucune}" >> $R
+echo "tests non jugés : $NON_JUGES" >> $R
 echo VERT >> $R

@@ -338,4 +338,15 @@ seuls() { # seuls <attendu: tenue|arret> <description> <motif d'arrêt|-> <prove
 seuls tenue "un test du shell seul, binaire nommé avec sa provenance" - oui tools/shell/test/test_x.py
 seuls arret "un test du shell et un fichier du moteur" "src/x.cpp" oui tools/shell/test/test_x.py src/x.cpp
 seuls arret "un test du shell, journal sans provenance" "tested binary" non tools/shell/test/test_x.py
+# **Un non-jugé dans une suite exigée** (18 novembre 2026, ticket de c7) : la garde le refuse, comme une suite non jouée.
+nonjuge() { # nonjuge <attendu: tenue|arret> <description> <ligne à ajouter au journal de la suite>
+  git checkout -q "$BASE" 2>/dev/null; mkdir -p extension/rag3weaver/src; echo '// lot' > extension/rag3weaver/src/code_sync.rs; git add -- extension/rag3weaver/src/code_sync.rs; git commit -qm "$2"; N=$(git rev-parse HEAD)
+  local J; J=$(mktemp -d); printf 'commit x\n== e2e_code_sync\ntest result: ok. 20 passed; 0 failed;\n' > "$J/resume.log"
+  printf 'test result: ok. 20 passed; 0 failed;\n%s\n' "$3" > "$J/e2e_code_sync.log"
+  local sortie rc; sortie=$(bash "$GARDE" --required-suites "$BASE" "$N" "$J" 2>&1); rc=$?; rm -rf "$J"
+  if { [ "$1" = tenue ] && [ $rc = 0 ]; } || { [ "$1" = arret ] && [ $rc != 0 ] && echo "$sortie" | grep -q "non jugé"; }; then echo "vert   non-jugé, $1 : $2"
+  else echo "ROUGE  non-jugé, attendu $1 (rc $rc) : $2 — $sortie"; rouge=1; fi
+}
+nonjuge arret "e2e_code_sync exigée, un test non jugé dans son journal" "non jugé : la lib n'a pas la colonne state"
+nonjuge tenue "e2e_code_sync exigée, aucun non-jugé" "fin"
 exit $rouge
