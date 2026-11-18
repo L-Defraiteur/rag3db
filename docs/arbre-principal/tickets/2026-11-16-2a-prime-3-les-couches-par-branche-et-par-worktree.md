@@ -1,13 +1,15 @@
 # 2a′-3 : écrire les couches par branche et par worktree
 
-- **État** : ouvert (16 novembre 2026), arbre principal ; conception posée, code à écrire.
+- **État** : ouvert (16 novembre 2026), arbre principal ; conception posée. Le 18 novembre, découpé en sept lots
+  (`docs/arbre-principal/18-11-2026/03-2a-prime-3-en-sept-lots.md`, à relire par Lucie pour la forme) ; lot 1 en cours.
 - **Famille** : produit
 - **Gravité** : fonctionnalité attendue ; sans elle, seule la couche `backend` a des générations, et toute vue
   sur une branche ou un worktree se refuse (« couche sans génération »).
 - **Atteignable en service** : oui, dès qu'un outil reçoit `view` sur une autre couche que `backend`.
 - **Touche rag3weaver** : oui (`src/suivies.rs`, `src/code_sync.rs`, `src/catalog.rs`, `src/generations.rs`,
   la montre `src/watch.rs`, le manifeste `tracked.writes`).
-- **Pour** : arbre principal ; à faire par Codex à partir de la passation du 16 novembre.
+- **Pour** : arbre principal. La passation à Codex du 16 novembre n'a rien donné sur ce point ; arbre principal le reprend
+  le 18 novembre.
 - **Signalé par** : arbre principal et c7, 16 novembre 2026.
 
 ## Ce que c'est
@@ -25,5 +27,5 @@ qui prolonge `docs/arbre-principal/14-11-2026/03-2a-prime-3-ce-que-les-suivies-a
 
 ## Ce qu'il faut pour le fermer
 
-Les sept témoins de la page, rouges d'abord, puis verts ; la passe épinglée avec `e2e_code_sync` (exigée par
-`tools/poste/required_suites.txt`).
+Les sept lots de la page du 18 novembre, chacun avec son témoin rouge d'abord, puis vert ; la passe épinglée avec
+`e2e_code_sync` (exigée par `tools/poste/required_suites.txt`).
