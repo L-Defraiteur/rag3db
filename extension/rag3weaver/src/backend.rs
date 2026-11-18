@@ -8848,6 +8848,55 @@ mod tests {
         assert_eq!(catalog.file_lag().estimate(&cell), Some(crate::catalog::retard::IndexEstimate { pending_files: 1, eta_ms: Some(300) }));
     }
 
+    /// **A read under its up-to-date view does not wait for another layer** (Lucie, 18 November 2026: « if I
+    /// index in my session for one worktree and someone else works on another, they should not be blocked in
+    /// "indexing in progress", they should know theirs is already there »). A lag is put by hand in another
+    /// layer; the read under the backend's view neither waits nor says « not ready »: its view is up to date,
+    /// and the other one is named.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_read_under_its_up_to_date_view_does_not_wait_for_another_layer() {
+        use crate::catalog::retard::{now_ms, LagKey, LayerId};
+        let (_dir, backend) = backend_with_read_freshness(Some(3));
+        {
+            let cat = backend.catalog.lock().unwrap();
+            let key = LagKey { cell: cat.scope().clone(), layer: LayerId("worktree-a".into()) };
+            cat.file_lag().note_in(&key, "src/autre.rs", now_ms());
+        }
+        let t = std::time::Instant::now();
+        let answer = backend.call("usages", json!({"name": "depart"})).expect("usages");
+        assert!(t.elapsed() < std::time::Duration::from_secs(1), "no wait for another layer: {:?}", t.elapsed());
+        assert_eq!(answer["index"], json!({"ready": true, "other_views": [{"layer": "worktree-a", "pending_files": 1}]}), "{answer}");
+        let text = answer["result"].to_string();
+        assert!(text.contains("ta vue est à jour") && text.contains("la vue worktree-a s'indexe : 1 fichier(s)"), "{text}");
+    }
+
+    /// **A read under another view waits only for its own layer.** The view « enfant » is posed by hand on the
+    /// backend's generation; a lag is put in the backend's layer. Under `view: enfant`, the read does not wait
+    /// for it, says its view is up to date, and names the backend's.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_read_under_another_view_waits_only_for_its_own_layer() {
+        use crate::catalog::retard::{now_ms, LagKey};
+        let (_dir, backend) = backend_with_read_freshness(Some(3));
+        let under_backend = backend.call("usages", json!({"name": "depart", "view": {"layer": "backend"}})).expect("the backend view");
+        let rank = under_backend["view"]["rank"].as_i64().expect("the backend's rank");
+        {
+            let cat = backend.catalog.lock().unwrap();
+            cat.execute_raw(&format!(
+                "CREATE (:_generation {{_key: 'enfant:1', couche: 'enfant', rang: 1, commit: '', base: '', recette: '', \
+                 parente_couche: 'backend', parente_rang: {rank}, tombstones: '[]', publiee_le: 0}})"
+            ))
+            .expect("the child's generation");
+            cat.file_lag().note_in(&LagKey::backend(cat.scope()), "outils.rs", now_ms());
+        }
+        let t = std::time::Instant::now();
+        let answer = backend.call("usages", json!({"name": "depart", "view": {"layer": "enfant"}})).expect("usages under enfant");
+        assert!(t.elapsed() < std::time::Duration::from_secs(1), "no wait for the backend's layer: {:?}", t.elapsed());
+        assert_eq!(answer["index"], json!({"ready": true, "other_views": [{"layer": "backend", "pending_files": 1}]}), "{answer}");
+        assert!(answer["result"].to_string().contains("la vue backend s'indexe : 1 fichier(s)"), "{answer}");
+    }
+
     /// **Une vue inconnue est refusée avant toute lecture** (page 28 d'arbre,
     /// contre-exemple de la vue inconnue) : le refus la nomme, et rien n'est lu
     /// sous une autre vue, ni l'ancre ni le disque.
