@@ -622,6 +622,33 @@ Les témoins :
 - `read_turns` sur ce L1 rend ses tours `indexed` ;
 - après la purge du TTL, le même appel rend `from_chat_file` par l'hôte, ou `gone` hors de l'hôte.
 
+### La chaîne dans l'autre sens : du tour à sa tranche, à ses L1, à leurs fiches
+
+Lucie : « la tranche de tours a une référence à une session ou une tranche, et cette tranche a une
+référence vers les L1 de l'archiviste ».
+
+1. **Un tour connaît sa tranche dès son écriture, sans réécriture.** Le `source` d'une ligne `Turn`
+   est le chemin de la Source de sa tranche (`sources/<run>-turns-<a>-<b>.md`), fixé à
+   l'**ouverture** de la tranche. `Turn` reste en ajout seul : on n'écrit rien sur lui à la
+   fermeture. Ce qui distingue une tranche ouverte d'une tranche fermée, c'est l'existence de sa
+   Source (écrite à la fermeture), et non un champ du tour. Archi n'a donc pas d'écriture de
+   tranche à faire sur `Turn`.
+2. **La Source de tranche est l'entité navigable** : son run, son intervalle, son
+   `slice_summary`, le rapport de l'archiviste rendu sur elle (§ b), et **la liste des L1 qu'elle a
+   produits**, chacun avec sa fiche. `cited_by` sur une Source la donne déjà. Un outil
+   `get_slice(path)` la rend **en clair** :
+   `{run, from_turn, to_turn, state: "open" | "closed", slice_summary, report, l1: [{apport, section, fiche}]}`.
+   Une tranche encore ouverte rend `state: "open"`, avec ses tours et sans L1.
+3. **Le run liste ses tranches dans l'ordre** : `list_slices(run)`, par `from_turn`, avec pour
+   chacune son état et le nombre de ses L1.
+4. **En un appel, depuis un tour, « d'où vient-il et qu'en a-t-on retenu »** :
+   `trace_turn(run, turn)` rend le tour, sa tranche (`get_slice`), les L1 qui couvrent ce tour
+   (ceux dont `from_turn ≤ turn ≤ to_turn`) et leurs fiches.
+
+**Le témoin, aller et retour** : un tour, puis sa tranche, puis ses L1, puis leurs fiches ; et
+depuis une fiche, un L1, puis `read_turns`, puis le même tour. Tout cela sur une tranche fermée,
+puis sur une tranche encore ouverte (`state: "open"`, sans L1).
+
 ### Une graine, pas un lot : le composeur de contexte de début de session
 
 Lucie, le 18 novembre : « un agent spécialiste d'organiser un début de session pour l'agent ».
