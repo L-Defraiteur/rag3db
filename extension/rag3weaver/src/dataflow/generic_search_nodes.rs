@@ -470,7 +470,16 @@ impl Node for SearchSourceNode {
             // embarquements, et son test « le journal d'une conversation ne
             // fait pas croire le code indexé »).
             SearchMode::Auto => match crate::dataflow::catalog_read::lock_for_read(&catalog) {
-                Some(cat) => adaptive_search_decision(cat.index_state_for(&self.target_name).ok(), has_source && !projected),
+                Some(cat) => {
+                    let state = cat.index_state_for(&self.target_name).ok();
+                    // **Before any index, without a view** (Lucie, 18 November 2026): no admission
+                    // mask exists yet, the only view is the backend's worktree, and its files are what
+                    // the scan reads. Under an explicit `view`, or once an index exists, a projection
+                    // never falls back on unmasked files (c67ca39c6).
+                    let never_indexed = state.as_ref().is_some_and(|s| s.text == crate::catalog::Level::Never);
+                    let explicit_view = ctx.service::<crate::views::ViewRequest>(crate::views::REQUESTED_VIEW_SERVICE).is_some();
+                    adaptive_search_decision(state, has_source && (!projected || (never_indexed && !explicit_view)))
+                }
                 None if has_source && !projected => (
                     true,
                     Some(format!(
