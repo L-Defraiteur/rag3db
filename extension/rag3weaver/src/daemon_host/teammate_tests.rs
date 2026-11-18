@@ -2065,11 +2065,15 @@ impl crate::daemon_host::rangement::Rangeur for TurnsOnly {
 #[test]
 fn the_teammate_steps_go_to_the_memory_as_they_go() {
     let d = tempfile::tempdir().unwrap();
-    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let (depot, manifeste) = depot_inscrit(d.path(), true);
     let mut m: Value = serde_json::from_str(&std::fs::read_to_string(&manifeste).unwrap()).unwrap();
     m["bilans"] = json!({ "memoire": "memoire/backend.json" });
     m["memory"] = json!({ "slice_tokens": 30 });
     std::fs::write(&manifeste, serde_json::to_string_pretty(&m).unwrap()).unwrap();
+    // The task takes the manifest as committed in the repository.
+    for args in [&["add", "-A"][..], &["commit", "-q", "-m", "the memory of the session"]] {
+        assert!(std::process::Command::new("git").arg("-C").arg(&depot).args(args).status().unwrap().success());
+    }
     let model: ChatModel = Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
         Ok(Arc::new(CallbackLlm::new("archived-steps", 8192, |turns, opts, sink| {
             answer(turns, opts, sink, &"y".repeat(200), calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "said hello", "remaining": "" }))]))
