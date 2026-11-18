@@ -16,8 +16,27 @@ pub fn memory_image_of(_analysis: &CodeAnalysis) -> MemoryImage {
 /// **The code schema for the reference tools**: files, scopes, libraries, symbols and their relations, without
 /// the derived content (`ScopeContent`), chunks, vectors or full text. What the fallback needs, and nothing it
 /// would have to derive.
+///
+/// No form stamp, no generations: the fallback is one image of the worktree as it is on disk, never written to a
+/// base. The analysis version is the full schema's, so that a version written from here would be the same.
 pub fn register_code_schema_for_references(catalog: &mut crate::Catalog) -> Result<(), crate::catalog::CatalogError> {
-    crate::code::register_code_schema(catalog, crate::code::default_scope_chunking())
+    use crate::code::{FILE, LIBRARY, RELATIONS, SCOPE, SYMBOL};
+    let chunking = crate::code::default_scope_chunking();
+    catalog.version_de_l_analyse = crate::code::version_de_l_analyse(&chunking);
+    let (mut entities, mut relations) = crate::code::schema_configs(chunking);
+    for name in [FILE, SCOPE, LIBRARY, SYMBOL] {
+        let mut config = entities.remove(name).expect("an entity of the code schema");
+        config.chunked = Some(false);
+        config.signals = crate::search::SearchSignals::NONE;
+        config.search_index = None;
+        config.derived = None;
+        catalog.register_entity(name, config)?;
+    }
+    for (name, _, _) in RELATIONS {
+        let relation = relations.remove(name).expect("a relation of the code schema");
+        catalog.register_relation_with(name, &relation.from, &relation.to, relation.properties.unwrap_or_default())?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
