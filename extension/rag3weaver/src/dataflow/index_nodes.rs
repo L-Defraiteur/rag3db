@@ -1103,6 +1103,40 @@ mod tests {
         assert!(!end.contains("reste dû : 0") && !end.contains(" 0 morceau"), "never a debt of zero: {unreadable:?}");
     }
 
+    /// **A finished index publishes its generation** (2a′-3, lot 2; ticket of 16 November 2026, « une vue sans rang
+    /// lit l'état de la bascule tant que rien ne publie »): on a base with generations, the backend's layer publishes
+    /// its pending rank when the journal says « terminée ». A view without rank then reads what a call without view
+    /// reads: no row of the layer is born after the published rank.
+    #[cfg(all(feature = "rag3db-native", feature = "code"))]
+    #[test]
+    fn a_finished_index_publishes_its_generation() {
+        let fichiers: Vec<(String, String)> = (0..3).map(|i| (format!("src/f{i}.rs"), format!("pub fn f{i}() -> u32 {{ {i} }}\n"))).collect();
+        let source: Arc<dyn FileSource> = Arc::new(Snapshot::new("depot", fichiers));
+        let conn = crate::Rag3dbConnection::in_memory().expect("base en mémoire");
+        let config = crate::CatalogConfig { name: Some("publie".into()), embedding_dim: 4, ..Default::default() };
+        let mut catalog = Catalog::new(Box::new(conn), Box::new(crate::embedder::AbsentEmbedder::new("absent", 4)), config);
+        catalog.initialize().unwrap();
+        crate::code::register_code_schema(&mut catalog, crate::code::default_scope_chunking()).unwrap();
+        let avant = catalog.rang_publie().expect("une base à générations");
+        let catalog = Arc::new(Mutex::new(catalog));
+        let journal = new_index_journal().expect("journal");
+        spawn_index(catalog.clone(), source, journal.clone(), 0, Default::default()).join().expect("le fil d'indexation");
+        let lignes: Vec<String> = std::fs::read_to_string(&journal).unwrap().lines().map(String::from).collect();
+        let _ = std::fs::remove_file(&journal);
+        assert!(lignes.last().is_some_and(|l| l.starts_with(DONE_LINE)), "the index did not finish: {lignes:?}");
+        let cat = catalog.lock().unwrap();
+        let publie = cat.rang_publie().expect("une base à générations");
+        assert_eq!(publie, avant + 1, "a finished index did not publish its rank");
+        assert_eq!(cat.rang_en_attente(), Some(publie + 1), "no pending rank opened above the published one");
+        let apres = cat
+            .execute_raw_with_params(
+                &format!("MATCH (s:{}) WHERE s._depuis > $r RETURN count(*)", crate::code::SCOPE),
+                &[crate::connection::QueryParam::new("r", crate::connection::CypherValue::Int(publie))],
+            )
+            .unwrap();
+        assert_eq!(apres.rows[0][0].as_i64(), Some(0), "rows are born after the published rank: a view without rank misses them");
+    }
+
     /// **La garde des comptes du plein texte, dite à la fin d'un index**
     /// (25 octobre 2026) : le journal dit « vérifié » quand chaque entité a
     /// autant de documents que de lignes, l'état garde les comptes ; et un
