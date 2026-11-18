@@ -1,6 +1,6 @@
 # La base « un seul sens » du cœur n'est pas au témoin de `check_rel_directions`
 
-- **État** : ouvert (16 novembre 2026) — pour Codex
+- **État** : fait (18 novembre 2026, branche check-rel-one-direction) : test_check_rel_directions.sh --one-direction joue l'outil sur la table R de la base et exige les comptes exacts lus sous la lib 3d706f709 : avant 10, arrière 12, union 12, perdues d'un seul sens 2 (1:111 et 1:60, au seul sens arrière) ; ATTENDU.txt disait 11 et 1, faute d'avoir relu 1:60 ancré après la réouverture ; rouge sur le témoin de master, 5 vert à luciepc
 - **Famille** : moteur (l'outil de contrôle des deux sens : `tools/check_rel_directions/`)
 - **Gravité** : témoin incomplet. L'outil n'est prouvé que sur LOCKS de code-principal, sans compte exact attendu.
 - **Atteignable en service** : non
