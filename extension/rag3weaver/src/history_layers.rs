@@ -105,6 +105,15 @@ fn generation_commit(catalog: &Catalog, layer: &str, rank: Option<i64>) -> Resul
     Ok(lu.rows.first().and_then(|r| r.first()).and_then(|c| c.as_str()).filter(|c| !c.is_empty()).map(str::to_string))
 }
 
+/// **Write the generation of a worktree's work layer** (2a′-3, lot 4): its uncommitted files, as `git status
+/// --porcelain=v2` says them, read from its disk, pinned on the generation of `branch_layer` whose commit is the
+/// worktree's HEAD. Without that generation, the work layer waits for `tip` and is not written. The files that
+/// were dirty in the layer's last generation and are clean now leave it, and the parent's rows show again.
+pub fn write_work_generation(catalog: &mut Catalog, worktree: &Path, layer_id: &str, branch_layer: &str) -> Result<i64, String> {
+    let _ = (catalog, worktree, layer_id, branch_layer);
+    Err("RED STUB: work layers are not written yet".into())
+}
+
 #[cfg(all(test, feature = "rag3db-native"))]
 mod tests {
     use super::*;
@@ -209,6 +218,40 @@ mod tests {
             e.push(format!("{p} {} {:?}", std::fs::read_to_string(&f).unwrap(), std::fs::metadata(&f).unwrap().modified().unwrap()));
         }
         e.join("\n")
+    }
+
+    /// **Témoin 1 : a view on another worktree sees that worktree's uncommitted file** (c7's witness, 2a′-3, lot 4).
+    /// A worktree `wt` on branch `b` changes f and adds h, uncommitted; the backend's own worktree changes f too,
+    /// uncommitted and never indexed. The view of `wt`'s work layer reads its f and its h, and g from the backend;
+    /// the backend's view reads neither. A file that becomes clean again leaves the work layer; a HEAD without a
+    /// generation of its branch waits for `tip`.
+    #[test]
+    fn a_view_on_another_worktree_sees_its_uncommitted_file() {
+        let (d, c1, _, _) = depot();
+        let (mut cat, n) = base(d.path(), &c1);
+        let wt_dir = tempfile::tempdir().unwrap();
+        let wt = wt_dir.path().join("wt");
+        git(d.path(), &["worktree", "add", "-q", "-b", "travail", wt.to_str().unwrap(), &c1]);
+        let branche = LayerWrite { layer: "refs/heads/travail".into(), parent: Some((crate::generations::COUCHE_DU_BACKEND.into(), n)) };
+        write_history_generation(&mut cat, d.path(), &branche, &c1).expect("la génération de travail@c1");
+        std::fs::write(d.path().join("f.rs"), F2).unwrap();
+        std::fs::write(wt.join("f.rs"), F3).unwrap();
+        std::fs::write(wt.join("h.rs"), "pub fn h() -> u32 {\n    9\n}\n").unwrap();
+        let couche = format!("worktree:{}", wt.display());
+        write_work_generation(&mut cat, &wt, &couche, "refs/heads/travail").expect("la génération de travail du worktree");
+        assert_eq!(fins_dans_la_vue(&mut cat, &couche, "f"), vec![5], "the view of wt does not read its uncommitted f");
+        assert_eq!(fins_dans_la_vue(&mut cat, &couche, "h"), vec![3], "the view of wt does not read its new h");
+        assert_eq!(fins_dans_la_vue(&mut cat, &couche, "g"), vec![3], "the view of wt does not read g from the backend");
+        assert_eq!(fins_dans_la_vue(&mut cat, crate::generations::COUCHE_DU_BACKEND, "f"), vec![3], "the backend's view reads wt's f");
+        assert!(fins_dans_la_vue(&mut cat, crate::generations::COUCHE_DU_BACKEND, "h").is_empty(), "the backend's view reads wt's h");
+        git(&wt, &["checkout", "-q", "--", "f.rs"]);
+        write_work_generation(&mut cat, &wt, &couche, "refs/heads/travail").expect("la deuxième génération du worktree");
+        assert_eq!(fins_dans_la_vue(&mut cat, &couche, "f"), vec![3], "f, clean again, does not come back from the parent");
+        assert_eq!(fins_dans_la_vue(&mut cat, &couche, "h"), vec![3], "h, still uncommitted, left the view of wt");
+        git(&wt, &["add", "h.rs"]);
+        git(&wt, &["commit", "-q", "-m", "h"]);
+        let refus = write_work_generation(&mut cat, &wt, &couche, "refs/heads/travail").expect_err("a HEAD without generation of its branch is written");
+        assert!(refus.contains("tip"), "the refusal does not say the work layer waits for tip: {refus}");
     }
 
     /// **Témoin 2 : a history layer is written without checkout.** Writing the generations of branch `b` (never
