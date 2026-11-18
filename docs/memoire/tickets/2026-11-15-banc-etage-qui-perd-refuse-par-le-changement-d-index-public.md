@@ -1,6 +1,6 @@
 # `banc_etage_qui_perd` tombe à son installation : changement d'index public refusé
 
-- **État** : ouvert, le 15 novembre 2026.
+- **État** : corrigé en branche le 18 novembre 2026 (`cx-memoire-banc-etage`, 65960ae7a), vert sur la lib 3d706f709 ; à fermer à son atterrissage. **Le diagnostic d'origine était faux**, voir « Diagnostic corrigé ».
 - **Famille** : produit. Le défaut est dans un banc e2e du crate, pas dans le catalogue : c'est la
   règle du catalogue qui a raison, et le banc qui ne la suit pas.
 - **Gravité** : un banc de la batterie est rouge sur master à chaque passe qui le joue. Il est rouge
@@ -49,3 +49,32 @@ Deux voies, au choix de qui tient le banc :
    de signaux ou de `boost`. C'est à lire dans `catalog.rs` près du refus.
 
 Rien n'est à relâcher dans la règle du catalogue.
+
+
+## Diagnostic corrigé, le 18 novembre 2026
+
+Le boost du titre n'était pas en cause. `search_index` (`EntityConfig.search_index`,
+`src/config.rs`) est le **nom** de l'entité d'index dérivée, et non les poids.
+
+- `register_code_schema` enregistre `Scope` avec `search_index = Some(SCOPE_CONTENT)`
+  (`src/code.rs`, vers la ligne 791) : ce sont les versions.
+- Le banc reconstruisait la config de `Scope` par `scope_config(default_scope_chunking())`, qui ne
+  pose pas ce champ. Le réenregistrement passait donc `search_index` de `Some(…)` à `None`, et c'est
+  ce changement que le catalogue refuse à raison, sur une entité peuplée.
+
+## Le correctif
+
+Il est dans le test seul, sans nouvelle ingestion : `tests/e2e_banc_etage.rs`. Le banc part
+maintenant de la config enregistrée (`cat.entity_config(SCOPE).cloned()`) et ne change que le boost
+du titre, et les signaux dans le cas du creux. Rien n'est relâché dans le catalogue.
+
+Ni l'une ni l'autre des deux voies proposées plus haut (une base par réglage, une migration
+déclarée) n'est nécessaire.
+
+## La preuve
+
+- Le rouge est celui de master : vu deux fois, le 15 novembre, sur la tête du lot `usage` et sur
+  c733b81dd, au même endroit et par le même refus.
+- Le vert : `e2e_banc_etage` 2/2 (`banc_etage_qui_perd` et `banc_cohesion_produit`), en 1 354 s, sur
+  65960ae7a, lib 3d706f709 sans drapeau, validation VERT
+  (`~/.cache/rag3weaver-build/validations/validation-o2i9rkg9`).
