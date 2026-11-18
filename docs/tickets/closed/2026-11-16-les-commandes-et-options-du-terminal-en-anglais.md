@@ -1,6 +1,6 @@
 # Les commandes et options du terminal en anglais, avec alias
 
-- **État** : ouvert. Règle de Lucie du 16 nov. 2026 (« stop au code en français, ou aux /commandes en français ») ; rien n'est encore fait dans le terminal.
+- **État** : fait. Lot tty-21 (18 nov. 2026), repris du travail de Codex sur `cx-tty-english-aliases-7` (16 et 17 nov.) : les commandes et options anglaises à côté des françaises, et la complétion de `/task` et `/repo` ; page `docs/tty/18-11-2026/02-tty-21-commandes-et-options-en-anglais.md`.
 - **Famille** : produit
 - **Gravité** : forme. Les commandes et options françaises restent, mais toute nouveauté est en anglais, et l'existant prend un alias quand on y touche.
 - **Atteignable en service** : oui, à chaque lancement du terminal et à chaque `/commande`.
@@ -47,3 +47,12 @@ Ajouter un nom anglais à chaque `/commande` et option française, en gardant l'
 ## Taille et blocage
 
 3 heures. Rien ne le bloque.
+
+## Ce qui a été fait (tty-21)
+
+- Les `/commandes` du tableau ont leur nom anglais. L'ancien marche toujours, et `/aide` (`/help`) montre l'anglais d'abord, avec « (ancien : …) ».
+- Les options aussi. Les anciennes sont lues en silence, `--backend` compris.
+- La lecture des options est une fonction testable, `parse_options`.
+- La complétion par Tab de l'argument de `/task` et `/repo` (et de `/tache`, `/depot`) choisit ses sources par la commande lue, et non plus par un préfixe : avant, `/task mes` ne complétait rien.
+- Différences avec ce que ce ticket demandait : `/clear` remplace `/effacer` (avec `/clear history`) ; `--since` et `--address` s'ajoutent à la liste ; les anciens noms d'options ne sont pas dits dans le README, seulement dans l'aide.
+- Les tests de Codex, vus rouges sur sa branche, puis rouges à nouveau sur master pour les commandes.
