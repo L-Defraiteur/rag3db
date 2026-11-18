@@ -21,4 +21,18 @@ commits du 16 (`3cd8e88f0`, `cd53b41bc`), reposés sur master `560b2d403`.
    entière, témoins du module, e2e_demon_hote, e2e_lectures, e2e_hooks, navigateur), lib 59ac
    épinglée.
 
+## Le rouge vu
+
+Le rouge vu est consigné par **Codex**, dans le rôle d'archi, le 16 novembre 2026, à la page
+`docs/rag3weaver-archi/16-11-2026/04-arret-vertex-pas-va-au-bout.md` de la branche
+`cx-archi-pas-va-au-bout-r2`. Les conditions :
+- source exécutée `713433bd6`, sur le produit `37771e225c`, c'est-à-dire mes deux commits reposés
+  sur `68590270e` ;
+- lib `59ac9c86bc`, sous Vertex.
+
+`e2e_equipier::l_equipier_ecrit_la_doc_d_un_depot_de_test_par_pas_juges` a échoué sur son délai de
+900 s, après la demande d'accord `rm Cargo.lock` restée sans réponse. c7 l'a admis comme rouge vu le
+18 novembre : ce sont les deux mêmes commits, sous Vertex et la lib 59ac, et il n'y a pas de tirage
+de plus.
+
 Le témoin unitaire de Codex (refus d'abord, puis l'équipier finit) se reprend dans un lot à part.
