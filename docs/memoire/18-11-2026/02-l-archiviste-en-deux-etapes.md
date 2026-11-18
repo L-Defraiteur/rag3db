@@ -466,6 +466,50 @@ qu'on a trouvé.
 bien sous les 60 de l'équipier) et `max_model_calls` (4). Tout est **débrayé par défaut** : une
 liste vide garde l'appel simple, et la mesure d'aujourd'hui ne bouge pas.
 
+### Les vrais tours, indexés au fil de l'eau avec un TTL (les L0)
+
+Lucie : « les L0, les vrais tours, doivent être indexés au fil de l'eau avec un TTL ». C'est ce que
+`search_turns` cherche.
+
+- **Où ils vivent** : une entité neuve du gabarit memory, `Turn`, avec une ligne par tour :
+  `{source, section, run, text, created_at}`.
+  - `source` est le chemin de la transcription du run, une Source comme aujourd'hui.
+  - `section` vaut `turn <n>`. C'est déjà la forme de l'identité d'un Apport
+    (`{fiche, source, section}`), si bien qu'un L1 cite une plage de tours sans dépendre des lignes
+    `Turn`.
+  - Les signaux sont `bm25` et `vector`, découpés par le mécanisme générique (1 500 caractères,
+    200 de chevauchement), comme les apports.
+  - La Source elle-même reste en plein texte seul, et immuable.
+- **Quand elles s'écrivent** :
+  - **le plein texte à chaque fin de tour** : l'hôte écrit la ligne `Turn` du tour fermé, et elle
+    se cherche aussitôt (lucivy, local) ;
+  - **le dense par lot, à la fermeture de la tranche** : les vecteurs des tours de la tranche
+    partent en un lot au service. Le mécanisme de la dette des vecteurs existe déjà (« vecteurs en
+    dette », rattrapés à l'index suivant). Reste **à vérifier** qu'il se déclenche à la fermeture
+    d'une tranche, plutôt qu'à chaque écriture.
+- **`search_turns(query, options)`** est le `recall` générique (`search_structured.mmd`) sur
+  `Turn`, filtré par `run`, avec une option pour écarter la tranche courante.
+- **Le TTL** : `memory.l0_ttl_days`, dans les bindings du gabarit memory (30 jours proposés). Une
+  ligne `Turn` plus ancienne est effacée, avec ses morceaux, son index et ses vecteurs. **Ne se
+  touchent pas** : le `ChatFile` (l'hôte le garde), la Source de la transcription (le L0 immuable)
+  et les L1, qui citent des intervalles et non des lignes.
+- **Qui purge** : un outil du gabarit, `purge_turns(older_than_days)`, qui efface par
+  `EntityBatchNode` ou `EntityRecordNode`, nœuds de base d'un outil. C'est **l'hôte** qui l'appelle,
+  à chaque fermeture de tranche (la part d'archi), puisqu'il a la cadence du run. Une réaction ne
+  convient pas : elle répond à un événement, pas à une horloge. Une tâche propre au gabarit n'a pas
+  de déclencheur sans l'hôte.
+- **Le coût** :
+  - le plein texte est une écriture lucivy locale par tour, de quelques millisecondes ;
+  - le dense revient à une tranche de 50 k jetons (~200 k caractères), soit ~130 morceaux de
+    1 500 caractères, en un lot au service bge-m3, de l'ordre de la seconde. Aucun morceau ne
+    dépasse le plafond de requête ;
+  - la place est bornée par le TTL.
+- **La part d'archi** (l'hôte) : écrire la ligne `Turn` à chaque fin de tour, déclencher le lot
+  dense et `purge_turns` à chaque fermeture de tranche, et exposer `search_turns` et `read_turns`
+  à l'archiviste.
+- **Ma part** (le gabarit) : l'entité `Turn`, l'outil `search_turns`, l'outil `purge_turns`, et
+  leurs témoins (le TTL efface les tours anciens sans toucher aux L1 ni à la Source).
+
 ### Ce que ça change au graphe
 
 - **Un nœud neuf, `AgentStepNode`** : un pas d'agent dans un graphe, son prompt, ses outils
