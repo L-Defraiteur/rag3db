@@ -1904,3 +1904,48 @@ fn a_step_whose_context_is_full_is_told_to_declare_step_done() {
     assert!(!results[0].contains("step_context_tokens"), "the first read passes: {results:#?}");
     assert!(results[1].contains("step_context_tokens") && results[1].contains("step_done"), "the second read is refused by the context bound: {results:#?}");
 }
+
+/// **The next step sees what the previous one did** (S2, D6 campaign of 16 Nov 2026: each step
+/// started from a fresh thread with only the request and the step_done lines, and read everything
+/// again). Step 1 reads src/lib.rs and stops without step_done; step 2's frontier carries a
+/// `Previous step` block that names the file and its range, and a replace_lines on those lines
+/// passes without a new read.
+#[test]
+fn the_next_step_sees_what_the_previous_step_read() {
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let seen = Arc::new(Mutex::new((Vec::<String>::new(), Vec::<String>::new())));
+    let model: ChatModel = {
+        let seen = seen.clone();
+        Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let seen = seen.clone();
+            Ok(Arc::new(CallbackLlm::new("previous-step", 8192, move |turns, opts, sink| {
+                let results = tool_results(turns);
+                if results.is_empty() {
+                    seen.lock().unwrap().0.push(last_user(turns));
+                }
+                if step_of(turns) == 2 {
+                    seen.lock().unwrap().1 = results.clone();
+                }
+                match (step_of(turns), results.len()) {
+                    (1, 0) => answer(turns, opts, sink, "", calls(&[("read_file", json!({ "path": "src/lib.rs", "offset": 1, "length": 20 }))])),
+                    (1, _) => answer(turns, opts, sink, "I read src/lib.rs; next I edit its first line.", vec![]),
+                    (2, 0) => answer(turns, opts, sink, "", calls(&[("replace_lines", json!({ "path": "src/lib.rs", "from": 1, "to": 1, "text": "//! A small crate.\n" }))])),
+                    _ => answer(turns, opts, sink, "Done.", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "first line documented", "remaining": "" }))])),
+                }
+            })))
+        })
+    };
+    let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("the parent opens");
+    host.post_to_teammate(&h.id, "doc", "lucie", "request", None, "Document the first line of src/lib.rs.", &Value::Null).expect("the request");
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    let mailbox = attendre_dans(&files, "the end", &|b| b.iter().any(|l| l["kind"] == "ended"));
+    let (frontiers, step2_results) = seen.lock().unwrap().clone();
+    let second = frontiers.get(1).cloned().unwrap_or_default();
+    assert!(second.contains("Previous step") && second.contains("src/lib.rs") && second.contains("lines 1-20"), "the second frontier names what step 1 read: {second}");
+    assert!(second.contains("next I edit its first line"), "and the last text of step 1: {second}");
+    assert!(step2_results.first().is_some_and(|r| !r.contains("\"ok\":false") && !r.contains("error")), "replace_lines passes without a new read: {step2_results:?}");
+    assert_eq!(mailbox.iter().find(|l| l["kind"] == "ended").unwrap()["text"], "fait sans plan", "{mailbox:#?}");
+}
