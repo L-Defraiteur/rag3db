@@ -52,3 +52,14 @@ Embarquement n'y a pas touché.
 3. Si le raccord n'est pas adopté par l'index réel, poser la question à Lucie : garder ces témoins
    dans le jeu courant de la lib, ou les sortir du jeu par défaut. Un banc d'essai ne doit pas
    faire rougir les lots des autres.
+
+## Une occurrence de plus (18 novembre 2026, 22 h 5x)
+
+La même signature, à la même ligne (`tests.rs:545`, « after-lexical-durability », `None` contre `Some(91)`), dans la
+lib entière de la passe du lot 4 de 2a′-3 :
+
+- à luciepc, branche `arbre-principal/couches-de-travail`, bb8cc375a8 ;
+- lib 3d706f709, sous `poste lourd`.
+
+Le lot ne touche ni le raccord physique ni ses tests : 2 632 autres tests verts, et les suites e2e vertes dans la
+même passe. Le rejeu de la même tête juge.
