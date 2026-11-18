@@ -781,17 +781,25 @@ void OnDiskHNSWIndex::commitInsert(Transaction* transaction,
     auto& hnswInsertState = insertState.cast<HNSWInsertState>();
     fitVisitedToTable(transaction, hnswInsertState.searchState);
     auto commitInsertScanState = std::make_unique<CommitInsertEmbeddingScanState>(dataVectors[0]);
+    auto& numCheckpointedNodes = storageInfo->cast<HNSWStorageInfo>().numCheckpointedNodes;
     for (size_t i = 0; i < nodeIDVector.state->getSelSize(); ++i) {
         auto pos = nodeIDVector.state->getSelVector()[i];
         const auto offset = nodeIDVector.readNodeOffset(pos);
         auto valuePos = dataVectors[0]->state->getSelVector()[i];
-        if (dataVectors[0]->isNull(valuePos)) {
-            continue; // Skip null or deleted values.
+        if (!dataVectors[0]->isNull(valuePos)) {
+            EmbeddingHandle handle{dataVectors[0]->getValue<common::list_entry_t>(valuePos).offset,
+                commitInsertScanState.get()};
+            insertInternal(transaction, offset, handle, hnswInsertState);
         }
-        EmbeddingHandle handle{dataVectors[0]->getValue<common::list_entry_t>(valuePos).offset,
-            commitInsertScanState.get()};
-        insertInternal(transaction, offset, handle, hnswInsertState);
-        storageInfo->cast<HNSWStorageInfo>().numCheckpointedNodes = offset + 1;
+        // La borne du graphe n'avance que d'une ligne qui la suit : reliée, ou sans vecteur (une
+        // ligne nulle ou supprimée n'est jamais un résultat ; un SET qui lui donne un vecteur la
+        // relie par update). Au-delà d'un trou (les lignes d'un COPY forcé que le rattrapage d'un
+        // CREATE a laissées hors du graphe), la poser après cette ligne retirait le trou de la
+        // plage balayée : ses lignes n'étaient plus ni dans le graphe ni balayées. La ligne reliée
+        // reste alors aussi dans la plage ; le balayage ne rend pas deux fois une ligne du graphe.
+        if (offset == numCheckpointedNodes) {
+            numCheckpointedNodes = offset + 1;
+        }
     }
 }
 
