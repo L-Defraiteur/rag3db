@@ -1365,7 +1365,7 @@ fn synchroniser_la_source(
     let source_id = source_id.to_string();
     // **Sous les générations (2a′-2), une source déjà indexée se synchronise par l'écrivain** : la fin
     // d'instantané effacerait ce qu'aucun paquet n'a marqué, lignes publiées retirées comprises.
-    if catalog.generations.is_some() && source_deja_indexee(catalog, &source_id)? {
+    if catalog.generations.is_some() && source_deja_indexee(catalog, &source_id)? && !first_pass_interrupted(catalog, &source_id)? {
         return synchroniser_par_generations(catalog, source, options, progress, source_id);
     }
     let grain = BTreeMap::from([("source".to_string(), CypherValue::String(source_id.clone()))]);
@@ -2031,6 +2031,21 @@ fn garder_la_regle(catalog: &Catalog) -> Result<(), String> {
 
 /// La source a-t-elle déjà des scopes en base ? Sinon, c'est une première
 /// indexation : le chemin de masse.
+/// **A first pass cut short resumes by its snapshot** (ticket of 18 November 2026, « un gros paquet défait
+/// repris ne redonne pas les mêmes arêtes ») : a snapshot session still open on the source, while nothing is
+/// published in the layer, is a first indexing that stopped between two batches. Its rows are already there,
+/// so [`source_deja_indexee`] says yes; through the writer of generations, the resumed batches were born at the
+/// pending rank (1) and the first ones at 0, and their occurrence uuids, which carry `_depuis`, differed from a
+/// base indexed in one go. The snapshot path takes the session over and writes every row at 0. It cannot erase
+/// a published retired row, which the writer route protects: nothing is published.
+fn first_pass_interrupted(catalog: &Catalog, source_id: &str) -> Result<bool, String> {
+    if !catalog.generations.as_ref().is_some_and(|v| v.rang_publie <= 0) {
+        return Ok(false);
+    }
+    let grain = BTreeMap::from([("source".to_string(), CypherValue::String(source_id.to_string()))]);
+    Ok(catalog.open_snapshot_session(SCOPE, &grain).map_err(|e| e.to_string())?.is_some())
+}
+
 fn source_deja_indexee(catalog: &Catalog, source_id: &str) -> Result<bool, String> {
     // La sélection du dialecte, pas un texte Cypher : sur rag3db, la même
     // requête (seul l'alias change), et un dialecte sans Cypher sait la dire.
