@@ -325,6 +325,39 @@ impl TryFrom<ModelSourceWire> for ModelSource {
 }
 
 impl ModelSource {
+    /// **Why the provider stopped**, read at the last line of its log when it
+    /// starts with « ✗ arrêt : » : an activation's own journal on this host,
+    /// else the `log` of a service posed by hand. `None` otherwise (18 November
+    /// 2026, entry 7 ; before, the activation's journal only).
+    pub fn stop_cause(&self) -> Option<String> {
+        let path = match (&self.activation, &self.log) {
+            #[cfg(feature = "daemon")]
+            (Some(a), _) if a.hote.is_none() => a.journal.join(format!("{}.log", crate::daemon::embeddings::SERVICE)),
+            (None, Some(log)) => log.clone(),
+            _ => return None,
+        };
+        let text = std::fs::read_to_string(path).ok()?;
+        let line = text.lines().rev().find(|l| !l.trim().is_empty())?.trim();
+        let cause = line.strip_prefix("✗ arrêt : ")?;
+        Some(cause.split(" (code ").next().unwrap_or(cause).to_string())
+    }
+
+    /// **The `log` of a declaration, checked at load** : absolute, and never
+    /// with an activation (two truths about one provider).
+    pub fn check_log(&self, at: &str) -> Result<(), String> {
+        let Some(log) = &self.log else { return Ok(()) };
+        if !log.is_absolute() {
+            return Err(format!("{at}.log ({}) : un chemin absolu est attendu", log.display()));
+        }
+        if self.activation.is_some() {
+            return Err(format!(
+                "{at}.log ({}) avec une activation : l'activation a déjà son journal ; ne garder que l'un",
+                log.display()
+            ));
+        }
+        Ok(())
+    }
+
     pub fn local(model: impl Into<String>) -> Self {
         Self {
             activation: None,
