@@ -489,6 +489,15 @@ Lucie : « les L0, les vrais tours, doivent être indexés au fil de l'eau avec 
     d'une tranche, plutôt qu'à chaque écriture.
 - **`search_turns(query, options)`** est le `recall` générique (`search_structured.mmd`) sur
   `Turn`, filtré par `run`, avec une option pour écarter la tranche courante.
+- **Le rappel ordinaire ne les trouve jamais** (Lucie : « le filtre par défaut de la recherche
+  mémoire ne les trouve pas ; il faut préciser qu'on veut chercher dedans »). C'est vrai par
+  construction : `Turn` est une entité à part, et `recall_fiches`, `recall_apports`,
+  `recall_subjects` et `recall` visent chacun leur entité (Fiche, Apport, Subject, Memory). Aucun
+  rappel existant ne lit `Turn`. **La forme explicite est l'outil `search_turns` lui-même** : on le
+  choisit pour chercher dans les tours. Il n'y a pas de drapeau `include_turns` sur les autres
+  rappels, qui deviendrait un jour un défaut oublié. Le témoin le vérifie : des tours indexés dont
+  le texte répond à la requête n'apparaissent ni dans `recall_fiches` ni dans `recall_apports`, et
+  apparaissent dans `search_turns`.
 - **Le TTL** : `memory.l0_ttl_days`, dans les bindings du gabarit memory (30 jours proposés). Une
   ligne `Turn` plus ancienne est effacée, avec ses morceaux, son index et ses vecteurs. **Ne se
   touchent pas** : le `ChatFile` (l'hôte le garde), la Source de la transcription (le L0 immuable)
