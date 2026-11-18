@@ -218,7 +218,7 @@ processus après l'étape. Journaux : `~/.cache/rag3weaver-build/cout/`.
   le lecteur de symboles à deux faces et sa sonde de parité, rouge d'abord (une face mémoire vide ne rend aucune
   arête là où la base en rend). Aucun code avant le mot de Lucie.
 
-## Questions pour Lucie
+## 7. La lecture (recherche)
 
 ### Ce qui est déjà fait, sans repli
 
@@ -241,23 +241,53 @@ vide n'est pas une réponse. Le temps d'attente, lui, ne change pas.
 - **B bat l'index d'un facteur 4** sur rag3weaver. Elle coûte deux choses : un second chemin de lecture pour
   `usages`, `callees` et `impact` (aujourd'hui des nœuds Cypher génériques), et des tables compactes bâties
   fichier par fichier, sans quoi le dépôt demande près de 9 Gio.
-- **Une troisième voie, C, n'est pas mesurée** : faire publier les relations plus tôt par l'index réel lui-même.
-  Sur rag3weaver, 36 s passent avant que la première relation croisée soit lisible, et 10 s ensuite. Si l'essentiel
-  des 36 s est le plein texte et les morceaux, l'index pourrait poser les scopes et les relations d'abord, puis le
-  plein texte. Ce serait un seul chemin, sans repli à tenir à jour. Pour le savoir, il suffit d'une mesure : le
-  profil par phase (`[sync-profile]`) d'un premier index, qui n'apparaît pas aujourd'hui dans la sortie de la
-  sonde.
+- **Une troisième voie, C** : faire publier les relations plus tôt par l'index réel lui-même. Mesurée ci-dessous.
+
+### C mesurée : ce qui retient les relations dans un premier index (17 h 30)
+
+**Le relevé** : la même sonde, avec `RAG3WEAVER_INGEST_PROFILE=1`, lib 3d706f709, plein texte seul. Journaux :
+`~/.cache/rag3weaver-build/probe-index-c-rw-src.log` et `probe-index-c-depot.log` à luciepc.
+
+| Phase (`[sync-profile]`) | rag3weaver/src | Dépôt entier |
+|---|---|---|
+| analyser (codeparsers) | 13,2 s (dont `parse_project` 8,2 s) | 43,1 s (dont 22,4 s) |
+| ingérer les paquets | 19,0 s | 116,0 s |
+| — dont **dérivations** (le contenu dérivé, pour la recherche) | **14,9 s** | **95,9 s** |
+| — dont symboles (ingestion et rendez-vous) | 2,4 s | 9,5 s |
+| — dont COMMIT des paquets | 1,9 s | 12,6 s |
+| charger les relations à la fin | 9,9 s (dont `drain · liens` 7,0 s) | 26,8 s |
+| choisir et lier (la résolution) | 0,9 s | 5,5 s |
+| **`usages` complet** | **42 s** | **196 s** |
+
+**Ce qui retient les relations, ce sont d'abord les dérivations** : 35 % du temps sur rag3weaver, la moitié sur le
+dépôt. Elles servent la recherche, pas les outils de référence. Viennent ensuite l'analyse, puis la pose des liens à
+la fin. La résolution elle-même est négligeable.
+
+**C par réordonnancement** : poser d'abord fichiers, scopes, symboles et relations, puis les dérivations et le
+plein texte. Cela ôte les dérivations du chemin critique. L'estimation par soustraction, à confirmer une fois
+écrite :
+- rag3weaver/src : ~27 s au lieu de 42 s ;
+- dépôt entier : ~95 s au lieu de 196 s.
+
+C'est un gain de 1,5 à 2, **pas la quinzaine de secondes** visée : l'analyse (13 s, 43 s) et la pose des liens
+(10 s, 27 s) restent sur le chemin. Pour descendre plus bas, il faudrait aussi :
+- accélérer la pose des liens (`drain · liens`, 7 s sur rag3weaver) ;
+- recouvrir l'analyse et l'ingestion, paquet par paquet ;
+- ou passer par B, qui n'a que l'analyse et la résolution (~12 s sur rag3weaver), avec son second chemin de lecture
+  et sa mémoire.
 
 ## Questions pour Lucie
 
-1. **Avant de choisir A ou B** : d'accord pour mesurer d'abord C (une passe de sonde, sans code de produit) ? Si
-   l'index réel peut rendre les relations en une quinzaine de secondes sur rag3weaver, il n'y a pas de second
-   chemin à écrire.
+1. ~~Mesurer d'abord C ?~~ **Tranché par c7 : oui.** C est mesurée au §7. Réordonner l'index donne ~27 s sur
+   rag3weaver et ~95 s sur le dépôt, pas une quinzaine de secondes. **La question devient** : C seule (un seul
+   chemin, un gain de 1,5 à 2), ou C puis B (C d'abord, B pour la première minute sur un gros dépôt) ?
 2. **Si B** : une borne en nombre de fichiers (quelques centaines, puis l'index), ou des tables compactes sans
    borne (plus de code, et tout dépôt couvert) ?
 3. **Si B** : l'image se bâtit au premier appel d'un outil de référence, qui attend alors une dizaine de secondes,
    ou dès l'ouverture d'un backend jamais indexé, qui tient alors de la mémoire pour rien si personne ne demande ?
 
-**Ma recommandation (recherche)** : 1 d'abord. B seulement si C ne descend pas sous une quinzaine de secondes. Dans
-ce cas, des tables compactes, et l'image bâtie au premier appel. codeparsers penche pour B avec des tables
-compactes, ou une borne de quelques centaines de fichiers.
+**Ma recommandation (recherche)** : C d'abord, sans attendre. C'est un seul chemin, et le gain vaut aussi pour le
+plein texte et les vecteurs, qui viennent derrière. Puis mesurer ce que C donne réellement. B ne vient que si
+Lucie veut des outils de référence en moins de ~15 s sur tout dépôt. Dans ce cas, des tables compactes et l'image
+bâtie au premier appel. codeparsers penche pour B avec des tables compactes, ou une borne de quelques centaines de
+fichiers.
