@@ -45,9 +45,11 @@ protected:
         ASSERT_TRUE(result->isSuccess()) << query << " : " << result->getErrorMessage();
     }
 
-    // Rows without a vector: an ordinary insert links a row to the graph at its commit and moves
-    // the graph's bound past it (commitInsert), but a NULL vector is skipped and the bound stays,
-    // so these rows lie in the range every search scans one by one (searchFromUnCheckpointed).
+    // Rows without a vector: an ordinary insert links a row to the graph at its commit, and the
+    // graph's bound moves past a row that follows it, linked or without a vector (never a
+    // result), so neither stays in the range every search scans one by one. Only a gap (a forced
+    // COPY's rows left out by a CREATE's catch-up, AForcedCopyCommittedRightAfterACreateIsReached
+    // in concurrence_test) is counted.
     static std::string insertRowsWithoutVector(int64_t from, int64_t count) {
         return "UNWIND range(" + std::to_string(from) + ", " + std::to_string(from + count - 1) +
                ") AS i CREATE (:Doc {id: i});";
@@ -89,14 +91,14 @@ TEST_F(VectorIndexDiagnosticsTest, AFreshIndexReportsZeroAndTheColumnsKeepTheirO
     EXPECT_EQ(schema->getColumnNames(), names) << "[check: the-eight-columns-keep-their-order]";
 }
 
-TEST_F(VectorIndexDiagnosticsTest, RowsAfterTheGraphAreCountedUntilAVectorFollowsThem) {
+TEST_F(VectorIndexDiagnosticsTest, OrdinaryInsertsLeaveNothingOutsideTheGraph) {
     ok(insertRows(400, 10));
     EXPECT_EQ(rowsOutsideGraphAtMost(), 0) << "[check: rows-with-a-vector-enter-the-graph]";
     ok(insertRowsWithoutVector(410, 150));
-    EXPECT_EQ(rowsOutsideGraphAtMost(), 150) << "[check: rows-after-the-graph-are-counted]";
-    ok(insertRows(560, 1));
     EXPECT_EQ(rowsOutsideGraphAtMost(), 0)
-        << "[check: a-row-with-a-vector-moves-the-bound-past-them]";
+        << "[check: rows-without-a-vector-are-not-left-to-the-scan]";
+    ok(insertRows(560, 1));
+    EXPECT_EQ(rowsOutsideGraphAtMost(), 0) << "[check: a-row-after-them-enters-the-graph]";
 }
 
 TEST_F(VectorIndexDiagnosticsTest, TheReadTakesNoLockInAReadOnlyTransaction) {
@@ -106,7 +108,7 @@ TEST_F(VectorIndexDiagnosticsTest, TheReadTakesNoLockInAReadOnlyTransaction) {
     auto* transaction = transaction::Transaction::Get(*context);
     auto& locks = transaction::TransactionManager::Get(*context)->getLockManager();
     ASSERT_EQ(locks.getNumLocksHeld(transaction->getID()), 0u);
-    EXPECT_EQ(rowsOutsideGraphAtMost(), 20);
+    EXPECT_EQ(rowsOutsideGraphAtMost(), 0);
     EXPECT_EQ(locks.getNumLocksHeld(transaction->getID()), 0u) << "[check: the-read-takes-no-lock]";
     ok("COMMIT;");
 }
