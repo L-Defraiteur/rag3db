@@ -435,7 +435,9 @@ fn banc_etage_qui_perd() {
     if avec_creux {
         let bge = common::burn::BGE_M3.clone();
         let mut cat = reel.lock().unwrap();
-        let mut config = rag3weaver::code::scope_config(default_scope_chunking());
+        // From the config register_code_schema has just declared: it carries the
+        // search_index of the versions (SCOPE_CONTENT), which scope_config alone drops.
+        let mut config = cat.entity_config(SCOPE).cloned().expect("Scope is registered");
         config.signals = SearchSignals::HYBRID | SearchSignals::SPARSE;
         cat.register_entity(SCOPE, config).expect("Scope avec le creux");
         cat.set_sparse_embedder(bge.clone());
@@ -791,10 +793,11 @@ fn banc_etage_qui_perd() {
     {
         let scope_au_boost = |b: f64| {
             let mut cat = reel.lock().unwrap();
-            let mut config = rag3weaver::code::scope_config(default_scope_chunking());
-            if avec_creux {
-                config.signals = SearchSignals::HYBRID | SearchSignals::SPARSE;
-            }
+            // Only the boost changes, on the registered config (its signals, its
+            // search_index): rebuilding it from scope_config dropped the search_index of
+            // the versions, and the catalog rightly refuses that on a populated entity
+            // (ticket 2026-11-15, banc_etage_qui_perd).
+            let mut config = cat.entity_config(SCOPE).cloned().expect("Scope is registered");
             if let Some(d) = config.fields.get_mut("name") {
                 d.boost = Some(b);
             }
