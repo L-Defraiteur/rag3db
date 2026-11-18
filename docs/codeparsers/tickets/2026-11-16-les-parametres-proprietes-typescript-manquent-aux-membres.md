@@ -4,6 +4,9 @@
 - **Pour** : Codeparsers après END de baseline.
 - **Famille** : produit ; membres de classe absents sur AST valide.
 - **Parent** : docs/codeparsers/tickets/2026-11-16-verifier-la-couverture-sur-des-corpus-publics-multilangages.md.
+- **Gravité** : moyenne ; des propriétés de classe manquent aux membres, donc à la résolution d'un accès `this.x`
+- **Atteignable en service** : oui, extraction TypeScript de production
+- **Touche rag3weaver** : oui, membres de classe lus par la résolution
 
 Source gel02 : vscode6e68549edb69380c9316e49df5d3795d5064a2b0,
 `src/vs/editor/common/core/2d/point.ts`, SHA256

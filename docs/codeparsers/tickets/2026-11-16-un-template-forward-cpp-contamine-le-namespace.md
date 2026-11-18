@@ -4,6 +4,9 @@
 - **Pour** : Codeparsers, après fin de baseline ; Banc conserve le jugement indépendant.
 - **Famille** : produit ; attributs de scope incorrects malgré AST valide.
 - **Parent** : docs/codeparsers/tickets/2026-11-16-verifier-la-couverture-sur-des-corpus-publics-multilangages.md.
+- **Gravité** : faible ; un namespace reçoit les paramètres d'un template déclaré sans corps
+- **Atteignable en service** : oui, extraction C++ de production
+- **Touche rag3weaver** : oui, `template_params` des scopes (`code.rs:1665`)
 
 Source réelle du gel02 : grpc e67d793e4c19c3715fa3370d760280cdf3943903,
 `include/grpc/event_engine/internal/slice_cast.h`, SHA256

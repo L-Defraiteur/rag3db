@@ -4,6 +4,9 @@
 - **Pour** : Codeparsers après END de baseline.
 - **Famille** : produit ; attribut structuré incorrect sur AST valide.
 - **Parent** : docs/codeparsers/tickets/2026-11-16-verifier-la-couverture-sur-des-corpus-publics-multilangages.md.
+- **Gravité** : faible ; le nom d'un paramètre générique porte sa borne (`R: AsyncRead` au lieu de `R`)
+- **Atteignable en service** : oui, extraction Rust de production
+- **Touche rag3weaver** : oui, `template_params` des scopes (`code.rs:1665`)
 
 Source gel02 : tokio f3e855fa55d6c1cc3e7a28e115a421b8ee5860bd,
 `tokio-util/src/io/read_arc.rs`, SHA256
