@@ -690,8 +690,8 @@ mod tests {
         std::fs::write(&marqueur, "mort").unwrap();
         let programme = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/residence/fournisseur.py");
         let s = Serveur::new("rag3weaver-embeddings", port_sourd(), programme)
-            .arg("--adresse")
-            .arg(port_sourd())
+            // The fixture refuses any address but 127.0.0.1 ; it never listens here.
+            .args(["--adresse", "127.0.0.1:0"])
             .args(["--generation", "dead-start", "--journal"])
             .arg(dossier.path().join("fixture.jsonl").display().to_string())
             .arg("--arret-nomme")
