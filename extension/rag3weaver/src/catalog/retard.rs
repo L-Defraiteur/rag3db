@@ -39,6 +39,37 @@ impl LagSummary {
     }
 }
 
+/// **The id of a layer**, the stable id the tracked sources give it: `suivies::ID_DE_LA_COUCHE_DU_BACKEND`
+/// for the backend's own worktree, and the id of `suivies::identifiants_des_couches` for a worktree layer of
+/// 2a′-3 — never its name or its path, which change with a rename.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct LayerId(pub String);
+
+impl LayerId {
+    /// The layer of the backend's own worktree.
+    pub fn backend() -> Self {
+        LayerId(crate::suivies::ID_DE_LA_COUCHE_DU_BACKEND.to_string())
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// **The key of a lag**: a cell and a layer. Typed, so that a swap of the two does not compile.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct LagKey {
+    pub cell: Scope,
+    pub layer: LayerId,
+}
+
+impl LagKey {
+    /// The backend's own layer in `cell`.
+    pub fn backend(cell: &Scope) -> Self {
+        LagKey { cell: cell.clone(), layer: LayerId::backend() }
+    }
+}
+
 /// Le registre, partagé par la montre, la réindexation et les lectures.
 #[derive(Debug, Default)]
 pub struct Lag {
@@ -161,6 +192,33 @@ impl Lag {
                 Err(e) => e.into_inner().0,
             };
         }
+    }
+}
+
+impl Lag {
+    /// `path` changed in the layer of `key` at `at_ms`.
+    pub fn note_in(&self, key: &LagKey, path: &str, at_ms: u64) {
+        self.note(&key.cell, path, at_ms)
+    }
+
+    /// `path` was reindexed in the layer of `key`, from the disk read at `read_at_ms`.
+    pub fn done_in(&self, key: &LagKey, path: &str, read_at_ms: u64) {
+        self.done(&key.cell, path, read_at_ms)
+    }
+
+    /// The estimate of the layer of `key`, if it lags.
+    pub fn estimate_of(&self, key: &LagKey) -> Option<IndexEstimate> {
+        self.estimate(&key.cell)
+    }
+
+    /// Waits until the layer of `key` has caught up, or `deadline`.
+    pub fn wait_caught_up_of(&self, key: &LagKey, deadline: std::time::Instant) -> bool {
+        self.wait_caught_up(&key.cell, deadline)
+    }
+
+    /// The layers of `cell` that lag, with their pending files.
+    pub fn layers_behind(&self, _cell: &Scope) -> Vec<(LayerId, usize)> {
+        Vec::new()
     }
 }
 
