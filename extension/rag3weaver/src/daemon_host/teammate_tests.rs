@@ -1820,3 +1820,87 @@ fn a_step_that_answers_without_step_done_is_continued_without_waiting() {
     let copie = boite.iter().find(|l| l["text"] == "Next I will write the test, then run it.").expect("la réponse du pas, seule");
     assert_eq!((&copie["from"], &copie["origin"]), (&json!("teammate"), &json!("host_copy")), "{copie}");
 }
+
+/// **A step that reads before it writes is not cut by a count of calls** (S1, D6 campaign of
+/// 16 Nov 2026: 7 steps, 82 calls, 0 edit; the step stopped at 12 tool calls and 12 model calls).
+/// Fifteen reads, then an edit, then step_done: one step, and the file is written.
+#[test]
+fn a_step_reads_fifteen_times_then_writes_and_finishes_in_one_step() {
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let seen = Arc::new(Mutex::new((Vec::<usize>::new(), Vec::<String>::new())));
+    let model: ChatModel = {
+        let seen = seen.clone();
+        Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let seen = seen.clone();
+            Ok(Arc::new(CallbackLlm::new("reads-then-writes", 8192, move |turns, opts, sink| {
+                let results = tool_results(turns);
+                {
+                    let mut s = seen.lock().unwrap();
+                    s.0.push(step_of(turns));
+                    s.1 = results.clone();
+                }
+                match results.len() {
+                    n if n < 15 => answer(turns, opts, sink, "", calls(&[("read_file", json!({ "path": "src/lib.rs" }))])),
+                    15 => answer(turns, opts, sink, "", calls(&[("edit_file", json!({ "path": "README.md", "content": "# Documentation\nThe bonjour function returns a greeting.\n" }))])),
+                    _ => answer(turns, opts, sink, "README.md documents bonjour.", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "documentation written", "remaining": "" }))])),
+                }
+            })))
+        })
+    };
+    let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("the parent opens");
+    host.post_to_teammate(&h.id, "doc", "lucie", "request", None, "Document bonjour in README.md.", &Value::Null).expect("the request");
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    let mailbox = attendre_dans(&files, "the end", &|b| b.iter().any(|l| l["kind"] == "ended"));
+    let (steps, results) = seen.lock().unwrap().clone();
+    assert!(!results.iter().any(|r| r.contains("budget")), "no call is refused: {results:#?}");
+    assert!(steps.iter().all(|&n| n == 1), "one step only: {steps:?}");
+    assert_eq!(mailbox.iter().filter(|l| l["kind"] == "step_done").count(), 1, "{mailbox:#?}");
+    assert_eq!(mailbox.iter().find(|l| l["kind"] == "ended").unwrap()["text"], "fait sans plan", "{mailbox:#?}");
+    let task = host.tache(&h.id, "doc").unwrap();
+    let root = &task.workspace.as_ref().unwrap().racine;
+    assert!(std::fs::read_to_string(root.join("README.md")).unwrap().contains("bonjour"));
+}
+
+/// **What bounds a step is its context** (S1): once the last model call carried more tokens than
+/// `teammate.step_context_tokens` (64 000 by default), work tools are refused with a message that
+/// names the bound and says to declare step_done; step_done itself passes.
+#[test]
+fn a_step_whose_context_is_full_is_told_to_declare_step_done() {
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let seen = Arc::new(Mutex::new(Vec::<String>::new()));
+    let model: ChatModel = {
+        let seen = seen.clone();
+        Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let seen = seen.clone();
+            Ok(Arc::new(CallbackLlm::new("full-context", 8192, move |turns, opts, sink| {
+                let results = tool_results(turns);
+                if step_of(turns) == 1 {
+                    *seen.lock().unwrap() = results.clone();
+                }
+                let mut out = match results.len() {
+                    0 | 1 => answer(turns, opts, sink, "", calls(&[("read_file", json!({ "path": "src/lib.rs" }))])),
+                    _ => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": false, "done": "read src/lib.rs", "remaining": "write the documentation" }))])),
+                };
+                // The second call reports a full context: the read it asks for is refused.
+                if let (Ok((_, usage)), 1) = (&mut out, results.len()) {
+                    usage.prompt_tokens = 70_000;
+                }
+                out
+            })))
+        })
+    };
+    let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("the parent opens");
+    host.post_to_teammate(&h.id, "doc", "lucie", "request", None, "Document bonjour in README.md.", &Value::Null).expect("the request");
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    attendre_dans(&files, "the first step_done", &|b| b.iter().any(|l| l["kind"] == "step_done"));
+    host.post_to_teammate(&h.id, "doc", "lucie", "stop", None, "stop", &Value::Null).ok();
+    let results = seen.lock().unwrap().clone();
+    assert!(!results[0].contains("step_context_tokens"), "the first read passes: {results:#?}");
+    assert!(results[1].contains("step_context_tokens") && results[1].contains("step_done"), "the second read is refused by the context bound: {results:#?}");
+}
