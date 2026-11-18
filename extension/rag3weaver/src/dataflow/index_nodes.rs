@@ -1085,6 +1085,47 @@ mod tests {
         assert_eq!(docs, lignes + 1, "un document de trop se compte : {comptes:?}");
     }
 
+    /// **The noted full-text counts carry their date, and the nightly maintenance refreshes them** (ticket
+    /// `docs/recherche/tickets/2026-11-15-l-etat-d-index-ne-voit-pas-les-orphelins-du-plein-texte.md`): the
+    /// state read `fts_counts` from the end of the last full index only, and said « as many documents as rows »
+    /// with figures weeks old while orphans existed. Here, the end of an index notes `measured_at_ms`; a ghost
+    /// is then put in the full text, and a nightly maintenance that refuses to purge (ratio 0) refreshes the
+    /// noted counts with its own reading: one more document than rows, one orphan, a newer date. No full index
+    /// runs in between.
+    #[cfg(all(feature = "rag3db-native", feature = "code"))]
+    #[test]
+    fn the_nightly_maintenance_refreshes_the_noted_counts_with_their_orphans_and_date() {
+        let fichiers: Vec<(String, String)> = (0..4).map(|i| (format!("src/f{i}.rs"), format!("pub fn f{i}() -> u32 {{ {i} }}\n"))).collect();
+        let source: Arc<dyn FileSource> = Arc::new(Snapshot::new("depot", fichiers));
+        let conn = crate::Rag3dbConnection::in_memory().expect("in-memory base");
+        let config = crate::CatalogConfig { name: Some("counts-date".into()), embedding_dim: 4, ..Default::default() };
+        let mut catalog = Catalog::new(Box::new(conn), Box::new(crate::embedder::AbsentEmbedder::new("absent", 4)), config);
+        catalog.initialize().unwrap();
+        crate::code::register_code_schema(&mut catalog, crate::code::default_scope_chunking()).unwrap();
+        let catalog = Arc::new(Mutex::new(catalog));
+        let journal = new_index_journal().expect("journal");
+        let before_index = crate::catalog::retard::now_ms();
+        spawn_index(catalog.clone(), source, journal.clone(), 0, Default::default()).join().expect("the index thread");
+        let _ = std::fs::remove_file(&journal);
+        let mut cat = catalog.lock().unwrap();
+        let noted = cat.comptes_notes_du_plein_texte().expect("the noted counts");
+        let at_index_end = noted[crate::code::SCOPE]["measured_at_ms"].as_u64().unwrap_or(0);
+        assert!(at_index_end >= before_index, "the end of an index dates its counts: {noted}");
+
+        let table = cat.resolve_search_target(crate::code::SCOPE).unwrap().parent_table;
+        let handle = cat.fts_handles().get(&table).expect("the full text of Scope").clone();
+        handle.add_document_json(u64::MAX - 7, &serde_json::json!({})).expect("a ghost document");
+        handle.commit().expect("commit");
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        let night = jiff::Zoned::now().datetime();
+        cat.fts_maintenance_nocturne(night, 0.0, false).expect("a nightly maintenance");
+        let noted = cat.comptes_notes_du_plein_texte().expect("the noted counts");
+        let scope = &noted[crate::code::SCOPE];
+        assert_eq!(scope["documents"].as_u64(), scope["rows"].as_u64().map(|r| r + 1), "the ghost is counted: {noted}");
+        assert_eq!(scope["orphans"], 1, "the maintenance reading names one orphan: {noted}");
+        assert!(scope["measured_at_ms"].as_u64().unwrap_or(0) > at_index_end, "the counts carry the date of the maintenance: {noted}");
+    }
+
     /// **Un Scope effacé après un redémarrage emporte son document plein texte**
     /// (ticket recherche du 14 novembre 2026, les orphelins de la base du dépôt :
     /// 8 809 documents vivants sans Scope). Le document d'un Scope est rangé sous
