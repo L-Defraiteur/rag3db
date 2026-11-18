@@ -1,0 +1,17 @@
+{
+ "_provenance": "Tiré une fois par la sonde de la recherche (ca428691b) sur la base d'avant les versions R (instantané avant-835d5298f/code-rag3db-depot, copie ed-mesure-2a2/ref à luciepc), le 14 novembre 2026 ; journal ed-generations-2/mesure-reference.log. Les 5 noms sont les plus consommés (CONSUMES) ; le chemin et le langage, ceux dont la part de scopes est la plus proche de 10 % (src/include/ 12,4 %, python 8,1 %). Figé : ne pas retirer d'une autre base.",
+ "requetes": [
+  "json",
+  "read_text",
+  "rag3db",
+  "PortDef",
+  "value",
+  "ouvrir une base et enregistrer le schéma",
+  "parse a json manifest",
+  "rebuild the vector index",
+  "transaction rollback",
+  "translate a hop into a query"
+ ],
+ "chemin": "src/include/",
+ "langage": "python"
+}
