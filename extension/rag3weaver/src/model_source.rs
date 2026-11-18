@@ -244,13 +244,17 @@ impl ModelSource {
     /// **Le budget du contexte qui repart après une compaction** par l'archiviste (96, conception
     /// `docs/memoire/15-11-2026/03-la-compaction-est-l-archiviste.md`) : `restart_budget_tokens` s'il
     /// est déclaré ; sinon 100 000 jetons pour un modèle cloud, et pour un modèle local (servi ici, par
-    /// un service à nous ou par `llama_server`) la moitié de sa fenêtre, au plus 100 000.
+    /// un service à nous, ou un `compatible` à une adresse de boucle : un llama-server) la moitié de sa
+    /// fenêtre, au plus 100 000.
     pub fn budget_de_reprise(&self) -> usize {
         const CLOUD: usize = 100_000;
         if let Some(b) = self.restart_budget_tokens {
             return b;
         }
-        let local = matches!(self.provider, Provider::Local | Provider::Service) || self.protocol.as_deref() == Some("llama_server");
+        // A llama-server is declared `compatible` at its address: a loopback address makes it local. The protocol
+        // `llama_server` is not a sign of it: `connect_llm` refuses it for a language model.
+        let local = matches!(self.provider, Provider::Local | Provider::Service)
+            || (!self.address.is_empty() && self.address.0.iter().all(|a| is_loopback_address(a)));
         if !local {
             return CLOUD;
         }
@@ -269,6 +273,21 @@ impl ModelSource {
         }
         capability.variables().iter().find_map(|v| env(v).map(|s| Addresses::parse(&s)).filter(|a| !a.is_empty())).map(|a| a.0).unwrap_or_default()
     }
+}
+
+/// **Is this address on this machine?** `127.0.0.1` (and the rest of `127.0.0.0/8`), `localhost` or `::1`, with or
+/// without a scheme, a port or a path. A host that only starts like one (`localhost.example.com`) is not.
+fn is_loopback_address(address: &str) -> bool {
+    let rest = address.split_once("://").map_or(address, |(_, r)| r);
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
+    let host_port = authority.rsplit_once('@').map_or(authority, |(_, h)| h);
+    let host = if let Some(v6) = host_port.strip_prefix('[') {
+        v6.split(']').next().unwrap_or("")
+    } else {
+        host_port.split(':').next().unwrap_or("")
+    };
+    let host = host.to_ascii_lowercase();
+    host == "localhost" || host == "::1" || host.parse::<std::net::Ipv4Addr>().is_ok_and(|ip| ip.is_loopback())
 }
 
 /// **Les modèles déclarés d'un manifeste**, par capacité (`models` d'un manifeste de backend ou d'un
@@ -960,7 +979,7 @@ mod tests {
             let m = lire(r#"{"llm": [
                 {"name": "cloud", "provider": "compatible", "protocol": "vertex", "model": "gemini-2.5-pro", "default": true},
                 {"name": "regle", "provider": "compatible", "protocol": "anthropic", "model": "claude", "restart_budget_tokens": 50000},
-                {"name": "local", "provider": "compatible", "protocol": "llama_server", "model": "qwen", "context_tokens": 32768}
+                {"name": "local", "provider": "compatible", "protocol": "openai", "address": "http://127.0.0.1:8080/v1", "model": "qwen", "context_tokens": 32768}
             ]}"#)
             .expect("trois modèles");
             assert_eq!(m.modele_de_langage("cloud").unwrap().budget_de_reprise(), 100_000);
