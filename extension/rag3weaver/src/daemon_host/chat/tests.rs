@@ -1867,7 +1867,9 @@ fn une_erreur_du_modele_garde_les_actions_du_chat_et_permet_la_reprise() {
     n.evaluer("document.querySelector('#message').value = 'lis puis rencontre la panne'; document.querySelector('#send').click()");
     n.attendre("document.querySelector('#status')?.textContent === 'Erreur' && document.body.innerText.includes('panne-apres-lecture')", "la panne du modèle est dite");
     let action = "!!document.querySelector('.outil[data-outil=read_file]') && document.querySelector('.outil[data-outil=read_file]').textContent.includes('fn main()')";
-    assert_eq!(n.evaluer(action), json!(true), "une panne n'efface pas la lecture déjà exécutée");
+    // The tool card and the error status come by two pushes: under load (four heavy passes at
+    // luciepc, 18 Nov 2026) the status was shown first. Wait for the card, bounded.
+    n.attendre(action, "une panne n'efface pas la lecture déjà exécutée");
     let proposes = vus.lock().unwrap().first().cloned().unwrap();
     println!("INVENTAIRE navigateur dépôt hors tâche : {proposes:?}");
     assert!(proposes.iter().any(|nom| nom == "read_file"));
@@ -1875,13 +1877,14 @@ fn une_erreur_du_modele_garde_les_actions_du_chat_et_permet_la_reprise() {
     assert!(!proposes.iter().any(|nom| nom == "run_command" || nom == "edit_file"));
     n.evaluer("document.querySelector('#message').value = 'reprends'; document.querySelector('#send').click()");
     n.attendre("document.querySelector('#status')?.textContent === 'fini' && document.body.innerText.includes('Repris après la panne.')", "une demande reprend après l'erreur");
-    assert_eq!(n.evaluer(action), json!(true), "la reprise garde l'historique des actions");
+    n.attendre(action, "la reprise garde l'historique des actions");
     // Un tour parti hors du formulaire (comme après une carte) ne bénéficie
     // d'aucun catch local : l'état poussé doit lui aussi rendre l'erreur.
     let corps = json!({ "backend": id, "message": "nouvelle panne" }).to_string();
     n.evaluer(&format!("fetch('/ide/chat', {{ method: 'POST', headers: {{'Content-Type':'application/json'}}, body: JSON.stringify({corps}) }}); true"));
     n.attendre("document.querySelector('#status')?.textContent === 'Erreur' && document.body.innerText.includes('nouvelle panne') && document.body.innerText.includes('panne-apres-lecture')", "un tour extérieur en erreur n'est pas déclaré fini");
-    assert_eq!(n.evaluer("document.querySelectorAll('.outil[data-outil=read_file]').length"), json!(2));
+    n.attendre("document.querySelectorAll('.outil[data-outil=read_file]').length === 2", "the external turn adds its own read_file card");
+    assert_eq!(n.evaluer("document.querySelectorAll('.outil[data-outil=read_file]').length"), json!(2), "no third card");
     assert!(n.erreurs.is_empty(), "console : {:?}", n.erreurs);
     drop(n);
     let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
