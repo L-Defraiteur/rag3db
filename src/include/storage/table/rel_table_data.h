@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cmath>
+#include <shared_mutex>
 
 #include "common/enums/rel_direction.h"
 #include "common/enums/rel_multiplicity.h"
@@ -78,11 +79,22 @@ public:
     bool checkIfNodeHasRels(transaction::Transaction* transaction,
         common::ValueVector* srcNodeIDVector) const;
 
-    Column* getNbrIDColumn() const { return columns[NBR_ID_COLUMN_ID].get(); }
+    // Le vecteur des colonnes se lit sous columnsMtx partagé et ne change que sous columnsMtx
+    // exclusif, comme celui de NodeTable (un ADD COLUMN sous des lecteurs, 18 novembre 2026).
+    Column* getNbrIDColumn() const {
+        std::shared_lock lck{columnsMtx};
+        return columns[NBR_ID_COLUMN_ID].get();
+    }
     Column* getCSROffsetColumn() const { return csrHeaderColumns.offset.get(); }
     Column* getCSRLengthColumn() const { return csrHeaderColumns.length.get(); }
-    common::column_id_t getNumColumns() const { return columns.size(); }
-    Column* getColumn(common::column_id_t columnID) const { return columns[columnID].get(); }
+    common::column_id_t getNumColumns() const {
+        std::shared_lock lck{columnsMtx};
+        return columns.size();
+    }
+    Column* getColumn(common::column_id_t columnID) const {
+        std::shared_lock lck{columnsMtx};
+        return columns[columnID].get();
+    }
     std::vector<const Column*> getColumns() const {
         std::vector<const Column*> result;
         result.reserve(columns.size());
@@ -172,6 +184,7 @@ private:
 
     CSRHeaderColumns csrHeaderColumns;
     std::vector<std::unique_ptr<Column>> columns;
+    mutable std::shared_mutex columnsMtx;
 
     PersistentVersionRecordHandler persistentVersionRecordHandler;
     InMemoryVersionRecordHandler inMemoryVersionRecordHandler;
