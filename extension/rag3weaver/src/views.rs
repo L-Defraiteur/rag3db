@@ -208,6 +208,69 @@ pub fn load_stack_on(
     }
 }
 
+/// **What a view knows of its own index** (the per-view index state, 18 November 2026): what it reads, and
+/// whether its layer's index is behind — never another layer's. A read under view B is up to date while an
+/// index writes layer A.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ViewState {
+    /// The layer of the view (its stable id).
+    pub layer: String,
+    /// The rank the view reads: the requested one, or the last published generation of its layer; `None` when
+    /// the layer has no generation yet (a worktree layer before 2a′-3, a base not yet published), which is not a
+    /// refusal here.
+    pub rank: Option<i64>,
+    /// An index writes this layer right now (`Lag::is_writing`).
+    pub indexing: bool,
+    /// The files changed in this layer and not yet reindexed, as the watch noted them (`Lag`, its starting
+    /// reconciliation included). Without a watch, nothing is noted and this is 0: the cold tree diff is a
+    /// ticket of its own.
+    pub files_behind: usize,
+    /// The oldest of those changes (Unix milliseconds), when there are some.
+    pub behind_since_ms: Option<u64>,
+    /// `!indexing && files_behind == 0`.
+    pub up_to_date: bool,
+}
+
+/// **The state of a view**, read on `conn` (the snapshot of a tool call, like [`load_stack_on`]) and in `lag`
+/// for the layer of the view in `cell`. A failed read of `_generation` is a refusal; an unknown layer is not.
+pub fn view_state(
+    conn: &dyn crate::connection::DbConnection,
+    dialecte: &dyn crate::dialect::SchemaDialect,
+    vue: &ViewRequest,
+    lag: &crate::catalog::retard::Lag,
+    cell: &crate::scope::Scope,
+) -> Result<ViewState, StackError> {
+    use crate::catalog::retard::{LagKey, LayerId};
+    use crate::connection::{CypherValue, QueryParam};
+    let rank = match (vue.rank, dialecte.latest_generation_rank()) {
+        (Some(r), _) => Some(r),
+        (None, None) => None,
+        (None, Some(dernier)) => {
+            let lu = conn
+                .execute_with_params(&dernier, &[QueryParam::new("couche", CypherValue::String(vue.layer.clone()))])
+                .map_err(|e| StackError::Db(format!("vues : lecture de _generation : {e}")))?;
+            match lu.rows.first().and_then(|r| r.first()) {
+                Some(CypherValue::Int(r)) => Some(*r),
+                _ => None,
+            }
+        }
+    };
+    // RED STUB: the layer folds into the backend's.
+    let _ = LayerId(vue.layer.clone());
+    let key = LagKey::backend(cell);
+    let indexing = lag.is_writing(&key);
+    let behind = lag.summary_of(&key);
+    let files_behind = behind.map_or(0, |b| b.files);
+    Ok(ViewState {
+        layer: vue.layer.clone(),
+        rank,
+        indexing,
+        files_behind,
+        behind_since_ms: behind.map(|b| b.since_ms),
+        up_to_date: !indexing && files_behind == 0,
+    })
+}
+
 #[cfg(all(test, feature = "rag3db-native"))]
 mod tests {
     use super::*;
@@ -357,6 +420,48 @@ mod tests {
         assert!(matches!(e(vue("a", None)), StackError::Cycle { .. }));
         assert!(matches!(e(vue("illisible", None)), StackError::UnreadableTombstones { rank: 1, .. }));
         assert!(matches!(load_stack(&cat, &vue("a", None), &ViewSettings { max_depth: 1, ..r }).unwrap_err(), StackError::TooDeep { max_depth: 1, .. }));
+    }
+
+    /// **A view is up to date while another layer is indexed** (Lucie, 18 November 2026: another worktree must not
+    /// read « indexation en cours » when its own is up to date). Two layers by hand: an index writes layer `a` and
+    /// the watch noted two files in it; view `b` is up to date, not indexing, nothing behind; `a` says it.
+    #[test]
+    fn a_view_is_up_to_date_while_another_layer_is_indexed() {
+        use crate::catalog::retard::{LagKey, LayerId};
+        let cat = catalogue();
+        poser(&cat, "backend", 0, None, "[]");
+        poser(&cat, "a", 1, Some(("backend", 0)), "[]");
+        poser(&cat, "b", 1, Some(("backend", 0)), "[]");
+        let lag = std::sync::Arc::new(crate::catalog::retard::Lag::new());
+        let cell = cat.scope().clone();
+        let a = LagKey { cell: cell.clone(), layer: LayerId("a".into()) };
+        let _ecrit = lag.writing_guard(a.clone());
+        lag.note_in(&a, "src/x.rs", 1_000);
+        lag.note_in(&a, "src/y.rs", 2_000);
+        let etat = |v: &str| view_state(cat.conn(), cat.dialect_arc().as_ref(), &vue(v, None), &lag, &cell).unwrap();
+        let b = etat("b");
+        assert_eq!(
+            b,
+            ViewState { layer: "b".into(), rank: Some(1), indexing: false, files_behind: 0, behind_since_ms: None, up_to_date: true },
+            "view b is held behind layer a's index"
+        );
+        let a_ = etat("a");
+        assert!(a_.indexing && !a_.up_to_date, "layer a, being written, says it is up to date: {a_:?}");
+        assert_eq!((a_.files_behind, a_.behind_since_ms), (2, Some(1_000)), "{a_:?}");
+        assert!(etat("backend").up_to_date, "the backend's layer is held behind layer a's index");
+    }
+
+    /// **An unknown layer is a state, not a refusal**: a worktree layer before 2a′-3 has no generation; its view
+    /// has no rank, and its lag is still read.
+    #[test]
+    fn an_unknown_layer_has_a_state_without_rank() {
+        let cat = catalogue();
+        let lag = crate::catalog::retard::Lag::new();
+        let s = view_state(cat.conn(), cat.dialect_arc().as_ref(), &vue("sans-generation", None), &lag, cat.scope()).unwrap();
+        assert_eq!(s.rank, None);
+        assert!(s.up_to_date, "{s:?}");
+        let s7 = view_state(cat.conn(), cat.dialect_arc().as_ref(), &vue("sans-generation", Some(7)), &lag, cat.scope()).unwrap();
+        assert_eq!(s7.rank, Some(7), "a requested rank is the rank read");
     }
 
     /// **Les réglages des vues** : les défauts sans `views`, les valeurs déclarées, et une clé inconnue
