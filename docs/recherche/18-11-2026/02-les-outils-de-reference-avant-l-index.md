@@ -131,7 +131,11 @@ _Après la fenêtre, sous `poste lourd`._
 - **codeparsers** : trois postes, à partir des chronos d'`ingest_profile`, avec le pic de mémoire relevé par le
   confineur. Ce sont le parsing, la construction des tables et le choix. Les mesures se font sur
   `extension/rag3weaver/src`, puis sur le dépôt entier, puis en ordre de grandeur pour un noyau Linux.
-- **recherche** : le temps d'un index complet sur les mêmes arbres, phase par phase (`[sync-profile]`). Je mesure
+- **recherche** : la sonde `tests/probe_index_timeline.rs` (branche `probe-index-timeline`). Sur une base neuve, le
+  gabarit de code livré indexe la racine telle quelle. Toutes les secondes, la sonde relève les changements d'état
+  (plein texte, relations, vecteurs) et les nouvelles lignes du journal. Toutes les deux secondes, elle relève la
+  taille d'une réponse `usages`. Elle tourne deux fois : sans service d'embarquement (plein texte seul, vecteurs en
+  dette), puis avec. Elle donne le temps d'un index complet sur les mêmes arbres, phase par phase (`[sync-profile]`). Je mesure
   aussi le moment où les relations sont lisibles dans l'index réel, avant le plein texte et les vecteurs : c'est la
   durée que le repli doit battre. Et la forme A elle-même : la même ingestion vers un catalogue en mémoire.
 
