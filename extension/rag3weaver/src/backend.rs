@@ -8938,6 +8938,33 @@ mod tests {
         assert!(text.contains("ta vue est à jour") && text.contains("la vue worktree-a s'indexe : 1 fichier(s)"), "{text}");
     }
 
+    /// **A read says when an index writes its view** (the wait decided by the view's state, 18 November 2026).
+    /// The probe of a first index saw `usages` answer 0 lines for 46 s on rag3weaver/src while the state only
+    /// said « busy »: a full index notes no file in the lag, so the read kept silent. The writing mark is put by
+    /// hand on the backend's layer, with no file noted. The read answers at once (a full index is not short and
+    /// nobody knows its length), and says its view is being indexed. Under another view, it is up to date; once
+    /// the mark drops, nothing is said.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_read_says_when_an_index_writes_its_view() {
+        use crate::catalog::retard::LagKey;
+        let (_dir, backend) = backend_with_read_freshness(Some(3));
+        let (lag, cell) = {
+            let cat = backend.catalog.lock().unwrap();
+            (cat.file_lag(), cat.scope().clone())
+        };
+        let guard = lag.writing_guard(LagKey::backend(&cell));
+        let t = std::time::Instant::now();
+        let answer = backend.call("usages", json!({"name": "depart"})).expect("usages during an index");
+        assert!(t.elapsed() < std::time::Duration::from_secs(1), "no wait for a full index: {:?}", t.elapsed());
+        assert_eq!(answer["index"], json!({"ready": false, "indexing": true, "eta_s": null, "pending_files": 0}), "{answer}");
+        let text = answer["result"].to_string();
+        assert!(text.contains("un index écrit ta vue"), "the answer says it: {text}");
+        drop(guard);
+        let after = backend.call("usages", json!({"name": "depart"})).expect("usages after the index");
+        assert!(after.get("index").is_none(), "nothing is said once the mark drops: {after}");
+    }
+
     /// **A read under another view waits only for its own layer.** The view « enfant » is posed by hand on the
     /// backend's generation; a lag is put in the backend's layer. Under `view: enfant`, the read does not wait
     /// for it, says its view is up to date, and names the backend's.
