@@ -45,6 +45,14 @@ part de l'hôte, et se relira quand elle sera posée.
    dernier tour rangé) et `slices: Vec<{from, to, source, ok}>`. Seul l'hôte les écrit, sous le
    verrou des chats, à la fin d'un rangement réussi. Un rangement raté garde la marque où elle
    était : la tranche repartira, avec la suivante.
+3 bis. **La marque n'avance qu'après le commit** (contrat avec mémoire, 18 novembre). Le rangement
+   rend `{report, archived_through_turn}`. L'hôte n'écrit `archived_through_turn` dans le
+   `ChatFile` que si deux conditions sont réunies :
+   - les écritures de la passe sont validées : la Source de tranche, les L1 et les fiches ;
+   - le rapport ne porte aucune erreur.
+
+   Un appel `archive` seulement terminé ne suffit pas. Une passe qui échoue, ou dont le rapport
+   porte une erreur, laisse la marque où elle était, et la tranche se refait, avec la suivante.
 4. **La compaction ne range que la dernière tranche.** À 80 % de la jauge (`last_call` sur la
    fenêtre du modèle, réglage `memory.compact_at`, 0,8) ou sur `/compact`, l'hôte range la
    tranche ouverte (T+1..maintenant), en attendant cette fois, puis appelle `compose_restart`.
@@ -113,6 +121,12 @@ La part gabarit est décrite par mémoire. La part hôte :
      sur le retour : `ok: false`, `error`, un refus de la porte ou des bornes du pas, un appel
      orphelin refermé).
    - **La garde de l'exclusion** vaut aussi pour `params` et `result`.
+   - **Le filtre des motifs de secrets** (clés, jetons, mots de passe) passe sur `text`,
+     `params` et `result` avant l'écriture d'un `Turn`. Il tourne **dans le gabarit**, à
+     l'écriture, comme la garde de l'exclusion. L'hôte écrit les `Turn` par l'outil du gabarit
+     (forme : mémoire, page du 18, section g), si bien qu'un seul endroit couvre tous les
+     rédacteurs (l'hôte, les hooks Claude Code, l'archiviste). L'hôte ne garde pas de liste de
+     motifs.
    - **`search_turns` passe les filtres** `since`, `until`, `role`, `tool_name` et `status` au
      rappel du memory (forme du gabarit : mémoire).
    - **Les bornes** sont celles du gabarit memory, qui fait foi (accord avec mémoire, 18
