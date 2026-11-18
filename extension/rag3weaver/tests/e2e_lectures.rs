@@ -850,7 +850,10 @@ fn la_recherche_rend_les_mots_pendant_un_create_de_l_index_vectoriel() {
     // **La capacité de la lib liée** : l'état d'un index (NOTED, la colonne `state` de
     // SHOW_INDEXES) n'existe qu'au format 43. Sous une lib d'avant, ce témoin n'a rien à juger :
     // il le dit et rend la main, comme un plancher ; il se juge de lui-même après la bascule.
-    let a_l_etat = std::env::var("RAG3WEAVER_MOTEUR_ANCIEN").as_deref() != Ok("1") && {
+    // La porte est la sonde de la lib liée, et seulement elle : `RAG3WEAVER_MOTEUR_ANCIEN` dit que le
+    // C++ des sources est plus neuf que la lib, pas que la lib manque la colonne (sous 59ac, elle l'a,
+    // et le témoin se joue, drapeau ou non ; c7, 18 novembre 2026).
+    let a_l_etat = {
         let cat = backend.catalog.lock().unwrap();
         let t = rag3weaver::code::scope_chunks(&cat).expect("la table des morceaux du code").table;
         let stockage = cat.vector_storage(&t).expect("le stockage du modèle");
@@ -859,7 +862,8 @@ fn la_recherche_rend_les_mots_pendant_un_create_de_l_index_vectoriel() {
         ligne.expect("l'index vectoriel dans SHOW_INDEXES avant le CREATE").len() > 6
     };
     if !a_l_etat {
-        eprintln!("non jugé : la lib n'a pas la colonne state (format 43 requis), bascule à venir");
+        // La ligne que la passe compte (contrat « not-judged-is-not-passed ») : son nom et sa raison.
+        eprintln!("non jugé : la_recherche_rend_les_mots_pendant_un_create_de_l_index_vectoriel — la lib liée n'a pas la colonne state de SHOW_INDEXES (format 43 requis)");
         return;
     }
 
