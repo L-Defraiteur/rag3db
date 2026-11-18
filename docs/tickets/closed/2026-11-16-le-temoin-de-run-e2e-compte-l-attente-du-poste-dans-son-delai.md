@@ -1,6 +1,6 @@
 # Le témoin de run_e2e.sh compte l'attente du poste dans son délai
 
-- **État** : ouvert (16 novembre 2026) — à G
+- **État** : fait (18 novembre 2026, branche run-e2e-witness-holds-poste) : test_run_e2e.sh se relance une fois sous poste lourd (32G) et ses cas trouvent le poste tenu ; derrière un lourd qui tient l unique place, 2 ÉCHEC en 124 avant, 22 OK après (une seule attente) ; sous un poste déjà tenu, 22 OK en 20 s sans attente
 - **Famille** : produit (outillage : `extension/rag3weaver/scripts/test_run_e2e.sh`)
 - **Gravité** : faux rouge. Le témoin rougit quand le poste est occupé, sans rien dire du code.
 - **Atteignable en service** : non (le témoin d'un script de passe)
