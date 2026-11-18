@@ -621,6 +621,10 @@ name = "sonde_clause_sans_filtre"
 path = "tests/sonde_clause_sans_filtre.rs"
 required-features = ["rag3db-native"]
 [[test]]
+name = "probe_index_timeline"
+path = "tests/probe_index_timeline.rs"
+required-features = ["rag3db-native", "code", "daemon"]
+[[test]]
 name = "sonde_recherche_sans_filtre"
 path = "tests/sonde_recherche_sans_filtre.rs"
 required-features = ["rag3db-native", "code"]
