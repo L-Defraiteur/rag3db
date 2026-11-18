@@ -540,7 +540,10 @@ impl Vue {
             // pose à la fin du pas ne redisent pas le texte streamé, et son préfixe ne s'affiche pas.
             if l["from"] == "teammate" && l["kind"] == "report" {
                 let corps = sans_mot_d_hote(texte);
-                if corps.trim().is_empty() || meme_texte(corps, &self.texte_coule) {
+                // The host's copy (`origin: "host_copy"`) carries the model's last answer only: it is not shown
+                // again when the text streamed over the run contains it. Old mailboxes have the French prefix.
+                let host_copy = l["origin"] == "host_copy";
+                if corps.trim().is_empty() || meme_texte(corps, &self.texte_coule) || (host_copy && contains_text(&self.texte_coule, corps)) {
                     return;
                 }
                 if corps.len() != texte.len() {
@@ -984,6 +987,13 @@ fn sans_mot_d_hote(t: &str) -> &str {
 /// Deux textes égaux aux blancs près.
 fn meme_texte(a: &str, b: &str) -> bool {
     a.split_whitespace().eq(b.split_whitespace())
+}
+
+/// Does `haystack` contain `needle`, up to whitespace?
+fn contains_text(haystack: &str, needle: &str) -> bool {
+    let words = |t: &str| t.split_whitespace().collect::<Vec<_>>().join(" ");
+    let needle = words(needle);
+    !needle.is_empty() && words(haystack).contains(&needle)
 }
 
 /// Le début de `s` qui tient dans `max` colonnes, `…` en bout quand il est coupé : une
