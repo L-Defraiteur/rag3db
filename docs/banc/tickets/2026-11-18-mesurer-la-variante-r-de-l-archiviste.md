@@ -86,6 +86,13 @@ Le contexte qu'une session reçoit après une compaction se compose lui aussi d'
 **La vérité de terrain** est ce que les tours suivants ont eu besoin de savoir. Chaque profil est jugé sur la part de ce
 besoin qu'il couvre, et sur son coût en jetons. Cela se fait après la page de la session mémoire.
 
+**Par distance** (c7, 18 novembre, d'après un avis extérieur) : une contrainte perdue se révèle tard. Chaque profil est
+donc jugé sur les besoins des tours suivants **par distance de la frontière** : les 10 premiers tours, jusqu'à 30, et
+jusqu'à 100. Cela donne trois nombres au lieu d'un, et les erreurs que l'agent commet loin de la reprise comptent.
+
+**Les combinaisons** : seulement des combinaisons informatives (un ingrédient de plus ou de moins à la fois autour de
+S 50), pas toutes les permutations.
+
 ## Pour fermer
 
 Les quatre réglages de la matrice joués dans la forme en deux étapes, jugés contre N en P1, P2 et P5 ; les trois profils d'après compaction jugés contre la compaction de Claude Code ; les deux résultats écrits dans leurs pages.
