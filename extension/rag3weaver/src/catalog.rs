@@ -580,6 +580,14 @@ pub const fn rebuild_threshold(dim: usize) -> usize {
 }
 
 /// Clé de `_catalog_meta` : le choix du premier index et sa raison.
+/// **A write in a layer** (2a′-3, lot 1): the layer (its stable id) and its parent pinned at a rank, `None` for a
+/// root (a history layer without a parent branch).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LayerWrite {
+    pub layer: String,
+    pub parent: Option<(String, i64)>,
+}
+
 /// La clé méta de l'arbre indexé (racine, commit, heure) : voir
 /// [`Catalog::note_indexed_tree`].
 pub const INDEXED_TREE_KEY: &str = "indexed_tree";
@@ -10727,6 +10735,15 @@ fn read_threads() -> u64 {
             v.rang = r;
         }
         rendu
+    }
+
+    /// **Write in another layer than the backend's** (2a′-3, lot 1): while `f` runs, the writer, the births and
+    /// the publication work in `layer.layer`, on its parent pinned at `layer.parent`; the backend's visibility
+    /// comes back after, and the published read view stays the backend's meanwhile.
+    pub fn write_in_layer<R>(&mut self, layer: &LayerWrite, f: impl FnOnce(&mut Self) -> R) -> Result<R, CatalogError> {
+        // RED STUB: the write goes to the backend's layer.
+        let _ = layer;
+        Ok(f(self))
     }
 
     /// **Le dernier rang publié de la couche** (2a′-2, page 06, § 1).
