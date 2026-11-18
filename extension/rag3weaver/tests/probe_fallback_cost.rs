@@ -5,7 +5,7 @@
 //! times `analyze` (parsing and in-file resolution) and the ingestion into an in-memory catalog (form A:
 //! `Rag3dbConnection::in_memory`, `HashEmbedder` of dimension 64), with the ingestion stages of
 //! `ingest_profile`. Memory: the process high-water mark (`VmHWM`) after each step, and the resident size.
-//! One tree per process, so that each peak is its own.
+//! One tree per process, so that each peak is its own. `PROBE_GIT_FILES=1`: the files git tracks under the root.
 //!
 //! Run with: PROBE_ROOT=… cargo test --release --features rag3db-native,code --test probe_fallback_cost -- --ignored --nocapture
 
@@ -66,7 +66,18 @@ fn fallback_cost_of_one_tree() {
     let root = std::env::var("PROBE_ROOT").expect("PROBE_ROOT");
     let t = Instant::now();
     let mut v = Vec::new();
-    files(std::path::Path::new(&root), &mut v);
+    if std::env::var_os("PROBE_GIT_FILES").is_some() {
+        // The files git tracks (the index's own listing), not every file under the root.
+        let out = std::process::Command::new("git").args(["-C", &root, "ls-files", "-z"]).output().expect("git ls-files");
+        for name in out.stdout.split(|b| *b == 0).filter(|n| !n.is_empty()) {
+            let p = std::path::Path::new(&root).join(String::from_utf8_lossy(name).as_ref());
+            if p.extension().and_then(|x| x.to_str()).is_some_and(|x| ["rs", "c", "h", "cpp", "cc", "hpp", "py", "ts", "js", "go", "cs"].contains(&x)) {
+                v.push(p);
+            }
+        }
+    } else {
+        files(std::path::Path::new(&root), &mut v);
+    }
     v.sort();
     let gate = rag3weaver::generated::GeneratedPolicy::default();
     let sources: Vec<(String, String)> = v
