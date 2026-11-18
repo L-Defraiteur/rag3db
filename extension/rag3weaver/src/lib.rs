@@ -116,6 +116,8 @@ pub mod burn_ppocr;
 /// Le code comme graphe : `File` / `Scope` / `Library` via `codeparsers`.
 #[cfg(feature = "code")]
 pub mod code;
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+pub mod memory_resolution;
 /// Les gabarits (graphes, backends, composants, nœuds scriptés) indexés comme du code.
 #[cfg(feature = "code")]
 pub mod code_gabarits;
