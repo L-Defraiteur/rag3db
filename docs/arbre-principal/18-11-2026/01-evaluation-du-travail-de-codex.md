@@ -114,3 +114,11 @@ G du 16 (`~/.local/share/rag3weaver/instantanes/avant-59ac9c86b-20261116-927`, s
 | `lifecycle-copy-v8` | 3.09 Go |
 | `lifecycle-copy-v9` | 3.39 Go |
 | `migration-rehearsal-service-corrective-02` | 6.17 Go |
+
+**Effacé le 18 novembre à 12 h 18**, sur le oui de Lucie donné dans la session d'arbre principal : les
+cinq dossiers du portable et les douze de luciepc ci-dessus, par chemins littéraux (`rm -rf -- <chemin>`), après
+une vérification que rien ne les tenait. **La place rendue est presque nulle** : +0,1 Go au portable, +1 Go à
+luciepc. Ces copies avaient été faites par reflink (btrfs) : elles partageaient presque tous leurs blocs avec les
+instantanés de G ou entre elles, et n'occupaient que ce qu'elles avaient de propre. Les tailles apparentes (18,1 et
+40,1 Go) n'étaient pas de la place disque. Restent sous `bascule-live-20261116` : 1,4 Go au portable et 1,3 Go à
+luciepc, les preuves et outils. Les instantanés de G, les bases vivantes et mes copies de parité sont intacts.
