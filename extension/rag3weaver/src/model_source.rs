@@ -220,6 +220,11 @@ pub struct ModelSource {
     /// **Le modèle de langage par défaut** d'une liste `models.llm` : un seul l'est.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub default: bool,
+    /// **The log of a service posed by hand**, an absolute path : when the
+    /// service does not answer, its last line « ✗ arrêt : <cause> » is said
+    /// (18 November 2026, entry 7). An activation has its own `journal`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub log: Option<std::path::PathBuf>,
 }
 
 /// **A declared model as written in a manifest**, in either form (ticket of 15 November 2026, « provider et
@@ -335,6 +340,7 @@ impl ModelSource {
             name: None,
             max_output_tokens: None,
             restart_budget_tokens: None,
+            log: None,
             default: false,
         }
     }
