@@ -275,11 +275,24 @@ schéma.
    - ses valeurs viennent des attributs libres, rapprochés par voisinage ;
    - les attributs libres deviennent des Refs vers ces valeurs, et l'apport libre d'origine est
      gardé comme provenance (`recopied`, comme les gestes scinder et rejoindre).
-4. **Catégories et valeurs sont « proposées »** jusqu'à une relecture, ou jusqu'à ce que k fiches
-   les portent. C'est la même règle que les fiches (`confirmer_fiche`).
-5. **Le juge** : une valeur sémantiquement proche d'une valeur définie (voisinage des mots, puis le
-   dense sur les descriptions) se **réutilise**, ou le choix d'une valeur neuve se **justifie**
-   dans l'apport.
+4. **La récurrence justifie de proposer, pas de confirmer** (un avis extérieur, retenu par Lucie et
+   c7). Une catégorie ou une valeur reste « proposée » jusqu'à l'un de deux chemins :
+   - **la confirmation automatique** : au moins k fiches la portent, **et** son utilité est
+     constatée (elle a servi au moins un rappel ou un `cited_by` qui a rendu une fiche juste),
+     **et** sa qualité sémantique est jugée : ses valeurs décrivent une même dimension cohérente,
+     sans recouvrement. C'est le même juge que les fiches ;
+   - **la relecture**, par `confirmer_fiche`, pour tout le reste.
+
+   Il n'y a pas de règle « jamais de confirmation automatique » : une confirmation à la main seule
+   ne suit pas quatorze sessions, et c'est la raison même de la voie 3. La confirmation
+   automatique est **bornée par l'utilité constatée**, pas seulement par le compte.
+5. **Le juge** :
+   - une valeur sémantiquement proche d'une valeur définie (voisinage des mots, puis le dense sur
+     les descriptions) se **réutilise**, ou le choix d'une valeur neuve se **justifie** dans
+     l'apport ;
+   - **un état daté n'est pas une catégorie** : « bloqué » ou « résolu » sont des états d'une
+     fiche dans le temps, portés par l'entité `Etat` et la relation `ETAT_DE`. Le juge refuse une
+     valeur de catégorie qui dit un état, en renvoyant vers `Etat`.
 6. **Un outil `put_category`** permet à un agent en tâche de déclarer une catégorie et ses
    valeurs. Mais le mécanisme par défaut est l'archiviste : ce qu'aucun agent ne déclare
    s'établit quand même par la consolidation.
@@ -289,6 +302,24 @@ schéma.
      doublons) ;
    - le gain de « fiches du même type » : pour un échantillon de fiches, le nombre de fiches
      sans lien direct que `cited_by` d'une valeur fait retrouver, et combien sont justes.
+
+### Une mémoire qui ne se valide pas elle-même : révoquer
+
+Le risque, dit par l'avis extérieur : une interprétation approximative devient un L1, puis une
+catégorie, puis une autorité que l'on cite. La protection : **révoquer une Source ou une
+décision**.
+
+- **L'outil `revoke(target, reason)`** prend comme cible une Source, un Apport ou une fiche. Il
+  marque **à revoir** tout ce qui en dépend, **sans rien réécrire** :
+  - les L1 qui citent la Source (`cited_by`) ;
+  - leurs fiches (`to_review`) ;
+  - les catégories et valeurs nées de ces fiches (elles reviennent à « proposée ») ;
+  - les L1 qui citent ces L1 (`CONSOLIDE`) ;
+  - les Refs qui portent ces valeurs (`a_revoir`).
+- **Il va en profondeur**, jusqu'à ce qu'il ne trouve plus de dépendant, et sa réponse liste tout
+  ce qu'il a marqué. C'est le `review_anchored` d'ED, étendu au-delà d'un seul niveau.
+- **La raison** est gardée sur chaque marque, et la révocation se lit dans la trace et dans le
+  rapport de l'archiviste.
 
 ### Ce qui reste à trancher
 
@@ -558,6 +589,14 @@ Lucie : « les L0, les vrais tours, doivent être indexés au fil de l'eau avec 
 - **Un seul écrivain** : l'écriture du tour (`Turn`) passe avant le rangement. Le rangement de la
   tranche avance par petites transactions (un sujet, ses écritures), si bien qu'il ne tient jamais
   la base longtemps devant l'écriture du tour suivant.
+- **Les secrets, filtrés avant l'écriture** : les sorties d'outils portent parfois des secrets
+  venus d'ailleurs que des fichiers exclus (un jeton dans une réponse HTTP, une variable
+  d'environnement affichée). Un **filtre de motifs** passe sur `text`, `params` et `result` avant
+  l'écriture de `Turn` : les clés d'API, les jetons (`Bearer …`, `ghp_…`, `sk-…`), les mots de
+  passe dans une URL ou une affectation. Chaque motif est remplacé par « secret masqué
+  (<genre>) ». Le témoin écrit un tour qui contient un faux jeton, et vérifie que ni `Turn`, ni le
+  plein texte, ni les vecteurs ne le portent. C'est la graine « fuites de secrets » de Lucie (13
+  novembre), appliquée ici en premier.
 - **Ce qui n'entre jamais dans la trace** : la trace porte le code lu et les sorties de commandes.
   Les fichiers exclus du dépôt (ignorés par git, `.vault/`, les secrets) n'y entrent pas. L'hôte
   remplace leur contenu par « exclu du dépôt » avant l'écriture du tour. Le témoin vérifie qu'un
@@ -711,7 +750,10 @@ la fois**.
 
 **Le contrat entre mes lots et celui d'archi** : `archive` sur un intervalle de tours rend
 `{report, archived_through_turn}`. L'hôte écrit lui-même `archived_through_turn` dans le
-`ChatFile`, et l'archiviste ne l'écrit pas. Le témoin de la compaction
+`ChatFile`, et l'archiviste ne l'écrit pas. **La marque n'avance qu'après les écritures validées**
+(le commit de la passe : la Source de tranche, les L1, les fiches), jamais sur un appel seulement
+terminé. Une passe qui échoue, ou qui rend des erreurs dans son rapport, laisse la marque où elle
+était, et la tranche se refait. Je l'écris avec archi, en toutes lettres, dans sa page aussi. Le témoin de la compaction
 (`cx-memoire-compaction-temoin-archi`, 3d30f16ee, chez archi) se relit à cette lumière : sa forme
 « une section par échange » devient « une tranche par fenêtre de jetons ». Je le dirai à archi
 avant son lot.
