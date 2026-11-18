@@ -87,6 +87,18 @@ La part gabarit est décrite par mémoire. La part hôte :
    tours (`from`, `to`, et `chat` : la conversation de la tranche par défaut), rendue comme la
    tranche, bornée en caractères, en lecture seule. Il n'est offert qu'au pas de l'archiviste, et
    à aucun autre agent sans déclaration.
+9 ter. **Suivre la chaîne à la main** (Lucie) : un L1 mène à sa tranche, puis à son intervalle
+   de tours, puis au tour exact, tant que le TTL ne l'a pas effacé.
+   - **`read_turns` prend `(run, from_turn, to_turn)`.** Il lit l'entité `Turn` du memory si elle
+     est là, sinon le `ChatFile`. Il rend chaque tour avec son état :
+     - « indexé » ;
+     - « hors index, lu dans le fichier » ;
+     - « disparu », si le fichier est parti aussi.
+   - **Un L1 rendu par l'hôte porte sa plage en clair** (`run`, `turns a-b`), pour qu'on l'ouvre
+     sans deviner.
+   - **Le tty et l'IDE** montrent cette plage et ouvrent les tours par `read_turns`. Le tty le
+     fera à son tour ; l'IDE, par archi, avec ce lot.
+
 9 bis. **`search_turns`, chercher avant de lire : les tours eux-mêmes sont indexés au fil du run**
    (Lucie : « pas seulement relire, mais chercher » ; « les L0, les vrais tours, doivent quand
    même être indexés au fil de l'eau, avec un TTL »).
