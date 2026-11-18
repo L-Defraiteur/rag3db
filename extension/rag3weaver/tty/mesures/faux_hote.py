@@ -99,6 +99,12 @@ class Gestion(http.server.BaseHTTPRequestHandler):
         elif u.path == "/ide/teammate":
             with cond:
                 self.json({"ok": True, "result": {"mailbox": list(boite), "backend": TACHE, "running": etat["state"] == "running"}})
+        elif u.path == "/ide/l1":
+            # The L1 of a run (archi's route, 18 nov.): two L1, the first over turns 12 to 15.
+            run = urllib.parse.parse_qs(u.query).get("run", ["?"])[0]
+            self.json({"ok": True, "result": {"l1": [
+                {"apport": "a-1", "fiche": "tty-terminal", "section": "turns 12-15 · le mode plain attend la fin", "run": run, "from_turn": 12, "to_turn": 15},
+                {"apport": "a-2", "fiche": "archiviste", "section": "turns 16-16 · une question sur les L1", "run": run, "from_turn": 16, "to_turn": 16}]}})
         elif u.path == "/ide/teammate/list":
             self.json({"ok": True, "result": {"supervisor": "supervisor", "teammates": [{"task": "mesure", "parent": "faux", "state": etat["state"]}]}})
         elif u.path == "/ide/flux":
@@ -170,6 +176,12 @@ class Gestion(http.server.BaseHTTPRequestHandler):
             extra = {k: corps[k] for k in ("peer", "direction", "delivery", "delivery_reason", "reply_to") if k in corps}
             ligne(corps.get("kind", "message"), corps.get("text", ""), de="session", **extra)
             self.json({"ok": True, "result": {"id": boite[-1]["id"]}})
+        elif self.path == "/ide/turns/read":
+            # read_turns (archi's route, 18 nov.): one turn indexed, one read from the chat file, one gone.
+            self.json({"ok": True, "result": {"turns": [
+                {"turn": 12, "state": "indexed", "messages": [{"role": "user", "text": "lance le plain"}, {"role": "tool", "tool_name": "run_command", "status": "ok", "text": "fait"}]},
+                {"turn": 13, "state": "from_chat_file", "messages": [{"role": "assistant", "text": "le tour lu dans le fichier du chat"}]},
+                {"turn": 14, "state": "gone", "messages": []}]}})
         elif self.path == "/faux/marque":
             publier("tokens", {"kind": "Token", "run": "r1", "node": "chat", "seq": 5000, "text": corps.get("texte", ""), "count": 1})
             self.json({"ok": True, "result": {}})
