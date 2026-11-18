@@ -110,8 +110,75 @@ fn generation_commit(catalog: &Catalog, layer: &str, rank: Option<i64>) -> Resul
 /// worktree's HEAD. Without that generation, the work layer waits for `tip` and is not written. The files that
 /// were dirty in the layer's last generation and are clean now leave it, and the parent's rows show again.
 pub fn write_work_generation(catalog: &mut Catalog, worktree: &Path, layer_id: &str, branch_layer: &str) -> Result<i64, String> {
-    let _ = (catalog, worktree, layer_id, branch_layer);
-    Err("RED STUB: work layers are not written yet".into())
+    use crate::connection::{CypherValue, QueryParam};
+    let head = String::from_utf8_lossy(&git(worktree, &["rev-parse", "HEAD"])?).trim().to_string();
+    let lu = catalog
+        .execute_raw_with_params(
+            &format!("MATCH (g:{}) WHERE g.couche = $couche AND g.commit = $commit RETURN max(g.rang)", crate::generations::TABLE),
+            &[QueryParam::new("couche", CypherValue::String(branch_layer.to_string())), QueryParam::new("commit", CypherValue::String(head.clone()))],
+        )
+        .map_err(|e| e.to_string())?;
+    let Some(parent_rank) = lu.rows.first().and_then(|r| r.first()).and_then(|v| v.as_i64()) else {
+        return Err(format!(
+            "couche de travail {layer_id} : la couche {branch_layer} n'a pas de génération au HEAD {head} ; elle attend tip, et ne s'écrit pas sur une autre parente"
+        ));
+    };
+    let dirty = dirty_paths(worktree)?;
+    let before = last_tombstoned_files(catalog, layer_id)?;
+    let source = crate::code_tools::WorkingTree::new(worktree);
+    let mut files = Vec::new();
+    for p in &dirty {
+        files.push((p.clone(), source.read(p)?));
+    }
+    // Clean again: its rows leave the layer, and the parent's show.
+    for p in before.difference(&dirty) {
+        files.push((p.clone(), None));
+    }
+    let layer = LayerWrite { layer: layer_id.to_string(), parent: Some((branch_layer.to_string(), parent_rank)) };
+    catalog
+        .write_in_layer(&layer, |c| {
+            crate::code_sync::reingest_files(c, &source, &files, crate::disponibilite::Disponibilites::TOUT)?;
+            c.set_layer_tombstones(dirty.clone()).map_err(|e| e.to_string())?;
+            c.publier_la_generation(&head, dirty.len()).map_err(|e| e.to_string())
+        })
+        .map_err(|e| e.to_string())?
+}
+
+/// **The dirty paths of a worktree**: changed, added, deleted, renamed (both names), unmerged and untracked, as
+/// `git status --porcelain=v2 -z --untracked-files=all` says them, without refreshing its index.
+fn dirty_paths(worktree: &Path) -> Result<std::collections::BTreeSet<String>, String> {
+    let out = git(worktree, &["--no-optional-locks", "status", "--porcelain=v2", "-z", "--untracked-files=all"])?;
+    let mut paths = std::collections::BTreeSet::new();
+    let mut entries = out.split(|b| *b == 0).filter(|e| !e.is_empty()).map(|e| String::from_utf8_lossy(e).into_owned());
+    while let Some(e) = entries.next() {
+        let field = |n: usize| e.splitn(n, ' ').nth(n - 1).map(str::to_string);
+        match e.chars().next() {
+            Some('1') => paths.extend(field(9)),
+            Some('2') => {
+                paths.extend(field(10));
+                // The original path of a rename follows, as its own entry.
+                paths.extend(entries.next());
+            }
+            Some('u') => paths.extend(field(11)),
+            Some('?') => paths.extend(e.get(2..).map(str::to_string)),
+            _ => {}
+        }
+    }
+    Ok(paths)
+}
+
+/// The files the last generation of `layer` tombstones (empty without one).
+fn last_tombstoned_files(catalog: &Catalog, layer: &str) -> Result<std::collections::BTreeSet<String>, String> {
+    use crate::connection::{CypherValue, QueryParam};
+    let lu = catalog
+        .execute_raw_with_params(
+            &format!("MATCH (g:{}) WHERE g.couche = $couche RETURN g.rang, g.tombstones ORDER BY g.rang DESC LIMIT 1", crate::generations::TABLE),
+            &[QueryParam::new("couche", CypherValue::String(layer.to_string()))],
+        )
+        .map_err(|e| e.to_string())?;
+    let Some(row) = lu.rows.first() else { return Ok(Default::default()) };
+    let (rang, texte) = (row.first().and_then(|v| v.as_i64()).unwrap_or(0), row.get(1).and_then(|v| v.as_str()).unwrap_or("[]"));
+    Ok(crate::views::read_tombstones(layer, rang, texte)?.1)
 }
 
 #[cfg(all(test, feature = "rag3db-native"))]
