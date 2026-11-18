@@ -628,11 +628,26 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
     } catch (e) {
       // Les outils ont pu agir avant la panne : leur trace reste dans la
       // conversation, même si la requête qui attendait le modèle échoue.
-      setItems((cur) => [
-        ...cur.filter((i) => !(i.kind === "message" && i.live && i.parts.length === 0))
-          .map((i) => i.kind === "message" && i.live ? { ...i, live: false } : i),
-        message("error", (e as Error).message),
-      ]);
+      // **The session is the truth at the end of a failed turn too** (18 Nov 2026, under load
+      // at luciepc: the host kept the tool result, but the bus's ToolCallFinished and the pushed
+      // end-of-turn state both came too late or were set aside — a failed request carries no
+      // run — and the card stayed at « read_file… »). The host writes the session before it
+      // answers: read it, then add the error.
+      const erreur = (e as Error).message;
+      etatsRecus.current.clear();
+      const s = await fetchChat(id).catch(() => null);
+      if (s) {
+        setChat(s);
+        toursRef.current = s.turns;
+        follow.current = true;
+        setItems([...fromTurns(s.turns), message("error", erreur)]);
+      } else {
+        setItems((cur) => [
+          ...cur.filter((i) => !(i.kind === "message" && i.live && i.parts.length === 0))
+            .map((i) => i.kind === "message" && i.live ? { ...i, live: false } : i),
+          message("error", erreur),
+        ]);
+      }
       setStatus("Erreur");
     } finally {
       envoiDeLaPage.current = false;
