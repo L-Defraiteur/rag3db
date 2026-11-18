@@ -1505,13 +1505,29 @@ impl DaemonHost {
             // déclarés depuis elle (une relance sur une demande nouvelle ne
             // relit pas l'ancienne).
             let derniere = lines.iter().rposition(|l| l["kind"] == "request" && l["from"] != "teammate" && l["from"] != "host");
-            let consigne = derniere.and_then(|n| lines[n]["text"].as_str()).unwrap_or_default().to_string();
+            // **A follow-up adds to the open request** (S3, 18 Nov 2026): the open request is
+            // every supervisor request since the last `ended`; the first one is the brief, the
+            // later ones are its follow-ups (a « continue » no longer replaces it).
+            let ouverture = lines.iter().rposition(|l| l["kind"] == "ended").map_or(0, |n| n + 1);
+            let ouvertes: Vec<usize> = (ouverture..lines.len()).filter(|&n| lines[n]["kind"] == "request" && lines[n]["from"] != "teammate" && lines[n]["from"] != "host").collect();
+            let consigne = match ouvertes.as_slice() {
+                [] => String::new(),
+                [seule] => lines[*seule]["text"].as_str().unwrap_or_default().to_string(),
+                [premiere, suites @ ..] => {
+                    let mut c = format!("Request (opened at {}): {}", lines[*premiere]["at"].as_str().map(str::to_string).unwrap_or_else(|| lines[*premiere]["at"].to_string()), lines[*premiere]["text"].as_str().unwrap_or_default());
+                    for n in suites {
+                        c.push_str(&format!("\nFollow-up: {}", lines[*n]["text"].as_str().unwrap_or_default()));
+                    }
+                    c
+                }
+            };
+            let premiere_ouverte = ouvertes.first().copied().or(derniere);
             if derniere != demande_suivie {
                 demande_suivie = derniere;
                 trace = derniere.is_some() && files.read_trace() == derniere;
             }
             attente_bornee = None;
-            let faits: Vec<Value> = lines.iter().skip(derniere.map_or(0, |n| n + 1)).filter(|l| l["from"] == "teammate" && l["kind"] == "step_done").cloned().collect();
+            let faits: Vec<Value> = lines.iter().skip(premiere_ouverte.map_or(0, |n| n + 1)).filter(|l| l["from"] == "teammate" && l["kind"] == "step_done").cloned().collect();
             let mut message = frontier_message(number, &news, &plans, last, &consigne, &faits);
             match expected_deliverable(&lines).map(|(_, e)| e) {
                 Some(e) if e == "report" => message.push_str("\nLa demande exige un report (outil report) avant la fin : sans lui, la tâche attend le superviseur.\n"),
