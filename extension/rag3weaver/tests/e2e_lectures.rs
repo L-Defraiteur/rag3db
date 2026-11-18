@@ -774,6 +774,38 @@ fn la_recherche_se_replie_sans_l_index_vectoriel(nom: &str, drapeau: bool, raiso
     assert!(apres.contains(raison), "et pourquoi ({raison}) : {apres}");
 }
 
+/// **`search_code` avant tout index balaie les fichiers** (Lucie, 18 novembre 2026, ticket
+/// `docs/recherche/tickets/2026-11-14-search-code-avant-l-index-ne-balaie-plus-les-fichiers.md`).
+/// Sur une base neuve, rien n'est indexé et aucun masque d'admission n'existe encore : sans `view`,
+/// la seule vue est le worktree du backend, et ses fichiers sont ce que le balayage lit. La recherche
+/// balaie et le dit. Sous une `view` explicite, la règle de c67ca39c6 reste : pas de repli sur des
+/// fichiers non masqués.
+#[cfg(feature = "code")]
+#[test]
+#[ignore]
+fn search_code_before_any_index_scans_the_files_unless_a_view_is_asked() {
+    use rag3weaver::backend::PreparedBackend;
+    use serde_json::json;
+    let tmp = tempfile::tempdir().unwrap();
+    let chemin = manifeste_code(tmp.path(), "scan-before-index");
+    let prepared = PreparedBackend::load(&chemin).expect("le manifeste charge");
+    let base = prepared.path(&prepared.manifest.database);
+    let backend = prepared.open(Box::new(Rag3dbConnection::new(&base).expect("la base")), None).expect("l'ouverture");
+
+    let answer = backend.call("search_code", json!({"query": "alpha", "options": {}})).expect("search_code avant l'index").to_string();
+    assert!(answer.contains("a.rs"), "no index and no view: the scan finds the file: {answer}");
+    assert!(answer.contains("balayage"), "and says it scanned: {answer}");
+
+    // Under an explicit view, no fallback on unmasked files: a refusal, or an answer without the scan.
+    match backend.call("search_code", json!({"query": "alpha", "options": {}, "view": {"layer": "backend"}})) {
+        Err(e) => eprintln!("[scan-before-index] under a view: refused: {e}"),
+        Ok(v) => {
+            let under = v.to_string();
+            assert!(!under.contains("balayage") && !under.contains("a.rs"), "under a view, no scan of unmasked files: {under}");
+        }
+    }
+}
+
 #[cfg(feature = "code")]
 #[test]
 #[ignore]
