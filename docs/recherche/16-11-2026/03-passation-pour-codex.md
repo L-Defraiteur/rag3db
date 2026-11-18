@@ -52,6 +52,11 @@ tailles comptent la passe.
 
 ### 1. L'état d'index qui voit les orphelins (4 à 6 h)
 
+> **18 novembre — commencée par Codex, non qualifiée.** Détournée vers le prérequis « ouvrir un index
+> existant sans écrivain » (`src/fts_existing.rs`), en branche `cx-recherche-fts-existing-canon-proofs-r1`
+> (c16f1a4075). Le relevé vivant dans l'état n'est pas fait. Voir
+> `docs/recherche/18-11-2026/01-evaluation-du-travail-de-codex.md`.
+
 Ticket : `docs/recherche/tickets/2026-11-15-l-etat-d-index-ne-voit-pas-les-orphelins-du-plein-texte.md`.
 - **Faire** : `index.fts_counts` (l'état, `Backend::index_states` dans `backend.rs`, écrit par
   `Catalog::noter_les_comptes_du_plein_texte`) vient aujourd'hui de la seule fin d'un index complet. Le
@@ -148,6 +153,14 @@ Ticket : `docs/recherche/tickets/2026-11-11-le-juge-gemini-omet-required-dans-la
   preuve textuelle attendue du schéma). Le modèle varie, et la cause n'est pas établie. Ne pas ajouter de
   retry.
 - **Bloqué par** : ED, et le quota Gemini (des appels payants), à voir avec l'orchestration.
+
+### Hors liste, trouvée par Codex : la garde des comptes sous les générations
+
+> **18 novembre — en branche, non qualifiée.** Sur master, `check_fts_counts` et `rebuild_pending_fts` ne
+> passent que par `synchroniser`, jamais par `synchroniser_par_generations`. Codex les rend communs
+> (`prepare_fts_for_source_sync`, `code_sync.rs`), avec un rouge produit, en branche
+> `cx-recherche-fts-generation-union-r2` (6365396b63). À reposer, sans crochets de test dans le code de
+> production, puis qualifier avec `e2e_code_sync`.
 
 ### 10. Après 2a′-3 d'arbre principal (1 jour chacun)
 
