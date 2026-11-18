@@ -1,6 +1,6 @@
 # Le refus « est mort avant de répondre » nomme le type de service, pas le programme lancé
 
-- **État** : ouvert (14 novembre 2026, embarquement, relevé pendant le lot de la reprise après plantage ; hors de ce lot, décision de c7)
+- **État** : corrigé (18 novembre 2026, embarquement, branche `dead-start-name`, e4a661c9df) ; ouvert le 14 novembre, relevé pendant le lot de la reprise après plantage
 - **Pour** : embarquement
 - **Famille** : produit
 - **Gravité** : diagnostic trompeur. Un fournisseur qui meurt au démarrage est nommé « rag3weaver-embeddings » quel que soit le programme déclaré, et son journal est cherché sous ce nom.
@@ -26,3 +26,11 @@ Le programme qui est mort était `fournisseur.py`.
 
 Le refus nomme le programme lancé (son chemin, ou son nom de fichier), à côté du type de service. Un
 témoin sur la fixture, rouge d'abord : le refus d'un démarrage mort contient `fournisseur.py`.
+
+## Correction (18 novembre 2026)
+
+`ServeurError::Mort` et `ServeurError::Muet` (`src/serveur.rs`) portent le programme lancé, et leur message le nomme
+par son nom de fichier, à côté du type de service : « « rag3weaver-embeddings » (fournisseur.py) est mort avant de
+répondre (code 70) — le journal est dans … ». Le nom du journal ne change pas (`cause_d_arret` le lit). Témoin
+`a_dead_start_names_the_program` (lib, `serveur.rs`), sur la fixture lancée avec `--arret-nomme` : vu rouge (le refus
+ne nommait que « rag3weaver-embeddings »), puis vert.
