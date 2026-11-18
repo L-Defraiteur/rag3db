@@ -1,6 +1,7 @@
 # Un embarqueur distant sans adresse fait échouer l'estimation et l'index
 
-- **État** : ouvert (18 novembre 2026, embarquement ; relevé en évaluant la clé du débit de Codex)
+- **État** : corrigé (18 novembre 2026, embarquement, branche `rate-compatible`, tête testée 40ace2095d) ;
+  ouvert le même jour, relevé en évaluant la clé du débit de Codex
 - **Pour** : embarquement
 - **Famille** : produit
 - **Gravité** : haute pour qui l'emploie. Un backend dont `models.embed` est en `provider: compatible` ne peut ni
@@ -46,3 +47,19 @@ Le refus remonte donc par `?` : l'estimation d'un premier index échoue, et un i
 ## Taille
 
 2 à 3 heures.
+
+## Correction (18 novembre 2026)
+
+- **`HttpEmbedder::called_address`** (`src/http_embedder.rs`) rend l'URL de base, sans barre finale et sans les
+  identifiants qu'une URL peut porter (`https://user:secret@hôte/v1` → `https://hôte/v1`) : l'adresse entre
+  dans une clé du catalogue. Le débit d'un fournisseur `compatible` se note donc sous `{url}@{poste}`.
+- **La sonde de l'estimation** (`Catalog::probe_embedding_rate`) mesure toujours, mais ne note le débit que sous
+  une provenance connue ; elle ne fait plus échouer l'estimation.
+- **La fin d'un index** (`run_index`) : un débit qui ne peut pas se noter se dit au journal (« débit
+  d'embarquement mesuré non noté (N caractères/s) : … »), et l'index finit sur sa ligne de fin. Les vecteurs
+  étaient déjà écrits.
+- **`note_measured_embedding_rate` refuse toujours une provenance inconnue** : le contrat de la clé ne change
+  pas (`an_unknown_remote_rate_address_never_becomes_local_or_calls_the_provider` reste vert).
+- Témoins, vus rouges puis verts : `the_called_address_is_the_base_url_without_credentials`,
+  `a_probe_without_a_known_provenance_measures_and_notes_nothing`,
+  `an_index_whose_rate_cannot_be_noted_still_ends_and_says_so`.

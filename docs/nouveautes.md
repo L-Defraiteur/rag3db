@@ -1,5 +1,11 @@
 # Nouveautés
 
+- 18 novembre 2026 — **Un embarquement par un fournisseur `compatible` peut estimer et indexer.** Depuis la clé du
+  débit par adresse et par poste, un fournisseur `compatible` (une API d'embarquement au contrat OpenAI) n'avait pas
+  d'adresse : l'estimation échouait, et un index de 512 morceaux et plus finissait en échec une fois ses vecteurs
+  écrits. Il dit désormais son URL de base, sans les identifiants, et son débit se note sous elle. Un débit qui ne
+  peut pas se noter se dit au journal sans faire échouer l'index.
+
 - 16 novembre2026 — **L'ordre des ex æquo tient aussi d'une base réécrite à une base neuve.** Deux résultats au même score se départagent par leur chemin, leur ligne et leur nom (une version par son identité de contenu), et non plus par un identifiant que la réécriture d'une ligne change. Une base qui a son histoire et un index neuf du même arbre rendent la même liste.
 
 - 16 novembre2026 — **Une fonction définie plusieurs fois donne le type de celle que le fichier importe.** `let host = hote(…); host.hosted()`, où `hote` existe dans quatre modules avec quatre types de retour, n'était relié à rien ; c'est maintenant la méthode du type que rend le `hote` importé. Sur rag3weaver, 86 appels de plus sont reliés par le type. **Toutes les bases repassent une fois** (`REGLES_DE_L_ANALYSE` monte à 7 ; pointeur codeparsers : le module du retour, `bd13385`).
