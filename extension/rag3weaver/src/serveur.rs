@@ -96,10 +96,12 @@ pub enum ServeurError {
     /// Le lancement lui-même a échoué (binaire absent, droits…).
     Lancement { nom: String, cause: String },
     /// Le processus est mort avant de répondre. Porte le journal, parce que
-    /// c'est là qu'est la raison.
-    Mort { nom: String, code: Option<i32>, journal: PathBuf },
+    /// c'est là qu'est la raison, et le programme lancé : le type de service
+    /// (`nom`) ne dit pas lequel (une fixture, un fournisseur tiers, une copie
+    /// renommée ; ticket du 14 novembre 2026).
+    Mort { nom: String, programme: String, code: Option<i32>, journal: PathBuf },
     /// Il vit toujours mais n'a pas répondu dans le délai.
-    Muet { nom: String, delai: Duration, journal: PathBuf },
+    Muet { nom: String, programme: String, delai: Duration, journal: PathBuf },
 }
 
 impl std::fmt::Display for ServeurError {
@@ -112,15 +114,17 @@ impl std::fmt::Display for ServeurError {
                  rien n'a été tué, choisissez un autre port ou arrêtez ce service à la main"
             ),
             Self::Lancement { nom, cause } => write!(f, "« {nom} » n'a pas pu être lancé : {cause}"),
-            Self::Mort { nom, code, journal } => write!(
+            Self::Mort { nom, programme, code, journal } => write!(
                 f,
-                "« {nom} » est mort avant de répondre (code {}) — le journal est dans {}",
+                "« {nom} » ({}) est mort avant de répondre (code {}) — le journal est dans {}",
+                nom_du_programme(programme),
                 code.map(|c| c.to_string()).unwrap_or_else(|| "?".into()),
                 journal.display()
             ),
-            Self::Muet { nom, delai, journal } => write!(
+            Self::Muet { nom, programme, delai, journal } => write!(
                 f,
-                "« {nom} » vit mais n'a pas répondu en {:.1} s — le journal est dans {}",
+                "« {nom} » ({}) vit mais n'a pas répondu en {:.1} s — le journal est dans {}",
+                nom_du_programme(programme),
                 delai.as_secs_f32(),
                 journal.display()
             ),
@@ -129,6 +133,11 @@ impl std::fmt::Display for ServeurError {
 }
 
 impl std::error::Error for ServeurError {}
+
+/// The file name of a program, for a refusal : `/x/y/fournisseur.py` → `fournisseur.py`.
+fn nom_du_programme(programme: &str) -> &str {
+    std::path::Path::new(programme).file_name().and_then(|n| n.to_str()).unwrap_or(programme)
+}
 
 /// **La ligne qu'un serveur lancé sur un port nul écrit sur sa sortie**,
 /// suivie de l'adresse qu'il a réellement prise (`127.0.0.1:45123`), avant de
@@ -308,6 +317,7 @@ impl Serveur {
             if let Ok(Some(statut)) = enfant.try_wait() {
                 return Err(ServeurError::Mort {
                     nom: self.nom.clone(),
+                    programme: self.programme.clone(),
                     code: statut.code(),
                     journal,
                 });
@@ -328,6 +338,7 @@ impl Serveur {
                 let _ = enfant.wait();
                 return Err(ServeurError::Muet {
                     nom: self.nom.clone(),
+                    programme: self.programme.clone(),
                     delai: self.attente,
                     journal,
                 });
@@ -361,7 +372,7 @@ impl Serveur {
         let mut reelle: Option<(String, SocketAddr)> = None;
         loop {
             if let Ok(Some(statut)) = enfant.try_wait() {
-                return Err(ServeurError::Mort { nom: self.nom.clone(), code: statut.code(), journal });
+                return Err(ServeurError::Mort { nom: self.nom.clone(), programme: self.programme.clone(), code: statut.code(), journal });
             }
             if reelle.is_none() {
                 if let Ok(a) = reception.try_recv() {
@@ -384,7 +395,7 @@ impl Serveur {
             if debut.elapsed() >= self.attente {
                 let _ = enfant.kill();
                 let _ = enfant.wait();
-                return Err(ServeurError::Muet { nom: self.nom.clone(), delai: self.attente, journal });
+                return Err(ServeurError::Muet { nom: self.nom.clone(), programme: self.programme.clone(), delai: self.attente, journal });
             }
             std::thread::sleep(Duration::from_millis(50));
         }
