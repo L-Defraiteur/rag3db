@@ -73,4 +73,7 @@ Le nombre de scopes ne change pas, et aucun couple CONSUMES ne naît ni ne part,
 La mesure du banc sous le manifeste de Lucie (`docs/banc/18-11-2026/02-la-pile-de-codeparsers-sous-le-manifeste-de-lucie.md`,
 698efc4f3a ; arbre 1de1f86d88, index neuf par le master du 18, lib 3d706f709) retrouve reliées par leur fichier les
 27 lambdas Python et la lambda de spdlog que l'index du 16 laissait sans `DEFINED_IN`.
+Sur toute la base, à fichiers égaux : 3 814 scopes sans `DEFINED_IN` dans l'index du 16 par f10336d3f2, 63 dans
+celui par 41144f8d22, après la pile du 16 ; 0 dans celui du 18. Les 63 se répartissent en 35 dans `app.js`, que
+l'exclusion de Lucie écarte, et 28 qui sont ceux de ce ticket (les deux comptes sont du banc, relus le 18).
 
