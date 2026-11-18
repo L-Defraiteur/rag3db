@@ -20,7 +20,7 @@ nomme chaque écart. Deux régimes, choisis par --regime :
 L'identité d'un résultat est son `_uuid`, et à défaut (file_path, name, start_line).
 
 Usage : parite_search_code.py AVANT.json APRES.json [--regime optimisation|migration|reponses]
-        [--ensemble-min 0.9] [--rang-max 3]
+        [--ensemble-min 0.9] [--rang-max 3] [--score-tolerance 1e-5]
 La dernière ligne est VERT ou ROUGE ; le code de sortie est 0 ou 1.
 """
 import argparse
@@ -49,6 +49,8 @@ def main():
     p.add_argument("--regime", choices=["optimisation", "migration", "reponses"], default="optimisation")
     p.add_argument("--ensemble-min", type=float, default=0.9)
     p.add_argument("--rang-max", type=int, default=3)
+    p.add_argument("--score-tolerance", type=float, default=0.0,
+                   help="optimisation and reponses: two scores are equal when they differ by less (the order stays exact)")
     a = p.parse_args()
     A, B = json.load(open(a.avant)), json.load(open(a.apres))
     if A["jeu"] != B["jeu"]:
@@ -56,7 +58,7 @@ def main():
         return 1
     print(f"avant : {A['base']} ({A['forme_de_la_base']})")
     print(f"après : {B['base']} ({B['forme_de_la_base']})")
-    print(f"régime : {a.regime} ; k = {A['k']}")
+    print(f"régime : {a.regime} ; k = {A['k']}" + (f" ; scores à {a.score_tolerance} près" if a.score_tolerance > 0 else ""))
     par_b = {(x["requete"], x["forme"]): x for x in B["releve"]}
     rouges, cas, communs_total, places_total = 0, 0, 0, 0
     for xa in A["releve"]:
@@ -77,7 +79,7 @@ def main():
             for i, (x, y) in enumerate(zip(ra, rb), 1):
                 if ident(x) != ident(y):
                     ecarts.append(f"rang {i} : {nom(x)} devient {nom(y)}")
-                elif x.get("score") != y.get("score"):
+                elif x.get("score") != y.get("score") and not (a.score_tolerance > 0 and abs((x.get("score") or 0) - (y.get("score") or 0)) < a.score_tolerance):
                     ecarts.append(f"rang {i} : {nom(x)}, score {x.get('score')} devient {y.get('score')}")
         else:
             communs = set(ka) & set(kb)

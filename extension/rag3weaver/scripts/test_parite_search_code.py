@@ -61,5 +61,36 @@ class ParityComparator(unittest.TestCase):
         self.assertEqual(self.judge(releve(r), releve(replaced), "migration"), (0, "VERT"))
 
 
+class ScoreTolerance(unittest.TestCase):
+    """`--score-tolerance`: two scores are equal when they differ by less; the order is still exact."""
+
+    def judge(self, before, after, *options):
+        with tempfile.TemporaryDirectory() as d:
+            a, b = os.path.join(d, "a.json"), os.path.join(d, "b.json")
+            json.dump(before, open(a, "w")); json.dump(after, open(b, "w"))
+            run = subprocess.run([sys.executable, "-I", COMPARATOR, a, b, *options], capture_output=True, text=True)
+            return run.returncode, run.stdout.strip().splitlines()[-1] if run.stdout.strip() else run.stderr.strip()[-200:]
+
+    def test_a_score_drift_under_the_tolerance_is_green(self):
+        r = [result(i) for i in range(10)]
+        drift = [dict(x) for x in r]; drift[3]["score"] += 1e-6
+        self.assertEqual(self.judge(releve(r), releve(drift), "--regime", "reponses", "--score-tolerance", "1e-5"), (0, "VERT"))
+
+    def test_without_the_option_the_drift_stays_red(self):
+        r = [result(i) for i in range(10)]
+        drift = [dict(x) for x in r]; drift[3]["score"] += 1e-6
+        self.assertEqual(self.judge(releve(r), releve(drift), "--regime", "reponses"), (1, "ROUGE"))
+
+    def test_a_drift_over_the_tolerance_is_red(self):
+        r = [result(i) for i in range(10)]
+        drift = [dict(x) for x in r]; drift[3]["score"] += 1e-3
+        self.assertEqual(self.judge(releve(r), releve(drift), "--regime", "reponses", "--score-tolerance", "1e-5"), (1, "ROUGE"))
+
+    def test_the_tolerance_never_forgives_a_swapped_rank(self):
+        r = [result(i) for i in range(10)]
+        swapped = r[:]; swapped[0], swapped[1] = swapped[1], swapped[0]
+        self.assertEqual(self.judge(releve(r), releve(swapped), "--regime", "optimisation", "--score-tolerance", "1"), (1, "ROUGE"))
+
+
 if __name__ == "__main__":
     unittest.main()

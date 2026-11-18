@@ -71,6 +71,10 @@ fi
 if ! python3 -B "$ICI/scripts/test_parite_search_code.py" > /dev/null 2>&1; then
   refuser test_parite_search_code
 fi
+# Vector parity by tolerance (the same text in a batch of another shape gives other last bits): its witness.
+if ! python3 -B "$ICI/scripts/test_vector_parity.py" > /dev/null 2>&1; then
+  refuser test_vector_parity
+fi
 # Le lanceur possède et libère son état de fixture ; le garde doit rester
 # rouge pour les résidus étrangers et les défauts de nettoyage.
 if ! timeout 60 bash "$ICI/scripts/test_etat_suite_e2e.sh"; then
