@@ -76,3 +76,41 @@ Identité : les 76 commits de master et les 141 des branches sont en gmail. Le s
 
 On n'y apprend qu'à la fin, et en passant, que les trois bases n'ont pas été migrées. Une passation dit cela en
 première ligne.
+
+## 5. Le retrait des copies de travail (18 novembre, au mot de Lucie)
+
+Lucie a dit « ok oui » (par c7, 18 novembre) pour retirer les copies de travail de Codex sous
+`~/.cache/rag3weaver-build/bascule-live-20261116/`. Seuls partent les dossiers qui portent une copie de base
+(`*.rag3db`). Restent : les petits dossiers de preuves et d'outils que sa passation cite (`*-proofs-*`,
+`*-observed-*`, `*-red-*`, `*-control-*`, `*-tools-*`, `*-scopes`), moins de 2 Go aux deux postes ; les instantanés de
+G du 16 (`~/.local/share/rag3weaver/instantanes/avant-59ac9c86b-20261116-927`, sa variante `-controle`, et
+`diagnostic-code-principal-20261116-122933`) ; mes copies de la répétition et de la parité, sous
+`~/.cache/rag3weaver-build/bascule/` à luciepc. Avant l'effacement, aucun processus ne tenait un fichier de ces dossiers
+(`fuser` sur chacun, et aucun répertoire courant dedans), aux deux postes.
+
+**Au portable** (18.1 Go) :
+
+| Dossier | Taille |
+|---|---|
+| `cold-files-01` | 4.53 Go |
+| `cold-inspection-01` | 0.00 Go |
+| `cold-inspection-02` | 4.53 Go |
+| `id-sets-portable-01` | 4.53 Go |
+| `immutable-portable-01` | 4.53 Go |
+
+**À luciepc** (40.1 Go) :
+
+| Dossier | Taille |
+|---|---|
+| `debt-acquittement-copy-v1` | 3.22 Go |
+| `debt-audit-ro-result-v1` | 3.22 Go |
+| `debt-fin-ro-result-v1` | 3.37 Go |
+| `fresh-directions-01` | 1.79 Go |
+| `fresh-sets-01` | 1.79 Go |
+| `id-sets-pc-01` | 3.94 Go |
+| `immutable-pc-01` | 3.94 Go |
+| `lifecycle-copy-v1` | 3.09 Go |
+| `lifecycle-copy-v4` | 3.09 Go |
+| `lifecycle-copy-v8` | 3.09 Go |
+| `lifecycle-copy-v9` | 3.39 Go |
+| `migration-rehearsal-service-corrective-02` | 6.17 Go |
