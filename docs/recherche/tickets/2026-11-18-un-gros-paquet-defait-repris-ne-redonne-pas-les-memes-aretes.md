@@ -44,3 +44,46 @@ vérifié.
   À trancher avec le propriétaire de l'écrivain.
 - Ajouter cette suite à `tools/poste/required_suites.txt` pour les chemins de l'écrivain, pour qu'elle ne
   rougisse plus sans être jouée.
+
+## La cause (ED, 18 novembre 2026)
+
+**Les nœuds diffèrent aussi, pas seulement les arêtes.** Les écarts portent sur Scope, File et File_Chunk, en plus des
+arêtes. L'empreinte des nœuds compte `_uuid` et `_depuis`. Relevé sur les bases laissées par un rouge, à luciepc
+(`~/.cache/rag3weaver-build/e2e-gardes/e2e_tx_par_paquet_arret-20261118-144341-4031639`) :
+
+- dans la reprise, 50 000 scopes ont `_depuis = 1` et 50 000 ont `_depuis = 0` ;
+- dans le témoin, les 100 000 ont `_depuis = 0`.
+
+Le contenu est le même. L'uuid d'une occurrence porte `_depuis` : les 50 000 du paquet repris ont donc d'autres
+uuids, et les arêtes qui partent d'eux aussi.
+
+**Le commit fautif est 365dc75f74** (« sync_source d'une source déjà indexée passe par l'écrivain des
+générations »). Bissection à luciepc, lib 59ac, avec ce seul test :
+
+| Commit | Verdict |
+|---|---|
+| c693496a8 | vert |
+| 483479fc57 | vert |
+| 3ad8950c4f | vert |
+| d82ec8c916 | vert |
+| de006b6de0 | (en cours) |
+| 365dc75f74 | rouge |
+| 9556cb949b | rouge |
+| 513ed0d54a | rouge |
+| c33574eb9 (sous 59ac et sous 373b) | rouge |
+
+La lib est hors de cause.
+
+Le mécanisme :
+
+1. La reprise relance `sync_source` sur une source dont la première passe s'est arrêtée entre deux paquets.
+2. `source_deja_indexee` y voit un scope : la source passe donc par l'écrivain des générations.
+3. L'écrivain fait naître le paquet repris au rang en attente (1).
+4. Avant ce commit, la reprise prenait sa session d'instantané (takeover), et tout naissait au rang 0.
+
+**Le correctif** (branche `first-sync-resumes-by-snapshot`) : une session d'instantané ouverte sur la source, alors
+que rien n'est publié dans la couche, est une première passe interrompue ; elle reprend par l'instantané. La route de
+l'écrivain garde ce qu'elle protège, les lignes publiées retirées : rien n'est publié dans ce cas.
+
+L'autre voie, juger le test par la clé visible, n'est pas prise : deux bases au même contenu doivent avoir les mêmes
+identités (parité de lucivy, ordre des ex æquo).
