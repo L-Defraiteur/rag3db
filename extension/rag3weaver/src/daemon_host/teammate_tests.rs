@@ -1924,14 +1924,15 @@ impl crate::daemon_host::rangement::Rangeur for TurnsOnly {
 #[test]
 fn the_teammate_steps_go_to_the_memory_as_they_go() {
     let d = tempfile::tempdir().unwrap();
-    let (depot, manifeste) = depot_inscrit(d.path(), true);
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
     let mut m: Value = serde_json::from_str(&std::fs::read_to_string(&manifeste).unwrap()).unwrap();
     m["bilans"] = json!({ "memoire": "memoire/backend.json" });
     m["memory"] = json!({ "slice_tokens": 30 });
     std::fs::write(&manifeste, serde_json::to_string_pretty(&m).unwrap()).unwrap();
-    // The task takes the manifest as committed in the repository.
+    // The task takes the manifest as committed in its declarations.
+    let declarations = manifeste.parent().unwrap();
     for args in [&["add", "-A"][..], &["commit", "-q", "-m", "the memory of the session"]] {
-        assert!(std::process::Command::new("git").arg("-C").arg(&depot).args(args).status().unwrap().success());
+        assert!(std::process::Command::new("git").args(args).current_dir(declarations).status().unwrap().success(), "git {args:?}");
     }
     let model: ChatModel = Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
         Ok(Arc::new(CallbackLlm::new("archived-steps", 8192, |turns, opts, sink| {
