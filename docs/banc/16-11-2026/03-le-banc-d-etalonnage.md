@@ -171,3 +171,51 @@ l'estimation.
 | 3 | la mesure, à luciepc et depuis le portable, sous `poste mesure` | 1 h 30 |
 | 4 | la vérification contre `[montre]` et la clé de l'index, puis la table de cette page | 1 h |
 | 5 | l'écriture au catalogue, une fois la clé décidée par embarquement | dans son lot |
+
+## 9. La mesure de luciepc (18 novembre 2026, 13 h 18 – 13 h 25)
+
+**Le banc** : `tests/bench_embedding_rate.rs`, sur la branche `banc-etalonnage-bench`, tête 4bc1c615f6 (base master du
+18). Le témoin a d'abord été vu rouge, au bon endroit (`measurement is not implemented`), puis vert. La mesure suit le
+chemin du catalogue (`EmbedNode`) : tri par octets, `burst::plan`, 32 par défaut. Seuls les appels sont chronométrés,
+et les caractères comptés sont ceux qui partent, coupés au plafond.
+
+**L'artefact, relu avant le premier chiffre** :
+- le jeu figé, sha256 `458f83f0e8877cd3c585eb6b3a54e0ef4b42c0e15cd4e1a72439854326acaa3d` ;
+- le commit propre, le binaire du banc (`5d7063f1…`) et le binaire de service (`a70f1e46…`) ;
+- les deux services réels, sans usage en cours : 7878 granite-278m (dim 768, conseil `[128, 512]`, plafond 12 000) et
+  7879 bge-m3 (dim 1 024, conseil `[32, 512]`) ;
+- au départ, sous `poste mesure` : 0 lourd tenu et card2 à 1 %. Le 7880 est froid, non réveillé.
+
+Trois répétitions par point, après une chauffe hors mesure. Le p90 reste à moins de 1 % du p50 partout. Le dépôt compte
+6 morceaux par fichier au médian. Le JSON complet est `docs/banc/18-11-2026/etalonnage-luciepc.json`.
+
+| luciepc → service | lots | textes | lots (le plus grand) | caractères/s p50 | morceaux/s p50 | 1er lot (ms) | morceaux en 6 s | **fichiers moyens du dépôt en 6 s** |
+|---|---|---|---|---|---|---|---|---|
+| 7878 granite-278m | du catalogue, textes réels | 4 096 | 56 (128) | 194 422 | 281,4 | 75 | 1 688 | **281** |
+| 7878 granite-278m | du catalogue, morceaux pleins de 1 500 car. | 1 024 | 17 (64) | 214 908 | 148,2 | 424 | 889 | 148 |
+| 7878 granite-278m | fixes de 1 | 64 | 64 (1) | 15 564 | 18,8 | 51 | 113 | 19 |
+| 7878 granite-278m | fixes de 8 | 64 | 8 (8) | 155 345 | 187,6 | 13 | 1 125 | 188 |
+| 7878 granite-278m | fixes de 32 | 256 | 8 (32) | 177 450 | 227,6 | 23 | 1 366 | 228 |
+| 7878 granite-278m | fixes de 128 | 1 024 | 8 (128) | 194 169 | 272,4 | 88 | 1 634 | 272 |
+| 7879 bge-m3 | du catalogue, textes réels | 4 096 | 207 (32) | 42 142 | 61,0 | 27 | 366 | **61** |
+| 7879 bge-m3 | du catalogue, morceaux pleins | 1 024 | 66 (16) | 59 363 | 40,9 | 383 | 246 | 41 |
+| 7879 bge-m3 | fixes de 1 | 64 | 64 (1) | 12 135 | 14,7 | 57 | 88 | 15 |
+| 7879 bge-m3 | fixes de 8 | 64 | 8 (8) | 41 008 | 49,5 | 20 | 297 | 50 |
+| 7879 bge-m3 | fixes de 32 | 256 | 8 (32) | 46 392 | 59,5 | 39 | 357 | 60 |
+
+**Ce que 6 s valent, pour Lucie** : par granite-278m, sur luciepc, environ **1 700 morceaux, soit environ 280 fichiers
+moyens du dépôt**. Par bge-m3, environ **370 morceaux, soit environ 60 fichiers**. Envoyer un morceau à la fois divise
+le débit par 15 (granite) ou par 4 (bge-m3). Les lots du catalogue tiennent déjà presque le meilleur point.
+
+**Ce qui n'est pas encore mesuré** :
+- la passe depuis la tablette, par les tunnels 7979 et 7980. Elle était en file, et c7 l'a retirée parce qu'elle
+  bloquait sept lourds à luciepc. Elle se jouera dans un creux du soir ou dans la passe de nuit de G, sous
+  `poste mesure` à luciepc, car c'est sa carte qui calcule ;
+- le pas 4, la vérification contre les lignes `[montre]` d'une réindexation réelle et contre la clé de l'index. Un
+  premier ordre de grandeur, à confirmer : B′ du 16 a embarqué 98 825 morceaux par le 7878 en environ 520 s
+  au-delà de son index (787 s en tout, 202 s pour un index sans vecteurs le même jour). Cela fait environ
+  190 morceaux/s, écritures comprises, soit environ 68 % du débit du banc. L'écart dépasse les 30 % du § 4 ; sa
+  cause probable est l'écriture des vecteurs et la reconstruction des index, que le banc ne compte pas. C'est à
+  prouver par `[montre]` ;
+- le pas 5, l'écriture sous la clé `embedding_rate:{modèle}:{adresse}@{poste}`. Elle attend la lecture de la clé
+  par embarquement.

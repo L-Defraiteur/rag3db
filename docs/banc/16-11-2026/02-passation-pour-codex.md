@@ -149,6 +149,8 @@ sur la copie finale de la bascule, quand c7 la refera : même méthode, contre u
 
 ### Entrée 6. Le banc d'étalonnage du débit d'embarquement
 
+**Repris par banc le 18 novembre** : le pas 2 est vert sur `banc-etalonnage-bench` (4bc1c615f6, depuis le témoin de Codex 675cf02000). Le pas 3 est mesuré à luciepc (page 03, § 9, et `docs/banc/18-11-2026/etalonnage-luciepc.json`). Restent la passe par les tunnels (créneau de c7), le pas 4 et le pas 5.
+
 **En cours par banc, arrêté le 16 novembre à 11 h (mot de Lucie)** :
 - **Fait** :
   - la page de conception, `docs/banc/16-11-2026/03-le-banc-d-etalonnage.md`, avec les réponses de c7 et

@@ -1,0 +1,557 @@
+{
+  "host": "LuciePC",
+  "median_chunks_per_file": 6.0,
+  "reps": 3,
+  "services": [
+    {
+      "address": "127.0.0.1:7878",
+      "identity": {
+        "chars_per_token": 3,
+        "chauffe": {
+          "embed": {
+            "duree_ms": 2796,
+            "etat": "complete",
+            "formes": [
+              {
+                "lot": 1,
+                "mots": 40
+              },
+              {
+                "lot": 8,
+                "mots": 40
+              },
+              {
+                "lot": 32,
+                "mots": 40
+              },
+              {
+                "lot": 128,
+                "mots": 40
+              },
+              {
+                "lot": 1,
+                "mots": 90
+              },
+              {
+                "lot": 8,
+                "mots": 90
+              },
+              {
+                "lot": 32,
+                "mots": 90
+              },
+              {
+                "lot": 128,
+                "mots": 90
+              },
+              {
+                "lot": 1,
+                "mots": 190
+              },
+              {
+                "lot": 8,
+                "mots": 190
+              },
+              {
+                "lot": 32,
+                "mots": 190
+              },
+              {
+                "lot": 128,
+                "mots": 190
+              },
+              {
+                "lot": 1,
+                "mots": 380
+              },
+              {
+                "lot": 8,
+                "mots": 380
+              },
+              {
+                "lot": 32,
+                "mots": 380
+              },
+              {
+                "lot": 128,
+                "mots": 380
+              }
+            ]
+          }
+        },
+        "dim": 768,
+        "dual": false,
+        "executable": "/home/lucied/.local/bin/rag3weaver-embeddings@1794771361",
+        "factice": false,
+        "lot_conseille": [
+          128,
+          512
+        ],
+        "max_chars_per_text": 12000,
+        "modele": "granite-278m",
+        "precision": "Flex32",
+        "service": "rag3weaver-embeddings",
+        "sparse": false,
+        "usage": {
+          "baux": 0,
+          "en_cours": 0
+        }
+      },
+      "key": "granite-278m:127.0.0.1:7878@LuciePC",
+      "points": [
+        {
+          "batches": 56,
+          "batches_per_second": {
+            "p50": 3.847311428175826
+          },
+          "chars_per_second": {
+            "p50": 194422.16547312064,
+            "p90": 195308.23718551063,
+            "runs": [
+              195308.23718551063,
+              194422.16547312064,
+              188797.1590737156
+            ]
+          },
+          "chunks_in_6s": 1688.4201010508766,
+          "chunks_per_second": {
+            "p50": 281.4033501751461,
+            "p90": 282.68583536789765
+          },
+          "first_batch_ms": [
+            75.163816,
+            76.126032,
+            111.21599
+          ],
+          "input_chars": 2846637,
+          "largest_batch": 128,
+          "name": "real, catalog batches",
+          "repository_files_in_6s": 281.4033501751461,
+          "sent_chars": 2829935,
+          "texts": 4096
+        },
+        {
+          "batches": 17,
+          "batches_per_second": {
+            "p50": 2.4602891590323726
+          },
+          "chars_per_second": {
+            "p50": 214908.28416196164,
+            "p90": 223569.03813708853,
+            "runs": [
+              200711.35143888489,
+              223569.03813708853,
+              214908.28416196164
+            ]
+          },
+          "chunks_in_6s": 889.177446652641,
+          "chunks_per_second": {
+            "p50": 148.1962411087735,
+            "p90": 154.16851523160068
+          },
+          "first_batch_ms": [
+            515.6822559999999,
+            423.868164,
+            462.158148
+          ],
+          "input_chars": 1484964,
+          "largest_batch": 64,
+          "name": "full, catalog batches",
+          "repository_files_in_6s": 148.1962411087735,
+          "sent_chars": 1484964,
+          "texts": 1024
+        },
+        {
+          "batches": 64,
+          "batches_per_second": {
+            "p50": 18.79270627819919
+          },
+          "chars_per_second": {
+            "p50": 15564.178066811688,
+            "p90": 15655.700017702504,
+            "runs": [
+              15520.367653859497,
+              15655.700017702504,
+              15564.178066811688
+            ]
+          },
+          "chunks_in_6s": 112.75623766919514,
+          "chunks_per_second": {
+            "p50": 18.79270627819919,
+            "p90": 18.90321292581757
+          },
+          "first_batch_ms": [
+            50.59344,
+            51.187884000000004,
+            50.915832
+          ],
+          "input_chars": 53005,
+          "largest_batch": 1,
+          "name": "real, batches of 1",
+          "repository_files_in_6s": 18.79270627819919,
+          "sent_chars": 53005,
+          "texts": 64
+        },
+        {
+          "batches": 8,
+          "batches_per_second": {
+            "p50": 23.44611447796338
+          },
+          "chars_per_second": {
+            "p50": 155345.16223805613,
+            "p90": 156313.89695481802,
+            "runs": [
+              156313.89695481802,
+              155345.16223805613,
+              154894.9975271739
+            ]
+          },
+          "chunks_in_6s": 1125.4134949422423,
+          "chunks_per_second": {
+            "p50": 187.56891582370704,
+            "p90": 188.7385983418235
+          },
+          "first_batch_ms": [
+            15.750163,
+            14.616488,
+            13.394827
+          ],
+          "input_chars": 53005,
+          "largest_batch": 8,
+          "name": "real, batches of 8",
+          "repository_files_in_6s": 187.56891582370704,
+          "sent_chars": 53005,
+          "texts": 64
+        },
+        {
+          "batches": 8,
+          "batches_per_second": {
+            "p50": 7.113541931690563
+          },
+          "chars_per_second": {
+            "p50": 177449.97106424547,
+            "p90": 179614.2062034072,
+            "runs": [
+              162579.5142079178,
+              179614.2062034072,
+              177449.97106424547
+            ]
+          },
+          "chunks_in_6s": 1365.800050884588,
+          "chunks_per_second": {
+            "p50": 227.633341814098,
+            "p90": 230.40962897968183
+          },
+          "first_batch_ms": [
+            22.786225,
+            23.161564,
+            24.380292
+          ],
+          "input_chars": 199563,
+          "largest_batch": 32,
+          "name": "real, batches of 32",
+          "repository_files_in_6s": 227.633341814098,
+          "sent_chars": 199563,
+          "texts": 256
+        },
+        {
+          "batches": 8,
+          "batches_per_second": {
+            "p50": 2.127890703579409
+          },
+          "chars_per_second": {
+            "p50": 194168.6967699313,
+            "p90": 194829.24057570647,
+            "runs": [
+              188919.0029625016,
+              194829.24057570647,
+              194168.6967699313
+            ]
+          },
+          "chunks_in_6s": 1634.220060348986,
+          "chunks_per_second": {
+            "p50": 272.3700100581643,
+            "p90": 273.2965874417269
+          },
+          "first_batch_ms": [
+            92.187376,
+            88.161653,
+            98.67743499999999
+          ],
+          "input_chars": 743922,
+          "largest_batch": 128,
+          "name": "real, batches of 128",
+          "repository_files_in_6s": 272.3700100581643,
+          "sent_chars": 729995,
+          "texts": 1024
+        }
+      ]
+    },
+    {
+      "address": "127.0.0.1:7879",
+      "identity": {
+        "chars_per_token": 3,
+        "chauffe": {
+          "embed": {
+            "duree_ms": 5365,
+            "etat": "complete",
+            "formes": [
+              {
+                "lot": 1,
+                "mots": 40
+              },
+              {
+                "lot": 8,
+                "mots": 40
+              },
+              {
+                "lot": 32,
+                "mots": 40
+              },
+              {
+                "lot": 32,
+                "mots": 40
+              },
+              {
+                "lot": 1,
+                "mots": 90
+              },
+              {
+                "lot": 8,
+                "mots": 90
+              },
+              {
+                "lot": 32,
+                "mots": 90
+              },
+              {
+                "lot": 32,
+                "mots": 90
+              },
+              {
+                "lot": 1,
+                "mots": 190
+              },
+              {
+                "lot": 8,
+                "mots": 190
+              },
+              {
+                "lot": 32,
+                "mots": 190
+              },
+              {
+                "lot": 32,
+                "mots": 190
+              },
+              {
+                "lot": 1,
+                "mots": 380
+              },
+              {
+                "lot": 8,
+                "mots": 380
+              },
+              {
+                "lot": 32,
+                "mots": 380
+              },
+              {
+                "lot": 32,
+                "mots": 380
+              }
+            ]
+          },
+          "ocr": {
+            "duree_ms": 0,
+            "etat": "non_executee",
+            "formes": []
+          },
+          "rerank": {
+            "duree_ms": 0,
+            "etat": "non_executee",
+            "formes": []
+          }
+        },
+        "dim": 1024,
+        "dual": true,
+        "executable": "/home/lucied/.local/bin/rag3weaver-embeddings@1794771361",
+        "factice": false,
+        "lot_conseille": [
+          32,
+          512
+        ],
+        "max_chars_per_text": 12000,
+        "modele": "bge-m3",
+        "ocr": "ppocrv6-tiny",
+        "precision": "Flex32",
+        "reranker": "bge-reranker-v2-m3",
+        "service": "rag3weaver-embeddings",
+        "sparse": true,
+        "usage": {
+          "baux": 0,
+          "en_cours": 0
+        }
+      },
+      "key": "bge-m3:127.0.0.1:7879@LuciePC",
+      "points": [
+        {
+          "batches": 207,
+          "batches_per_second": {
+            "p50": 3.08253620788577
+          },
+          "chars_per_second": {
+            "p50": 42141.91837421844,
+            "p90": 42212.89608276519,
+            "runs": [
+              41890.38476455086,
+              42141.91837421844,
+              42212.89608276519
+            ]
+          },
+          "chunks_in_6s": 365.97299442029316,
+          "chunks_per_second": {
+            "p50": 60.99549907004886,
+            "p90": 61.098231003541144
+          },
+          "first_batch_ms": [
+            43.786905000000004,
+            26.763683999999998,
+            28.042465
+          ],
+          "input_chars": 2846637,
+          "largest_batch": 32,
+          "name": "real, catalog batches",
+          "repository_files_in_6s": 60.99549907004886,
+          "sent_chars": 2829935,
+          "texts": 4096
+        },
+        {
+          "batches": 66,
+          "batches_per_second": {
+            "p50": 2.6383979530484223
+          },
+          "chars_per_second": {
+            "p50": 59362.51481743329,
+            "p90": 59376.327410595695,
+            "runs": [
+              59362.51481743329,
+              59376.327410595695,
+              59263.44084830458
+            ]
+          },
+          "chunks_in_6s": 245.6108639928713,
+          "chunks_per_second": {
+            "p50": 40.93514399881188,
+            "p90": 40.944668873083785
+          },
+          "first_batch_ms": [
+            388.17871599999995,
+            383.266261,
+            424.251014
+          ],
+          "input_chars": 1484964,
+          "largest_batch": 16,
+          "name": "full, catalog batches",
+          "repository_files_in_6s": 40.93514399881188,
+          "sent_chars": 1484964,
+          "texts": 1024
+        },
+        {
+          "batches": 64,
+          "batches_per_second": {
+            "p50": 14.652798237907966
+          },
+          "chars_per_second": {
+            "p50": 12135.49329062987,
+            "p90": 12188.961898382922,
+            "runs": [
+              12135.49329062987,
+              12119.04407424043,
+              12188.961898382922
+            ]
+          },
+          "chunks_in_6s": 87.9167894274478,
+          "chunks_per_second": {
+            "p50": 14.652798237907966,
+            "p90": 14.717358013329063
+          },
+          "first_batch_ms": [
+            59.190976,
+            57.179528,
+            57.074721000000004
+          ],
+          "input_chars": 53005,
+          "largest_batch": 1,
+          "name": "real, batches of 1",
+          "repository_files_in_6s": 14.652798237907966,
+          "sent_chars": 53005,
+          "texts": 64
+        },
+        {
+          "batches": 8,
+          "batches_per_second": {
+            "p50": 6.189266823212101
+          },
+          "chars_per_second": {
+            "p50": 41007.76099554468,
+            "p90": 41172.94028453224,
+            "runs": [
+              33920.60440620543,
+              41172.94028453224,
+              41007.76099554468
+            ]
+          },
+          "chunks_in_6s": 297.08480751418085,
+          "chunks_per_second": {
+            "p50": 49.51413458569681,
+            "p90": 49.71357755325089
+          },
+          "first_batch_ms": [
+            79.549066,
+            20.831934999999998,
+            20.090566
+          ],
+          "input_chars": 53005,
+          "largest_batch": 8,
+          "name": "real, batches of 8",
+          "repository_files_in_6s": 49.51413458569681,
+          "sent_chars": 53005,
+          "texts": 64
+        },
+        {
+          "batches": 8,
+          "batches_per_second": {
+            "p50": 1.8597361736559468
+          },
+          "chars_per_second": {
+            "p50": 46391.816252912715,
+            "p90": 46471.853031295745,
+            "runs": [
+              45628.53635675549,
+              46471.853031295745,
+              46391.816252912715
+            ]
+          },
+          "chunks_in_6s": 357.0693453419418,
+          "chunks_per_second": {
+            "p50": 59.5115575569903,
+            "p90": 59.61422897035878
+          },
+          "first_batch_ms": [
+            39.495944,
+            39.992515,
+            40.93888
+          ],
+          "input_chars": 199563,
+          "largest_batch": 32,
+          "name": "real, batches of 32",
+          "repository_files_in_6s": 59.511557556990304,
+          "sent_chars": 199563,
+          "texts": 256
+        }
+      ]
+    }
+  ],
+  "set": "/home/lucied/.cache/rag3db-banc-notes/etalonnage/set.json"
+}
