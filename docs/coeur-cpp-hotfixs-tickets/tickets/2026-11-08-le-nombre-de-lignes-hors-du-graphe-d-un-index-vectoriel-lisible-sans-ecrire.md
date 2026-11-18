@@ -41,6 +41,21 @@ Elle doit répondre sous l'instantané de l'appelant, comme `state` (lu au holde
 Un index bâti, puis un COPY forcé validé juste après le CREATE (la recette du ticket du 18 octobre)
 : la lecture rend le nombre de lignes hors du graphe ; après la reconstruction, elle rend zéro.
 
+## La décision de Lucie (18 novembre 2026, par c7)
+
+« ok (a) mais étudier si (b) est si lourd à faire et ce qu'il pourrait permettre d'autre ».
+
+- **(a), à faire en lot, rouge d'abord** : une borne supérieure sans changement de format, la colonne
+  `rows_outside_graph_at_most` de `SHOW_INDEXES`. Elle compte les lignes au-delà de `numCheckpointedNodes`, plus ce
+  que le dernier bâti a sauté, et elle est nommée comme une borne, pas comme un compte exact. Elle suffit au seuil de
+  reconstruction du produit (N* ≈ 13 400 lignes à la dimension 768). Le témoin de Codex
+  (`test/transaction/vector_index_diagnostics_test.cpp`, branche `cx-hotfixs-rows-outside-graph-red-pilot-v2`) se
+  reprend, avec le nom de colonne et la valeur attendue de (a).
+- **(b), une page courte, sans code, « à lire par Lucie »**, après (a). Elle chiffre ce que le marqueur d'appartenance
+  coûterait vraiment (format, GC et MVCC, migration des bases, en jours), et ce qu'il ouvrirait d'autre (quelles
+  requêtes ou quelles garanties). La conception de Codex
+  (`docs/coeur-cpp-hotfixs-tickets/17-11-2026/01-…` à `03-…` sur sa branche) en est le point de départ.
+
 ## Pour le fermer
 
 La lecture, son témoin, et la ligne dans le ticket du 18 octobre qui dit que le produit peut
