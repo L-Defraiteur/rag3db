@@ -6,6 +6,8 @@
 #include "catalog/catalog_entry/rel_group_catalog_entry.h"
 #include "common/exception/message.h"
 #include "common/exception/runtime.h"
+#include "common/exception/transaction_manager.h"
+#include "common/string_format.h"
 #include "common/test_hooks.h"
 #include "common/types/types.h"
 #include "main/client_context.h"
@@ -48,6 +50,15 @@ void RelTableScanState::setToTable(const Transaction* transaction, Table* table_
             columns[i] = nullptr;
         } else {
             columns[i] = table->cast<RelTable>().getColumn(columnID, direction);
+            // Retirée par un DROP puis un point de reprise depuis l'instantané : un refus nommé,
+            // comme pour une table de nœuds (NodeTableScanState::setToTable).
+            if (columns[i] == nullptr) {
+                throw TransactionManagerException(stringFormat(
+                    "{} column {} of table {} was dropped and checkpointed after this transaction "
+                    "started; retry the transaction.",
+                    Transaction::SCHEMA_CHANGED_RETRY, columnID,
+                    table->cast<RelTable>().getTableName()));
+            }
         }
     }
     csrOffsetColumn = table->cast<RelTable>().getCSROffsetColumn(direction);

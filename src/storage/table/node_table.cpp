@@ -223,7 +223,18 @@ void NodeTableScanState::setToTable(const Transaction* transaction, Table* table
             columnID == INVALID_COLUMN_ID || columnID == ROW_IDX_COLUMN_ID) {
             columns[i] = nullptr;
         } else {
-            columns[i] = &table->cast<NodeTable>().getColumn(columnID);
+            // Une colonne que l'instantané voit encore, mais qu'un DROP validé depuis puis un point
+            // de reprise ont retirée du stockage : un refus nommé, au lieu de balayer une colonne
+            // détruite (ticket du point de reprise qui détruit une colonne retirée qu'un lecteur
+            // plus ancien tient encore, 18 novembre 2026). La transaction recommence.
+            auto& nodeTable = table->cast<NodeTable>();
+            if (!nodeTable.hasColumn(columnID)) {
+                throw TransactionManagerException(stringFormat(
+                    "{} column {} of table {} was dropped and checkpointed after this transaction "
+                    "started; retry the transaction.",
+                    Transaction::SCHEMA_CHANGED_RETRY, columnID, nodeTable.getTableName()));
+            }
+            columns[i] = &nodeTable.getColumn(columnID);
         }
     }
 }
