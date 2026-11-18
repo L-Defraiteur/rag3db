@@ -425,13 +425,26 @@ fn indexer_et_dire(
     match run_index(&catalog, source.as_ref(), &journal, kept_bytes, generated, watch) {
         Ok(reste) => {
             // L'arbre et le commit indexés, que chaque lecture dira.
-            if let Some(root) = crate::workspace_path::worktree_root(&source.cursor()) {
+            let arbre = crate::workspace_path::worktree_root(&source.cursor()).map(|root| {
                 // `git` d'abord, hors du verrou ; le verrou pour l'écriture seule.
                 let v = crate::catalog::indexed_tree_of(root);
                 if let Ok(cat) = catalog.lock() {
                     let cell = cat.scope().clone();
                     if let Err(e) = cat.note_indexed_tree(&cell, &v) {
                         log(&journal, &format!("(l'arbre indexé n'a pas pu être noté : {e})"));
+                    }
+                }
+                v
+            });
+            // **The backend's layer publishes its generation** (2a′-3, lot 2; ticket of 16 November 2026): the
+            // pending rank becomes published at the indexed commit, so that a view without rank reads what a call
+            // without view reads. An index stopped or failed publishes nothing.
+            if let Ok(mut cat) = catalog.lock() {
+                if cat.rang_en_attente().is_some() {
+                    let commit = arbre.as_ref().and_then(|v| v.get("commit")).and_then(|c| c.as_str()).unwrap_or("").to_string();
+                    let sales = arbre.as_ref().and_then(|v| v.get("dirty_paths")).and_then(|n| n.as_u64()).unwrap_or(0) as usize;
+                    if let Err(e) = cat.publier_la_generation(&commit, sales) {
+                        log(&journal, &format!("(la génération n'a pas pu être publiée : {e})"));
                     }
                 }
             }

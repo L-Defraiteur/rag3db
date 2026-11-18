@@ -618,8 +618,9 @@ pub fn indexed_tree_of(root: &str) -> serde_json::Value {
     let commit = git(&["rev-parse", "--short", "HEAD"]).unwrap_or_default();
     // La branche : `HEAD` détaché n'en a pas (null).
     let branch = git(&["rev-parse", "--abbrev-ref", "HEAD"]).filter(|b| !b.is_empty() && b != "HEAD");
-    let dirty = git(&["status", "--porcelain", "--untracked-files=no"]).is_some_and(|s| !s.is_empty());
-    serde_json::json!({ "root": root, "commit": commit, "branch": branch, "dirty": dirty, "at_ms": retard::now_ms() })
+    let status = git(&["status", "--porcelain", "--untracked-files=no"]).unwrap_or_default();
+    let dirty_paths = status.lines().filter(|l| !l.trim().is_empty()).count();
+    serde_json::json!({ "root": root, "commit": commit, "branch": branch, "dirty": dirty_paths > 0, "dirty_paths": dirty_paths, "at_ms": retard::now_ms() })
 }
 pub const EMBEDDING_CHOICE_KEY: &str = "embedding_choice";
 
