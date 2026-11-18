@@ -102,7 +102,7 @@ La part gabarit est décrite par mémoire. La part hôte :
      marque qu'après un rangement réussi. La réponse est donc unique. Un tour sans tranche est
      « pas encore rangé ».
    - **Les L1 de la tranche** viennent de `cited_by` sur la Source de tranche (gabarit :
-     mémoire). L'hôte offre `turn_origin(run, turn)` : la tranche, son run et ses L1, ou « pas
+     mémoire). L'hôte offre `trace_turn(run, turn)` (un seul nom avec l'outil du gabarit, accord du 18 novembre ; à côté, `get_slice` et `list_slices` du gabarit) : la tranche, son run et ses L1, ou « pas
      encore rangé ». C'est en lecture seule, offert au chat, à l'archiviste et à l'IDE.
 
 9 quater. **Les tours cherchables par le temps, et les appels d'outils filtrables** (Lucie :
