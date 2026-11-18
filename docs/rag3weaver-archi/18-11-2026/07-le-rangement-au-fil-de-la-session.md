@@ -118,6 +118,13 @@ La part gabarit est décrite par mémoire. La part hôte :
      mémoire). L'hôte offre `trace_turn(run, turn)` (un seul nom avec l'outil du gabarit, accord du 18 novembre ; à côté, `get_slice` et `list_slices` du gabarit) : la tranche, son run et ses L1, ou « pas
      encore rangé ». C'est en lecture seule, offert au chat, à l'archiviste et à l'IDE.
 
+9 ter bis. **Les routes de l'IDE et du tty**, par run et non par tâche, pour servir le chat et
+   l'équipier (noms définitifs, pris de tty le 18 novembre) :
+   - `GET /ide/l1?backend=<id>&run=<run>` : les L1 d'un run dans l'ordre des tours (`apport`,
+     `fiche`, `section`, `run`, `from_turn`, `to_turn`) ;
+   - `POST /ide/turns/read`, avec `{apport}` ou `{run, from, to}` : `read_turns`, chaque tour avec
+     son état, `indexed`, `from_chat_file` ou `gone`.
+
 9 quater. **Les tours cherchables par le temps, et les appels d'outils filtrables** (Lucie :
    revoir « ce qui a mal marché », vérifier qu'un outil a bien été appelé la veille).
    - **Ce que l'hôte écrit pour chaque tour** : un `Turn` avec `at`, `run`, `turn` et `role`.
