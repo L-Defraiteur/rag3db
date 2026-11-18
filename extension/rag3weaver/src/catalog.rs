@@ -601,6 +601,9 @@ pub(crate) struct LayerWriteState {
     pub(crate) files: std::collections::BTreeSet<String>,
     backend_births: std::collections::HashMap<String, i64>,
     backend_copied_edges: usize,
+    /// The tombstones the write sets itself ([`Catalog::set_layer_tombstones`]): a work layer names its dirty
+    /// files exactly, without the union with its earlier generations.
+    tombstones: Option<std::collections::BTreeSet<String>>,
 }
 
 /// La clé méta de l'arbre indexé (racine, commit, heure) : voir
@@ -10771,6 +10774,7 @@ fn read_threads() -> u64 {
             files: Default::default(),
             backend_births: std::mem::take(&mut self.naissances),
             backend_copied_edges: std::mem::take(&mut self.recopies_en_attente),
+            tombstones: None,
         });
         let rendu = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(self)));
         if let Some(state) = self.layer_write.take() {
@@ -10787,6 +10791,15 @@ fn read_threads() -> u64 {
             Ok(r) => Ok(r),
             Err(panique) => std::panic::resume_unwind(panique),
         }
+    }
+
+    /// **The tombstones of the generation being written in a layer**, set by the caller instead of the union of the
+    /// files it rewrote with those of its earlier generations (a work layer: exactly its dirty files). Outside a
+    /// write in a layer, a refusal.
+    pub fn set_layer_tombstones(&mut self, files: std::collections::BTreeSet<String>) -> Result<(), CatalogError> {
+        let state = self.layer_write.as_mut().ok_or_else(|| CatalogError::DbError("les tombstones d'une couche : aucune écriture dans une couche en cours".into()))?;
+        state.tombstones = Some(files);
+        Ok(())
     }
 
     /// **The visibility of a layer to write in**: the backend's tables and sets, the layer's last published rank
@@ -10851,7 +10864,10 @@ fn read_threads() -> u64 {
         let (couche, w, publie) = (v.couche.clone(), v.rang, v.rang_publie);
         let (parente, tombstones) = match &self.layer_write {
             None => (None, "[]".to_string()),
-            Some(state) => (state.parent.clone(), self.layer_tombstones(&couche, publie, &state.files)?),
+            Some(state) => match &state.tombstones {
+                Some(files) => (state.parent.clone(), serde_json::json!({ "keys": [], "files": files }).to_string()),
+                None => (state.parent.clone(), self.layer_tombstones(&couche, publie, &state.files)?),
+            },
         };
         let poser = self
             .dialect
