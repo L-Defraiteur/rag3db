@@ -986,12 +986,24 @@ fn default_index_wait_s() -> u64 {
 
 /// The line a read puts at the top of its answer when the index is not ready.
 fn not_ready_line(state: &Value) -> String {
+    let others: Vec<String> = state["other_views"]
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .map(|o| format!("la vue {} s'indexe : {} fichier(s)", o["layer"].as_str().unwrap_or("?"), o["pending_files"].as_u64().unwrap_or(0)))
+                .collect()
+        })
+        .unwrap_or_default();
+    let others = if others.is_empty() { String::new() } else { format!(" ; {}", others.join(" ; ")) };
+    if state["ready"] == json!(true) {
+        return format!("index : ta vue est à jour{others}.");
+    }
     let files = state["pending_files"].as_u64().unwrap_or(0);
     let when = match state["eta_s"].as_u64() {
         Some(n) => format!("environ {n} s"),
         None => "durée inconnue".to_string(),
     };
-    format!("index pas prêt, {when} : la réponse porte sur ce qui est déjà indexé ({files} fichier(s) en attente).")
+    format!("index pas prêt, {when} : la réponse porte sur ce qui est déjà indexé ({files} fichier(s) en attente){others}.")
 }
 
 /// **`view` d'un appel d'outil** : `{"layer": <id de couche>, "rank"?: <génération>}`.
@@ -4731,11 +4743,6 @@ impl Backend {
                 metadata_ports.push(port.clone());
             }
         }
-        // **A lagging index** (point 7 of Lucie's vision, 16 November 2026): a read
-        // tool waits for it under `search.index_wait_s`, or answers at once and
-        // says it is not ready. Before the graph, so that its snapshot sees the
-        // catch-up.
-        let index_state = if attachment.freshness { self.wait_for_a_lagging_index(prepared) } else { None };
         struct RestoreView(Option<crate::views::ViewRequest>);
         impl Drop for RestoreView {
             fn drop(&mut self) {
@@ -4746,6 +4753,11 @@ impl Backend {
         let previous = CALL_VIEW.with(|v| v.replace(view.clone()));
         VIEW_READ.with(|v| *v.borrow_mut() = None);
         let _restore = RestoreView(previous);
+        // **A lagging index** (point 7 of Lucie's vision, 16 November 2026): a read
+        // tool waits for it under `search.index_wait_s`, or answers at once and
+        // says it is not ready. Before the graph, so that its snapshot sees the
+        // catch-up; after the call's view is set, so that it waits for that view's layer only.
+        let index_state = if attachment.freshness { self.wait_for_a_lagging_index(prepared) } else { None };
         let mut response = self.execute_graph(prepared, tool, &def, &metadata_ports, &policy, Some(GraphTarget::Tool(name.to_string())))?;
         if view.is_some() {
             // La vue lue se dit dans la réponse ; un appel qui n'a pas posé de vue
@@ -4801,21 +4813,44 @@ impl Backend {
     /// up within the wait, and nothing is said. Otherwise the `index` field of
     /// the answer: `ready: false`, the estimate in seconds (`null` without an
     /// observed rate), the files still pending, and `waited_s` when it waited.
+    ///
+    /// **By view** (Lucie, 18 November 2026): the wait reads the lag of the layer the call reads — the layer
+    /// of its `view`, else the backend's — and never waits for another layer. The other layers that lag are
+    /// named (`other_views`), and then the answer says its own view is up to date (`ready: true`).
     fn wait_for_a_lagging_index(&self, prepared: &PreparedBackend) -> Option<Value> {
+        use crate::catalog::retard::{LagKey, LayerId};
         let vue = self.read_view.current()?;
         let cell = CELL_OF_CALL.with(|c| c.borrow().clone()).unwrap_or_else(|| vue.scope.clone());
-        let estimate = vue.file_lag.estimate(&cell)?;
-        let wait_s = prepared.manifest.search.as_ref().map_or_else(default_index_wait_s, |s| s.index_wait_s);
-        let eta_s = estimate.eta_ms.map(|ms| ms.div_ceil(1000));
-        if estimate.eta_ms.is_some_and(|ms| ms > wait_s * 1000) {
-            return Some(json!({"ready": false, "eta_s": eta_s, "pending_files": estimate.pending_files}));
+        let layer = CALL_VIEW.with(|v| v.borrow().as_ref().map(|r| LayerId(r.layer.clone()))).unwrap_or_else(LayerId::backend);
+        let key = LagKey { cell: cell.clone(), layer: layer.clone() };
+        let own = vue.file_lag.estimate_of(&key).and_then(|estimate| {
+            let wait_s = prepared.manifest.search.as_ref().map_or_else(default_index_wait_s, |s| s.index_wait_s);
+            let eta_s = estimate.eta_ms.map(|ms| ms.div_ceil(1000));
+            if estimate.eta_ms.is_some_and(|ms| ms > wait_s * 1000) {
+                return Some(json!({"ready": false, "eta_s": eta_s, "pending_files": estimate.pending_files}));
+            }
+            let start = std::time::Instant::now();
+            if vue.file_lag.wait_caught_up_of(&key, start + std::time::Duration::from_secs(wait_s)) {
+                return None;
+            }
+            let pending = vue.file_lag.estimate_of(&key).map_or(estimate.pending_files, |e| e.pending_files);
+            Some(json!({"ready": false, "eta_s": eta_s, "pending_files": pending, "waited_s": start.elapsed().as_secs()}))
+        });
+        let others: Vec<Value> = vue
+            .file_lag
+            .layers_behind(&cell)
+            .into_iter()
+            .filter(|(other, _)| *other != layer)
+            .map(|(other, files)| json!({"layer": other.as_str(), "pending_files": files}))
+            .collect();
+        match (own, others.is_empty()) {
+            (own, true) => own,
+            (None, false) => Some(json!({"ready": true, "other_views": others})),
+            (Some(mut own), false) => {
+                own["other_views"] = json!(others);
+                Some(own)
+            }
         }
-        let start = std::time::Instant::now();
-        if vue.file_lag.wait_caught_up(&cell, start + std::time::Duration::from_secs(wait_s)) {
-            return None;
-        }
-        let pending = vue.file_lag.estimate(&cell).map_or(estimate.pending_files, |e| e.pending_files);
-        Some(json!({"ready": false, "eta_s": eta_s, "pending_files": pending, "waited_s": start.elapsed().as_secs()}))
     }
 
     /// **La fraîcheur d'une réponse de lecture** (`ToolAttachment::freshness`) : le champ
