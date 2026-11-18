@@ -1250,15 +1250,16 @@ fn la_maintenance_nocturne_se_desactive_au_manifeste() {
 // table qu'aucune recherche n'avait encore ouverte — le premier pas de la bascule des bases, juste après la pose
 // d'une lib et le redémarrage de l'hôte. La nuit, elle, ne maintenait que les tables déjà ouvertes.
 
-/// Un backend écrit (trois fiches, et un orphelin posé au plein texte à 900 000), puis l'hôte arrêté : le
-/// manifeste, un hôte neuf et sa session, sans aucune recherche.
-fn restarted_host(d: &Path, label: &str) -> (PathBuf, DaemonHost, String) {
+/// Un backend écrit (`fiches` fiches, et un orphelin posé au plein texte à 900 000), puis l'hôte arrêté : le
+/// manifeste, un hôte neuf et sa session, sans aucune recherche. La nuit refuse une purge au-delà de 5 % des
+/// documents : son témoin pose assez de fiches pour que l'orphelin reste sous ce plafond.
+fn restarted_host(d: &Path, label: &str, fiches: usize) -> (PathBuf, DaemonHost, String) {
     let m = manifeste_plein_texte(d);
     let first = DaemonHost::new();
     let s = first.open_session("témoin", None, vec![], None);
     let id = ok(&first.open(Some(&s), &m))["id"].as_str().unwrap().to_string();
-    for titre in ["une", "deux", "trois"] {
-        ok(&put(&first, &s, &m, "put_fiche", &format!("{label} {titre}")));
+    for i in 0..fiches {
+        ok(&put(&first, &s, &m, "put_fiche", &format!("{label} {i}")));
     }
     orphelins(&first, &id, 900_000..900_001);
     first.shutdown();
@@ -1272,7 +1273,7 @@ fn restarted_host(d: &Path, label: &str) -> (PathBuf, DaemonHost, String) {
 #[ignore]
 fn maintenance_routes_open_the_index_after_a_host_restart() {
     let d = dossier("maintenance-after-restart");
-    let (m, host, s) = restarted_host(&d, "restart");
+    let (m, host, s) = restarted_host(&d, "restart", 3);
     ok(&host.open(Some(&s), &m));
     // No search before: the live ids open the index themselves.
     let (live, token) = releve(&host, &s, &m);
@@ -1293,12 +1294,12 @@ fn maintenance_routes_open_the_index_after_a_host_restart() {
 #[ignore]
 fn nightly_maintenance_covers_tables_no_search_has_opened() {
     let d = dossier("maintenance-nightly-after-restart");
-    let (m, host, s) = restarted_host(&d, "nightly");
+    let (m, host, s) = restarted_host(&d, "nightly", 30);
     ok(&host.open(Some(&s), &m));
     let done = host.maintenance_periodique(a("03:31"));
     assert_eq!(done.len(), 1, "[check: nightly-after-restart] {done:?}");
     assert!(done[0].contains("1 orphelin"), "[check: nightly-purges-after-restart] {done:?}");
-    assert_eq!(releve(&host, &s, &m).0.len(), 3, "[check: orphan-gone-after-restart]");
+    assert_eq!(releve(&host, &s, &m).0.len(), 30, "[check: orphan-gone-after-restart]");
     host.shutdown();
     let _ = std::fs::remove_dir_all(d);
 }
