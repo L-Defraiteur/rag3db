@@ -11,7 +11,7 @@
 //! | `ddl` | create_table, create_rel_table, create_meta_table, create_blob_table, create_aside_table, alter_add_column_default | recherche |
 //! | `meta` | upsert_meta, load_meta_by_prefix, upsert_scope_node, count_rows | recherche |
 //! | `read` | select, hop, select_by_uuids, select_all, select_by_field, exists_by_uuid, select_snapshot_scope, select_all_uuids | recherche |
-//! | `load` | write (Load, Upsert), batch_upsert, copy_nodes_from_csv, copy_links_from_csv | codeparsers |
+//! | `load` | write (Upsert), batch_upsert — no bulk load: `Write::Load` and `copy_*_from_csv` are refused, the typed upsert carries the rows | codeparsers |
 //! | `count` | count, count_links | codeparsers |
 //! | `links` | write (Link), batch_link (also for batch_link_labeled), existing_links (also for existing_links_with) | codeparsers |
 //! | `aside` | upsert_aside, select_aside, select_aside_by_session, clear_aside, purge_aside_before | codeparsers |
@@ -49,7 +49,7 @@ impl SchemaDialect for MemoryDialect {
     }
 
     fn capabilities(&self) -> DialectCapabilities {
-        DialectCapabilities { cypher: false, transactions: true, bulk_load: true, structured_fields: false, fanout: false, two_step_hops: false }
+        DialectCapabilities { cypher: false, transactions: true, bulk_load: false, structured_fields: false, fanout: false, two_step_hops: false }
     }
 
     fn vector_index_listing(&self) -> Option<String> {
@@ -138,6 +138,11 @@ impl SchemaDialect for MemoryDialect {
     fn write(&self, write: &rag3weaver_ir::Write) -> Result<String, rag3weaver_ir::TranslateError> {
         use rag3weaver_ir::Write as W;
         write.validate()?;
+        // **No bulk load** (codeparsers, 18 November 2026): a CSV has no types, and the typed path exists — refused by
+        // its name, the batch goes back through `Upsert` / `Link`, its `$items` typed, with no file in between.
+        if matches!(write, W::Load { .. }) {
+            return Err(rag3weaver_ir::TranslateError::Untranslated { dialect: self.name().to_string(), form: "Write::Load" });
+        }
         let family = match write {
             W::Load { .. } | W::Upsert { .. } => "load",
             W::Link { .. } => "links",
@@ -148,11 +153,11 @@ impl SchemaDialect for MemoryDialect {
     fn batch_upsert(&self, table: &str, columns: &[&str]) -> String {
         op("load", "batch_upsert", json!({"table": table, "columns": columns}))
     }
-    fn copy_nodes_from_csv(&self, table: &str, columns: &[&str], path: &str) -> Option<String> {
-        Some(op("load", "copy_nodes_from_csv", json!({"table": table, "columns": columns, "path": path})))
+    fn copy_nodes_from_csv(&self, _table: &str, _columns: &[&str], _path: &str) -> Option<String> {
+        None
     }
-    fn copy_links_from_csv(&self, rel_table: &str, ends: (&str, &str), prop_columns: &[&str], path: &str) -> Option<String> {
-        Some(op("load", "copy_links_from_csv", json!({"relation": rel_table, "ends": [ends.0, ends.1], "props": prop_columns, "path": path})))
+    fn copy_links_from_csv(&self, _rel_table: &str, _ends: (&str, &str), _prop_columns: &[&str], _path: &str) -> Option<String> {
+        None
     }
     fn batch_link(&self, rel_table: &str, prop_columns: &[&str]) -> String {
         op("links", "batch_link", json!({"relation": rel_table, "ends": null, "props": prop_columns}))
