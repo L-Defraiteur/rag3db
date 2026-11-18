@@ -100,8 +100,10 @@ La part gabarit est décrite par mémoire. La part hôte :
    - **Le TTL** (`memory.l0_ttl_days`) purge les entrées d'index et les vecteurs des tours
      anciens. Le `ChatFile` reste sur disque, et les L1 gardent leur intervalle de tours en
      citation : `read_turns` marche toujours après la purge.
-   - **`search_turns`** devient un `recall_sources` ordinaire sur ces sections, filtré sur la
-     trace du run : il rend des intervalles de tours avec un extrait. L'archiviste cherche, puis
+   - **Les tours ne sortent pas dans le rappel par défaut de la mémoire** (Lucie) : il faut les
+     demander explicitement. `search_turns`, côté hôte, n'est que le rappel du memory avec ce
+     paramètre posé (`include_turns` ou une portée `turns` : la forme est à mémoire), filtré sur
+     la trace du run. Il rend des intervalles de tours avec un extrait. L'archiviste cherche, puis
      lit par `read_turns`.
 
    **Ce qui me gêne, et que la page de mémoire doit trancher.**
