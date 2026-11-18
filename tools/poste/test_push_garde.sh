@@ -263,6 +263,16 @@ cpp_cas 3 src/moteur.cpp extension/rag3weaver/src/lot.rs -- extension/rag3weaver
 { read -r rc; sortie=$(cat); } < "$D/cpp-3"
 [ "$rc" != 0 ] && echo "$sortie" | grep -q "master a apporté du code" \
   && echo "vert   un lot qui touche aussi du Rust : arrêt" || { echo "ROUGE  lot avec du Rust : rc $rc — $(echo "$sortie" | tail -2 | tr '\n' ' ')"; rouge=1; }
+# **Le shell C++ dans la voie transférable** (18 novembre 2026, ticket de c7) : tools/shell ne lie que la lib du moteur,
+# jamais le crate Rust ; un lot du shell seul, quand seul du Rust a atterri, pousse sans rejouer.
+cpp_cas 4 tools/shell/printer/table.cpp -- extension/rag3weaver/src/pont.rs
+{ read -r rc; sortie=$(cat); } < "$D/cpp-4"
+[ "$rc" = 0 ] && echo "$sortie" | grep -qx POUSSE && echo "$sortie" | grep -q "suites C++ transférables" \
+  && echo "vert   un lot du shell C++ seul, du Rust atterri : suites C++ transférables, poussé" || { echo "ROUGE  lot du shell seul, Rust atterri : rc $rc — $(echo "$sortie" | tail -2 | tr '\n' ' ')"; rouge=1; }
+cpp_cas 5 tools/shell/printer/table.cpp extension/rag3weaver/src/lot.rs -- extension/rag3weaver/src/pont.rs
+{ read -r rc; sortie=$(cat); } < "$D/cpp-5"
+[ "$rc" != 0 ] && echo "$sortie" | grep -q "master a apporté du code" \
+  && echo "vert   un lot du shell qui touche aussi du Rust : arrêt" || { echo "ROUGE  lot du shell avec du Rust : rc $rc — $(echo "$sortie" | tail -2 | tr '\n' ' ')"; rouge=1; }
 # **Le commit testé en forme courte** (15 novembre 2026) : un résumé qui l'écrit en 7, 9 ou 12 caractères, et une tête égale
 # au testé, ne font jamais dire « de la doc seule ».
 for l in 7 9 12; do
