@@ -156,6 +156,33 @@ else
   LISTE_DES_SUITES="$EXIGEES_NOMS e2e_lectures e2e_code $(case "${SUITE_DU_TEMOIN:-}" in lib|navigateur) ;; *) echo "${SUITE_DU_TEMOIN:-}" ;; esac) ${SUITES_EN_PLUS:-}"
 fi
 JOUEES=""
+# **Le crate du terminal** (19 novembre 2026, trou relevé par tty) : un lot qui touche extension/rag3weaver/tty/ (la suite
+# « tty » de required_suites.txt) joue les tests du crate avec et sans sa vue, dans le target de son worktree (la ligne
+# « Compiling rag3weaver-tty (<worktree>) » vérifiée : un target partagé rejouait le binaire d'un autre arbre),
+# clippy -D warnings, puis ses deux mesures plain_* sur le binaire bâti. Ce n'est pas une suite e2e : elle sort de la
+# liste, et son journal tty.log porte « test result » pour la garde.
+if echo " $EXIGEES_NOMS " | grep -q " tty "; then
+  echo "== tty" >> $R
+  JOUEES="$JOUEES tty"
+  TTY=$W/extension/rag3weaver/tty
+  (
+    cd $TTY || exit 1
+    export CARGO_TARGET_DIR=$HOME/.cache/rag3weaver-build/target-tty-wt/$(basename $W)
+    touch src/lib.rs; timeout 1800 cargo test -j 8 || exit 11
+    touch src/lib.rs; timeout 1800 cargo test -j 8 --no-default-features || exit 12
+    timeout 1800 cargo clippy -j 8 --all-targets -- -D warnings || exit 13
+    timeout 1800 cargo build -j 8 --release || exit 14
+    for m in plain_stays_attached plain_waits_for_a_resumed_run; do
+      timeout 300 python3 mesures/$m.py $CARGO_TARGET_DIR/release/rag3weaver-tty mesures/faux_hote.py $J/tty-$m > $J/tty-$m.log 2>&1
+      echo "$m : $(tail -1 $J/tty-$m.log)"
+      tail -1 $J/tty-$m.log | grep -qx VERT || exit 15
+    done
+  ) > $J/tty.log 2>&1; c=$?
+  grep -E '^test result|FAILED|panicked|^plain_' $J/tty.log | head -20 >> $R
+  [ $c = 0 ] || rouge "tty (code=$c)"
+  [ "$(grep -c "Compiling rag3weaver-tty v.* ($TTY)" $J/tty.log)" -ge 2 ] || rouge "tty : le crate n'a pas été compilé deux fois depuis $TTY"
+fi
+LISTE_DES_SUITES=$(echo " $LISTE_DES_SUITES " | sed 's/ tty / /g')
 for suite in $(echo $LISTE_DES_SUITES | tr " " "\n" | awk 'NF && !vu[$0]++'); do
   echo "== $suite" >> $R
   JOUEES="$JOUEES $suite"

@@ -4,3 +4,6 @@
 # the suite to the pass) and by push_garde.sh (which refuses a pass that did not play it), through required_suites.sh.
 # One line per suite: <suite> <path glob>...
 e2e_code_sync extension/rag3weaver/src/code.rs extension/rag3weaver/src/code_sync.rs extension/rag3weaver/src/catalog.rs extension/rag3weaver/src/catalog/* extension/rag3weaver/src/generations.rs extension/rag3weaver/src/marque_d_ecrivain.rs extension/rag3weaver/tests/e2e_code_sync.rs
+# The terminal's crate (19 November 2026, hole found by tty): a lot that touches it plays the crate's tests with and
+# without its view, clippy and its two plain_* measures, as the step « tty » of the pass (not an e2e suite).
+tty extension/rag3weaver/tty/*
