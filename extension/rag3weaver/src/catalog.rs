@@ -10246,6 +10246,21 @@ fn read_threads() -> u64 {
         self.fautes_de_test.stop_after_batch = rang;
     }
 
+    /// **Arms an ALTER after the BEGIN of a batch, for a witness**: at batch `rank` of a sync, once, `ddl` runs on
+    /// another connection of the same base right after the batch's transaction opened.
+    pub fn inject_alter_after_begin(&mut self, rank: usize, ddl: &str) {
+        self.fautes_de_test.alter_after_begin = Some((rank, ddl.to_string()));
+    }
+
+    /// The ALTER armed for this batch, taken once.
+    #[cfg_attr(not(feature = "code"), allow(dead_code))]
+    pub(crate) fn take_alter_after_begin(&mut self, rank: usize) -> Option<String> {
+        match &self.fautes_de_test.alter_after_begin {
+            Some((r, _)) if *r == rank => self.fautes_de_test.alter_after_begin.take().map(|(_, ddl)| ddl),
+            _ => None,
+        }
+    }
+
     #[cfg_attr(not(feature = "code"), allow(dead_code))]
     pub(crate) fn test_stop_after_batch(&self) -> Option<usize> {
         self.fautes_de_test.stop_after_batch

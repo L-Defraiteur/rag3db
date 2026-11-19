@@ -29,6 +29,10 @@ pub struct FautesDeTest {
     /// partir de 0), comme sur une demande d'arrêt. Avant le 19 octobre 2026,
     /// `RAG3WEAVER_TEST_STOP_AFTER_BATCH`, pour tout le processus.
     pub stop_after_batch: Option<usize>,
+    /// **An ALTER validated between the BEGIN of a batch and its first write** (ticket of 15 November 2026,
+    /// « recommencer une écriture refusée par un ALTER validé »): at batch `rank`, once, `ddl` runs on another
+    /// connection of the same base, right after the batch's transaction opened.
+    pub alter_after_begin: Option<(usize, String)>,
     /// **The release of this writer's claims fails** (ticket of 11 November 2026, « les erreurs de libération
     /// des réclamations et de lecture de dette sont masquées »): every vector table's release query errs.
     pub release: bool,

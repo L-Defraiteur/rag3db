@@ -1103,6 +1103,36 @@ mod tests {
         assert!(!end.contains("reste dû : 0") && !end.contains(" 0 morceau"), "never a debt of zero: {unreadable:?}");
     }
 
+    /// **A batch refused by an ALTER validated after its BEGIN is started again** (ticket of 15 November 2026,
+    /// « recommencer une écriture refusée par un ALTER validé », way (i)): a column is added to `File` on another
+    /// connection between the BEGIN of the first batch and its first write. The engine refuses the batch
+    /// (« Schema changed, retry: »); the index goes to the end all the same, with the counts of a pass without
+    /// the ALTER, and its journal says it started the batch again.
+    #[cfg(all(feature = "rag3db-native", feature = "code"))]
+    #[test]
+    fn a_batch_refused_by_an_alter_validated_after_its_begin_is_started_again() {
+        let fichiers: Vec<(String, String)> = (0..6).map(|i| (format!("src/f{i}.rs"), format!("pub fn f{i}() -> u32 {{ {i} }}\n"))).collect();
+        let source: Arc<dyn FileSource> = Arc::new(Snapshot::new("depot", fichiers));
+        let conn = crate::Rag3dbConnection::in_memory().expect("in-memory base");
+        let config = crate::CatalogConfig { name: Some("alter".into()), embedding_dim: 4, ..Default::default() };
+        let mut catalog = Catalog::new(Box::new(conn), Box::new(crate::embedder::AbsentEmbedder::new("absent", 4)), config);
+        catalog.initialize().unwrap();
+        crate::code::register_code_schema(&mut catalog, crate::code::default_scope_chunking()).unwrap();
+        catalog.inject_alter_after_begin(0, "ALTER TABLE File ADD witness_column STRING");
+        let catalog = Arc::new(Mutex::new(catalog));
+        let journal = new_index_journal().expect("journal");
+        spawn_index(catalog.clone(), source, journal.clone(), 0, Default::default()).join().expect("the index thread");
+        let lines: Vec<String> = std::fs::read_to_string(&journal).unwrap().lines().map(String::from).collect();
+        let _ = std::fs::remove_file(&journal);
+        let end = lines.last().cloned().unwrap_or_default();
+        assert!(end.starts_with(DONE_LINE), "the index goes to the end: {lines:?}");
+        assert!(lines.iter().any(|l| l.contains("schéma changé")), "the journal says the batch was started again: {lines:?}");
+        let cat = catalog.lock().unwrap();
+        assert!(cat.must_reopen().is_none(), "the catalog is not left poisoned: {:?}", cat.must_reopen());
+        let count = |label: &str| cat.conn().execute(&format!("MATCH (n:{label}) RETURN count(n)")).unwrap().rows[0][0].as_i64().unwrap();
+        assert_eq!((count("File"), count("Scope")), (6, 6), "no row lost, none doubled");
+    }
+
     /// **La garde des comptes du plein texte, dite à la fin d'un index**
     /// (25 octobre 2026) : le journal dit « vérifié » quand chaque entité a
     /// autant de documents que de lignes, l'état garde les comptes ; et un
