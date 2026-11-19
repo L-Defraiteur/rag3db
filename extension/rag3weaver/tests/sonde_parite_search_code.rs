@@ -725,7 +725,8 @@ fn releve_le_namespace_devant_la_classe() {
     let forme = format!("{:?}", rag3weaver::code::scope_form(&backend.catalog.lock().unwrap()).unwrap());
     let mut releve = json!({"base": base.to_string_lossy(), "forme": forme, "requete": requete, "chemin": chemin, "modes": {}});
     for (nom, signaux) in [("tous", Value::Null), ("dense", json!(["vector"])), ("bm25", json!(["bm25"]))] {
-        let mut options = json!({"limit": 20});
+        let limite: u64 = std::env::var("RAG3WEAVER_NAMESPACE_LIMITE").ok().and_then(|v| v.parse().ok()).unwrap_or(20);
+        let mut options = json!({"limit": limite});
         if !signaux.is_null() {
             options["signals"] = signaux;
         }
@@ -773,7 +774,9 @@ fn releve_le_namespace_devant_la_classe() {
                 })
             })
             .collect();
-        eprintln!("[namespace] {nom} : {} résultats", rangs.len());
+        let par_signal = |m: &str| lignes.iter().filter(|l| l["signal"].as_str().unwrap_or("").contains(m)).count();
+        let premier_dense = lignes.iter().position(|l| l["signal"].as_str().unwrap_or("").contains("vector")).map(|i| i + 1);
+        eprintln!("[namespace] {nom} : {} résultats ; avec vector {} (le premier au rang {premier_dense:?}), avec bm25 {}", rangs.len(), par_signal("vector"), par_signal("bm25"));
         for x in &rangs {
             eprintln!("  {:>2} {:<28} {:<10} {}:{} len={} score={}", x["rang"], x["name"].as_str().unwrap_or("?"), x["scope_type"].as_str().unwrap_or("?"), x["file_path"].as_str().unwrap_or("?"), x["start_line"], x["content_len"], x["score"]);
         }
