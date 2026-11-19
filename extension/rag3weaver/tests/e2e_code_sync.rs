@@ -589,6 +589,8 @@ fn held_derivations_wait_for_their_release() {
     let released = catalog.release_deferred_derivations(rag3weaver::disponibilite::Disponibilites::default());
     assert_eq!(released.failed, 0, "{released:?}");
     assert!(count(&catalog, &contents) > 0, "the release renders the contents");
+}
+
 /// **`usages` does not show the declaration of a retired container** (ticket
 /// `docs/recherche/tickets/2026-11-18-usages-lit-des-conteneurs-sans-la-borne-des-generations.md`). Under
 /// generations (2a′), a retired row stays in its table. A C++ class declares `bar` in a header, with no definition
