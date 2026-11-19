@@ -10,4 +10,4 @@ graph LR
     select["ForEachNode(graph='@builtin:backends/memory/graphs/turns_select.mmd')"]
     render["RhaiNode(script_id=render_turns, inputs='run,from_turn,to_turn', run=$run, from_turn=$from_turn, to_turn=$to_turn)"]
     filter -->|result:elements| select
-    select -->|results:value| render
+    select -->|list:value| render
