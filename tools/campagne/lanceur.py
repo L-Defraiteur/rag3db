@@ -34,6 +34,9 @@ def read_case(path):
     if not m:
         raise ValueError(f"{path}: no ```json « lanceur » block")
     block = json.loads(m.group(1))
+    # Two shapes: the bare block, or the block wrapped in « lanceur » (lucivy, embarquement).
+    if set(block) == {"lanceur"}:
+        block = block["lanceur"]
     if REPORT_TITLE not in texte:
         raise ValueError(f"{path}: no section « {REPORT_TITLE[3:]} »")
     section = texte.split(REPORT_TITLE, 1)[1]
@@ -44,7 +47,11 @@ def read_case(path):
 
 
 def repo_of(block, default, depots):
-    raise NotImplementedError
+    """The repository of the case: the one its block names (`repo`, cloned bare among the
+    campaign's own, never a working tree of Lucie's), else the default one."""
+    if not block.get("repo"):
+        return default
+    return bare_clone(depots, block["repo"], block["parent"])
 
 
 def changed_paths(repo, commit):
@@ -302,12 +309,13 @@ def prepare(case_file, case_path, repo, poste=None, racine=CAMPAGNE):
     target lives under the campaign folder, never in /tmp (RAM on these machines)."""
     import datetime, hashlib, shutil
     block, report = read_case(case_file)
+    repo = repo_of(block, repo, os.path.join(racine, "depots"))
     raisons = refusals(block, report, repo, case_path)
     nom = os.path.splitext(os.path.basename(case_file))[0]
     run = os.path.join(racine, nom, datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
     os.makedirs(run)
     with open(os.path.join(run, "case.json"), "w") as f:
-        json.dump(dict(block, case_file=case_path, report_sha256=hashlib.sha256(report.encode()).hexdigest()), f, indent=2, ensure_ascii=False)
+        json.dump(dict(block, case_file=case_path, repo_used=repo, report_sha256=hashlib.sha256(report.encode()).hexdigest()), f, indent=2, ensure_ascii=False)
     if raisons:
         with open(os.path.join(run, "refused.json"), "w") as f:
             json.dump(raisons, f, indent=2, ensure_ascii=False)
@@ -395,6 +403,8 @@ class Hote:
 
 
 def play(run, repo, hote, rev="origin/master", task="campagne", wall_s=1800):
+    # `repo` is rag3weaver's repository: the declarations come from it, whatever the case's
+    # repository (lucivy, codeparsers).
     """One prepared case played: the tree registered at the campaign host, the report alone as
     the request, approvals answered by answer_for, a stop at the wall budget, then the output for
     the bench (diff.patch, diffstat.txt, mailbox.jsonl, budget.json). No verdict."""
