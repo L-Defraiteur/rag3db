@@ -18,6 +18,11 @@ struct AcquireLocksFunction {
     static function_set getFunctionSet();
 };
 
+struct LockTablesFunction {
+    static constexpr const char* name = "LOCK_TABLES";
+    static function_set getFunctionSet();
+};
+
 struct ClearWarningsFunction {
     static constexpr const char* name = "CLEAR_WARNINGS";
 
