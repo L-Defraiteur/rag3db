@@ -38,6 +38,23 @@ impl Registre {
         Some(Registre { sessions, socks })
     }
 
+    /// La socket de la session nommée `nom` au registre (lu, jamais écrit).
+    fn socket_de(&self, nom: &str) -> Result<PathBuf, String> {
+        let mut presentes = Vec::new();
+        for d in std::fs::read_dir(&self.sessions).map_err(|e| format!("{} : {e}", self.sessions.display()))?.flatten() {
+            let Some(e) = std::fs::read(d.path()).ok().and_then(|o| serde_json::from_slice::<Value>(&o).ok()) else { continue };
+            let Some(n) = e["name"].as_str() else { continue };
+            if n == nom {
+                if let Some(s) = e["messagingSocketPath"].as_str().filter(|s| !s.is_empty()) {
+                    return Ok(PathBuf::from(s));
+                }
+            }
+            presentes.push(n.to_string());
+        }
+        presentes.sort();
+        Err(format!("no session named « {nom} » in the registry; present: {}", presentes.join(", ")))
+    }
+
     fn fichier(&self, pid: u32) -> PathBuf {
         self.sessions.join(format!("{pid}.json"))
     }
@@ -260,8 +277,31 @@ impl Pair {
     /// relevée le 16 novembre 2026, enveloppe faite ici ; une connexion, sans attendre de réponse.
     /// Rend le `msg_id` de la trame.
     pub fn envoyer(&self, cle: &str, to: &str, texte: &str) -> Result<String, String> {
-        let _ = (cle, to, texte);
-        Err("not yet".into())
+        use std::io::Write;
+        let (nom, notre) = {
+            let tenue = self.tenue.lock().unwrap_or_else(|p| p.into_inner());
+            match tenue.as_ref() {
+                Some((c, e)) if c == cle => (e["name"].as_str().unwrap_or_default().to_string(), e["messagingSocketPath"].as_str().unwrap_or_default().to_string()),
+                _ => return Err(format!("{cle} does not hold the pair entry of this host: it cannot write to a session")),
+            }
+        };
+        let cible = match to.strip_prefix("uds:") {
+            Some(chemin) => PathBuf::from(chemin),
+            None => self.registre.socket_de(to)?,
+        };
+        let msg_id = session_id();
+        let from = format!("uds:{notre}");
+        let contenu = format!("<cross-session-message from=\"{from}\" from-name=\"{nom}\" from-mode=\"rag3weaver\">\n{texte}\n</cross-session-message>");
+        let trame = json!({ "msgV": 1, "msg_id": msg_id, "type": "user", "message": { "role": "user", "content": contenu }, "priority": "next", "from": from });
+        let mut c = std::os::unix::net::UnixStream::connect(&cible).map_err(|e| format!("{to}: the session does not answer on {} ({e})", cible.display()))?;
+        let _ = c.set_write_timeout(Some(std::time::Duration::from_secs(5)));
+        c.write_all(format!("{trame}\n").as_bytes()).map_err(|e| format!("{to}: the message did not go ({e})"))?;
+        Ok(msg_id)
+    }
+
+    /// Cette tâche tient-elle l'entrée ?
+    pub fn tient(&self, cle: &str) -> bool {
+        self.tenue.lock().unwrap_or_else(|p| p.into_inner()).as_ref().is_some_and(|(c, _)| c == cle)
     }
 
     fn cesser_d_ecouter(&self) {
