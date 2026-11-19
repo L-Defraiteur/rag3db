@@ -1,7 +1,12 @@
 #!/bin/bash
 N=~/.cache/rag3weaver-notes-A/lib58
-W=~/git_workspaces/rag3db-instable
+# L'arbre (20 novembre 2026, règle des worktrees du 19) : VERDICT_ARBRE s'il est donné ; sinon créé, détaché, sous
+# ~/git_workspaces/<session>/<jj-mm-aaaa>-verdict (SESSION, G par défaut), avec son sous-module.
+W=${VERDICT_ARBRE:-$HOME/git_workspaces/${SESSION:-G}/$(date +%d-%m-%Y)-verdict}
 T=$N/v-etat
+if [ ! -d "$W" ]; then
+  git -C ~/git_workspaces/rag3db fetch -q origin master && git -C ~/git_workspaces/rag3db worktree add -q --detach "$W" FETCH_HEAD && git -C "$W" submodule update -q --init || { echo "ARRÊT arbre" > $T; exit 9; }
+fi
 cd $W || exit 9
 [ -z "$(git status --short --untracked-files=no | grep -v codeparsers)" ] || { echo "ARRÊT sale" > $T; exit 8; }
 git fetch -q origin master && git checkout -q --detach FETCH_HEAD && git submodule update -q || { echo "ARRÊT checkout" > $T; exit 7; }
