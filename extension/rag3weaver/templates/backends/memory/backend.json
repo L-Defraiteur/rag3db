@@ -18,6 +18,79 @@
   },
   "vector_extension": "vector",
   "entities": {
+    "Turn": {
+      "schema": "schemas/turn.json",
+      "config": {
+        "fields": {
+          "key": {
+            "type": "string"
+          },
+          "run": {
+            "type": "string"
+          },
+          "turn": {
+            "type": "integer"
+          },
+          "seq": {
+            "type": "integer"
+          },
+          "at": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string",
+            "isContent": true
+          },
+          "tool_name": {
+            "type": "string"
+          },
+          "params": {
+            "type": "string"
+          },
+          "result": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "masked": {
+            "type": "integer"
+          },
+          "cut": {
+            "type": "boolean"
+          },
+          "section": {
+            "type": "string",
+            "isTitle": true
+          }
+        },
+        "hashsafe": [
+          "key"
+        ],
+        "returnFields": [
+          "run",
+          "turn",
+          "seq",
+          "at",
+          "role",
+          "tool_name",
+          "status",
+          "section"
+        ],
+        "signals": [
+          "bm25"
+        ]
+      },
+      "writes": {
+        "created_at": "created_at",
+        "updated_at": "updated_at",
+        "revision": "revision",
+        "immutable": true
+      }
+    },
     "Memory": {
       "schema": "schemas/memory.json",
       "config": {
@@ -694,6 +767,12 @@
     "archive_slice_prompt": "scripts/archive_slice_prompt.rhai",
     "archive_slice_build": "scripts/archive_slice_build.rhai",
     "archive_slice_rapport": "scripts/archive_slice_rapport.rhai",
+    "put_turn_record": "scripts/put_turn_record.rhai",
+    "put_turn_done": "scripts/put_turn_done.rhai",
+    "turns_filter": "scripts/turns_filter.rhai",
+    "render_turns": "scripts/render_turns.rhai",
+    "archive_slice_input": "scripts/archive_slice_input.rhai",
+    "archive_slice_done": "scripts/archive_slice_done.rhai",
     "archive_segment_prompt": "scripts/archive_segment_prompt.rhai",
     "archive_segment_build": "scripts/archive_segment_build.rhai",
     "archive_params": "scripts/archive_params.rhai",
@@ -963,6 +1042,12 @@
       "policy": {
         "call_models": true
       }
+    },
+    "put_turn": {
+      "graph": "graphs/put_turn.mmd"
+    },
+    "render_turns": {
+      "graph": "graphs/render_turns.mmd"
     }
   },
   "reactions": {

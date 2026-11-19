@@ -1,0 +1,13 @@
+%% tool: render_turns
+%% description: The slice of a run between two turns, rendered from its Turn rows in the single form the archiviste files (one « ## turn <n> » per turn, one « ### <role> · <time> » per message, a tool call with its name, status, params and result). Returns {text, turns, messages}. archive_slice renders its slice through it.
+%% param: run string! -- The run.
+%% param: from_turn int! -- The first turn, included.
+%% param: to_turn int! -- The last turn, included.
+%% result: render.result
+
+graph LR
+    filter["RhaiNode(script_id=turns_filter, inputs='run,from_turn,to_turn', run=$run, from_turn=$from_turn, to_turn=$to_turn)"]
+    select["ForEachNode(graph='@builtin:backends/memory/graphs/turns_select.mmd')"]
+    render["RhaiNode(script_id=render_turns, inputs='run,from_turn,to_turn', run=$run, from_turn=$from_turn, to_turn=$to_turn)"]
+    filter -->|result:elements| select
+    select -->|results:value| render
