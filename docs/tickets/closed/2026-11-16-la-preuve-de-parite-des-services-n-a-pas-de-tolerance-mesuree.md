@@ -1,6 +1,6 @@
 # La preuve de parité des services n'a pas de tolérance mesurée
 
-- **État** : ouvert (16 novembre 2026, embarquement ; demande de c7)
+- **État** : fait (19 novembre 2026, embarquement, branche `embed-parity`) ; ouvert (16 novembre 2026, embarquement ; demande de c7)
 - **Pour** : embarquement
 - **Famille** : produit
 - **Gravité** : manque de preuve. La pose d'un binaire de service se prouve aujourd'hui au bit près, sur un
@@ -52,3 +52,14 @@ est un client. Jamais un essai qui charge un modèle sur card2.
 
 Rien. La mesure réelle appelle 7878 et 7879 : l'annoncer aux sessions qui mesurent (banc), quelques
 secondes de charge.
+
+## Fait (19 novembre 2026)
+
+- `scripts/embed_parity.py` (client seul) et le jeu fixe `tests/fixtures/embed_parity/texts.json` (100 textes) ;
+  témoin `embed_parity_on_the_fixture_is_bit_exact` (e2e), vu rouge (script absent) puis vert sur la fixture.
+- **La mesure**, le 19 novembre à 9 h 16 sur le binaire b3764125fba4cc73 (Flex32), après la pose de G : entre lots,
+  granite-278m (7878) au plus **5,51e-5** (cosinus 0,99999993), bge-m3 (7879) au plus **1,34e-3** (cosinus 0,99993) ;
+  même forme de lot : au bit près sur les deux.
+- **La règle de preuve d'une pose** est écrite dans `docs/embarquement/13-11-2026/01-activation-et-residence-livre-et-manquant.md`,
+  section « La règle de preuve d'une pose » : au bit près pour un même texte dans une même forme de lot ; entre lots,
+  sous la tolérance mesurée avec une marge d'un facteur 2.
