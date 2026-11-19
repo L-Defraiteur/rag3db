@@ -188,15 +188,51 @@ def prove_red(block, dest, target, poste):
 
 
 def answer_for(command):
-    raise NotImplementedError
+    """The launcher answers the teammate's approvals: git is refused (the tree has no history,
+    and the history of the real repository is out of the case), the rest is granted."""
+    import shlex
+    try:
+        mots = shlex.split(command)
+    except ValueError:
+        mots = command.split()
+    for mot in mots:
+        if os.path.basename(mot) == "git":
+            return {"approved": False, "text": "git is not available in this campaign: work on the files, and run the tests."}
+    return {"approved": True, "text": "granted"}
 
 
 def freeze_declarations(repo, rev, dest):
-    raise NotImplementedError
+    """The templates of `rev`, frozen for the campaign host, with the command gate in `auto`: no
+    human answers in a campaign, and what still asks is answered by `answer_for`."""
+    import io, tarfile
+    os.makedirs(dest, exist_ok=True)
+    brut = git(repo, "archive", "--format=tar", rev, "extension/rag3weaver/templates")
+    with tarfile.open(fileobj=io.BytesIO(brut)) as tar:
+        tar.extractall(dest, filter="data")
+    racine = os.path.join(dest, "extension/rag3weaver")
+    manifeste = os.path.join(racine, "templates/backends/code/backend.json")
+    with open(manifeste) as f:
+        m = json.load(f)
+    m.setdefault("workspace", {})["commands"] = "auto"
+    with open(manifeste, "w") as f:
+        json.dump(m, f, indent=2, ensure_ascii=False)
+    return racine
 
 
 def collect_diff(worktree, base):
-    raise NotImplementedError
+    """base..the worktree as it is, new files included, through a temporary index: the
+    worktree and its index are left untouched."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as t:
+        env = dict(os.environ, GIT_INDEX_FILE=os.path.join(t, "index"))
+        def g(*args):
+            r = subprocess.run(["git", "-C", worktree, *args], env=env, capture_output=True)
+            if r.returncode:
+                raise RuntimeError(r.stderr.decode(errors="replace"))
+            return r.stdout.decode(errors="replace")
+        g("read-tree", "HEAD")
+        g("add", "-A")
+        return g("diff", "--cached", "--binary", base), g("diff", "--cached", "--stat", base)
 
 
 CAMPAGNE = os.path.expanduser("~/.cache/rag3weaver-build/campagne")
