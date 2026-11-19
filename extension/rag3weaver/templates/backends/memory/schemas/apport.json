@@ -43,7 +43,11 @@
     },
     "state": {
       "type": "string",
-      "enum": ["current", "consolidated", "recopied"],
+      "enum": [
+        "current",
+        "consolidated",
+        "recopied"
+      ],
       "description": "consolidated : un L1 résumé par un L1bis ; il reste (la provenance), le recalcul du L2 ne le relit plus. recopied : un L1 recopié sous une fiche issue (scinder_fiche, rejoindre_fiches) ; il reste sous l’ancienne fiche comme provenance, et recall_apports l’écarte par défaut."
     },
     "author": {
@@ -65,6 +69,20 @@
     "updated_at": {
       "type": "integer",
       "description": "Server UTC epoch milliseconds"
+    },
+    "run": {
+      "type": "string",
+      "description": "The run of the slice it was filed from (a run's turns); absent for a document."
+    },
+    "from_turn": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "The first turn of its range, included; absent for a document."
+    },
+    "to_turn": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "The last turn of its range, included; absent for a document."
     }
   }
 }

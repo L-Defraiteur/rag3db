@@ -28,4 +28,15 @@ if chemin == "" {
     if slug.len() > 60 { slug = slug.sub_string(0, 60); }
     chemin = `sources/${input.jour}-${slug}.md`;
 }
-#{ chemin: chemin, titre: titre, contenu: contenu, origine: input.origine, via: "archiviste" }
+let rec = #{ chemin: chemin, titre: titre, contenu: contenu, origine: input.origine, via: "archiviste" };
+// archive_slice by run: the slice Source says its run, its range and the summary of its extraction.
+if input.run != () && input.run != "" {
+    rec.run = input.run;
+    rec.from_turn = input.from_turn;
+    rec.to_turn = input.to_turn;
+    let r = input.value;
+    if type_of(r) == "map" && type_of(r.results) == "array" {
+        for x in r.results { if type_of(x) == "map" && x.slice_summary != () { rec.slice_summary = x.slice_summary; break; } }
+    }
+}
+rec

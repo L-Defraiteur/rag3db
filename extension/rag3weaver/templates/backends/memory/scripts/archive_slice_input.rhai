@@ -13,8 +13,8 @@ if i.run != "" {
     }
     let titre = if i.titre == "" { `run ${i.run}, turns ${i.from_turn}-${i.to_turn}` } else { i.titre };
     let chemin = if i.chemin == "" { `sources/${slug}-turns-${i.from_turn}-${i.to_turn}.md` } else { i.chemin };
-    return [#{ titre: titre, contenu: r.text, chemin: chemin }];
+    return [#{ titre: titre, contenu: r.text, chemin: chemin, run: i.run, from_turn: i.from_turn, to_turn: i.to_turn }];
 }
 if i.contenu == "" { throw "archive_slice: give run and a turn range, or contenu"; }
 if i.titre == "" || i.chemin == "" { throw "archive_slice: with contenu, titre and chemin are required"; }
-[#{ titre: i.titre, contenu: i.contenu, chemin: i.chemin }]
+[#{ titre: i.titre, contenu: i.contenu, chemin: i.chemin, run: "", from_turn: 0, to_turn: 0 }]

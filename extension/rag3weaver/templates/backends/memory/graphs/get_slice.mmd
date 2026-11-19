@@ -1,0 +1,17 @@
+%% tool: get_slice
+%% description: A slice of a run, in clear: by the path of its Source, or by a turn it contains (run and turn). Returns {state: closed, chemin, run, from_turn, to_turn, slice_summary, l1: [{fiche, section, from_turn, to_turn}]} for a filed slice; {state: open, l1: []} when no slice contains the turn yet (not filed). From a turn to its slice and the L1 it produced.
+%% param: chemin string = "" -- The path of the slice Source (sources/<run slug>-turns-<a>-<b>.md).
+%% param: run string = "" -- Without chemin: the run.
+%% param: turn int = 0 -- Without chemin: a turn of the slice.
+%% result: render.result
+
+graph LR
+    find["RhaiNode(script_id=slice_find, inputs='chemin,run,turn', chemin=$chemin, run=$run, turn=$turn)"]
+    source["ForEachNode(graph='@builtin:backends/memory/graphs/rows_source.mmd')"]
+    query["RhaiNode(script_id=slice_l1_query)"]
+    apports["ForEachNode(graph='@builtin:backends/memory/graphs/rows_apport.mmd')"]
+    render["RhaiNode(script_id=slice_render)"]
+    find -->|result:elements| source
+    source -->|list:value| query
+    query -->|result:elements| apports
+    apports -->|list:value| render

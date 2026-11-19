@@ -22,7 +22,7 @@ graph LR
     genre["CreateRefTypeNode(name='doc', description='La section d&#39;un source Markdown, provenance d&#39;un apport : doc:<chemin du source>#<titre de la section>.', forme='doc:<chemin du source>#<titre>', confirm=true, types_entity='RefType')"]
     prompt["RhaiNode(script_id=archive_slice_prompt, inputs='contenu', contenu=$element.contenu)"]
     extract["LlmNode(response_schema=$schema, max_tokens=$extract_max_tokens, temperature=0)"]
-    build["RhaiNode(script_id=archive_slice_build, inputs='contenu,chemin,titre,origine,step2_input,raw_turns_max_tokens', contenu=$element.contenu, chemin=$element.chemin, titre=$element.titre, origine=$origine, step2_input=$step2_input, raw_turns_max_tokens=$raw_turns_max_tokens)"]
+    build["RhaiNode(script_id=archive_slice_build, inputs='contenu,chemin,titre,origine,step2_input,raw_turns_max_tokens,run', run=$element.run, contenu=$element.contenu, chemin=$element.chemin, titre=$element.titre, origine=$origine, step2_input=$step2_input, raw_turns_max_tokens=$raw_turns_max_tokens)"]
     decide["ForEachNode(graph='@builtin:backends/memory/graphs/archive_decide.mmd', on_error='report', carry='proposed', report_results=true, candidates=$candidates, allow_create=$allow_create, instruction=$instruction, search_options=$search_options, context=$context, context_title=$context_title, query_chars=$query_chars)"]
     decided["Route(key='stage', routes='decided')"]
     subject["ForEachNode(graph='@builtin:backends/memory/graphs/archive_subject.mmd')"]
@@ -31,7 +31,7 @@ graph LR
     create["ForEachNode(graph='@builtin:backends/memory/graphs/archive_create.mmd', on_error='report')"]
     refs["ForEachNode(graph='@builtin:backends/memory/graphs/archive_link.mmd', on_error='report')"]
     refs_new["ForEachNode(graph='@builtin:backends/memory/graphs/archive_link.mmd', on_error='report')"]
-    sourcer["RhaiNode(script_id=archive_params, inputs='titre,contenu,chemin,origine,jour', titre=$element.titre, contenu=$element.contenu, chemin=$element.chemin, origine=$origine, jour=$jour)"]
+    sourcer["RhaiNode(script_id=archive_params, inputs='titre,contenu,chemin,origine,jour,run,from_turn,to_turn', run=$element.run, from_turn=$element.from_turn, to_turn=$element.to_turn, titre=$element.titre, contenu=$element.contenu, chemin=$element.chemin, origine=$origine, jour=$jour)"]
     source["EntityRecordNode(entity='Source', action='put', record=$source)"]
     rapport["RhaiNode(script_id=archive_slice_rapport, inputs='trace,chemin', trace=$trace, chemin=$element.chemin)"]
     genre -->|report:value| prompt

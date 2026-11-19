@@ -645,7 +645,11 @@
           "via",
           "revision",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "run",
+          "from_turn",
+          "to_turn",
+          "slice_summary"
         ],
         "body": "contenu"
       }
@@ -763,6 +767,16 @@
     "render_turns": "scripts/render_turns.rhai",
     "archive_slice_input": "scripts/archive_slice_input.rhai",
     "archive_slice_done": "scripts/archive_slice_done.rhai",
+    "slice_find": "scripts/slice_find.rhai",
+    "slice_l1_query": "scripts/slice_l1_query.rhai",
+    "slice_render": "scripts/slice_render.rhai",
+    "slices_query": "scripts/slices_query.rhai",
+    "slices_l1_query": "scripts/slices_l1_query.rhai",
+    "slices_render": "scripts/slices_render.rhai",
+    "trace_turn_query": "scripts/trace_turn_query.rhai",
+    "trace_turn_slice": "scripts/trace_turn_slice.rhai",
+    "trace_turn_l1": "scripts/trace_turn_l1.rhai",
+    "trace_turn_render": "scripts/trace_turn_render.rhai",
     "turns_where": "scripts/turns_where.rhai",
     "turns_list": "scripts/turns_list.rhai",
     "turns_found": "scripts/turns_found.rhai",
@@ -1054,6 +1068,15 @@
     },
     "purge_turns": {
       "graph": "graphs/purge_turns.mmd"
+    },
+    "get_slice": {
+      "graph": "graphs/get_slice.mmd"
+    },
+    "list_slices": {
+      "graph": "graphs/list_slices.mmd"
+    },
+    "trace_turn": {
+      "graph": "graphs/trace_turn.mmd"
     }
   },
   "reactions": {
