@@ -60,6 +60,9 @@ pub fn refus_pool_plein(plafond: usize) -> String {
 /// L'erreur d'une requête dont l'instantané s'est rompu.
 pub const INSTANTANE_ROMPU: &str = "instantané de lecture rompu (ouverture refusée) : la requête n'est pas lue hors de lui";
 
+/// The refusal of a statement of a stopped call (its run was stopped: the IDE, `stop_run`, a deadline).
+pub const INSTANTANE_INTERROMPU: &str = "l'appel a été arrêté : sa lecture est interrompue";
+
 /// Pour les témoins : l'erreur d'origine d'une ouverture refusée par le crochet.
 #[cfg(test)]
 pub(crate) const CAUSE_DU_CROCHET: &str = "BEGIN READ ONLY refusé par le crochet de test";
@@ -130,6 +133,7 @@ impl ReadPool {
         let conn = Arc::new(ConnDInstantane {
             inner: conn,
             etat: Mutex::new(Phase::AOuvrir),
+            interrompu: AtomicBool::new(false),
             rompus: self.rompus.clone(),
             #[cfg(test)]
             a_rompre: self.a_rompre.clone(),
@@ -233,7 +237,11 @@ impl Instantane {
     /// `2026-11-07-un-arret-ne-coupe-pas-une-requete-du-moteur-en-cours`). The statement running on the snapshot's
     /// connection ends with an error, and every later statement of the snapshot is refused. Without effect once the
     /// snapshot is over: its connection may already serve another call.
-    pub fn interrompre(&self) {}
+    pub fn interrompre(&self) {
+        if let Some(c) = &self.conn {
+            c.interrompre();
+        }
+    }
 
     /// L'instantané s'est rompu : l'appel doit recommencer sous un neuf.
     pub fn rompu(&self) -> bool {
@@ -288,6 +296,9 @@ enum Phase {
 pub struct ConnDInstantane {
     inner: Arc<dyn DbConnection>,
     etat: Mutex<Phase>,
+    /// The call was stopped: every later statement is refused. The engine resets its own flag at the start of each
+    /// statement, so an interruption that fell between two would otherwise be lost.
+    interrompu: AtomicBool,
     rompus: Arc<AtomicU64>,
     #[cfg(test)]
     a_rompre: Arc<AtomicU64>,
@@ -296,10 +307,26 @@ pub struct ConnDInstantane {
 }
 
 impl ConnDInstantane {
+    /// Interrupt under the phase lock: while the snapshot is open, its connection is still this call's; once it is
+    /// over (`Fini`), the connection may serve another call, and nothing is interrupted.
+    fn interrompre(&self) {
+        let etat = self.etat.lock().unwrap_or_else(|e| e.into_inner());
+        if matches!(*etat, Phase::Fini) {
+            return;
+        }
+        self.interrompu.store(true, Ordering::SeqCst);
+        if matches!(*etat, Phase::Ouvert) {
+            self.inner.interrupt();
+        }
+    }
+
     /// Avant chaque requête : ouvrir l'instantané à la première, et refuser
     /// toute requête d'un instantané rompu.
     fn avant(&self) -> Result<(), DbError> {
         let mut etat = self.etat.lock().unwrap_or_else(|e| e.into_inner());
+        if self.interrompu.load(Ordering::SeqCst) && !matches!(*etat, Phase::Fini) {
+            return Err(DbError::QueryError(INSTANTANE_INTERROMPU.to_string()));
+        }
         if let Phase::AOuvrir = *etat {
             #[cfg(test)]
             let refus = self
@@ -339,6 +366,10 @@ impl ConnDInstantane {
         let mut etat = self.etat.lock().unwrap_or_else(|e| e.into_inner());
         let ouvert = matches!(*etat, Phase::Ouvert);
         *etat = Phase::Fini;
+        // Interrupted, the transaction is rolled back and the connection forgotten: its statement ended mid-way.
+        if self.interrompu.load(Ordering::SeqCst) {
+            return !ouvert;
+        }
         !ouvert || self.inner.commit().is_ok()
     }
 }
@@ -370,6 +401,9 @@ impl DbConnection for ConnDInstantane {
     }
     fn close_without_checkpoint(&self) {
         self.inner.close_without_checkpoint()
+    }
+    fn interrupt(&self) {
+        self.interrompre()
     }
     // Une lecture d'outil n'ouvre ni ne ferme de transaction : l'instantané
     // les porte. Ces trois verbes passent tels quels.
