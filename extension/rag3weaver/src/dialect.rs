@@ -331,6 +331,22 @@ pub trait SchemaDialect: Send + Sync {
         None
     }
 
+    /// **Copy the edges of replaced rows to their replacements** ([`rag3weaver_ir::Write::CopyEdges`]), `filter` on
+    /// the alias `x` of the other end. `None`: this dialect does not say it, and the write is refused by name.
+    #[allow(clippy::too_many_arguments)]
+    fn copy_edges(
+        &self,
+        relation: &str,
+        table: &str,
+        other: &str,
+        side: rag3weaver_ir::Direction,
+        filter: Option<&rag3weaver_ir::Predicate>,
+        props: &[String],
+    ) -> Option<String> {
+        let _ = (relation, table, other, side, filter, props);
+        None
+    }
+
     /// **Ce dialecte sait-il les générations** (2a′) : les colonnes `_couche`, `_depuis` et
     /// `_jusqu_a`, et le prédicat [`rag3weaver_ir::Predicate::Visible`] ? Non par défaut : une base
     /// neuve garde alors la forme d'avant (postgres, ticket du 14 novembre 2026).
@@ -1409,6 +1425,9 @@ pub fn write_by_methods<D: SchemaDialect + ?Sized>(d: &D, write: &rag3weaver_ir:
         rag3weaver_ir::Write::Detach { relation, table, side, filter } => d
             .detach_edges(relation, table, *side, filter)
             .ok_or_else(|| rag3weaver_ir::TranslateError::Untranslated { dialect: d.name().into(), form: "Write::Detach" })?,
+        rag3weaver_ir::Write::CopyEdges { relation, table, other, side, filter, props } => d
+            .copy_edges(relation, table, other, *side, filter.as_ref(), props)
+            .ok_or_else(|| rag3weaver_ir::TranslateError::Untranslated { dialect: d.name().into(), form: "Write::CopyEdges" })?,
         rag3weaver_ir::Write::Load { target, path } => {
             let refus = || rag3weaver_ir::TranslateError::Untranslated { dialect: d.name().into(), form: "Write::Load" };
             if !d.capabilities().bulk_load {
@@ -1650,6 +1669,29 @@ impl Rag3dbDialect {
 impl SchemaDialect for Rag3dbDialect {
     fn sait_les_generations(&self) -> bool {
         true
+    }
+
+    fn copy_edges(
+        &self,
+        relation: &str,
+        table: &str,
+        other: &str,
+        side: rag3weaver_ir::Direction,
+        filter: Option<&rag3weaver_ir::Predicate>,
+        props: &[String],
+    ) -> Option<String> {
+        let (rel, t, o) = (cypher_quote(relation), cypher_quote(table), cypher_quote(other));
+        let copie = if props.is_empty() {
+            String::new()
+        } else {
+            format!(" {{{}}}", props.iter().map(|k| format!("{q}: r.{q}", q = cypher_quote(k))).collect::<Vec<_>>().join(", "))
+        };
+        let (motif, deja, cree) = match side {
+            rag3weaver_ir::Direction::Incoming => (format!("(x:{o})-[r:{rel}]->(a:{t} {{_uuid: p.a}})"), format!("(x)-[:{rel}]->(n)"), format!("(x)-[:{rel}{copie}]->(n)")),
+            rag3weaver_ir::Direction::Outgoing => (format!("(a:{t} {{_uuid: p.a}})-[r:{rel}]->(x:{o})"), format!("(n)-[:{rel}]->(x)"), format!("(n)-[:{rel}{copie}]->(x)")),
+        };
+        let filtre = filter.map(|f| format!("({}) AND ", rag3db_condition_sur(f, "x", &mut 0))).unwrap_or_default();
+        Some(format!("UNWIND $paires AS p MATCH {motif}, (n:{t} {{_uuid: p.n}}) WHERE {filtre}NOT EXISTS {{ MATCH {deja} }} CREATE {cree} RETURN count(*)"))
     }
 
     fn condition_visible_sur(&self, alias: &str, couche: &str, rang: i64) -> Option<String> {
