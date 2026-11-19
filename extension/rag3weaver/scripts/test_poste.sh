@@ -312,5 +312,23 @@ seuil_poste=$(sed -n 's/^VALIDATION_MEMORY_MAX=\([0-9]*\).*/\1/p' "$POSTE")
 seuil_confineur=$(python3 -c "import re,sys; m=re.search(r'^MAX_MEMOIRE = (\d+) \* 1024\*\*3', open(sys.argv[1]).read(), re.M); print(int(m.group(1))*1024**3)" "$(dirname "$(realpath "$0")")/confiner_validation.py" 2>/dev/null)
 [ -n "$seuil_poste" ] && [ "$seuil_poste" = "$seuil_confineur" ]
 cas $? "le seuil de poste est celui du confineur (poste ${seuil_poste:-absent}, confiner_validation.py ${seuil_confineur:-absent})"
-
+# sccache et mold (19 novembre 2026, c7 ; posés par Lucie aux deux postes) : sous `poste`, une commande compile par
+# sccache (cache sur disque, plafond 40G) et lie par mold, quand ils sont là ; un choix de l'appelant l'emporte.
+R=$(mktemp -d -p "${TMPDIR:-$HOME/.cache}"); mkdir -p "$R/bin"
+for b in sccache mold clang; do printf '#!/bin/sh\nexit 0\n' > "$R/bin/$b"; chmod +x "$R/bin/$b"; done
+# Un script, pas un `sh -c` : systemd-run développe lui-même les ${…} d'une ligne de commande.
+printf '%s\n' '#!/bin/sh' 'echo "${RUSTC_WRAPPER-absent}|${SCCACHE_DIR-absent}|${SCCACHE_CACHE_SIZE-absent}|${CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER-absent}|${CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS-absent}" > "$1"' > "$R/lire.sh"
+env -u RUSTC_WRAPPER -u SCCACHE_DIR -u SCCACHE_CACHE_SIZE -u CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER -u CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS \
+  PATH="$R/bin:$PATH" "$POSTE" lourd sh "$R/lire.sh" "$R/env" > /dev/null 2>&1
+[ "$(cat "$R/env" 2>/dev/null)" = "sccache|$HOME/.cache/sccache|40G|clang|-C link-arg=-fuse-ld=mold" ]
+cas $? "sous poste, sccache (~/.cache/sccache, 40G) et mold par clang, quand ils sont là (lu : $(cat "$R/env" 2>/dev/null))"
+env -u SCCACHE_DIR -u SCCACHE_CACHE_SIZE -u CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER -u CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS \
+  RUSTC_WRAPPER= PATH="$R/bin:$PATH" "$POSTE" lourd sh "$R/lire.sh" "$R/env2" > /dev/null 2>&1
+[ "$(cut -d'|' -f1 "$R/env2" 2>/dev/null)" = "" ]
+cas $? "RUSTC_WRAPPER posé vide par l'appelant reste vide (lu : $(cat "$R/env2" 2>/dev/null))"
+env -u RUSTC_WRAPPER -u SCCACHE_DIR -u SCCACHE_CACHE_SIZE -u CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER -u CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS \
+  PATH="/usr/bin:/bin" POSTE_SANS_OUTILS_TEMOIN=1 "$POSTE" lourd sh "$R/lire.sh" "$R/env3" > /dev/null 2>&1
+if command -v sccache > /dev/null 2>&1 && [ "$(command -v sccache)" != "$R/bin/sccache" ]; then cas 0 "(sccache installé ici : le cas sans outils ne se juge pas)"
+else [ "$(cut -d'|' -f1 "$R/env3" 2>/dev/null)" = absent ]; cas $? "sans sccache ni mold, rien n'est posé (lu : $(cat "$R/env3" 2>/dev/null))"; fi
+rm -rf "$R"
 exit $echec
