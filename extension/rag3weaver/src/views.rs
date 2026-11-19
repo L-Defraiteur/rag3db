@@ -251,8 +251,8 @@ pub struct VectorsDue {
     /// The rate of the view's embedding service, in characters per second (an index's rate: the claim, the call and
     /// the write); `None` when no rate is known.
     pub chars_per_s: Option<f64>,
-    /// Where the rate comes from, said in the answer: « index » (the catalog's key of the service, an index's rate),
-    /// « banc × 0,5 » (the bench's declared rate, halved), or `None` (unknown).
+    /// Where the rate comes from, said in the answer, with embarquement's names (its page 05 of 19 November): « index »
+    /// (the catalog's key of the service, an index's rate), « bench » (the bench's declared rate, halved), « unknown ».
     pub rate_from: Option<&'static str>,
 }
 
