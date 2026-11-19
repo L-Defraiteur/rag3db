@@ -780,6 +780,11 @@ fn a_teammate_runs_commands_through_the_declared_gate_and_asks_for_the_rest() {
             let vus = vus.clone();
             Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
                 let results = tool_results(turns);
+                // **A loaded machine, made deterministic** (ticket of 8 November 2026): the second tool result
+                // reaches the model late. The supervisor's mailbox may already hold the question by then.
+                if results.len() == 2 {
+                    std::thread::sleep(std::time::Duration::from_millis(300));
+                }
                 if let Some(r) = results.last() {
                     vus.lock().unwrap().push(r.clone());
                 }
