@@ -179,7 +179,8 @@ fn decide_by_llm_asks_a_schema_and_labels_the_element() {
     // L'usage de l'appel est posé sur l'élément (15 novembre 2026) : le faux modèle compte son invite.
     assert!(usage.as_ref().is_some_and(|u| u["prompt_tokens"].as_u64().is_some_and(|n| n > 0) && u["ms"].is_u64()), "{usage:?}");
     let (text, format) = asked.lock().unwrap().clone().unwrap();
-    assert_eq!(text, "comment indexer ?");
+    // The text first, the candidate labels at the end (19 November 2026, the stable first for the cache).
+    assert_eq!(text, "comment indexer ?\n\nÉtiquettes admises : question, bavardage.");
     match format {
         Some(ResponseFormat::JsonSchema { schema, .. }) => {
             assert_eq!(schema["properties"]["label"]["enum"], json!(["question", "bavardage"]));
