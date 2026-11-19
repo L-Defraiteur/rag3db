@@ -1268,6 +1268,57 @@ fn a_text_both_written_and_reported_is_in_the_mailbox_once() {
     assert_eq!(portee, 1, "le contenu une seule fois, celui du report : {boite:#?}");
 }
 
+/// **A report about the text is not the text** (ticket « L'équipier rend un compte rendu au lieu du
+/// contenu demandé », reopened by archi on 15 November 2026 on tty's finding): to a request for a
+/// text, with no `expects`, the model writes no text, calls `report` with a sentence *about* what it
+/// would have written, then `step_done` succeeded — the séance of 14 November on Gemini 3.8 Flash.
+/// Today the task ends « fait sans plan » and the content is nowhere. The witness does not choose the
+/// guard (archi designs it): it only refuses that silent end. Either the content reaches the mailbox
+/// (the fake model writes it from its second step on, if a guard relaunches it), or the host says in
+/// the mailbox that the requested content is missing, and the task has not ended.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn a_report_about_the_text_is_not_the_text() {
+    use std::time::{Duration, Instant};
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let model = un_pas(
+        |turns, opts, sink| {
+            if step_of(turns) <= 1 {
+                answer(turns, opts, sink, "", calls(&[
+                    ("report", json!({ "text": "Présentation fournie au superviseur conformément au format demandé (titre, 3 puces, mot en gras)." })),
+                    ("step_done", json!({ "item": "", "succeeded": true, "done": "Présentation rédigée avec titre, trois points de compétence et un mot en gras.", "remaining": "" })),
+                ]))
+            } else {
+                answer(turns, opts, sink, PRESENTATION, calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "présentation écrite", "remaining": "" }))]))
+            }
+        },
+        Arc::default(),
+    );
+    let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    host.post_to_teammate(&h.id, "doc", "c7", "request", None, "Présente-toi en quelques lignes : un titre, une liste à puces de trois choses que tu sais faire, et un mot en gras.", &Value::Null).expect("la request");
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    let contenu = |b: &[Value]| b.iter().any(|l| l["from"] == "teammate" && l["text"].as_str().is_some_and(|t| t.contains("# L'équipier") && t.contains("**gras**")));
+    // The end or the content, whichever comes first; a guard that waits for the supervisor gives neither.
+    let borne = Instant::now() + Duration::from_secs(20);
+    let boite = loop {
+        let b = files.mailbox();
+        if contenu(&b) || b.iter().any(|l| l["kind"] == "ended") || Instant::now() >= borne {
+            break b;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    };
+    if contenu(&boite) {
+        return;
+    }
+    let fin = boite.iter().find(|l| l["kind"] == "ended");
+    assert!(fin.is_none(), "the task ended ({}) with only a report about the text, and the content is nowhere : {boite:#?}", fin.map(|f| f["text"].to_string()).unwrap_or_default());
+    let apres_le_pas = boite.iter().skip_while(|l| l["kind"] != "step_done").any(|l| l["from"] == "host" && l["kind"] != "ended");
+    assert!(apres_le_pas, "the task waits without saying that the requested content is missing : {boite:#?}");
+}
+
 /// **Une request qui exige un report ne se clôt pas sans lui** (`expects: "report"`, déclaré
 /// par le superviseur) : un `step_done` sans `report` dit « fait sans le livrable demandé » et
 /// l'équipier attend la boîte sans appeler le modèle ; une ligne du superviseur le relance, le
