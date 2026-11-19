@@ -1414,10 +1414,21 @@ fn synchroniser_la_source(
     source_id: &str,
 ) -> Result<(SourceSyncReport, SourceSyncProgress), String> {
     let source_id = source_id.to_string();
+    // **The containers that are not search candidates, set aside, before any path** (2.12): a version written before
+    // the rule keeps its render, so no writer would rewrite it; the gesture takes it out of the full text and its
+    // chunks. Before the choice of a path (the bench, 19 November 2026: a source the base had never indexed took the
+    // snapshot path, and the gesture, then only on the writer's, never ran).
+    let non_candidats = catalog.set_aside_non_candidates(crate::code::SCOPE_CONTENT).map_err(|e| e.to_string())?;
+    let avec_le_compte = |r: Result<(SourceSyncReport, SourceSyncProgress), String>| {
+        r.map(|(mut rapport, avancement)| {
+            rapport.non_candidates_set_aside = non_candidats;
+            (rapport, avancement)
+        })
+    };
     // **Sous les générations (2a′-2), une source déjà indexée se synchronise par l'écrivain** : la fin
     // d'instantané effacerait ce qu'aucun paquet n'a marqué, lignes publiées retirées comprises.
     if catalog.generations.is_some() && source_deja_indexee(catalog, &source_id)? && !first_pass_interrupted(catalog, &source_id)? {
-        return synchroniser_par_generations(catalog, source, options, progress, source_id);
+        return avec_le_compte(synchroniser_par_generations(catalog, source, options, progress, source_id));
     }
     let grain = BTreeMap::from([("source".to_string(), CypherValue::String(source_id.clone()))]);
     let s_scopes = catalog.begin_snapshot(SCOPE, &grain, options.takeover).map_err(|e| e.to_string())?.session;
@@ -1484,7 +1495,7 @@ fn synchroniser_la_source(
         let _ = catalog.abort_snapshot(SCOPE, &grain, &s_scopes);
         let _ = catalog.abort_snapshot(FILE, &grain, &s_files);
     }
-    resultat
+    avec_le_compte(resultat)
 }
 
 /// **The full text, prepared before a source is synchronized**, on both paths (the snapshot one and the
@@ -1655,9 +1666,6 @@ fn synchroniser_par_generations(
     // The same guard as the snapshot path, before anything is listed: an unchanged source is resynchronized
     // without a single batch, so no batch would run it later.
     prepare_full_text_for_source_sync(catalog)?;
-    // **The containers that are not search candidates, set aside** (2.12): a version written before the rule keeps
-    // its render, so the writer would never rewrite it; the gesture takes it out of the full text and its chunks.
-    let non_candidats = catalog.set_aside_non_candidates(crate::code::SCOPE_CONTENT).map_err(|e| e.to_string())?;
     let listed = source.list()?;
     let manifestes = crate::manifestes::Manifestes::lire(&listed, |c| source.read(c).ok().flatten());
     catalog.note_manifestes(&manifestes).map_err(|e| e.to_string())?;
@@ -1717,7 +1725,6 @@ fn synchroniser_par_generations(
         files_listed: listed.len(),
         relations_mode: Some(RelationsMode::PerBatch),
         buffer_pool: catalog.conn().buffer_pool().map(crate::connection::describe_buffer_pool),
-        non_candidates_set_aside: non_candidats,
         ..Default::default()
     };
     // Les fichiers déjà indexés dont la version de l'analyse n'est pas la courante : ils repassent tous,
