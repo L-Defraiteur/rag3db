@@ -1,5 +1,6 @@
 # Nouveautés
 
+- 19 novembre 2026 — **Une valeur citée se définit, et seule une définition changée fait repasser ses fiches à revoir.** `define_ref` écrit la définition d'une valeur déjà citée (la valeur d'une catégorie, par exemple) ; les fiches ancrées à cette valeur passent « à revoir », leur contenu intact. Une citation (`add_ref`, `ancrer_fiche`) ne les touche plus et n'efface jamais une définition. `review_anchored` prend un filtre `change` pour cela.
 - 20 novembre 2026 — **Un namespace replié ne passe plus devant la classe qu'on cherche.** Un `namespace` ou un
   `module` qui porte à lui, hors de ses lignes de structure (ouvertures, plis des conteneurs imbriqués, déclarations
   avancées, accolades fermantes et leurs commentaires), moins de 80 caractères n'est plus candidat à la recherche :
