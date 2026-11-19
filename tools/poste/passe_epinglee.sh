@@ -126,6 +126,14 @@ if [ "${SUITE_DU_TEMOIN:-}" = navigateur ]; then
   [ -x scripts/temoins_navigateur.sh ] || rouge "témoin navigateur : pas d'étape des témoins navigateur (scripts/temoins_navigateur.sh) dans cet arbre"
   [ "$SEUL" = temoins ] && { echo "TEMOINS code=0 (témoin navigateur, jugé à son étape)" >> $R; exit 0; }
   c=0
+# SUITE_DU_TEMOIN=tty (19 novembre 2026, tty) : le témoin est un test du crate du terminal, qui n'est pas dans la lib de
+# rag3weaver. Il se juge à l'étape « tty », où son nom doit sortir « ok » ; un lot qui ne touche pas tty/ n'a pas
+# d'étape tty, et ne peut donc pas avoir ce témoin.
+elif [ "${SUITE_DU_TEMOIN:-}" = tty ]; then
+  echo "témoin tty : $FILTRE, jugé à l'étape tty" >> $R
+  echo " $EXIGEES_NOMS " | grep -q " tty " || rouge "témoin tty : le lot ne touche pas extension/rag3weaver/tty/, son témoin n'y serait pas joué"
+  [ "$SEUL" = temoins ] && { echo "TEMOINS code=0 (témoin tty, jugé à son étape)" >> $R; exit 0; }
+  c=0
 elif [ "${SUITE_DU_TEMOIN:-}" = lib ]; then
   timeout 3600 ./run_e2e.sh --features openai-llm,anthropic-llm --lib "$FILTRE" > $J/temoins.log 2>&1; c=$?
 else
@@ -137,7 +145,7 @@ grep -E '^test result|panicked at' $J/temoins.log >> $R
 # **Un témoin qui ne joue rien n'est pas vert** (19 novembre 2026, c7) : un filtre qui ne désigne aucun test, ou un test
 # ignoré (la lib sans la feature navigateur), dit « 0 passed » avec le code 0. Au moins un test dont le nom porte le
 # filtre doit sortir « ok » (le témoin navigateur se juge à son étape).
-if [ "${SUITE_DU_TEMOIN:-}" != navigateur ]; then
+if [ "${SUITE_DU_TEMOIN:-}" != navigateur ] && [ "${SUITE_DU_TEMOIN:-}" != tty ]; then
   awk -v f="$FILTRE" '$1 == "test" && $3 == "..." && $4 == "ok" && index($2, f) {t = 1} END {exit !t}' $J/temoins.log \
     || rouge "témoin : aucun test « $FILTRE » n'a été joué ok ($(grep -m1 '^test result' $J/temoins.log))"
 fi
@@ -153,7 +161,7 @@ if [ -n "${SUITES:-}" ]; then
   LISTE_DES_SUITES="$LISTE_DES_SUITES $EXIGEES_NOMS"
 else
   # La lib n'est pas une suite e2e : elle se rejoue entière à l'étape « lib ».
-  LISTE_DES_SUITES="$EXIGEES_NOMS e2e_lectures e2e_code $(case "${SUITE_DU_TEMOIN:-}" in lib|navigateur) ;; *) echo "${SUITE_DU_TEMOIN:-}" ;; esac) ${SUITES_EN_PLUS:-}"
+  LISTE_DES_SUITES="$EXIGEES_NOMS e2e_lectures e2e_code $(case "${SUITE_DU_TEMOIN:-}" in lib|navigateur|tty) ;; *) echo "${SUITE_DU_TEMOIN:-}" ;; esac) ${SUITES_EN_PLUS:-}"
 fi
 JOUEES=""
 # **Le crate du terminal** (19 novembre 2026, trou relevé par tty) : un lot qui touche extension/rag3weaver/tty/ (la suite
@@ -181,6 +189,10 @@ if echo " $EXIGEES_NOMS " | grep -q " tty "; then
   grep -E '^test result|FAILED|panicked|^plain_' $J/tty.log | head -20 >> $R
   [ $c = 0 ] || rouge "tty (code=$c)"
   [ "$(grep -c "Compiling rag3weaver-tty v.* ($TTY)" $J/tty.log)" -ge 2 ] || rouge "tty : le crate n'a pas été compilé deux fois depuis $TTY"
+  if [ "${SUITE_DU_TEMOIN:-}" = tty ]; then
+    grep -qE "^test ([^ ]*::)?$FILTRE \.\.\. ok$" $J/tty.log || rouge "témoin tty $FILTRE : pas vu « ok » à l'étape tty"
+    echo "témoin tty $FILTRE : ok" >> $R
+  fi
 fi
 LISTE_DES_SUITES=$(echo " $LISTE_DES_SUITES " | sed 's/ tty / /g')
 for suite in $(echo $LISTE_DES_SUITES | tr " " "\n" | awk 'NF && !vu[$0]++'); do
