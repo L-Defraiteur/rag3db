@@ -1410,7 +1410,9 @@ fn le_retour_d_un_outil_se_lit_et_le_brut_reste_exact() {
     ));
     assert_eq!(rendu["numero"], "1", "les lignes numérotées : {rendu}");
     assert_eq!(rendu["code"], true, "le code du fichier : {rendu}");
-    assert_eq!(rendu["autres"], true, "les champs autour du résultat : {rendu}");
+    // The model receives the read's text alone (presentation of the tools, 19 Nov. 2026): there is no
+    // field around it any more, and the readable view shows nothing the model did not get.
+    assert_eq!(rendu["autres"], false, "no field around the text the model received : {rendu}");
     n.evaluer(&format!("{d}.querySelector('button.brut').click()"));
     n.attendre(&format!("{d}.querySelector('.texte-brut')"), "le brut");
     assert_eq!(n.evaluer(&format!("{d}.querySelector('.texte-brut').textContent")), json!(recu), "le brut n'est pas le texte exact reçu par le modèle");
