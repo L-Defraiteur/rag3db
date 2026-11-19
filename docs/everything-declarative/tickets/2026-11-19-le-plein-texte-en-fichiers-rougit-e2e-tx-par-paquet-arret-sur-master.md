@@ -5,8 +5,8 @@
 - **Gravité** : une reprise après arrêt rend de mauvais comptes, en plein texte en fichiers. Une recherche après un
   arrêt ne trouve pas un fichier d'un paquet validé.
 - **Atteignable en service** : oui, pour toute base au plein texte en fichiers qui reprend après un arrêt.
-- **Touche rag3weaver** : à départager (le plein texte en fichiers, sa reprise, ou la lib 7c2b506ec).
-- **Pour** : à attribuer par c7 (ce n'est pas le lot d'ED qui l'a montré).
+- **Touche rag3weaver** : oui, C (`src/catalog.rs`, `src/code_sync.rs`), le lot de recherche qui retient les dérivations d'un premier index jusqu'après les relations.
+- **Pour** : recherche (C est son lot).
 - **Signalé par** : ED, à la passe du lot 2.7 (ii), `schema-changed-retry`.
 
 ## Ce qu'on voit
@@ -34,3 +34,36 @@ même lib), les tests « en fichiers » rougissent aussi : 4 échecs sur 6 avec 
 Départager entre le Rust atterri depuis le 18 au soir et la lib 7c2b506ec, en jouant la suite sur
 `d9c30ef781` sous 7c2b506ec, puis sur la base du 19 sous 3d706f709. Ensuite, le correctif chez le propriétaire, et
 la suite verte.
+
+## La cause (recherche, 19 novembre 2026)
+
+**Le départage** (filtre `en_fichiers`, à luciepc) :
+- master 536f8824af sous la lib d'avant 3d706f709 (`RAG3WEAVER_MOTEUR_ANCIEN=1`) : 4 rouges sur 6 ;
+- d9c30ef781 sous la lib 7c2b506ec : 6 verts sur 6.
+
+Ce n'est donc pas la lib, mais le Rust atterri entre ces deux commits.
+
+**La bissection** : le parent de C (07b5f782f8) donne 6 verts sur 6, C (e6c0307291) 4 rouges sur 6, sous la même
+lib.
+
+**Le mécanisme.** C retient les dérivées d'un premier index (`ScopeContent`, le plein texte du code) jusqu'après
+les relations, pour que les outils de référence répondent plus tôt. Avant C, chaque paquet rendait les siennes dans
+sa propre transaction. Avec C, un arrêt brutal laisse des paquets validés sans leur contenu dérivé :
+- le lecteur seul voit `Never` au lieu de « à rebâtir » ;
+- la recherche ne trouve pas f010, qui est pourtant dans un paquet validé ;
+- la reprise rend de mauvais comptes, puisque les dérivées d'avant la mort ne sont jamais rendues.
+
+C'est une perte de données après un arrêt brutal.
+
+**Le revert.** Les quatre commits de C sont revertés en un commit neuf (branche `revert-c`, au pousseur), et les
+quatre lignes `en_fichiers` sortent de `tools/poste/known_red_e2e.txt`.
+
+**Ce qui reste, donc le ticket reste ouvert** : C reposée avec sa durabilité.
+- Une marque « dérivations retenues » dans `_catalog_meta`, posée dans la transaction du premier paquet. Le journal
+  d'index ne convient pas : c'est celui de la commande `index` de l'hôte, hors de la base, que `sync_source` n'écrit
+  pas et qu'un catalogue qui rouvre ne lit pas.
+- Les trois chemins :
+  - le lecteur seul voit « à rebâtir » ;
+  - le chercheur rend les dérivées dues avant de répondre ;
+  - le repreneur rend celles d'avant la mort.
+- Les quatre cas rouges d'abord, puis verts, et la mesure de C refaite en release.
