@@ -564,4 +564,16 @@ w1=$(on_master tk-wait && echo poussé || echo attend)
 PUSHER_IDLE=0 PUSHER_TRAIN_MAX=1 P step > /dev/null 2>&1; PUSHER_IDLE=0 PUSHER_TRAIN_MAX=1 P step > /dev/null 2>&1
 [ "$w1" = attend ] && ! grep -q "^rouge	tk-wait	" "$D/pusher/inbox/author-a.txt" && ok "master rouge à check_tickets : le lot qui ne le répare pas attend, sans être rendu" || ko "master rouge : le lot qui ne répare pas est $w1"
 on_master tk-mend && on_master tk-wait && ok "le lot qui répare atterrit, puis celui qui attendait" || ko "après la réparation : tk-mend $(on_master tk-mend && echo poussé || echo absent), tk-wait $(on_master tk-wait && echo poussé || echo absent)"
+# 35. Master red at check_tickets (19 Nov., c7: two Rust trains replayed twenty minutes to go red on the tickets): a Rust
+# lot is not taken, the docs lot that mends master lands, then the Rust lot is replayed and lands.
+( cd "$D/author" && git fetch -q origin && git checkout -q -B tk-red2 origin/master && tk quatre corrigé > docs/s/tickets/quatre.md && git add -A && git commit -qm "red tickets 2" && git push -q origin HEAD:master )
+hr=$(lot tk-rust extension/rag3weaver/src/tkr.rs 'fn tkr() {}'); P enqueue tk-rust tk-rust "$hr" rust some_witness e2e_code - - author-c > /dev/null
+hm=$(lot tk-mend2 docs/s/tickets/quatre.md "$(tk quatre ouvert)"); P enqueue tk-mend2 tk-mend2 "$hm" docs - - - - author-a > /dev/null
+echo VERT > "$D/outcomes.d/tk-rust"; c0=$(calls "$D/pass_calls")
+PUSHER_IDLE=0 PUSHER_TRAIN_MAX=1 P step > /dev/null 2>&1
+c1=$(calls "$D/pass_calls")
+[ "$c1" = "$c0" ] && ok "master rouge aux tickets : le lot rust n'est pas pris" || ko "master rouge aux tickets : un lot rust est pris et rejoué"
+PUSHER_IDLE=0 PUSHER_TRAIN_MAX=1 P step > /dev/null 2>&1; PUSHER_IDLE=0 PUSHER_TRAIN_MAX=1 P step > /dev/null 2>&1
+on_master tk-mend2 && on_master tk-rust && ok "le lot de docs qui répare atterrit, puis le lot rust" || ko "après la réparation : tk-mend2 $(on_master tk-mend2 && echo poussé || echo absent), tk-rust $(on_master tk-rust && echo poussé || echo absent)"
+rm -f "$D/outcomes.d/tk-rust"
 exit $red
