@@ -1152,6 +1152,8 @@ fn a_provider_refusal_waits_a_window_and_does_not_fail_the_step() {
     let reprises: Vec<u64> = evenements.iter().filter(|e| e["kind"] == "Resumed").filter_map(|e| e["waited_ms"].as_u64()).collect();
     assert!(reprises.len() == 3 && reprises[2] >= 4000, "the whole backoff (1, 2, then 4 s) : {reprises:?}");
     assert!(evenements.iter().filter(|e| e["kind"] == "Waiting").all(|e| e["run"].as_str().is_some_and(|r| r.starts_with("agent-"))), "on the run of the refused step : {evenements:#?}");
+    let fenetres: Vec<&Value> = evenements.iter().filter(|e| e["kind"] == "Waiting").map(|e| &e["wait_ms"]).collect();
+    assert_eq!(fenetres, [&json!(1000), &json!(2000), &json!(4000)], "the window announced, for « reprise dans N s » (archi) : {evenements:#?}");
 }
 
 /// Attend dans la boîte une ligne qui satisfait `ok`, 90 s au plus.
