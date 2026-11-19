@@ -8,7 +8,7 @@ import { RagDesDepots, UiDuTour } from "@/components/UiDuTour";
 import { Breadcrumb, ChatSidebar } from "@/views/ChatSidebar";
 import DOMPurify from "dompurify";
 import { fileTheme, imageDe, type ThemeAnimation } from "@/lib/theme";
-import { displayName, fetchChat, onEtat, onFlux, sendChat, stopRun, tourEnVol, type Backend, type ChatContext, type ChatPousse, type ChatState, type ChatTurn, type ChatUsage, type FluxEvent, type UiComposant, type Rag, type HostState, type MemoryWrite, type TurnResult } from "@/lib/host";
+import { displayName, etatPartage, fenetres, fetchChat, onEtat, onFlux, sendChat, stopRun, tourEnVol, type Backend, type ChatContext, type ChatPousse, type ChatState, type ChatTurn, type ChatUsage, type FluxEvent, type UiComposant, type Rag, type HostState, type MemoryWrite, type TurnResult } from "@/lib/host";
 
 // **Le chat de la tâche et de l'atelier** (page 08, vue 2) : la forme de ui/chat —
 // la colonne des conversations, l'en-tête nom / modèle / état, le fil, la saisie
@@ -569,6 +569,22 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, backend?.manifest]);
+
+  // **The chat guides a detached window of the repository** (the IDE in several windows, slice 2): with a window of
+  // the repository open for this backend, a cited file or symbol, clicked, opens there (`selection:<backend>`), and
+  // the chat stays on its conversation. Without one, the link goes as before.
+  useEffect(() => {
+    const liste = messages.current;
+    if (!liste) return;
+    const clic = (e: MouseEvent) => {
+      const a = (e.target as Element | null)?.closest?.("a.code-ref") as HTMLAnchorElement | null;
+      if (!a || !fenetres().some((f) => f.role === "depot" && f.backend === id)) return;
+      e.preventDefault();
+      etatPartage.ecrire(`selection:${id}`, { href: a.getAttribute("href"), at: Date.now() });
+    };
+    liste.addEventListener("click", clic, true);
+    return () => liste.removeEventListener("click", clic, true);
+  }, [id]);
 
   // Recoller en bas, seulement si on le demande et si la personne y était.
   useLayoutEffect(() => {
