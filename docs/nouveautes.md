@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 19 novembre 2026 — **Le chat de l'IDE ouvre le dépôt à côté.** Un lien « dépôt à côté » de son en-tête ouvre l'arbre du dépôt dans une fenêtre à lui, qui ne montre que son rôle et le flux ; les fichiers cités dans le chat s'y ouvrent sans recharger cette fenêtre, et précédent et suivant y reviennent sur les vues suivies.
+
 - 19 novembre 2026 — **Le chat de l'IDE guide une fenêtre du dépôt détachée.** Une fenêtre ouverte sur le dépôt avec `?fenetre=depot` se fait connaître des autres ; un fichier ou un symbole cité dans le chat, cliqué, s'ouvre dans la dernière de ces fenêtres qui a eu le focus, et le chat reste sur sa conversation.
 
 - 19 novembre 2026 — **Deux fenêtres de l'IDE sur le même chat suivent le même tour.** Une fenêtre ouverte au milieu d'un tour montre son texte depuis le début, et non seulement les mots arrivés après elle : le worker partagé du flux le garde pendant le tour. Une relecture d'une fenêtre, partie avant un tour d'une autre, ne l'efface plus.
