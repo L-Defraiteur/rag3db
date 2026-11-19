@@ -42,6 +42,17 @@ pub struct EtatDuRangement {
     /// What went wrong last (a refused slice, a memory without the tool), until the next success.
     #[serde(default)]
     pub last_error: Option<String>,
+    /// The Sources of the slices filed without error, in order (`compose_restart` takes them).
+    #[serde(default)]
+    pub sources: Vec<String>,
+    /// The turns a compaction took out of the session: the session's turn n is the run's turn
+    /// `turn_offset + n`.
+    #[serde(default)]
+    pub turn_offset: usize,
+    /// The last message written by `put_turn`, `(turn, seq)`: what follows goes at the next end of
+    /// turn, a refused one included.
+    #[serde(default)]
+    pub written_through: Option<(usize, usize)>,
 }
 
 pub(super) fn chemin_de_l_etat(chats_root: &Path, backend_id: &str) -> PathBuf {
@@ -80,17 +91,23 @@ pub(super) fn iso_utc(ms: u64) -> String {
 
 /// The messages of a session, numbered: `(turn, seq, message)`. A turn starts at each user
 /// message; `seq` 0 is that message, then the assistant and each tool result, in order.
-fn numeroter(turns: &[crate::llm::Turn]) -> Vec<(usize, usize, &crate::llm::Turn)> {
-    let (mut tour, mut seq) = (0usize, 0usize);
+/// A message that a compaction put in the session (the restart context and its answer): not a
+/// turn of the run.
+pub(super) fn de_reprise(t: &crate::llm::Turn) -> bool {
+    t.metadata.as_ref().is_some_and(|m| m["compaction"] == true)
+}
+
+pub(super) fn numeroter(turns: &[crate::llm::Turn], offset: usize) -> Vec<(usize, usize, &crate::llm::Turn)> {
+    let (mut tour, mut seq) = (offset, 0usize);
     let mut out = Vec::new();
-    for t in turns.iter().filter(|t| t.role != "system") {
+    for t in turns.iter().filter(|t| t.role != "system" && !de_reprise(t)) {
         if t.role == "user" {
             tour += 1;
             seq = 0;
         } else {
             seq += 1;
         }
-        if tour > 0 {
+        if tour > offset {
             out.push((tour, seq, t));
         }
     }
@@ -132,78 +149,135 @@ impl Rangeur for RangeurDeLHote {
         let v = h.call(None, memoire, "archive_slice", args.clone());
         if v["error"].is_null() { Ok(v.get("result").cloned().unwrap_or(v)) } else { Err(v["error"].to_string()) }
     }
+    fn compose_restart(&self, memoire: &Path, args: &Value) -> Result<Value, String> {
+        let h = self.hote.upgrade().ok_or("the host is gone")?;
+        let v = h.call(None, memoire, "compose_restart", args.clone());
+        if v["error"].is_null() { Ok(v.get("result").cloned().unwrap_or(v)) } else { Err(v["error"].to_string()) }
+    }
+}
+
+/// What the archiving of a conversation needs: its settings, its memory, its way there, the file
+/// of its mark.
+pub(super) struct Rangement {
+    pub reglage: crate::backend::SessionArchive,
+    pub memoire: PathBuf,
+    pub rangeur: Arc<dyn Rangeur>,
+    pub chemin: PathBuf,
+    pub verrou: Arc<std::sync::Mutex<()>>,
+}
+
+/// Whether a slice report says « filed »: the mark reaches `to_turn` and there is no error (the
+/// report is flat; `report.*` is read too, the form of the first witnesses).
+fn tranche_rangee(r: &Value, to: usize) -> bool {
+    let errors = r["errors"].as_array().or(r["report"]["errors"].as_array()).map(|a| a.len()).unwrap_or(0);
+    r["ok"] != false && r["report"]["ok"] != false && errors == 0 && r["archived_through_turn"] == json!(to)
+}
+
+impl Rangement {
+    /// Read, change and write the state of the mark, one writer at a time.
+    pub fn changer(&self, f: impl FnOnce(&mut EtatDuRangement)) -> EtatDuRangement {
+        let _g = self.verrou.lock().unwrap_or_else(|p| p.into_inner());
+        let mut etat = lire_l_etat(&self.chemin);
+        f(&mut etat);
+        let _ = ecrire_l_etat(&self.chemin, &etat);
+        etat
+    }
+
+    pub fn etat(&self) -> EtatDuRangement {
+        let _g = self.verrou.lock().unwrap_or_else(|p| p.into_inner());
+        lire_l_etat(&self.chemin)
+    }
+
+    /// Every message after `written_through` goes to the memory, in order; the first refusal
+    /// stops there and is said, and the next call starts from it again.
+    pub fn envoyer_les_tours(&self, run: &str, turns: &[crate::llm::Turn]) -> Result<(), String> {
+        let etat = self.etat();
+        let numerotes = numeroter(turns, etat.turn_offset);
+        let appels: std::collections::HashMap<String, (String, String)> = turns.iter().flat_map(|t| t.tool_calls.iter().map(|c| (c.id.clone(), (c.name.clone(), c.arguments.clone())))).collect();
+        for (tour, seq, t) in numerotes {
+            if etat.written_through.is_some_and(|w| (tour, seq) <= w) {
+                continue;
+            }
+            if let Err(e) = self.rangeur.put_turn(&self.memoire, &ligne_du_message(run, tour, seq, t, &appels)) {
+                let e = format!("put_turn {tour}.{seq}: {e}");
+                self.changer(|s| s.last_error = Some(e.clone()));
+                return Err(e);
+            }
+            self.changer(|s| s.written_through = Some((tour, seq)));
+        }
+        Ok(())
+    }
+
+    /// The open slice, from the mark to the last turn of `turns`: `(from, to, tokens)`.
+    pub fn tranche_ouverte(&self, turns: &[crate::llm::Turn]) -> (usize, usize, usize) {
+        let etat = self.etat();
+        let numerotes = numeroter(turns, etat.turn_offset);
+        let de = etat.archived_through_turn.unwrap_or(0) + 1;
+        let jusqu_a = numerotes.last().map(|(n, _, _)| *n).unwrap_or(etat.turn_offset);
+        let caracteres: usize = numerotes.iter().filter(|(n, _, _)| *n >= de).map(|(_, _, t)| t.content.chars().count() + t.tool_calls.iter().map(|c| c.arguments.chars().count()).sum::<usize>()).sum();
+        (de, jusqu_a, caracteres.div_ceil(4))
+    }
+
+    /// The slice `de..=jusqu_a` to the archivist, waiting; the mark, the Source and the error
+    /// written from the answer. `Ok` only when the slice is filed.
+    pub fn ranger(&self, run: &str, de: usize, jusqu_a: usize) -> Result<(), String> {
+        let reponse = self.rangeur.archive_slice(&self.memoire, &json!({ "run": run, "from_turn": de, "to_turn": jusqu_a, "context": "" }));
+        let mut resultat = Ok(());
+        self.changer(|etat| match &reponse {
+            Ok(r) if tranche_rangee(r, jusqu_a) => {
+                etat.archived_through_turn = Some(jusqu_a);
+                etat.last_error = None;
+                if let Some(source) = r["source"].as_str() {
+                    etat.sources.push(source.to_string());
+                }
+                etat.slices.push(json!({ "from_turn": de, "to_turn": jusqu_a, "ok": true, "source": r["source"] }));
+            }
+            _ => {
+                let pourquoi = match &reponse {
+                    Err(e) => e.clone(),
+                    Ok(r) => format!("the archivist did not file turns {de}-{jusqu_a}: {}", if r["errors"].is_null() { r["report"]["errors"].clone() } else { r["errors"].clone() }),
+                };
+                etat.slices.push(json!({ "from_turn": de, "to_turn": jusqu_a, "ok": false, "error": pourquoi }));
+                etat.last_error = Some(pourquoi.clone());
+                resultat = Err(pourquoi);
+            }
+        });
+        resultat
+    }
 }
 
 impl DaemonHost {
-    /// **The compaction of a chat** (lot 2, 19 Nov 2026): `POST /ide/chat/compact`.
-    pub fn compacter_le_chat(&self, _backend_id: &str) -> Result<Value, String> {
-        Err("compaction: not yet".into())
-    }
-
-    /// **At the end of a chat turn**: its messages go to the memory (`put_turn`); past
-    /// `memory.slice_tokens` since the mark, the slice goes to the archivist in the background,
-    /// one at a time per conversation. Nothing here makes the turn fail: what goes wrong is
-    /// written as `last_error` in the conversation's state.
-    pub(super) fn ranger_apres_le_tour(&self, hosted: &Arc<super::Hosted>, backend_id: &str, run: &str, depuis: usize, turns: Vec<crate::llm::Turn>) {
-        let Ok((reglage, bilans)) = self.with_backend(hosted, |b| (b.prepared().manifest.memory.clone().unwrap_or_default(), b.prepared().manifest.bilans.clone())) else { return };
-        let Some(bilans) = bilans else { return };
+    /// The archiving of a conversation, if its backend declares a memory and indexes its turns.
+    pub(super) fn rangement_de(&self, hosted: &Arc<super::Hosted>, backend_id: &str) -> Option<Rangement> {
+        let (reglage, bilans) = self.with_backend(hosted, |b| (b.prepared().manifest.memory.clone().unwrap_or_default(), b.prepared().manifest.bilans.clone())).ok()?;
+        let bilans = bilans?;
         if !reglage.index_turns {
-            return;
+            return None;
         }
         let memoire = if bilans.memoire.is_absolute() { bilans.memoire.clone() } else { hosted.manifest.parent().map(|p| p.join(&bilans.memoire)).unwrap_or(bilans.memoire.clone()) };
-        let Some(rangeur) = self.rangeur.clone().or_else(|| self.soi.get().map(|w| Arc::new(RangeurDeLHote { hote: w.clone() }) as Arc<dyn Rangeur>)) else { return };
-        let run = run.to_string();
-        let numerotes = numeroter(&turns);
-        let appels: std::collections::HashMap<String, (String, String)> = turns.iter().flat_map(|t| t.tool_calls.iter().map(|c| (c.id.clone(), (c.name.clone(), c.arguments.clone())))).collect();
-        let chemin = chemin_de_l_etat(&self.chats_root, backend_id);
-        // The new messages of this turn, to the memory.
-        // `depuis` counts the session's messages (system aside) before this turn.
-        let premier_neuf = depuis;
-        let mut erreur = None;
-        for (tour, seq, t) in numerotes.iter().skip(premier_neuf) {
-            if let Err(e) = rangeur.put_turn(&memoire, &ligne_du_message(&run, *tour, *seq, t, &appels)) {
-                erreur = Some(format!("put_turn: {e}"));
-                break;
-            }
-        }
-        if let Some(e) = erreur {
-            let mut etat = lire_l_etat(&chemin);
-            etat.last_error = Some(e);
-            let _ = ecrire_l_etat(&chemin, &etat);
+        let rangeur = self.rangeur.clone().or_else(|| self.soi.get().map(|w| Arc::new(RangeurDeLHote { hote: w.clone() }) as Arc<dyn Rangeur>))?;
+        Some(Rangement { reglage, memoire, rangeur, chemin: chemin_de_l_etat(&self.chats_root, backend_id), verrou: self.rangement_verrou.clone() })
+    }
+
+    /// **At the end of a turn**: the messages not yet written go to the memory; past
+    /// `memory.slice_tokens` since the mark, the slice goes to the archivist in the background,
+    /// one at a time per conversation. Nothing here makes the turn fail.
+    pub(super) fn ranger_apres_le_tour(&self, hosted: &Arc<super::Hosted>, backend_id: &str, run: &str, turns: Vec<crate::llm::Turn>) {
+        let Some(r) = self.rangement_de(hosted, backend_id) else { return };
+        if r.envoyer_les_tours(run, &turns).is_err() {
             return;
         }
-        // The slice since the mark: is it full, and is no filing in flight?
-        let etat = lire_l_etat(&chemin);
-        let de = etat.archived_through_turn.unwrap_or(0) + 1;
-        let jusqu_a = numerotes.last().map(|(n, _, _)| *n).unwrap_or(0);
-        let caracteres: usize = numerotes.iter().filter(|(n, _, _)| *n >= de).map(|(_, _, t)| t.content.chars().count() + t.tool_calls.iter().map(|c| c.arguments.chars().count()).sum::<usize>()).sum();
-        if jusqu_a < de || caracteres.div_ceil(4) <= reglage.slice_tokens {
+        let (de, jusqu_a, jetons) = r.tranche_ouverte(&turns);
+        if jusqu_a < de || jetons <= r.reglage.slice_tokens {
             return;
         }
         if !self.rangements_en_vol.lock().unwrap_or_else(|p| p.into_inner()).insert(backend_id.to_string()) {
             return;
         }
         let en_vol = self.rangements_en_vol.clone();
-        let id = backend_id.to_string();
-        let args = json!({ "run": run, "from_turn": de, "to_turn": jusqu_a, "context": "" });
+        let (id, run) = (backend_id.to_string(), run.to_string());
         std::thread::spawn(move || {
-            let reponse = rangeur.archive_slice(&memoire, &args);
-            let mut etat = lire_l_etat(&chemin);
-            let errors = reponse.as_ref().map(|r| r["report"]["errors"].as_array().map(|a| a.len()).unwrap_or(0)).unwrap_or(0);
-            let reussi = matches!(&reponse, Ok(r) if r["report"]["ok"] != false && errors == 0 && r["archived_through_turn"] == json!(jusqu_a));
-            if reussi {
-                etat.archived_through_turn = Some(jusqu_a);
-                etat.last_error = None;
-                etat.slices.push(json!({ "from_turn": de, "to_turn": jusqu_a, "ok": true }));
-            } else {
-                let pourquoi = match &reponse {
-                    Err(e) => e.clone(),
-                    Ok(r) => format!("the archivist did not file turns {de}-{jusqu_a}: {}", r["report"]["errors"]),
-                };
-                etat.slices.push(json!({ "from_turn": de, "to_turn": jusqu_a, "ok": false, "error": pourquoi }));
-                etat.last_error = Some(pourquoi);
-            }
-            let _ = ecrire_l_etat(&chemin, &etat);
+            let _ = r.ranger(&run, de, jusqu_a);
             en_vol.lock().unwrap_or_else(|p| p.into_inner()).remove(&id);
         });
     }
