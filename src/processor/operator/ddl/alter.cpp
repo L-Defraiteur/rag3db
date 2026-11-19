@@ -26,16 +26,26 @@ void Alter::initLocalStateInternal(ResultSet* resultSet, ExecutionContext* conte
 }
 
 // Les tables de stockage d'une entrée du catalogue : la table elle-même pour un nœud, chaque table
-// du groupe pour une relation. Le verrou de schéma de chacune, en exclusif.
+// du groupe pour une relation. Le verrou de schéma de chacune, en exclusif ; pour un changement des
+// colonnes, d'abord celui des lecteurs (ticket de l'ALTER qui n'attend pas les lecteurs).
 static void lockTablesOf(const transaction::Transaction& transaction,
-    const TableCatalogEntry& entry) {
+    const TableCatalogEntry& entry, bool waitsForReaders) {
+    std::vector<table_id_t> tableIDs;
     if (entry.getType() == CatalogEntryType::REL_GROUP_ENTRY) {
         for (const auto& info : entry.constCast<RelGroupCatalogEntry>().getRelEntryInfos()) {
-            transaction.lockTableForSchemaChange(info.oid);
+            tableIDs.push_back(info.oid);
         }
-        return;
+    } else {
+        tableIDs.push_back(entry.getTableID());
     }
-    transaction.lockTableForSchemaChange(entry.getTableID());
+    if (waitsForReaders) {
+        for (const auto tableID : tableIDs) {
+            transaction.lockTableReadersForSchemaChange(tableID);
+        }
+    }
+    for (const auto tableID : tableIDs) {
+        transaction.lockTableForSchemaChange(tableID);
+    }
 }
 
 void Alter::executeInternal(ExecutionContext* context) {
@@ -47,7 +57,9 @@ void Alter::executeInternal(ExecutionContext* context) {
         // Le verrou de schéma, en exclusif : l'ALTER attend la fin des écrivains ouverts sur la
         // table, et ceux qui arrivent l'attendent (ticket de l'ADD COLUMN sous une écriture
         // ouverte, 15 novembre 2026).
-        lockTablesOf(*transaction, *entry);
+        lockTablesOf(*transaction, *entry,
+            info.alterType == AlterType::ADD_PROPERTY ||
+                info.alterType == AlterType::DROP_PROPERTY);
         alterTable(clientContext, *entry, info);
     } else {
         throw BinderException("Table " + info.tableName + " does not exist.");
