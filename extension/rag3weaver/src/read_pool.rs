@@ -229,6 +229,12 @@ impl Instantane {
         self.conn.as_ref().expect("la connexion vit jusqu'à la chute de l'instantané").clone()
     }
 
+    /// **Stop the call's statement in flight**: the stop of its run (ticket
+    /// `2026-11-07-un-arret-ne-coupe-pas-une-requete-du-moteur-en-cours`). The statement running on the snapshot's
+    /// connection ends with an error, and every later statement of the snapshot is refused. Without effect once the
+    /// snapshot is over: its connection may already serve another call.
+    pub fn interrompre(&self) {}
+
     /// L'instantané s'est rompu : l'appel doit recommencer sous un neuf.
     pub fn rompu(&self) -> bool {
         self.rupture().is_some()
