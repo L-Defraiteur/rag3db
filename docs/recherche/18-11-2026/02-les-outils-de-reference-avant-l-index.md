@@ -10,6 +10,22 @@
 - **Statut** : docs seules. **Aucun code avant le mot de Lucie.** Les mesures du coût (section 4) viennent après la
   fenêtre de bascule de la lib, sous `poste lourd`.
 
+> **Requalification des mesures (19 novembre 2026, midi).** Les temps des index réels de cette page (sondes
+> `probe_index_timeline` et `probe_memory_surface`, recherche) ont été pris **en debug** : `cargo test` sans
+> `--release` (« unoptimized + debuginfo »), y compris « C en service ». Ce sont des ordres de grandeur relatifs,
+> pas les temps de l'hôte, qui tourne en release. En release, l'analyse de rag3weaver/src prend environ 4,5 s, contre
+> environ 13 s dans la sonde en debug.
+>
+> - **Les mesures de B (codeparsers) étaient, elles, en release** (`cargo test --release`). La comparaison du repli B
+>   (~21 s, release) avec l'index après C (26 s, debug) mettait donc du release face à du debug. En release, l'index
+>   est plus rapide, et la conclusion (la porte reste fermée) n'en est que plus nette.
+> - **Les rapports avant/après C tiennent** : même binaire, même mode des deux côtés. **Les valeurs absolues, non.**
+> - **La règle, dès maintenant (c7)** : une mesure qui décide se fait sur le binaire tel qu'il tourne, en release.
+> - **Les chiffres en release** : recherche rejoue l'avant/après C (rag3weaver/src et le dépôt) et C en service,
+>   avec le script `mesure-c-release.sh` sous `poste mesure`. codeparsers rejoue sa série (rag3weaver/src, `src/`
+>   du moteur, Python et JS) sur l'état de link-copy-split. Les tableaux ci-dessous les recevront, à côté des chiffres
+>   de debug.
+
 ## 1. Quels outils (recherche)
 
 Les quatre outils de référence lisent le même graphe : le schéma de code de `src/code.rs`.
@@ -146,7 +162,7 @@ _Après la fenêtre, sous `poste lourd`._
 | dépôt entier | 8 585 (82 393 scopes) ; sonde : 3 821 fichiers de code suivis par git (73 324 scopes) | 22,5 s | non mesuré | non mesuré | **8,7 Gio** (analyse seule) | non joué (ne tient pas : environ 6 Gio pour 16 000 scopes) | partiel dès 99 s ; 704 lignes sur 705 à 143 s ; tout à 192 s | 194 s (plein texte seul) |
 | noyau Linux (ordre de grandeur) | en-têtes installés (7.3.4) : 8 829 (88 783 scopes, 57 Mo) ; noyau entier : environ 63 000 fichiers, environ 1,1 Go | 5,2 s (en-têtes) ; environ 100 s (noyau entier, au même débit) | | | 1,4 Gio (en-têtes) ; environ 25 Gio (noyau entier, au prorata des octets) | hors de portée | | |
 
-### Ce que dit la chronologie d'un premier index (recherche, 18 novembre 2026)
+### Ce que dit la chronologie d'un premier index (recherche, 18 novembre 2026 — **en debug**, voir la requalification en tête)
 
 **Le relevé** : sonde `probe_index_timeline` à luciepc, lib 3d706f709, sans service d'embarquement (plein texte seul,
 vecteurs en dette), sur une base neuve. La sonde lit l'état d'index chaque seconde et appelle `usages Catalog`
@@ -243,7 +259,7 @@ vide n'est pas une réponse. Le temps d'attente, lui, ne change pas.
   fichier par fichier, sans quoi le dépôt demande près de 9 Gio.
 - **Une troisième voie, C** : faire publier les relations plus tôt par l'index réel lui-même. Mesurée ci-dessous.
 
-### C mesurée : ce qui retient les relations dans un premier index (17 h 30)
+### C mesurée : ce qui retient les relations dans un premier index (17 h 30 — **en debug**)
 
 **Le relevé** : la même sonde, avec `RAG3WEAVER_INGEST_PROFILE=1`, lib 3d706f709, plein texte seul. Journaux :
 `~/.cache/rag3weaver-build/probe-index-c-rw-src.log` et `probe-index-c-depot.log` à luciepc.
@@ -294,7 +310,7 @@ C'est un gain de 1,5 à 2, **pas la quinzaine de secondes** visée : l'analyse (
   - l'image bâtie **au premier appel** d'un outil de référence.
   - Ticket : `docs/recherche/tickets/2026-11-18-les-outils-de-reference-par-des-tables-a-soi-avant-l-index.md`.
 
-## C écrite et mesurée (recherche, 18 novembre 2026, 18 h 50)
+## C écrite et mesurée (recherche, 18 novembre 2026, 18 h 50 — temps **en debug**, rapports valables)
 
 **Le lot** : branche `relations-before-derivations`.
 - Les témoins rouges : ec77f1d77a, puis a0e9a35d6c et 9ba2da7d79 pour qu'ils compilent.
@@ -419,7 +435,7 @@ après C (26 s). Le disque ne coûte presque rien ici. Le gain de B ne viendra d
 un moteur : pas de `COPY` par fichier CSV, pas de MERGE en Cypher, pas de points de reprise. Il reste à le mesurer
 une fois écrite. Si elle ne descend pas nettement sous l'index, il faudra le dire avant d'aller plus loin.
 
-## C en service : le manifeste réel de l'hôte, en premier index (19 novembre 2026, 11 h 50)
+## C en service : le manifeste réel de l'hôte, en premier index (19 novembre 2026, 11 h 50 — **par la sonde, en debug**, pas par l'hôte)
 
 **Pourquoi un premier index.** C ne joue que sur le chemin en masse d'un premier index. Une base déjà indexée ne fait
 qu'une synchronisation incrémentale, et une réindexation par changement de version de l'analyse passe par l'écrivain
@@ -473,7 +489,8 @@ sont ceux de la base, au couple près (fichier, ligne, scope, cible, marque) :
 | `src/` du moteur | 2,6 s | 13,3 s | 6,9 s | 1,2 Gio | 2,0 Gio |
 
 **La lecture (recherche)** :
-- **Le repli B prend environ 29 s sur rag3weaver/src, contre 26 s pour l'index réel depuis C.** Il ne le bat pas.
+- **Le repli B prend environ 29 s sur rag3weaver/src (release), contre 26 s pour l'index réel depuis C (debug : voir
+  la requalification en tête).** Il ne le bat pas.
   La réserve de l'essai borné se vérifie : l'image coûte aujourd'hui deux fois le temps d'une base rag3db en mémoire,
   pour 35 % de mémoire en moins.
 - **La porte des outils (le lot 4) attend** : brancher un repli plus lent que l'index ne servirait pas l'agent.
