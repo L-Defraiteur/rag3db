@@ -123,6 +123,12 @@ pub trait DbConnection: Send + Sync {
     /// disque et du journal. Sans effet pour un moteur qui ne le sait pas.
     fn close_without_checkpoint(&self) {}
 
+    /// **Interrupt the statement running on this connection** (ticket
+    /// `2026-11-07-un-arret-ne-coupe-pas-une-requete-du-moteur-en-cours`): it ends with an error instead of going to
+    /// its end. Never on a shared connection: the caller owns this one for the length of a call (a read snapshot).
+    /// Without effect for an engine that cannot.
+    fn interrupt(&self) {}
+
     /// **Ouvre une transaction explicite.** Au défaut, le texte du moteur
     /// (`BEGIN TRANSACTION`) — juste pour un moteur MONO-SESSION (rag3db),
     /// où chaque instruction part de toute façon sur la même session. Un
