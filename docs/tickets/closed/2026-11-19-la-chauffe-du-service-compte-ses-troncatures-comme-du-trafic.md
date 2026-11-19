@@ -1,6 +1,6 @@
 # La chauffe du service compte ses troncatures comme du trafic
 
-- **État** : ouvert (19 novembre 2026, embarquement ; relevé en lisant le compteur du point C)
+- **État** : corrigé (19 novembre 2026, embarquement, branche `truncation-relay`, e3d8c01f05) ; ouvert (19 novembre 2026, embarquement ; relevé en lisant le compteur du point C)
 - **Pour** : embarquement
 - **Famille** : produit
 - **Gravité** : mesure faussée. Chaque démarrage du 7878 (granite-278m) ajoute 169 à `truncated_texts`, sans aucun
@@ -35,3 +35,16 @@ Témoin, rouge d'abord : un service dont l'embarqueur tronque à 512 a `truncate
 ## Taille
 
 Une à deux heures.
+
+## Correction (19 novembre 2026)
+
+Lot convenu avec c7 : la voie 2 (une base comptée après la chauffe), et le relais des troncatures au client.
+- `truncated_texts` ne compte plus la chauffe ; la chauffe dit ses textes et ses coupes (`Chauffe::texts`,
+  `::truncated`, et la ligne du journal du service).
+- Chaque `/embed` dit les textes tronqués par le modèle ; `DaemonEmbedder` les compte et s'en souvient ; le journal
+  d'index nomme les morceaux coupés (fichier et ligne, dix au plus).
+- Témoins vus rouges puis verts : `the_warm_up_truncations_are_not_counted_as_traffic`,
+  `the_service_says_which_texts_its_model_truncated_and_the_client_relays_it`,
+  `the_index_journal_names_the_chunks_the_model_truncated`.
+- **Reste** : la pose du binaire des services (G) ; puis une journée de trafic relue au journal d'index, pour savoir
+  si les morceaux coupés par granite sont du code légitime (le découpage en amont est alors en cause).
