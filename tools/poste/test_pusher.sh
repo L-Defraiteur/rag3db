@@ -56,7 +56,8 @@ cat > "$D/pass.sh" <<'P'
 echo "$*" >> "$PASS_CALLS"
 echo "${SUITES_EN_PLUS:-}" >> "$PASS_ENV"
 J=$PUSHER_JOURNALS_ROOT/$2; mkdir -p "$J"
-echo "commit $(git -C "$PUSHER_WORKSPACES/$1" rev-parse HEAD)" > "$J/resume.log"
+echo "commit $(git -C "$PUSHER_WORKSPACES/$1" rev-parse HEAD) ; lib 0000000001" > "$J/resume.log"
+echo "RAG3DB_LIB=rag3db-build-$(printf '%040d' 1)-Release" > "$J/lib.log"
 o=$(head -1 "$OUTCOMES"); sed -i 1d "$OUTCOMES"
 case "$o" in
   VERT) echo VERT >> "$J/resume.log" ;;
@@ -73,6 +74,7 @@ echo "$*" >> "$GUARD_CALLS"
 cd "$PUSHER_WORKSPACES/$1" || exit 1
 tail -1 "$PUSHER_JOURNALS_ROOT/$2/resume.log" | grep -qx VERT || { echo "ARRÊT : la passe n'est pas VERTE"; exit 1; }
 if [ -n "${PRE_PUSH:-}" ]; then ${PRE_PUSH} "$(git rev-parse HEAD)" || echo "PR absente : le crochet PRE_PUSH a rendu $?"; fi
+[ -e "${GUARD_REFUSE:-/nonexistent}" ] && { echo "ARRÊT : push refusé"; exit 1; }
 git push -q origin HEAD:master || { echo "ARRÊT : push refusé"; exit 1; }
 echo POUSSE
 G
@@ -110,7 +112,7 @@ case "$1 $2" in
 esac
 H
 chmod +x "$D/gh.sh"
-export PUSHER_GH=$D/gh.sh GH_CALLS=$D/gh_calls GH_BODIES=$D/gh_bodies GH_DOWN=$D/gh-down
+export PUSHER_GH=$D/gh.sh GH_CALLS=$D/gh_calls GH_BODIES=$D/gh_bodies GH_DOWN=$D/gh-down GUARD_REFUSE=$D/guard-refuse
 : > "$D/gh_calls"; : > "$D/gh_bodies"
 P() { bash "$PUSHER" "$@"; }
 master() { git -C "$D/author" fetch -q origin && git -C "$D/author" rev-parse origin/master; }
@@ -394,6 +396,8 @@ echo VERT >> "$D/outcomes"
 P enqueue pr-r pr-r "$h" rust some_witness e2e_code - - author-c > /dev/null && P step > /dev/null 2>&1
 fr=$(git -C "$D/author" ls-remote origin 'refs/heads/pusher/*-pr-r-final' | cut -f1)
 on_master pr-r && [ "$fr" = "$(master)" ] && grep -q "	pr-r	PR [0-9]* ouverte	" "$D/pusher/log.tsv" && ok "lot rust : la PR s'ouvre par la garde, sur la tête finale" || ko "lot rust : pas de PR par la garde ($fr)"
+grep -q "Lot pr-r " "$D/gh_bodies" && awk '/^Lot pr-r /{f=1} f && /^- Lib : /{print; exit}' "$D/gh_bodies" | grep -q "rag3db-build-$(printf '%040d' 1)" \
+  && ok "corps de la PR rust : la lib en forme longue, lue dans les journaux de la passe" || ko "corps de la PR rust : lib absente ($(awk '/^Lot pr-r /{f=1} f && /^- Lib : /{print; exit}' "$D/gh_bodies"))"
 
 # 27. gh down: the lot is pushed all the same, « PR absente » in the log.
 touch "$D/gh-down"
@@ -401,6 +405,20 @@ h=$(lot pr-down docs/pr-down.md '# down')
 P enqueue pr-down pr-down "$h" docs - - - - author-a > /dev/null && P step > /dev/null 2>&1
 rm -f "$D/gh-down"
 on_master pr-down && grep -q "	pr-down	PR absente : " "$D/pusher/log.tsv" && ok "gh en panne : le lot est poussé, « PR absente » au journal" || ko "gh en panne : lot bloqué, ou pas de « PR absente »"
+
+# 27 bis. A push refused after the pull requests opened (G, 19 Nov.): they are closed, said in the log, and nothing of
+# theirs stays open. Docs refused by poste: the lot is returned; Rust refused by the guard: it stays, reposed next step.
+h=$(lot pr-o docs/pr-o.md '# orphan')
+P enqueue pr-o pr-o "$h" docs - - - - author-a > /dev/null && FAKE_POSTE_DOWN=1 P step > /dev/null 2>&1
+no=$(grep "	pr-o	PR [0-9]* ouverte	" "$D/pusher/log.tsv" | tail -1 | sed -E 's/.*	PR ([0-9]+) ouverte	.*/\1/')
+! on_master pr-o && [ -n "$no" ] && grep -q "^pr close $no .*--comment" "$D/gh_calls" && grep -q "	pr-o	PR $no fermée	" "$D/pusher/log.tsv" \
+  && ok "push refusé après l'ouverture : la PR fermée, dite au journal" || ko "push refusé après l'ouverture : PR $no laissée ouverte"
+h=$(lot pr-g extension/rag3weaver/src/prg.rs 'fn prg() {}')
+printf 'VERT\nVERT\n' >> "$D/outcomes"; touch "$D/guard-refuse"
+P enqueue pr-g pr-g "$h" rust some_witness e2e_code - - author-c > /dev/null && P step > /dev/null 2>&1
+rm -f "$D/guard-refuse"; P step > /dev/null 2>&1
+opened=$(grep -c "	pr-g	PR [0-9]* ouverte	" "$D/pusher/log.tsv"); closed=$(grep -c "	pr-g	PR [0-9]* fermée	" "$D/pusher/log.tsv")
+on_master pr-g && [ "$opened" = 2 ] && [ "$closed" = 1 ] && ok "la garde refuse après PRE_PUSH : la PR fermée, une seule neuve au pas suivant" || ko "garde refusée : $opened ouvertes, $closed fermées"
 
 # 28. The catch-up: a -base branch at the master of before, the pull request from the -final to it, closed with where it
 # landed; no ref deleted.
