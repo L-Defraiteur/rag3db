@@ -360,3 +360,36 @@ fn the_detaches_by_the_ir_at_parity() {
     }
     assert!(defaites > 0, "the witness base has edges to undo");
 }
+
+/// `Catalog::poser_les_generations`: one row not visible at the rank after the pending one (a base with a history).
+#[test]
+fn the_hidden_row_read_by_the_ir_at_parity() {
+    let (catalog, _) = base_with_history();
+    let v = catalog.generations.clone().unwrap();
+    for rang in [v.rang, v.rang + 1] {
+        for table in [SCOPE, FILE] {
+            let visible = catalog.dialect_arc().condition_visible_sur("s", &v.couche, rang).unwrap();
+            let before = format!("MATCH (s:`{table}`) WHERE NOT ({visible}) RETURN s._uuid LIMIT 1");
+            let after = catalog.hidden_row_read(table, &v.couche, rang).unwrap().unwrap();
+            // A LIMIT 1 without order picks any one row: the parity is on its existence and on the plan.
+            let (a, b) = (rows(&catalog, &before, &[]).len(), rows(&catalog, &after, &[]).len());
+            eprintln!("[hidden row, {table}, {rang}] before: {before}\n[hidden row, {table}, {rang}] after:  {after}");
+            assert_eq!(b, a, "[hidden row, {table}] the same existence");
+            assert_eq!(access(&plan(&catalog, &after, &[])), access(&plan(&catalog, &before, &[])), "[hidden row, {table}] the same access steps");
+        }
+    }
+    assert_eq!(rows(&catalog, &catalog.hidden_row_read(SCOPE, &v.couche, v.rang + 1).unwrap().unwrap(), &[]).len(), 1, "the witness base has a history");
+}
+
+/// `Catalog::publier_la_generation`: the counts of the published generation.
+#[test]
+fn the_generation_counts_by_the_dialect_at_parity() {
+    let before = format!("MATCH (g:{} {{_key: $key}}) SET g.chemins_sales = $sales, g.aretes_recopiees = $recopiees", crate::generations::TABLE);
+    let (catalog, _) = base_with_history();
+    let after = catalog.dialect_arc().set_generation_counts().unwrap();
+    let cle = |c: &Catalog| {
+        let lu = c.execute_raw(&format!("MATCH (g:{}) RETURN g._key ORDER BY g._key LIMIT 1", crate::generations::TABLE)).unwrap();
+        lu.rows[0][0].clone()
+    };
+    same_write("generation counts", &before, &after, |c| vec![param("key", cle(c)), param("sales", CypherValue::Int(7)), param("recopiees", CypherValue::Int(3))]);
+}

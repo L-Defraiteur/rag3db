@@ -402,6 +402,12 @@ pub trait SchemaDialect: Send + Sync {
         None
     }
 
+    /// **The counts of a published generation** (`$key`): its dirty paths (`$sales`) and its copied edges
+    /// (`$recopiees`). None for a dialect without generations.
+    fn set_generation_counts(&self) -> Option<String> {
+        None
+    }
+
     /// **Une génération** (`$couche`, `$rang`) pour le chargeur des vues (2b′) : une ligne
     /// `parente_couche, parente_rang, tombstones`, vide si elle n'est pas publiée.
     fn read_generation(&self) -> Option<String> {
@@ -1753,6 +1759,10 @@ impl SchemaDialect for Rag3dbDialect {
 
     fn latest_generation_rank(&self) -> Option<String> {
         Some(format!("MATCH (g:{}) WHERE g.couche = $couche RETURN max(g.rang)", crate::generations::TABLE))
+    }
+
+    fn set_generation_counts(&self) -> Option<String> {
+        Some(format!("MATCH (g:{} {{_key: $key}}) SET g.chemins_sales = $sales, g.aretes_recopiees = $recopiees", crate::generations::TABLE))
     }
 
     fn read_generation(&self) -> Option<String> {
