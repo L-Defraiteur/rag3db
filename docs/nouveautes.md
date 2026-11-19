@@ -40,6 +40,19 @@
   d'abord son reçu dans le journal des décisions, puis publie l'accord. Sans journal, rien n'est publié, et l'erreur
   le dit : un accord ne semble jamais appliqué sans l'être. Un reçu dont la publication échoue est marqué « non
   posé ».
+- 19 novembre 2026 — **Une vue par branche et par worktree.** Une branche suivie a sa couche d'histoire : sa vue lit
+  les fichiers tels qu'à son commit, lus dans les objets git, sans checkout ni écriture dans aucun worktree. Un
+  worktree suivi a sa couche de travail : sa vue lit ses fichiers non commités, et le reste depuis sa branche. Un
+  backend qui déclare `tracked.writes.every_ms` tient ces couches à jour en fond, au plus `tracked.writes.max_work_layers`
+  couches de travail (32 par défaut ; au-delà, la couche neuve est refusée en nommant le réglage). Le sélecteur
+  `worktree:<motif>` prend les worktrees par motif de chemin (`*` et `?` dans un segment, `~` déplié).
+
+- 19 novembre 2026 — **Une vue sur une branche ou un worktree disparu le dit.** Elle est refusée avant toute lecture,
+  par son nom comme par son id : « vue « … » : couche finie le 2026-11-19 14:02 CET (sa ref ou son worktree a disparu) ».
+  Avant, par son id, elle se lisait encore comme si la couche vivait.
+
+- 19 novembre 2026 — **Un index fini publie sa génération.** Une vue sans rang lit désormais ce que lit un appel sans
+  vue, et non plus l'état de la base au moment de sa migration vers les générations.
 
 - 19 novembre 2026 — **Un ADD ou un DROP de colonne attend les lectures ouvertes de sa table.** Une transaction qui
   lit une table la retient jusqu'à sa fin : un `ALTER TABLE … ADD`, `… DROP` ou un `DROP TABLE` l'attend, et la
