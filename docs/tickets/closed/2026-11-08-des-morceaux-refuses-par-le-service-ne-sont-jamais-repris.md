@@ -1,7 +1,7 @@
 # Des morceaux refusés par le service pendant un index ne sont jamais repris par le rattrapage
 
-- **État** : ouvert (8 novembre 2026, 22 h 40, à la demande de l'orchestration) ; lot à faire
-  derrière les vues, chez everything declarative ; à prouver par un témoin rouge
+- **État** : fermé (19 novembre 2026, everything declarative) ; ouvert le 8 novembre 2026, 22 h 40 ; corrigé le
+  11 novembre par `b3f31b544f`, trouvé par bisection
 - **Famille** : produit
 - **Gravité** : perte — une panne du service d'embarquement pendant un index laisserait des
   morceaux sans vecteur pour de bon, comptés en dette, jamais repris
@@ -38,3 +38,21 @@ réclamé.
 Un morceau refusé redevient réclamable au prochain index (ou à un délai), et la dette qu'on dit est
 celle qu'on peut solder. Témoin rouge d'abord : un service qui refuse pendant un premier index,
 puis un service sain ; la dette tombe à zéro.
+
+## Fermé le 19 novembre 2026 (ED) : corrigé le 11 novembre, prouvé par bisection
+
+**Corrigé par `b3f31b544f`** (11 novembre 2026, « rendre les réclamations à la sortie de l'index »). La cause, lue le
+9 novembre : les réclamations d'une passe restaient au nom de son écrivain, et le catalogue rouvert, un autre
+écrivain, les sautait une minute. Ce n'était pas l'état « silencieux » d'`EmbedWatch` : un refus du service (une
+erreur, pas un délai) n'y est pas noté.
+
+**La preuve**, à lucie-tablette, avec la lib `7c2b506ec` :
+- **la forme où le ticket l'a vu**, le rattrapage à l'ouverture, a maintenant son témoin :
+  `daemon_host::worktrees::tests::chunks_refused_by_the_service_are_caught_up_on_open`. 303 fichiers, un service
+  qui refuse tout, puis une réouverture avec un service sain et `embeddings.catch_up_on_open` ;
+- **rouge à `cb996541d`**, le commit du ticket : 606 vecteurs dus après le rattrapage, le chiffre même du ticket ;
+- **vert sur master** ;
+- **la bisection** (`git bisect run`, treize pas dont un sauté (non compilable), la forme courte du témoin) désigne `b3f31b544f` comme le premier
+  commit corrigé ;
+- le témoin de ce commit, `refused_chunks_are_retaken_by_the_next_index_after_a_reopen`, couvre la reprise par un
+  `index` explicite. Les deux sont verts ensemble.
