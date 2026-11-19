@@ -1,0 +1,8 @@
+%% tool: purge_turns
+%% description: Expires the indexed turns older than a bound (the TTL), with their full text and vectors. The slice Sources and the L1 filed from them stay: they cite a range of turns, not its rows. Called by the host when it closes a slice. Returns {expired, older_than_days, before}.
+%% param: older_than_days int = -1 -- The turns written more than this many days ago go; -1: the entity's ttl_days (30 by default).
+%% param: record json = {} -- Reserved: expire reads no record.
+%% result: expire.record
+
+graph LR
+    expire["EntityRecordNode(entity='Turn', action='expire', record=$record, older_than_days=$older_than_days)"]

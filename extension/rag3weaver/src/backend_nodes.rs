@@ -52,8 +52,9 @@ impl NodeFactory for EntityRecordFactory {
         );
         // `restore` : la reconstruction de l'hôte seulement (lot M3), refusée à
         // tout graphe auquel l'hôte ne prête pas le service de restauration.
-        action.choices = Some(Choices::fixed(["get", "put", "restore"]));
-        NodeSchema{node_type:self.node_type().to_owned().into(),description:"Typed records with declared server dates, revision preconditions and immutable-row policy; `restore` (the host's rebuild from files only) writes a row read from its file, dates and revision as read".into(),inputs:vec![PortDef::value("record", PortType::Map, false)],outputs:vec![PortDef::value("record", PortType::Map, false)],config_params:vec![param("entity",ConfigParamType::String,true,"Declared entity"),action,param("record",ConfigParamType::Json,true,"Identity fields for get; complete editable payload for put; the row read from its file for restore"),param("expected_revision",ConfigParamType::Int,false,"Required revision for replacing an existing versioned record; 0 for creation"),param("uuid",ConfigParamType::String,false,"restore: the uuid read from the file, checked against the one its identity derives")]}
+        // `expire` : the rows older than a bound, on an entity that declares `writes.expires` only.
+        action.choices = Some(Choices::fixed(["get", "put", "restore", "expire"]));
+        NodeSchema{node_type:self.node_type().to_owned().into(),description:"Typed records with declared server dates, revision preconditions and immutable-row policy; `restore` (the host's rebuild from files only) writes a row read from its file, dates and revision as read".into(),inputs:vec![PortDef::value("record", PortType::Map, false)],outputs:vec![PortDef::value("record", PortType::Map, false)],config_params:vec![param("entity",ConfigParamType::String,true,"Declared entity"),action,param("record",ConfigParamType::Json,true,"Identity fields for get; complete editable payload for put; the row read from its file for restore"),param("expected_revision",ConfigParamType::Int,false,"Required revision for replacing an existing versioned record; 0 for creation"),param("uuid",ConfigParamType::String,false,"restore: the uuid read from the file, checked against the one its identity derives"),param("older_than_days",ConfigParamType::Int,false,"expire: the rows whose created_at is older than this many days go; absent or negative: the entity's ttl_days")]}
     }
     fn create(&self, name: &str, config: &Value) -> Result<Box<dyn Node>, String> {
         for key in ["entity", "action"] {
@@ -81,6 +82,67 @@ impl NodeFactory for EntityRecordFactory {
         }))
     }
 }
+impl EntityRecordNode {
+    /// **expire** (19 November 2026): deletes the rows of `entity` whose `created_at` is older than
+    /// `older_than_days` (or the entity's `ttl_days`), in the cell of the call, by the catalog's
+    /// delete path (the row, its chunks, its full text and its vectors). Refused on an entity that
+    /// does not declare `writes.expires`, naming it.
+    fn expire(&self, ctx: &mut NodeContext, cat: &mut Catalog, entity: &str, policy: &WritePolicy) -> Result<(), String> {
+        use crate::read_view::ReadCatalog;
+        if !policy.expires {
+            return Err(format!(
+                "expire: the entity {entity} does not declare writes.expires; a tool expires only the rows of an entity that declares it"
+            ));
+        }
+        let field = policy
+            .created_at
+            .as_deref()
+            .ok_or_else(|| format!("expire: the entity {entity} declares no created_at"))?;
+        let days = match self.config.get("older_than_days").and_then(Value::as_i64) {
+            Some(d) if d >= 0 => d as u64,
+            _ => policy
+                .ttl_days
+                .ok_or_else(|| format!("expire: no older_than_days, and the entity {entity} declares no ttl_days"))?,
+        };
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).map_err(|e| e.to_string())?.as_millis() as i64;
+        let before = now.saturating_sub((days as i64).saturating_mul(86_400_000));
+        let condition: crate::filter::FilterCondition =
+            serde_json::from_value(json!({"field": {"key": field, "value": [{"op": "lt", "value": before}]}}))
+                .map_err(|e| e.to_string())?;
+        let relations = HashMap::new();
+        let dialect = cat.dialect_arc();
+        let mut parser = crate::filter::FilterParser::new(&relations, dialect.as_ref());
+        let parsed = parser.parse_condition(&condition, entity, "m").map_err(|e| e.to_string())?;
+        let selection = rag3weaver_ir::Select::filtered(
+            entity,
+            rag3weaver_ir::Predicate::Compiled(parsed.combine_where()),
+            vec![rag3weaver_ir::Column::Whole],
+        );
+        let q = cat.traduire_select(&selection).map_err(|e| e.to_string())?;
+        let rows = cat.execute_read_with_params(&q, &parsed.params).map_err(|e| e.to_string())?;
+        let cell = ctx.service::<crate::scope::Scope>("scope").cloned().unwrap_or_default();
+        let mut uuids = Vec::new();
+        for row in rows.rows {
+            let Some(CypherValue::Map(data)) = row.into_iter().next() else {
+                return Err("expire: the selection returned no entity map".into());
+            };
+            let lire = |c: &str| data.get(c).and_then(|v| v.as_str()).map(str::to_string);
+            let in_cell = match (lire(crate::scope::ORG_COLUMN), lire(crate::scope::PROJECT_COLUMN)) {
+                (Some(org), Some(project)) => org == cell.org && project == cell.project,
+                _ => cell.is_default(),
+            };
+            if in_cell {
+                uuids.push(lire("_uuid").ok_or("expire: a row has no uuid")?);
+            }
+        }
+        for uuid in &uuids {
+            cat.delete(entity, uuid).map_err(|e| format!("expire: {entity} {uuid}: {e}"))?;
+        }
+        ctx.set_output("record", PortValue::new(json!({"expired": uuids.len(), "older_than_days": days, "before": before})));
+        Ok(())
+    }
+}
+
 impl Node for EntityRecordNode {
     fn inputs(&self) -> Vec<PortDef> {
         EntityRecordFactory.schema().inputs
@@ -151,6 +213,10 @@ impl Node for EntityRecordNode {
             .get(entity)
             .ok_or("unknown entity")?
             .clone();
+        if self.config["action"] == "expire" {
+            let policy = policy.clone();
+            return self.expire(ctx, &mut cat, entity, &policy);
+        }
         let mut input = ctx
             .input("record")
             .and_then(|v| v.downcast::<Value>())
