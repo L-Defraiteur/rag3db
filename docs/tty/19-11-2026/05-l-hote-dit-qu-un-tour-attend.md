@@ -22,7 +22,7 @@ La cause `index` n'est pas émise par ce lot. Une attente d'index se voit aujour
 
 ## La portée (relecture d'archi)
 
-- **Les pas d'un équipier seulement.** Un outil lent dans un tour du chat de l'IDE (`OutilsDuChat`) ne dit encore rien : c'est le ticket [`docs/tty/tickets/2026-11-19-un-outil-lent-du-chat-de-l-ide-ne-dit-pas-qu-il-attend.md`](../tickets/2026-11-19-un-outil-lent-du-chat-de-l-ide-ne-dit-pas-qu-il-attend.md).
+- **Les pas d'un équipier, puis le chat.** Un outil lent dans un tour du chat de l'IDE ne disait rien. C'est fait dans le lot qui suit (`cx-chat-waiting-2`) : le minuteur est partagé (`say_the_wait`), et les outils du chat sont enveloppés (`DitSonAttente`). Ticket fermé : [`docs/tty/tickets/closed/2026-11-19-un-outil-lent-du-chat-de-l-ide-ne-dit-pas-qu-il-attend.md`](../tickets/closed/2026-11-19-un-outil-lent-du-chat-de-l-ide-ne-dit-pas-qu-il-attend.md).
 - **Le `Waiting` du modèle part sur le run du pas refusé, déjà fini.** Le terminal, qui suit la tâche, le voit : c'est l'usage visé. Une page qui ne suit que le run du tour en cours (`runRef` dans `Chat.tsx`) ne le verra pas.
 
 ## Les témoins
