@@ -863,6 +863,10 @@ pub struct Usage {
     ///
     /// `0` quand le fournisseur ne le dit pas : **on ne devine pas un cache**.
     pub cached_prompt_tokens: usize,
+    /// **The provider said its cache** (ticket of 17 November 2026, « mesurer et optimiser le cache de contexte des
+    /// appels Vertex »): `cached_prompt_tokens` was read from the answer, even if it is 0. `false`: the answer said
+    /// nothing, and the 0 above is not a measure of an empty cache.
+    pub cache_reported: bool,
 }
 
 impl Usage {
@@ -1321,7 +1325,7 @@ impl Llm for MockLlm {
                 ms: started.elapsed().as_millis() as u64,
                 // Un modèle local ne réessaie rien, et **ne met rien en
                 // cache côté fournisseur** : il n'y a pas de fournisseur.
-                retries: 0, recovered_calls: 0, cached_prompt_tokens: 0, reasoning_tokens: 0 },
+                retries: 0, recovered_calls: 0, cached_prompt_tokens: 0, reasoning_tokens: 0, cache_reported: false },
         ))
     }
 
@@ -1561,7 +1565,7 @@ mod tests {
                 }
             }
             sink.on_finish(&Finish::eos());
-            Ok((Finish::eos(), Usage { prompt_tokens: 1, completion_tokens: 4, ms: 0, retries: 0 , recovered_calls: 0, cached_prompt_tokens: 0, reasoning_tokens: 0 }))
+            Ok((Finish::eos(), Usage { prompt_tokens: 1, completion_tokens: 4, ms: 0, retries: 0 , recovered_calls: 0, cached_prompt_tokens: 0, reasoning_tokens: 0, cache_reported: false }))
         });
         let mut sink = StringSink::default();
         let opts = GenOptions::default().with_max_tokens(7);
@@ -1825,7 +1829,7 @@ mod tests {
     #[test]
     fn usage_tokens_per_s() {
         assert_eq!(Usage::default().tokens_per_s(), 0.0);
-        let u = Usage { prompt_tokens: 0, completion_tokens: 50, ms: 1000, retries: 0 , recovered_calls: 0, cached_prompt_tokens: 0, reasoning_tokens: 0 };
+        let u = Usage { prompt_tokens: 0, completion_tokens: 50, ms: 1000, retries: 0 , recovered_calls: 0, cached_prompt_tokens: 0, reasoning_tokens: 0, cache_reported: false };
         assert!((u.tokens_per_s() - 50.0).abs() < 1e-9);
     }
 
