@@ -522,7 +522,10 @@
           "section",
           "niveau",
           "state",
-          "created_at"
+          "created_at",
+          "run",
+          "from_turn",
+          "to_turn"
         ],
         "signals": [
           "bm25",
