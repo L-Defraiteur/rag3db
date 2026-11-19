@@ -61,6 +61,16 @@ pub const CALLS_IN_FLIGHT: &str = "des appels tiennent encore ce backend";
 /// les appels en vol d'un backend** (lot L5) avant de refuser en le disant.
 pub const SLOT_WRITE_WAIT: std::time::Duration = std::time::Duration::from_secs(30);
 
+/// **Combien de temps un appel attend le slot d'un backend qu'une ouverture,
+/// une fermeture ou une réouverture tient** avant de répondre en le disant
+/// (ticket du 11 octobre 2026, « Un appel d'outil attend derrière un index sans
+/// le dire ») : une ouverture tient le slot le temps du schéma et des index
+/// (26 s vues à l'hôte de Lucie), et un appel l'attendait sans borne.
+pub const SLOT_READ_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Le refus d'un appel arrivé pendant l'ouverture de son backend.
+pub const OPENING: &str = "s'ouvre depuis";
+
 /// Ouvre un backend depuis son manifeste chargé.
 pub type Opener = Box<dyn Fn(PreparedBackend) -> Result<Backend, String> + Send + Sync>;
 
@@ -239,6 +249,9 @@ struct Hosted {
     /// Le dernier refus d'ouverture, quand un écrivain autonome tenait la
     /// base (sa marque `<base>.ecrivain`) ; effacé à l'ouverture suivante.
     refused: Mutex<Option<String>>,
+    /// **Depuis quand une ouverture tient le slot**, pour qu'un appel qui
+    /// l'attend au-delà de [`SLOT_READ_WAIT`] dise depuis quand le backend s'ouvre.
+    opening: Mutex<Option<std::time::Instant>>,
 }
 
 /// L'empreinte d'un manifeste : son contenu, pas sa date (un `touch` ne
@@ -665,6 +678,7 @@ impl DaemonHost {
                     file: Mutex::new(FileDesEcritures { attente: disque.file.into(), ..Default::default() }),
                     print: Mutex::new(None),
                     refused: Mutex::new(None),
+                    opening: Mutex::new(None),
                 })
             })
             .clone())
@@ -690,11 +704,41 @@ impl DaemonHost {
         }
     }
 
+    /// **Le slot en lecture**, sans attendre plus de [`SLOT_READ_WAIT`] une
+    /// ouverture, une fermeture ou une réouverture qui le tient : au-delà, un
+    /// refus qui dit ce qui le tient, et depuis quand quand c'est une ouverture.
+    /// Cet appel n'a alors rien fait.
+    fn lire_le_slot<'a>(&self, hosted: &'a Hosted) -> Result<std::sync::RwLockReadGuard<'a, Option<Backend>>, String> {
+        let debut = std::time::Instant::now();
+        loop {
+            match hosted.backend.try_read() {
+                Ok(slot) => return Ok(slot),
+                Err(std::sync::TryLockError::Poisoned(p)) => return Ok(p.into_inner()),
+                Err(std::sync::TryLockError::WouldBlock) if debut.elapsed() >= SLOT_READ_WAIT => {
+                    let depuis = *hosted.opening.lock().unwrap_or_else(|p| p.into_inner());
+                    return Err(match depuis {
+                        Some(t) => format!(
+                            "{} {OPENING} {} s (son schéma et ses index se chargent) : cet appel n'a rien fait, recommencez dans un moment",
+                            hosted.manifest.display(),
+                            t.elapsed().as_secs()
+                        ),
+                        None => format!(
+                            "{} : une fermeture ou une réouverture tient ce backend depuis plus de {} s : cet appel n'a rien fait, recommencez dans un moment",
+                            hosted.manifest.display(),
+                            SLOT_READ_WAIT.as_secs()
+                        ),
+                    });
+                }
+                Err(std::sync::TryLockError::WouldBlock) => std::thread::sleep(std::time::Duration::from_millis(20)),
+            }
+        }
+    }
+
     /// **Le backend ouvert, partagé** : l'ouvre s'il ne l'est pas (le seul
     /// temps exclusif d'un appel), puis l'appelle sous le slot en lecture, en
     /// parallèle des autres appels de ce backend.
     fn with_backend<T>(&self, hosted: &Hosted, f: impl FnOnce(&Backend) -> T) -> Result<T, String> {
-        let ferme = hosted.backend.read().map(|s| s.is_none()).unwrap_or_else(|p| p.into_inner().is_none());
+        let ferme = self.lire_le_slot(hosted)?.is_none();
         if ferme {
             let mut slot = self.ecrire_le_slot(hosted)?;
             self.open_slot(hosted, &mut slot)?;
@@ -707,7 +751,7 @@ impl DaemonHost {
         // l'appel suivant. Ticket du 11 octobre 2026.
         let mut rouvert = false;
         let slot = loop {
-            let slot = hosted.backend.read().unwrap_or_else(|p| p.into_inner());
+            let slot = self.lire_le_slot(hosted)?;
             let revenu = slot.as_ref().is_some_and(|b| b.embarqueur_revenu());
             if !revenu || rouvert {
                 break slot;
@@ -764,6 +808,15 @@ impl DaemonHost {
     /// l'empreinte du manifeste lu.
     fn open_slot(&self, hosted: &Hosted, slot: &mut Option<Backend>) -> Result<(), String> {
         if slot.is_none() {
+            // Le début de l'ouverture, pour les appels qui attendent le slot ; effacé à toute sortie.
+            struct Ouverture<'a>(&'a Mutex<Option<std::time::Instant>>);
+            impl Drop for Ouverture<'_> {
+                fn drop(&mut self) {
+                    *self.0.lock().unwrap_or_else(|p| p.into_inner()) = None;
+                }
+            }
+            *hosted.opening.lock().unwrap_or_else(|p| p.into_inner()) = Some(std::time::Instant::now());
+            let _ouverture = Ouverture(&hosted.opening);
             if let Some(f) = hosted.held_closed.lock().unwrap_or_else(|p| p.into_inner()).clone() {
                 return Err(format!("{} : {} — rien ne le rouvre avant un POST /backend/open explicite", hosted.manifest.display(), f.dire()));
             }
