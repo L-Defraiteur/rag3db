@@ -63,7 +63,19 @@ impl DaemonHost {
             }
         };
         let notice = prepared.manifest.teammate.clone().unwrap_or_default().tool_wait_notice_s;
-        let etanche = Etanche { host: self, hosted: hosted.clone(), defs, files, hors_ligne, notice: Duration::from_secs(notice), boite: step.files.clone(), repli: Mutex::new(Vec::new()), empreinte };
+        let etanche = Etanche {
+            host: self,
+            hosted: hosted.clone(),
+            defs,
+            files,
+            hors_ligne,
+            notice: Duration::from_secs(notice),
+            boite: step.files.clone(),
+            repli: Mutex::new(Vec::new()),
+            empreinte,
+            bus: bus.clone(),
+            run: run_id.to_string(),
+        };
         let tour = Tour { prepared, mode, dans_une_tache: true, bus, boite: &etanche, ecrivent: &ecrivent, repli: Some(&etanche.repli) };
         self.run_chat_turn(tour, backend_id, &hosted.manifest, run_id, session, message, annule, arrete_par, Some(step))
     }
@@ -86,6 +98,10 @@ pub(super) struct Etanche<'a> {
     /// garde la même garde qu'un tour du chat (replace_lines exige d'avoir lu, une empreinte
     /// périmée refuse). Sans elle, un `replace_lines` sans lecture écrivait (15 novembre 2026).
     empreinte: (Arc<Mutex<super::empreintes::Empreintes>>, usize),
+    /// The bus of the backend and the run of the turn, for `Waiting` and `Resumed` (19 November
+    /// 2026): a call past the notice says so on the bus as well as in the mailbox.
+    bus: Option<crate::events::EventBus>,
+    run: String,
 }
 
 impl Etanche<'_> {
@@ -96,9 +112,11 @@ impl Etanche<'_> {
             return self.repli_sur_fichiers(call, cause);
         }
         let fini = AtomicBool::new(false);
+        // Set once the call has said it waits: only then does its end say `Resumed`.
+        let attendu = AtomicBool::new(false);
+        let depart = Instant::now();
         let r = std::thread::scope(|sc| {
             sc.spawn(|| {
-                let depart = Instant::now();
                 while !fini.load(Ordering::SeqCst) {
                     if depart.elapsed() >= self.notice {
                         let _ = self.boite.append(
@@ -107,6 +125,15 @@ impl Etanche<'_> {
                             None,
                             &format!("« {} » attend depuis {} s (un index tient sans doute l'écriture) ; l'appel continue, rien n'est abandonné", call.name, self.notice.as_secs()),
                         );
+                        if let Some(bus) = &self.bus {
+                            attendu.store(true, Ordering::SeqCst);
+                            bus.emit(crate::events::Event::Waiting {
+                                run: self.run.clone(),
+                                cause: "tool".into(),
+                                what: call.name.clone(),
+                                since_ms: depart.elapsed().as_millis() as u64,
+                            });
+                        }
                         return;
                     }
                     std::thread::sleep(Duration::from_millis(100));
@@ -121,6 +148,12 @@ impl Etanche<'_> {
             fini.store(true, Ordering::SeqCst);
             r
         });
+        // The watcher has returned with the scope: a `Waiting` it emitted is already on the bus.
+        if attendu.load(Ordering::SeqCst) {
+            if let Some(bus) = &self.bus {
+                bus.emit(crate::events::Event::Resumed { run: self.run.clone(), cause: "tool".into(), waited_ms: depart.elapsed().as_millis() as u64 });
+            }
+        }
         match r {
             Ok(turn) => turn,
             Err(cause) => self.repli_sur_fichiers(call, &cause),

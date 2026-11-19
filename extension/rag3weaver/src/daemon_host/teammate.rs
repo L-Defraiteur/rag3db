@@ -520,6 +520,9 @@ pub struct Step {
     /// What the step did, for the next frontier (S2): `read <path> (lines a-b)`, `wrote <path>`,
     /// and the last command with the end of its output.
     work: Mutex<StepWork>,
+    /// The run of the step's turn and its model's name, noted when the turn starts: a refused step
+    /// says on that run that it waits for the model (`Waiting`, 19 November 2026).
+    turn_run: Mutex<Option<(String, String)>>,
 }
 
 /// What a step did with its work tools, kept for the next frontier (S2, 18 Nov 2026).
@@ -606,7 +609,18 @@ impl Step {
             woke_by: None,
             succeeded_tools: Mutex::new(Vec::new()),
             work: Mutex::new(StepWork::default()),
+            turn_run: Mutex::new(None),
         }
+    }
+
+    /// Notes the run of the step's turn and its model's name.
+    pub fn note_turn_run(&self, run: &str, model: &str) {
+        *self.turn_run.lock().unwrap_or_else(|p| p.into_inner()) = Some((run.to_string(), model.to_string()));
+    }
+
+    /// The run of the step's turn and its model's name, once the turn has started.
+    pub fn turn_run(&self) -> Option<(String, String)> {
+        self.turn_run.lock().unwrap_or_else(|p| p.into_inner()).clone()
     }
 
     /// The step's bounds, from the backend's `teammate` policy.
@@ -1655,6 +1669,13 @@ impl DaemonHost {
                         &format!("le pas {} attend le fournisseur ({unavailable} refus sur {} permis) : {e} ; reprise dans {attente} s", number + 1, policy.max_unavailable_steps),
                     )?;
                     publish(bus.as_ref(), task, &line);
+                    // **On the bus too** (19 November 2026): the wait for the model, on the run of the
+                    // refused step, then its end when the step plays again.
+                    let attendu = std::time::Instant::now();
+                    let sur_le_bus = bus.as_ref().zip(step.turn_run());
+                    if let Some((b, (run, model))) = &sur_le_bus {
+                        b.emit(crate::events::Event::Waiting { run: run.clone(), cause: "model".into(), what: model.clone(), since_ms: 0 });
+                    }
                     // L'attente se coupe sur un `stop` de la boîte, ou si la tâche se ferme.
                     let fin = std::time::Instant::now() + std::time::Duration::from_secs(attente);
                     while std::time::Instant::now() < fin {
@@ -1667,6 +1688,9 @@ impl DaemonHost {
                             return Ok(outcome);
                         }
                         std::thread::sleep(std::time::Duration::from_millis(500).min(fin.saturating_duration_since(std::time::Instant::now())));
+                    }
+                    if let Some((b, (run, _))) = &sur_le_bus {
+                        b.emit(crate::events::Event::Resumed { run: run.clone(), cause: "model".into(), waited_ms: attendu.elapsed().as_millis() as u64 });
                     }
                     continue;
                 }
