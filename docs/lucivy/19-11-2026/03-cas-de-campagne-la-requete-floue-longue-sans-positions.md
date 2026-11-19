@@ -1,3 +1,24 @@
+```json
+{
+  "lanceur": {
+    "repo": "https://github.com/L-Defraiteur/lucivy",
+    "parent": "fa65315ce8fcbc267a50b5483701117173580f07",
+    "tree": ".",
+    "needs_lib": false,
+    "witness": "a_long_fuzzy_query_without_positions_reads_windows_and_finds_the_same",
+    "test": "cargo test -p lucivy-core --test test_no_positions_long_fuzzy a_long_fuzzy_query_without_positions_reads_windows_and_finds_the_same",
+    "suites": [
+      "cargo test --workspace"
+    ],
+    "hints": [
+      "src/suffix_fst/briques/stored.rs",
+      "src/suffix_fst/briques/profile.rs"
+    ],
+    "ours": "8a707ac72cb5a9b89efce3dd9adc7ba1bdab7b51"
+  }
+}
+```
+
 # Cas de campagne : sans positions, une requête floue longue relit chaque valeur entière
 
 Session lucivy, 19 novembre 2026, pour la campagne des correctifs passés (chantier de Lucie). C'est un cas de
@@ -8,12 +29,9 @@ performance en Rust, dans le moteur de lucivy. Il se joue sans la lib rag3db, en
 - **Dépôt** : lucivy (`github.com/L-Defraiteur/lucivy`), pas rag3db.
 - **Commit parent** : `fa65315ce8fc` (19 novembre 2026, 10 h 16). Le témoin y est, rouge ; le correctif n'y est pas.
 - **Arbre** : le workspace lucivy entier (le moteur `ld-lucivy` à la racine, `lucivy_core` pour le témoin).
+- **Le signalement ci-dessous** : c'est le ticket du 14 novembre (`docs/lucivy/tickets/2026-11-14-le-chemin-sans-positions-relit-tout-pour-une-requete-longue.md`, dans rag3db). Il est repris sans sa partie « Ce qu'on pourrait faire », qui oriente la résolution. Sa partie « Comment le rejouer » est remplacée par le témoin, car la branche de mesure qu'elle nommait n'est pas dans l'arbre.
 
 ## Le signalement, tel qu'il était
-
-C'est le ticket du 14 novembre (`docs/lucivy/tickets/2026-11-14-le-chemin-sans-positions-relit-tout-pour-une-requete-longue.md`,
-dans rag3db). Il est repris sans sa partie « Ce qu'on pourrait faire », qui oriente la résolution. Sa partie « Comment
-le rejouer » est remplacée par le témoin, car la branche de mesure qu'elle nommait n'est pas dans l'arbre.
 
 > Un index créé avec `positions: false` garde, dans ses postings, les documents et les fréquences, mais pas les
 > positions. Chaque correspondance est retrouvée comme documents candidats, puis vérifiée sur le texte stocké. La
