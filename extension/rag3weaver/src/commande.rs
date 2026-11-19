@@ -941,8 +941,14 @@ impl Atelier {
 
     /// **The host's poste** (19 Nov 2026): `RAG3WEAVER_POSTE` (the path of `poste`) and
     /// `RAG3WEAVER_POSTE_ATTENTE_S` (60 by default), read through `lire`. Absent: nothing changes.
-    pub fn avec_le_poste_de_l_hote(self, _lire: impl Fn(&str) -> Option<String>) -> Self {
-        self
+    pub fn avec_le_poste_de_l_hote(self, lire: impl Fn(&str) -> Option<String>) -> Self {
+        match lire("RAG3WEAVER_POSTE").map(|p| p.trim().to_string()).filter(|p| !p.is_empty()) {
+            Some(poste) => {
+                let attente = lire("RAG3WEAVER_POSTE_ATTENTE_S").and_then(|s| s.trim().parse().ok()).unwrap_or(60);
+                self.avec_le_poste(poste, attente)
+            }
+            None => self,
+        }
     }
 
     /// Heavy commands go through `poste lourd` at `chemin`, waiting `attente_s` at most.
