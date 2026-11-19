@@ -52,6 +52,12 @@ pub struct Chauffe {
     pub etat: EtatChauffe,
     pub duree_ms: u64,
     pub formes: Vec<FormeChauffe>,
+    /// The texts the warm-up embedded.
+    #[serde(default)]
+    pub texts: usize,
+    /// Among them, those the model truncated : not counted in `truncated_texts`.
+    #[serde(default)]
+    pub truncated: usize,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -412,7 +418,7 @@ impl EmbedDaemon {
         let mut bilan = std::collections::BTreeMap::new();
         for (capacite, presente) in [("embed", true), ("rerank", self.reranker.is_some()), ("ocr", self.ocr.is_some())] {
             if presente {
-                bilan.insert(capacite.to_string(), Chauffe { etat: EtatChauffe::NonExecutee, duree_ms: 0, formes: Vec::new() });
+                bilan.insert(capacite.to_string(), Chauffe { etat: EtatChauffe::NonExecutee, duree_ms: 0, formes: Vec::new(), texts: 0, truncated: 0 });
             }
         }
         if active {
@@ -438,6 +444,8 @@ impl EmbedDaemon {
                 etat: if succes == faits.len() { EtatChauffe::Complete } else { EtatChauffe::Partielle },
                 duree_ms: debut.elapsed().as_millis().min(u64::MAX as u128) as u64,
                 formes: faits,
+                texts: 0,
+                truncated: 0,
             });
         } else { bilan.get_mut("embed").unwrap().etat = EtatChauffe::Desactivee; }
         self.chauffe = Some(bilan);
@@ -1773,6 +1781,48 @@ mod tests {
     /// had the 7878 refuse every batch of 512, and a whole index stayed
     /// without vectors). The identity says the cap and its ratio (12 000
     /// characters by default, about 3 per token).
+    /// A model that truncates any text longer than 1 000 bytes, at a window of 32.
+    #[derive(Default)]
+    struct Truncating { count: std::sync::atomic::AtomicUsize, last: std::sync::Mutex<Vec<usize>> }
+    impl Embedder for Truncating {
+        fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
+            let cut: Vec<usize> = texts.iter().enumerate().filter(|(_, t)| t.len() > 1000).map(|(i, _)| i).collect();
+            self.count.fetch_add(cut.len(), std::sync::atomic::Ordering::Relaxed);
+            *self.last.lock().unwrap() = cut;
+            Ok(texts.iter().map(|_| vec![0.5; 4]).collect())
+        }
+        fn dim(&self) -> usize { 4 }
+        fn name(&self) -> &str { "truncating" }
+        fn troncatures(&self) -> Option<(usize, usize)> { Some((self.count.load(std::sync::atomic::Ordering::Relaxed), 32)) }
+        fn last_truncated(&self) -> Vec<usize> { self.last.lock().unwrap().clone() }
+    }
+
+    /// **The warm-up's truncations are not traffic** (19 November 2026 : the 7878's
+    /// warm-up of 380 « words », 762 tokens for granite, added 169 to
+    /// `truncated_texts` at each start). The warm-up says its texts and its cuts.
+    #[test]
+    fn the_warm_up_truncations_are_not_counted_as_traffic() {
+        let identity = EmbedDaemon::new(Arc::new(Truncating::default())).chauffer(true).identite();
+        assert_eq!(identity.truncated_texts, Some(0), "after the warm-up, no traffic was truncated");
+        let warm = &identity.chauffe.expect("a warm-up")["embed"];
+        // 4 lengths × lots of 1, 8, 32 and 32 ; only the 380 « words » pass 1 000 bytes.
+        assert_eq!((warm.texts, warm.truncated), (4 * 73, 73), "the warm-up says its texts and its cuts");
+    }
+
+    /// **The service says which texts its model truncated, and the client relays
+    /// it** : its count and window (`troncatures`), and each text (`was_truncated`),
+    /// for the index journal to name the chunk.
+    #[test]
+    fn the_service_says_which_texts_its_model_truncated_and_the_client_relays_it() {
+        let adresse = demon(EmbedDaemon::new(Arc::new(Truncating::default())));
+        let c = DaemonEmbedder::joindre(&adresse).expect("joindre");
+        let long = "x".repeat(1500);
+        c.embed(&["court".to_string(), long.clone()]).expect("embarqué");
+        assert_eq!(c.troncatures(), Some((1, 32)), "one text truncated, at the service's window");
+        assert!(c.was_truncated(&long), "the long text is known as truncated");
+        assert!(!c.was_truncated("court"), "the short one is not");
+    }
+
     /// **The service says its model's window in tokens, and what it truncated
     /// there** (18 November 2026 : 11 000 « é », under the 12 000-character cap,
     /// are 11 002 tokens ; bge-m3 has 8 194 positions and panicked on the card).

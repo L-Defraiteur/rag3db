@@ -106,6 +106,20 @@ pub trait Embedder: Send + Sync {
         None
     }
 
+    /// **The indices, in the texts of the last `embed` call, that the model
+    /// truncated at its window.** A service reads it under its pass lock, right
+    /// after the call. Empty by default.
+    fn last_truncated(&self) -> Vec<usize> {
+        Vec::new()
+    }
+
+    /// **Was this text truncated by the model**, as its provider said ? The
+    /// index journal names the chunks it was for. `false` by default.
+    fn was_truncated(&self, text: &str) -> bool {
+        let _ = text;
+        false
+    }
+
     /// **Le modèle vit-il ailleurs ?**
     ///
     /// Sert à une règle et une seule : **celui qui touche la carte souffle**
@@ -203,6 +217,12 @@ impl<T: Embedder + ?Sized> Embedder for std::sync::Arc<T> {
     /// forme la plus chère du défaut » selon la doc du trait lui-même.
     fn troncatures(&self) -> Option<(usize, usize)> {
         (**self).troncatures()
+    }
+    fn last_truncated(&self) -> Vec<usize> {
+        (**self).last_truncated()
+    }
+    fn was_truncated(&self, text: &str) -> bool {
+        (**self).was_truncated(text)
     }
     fn distant(&self) -> bool {
         (**self).distant()
