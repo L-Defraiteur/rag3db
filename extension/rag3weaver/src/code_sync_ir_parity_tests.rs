@@ -109,3 +109,56 @@ fn the_rows_of_paths_read_by_the_ir_at_parity() {
         same_read(&catalog, &format!("rows of paths, {table}"), &before, &after, &[param("src", text(&source_of(&catalog))), param("chemins", chemins.clone())]);
     }
 }
+
+/// `decide_methods_defined_elsewhere`: the visible classes of a source named among given names.
+#[test]
+fn the_visible_classes_read_by_the_ir_at_parity() {
+    let (catalog, _) = base_with_history();
+    let v = catalog.generations.clone().unwrap();
+    let visible = catalog.dialect_arc().condition_visible_sur("s", &v.couche, v.rang).unwrap();
+    let before = format!("MATCH (s:`{SCOPE}`) WHERE s.source = $src AND s.scope_type = 'class' AND s.name IN $names AND s._couche = $couche AND ({visible}) RETURN s.name, s.key, s.file_path");
+    let after = visible_classes_read(&catalog).unwrap();
+    let params = [
+        param("src", text(&source_of(&catalog))),
+        param("classe", text("class")),
+        param("names", CypherValue::List(vec![text("Point"), text("Absent")])),
+        param("couche", text(&v.couche)),
+    ];
+    same_read(&catalog, "visible classes", &before, &after, &params);
+}
+
+/// `ecrire_la_table`: the whole rows of given paths, visible at the pending rank or retired at it.
+#[test]
+fn the_rows_to_compare_read_by_the_ir_at_parity() {
+    let (catalog, _) = base_with_history();
+    let v = catalog.generations.clone().unwrap();
+    let visible = catalog.dialect_arc().condition_visible_sur("s", &v.couche, v.rang).unwrap();
+    for (table, champ) in [(SCOPE, "file_path"), (FILE, "path")] {
+        let before = format!("MATCH (s:`{table}`) WHERE s.source = $src AND s.`{champ}` IN $chemins AND s._couche = $couche AND (({visible}) OR s._jusqu_a = $w) RETURN s");
+        let after = rows_to_compare_read(&catalog, table, champ).unwrap();
+        let params = [
+            param("src", text(&source_of(&catalog))),
+            param("chemins", CypherValue::List(vec![text("a.rs"), text("b.rs")])),
+            param("couche", text(&v.couche)),
+            param("w", CypherValue::Int(v.rang)),
+        ];
+        same_read(&catalog, &format!("rows to compare, {table}"), &before, &after, &params);
+    }
+}
+
+/// `completer_les_naissances`: the key and birth rank of visible rows among given keys.
+#[test]
+fn the_births_read_by_the_ir_at_parity() {
+    let (catalog, _) = base_with_history();
+    let v = catalog.generations.clone().unwrap();
+    let visible = catalog.dialect_arc().condition_visible_sur("s", &v.couche, v.rang).unwrap();
+    let cles_de = |table: &str, champ: &str| -> CypherValue {
+        let lu = catalog.execute_raw(&format!("MATCH (s:`{table}`) RETURN DISTINCT s.`{champ}`")).unwrap();
+        CypherValue::List(lu.rows.iter().filter_map(|l| l.first().cloned()).collect())
+    };
+    for (table, champ) in [(SCOPE, "key"), (FILE, "path")] {
+        let before = format!("MATCH (s:`{table}`) WHERE s.`{champ}` IN $cles AND s._couche = $couche AND {visible} RETURN s.`{champ}`, s.{}", crate::generations::DEPUIS);
+        let after = births_read(&catalog, table, champ).unwrap();
+        same_read(&catalog, &format!("births, {table}"), &before, &after, &[param("cles", cles_de(table, champ)), param("couche", text(&v.couche))]);
+    }
+}
