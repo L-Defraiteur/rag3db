@@ -179,4 +179,5 @@ pub mod foreach_node;
 pub mod search_chain;
 
 pub mod rhai_node;
+pub mod collect_node;
 pub mod validation_nodes;
