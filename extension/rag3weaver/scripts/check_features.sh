@@ -59,6 +59,14 @@ fi
 if ! python3 "$ICI/scripts/test_check_tickets.py" > /dev/null 2>&1; then
   refuser test_check_tickets
 fi
+# Les scripts de procédure ne nomment aucun worktree à plat en dur (20 novembre 2026, c7) : ils prennent leur arbre en
+# argument ou le créent sous ~/git_workspaces/<session>/<date>-<nom> ; puis le témoin du contrôle.
+if ! bash "$ICI/../../tools/poste/chemins_a_plat.sh" "$ICI/../.."; then
+  refuser chemins_a_plat
+fi
+if ! bash "$ICI/../../tools/poste/test_chemins_a_plat.sh" > /dev/null 2>&1; then
+  refuser test_chemins_a_plat
+fi
 # Les règles de l'analyse (page 06 d'everything declarative, § 13) : un lot qui change l'analyse monte
 # REGLES_DE_L_ANALYSE ou dit « sans effet sur l'analyse » ; puis le témoin de la garde.
 if ! python3 "$ICI/scripts/check_regles_de_l_analyse.py" --depot "$ICI/../.."; then
