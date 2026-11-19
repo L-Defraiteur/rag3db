@@ -106,4 +106,15 @@ Pas encore fait : le bouton « détacher » et la vue seule sans barre (tranche 
 
 Le témoin de la tranche 2 est étendu à ces trois points : l'adresse et la cible du bouton, l'en-tête d'une fenêtre détachée, et une marque posée dans la fenêtre du dépôt qui survit à la navigation. Il a été vu rouge (8c30bfe232), mais **à sa première assertion seulement** (le bouton manquait). L'en-tête et la navigation interne n'ont pas été vus rouges isolément. Il est vert (35f1a3ebe4). Restent verts : les trois témoins de la tranche 1, `ide_par_le_flux` (2) et le contrôle du bundle ; tsc est propre.
 
+### La relecture d'ED de la tranche 3
+
+- **Le même fichier à une autre ligne** (`A#L5` puis `A#L40`) : seul le hash change, et `pushState` ne déclenche pas de `hashchange`. La fenêtre restait sur L5. `File.tsx` lit maintenant l'ancre à chaque rendu (`ancre = location.hash`, dans les dépendances de l'effet qui vise la ligne). Le témoin cite `src/long.rs:5` puis `src/long.rs:40`, un fichier de 60 lignes écrit dans l'espace de travail.
+- **Chaque promesse vue rouge isolément**, avec son seul morceau de code retiré (deux variantes du bundle, jouées à luciepc, le worktree remis après chacune) :
+  - l'en-tête détaché (`fenetre` forcé à `null`) : rouge à « a detached window shows its role and the stream only » ;
+  - la navigation interne (`location.assign` remis) : rouge à « the window of the repository followed without reloading its page » ;
+  - la ligne suivie (sans le correctif de `File.tsx`, 03147ec4c4) : rouge à « the window aims at line 40 of the same file ».
+- Vert (532b2716d2), avec les trois témoins de la tranche 1, `ide_par_le_flux` (2) et le contrôle du bundle.
+
+Vu en route, hors tranche : la vue d'un fichier garde l'erreur du fichier précédent quand son chemin change. Ticket : [`docs/tty/tickets/2026-11-19-la-vue-d-un-fichier-garde-l-erreur-du-precedent.md`](../tickets/2026-11-19-la-vue-d-un-fichier-garde-l-erreur-du-precedent.md).
+
 Restent les tranches 4 (le graphe détaché suit le run du tour) et 5 (le compte des accords dans une fenêtre qui n'est pas le chat).
