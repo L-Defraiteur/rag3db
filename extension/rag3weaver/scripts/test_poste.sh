@@ -181,10 +181,10 @@ cas $? "à la fin, aucune fiche ne reste"
 
 # ── 7. Au plus N lourds à la fois, les suivants dans l'ordre d'arrivée ────────
 # (7 novembre 2026, luciepc : sept passes tenaient la place partagée ensemble,
-# et des témoins rougissaient sur « pas indexé en 60 s ».) Trois places, dont une
-# réservée au pousseur (19 novembre 2026) : deux aux sessions.
+# et des témoins rougissaient sur « pas indexé en 60 s ».) Sans place réservée
+# déclarée, les sessions ont les N places.
 : > "$J"
-echo 3 > "$POSTE_LOCK_DIR/lourds-max"
+echo 2 > "$POSTE_LOCK_DIR/lourds-max"
 travail lourd L1 2 &
 sleep 0.3
 travail lourd L2 4 &
@@ -197,10 +197,10 @@ echo "$qui" | sed 's/^/       /'
 dL2=$(instant L2 début); fL1=$(instant L1 fin); dL3=$(instant L3 début)
 echo "       (ms) fin L1 $fL1 · début L2 $dL2 · début L3 $dL3"
 [ -n "$dL2" ] && [ "$dL2" -lt "$fL1" ]
-cas $? "deux places de sessions : le deuxième lourd passe pendant que le premier tourne"
+cas $? "deux places, aucune réservée : le deuxième lourd passe pendant que le premier tourne"
 [ -n "$dL3" ] && [ "$dL3" -ge "$fL1" ] && [ "$dL3" -lt "$(instant L2 fin)" ]
 cas $? "le troisième attend le premier qui finit, et prend sa place sans attendre le deuxième"
-echo "$qui" | grep -q "lourds : 2/3 places tenues, en file dans l'ordre : pid [0-9]"
+echo "$qui" | grep -q "lourds : 2/2 places tenues, en file dans l'ordre : pid [0-9]"
 cas $? "poste --qui dit les places tenues et la file"
 
 : > "$J"
@@ -244,10 +244,11 @@ POSTE_VOIE=pousseur travail lourd P 1 &
 wait
 [ -n "$(instant P début)" ] && [ "$(instant P début)" -ge "$(instant M fin)" ]
 cas $? "la voie du pousseur reste derrière une mesure en attente"
-# La place réservée (19 novembre 2026, c7 : quatre mesures longues de sessions ont figé la file une heure) : à partir de
-# deux places, les lourds des sessions n'en tiennent que N-1 ; la dernière reste au pousseur, qui part sans attendre.
+# La place réservée (19 novembre 2026, c7 : quatre mesures longues de sessions ont figé la file une heure) : sur un
+# poste qui la déclare (place-pousseur), à partir de deux places, les sessions n'en tiennent que N-1 ; la dernière reste
+# au pousseur, qui part sans attendre.
 : > "$J"
-echo 2 > "$POSTE_LOCK_DIR/lourds-max"
+echo 2 > "$POSTE_LOCK_DIR/lourds-max"; touch "$POSTE_LOCK_DIR/place-pousseur"
 travail lourd L1 3 &
 sleep 0.3
 travail lourd L2 1 &
@@ -255,8 +256,8 @@ sleep 0.3
 POSTE_VOIE=pousseur travail lourd P 1 &
 wait
 [ -n "$(instant P début)" ] && [ "$(instant P début)" -lt "$(instant L1 fin)" ] && [ "$(instant L2 début)" -ge "$(instant L1 fin)" ]
-cas $? "deux places : une session en tient une, la seconde session attend, le pousseur part à la place réservée"
-rm -f "$POSTE_LOCK_DIR/lourds-max"
+cas $? "deux places, une réservée : une session en tient une, la seconde attend, le pousseur part à la place réservée"
+rm -f "$POSTE_LOCK_DIR/place-pousseur" "$POSTE_LOCK_DIR/lourds-max"
 [ -z "$(ls -A "$POSTE_LOCK_DIR/fiches" 2>/dev/null)" ] && [ -z "$(ls -A "$POSTE_LOCK_DIR/file" 2>/dev/null)" ]
 cas $? "à la fin, aucune fiche ni aucun billet ne reste"
 
