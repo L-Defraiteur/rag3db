@@ -1,5 +1,10 @@
 # Nouveautés
 
+- 19 novembre 2026 — **Arrêter un appel coupe aussi la requête qu'il fait au moteur.** Un appel arrêté (par l'IDE,
+  `stop_run` ou son `deadline_ms`) allait au bout de la requête que son nœud avait déjà lancée, par exemple un plein
+  texte flou de 30 s. Sa lecture est maintenant interrompue en vol : il rend la main en moins d'une seconde, et les
+  appels voisins sur le même backend vont au bout des leurs.
+
 - 19 novembre 2026 — **La conversation d'un chat se range en mémoire au fil de l'eau.** Chaque tour du chat de
   l'IDE s'écrit dans la mémoire déclarée par le dépôt (`bilans.memoire`). Quand les tours pas encore rangés
   dépassent `memory.slice_tokens` (50 000 jetons par défaut), une tranche se range en fond, sans retarder le chat.
