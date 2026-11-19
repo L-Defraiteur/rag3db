@@ -2895,7 +2895,7 @@ impl PreparedBackend {
             },
         );
         cat.set_moteur_texte(MoteurTexte::Lucivy);
-        cat.set_fts_positions(self.manifest.fts_positions.unwrap_or(true));
+        cat.set_fts_positions(self.manifest.fts_positions.unwrap_or(false));
         // **Le creux, enfin branché.** Le backend comptait le signal `sparse`
         // pour exiger un service, puis ne donnait jamais d'embarqueur creux
         // au catalogue (trouvé le 3 octobre 2026) : le signal restait muet.
