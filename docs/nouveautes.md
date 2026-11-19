@@ -1,5 +1,13 @@
 # Nouveautés
 
+- 19 novembre 2026 — **Un agent de rag3weaver peut être le pair des sessions Claude Code.** Une tâche dont le backend
+  déclare `teammate.pair: true` (éteint par défaut) apparaît dans le registre des sessions sous le nom de son agent,
+  « idle » entre deux travaux et « busy » pendant un pas, et disparaît à la fermeture de la tâche ou à l'arrêt de
+  l'hôte. Un message envoyé par une session (`SendMessage`) arrive dans la boîte de la tâche comme une demande de
+  « session », avec le nom de l'émetteur et son adresse de réponse, et relance l'équipier s'il ne tournait pas.
+  L'équipier répond par l'outil `send_to_session`, au nom ou à l'adresse de la session ; sa réponse reste dans la
+  boîte. Une tâche à la fois par hôte ; les avis de pause ne sont pas encore servis.
+
 - 19 novembre 2026 — **La conversation d'un chat se range en mémoire au fil de l'eau.** Chaque tour du chat de
   l'IDE s'écrit dans la mémoire déclarée par le dépôt (`bilans.memoire`). Quand les tours pas encore rangés
   dépassent `memory.slice_tokens` (50 000 jetons par défaut), une tranche se range en fond, sans retarder le chat.
