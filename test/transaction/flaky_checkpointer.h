@@ -20,6 +20,15 @@ public:
         transaction::TransactionManager::Get(context)->initCheckpointerFunc = initFunc;
     }
 
+    // What the manager holds about automatic checkpoints: a request left to the last transaction
+    // to leave, and a checkpoint pending (new transactions held back).
+    static bool autoCheckpointRequested(main::ClientContext& context) {
+        return transaction::TransactionManager::Get(context)->autoCheckpointRequested;
+    }
+    static bool checkpointPending(main::ClientContext& context) {
+        return transaction::TransactionManager::Get(context)->checkpointPending;
+    }
+
 private:
     transaction::TransactionManager::init_checkpointer_func_t initFunc;
 };
