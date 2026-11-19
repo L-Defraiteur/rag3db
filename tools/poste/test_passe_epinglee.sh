@@ -20,7 +20,7 @@ echo '// lot' >> $W/src/lib.rs; git -C $H/git_workspaces/wt -c user.email=t@t -c
 # FAUX_CHECK=rouge rend check_features sans sa dernière ligne verte ; FAUX_PREUVE=muette ne recompile rien.
 cat > $W/run_e2e.sh <<'F'
 #!/bin/bash
-s=""; while [ $# -gt 0 ]; do [ "$1" = --test ] && s=$2; [ "$1" = --lib ] && s=lib; shift; done
+s=""; dernier=""; while [ $# -gt 0 ]; do [ "$1" = --test ] && s=$2; [ "$1" = --lib ] && s=lib; dernier=$1; shift; done
 echo "$s EMBED=$RAG3WEAVER_EMBED_SERVICE LIB=$RAG3DB_LIB REPLI=${RAG3WEAVER_TESTS_REPLI_PERIPHERIQUE:-absent}" >> "$FAUX_TRACE"
 [ "${FAUX_NON_JOUEES:-}" = "$s" ] && echo "▸ ⚠ 1 suites NON JOUÉES faute de feature"
 [ "${FAUX_NON_JUGE:-}" = "$s" ] && echo "non jugé : la lib n'a pas la colonne state (format 43 requis), bascule à venir"
@@ -30,6 +30,11 @@ if [ "${FAUX_CAS_VERTS%%:*}" = "$s" ]; then for c in $(echo "${FAUX_CAS_VERTS#*:
 if [ "${FAUX_CAS_ROUGES%%:*}" = "$s" ]; then
   n=0; for c in $(echo "${FAUX_CAS_ROUGES#*:}" | tr , ' '); do echo "test $c ... FAILED"; n=$((n + 1)); done
   echo "test result: FAILED. 2 passed; $n failed"; exit 101
+fi
+# Le témoin (le filtre « filtre ») : cargo écrit la ligne du test joué ; FAUX_TEMOIN_MUET l'ignore (0 passed).
+if [ "$dernier" = filtre ]; then
+  [ -n "${FAUX_TEMOIN_MUET:-}" ] && { echo "test result: ok. 0 passed; 0 failed; 1 ignored"; exit 0; }
+  echo "test tests::filtre_du_lot ... ok"
 fi
 echo "test result: ok. 1 passed; 0 failed"
 F
@@ -99,6 +104,10 @@ printf -- '# t\n\n- **État** : fermé (corrigé par abc)\n' > $T/rouge.md; prin
 passe "ROUGE rouges connus" "un rouge connu au ticket fermé refuse la passe" SUITES_EN_PLUS=e2e_x
 rm -f $K
 
+# **Un témoin qui ne joue rien** (19 novembre 2026, c7) : un filtre qui ne désigne aucun test, ou un test ignoré, dit
+# « 0 passed » avec le code 0. Le nom du témoin doit sortir « ok », sinon la passe rougit.
+passe "ROUGE témoin" "un témoin qui ne joue aucun test (0 passed) rougit la passe" FAUX_TEMOIN_MUET=1
+passe "ROUGE témoin" "sous SUITE_DU_TEMOIN=lib aussi" FAUX_TEMOIN_MUET=1 SUITE_DU_TEMOIN=lib
 # **Le témoin navigateur** (19 novembre 2026, c7) : SUITE_DU_TEMOIN=navigateur, pour un lot dont le seul témoin est un test
 # sous la feature `navigateur` (Chat.tsx) ; l'étape « témoin » ne le joue pas dans la lib (il y serait ignoré, donc
 # « 0 passed » et vert sans avoir jugé), il se juge à l'étape des témoins navigateur, où son nom doit sortir « ok ».

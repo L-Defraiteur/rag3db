@@ -134,6 +134,13 @@ fi
 grep -E '^test result|panicked at' $J/temoins.log >> $R
 [ "$SEUL" = temoins ] && { echo "TEMOINS code=$c" >> $R; exit $c; }
 [ $c = 0 ] || rouge "témoin (code=$c)"
+# **Un témoin qui ne joue rien n'est pas vert** (19 novembre 2026, c7) : un filtre qui ne désigne aucun test, ou un test
+# ignoré (la lib sans la feature navigateur), dit « 0 passed » avec le code 0. Au moins un test dont le nom porte le
+# filtre doit sortir « ok » (le témoin navigateur se juge à son étape).
+if [ "${SUITE_DU_TEMOIN:-}" != navigateur ]; then
+  awk -v f="$FILTRE" '$1 == "test" && $3 == "..." && $4 == "ok" && index($2, f) {t = 1} END {exit !t}' $J/temoins.log \
+    || rouge "témoin : aucun test « $FILTRE » n'a été joué ok ($(grep -m1 '^test result' $J/temoins.log))"
+fi
 non_juges $J/temoins.log témoin || rouge "témoin : $(grep -c '^non jugé : ' $J/temoins.log) test non jugé (un témoin doit juger)"
 
 # SUITES=<liste> (14 novembre 2026, au mot de c7) : la liste des suites e2e remplace celle par défaut
