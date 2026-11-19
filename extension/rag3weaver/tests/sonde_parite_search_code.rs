@@ -820,7 +820,7 @@ fn mesure_les_formes_de_la_recopie() {
     // Pairs that copy for real: each File towards the next one, no batch excluded. The two forms that write run
     // on them, the corrected one first (today's refusal makes the connection to be reopened).
     let decalees = CypherValue::List(lu.rows.windows(2).map(|w| CypherValue::Map(std::collections::BTreeMap::from([("a".to_string(), w[0][0].clone()), ("n".to_string(), w[1][0].clone())]))).collect());
-    let ecrit = |entete: &str| format!("UNWIND $paires AS p {entete} WHERE {visible} AND {hors} AND NOT EXISTS {{ MATCH (x)-[:`DEFINED_IN`]->(n) }} CREATE (x)-[:`DEFINED_IN` {{`resolution`: r.`resolution`}}]->(n) RETURN count(*)");
+    let ecrit = |entete: &str| format!("UNWIND $paires AS p {entete} WHERE {visible} AND {hors} AND NOT EXISTS {{ MATCH (x)-[:`DEFINED_IN`]->(n) }} CREATE (x)-[:`DEFINED_IN`]->(n) RETURN count(*)");
     let formes_qui_ecrivent = [
         ("corrigée, qui écrit", ecrit("MATCH (a:`File` {_uuid: p.a}) MATCH (n:`File` {_uuid: p.n}) MATCH (x:`Scope`)-[r:`DEFINED_IN`]->(a)")),
         ("aujourd'hui, qui écrit", ecrit("MATCH (x:`Scope`)-[r:`DEFINED_IN`]->(a:`File` {_uuid: p.a}), (n:`File` {_uuid: p.n})")),
