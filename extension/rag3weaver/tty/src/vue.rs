@@ -1535,6 +1535,33 @@ mod tests {
         assert!(!large.contains("backend"));
     }
 
+    /// **What the host says it waits for is named beside the animation** (tty-25, second half, 19 Nov.:
+    /// the host's `Waiting {run, cause, what, since_ms, wait_ms?}` and `Resumed`). A tool that waits
+    /// says « attend… » with the time it has waited, not « travaille… »; `Resumed` gives back the
+    /// work. A model the provider holds back keeps the animation alive after its run has ended
+    /// (« à toi » would be false) and says when it resumes.
+    #[test]
+    fn what_the_host_waits_for_is_named_beside_the_animation() {
+        let mut v = Vue::new(120, true);
+        let vivante = |v: &Vue, plus: u64| v.ligne_vivante(120, Instant::now() + Duration::from_secs(plus)).spans.iter().map(|s| s.content.to_string()).collect::<String>();
+        v.trame(&json!({ "evenement": { "kind": "RunStarted", "run": "agent-1" } }));
+        v.trame(&json!({ "evenement": { "kind": "ToolCallStarted", "tool": "read_file", "call_id": "c1", "arguments": "{\"path\":\"README.md\"}" } }));
+        assert!(vivante(&v, 0).contains("read_file README.md travaille…"), "{}", vivante(&v, 0));
+        v.trame(&json!({ "evenement": { "kind": "Waiting", "run": "agent-1", "cause": "tool", "what": "read_file", "since_ms": 20000 } }));
+        let dit = vivante(&v, 5);
+        assert!(dit.contains("read_file README.md attend… (25 s)"), "the tool waits, since 20 s plus 5 : {dit}");
+        v.trame(&json!({ "evenement": { "kind": "Resumed", "run": "agent-1", "cause": "tool", "waited_ms": 26000 } }));
+        assert!(vivante(&v, 0).contains("read_file README.md travaille…"), "Resumed gives back the work : {}", vivante(&v, 0));
+        v.trame(&json!({ "evenement": { "kind": "ToolCallFinished", "call_id": "c1", "ok": true, "ms": 26000 } }));
+        v.trame(&json!({ "evenement": { "kind": "RunFinished", "run": "agent-1", "ok": false } }));
+        v.trame(&json!({ "evenement": { "kind": "Waiting", "run": "agent-1", "cause": "model", "what": "gemini-3.8-flash", "since_ms": 0, "wait_ms": 4000 } }));
+        let dit = vivante(&v, 1);
+        assert!(v.quelle().is_some() && !dit.contains("à toi"), "the animation stays while the provider holds the model back : {dit}");
+        assert!(dit.contains("gemini-3.8-flash attend le fournisseur… (reprise dans 3 s)"), "{dit}");
+        v.trame(&json!({ "evenement": { "kind": "Resumed", "run": "agent-1", "cause": "model", "waited_ms": 4000 } }));
+        assert!(!vivante(&v, 0).contains("attend le fournisseur"), "{}", vivante(&v, 0));
+    }
+
     /// **Un accord demandé est un état vivant** (Lucie, 15 nov. : « les accords demandés, je dois
     /// pas les voir défiler comme ça, ça doit être vivant ») : la demande se dit dans la zone
     /// vivante, même quand l'équipier s'anime, et ne s'écrit pas ; l'historique n'en garde qu'une
