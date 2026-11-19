@@ -1,5 +1,11 @@
 # Nouveautés
 
+- 19 novembre 2026 — **Un L1 dit de quels tours il vient, et un tour dit ce qu'on en a retenu.** Un L1 rangé depuis
+  une conversation porte son run et son intervalle de tours, que `recall_apports` rend ; la Source de la tranche
+  aussi, avec son résumé. `get_slice` rend une tranche, par son chemin ou par un de ses tours, avec ses L1 et leurs
+  fiches ; `list_slices` rend les tranches d'un run dans l'ordre ; `trace_turn` rend d'un tour sa tranche, les L1
+  qui le couvrent et leurs fiches. Un tour pas encore rangé appartient à une tranche « ouverte ».
+
 - 19 novembre 2026 — **Les tours d'une conversation expirent après 30 jours.** `purge_turns` efface les tours plus
   anciens que leur durée de vie (30 jours par défaut, ou le nombre de jours donné), avec leur plein texte. Les
   tranches rangées et les L1 qui en sont tirés restent. Seule une entité qui déclare son expiration peut ainsi perdre
