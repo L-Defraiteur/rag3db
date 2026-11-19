@@ -267,14 +267,149 @@ def prepare(case_file, case_path, repo, poste=None, racine=CAMPAGNE):
     return {"run": run, "refused": [], "red": rouge["failed"]}
 
 
+HOTE_SH = """#!/bin/bash
+# The campaign host's environment: an instance of its own (HOME of its own), never a service host.
+set -a; . "$HOME/.config/rag3weaver/rag3weaver-daemon.env"; set +a
+export GOOGLE_CLOUD_LOCATION=global RAG3WEAVER_EXIGER_GEMINI=1
+export RAG3WEAVER_POSTE="$HOME/.cache/rag3weaver-build/poste" POSTE_MEM_MAX=32G
+export PATH="$HOME/.cargo/bin:$PATH"
+export RAG3WEAVER_DAEMON_DIR="{maison}/.local/share/rag3weaver"
+export HOME="{maison}"
+exec "$@"
+"""
+
+
+class Hote:
+    """The campaign host: its own HOME (the rust chain and the model cache linked in, an identity
+    « campagne »), its own port, the installed binary."""
+
+    def __init__(self, racine=CAMPAGNE, port=7990, binaire=os.path.expanduser("~/.local/bin/rag3weaver-backend")):
+        self.racine, self.port, self.binaire = racine, port, binaire
+        self.maison = os.path.join(racine, "maison")
+        self.sh = os.path.join(racine, "hote.sh")
+
+    def preparer(self):
+        reel = os.path.expanduser("~")
+        os.makedirs(os.path.join(self.maison, ".cache"), exist_ok=True)
+        for lien, cible in ((".rustup", ".rustup"), (".cargo", ".cargo"), (".cache/rag3weaver", ".cache/rag3weaver")):
+            chemin = os.path.join(self.maison, lien)
+            if not os.path.lexists(chemin):
+                os.symlink(os.path.join(reel, cible), chemin)
+        with open(os.path.join(self.maison, ".gitconfig"), "w") as f:
+            f.write("[user]\n\tname = campagne\n\temail = campagne@localhost\n[commit]\n\tgpgsign = false\n")
+        with open(self.sh, "w") as f:
+            f.write(HOTE_SH.replace("{maison}", self.maison))
+        os.chmod(self.sh, 0o755)
+
+    def ecoute(self):
+        import socket
+        with socket.socket() as s:
+            s.settimeout(1)
+            return s.connect_ex(("127.0.0.1", self.port)) == 0
+
+    def demarrer(self):
+        import time
+        self.preparer()
+        if self.ecoute():
+            return
+        with open(os.path.join(self.racine, "hote.log"), "ab") as log:
+            subprocess.Popen([self.sh, self.binaire, "daemon", "--address", f"127.0.0.1:{self.port}"], stdout=log, stderr=log, start_new_session=True)
+        for _ in range(60):
+            if self.ecoute():
+                return
+            time.sleep(1)
+        raise RuntimeError("the campaign host does not listen")
+
+    def jeton(self):
+        with open(os.path.join(self.maison, ".local/share/rag3weaver/daemon.token")) as f:
+            return f.read().strip()
+
+    def http(self, methode, chemin, corps=None):
+        import urllib.request
+        req = urllib.request.Request(f"http://127.0.0.1:{self.port}{chemin}", method=methode,
+                                     data=None if corps is None else json.dumps(corps).encode(),
+                                     headers={"Authorization": f"Bearer {self.jeton()}", "content-type": "application/json"})
+        with urllib.request.urlopen(req, timeout=60) as r:
+            return json.loads(r.read())
+
+    def lancer(self, *argv):
+        return subprocess.run([self.sh, *argv], capture_output=True, text=True)
+
+
+def play(run, repo, hote, rev="origin/master", task="campagne", wall_s=1800):
+    """One prepared case played: the tree registered at the campaign host, the report alone as
+    the request, approvals answered by answer_for, a stop at the wall budget, then the output for
+    the bench (diff.patch, diffstat.txt, mailbox.jsonl, budget.json). No verdict."""
+    import time, shutil
+    hote.demarrer()
+    rev9 = git(repo, "rev-parse", "--short=9", rev).decode().strip()
+    decl = os.path.join(hote.racine, "declarations", rev9)
+    racine_decl = os.path.join(decl, "extension/rag3weaver")
+    if not os.path.isdir(racine_decl):
+        freeze_declarations(repo, rev9, decl)
+    arbre = os.path.join(run, "arbre")
+    base = git(arbre, "rev-parse", "HEAD").decode().strip()
+    nom = "cas-" + os.path.basename(os.path.dirname(run))[:2] + "-" + os.path.basename(run)
+    r = hote.lancer(hote.binaire, "code-tree", "add", arbre, "--from", racine_decl, "--as", nom, "--daemon", f"127.0.0.1:{hote.port}")
+    if r.returncode:
+        raise RuntimeError(f"code-tree add: {r.stdout}{r.stderr}")
+    etat = hote.http("GET", "/ide/etat")
+    backend = next(d["backend"] for d in etat["available_repos"] if os.path.realpath(d["path"]) == os.path.realpath(arbre))
+    with open(os.path.join(run, "request.txt")) as f:
+        demande = f.read().strip()
+    t0 = time.time()
+    v = hote.http("POST", "/ide/teammate/mailbox", {"backend": backend, "task": task, "kind": "request", "text": demande})
+    if not v.get("ok"):
+        raise RuntimeError(f"request: {v}")
+    boite = os.path.join(hote.maison, ".local/share/rag3weaver/taches", backend, task, "mailbox.jsonl")
+    repondues, accords, stopped_by = set(), [], None
+    while True:
+        lignes = []
+        if os.path.exists(boite):
+            with open(boite) as f:
+                lignes = [json.loads(l) for l in f if l.strip()]
+        for l in lignes:
+            if l.get("kind") == "answer" and l.get("reply_to"):
+                repondues.add(l["reply_to"])
+        for l in lignes:
+            if l.get("kind") == "approval" and l.get("id") not in repondues:
+                rep = answer_for(l.get("command") or "")
+                hote.http("POST", "/ide/teammate/mailbox", {"backend": backend, "task": task, "kind": "answer", "reply_to": l["id"], "approved": rep["approved"], "text": rep["text"]})
+                repondues.add(l["id"])
+                accords.append({"command": l.get("command"), "approved": rep["approved"]})
+        if any(l.get("kind") == "ended" for l in lignes):
+            break
+        if time.time() - t0 > wall_s and stopped_by is None:
+            hote.http("POST", "/ide/teammate/mailbox", {"backend": backend, "task": task, "kind": "stop", "text": f"campaign budget reached: {wall_s} s"})
+            stopped_by = "wall"
+        if stopped_by and time.time() - t0 > wall_s + 120:
+            break
+        time.sleep(5)
+    code = os.path.join(hote.maison, ".local/share/rag3weaver/taches", backend, task, "code")
+    diff, stat = collect_diff(code, base)
+    with open(os.path.join(run, "diff.patch"), "w") as f:
+        f.write(diff)
+    with open(os.path.join(run, "diffstat.txt"), "w") as f:
+        f.write(stat)
+    shutil.copy(boite, os.path.join(run, "mailbox.jsonl"))
+    with open(os.path.join(run, "budget.json"), "w") as f:
+        json.dump({"wall_s": wall_s, "elapsed_s": round(time.time() - t0), "stopped_by": stopped_by, "approvals": accords,
+                   "backend": backend, "task": task, "declarations": rev9, "base": base}, f, indent=2, ensure_ascii=False)
+    return {"run": run, "stopped_by": stopped_by, "elapsed_s": round(time.time() - t0), "diffstat": stat.strip().splitlines()[-1:] }
+
+
 if __name__ == "__main__":
     import argparse
     a = argparse.ArgumentParser(description="The launcher of the campaign of past fixes, lot 1: prepare a case.")
-    a.add_argument("verb", choices=["prepare"])
-    a.add_argument("case_file", help="the case file (Markdown with its « lanceur » block)")
-    a.add_argument("--case-path", required=True, help="the case file's path in its repository (refused if present at the parent)")
+    a.add_argument("verb", choices=["prepare", "play"])
+    a.add_argument("case_file", help="prepare: the case file (Markdown with its « lanceur » block); play: the prepared run folder")
+    a.add_argument("--case-path", help="the case file's path in its repository (refused if present at the parent)")
+    a.add_argument("--wall-s", type=int, default=1800)
     a.add_argument("--repo", required=True, help="a clone of the repository that holds the parent (read only)")
     a.add_argument("--poste", default=os.path.expanduser("~/.cache/rag3weaver-build/poste"), help="poste, for the red at the parent under poste lourd")
     a.add_argument("--racine", default=CAMPAGNE)
     o = a.parse_args()
-    print(json.dumps(prepare(o.case_file, o.case_path, o.repo, o.poste if os.path.exists(o.poste) else None, o.racine), ensure_ascii=False))
+    if o.verb == "prepare":
+        print(json.dumps(prepare(o.case_file, o.case_path, o.repo, o.poste if os.path.exists(o.poste) else None, o.racine), ensure_ascii=False))
+    else:
+        print(json.dumps(play(o.case_file, o.repo, Hote(o.racine), wall_s=o.wall_s), ensure_ascii=False))
