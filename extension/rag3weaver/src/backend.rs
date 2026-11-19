@@ -9231,7 +9231,9 @@ mod tests {
         assert_eq!(etat["eta_s"], json!(20), "{etat}");
         let cell = backend.catalog.lock().unwrap().scope().clone();
         let lag = backend.catalog.lock().unwrap().file_lag();
-        lag.done_in(&crate::catalog::retard::LagKey::backend(&cell), "arrivee.rs", u64::MAX);
+        for chemin in ["arrivee.rs", "sources/arrivee.rs"] {
+            lag.done_in(&crate::catalog::retard::LagKey::backend(&cell), chemin, u64::MAX);
+        }
         assert_eq!(backend.index_state_now(None, None), json!({"ready": true}), "a caught-up layer is ready");
     }
 
