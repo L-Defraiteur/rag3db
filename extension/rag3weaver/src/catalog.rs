@@ -323,12 +323,6 @@ pub struct Catalog {
     /// les segments lucivy restent dans le tampon, et partent en une fois
     /// (`push_deferred_blobs`).
     defer_blob_push: bool,
-    /// **The derivations are held back** (`defer_derivations`): during the batches of a first index, the derived
-    /// entities of a batch (`ScopeContent` for the code) are queued here with their debt, not drained, so that the
-    /// relations are posed first; `release_deferred_derivations` drains them after.
-    defer_derivations: bool,
-    /// The derivations held back by `defer_derivations`, in the order they came.
-    deferred_derivations: Vec<crate::records::Derivation>,
     /// **Les tables de nœuds repliées sur MERGE dans la transaction en
     /// cours** : elles y restent jusqu'à sa validation. Le moteur refuse un
     /// COPY dans une table où la même transaction a déjà inséré des lignes
@@ -764,8 +758,6 @@ fn read_threads() -> u64 {
             checkpoints_in_transaction: false,
             fresh_ingest: None,
             defer_blob_push: false,
-            defer_derivations: false,
-            deferred_derivations: Vec::new(),
             merge_in_transaction: HashSet::new(),
             fts_tampon: None,
             peut_devoir_un_redecoupage: false,
@@ -7060,11 +7052,7 @@ fn read_threads() -> u64 {
                 let t = std::time::Instant::now();
                 let mut derivations = self.derivations_pour_racine(entity_name, &uuids_ingeres);
                 derivations.extend(self.derivations_pour_voisine(entity_name, &uuids_ingeres));
-                if !derivations.is_empty() && self.defer_derivations {
-                    // **Held back** (decision C): the debt goes to the base now, the rendering after the relations.
-                    self.marquer_la_dette_des_derivations(&derivations);
-                    self.deferred_derivations.extend(derivations);
-                } else if !derivations.is_empty() {
+                if !derivations.is_empty() {
                     self.mettre_en_file_les_derivations_avec_dette(derivations);
                     kb_failed += self
                         .drainer(avec_embarquement, Self::decoupage_pour(exige), Some((entity_name, true)))
@@ -7524,15 +7512,8 @@ fn read_threads() -> u64 {
         if derivations.is_empty() {
             return;
         }
-        self.marquer_la_dette_des_derivations(&derivations);
-        self.mettre_en_file_les_derivations(derivations);
-    }
-
-    /// The debt of `derivations`, put in the base (`_render_hash` emptied, or the references marked pending in a
-    /// transaction), without queueing them: their rendering is owed, whoever drains them later.
-    fn marquer_la_dette_des_derivations(&mut self, derivations: &[crate::records::Derivation]) {
         let mut par_entite: BTreeMap<String, Vec<CypherValue>> = BTreeMap::new();
-        for d in derivations {
+        for d in &derivations {
             par_entite.entry(d.entity.clone()).or_default().push(CypherValue::String(d.root_uuid.clone()));
         }
         for (entite, uuids) in par_entite {
@@ -7552,6 +7533,7 @@ fn read_threads() -> u64 {
             }
         }
         self.peut_devoir_un_rendu = true;
+        self.mettre_en_file_les_derivations(derivations);
     }
 
     /// **La passe de rattrapage du rendu** (pas B du repli des KB) : les
@@ -8562,26 +8544,6 @@ fn read_threads() -> u64 {
     /// Cette entité est-elle écrite par une première indexation en cours ?
     pub fn fresh_ingest_covers(&self, entity_name: &str) -> bool {
         self.fresh_ingest.as_ref().is_some_and(|f| f.written.contains_key(entity_name))
-    }
-
-    /// **Hold the derivations back** for the batches of a first index (the reference tools before the index,
-    /// decision C of Lucie, 18 November 2026): the relations of the code do not read the derived entities, and
-    /// draining them per batch kept the relations waiting (15 s of 42 on rag3weaver/src, 96 s of 196 on the whole
-    /// repository). Turned off by [`release_deferred_derivations`](Self::release_deferred_derivations).
-    pub fn defer_derivations(&mut self, on: bool) {
-        self.defer_derivations = on;
-    }
-
-    /// **The derivations held back, drained now**, after the relations: turns the hold off and drains them like a
-    /// batch would have. A no-op when nothing was held.
-    pub fn release_deferred_derivations(&mut self, exige: crate::disponibilite::Disponibilites) -> FlushResult {
-        self.defer_derivations = false;
-        let held = std::mem::take(&mut self.deferred_derivations);
-        if held.is_empty() {
-            return FlushResult::default();
-        }
-        self.mettre_en_file_les_derivations(held);
-        self.drainer(exige.dense() || exige.sparse(), Self::decoupage_pour(exige), None)
     }
 
     /// **Retenir la poussée des blobs du plein texte**, le temps d'une
