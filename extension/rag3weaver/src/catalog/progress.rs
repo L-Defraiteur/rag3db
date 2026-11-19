@@ -613,9 +613,52 @@ impl Catalog {
     /// and the rate of the catalog's embedder: its key (an index's rate), else the bench's declared rate halved and said
     /// so, else unknown.
     pub fn vectors_due_for_view(&self, layer: &str) -> Result<crate::views::VectorsDue, CatalogError> {
-        // RED STUB.
-        let _ = layer;
-        Ok(crate::views::VectorsDue::default())
+        self.check_reopen()?;
+        let par_couche: std::collections::BTreeSet<String> = self.generations.as_ref().map(|v| v.tables.iter().cloned().collect()).unwrap_or_default();
+        let (mut chunks, mut chars) = (0usize, 0f64);
+        for table in self.vector_tables() {
+            let Ok(storage) = self.vector_storage(&table) else { continue };
+            let m = &storage.marker;
+            // A table carrying the layer column counts this layer's chunks; a table of shared contents, the whole base's.
+            let filtre = if par_couche.contains(&table) { format!(" AND n.{} = $couche", crate::generations::COUCHE) } else { String::new() };
+            let lu = self
+                .conn
+                .execute_with_params(
+                    &format!(
+                        "MATCH (n:`{table}`) WHERE (n.{m} IS NULL OR n.{m} = '' OR n.{m} <> n._text_hash) AND n._text IS NOT NULL AND n._text <> ''{filtre} \
+                         RETURN count(n), sum(size(n._text))"
+                    ),
+                    &[crate::connection::QueryParam::new("couche", crate::connection::CypherValue::String(layer.to_string()))],
+                )
+                .map_err(|e| CatalogError::DbError(format!("les morceaux dus de {table} : {e}")))?;
+            if let Some(row) = lu.rows.first() {
+                chunks += row.first().and_then(|v| v.as_i64()).unwrap_or(0) as usize;
+                chars += row.get(1).and_then(|v| v.as_i64()).unwrap_or(0) as f64;
+            }
+        }
+        let mean_chars = if chunks == 0 { 0.0 } else { chars / chunks as f64 };
+        let (chars_per_s, rate_from) = match self.known_embedding_rate()? {
+            Some(rate) => (Some(rate.chars_per_second), Some("index")),
+            None => match self.declared_embedding_rate() {
+                // The bench measures the calls alone; an index's rate was 47 % of it on B′ (page 05): halved, and said.
+                Some(r) => (Some(r * 0.5), Some("banc × 0,5")),
+                None => (None, None),
+            },
+        };
+        Ok(crate::views::VectorsDue { chunks, mean_chars, chars_per_s, rate_from })
+    }
+
+    /// **The bench's declared rate** of this catalog's embedder (page 05 of 19 November): a file of
+    /// `{"<model>:<address>@<host>": <chars/s>}`, at `RAG3WEAVER_EMBEDDING_RATES`, else
+    /// `~/.config/rag3weaver/embedding-rates.json` (the form proposed by the bench; embarquement decides it).
+    fn declared_embedding_rate(&self) -> Option<f64> {
+        let embedder = self.embedder.as_ref()?;
+        let place = Self::embedding_rate_place(embedder.as_ref())?;
+        let chemin = std::env::var_os("RAG3WEAVER_EMBEDDING_RATES")
+            .map(std::path::PathBuf::from)
+            .or_else(|| std::env::var_os("HOME").map(|h| std::path::Path::new(&h).join(".config/rag3weaver/embedding-rates.json")))?;
+        let table: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(chemin).ok()?).ok()?;
+        table.get(format!("{}:{place}", embedder.name()))?.as_f64().filter(|r| *r > 0.0)
     }
 
     /// Le débit noté pour l'embarqueur de ce catalogue, s'il y en a un.
