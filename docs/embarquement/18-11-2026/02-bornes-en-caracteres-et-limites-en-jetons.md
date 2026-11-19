@@ -96,6 +96,12 @@ la moins chère (1 jeton par octet, sans encodage) et sa mesure de débit à fai
 soir** : depuis A, l'identité d'un service dit `truncated_texts`, que granite remplit par sa troncature à 512. Une fois
 le binaire de A posé sur le 7878, son `/sante` comptera sur le trafic réel les morceaux coupés à 512 jetons ; il sera
 lu le lendemain, sans index de mesure ni essai sur le service.
+
+**Premier relevé, le 19 novembre** : la chauffe compte 169 troncatures à chaque démarrage du 7878. Sa forme de
+380 « mots » fait 762 jetons ; le ticket est `embarquement/tickets/2026-11-19-la-chauffe-du-service-compte-ses-troncatures-comme-du-trafic.md`.
+Une fois la chauffe retirée, il reste **67 morceaux du trafic réel coupés à 512 jetons en 40 minutes** (10 h 47 → 11 h 27).
+Quels textes, et quelle vue : le service ne les nomme pas. C'est à lire côté client, au journal d'index des hôtes, qui
+ne voit pas aujourd'hui les troncatures d'un service distant (`DaemonEmbedder::troncatures` n'est pas relayé).
 S'ils sont nombreux, `text-splitter` sait dimensionner par un tokenizer, et `max_size` peut alors se dire en jetons
 par modèle. **Taille : une mesure, puis à décider.**
 
