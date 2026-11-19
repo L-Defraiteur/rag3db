@@ -1329,7 +1329,11 @@ fn usages_d_un_type_compte_ses_sites_type_methode_d_un_type_importe() {
     let catalog = setup();
     {
         let mut cat = catalog.lock().unwrap();
-        cat.ingest_code(&analyze(&racine, read_sources(&racine).unwrap())).unwrap();
+        // Comme l'index : les manifestes du dépôt lus (`monlib` est un paquet du projet, pas une dépendance).
+        let cargo = dir.join("Cargo.toml").to_string_lossy().to_string();
+        let manifestes = rag3weaver::manifestes::Manifestes::lire(&[cargo], |c| std::fs::read_to_string(c).ok());
+        let analyse = rag3weaver::code::analyze_in_project_avec(&racine, read_sources(&racine).unwrap(), "", None, Some(&manifestes));
+        cat.ingest_code(&analyse).unwrap();
     }
     let cat = catalog.lock().unwrap();
     let r = usages_of(&cat, &code_config(), "Catalog", "").unwrap();
