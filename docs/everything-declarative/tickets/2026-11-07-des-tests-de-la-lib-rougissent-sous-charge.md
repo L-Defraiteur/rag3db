@@ -68,3 +68,15 @@ qui finissait dans cette fenêtre perdait sa fin, celle que le journal doit gard
 
 **Reste à faire** : les autres témoins du tableau, d'abord `taches::tests::la_base_principale_n_est_jamais_ecrite_par_la_tache`
 (une attente de 60 s, à remplacer par un repère).
+## Corrigé le 19 novembre 2026 (ED) : la tâche qui n'indexait pas « en 60 s »
+
+`daemon_host::taches::tests::la_base_principale_n_est_jamais_ecrite_par_la_tache` attendait que `usages` trouve
+`main.rs`, en interrogeant toutes les 200 ms, et abandonnait après 60 s. Sous la charge de la lib entière, l'index
+de la tâche prenait plus. Il attend maintenant **le repère** : la dernière ligne du journal d'index (terminée,
+échouée ou arrêtée), qui est le contrat du module. Il lit ensuite `usages` une seule fois, sur un index fini. Sa
+seule borne est une limite de sûreté de 600 s, qui dit ses secondes quand elle abandonne.
+
+**Pas de rouge déterministe** pour ce changement : il faudrait ralentir l'index de plus d'une minute. Le témoin passe
+seul en 2 s ; le juge est la lib entière sous charge, chez le pousseur.
+
+**Restent** les autres lignes du tableau.
