@@ -214,6 +214,11 @@ def freeze_declarations(repo, rev, dest):
     with open(manifeste) as f:
         m = json.load(f)
     m.setdefault("workspace", {})["commands"] = "auto"
+    # The campaign host has a HOME of its own, where « ~ » is a link: the sandbox gets the real
+    # paths (cargo could not read ~/.rustup/settings.toml through the link, case tty 09).
+    bac = m["workspace"].get("sandbox") or {}
+    if "extra_read" in bac:
+        bac["extra_read"] = [os.path.join(os.path.expanduser("~"), c[2:]) if c.startswith("~/") else c for c in bac["extra_read"]]
     with open(manifeste, "w") as f:
         json.dump(m, f, indent=2, ensure_ascii=False)
     return racine
