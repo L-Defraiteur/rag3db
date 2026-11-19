@@ -39,15 +39,22 @@ struct HandleState {
     /// Qui a demandé l'arrêt (`cancel_by`) : dit par `RunFinished.cancelled_by`.
     by: Option<String>,
     hubs: Vec<StreamHub<PortValue>>,
+    /// What a stop does beyond the nodes ([`CancelHandle::on_cancel`]), by the id of its guard.
+    on_cancel: Vec<(u64, Arc<dyn Fn() + Send + Sync>)>,
+    next_on_cancel: u64,
 }
 
 impl CancelHandle {
     pub fn cancel(&self) {
-        let hubs = {
+        let (hubs, on_cancel) = {
             let mut s = self.inner.lock().unwrap_or_else(|p| p.into_inner());
             s.cancelled = true;
-            s.hubs.clone()
+            (s.hubs.clone(), std::mem::take(&mut s.on_cancel))
         };
+        // Outside the lock: a callback may take its own (the snapshot's phase).
+        for (_, f) in on_cancel {
+            f();
+        }
         for h in hubs {
             h.cancel(CancelCause::External);
         }
@@ -72,8 +79,17 @@ impl CancelHandle {
     /// **Something to do at the stop of this run, beyond its nodes**: interrupt the statement its read snapshot runs
     /// on the engine (ticket `2026-11-07-un-arret-ne-coupe-pas-une-requete-du-moteur-en-cours`). Called once, at
     /// the first stop, or at once if the run is already stopped; never after the guard rendered has fallen.
-    pub fn on_cancel(&self, _f: impl Fn() + Send + Sync + 'static) -> OnCancel {
-        OnCancel
+    pub fn on_cancel(&self, f: impl Fn() + Send + Sync + 'static) -> OnCancel {
+        let mut s = self.inner.lock().unwrap_or_else(|p| p.into_inner());
+        if s.cancelled {
+            drop(s);
+            f();
+            return OnCancel { handle: None, id: 0 };
+        }
+        let id = s.next_on_cancel;
+        s.next_on_cancel += 1;
+        s.on_cancel.push((id, Arc::new(f)));
+        OnCancel { handle: Some(self.clone()), id }
     }
 
     fn attach(&self, hub: &StreamHub<PortValue>) {
@@ -99,7 +115,18 @@ impl CancelHandle {
 
 /// What [`CancelHandle::on_cancel`] registered, forgotten when this guard falls.
 #[must_use = "the callback is forgotten when the guard falls"]
-pub struct OnCancel;
+pub struct OnCancel {
+    handle: Option<CancelHandle>,
+    id: u64,
+}
+
+impl Drop for OnCancel {
+    fn drop(&mut self) {
+        if let Some(h) = &self.handle {
+            h.inner.lock().unwrap_or_else(|p| p.into_inner()).on_cancel.retain(|(id, _)| *id != self.id);
+        }
+    }
+}
 
 /// Un hub attaché à une poignée d'arrêt, détaché à la chute.
 pub(super) struct Attached {
