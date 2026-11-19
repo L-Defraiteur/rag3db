@@ -429,6 +429,25 @@ mod tests {
         assert_eq!(n.rows[0][0], crate::connection::CypherValue::Int(30_000_000), "and its count is whole");
     }
 
+    #[test]
+    #[ignore]
+    fn probe_query_durations() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (_conn, p) = pool(tmp.path(), 4);
+        let i = p.instantane(Duration::from_secs(5)).unwrap();
+        let c = i.conn();
+        for q in [
+            "UNWIND range(1, 20000) AS x UNWIND range(1, 50000) AS y RETURN count(*)",
+            "UNWIND range(1, 3000) AS x UNWIND range(1, 10000) AS y RETURN sum(x * y % 13)",
+            "UNWIND range(1, 3000) AS x UNWIND range(1, 10000) AS y WITH x * y AS z WHERE z % 7 = 3 RETURN count(z)",
+            "UNWIND range(1, 10000) AS x UNWIND range(1, 10000) AS y RETURN sum(x * y % 13)",
+        ] {
+            let t = Instant::now();
+            let r = c.execute(q).map(|r| r.rows);
+            eprintln!("PROBE {:?} {q} -> {r:?}", t.elapsed());
+        }
+    }
+
     fn compte(c: &Arc<dyn DbConnection>) -> i64 {
         let r = c.execute("MATCH (t:T) RETURN count(t)").unwrap();
         match &r.rows[0][0] {
