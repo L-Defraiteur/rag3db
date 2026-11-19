@@ -596,7 +596,9 @@ fn usage_properties(sites: &[UsageSite]) -> BTreeMap<String, CypherValue> {
 // 8 (18 novembre 2026) : les mots vides de Rust sont ceux de Rust (la doc de std, en données) et un chemin
 // d'une bibliothèque de provenance sûre (`std::fs::remove_file`) ne se relie pas à un homonyme du projet
 // (la racine du chemin lue à la position de la mention).
-pub const REGLES_DE_L_ANALYSE: u32 = 8;
+// 9 (20 novembre 2026) : le type d'un appel `Type::f()` / `Type.f()` est un usage du type (`tetes_de_type`) — les
+// sites qualifiés rejoignent leur type, en Rust, C++, Python, TypeScript et C# (`usages Catalog` perdait 41 sites).
+pub const REGLES_DE_L_ANALYSE: u32 = 9;
 
 /// **La version de l'analyse** (page 06, § 13) : le commit du parseur lié, [`REGLES_DE_L_ANALYSE`] et le
 /// gabarit du code (le découpage et les champs déclarés de `File` et de `Scope`), hachés.
