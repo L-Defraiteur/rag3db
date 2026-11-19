@@ -855,16 +855,17 @@ fn put_turn_masks_secrets_bounds_tool_payloads_and_keeps_one_row_per_message() {
     assert!(text.contains("characters)") && !text.contains(&"p".repeat(4001)), "the params are bounded at 4000");
 }
 
-/// **put_turn's patterns are a parameter** (lot B6): a pattern added by the call is masked, without a rebuild, and the
-/// declared defaults still apply.
+/// **put_turn's patterns are a parameter** (lot B6): a pattern the call declares is masked, without a rebuild. The
+/// declared defaults are proven by the witness above (the github token of its text).
 #[test]
 #[ignore]
 fn put_turn_masks_a_pattern_added_by_its_parameter() {
     let dir = tempfile::tempdir().expect("dossier");
     let b = ouvrir(dir.path(), |_| {});
-    let defaults = b.tool_graph("put_turn").and_then(|g| g.params().iter().find(|p| p.name == "patterns").and_then(|p| p.default.clone())).expect("put_turn declares its patterns");
-    let mut patterns = defaults.as_array().cloned().unwrap();
-    patterns.push(json!({"name": "acme key", "kind": "prefix", "prefix": "acme_", "min_body": 8}));
+    let patterns = json!([
+        {"name": "github token", "kind": "prefix", "prefix": "ghp_", "min_body": 30},
+        {"name": "acme key", "kind": "prefix", "prefix": "acme_", "min_body": 8}
+    ]);
     let said = appel(&b, "put_turn", json!({"run": "chat:p", "turn": 1, "seq": 0, "at": "", "role": "user",
         "text": "acme_12345678 and ghp_0123456789abcdefABCDEF0123456789abcd", "patterns": patterns}));
     assert_eq!(said["result"]["masked"], json!(2), "{said}");
