@@ -68,3 +68,13 @@ Les témoins, navigateur, joués à luciepc, vus rouges d'abord (f80e058514, pui
 - `une_relecture_retenue_de_la_seconde_fenetre_n_efface_pas_le_tour_de_la_premiere`, avec la barrière d'ED.
 
 Ce qui n'est pas repris par une fenêtre ouverte en plein tour : les appels d'outil d'avant son ouverture. Elle les voit à la fin du tour, par l'état poussé. La tranche 1 ne porte que le texte.
+
+### La relecture d'ED de la tranche 1
+
+- **La borne du worker** (512 Kio) : passé elle, le texte et son `seq` s'arrêtent ensemble, et `tronque` le dit. La page rend le texte gardé, une marque « […] », puis chaque jeton reçu après lui (`recus`). Rien n'est sauté, rien n'est doublé, et le manque est dit. Témoin : `passe_la_borne_du_worker_le_texte_repris_dit_ce_qui_lui_manque`, la borne abaissée à 12 caractères par le message `tour-max`, réservé aux témoins.
+- **Le compteur des relectures** (`window.__ide.relecturesAppliquees`, compté à la fin de chaque relecture, appliquée ou écartée) : le témoin de la relecture retenue l'attend, au lieu de 500 ms.
+- **Le texte repris passe devant les outils** venus en direct, et l'entrelacement « mots, outil, mots » n'est pas refait. La fin du tour remet l'ordre de la session. C'est dit en commentaire.
+- **Au plus 8 tours** sont gardés par le worker, le plus ancien oublié d'abord, et tous sont oubliés sur `EventsMissed`.
+- **Une demande de tour sans réponse** quitte la file de `host.ts` au bout de la seconde.
+
+Rouges d'abord (290141f1d1 : pas de marque au-delà de la borne, et un compteur qui n'existait pas), puis verts (b0e034b81a). Restent verts : les deux témoins de la tranche, `ide_par_le_flux` (2) et le contrôle du bundle.
