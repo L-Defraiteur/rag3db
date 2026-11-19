@@ -214,7 +214,7 @@ pub enum StructureLine {
     /// Braces (and a semicolon) alone, a trailing `//` comment allowed: `}`, `};`, `} // namespace x`.
     BraceOnly,
     /// The opening of a container by its keyword, after visibility words (`pub`, `pub(crate)`, `inline`,
-    /// `export`): `namespace x {`, `namespace x { … }`, `mod x;`, `pub mod x {`.
+    /// `export`): `namespace x {`, `namespace x { … }`, `namespace x { …`, `mod x;`, `pub mod x {`.
     Opening { keyword: String },
     /// A declaration without a body, by one of its keywords: `class X;`, `struct X;`, `enum class X;`.
     ForwardDeclaration { keywords: Vec<String> },
@@ -238,7 +238,8 @@ impl StructureLine {
                 }
                 let Some(apres) = reste.strip_prefix(keyword.as_str()).filter(|a| a.starts_with(' ') || a.starts_with('{')) else { return false };
                 let apres = apres.trim_end();
-                apres.ends_with('{') || apres.ends_with(';') || (apres.contains('{') && apres.ends_with('}') && apres.contains('…'))
+                // Open (`{`), declared (`;`), or folded: `{ … }`, and `{ …` when the fold keeps no closing brace.
+                apres.ends_with('{') || apres.ends_with(';') || (apres.contains('{') && apres.contains('…') && (apres.ends_with('}') || apres.ends_with('…')))
             }
             StructureLine::ForwardDeclaration { keywords } => {
                 line.ends_with(';')
@@ -259,6 +260,12 @@ impl NotCandidate {
 
     /// Whether the row of these fields is set aside.
     pub fn excludes(&self, data: &std::collections::BTreeMap<String, crate::connection::CypherValue>) -> bool {
+        data.get(&self.type_field).and_then(|v| v.as_str()).is_some_and(|t| self.types.iter().any(|x| x == t)) && self.own_chars(data) < self.min_chars
+    }
+
+    /// **What the row carries of its own**, in characters: its text fields, the lines of pure structure of its
+    /// language taken out of `structure_field`.
+    pub fn own_chars(&self, data: &std::collections::BTreeMap<String, crate::connection::CypherValue>) -> usize {
         let langue = self.language_field.as_ref().and_then(|f| data.get(f)).and_then(|v| v.as_str()).unwrap_or("");
         let structure = self.structure.get(langue).filter(|s| !s.is_empty());
         let texte = |f: &str| {
@@ -274,8 +281,7 @@ impl NotCandidate {
                 None => s.chars().count(),
             }
         };
-        data.get(&self.type_field).and_then(|v| v.as_str()).is_some_and(|t| self.types.iter().any(|x| x == t))
-            && self.text_fields.iter().map(|f| texte(f)).sum::<usize>() < self.min_chars
+        self.text_fields.iter().map(|f| texte(f)).sum::<usize>()
     }
 }
 
@@ -2171,6 +2177,15 @@ mod not_candidate_tests {
             // Past the threshold by what it carries of its own (seven lines of it), not by its structure.
             let avec = format!("namespace rag3db {{\n{}\n}}", vec![propre; 7].join("\n"));
             assert!(!r.excludes(&ligne("namespace", &avec, "", "cpp")), "a container with {propre} of its own stays a candidate");
+        }
+        // **The three texts of the bench** (banc, 19 November 2026, on its index under the codeparsers stack): the fold
+        // of a nested namespace written `namespace x { …`, its closing comment kept, blank lines; 80 to 83 characters.
+        for banc in [
+            "namespace rag3db {\nnamespace main { …\nnamespace binder { … // namespace binder\n}",
+            "namespace rag3db {\nnamespace catalog { …\nnamespace binder { … // namespace binder\n}",
+            "namespace rag3db {\n\nnamespace main { …\n\nnamespace common { … // namespace common\n}",
+        ] {
+            assert_eq!(r.own_chars(&ligne("namespace", banc, "", "cpp")), 0, "the bench's namespace carries nothing of its own: {banc:?}");
         }
         let doc = "The engine's namespace: every public type of the library, its handles and its states.";
         assert!(!r.excludes(&ligne("namespace", structure, doc, "cpp")), "a documented container stays a candidate");
