@@ -44,3 +44,33 @@ une reprise.
 Retiens-tu (i), la reprise par la réouverture et le lanceur de l'index, au lieu d'un rejeu sur place que
 l'empoisonnement interdit ? Et pour (ii), le cœur confirme-t-il qu'une instruction refusée ne laisse rien ?
 En attendant la réponse, je passe à l'entrée suivante de ma liste. Le worktree `wt-retry` reste prêt.
+
+## Retenu par c7 : (i). Le relevé du chemin (19 novembre, après la réponse)
+
+**Ce qui existe** :
+
+- `terminer` empoisonne le catalogue sur un ROLLBACK ;
+- l'hôte, après **un appel** dont le backend dit `must_reopen`, lâche ce backend : il arrête ses réactions et ses
+  indexations (`stop_indexings_of`), puis le prochain appel le rouvre (`daemon_host.rs`, autour de la ligne 732) ;
+- un manifeste peut déclarer `catch_up_on_open`, et la réouverture rattrape alors la source.
+
+**Ce qui manque pour (i)** : le fil de l'index ne fait pas d'appel. Un paquet refusé pour schéma changé laisse
+donc un catalogue empoisonné que personne ne lâche ni ne rouvre, jusqu'au prochain appel d'outil. Et l'index n'est
+relancé que si le manifeste déclare `catch_up_on_open`.
+
+**Le chemin que je prends** :
+
+1. `terminer` reconnaît le refus et rend une erreur qui commence par un préfixe nommé, `SCHEMA_CHANGED_PREFIX`,
+   comme `SYNC_SUSPENDED`.
+2. La fin de l'index la dit (« reprise demandée : schéma changé sur T »), et l'index s'inscrit **à reprendre** :
+   le nombre d'essais est noté en méta, au plus 3.
+3. L'hôte, au registre des fils (`catalog_threads`), voit un index fini sur ce préfixe. Il lâche le backend et le
+   rouvre comme après un appel, puis relance l'index sur la même source. Au 3e essai, la fin est un échec nommé, et
+   l'index n'est plus relancé.
+
+**Le témoin**, rouge d'abord : un `ADD COLUMN` validé sur une autre connexion entre l'ouverture d'un paquet et sa
+première écriture, par un crochet du catalogue du test. L'index va au bout, aucune ligne n'est perdue ni doublée,
+et le journal dit une reprise. C'est un e2e par l'hôte, puisque la réouverture est à lui.
+
+**Taille** : un lot qui touche l'hôte (le registre des fils et la réouverture), environ une journée. (ii) attend la
+réponse du cœur.
