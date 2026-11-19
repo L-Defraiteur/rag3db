@@ -7768,6 +7768,59 @@ mod tests {
         assert!(lignes.iter().any(|(n, t, f)| n == "zorg" && t == "namespace" && f == "api.h"), "the documented namespace stays a candidate: {lignes:?}");
     }
 
+    /// **A base indexed before the rule loses its folded containers at the next index** (2.12, c7's gesture): the
+    /// versions of a base written before the rule keep their render, and the writer would never rewrite them. The
+    /// gesture at the start of a sync takes them out of the full text and their chunks, counts them, and a second
+    /// sync removes nothing. A gesture with another threshold than the base's is refused, naming both.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_base_indexed_before_the_rule_loses_its_folded_containers() {
+        let tools = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/tools");
+        let (dir, p) = fixture_code_avec("working_tree", false, json!({}), &|m| {
+            m["tools"]["search_code"] =
+                json!({"graph": "search_workspace.mmd", "bindings": {"target": "Scope"}, "policy": {"read_files": true}});
+        });
+        drop(p);
+        std::fs::copy(tools.join("search_workspace.mmd"), dir.path().join("search_workspace.mmd")).unwrap();
+        for i in 0..12 {
+            std::fs::write(dir.path().join(format!("sources/h{i}.h")), format!("#pragma once\n\nnamespace zorg {{\nclass Thing{i} {{\n  int a{i};\n}};\n}}\n")).unwrap();
+        }
+        let prepared = PreparedBackend::load(&dir.path().join("backend.json")).expect("le manifeste se charge");
+        let backend = backend_de_code(dir.path(), prepared);
+        let regle = backend.catalog.lock().unwrap().entity_config(crate::code::SCOPE_CONTENT).and_then(|c| c.chunking.not_candidate.clone()).expect("the rule is declared");
+        let source = backend.file_source.clone().unwrap();
+        let replies = |backend: &Backend| -> usize {
+            let r = backend.call("search_code", json!({"query": "zorg", "options": {"signals": ["bm25"], "limit": 20, "format": "json"}})).expect("search_code");
+            r["result"].as_array().map(|a| a.iter().filter(|l| l["data"]["scope_type"] == "namespace").count()).unwrap_or(0)
+        };
+        // Before the rule: the folded namespaces are indexed.
+        {
+            let mut cat = backend.catalog.lock().unwrap();
+            cat.poser_la_regle_des_non_candidats(crate::code::SCOPE_CONTENT, None);
+            crate::code_sync::sync_source(&mut cat, source.as_ref(), &Default::default(), &mut |_| {}).expect("the index before the rule");
+        }
+        assert!(replies(&backend) >= 10, "before the rule, the folded namespaces are results");
+        // Under the rule: the next index sets them aside, and says how many.
+        let ecartees = {
+            let mut cat = backend.catalog.lock().unwrap();
+            cat.poser_la_regle_des_non_candidats(crate::code::SCOPE_CONTENT, Some(regle.clone()));
+            crate::code_sync::sync_source(&mut cat, source.as_ref(), &Default::default(), &mut |_| {}).expect("the index under the rule").non_candidates_set_aside
+        };
+        assert!(ecartees >= 10, "the gesture counts the versions it set aside: {ecartees}");
+        assert_eq!(replies(&backend), 0, "no folded namespace is a result after the gesture");
+        // Replayable: nothing left to set aside.
+        let encore = {
+            let mut cat = backend.catalog.lock().unwrap();
+            crate::code_sync::sync_source(&mut cat, source.as_ref(), &Default::default(), &mut |_| {}).expect("the index again").non_candidates_set_aside
+        };
+        assert_eq!(encore, 0, "a second gesture removes nothing");
+        // The threshold is the base's.
+        let mut cat = backend.catalog.lock().unwrap();
+        cat.poser_la_regle_des_non_candidats(crate::code::SCOPE_CONTENT, Some(crate::config::NotCandidate { min_chars: 50, ..regle }));
+        let refus = cat.set_aside_non_candidates(crate::code::SCOPE_CONTENT).expect_err("another threshold is refused");
+        assert!(refus.to_string().contains("80") && refus.to_string().contains("50"), "the refusal names both thresholds: {refus}");
+    }
+
     /// **Témoin 1 de la vue : aucune projection n'écrit de liste** (2a′-2, page 05, § 5). Une recherche
     /// dense filtrée par chemin, sur une base à générations, projette un Cypher court : moins de 4 Kio,
     /// quelle que soit la taille de la base. Aujourd'hui, le masque des versions y est écrit en clair.
