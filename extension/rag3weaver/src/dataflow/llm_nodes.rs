@@ -1289,4 +1289,29 @@ mod tests {
         assert_eq!(*seen.lock().unwrap(), Some(crate::llm::ReasoningEffort::Low));
         assert!(LlmNodeFactory.create("x", &serde_json::json!({"reasoning": "lots"})).is_err(), "an unknown reasoning is refused");
     }
+
+    /// **The usage of a call comes out on its own port** (19 November 2026: the banc could only estimate the
+    /// extraction's ~411 000 tokens per pass): `usage` carries the prompt, cached, completion and reasoning tokens as
+    /// the provider returned them, the time, and the finish.
+    #[test]
+    fn the_usage_of_a_call_comes_out_on_its_port() {
+        let llm: Arc<dyn Llm> = Arc::new(crate::llm::CallbackLlm::new("u", 4096, |_t, _o, sink| {
+            for f in crate::llm::fragments("{\"topics\": []}") {
+                sink.on_token(&f);
+            }
+            sink.on_finish(&Finish::eos());
+            Ok((Finish::eos(), crate::llm::Usage { prompt_tokens: 100, cached_prompt_tokens: 60, completion_tokens: 40, reasoning_tokens: 10, ms: 7, ..Default::default() }))
+        }));
+        let mut node = LlmNodeFactory.create("extract", &serde_json::json!({"response_schema": topics_schema()})).unwrap();
+        let mut ctx = ctx_with(llm);
+        ctx.set_input("prompt", PortValue::new("découpe".to_string()));
+        node.execute(&mut ctx).unwrap();
+        let usage = ctx.drain_outputs().remove("usage").and_then(take_or_clone::<serde_json::Value>).expect("the usage port");
+        assert_eq!(
+            (usage["prompt_tokens"].clone(), usage["cached_prompt_tokens"].clone(), usage["completion_tokens"].clone(), usage["reasoning_tokens"].clone(), usage["ms"].clone()),
+            (serde_json::json!(100), serde_json::json!(60), serde_json::json!(40), serde_json::json!(10), serde_json::json!(7)),
+            "{usage}"
+        );
+        assert!(usage["finish"].is_string(), "{usage}");
+    }
 }
