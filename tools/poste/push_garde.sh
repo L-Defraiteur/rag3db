@@ -310,6 +310,13 @@ if [ -n "$retires" ]; then
   git commit -q -m "docs(tickets): la copie ouverte d'un ticket que le lot ferme est retirée par la garde —$retires" -- $retires || { echo "ARRÊT : le commit qui retire les copies ouvertes a échoué"; revenir; exit 1; }
   echo "copies ouvertes retirées dans le même push :$retires"
 fi
+# **La PR du lot** (19 novembre 2026, c7 et G) : le pousseur ouvre une PR par lot avant le push. PRE_PUSH, quand il est
+# posé, est une commande appelée avec la tête finale : après le rebase sur master (ou le --onto de la pile) et après le
+# commit des copies ouvertes, juste avant le push. Elle ne bloque jamais : son échec est dit, et le push se fait.
+if [ -n "${PRE_PUSH:-}" ]; then
+  # shellcheck disable=SC2086
+  ${PRE_PUSH} "$(git rev-parse HEAD)" || echo "PR absente : le crochet PRE_PUSH a rendu $?"
+fi
 git push -q origin HEAD:master || { echo "ARRÊT : push refusé"; revenir; exit 1; }
 git fetch -q origin master
 echo "== trois contrôles"

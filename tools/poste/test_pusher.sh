@@ -72,6 +72,7 @@ if [ "$1" = --code-apporte ]; then exec bash "$REAL_GUARD" "$@"; fi
 echo "$*" >> "$GUARD_CALLS"
 cd "$PUSHER_WORKSPACES/$1" || exit 1
 tail -1 "$PUSHER_JOURNALS_ROOT/$2/resume.log" | grep -qx VERT || { echo "ARRÊT : la passe n'est pas VERTE"; exit 1; }
+if [ -n "${PRE_PUSH:-}" ]; then ${PRE_PUSH} "$(git rev-parse HEAD)" || echo "PR absente : le crochet PRE_PUSH a rendu $?"; fi
 git push -q origin HEAD:master || { echo "ARRÊT : push refusé"; exit 1; }
 echo POUSSE
 G
@@ -93,6 +94,24 @@ export PUSHER_PIN_SCRIPT=pin.sh PUSHER_FETCH_LOCK=$D/fetch.lock PUSHER_CACHE=$D/
   PUSHER_PASS=$D/pass.sh PUSHER_GUARD=$D/guard.sh PUSHER_POSTE=$D/poste.sh PUSHER_MASTER_HELD=$D/master-tenu \
   REAL_GUARD=$HERE/push_garde.sh OUTCOMES=$D/outcomes PASS_CALLS=$D/pass_calls GUARD_CALLS=$D/guard_calls PASS_ENV=$D/pass_env
 : > "$D/outcomes"; : > "$D/pass_calls"; : > "$D/guard_calls"
+# The gh double (one pull request per lot, 19 Nov.): notes each call, and each --body apart; $GH_DOWN existing makes
+# every call fail. A pull request it creates is numbered from 41.
+cat > "$D/gh.sh" <<'H'
+#!/bin/bash
+printf '%s\n' "$*" >> "$GH_CALLS"
+prev=""; for a in "$@"; do [ "$prev" = --body ] && printf '%s\n----\n' "$a" >> "$GH_BODIES"; prev=$a; done
+[ -e "${GH_DOWN:-/nonexistent}" ] && { echo "gh: down (doublure)" >&2; exit 1; }
+case "$1 $2" in
+  "auth token") echo tok-L ;;
+  "api user") [ "${GH_TOKEN:-}" = tok-L ] && echo L-Defraiteur || echo someone-else ;;
+  "pr create") echo "https://github.com/L-Defraiteur/rag3db/pull/$(( 40 + $(grep -c '^pr create' "$GH_CALLS") ))" ;;
+  "pr comment"|"pr close") ;;
+  *) exit 2 ;;
+esac
+H
+chmod +x "$D/gh.sh"
+export PUSHER_GH=$D/gh.sh GH_CALLS=$D/gh_calls GH_BODIES=$D/gh_bodies GH_DOWN=$D/gh-down
+: > "$D/gh_calls"; : > "$D/gh_bodies"
 P() { bash "$PUSHER" "$@"; }
 master() { git -C "$D/author" fetch -q origin && git -C "$D/author" rev-parse origin/master; }
 on_master() { git -C "$D/author" fetch -q origin && git -C "$D/author" log --format=%s origin/master | grep -qx "$1"; }
@@ -125,6 +144,16 @@ P step > /dev/null 2>&1
 on_master docs-1 && [ "$(calls "$D/pass_calls")" = 0 ] && ok "docs poussés sans passe" || ko "docs : pas poussés, ou une passe jouée"
 grep -q "^poussé	docs-1	" "$D/pusher/inbox/author-a.txt" 2>/dev/null && ok "boîte de l'auteur : poussé" || ko "boîte de l'auteur sans « poussé docs-1 »"
 [ -z "$(grep -v '^#' "$D/pusher/queue.tsv")" ] && ok "file vide après le push" || ko "le lot est resté dans la file"
+# The docs lot's pull request (19 Nov.): opened before the push, from pusher/<stamp>-docs-1-final to master, its title
+# « <id> : <subject> », a body with no attribution; GitHub marks it merged by the fast-forward; « poussé » says its number.
+pr=$(grep -m1 '^pr create' "$D/gh_calls")
+fin=$(git -C "$D/author" ls-remote origin 'refs/heads/pusher/*-docs-1-final' | cut -f1)
+[[ "$pr" == *"--base master"* ]] && [[ "$pr" == *"--head pusher/"*"-docs-1-final"* ]] && [[ "$pr" == *"--title docs-1 : docs-1"* ]] \
+  && [ -n "$fin" ] && [ "$fin" = "$(master)" ] && ok "PR du lot de docs : pusher/…-docs-1-final à sa pointe, vers master, titre « id : sujet »" \
+  || ko "PR du lot de docs absente ou fausse (« $pr », branche $fin)"
+! grep -qiE 'claude|co-authored|generated' "$D/gh_bodies" && grep -q 'Lib : ' "$D/gh_bodies" && ok "corps de PR : lib, témoin, sans ligne d'attribution" || ko "corps de PR : attribution, ou lib absente"
+grep -q "	docs-1	PR 41 ouverte	" "$D/pusher/log.tsv" && grep -q "^poussé	docs-1	.*	PR 41$" "$D/pusher/inbox/author-a.txt" \
+  && grep -q '^pr comment 41 ' "$D/gh_calls" && ok "« PR 41 ouverte » au journal, son numéro dans « poussé », les trois contrôles en commentaire" || ko "PR 41 : journal, boîte ou commentaire manquant"
 
 # 4. A scripts lot, witness green; then one whose witness is red.
 h=$(lot scripts-1 tools/poste/foo.sh '#!/bin/bash
@@ -350,4 +379,36 @@ export RAG3DB_LIB=$newlib")
 P enqueue pin-2 pin-2 "$h" scripts - - - - author-b > /dev/null && P step > /dev/null 2>&1
 on_master pin-2 && [ "$(cat "$D/cache/lib-des-passes")" = "$newlib" ] && [ "$(cat "$D/cache/lib-des-passes.avant-pin-2" 2>/dev/null)" = rag3db-build-old ] \
   && ok "après une épingle, lib-des-passes dit la lib épinglée (ancien gardé)" || ko "lib-des-passes : $(cat "$D/cache/lib-des-passes")"
+# 25. One pull request per lot in a train: each from its own tip on the final head.
+h1=$(lot pt-a docs/pt-a.md '# pt-a'); h2=$(lot pt-b docs/pt-b.md '# pt-b')
+P enqueue pt-a pt-a "$h1" docs - - - - author-a > /dev/null; P enqueue pt-b pt-b "$h2" docs - - - - author-a > /dev/null
+P step > /dev/null 2>&1
+fa=$(git -C "$D/author" ls-remote origin 'refs/heads/pusher/*-pt-a-final' | cut -f1); fb=$(git -C "$D/author" ls-remote origin 'refs/heads/pusher/*-pt-b-final' | cut -f1)
+on_master pt-a && on_master pt-b && [ -n "$fa" ] && [ "$fb" = "$(master)" ] && [ "$(git -C "$D/author" log -1 --format=%s "$fa")" = pt-a ] \
+  && grep -q "	pt-a	PR [0-9]* ouverte	" "$D/pusher/log.tsv" && grep -q "	pt-b	PR [0-9]* ouverte	" "$D/pusher/log.tsv" \
+  && ok "train de deux lots : deux PR, chacune de la pointe de son lot" || ko "train de deux lots : PR absentes ou pointes fausses ($fa / $fb)"
+
+# 26. A Rust lot: the pull request opens through the guard (PRE_PUSH), on the final head.
+h=$(lot pr-r extension/rag3weaver/src/prr.rs 'fn prr() {}')
+echo VERT >> "$D/outcomes"
+P enqueue pr-r pr-r "$h" rust some_witness e2e_code - - author-c > /dev/null && P step > /dev/null 2>&1
+fr=$(git -C "$D/author" ls-remote origin 'refs/heads/pusher/*-pr-r-final' | cut -f1)
+on_master pr-r && [ "$fr" = "$(master)" ] && grep -q "	pr-r	PR [0-9]* ouverte	" "$D/pusher/log.tsv" && ok "lot rust : la PR s'ouvre par la garde, sur la tête finale" || ko "lot rust : pas de PR par la garde ($fr)"
+
+# 27. gh down: the lot is pushed all the same, « PR absente » in the log.
+touch "$D/gh-down"
+h=$(lot pr-down docs/pr-down.md '# down')
+P enqueue pr-down pr-down "$h" docs - - - - author-a > /dev/null && P step > /dev/null 2>&1
+rm -f "$D/gh-down"
+on_master pr-down && grep -q "	pr-down	PR absente : " "$D/pusher/log.tsv" && ok "gh en panne : le lot est poussé, « PR absente » au journal" || ko "gh en panne : lot bloqué, ou pas de « PR absente »"
+
+# 28. The catch-up: a -base branch at the master of before, the pull request from the -final to it, closed with where it
+# landed; no ref deleted.
+before=$(git -C "$D/author" rev-parse "$(master)~1"); tip=$(master)
+P pr-catchup pr-down "$before" "$tip" author-a "pr-down" > /dev/null 2>&1
+cb=$(git -C "$D/author" ls-remote origin 'refs/heads/pusher/*-pr-down-base' | cut -f1)
+[ "$cb" = "$before" ] && grep -q -- "--base pusher/.*-pr-down-base --head pusher/.*-pr-down-final" "$D/gh_calls" \
+  && grep -q "^pr close [0-9]* .*--comment atterri sur master à $tip" "$D/gh_calls" && ok "rattrapage : -base au master d'avant, PR de la finale vers elle, fermée « atterri sur master »" || ko "rattrapage faux ($cb)"
+grep -vE '^[[:space:]]*#' "$PUSHER" | grep -qE 'push[^|;]*(--delete|[[:space:]]:refs/)' && ko "le pousseur efface une ref" || ok "aucune ref effacée par le pousseur"
+
 exit $red
