@@ -7,7 +7,7 @@ Une ligne par cas joué ; les détails suivent la table.
 
 | cas | verdict | endroit | taille (Algareth / nôtre) | coût | dégâts à côté | indices présents, suivis ? |
 |---|---|---|---|---|---|---|
-| tty 09, une demande écrite une fois (`b1163f64e1`) | **écarté** : latence de Vertex (jeu du 19 à 16 h 26) ; à rejouer | aucun diff | 0 / +36 −3 (tui.rs +7 −2, vue.rs +29 −1 ; hors docs) | 2 pas, 45 appels, 1 814 s de modèle sur 1 828 s ; l'appel le plus lent 385 s pour 8 695 jetons d'invite | aucun (diff vide) | la souche `tui::nom_garde -> None` ; non suivie (rien n'est écrit) |
+| tty 09, une demande écrite une fois (`b1163f64e1`) | **écarté** : latence de Vertex (jeu du 19 à 16 h 26) ; à rejouer | aucun diff | 0 / +36 −3 (tui.rs +7 −2, vue.rs +29 −1 ; hors docs) | 2 pas, 45 appels, 1 814 s de modèle sur 1 828 s ; l'appel le plus lent 385 s pour 8 695 jetons d'invite ; invite totale 1,34 M jetons, dont 88 % par le cache | aucun (diff vide) | la souche `tui::nom_garde -> None` ; non suivie (rien n'est écrit) |
 
 ## tty 09 : une demande s'écrit une fois, et /nom retient le nom gardé (19 novembre)
 
@@ -30,9 +30,12 @@ Une ligne par cas joué ; les détails suivent la table.
   L'appel le plus lent prend 385 s pour 8 695 jetons d'invite et 34 jetons de sortie ; le suivant 285 s. C'est la
   latence de Vertex à ce moment-là, pas l'agent ni un outil. Le jeu ne se juge pas sur ce qu'il n'a pas pu faire.
   Archi le rejoue.
-- **Un point à éclaircir sur les compteurs** : la trace compte 156 794 jetons d'entrée et **1 186 786** jetons servis
-  par le cache. Le cache dépasse l'entrée : `input_tokens` ne compte sans doute que la part non servie par le cache.
-  Il faut le confirmer avant d'en tirer la colonne « coût » et la part servie par le cache (ticket R, P5).
+- **Les compteurs, éclaircis par archi** : `input_tokens` ne compte que la part de l'invite que le cache n'a pas
+  servie, et `cached_tokens` la part servie. L'invite totale est leur somme. La preuve : pour chaque pas, la somme des
+  `prompt_tokens` des appels moins celle de leurs `cached_prompt_tokens` donne exactement `input_tokens` (pas 1 :
+  1 101 867 − 1 011 581 = 90 286 ; pas 2 : 241 713 − 175 205 = 66 508). Pour ce jeu, l'invite totale vaut
+  **1 343 580 jetons, dont 88 % servis par le cache**. Le prochain lot du lanceur ajoute `prompt_tokens` (le total) et
+  renomme `input_tokens` en `uncached_input_tokens`.
 - **À ne pas compter contre l'agent** : dans le bac à sable, la suite `tty` rend 3 rouges de plus, des tests de
   coquille qui ouvrent un pseudo-terminal refusé par le bac à sable. Le ticket est
   `docs/rag3weaver-archi/tickets/2026-11-19-le-bac-a-sable-refuse-le-pseudo-terminal.md`.

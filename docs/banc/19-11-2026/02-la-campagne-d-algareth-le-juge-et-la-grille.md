@@ -80,6 +80,9 @@ de la campagne compte séparément les réussites avec indice et celles sans. Ce
 - `trace.json` : `steps`, `model_calls`, `input_tokens`, `output_tokens`, `cached_tokens`, `reasoning_tokens`,
   `wall_ms`, `model_ms`, `tool_calls` par outil, `ended` (la ligne de fin de la boîte) et `stopped_by`. C'est la
   source de la colonne « coût » ;
+  **`input_tokens` ne compte que la part de l'invite non servie par le cache** : l'invite totale est
+  `input_tokens + cached_tokens` (vérifié par archi le 19 novembre ; le champ devient `uncached_input_tokens`, avec un
+  `prompt_tokens` total, au lot suivant du lanceur) ;
 - `mailbox.jsonl` et `runs/` : la boîte et les journaux bruts, pour relire sans relancer ;
 - `budget.json` : le budget appliqué.
 
