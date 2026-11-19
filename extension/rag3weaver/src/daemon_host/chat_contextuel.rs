@@ -241,10 +241,10 @@ fn parcours(tronque: bool) {
             href.as_str().is_some_and(|h| h.starts_with(&attendu)),
             "le rendu doit utiliser la cible {id}, pas la conversation : {href}"
         );
-        n.evaluer(&format!("({lien}).click()"));
+        n.cliquer_pour_naviguer(lien);
         n.attendre(
             &format!(
-                "location.pathname === {} && document.body.innerText.includes({}) && !document.body.innerText.includes({})",
+                "!window.__temoin_ancien && location.pathname === {} && document.body.innerText.includes({}) && !document.body.innerText.includes({})",
                 json!(attendu),
                 json!(marque),
                 json!(autre)
@@ -257,9 +257,9 @@ fn parcours(tronque: bool) {
         assert_eq!(exposes.lock().unwrap().len(), appels, "recharger n'exécute pas à nouveau les outils");
         let apres = n.evaluer(&format!("({lien}).getAttribute('href')"));
         assert_eq!(apres, href, "le lien conserve son contexte effectif après relecture de session");
-        n.evaluer(&format!("({lien}).click()"));
+        n.cliquer_pour_naviguer(lien);
         n.attendre(
-            &format!("location.pathname === {} && document.body.innerText.includes({})", json!(attendu), json!(marque)),
+            &format!("!window.__temoin_ancien && location.pathname === {} && document.body.innerText.includes({})", json!(attendu), json!(marque)),
             "le clic reste correct après reprise",
         );
     }

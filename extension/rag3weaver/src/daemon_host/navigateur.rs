@@ -236,6 +236,17 @@ impl Navigateur {
     /// Une commande à l'onglet (au navigateur tant qu'aucune session), et sa
     /// réponse ; les événements reçus en route sont relevés.
     pub(crate) fn commande(&mut self, methode: &str, params: Value) -> Value {
+        match self.commande_ou_navigation(methode, params.clone()) {
+            Ok(v) => v,
+            Err(e) => panic!("{methode} {} : {e}", params["expression"].as_str().map(|x| x.chars().take(200).collect::<String>()).unwrap_or_default()),
+        }
+    }
+
+    /// The same command; a page that navigated or closed meanwhile (`Inspected target navigated or
+    /// closed`, a destroyed context: the page left for another) is an `Err`, not a panic — a
+    /// wait across a navigation reads it as « not yet » (ticket of ED, 19 Nov 2026: the click on a
+    /// file link navigates the whole page, and under load the poll fell in between).
+    fn commande_ou_navigation(&mut self, methode: &str, params: Value) -> Result<Value, String> {
         self.suivant += 1;
         let id = self.suivant;
         let mut m = json!({ "id": id, "method": methode, "params": params });
@@ -251,9 +262,13 @@ impl Navigateur {
                 .unwrap_or_else(|| panic!("{methode} : pas de réponse du navigateur en 30 s"));
             if v["id"] == id {
                 if let Some(e) = v.get("error") {
+                    let message = e["message"].as_str().unwrap_or_default();
+                    if message.contains("navigated or closed") || message.contains("Execution context was destroyed") || message.contains("Cannot find context") {
+                        return Err(e.to_string());
+                    }
                     panic!("{methode} : {e}");
                 }
-                return v["result"].clone();
+                return Ok(v["result"].clone());
             }
         }
     }
@@ -322,6 +337,13 @@ impl Navigateur {
         r["result"]["value"].clone()
     }
 
+    /// **Clicks what navigates the whole page** (a file link): the click goes after the
+    /// evaluation returns, so that the evaluation never loses its page, and the old document is
+    /// marked, so that `attendre` reads the new one.
+    pub(crate) fn cliquer_pour_naviguer(&mut self, element: &str) {
+        self.evaluer(&format!("window.__temoin_ancien = true; setTimeout(() => ({element}).click(), 0); true"));
+    }
+
     /// Va à une URL, et attend un nouveau document où `condition` est vraie.
     pub(crate) fn aller(&mut self, url: &str, condition: &str) {
         // La marque de l'ancien document : la condition ne se juge que sur le neuf.
@@ -345,14 +367,19 @@ impl Navigateur {
         let depart = Instant::now();
         let mut calme_depuis = Instant::now();
         loop {
-            let r = self.commande(
+            // A page that navigates meanwhile is « not yet »: the condition is read again on the
+            // next document.
+            let r = self.commande_ou_navigation(
                 "Runtime.evaluate",
                 json!({ "expression": format!("(() => {{ try {{ return !!({condition}); }} catch (e) {{ return false; }} }})()"), "returnByValue": true }),
             );
-            if r["result"]["value"] == true {
+            if r.as_ref().is_ok_and(|r| r["result"]["value"] == true) {
                 return;
             }
-            let en_vol = self.evaluer("(window.__temoin_en_vol ?? new Map()).size");
+            let en_vol = self
+                .commande_ou_navigation("Runtime.evaluate", json!({ "expression": "(window.__temoin_en_vol ?? new Map()).size", "returnByValue": true }))
+                .map(|r| r["result"]["value"].clone())
+                .unwrap_or(Value::Null);
             if en_vol.as_u64().unwrap_or(0) > 0 {
                 calme_depuis = Instant::now();
             }
