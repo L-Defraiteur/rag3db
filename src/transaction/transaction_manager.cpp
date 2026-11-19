@@ -612,6 +612,29 @@ bool TransactionManager::isActive(transaction_t transactionID) {
         [transactionID](const auto& transaction) { return transaction->getID() == transactionID; });
 }
 
+std::string TransactionManager::describeTransactions(
+    const std::vector<common::transaction_t>& ids) {
+    std::string out;
+    std::unique_lock lck{mtxForSerializingPublicFunctionCalls, std::try_to_lock};
+    const auto now = common::Timestamp::getCurrentTimestamp().value;
+    for (const auto id : ids) {
+        out += out.empty() ? "" : ", ";
+        out += "transaction " + std::to_string(id);
+        if (!lck.owns_lock()) {
+            continue;
+        }
+        for (const auto& active : activeTransactions) {
+            if (active->getID() == id) {
+                out += common::stringFormat(" ({}, open for {} ms)",
+                    active->isReadOnly() ? "read-only" : "write",
+                    (now - active->getCurrentTS()) / 1000);
+                break;
+            }
+        }
+    }
+    return out;
+}
+
 void TransactionManager::clearTransactionNoLock(transaction_t transactionID) {
     KU_ASSERT(std::ranges::any_of(activeTransactions.begin(), activeTransactions.end(),
         [transactionID](const auto& activeTransaction) {

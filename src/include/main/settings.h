@@ -34,6 +34,15 @@ struct LockTimeoutSetting {
     static common::Value getSetting(const ClientContext* context);
 };
 
+// L'attente maximale d'un ALTER ou d'un DROP TABLE derrière les transactions qui tiennent sa table,
+// en millisecondes (CALL alter_lock_timeout=…).
+struct AlterLockTimeoutSetting {
+    static constexpr auto name = "alter_lock_timeout";
+    static constexpr auto inputType = common::LogicalTypeID::UINT64;
+    static void setContext(ClientContext* context, const common::Value& parameter);
+    static common::Value getSetting(const ClientContext* context);
+};
+
 // Le chargement en masse journalisé est le défaut : un COPY écrit ses lignes au journal de sa
 // transaction. CALL force_checkpoint_on_copy=true rend le point de reprise forcé d'avant — pour
 // une transaction dont le journal serait énorme (le plein texte en base), ou un test qui regarde
