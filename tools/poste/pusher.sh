@@ -205,7 +205,7 @@ push_plain() { # <base> → 0 pushed, 1 master moved, 2 refused
   gfetch -q origin master || return 2
   [ "$(g rev-parse FETCH_HEAD)" = "$1" ] || return 1
   open_prs "$STAMP" - "$(g rev-parse HEAD)"
-  poste_push git -C "$WT" push -q origin HEAD:master || return 2
+  poste_push git -C "$WT" push -q origin HEAD:master || { close_step_prs "le push vers master a été refusé"; return 2; }
   gfetch -q origin master
   [ -z "$(g status --porcelain)" ] && [ ! -d "$(g rev-parse --git-dir)/rebase-merge" ] && [ "$(g rev-parse FETCH_HEAD)" = "$(g rev-parse HEAD)" ]
 }
@@ -227,7 +227,12 @@ gh_token() {
 # A pull request's body: what was replayed, under which lib; no attribution line.
 pr_body() { # <id> <branch> <author> <kind> <witness> <suite> <extra> <tip> <final> <journals>
   local lib="aucune : pas de passe Rust"
-  [ "${10}" != - ] && lib=$(grep -ohm1 'rag3db-build-[0-9a-f]\{40\}' "$JR/${10}/resume.log" 2>/dev/null || echo "non lue")
+  # The lib in its long form, from every journal of the pass, as the guard reads it (the summary's first line carries
+  # only the short form, 19 Nov., G).
+  if [ "${10}" != - ]; then
+    lib=$(grep -ho 'rag3db-build-[0-9a-f]\{40\}' "$JR/${10}"/*.log 2>/dev/null | sort -u | paste -sd' ')
+    [ -n "$lib" ] || lib="non lue"
+  fi
   printf 'Lot %s de la session %s, branche %s (%s), reposé et poussé par le pousseur.\n\n' "$1" "$3" "$2" "$4"
   printf -- '- Lib : %s\n- Témoin : %s (%s) ; suites en plus : %s\n- Rejeu : %s\n' "$lib" "$5" "$6" "$7" "${10/#-/sans passe}"
   printf -- '- Pointe du lot sur la tête finale : %s ; tête finale : %s\n' "$8" "$9"
@@ -264,6 +269,22 @@ open_prs() { # <stamp> <journals|-> <final head>
     fi
   done < "$D/step-lots.tsv"
   return 0
+}
+
+# The pull requests of this step that will not land: the push was refused after they opened (master moved, the guard
+# stopped). Each is closed with the reason, « PR <n> fermée » in the log; a lot reposed later gets a new one (19 Nov., G).
+close_step_prs() { # <reason>
+  local tok id n
+  [ -s "$D/step-prs.tsv" ] || return 0
+  tok=$(gh_token) || { while IFS=$'\t' read -r id n; do log "$id" "PR $n : fermeture impossible, pas de jeton" "$1"; done < "$D/step-prs.tsv"; : > "$D/step-prs.tsv"; return 0; }
+  while IFS=$'\t' read -r id n; do
+    if GH_TOKEN=$tok "$GH" pr close "$n" --repo "$PR_REPO" --comment "fermée sans atterrir : $1" > /dev/null 2>&1; then
+      log "$id" "PR $n fermée" "$1"
+    else
+      log "$id" "PR $n : fermeture refusée" "$1"
+    fi
+  done < "$D/step-prs.tsv"
+  : > "$D/step-prs.tsv"
 }
 
 # A lot that landed without its pull request: a branch -base at the master it landed on, -final at its tip, the pull
@@ -382,6 +403,8 @@ push_train() { # <line>…
     out=$(PRE_PUSH="bash $SELF open-prs $STAMP $JNAME" poste_push bash "$GUARD" "$WTN" "$JNAME" 2>&1)
     log "$TRAIN_LABEL" garde "$(echo "$out" | tail -1)"
     [ "$(echo "$out" | tail -1)" = POUSSE ] && return 0
+    # The guard did not push: the pull requests it opened through PRE_PUSH will not land.
+    close_step_prs "la garde n'a pas poussé : $(echo "$out" | grep -m1 'ARRÊT' || echo "$out" | tail -1)"
     echo "$out" | grep -qE 'master a apporté du code|push refusé' && return 1
     echo "$out" | grep -m1 'ARRÊT' > "$D/last-red.txt"; return 2
   fi
