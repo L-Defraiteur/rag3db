@@ -301,14 +301,42 @@ impl MemoryImage {
 
     /// **A node's table and only the given fields** (`_uuid` included by its name), without unfolding the others:
     /// the reads of the resolution ask for a few columns of many rows.
-    pub fn node_fields(&self, _uuid: &str, _fields: &[&str]) -> Option<(String, Vec<CypherValue>)> {
-        unimplemented!("memory image: node_fields")
+    pub fn node_fields(&self, uuid: &str, fields: &[&str]) -> Option<(String, Vec<CypherValue>)> {
+        let n = &self.nodes[self.live(uuid)? as usize];
+        let values = fields
+            .iter()
+            .map(|f| match *f {
+                "_uuid" => CypherValue::String(uuid.to_string()),
+                f => self.strings.get(f).and_then(|k| prop(&n.props, k)).map(|v| self.value(v)).unwrap_or(CypherValue::Null),
+            })
+            .collect();
+        Some((self.strings.name(n.table).to_string(), values))
     }
 
     /// **The neighbours by `rel`** from `at` (outgoing, or incoming): each one's uuid and only the given fields of
     /// the edge, without unfolding the others.
-    pub fn neighbours_fields(&self, _rel: &str, _at: &str, _outgoing: bool, _edge_fields: &[&str]) -> Vec<(String, Vec<CypherValue>)> {
-        unimplemented!("memory image: neighbours_fields")
+    pub fn neighbours_fields(&self, rel: &str, at: &str, outgoing: bool, edge_fields: &[&str]) -> Vec<(String, Vec<CypherValue>)> {
+        let (Some(rel), Some(at)) = (self.strings.get(rel), self.live(at)) else { return Vec::new() };
+        let keys: Vec<Option<Sym>> = edge_fields.iter().map(|f| self.strings.get(f)).collect();
+        let map = if outgoing { &self.outgoing } else { &self.incoming };
+        map.get(&(rel, at))
+            .into_iter()
+            .flatten()
+            .map(|r| &self.rels[*r as usize])
+            .filter(|r| r.alive)
+            .map(|r| {
+                let other = if outgoing { r.to } else { r.from };
+                let values = keys.iter().map(|k| k.and_then(|k| prop(&r.props, k)).map(|v| self.value(v)).unwrap_or(CypherValue::Null)).collect();
+                (self.strings.name(self.nodes[other as usize].uuid).to_string(), values)
+            })
+            .collect()
+    }
+
+    fn value(&self, v: &Compact) -> CypherValue {
+        match v {
+            Compact::Str(t) => CypherValue::String(self.strings.name(*t).to_string()),
+            Compact::Other(o) => o.clone(),
+        }
     }
 
     pub fn node(&self, uuid: &str) -> Option<NodeView> {

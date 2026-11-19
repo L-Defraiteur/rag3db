@@ -83,13 +83,6 @@ fn order(a: &CypherValue, b: &CypherValue) -> Ordering {
     }
 }
 
-fn neighbours(state: &State, relation: &str, direction: Direction, uuid: &str) -> Vec<(String, BTreeMap<String, CypherValue>)> {
-    match direction {
-        Direction::Outgoing => state.image.outgoing(relation, uuid),
-        Direction::Incoming => state.image.incoming(relation, uuid),
-    }
-}
-
 /// **Does a row satisfy a predicate.** `uuid` is the row's (empty for an edge: `Through` is then refused); `props`
 /// its fields. The only evaluator of the connection: the family `count` calls it too.
 pub(super) fn matches(state: &State, pred: &Predicate, uuid: &str, props: &BTreeMap<String, CypherValue>, params: &[QueryParam]) -> Result<bool, DbError> {
@@ -136,13 +129,17 @@ pub(super) fn matches(state: &State, pred: &Predicate, uuid: &str, props: &BTree
             if uuid.is_empty() {
                 return Err(refused("Predicate::Through sur une arête"));
             }
-            for (other, _) in neighbours(state, relation, *direction, uuid) {
-                let Some(node) = state.image.node(&other) else { continue };
-                if node.table != *end {
+            let mut wanted = Vec::new();
+            if let Some(f) = filter {
+                predicate_fields(f, &mut wanted);
+            }
+            for (other, _) in state.image.neighbours_fields(relation, uuid, matches!(direction, Direction::Outgoing), &[]) {
+                let Some(row) = projected(state, &other, &wanted) else { continue };
+                if row.table != *end {
                     continue;
                 }
                 if match filter {
-                    Some(f) => matches(state, f, &node.uuid, &node.props, params)?,
+                    Some(f) => matches(state, f, &row.uuid, &row.fields, params)?,
                     None => true,
                 } {
                     return Ok(true);
@@ -182,40 +179,99 @@ fn skip(offset: &Option<Offset>, params: &[QueryParam]) -> Result<usize, DbError
 }
 
 fn collect(state: &State, c: &rag3weaver_ir::Collect, uuid: &str, params: &[QueryParam]) -> Result<CypherValue, DbError> {
+    let mut wanted = c.fields.clone();
+    if let Some(f) = &c.filter {
+        predicate_fields(f, &mut wanted);
+    }
     let mut out = Vec::new();
-    for (other, _) in neighbours(state, &c.relation, c.direction, uuid) {
-        let Some(node) = state.image.node(&other) else { continue };
-        if node.table != c.end {
+    for (other, _) in state.image.neighbours_fields(&c.relation, uuid, matches!(c.direction, Direction::Outgoing), &[]) {
+        let Some(row) = projected(state, &other, &wanted) else { continue };
+        if row.table != c.end {
             continue;
         }
         if let Some(f) = &c.filter {
-            if !matches(state, f, &node.uuid, &node.props, params)? {
+            if !matches(state, f, &row.uuid, &row.fields, params)? {
                 continue;
             }
         }
-        out.push(CypherValue::Map(c.fields.iter().map(|f| (f.clone(), field(&node, f))).collect()));
+        out.push(CypherValue::Map(c.fields.iter().map(|f| (f.clone(), row.fields.get(f).cloned().unwrap_or(CypherValue::Null))).collect()));
     }
     Ok(CypherValue::List(out))
 }
 
-fn select(state: &State, s: &Select, params: &[QueryParam]) -> Result<QueryResult, DbError> {
-    let starts: Vec<(Option<String>, NodeView)> = if s.by_uuids {
-        uuids(params, "uuids")?
-            .into_iter()
-            .filter_map(|u| state.image.node(&u).filter(|n| n.table == s.table).map(|n| (Some(u), n)))
-            .collect()
-    } else {
-        state.image.nodes_of_table(&s.table).into_iter().filter_map(|u| state.image.node(&u)).map(|n| (None, n)).collect()
-    };
-    let mut kept = Vec::new();
-    for (u, node) in starts {
-        if let Some(f) = &s.filter {
-            if !matches(state, f, &node.uuid, &node.props, params)? {
-                continue;
+/// The fields of a node a read needs: the returned ones, the filter's and the order's, each once (`_uuid` by its
+/// name). Only these are unfolded from the image (`MemoryImage::node_fields`); a whole row is read whole.
+fn needed_fields(returns: &[Column], filter: Option<&Predicate>, order: &[String]) -> Vec<String> {
+    let mut fields: Vec<String> = Vec::new();
+    for c in returns {
+        if let Column::Node(f) = c {
+            if f != NULL_COLUMN && f != LABEL_COLUMN && f != WHOLE_COLUMN {
+                fields.push(f.clone());
             }
         }
-        kept.push((u, node));
     }
+    if let Some(p) = filter {
+        predicate_fields(p, &mut fields);
+    }
+    fields.extend(order.iter().cloned());
+    let mut seen = std::collections::HashSet::new();
+    fields.retain(|f| seen.insert(f.clone()));
+    fields
+}
+
+/// The fields of the row a predicate reads (`Through` reads its neighbours itself).
+fn predicate_fields(p: &Predicate, out: &mut Vec<String>) {
+    match p {
+        Predicate::Equals { field, .. }
+        | Predicate::Contains { field, .. }
+        | Predicate::AtLeast { field, .. }
+        | Predicate::In { field, .. }
+        | Predicate::StartsWith { field, .. } => out.push(field.clone()),
+        Predicate::AnyOf(all) | Predicate::AllOf(all) => all.iter().for_each(|q| predicate_fields(q, out)),
+        Predicate::Optional(q) => predicate_fields(q, out),
+        Predicate::Through { .. } | Predicate::Let(_) | Predicate::Compiled(_) | Predicate::Visible { .. } => {}
+    }
+}
+
+fn wants_whole(returns: &[Column]) -> bool {
+    returns.iter().any(|c| matches!(c, Column::Whole) || matches!(c, Column::Node(f) if f == WHOLE_COLUMN))
+}
+
+/// A projected row: its uuid, its table, and its needed fields by name.
+struct Row {
+    uuid: String,
+    table: String,
+    fields: BTreeMap<String, CypherValue>,
+}
+
+fn projected(state: &State, uuid: &str, fields: &[String]) -> Option<Row> {
+    let names: Vec<&str> = fields.iter().map(String::as_str).collect();
+    let (table, values) = state.image.node_fields(uuid, &names)?;
+    Some(Row { uuid: uuid.to_string(), table, fields: fields.iter().cloned().zip(values).collect() })
+}
+
+fn ordered(rows: &mut [(Row, Vec<CypherValue>)], keys: &[(String, bool)]) {
+    if keys.is_empty() {
+        return;
+    }
+    rows.sort_by(|(a, _), (b, _)| {
+        for (f, desc) in keys {
+            let null = CypherValue::Null;
+            let o = order(a.fields.get(f).unwrap_or(&null), b.fields.get(f).unwrap_or(&null));
+            let o = if *desc { o.reverse() } else { o };
+            if o != Ordering::Equal {
+                return o;
+            }
+        }
+        Ordering::Equal
+    });
+}
+
+fn whole_of(state: &State, uuid: &str) -> CypherValue {
+    state.image.node(uuid).map(|n| whole(&n)).unwrap_or(CypherValue::Null)
+}
+
+fn select(state: &State, s: &Select, params: &[QueryParam]) -> Result<QueryResult, DbError> {
     let mut keys = Vec::new();
     for k in &s.order_by {
         match &k.by {
@@ -223,18 +279,23 @@ fn select(state: &State, s: &Select, params: &[QueryParam]) -> Result<QueryResul
             other => return Err(refused(&format!("un ordre par {other:?}"))),
         }
     }
-    if !keys.is_empty() {
-        kept.sort_by(|(_, a), (_, b)| {
-            for (f, desc) in &keys {
-                let o = order(&field(a, f), &field(b, f));
-                let o = if *desc { o.reverse() } else { o };
-                if o != Ordering::Equal {
-                    return o;
-                }
+    let order_fields: Vec<String> = keys.iter().map(|(f, _)| f.clone()).collect();
+    let fields = needed_fields(&s.returns, s.filter.as_ref(), &order_fields);
+    let candidates: Vec<String> = if s.by_uuids { uuids(params, "uuids")? } else { state.image.nodes_of_table(&s.table) };
+    let mut kept: Vec<(Row, Vec<CypherValue>)> = Vec::new();
+    for u in candidates {
+        let Some(row) = projected(state, &u, &fields) else { continue };
+        if row.table != s.table {
+            continue;
+        }
+        if let Some(f) = &s.filter {
+            if !matches(state, f, &row.uuid, &row.fields, params)? {
+                continue;
             }
-            Ordering::Equal
-        });
+        }
+        kept.push((row, Vec::new()));
     }
+    ordered(&mut kept, &keys);
     let from = skip(&s.offset, params)?;
     let take = bound(&s.limit, params)?.unwrap_or(usize::MAX);
     let mut columns: Vec<String> = s.by_uuids.then(|| "u".to_string()).into_iter().collect();
@@ -245,77 +306,80 @@ fn select(state: &State, s: &Select, params: &[QueryParam]) -> Result<QueryResul
             other => format!("{other:?}"),
         });
     }
+    let whole_wanted = wants_whole(&s.returns);
     let mut rows = Vec::new();
-    for (u, node) in kept.into_iter().skip(from).take(take) {
-        let mut row: Vec<CypherValue> = u.map(CypherValue::String).into_iter().collect();
+    for (row, _) in kept.into_iter().skip(from).take(take) {
+        let mut out: Vec<CypherValue> = s.by_uuids.then(|| CypherValue::String(row.uuid.clone())).into_iter().collect();
+        let entire = if whole_wanted { whole_of(state, &row.uuid) } else { CypherValue::Null };
         for c in &s.returns {
-            row.push(match c {
-                Column::Node(f) if f == WHOLE_COLUMN => whole(&node),
+            out.push(match c {
+                Column::Node(f) if f == WHOLE_COLUMN => entire.clone(),
                 Column::Node(f) if f == NULL_COLUMN || f == LABEL_COLUMN => CypherValue::Null,
-                Column::Node(f) => field(&node, f),
-                Column::Whole => whole(&node),
-                Column::Collect(c) => collect(state, c, &node.uuid, params)?,
+                Column::Node(f) => row.fields.get(f).cloned().unwrap_or(CypherValue::Null),
+                Column::Whole => entire.clone(),
+                Column::Collect(c) => collect(state, c, &row.uuid, params)?,
                 // As the rag3db dialect: an edge, a label or a null column of a selection is NULL.
                 Column::Edge(_) | Column::Label | Column::Null => CypherValue::Null,
             });
         }
-        rows.push(row);
+        rows.push(out);
     }
     Ok(QueryResult { columns, rows })
 }
 
 fn hop(state: &State, h: &Hop, params: &[QueryParam]) -> Result<QueryResult, DbError> {
-    let mut rows: Vec<(NodeView, Vec<CypherValue>)> = Vec::new();
+    let fields = needed_fields(&h.returns, h.filter.as_ref(), &h.order_by);
+    let mut edge_fields: Vec<String> = h.returns.iter().filter_map(|c| if let Column::Edge(f) = c { Some(f.clone()) } else { None }).collect();
+    if let Some(x) = &h.exclude {
+        edge_fields.push(x.field.clone());
+    }
+    let edge_names: Vec<&str> = edge_fields.iter().map(String::as_str).collect();
+    let edge_at = |f: &str| edge_fields.iter().position(|e| e == f);
+    let whole_wanted = wants_whole(&h.returns);
+    let mut rows: Vec<(Row, Vec<CypherValue>)> = Vec::new();
     for start in uuids(params, "uuids")? {
-        let Some(from) = state.image.node(&start) else { continue };
-        if h.start.as_ref().is_some_and(|t| *t != from.table) {
+        let Some((start_table, _)) = state.image.node_fields(&start, &[]) else { continue };
+        if h.start.as_ref().is_some_and(|t| *t != start_table) {
             continue;
         }
-        for (other, edge) in neighbours(state, &h.relation, h.direction, &start) {
-            let Some(node) = state.image.node(&other) else { continue };
-            if h.end.as_ref().is_some_and(|t| *t != node.table) {
+        let outgoing = matches!(h.direction, Direction::Outgoing);
+        for (other, edge) in state.image.neighbours_fields(&h.relation, &start, outgoing, &edge_names) {
+            let Some(row) = projected(state, &other, &fields) else { continue };
+            if h.end.as_ref().is_some_and(|t| *t != row.table) {
                 continue;
             }
             if let Some(x) = &h.exclude {
-                if let Some(CypherValue::String(v)) = edge.get(&x.field) {
+                if let Some(CypherValue::String(v)) = edge_at(&x.field).map(|i| &edge[i]) {
                     if x.values.iter().any(|w| w == v) {
                         continue;
                     }
                 }
             }
             if let Some(f) = &h.filter {
-                if !matches(state, f, &node.uuid, &node.props, params)? {
+                if !matches(state, f, &row.uuid, &row.fields, params)? {
                     continue;
                 }
             }
-            let mut row = vec![CypherValue::String(start.clone())];
+            let entire = if whole_wanted { whole_of(state, &row.uuid) } else { CypherValue::Null };
+            let mut out = vec![CypherValue::String(start.clone())];
             for c in &h.returns {
-                row.push(match c {
-                    Column::Node(f) if f == WHOLE_COLUMN => whole(&node),
-                    Column::Node(f) if f == LABEL_COLUMN => CypherValue::String(node.table.clone()),
+                out.push(match c {
+                    Column::Node(f) if f == WHOLE_COLUMN => entire.clone(),
+                    Column::Node(f) if f == LABEL_COLUMN => CypherValue::String(row.table.clone()),
                     Column::Node(f) if f == NULL_COLUMN => CypherValue::Null,
-                    Column::Node(f) => field(&node, f),
-                    Column::Edge(f) => edge.get(f).cloned().unwrap_or(CypherValue::Null),
-                    Column::Label => CypherValue::String(node.table.clone()),
-                    Column::Whole => whole(&node),
+                    Column::Node(f) => row.fields.get(f).cloned().unwrap_or(CypherValue::Null),
+                    Column::Edge(f) => edge_at(f).map(|i| edge[i].clone()).unwrap_or(CypherValue::Null),
+                    Column::Label => CypherValue::String(row.table.clone()),
+                    Column::Whole => entire.clone(),
                     Column::Null => CypherValue::Null,
                     Column::Collect(_) => return Err(refused("une liste liée dans un saut")),
                 });
             }
-            rows.push((node, row));
+            rows.push((row, out));
         }
     }
-    if !h.order_by.is_empty() {
-        rows.sort_by(|(a, _), (b, _)| {
-            for f in &h.order_by {
-                let o = order(&field(a, f), &field(b, f));
-                if o != Ordering::Equal {
-                    return o;
-                }
-            }
-            Ordering::Equal
-        });
-    }
+    let keys: Vec<(String, bool)> = h.order_by.iter().map(|f| (f.clone(), false)).collect();
+    ordered(&mut rows, &keys);
     let take = h.limit.unwrap_or(usize::MAX);
     let mut columns = vec!["u".to_string()];
     columns.extend(h.returns.iter().map(|c| format!("{c:?}")));
