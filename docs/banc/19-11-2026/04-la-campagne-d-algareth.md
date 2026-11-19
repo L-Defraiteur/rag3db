@@ -10,6 +10,8 @@ Une ligne par cas joué ; les détails suivent la table.
 | tty 09, une demande écrite une fois (`b1163f64e1`) | **écarté** : latence de Vertex (jeu du 19 à 16 h 26) ; à rejouer | aucun diff | 0 / +36 −3 (tui.rs +7 −2, vue.rs +29 −1 ; hors docs) | 2 pas, 45 appels, 1 814 s de modèle sur 1 828 s ; l'appel le plus lent 385 s pour 8 695 jetons d'invite ; invite totale 1,34 M jetons, dont 88 % par le cache | aucun (diff vide) | la souche `tui::nom_garde -> None` ; non suivie (rien n'est écrit) |
 | tty 09, jeu du 19 à 18 h 06 | **dégâts** : les deux témoins déclarés passent, mais un test vert au parent rougit, par une assertion qu'Algareth lui a ajoutée | **même** (tui.rs, vue.rs) et **autre** (boite.rs) | +46 −5 (dont +13 de tests) / +36 −3 | 5 pas, 165 appels, 1 181 s (1 155 s de modèle) ; invite totale 5,31 M jetons, dont 87 % par le cache ; sortie 2 647, raisonnement 92 592 | `vue::tests::the_view_keeps_the_last_agent_name_seen` vert au parent, rouge après | la souche `nom_garde` : **suivie** (remplie et branchée dans `/nom`) |
 | lucivy 04, l'ulp d'écart en parse (`e3c9753f7f`) | **réussi** | **autre** : `buffered_union.rs` (Algareth) contre `score_combiner.rs` et `block_wand.rs` (nous) | +5 −22 / +17 −9 (hors le témoin, +81) | 2 pas, 54 appels, 464 s ; invite 1,66 M jetons, dont 82 % par le cache | aucun : le seul rouge de la suite l'était déjà au parent | trois fichiers de l'arbre, sans souche, absents de la consigne ; Algareth en a corrigé un |
+| ED 02, le préfixe d'une décision (`f063a90e52`) | **réussi** | **même** (`decide_nodes.rs`, et la même assertion de `decide_nodes/tests.rs`) | +13 −3 / +15 −3 | 3 pas, 72 appels, 680 s ; invite 2,09 M jetons, dont 58 % par le cache | aucun : la lib entière passe (1 745) | le fichier indiqué ; Algareth y a corrigé la cause |
+| ED 01, le journal plafonné (`b610560e51`) | **échoué** (réserve : Vertex lent) | aucun diff | 0 / +? | 3 pas, 34 appels, 1 388 s, dont 640 et 706 s pour les deux premiers pas ; invite 0,52 M jetons, dont 70 % par le cache | aucun | le fichier indiqué, lu sans conclure |
 
 ## tty 09 : une demande s'écrit une fois, et /nom retient le nom gardé (19 novembre)
 
@@ -103,3 +105,40 @@ Une ligne par cas joué ; les détails suivent la table.
     titre de notre correctif nomme d'ailleurs le même `swap_remove` comme cause.
 - **Les sorties** du juge sont à la tablette, `~/.cache/rag3db-banc-notes/campagne/lucivy-04-20261119-184828/`, et le
   juge est `~/.cache/rag3weaver-build/juge-campagne-2.sh`.
+
+## ED 02 : le préfixe d'une décision (19 novembre, jeu de 19 h 22)
+
+- **Le cas** : `docs/everything-declarative/19-11-2026/02-cas-de-campagne-le-prefixe-d-une-decision.md`, au parent
+  `f063a90e52`, avec le témoin `dataflow::decide_nodes::tests::two_decisions_on_the_same_text_begin_with_the_same_bytes`.
+- **Le tour** : Algareth a fini de lui-même, en 3 pas, 72 appels et 680 s, sans reprise.
+- **Le diff** : `decide_nodes.rs` +12 −2 et `decide_nodes/tests.rs` +1 −1. Il remet les étiquettes admises en fin de
+  tour utilisateur, pour que deux décisions sur le même texte gardent un préfixe commun.
+- **Le fichier de tests touché** : ce n'est pas l'assertion du témoin. C'est celle de
+  `decide_by_llm_asks_a_schema_and_labels_the_element`, qui fige la forme de l'invite. Notre correctif `1bba221689`
+  la change à l'identique, avec le même texte attendu : c'est la suite légitime du changement de forme.
+- **Le juge**, à luciepc (le portable était laissé à la bascule), dans un worktree et un target à part :
+
+| | parent | avec le diff d'Algareth |
+|---|---|---|
+| suite `dataflow::decide_nodes::` | 28 passés, 1 rouge : le témoin, sur son assertion (`tests.rs:212`) | **29 passés** |
+| lib entière | — | **1 745 passés**, 0 rouge |
+
+- **Le verdict : réussi**, au même endroit que notre correctif, et de taille voisine (+13 −3 contre +15 −3).
+
+## ED 01 : le journal plafonné (19 novembre, jeu de 18 h 56)
+
+- **Le cas** : `docs/everything-declarative/19-11-2026/01-cas-de-campagne-le-journal-plafonne.md`, au parent
+  `b610560e51`, avec le témoin `commande::tests::en_fond_un_journal_au_dela_du_plafond_garde_la_fin_et_le_dit`.
+- **Le tour** : l'équipier s'est arrêté sur « 3 pas de suite sans élément réussi », en 1 388 s, avec 34 appels et un
+  diff vide. Il a lu `commande.rs`, approché la cause par écrit (le calcul de `apres` avant la troncature), et n'a rien
+  modifié.
+- **Le rouge**, prouvé par le juge (tablette, worktree et target à part) : le témoin est **rouge 5 fois sur 5** sur son
+  assertion (`commande.rs:1772`), trois fois joué seul et deux fois dans la lib entière (1 743 passés, 1 rouge). Le
+  lanceur l'avait aussi vu rouge sur l'assertion (`red.json`). **La consigne du cas dit à tort que le témoin « passe
+  seul »** : Algareth avait bien un rouge à corriger, et l'a vu.
+- **Le verdict : échoué**, avec une réserve. Vertex a été lent pendant ce jeu, avec des appels de 85 à 155 s pour 11 à
+  19 k jetons, et 640 et 706 s pour les deux premiers pas. La règle d'arrêt compte des pas, pas du temps : la lenteur
+  n'a pas coupé le tour, mais rien ne dit qu'un Vertex rapide l'aurait fait aboutir. Un second jeu, avec un Vertex
+  rapide et la consigne corrigée, départagerait.
+- **Les sorties** des juges sont dans `~/.cache/rag3db-banc-notes/campagne/ed-01-20261119-185644/` (tablette) et
+  `ed-02-20261119-192205/` (luciepc).
