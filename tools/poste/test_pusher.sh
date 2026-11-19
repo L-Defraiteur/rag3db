@@ -610,4 +610,10 @@ rm -f "$D/pusher/paused"; timeout 120 bash "$PUSHER" step > /dev/null 2>&1
 on_master py-1 && [ -f "$D/cache/qux.py" ] && grep -q "	py-1	recopié	qux.py .*témoin vert" "$D/pusher/log.tsv" && [ ! -e "$D/pusher/paused" ] \
   && ok "une copie au témoin Python : témoin joué par python3, recopiée" || ko "copie au témoin Python : $(grep -P '\tpy-1\t' "$D/pusher/log.tsv" | tail -1 | cut -f3,4)"
 rm -f "$D/pusher/paused"
+# 39. A code red says where its pass's journals are (19 Nov., c7: recherche could not find why its lot went red).
+h=$(lot rj-1 extension/rag3weaver/src/rj.rs 'fn rj() {}')
+P enqueue rj-1 rj-1 "$h" rust some_witness e2e_code - - author-c > /dev/null; echo "ROUGE e2e_code" > "$D/outcomes.d/rj-1"
+PUSHER_TRAIN_MAX=1 P step > /dev/null 2>&1
+grep -qP "^rouge\trj-1\tcode\t.*journaux : $D/journals/pusher-[0-9-]+-rj-1" "$D/pusher/inbox/author-c.txt" \
+  && ok "un rouge de code dit le dossier des journaux de sa passe" || ko "rouge sans ses journaux : $(grep -P '^rouge\trj-1' "$D/pusher/inbox/author-c.txt" | cut -f4 | cut -c1-120)"
 exit $red

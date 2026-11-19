@@ -481,18 +481,19 @@ replay_train() { # <line>…
     [ "$x" = - ] || extra="$extra,$x"
   done
   extra=$(echo "${extra#,}" | tr ',' '\n' | awk 'NF && !seen[$0]++' | paste -sd,)
+  # A code red carries the folder of its pass's journals to the author (19 Nov., c7: recherche could not find its red).
   JNAME=pusher-$STAMP-$TRAIN_LABEL
   replay_rust "$TRAIN_LABEL" "$JNAME" "$first" "$suite" "${extra:--}"
   case $? in
     0) return 0 ;;
-    1) tail -1 "$JR/$JNAME/resume.log" > "$SD/last-red.txt" 2>/dev/null; return 1 ;;
+    1) { tail -1 "$JR/$JNAME/resume.log" 2>/dev/null | tr -d '\n'; echo " — journaux : $JR/$JNAME"; } > "$SD/last-red.txt"; return 1 ;;
   esac
   log "$TRAIN_LABEL" "rouge d'environnement, rejeu"
   JNAME=$JNAME-2
   replay_rust "$TRAIN_LABEL" "$JNAME" "$first" "$suite" "${extra:--}"
   case $? in
     0) return 0 ;;
-    1) tail -1 "$JR/$JNAME/resume.log" > "$SD/last-red.txt" 2>/dev/null; return 1 ;;
+    1) { tail -1 "$JR/$JNAME/resume.log" 2>/dev/null | tr -d '\n'; echo " — journaux : $JR/$JNAME"; } > "$SD/last-red.txt"; return 1 ;;
     *) return 2 ;;
   esac
 }
