@@ -1826,6 +1826,12 @@ fn le_chat_guide_une_fenetre_du_depot_detachee() {
     assert_eq!(n.evaluer("new URLSearchParams(location.search).get('fenetre')"), json!("depot"), "it stays a window of the repository");
     n.onglet(0);
     assert!(n.evaluer("location.pathname").as_str().unwrap_or_default().ends_with("/chat"), "the chat stays on its conversation : {}", n.evaluer("location.href"));
+    // A cited address with its own query (ED's review): the window keeps both the query and its role.
+    n.evaluer(&format!("new SharedWorker('/ide/flux-worker.js', {{ name: 'rag3weaver-flux' }}).port.postMessage({{ type: 'etat-ecrire', cle: 'selection:{id}', valeur: {{ href: '/ide/code/{id}/recherche?q=main', at: Date.now() }} }})"));
+    n.onglet(1);
+    n.attendre("location.pathname.endsWith('/recherche')", "the window of the repository opens the cited search");
+    assert_eq!(n.evaluer("[new URLSearchParams(location.search).get('q'), new URLSearchParams(location.search).get('fenetre')]"), json!(["main", "depot"]), "the query and the role, both kept : {}", n.evaluer("location.href"));
+    n.onglet(0);
     assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
     drop(n);
     drop(d);
