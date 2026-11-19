@@ -492,6 +492,7 @@ const BASE_NODES: &[&str] = &[
     // harnais d'un genre est un script rhai joué par le même `harness` borné
     // que `RhaiNode`, déjà de la liste : pur, plafonné, sans entrée-sortie.
     "AddRefNode",
+    "DefineRefNode",
     "CreateRefTypeNode",
     // **Et pas `ReactTransitionNode`** : je l'y avais mis, je le retire. Un
     // outil de backend est appelé par l'agent, et ce nœud ne sert à rien dans
