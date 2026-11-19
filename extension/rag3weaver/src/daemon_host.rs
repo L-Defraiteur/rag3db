@@ -327,6 +327,8 @@ pub struct DaemonHost {
     rangeur: Option<Arc<dyn rangement::Rangeur>>,
     /// The conversations whose slice is being filed (one at a time each).
     rangements_en_vol: Arc<Mutex<std::collections::HashSet<String>>>,
+    /// One writer at a time for the mark files (`chats/<backend>.rangement.json`).
+    rangement_verrou: Arc<Mutex<()>>,
     /// Le modèle de langage nommé qu'une tâche a choisi, connecté (lot tty-14).
     modele_nomme: chat::ModeleNomme,
     /// Ce que les chats ont consommé, par run et par slug.
@@ -507,6 +509,7 @@ impl DaemonHost {
             chat_model: chat::default_chat_model(),
             rangeur: None,
             rangements_en_vol: Arc::new(Mutex::new(Default::default())),
+            rangement_verrou: Arc::new(Mutex::new(())),
             modele_nomme: chat::default_modele_nomme(),
             chat_meter: Arc::new(crate::meter::Meter::new()),
             journal: journal_des_runs::JournalDesRuns::par_defaut(),
