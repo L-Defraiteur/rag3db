@@ -359,8 +359,17 @@ impl Navigateur {
             if calme_depuis.elapsed() > CALME || depart.elapsed() > TOUT {
                 let vue = self.evaluer("document.getElementById('vue')?.innerText ?? document.body?.innerText ?? ''");
                 let en_vol = self.evaluer("[...(window.__temoin_en_vol ?? new Map()).values()]");
+                // **What the page loaded** (entry 5, the chat page that rendered nothing under load): the document
+                // (its address, its state, the old one or the new one), and its last resources — a module that
+                // never came, or a stream that never opened, shows here; neither is counted in flight nor raises an
+                // error of the page.
+                let etat = self.evaluer(
+                    "JSON.stringify({adresse: location.href, document: document.readyState, ancien: !!window.__temoin_ancien, \
+                     ressources: performance.getEntriesByType('resource').slice(-30).map(r => \
+                       [r.name.replace(location.origin, ''), Math.round(r.startTime), Math.round(r.duration), r.responseStatus ?? null])})",
+                );
                 panic!(
-                    "{quoi} : « {condition} » jamais vraie en {} s ({} s de calme) ; la vue : {vue} ; en vol : {en_vol} ; erreurs : {:?}",
+                    "{quoi} : « {condition} » jamais vraie en {} s ({} s de calme) ; la vue : {vue} ; en vol : {en_vol} ; erreurs : {:?} ; état : {etat}",
                     depart.elapsed().as_secs(),
                     calme_depuis.elapsed().as_secs(),
                     self.erreurs
