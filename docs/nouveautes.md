@@ -1,5 +1,11 @@
 # Nouveautés
 
+- 19 novembre 2026 — **Une recherche qui lit les vecteurs attend aussi les vecteurs dus.** `search_code` en hybride
+  ou par le sens attend que les vecteurs de sa vue soient calculés quand c'est court (sous `search.index_wait_s`,
+  6 s par défaut). Sinon, elle répond tout de suite et dit les deux estimations à part : « index pas prêt : texte
+  environ 0 s, vecteurs environ 40 s ». En bm25 seul, elle n'attend que le texte. Sans service d'embarquement, elle
+  n'attend pas et dit pourquoi. usages, outline, read_file et grep n'attendent jamais les vecteurs.
+
 - 19 novembre 2026 — **La conversation d'un chat se range en mémoire au fil de l'eau.** Chaque tour du chat de
   l'IDE s'écrit dans la mémoire déclarée par le dépôt (`bilans.memoire`). Quand les tours pas encore rangés
   dépassent `memory.slice_tokens` (50 000 jetons par défaut), une tranche se range en fond, sans retarder le chat.
