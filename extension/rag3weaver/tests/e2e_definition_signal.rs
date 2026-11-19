@@ -46,8 +46,10 @@ fn open(dir: &Path) -> Backend {
         .expect("the opening")
 }
 
+/// A tool's answer: its `result`, the report of the graph (the answer wraps it with the run and the delivery).
 fn call(b: &Backend, tool: &str, args: Value) -> Value {
-    b.call(tool, args.clone()).unwrap_or_else(|e| panic!("{tool} {args}: {e}"))
+    let answer = b.call(tool, args.clone()).unwrap_or_else(|e| panic!("{tool} {args}: {e}"));
+    answer.get("result").cloned().unwrap_or(answer)
 }
 
 /// A fiche's state and about, read in the base: what the reaction wrote, not a tool's answer.
