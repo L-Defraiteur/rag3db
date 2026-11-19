@@ -148,6 +148,7 @@ function partager(vue: { onmessage: (e: { data: string }) => void }, statut: (s:
     else if (d.type === "statut") statut(d.statut);
     else if (d.type === "etat") etatRecu(d.cle, d.valeur);
     else if (d.type === "etat-complet") for (const [cle, valeur] of Object.entries(d.etat ?? {})) etatRecu(cle, valeur);
+    else if (d.type === "moi") moi = Number(d.id);
     else if (d.type === "tour") {
       for (const f of attentesDeTour.get(String(d.run)) ?? []) f((d.tour as TourEnVol | null) ?? null);
       attentesDeTour.delete(String(d.run));
@@ -167,6 +168,13 @@ function partager(vue: { onmessage: (e: { data: string }) => void }, statut: (s:
     });
   port.start();
   ecrireEtat = (cle, valeur) => port.postMessage({ type: "etat-ecrire", cle, valeur });
+  // A window opened with a role declares it to the worker, and says when it takes the focus.
+  const role = roleDeLaFenetre();
+  const focus = () => port.postMessage({ type: "focus" });
+  if (role) {
+    port.postMessage({ type: "fenetre", role, backend: route().id });
+    window.addEventListener("focus", focus);
+  }
   const battement = setInterval(() => port.postMessage({ type: "battement" }), 15_000);
   const partir = () => port.postMessage({ type: "partir" });
   const revenir = (e: PageTransitionEvent) => {
@@ -181,6 +189,7 @@ function partager(vue: { onmessage: (e: { data: string }) => void }, statut: (s:
     clearInterval(battement);
     window.removeEventListener("pagehide", partir);
     window.removeEventListener("pageshow", revenir);
+    window.removeEventListener("focus", focus);
     partir();
     port.close();
     ecrireEtat = ecrireLocalement;
@@ -234,10 +243,32 @@ const etatLocal = new Map<string, unknown>();
 const suiveurs = new Map<string, Set<(valeur: unknown) => void>>();
 function etatRecu(cle: string, valeur: unknown) {
   etatLocal.set(cle, valeur);
+  // The witnesses read the open windows there.
+  if (cle === "fenetres") {
+    const w = window as unknown as { __ide?: Record<string, unknown> };
+    w.__ide = { ...(w.__ide ?? {}), fenetres: valeur };
+  }
   for (const f of suiveurs.get(cle) ?? []) f(valeur);
 }
 const ecrireLocalement = (cle: string, valeur: unknown) => etatRecu(cle, valeur);
 let ecrireEtat: (cle: string, valeur: unknown) => void = ecrireLocalement;
+/// **An open window of the IDE**, as the shared worker keeps them (slice 2 of the IDE in several windows).
+export type Fenetre = { id: number; role: string; backend?: string; focus: number };
+let moi: number | null = null;
+/// The open windows that declared a role; none without a shared worker.
+export function fenetres(): Fenetre[] {
+  return (etatLocal.get("fenetres") as Fenetre[] | undefined) ?? [];
+}
+/// The role this window was opened with (`?fenetre=depot`), if any.
+export function roleDeLaFenetre(): string | null {
+  return new URLSearchParams(location.search).get("fenetre");
+}
+/// Is this window the one of its role and backend that had the focus last?
+export function jeSuisLaFenetre(role: string, backend: string): boolean {
+  const miennes = fenetres().filter((f) => f.role === role && f.backend === backend).sort((a, b) => b.focus - a.focus);
+  return moi !== null && miennes[0]?.id === moi;
+}
+
 /// The text of a turn in flight, as the shared worker kept it; `null` without a worker, or past a second.
 export type TourEnVol = { texte: string; seq: number; tronque?: boolean };
 const sansWorker = async (_run: string): Promise<TourEnVol | null> => null;

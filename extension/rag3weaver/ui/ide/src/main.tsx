@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { Moon, Sun, Radio } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { dispatchFlux, fetchState, onEtat, openFlux, route, type FluxStatus, type HostState } from "@/lib/host";
+import { dispatchFlux, etatPartage, fetchState, jeSuisLaFenetre, onEtat, openFlux, roleDeLaFenetre, route, type FluxStatus, type HostState } from "@/lib/host";
 import { Chat } from "@/views/Chat";
 import { File } from "@/views/File";
 import { Search } from "@/views/Search";
@@ -43,6 +43,20 @@ function App() {
   // index (`RepoIndexed`) : l'hôte pousse son état, la barre le montre sous « Dépôts »,
   // puis son rag indexé, sans recharger la page ni relire l'hôte.
   useEffect(() => onEtat<HostState>("hote", "*", (s) => setState(s)), []);
+  // **A detached window of the repository follows the selection** (slice 2): the one of its backend that had the
+  // focus last opens what the chat cites, and stays a window of the repository. A selection older than the window
+  // (received whole when it opens) is not followed.
+  useEffect(() => {
+    const id = route().id;
+    if (roleDeLaFenetre() !== "depot" || !id) return;
+    const ouverte = Date.now();
+    return etatPartage.suivre(`selection:${id}`, (v) => {
+      const s = v as { href?: string; at?: number } | undefined;
+      if (!s?.href || (s.at ?? 0) < ouverte || !jeSuisLaFenetre("depot", id)) return;
+      const [chemin, ancre] = s.href.split("#");
+      location.assign(`${chemin}?fenetre=depot${ancre ? `#${ancre}` : ""}`);
+    });
+  }, []);
   useEffect(() => {
     reloadState();
     return openFlux(dispatchFlux, (s: FluxStatus) => {
