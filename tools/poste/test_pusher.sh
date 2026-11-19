@@ -30,6 +30,15 @@ printf 'tools/poste/foo.sh foo.sh tools/poste/test_foo.sh\ntools/poste/bar.sh ba
 # pin.sh stands for passe_epinglee.sh: the lib it pins, under the same line the real one has.
 printf '#!/bin/bash\nexport RAG3DB_LIB=rag3db-build-%040d-Release\n' 1 > tools/poste/pin.sh
 printf '#!/bin/bash\ngrep -q RAG3DB_LIB= "${1:-$(dirname "$0")/pin.sh}"\n' > tools/poste/test_pin.sh
+# mv.sh's witness pushes a commit to master while it runs (MOVE_MASTER=docs or code): master moves during a step.
+printf '#!/bin/bash\necho mv\n' > tools/poste/mv.sh
+cat > tools/poste/test_mv.sh <<'MV'
+#!/bin/bash
+[ -n "${MOVE_MASTER:-}" ] || exit 0
+c=$(mktemp -d); git clone -q "$ORIGIN" "$c/x" 2>/dev/null && cd "$c/x" && git config user.email t@t && git config user.name t
+if [ "$MOVE_MASTER" = docs ]; then echo "# moved $(date +%s%N)" > docs/moved-$RANDOM.md; else echo "fn m() {}" > extension/rag3weaver/src/moved$RANDOM.rs; fi
+git add -A && git commit -qm "moved by another session" && git push -q origin HEAD:master
+MV
 # bar.sh's witness goes red against a cache copy when $BREAK_COPY exists: a copy that behaves otherwise at the cache.
 printf '#!/bin/bash\necho bar\n' > tools/poste/bar.sh
 printf '#!/bin/bash\n[ -n "${1:-}" ] && [ -e "${BREAK_COPY:-/nonexistent}" ] && exit 1\nexit 0\n' > tools/poste/test_bar.sh
@@ -101,7 +110,7 @@ esac
 exit 2
 Q
 chmod +x "$D/poste.sh"
-export PUSHER_PIN_SCRIPT=pin.sh PUSHER_FETCH_LOCK=$D/fetch.lock PUSHER_CACHE=$D/cache PUSHER_PEERS= PUSHER_DIR=$D/pusher PUSHER_WORKSPACES=$D/ws PUSHER_WT_NAME=wt PUSHER_JOURNALS_ROOT=$D/journals \
+export ORIGIN=$D/origin.git PUSHER_PIN_SCRIPT=pin.sh PUSHER_FETCH_LOCK=$D/fetch.lock PUSHER_CACHE=$D/cache PUSHER_PEERS= PUSHER_DIR=$D/pusher PUSHER_WORKSPACES=$D/ws PUSHER_WT_NAME=wt PUSHER_JOURNALS_ROOT=$D/journals \
   PUSHER_PASS=$D/pass.sh PUSHER_GUARD=$D/guard.sh PUSHER_POSTE=$D/poste.sh PUSHER_MASTER_HELD=$D/master-tenu \
   REAL_GUARD=$HERE/push_garde.sh OUTCOMES=$D/outcomes PASS_CALLS=$D/pass_calls GUARD_CALLS=$D/guard_calls PASS_ENV=$D/pass_env OUTCOMES_DIR=$D/outcomes.d PASS_TIMES=$D/pass_times POSTE_VOIES=$D/poste_voies
 : > "$D/outcomes"; : > "$D/pass_calls"; : > "$D/guard_calls"
@@ -470,4 +479,20 @@ PUSHER_SLOTS=2 PUSHER_TRAIN_MAX=1 PUSHER_WT2_NAME=wt2 P step > /dev/null 2>&1
 on_master sg-a && ! on_master sg-b && grep -q "^sg-b	" "$D/pusher/queue.tsv" && ! grep -q "^rouge	sg-b	" "$D/pusher/inbox/author-c.txt" \
   && ok "A vert, B rouge : A poussé, B gardé en file pour son propre rejeu" || ko "A vert, B rouge : mal traité"
 P dequeue sg-b > /dev/null 2>&1
+
+# 28. Master moves by docs while a scripts lot replays (another session pushes a page): the lot lands in the same step,
+# reposed on the new master, never sent back to the next step (19 Nov.: pusher-second-slot was taken three times).
+h=$(lot mv-d tools/poste/mv.sh '#!/bin/bash
+echo mv docs')
+P enqueue mv-d mv-d "$h" scripts - - - - author-b > /dev/null
+MOVE_MASTER=docs P step > /dev/null 2>&1
+on_master mv-d && [ "$(grep -cP '\tmv-d\tpris' "$D/pusher/log.tsv")" = 1 ] && ok "master bouge en docs pendant le pas : le lot atterrit dans le même pas" || ko "master bouge en docs : le lot n'a pas atterri dans le pas ($(grep -P '\tmv-d\t' "$D/pusher/log.tsv" | tail -1 | cut -f3))"
+
+# 29. Master moves by code while a scripts lot replays: the lot stays at the head of the queue, replayed next step.
+h=$(lot mv-c tools/poste/mv.sh '#!/bin/bash
+echo mv code')
+P enqueue mv-c mv-c "$h" scripts - - - - author-b > /dev/null
+MOVE_MASTER=code P step > /dev/null 2>&1
+! on_master mv-c && grep -q "^mv-c	" "$D/pusher/queue.tsv" && ok "master bouge en code pendant le pas : le lot reste en tête pour un rejeu" || ko "master bouge en code : le lot est parti sans rejeu"
+P step > /dev/null 2>&1
 exit $red
