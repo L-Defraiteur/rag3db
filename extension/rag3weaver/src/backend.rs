@@ -4655,7 +4655,13 @@ impl Backend {
         if let Some(hook) = prepared.after_hooks.get(operation) {
             if !prepared.nodes.snapshot_safe(hook.template()) { return Err("invocation refusée : crochet cible non prouvé en lecture seule".into()); }
         }
-        let scope = self.catalog.lock().map_err(|_| "catalogue cible indisponible")?.scope().clone();
+        // **The cell from the read view**, without the catalog's lock (ticket « un appel d'outil attend derrière un
+        // index sans le dire », 19 November 2026): an index holds that lock during its text phase. The lock only
+        // before a view is published.
+        let scope = match self.read_view.current() {
+            Some(vue) => vue.scope.clone(),
+            None => self.catalog.lock().map_err(|_| "catalogue cible indisponible")?.scope().clone(),
+        };
         if scope != authority.scope { return Err("invocation refusée : domaines de l'appelant et de la cible différents".into()); }
         crate::dataflow::invocation_nodes::during_parent_cancel(cancel,
             || self.call_in_on(prepared, &authority.scope, operation, arguments))
