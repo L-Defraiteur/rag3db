@@ -97,3 +97,13 @@ Le témoin, `le_chat_guide_une_fenetre_du_depot_detachee` (navigateur, joué à 
 À la relecture d'ED, la fenêtre du dépôt suit l'adresse citée par `URL` : `?fenetre=depot` collé derrière l'adresse donnait `?q=main?fenetre=depot` pour une adresse qui avait sa propre requête, et la fenêtre perdait son rôle. Le témoin le prouve par une sélection `…/recherche?q=main`, vue rouge (339b9edcfc), puis verte (c5bf47bd47). Remarque d'ED pour la tranche 3 : `location.assign` recharge la fenêtre du dépôt à chaque clic (défilement remis à zéro, connexion au worker rouverte) ; une navigation interne viendra avec elle.
 
 Pas encore fait : le bouton « détacher » et la vue seule sans barre (tranche 3). Aujourd'hui, une fenêtre du dépôt s'ouvre par son adresse, avec `?fenetre=depot`.
+
+## Tranche 3, faite (19 novembre, dans la nuit)
+
+- **Le bouton « dépôt à côté »** du chat (`#detacher-depot`) ouvre l'arbre du dépôt dans une fenêtre à lui (`target="_blank"`, `…/arbre?fenetre=depot`). Les fichiers cités dans le chat s'y ouvrent ensuite (tranche 2).
+- **La vue seule** : une fenêtre ouverte avec `?fenetre=<rôle>` n'a dans son en-tête que son rôle (« fenêtre : dépôt ») et le flux. Ni le nom de l'IDE, ni les boutons des thèmes. `#entete` porte `data-fenetre`.
+- **La navigation interne** (remarque d'ED à la tranche 2) : la fenêtre du dépôt suit une sélection par `history.pushState` et un nouveau rendu. Elle ne recharge pas sa page, et garde son lien au worker. `popstate` refait le rendu : précédent et suivant ramènent les vues suivies.
+
+Le témoin de la tranche 2 est étendu à ces trois points : l'adresse et la cible du bouton, l'en-tête d'une fenêtre détachée, et une marque posée dans la fenêtre du dépôt qui survit à la navigation. Il a été vu rouge (8c30bfe232), mais **à sa première assertion seulement** (le bouton manquait). L'en-tête et la navigation interne n'ont pas été vus rouges isolément. Il est vert (35f1a3ebe4). Restent verts : les trois témoins de la tranche 1, `ide_par_le_flux` (2) et le contrôle du bundle ; tsc est propre.
+
+Restent les tranches 4 (le graphe détaché suit le run du tour) et 5 (le compte des accords dans une fenêtre qui n'est pas le chat).
