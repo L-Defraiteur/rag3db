@@ -928,6 +928,81 @@ fn archive_slice_with_an_error_does_not_advance() {
     assert_eq!(r["result"]["archived_through_turn"], json!(0), "{r}");
 }
 
+/// Three tool calls and a user message over two days, for the turn listings.
+fn put_calls_over_two_days(b: &Backend) {
+    for (turn, at, tool, status, params, result) in [
+        (1, "2026-11-17T10:00:00Z", "archive", "error", "{\"titre\": \"hier\"}", "PARSEFAILED the model replied no JSON"),
+        (2, "2026-11-18T09:00:00Z", "read_file", "error", "{\"path\": \"absent.rs\"}", "no such file"),
+        (3, "2026-11-18T11:00:00Z", "archive", "ok", "{\"titre\": \"aujourd'hui\"}", "3 sections filed"),
+    ] {
+        appel(b, "put_turn", json!({"run": "chat:days", "turn": turn, "seq": 0, "at": at, "role": "user", "text": format!("ZEBRAFINCH turn {turn}")}));
+        appel(b, "put_turn", json!({"run": "chat:days", "turn": turn, "seq": 1, "at": at, "role": "tool", "tool_name": tool, "status": status, "params": params, "result": result}));
+    }
+}
+
+/// **list_turns** (18 November 2026, Lucie: « revoir un truc qui aurait mal marché, vérifier que la
+/// veille on a bien appelé tel outil, quel est son résultat, quels paramètres »): the turns by time,
+/// newest first, filtered by tool, status, role, run and date, each with its params and result.
+#[test]
+#[ignore]
+fn list_turns_finds_yesterdays_failed_call_with_its_params_and_result() {
+    let dir = tempfile::tempdir().expect("dossier");
+    let b = ouvrir(dir.path(), |_| {});
+    put_calls_over_two_days(&b);
+    let r = appel(&b, "list_turns", json!({"tool_name": "archive", "status": "error", "since": "2026-11-17T00:00:00Z"}));
+    let rows = r["result"]["turns"].as_array().cloned().unwrap_or_default();
+    assert_eq!(rows.len(), 1, "{r}");
+    assert_eq!(rows[0]["turn"], json!(1));
+    assert_eq!(rows[0]["params"], json!("{\"titre\": \"hier\"}"));
+    assert!(rows[0]["result"].as_str().unwrap().contains("PARSEFAILED"), "{r}");
+    // By time, newest first; `until` bounds the other end.
+    let r = appel(&b, "list_turns", json!({"run": "chat:days", "role": "tool", "until": "2026-11-18T10:00:00Z"}));
+    let turns: Vec<Value> = r["result"]["turns"].as_array().unwrap().iter().map(|x| x["turn"].clone()).collect();
+    assert_eq!(turns, vec![json!(2), json!(1)], "{r}");
+    // `limit` keeps the newest.
+    let r = appel(&b, "list_turns", json!({"run": "chat:days", "limit": 2}));
+    let ats: Vec<Value> = r["result"]["turns"].as_array().unwrap().iter().map(|x| x["at"].clone()).collect();
+    assert_eq!(ats, vec![json!("2026-11-18T11:00:00Z"), json!("2026-11-18T11:00:00Z")], "{r}");
+    assert_eq!(r["result"]["total"], json!(6), "the total before the limit: {r}");
+}
+
+/// **search_turns** looks in the turns, and only it: the ordinary recalls never see a Turn (Lucie:
+/// « le filtre par défaut de la recherche mémoire ne les trouve pas ; il faut préciser qu'on veut
+/// chercher dedans »).
+#[test]
+#[ignore]
+fn search_turns_finds_turns_and_the_ordinary_recalls_do_not() {
+    let dir = tempfile::tempdir().expect("dossier");
+    let b = ouvrir(dir.path(), |_| {});
+    put_calls_over_two_days(&b);
+    let r = appel(&b, "search_turns", json!({"query": "ZEBRAFINCH", "status": "ok", "options": {"consistency": "strict"}}));
+    let rows = r["result"]["turns"].as_array().cloned().unwrap_or_default();
+    assert!(!rows.is_empty() && rows.iter().all(|x| x["status"] == json!("ok")), "{r}");
+    assert!(rows.iter().any(|x| x["text"].as_str().is_some_and(|t| t.contains("ZEBRAFINCH"))), "{r}");
+    for outil in ["recall_apports", "recall_fiches"] {
+        let r = appel(&b, outil, json!({"query": "ZEBRAFINCH", "options": {"consistency": "strict"}}));
+        assert!(!r.to_string().contains("ZEBRAFINCH turn"), "{outil} sees a turn: {r}");
+    }
+}
+
+/// **read_turns** follows the chain down to the turns: each turn of the range, in order, with its
+/// state — `indexed` (read from Turn) or `gone` (not there any more); never a silent gap.
+#[test]
+#[ignore]
+fn read_turns_gives_each_turn_of_the_range_with_its_state() {
+    let dir = tempfile::tempdir().expect("dossier");
+    let b = ouvrir(dir.path(), |_| {});
+    put_calls_over_two_days(&b);
+    let r = appel(&b, "read_turns", json!({"run": "chat:days", "from_turn": 2, "to_turn": 4}));
+    let t = r["result"]["turns"].as_array().cloned().unwrap_or_default();
+    assert_eq!(t.len(), 3, "{r}");
+    assert_eq!((t[0]["turn"].clone(), t[0]["state"].clone()), (json!(2), json!("indexed")));
+    assert_eq!(t[0]["messages"].as_array().unwrap().len(), 2, "{r}");
+    assert_eq!(t[0]["messages"][1]["result"], json!("no such file"));
+    assert_eq!((t[2]["turn"].clone(), t[2]["state"].clone()), (json!(4), json!("gone")));
+    assert_eq!(t[2]["messages"], json!([]));
+}
+
 /// An extraction that is not the requested JSON is refused, naming response_schema: nothing is
 /// guessed and nothing is filed.
 #[test]
