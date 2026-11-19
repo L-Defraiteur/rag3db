@@ -405,8 +405,8 @@ mod tests {
 
     /// **A stopped call gives the hand back in under a second, and the other call goes to its end** (ticket
     /// `2026-11-07-un-arret-ne-coupe-pas-une-requete-du-moteur-en-cours`). Two snapshots of one pool each run a long
-    /// count (a billion rows, built from two short lists: a long `range` is a list held in memory); the first
-    /// is interrupted in flight: its statement ends with an error well before its end, a later
+    /// sum computed on every row (four billion rows, about 20 s alone, built from two short lists: a long
+    /// `range` is a list held in memory, and a bare `count(*)` of two UNWIND is cut short); the first is interrupted in flight: its statement ends with an error well before its end, a later
     /// statement of it is refused, and the second snapshot's count is whole.
     #[test]
     fn an_interrupted_snapshot_gives_the_hand_back_and_the_other_goes_to_its_end() {
@@ -415,8 +415,8 @@ mod tests {
         let a = p.instantane(Duration::from_secs(5)).expect("a first snapshot");
         let b = p.instantane(Duration::from_secs(5)).expect("a second snapshot");
         let (ca, cb) = (a.conn(), b.conn());
-        let long = std::thread::spawn(move || ca.execute("UNWIND range(1, 20000) AS x UNWIND range(1, 50000) AS y RETURN count(*)"));
-        let other = std::thread::spawn(move || cb.execute("UNWIND range(1, 3000) AS x UNWIND range(1, 10000) AS y RETURN count(*)"));
+        let long = std::thread::spawn(move || ca.execute("UNWIND range(1, 40000) AS x UNWIND range(1, 100000) AS y RETURN sum(x * y % 13)"));
+        let other = std::thread::spawn(move || cb.execute("UNWIND range(1, 10000) AS x UNWIND range(1, 10000) AS y RETURN sum(x * y % 13)"));
         std::thread::sleep(Duration::from_millis(300));
         let t = Instant::now();
         a.interrompre();
@@ -426,7 +426,7 @@ mod tests {
         assert!(rendu < Duration::from_secs(1), "the hand comes back in under a second: {rendu:?}");
         assert!(a.conn().execute("RETURN 1").is_err(), "a later statement of an interrupted snapshot is refused");
         let n = other.join().unwrap().expect("the other snapshot goes to its end");
-        assert_eq!(n.rows[0][0], crate::connection::CypherValue::Int(30_000_000), "and its count is whole");
+        assert_eq!(n.rows[0][0], crate::connection::CypherValue::Int(553_873_824), "and its sum is whole");
     }
 
     fn compte(c: &Arc<dyn DbConnection>) -> i64 {
