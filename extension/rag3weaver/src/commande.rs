@@ -929,6 +929,7 @@ impl Atelier {
             max_sortie: self.max_sortie,
             journaux: self.journaux.clone(),
             bac_a_sable: None,
+            poste: self.poste.clone(),
             nom_journaux: Some(nom.to_string()),
             plafond_journal: self.plafond_journal,
         }
