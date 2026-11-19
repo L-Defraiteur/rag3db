@@ -41,6 +41,7 @@ class Lanceur(unittest.TestCase):
         os.makedirs(self.repo)
         git(self.repo, "init", "-q")
         ecrire(os.path.join(self.repo, "crate/src/lib.rs"), "pub fn f() -> u8 { 1 }\n#[test]\nfn the_witness() { assert_eq!(f(), 2); }\n")
+        ecrire(os.path.join(self.repo, "crate/Cargo.toml"), "[package]\nname = \"crate_du_cas\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n")
         ecrire(os.path.join(self.repo, "docs/session/01-le-principe.md"), "Le correctif : f rend 2.\n")
         ecrire(os.path.join(self.repo, "docs/procedures/push.md"), "La procédure.\n")
         ecrire(os.path.join(self.repo, "crate/README.md"), "Le crate.\n")
@@ -97,6 +98,22 @@ class Lanceur(unittest.TestCase):
         self.assertTrue(os.path.exists(os.path.join(dest, "vendor/sub/lib.rs")), "the submodule at its commit")
         self.assertTrue(os.path.exists(os.path.join(dest, "crate/tests/born.rs")), "the witness files")
         self.assertNotIn(self.ours, git(dest, "log", "--format=%H %s"))
+
+
+    def test_the_red_is_proved_at_the_parent_on_the_assertion(self):
+        block, _ = lanceur.read_case(self.case("> f rend 1.", test="cargo test -q -- --exact the_witness"))
+        dest = os.path.join(self.tmp.name, "arbre")
+        lanceur.build_tree(block, self.repo, os.path.join(self.tmp.name, "depots"), dest)
+        target = os.path.join(self.tmp.name, "target")
+        rouge = lanceur.prove_red(block, dest, target, poste=None)
+        self.assertTrue(rouge["red"], rouge)
+        self.assertEqual(rouge["failed"], ["the_witness"], rouge)
+        # A witness that does not compile is not a red.
+        with open(os.path.join(dest, "crate/src/lib.rs"), "a") as f:
+            f.write("fn casse( {\n")
+        rouge = lanceur.prove_red(block, dest, target, poste=None)
+        self.assertFalse(rouge["red"], rouge)
+        self.assertIn("compile", rouge["why"])
 
 
 if __name__ == "__main__":
