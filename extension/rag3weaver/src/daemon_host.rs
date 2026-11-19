@@ -344,7 +344,6 @@ pub struct DaemonHost {
     rangement_verrou: Arc<Mutex<()>>,
     /// The pair mode's registry entry, made at the first paired task (never before: a host
     /// without a paired task does not read or write the sessions registry).
-    #[allow(dead_code)] // red witness: read once the pair mode is wired
     pair: std::sync::OnceLock<Option<Arc<pair::Pair>>>,
     /// The registry to use instead of the environment's (the witnesses).
     pair_registre: Option<pair::Registre>,
