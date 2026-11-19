@@ -47,6 +47,7 @@ git clone -q "$D/origin.git" "$D/ws/wt" 2>/dev/null && git -C "$D/ws/wt" config 
 cat > "$D/pass.sh" <<'P'
 #!/bin/bash
 echo "$*" >> "$PASS_CALLS"
+echo "${SUITES_EN_PLUS:-}" >> "$PASS_ENV"
 J=$PUSHER_JOURNALS_ROOT/$2; mkdir -p "$J"
 echo "commit $(git -C "$PUSHER_WORKSPACES/$1" rev-parse HEAD)" > "$J/resume.log"
 o=$(head -1 "$OUTCOMES"); sed -i 1d "$OUTCOMES"
@@ -83,7 +84,7 @@ Q
 chmod +x "$D/poste.sh"
 export PUSHER_CACHE=$D/cache PUSHER_PEERS= PUSHER_DIR=$D/pusher PUSHER_WORKSPACES=$D/ws PUSHER_WT_NAME=wt PUSHER_JOURNALS_ROOT=$D/journals \
   PUSHER_PASS=$D/pass.sh PUSHER_GUARD=$D/guard.sh PUSHER_POSTE=$D/poste.sh PUSHER_MASTER_HELD=$D/master-tenu \
-  REAL_GUARD=$HERE/push_garde.sh OUTCOMES=$D/outcomes PASS_CALLS=$D/pass_calls GUARD_CALLS=$D/guard_calls
+  REAL_GUARD=$HERE/push_garde.sh OUTCOMES=$D/outcomes PASS_CALLS=$D/pass_calls GUARD_CALLS=$D/guard_calls PASS_ENV=$D/pass_env
 : > "$D/outcomes"; : > "$D/pass_calls"; : > "$D/guard_calls"
 P() { bash "$PUSHER" "$@"; }
 master() { git -C "$D/author" fetch -q origin && git -C "$D/author" rev-parse origin/master; }
@@ -255,4 +256,25 @@ c0=$(calls "$D/pass_calls")
 FAKE_POSTE_DOWN=1 P step > /dev/null 2>&1
 ! on_master env-poste && [ "$(calls "$D/pass_calls")" = "$c0" ] && grep -q "^rouge	env-poste	environnement	" "$D/pusher/inbox/author-c.txt" \
   && ok "passe refusée par poste : rouge d'environnement" || ko "passe refusée par poste : comptée rouge de code, ou jouée"
+
+# 18. A Rust train of two: the second lot's witness is a test of the suite e2e_code_sync. The pass gets the suite in
+# its extra suites, never the test's name (19 Nov.: a test name given as a suite).
+h1=$(lot sx-a extension/rag3weaver/src/sxa.rs 'fn sxa() {}'); h2=$(lot sx-b extension/rag3weaver/src/sxb.rs 'fn sxb() {}')
+P enqueue sx-a sx-a "$h1" rust some_lib_test lib - - author-c > /dev/null
+P enqueue sx-b sx-b "$h2" rust usages_does_not_show_the_declaration e2e_code_sync e2e_code - author-c > /dev/null
+echo VERT >> "$D/outcomes"
+P step > /dev/null 2>&1
+x=$(tail -1 "$D/pass_env" | tr " " ",")
+on_master sx-a && on_master sx-b && [[ ",$x," == *,e2e_code_sync,* ]] && [[ ",$x," == *,e2e_code,* ]] && [[ "$x" != *usages_does_not* ]] \
+  && ok "train rust : la suite du second lot en plus, pas son témoin ($x)" || ko "train rust : suites en plus fausses ($x)"
+
+# 19. A lot that changes a cache copy's source closes its train: the docs lot behind it waits for the next step,
+# which runs on the new copy.
+h1=$(lot cc-a tools/poste/foo.sh '#!/bin/bash
+echo ok; echo cut'); h2=$(lot cc-b docs/cc.md '# cc')
+P enqueue cc-a cc-a "$h1" scripts - - - - author-b > /dev/null; P enqueue cc-b cc-b "$h2" docs - - - - author-a > /dev/null
+P step > /dev/null 2>&1
+on_master cc-a && ! on_master cc-b && grep -q 'echo cut' "$D/cache/foo.sh" && ok "un lot qui change une copie du cache ferme son train" || ko "le lot d'après est parti dans le même train"
+P step > /dev/null 2>&1
+on_master cc-b && ok "le lot d'après passe au pas suivant" || ko "le lot d'après n'est pas passé"
 exit $red
