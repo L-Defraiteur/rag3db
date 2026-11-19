@@ -6,7 +6,8 @@
   "tree": "extension/rag3weaver/tty",
   "paths": [
     "extension/rag3weaver/tty",
-    "extension/rag3weaver/templates/themes"
+    "extension/rag3weaver/templates",
+    "extension/rag3weaver/scripts"
   ],
   "needs_lib": false,
   "witness": "vue::tests::the_empty_input_says_how_to_break_a_line",
@@ -23,7 +24,7 @@
 
 Le bloc est celui du lanceur (forme d'archi). `witness` porte les filtres exacts, séparés par une espace ; `test` les passe à libtest avec `--exact`. Les `suites` sont celles de la suite exigée `tty` qui existent au parent : les mesures `plain_*` n'y sont pas encore (elles datent du 16 novembre, après le parent).
 
-`tree` est le dossier d'où les commandes partent ; `paths` sont les chemins à archiver (`git archive <parent> <paths>`) : le crate inclut les thèmes de `extension/rag3weaver/templates/themes` (`include_str!`), et sans eux il ne compile pas. Un target par cas : deux arbres de cas sur un même `CARGO_TARGET_DIR` ont rejoué le binaire de l'autre (vu le 19 nov. en vérifiant ces deux cas). Vérifié sur l'arbre archivé, dans un target propre : le témoin est rouge au parent.
+`tree` est le dossier d'où les commandes partent ; `paths` sont les chemins à archiver (`git archive <parent> <paths>`) : le crate inclut les thèmes de `extension/rag3weaver/templates/themes` (`include_str!`), et sans eux il ne compile pas ; `theme::tests::the_palette_script_…` lance `../scripts/themes_palettes.py`, qui lit `templates/theme-roles.json` (relevé par archi au jeu de 18 h, corrigé le 19 au soir : avec `templates` et `scripts` entiers, seuls les témoins sont rouges au parent). Un target par cas : deux arbres de cas sur un même `CARGO_TARGET_DIR` ont rejoué le binaire de l'autre (vu le 19 nov. en vérifiant ces deux cas). Vérifié sur l'arbre archivé, dans un target propre : le témoin est rouge au parent.
 
 Session tty, 19 novembre 2026, pour la campagne des correctifs passés (chantier de Lucie ; lanceur d'archi, juge du banc). C'est un cas court, en Rust, dans le crate du terminal.
 
