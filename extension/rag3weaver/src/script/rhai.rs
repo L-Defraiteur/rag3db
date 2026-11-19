@@ -74,14 +74,20 @@ fn engine(limits: &ScriptLimits, start: Option<std::time::Instant>) -> rhai::Eng
                 .to_string())
         },
     );
-    // The secret filter of put_turn (18 November 2026): #{text, count}.
-    engine.register_fn("mask_secrets", |text: &str| -> rhai::Map {
-        let (masked, count) = super::secrets::mask_secrets(text);
-        let mut m = rhai::Map::new();
-        m.insert("text".into(), masked.into());
-        m.insert("count".into(), (count as rhai::INT).into());
-        m
-    });
+    // The secret filter of put_turn (18 November 2026; lot B6: the patterns are declared by the caller):
+    // #{text, count}.
+    engine.register_fn(
+        "mask_secrets",
+        |text: &str, patterns: rhai::Dynamic| -> Result<rhai::Map, Box<EvalAltResult>> {
+            let patterns: Value = rhai::serde::from_dynamic(&patterns)?;
+            let patterns = super::secrets::patterns_from(&patterns).map_err(|e| -> Box<EvalAltResult> { e.into() })?;
+            let (masked, count) = super::secrets::mask_secrets(text, &patterns);
+            let mut m = rhai::Map::new();
+            m.insert("text".into(), masked.into());
+            m.insert("count".into(), (count as rhai::INT).into());
+            Ok(m)
+        },
+    );
     // no_module is also enabled at build time. No host I/O APIs are registered.
     for keyword in ["eval", "import", "export"] {
         engine.disable_symbol(keyword);
