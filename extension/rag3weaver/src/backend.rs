@@ -152,6 +152,12 @@ pub struct SessionArchive {
     /// The turns are written to the memory and its index. Off: no slice closes. Default: on.
     #[serde(default = "SessionArchive::on")]
     pub index_turns: bool,
+    /// The share of the model's window past which a chat turn compacts first. Default: 0.8.
+    #[serde(default = "SessionArchive::compact_at_default")]
+    pub compact_at: f64,
+    /// The last turns kept raw after a compaction. Default: 2.
+    #[serde(default = "SessionArchive::keep_turns_default")]
+    pub keep_turns: usize,
 }
 
 impl SessionArchive {
@@ -161,11 +167,17 @@ impl SessionArchive {
     fn on() -> bool {
         true
     }
+    fn compact_at_default() -> f64 {
+        0.8
+    }
+    fn keep_turns_default() -> usize {
+        2
+    }
 }
 
 impl Default for SessionArchive {
     fn default() -> Self {
-        SessionArchive { slice_tokens: Self::slice_tokens_default(), index_turns: Self::on() }
+        SessionArchive { slice_tokens: Self::slice_tokens_default(), index_turns: Self::on(), compact_at: Self::compact_at_default(), keep_turns: Self::keep_turns_default() }
     }
 }
 
