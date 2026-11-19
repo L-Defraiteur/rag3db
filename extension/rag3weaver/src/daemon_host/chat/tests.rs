@@ -2119,6 +2119,9 @@ impl crate::daemon_host::rangement::Rangeur for MemoireImmediate {
         self.restarts.lock().unwrap().push(args.clone());
         Ok(json!({ "text": "RESTART CONTEXT", "tokens": 4 }))
     }
+    fn cited_by(&self, _memoire: &Path, source: &str) -> Result<Value, String> {
+        Ok(json!([{ "apport": format!("{source}#1"), "fiche": "the chat", "section": "first" }]))
+    }
 }
 
 fn banc_de_compaction(memory: Value, model: ChatModel) -> (tempfile::TempDir, DaemonHost, String, Arc<MemoireImmediate>) {
@@ -2255,5 +2258,42 @@ fn a_second_overflow_after_the_compaction_is_a_named_failure() {
     let e = host.chat_turn(&id, "second question").expect_err("the retry overflows too");
     assert!(e.contains("after a compaction"), "{e}");
     assert_eq!(memoire.restarts.lock().unwrap().len(), 1, "one compaction, not a loop");
+}
+
+/// **`/ide/turns/read`, first form: the turns read from the chat file** (19 Nov 2026, for tty-26):
+/// each turn of the interval with its messages and its state, `from_chat_file`, or `gone` once a
+/// compaction took it out of the session.
+#[test]
+fn the_turns_of_a_run_read_from_the_chat_file_and_gone_after_a_compaction() {
+    let (_d, host, id, _memoire) = banc_de_compaction(json!({ "slice_tokens": 1_000_000, "keep_turns": 1 }), qui_repond());
+    for q in ["first question", "second question", "third question"] {
+        host.chat_turn(&id, q).expect("a turn");
+    }
+    let run = format!("chat:{id}");
+    let lus = host.lire_les_tours(&run, 1, 3).expect("the turns read");
+    let tours = lus["turns"].as_array().cloned().unwrap_or_default();
+    assert_eq!(tours.iter().map(|t| (t["turn"].clone(), t["state"].clone())).collect::<Vec<_>>(), vec![(json!(1), json!("from_chat_file")), (json!(2), json!("from_chat_file")), (json!(3), json!("from_chat_file"))], "{lus}");
+    assert_eq!(tours[1]["messages"][0]["text"], "second question");
+    assert_eq!(tours[1]["messages"][1]["role"], "assistant");
+    host.compacter_le_chat(&id).expect("the compaction");
+    let lus = host.lire_les_tours(&run, 1, 4).expect("the turns read after the compaction");
+    let etats: Vec<(Value, Value)> = lus["turns"].as_array().unwrap().iter().map(|t| (t["turn"].clone(), t["state"].clone())).collect();
+    assert_eq!(etats, vec![(json!(1), json!("gone")), (json!(2), json!("gone")), (json!(3), json!("from_chat_file")), (json!(4), json!("gone"))], "{lus}");
+}
+
+/// **`/ide/l1`, first form: the L1 of a run in the order of its turns** (19 Nov 2026, for tty-26).
+#[test]
+fn the_l1_of_a_run_come_in_the_order_of_its_turns() {
+    let (_d, host, id, _memoire) = banc_de_compaction(json!({ "slice_tokens": 1_000_000, "keep_turns": 1 }), qui_repond());
+    for q in ["first question", "second question"] {
+        host.chat_turn(&id, q).expect("a turn");
+    }
+    host.compacter_le_chat(&id).expect("the compaction");
+    let run = format!("chat:{id}");
+    let l1 = host.l1_du_run(&id, &run).expect("the L1");
+    let lignes = l1["l1"].as_array().cloned().unwrap_or_default();
+    assert_eq!(lignes.len(), 1, "{l1}");
+    assert_eq!((lignes[0]["from_turn"].clone(), lignes[0]["to_turn"].clone(), lignes[0]["run"].clone()), (json!(1), json!(2), json!(run)), "{l1}");
+    assert_eq!(lignes[0]["fiche"], "the chat");
 }
 
