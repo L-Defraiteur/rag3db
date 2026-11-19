@@ -25,6 +25,12 @@ echo "$s EMBED=$RAG3WEAVER_EMBED_SERVICE LIB=$RAG3DB_LIB REPLI=${RAG3WEAVER_TEST
 [ "${FAUX_NON_JOUEES:-}" = "$s" ] && echo "▸ ⚠ 1 suites NON JOUÉES faute de feature"
 [ "${FAUX_NON_JUGE:-}" = "$s" ] && echo "non jugé : la lib n'a pas la colonne state (format 43 requis), bascule à venir"
 [ "${FAUX_ROUGE:-}" = "$s" ] && { echo "test result: FAILED. 0 passed; 1 failed"; exit 101; }
+# FAUX_CAS_VERTS=<suite>:<cas>,… et FAUX_CAS_ROUGES=<suite>:<cas>,… nomment des cas, comme cargo les dit.
+if [ "${FAUX_CAS_VERTS%%:*}" = "$s" ]; then for c in $(echo "${FAUX_CAS_VERTS#*:}" | tr , ' '); do echo "test $c ... ok"; done; fi
+if [ "${FAUX_CAS_ROUGES%%:*}" = "$s" ]; then
+  n=0; for c in $(echo "${FAUX_CAS_ROUGES#*:}" | tr , ' '); do echo "test $c ... FAILED"; n=$((n + 1)); done
+  echo "test result: FAILED. 2 passed; $n failed"; exit 101
+fi
 echo "test result: ok. 1 passed; 0 failed"
 F
 cat > $W/scripts/check_features.sh <<'F'
@@ -67,6 +73,26 @@ for h in LuciePC lucie-tablette; do
   # Ports, never bare digits: the lib of 19 Nov. (7c2b506ec74e79812df…) holds « 7981 » in its hash.
   grep -qE ':(7880|7981)([^0-9]|$)' $D/trace && { echo "ROUGE  $h cite un service arrêté : $(head -1 $D/trace | grep -o 'EMBED=[^ ]*')"; rouge=1; } || echo "vert   $h ne cite ni 7880 ni 7981 ($(head -1 $D/trace | grep -o 'EMBED=[^ ]*'))"
 done
+# **Les rouges connus** (19 novembre 2026, forme de c7) : tools/poste/known_red_e2e.txt, dans l'arbre, une ligne par cas
+# (suite, cas, ticket). La passe joue la suite entière ; un cas listé rouge est « rouge connu » avec son ticket, un cas listé
+# vert est « à lever », tout autre rouge juge ; un ticket absent, fermé ou dans closed/ refuse la passe.
+K=$H/git_workspaces/wt/tools/poste/known_red_e2e.txt; T=$H/git_workspaces/wt/docs/x/tickets
+mkdir -p $T $H/git_workspaces/wt/docs/x/tickets/closed
+printf -- '# t\n\n- **État** : ouvert (19 novembre 2026)\n' > $T/rouge.md
+printf 'e2e_x\tcas_un\tdocs/x/tickets/rouge.md\n' > $K
+passe VERT "un cas listé rouge ne rougit pas la passe" SUITES_EN_PLUS=e2e_x FAUX_CAS_ROUGES=e2e_x:cas_un
+grep -q 'rouge connu (docs/x/tickets/rouge.md) : e2e_x::cas_un' $R && echo "vert   le rouge connu est dit avec son ticket" || { echo "ROUGE  le rouge connu n'est pas dit : $(grep -i connu $R)"; rouge=1; }
+passe "ROUGE e2e_x" "un cas non listé rouge, à côté d'un listé, rougit la passe" SUITES_EN_PLUS=e2e_x FAUX_CAS_ROUGES=e2e_x:cas_un,cas_deux
+passe VERT "un cas listé qui passe" SUITES_EN_PLUS=e2e_x FAUX_CAS_VERTS=e2e_x:cas_un
+grep -q 'à lever : e2e_x::cas_un' $R && echo "vert   un cas listé vert est dit « à lever »" || { echo "ROUGE  le cas listé vert n'est pas dit à lever"; rouge=1; }
+printf 'e2e_x\tcas_un\tdocs/x/tickets/absent.md\n' > $K
+passe "ROUGE rouges connus" "un rouge connu au ticket absent refuse la passe" SUITES_EN_PLUS=e2e_x
+printf 'e2e_x\tcas_un\tdocs/x/tickets/closed/rouge.md\n' > $K; cp $T/rouge.md $T/closed/rouge.md
+passe "ROUGE rouges connus" "un rouge connu au ticket dans closed/ refuse la passe" SUITES_EN_PLUS=e2e_x
+printf -- '# t\n\n- **État** : fermé (corrigé par abc)\n' > $T/rouge.md; printf 'e2e_x\tcas_un\tdocs/x/tickets/rouge.md\n' > $K
+passe "ROUGE rouges connus" "un rouge connu au ticket fermé refuse la passe" SUITES_EN_PLUS=e2e_x
+rm -f $K
+
 # Le repli des tests sur l'iGPU : à luciepc seulement, jamais au portable (son seul GPU porte l'écran), même posé par l'appelant.
 passe VERT "le repli à luciepc" FAUX_HOTE=LuciePC
 grep -q 'REPLI=igpu:0' $D/trace && echo "vert   LuciePC : RAG3WEAVER_TESTS_REPLI_PERIPHERIQUE=igpu:0" || { echo "ROUGE  LuciePC sans repli : $(head -1 $D/trace | grep -o 'REPLI=[^ ]*')"; rouge=1; }

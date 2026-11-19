@@ -1,0 +1,7 @@
+# Known red cases of the e2e suites (19 Nov. 2026, form of c7): <suite>\t<case>\t<path of its open ticket>.
+# The pinned pass plays the whole suite; a listed red case is said « rouge connu », a listed case that passes « à lever ».
+# A line whose ticket is missing, closed or in closed/ refuses the pass. The lot that fixes a case removes its line.
+e2e_tx_par_paquet_arret	en_fichiers_un_arret_entre_les_fichiers_et_la_validation_se_rebatit_aux_bons_comptes	docs/everything-declarative/tickets/2026-11-19-le-plein-texte-en-fichiers-rougit-e2e-tx-par-paquet-arret-sur-master.md
+e2e_tx_par_paquet_arret	en_fichiers_une_recherche_apres_un_arret_rebatit_avant_de_repondre	docs/everything-declarative/tickets/2026-11-19-le-plein-texte-en-fichiers-rougit-e2e-tx-par-paquet-arret-sur-master.md
+e2e_tx_par_paquet_arret	en_fichiers_le_rebati_dit_son_etat_et_survit_a_son_interruption	docs/everything-declarative/tickets/2026-11-19-le-plein-texte-en-fichiers-rougit-e2e-tx-par-paquet-arret-sur-master.md
+e2e_tx_par_paquet_arret	en_fichiers_hors_transaction_un_arret_entre_lignes_et_plein_texte_se_detecte	docs/everything-declarative/tickets/2026-11-19-le-plein-texte-en-fichiers-rougit-e2e-tx-par-paquet-arret-sur-master.md
