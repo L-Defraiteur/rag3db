@@ -69,6 +69,13 @@ impl CancelHandle {
         self.inner.lock().unwrap_or_else(|p| p.into_inner()).cancelled
     }
 
+    /// **Something to do at the stop of this run, beyond its nodes**: interrupt the statement its read snapshot runs
+    /// on the engine (ticket `2026-11-07-un-arret-ne-coupe-pas-une-requete-du-moteur-en-cours`). Called once, at
+    /// the first stop, or at once if the run is already stopped; never after the guard rendered has fallen.
+    pub fn on_cancel(&self, _f: impl Fn() + Send + Sync + 'static) -> OnCancel {
+        OnCancel
+    }
+
     fn attach(&self, hub: &StreamHub<PortValue>) {
         let mut s = self.inner.lock().unwrap_or_else(|p| p.into_inner());
         if s.cancelled {
@@ -89,6 +96,10 @@ impl CancelHandle {
         Attached { handle: self.clone(), hub: hub.clone() }
     }
 }
+
+/// What [`CancelHandle::on_cancel`] registered, forgotten when this guard falls.
+#[must_use = "the callback is forgotten when the guard falls"]
+pub struct OnCancel;
 
 /// Un hub attaché à une poignée d'arrêt, détaché à la chute.
 pub(super) struct Attached {
