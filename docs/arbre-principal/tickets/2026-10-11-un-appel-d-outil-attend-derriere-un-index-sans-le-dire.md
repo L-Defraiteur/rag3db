@@ -100,3 +100,23 @@ environnement, et l'ouverture échouait en 0,6 s.
 Ce que le relevé dit déjà : sans rattrapage de vecteurs, l'ouverture d'une base de 3,6 Go tient en une à trois
 secondes, réactions comprises. Les 26 s du 11 octobre accompagnaient un rattrapage de 2 074 morceaux annoncé au
 journal, et dépendent donc de la dette de la base, pas de sa taille.
+
+### Le verdict de la mesure (19 novembre 2026, 14 h)
+
+- **L'extension notée chargée** : dans une copie de mesure, le `.extensions` est repointé sur la lib 7c2b506ec, ce
+  que le relevé dit. Les temps ne bougent pas : 2,6 s avec les réactions et la veille, 1,2 s sans, en comptant
+  ouverture, `describe` et arrêt.
+- **La copie est prouvée** par `index_state`, relevé sur une copie à part :
+  - le plein texte a autant de documents que de lignes (File 6 508, Library 400, Scope 68 585, Symbol 75 745) ;
+  - les vecteurs sont prêts à 100 % ;
+  - la maintenance du matin n'a trouvé aucun orphelin.
+
+**Verdict** : l'ouverture d'une base saine de 3,6 Go, sans dette de vecteurs, tient en 1 à 3 s, réactions et veille
+comprises. Ni le chargement de l'extension, ni un rebâti du HNSW n'y pèse. Les 26 s du 11 octobre accompagnaient un
+rattrapage de 2 074 morceaux à embarquer : c'est la **dette** qui fait attendre le premier appel, pas la taille de la
+base.
+
+Le reste du point 1 de tty se réduit donc à ceci : **le rattrapage d'une dette de vecteurs doit se faire derrière une
+réponse qui dit le retard, et non avant le premier appel**. C'est déjà la forme que ce ticket demandait en octobre.
+Un témoin qui l'éprouve doit ouvrir une base **avec** une dette ; c'est le dernier point ouvert de ce ticket, avec les
+lots déposés (`arbre-verrou-invocation`, `arbre-strict-borne`) et la part hôte de tty.
