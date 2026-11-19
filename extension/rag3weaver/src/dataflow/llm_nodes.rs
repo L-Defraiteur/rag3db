@@ -256,6 +256,19 @@ impl Node for LlmNode {
             (finish, usage, sink.text)
         };
 
+        // The usage of the call, as the provider returned it, on its own port (19 November 2026: the banc could
+        // only estimate the extraction's tokens).
+        ctx.set_output(
+            "usage",
+            PortValue::new(serde_json::json!({
+                "prompt_tokens": usage.prompt_tokens,
+                "cached_prompt_tokens": usage.cached_prompt_tokens,
+                "completion_tokens": usage.completion_tokens,
+                "reasoning_tokens": usage.reasoning_tokens,
+                "ms": usage.ms,
+                "finish": format!("{finish:?}"),
+            })),
+        );
         ctx.metric("llm_prompt_tokens", usage.prompt_tokens as f64);
         ctx.metric("llm_completion_tokens", usage.completion_tokens as f64);
         ctx.metric("llm_ms", usage.ms as f64);
@@ -556,6 +569,7 @@ impl NodeFactory for LlmNodeFactory {
                 PortDef::value("llm", PortType::Llm, false),
                 PortDef::value("tokens", PortType::Text, false).stream(super::port::PortKind::Finite),
                 PortDef::value("json", PortType::Map, false),
+                PortDef::value("usage", PortType::Map, false),
             ],
             config_params: vec![
                 ConfigParam {
@@ -889,7 +903,7 @@ mod tests {
         assert_eq!(schema.inputs[0].port_type, PortType::Text);
         // text, llm, le flux tokens, et json (la réponse sous response_schema) ; stop_when_unread et
         // response_schema s'ajoutent aux cinq réglages, puis instruction (lot B1) et reasoning (19 nov.).
-        assert_eq!(schema.outputs.len(), 4);
+        assert_eq!(schema.outputs.len(), 5);
         assert_eq!(schema.config_params.len(), 9);
     }
 
