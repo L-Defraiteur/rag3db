@@ -1,3 +1,22 @@
+```json
+{
+  "lanceur": {
+    "parent": "30ad9a2eec4fd75c6b92dca58821c3f86c81574e",
+    "tree": "extension/rag3weaver",
+    "needs_lib": false,
+    "witness": "catalog::retard::tests::the_writing_mark_is_per_layer_and_the_guard_clears_it",
+    "test": "cargo test --lib -- --exact catalog::retard::tests::the_writing_mark_is_per_layer_and_the_guard_clears_it",
+    "suites": [
+      "./run_e2e.sh --test e2e_code_sync"
+    ],
+    "hints": [
+      "src/catalog/retard.rs"
+    ],
+    "ours": "e475942260aca58f01c1ded5d4c127938fe04180"
+  }
+}
+```
+
 # Cas de campagne : la marque d'écriture repliée sur la cellule
 
 Arbre principal, 19 novembre 2026, pour la campagne des correctifs passés (chantier de Lucie). C'est un cas court, en
@@ -23,7 +42,7 @@ Rust, dans le crate rag3weaver. Le témoin n'a pas besoin de la lib rag3db à l'
 - **Suite** : `cargo test --lib` du crate `extension/rag3weaver`, avec les features de la passe.
 - **Rouge au parent** : l'assertion « layer b is marked while only layer a is written » échoue. Au parent, la marque
   est repliée sur la couche du backend de la cellule, et `is_writing` répond pour toute couche de la cellule.
-- **Suites exigées par les chemins** : `e2e_code_sync`, pour `src/catalog/*` (`tools/poste/required_suites.txt`).
+- **Suites exigées par les chemins** : `e2e_code_sync`, pour `src/catalog/*` (`tools/poste/required_suites.txt`). Elle demande la lib rag3db ; le témoin, non.
 
 ## Les indices présents dans l'arbre
 
