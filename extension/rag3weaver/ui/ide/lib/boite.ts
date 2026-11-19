@@ -15,6 +15,18 @@ export type LigneVue = {
   session: boolean;
 };
 
+const ENVELOPPE = /^<cross-session-message([^>]*)>\n?([\s\S]*?)\n?<\/cross-session-message>\s*$/;
+
 export function ligneDeBoite(l: Record<string, unknown>): LigneVue {
-  return { qui: String(l.from ?? ""), genre: String(l.kind ?? ""), texte: String(l.text ?? ""), session: false };
+  const texte = String(l.text ?? "");
+  const genre = String(l.kind ?? "");
+  if (l.from === "session") {
+    const m = ENVELOPPE.exec(texte);
+    const nom = m ? /from-name="([^"]*)"/.exec(m[1])?.[1] : undefined;
+    return { qui: String(l.peer || nom || "session"), genre, texte: m ? m[2] : texte, session: true };
+  }
+  if (l.from === "teammate" && genre === "message" && l.direction === "out") {
+    return { qui: "teammate", vers: String(l.to ?? ""), genre, texte, session: true };
+  }
+  return { qui: String(l.from ?? ""), genre, texte, session: false };
 }
