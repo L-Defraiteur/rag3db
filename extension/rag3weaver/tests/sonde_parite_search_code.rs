@@ -731,6 +731,11 @@ fn releve_le_namespace_devant_la_classe() {
         }
         let r = backend.call("search_code", json!({"query": requete, "scope": chemin, "options": options})).unwrap_or_else(|e| panic!("search_code ({nom}) : {e}"));
         let lignes: Vec<Value> = r["result"].as_array().cloned().unwrap_or_default();
+        // What the call says beside its results: the warnings and the signals (a dense branch that fell back, a
+        // signal the target does not declare).
+        let mut sans_resultat = r.clone();
+        sans_resultat["result"] = Value::Null;
+        eprintln!("[namespace] {nom} · méta : {}", serde_json::to_string(&sans_resultat).unwrap_or_default().chars().take(1500).collect::<String>());
         let rangs: Vec<Value> = lignes
             .iter()
             .enumerate()
