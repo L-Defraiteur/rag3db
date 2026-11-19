@@ -1,5 +1,11 @@
 # Nouveautés
 
+- 19 novembre 2026 — **`usages` répond deux fois plus vite pendant un premier index, et un arrêt brutal ne laisse
+  plus de contenu dérivé manquant.** Un premier index pose les relations avant le texte complet du code : `usages`
+  rend sa réponse complète en 12,2 s au lieu de 23,9 s sur rag3weaver/src, en 40,5 s au lieu de 74,9 s sur le dépôt,
+  et l'index entier ne ralentit pas. Si l'index meurt avant de rendre ce texte, la base le sait : l'état dit
+  « à rebâtir », et la prochaine recherche ou la reprise le rend avant de répondre.
+
 - 19 novembre 2026 — **Un ADD ou un DROP de colonne attend les lectures ouvertes de sa table.** Une transaction qui
   lit une table la retient jusqu'à sa fin : un `ALTER TABLE … ADD`, `… DROP` ou un `DROP TABLE` l'attend, et la
   lecture relit ses colonnes au lieu d'être refusée. L'attente est bornée par `alter_lock_timeout` (5 s par défaut,
