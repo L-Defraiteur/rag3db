@@ -170,7 +170,7 @@ P enqueue rust-4 rust-4 "$h" rust some_witness e2e_code - - author-c > /dev/null
 h=$(FROM=$BASE0 lot docs-2 docs/notes.md '# notes, the other way')
 P enqueue docs-2 docs-2 "$h" docs - - - - author-a > /dev/null; m0=$(master)
 P step > /dev/null 2>&1
-[ "$(master)" = "$m0" ] && grep -q "^rouge	docs-2	conflit	.*CONFLICT" "$D/pusher/inbox/author-a.txt" && ok "conflit à la repose : rendu à l'auteur, nommé" || ko "conflit à la repose : mal traité, ou sans son nom"
+[ "$(master)" = "$m0" ] && grep -q "^rouge	docs-2	conflit	.*docs/notes.md" "$D/pusher/inbox/author-a.txt" && ok "conflit à la repose : rendu à l'auteur, nommé" || ko "conflit à la repose : mal traité, ou sans son nom"
 grep -q "^docs-2	" "$D/pusher/returned.tsv" 2>/dev/null && ok "la ligne rendue est gardée (returned.tsv)" || ko "la ligne rendue est perdue"
 
 # 9. A branch moved after its deposit: returned.
@@ -316,4 +316,25 @@ git -C "$D/author" commit -q --allow-empty -m "em-a marker" && echo '# em' > "$D
 P enqueue em-a em-a "$(git -C "$D/author" rev-parse HEAD)" docs - - - - author-a > /dev/null
 P step > /dev/null 2>&1
 on_master em-a && ok "un commit vide à l'origine passe" || ko "un commit vide à l'origine bute ($(grep -P '\tem-a\t' "$D/pusher/log.tsv" | tail -1 | cut -f3-))"
+
+# 23. A child deposited after its parent landed, the parent's nouveautes line merged by union (so its patch changed): the
+# child's repose leaves out the parent's original commits by its original head (landed.tsv), never by patch alone — the
+# line would come twice (19 Nov., c7's rule: rebase --onto the parent's original head).
+m0=$(master)
+FROM=$m0 lot un-m docs/nouveautes.md '# Nouveautés
+
+- la ligne de master
+- le début' > /dev/null && git -C "$D/author" push -q origin un-m:master
+hp=$(FROM=$m0 lot un-p docs/nouveautes.md '# Nouveautés
+
+- la ligne du parent
+- le début')
+hk=$(FROM=un-p lot un-k docs/un-k.md '# child of un-p')
+P enqueue un-p un-p "$hp" docs - - - - author-a > /dev/null
+P step > /dev/null 2>&1
+P enqueue un-k un-k "$hk" docs - - - un-p author-a > /dev/null 2>&1 || echo "dépôt de l'enfant d'un parent atterri refusé" >> "$D/un-k.refus"
+P step > /dev/null 2>&1
+git -C "$D/author" fetch -q origin
+n=$(git -C "$D/author" show origin/master:docs/nouveautes.md | grep -c 'la ligne du parent')
+[ ! -e "$D/un-k.refus" ] && on_master un-p && on_master un-k && [ "$n" = 1 ] && ok "l'enfant d'un parent atterri se repose sur ses seuls commits (ligne du parent une fois)" || ko "l'enfant d'un parent atterri : refusé, absent, ou la ligne du parent $n fois"
 exit $red

@@ -60,6 +60,13 @@ gfetch() {
   return 1
 }
 queue_lines() { grep -v '^#' "$Q"; }
+# The original head of a lot: from the queue, or from landed.tsv once pushed.
+origin_head() { # <id>
+  local h
+  h=$(queue_lines | awk -F'\t' -v id="$1" '$1 == id {print $3}' | tail -1)
+  [ -n "$h" ] || h=$(awk -F'\t' -v id="$1" '$1 == id {print $2}' "$D/landed.tsv" 2>/dev/null | tail -1)
+  [ -n "$h" ] && echo "$h"
+}
 in_queue() { queue_lines | awk -F'\t' -v id="$1" '$1 == id {f=1} END {exit !f}'; }
 remove_from_queue() {
   ( flock 9; awk -F'\t' -v id="$1" '/^#/ || $1 != id' "$Q" > "$Q.new" && mv "$Q.new" "$Q" ) 9> "$D/queue.lock"
@@ -88,7 +95,7 @@ enqueue() {
     *) echo "refusé : kind inconnu « $kind » (docs, scripts, rust)" >&2; return 1 ;; esac
   [ "$kind" = rust ] && [ "$5" = - ] && { echo "refusé : un lot rust nomme son témoin (le filtre de run_e2e.sh)" >&2; return 1; }
   in_queue "$id" && { echo "refusé : l'id $id est déjà dans la file" >&2; return 1; }
-  [ "$parent" = - ] || in_queue "$parent" || { echo "refusé : le parent $parent n'est pas dans la file" >&2; return 1; }
+  [ "$parent" = - ] || in_queue "$parent" || origin_head "$parent" > /dev/null || { echo "refusé : le parent $parent n'est ni dans la file ni poussé (landed.tsv)" >&2; return 1; }
   gfetch -q origin master "+refs/heads/$branch:refs/remotes/origin/$branch" || { echo "refusé : la branche $branch n'est pas sur origin" >&2; return 1; }
   remote=$(g rev-parse "origin/$branch")
   full=$(g rev-parse -q --verify "$head^{commit}")
@@ -121,6 +128,8 @@ red() { # <id> <author> <reason> <detail>
 }
 pushed() { # <id> <author> <branch>
   local h; h=$(g rev-parse --short HEAD)
+  # The lot's original head, kept: a child deposited on it later reposes on its own commits only (19 Nov., c7).
+  queue_lines | awk -F'\t' -v id="$1" -v h="$(g rev-parse HEAD)" '$1 == id {print $1 "\t" $3 "\t" h}' >> "$D/landed.tsv"
   remove_from_queue "$1"
   log "$1" poussé "$h"
   printf 'poussé\t%s\t%s\t%s\n' "$1" "$h" "$3" >> "$D/inbox/$2.txt"
@@ -202,18 +211,23 @@ red_family() { # <id> <author> <reason> <detail>
 # Repose the given lines on BASE, in the pusher's worktree, under the branch RB. Prints the id of the lot whose
 # cherry-pick conflicts and returns 1; returns 0 when every lot is reposed.
 repose() { # <line>…
-  local line id head commits
+  local line id head commits par pex
   g checkout -q -f -B "$RB" "$BASE" && g clean -q -fd
   for line in "$@"; do
-    id=$(f_ "$line" 1); head=$(f_ "$line" 3)
+    id=$(f_ "$line" 1); head=$(f_ "$line" 3); par=$(f_ "$line" 8); pex=""
+    # A child leaves out its parent's original commits by the parent's original head (c7's rule: rebase --onto it);
+    # the patch filter stays under it, for commits already on master by another way.
+    [ "$par" = - ] || pex=$(origin_head "$par")
     # By patch: a commit whose change is already on the reposed head (a parent that landed reposed, under new hashes)
     # is left out (19 Nov.: picking it again conflicted with the parent's later commits).
-    commits=$(g rev-list --reverse --no-merges --cherry-pick --right-only "HEAD...$head")
+    commits=$(g rev-list --reverse --no-merges --cherry-pick --right-only "HEAD...$head" ${pex:+"^$pex"})
     [ -n "$commits" ] || continue
     # docs/nouveautes.md takes every lot's line at its head: the two sides are kept (union), as a session resolves
     # it by hand. Any other collision stays a conflict for the author.
     # --allow-empty keeps a commit empty from its origin (a marker); --empty=drop still drops one that became empty.
     if ! g -c core.attributesFile="$D/attributes" cherry-pick --allow-empty --empty=drop $commits > "$D/last-repose.log" 2>&1; then
+      # The files in conflict, named for the author (19 Nov., c7: « bute : » said nothing).
+      g diff --name-only --diff-filter=U | paste -sd' ' > "$D/last-conflict.txt"
       g cherry-pick --abort 2>/dev/null
       echo "$id"; return 1
     fi
@@ -383,7 +397,7 @@ step() {
     RB="pusher/$STAMP-$TRAIN_LABEL"
     id=$(repose "${train[@]}") && break
     for line in "${train[@]}"; do [ "$(f_ "$line" 1)" = "$id" ] && author=$(f_ "$line" 9); done
-    red_family "$id" "$author" conflit "la repose sur master $(g rev-parse --short "$BASE") bute : $(grep -m1 -E 'CONFLICT|error' "$D/last-repose.log")"
+    red_family "$id" "$author" conflit "la repose sur master $(g rev-parse --short "$BASE") bute sur : $(cat "$D/last-conflict.txt" 2>/dev/null) — $(grep -m1 -E 'CONFLICT|error' "$D/last-repose.log")"
     kept=("${train[@]}")
   done
   # The replay, with the bisection: part is the prefix under test.
