@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 19 novembre 2026 — Dans le terminal de l'agent, ce que l'hôte attend se dit à côté de l'animation : « read_file README.md attend… (25 s) » pendant qu'un outil attend, « gemini-3.8-flash attend le fournisseur… (reprise dans 3 s) » pendant que le fournisseur retient le modèle, au lieu d'un « à toi » faux.
+
 - 18 novembre 2026 — **La fin d'un index dit une libération ou une dette qu'elle n'a pas pu faire.** Une erreur en rendant les réclamations d'embarquement s'ajoute à la dernière ligne du journal, avec sa table et sa cause, sans en effacer la cause de fin ; une dette restante illisible se dit « dette inconnue », plus jamais « 0 ».
 
 - 18 novembre 2026 — **Un modèle déclaré dit `access` et `provider`.** `access` dit la manière d'y accéder (`local`, `service`, `compatible`), `provider` le fournisseur (`openai`, `vertex`, `anthropic`, `llama_server`). L'ancienne forme, `provider` pour la manière et `protocol` pour le fournisseur, se lit encore **jusqu'au 29 novembre 2026** ; un modèle qui mêle les deux est refusé, en nommant les deux mots. `/model` rend les deux mots neufs.
