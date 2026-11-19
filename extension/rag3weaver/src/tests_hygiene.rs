@@ -33,8 +33,61 @@ fn declared_fn(line: &str) -> Option<&str> {
     (end > 0 && rest[end..].starts_with('(')).then_some(&rest[..end])
 }
 
-fn returns_early(line: &str) -> bool {
-    line.contains("return") && (line.contains("else {") || line.contains("=> return") || line.contains("{ return"))
+/// The text with the contents of string literals and comments blanked (newlines kept): code only. A `return` in
+/// a string (the TypeScript of a fixture, a format string across lines) is not a return.
+fn code_only(text: &str) -> String {
+    let c: Vec<char> = text.chars().collect();
+    let mut out = String::with_capacity(text.len());
+    let mut i = 0;
+    let blank = |ch: char| if ch == '\n' { '\n' } else { ' ' };
+    while i < c.len() {
+        if c[i] == '/' && c.get(i + 1) == Some(&'/') {
+            while i < c.len() && c[i] != '\n' { out.push(' '); i += 1; }
+        } else if c[i] == 'r' && (c.get(i + 1) == Some(&'"') || c.get(i + 1) == Some(&'#')) && (i == 0 || !(c[i - 1].is_alphanumeric() || c[i - 1] == '_')) {
+            // A raw string r"…" or r#"…"#: up to the quote followed by as many hashes.
+            let mut j = i + 1;
+            let mut hashes = 0;
+            while c.get(j) == Some(&'#') { hashes += 1; j += 1; }
+            if c.get(j) != Some(&'"') { out.push(c[i]); i += 1; continue; }
+            out.push(' ');
+            for _ in i + 1..=j { out.push(' '); }
+            j += 1;
+            loop {
+                if j >= c.len() { break; }
+                if c[j] == '"' && (0..hashes).all(|k| c.get(j + 1 + k) == Some(&'#')) {
+                    for _ in 0..=hashes { out.push(' '); }
+                    j += 1 + hashes;
+                    break;
+                }
+                out.push(blank(c[j]));
+                j += 1;
+            }
+            i = j;
+        } else if c[i] == '"' {
+            out.push(' ');
+            i += 1;
+            while i < c.len() && c[i] != '"' {
+                if c[i] == '\\' { out.push(' '); i += 1; }
+                if i < c.len() { out.push(blank(c[i])); i += 1; }
+            }
+            if i < c.len() { out.push(' '); i += 1; }
+        } else if c[i] == '\'' && (c.get(i + 2) == Some(&'\'') || (c.get(i + 1) == Some(&'\\') && c.get(i + 3) == Some(&'\''))) {
+            // A char literal ('"', '\''): three or four characters, blanked.
+            let n = if c.get(i + 1) == Some(&'\\') { 4 } else { 3 };
+            for _ in 0..n { out.push(' '); }
+            i += n;
+        } else {
+            out.push(c[i]);
+            i += 1;
+        }
+    }
+    out
+}
+
+/// A bare `return` (no value) behind a guard on the line: `else { return }`, `=> return,`, `{ return; }`.
+fn returns_early(code: &str) -> bool {
+    let bare = ["return;", "return }", "return,", "return\n"].iter().any(|r| code.contains(r)) || code.trim_end().ends_with("return");
+    bare && (code.contains("else {") || code.contains("=> return") || code.contains("{ return"))
 }
 
 fn says_a_skip(line: &str) -> bool {
@@ -48,6 +101,8 @@ fn no_test_returns_without_saying_it_skipped() {
     for path in sources() {
         let text = std::fs::read_to_string(&path).unwrap();
         let lines: Vec<&str> = text.lines().collect();
+        let code = code_only(&text);
+        let code_lines: Vec<&str> = code.lines().collect();
         let name = path.file_name().unwrap().to_string_lossy().to_string();
         let mut in_test = false;
         for (i, line) in lines.iter().enumerate() {
@@ -61,7 +116,7 @@ fn no_test_returns_without_saying_it_skipped() {
             }
             if says_a_skip(line) {
                 found.push(format!("tests/{name}:{}: a skip that is not SAUTÉ: {}", i + 1, line.trim()));
-            } else if in_test && returns_early(line) {
+            } else if in_test && returns_early(code_lines.get(i).copied().unwrap_or("")) {
                 found.push(format!("tests/{name}:{}: a test that returns without SAUTÉ or ENFANT: {}", i + 1, line.trim()));
             }
         }

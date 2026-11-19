@@ -275,7 +275,7 @@ fn empreinte(catalog: &Catalog, depot: Option<&Path>) -> (BTreeMap<String, Strin
 #[test]
 #[ignore]
 fn role_enfant() {
-    let (Ok(role), Ok(base)) = (std::env::var(ROLE), std::env::var(BASE)) else { return };
+    let (Ok(role), Ok(base)) = (std::env::var(ROLE), std::env::var(BASE)) else { return crate::common::enfant("e2e_tx_par_paquet_arret") };
     let base = PathBuf::from(base);
     if role == "lecteur-fts" {
         // Un lecteur seul : il calcule l'état, ne jette ni n'écrit rien.

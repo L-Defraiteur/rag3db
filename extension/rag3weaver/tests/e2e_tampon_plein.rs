@@ -62,7 +62,7 @@ fn catalogue(base: &str) -> Catalog {
 #[test]
 #[ignore]
 fn role_enfant() {
-    let (Ok(role), Ok(base)) = (std::env::var(ROLE), std::env::var(BASE)) else { return };
+    let (Ok(role), Ok(base)) = (std::env::var(ROLE), std::env::var(BASE)) else { return crate::common::enfant("e2e_tampon_plein") };
     let mut catalog = catalogue(&base);
     let r = catalog.ingest_entities_jusqu_a("Doc", lignes(), Disponibilites::RECHERCHE_TEXTE);
     match role.as_str() {

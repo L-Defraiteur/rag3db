@@ -130,7 +130,7 @@ fn lire(base: &str) {
 #[test]
 #[ignore]
 fn role_enfant() {
-    let (Ok(role), Ok(base)) = (std::env::var(ROLE), std::env::var(BASE)) else { return };
+    let (Ok(role), Ok(base)) = (std::env::var(ROLE), std::env::var(BASE)) else { return crate::common::enfant("e2e_lecture_seule_apres_fermeture_sans_point_de_reprise") };
     match role.as_str() {
         "ordinaire" => ecrire(&base, false),
         "copy_refuse" => ecrire(&base, true),

@@ -450,12 +450,9 @@ fn un_motif_ajoute_ses_champs_avant_l_enregistrement() {
     let contenu = read(&racine, Family::Entity, "user").expect("user");
 
     let nu = prepare_entity(&contenu, &[]).expect("nu");
-    let motif = match read(&racine, Family::Pattern, "versioned") {
-        Ok(m) => m,
-        // Le motif est facultatif dans le catalogue fourni : si personne ne
-        // l'a encore écrit, le test ne prétend pas le contraire.
-        Err(_) => return,
-    };
+    // Le motif fait partie du catalogue livré (templates/patterns/versioned.json) : un test qui ne le trouve pas
+    // rougit (19 novembre 2026, c7), il ne passe pas en silence.
+    let motif = read(&racine, Family::Pattern, "versioned").expect("le motif « versioned » du catalogue livré");
     let habille = prepare_entity(&contenu, &[&motif]).expect("habillé");
     assert!(
         habille.fields.len() > nu.fields.len(),
