@@ -136,6 +136,7 @@ impl LlmNode {
         if let Some(i) = self.instruction.as_ref().filter(|i| !i.is_empty()) {
             pieces.push(i.clone());
         }
+        let presentations = ctx.service::<std::collections::HashMap<String, serde_json::Value>>(PRESENTATIONS_SERVICE).cloned();
         if let Some(pv) = context {
             let parts = take_or_clone::<serde_json::Value>(pv).ok_or("LlmNode: 'context' carries a list of parts {name, title, value, format?, max_tokens?}")?;
             let parts = match parts {
@@ -144,7 +145,7 @@ impl LlmNode {
                 other => vec![other],
             };
             for part in &parts {
-                if let Some(section) = render_part(part)? {
+                if let Some(section) = render_part(part, presentations.as_ref())? {
                     pieces.push(section);
                 }
             }
@@ -309,39 +310,118 @@ fn sorted(v: &serde_json::Value) -> serde_json::Value {
     }
 }
 
-/// `json` (the default): compact, keys sorted, one line per element of a list. A string is never quoted.
-fn render_json(v: &serde_json::Value) -> String {
-    match v {
-        serde_json::Value::String(s) => s.clone(),
-        serde_json::Value::Array(a) => a.iter().map(|x| match x {
-            serde_json::Value::String(s) => s.clone(),
-            other => sorted(other).to_string(),
-        }).collect::<Vec<_>>().join("\n"),
-        other => sorted(other).to_string(),
+/// The service a backend gives its graphs: the presentation of each type that declares one (lot B2).
+pub const PRESENTATIONS_SERVICE: &str = "backend_presentations";
+
+/// The named forms of a presentation.
+const FORMS: [&str; 3] = ["json", "kv", "markdown"];
+
+/// **A type's presentation, checked at load** (lot B2): `{template}`, a text template on the fields of a row, or
+/// `{form}`, one of json, kv, markdown — exactly one of them.
+pub fn check_presentation(p: &serde_json::Value) -> Result<(), String> {
+    let o = p.as_object().ok_or("an object {template} or {form}")?;
+    match (o.get("template"), o.get("form")) {
+        (Some(serde_json::Value::String(t)), None) => minijinja::Environment::new()
+            .template_from_str(t)
+            .map(|_| ())
+            .map_err(|e| format!("the template does not compile: {e}")),
+        (None, Some(serde_json::Value::String(f))) if FORMS.contains(&f.as_str()) => Ok(()),
+        (None, Some(serde_json::Value::String(f))) => Err(format!("unknown form « {f} »; known: {}", FORMS.join(", "))),
+        _ => Err("exactly one of template (a text) and form (json, kv, markdown)".into()),
     }
 }
 
-/// `kv`: an object as « key: value » lines, keys sorted (a string value as it is, any other as compact JSON);
-/// a list as its elements so rendered, separated by a blank line.
-fn render_kv(v: &serde_json::Value) -> String {
+/// A row of an entity, as a selection returns it: `{entity, data}`.
+fn typed(v: &serde_json::Value) -> Option<(&str, &serde_json::Value)> {
+    let o = v.as_object()?;
+    let entity = o.get("entity")?.as_str()?;
+    let data = o.get("data").filter(|d| d.is_object())?;
+    Some((entity, data))
+}
+
+/// An object as « key: value » lines (`kv`) or « **key**: value » lines (`markdown`), keys sorted; a string value
+/// as it is, any other as compact JSON with sorted keys. Anything but an object renders as JSON.
+fn render_lines(v: &serde_json::Value, bold: bool) -> String {
     match v {
         serde_json::Value::Object(o) => {
             let mut keys: Vec<&String> = o.keys().collect();
             keys.sort();
-            keys.iter().map(|k| match &o[*k] {
-                serde_json::Value::String(s) => format!("{k}: {s}"),
-                other => format!("{k}: {}", sorted(other)),
-            }).collect::<Vec<_>>().join("\n")
+            keys.iter()
+                .map(|k| {
+                    let value = match &o[*k] {
+                        serde_json::Value::String(s) => s.clone(),
+                        other => sorted(other).to_string(),
+                    };
+                    if bold { format!("**{k}**: {value}") } else { format!("{k}: {value}") }
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
         }
-        serde_json::Value::Array(a) => a.iter().map(render_kv).collect::<Vec<_>>().join("\n\n"),
-        other => render_json(other),
+        serde_json::Value::String(s) => s.clone(),
+        other => sorted(other).to_string(),
     }
 }
 
-/// One context part as a section: « ## title », a blank line, the value rendered by its `format` (json, the
-/// default, or kv), cut to `max_tokens` (estimated: characters / 4, rounded up) with the cut said. An empty part
-/// renders nothing.
-fn render_part(part: &serde_json::Value) -> Result<Option<String>, String> {
+/// One value (not a list): a string as it is; a typed row by the part's format, else its type's presentation, else
+/// JSON — on the row's fields. Returns the text and whether it is a one-line JSON form (lists of those take one line
+/// per element; any other form, a blank line between elements).
+fn render_one(
+    v: &serde_json::Value,
+    format: Option<&str>,
+    presentations: Option<&std::collections::HashMap<String, serde_json::Value>>,
+) -> Result<(String, bool), String> {
+    let (entity, content) = match typed(v) {
+        Some((e, d)) => (Some(e), d),
+        None => (None, v),
+    };
+    if let serde_json::Value::String(s) = content {
+        return Ok((s.clone(), true));
+    }
+    let declared = match format {
+        Some(_) => None,
+        None => entity.and_then(|e| presentations.and_then(|p| p.get(e))),
+    };
+    if let Some(t) = declared.and_then(|p| p.get("template")).and_then(serde_json::Value::as_str) {
+        let text = minijinja::Environment::new()
+            .render_str(t, content)
+            .map_err(|e| format!("LlmNode: the presentation of {} does not render: {e}", entity.unwrap_or("?")))?;
+        return Ok((text, false));
+    }
+    let form = format
+        .or_else(|| declared.and_then(|p| p.get("form")).and_then(serde_json::Value::as_str))
+        .unwrap_or("json");
+    match form {
+        "json" => Ok((sorted(content).to_string(), true)),
+        "kv" => Ok((render_lines(content, false), false)),
+        "markdown" => Ok((render_lines(content, true), false)),
+        other => Err(format!("LlmNode: unknown format « {other} »; known: {}", FORMS.join(", "))),
+    }
+}
+
+/// A value: a list renders element by element (one line each when all are one-line JSON, a blank line between
+/// them otherwise); anything else by [`render_one`].
+fn render_value(
+    v: &serde_json::Value,
+    format: Option<&str>,
+    presentations: Option<&std::collections::HashMap<String, serde_json::Value>>,
+) -> Result<String, String> {
+    match v {
+        serde_json::Value::Array(a) => {
+            let rendered = a.iter().map(|x| render_one(x, format, presentations)).collect::<Result<Vec<_>, _>>()?;
+            let sep = if rendered.iter().all(|(_, line)| *line) { "\n" } else { "\n\n" };
+            Ok(rendered.into_iter().map(|(t, _)| t).collect::<Vec<_>>().join(sep))
+        }
+        other => render_one(other, format, presentations).map(|(t, _)| t),
+    }
+}
+
+/// One context part as a section: « ## title », a blank line, the value rendered — by the part's `format` (json,
+/// kv, markdown), else by its type's presentation (lot B2), else as JSON with sorted keys — cut to `max_tokens`
+/// (estimated: characters / 4, rounded up) with the cut said. An empty part renders nothing.
+fn render_part(
+    part: &serde_json::Value,
+    presentations: Option<&std::collections::HashMap<String, serde_json::Value>>,
+) -> Result<Option<String>, String> {
     let o = part.as_object().ok_or("LlmNode: a context part is an object {name, title, value, format?, max_tokens?}")?;
     let name = o.get("name").and_then(serde_json::Value::as_str).unwrap_or("?");
     let title = o
@@ -353,11 +433,8 @@ fn render_part(part: &serde_json::Value) -> Result<Option<String>, String> {
     if crate::dataflow::collect_node::is_empty(value) {
         return Ok(None);
     }
-    let mut text = match o.get("format").and_then(serde_json::Value::as_str) {
-        None | Some("json") => render_json(value),
-        Some("kv") => render_kv(value),
-        Some(other) => return Err(format!("LlmNode: the context part « {name} » asks for the format « {other} »; known: json, kv")),
-    };
+    let format = o.get("format").and_then(serde_json::Value::as_str);
+    let mut text = render_value(value, format, presentations).map_err(|e| format!("{e} (context part « {name} »)"))?;
     if let Some(max) = o.get("max_tokens").filter(|v| !v.is_null()) {
         let max = max.as_u64().filter(|m| *m > 0).ok_or_else(|| format!("LlmNode: the context part « {name} »: max_tokens is a positive integer"))? as usize;
         let chars = text.chars().count();
