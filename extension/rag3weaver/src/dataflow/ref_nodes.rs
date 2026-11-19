@@ -447,6 +447,154 @@ impl NodeFactory for AddRefNodeFactory {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// define_ref
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// **Defines a cited value** (ticket of 18 November 2026, categories, question 2): writes `definition` on an
+/// existing reference and announces it as `change: "definition"`. It is the only verb that writes `definition`:
+/// a citation (`add_ref`) never changes a definition, so a reaction filtered on `definition` flags the records
+/// anchored to the value only when its meaning changed.
+pub struct DefineRefNode {
+    node_name: String,
+    cfg: serde_json::Value,
+}
+
+impl DefineRefNode {
+    fn champ(&self, cle: &str) -> String {
+        self.cfg.get(cle).and_then(|v| v.as_str()).unwrap_or_default().trim().to_string()
+    }
+}
+
+impl Node for DefineRefNode {
+    fn name(&self) -> &str {
+        &self.node_name
+    }
+    fn node_type(&self) -> &'static str {
+        "DefineRefNode"
+    }
+    fn node_config(&self) -> Option<Box<dyn std::any::Any + Send>> {
+        Some(Box::new(self.cfg.clone()))
+    }
+    fn inputs(&self) -> Vec<PortDef> {
+        super::node_registry::ports_declares(&DefineRefNodeFactory).0
+    }
+    fn outputs(&self) -> Vec<PortDef> {
+        super::node_registry::ports_declares(&DefineRefNodeFactory).1
+    }
+
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        let catalog = ctx
+            .service::<Arc<Mutex<Catalog>>>("catalog")
+            .cloned()
+            .ok_or("DefineRefNode: 'catalog' service not found")?;
+        let refs_entity = identifiant(&self.champ("refs_entity"), "refs_entity")?;
+        let types_entity = identifiant(&self.champ("types_entity"), "types_entity")?;
+        let genre = self.champ("genre");
+        let valeur = self.champ("valeur");
+        let definition = self.champ("definition");
+        let rendre = |ctx: &mut NodeContext, v: serde_json::Value| {
+            ctx.set_output("report", PortValue::new(v));
+        };
+        if valeur.is_empty() || definition.is_empty() {
+            rendre(ctx, serde_json::json!({
+                "executed": false,
+                "needs": [if valeur.is_empty() { "valeur" } else { "definition" }],
+                "why": "définir une valeur demande la valeur et sa définition",
+            }));
+            return Ok(());
+        }
+        let mut cat = catalog.lock().map_err(|_| "DefineRefNode: catalog poisoned".to_string())?;
+        let liste = genres(&cat, &types_entity)?;
+        let Some((_, _, script)) = liste.iter().find(|(n, _, _)| *n == genre) else {
+            rendre(ctx, serde_json::json!({
+                "executed": false,
+                "needs": ["genre"],
+                "why": format!("le genre « {genre} » n'existe pas"),
+                "genres": liste.iter().map(|(n, d, _)| serde_json::json!({"name": n, "description": d})).collect::<Vec<_>>(),
+            }));
+            return Ok(());
+        };
+        let verdict = eprouver(script, &valeur, ctx);
+        if !verdict.ok {
+            rendre(ctx, serde_json::json!({ "executed": false, "needs": ["valeur"], "why": verdict.pourquoi, "genre": genre, "valeur": valeur }));
+            return Ok(());
+        }
+        let normale = verdict.normal.unwrap_or_else(|| valeur.clone());
+        let mut identite: BTreeMap<String, CypherValue> = BTreeMap::new();
+        identite.insert("genre".into(), CypherValue::String(genre.clone()));
+        identite.insert("valeur".into(), CypherValue::String(normale.clone()));
+        let cellule = ctx.service::<crate::scope::Scope>("scope").cloned().unwrap_or_else(|| cat.scope().clone());
+        cellule.stamp(&mut identite);
+        let uuid = cat
+            .entity_uuid_in(&cellule, &refs_entity, &identite)
+            .map_err(|e| format!("DefineRefNode: l'identité de la référence : {e}"))?;
+        // **A value is cited before it is defined**: the definition belongs to a value that exists.
+        let existe = !cat.get_many(&refs_entity, std::slice::from_ref(&uuid)).map_err(|e| format!("DefineRefNode: {e}"))?.is_empty();
+        if !existe {
+            rendre(ctx, serde_json::json!({
+                "executed": false,
+                "needs": ["valeur"],
+                "why": format!("la valeur « {normale} » du genre « {genre} » n'est encore citée nulle part : cite-la d'abord par add_ref, puis définis-la"),
+            }));
+            return Ok(());
+        }
+        let fait = cat
+            .update_many(&refs_entity, vec![(uuid.clone(), BTreeMap::from([("definition".to_string(), CypherValue::String(definition.clone()))]))])
+            .map_err(|e| format!("DefineRefNode: {e}"))?;
+        if fait.failed > 0 {
+            rendre(ctx, serde_json::json!({ "executed": false, "why": "la définition ne s'est pas écrite", "ref": {"genre": genre, "valeur": normale, "uuid": uuid} }));
+            return Ok(());
+        }
+        cat.publier(crate::events::CatalogEvent::entites_changees(&refs_entity, vec![uuid.clone()], "definition"));
+        rendre(ctx, serde_json::json!({
+            "executed": true,
+            "ref": {"genre": genre, "valeur": normale, "uuid": uuid},
+            "definition": definition,
+        }));
+        Ok(())
+    }
+}
+
+pub struct DefineRefNodeFactory;
+
+impl NodeFactory for DefineRefNodeFactory {
+    fn create(&self, name: &str, config: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+        let n = DefineRefNode { node_name: name.into(), cfg: config.clone() };
+        for cle in ["refs_entity", "types_entity"] {
+            identifiant(&n.champ(cle), cle)?;
+        }
+        Ok(Box::new(n))
+    }
+    fn node_type(&self) -> &'static str {
+        "DefineRefNode"
+    }
+    fn schema(&self) -> NodeSchema {
+        let p = |name: &'static str, required, default: Option<serde_json::Value>, description: &'static str, choices| ConfigParam {
+            name: name.into(),
+            param_type: ConfigParamType::String,
+            required,
+            default,
+            description: description.into(),
+            choices,
+            json_schema: None,
+        };
+        NodeSchema {
+            node_type: "DefineRefNode".into(),
+            description: "Defines a value already cited: writes 'definition' on the reference (genre + normal form) and announces it as an EntitiesChanged of change 'definition'; the only verb that writes a definition, so a reaction filtered on that change flags the records anchored to the value when its meaning changes, never on a citation".into(),
+            inputs: vec![],
+            outputs: vec![PortDef::value("report", PortType::Map, false)],
+            config_params: vec![
+                p("genre", true, None, "Genre of the value", Some(Choices::Values { entity: "RefType".into(), field: "name".into() })),
+                p("valeur", true, None, "The value, in whatever form the caller has it; the genre's harness normalises it", None),
+                p("definition", true, None, "What the value means", None),
+                p("refs_entity", false, Some(serde_json::json!("Ref")), "Entity that holds references", None),
+                p("types_entity", false, Some(serde_json::json!("RefType")), "Entity that holds the genres", None),
+            ],
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // create_ref_type
 // ═══════════════════════════════════════════════════════════════════════════
 

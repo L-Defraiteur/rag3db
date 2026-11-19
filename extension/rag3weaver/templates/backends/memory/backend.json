@@ -236,6 +236,9 @@
           },
           "etat": {
             "type": "string"
+          },
+          "definition": {
+            "type": "string"
           }
         },
         "hashsafe": [
@@ -247,7 +250,8 @@
           "valeur",
           "dit_comme",
           "etat",
-          "revision"
+          "revision",
+          "definition"
         ],
         "signals": [
           "bm25"
@@ -1049,6 +1053,13 @@
     },
     "read_turns": {
       "graph": "graphs/read_turns.mmd"
+    },
+    "define_ref": {
+      "graph": "graphs/define_ref.mmd",
+      "bindings": {
+        "refs_entity": "Ref",
+        "types_entity": "RefType"
+      }
     }
   },
   "reactions": {
@@ -1061,6 +1072,17 @@
         "source": "Subject"
       },
       "description": "Un sujet qui change fait repasser « à revoir » les mémoires qui l'ancrent."
+    },
+    "review_definitions": {
+      "graph": "graphs/review_definitions.mmd",
+      "bindings": {
+        "target": "Fiche",
+        "relation": "ANCRE",
+        "transition": "review",
+        "source": "Ref",
+        "change": "definition"
+      },
+      "description": "Une définition changée (define_ref) fait repasser « à revoir » les fiches ancrées à la valeur ; une citation ne déclenche rien."
     }
   }
 }
