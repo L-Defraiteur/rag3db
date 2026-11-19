@@ -1338,6 +1338,10 @@ fn usages_d_un_type_compte_ses_sites_type_methode_d_un_type_importe() {
     let cat = catalog.lock().unwrap();
     let r = usages_of(&cat, &code_config(), "Catalog", "").unwrap();
     eprintln!("{}", r.markdown("all", 50));
+    let aretes = cat
+        .execute_raw("MATCH (a:Scope {name: 'essai'})-[r]->(b) RETURN label(r), b.name, r.resolution, r.qualifier_types ORDER BY b.name")
+        .unwrap();
+    eprintln!("arêtes de essai : {:?}", aretes.rows);
     let sites: BTreeSet<(String, Option<i64>)> = r.usages.iter().map(|u| (fichier(&u.user.path), u.user.line)).collect();
     let _ = std::fs::remove_dir_all(&dir);
     assert!(
