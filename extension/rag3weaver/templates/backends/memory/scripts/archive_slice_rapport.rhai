@@ -1,7 +1,10 @@
 // archive_slice_rapport — the report of archive_slice: the decisions report (as archive_rapport does,
 // with usage_total), plus the slice meta carried by the elements (slice_summary, open). `results`
 // stays only under trace.
-let r = input.value;
+// The decisions report, then the usage of the extraction call (Collect, in that order).
+let v = input.value;
+let r = if type_of(v) == "array" { v[0] } else { v };
+if type_of(v) == "array" && v.len() > 1 && type_of(v[1]) == "map" { r.extraction_usage = v[1]; }
 let summary = ();
 let open = ();
 if type_of(r.results) == "array" {
