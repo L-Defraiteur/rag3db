@@ -110,6 +110,8 @@ fn reactif_sur(conn: CallbackConnection) -> (tempfile::TempDir, Backend) {
         cell_reactions: Mutex::new(std::collections::HashMap::new()),
         miroir_reacteur: Mutex::new(None),
         watches: Mutex::new(Vec::new()),
+        #[cfg(feature = "code")]
+        layer_sync: Mutex::new(None),
         components_watch: Mutex::new(None),
         propositions: Default::default(),
         reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
