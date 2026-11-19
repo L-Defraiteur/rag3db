@@ -114,6 +114,8 @@ pub struct BurnBgeM3Embedder {
     max_tokens: usize,
     /// Texts cut at that window since the embedder was built.
     troncatures: std::sync::atomic::AtomicUsize,
+    /// The indices truncated in the last call (read by a service under its pass lock).
+    last_truncated: Mutex<Vec<usize>>,
     device: Device,
 }
 
@@ -176,6 +178,7 @@ impl BurnBgeM3Embedder {
             tokenizer: Mutex::new(tokenizer),
             max_tokens: MAX_TOKENS,
             troncatures: std::sync::atomic::AtomicUsize::new(0),
+            last_truncated: Mutex::new(Vec::new()),
             device,
         })
     }
@@ -227,10 +230,11 @@ impl BurnBgeM3Embedder {
             .encode_batch(refs, true)
             .map_err(|e| EmbedError::ProviderError(format!("tokenizer: {e}")))?;
         drop(tokenizer);
-        let truncated = encodings.iter().filter(|e| !e.get_overflowing().is_empty()).count();
-        if truncated > 0 {
-            self.troncatures.fetch_add(truncated, std::sync::atomic::Ordering::Relaxed);
+        let cut: Vec<usize> = encodings.iter().enumerate().filter(|(_, e)| !e.get_overflowing().is_empty()).map(|(i, _)| i).collect();
+        if !cut.is_empty() {
+            self.troncatures.fetch_add(cut.len(), std::sync::atomic::Ordering::Relaxed);
         }
+        *self.last_truncated.lock().unwrap_or_else(|p| p.into_inner()) = cut;
 
         let batch = encodings.len();
         let seq = encodings
@@ -380,6 +384,10 @@ impl Embedder for BurnBgeM3Embedder {
     /// au modèle qu'il croit (`crate::daemon`).
     fn troncatures(&self) -> Option<(usize, usize)> {
         Some((self.troncatures.load(std::sync::atomic::Ordering::Relaxed), self.max_tokens))
+    }
+
+    fn last_truncated(&self) -> Vec<usize> {
+        self.last_truncated.lock().unwrap_or_else(|p| p.into_inner()).clone()
     }
 
     fn name(&self) -> &str {

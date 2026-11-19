@@ -87,6 +87,8 @@ pub struct GraniteEmbedder<G: GraniteGraph> {
     graph: G,
     tokenizer: Mutex<Tokenizer>,
     troncatures: AtomicUsize,
+    /// The indices truncated in the last call (read by a service under its pass lock).
+    last_truncated: Mutex<Vec<usize>>,
     device: Device,
 }
 
@@ -112,7 +114,7 @@ impl<G: GraniteGraph> GraniteEmbedder<G> {
         // `from_bytes`, ne profite pas de Flex32 pour cette raison).
         let graph = G::charger(&device, weights, crate::burn_device::float_dtype_voulu()).map_err(EmbedError::ProviderError)?;
 
-        Ok(Self { graph, tokenizer: Mutex::new(tokenizer), troncatures: AtomicUsize::new(0), device })
+        Ok(Self { graph, tokenizer: Mutex::new(tokenizer), troncatures: AtomicUsize::new(0), last_truncated: Mutex::new(Vec::new()), device })
     }
 
     pub fn from_files(weights: impl AsRef<Path>, tokenizer_path: impl AsRef<Path>, device: BurnDevice) -> Result<Self, EmbedError> {
@@ -132,10 +134,11 @@ impl<G: GraniteGraph> GraniteEmbedder<G> {
             let refs: Vec<&str> = texts.iter().map(String::as_str).collect();
             tokenizer.encode_batch(refs, true).map_err(|e| EmbedError::ProviderError(format!("tokenize: {e}")))?
         };
-        let tronquees = encodings.iter().filter(|e| !e.get_overflowing().is_empty()).count();
-        if tronquees > 0 {
-            self.troncatures.fetch_add(tronquees, Ordering::Relaxed);
+        let cut: Vec<usize> = encodings.iter().enumerate().filter(|(_, e)| !e.get_overflowing().is_empty()).map(|(i, _)| i).collect();
+        if !cut.is_empty() {
+            self.troncatures.fetch_add(cut.len(), Ordering::Relaxed);
         }
+        *self.last_truncated.lock().unwrap_or_else(|p| p.into_inner()) = cut;
 
         let batch = encodings.len();
         let seq = encodings[0].get_ids().len();
@@ -180,6 +183,10 @@ impl<G: GraniteGraph> Embedder for GraniteEmbedder<G> {
 
     fn troncatures(&self) -> Option<(usize, usize)> {
         Some((self.troncatures.load(Ordering::Relaxed), MAX_SEQ_LEN))
+    }
+
+    fn last_truncated(&self) -> Vec<usize> {
+        self.last_truncated.lock().unwrap_or_else(|p| p.into_inner()).clone()
     }
 
     /// 128 séquences de 512. L'attention est fusionnée (masque booléen, voir

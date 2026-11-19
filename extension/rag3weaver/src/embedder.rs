@@ -113,7 +113,8 @@ pub trait Embedder: Send + Sync {
         Vec::new()
     }
 
-    /// **Was this text truncated by the model**, as its provider said ? The
+    /// **Was this text truncated by the model**, as its provider said ? See
+    /// [`text_hash`]. The
     /// index journal names the chunks it was for. `false` by default.
     fn was_truncated(&self, text: &str) -> bool {
         let _ = text;
@@ -1390,4 +1391,13 @@ mod tests_rythme_et_lots {
             }
         }
     }
+}
+
+/// **The hash under which a text truncated by a distant model is remembered**
+/// (`Embedder::was_truncated`) : the client keeps hashes, not texts.
+pub fn text_hash(text: &str) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    text.hash(&mut h);
+    h.finish()
 }

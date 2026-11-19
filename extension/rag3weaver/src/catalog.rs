@@ -4795,6 +4795,18 @@ fn read_threads() -> u64 {
         // provisoire, que le verrou repris permet de lire.
         let avertissements: Vec<String> = avertissements.iter().map(|a| self.nommer_les_muets(&table, a)).collect();
         if let Some(w) = suivi {
+            // The truncated chunks too (19 November 2026) : their file and line, not an uuid.
+            for (uuid, nom) in w.truncated.lock().unwrap_or_else(|p| p.into_inner()).iter_mut() {
+                if *nom == crate::dataflow::record_nodes::nom_provisoire(&table, uuid) {
+                    *nom = crate::dataflow::record_nodes::nom_du_morceau(
+                        self.conn.as_ref(),
+                        self.dialect.as_ref(),
+                        Some(&self.entity_configs),
+                        &table,
+                        uuid,
+                    );
+                }
+            }
             for (uuid, nom) in w.silent.lock().unwrap_or_else(|p| p.into_inner()).iter_mut() {
                 if *nom == crate::dataflow::record_nodes::nom_provisoire(&table, uuid) {
                     *nom = crate::dataflow::record_nodes::nom_du_morceau(

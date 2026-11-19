@@ -2243,6 +2243,10 @@ pub struct EmbedWatch {
     pub char_cuts_reported: std::sync::atomic::AtomicUsize,
     /// Texts truncated by the model (in tokens), already written in the index journal.
     pub token_cuts_reported: std::sync::atomic::AtomicUsize,
+    /// The chunks the model truncated, as its provider said : (uuid, name).
+    pub truncated: Mutex<Vec<(String, String)>>,
+    /// How many of them the index journal has already named.
+    pub truncated_reported: std::sync::atomic::AtomicUsize,
 }
 
 impl EmbedWatch {
@@ -2960,6 +2964,14 @@ impl Node for EmbedNode {
                 Ok(())
             }, &suivi)?;
             relever_les_muets(ctx, watch.as_deref(), &stats.silent, &embedder.timeout(), |i| (dense_works[i].uuid.clone(), nommer(i)));
+            // The chunks the model truncated, named for the index journal (19 November 2026).
+            if let Some(w) = watch.as_deref() {
+                let cut: Vec<(String, String)> = (0..dense_works.len())
+                    .filter(|&i| embedder.was_truncated(&dense_works[i].text))
+                    .map(|i| (dense_works[i].uuid.clone(), nommer(i)))
+                    .collect();
+                w.truncated.lock().unwrap_or_else(|p| p.into_inner()).extend(cut);
+            }
             ctx.metric("model_ms", stats.embed_ms as f64);
             ctx.metric("write_ms", stats.write_ms as f64);
         }

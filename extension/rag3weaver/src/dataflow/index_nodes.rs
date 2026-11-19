@@ -353,6 +353,21 @@ fn dire_la_provenance(catalog: &Catalog, journal: &std::path::Path, watch: &Embe
                 ));
             }
         }
+        // **Which chunks** (19 November 2026) : named, ten at most, the new ones only.
+        let named: Vec<String> = {
+            let all = watch.truncated.lock().unwrap_or_else(|p| p.into_inner());
+            let from = watch.truncated_reported.swap(all.len(), std::sync::atomic::Ordering::SeqCst).min(all.len());
+            all[from..].iter().map(|(_, n)| n.clone()).collect()
+        };
+        if !named.is_empty() {
+            let window = tokens.map(|(_, w)| format!(" à {w} jetons")).unwrap_or_default();
+            let more = if named.len() > 10 { format!(", et {} autres", named.len() - 10) } else { String::new() };
+            log(journal, &format!(
+                "{} morceau(x) coupé(s){window} par le modèle : {}{more}",
+                named.len(),
+                named.iter().take(10).cloned().collect::<Vec<_>>().join(", ")
+            ));
+        }
     }
 }
 

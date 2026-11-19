@@ -326,6 +326,8 @@ pub struct EmbedDaemon {
     max_chars: usize,
     /// Texts cut to the cap since the service started (said in its identity).
     cut_texts: std::sync::atomic::AtomicU64,
+    /// The model's truncations during the warm-up : not traffic (19 November 2026).
+    warmup_truncations: usize,
 }
 
 impl EmbedDaemon {
@@ -357,6 +359,7 @@ impl EmbedDaemon {
             empoisonne: Mutex::new(None),
             max_chars: MAX_CHARS_PAR_TEXTE,
             cut_texts: std::sync::atomic::AtomicU64::new(0),
+            warmup_truncations: 0,
         }
     }
 
@@ -424,12 +427,15 @@ impl EmbedDaemon {
         if active {
             let debut = std::time::Instant::now();
             let (lot_max, _) = self.embedder.budget_conseille().unwrap_or((32, 512));
+            let before = self.embedder.troncatures().map_or(0, |(n, _)| n);
+            let mut sent = 0usize;
             let mut faits = Vec::new();
             for mots in [40usize, 90, 190, 380] {
                 for lot in [1usize, 8, 32, lot_max] {
                     let textes: Vec<String> = (0..lot).map(|i| (0..mots)
                         .map(|j| format!("m{}", (i * 7 + j * 13) % 97))
                         .collect::<Vec<_>>().join(" ")).collect();
+                    sent += textes.len();
                     let erreur = match self.embedder.embed(&textes) {
                         Ok(vecteurs) if vecteurs.len() == textes.len() && vecteurs.iter().all(|v| v.len() == self.embedder.dim() && v.iter().all(|x| x.is_finite())) => None,
                         Ok(_) => Some("chauffe : résultat vide, dimension ou cardinalité invalide".into()),
@@ -439,13 +445,16 @@ impl EmbedDaemon {
                 }
             }
             let succes = faits.iter().filter(|f| f.erreur.is_none()).count();
-            eprintln!("  chauffe : {succes}/{} classes de forme en {:?}", faits.len(), debut.elapsed());
+            let after = self.embedder.troncatures().map_or(0, |(n, _)| n);
+            self.warmup_truncations = after;
+            let cut_in_warmup = after.saturating_sub(before);
+            eprintln!("  chauffe : {succes}/{} classes de forme en {:?}, {sent} textes dont {cut_in_warmup} coupés", faits.len(), debut.elapsed());
             bilan.insert("embed".into(), Chauffe {
                 etat: if succes == faits.len() { EtatChauffe::Complete } else { EtatChauffe::Partielle },
                 duree_ms: debut.elapsed().as_millis().min(u64::MAX as u128) as u64,
                 formes: faits,
-                texts: 0,
-                truncated: 0,
+                texts: sent,
+                truncated: cut_in_warmup,
             });
         } else { bilan.get_mut("embed").unwrap().etat = EtatChauffe::Desactivee; }
         self.chauffe = Some(bilan);
@@ -636,7 +645,7 @@ impl EmbedDaemon {
             chars_per_token: Some(CARACTERES_PAR_JETON),
             cut_texts: Some(self.cut_texts.load(std::sync::atomic::Ordering::Relaxed)),
             max_tokens_per_text: self.embedder.troncatures().map(|(_, window)| window),
-            truncated_texts: self.embedder.troncatures().map(|(count, _)| count as u64),
+            truncated_texts: self.embedder.troncatures().map(|(count, _)| count.saturating_sub(self.warmup_truncations) as u64),
         }
     }
 
@@ -835,10 +844,31 @@ impl EmbedDaemon {
             },
             ("POST", "/embed") => match lire_json::<Textes>(req) {
                 Err(e) => (400, erreur(&e)),
-                Ok(t) => match self.par_lots(&self.cut_to_cap(&t.texts), |lot| self.embedder.embed(lot)) {
-                    Ok(v) => (200, serde_json::json!({ "vectors": v }).to_string()),
-                    Err(e) => (500, erreur(&e.to_string())),
-                },
+                Ok(t) => {
+                    // **Which texts the model truncated** (19 November 2026) : read
+                    // right after each batch, under the pass lock, and given back by
+                    // their index in the request, for the client to name the chunk.
+                    let texts = self.cut_to_cap(&t.texts);
+                    let cut = Mutex::new(Vec::<String>::new());
+                    match self.par_lots(&texts, |lot| {
+                        let v = self.embedder.embed(lot)?;
+                        let mut c = cut.lock().unwrap_or_else(|p| p.into_inner());
+                        c.extend(self.embedder.last_truncated().into_iter().filter_map(|i| lot.get(i).cloned()));
+                        Ok(v)
+                    }) {
+                        Ok(v) => {
+                            let cut = cut.into_inner().unwrap_or_else(|p| p.into_inner());
+                            let truncated: Vec<usize> = texts.iter().enumerate().filter(|(_, t)| cut.contains(t)).map(|(i, _)| i).collect();
+                            let body = if truncated.is_empty() {
+                                serde_json::json!({ "vectors": v })
+                            } else {
+                                serde_json::json!({ "vectors": v, "truncated": truncated })
+                            };
+                            (200, body.to_string())
+                        }
+                        Err(e) => (500, erreur(&e.to_string())),
+                    }
+                }
             },
             ("POST", "/embed_dual") => match (&self.dual, lire_json::<Textes>(req)) {
                 (None, _) => (404, erreur("ce démon ne sert pas le creux")),
@@ -991,6 +1021,10 @@ pub struct DaemonEmbedder {
     _attache: Option<crate::serveur::Attache>,
     /// Texts this client cut to its service's `max_chars_per_text` before sending.
     cut_texts: std::sync::atomic::AtomicUsize,
+    /// Texts the service's model truncated, as its `/embed` said (19 November 2026).
+    truncated: std::sync::atomic::AtomicUsize,
+    /// Their hashes (`crate::embedder::text_hash`), for the index journal to name them.
+    truncated_hashes: Mutex<std::collections::HashSet<u64>>,
 }
 
 /// **Un bail d'usage tenu chez un fournisseur** ([`DaemonEmbedder::prendre_bail`]).
@@ -1157,7 +1191,7 @@ impl DaemonEmbedder {
     fn depuis_dans(adresse: &str, attache: Option<crate::serveur::Attache>, delai: std::time::Duration) -> Result<Self, DaemonError> {
         let agent = super::agent_with_timeout(delai);
         let identite: Identite = identite_de(&agent, adresse, SERVICE)?;
-        Ok(Self { adresse: adresse.to_string(), base: base_url(adresse), agent, delai, identite, _attache: attache, cut_texts: Default::default() })
+        Ok(Self { adresse: adresse.to_string(), base: base_url(adresse), agent, delai, identite, _attache: attache, cut_texts: Default::default(), truncated: Default::default(), truncated_hashes: Default::default() })
     }
 
     /// **Le délai d'un appel** au service, au lieu du défaut
@@ -1263,6 +1297,7 @@ impl DaemonEmbedder {
 
 impl Embedder for DaemonEmbedder {
     fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
+        let originals = texts;
         let texts = &*self.within_cap(texts);
         // **Sous l'échéance d'un appel** (le `/call` d'un hook, `deadline_ms`) :
         // l'attente du service est bornée au temps qui reste, et ce qu'on attendait
@@ -1283,12 +1318,34 @@ impl Embedder for DaemonEmbedder {
             }
             _ => self.envoyer("/embed", texts)?,
         };
+        if let Some(cut) = v["truncated"].as_array() {
+            let mut known = self.truncated_hashes.lock().unwrap_or_else(|p| p.into_inner());
+            if known.len() > 100_000 {
+                known.clear();
+            }
+            for i in cut.iter().filter_map(|i| i.as_u64()) {
+                if let Some(t) = originals.get(i as usize) {
+                    known.insert(crate::embedder::text_hash(t));
+                    self.truncated.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                }
+            }
+        }
         serde_json::from_value(v["vectors"].clone())
             .map_err(|e| EmbedError::ProviderError(format!("champ 'vectors' : {e}")))
     }
 
     fn dim(&self) -> usize {
         self.identite.dim
+    }
+
+    /// **What the service's model truncated for this client**, at the window
+    /// its identity declares ; `None` for a service from before the window.
+    fn troncatures(&self) -> Option<(usize, usize)> {
+        self.identite.max_tokens_per_text.map(|window| (self.truncated.load(std::sync::atomic::Ordering::Relaxed), window))
+    }
+
+    fn was_truncated(&self, text: &str) -> bool {
+        self.truncated_hashes.lock().unwrap_or_else(|p| p.into_inner()).contains(&crate::embedder::text_hash(text))
     }
 
     /// **Relayé, jamais blanchi.** Voir l'en-tête du module.
