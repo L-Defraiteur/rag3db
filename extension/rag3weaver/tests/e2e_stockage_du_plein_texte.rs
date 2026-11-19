@@ -72,7 +72,7 @@ fn blobs_en_base(catalog: &Catalog) -> i64 {
 #[test]
 #[ignore]
 fn role_enfant() {
-    let (Ok(role), Ok(base)) = (std::env::var(ROLE), std::env::var(BASE)) else { return };
+    let (Ok(role), Ok(base)) = (std::env::var(ROLE), std::env::var(BASE)) else { return crate::common::enfant("e2e_stockage_du_plein_texte") };
     let synchroniser = |catalog: &mut Catalog| {
         let options = SourceSyncOptions { exige: Disponibilites::RECHERCHE_TEXTE, ..Default::default() };
         let r = sync_source(catalog, &Snapshot::new("depot", corpus()), &options, &mut |_| {}).expect("synchroniser");
