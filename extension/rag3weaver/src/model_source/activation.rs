@@ -516,7 +516,7 @@ pub(super) fn connecter_ou_attendre(source: &super::ModelSource, annule: &std::s
         Some(a) => a,
         None => tenue.adresse_active().ok_or("activation : fournisseur maintenu sans adresse")?,
     };
-    Ok((Box::new(DenseTenu { tenue, dim, vu: std::sync::Mutex::new(vu) }), super::Origin::Service(adresse)))
+    Ok((Box::new(DenseTenu { tenue, dim, vu: std::sync::Mutex::new(vu), truncated_hashes: Default::default() }), super::Origin::Service(adresse)))
 }
 
 /// **Un fournisseur tenu pour une capacité** : son client, et ce qui le
@@ -1095,6 +1095,8 @@ struct DenseTenu {
     tenue: Tenue<crate::daemon::DaemonEmbedder>,
     dim: usize,
     vu: std::sync::Mutex<Option<(bool, Option<(usize, usize)>, Option<(usize, usize)>)>>,
+    /// The texts its provider's model truncated (`crate::embedder::text_hash`), across takes.
+    truncated_hashes: std::sync::Mutex<std::collections::HashSet<u64>>,
 }
 
 #[cfg(feature = "daemon")]
@@ -1104,6 +1106,8 @@ impl crate::embedder::Embedder for DenseTenu {
             let r = c.embed(textes);
             if r.is_ok() {
                 *self.vu.lock().unwrap_or_else(|e| e.into_inner()) = Some((c.is_mock(), c.budget_conseille(), c.troncatures()));
+                let mut known = self.truncated_hashes.lock().unwrap_or_else(|e| e.into_inner());
+                known.extend(textes.iter().filter(|t| c.was_truncated(t)).map(|t| crate::embedder::text_hash(t)));
             }
             r
         }, parti_calcul, crate::embedder::EmbedError::ProviderError)
@@ -1116,6 +1120,7 @@ impl crate::embedder::Embedder for DenseTenu {
     fn called_address(&self) -> Option<String> { self.tenue.adresse_active() }
     fn budget_conseille(&self) -> Option<(usize, usize)> { self.vu.lock().unwrap_or_else(|e| e.into_inner()).as_ref().and_then(|(_, b, _)| *b) }
     fn troncatures(&self) -> Option<(usize, usize)> { self.vu.lock().unwrap_or_else(|e| e.into_inner()).as_ref().and_then(|(_, _, t)| *t) }
+    fn was_truncated(&self, text: &str) -> bool { self.truncated_hashes.lock().unwrap_or_else(|e| e.into_inner()).contains(&crate::embedder::text_hash(text)) }
     fn timeout(&self) -> Option<std::time::Duration> { Some(delai_appel(&self.tenue.source)) }
     fn provenance_counts(&self) -> Vec<(String, usize)> { self.tenue.lire_les_comptes() }
     fn provenance_events(&self) -> Vec<String> { self.tenue.lire_les_dits() }
