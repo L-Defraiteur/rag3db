@@ -30,6 +30,12 @@
   lisait les fichiers indexés que dans les lignes `File`, et ce chemin lui échappait. Un index complet retire
   maintenant les scopes d'un chemin sans `File` que la source ne retient plus. La cause de ces orphelins reste à
   trouver (ticket).
+- 19 novembre 2026 — **L'archiviste n'écrit plus de consigne en prose pour extraire les sujets.** L'invite
+  d'extraction d'une tranche est une ligne de tâche (`extract_instruction`, réglable sans rebâtir), puis la tranche ;
+  celle du découpage d'une longue section, une ligne (`instruction`) puis ses paragraphes numérotés. Les règles d'un
+  sujet (un chantier, une chose ou une règle, jamais une date ; les intervalles de tours ; ce qui est écarté et
+  pourquoi) sont dans les descriptions des champs du schéma de réponse, que le modèle reçoit avec lui.
+
 - 19 novembre 2026 — **Un type déclare comment il se présente au modèle.** Le schéma d'une entité peut porter
   `x-presentation` : un gabarit de texte sur ses champs (`{"template": "{{ name }} — {{ about }}"}`) ou une forme
   nommée (`{"form": "kv"}`, `json` ou `markdown`). Une ligne de cette entité, donnée en contexte à `LlmNode`, se rend
