@@ -33,7 +33,7 @@ graph LR
     refs_new["ForEachNode(graph='@builtin:backends/memory/graphs/archive_link.mmd', on_error='report')"]
     sourcer["RhaiNode(script_id=archive_params, inputs='titre,contenu,chemin,origine,jour', titre=$element.titre, contenu=$element.contenu, chemin=$element.chemin, origine=$origine, jour=$jour)"]
     source["EntityRecordNode(entity='Source', action='put', record=$source)"]
-    rapport["RhaiNode(script_id=archive_slice_rapport, inputs='trace', trace=$trace)"]
+    rapport["RhaiNode(script_id=archive_slice_rapport, inputs='trace,chemin', trace=$trace, chemin=$element.chemin)"]
     genre -->|report:value| prompt
     prompt -->|result:value| extract
     extract -->|json:value| build
