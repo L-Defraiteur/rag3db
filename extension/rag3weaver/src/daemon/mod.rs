@@ -490,7 +490,45 @@ fn agent_qui_reprend(config: ureq::config::Config) -> ureq::Agent {
 /// signal`) : c'est transitoire, un client le retente. Seule l'attente se retente, elle ne
 /// consomme rien ; un envoi interrompu n'est jamais rejoué.
 pub fn connecteur_qui_reprend() -> impl ureq::unversioned::transport::Connector {
-    ureq::unversioned::transport::DefaultConnector::default()
+    use ureq::unversioned::transport::Connector;
+    ureq::unversioned::transport::DefaultConnector::default().chain(Reprise)
+}
+
+/// Habille le transport du connecteur par défaut ([`TransportQuiReprend`]).
+#[derive(Debug)]
+struct Reprise;
+
+impl<In: ureq::unversioned::transport::Transport> ureq::unversioned::transport::Connector<In> for Reprise {
+    type Out = TransportQuiReprend<In>;
+    fn connect(&self, _: &ureq::unversioned::transport::ConnectionDetails, chained: Option<In>) -> Result<Option<Self::Out>, ureq::Error> {
+        Ok(chained.map(TransportQuiReprend))
+    }
+}
+
+/// Le transport par défaut, dont l'attente d'une réponse reprend sur `Interrupted` (cinq fois au
+/// plus : un signal par reprise ne se répète pas sans fin).
+#[derive(Debug)]
+struct TransportQuiReprend<T>(T);
+
+impl<T: ureq::unversioned::transport::Transport> ureq::unversioned::transport::Transport for TransportQuiReprend<T> {
+    fn buffers(&mut self) -> &mut dyn ureq::unversioned::transport::Buffers {
+        self.0.buffers()
+    }
+    fn transmit_output(&mut self, amount: usize, timeout: ureq::unversioned::transport::NextTimeout) -> Result<(), ureq::Error> {
+        self.0.transmit_output(amount, timeout)
+    }
+    fn await_input(&mut self, timeout: ureq::unversioned::transport::NextTimeout) -> Result<bool, ureq::Error> {
+        let mut reprises = 0;
+        loop {
+            match self.0.await_input(timeout) {
+                Err(ureq::Error::Io(e)) if e.kind() == std::io::ErrorKind::Interrupted && reprises < 5 => reprises += 1,
+                r => return r,
+            }
+        }
+    }
+    fn is_open(&mut self) -> bool {
+        self.0.is_open()
+    }
 }
 
 /// **Le client des témoins** (ticket du 8 novembre 2026 : un test de l'hôte attendait son hôte
