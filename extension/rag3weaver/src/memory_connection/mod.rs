@@ -132,6 +132,8 @@ impl DbConnection for MemoryConnection {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_writes;
 
 /// **No checkpoints in memory**: an image is rebuilt, never resumed — an ingestion interrupted in memory starts over.
 /// This store keeps nothing and finds nothing incomplete; [`crate::memory_dialect::MemoryDialect`] hands it to the
