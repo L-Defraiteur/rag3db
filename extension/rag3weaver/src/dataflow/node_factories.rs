@@ -1614,7 +1614,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
 
 /// Nombre de types de nœuds enregistrés par [`register_builtins`] — les tests
 /// de comptage le lisent ici pour suivre les features.
-pub const BUILTIN_NODE_COUNT: usize = 57 + if cfg!(feature = "code") { 20 } else { 0 };
+pub const BUILTIN_NODE_COUNT: usize = 58 + if cfg!(feature = "code") { 20 } else { 0 };
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
