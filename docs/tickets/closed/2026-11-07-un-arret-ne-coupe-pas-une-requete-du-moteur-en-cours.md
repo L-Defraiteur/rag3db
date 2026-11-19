@@ -59,11 +59,18 @@ même backend va au bout.
   - Une requête suivante du premier est refusée.
 - `dataflow::concurrent::tests::a_stop_runs_what_was_registered_once_and_never_after_its_guard`.
 
-**Ce qui n'est pas prouvé de bout en bout** : le témoin passe par l'instantané, pas par un run du backend. Aucun
-nœud sûr pour l'instantané ne lance de requête lente ou arbitraire : `CypherNode` n'est pas `snapshot_safe`, et aucun
-test n'ajoute de fabrique de nœuds au registre d'un backend. Le branchement dans `execute_plan_une_fois` (quatre
-lignes) n'a donc pas de témoin à lui. Pour l'en doter, il faudrait un nœud de test lent et sûr, inscrit au registre
-d'un backend de test.
+**Le témoin par le chemin de l'hôte** (branche `interrupt-e2e`), à la demande de c7 :
+`backend::tests::stopping_a_call_interrupts_its_snapshot_statement_through_the_host_path`.
+- **Le montage** : un nœud de lecture lente (`backend::lecture_lente`, inscrit au registre et permis aux outils sous
+  `cfg(test)` seulement) somme quatre milliards de lignes sur la connexion de l'instantané. L'outil qui le porte est
+  appelé par `call_in` sur la cellule du catalogue, comme le fait une session de l'hôte. Une fois le run de l'appel en
+  vol, `stop_run` l'arrête.
+- **Le résultat** : l'appel rend la main en moins d'une seconde, et pas avec sa somme. Sans les quatre lignes de
+  `execute_plan_une_fois` (sonde `probe-interrupt-e2e-red`), il allait au bout : 20,1 s.
+- **Ce témoin a trouvé un défaut que celui du pool ne voyait pas.** Les instantanés de l'hôte passent par
+  `RevocableConnection` (`src/connection/lifecycle.rs`), qui relayait tous les verbes sauf `interrupt`. Elle prenait
+  donc le défaut, sans effet, et un appel arrêté allait au bout (19,8 s), alors que le témoin du pool, sur une
+  `Rag3dbConnection` nue, était vert. Elle relaie maintenant `interrupt` (86ce45f487).
 
 **Une course reste** : une interruption qui tombe entre le contrôle de l'instantané (`avant`) et le début de la
 requête dans le moteur est remise à zéro par le moteur, et cette requête va au bout. La fenêtre est de quelques
