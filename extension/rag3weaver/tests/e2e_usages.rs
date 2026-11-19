@@ -1390,3 +1390,20 @@ fn usages_d_un_type_compte_ses_sites_type_methode_dans_chaque_langage() {
     }
     assert!(perdus.is_empty(), "les sites Type::méthode() comptés pour le type : {perdus:#?}");
 }
+
+/// **La tête de type ne déplace pas une arête que le fichier résout déjà** : `f() -> Result<(), CatalogError>`
+/// qui fait `Err(CatalogError::Schema)`, le type défini dans le même fichier. L'arête `f → CatalogError` reste
+/// « fichier », à la ligne de la signature : la tête `CatalogError` de l'appel ne la remplace pas par un rendez-vous
+/// « par le nom » (433 arêtes de rag3weaver/src déplacées ainsi à la première forme du correctif).
+#[test]
+#[ignore]
+fn la_tete_de_type_ne_deplace_pas_une_arete_du_fichier() {
+    let catalog = setup();
+    let fichiers = vec![(
+        "a.rs".to_string(),
+        "pub enum CatalogError {\n    Schema,\n}\n\npub fn f() -> Result<(), CatalogError> {\n    Err(CatalogError::Schema)\n}\n".to_string(),
+    )];
+    let mut cat = catalog.lock().unwrap();
+    cat.ingest_code(&analyze("/projet", fichiers)).unwrap();
+    assert_eq!(marques_vers(&cat, "f", "CatalogError"), vec!["fichier".to_string()], "l'arête du fichier reste « fichier »");
+}
