@@ -817,21 +817,36 @@ fn mesure_les_formes_de_la_recopie() {
         // Last: its refusal makes the connection to be reopened.
         ("aujourd'hui", rag3weaver::code_sync::edge_copy_write(&cat, "DEFINED_IN", "File", "Scope", rag3weaver_ir::Direction::Incoming, cat.rang_en_attente(), 1).unwrap()),
     ];
+    // Pairs that copy for real: each File towards the next one, no batch excluded. The two forms that write run
+    // on them, the corrected one first (today's refusal makes the connection to be reopened).
+    let decalees = CypherValue::List(lu.rows.windows(2).map(|w| CypherValue::Map(std::collections::BTreeMap::from([("a".to_string(), w[0][0].clone()), ("n".to_string(), w[1][0].clone())]))).collect());
+    let ecrit = |entete: &str| format!("UNWIND $paires AS p {entete} WHERE {visible} AND {hors} AND NOT EXISTS {{ MATCH (x)-[:`DEFINED_IN`]->(n) }} CREATE (x)-[:`DEFINED_IN` {{`resolution`: r.`resolution`}}]->(n) RETURN count(*)");
+    let formes_qui_ecrivent = [
+        ("corrigée, qui écrit", ecrit("MATCH (a:`File` {_uuid: p.a}) MATCH (n:`File` {_uuid: p.n}) MATCH (x:`Scope`)-[r:`DEFINED_IN`]->(a)")),
+        ("aujourd'hui, qui écrit", ecrit("MATCH (x:`Scope`)-[r:`DEFINED_IN`]->(a:`File` {_uuid: p.a}), (n:`File` {_uuid: p.n})")),
+    ];
+    let params_qui_ecrivent = [QueryParam::new("paires", decalees), QueryParam::new("lot_s0", source.clone()), QueryParam::new("lot_p0", CypherValue::List(vec![]))];
     let params = [QueryParam::new("paires", paires), QueryParam::new("lot_s0", source), QueryParam::new("lot_p0", chemins)];
-    for (nom, requete) in formes {
-        let plan = conn.execute_with_params(&format!("EXPLAIN {requete}"), &params).map(|r| r.rows.iter().map(|l| format!("{l:?}")).collect::<Vec<_>>().join("\n")).unwrap_or_else(|e| format!("EXPLAIN refusé : {e}"));
+    let formes: Vec<(&str, String, &[QueryParam])> = formes
+        .into_iter()
+        .filter(|(nom, _)| *nom != "aujourd'hui")
+        .map(|(n, q)| (n, q, &params[..]))
+        .chain(formes_qui_ecrivent.into_iter().map(|(n, q)| (n, q, &params_qui_ecrivent[..])))
+        .collect();
+    for (nom, requete, params) in formes {
+        let plan = conn.execute_with_params(&format!("EXPLAIN {requete}"), params).map(|r| r.rows.iter().map(|l| format!("{l:?}")).collect::<Vec<_>>().join("\n")).unwrap_or_else(|e| format!("EXPLAIN refusé : {e}"));
         let mut ops: Vec<String> = plan.split(|c: char| !(c.is_ascii_uppercase() || c == '_')).filter(|m| m.len() >= 4 && (m.contains("SCAN") || m.contains("JOIN") || m.contains("CROSS") || m.contains("LOOKUP") || m.contains("MASK"))).map(str::to_string).collect();
         ops.dedup();
         let _ = std::fs::write("/proc/self/clear_refs", "5");
         let avant = memoire_du_processus();
         conn.execute("BEGIN TRANSACTION").unwrap();
         let debut = std::time::Instant::now();
-        let r = conn.execute_with_params(&requete, &params);
+        let r = conn.execute_with_params(&requete, params);
         let ms = debut.elapsed().as_millis();
         let _ = conn.execute("ROLLBACK");
         let (pic, _) = memoire_du_processus();
         let rendu = match &r {
-            Ok(q) => format!("{} lignes", q.rows.len()),
+            Ok(q) => format!("{} lignes : {:?}", q.rows.len(), q.rows.first()),
             Err(e) => format!("refusé : {}", e.to_string().chars().take(140).collect::<String>()),
         };
         eprintln!("[forme] {nom} : {ms} ms, pic {pic} Mio (avant {} Mio), {rendu}\n[forme]   accès : {ops:?}", avant.1);
