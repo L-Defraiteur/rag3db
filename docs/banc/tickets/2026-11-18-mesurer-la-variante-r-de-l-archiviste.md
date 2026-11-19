@@ -57,7 +57,11 @@ passe, appels, jetons d'entrée et part du cache), avec les définitions du § 4
 donne, par réglage, **le taux de jetons d'invite servis depuis le cache** (Vertex l'a donné à 28 % sur la F300 du
 18), et le **coût réel** qui en découle, aux prix de Vertex du jour, écrits avec la mesure. F, S et R se départagent
 sur le prix comme sur P1. Un compteur absent n'est pas un zéro : la part se calcule sur les appels qui le rendent,
-avec leur couverture, comme le dit `docs/banc/17-11-2026/04-audit-cache-vertex-et-plan-de-mesure.md`. Les autres
+avec leur couverture, comme le dit `docs/banc/17-11-2026/04-audit-cache-vertex-et-plan-de-mesure.md`.
+**Par appel** (session mémoire, 19 novembre) : la taille du préfixe stable (consigne, schéma, identité, rapport et
+résumés d'avant) et les jetons servis par le cache, appel par appel. Sur Gemini 3.8 Flash, le cache implicite ne joue
+qu'au-delà de 6 144 jetons communs : la colonne dit, pour chaque réglage, la part des appels dont le préfixe dépasse
+ce seuil. Voir la section « Le cache explicite de Vertex pour une fenêtre entière » plus bas. Les autres
 ingrédients restent à leur réglage par défaut et sont écrits avec chaque passe. La matrice se joue après la page de
 la session mémoire qui pose la forme.
 
