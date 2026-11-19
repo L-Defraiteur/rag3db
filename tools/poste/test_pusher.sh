@@ -505,6 +505,12 @@ h=$(lot nav-1 extension/rag3weaver/src/nav.rs 'fn nav() {}')
 P enqueue nav-1 nav-1 "$h" rust la_page_du_chat_nomme navigateur - - author-c > /dev/null 2>&1 && ok "suite du témoin « navigateur » acceptée au dépôt" || ko "suite du témoin « navigateur » refusée au dépôt"
 P dequeue nav-1 > /dev/null 2>&1
 
+# 32. A lot of the terminal's crate (19 Nov., tty): witness suite « tty » accepted at the deposit, and handed to the
+# pass as SUITE_DU_TEMOIN=tty (judged at the pass's tty step).
+h=$(lot tty-1 extension/rag3weaver/tty/src/t.rs 'fn t() {}')
+P enqueue tty-1 tty-1 "$h" rust the_view_says_it tty - - author-c > /dev/null 2>&1 && ok "suite du témoin « tty » acceptée au dépôt" || ko "suite du témoin « tty » refusée au dépôt"
+P dequeue tty-1 > /dev/null 2>&1
+
 # 31. landed.tsv keeps the declared witness and its suite of each landed lot (19 Nov., c7: for an audit of what proved it).
 h=$(lot lw-1 extension/rag3weaver/src/lw.rs 'fn lw() {}')
 P enqueue lw-1 lw-1 "$h" rust lw_witness e2e_code - - author-c > /dev/null; echo VERT > "$D/outcomes.d/lw-1"
