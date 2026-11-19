@@ -1,0 +1,9 @@
+%% tool: rows_source
+%% description: The Source rows that match a computed filter, with what the caller carries along (a cited graph receives its arguments by its configuration only, and a ForEachNode's results are a single list: the carried value is how a chain of selections keeps what it has found).
+%% param: element json! -- {filter, carried}.
+%% result: wrap.result
+
+graph LR
+    select["SelectRecordsNode(entity='Source', filter=$element.filter, limit=0)"]
+    wrap["RhaiNode(script='#{rows: input.value, carried: input.carried}', inputs='carried', carried=$element.carried)"]
+    select -->|results:value| wrap
