@@ -187,5 +187,46 @@ def prove_red(block, dest, target, poste):
     return {"red": True, "why": "red on the assertion", "failed": failed, "code": code, "tail": sortie[-2000:]}
 
 
+CAMPAGNE = os.path.expanduser("~/.cache/rag3weaver-build/campagne")
+
+
+def prepare(case_file, case_path, repo, poste=None, racine=CAMPAGNE):
+    """One case, ready for Algareth: refused with its reasons, or a run folder holding the tree,
+    the case's target, case.json, request.txt and red.json (the red proved at the parent). The
+    target lives under the campaign folder, never in /tmp (RAM on these machines)."""
+    import datetime, hashlib, shutil
+    block, report = read_case(case_file)
+    raisons = refusals(block, report, repo, case_path)
+    nom = os.path.splitext(os.path.basename(case_file))[0]
+    run = os.path.join(racine, nom, datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
+    os.makedirs(run)
+    with open(os.path.join(run, "case.json"), "w") as f:
+        json.dump(dict(block, case_file=case_path, report_sha256=hashlib.sha256(report.encode()).hexdigest()), f, indent=2, ensure_ascii=False)
+    if raisons:
+        with open(os.path.join(run, "refused.json"), "w") as f:
+            json.dump(raisons, f, indent=2, ensure_ascii=False)
+        return {"run": run, "refused": raisons}
+    with open(os.path.join(run, "request.txt"), "w") as f:
+        f.write(report + "\n")
+    build_tree(block, repo, os.path.join(racine, "depots"), os.path.join(run, "arbre"))
+    rouge = prove_red(block, os.path.join(run, "arbre"), os.path.join(run, "target"), poste)
+    with open(os.path.join(run, "red.json"), "w") as f:
+        json.dump(rouge, f, indent=2, ensure_ascii=False)
+    if not rouge["red"]:
+        with open(os.path.join(run, "refused.json"), "w") as f:
+            json.dump([rouge["why"]], f, indent=2, ensure_ascii=False)
+        return {"run": run, "refused": [rouge["why"]]}
+    return {"run": run, "refused": [], "red": rouge["failed"]}
+
+
 if __name__ == "__main__":
-    sys.exit("usage: lanceur.py <case.md> …")
+    import argparse
+    a = argparse.ArgumentParser(description="The launcher of the campaign of past fixes, lot 1: prepare a case.")
+    a.add_argument("verb", choices=["prepare"])
+    a.add_argument("case_file", help="the case file (Markdown with its « lanceur » block)")
+    a.add_argument("--case-path", required=True, help="the case file's path in its repository (refused if present at the parent)")
+    a.add_argument("--repo", required=True, help="a clone of the repository that holds the parent (read only)")
+    a.add_argument("--poste", default=os.path.expanduser("~/.cache/rag3weaver-build/poste"), help="poste, for the red at the parent under poste lourd")
+    a.add_argument("--racine", default=CAMPAGNE)
+    o = a.parse_args()
+    print(json.dumps(prepare(o.case_file, o.case_path, o.repo, o.poste if os.path.exists(o.poste) else None, o.racine), ensure_ascii=False))
