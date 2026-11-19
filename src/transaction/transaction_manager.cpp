@@ -619,17 +619,23 @@ std::string TransactionManager::describeTransactions(
     const auto now = common::Timestamp::getCurrentTimestamp().value;
     for (const auto id : ids) {
         out += out.empty() ? "" : ", ";
-        out += "transaction " + std::to_string(id);
-        if (!lck.owns_lock()) {
-            continue;
-        }
-        for (const auto& active : activeTransactions) {
-            if (active->getID() == id) {
-                out += common::stringFormat(" ({}, open for {} ms)",
-                    active->isReadOnly() ? "read-only" : "write",
-                    (now - active->getCurrentTS()) / 1000);
-                break;
+        const Transaction* found = nullptr;
+        if (lck.owns_lock()) {
+            for (const auto& active : activeTransactions) {
+                if (active->getID() == id) {
+                    found = active.get();
+                    break;
+                }
             }
+        }
+        if (found == nullptr) {
+            out += "transaction " + std::to_string(id);
+        } else if (found->isReadOnly()) {
+            out += common::stringFormat("reader {} (read-only, open for {} ms)", id,
+                (now - found->getCurrentTS()) / 1000);
+        } else {
+            out += common::stringFormat("writer {} (open for {} ms)", id,
+                (now - found->getCurrentTS()) / 1000);
         }
     }
     return out;

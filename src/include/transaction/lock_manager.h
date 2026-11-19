@@ -46,6 +46,13 @@ enum class LockResourceKind : uint8_t {
     // 15 novembre 2026). Un écrivain la tient en partagé de sa première écriture dans la table à sa
     // fin ; un ALTER, un DROP TABLE ou un CREATE INDEX la prend en exclusif, et attend.
     TABLE = 2,
+    // Les lecteurs d'une table (ticket de l'ALTER qui n'attend pas les lecteurs, 19 novembre
+    // 2026). Toute transaction qui lit la table la tient en partagé de sa première lecture à sa
+    // fin ; un changement des colonnes (ADD, DROP de propriété) ou un DROP TABLE la prend en
+    // exclusif, avant TABLE, et attend. Un COMMENT, un RENAME, un CREATE ou DROP d'index ne la
+    // prennent pas : ils n'attendent pas les lecteurs (le niveau de verrou de PostgreSQL : ACCESS
+    // EXCLUSIVE pour les premiers, SHARE UPDATE EXCLUSIVE pour les seconds).
+    TABLE_READ = 3,
     // Un genre s'ajoute ici sans rien changer d'autre : la ressource est comparée champ à
     // champ. Règle à tenir (PostgreSQL) : toute attente qui peut entrer dans un cycle doit
     // passer par ce gestionnaire, sinon la détection d'interblocage est aveugle.
@@ -68,6 +75,9 @@ struct RAG3DB_API LockResource {
     }
     static LockResource table(common::table_id_t tableID) {
         return LockResource{LockResourceKind::TABLE, tableID, {}};
+    }
+    static LockResource tableRead(common::table_id_t tableID) {
+        return LockResource{LockResourceKind::TABLE_READ, tableID, {}};
     }
 
     auto operator<=>(const LockResource&) const = default;
