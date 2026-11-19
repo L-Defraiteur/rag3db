@@ -7,8 +7,11 @@ fn conditions(i) {
         let v = i[k];
         if v != () && v != "" { must.push(#{ field: #{ key: k, value: v } }); }
     }
-    if i.since != () && i.since != "" { must.push(#{ field: #{ key: "at", value: [#{ op: "gte", value: i.since }] } }); }
-    if i.until != () && i.until != "" { must.push(#{ field: #{ key: "at", value: [#{ op: "lte", value: i.until }] } }); }
+    // `until` is a reserved word of Rhai: both bounds are read by index.
+    let since = i["since"];
+    let until_ = i["until"];
+    if since != () && since != "" { must.push(#{ field: #{ key: "at", value: [#{ op: "gte", value: since }] } }); }
+    if until_ != () && until_ != "" { must.push(#{ field: #{ key: "at", value: [#{ op: "lte", value: until_ }] } }); }
     must
 }
 let must = conditions(input);
