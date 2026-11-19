@@ -393,10 +393,13 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
       setRun(run);
       setBusy(true);
       // A turn in flight, opened in this window after it started: its text so far, from the shared worker.
+      // The worker's answer can come before the next render, while `runRef` still holds the run of before: the update
+      // itself picks the live bubble of this run (the functional updates apply in order, after the one that gives
+      // the bubble its run).
       tourEnVol(run).then((t) => {
-        if (!t || runRef.current !== run) return;
+        if (!t) return;
         dejaRepris.current = { run, seq: t.seq };
-        setItems((cur) => cur.map((i) => (i.kind === "message" && i.live ? { ...i, parts: [{ kind: "text", text: t.texte } as Part, ...i.parts.filter((p) => p.kind !== "text")] } : i)));
+        setItems((cur) => cur.map((i) => (i.kind === "message" && i.live && i.run === run ? { ...i, parts: [{ kind: "text", text: t.texte } as Part, ...i.parts.filter((p) => p.kind !== "text")] } : i)));
       });
       setStatus("l'agent travaille…");
       setItems((cur) => (cur.some((i) => i.kind === "message" && i.live) ? cur.map((i) => (i.kind === "message" && i.live ? { ...i, run: s.run! } : i)) : [...cur, message("assistant", "", { run: s.run!, live: true })]));
