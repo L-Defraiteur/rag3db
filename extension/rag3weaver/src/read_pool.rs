@@ -31,9 +31,7 @@
 //! instantané neuf (`Backend::execute_plan_avec`), en le disant
 //! (`instantane_renouvele`). Les ruptures sont comptées ([`ReadPool::rompus`]).
 
-use std::sync::atomic::{AtomicU64, Ordering};
-#[cfg(test)]
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
