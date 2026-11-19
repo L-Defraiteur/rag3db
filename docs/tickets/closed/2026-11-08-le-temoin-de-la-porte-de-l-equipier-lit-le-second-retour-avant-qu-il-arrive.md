@@ -1,6 +1,6 @@
 # Le témoin de la porte de l'équipier lit le second retour avant qu'il arrive
 
-- **État** : ouvert (8 novembre 2026), vu par l'arbre principal dans la passe du lot du délai ; pour everything declarative (le lot 2 de l'équipier, ad496c462).
+- **État** : fermé (19 novembre 2026, ED) — déjà fermé par b0301a0e32 (8 nov., 03:37) : le témoin attend aussi la ligne « en attente du superviseur depuis », que l'hôte n'écrit qu'après que le modèle a reçu tous ses résultats. Le rouge du ticket avait été vu sur 624aaadc9 (8 nov., 02:14), qui ne l'a pas. **Preuve** : un retard de 300 ms injecté dans le faux modèle avant qu'il enregistre son second retour (une machine chargée, rendue déterministe) laisse le témoin vert ; le retard reste dans le témoin, comme garde.
 - **Famille** : produit
 - **Gravité** : faux rouge (une course du témoin).
 - **Atteignable en service** : non (le témoin).
