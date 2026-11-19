@@ -231,6 +231,31 @@ else echo "ROUGE  tête reposée à la main, master bougé : rc $rc, master « $
   fi
   echo "ROUGE  ticket fermé : rc $rc, ouverte « $ouverte », fermée « $fermee »"; echo "$sortie" | tail -3; exit 1
 ) || rouge=1
+# **Le crochet PRE_PUSH** (19 novembre 2026, une PR par lot) : appelé avec la tête finale, juste avant le push ; son
+# échec est dit (« PR absente ») et le push se fait quand même.
+crochet() { # crochet <n> <rc du crochet> : écrit rc, sortie, tête vue par le crochet et master dans $D/crochet-<n>
+  (
+    H="$D/homep$1"; mkdir -p "$H/git_workspaces" "$H/.cache/rag3weaver-build/j"
+    git clone -q --bare "$D" "$D/nup$1.git" 2>/dev/null; git -C "$D/nup$1.git" update-ref refs/heads/master "$BASE"
+    git clone -q "$D/nup$1.git" "$H/git_workspaces/wt" 2>/dev/null
+    cd "$H/git_workspaces/wt" && git config user.email luciedefraiteur@gmail.com && git config user.name t
+    git checkout -q --detach origin/master; echo 'fn crochet() {}' > extension/rag3weaver/src/crochet.rs; git add -A; git commit -qm crochet
+    printf 'teste %s\nVERT\n' "$(git rev-parse --short HEAD)" > "$H/.cache/rag3weaver-build/j/resume.log"; git rev-parse origin/master > "$H/.cache/rag3weaver-build/j/base"
+    echo "rag3db-build-0123456789012345678901234567890123456789-Release" > "$H/.cache/rag3weaver-build/j/lib.log"
+    printf '#!/bin/bash\necho "$1 $(git -C %s rev-parse origin/master)" > %s\nexit %s\n' "$H/git_workspaces/wt" "$D/crochet-vu-$1" "$2" > "$D/crochet-$1.sh"
+    sortie=$(HOME="$H" PRE_PUSH="bash $D/crochet-$1.sh" bash "$GARDE" wt j 2>&1); rc=$?
+    printf '%s\n%s\n%s\n' "$rc" "$(git -C "$D/nup$1.git" rev-parse master)" "$sortie" > "$D/crochet-$1"
+  )
+}
+crochet 1 0; crochet 2 1
+r1=$(sed -n 1p "$D/crochet-1"); m1=$(sed -n 2p "$D/crochet-1"); vu1=$(cat "$D/crochet-vu-1" 2>/dev/null)
+if [ "$r1" = 0 ] && grep -qx POUSSE "$D/crochet-1" && [ "${vu1%% *}" = "$m1" ] && [ "${vu1#* }" != "$m1" ]; then
+  echo "vert   PRE_PUSH appelé avec la tête finale, avant le push"
+else echo "ROUGE  PRE_PUSH : rc $r1, vu « $vu1 », master $m1"; rouge=1; fi
+r2=$(sed -n 1p "$D/crochet-2")
+if [ "$r2" = 0 ] && grep -qx POUSSE "$D/crochet-2" && grep -q "PR absente : le crochet PRE_PUSH a rendu 1" "$D/crochet-2"; then
+  echo "vert   PRE_PUSH en échec : « PR absente », le push se fait"
+else echo "ROUGE  PRE_PUSH en échec : rc $r2 — $(tail -2 "$D/crochet-2")"; rouge=1; fi
 # **Les suites C++ transférables** (15 novembre 2026, relevé du cœur) : un lot qui ne touche que le moteur, quand seul du
 # Rust a atterri, pousse sans rejouer ; du C++ atterri aussi, ou un lot qui touche du Rust : arrêt.
 cpp_cas() { # cpp_cas <n> <fichier du lot…> -- <fichier de master…> : écrit rc, sortie et sujets de master dans $D/cpp-<n>

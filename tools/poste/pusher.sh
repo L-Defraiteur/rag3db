@@ -11,6 +11,10 @@
 #   pusher.sh dequeue <id>
 #   pusher.sh step          one lot from the head of the queue, then return
 #   pusher.sh run           step in a loop (PUSHER_IDLE seconds between empty steps, 60 by default)
+#   pusher.sh open-prs <stamp> <journals|-> <final head>
+#                           one pull request per lot of the last repose (called through PRE_PUSH by the guard)
+#   pusher.sh pr-catchup <id> <master before> <tip> <author> <subject>
+#                           the pull request of a lot that landed without it, closed with where it landed
 #
 # The queue (queue.tsv), the log (log.tsv, never rewritten), the inboxes (inbox/<author>.txt) and the pause file
 # (paused) live in PUSHER_DIR. Everything below can be replaced for the witness (tools/poste/test_pusher.sh).
@@ -35,6 +39,11 @@ PEERS=${PUSHER_PEERS-lucie-tablette}
 LIB_PATHS=${PUSHER_LIB_PATHS:-src/ extension/vector/}
 # The pass that pins the lib: once recopied, lib-des-passes says the lib it pins (tour.sh reads that file first).
 PIN_SCRIPT=${PUSHER_PIN_SCRIPT:-passe_epinglee.sh}
+# One pull request per lot (19 Nov., c7 and G): gh under the token of PR_ACCOUNT, never the active account.
+GH=${PUSHER_GH:-gh}
+PR_REPO=${PUSHER_PR_REPO:-L-Defraiteur/rag3db}
+PR_ACCOUNT=L-Defraiteur
+SELF=$(realpath "$0")
 EMAIL=luciedefraiteur@gmail.com
 ENGINE_PATHS='^(src|test|extension/vector|tools/rust_api|tools/shell)/'
 Q=$D/queue.tsv
@@ -129,12 +138,20 @@ red() { # <id> <author> <reason> <detail>
   echo "rouge $1 ($3) : $4"
 }
 pushed() { # <id> <author> <branch>
-  local h; h=$(g rev-parse --short HEAD)
+  local h pr="" tok; h=$(g rev-parse --short HEAD)
+  pr=$(awk -F'\t' -v id="$1" '$1 == id {n=$2} END {print n}' "$D/step-prs.tsv" 2>/dev/null)
   # The lot's original head, kept: a child deposited on it later reposes on its own commits only (19 Nov., c7).
   queue_lines | awk -F'\t' -v id="$1" -v h="$(g rev-parse HEAD)" '$1 == id {print $1 "\t" $3 "\t" h}' >> "$D/landed.tsv"
   remove_from_queue "$1"
-  log "$1" poussé "$h"
-  printf 'poussé\t%s\t%s\t%s\n' "$1" "$h" "$3" >> "$D/inbox/$2.txt"
+  log "$1" poussé "$h${pr:+ PR $pr}"
+  printf 'poussé\t%s\t%s\t%s%s\n' "$1" "$h" "$3" "${pr:+	PR $pr}" >> "$D/inbox/$2.txt"
+  # The three controls held (push_plain, or the guard's POUSSE): said on the pull request, which GitHub has marked
+  # merged since master holds its head. A failed comment is said, never blocking.
+  if [ -n "$pr" ]; then
+    tok=$(gh_token) && GH_TOKEN=$tok "$GH" pr comment "$pr" --repo "$PR_REPO" --body \
+      "Atterri sur master à $(g rev-parse HEAD). Les trois contrôles : status propre, aucun rebase en cours, FETCH_HEAD = HEAD." > /dev/null 2>&1 \
+      || log "$1" "PR $pr : commentaire absent"
+  fi
   echo "poussé $1 : $h"
 }
 
@@ -187,9 +204,82 @@ replay_rust() { # <id> <journals> <witness> <witness_suite> <extra_suites> → 0
 push_plain() { # <base> → 0 pushed, 1 master moved, 2 refused
   gfetch -q origin master || return 2
   [ "$(g rev-parse FETCH_HEAD)" = "$1" ] || return 1
+  open_prs "$STAMP" - "$(g rev-parse HEAD)"
   poste_push git -C "$WT" push -q origin HEAD:master || return 2
   gfetch -q origin master
   [ -z "$(g status --porcelain)" ] && [ ! -d "$(g rev-parse --git-dir)/rebase-merge" ] && [ "$(g rev-parse FETCH_HEAD)" = "$(g rev-parse HEAD)" ]
+}
+
+# ── One pull request per lot (19 Nov., c7 and G) ──────────────────────────────────────────────────────────────────
+# Before the push, each lot of the train gets a branch pusher/<STAMP>-<id>-final at its own tip on the final head, and
+# a pull request from it to master. The push is a fast-forward to the final head, so GitHub marks every one of them
+# merged. A pull request that cannot be opened (gh down, no token, no tip) is « PR absente » in the log and never
+# stops the push; pr-catchup opens it later against a branch at the master of before. No ref is ever deleted.
+
+# The token of PR_ACCOUNT, checked: its login must be PR_ACCOUNT. The active account is never touched.
+gh_token() {
+  local tok
+  tok=$("$GH" auth token --user "$PR_ACCOUNT" 2>/dev/null) && [ -n "$tok" ] || return 1
+  [ "$(GH_TOKEN=$tok "$GH" api user --jq .login 2>/dev/null)" = "$PR_ACCOUNT" ] || return 1
+  printf '%s' "$tok"
+}
+
+# A pull request's body: what was replayed, under which lib; no attribution line.
+pr_body() { # <id> <branch> <author> <kind> <witness> <suite> <extra> <tip> <final> <journals>
+  local lib="aucune : pas de passe Rust"
+  [ "${10}" != - ] && lib=$(grep -ohm1 'rag3db-build-[0-9a-f]\{40\}' "$JR/${10}/resume.log" 2>/dev/null || echo "non lue")
+  printf 'Lot %s de la session %s, branche %s (%s), reposé et poussé par le pousseur.\n\n' "$1" "$3" "$2" "$4"
+  printf -- '- Lib : %s\n- Témoin : %s (%s) ; suites en plus : %s\n- Rejeu : %s\n' "$lib" "$5" "$6" "$7" "${10/#-/sans passe}"
+  printf -- '- Pointe du lot sur la tête finale : %s ; tête finale : %s\n' "$8" "$9"
+  printf -- '- Les trois contrôles suivent le push, en commentaire de cette PR.\n'
+}
+
+# Open one pull request per lot of the last repose, on the final head: never fails. Called by push_plain before its
+# push, and by the guard through PRE_PUSH (the final head appended after the guard's own rebase).
+open_prs() { # <stamp> <journals|-> <final head>
+  local stamp=$1 jn=$2 final=$3 tok master id branch author kind w s x pids subj tip last n url err
+  : > "$D/step-prs.tsv"
+  [ -s "$D/step-lots.tsv" ] || return 0
+  if ! tok=$(gh_token); then
+    while IFS=$'\t' read -r id _; do log "$id" "PR absente : pas de jeton gh de $PR_ACCOUNT"; done < "$D/step-lots.tsv"
+    return 0
+  fi
+  gfetch -q origin master 2>/dev/null; master=$(g rev-parse FETCH_HEAD)
+  # The commits of the final head over master, in order, by patch id: each lot's tip is its last own commit; the last
+  # lot's tip is the final head itself (a commit the guard adds, the copies of closed tickets, goes with it).
+  g log -p --no-merges --reverse --format='commit %H' "$master..$final" | g patch-id --stable > "$D/final-patchids"
+  last=$(tail -1 "$D/step-lots.tsv" | cut -f1)
+  while IFS=$'\t' read -r id branch author kind w s x pids subj; do
+    tip=$(awk -v ids=" $pids " 'index(ids, " " $1 " ") {t=$2} END {print t}' "$D/final-patchids")
+    [ "$id" = "$last" ] && [ -n "$tip" ] && tip=$final
+    [ -n "$tip" ] || { log "$id" "PR absente : aucun commit du lot sur la tête finale"; continue; }
+    g push -q origin "$tip:refs/heads/pusher/$stamp-$id-final" 2>/dev/null || { log "$id" "PR absente : push de pusher/$stamp-$id-final refusé"; continue; }
+    if url=$(GH_TOKEN=$tok "$GH" pr create --repo "$PR_REPO" --base master --head "pusher/$stamp-$id-final" \
+        --title "$id : $subj" --body "$(pr_body "$id" "$branch" "$author" "$kind" "$w" "$s" "$x" "$tip" "$final" "$jn")" 2>"$D/last-gh.err"); then
+      n=${url##*/}
+      log "$id" "PR $n ouverte" "$url"
+      printf '%s\t%s\n' "$id" "$n" >> "$D/step-prs.tsv"
+    else
+      err=$(head -1 "$D/last-gh.err"); log "$id" "PR absente : gh pr create a échoué" "$err"
+    fi
+  done < "$D/step-lots.tsv"
+  return 0
+}
+
+# A lot that landed without its pull request: a branch -base at the master it landed on, -final at its tip, the pull
+# request from one to the other, closed with where it landed. No ref is deleted.
+pr_catchup() { # <id> <master before> <tip> <author> <subject>
+  local tok stamp url n
+  tok=$(gh_token) || { log "$1" "PR absente : pas de jeton gh de $PR_ACCOUNT (rattrapage)"; return 1; }
+  stamp=$(date +%Y%m%d-%H%M%S)
+  g push -q origin "$2:refs/heads/pusher/$stamp-$1-base" "$3:refs/heads/pusher/$stamp-$1-final" || { log "$1" "PR absente : push des branches du rattrapage refusé"; return 1; }
+  url=$(GH_TOKEN=$tok "$GH" pr create --repo "$PR_REPO" --base "pusher/$stamp-$1-base" --head "pusher/$stamp-$1-final" \
+    --title "$1 : $5" --body "Lot $1 de la session $4, poussé par le pousseur sans sa PR ; rattrapage. Atterri sur master à $3.") \
+    || { log "$1" "PR absente : gh pr create a échoué (rattrapage)"; return 1; }
+  n=${url##*/}
+  log "$1" "PR $n ouverte" "$url (rattrapage)"
+  GH_TOKEN=$tok "$GH" pr close "$n" --repo "$PR_REPO" --comment "atterri sur master à $3" > /dev/null 2>&1 \
+    && log "$1" "PR $n fermée" "atterri sur master à $3" || log "$1" "PR $n : fermeture refusée"
 }
 
 # ── The train (lot 2) ────────────────────────────────────────────────────────────────────────────────────────────
@@ -213,8 +303,10 @@ red_family() { # <id> <author> <reason> <detail>
 # Repose the given lines on BASE, in the pusher's worktree, under the branch RB. Prints the id of the lot whose
 # cherry-pick conflicts and returns 1; returns 0 when every lot is reposed.
 repose() { # <line>…
-  local line id head commits par pex
+  local line id head commits par pex before
   g checkout -q -f -B "$RB" "$BASE" && g clean -q -fd
+  # The lots of this repose, for their pull requests (open_prs): one line each, written after its cherry-pick.
+  : > "$D/step-lots.tsv"
   for line in "$@"; do
     id=$(f_ "$line" 1); head=$(f_ "$line" 3); par=$(f_ "$line" 8); pex=""
     # A child leaves out its parent's original commits by the parent's original head (c7's rule: rebase --onto it);
@@ -227,12 +319,18 @@ repose() { # <line>…
     # docs/nouveautes.md takes every lot's line at its head: the two sides are kept (union), as a session resolves
     # it by hand. Any other collision stays a conflict for the author.
     # --allow-empty keeps a commit empty from its origin (a marker); --empty=drop still drops one that became empty.
+    before=$(g rev-parse HEAD)
     if ! g -c core.attributesFile="$D/attributes" cherry-pick --allow-empty --empty=drop $commits > "$D/last-repose.log" 2>&1; then
       # The files in conflict, named for the author (19 Nov., c7: « bute : » said nothing).
       g diff --name-only --diff-filter=U | paste -sd' ' > "$D/last-conflict.txt"
       g cherry-pick --abort 2>/dev/null
       echo "$id"; return 1
     fi
+    # id, branch, author, kind, witness, witness suite, extra suites, the patch ids of its reposed commits, subject.
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$id" "$(f_ "$line" 2)" "$(f_ "$line" 9)" "$(f_ "$line" 4)" \
+      "$(f_ "$line" 5)" "$(f_ "$line" 6)" "$(f_ "$line" 7)" \
+      "$(g log -p --no-merges --format='commit %H' "$before..HEAD" | g patch-id --stable | awk '{print $1}' | paste -sd' ')" \
+      "$(g log -1 --format=%s HEAD)" >> "$D/step-lots.tsv"
   done
   return 0
 }
@@ -280,7 +378,8 @@ push_train() { # <line>…
   local line rank=0 r out
   for line in "$@"; do r=$(kind_rank "$(f_ "$line" 4)"); [ "$r" -gt "$rank" ] && rank=$r; done
   if [ "$rank" = 2 ]; then
-    out=$(poste_push bash "$GUARD" "$WTN" "$JNAME" 2>&1)
+    # The guard calls PRE_PUSH with the final head, after its own rebase: the pull requests open on what lands.
+    out=$(PRE_PUSH="bash $SELF open-prs $STAMP $JNAME" poste_push bash "$GUARD" "$WTN" "$JNAME" 2>&1)
     log "$TRAIN_LABEL" garde "$(echo "$out" | tail -1)"
     [ "$(echo "$out" | tail -1)" = POUSSE ] && return 0
     echo "$out" | grep -qE 'master a apporté du code|push refusé' && return 1
@@ -456,6 +555,8 @@ case "${1:-}" in
   enqueue) shift; enqueue "$@" ;;
   dequeue) dequeue "$2" ;;
   step) step ;;
+  open-prs) open_prs "$2" "$3" "$4" ;;
+  pr-catchup) shift; pr_catchup "$@" ;;
   run) while :; do
          out=$(step); rc=$?; echo "$out"
          # pusher.sh recopied by the train it just pushed: the new copy takes over.
