@@ -1,5 +1,5 @@
 // put_turn_record — the Turn row of one message: secrets masked in text, params and result (the host
-// function mask_secrets), params bounded at 4000 characters and result at 8000, with the original
+// function mask_secrets, on the patterns put_turn declares), params bounded at 4000 characters and result at 8000, with the original
 // size said; how many secrets were masked and whether anything was cut stay on the row.
 fn bound(s, max) {
     if s.len() <= max { return #{ text: s, cut: false }; }
@@ -9,9 +9,9 @@ let i = input;
 if i.run == "" { throw "put_turn: run is empty"; }
 if i.turn < 1 { throw "put_turn: turn starts at 1"; }
 if i.seq < 0 { throw "put_turn: seq starts at 0"; }
-let text = mask_secrets(i.text);
-let params = mask_secrets(i.params);
-let result = mask_secrets(i.result);
+let text = mask_secrets(i.text, i.patterns);
+let params = mask_secrets(i.params, i.patterns);
+let result = mask_secrets(i.result, i.patterns);
 let p = bound(params.text, 4000);
 let r = bound(result.text, 8000);
 let rec = #{
