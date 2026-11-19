@@ -1,5 +1,10 @@
 # Nouveautés
 
+- 19 novembre 2026 — **Les secrets que la mémoire masque sont déclarés, et chaque masque dit son genre.** Les motifs
+  de `put_turn` sont un paramètre (`patterns`) : un préfixe suivi d'un corps assez long (`ghp_`, `sk-ant-`, `AKIA`…),
+  un jeton `Bearer`, une clé privée PEM. Ajouter un motif ne demande plus de rebâtir. Un secret masqué se lit
+  « [masked secret: github token] » au lieu de « [masked secret] ».
+
 - 19 novembre 2026 — **L'archiviste n'écrit plus de consigne en prose pour extraire les sujets.** L'invite
   d'extraction d'une tranche est une ligne de tâche (`extract_instruction`, réglable sans rebâtir), puis la tranche ;
   celle du découpage d'une longue section, une ligne (`instruction`) puis ses paragraphes numérotés. Les règles d'un
