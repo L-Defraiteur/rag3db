@@ -1883,6 +1883,139 @@ mod tests {
     }
 
 
+    /// A fake granite-278m service that refuses every text (ticket of 8 November 2026, « des morceaux refusés par le
+    /// service ne sont jamais repris »).
+    struct RefusingGranite;
+    impl crate::embedder::Embedder for RefusingGranite {
+        fn name(&self) -> &str {
+            "granite-278m"
+        }
+        fn embed(&self, _texts: &[String]) -> Result<Vec<Vec<f32>>, crate::embedder::EmbedError> {
+            Err(crate::embedder::EmbedError::ProviderError("the witness's service refuses everything".into()))
+        }
+        fn dim(&self) -> usize {
+            768
+        }
+    }
+
+    /// **Chunks refused by the service are claimed again by the next index** (ticket of 8 November 2026): a first
+    /// index whose declared service refuses every text leaves the vectors owed; with a healthy service, the next
+    /// index embeds them, and the owed vectors fall to zero.
+    #[test]
+    fn chunks_refused_by_the_service_are_claimed_again_by_the_next_index() {
+        let d = tempfile::tempdir().unwrap();
+        let (manifeste, _arbre) = crate::daemon_host::symboles_cites::tests::petit_depot(d.path());
+        let manifeste = PathBuf::from(manifeste);
+        let ecrire = |f: &dyn Fn(&mut Value)| {
+            let mut m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
+            f(&mut m);
+            std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+        };
+        let refusing = servir(Arc::new(RefusingGranite));
+        ecrire(&|m| {
+            m["embeddings"]["catch_up_on_open"] = json!(false);
+            m["embeddings"]["address"] = json!(refusing);
+        });
+        let host = Arc::new(crate::daemon_host::tests::hote_isole());
+        let h = host.hosted(&manifeste).unwrap();
+        // A known rate: `index` does not probe the refusing service (the probe would refuse to start).
+        host.with_backend(&h, |b| b.catalog.lock().unwrap().note_measured_embedding_rate(crate::estimate::Rate::from_sample(100_000, std::time::Duration::from_secs(1)).unwrap()).unwrap()).unwrap();
+        let indexer = |quoi: &str| {
+            let recu = host.with_backend(&h, |b| b.call("index", json!({ "confirm": true }))).unwrap().unwrap();
+            let journal = recu["result"].as_str().unwrap_or_default().lines().find_map(|l| l.strip_prefix("journal : ")).unwrap_or_else(|| panic!("{quoi}: the index says its journal: {recu}")).trim().to_string();
+            let debut = std::time::Instant::now();
+            loop {
+                let derniere = std::fs::read_to_string(&journal).ok().and_then(|t| t.lines().rev().find(|l| !l.trim().is_empty()).map(str::to_string)).unwrap_or_default();
+                if derniere.starts_with(crate::dataflow::index_nodes::DONE_LINE) || derniere.starts_with(crate::dataflow::index_nodes::FAILED_PREFIX) {
+                    break;
+                }
+                assert!(debut.elapsed() < std::time::Duration::from_secs(300), "{quoi}: the index did not end in {} s", debut.elapsed().as_secs());
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            while host.with_backend(&h, |b| crate::dataflow::index_nodes::indexings_running(&b.catalog)).unwrap() > 0 {
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            std::fs::read_to_string(&journal).unwrap_or_default()
+        };
+        let dus = || host.with_backend(&h, |b| b.catalog.lock().unwrap().index_progress().unwrap().dense_missing()).unwrap();
+        let premier = indexer("the index under a refusing service");
+        let avant = dus();
+        assert!(avant > 0, "a refusing service leaves owed vectors: {premier}");
+
+        // The healthy service, declared in the manifest: reopened, then indexed again.
+        let sain = service_granite();
+        ecrire(&|m| m["embeddings"]["address"] = json!(sain));
+        let s = host.open_session("the witness", None, Vec::new(), None);
+        assert_eq!(host.close(Some(&s), &manifeste)["ok"], true);
+        let second = indexer("the index under a healthy service");
+        assert_eq!(dus(), 0, "the next index claims the refused chunks again ({avant} owed before): {second}");
+    }
+
+    /// **Chunks refused by the service are caught up on open** (ticket of 8 November 2026, the form it was seen in):
+    /// a first index under a refusing service; reopened with a healthy service and `embeddings.catch_up_on_open`,
+    /// the index that starts on open embeds them, and the owed vectors fall to zero.
+    #[test]
+    fn chunks_refused_by_the_service_are_caught_up_on_open() {
+        let d = tempfile::tempdir().unwrap();
+        let (manifeste, arbre) = crate::daemon_host::symboles_cites::tests::petit_depot(d.path());
+        let manifeste = PathBuf::from(manifeste);
+        for i in 0..300 {
+            std::fs::write(arbre.join(format!("src/f{i}.rs")), format!("pub fn fonction_{i}() -> u32 {{\n    {i}\n}}\n")).unwrap();
+        }
+        let ecrire = |f: &dyn Fn(&mut Value)| {
+            let mut m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
+            f(&mut m);
+            std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+        };
+        let refusing = servir(Arc::new(RefusingGranite));
+        ecrire(&|m| {
+            m["embeddings"]["catch_up_on_open"] = json!(false);
+            m["embeddings"]["address"] = json!(refusing);
+        });
+        let host = Arc::new(crate::daemon_host::tests::hote_isole());
+        let h = host.hosted(&manifeste).unwrap();
+        host.with_backend(&h, |b| b.catalog.lock().unwrap().note_measured_embedding_rate(crate::estimate::Rate::from_sample(100_000, std::time::Duration::from_secs(1)).unwrap()).unwrap()).unwrap();
+        let recu = host.with_backend(&h, |b| b.call("index", json!({ "confirm": true }))).unwrap().unwrap();
+        let journal = recu["result"].as_str().unwrap_or_default().lines().find_map(|l| l.strip_prefix("journal : ")).unwrap().trim().to_string();
+        let fini = |j: &str| std::fs::read_to_string(j).ok().and_then(|t| t.lines().rev().find(|l| !l.trim().is_empty()).map(|l| l.starts_with(crate::dataflow::index_nodes::DONE_LINE) || l.starts_with(crate::dataflow::index_nodes::FAILED_PREFIX))).unwrap_or(false);
+        let attendre_l_index = |quoi: &str| {
+            let debut = std::time::Instant::now();
+            while host.with_backend(&h, |b| crate::dataflow::index_nodes::indexings_running(&b.catalog)).unwrap() > 0 {
+                assert!(debut.elapsed() < std::time::Duration::from_secs(300), "{quoi}: the index did not end in {} s", debut.elapsed().as_secs());
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+        };
+        let debut = std::time::Instant::now();
+        while !fini(&journal) {
+            assert!(debut.elapsed() < std::time::Duration::from_secs(300), "the first index did not end in {} s", debut.elapsed().as_secs());
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        attendre_l_index("the first index");
+        let dus = || host.with_backend(&h, |b| b.catalog.lock().unwrap().index_progress().unwrap().dense_missing()).unwrap();
+        let avant = dus();
+        assert!(avant > 0, "a refusing service leaves owed vectors");
+        let s = host.open_session("the witness", None, Vec::new(), None);
+        assert_eq!(host.close(Some(&s), &manifeste)["ok"], true);
+
+        // Reopened with a healthy service and the catch-up declared.
+        let sain = service_granite();
+        ecrire(&|m| {
+            m["embeddings"]["address"] = json!(sain);
+            m["embeddings"]["catch_up_on_open"] = json!(true);
+        });
+        host.with_backend(&h, |_| ()).unwrap();
+        let rattrapage = std::fs::read_to_string(super::marque_du_premier_index(&manifeste)).expect("the catch-up set its mark");
+        let rattrapage = rattrapage.trim().to_string();
+        let debut = std::time::Instant::now();
+        while !fini(&rattrapage) {
+            assert!(debut.elapsed() < std::time::Duration::from_secs(300), "the catch-up did not end in {} s", debut.elapsed().as_secs());
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        attendre_l_index("the catch-up");
+        let journal = std::fs::read_to_string(&rattrapage).unwrap_or_default();
+        assert_eq!(dus(), 0, "the catch-up claims the refused chunks again ({avant} owed before): {journal}");
+    }
+
     /// **Une note « en cours » d'avant un arrêt ne se lit pas comme un index qui tourne**
     /// (c7, 8 novembre 2026 : code-essais-c7 rendait `text: running` noté le 25 octobre à
     /// 23 h 21, ses comptes complets, rien ne tournant ; list_worktrees disait « plein texte
