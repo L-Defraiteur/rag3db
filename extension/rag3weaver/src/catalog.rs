@@ -10846,6 +10846,12 @@ fn read_threads() -> u64 {
         }
     }
 
+    /// The witnesses' fresh process (2.12): the full-text handles closed, as a host that has just opened the base.
+    #[cfg(test)]
+    pub(crate) fn fermer_les_poignees_du_plein_texte(&mut self) {
+        let _ = self.close_fts_handles();
+    }
+
     /// Whether a full-text write of these values on `table` is set aside by its rule of non-candidates (2.12).
     fn hors_candidats(&self, table: &str, values: &[(String, String)]) -> bool {
         self.entity_configs.get(table).and_then(|c| c.chunking.not_candidate.as_ref()).is_some_and(|r| r.excludes_values(values))
@@ -10911,7 +10917,20 @@ fn read_threads() -> u64 {
             }
         }
         // Their full-text documents, at the offsets the router knows (an unknown offset would be broadcast to every
-        // shard): the retirements of a batch's buffer, applied the same way.
+        // shard): the retirements of a batch's buffer, applied the same way. **The handle is opened here**: handles
+        // open at their first use, and a host that has just opened the base has none at the start of its sync (the
+        // bench, 19 November 2026: the gesture took nothing out of the full text). Its fields are those of the search
+        // target that reads this table.
+        let champs_texte = self
+            .entity_configs
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>()
+            .into_iter()
+            .find_map(|nom| self.resolve_search_target(&nom).ok().filter(|t| t.parent_table == entity).map(|t| t.bm25_fields));
+        if let Some(champs) = champs_texte {
+            let _ = self.ensure_fts_handle(entity, &champs, &crate::scope::fts_filter_fields());
+        }
         if let Some(h) = self.fts_handles.get(entity) {
             let q = self.dialect.select_node_ids(entity);
             let rows = self.conn.execute_with_params(&q, &[QueryParam::new("uuids", uuids)]).map_err(|e| CatalogError::DbError(e.to_string()))?;
