@@ -12,6 +12,8 @@ Une ligne par cas joué ; les détails suivent la table.
 | lucivy 04, l'ulp d'écart en parse (`e3c9753f7f`) | **réussi** | **autre** : `buffered_union.rs` (Algareth) contre `score_combiner.rs` et `block_wand.rs` (nous) | +5 −22 / +17 −9 (hors le témoin, +81) | 2 pas, 54 appels, 464 s ; invite 1,66 M jetons, dont 82 % par le cache | aucun : le seul rouge de la suite l'était déjà au parent | trois fichiers de l'arbre, sans souche, absents de la consigne ; Algareth en a corrigé un |
 | ED 02, le préfixe d'une décision (`f063a90e52`) | **réussi** | **même** (`decide_nodes.rs`, et la même assertion de `decide_nodes/tests.rs`) | +13 −3 / +15 −3 | 3 pas, 72 appels, 680 s ; invite 2,09 M jetons, dont 58 % par le cache | aucun : la lib entière passe (1 745) | le fichier indiqué ; Algareth y a corrigé la cause |
 | ED 01, le journal plafonné (`b610560e51`) | **échoué** (réserve : Vertex lent) | aucun diff (nous : `commande.rs`) | 0 / +10 −2 | 3 pas, 34 appels, 1 388 s, dont 640 et 706 s pour les deux premiers pas ; invite 0,52 M jetons, dont 70 % par le cache | aucun | le fichier indiqué, lu sans conclure |
+| embarquement 02, le refus d'un démarrage mort (`c4b36feffa`) | **réussi** | **même** (`serveur.rs`) ; le nôtre nomme aussi le programme d'un démarrage muet, hors de la demande | +10 −4 / +20 −9 | 2 pas, 64 appels, 408 s ; invite 1,85 M jetons, dont 62 % par le cache | aucun : la lib entière passe (1 743) | le fichier indiqué |
+| lucivy 03, la requête floue longue sans positions (`fa65315ce8`) | **échoué** (défaut de forme du cas) | aucun diff : une analyse | 0 / voir le cas | 1 pas, 33 appels, 202 s ; invite 1,28 M jetons, dont 92 % par le cache | aucun | les deux fichiers indiqués, lus |
 
 ## tty 09 : une demande s'écrit une fois, et /nom retient le nom gardé (19 novembre)
 
@@ -142,3 +144,36 @@ Une ligne par cas joué ; les détails suivent la table.
   rapide et la consigne corrigée, départagerait.
 - **Les sorties** des juges sont dans `~/.cache/rag3db-banc-notes/campagne/ed-01-20261119-185644/` (tablette) et
   `ed-02-20261119-192205/` (luciepc).
+
+## embarquement 02 : le refus d'un démarrage mort (19 novembre, jeu de 19 h 44)
+
+- **Le cas** : `docs/embarquement/19-11-2026/02-cas-de-campagne-le-refus-d-un-demarrage-mort.md`, au parent
+  `c4b36feffa`, avec le témoin `serveur::tests::a_dead_start_names_the_program`.
+- **Le tour** : Algareth a fini de lui-même, en 2 pas, 64 appels et 408 s, sans reprise.
+- **Le diff** : `serveur.rs`, +10 −4. Il ajoute un champ `programme` à `ServeurError::Mort`, et le nomme dans le
+  message de refus. Il ne touche aucun test.
+- **Le juge**, à luciepc, dans un worktree et un target à part :
+
+| | parent | avec le diff d'Algareth |
+|---|---|---|
+| module `serveur::` | 12 passés, 1 rouge : le témoin, sur son assertion (`serveur.rs:705`) | **13 passés** |
+| lib entière | — | **1 743 passés**, 0 rouge |
+
+- **Le verdict : réussi**, au même endroit que notre correctif `0bda7c020f` (+20 −9). Le nôtre nomme aussi le
+  programme dans le refus d'un démarrage **muet**. La demande ne parlait que du démarrage mort : Algareth a fait
+  exactement ce qui était demandé, et pas plus.
+
+## lucivy 03 : la requête floue longue sans positions (19 novembre, jeu de 19 h 36)
+
+- **Le cas** : `docs/lucivy/19-11-2026/03-cas-de-campagne-la-requete-floue-longue-sans-positions.md`, au parent
+  `fa65315ce8`, avec le témoin `a_long_fuzzy_query_without_positions_reads_windows_and_finds_the_same`. Le lanceur l'a
+  vu rouge au parent, sur son assertion (`red.json`).
+- **Le tour** : Algareth a fini de lui-même (« fait sans plan »), en 1 pas, 33 appels et 202 s. Le diff est vide : il
+  a rendu une analyse (les causes des 60 s, des pistes), sans correctif.
+- **Le juge** : un diff vide laisse le témoin tel qu'au parent, rouge. Il n'y avait rien à rejouer.
+- **Le verdict : échoué** au sens de la grille, qui se juge sur le témoin. Une analyse sans diff ne compte pas comme
+  un correctif.
+- **Mais c'est d'abord un défaut de forme du cas.** La consigne décrit le défaut et ses mesures, mais ne demande pas de
+  correctif, et ne nomme pas de témoin à faire passer. Les autres cas de la campagne finissent par une phrase de la
+  forme « un témoin …, rouge d'abord ». Algareth a répondu à la question qu'on lui posait. Le cas est à corriger chez
+  lucivy, puis à rejouer : ce verdict ne mesure pas sa capacité à corriger.
