@@ -247,6 +247,22 @@ pub enum Event {
         /// Contexte du reçu, indépendant de l'extrait textuel borné.
         metadata: Option<serde_json::Value>,
     },
+    /// **A turn waits** (c7 and archi, 19 November 2026): a tool call past
+    /// `teammate.tool_wait_notice_s`, or the provider's backoff after a refusal. Emitted once
+    /// per wait, past its threshold, never at each turn of a loop; `cause` is `tool`, `model`
+    /// or `index`, `what` the tool's or the model's name, `since_ms` how long it has waited.
+    Waiting {
+        run: String,
+        cause: String,
+        what: String,
+        since_ms: u64,
+    },
+    /// **The wait is over**: only after a [`Event::Waiting`] of the same run and cause.
+    Resumed {
+        run: String,
+        cause: String,
+        waited_ms: u64,
+    },
     /// Un nœud d'un graphe exécuté par le runtime — ce qui se passe *sous*
     /// un outil.
     NodeRun {
@@ -613,6 +629,7 @@ impl Event {
             }
             Self::SearchStarted { .. } | Self::SearchCompleted { .. } => topic::SEARCH,
             Self::LlmCall { .. } | Self::ToolCallStarted { .. } | Self::ToolCallFinished { .. } => topic::AGENT,
+            Self::Waiting { .. } | Self::Resumed { .. } => topic::AGENT,
             Self::TurnCompacted { .. } | Self::Consumed { .. } => topic::AGENT,
             Self::EntitiesChanged { .. } => topic::CATALOG,
             Self::NodeRun { .. } => topic::DATAFLOW,
@@ -634,6 +651,8 @@ impl Event {
             | Self::LlmCall { run, .. }
             | Self::ToolCallStarted { run, .. }
             | Self::ToolCallFinished { run, .. }
+            | Self::Waiting { run, .. }
+            | Self::Resumed { run, .. }
             | Self::TurnCompacted { run, .. }
             | Self::Consumed { run, .. }
             | Self::NodeRun { run, .. }
@@ -731,6 +750,8 @@ impl Event {
             Self::ToolCallStarted { run, agent, call_id, tool, arguments } => json!({
                 "kind": "ToolCallStarted", "run": run, "agent": agent, "call_id": call_id, "tool": tool, "arguments": arguments,
             }),
+            Self::Waiting { run, cause, what, since_ms } => json!({ "kind": "Waiting", "run": run, "cause": cause, "what": what, "since_ms": since_ms }),
+            Self::Resumed { run, cause, waited_ms } => json!({ "kind": "Resumed", "run": run, "cause": cause, "waited_ms": waited_ms }),
             Self::ToolCallFinished { run, agent, call_id, tool, ok, error_kind, ms, bytes, result_excerpt, truncated, ui, metadata } => {
                 let mut v = json!({
                     "kind": "ToolCallFinished", "run": run, "agent": agent, "call_id": call_id, "tool": tool,
