@@ -352,8 +352,10 @@ red_family() { # <id> <author> <reason> <detail>
 repose() { # <line>…
   local line id head commits par pex before
   g checkout -q -f -B "$RB" "$BASE" && g clean -q -fd
-  # The lots of this repose, for their pull requests (open_prs): one line each, written after its cherry-pick.
-  : > "$SD/step-lots.tsv"
+  # The lots of this repose, for their pull requests (open_prs): one line each, written after its cherry-pick. The
+  # pull requests of an earlier step are not this step's: a docs push that landed left its own here (19 Nov.: the
+  # guard stopping parent-cache tried to close PR 47, landed twenty minutes before).
+  : > "$SD/step-lots.tsv"; : > "$SD/step-prs.tsv"
   for line in "$@"; do
     id=$(f_ "$line" 1); head=$(f_ "$line" 3); par=$(f_ "$line" 8); pex=""
     # A child leaves out its parent's original commits by the parent's original head (c7's rule: rebase --onto it);
@@ -379,6 +381,13 @@ repose() { # <line>…
       "$(g log -p --no-merges --format='commit %H' "$before..HEAD" | g patch-id --stable | awk '{print $1}' | paste -sd' ')" \
       "$(g log -1 --format=%s HEAD)" >> "$SD/step-lots.tsv"
   done
+  # The submodules at the reposed head's pointers, before the pass and the guard: a checkout and a cherry-pick move a
+  # pointer in the index, never the submodule (19 Nov., parent-cache: the pass played the old codeparsers, and the
+  # guard saw « M extension/rag3weaver/codeparsers »).
+  if ! g submodule update --init --quiet > "$SD/last-repose.log" 2>&1; then
+    echo "le sous-module ne se met pas au pointeur du lot : $(tail -1 "$SD/last-repose.log")" > "$SD/last-conflict.txt"
+    echo "${id:-sous-module}"; return 1
+  fi
   return 0
 }
 
