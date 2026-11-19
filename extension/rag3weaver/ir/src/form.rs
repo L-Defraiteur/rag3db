@@ -696,8 +696,9 @@ pub enum Write {
     /// **Défaire les arêtes d'un ensemble de nœuds** : les arêtes de
     /// `relation` dont le nœud du côté `side` (`Outgoing` : la source,
     /// `Incoming` : la cible) est une ligne de `table` que `filter` retient
-    /// (sur l'alias `m`). Une instruction par relation.
-    Detach { relation: String, table: String, side: Direction, filter: Predicate },
+    /// (sur l'alias `m`). Une instruction par relation. `end`, when given: only the edges whose other end is a row
+    /// of that table that its condition keeps (the visibility of the other end, 2.11).
+    Detach { relation: String, table: String, side: Direction, filter: Predicate, end: Option<(String, Predicate)> },
     /// **Copy the edges of replaced rows to their replacements**: for each pair of `$paires` (`a`: a replaced row
     /// of `table`, `n`: the row that replaces it), each edge of `relation` between the replaced row and a row of
     /// `other` that `filter` keeps (on the alias `m`) is copied to the replacement with its `props`, unless the
@@ -765,9 +766,13 @@ impl Write {
                     None => Ok(()),
                 };
             }
-            Write::Detach { relation, table, filter, .. } => {
+            Write::Detach { relation, table, filter, end, .. } => {
                 let mut du_filtre = Vec::new();
                 filter.names(&mut du_filtre);
+                if let Some((autre, condition)) = end {
+                    du_filtre.push(autre.clone());
+                    condition.names(&mut du_filtre);
+                }
                 let mut tous: Vec<&str> = vec![relation, table];
                 tous.extend(du_filtre.iter().map(String::as_str));
                 return match tous.into_iter().find(|n| !crate::is_valid_identifier(n)) {
