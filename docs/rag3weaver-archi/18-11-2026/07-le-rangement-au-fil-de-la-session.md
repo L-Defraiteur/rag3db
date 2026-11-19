@@ -265,6 +265,22 @@ Le lot 1 passe à 4 jours au lieu de 1,5, avec les champs des tours et les filtr
    - `put_turn` reste immuable par `(run, turn, seq)` : rien n'est réécrit.
 5. **Le filet `ContextOverflow`** va au lot 3, avec les outils de lecture.
 
+## Lot 3 : le filet `ContextOverflow` (conception du 19 novembre)
+
+1. **Quand.** Un tour du chat rend `llm context overflow` : le fournisseur a refusé l'entrée,
+   l'hôte l'a vue (`ContextOverflow`).
+2. **Le tour qui a débordé reste vrai.** Ses messages, déjà dans la session, partent par
+   `put_turn` sous leur numéro N. La compaction les range avec la tranche ouverte, puis les
+   retire de la session comme les tours d'avant : `turn_offset` les compte.
+3. **Le nouvel essai est un tour neuf, N+1**, avec le même message. Rien ne réécrit une ligne
+   `(run, turn, seq)` déjà écrite (`put_turn` est immuable). L'historique du run dit ce qui s'est
+   passé : le tour N a débordé, le tour N+1 l'a rejoué.
+4. **Une fois seulement.** Un second débordement après la compaction est une panne nommée
+   (« context overflow after a compaction »), rendue telle quelle. Une compaction refusée (un
+   rangement en vol, aucun memory) rend le débordement d'origine, avec le refus.
+5. **L'équipier n'en a pas besoin** : chaque pas repart d'un fil neuf. Son débordement reste un
+   pas en échec, compté par `max_failed_steps`.
+
 ## La preuve, rouge d'abord (demain)
 
 - **Faux modèle, `slice_tokens` petit.** Après assez de tours, l'outil `archive` du memory du
