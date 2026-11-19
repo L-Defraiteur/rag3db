@@ -389,6 +389,32 @@ pub fn spawn_layer_sync(
     LayerSyncHandle { stop, thread }
 }
 
+/// **Catch up an older commit of a history layer** (2a′-3, lot 8): its generation is written at its commit's position
+/// on the ref's first parent, in the gap under the generations already written, its rows retired at the next written
+/// rank above. Its rank.
+pub fn write_history_catch_up(catalog: &mut Catalog, root: &Path, layer: &LayerWrite, commit: &str) -> Result<i64, String> {
+    // RED STUB.
+    let _ = (catalog, root, layer, commit);
+    Err("RED STUB: no catch-up".into())
+}
+
+/// **The duplicates at the upper edge of the gaps of a layer** (2a′-3, lot 8): rows born at a caught-up rank and retired
+/// at the next written rank, whose content that rank holds identical. Counted in the state, never collapsed.
+pub fn layer_duplicates(catalog: &Catalog, layer: &str) -> Result<usize, String> {
+    // RED STUB.
+    let _ = (catalog, layer);
+    Ok(0)
+}
+
+/// **Whether a history layer still matches its ref** (2a′-3, lot 8): every written generation's commit must stand at
+/// its rank on the ref's first parent. A rewritten ref (a rebase, a forced push) makes the layer « à rebâtir », naming
+/// the ref and the lost commit.
+pub fn check_layer_history(catalog: &Catalog, root: &Path, layer: &str, refname: &str) -> Result<(), String> {
+    // RED STUB.
+    let _ = (catalog, root, layer, refname);
+    Ok(())
+}
+
 #[cfg(all(test, feature = "rag3db-native"))]
 mod tests {
     use super::*;
@@ -639,6 +665,99 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(50));
         }
         sync.stop();
+    }
+
+    /// The end lines of `nom` under the view of `couche` at `rang`.
+    fn fins_au_rang(cat: &mut Catalog, couche: &str, rang: i64, nom: &str) -> Vec<i64> {
+        let pile = crate::views::load_stack(cat, &crate::views::ViewRequest { layer: couche.into(), rank: Some(rang) }, &Default::default())
+            .unwrap_or_else(|e| panic!("la vue {couche}:{rang} : {e}"));
+        let v = cat.generations.clone().expect("générations").with_stack(&pile);
+        let mut fins = Vec::new();
+        for (c, r, masques) in std::iter::once((v.couche.clone(), v.rang, std::collections::BTreeSet::<String>::new()))
+            .chain(v.parents.iter().map(|p| (p.layer.clone(), p.rank, p.masked_files.clone())))
+        {
+            let visible = cat.dialect_arc().condition_visible_sur("s", &c, r).unwrap();
+            let lu = cat
+                .conn()
+                .execute_with_params(
+                    &format!("MATCH (s:Scope) WHERE s.name = $n AND {visible} RETURN s.end_line, s.file_path"),
+                    &[QueryParam::new("n", CypherValue::String(nom.into()))],
+                )
+                .unwrap();
+            for l in lu.rows {
+                if !masques.contains(l[1].as_str().unwrap_or("")) {
+                    fins.push(l[0].as_i64().unwrap_or(-1));
+                }
+            }
+            if !fins.is_empty() {
+                break;
+            }
+        }
+        fins
+    }
+
+    /// **Témoin 7 : the catch-up of a history layer, and the duplicate at the upper edge of a gap** (2a′-3, lot 8).
+    /// Branch b has two commits after main's c1: c2 changes f (F2) and k, c3 changes f again (F3) and leaves k. The tip
+    /// is written first, at its position on the first parent (2); then c2 is caught up, in the gap, at rank 1. The view
+    /// at 2 is unchanged, the view at 1 reads f as at c2, the view without rank still reads the tip; k, identical at 1
+    /// and 2, is one duplicate at the upper edge, counted. A rewritten ref makes the layer « à rebâtir », named.
+    #[test]
+    fn the_catch_up_of_a_history_layer_and_the_duplicate_at_the_upper_edge() {
+        const K1: &str = "pub fn k() -> u32 {\n    1\n}\n";
+        const K2: &str = "pub fn k() -> u32 {\n    let a = 2;\n    a\n}\n";
+        let d = tempfile::tempdir().unwrap();
+        git(d.path(), &["init", "-q", "-b", "main"]);
+        std::fs::write(d.path().join("f.rs"), F1).unwrap();
+        std::fs::write(d.path().join("g.rs"), G).unwrap();
+        std::fs::write(d.path().join("k.rs"), K1).unwrap();
+        git(d.path(), &["add", "."]);
+        git(d.path(), &["commit", "-q", "-m", "c1"]);
+        let c1 = git(d.path(), &["rev-parse", "HEAD"]);
+        git(d.path(), &["checkout", "-q", "-b", "b"]);
+        std::fs::write(d.path().join("f.rs"), F2).unwrap();
+        std::fs::write(d.path().join("k.rs"), K2).unwrap();
+        git(d.path(), &["commit", "-q", "-am", "c2"]);
+        let c2 = git(d.path(), &["rev-parse", "HEAD"]);
+        std::fs::write(d.path().join("f.rs"), F3).unwrap();
+        git(d.path(), &["commit", "-q", "-am", "c3"]);
+        let c3 = git(d.path(), &["rev-parse", "HEAD"]);
+        git(d.path(), &["checkout", "-q", "main"]);
+        // The backend's layer at c1 (g, f F1, k K1).
+        let conn = crate::Rag3dbConnection::in_memory().unwrap();
+        let mut cat = Catalog::new(Box::new(conn), Box::new(crate::embedder::HashEmbedder::new(8)), crate::CatalogConfig {
+            allow_mock_embedder: true,
+            embedding_dim: 8,
+            ..Default::default()
+        });
+        cat.initialize().unwrap();
+        crate::code::register_code_schema(&mut cat, crate::code::default_scope_chunking()).unwrap();
+        let src = crate::code_tools::WorkingTree::new(d.path());
+        let lot: Vec<(String, Option<String>)> = ["f.rs", "g.rs", "k.rs"].iter().map(|p| (p.to_string(), Some(std::fs::read_to_string(d.path().join(p)).unwrap()))).collect();
+        crate::code_sync::reingest_files(&mut cat, &src, &lot, crate::disponibilite::Disponibilites::TOUT).unwrap();
+        let n = cat.publier_la_generation(&c1, 0).unwrap();
+        let b = LayerWrite { layer: "refs/heads/b".into(), parent: Some((crate::generations::COUCHE_DU_BACKEND.into(), n)) };
+        // 1. The tip first, at its position on the first parent.
+        let pointe = write_history_generation(&mut cat, d.path(), &b, &c3).expect("la pointe");
+        assert_eq!(pointe, 2, "the tip is not at its position on the first parent (2 commits after c1)");
+        let avant = (fins_au_rang(&mut cat, "refs/heads/b", 2, "f"), fins_au_rang(&mut cat, "refs/heads/b", 2, "k"));
+        // 2. The catch-up of c2, in the gap.
+        let rattrape = write_history_catch_up(&mut cat, d.path(), &b, &c2).expect("le rattrapage de c2");
+        assert_eq!(rattrape, 1, "the caught-up commit is not at its position (1)");
+        assert_eq!((fins_au_rang(&mut cat, "refs/heads/b", 2, "f"), fins_au_rang(&mut cat, "refs/heads/b", 2, "k")), avant, "the view at the tip changed");
+        // 3. The view at 1 reads f as at c2; without rank, the tip.
+        assert_eq!(fins_au_rang(&mut cat, "refs/heads/b", 1, "f"), vec![4], "the view at 1 does not read f as at c2");
+        assert_eq!(fins_dans_la_vue(&mut cat, "refs/heads/b", "f"), vec![5], "the view without rank does not read the tip");
+        // 4. k, identical at 1 and 2: one duplicate at the upper edge, counted.
+        assert_eq!(layer_duplicates(&cat, "refs/heads/b").unwrap(), 1, "the duplicate at the upper edge is not counted");
+        // 5. A rewritten ref: the layer is « à rebâtir », named.
+        check_layer_history(&cat, d.path(), "refs/heads/b", "refs/heads/b").expect("an intact ref is said rewritten");
+        git(d.path(), &["branch", "-f", "b", &c1]);
+        git(d.path(), &["checkout", "-q", "b"]);
+        std::fs::write(d.path().join("f.rs"), F3).unwrap();
+        git(d.path(), &["commit", "-q", "-am", "c2-réécrit"]);
+        git(d.path(), &["checkout", "-q", "main"]);
+        let refus = check_layer_history(&cat, d.path(), "refs/heads/b", "refs/heads/b").expect_err("a rewritten ref is not seen");
+        assert!(refus.contains("à rebâtir") && refus.contains("refs/heads/b"), "the refusal does not name the layer to rebuild: {refus}");
     }
 
     /// **Témoin 2 : a history layer is written without checkout.** Writing the generations of branch `b` (never
