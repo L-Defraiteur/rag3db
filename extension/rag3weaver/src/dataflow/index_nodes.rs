@@ -531,8 +531,12 @@ fn run_index(
                 }
                 log(journal, &line);
             }
-            // Les mots sont là ; le graphe arrive d'un coup.
-            SyncPhase::Relations => log(journal, &format!("plein texte prêt · relations : {} liens à poser", p.relations_pending)),
+            // Les fichiers et les scopes sont là ; le graphe arrive d'un coup. Le plein texte du code vient après les
+            // relations (ses dérivées, décision C du 18 novembre 2026) : il n'est pas « prêt » ici.
+            SyncPhase::Relations => log(journal, &format!("fichiers et scopes posés · relations : {} liens à poser", p.relations_pending)),
+            // Les relations sont posées : les outils de référence répondent ; le plein texte du code (ses
+            // dérivées) se rend ensuite (décision C, 18 novembre 2026).
+            SyncPhase::Derivations => log(journal, "relations posées · plein texte du code : rendu en cours"),
             // Ce qui a été édité pendant l'indexation, repris avant de finir.
             SyncPhase::Resume => log(
                 journal,
