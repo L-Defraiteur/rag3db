@@ -33,6 +33,8 @@ CACHE_DIR=${PUSHER_CACHE:-$CACHE}
 PEERS=${PUSHER_PEERS-lucie-tablette}
 # What the pinned lib is built from: a change here on master after the lib's commit makes the lib late.
 LIB_PATHS=${PUSHER_LIB_PATHS:-src/ extension/vector/}
+# The pass that pins the lib: once recopied, lib-des-passes says the lib it pins (tour.sh reads that file first).
+PIN_SCRIPT=${PUSHER_PIN_SCRIPT:-passe_epinglee.sh}
 EMAIL=luciedefraiteur@gmail.com
 ENGINE_PATHS='^(src|test|extension/vector|tools/rust_api|tools/shell)/'
 Q=$D/queue.tsv
@@ -308,7 +310,7 @@ lib_late() {
 # installed, its witness played against the copy; a red witness puts the old copy back and pauses the queue. The other
 # postes get the same bytes, proved by their sha256. Returns 3 when pusher.sh itself was recopied (run re-executes).
 recopy() { # <label>
-  local label=$1 src name witness sum peer rc=0 table
+  local label=$1 src name witness sum peer rc=0 table lib
   table=$(g show HEAD:tools/poste/cache_copies.txt 2>/dev/null | grep -vE '^[[:space:]]*(#|$)') || return 0
   while read -r src name witness; do
     g diff --quiet "$BASE" HEAD -- "$src" && continue
@@ -335,6 +337,14 @@ PEER
       fi
     done
     [ "$name" = pusher.sh ] && rc=3
+    if [ "$name" = "$PIN_SCRIPT" ]; then
+      lib=$(grep -om1 'RAG3DB_LIB=rag3db-build-[0-9a-f]\{40\}[^ ]*' "$CACHE_DIR/$name" | cut -d= -f2)
+      if [ -n "$lib" ] && [ "$(cat "$CACHE_DIR/lib-des-passes" 2>/dev/null)" != "$lib" ]; then
+        [ -f "$CACHE_DIR/lib-des-passes" ] && cp -p "$CACHE_DIR/lib-des-passes" "$CACHE_DIR/lib-des-passes.avant-$label"
+        echo "$lib" > "$CACHE_DIR/lib-des-passes.neuf" && mv "$CACHE_DIR/lib-des-passes.neuf" "$CACHE_DIR/lib-des-passes"
+        log "$label" "lib-des-passes" "$lib"
+      fi
+    fi
   done <<< "$table"
   return $rc
 }
