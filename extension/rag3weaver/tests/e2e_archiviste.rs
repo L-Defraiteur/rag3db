@@ -1062,6 +1062,98 @@ fn expire_is_refused_on_an_entity_that_does_not_declare_it() {
     assert!(f["result"]["data"].is_object(), "the fiche stays: {f}");
 }
 
+/// The six turns filed by range, with three topics (1-2 and 5, 3-4, and the residual 6).
+fn six_turns_filed(b: &Backend, serveur: &FakeServer) {
+    let _ = serveur;
+    put_six_turns(b);
+    let r = appel(b, "archive_slice", json!({"run": "chat:test", "from_turn": 1, "to_turn": 6, "allow_create": true}));
+    assert_eq!(r["result"]["archived_through_turn"], json!(6), "{r}");
+}
+
+fn three_topics_server() -> FakeServer {
+    let extraction = r#"{"slice_summary": "SUMMARYMARK la reprise et le compositeur", "topics": [
+        {"title": "la reprise du journal", "turns": [{"from": 1, "to": 2}, {"from": 5, "to": 5}], "said": "SAIDREPRISE", "open": false, "attributes": []},
+        {"title": "le compositeur", "turns": [{"from": 3, "to": 4}], "said": "SAIDCOMPOSITEUR", "open": true, "attributes": []}
+    ], "not_filed": []}"#;
+    FakeServer::start_sequence(vec![
+        text_reply(extraction),
+        etiquette_decrite("create", "La reprise du journal", "Comment le moteur rejoue son journal à l’ouverture."),
+        etiquette_decrite("create", "Le compositeur du portable", "Le compositeur de l’écran du portable et son rapport cyclique."),
+        etiquette_decrite("create", "Le cache de Vertex", "Ce que le cache de Vertex sert sur une fenêtre du banc."),
+    ])
+}
+
+/// **The chain, both ways** (18 November 2026, Lucie: « ce L1 venait de telle plage ; telle plage
+/// allait de tel tour à tel tour ; si je veux, je relis exactement tel tour »): the L1 and the slice
+/// Source say their run and range in clear; get_slice, list_slices and trace_turn follow them; from a
+/// fiche's L1, read_turns gives back the same turns.
+#[test]
+#[ignore]
+fn the_chain_goes_from_a_turn_to_its_slice_its_l1s_and_their_fiches_and_back() {
+    let serveur = three_topics_server();
+    let adresse = serveur.url.clone();
+    let dir = tempfile::tempdir().expect("dossier");
+    let b = ouvrir(dir.path(), |m| {
+        m["models"]["llm"] = json!({"provider": "compatible", "protocol": "openai", "model": "faux", "address": adresse});
+    });
+    six_turns_filed(&b, &serveur);
+    // The L1 says its range in clear.
+    let compositeur = &apports_de(&b, "Le compositeur du portable")[0];
+    assert_eq!((compositeur["run"].clone(), compositeur["from_turn"].clone(), compositeur["to_turn"].clone()), (json!("chat:test"), json!(3), json!(4)), "{compositeur}");
+    // The slice Source too, with its summary.
+    let s = appel(&b, "select_sources", json!({"filter": {"field": {"key": "chemin", "value": "sources/chat-test-turns-1-6.md"}}}));
+    let src = &s["result"][0]["data"];
+    assert_eq!((src["run"].clone(), src["from_turn"].clone(), src["to_turn"].clone()), (json!("chat:test"), json!(1), json!(6)), "{s}");
+    assert!(src["slice_summary"].as_str().is_some_and(|x| x.contains("SUMMARYMARK")), "{s}");
+    // get_slice, by its path or by a turn it contains.
+    for args in [json!({"chemin": "sources/chat-test-turns-1-6.md"}), json!({"run": "chat:test", "turn": 4})] {
+        let g = appel(&b, "get_slice", args.clone());
+        let r = &g["result"];
+        assert_eq!(r["state"], json!("closed"), "{args}: {g}");
+        assert_eq!((r["chemin"].clone(), r["from_turn"].clone(), r["to_turn"].clone()), (json!("sources/chat-test-turns-1-6.md"), json!(1), json!(6)), "{g}");
+        let mut fiches: Vec<String> = r["l1"].as_array().unwrap().iter().map(|x| x["fiche"].as_str().unwrap().to_string()).collect();
+        fiches.sort();
+        assert_eq!(fiches, vec!["La reprise du journal", "Le cache de Vertex", "Le compositeur du portable"], "{g}");
+    }
+    // list_slices: the run's slices in order, each with its count of L1.
+    let l = appel(&b, "list_slices", json!({"run": "chat:test"}));
+    assert_eq!(l["result"]["slices"].as_array().map(Vec::len), Some(1), "{l}");
+    assert_eq!(l["result"]["slices"][0]["l1"], json!(3), "{l}");
+    // trace_turn: the turn, its slice, the L1 that cover it and their fiches.
+    let t = appel(&b, "trace_turn", json!({"run": "chat:test", "turn": 3}));
+    let r = &t["result"];
+    assert_eq!(r["turn"]["state"], json!("indexed"), "{t}");
+    assert!(r["turn"]["messages"].to_string().contains("SLICETHREE"), "{t}");
+    assert_eq!(r["slice"]["chemin"], json!("sources/chat-test-turns-1-6.md"), "{t}");
+    let mut fiches: Vec<String> = r["l1"].as_array().unwrap().iter().map(|x| x["fiche"].as_str().unwrap().to_string()).collect();
+    fiches.sort();
+    assert_eq!(fiches, vec!["La reprise du journal", "Le compositeur du portable"], "1-5 and 3-4 cover turn 3, 6-6 does not: {t}");
+    // And back: from the L1 of a fiche, read_turns gives its turns.
+    let back = appel(&b, "read_turns", json!({"run": compositeur["run"], "from_turn": compositeur["from_turn"], "to_turn": compositeur["to_turn"]}));
+    assert!(back["result"]["turns"][0]["messages"].to_string().contains("SLICETHREE"), "{back}");
+}
+
+/// A turn that no slice contains yet: its slice is `open`, with no L1 — « pas encore rangé » is true
+/// by construction.
+#[test]
+#[ignore]
+fn a_turn_not_filed_yet_belongs_to_an_open_slice() {
+    let serveur = three_topics_server();
+    let adresse = serveur.url.clone();
+    let dir = tempfile::tempdir().expect("dossier");
+    let b = ouvrir(dir.path(), |m| {
+        m["models"]["llm"] = json!({"provider": "compatible", "protocol": "openai", "model": "faux", "address": adresse});
+    });
+    six_turns_filed(&b, &serveur);
+    appel(&b, "put_turn", json!({"run": "chat:test", "turn": 7, "seq": 0, "at": "2026-11-18T20:07:00Z", "role": "user", "text": "SLICESEVEN pas encore rangé"}));
+    let t = appel(&b, "trace_turn", json!({"run": "chat:test", "turn": 7}));
+    assert_eq!(t["result"]["slice"]["state"], json!("open"), "{t}");
+    assert_eq!(t["result"]["l1"], json!([]), "{t}");
+    assert!(t["result"]["turn"]["messages"].to_string().contains("SLICESEVEN"), "{t}");
+    let g = appel(&b, "get_slice", json!({"run": "chat:test", "turn": 7}));
+    assert_eq!(g["result"]["state"], json!("open"), "{g}");
+}
+
 /// An extraction that is not the requested JSON is refused, naming response_schema: nothing is
 /// guessed and nothing is filed.
 #[test]
