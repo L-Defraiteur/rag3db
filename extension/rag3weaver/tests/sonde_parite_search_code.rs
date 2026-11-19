@@ -890,7 +890,21 @@ fn releve_les_aretes_d_un_scope() {
     let a = rag3weaver::code::analyze("/", vec![(fichier.clone(), texte)]);
     let cles: Vec<&str> = a.scopes.iter().filter(|s| s.name == nom).map(|s| s.key.as_str()).collect();
     eprintln!("[analyse] scopes {nom} : {cles:?}");
-    for r in a.relations.iter().filter(|r| cles.contains(&r.from_key.as_str()) && (r.to_key.contains("Catalog") || r.rel == "MENTIONS")) {
-        eprintln!("[analyse]   {} → {}:{}", r.rel, r.to_entity, r.to_key);
+    let mut miennes: Vec<String> = a.relations.iter().filter(|r| cles.contains(&r.from_key.as_str())).map(|r| format!("{} → {}:{}", r.rel, r.to_entity, r.to_key)).collect();
+    miennes.sort();
+    eprintln!("[analyse]   {} relations ; vers Catalog : {:?}", miennes.len(), miennes.iter().filter(|m| m.contains("Catalog")).collect::<Vec<_>>());
+    for m in miennes.iter().take(12) {
+        eprintln!("[analyse]   {m}");
     }
+    let attentes: Vec<String> = a.pending.iter().filter(|(k, _, _)| cles.contains(&k.as_str())).map(|(_, n, kind)| format!("{n}:{kind}")).collect();
+    eprintln!("[analyse]   en attente : {} ; Catalog parmi elles : {:?}", attentes.len(), attentes.iter().filter(|x| x.starts_with("Catalog")).collect::<Vec<_>>());
+    let qualifies: Vec<String> = a.pending_qualifier_types.iter().filter(|(k, _, v)| cles.contains(&k.as_str()) && v.iter().any(|x| x.contains("Catalog"))).map(|(_, n, v)| format!("{n} qualifié par {v:?}")).collect();
+    eprintln!("[analyse]   qualifiés par Catalog : {qualifies:?}");
+    let sites: Vec<String> = a.pending_sites.iter().filter(|(k, n, _)| cles.contains(&k.as_str()) && (n == "new" || n.contains("Catalog"))).map(|(_, n, v)| format!("{n} {v:?}")).collect();
+    eprintln!("[analyse]   sites de new / Catalog : {sites:?}");
+    eprintln!("[analyse] relations du fichier : {} ; par type : {:?}", a.relations.len(), {
+        let mut c = std::collections::BTreeMap::new();
+        for r in &a.relations { *c.entry(r.rel.clone()).or_insert(0) += 1; }
+        c
+    });
 }
