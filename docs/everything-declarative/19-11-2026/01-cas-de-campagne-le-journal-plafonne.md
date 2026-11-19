@@ -18,8 +18,9 @@ ni modèle.
 ## Le signalement, tel qu'il était
 
 > Dans la lib entière de rag3weaver, sous charge, le témoin
-> `commande::tests::en_fond_un_journal_au_dela_du_plafond_garde_la_fin_et_le_dit` rougit une fois sur deux, et passe
-> seul. Une commande lancée en fond écrit elle-même son journal ; un surveillant le plafonne (100 000 octets dans le
+> `commande::tests::en_fond_un_journal_au_dela_du_plafond_garde_la_fin_et_le_dit` rougissait une fois sur deux. Il
+> rend maintenant la charge déterministe (le retard décrit plus bas) et **rougit à chaque exécution**, seul comme dans
+> la lib. Une commande lancée en fond écrit elle-même son journal ; un surveillant le plafonne (100 000 octets dans le
 > témoin) : au-delà, il garde la fin sous un en-tête qui compte les octets perdus. La commande écrit 30 000 lignes de
 > 11 octets, 330 000 octets. Sous charge, le compte des octets écrits que rend la fin (`octets_stdout`) tombe loin
 > sous ce qui a été écrit : la troncature perd des octets sans les compter. Le témoin rend la charge déterministe par
