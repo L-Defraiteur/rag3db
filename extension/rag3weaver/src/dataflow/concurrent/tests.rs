@@ -763,3 +763,28 @@ fn an_inner_failure_fails_the_run_with_its_error() {
     }
     assert!(events.iter().any(|e| e.contains("NodeFailed") && e.contains("\"sous\"")), "{events:?}");
 }
+
+/// **What a stop does beyond its nodes** (ticket `2026-11-07-un-arret-ne-coupe-pas-une-requete-du-moteur-en-cours`):
+/// a callback registered on the handle runs at the first stop, once; one whose guard has fallen never runs; one
+/// registered on a handle already stopped runs at once.
+#[test]
+fn a_stop_runs_what_was_registered_once_and_never_after_its_guard() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let compteur = || Arc::new(AtomicUsize::new(0));
+    let inc = |n: &Arc<AtomicUsize>| {
+        let n = n.clone();
+        move || {
+            n.fetch_add(1, Ordering::SeqCst);
+        }
+    };
+    let handle = crate::dataflow::CancelHandle::default();
+    let (held, fallen, late) = (compteur(), compteur(), compteur());
+    let _held = handle.on_cancel(inc(&held));
+    drop(handle.on_cancel(inc(&fallen)));
+    handle.cancel();
+    handle.cancel_by("ide");
+    assert_eq!(held.load(Ordering::SeqCst), 1, "the stop runs a held callback, once");
+    assert_eq!(fallen.load(Ordering::SeqCst), 0, "a fallen guard's callback never runs");
+    let _late = handle.on_cancel(inc(&late));
+    assert_eq!(late.load(Ordering::SeqCst), 1, "registered on a stopped run, it runs at once");
+}
