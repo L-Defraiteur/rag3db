@@ -1,0 +1,21 @@
+%% tool: put_turn
+%% description: Stores one message of a run as a Turn row (the L0 of the archiviste, 18 November 2026): one row per (run, turn, seq), append-only — written again identical, it stays one row and says written false; different, it is refused. Secrets are masked in the text, the params and the result before anything is stored; a tool call's params are bounded at 4000 characters and its result at 8000, the original size said. Returns {written, masked, cut}.
+%% param: run string! -- The run: « <chat>:<backend_id> » for a chat, « <task>:<parent> » for a task.
+%% param: turn int! -- The turn number, from 1.
+%% param: seq int! -- The message number in the turn; 0 is the user message.
+%% param: at string! -- When it was said, ISO 8601.
+%% param: role string! -- user, assistant or tool.
+%% param: text string = "" -- The message.
+%% param: tool_name string = "" -- role tool: the tool called.
+%% param: params string = "" -- role tool: its arguments, as sent.
+%% param: result string = "" -- role tool: its result, as received.
+%% param: status string = "ok" -- ok, error, refused or interrupted.
+%% param: record json = {} -- Reserved: the row is composed from the other parameters.
+%% result: done.result
+
+graph LR
+    compose["RhaiNode(script_id=put_turn_record, inputs='run,turn,seq,at,role,text,tool_name,params,result,status', run=$run, turn=$turn, seq=$seq, at=$at, role=$role, text=$text, tool_name=$tool_name, params=$params, result=$result, status=$status)"]
+    write["EntityRecordNode(entity='Turn', action='put', record=$record)"]
+    done["RhaiNode(script_id=put_turn_done)"]
+    compose -->|result:record| write
+    write -->|record:value| done

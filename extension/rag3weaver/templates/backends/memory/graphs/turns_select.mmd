@@ -1,0 +1,7 @@
+%% tool: turns_select
+%% description: The Turn rows that match a filter, all of them, unordered. Cited by render_turns, once, through a ForEachNode of one element: the filter is computed.
+%% param: element json! -- {filter}: the filter.
+%% result: select.results
+
+graph LR
+    select["SelectRecordsNode(entity='Turn', filter=$element.filter, limit=0)"]
