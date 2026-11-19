@@ -838,21 +838,9 @@ moteur_inchange() {
 # passe entière (un filtre qui ne désigne rien est une faute de frappe, pas
 # un succès). Rend 1 et le dit si la règle est enfreinte.
 suites_vides() {
-  local journal="$1" vides total
-  vides=$(grep -c '^test result: .* 0 passed; 0 failed;' "$journal" || true)
-  total=0
-  # Les tests joués, réussis ou non : un filtre qui désigne un test en échec
-  # désigne bien quelque chose.
-  for n in $(grep '^test result:' "$journal" | grep -oP '\d+(?= (passed|failed);)'); do total=$((total + n)); done
-  if [ -z "$TEST_FILTER" ] && [ "${vides:-0}" -gt 0 ]; then
-    echo "✗ ${vides} suite(s) n'ont joué aucun test : feature manquante, ou fichier sans test ?"
-    return 1
-  fi
-  if [ -n "$TEST_FILTER" ] && [ "${total:-0}" -eq 0 ]; then
-    echo "✗ le filtre « $TEST_FILTER » n'a désigné aucun test"
-    return 1
-  fi
-  return 0
+  # The count lives in scripts/played_tests.sh (its witness: scripts/test_played_tests.sh), which leaves out the
+  # binary's own safety nets: they play in every pass, whatever the filter.
+  bash "$WEAVER/scripts/played_tests.sh" "$1" "$TEST_FILTER"
 }
 
 # ── Le binaire unique des e2e, lancé une fois PAR SUITE ─────────────────────
