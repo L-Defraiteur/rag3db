@@ -1,5 +1,11 @@
 # Nouveautés
 
+- 19 novembre 2026 — **Une invocation lit sous la vue de son contexte.** Un outil qui en invoque un autre, dans un
+  autre backend (`InvokeToolNode`, `context: {"target": …, "view": …}`), lit désormais sous la vue que porte son
+  contexte, au lieu d'être refusé (« vue contextuelle non disponible »). La réponse dit la vue lue. Un `view` explicite
+  dans les arguments l'emporte, une vue inconnue de la cible est refusée en se nommant, et sans contexte il n'y a jamais
+  de vue implicite.
+
 - 19 novembre 2026 — **La conversation d'un chat se range en mémoire au fil de l'eau.** Chaque tour du chat de
   l'IDE s'écrit dans la mémoire déclarée par le dépôt (`bilans.memoire`). Quand les tours pas encore rangés
   dépassent `memory.slice_tokens` (50 000 jetons par défaut), une tranche se range en fond, sans retarder le chat.
