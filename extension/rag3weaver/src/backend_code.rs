@@ -99,6 +99,11 @@ pub struct WorkspaceConfig {
     /// des dépendances, que la tâche n'a pas à relire ni à fusionner).
     #[serde(default)]
     pub exclude: Option<Vec<String>>,
+    /// **The shortest container that is a search candidate** (2.12, c7's rule of 19 November 2026): a folded
+    /// `namespace` or `module` whose folded content and docstring together hold fewer characters is in neither the
+    /// full text nor the chunks. A property of the base: it joins the version of the analysis. Absent: 80.
+    #[serde(default)]
+    pub container_min_chars: Option<usize>,
     /// La porte des commandes (`run`/`run_bg`) : absente ou `off`, le
     /// service n'est pas monté et `run` refuse tout — c'est le défaut.
     #[serde(default)]
@@ -984,6 +989,7 @@ mod tests {
             git_init: false,
             git_identity: None,
             exclude: None,
+            container_min_chars: None,
             commands: CommandGate::Off,
             commands_outside_tasks: false,
             writes_outside_tasks: false,
