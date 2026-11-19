@@ -677,6 +677,10 @@ void NodeGroup::checkpoint(MemoryManager& memoryManager, NodeGroupCheckpointStat
     // Déjà posé après la copie fusionnée ; l'échange, lui, ne se défait pas non plus.
     state.markChangedMemory();
     const auto lock = chunkedGroups.lock();
+    // La liste des blocs est vidée puis remplie : un lecteur qui la parcourt sans le verrou des
+    // blocs (isVisibleNoLock, la recherche par clé primaire) tient inMemAppendMtx en partagé, et
+    // l'attend ici comme il attend un ajout. Même ordre que l'ajout : les blocs, puis celui-ci.
+    const std::unique_lock appendGuard{inMemAppendMtx};
     // Les blocs ajoutés depuis la prise (après le dernier bloc pris, scellé) : gardés derrière
     // le bloc neuf, qui a fondu toutes les lignes des blocs pris, donc leur startRowIdx suit.
     const auto& live = chunkedGroups.getAllGroups(lock);
