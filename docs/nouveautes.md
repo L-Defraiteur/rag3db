@@ -1,5 +1,13 @@
 # Nouveautés
 
+- 19 novembre 2026 — **Un graphe compose le contexte d'un appel au modèle, sans script de prose.** Le nœud `Collect`
+  rassemble ses entrées nommées dans l'ordre que le graphe déclare (`inputs='identity,report,slice'`), quel que soit
+  l'ordre où elles arrivent ; une entrée vide est retirée, sauf `keep_empty`. `LlmNode` prend une `instruction` (la
+  ligne de tâche) et un port `context` : une liste de parts `{name, title, value, format?, max_tokens?}`, rendues en
+  sections, une chaîne telle quelle et toute autre valeur en JSON à clés triées (ou en lignes « clé : valeur » avec
+  `format: "kv"`). Une part au-delà de son plafond est coupée, et la coupe est dite. La même composition rend la
+  même invite, octet pour octet.
+
 - 19 novembre 2026 — **Un L1 dit de quels tours il vient, et un tour dit ce qu'on en a retenu.** Un L1 rangé depuis
   une conversation porte son run et son intervalle de tours, que `recall_apports` rend ; la Source de la tranche
   aussi, avec son résumé. `get_slice` rend une tranche, par son chemin ou par un de ses tours, avec ses L1 et leurs
