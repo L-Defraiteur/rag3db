@@ -17,6 +17,7 @@ use serde_json::Value;
 use std::sync::Arc;
 
 mod quickjs;
+pub mod secrets;
 mod rhai;
 #[cfg(test)]
 mod tests;
