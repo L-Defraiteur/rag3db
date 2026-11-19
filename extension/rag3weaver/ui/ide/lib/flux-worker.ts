@@ -27,6 +27,11 @@ type Page = { port: MessagePort; sujets: Set<string> | null; vu: number };
 
 const pages = new Set<Page>();
 const etat = new Map<string, unknown>();
+/// **The text of each turn in flight** (the IDE in several windows, 19 Nov. 2026): a window opened in the middle of
+/// a turn asks for it (`tour`), and shows the turn's beginning, not only what streams after it opened. Kept from the
+/// turn's tokens until its `RunFinished`, bounded at TOUR_MAX characters (past it, the rest is not kept).
+const tours = new Map<string, { texte: string; seq: number }>();
+const TOUR_MAX = 512 * 1024;
 let source: EventSource | null = null;
 let dernier = "";
 let statut: Statut = "fermé";
@@ -47,11 +52,20 @@ function brancher() {
   s.onmessage = (e) => {
     if (e.lastEventId) dernier = e.lastEventId;
     let sujet: string | undefined;
+    let ev: { kind?: string; run?: string; text?: string; seq?: number } | undefined;
     try {
-      sujet = JSON.parse(e.data)?.sujet;
+      const j = JSON.parse(e.data);
+      sujet = j?.sujet;
+      ev = j?.evenement;
     } catch {
       /* une ligne illisible va à tous : la page la jettera */
     }
+    if (ev?.run && ev.kind === "Token") {
+      const t = tours.get(ev.run) ?? { texte: "", seq: -1 };
+      if (t.texte.length < TOUR_MAX) t.texte += String(ev.text ?? "");
+      if (typeof ev.seq === "number") t.seq = Math.max(t.seq, ev.seq);
+      tours.set(ev.run, t);
+    } else if (ev?.run && ev.kind === "RunFinished") tours.delete(ev.run);
     for (const p of pages) {
       if (!p.sujets || sujet === undefined || p.sujets.has(sujet)) p.port.postMessage({ type: "evenement", data: e.data, id: e.lastEventId });
     }
@@ -96,6 +110,9 @@ function oublier(p: Page) {
         if (!source) brancher();
         port.postMessage({ type: "statut", statut });
         port.postMessage({ type: "etat-complet", etat: Object.fromEntries(etat) });
+        break;
+      case "tour":
+        port.postMessage({ type: "tour", run: d.run, tour: tours.get(String(d.run)) ?? null });
         break;
       case "etat-ecrire":
         if (typeof d.cle === "string") {
