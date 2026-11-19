@@ -340,6 +340,7 @@ impl Navigateur {
     /// **Clicks what navigates the whole page** (a file link): the click goes after the
     /// evaluation returns, so that the evaluation never loses its page, and the old document is
     /// marked, so that `attendre` reads the new one.
+    #[cfg_attr(not(feature = "code"), allow(dead_code))]
     pub(crate) fn cliquer_pour_naviguer(&mut self, element: &str) {
         self.evaluer(&format!("window.__temoin_ancien = true; setTimeout(() => ({element}).click(), 0); true"));
     }
