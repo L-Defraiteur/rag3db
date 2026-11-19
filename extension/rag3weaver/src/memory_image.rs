@@ -336,14 +336,13 @@ impl MemoryImage {
         self.uuids(self.by_file.get(&f).into_iter().flatten().copied())
     }
 
-    /// Take `path` out: its nodes and all their relations, both directions.
-    pub fn remove_file(&mut self, path: &str) -> RemovedFile {
-        let mut removed = RemovedFile::default();
-        let Some(f) = self.strings.get(path) else { return removed };
-        let ids: Vec<u32> = self.by_file.remove(&f).unwrap_or_default().into_iter().filter(|id| self.nodes[*id as usize].alive).collect();
-        let mut rels: Vec<u32> = ids.iter().flat_map(|id| self.touching[*id as usize].iter().copied()).filter(|r| self.rels[*r as usize].alive).collect();
+    /// Take relations out (alive ones; duplicates allowed): from both indexes and from the nodes they touch. Gives
+    /// back how many, and the names of the symbols at their ends.
+    fn drop_rels(&mut self, mut rels: Vec<u32>) -> (usize, BTreeSet<String>) {
+        rels.retain(|r| self.rels[*r as usize].alive);
         rels.sort_unstable();
         rels.dedup();
+        let mut names = BTreeSet::new();
         for r in &rels {
             let (rel, from, to) = (self.rels[*r as usize].rel, self.rels[*r as usize].from, self.rels[*r as usize].to);
             for end in [from, to] {
@@ -351,7 +350,7 @@ impl MemoryImage {
                 if let Some((table, field)) = self.symbol_table {
                     if n.table == table {
                         if let Some(Compact::Str(name)) = prop(&n.props, field) {
-                            removed.symbol_names.insert(self.strings.name(*name).to_string());
+                            names.insert(self.strings.name(*name).to_string());
                         }
                     }
                 }
@@ -367,27 +366,57 @@ impl MemoryImage {
                 self.touching[end as usize].retain(|x| x != r);
             }
         }
-        for id in &ids {
-            self.unindex(*id);
-            self.nodes[*id as usize].alive = false;
-            let t = self.nodes[*id as usize].table;
-            if let Some(list) = self.by_table.get_mut(&t) {
-                list.retain(|x| x != id);
+        (rels.len(), names)
+    }
+
+    /// Take a node out of its indexes (its relations already gone).
+    fn drop_node(&mut self, id: u32) {
+        self.unindex(id);
+        self.nodes[id as usize].alive = false;
+        let (table, file) = (self.nodes[id as usize].table, self.nodes[id as usize].file);
+        if let Some(list) = self.by_table.get_mut(&table) {
+            list.retain(|x| *x != id);
+        }
+        if let Some(f) = file {
+            if let Some(list) = self.by_file.get_mut(&f) {
+                list.retain(|x| *x != id);
             }
         }
+    }
+
+    /// Take `path` out: its nodes and all their relations, both directions.
+    pub fn remove_file(&mut self, path: &str) -> RemovedFile {
+        let mut removed = RemovedFile::default();
+        let Some(f) = self.strings.get(path) else { return removed };
+        let ids: Vec<u32> = self.by_file.get(&f).cloned().unwrap_or_default().into_iter().filter(|id| self.nodes[*id as usize].alive).collect();
+        let rels: Vec<u32> = ids.iter().flat_map(|id| self.touching[*id as usize].clone()).collect();
+        let (n, names) = self.drop_rels(rels);
+        for id in &ids {
+            self.drop_node(*id);
+        }
         removed.nodes = ids.len();
-        removed.relations = rels.len();
+        removed.relations = n;
+        removed.symbol_names = names;
         removed
     }
 
     /// Take one node out, with all its relations, both directions (a `DETACH DELETE`). `false` when it is absent.
-    pub fn remove_node(&mut self, _uuid: &str) -> bool {
-        unimplemented!("memory image: remove_node")
+    pub fn remove_node(&mut self, uuid: &str) -> bool {
+        let Some(id) = self.live(uuid) else { return false };
+        let rels = self.touching[id as usize].clone();
+        self.drop_rels(rels);
+        self.drop_node(id);
+        true
     }
 
     /// Take one relation out. `false` when it is absent.
-    pub fn remove_rel(&mut self, _rel: &str, _from: &str, _to: &str) -> bool {
-        unimplemented!("memory image: remove_rel")
+    pub fn remove_rel(&mut self, rel: &str, from: &str, to: &str) -> bool {
+        let (Some(rel), Some(from), Some(to)) = (self.strings.get(rel), self.live(from), self.live(to)) else { return false };
+        let found = self.outgoing.get(&(rel, from)).and_then(|ids| ids.iter().copied().find(|r| self.rels[*r as usize].to == to));
+        match found {
+            Some(r) => self.drop_rels(vec![r]).0 == 1,
+            None => false,
+        }
     }
 
     /// The live nodes and relations.
