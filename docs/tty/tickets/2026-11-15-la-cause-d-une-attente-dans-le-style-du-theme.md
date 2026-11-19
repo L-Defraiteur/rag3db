@@ -1,6 +1,6 @@
 # La cause d'une attente, dans le style du thème et telle que l'hôte la dit
 
-- **État** : ouvert. Le style du thème est fait (tty-25, 18 nov. 2026, page `docs/tty/18-11-2026/06-tty-25-la-cause-dans-le-style-du-theme.md`) ; restent les attentes que seul l'hôte connaît, qui attendent son événement `waiting`.
+- **État** : ouvert. Le style du thème est fait (tty-25, 18 nov. 2026). Les attentes que seul l'hôte connaît sont faites le 19 nov. 2026 : l'événement par `cx-hote-waiting` (page `docs/tty/19-11-2026/05-l-hote-dit-qu-un-tour-attend.md`), le terminal par tty-29 (page `docs/tty/19-11-2026/06-tty-29-l-attente-dite-par-l-hote.md`). Il se ferme au « poussé » des deux.
 - **Famille** : produit
 - **Gravité** : gêne (Lucie ne voit pas ce que l'équipier attend quand c'est un quota ou l'index).
 - **Atteignable en service** : oui, à chaque tour de l'équipier.
