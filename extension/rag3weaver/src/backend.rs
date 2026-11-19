@@ -5166,6 +5166,14 @@ impl Backend {
         }))
     }
 
+    /// **The state of a view's index, now** (`POST /index_state`, the thin client's watch): what a read of `cell`
+    /// under `view` would say, without waiting. `{"ready": true}` when its layer is caught up; otherwise the `index`
+    /// field a read would carry (estimate, files pending, an index writing it).
+    pub fn index_state_now(&self, cell: Option<&crate::scope::Scope>, view: Option<crate::views::ViewRequest>) -> Value {
+        let _ = (cell, view);
+        json!({"ready": true})
+    }
+
     fn wait_for_a_lagging_index(&self, prepared: &PreparedBackend, vectors: bool) -> Option<Value> {
         use crate::catalog::retard::{LagKey, LayerId};
         let vue = self.read_view.current()?;
@@ -9831,6 +9839,27 @@ mod tests {
         assert_eq!(answer["index"], json!({"ready": false, "eta_s": 20, "pending_files": 1}), "{answer}");
         assert!(answer["result"].to_string().contains("index pas prêt, environ 20 s"), "{answer}");
         assert!(answer["result"].to_string().contains("1 fichier changé"), "the freshness line is still said: {answer}");
+    }
+
+    /// **The state of a view's index, said without waiting** (the thin client's watch, `POST /index_state`). A file
+    /// noted behind at 20 s per file: not ready, with its estimate, at once; once the layer caught up: ready.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn the_index_state_of_a_view_is_said_now_without_waiting() {
+        let (dir, backend) = backend_with_read_freshness(None);
+        backend.mount_watches().unwrap();
+        seed_rate(&backend, std::time::Duration::from_secs(20));
+        std::fs::write(dir.path().join("sources/arrivee.rs"), "pub fn arrivee() {}\n").unwrap();
+        wait_for_lag(&backend, 1);
+        let t = std::time::Instant::now();
+        let etat = backend.index_state_now(None, None);
+        assert!(t.elapsed() < std::time::Duration::from_secs(1), "the state is said without waiting: {:?}", t.elapsed());
+        assert_eq!(etat["ready"], json!(false), "{etat}");
+        assert_eq!(etat["eta_s"], json!(20), "{etat}");
+        let cell = backend.catalog.lock().unwrap().scope().clone();
+        let lag = backend.catalog.lock().unwrap().file_lag();
+        lag.done_in(&crate::catalog::retard::LagKey::backend(&cell), "arrivee.rs", u64::MAX);
+        assert_eq!(backend.index_state_now(None, None), json!({"ready": true}), "a caught-up layer is ready");
     }
 
     /// **Without an observed rate, a read waits at most the setting, and says
