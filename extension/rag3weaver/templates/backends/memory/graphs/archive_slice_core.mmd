@@ -42,7 +42,10 @@ graph LR
     parts -->|list:context| extract
     extract -->|json:value| build
     build -->|result:elements| decide
-    decide -->|report:value| rapport
+    stats["Collect(inputs='report,extraction', keep_empty=true)"]
+    decide -->|report:report| stats
+    extract -->|usage:extraction| stats
+    stats -->|list:value| rapport
     decide -->|report:value| sourcer
     sourcer -->|result:record| source
     decide -->|results:element| decided
