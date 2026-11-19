@@ -60,6 +60,15 @@ impl SchemaDialect for MemoryDialect {
         Vec::new()
     }
 
+    /// An image is rebuilt, never resumed: no checkpoints ([`crate::memory_connection::NoCheckpoints`]).
+    fn nouveau_magasin_de_checkpoints(
+        &self,
+        _conn: std::sync::Arc<dyn crate::connection::DbConnection>,
+        _dossier: std::path::PathBuf,
+    ) -> Option<std::sync::Arc<dyn crate::dataflow::checkpoint::CheckpointStore>> {
+        Some(std::sync::Arc::new(crate::memory_connection::NoCheckpoints))
+    }
+
     // ── ddl ──────────────────────────────────────────────────────────────────
     fn create_table(&self, name: &str, columns: &[ColumnDef]) -> String {
         op("ddl", "create_table", json!({"name": name, "columns": names(columns)}))

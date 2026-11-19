@@ -115,3 +115,46 @@ impl DbConnection for MemoryConnection {
 
 #[cfg(test)]
 mod tests;
+
+/// **No checkpoints in memory**: an image is rebuilt, never resumed — an ingestion interrupted in memory starts over.
+/// This store keeps nothing and finds nothing incomplete; [`crate::memory_dialect::MemoryDialect`] hands it to the
+/// catalog, which otherwise refuses to start without a durable store (`DurableStoreMissing`).
+#[derive(Debug, Default)]
+pub struct NoCheckpoints;
+
+impl crate::dataflow::checkpoint::CheckpointStore for NoCheckpoints {
+    fn initialize(&self) -> Result<(), String> {
+        Ok(())
+    }
+    fn create_execution(&self, _checkpoint: &crate::dataflow::checkpoint::ExecutionCheckpoint) -> Result<(), String> {
+        Ok(())
+    }
+    fn load_execution(&self, _execution_id: &str) -> Result<Option<crate::dataflow::checkpoint::ExecutionCheckpoint>, String> {
+        Ok(None)
+    }
+    fn find_incomplete(&self) -> Result<Vec<String>, String> {
+        Ok(Vec::new())
+    }
+    fn save_node_completed(
+        &self,
+        _execution_id: &str,
+        _node_name: &str,
+        _outputs: &std::collections::HashMap<String, crate::dataflow::checkpoint::CheckpointPortValue>,
+        _undo_context: Option<&serde_json::Value>,
+        _duration_ms: u64,
+    ) -> Result<(), String> {
+        Ok(())
+    }
+    fn save_node_failed(&self, _execution_id: &str, _node_name: &str, _error: &str) -> Result<(), String> {
+        Ok(())
+    }
+    fn mark_completed(&self, _execution_id: &str) -> Result<(), String> {
+        Ok(())
+    }
+    fn mark_failed(&self, _execution_id: &str, _error: &str) -> Result<(), String> {
+        Ok(())
+    }
+    fn delete(&self, _execution_id: &str) -> Result<(), String> {
+        Ok(())
+    }
+}
