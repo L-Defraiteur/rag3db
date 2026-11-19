@@ -1432,6 +1432,8 @@ pub struct PreparedBackend {
     /// d'ouverture — une garde d'états se recharge, une relation non.
     relation_defs: HashMap<String, RelationDef>,
     mappings: HashMap<String, JsonSchemaMapping>,
+    /// **The presentation of each type** (lot B2): `x-presentation` of an entity's schema, when it declares one.
+    presentations: HashMap<String, Value>,
     validators: HashMap<String, Arc<jsonschema::Validator>>,
     /// Les miroirs en fichiers, par entité qui déclare `files`.
     miroirs: HashMap<String, Arc<crate::fichiers_entite::Miroir>>,
@@ -1873,6 +1875,7 @@ impl PreparedBackend {
                 .map_err(|errors| format!("components/ : {}", errors.join(" ; ")))?,
         );
         let mut schemas = HashMap::new();
+        let mut presentations: HashMap<String, Value> = HashMap::new();
         let mut mappings = HashMap::new();
         let mut entities = HashMap::new();
         let mut validators = HashMap::new();
@@ -1969,6 +1972,10 @@ impl PreparedBackend {
             }
             if config.derived.is_none() && config.hashsafe.as_ref().is_none_or(|v| v.is_empty()) {
                 return Err(format!("{name}: stable hashsafe identity required"));
+            }
+            if let Some(p) = schema.get("x-presentation") {
+                crate::dataflow::llm_nodes::check_presentation(p).map_err(|e| format!("{name}: x-presentation: {e}"))?;
+                presentations.insert(name.clone(), p.clone());
             }
             schemas.insert(name.clone(), schema);
             mappings.insert(name.clone(), mapping);
@@ -2497,6 +2504,7 @@ impl PreparedBackend {
             directory,
             entities,
             mappings,
+            presentations,
             validators,
             miroirs,
             tools,
@@ -5674,6 +5682,7 @@ impl Backend {
             prepared.manifest.relations.clone(),
         );
         services.register("backend_mappings", prepared.mappings.clone());
+        services.register(crate::dataflow::llm_nodes::PRESENTATIONS_SERVICE, prepared.presentations.clone());
         services.register("backend_validators", prepared.validators.clone());
         services.register(crate::fichiers_entite::SERVICE, prepared.miroirs.clone());
         services.register(
