@@ -1,12 +1,15 @@
 %% tool: archive_segment
 %% description: Splits a long section into topics (archive, param segment_over): its numbered paragraphs go to the model, which returns its topics under a schema ({topics: [{title, from, to}]}); each topic becomes a sub-section titled « <title> §from-to » whose text is its paragraphs. A model that does not return this JSON makes the call fail, naming response_schema: nothing is guessed. No topic returned: the section stays whole.
 %% param: element json! -- The long section.
-%% param: schema json = {"type": "object", "properties": {"topics": {"type": "array", "items": {"type": "object", "properties": {"title": {"type": "string"}, "from": {"type": "integer"}, "to": {"type": "integer"}}, "required": ["title", "from", "to"], "additionalProperties": false}}}, "required": ["topics"], "additionalProperties": false} -- The shape of the model reply.
+%% param: instruction string = "Split this section into topics." -- The task line of the split, set before the numbered section. The rules are in the descriptions of the schema.
+%% param: schema json = {"type": "object", "properties": {"topics": {"type": "array", "description": "The topics of the section, in order; each paragraph is in exactly one topic.", "items": {"type": "object", "properties": {"title": {"type": "string", "description": "The topic in a few words: a piece of work, a thing or a rule."}, "from": {"type": "integer", "description": "The first paragraph of the topic, by its [n] number, included. Neighbouring paragraphs on the same topic go together."}, "to": {"type": "integer", "description": "The last paragraph of the topic, by its [n] number, included."}}, "required": ["title", "from", "to"], "additionalProperties": false}}}, "required": ["topics"], "additionalProperties": false} -- The shape of the model reply; the meaning of each field is in its description.
 %% result: build.result
 
 graph LR
     prompt["RhaiNode(script_id=archive_segment_prompt, inputs='section', section=$element)"]
-    model["LlmNode(response_schema=$schema, max_tokens=2048, temperature=0)"]
+    parts["Collect(inputs='section')"]
+    model["LlmNode(instruction=$instruction, response_schema=$schema, max_tokens=2048, temperature=0)"]
     build["RhaiNode(script_id=archive_segment_build, inputs='section', section=$element)"]
-    prompt -->|result:value| model
+    prompt -->|result:section| parts
+    parts -->|list:context| model
     model -->|json:value| build
