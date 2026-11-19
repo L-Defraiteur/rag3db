@@ -474,7 +474,10 @@ avant code. Ce qui est noté dès maintenant :
 - **Les motifs de `mask_secrets`** quittent la constante Rust (`src/script/secrets.rs`) pour une déclaration du
   gabarit. Le moteur ne garde que le parcours générique.
 - **L'invite d'extraction devient un paramètre presque vide**, une ligne qui dit la tâche (Lucie : « éviter
-  qu'il y ait beaucoup de prompt à part les descriptions, si c'est pour l'extraction structurée »). C'est le
+  qu'il y ait beaucoup de prompt à part les descriptions, si c'est pour l'extraction structurée »). Cette ligne
+  est **un paramètre déclaré du graphe**, comme l'instruction du Decide : courte par défaut, modifiable sans
+  rebâtir (Lucie : « dans tous les cas, même la consigne est paramétrable »). Les descriptions du schéma de
+  réponse le sont aussi, puisque le schéma est déjà un paramètre (`schema`) d'`archive_slice_core`. C'est le
   `response_schema` du `LlmNode` qui porte le sens, par les descriptions de ses champs : le sujet, ses tours, ce
   qui est dit, s'il reste ouvert, les attributs, ce qui est écarté et pourquoi. Toute consigne écrite aujourd'hui
   en prose dans `archive_slice_prompt.rhai` se déplace dans la description du champ qu'elle concerne. **La
