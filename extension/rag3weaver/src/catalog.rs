@@ -822,7 +822,7 @@ fn read_threads() -> u64 {
             fts_promise_token: format!("{}-{}", std::process::id(), crate::dataflow::checkpoint::timestamp_ms()),
             fts_storage: Default::default(),
             fts_storage_pose: false,
-            fts_positions: true,
+            fts_positions: false,
             writer_id: crate::uuid::hashsafe_uuid(
                 "_writer",
                 &[&format!("{:?}", std::time::SystemTime::now()), &format!("{:?}", std::thread::current().id())],
@@ -1589,6 +1589,14 @@ fn read_threads() -> u64 {
     }
 
     /// L'entité dont `table` porte le plein texte.
+    /// Whether the full text of `table` is created with positions: its entity's declaration
+    /// (`ftsPositions`), else the catalog's policy (the manifest's `fts_positions`, false by default).
+    fn fts_positions_of(&self, table: &str) -> bool {
+        self.entity_of_fts_table(table)
+            .and_then(|e| self.entity_configs.get(&e).and_then(|c| c.fts_positions))
+            .unwrap_or(self.fts_positions)
+    }
+
     fn entity_of_fts_table(&self, table: &str) -> Option<String> {
         self.entity_configs
             .keys()
@@ -1844,7 +1852,7 @@ fn read_threads() -> u64 {
                 if self.lecture_seule {
                     return Err(Some(format!("index plein texte {table} absent ou illisible en lecture seule : {ouverture}")));
                 }
-                let positions = self.fts_positions;
+                let positions = self.fts_positions_of(table);
                 let config = match crate::fts_handle::build_schema_config_with_positions(
                     text_fields,
                     filter_fields,
