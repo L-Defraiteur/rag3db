@@ -32,3 +32,5 @@ L'étape « témoin » ne savait jouer qu'un test de la lib de rag3weaver (`lib`
 - le témoin n'est pas ajouté aux suites e2e.
 
 Témoin de la passe : trois cas, vus rouges (91f7f383d6), puis verts (59 cas). Les témoins de la garde et du pousseur restent verts. Le dépôt d'un lot du terminal se fait ainsi : `enqueue <id> <branche> <tête> rust <filtre> tty - - tty`.
+
+Le pousseur, à la relecture de G : `enqueue` accepte la suite du témoin `tty` (elle était refusée, ni `lib`, ni `navigateur`, ni `tests/tty.rs`), et un train ne l'ajoute pas aux suites en plus d'un lot qui suit (`replay_train`). Cas 32 de `test_pusher.sh`, rouge (50a6ddd67b), puis vert.
