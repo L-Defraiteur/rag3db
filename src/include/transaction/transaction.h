@@ -214,15 +214,18 @@ public:
     // le graphe d'attente ne voit pas). Un changement de schéma la prend en exclusif, et attend.
     void lockTableForWrite(common::table_id_t tableID) const;
     void lockTableForSchemaChange(common::table_id_t tableID) const;
-    // Un lecteur tient le verrou de schéma de chaque table qu'il lit, en partagé, jusqu'à la fin de
-    // sa transaction : un ALTER ou un DROP l'attend, et il relit ses colonnes (ticket de l'ALTER
-    // qui n'attend pas les lecteurs, 19 novembre 2026).
+    // Une transaction tient le verrou des lecteurs de chaque table qu'elle lit (TABLE_READ), en
+    // partagé, de sa première lecture à sa fin, une seule prise par table : un changement des
+    // colonnes ou un DROP TABLE l'attend, et elle relit ses colonnes (ticket de l'ALTER qui
+    // n'attend pas les lecteurs, 19 novembre 2026). Pas de contrôle de schéma ici : un lecteur lit
+    // son instantané, colonnes comprises, et le refus nommé de la liaison du balayage reste le
+    // filet d'une colonne détruite.
     void lockTableForRead(common::table_id_t tableID) const;
-    // Les verrous de table valent pour une lecture aussi, sous les écritures multiples.
+    // Le pendant du changement : le verrou des lecteurs en exclusif, à prendre avant
+    // lockTableForSchemaChange.
+    void lockTableReadersForSchemaChange(common::table_id_t tableID) const;
+    // Les verrous de lecture valent sous les écritures multiples, pour toute transaction.
     bool usesReadLocks() const;
-    // La prise partagée du verrou de schéma d'une table, une fois par transaction, pour une
-    // lecture comme pour une écriture.
-    void lockTableShared(common::table_id_t tableID) const;
     // Le début stable du refus d'une écriture dont la table a changé de schéma depuis le départ de
     // sa transaction : un client le reconnaît et recommence la transaction, qui se lie alors sur
     // le nouveau schéma.
@@ -293,6 +296,9 @@ private:
     // d'une même transaction écrivent en parallèle, d'où le mutex.
     mutable std::mutex tableLocksMtx;
     mutable std::unordered_set<common::table_id_t> tablesLockedForWrite;
+    mutable std::unordered_set<common::table_id_t> tablesLockedForRead;
+    // L'attente d'un changement de schéma : au plus lock_timeout et alter_lock_timeout.
+    uint64_t schemaChangeLockTimeoutInMS() const;
     // Posé pendant commit() : plus aucune prise de verrou de table (voir lockTableForWrite).
     std::atomic<bool> committing{false};
 };

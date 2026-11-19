@@ -74,14 +74,26 @@ void Drop::dropTable(const main::ClientContext* context) {
         }
     }
     auto entry = catalog->getTableCatalogEntry(transaction, dropInfo.name);
-    // Le verrou de schéma, en exclusif : le DROP attend la fin des écrivains ouverts sur la table.
+    // Le verrou de schéma, en exclusif : le DROP attend la fin des écrivains ouverts sur la table,
+    // et d'abord celle de ses lecteurs. Pas pour une table interne (le graphe d'un index HNSW) :
+    // son DROP vient d'un DROP d'index, et les lecteurs d'avant gardent l'ancien index par la
+    // rétention, ils ne sont pas attendus.
+    std::vector<table_id_t> tableIDs;
     if (entry->getType() == CatalogEntryType::REL_GROUP_ENTRY) {
         for (const auto& info :
             entry->constCast<catalog::RelGroupCatalogEntry>().getRelEntryInfos()) {
-            transaction->lockTableForSchemaChange(info.oid);
+            tableIDs.push_back(info.oid);
         }
     } else {
-        transaction->lockTableForSchemaChange(entry->getTableID());
+        tableIDs.push_back(entry->getTableID());
+    }
+    if (entry->getOID() < CatalogSet::INTERNAL_CATALOG_SET_START_OID) {
+        for (const auto tableID : tableIDs) {
+            transaction->lockTableReadersForSchemaChange(tableID);
+        }
+    }
+    for (const auto tableID : tableIDs) {
+        transaction->lockTableForSchemaChange(tableID);
     }
     switch (entry->getType()) {
     case CatalogEntryType::NODE_TABLE_ENTRY: {

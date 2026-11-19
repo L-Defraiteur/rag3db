@@ -95,8 +95,8 @@ public:
     // Les verrous des écritures parallèles. Une transaction les prend pendant ses écritures ;
     // ils sont rendus quand elle quitte le système, validée ou annulée.
     LockManager& getLockManager() { return lockManager; }
-    // « transaction 12 (read-only, open for 3400 ms), transaction 15 (write, …) », pour le refus
-    // d'un verrou de table. Sans le verrou public (déjà tenu), les seuls identifiants.
+    // « reader 12 (read-only, open for 3400 ms), writer 15 (open for … ms) », pour le refus d'un
+    // verrou de table. Sans le verrou public (déjà tenu), « transaction 12 ».
     std::string describeTransactions(const std::vector<common::transaction_t>& ids);
     // Le point de reprise en cours (V2-2), posé par checkpointNoLock sous le verrou public au
     // départ de l'écriture : T, tout ce qui est validé (lastTimestamp) ; F, le plus vieux

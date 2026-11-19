@@ -18,6 +18,8 @@ std::string LockResource::toString() const {
         return stringFormat("row '{}' of table {}", value, tableID);
     case LockResourceKind::TABLE:
         return stringFormat("table {}", tableID);
+    case LockResourceKind::TABLE_READ:
+        return stringFormat("the readers of table {}", tableID);
     case LockResourceKind::INDEX:
     default:
         return stringFormat("the index of table {}", tableID);

@@ -1,5 +1,7 @@
 #include "transaction/transaction.h"
 
+#include <algorithm>
+
 #include "catalog/catalog.h"
 #include "common/exception/runtime.h"
 #include "common/exception/transaction_manager.h"
@@ -102,7 +104,8 @@ void Transaction::acquireLocks(std::span<const LockRequest> requests,
         auto message = LockManager::describe(outcome, failedOn);
         // Un verrou de table refusé dit qui le tient (lecteur ou écrivain, et depuis quand) :
         // l'hôte sait quelle transaction fermer.
-        if (failedOn.kind == LockResourceKind::TABLE) {
+        if (failedOn.kind == LockResourceKind::TABLE ||
+            failedOn.kind == LockResourceKind::TABLE_READ) {
             std::vector<common::transaction_t> holders;
             for (const auto holder : lockManager.getHolders(failedOn)) {
                 if (holder != ID) {
@@ -132,17 +135,34 @@ void Transaction::lockTableForRead(common::table_id_t tableID) const {
     if (!usesReadLocks() || committing.load()) {
         return;
     }
-    lockTableShared(tableID);
+    {
+        std::unique_lock lck{tableLocksMtx};
+        if (tablesLockedForRead.contains(tableID)) {
+            return;
+        }
+    }
+    acquireLock(LockResource::tableRead(tableID), LockMode::SHARED);
+    std::unique_lock lck{tableLocksMtx};
+    tablesLockedForRead.insert(tableID);
+}
+
+uint64_t Transaction::schemaChangeLockTimeoutInMS() const {
+    const auto* config = clientContext->getClientConfig();
+    return std::min(config->lockTimeoutInMS, config->alterLockTimeoutInMS);
+}
+
+void Transaction::lockTableReadersForSchemaChange(common::table_id_t tableID) const {
+    if (!usesLocks()) {
+        return;
+    }
+    const LockRequest request{LockResource::tableRead(tableID), LockMode::EXCLUSIVE};
+    acquireLocks(std::span<const LockRequest>{&request, 1}, schemaChangeLockTimeoutInMS());
 }
 
 void Transaction::lockTableForWrite(common::table_id_t tableID) const {
     if (!usesLocks() || committing.load()) {
         return;
     }
-    lockTableShared(tableID);
-}
-
-void Transaction::lockTableShared(common::table_id_t tableID) const {
     {
         std::unique_lock lck{tableLocksMtx};
         if (tablesLockedForWrite.contains(tableID)) {
@@ -179,8 +199,7 @@ void Transaction::lockTableForSchemaChange(common::table_id_t tableID) const {
         return;
     }
     const LockRequest request{LockResource::table(tableID), LockMode::EXCLUSIVE};
-    acquireLocks(std::span<const LockRequest>{&request, 1},
-        clientContext->getClientConfig()->alterLockTimeoutInMS);
+    acquireLocks(std::span<const LockRequest>{&request, 1}, schemaChangeLockTimeoutInMS());
     throwIfSchemaChangedAfterSnapshot(tableID);
 }
 
