@@ -196,6 +196,57 @@ pub struct NotCandidate {
     pub types: Vec<String>,
     pub text_fields: Vec<String>,
     pub min_chars: usize,
+    /// **What a container carries of its own is measured without its pure structure** (c7, 19 November 2026): in
+    /// `structure_field`, the lines that are only structure in the row's language (`language_field`) are not
+    /// counted. A namespace of forward declarations and folded inner namespaces carries nothing of its own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub structure_field: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub language_field: Option<String>,
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub structure: std::collections::BTreeMap<String, Vec<StructureLine>>,
+}
+
+/// **A line of pure structure** in a language, declared rather than written as a regular expression.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", tag = "kind")]
+pub enum StructureLine {
+    /// Braces (and a semicolon) alone, a trailing `//` comment allowed: `}`, `};`, `} // namespace x`.
+    BraceOnly,
+    /// The opening of a container by its keyword, after visibility words (`pub`, `pub(crate)`, `inline`,
+    /// `export`): `namespace x {`, `namespace x { … }`, `mod x;`, `pub mod x {`.
+    Opening { keyword: String },
+    /// A declaration without a body, by one of its keywords: `class X;`, `struct X;`, `enum class X;`.
+    ForwardDeclaration { keywords: Vec<String> },
+}
+
+impl StructureLine {
+    /// Whether this line (already without its trailing `//` comment, trimmed) is this kind of structure.
+    pub fn matches(&self, line: &str) -> bool {
+        match self {
+            StructureLine::BraceOnly => !line.is_empty() && line.chars().all(|c| matches!(c, '{' | '}' | ';' | ' ')),
+            StructureLine::Opening { keyword } => {
+                let mut reste = line;
+                loop {
+                    let avant = reste;
+                    for v in ["pub(crate) ", "pub(super) ", "pub ", "inline ", "export "] {
+                        reste = reste.strip_prefix(v).unwrap_or(reste);
+                    }
+                    if reste == avant {
+                        break;
+                    }
+                }
+                let Some(apres) = reste.strip_prefix(keyword.as_str()).filter(|a| a.starts_with(' ') || a.starts_with('{')) else { return false };
+                let apres = apres.trim_end();
+                apres.ends_with('{') || apres.ends_with(';') || (apres.contains('{') && apres.ends_with('}') && apres.contains('…'))
+            }
+            StructureLine::ForwardDeclaration { keywords } => {
+                line.ends_with(';')
+                    && !line.contains(|c| matches!(c, '(' | '{' | '='))
+                    && keywords.iter().any(|k| line.strip_prefix(k.as_str()).is_some_and(|a| a.starts_with(' ')))
+            }
+        }
+    }
 }
 
 impl NotCandidate {
@@ -208,7 +259,21 @@ impl NotCandidate {
 
     /// Whether the row of these fields is set aside.
     pub fn excludes(&self, data: &std::collections::BTreeMap<String, crate::connection::CypherValue>) -> bool {
-        let texte = |f: &str| data.get(f).and_then(|v| v.as_str()).map_or(0, |s| s.chars().count());
+        let langue = self.language_field.as_ref().and_then(|f| data.get(f)).and_then(|v| v.as_str()).unwrap_or("");
+        let structure = self.structure.get(langue).filter(|s| !s.is_empty());
+        let texte = |f: &str| {
+            let Some(s) = data.get(f).and_then(|v| v.as_str()) else { return 0 };
+            match structure.filter(|_| self.structure_field.as_deref() == Some(f)) {
+                // What remains once the lines of pure structure are taken out.
+                Some(lignes) => s
+                    .lines()
+                    .map(|l| l.split_once("//").map_or(l, |(avant, _)| avant).trim())
+                    .filter(|l| !lignes.iter().any(|k| k.matches(l)))
+                    .map(|l| l.chars().count())
+                    .sum(),
+                None => s.chars().count(),
+            }
+        };
         data.get(&self.type_field).and_then(|v| v.as_str()).is_some_and(|t| self.types.iter().any(|x| x == t))
             && self.text_fields.iter().map(|f| texte(f)).sum::<usize>() < self.min_chars
     }
@@ -2072,5 +2137,48 @@ mod tests_keep_for {
         for illisible in ["7", "", "d", "-1d", "7w", "1.5d", "99999999999999999d"] {
             assert!(avec(Some(illisible)).keep_for_ms().is_err(), "« {illisible} »");
         }
+    }
+}
+
+#[cfg(test)]
+mod not_candidate_tests {
+    use super::*;
+    use crate::connection::CypherValue;
+
+    fn regle() -> NotCandidate {
+        crate::code::scope_chunking_with(80).not_candidate.expect("the code rule")
+    }
+
+    fn ligne(t: &str, contenu: &str, doc: &str, langue: &str) -> std::collections::BTreeMap<String, CypherValue> {
+        [("scope_type", t), ("content", contenu), ("docstring", doc), ("language", langue)]
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), CypherValue::String(v.to_string())))
+            .collect()
+    }
+
+    /// **A container that carries only structure is set aside, whatever its length** (c7, 19 November 2026): the
+    /// outer namespace of a real header — a forward declaration in a nested namespace, the folded inner namespace,
+    /// closing comments — measures 0 once its structure is out. A function, a `using` or a constant of its own, or a
+    /// docstring, keep it a candidate.
+    #[test]
+    fn a_container_of_pure_structure_is_set_aside_whatever_its_length() {
+        let r = regle();
+        let structure = "namespace rag3db {\nnamespace main {\nstruct Option;\n}\nnamespace catalog {\nclass RAG3DB_API TableCatalogEntry;\nenum class Kind;\n}\nnamespace binder { … }\n} // namespace rag3db";
+        assert!(structure.chars().count() > 80, "the witness is past the old threshold");
+        assert!(r.excludes(&ligne("namespace", structure, "", "cpp")), "pure structure is set aside");
+        assert!(r.excludes(&ligne("namespace", structure, "", "c")));
+        for propre in ["int version();", "using Id = std::uint64_t;", "constexpr int MAX_DEPTH = 40000;"] {
+            // Past the threshold by what it carries of its own (seven lines of it), not by its structure.
+            let avec = format!("namespace rag3db {{\n{}\n}}", vec![propre; 7].join("\n"));
+            assert!(!r.excludes(&ligne("namespace", &avec, "", "cpp")), "a container with {propre} of its own stays a candidate");
+        }
+        let doc = "The engine's namespace: every public type of the library, its handles and its states.";
+        assert!(!r.excludes(&ligne("namespace", structure, doc, "cpp")), "a documented container stays a candidate");
+        // Rust: `mod x;`, `pub mod x {`, a brace alone.
+        assert!(r.excludes(&ligne("module", "pub mod a {\nmod b;\npub(crate) mod c { … }\n}", "", "rust")));
+        // A language without declared structure is measured whole.
+        assert!(!r.excludes(&ligne("module", &"x".repeat(90), "", "python")));
+        // Not a container: never set aside.
+        assert!(!r.excludes(&ligne("class", "class A;", "", "cpp")));
     }
 }
