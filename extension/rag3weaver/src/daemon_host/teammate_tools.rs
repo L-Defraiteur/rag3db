@@ -157,7 +157,8 @@ impl Etanche<'_> {
                     "host",
                     "report",
                     None,
-                    &format!("« {} » attend depuis {} s (un index tient sans doute l'écriture) ; l'appel continue, rien n'est abandonné", call.name, self.notice.as_secs()),
+                    // For the model too, which reads the mailbox at its frontier: in English.
+                    &format!("\"{}\" has been waiting for {} s (an index is probably holding the write); the call goes on, nothing is abandoned", call.name, self.notice.as_secs()),
                 );
             },
             || {
