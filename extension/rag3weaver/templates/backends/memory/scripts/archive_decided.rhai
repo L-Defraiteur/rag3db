@@ -162,4 +162,10 @@ if s.usage != () { out.usage = s.usage; }
 if s.query_chars != () { out.query_chars = s.query_chars; }
 // The slice meta of archive_slice, for its report.
 if s.slice_summary != () { out.slice_summary = s.slice_summary; out.slice_open = s.slice_open; }
+// The chain (archive_slice by run): the L1 says its run and its range in clear.
+if s.run != () && s.run != "" {
+    out.apport_record.run = s.run;
+    out.apport_record.from_turn = s.from_turn;
+    out.apport_record.to_turn = s.to_turn;
+}
 out
