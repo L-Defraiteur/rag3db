@@ -109,6 +109,19 @@ fn absent_pendant_l_indexation(signal: &str) -> String {
     )
 }
 
+/// **How long a `Strict` search waits for the catalog** before it answers « occupé » (ticket « un appel d'outil attend
+/// derrière un index sans le dire »): `Strict` empties the queue first, under the lock, and an index holds that lock
+/// during its whole text phase. A call never stays open without a word.
+pub(crate) const ATTENTE_DU_STRICT: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// **The catalog's lock for a `Strict` search**, waited at most `attente`; beyond, a refusal that says the catalog is
+/// busy, since when, and what to do instead.
+pub(crate) fn garde_strict(c: &Mutex<Catalog>, attente: std::time::Duration) -> Result<std::sync::MutexGuard<'_, Catalog>, String> {
+    // RED STUB: waits without bound.
+    let _ = attente;
+    Ok(c.lock().unwrap_or_else(|p| p.into_inner()))
+}
+
 /// **Le catalogue vivant, pour la poignée qui manque à la vue** (25 octobre
 /// 2026 : la première recherche après l'ouverture de l'IDE perdait le plein
 /// texte, ouvert sous le verrou que la montre tenait). Sans vue, on attend
@@ -3376,6 +3389,42 @@ fn retag(results: &mut [UnifiedResult], label: &str) {
 
 #[cfg(test)]
 mod tests {
+
+    /// **A `Strict` search says « occupé » instead of waiting behind an index** (ticket « un appel d'outil attend
+    /// derrière un index sans le dire », 19 November 2026): a thread holds the catalog's lock for 2 s, as an index
+    /// does; `garde_strict` answers within its wait, saying the catalog is busy and what to do; the lock free, it
+    /// takes it.
+    #[test]
+    fn a_strict_search_says_busy_instead_of_waiting_behind_an_index() {
+        use std::time::{Duration, Instant};
+        let conn = crate::connection::CallbackConnection::new(|_, _| Ok(crate::connection::QueryResult::default()));
+        let mut cat = Catalog::new(
+            Box::new(conn),
+            Box::new(crate::embedder::HashEmbedder::new(8)),
+            crate::CatalogConfig { allow_mock_embedder: true, embedding_dim: 8, ..Default::default() },
+        );
+        cat.initialize().unwrap();
+        let catalog = Arc::new(Mutex::new(cat));
+        let (pret, attendre) = std::sync::mpsc::channel();
+        let ecrivain = {
+            let c = catalog.clone();
+            std::thread::spawn(move || {
+                let _tenu = c.lock().unwrap();
+                pret.send(()).unwrap();
+                std::thread::sleep(Duration::from_secs(2));
+            })
+        };
+        attendre.recv().unwrap();
+        let t = Instant::now();
+        let rendu = garde_strict(&catalog, Duration::from_millis(300)).map(|_| ());
+        let attendu = t.elapsed();
+        assert!(attendu < Duration::from_millis(1500), "Strict waited {attendu:?} behind the lock, beyond its bound");
+        let refus = rendu.expect_err("Strict took a lock held by an index");
+        assert!(refus.contains("occupé") && refus.contains("Strict"), "the refusal does not say busy and what to do: {refus}");
+        ecrivain.join().unwrap();
+        assert!(garde_strict(&catalog, Duration::from_millis(300)).is_ok(), "the lock free, Strict does not take it");
+    }
+
     use super::super::port::PortType;
     use super::*;
     use std::collections::BTreeMap;
