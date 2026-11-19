@@ -209,6 +209,22 @@ impl Client {
         Self { enfant, entree, sortie, id: 0, notifications: Vec::new() }
     }
 
+    /// **Branched on a given host** (`--daemon <address>`): never launched from here, never relaunched.
+    fn branche(manifeste: &Path, adresse: &str) -> Self {
+        let mut enfant = Command::new(env!("CARGO_BIN_EXE_rag3weaver-backend"))
+            .args(["mcp", "--manifest", &manifeste.to_string_lossy(), "--daemon", adresse])
+            .env_remove("RAG3WEAVER_EMBED_SERVICE")
+            .env_remove("RAG3WEAVER_SERVICE_EMBED")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .expect("lancer le client MCP");
+        let entree = enfant.stdin.take().unwrap();
+        let sortie = BufReader::new(enfant.stdout.take().unwrap());
+        Self { enfant, entree, sortie, id: 0, notifications: Vec::new() }
+    }
+
     fn demander(&mut self, methode: &str, params: Value) -> Value {
         self.id += 1;
         let requete = json!({"jsonrpc": "2.0", "id": self.id, "method": methode, "params": params});
@@ -673,3 +689,77 @@ fn le_journal_de_l_hote_dit_l_heure_et_l_auteur_de_chaque_ligne() {
         "chaque ligne du crochet nomme son client : {crochet:#?}"
     );
 }
+
+/// **A fake host, by route**, for the thin client's index watch: every `/call` answers « not ready » (an estimate of
+/// 1 s), `/index_state` answers ready from its `ready_after`-th poll on. Gives its address and the count of polls.
+fn faux_hote_pas_pret(ready_after: usize) -> (String, std::sync::Arc<std::sync::atomic::AtomicUsize>) {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let serveur = tiny_http::Server::http("127.0.0.1:0").expect("a port");
+    let adresse = serveur.server_addr().to_ip().expect("an ip address").to_string();
+    let sondes = std::sync::Arc::new(AtomicUsize::new(0));
+    let compte = sondes.clone();
+    let describe = json!({"name": "toy", "version": 3, "tools": [{
+        "name": "search_code",
+        "description": "cherche",
+        "inputSchema": {"type": "object", "properties": {"query": {"type": "string"}, "view": {"type": "object"}}}
+    }]});
+    std::thread::spawn(move || {
+        for mut requete in serveur.incoming_requests() {
+            let mut corps = String::new();
+            let _ = std::io::Read::read_to_string(requete.as_reader(), &mut corps);
+            let reponse = match requete.url() {
+                "/session" => json!({"session": "s-1"}),
+                "/open" => json!({"ok": true, "result": {"describe": describe, "reactions": []}}),
+                "/describe" => json!({"ok": true, "result": describe}),
+                "/call" => json!({"ok": true, "result": {"result": "rien encore", "index": {"ready": false, "eta_s": 1, "pending_files": 1}}}),
+                "/index_state" => json!({"ok": true, "result": {"ready": compte.fetch_add(1, Ordering::SeqCst) + 1 >= ready_after}}),
+                _ => json!({"ok": true, "result": {}}),
+            };
+            let _ = requete.respond(tiny_http::Response::from_string(reponse.to_string()));
+        }
+    });
+    (adresse, sondes)
+}
+
+/// **One notice when the index of a view that answered « not ready » is ready, through the real binary** (c7,
+/// 20 November 2026; page `docs/recherche/19-11-2026/03-…`). Two calls answer « not ready » on the view `w`; the host
+/// says the layer ready from its third poll. The MCP client receives exactly one `notifications/message`, level
+/// info, that names the view; nothing more after.
+#[test]
+#[ignore]
+fn a_view_not_ready_is_notified_once_when_its_index_is_ready() {
+    let (adresse, sondes) = faux_hote_pas_pret(3);
+    let dir = tempfile::tempdir().unwrap();
+    let manifeste = dir.path().join("backend.json");
+    std::fs::write(
+        &manifeste,
+        json!({"search": {"ready_watch": {"first_poll_max_s": 1, "every_s": 1, "max_s": 30, "eta_factor": 10}}}).to_string(),
+    )
+    .unwrap();
+    let mut c = Client::branche(&manifeste, &adresse);
+    c.initialiser();
+    for _ in 0..2 {
+        let (erreur, texte) = c.appeler("search_code", json!({"query": "x", "view": {"layer": "w"}}));
+        assert!(!erreur, "the call answers: {texte}");
+    }
+    let est_un_avis = |n: &&Value| n["method"] == "notifications/message";
+    let debut = Instant::now();
+    while !c.notifications.iter().any(|n| est_un_avis(&n)) {
+        assert!(
+            debut.elapsed() < Duration::from_secs(30),
+            "no notice in 30 s ({} polls of the host): {:?}",
+            sondes.load(std::sync::atomic::Ordering::SeqCst),
+            c.notifications
+        );
+        std::thread::sleep(Duration::from_millis(300));
+        c.demander("ping", json!({}));
+    }
+    std::thread::sleep(Duration::from_secs(3));
+    c.demander("ping", json!({}));
+    let avis: Vec<&Value> = c.notifications.iter().filter(est_un_avis).collect();
+    assert_eq!(avis.len(), 1, "exactly one notice, for two « not ready » on one view: {avis:?}");
+    assert_eq!(avis[0]["params"]["level"], json!("info"));
+    assert!(avis[0]["params"]["data"].as_str().is_some_and(|d| d.contains("vue w")), "the notice names the view: {avis:?}");
+    c.fermer();
+}
+
