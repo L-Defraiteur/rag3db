@@ -1,5 +1,8 @@
 # Nouveautés
 
+- 19 novembre 2026 — **Une fonction ou une classe nommée comme un mot de JavaScript est une référence, dans tous les langages.** C++, C# et Go reprenaient la liste des mots vides de JavaScript, Python sa liste des noms intégrés : une fonction `of` ou `function`, une classe `Symbol` ou `Map` du projet n'étaient reliées à rien. Les mots vides et les noms intégrés des huit langages viennent maintenant d'une seule source (`data/stop_words/`, un fichier par langage, tirés des grammaires tree-sitter, des mots-clés et du module `builtins` de Python, du `builtin.go` de Go).
+
+- 19 novembre 2026 — **Une variable locale C ou C++ n'est plus prise pour une référence.** `auto total = …`, `int count;` ou `for (auto& item : …)` restaient parmi les références de leur fonction, et se reliaient à une fonction ou un namespace du même nom dans le fichier. Sur le moteur, 73 arêtes fausses partent, et 63 appels qu'une locale homonyme masquait (`auto lock = groups.lock();`) rejoignent leur classe par le type ; `function` n'étant plus un mot vide du C++, ses 79 locales ne se relient pas non plus au `namespace function`. Un appel de méthode sur une locale garde son lien par le nom.
 - 19 novembre 2026 — **Le plein texte ne perd plus de mots à la maintenance nocturne (lucivy 4.3.12).** La
   compaction du dictionnaire retirait le texte d'un mot qu'aucun document ne citait plus, mais le mot restait dans
   une table d'attente qui n'était jamais vidée ; un fichier réindexé qui contenait de nouveau ce mot reprenait
