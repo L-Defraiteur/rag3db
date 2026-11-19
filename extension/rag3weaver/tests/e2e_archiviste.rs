@@ -1154,6 +1154,64 @@ fn a_turn_not_filed_yet_belongs_to_an_open_slice() {
     assert_eq!(g["result"]["state"], json!("open"), "{g}");
 }
 
+/// The user message of a request the fake server received.
+fn user_prompt(request: &Value) -> String {
+    request["messages"].as_array().unwrap().iter().filter(|m| m["role"] == json!("user")).map(|m| m["content"].as_str().unwrap_or_default().to_string()).collect::<Vec<_>>().join("\n")
+}
+
+/// **B3, the reduced prompt** (Lucie, 19 November 2026: « éviter qu'il y ait beaucoup de prompt à part les
+/// descriptions, si c'est pour l'extraction structurée » ; « même la consigne est paramétrable »): the extraction
+/// prompt is the one-line instruction (a declared parameter) then the slice as a context part — nothing else. The
+/// rules that were prose live in the descriptions of the response schema's fields.
+#[test]
+#[ignore]
+fn the_slice_extraction_prompt_is_the_instruction_and_the_slice_only() {
+    let serveur = FakeServer::start_sequence(vec![text_reply(r#"{"slice_summary": "s", "topics": [], "not_filed": [{"from": 1, "to": 6, "reason": "nothing"}]}"#)]);
+    let adresse = serveur.url.clone();
+    let dir = tempfile::tempdir().expect("dossier");
+    let b = ouvrir(dir.path(), |m| {
+        m["models"]["llm"] = json!({"provider": "compatible", "protocol": "openai", "model": "faux", "address": adresse});
+    });
+    let _ = b.call("archive_slice", json!({"titre": "run chat:test, turns 1-6", "chemin": "sources/chat-test-turns-1-6.md", "contenu": slice_of_six_turns(), "allow_create": true}));
+    let first: Value = serde_json::from_str(&serveur.request.recv().unwrap()).unwrap();
+    assert_eq!(user_prompt(&first), format!("Split this slice of a conversation into topics.\n\n## The slice\n\n{}", slice_of_six_turns()));
+    let props = &first["response_format"]["json_schema"]["schema"]["properties"];
+    let topic = &props["topics"]["items"]["properties"];
+    assert!(topic["title"]["description"].as_str().is_some_and(|d| d.contains("never a date")), "the rule of a topic is in the schema: {props}");
+    assert!(topic["turns"]["description"].as_str().is_some_and(|d| d.contains("## turn")), "{props}");
+    assert!(props["not_filed"]["description"].as_str().is_some_and(|d| d.contains("reason")), "{props}");
+    // The instruction is a parameter.
+    let serveur = FakeServer::start_sequence(vec![text_reply(r#"{"slice_summary": "s", "topics": [], "not_filed": [{"from": 1, "to": 6, "reason": "nothing"}]}"#)]);
+    let adresse = serveur.url.clone();
+    let dir = tempfile::tempdir().expect("dossier");
+    let b = ouvrir(dir.path(), |m| {
+        m["models"]["llm"] = json!({"provider": "compatible", "protocol": "openai", "model": "faux", "address": adresse});
+    });
+    let _ = b.call("archive_slice", json!({"titre": "t", "chemin": "sources/t.md", "contenu": slice_of_six_turns(), "extract_instruction": "Find the topics."}));
+    let first: Value = serde_json::from_str(&serveur.request.recv().unwrap()).unwrap();
+    assert!(user_prompt(&first).starts_with("Find the topics.\n\n## The slice\n\n"), "{}", user_prompt(&first));
+}
+
+/// The split of a long section (archive, segment_over): the instruction, then its numbered paragraphs as a part;
+/// the rules of a topic are in the schema.
+#[test]
+#[ignore]
+fn the_split_prompt_is_the_instruction_and_the_numbered_section_only() {
+    let serveur = FakeServer::start_sequence(vec![text_reply(r#"{"topics": []}"#), etiquette("none")]);
+    let adresse = serveur.url.clone();
+    let dir = tempfile::tempdir().expect("dossier");
+    let b = ouvrir(dir.path(), |m| {
+        m["models"]["llm"] = json!({"provider": "compatible", "protocol": "openai", "model": "faux", "address": adresse});
+    });
+    let _ = b.call("archive", json!({"titre": "Un tour", "contenu": LONG_TURN, "jour": "2026-11-15", "segment_over": 200}));
+    let first: Value = serde_json::from_str(&serveur.request.recv().unwrap()).unwrap();
+    let p = user_prompt(&first);
+    assert!(p.starts_with("Split this section into topics.\n\n## The section: "), "{p}");
+    assert!(p.contains("[1] ") && p.contains("[3] ") && !p.contains("A topic is"), "numbered paragraphs, no prose rule: {p}");
+    let topic = &first["response_format"]["json_schema"]["schema"]["properties"]["topics"]["items"]["properties"];
+    assert!(topic["from"]["description"].as_str().is_some_and(|d| d.contains("[n]")), "{topic}");
+}
+
 /// An extraction that is not the requested JSON is refused, naming response_schema: nothing is
 /// guessed and nothing is filed.
 #[test]
