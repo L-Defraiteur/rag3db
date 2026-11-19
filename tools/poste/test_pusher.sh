@@ -597,4 +597,17 @@ P enqueue rd-a rd-a "$(git -C "$D/author" rev-parse rd-a)" docs - - - - author-a
 order=$(grep -v '^#' "$D/pusher/queue.tsv" | cut -f1 | grep -E '^rd-' | paste -sd' ')
 [ "$order" = "rd-a rd-b rd-c" ] && ok "un lot redéposé reprend le rang de son premier dépôt" || ko "redéposé en queue : $order"
 for x in rd-a rd-b rd-c; do P dequeue $x > /dev/null 2>&1; done
+# 38. A cache copy whose witness is Python (19 Nov., menage.py: the recopy ran test_menage.py by bash, whose « import »
+# line started ImageMagick's import, which waited for a screen; the queue stood still 40 minutes): a .py witness runs by
+# python3, given the copy.
+git -C "$D/author" fetch -q origin && git -C "$D/author" checkout -q -B py-1 origin/master
+printf '#!/usr/bin/env python3\nprint("qux")\n' > "$D/author/tools/poste/qux.py"
+printf '#!/usr/bin/env python3\nassert open((__import__("sys").argv[1:] or ["tools/poste/qux.py"])[0]).read().startswith("#!"), "pas la copie"\n' > "$D/author/tools/poste/test_qux.py"
+echo 'tools/poste/qux.py qux.py tools/poste/test_qux.py' >> "$D/author/tools/poste/cache_copies.txt"
+git -C "$D/author" add -A && git -C "$D/author" commit -qm py-1 && git -C "$D/author" push -q origin HEAD:py-1
+P enqueue py-1 py-1 "$(git -C "$D/author" rev-parse py-1)" scripts - - - - author-b > /dev/null
+rm -f "$D/pusher/paused"; timeout 120 bash "$PUSHER" step > /dev/null 2>&1
+on_master py-1 && [ -f "$D/cache/qux.py" ] && grep -q "	py-1	recopié	qux.py .*témoin vert" "$D/pusher/log.tsv" && [ ! -e "$D/pusher/paused" ] \
+  && ok "une copie au témoin Python : témoin joué par python3, recopiée" || ko "copie au témoin Python : $(grep -P '\tpy-1\t' "$D/pusher/log.tsv" | tail -1 | cut -f3,4)"
+rm -f "$D/pusher/paused"
 exit $red

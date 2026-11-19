@@ -4,7 +4,10 @@
 go past 72 h. A folder held open by a process stays. --dry-run deletes nothing."""
 import json, os, subprocess, sys, tempfile, time, unittest
 ICI = os.path.dirname(os.path.abspath(__file__))
+# The copy to judge: the first argument (the pusher's recopy gives the cache copy), else $MENAGE, else the tree's.
 MENAGE = os.environ.get("MENAGE", os.path.join(ICI, "menage.py"))
+if len(sys.argv) > 1 and os.path.isfile(sys.argv[1]):
+    MENAGE = os.path.abspath(sys.argv.pop(1))
 
 
 def dossier(racine, nom, heures, marque=None, taille=1000):
