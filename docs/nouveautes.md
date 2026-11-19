@@ -1,5 +1,11 @@
 # Nouveautés
 
+- 19 novembre 2026 — **Le plein texte d'un backend se bâtit sans positions par défaut.** Un manifeste sans
+  `fts_positions` crée ses index lucivy sans positions. Mesuré sur la base du dépôt : −29 % de place (866 → 613 Mo),
+  toutes les requêtes sous 100 ms, et les mêmes réponses, documents et spans compris ; l'indexation va 30 % plus vite.
+  `fts_positions: true` dans le manifeste, ou `ftsPositions: true` dans la configuration d'une entité, garde les
+  positions. Un index qui existe garde son schéma jusqu'à son rebâti.
+
 - 18 novembre 2026 — **La fin d'un index dit une libération ou une dette qu'elle n'a pas pu faire.** Une erreur en rendant les réclamations d'embarquement s'ajoute à la dernière ligne du journal, avec sa table et sa cause, sans en effacer la cause de fin ; une dette restante illisible se dit « dette inconnue », plus jamais « 0 ».
 
 - 18 novembre 2026 — **Un modèle déclaré dit `access` et `provider`.** `access` dit la manière d'y accéder (`local`, `service`, `compatible`), `provider` le fournisseur (`openai`, `vertex`, `anthropic`, `llama_server`). L'ancienne forme, `provider` pour la manière et `protocol` pour le fournisseur, se lit encore **jusqu'au 29 novembre 2026** ; un modèle qui mêle les deux est refusé, en nommant les deux mots. `/model` rend les deux mots neufs.
