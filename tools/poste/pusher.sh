@@ -148,7 +148,8 @@ pushed() { # <id> <author> <branch>
   local h pr="" tok; h=$(g rev-parse --short HEAD)
   pr=$(awk -F'\t' -v id="$1" '$1 == id {n=$2} END {print n}' "$SD/step-prs.tsv" 2>/dev/null)
   # The lot's original head, kept: a child deposited on it later reposes on its own commits only (19 Nov., c7).
-  queue_lines | awk -F'\t' -v id="$1" -v h="$(g rev-parse HEAD)" '$1 == id {print $1 "\t" $3 "\t" h}' >> "$D/landed.tsv"
+  # id, original head, pushed head, declared witness and its suite (19 Nov., c7: an audit reads what proved each lot).
+  queue_lines | awk -F'\t' -v id="$1" -v h="$(g rev-parse HEAD)" '$1 == id {print $1 "\t" $3 "\t" h "\t" $5 "\t" $6}' >> "$D/landed.tsv"
   remove_from_queue "$1"
   log "$1" poussé "$h${pr:+ PR $pr}"
   printf 'poussé\t%s\t%s\t%s%s\n' "$1" "$h" "$3" "${pr:+	PR $pr}" >> "$D/inbox/$2.txt"

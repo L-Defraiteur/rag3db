@@ -495,4 +495,11 @@ P enqueue mv-c mv-c "$h" scripts - - - - author-b > /dev/null
 MOVE_MASTER=code P step > /dev/null 2>&1
 ! on_master mv-c && grep -q "^mv-c	" "$D/pusher/queue.tsv" && ok "master bouge en code pendant le pas : le lot reste en tête pour un rejeu" || ko "master bouge en code : le lot est parti sans rejeu"
 P step > /dev/null 2>&1
+
+# 31. landed.tsv keeps the declared witness and its suite of each landed lot (19 Nov., c7: for an audit of what proved it).
+h=$(lot lw-1 extension/rag3weaver/src/lw.rs 'fn lw() {}')
+P enqueue lw-1 lw-1 "$h" rust lw_witness e2e_code - - author-c > /dev/null; echo VERT > "$D/outcomes.d/lw-1"
+P step > /dev/null 2>&1
+awk -F'\t' '$1 == "lw-1" && $4 == "lw_witness" && $5 == "e2e_code" {f = 1} END {exit !f}' "$D/pusher/landed.tsv" \
+  && ok "landed.tsv garde le témoin déclaré et sa suite" || ko "landed.tsv sans le témoin : $(grep '^lw-1' "$D/pusher/landed.tsv")"
 exit $red
