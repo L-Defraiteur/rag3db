@@ -53,6 +53,13 @@ tel qu'il était »**, mot pour mot. Toute piste (ce qu'on suppose, ce qu'on pou
      **dépôt entier par défaut** : un crate qui inclut hors de lui (`include_str!` vers `templates/`)
      ne compilerait pas avec son seul dossier. `paths`, quand le cas le déclare, restreint l'archive,
      jamais l'inverse. `tree` n'est que le dossier d'où se jouent les commandes.
+   - **Les sous-modules aussi**, chacun archivé à son commit enregistré au parent et posé à son
+     chemin. `git archive` ne les prend pas, et cargo lit les manifestes des dépendances par chemin
+     (`tools/rust_api`, `codeparsers`) même sans leur feature.
+   - **Sans les dossiers `docs/`, où qu'ils soient** (`docs/`, `extension/rag3weaver/docs/`, …),
+     sauf `docs/procedures/`. Nos journaux de session et nos tickets au parent énoncent souvent le
+     principe du correctif : c'est une fuite, pas un indice réaliste. Les `README.md` restent. Un cas
+     qui veut une page la remet par `paths`.
    - Puis les fichiers de `witness_files_from`, copiés depuis leur commit : ce sont des indices
      déclarés, que le banc voit comme « test rouge en place ».
    - Puis `git init` et un seul commit « base ». La tâche a besoin d'un dépôt pour sa branche et
