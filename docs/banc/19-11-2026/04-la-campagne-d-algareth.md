@@ -9,11 +9,12 @@ Une ligne par cas joué ; les détails suivent la table.
 |---|---|---|---|---|---|---|
 | tty 09, une demande écrite une fois (`b1163f64e1`) | **écarté** : latence de Vertex (jeu du 19 à 16 h 26) ; à rejouer | aucun diff | 0 / +36 −3 (tui.rs +7 −2, vue.rs +29 −1 ; hors docs) | 2 pas, 45 appels, 1 814 s de modèle sur 1 828 s ; l'appel le plus lent 385 s pour 8 695 jetons d'invite ; invite totale 1,34 M jetons, dont 88 % par le cache | aucun (diff vide) | la souche `tui::nom_garde -> None` ; non suivie (rien n'est écrit) |
 | tty 09, jeu du 19 à 18 h 06 | **dégâts** : les deux témoins déclarés passent, mais un test vert au parent rougit, par une assertion qu'Algareth lui a ajoutée | **même** (tui.rs, vue.rs) et **autre** (boite.rs) | +46 −5 (dont +13 de tests) / +36 −3 | 5 pas, 165 appels, 1 181 s (1 155 s de modèle) ; invite totale 5,31 M jetons, dont 87 % par le cache ; sortie 2 647, raisonnement 92 592 | `vue::tests::the_view_keeps_the_last_agent_name_seen` vert au parent, rouge après | la souche `nom_garde` : **suivie** (remplie et branchée dans `/nom`) |
-| lucivy 04, l'ulp d'écart en parse (`e3c9753f7f`) | **réussi** | **autre** : `buffered_union.rs` (Algareth) contre `score_combiner.rs` et `block_wand.rs` (nous) | +5 −22 / +17 −9 (hors le témoin, +81) | 2 pas, 54 appels, 464 s ; invite 1,66 M jetons, dont 82 % par le cache | aucun : le seul rouge de la suite l'était déjà au parent | trois fichiers de l'arbre, sans souche, absents de la consigne ; Algareth en a corrigé un |
+| lucivy 04, l'ulp d'écart en parse (`e3c9753f7f`) | **réussi**, sans qu'Algareth ait pu jouer un test (cargo refusé dans le bac, voir plus bas) | **autre** : `buffered_union.rs` (Algareth) contre `score_combiner.rs` et `block_wand.rs` (nous) | +5 −22 / +17 −9 (hors le témoin, +81) | 2 pas, 54 appels, 464 s ; invite 1,66 M jetons, dont 82 % par le cache | aucun : le seul rouge de la suite l'était déjà au parent | trois fichiers de l'arbre, sans souche, absents de la consigne ; Algareth en a corrigé un |
 | ED 02, le préfixe d'une décision (`f063a90e52`) | **réussi** | **même** (`decide_nodes.rs`, et la même assertion de `decide_nodes/tests.rs`) | +13 −3 / +15 −3 | 3 pas, 72 appels, 680 s ; invite 2,09 M jetons, dont 58 % par le cache | aucun : la lib entière passe (1 745) | le fichier indiqué ; Algareth y a corrigé la cause |
 | ED 01, le journal plafonné (`b610560e51`) | **échoué** (réserve : Vertex lent) | aucun diff (nous : `commande.rs`) | 0 / +10 −2 | 3 pas, 34 appels, 1 388 s, dont 640 et 706 s pour les deux premiers pas ; invite 0,52 M jetons, dont 70 % par le cache | aucun | le fichier indiqué, lu sans conclure |
 | embarquement 02, le refus d'un démarrage mort (`c4b36feffa`) | **réussi** | **même** (`serveur.rs`) ; le nôtre nomme aussi le programme d'un démarrage muet, hors de la demande | +10 −4 / +20 −9 | 2 pas, 64 appels, 408 s ; invite 1,85 M jetons, dont 62 % par le cache | aucun : la lib entière passe (1 743) | le fichier indiqué |
 | lucivy 03, la requête floue longue sans positions (`fa65315ce8`) | **échoué** (défaut de forme du cas) | aucun diff : une analyse | 0 / voir le cas | 1 pas, 33 appels, 202 s ; invite 1,28 M jetons, dont 92 % par le cache | aucun | les deux fichiers indiqués, lus |
+| lucivy 03, jeu de 20 h 13, consigne réécrite | **écarté** (cargo refusé dans le bac à sable) | aucun diff | — | 8 pas, 1 454 s, arrêté sur « 3 pas de suite sans élément réussi » ; une bonne part des pas contre cargo | — | — |
 
 ## tty 09 : une demande s'écrit une fois, et /nom retient le nom gardé (19 novembre)
 
@@ -177,3 +178,19 @@ Une ligne par cas joué ; les détails suivent la table.
   correctif, et ne nomme pas de témoin à faire passer. Les autres cas de la campagne finissent par une phrase de la
   forme « un témoin …, rouge d'abord ». Algareth a répondu à la question qu'on lui posait. Le cas est à corriger chez
   lucivy, puis à rejouer : ce verdict ne mesure pas sa capacité à corriger.
+
+## Une réserve sur les deux cas de lucivy : cargo refusé dans le bac à sable (archi, 19 novembre au soir)
+
+Dans le bac à sable de l'hôte de campagne, cargo ne tournait pas pour un arbre sans fichier de chaîne Rust, ce qui est
+le cas de lucivy. rustup y lisait son défaut à travers le lien de la maison isolée, et répondait « no default is
+configured ». Les arbres de rag3db (tty, ED, embarquement) épinglent leur chaîne : ils n'étaient pas touchés.
+Archi l'a corrigé (le gabarit figé pose `RUSTUP_HOME` et `CARGO_HOME` réels, `campagne-lanceur-5`, vu rouge d'abord).
+
+- **lucivy 04 (jeu de 18 h 48)** : Algareth n'a pu jouer aucun test, cargo lui a été refusé deux fois. Son diff est
+  juste, mais **sans avoir été vérifié par lui**. Le verdict « réussi » tient, parce que le juge l'a rejoué lui-même
+  (le témoin vert, la suite sans dégât). La ligne le dit : un correctif juste à l'aveugle ne vaut pas un correctif
+  vérifié, et le jeu qu'archi refait derrière, avec cargo, dira si Algareth le garde.
+- **lucivy 03, jeu de 20 h 13** (consigne réécrite, `campagne/03/20261119-201304`) : 8 pas, 1 454 s, arrêté sans diff
+  sur « 3 pas de suite sans élément réussi ». Une bonne part de ses pas a servi à se battre avec cargo (`RUSTUP_HOME` à
+  la main, un fichier `rust-toolchain` écrit, `cargo +stable`). **Écarté**, comme tty 09 à 16 h : il ne mesure pas
+  Algareth. Le jeu de 20 h 50, avec le correctif, le remplace.
