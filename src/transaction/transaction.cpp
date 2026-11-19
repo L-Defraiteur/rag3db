@@ -65,8 +65,20 @@ bool Transaction::usesLocks() const {
            clientContext->getDBConfig()->enableMultiWrites;
 }
 
+bool Transaction::usesReadLocks() const {
+    return (isWriteTransaction() || isReadOnly()) && clientContext != nullptr &&
+           clientContext->getDBConfig()->enableMultiWrites;
+}
+
 void Transaction::acquireLocks(std::span<const LockRequest> requests) const {
-    if (requests.empty() || !usesLocks()) {
+    acquireLocks(requests, std::nullopt);
+}
+
+void Transaction::acquireLocks(std::span<const LockRequest> requests,
+    std::optional<uint64_t> timeoutInMS) const {
+    // usesReadLocks() contient usesLocks() : une lecture ne prend que des verrous de table, en
+    // partagé, et seulement par lockTableForRead.
+    if (requests.empty() || !usesReadLocks()) {
         return;
     }
     auto& lockManager = TransactionManager::Get(*clientContext)->getLockManager();
@@ -81,24 +93,26 @@ void Transaction::acquireLocks(std::span<const LockRequest> requests) const {
         // la transaction qui doit valider pour les libérer n'en trouve plus.
         const common::TaskScheduler::BlockingWait blocking{
             common::TaskScheduler::Get(*clientContext)};
-        const auto deadline =
-            LockManager::clock::now() +
-            std::chrono::milliseconds{clientContext->getClientConfig()->lockTimeoutInMS};
+        const auto timeout =
+            timeoutInMS.value_or(clientContext->getClientConfig()->lockTimeoutInMS);
+        const auto deadline = LockManager::clock::now() + std::chrono::milliseconds{timeout};
         outcome = lockManager.acquire(ID, requests, deadline, interrupted, &failedOn);
     }
     if (outcome != LockOutcome::ACQUIRED) {
         auto message = LockManager::describe(outcome, failedOn);
-        // Un verrou de table refusé dit qui le tient : l'hôte sait quelle écriture fermer.
+        // Un verrou de table refusé dit qui le tient (lecteur ou écrivain, et depuis quand) :
+        // l'hôte sait quelle transaction fermer.
         if (failedOn.kind == LockResourceKind::TABLE) {
-            std::string holders;
+            std::vector<common::transaction_t> holders;
             for (const auto holder : lockManager.getHolders(failedOn)) {
                 if (holder != ID) {
-                    holders += (holders.empty() ? "" : ", ") + std::to_string(holder);
+                    holders.push_back(holder);
                 }
             }
             if (!holders.empty()) {
-                message += common::stringFormat(" It waited for writer {} for {} ms.", holders,
-                    clientContext->getClientConfig()->lockTimeoutInMS);
+                message += common::stringFormat(" It waited for {} for {} ms.",
+                    TransactionManager::Get(*clientContext)->describeTransactions(holders),
+                    timeoutInMS.value_or(clientContext->getClientConfig()->lockTimeoutInMS));
             }
         }
         throw common::TransactionManagerException(message);
@@ -114,10 +128,21 @@ void Transaction::acquireLock(const LockResource& resource, LockMode mode) const
     acquireLocks(std::span<const LockRequest>{&request, 1});
 }
 
+void Transaction::lockTableForRead(common::table_id_t tableID) const {
+    if (!usesReadLocks() || committing.load()) {
+        return;
+    }
+    lockTableShared(tableID);
+}
+
 void Transaction::lockTableForWrite(common::table_id_t tableID) const {
     if (!usesLocks() || committing.load()) {
         return;
     }
+    lockTableShared(tableID);
+}
+
+void Transaction::lockTableShared(common::table_id_t tableID) const {
     {
         std::unique_lock lck{tableLocksMtx};
         if (tablesLockedForWrite.contains(tableID)) {
@@ -153,7 +178,9 @@ void Transaction::lockTableForSchemaChange(common::table_id_t tableID) const {
     if (!usesLocks()) {
         return;
     }
-    acquireLock(LockResource::table(tableID), LockMode::EXCLUSIVE);
+    const LockRequest request{LockResource::table(tableID), LockMode::EXCLUSIVE};
+    acquireLocks(std::span<const LockRequest>{&request, 1},
+        clientContext->getClientConfig()->alterLockTimeoutInMS);
     throwIfSchemaChangedAfterSnapshot(tableID);
 }
 

@@ -21,9 +21,14 @@ void TableScanState::resetOutVectors() {
     outState->getSelVectorUnsafe().setToUnfiltered();
 }
 
-void TableScanState::setToTable(const transaction::Transaction*, Table* table_,
+void TableScanState::setToTable(const transaction::Transaction* transaction, Table* table_,
     std::vector<column_id_t> columnIDs_, std::vector<ColumnPredicateSet> columnPredicateSets_,
     RelDataDirection) {
+    // Le lecteur tient le verrou de schéma de la table jusqu'à la fin de sa transaction : un ALTER
+    // ou un DROP l'attend (ticket de l'ALTER qui n'attend pas les lecteurs, 19 novembre 2026).
+    if (transaction != nullptr) {
+        transaction->lockTableForRead(table_->getTableID());
+    }
     table = table_;
     columnIDs = std::move(columnIDs_);
     columnPredicateSets = std::move(columnPredicateSets_);

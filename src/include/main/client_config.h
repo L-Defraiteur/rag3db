@@ -13,6 +13,10 @@ struct ClientConfigDefault {
     static constexpr uint64_t TIMEOUT_IN_MS = 0;
     // L'attente maximale d'un verrou d'écriture (LockManager::DEFAULT_LOCK_TIMEOUT_IN_MS).
     static constexpr uint64_t LOCK_TIMEOUT_IN_MS = 30'000;
+    // L'attente maximale d'un ALTER ou d'un DROP TABLE derrière les transactions qui tiennent sa
+    // table, lecteurs compris : pendant qu'il attend, les lecteurs neufs de la table attendent
+    // derrière lui (file FIFO, comme sous PostgreSQL) ; ce délai borne ce gel.
+    static constexpr uint64_t ALTER_LOCK_TIMEOUT_IN_MS = 5'000;
     static constexpr uint32_t VAR_LENGTH_MAX_DEPTH = 30;
     static constexpr uint64_t SPARSE_FRONTIER_THRESHOLD = 1000;
     static constexpr bool ENABLE_SEMI_MASK = true;
@@ -43,6 +47,7 @@ struct ClientConfig {
     // L'attente maximale d'un verrou d'écriture (millisecondes) : au-delà, la transaction qui
     // attend reçoit l'erreur « lock timeout ».
     uint64_t lockTimeoutInMS = ClientConfigDefault::LOCK_TIMEOUT_IN_MS;
+    uint64_t alterLockTimeoutInMS = ClientConfigDefault::ALTER_LOCK_TIMEOUT_IN_MS;
     // Un COPY FROM force-t-il un point de reprise à sa validation ? Vrai tant que le chargement
     // en masse journalisé n'est pas complet : à faux, un COPY de nœuds écrit ses lignes au
     // journal et ne force plus rien ; un COPY de relations force encore le sien.
