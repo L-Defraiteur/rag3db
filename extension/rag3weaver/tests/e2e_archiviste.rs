@@ -896,6 +896,8 @@ fn archive_slice_by_range_files_the_rendered_turns_and_says_how_far() {
     let r = appel(&b, "archive_slice", json!({"run": "chat:test", "from_turn": 1, "to_turn": 6, "jour": "2026-11-18", "allow_create": true}));
     assert_eq!(r["result"]["errors"], json!([]), "{r}");
     assert_eq!(r["result"]["archived_through_turn"], json!(6), "{r}");
+    // The path written, for the host's list of filed slices (compose_restart's sources).
+    assert_eq!(r["result"]["source"], json!("sources/chat-test-turns-1-6.md"), "{r}");
     let first: Value = serde_json::from_str(&serveur.request.recv().unwrap()).unwrap();
     assert!(first["messages"].to_string().contains("read_file · ok"), "the tool call reaches the extraction");
     let s = appel(&b, "select_sources", json!({"filter": {"field": {"key": "chemin", "value": "sources/chat-test-turns-1-6.md"}}}));
