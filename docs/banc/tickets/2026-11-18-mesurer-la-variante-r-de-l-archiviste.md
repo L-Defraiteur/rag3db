@@ -51,7 +51,13 @@ F, S, R et leurs mélanges deviennent des **réglages** joués sur le même corp
 | S 50 + les deux | oui | oui |
 
 Chaque réglage est jugé contre la N rejouée, en **P1** (rappel des sujets), **P2** (doublons) et **P5** (coût : temps de
-passe, appels, jetons d'entrée et part du cache), avec les définitions du § 4 de la page du 15. Les autres
+passe, appels, jetons d'entrée et part du cache), avec les définitions du § 4 de la page du 15.
+
+**Le cache et le prix** (c7, 18 novembre) : une colonne de plus, dès qu'ED aura posé la mesure dans `LlmCall`. Elle
+donne, par réglage, **le taux de jetons d'invite servis depuis le cache** (Vertex l'a donné à 28 % sur la F300 du
+18), et le **coût réel** qui en découle, aux prix de Vertex du jour, écrits avec la mesure. F, S et R se départagent
+sur le prix comme sur P1. Un compteur absent n'est pas un zéro : la part se calcule sur les appels qui le rendent,
+avec leur couverture, comme le dit `docs/banc/17-11-2026/04-audit-cache-vertex-et-plan-de-mesure.md`. Les autres
 ingrédients restent à leur réglage par défaut et sont écrits avec chaque passe. La matrice se joue après la page de
 la session mémoire qui pose la forme.
 
