@@ -9,6 +9,7 @@ Une ligne par cas joué ; les détails suivent la table.
 |---|---|---|---|---|---|---|
 | tty 09, une demande écrite une fois (`b1163f64e1`) | **écarté** : latence de Vertex (jeu du 19 à 16 h 26) ; à rejouer | aucun diff | 0 / +36 −3 (tui.rs +7 −2, vue.rs +29 −1 ; hors docs) | 2 pas, 45 appels, 1 814 s de modèle sur 1 828 s ; l'appel le plus lent 385 s pour 8 695 jetons d'invite ; invite totale 1,34 M jetons, dont 88 % par le cache | aucun (diff vide) | la souche `tui::nom_garde -> None` ; non suivie (rien n'est écrit) |
 | tty 09, jeu du 19 à 18 h 06 | **dégâts** : les deux témoins déclarés passent, mais un test vert au parent rougit, par une assertion qu'Algareth lui a ajoutée | **même** (tui.rs, vue.rs) et **autre** (boite.rs) | +46 −5 (dont +13 de tests) / +36 −3 | 5 pas, 165 appels, 1 181 s (1 155 s de modèle) ; invite totale 5,31 M jetons, dont 87 % par le cache ; sortie 2 647, raisonnement 92 592 | `vue::tests::the_view_keeps_the_last_agent_name_seen` vert au parent, rouge après | la souche `nom_garde` : **suivie** (remplie et branchée dans `/nom`) |
+| lucivy 04, l'ulp d'écart en parse (`e3c9753f7f`) | **réussi** | **autre** : `buffered_union.rs` (Algareth) contre `score_combiner.rs` et `block_wand.rs` (nous) | +5 −22 / +17 −9 (hors le témoin, +81) | 2 pas, 54 appels, 464 s ; invite 1,66 M jetons, dont 82 % par le cache | aucun : le seul rouge de la suite l'était déjà au parent | trois fichiers de l'arbre, sans souche, absents de la consigne ; Algareth en a corrigé un |
 
 ## tty 09 : une demande s'écrit une fois, et /nom retient le nom gardé (19 novembre)
 
@@ -71,3 +72,34 @@ Une ligne par cas joué ; les détails suivent la table.
   s'appliquent pas.
 - **Les sorties** du juge sont à la tablette : `~/.cache/rag3db-banc-notes/campagne/09-20261119-180649/` (`parent.log`,
   `algareth.log`), et le juge est `~/.cache/rag3weaver-build/juge-09.sh`.
+
+## lucivy 04 : l'ulp d'écart en parse (19 novembre, jeu de 18 h 48)
+
+- **Le cas** : `docs/lucivy/19-11-2026/04-cas-de-campagne-un-ulp-d-ecart-en-parse.md`. Le dépôt est un clone nu de
+  lucivy (`~/.cache/rag3weaver-build/campagne/depots/lucivy.git`). Le témoin n'existe pas au parent : son fichier,
+  `lucivy_core/tests/test_parse_scores_identical_across_layouts.rs`, est pris de notre correctif `3933431475` et posé
+  sur le parent `e3c9753f7f`.
+- **Le tour** : Algareth a fini de lui-même, en 2 pas, 54 appels, 464 s, sans reprise.
+- **Le diff** : `src/query/union/buffered_union.rs`, +5 −22. Il remplace `unordered_drain_filter` et son `swap_remove`
+  par `retain_mut`, qui garde l'ordre des scorers. Ainsi, l'ordre de la somme en f32 ne dépend plus de la disposition
+  des segments.
+- **Le juge**, sur la tablette, dans un clone à part et un target à part :
+
+| | parent et témoin | avec le diff d'Algareth |
+|---|---|---|
+| le témoin | rouge, sur l'assertion (`…_layouts.rs:80`) | **vert** |
+| `cargo test --workspace` | 2 200 passés, 2 rouges : le témoin et `derived_in_ram_answers_like_the_files` | 2 201 passés, 1 rouge : `derived_in_ram_answers_like_the_files` |
+
+- **Le verdict : réussi.**
+  - Le témoin passe, et son fichier n'est pas touché par le diff.
+  - Le seul rouge restant (`derived_in_ram_answers_like_the_files`, `tests/common/mod.rs:52`) l'était déjà au parent :
+    ce n'est pas un dégât.
+- **La comparaison** :
+  - **Notre correctif** additionne les scores d'un OU en f64, arrondis une fois (`score_combiner.rs`,
+    `block_wand.rs`). La somme ne dépend alors plus de son ordre.
+  - **Algareth** garde l'ordre des clauses dans l'union, ce qui fixe l'ordre de la somme en f32.
+  - Les deux passent le témoin. Le nôtre rend la somme indépendante de l'ordre, alors que celui d'Algareth la rend
+    seulement constante d'une disposition à l'autre. C'est plus étroit, mais exact sur ce que le témoin exige. Le
+    titre de notre correctif nomme d'ailleurs le même `swap_remove` comme cause.
+- **Les sorties** du juge sont à la tablette, `~/.cache/rag3db-banc-notes/campagne/lucivy-04-20261119-184828/`, et le
+  juge est `~/.cache/rag3weaver-build/juge-campagne-2.sh`.
