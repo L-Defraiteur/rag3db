@@ -1,6 +1,6 @@
 # Le témoin des vues de l'IDE rougit sous le lot des témoins navigateur
 
-- **État** : ouvert, le 25 octobre 2026 à 23 h 55. Relevé par hotfixs pendant le rejeu de push de
+- **État** : fermé (19 novembre 2026, everything declarative) ; ouvert le 25 octobre 2026 à 23 h 55. Relevé par hotfixs pendant le rejeu de push de
   (A) (`create-concurrently-etat-6`), confié par l'orchestration à everything declarative. Aucun
   correctif écrit.
 - **Gravité** : un faux rouge dans la passe de push. Un tour qui joue `scripts/temoins_navigateur.sh`
@@ -52,3 +52,21 @@ backend coûtent 59 s à chaque jeu, même seuls et sans charge ; les suivants 2
 d'ordinaire parce que l'appel reste en vol. Détail et sonde suivante :
 `docs/everything-declarative/13-11-2026/02-mesure-de-l-etape-navigateur.md` (cause 2). Ne pas
 relever le seuil.
+
+## Fermé le 19 novembre 2026 (ED) : mesuré en release, plus de minute
+
+**La cause** était le plafond de six connexions HTTP/1.1 par hôte du navigateur
+(`docs/everything-declarative/13-11-2026/02-mesure-de-l-etape-navigateur.md`, « Cause 2, trouvée »). Les flux des
+vues quittées tenaient les connexions environ 60 s. Deux correctifs sont sur master depuis le 13 novembre au soir :
+- (a) la page ferme son flux en partant ;
+- (b) un seul flux par navigateur, tenu par un `SharedWorker` (`352430b481`, témoin des six onglets `967224067b`).
+
+**La mesure**, faite en release (`cargo test --release`) sur master `70e67f6e74`, avec la lib épinglée `7c2b506ec`, à
+lucie-tablette :
+- le témoin, instrumenté hors commit, charge ses douze vues deux fois de suite, soit 24 chargements, bien au-delà
+  du plafond de six ;
+- chaque vue se rend en **153 à 460 ms** ;
+- la recherche, 460 puis 364 ms, et le graphe, 260 puis 268 ms, prenaient chacun 59 s le 13 novembre ;
+- le témoin entier est vert en 11,7 s.
+
+Aucun seuil n'a été relevé. Un nouveau rouge de ce témoin ouvrirait un ticket neuf, avec la durée de chaque vue.
