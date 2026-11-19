@@ -304,8 +304,10 @@ fn le_chat_attend_la_sortie_differee_d_une_commande_apres_accord() {
                     Some(t) => {
                         vus.lock().unwrap().push((t.tool_name.clone().unwrap(), t.content.clone()));
                         if t.tool_name.as_deref() == Some("run_command") && t.content.contains("**En fond**") {
-                            let v: Value = serde_json::from_str(&t.content).unwrap();
-                            let texte = v["result"].as_str().unwrap();
+                            // The model reads the command's text, not its JSON envelope (presentation of the tools,
+                            // 19 Nov. 2026); an envelope, if one still comes, is read for its `result`.
+                            let v: Value = serde_json::from_str(&t.content).unwrap_or(Value::Null);
+                            let texte = v["result"].as_str().unwrap_or(&t.content);
                             let journal = texte.split("- sortie : `").nth(1).unwrap().split('`').next().unwrap();
                             assert!(
                                 !std::fs::read_to_string(journal).unwrap_or_default().contains("SORTIE_DIFFEREE_PREUVE"),
@@ -397,8 +399,9 @@ fn un_accord_exterieur_reprend_la_ligne_exacte_et_n_accorde_pas_sa_variante() {
                     Some(t) => {
                         retours.lock().unwrap().push((t.tool_name.clone().unwrap(), t.content.clone()));
                         if !variante_demandee && t.tool_name.as_deref() == Some("run_command") && t.content.contains("**En fond**") {
-                            let contenu: Value = serde_json::from_str(&t.content).unwrap();
-                            let texte = contenu["result"].as_str().expect("vrai résultat de commande");
+                            // The model reads the command's text, not its JSON envelope (presentation of the tools).
+                            let contenu: Value = serde_json::from_str(&t.content).unwrap_or(Value::Null);
+                            let texte = contenu["result"].as_str().unwrap_or(&t.content);
                             let journal = texte.split("- sortie : `").nth(1).unwrap().split('`').next().unwrap();
                             assert!(
                                 !std::fs::read_to_string(journal).unwrap_or_default().contains("SORTIE_EXTERIEURE_PREUVE"),
