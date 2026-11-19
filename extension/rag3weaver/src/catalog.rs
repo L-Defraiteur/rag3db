@@ -12512,6 +12512,40 @@ mod tests {
         assert_eq!(catalog.known_embedding_rate().unwrap(), None, "nothing noted at all");
     }
 
+    /// **A new base reads the host's declared rate, times 0.5, and says so** (19
+    /// November 2026, point 7 of the vision : the search waits for the index if it
+    /// is short). The catalog's key wins ; another address or host, or no
+    /// declaration, is unknown ; an unreadable declaration is unknown, with its reason.
+    #[cfg(feature = "rag3db-native")]
+    #[test]
+    fn a_new_base_reads_the_declared_rate_and_says_its_source() {
+        use crate::catalog::progress::RateSource;
+        let place = tempfile::tempdir().unwrap();
+        let host = crate::catalog::progress::this_host();
+        let write = |name: &str, body: String| { let p = place.path().join(name); std::fs::write(&p, body).unwrap(); p };
+        let declared = |address: &str, host: &str| format!(
+            r#"{{"version": 1, "rates": {{"rate-model:{address}@{host}": {{"chars_per_second": 1000, "measured_at": "2026-11-18", "source": "banc"}}}}}}"#);
+        let ours = write("ours.json", declared("127.0.0.1:7999", &host));
+        let catalog = catalog_calling(Some("127.0.0.1:7999"));
+        let (rate, source) = catalog.embedding_rate_for_wait_from(Some(&ours)).unwrap();
+        assert_eq!(rate.map(|r| r.chars_per_second), Some(500.0), "the banc's rate, times 0.5");
+        assert_eq!(source, RateSource::Bench { measured_at: "2026-11-18".into(), factor: 0.5 });
+        assert_eq!(source.key(), "bench");
+        for other in [write("address.json", declared("127.0.0.1:7888", &host)), write("host.json", declared("127.0.0.1:7999", "another-host"))] {
+            assert_eq!(catalog.embedding_rate_for_wait_from(Some(&other)).unwrap(), (None, RateSource::Unknown { reason: None }), "another address or host");
+        }
+        assert_eq!(catalog.embedding_rate_for_wait_from(None).unwrap(), (None, RateSource::Unknown { reason: None }), "no declaration");
+        assert_eq!(catalog.embedding_rate_for_wait_from(Some(&place.path().join("absent.json"))).unwrap(), (None, RateSource::Unknown { reason: None }), "an absent file");
+        for (name, body) in [("broken.json", "{".to_string()), ("version.json", r#"{"version": 2, "rates": {}}"#.to_string()),
+                             ("zero.json", declared("127.0.0.1:7999", &host).replace("1000", "0"))] {
+            let (rate, source) = catalog.embedding_rate_for_wait_from(Some(&write(name, body))).unwrap();
+            assert_eq!(rate, None, "{name}");
+            assert!(matches!(&source, RateSource::Unknown { reason: Some(r) } if r.contains("déclaration illisible")), "{name} : {source:?}");
+        }
+        catalog.note_measured_embedding_rate(crate::estimate::Rate { chars_per_second: 900.0 }).unwrap();
+        assert_eq!(catalog.embedding_rate_for_wait_from(Some(&ours)).unwrap(), (Some(crate::estimate::Rate { chars_per_second: 900.0 }), RateSource::Index), "the catalog's key wins");
+    }
+
     #[cfg(feature = "rag3db-native")]
     #[test]
     fn rate_keys_keep_addresses_and_client_hosts_isolated() {

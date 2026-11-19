@@ -282,6 +282,46 @@ fn rate_key(model: &str, origin: &str) -> String {
     format!("embedding_rate:{model}:{origin}")
 }
 
+/// **Where the rate of a wait comes from** (19 November 2026, page
+/// `docs/embarquement/19-11-2026/05-la-declaration-du-debit-par-poste.md`).
+#[derive(Debug, Clone, PartialEq)]
+pub enum RateSource {
+    /// The catalog's key : a rate the index measured (claim, call and write).
+    Index,
+    /// The host's declaration, measured by the banc, times `factor`.
+    Bench { measured_at: String, factor: f64 },
+    /// Neither ; `reason` when a declaration was there and could not be read.
+    Unknown { reason: Option<String> },
+}
+
+impl RateSource {
+    /// The name in a state : `index`, `bench` or `unknown`.
+    pub fn key(&self) -> &'static str {
+        match self {
+            Self::Index => "index",
+            Self::Bench { .. } => "bench",
+            Self::Unknown { .. } => "unknown",
+        }
+    }
+
+    /// What a person reads.
+    pub fn label(&self) -> String {
+        match self {
+            Self::Index => "débit de l'index".into(),
+            Self::Bench { measured_at, factor } => format!("débit du banc × {factor} (mesuré le {measured_at})"),
+            Self::Unknown { reason: None } => "débit inconnu".into(),
+            Self::Unknown { reason: Some(r) } => format!("débit inconnu ({r})"),
+        }
+    }
+}
+
+/// **The factor applied to a declared bench rate** : the banc measures the calls to
+/// the service only ; on B′ the index's rate was 47 % of the banc's.
+pub const BENCH_RATE_FACTOR: f64 = 0.5;
+
+/// The variable that names the host's declaration of rates ; empty : none is read.
+pub const EMBEDDING_RATES_VARIABLE: &str = "RAG3WEAVER_EMBEDDING_RATES";
+
 /// **This machine's name**, the `host` of a rate key.
 pub fn this_host() -> String {
     #[cfg(unix)]
@@ -612,6 +652,22 @@ impl Catalog {
             }
         }
         self.embedding_rate(embedder.name(), Self::embedder_origin(embedder.as_ref()))
+    }
+
+    /// **The rate of a wait, and its source** : the catalog's key, else the host's
+    /// declaration (`~/.config/rag3weaver/embedding-rates.json`) times
+    /// [`BENCH_RATE_FACTOR`], else unknown.
+    pub fn embedding_rate_for_wait(&self) -> Result<(Option<Rate>, RateSource), CatalogError> {
+        self.embedding_rate_for_wait_from(None)
+    }
+
+    /// [`Self::embedding_rate_for_wait`], the declaration given. Stub : the catalog's key only.
+    pub fn embedding_rate_for_wait_from(&self, declaration: Option<&std::path::Path>) -> Result<(Option<Rate>, RateSource), CatalogError> {
+        let _ = (declaration, BENCH_RATE_FACTOR, EMBEDDING_RATES_VARIABLE);
+        Ok(match self.known_embedding_rate()? {
+            Some(rate) => (Some(rate), RateSource::Index),
+            None => (None, RateSource::Unknown { reason: None }),
+        })
     }
 
     /// Note le débit constaté d'un modèle configuré. Le profil lexical ne
