@@ -439,6 +439,13 @@ pub struct EntityConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group_by: Option<GroupBy>,
 
+    /// **The full text of this entity keeps its positions** (19 November 2026): the indexes are built
+    /// without positions by default (the light profile: −29 % on the code base, every query under 100 ms,
+    /// the same documents and spans). `ftsPositions: true` keeps them for this entity, `false` drops them
+    /// whatever the manifest says. Read when the index is created; an existing index keeps its schema.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fts_positions: Option<bool>,
+
     /// **Le mode de checkpoint des ingestions de cette entité**, s'il diffère
     /// de celui du catalogue ([`CatalogConfig::checkpoint_mode`]). Un drain
     /// mêle des entités : lui suit toujours le catalogue.
@@ -880,6 +887,7 @@ impl Default for EntityConfig {
             hashsafe: None,
             return_fields: None,
             group_by: None,
+            fts_positions: None,
             chunked: None,
             lifecycle: None,
             checkpoint: None,

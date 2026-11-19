@@ -372,7 +372,8 @@ pub struct BackendManifest {
     /// the archivist of `bilans.memoire` files in the background. Absent: the defaults.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub memory: Option<SessionArchive>,
-    /// Creation-time Lucivy option; existing indexes retain their persisted setting.
+    /// Creation-time Lucivy option; existing indexes retain their persisted setting. **Absent: no
+    /// positions** (19 November 2026, the light profile); an entity may keep them (`ftsPositions`).
     #[serde(default)]
     pub fts_positions: Option<bool>,
     /// **Le plein texte entretenu par l'hôte** (15 novembre 2026) : `fts.maintenance`, la maintenance
@@ -7583,6 +7584,86 @@ mod tests {
         assert!(texte.contains("\"uuid\"") && texte.contains("\"file_path\"") && texte.contains("\"start_line\""), "{texte}");
         // Un format inconnu est refusé, pas rendu en markdown sans le dire.
         assert!(backend.call("read_file", json!({"path": "outils.rs", "format": "html"})).is_err());
+    }
+
+    /// A code backend, its sources written, indexed, with `search_code`; `patch` edits its manifest.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    fn indexed_code_backend(files: &[(&str, &str)], patch: &dyn Fn(&mut Value)) -> (tempfile::TempDir, Backend) {
+        let tools = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/tools");
+        let (dir, p) = fixture_code_avec("working_tree", false, json!({}), &|m| {
+            m["tools"]["search_code"] =
+                json!({"graph": "search_workspace.mmd", "bindings": {"target": "Scope"}, "policy": {"read_files": true}});
+            patch(m);
+        });
+        drop(p);
+        std::fs::copy(tools.join("search_workspace.mmd"), dir.path().join("search_workspace.mmd")).unwrap();
+        for (path, text) in files {
+            std::fs::write(dir.path().join("sources").join(path), text).unwrap();
+        }
+        let prepared = PreparedBackend::load(&dir.path().join("backend.json")).expect("the manifest loads");
+        let backend = backend_de_code(dir.path(), prepared);
+        {
+            let source = backend.file_source.clone().unwrap();
+            let mut cat = backend.catalog.lock().unwrap();
+            crate::code_sync::sync_source(&mut cat, source.as_ref(), &Default::default(), &mut |_| {}).expect("the index");
+        }
+        (dir, backend)
+    }
+
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    fn scope_positions(backend: &Backend) -> Option<bool> {
+        let cat = backend.catalog.lock().unwrap();
+        let table = cat.resolve_search_target(crate::code::SCOPE).unwrap().parent_table;
+        cat.fts_handles().get(&table).expect("the full text of Scope").config.positions
+    }
+
+    /// **A manifest without `fts_positions` builds its full text without positions** (19 November 2026,
+    /// c7, on the measure of the code base: −29 % on disk, every query under 100 ms, the same answers).
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_manifest_without_fts_positions_builds_the_full_text_without_them() {
+        let (_dir, backend) = indexed_code_backend(&[("outils.rs", "pub fn depart() {}\n")], &|_| {});
+        assert_eq!(scope_positions(&backend), Some(false), "the light profile is the default");
+        let (_dir, backend) = indexed_code_backend(&[("outils.rs", "pub fn depart() {}\n")], &|m| m["fts_positions"] = json!(true));
+        assert_eq!(scope_positions(&backend), Some(true), "fts_positions: true keeps them");
+    }
+
+    /// **The same code search answers the same with and without positions** (19 November 2026): the light
+    /// profile loses nothing a search of rag3weaver gives. `search_code` (lucivy's spans, their attachment to
+    /// the chunks, the ranking, the rendering) on the same sources, one index with positions and one without:
+    /// the same answer, byte for byte, for words, a phrase, a short word, a fuzzy word and several words.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn the_same_code_search_answers_the_same_with_and_without_positions() {
+        let files: [(&str, &str); 3] = [
+            ("compte.rs", "/// Compte les lignes d'un fichier, puis les mots.\npub fn compte_les_lignes(texte: &str) -> usize {\n    texte.lines().count()\n}\n\npub fn compte_les_mots(texte: &str) -> usize {\n    texte.split_whitespace().count()\n}\n"),
+            ("commit.rs", "/// Le commit du plein texte : chaque commit publie les documents.\npub fn commit_le_plein_texte(n: usize) -> usize {\n    let commit = n + 1;\n    commit * 2\n}\n"),
+            ("outils.rs", "pub fn depart() { let lignes = 3; let mots = lignes * 2; }\npub fn arrivee() -> &'static str { \"le plein texte compte les lignes\" }\n"),
+        ];
+        let answers = |positions: Option<bool>| {
+            let (_dir, backend) = indexed_code_backend(&files, &move |m| {
+                if let Some(p) = positions {
+                    m["fts_positions"] = json!(p);
+                }
+            });
+            let queries = ["compte les lignes", "\"plein texte\"", "commit", "lignse", "depart mots arrivee", "compte_les_mots"];
+            let rendered: Vec<Value> = queries
+                .iter()
+                .map(|q| {
+                    let mut r = backend.call("search_code", json!({"query": q, "options": {}})).unwrap_or_else(|e| panic!("{q}: {e}"));
+                    r.as_object_mut().and_then(|o| o.remove("run"));
+                    assert!(r["result"].as_array().is_some_and(|a| !a.is_empty()), "{q} finds something: {r}");
+                    r
+                })
+                .collect();
+            (scope_positions(&backend), rendered)
+        };
+        let (with, kept) = answers(Some(true));
+        let (without, light) = answers(None);
+        assert_eq!((with, without), (Some(true), Some(false)), "one index with positions, one without");
+        for (k, l) in kept.iter().zip(&light) {
+            assert_eq!(k, l, "the same answer with and without positions");
+        }
     }
 
     /// La base des témoins de la vue (2a′-2) : une base à générations, un fichier de 150 fonctions
