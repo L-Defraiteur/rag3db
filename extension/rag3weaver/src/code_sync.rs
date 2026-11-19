@@ -1558,30 +1558,14 @@ fn synchroniser_par_generations(
     let manifestes = crate::manifestes::Manifestes::lire(&listed, |c| source.read(c).ok().flatten());
     catalog.note_manifestes(&manifestes).map_err(|e| e.to_string())?;
     let retenus: Vec<String> = listed.iter().filter(|p| crate::code::admission(p, None, &options.generated).is_ok()).cloned().collect();
-    let v = catalog.generations.clone().ok_or("sans générations")?;
-    let visible = catalog.dialect_arc().condition_visible_sur("f", &v.couche, v.rang).ok_or("ce dialecte ne sait pas les générations")?;
-    let lu = catalog
-        .execute_raw_with_params(
-            &format!("MATCH (f:{FILE}) WHERE f.source = $src AND f._couche = $couche AND {visible} RETURN f.path, f.content_hash, f.analyse"),
-            &[
-                crate::connection::QueryParam::new("src", CypherValue::String(source_id.clone())),
-                crate::connection::QueryParam::new("couche", CypherValue::String(v.couche.clone())),
-            ],
-        )
-        .map_err(|e| e.to_string())?;
-    // Le chemin et l'empreinte indexée de chaque fichier que la couche voit au rang en attente : son
-    // contenu, et la version de l'analyse qui l'a écrit (page 06, § 13).
-    let texte = |l: &Vec<CypherValue>, i: usize| l.get(i).and_then(|x| x.as_str()).unwrap_or("").to_string();
-    let empreintes: BTreeMap<String, (String, String)> =
-        lu.rows.iter().filter_map(|l| Some((l.first()?.as_str()?.to_string(), (texte(l, 1), texte(l, 2))))).collect();
+    let empreintes = indexed_fingerprints(catalog, &source_id)?;
     let version = catalog.version_de_l_analyse.clone();
     let indexes: BTreeSet<String> = empreintes.keys().cloned().collect();
     // **Un fichier inchangé ne se réécrit pas** : sous l'écrivain, son empreinte égale à celle du disque
     // ne changerait aucune ligne, et la passe coûte le diff, pas la source (un rattrapage à l'ouverture
     // réécrivait tout en un paquet, et la fermeture l'attendait). Sauf après une passe en masse
     // interrompue : ses liens manquent, il faut tout repasser.
-    let marque = format!("relations_pending:{}/{}:{}", catalog.scope().org, catalog.scope().project, source_id);
-    let tout_repasser = catalog.read_meta_key(&marque).map_err(|e| e.to_string())?.is_some_and(|v| !v.is_empty());
+    let tout_repasser = bulk_pass_interrupted(catalog, &source_id)?;
     let presents: BTreeSet<String> = retenus.iter().map(|p| crate::code_tools::indexed_name(source, p).1).collect();
     let mut partis: Vec<String> = indexes.into_iter().filter(|p| !presents.contains(p)).collect();
     // **The guards of a snapshot sync, before any write** (e2e_code_sync, 16 November 2026: the writer's path
@@ -2152,6 +2136,32 @@ fn first_pass_interrupted(catalog: &Catalog, source_id: &str) -> Result<bool, St
     }
     let grain = BTreeMap::from([("source".to_string(), CypherValue::String(source_id.to_string()))]);
     Ok(catalog.open_snapshot_session(SCOPE, &grain).map_err(|e| e.to_string())?.is_some())
+}
+
+/// **A bulk pass of this source was cut short**: its links are missing, and every file goes through again,
+/// unchanged or not (the mark « relations en cours »).
+pub(crate) fn bulk_pass_interrupted(catalog: &Catalog, source_id: &str) -> Result<bool, String> {
+    let marque = format!("relations_pending:{}/{}:{}", catalog.scope().org, catalog.scope().project, source_id);
+    Ok(catalog.read_meta_key(&marque).map_err(|e| e.to_string())?.is_some_and(|v| !v.is_empty()))
+}
+
+/// **The indexed fingerprint of each file of a source** that the layer sees at the pending rank: its content
+/// hash, and the version of the analysis that wrote it (page 06, § 13). Shared by the sync of a source already
+/// indexed, which skips an unchanged file, and by the estimate of a reindexing, which does not count it.
+pub(crate) fn indexed_fingerprints(catalog: &Catalog, source_id: &str) -> Result<BTreeMap<String, (String, String)>, String> {
+    let v = catalog.generations.clone().ok_or("sans générations")?;
+    let visible = catalog.dialect_arc().condition_visible_sur("f", &v.couche, v.rang).ok_or("ce dialecte ne sait pas les générations")?;
+    let lu = catalog
+        .execute_raw_with_params(
+            &format!("MATCH (f:{FILE}) WHERE f.source = $src AND f._couche = $couche AND {visible} RETURN f.path, f.content_hash, f.analyse"),
+            &[
+                crate::connection::QueryParam::new("src", CypherValue::String(source_id.to_string())),
+                crate::connection::QueryParam::new("couche", CypherValue::String(v.couche.clone())),
+            ],
+        )
+        .map_err(|e| e.to_string())?;
+    let texte = |l: &Vec<CypherValue>, i: usize| l.get(i).and_then(|x| x.as_str()).unwrap_or("").to_string();
+    Ok(lu.rows.iter().filter(|l| !texte(l, 0).is_empty()).map(|l| (texte(l, 0), (texte(l, 1), texte(l, 2)))).collect())
 }
 
 fn source_deja_indexee(catalog: &Catalog, source_id: &str) -> Result<bool, String> {
