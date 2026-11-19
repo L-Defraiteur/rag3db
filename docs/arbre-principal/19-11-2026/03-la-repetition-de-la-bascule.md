@@ -76,3 +76,26 @@ puis retirée base par base au mot de c7.
 - `~/.cache/rag3weaver-build/mesures/parite-search-20261119-*/` : la parité de `search_code`.
 - Les copies `code-rag3db-{ancienne,migree}-{repetition,parite}-20261119-*`. Elles partent au ménage après la fenêtre.
   Les copies `…-1623-interrompue` viennent d'un essai arrêté en cours de 1b, et ne sont jamais relues.
+
+## La fenêtre du soir, annulée (19 novembre 2026, 18 h 17)
+
+G a suivi la recette. Sur code-rag3db-depot, 1b a pris 770 s (contre 659 s sur la copie), les générations 3 s, et la
+réouverture s'est faite sans avertissement. **Le repassage de l'étape 7** (le premier index de l'écrivain, base
+ouverte) a rempli le tampon du moteur, sur DEFINED_IN, avec 8 Gio comme avec 24 Gio. La bascule est annulée. Les trois
+bases sont revenues sur leurs instantanés et rouvertes au format d'avant à 18 h 17, avec une recherche et des usages
+identiques à ceux d'avant. Le ticket du tampon est confié à ED.
+
+**Ce que ma répétition n'a pas joué** : elle s'arrêtait après la montée aux générations, et vérifiait la base migrée
+sans la repasser. Elle ne pouvait donc pas voir ce défaut. Son « vert » portait sur la migration, pas sur la fenêtre
+entière.
+
+## Le pas à ajouter à la prochaine répétition
+
+- **Le repassage jusqu'au critère**, sur une copie de la vraie base, avec le binaire et la lib du soir :
+  1. rouvrir la base migrée par un hôte isolé ;
+  2. lancer `index` avec `confirm=true`, et le suivre jusqu'à la dernière ligne de son journal (« indexation
+     terminée ») ;
+  3. relever la mémoire du moteur pendant tout le repassage : le tampon, et le pic de la portée sous `poste lourd` ;
+  4. appliquer ensuite les vérifications de l'étape 8 : le plein texte et ses lignes, les vecteurs à 100 %, les
+     `usages`, et `search_code` sur son top 10.
+- **Le verdict d'une répétition** ne se dit qu'une fois ce pas joué jusqu'au critère.
