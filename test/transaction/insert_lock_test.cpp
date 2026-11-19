@@ -17,6 +17,8 @@
 #include <thread>
 #include <vector>
 
+#include "catalog/catalog.h"
+#include "catalog/catalog_entry/table_catalog_entry.h"
 #include "graph_test/private_graph_test.h"
 #include "main/connection.h"
 #include "main/database.h"
@@ -126,10 +128,19 @@ TEST_F(InsertLockTest, ACopyHoldsTheIndexExclusiveUntilTheEnd) {
     mustRun(*conn, "BEGIN TRANSACTION;");
     mustRun(*conn, copyOfKeys(100, 10));
     const auto id = transactionIDOf(*conn);
-    EXPECT_EQ(locks().getNumLocksHeld(id), 2u) << "the index, exclusive, and the table, shared";
-    mustRun(*conn, "CREATE (:Item {id: 7, v: 0});");
+    // Plus le verrou des lecteurs de la table, en partagé : le COPY lit la table qu'il remplit
+    // (ticket de l'ALTER qui n'attend pas les lecteurs, 19 novembre 2026).
+    const auto tableID =
+        catalog::Catalog::Get(*conn->getClientContext())
+            ->getTableCatalogEntry(Transaction::Get(*conn->getClientContext()), "Item")
+            ->getTableID();
+    EXPECT_EQ(locks().getHolders(LockResource::tableRead(tableID)), std::vector<transaction_t>{id})
+        << "the readers of the table, shared";
     EXPECT_EQ(locks().getNumLocksHeld(id), 3u)
-        << "the index and the table are already held; plus the key";
+        << "the index, exclusive, the table and its readers, shared";
+    mustRun(*conn, "CREATE (:Item {id: 7, v: 0});");
+    EXPECT_EQ(locks().getNumLocksHeld(id), 4u)
+        << "the index, the table and its readers are already held; plus the key";
     mustRun(*conn, "ROLLBACK;");
     EXPECT_EQ(locks().getNumResources(), 0u);
 }
