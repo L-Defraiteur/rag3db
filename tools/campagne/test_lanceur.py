@@ -141,7 +141,7 @@ class Lanceur(unittest.TestCase):
 
     def test_the_frozen_declarations_let_commands_run_without_a_human(self):
         ecrire(os.path.join(self.repo, "extension/rag3weaver/templates/backends/code/backend.json"),
-               json.dumps({"database": "x", "tools": [], "workspace": {"commands": "approval", "root": ".", "sandbox": {"extra_read": ["~/.rustup", "/opt/x"]}}}))
+               json.dumps({"database": "x", "tools": [], "workspace": {"commands": "approval", "root": ".", "sandbox": {"extra_read": ["~/.rustup", "/opt/x"], "env": {"KEEP": "1"}}}}))
         git(self.repo, "add", "-A")
         git(self.repo, "-c", "user.name=T", "-c", "user.email=t@example.org", "commit", "-qm", "templates")
         d = lanceur.freeze_declarations(self.repo, "HEAD", os.path.join(self.tmp.name, "decl"))
@@ -151,6 +151,12 @@ class Lanceur(unittest.TestCase):
         # The campaign host has a HOME of its own: « ~ » there is a link, and the sandbox reads
         # the real chain (cargo could not read ~/.rustup/settings.toml, case tty 09, 19 Nov).
         self.assertEqual(w["sandbox"]["extra_read"], [os.path.join(os.path.expanduser("~"), ".rustup"), "/opt/x"])
+        # A tree without its own toolchain file (lucivy) falls back on rustup's default, read in
+        # RUSTUP_HOME: under the campaign HOME it was the link, and rustup said « no default is
+        # configured » (case lucivy 03, 19 Nov). The sandbox gets the real homes.
+        self.assertEqual(w["sandbox"]["env"]["RUSTUP_HOME"], os.path.join(os.path.expanduser("~"), ".rustup"))
+        self.assertEqual(w["sandbox"]["env"]["CARGO_HOME"], os.path.join(os.path.expanduser("~"), ".cargo"))
+        self.assertEqual(w["sandbox"]["env"]["KEEP"], "1", "the other variables stay")
 
     def test_the_diff_holds_new_files_and_uncommitted_changes(self):
         block, _ = lanceur.read_case(self.case("> f rend 1."))
