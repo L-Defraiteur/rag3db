@@ -1791,9 +1791,12 @@ fn le_chat_guide_une_fenetre_du_depot_detachee() {
         return;
     };
     let model: ChatModel = Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
-        Ok(Arc::new(CallbackLlm::new("faux-modele", 8192, |turns, opts, sink| MockLlm::new("Le point d'entrée est `src/main.rs:1`.").generate(turns, opts, sink))))
+        Ok(Arc::new(CallbackLlm::new("faux-modele", 8192, |turns, opts, sink| MockLlm::new("Le point d'entrée est `src/main.rs:1` ; voir aussi `src/long.rs:5` et `src/long.rs:40`.").generate(turns, opts, sink))))
     });
     let (d, h, m, id) = banc_dans("atelier", model.clone(), |_| {});
+    // A file of sixty lines in the workspace, cited at two of its lines (ED's review of slice 3).
+    std::fs::create_dir_all(d.path().join("code/src")).unwrap();
+    std::fs::write(d.path().join("code/src/long.rs"), (1..=60).map(|n| format!("// ligne {n}\n")).collect::<String>()).unwrap();
     drop(h);
     let (chats, taches, runs) = (d.path().join("chats"), d.path().join("taches"), d.path().join("runs"));
     let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| h.with_racine_des_taches(taches).with_chats_root(chats).with_runs_root(runs).with_chat_model(model));
@@ -1831,6 +1834,16 @@ fn le_chat_guide_une_fenetre_du_depot_detachee() {
     n.onglet(1);
     n.attendre("location.pathname.includes('/fichier/src/main.rs')", "the window of the repository opens the cited file");
     assert_eq!(n.evaluer("window.__pasRecharge === true"), json!(true), "the window of the repository followed without reloading its page");
+    // The same file, at two of its lines (ED's review): only the hash changes, and the window must aim at each.
+    let cliquer = |n: &mut Navigateur, fin: &str| {
+        n.onglet(0);
+        n.evaluer(&format!("[...document.querySelectorAll('article.message.assistant a.code-ref')].find((a) => a.getAttribute('href').endsWith('{fin}')).click()"));
+        n.onglet(1);
+    };
+    cliquer(&mut n, "src/long.rs#L5");
+    n.attendre("document.querySelector('tr.vise')?.id === 'L5'", "the window aims at line 5 of src/long.rs");
+    cliquer(&mut n, "src/long.rs#L40");
+    n.attendre("document.querySelector('tr.vise')?.id === 'L40'", "the window aims at line 40 of the same file: only the hash changed");
     assert_eq!(n.evaluer("new URLSearchParams(location.search).get('fenetre')"), json!("depot"), "it stays a window of the repository");
     n.onglet(0);
     assert!(n.evaluer("location.pathname").as_str().unwrap_or_default().ends_with("/chat"), "the chat stays on its conversation : {}", n.evaluer("location.href"));
