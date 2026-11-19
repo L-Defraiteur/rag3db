@@ -33,8 +33,13 @@ impl InvocationHost for HostedInvocations {
     ) -> Result<Value, String> {
         let context: Context = serde_json::from_value(context.clone())
             .map_err(|e| format!("contexte invalide : {e}"))?;
-        if context.view.is_some() {
-            return Err("vue contextuelle non disponible : aucun repli implicite".into());
+        // **The current view by the context** (2b-C): the context's view goes into the arguments, where the call
+        // reads, checks and refuses it as `view`; an explicit `view` in the arguments wins. No implicit view without a
+        // context.
+        let mut arguments = arguments;
+        if let Some(view) = context.view.clone() {
+            let args = arguments.as_object_mut().ok_or("arguments cibles : objet attendu")?;
+            args.entry("view").or_insert(view);
         }
         if context.target.kind != "backend" || context.target.id.trim().is_empty() {
             return Err(
