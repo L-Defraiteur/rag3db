@@ -1,6 +1,6 @@
 # Trois témoins rougissent sous charge, avant comme après l'embarquement hors du verrou
 
-- **État** : ouvert
+- **État** : fermé (19 novembre 2026, everything declarative) ; ouvert le 18 octobre 2026
 - **Gravité** : tests instables sous charge ; en service, à établir pour le premier (une lecture
   qui verrait un lot à moitié)
 - **Atteignable en service** : peut-être, pour `a_read_during_a_reindexed_batch_sees_the_batch_before_whole`
@@ -105,3 +105,21 @@ lignes cherchées.
 - Le correctif : 0 rouge sur 20 passes sous seize boucles CPU (luciepc, base f32d97383).
 
 Cette ligne est fermée ; les deux autres du tableau restent ouvertes.
+
+## Fermé le 19 novembre 2026 (ED) : la troisième ligne était un défaut du journal plafonné
+
+Les deux premières lignes sont fermées plus haut :
+- la lecture d'un lot à moitié, par L6 le 19 octobre ;
+- la montre, le 18 octobre.
+
+**La troisième**, `commande::tests::en_fond_un_journal_au_dela_du_plafond_garde_la_fin_et_le_dit` (« la fin est
+gardée »), était un défaut du produit, et non le délai du test.
+- **Le défaut** : `plafonner` lisait la fin du journal puis le tronquait. Ce que la commande écrivait entre les deux
+  était perdu sans être compté, et une commande qui finissait dans cette fenêtre perdait sa fin : c'est le message
+  du 18 octobre.
+- **Rouge déterministe** (`b610560e51`) : un retard de 50 ms dans la fenêtre compte 260 051 octets pour 330 000 écrits.
+- **Correctif** (`1bffb7659d`) : relire juste avant la troncature, garder la seconde moitié du plafond, compter le
+  reste comme perdu.
+
+Le détail est au ticket `2026-11-07-des-tests-de-la-lib-rougissent-sous-charge.md`. Ce ticket-ci se ferme avec ce
+lot, sur lequel il est empilé.
