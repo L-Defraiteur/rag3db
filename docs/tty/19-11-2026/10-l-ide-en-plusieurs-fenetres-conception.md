@@ -20,12 +20,16 @@ Une fenêtre détachée est la même page, sur l'adresse de sa vue, avec `?fenet
 ## Ce que porte le worker (l'état partagé)
 
 Ce sont des clés de `etatPartage`, écrites par une page et reçues par toutes, et par une page neuve à son branchement :
-- `fenetres` : les fenêtres ouvertes, `{rôle, backend, depuis}`, et le battement du worker les oublie quand elles partent.
-- `selection:<backend>` : ce qu'on regarde, `{type: "fichier" | "symbole" | "graphe" | "run", cible, ligne?}`.
+- `fenetres` : les fenêtres ouvertes, `{rôle, backend, depuis, focus}`. **Le worker la tient lui-même** (relecture d'ED) : chaque page lui déclare son rôle au branchement, son battement l'oublie, il note la dernière qui a eu le focus, et les pages la lisent sans l'écrire. Une liste réécrite par les pages perdrait une fenêtre sur deux qui s'ouvrent ensemble, puisque c'est le dernier qui écrit qui gagne. Même règle pour toute clé à plusieurs auteurs.
+- `selection:<backend>` : ce qu'on regarde, `{type: "fichier" | "symbole" | "graphe" | "run", cible, ligne?}`. Un seul geste à la fois : le dernier écrit suffit. Avec plusieurs fenêtres du dépôt, c'est **la dernière qui a eu le focus** (notée par le worker dans `fenetres`) qui suit la sélection, pour que deux fenêtres n'ouvrent pas le même fichier.
 - `conversation` : la conversation ouverte, `{backend}`.
-- `accords:<backend>` : les cartes d'accord en attente, pour qu'une fenêtre qui n'est pas le chat en montre le compte. La carte reste au chat.
+- ~~`accords:<backend>`~~ : retiré (relecture d'ED). Écrit par le chat, ce serait une copie de l'hôte, juste seulement quand une fenêtre de chat est ouverte. Une fenêtre qui n'est pas le chat compte les accords en attente depuis l'état que l'hôte pousse déjà (`onEtat("chat")`) : une seule source, et aucune requête au repos.
 
 L'état du tour n'y est pas. Il reste à l'hôte : le run en vol, les tours et les accords sont lus par `fetchChat` et suivis par le flux, comme aujourd'hui. Le worker ne garde que ce que l'hôte ne sait pas : ce que la personne regarde, et où.
+
+## La course de la relecture, en deux fenêtres (relecture d'ED, avant le code)
+
+ED a corrigé le 19 novembre (`ed-chat-reload-epoch`) une relecture du chat qui, partie avant un tour et revenue après lui, l'effaçait de l'écran. Son époque des tours n'avance que sur les envois de la page. Une fenêtre B qui n'envoie rien, et dont le tour vient de A, garde la course. **L'époque avance aussi** sur le `RunStarted` et le `RunFinished` d'un tour venu d'ailleurs (`chat:<id>`), et sur l'état poussé de fin de tour (`onEtat("chat")`). Le témoin de la tranche 1 l'éprouve par un ordre et non par une durée : il retient une relecture de B (`window.__ide.relectureRetenue`), fait faire le tour par A, lâche la relecture, et vérifie que B garde le tour. Le lot se pose sur `ed-chat-reload-epoch`.
 
 ## Ce que garde chaque fenêtre
 
@@ -44,6 +48,8 @@ L'état du tour n'y est pas. Il reste à l'hôte : le run en vol, les tours et l
 2. **Le chat guide une fenêtre du dépôt détachée** : `selection:<backend>`, un fichier cliqué dans le chat qui s'ouvre dans l'autre fenêtre, le chat qui ne bouge pas.
 3. **Le bouton « détacher » et `?fenetre=`** : la vue seule, sans barre.
 4. **Le graphe détaché** suit le run du tour (`selection` de type `run`).
-5. **Le compte des accords** en attente, dans une fenêtre qui n'est pas le chat.
+5. **Le compte des accords** en attente, dans une fenêtre qui n'est pas le chat, depuis l'état poussé par l'hôte.
+
+Et, à chaque tranche, **un témoin au repos** (relecture d'ED, pendant du témoin des six onglets, 967224067b) : deux fenêtres ouvertes, une seule connexion `/ide/flux` à l'hôte, et aucune requête au repos.
 
 Sans SharedWorker (navigation privée), chaque fenêtre garde son flux, et `etatPartage` reste local (`ecrireLocalement`) : les fenêtres ne se guident pas, et rien ne casse. La page le dit une fois dans l'en-tête.
