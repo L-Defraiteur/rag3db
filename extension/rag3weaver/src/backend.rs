@@ -8534,6 +8534,80 @@ mod tests {
         });
     }
 
+    /// A code backend whose `search_code` declares `freshness`, its text indexed and **its vectors due** (the text
+    /// ingested without embedding), under `embarqueur`. Page `docs/recherche/19-11-2026/03-…`.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    fn backend_owing_vectors(embarqueur: Box<dyn crate::embedder::Embedder>) -> (tempfile::TempDir, Backend) {
+        let graphe = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/tools/search_workspace.mmd");
+        let (dir, p) = fixture_code_avec("working_tree", false, json!({}), &|m| {
+            m["tools"]["search_code"] = json!({
+                "graph": graphe.to_string_lossy(),
+                "bindings": {"target": "Scope"},
+                "metadata": [{"node": "render", "port": "meta"}],
+                "policy": {"read_files": true},
+                "freshness": true,
+            });
+        });
+        drop(p);
+        let texte = "pub fn depart() -> u32 {\n    1\n}\n";
+        std::fs::write(dir.path().join("sources/outils.rs"), texte).unwrap();
+        let prepared = PreparedBackend::load(&dir.path().join("backend.json")).expect("the manifest with search_code loads");
+        let backend = backend_de_code_avec(dir.path(), prepared, embarqueur);
+        {
+            let source = backend.file_source.clone().unwrap();
+            let mut cat = backend.catalog.lock().unwrap();
+            let lot = vec![("outils.rs".to_string(), Some(texte.to_string()))];
+            crate::code_sync::reingest_files(&mut cat, source.as_ref(), &lot, crate::disponibilite::Disponibilites::RECHERCHE_TEXTE)
+                .expect("the text, without its vectors");
+        }
+        (dir, backend)
+    }
+
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    fn search_code_in(backend: &Backend, signals: Value) -> (Value, std::time::Duration) {
+        let cellule = backend.catalog.lock().unwrap().scope().clone();
+        let t = std::time::Instant::now();
+        let r = backend
+            .call_in(&cellule, "search_code", json!({"query": "depart", "options": {"signals": signals, "limit": 5}}))
+            .expect("search_code answers");
+        (r, t.elapsed())
+    }
+
+    /// **A search that reads the vectors waits for them too** (Lucie, 18 November 2026; page
+    /// `docs/recherche/19-11-2026/03-l-attente-des-recherches-sur-l-index.md`). Its text is caught up, but its view owes
+    /// chunks at a rate of 1 character a second: well beyond `search.index_wait_s`. A hybrid search answers at once,
+    /// not ready, and says the vectors' estimate apart from the text's; a bm25 search of the same view does not wait
+    /// and says nothing.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_hybrid_search_owing_long_vectors_answers_at_once_and_says_them() {
+        let (_dir, backend) = backend_owing_vectors(Box::new(crate::embedder::HashEmbedder::new(8)));
+        backend.catalog.lock().unwrap().note_measured_embedding_rate(crate::estimate::Rate { chars_per_second: 1.0 }).unwrap();
+        let (r, duree) = search_code_in(&backend, json!(["bm25", "vector"]));
+        assert!(duree < std::time::Duration::from_secs(3), "a long estimate answers at once: {duree:?}");
+        let index = &r["index"];
+        assert_eq!(index["ready"], json!(false), "the vectors due are not said: {r}");
+        assert!(index["vectors_eta_s"].as_u64().is_some_and(|s| s > 6), "the vectors' estimate apart: {index}");
+        assert_eq!(index["text_eta_s"], json!(0), "the text is caught up, and said apart: {index}");
+        let (r, _) = search_code_in(&backend, json!(["bm25"]));
+        assert!(r["index"].is_null(), "bm25 alone does not wait for the vectors: {}", r["index"]);
+    }
+
+    /// **No embedding service: no wait for the vectors, and the cause said** (same page). The view owes chunks that
+    /// nothing will compute; a hybrid search answers at once, and its `index` says why the vectors are not there.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_hybrid_search_without_an_embedding_service_does_not_wait_and_says_why() {
+        let (_dir, backend) = backend_owing_vectors(Box::new(crate::embedder::AbsentEmbedder::new("absent", 8)));
+        let (r, duree) = search_code_in(&backend, json!(["bm25", "vector"]));
+        assert!(duree < std::time::Duration::from_secs(3), "nothing to wait for: {duree:?}");
+        assert!(
+            r["index"]["vectors_unavailable"].as_str().is_some_and(|c| c.contains("embedding")),
+            "the cause of the missing vectors is said: {}",
+            r["index"]
+        );
+    }
+
     #[cfg(all(feature = "code", feature = "rag3db-native"))]
     fn usages_de(backend: &Backend, name: &str) -> String {
         backend.call("usages", json!({"name": name})).map(|v| v.to_string()).unwrap_or_else(|e| e)
