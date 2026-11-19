@@ -131,7 +131,7 @@ TEST_F(InsertLockTest, ACopyHoldsTheIndexExclusiveUntilTheEnd) {
     // Plus le verrou des lecteurs de la table, en partagé : le COPY lit la table qu'il remplit
     // (ticket de l'ALTER qui n'attend pas les lecteurs, 19 novembre 2026).
     const auto tableID =
-        catalog::Catalog::Get(*conn->getClientContext())
+        rag3db::catalog::Catalog::Get(*conn->getClientContext())
             ->getTableCatalogEntry(Transaction::Get(*conn->getClientContext()), "Item")
             ->getTableID();
     EXPECT_EQ(locks().getHolders(LockResource::tableRead(tableID)), std::vector<transaction_t>{id})
