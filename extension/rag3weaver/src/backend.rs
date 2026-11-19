@@ -8090,6 +8090,8 @@ mod tests {
         let vue = backend.read_view.current().expect("a published read view");
         assert!(vue.scope == cellule && vue.pool.is_some(), "the call reads under a snapshot of the catalogue's cell");
 
+        // The backend may have runs of its own in flight (its index): only the run that appears with the call is its.
+        let avant: std::collections::BTreeSet<String> = backend.runs_in_flight().into_iter().collect();
         std::thread::scope(|s| {
             let appel = s.spawn(|| {
                 let r = backend.call_in(&cellule, "lente", json!({}));
@@ -8097,7 +8099,7 @@ mod tests {
             });
             let echeance = std::time::Instant::now() + std::time::Duration::from_secs(10);
             let run = loop {
-                if let Some(run) = backend.runs_in_flight().into_iter().next() {
+                if let Some(run) = backend.runs_in_flight().into_iter().find(|r| !avant.contains(r)) {
                     break run;
                 }
                 assert!(std::time::Instant::now() < echeance, "the slow call never got in flight");
@@ -8108,6 +8110,7 @@ mod tests {
             let arret = std::time::Instant::now();
             backend.stop_run(&run, "ide").expect("the run is in flight");
             let (r, fin) = appel.join().unwrap();
+            assert_eq!(r.as_ref().ok().and_then(|v| v["run"].as_str()).map_or(run.as_str(), |x| x), run, "the stopped run is the call's");
             let rendu = fin.duration_since(arret);
             assert!(rendu < std::time::Duration::from_secs(1), "the call gives the hand back in under a second: {rendu:?} ({r:?})");
             assert!(
