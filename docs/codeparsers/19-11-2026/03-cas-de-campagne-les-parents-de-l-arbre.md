@@ -1,5 +1,5 @@
 ```json
-{"parent": "579a3f3ca90eae6c66149356ca5fe7a8ce6bbd95", "tree": ".", "needs_lib": false, "witness": "the_extraction_does_not_walk_down_the_tree_for_each_identifier", "test": "cargo test --test parent_calls", "suites": ["cargo test"], "hints": ["src/scope_extraction/parents.rs", "tests/parent_calls.rs", "tests/parent_cost.rs"], "ours": "828f855d00d832b51884d0b075c8e7caaf7f4c4a"}
+{"repo": "git@github.com:L-Defraiteur/codeparsers.git", "parent": "579a3f3ca90eae6c66149356ca5fe7a8ce6bbd95", "tree": ".", "needs_lib": false, "witness": "the_extraction_does_not_walk_down_the_tree_for_each_identifier", "test": "cargo test --test parent_calls", "suites": ["cargo test"], "hints": ["src/scope_extraction/parents.rs", "tests/parent_calls.rs", "tests/parent_cost.rs"], "ours": "828f855d00d832b51884d0b075c8e7caaf7f4c4a"}
 ```
 
 # Cas de campagne : l'extraction redescend l'arbre pour chaque identifiant

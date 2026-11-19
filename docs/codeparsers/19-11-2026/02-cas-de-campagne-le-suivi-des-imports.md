@@ -1,5 +1,5 @@
 ```json
-{"parent": "ed4c4a913677fad7b622ab8763942ad929ea42e0", "tree": ".", "needs_lib": false, "witness": "tracking_the_imports_of_many_scopes_stays_cheap_and_exact", "test": "cargo test --test import_tracking_cost", "suites": ["cargo test"], "hints": ["tests/import_tracking_cost.rs", "src/scope_extraction/base_scope_extraction_parser.rs"], "ours": "dcec0a560a038ef3f921ffce2516fcff14a4f3b7"}
+{"repo": "git@github.com:L-Defraiteur/codeparsers.git", "parent": "ed4c4a913677fad7b622ab8763942ad929ea42e0", "tree": ".", "needs_lib": false, "witness": "tracking_the_imports_of_many_scopes_stays_cheap_and_exact", "test": "cargo test --test import_tracking_cost", "suites": ["cargo test"], "hints": ["tests/import_tracking_cost.rs", "src/scope_extraction/base_scope_extraction_parser.rs"], "ours": "dcec0a560a038ef3f921ffce2516fcff14a4f3b7"}
 ```
 
 # Cas de campagne : le suivi des imports compile une expression régulière par import
