@@ -75,11 +75,14 @@ pub fn view_settings(tracked: Option<&Value>) -> Result<ViewSettings, String> {
 pub struct WriteSettings {
     /// How many work layers are written at most; a new one beyond is refused, naming this setting.
     pub max_work_layers: usize,
+    /// The period of the backend's sync of its tracked layers, in milliseconds; `None`: no sync runs (the default,
+    /// a backend writes only its own layer).
+    pub every_ms: Option<u64>,
 }
 
 impl Default for WriteSettings {
     fn default() -> Self {
-        WriteSettings { max_work_layers: 32 }
+        WriteSettings { max_work_layers: 32, every_ms: None }
     }
 }
 
@@ -91,8 +94,9 @@ pub fn write_settings(tracked: Option<&Value>) -> Result<WriteSettings, String> 
     for (cle, v) in objet {
         match (cle.as_str(), v.as_u64().filter(|n| *n > 0)) {
             ("max_work_layers", Some(n)) => r.max_work_layers = n as usize,
-            ("max_work_layers", None) => return Err(format!("tracked.writes.max_work_layers : un entier positif attendu, pas {v}")),
-            _ => return Err(format!("tracked.writes : clé inconnue « {cle} » (max_work_layers)")),
+            ("every_ms", Some(n)) => r.every_ms = Some(n),
+            ("max_work_layers" | "every_ms", None) => return Err(format!("tracked.writes.{cle} : un entier positif attendu, pas {v}")),
+            _ => return Err(format!("tracked.writes : clé inconnue « {cle} » (max_work_layers, every_ms)")),
         }
     }
     Ok(r)
