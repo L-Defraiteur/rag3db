@@ -641,8 +641,8 @@ impl Catalog {
             Some(rate) => (Some(rate.chars_per_second), Some("index")),
             None => match self.declared_embedding_rate() {
                 // The bench measures the calls alone; an index's rate was 47 % of it on B′ (page 05): halved, and said.
-                Some(r) => (Some(r * 0.5), Some("banc × 0,5")),
-                None => (None, None),
+                Some(r) => (Some(r * 0.5), Some("bench")),
+                None => (None, Some("unknown")),
             },
         };
         Ok(crate::views::VectorsDue { chunks, mean_chars, chars_per_s, rate_from })
@@ -768,11 +768,11 @@ mod tests {
         let du = cat.vectors_due_for_view(crate::generations::COUCHE_DU_BACKEND).unwrap();
         assert!(du.chunks > 0, "text ingested without embedding leaves no chunk due: {du:?}");
         assert!(du.mean_chars > 0.0, "{du:?}");
-        assert_eq!((du.chars_per_s, du.rate_from), (None, None), "a rate without key nor declaration: {du:?}");
+        assert_eq!((du.chars_per_s, du.rate_from), (None, Some("unknown")), "a rate without key nor declaration: {du:?}");
         let place = Catalog::embedding_rate_place(cat.embedder.as_deref().unwrap()).expect("the place of the embedder");
         std::fs::write(&declares, serde_json::json!({ format!("{}:{place}", cat.embedder.as_ref().unwrap().name()): 100_000 }).to_string()).unwrap();
         let du = cat.vectors_due_for_view(crate::generations::COUCHE_DU_BACKEND).unwrap();
-        assert_eq!((du.chars_per_s, du.rate_from), (Some(50_000.0), Some("banc × 0,5")), "the declared bench rate is not halved and said: {du:?}");
+        assert_eq!((du.chars_per_s, du.rate_from), (Some(50_000.0), Some("bench")), "the declared bench rate is not halved and said: {du:?}");
         cat.note_measured_embedding_rate(crate::estimate::Rate { chars_per_second: 30_000.0 }).unwrap();
         let du = cat.vectors_due_for_view(crate::generations::COUCHE_DU_BACKEND).unwrap();
         assert_eq!((du.chars_per_s, du.rate_from), (Some(30_000.0), Some("index")), "the catalog's key does not come first: {du:?}");
