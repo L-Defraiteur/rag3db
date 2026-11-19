@@ -1,6 +1,7 @@
 # Vérifier la quarantaine après annulation partielle pour les transactions déjà ouvertes
 
-- **État** : ouvert — diagnostic de contrôle de flux, aucun défaut de données reproduit
+- **État** : ouvert — avancé le 19 novembre 2026 : la validation d'une écriture déjà ouverte est refusée (branche
+  `quarantine-holds-open-transactions`) ; reste le point de reprise automatique du dernier lecteur (voir l'avancement)
 - **Famille** : moteur
 - **Gravité** : risque de persistance ou de lecture d’un état partiellement annulé, à établir ; aucune corruption observée par cette revue
 - **Atteignable en service** : à confirmer — une annulation doit lever après le début des effets partagés, tandis qu’une autre transaction reste ouverte
@@ -170,3 +171,23 @@ commit ordinaire/forcé, différé/lecteur et attente synchronisée ; aucune cel
 exécutée ou autorisée par cette note. Durabilité et index persistant de fixture
 restent une tranche distincte. Ticket ouvert, porteur hotfixs/cœur ; pas master,
 pas patchlib, pas de reprise d'action arrêtée/rejetée.
+
+## Avancement du 19 novembre 2026 (hotfixs, au mot de c7)
+
+**Le défaut est confirmé.** Le témoin `QuarantineOpenTransactions` (`test/transaction/quarantine_open_transactions_test.cpp`)
+reprend le diagnostic privé de Codex en témoin ordinaire. Chaque cas joue dans un fils qui ne détruit jamais sa base.
+Un faux index fait lever l'annulation de TA au milieu du stockage partagé, et une fabrique de point de reprise
+sentinelle compte ses appels. Sur master 9fd3df3765, une fois la faute et le refus du BEGIN de contrôle vérifiés :
+- le COMMIT forcé de TB, ouverte avant, **atteint le point de reprise** (« witness: checkpointer reached ») ;
+- le COMMIT ordinaire de TB **réussit**.
+
+**Le correctif** : `TransactionManager::commit` refuse, à son entrée, toute validation d'écriture quand une
+annulation n'a pas pu finir (`throwIfRollbackFailedNoLock`, le refus du BEGIN et du CHECKPOINT). Le refus vient avant
+toute publication et tout point de reprise ; l'appelant annule TB. Le refus après un point de reprise échoué
+(`checkpointFailed`) n'est pas étendu à la validation : `commit_after_failed_checkpoint_test` attend qu'elle passe.
+Vert sur 852266a8b0 avec le correctif, les deux cas.
+
+**Ce qui reste ouvert** : la validation d'une lecture seule passe par `writeRequestedCheckpointIfLastNoLock`, et un
+dernier lecteur qui part peut lancer le point de reprise automatique demandé (`checkpointNoLock`), sans garde en
+quarantaine. Le témoin demande une demande automatique pendante au moment de la faute ; il est à écrire. La
+récupération après réouverture (le journal rejoué) reste celle d'aujourd'hui, que ce lot ne change pas.
