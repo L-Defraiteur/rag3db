@@ -21,3 +21,18 @@ Le témoin charge5000lignes, réécrit cinq lots avec ADD/DROP sous lecteur, act
 La [paire diagnostique50e2](../16-11-2026/15-paire-diagnostique-arretee-sur-sigsegv-et-sonde-non-activee.md) s'arrête sur SIGSEGV natif avant résultat complet ; drapeau de sonde effacé par le pilote, donc aucune valeur instrumentée acquise ni localisation du228. Trois autres cas non joués, référence non construite, aucun retry. Deux tickets distincts suivent signal et défaut de pilote, sans attribution au présent défaut.
 
 Relire oracle et opérations/valeurs, puis témoin réduit sous recette et admission neuves si nécessaire. Ne pas modifier known_red, exclure le cas ou fermer C1 pour obtenir du vert. Fin : cause documentée, rouge avant correction, qualification pertinente puis intégration autorisée. Aucun nouveau lourd autorisé par ce ticket.
+
+## Non reproduit le 18 novembre (cœur c++)
+
+Le même test, `StringRewriteAcrossAddColumn.AutomaticCheckpointsBetweenAddsAndDrops`, joué 400 fois à
+luciepc sur master `05c54aab8` (avec le correctif des offsets `9fa16affff`), chaque tour dans son
+propre processus : tel quel, sans le fil lecteur, sans les DROP, et sous l'environnement de la
+qualification de Codex (MAX_NUM_THREADS=2, OMP et OPENBLAS à 5, `taskset -c 0-4`). 400 verts : aucun
+`wrongRows`, aucun contrôle `after-automatic-checkpoints`, `after-checkpoint` ni `after-reopen` rouge.
+Journaux : `~/.cache/rag3db-moteur-notes/c1-rate/tours.txt` à luciepc.
+
+Les 228 lignes fausses de la qualification de Codex (une passe, source `888c81825` sur base
+`68590270e`) ne se revoient donc pas sur master, à 400 tours. Restent possibles un défaut corrigé
+depuis (master a reçu depuis le correctif de l'ADD COLUMN refusé à mi-chemin et celui du pool), une
+course très rare, ou un écart de son pilote. À garder ouvert une semaine : si aucune passe ne le
+revoit, le fermer comme non reproduit.
