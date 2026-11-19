@@ -53,8 +53,10 @@ function App() {
     return etatPartage.suivre(`selection:${id}`, (v) => {
       const s = v as { href?: string; at?: number } | undefined;
       if (!s?.href || (s.at ?? 0) < ouverte || !jeSuisLaFenetre("depot", id)) return;
-      const [chemin, ancre] = s.href.split("#");
-      location.assign(`${chemin}?fenetre=depot${ancre ? `#${ancre}` : ""}`);
+      // By `URL` (ED's review): a cited address with its own query keeps it, and the window its role; the hash follows.
+      const u = new URL(s.href, location.origin);
+      u.searchParams.set("fenetre", "depot");
+      location.assign(u.toString());
     });
   }, []);
   useEffect(() => {
