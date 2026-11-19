@@ -199,6 +199,13 @@ pub struct NotCandidate {
 }
 
 impl NotCandidate {
+    /// [`Self::excludes`] on the text values a full-text write holds (`(field, value)` pairs).
+    pub fn excludes_values(&self, values: &[(String, String)]) -> bool {
+        let data: std::collections::BTreeMap<String, crate::connection::CypherValue> =
+            values.iter().map(|(k, v)| (k.clone(), crate::connection::CypherValue::String(v.clone()))).collect();
+        self.excludes(&data)
+    }
+
     /// Whether the row of these fields is set aside.
     pub fn excludes(&self, data: &std::collections::BTreeMap<String, crate::connection::CypherValue>) -> bool {
         let texte = |f: &str| data.get(f).and_then(|v| v.as_str()).map_or(0, |s| s.chars().count());
