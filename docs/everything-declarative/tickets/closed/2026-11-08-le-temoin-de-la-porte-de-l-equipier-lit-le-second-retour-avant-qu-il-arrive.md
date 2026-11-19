@@ -1,6 +1,6 @@
 # Le témoin de la porte de l'équipier lit le second retour avant qu'il arrive
 
-- **État** : ouvert (8 novembre 2026), vu par l'arbre principal dans la passe du lot du délai ; pour everything declarative (le lot 2 de l'équipier, ad496c462).
+- **État** : fermé le 19 novembre 2026 par la session tty : déjà corrigé par b0301a0e32 (8 novembre, 4 h 20), venu après la base vue rouge (624aaadc9, 3 h 50). Voir « Fermeture ».
 - **Famille** : produit
 - **Gravité** : faux rouge (une course du témoin).
 - **Atteignable en service** : non (le témoin).
@@ -28,3 +28,9 @@ the len is 1 but the index is 1 », et le fil `teammate-doc` panique ensuite sur
 
 Attendre, dans le témoin, que le faux modèle ait vu ses deux retours (`vus.len() >= 2`, par la même
 attente bornée que la boîte) avant de les lire ; rouge d'abord sous charge.
+
+## Fermeture (19 novembre 2026, session tty)
+
+Le correctif n'a pas pris la forme proposée (`vus.len() >= 2`), mais il ferme la course. Depuis b0301a0e32 (« l'état d'attente »), le témoin n'attend plus la seule question d'accord. Il attend aussi la ligne de l'hôte « en attente du superviseur depuis … ». Cette ligne s'écrit dans `run_teammate` après le retour du graphe du pas (`daemon_host/teammate.rs`, « Un pas qui finit sur une question attend la réponse »). Le pas ne revient qu'après le `step_done` du faux modèle. Or le faux modèle ne rend ce `step_done` qu'à son appel qui porte deux retours d'outil, et il range le second dans `vus` avant de répondre. Quand le témoin lit `vus[1]`, il est donc toujours là.
+
+La base vue rouge (624aaadc9, 3 h 50) précède b0301a0e32 (4 h 20) : le rouge du ticket est celui de l'ancienne attente. Depuis, aucun rouge de ce témoin n'est relevé dans les passes.
