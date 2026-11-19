@@ -75,3 +75,28 @@ seed). Il faut une copie fidèle d'une vraie base, l'hôte arrêté pour elle ou
 
 **Verdict pour l'ordre** : pas de blocage franc sous un usage normal, hors invocation et `Strict`. Le lot 6 de 2a′-3
 passe devant, puis ce ticket : `invoke_read_on` par la vue, `Strict` borné, et l'ouverture mesurée puis découpée.
+
+## La mesure de l'ouverture, 19 novembre 2026 (arbre principal, à luciepc)
+
+Sur la copie fidèle de code-rag3db que G a faite (instantané du portable pris à 10 h 04, hôte arrêté, base de 3,6 Go,
+`mesures/code-rag3db-parent-ouverture-20261119`). Une copie reflink par relevé, sous `poste mesure`, avec le binaire
+posé `rag3weaver-backend` et la lib 7c2b506ec. Le temps compte l'ouverture, un `describe` et l'arrêt propre :
+
+| relevé | ouverture + describe + arrêt |
+|---|---|
+| avec les réactions et la veille du workspace | 2,6 s |
+| sans réactions ni veille | 1,2 s |
+
+`models.llm` est retiré des copies : il déclare Vertex sans `GOOGLE_CLOUD_PROJECT`, que l'hôte tient de son
+environnement, et l'ouverture échouait en 0,6 s.
+
+**Pas encore un verdict**, pour deux raisons :
+
+- **L'extension VECTOR notée à côté de la base ne charge pas** : le `.extensions` de la copie pointe sur celle de la
+  lib 3d706f709, et le backend dit « une extension notée à côté de la base n'a pas pu être chargée à l'ouverture ».
+  Le rebâti du HNSW détaché, principal suspect des 26 s du 11 octobre, n'est peut-être pas exercé ici.
+- **La copie n'est pas encore prouvée** par son nombre de documents, comparé à la base en service.
+
+Ce que le relevé dit déjà : sans rattrapage de vecteurs, l'ouverture d'une base de 3,6 Go tient en une à trois
+secondes, réactions comprises. Les 26 s du 11 octobre accompagnaient un rattrapage de 2 074 morceaux annoncé au
+journal, et dépendent donc de la dette de la base, pas de sa taille.
