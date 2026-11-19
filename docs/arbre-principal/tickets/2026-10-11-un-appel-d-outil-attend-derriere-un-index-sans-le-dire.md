@@ -1,6 +1,6 @@
 # Un appel d'outil attend derrière un index sans le dire
 
-- **État** : ouvert (11 octobre 2026) — vu par le cœur et mesuré par la session codeparsers sur l'hôte de luciepc ; pour la session proto et l'arbre principal
+- **État** : ouvert (11 octobre 2026) — vu par le cœur et mesuré par la session codeparsers sur l'hôte de luciepc. Le 19 novembre, la session tty a borné l'attente côté hôte (voir « Relevé du 19 novembre ») ; le reste revient à l'arbre principal (au mot de c7).
 - **Gravité** : blocage (un agent reste suspendu des minutes, sans réponse ni délai, jusqu'à ce qu'on l'interrompe)
 - **Atteignable en service** : oui, dès qu'un index (ou une réindexation de la montre) court sur le backend qu'un agent interroge
 - **Touche rag3weaver** : oui (verrou du catalogue, service d'embarquement, réponses des outils)
@@ -46,3 +46,14 @@ rattrape **avant** de répondre au premier appel. Les appels suivants : `daemon_
 instantané, `usages` 0,46 s. C'est la même forme que le cas de l'index : le rattrapage se fait
 derrière une réponse qui dit le retard (« vecteurs de N morceaux en rattrapage »), pas avant
 elle — le client attend 26 s sans un mot, Claude Code reste sur « Connecting… ».
+
+## Relevé du 19 novembre 2026 (session tty)
+
+Le chemin d'un appel, de `DaemonHost::call_with_deadline` à `Backend::call_on`, relevé sur master 50b1ff4a2. Chaque attente avec sa borne :
+
+- **Corrigé, côté hôte** : un appel attendait sans borne le slot d'un backend qu'une ouverture tenait en écriture (`with_backend`, `hosted.backend.read()`) ; un second appel arrivé pendant une ouverture de 26 s attendait les 26 s. Il lit maintenant le slot avec une borne de 5 s (`SLOT_READ_WAIT`). Au-delà, il répond « <manifeste> s'ouvre depuis N s » (ou qu'une fermeture ou une réouverture le tient), sans rien faire. Le témoin `e2e_demon_hote::a_call_during_a_long_open_says_the_backend_is_opening` a été vu rouge (d985884ee9 : 14,7 s d'attente sur une ouverture de 15 s), puis vert ; la suite `e2e_demon_hote` reste verte (27).
+- **Déjà borné** : la lecture du catalogue (`lock_for_read`, 1 s, puis « Catalogue occupé »), la poignée de `catalogue_vivant` (1,5 s), une connexion de lecture (`read_pool`, 5 s), l'attente d'un index en retard (`search.index_wait_s`, 6 s ; un index entier en cours répond tout de suite `indexing: true`).
+- **Reste, pour l'arbre principal** :
+  - **Le premier appel, celui qui ouvre, attend l'ouverture entière** : le schéma, `rebuild_detached_vector_indexes` → `ensure_vector_index` (le HNSW rebâti s'il est détaché), les réactions, `seed`, la comparaison des fichiers (`Backend::open_with_reason`). Le rattrapage des vecteurs, lui, part en fond (`worktrees::a_l_ouverture`). Les 26 s du `initialize` viennent sans doute du rebâti du HNSW : à mesurer, puis à faire passer derrière une réponse qui dit le retard.
+  - **Des `catalog.lock()` sans borne hors du chemin de la vue** : `reactions_de_la_cellule_on` et `build_services` (une session dont la cellule diffère de la vue lue, ou sans vue), `invoke_read_on`, et le repli « L4 : sans vue » des nœuds de recherche (`generic_search_nodes.rs`, `code_nodes.rs`, `search_nodes.rs`). L'index tient le catalogue toute sa phase de texte (`sync_source`) et chaque passe de vecteurs.
+  - **La requête d'une recherche fait la queue au service d'embarquement** derrière le lot en cours (le verrou `passe` par lot, sans priorité) ; elle est bornée à 60 s (`RAG3WEAVER_EMBED_TIMEOUT_SECS`). C'est à la session embarquement de dire si elle doit passer avant les lots.
