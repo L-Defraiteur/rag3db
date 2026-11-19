@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Square, SendHorizontal, MessageSquare, FileDiff, Scale, ChevronDown, ChevronRight } from "lucide-react";
+import { Square, SendHorizontal, MessageSquare, FileDiff, Scale, ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { marked } from "marked";
 import { forgetSymbols, highlightBlock, inlineCodeHtml, onHostHighlight, withInlineCode } from "@/lib/code";
@@ -848,6 +848,10 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
             ) : null}
             <a href={`/ide/code/${id}/bilans`} className="inline-flex items-center gap-1 hover:underline" data-bilans>
               <Scale className="size-3.5" /> bilans
+            </a>
+            {/* The IDE in several windows, slice 3: the repository in a window of its own, that this chat guides. */}
+            <a id="detacher-depot" href={`/ide/code/${id}/arbre?fenetre=depot`} target="_blank" rel="noopener" className="inline-flex items-center gap-1 hover:underline" title="ouvrir le dépôt dans une fenêtre à côté : les fichiers cités ici s'y ouvrent">
+              <ExternalLink className="size-3.5" /> dépôt à côté
             </a>
             <span id="status" role="status" className="text-primary">
               {attente ? texteDAttente(attente, maintenant) : status}
