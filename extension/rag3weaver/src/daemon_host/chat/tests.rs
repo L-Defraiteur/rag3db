@@ -1782,6 +1782,9 @@ fn le_chat_guide_une_fenetre_du_depot_detachee() {
     };
     cliquer(&mut n, "src/long.rs#L5");
     n.attendre("document.querySelector('tr.vise')?.id === 'L5'", "the window aims at line 5 of src/long.rs");
+    // The view of src/long.rs does not keep the error of src/main.rs, absent, read just before (ticket of 19 Nov.).
+    let alerte = n.evaluer("document.querySelector('[role=alert]')?.textContent ?? null");
+    assert_eq!(alerte, Value::Null, "the view of a readable file keeps the error of the file read before it");
     cliquer(&mut n, "src/long.rs#L40");
     n.attendre("document.querySelector('tr.vise')?.id === 'L40'", "the window aims at line 40 of the same file: only the hash changed");
     assert_eq!(n.evaluer("new URLSearchParams(location.search).get('fenetre')"), json!("depot"), "it stays a window of the repository");
