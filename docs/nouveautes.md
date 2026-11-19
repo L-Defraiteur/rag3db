@@ -13,6 +13,10 @@
   fois la prise faite, un ALTER ou un DROP de ces tables attend la fin du paquet ; deux paquets ne s'attendent pas.
   Une table inconnue est nommée ; en autocommit, l'appel est refusé.
 
+- 19 novembre 2026 — **`usages` ne montre plus la déclaration d'un conteneur retiré.** Une classe retirée par une
+  édition ne laissait pas partir ses déclarations : `usages bar` montrait encore « déclaré dans Foo — foo.h:3 »
+  après la synchronisation qui avait retiré `Foo`. Les usages ne lisent plus que les lignes visibles de la base.
+
 - 18 novembre 2026 — **La fin d'un index dit une libération ou une dette qu'elle n'a pas pu faire.** Une erreur en rendant les réclamations d'embarquement s'ajoute à la dernière ligne du journal, avec sa table et sa cause, sans en effacer la cause de fin ; une dette restante illisible se dit « dette inconnue », plus jamais « 0 ».
 
 - 18 novembre 2026 — **Un modèle déclaré dit `access` et `provider`.** `access` dit la manière d'y accéder (`local`, `service`, `compatible`), `provider` le fournisseur (`openai`, `vertex`, `anthropic`, `llama_server`). L'ancienne forme, `provider` pour la manière et `protocol` pour le fournisseur, se lit encore **jusqu'au 29 novembre 2026** ; un modèle qui mêle les deux est refusé, en nommant les deux mots. `/model` rend les deux mots neufs.
