@@ -783,9 +783,9 @@ mod tests {
         assert_eq!(schema.node_type, "LlmNode");
         assert_eq!(schema.inputs[0].port_type, PortType::Text);
         // text, llm, le flux tokens, et json (la réponse sous response_schema) ; stop_when_unread et
-        // response_schema s'ajoutent aux cinq réglages.
+        // response_schema s'ajoutent aux cinq réglages, puis instruction (lot B1).
         assert_eq!(schema.outputs.len(), 4);
-        assert_eq!(schema.config_params.len(), 7);
+        assert_eq!(schema.config_params.len(), 8);
     }
 
     #[test]
