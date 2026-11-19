@@ -117,9 +117,22 @@ pub(crate) const ATTENTE_DU_STRICT: std::time::Duration = std::time::Duration::f
 /// **The catalog's lock for a `Strict` search**, waited at most `attente`; beyond, a refusal that says the catalog is
 /// busy, since when, and what to do instead.
 pub(crate) fn garde_strict(c: &Mutex<Catalog>, attente: std::time::Duration) -> Result<std::sync::MutexGuard<'_, Catalog>, String> {
-    // RED STUB: waits without bound.
-    let _ = attente;
-    Ok(c.lock().unwrap_or_else(|p| p.into_inner()))
+    let debut = std::time::Instant::now();
+    loop {
+        match c.try_lock() {
+            Ok(g) => return Ok(g),
+            Err(std::sync::TryLockError::Poisoned(p)) => return Ok(p.into_inner()),
+            Err(std::sync::TryLockError::WouldBlock) if debut.elapsed() < attente => std::thread::sleep(std::time::Duration::from_millis(20)),
+            Err(std::sync::TryLockError::WouldBlock) => {
+                return Err(format!(
+                    "occupé : une écriture (une indexation) tient le catalogue depuis plus de {} s ; `Strict` attend que la \
+                     file soit vidée sous ce verrou. Relancer plus tard, ou chercher sans `Strict` : la réponse vient alors de \
+                     l'état validé, et dit ce qui reste en file",
+                    attente.as_secs_f64().ceil() as u64
+                ))
+            }
+        }
+    }
 }
 
 /// **Le catalogue vivant, pour la poignée qui manque à la vue** (25 octobre
@@ -641,7 +654,9 @@ impl Node for SearchSourceNode {
                 Err(std::sync::TryLockError::Poisoned(p)) => Some(p.into_inner()),
                 Err(std::sync::TryLockError::WouldBlock) => None,
             },
-            _ => Some(catalog.lock().unwrap()), // L4 : Strict, ou sans vue
+            // `Strict` par la vue : le verrou, mais jamais sans borne (« occupé » au-delà).
+            Some(_) => Some(garde_strict(&catalog, ATTENTE_DU_STRICT)?),
+            None => Some(catalog.lock().unwrap()), // L4 : sans vue (l'ouverture)
         };
         // Par la vue sans instantané (pool plein, L6) : la réponse le dit.
         let sans_instantane = garde.is_none() && vue.as_ref().is_some_and(|v| v.sans_instantane);
