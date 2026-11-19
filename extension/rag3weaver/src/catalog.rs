@@ -10838,16 +10838,6 @@ fn read_threads() -> u64 {
         Ok(serde_json::json!({ "keys": [], "files": files }).to_string())
     }
 
-    /// **Publier la génération en attente** au commit de la source suivie (2a′-2, page 06, § 3) : la
-    /// ligne `_generation` au rang en attente w, avec son commit et le nombre de chemins sales (un arbre
-    /// propre en a 0), puis w devient le rang publié et w + 1 le rang en attente. Aucune ligne de
-    /// `Scope` ni de `File` n'est réécrite : les lignes nées à w deviennent publiées par le seul rang.
-    /// **The gesture of a base indexed before the rule** (2.12, c7's decision of 19 November 2026): a row that is not a
-    /// search candidate (`ChunkingConfig::not_candidate` of `entity`) loses its chunks, hence its vectors, and its
-    /// full-text document; the row itself, and its edges, stay. A version is never rewritten for it: its render does
-    /// not change, so the writer would find it unchanged. Replayable: a second pass removes nothing. Returns how many
-    /// rows lost something. **The threshold is the base's**: it is noted at the first gesture, and a gesture with
-    /// another threshold is refused, naming both.
     /// The witnesses' rule of non-candidates of `entity` (2.12): a base indexed before the rule, then under it.
     #[cfg(test)]
     pub(crate) fn poser_la_regle_des_non_candidats(&mut self, entity: &str, regle: Option<crate::config::NotCandidate>) {
@@ -10861,6 +10851,12 @@ fn read_threads() -> u64 {
         self.entity_configs.get(table).and_then(|c| c.chunking.not_candidate.as_ref()).is_some_and(|r| r.excludes_values(values))
     }
 
+    /// **The gesture of a base indexed before the rule** (2.12, c7's decision of 19 November 2026): a row that is not a
+    /// search candidate (`ChunkingConfig::not_candidate` of `entity`) loses its chunks, hence its vectors, and its
+    /// full-text document; the row itself, and its edges, stay. A version is never rewritten for it: its render does
+    /// not change, so the writer would find it unchanged. Replayable: a second pass removes nothing. Returns how many
+    /// rows lost something. **The threshold is the base's**: it is noted at the first gesture, and a gesture with
+    /// another threshold is refused, naming both.
     pub fn set_aside_non_candidates(&mut self, entity: &str) -> Result<usize, CatalogError> {
         let Some(regle) = self.entity_config(entity).and_then(|c| c.chunking.not_candidate.clone()) else { return Ok(0) };
         let cle = format!("not_candidate_min_chars:{entity}");
@@ -10933,6 +10929,8 @@ fn read_threads() -> u64 {
             }
         }
         Ok(touchees.len())
+    }
+
     /// **One row of `table` that is not visible at `rank` of `layer`**, if any (`LIMIT 1`): what tells a base
     /// with a history from one that is « all visible ». `None` for a dialect without generations.
     pub(crate) fn hidden_row_read(&self, table: &str, layer: &str, rank: i64) -> Result<Option<String>, CatalogError> {
@@ -10952,6 +10950,10 @@ fn read_threads() -> u64 {
         self.dialect.select(&select).map(Some).map_err(|e| CatalogError::DbError(e.to_string()))
     }
 
+    /// **Publier la génération en attente** au commit de la source suivie (2a′-2, page 06, § 3) : la
+    /// ligne `_generation` au rang en attente w, avec son commit et le nombre de chemins sales (un arbre
+    /// propre en a 0), puis w devient le rang publié et w + 1 le rang en attente. Aucune ligne de
+    /// `Scope` ni de `File` n'est réécrite : les lignes nées à w deviennent publiées par le seul rang.
     pub fn publier_la_generation(&mut self, commit: &str, chemins_sales: usize) -> Result<i64, CatalogError> {
         let Some(v) = self.generations.as_ref() else {
             return Err(CatalogError::DbError("publier une génération : cette base n'a pas de générations".into()));
