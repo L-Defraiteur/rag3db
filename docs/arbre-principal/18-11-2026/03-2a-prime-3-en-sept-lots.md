@@ -53,3 +53,20 @@ ensemble en tête, mais un rouge qui attend trois lots ne juge rien.
   montrerait quelque chose plus tôt. Mais une vue de worktree dont le HEAD diffère du commit indexé se refuserait
   jusqu'au lot 3, ce qui serait pire qu'attendre un lot.
 - **Les backends par worktree attaché restent jusqu'au lot 5**, puis un ticket les retire.
+
+## Un lot 8, ajouté le 19 novembre 2026 : le rattrapage, avec le témoin 7
+
+Les lots 1 à 7 n'écrivent que la **pointe** d'une couche d'histoire, dans l'ordre (`sync_tracked_layers`). Le
+rattrapage paresseux de `history: all` et `{last: N}` n'est pas écrit :
+
+- le plus récent d'abord ;
+- par pas de 5 générations ou de 30 s ;
+- d'après la page du 16 novembre.
+
+C'est lui qui écrit une génération plus ancienne **après** une plus récente, donc lui seul qui produit le doublon au
+bord haut d'un trou. Le **témoin 7** (le doublon compté dans l'état) se pose avec lui :
+
+- **Le lot 8** : le rattrapage par pas, sur les couches dont `history` le demande, avec le témoin 7, rouge d'abord.
+  Une génération rattrapée après la pointe pose son doublon au bord haut, et l'état le compte.
+
+Accepté par c7 le 19 novembre, après le témoin de mort du raccord physique.

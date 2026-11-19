@@ -29,3 +29,10 @@ qui prolonge `docs/arbre-principal/14-11-2026/03-2a-prime-3-ce-que-les-suivies-a
 
 Les sept lots de la page du 18 novembre, chacun avec son témoin rouge d'abord, puis vert ; la passe épinglée avec
 `e2e_code_sync` (exigée par `tools/poste/required_suites.txt`).
+
+## État au 19 novembre 2026
+
+- **Les lots 1 à 6** sont au pousseur, en chaîne : de `pile-arbre-2a3-2` à `pile-arbre-6b-2`.
+- **Le lot 7** (recherche, le sucre de nom) suit `pile-arbre-6b-2`.
+- **Un lot 8 est ajouté** : le rattrapage de `history: all` et `{last: N}`, avec le témoin 7. Voir la page de
+  découpe. Le ticket se ferme avec lui.
