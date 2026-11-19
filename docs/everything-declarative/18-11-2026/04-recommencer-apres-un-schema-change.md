@@ -74,3 +74,29 @@ et le journal dit une reprise. C'est un e2e par l'hôte, puisque la réouverture
 
 **Taille** : un lot qui touche l'hôte (le registre des fils et la réouverture), environ une journée. (ii) attend la
 réponse du cœur.
+
+## (ii) confirmé par le cœur (19 novembre)
+
+« Une instruction seule en autocommit, refusée par "Schema changed, retry:", ne laisse rien, et la même instruction
+rejouée telle quelle va au bout. » Voici pourquoi :
+
+- hors mode MANUAL, `TransactionContext::rollbackAfterStatementFailure` annule toute la transaction automatique
+  (`transaction_context.cpp:115`) : le stockage local, le tampon d'annulation et les verrous sont rendus ;
+- rien n'atteint le WAL avant la validation ;
+- un CREATE sur plusieurs tables ou un COPY s'annule entier ;
+- la relecture de l'instruction se lie sur le nouveau schéma.
+
+Le plafond de 3 essais lui paraît juste. Deux réserves :
+
+1. Un COPY au point de reprise forcé, annulé, peut perdre de la place : des pages allouées, pas des lignes
+   (`copy_test.cpp:144`).
+2. Dans une transaction explicite, la transaction reste ouverte après le refus, avec ses verrous : à défaire par
+   ROLLBACK avant de recommencer. C'est la voie (i).
+
+**À venir sur sa branche `drop-waits-for-readers`** : un ADD ou un DROP de colonne attendra aussi les lecteurs
+(5 s au plus), et son refus nommera le lecteur ou l'écrivain qui le tient. Un lecteur ne sera plus refusé par un
+ADD.
+
+**Donc (ii)** : la connexion (`Rag3dbConnection`) recommence elle-même, au plus 3 fois, une instruction refusée pour
+schéma changé **quand aucune transaction explicite n'est ouverte**. Le catalogue ne voit qu'un succès, et ses caches
+restent d'accord avec la base. Dans une transaction explicite, l'erreur remonte telle quelle vers (i).
