@@ -132,6 +132,10 @@
   que l'instruction et la forme de la réponse ; le texte puis les étiquettes candidates ferment le tour utilisateur.
   Deux décisions sur le même texte commencent par les mêmes octets, et le fournisseur ne relit pas le texte entier
   à chaque jeu de candidats. Un gabarit garde son propre ordre.
+- 19 novembre 2026 — **Une instruction refusée pour un schéma changé recommence d'elle-même.** Hors d'une
+  transaction explicite, une instruction que le moteur refuse par « Schema changed, retry: » est rejouée par la
+  connexion, trois fois au plus ; au-delà, l'erreur dit les essais. Dans un `BEGIN … COMMIT`, le refus remonte tel
+  quel.
 
 - 18 novembre 2026 — **La fin d'un index dit une libération ou une dette qu'elle n'a pas pu faire.** Une erreur en rendant les réclamations d'embarquement s'ajoute à la dernière ligne du journal, avec sa table et sa cause, sans en effacer la cause de fin ; une dette restante illisible se dit « dette inconnue », plus jamais « 0 ».
 
