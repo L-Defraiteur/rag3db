@@ -3030,6 +3030,8 @@ impl PreparedBackend {
             cell_reactions: Mutex::new(HashMap::new()),
             miroir_reacteur: Mutex::new(None),
             watches: Mutex::new(Vec::new()),
+            #[cfg(feature = "code")]
+            layer_sync: Mutex::new(None),
             components_watch: Mutex::new(None),
             propositions: Default::default(),
             reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -3658,6 +3660,9 @@ pub struct Backend {
     /// Les montres de fichiers en service ; arrêtées **avant** les réactions
     /// qu'elles nourrissent.
     watches: Mutex<Vec<crate::watch::WatchHandle>>,
+    /// The sync of the tracked layers (2a′-3, lot 5b-2), when `tracked.writes.every_ms` is declared.
+    #[cfg(feature = "code")]
+    layer_sync: Mutex<Option<crate::history_layers::LayerSyncHandle>>,
     /// La montre des composants, montée par l'aperçu de l'IDE
     /// ([`Backend::watch_components`]).
     components_watch: Mutex<Option<crate::components::a_chaud::ComponentsWatch>>,
@@ -3889,7 +3894,29 @@ impl Backend {
         // Les montres **après** les réactions : ce que leur réconciliation de
         // départ publie doit trouver la réaction à l'écoute.
         self.mount_watches()?;
+        #[cfg(feature = "code")]
+        self.mount_layer_sync()?;
         Ok(mounted)
+    }
+
+    /// **The sync of the tracked layers** (2a′-3, lot 5b-2): started when `tracked.writes.every_ms` is declared and
+    /// the backend has a working-tree workspace; stopped with the watches.
+    #[cfg(feature = "code")]
+    fn mount_layer_sync(&self) -> Result<(), String> {
+        let prepared = self.prepared();
+        let tracked = prepared.manifest.tracked.clone();
+        let settings = crate::views::write_settings(tracked.as_ref())?;
+        let Some(every) = settings.every_ms else { return Ok(()) };
+        let Some(workspace) = prepared.manifest.workspace.as_ref() else { return Ok(()) };
+        if !matches!(workspace.source, crate::backend_code::WorkspaceSource::WorkingTree) {
+            return Ok(());
+        }
+        let root = if workspace.root.is_absolute() { workspace.root.clone() } else { prepared.directory.join(&workspace.root) };
+        let mut slot = self.layer_sync.lock().unwrap_or_else(|e| e.into_inner());
+        if slot.is_none() {
+            *slot = Some(crate::history_layers::spawn_layer_sync(self.catalog.clone(), root, tracked, settings, std::time::Duration::from_millis(every)));
+        }
+        Ok(())
     }
 
     /// **Monte la réaction de miroir** si une entité déclare un fichier composé
@@ -4060,6 +4087,10 @@ impl Backend {
         let handles: Vec<_> = self.watches.lock().unwrap_or_else(|e| e.into_inner()).drain(..).collect();
         for h in handles {
             h.stop();
+        }
+        #[cfg(feature = "code")]
+        if let Some(sync) = self.layer_sync.lock().unwrap_or_else(|e| e.into_inner()).take() {
+            sync.stop();
         }
     }
 
@@ -7027,6 +7058,8 @@ mod tests {
             cell_reactions: Mutex::new(HashMap::new()),
             miroir_reacteur: Mutex::new(None),
             watches: Mutex::new(Vec::new()),
+            #[cfg(feature = "code")]
+            layer_sync: Mutex::new(None),
             components_watch: Mutex::new(None),
             propositions: Default::default(),
             reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -7414,6 +7447,8 @@ mod tests {
             cell_reactions: Mutex::new(HashMap::new()),
             miroir_reacteur: Mutex::new(None),
             watches: Mutex::new(Vec::new()),
+            #[cfg(feature = "code")]
+            layer_sync: Mutex::new(None),
             components_watch: Mutex::new(None),
             propositions: Default::default(),
             reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
