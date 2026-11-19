@@ -617,7 +617,7 @@ mod tests {
         // A handler without SA_RESTART for SIGUSR2, sent only to the waiting thread.
         let ancien = unsafe {
             let mut neuf: libc::sigaction = std::mem::zeroed();
-            neuf.sa_sigaction = rien as usize;
+            neuf.sa_sigaction = rien as extern "C" fn(libc::c_int) as libc::sighandler_t;
             neuf.sa_flags = 0;
             let mut ancien: libc::sigaction = std::mem::zeroed();
             assert_eq!(libc::sigaction(libc::SIGUSR2, &neuf, &mut ancien), 0);
