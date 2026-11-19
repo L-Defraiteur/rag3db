@@ -1,0 +1,17 @@
+%% tool: list_turns
+%% description: The indexed turns of the runs by time, newest first, without text: to check that a tool was called, with which params, what it returned, or what failed (e.g. tool_name "archive", status "error", since yesterday). Each row is one message (run, turn, seq, at, role, text, tool_name, params, result, status). Returns {turns, total}. The turns are kept for a limited time (the TTL): older ones are gone. Searching by words: search_turns.
+%% param: run string = "" -- Only this run; empty: all.
+%% param: role string = "" -- Only this role (user, assistant, tool); empty: all.
+%% param: tool_name string = "" -- Only the calls of this tool; empty: all.
+%% param: status string = "" -- Only this status (ok, error, refused, interrupted); empty: all.
+%% param: since string = "" -- Only the messages said at or after this time, ISO 8601 (compared on `at`); empty: no bound.
+%% param: until string = "" -- Only the messages said at or before this time, ISO 8601; empty: no bound.
+%% param: limit int = 50 -- The newest rows kept; 0: all. total says how many matched.
+%% result: list.result
+
+graph LR
+    where["RhaiNode(script_id=turns_where, inputs='run,role,tool_name,status,since,until', run=$run, role=$role, tool_name=$tool_name, status=$status, since=$since, until=$until)"]
+    select["ForEachNode(graph='@builtin:backends/memory/graphs/turns_select.mmd')"]
+    list["RhaiNode(script_id=turns_list, inputs='limit', limit=$limit)"]
+    where -->|result:elements| select
+    select -->|list:value| list

@@ -761,6 +761,10 @@
     "render_turns": "scripts/render_turns.rhai",
     "archive_slice_input": "scripts/archive_slice_input.rhai",
     "archive_slice_done": "scripts/archive_slice_done.rhai",
+    "turns_where": "scripts/turns_where.rhai",
+    "turns_list": "scripts/turns_list.rhai",
+    "turns_found": "scripts/turns_found.rhai",
+    "read_turns": "scripts/read_turns.rhai",
     "archive_segment_prompt": "scripts/archive_segment_prompt.rhai",
     "archive_segment_build": "scripts/archive_segment_build.rhai",
     "archive_params": "scripts/archive_params.rhai",
@@ -1036,6 +1040,15 @@
     },
     "render_turns": {
       "graph": "graphs/render_turns.mmd"
+    },
+    "list_turns": {
+      "graph": "graphs/list_turns.mmd"
+    },
+    "search_turns": {
+      "graph": "graphs/search_turns.mmd"
+    },
+    "read_turns": {
+      "graph": "graphs/read_turns.mmd"
     }
   },
   "reactions": {

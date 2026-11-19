@@ -1,0 +1,13 @@
+%% tool: read_turns
+%% description: Reads the turns of a run between two turns, in order, each with its state: indexed (its messages, read from the index) or gone (no longer indexed: past the TTL, or never indexed). Follows the chain from an L1 (« turns a-b · <title> ») down to its turns. Returns {run, turns: [{turn, state, messages}]}.
+%% param: run string! -- The run.
+%% param: from_turn int! -- The first turn, included.
+%% param: to_turn int! -- The last turn, included (at most 1000 turns at once).
+%% result: read.result
+
+graph LR
+    filter["RhaiNode(script_id=turns_filter, inputs='run,from_turn,to_turn', run=$run, from_turn=$from_turn, to_turn=$to_turn)"]
+    select["ForEachNode(graph='@builtin:backends/memory/graphs/turns_select.mmd')"]
+    read["RhaiNode(script_id=read_turns, inputs='run,from_turn,to_turn', run=$run, from_turn=$from_turn, to_turn=$to_turn)"]
+    filter -->|result:elements| select
+    select -->|list:value| read
