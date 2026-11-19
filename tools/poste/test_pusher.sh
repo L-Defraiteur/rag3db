@@ -501,4 +501,11 @@ P step > /dev/null 2>&1
 h=$(lot nav-1 extension/rag3weaver/src/nav.rs 'fn nav() {}')
 P enqueue nav-1 nav-1 "$h" rust la_page_du_chat_nomme navigateur - - author-c > /dev/null 2>&1 && ok "suite du témoin « navigateur » acceptée au dépôt" || ko "suite du témoin « navigateur » refusée au dépôt"
 P dequeue nav-1 > /dev/null 2>&1
+
+# 31. landed.tsv keeps the declared witness and its suite of each landed lot (19 Nov., c7: for an audit of what proved it).
+h=$(lot lw-1 extension/rag3weaver/src/lw.rs 'fn lw() {}')
+P enqueue lw-1 lw-1 "$h" rust lw_witness e2e_code - - author-c > /dev/null; echo VERT > "$D/outcomes.d/lw-1"
+P step > /dev/null 2>&1
+awk -F'\t' '$1 == "lw-1" && $4 == "lw_witness" && $5 == "e2e_code" {f = 1} END {exit !f}' "$D/pusher/landed.tsv" \
+  && ok "landed.tsv garde le témoin déclaré et sa suite" || ko "landed.tsv sans le témoin : $(grep '^lw-1' "$D/pusher/landed.tsv")"
 exit $red
