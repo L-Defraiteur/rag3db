@@ -451,7 +451,9 @@ impl EmbedDaemon {
                         .map(|j| format!("m{}", (i * 7 + j * 13) % 97))
                         .collect::<Vec<_>>().join(" ")).collect();
                     sent += textes.len();
-                    let erreur = match self.embedder.embed(&textes) {
+                    // **Through the service's own batching** (19 November 2026) : the
+                    // shapes the service computes, and only those.
+                    let erreur = match self.par_lots(&textes, |lot| self.embedder.embed(lot)) {
                         Ok(vecteurs) if vecteurs.len() == textes.len() && vecteurs.iter().all(|v| v.len() == self.embedder.dim() && v.iter().all(|x| x.is_finite())) => None,
                         Ok(_) => Some("chauffe : résultat vide, dimension ou cardinalité invalide".into()),
                         Err(e) => Some(e.to_string()),
