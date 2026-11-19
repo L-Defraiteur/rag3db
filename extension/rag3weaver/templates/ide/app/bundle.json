@@ -1,8 +1,8 @@
 {
   "sha256": {
-    "app.js": "4fccbed6b3dd83dcc921b513951dc711f9b3a933cc79db5455927c4c2749aa3c",
+    "app.js": "05b9436bcdc26780cc122b76d0ed7f6de37169a85f3304e4d3ae19d26a8ddc31",
     "app.css": "20d2a75348e6631b1c1763f0545a765f53ae35e5b8b3178dcdef726f50d3af30",
-    "flux-worker.js": "f8dac753bd673e5807d90b4ff17fbdaf0b33d4388eac0183c7439e9ba34de69b"
+    "flux-worker.js": "ca13e056f56ac079ef4716de084ea6cb4a880e94432670b362c09c0a99f37c88"
   },
   "versions": {
     "class-variance-authority": "0.7.1",
