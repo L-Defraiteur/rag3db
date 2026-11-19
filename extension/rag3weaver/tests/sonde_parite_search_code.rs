@@ -852,3 +852,45 @@ fn mesure_les_formes_de_la_recopie() {
         eprintln!("[forme] {nom} : {ms} ms, pic {pic} Mio (avant {} Mio), {rendu}\n[forme]   accès : {ops:?}", avant.1);
     }
 }
+
+/// **The usages of a scope after the writer's first pass** (G's repetition, 19 November 2026: 41 MENTIONS of
+/// `Catalog` from tests/ lost). On a copy (`RAG3WEAVER_PARITE_BASE`), the occurrences of the function
+/// `RAG3WEAVER_SCOPE_NOM` in a file ending with `RAG3WEAVER_SCOPE_FICHIER`, with their ranks and the edges that leave
+/// them; then what today's analysis of that file (`RAG3WEAVER_SCOPE_SOURCE`, a path on disk) gives that function.
+#[test]
+#[ignore]
+fn releve_les_aretes_d_un_scope() {
+    let var = |n: &str| std::env::var(n).ok();
+    let (Some(base), Some(nom), Some(fichier), Some(source)) =
+        (var("RAG3WEAVER_PARITE_BASE"), var("RAG3WEAVER_SCOPE_NOM"), var("RAG3WEAVER_SCOPE_FICHIER"), var("RAG3WEAVER_SCOPE_SOURCE"))
+    else {
+        eprintln!("SAUTÉ releve_les_aretes_d_un_scope : une variable manque");
+        return;
+    };
+    let conn = Rag3dbConnection::new(&base).expect("ouvrir la copie");
+    use rag3weaver::connection::DbConnection;
+    let lu = conn
+        .execute(&format!("MATCH (s:Scope) WHERE s.name = '{nom}' AND s.file_path ENDS WITH '{fichier}' RETURN s._uuid, s._couche, s._depuis, s._jusqu_a, s.start_line, s.file_path"))
+        .expect("les occurrences");
+    for l in &lu.rows {
+        eprintln!("[scope] occurrence {l:?}");
+        let u = l[0].as_str().unwrap_or("");
+        let aretes = conn
+            .execute(&format!("MATCH (s:Scope {{_uuid: '{u}'}})-[r]->(o) RETURN label(r), label(o), o.name, o._jusqu_a"))
+            .expect("les arêtes");
+        let mut parts: Vec<String> = aretes.rows.iter().map(|a| format!("{:?}", a)).collect();
+        parts.sort();
+        for p in parts.iter().filter(|p| p.contains("Catalog") || p.contains("MENTIONS")).take(20) {
+            eprintln!("[scope]   {p}");
+        }
+        eprintln!("[scope]   {} arêtes en tout", parts.len());
+    }
+    // Today's analysis of the file.
+    let texte = std::fs::read_to_string(&source).expect("la source");
+    let a = rag3weaver::code::analyze("/", vec![(fichier.clone(), texte)]);
+    let cles: Vec<&str> = a.scopes.iter().filter(|s| s.name == nom).map(|s| s.key.as_str()).collect();
+    eprintln!("[analyse] scopes {nom} : {cles:?}");
+    for r in a.relations.iter().filter(|r| cles.contains(&r.from_key.as_str()) && (r.to_key.contains("Catalog") || r.rel == "MENTIONS")) {
+        eprintln!("[analyse]   {} → {}:{}", r.rel, r.to_entity, r.to_key);
+    }
+}
