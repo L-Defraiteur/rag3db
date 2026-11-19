@@ -310,6 +310,10 @@ pub struct EmbedDaemon {
     lot_max: usize,
     /// La carte est unique : une passe à la fois. Voir l'en-tête.
     passe: Mutex<()>,
+    /// **Short requests waiting for the pass** (19 November 2026) : a long batch
+    /// does not take the pass while one is waiting.
+    short_waiting: std::sync::atomic::AtomicUsize,
+    short_done: std::sync::Condvar,
     /// La porte des rafales, quand la carte est partagée avec l'affichage
     /// ([`crate::burst`]). Une seule pour tous les clients : c'est la carte
     /// qu'on cadence, pas la requête.
@@ -355,6 +359,8 @@ impl EmbedDaemon {
             lot_max: 32,
             expose: false,
             passe: Mutex::new(()),
+            short_waiting: std::sync::atomic::AtomicUsize::new(0),
+            short_done: std::sync::Condvar::new(),
             gate: None,
             baux: Baux::default(),
             en_cours: std::sync::atomic::AtomicUsize::new(0),
@@ -528,6 +534,27 @@ impl EmbedDaemon {
     ///   s'entrelace.
     /// - **Souffler hors du verrou** : dormir en le tenant reviendrait à
     ///   refuser la carte à tout le monde pendant qu'on ne s'en sert pas.
+    /// **The pass, with a short lane** (19 November 2026) : a short request
+    /// registers, then takes the pass ; a long batch, once it holds the pass,
+    /// gives it back while a short request is registered. A short request thus
+    /// waits at most the long batch in course, never the next ones.
+    fn take_pass(&self, short: bool) -> std::sync::MutexGuard<'_, ()> {
+        use std::sync::atomic::Ordering::SeqCst;
+        if short {
+            self.short_waiting.fetch_add(1, SeqCst);
+            let pass = self.passe.lock().unwrap_or_else(|e| e.into_inner());
+            self.short_waiting.fetch_sub(1, SeqCst);
+            self.short_done.notify_all();
+            pass
+        } else {
+            let mut pass = self.passe.lock().unwrap_or_else(|e| e.into_inner());
+            while self.short_waiting.load(SeqCst) > 0 {
+                pass = self.short_done.wait_timeout(pass, std::time::Duration::from_millis(50)).unwrap_or_else(|e| e.into_inner()).0;
+            }
+            pass
+        }
+    }
+
     fn par_lots<T>(
         &self,
         textes: &[String],
@@ -572,12 +599,13 @@ impl EmbedDaemon {
             }
             Ok(())
         };
+        let short = textes.len() <= SHORT_REQUEST_TEXTS;
         match &self.gate {
             None => {
                 for plage in budget_batches(&lens, self.lot_max, embed_char_budget()) {
                     let debut = std::time::Instant::now();
                     let lot = {
-                        let _passe = self.passe.lock();
+                        let _passe = self.take_pass(short);
                         embarquer(&tries[plage.clone()])
                     }?;
                     souffler(debut.elapsed());
@@ -593,10 +621,14 @@ impl EmbedDaemon {
                 let mut start = 0usize;
                 while start < lens.len() {
                     let (plage, lot) = {
-                        let _passe = self.passe.lock();
+                        let _passe = self.take_pass(short);
                         let mut gate = gate.lock().unwrap_or_else(|e| e.into_inner());
                         let plage = crate::burst::next_paced_batch(&lens, start, budget, gate.budget());
-                        gate.wait();
+                        // A short request does not wait the burst's gap ; it counts
+                        // in the next burst (`done` below), for the screen's share.
+                        if !short {
+                            gate.wait();
+                        }
                         let debut = std::time::Instant::now();
                         let lot = embarquer(&tries[plage.clone()]);
                         gate.done(lens[plage.clone()].iter().sum(), debut.elapsed());
@@ -649,7 +681,7 @@ impl EmbedDaemon {
             max_chars_per_text: Some(self.max_chars),
             chars_per_token: Some(CARACTERES_PAR_JETON),
             cut_texts: Some(self.cut_texts.load(std::sync::atomic::Ordering::Relaxed)),
-            short_request_texts: None,
+            short_request_texts: Some(SHORT_REQUEST_TEXTS),
             max_tokens_per_text: self.embedder.troncatures().map(|(_, window)| window),
             truncated_texts: self.embedder.troncatures().map(|(count, _)| count.saturating_sub(self.warmup_truncations) as u64),
         }
@@ -728,6 +760,10 @@ pub fn max_chars_depuis(valeur: Option<&str>) -> Result<usize, String> {
         }),
     }
 }
+
+/// **A short request**, in texts : a query (one text), a highlight (a few). It
+/// passes before the next long batch at the pass lock (19 November 2026).
+pub const SHORT_REQUEST_TEXTS: usize = 4;
 
 /// The variable that sets the window of a text in tokens, at the service's binary.
 pub const MAX_TOKENS_VARIABLE: &str = "RAG3WEAVER_EMBED_MAX_TOKENS";
