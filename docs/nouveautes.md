@@ -176,6 +176,10 @@
 - 19 novembre 2026 — **Une base de code sur PostgreSQL a les générations.** Comme sur rag3db, une base neuve garde
   l'histoire de ses lignes : une édition retire au rang en attente et garde ce qui est publié. La visibilité s'y
   lit par un index.
+- 19 novembre 2026 — **Le journal d'index nomme les morceaux que le modèle a coupés.** Un service d'embarquement dit
+  désormais quels textes son modèle a tronqués à sa fenêtre ; le journal d'index nomme les morceaux concernés (fichier
+  et ligne) : « 3 morceau(x) coupé(s) à 512 jetons par le modèle : src/x.rs:120 (morceau 4), … ». Le compteur du
+  service (`truncated_texts`) ne compte plus sa chauffe, qui disait 169 coupes à chaque démarrage de granite.
 
 - 18 novembre 2026 — **La fin d'un index dit une libération ou une dette qu'elle n'a pas pu faire.** Une erreur en rendant les réclamations d'embarquement s'ajoute à la dernière ligne du journal, avec sa table et sa cause, sans en effacer la cause de fin ; une dette restante illisible se dit « dette inconnue », plus jamais « 0 ».
 
