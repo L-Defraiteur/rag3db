@@ -46,3 +46,32 @@ rattrape **avant** de répondre au premier appel. Les appels suivants : `daemon_
 instantané, `usages` 0,46 s. C'est la même forme que le cas de l'index : le rattrapage se fait
 derrière une réponse qui dit le retard (« vecteurs de N morceaux en rattrapage »), pas avant
 elle — le client attend 26 s sans un mot, Claude Code reste sur « Connecting… ».
+
+## Relevé d'arbre principal, 19 novembre 2026 : les `catalog.lock()` hors du chemin de la vue
+
+Relevé statique sur master (`e0784a0d23`+), les trois fonctions et les replis nommés par tty. **En usage normal**
+(une vue de lecture publiée, un appel dans la cellule du catalogue), **un appel d'outil ne prend pas le verrou du
+catalogue**. Deux chemins le prennent quand même, et attendent donc un index qui tient le catalogue :
+
+1. **`Backend::invoke_read_on`** prend le verrou **à chaque invocation**, seulement pour lire
+   `scope()`. La vue de lecture porte la même cellule. C'est le seul chemin d'usage courant qui bloque, et il se
+   corrige en lisant la cellule dans la vue.
+2. **Une recherche en cohérence `Strict`** (`generic_search_nodes.rs`, le repli « Strict, ou sans vue ») prend le
+   verrou par construction : `Strict` vide la file d'abord. Elle doit dire « occupé » au-delà d'un délai, au lieu
+   d'attendre en silence.
+
+Les autres prises ne servent que hors de l'usage courant :
+
+- `build_services` : pour un appel dans une autre cellule que celle de la vue, ou sans vue publiée ;
+- `reactions_de_la_cellule_on` : pour une autre cellule pas encore montée ;
+- les replis « L4 : sans vue » de `code_nodes.rs`, `schema_nodes.rs`, `field_weight.rs` et
+  `composable_results.rs`.
+
+« Sans vue publiée », c'est l'ouverture : avant le premier `publish_read_view`. Elle rejoint le point 1 de tty,
+l'ouverture entière avant le premier appel.
+
+**Ce qui reste à mesurer** : où passent les secondes de l'ouverture (schéma, rebâti du HNSW détaché, réactions,
+seed). Il faut une copie fidèle d'une vraie base, l'hôte arrêté pour elle ou par un instantané de G. Demandé à c7.
+
+**Verdict pour l'ordre** : pas de blocage franc sous un usage normal, hors invocation et `Strict`. Le lot 6 de 2a′-3
+passe devant, puis ce ticket : `invoke_read_on` par la vue, `Strict` borné, et l'ouverture mesurée puis découpée.
