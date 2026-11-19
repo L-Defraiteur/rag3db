@@ -150,8 +150,41 @@ def build_tree(block, repo, depots, dest):
     git(dest, *ident, "commit", "-qm", "base")
 
 
+def run_test(block, dest, target, poste, commande):
+    """`commande` from dest/tree, with the case's own CARGO_TARGET_DIR (two trees on one target
+    replayed each other's binary, 19 Nov 2026), under `poste lourd` when given."""
+    cwd = os.path.join(dest, block.get("tree") or ".")
+    env = dict(os.environ, CARGO_TARGET_DIR=target)
+    argv = ["sh", "-c", commande]
+    if poste:
+        argv = [poste, "lourd", *argv]
+        env.setdefault("POSTE_MEM_MAX", "32G")
+    r = subprocess.run(argv, cwd=cwd, env=env, capture_output=True, text=True)
+    return r.returncode, r.stdout + r.stderr
+
+
+def failed_tests(sortie):
+    """The tests libtest says failed: « test X ... FAILED » lines, and the closing « failures: »
+    list (the only form under -q)."""
+    noms = set(re.findall(r"^test (\S+) \.\.\. FAILED", sortie, re.M))
+    for bloc in re.findall(r"^failures:\n((?:    \S+\n)+)", sortie, re.M):
+        noms.update(l.strip() for l in bloc.splitlines() if l.strip())
+    return sorted(noms)
+
+
 def prove_red(block, dest, target, poste):
-    raise NotImplementedError
+    """The witness is red at the parent, on its assertion: the test command fails, libtest says
+    FAILED for the witness. A compile error, a missing test or a green are not a red."""
+    code, sortie = run_test(block, dest, target, poste, block["test"])
+    temoins = block["witness"].split()
+    failed = [t for t in temoins if any(n == t or n.endswith("::" + t) or t.endswith("::" + n) for n in failed_tests(sortie))]
+    if re.search(r"^error(\[E\d+\])?: ", sortie, re.M) and "test result" not in sortie:
+        return {"red": False, "why": "the witness does not compile at the parent", "failed": [], "code": code, "tail": sortie[-2000:]}
+    if code == 0:
+        return {"red": False, "why": "the witness is green at the parent", "failed": [], "code": code, "tail": sortie[-2000:]}
+    if not failed:
+        return {"red": False, "why": "the command failed, but no witness is FAILED (absent, or another failure)", "failed": [], "code": code, "tail": sortie[-2000:]}
+    return {"red": True, "why": "red on the assertion", "failed": failed, "code": code, "tail": sortie[-2000:]}
 
 
 if __name__ == "__main__":
