@@ -297,8 +297,12 @@ impl DaemonClient {
     /// **The state of the index of this session's view, now** (`POST /index_state`): what a read would say, without
     /// waiting (`ready`, the estimates). The index watch of the thin client polls it.
     pub fn index_state(&self, view: Option<&Value>) -> Result<Value, String> {
-        let _ = view;
-        Ok(Value::Null)
+        self.index_state_of(view, false)
+    }
+
+    /// [`Self::index_state`], the vectors owed too when `vectors`.
+    pub fn index_state_of(&self, view: Option<&Value>, vectors: bool) -> Result<Value, String> {
+        self.op("/index_state", json!({ "manifest": self.manifest, "view": view, "vectors": vectors })).map_err(|e| e.error)
     }
 
     pub fn op(&self, route: &str, body: Value) -> Result<Value, OpError> {
@@ -563,6 +567,11 @@ pub struct McpInner {
     /// Ce qui fait sortir `notifications/tools/list_changed` (posé par le
     /// binaire : un message glissé dans l'entrée de la boucle MCP).
     notifier: Mutex<Option<Box<dyn Fn() + Send + Sync>>>,
+    /// The watches of views that answered « not ready », and their settings (the manifest's `search.ready_watch`).
+    watches: ReadyWatches,
+    watch_settings: ReadyWatchSettings,
+    /// What sends a notice to the MCP client (set by the binary: an internal notice slipped into the loop's input).
+    notice: std::sync::Arc<Mutex<Option<Box<dyn Fn(String) + Send + Sync>>>>,
 }
 
 impl std::ops::Deref for McpClient {
@@ -598,8 +607,16 @@ impl Default for ReadyWatchSettings {
 impl ReadyWatchSettings {
     /// The settings a manifest declares, the defaults for what it does not.
     pub fn from_manifest(manifest: &Path) -> Self {
-        let _ = manifest;
-        Self::default()
+        let d = Self::default();
+        let v: Value = std::fs::read(manifest).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or(Value::Null);
+        let w = &v["search"]["ready_watch"];
+        let s = |k: &str, defaut: std::time::Duration| w[k].as_u64().map_or(defaut, std::time::Duration::from_secs);
+        ReadyWatchSettings {
+            first_poll_max: s("first_poll_max_s", d.first_poll_max),
+            every: s("every_s", d.every),
+            max: s("max_s", d.max),
+            eta_factor: w["eta_factor"].as_u64().map_or(d.eta_factor, |n| n.clamp(1, 100) as u32),
+        }
     }
 }
 
@@ -607,7 +624,6 @@ impl ReadyWatchSettings {
 /// other. A watch polls the host until the layer is ready, then sends one notice and ends.
 #[derive(Default, Clone)]
 pub struct ReadyWatches {
-    #[allow(dead_code)] // the red stub does not read it yet
     active: std::sync::Arc<Mutex<std::collections::HashSet<String>>>,
 }
 
@@ -624,8 +640,29 @@ impl ReadyWatches {
         ready: impl Fn() -> Option<bool> + Send + 'static,
         notify: impl Fn(String) + Send + 'static,
     ) -> bool {
-        let _ = (key, eta_s, settings, text, ready, notify);
-        false
+        if !self.active.lock().unwrap_or_else(|p| p.into_inner()).insert(key.to_string()) {
+            return false;
+        }
+        let (active, key) = (self.active.clone(), key.to_string());
+        std::thread::spawn(move || {
+            let eta = eta_s.map(std::time::Duration::from_secs);
+            let first = eta.unwrap_or(settings.every).min(settings.first_poll_max);
+            let bound = settings.max.min(eta.unwrap_or(settings.max).max(settings.every) * settings.eta_factor);
+            let start = std::time::Instant::now();
+            std::thread::sleep(first);
+            loop {
+                if ready() == Some(true) {
+                    notify(text);
+                    break;
+                }
+                if start.elapsed() + settings.every > bound {
+                    break;
+                }
+                std::thread::sleep(settings.every);
+            }
+            active.lock().unwrap_or_else(|p| p.into_inner()).remove(&key);
+        });
+        true
     }
 }
 
@@ -686,6 +723,9 @@ impl McpClient {
             keys,
             side: Mutex::new(Side::Missing(Missing::Absent("connexion à l'hôte en cours".into()))),
             notifier: Mutex::new(None),
+            watches: ReadyWatches::default(),
+            watch_settings: ReadyWatchSettings::from_manifest(manifest),
+            notice: Default::default(),
         });
         let (fait, attendu) = std::sync::mpsc::channel::<()>();
         let fil = inner.clone();
@@ -723,6 +763,44 @@ impl McpClient {
     /// message dans l'entrée de la boucle MCP).
     pub fn set_notifier(&self, n: Box<dyn Fn() + Send + Sync>) {
         *self.notifier.lock().unwrap_or_else(|p| p.into_inner()) = Some(n);
+    }
+
+    /// What sends a notice to the MCP client (the binary slips an [`crate::mcp::INTERNAL_NOTICE`] into the loop).
+    pub fn set_notice(&self, n: Box<dyn Fn(String) + Send + Sync>) {
+        *self.notice.lock().unwrap_or_else(|p| p.into_inner()) = Some(n);
+    }
+
+    /// **An answer « not ready » opens a watch of its view** (one per manifest and view): polled on the host until
+    /// ready, then one notice that names the view and what is ready (« texte » or « texte et vecteurs »).
+    fn watch_if_not_ready(&self, answer: &Value, view: Option<Value>) {
+        let index = &answer["index"];
+        if index["ready"] != json!(false) {
+            return;
+        }
+        let vectors = index.get("vectors_eta_s").is_some();
+        let eta = ["eta_s", "text_eta_s", "vectors_eta_s"].iter().filter_map(|k| index[*k].as_u64()).max();
+        let label = view
+            .as_ref()
+            .and_then(|v| v["worktree"].as_str().or_else(|| v["layer"].as_str()).map(str::to_string))
+            .unwrap_or_else(|| "du backend".to_string());
+        let key = format!("{}|{}", self.manifest.display(), view.as_ref().map_or_else(|| "backend".to_string(), |v| v.to_string()));
+        let text = format!("l'index de la vue {label} est prêt : {}", if vectors { "texte et vecteurs" } else { "texte" });
+        let (inner, notice) = (self.inner.clone(), self.notice.clone());
+        self.watches.watch(
+            &key,
+            eta,
+            self.watch_settings,
+            text,
+            move || match &*inner.side.lock().unwrap_or_else(|p| p.into_inner()) {
+                Side::Attached(c) => c.index_state_of(view.as_ref(), vectors).ok().map(|s| s["ready"] == json!(true)),
+                Side::Missing(_) => None,
+            },
+            move |t| {
+                if let Some(n) = &*notice.lock().unwrap_or_else(|p| p.into_inner()) {
+                    n(t);
+                }
+            },
+        );
     }
 
     fn try_attach(attach: &Attach, manifest: &Path, client: &str, keys: &[String]) -> Side {
@@ -875,7 +953,14 @@ impl Hote for McpClient {
             }
         }
         match &*side {
-            Side::Attached(c) => c.appeler(nom, arguments),
+            Side::Attached(c) => {
+                let view = arguments.get("view").cloned();
+                let r = c.appeler(nom, arguments);
+                if let Ok(answer) = &r {
+                    self.watch_if_not_ready(answer, view);
+                }
+                r
+            }
             Side::Missing(m) => Err(format!(
                 "l'hôte du démon est {} : {} — appelez {DAEMON_STATUS} pour le détail",
                 m.state(),
@@ -1204,7 +1289,7 @@ mod tests {
         let sondages = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let (envoi, recu) = std::sync::mpsc::channel::<String>();
         let s = sondages.clone();
-        let ouverte = watches.watch("m|w", Some(0), reglages_courts(), "l'index de la vue w est prêt".into(), move || {
+        let ouverte = watches.watch("m|w", Some(1), reglages_courts(), "l'index de la vue w est prêt".into(), move || {
             Some(s.fetch_add(1, std::sync::atomic::Ordering::SeqCst) >= 2)
         }, move |t| {
             let _ = envoi.send(t);

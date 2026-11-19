@@ -241,6 +241,15 @@ fn servir_mcp(args: &[String]) -> Result<(), String> {
                 let _ = envoyeur.lock().unwrap_or_else(|p| p.into_inner()).send(Some(ligne.into_bytes()));
             }));
         }
+        // **The index of a view is ready** (one notice after a « not ready »): the watch of the client slips an
+        // internal notice into the input, that the loop writes as `notifications/message`.
+        {
+            let envoyeur = std::sync::Mutex::new(entree.envoyeur.clone());
+            client.set_notice(Box::new(move |texte| {
+                let avis = serde_json::json!({"jsonrpc": "2.0", "method": rag3weaver::mcp::INTERNAL_NOTICE, "params": {"level": "info", "data": texte}});
+                let _ = envoyeur.lock().unwrap_or_else(|p| p.into_inner()).send(Some(format!("{avis}\n").into_bytes()));
+            }));
+        }
         let mut sortie = io::stdout();
         let suite = rag3weaver::mcp::servir(&client, &cles, &mut entree, &mut sortie);
         client.close();

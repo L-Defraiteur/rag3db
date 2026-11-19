@@ -1890,6 +1890,22 @@ impl DaemonHost {
                 };
                 (statut(&reponse), reponse)
             }
+            // **The state of the session's view, now** (the thin client's watch of a view that answered « not
+            // ready »): never waits, never reads the catalogue's mutex but by a try.
+            ("POST", "/index_state") => {
+                let (v, m) = match corps().and_then(|v| manifeste(&v).map(|m| (v, m))) {
+                    Ok(x) => x,
+                    Err(e) => return (400, json!({ "ok": false, "error": e })),
+                };
+                let etat = self.check_session(session).and_then(|s| {
+                    let cell = cell_of(&s)?;
+                    let hosted = self.hosted(&m)?;
+                    self.with_backend(&hosted, |b| b.index_state_now(cell.as_ref(), v.get("view"), v["vectors"] == json!(true)))
+                        .and_then(|r| r)
+                });
+                let reponse = op_response(etat);
+                (statut(&reponse), reponse)
+            }
             ("POST", "/open" | "/backend/open" | "/backend/close" | "/describe" | "/call") => {
                 let v = match corps().and_then(|v| manifeste(&v).map(|m| (v, m))) {
                     Ok(x) => x,
