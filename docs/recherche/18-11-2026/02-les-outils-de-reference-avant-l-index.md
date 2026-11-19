@@ -26,6 +26,42 @@
 >   du moteur, Python et JS) sur l'état de link-copy-split. Les tableaux ci-dessous les recevront, à côté des chiffres
 >   de debug.
 
+## C : le revert, puis C durable (19 novembre 2026, après-midi)
+
+**Ce qui s'est passé.** C a fait rougir quatre cas `en_fichiers` d'`e2e_tx_par_paquet_arret` sur master (ticket d'ED
+`2026-11-19-le-plein-texte-en-fichiers-rougit-e2e-tx-par-paquet-arret-sur-master.md`).
+- **Le défaut** : un arrêt brutal laissait des paquets validés sans leurs dérivées (le plein texte du code), car C
+  les rendait en fin de passe. Après la mort, f010 était introuvable, la reprise rendait de mauvais comptes, et un
+  lecteur ne voyait pas « à rebâtir ».
+- **Départage** : la lib n'y est pour rien. **Bissection** : le parent de C 6/6, C 4/6.
+- **Revert** sur master (4c0728e703, PR #19), puis **C durable** (branche `c-durable-2`) :
+  - la marque `derivations_held` dans `_catalog_meta`, posée dans la transaction du premier paquet ;
+  - un écrivain qui la trouve rend ce qu'une passe morte a retenu, avant toute lecture et en fin de reprise ;
+  - l'état d'une entité dérivée dit « à rebâtir » tant qu'elle reste.
+  - Les quatre cas, rouges sur C réappliquée, sont verts.
+- **Pourquoi pas le journal d'index** : c'est celui de la commande `index` de l'hôte, hors de la base. `sync_source`
+  (la montre, une reprise) ne l'écrit pas, et un catalogue qui rouvre ne le lit pas. La marque vit donc dans la
+  base, avec les lignes du premier paquet.
+
+**La mesure en release** (19 novembre, 16 h 48, `mesure-c-durable-release.sh` sous `poste mesure`, lib
+7c2b506ec, plein texte seul). « master » est le master sans C, depuis le revert (`probe-on-master`). « C durable »
+est `probe-on-c-durable-2`. « C d'avant » est la mesure de 13 h 30 ci-dessous.
+
+| | master (sans C) | C d'avant | **C durable** |
+|---|---|---|---|
+| rag3weaver/src : `usages` complet | 23,9 s | 14,1 s | **12,2 s** |
+| rag3weaver/src : index entier | 23,9 s | 26,2 s | 24,5 s |
+| dépôt : `usages` complet | 74,9 s (dernière ligne à 99,8 s) | 48,6 s | **40,5 s** |
+| dépôt : index entier | 101,9 s | 100,6 s | 92,5 s |
+| en service : `usages` complet | — | 34,4 s | **28,3 s** |
+| en service : index entier | — | 78,4 s | 72,6 s |
+
+- **Le gain tient**, et il a grandi.
+- **Le coût à vide de la marque et de la réparation ne se voit pas** : une lecture de méta par recherche, une
+  écriture en début et en fin de passe.
+- **L'écart avec C d'avant** vient de master : la pose des liens est passée de 6,1 s à 3,5 s sur rag3weaver/src
+  depuis le 18 (lot de codeparsers).
+
 ## Les chiffres en release (19 novembre 2026, 13 h 30)
 
 **Le relevé.**
