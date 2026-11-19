@@ -1310,3 +1310,34 @@ fn a_bare_project_call_before_a_library_path_on_the_same_line_remains_visible() 
     let cat = catalog.lock().unwrap();
     assert_eq!(cibles_vers(&cat, "mixed", "var").len(), 1, "the project call must remain visible");
 }
+
+/// **`usages Type` compte les sites `Type::méthode(…)` d'un type importé** (rag3db, 19 novembre 2026) : dans les tests
+/// d'un crate, `use monlib::Catalog;` puis `Catalog::new()` — le crate est une bibliothèque pour ses propres tests.
+/// `usages Catalog` perdait les 41 sites de `tests/*.rs` : l'appel `new` qualifié par `Catalog` ne laissait plus
+/// aucun rendez-vous vers `Catalog` lui-même.
+#[test]
+#[ignore]
+fn usages_d_un_type_compte_ses_sites_type_methode_d_un_type_importe() {
+    let dir = std::env::temp_dir().join(format!("usages-type-methode-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("src")).unwrap();
+    std::fs::create_dir_all(dir.join("tests")).unwrap();
+    std::fs::write(dir.join("Cargo.toml"), "[package]\nname = \"monlib\"\nversion = \"0.1.0\"\nedition = \"2021\"\n").unwrap();
+    std::fs::write(dir.join("src/lib.rs"), "pub struct Catalog;\n\nimpl Catalog {\n    pub fn new() -> Catalog {\n        Catalog\n    }\n}\n").unwrap();
+    std::fs::write(dir.join("tests/a.rs"), "use monlib::Catalog;\n\nfn essai() {\n    let _c = Catalog::new();\n}\n").unwrap();
+    let racine = dir.to_string_lossy().to_string();
+    let catalog = setup();
+    {
+        let mut cat = catalog.lock().unwrap();
+        cat.ingest_code(&analyze(&racine, read_sources(&racine).unwrap())).unwrap();
+    }
+    let cat = catalog.lock().unwrap();
+    let r = usages_of(&cat, &code_config(), "Catalog", "").unwrap();
+    eprintln!("{}", r.markdown("all", 50));
+    let sites: BTreeSet<(String, Option<i64>)> = r.usages.iter().map(|u| (fichier(&u.user.path), u.user.line)).collect();
+    let _ = std::fs::remove_dir_all(&dir);
+    assert!(
+        sites.iter().any(|(f, l)| f == "a.rs" && *l == Some(4)),
+        "le site Catalog::new() de tests/a.rs:4 est compté : {sites:?}"
+    );
+}
