@@ -12,9 +12,9 @@
 //! montre ne fait que l'appeler. Sous son propre verrou, jamais celui du
 //! catalogue : la montre ne bloque pas derrière une indexation.
 //!
-//! Aujourd'hui, la montre et sa réaction travaillent dans la cellule du
-//! catalogue (le bus et les services de `mount_reactions`) ; la clé de cellule
-//! est là pour le jour où une montre servira une autre cellule.
+//! Chaque montre note dans la couche qu'elle sert (`LagKey` : la cellule et la
+//! couche, 2a′-3) ; la montre du backend dans la couche du backend. Les
+//! anciennes méthodes à la cellule seule sont mortes avec le lot 5b.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Condvar, Mutex};
@@ -92,25 +92,7 @@ impl Lag {
         self.pending.lock().unwrap_or_else(|e| e.into_inner())
     }
 
-    /// `path` a changé dans `cell` à `at_ms`. Un chemin déjà en attente garde
-    /// son premier instant (le retard compte depuis le plus ancien) et avance
-    /// son dernier.
-    ///
-    /// The backend's layer: an alias of [`Self::note_in`] that dies with 2a′-3, when every watch notes with the
-    /// id of its worktree's layer.
-    pub fn note(&self, cell: &Scope, path: &str, at_ms: u64) {
-        self.note_in(&LagKey::backend(cell), path, at_ms)
-    }
 
-    /// `path` a été réindexé (ou retiré, ou mis en reprise) d'après le disque
-    /// **lu à `read_at_ms`**. L'attente ne tombe que si aucun changement n'est
-    /// venu après cette lecture : une édition arrivée pendant la réindexation
-    /// du même fichier garde son retard, et la montre relancera la réaction.
-    ///
-    /// The backend's layer: an alias of [`Self::done_in`] that dies with 2a′-3.
-    pub fn done(&self, cell: &Scope, path: &str, read_at_ms: u64) {
-        self.done_in(&LagKey::backend(cell), path, read_at_ms)
-    }
 
     /// **Combien de fichiers attendent leur réindexation, toutes cellules** : un
     /// hôte inactif ne s'arrête pas tant que la montre a du travail (18 octobre 2026).
@@ -118,11 +100,6 @@ impl Lag {
         self.pending().values().map(BTreeMap::len).sum()
     }
 
-    /// Le retard de `cell`, s'il y en a un : la couche du backend, un alias de [`Self::summary_of`] qui meurt
-    /// avec 2a′-3.
-    pub fn summary_in(&self, cell: &Scope) -> Option<LagSummary> {
-        self.summary_of(&LagKey::backend(cell))
-    }
 
     /// The lag of the layer of `key`, if it lags.
     pub fn summary_of(&self, key: &LagKey) -> Option<LagSummary> {
@@ -170,17 +147,7 @@ impl Lag {
         }
     }
 
-    /// The estimate of the backend's layer of `cell`, if it lags: an alias of [`Self::estimate_of`] that dies
-    /// with 2a′-3.
-    pub fn estimate(&self, cell: &Scope) -> Option<IndexEstimate> {
-        self.estimate_of(&LagKey::backend(cell))
-    }
 
-    /// Waits until `cell` has nothing left to reindex, or `deadline`: `true`
-    /// if it caught up.
-    pub fn wait_caught_up(&self, cell: &Scope, deadline: std::time::Instant) -> bool {
-        self.wait_caught_up_of(&LagKey::backend(cell), deadline)
-    }
 
     /// Waits until the layer of `key` has nothing left to reindex, or `deadline`: `true` if it caught up.
     pub fn wait_caught_up_of(&self, key: &LagKey, deadline: std::time::Instant) -> bool {
@@ -326,15 +293,15 @@ mod tests {
     fn the_lag_is_per_cell_and_counts_from_the_oldest_change() {
         let lag = Lag::new();
         let (a, b) = (cell("a"), cell("b"));
-        lag.note(&a, "src/x.rs", 1_000);
-        lag.note(&a, "src/y.rs", 3_000);
-        lag.note(&a, "src/x.rs", 5_000);
-        assert_eq!(lag.summary_in(&a), Some(LagSummary { files: 2, since_ms: 1_000 }));
-        assert_eq!(lag.summary_in(&b), None);
-        lag.done(&a, "src/x.rs", 6_000);
-        assert_eq!(lag.summary_in(&a), Some(LagSummary { files: 1, since_ms: 3_000 }));
-        lag.done(&a, "src/y.rs", 6_000);
-        assert_eq!(lag.summary_in(&a), None);
+        lag.note_in(&LagKey::backend(&a), "src/x.rs", 1_000);
+        lag.note_in(&LagKey::backend(&a), "src/y.rs", 3_000);
+        lag.note_in(&LagKey::backend(&a), "src/x.rs", 5_000);
+        assert_eq!(lag.summary_of(&LagKey::backend(&a)), Some(LagSummary { files: 2, since_ms: 1_000 }));
+        assert_eq!(lag.summary_of(&LagKey::backend(&b)), None);
+        lag.done_in(&LagKey::backend(&a), "src/x.rs", 6_000);
+        assert_eq!(lag.summary_of(&LagKey::backend(&a)), Some(LagSummary { files: 1, since_ms: 3_000 }));
+        lag.done_in(&LagKey::backend(&a), "src/y.rs", 6_000);
+        assert_eq!(lag.summary_of(&LagKey::backend(&a)), None);
     }
 
     /// **Une édition pendant la réindexation garde son retard** : noté à 1,
@@ -343,12 +310,12 @@ mod tests {
     fn an_edit_during_the_reindexing_keeps_its_lag() {
         let lag = Lag::new();
         let a = cell("a");
-        lag.note(&a, "src/x.rs", 1);
-        lag.note(&a, "src/x.rs", 3);
-        lag.done(&a, "src/x.rs", 2);
-        assert_eq!(lag.summary_in(&a), Some(LagSummary { files: 1, since_ms: 1 }));
-        lag.done(&a, "src/x.rs", 3);
-        assert_eq!(lag.summary_in(&a), None);
+        lag.note_in(&LagKey::backend(&a), "src/x.rs", 1);
+        lag.note_in(&LagKey::backend(&a), "src/x.rs", 3);
+        lag.done_in(&LagKey::backend(&a), "src/x.rs", 2);
+        assert_eq!(lag.summary_of(&LagKey::backend(&a)), Some(LagSummary { files: 1, since_ms: 1 }));
+        lag.done_in(&LagKey::backend(&a), "src/x.rs", 3);
+        assert_eq!(lag.summary_of(&LagKey::backend(&a)), None);
     }
 
     #[test]

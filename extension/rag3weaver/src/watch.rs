@@ -801,8 +801,7 @@ pub fn spawn(
                         .unwrap_or_default();
                     for c in changes {
                         // Le retard d'abord : une lecture qui suit l'événement le voit.
-                        // RED STUB: noted in the backend's layer of the cell, whatever the layer.
-                        lag.note(&layer.cell, &c.path, at_ms);
+                        lag.note_in(&layer, &c.path, at_ms);
                         bus.emit(crate::events::Event::FileChanged {
                             watch: name.clone(),
                             path: c.path,
