@@ -1551,6 +1551,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
     // Le lancement en fond posé comme nœud (page 12-octobre-2026-recherche/03).
     registry.register(Box::new(super::spawn_nodes::SpawnNodeFactory));
     registry.register(Box::new(super::rhai_node::RhaiNodeFactory));
+    registry.register(Box::new(super::collect_node::CollectNodeFactory));
     super::validation_nodes::register(registry);
     registry.register(Box::new(KBQuerySourceNodeFactory));
     registry.register(Box::new(FetchRelatedNodeFactory));
@@ -1922,6 +1923,7 @@ mod tests {
                 "AdoptTemplateNode" => serde_json::json!({ "entity": "Product", "description": "un gabarit" }),
                 "Decide" => serde_json::json!({ "labels": "a|b" }),
                 "Route" => serde_json::json!({ "routes": "a|b" }),
+                "Collect" => serde_json::json!({ "inputs": "a,b" }),
                 "Spot" => serde_json::json!({ "patterns": { "a": "a" } }),
                 "ReindexFileNode" => serde_json::json!({}),
                 _ => serde_json::json!({}),
