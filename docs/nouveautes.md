@@ -1,5 +1,10 @@
 # Nouveautés
 
+- 19 novembre 2026 — **Une base neuve connaît le débit de son service d'embarquement dès le premier index.** Tant que
+  l'index n'a pas mesuré son propre débit, l'hôte lit le débit que le banc a mesuré pour ce poste et ce service
+  (`~/.config/rag3weaver/embedding-rates.json`, sous la clé `{modèle}:{adresse}@{poste}`), compté à moitié. Il dit
+  d'où vient le débit : « débit de l'index », « débit du banc × 0,5 (mesuré le …) » ou « débit inconnu ».
+
 - 19 novembre 2026 — **La conversation d'un chat se range en mémoire au fil de l'eau.** Chaque tour du chat de
   l'IDE s'écrit dans la mémoire déclarée par le dépôt (`bilans.memoire`). Quand les tours pas encore rangés
   dépassent `memory.slice_tokens` (50 000 jetons par défaut), une tranche se range en fond, sans retarder le chat.
