@@ -1,6 +1,6 @@
 # L'estimation d'une réindexation compte toute la source comme un premier index
 
-- **État** : ouvert (15 novembre 2026)
+- **État** : fermé (19 novembre 2026, ED) — sur une base déjà indexée, `estimate_of` ne compte que les fichiers dont l'empreinte indexée (contenu et version de l'analyse, la même que la synchronisation : `code_sync::indexed_fingerprints`) diffère du disque, plus la dette réelle (`dense_missing`, à la taille moyenne d'un morceau de la base) ; les inchangés ne coûtent rien ; une source jamais indexée, ou après une passe en masse interrompue, s'estime comme avant. L'estimation dit la réindexation (« N changé(s), M inchangé(s), K morceau(x) déjà dû(s) »). Témoin `dataflow::index_nodes::tests::the_estimate_of_an_unchanged_reindexing_announces_no_vector`, ROUGE sur b4efce008a (894 s annoncées, confirmation demandée), vert avec le correctif. **Hors de ce lot** : l'estimation au rythme observé (relevé du 15 nov. ci-dessous), qui demande un étalonnage par poste.
 - **Famille** : produit
 - **Gravité** : réponse fausse et blocage. L'outil `index` refuse sans `confirm=true` une réindexation
   qui ne coûte presque rien, sur la foi d'une estimation d'un premier index (environ 10 min annoncées

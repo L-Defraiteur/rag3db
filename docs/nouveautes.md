@@ -1,5 +1,6 @@
 # Nouveautés
 
+- 19 novembre 2026 — **L'estimation d'une réindexation compte ce qui change.** Sur une base déjà indexée, `estimate` et `index` ne comptent plus toute la source : seulement les fichiers dont le contenu ou la version de l'analyse a changé, et les vecteurs déjà dus. Une réindexation sans changement annonce zéro vecteur et ne demande plus de confirmation ; l'estimation dit combien de fichiers changent.
 - 19 novembre 2026 — Dans l'IDE, la vue d'un fichier ne garde plus l'erreur du fichier lu juste avant : passer d'un fichier absent à un fichier lisible montre ses lignes seules, sans l'alerte du premier.
 
 - 19 novembre 2026 — **Le chat de l'IDE ouvre le dépôt à côté.** Un lien « dépôt à côté » de son en-tête ouvre l'arbre du dépôt dans une fenêtre à lui, qui ne montre que son rôle et le flux ; les fichiers cités dans le chat s'y ouvrent sans recharger cette fenêtre, et précédent et suivant y reviennent sur les vues suivies.
