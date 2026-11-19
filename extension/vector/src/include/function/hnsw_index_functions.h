@@ -38,6 +38,8 @@ struct CreateInMemHNSWSharedState final : function::SimpleTableFuncSharedState {
     storage::NodeTable& nodeTable;
     common::offset_t numNodes;
     std::atomic<common::offset_t> numNodesInserted = 0;
+    // The sequential seed of the build (seed_points): the offsets visited below it.
+    std::atomic<common::offset_t> seedNodesVisited = 0;
 
     const CreateHNSWIndexBindData* bindData;
 
