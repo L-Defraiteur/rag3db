@@ -1712,12 +1712,19 @@ impl SchemaDialect for Rag3dbDialect {
         } else {
             format!(" {{{}}}", props.iter().map(|k| format!("{q}: r.{q}", q = cypher_quote(k))).collect::<Vec<_>>().join(", "))
         };
+        // **Each end by its key, in a MATCH of its own** (ticket of 19 November 2026, « le premier passage de
+        // l'écrivain sur une base migrée remplit le tampon »): the replaced row, then its replacement, then the
+        // edges of the replaced row. One MATCH with the two patterns crossed made the engine scan every row of the
+        // other end and every edge of the relation, and its memory grew with the base (9 Gio on 2 000 pairs of
+        // code-rag3db, the buffer full); anchored, the same 2 000 pairs copy 6 861 edges with 16 Mio more.
         let (motif, deja, cree) = match side {
-            rag3weaver_ir::Direction::Incoming => (format!("(x:{o})-[r:{rel}]->(a:{t} {{_uuid: p.a}})"), format!("(x)-[:{rel}]->(n)"), format!("(x)-[:{rel}{copie}]->(n)")),
-            rag3weaver_ir::Direction::Outgoing => (format!("(a:{t} {{_uuid: p.a}})-[r:{rel}]->(x:{o})"), format!("(n)-[:{rel}]->(x)"), format!("(n)-[:{rel}{copie}]->(x)")),
+            rag3weaver_ir::Direction::Incoming => (format!("(x:{o})-[r:{rel}]->(a)"), format!("(x)-[:{rel}]->(n)"), format!("(x)-[:{rel}{copie}]->(n)")),
+            rag3weaver_ir::Direction::Outgoing => (format!("(a)-[r:{rel}]->(x:{o})"), format!("(n)-[:{rel}]->(x)"), format!("(n)-[:{rel}{copie}]->(x)")),
         };
         let filtre = filter.map(|f| format!("({}) AND ", rag3db_condition_sur(f, "x", &mut 0))).unwrap_or_default();
-        Some(format!("UNWIND $paires AS p MATCH {motif}, (n:{t} {{_uuid: p.n}}) WHERE {filtre}NOT EXISTS {{ MATCH {deja} }} CREATE {cree} RETURN count(*)"))
+        Some(format!(
+            "UNWIND $paires AS p MATCH (a:{t} {{_uuid: p.a}}) MATCH (n:{t} {{_uuid: p.n}}) MATCH {motif} WHERE {filtre}NOT EXISTS {{ MATCH {deja} }} CREATE {cree} RETURN count(*)"
+        ))
     }
 
     fn condition_visible_sur(&self, alias: &str, couche: &str, rang: i64) -> Option<String> {
