@@ -145,6 +145,9 @@
 - 19 novembre 2026 — **Le journal plafonné d'une commande en fond garde sa fin.** Quand le journal dépassait son
   plafond, ce que la commande écrivait pendant la troncature se perdait sans être compté, et une commande qui
   finissait à ce moment perdait la fin de sa sortie. La fin est gardée, et l'en-tête compte tout ce qui est parti.
+- 19 novembre 2026 — **Une base de code sur PostgreSQL a les générations.** Comme sur rag3db, une base neuve garde
+  l'histoire de ses lignes : une édition retire au rang en attente et garde ce qui est publié. La visibilité s'y
+  lit par un index.
 
 - 18 novembre 2026 — **La fin d'un index dit une libération ou une dette qu'elle n'a pas pu faire.** Une erreur en rendant les réclamations d'embarquement s'ajoute à la dernière ligne du journal, avec sa table et sa cause, sans en effacer la cause de fin ; une dette restante illisible se dit « dette inconnue », plus jamais « 0 ».
 
