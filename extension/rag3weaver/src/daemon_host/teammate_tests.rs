@@ -2097,10 +2097,10 @@ fn the_teammate_steps_go_to_the_memory_as_they_go() {
     }
 }
 
-/// **A paired task holds its entry while it works, and leaves none** (mode pair, lot 1, page 05 of
-/// 19 Nov 2026): with `teammate.pair`, the agent's entry is in the sessions registry during its
-/// step, named after the agent and busy; after the teammate ends, nothing is left. A task without
-/// it writes nothing.
+/// **A paired task holds its entry while it works** (mode pair, lot 1, page 05 of 19 Nov 2026):
+/// with `teammate.pair`, the agent's entry is in the sessions registry during its step, named after
+/// the agent and busy; idle after the teammate ends (lot 2: a pair is reachable between two works);
+/// gone once the task is closed. A task without it writes nothing.
 #[cfg(all(feature = "code", feature = "rag3db-native"))]
 #[test]
 fn a_paired_task_holds_its_entry_while_it_works_and_leaves_none() {
@@ -2139,7 +2139,12 @@ fn a_paired_task_holds_its_entry_while_it_works_and_leaves_none() {
         if pair {
             assert_eq!(vues[0]["status"], "busy", "the entry is there during the step: {:?}", vues[0]);
             assert!(vues[0]["name"].as_str().is_some_and(|n| !n.is_empty()), "named after the agent: {:?}", vues[0]);
-            assert!(restes.is_empty(), "nothing left after the teammate ends: {restes:?}");
+            let apres: Value = serde_json::from_slice(&std::fs::read(registre.sessions.join(format!("{}.json", std::process::id()))).unwrap()).unwrap();
+            assert_eq!(apres["status"], "idle", "reachable between two works: idle after the teammate ends");
+            drop(vues);
+            host.fermer_une_tache(&h.id, "doc").unwrap();
+            let restes: Vec<_> = std::fs::read_dir(&registre.sessions).map(|r| r.flatten().map(|e| e.file_name()).collect()).unwrap_or_default();
+            assert!(restes.is_empty(), "nothing left once the task is closed: {restes:?}");
         } else {
             assert_eq!(vues[0], Value::Null, "no pair, no entry");
             assert!(restes.is_empty(), "{restes:?}");
@@ -2196,8 +2201,15 @@ fn a_message_to_a_paired_task_socket_is_a_request_in_its_mailbox() {
     host.ouvrir_une_tache(&h.id, "doc").expect("la tâche s'ouvre");
     let files = host.teammate_files(&h.id, "doc").unwrap();
     files.append_with("supervisor", "request", None, "Fais-le.", &json!({ "expects": "none" })).unwrap();
-    host.run_teammate(&h.id, "doc").unwrap();
+    // As in service: through start_teammate, so that a message during a step starts no second one.
+    assert!(host.start_teammate(&h.id, "doc"));
+    attendre_dans(&files, "the teammate ends", &|b| b.iter().any(|l| l["kind"] == "ended"));
+    let fin = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while host.teammate_running(&h.id, "doc") && std::time::Instant::now() < fin {
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
     let boite = files.mailbox();
+    assert_eq!(boite.iter().filter(|l| l["kind"] == "ended").count(), 1, "one teammate, one end: {boite:#?}");
     let venue: Vec<&Value> = boite.iter().filter(|l| l["from"] == "session").collect();
     assert_eq!(venue.len(), 1, "the message is in the mailbox once: {boite:#?}");
     assert_eq!(venue[0]["kind"], "request");
@@ -2206,4 +2218,52 @@ fn a_message_to_a_paired_task_socket_is_a_request_in_its_mailbox() {
     assert_eq!(venue[0]["reply_to_address"], "uds:/run/user/1000/cc-socks/42.sock");
     let f = frontieres.lock().unwrap();
     assert!(f.iter().skip(1).any(|t| t.contains("What is 2+2?")), "the teammate reads it at a next step: {f:?}");
+}
+
+/// **A pair is reachable between two works** (mode pair, lot 2, c7 on 19 Nov 2026): a paired task
+/// is in the registry, idle, as soon as it is open; a message to its socket starts its teammate;
+/// the entry is idle again when the teammate ends; closing the task leaves neither entry nor socket.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn a_paired_task_is_reachable_between_two_works_and_leaves_with_its_task() {
+    use std::io::Write;
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let mut m: Value = serde_json::from_str(&std::fs::read_to_string(&manifeste).unwrap()).unwrap();
+    m["teammate"] = json!({ "pair": true });
+    std::fs::write(&manifeste, serde_json::to_string_pretty(&m).unwrap()).unwrap();
+    let declarations = manifeste.parent().unwrap();
+    for args in [&["add", "-A"][..], &["commit", "-q", "-m", "le mode pair"]] {
+        assert!(std::process::Command::new("git").args(args).current_dir(declarations).status().unwrap().success(), "git {args:?}");
+    }
+    let registre = super::pair::Registre { sessions: d.path().join("sessions"), socks: d.path().join("socks") };
+    let model: ChatModel = Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+        Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
+            answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "4", "remaining": "" }))]))
+        })))
+    });
+    let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")).with_pair_registry(registre.clone()));
+    host.se_connaitre();
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    host.ouvrir_une_tache(&h.id, "doc").expect("la tâche s'ouvre");
+    let fichier = registre.sessions.join(format!("{}.json", std::process::id()));
+    let lire = || -> Value { serde_json::from_slice(&std::fs::read(&fichier).unwrap_or_default()).unwrap_or(Value::Null) };
+    assert_eq!(lire()["status"], "idle", "visible as soon as the task is open, before any request");
+    let socket = std::path::PathBuf::from(lire()["messagingSocketPath"].as_str().unwrap());
+    let mut c = std::os::unix::net::UnixStream::connect(&socket).unwrap();
+    let trame = json!({ "msgV": 1, "msg_id": "m-1", "type": "user", "priority": "next", "from": "uds:/run/user/1000/cc-socks/42.sock",
+                        "message": { "role": "user", "content": "<cross-session-message from=\"uds:/run/user/1000/cc-socks/42.sock\" from-name=\"rag3db-5a\" from-mode=\"prompting\">\nWhat is 2+2?\n</cross-session-message>" } });
+    c.write_all(format!("{trame}\n").as_bytes()).unwrap();
+    drop(c);
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    attendre_dans(&files, "the message starts the teammate, which ends", &|b| b.iter().any(|l| l["from"] == "session") && b.iter().any(|l| l["kind"] == "ended"));
+    let fin = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while (host.teammate_running(&h.id, "doc") || lire()["status"] != "idle") && std::time::Instant::now() < fin {
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    assert_eq!(lire()["status"], "idle", "idle again once its teammate ends");
+    host.fermer_une_tache(&h.id, "doc").unwrap();
+    assert!(!fichier.exists(), "the entry goes with the task");
+    assert!(!socket.exists(), "and its socket");
 }
