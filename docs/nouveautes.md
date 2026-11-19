@@ -30,6 +30,13 @@
   lisait les fichiers indexés que dans les lignes `File`, et ce chemin lui échappait. Un index complet retire
   maintenant les scopes d'un chemin sans `File` que la source ne retient plus. La cause de ces orphelins reste à
   trouver (ticket).
+- 19 novembre 2026 — **Un type déclare comment il se présente au modèle.** Le schéma d'une entité peut porter
+  `x-presentation` : un gabarit de texte sur ses champs (`{"template": "{{ name }} — {{ about }}"}`) ou une forme
+  nommée (`{"form": "kv"}`, `json` ou `markdown`). Une ligne de cette entité, donnée en contexte à `LlmNode`, se rend
+  alors de la même façon dans toutes les invites ; le `format` d'une part l'emporte sur elle, et sans présentation
+  déclarée la ligne se rend en JSON à clés triées. Une présentation mal formée est refusée au chargement, en nommant
+  l'entité.
+
 - 19 novembre 2026 — **Un graphe compose le contexte d'un appel au modèle, sans script de prose.** Le nœud `Collect`
   rassemble ses entrées nommées dans l'ordre que le graphe déclare (`inputs='identity,report,slice'`), quel que soit
   l'ordre où elles arrivent ; une entrée vide est retirée, sauf `keep_empty`. `LlmNode` prend une `instruction` (la
