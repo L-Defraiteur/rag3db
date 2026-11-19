@@ -1225,6 +1225,9 @@ pub enum SyncPhase {
     Nodes,
     /// Le chargement final des relations et la résolution (`Bulk`).
     Relations,
+    /// The derived entities of a first index (`ScopeContent`, the full text of the code), drained after the
+    /// relations (`Bulk`).
+    Derivations,
     /// La reprise des fichiers édités après leur passage.
     Resume,
     /// Tout est posé.
@@ -1468,6 +1471,15 @@ fn synchroniser_la_source(
     }
     let resultat = synchroniser(catalog, source, options, mode, &marque, progress, &grain, &s_scopes, &s_files, source_id, tx);
     catalog.end_proving_presence();
+    if resultat.is_err() {
+        // **Held derivations are never left held**: a suspended or failed pass renders what it held back (their
+        // debt is in the base already, and the render catch-up would find it), and the hold is lifted, so that the
+        // next ingest drains its own.
+        let rendu = catalog.release_deferred_derivations(options.exige);
+        if rendu.failed > 0 {
+            eprintln!("[code-sync] dérivations retenues, rendues après une passe interrompue : {} échec(s)", rendu.failed);
+        }
+    }
     let suspendue = matches!(&resultat, Err(e) if e.starts_with(SYNC_SUSPENDED));
     if suspendue {
         // La marque reste : la reprise sait que les relations manquent.
@@ -1948,6 +1960,13 @@ fn synchroniser(
     let par_paquet = catalog.file_batch_size().unwrap_or(options.batch_files).max(1);
     let nombre_de_paquets = retenus.chunks(par_paquet).len();
     let par_validation = paquets_par_validation();
+    // **The derivations wait for the relations** (decision C of Lucie, 18 November 2026): in `Bulk`, the derived
+    // entities of each batch (`ScopeContent`, the full text of the code) are held, their debt put in the base, and
+    // rendered after the relations. The reference tools answer sooner; `synchroniser_la_source` releases them on
+    // any other way out.
+    if mode == RelationsMode::Bulk {
+        catalog.defer_derivations(true);
+    }
     for (rang_du_paquet, paquet) in retenus.chunks(par_paquet).enumerate() {
         // Lus, avant de les lire : une édition d'un de ces fichiers, à partir
         // d'ici, est à reprendre.
@@ -2101,6 +2120,21 @@ fn synchroniser(
         report.relations_bulk_ms = debut.elapsed().as_millis();
         profil.add("charger les relations à la fin", debut);
         avancement.relations_pending = 0;
+    }
+    if mode == RelationsMode::Bulk {
+        avancement.phase = SyncPhase::Derivations;
+        progress(avancement);
+        let debut = std::time::Instant::now();
+        let tx = par_transaction;
+        if tx {
+            commencer(catalog)?;
+        }
+        let rendu = catalog.release_deferred_derivations(options.exige);
+        if tx {
+            terminer(catalog, Ok(()))?;
+        }
+        report.failed += rendu.failed;
+        profil.add("rendre les dérivations, après les relations", debut);
     }
     if poussee_differee {
         tuer_avant_la_poussee();
