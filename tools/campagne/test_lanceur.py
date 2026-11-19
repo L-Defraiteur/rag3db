@@ -152,5 +152,40 @@ class Lanceur(unittest.TestCase):
         self.assertEqual([l.strip() for l in git(dest, "status", "--porcelain").splitlines()], ["M crate/README.md", "?? crate/src/neuf.rs"], "the worktree and its index are left as they were")
 
 
+    def test_the_trace_sums_the_steps_of_the_task_and_names_the_slow_calls(self):
+        runs = os.path.join(self.tmp.name, "runs", "abc")
+        os.makedirs(runs)
+        def llm(ms, prompt, cached, out, retries=0):
+            return {"kind": "LlmCall", "ms": str(ms), "prompt_tokens": str(prompt), "cached_prompt_tokens": str(cached),
+                    "completion_tokens": str(out), "retries": str(retries), "retry_log": "[]", "model": "m", "finish": "ToolCall"}
+        def outil(nom, ms, ok=True):
+            return [{"kind": "ToolCallStarted", "tool": nom, "arguments": "{}"},
+                    {"kind": "ToolCallFinished", "tool": nom, "ms": str(ms), "ok": str(ok), "error_kind": "None"}]
+        def run(nom, pas, parent, ms, evs, usage):
+            d = {"run": nom, "pas": pas, "tache": {"parent": parent, "nom": "campagne"}, "fin": {"ms": ms, "ok": True},
+                 "evenements": evs, "usage_du_chat": usage}
+            chemin = os.path.join(runs, nom + ".json")
+            with open(chemin, "w") as f:
+                json.dump(d, f)
+            subprocess.run(["zstd", "-q", "--rm", chemin], check=True)
+        run("agent-1", 1, "repo1", 10000, [llm(3000, 7000, 0, 20), *outil("read_file", 100), llm(5000, 9000, 6000, 30), *outil("run_command", 2000, False)],
+            {"input_tokens": 10000, "cached_input_tokens": 6000, "output_tokens": 50, "reasoning_tokens": 7})
+        run("agent-2", 2, "repo1", 400000, [llm(384000, 9000, 0, 34, retries=1)], {"input_tokens": 9000, "cached_input_tokens": 0, "output_tokens": 34, "reasoning_tokens": 0})
+        run("agent-3", 1, "un-autre", 5, [llm(1, 1, 0, 1)], {})
+        with open(os.path.join(runs, "graph-9.json.zst"), "wb") as f:
+            f.write(b"")
+        t = lanceur.build_trace(os.path.dirname(runs), "repo1")
+        self.assertEqual(t["steps"], 2)
+        self.assertEqual(t["model_calls"], 3)
+        self.assertEqual(t["model_ms"], 392000)
+        self.assertEqual(t["wall_ms"], 410000)
+        self.assertEqual((t["input_tokens"], t["cached_tokens"], t["output_tokens"], t["reasoning_tokens"]), (19000, 6000, 84, 7))
+        self.assertEqual(t["tool_calls"], {"read_file": 1, "run_command": 1})
+        self.assertEqual(t["tool_errors"], 1)
+        self.assertEqual(t["retries"], 1)
+        self.assertEqual(t["slowest_model_calls"][0], {"step": 2, "ms": 384000, "prompt_tokens": 9000, "cached_tokens": 0, "output_tokens": 34, "retries": 1})
+        self.assertEqual([s["step"] for s in t["per_step"]], [1, 2])
+
+
 if __name__ == "__main__":
     unittest.main()
