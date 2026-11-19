@@ -122,9 +122,35 @@ pub fn declaration_du_manifeste(tracked: Option<&Value>) -> Result<Declaration, 
 
 /// `~` at the head of a path, expanded to `home` (the `HOME` of the process when `None` is given by the caller).
 pub(crate) fn expand_home(path: &str, home: Option<&str>) -> String {
-    // RED STUB: not expanded.
-    let _ = home;
-    path.to_string()
+    let home = home.map(str::to_string).or_else(|| std::env::var("HOME").ok());
+    match (path.strip_prefix('~'), home) {
+        (Some(rest), Some(h)) if rest.is_empty() || rest.starts_with('/') => format!("{h}{rest}"),
+        _ => path.to_string(),
+    }
+}
+
+/// **A worktree's path against a pattern**: segment by segment, `*` any run of characters and `?` one character,
+/// never across a `/`. The pattern's literal head (its segments before the first wildcard) is canonicalized as the
+/// worktrees' paths are.
+fn path_matches(pattern: &str, path: &std::path::Path) -> bool {
+    let segments: Vec<&str> = pattern.split('/').collect();
+    let first_wild = segments.iter().position(|s| s.contains(['*', '?'])).unwrap_or(segments.len());
+    let head: std::path::PathBuf = segments[..first_wild].join("/").into();
+    let head = head.canonicalize().unwrap_or(head);
+    let mut wanted: Vec<String> = head.to_string_lossy().split('/').map(str::to_string).collect();
+    wanted.extend(segments[first_wild..].iter().map(|s| s.to_string()));
+    let got: Vec<String> = path.to_string_lossy().split('/').map(str::to_string).collect();
+    wanted.len() == got.len() && wanted.iter().zip(&got).all(|(p, g)| segment_matches(p.as_bytes(), g.as_bytes()))
+}
+
+fn segment_matches(p: &[u8], s: &[u8]) -> bool {
+    match (p.first(), s.first()) {
+        (None, None) => true,
+        (Some(b'*'), _) => segment_matches(&p[1..], s) || (!s.is_empty() && segment_matches(p, &s[1..])),
+        (Some(b'?'), Some(_)) => segment_matches(&p[1..], &s[1..]),
+        (Some(a), Some(b)) if a == b => segment_matches(&p[1..], &s[1..]),
+        _ => false,
+    }
 }
 
 fn lire_une_source(i: usize, v: &Value) -> Result<Source, String> {
@@ -155,7 +181,13 @@ fn lire_une_source(i: usize, v: &Value) -> Result<Source, String> {
         match r {
             "backend" => Selecteur::Worktree(Worktree::DuBackend),
             "*" => Selecteur::Worktree(Worktree::Tous),
-            chemin => Selecteur::Worktree(Worktree::Chemin(non_vide(chemin)?)),
+            chemin if chemin.contains(['*', '?', '[', ']', '{', '}']) => {
+                if chemin.contains(['[', ']', '{', '}']) {
+                    return Err(format!("{} : le motif « {chemin} » est mal formé (seuls * et ? sont admis, dans un segment de chemin)", ou("select")));
+                }
+                Selecteur::Worktree(Worktree::Pattern(expand_home(chemin, None)))
+            }
+            chemin => Selecteur::Worktree(Worktree::Chemin(expand_home(&non_vide(chemin)?, None))),
         }
     } else {
         return Err(format!("{} : « {texte} » n'a pas de préfixe connu (branch:, refs:, worktree:, commit:, tasks)", ou("select")));
@@ -281,8 +313,7 @@ pub fn resoudre_les_sources(
                             let voulu = std::path::Path::new(c).canonicalize().ok();
                             worktrees.iter().filter(|w| voulu.as_ref() == Some(&w.chemin)).collect()
                         }
-                        // RED STUB: a pattern selects nothing.
-                        Worktree::Pattern(_) => Vec::new(),
+                        Worktree::Pattern(m) => worktrees.iter().filter(|w| path_matches(m, &w.chemin)).collect(),
                     };
                     let vide = choisis.is_empty().then(|| match quel {
                         Worktree::DuBackend => format!("worktree:backend : {} n'est dans aucun worktree du dépôt", worktree_du_backend.display()),
