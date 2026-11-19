@@ -419,6 +419,45 @@ après C (26 s). Le disque ne coûte presque rien ici. Le gain de B ne viendra d
 un moteur : pas de `COPY` par fichier CSV, pas de MERGE en Cypher, pas de points de reprise. Il reste à le mesurer
 une fois écrite. Si elle ne descend pas nettement sous l'index, il faudra le dire avant d'aller plus loin.
 
+## B : la parité tient, le temps ne bat pas encore l'index (19 novembre 2026, matin)
+
+**Ce qui est écrit**, sur `memory-connection` (recherche, tête c49cf61c92) et `codeparsers/memory-connection-writes-2`
+(codeparsers) :
+- le dialecte `memoire` ;
+- la connexion mémoire, avec ses familles `ddl`, `meta` et `read` (recherche), `load`, `links`, `count` et `aside`
+  (codeparsers), `writes` en cours ;
+- `memory_catalog`, `NoCheckpoints` et un `MemBlobStore` ;
+- `MemoryImage` avec `remove_node`, `remove_rel` et `set_file_field` ;
+- la sonde de parité de codeparsers.
+
+Chaque morceau a été vu rouge, puis vert.
+
+**La parité** (codeparsers, sonde `tests/probe_memory_image_parity.rs`, lib 3d706f709) : les CONSUMES de l'image
+sont ceux de la base, au couple près (fichier, ligne, scope, cible, marque) :
+- rag3weaver/src : 290 fichiers, 49 063 CONSUMES ;
+- `src/` du moteur : 1 550 fichiers, 19 645 CONSUMES.
+
+**La mesure** (codeparsers) :
+
+| Arbre | Analyse | Ingestion dans l'image | Ingestion dans rag3db en mémoire | Pic, image | Pic, rag3db en mémoire |
+|---|---|---|---|---|---|
+| rag3weaver/src | 7,5 s | 21,4 s | 11,6 s | 1,6 Gio | 2,4 Gio |
+| `src/` du moteur | 2,6 s | 13,3 s | 6,9 s | 1,2 Gio | 2,0 Gio |
+
+**La lecture (recherche)** :
+- **Le repli B prend environ 29 s sur rag3weaver/src, contre 26 s pour l'index réel depuis C.** Il ne le bat pas.
+  La réserve de l'essai borné se vérifie : l'image coûte aujourd'hui deux fois le temps d'une base rag3db en mémoire,
+  pour 35 % de mémoire en moins.
+- **La porte des outils (le lot 4) attend** : brancher un repli plus lent que l'index ne servirait pas l'agent.
+- **Le lot suivant est donc le temps de l'image** (codeparsers, par profil d'abord). Les suspects :
+  - le JSON de chaque instruction (`MEMOIRE:` et `serde_json`, avec `$items` en `CypherValue`) ;
+  - `node()`, qui déplie toutes les propriétés à chaque upsert ;
+  - la fusion d'un lien par `outgoing().find()`.
+- **Le plancher est l'analyse** : 7,5 s sur rag3weaver/src. Si l'ingestion dans l'image descend sous ~5 s, le repli
+  tombe vers 12 s, soit la moitié de l'index depuis C : c'est ce gain que B doit prouver avant la porte.
+- **Si elle n'y descend pas**, la question revient à Lucie : garder C seule, ou chercher le gain ailleurs (une
+  analyse en parallèle, un repli limité à `outline`).
+
 ## Questions pour Lucie (posées avant sa décision)
 
 1. ~~Mesurer d'abord C ?~~ **Tranché par c7 : oui.** C est mesurée au §7. Réordonner l'index donne ~27 s sur
