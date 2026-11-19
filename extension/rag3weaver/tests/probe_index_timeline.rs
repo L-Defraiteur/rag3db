@@ -79,30 +79,51 @@ fn levels(states: &Value) -> String {
 #[test]
 #[ignore]
 fn the_timeline_of_a_first_index() {
-    let Ok(root) = std::env::var("PROBE_ROOT") else {
-        eprintln!("[timeline] NOT MEASURED: PROBE_ROOT is absent");
+    let root = std::env::var("PROBE_ROOT").unwrap_or_default();
+    if root.is_empty() && std::env::var("PROBE_MANIFEST").is_err() {
+        eprintln!("[timeline] NOT MEASURED: neither PROBE_ROOT nor PROBE_MANIFEST");
         return;
-    };
+    }
     let name = std::env::var("PROBE_NAME").unwrap_or_else(|_| "Catalog".into());
     let dir = std::path::PathBuf::from(std::env::var("PROBE_DIR").expect("PROBE_DIR, on disk"));
     assert!(!dir.starts_with("/tmp"), "PROBE_DIR is on disk, not under /tmp: {}", dir.display());
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
 
-    let templates = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates");
-    let t = dir.join("templates");
-    copy_tree(&templates.join("tools"), &t.join("tools"));
-    copy_tree(&templates.join("backends/code"), &t.join("backends/code"));
-    let path = t.join("backends/code/backend.json");
-    let mut m: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
-    m["name"] = json!("probe-index-timeline");
-    m["database"] = json!(dir.join("code.rag3db").to_string_lossy());
-    m["vector_extension"] = json!(vector_extension());
-    m["workspace"]["root"] = json!(root);
-    m["workspace"]["commands"] = json!("off");
-    m["tools"].as_object_mut().unwrap().remove("run_command");
-    m["tools"].as_object_mut().unwrap().remove("wait_output");
-    std::fs::write(&path, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+    // `PROBE_MANIFEST`: a real manifest (an host's), copied beside itself with its database pointed into
+    // `PROBE_DIR` — an empty base, so that the index is a first one (the bulk path, where C plays). Otherwise the
+    // shipped code template on `PROBE_ROOT`.
+    let path = match std::env::var("PROBE_MANIFEST") {
+        Ok(real) => {
+            let real = std::path::PathBuf::from(real);
+            let mut m: Value = serde_json::from_slice(&std::fs::read(&real).unwrap()).unwrap();
+            m["database"] = json!(dir.join("code.rag3db").to_string_lossy());
+            if let Some(tools) = m["tools"].as_object_mut() {
+                tools.remove("run_command");
+                tools.remove("wait_output");
+            }
+            let copy = real.with_file_name(format!("probe-index-timeline-{}.json", std::process::id()));
+            std::fs::write(&copy, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+            copy
+        }
+        Err(_) => {
+            let templates = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates");
+            let t = dir.join("templates");
+            copy_tree(&templates.join("tools"), &t.join("tools"));
+            copy_tree(&templates.join("backends/code"), &t.join("backends/code"));
+            let path = t.join("backends/code/backend.json");
+            let mut m: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+            m["name"] = json!("probe-index-timeline");
+            m["database"] = json!(dir.join("code.rag3db").to_string_lossy());
+            m["vector_extension"] = json!(vector_extension());
+            m["workspace"]["root"] = json!(root);
+            m["workspace"]["commands"] = json!("off");
+            m["tools"].as_object_mut().unwrap().remove("run_command");
+            m["tools"].as_object_mut().unwrap().remove("wait_output");
+            std::fs::write(&path, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+            path
+        }
+    };
 
     let prepared = PreparedBackend::load(&path).expect("the manifest loads");
     let base = prepared.path(&prepared.manifest.database);
