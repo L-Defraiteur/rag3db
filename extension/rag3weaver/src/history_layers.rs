@@ -928,6 +928,86 @@ mod tests {
         assert!(refus.contains("à rebâtir") && refus.contains("refs/heads/b"), "the refusal does not name the layer to rebuild: {refus}");
     }
 
+    /// **La sonde de la place des couches** (c7, 19 novembre 2026 ; à jouer sur un reflink, jamais sur une base vivante) :
+    /// sur la base `RAG3WEAVER_SONDE_BASE`, migrée aux versions et repassée, la couche d'histoire `refs/heads/master` du
+    /// dépôt `RAG3WEAVER_SONDE_DEPOT` est écrite à sa pointe (K commits au-dessus de l'arbre indexé,
+    /// `RAG3WEAVER_SONDE_K`, 20 par défaut), puis rattrapée commit par commit, le plus récent d'abord. Elle relève par
+    /// table les lignes et les octets ajoutés, les doublons au bord haut, et le temps de lecture d'une vue. Une ligne
+    /// `SONDE_PLACE` par relevé. Sans embarqueur : les vecteurs restent dus, les lignes et les morceaux sont écrits.
+    #[test]
+    #[ignore]
+    fn sonde_place_des_couches() {
+        let (Ok(chemin), Ok(depot)) = (std::env::var("RAG3WEAVER_SONDE_BASE"), std::env::var("RAG3WEAVER_SONDE_DEPOT")) else {
+            panic!("RAG3WEAVER_SONDE_BASE et RAG3WEAVER_SONDE_DEPOT sont requis");
+        };
+        let k: usize = std::env::var("RAG3WEAVER_SONDE_K").ok().and_then(|v| v.parse().ok()).unwrap_or(20);
+        let depot = std::path::PathBuf::from(depot);
+        let conn = crate::Rag3dbConnection::new(&chemin).expect("la base de la sonde");
+        let mut cat = Catalog::without_embedding_model(Box::new(conn), crate::CatalogConfig::default());
+        cat.initialize().unwrap();
+        crate::code::register_code_schema(&mut cat, crate::code::default_scope_chunking()).unwrap();
+        let ligne = |quoi: &str, v: serde_json::Value| println!("SONDE_PLACE {}", serde_json::json!({"relevé": quoi, "valeur": v}));
+        // La base : le commit de l'arbre indexé, donné à la génération publiée du backend.
+        let cell = cat.scope().clone();
+        let court = cat.indexed_tree(&cell).and_then(|v| v.get("commit").and_then(|c| c.as_str()).map(str::to_string)).expect("l'arbre indexé de la base");
+        let base = git(&depot, &["rev-parse", &court]);
+        let n = cat.rang_publie().expect("une base à générations");
+        cat.execute_raw_with_params(
+            &format!("MATCH (g:{}) WHERE g.couche = 'backend' AND g.rang = $n SET g.commit = $c", crate::generations::TABLE),
+            &[QueryParam::new("n", CypherValue::Int(n)), QueryParam::new("c", CypherValue::String(base.clone()))],
+        )
+        .unwrap();
+        let chaine: Vec<String> = git(&depot, &["rev-list", "--first-parent", "--reverse", &format!("{base}..origin/master")]).lines().take(k).map(str::to_string).collect();
+        assert!(chaine.len() >= 2, "moins de deux commits au-dessus de l'arbre indexé ({base})");
+        ligne("départ", serde_json::json!({"base": base, "rang_du_backend": n, "commits": chaine.len()}));
+        let tables: Vec<String> = cat.generations.as_ref().unwrap().tables.iter().cloned().chain(cat.vector_tables()).collect();
+        let comptes = |cat: &Catalog| -> serde_json::Value {
+            let mut m = serde_json::Map::new();
+            for t in &tables {
+                let lu = cat.execute_raw(&format!("MATCH (s:`{t}`) RETURN count(s), sum(size(coalesce(s._text, '')))")).unwrap();
+                let r = &lu.rows[0];
+                m.insert(t.clone(), serde_json::json!({"lignes": r[0].as_i64(), "octets_de_texte": r[1].as_i64()}));
+            }
+            serde_json::Value::Object(m)
+        };
+        let lire = |cat: &mut Catalog, rang: Option<i64>| -> f64 {
+            let debut = std::time::Instant::now();
+            let pile = crate::views::load_stack(cat, &crate::views::ViewRequest { layer: "refs/heads/master".into(), rank: rang }, &Default::default()).unwrap();
+            let v = cat.generations.clone().unwrap().with_stack(&pile);
+            let visible = cat.dialect_arc().condition_visible_sur("s", &v.couche, v.rang).unwrap();
+            let _ = cat.execute_raw(&format!("MATCH (s:Scope) WHERE {visible} RETURN count(s)")).unwrap();
+            debut.elapsed().as_secs_f64() * 1000.0
+        };
+        let avant = comptes(&cat);
+        ligne("comptes avant", avant.clone());
+        let couche = LayerWrite { layer: "refs/heads/master".into(), parent: Some(("backend".into(), n)) };
+        let pointe = chaine.last().unwrap().clone();
+        let debut = std::time::Instant::now();
+        let r = write_history_generation(&mut cat, &depot, &couche, &pointe).expect("la pointe");
+        ligne("pointe", serde_json::json!({"rang": r, "ms": debut.elapsed().as_millis(), "comptes": comptes(&cat)}));
+        let lecture_pointe = lire(&mut cat, None);
+        for c in chaine.iter().rev().skip(1) {
+            let debut = std::time::Instant::now();
+            let r = write_history_catch_up(&mut cat, &depot, &couche, c).expect("un rattrapage");
+            ligne("rattrapage", serde_json::json!({"rang": r, "ms": debut.elapsed().as_millis()}));
+        }
+        let apres = comptes(&cat);
+        let doublons = layer_duplicates(&cat, "refs/heads/master").unwrap();
+        let rattrapes: Vec<i64> = layer_generations(&cat, "refs/heads/master").unwrap().into_iter().map(|(r, _)| r).collect();
+        let milieu = rattrapes[rattrapes.len() / 2];
+        ligne(
+            "après",
+            serde_json::json!({
+                "comptes": apres,
+                "doublons_fichiers": doublons,
+                "lecture_ms_pointe_avant_rattrapage": lecture_pointe,
+                "lecture_ms_pointe_apres": lire(&mut cat, None),
+                "lecture_ms_rang_milieu": lire(&mut cat, Some(milieu)),
+                "generations": rattrapes.len()
+            }),
+        );
+    }
+
     /// **Témoin 2 : a history layer is written without checkout.** Writing the generations of branch `b` (never
     /// checked out) changes neither HEAD, nor the index, nor the status, nor any file of the worktree.
     #[test]
