@@ -155,6 +155,20 @@ struct Bloc {
     lignes: Vec<String>,
 }
 
+/// **What the host says the turn waits for** (`Waiting {cause, what, since_ms, wait_ms?}`), until
+/// `Resumed`: a tool past its notice, or the model that its provider holds back.
+#[derive(Debug, Clone)]
+struct AttenteDite {
+    /// `tool`, `model` or `index`.
+    cause: String,
+    /// The tool's or the model's name.
+    what: String,
+    /// When the wait began, from `since_ms`.
+    depuis: Instant,
+    /// The window announced (the provider's backoff), for « reprise dans N s ».
+    fenetre_ms: Option<u64>,
+}
+
 /// Le modèle de la vue.
 #[derive(Debug)]
 pub struct Vue {
@@ -177,6 +191,8 @@ pub struct Vue {
     attente_depuis: Instant,
     /// Le modèle du dernier appel, tel que l'hôte le nomme.
     modele: Option<String>,
+    /// What the host says the turn waits for (`Waiting`), until `Resumed` (tty-25, second half).
+    attente_dite: Option<AttenteDite>,
     /// Le texte streamé depuis le départ du run : la réponse, déjà à l'écran.
     texte_coule: String,
     /// Le dernier nom de l'agent vu sur ses lignes (`name`), ou gardé par l'hôte après `/nom`.
@@ -244,6 +260,7 @@ impl Vue {
             depuis: Instant::now(),
             attente_depuis: Instant::now(),
             modele: None,
+            attente_dite: None,
             texte_coule: String::new(),
             nom_agent: None,
             envoyes: Vec::new(),
@@ -416,7 +433,26 @@ impl Vue {
     /// Une trame de `/ide/flux` (`{evenement: {kind, …}}`).
     pub fn trame(&mut self, enveloppe: &Value) {
         let e = &enveloppe["evenement"];
+        // A new call, or the end of one, ends what the host said it waited for.
+        if matches!(e["kind"].as_str(), Some("RunStarted" | "ToolCallStarted" | "ToolCallFinished" | "Resumed")) {
+            self.attente_dite = None;
+        }
         match e["kind"].as_str().unwrap_or_default() {
+            // **The host says what the turn waits for** (19 Nov.): a tool past its notice, or the model
+            // that the provider holds back, on a run that has already ended: the animation goes on.
+            "Waiting" => {
+                let since = std::time::Duration::from_millis(e["since_ms"].as_u64().unwrap_or(0));
+                let cause = e["cause"].as_str().unwrap_or("tool").to_string();
+                self.attente_dite = Some(AttenteDite {
+                    what: e["what"].as_str().unwrap_or_default().to_string(),
+                    depuis: Instant::now().checked_sub(since).unwrap_or_else(Instant::now),
+                    fenetre_ms: e["wait_ms"].as_u64(),
+                    cause: cause.clone(),
+                });
+                if cause == "model" {
+                    self.changer(Etat::Reflechit);
+                }
+            }
             // L'hôte ne dit `LlmCall` qu'au retour du modèle : dès qu'un run part, l'équipier réfléchit.
             "RunStarted" | "LlmCall" => {
                 // Un appel au modèle part : au départ du run, ou au retour du précédent.
@@ -866,17 +902,20 @@ impl Vue {
             Some(q) => {
                 // Ce qu'on attend, nommé à côté de l'animation (Lucie, 15 nov.).
                 let n = maintenant.saturating_duration_since(self.attente_depuis).as_secs();
-                let suite = match &self.etat {
-                    Etat::Agit(o) if matches!(o.as_str(), "step_done" | "report" | "edit_plan") => String::new(),
-                    Etat::Agit(o) => {
+                let suite = match (&self.etat, &self.attente_dite) {
+                    (Etat::Agit(o), Some(a)) if a.cause == "tool" => {
                         let cible = self.appels.last().and_then(|a| a.cible()).map(|c| format!(" {c}")).unwrap_or_default();
-                        format!("{o}{cible} travaille… ({n} s)")
+                        format!("{o}{cible} attend… ({} s)", maintenant.saturating_duration_since(a.depuis).as_secs())
                     }
-                    Etat::Reflechit => match &self.modele {
-                        Some(m) => format!("le modèle répond… ({m}, {n} s)"),
-                        None => format!("le modèle répond… ({n} s)"),
-                    },
-                    _ => String::new(),
+                    (_, Some(a)) if a.cause == "model" => {
+                        let ecoule = maintenant.saturating_duration_since(a.depuis);
+                        match a.fenetre_ms {
+                            Some(w) => format!("{} attend le fournisseur… (reprise dans {} s)", a.what, w.saturating_sub(ecoule.as_millis() as u64).div_ceil(1000)),
+                            None => format!("{} attend le fournisseur… ({} s)", a.what, ecoule.as_secs()),
+                        }
+                    }
+                    (_, Some(a)) => format!("{} attend… ({} s)", a.what, maintenant.saturating_duration_since(a.depuis).as_secs()),
+                    _ => self.suite_du_travail(n),
                 };
                 anim::ligne(&self.theme, q, self.image(maintenant), self.graine, self.capacites, &suite)
             }
@@ -901,6 +940,22 @@ impl Vue {
             ligne.spans.push(Span::styled(self.entete.clone(), sourdine));
         }
         ligne
+    }
+
+    /// What the turn is doing, beside the animation: the tool and its target, or the model.
+    fn suite_du_travail(&self, n: u64) -> String {
+        match &self.etat {
+            Etat::Agit(o) if matches!(o.as_str(), "step_done" | "report" | "edit_plan") => String::new(),
+            Etat::Agit(o) => {
+                let cible = self.appels.last().and_then(|a| a.cible()).map(|c| format!(" {c}")).unwrap_or_default();
+                format!("{o}{cible} travaille… ({n} s)")
+            }
+            Etat::Reflechit => match &self.modele {
+                Some(m) => format!("le modèle répond… ({m}, {n} s)"),
+                None => format!("le modèle répond… ({n} s)"),
+            },
+            _ => String::new(),
+        }
     }
 
     /// Dessine la zone vivante dans `zone` (trois lignes), à l'heure qu'il est.
