@@ -1674,7 +1674,7 @@ fn le_theme_daemon_se_choisit_et_l_invocation_tourne_pendant_que_le_modele_refle
 
 /// **The chat page names what a turn waits for** (ticket of 19 Nov., « Un outil lent du chat de
 /// l'IDE ne dit pas qu'il attend », its page half). The host says `Waiting` then `Resumed` on the
-/// turn's run; the page shows « put_note attend… (N s) » in its status, counted by a local timer (the
+/// turn's run; the page shows « propose attend… (N s) » in its status, counted by a local timer (the
 /// page asks the host nothing for it), then goes back to its work. The status changes at most once
 /// a second while it waits: bounded, as the terminal's frames are.
 #[test]
@@ -1685,49 +1685,36 @@ fn la_page_du_chat_nomme_ce_qu_un_tour_attend() {
     let Some(binaire) = navigateur_ou_saut(TEMOIN) else {
         return;
     };
-    // The model asks the test to hold the catalog, then calls put_note, which waits behind it 2.5 s.
+    // The model asks the test to hold the list of propositions, then calls propose, which waits
+    // behind it 2.5 s (the same hold as the host's witness, a_slow_tool_of_the_chat_says_it_waits_then_resumes).
     let (tenir, tenu) = std::sync::mpsc::channel::<()>();
     let (pris, attendre_pris) = std::sync::mpsc::channel::<()>();
     let (tenir, attendre_pris) = (Arc::new(Mutex::new(tenir)), Arc::new(Mutex::new(attendre_pris)));
     let model: ChatModel = Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
         let (tenir, attendre_pris) = (tenir.clone(), attendre_pris.clone());
         Ok(Arc::new(CallbackLlm::new("faux-modele", 8192, move |turns, opts, sink| {
-            let deja = turns.iter().any(|t| t.role == "tool");
-            let modele = if deja {
-                MockLlm::new("Noté.")
+            let proposition = json!({ "files": [{ "path": "notes.md", "content": "# Une note\n" }], "reason": "une note" }).to_string();
+            let modele = if turns.iter().any(|t| t.role == "tool") {
+                MockLlm::new("Proposé.")
             } else {
                 tenir.lock().unwrap().send(()).unwrap();
-                attendre_pris.lock().unwrap().recv_timeout(Duration::from_secs(10)).expect("the catalog held");
-                MockLlm::new("").with_tool_calls(vec![("put_note", r#"{"record":{"key":"une-note","text":"le texte"}}"#)])
+                attendre_pris.lock().unwrap().recv_timeout(Duration::from_secs(10)).expect("the propositions held");
+                MockLlm::new("").with_tool_calls(vec![(crate::declare::PROPOSE, proposition.as_str())])
             };
             modele.generate(turns, opts, sink)
         })))
     });
-    let (d, h, m, id) = banc_gabarit("carnet", "notebook", model.clone(), |m| {
-        // The notebook has no workspace: the bench's root would be a workspace without its source.
-        m.as_object_mut().unwrap().remove("workspace");
-        m["teammate"]["tool_wait_notice_s"] = json!(1);
-    });
+    let (d, h, m, id) = banc_avec(model.clone(), |m| m["teammate"]["tool_wait_notice_s"] = json!(1));
     drop(h);
-    let catalogues: Arc<Mutex<Vec<Arc<Mutex<crate::Catalog>>>>> = Arc::default();
-    let pour_l_ouvreur = catalogues.clone();
     let (chats, taches, runs) = (d.path().join("chats"), d.path().join("taches"), d.path().join("runs"));
-    let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| {
-        let mut h = h.with_racine_des_taches(taches).with_chats_root(chats).with_runs_root(runs).with_chat_model(model);
-        h.opener = Box::new(move |prepared| {
-            let b = crate::daemon_host::open_on_disk(prepared)?;
-            pour_l_ouvreur.lock().unwrap().push(b.catalog.clone());
-            Ok(b)
-        });
-        h
-    });
-    let teneur = std::thread::spawn(move || {
-        tenu.recv_timeout(Duration::from_secs(60)).expect("the model asks to hold");
-        let catalogue = catalogues.lock().unwrap().last().cloned().expect("the backend is open");
-        let _tenu = catalogue.lock().unwrap();
-        pris.send(()).unwrap();
-        std::thread::sleep(Duration::from_millis(2500));
-    });
+    // hote_garde_avec, keeping the host: the test holds a list of its backend.
+    let hote = Arc::new(crate::daemon_host::tests::hote_isole().with_racine_des_taches(taches).with_chats_root(chats).with_runs_root(runs).with_chat_model(model));
+    let ecoute = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let adresse = ecoute.local_addr().unwrap().to_string();
+    let fil = {
+        let (hote, server) = (hote.clone(), tiny_http::Server::from_listener(ecoute, None).unwrap());
+        std::thread::spawn(move || crate::daemon_host::DaemonServer::new(server, 2).serve(hote, Some("j".to_string())))
+    };
     let racine = format!("http://{adresse}");
     let mut r = crate::daemon::agent_de_temoin()
         .post(format!("{racine}/ide/describe"))
@@ -1737,6 +1724,19 @@ fn la_page_du_chat_nomme_ce_qu_un_tour_attend() {
         .unwrap();
     let v: Value = serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap();
     assert_eq!(v["ok"], true, "{v}");
+    let teneur = {
+        let (hote, m) = (hote.clone(), m.clone());
+        std::thread::spawn(move || {
+            tenu.recv_timeout(Duration::from_secs(60)).expect("the model asks to hold");
+            let h = hote.hosted(&m).unwrap();
+            hote.with_backend(&h, |b| {
+                let _liste = b.hold_for_a_test();
+                pris.send(()).unwrap();
+                std::thread::sleep(Duration::from_millis(2500));
+            })
+            .unwrap();
+        })
+    };
 
     let mut n = Navigateur::lancer(&binaire);
     n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
@@ -1744,8 +1744,8 @@ fn la_page_du_chat_nomme_ce_qu_un_tour_attend() {
     n.aller(&format!("{racine}/ide/code/{id}/chat"), prete);
     // Every text the status takes, as it changes.
     n.evaluer("window.__statuts = []; new MutationObserver(() => window.__statuts.push(document.querySelector('#status').textContent)).observe(document.querySelector('#status'), { childList: true, characterData: true, subtree: true })");
-    n.evaluer("document.querySelector('#message').value = 'note-le'; document.querySelector('#send').click()");
-    n.attendre("/put_note attend… \\(\\d+ s\\)/.test(document.querySelector('#status')?.textContent ?? '')", "the status says that put_note waits, and since when");
+    n.evaluer("document.querySelector('#message').value = 'propose une note'; document.querySelector('#send').click()");
+    n.attendre("/propose attend… \\(\\d+ s\\)/.test(document.querySelector('#status')?.textContent ?? '')", "the status says that propose waits, and since when");
     n.attendre("document.querySelector('#status')?.textContent === 'fini'", "la fin du tour");
     teneur.join().unwrap();
     let statuts: Vec<String> = serde_json::from_value(n.evaluer("window.__statuts")).unwrap_or_default();
