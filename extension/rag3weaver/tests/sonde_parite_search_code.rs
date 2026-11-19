@@ -736,6 +736,22 @@ fn releve_le_namespace_devant_la_classe() {
         let mut sans_resultat = r.clone();
         sans_resultat["result"] = Value::Null;
         eprintln!("[namespace] {nom} · méta : {}", serde_json::to_string(&sans_resultat).unwrap_or_default().chars().take(1500).collect::<String>());
+        // Every string of the answer that speaks of the dense branch or of a signal's state.
+        fn cueillir(v: &Value, chemin: &str, out: &mut Vec<String>) {
+            match v {
+                Value::Object(o) => o.iter().for_each(|(k, x)| cueillir(x, &format!("{chemin}.{k}"), out)),
+                Value::Array(a) => a.iter().enumerate().for_each(|(i, x)| cueillir(x, &format!("{chemin}[{i}]"), out)),
+                Value::String(s) if ["vector", "dense", "vecteur", "signal", "repli", "branch"].iter().any(|m| s.to_lowercase().contains(m)) && !chemin.contains(".result[") => {
+                    out.push(format!("{chemin} = {}", s.chars().take(300).collect::<String>()))
+                }
+                _ => {}
+            }
+        }
+        let mut dits = Vec::new();
+        cueillir(&sans_resultat, "", &mut dits);
+        for d in dits.iter().take(30) {
+            eprintln!("[namespace] {nom} · dit : {d}");
+        }
         let rangs: Vec<Value> = lignes
             .iter()
             .enumerate()
