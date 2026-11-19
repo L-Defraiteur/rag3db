@@ -384,8 +384,12 @@ fn le_chat_se_mene_et_s_arrete_dans_la_page() {
     // en vol), la page relit l'état du chat, et Arrêter apparaît quand même.
     n.evaluer("window.__ide.flux.close(); document.querySelector('#message').value = 'parle, lentement, sans flux'; document.querySelector('#send').click()");
     attendre_l_hote(true, "le tour parti flux fermé en vol");
+    // **One reopening, once the host has the run** (ticket of 7 November 2026): calling `onopen()` at each
+    // evaluation of the condition left several reads of the chat in flight, and one of them could land after the
+    // next turn.
+    n.evaluer("window.__ide.flux.onopen()");
     n.attendre(
-        "(window.__ide.flux.onopen(), !document.querySelector('#stop').hidden && document.querySelector('#status')?.textContent === \"l'agent travaille…\")",
+        "!document.querySelector('#stop').hidden && document.querySelector('#status')?.textContent === \"l'agent travaille…\"",
         "le tour parti flux fermé, Arrêter rendu par la relecture",
     );
     n.evaluer("document.querySelector('#stop').click()");
@@ -399,6 +403,32 @@ fn le_chat_se_mene_et_s_arrete_dans_la_page() {
         "document.querySelector('#status')?.textContent === 'fini' \
          && [...document.querySelectorAll('article.message.assistant')].at(-1)?.querySelector('.proposition-du-tour a[data-proposition]')",
         "le tour qui propose flux fermé, le lien de sa proposition",
+    );
+
+    // **A read of the chat that left before a turn and lands after it does not erase that turn** (ticket of
+    // 7 November 2026): the read is held by a gate, as a cold page under load answers late; a turn is sent and ends
+    // meanwhile; the gate is let go, and once the read has landed, the turn and the link of its proposition are still
+    // on the screen. An order, not a duration.
+    n.evaluer(
+        "window.__ide.relectureRetenue = new Promise((ok) => { window.__lacherLaRelecture = ok; }); \
+         window.__relectureFinie = false; \
+         window.__ide.relireLeChat().finally(() => { window.__relectureFinie = true; }); \
+         document.querySelector('#message').value = 'écris encore une note'; document.querySelector('#send').click()",
+    );
+    n.attendre(
+        "document.querySelector('#status')?.textContent === 'fini' && document.querySelectorAll('article.message.assistant').length >= 5",
+        "le tour envoyé pendant une relecture en vol, fini",
+    );
+    let tours_avant = n.evaluer("document.querySelectorAll('article.message').length");
+    assert_eq!(n.evaluer("window.__relectureFinie"), Value::Bool(false), "la relecture est retenue jusqu'à la fin du tour");
+    n.evaluer("delete window.__ide.relectureRetenue; window.__lacherLaRelecture()");
+    n.attendre("window.__relectureFinie === true", "la relecture lâchée a atterri");
+    let tours_apres = n.evaluer("document.querySelectorAll('article.message').length");
+    assert_eq!(tours_apres, tours_avant, "une relecture partie avant le tour a effacé des tours de l'écran");
+    assert_eq!(
+        n.evaluer("!![...document.querySelectorAll('article.message.assistant')].at(-1)?.querySelector('.proposition-du-tour a[data-proposition]')"),
+        Value::Bool(true),
+        "une relecture partie avant le tour a effacé le lien de sa proposition"
     );
     assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
 

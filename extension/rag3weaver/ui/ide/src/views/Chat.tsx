@@ -366,6 +366,11 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
   // avant (page rechargée, flux coupé puis repris) a publié son run.
   const reload = async () => {
     const s = await fetchChat(id);
+    // **A witness's gate** (ticket of 7 November 2026, « le témoin du chat dans la page rougit à la première
+    // exécution après un bâti »): the state read, then held until the witness lets it go, as a cold page under load
+    // answers late. Set by the witnesses only, through `window.__ide.relectureRetenue` (a promise).
+    const retenue = (window as unknown as { __ide?: { relectureRetenue?: Promise<unknown> } }).__ide?.relectureRetenue;
+    if (retenue) await retenue;
     toursRef.current = s.turns;
     setChat(s);
     follow.current = true;
