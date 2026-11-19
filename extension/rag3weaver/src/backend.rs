@@ -7258,6 +7258,29 @@ mod tests {
         (p, request)
     }
 
+    /// **A type's presentation is checked at load** (lot B2): `x-presentation` in an entity's schema is
+    /// `{template}` (a text template on the row's fields) or `{form}` (json, kv, markdown); a template that does
+    /// not compile, or an unknown form, is refused naming the entity.
+    #[test]
+    fn a_bad_presentation_in_a_schema_is_refused_at_load_naming_the_entity() {
+        for (bad, says) in [(json!({"template": "{{ key "}), "template"), (json!({"form": "fancy"}), "fancy"), (json!({"template": "x", "form": "kv"}), "x-presentation")] {
+            let (dir, _) = fixture_avec_descriptions();
+            let schema = dir.path().join("schemas/note.json");
+            let mut s: Value = serde_json::from_slice(&std::fs::read(&schema).unwrap()).unwrap();
+            s["x-presentation"] = bad.clone();
+            std::fs::write(&schema, serde_json::to_vec_pretty(&s).unwrap()).unwrap();
+            let e = PreparedBackend::load(&dir.path().join("backend.json")).err().unwrap_or_else(|| panic!("{bad} is refused"));
+            assert!(e.contains("Note") && e.contains(says), "{bad}: {e}");
+        }
+        // A good one loads.
+        let (dir, _) = fixture_avec_descriptions();
+        let schema = dir.path().join("schemas/note.json");
+        let mut s: Value = serde_json::from_slice(&std::fs::read(&schema).unwrap()).unwrap();
+        s["x-presentation"] = json!({"template": "{{ key }}: {{ body }}"});
+        std::fs::write(&schema, serde_json::to_vec_pretty(&s).unwrap()).unwrap();
+        PreparedBackend::load(&dir.path().join("backend.json")).expect("a good presentation loads");
+    }
+
     /// Le backend notebook copié dans un dossier jetable, avec les
     /// descriptions du pas produit : l'entité `Note` en gagne une, l'outil
     /// `get_note` une surcharge — `put_note` garde le texte de son gabarit.
