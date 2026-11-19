@@ -42,6 +42,10 @@ protected:
 };
 
 TEST_F(DroppedColumnUnderOpenReader, AReaderOpenBeforeADropReadsTheNodeColumnAfterACheckpoint) {
+    // Sans les écritures multiples, un lecteur ne prend pas le verrou de sa table et le DROP ne
+    // l'attend pas : le refus nommé de la liaison du balayage reste le filet (sous les écritures
+    // multiples, le DROP attend le lecteur : drop_waits_for_readers_test.cpp).
+    run(*conn, "CALL enable_multi_writes=false;");
     run(*conn, "CREATE NODE TABLE T(id INT64 PRIMARY KEY, n INT64, s STRING);");
     run(*conn,
         "UNWIND range(1, 20000) AS i CREATE (:T {id: i, n: i, s: 'v' + CAST(i AS STRING)});");
@@ -62,6 +66,10 @@ TEST_F(DroppedColumnUnderOpenReader, AReaderOpenBeforeADropReadsTheNodeColumnAft
 }
 
 TEST_F(DroppedColumnUnderOpenReader, AReaderOpenBeforeADropReadsTheRelColumnAfterACheckpoint) {
+    // Sans les écritures multiples, un lecteur ne prend pas le verrou de sa table et le DROP ne
+    // l'attend pas : le refus nommé de la liaison du balayage reste le filet (sous les écritures
+    // multiples, le DROP attend le lecteur : drop_waits_for_readers_test.cpp).
+    run(*conn, "CALL enable_multi_writes=false;");
     run(*conn, "CREATE NODE TABLE A(id INT64 PRIMARY KEY);");
     run(*conn, "CREATE REL TABLE R(FROM A TO A, w INT64, name STRING);");
     run(*conn, "UNWIND range(1, 3000) AS i CREATE (:A {id: i});");
