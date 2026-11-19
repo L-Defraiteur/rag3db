@@ -463,6 +463,27 @@ la mesure du taux de cache par appel (ED), et pas avant ce chiffre.
 **En tout, environ deux jours** au-dessus du lot des deux étapes. Tout s'éteint par défaut, sauf
 S 50 : rien ne change pour qui ne touche pas aux réglages.
 
+### Lot B : tout déclaratif (19 novembre, décisions de Lucie)
+
+Lucie : « tout doit être déclaratif en général ; quelqu'un doit pouvoir se dire : c'est juste un DAG comme un
+autre, j'aurais pu en faire un moi-même ; et pareil si on veut des boucles auto-amélioratives plus tard, un agent
+qui édite son propre workflow de mémoire ». Le lot B est dû, après la chaîne des tranches, page de conception
+avant code. Ce qui est noté dès maintenant :
+
+- **Les ingrédients** (`archivist.context.*`, `restart.context.*`) sont déclarés dans le gabarit, comme ci-dessus.
+- **Les motifs de `mask_secrets`** quittent la constante Rust (`src/script/secrets.rs`) pour une déclaration du
+  gabarit. Le moteur ne garde que le parcours générique.
+- **L'invite d'extraction devient un paramètre presque vide**, une ligne qui dit la tâche (Lucie : « éviter
+  qu'il y ait beaucoup de prompt à part les descriptions, si c'est pour l'extraction structurée »). C'est le
+  `response_schema` du `LlmNode` qui porte le sens, par les descriptions de ses champs : le sujet, ses tours, ce
+  qui est dit, s'il reste ouvert, les attributs, ce qui est écarté et pourquoi. Toute consigne écrite aujourd'hui
+  en prose dans `archive_slice_prompt.rhai` se déplace dans la description du champ qu'elle concerne. **La
+  preuve** : rejouer le témoin d'extraction sur les mêmes tranches avec l'invite réduite et comparer les
+  sorties. Si une consigne manque vraiment, elle devient une description de champ, pas un paragraphe.
+- **Une graine à garder dans la forme** : qu'un agent puisse un jour éditer ces graphes et ces scripts par
+  outils (lecture, écriture, revue, retour arrière, un témoin qui juge). Rien dans leur forme ne doit
+  l'empêcher.
+
 ## (f) Ce que voit l'agent après la compaction, aussi en ingrédients
 
 Lucie, le 18 novembre au soir :
