@@ -613,7 +613,10 @@ Lucie : « les L0, les vrais tours, doivent être indexés au fil de l'eau avec 
   - `run`, `role`, `tool_name`, `status` ;
   - une option pour écarter la tranche courante.
 
-  **Sans texte**, c'est une liste par le temps (`select_structured`, triée par `at`). C'est ce que
+  **Sans texte**, c'est un second outil, **`list_turns`**, une liste par le temps, du plus récent
+  au plus ancien, avec les mêmes filtres et `limit` (corrigé le 19 novembre : un seul outil aurait
+  dû fondre deux branches en une sortie, ce que le dataflow ne fait pas ; deux outils explicites
+  valent mieux). C'est ce que
   veut Lucie pour « revoir un truc qui aurait mal marché, vérifier que la veille on a bien appelé
   tel outil, quel est son résultat, quels paramètres ». Par exemple, `tool_name: "archive",
   status: "error", since: <hier>` rend les appels de la veille qui ont échoué, avec leurs
@@ -659,8 +662,14 @@ Lucie : « les L0, les vrais tours, doivent être indexés au fil de l'eau avec 
   ligne `Turn` plus ancienne est effacée, avec ses morceaux, son index et ses vecteurs. **Ne se
   touchent pas** : le `ChatFile` (l'hôte le garde), la Source de la transcription (le L0 immuable)
   et les L1, qui citent des intervalles et non des lignes.
-- **Qui purge** : un outil du gabarit, `purge_turns(older_than_days)`, qui efface par
-  `EntityBatchNode` ou `EntityRecordNode`, nœuds de base d'un outil. C'est **l'hôte** qui l'appelle,
+- **Qui purge** : un outil du gabarit, `purge_turns(older_than_days)`. **Corrigé le 19 novembre** :
+  aucun nœud d'outil ne savait effacer (`EntityRecordNode` fait get, put et restore ;
+  `DeleteRecordNode` est interne au catalogue, refusé à la frontière des outils). Tranché par c7
+  selon la règle de Lucie (la forme la plus générale et durable) : une entité déclare
+  `writes.expires: true` avec son `ttl_days` (Turn seule aujourd'hui), et un geste `expire`
+  n'efface que ses lignes plus vieilles que la borne, avec leurs morceaux, leur plein texte et
+  leurs vecteurs, par le chemin de suppression du catalogue. Sur une entité qui ne le déclare pas,
+  il est refusé en la nommant. La garde est la déclaration de l'entité, pas une politique d'outil. C'est **l'hôte** qui l'appelle,
   à chaque fermeture de tranche (la part d'archi), puisqu'il a la cadence du run. Une réaction ne
   convient pas : elle répond à un événement, pas à une horloge. Une tâche propre au gabarit n'a pas
   de déclencheur sans l'hôte.
@@ -722,6 +731,10 @@ Lucie : « il faut qu'on sache relier : ce L1 venait de telle plage ; telle plag
    - `from_chat_file` : hors de l'index (TTL passé, ou `index_turns` éteint), mais lu dans le
      `ChatFile` par l'hôte ;
    - `gone` : ni dans l'index, ni dans le fichier. L'outil le dit, il ne rend pas un vide muet.
+
+   Le gabarit rend `indexed` ou `gone` (19 novembre, `read_turns(run, from_turn, to_turn)`) ;
+   l'hôte remplace un `gone` par `from_chat_file` quand son fichier a le tour. L'entrée par l'uuid
+   d'un Apport viendra avec les champs `run`, `from_turn` et `to_turn` de l'Apport (point 1).
 
    La part du gabarit lit `Turn`. La part de l'hôte (archi) complète par le `ChatFile` ce que
    l'index n'a plus, et expose l'outil aux agents.
