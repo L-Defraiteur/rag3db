@@ -244,7 +244,49 @@ def collect_diff(worktree, base):
 
 
 def build_trace(runs_root, backend):
-    raise NotImplementedError
+    """trace.json for the bench: the agent runs of the task opened on `backend` (one run per
+    step), summed — steps, model calls and time, tokens, tool calls and errors, retries — with
+    the slowest model calls named, so a slow case says where its time went."""
+    import glob
+    n = lambda v: int(v) if str(v).lstrip("-").isdigit() else 0
+    pas, lents = [], []
+    for chemin in sorted(glob.glob(os.path.join(runs_root, "*", "agent-*.json.zst"))):
+        r = subprocess.run(["zstd", "-dc", chemin], capture_output=True)
+        if r.returncode:
+            continue
+        d = json.loads(r.stdout)
+        if (d.get("tache") or {}).get("parent") != backend:
+            continue
+        ev = d.get("evenements") or []
+        appels = [e for e in ev if e.get("kind") == "LlmCall"]
+        fins = [e for e in ev if e.get("kind") == "ToolCallFinished"]
+        outils = {}
+        for e in fins:
+            outils[e.get("tool")] = outils.get(e.get("tool"), 0) + 1
+        u = d.get("usage_du_chat") or {}
+        un = {"step": d.get("pas"), "run": d.get("run"), "wall_ms": n((d.get("fin") or {}).get("ms")),
+              "model_calls": len(appels), "model_ms": sum(n(e.get("ms")) for e in appels),
+              "retries": sum(n(e.get("retries")) for e in appels),
+              "input_tokens": n(u.get("input_tokens")), "cached_tokens": n(u.get("cached_input_tokens")),
+              "output_tokens": n(u.get("output_tokens")), "reasoning_tokens": n(u.get("reasoning_tokens")),
+              "tool_calls": outils, "tool_ms": sum(n(e.get("ms")) for e in fins),
+              "tool_errors": sum(1 for e in fins if str(e.get("ok")) != "True")}
+        pas.append(un)
+        for e in appels:
+            lents.append({"step": d.get("pas"), "ms": n(e.get("ms")), "prompt_tokens": n(e.get("prompt_tokens")),
+                          "cached_tokens": n(e.get("cached_prompt_tokens")), "output_tokens": n(e.get("completion_tokens")),
+                          "retries": n(e.get("retries"))})
+    pas.sort(key=lambda p: (n(p["step"]), p["run"] or ""))
+    somme = lambda k: sum(p[k] for p in pas)
+    outils = {}
+    for p in pas:
+        for k, v in p["tool_calls"].items():
+            outils[k] = outils.get(k, 0) + v
+    return {"steps": len(pas), "model_calls": somme("model_calls"), "model_ms": somme("model_ms"), "wall_ms": somme("wall_ms"),
+            "retries": somme("retries"), "input_tokens": somme("input_tokens"), "cached_tokens": somme("cached_tokens"),
+            "output_tokens": somme("output_tokens"), "reasoning_tokens": somme("reasoning_tokens"),
+            "tool_calls": outils, "tool_ms": somme("tool_ms"), "tool_errors": somme("tool_errors"),
+            "slowest_model_calls": sorted(lents, key=lambda c: -c["ms"])[:10], "per_step": pas}
 
 
 CAMPAGNE = os.path.expanduser("~/.cache/rag3weaver-build/campagne")
@@ -407,6 +449,12 @@ def play(run, repo, hote, rev="origin/master", task="campagne", wall_s=1800):
     with open(os.path.join(run, "diffstat.txt"), "w") as f:
         f.write(stat)
     shutil.copy(boite, os.path.join(run, "mailbox.jsonl"))
+    trace = build_trace(os.path.join(hote.maison, ".local/share/rag3weaver/runs"), backend)
+    with open(boite) as f:
+        trace["ended"] = any(json.loads(l).get("kind") == "ended" for l in f if l.strip())
+    trace["stopped_by"] = stopped_by
+    with open(os.path.join(run, "trace.json"), "w") as f:
+        json.dump(trace, f, indent=2, ensure_ascii=False)
     with open(os.path.join(run, "budget.json"), "w") as f:
         json.dump({"wall_s": wall_s, "elapsed_s": round(time.time() - t0), "stopped_by": stopped_by, "approvals": accords,
                    "backend": backend, "task": task, "declarations": rev9, "base": base}, f, indent=2, ensure_ascii=False)
@@ -416,7 +464,7 @@ def play(run, repo, hote, rev="origin/master", task="campagne", wall_s=1800):
 if __name__ == "__main__":
     import argparse
     a = argparse.ArgumentParser(description="The launcher of the campaign of past fixes, lot 1: prepare a case.")
-    a.add_argument("verb", choices=["prepare", "play"])
+    a.add_argument("verb", choices=["prepare", "play", "trace"])
     a.add_argument("case_file", help="prepare: the case file (Markdown with its « lanceur » block); play: the prepared run folder")
     a.add_argument("--case-path", help="the case file's path in its repository (refused if present at the parent)")
     a.add_argument("--wall-s", type=int, default=1800)
@@ -426,5 +474,14 @@ if __name__ == "__main__":
     o = a.parse_args()
     if o.verb == "prepare":
         print(json.dumps(prepare(o.case_file, o.case_path, o.repo, o.poste if os.path.exists(o.poste) else None, o.racine), ensure_ascii=False))
+    elif o.verb == "trace":
+        # A trace rebuilt after the fact, for a run played before lot 3.
+        with open(os.path.join(o.case_file, "budget.json")) as f:
+            b = json.load(f)
+        t = build_trace(os.path.join(o.racine, "maison/.local/share/rag3weaver/runs"), b["backend"])
+        t["stopped_by"] = b.get("stopped_by")
+        with open(os.path.join(o.case_file, "trace.json"), "w") as f:
+            json.dump(t, f, indent=2, ensure_ascii=False)
+        print(json.dumps({k: t[k] for k in ("steps", "model_calls", "model_ms", "wall_ms", "retries")}))
     else:
         print(json.dumps(play(o.case_file, o.repo, Hote(o.racine), wall_s=o.wall_s), ensure_ascii=False))
