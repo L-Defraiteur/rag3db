@@ -5164,9 +5164,31 @@ impl Backend {
     /// **The state of a view's index, now** (`POST /index_state`, the thin client's watch): what a read of `cell`
     /// under `view` would say, without waiting. `{"ready": true}` when its layer is caught up; otherwise the `index`
     /// field a read would carry (estimate, files pending, an index writing it).
-    pub fn index_state_now(&self, cell: Option<&crate::scope::Scope>, view: Option<crate::views::ViewRequest>) -> Value {
-        let _ = (cell, view);
-        json!({"ready": true})
+    ///
+    /// `vectors`: the watch was opened by a search that reads the vectors, which are then owed too.
+    pub fn index_state_now(&self, cell: Option<&crate::scope::Scope>, view: Option<&Value>, vectors: bool) -> Result<Value, String> {
+        use crate::catalog::retard::{LagKey, LayerId};
+        let Some(vue) = self.read_view.current() else { return Ok(json!({"ready": true})) };
+        let layer = match view.filter(|v| !v.is_null()) {
+            Some(v) => LayerId(parse_view(v)?.layer),
+            None => LayerId::backend(),
+        };
+        let key = LagKey { cell: cell.cloned().unwrap_or_else(|| vue.scope.clone()), layer: layer.clone() };
+        if vue.file_lag.is_writing(&key) {
+            let pending = vue.file_lag.summary_of(&key).map_or(0, |s| s.files);
+            return Ok(json!({"ready": false, "indexing": true, "eta_s": null, "pending_files": pending}));
+        }
+        if let Some(e) = vue.file_lag.estimate_of(&key) {
+            return Ok(json!({"ready": false, "eta_s": e.eta_ms.map(|ms| ms.div_ceil(1000)), "pending_files": e.pending_files}));
+        }
+        if vectors {
+            match self.vectors_owed(&vue, layer.as_str()) {
+                Ok(Some((0, _, _))) | Err(_) => {}
+                Ok(Some((chunks, eta, _))) => return Ok(json!({"ready": false, "text_eta_s": 0, "vectors_eta_s": eta, "vectors_due": chunks})),
+                Ok(None) => return Ok(json!({"ready": false, "text_eta_s": 0, "vectors_eta_s": null})),
+            }
+        }
+        Ok(json!({"ready": true}))
     }
 
     fn wait_for_a_lagging_index(&self, prepared: &PreparedBackend, vectors: bool) -> Option<Value> {
@@ -9845,7 +9867,7 @@ mod tests {
         std::fs::write(dir.path().join("sources/arrivee.rs"), "pub fn arrivee() {}\n").unwrap();
         wait_for_lag(&backend, 1);
         let t = std::time::Instant::now();
-        let etat = backend.index_state_now(None, None);
+        let etat = backend.index_state_now(None, None, false).expect("the state");
         assert!(t.elapsed() < std::time::Duration::from_secs(1), "the state is said without waiting: {:?}", t.elapsed());
         assert_eq!(etat["ready"], json!(false), "{etat}");
         assert_eq!(etat["eta_s"], json!(20), "{etat}");
@@ -9854,7 +9876,7 @@ mod tests {
         for chemin in ["arrivee.rs", "sources/arrivee.rs"] {
             lag.done_in(&crate::catalog::retard::LagKey::backend(&cell), chemin, u64::MAX);
         }
-        assert_eq!(backend.index_state_now(None, None), json!({"ready": true}), "a caught-up layer is ready");
+        assert_eq!(backend.index_state_now(None, None, false).unwrap(), json!({"ready": true}), "a caught-up layer is ready");
     }
 
     /// **Without an observed rate, a read waits at most the setting, and says

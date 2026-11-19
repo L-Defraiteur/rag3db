@@ -254,6 +254,9 @@ pub fn servir(
             Ok(requete) if requete["method"] == OUTILS_CHANGES => {
                 Some(json!({ "jsonrpc": "2.0", "method": "notifications/tools/list_changed" }))
             }
+            Ok(requete) if requete["method"] == INTERNAL_NOTICE => {
+                Some(json!({ "jsonrpc": "2.0", "method": "notifications/message", "params": requete["params"].clone() }))
+            }
             Ok(requete) => traiter(&requete, hote, cles),
             // Une ligne illisible : le protocole veut un `id` nul.
             Err(e) => Some(erreur(Value::Null, -32700, format!("JSON illisible : {e}"))),
