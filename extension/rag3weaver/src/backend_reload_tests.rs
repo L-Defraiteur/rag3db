@@ -1555,6 +1555,7 @@ fn an_invocation_does_not_wait_behind_the_catalog_lock() {
     write(dir.path(), "echo.mmd", "%% tool: echo\n%% description: read the schema\n%% result: answer.result\ngraph LR\n answer[\"SchemaNode\"]\n");
     backend.reload().unwrap();
     let backend = std::sync::Arc::new(backend);
+    assert!(backend.read_view.current().is_some(), "no read view is published: the witness would test the opening's fallback, not the common use");
     let authority = crate::dataflow::invocation_nodes::InvocationAuthority {
         manifest: backend.prepared().manifest_path.clone(),
         policy: Default::default(),
