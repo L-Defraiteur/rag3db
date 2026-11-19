@@ -1,6 +1,7 @@
 # Le plein texte en fichiers rougit e2e_tx_par_paquet_arret sur master
 
-- **État** : ouvert (19 novembre 2026)
+- **État** : fermé (19 novembre 2026, session recherche) : C est revenue avec sa durabilité.
+- **Ouvert le** : 19 novembre 2026, par ED.
 - **Famille** : produit
 - **Gravité** : une reprise après arrêt rend de mauvais comptes, en plein texte en fichiers. Une recherche après un
   arrêt ne trouve pas un fichier d'un paquet validé.
@@ -67,3 +68,16 @@ quatre lignes `en_fichiers` sortent de `tools/poste/known_red_e2e.txt`.
   - le chercheur rend les dérivées dues avant de répondre ;
   - le repreneur rend celles d'avant la mort.
 - Les quatre cas rouges d'abord, puis verts, et la mesure de C refaite en release.
+
+## Ce qui le ferme (recherche, 19 novembre 2026)
+
+- **Le revert** de C est sur master (4c0728e703, PR #19) : les quatre cas `en_fichiers` sont redevenus verts, jugés
+  pour de vrai depuis que leurs lignes ont quitté `tools/poste/known_red_e2e.txt`.
+- **C revient, durable**, sur la branche `c-durable-2` :
+  - la marque `derivations_held` dans `_catalog_meta`, posée dans la transaction du premier paquet et effacée quand
+    les dérivées retenues sont rendues ;
+  - un écrivain qui trouve la marque rend ce qu'une passe morte a retenu (`Catalog::repair_held_derivations`), avant
+    toute lecture (`consigne`) et en fin de reprise ;
+  - tant que la marque reste, l'état d'une entité dérivée dit « à rebâtir » (`Running`, 0 %).
+- **Le témoin** : les quatre cas `en_fichiers`. Ils sont rouges sur C réappliquée telle quelle (f40c251297, comme en
+  bissection : C 4/6, son parent 6/6), puis verts avec le correctif.
