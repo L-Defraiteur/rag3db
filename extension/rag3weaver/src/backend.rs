@@ -1076,8 +1076,21 @@ fn not_ready_line(state: &Value) -> String {
         })
         .unwrap_or_default();
     let others = if others.is_empty() { String::new() } else { format!(" ; {}", others.join(" ; ")) };
+    let vectors = match state["vectors_unavailable"].as_str() {
+        Some(cause) => format!(" ; vecteurs indisponibles ({cause}) : la réponse porte sur les mots"),
+        None => String::new(),
+    };
     if state["ready"] == json!(true) {
-        return format!("index : ta vue est à jour{others}.");
+        return format!("index : ta vue est à jour{vectors}{others}.");
+    }
+    if let Some(v) = state["vectors_eta_s"].as_u64().map(Some).or_else(|| state.get("vectors_eta_s").map(|_| None)) {
+        let s = |n: Option<u64>| n.map_or_else(|| "durée inconnue".to_string(), |n| format!("environ {n} s"));
+        let files = state["pending_files"].as_u64().unwrap_or(0);
+        return format!(
+            "index pas prêt : texte {}, vecteurs {} — la réponse porte sur ce qui est déjà indexé ({files} fichier(s) en attente){others}.",
+            s(state["text_eta_s"].as_u64()),
+            s(v)
+        );
     }
     let files = state["pending_files"].as_u64().unwrap_or(0);
     if state["indexing"] == json!(true) {
@@ -1087,7 +1100,7 @@ fn not_ready_line(state: &Value) -> String {
         Some(n) => format!("environ {n} s"),
         None => "durée inconnue".to_string(),
     };
-    format!("index pas prêt, {when} : la réponse porte sur ce qui est déjà indexé ({files} fichier(s) en attente){others}.")
+    format!("index pas prêt, {when} : la réponse porte sur ce qui est déjà indexé ({files} fichier(s) en attente){vectors}{others}.")
 }
 
 /// **`view` d'un appel d'outil** : `{"layer": <id de couche>, "rank"?: <génération>}`.
@@ -4857,7 +4870,13 @@ impl Backend {
         // tool waits for it under `search.index_wait_s`, or answers at once and
         // says it is not ready. Before the graph, so that its snapshot sees the
         // catch-up; after the call's view is set, so that it waits for that view's layer only.
-        let index_state = if attachment.freshness { self.wait_for_a_lagging_index(prepared) } else { None };
+        // **The vectors too, for a search that reads them** (Lucie, 18 November 2026; page
+        // `docs/recherche/19-11-2026/03-l-attente-des-recherches-sur-l-index.md`): a graph with a vector search, and a
+        // call whose signals read the vectors. usages, outline, read_file, grep never wait for the vectors.
+        let vectors = attachment.freshness
+            && def.nodes.iter().any(|n| n.node_type == "VectorSearchNode")
+            && self.call_reads_vectors(&args_for_hook);
+        let index_state = if attachment.freshness { self.wait_for_a_lagging_index(prepared, vectors) } else { None };
         let mut response = self.execute_graph(prepared, tool, &def, &metadata_ports, &policy, Some(GraphTarget::Tool(name.to_string())))?;
         if view.is_some() {
             // La vue lue se dit dans la réponse ; un appel qui n'a pas posé de vue
@@ -4934,12 +4953,116 @@ impl Backend {
         Some(json!({"ready": false, "eta_s": eta_s, "pending_files": pending, "waited_s": start.elapsed().as_secs()}))
     }
 
-    fn wait_for_a_lagging_index(&self, prepared: &PreparedBackend) -> Option<Value> {
+    /// Whether a call reads the vectors: its `options.signals`, else the default signals of its `target` entity; never
+    /// in `scan` mode.
+    fn call_reads_vectors(&self, args: &Value) -> bool {
+        if args.get("mode").and_then(Value::as_str) == Some("scan") {
+            return false;
+        }
+        match args.get("options").and_then(|o| o.get("signals")).filter(|v| !v.is_null()) {
+            Some(asked) => serde_json::from_value::<crate::search::SearchSignals>(asked.clone()).is_ok_and(|s| s.vector()),
+            None => {
+                let target = args.get("target").and_then(Value::as_str);
+                self.read_view
+                    .current()
+                    .and_then(|vue| target.and_then(|t| vue.entity_configs.get(t).map(|c| c.signals.vector())))
+                    .unwrap_or(false)
+            }
+        }
+    }
+
+    /// **The vectors a view owes** (`Catalog::vectors_due_for_view`, by a try of the catalogue's lock, never a wait):
+    /// `Err` the cause when no service will compute them; `Ok(None)` when the catalogue is held by a writer or the
+    /// count failed (unknown); `Ok(Some((chunks, eta_s)))` otherwise, `eta_s` `None` without a known rate.
+    fn vectors_owed(&self, vue: &crate::read_view::ReadView, layer: &str) -> Result<Option<(usize, Option<u64>, Option<&'static str>)>, String> {
+        if let Some(e) = vue.search_services.get::<Arc<dyn crate::embedder::Embedder>>("embedder") {
+            if e.is_absent() {
+                return Err(format!("no embedding service ({})", crate::embedder::AVERTISSEMENT_EMBARQUEUR_ABSENT));
+            }
+        }
+        let Ok(cat) = self.catalog.try_lock() else { return Ok(None) };
+        let Ok(due) = cat.vectors_due_for_view(layer) else { return Ok(None) };
+        let eta = if due.chunks == 0 {
+            Some(0)
+        } else {
+            due.chars_per_s.filter(|r| *r > 0.0).map(|r| (due.chunks as f64 * due.mean_chars / r).ceil() as u64)
+        };
+        Ok(Some((due.chunks, eta, due.rate_from)))
+    }
+
+    /// **The wait of a search that reads the vectors**: the text and the vectors, each with its estimate. Beyond
+    /// `search.index_wait_s` for either, the answer comes at once and says both (`text_eta_s`, `vectors_eta_s`);
+    /// within it, the call waits for the text then the vectors, up to the setting. No embedding service: the vectors
+    /// are not waited for and the cause is said (`vectors_unavailable`). `None`: nothing to say about the vectors
+    /// (the text's own wait follows).
+    fn wait_for_text_and_vectors(&self, prepared: &PreparedBackend, vue: &crate::read_view::ReadView, key: &crate::catalog::retard::LagKey) -> Option<Value> {
+        let wait_s = prepared.manifest.search.as_ref().map_or_else(default_index_wait_s, |s| s.index_wait_s);
+        let layer = key.layer.as_str();
+        let owed = match self.vectors_owed(vue, layer) {
+            Err(cause) => {
+                let mut state = self.wait_for_noted_files(prepared, &vue.file_lag, key).unwrap_or_else(|| json!({"ready": true}));
+                state["vectors_unavailable"] = json!(cause);
+                return Some(state);
+            }
+            Ok(owed) => owed,
+        };
+        let text = vue.file_lag.estimate_of(key);
+        let text_eta_s = match &text {
+            None => Some(0),
+            Some(e) => e.eta_ms.map(|ms| ms.div_ceil(1000)),
+        };
+        let pending = text.as_ref().map_or(0, |e| e.pending_files);
+        let vectors_eta_s = owed.and_then(|(_, eta, _)| eta);
+        let long = |eta: Option<u64>| eta.is_some_and(|s| s > wait_s);
+        if long(text_eta_s) || long(vectors_eta_s) {
+            let (chunks, rate_from) = owed.map_or((None, None), |(c, _, r)| (Some(c), r));
+            return Some(json!({
+                "ready": false,
+                "eta_s": text_eta_s.zip(vectors_eta_s).map(|(t, v)| t.max(v)),
+                "text_eta_s": text_eta_s,
+                "vectors_eta_s": vectors_eta_s,
+                "vectors_due": chunks,
+                "vectors_rate_from": rate_from,
+                "pending_files": pending,
+            }));
+        }
+        let start = std::time::Instant::now();
+        let deadline = start + std::time::Duration::from_secs(wait_s);
+        let text_state = self.wait_for_noted_files(prepared, &vue.file_lag, key);
+        if text_state.is_some() {
+            return text_state;
+        }
+        loop {
+            match self.vectors_owed(vue, layer) {
+                Ok(Some((0, _, _))) => return None,
+                Ok(_) if std::time::Instant::now() >= deadline => break,
+                Ok(_) => std::thread::sleep(std::time::Duration::from_millis(200)),
+                Err(_) => return None,
+            }
+        }
+        let owed_now = self.vectors_owed(vue, layer).ok().flatten();
+        Some(json!({
+            "ready": false,
+            "eta_s": owed_now.and_then(|(_, eta, _)| eta),
+            "text_eta_s": 0,
+            "vectors_eta_s": owed_now.and_then(|(_, eta, _)| eta),
+            "vectors_due": owed_now.map(|(c, _, _)| c),
+            "pending_files": 0,
+            "waited_s": start.elapsed().as_secs(),
+        }))
+    }
+
+    fn wait_for_a_lagging_index(&self, prepared: &PreparedBackend, vectors: bool) -> Option<Value> {
         use crate::catalog::retard::{LagKey, LayerId};
         let vue = self.read_view.current()?;
         let cell = CELL_OF_CALL.with(|c| c.borrow().clone()).unwrap_or_else(|| vue.scope.clone());
         let layer = CALL_VIEW.with(|v| v.borrow().as_ref().map(|r| LayerId(r.layer.clone()))).unwrap_or_else(LayerId::backend);
         let key = LagKey { cell: cell.clone(), layer: layer.clone() };
+        if vectors {
+            if let Some(state) = self.wait_for_text_and_vectors(prepared, &vue, &key) {
+                return Some(state);
+            }
+        }
         // **An index writes this view** (the view's state, `views::ViewState::indexing`, 18 November 2026): a full
         // index notes no file in the lag, and its length is unknown. The read answers at once and says so; before,
         // it kept silent for the whole index (46 s on rag3weaver/src, about 3 min on the whole repository).
