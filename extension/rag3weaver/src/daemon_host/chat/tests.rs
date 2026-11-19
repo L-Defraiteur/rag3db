@@ -1672,6 +1672,91 @@ fn le_theme_daemon_se_choisit_et_l_invocation_tourne_pendant_que_le_modele_refle
     fil.join().unwrap();
 }
 
+/// **The chat page names what a turn waits for** (ticket of 19 Nov., « Un outil lent du chat de
+/// l'IDE ne dit pas qu'il attend », its page half). The host says `Waiting` then `Resumed` on the
+/// turn's run; the page shows « put_note attend… (N s) » in its status, counted by a local timer (the
+/// page asks the host nothing for it), then goes back to its work. The status changes at most once
+/// a second while it waits: bounded, as the terminal's frames are.
+#[test]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+fn la_page_du_chat_nomme_ce_qu_un_tour_attend() {
+    use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+    const TEMOIN: &str = "la_page_du_chat_nomme_ce_qu_un_tour_attend";
+    let Some(binaire) = navigateur_ou_saut(TEMOIN) else {
+        return;
+    };
+    // The model asks the test to hold the catalog, then calls put_note, which waits behind it 2.5 s.
+    let (tenir, tenu) = std::sync::mpsc::channel::<()>();
+    let (pris, attendre_pris) = std::sync::mpsc::channel::<()>();
+    let (tenir, attendre_pris) = (Arc::new(Mutex::new(tenir)), Arc::new(Mutex::new(attendre_pris)));
+    let model: ChatModel = Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+        let (tenir, attendre_pris) = (tenir.clone(), attendre_pris.clone());
+        Ok(Arc::new(CallbackLlm::new("faux-modele", 8192, move |turns, opts, sink| {
+            let deja = turns.iter().any(|t| t.role == "tool");
+            let modele = if deja {
+                MockLlm::new("Noté.")
+            } else {
+                tenir.lock().unwrap().send(()).unwrap();
+                attendre_pris.lock().unwrap().recv_timeout(Duration::from_secs(10)).expect("the catalog held");
+                MockLlm::new("").with_tool_calls(vec![("put_note", r#"{"record":{"key":"une-note","text":"le texte"}}"#)])
+            };
+            modele.generate(turns, opts, sink)
+        })))
+    });
+    let (d, h, m, id) = banc_gabarit("carnet", "notebook", model.clone(), |m| m["teammate"]["tool_wait_notice_s"] = json!(1));
+    drop(h);
+    let catalogues: Arc<Mutex<Vec<Arc<Mutex<crate::Catalog>>>>> = Arc::default();
+    let pour_l_ouvreur = catalogues.clone();
+    let (chats, taches, runs) = (d.path().join("chats"), d.path().join("taches"), d.path().join("runs"));
+    let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| {
+        let mut h = h.with_racine_des_taches(taches).with_chats_root(chats).with_runs_root(runs).with_chat_model(model);
+        h.opener = Box::new(move |prepared| {
+            let b = crate::daemon_host::open_on_disk(prepared)?;
+            pour_l_ouvreur.lock().unwrap().push(b.catalog.clone());
+            Ok(b)
+        });
+        h
+    });
+    let teneur = std::thread::spawn(move || {
+        tenu.recv_timeout(Duration::from_secs(60)).expect("the model asks to hold");
+        let catalogue = catalogues.lock().unwrap().last().cloned().expect("the backend is open");
+        let _tenu = catalogue.lock().unwrap();
+        pris.send(()).unwrap();
+        std::thread::sleep(Duration::from_millis(2500));
+    });
+    let racine = format!("http://{adresse}");
+    let mut r = crate::daemon::agent_de_temoin()
+        .post(format!("{racine}/ide/describe"))
+        .header("Cookie", "rag3weaver_ide=j")
+        .header("content-type", "application/json")
+        .send(json!({ "manifest": m }).to_string())
+        .unwrap();
+    let v: Value = serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap();
+    assert_eq!(v["ok"], true, "{v}");
+
+    let mut n = Navigateur::lancer(&binaire);
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+    let prete = "document.querySelector('#send') && !document.querySelector('#send').disabled && document.getElementById('lien')?.textContent === 'flux : ouvert'";
+    n.aller(&format!("{racine}/ide/code/{id}/chat"), prete);
+    // Every text the status takes, as it changes.
+    n.evaluer("window.__statuts = []; new MutationObserver(() => window.__statuts.push(document.querySelector('#status').textContent)).observe(document.querySelector('#status'), { childList: true, characterData: true, subtree: true })");
+    n.evaluer("document.querySelector('#message').value = 'note-le'; document.querySelector('#send').click()");
+    n.attendre("/put_note attend… \\(\\d+ s\\)/.test(document.querySelector('#status')?.textContent ?? '')", "the status says that put_note waits, and since when");
+    n.attendre("document.querySelector('#status')?.textContent === 'fini'", "la fin du tour");
+    teneur.join().unwrap();
+    let statuts: Vec<String> = serde_json::from_value(n.evaluer("window.__statuts")).unwrap_or_default();
+    let attentes: Vec<&String> = statuts.iter().filter(|t| t.contains("attend…")).collect();
+    assert!(!attentes.is_empty(), "{statuts:?}");
+    assert!(attentes.len() <= 6, "the status changes at most once a second while it waits (2.5 s held, 1 s notice) : {statuts:?}");
+    assert!(statuts.iter().position(|t| t.contains("attend…")) < statuts.iter().rposition(|t| t == "fini"), "{statuts:?}");
+    assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
+    drop(n);
+    drop(d);
+    let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+    assert_eq!(statut, 200);
+    fil.join().unwrap();
+}
+
 /// **Le menu des thèmes** (c7, 13 novembre 2026 : Lucie a demandé trois thèmes de plus,
 /// tty les pose dans `templates/themes/`). Le menu de l'en-tête montre les thèmes du
 /// dossier, et eux seuls ; choisir forêt pose les couleurs que son fichier dit ; le choix
