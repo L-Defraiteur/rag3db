@@ -10,6 +10,7 @@ Deux événements sur le bus du backend, sujet `agent`, sur le run du tour :
   - `cause` vaut `tool` ou `model` ;
   - `what` est le nom de l'outil ou du modèle (le même que le `model` de `LlmCall`) ;
   - `since_ms` est le temps déjà attendu.
+- Pour le modèle, `wait_ms` : la fenêtre annoncée, pour que l'écran dise « reprise dans N s » (remarque d'archi, rouge e7b5f174b6, puis vert).
 - `{kind: "Resumed", run, cause, waited_ms}`, seulement après un `Waiting` du même run.
 
 Ils sont émis une fois par attente, au-delà d'un seuil qui existait déjà, et jamais à chaque tour de boucle :
@@ -18,6 +19,11 @@ Ils sont émis une fois par attente, au-delà d'un seuil qui existait déjà, et
 - **le modèle** : le recul d'un refus du fournisseur (`attente_du_fournisseur`), sur le run du pas refusé, dont le pas note le run et le modèle au début de son tour (`Step::note_turn_run`). Le `Resumed` part quand la fenêtre est passée. Un `stop` ou une tâche fermée pendant l'attente n'en émet pas : le run est fini.
 
 La cause `index` n'est pas émise par ce lot. Une attente d'index se voit aujourd'hui comme un outil qui attend, et la ligne de la boîte le suppose (« un index tient sans doute l'écriture »).
+
+## La portée (relecture d'archi)
+
+- **Les pas d'un équipier seulement.** Un outil lent dans un tour du chat de l'IDE (`OutilsDuChat`) ne dit encore rien : c'est le ticket [`docs/tty/tickets/2026-11-19-un-outil-lent-du-chat-de-l-ide-ne-dit-pas-qu-il-attend.md`](../tickets/2026-11-19-un-outil-lent-du-chat-de-l-ide-ne-dit-pas-qu-il-attend.md).
+- **Le `Waiting` du modèle part sur le run du pas refusé, déjà fini.** Le terminal, qui suit la tâche, le voit : c'est l'usage visé. Une page qui ne suit que le run du tour en cours (`runRef` dans `Chat.tsx`) ne le verra pas.
 
 ## Les témoins
 
