@@ -413,7 +413,7 @@ pub(crate) fn defaire_les_aretes(s: &Scene) {
     let avant = toutes(&s.cat);
 
     // La forme : une instruction.
-    let ecrire = Write::Detach { relation: "uses".into(), table: "Symbol".into(), side: Direction::Outgoing, filter: filtre };
+    let ecrire = Write::Detach { relation: "uses".into(), table: "Symbol".into(), side: Direction::Outgoing, filter: filtre, end: None };
     let texte = d.write(&ecrire).unwrap_or_else(|e| panic!("{e}"));
     s.cat.execute_raw_with_params(&texte, &params).unwrap_or_else(|e| panic!("{e}\n{texte}"));
     let apres = toutes(&s.cat);
@@ -422,6 +422,6 @@ pub(crate) fn defaire_les_aretes(s: &Scene) {
     assert!(apres.iter().any(|(_, vers)| vers == &s.a), "d → a reste");
 
     // Une condition vide se refuse avant le moteur.
-    let vide = Write::Detach { relation: "uses".into(), table: "Symbol".into(), side: Direction::Outgoing, filter: Predicate::AllOf(vec![]) };
+    let vide = Write::Detach { relation: "uses".into(), table: "Symbol".into(), side: Direction::Outgoing, filter: Predicate::AllOf(vec![]), end: None };
     assert!(d.write(&vide).is_err(), "AllOf vide refusé");
 }
