@@ -731,6 +731,19 @@ impl Resolveur {
 /// (`COUCHE_DU_BACKEND`), posé tel quel et jamais dérivé, pour que rien de posé ne bouge.
 pub const ID_DE_LA_COUCHE_DU_BACKEND: &str = "backend";
 
+/// **A finished layer, by its name or its id** (2a′-3, lot 6b): its id and the date of its end, when the layer's card
+/// says it ended (its ref or its worktree disappeared); `None` for a live or unknown layer. A view on it is refused
+/// saying so, before any read.
+pub fn finished_layer(
+    lire_meta: &dyn Fn(&str) -> Result<Option<String>, String>,
+    depot: &str,
+    nom_ou_id: &str,
+) -> Result<Option<(String, String)>, String> {
+    // RED STUB: no layer is ever said finished.
+    let _ = (lire_meta, depot, nom_ou_id);
+    Ok(None)
+}
+
 /// **L'id d'une couche par son nom** (`couche_nom:<dépôt>:<nom>`), seulement si sa fiche est vivante
 /// (sans `fin`). `lire_meta` lit une clé de `_catalog_meta` : celle du catalogue, ou celle de
 /// l'instantané d'un appel d'outil.
@@ -1708,9 +1721,17 @@ mod tests {
         assert_eq!(layer_id_by_name(&lire, "depot", "refs/heads/b").unwrap(), None, "le nom d'une couche finie mène encore à son id");
         let fiche = cat.read_meta_key(&format!("fiche_couche:depot:{a}")).unwrap().unwrap_or_default();
         assert!(fiche.contains("fin"), "la fiche de la couche effacée n'a pas sa fin : {fiche}");
+        // **Témoin 6 (2a′-3, lot 6b) : the end of a layer is said, by its name and by its id, with its date.**
+        let fin = finished_layer(&lire, "depot", "refs/heads/b").unwrap();
+        assert_eq!(fin.as_ref().map(|(id, _)| id.as_str()), Some(a.as_str()), "a finished layer is not found by its name");
+        assert!(fin.as_ref().is_some_and(|(_, quand)| quand.starts_with("20")), "the end has no date: {fin:?}");
+        assert_eq!(finished_layer(&lire, "depot", &a).unwrap(), fin, "a finished layer is not found by its id");
+        assert_eq!(finished_layer(&lire, "depot", "refs/heads/main").unwrap(), None, "a live layer is said finished");
         git(&d, &["branch", "b", "main"]);
         let recree = ids(&r);
         assert_ne!(recree["refs/heads/b"], a, "une branche recréée ailleurs a repris l'identifiant de l'ancienne");
+        assert_eq!(finished_layer(&lire, "depot", "refs/heads/b").unwrap(), None, "a name born again is said finished");
+        assert!(finished_layer(&lire, "depot", &a).unwrap().is_some(), "the old id of a name born again is no longer finished");
         // La garde d'ED : une branche effacée et une autre créée sur la même pointe, pendant qu'une ref vivante
         // (main) la porte encore, ce n'est pas un renommage : une fin et une naissance.
         let b = recree["refs/heads/b"].clone();
