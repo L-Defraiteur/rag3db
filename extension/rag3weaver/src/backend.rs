@@ -6309,7 +6309,7 @@ impl Backend {
         }
         // Le retard de l'index sur le disque : des fichiers changés pas encore
         // réindexés (la montre de fichiers).
-        if let Some(lag) = cat.file_lag().summary_in(cat.scope()) {
+        if let Some(lag) = cat.file_lag().summary_of(&crate::catalog::retard::LagKey::backend(cat.scope())) {
             etats.insert("lag".to_string(), json!({"files": lag.files, "since_ms": lag.since_ms}));
         }
         if let Some(r) = reprise {
@@ -8030,11 +8030,11 @@ mod tests {
         // Une cellule voisine n'a pas ce retard, et le sien ne déborde pas ici.
         let voisine = crate::scope::Scope { org: "voisine".into(), project: "p".into() };
         let lag = backend.catalog.lock().unwrap().file_lag();
-        assert_eq!(lag.summary_in(&voisine), None);
-        lag.note(&voisine, "autre.rs", 0);
+        assert_eq!(lag.summary_of(&crate::catalog::retard::LagKey::backend(&voisine)), None);
+        lag.note_in(&crate::catalog::retard::LagKey::backend(&voisine), "autre.rs", 0);
         let u = usages_de(&backend, "depart");
         assert!(u.contains("1 fichier changé"), "seul le retard de la cellule de l'appel compte : {u}");
-        lag.done(&voisine, "autre.rs", u64::MAX);
+        lag.done_in(&crate::catalog::retard::LagKey::backend(&voisine), "autre.rs", u64::MAX);
 
         // La réaction montée : l'édition suivante est réindexée, le retard tombe.
         backend.mount_reactions().unwrap();
@@ -8151,12 +8151,12 @@ mod tests {
             let cat = backend.catalog.lock().unwrap();
             (cat.file_lag(), cat.scope().clone())
         };
-        lag.note(&cell, "outils.rs", crate::catalog::retard::now_ms());
-        assert_eq!(lag.summary_in(&cell).map(|s| s.files), Some(1));
+        lag.note_in(&crate::catalog::retard::LagKey::backend(&cell), "outils.rs", crate::catalog::retard::now_ms());
+        assert_eq!(lag.summary_of(&crate::catalog::retard::LagKey::backend(&cell)).map(|s| s.files), Some(1));
         let source = backend.file_source.clone().unwrap();
         let mut cat = backend.catalog.lock().unwrap();
         crate::code_sync::sync_source(&mut cat, source.as_ref(), &Default::default(), &mut |_| {}).unwrap();
-        assert_eq!(lag.summary_in(&cell), None, "relu par la synchronisation, le retard tombe");
+        assert_eq!(lag.summary_of(&crate::catalog::retard::LagKey::backend(&cell)), None, "relu par la synchronisation, le retard tombe");
     }
 
     /// **Un fichier créé est vu** : la montre relit la liste de la source à
@@ -8995,8 +8995,8 @@ mod tests {
         }
         let catalog = open();
         let cell = catalog.scope().clone();
-        catalog.file_lag().note(&cell, "x.rs", crate::catalog::retard::now_ms());
-        assert_eq!(catalog.file_lag().estimate(&cell), Some(crate::catalog::retard::IndexEstimate { pending_files: 1, eta_ms: Some(300) }));
+        catalog.file_lag().note_in(&crate::catalog::retard::LagKey::backend(&cell), "x.rs", crate::catalog::retard::now_ms());
+        assert_eq!(catalog.file_lag().estimate_of(&crate::catalog::retard::LagKey::backend(&cell)), Some(crate::catalog::retard::IndexEstimate { pending_files: 1, eta_ms: Some(300) }));
     }
 
     /// **A read under its up-to-date view does not wait for another layer** (Lucie, 18 November 2026: « if I

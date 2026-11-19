@@ -398,7 +398,7 @@ impl Node for ReindexFileNode {
                     v => v,
                 };
                 if matches!(verdict, Ok(Outcome::Reindexed | Outcome::Removed)) {
-                    lag.done(&cell, &path, read_at);
+                    lag.done_in(&crate::catalog::retard::LagKey::backend(&cell), &path, read_at);
                 }
                 match verdict {
                     Ok(Outcome::Reindexed) => reindexed.push(path),
