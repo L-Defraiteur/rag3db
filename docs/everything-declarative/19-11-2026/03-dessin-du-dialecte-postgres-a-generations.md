@@ -80,19 +80,43 @@ s'hérite pas en Cypher » (`SchemaDialect::hop`). L'IR a presque tout :
 
 ## Les témoins
 
-- **Lot A** : un témoin de rendu par forme neuve (`Predicate::Not`, `Write::CopyEdges`, le `end_filter` de `Detach`),
-  sur les deux dialectes, comme les témoins de rendu existants. Puis les suites de l'écrivain inchangées :
-  `e2e_code_sync` (exigée par `code_sync.rs` et `catalog.rs`) et la lib.
+- **Lot A, parité par résultat** (convenue avec c7 le 19 novembre ; une parité texte pour texte forcerait l'IR à copier
+  l'alias et les parenthèses de chaque site) :
+  - l'ancienne requête brute de chacun des onze sites est gardée dans le témoin, telle qu'elle était, et s'exécute à
+    côté de la forme IR qui la remplace, sur la même base. C'est une base de code en mémoire à générations, avec de
+    l'histoire : des lignes fermées et rouvertes, une génération publiée, une ligne remplacée sur place ;
+  - pour une lecture : les mêmes lignes, et le même **plan** (`EXPLAIN` des deux formes : mêmes pas d'accès,
+    balayages, recherches par index et jointures, pas un balayage là où l'ancienne allait par index) ;
+  - pour une écriture : le même **état** sur deux bases bâties à l'identique. L'état comprend les lignes et leurs
+    rangs, les arêtes avec leurs propriétés, les générations et leurs compteurs (sans l'heure de publication,
+    une horloge) ;
+  - le texte rendu, avant et après, s'écrit à la sortie du témoin pour la relecture, sans être comparé ;
+  - puis les suites de l'écrivain inchangées : `e2e_code_sync` (exigée par `code_sync.rs` et `catalog.rs`) et la lib.
 - **Lot B, rouge d'abord** :
   - une base de code neuve sur postgres porte l'estampille `code-scope-v1/content/generations`, et non
     `…/content` (c'est le « comment le voir » du ticket) ;
   - puis les témoins de l'écrivain qui ne lisent pas de Cypher brut, joués sur postgres. Le serveur est là :
-    `rag3weaver-pg` tourne à lucie-tablette, et `run_e2e.sh` ajoute la feature quand le port répond.
+    `rag3weaver-pg` tourne à lucie-tablette, et `run_e2e.sh` ajoute la feature quand le port répond ;
+  - **les index postgres sur `(_couche, _depuis, _jusqu_a)` se prouvent par le plan** : l'`EXPLAIN` d'une lecture
+    visible, sur une base de taille réelle, montre un parcours d'index, pas un balayage.
 - **Passe** : `SUITE_DU_TEMOIN=e2e_postgres SUITES=e2e_code`, et `e2e_code_sync` par les chemins.
 
-## Ce que je demande à c7
+## Les listes longues passent par paramètre et par lots
+
+Règle de c7, 19 novembre : un `IN` de 72 000 valeurs écrites dans la requête coûtait 5 s, quadratique, contre 113 ms
+par `UNWIND` d'un paramètre.
+- **`Write::CopyEdges`** prend ses paires `(ancienne, neuve)` par le paramètre `$paires`, jamais écrites dans le
+  texte : `UNWIND $paires` côté rag3db, `unnest($paires)` côté postgres. Elles passent **par lots de 2 000**
+  (`migration_des_versions::LOT`), comme la migration.
+- **Même règle pour les `In` des lectures filtrées** quand la liste est longue : la liste est toujours un paramètre,
+  et un appelant qui peut en recevoir des dizaines de milliers la découpe en lots.
+
+## Ce que j'ai demandé à c7, et sa réponse (19 novembre)
 
 1. **La forme par l'IR** (proposée) plutôt qu'une méthode de dialecte par site. Les méthodes iraient plus vite pour
    postgres seul, mais garderaient le Cypher brut dans l'écrivain et le `replacen`.
 2. **Deux lots**, A puis B, A étant un refactor à comportement égal. Ou un seul lot, plus gros.
 3. **L'estimation** passe de 2 jours (passation) à environ 3 jours d'agent : environ 1,5 pour A et 1,5 pour B.
+
+**Réponse de c7** : oui aux trois (l'IR, deux lots, environ 3 jours). Les formes neuves restent génériques et
+nommées par ce qu'elles font, pas par le site qui les appelle.
