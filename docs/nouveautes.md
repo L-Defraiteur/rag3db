@@ -1,5 +1,10 @@
 # Nouveautés
 
+- 19 novembre 2026 — **Les tours d'une conversation expirent après 30 jours.** `purge_turns` efface les tours plus
+  anciens que leur durée de vie (30 jours par défaut, ou le nombre de jours donné), avec leur plein texte. Les
+  tranches rangées et les L1 qui en sont tirés restent. Seule une entité qui déclare son expiration peut ainsi perdre
+  des lignes : un outil qui voudrait expirer des fiches est refusé, en nommant l'entité.
+
 - 18 novembre 2026 — **La fin d'un index dit une libération ou une dette qu'elle n'a pas pu faire.** Une erreur en rendant les réclamations d'embarquement s'ajoute à la dernière ligne du journal, avec sa table et sa cause, sans en effacer la cause de fin ; une dette restante illisible se dit « dette inconnue », plus jamais « 0 ».
 
 - 18 novembre 2026 — **Un modèle déclaré dit `access` et `provider`.** `access` dit la manière d'y accéder (`local`, `service`, `compatible`), `provider` le fournisseur (`openai`, `vertex`, `anthropic`, `llama_server`). L'ancienne forme, `provider` pour la manière et `protocol` pour le fournisseur, se lit encore **jusqu'au 29 novembre 2026** ; un modèle qui mêle les deux est refusé, en nommant les deux mots. `/model` rend les deux mots neufs.
