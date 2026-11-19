@@ -2156,6 +2156,26 @@ mod tests {
         }
     }
 
+    /// **The cache is read, and an absent count is not a zero** (ticket of 17 November 2026, « mesurer et optimiser
+    /// le cache de contexte des appels Vertex »): under `prompt_tokens_details.cached_tokens` (compatible OpenAI),
+    /// `cached_content_token_count` (Gemini showing through) or `timings.cache_n` (llama-server); an answer that says
+    /// nothing leaves `cache_reported` false.
+    #[test]
+    fn the_cache_is_read_and_an_absent_count_is_not_a_zero() {
+        let fin = r#"{"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}"#;
+        let texte = r#"{"choices":[{"index":0,"delta":{"content":"ok"},"finish_reason":null}]}"#;
+        for (usage, expected) in [
+            (r#"{"choices":[],"usage":{"prompt_tokens":100,"completion_tokens":5,"prompt_tokens_details":{"cached_tokens":70}}}"#, (70, true)),
+            (r#"{"choices":[],"usage":{"prompt_tokens":100,"completion_tokens":5,"cached_content_token_count":28}}"#, (28, true)),
+            (r#"{"choices":[],"usage":{"prompt_tokens":100,"completion_tokens":5,"prompt_tokens_details":{"cached_tokens":0}}}"#, (0, true)),
+            (r#"{"choices":[],"usage":{"prompt_tokens":100,"completion_tokens":5}}"#, (0, false)),
+            (r#"{"choices":[],"usage":{"prompt_tokens":100,"completion_tokens":5},"timings":{"cache_n":64,"prompt_n":36}}"#, (64, true)),
+        ] {
+            let (_, u) = replay(&[texte, fin, usage], &GenOptions::default(), &mut crate::llm::StringSink::default());
+            assert_eq!((u.cached_prompt_tokens, u.cache_reported), expected, "{usage}");
+        }
+    }
+
     #[test]
     fn request_body_is_the_openai_shape() {
         let llm = OpenAiLlm::new("http://x/v1", "gpt-x");
