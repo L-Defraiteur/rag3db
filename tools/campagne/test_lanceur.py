@@ -124,12 +124,16 @@ class Lanceur(unittest.TestCase):
 
     def test_the_frozen_declarations_let_commands_run_without_a_human(self):
         ecrire(os.path.join(self.repo, "extension/rag3weaver/templates/backends/code/backend.json"),
-               json.dumps({"database": "x", "tools": [], "workspace": {"commands": "approval", "root": "."}}))
+               json.dumps({"database": "x", "tools": [], "workspace": {"commands": "approval", "root": ".", "sandbox": {"extra_read": ["~/.rustup", "/opt/x"]}}}))
         git(self.repo, "add", "-A")
         git(self.repo, "-c", "user.name=T", "-c", "user.email=t@example.org", "commit", "-qm", "templates")
         d = lanceur.freeze_declarations(self.repo, "HEAD", os.path.join(self.tmp.name, "decl"))
         with open(os.path.join(d, "templates/backends/code/backend.json")) as f:
-            self.assertEqual(json.load(f)["workspace"]["commands"], "auto")
+            w = json.load(f)["workspace"]
+        self.assertEqual(w["commands"], "auto")
+        # The campaign host has a HOME of its own: « ~ » there is a link, and the sandbox reads
+        # the real chain (cargo could not read ~/.rustup/settings.toml, case tty 09, 19 Nov).
+        self.assertEqual(w["sandbox"]["extra_read"], [os.path.join(os.path.expanduser("~"), ".rustup"), "/opt/x"])
 
     def test_the_diff_holds_new_files_and_uncommitted_changes(self):
         block, _ = lanceur.read_case(self.case("> f rend 1."))
