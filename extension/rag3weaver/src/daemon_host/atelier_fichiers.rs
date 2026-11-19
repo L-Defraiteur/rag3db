@@ -2318,6 +2318,28 @@ mod publication_accord_tests {
         assert!(host.accorde(&p, "read", None));
     }
 
+    /// **A receipt written, then a publication that fails, is marked « non posé »** (ticket of 12 November 2026,
+    /// « un accord peut être appliqué malgré une erreur de journal », the second half of the receipt contract):
+    /// the command's backend is not hosted, so the agreement cannot be posed at its gate. The first line of the
+    /// journal is the decision, the second says it was not posed, with its cause; nothing is granted, the call
+    /// answers an error, and the request stays open.
+    #[test]
+    fn a_receipt_whose_publication_fails_is_marked_not_posed() {
+        let d = tempfile::tempdir().unwrap();
+        let host = DaemonHost::new().with_runs_root(d.path().join("runs"));
+        let (_, carte) = host.atelier_demander_commande("not-hosted", "cargo test", None);
+        let id = carte["id"].as_str().unwrap();
+        let e = host.decider_accord(id, true, "fixture").expect_err("the gate of an unknown backend cannot pose it");
+        assert!(e.contains("cargo test"), "{e}");
+        let journal = std::fs::read_to_string(d.path().join("runs/decisions.jsonl")).unwrap();
+        let lines: Vec<Value> = journal.lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+        assert_eq!(lines.len(), 2, "the decision, then its cancellation: {journal}");
+        assert_eq!((lines[0]["decision"].as_str(), lines[1]["decision"].as_str()), (Some("accordé"), Some("non posé")), "{journal}");
+        assert_eq!(lines[1]["id"], json!(id));
+        assert!(lines[1]["raison"].as_str().unwrap_or("").contains("cargo test"), "the cause is said: {journal}");
+        assert!(host.etat_accord(id).unwrap()["decision"].is_null(), "the request stays open");
+    }
+
     /// Le contrat du 13 novembre 2026 (ticket d'ED, la décision posée avant son journal) : ce
     /// test qualifiait l'ancien contrat (« une erreur de journal après la pose laisse l'accord en
     /// vigueur ») ; le journal s'écrit maintenant d'abord. Sans journal : `Err`, la demande reste
