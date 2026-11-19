@@ -115,6 +115,11 @@ void TransactionManager::commit(main::ClientContext& clientContext, Transaction*
     } break;
     case TransactionType::RECOVERY:
     case TransactionType::WRITE: {
+        // Une écriture ouverte avant une annulation inachevée ne valide pas : la mémoire ne
+        // correspond plus à rien de validé ni d'annulé. Validée, elle publiait ses versions sur
+        // cet état, et une validation forcée l'écrivait dans les fichiers de données par son
+        // point de reprise. Le refus est celui du BEGIN et du CHECKPOINT ; l'appelant annule.
+        throwIfRollbackFailedNoLock();
         const auto forced = transaction->shouldForceCheckpoint();
         if (forced && autoCheckpointRequested) {
             // Une demande automatique attend le départ des autres : le point de reprise forcé de
@@ -339,7 +344,7 @@ void TransactionManager::checkpoint(main::ClientContext& clientContext) {
     checkpointNoLock(clientContext, lck);
 }
 
-void TransactionManager::throwIfCheckpointFailedNoLock() const {
+void TransactionManager::throwIfRollbackFailedNoLock() const {
     if (rollbackFailed) {
         throw TransactionManagerException(common::stringFormat(
             "{}: what it holds in memory no longer matches anything committed or rolled back. No "
@@ -347,6 +352,10 @@ void TransactionManager::throwIfCheckpointFailedNoLock() const {
             "reopened.",
             REOPEN_AFTER_FAILED_ROLLBACK));
     }
+}
+
+void TransactionManager::throwIfCheckpointFailedNoLock() const {
+    throwIfRollbackFailedNoLock();
     if (checkpointFailed) {
         throw TransactionManagerException(common::stringFormat(
             "{}: what it holds in memory no longer matches its files. No committed transaction "

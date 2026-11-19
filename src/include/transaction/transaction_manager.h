@@ -233,6 +233,7 @@ private:
     // mtxForSerializingPublicFunctionCalls.
     bool checkpointCarriesForcedCommit = false;
     void throwIfCheckpointFailedNoLock() const;
+    void throwIfRollbackFailedNoLock() const;
 };
 } // namespace transaction
 } // namespace rag3db
