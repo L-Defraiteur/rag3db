@@ -811,10 +811,11 @@ fn mesure_les_formes_de_la_recopie() {
     let visible = cat.condition_visible("x").unwrap();
     let hors = "NOT ((x.`source` = $lot_s0) AND (x.`file_path` IN $lot_p0))";
     let formes = [
-        ("aujourd'hui", rag3weaver::code_sync::edge_copy_write(&cat, "DEFINED_IN", "File", "Scope", rag3weaver_ir::Direction::Incoming, cat.rang_en_attente(), 1).unwrap()),
         ("lecture seule, par a", format!("UNWIND $paires AS p MATCH (a:`File` {{_uuid: p.a}}) MATCH (x:`Scope`)-[r:`DEFINED_IN`]->(a) WHERE {visible} AND {hors} RETURN x._uuid, p.n")),
         ("par a puis n, NOT EXISTS", format!("UNWIND $paires AS p MATCH (a:`File` {{_uuid: p.a}}) MATCH (n:`File` {{_uuid: p.n}}) MATCH (x:`Scope`)-[r:`DEFINED_IN`]->(a) WHERE {visible} AND {hors} AND NOT EXISTS {{ MATCH (x)-[:`DEFINED_IN`]->(n) }} RETURN count(*)")),
         ("existantes vers n", "UNWIND $paires AS p MATCH (x:`Scope`)-[:`DEFINED_IN`]->(n:`File` {_uuid: p.n}) RETURN x._uuid, p.n".to_string()),
+        // Last: its refusal makes the connection to be reopened.
+        ("aujourd'hui", rag3weaver::code_sync::edge_copy_write(&cat, "DEFINED_IN", "File", "Scope", rag3weaver_ir::Direction::Incoming, cat.rang_en_attente(), 1).unwrap()),
     ];
     let params = [QueryParam::new("paires", paires), QueryParam::new("lot_s0", source), QueryParam::new("lot_p0", chemins)];
     for (nom, requete) in formes {
