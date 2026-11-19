@@ -1,5 +1,10 @@
 # Nouveautés
 
+- 19 novembre 2026 — **Les tours d'une conversation expirent après 30 jours.** `purge_turns` efface les tours plus
+  anciens que leur durée de vie (30 jours par défaut, ou le nombre de jours donné), avec leur plein texte. Les
+  tranches rangées et les L1 qui en sont tirés restent. Seule une entité qui déclare son expiration peut ainsi perdre
+  des lignes : un outil qui voudrait expirer des fiches est refusé, en nommant l'entité.
+
 - 19 novembre 2026 — **On retrouve un tour passé par ses filtres ou par ses mots.** `list_turns` liste les tours du
   plus récent au plus ancien, filtrés par run, rôle, outil, statut et date : « l'appel d'archive en erreur d'hier,
   avec ses paramètres et son résultat ». `search_turns` cherche dans leurs mots, et c'est le seul outil qui les voit :
