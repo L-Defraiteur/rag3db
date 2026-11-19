@@ -1,5 +1,13 @@
 # Nouveautés
 
+- 19 novembre 2026 — **Les tours d'une conversation s'écrivent dans la mémoire, et l'archiviste range une tranche par
+  ses numéros de tours.** Chaque message d'un tour (la demande, la réponse, chaque appel d'outil avec ses paramètres et
+  son résultat) devient une ligne de la mémoire par `put_turn`. Les secrets reconnus (clés et jetons de fournisseurs,
+  `Bearer …`, clés privées) sont masqués avant tout enregistrement ; les paramètres et le résultat d'un outil sont
+  bornés à 4 000 et 8 000 caractères, la taille d'origine dite. `render_turns` rend une tranche dans une seule forme,
+  et `archive_slice(run, from_turn, to_turn)` la range en deux temps : les sujets de la tranche, puis chaque sujet sur
+  sa fiche. Elle garde la tranche comme Source, et rend son chemin et jusqu'à quel tour le run est rangé.
+
 - 19 novembre 2026 — **Un ADD ou un DROP de colonne attend les lectures ouvertes de sa table.** Une transaction qui
   lit une table la retient jusqu'à sa fin : un `ALTER TABLE … ADD`, `… DROP` ou un `DROP TABLE` l'attend, et la
   lecture relit ses colonnes au lieu d'être refusée. L'attente est bornée par `alter_lock_timeout` (5 s par défaut,
