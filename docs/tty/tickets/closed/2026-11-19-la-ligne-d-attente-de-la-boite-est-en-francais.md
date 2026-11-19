@@ -1,6 +1,6 @@
 # La ligne d'attente de la boîte de l'équipier est en français
 
-- **État** : ouvert. Relevé par archi à la relecture de `cx-chat-waiting-2` (19 nov. 2026), écrit par la session tty ; pour tty, au prochain lot qui touche ce texte.
+- **État** : fermé le 19 novembre 2026 par la session tty (branche `cx-ligne-attente-anglais-2`). La ligne dit « "<tool>" has been waiting for N s (an index is probably holding the write); the call goes on, nothing is abandoned ». Ni le terminal, ni la page, ni l'hôte ne reconnaissaient l'ancien texte : rien d'autre ne change. Témoin : `a_waiting_tool_says_so_on_the_bus_once_and_says_when_it_resumes`, qui lit aussi la ligne, rouge (71ec1614c3), puis vert ; module `daemon_host::teammate` vert (44).
 - **Famille** : produit
 - **Gravité** : gêne. Un texte que l'hôte écrit pour le modèle est en anglais (règle du 16 nov.), et celui-ci ne l'est pas.
 - **Atteignable en service** : oui, à chaque outil d'un pas d'équipier qui dépasse `teammate.tool_wait_notice_s`.
