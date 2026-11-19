@@ -1361,3 +1361,26 @@ fn six_onglets_ouverts_laissent_une_septieme_vue_se_rendre() {
     attendre_les_fenetres(0, "tous les onglets fermés");
     assert!(n.erreurs.is_empty(), "console : {:?}", n.erreurs);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// **A wait that fails says what the page loaded** (entry 5 of the handover of 16 November 2026, ticket
+    /// `docs/recherche/tickets/2026-11-14-le-temoin-du-chat-d-une-tache-rougit-sous-charge.md`). Under load, a chat
+    /// page sometimes rendered nothing, with nothing in flight and no error: the witness could not say whether the
+    /// document was the new one, nor what its scripts and its stream did. A wait that never comes true now says the
+    /// address, the document's state, whether it is the old document, and the resources the page loaded (start,
+    /// duration, status).
+    #[test]
+    #[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+    #[should_panic(expected = "ressources")]
+    fn a_wait_that_fails_says_what_the_page_loaded() {
+        let Some(binaire) = navigateur_ou_saut("a_wait_that_fails_says_what_the_page_loaded") else {
+            panic!("sans navigateur, rien à dire des ressources");
+        };
+        let mut n = Navigateur::lancer(&binaire);
+        n.aller("data:text/html,<div id=vue>une page</div>", "true");
+        n.attendre("false", "le témoin du diagnostic");
+    }
+}
