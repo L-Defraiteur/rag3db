@@ -1928,6 +1928,20 @@ mod tests {
         let s = host.open_session("le témoin", None, Vec::new(), None);
         assert_eq!(host.close(Some(&s), &manifeste)["ok"], true);
 
+        // The condition of 11 October: files changed and removed while the backend was closed, so that the watch's
+        // starting reconciliation reindexes them through the reaction, while the catch-up runs.
+        assert!(
+            host.with_backend(&h, |b| b.prepared().manifest.watches.contains_key("code")).unwrap_or(false),
+            "the decor has no watch: it would not reproduce the reconciliation of 11 October"
+        );
+        let s = host.open_session("le témoin", None, Vec::new(), None);
+        assert_eq!(host.close(Some(&s), &manifeste)["ok"], true);
+        for i in 0..20 {
+            std::fs::write(arbre.join(format!("src/f{i}.rs")), format!("pub fn fonction_{i}() -> u32 {{\n    {}\n}}\n", i + 1000)).unwrap();
+        }
+        for i in 20..25 {
+            std::fs::remove_file(arbre.join(format!("src/f{i}.rs"))).unwrap();
+        }
         // Reopened with the catch-up declared: the opening and the first call, timed.
         ecrire(&|m| m["embeddings"]["catch_up_on_open"] = json!(true));
         let debut = std::time::Instant::now();
