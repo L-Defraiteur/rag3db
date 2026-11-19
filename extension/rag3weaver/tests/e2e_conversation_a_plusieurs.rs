@@ -255,8 +255,7 @@ impl Artefact {
 #[ignore]
 fn trois_agents_un_fil_une_question() {
     let Some(llm) = model() else {
-        eprintln!("skipped: aucun modèle — ni RAG3WEAVER_LOCAL_LLM, ni identifiants Vertex");
-        return;
+        return crate::common::sauter("e2e_conversation_a_plusieurs", "aucun modèle — ni RAG3WEAVER_LOCAL_LLM, ni identifiants Vertex");
     };
     let (services, _source) = setup();
     let (nodes, graph_tools) = builtin_graph_tools().unwrap();

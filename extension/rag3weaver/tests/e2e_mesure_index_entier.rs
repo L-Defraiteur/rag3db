@@ -36,9 +36,6 @@ fn require_the_form_of_before(conn: &Rag3dbConnection) {
 /// La copie de l'index, ou `None` en le disant.
 fn base() -> Option<String> {
     let b = std::env::var("RAG3WEAVER_MESURE_BASE").ok();
-    if b.is_none() {
-        eprintln!("[index entier] NON MESURÉ : RAG3WEAVER_MESURE_BASE absent (une copie de l'index, jamais l'original)");
-    }
     b
 }
 
@@ -53,7 +50,7 @@ fn base() -> Option<String> {
 fn ou_va_le_temps_d_usages_sur_l_index_entier() {
     use rag3weaver::dataflow::usage_nodes::{declarations_of, usages_of, DeclarationsConfig, UsagesConfig};
     use rag3weaver::rag3db_connection::phases;
-    let Some(base) = base() else { return };
+    let Some(base) = base() else { return crate::common::sauter("e2e_mesure_index_entier", "RAG3WEAVER_MESURE_BASE absent : une copie de l'index, jamais l'original") };
     let conn = Rag3dbConnection::new(&base).expect("ouvrir la copie");
     let config = CatalogConfig { name: Some("code-rag3db".into()), embedding_dim: 768, ..Default::default() };
     let mut catalog = Catalog::new(Box::new(conn), Box::new(HashEmbedder::new(768)), config);
@@ -122,7 +119,7 @@ fn ou_va_le_temps_d_usages_sur_l_index_entier() {
 #[ignore]
 fn le_plan_du_saut_d_usages_sur_l_index_entier() {
     use rag3weaver::connection::CypherValue;
-    let Some(base) = base() else { return };
+    let Some(base) = base() else { return crate::common::sauter("e2e_mesure_index_entier", "RAG3WEAVER_MESURE_BASE absent : une copie de l'index, jamais l'original") };
     let conn = Rag3dbConnection::new(&base).expect("ouvrir la copie");
     let symbole = conn
         .execute("MATCH (s:`Symbol`) WHERE s.`name` = 'update' RETURN s.`_uuid` LIMIT 1")
@@ -204,7 +201,7 @@ fn le_plan_du_saut_d_usages_sur_l_index_entier() {
 #[ignore]
 fn les_formes_du_saut_d_usages_sur_l_index_entier() {
     use rag3weaver::connection::CypherValue;
-    let Some(base) = base() else { return };
+    let Some(base) = base() else { return crate::common::sauter("e2e_mesure_index_entier", "RAG3WEAVER_MESURE_BASE absent : une copie de l'index, jamais l'original") };
     let conn = Rag3dbConnection::new(&base).expect("ouvrir la copie");
     let sym = conn.execute("MATCH (s:`Symbol`) WHERE s.`name` = 'update' RETURN s.`_uuid` LIMIT 1").unwrap().rows[0][0].clone();
     let liste = |v: Vec<CypherValue>| CypherValue::List(v);
@@ -281,7 +278,7 @@ fn les_formes_du_saut_d_usages_sur_l_index_entier() {
 #[test]
 #[ignore]
 fn les_morceaux_a_texte_vide() {
-    let Some(base) = base() else { return };
+    let Some(base) = base() else { return crate::common::sauter("e2e_mesure_index_entier", "RAG3WEAVER_MESURE_BASE absent : une copie de l'index, jamais l'original") };
     let conn = Rag3dbConnection::new(&base).expect("ouvrir la copie");
     require_the_form_of_before(&conn);
     let n = conn
@@ -306,7 +303,7 @@ fn les_morceaux_a_texte_vide() {
 #[test]
 #[ignore]
 fn les_morceaux_vides_ont_le_hash_d_un_texte() {
-    let Some(base) = base() else { return };
+    let Some(base) = base() else { return crate::common::sauter("e2e_mesure_index_entier", "RAG3WEAVER_MESURE_BASE absent : une copie de l'index, jamais l'original") };
     let conn = Rag3dbConnection::new(&base).expect("ouvrir la copie");
     require_the_form_of_before(&conn);
     const SHA256_VIDE: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
@@ -334,7 +331,7 @@ fn les_morceaux_vides_ont_le_hash_d_un_texte() {
 #[ignore]
 fn ce_qui_distingue_les_morceaux_vides() {
     use rag3weaver::connection::CypherValue;
-    let Some(base) = base() else { return };
+    let Some(base) = base() else { return crate::common::sauter("e2e_mesure_index_entier", "RAG3WEAVER_MESURE_BASE absent : une copie de l'index, jamais l'original") };
     let conn = Rag3dbConnection::new(&base).expect("ouvrir la copie");
     require_the_form_of_before(&conn);
     let info = conn.execute("CALL TABLE_INFO('Scope_Chunk') RETURN *").unwrap_or_else(|e| panic!("{e}"));
@@ -409,7 +406,7 @@ fn ce_qui_distingue_les_morceaux_vides() {
 #[test]
 #[ignore]
 fn les_fichiers_des_scopes_vides() {
-    let Some(base) = base() else { return };
+    let Some(base) = base() else { return crate::common::sauter("e2e_mesure_index_entier", "RAG3WEAVER_MESURE_BASE absent : une copie de l'index, jamais l'original") };
     let conn = Rag3dbConnection::new(&base).expect("ouvrir la copie");
     require_the_form_of_before(&conn);
     if let Ok(r) = conn.execute("CALL TABLE_INFO('File') RETURN *") {
@@ -456,7 +453,7 @@ fn les_fichiers_des_scopes_vides() {
 #[ignore]
 fn ce_que_porte_le_texte_des_scopes_vides() {
     use rag3weaver::connection::CypherValue;
-    let Some(base) = base() else { return };
+    let Some(base) = base() else { return crate::common::sauter("e2e_mesure_index_entier", "RAG3WEAVER_MESURE_BASE absent : une copie de l'index, jamais l'original") };
     let conn = Rag3dbConnection::new(&base).expect("ouvrir la copie");
     require_the_form_of_before(&conn);
     // En deux temps : le classement des scopes sans leur texte, puis leur
@@ -522,7 +519,7 @@ fn ce_que_porte_le_texte_des_scopes_vides() {
 fn deux_lectures_pour_departager_les_chemins() {
     use rag3weaver::connection::CypherValue;
     use std::collections::HashMap;
-    let Some(base) = base() else { return };
+    let Some(base) = base() else { return crate::common::sauter("e2e_mesure_index_entier", "RAG3WEAVER_MESURE_BASE absent : une copie de l'index, jamais l'original") };
     let conn = Rag3dbConnection::new(&base).expect("ouvrir la copie");
     require_the_form_of_before(&conn);
     let vide = "(n.`_text` IS NULL OR n.`_text` = '')";
@@ -584,7 +581,7 @@ fn deux_lectures_pour_departager_les_chemins() {
 #[test]
 #[ignore]
 fn les_morceaux_vides_et_les_groupes_de_noeuds() {
-    let Some(base) = base() else { return };
+    let Some(base) = base() else { return crate::common::sauter("e2e_mesure_index_entier", "RAG3WEAVER_MESURE_BASE absent : une copie de l'index, jamais l'original") };
     let conn = Rag3dbConnection::new(&base).expect("ouvrir la copie");
     require_the_form_of_before(&conn);
     let r = conn
@@ -622,7 +619,7 @@ fn usages_en_un_temps_et_en_deux() {
     use rag3weaver::dataflow::usage_nodes::{declarations_of, usages_of, DeclarationsConfig, UsagesConfig};
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
-    let Some(base) = base() else { return };
+    let Some(base) = base() else { return crate::common::sauter("e2e_mesure_index_entier", "RAG3WEAVER_MESURE_BASE absent : une copie de l'index, jamais l'original") };
     let conn = Rag3dbConnection::new(&base).expect("ouvrir la copie");
     let config = CatalogConfig { name: Some("code-rag3db".into()), embedding_dim: 768, ..Default::default() };
     let mut catalog = Catalog::new(Box::new(conn), Box::new(HashEmbedder::new(768)), config);

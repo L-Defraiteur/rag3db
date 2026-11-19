@@ -15,12 +15,14 @@
 
 #![cfg(feature = "rag3db-native")]
 
-fn probing() -> bool {
+/// The long probes (minutes) run under `RAG3DB_PROBE_HNSW=1`; otherwise the test says SAUTÉ, by its name, and
+/// returns (19 November 2026: they returned in silence and counted green).
+fn sauter_sans_sonde(test: &str) -> bool {
     if std::env::var_os("RAG3DB_PROBE_HNSW").is_some() {
-        return true;
+        return false;
     }
-    eprintln!("skipped: long probe (minutes) — set RAG3DB_PROBE_HNSW=1 to run");
-    false
+    crate::common::sauter("e2e_hnsw_scale", &format!("{test} : sonde longue (minutes), RAG3DB_PROBE_HNSW=1 pour la jouer"));
+    true
 }
 
 use std::collections::{BTreeMap, HashMap};
@@ -69,10 +71,10 @@ fn ingest_n(n: usize, dim: usize) {
 #[test] #[ignore] fn n256() { ingest_n(256, 64); }
 // Canari permanent : le chemin catalogue (INSERT puis SET) au-delà du seuil du bug.
 #[test] #[ignore] fn n1024() { ingest_n(1024, 64); }
-#[test] #[ignore] fn n4096() { if !probing() { return; } ingest_n(4096, 64); }
-#[test] #[ignore] fn n1024_dim4() { if !probing() { return; } ingest_n(1024, 4); }
+#[test] #[ignore] fn n4096() { if sauter_sans_sonde("n4096") { return; } ingest_n(4096, 64); }
+#[test] #[ignore] fn n1024_dim4() { if sauter_sans_sonde("n1024_dim4") { return; } ingest_n(1024, 4); }
 #[test] #[ignore] fn n512() { ingest_n(512, 64); }
-#[test] #[ignore] fn n768() { if !probing() { return; } ingest_n(768, 64); }
+#[test] #[ignore] fn n768() { if sauter_sans_sonde("n768") { return; } ingest_n(768, 64); }
 #[test] #[ignore] fn n384() { ingest_n(384, 64); }
 
 // ── Isolation du chemin : insertion avec embedding (chemin amont) contre
@@ -119,11 +121,11 @@ fn raw_insert_then_set(n: usize) {
 // Canari permanent : le chemin UPDATE brut au-delà du seuil du bug.
 #[test] #[ignore] fn raw_update_path_n1024() { raw_insert_then_set(1024); }
 #[test] #[ignore] fn raw_insert_path_n4096() { raw_insert_with_embedding(4096); }
-#[test] #[ignore] fn raw_update_path_n4096() { if !probing() { return; } raw_insert_then_set(4096); }
+#[test] #[ignore] fn raw_update_path_n4096() { if sauter_sans_sonde("raw_update_path_n4096") { return; } raw_insert_then_set(4096); }
 #[test] #[ignore] fn n4096_update_twice() {
     // Ré-ingestion : chaque ligne reçoit un SET d'embedding une seconde fois
     // (l'ancienne valeur n'est plus NULL mais périmée).
-    if !probing() { return; }
+    if sauter_sans_sonde("n4096_update_twice") { return; }
     let conn = raw_conn();
     for i in 0..2048 { conn.execute(&format!("CREATE (:V {{id: {i}}})")).unwrap(); }
     for round in 0..2 {

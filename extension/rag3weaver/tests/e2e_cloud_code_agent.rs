@@ -154,8 +154,7 @@ const QUESTIONS: [&str; 3] = [
 #[ignore]
 fn a_cloud_model_explores_our_own_code_with_grep_read_and_search() {
     let Some(llm) = model() else {
-        eprintln!("skipped: ni RAG3WEAVER_LOCAL_LLM, ni GOOGLE_CLOUD_PROJECT / GOOGLE_APPLICATION_CREDENTIALS");
-        return;
+        return crate::common::sauter("e2e_cloud_code_agent", "ni RAG3WEAVER_LOCAL_LLM, ni GOOGLE_CLOUD_PROJECT / GOOGLE_APPLICATION_CREDENTIALS");
     };
     let (nodes, graph_tools) = builtin_graph_tools().unwrap();
     let services = setup();
@@ -245,8 +244,7 @@ const MISSIONS: [(&str, &str); 2] = [
 #[ignore]
 fn a_cloud_model_edits_a_copy_of_our_code() {
     let Some(llm) = model() else {
-        eprintln!("skipped: ni RAG3WEAVER_LOCAL_LLM, ni GOOGLE_CLOUD_PROJECT / GOOGLE_APPLICATION_CREDENTIALS");
-        return;
+        return crate::common::sauter("e2e_cloud_code_agent", "ni RAG3WEAVER_LOCAL_LLM, ni GOOGLE_CLOUD_PROJECT / GOOGLE_APPLICATION_CREDENTIALS");
     };
     let (dir, source) = scratch_copy();
     let (nodes, graph_tools) = builtin_graph_tools().unwrap();

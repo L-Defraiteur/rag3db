@@ -88,6 +88,10 @@ compte "$T/journal-script" --test e2e_lectures > "$T/sortie-compte3" ; grep -q "
 cas $? "--test e2e_lectures sans --test e2e : 1 sur 1"
 compte "$T/journal-script" --test e2e_lectures --test e2e_tty > "$T/sortie-compte4" ; grep -q "Suites jouées : 1 sur 2 demandées." "$T/sortie-compte4" && grep -q "manquantes : e2e_tty" "$T/sortie-compte4"
 cas $? "une suite demandée sans sa ligne reste manquante : 1 sur 2, e2e_tty nommée"
+# Les marques (19 novembre 2026) : un journal qui porte deux SAUTÉ et trois ENFANT ; le compte les dit.
+printf '     Running tests/e2e_tx.rs (binaire e2e unique, filtre e2e_tx::)\nSAUTÉ e2e_tx — pas de modèle\nSAUTÉ e2e_tx — pas de base\nENFANT e2e_tx\nENFANT e2e_tx\nENFANT e2e_tx\ntest result: ok. 9 passed; 0 failed;\n' > "$T/journal-marques"
+compte "$T/journal-marques" --test e2e_tx > "$T/sortie-marques"; grep -q "Marques : 2 sauté(s), 3 point(s) d'entrée d'enfant." "$T/sortie-marques"
+cas $? "les marques d'un journal : 2 SAUTÉ, 3 ENFANT comptés"
 compte "$T/journal-vide" --test e2e e2e_lectures > "$T/sortie-compte5" ; grep -q "Suites jouées : 0 sur 1 demandées." "$T/sortie-compte5" && grep -q "manquantes : e2e_lectures" "$T/sortie-compte5"
 cas $? "--test e2e e2e_lectures sans aucune ligne : 0 sur 1, la suite nommée"
 [ ! -e "$T/cargo-appele" ]
