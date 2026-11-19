@@ -1674,7 +1674,7 @@ impl DaemonHost {
                     let attendu = std::time::Instant::now();
                     let sur_le_bus = bus.as_ref().zip(step.turn_run());
                     if let Some((b, (run, model))) = &sur_le_bus {
-                        b.emit(crate::events::Event::Waiting { run: run.clone(), cause: "model".into(), what: model.clone(), since_ms: 0 });
+                        b.emit(crate::events::Event::Waiting { run: run.clone(), cause: "model".into(), what: model.clone(), since_ms: 0, wait_ms: Some(attente * 1000) });
                     }
                     // L'attente se coupe sur un `stop` de la boîte, ou si la tâche se ferme.
                     let fin = std::time::Instant::now() + std::time::Duration::from_secs(attente);

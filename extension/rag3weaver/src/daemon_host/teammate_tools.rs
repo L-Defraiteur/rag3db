@@ -132,6 +132,7 @@ impl Etanche<'_> {
                                 cause: "tool".into(),
                                 what: call.name.clone(),
                                 since_ms: depart.elapsed().as_millis() as u64,
+                                wait_ms: None,
                             });
                         }
                         return;
