@@ -2354,3 +2354,30 @@ règle (lot à G). Les modèles gpt-oss-120b et ornith-122b (134 Go) effacés pa
 bascule de G, 14 Go d'arbres de tâche de l'hôte, 5 Go de retour arrière, 4 Go de preuve WAL du 8 nov., 4,5 Go des
 bases de mes deux worktrees retirés, 2,3 Go d'un instantané du 12 oct.) ; les copies de mesure du banc à luciepc
 (433 Go apparents), oui donné à 21 h 09, transmis au banc.
+
+## 19 novembre, 21 h 31 — les 538 Go de la tablette, et le lot de bâti
+
+Lucie, 21 h 2x, son disque : « mon Steam prend 172 Go, après je sais qu'il y a git_workspaces, mais à eux deux j'ai du
+mal à croire que ça me prenne tant de disque ». Relevé réel : Steam 188, jeux hors Steam 58, cache de bâti
+`~/.cache/rag3weaver-build` 166, git_workspaces 64 (sairen 51), données `~/.local/share/rag3weaver` 56, baloo 26
+(l'indexeur de KDE indexe nos bâtis), caches divers 57. Les sessions tenaient environ 250 Go.
+
+**Effacé sur son oui, puis son « je t'autorise explicitement » (le classifieur de ma session avait refusé le premier
+`rm`)** : la preuve WAL du 8 nov. (tickets fermés, 4,2 Go), l'instantané du 12 oct. (2,3), mes deux bases d'essai et
+leur manifeste (4,5), ma tâche d'essai de l'hôte (4,2), les six instantanés de bascule de G des 16 et 18 nov. et les
+doublons de contrôle du 19, plus la copie du retour arrière validé (28), dix dossiers de preuves Codex des 12 et
+13 nov. (15), la copie de répétition avortée de 19 h 42 (4,3), la bascule-live du 16 (1,4). `~/.local/share/rag3weaver`
+passe de 70 à 28 Go ; place libre de la tablette 312 → 406 Go. La tâche « atelier » de l'hôte (agent Algareth, 15 nov.
+16 h 15, 5 Go) n'est à aucune session, à Lucie de dire ; ma purge de 21 h 11 avait retiré son arbre, recréé à
+l'identique à 21 h 24 (tête ad9bf16185 dans master).
+
+**Pourquoi les targets pèsent** : le target d'archi, 31 Go, c'est 20 Go de cache incrémental (cinq graphes de 0,6 Go,
+un par variante de la crate, jamais balayés) et 11 Go de rlib et binaires ; les symboles sont déjà réduits (lignes
+seules, rien pour les dépendances depuis le 10 oct.). Lucie : « il n'y a rien de plus opti que cargo ? … sinon cron
+le matin pour rebuild avec cache reseté ». Lot de bâti donné à G (« oui oki go ») : sccache partagé entre les treize
+targets (plafond 40 Go par poste), `cargo sweep --time 2` au ménage de 07 h 30, incrémental coupé dans ce qui joue
+une passe une fois (le pousseur et la passe épinglée l'avaient déjà ; le trou était le lanceur de campagne : lot
+campagne-incremental-off déposé, 8/8), mold comme éditeur de liens. Lucie a posé sccache 0.19.0, mold 3.0.0 et
+cargo-sweep 0.8.0 sur les deux postes (21 h 31). Le ménage programmé attend sa décision : la session de G refuse
+d'écrire un script qui effacerait à sa place après deux refus de permission ce soir ; je lui ai recommandé de donner
+à G une règle de permission sur `~/.cache/rag3weaver-build` et `~/.local/share/rag3weaver`.
