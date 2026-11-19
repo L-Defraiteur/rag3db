@@ -148,7 +148,18 @@ function partager(vue: { onmessage: (e: { data: string }) => void }, statut: (s:
     else if (d.type === "statut") statut(d.statut);
     else if (d.type === "etat") etatRecu(d.cle, d.valeur);
     else if (d.type === "etat-complet") for (const [cle, valeur] of Object.entries(d.etat ?? {})) etatRecu(cle, valeur);
+    else if (d.type === "tour") {
+      for (const f of attentesDeTour.get(String(d.run)) ?? []) f((d.tour as TourEnVol | null) ?? null);
+      attentesDeTour.delete(String(d.run));
+    }
   };
+  const attentesDeTour = new Map<string, ((t: TourEnVol | null) => void)[]>();
+  demanderTour = (run: string) =>
+    new Promise((resolve) => {
+      attentesDeTour.set(run, [...(attentesDeTour.get(run) ?? []), resolve]);
+      port.postMessage({ type: "tour", run });
+      setTimeout(() => resolve(null), 1000);
+    });
   port.start();
   ecrireEtat = (cle, valeur) => port.postMessage({ type: "etat-ecrire", cle, valeur });
   const battement = setInterval(() => port.postMessage({ type: "battement" }), 15_000);
@@ -168,6 +179,7 @@ function partager(vue: { onmessage: (e: { data: string }) => void }, statut: (s:
     partir();
     port.close();
     ecrireEtat = ecrireLocalement;
+    demanderTour = sansWorker;
     statut("fermé");
   };
 }
@@ -221,6 +233,14 @@ function etatRecu(cle: string, valeur: unknown) {
 }
 const ecrireLocalement = (cle: string, valeur: unknown) => etatRecu(cle, valeur);
 let ecrireEtat: (cle: string, valeur: unknown) => void = ecrireLocalement;
+/// The text of a turn in flight, as the shared worker kept it; `null` without a worker, or past a second.
+export type TourEnVol = { texte: string; seq: number };
+const sansWorker = async (_run: string): Promise<TourEnVol | null> => null;
+let demanderTour: (run: string) => Promise<TourEnVol | null> = sansWorker;
+/// **Joins a turn in flight** (the IDE in several windows): what the worker kept of its text.
+export function tourEnVol(run: string): Promise<TourEnVol | null> {
+  return demanderTour(run);
+}
 export const etatPartage = {
   lire: (cle: string): unknown => etatLocal.get(cle),
   ecrire: (cle: string, valeur: unknown) => ecrireEtat(cle, valeur),

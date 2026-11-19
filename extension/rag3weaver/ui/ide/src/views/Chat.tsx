@@ -8,7 +8,7 @@ import { RagDesDepots, UiDuTour } from "@/components/UiDuTour";
 import { Breadcrumb, ChatSidebar } from "@/views/ChatSidebar";
 import DOMPurify from "dompurify";
 import { fileTheme, imageDe, type ThemeAnimation } from "@/lib/theme";
-import { displayName, fetchChat, onEtat, onFlux, sendChat, stopRun, type Backend, type ChatContext, type ChatPousse, type ChatState, type ChatTurn, type ChatUsage, type FluxEvent, type UiComposant, type Rag, type HostState, type MemoryWrite, type TurnResult } from "@/lib/host";
+import { displayName, fetchChat, onEtat, onFlux, sendChat, stopRun, tourEnVol, type Backend, type ChatContext, type ChatPousse, type ChatState, type ChatTurn, type ChatUsage, type FluxEvent, type UiComposant, type Rag, type HostState, type MemoryWrite, type TurnResult } from "@/lib/host";
 
 // **Le chat de la tâche et de l'atelier** (page 08, vue 2) : la forme de ui/chat —
 // la colonne des conversations, l'en-tête nom / modèle / état, le fil, la saisie
@@ -350,6 +350,9 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
   // ends. A read of the chat applies its state only if no turn moved since it left: a read that left before a turn
   // and lands after it would put back a screen without that turn.
   const epoqueDesTours = useRef(0);
+  // **The text a window joined in flight** (the IDE in several windows, 19 Nov. 2026): the run and the last token the
+  // worker had counted; a token at or below it is already in the bubble.
+  const dejaRepris = useRef<{ run: string; seq: number } | null>(null);
   // **Les runs que la page sait finis** (la bulle fantôme, relevée par everything declarative le
   // 13 novembre 2026) : sous charge, le RunStarted d'un tour envoyé d'ici peut arriver après la
   // réponse de son POST ; pris pour un tour venu d'ailleurs, il ouvrait une bulle que rien ne
@@ -410,8 +413,15 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
     follow.current = true;
     setItems((cur) => (cur.some((i) => i.kind === "message" && i.live) ? cur : fromTurns(s.turns)));
     if (s.run) {
-      setRun(s.run);
+      const run = s.run;
+      setRun(run);
       setBusy(true);
+      // A turn in flight, opened in this window after it started: its text so far, from the shared worker.
+      tourEnVol(run).then((t) => {
+        if (!t || runRef.current !== run) return;
+        dejaRepris.current = { run, seq: t.seq };
+        setItems((cur) => cur.map((i) => (i.kind === "message" && i.live ? { ...i, parts: [{ kind: "text", text: t.texte } as Part, ...i.parts.filter((p) => p.kind !== "text")] } : i)));
+      });
       setStatus("l'agent travaille…");
       setItems((cur) => (cur.some((i) => i.kind === "message" && i.live) ? cur.map((i) => (i.kind === "message" && i.live ? { ...i, run: s.run! } : i)) : [...cur, message("assistant", "", { run: s.run!, live: true })]));
     }
@@ -484,6 +494,9 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
       else if (ev.kind === "RunFinished" && reactionsEnCours.current.delete(String(ev.run))) forgetSymbols(id, `fin de la réaction ${String(ev.run)}`);
       if (ev.kind === "RunStarted" && ev.run_kind === "agent" && ev.name === `chat:${id}`) {
         if (runsFinis.current.has(String(ev.run))) return;
+        // A turn from elsewhere moves the epoch too (ED's review): a read of this window that left before it would
+        // put back a screen without it.
+        if (!envoiDeLaPage.current) epoqueDesTours.current += 1;
         setRun(String(ev.run));
         setBusy(true);
         if (!envoiDeLaPage.current) {
@@ -519,6 +532,8 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
         } else if (ev.kind === "Resumed" || ev.kind === "ToolCallStarted" || ev.kind === "ToolCallFinished" || ev.kind === "RunFinished") setAttente(null);
       }
       if (ev.kind === "Token") {
+        const repris = dejaRepris.current;
+        if (repris && ev.run === repris.run && typeof ev.seq === "number" && ev.seq <= repris.seq) return;
         if (typeof ev.seq === "number") (tokenLog.applied[String(ev.run)] ??= []).push(ev.seq);
         live((m) => ({ ...m, parts: appendText(m.parts, String(ev.text ?? "")) }));
       }
@@ -552,6 +567,7 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
       } else if (ev.kind === "PropositionChanged" && ev.change === "proposed") {
         live((m) => (m.propositions.some((p) => p.id === ev.id) ? m : { ...m, propositions: [...m.propositions, { id: Number(ev.id), paths: ev.paths as string[] | undefined, accepted: ev.accepted as boolean | undefined }] }));
       } else if (ev.kind === "RunFinished" && ev.run === runRef.current) {
+        epoqueDesTours.current += 1;
         runsFinis.current.add(String(ev.run));
         setRun(null);
       }
@@ -576,6 +592,7 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
   useEffect(
     () =>
       onEtat<ChatPousse>("chat", id, (p) => {
+        epoqueDesTours.current += 1;
         const tours = [...toursRef.current.slice(0, p.depuis), ...p.nouveaux_tours];
         toursRef.current = tours;
         const { depuis: _d, nouveaux_tours: _n, tour: _t, fin_du_tour: fin, ...reste } = p;
