@@ -960,11 +960,20 @@ mod tests {
         let chaine: Vec<String> = git(&depot, &["rev-list", "--first-parent", "--reverse", &format!("{base}..origin/master")]).lines().take(k).map(str::to_string).collect();
         assert!(chaine.len() >= 2, "moins de deux commits au-dessus de l'arbre indexé ({base})");
         ligne("départ", serde_json::json!({"base": base, "rang_du_backend": n, "commits": chaine.len()}));
-        let tables: Vec<String> = cat.generations.as_ref().unwrap().tables.iter().cloned().chain(cat.vector_tables()).collect();
+        // Les tables à générations, et les tables de morceaux du code (celles qui manquent à la base sont sautées).
+        let tables: Vec<String> = cat
+            .generations
+            .as_ref()
+            .unwrap()
+            .tables
+            .iter()
+            .cloned()
+            .chain(["ScopeContent", "ScopeContent_Chunk", "Scope_Chunk", "File_Chunk"].iter().map(|t| t.to_string()))
+            .collect();
         let comptes = |cat: &Catalog| -> serde_json::Value {
             let mut m = serde_json::Map::new();
             for t in &tables {
-                let lu = cat.execute_raw(&format!("MATCH (s:`{t}`) RETURN count(s), sum(size(coalesce(s._text, '')))")).unwrap();
+                let Ok(lu) = cat.execute_raw(&format!("MATCH (s:`{t}`) RETURN count(s), sum(size(coalesce(s._text, '')))")) else { continue };
                 let r = &lu.rows[0];
                 m.insert(t.clone(), serde_json::json!({"lignes": r[0].as_i64(), "octets_de_texte": r[1].as_i64()}));
             }
