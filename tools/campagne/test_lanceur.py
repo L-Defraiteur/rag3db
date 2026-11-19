@@ -116,6 +116,23 @@ class Lanceur(unittest.TestCase):
         self.assertIn("compile", rouge["why"])
 
 
+    def test_a_case_command_runs_without_the_incremental_cache(self):
+        # 19 Nov 2026, c7: a case is built once, on its own target; its incremental/ is never reused, and archi's
+        # target held 20 of its 31 Go there. CARGO_INCREMENTAL=0, unless the environment already says otherwise.
+        dest = os.path.join(self.tmp.name, "arbre-incr"); os.makedirs(dest)
+        old = os.environ.pop("CARGO_INCREMENTAL", None)
+        try:
+            rc, out = lanceur.run_test({}, dest, os.path.join(self.tmp.name, "t"), None, 'echo "INCR=${CARGO_INCREMENTAL:-absent}"')
+            self.assertEqual(rc, 0, out)
+            self.assertIn("INCR=0", out)
+            os.environ["CARGO_INCREMENTAL"] = "1"
+            rc, out = lanceur.run_test({}, dest, os.path.join(self.tmp.name, "t"), None, 'echo "INCR=${CARGO_INCREMENTAL:-absent}"')
+            self.assertIn("INCR=1", out)
+        finally:
+            os.environ.pop("CARGO_INCREMENTAL", None)
+            if old is not None:
+                os.environ["CARGO_INCREMENTAL"] = old
+
     def test_git_is_refused_and_the_rest_granted(self):
         for c in ["git log", "git -C . show HEAD", "env A=b git status", "cd x && git diff", "/usr/bin/git log"]:
             self.assertFalse(lanceur.answer_for(c)["approved"], c)
