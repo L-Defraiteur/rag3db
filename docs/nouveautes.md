@@ -1,5 +1,12 @@
 # Nouveautés
 
+- 19 novembre 2026 — **Après une annulation qui n'a pas pu finir, une écriture déjà ouverte ne valide plus.** Quand
+  l'annulation d'une transaction échoue en cours de route, la base demande à être fermée et rouverte, et refusait déjà
+  tout `BEGIN` et tout `CHECKPOINT`. Une transaction d'écriture ouverte avant pouvait pourtant encore valider, et une
+  validation forcée écrivait alors cet état à moitié annulé dans les fichiers. Son `COMMIT` est désormais refusé par
+  le même message (« A rollback of this database could not complete… ») : on annule, on ferme et on rouvre la base ;
+  rien de validé n'est perdu, le journal est rejoué à la réouverture.
+
 - 19 novembre 2026 — **La conversation d'un chat se range en mémoire au fil de l'eau.** Chaque tour du chat de
   l'IDE s'écrit dans la mémoire déclarée par le dépôt (`bilans.memoire`). Quand les tours pas encore rangés
   dépassent `memory.slice_tokens` (50 000 jetons par défaut), une tranche se range en fond, sans retarder le chat.
