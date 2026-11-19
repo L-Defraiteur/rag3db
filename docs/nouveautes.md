@@ -1,5 +1,12 @@
 # Nouveautés
 
+- 19 novembre 2026 — **Après une annulation qui n'a pas pu finir, une écriture déjà ouverte ne valide plus.** Quand
+  l'annulation d'une transaction échoue en cours de route, la base demande à être fermée et rouverte, et refusait déjà
+  tout `BEGIN` et tout `CHECKPOINT`. Une transaction d'écriture ouverte avant pouvait pourtant encore valider, et une
+  validation forcée écrivait alors cet état à moitié annulé dans les fichiers. Son `COMMIT` est désormais refusé par
+  le même message (« A rollback of this database could not complete… ») : on annule, on ferme et on rouvre la base ;
+  rien de validé n'est perdu, le journal est rejoué à la réouverture.
+
 - 19 novembre 2026 — **Le chat de l'IDE ne fait plus disparaître un tour.** Une relecture de la conversation
   partie avant un tour et revenue après lui remettait un écran sans ce tour, jusqu'au rechargement suivant. La page
   n'applique plus une relecture dépassée par un tour.
