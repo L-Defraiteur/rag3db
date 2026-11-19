@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 19 novembre 2026 — Dans le terminal de l'agent, la réponse que l'hôte recopie dans la boîte ne s'affiche plus une seconde fois quand elle a déjà défilé : elle se reconnaît à son champ `origin`, et non plus à un texte français.
+
 - 18 novembre2026 — Dans le terminal de l'agent, ce qu'on tape pendant une commande `!` ne se garde plus jamais dans sa sortie, même tapé avant que la commande coupe l'écho : un mot de passe tapé avant l'invite de `sudo` se voit à l'écran, comme dans tout terminal, mais n'entre ni dans la consigne envoyée à l'équipier, ni dans le journal.
 
 - 18 novembre2026 — Dans le terminal de l'agent, ce qu'il attend se dit dans le style du thème : pendant une écriture, le verbe de la cause se déforme en glyphes du thème, un caractère à la fois ; pendant une réflexion ou une lecture, la cause prend la couleur du halo. Ce qu'elle nomme (outil, cible, modèle, durée) reste lisible.
