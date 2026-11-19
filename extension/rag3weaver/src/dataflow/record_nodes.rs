@@ -4330,6 +4330,10 @@ impl Node for UpdateRecordNode {
                             // c'est le plein texte qui est perdu, pas la
                             // mise à jour.
                             let tampon = ctx.service::<Arc<crate::fts_tampon::TamponPleinTexte>>(crate::fts_tampon::FTS_TAMPON_SERVICE).cloned();
+                            let regle = ctx
+                                .service::<HashMap<String, crate::config::EntityConfig>>("entity_configs")
+                                .and_then(|c| c.get(entity_name))
+                                .and_then(|c| c.chunking.not_candidate.clone());
                             if let Err(e) = reindex_fts_rows(
                                 conn.as_ref(),
                                 dialect.as_ref(),
@@ -4339,6 +4343,7 @@ impl Node for UpdateRecordNode {
                                 uuids,
                                 &schema_fields,
                                 tampon.as_deref(),
+                                regle.as_ref(),
                             ) {
                                 consigner_l_echec(
                                     ctx, "UpdateRecordNode", entity_name, 0,
@@ -4563,6 +4568,11 @@ impl Node for UpdateRecordNode {
                             .iter()
                             .filter_map(|m| m.get("_uuid").cloned())
                             .collect();
+                        let regle = self
+                            .entity_configs
+                            .as_ref()
+                            .and_then(|c| c.get(entity_name))
+                            .and_then(|c| c.chunking.not_candidate.clone());
                         reindex_fts_rows(
                             conn.as_ref(),
                             dialect.as_ref(),
@@ -4572,6 +4582,7 @@ impl Node for UpdateRecordNode {
                             uuids,
                             &schema_fields,
                             None,
+                            regle.as_ref(),
                         )?;
                     }
                 }
@@ -4610,9 +4621,21 @@ fn reindex_fts_rows(
     uuids: Vec<CypherValue>,
     schema_fields: &[String],
     tampon: Option<&crate::fts_tampon::TamponPleinTexte>,
+    regle: Option<&crate::config::NotCandidate>,
 ) -> Result<(), String> {
     let mut cols: Vec<&str> = vec!["_uuid"];
     cols.extend(schema_fields.iter().map(|s| s.as_str()));
+    // The fields the rule of non-candidates reads (2.12), after the indexed ones.
+    let lus_pour_la_regle: Vec<&str> = regle
+        .map(|r| std::iter::once(r.type_field.as_str()).chain(r.text_fields.iter().map(String::as_str)).filter(|f| !schema_fields.iter().any(|s| s == f)).collect())
+        .unwrap_or_default();
+    let lus_pour_la_regle: Vec<&str> = {
+        let mut v = lus_pour_la_regle;
+        v.sort_unstable();
+        v.dedup();
+        v
+    };
+    cols.extend(lus_pour_la_regle.iter().copied());
     let sel = dialect.select_by_uuids(entity_name, &cols);
     let rows = conn
         .execute_with_params(
@@ -4638,6 +4661,23 @@ fn reindex_fts_rows(
                     .map(|s| (name.clone(), s.to_string()))
             })
             .collect();
+        // **A row that is not a search candidate** (2.12) loses its document instead of being reindexed.
+        if let Some(r) = regle {
+            let mut jugees = values.clone();
+            for (j, f) in lus_pour_la_regle.iter().enumerate() {
+                if let Some(s) = row.get(1 + schema_fields.len() + j).and_then(|v| v.as_str()) {
+                    jugees.push((f.to_string(), s.to_string()));
+                }
+            }
+            if r.excludes_values(&jugees) {
+                if let Some(t) = tampon {
+                    t.retirer(entity_name, uuid, offset);
+                } else if let Some(o) = offset.filter(|o| handle.shard_for_node_id(*o).is_some()) {
+                    handle.delete_by_node_id(o).map_err(|e| format!("retrait FTS de {entity_name}: {e}"))?;
+                }
+                continue;
+            }
+        }
         // Dans un lot : par `_uuid`, appliqué après le COMMIT.
         if let Some(t) = tampon {
             t.ecrire(entity_name, uuid, values);
