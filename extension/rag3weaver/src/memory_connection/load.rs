@@ -31,6 +31,14 @@ fn strings(v: &Value) -> Vec<String> {
     v.as_array().map(|a| a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect()).unwrap_or_default()
 }
 
+/// A parameter value seen through its type annotation (`typed_payload_param`), without a copy.
+pub(super) fn untyped(v: &CypherValue) -> &CypherValue {
+    match v {
+        CypherValue::Typed { value, .. } => untyped(value),
+        other => other,
+    }
+}
+
 /// A parameter value without its type annotation (`typed_payload_param`), lists and maps included.
 pub(super) fn plain(v: &CypherValue) -> CypherValue {
     match v {
@@ -42,25 +50,25 @@ pub(super) fn plain(v: &CypherValue) -> CypherValue {
 }
 
 fn upsert(state: &mut State, table: &str, columns: &[String], params: &[QueryParam]) -> Result<QueryResult, DbError> {
-    let Some(CypherValue::List(items)) = param(params, "items").map(plain) else {
+    let Some(CypherValue::List(items)) = param(params, "items").map(untyped) else {
         return Err(DbError::QueryError(format!("connexion mémoire : l'upsert de « {table} » attend $items, une liste")));
     };
     let mut rows = Vec::with_capacity(items.len());
     for item in items {
-        let CypherValue::Map(item) = item else {
+        let CypherValue::Map(item) = untyped(item) else {
             return Err(DbError::QueryError(format!("connexion mémoire : un élément de $items de « {table} » n'est pas une carte")));
         };
-        let Some(CypherValue::String(uuid)) = item.get("_uuid") else {
+        let Some(CypherValue::String(uuid)) = item.get("_uuid").map(untyped) else {
             return Err(DbError::QueryError(format!("connexion mémoire : une ligne de « {table} » sans _uuid")));
         };
         let mut props: BTreeMap<String, CypherValue> = state.image.node(uuid).filter(|n| n.table == table).map(|n| n.props).unwrap_or_default();
         for c in columns.iter().filter(|c| c.as_str() != "_uuid") {
-            match item.get(c) {
+            match item.get(c).map(untyped) {
                 Some(CypherValue::Null) | None => {
                     props.remove(c);
                 }
                 Some(v) => {
-                    props.insert(c.clone(), v.clone());
+                    props.insert(c.clone(), plain(v));
                 }
             }
         }

@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 
 use serde_json::Value;
 
-use super::load::plain;
+use super::load::{plain, untyped};
 use super::{not_written, param, State};
 use crate::connection::{CypherValue, DbError, QueryParam, QueryResult};
 
@@ -38,26 +38,26 @@ fn strings(v: &Value) -> Vec<String> {
 }
 
 fn link(state: &mut State, relation: &str, props: &[String], params: &[QueryParam]) -> Result<QueryResult, DbError> {
-    let Some(CypherValue::List(items)) = param(params, "items").map(plain) else {
+    let Some(CypherValue::List(items)) = param(params, "items").map(untyped) else {
         return Err(DbError::QueryError(format!("connexion mémoire : la pose de « {relation} » attend $items, une liste")));
     };
-    for item in &items {
-        let CypherValue::Map(item) = item else {
+    for item in items {
+        let CypherValue::Map(item) = untyped(item) else {
             return Err(DbError::QueryError(format!("connexion mémoire : un élément de $items de « {relation} » n'est pas une carte")));
         };
-        let (Some(CypherValue::String(from)), Some(CypherValue::String(to))) = (item.get("from_uuid"), item.get("to_uuid")) else {
+        let (Some(CypherValue::String(from)), Some(CypherValue::String(to))) = (item.get("from_uuid").map(untyped), item.get("to_uuid").map(untyped)) else {
             return Err(DbError::QueryError(format!("connexion mémoire : un lien de « {relation} » sans from_uuid ni to_uuid")));
         };
         // `MERGE … SET r.c = item.c` sets the listed properties only (a missing one becomes NULL); the others keep theirs.
         let mut merged: BTreeMap<String, CypherValue> =
             state.image.outgoing(relation, from).into_iter().find(|(t, _)| t == to).map(|(_, p)| p).unwrap_or_default();
         for p in props {
-            match item.get(p) {
+            match item.get(p).map(untyped) {
                 Some(CypherValue::Null) | None => {
                     merged.remove(p);
                 }
                 Some(v) => {
-                    merged.insert(p.clone(), v.clone());
+                    merged.insert(p.clone(), plain(v));
                 }
             }
         }
@@ -68,12 +68,12 @@ fn link(state: &mut State, relation: &str, props: &[String], params: &[QueryPara
 
 fn existing(state: &mut State, relation: &str, ends: &Value, props: &[String], params: &[QueryParam]) -> Result<QueryResult, DbError> {
     let to_table = ends.get(1).and_then(Value::as_str);
-    let Some(CypherValue::List(froms)) = param(params, "froms").map(plain) else {
+    let Some(CypherValue::List(froms)) = param(params, "froms").map(untyped) else {
         return Err(DbError::QueryError(format!("connexion mémoire : les liens de « {relation} » attendent $froms, une liste")));
     };
     let mut rows = Vec::new();
-    for from in &froms {
-        let CypherValue::String(from) = from else { continue };
+    for from in froms {
+        let CypherValue::String(from) = untyped(from) else { continue };
         for (to, p) in state.image.outgoing(relation, from) {
             if to_table.is_some_and(|t| state.image.node(&to).is_none_or(|n| n.table != t)) {
                 continue;
