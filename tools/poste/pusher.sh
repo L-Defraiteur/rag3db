@@ -189,6 +189,42 @@ replay_scripts() { # <id> → 0 green, 1 red (the failing witness on stdout)
   return 0
 }
 
+# The tickets' headers, for a docs or scripts train (19 Nov., c7: lucivy-ticket-lost-words-2 landed a « corrigé » ticket
+# outside closed/, master went red at check_tickets, and three docs lots were pushed behind it). check_tickets.py on the
+# reposed tree; when red, on master's own docs: 0 green, 1 red by the train (the refusals in last-red.txt), 4 master
+# itself red (the train waits for a lot that mends it).
+tickets_gate() {
+  local c=extension/rag3weaver/scripts/check_tickets.py tmp r
+  [ -f "$WT/$c" ] || return 0
+  python3 "$WT/$c" "$WT" > "$SD/last-tickets.log" 2>&1 && return 0
+  tmp=$(mktemp -d)
+  g archive "$BASE" docs | tar -x -C "$tmp"
+  python3 "$WT/$c" "$tmp" > /dev/null 2>&1; r=$?
+  rm -rf -- "$tmp"
+  if [ $r = 0 ]; then
+    { echo "check_tickets rouge sur l'arbre reposé :"; grep -E '^  - ' "$SD/last-tickets.log" | head -3; } | paste -sd' ' > "$SD/last-red.txt"
+    return 1
+  fi
+  return 4
+}
+
+# A train waiting on a master red at check_tickets goes behind the next lot of the queue that is not its own child, so
+# a lot that mends master reaches the head; once every lot has waited on this master, the pusher idles.
+tickets_wait() { # <line>…
+  local ids="" line w=$D/tickets-wait.txt
+  for line in "$@"; do ids="$ids $(f_ "$line" 1)"; done
+  [ "$(head -1 "$w" 2>/dev/null)" = "$BASE" ] || echo "$BASE" > "$w"
+  if grep -qx "$(f_ "$1" 1)" "$w"; then sleep "${PUSHER_IDLE:-60}"; return 0; fi
+  for line in "$@"; do f_ "$line" 1 >> "$w"; done
+  log "$TRAIN_LABEL" "en attente" "master $(g rev-parse --short "$BASE") rouge à check_tickets : le lot passe derrière le suivant"
+  ( flock 9
+    awk -F'\t' -v ids="$ids" 'BEGIN {n = split(ids, a, " "); for (i = 1; i <= n; i++) mine[a[i]] = 1}
+      /^#/ {print; next}
+      ($1 in mine) {held = held $0 "\n"; next}
+      {print; if (held != "" && !done && !($8 in mine)) {printf "%s", held; done = 1}}
+      END {if (!done) printf "%s", held}' "$Q" > "$Q.new" && mv "$Q.new" "$Q" ) 9> "$D/queue.lock"
+}
+
 # A Rust lot: one pinned pass under `poste lourd`, the peak of its memory in the log. An environment red (code 124,
 # poste held, a service that refuses) is replayed once; anything else is a code red.
 replay_rust() { # <id> <journals> <witness> <witness_suite> <extra_suites> → 0 green, 1 code red, 2 environment red
@@ -522,14 +558,19 @@ replay_and_push_a() {
       for line in "${part[@]}"; do log "$(f_ "$line" 1)" "déjà sur master"; pushed "$(f_ "$line" 1)" "$(f_ "$line" 9)" "$(f_ "$line" 2)"; done
       return 0
     fi
-    g push -q origin "HEAD:refs/heads/$RB" || { log "$TRAIN_LABEL" "push de la repose $RB refusé, rejoué au pas suivant"; return 0; }
-    log "$TRAIN_LABEL" reposé "$RB $(g rev-parse --short HEAD) sur $(g rev-parse --short "$BASE")"
-    replay_train "${part[@]}"
-    case $? in
-      0) break ;;
-      2) for line in "${part[@]}"; do red_family "$(f_ "$line" 1)" "$(f_ "$line" 9)" environnement "deux rouges d'environnement pour le train $TRAIN_LABEL : appeler c7"; done
-         return 0 ;;
-    esac
+    rank=0; for line in "${part[@]}"; do r=$(kind_rank "$(f_ "$line" 4)"); [ "$r" -gt "$rank" ] && rank=$r; done
+    gate=0; [ "$rank" -lt 2 ] && { tickets_gate; gate=$?; }
+    [ $gate = 4 ] && { tickets_wait "${part[@]}"; return 0; }
+    if [ $gate = 0 ]; then
+      g push -q origin "HEAD:refs/heads/$RB" || { log "$TRAIN_LABEL" "push de la repose $RB refusé, rejoué au pas suivant"; return 0; }
+      log "$TRAIN_LABEL" reposé "$RB $(g rev-parse --short HEAD) sur $(g rev-parse --short "$BASE")"
+      replay_train "${part[@]}"
+      case $? in
+        0) break ;;
+        2) for line in "${part[@]}"; do red_family "$(f_ "$line" 1)" "$(f_ "$line" 9)" environnement "deux rouges d'environnement pour le train $TRAIN_LABEL : appeler c7"; done
+           return 0 ;;
+      esac
+    fi
     n=${#part[@]}
     if [ "$n" = 1 ]; then
       red_family "$(f_ "${part[0]}" 1)" "$(f_ "${part[0]}" 9)" code "$(cat "$SD/last-red.txt" 2>/dev/null)"
