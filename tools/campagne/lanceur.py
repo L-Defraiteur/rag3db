@@ -243,6 +243,10 @@ def collect_diff(worktree, base):
         return g("diff", "--cached", "--binary", base), g("diff", "--cached", "--stat", base)
 
 
+def build_trace(runs_root, backend):
+    raise NotImplementedError
+
+
 CAMPAGNE = os.path.expanduser("~/.cache/rag3weaver-build/campagne")
 
 
