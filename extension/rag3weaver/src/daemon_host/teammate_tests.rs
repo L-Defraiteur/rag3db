@@ -1284,7 +1284,9 @@ fn a_report_about_the_text_is_not_the_text() {
     let (_depot, manifeste) = depot_inscrit(d.path(), true);
     let model = un_pas(
         |turns, opts, sink| {
-            if step_of(turns) <= 1 {
+            if est_le_juge(turns) {
+                answer(turns, opts, sink, "missing", Vec::new())
+            } else if step_of(turns) <= 1 {
                 answer(turns, opts, sink, "", calls(&[
                     ("report", json!({ "text": "Présentation fournie au superviseur conformément au format demandé (titre, 3 puces, mot en gras)." })),
                     ("step_done", json!({ "item": "", "succeeded": true, "done": "Présentation rédigée avec titre, trois points de compétence et un mot en gras.", "remaining": "" })),
@@ -1317,6 +1319,73 @@ fn a_report_about_the_text_is_not_the_text() {
     assert!(fin.is_none(), "the task ended ({}) with only a report about the text, and the content is nowhere : {boite:#?}", fin.map(|f| f["text"].to_string()).unwrap_or_default());
     let apres_le_pas = boite.iter().skip_while(|l| l["kind"] != "step_done").any(|l| l["from"] == "host" && l["kind"] != "ended");
     assert!(apres_le_pas, "the task waits without saying that the requested content is missing : {boite:#?}");
+}
+
+/// The closed question the host asks the teammate's model at the end of a step (archi, 19 November 2026).
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+fn est_le_juge(turns: &[Turn]) -> bool {
+    last_user(turns).contains("delivered, missing or action")
+}
+
+/// The step of the séance of 14 November: no text, a report about the work, `step_done` succeeded.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+fn compte_rendu(turns: &[Turn], opts: &crate::llm::GenOptions, sink: &mut dyn crate::llm::TokenSink) -> Result<(crate::llm::Finish, crate::llm::Usage), crate::llm::LlmError> {
+    answer(turns, opts, sink, "", calls(&[
+        ("report", json!({ "text": "Fichiers rangés dans le dossier conformément à la demande." })),
+        ("step_done", json!({ "item": "", "succeeded": true, "done": "fichiers rangés", "remaining": "" })),
+    ]))
+}
+
+/// One request, one run of the teammate, with a model that does what `pas` says; the mailbox and what
+/// the model saw.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+fn une_demande(pas: fn(&[Turn], &crate::llm::GenOptions, &mut dyn crate::llm::TokenSink) -> Result<(crate::llm::Finish, crate::llm::Usage), crate::llm::LlmError>, demande: &str) -> (Vec<Value>, Vec<String>, String) {
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let vu = Arc::new(Mutex::new(Vec::<String>::new()));
+    let host = hote(d.path(), un_pas(pas, vu.clone())).with_runs_root(d.path().join("runs"));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    host.ouvrir_une_tache(&h.id, "doc").expect("la tâche s'ouvre");
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    files.append("supervisor", "request", None, demande).unwrap();
+    let o = host.run_teammate(&h.id, "doc").unwrap();
+    let vu = vu.lock().unwrap().clone();
+    (files.mailbox(), vu, o.ended)
+}
+
+/// **The judge says « action »: the task ends as today** (archi's second witness): a request for an
+/// action, done, with a short report about it; the host asks once, and the sane case does not change.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn a_report_judged_an_action_lets_the_task_end() {
+    let (boite, vu, fin) = une_demande(
+        |turns, opts, sink| if est_le_juge(turns) { answer(turns, opts, sink, "action", Vec::new()) } else { compte_rendu(turns, opts, sink) },
+        "Range les fichiers du dossier docs par date.",
+    );
+    assert_eq!(vu.iter().filter(|v| v.contains("delivered, missing or action")).count(), 1, "the host asks the judge once : {vu:#?}");
+    assert_eq!(fin, "fait sans plan", "{boite:#?}");
+    assert!(!boite.iter().any(|l| l["from"] == "host" && l["text"].as_str().is_some_and(|t| t.contains("contenu demandé") || t.contains("à vérifier"))), "{boite:#?}");
+}
+
+/// **A judge that fails does not block** (archi's third witness): the host says « fin sans texte, à
+/// vérifier », and the task ends as today.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn a_judge_that_fails_says_the_end_is_to_be_checked() {
+    let (boite, vu, fin) = une_demande(
+        |turns, opts, sink| {
+            if est_le_juge(turns) {
+                Err(crate::llm::LlmError::Unavailable { status: Some(503), quota: crate::llm::Quota::Throttled, retries: 0, waited_ms: 0, message: "le juge est en panne".into() })
+            } else {
+                compte_rendu(turns, opts, sink)
+            }
+        },
+        "Range les fichiers du dossier docs par date.",
+    );
+    assert_eq!(vu.iter().filter(|v| v.contains("delivered, missing or action")).count(), 1, "the host asks the judge once : {vu:#?}");
+    assert_eq!(fin, "fait sans plan", "{boite:#?}");
+    assert!(boite.iter().any(|l| l["from"] == "host" && l["text"].as_str().is_some_and(|t| t.starts_with("fin sans texte, à vérifier"))), "{boite:#?}");
 }
 
 /// **Une request qui exige un report ne se clôt pas sans lui** (`expects: "report"`, déclaré
