@@ -245,7 +245,10 @@ faire pour Codex. La suite reprend à l'entrée 3.
 
 ### Entrée 6 : le chemin sans positions relit tout pour une requête longue (lot long)
 
-- **Ticket** : `docs/lucivy/tickets/2026-11-14-le-chemin-sans-positions-relit-tout-pour-une-requete-longue.md`.
+**Faite le 19 novembre 2026** : lucivy 4.3.11 (PR #48), 6,8 s → 0,19 s ; ticket fermé
+(`docs/tickets/closed/2026-11-14-le-chemin-sans-positions-relit-tout-pour-une-requete-longue.md`).
+
+- **Ticket** : `docs/tickets/closed/2026-11-14-le-chemin-sans-positions-relit-tout-pour-une-requete-longue.md`.
 - **Pourquoi en dernier** : aucun index de rag3weaver n'est sans positions aujourd'hui (décision du 14 novembre :
   on garde les positions). C'est ce qui interdit le profil léger un jour.
 - **Ce qu'il faut faire** : avant la vérification sur le texte stocké, réduire les candidats d'une requête de

@@ -1,6 +1,13 @@
 # Le chemin sans positions relit tout pour une requête longue
 
-- **État** : ouvert (14 novembre 2026), pour un jour : les index de rag3weaver gardent leurs positions.
+- **État** : corrigé (19 novembre 2026), lucivy 4.3.11 (main 29594b9, PR #48), publiée. La cause n'était pas
+  l'intersection des postings : la coupe du pigeonnier d'une requête floue d1 de 230 octets était `ledic | …`. « ledic »
+  est présent dans un tiers des documents, et chacun passait entier dans une distance d'édition non bit-parallèle
+  (aiguille de plus de 64 octets) : 23 Mo et 6,5 s par segment. La distance ne tourne plus que dans des fenêtres autour
+  des occurrences des morceaux (`briques::stored::piece_windows`), avec les mêmes occurrences et les mêmes spans. Sur 20 000
+  fichiers du dépôt, la requête de l'archiviste sans positions passe de 6 818 à 188 ms (153 avec positions). Témoin
+  `test_no_positions_long_fuzzy` (238 818 → 26 729 octets passés à la distance) ; `positions_off` flou et regex au span
+  près, vert sur linux v7.2. rag3weaver passe à la 4.3.11 par le pousseur (lot `lucivy-4-3-11`).
 - **Gravité** : performance. Les réponses sont justes, mais une requête longue et floue prend une minute.
 - **Atteignable en service** : non tant qu'aucun backend ne pose `fts_positions: false`. Oui dès qu'un backend le
   pose.
