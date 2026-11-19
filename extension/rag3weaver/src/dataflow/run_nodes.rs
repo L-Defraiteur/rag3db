@@ -296,7 +296,9 @@ impl Node for RunCommandNode {
         let mut atelier = Atelier::dans(&racine)
             .avec_delai(std::time::Duration::from_secs(self.delai_s))
             .avec_max_sortie(self.max_sortie)
-            .avec_journaux(dossier_du_run(ctx));
+            .avec_journaux(dossier_du_run(ctx))
+            // Heavy commands under the machine's `poste lourd`, when the host declares it.
+            .avec_le_poste_de_l_hote(|k| std::env::var(k).ok());
         // Le bac à sable du manifeste, s'il y en a un : le noyau borne ce
         // que la commande voit — la garde refuse tôt et parle, le bac tient.
         if let Some(bac) = ctx.service::<Arc<crate::commande::BacASable>>(BAC_A_SABLE_SERVICE) {
@@ -373,7 +375,8 @@ impl RunCommandNode {
         let mut atelier = Atelier::dans(racine)
             .avec_max_sortie(self.max_sortie)
             .avec_journaux(dossier_du_run(ctx))
-            .avec_nom_journaux(poignee.clone());
+            .avec_nom_journaux(poignee.clone())
+            .avec_le_poste_de_l_hote(|k| std::env::var(k).ok());
         if let Some(bac) = ctx.service::<Arc<crate::commande::BacASable>>(BAC_A_SABLE_SERVICE) {
             atelier = atelier.avec_bac_a_sable(bac.as_ref().clone());
         }
