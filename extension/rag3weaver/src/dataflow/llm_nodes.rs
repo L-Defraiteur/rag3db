@@ -275,6 +275,15 @@ impl Node for LlmNode {
 
         // Sous un schéma, la réponse se lit avant tout envoi : une réponse non
         // conforme est une erreur, et aucun port ne sort à moitié.
+        // A reply cut by its limit is not « not JSON »: it is cut, and the refusal says why and what to change
+        // (19 November 2026: on Vertex, the reasoning of Gemini counts in max_tokens).
+        if self.response_schema.is_some() && finish == crate::llm::Finish::max_tokens() {
+            return Err(format!(
+                "LlmNode ({}) : {}; the response_schema cannot be read from a cut reply: raise max_tokens or lower reasoning",
+                llm.name(),
+                crate::llm::cut_reply(opts.max_tokens, &usage)
+            ));
+        }
         let json = match &self.response_schema {
             Some(schema) => Some(
                 read_under_schema(&text, schema).map_err(|e| format!("LlmNode ({}) : {e}", llm.name()))?,
@@ -503,6 +512,16 @@ impl NodeFactory for LlmNodeFactory {
             .with_temperature(temperature)
             .with_top_p(top_p)
             .with_stop(stop);
+        let mut opts = opts;
+        match config.get("reasoning") {
+            None | Some(serde_json::Value::Null) => {}
+            Some(v) => {
+                opts.reasoning = Some(
+                    serde_json::from_value::<crate::llm::ReasoningEffort>(v.clone())
+                        .map_err(|_| format!("LlmNode: 'reasoning' is one of minimal, low, medium, high, not {v}"))?,
+                );
+            }
+        }
         let mut node = LlmNode::new(name).with_options(opts).with_tools(with_tools).with_stop_when_unread(stop_when_unread);
         match config.get("instruction") {
             None | Some(serde_json::Value::Null) => {}
@@ -582,6 +601,15 @@ impl NodeFactory for LlmNodeFactory {
                     default: Some(serde_json::json!(false)),
                     description: "Expose every registered node type to the model as a tool".into(),
                     choices: None,
+                    json_schema: None,
+                },
+                ConfigParam {
+                    name: "reasoning".into(),
+                    param_type: ConfigParamType::String,
+                    required: false,
+                    default: None,
+                    description: "The reasoning effort asked of the model (minimal, low, medium, high); absent: the model's default. On Vertex, reasoning counts in max_tokens".into(),
+                    choices: Some(crate::dataflow::node_registry::Choices::fixed(["minimal", "low", "medium", "high"])),
                     json_schema: None,
                 },
                 ConfigParam {
@@ -860,9 +888,9 @@ mod tests {
         assert_eq!(schema.node_type, "LlmNode");
         assert_eq!(schema.inputs[0].port_type, PortType::Text);
         // text, llm, le flux tokens, et json (la réponse sous response_schema) ; stop_when_unread et
-        // response_schema s'ajoutent aux cinq réglages, puis instruction (lot B1).
+        // response_schema s'ajoutent aux cinq réglages, puis instruction (lot B1) et reasoning (19 nov.).
         assert_eq!(schema.outputs.len(), 4);
-        assert_eq!(schema.config_params.len(), 8);
+        assert_eq!(schema.config_params.len(), 9);
     }
 
     #[test]
