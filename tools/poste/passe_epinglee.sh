@@ -82,6 +82,40 @@ non_juges() { # <journal> <nom> : ajoute au résumé les non-jugés du journal, 
   fi
   return "$n"
 }
+# **Les rouges connus** (19 novembre 2026, forme de c7) : tools/poste/known_red_e2e.txt, dans l'arbre, une ligne par cas,
+# `suite<TAB>cas<TAB>chemin du ticket`. La suite se joue entière ; au verdict, un cas rouge qui a sa ligne compte « rouge
+# connu (ticket) », un cas listé qui passe est dit « à lever », tout autre rouge juge. Une ligne dont le ticket est absent,
+# rangé dans closed/ ou d'un état qui n'est pas ouvert refuse la passe : la liste ne vieillit pas. Le lot qui corrige
+# retire sa ligne dans le même lot, et sa passe juge alors le cas pour de vrai.
+CONNUS=""
+if [ -f $W/tools/poste/known_red_e2e.txt ]; then
+  while IFS=$'\t' read -r ks kc kt; do
+    case "$ks" in ''|'#'*) continue ;; esac
+    [ -n "$kc" ] && [ -n "$kt" ] || rouge "rouges connus : ligne incomplète ($ks $kc)"
+    case "$kt" in */closed/*) rouge "rouges connus : $ks::$kc cite un ticket fermé ($kt), retirer la ligne" ;; esac
+    [ -f "$W/$kt" ] || rouge "rouges connus : $ks::$kc cite un ticket absent ($kt)"
+    etat=$(grep -m1 -E '^- \*\*État\*\* *:' "$W/$kt" | sed 's/^[^:]*: *//')
+    case "$etat" in ouvert*|"en cours"*) ;; *) rouge "rouges connus : le ticket de $ks::$kc n'est pas ouvert ($kt : ${etat:-sans état})" ;; esac
+    CONNUS="$CONNUS$ks"$'\t'"$kc"$'\t'"$kt"$'\n'
+  done < $W/tools/poste/known_red_e2e.txt
+  echo "rouges connus déclarés : $(printf '%s' "$CONNUS" | grep -c .)" >> $R
+fi
+# juge_connus <suite> <journal> : 0 si chaque cas rouge du journal est un rouge connu de cette suite (et il le dit).
+juge_connus() {
+  local f base kt rouges
+  rouges=$(grep -oE '^test [^ ]+ \.\.\. FAILED$' "$2" | awk '{print $2}')
+  [ -n "$rouges" ] || return 1
+  for f in $rouges; do
+    base=${f##*::}
+    kt=$(printf '%s' "$CONNUS" | awk -F'\t' -v s="$1" -v c="$base" '$1 == s && $2 == c {print $3; exit}')
+    [ -n "$kt" ] || return 1
+  done
+  for f in $rouges; do
+    base=${f##*::}
+    echo "rouge connu ($(printf '%s' "$CONNUS" | awk -F'\t' -v s="$1" -v c="$base" '$1 == s && $2 == c {print $3; exit}')) : $1::$base" >> $R
+  done
+  return 0
+}
 echo "== témoin" >> $R
 # SUITE_DU_TEMOIN=lib (15 novembre 2026, ticket d'hotfixs) : le témoin est un test de la lib, joué par `run_e2e.sh --lib`.
 if [ "${SUITE_DU_TEMOIN:-}" = lib ]; then
@@ -112,7 +146,10 @@ for suite in $(echo $LISTE_DES_SUITES | tr " " "\n" | awk 'NF && !vu[$0]++'); do
   JOUEES="$JOUEES $suite"
   timeout 5400 ./run_e2e.sh --features openai-llm,anthropic-llm --test $suite > $J/$suite.log 2>&1; c=$?
   grep -E '^test result|FAILED|panicked' $J/$suite.log | head -20 >> $R
-  [ $c = 0 ] || rouge "$suite (code=$c)"
+  [ $c = 0 ] || juge_connus "$suite" $J/$suite.log || rouge "$suite (code=$c)"
+  printf '%s' "$CONNUS" | awk -F'\t' -v s="$suite" '$1 == s {print $2 "\t" $3}' | while IFS=$'\t' read -r kc kt; do
+    grep -qE "^test ([^ ]*::)?$kc \.\.\. ok$" $J/$suite.log && echo "à lever : $suite::$kc passe (ticket $kt)" >> $R
+  done
   # Une suite non jouée faute de feature est rouge (procédure, 7 novembre 2026).
   grep -q 'NON JOUÉES' $J/$suite.log && rouge "$suite : des suites non jouées faute de feature"
   if ! non_juges $J/$suite.log $suite && echo " $EXIGEES_NOMS " | grep -q " $suite "; then
