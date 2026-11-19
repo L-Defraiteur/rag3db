@@ -1703,7 +1703,11 @@ fn la_page_du_chat_nomme_ce_qu_un_tour_attend() {
             modele.generate(turns, opts, sink)
         })))
     });
-    let (d, h, m, id) = banc_gabarit("carnet", "notebook", model.clone(), |m| m["teammate"]["tool_wait_notice_s"] = json!(1));
+    let (d, h, m, id) = banc_gabarit("carnet", "notebook", model.clone(), |m| {
+        // The notebook has no workspace: the bench's root would be a workspace without its source.
+        m.as_object_mut().unwrap().remove("workspace");
+        m["teammate"]["tool_wait_notice_s"] = json!(1);
+    });
     drop(h);
     let catalogues: Arc<Mutex<Vec<Arc<Mutex<crate::Catalog>>>>> = Arc::default();
     let pour_l_ouvreur = catalogues.clone();
