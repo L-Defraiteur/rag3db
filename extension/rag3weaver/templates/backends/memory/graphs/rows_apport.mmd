@@ -4,6 +4,6 @@
 %% result: wrap.result
 
 graph LR
-    select["SelectRecordsNode(entity='Apport', filter=$element.filter, limit=0)"]
+    select["GraphNode(graph='@builtin:tools/select_structured.mmd', entity='Apport', filter=$element.filter, limit=0)"]
     wrap["RhaiNode(script='#{rows: input.value, carried: input.carried}', inputs='carried', carried=$element.carried)"]
-    select -->|results:value| wrap
+    select -->|result:value| wrap
