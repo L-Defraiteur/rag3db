@@ -2225,3 +2225,33 @@ fn seules_les_bases_mortes_de_ce_poste_sont_orphelines() {
     // un poste dont le nom finit par des zéros : le préfixe ne les rogne pas
     assert_eq!(orphelines(&noms, "PC10", |pid| pid == 11), vec!["rag3weaver_test_pc10_10".to_string()]);
 }
+
+// ═══ Les générations sur postgres (2.11, lot B) ═══════════════════════════════
+
+/// **A new code base on postgres has generations** (ticket of 14 November 2026, « le dialecte postgres n'a pas la
+/// forme à générations »): stamped `code-scope-v1/content/generations` like on rag3db, and an edit retires at the
+/// pending rank while the published rank keeps the scope.
+#[cfg(feature = "code")]
+#[test]
+#[ignore]
+fn a_new_code_base_on_postgres_has_generations() {
+    use rag3weaver::code::{default_scope_chunking, register_code_schema, scope_form, ScopeForm};
+    use rag3weaver::code_sync::{sync_source, SourceSyncOptions};
+    use rag3weaver::code_tools::{edit_file, EditOp, Snapshot};
+    let (_garde, mut catalog) = catalogue(8);
+    register_code_schema(&mut catalog, default_scope_chunking()).unwrap();
+    assert_eq!(scope_form(&catalog).unwrap(), ScopeForm::Generations, "a new postgres code base is stamped with generations");
+    let snapshot = Snapshot::new("demo", [("a.rs".to_string(), "pub fn alpha() {}\npub fn beta() {}\n".to_string())]);
+    sync_source(&mut catalog, &snapshot, &SourceSyncOptions::default(), &mut |_| {}).expect("the first index on postgres");
+    let publie = catalog.publier_la_generation("c1", 0).expect("publish on postgres");
+    edit_file(&snapshot, Some(&mut catalog), "a.rs", &EditOp::Replace { old: "pub fn beta()".into(), new: "pub fn gamma()".into() }).expect("edit on postgres");
+    let noms = |c: &mut Catalog| -> Vec<String> {
+        let visible = c.condition_visible("s").expect("visible");
+        let lu = c.execute_raw(&format!("SELECT s.name FROM scope AS s WHERE {visible} ORDER BY s.name")).unwrap();
+        lu.rows.iter().filter_map(|l| l.first().and_then(|v| v.as_str()).map(str::to_string)).collect()
+    };
+    let au_rang_en_attente = noms(&mut catalog);
+    assert!(au_rang_en_attente.contains(&"gamma".to_string()) && !au_rang_en_attente.contains(&"beta".to_string()), "at the pending rank: {au_rang_en_attente:?}");
+    let au_publie = catalog.au_rang(publie, noms);
+    assert!(au_publie.contains(&"beta".to_string()) && !au_publie.contains(&"gamma".to_string()), "at the published rank: {au_publie:?}");
+}
