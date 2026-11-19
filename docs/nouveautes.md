@@ -5,7 +5,8 @@
   tout `BEGIN` et tout `CHECKPOINT`. Une transaction d'écriture ouverte avant pouvait pourtant encore valider, et une
   validation forcée écrivait alors cet état à moitié annulé dans les fichiers. Son `COMMIT` est désormais refusé par
   le même message (« A rollback of this database could not complete… ») : on annule, on ferme et on rouvre la base ;
-  rien de validé n'est perdu, le journal est rejoué à la réouverture.
+  rien de validé n'est perdu, le journal est rejoué à la réouverture. Le point de reprise automatique qu'une autre
+  écriture avait demandé n'est pas écrit non plus par le dernier lecteur qui part.
 
 - 19 novembre 2026 — **Le chat de l'IDE ne fait plus disparaître un tour.** Une relecture de la conversation
   partie avant un tour et revenue après lui remettait un écran sans ce tour, jusqu'au rechargement suivant. La page
