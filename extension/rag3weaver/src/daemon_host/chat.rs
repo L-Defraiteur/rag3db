@@ -727,7 +727,14 @@ impl DaemonHost {
                             .avec_les_commandes_en_attente(move |ligne| self.atelier_demander_commande(&backend, ligne, domaine.as_deref()))
                             .avec_les_cartes_rattachees(move |id| self.rattacher_accord(id, &du_chat))
                     };
-                    let tour = Tour { prepared: b.prepared(), mode: b.mode_declarations(), dans_une_tache, bus: Some(b.bus_de_publication()), boite: &outils, ecrivent: &outils.ecrivent, repli: None };
+                    // **A slow tool says it waits** (ticket of 19 Nov., relevé par archi): the teammate's notice.
+                    let attente = DitSonAttente {
+                        inner: &outils,
+                        notice: std::time::Duration::from_secs(b.prepared().manifest.teammate.clone().unwrap_or_default().tool_wait_notice_s),
+                        bus: b.bus_de_publication(),
+                        run: run_id.clone(),
+                    };
+                    let tour = Tour { prepared: b.prepared(), mode: b.mode_declarations(), dans_une_tache, bus: Some(b.bus_de_publication()), boite: &attente, ecrivent: &outils.ecrivent, repli: None };
                     self.run_chat_turn(tour, backend_id, &hosted.manifest, &run_id, &mut session, message, annule, arrete_par, None)
                 })
                 .and_then(|r| r),
@@ -1218,6 +1225,34 @@ impl crate::agent::ToolBox for OutilsDuChat<'_> {
 
 /// **Les fichiers qu'un tour a écrits** : les `path` des appels à un outil qui
 /// écrit, dont le résultat n'est pas un refus, dans l'ordre et sans doublon.
+/// **The chat's tools, saying when a call waits** (ticket of 19 November 2026): each call past
+/// `notice` puts `Waiting` then `Resumed` on the turn's run, as a teammate's step does
+/// ([`super::teammate_tools::say_the_wait`]); the chat has no mailbox, so nothing else is written.
+pub(super) struct DitSonAttente<'a> {
+    pub inner: &'a (dyn crate::agent::ToolBox + Sync),
+    pub notice: std::time::Duration,
+    pub bus: crate::events::EventBus,
+    pub run: String,
+}
+
+impl crate::agent::ToolBox for DitSonAttente<'_> {
+    fn call(&self, call: &crate::llm::ToolCall) -> crate::llm::Turn {
+        super::teammate_tools::say_the_wait(self.notice, Some(&self.bus), &self.run, &call.name, || {}, || self.inner.call(call))
+    }
+    fn call_in(&self, call: &crate::llm::ToolCall, run: &str) -> crate::llm::Turn {
+        super::teammate_tools::say_the_wait(self.notice, Some(&self.bus), &self.run, &call.name, || {}, || self.inner.call_in(call, run))
+    }
+    fn call_with(&self, call: &crate::llm::ToolCall, run: &str, inv: &crate::agent::ToolInvocation) -> crate::llm::Turn {
+        super::teammate_tools::say_the_wait(self.notice, Some(&self.bus), &self.run, &call.name, || {}, || self.inner.call_with(call, run, inv))
+    }
+    fn tool_defs(&self) -> Vec<crate::tools::ToolDef> {
+        self.inner.tool_defs()
+    }
+    fn is_async(&self, tool: &str) -> bool {
+        self.inner.is_async(tool)
+    }
+}
+
 fn fichiers_ecrits_du_tour(turns: &[crate::llm::Turn], ecrivent: &HashSet<String>) -> Vec<String> {
     let reussi = |id: &str| {
         turns.iter().find(|t| t.role == "tool" && t.tool_call_id.as_deref() == Some(id)).is_some_and(|t| {
