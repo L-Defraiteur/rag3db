@@ -4648,6 +4648,8 @@ impl Backend {
             if resolved.contains_key(key) { return Err(format!("cannot override binding {key}")); }
         }
         resolved.extend(attachment.bindings.clone());
+        // `view` is the call's, not the tool's: the call reads it (`call_tool_on`), the instance never sees it.
+        resolved.remove("view");
         let definition = tool.instantiate(&Value::Object(resolved)).map_err(|e| e.to_string())?;
         if !prepared.nodes.snapshot_safe(&definition) {
             return Err("invocation refusée : opération cible non prouvée en lecture seule (boucles comprises)".into());
