@@ -1106,19 +1106,32 @@ fn not_ready_line(state: &Value) -> String {
     format!("index pas prêt, {when} : la réponse porte sur ce qui est déjà indexé ({files} fichier(s) en attente){others}.")
 }
 
-/// **`view` d'un appel d'outil** : `{"layer": <id de couche>, "rank"?: <génération>}`.
+/// **`view` d'un appel d'outil** : `{"layer": <id de couche>, "rank"?: <génération>}`, ou
+/// `{"worktree": <chemin absolu>, "rank"?}`, le sucre de la couche de travail `worktree:<chemin réel>`.
 /// Le rang omis vaut la dernière génération publiée de la couche. Toute autre
 /// clé, une couche absente ou vide, un rang qui n'est pas un entier : un refus
 /// qui les nomme.
 fn parse_view(v: &Value) -> Result<crate::views::ViewRequest, String> {
-    let o = v.as_object().ok_or_else(|| format!("`view` doit être un objet {{\"layer\", \"rank\"?}}, pas {v}"))?;
-    if let Some(k) = o.keys().find(|k| *k != "layer" && *k != "rank") {
-        return Err(format!("`view` : clé inconnue « {k} » (attendues : layer, rank)"));
+    let o = v.as_object().ok_or_else(|| format!("`view` doit être un objet {{\"layer\" ou \"worktree\", \"rank\"?}}, pas {v}"))?;
+    if let Some(k) = o.keys().find(|k| !matches!(k.as_str(), "layer" | "worktree" | "rank")) {
+        return Err(format!("`view` : clé inconnue « {k} » (attendues : layer ou worktree, rank)"));
     }
-    let layer = match o.get("layer") {
-        Some(Value::String(c)) if !c.is_empty() => c.clone(),
-        Some(x) => return Err(format!("`view.layer` doit être l'id d'une couche, pas {x}")),
-        None => return Err("`view` : `layer` manque (l'id de la couche à lire)".into()),
+    let layer = match (o.get("layer"), o.get("worktree")) {
+        (Some(_), Some(_)) => return Err("`view` : `worktree` et `layer` ensemble — une vue se nomme par l'un ou l'autre".into()),
+        (Some(Value::String(c)), None) if !c.is_empty() => c.clone(),
+        (Some(x), None) => return Err(format!("`view.layer` doit être l'id ou le nom d'une couche, pas {x}")),
+        // **The sugar of a view's name** (2a′-3, lot 7): a worktree by its path is the work layer
+        // `worktree:<real path>`, the name the tracked layers give it; the path is canonicalized first.
+        (None, Some(Value::String(p))) if !p.is_empty() => {
+            let path = std::path::Path::new(p);
+            if !path.is_absolute() {
+                return Err(format!("`view.worktree` : « {p} » n'est pas un chemin absolu"));
+            }
+            let real = std::fs::canonicalize(path).map_err(|_| format!("`view.worktree` : chemin introuvable « {p} »"))?;
+            format!("worktree:{}", real.display())
+        }
+        (None, Some(x)) => return Err(format!("`view.worktree` doit être le chemin d'un worktree, pas {x}")),
+        (None, None) => return Err("`view` : `layer` ou `worktree` manque (la couche à lire)".into()),
     };
     let rank = match o.get("rank") {
         None | Some(Value::Null) => None,
@@ -2234,9 +2247,9 @@ impl PreparedBackend {
                 if let Some(props) = input["properties"].as_object_mut() {
                     props.insert("view".into(), json!({
                         "type": "object",
-                        "description": "La vue lue : {layer: id ou nom de couche, rank?: génération}. Absente : la vue courante. Une vue inconnue se refuse avant toute lecture ; la réponse dit la vue lue (view.layer, view.rank, view.depth).",
-                        "properties": {"layer": {"type": "string", "minLength": 1}, "rank": {"type": "integer"}},
-                        "required": ["layer"],
+                        "description": "La vue lue : {layer: id ou nom de couche, rank?: génération}, ou {worktree: chemin absolu d'un worktree suivi, rank?} (sa couche de travail). Absente : la vue courante. Une vue inconnue se refuse avant toute lecture ; la réponse dit la vue lue (view.layer, view.rank, view.depth).",
+                        "properties": {"layer": {"type": "string", "minLength": 1}, "worktree": {"type": "string", "minLength": 1}, "rank": {"type": "integer"}},
+                        "oneOf": [{"required": ["layer"]}, {"required": ["worktree"]}],
                         "additionalProperties": false
                     }));
                 }
