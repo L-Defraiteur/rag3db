@@ -475,7 +475,22 @@ pub fn agent() -> ureq::Agent {
 /// tenir son fil sans fin (ticket du 11 octobre 2026 : un `/embed` muet a figé
 /// deux fois l'index de code-lourd, et l'arrêt ne pouvait pas le couper).
 pub fn agent_with_timeout(delai: std::time::Duration) -> ureq::Agent {
-    ureq::Agent::new_with_config(ureq::Agent::config_builder().http_status_as_error(false).timeout_global(Some(delai)).build())
+    agent_qui_reprend(ureq::Agent::config_builder().http_status_as_error(false).timeout_global(Some(delai)).build())
+}
+
+/// The witnesses' agent and the product's, with [`connecteur_qui_reprend`].
+fn agent_qui_reprend(config: ureq::config::Config) -> ureq::Agent {
+    ureq::Agent::with_parts(config, connecteur_qui_reprend(), ureq::unversioned::resolver::DefaultResolver::default())
+}
+
+/// **Un connecteur qui retente l'attente d'une réponse interrompue** (le rouge intermittent du
+/// 19 novembre 2026, `a_backend_closes_between_two_tool_calls_of_a_step` :
+/// `Io(Os { code: 4, kind: Interrupted })`). Une socket qui porte un délai rend EINTR à `recv`
+/// même avec `SA_RESTART`, et même sans gestionnaire après un arrêt et une reprise (`man 7
+/// signal`) : c'est transitoire, un client le retente. Seule l'attente se retente, elle ne
+/// consomme rien ; un envoi interrompu n'est jamais rejoué.
+pub fn connecteur_qui_reprend() -> impl ureq::unversioned::transport::Connector {
+    ureq::unversioned::transport::DefaultConnector::default()
 }
 
 /// **Le client des témoins** (ticket du 8 novembre 2026 : un test de l'hôte attendait son hôte
@@ -485,7 +500,7 @@ pub fn agent_with_timeout(delai: std::time::Duration) -> ureq::Agent {
 #[cfg(all(test, feature = "rag3db-native"))]
 pub(crate) fn agent_de_temoin() -> ureq::Agent {
     let d = Some(DELAI_DES_TEMOINS);
-    ureq::Agent::new_with_config(
+    agent_qui_reprend(
         ureq::Agent::config_builder()
             .http_status_as_error(false)
             .timeout_connect(d)
@@ -579,6 +594,51 @@ pub fn poster(
 
 #[cfg(test)]
 mod tests {
+    /// **An answer awaited through an interrupted recv is still read** (the intermittent red of 19
+    /// Nov 2026): a server answers after 400 ms; meanwhile a signal whose handler has no
+    /// SA_RESTART hits the thread waiting for the answer, and its recv (with a timeout) returns
+    /// EINTR. The agent retries the wait and reads the answer.
+    #[cfg(unix)]
+    #[test]
+    fn an_answer_awaited_through_an_interrupted_recv_is_still_read() {
+        use std::io::{Read, Write};
+        extern "C" fn rien(_: libc::c_int) {}
+        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let adresse = l.local_addr().unwrap();
+        std::thread::spawn(move || {
+            for c in l.incoming().take(1).flatten() {
+                let mut c = c;
+                let mut tampon = [0u8; 4096];
+                let _ = c.read(&mut tampon);
+                std::thread::sleep(std::time::Duration::from_millis(400));
+                let _ = c.write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 2\r\nconnection: close\r\n\r\nok");
+            }
+        });
+        // A handler without SA_RESTART for SIGUSR2, sent only to the waiting thread.
+        let ancien = unsafe {
+            let mut neuf: libc::sigaction = std::mem::zeroed();
+            neuf.sa_sigaction = rien as usize;
+            neuf.sa_flags = 0;
+            let mut ancien: libc::sigaction = std::mem::zeroed();
+            assert_eq!(libc::sigaction(libc::SIGUSR2, &neuf, &mut ancien), 0);
+            ancien
+        };
+        let (tx, rx) = std::sync::mpsc::channel();
+        let fil = std::thread::spawn(move || {
+            tx.send(unsafe { libc::pthread_self() }).unwrap();
+            let agent = agent_with_timeout(std::time::Duration::from_secs(10));
+            agent.get(format!("http://{adresse}/")).call().map(|mut r| r.body_mut().read_to_string().unwrap_or_default()).map_err(|e| e.to_string())
+        });
+        let cible = rx.recv().unwrap();
+        for _ in 0..3 {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            unsafe { libc::pthread_kill(cible, libc::SIGUSR2) };
+        }
+        let rendu = fil.join().unwrap();
+        unsafe { libc::sigaction(libc::SIGUSR2, &ancien, std::ptr::null_mut()) };
+        assert_eq!(rendu, Ok("ok".to_string()), "the interrupted wait is retried, the answer read");
+    }
+
     use super::*;
 
     /// **Une requête sans réponse rend la main dans le délai** (ticket du
