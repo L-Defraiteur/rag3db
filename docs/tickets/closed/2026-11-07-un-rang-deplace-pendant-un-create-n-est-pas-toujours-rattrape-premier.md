@@ -1,8 +1,7 @@
 # Un rang déplacé pendant un CREATE de l'index vectoriel n'est pas toujours rendu premier à son nouveau vecteur
 
-- **État** : ouvert, le 7 novembre 2026 (seconde session cœur C++, hotfixs). Le cas est inscrit à
-  `test/transaction/concurrence/probabilistic.txt` ; le correctif entre en tête du lot G6 (HNSW hors
-  verrous), avec un témoin déterministe s'il s'en trouve un.
+- **État** : fermé (19 novembre 2026, branche `isolated-point-found-first`, 3536e55a66) ; ouvert le 7 novembre
+  2026 par la seconde session cœur C++ (hotfixs)
 - **Gravité** : réponse fausse en silence (le 19 novembre : environ une fois sur deux sur une recette sans concurrence ; voir plus bas) : un rang mis à jour pendant la construction
   de l'index est trouvé, mais pas au premier rang, par une recherche à son vecteur exact.
 - **Atteignable en service** : oui, par un CREATE_VECTOR_INDEX sous écritures (le rattrapage de
@@ -149,3 +148,36 @@ rang.
 2. Un témoin déterministe : un rang déplacé à un instant choisi du bâti (après le dernier lot du
    balayage, avant le rattrapage), puis la recherche à son vecteur.
 3. Le correctif, puis la ligne de `probabilistic.txt` retirée dans son commit.
+
+## La fermeture
+
+**La cause** : le bâti parallèle, pas le rattrapage du CREATE. Un point loin de tout, inséré au tout début du bâti,
+quand chaque fil entame sa tranche de 2 048 lignes et que le graphe ne compte que quelques nœuds, se liait à ces rares
+nœuds, hors de la route des recherches venues de sa direction. Les points posés ensuite près de lui ne le trouvaient
+pas. Recette au shell : 0/12 manqués à 1 et à 4 fils, 5/12 à 8, 4/12 à 24. Un verrou par nœud (la perte d'arêtes entre
+`insertRel` et `shrinkForNode`) ne changeait rien ; il n'est pas livré. La page
+[le point isolé…](../../coeur-cpp-hotfixs-tickets/19-11-2026/02-le-point-isole-trois-variantes.md) suit l'enquête.
+
+**Le correctif** : l'option du CREATE `seed_points` (défaut 1 000, 0 = le bâti d'avant). Ces premiers points sont
+insérés par un seul fil avant la phase parallèle. Elle ne change pas l'index, seulement son bâti : ni persistée ni
+montrée par SHOW_INDEXES, comme `cache_embeddings`.
+
+**Le témoin** : `tools/shell/test/test_shell_isolated_point.py`, la recette dix fois à 8 fils par le shell. Rouge sur
+4bdc0bfe59 (« run 5 got 3 », sous poste lourd, 5 cœurs), vert sur 3536e55a66. Par transaction_test, la même recette
+n'a jamais manqué (plus de 100 tours, même à 24 fils et avec une pause injectée) : l'écart n'est pas expliqué, et ce
+témoin-là a été retiré (2666554278).
+
+**Les mesures** :
+- la recette, avec l'amorce : 0/36 manqués à 8 fils et 0/36 à 24 (contre 3/12 et 3/12 sans, même binaire) ;
+- le CREATE de 20 000 lignes à 8 fils : +6,5 % (1 534 à 1 569 ms sans, 1 614 à 1 674 avec) ;
+- la base du banc (120 000 × 768, `VectorIndexSeedMeasure`, branche `isolated-point-found-first-measure`) :
+  rappel@10 sur 200 requêtes contre la force brute 0,7515 → 0,7505 à 8 fils, 0,7445 → 0,7500 à 24 ; CREATE
+  45,7 → 47,0 s à 8 fils (+3 %), 30,3 → 31,8 s à 24 (+5 %). L'amorce ne coûte pas de rappel.
+
+**La passe** (`journaux-hotfixs-seed-points` à luciepc) : le témoin, la recette, transaction_test 399,
+`concurrence_test.known_red`, les 74 cas des .test de vector, e2e_test 1 867 (DropNodeTableReclaim, rouge de master
+admis).
+
+**Ce qui reste, à part** : sur la base gaussienne du banc, les points les plus isolés (anti-hubs en 768 dimensions)
+ne sont presque jamais retrouvés par leur propre vecteur (au plus 4 sur 200), avec comme sans amorce. Ce n'est pas le
+cas de ce ticket ; c'est une limite de rappel du graphe, à mesurer à part si le produit en souffre.
