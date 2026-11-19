@@ -55,6 +55,10 @@ Une ligne de `queue.tsv` porte, séparés par des tabulations :
 | `parent` | `-` ou l'`id` d'un lot de la file | un lot écrit sur un autre ; il passe après lui, dans le même train |
 | `author` | `embarquement` | nom de session, pour le message et la boîte |
 
+**Ce que l'auteur prouve avant de déposer (c7, 19 nov. 2026).** Son témoin, rouge puis vert, et les suites qu'exigent
+ses chemins, les plus courtes. Pas la passe complète : le pousseur la joue, une fois, sur la tête du moment. Une passe
+complète d'auteur ne se justifie que pour un lot qui touche une suite lourde partout (le catalogue, l'index).
+
 **Déposer.** Par ssh, sous verrou de la file :
 `ssh luciepc '~/.cache/rag3weaver-build/pusher.sh enqueue <id> <branch> <head> <kind> …'`. Ou par un message à la
 session-pousseur, qui fait le même appel. `enqueue` refuse :

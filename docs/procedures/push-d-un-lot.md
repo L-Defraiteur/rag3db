@@ -47,6 +47,14 @@ sessions. Court, parce que chaque ligne a coûté un rouge ou un push perdu.
 
 ## La passe (à luciepc, sous `poste lourd`)
 
+**Depuis le pousseur, l'auteur ne joue plus la passe complète (c7, 19 nov. 2026).** Pour déposer un lot au pousseur,
+l'auteur prouve **son témoin, rouge puis vert**, et **les suites qu'exigent ses chemins** (`tools/poste/required_suites.txt`),
+les plus courtes. La passe complète (lib entière, check_features, e2e_code, e2e_lectures) est jouée **une fois, par le
+pousseur**, sur la tête du moment. Le 19 novembre, le poste de luciepc tenait quatre lourds et six en attente, presque
+tous des rejeux d'auteurs que le pousseur allait refaire. Une passe complète d'auteur ne se justifie que pour un lot qui
+touche une suite lourde partout (le catalogue, l'index) : l'auteur le dit en déposant. Le dépôt et la file :
+`docs/optimiseur/18-11-2026/02-le-pousseur.md`.
+
 **Toute passe lourde part sous `timeout`, dans `poste` (c7, 15 nov. 2026, rappel de la règle du 10 octobre)** : `poste lourd timeout <N> <commande>`, aux deux postes, lib comme batterie. Le 15 novembre, un `cargo test --lib` sans borne a tenu la seule place lourde du portable 80 minutes à 1,7 de charge : des témoins attendaient un superviseur sans délai, et quatre passes attendaient derrière. Une attente sans borne dans un test est un défaut du produit à écrire (le produit a un délai réglé et le dit), pas une raison de laisser la place.
 
 **Mémoire (c7, 13 nov. 2026)** : **32 Gio pour toute validation**, l'invariant de `scripts/confiner_validation.py`. `poste` garde son défaut de **40 Gio pour les bâtis**. Donc `run_e2e.sh` se lance seul (il prend `poste` avec 32G), ou bien `POSTE_MEM_MAX=32G poste lourd … run_e2e.sh` : sous un `poste lourd` sans cette variable, la portée existe déjà à 40 Gio et le confineur refuse la passe.
