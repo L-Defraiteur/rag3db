@@ -120,7 +120,7 @@ pub(super) fn numeroter(turns: &[crate::llm::Turn], offset: usize) -> Vec<(usize
 
 /// The `put_turn` line of a message. A tool result carries its tool, the arguments of its call
 /// (found on the assistant message) and its status.
-fn ligne_du_message(run: &str, tour: usize, seq: usize, t: &crate::llm::Turn, appels: &std::collections::HashMap<String, (String, String)>) -> Value {
+pub(super) fn ligne_du_message(run: &str, tour: usize, seq: usize, t: &crate::llm::Turn, appels: &std::collections::HashMap<String, (String, String)>) -> Value {
     let at = t.at_ms.map(iso_utc).unwrap_or_default();
     let mut l = json!({ "run": run, "turn": tour, "seq": seq, "at": at, "role": t.role, "text": t.content });
     if t.role == "tool" {
@@ -157,6 +157,33 @@ impl Rangeur for RangeurDeLHote {
         let h = self.hote.upgrade().ok_or("the host is gone")?;
         let v = h.call(None, memoire, "compose_restart", args.clone());
         if v["error"].is_null() { Ok(v.get("result").cloned().unwrap_or(v)) } else { Err(v["error"].to_string()) }
+    }
+    /// `cited_by {value: "doc:<source>", format: "json"}` returns fiches, each with its apports
+    /// (form given by mémoire, 19 Nov 2026); flattened here to `{apport, fiche, section}`, the
+    /// identity of an apport being (fiche, source, section).
+    fn cited_by(&self, memoire: &Path, source: &str) -> Result<Value, String> {
+        let h = self.hote.upgrade().ok_or("the host is gone")?;
+        let v = h.call(None, memoire, "cited_by", serde_json::json!({ "value": format!("doc:{source}"), "format": "json", "limit": 200 }));
+        if !v["error"].is_null() {
+            return Err(v["error"].to_string());
+        }
+        let fiches: Value = match &v["result"] {
+            Value::String(t) => serde_json::from_str(t).map_err(|e| format!("cited_by: unreadable result: {e}"))?,
+            autre => autre.clone(),
+        };
+        let mut out = Vec::new();
+        for f in fiches.as_array().cloned().unwrap_or_default() {
+            let d = if f["data"].is_null() { f.clone() } else { f["data"].clone() };
+            let nom = d["name"].as_str().unwrap_or_default().to_string();
+            for a in d["apports"].as_array().cloned().unwrap_or_default() {
+                let (src, section) = (a["source"].as_str().unwrap_or_default(), a["section"].as_str().unwrap_or_default());
+                if !src.contains(source) {
+                    continue;
+                }
+                out.push(serde_json::json!({ "apport": format!("{nom}|{src}|{section}"), "fiche": nom, "section": section }));
+            }
+        }
+        Ok(Value::Array(out))
     }
 }
 
@@ -251,6 +278,15 @@ impl Rangement {
 }
 
 impl DaemonHost {
+    /// The backend of a run: `chat:<backend>`, or `<task>:<parent>` for a teammate's task.
+    pub(super) fn backend_du_run(&self, run: &str) -> Result<String, String> {
+        if let Some(id) = run.strip_prefix("chat:") {
+            return Ok(id.to_string());
+        }
+        let (tache, parent) = run.split_once(':').ok_or_else(|| format!("{run}: not a run (chat:<backend> or <task>:<parent>)"))?;
+        self.tache(parent, tache).map(|t| t.id).ok_or_else(|| format!("{run}: no task {tache} on {parent}"))
+    }
+
     /// The archiving of a conversation, if its backend declares a memory and indexes its turns.
     pub(super) fn rangement_de(&self, hosted: &Arc<super::Hosted>, backend_id: &str) -> Option<Rangement> {
         let (reglage, bilans) = self.with_backend(hosted, |b| (b.prepared().manifest.memory.clone().unwrap_or_default(), b.prepared().manifest.bilans.clone())).ok()?;

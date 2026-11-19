@@ -290,13 +290,59 @@ impl DaemonHost {
     }
 
     /// **The turns of a run, read** (`POST /ide/turns/read`, first form, 19 Nov 2026).
-    pub fn lire_les_tours(&self, _run: &str, _from: usize, _to: usize) -> Result<Value, String> {
-        Err("not yet".into())
+    /// Each turn of `from..=to` with its messages (the form of `put_turn`) and its state:
+    /// `from_chat_file`, read from the session; `gone`, out of the session (a compaction took it,
+    /// or it never was). The memory's index (`indexed`) comes with its `read_turns`.
+    pub fn lire_les_tours(&self, run: &str, from: usize, to: usize) -> Result<Value, String> {
+        if to < from || to - from > 500 {
+            return Err(format!("turns {from}-{to}: at most 500 turns, from ≤ to"));
+        }
+        let backend_id = self.backend_du_run(run)?;
+        let turns = self.tours_du_chat(&backend_id);
+        let etat = super::rangement::lire_l_etat(&super::rangement::chemin_de_l_etat(&self.chats_root, &backend_id));
+        let appels: HashMap<String, (String, String)> = turns.iter().flat_map(|t| t.tool_calls.iter().map(|c| (c.id.clone(), (c.name.clone(), c.arguments.clone())))).collect();
+        let numerotes = super::rangement::numeroter(&turns, etat.turn_offset);
+        let tours: Vec<Value> = (from..=to)
+            .map(|n| {
+                let messages: Vec<Value> = numerotes.iter().filter(|(t, _, _)| *t == n).map(|(t, seq, m)| super::rangement::ligne_du_message(run, *t, *seq, m, &appels)).collect();
+                let state = if messages.is_empty() { "gone" } else { "from_chat_file" };
+                json!({ "turn": n, "state": state, "messages": messages })
+            })
+            .collect();
+        Ok(json!({ "run": run, "turns": tours }))
+    }
+
+    /// The session of a backend: in memory if loaded, else from its file.
+    fn tours_du_chat(&self, backend_id: &str) -> Vec<crate::llm::Turn> {
+        if let Some(e) = self.chats.lock().unwrap_or_else(|p| p.into_inner()).get(backend_id) {
+            if e.busy.is_none() {
+                return e.session.turns.clone();
+            }
+        }
+        std::fs::read(self.chat_path(backend_id)).ok().and_then(|o| serde_json::from_slice::<ChatFile>(&o).ok()).map(|f| f.session.turns).unwrap_or_default()
     }
 
     /// **The L1 of a run, in the order of its turns** (`GET /ide/l1`, first form, 19 Nov 2026).
-    pub fn l1_du_run(&self, _backend_id: &str, _run: &str) -> Result<Value, String> {
-        Err("not yet".into())
+    /// The slices filed for the run, each with the L1 that cite its Source (`cited_by` on the
+    /// memory): `{apport, fiche, section, run, from_turn, to_turn}`, in the order of the turns.
+    pub fn l1_du_run(&self, backend_id: &str, run: &str) -> Result<Value, String> {
+        let du_run = self.backend_du_run(run)?;
+        let hosted = self.hote_par_id(&du_run)?;
+        let r = self.rangement_de(&hosted, &du_run).ok_or("no memory for this run: no bilans.memoire, or memory.index_turns is off")?;
+        let etat = r.etat();
+        let mut l1 = Vec::new();
+        for s in etat.slices.iter().filter(|s| s["ok"] == true) {
+            let Some(source) = s["source"].as_str() else { continue };
+            let cites = r.rangeur.cited_by(&r.memoire, source)?;
+            for a in cites.as_array().cloned().unwrap_or_default() {
+                l1.push(json!({ "apport": a["apport"], "fiche": a["fiche"], "section": a["section"], "run": run, "from_turn": s["from_turn"], "to_turn": s["to_turn"], "source": source }));
+            }
+        }
+        // In the order of the turns: by slice, then by the first turn of the section (« turns a-b
+        // · … », each subject its own interval; cited_by sorts by the last apport), as numbers.
+        let premier = |v: &Value| -> u64 { v["section"].as_str().and_then(|s| s.strip_prefix("turns ")).and_then(|s| s.split(|c: char| !c.is_ascii_digit()).next()).and_then(|n| n.parse().ok()).unwrap_or(u64::MAX) };
+        l1.sort_by_key(|v| (v["from_turn"].as_u64().unwrap_or(u64::MAX), premier(v), v["section"].as_str().unwrap_or_default().to_string()));
+        Ok(json!({ "backend": backend_id, "run": run, "l1": l1 }))
     }
 
     /// The calls to the memory of the session archived as it goes (a witness plays them).
