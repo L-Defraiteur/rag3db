@@ -220,7 +220,29 @@ fn content(t: FieldType) -> SimpleFieldDef {
 
 /// Chunking des scopes : 1000 / 100 depuis février (« ~250 tokens »). À
 /// dériver de la fenêtre du modèle d'embedding quand on saura la lire.
+/// The default shortest container that is a search candidate (2.12): the folded namespaces measured on the
+/// rag3db repository held 41 to 61 characters.
+pub const CONTAINER_MIN_CHARS: usize = 80;
+
+/// [`default_scope_chunking`], with the shortest container that is a search candidate given (2.12).
+pub fn scope_chunking_with(container_min_chars: usize) -> ChunkingConfig {
+    ChunkingConfig {
+        not_candidate: Some(crate::config::NotCandidate {
+            type_field: "scope_type".into(),
+            types: vec!["namespace".into(), "module".into()],
+            text_fields: vec!["content".into(), "docstring".into()],
+            min_chars: container_min_chars,
+        }),
+        ..default_scope_chunking_without_rule()
+    }
+}
+
+/// The scope chunking, with the container rule at its default threshold.
 pub fn default_scope_chunking() -> ChunkingConfig {
+    scope_chunking_with(CONTAINER_MIN_CHARS)
+}
+
+fn default_scope_chunking_without_rule() -> ChunkingConfig {
     // **Par lignes, façon ragforge** (6 septembre 2026) : 30 lignes ou 1 500
     // caractères, jamais au milieu d'une ligne, 5 lignes de recouvrement
     // seulement au-delà. Avant : sémantique 1 000 / 100, une découpe de prose
