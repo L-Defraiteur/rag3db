@@ -289,6 +289,16 @@ impl DaemonHost {
         }
     }
 
+    /// **The turns of a run, read** (`POST /ide/turns/read`, first form, 19 Nov 2026).
+    pub fn lire_les_tours(&self, _run: &str, _from: usize, _to: usize) -> Result<Value, String> {
+        Err("not yet".into())
+    }
+
+    /// **The L1 of a run, in the order of its turns** (`GET /ide/l1`, first form, 19 Nov 2026).
+    pub fn l1_du_run(&self, _backend_id: &str, _run: &str) -> Result<Value, String> {
+        Err("not yet".into())
+    }
+
     /// The calls to the memory of the session archived as it goes (a witness plays them).
     pub fn with_rangeur(mut self, rangeur: Arc<dyn super::rangement::Rangeur>) -> Self {
         self.rangeur = Some(rangeur);
