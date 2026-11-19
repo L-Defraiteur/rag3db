@@ -1,6 +1,6 @@
 # Les tests lancés hors de run_e2e.sh laissent leurs bases dans /tmp, qui est de la mémoire vive
 
-- **État** : ouvert (18 octobre 2026, seconde session cœur C++, à la demande de l'orchestration) ; le 8 novembre, le cache d'index quitte /tmp et le témoin de suite existe (session recherche), restent cinq suites qui laissent des résidus à chaque passe et trois, intermittentes, en rouge connu du témoin.
+- **État** : fermé (19 novembre 2026, session recherche) : les cinq suites qui laissaient des résidus à chaque passe sont propres, et sorties de la liste. Ouvert le 18 octobre 2026 (seconde session cœur C++, à la demande de l'orchestration) ; le 8 novembre, le cache d'index avait quitté /tmp et le témoin de suite était né (session recherche).
 - **Gravité** : confort, mais `/tmp` est un tmpfs sur le poste principal : ce qui y reste occupe
   la RAM, puis l'échange.
 - **Atteignable en service** : non (tests seulement), à une exception près : `Catalog` écrit son
@@ -237,3 +237,32 @@ par un processus, et aucun effacement n'a échoué.
 
 Les suites qui récidivent (section précédente) en remettront : le correctif reste à faire dans les
 suites elles-mêmes.
+
+## Le 19 novembre 2026 : les cinq suites sont propres (session recherche, entrée 7 de la passation)
+
+Chaque suite a reçu deux commits : le premier la sort de
+`extension/rag3weaver/tests/e2e/suites_qui_laissent_des_residus.txt`, et le témoin de suite la juge rouge en
+nommant ce qu'elle laisse ; le second la rend propre. Le défaut est le même partout. Un test effaçait le dossier de
+sa base par `remove_dir_all`, mais pas ses voisins (`.fts`, `.extensions`, `.readers`, `.ecrivain`, `.wal`), et
+parfois rien du tout : un journal du démon à nom fixe, une base qu'un `return` anticipé quittait. Désormais, chaque
+base vit dans un `tempfile::TempDir`. Il est déclaré avant les connexions, donc il tombe après elles, et il emporte
+la base et tous ses voisins.
+
+| Suite | Ce qu'elle laissait (sonde du 19 nov., 3 tests jusqu'à 13) | Commits |
+|---|---|---|
+| `e2e_code` | `rag3weaver-bulk-<pid>` et ses voisins | branche `tmpdir-residues` (4b6fff375b, a0820e54c1) |
+| `e2e_rouvrir` | 3 entrées, 8,2 Mo | 4319418110, 61c8505490 |
+| `e2e_repli_de_branche` | 12 entrées, 24 Mo | 05ff734787, b756720e0e |
+| `e2e_rag3daemon` | 9 entrées : deux bases et deux journaux à nom fixe | 5af5ce575e, a3c20ccd51 |
+| `e2e_prise_atomique` | 36 entrées, 65 Mo | 5a595629ee, 3bdd11da57 |
+
+Chaque suite a été rouge sans sa ligne sur la sonde `probe-residues-4` (ed13e5a978), puis verte, sans résidu, avec
+son correctif (validations vertes du 19 novembre, lib 6e2476d41).
+
+**Ce qui reste, hors de ce ticket :**
+- **la ligne intermittente** d'`e2e_tx_par_paquet_arret` : un COPY tué ne peut plus effacer son CSV. Elle a son
+  propre ticket (`2026-11-11-un-copy-tue-laisse-son-csv-dans-le-dossier-temporaire.md`) ;
+- **le test `aucune_ouverture_n_est_croisee_sous_l_ecrivain_qui_affamait`** (`e2e_prise_atomique`) : il écrit sa
+  base sous `~/.cache/rag3weaver-build/affame-*`, hors du TMPDIR, et n'efface que son dossier. Le témoin de suite ne
+  le voit pas.
+
