@@ -787,3 +787,52 @@ fn repasse_une_base_migree_sous_le_tampon_du_produit() {
     eprintln!("[repassage] en {:.0} s, pic {} Mio : {derniere}", debut.elapsed().as_secs_f64(), memoire_du_processus().0);
     assert!(derniere.starts_with("indexation terminée"), "le premier passage de l'écrivain finit sous le tampon du produit : {derniere}");
 }
+
+/// **Forms of the edge copy, measured** (ticket of 19 November 2026): on the same copy, each candidate form of
+/// the DEFINED_IN copy runs on 2 000 real pairs inside a transaction rolled back after, with its plan's operators
+/// and the peak resident memory of the process (reset between forms through `/proc/self/clear_refs`).
+#[test]
+#[ignore]
+fn mesure_les_formes_de_la_recopie() {
+    use rag3weaver::connection::{CypherValue, QueryParam};
+    let var = |n: &str| std::env::var_os(n);
+    let (Some(base), Some(manifeste)) = (var("RAG3WEAVER_PARITE_BASE"), var("RAG3WEAVER_PARITE_MANIFESTE")) else {
+        eprintln!("SAUTÉ mesure_les_formes_de_la_recopie : RAG3WEAVER_PARITE_BASE ou _MANIFESTE manque");
+        return;
+    };
+    let prepared = PreparedBackend::load(std::path::Path::new(&manifeste)).expect("le manifeste");
+    let backend = prepared.open(Box::new(Rag3dbConnection::new(&base).expect("ouvrir la copie")), None).expect("ouvrir le backend");
+    let cat = backend.catalog.lock().unwrap();
+    let conn = cat.conn_arc();
+    let lu = cat.execute_raw("MATCH (f:File) WHERE f._jusqu_a IS NULL RETURN f._uuid, f.source, f.path LIMIT 2000").unwrap();
+    let paires = CypherValue::List(lu.rows.iter().map(|l| CypherValue::Map(std::collections::BTreeMap::from([("a".to_string(), l[0].clone()), ("n".to_string(), l[0].clone())]))).collect());
+    let source = lu.rows[0][1].clone();
+    let chemins = CypherValue::List(lu.rows.iter().map(|l| l[2].clone()).collect());
+    let visible = cat.condition_visible("x").unwrap();
+    let hors = "NOT ((x.`source` = $lot_s0) AND (x.`file_path` IN $lot_p0))";
+    let formes = [
+        ("aujourd'hui", rag3weaver::code_sync::edge_copy_write(&cat, "DEFINED_IN", "File", "Scope", rag3weaver_ir::Direction::Incoming, cat.rang_en_attente(), 1).unwrap()),
+        ("lecture seule, par a", format!("UNWIND $paires AS p MATCH (a:`File` {{_uuid: p.a}}) MATCH (x:`Scope`)-[r:`DEFINED_IN`]->(a) WHERE {visible} AND {hors} RETURN x._uuid, p.n")),
+        ("par a puis n, NOT EXISTS", format!("UNWIND $paires AS p MATCH (a:`File` {{_uuid: p.a}}) MATCH (n:`File` {{_uuid: p.n}}) MATCH (x:`Scope`)-[r:`DEFINED_IN`]->(a) WHERE {visible} AND {hors} AND NOT EXISTS {{ MATCH (x)-[:`DEFINED_IN`]->(n) }} RETURN count(*)")),
+        ("existantes vers n", "UNWIND $paires AS p MATCH (x:`Scope`)-[:`DEFINED_IN`]->(n:`File` {_uuid: p.n}) RETURN x._uuid, p.n".to_string()),
+    ];
+    let params = [QueryParam::new("paires", paires), QueryParam::new("lot_s0", source), QueryParam::new("lot_p0", chemins)];
+    for (nom, requete) in formes {
+        let plan = conn.execute_with_params(&format!("EXPLAIN {requete}"), &params).map(|r| r.rows.iter().map(|l| format!("{l:?}")).collect::<Vec<_>>().join("\n")).unwrap_or_else(|e| format!("EXPLAIN refusé : {e}"));
+        let mut ops: Vec<String> = plan.split(|c: char| !(c.is_ascii_uppercase() || c == '_')).filter(|m| m.len() >= 4 && (m.contains("SCAN") || m.contains("JOIN") || m.contains("CROSS") || m.contains("LOOKUP") || m.contains("MASK"))).map(str::to_string).collect();
+        ops.dedup();
+        let _ = std::fs::write("/proc/self/clear_refs", "5");
+        let avant = memoire_du_processus();
+        conn.execute("BEGIN TRANSACTION").unwrap();
+        let debut = std::time::Instant::now();
+        let r = conn.execute_with_params(&requete, &params);
+        let ms = debut.elapsed().as_millis();
+        let _ = conn.execute("ROLLBACK");
+        let (pic, _) = memoire_du_processus();
+        let rendu = match &r {
+            Ok(q) => format!("{} lignes", q.rows.len()),
+            Err(e) => format!("refusé : {}", e.to_string().chars().take(140).collect::<String>()),
+        };
+        eprintln!("[forme] {nom} : {ms} ms, pic {pic} Mio (avant {} Mio), {rendu}\n[forme]   accès : {ops:?}", avant.1);
+    }
+}
