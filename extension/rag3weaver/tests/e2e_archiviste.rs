@@ -1050,7 +1050,7 @@ fn expire_is_refused_on_an_entity_that_does_not_declare_it() {
     let b = ouvrir(dir.path(), |m| {
         std::fs::write(
             racine.join("templates/backends/memory/graphs/expire_fiches.mmd"),
-            "%% tool: expire_fiches\n%% description: test\n%% param: record json = {}\n%% result: x.record\n\ngraph LR\n    x[\"EntityRecordNode(entity='Fiche', action='expire', record=$record, older_than_days=0)\"]\n",
+            "%% tool: expire_fiches\n%% description: test\n%% param: record json = {} -- Reserved.\n%% result: x.record\n\ngraph LR\n    x[\"EntityRecordNode(entity='Fiche', action='expire', record=$record, older_than_days=0)\"]\n",
         )
         .unwrap();
         m["tools"]["expire_fiches"] = json!({"graph": "graphs/expire_fiches.mmd"});
