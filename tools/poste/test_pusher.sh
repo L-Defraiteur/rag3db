@@ -616,4 +616,16 @@ P enqueue rj-1 rj-1 "$h" rust some_witness e2e_code - - author-c > /dev/null; ec
 PUSHER_TRAIN_MAX=1 P step > /dev/null 2>&1
 grep -qP "^rouge\trj-1\tcode\t.*journaux : $D/journals/pusher-[0-9-]+-rj-1" "$D/pusher/inbox/author-c.txt" \
   && ok "un rouge de code dit le dossier des journaux de sa passe" || ko "rouge sans ses journaux : $(grep -P '^rouge\trj-1' "$D/pusher/inbox/author-c.txt" | cut -f4 | cut -c1-120)"
+# 40. A lot returned (red) and deposited again under the same id within the hour takes back the rank it had when it
+# was returned (20 Nov., c7: stop-words-locals, moved to the head by hand, red at the guard and mended in ten minutes,
+# fell back to the rank of its first deposit, 45th).
+for x in rk-b rk-c; do lot $x docs/$x.md "# $x" > /dev/null; P enqueue $x $x "$(git -C "$D/author" rev-parse $x)" docs - - - - author-a > /dev/null; sleep 1; done
+h=$(lot rk-a extension/rag3weaver/src/rka.rs 'fn rka() {}'); P enqueue rk-a rk-a "$h" rust some_witness e2e_code - - author-c > /dev/null
+# by hand to the head, as c7 orders it
+( grep '^#' "$D/pusher/queue.tsv"; grep -P '^rk-a\t' "$D/pusher/queue.tsv"; grep -v '^#' "$D/pusher/queue.tsv" | grep -vP '^rk-a\t' ) > "$D/q.new" && mv "$D/q.new" "$D/pusher/queue.tsv"
+echo "ROUGE e2e_code" > "$D/outcomes.d/rk-a"; PUSHER_TRAIN_MAX=1 P step > /dev/null 2>&1
+P enqueue rk-a rk-a "$h" rust some_witness e2e_code - - author-c > /dev/null
+first=$(grep -v '^#' "$D/pusher/queue.tsv" | head -1 | cut -f1)
+[ "$first" = rk-a ] && ok "un lot rendu et redéposé dans l'heure reprend le rang qu'il avait au rendu" || ko "redéposé au rang du premier dépôt : en tête, $first ; rk-a au rang $(grep -v '^#' "$D/pusher/queue.tsv" | cut -f1 | grep -nx rk-a | cut -d: -f1)"
+for x in rk-a rk-b rk-c; do P dequeue $x > /dev/null 2>&1; done; rm -f "$D/outcomes.d/rk-a"
 exit $red
