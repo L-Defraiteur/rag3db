@@ -1880,6 +1880,31 @@ mod tests {
     /// had the 7878 refuse every batch of 512, and a whole index stayed
     /// without vectors). The identity says the cap and its ratio (12 000
     /// characters by default, about 3 per token).
+    /// A model that advises batches of 128, and remembers the largest it was given.
+    #[derive(Default)]
+    struct Advising { largest: std::sync::atomic::AtomicUsize }
+    impl Embedder for Advising {
+        fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
+            self.largest.fetch_max(texts.len(), std::sync::atomic::Ordering::Relaxed);
+            Ok(texts.iter().map(|_| vec![0.5; 4]).collect())
+        }
+        fn dim(&self) -> usize { 4 }
+        fn name(&self) -> &str { "advising" }
+        fn budget_conseille(&self) -> Option<(usize, usize)> { Some((128, 512)) }
+    }
+
+    /// **The warm-up warms the batches the service computes** (19 November 2026) :
+    /// a request is cut in batches of at most `lot_max` (32), but the warm-up took
+    /// the model's advice (128 for granite). On the iGPU of luciepc, a batch of
+    /// 128 × 182 tokens then one of 382 made burn panic (« Expand 382 != 182 ») :
+    /// a shape the service never computes broke its start.
+    #[test]
+    fn the_warm_up_batches_stay_within_the_service_lot_max() {
+        let model = Arc::new(Advising::default());
+        let _ = EmbedDaemon::new(model.clone()).chauffer(true);
+        assert_eq!(model.largest.load(std::sync::atomic::Ordering::Relaxed), 32, "the warm-up's largest batch is the service's lot_max");
+    }
+
     /// A slow model : 200 ms for a call with a text over 1 000 bytes, 10 ms otherwise.
     struct Slow;
     impl Embedder for Slow {
