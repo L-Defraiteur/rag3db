@@ -1527,6 +1527,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
     // Le lancement en fond posé comme nœud (page 12-octobre-2026-recherche/03).
     registry.register(Box::new(super::spawn_nodes::SpawnNodeFactory));
     registry.register(Box::new(super::rhai_node::RhaiNodeFactory));
+    registry.register(Box::new(super::collect_node::CollectNodeFactory));
     super::validation_nodes::register(registry);
     registry.register(Box::new(KBQuerySourceNodeFactory));
     registry.register(Box::new(FetchRelatedNodeFactory));
@@ -1613,7 +1614,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
 
 /// Nombre de types de nœuds enregistrés par [`register_builtins`] — les tests
 /// de comptage le lisent ici pour suivre les features.
-pub const BUILTIN_NODE_COUNT: usize = 57 + if cfg!(feature = "code") { 20 } else { 0 };
+pub const BUILTIN_NODE_COUNT: usize = 58 + if cfg!(feature = "code") { 20 } else { 0 };
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
@@ -1896,6 +1897,7 @@ mod tests {
                 "AdoptTemplateNode" => serde_json::json!({ "entity": "Product", "description": "un gabarit" }),
                 "Decide" => serde_json::json!({ "labels": "a|b" }),
                 "Route" => serde_json::json!({ "routes": "a|b" }),
+                "Collect" => serde_json::json!({ "inputs": "a,b" }),
                 "Spot" => serde_json::json!({ "patterns": { "a": "a" } }),
                 "ReindexFileNode" => serde_json::json!({}),
                 _ => serde_json::json!({}),
