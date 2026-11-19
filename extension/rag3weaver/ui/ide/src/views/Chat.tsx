@@ -322,6 +322,10 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
   // Un tour envoyé par cette page ; un tour venu d'ailleurs (relancé par la carte d'accord,
   // lot 7 de l'atelier) se suit par le flux et se relit à sa fin.
   const envoiDeLaPage = useRef(false);
+  // **The epoch of the turns** (ticket of 7 November 2026): it moves when the page sends a turn and when that turn
+  // ends. A read of the chat applies its state only if no turn moved since it left: a read that left before a turn
+  // and lands after it would put back a screen without that turn.
+  const epoqueDesTours = useRef(0);
   // **Les runs que la page sait finis** (la bulle fantôme, relevée par everything declarative le
   // 13 novembre 2026) : sous charge, le RunStarted d'un tour envoyé d'ici peut arriver après la
   // réponse de son POST ; pris pour un tour venu d'ailleurs, il ouvrait une bulle que rien ne
@@ -365,12 +369,18 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
   // L'état du chat, à l'ouverture et à chaque réouverture du flux : un tour parti
   // avant (page rechargée, flux coupé puis repris) a publié son run.
   const reload = async () => {
+    const depart = epoqueDesTours.current;
     const s = await fetchChat(id);
     // **A witness's gate** (ticket of 7 November 2026, « le témoin du chat dans la page rougit à la première
     // exécution après un bâti »): the state read, then held until the witness lets it go, as a cold page under load
     // answers late. Set by the witnesses only, through `window.__ide.relectureRetenue` (a promise).
     const retenue = (window as unknown as { __ide?: { relectureRetenue?: Promise<unknown> } }).__ide?.relectureRetenue;
     if (retenue) await retenue;
+    if (epoqueDesTours.current !== depart) {
+      // A turn moved meanwhile: its own end set the screen from the session; this state is older.
+      reloadRecaps();
+      return;
+    }
     toursRef.current = s.turns;
     setChat(s);
     follow.current = true;
@@ -587,6 +597,7 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
     if (!text || busy || !chat?.on) return;
     if (input.current) input.current.value = "";
     envoiDeLaPage.current = true;
+    epoqueDesTours.current += 1;
     setBusy(true);
     setPense(true);
     setStatus("l'agent travaille…");
@@ -655,6 +666,7 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
       }
       setStatus("Erreur");
     } finally {
+      epoqueDesTours.current += 1;
       envoiDeLaPage.current = false;
       setBusy(false);
       setPense(false);
