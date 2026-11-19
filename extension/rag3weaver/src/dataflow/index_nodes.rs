@@ -172,7 +172,16 @@ fn estimate_of(
             (rate, guard.embedder_is_remote())
         }
     };
-    let estimate = estimate_here(&files, &excluded, policy, rate, remote, declared);
+    // **A base already indexed: only what changes counts** (ticket of 15 November 2026): the files whose
+    // indexed fingerprint differs from the disk, and the vectors already owed. Unchanged files cost nothing.
+    let reindexing = match catalog {
+        Some(catalog) => reindexing_of(source, &files, catalog)?,
+        None => None,
+    };
+    let estimate = match reindexing {
+        Some((changed, r)) => crate::estimate::estimate_reindexing_here(&changed, &excluded, policy, rate, remote, declared, r),
+        None => estimate_here(&files, &excluded, policy, rate, remote, declared),
+    };
     // Le tampon de la base ouverte, quand elle le dit : celui-là, manifeste
     // compris, est le vrai.
     let pool = catalog.and_then(|c| c.lock().ok().and_then(|g| g.conn().buffer_pool()));
@@ -183,6 +192,45 @@ fn estimate_of(
         }
         None => estimate,
     })
+}
+
+/// **What a reindexing will do**, read from the base: `None` for a source not indexed yet (a first index), or
+/// after a bulk pass cut short (every file goes through again). Otherwise the changed files, by the same
+/// fingerprint as the sync (content and version of the analysis), and the debt at the base's average chunk.
+fn reindexing_of(
+    source: &dyn FileSource,
+    files: &[(String, u64)],
+    catalog: &Arc<Mutex<Catalog>>,
+) -> Result<Option<(Vec<(String, u64)>, crate::estimate::Reindexing)>, String> {
+    let Some((first, _)) = files.first() else { return Ok(None) };
+    let (source_id, _) = crate::code_tools::indexed_name(source, first);
+    let guard = catalog.lock().map_err(|_| "catalogue empoisonné".to_string())?;
+    if guard.generations.is_none() || crate::code_sync::bulk_pass_interrupted(&guard, &source_id)? {
+        return Ok(None);
+    }
+    let fingerprints = crate::code_sync::indexed_fingerprints(&guard, &source_id)?;
+    if fingerprints.is_empty() {
+        return Ok(None);
+    }
+    let version = guard.version_de_l_analyse.clone();
+    let progress = guard.index_progress().map_err(|e| e.to_string())?;
+    drop(guard);
+    let mut changed = Vec::new();
+    for (path, bytes) in files {
+        let indexed = crate::code_tools::indexed_name(source, path).1;
+        let same = match (fingerprints.get(&indexed), source.read(path)?) {
+            (Some((hash, analysis)), Some(content)) => *hash == crate::hash::content_hash(&content) && *analysis == version,
+            _ => false,
+        };
+        if !same {
+            changed.push((path.clone(), *bytes));
+        }
+    }
+    let total: u64 = files.iter().map(|(_, b)| *b).sum();
+    let debt_chunks = progress.dense_missing();
+    let debt_bytes = debt_chunks as u64 * total / progress.chunks().max(1) as u64;
+    let r = crate::estimate::Reindexing { changed_files: changed.len(), unchanged_files: files.len() - changed.len(), debt_chunks, debt_bytes };
+    Ok(Some((changed, r)))
 }
 
 pub struct EstimateNodeFactory;

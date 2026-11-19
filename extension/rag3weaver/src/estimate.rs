@@ -342,6 +342,21 @@ pub struct Estimate {
     /// (une estimation pure, sans poste).
     #[serde(default)]
     pub buffer: Option<BufferCheck>,
+    /// **A reindexing of a base already indexed** (ticket of 15 November 2026): the survey then counts only
+    /// the changed files, and the vectors cover them plus the real debt. `None` for a first index.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reindexing: Option<Reindexing>,
+}
+
+/// What a reindexing will do, read from the base: the files whose indexed fingerprint (content and version of
+/// the analysis) differs from the disk, those unchanged, and the vectors already owed.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Reindexing {
+    pub changed_files: usize,
+    pub unchanged_files: usize,
+    pub debt_chunks: usize,
+    /// The debt in characters, at the base's average size of a chunk.
+    pub debt_bytes: u64,
 }
 
 impl Estimate {
@@ -356,6 +371,7 @@ impl Estimate {
             needs_confirmation: vectors.is_some_and(|d| d > confirm_above),
             confirm_above_seconds: confirm_above.as_secs(),
             buffer: None,
+            reindexing: None,
         }
     }
 
@@ -392,6 +408,12 @@ impl Estimate {
         }
         for (reason, (n, bytes)) in &self.survey.skipped {
             out.push_str(&format!("\n{n} écartés ({}) : {reason}", mo(*bytes)));
+        }
+        if let Some(r) = &self.reindexing {
+            out.push_str(&format!(
+                "\nréindexation : {} fichier(s) changé(s), {} inchangé(s) ; {} morceau(x) déjà dû(s) sans vecteur",
+                r.changed_files, r.unchanged_files, r.debt_chunks
+            ));
         }
         out.push_str(&format!("\nmodèle : {} — {}", self.model, self.model_reason));
         match self.vectors_seconds {
@@ -450,6 +472,31 @@ pub fn estimate_here(
     let pacing = if remote { None } else { crate::burst::active() };
     let (pool, source) = buffer_pool_here();
     Estimate::new(survey, choice, rate.map(|r| r.paced(pacing)), CONFIRM_ABOVE).with_buffer(pool, source)
+}
+
+/// **The estimate of a reindexing, on this poste**: [`estimate_here`] over the changed files only, its vectors
+/// counting the real debt too. The files of an unchanged source cost nothing.
+pub fn estimate_reindexing_here(
+    changed: &[(String, u64)],
+    excluded: &[(String, &'static str)],
+    policy: impl Fn(&str, u64) -> Kept,
+    rate: Option<Rate>,
+    remote: bool,
+    declared: Option<&str>,
+    reindexing: Reindexing,
+) -> Estimate {
+    let mut survey = survey(changed.iter().map(|(p, b)| (p.as_str(), *b)), policy).with_exclusions(excluded);
+    let service = service_attached();
+    let card = computing_card(service, crate::regime::card_class_of_this_machine());
+    let sole = !service && crate::regime::sole_card_of_this_machine_drives_display();
+    let explicit = std::env::var(crate::embedding_choice::MODEL_VARIABLE).ok();
+    let choice = crate::embedding_choice::choose_declared(survey.files, survey.bytes, card, sole, declared, explicit.as_deref());
+    let pacing = if remote { None } else { crate::burst::active() };
+    let (pool, source) = buffer_pool_here();
+    survey.bytes += reindexing.debt_bytes;
+    let mut e = Estimate::new(survey, choice, rate.map(|r| r.paced(pacing)), CONFIRM_ABOVE).with_buffer(pool, source);
+    e.reindexing = Some(reindexing);
+    e
 }
 
 fn human(seconds: u64) -> String {
