@@ -257,9 +257,12 @@ impl ViewState {
     /// **The seconds left to embed** the chunks due: chunks × mean size ÷ rate, rounded up; `Some(0)` with nothing due,
     /// `None` without a rate.
     pub fn with_vectors_due(self, due: VectorsDue) -> Self {
-        // RED STUB: not set.
-        let _ = due;
-        self
+        let vectors_eta_s = if due.chunks == 0 {
+            Some(0)
+        } else {
+            due.chars_per_s.filter(|r| *r > 0.0).map(|r| (due.chunks as f64 * due.mean_chars / r).ceil() as u64)
+        };
+        ViewState { vectors_eta_s, ..self }
     }
 }
 
@@ -298,8 +301,11 @@ pub fn view_state(
         files_behind,
         behind_since_ms: behind.map(|b| b.since_ms),
         up_to_date: !indexing && files_behind == 0,
-        // RED STUB: not computed.
-        text_eta_s: None,
+        text_eta_s: if files_behind == 0 {
+            Some(0)
+        } else {
+            lag.rate(cell).map(|ms_par_fichier| (files_behind as f64 * ms_par_fichier / 1000.0).ceil() as u64)
+        },
         vectors_eta_s: None,
     })
 }
