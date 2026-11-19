@@ -712,7 +712,13 @@ fn recopier_les_aretes_entrantes(catalog: &mut Catalog, remplacees: &[Remplacee]
     }
     let compte = |lu: &crate::connection::QueryResult| lu.rows.first().and_then(|l| l.first()).and_then(|x| x.as_i64()).unwrap_or(0) as usize;
     let mut recopiees = 0usize;
-    for (to, liste) in paires {
+    // **The pairs by parameter and by batches** (c7, 19 November 2026): never a list written in the query, and at
+    // most `LOT` pairs per statement, like the versions migration (an IN of 72 k written out was quadratic).
+    let par_lots: Vec<(String, Vec<CypherValue>)> = paires
+        .into_iter()
+        .flat_map(|(to, liste)| liste.chunks(crate::migration_des_versions::LOT).map(|l| (to.clone(), l.to_vec())).collect::<Vec<_>>())
+        .collect();
+    for (to, liste) in par_lots {
         let liste = CypherValue::List(liste);
         for (rel, from, cible) in crate::code::RELATIONS {
             // **`CONSUMED_BY` n'est pas une entrante** (témoin 18) : celui qui arrive à la ligne retirée
