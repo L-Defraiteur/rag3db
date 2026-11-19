@@ -66,6 +66,11 @@ impl<C: DbConnection + ?Sized> DbConnection for RevocableConnection<C> {
     fn close_without_checkpoint(&self) {
         self.inner.close_without_checkpoint();
     }
+    // Forwarded like every other verb: the default does nothing, and a stopped call would read to its end (the
+    // host's read snapshots go through this wrapper).
+    fn interrupt(&self) {
+        self.inner.interrupt();
+    }
     // Delegating these methods is essential for pooled backends. Replacing
     // them by textual SQL would lose their pinned transaction session.
     fn begin(&self) -> Result<(), DbError> {
