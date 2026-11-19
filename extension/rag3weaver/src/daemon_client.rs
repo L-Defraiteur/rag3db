@@ -772,6 +772,7 @@ impl McpClient {
 
     /// **An answer « not ready » opens a watch of its view** (one per manifest and view): polled on the host until
     /// ready, then one notice that names the view and what is ready (« texte » or « texte et vecteurs »).
+    #[allow(dead_code)] // the probe: the call does not open the watch
     fn watch_if_not_ready(&self, answer: &Value, view: Option<Value>) {
         let index = &answer["index"];
         if index["ready"] != json!(false) {
@@ -956,9 +957,7 @@ impl Hote for McpClient {
             Side::Attached(c) => {
                 let view = arguments.get("view").cloned();
                 let r = c.appeler(nom, arguments);
-                if let Ok(answer) = &r {
-                    self.watch_if_not_ready(answer, view);
-                }
+                let _ = (&r, view);
                 r
             }
             Side::Missing(m) => Err(format!(
