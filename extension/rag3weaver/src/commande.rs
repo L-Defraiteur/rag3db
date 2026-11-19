@@ -779,7 +779,7 @@ impl Autorisee {
 /// refuse en le disant. Limites avouées : Landlock ne couvre ni UDP ni les
 /// sockets unix (ABI v4 couvre TCP), et le bac à sable borne la commande,
 /// pas le backend lui-même.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct BacASable {
     /// Lecture-écriture : le domaine de travail, et les écritures déclarées
     /// (`extra_write` — un cache de build, par exemple).
@@ -906,6 +906,9 @@ pub struct Atelier {
     /// **The machine's lock for heavy commands** (19 Nov 2026): the path of `poste` and how many
     /// seconds a heavy command waits for its place. `None`: heavy commands run as before.
     pub poste: Option<(std::path::PathBuf, u64)>,
+    /// The program that encloses a heavy command under `poste` (`<aide> sandbox-exec <rules> --
+    /// <command>`); `None`: the running program (the host's binary).
+    pub aide_sandbox: Option<std::path::PathBuf>,
     /// Le nom des journaux (`<nom>.out`, `<nom>.err`) : la poignée d'une
     /// commande en fond. `None` : `<programme>-<pid>-<n>`, unique dans le
     /// processus — deux lancements du même programme ne s'écrasent plus.
@@ -930,6 +933,7 @@ impl Atelier {
             journaux: self.journaux.clone(),
             bac_a_sable: None,
             poste: self.poste.clone(),
+            aide_sandbox: self.aide_sandbox.clone(),
             nom_journaux: Some(nom.to_string()),
             plafond_journal: self.plafond_journal,
         }
@@ -949,6 +953,7 @@ impl Atelier {
             journaux: None,
             bac_a_sable: None,
             poste: None,
+            aide_sandbox: None,
             nom_journaux: None,
             plafond_journal: std::env::var("RAG3WEAVER_JOURNAL_PLAFOND")
                 .ok()
@@ -1186,6 +1191,33 @@ struct Lance {
     chemin_err: Option<std::path::PathBuf>,
     /// Le verrou du target partagé, tenu jusqu'à la fin de la commande.
     verrou: Option<std::fs::File>,
+    /// The command went through `poste lourd`: its code 75 is a refused place.
+    sous_poste: Option<std::path::PathBuf>,
+}
+
+/// **The heavy families** (19 Nov 2026): what builds or tests at full load goes through `poste lourd`.
+pub fn est_lourde(c: &Commande) -> bool {
+    let nom = std::path::Path::new(&c.programme).file_name().and_then(|n| n.to_str()).unwrap_or_default();
+    matches!(nom, "cmake" | "ninja" | "make")
+        || matches!(c.famille().as_str(), "cargo build" | "cargo test" | "cargo check" | "cargo clippy" | "cargo bench" | "cargo run" | "cargo doc")
+}
+
+/// **The enclosing helper** (`<host binary> sandbox-exec <rules JSON> -- <program> <args…>`, 19 Nov
+/// 2026): it sets the Landlock rules on itself, then becomes the command. `poste lourd` runs free (it
+/// writes its locks and talks to systemd), the command alone is enclosed.
+#[cfg(all(feature = "code", target_os = "linux"))]
+pub fn sandbox_exec(args: &[String]) -> Result<std::convert::Infallible, String> {
+    use std::os::unix::process::CommandExt;
+    const USAGE: &str = "usage: sandbox-exec <rules JSON> -- <program> <args…>";
+    let (regles, reste) = args.split_first().ok_or(USAGE)?;
+    let reste = match reste.split_first() {
+        Some((tiret, r)) if tiret == "--" => r,
+        _ => return Err(USAGE.into()),
+    };
+    let (programme, args) = reste.split_first().ok_or(USAGE)?;
+    let bac: BacASable = serde_json::from_str(regles).map_err(|e| format!("sandbox-exec: rules: {e}"))?;
+    bac.ruleset()?.restrict_self().map_err(|e| format!("sandbox-exec: landlock: {e}"))?;
+    Err(format!("sandbox-exec: {programme}: {}", std::process::Command::new(programme).args(args).exec()))
 }
 
 /// **Le dossier des targets partagés** : `RAG3WEAVER_TARGETS_DIR`, sinon
@@ -1319,9 +1351,35 @@ fn lancer(a: &Autorisee, atelier: &Atelier, direct: bool) -> Result<Lance, ExecE
     if !atelier.cwd.is_dir() {
         return Err(ExecErreur::Atelier(format!("{} n'est pas un dossier", atelier.cwd.display())));
     }
-    let mut commande = Command::new(&a.0.programme);
+    // **A heavy command goes through `poste lourd`** (19 Nov 2026): `poste` runs free, the command
+    // is enclosed by the helper when there is a sandbox; the place waited at most `attente` s.
+    let sous_poste = atelier.poste.as_ref().filter(|_| est_lourde(&a.0)).map(|(p, _)| p.clone());
+    let mut commande = match &atelier.poste {
+        Some((poste, attente)) if sous_poste.is_some() => {
+            let mut c = Command::new(poste);
+            c.arg("lourd");
+            if let Some(bac) = &atelier.bac_a_sable {
+                let aide = match &atelier.aide_sandbox {
+                    Some(a) => a.clone(),
+                    None => std::env::current_exe().map_err(|e| ExecErreur::Lancement(format!("sandbox-exec: {e}")))?,
+                };
+                let regles = serde_json::to_string(bac).map_err(|e| ExecErreur::Atelier(format!("bac à sable : {e}")))?;
+                c.arg(aide).arg("sandbox-exec").arg(regles).arg("--");
+            }
+            c.arg(&a.0.programme).args(&a.0.args);
+            c.env("POSTE_LOURD_ATTENTE_MAX", attente.to_string());
+            if std::env::var_os("POSTE_MEM_MAX").is_none() {
+                c.env("POSTE_MEM_MAX", "32G");
+            }
+            c
+        }
+        _ => {
+            let mut c = Command::new(&a.0.programme);
+            c.args(&a.0.args);
+            c
+        }
+    };
     commande
-        .args(&a.0.args)
         .current_dir(&atelier.cwd)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -1341,8 +1399,9 @@ fn lancer(a: &Autorisee, atelier: &Atelier, direct: bool) -> Result<Lance, ExecE
     // n'exécute que la restriction : deux syscalls, sûrs à cet endroit.
     // Une erreur de construction refuse la commande — jamais un repli
     // silencieux vers « pas de bac à sable ».
+    // Under `poste`, the helper encloses the command: `poste` itself stays free.
     #[cfg(all(feature = "code", target_os = "linux"))]
-    if let Some(bac) = &atelier.bac_a_sable {
+    if let Some(bac) = atelier.bac_a_sable.as_ref().filter(|_| sous_poste.is_none()) {
         use std::os::unix::process::CommandExt;
         let ruleset = bac
             .ruleset()
@@ -1447,7 +1506,7 @@ fn lancer(a: &Autorisee, atelier: &Atelier, direct: bool) -> Result<Lance, ExecE
     let (pour_out, pour_err) = if direct { (None, None) } else { (chemin_out.clone(), chemin_err.clone()) };
     let out = lire(enfant.stdout.take().map(|f| Box::new(f) as Box<dyn Read + Send>), atelier.max_sortie, pour_out);
     let err = lire(enfant.stderr.take().map(|f| Box::new(f) as Box<dyn Read + Send>), atelier.max_sortie, pour_err);
-    Ok(Lance { enfant, out, err, chemin_out, chemin_err, verrou })
+    Ok(Lance { enfant, out, err, chemin_out, chemin_err, verrou, sous_poste })
 }
 
 /// **L'aperçu dit ce qu'il ne montre pas.** Une sortie coupée en silence
@@ -1471,7 +1530,7 @@ fn apercu(v: Vec<u8>, total: usize, perdus: u64, journal: &Option<std::path::Pat
 /// **Exécuter par argv, jamais par un shell**, et attendre la fin.
 pub fn executer(a: Autorisee, atelier: &Atelier) -> Result<Sortie, ExecErreur> {
     let debut = std::time::Instant::now();
-    let Lance { mut enfant, out, err, chemin_out, chemin_err, verrou: _verrou } = lancer(&a, atelier, false)?;
+    let Lance { mut enfant, out, err, chemin_out, chemin_err, verrou: _verrou, sous_poste } = lancer(&a, atelier, false)?;
 
     let mut expiree = false;
     let code = loop {
@@ -1495,6 +1554,15 @@ pub fn executer(a: Autorisee, atelier: &Atelier) -> Result<Sortie, ExecErreur> {
     let brut = |j: std::thread::JoinHandle<(Vec<u8>, usize, u64)>| j.join().unwrap_or_default();
     let ((o, n_out, p_out), (e, n_err, p_err)) = (brut(out), brut(err));
     let tronquee = n_out > o.len() || n_err > e.len();
+    // **A place refused** (`poste lourd` exits 75 when its wait is over, nothing taken): said to the
+    // agent in clear, with who holds the machine.
+    if let (Some(poste), Some(75)) = (&sous_poste, code) {
+        let qui = std::process::Command::new(poste).arg("--qui").output().map(|o| String::from_utf8_lossy(&o.stdout).trim().chars().take(400).collect::<String>()).unwrap_or_default();
+        return Err(ExecErreur::Lancement(format!(
+            "the machine is busy: its heavy places are all held (poste lourd waited {} s). The command did not run; try again later, or do something else meanwhile. {qui}",
+            atelier.poste.as_ref().map(|(_, s)| *s).unwrap_or(0)
+        )));
+    }
     Ok(Sortie {
         stdout: apercu(o, n_out, p_out, &chemin_out),
         stderr: apercu(e, n_err, p_err, &chemin_err),
@@ -1557,7 +1625,7 @@ pub fn lancer_en_fond(
     let debut = std::time::Instant::now();
     // L'aperçu d'une commande en fond garde la fin, pas le début : on lit la
     // fin dans le journal quand elle meurt.
-    let Lance { mut enfant, out, err, chemin_out, chemin_err, verrou } = lancer(&a, atelier, true)?;
+    let Lance { mut enfant, out, err, chemin_out, chemin_err, verrou, sous_poste: _ } = lancer(&a, atelier, true)?;
     let pid = enfant.id();
     let fin = std::sync::Arc::new(std::sync::Mutex::new(None));
     let tuee = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
@@ -2724,6 +2792,57 @@ mod tests {
         let s = executer(sh("echo light"), &atelier).expect("the command runs");
         assert!(s.stdout.contains("light"));
         assert!(!d.path().join("argv").exists(), "no poste for a light command");
+    }
+
+    /// **Under `poste`, the helper encloses the command, `poste` runs free** (19 Nov 2026): the argv
+    /// is `lourd <helper> sandbox-exec <rules> -- <command>`.
+    #[cfg(all(feature = "code", target_os = "linux"))]
+    #[test]
+    fn a_heavy_command_with_a_sandbox_is_enclosed_by_the_helper_under_poste() {
+        let d = tempfile::tempdir().unwrap();
+        let poste = faux_poste(d.path(), None);
+        let aide = d.path().join("aide");
+        std::fs::write(&aide, "#!/bin/sh\nshift 3\nexec \"$@\"\n").unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&aide, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let mut atelier = Atelier::dans(d.path()).avec_le_poste(&poste, 5);
+        atelier.bac_a_sable = Some(BacASable::autour(d.path()));
+        atelier.aide_sandbox = Some(aide.clone());
+        let s = executer(Autorisee(cmd("cargo", &["test", "--help"])), &atelier).expect("the command runs");
+        assert_eq!(s.code, Some(0), "{}", s.stderr);
+        let argv = std::fs::read_to_string(d.path().join("argv")).unwrap_or_default();
+        let attendu = format!("lourd {} sandbox-exec {{", aide.display());
+        assert!(argv.starts_with(&attendu) && argv.contains("} -- cargo test --help"), "{argv:?}");
+    }
+
+    /// The helper's role, played by this test binary run again: `sandbox-exec` with the rules and
+    /// the command given in its environment.
+    #[cfg(all(feature = "code", target_os = "linux"))]
+    #[test]
+    #[ignore]
+    fn role_sandbox_exec() {
+        let (Ok(regles), Ok(script)) = (std::env::var("COMMANDE_SANDBOX_REGLES"), std::env::var("COMMANDE_SANDBOX_SCRIPT")) else { return };
+        let Err(e) = sandbox_exec(&[regles, "--".into(), "sh".into(), "-c".into(), script]);
+        panic!("{e}");
+    }
+
+    /// **`sandbox-exec` encloses what it becomes**: a write inside the domain passes, a write
+    /// outside is refused.
+    #[cfg(all(feature = "code", target_os = "linux"))]
+    #[test]
+    fn sandbox_exec_encloses_the_command_it_becomes() {
+        let domaine = tempfile::tempdir().unwrap();
+        let dehors = tempfile::tempdir().unwrap();
+        let regles = serde_json::to_string(&BacASable::autour(domaine.path())).unwrap();
+        let script = format!("touch {}/dedans; touch {}/dehors; true", domaine.path().display(), dehors.path().display());
+        let sortie = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "commande::tests::role_sandbox_exec", "--ignored", "--nocapture"])
+            .env("COMMANDE_SANDBOX_REGLES", regles)
+            .env("COMMANDE_SANDBOX_SCRIPT", script)
+            .output()
+            .unwrap();
+        assert!(domaine.path().join("dedans").exists(), "a write inside the domain passes: {}", String::from_utf8_lossy(&sortie.stderr));
+        assert!(!dehors.path().join("dehors").exists(), "a write outside is refused");
     }
 }
 
