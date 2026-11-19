@@ -2423,3 +2423,32 @@ une nuit de sonde sur 4.3.12.
 namespaces vides, faits de déclarations anticipées, passent les 80 caractères. Validé : la longueur se mesure sur ce
 qui reste une fois ôtées les lignes de pure structure, déclarées par motifs et par langage dans `NotCandidate` ;
 témoin rouge sur bound_standalone_call.h, parité rejouée, le critère reste le top 20.
+
+## 19 novembre, 23 h 53 — lucivy 4.3.12 atterrie dans rag3db ; la soirée de sccache
+
+**Le pointeur** : lucivy 4.3.12 publiée partout à 22 h 46 (5 crates, 2 npm, PyPI, PR lucivy #55 avec la cause #54, le
+sursis #50, le rapport #52), et son pointeur atterri dans rag3db à 23 h 52 (c42baa7c0f) avec la note de maintenance
+qui porte `dictionary_revived` et la phrase de l'état qui compte les textes repris du sursis. Suite : G bâtit le binaire
+de l'hôte et réveille les hôtes des deux postes dessus ; lucivy joue sa sonde de nuit ; demain la compaction se rallume
+dans les huit manifestes (coupée depuis 17 h 44), puis une seconde nuit de sonde.
+
+**La soirée de sccache.** Le premier train rust sous sccache + mold (recherche-filtre-vide, 22 h 56) rougit la lib
+(code 101) : deux tests qui lancent cargo **dans le bac à sable de commande** meurent, « sccache: error: Permission
+denied (os error 13) », parce que le bac hérite de `RUSTC_WRAPPER` du poste et ne peut ni créer le dossier de sccache ni
+joindre son serveur. Le train suivant (poste-place-pousseur, parti sous sccache aussi) passe vert : le rouge est
+intermittent, au démarrage à froid. Mais le défaut du produit est réel (une utilisatrice qui compile par sccache aurait
+le même rouge en service) : ticket de G (db61938fbe), correctif à archi demain matin en premier, qui **ferme la porte**
+(le bac à sable ne laisse passer que les variables qu'il déclare ; ouvrir le chemin vers le serveur sccache du poste
+ferait sortir l'agent de son confinement). D'ici là : sccache en opt-in dans poste (`POSTE_SCCACHE=1`, lot
+poste-sccache-opt-in, 42/42), mold reste ; après le correctif, sccache par défaut et la mesure sur trois passes
+(avant : 814 s par passe rust, target 7,5 Go). Deux erreurs de ma part dans la soirée : j'ai cru la file figée par les
+places lourdes (c'était la recopie de menage.py, dont le témoin .py joué par bash appelait l'`import` d'ImageMagick qui
+attendait un écran ; corrigé b61a91caed), et j'ai cru les journaux de passe écrasés (chaque train garde son dossier ;
+seul le chemin manquait au message rendu à l'auteur, 4197a0ec9e). Posé aussi : la place lourde réservée au pousseur
+(c26690ff4c, déclarée par `place-pousseur` à luciepc seulement, dc52d02aa7).
+
+**Prêts pour demain** : la fenêtre C++ (hotfixs quarantine-last-reader-checkpoint 4b6fa1b91f, passe verte, remplace
+38eacb2664 ; cœur course-des-groupes e6a38eccd2 si son TSan est vert) ; le bac à sable puis le lot reasoning d'archi
+(une clé `reasoning`, models.llm sans model, 702a3adb74) ; la mesure du raisonnement de l'extraction au banc sur la tête
+de mémoire (memoire-extraction-cut e94b15ca2) ; le correctif des usages qualifiés de codeparsers, puis la répétition
+rejouée et la bascule des bases.
