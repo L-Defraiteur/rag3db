@@ -392,6 +392,24 @@ mod tests {
             && phrase.contains("Essai : maintenance refusée"), "[check: la-phrase-de-l-etat] {phrase}");
     }
 
+    /// **Une nuit qui reprend des textes du sursis le dit** (19 novembre 2026, lucivy 4.3.12) : la note de la table
+    /// porte `dictionary_revived` (le shard, l'id et le segment qui le cite), et la phrase de l'état compte ces
+    /// textes et nomme le premier segment. C'est l'indice d'un mot que la compaction croyait mort à tort.
+    #[test]
+    fn une_nuit_qui_reprend_des_textes_du_sursis_le_dit() {
+        let dir = tempfile::tempdir().unwrap();
+        let handle = index(dir.path());
+        handle.add_document_json(1, &serde_json::json!({ "content": "doc un" })).unwrap();
+        handle.commit().unwrap();
+        let r = maintenance_nocturne(&handle, "Essai", || Ok(vec![1]), 0.05, true).unwrap();
+        assert!(r["dictionary_revived"].as_array().is_some_and(|a| a.is_empty()), "[check: la-note-porte-le-champ] {r}");
+        let revenu = serde_json::json!({"table": "Scope", "purged": 0, "dictionary_bytes": [10, 10],
+            "dictionary_revived": ["shard_2: field 1 id 2174820, segment c874975fabcd"]});
+        let phrase = phrase_de_la_nuit("2026-11-20 03:31", &[revenu]);
+        assert!(phrase.contains("Scope : 1 texte repris du sursis") && phrase.contains("segment c874975fabcd"),
+            "[check: la-phrase-dit-les-textes-repris] {phrase}");
+    }
+
     /// Le jeton change quand la table change, et pas autrement.
     #[test]
     fn le_jeton_suit_les_commits() {
