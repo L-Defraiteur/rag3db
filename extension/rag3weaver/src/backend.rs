@@ -4044,7 +4044,7 @@ impl Backend {
                     source.clone(),
                     bus.clone(),
                     lag.clone(),
-                    cell.clone(),
+                    crate::catalog::retard::LagKey::backend(&cell),
                     indexed.clone(),
                     workspace.index_gate(),
                 )?);

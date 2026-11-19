@@ -109,7 +109,7 @@ fn a_change_is_seen_on_the_kernel_event_not_the_period() {
         source,
         bus.clone(),
         Arc::new(crate::catalog::retard::Lag::new()),
-        crate::scope::Scope::default(),
+        crate::catalog::retard::LagKey::backend(&crate::scope::Scope::default()),
         None,
         Default::default(),
     )
@@ -146,7 +146,7 @@ fn the_running_watch_publishes_and_stops_at_once() {
         source,
         bus.clone(),
         Arc::new(crate::catalog::retard::Lag::new()),
-        crate::scope::Scope::default(),
+        crate::catalog::retard::LagKey::backend(&crate::scope::Scope::default()),
         None,
         Default::default(),
     )
@@ -170,7 +170,7 @@ fn the_running_watch_publishes_and_stops_at_once() {
 
     // Une période d'une minute : l'arrêt n'en attend rien.
     let (dir, source) = tree();
-    let handle = spawn("lente", &WatchConfig { every_ms: 60_000, ..Default::default() }, dir.path().to_path_buf(), source, bus, Arc::new(crate::catalog::retard::Lag::new()), crate::scope::Scope::default(), None, Default::default()).unwrap();
+    let handle = spawn("lente", &WatchConfig { every_ms: 60_000, ..Default::default() }, dir.path().to_path_buf(), source, bus, Arc::new(crate::catalog::retard::Lag::new()), crate::catalog::retard::LagKey::backend(&crate::scope::Scope::default()), None, Default::default()).unwrap();
     let t = Instant::now();
     handle.stop();
     assert!(t.elapsed() < Duration::from_secs(2), "{:?}", t.elapsed());
@@ -202,7 +202,7 @@ fn the_watch_notes_the_lag_before_publishing() {
         source,
         bus,
         lag.clone(),
-        cell.clone(),
+        crate::catalog::retard::LagKey::backend(&cell),
         None,
         Default::default(),
     )
@@ -213,9 +213,44 @@ fn the_watch_notes_the_lag_before_publishing() {
         assert!(Instant::now() < deadline, "aucun événement en 10 s");
         std::thread::sleep(Duration::from_millis(10));
     }
-    assert_eq!(lag.summary_in(&cell).map(|s| s.files), Some(1));
-    assert_eq!(lag.summary_in(&crate::scope::Scope::default()), None);
+    assert_eq!(lag.summary_of(&crate::catalog::retard::LagKey::backend(&cell)).map(|s| s.files), Some(1));
+    assert_eq!(lag.summary_of(&crate::catalog::retard::LagKey::backend(&crate::scope::Scope::default())), None);
     handle.stop();
+}
+
+/// **A watch notes in the layer it serves** (2a′-3, lot 5b): a watch on a worktree's work layer notes its changes in
+/// that layer's lag, not in the backend's layer of the same cell — a view of the backend stays up to date while
+/// another worktree is edited.
+#[test]
+fn a_watch_notes_in_the_layer_it_serves() {
+    use crate::catalog::retard::{LagKey, LayerId};
+    let (dir, source) = tree();
+    let bus = crate::events::EventBus::new(64);
+    let mut rx = bus.subscribe(crate::events::topic::FILES);
+    let lag = Arc::new(crate::catalog::retard::Lag::new());
+    let cell = crate::scope::Scope { org: "o".into(), project: "p".into() };
+    let travail = LagKey { cell: cell.clone(), layer: LayerId("travail".into()) };
+    let handle = spawn(
+        "travail",
+        &WatchConfig { every_ms: 20, settle_ms: 0, ..Default::default() },
+        dir.path().to_path_buf(),
+        source,
+        bus,
+        lag.clone(),
+        travail.clone(),
+        None,
+        Default::default(),
+    )
+    .unwrap();
+    std::fs::write(dir.path().join("src/b.rs"), "fn b() { 2 }\n").unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while rx.try_recv().is_err() {
+        assert!(Instant::now() < deadline, "aucun événement en 10 s");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    handle.stop();
+    assert_eq!(lag.summary_of(&travail).map(|s| s.files), Some(1), "the change is not noted in the layer of the watch");
+    assert_eq!(lag.summary_of(&LagKey::backend(&cell)), None, "the change is noted in the backend's layer");
 }
 
 
