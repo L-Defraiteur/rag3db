@@ -484,31 +484,48 @@ avant code. Ce qui est noté dès maintenant :
   preuve** : rejouer le témoin d'extraction sur les mêmes tranches avec l'invite réduite et comparer les
   sorties. Si une consigne manque vraiment, elle devient une description de champ, pas un paragraphe.
 - **Le nœud d'extraction structurée est `LlmNode`** (question de Lucie : « un nœud générique d'extraction
-  structurée, qui prend en entrée des descriptions de champs et des contextes ; une chaîne et un titre ? » ; forme
-  de c7). Il n'y a pas de type de nœud de plus. Il lui manque le contrat du contexte, en trois déclarations :
-  1. **un port `context`**, qui reçoit des **parts** `{name, title, text, max_tokens?}`. Chaque part vient d'un nœud
-     amont du graphe : la tranche rendue, les fiches rappelées, le rapport d'avant, les catégories candidates.
-     Ce sont les ingrédients `archivist.context.*`. Le nœud rend chaque part en section (`## title`, puis le
-     texte) et dit la coupe quand une part dépasse son plafond. Un ingrédient débrayé rend une part vide, que le
-     nœud ne rend pas ;
-  2. **un paramètre `context_order`**, la liste des noms de parts, dans l'ordre où le nœud les rend. Une part
-     absente de la liste est refusée en la nommant. C'est la règle « le stable d'abord » de cette page, écrite
-     dans le graphe ;
-  3. **`instruction`** (la ligne de tâche) et **`response_schema`** (le sens, dans les descriptions des champs).
+  structurée, qui prend en entrée des descriptions de champs et des contextes ; une chaîne et un titre ? »).
+  Il n'y a pas de nœud d'extraction de plus. Trois déclarations lui suffisent :
+  1. **un port `context`**, qui prend une **liste de parts** ;
+  2. **`instruction`**, la ligne de tâche, courte et paramétrable ;
+  3. **`response_schema`**, qui porte le sens dans les descriptions de ses champs.
 
-  Plus aucun script Rhai n'assemble une invite en prose : `archive_slice_prompt.rhai` disparaît. La même forme de
-  part sert à `compose_restart` (`restart.context.*`) et au composeur de contexte.
+  Plus aucun script Rhai n'assemble une invite en prose : `archive_slice_prompt.rhai` disparaît. La même forme
+  sert à `compose_restart` (`restart.context.*`) et au composeur de contexte.
 
-  **Ce que le moteur demande** (vérifié le 19 novembre) :
-  - un port ne reçoit pas aujourd'hui plusieurs valeurs JSON. Le fan-in (`merge_port_values`,
-    `src/dataflow/port.rs`) ne fusionne que des résultats, des uuids, des enfants, des états de branche et des
-    métas. Il faut une règle de plus : une part, ou une liste de parts, se concatène ;
-  - l'ordre d'arrivée du fan-in suit la fin des branches, qui tournent en parallèle. Sans `context_order`,
-    l'invite changerait d'un appel à l'autre, et le cache de préfixe ne servirait plus.
+- **La part** (Lucie : « le contexte pourrait être des objets sérialisables aussi ; une liste d'objets
+  sérialisables, hop, c'est pris en charge ») : `{name, title, value, format?, max_tokens?}`. `value` est
+  n'importe quelle valeur JSON : une chaîne, un objet, une liste d'objets (les fiches rappelées, les tours, les
+  catégories candidates). `LlmNode` rend chaque part en section, `## title` puis la valeur rendue en texte. Une
+  chaîne passe telle quelle. Le plafond s'applique après le rendu, et la coupe est dite. Plus aucun script ne met
+  des objets en prose.
 
-  **Les témoins** : un graphe à deux parts et un schéma rend l'invite attendue octet pour octet ; deux branches
-  qui finissent dans le désordre donnent la même invite ; une part au-dessus de son plafond est coupée, et la
-  coupe est dite.
+- **La présentation d'une valeur**, en trois niveaux (Lucie : « définir sur chaque élément la présentation, et
+  les objets sérialisables déclarent optionnellement un format de présentation par défaut ») :
+  1. `format` sur la part, qui vaut à cette place dans cette invite ;
+  2. sinon, la présentation par défaut du type de la valeur, déclarée dans le schéma de son entité
+     (`fiche.json`, `source.json`, `turn.json`…), facultative. C'est une déclaration du gabarit comme le reste : un
+     gabarit de texte sur les champs, ou un nom de forme (markdown, « clé : valeur ») ;
+  3. sinon, du JSON à clés triées.
+
+- **L'assemblage est un nœud générique de collecte** (Lucie, et c7 la suit) : des entrées nommées, déclarées
+  dans l'ordre dans le `.mmd`, et une liste en sortie dans cet ordre. Il rassemble n'importe quelle valeur, pas
+  seulement des parts. L'ordre est donc écrit dans le graphe, et « le stable d'abord » de cette page veut dire :
+  la première entrée. Le moteur ne gagne aucune règle de fusion par type.
+  - **Vérifié dans le moteur** (19 novembre) : des entrées nommées en nombre variable passent par
+    `NodeFactory::schema_for(config)`, comme les sorties de `Route`, une par route déclarée.
+  - **Un ingrédient débrayé rend une valeur vide, il ne se fait pas sauter.** Une branche sautée par un `Route`
+    saute aussi son aval : la collecte sauterait, et l'invite avec. Une option de la collecte décide de garder
+    ou de retirer une entrée vide.
+
+- **Les témoins** :
+  - un graphe à deux parts et un schéma rend l'invite attendue, octet pour octet ;
+  - deux branches qui finissent dans le désordre donnent la même liste, donc la même invite ;
+  - une part au-dessus de son plafond est coupée, et la coupe est dite ;
+  - une part objet et une part liste se rendent en JSON stable, à clés triées, octet pour octet ;
+  - la même fiche se rend pareil dans deux invites sans `format` de part, et autrement quand la part en déclare
+    un.
+
 - **Une graine à garder dans la forme** : qu'un agent puisse un jour éditer ces graphes et ces scripts par
   outils (lecture, écriture, revue, retour arrière, un témoin qui juge). Rien dans leur forme ne doit
   l'empêcher.
