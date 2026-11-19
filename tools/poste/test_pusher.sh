@@ -7,6 +7,9 @@ set -u
 PUSHER=$(realpath "${1:-$(dirname "$0")/pusher.sh}")
 HERE=$(dirname "$(realpath "$0")")
 [ -f "$PUSHER" ] || { echo "ROUGE  pusher.sh absent : $PUSHER"; exit 1; }
+# The witness sets its own PUSHER_*: none comes from whoever runs it (19 Nov.: played by the pusher's unit, it took its
+# PUSHER_TRAIN_MAX=1, and every train case went red).
+unset $(compgen -e | grep '^PUSHER_')
 D=$(mktemp -d); trap 'rm -rf "$D"' EXIT
 # Git speaks French at luciepc (19 Nov.: « CONFLIT », and a filter on « CONFLICT » named no conflict).
 export LANG=fr_FR.UTF-8 LC_ALL=fr_FR.UTF-8
