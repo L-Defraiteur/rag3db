@@ -1342,6 +1342,14 @@ fn compte_rendu(turns: &[Turn], opts: &crate::llm::GenOptions, sink: &mut dyn cr
 fn une_demande(pas: fn(&[Turn], &crate::llm::GenOptions, &mut dyn crate::llm::TokenSink) -> Result<(crate::llm::Finish, crate::llm::Usage), crate::llm::LlmError>, demande: &str) -> (Vec<Value>, Vec<String>, String) {
     let d = tempfile::tempdir().unwrap();
     let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    // A red that waits for the supervisor waits 3 s, not 1 800 (it held the laptop's heavy slot, 19 Nov.).
+    let mut m: Value = serde_json::from_str(&std::fs::read_to_string(&manifeste).unwrap()).unwrap();
+    m["teammate"]["reply_wait_s"] = json!(3);
+    std::fs::write(&manifeste, serde_json::to_string_pretty(&m).unwrap()).unwrap();
+    let declarations = manifeste.parent().unwrap();
+    for args in [&["add", "-A"][..], &["commit", "-q", "-m", "une attente courte"]] {
+        assert!(std::process::Command::new("git").args(args).current_dir(declarations).status().unwrap().success(), "git {args:?}");
+    }
     let vu = Arc::new(Mutex::new(Vec::<String>::new()));
     let host = hote(d.path(), un_pas(pas, vu.clone())).with_runs_root(d.path().join("runs"));
     let h = host.hosted(&manifeste).unwrap();
@@ -1365,7 +1373,60 @@ fn a_report_judged_an_action_lets_the_task_end() {
     );
     assert_eq!(vu.iter().filter(|v| v.contains("delivered, missing or action")).count(), 1, "the host asks the judge once : {vu:#?}");
     assert_eq!(fin, "fait sans plan", "{boite:#?}");
-    assert!(!boite.iter().any(|l| l["from"] == "host" && l["text"].as_str().is_some_and(|t| t.contains("contenu demandé") || t.contains("à vérifier"))), "{boite:#?}");
+    assert!(!boite.iter().any(|l| l["from"] == "host" && l["text"].as_str().is_some_and(|t| t.contains("requested") || t.contains("check"))), "{boite:#?}");
+}
+
+/// **The verdict is the judge's first word** (archi's review): « delivered, not missing » is a
+/// delivery, not a miss; a `contains` read it as « missing » and relaunched.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn the_verdict_is_the_judge_s_first_word() {
+    let (boite, vu, fin) = une_demande(
+        |turns, opts, sink| if est_le_juge(turns) { answer(turns, opts, sink, "Delivered, not missing.", Vec::new()) } else { compte_rendu(turns, opts, sink) },
+        "Range les fichiers du dossier docs par date.",
+    );
+    assert_eq!(vu.iter().filter(|v| v.contains("delivered, missing or action")).count(), 1, "the host asks the judge once : {vu:#?}");
+    assert_eq!(fin, "fait sans plan", "« Delivered, not missing. » is a delivery : {boite:#?}");
+    assert!(!boite.iter().any(|l| l["from"] == "host" && l["text"].as_str().is_some_and(|t| t.contains("requested") || t.contains("check"))), "{boite:#?}");
+}
+
+/// **The judge thinks little, and counts in the run's usage** (archi's review): a reasoning model
+/// spends its 50 tokens thinking (2 805 reasoning tokens seen in D1 on gemini-3.8-flash) and answers
+/// nothing; the call asks for the least reasoning, or leaves room for it. And its consumption is
+/// recorded on the step's run, by the chat's meter, so that the run's usage carries it.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn the_judge_thinks_little_and_counts_in_the_run_s_usage() {
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let du_juge: Arc<Mutex<Vec<(usize, Option<crate::llm::ReasoningEffort>)>>> = Arc::default();
+    let model: ChatModel = {
+        let du_juge = du_juge.clone();
+        Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let du_juge = du_juge.clone();
+            Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
+                if est_le_juge(turns) {
+                    du_juge.lock().unwrap().push((opts.max_tokens, opts.reasoning));
+                    return answer(turns, opts, sink, "action", Vec::new());
+                }
+                if tool_results(turns).is_empty() { compte_rendu(turns, opts, sink) } else { answer(turns, opts, sink, "", Vec::new()) }
+            })))
+        })
+    };
+    let host = hote(d.path(), model).with_runs_root(d.path().join("runs"));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    host.ouvrir_une_tache(&h.id, "doc").expect("la tâche s'ouvre");
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    files.append("supervisor", "request", None, "Range les fichiers du dossier docs par date.").unwrap();
+    let o = host.run_teammate(&h.id, "doc").unwrap();
+    let appels = du_juge.lock().unwrap().clone();
+    assert_eq!(appels.len(), 1, "one judge call : {appels:?}");
+    let (max_tokens, reasoning) = appels[0];
+    assert!(reasoning == Some(crate::llm::ReasoningEffort::Minimal) || max_tokens >= 512, "the judge's reasoning is cut, or has room : max_tokens {max_tokens}, reasoning {reasoning:?}");
+    let run = o.steps.last().and_then(|s| s["run"].as_str()).unwrap_or_default().to_string();
+    let du_run: Vec<String> = host.chat_meter.all().into_iter().filter(|c| c.run == run).map(|c| c.agent).collect();
+    assert!(du_run.iter().any(|a| a == "content-judge"), "the judge's consumption is on the step's run ({run}) : {du_run:?}");
 }
 
 /// **A judge that fails does not block** (archi's third witness): the host says « fin sans texte, à
@@ -1385,7 +1446,7 @@ fn a_judge_that_fails_says_the_end_is_to_be_checked() {
     );
     assert_eq!(vu.iter().filter(|v| v.contains("delivered, missing or action")).count(), 1, "the host asks the judge once : {vu:#?}");
     assert_eq!(fin, "fait sans plan", "{boite:#?}");
-    assert!(boite.iter().any(|l| l["from"] == "host" && l["text"].as_str().is_some_and(|t| t.starts_with("fin sans texte, à vérifier"))), "{boite:#?}");
+    assert!(boite.iter().any(|l| l["from"] == "host" && l["text"].as_str().is_some_and(|t| t.starts_with("ended without a text, to be checked"))), "{boite:#?}");
 }
 
 /// **Une request qui exige un report ne se clôt pas sans lui** (`expects: "report"`, déclaré
