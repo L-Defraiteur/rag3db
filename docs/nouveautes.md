@@ -66,6 +66,7 @@
 - 19 novembre 2026 — **Le premier index d'une base passée aux versions tient sous le tampon du moteur.** La recopie
   des arêtes vers les lignes neuves lit chaque bout par sa clé : sur la base du dépôt, le repassage entier finit sous
   8 Gio (17 min, 7 Gio au plus pour tout le processus), là où il remplissait le tampon dès son premier paquet.
+- 19 novembre 2026 — **Un équipier qui rend un compte rendu au lieu du texte demandé est relancé.** Quand un pas se dit réussi sans avoir écrit de texte, et que ses rapports ne font que décrire le travail, le modèle de la tâche juge si la demande attendait un texte. S'il manque, l'équipier repart une fois pour l'écrire, puis attend le superviseur ; si le juge ne répond pas, la boîte dit « fin sans texte, à vérifier ».
 
 - 18 novembre 2026 — **La fin d'un index dit une libération ou une dette qu'elle n'a pas pu faire.** Une erreur en rendant les réclamations d'embarquement s'ajoute à la dernière ligne du journal, avec sa table et sa cause, sans en effacer la cause de fin ; une dette restante illisible se dit « dette inconnue », plus jamais « 0 ».
 
