@@ -10868,13 +10868,21 @@ fn read_threads() -> u64 {
     /// the publication work in `layer.layer`, on its parent pinned at `layer.parent`; the backend's visibility
     /// comes back after, and the published read view stays the backend's meanwhile.
     pub fn write_in_layer<R>(&mut self, layer: &LayerWrite, f: impl FnOnce(&mut Self) -> R) -> Result<R, CatalogError> {
+        self.write_in_layer_at(layer, None, f)
+    }
+
+    /// [`Self::write_in_layer`] **at a given rank** (2a′-3, lot 8): the generation is written at `rank` instead of the
+    /// pending rank — a history layer's rank is its commit's position on the ref's first parent, and a catch-up falls
+    /// in a gap under ranks already written. The rank published of reference, for the tombstones and the writer's
+    /// reads, is the highest generation written under `rank`. `None`: the pending rank, as before.
+    pub fn write_in_layer_at<R>(&mut self, layer: &LayerWrite, rank: Option<i64>, f: impl FnOnce(&mut Self) -> R) -> Result<R, CatalogError> {
         if self.layer_write.is_some() {
             return Err(CatalogError::DbError(format!("écrire dans la couche {} : une écriture dans une autre couche est en cours", layer.layer)));
         }
         if layer.layer == crate::generations::COUCHE_DU_BACKEND {
             return Err(CatalogError::DbError("écrire dans une couche : la couche du backend s'écrit sans write_in_layer".into()));
         }
-        let visibility = self.layer_visibility(&layer.layer)?;
+        let visibility = self.layer_visibility(&layer.layer, rank)?;
         self.layer_write = Some(LayerWriteState {
             backend: self.generations.replace(visibility),
             parent: layer.parent.clone(),
@@ -10911,12 +10919,20 @@ fn read_threads() -> u64 {
 
     /// **The visibility of a layer to write in**: the backend's tables and sets, the layer's last published rank
     /// read in `_generation` (0 for a layer without generation), and the pending rank above it.
-    fn layer_visibility(&self, layer: &str) -> Result<crate::generations::Visibilite, CatalogError> {
+    fn layer_visibility(&self, layer: &str, rank: Option<i64>) -> Result<crate::generations::Visibilite, CatalogError> {
         let backend = self.generations.as_ref().ok_or_else(|| CatalogError::DbError(format!("écrire dans la couche {layer} : cette base n'a pas de générations")))?;
-        let dernier = self.dialect.latest_generation_rank().ok_or_else(|| CatalogError::DbError("écrire dans une couche : ce dialecte ne sait pas les générations".into()))?;
+        // The highest rank published under `rank` (every rank without one): the reference of the write.
+        let mut params = vec![QueryParam::new("couche", CypherValue::String(layer.to_string()))];
+        let sous = match rank {
+            Some(r) => {
+                params.push(QueryParam::new("sous", CypherValue::Int(r)));
+                " AND g.rang < $sous"
+            }
+            None => "",
+        };
         let lu = self
             .conn
-            .execute_with_params(&dernier, &[QueryParam::new("couche", CypherValue::String(layer.to_string()))])
+            .execute_with_params(&format!("MATCH (g:{}) WHERE g.couche = $couche{sous} RETURN max(g.rang)", crate::generations::TABLE), &params)
             .map_err(|e| CatalogError::DbError(format!("le dernier rang de la couche {layer} : {e}")))?;
         let published = match lu.rows.first().and_then(|r| r.first()) {
             Some(CypherValue::Int(r)) => *r,
@@ -10924,7 +10940,7 @@ fn read_threads() -> u64 {
         };
         Ok(crate::generations::Visibilite {
             couche: layer.to_string(),
-            rang: published + 1,
+            rang: rank.unwrap_or(published + 1),
             rang_publie: published,
             tout_visible: false,
             parents: Vec::new(),

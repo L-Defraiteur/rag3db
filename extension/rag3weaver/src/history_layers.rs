@@ -60,13 +60,39 @@ impl FileSource for GitCommitSource {
 /// publish it: its rank. The files written are those changed since the layer's last generation, or since its
 /// parent's generation for a first one, or the whole tree for a root layer.
 pub fn write_history_generation(catalog: &mut Catalog, root: &Path, layer: &LayerWrite, commit: &str) -> Result<i64, String> {
+    let rank = commit_rank(catalog, root, layer, commit)?;
+    write_history_at(catalog, root, layer, commit, rank, None)
+}
+
+/// **The rank of a commit in a history layer** (2a′-3, lot 8): its position on the ref's first parent, counted from the
+/// base of the layer — the commit of its pinned parent's generation, or the root for a layer without parent.
+fn commit_rank(catalog: &Catalog, root: &Path, layer: &LayerWrite, commit: &str) -> Result<i64, String> {
+    let base = layer_base(catalog, layer)?;
+    let range = match &base {
+        Some(b) => format!("{b}..{commit}"),
+        None => commit.to_string(),
+    };
+    // 0: the ref stands at its base (a branch that has not moved since it forked); its generation holds no file.
+    String::from_utf8_lossy(&git(root, &["rev-list", "--first-parent", "--count", &range])?).trim().parse::<i64>().map_err(|e| e.to_string())
+}
+
+/// The base of a layer: the commit of its pinned parent's generation, or `None` (the root).
+fn layer_base(catalog: &Catalog, layer: &LayerWrite) -> Result<Option<String>, String> {
+    match &layer.parent {
+        Some((couche, rang)) => generation_commit(catalog, couche, Some(*rang)),
+        None => Ok(None),
+    }
+}
+
+/// Write the generation of `commit` at `rank` in a history layer: the files changed since the generation written just
+/// under `rank` (or the layer's base, or the whole tree), and, under a ceiling (the next rank written above), its rows
+/// retired at the ceiling.
+fn write_history_at(catalog: &mut Catalog, root: &Path, layer: &LayerWrite, commit: &str, rank: i64, ceiling: Option<i64>) -> Result<i64, String> {
+    use crate::connection::{CypherValue, QueryParam};
     let source = GitCommitSource::new(root, commit);
-    let base = match generation_commit(catalog, &layer.layer, None)? {
+    let base = match commit_below(catalog, &layer.layer, rank)? {
         Some(c) => Some(c),
-        None => match &layer.parent {
-            Some((couche, rang)) => generation_commit(catalog, couche, Some(*rang))?,
-            None => None,
-        },
+        None => layer_base(catalog, layer)?,
     };
     let paths = match &base {
         Some(b) => paths_z(&git(root, &["diff-tree", "-r", "--name-only", "-z", "--no-renames", b, commit])?),
@@ -78,11 +104,56 @@ pub fn write_history_generation(catalog: &mut Catalog, root: &Path, layer: &Laye
         files.push((p, content));
     }
     catalog
-        .write_in_layer(layer, |c| {
+        .write_in_layer_at(layer, Some(rank), |c| {
             crate::code_sync::reingest_files(c, &source, &files, crate::disponibilite::Disponibilites::TOUT)?;
+            if let Some(plafond) = ceiling {
+                // In a gap: the rows born here are retired at the next rank written above (the duplicate at the upper
+                // edge, when that rank holds the same content). No row published above changes.
+                let tables: Vec<String> = c.generations.as_ref().map(|v| v.tables.iter().cloned().collect()).unwrap_or_default();
+                for t in tables {
+                    c.execute_raw_with_params(
+                        &format!(
+                            "MATCH (s:`{t}`) WHERE s.{couche} = $couche AND s.{depuis} = $r AND s.{jusqu} IS NULL SET s.{jusqu} = $plafond",
+                            couche = crate::generations::COUCHE,
+                            depuis = crate::generations::DEPUIS,
+                            jusqu = crate::generations::JUSQU_A
+                        ),
+                        &[
+                            QueryParam::new("couche", CypherValue::String(layer.layer.clone())),
+                            QueryParam::new("r", CypherValue::Int(rank)),
+                            QueryParam::new("plafond", CypherValue::Int(plafond)),
+                        ],
+                    )
+                    .map_err(|e| e.to_string())?;
+                }
+            }
             c.publier_la_generation(commit, 0).map_err(|e| e.to_string())
         })
         .map_err(|e| e.to_string())?
+}
+
+/// The commit of the highest generation of `layer` under `rank`.
+fn commit_below(catalog: &Catalog, layer: &str, rank: i64) -> Result<Option<String>, String> {
+    use crate::connection::{CypherValue, QueryParam};
+    let lu = catalog
+        .execute_raw_with_params(
+            &format!("MATCH (g:{}) WHERE g.couche = $couche AND g.rang < $r RETURN g.commit ORDER BY g.rang DESC LIMIT 1", crate::generations::TABLE),
+            &[QueryParam::new("couche", CypherValue::String(layer.to_string())), QueryParam::new("r", CypherValue::Int(rank))],
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(lu.rows.first().and_then(|r| r.first()).and_then(|c| c.as_str()).filter(|c| !c.is_empty()).map(str::to_string))
+}
+
+/// The generations of `layer`: (rank, commit), by rank.
+fn layer_generations(catalog: &Catalog, layer: &str) -> Result<Vec<(i64, String)>, String> {
+    use crate::connection::{CypherValue, QueryParam};
+    let lu = catalog
+        .execute_raw_with_params(
+            &format!("MATCH (g:{}) WHERE g.couche = $couche RETURN g.rang, g.commit ORDER BY g.rang", crate::generations::TABLE),
+            &[QueryParam::new("couche", CypherValue::String(layer.to_string()))],
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(lu.rows.iter().filter_map(|r| Some((r.first()?.as_i64()?, r.get(1)?.as_str()?.to_string()))).collect())
 }
 
 /// The commit of a published generation of `layer`: at `rank`, or its last one; `None` when there is none, or when
@@ -268,6 +339,11 @@ pub fn sync_tracked_layers(
             }
             done.insert(couche.nom.clone());
             let Some(id) = t.ids.get(&couche.nom).cloned() else { continue };
+            // A rewritten ref: the layer is « à rebâtir », and receives nothing until rebuilt (2a′-3, lot 8).
+            if let Err(e) = check_layer_history(catalog, &t.repo, &id, &couche.nom) {
+                issues.push((couche.nom.clone(), id, Err(e)));
+                continue;
+            }
             let issue = if generation_commit(catalog, &id, None)?.as_deref() == Some(couche.pointe.as_str()) {
                 last_rank(catalog, &id)
             } else {
@@ -280,6 +356,20 @@ pub fn sync_tracked_layers(
                 };
                 write_history_generation(catalog, &t.repo, &LayerWrite { layer: id.clone(), parent: Some(parent) }, &couche.pointe)
             };
+            // The catch-up of `history: all` and `{last: N}`: the most recent first, one step per sync.
+            if issue.is_ok() {
+                let politique = t.resolution.sources.iter().find(|s| s.refs.iter().any(|r| r.nom == couche.nom)).map(|s| s.source.history.clone());
+                let limite = match politique {
+                    Some(crate::suivies::Histoire::Tout) => Some(usize::MAX),
+                    Some(crate::suivies::Histoire::Derniers(n)) => Some(n as usize),
+                    _ => None,
+                };
+                if let Some(limite) = limite {
+                    if let Err(e) = catch_up_step(catalog, &t.repo, &id, &couche.pointe, limite) {
+                        issues.push((couche.nom.clone(), id.clone(), Err(e)));
+                    }
+                }
+            }
             issues.push((couche.nom.clone(), id, issue));
         }
         if rest.len() == before {
@@ -308,6 +398,40 @@ pub fn sync_tracked_layers(
         issues.push((names.get(&id).cloned().unwrap_or_default(), id, issue));
     }
     Ok(issues)
+}
+
+/// **One step of the catch-up of a history layer** (2a′-3, lot 8): the commits of the ref's first parent not yet
+/// written, among its `limite` most recent above the layer's base, the most recent first, at most 5 generations or
+/// 30 s.
+fn catch_up_step(catalog: &mut Catalog, root: &Path, layer: &str, tip: &str, limite: usize) -> Result<(), String> {
+    use crate::connection::{CypherValue, QueryParam};
+    let lu = catalog
+        .execute_raw_with_params(
+            &format!("MATCH (g:{}) WHERE g.couche = $couche RETURN g.parente_couche, g.parente_rang ORDER BY g.rang DESC LIMIT 1", crate::generations::TABLE),
+            &[QueryParam::new("couche", CypherValue::String(layer.to_string()))],
+        )
+        .map_err(|e| e.to_string())?;
+    let parent = lu.rows.first().and_then(|r| Some((r.first()?.as_str()?.to_string(), r.get(1)?.as_i64()?))).filter(|(p, _)| !p.is_empty());
+    let ecriture = LayerWrite { layer: layer.to_string(), parent };
+    let base = layer_base(catalog, &ecriture)?;
+    let range = match &base {
+        Some(b) => format!("{b}..{tip}"),
+        None => tip.to_string(),
+    };
+    let ecrits: std::collections::BTreeSet<String> = layer_generations(catalog, layer)?.into_iter().map(|(_, c)| c).collect();
+    let debut = std::time::Instant::now();
+    let mut pas = 0;
+    for commit in String::from_utf8_lossy(&git(root, &["rev-list", "--first-parent", &range])?).lines().take(limite) {
+        if ecrits.contains(commit) {
+            continue;
+        }
+        if pas >= 5 || debut.elapsed() >= std::time::Duration::from_secs(30) {
+            break;
+        }
+        write_history_catch_up(catalog, root, &ecriture, commit)?;
+        pas += 1;
+    }
+    Ok(())
 }
 
 /// The last published rank of `layer`, or a refusal when it has none.
@@ -393,25 +517,68 @@ pub fn spawn_layer_sync(
 /// on the ref's first parent, in the gap under the generations already written, its rows retired at the next written
 /// rank above. Its rank.
 pub fn write_history_catch_up(catalog: &mut Catalog, root: &Path, layer: &LayerWrite, commit: &str) -> Result<i64, String> {
-    // RED STUB.
-    let _ = (catalog, root, layer, commit);
-    Err("RED STUB: no catch-up".into())
+    let rank = commit_rank(catalog, root, layer, commit)?;
+    let generations = layer_generations(catalog, &layer.layer)?;
+    if generations.iter().any(|(r, _)| *r == rank) {
+        return Err(format!("couche {} : le rang {rank} ({commit}) est déjà écrit", layer.layer));
+    }
+    let ceiling = generations.iter().map(|(r, _)| *r).filter(|r| *r > rank).min();
+    write_history_at(catalog, root, layer, commit, rank, ceiling)
 }
 
 /// **The duplicates at the upper edge of the gaps of a layer** (2a′-3, lot 8): rows born at a caught-up rank and retired
 /// at the next written rank, whose content that rank holds identical. Counted in the state, never collapsed.
 pub fn layer_duplicates(catalog: &Catalog, layer: &str) -> Result<usize, String> {
-    // RED STUB.
-    let _ = (catalog, layer);
-    Ok(0)
+    use crate::connection::{CypherValue, QueryParam};
+    // At the grain of a file: a `File` row born in a gap and retired at the next rank, whose content that rank holds
+    // identical.
+    let lu = catalog
+        .execute_raw_with_params(
+            &format!(
+                "MATCH (a:`{f}`), (b:`{f}`) WHERE a.{c} = $couche AND b.{c} = $couche AND a.path = b.path AND a.{j} IS NOT NULL \
+                 AND b.{d} = a.{j} AND a.content_hash = b.content_hash RETURN count(*)",
+                f = crate::code::FILE,
+                c = crate::generations::COUCHE,
+                d = crate::generations::DEPUIS,
+                j = crate::generations::JUSQU_A
+            ),
+            &[QueryParam::new("couche", CypherValue::String(layer.to_string()))],
+        )
+        .map_err(|e| e.to_string())?;
+    Ok(lu.rows.first().and_then(|r| r.first()).and_then(|v| v.as_i64()).unwrap_or(0) as usize)
 }
 
 /// **Whether a history layer still matches its ref** (2a′-3, lot 8): every written generation's commit must stand at
 /// its rank on the ref's first parent. A rewritten ref (a rebase, a forced push) makes the layer « à rebâtir », naming
 /// the ref and the lost commit.
 pub fn check_layer_history(catalog: &Catalog, root: &Path, layer: &str, refname: &str) -> Result<(), String> {
-    // RED STUB.
-    let _ = (catalog, root, layer, refname);
+    use crate::connection::{CypherValue, QueryParam};
+    let lu = catalog
+        .execute_raw_with_params(
+            &format!("MATCH (g:{}) WHERE g.couche = $couche RETURN g.rang, g.commit, g.parente_couche, g.parente_rang", crate::generations::TABLE),
+            &[QueryParam::new("couche", CypherValue::String(layer.to_string()))],
+        )
+        .map_err(|e| e.to_string())?;
+    for row in &lu.rows {
+        let (Some(rang), Some(commit)) = (row.first().and_then(|v| v.as_i64()), row.get(1).and_then(|v| v.as_str())) else { continue };
+        let parente = row.get(2).and_then(|v| v.as_str()).filter(|p| !p.is_empty());
+        let base = match (parente, row.get(3).and_then(|v| v.as_i64())) {
+            (Some(p), Some(r)) => generation_commit(catalog, p, Some(r))?,
+            _ => None,
+        };
+        let range = match &base {
+            Some(b) => format!("{b}..{refname}"),
+            None => refname.to_string(),
+        };
+        // The first parent of the ref, from its base: the commit at position `rang` (1 = just above the base).
+        let chaine = String::from_utf8_lossy(&git(root, &["rev-list", "--first-parent", "--reverse", &range])?).lines().map(str::to_string).collect::<Vec<_>>();
+        let au_rang = usize::try_from(rang - 1).ok().and_then(|i| chaine.get(i));
+        if au_rang.map(String::as_str) != Some(commit) {
+            return Err(format!(
+                "couche {layer} à rebâtir : la ref {refname} a été réécrite, le commit {commit} n'est plus au rang {rang} de sa première parente"
+            ));
+        }
+    }
     Ok(())
 }
 
