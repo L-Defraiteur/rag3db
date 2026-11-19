@@ -26,6 +26,8 @@ pub(super) fn base_with_history() -> (Catalog, Snapshot) {
     sync_source(&mut catalog, &snapshot, &SourceSyncOptions::default(), &mut |_| {}).expect("the first index");
     catalog.publier_la_generation("c1", 0).expect("publish");
     edit_file(&snapshot, Some(&mut catalog), "b.rs", &EditOp::Replace { old: "pub fn beta()".into(), new: "pub fn delta()".into() }).expect("edit");
+    // `alpha` replaced in place: same key, a new occurrence; `gamma` (c.rs) still consumes it from outside.
+    edit_file(&snapshot, Some(&mut catalog), "a.rs", &EditOp::Replace { old: "pub fn alpha() {}".into(), new: "pub fn alpha() { let _x = 1; }".into() }).expect("edit");
     (catalog, snapshot)
 }
 
@@ -45,6 +47,18 @@ pub(super) fn operators(plan: &str) -> Vec<String> {
         }
     }
     v
+}
+
+/// An edge row without its internal ids (`_id`, `_src`, `_dst`): positions in the store, not data.
+fn strip_internal_ids(row: &str) -> String {
+    let mut s = row.to_string();
+    for cle in ["_id", "_src", "_dst"] {
+        while let Some(i) = s.find(&format!("\"{cle}\": ")) {
+            let fin = s[i..].find("), ").map(|j| i + j + 3).or_else(|| s[i..].find(')').map(|j| i + j + 1)).unwrap_or(s.len());
+            s.replace_range(i..fin, "");
+        }
+    }
+    s
 }
 
 /// The rows of a query, sorted: the parity of a read does not depend on an order it does not ask for.
@@ -170,7 +184,8 @@ pub(super) fn state(catalog: &Catalog) -> Vec<String> {
     for (table, nom) in [(SCOPE, "key"), (FILE, "path")] {
         v.extend(rows(catalog, &format!("MATCH (s:`{table}`) RETURN '{table}', s._uuid, s.`{nom}`, s._couche, s._depuis, s._jusqu_a"), &[]));
     }
-    v.extend(rows(catalog, "MATCH (a)-[r]->(b) RETURN label(r), a._uuid, b._uuid", &[]));
+    // Each edge with its properties: a copy carries those of the edge it copies.
+    v.extend(rows(catalog, "MATCH (a)-[r]->(b) RETURN label(r), a._uuid, b._uuid, r", &[]).into_iter().map(|l| strip_internal_ids(&l)));
     // Every field of a generation but its publication time (a clock, different between two bases).
     v.extend(rows(
         catalog,
@@ -197,6 +212,24 @@ pub(super) fn same_write(site: &str, before: &str, after: &str, params: impl Fn(
     assert_eq!(state(&apres), state(&avant), "[{site}] the same state");
 }
 
+/// [`same_write`] for a write whose setup is done by `params` itself, on both bases alike; `changes`: whether
+/// the old write is expected to change something.
+pub(super) fn same_write_from(site: &str, before: &str, after: &str, params: &dyn Fn(&Catalog) -> Vec<crate::connection::QueryParam>, changes: bool) {
+    eprintln!("[{site}] before: {before}\n[{site}] after:  {after}");
+    let (avant, _) = base_with_history();
+    let (apres, _) = base_with_history();
+    let (pa, pb) = (params(&avant), params(&apres));
+    assert_eq!(state(&apres), state(&avant), "[{site}] the two bases start equal");
+    let depart = state(&avant);
+    let na = avant.execute_raw_with_params(before, &pa).unwrap_or_else(|e| panic!("[{site}] {before}: {e}"));
+    let nb = apres.execute_raw_with_params(after, &pb).unwrap_or_else(|e| panic!("[{site}] {after}: {e}"));
+    assert_eq!(format!("{:?}", nb.rows), format!("{:?}", na.rows), "[{site}] the same count returned");
+    if changes {
+        assert_ne!(state(&avant), depart, "[{site}] the old write changes something on the witness base");
+    }
+    assert_eq!(state(&apres), state(&avant), "[{site}] the same state");
+}
+
 /// `ecrire_la_table`: the retirement rank of given rows, set then reopened with a typed NULL.
 #[test]
 fn the_retirement_write_by_the_ir_at_parity() {
@@ -219,4 +252,72 @@ fn the_retirement_write_by_the_ir_at_parity() {
             same_write("reopen, Scope", &before, &after, |c| vec![param("uuids", fermees(c)), param("valeur", null_entier())]);
         }
     }
+}
+
+/// The pairs (replaced row, its replacement) of `Scope` at the pending rank, as `$paires` maps.
+fn replacement_pairs(catalog: &Catalog) -> (CypherValue, CypherValue) {
+    let lu = catalog
+        .execute_raw(&format!("MATCH (o:`{SCOPE}`), (n:`{SCOPE}`) WHERE o.key = n.key AND o._jusqu_a IS NOT NULL AND n._jusqu_a IS NULL AND n._depuis = o._jusqu_a RETURN o._uuid, n._uuid"))
+        .unwrap();
+    let paires = lu.rows.iter().map(|l| CypherValue::Map(BTreeMap::from([("a".to_string(), l[0].clone()), ("n".to_string(), l[1].clone())]))).collect();
+    let neuves = lu.rows.iter().map(|l| l[1].clone()).collect();
+    (CypherValue::List(paires), CypherValue::List(neuves))
+}
+
+/// `recopier_les_aretes_entrantes`: the edges of the replaced rows copied to their replacements, those that
+/// arrive (each relation into `Scope`) and the `CONSUMED_BY` mirror that leaves; outside the batch (`a.rs`).
+#[test]
+fn the_edge_copies_by_the_ir_at_parity() {
+    let (catalog, _) = base_with_history();
+    let v = catalog.generations.clone().unwrap();
+    let (paires, _) = replacement_pairs(&catalog);
+    assert!(matches!(&paires, CypherValue::List(l) if !l.is_empty()), "the witness base replaces a row in place");
+    let source = source_of(&catalog);
+    let hors_du_lot = "NOT (x.source = $lot_s0 AND x.file_path IN $lot_p0)";
+    // The old copy of the relation's properties, as the writer wrote it.
+    let copie_de = |rel: &str| -> String {
+        let props: Vec<String> = catalog.get_relation_def(rel).and_then(|r| r.properties.as_ref()).map(|m| m.keys().cloned().collect()).unwrap_or_default();
+        if props.is_empty() {
+            String::new()
+        } else {
+            format!(" {{{}}}", props.iter().map(|k| format!("`{k}`: r.`{k}`")).collect::<Vec<_>>().join(", "))
+        }
+    };
+    let mut cas: Vec<(String, String, String, rag3weaver_ir::Direction, String)> = Vec::new();
+    for (rel, from, to) in crate::code::RELATIONS {
+        if to != SCOPE || rel == "CONSUMED_BY" {
+            continue;
+        }
+        let visible = if v.tables.contains(from) { catalog.dialect_arc().condition_visible_sur("x", &v.couche, v.rang) } else { None };
+        let mut clauses: Vec<String> = visible.into_iter().collect();
+        if from == SCOPE {
+            clauses.push(hors_du_lot.to_string());
+        }
+        clauses.push(format!("NOT EXISTS {{ MATCH (x)-[:`{rel}`]->(n) }}"));
+        let before = format!("UNWIND $paires AS p MATCH (x:`{from}`)-[r:`{rel}`]->(o:`{to}` {{_uuid: p.a}}), (n:`{to}` {{_uuid: p.n}}) WHERE {} CREATE (x)-[:`{rel}`{}]->(n) RETURN count(*)", clauses.join(" AND "), copie_de(rel));
+        let after = edge_copy_write(&catalog, rel, to, from, rag3weaver_ir::Direction::Incoming, v.tables.contains(from).then_some(v.rang), usize::from(from == SCOPE)).unwrap();
+        cas.push((rel.to_string(), before, after, rag3weaver_ir::Direction::Incoming, format!("MATCH (x)-[r:`{rel}`]->(n:`{SCOPE}`) WHERE n._uuid IN $neuves DELETE r")));
+    }
+    let visible = catalog.dialect_arc().condition_visible_sur("x", &v.couche, v.rang).unwrap();
+    let before = format!("UNWIND $paires AS p MATCH (o:`{SCOPE}` {{_uuid: p.a}})-[r:CONSUMED_BY]->(x:`{SCOPE}`), (n:`{SCOPE}` {{_uuid: p.n}}) WHERE {visible} AND {hors_du_lot} AND NOT EXISTS {{ MATCH (n)-[:CONSUMED_BY]->(x) }} CREATE (n)-[:CONSUMED_BY{}]->(x) RETURN count(*)", copie_de("CONSUMED_BY"));
+    let after = edge_copy_write(&catalog, "CONSUMED_BY", SCOPE, SCOPE, rag3weaver_ir::Direction::Outgoing, Some(v.rang), 1).unwrap();
+    cas.push(("CONSUMED_BY".to_string(), before, after, rag3weaver_ir::Direction::Outgoing, format!("MATCH (n:`{SCOPE}`)-[r:CONSUMED_BY]->(x) WHERE n._uuid IN $neuves DELETE r")));
+    let mut copiees = 0;
+    for (rel, before, after, _, retirer) in cas {
+        // The copies the writer already made, undone alike on both bases: the copy has something to do.
+        let params = |c: &Catalog| {
+            let (paires, neuves) = replacement_pairs(c);
+            c.execute_raw_with_params(&retirer, &[param("neuves", neuves)]).unwrap();
+            vec![param("paires", paires), param("lot_s0", text(&source)), param("lot_p0", CypherValue::List(vec![text("a.rs")]))]
+        };
+        let (avant, _) = base_with_history();
+        let depart = state(&avant);
+        let p = params(&avant);
+        let lu = avant.execute_raw_with_params(&before, &p).unwrap();
+        let n = lu.rows.first().and_then(|l| l.first()).and_then(|x| x.as_i64()).unwrap_or(0);
+        copiees += n;
+        let _ = depart;
+        same_write_from(&format!("copy {rel}"), &before, &after, &params, n > 0);
+    }
+    assert!(copiees > 0, "the witness base has edges to copy");
 }

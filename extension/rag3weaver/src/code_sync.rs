@@ -691,23 +691,12 @@ fn recopier_les_aretes_entrantes(catalog: &mut Catalog, remplacees: &[Remplacee]
     for (source, chemin) in lot {
         par_source.entry(source.as_str()).or_default().push(CypherValue::String(chemin.clone()));
     }
-    let mut hors_du_lot = Vec::new();
     let mut params_du_lot = Vec::new();
+    let sources_du_lot = par_source.len();
     for (i, (source, chemins)) in par_source.into_iter().enumerate() {
-        hors_du_lot.push(format!("NOT (x.source = $lot_s{i} AND x.file_path IN $lot_p{i})"));
         params_du_lot.push(p(&format!("lot_s{i}"), CypherValue::String(source.to_string())));
         params_du_lot.push(p(&format!("lot_p{i}"), CypherValue::List(chemins)));
     }
-    // La clause : la visibilité de `x`, hors du lot pour un scope, et pas d'arête que l'ingestion a déjà
-    // posée vers la ligne neuve (la résolution d'un définisseur du lot la repose : témoins 3 et 17).
-    let clause = |visible: Option<String>, du_scope: bool, motif: &str| -> String {
-        let mut clauses: Vec<String> = visible.into_iter().collect();
-        if du_scope {
-            clauses.extend(hors_du_lot.iter().cloned());
-        }
-        clauses.push(format!("NOT EXISTS {{ MATCH {motif} }}"));
-        format!(" WHERE {}", clauses.join(" AND "))
-    };
     // Les paires (ligne retirée, ligne neuve) par table : une instruction par relation pour tout le lot,
     // pas une par ligne remplacée (ticket du repassage dix fois le parent).
     let mut paires: BTreeMap<String, Vec<CypherValue>> = BTreeMap::new();
@@ -721,14 +710,6 @@ fn recopier_les_aretes_entrantes(catalog: &mut Catalog, remplacees: &[Remplacee]
             ("n".to_string(), CypherValue::String(neuf)),
         ])));
     }
-    let copie_de = |catalog: &Catalog, rel: &str| -> String {
-        let props: Vec<String> = catalog.get_relation_def(rel).and_then(|r| r.properties.as_ref()).map(|m| m.keys().cloned().collect()).unwrap_or_default();
-        if props.is_empty() {
-            String::new()
-        } else {
-            format!(" {{{}}}", props.iter().map(|k| format!("`{k}`: r.`{k}`")).collect::<Vec<_>>().join(", "))
-        }
-    };
     let compte = |lu: &crate::connection::QueryResult| lu.rows.first().and_then(|l| l.first()).and_then(|x| x.as_i64()).unwrap_or(0) as usize;
     let mut recopiees = 0usize;
     for (to, liste) in paires {
@@ -741,16 +722,15 @@ fn recopier_les_aretes_entrantes(catalog: &mut Catalog, remplacees: &[Remplacee]
             if cible != to || rel == "CONSUMED_BY" {
                 continue;
             }
-            let copie = copie_de(catalog, rel);
-            let visible = if v.tables.contains(from) { catalog.dialect_arc().condition_visible_sur("x", &v.couche, v.rang) } else { None };
-            let filtre = clause(visible, from == SCOPE, &format!("(x)-[:`{rel}`]->(n)"));
+            let rang = v.tables.contains(from).then_some(v.rang);
+            let ecrire = edge_copy_write(catalog, rel, &to, from, rag3weaver_ir::Direction::Incoming, rang, if from == SCOPE { sources_du_lot } else { 0 })?;
             let mut params = vec![p("paires", liste.clone())];
             if from == SCOPE {
                 params.extend(params_du_lot.iter().cloned());
             }
             let lu = catalog
                 .execute_raw_with_params(
-                    &format!("UNWIND $paires AS p MATCH (x:`{from}`)-[r:`{rel}`]->(o:`{to}` {{_uuid: p.a}}), (n:`{to}` {{_uuid: p.n}}){filtre} CREATE (x)-[:`{rel}`{copie}]->(n) RETURN count(*)"),
+                    &ecrire,
                     &params,
                 )
                 .map_err(|e| format!("recopier les arêtes {rel} : {e}"))?;
@@ -761,13 +741,12 @@ fn recopier_les_aretes_entrantes(catalog: &mut Catalog, remplacees: &[Remplacee]
         // repose pas (l'oubli ne défait que les `CONSUMED_BY` qui arrivent aux scopes du fichier). Elle
         // suit la ligne neuve comme une entrante.
         if to == SCOPE {
-            let copie = copie_de(catalog, "CONSUMED_BY");
-            let filtre = clause(catalog.dialect_arc().condition_visible_sur("x", &v.couche, v.rang), true, "(n)-[:CONSUMED_BY]->(x)");
+            let ecrire = edge_copy_write(catalog, "CONSUMED_BY", SCOPE, SCOPE, rag3weaver_ir::Direction::Outgoing, Some(v.rang), sources_du_lot)?;
             let mut params = vec![p("paires", liste)];
             params.extend(params_du_lot.iter().cloned());
             let lu = catalog
                 .execute_raw_with_params(
-                    &format!("UNWIND $paires AS p MATCH (o:`{SCOPE}` {{_uuid: p.a}})-[r:CONSUMED_BY]->(x:`{SCOPE}`), (n:`{SCOPE}` {{_uuid: p.n}}){filtre} CREATE (n)-[:CONSUMED_BY{copie}]->(x) RETURN count(*)"),
+                    &ecrire,
                     &params,
                 )
                 .map_err(|e| format!("recopier le miroir CONSUMED_BY : {e}"))?;
@@ -1590,6 +1569,39 @@ pub(crate) fn births_read(catalog: &Catalog, table: &str, key_field: &str) -> Re
 pub(crate) fn retirement_write(catalog: &Catalog, table: &str) -> Result<String, String> {
     let marque = rag3weaver_ir::Write::Mark { table: table.to_string(), set: vec![(crate::generations::JUSQU_A.to_string(), Some("valeur".to_string()))] };
     catalog.dialect_arc().write(&marque).map_err(|e| e.to_string())
+}
+
+/// **The copy of edges to the rows that replace others** (`$paires`), kept on the other end (`other`, alias `x`) by
+/// its visibility at `visible_rank` when given and, for `batch_sources` sources of the batch, outside the batch
+/// (`$lot_s{i}`, `$lot_p{i}`): the ingestion of the batch's files sets their edges again. The relation's
+/// properties are copied with it.
+pub(crate) fn edge_copy_write(
+    catalog: &Catalog,
+    relation: &str,
+    table: &str,
+    other: &str,
+    side: rag3weaver_ir::Direction,
+    visible_rank: Option<i64>,
+    batch_sources: usize,
+) -> Result<String, String> {
+    use rag3weaver_ir::Predicate;
+    let mut conditions = Vec::new();
+    if let Some(rank) = visible_rank {
+        conditions.push(writer_visible(catalog, rank)?);
+    }
+    for i in 0..batch_sources {
+        conditions.push(Predicate::Not(Box::new(Predicate::AllOf(vec![equals("source", &format!("lot_s{i}")), among("file_path", &format!("lot_p{i}"))]))));
+    }
+    let props: Vec<String> = catalog.get_relation_def(relation).and_then(|r| r.properties.as_ref()).map(|m| m.keys().cloned().collect()).unwrap_or_default();
+    let copie = rag3weaver_ir::Write::CopyEdges {
+        relation: relation.to_string(),
+        table: table.to_string(),
+        other: other.to_string(),
+        side,
+        filter: (!conditions.is_empty()).then_some(Predicate::AllOf(conditions)),
+        props,
+    };
+    catalog.dialect_arc().write(&copie).map_err(|e| e.to_string())
 }
 
 /// The equality of `field` to the parameter `param`, for [`visible_read`].
