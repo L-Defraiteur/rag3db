@@ -586,4 +586,15 @@ PUSHER_TRAIN_MAX=1 P step > /dev/null 2>&1
 ! on_master rs-w && grep -q "^rouge	rs-w	.*test_foo.sh" "$D/pusher/inbox/author-c.txt" && [ "$(calls "$D/pass_calls")" = "$c0" ] \
   && ok "un lot rust qui casse le témoin d'un script : rendu sans passe" || ko "un lot rust qui casse le témoin d'un script : $(grep -P '\trs-w\t' "$D/pusher/log.tsv" | tail -1 | cut -f3,4)"
 rm -f "$D/outcomes.d/rs-w"
+# 37. A lot deposited again under the same id takes the rank of its first deposit (19 Nov., c7: every redeposit fell at
+# the tail, behind lots deposited hours after it), behind its parent when its parent is in the queue.
+P dequeue tk-rust > /dev/null 2>&1; P dequeue tk-mend2 > /dev/null 2>&1
+for x in rd-a rd-b rd-c; do lot $x docs/$x.md "# $x" > /dev/null; done
+P enqueue rd-a rd-a "$(git -C "$D/author" rev-parse rd-a)" docs - - - - author-a > /dev/null; sleep 1
+P enqueue rd-b rd-b "$(git -C "$D/author" rev-parse rd-b)" docs - - - - author-a > /dev/null; sleep 1
+P dequeue rd-a > /dev/null; P enqueue rd-c rd-c "$(git -C "$D/author" rev-parse rd-c)" docs - - - - author-a > /dev/null; sleep 1
+P enqueue rd-a rd-a "$(git -C "$D/author" rev-parse rd-a)" docs - - - - author-a > /dev/null
+order=$(grep -v '^#' "$D/pusher/queue.tsv" | cut -f1 | grep -E '^rd-' | paste -sd' ')
+[ "$order" = "rd-a rd-b rd-c" ] && ok "un lot redéposé reprend le rang de son premier dépôt" || ko "redéposé en queue : $order"
+for x in rd-a rd-b rd-c; do P dequeue $x > /dev/null 2>&1; done
 exit $red
