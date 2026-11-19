@@ -434,6 +434,12 @@ impl DecideNode {
         }
     }
 
+    /// **The instruction alone**, without the labels: what stays the same from one call to the next, for the
+    /// system turn of a model call (19 November 2026, « composer les invites pour le cache »).
+    fn stable_instruction(&self) -> &str {
+        if self.instruction.is_empty() { "Classe le texte qui suit, parmi les étiquettes admises données à la fin." } else { self.instruction.as_str() }
+    }
+
     fn by_decider(&self, decider: &dyn Decider, text: &str, labels: &[String]) -> Result<(String, Option<f64>), String> {
         // Un gabarit est envoyé **tel quel** : le decider complète un texte
         // brut, c'est au gabarit de porter celui de la conversation du modèle.
@@ -493,13 +499,18 @@ impl DecideNode {
             .with_response_format(ResponseFormat::strict_schema("decision", schema))
             .with_temperature(0.0)
             .with_max_tokens(self.max_tokens);
+        // **The stable comes first** (19 November 2026, « composer les invites pour le cache »): the system turn holds
+        // the instruction and the form, the same from one call to the next; the text, then the candidate labels,
+        // which change, close the user turn. A provider's cache serves only an identical prefix: with the labels in
+        // the system turn, a new set of candidates lost the whole text for the cache. A template orders its own
+        // holes.
         let turns = vec![
             Turn::system(match &self.template {
                 // Le gabarit dit déjà la tâche : le système ne dit que la forme.
                 Some(_) => format!("Réponds en JSON : {forme}."),
-                None => format!("{}\nRéponds en JSON : {forme}.", self.prompt(labels)),
+                None => format!("{}\nRéponds en JSON : {forme}.", self.stable_instruction()),
             }),
-            Turn::user(self.rendered(text, labels).unwrap_or_else(|| text.to_string())),
+            Turn::user(self.rendered(text, labels).unwrap_or_else(|| format!("{text}\n\nÉtiquettes admises : {}.", labels.join(", ")))),
         ];
         // Un puits qui s'arrête au jeton suivant si le run est annulé : l'hôte
         // qui arrête le graphe n'attend pas la fin de l'appel.
