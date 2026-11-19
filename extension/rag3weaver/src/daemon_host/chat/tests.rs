@@ -59,6 +59,64 @@ fn banc_gabarit(nom: &str, gabarit: &str, model: ChatModel, retouche: impl Fn(&m
     (d, host, manifeste.canonicalize().unwrap(), id)
 }
 
+/// **A slow tool of the chat says it waits, on the bus, once, then resumes** (ticket of 19 Nov.,
+/// « Un outil lent du chat de l'IDE ne dit pas qu'il attend », relevé par archi). The threshold is the
+/// teammate's (`teammate.tool_wait_notice_s`, 1 s here); the fake model calls `propose` while the test
+/// holds the list of propositions 2.5 s. The turn's run carries one `Waiting {cause: "tool", what:
+/// "propose"}` past the threshold, then one `Resumed`.
+#[test]
+fn a_slow_tool_of_the_chat_says_it_waits_then_resumes() {
+    let (tenir, tenu) = std::sync::mpsc::channel::<()>();
+    let (pris, attendre_pris) = std::sync::mpsc::channel::<()>();
+    let attendre_pris = Arc::new(Mutex::new(attendre_pris));
+    let model: ChatModel = {
+        let (tenir, attendre_pris) = (Arc::new(Mutex::new(tenir)), attendre_pris.clone());
+        Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let (tenir, attendre_pris) = (tenir.clone(), attendre_pris.clone());
+            let appels = Arc::new(AtomicUsize::new(0));
+            Ok(Arc::new(CallbackLlm::new("faux-modele", 8192, move |turns, opts, sink| {
+                let proposition = json!({ "files": [{ "path": "notes.md", "content": "# Une note\n" }], "reason": "une note" }).to_string();
+                let modele = match appels.fetch_add(1, Ordering::SeqCst) {
+                    0 => {
+                        tenir.lock().unwrap().send(()).unwrap();
+                        attendre_pris.lock().unwrap().recv_timeout(Duration::from_secs(10)).expect("the propositions held");
+                        MockLlm::new("").with_tool_calls(vec![(crate::declare::PROPOSE, proposition.as_str())])
+                    }
+                    _ => MockLlm::new("Proposé."),
+                };
+                modele.generate(turns, opts, sink)
+            })))
+        })
+    };
+    let (_d, host, manifeste, id) = banc_avec(model, |m| m["teammate"]["tool_wait_notice_s"] = json!(1));
+    let host = Arc::new(host);
+    let h = host.hosted(&manifeste).unwrap();
+    let mut agent = host.with_backend(&h, |b| b.bus_de_publication().subscribe(crate::events::topic::AGENT)).unwrap();
+    let teneur = {
+        let (host, h) = (host.clone(), h.clone());
+        std::thread::spawn(move || {
+            tenu.recv_timeout(Duration::from_secs(30)).expect("the model asks to hold");
+            host.with_backend(&h, |b| {
+                let _liste = b.hold_for_a_test();
+                pris.send(()).unwrap();
+                std::thread::sleep(Duration::from_millis(2500));
+            })
+            .unwrap();
+        })
+    };
+    let r = host.chat_turn(&id, "propose une note").unwrap();
+    teneur.join().unwrap();
+    let a = vider(&mut agent);
+    let run = r["run"].as_str().unwrap_or_default();
+    let attentes: Vec<&Value> = a.iter().filter(|e| e["kind"] == "Waiting").collect();
+    let reprises: Vec<&Value> = a.iter().filter(|e| e["kind"] == "Resumed").collect();
+    let kinds: Vec<&Value> = a.iter().map(|e| &e["kind"]).collect();
+    assert_eq!((attentes.len(), reprises.len()), (1, 1), "one Waiting and one Resumed : {kinds:?}");
+    assert_eq!((&attentes[0]["cause"], &attentes[0]["what"], &attentes[0]["run"]), (&json!("tool"), &json!("propose"), &json!(run)), "{}", attentes[0]);
+    assert!(attentes[0]["since_ms"].as_u64().is_some_and(|ms| ms >= 1000), "{}", attentes[0]);
+    assert!(reprises[0]["waited_ms"].as_u64().is_some_and(|ms| ms >= 2000) && reprises[0]["run"] == json!(run), "{}", reprises[0]);
+}
+
 /// Un faux modèle qui propose `notes.md` au premier appel, puis répond.
 fn qui_propose() -> ChatModel {
     let appels = Arc::new(AtomicUsize::new(0));
