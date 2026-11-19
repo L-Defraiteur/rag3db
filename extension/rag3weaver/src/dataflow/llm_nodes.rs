@@ -1086,4 +1086,62 @@ mod tests {
         node.execute(&mut ctx).unwrap();
         assert_eq!(*seen.lock().unwrap(), format!("Read.\n\n## Long\n\n{}\n[cut: 10 of 25 estimated tokens kept]", "a".repeat(40)));
     }
+
+    // ── Lot B2 (19 November 2026): the default presentation of a type ──
+
+    fn ctx_with_presentations(llm: Arc<dyn Llm>) -> NodeContext {
+        let mut s = services_with(llm);
+        let mut presentations: std::collections::HashMap<String, serde_json::Value> = std::collections::HashMap::new();
+        presentations.insert("Fiche".into(), serde_json::json!({"template": "{{ name }} — {{ about }}"}));
+        presentations.insert("Turn".into(), serde_json::json!({"form": "kv"}));
+        s.register("backend_presentations", presentations);
+        NodeContext::with_services(Arc::new(s))
+    }
+
+    fn fiche_row(name: &str, about: &str) -> serde_json::Value {
+        serde_json::json!({"uuid": "u", "score": 1.0, "entity": "Fiche", "data": {"name": name, "about": about, "state": "current"}})
+    }
+
+    fn prompt_of(instruction: &str, parts: serde_json::Value) -> String {
+        let seen = Arc::new(std::sync::Mutex::new(String::new()));
+        let mut node = LlmNodeFactory.create("n", &serde_json::json!({"instruction": instruction})).unwrap();
+        let mut ctx = ctx_with_presentations(notes_prompt(seen.clone()));
+        ctx.set_input("context", PortValue::new(parts));
+        node.execute(&mut ctx).unwrap();
+        let s = seen.lock().unwrap().clone();
+        s
+    }
+
+    /// **A typed value renders by its type's presentation** (lot B2): a row of an entity (`{entity, data}`, as a
+    /// selection returns it) without a part `format` renders by the presentation its schema declares — the same in
+    /// two prompts — and otherwise when the part declares a format. A type with no declared presentation renders its
+    /// fields as JSON with sorted keys.
+    #[test]
+    fn a_typed_value_renders_by_its_type_presentation_unless_the_part_says_otherwise() {
+        let one = prompt_of("Extract.", serde_json::json!([{"name": "f", "title": "Fiche", "value": fiche_row("Zeta", "the z")}]));
+        let two = prompt_of("Decide.", serde_json::json!([
+            {"name": "x", "title": "Other", "value": "something"},
+            {"name": "f", "title": "Fiche", "value": fiche_row("Zeta", "the z")}
+        ]));
+        assert!(one.ends_with("## Fiche\n\nZeta — the z"), "{one}");
+        assert!(two.ends_with("## Fiche\n\nZeta — the z"), "the same fiche, the same text: {two}");
+        // A list of rows: each by its presentation, a blank line between.
+        let list = prompt_of("Extract.", serde_json::json!([{"name": "f", "title": "Fiches", "value": [fiche_row("Zeta", "the z"), fiche_row("Alpha", "the a")]}]));
+        assert!(list.ends_with("## Fiches\n\nZeta — the z\n\nAlpha — the a"), "{list}");
+        // The part's format wins, on the row's fields.
+        let json = prompt_of("Extract.", serde_json::json!([{"name": "f", "title": "Fiche", "value": fiche_row("Zeta", "the z"), "format": "json"}]));
+        assert!(json.ends_with("## Fiche\n\n{\"about\":\"the z\",\"name\":\"Zeta\",\"state\":\"current\"}"), "{json}");
+        // A form by name, and a type without a presentation.
+        let turn = prompt_of("Read.", serde_json::json!([{"name": "t", "title": "Turn", "value": {"entity": "Turn", "data": {"turn": 3, "role": "user"}}}]));
+        assert!(turn.ends_with("## Turn\n\nrole: user\nturn: 3"), "{turn}");
+        let src = prompt_of("Read.", serde_json::json!([{"name": "s", "title": "Source", "value": {"entity": "Source", "data": {"titre": "t", "chemin": "c"}}}]));
+        assert!(src.ends_with("## Source\n\n{\"chemin\":\"c\",\"titre\":\"t\"}"), "{src}");
+    }
+
+    /// The `markdown` form: an object as « **key**: value » lines.
+    #[test]
+    fn the_markdown_form_renders_bold_keys() {
+        let md = prompt_of("Read.", serde_json::json!([{"name": "m", "title": "M", "value": {"b": "two", "a": 1}, "format": "markdown"}]));
+        assert!(md.ends_with("## M\n\n**a**: 1\n**b**: two"), "{md}");
+    }
 }
