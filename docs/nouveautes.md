@@ -1,5 +1,11 @@
 # Nouveautés
 
+- 19 novembre 2026 — **Une recherche qui lit les vecteurs attend aussi les vecteurs dus.** `search_code` en hybride
+  ou par le sens attend que les vecteurs de sa vue soient calculés quand c'est court (sous `search.index_wait_s`,
+  6 s par défaut). Sinon, elle répond tout de suite et dit les deux estimations à part : « index pas prêt : texte
+  environ 0 s, vecteurs environ 40 s ». En bm25 seul, elle n'attend que le texte. Sans service d'embarquement, elle
+  n'attend pas et dit pourquoi. usages, outline, read_file et grep n'attendent jamais les vecteurs.
+
 - 19 novembre 2026 — **Une fenêtre du graphe suit les outils du chat.** Ouverte sur les graphes avec `?fenetre=graphe`, elle montre le graphe de chaque outil que le tour du chat appelle, au moment où il l'appelle, et le flux l'allume nœud par nœud ; elle ne se recharge pas, et la fenêtre du dépôt ne bouge pas pour autant.
 
 - 19 novembre 2026 — Dans l'IDE, la vue d'un fichier ne garde plus l'erreur du fichier lu juste avant : passer d'un fichier absent à un fichier lisible montre ses lignes seules, sans l'alerte du premier.
