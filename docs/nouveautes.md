@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 19 novembre 2026 — **Un outil lent du chat de l'IDE dit qu'il attend.** Au-delà de `teammate.tool_wait_notice_s`, un tour du chat publie `Waiting` puis `Resumed` sur son run, comme un pas de l'équipier : la page et le terminal peuvent nommer ce qu'ils attendent.
+
 - 19 novembre 2026 — **Un tour qui attend le dit sur le flux.** Un outil qui attend au-delà de `teammate.tool_wait_notice_s`, ou un modèle que le fournisseur fait patienter, publie `Waiting` avec la cause (`tool` ou `model`), le nom de l'outil ou du modèle et le temps déjà attendu, puis `Resumed` quand il reprend. Le terminal et l'IDE peuvent ainsi nommer ce qu'ils attendent.
 - 20 novembre 2026 — **Un namespace replié ne passe plus devant la classe qu'on cherche.** Un `namespace` ou un
   `module` qui porte à lui, hors de ses lignes de structure (ouvertures, plis des conteneurs imbriqués, déclarations
