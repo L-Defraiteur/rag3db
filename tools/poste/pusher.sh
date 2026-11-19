@@ -44,6 +44,21 @@ printf 'docs/nouveautes.md merge=union\n' > "$D/attributes"
 log() { printf '%s\t%s\t%s\t%s\n' "$(date +%FT%T)" "$1" "$2" "${3:-}" >> "$LOG"; }   # <id> <event> [detail]
 # Git in English: the pusher reads its messages (19 Nov.: git spoke French at luciepc, and a conflict had no name).
 g() { LC_ALL=C git -C "$WT" "$@"; }
+# **The fetch, under a file lock shared with the passes' scripts**, retried on a ref lock (19 Nov., relevé d'archi: a
+# « cannot lock ref » when two fetches of the shared repository of luciepc crossed). Three tries, three seconds apart.
+FETCH_LOCK=${PUSHER_FETCH_LOCK:-$CACHE/git-fetch.lock}
+gfetch() {
+  local i out
+  for i in 1 2 3; do
+    out=$(flock "$FETCH_LOCK" env LC_ALL=C git -C "$WT" fetch "$@" 2>&1) && return 0
+    if echo "$out" | grep -qE 'cannot lock ref|Unable to create .*\.lock'; then
+      log fetch "verrou de ref" "essai $i : $(echo "$out" | grep -m1 -E 'cannot lock ref|\.lock')"; sleep 3
+    else
+      echo "$out" >&2; return 1
+    fi
+  done
+  return 1
+}
 queue_lines() { grep -v '^#' "$Q"; }
 in_queue() { queue_lines | awk -F'\t' -v id="$1" '$1 == id {f=1} END {exit !f}'; }
 remove_from_queue() {
@@ -74,11 +89,15 @@ enqueue() {
   [ "$kind" = rust ] && [ "$5" = - ] && { echo "refusé : un lot rust nomme son témoin (le filtre de run_e2e.sh)" >&2; return 1; }
   in_queue "$id" && { echo "refusé : l'id $id est déjà dans la file" >&2; return 1; }
   [ "$parent" = - ] || in_queue "$parent" || { echo "refusé : le parent $parent n'est pas dans la file" >&2; return 1; }
-  g fetch -q origin master "+refs/heads/$branch:refs/remotes/origin/$branch" || { echo "refusé : la branche $branch n'est pas sur origin" >&2; return 1; }
+  gfetch -q origin master "+refs/heads/$branch:refs/remotes/origin/$branch" || { echo "refusé : la branche $branch n'est pas sur origin" >&2; return 1; }
   remote=$(g rev-parse "origin/$branch")
   full=$(g rev-parse -q --verify "$head^{commit}")
   [ "$full" = "$remote" ] || { echo "refusé : la tête de $branch sur origin ($(g rev-parse --short "$remote")) n'est pas $head" >&2; return 1; }
   computed=$(kind_of "$remote") || { echo "refusé : le lot ne se lit pas contre master" >&2; return 1; }
+  # The witness's suite is SUITE_DU_TEMOIN: « lib », or the name of an e2e suite of the lot's tree (19 Nov., relevé d'ED).
+  if [ "$kind" = rust ] && [ "$6" != lib ] && ! g cat-file -e "$remote:extension/rag3weaver/tests/$6.rs" 2>/dev/null; then
+    echo "refusé : la suite du témoin « $6 » n'est ni lib ni une suite e2e du lot (extension/rag3weaver/tests/$6.rs)" >&2; return 1
+  fi
   [ "$computed" = cpp ] && { echo "refusé : le lot touche le moteur (cpp), il passe par la voie transférable ou une fenêtre" >&2; return 1; }
   [ "$computed" = "$kind" ] || { echo "refusé : le lot est $computed, pas $kind" >&2; return 1; }
   ( flock 9; printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$id" "$branch" "$full" "$kind" "$5" "$6" "$7" "$parent" "$9" >> "$Q" ) 9> "$D/queue.lock"
@@ -155,10 +174,10 @@ replay_rust() { # <id> <journals> <witness> <witness_suite> <extra_suites> → 0
 # Master, re-read after the replay: docs and scripts are pushed by the pusher itself (the guard is for a pass), under
 # `poste push`, and only if master has not moved since the repose; otherwise the lot stays in the queue, reposed next step.
 push_plain() { # <base> → 0 pushed, 1 master moved, 2 refused
-  g fetch -q origin master || return 2
+  gfetch -q origin master || return 2
   [ "$(g rev-parse FETCH_HEAD)" = "$1" ] || return 1
   poste_push git -C "$WT" push -q origin HEAD:master || return 2
-  g fetch -q origin master
+  gfetch -q origin master
   [ -z "$(g status --porcelain)" ] && [ ! -d "$(g rev-parse --git-dir)/rebase-merge" ] && [ "$(g rev-parse FETCH_HEAD)" = "$(g rev-parse HEAD)" ]
 }
 
@@ -310,7 +329,7 @@ step() {
   local -a train=() kept=() part=()
   local line id branch author refs="" n half reposed=0 late="" skipped=" "
   [ -n "$(queue_lines)" ] || { echo "file vide"; return 0; }
-  g fetch -q origin master || { log train "fetch de master refusé, rejoué au pas suivant"; return 0; }
+  gfetch -q origin master || { log train "fetch de master refusé, rejoué au pas suivant"; return 0; }
   late=$(lib_late)
   if [ -n "$late" ]; then
     [ -s "$D/lib-late" ] || log lib "en retard : $late"
@@ -331,7 +350,7 @@ step() {
     [ -z "$closed" ] && [ ${#train[@]} -lt "$TRAIN_MAX" ] || continue
     train+=("$line")
     branch=$(f_ "$line" 2)
-    g fetch -q origin "+refs/heads/$branch:refs/remotes/origin/$branch" 2>/dev/null
+    gfetch -q origin "+refs/heads/$branch:refs/remotes/origin/$branch" 2>/dev/null
     if [ -n "$sources" ] && g diff --name-only "$(g merge-base origin/master "origin/$branch" 2>/dev/null)" "origin/$branch" 2>/dev/null | grep -qxF "$sources"; then
       closed=$id; log "$id" "train fermé" "le lot change une copie du cache"
     fi
@@ -342,7 +361,7 @@ step() {
     log "$(f_ "$line" 1)" pris "$branch $(f_ "$line" 4), train de ${#train[@]}"
   done
   # shellcheck disable=SC2086
-  g fetch -q origin master $refs || { echo "fetch du train" > "$D/last-red.txt"; log train "fetch refusé, rejoué au pas suivant"; return 0; }
+  gfetch -q origin master $refs || { echo "fetch du train" > "$D/last-red.txt"; log train "fetch refusé, rejoué au pas suivant"; return 0; }
   # A branch that moved since its deposit: returned, with its children.
   for line in "${train[@]}"; do
     id=$(f_ "$line" 1); branch=$(f_ "$line" 2); author=$(f_ "$line" 9)
