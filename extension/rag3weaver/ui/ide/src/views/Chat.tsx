@@ -410,6 +410,8 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
         if (!t) return;
         dejaRepris.current = { run, seq: t.seq };
         const apres = recus.current?.run === run ? recus.current.jetons.filter((j) => j.seq > t.seq).map((j) => j.text).join("") : "";
+        // Joined: what follows comes by the stream, past `dejaRepris`; the received tokens are no longer needed.
+        recus.current = null;
         // Past the worker's bound, the gap is said, never hidden (Lucie: one must know when an information is missing).
         const texte = t.texte + (t.tronque ? " […] " : "") + apres;
         setItems((cur) => cur.map((i) => (i.kind === "message" && i.live && i.run === run ? { ...i, parts: [{ kind: "text", text: texte } as Part, ...i.parts.filter((p) => p.kind !== "text")] } : i)));
