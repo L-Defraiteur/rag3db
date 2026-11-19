@@ -1,6 +1,6 @@
 # check-manifests refuse deux gabarits de code orphelins
 
-- **État** : ouvert (19 novembre 2026)
+- **État** : fermé (19 novembre 2026, ED, sur le oui de Lucie) — sept copies effacées : `atelier/templates/backends/{code,notebook,validated-result,memory}` et `memoire-longue/backends/{code,validated-result,atelier}`. **`memoire-longue/backends/notebook` est gardé** : le backend `memory` y prend ses graphes `../notebook/graphs/put.mmd` et `get.mmd` ; la proposition du point 1 l'effaçait à tort, et le contrôle d'avant l'effacement l'a vu. Ensuite, `check-manifests` du binaire posé (72a02fdd1) : 3 arbres inscrits, 0 refusé ; l'atelier et la mémoire longue chargent ok.
 - **Famille** : produit
 - **Gravité** : du bruit. Chaque contrôle par `check-manifests` dit « REFUSÉ » pour deux arbres que rien n'ouvre, et
   un vrai refus peut s'y perdre.
