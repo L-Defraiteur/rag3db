@@ -2086,3 +2086,132 @@ fn a_report_with_errors_leaves_the_mark_and_the_slice_is_filed_again() {
     release.send(json!({ "report": { "ok": true, "errors": [] }, "archived_through_turn": 2 })).unwrap();
 }
 
+/// A fake memory that answers at once: `archive_slice` files every slice (and says its Source),
+/// `compose_restart` returns a known text; it can refuse one `put_turn`.
+struct MemoireImmediate {
+    turns: Mutex<Vec<Value>>,
+    slices: Mutex<Vec<Value>>,
+    restarts: Mutex<Vec<Value>>,
+    refuse_put_turn_once: Mutex<Option<(u64, u64)>>,
+}
+
+impl MemoireImmediate {
+    fn new() -> Arc<Self> {
+        Arc::new(MemoireImmediate { turns: Mutex::new(Vec::new()), slices: Mutex::new(Vec::new()), restarts: Mutex::new(Vec::new()), refuse_put_turn_once: Mutex::new(None) })
+    }
+}
+
+impl crate::daemon_host::rangement::Rangeur for MemoireImmediate {
+    fn put_turn(&self, _memoire: &Path, line: &Value) -> Result<Value, String> {
+        let mut refuse = self.refuse_put_turn_once.lock().unwrap();
+        if *refuse == Some((line["turn"].as_u64().unwrap_or(0), line["seq"].as_u64().unwrap_or(0))) {
+            *refuse = None;
+            return Err("the writer is busy".into());
+        }
+        self.turns.lock().unwrap().push(line.clone());
+        Ok(json!({ "written": true }))
+    }
+    fn archive_slice(&self, _memoire: &Path, args: &Value) -> Result<Value, String> {
+        self.slices.lock().unwrap().push(args.clone());
+        Ok(json!({ "ok": true, "errors": [], "archived_through_turn": args["to_turn"], "source": format!("sources/run-turns-{}-{}.md", args["from_turn"], args["to_turn"]) }))
+    }
+    fn compose_restart(&self, _memoire: &Path, args: &Value) -> Result<Value, String> {
+        self.restarts.lock().unwrap().push(args.clone());
+        Ok(json!({ "text": "RESTART CONTEXT", "tokens": 4 }))
+    }
+}
+
+fn banc_de_compaction(memory: Value, model: ChatModel) -> (tempfile::TempDir, DaemonHost, String, Arc<MemoireImmediate>) {
+    let (d, host, _m, id) = banc_avec(model, move |m| {
+        m["bilans"] = json!({ "memoire": "memoire/backend.json" });
+        m["memory"] = memory.clone();
+    });
+    let memoire = MemoireImmediate::new();
+    let host = host.with_rangeur(memoire.clone());
+    (d, host, id, memoire)
+}
+
+fn qui_repond() -> ChatModel {
+    Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> { Ok(Arc::new(MockLlm::new("an answer"))) })
+}
+
+/// **A compaction files the open slice, then the session restarts from compose_restart** (lot 2,
+/// 19 Nov 2026): the slice 1-3 is filed first, compose_restart receives its Source, the session
+/// keeps the restart context and the last turn raw, and the next turn is numbered 4.
+#[test]
+fn a_compaction_files_the_open_slice_then_restarts_from_compose_restart() {
+    let (_d, host, id, memoire) = banc_de_compaction(json!({ "slice_tokens": 1_000_000, "keep_turns": 1 }), qui_repond());
+    for q in ["first question", "second question", "third question"] {
+        host.chat_turn(&id, q).expect("a turn");
+    }
+    host.compacter_le_chat(&id).expect("the compaction");
+    let slices = memoire.slices.lock().unwrap().clone();
+    assert_eq!(slices.iter().map(|s| (s["from_turn"].clone(), s["to_turn"].clone())).collect::<Vec<_>>(), vec![(json!(1), json!(3))], "{slices:#?}");
+    let restarts = memoire.restarts.lock().unwrap().clone();
+    assert_eq!(restarts.first().map(|r| r["sources"].clone()), Some(json!(["sources/run-turns-1-3.md"])), "{restarts:#?}");
+    let etat = host.chat_state(&id).unwrap();
+    let turns = etat["turns"].as_array().cloned().unwrap_or_default();
+    let users: Vec<String> = turns.iter().filter(|t| t["role"] == "user").map(|t| t["content"].as_str().unwrap_or("").to_string()).collect();
+    assert!(users.iter().any(|u| u.contains("RESTART CONTEXT")), "the restart context: {users:?}");
+    assert!(users.iter().any(|u| u == "third question") && !users.iter().any(|u| u == "first question"), "the last turn kept raw, the others gone: {users:?}");
+    host.chat_turn(&id, "fourth question").expect("turn 4");
+    let lines = memoire.turns.lock().unwrap().clone();
+    assert!(lines.iter().any(|l| l["turn"] == 4 && l["seq"] == 0 && l["text"] == "fourth question"), "the next turn is turn 4 of the run: {lines:#?}");
+}
+
+/// **A chat turn past `memory.compact_at` of the window compacts first** (lot 2).
+#[test]
+fn a_turn_past_the_threshold_compacts_first() {
+    let (_d, host, id, memoire) = banc_de_compaction(json!({ "slice_tokens": 1_000_000, "compact_at": 0.000001 }), qui_repond());
+    host.chat_turn(&id, "first question").expect("turn 1");
+    host.chat_turn(&id, "second question").expect("turn 2");
+    assert_eq!(memoire.slices.lock().unwrap().first().map(|s| (s["from_turn"].clone(), s["to_turn"].clone())), Some((json!(1), json!(1))), "turn 2 compacted turn 1 first");
+    assert_eq!(memoire.restarts.lock().unwrap().len(), 1);
+}
+
+/// **No compaction while a turn is in flight** (lot 2).
+#[test]
+fn a_compaction_is_refused_while_a_turn_is_in_flight() {
+    let (go, wait) = std::sync::mpsc::channel::<()>();
+    let wait = Arc::new(Mutex::new(wait));
+    let model: ChatModel = Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+        let wait = wait.clone();
+        Ok(Arc::new(CallbackLlm::new("slow", 8192, move |turns, opts, sink| {
+            let _ = wait.lock().unwrap().recv_timeout(Duration::from_secs(20));
+            MockLlm::new("late").generate(turns, opts, sink)
+        })))
+    });
+    let (_d, host, id, _memoire) = banc_de_compaction(json!({ "slice_tokens": 1_000_000 }), model);
+    let host = Arc::new(host);
+    let h2 = host.clone();
+    let id2 = id.clone();
+    let tour = std::thread::spawn(move || h2.chat_turn(&id2, "a slow question"));
+    let fin = Instant::now() + Duration::from_secs(10);
+    let refus = loop {
+        match host.compacter_le_chat(&id) {
+            Err(e) if e.contains("in flight") => break e,
+            _ => {}
+        }
+        assert!(Instant::now() < fin, "the compaction is refused while the turn runs");
+        std::thread::sleep(Duration::from_millis(50));
+    };
+    go.send(()).unwrap();
+    tour.join().unwrap().expect("the turn ends");
+    assert!(refus.contains("in flight"), "{refus}");
+}
+
+/// **A put_turn refused in the middle of a turn is sent again with the next turn** (ticket of
+/// 19 Nov 2026).
+#[test]
+fn a_refused_put_turn_is_sent_again_with_the_next_turn() {
+    let (_d, host, id, memoire) = banc_de_compaction(json!({ "slice_tokens": 1_000_000 }), qui_repond());
+    *memoire.refuse_put_turn_once.lock().unwrap() = Some((1, 1));
+    host.chat_turn(&id, "first question").expect("turn 1");
+    host.chat_turn(&id, "second question").expect("turn 2");
+    let lines = memoire.turns.lock().unwrap().clone();
+    let keys: Vec<(u64, u64)> = lines.iter().map(|l| (l["turn"].as_u64().unwrap(), l["seq"].as_u64().unwrap())).collect();
+    assert!(keys.contains(&(1, 1)), "the refused answer of turn 1 goes again: {keys:?}");
+    let first_of_turn_2 = keys.iter().position(|k| *k == (2, 0)).unwrap();
+    assert!(keys.iter().position(|k| *k == (1, 1)).unwrap() < first_of_turn_2, "before turn 2: {keys:?}");
+}
+

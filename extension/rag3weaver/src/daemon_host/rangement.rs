@@ -18,6 +18,11 @@ pub trait Rangeur: Send + Sync {
     /// `archive_slice` on the memory `memoire`: `{run, from_turn, to_turn, context}`; returns
     /// `{report, archived_through_turn}`.
     fn archive_slice(&self, memoire: &Path, args: &Value) -> Result<Value, String>;
+    /// `compose_restart` on the memory `memoire`: `{sources, identity, task_fiche,
+    /// budget_tokens}`; returns `{text, tokens, …}`.
+    fn compose_restart(&self, _memoire: &Path, _args: &Value) -> Result<Value, String> {
+        Err("compose_restart: not offered by this memory".into())
+    }
 }
 
 use super::DaemonHost;
@@ -130,6 +135,11 @@ impl Rangeur for RangeurDeLHote {
 }
 
 impl DaemonHost {
+    /// **The compaction of a chat** (lot 2, 19 Nov 2026): `POST /ide/chat/compact`.
+    pub fn compacter_le_chat(&self, _backend_id: &str) -> Result<Value, String> {
+        Err("compaction: not yet".into())
+    }
+
     /// **At the end of a chat turn**: its messages go to the memory (`put_turn`); past
     /// `memory.slice_tokens` since the mark, the slice goes to the archivist in the background,
     /// one at a time per conversation. Nothing here makes the turn fail: what goes wrong is
