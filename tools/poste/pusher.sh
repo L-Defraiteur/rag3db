@@ -655,7 +655,9 @@ step() {
     else kept+=("$line"); fi
   done
   BASE=$(g rev-parse origin/master)
-  STAMP=$(date +%Y%m%d-%H%M%S)
+  # To the millisecond: two steps in the same second reposed under the same branch name, and the push of the second
+  # repose was refused (19 Nov.).
+  STAMP=$(date +%Y%m%d-%H%M%S-%3N)
   # The repose: a conflicting lot leaves the train (and the queue, with its children), the rest is reposed again.
   while :; do
     train=(); for line in "${kept[@]}"; do in_queue "$(f_ "$line" 1)" && train+=("$line"); done

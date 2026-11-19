@@ -494,7 +494,10 @@ echo mv code')
 P enqueue mv-c mv-c "$h" scripts - - - - author-b > /dev/null
 MOVE_MASTER=code P step > /dev/null 2>&1
 ! on_master mv-c && grep -q "^mv-c	" "$D/pusher/queue.tsv" && ok "master bouge en code pendant le pas : le lot reste en tête pour un rejeu" || ko "master bouge en code : le lot est parti sans rejeu"
+# The next step, in the same second: its repose goes under a name of its own, and the lot lands (19 Nov.: two steps in
+# one second reposed under the same name, the push of the second repose was refused, the lot looped).
 P step > /dev/null 2>&1
+on_master mv-c && ok "le pas suivant, dans la même seconde, repose sous un nom neuf et pousse" || ko "le pas suivant n'a pas poussé ($(grep -P '\tmv-c\t' "$D/pusher/log.tsv" | tail -1 | cut -f3))"
 
 # 31. landed.tsv keeps the declared witness and its suite of each landed lot (19 Nov., c7: for an audit of what proved it).
 h=$(lot lw-1 extension/rag3weaver/src/lw.rs 'fn lw() {}')
