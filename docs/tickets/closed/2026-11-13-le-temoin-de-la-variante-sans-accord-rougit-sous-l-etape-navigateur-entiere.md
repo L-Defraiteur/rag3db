@@ -1,6 +1,6 @@
 # Le témoin de la variante sans accord rougit sous l'étape navigateur entière, vert seul
 
-- **État** : ouvert (13 novembre 2026), relevé par arbre principal pendant la passe du lot du raccord physique.
+- **État** : fermé (19 novembre 2026, everything declarative) ; ouvert le 13 novembre 2026, relevé par arbre principal pendant la passe du lot du raccord physique.
 - **Pour** : ED (décision et reprise de commande, auteur du témoin `846829ba3`).
 - **Famille** : produit
 - **Gravité** : passe rouge sans cause dans le lot qui la joue ; une fois, sous charge.
@@ -42,3 +42,12 @@ une bulle fantôme sur un `RunStarted` arrivé après la réponse de son POST, e
 jamais à « fini ». Trouvé et corrigé par archi (`origin/chat-sans-bulle-fantome`, témoin
 `a_late_run_started_of_a_finished_turn_opens_no_ghost_bubble`, rouge sur master puis vert). Ce
 ticket se ferme quand ce lot est sur master.
+
+## Fermé le 19 novembre 2026 (ED)
+
+La condition de fermeture est remplie : le lot de la bulle fantôme est sur master (`910605dfe7`, « la page retient les
+runs finis et ignore leur RunStarted tardif », puis `b72ac099cf`), avec son témoin
+`a_late_run_started_of_a_finished_turn_opens_no_ghost_bubble` dans `src/daemon_host/ide_par_le_flux.rs`. Le même
+jour, la page a aussi cessé d'effacer un tour par une relecture tardive (lot `ed-chat-reload-epoch`, ticket du témoin
+du chat dans la page). Un nouveau rouge de la variante sous l'étape entière ouvrirait un ticket neuf, avec le journal
+de l'hôte du témoin.
