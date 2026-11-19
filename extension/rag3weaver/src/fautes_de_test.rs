@@ -35,3 +35,18 @@ pub struct FautesDeTest {
     /// **The debt read at the end of an index fails** (same ticket): the remaining debt cannot be read.
     pub debt_read: bool,
 }
+
+
+/// **A simulated death** (19 November 2026, ticket « le témoin de mort du raccord physique meurt par un signal, une fois
+/// sur dix »): **a simulated death calls no destructor.** A process that dies runs neither `atexit` handlers nor static
+/// destructors; `std::process::exit` runs both, while the engine's scheduler may still parse a query on another thread,
+/// which then jumps into a destroyed table (SIGSEGV seen in the core of the physical join's witness). Every crash point
+/// of a witness exits through here; a death by an external signal (SIGKILL from the parent) needs nothing.
+pub fn simulated_death(code: i32) -> ! {
+    #[cfg(unix)]
+    unsafe {
+        libc::_exit(code)
+    }
+    #[cfg(not(unix))]
+    std::process::exit(code)
+}

@@ -446,18 +446,15 @@ fn decide_methods_defined_elsewhere(
     for sc in analysis.scopes.iter().filter(|sc| sc.scope_type == "class" && names.contains(&sc.name)) {
         classes.entry(sc.name.clone()).or_default().insert(sc.key.clone());
     }
-    if let Some(v) = catalog.generations.clone() {
-        let visible = catalog.dialect_arc().condition_visible_sur("s", &v.couche, v.rang).ok_or("ce dialecte ne sait pas les générations")?;
+    if catalog.generations.is_some() {
         let p = |n: &str, x: CypherValue| crate::connection::QueryParam::new(n, x);
         let lu = catalog
             .execute_raw_with_params(
-                &format!(
-                    "MATCH (s:`{SCOPE}`) WHERE s.source = $src AND s.scope_type = 'class' AND s.name IN $names AND s._couche = $couche AND ({visible}) RETURN s.name, s.key, s.file_path"
-                ),
+                &visible_classes_read(catalog)?,
                 &[
                     p("src", CypherValue::String(source_id.to_string())),
+                    p("classe", CypherValue::String("class".to_string())),
                     p("names", CypherValue::List(names.iter().cloned().map(CypherValue::String).collect())),
-                    p("couche", CypherValue::String(v.couche.clone())),
                 ],
             )
             .map_err(|e| e.to_string())?;
@@ -507,6 +504,11 @@ fn write_batch_by_generations(catalog: &mut Catalog, fichiers: &[FileToWrite]) -
         })
         .collect();
     ecrire_la_table(catalog, FILE, "path", "path", &lignes_file, &mut e)?;
+    // In another layer than the backend's (2a′-3), each file written is a tombstone of its generation: the
+    // parent's rows of that file are masked under the layer's view.
+    if let Some(state) = catalog.layer_write.as_mut() {
+        state.files.extend(fichiers.iter().map(|f| f.chemin.clone()));
+    }
     Ok(e)
 }
 
@@ -526,7 +528,6 @@ fn ecrire_la_table(
         return Ok(());
     }
     let w = v.rang;
-    let visible = catalog.dialect_arc().condition_visible_sur("s", &v.couche, w).ok_or("ce dialecte ne sait pas les générations")?;
     let p = |n: &str, x: CypherValue| crate::connection::QueryParam::new(n, x);
     // Une lecture par source, pour tous les chemins du lot : les lignes rangées par chemin.
     let mut par_source: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
@@ -538,13 +539,8 @@ fn ecrire_la_table(
         let liste = CypherValue::List(chemins.iter().map(|c| CypherValue::String(c.to_string())).collect());
         let lu = catalog
             .execute_raw_with_params(
-                &format!("MATCH (s:`{table}`) WHERE s.source = $src AND s.`{champ_du_chemin}` IN $chemins AND s._couche = $couche AND (({visible}) OR s._jusqu_a = $w) RETURN s"),
-                &[
-                    p("src", CypherValue::String(source.to_string())),
-                    p("chemins", liste),
-                    p("couche", CypherValue::String(v.couche.clone())),
-                    p("w", CypherValue::Int(w)),
-                ],
+                &rows_to_compare_read(catalog, table, champ_du_chemin)?,
+                &[p("src", CypherValue::String(source.to_string())), p("chemins", liste), p("w", CypherValue::Int(w))],
             )
             .map_err(|e| e.to_string())?;
         for ligne in lu.rows {
@@ -617,7 +613,7 @@ fn ecrire_la_table(
         let liste = CypherValue::List(uuids.iter().cloned().map(CypherValue::String).collect());
         catalog
             .execute_raw_with_params(
-                &format!("UNWIND $uuids AS u MATCH (s:`{table}` {{_uuid: u}}) SET s.{} = $valeur", crate::generations::JUSQU_A),
+                &retirement_write(catalog, table)?,
                 &[p("uuids", liste), p("valeur", valeur)],
             )
             .map(|_| ())
@@ -668,7 +664,6 @@ fn completer_les_naissances(catalog: &mut Catalog, analysis: &crate::code::CodeA
             }
         }
     }
-    let visible = catalog.dialect_arc().condition_visible_sur("s", &v.couche, v.rang).ok_or("ce dialecte ne sait pas les générations")?;
     for (table, champ, cles) in [(SCOPE, "key", scopes), (FILE, "path", fichiers)] {
         if cles.is_empty() || !v.tables.contains(table) {
             continue;
@@ -676,8 +671,8 @@ fn completer_les_naissances(catalog: &mut Catalog, analysis: &crate::code::CodeA
         let liste = CypherValue::List(cles.into_iter().map(CypherValue::String).collect());
         let lu = catalog
             .execute_raw_with_params(
-                &format!("MATCH (s:`{table}`) WHERE s.`{champ}` IN $cles AND s._couche = $couche AND {visible} RETURN s.`{champ}`, s.{}", crate::generations::DEPUIS),
-                &[p("cles", liste), p("couche", CypherValue::String(v.couche.clone()))],
+                &births_read(catalog, table, champ)?,
+                &[p("cles", liste)],
             )
             .map_err(|e| e.to_string())?;
         for l in lu.rows {
@@ -701,23 +696,12 @@ fn recopier_les_aretes_entrantes(catalog: &mut Catalog, remplacees: &[Remplacee]
     for (source, chemin) in lot {
         par_source.entry(source.as_str()).or_default().push(CypherValue::String(chemin.clone()));
     }
-    let mut hors_du_lot = Vec::new();
     let mut params_du_lot = Vec::new();
+    let sources_du_lot = par_source.len();
     for (i, (source, chemins)) in par_source.into_iter().enumerate() {
-        hors_du_lot.push(format!("NOT (x.source = $lot_s{i} AND x.file_path IN $lot_p{i})"));
         params_du_lot.push(p(&format!("lot_s{i}"), CypherValue::String(source.to_string())));
         params_du_lot.push(p(&format!("lot_p{i}"), CypherValue::List(chemins)));
     }
-    // La clause : la visibilité de `x`, hors du lot pour un scope, et pas d'arête que l'ingestion a déjà
-    // posée vers la ligne neuve (la résolution d'un définisseur du lot la repose : témoins 3 et 17).
-    let clause = |visible: Option<String>, du_scope: bool, motif: &str| -> String {
-        let mut clauses: Vec<String> = visible.into_iter().collect();
-        if du_scope {
-            clauses.extend(hors_du_lot.iter().cloned());
-        }
-        clauses.push(format!("NOT EXISTS {{ MATCH {motif} }}"));
-        format!(" WHERE {}", clauses.join(" AND "))
-    };
     // Les paires (ligne retirée, ligne neuve) par table : une instruction par relation pour tout le lot,
     // pas une par ligne remplacée (ticket du repassage dix fois le parent).
     let mut paires: BTreeMap<String, Vec<CypherValue>> = BTreeMap::new();
@@ -731,17 +715,15 @@ fn recopier_les_aretes_entrantes(catalog: &mut Catalog, remplacees: &[Remplacee]
             ("n".to_string(), CypherValue::String(neuf)),
         ])));
     }
-    let copie_de = |catalog: &Catalog, rel: &str| -> String {
-        let props: Vec<String> = catalog.get_relation_def(rel).and_then(|r| r.properties.as_ref()).map(|m| m.keys().cloned().collect()).unwrap_or_default();
-        if props.is_empty() {
-            String::new()
-        } else {
-            format!(" {{{}}}", props.iter().map(|k| format!("`{k}`: r.`{k}`")).collect::<Vec<_>>().join(", "))
-        }
-    };
     let compte = |lu: &crate::connection::QueryResult| lu.rows.first().and_then(|l| l.first()).and_then(|x| x.as_i64()).unwrap_or(0) as usize;
     let mut recopiees = 0usize;
-    for (to, liste) in paires {
+    // **The pairs by parameter and by batches** (c7, 19 November 2026): never a list written in the query, and at
+    // most `LOT` pairs per statement, like the versions migration (an IN of 72 k written out was quadratic).
+    let par_lots: Vec<(String, Vec<CypherValue>)> = paires
+        .into_iter()
+        .flat_map(|(to, liste)| liste.chunks(crate::migration_des_versions::LOT).map(|l| (to.clone(), l.to_vec())).collect::<Vec<_>>())
+        .collect();
+    for (to, liste) in par_lots {
         let liste = CypherValue::List(liste);
         for (rel, from, cible) in crate::code::RELATIONS {
             // **`CONSUMED_BY` n'est pas une entrante** (témoin 18) : celui qui arrive à la ligne retirée
@@ -751,16 +733,15 @@ fn recopier_les_aretes_entrantes(catalog: &mut Catalog, remplacees: &[Remplacee]
             if cible != to || rel == "CONSUMED_BY" {
                 continue;
             }
-            let copie = copie_de(catalog, rel);
-            let visible = if v.tables.contains(from) { catalog.dialect_arc().condition_visible_sur("x", &v.couche, v.rang) } else { None };
-            let filtre = clause(visible, from == SCOPE, &format!("(x)-[:`{rel}`]->(n)"));
+            let rang = v.tables.contains(from).then_some(v.rang);
+            let ecrire = edge_copy_write(catalog, rel, &to, from, rag3weaver_ir::Direction::Incoming, rang, if from == SCOPE { sources_du_lot } else { 0 })?;
             let mut params = vec![p("paires", liste.clone())];
             if from == SCOPE {
                 params.extend(params_du_lot.iter().cloned());
             }
             let lu = catalog
                 .execute_raw_with_params(
-                    &format!("UNWIND $paires AS p MATCH (x:`{from}`)-[r:`{rel}`]->(o:`{to}` {{_uuid: p.a}}), (n:`{to}` {{_uuid: p.n}}){filtre} CREATE (x)-[:`{rel}`{copie}]->(n) RETURN count(*)"),
+                    &ecrire,
                     &params,
                 )
                 .map_err(|e| format!("recopier les arêtes {rel} : {e}"))?;
@@ -771,13 +752,12 @@ fn recopier_les_aretes_entrantes(catalog: &mut Catalog, remplacees: &[Remplacee]
         // repose pas (l'oubli ne défait que les `CONSUMED_BY` qui arrivent aux scopes du fichier). Elle
         // suit la ligne neuve comme une entrante.
         if to == SCOPE {
-            let copie = copie_de(catalog, "CONSUMED_BY");
-            let filtre = clause(catalog.dialect_arc().condition_visible_sur("x", &v.couche, v.rang), true, "(n)-[:CONSUMED_BY]->(x)");
+            let ecrire = edge_copy_write(catalog, "CONSUMED_BY", SCOPE, SCOPE, rag3weaver_ir::Direction::Outgoing, Some(v.rang), sources_du_lot)?;
             let mut params = vec![p("paires", liste)];
             params.extend(params_du_lot.iter().cloned());
             let lu = catalog
                 .execute_raw_with_params(
-                    &format!("UNWIND $paires AS p MATCH (o:`{SCOPE}` {{_uuid: p.a}})-[r:CONSUMED_BY]->(x:`{SCOPE}`), (n:`{SCOPE}` {{_uuid: p.n}}){filtre} CREATE (n)-[:CONSUMED_BY{copie}]->(x) RETURN count(*)"),
+                    &ecrire,
                     &params,
                 )
                 .map_err(|e| format!("recopier le miroir CONSUMED_BY : {e}"))?;
@@ -824,15 +804,9 @@ fn forget_edges_of_files(catalog: &mut Catalog, source_id: &str, chemins: &[Stri
     let visibilite = catalog.generations.clone();
     let mut defaire = |relation: &str, side: Direction, autre: &str| -> Result<(), String> {
         let dialecte = catalog.dialect_arc();
-        let autre_visible = visibilite
-            .as_ref()
-            .filter(|v| v.tables.contains(autre))
-            .and_then(|v| dialecte.condition_visible_sur("o", &v.couche, v.rang));
-        let Some(requete) = dialecte.detach_edges_returning(relation, SCOPE, side, &filtre).map(|q| match &autre_visible {
-            Some(c) => q.replacen(" DELETE r", &format!(" AND ({c}) DELETE r"), 1),
-            None => q,
-        }) else {
-            let ecrire = Write::Detach { relation: relation.into(), table: SCOPE.into(), side, filter: filtre.clone() };
+        let bout = edge_end_visible(visibilite.as_ref(), autre);
+        let Some(requete) = dialecte.detach_edges_returning(relation, SCOPE, side, &filtre, bout.as_ref().map(|(t, p)| (t.as_str(), p))) else {
+            let ecrire = Write::Detach { relation: relation.into(), table: SCOPE.into(), side, filter: filtre.clone(), end: bout };
             let requete = dialecte.write(&ecrire).map_err(|e| e.to_string())?;
             catalog.execute_raw_with_params(&requete, &params).map_err(|e| e.to_string())?;
             return Ok(());
@@ -1382,7 +1356,7 @@ pub fn sync_source(
             };
             report.failed += r.failed;
             // Relu et repris : le retard noté avant cette lecture tombe.
-            catalog.file_lag().done(&catalog.scope().clone(), &path, lu_a);
+            catalog.file_lag().done_in(&crate::catalog::retard::LagKey::backend(catalog.scope()), &path, lu_a);
             report.files_resumed.push(path);
             avancement.files_resumed += 1;
             avancement.files_to_resume -= 1;
@@ -1528,6 +1502,142 @@ fn prepare_full_text_for_source_sync(catalog: &mut Catalog) -> Result<Option<std
     Ok((!rebuilt.is_empty()).then_some(rebuild_started))
 }
 
+/// **A read of the rows the writer sees** (2.11, the writer by the IR): `table` kept by `conditions` and, when
+/// `rank` is given, visible at that rank of the writer's layer; returning `fields`, in the order of `order` when
+/// given. Rendered by the catalog's dialect: no raw query of the writer carries a language of its own.
+pub(crate) fn visible_read(
+    catalog: &Catalog,
+    table: &str,
+    rank: Option<i64>,
+    mut conditions: Vec<rag3weaver_ir::Predicate>,
+    fields: &[&str],
+    order: Option<&str>,
+) -> Result<String, String> {
+    if let Some(rank) = rank {
+        let v = catalog.generations.as_ref().ok_or("sans générations")?;
+        conditions.push(rag3weaver_ir::Predicate::Visible { couche: v.couche.clone(), rang: rank, mask: Default::default() });
+    }
+    let select = rag3weaver_ir::Select {
+        table: table.to_string(),
+        by_uuids: false,
+        filter: Some(rag3weaver_ir::Predicate::AllOf(conditions)),
+        returns: fields.iter().map(|f| rag3weaver_ir::Column::Node(f.to_string())).collect(),
+        order_by: order.map(|f| vec![rag3weaver_ir::OrderKey { by: rag3weaver_ir::OrderBy::Field(f.to_string()), desc: false }]).unwrap_or_default(),
+        limit: None,
+        offset: None,
+    };
+    catalog.dialect_arc().select(&select).map_err(|e| e.to_string())
+}
+
+/// **The visibility of the writer's layer at `rank`**, as a condition of the IR.
+pub(crate) fn writer_visible(catalog: &Catalog, rank: i64) -> Result<rag3weaver_ir::Predicate, String> {
+    let v = catalog.generations.as_ref().ok_or("sans générations")?;
+    Ok(rag3weaver_ir::Predicate::Visible { couche: v.couche.clone(), rang: rank, mask: Default::default() })
+}
+
+/// A read of `table` kept by every condition of `conditions`, returning `returns`, rendered by the dialect.
+pub(crate) fn rows_read(catalog: &Catalog, table: &str, conditions: Vec<rag3weaver_ir::Predicate>, returns: Vec<rag3weaver_ir::Column>) -> Result<String, String> {
+    let select = rag3weaver_ir::Select {
+        table: table.to_string(),
+        by_uuids: false,
+        filter: Some(rag3weaver_ir::Predicate::AllOf(conditions)),
+        returns,
+        order_by: Vec::new(),
+        limit: None,
+        offset: None,
+    };
+    catalog.dialect_arc().select(&select).map_err(|e| e.to_string())
+}
+
+/// The visible classes of a source (`$src`) named among `$names` (`scope_type` = `$classe`): name, key, file.
+pub(crate) fn visible_classes_read(catalog: &Catalog) -> Result<String, String> {
+    let rank = catalog.generations.as_ref().map(|v| v.rang).ok_or("sans générations")?;
+    visible_read(catalog, SCOPE, Some(rank), vec![equals("source", "src"), equals("scope_type", "classe"), among("name", "names")], &["name", "key", "file_path"], None)
+}
+
+/// The whole rows of `table` whose `path_field` is among `$chemins` in `$src`, visible at the pending rank or
+/// retired at it (`_jusqu_a` = `$w`): what the writer compares a batch with.
+pub(crate) fn rows_to_compare_read(catalog: &Catalog, table: &str, path_field: &str) -> Result<String, String> {
+    let rank = catalog.generations.as_ref().map(|v| v.rang).ok_or("sans générations")?;
+    let visible_or_retired_here = rag3weaver_ir::Predicate::AnyOf(vec![writer_visible(catalog, rank)?, equals(crate::generations::JUSQU_A, "w")]);
+    rows_read(catalog, table, vec![equals("source", "src"), among(path_field, "chemins"), visible_or_retired_here], vec![rag3weaver_ir::Column::Whole])
+}
+
+/// The key field (`key_field`) and birth rank of the visible rows of `table` whose key is among `$cles`.
+pub(crate) fn births_read(catalog: &Catalog, table: &str, key_field: &str) -> Result<String, String> {
+    let rank = catalog.generations.as_ref().map(|v| v.rang).ok_or("sans générations")?;
+    visible_read(catalog, table, Some(rank), vec![among(key_field, "cles")], &[key_field, crate::generations::DEPUIS], None)
+}
+
+/// **The retirement rank of given rows** (`$uuids`) set to `$valeur`: a rank to retire them, a typed NULL to
+/// reopen them. Rendered by the dialect as a mark.
+pub(crate) fn retirement_write(catalog: &Catalog, table: &str) -> Result<String, String> {
+    let marque = rag3weaver_ir::Write::Mark { table: table.to_string(), set: vec![(crate::generations::JUSQU_A.to_string(), Some("valeur".to_string()))] };
+    catalog.dialect_arc().write(&marque).map_err(|e| e.to_string())
+}
+
+/// **The copy of edges to the rows that replace others** (`$paires`), kept on the other end (`other`, alias `x`) by
+/// its visibility at `visible_rank` when given and, for `batch_sources` sources of the batch, outside the batch
+/// (`$lot_s{i}`, `$lot_p{i}`): the ingestion of the batch's files sets their edges again. The relation's
+/// properties are copied with it.
+pub fn edge_copy_write(
+    catalog: &Catalog,
+    relation: &str,
+    table: &str,
+    other: &str,
+    side: rag3weaver_ir::Direction,
+    visible_rank: Option<i64>,
+    batch_sources: usize,
+) -> Result<String, String> {
+    use rag3weaver_ir::Predicate;
+    let mut conditions = Vec::new();
+    if let Some(rank) = visible_rank {
+        conditions.push(writer_visible(catalog, rank)?);
+    }
+    for i in 0..batch_sources {
+        conditions.push(Predicate::Not(Box::new(Predicate::AllOf(vec![equals("source", &format!("lot_s{i}")), among("file_path", &format!("lot_p{i}"))]))));
+    }
+    let props: Vec<String> = catalog.get_relation_def(relation).and_then(|r| r.properties.as_ref()).map(|m| m.keys().cloned().collect()).unwrap_or_default();
+    let copie = rag3weaver_ir::Write::CopyEdges {
+        relation: relation.to_string(),
+        table: table.to_string(),
+        other: other.to_string(),
+        side,
+        filter: (!conditions.is_empty()).then_some(Predicate::AllOf(conditions)),
+        props,
+    };
+    catalog.dialect_arc().write(&copie).map_err(|e| e.to_string())
+}
+
+/// **The other end of a detach, kept visible at the pending rank** (witness 13: an edge towards a closed row is
+/// history): the other end's table and its visibility, when that table has generations.
+pub(crate) fn edge_end_visible(generations: Option<&crate::generations::Visibilite>, other: &str) -> Option<(String, rag3weaver_ir::Predicate)> {
+    let v = generations.filter(|v| v.tables.contains(other))?;
+    Some((other.to_string(), rag3weaver_ir::Predicate::Visible { couche: v.couche.clone(), rang: v.rang, mask: Default::default() }))
+}
+
+/// The equality of `field` to the parameter `param`, for [`visible_read`].
+fn equals(field: &str, param: &str) -> rag3weaver_ir::Predicate {
+    rag3weaver_ir::Predicate::Equals { field: field.to_string(), param: param.to_string() }
+}
+
+/// The files of a source (`$src`) visible at `rank`: path, content hash, analysis version.
+pub(crate) fn indexed_files_read(catalog: &Catalog, rank: i64) -> Result<String, String> {
+    visible_read(catalog, FILE, Some(rank), vec![equals("source", "src")], &["path", "content_hash", "analyse"], None)
+}
+
+/// The `_uuid` of the rows of `table` whose `path_field` is among `$chemins`, in the source `$src`, visible at
+/// the pending rank when the catalog has generations.
+pub(crate) fn rows_of_paths_read(catalog: &Catalog, table: &str, path_field: &str) -> Result<String, String> {
+    let rank = catalog.generations.as_ref().map(|v| v.rang);
+    visible_read(catalog, table, rank, vec![equals("source", "src"), among(path_field, "chemins")], &["_uuid"], Some("_uuid"))
+}
+
+/// The membership of `field` in the list parameter `param`, for [`visible_read`].
+fn among(field: &str, param: &str) -> rag3weaver_ir::Predicate {
+    rag3weaver_ir::Predicate::In { field: field.to_string(), param: param.to_string() }
+}
+
 /// **La synchronisation d'une source déjà indexée, sous les générations** : les fichiers retenus par
 /// paquets, puis ceux que la couche voit encore au rang en attente et que la source ne liste plus, tous
 /// par [`reingest_files_par_generations`] — l'écrivain décide, rien n'est effacé d'une génération
@@ -1547,14 +1657,10 @@ fn synchroniser_par_generations(
     catalog.note_manifestes(&manifestes).map_err(|e| e.to_string())?;
     let retenus: Vec<String> = listed.iter().filter(|p| crate::code::admission(p, None, &options.generated).is_ok()).cloned().collect();
     let v = catalog.generations.clone().ok_or("sans générations")?;
-    let visible = catalog.dialect_arc().condition_visible_sur("f", &v.couche, v.rang).ok_or("ce dialecte ne sait pas les générations")?;
     let lu = catalog
         .execute_raw_with_params(
-            &format!("MATCH (f:{FILE}) WHERE f.source = $src AND f._couche = $couche AND {visible} RETURN f.path, f.content_hash, f.analyse"),
-            &[
-                crate::connection::QueryParam::new("src", CypherValue::String(source_id.clone())),
-                crate::connection::QueryParam::new("couche", CypherValue::String(v.couche.clone())),
-            ],
+            &indexed_files_read(catalog, v.rang)?,
+            &[crate::connection::QueryParam::new("src", CypherValue::String(source_id.clone()))],
         )
         .map_err(|e| e.to_string())?;
     // Le chemin et l'empreinte indexée de chaque fichier que la couche voit au rang en attente : son
@@ -1650,7 +1756,7 @@ fn synchroniser_par_generations(
         report.failed += r.failed;
         let (lag, cell) = (catalog.file_lag(), catalog.scope().clone());
         for path in paquet {
-            lag.done(&cell, path, lu_a);
+            lag.done_in(&crate::catalog::retard::LagKey::backend(&cell), path, lu_a);
         }
         avancement.files_done += paquet.len();
         avancement.scopes_written = report.scopes_written;
@@ -1694,10 +1800,9 @@ fn lignes_visibles_des_fichiers(catalog: &Catalog, source_id: &str, chemins: &[S
         return Ok((Vec::new(), Vec::new()));
     }
     let lire = |table: &str, champ: &str| -> Result<Vec<String>, String> {
-        let visible = catalog.condition_visible("x").map(|c| format!(" AND {c}")).unwrap_or_default();
         let lu = catalog
             .execute_raw_with_params(
-                &format!("MATCH (x:`{table}`) WHERE x.source = $src AND x.`{champ}` IN $chemins{visible} RETURN x._uuid ORDER BY x._uuid"),
+                &rows_of_paths_read(catalog, table, champ)?,
                 &[
                     crate::connection::QueryParam::new("src", CypherValue::String(source_id.to_string())),
                     crate::connection::QueryParam::new("chemins", CypherValue::List(chemins.iter().map(|c| CypherValue::String(c.clone())).collect())),
@@ -1936,7 +2041,7 @@ fn synchroniser(
         {
             let (lag, cell) = (catalog.file_lag(), catalog.scope().clone());
             for path in paquet {
-                lag.done(&cell, path, lu_a);
+                lag.done_in(&crate::catalog::retard::LagKey::backend(&cell), path, lu_a);
             }
         }
         crate::ingest_profile::add("sync · paquet entier, de bout en bout", t_paquet);
@@ -2374,3 +2479,7 @@ mod registry_key_tests {
     }
 }
 
+
+#[cfg(all(test, feature = "rag3db-native"))]
+#[path = "code_sync_ir_parity_tests.rs"]
+mod ir_parity_tests;

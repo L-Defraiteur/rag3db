@@ -704,3 +704,151 @@ fn embedder_of(prepared: &PreparedBackend) -> Option<Box<dyn rag3weaver::embedde
         Err(e) => panic!("the relevé needs the manifest's embedder (set RAG3WEAVER_PARITE_NO_EMBEDDER=1 for lexical only): {e}"),
     }
 }
+
+/// The peak and current resident memory of this process, in MiB (`VmHWM`, `VmRSS`).
+fn memoire_du_processus() -> (u64, u64) {
+    let s = std::fs::read_to_string("/proc/self/status").unwrap_or_default();
+    let lire = |cle: &str| s.lines().find_map(|l| l.strip_prefix(cle)).and_then(|v| v.split_whitespace().next()).and_then(|v| v.parse::<u64>().ok()).unwrap_or(0) / 1024;
+    (lire("VmHWM:"), lire("VmRSS:"))
+}
+
+/// **The first pass of the writer on a migrated base, under the product's buffer** (ticket of 19 November 2026,
+/// « le premier passage de l'écrivain sur une base migrée remplit le tampon du moteur »): on a reflink copy of a
+/// base passed through 1b and the generations, never rewritten (`RAG3WEAVER_PARITE_BASE` and `_MANIFESTE`), the
+/// plan of the DEFINED_IN copy on one real batch, then the index the writer runs, sampled every second (the
+/// process's resident memory; the engine's buffer is inside it). Ends with the journal's last line.
+#[test]
+#[ignore]
+fn repasse_une_base_migree_sous_le_tampon_du_produit() {
+    let var = |n: &str| std::env::var_os(n);
+    let (Some(base), Some(manifeste)) = (var("RAG3WEAVER_PARITE_BASE"), var("RAG3WEAVER_PARITE_MANIFESTE")) else {
+        eprintln!("SAUTÉ repasse_une_base_migree_sous_le_tampon_du_produit : RAG3WEAVER_PARITE_BASE ou _MANIFESTE manque (une copie, jamais la base en service)");
+        return;
+    };
+    let tampon = rag3weaver::rag3db_connection::buffer_pool_choice(None);
+    eprintln!("[repassage] tampon : {tampon:?}");
+    let prepared = PreparedBackend::load(std::path::Path::new(&manifeste)).expect("le manifeste");
+    let backend = { let embedder = embedder_of(&prepared); prepared.open(Box::new(Rag3dbConnection::new(&base).expect("ouvrir la copie")), embedder) }.expect("ouvrir le backend");
+    eprintln!("[repassage] forme {:?}", rag3weaver::code::scope_form(&backend.catalog.lock().unwrap()).unwrap());
+    // The plan of the copy on one batch: the File rows of 200 paths, paired with themselves (the shape of the
+    // first pass, where every File is replaced).
+    {
+        let cat = backend.catalog.lock().unwrap();
+        let lu = cat.execute_raw("MATCH (f:File) WHERE f._jusqu_a IS NULL RETURN f._uuid, f.source, f.path LIMIT 200").unwrap();
+        let paires: Vec<rag3weaver::connection::CypherValue> = lu
+            .rows
+            .iter()
+            .map(|l| rag3weaver::connection::CypherValue::Map(std::collections::BTreeMap::from([("a".to_string(), l[0].clone()), ("n".to_string(), l[0].clone())])))
+            .collect();
+        let source = lu.rows.first().map(|l| l[1].clone()).unwrap_or(rag3weaver::connection::CypherValue::Null);
+        let chemins = rag3weaver::connection::CypherValue::List(lu.rows.iter().map(|l| l[2].clone()).collect());
+        let requete = rag3weaver::code_sync::edge_copy_write(&cat, "DEFINED_IN", "File", "Scope", rag3weaver_ir::Direction::Incoming, cat.rang_en_attente(), 1).unwrap();
+        let params = [
+            rag3weaver::connection::QueryParam::new("paires", rag3weaver::connection::CypherValue::List(paires)),
+            rag3weaver::connection::QueryParam::new("lot_s0", source),
+            rag3weaver::connection::QueryParam::new("lot_p0", chemins),
+        ];
+        let plan = cat.execute_raw_with_params(&format!("EXPLAIN {requete}"), &params).unwrap();
+        eprintln!("[repassage] la recopie DEFINED_IN : {requete}");
+        for l in &plan.rows {
+            eprintln!("{}", l.first().and_then(|v| v.as_str()).unwrap_or(""));
+        }
+    }
+    let fin = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let releve = {
+        let fin = fin.clone();
+        std::thread::spawn(move || {
+            let debut = std::time::Instant::now();
+            while !fin.load(std::sync::atomic::Ordering::SeqCst) {
+                let (pic, rss) = memoire_du_processus();
+                eprintln!("[mémoire] {:>5} s rss {rss} Mio, pic {pic} Mio", debut.elapsed().as_secs());
+                std::thread::sleep(std::time::Duration::from_secs(5));
+            }
+        })
+    };
+    let lance = backend.call("index", json!({"confirm": true})).unwrap_or_else(|e| panic!("index : {e}"));
+    let mut r = &lance;
+    while let Some(i) = r.get("result") {
+        r = i;
+    }
+    let journal = r.as_str().and_then(|t| t.lines().find_map(|l| l.strip_prefix("journal : ").map(str::to_string))).unwrap_or_else(|| panic!("le journal de l'index : {lance}"));
+    let debut = std::time::Instant::now();
+    let derniere = loop {
+        let lu = std::fs::read_to_string(&journal).unwrap_or_default();
+        let derniere = lu.lines().rev().find(|l| !l.trim().is_empty()).unwrap_or("").to_string();
+        if derniere.starts_with("indexation terminée") || derniere.starts_with("indexation échouée") || derniere.starts_with("indexation arrêtée") {
+            break derniere;
+        }
+        assert!(debut.elapsed().as_secs() < 7200, "pas fini en deux heures");
+        std::thread::sleep(std::time::Duration::from_secs(1));
+    };
+    fin.store(true, std::sync::atomic::Ordering::SeqCst);
+    releve.join().unwrap();
+    eprintln!("[repassage] en {:.0} s, pic {} Mio : {derniere}", debut.elapsed().as_secs_f64(), memoire_du_processus().0);
+    assert!(derniere.starts_with("indexation terminée"), "le premier passage de l'écrivain finit sous le tampon du produit : {derniere}");
+}
+
+/// **Forms of the edge copy, measured** (ticket of 19 November 2026): on the same copy, each candidate form of
+/// the DEFINED_IN copy runs on 2 000 real pairs inside a transaction rolled back after, with its plan's operators
+/// and the peak resident memory of the process (reset between forms through `/proc/self/clear_refs`).
+#[test]
+#[ignore]
+fn mesure_les_formes_de_la_recopie() {
+    use rag3weaver::connection::{CypherValue, QueryParam};
+    let var = |n: &str| std::env::var_os(n);
+    let (Some(base), Some(manifeste)) = (var("RAG3WEAVER_PARITE_BASE"), var("RAG3WEAVER_PARITE_MANIFESTE")) else {
+        eprintln!("SAUTÉ mesure_les_formes_de_la_recopie : RAG3WEAVER_PARITE_BASE ou _MANIFESTE manque");
+        return;
+    };
+    let prepared = PreparedBackend::load(std::path::Path::new(&manifeste)).expect("le manifeste");
+    let backend = prepared.open(Box::new(Rag3dbConnection::new(&base).expect("ouvrir la copie")), None).expect("ouvrir le backend");
+    let cat = backend.catalog.lock().unwrap();
+    let conn = cat.conn_arc();
+    let lu = cat.execute_raw("MATCH (f:File) WHERE f._jusqu_a IS NULL RETURN f._uuid, f.source, f.path LIMIT 2000").unwrap();
+    let paires = CypherValue::List(lu.rows.iter().map(|l| CypherValue::Map(std::collections::BTreeMap::from([("a".to_string(), l[0].clone()), ("n".to_string(), l[0].clone())]))).collect());
+    let source = lu.rows[0][1].clone();
+    let chemins = CypherValue::List(lu.rows.iter().map(|l| l[2].clone()).collect());
+    let visible = cat.condition_visible("x").unwrap();
+    let hors = "NOT ((x.`source` = $lot_s0) AND (x.`file_path` IN $lot_p0))";
+    let formes = [
+        ("lecture seule, par a", format!("UNWIND $paires AS p MATCH (a:`File` {{_uuid: p.a}}) MATCH (x:`Scope`)-[r:`DEFINED_IN`]->(a) WHERE {visible} AND {hors} RETURN x._uuid, p.n")),
+        ("par a puis n, NOT EXISTS", format!("UNWIND $paires AS p MATCH (a:`File` {{_uuid: p.a}}) MATCH (n:`File` {{_uuid: p.n}}) MATCH (x:`Scope`)-[r:`DEFINED_IN`]->(a) WHERE {visible} AND {hors} AND NOT EXISTS {{ MATCH (x)-[:`DEFINED_IN`]->(n) }} RETURN count(*)")),
+        ("existantes vers n", "UNWIND $paires AS p MATCH (x:`Scope`)-[:`DEFINED_IN`]->(n:`File` {_uuid: p.n}) RETURN x._uuid, p.n".to_string()),
+        // Last: its refusal makes the connection to be reopened.
+        ("aujourd'hui", rag3weaver::code_sync::edge_copy_write(&cat, "DEFINED_IN", "File", "Scope", rag3weaver_ir::Direction::Incoming, cat.rang_en_attente(), 1).unwrap()),
+    ];
+    // Pairs that copy for real: each File towards the next one, no batch excluded. The two forms that write run
+    // on them, the corrected one first (today's refusal makes the connection to be reopened).
+    let decalees = CypherValue::List(lu.rows.windows(2).map(|w| CypherValue::Map(std::collections::BTreeMap::from([("a".to_string(), w[0][0].clone()), ("n".to_string(), w[1][0].clone())]))).collect());
+    let ecrit = |entete: &str| format!("UNWIND $paires AS p {entete} WHERE {visible} AND {hors} AND NOT EXISTS {{ MATCH (x)-[:`DEFINED_IN`]->(n) }} CREATE (x)-[:`DEFINED_IN`]->(n) RETURN count(*)");
+    let formes_qui_ecrivent = [
+        ("corrigée, qui écrit", ecrit("MATCH (a:`File` {_uuid: p.a}) MATCH (n:`File` {_uuid: p.n}) MATCH (x:`Scope`)-[r:`DEFINED_IN`]->(a)")),
+        ("aujourd'hui, qui écrit", ecrit("MATCH (x:`Scope`)-[r:`DEFINED_IN`]->(a:`File` {_uuid: p.a}), (n:`File` {_uuid: p.n})")),
+    ];
+    let params_qui_ecrivent = [QueryParam::new("paires", decalees), QueryParam::new("lot_s0", source.clone()), QueryParam::new("lot_p0", CypherValue::List(vec![]))];
+    let params = [QueryParam::new("paires", paires), QueryParam::new("lot_s0", source), QueryParam::new("lot_p0", chemins)];
+    let formes: Vec<(&str, String, &[QueryParam])> = formes
+        .into_iter()
+        .filter(|(nom, _)| *nom != "aujourd'hui")
+        .map(|(n, q)| (n, q, &params[..]))
+        .chain(formes_qui_ecrivent.into_iter().map(|(n, q)| (n, q, &params_qui_ecrivent[..])))
+        .collect();
+    for (nom, requete, params) in formes {
+        let plan = conn.execute_with_params(&format!("EXPLAIN {requete}"), params).map(|r| r.rows.iter().map(|l| format!("{l:?}")).collect::<Vec<_>>().join("\n")).unwrap_or_else(|e| format!("EXPLAIN refusé : {e}"));
+        let mut ops: Vec<String> = plan.split(|c: char| !(c.is_ascii_uppercase() || c == '_')).filter(|m| m.len() >= 4 && (m.contains("SCAN") || m.contains("JOIN") || m.contains("CROSS") || m.contains("LOOKUP") || m.contains("MASK"))).map(str::to_string).collect();
+        ops.dedup();
+        let _ = std::fs::write("/proc/self/clear_refs", "5");
+        let avant = memoire_du_processus();
+        conn.execute("BEGIN TRANSACTION").unwrap();
+        let debut = std::time::Instant::now();
+        let r = conn.execute_with_params(&requete, params);
+        let ms = debut.elapsed().as_millis();
+        let _ = conn.execute("ROLLBACK");
+        let (pic, _) = memoire_du_processus();
+        let rendu = match &r {
+            Ok(q) => format!("{} lignes : {:?}", q.rows.len(), q.rows.first()),
+            Err(e) => format!("refusé : {}", e.to_string().chars().take(140).collect::<String>()),
+        };
+        eprintln!("[forme] {nom} : {ms} ms, pic {pic} Mio (avant {} Mio), {rendu}\n[forme]   accès : {ops:?}", avant.1);
+    }
+}

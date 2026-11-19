@@ -684,7 +684,8 @@ pub fn spawn(
     source: Arc<dyn FileSource>,
     bus: crate::events::EventBus,
     lag: Arc<crate::catalog::retard::Lag>,
-    cell: crate::scope::Scope,
+    // The layer this watch serves (2a′-3, lot 5b): its changes are noted in that layer's lag.
+    layer: crate::catalog::retard::LagKey,
     indexed: Option<Indexed>,
     generated: crate::generated::GeneratedPolicy,
 ) -> Result<WatchHandle, String> {
@@ -800,7 +801,7 @@ pub fn spawn(
                         .unwrap_or_default();
                     for c in changes {
                         // Le retard d'abord : une lecture qui suit l'événement le voit.
-                        lag.note(&cell, &c.path, at_ms);
+                        lag.note_in(&layer, &c.path, at_ms);
                         bus.emit(crate::events::Event::FileChanged {
                             watch: name.clone(),
                             path: c.path,

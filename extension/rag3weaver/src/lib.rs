@@ -133,6 +133,9 @@ pub mod symbol_navigation;
 /// Le code sur la synchronisation déclarée : une édition, une source entière.
 #[cfg(feature = "code")]
 pub mod code_sync;
+/// Les couches d'histoire (2a′-3, lot 3) : une génération par commit d'une branche, lue dans les objets git.
+#[cfg(feature = "code")]
+pub mod history_layers;
 #[cfg(feature = "burn-ocr")]
 pub use burn_ppocr::BurnPpOcr;
 pub mod catalog;

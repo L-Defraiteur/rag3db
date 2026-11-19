@@ -40,6 +40,14 @@ agent qui édite son propre workflow de mémoire »
 3. **Le dépassement de contexte devient une erreur typée** du client de modèle
    (`LlmError::ContextOverflow` jusqu'à l'appelant), et non plus un motif lu dans un texte.
 
+4. **Les outils de l'équipier définis par l'hôte passent au gabarit** (c7, le 19 novembre 2026,
+   par la même décision de Lucie) : `edit_plan`, `step_done`, `report`, `suggest` et
+   `send_to_session` (mode pair) sont aujourd'hui des `ToolDef` écrits en Rust dans
+   `src/daemon_host/teammate.rs`, avec leurs descriptions et le message système de l'équipier.
+   Ils deviennent des outils déclarés dans le gabarit, nom, description et paramètres compris.
+   L'hôte n'y garde que le mécanisme : écrire une ligne de boîte, finir un pas, écrire à une
+   session. Le message système de l'équipier devient une déclaration du gabarit lui aussi.
+
 ## Comment le prouver
 
 - Les témoins actuels du rangement restent verts : chat::tests, `a_slice_is_filed…`,
@@ -48,8 +56,10 @@ agent qui édite son propre workflow de mémoire »
   les appelle sans une ligne de Rust en plus.
 - `grep` ne trouve plus aucun texte de reprise ni aucun nom d'outil de mémoire dans
   `daemon_host/rangement.rs` et `chat.rs`.
+- Un gabarit de test déclare un outil d'équipier de plus, ou change la description de `report` :
+  l'équipier les voit sans une ligne de Rust en plus.
 
 ## Taille et blocage
 
-2 jours, côté hôte. Il attend le lanceur de la campagne, la chaîne des tranches et le lot B de
+2 jours pour le rangement, 1 à 2 jours de plus pour les outils de l'équipier, côté hôte. Il attend le lanceur de la campagne, la chaîne des tranches et le lot B de
 mémoire.

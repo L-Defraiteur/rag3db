@@ -44,6 +44,8 @@ pub enum Worktree {
     DuBackend,
     Tous,
     Chemin(String),
+    /// **A path pattern** (2a′-3, lot 6): `*` and `?` within a path segment, `~` expanded.
+    Pattern(String),
 }
 
 /// La parente d'une source.
@@ -95,11 +97,12 @@ pub fn declaration_du_manifeste(tracked: Option<&Value>) -> Result<Declaration, 
     };
     let objet = tracked.as_object().ok_or("tracked : un objet {root, sources} attendu")?;
     for cle in objet.keys() {
-        if cle != "root" && cle != "sources" && cle != "views" {
-            return Err(format!("tracked : clé inconnue « {cle} » (root, sources, views)"));
+        if cle != "root" && cle != "sources" && cle != "views" && cle != "writes" {
+            return Err(format!("tracked : clé inconnue « {cle} » (root, sources, views, writes)"));
         }
     }
     crate::views::view_settings(Some(tracked))?;
+    crate::views::write_settings(Some(tracked))?;
     let root = match objet.get("root") {
         None => Racine::Calculee,
         Some(Value::String(s)) if s == "computed" => Racine::Calculee,
@@ -115,6 +118,39 @@ pub fn declaration_du_manifeste(tracked: Option<&Value>) -> Result<Declaration, 
         Some(autre) => return Err(format!("tracked.sources : une liste attendue, pas {autre}")),
     };
     Ok(Declaration { root, sources })
+}
+
+/// `~` at the head of a path, expanded to `home` (the `HOME` of the process when `None` is given by the caller).
+pub(crate) fn expand_home(path: &str, home: Option<&str>) -> String {
+    let home = home.map(str::to_string).or_else(|| std::env::var("HOME").ok());
+    match (path.strip_prefix('~'), home) {
+        (Some(rest), Some(h)) if rest.is_empty() || rest.starts_with('/') => format!("{h}{rest}"),
+        _ => path.to_string(),
+    }
+}
+
+/// **A worktree's path against a pattern**: segment by segment, `*` any run of characters and `?` one character,
+/// never across a `/`. The pattern's literal head (its segments before the first wildcard) is canonicalized as the
+/// worktrees' paths are.
+fn path_matches(pattern: &str, path: &std::path::Path) -> bool {
+    let segments: Vec<&str> = pattern.split('/').collect();
+    let first_wild = segments.iter().position(|s| s.contains(['*', '?'])).unwrap_or(segments.len());
+    let head: std::path::PathBuf = segments[..first_wild].join("/").into();
+    let head = head.canonicalize().unwrap_or(head);
+    let mut wanted: Vec<String> = head.to_string_lossy().split('/').map(str::to_string).collect();
+    wanted.extend(segments[first_wild..].iter().map(|s| s.to_string()));
+    let got: Vec<String> = path.to_string_lossy().split('/').map(str::to_string).collect();
+    wanted.len() == got.len() && wanted.iter().zip(&got).all(|(p, g)| segment_matches(p.as_bytes(), g.as_bytes()))
+}
+
+fn segment_matches(p: &[u8], s: &[u8]) -> bool {
+    match (p.first(), s.first()) {
+        (None, None) => true,
+        (Some(b'*'), _) => segment_matches(&p[1..], s) || (!s.is_empty() && segment_matches(p, &s[1..])),
+        (Some(b'?'), Some(_)) => segment_matches(&p[1..], &s[1..]),
+        (Some(a), Some(b)) if a == b => segment_matches(&p[1..], &s[1..]),
+        _ => false,
+    }
 }
 
 fn lire_une_source(i: usize, v: &Value) -> Result<Source, String> {
@@ -145,7 +181,13 @@ fn lire_une_source(i: usize, v: &Value) -> Result<Source, String> {
         match r {
             "backend" => Selecteur::Worktree(Worktree::DuBackend),
             "*" => Selecteur::Worktree(Worktree::Tous),
-            chemin => Selecteur::Worktree(Worktree::Chemin(non_vide(chemin)?)),
+            chemin if chemin.contains(['*', '?', '[', ']', '{', '}']) => {
+                if chemin.contains(['[', ']', '{', '}']) {
+                    return Err(format!("{} : le motif « {chemin} » est mal formé (seuls * et ? sont admis, dans un segment de chemin)", ou("select")));
+                }
+                Selecteur::Worktree(Worktree::Pattern(expand_home(chemin, None)))
+            }
+            chemin => Selecteur::Worktree(Worktree::Chemin(expand_home(&non_vide(chemin)?, None))),
         }
     } else {
         return Err(format!("{} : « {texte} » n'a pas de préfixe connu (branch:, refs:, worktree:, commit:, tasks)", ou("select")));
@@ -271,11 +313,13 @@ pub fn resoudre_les_sources(
                             let voulu = std::path::Path::new(c).canonicalize().ok();
                             worktrees.iter().filter(|w| voulu.as_ref() == Some(&w.chemin)).collect()
                         }
+                        Worktree::Pattern(m) => worktrees.iter().filter(|w| path_matches(m, &w.chemin)).collect(),
                     };
                     let vide = choisis.is_empty().then(|| match quel {
                         Worktree::DuBackend => format!("worktree:backend : {} n'est dans aucun worktree du dépôt", worktree_du_backend.display()),
                         Worktree::Tous => "worktree:* : le dépôt n'a aucun worktree".to_string(),
                         Worktree::Chemin(c) => format!("worktree:{c} : aucun worktree du dépôt à ce chemin"),
+                        Worktree::Pattern(m) => format!("worktree:{m} : aucun worktree du dépôt ne répond à ce motif"),
                     });
                     (refs_des_worktrees(&refs, &choisis), choisis, vide)
                 }
@@ -687,6 +731,27 @@ impl Resolveur {
 /// (`COUCHE_DU_BACKEND`), posé tel quel et jamais dérivé, pour que rien de posé ne bouge.
 pub const ID_DE_LA_COUCHE_DU_BACKEND: &str = "backend";
 
+/// **A finished layer, by its name or its id** (2a′-3, lot 6b): its id and the date of its end, when the layer's card
+/// says it ended (its ref or its worktree disappeared); `None` for a live or unknown layer. A view on it is refused
+/// saying so, before any read.
+pub fn finished_layer(
+    lire_meta: &dyn Fn(&str) -> Result<Option<String>, String>,
+    depot: &str,
+    nom_ou_id: &str,
+) -> Result<Option<(String, String)>, String> {
+    let fiche = |id: &str| -> Result<Option<Value>, String> {
+        Ok(lire_meta(&format!("fiche_couche:{depot}:{id}"))?.filter(|v| !v.is_empty()).and_then(|v| serde_json::from_str(&v).ok()))
+    };
+    let par_nom = lire_meta(&format!("couche_nom:{depot}:{nom_ou_id}"))?.filter(|v| !v.is_empty());
+    let id = par_nom.unwrap_or_else(|| nom_ou_id.to_string());
+    let Some(f) = fiche(&id)? else { return Ok(None) };
+    Ok(f.get("fin").map(|fin| {
+        // An end written before its date (« true ») is said without one.
+        let quand = fin.as_str().map(str::to_string).unwrap_or_else(|| "à une date non notée".to_string());
+        (id, quand)
+    }))
+}
+
 /// **L'id d'une couche par son nom** (`couche_nom:<dépôt>:<nom>`), seulement si sa fiche est vivante
 /// (sans `fin`). `lire_meta` lit une clé de `_catalog_meta` : celle du catalogue, ou celle de
 /// l'instantané d'un appel d'outil.
@@ -774,9 +839,10 @@ pub fn identifiants_des_couches(
             out.insert(neuf, id);
         } else {
             let mut f = f.clone();
-            f["fin"] = json!(true);
+            // The date of the end, said by a view refused on it (2a′-3, lot 6b). The name keeps leading to this id
+            // until a layer of the same name is born, so that a view by name says the end too.
+            f["fin"] = json!(jiff::Zoned::now().strftime("%Y-%m-%d %H:%M %Z").to_string());
             ecrire_fiche(&id, &f)?;
-            catalog.persist_meta_key(&index(d), "").map_err(e)?;
         }
     }
     // Les naissances : l'id dérivé de la naissance, jamais celui d'une autre lignée (une fiche qui existe déjà
@@ -876,6 +942,21 @@ pub fn repo_id(racine: &std::path::Path, tracked: Option<&Value>) -> Result<Opti
         Some(i) => i.id,
         None => crate::couches::identifiant_du_depot(&depot).unwrap_or_default(),
     }))
+}
+
+/// **The tracked layers of a repository, to write** (2a′-3, lot 5c): its top-level, the resolution of its tracked
+/// sources (with the workshop's additions), and the stable id of each layer by name. `None` outside git.
+pub struct TrackedLayers {
+    pub repo: std::path::PathBuf,
+    pub resolution: Resolution,
+    pub ids: std::collections::BTreeMap<String, String>,
+}
+
+/// See [`TrackedLayers`]. The ids are born or read here, as [`ouvrir_une_tache`] does.
+pub fn tracked_layers(catalog: &crate::catalog::Catalog, racine_du_workspace: &std::path::Path, tracked: Option<&Value>) -> Result<Option<TrackedLayers>, String> {
+    let Some(c) = contexte(catalog, racine_du_workspace, tracked)? else { return Ok(None) };
+    let ids = identifiants_des_couches(catalog, &c.id, &c.backend, &c.resolution)?;
+    Ok(Some(TrackedLayers { repo: c.depot, resolution: c.resolution, ids }))
 }
 
 fn contexte(catalog: &crate::catalog::Catalog, racine: &std::path::Path, tracked: Option<&Value>) -> Result<Option<Contexte>, String> {
@@ -1255,6 +1336,30 @@ mod tests {
         (t, d)
     }
 
+    /// **Témoin 5 : the selector by path pattern** (2a′-3, lot 6). `worktree:<dir>/wt-*` takes the three worktrees,
+    /// `wt-?` the two whose name has one letter after `wt-`; a pattern that takes none is said in the state, without
+    /// refusal; a malformed pattern (a bracket) is refused naming it; `~` is expanded.
+    #[test]
+    fn the_worktree_selector_by_path_pattern() {
+        let (t, d) = depot();
+        let base = t.path().canonicalize().unwrap();
+        let choisis = |motif: &str| -> (Vec<String>, Option<String>) {
+            let decl = declaration_du_manifeste(Some(&serde_json::json!({"sources": [{"select": format!("worktree:{motif}")}]}))).expect("la déclaration");
+            let r = resoudre_les_sources(&d, &d, &[], &decl).expect("la résolution");
+            let mut noms: Vec<String> = r[0].travail.iter().map(|w| w.chemin.file_name().unwrap().to_string_lossy().into_owned()).collect();
+            noms.sort();
+            (noms, r[0].vide.clone())
+        };
+        assert_eq!(choisis(&format!("{}/wt-*", base.display())).0, vec!["wt-a", "wt-d", "wt-t1"], "wt-* does not take the three worktrees");
+        assert_eq!(choisis(&format!("{}/wt-?", base.display())).0, vec!["wt-a", "wt-d"], "wt-? does not take the two one-letter worktrees");
+        let (aucun, dit) = choisis(&format!("{}/zz-*", base.display()));
+        assert!(aucun.is_empty() && dit.as_deref().is_some_and(|v| v.contains("zz-*")), "a pattern that takes none is not said: {dit:?}");
+        let refus = declaration_du_manifeste(Some(&serde_json::json!({"sources": [{"select": format!("worktree:{}/wt-[ad]", base.display())}]})))
+            .expect_err("a malformed pattern is accepted");
+        assert!(refus.contains("wt-[ad]") && refus.contains("motif"), "the refusal does not name the pattern: {refus}");
+        assert_eq!(expand_home("~/x/wt-*", Some("/home/h")), "/home/h/x/wt-*", "~ is not expanded");
+    }
+
     fn une(select: Selecteur, work: bool) -> Declaration {
         Declaration { root: Racine::Calculee, sources: vec![source(select, Parente::Inferee, Histoire::Pointe, work)] }
     }
@@ -1625,9 +1730,17 @@ mod tests {
         assert_eq!(layer_id_by_name(&lire, "depot", "refs/heads/b").unwrap(), None, "le nom d'une couche finie mène encore à son id");
         let fiche = cat.read_meta_key(&format!("fiche_couche:depot:{a}")).unwrap().unwrap_or_default();
         assert!(fiche.contains("fin"), "la fiche de la couche effacée n'a pas sa fin : {fiche}");
+        // **Témoin 6 (2a′-3, lot 6b) : the end of a layer is said, by its name and by its id, with its date.**
+        let fin = finished_layer(&lire, "depot", "refs/heads/b").unwrap();
+        assert_eq!(fin.as_ref().map(|(id, _)| id.as_str()), Some(a.as_str()), "a finished layer is not found by its name");
+        assert!(fin.as_ref().is_some_and(|(_, quand)| quand.starts_with("20")), "the end has no date: {fin:?}");
+        assert_eq!(finished_layer(&lire, "depot", &a).unwrap(), fin, "a finished layer is not found by its id");
+        assert_eq!(finished_layer(&lire, "depot", "refs/heads/main").unwrap(), None, "a live layer is said finished");
         git(&d, &["branch", "b", "main"]);
         let recree = ids(&r);
         assert_ne!(recree["refs/heads/b"], a, "une branche recréée ailleurs a repris l'identifiant de l'ancienne");
+        assert_eq!(finished_layer(&lire, "depot", "refs/heads/b").unwrap(), None, "a name born again is said finished");
+        assert!(finished_layer(&lire, "depot", &a).unwrap().is_some(), "the old id of a name born again is no longer finished");
         // La garde d'ED : une branche effacée et une autre créée sur la même pointe, pendant qu'une ref vivante
         // (main) la porte encore, ce n'est pas un renommage : une fin et une naissance.
         let b = recree["refs/heads/b"].clone();

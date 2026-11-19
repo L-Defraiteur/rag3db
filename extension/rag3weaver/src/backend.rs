@@ -1005,6 +1005,22 @@ fn load_call_view_stack(
     requested: &crate::views::ViewRequest,
     settings: &crate::views::ViewSettings,
 ) -> Result<crate::views::ReadStack, String> {
+    // **A finished layer is refused, saying its end** (2a′-3, lot 6b), before any read: by its id it still has
+    // its generations, and would be read as if alive.
+    if let Some(root) = prepared.workspace_root() {
+        if let Some(repo) = crate::suivies::repo_id(&root, prepared.manifest.tracked.as_ref())? {
+            let read_meta = |key: &str| -> Result<Option<String>, String> {
+                let q = dialect.load_meta_by_prefix("prefix");
+                let rows = conn
+                    .execute_with_params(&q, &[crate::connection::QueryParam::new("prefix", crate::connection::CypherValue::String(key.to_string()))])
+                    .map_err(|e| format!("`view` : lecture de _catalog_meta : {e}"))?;
+                Ok(rows.rows.iter().find(|r| r.first().and_then(|k| k.as_str()) == Some(key)).and_then(|r| r.get(1)).and_then(|v| v.as_str()).map(str::to_string))
+            };
+            if let Some((_, quand)) = crate::suivies::finished_layer(&read_meta, &repo, &requested.layer)? {
+                return Err(format!("vue « {} » : couche finie le {quand} (sa ref ou son worktree a disparu)", requested.layer));
+            }
+        }
+    }
     let refusal = match crate::views::load_stack_on(conn, dialect, requested, settings) {
         Ok(pile) => return Ok(pile),
         // Seule une couche inconnue se relit par son nom ; un rang absent d'une couche connue reste un refus.
@@ -3101,6 +3117,8 @@ impl PreparedBackend {
             cell_reactions: Mutex::new(HashMap::new()),
             miroir_reacteur: Mutex::new(None),
             watches: Mutex::new(Vec::new()),
+            #[cfg(feature = "code")]
+            layer_sync: Mutex::new(None),
             components_watch: Mutex::new(None),
             propositions: Default::default(),
             reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -3729,6 +3747,9 @@ pub struct Backend {
     /// Les montres de fichiers en service ; arrêtées **avant** les réactions
     /// qu'elles nourrissent.
     watches: Mutex<Vec<crate::watch::WatchHandle>>,
+    /// The sync of the tracked layers (2a′-3, lot 5b-2), when `tracked.writes.every_ms` is declared.
+    #[cfg(feature = "code")]
+    layer_sync: Mutex<Option<crate::history_layers::LayerSyncHandle>>,
     /// La montre des composants, montée par l'aperçu de l'IDE
     /// ([`Backend::watch_components`]).
     components_watch: Mutex<Option<crate::components::a_chaud::ComponentsWatch>>,
@@ -3960,7 +3981,29 @@ impl Backend {
         // Les montres **après** les réactions : ce que leur réconciliation de
         // départ publie doit trouver la réaction à l'écoute.
         self.mount_watches()?;
+        #[cfg(feature = "code")]
+        self.mount_layer_sync()?;
         Ok(mounted)
+    }
+
+    /// **The sync of the tracked layers** (2a′-3, lot 5b-2): started when `tracked.writes.every_ms` is declared and
+    /// the backend has a working-tree workspace; stopped with the watches.
+    #[cfg(feature = "code")]
+    fn mount_layer_sync(&self) -> Result<(), String> {
+        let prepared = self.prepared();
+        let tracked = prepared.manifest.tracked.clone();
+        let settings = crate::views::write_settings(tracked.as_ref())?;
+        let Some(every) = settings.every_ms else { return Ok(()) };
+        let Some(workspace) = prepared.manifest.workspace.as_ref() else { return Ok(()) };
+        if !matches!(workspace.source, crate::backend_code::WorkspaceSource::WorkingTree) {
+            return Ok(());
+        }
+        let root = if workspace.root.is_absolute() { workspace.root.clone() } else { prepared.directory.join(&workspace.root) };
+        let mut slot = self.layer_sync.lock().unwrap_or_else(|e| e.into_inner());
+        if slot.is_none() {
+            *slot = Some(crate::history_layers::spawn_layer_sync(self.catalog.clone(), root, tracked, settings, std::time::Duration::from_millis(every)));
+        }
+        Ok(())
     }
 
     /// **Monte la réaction de miroir** si une entité déclare un fichier composé
@@ -4115,7 +4158,7 @@ impl Backend {
                     source.clone(),
                     bus.clone(),
                     lag.clone(),
-                    cell.clone(),
+                    crate::catalog::retard::LagKey::backend(&cell),
                     indexed.clone(),
                     workspace.index_gate(),
                 )?);
@@ -4131,6 +4174,10 @@ impl Backend {
         let handles: Vec<_> = self.watches.lock().unwrap_or_else(|e| e.into_inner()).drain(..).collect();
         for h in handles {
             h.stop();
+        }
+        #[cfg(feature = "code")]
+        if let Some(sync) = self.layer_sync.lock().unwrap_or_else(|e| e.into_inner()).take() {
+            sync.stop();
         }
     }
 
@@ -4655,7 +4702,13 @@ impl Backend {
         if let Some(hook) = prepared.after_hooks.get(operation) {
             if !prepared.nodes.snapshot_safe(hook.template()) { return Err("invocation refusée : crochet cible non prouvé en lecture seule".into()); }
         }
-        let scope = self.catalog.lock().map_err(|_| "catalogue cible indisponible")?.scope().clone();
+        // **The cell from the read view**, without the catalog's lock (ticket « un appel d'outil attend derrière un
+        // index sans le dire », 19 November 2026): an index holds that lock during its text phase. The lock only
+        // before a view is published.
+        let scope = match self.read_view.current() {
+            Some(vue) => vue.scope.clone(),
+            None => self.catalog.lock().map_err(|_| "catalogue cible indisponible")?.scope().clone(),
+        };
         if scope != authority.scope { return Err("invocation refusée : domaines de l'appelant et de la cible différents".into()); }
         crate::dataflow::invocation_nodes::during_parent_cancel(cancel,
             || self.call_in_on(prepared, &authority.scope, operation, arguments))
@@ -6321,7 +6374,7 @@ impl Backend {
         }
         // Le retard de l'index sur le disque : des fichiers changés pas encore
         // réindexés (la montre de fichiers).
-        if let Some(lag) = cat.file_lag().summary_in(cat.scope()) {
+        if let Some(lag) = cat.file_lag().summary_of(&crate::catalog::retard::LagKey::backend(cat.scope())) {
             etats.insert("lag".to_string(), json!({"files": lag.files, "since_ms": lag.since_ms}));
         }
         if let Some(r) = reprise {
@@ -7098,6 +7151,8 @@ mod tests {
             cell_reactions: Mutex::new(HashMap::new()),
             miroir_reacteur: Mutex::new(None),
             watches: Mutex::new(Vec::new()),
+            #[cfg(feature = "code")]
+            layer_sync: Mutex::new(None),
             components_watch: Mutex::new(None),
             propositions: Default::default(),
             reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -7535,6 +7590,8 @@ mod tests {
             cell_reactions: Mutex::new(HashMap::new()),
             miroir_reacteur: Mutex::new(None),
             watches: Mutex::new(Vec::new()),
+            #[cfg(feature = "code")]
+            layer_sync: Mutex::new(None),
             components_watch: Mutex::new(None),
             propositions: Default::default(),
             reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -8088,11 +8145,11 @@ mod tests {
         // Une cellule voisine n'a pas ce retard, et le sien ne déborde pas ici.
         let voisine = crate::scope::Scope { org: "voisine".into(), project: "p".into() };
         let lag = backend.catalog.lock().unwrap().file_lag();
-        assert_eq!(lag.summary_in(&voisine), None);
-        lag.note(&voisine, "autre.rs", 0);
+        assert_eq!(lag.summary_of(&crate::catalog::retard::LagKey::backend(&voisine)), None);
+        lag.note_in(&crate::catalog::retard::LagKey::backend(&voisine), "autre.rs", 0);
         let u = usages_de(&backend, "depart");
         assert!(u.contains("1 fichier changé"), "seul le retard de la cellule de l'appel compte : {u}");
-        lag.done(&voisine, "autre.rs", u64::MAX);
+        lag.done_in(&crate::catalog::retard::LagKey::backend(&voisine), "autre.rs", u64::MAX);
 
         // La réaction montée : l'édition suivante est réindexée, le retard tombe.
         backend.mount_reactions().unwrap();
@@ -8209,12 +8266,12 @@ mod tests {
             let cat = backend.catalog.lock().unwrap();
             (cat.file_lag(), cat.scope().clone())
         };
-        lag.note(&cell, "outils.rs", crate::catalog::retard::now_ms());
-        assert_eq!(lag.summary_in(&cell).map(|s| s.files), Some(1));
+        lag.note_in(&crate::catalog::retard::LagKey::backend(&cell), "outils.rs", crate::catalog::retard::now_ms());
+        assert_eq!(lag.summary_of(&crate::catalog::retard::LagKey::backend(&cell)).map(|s| s.files), Some(1));
         let source = backend.file_source.clone().unwrap();
         let mut cat = backend.catalog.lock().unwrap();
         crate::code_sync::sync_source(&mut cat, source.as_ref(), &Default::default(), &mut |_| {}).unwrap();
-        assert_eq!(lag.summary_in(&cell), None, "relu par la synchronisation, le retard tombe");
+        assert_eq!(lag.summary_of(&crate::catalog::retard::LagKey::backend(&cell)), None, "relu par la synchronisation, le retard tombe");
     }
 
     /// **Un fichier créé est vu** : la montre relit la liste de la source à
@@ -9053,8 +9110,8 @@ mod tests {
         }
         let catalog = open();
         let cell = catalog.scope().clone();
-        catalog.file_lag().note(&cell, "x.rs", crate::catalog::retard::now_ms());
-        assert_eq!(catalog.file_lag().estimate(&cell), Some(crate::catalog::retard::IndexEstimate { pending_files: 1, eta_ms: Some(300) }));
+        catalog.file_lag().note_in(&crate::catalog::retard::LagKey::backend(&cell), "x.rs", crate::catalog::retard::now_ms());
+        assert_eq!(catalog.file_lag().estimate_of(&crate::catalog::retard::LagKey::backend(&cell)), Some(crate::catalog::retard::IndexEstimate { pending_files: 1, eta_ms: Some(300) }));
     }
 
     /// **A read under its up-to-date view does not wait for another layer** (Lucie, 18 November 2026: « if I

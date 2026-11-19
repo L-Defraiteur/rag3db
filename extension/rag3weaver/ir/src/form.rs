@@ -414,6 +414,9 @@ pub enum Predicate {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         filter: Option<Box<Predicate>>,
     },
+    /// **The condition does not hold** (2.11, the writer by the IR): `NOT (…)` on every dialect. A NULL field
+    /// that the inner condition reads makes it neither true nor false, as in SQL and Cypher.
+    Not(Box<Predicate>),
     /// **Une condition facultative** (un Plan déclaré) : retirée au liage si
     /// l'un de ses paramètres est absent, une liste vide ou une chaîne vide.
     /// Un Plan lié n'en porte plus ; la validation la refuse.
@@ -466,6 +469,7 @@ impl Predicate {
             Predicate::Let(_) => Some("let"),
             Predicate::AnyOf(v) | Predicate::AllOf(v) => v.iter().find_map(Predicate::unresolved),
             Predicate::Through { filter: Some(f), .. } => f.unresolved(),
+            Predicate::Not(p) => p.unresolved(),
             _ => None,
         }
     }
@@ -481,7 +485,7 @@ impl Predicate {
                 out.insert(param.clone());
             }
             Predicate::Through { filter: Some(f), .. } => f.params(out),
-            Predicate::Optional(p) => p.params(out),
+            Predicate::Optional(p) | Predicate::Not(p) => p.params(out),
             Predicate::AnyOf(v) | Predicate::AllOf(v) => v.iter().for_each(|p| p.params(out)),
             Predicate::Through { filter: None, .. } | Predicate::Let(_) | Predicate::Compiled(_) | Predicate::Visible { .. } => {}
         }
@@ -506,6 +510,7 @@ impl Predicate {
             }
             // Non résolues : la validation les refuse ([`Predicate::unresolved`]).
             Predicate::Optional(p) => p.names(out),
+            Predicate::Not(p) => p.names(out),
             Predicate::Let(_) => {}
             // Une liste vide ne dit rien (`WHERE ` vide, `()`) : elle se refuse
             // comme un nom qui n'est pas un identifiant, avant le moteur.
@@ -691,8 +696,15 @@ pub enum Write {
     /// **Défaire les arêtes d'un ensemble de nœuds** : les arêtes de
     /// `relation` dont le nœud du côté `side` (`Outgoing` : la source,
     /// `Incoming` : la cible) est une ligne de `table` que `filter` retient
-    /// (sur l'alias `m`). Une instruction par relation.
-    Detach { relation: String, table: String, side: Direction, filter: Predicate },
+    /// (sur l'alias `m`). Une instruction par relation. `end`, when given: only the edges whose other end is a row
+    /// of that table that its condition keeps (the visibility of the other end, 2.11).
+    Detach { relation: String, table: String, side: Direction, filter: Predicate, end: Option<(String, Predicate)> },
+    /// **Copy the edges of replaced rows to their replacements**: for each pair of `$paires` (`a`: a replaced row
+    /// of `table`, `n`: the row that replaces it), each edge of `relation` between the replaced row and a row of
+    /// `other` that `filter` keeps (on the alias `m`) is copied to the replacement with its `props`, unless the
+    /// replacement already has it. `side`: `Incoming` for the edges that arrive at the replaced row, `Outgoing`
+    /// for those that leave it. Returns the number of edges copied.
+    CopyEdges { relation: String, table: String, other: String, side: Direction, filter: Option<Predicate>, props: Vec<String> },
 }
 
 /// Ce qu'un [`Write::Load`] remplit.
@@ -741,9 +753,26 @@ impl Write {
                 noms.extend([relation.as_str(), ends.0.as_str(), ends.1.as_str()]);
                 noms.extend(props.iter().map(String::as_str));
             }
-            Write::Detach { relation, table, filter, .. } => {
+            Write::CopyEdges { relation, table, other, filter, props, .. } => {
+                let mut du_filtre = Vec::new();
+                if let Some(f) = filter {
+                    f.names(&mut du_filtre);
+                }
+                let mut tous: Vec<&str> = vec![relation, table, other];
+                tous.extend(props.iter().map(String::as_str));
+                tous.extend(du_filtre.iter().map(String::as_str));
+                return match tous.into_iter().find(|n| !crate::is_valid_identifier(n)) {
+                    Some(n) => Err(TranslateError::Invalid(format!("écriture : « {n} » n'est pas un identifiant"))),
+                    None => Ok(()),
+                };
+            }
+            Write::Detach { relation, table, filter, end, .. } => {
                 let mut du_filtre = Vec::new();
                 filter.names(&mut du_filtre);
+                if let Some((autre, condition)) = end {
+                    du_filtre.push(autre.clone());
+                    condition.names(&mut du_filtre);
+                }
                 let mut tous: Vec<&str> = vec![relation, table];
                 tous.extend(du_filtre.iter().map(String::as_str));
                 return match tous.into_iter().find(|n| !crate::is_valid_identifier(n)) {

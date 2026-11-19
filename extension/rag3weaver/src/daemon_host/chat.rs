@@ -317,7 +317,7 @@ impl DaemonHost {
 
     /// **Le modèle de langage du chat d'un backend** : celui qu'a choisi sa tâche, s'il est une tâche
     /// qui en a choisi un (lot tty-14), sinon le modèle par défaut.
-    fn llm_du_chat(&self, manifest: &Path, prepared: &crate::backend::PreparedBackend) -> Result<Arc<dyn crate::llm::Llm>, String> {
+    pub(super) fn llm_du_chat(&self, manifest: &Path, prepared: &crate::backend::PreparedBackend) -> Result<Arc<dyn crate::llm::Llm>, String> {
         let choix = self.taches.lock().unwrap_or_else(|p| p.into_inner()).get(manifest).and_then(|t| t.modele.clone());
         match choix {
             Some(nom) => {

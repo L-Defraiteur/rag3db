@@ -13,6 +13,8 @@ unset $(compgen -e | grep '^PUSHER_')
 D=$(mktemp -d); trap 'rm -rf "$D"' EXIT
 # Git speaks French at luciepc (19 Nov.: « CONFLIT », and a filter on « CONFLICT » named no conflict).
 export LANG=fr_FR.UTF-8 LC_ALL=fr_FR.UTF-8
+# The submodule case clones a file:// submodule, which git refuses by default.
+export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=protocol.file.allow GIT_CONFIG_VALUE_0=always
 red=0
 ok() { echo "vert   $1"; }
 ko() { echo "ROUGE  $1"; red=1; }
@@ -65,6 +67,8 @@ cat > "$D/pass.sh" <<'P'
 #!/bin/bash
 echo "$*" >> "$PASS_CALLS"
 echo "${SUITES_EN_PLUS:-}" >> "$PASS_ENV"
+# The codeparsers it plays with, when the worktree has the submodule (19 Nov.: the pass played the old pointer).
+[ -e "$PUSHER_WORKSPACES/$1/extension/rag3weaver/codeparsers/.git" ] && echo "$2 $(git -C "$PUSHER_WORKSPACES/$1/extension/rag3weaver/codeparsers" rev-parse HEAD)" >> "$PASS_SUB"
 J=$PUSHER_JOURNALS_ROOT/$2; mkdir -p "$J"
 echo "commit $(git -C "$PUSHER_WORKSPACES/$1" rev-parse HEAD) ; lib 0000000001" > "$J/resume.log"
 echo "RAG3DB_LIB=rag3db-build-$(printf '%040d' 1)-Release" > "$J/lib.log"
@@ -90,6 +94,7 @@ if [ "$1" = --code-apporte ]; then exec bash "$REAL_GUARD" "$@"; fi
 echo "$*" >> "$GUARD_CALLS"
 cd "$PUSHER_WORKSPACES/$1" || exit 1
 tail -1 "$PUSHER_JOURNALS_ROOT/$2/resume.log" | grep -qx VERT || { echo "ARRÊT : la passe n'est pas VERTE"; exit 1; }
+[ -z "$(git status --porcelain)" ] || { echo "ARRÊT : arbre sale"; exit 1; }
 if [ -n "${PRE_PUSH:-}" ]; then ${PRE_PUSH} "$(git rev-parse HEAD)" || echo "PR absente : le crochet PRE_PUSH a rendu $?"; fi
 [ -e "${GUARD_REFUSE:-/nonexistent}" ] && { echo "ARRÊT : push refusé"; exit 1; }
 git push -q origin HEAD:master || { echo "ARRÊT : push refusé"; exit 1; }
@@ -112,7 +117,7 @@ Q
 chmod +x "$D/poste.sh"
 export ORIGIN=$D/origin.git PUSHER_PIN_SCRIPT=pin.sh PUSHER_FETCH_LOCK=$D/fetch.lock PUSHER_CACHE=$D/cache PUSHER_PEERS= PUSHER_DIR=$D/pusher PUSHER_WORKSPACES=$D/ws PUSHER_WT_NAME=wt PUSHER_JOURNALS_ROOT=$D/journals \
   PUSHER_PASS=$D/pass.sh PUSHER_GUARD=$D/guard.sh PUSHER_POSTE=$D/poste.sh PUSHER_MASTER_HELD=$D/master-tenu \
-  REAL_GUARD=$HERE/push_garde.sh OUTCOMES=$D/outcomes PASS_CALLS=$D/pass_calls GUARD_CALLS=$D/guard_calls PASS_ENV=$D/pass_env OUTCOMES_DIR=$D/outcomes.d PASS_TIMES=$D/pass_times POSTE_VOIES=$D/poste_voies
+  REAL_GUARD=$HERE/push_garde.sh OUTCOMES=$D/outcomes PASS_CALLS=$D/pass_calls GUARD_CALLS=$D/guard_calls PASS_ENV=$D/pass_env OUTCOMES_DIR=$D/outcomes.d PASS_TIMES=$D/pass_times POSTE_VOIES=$D/poste_voies PASS_SUB=$D/pass_sub
 : > "$D/outcomes"; : > "$D/pass_calls"; : > "$D/guard_calls"
 # The gh double (one pull request per lot, 19 Nov.): notes each call, and each --body apart; $GH_DOWN existing makes
 # every call fail. A pull request it creates is numbered from 41.
@@ -517,4 +522,79 @@ P enqueue lw-1 lw-1 "$h" rust lw_witness e2e_code - - author-c > /dev/null; echo
 P step > /dev/null 2>&1
 awk -F'\t' '$1 == "lw-1" && $4 == "lw_witness" && $5 == "e2e_code" {f = 1} END {exit !f}' "$D/pusher/landed.tsv" \
   && ok "landed.tsv garde le témoin déclaré et sa suite" || ko "landed.tsv sans le témoin : $(grep '^lw-1' "$D/pusher/landed.tsv")"
+# 33. A lot that moves the codeparsers submodule's pointer (19 Nov., parent-cache): the pass plays the lot's pointer, the
+# guard sees a clean tree, and the pull request of the previous step's docs lot is never closed by this step.
+git init -q -b master "$D/sub" && git -C "$D/sub" config user.email t@t && git -C "$D/sub" config user.name t
+echo v1 > "$D/sub/p.rs" && git -C "$D/sub" add -A && git -C "$D/sub" commit -qm c1 && c1=$(git -C "$D/sub" rev-parse HEAD)
+echo v2 > "$D/sub/p.rs" && git -C "$D/sub" commit -qam c2 && c2=$(git -C "$D/sub" rev-parse HEAD)
+git -C "$D/sub" checkout -q "$c1"
+( cd "$D/author" && git fetch -q origin && git checkout -q -B sub-base origin/master && git submodule add -q "$D/sub" extension/rag3weaver/codeparsers \
+  && git -C extension/rag3weaver/codeparsers checkout -q "$c1" && git add -A && git commit -qm "the submodule" && git push -q origin HEAD:master )
+# The pusher's worktree has the submodule at master's pointer, as at luciepc.
+git -C "$D/ws/wt" fetch -q origin && git -C "$D/ws/wt" checkout -q -f origin/master && git -C "$D/ws/wt" submodule update -q --init
+h=$(lot sub-docs docs/sub.md '# sub'); P enqueue sub-docs sub-docs "$h" docs - - - - author-a > /dev/null; P step > /dev/null 2>&1
+dpr=$(grep -P '\tsub-docs\tPR [0-9]+ ouverte' "$D/pusher/log.tsv" | tail -1 | cut -f3 | awk '{print $2}')
+( cd "$D/author" && git fetch -q origin && git checkout -q -B sub-bump origin/master && git submodule update -q --init \
+  && git -C extension/rag3weaver/codeparsers fetch -q origin && git -C extension/rag3weaver/codeparsers checkout -q "$c2" \
+  && git add extension/rag3weaver/codeparsers && git commit -qm sub-bump && git push -q origin HEAD:sub-bump )
+h=$(git -C "$D/author" rev-parse sub-bump)
+P enqueue sub-bump sub-bump "$h" rust some_witness e2e_code - - author-c > /dev/null; echo VERT > "$D/outcomes.d/sub-bump"
+P step > /dev/null 2>&1
+played=$(awk '$1 ~ /-sub-bump/ {print $2}' "$D/pass_sub" | tail -1)
+[ "$played" = "$c2" ] && ok "un lot qui bouge le pointeur du sous-module : la passe joue son codeparsers" || ko "la passe a joué le codeparsers $played, pas celui du lot ($c2)"
+on_master sub-bump && ok "le lot du sous-module poussé, la garde voit un arbre propre" || ko "le lot du sous-module rendu : $(grep -P '\tsub-bump\t' "$D/pusher/log.tsv" | tail -1 | cut -f3,4)"
+[ -n "$dpr" ] && ! grep -q "^pr close $dpr " "$D/gh_calls" && ok "la PR du lot de docs du pas d'avant n'est jamais fermée par ce pas" || ko "la PR $dpr du pas d'avant visée par une fermeture"
+# 34. The tickets' headers (19 Nov., c7): master carries check_tickets.py; a docs lot whose ticket says « corrigé » outside
+# closed/ is returned with the refusal; with master red at check_tickets, a docs lot that does not mend it waits behind
+# the next lot, the lot that mends it lands, and the waiting one lands after.
+tk() { printf '# %s\n\n- **État** : %s\n- **Famille** : produit\n- **Gravité** : faible\n- **Atteignable en service** : non\n- **Touche rag3weaver** : non\n' "$1" "$2"; }
+( cd "$D/author" && git fetch -q origin && git checkout -q -B tk-base origin/master && mkdir -p extension/rag3weaver/scripts docs/s/tickets docs/tickets/closed && touch docs/tickets/closed/.keep \
+  && cp "$HERE/../../extension/rag3weaver/scripts/check_tickets.py" extension/rag3weaver/scripts/ && tk un ouvert > docs/s/tickets/un.md \
+  && git add -A && git commit -qm "check_tickets" && git push -q origin HEAD:master )
+( cd "$D/author" && python3 extension/rag3weaver/scripts/check_tickets.py . > /dev/null ) && ok "master du témoin vert à check_tickets" || ko "master du témoin déjà rouge à check_tickets"
+h=$(lot tk-bad docs/s/tickets/deux.md "$(tk deux corrigé)")
+P enqueue tk-bad tk-bad "$h" docs - - - - author-a > /dev/null; P step > /dev/null 2>&1
+! on_master tk-bad && grep -q "^rouge	tk-bad	.*check_tickets" "$D/pusher/inbox/author-a.txt" && ok "un ticket « corrigé » hors closed/ : le lot rendu avec le refus" || ko "le lot au ticket faux : $(grep -P '\ttk-bad\t' "$D/pusher/log.tsv" | tail -1 | cut -f3,4)"
+# master made red by another way, then a docs lot that does not mend it, and one that does
+( cd "$D/author" && git fetch -q origin && git checkout -q -B tk-red origin/master && tk trois corrigé > docs/s/tickets/trois.md && git add -A && git commit -qm "red tickets" && git push -q origin HEAD:master )
+h1=$(lot tk-wait docs/other.md '# other'); P enqueue tk-wait tk-wait "$h1" docs - - - - author-a > /dev/null
+h2=$(lot tk-mend docs/s/tickets/trois.md "$(tk trois ouvert)"); P enqueue tk-mend tk-mend "$h2" docs - - - - author-a > /dev/null
+PUSHER_IDLE=0 PUSHER_TRAIN_MAX=1 P step > /dev/null 2>&1
+w1=$(on_master tk-wait && echo poussé || echo attend)
+PUSHER_IDLE=0 PUSHER_TRAIN_MAX=1 P step > /dev/null 2>&1; PUSHER_IDLE=0 PUSHER_TRAIN_MAX=1 P step > /dev/null 2>&1
+[ "$w1" = attend ] && ! grep -q "^rouge	tk-wait	" "$D/pusher/inbox/author-a.txt" && ok "master rouge à check_tickets : le lot qui ne le répare pas attend, sans être rendu" || ko "master rouge : le lot qui ne répare pas est $w1"
+on_master tk-mend && on_master tk-wait && ok "le lot qui répare atterrit, puis celui qui attendait" || ko "après la réparation : tk-mend $(on_master tk-mend && echo poussé || echo absent), tk-wait $(on_master tk-wait && echo poussé || echo absent)"
+# 35. Master red at check_tickets (19 Nov., c7: two Rust trains replayed twenty minutes to go red on the tickets): a Rust
+# lot is not taken, the docs lot that mends master lands, then the Rust lot is replayed and lands.
+( cd "$D/author" && git fetch -q origin && git checkout -q -B tk-red2 origin/master && tk quatre corrigé > docs/s/tickets/quatre.md && git add -A && git commit -qm "red tickets 2" && git push -q origin HEAD:master )
+hr=$(lot tk-rust extension/rag3weaver/src/tkr.rs 'fn tkr() {}'); P enqueue tk-rust tk-rust "$hr" rust some_witness e2e_code - - author-c > /dev/null
+hm=$(lot tk-mend2 docs/s/tickets/quatre.md "$(tk quatre ouvert)"); P enqueue tk-mend2 tk-mend2 "$hm" docs - - - - author-a > /dev/null
+echo VERT > "$D/outcomes.d/tk-rust"; c0=$(calls "$D/pass_calls")
+PUSHER_IDLE=0 PUSHER_TRAIN_MAX=1 P step > /dev/null 2>&1
+c1=$(calls "$D/pass_calls")
+[ "$c1" = "$c0" ] && ok "master rouge aux tickets : le lot rust n'est pas pris" || ko "master rouge aux tickets : un lot rust est pris et rejoué"
+PUSHER_IDLE=0 PUSHER_TRAIN_MAX=1 P step > /dev/null 2>&1; PUSHER_IDLE=0 PUSHER_TRAIN_MAX=1 P step > /dev/null 2>&1
+on_master tk-mend2 && on_master tk-rust && ok "le lot de docs qui répare atterrit, puis le lot rust" || ko "après la réparation : tk-mend2 $(on_master tk-mend2 && echo poussé || echo absent), tk-rust $(on_master tk-rust && echo poussé || echo absent)"
+rm -f "$D/outcomes.d/tk-rust"
+# 36. A Rust lot that also changes a script with a witness next to it (19 Nov., archi: ui/ide/lib/boite.ts and its
+# test_boite.sh): the witness is played before the pass, and a red witness returns the lot without a pass.
+h=$(lot rs-w extension/rag3weaver/src/rsw.rs 'fn rsw() {}')
+git -C "$D/author" checkout -q rs-w && printf '#!/bin/bash\necho broken\n' > "$D/author/tools/poste/foo.sh" && git -C "$D/author" commit -qam "rs-w breaks foo" && git -C "$D/author" push -q origin HEAD:rs-w
+h=$(git -C "$D/author" rev-parse rs-w)
+P enqueue rs-w rs-w "$h" rust some_witness e2e_code - - author-c > /dev/null; echo VERT > "$D/outcomes.d/rs-w"; c0=$(calls "$D/pass_calls")
+PUSHER_TRAIN_MAX=1 P step > /dev/null 2>&1
+! on_master rs-w && grep -q "^rouge	rs-w	.*test_foo.sh" "$D/pusher/inbox/author-c.txt" && [ "$(calls "$D/pass_calls")" = "$c0" ] \
+  && ok "un lot rust qui casse le témoin d'un script : rendu sans passe" || ko "un lot rust qui casse le témoin d'un script : $(grep -P '\trs-w\t' "$D/pusher/log.tsv" | tail -1 | cut -f3,4)"
+rm -f "$D/outcomes.d/rs-w"
+# 37. A lot deposited again under the same id takes the rank of its first deposit (19 Nov., c7: every redeposit fell at
+# the tail, behind lots deposited hours after it), behind its parent when its parent is in the queue.
+P dequeue tk-rust > /dev/null 2>&1; P dequeue tk-mend2 > /dev/null 2>&1
+for x in rd-a rd-b rd-c; do lot $x docs/$x.md "# $x" > /dev/null; done
+P enqueue rd-a rd-a "$(git -C "$D/author" rev-parse rd-a)" docs - - - - author-a > /dev/null; sleep 1
+P enqueue rd-b rd-b "$(git -C "$D/author" rev-parse rd-b)" docs - - - - author-a > /dev/null; sleep 1
+P dequeue rd-a > /dev/null; P enqueue rd-c rd-c "$(git -C "$D/author" rev-parse rd-c)" docs - - - - author-a > /dev/null; sleep 1
+P enqueue rd-a rd-a "$(git -C "$D/author" rev-parse rd-a)" docs - - - - author-a > /dev/null
+order=$(grep -v '^#' "$D/pusher/queue.tsv" | cut -f1 | grep -E '^rd-' | paste -sd' ')
+[ "$order" = "rd-a rd-b rd-c" ] && ok "un lot redéposé reprend le rang de son premier dépôt" || ko "redéposé en queue : $order"
+for x in rd-a rd-b rd-c; do P dequeue $x > /dev/null 2>&1; done
 exit $red

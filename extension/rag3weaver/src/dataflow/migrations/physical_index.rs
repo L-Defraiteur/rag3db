@@ -988,7 +988,8 @@ fn physical_boundary(_stage: &str, _step: Option<usize>) {
             || _step
                 .is_some_and(|step| wanted.as_deref() == Some(format!("{_stage}:{step}").as_str()))
         {
-            std::process::exit(91);
+            // A death, not an exit: no destructor runs (`fautes_de_test::simulated_death`).
+            crate::fautes_de_test::simulated_death(91);
         }
     }
 }

@@ -1,6 +1,6 @@
 # L'équipier rend un compte rendu au lieu du contenu demandé
 
-- **État** : ouvert, rouvert le 15 novembre 2026 par archi sur le relevé de tty : le correctif du 14 (`9009f3a3b`) achemine un texte écrit dans le pas, mais rien ne garde la demande quand le modèle n'écrit aucun texte et se dit réussi ; suite à concevoir avec c7.
+- **État** : ouvert ; la garde est codée par tty le 19 novembre 2026 sur la conception d'archi (`docs/rag3weaver-archi/19-11-2026/01-garde-compte-rendu-au-lieu-du-contenu.md`), branche `cx-equipier-compte-rendu`. Le témoin réel sous Vertex est vert (deux tirages, archi, 19 nov.), mais Gemini y écrit le texte lui-même et le juge n'est pas appelé : le juge réel n'est prouvé que sur faux modèle. À fermer au « poussé » de la garde.
 - **Famille** : produit
 - **Pour** : archi
 - **Gravité** : réponse fausse. L'équipier dit avoir fait ce qu'on lui demande (« Présentation fournie au superviseur conformément au format demandé »), et ne l'a pas fait : le contenu n'est nulle part.

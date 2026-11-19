@@ -486,3 +486,41 @@ cartes.
 
 Les constantes qui restent sont des ratios ou des plafonds dits, pas des réglages : `chars_per_token: 3` (dit dans
 l'identité du service), et le code de sortie 70 d'un arrêt sur un serveur de carte empoisonné.
+
+## La tolérance de parité entre lots (mesurée le 19 novembre 2026, 9 h 16)
+
+Ticket `embarquement/tickets/2026-11-16-la-preuve-de-parite-des-services-n-a-pas-de-tolerance-mesuree.md`.
+
+**La mesure.** Elle est faite par `scripts/embed_parity.py`, un client seul (`/sante`, `/embed`). Le jeu fixe est
+`tests/fixtures/embed_parity/texts.json` : 100 textes, 50 de prose et 50 de code, de 55 à 1 379 caractères. Chaque
+texte est embarqué seul (c'est la référence), puis seul une seconde fois, puis en lots de 8, 32 et 128, dans trois
+ordres (par longueur, longueur inverse, mélange à graine 18).
+
+**Le contexte de la mesure.** Le binaire des services est b3764125fba4cc73 (master cae66528ae, avec `token-cap`), posé
+par G le 19 novembre à 9 h 16. Les deux services calculent en Flex32, sur `gpu:0` (card2). Le 7879 tourne avec
+`RAG3WEAVER_EMBED_MAX_TOKENS=4096`. Les journaux bruts sont à luciepc, dans
+`~/.cache/rag3weaver-build/parity-measure-19nov/` (`parity-787x.json`, `sante-787x.json`, `binary.sha256`).
+
+| Service | Même forme de lot (seul, deux fois) | Entre lots : écart absolu max | Entre lots : cosinus min | Au bit près entre lots |
+|---|---|---|---|---|
+| 7878, granite-278m (768) | 0, 100 % au bit près | **5,51e-5** | 0,99999993 | 0 à 2 % |
+| 7879, bge-m3 (1 024) | 0, 100 % au bit près | **1,34e-3** | 0,99992861 | 0 à 1 % |
+
+- **L'écart de bge-m3 est 25 fois celui de granite**, à précision égale (Flex32). C'est un modèle plus profond (24
+  couches contre 12). Le cosinus reste au-dessus de 0,9999 ; son effet sur un classement n'est pas mesuré ici. Le
+  pire écart vient des lots de 8 en ordre mélangé. Dès 32, toutes les compositions donnent le même écart (1,22e-3) :
+  probablement le rembourrage à la plus longue séquence du lot, non vérifié.
+- **granite** confirme la sonde du 16 novembre (3,77e-5 pour un texte seul puis au milieu de 7).
+- **Le bit dépend du lot** : un texte seul rend les mêmes bits deux fois de suite, sur les deux services. L'écart entre
+  deux binaires, lui, se prouve par le vecteur témoin de chaque pose (règle 1 ci-dessous).
+
+## La règle de preuve d'une pose (19 novembre 2026)
+
+1. **Même texte, même forme de lot, entre l'ancien et le nouveau binaire : au bit près.** C'est le vecteur témoin qui
+   se fait déjà à chaque pose. Un écart, même de 1e-7, est un rouge : le calcul a changé.
+2. **Entre lots, sur le nouveau binaire : sous la tolérance mesurée, avec une marge d'un facteur 2.** Pour le 7878 :
+   écart ≤ **1,1e-4** et cosinus ≥ **0,99999987**. Pour le 7879 : écart ≤ **2,7e-3** et cosinus ≥ **0,99985**. Elle se
+   prouve en rejouant `scripts/embed_parity.py --address 127.0.0.1:787x`, sans client sur le port pendant la
+   mesure, et en lisant `between_batches`.
+3. **Un nouveau modèle, ou une autre précision, se mesure avant d'avoir sa tolérance** : ces chiffres ne valent que
+   pour granite-278m et bge-m3 en Flex32.

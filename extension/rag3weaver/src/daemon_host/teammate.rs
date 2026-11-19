@@ -1686,6 +1686,8 @@ impl DaemonHost {
             };
             let declared = step.declared();
             let run = r["run"].as_str().unwrap_or_default().to_string();
+            // The text the model wrote in this step, for the guard « un compte rendu n'est pas le contenu ».
+            let mut texte_du_pas = String::new();
             // **Le texte écrit dans un pas qui finit par step_done** (ticket de tty, 14 novembre
             // 2026) : c'est souvent la réponse elle-même (un texte demandé) ; il va dans la boîte en
             // `report`, sauf si un report de ce pas le porte déjà (le report l'emporte, c7).
@@ -1701,6 +1703,7 @@ impl DaemonHost {
                     .collect();
                 let texte = textes.join("\n\n");
                 let texte = texte.trim();
+                texte_du_pas = texte.to_string();
                 let deja = files
                     .mailbox()
                     .iter()
@@ -1821,6 +1824,32 @@ impl DaemonHost {
                     attente_bornee = Some(std::time::Instant::now() + std::time::Duration::from_secs(policy.reply_wait_s));
                     continue;
                 } else {
+                    // **Un compte rendu n'est pas le contenu demandé** (archi, 19 novembre 2026, sur la
+                    // proposition de tty) : un pas réussi sans texte, sous une request sans `expects`, dont
+                    // les reports sont courts, se fait juger par le modèle de la tâche, hors du tour.
+                    match self.judge_the_content(&t, &run, &files.mailbox(), avant, &texte_du_pas) {
+                        ContentVerdict::Missing => {
+                            let demande = demande_suivie.unwrap_or(usize::MAX);
+                            if relancee != Some(demande) {
+                                // La relance unique de la request, partagée avec la garde B ; un pas, compté.
+                                relancee = Some(demande);
+                                let line = files.append("host", "report", None, "ended without the requested content: your reports describe the work, they are not the requested text; the next step starts to write it")?;
+                                publish(bus.as_ref(), task, &line);
+                                relance = Some("Your step ended without the text the request asks for: your reports describe the work, they are not the text. Write the text itself now, in your answer, then call step_done.".to_string());
+                                encore = true;
+                                continue;
+                            }
+                            let line = files.append("host", "report", None, "ended without the requested content, after the relaunch: waiting for the supervisor")?;
+                            publish(bus.as_ref(), task, &line);
+                            attente_bornee = Some(std::time::Instant::now() + std::time::Duration::from_secs(policy.reply_wait_s));
+                            continue;
+                        }
+                        ContentVerdict::Failed(why) => {
+                            let line = files.append("host", "report", None, &format!("ended without a text, to be checked (the content judge did not answer: {why})"))?;
+                            publish(bus.as_ref(), task, &line);
+                        }
+                        ContentVerdict::NotAsked | ContentVerdict::Delivered | ContentVerdict::Action => {}
+                    }
                     outcome.ended = if plan_seen { "plus rien à faire : compte rendu".into() } else { "fait sans plan".into() };
                     return Ok(outcome);
                 }
@@ -1841,6 +1870,80 @@ impl DaemonHost {
         }
         outcome.ended = format!("{MAX_STEPS} pas atteints");
         Ok(outcome)
+    }
+}
+
+/// **What the judge of the content says** (archi, 19 November 2026): the guard « un compte rendu
+/// n'est pas le contenu demandé ».
+pub(crate) enum ContentVerdict {
+    /// The narrow case was not met: a text was written, the request declares `expects`, or a report is long.
+    NotAsked,
+    Delivered,
+    /// The request asked for an action, not a text: the task ends as before.
+    Action,
+    Missing,
+    /// The judge did not answer, or not with one of its three words: the end is to be checked.
+    Failed(String),
+}
+
+/// The closed question to the judge, in English (a host text for the model).
+pub(crate) const CONTENT_QUESTION: &str = "Does the request ask for a text, and is that text in the step's report or answer? Answer with one word: delivered, missing or action.";
+
+impl DaemonHost {
+    /// **The judge of the content**, only in the narrow case (layer 1, read from what the step noted):
+    /// no text from the model, reports of fewer than 300 characters, a request without `expects`.
+    /// One call to the task's model, outside the turn (it does not enter the task's session),
+    /// temperature 0, the least reasoning and room for it (archi's review: 2 805 reasoning tokens in
+    /// D1 on gemini-3.8-flash would leave 50 tokens empty). Its consumption is recorded on the step's
+    /// run by the chat's meter, as `content-judge`. The verdict is the answer's first word.
+    fn judge_the_content(&self, t: &super::taches::Tache, run: &str, boite: &[Value], avant: usize, texte_du_pas: &str) -> ContentVerdict {
+        if !texte_du_pas.trim().is_empty() {
+            return ContentVerdict::NotAsked;
+        }
+        let Some(n) = boite.iter().rposition(|l| l["kind"] == "request" && l["from"] != "teammate" && l["from"] != "host") else {
+            return ContentVerdict::NotAsked;
+        };
+        if !boite[n]["expects"].is_null() {
+            return ContentVerdict::NotAsked;
+        }
+        let reports: Vec<&str> = boite.iter().skip(avant.max(n + 1)).filter(|l| l["from"] == "teammate" && l["kind"] == "report").filter_map(|l| l["text"].as_str()).collect();
+        if reports.is_empty() || reports.iter().any(|r| r.chars().count() >= 300) {
+            return ContentVerdict::NotAsked;
+        }
+        let llm = match self.with_backend_id(&t.id, |b| self.llm_du_chat(&t.manifest, &b.prepared())) {
+            Ok(Ok(llm)) => llm,
+            Ok(Err(e)) | Err(e) => return ContentVerdict::Failed(e),
+        };
+        let question = format!(
+            "The request:\n{}\n\nThe step's reports:\n{}\n\nThe step's answer: none.\n\n{CONTENT_QUESTION}",
+            boite[n]["text"].as_str().unwrap_or_default(),
+            reports.join("\n---\n")
+        );
+        let opts = crate::llm::GenOptions { max_tokens: 512, temperature: 0.0, reasoning: Some(crate::llm::ReasoningEffort::Minimal), ..Default::default() };
+        let mut sink = crate::llm::StringSink::default();
+        match llm.generate(&[crate::llm::Turn::user(question)], &opts, &mut sink) {
+            Err(e) => ContentVerdict::Failed(e.to_string()),
+            Ok((_, usage)) => {
+                let nom = llm.name().rsplit('/').next().unwrap_or(llm.name());
+                let c = crate::meter::Consumption::new(format!("llm.{nom}"), "unknown")
+                    .by(run, "content-judge")
+                    .with(crate::meter::Unit::InputTokens, usage.prompt_tokens.saturating_sub(usage.cached_prompt_tokens) as u64)
+                    .with(crate::meter::Unit::CachedInputTokens, usage.cached_prompt_tokens as u64)
+                    .with(crate::meter::Unit::OutputTokens, usage.completion_tokens.saturating_sub(usage.reasoning_tokens) as u64)
+                    .with(crate::meter::Unit::ReasoningTokens, usage.reasoning_tokens as u64);
+                if !c.is_empty() {
+                    self.chat_meter.record(c);
+                }
+                let mot = sink.text.split(|c: char| !c.is_alphabetic()).find(|w| !w.is_empty()).unwrap_or_default().to_lowercase();
+                eprintln!("[équipier] {} : le juge du contenu dit « {} »", t.nom, sink.text.trim());
+                match mot.as_str() {
+                    "missing" => ContentVerdict::Missing,
+                    "delivered" => ContentVerdict::Delivered,
+                    "action" => ContentVerdict::Action,
+                    _ => ContentVerdict::Failed(format!("unreadable answer: « {} »", sink.text.trim())),
+                }
+            }
+        }
     }
 }
 

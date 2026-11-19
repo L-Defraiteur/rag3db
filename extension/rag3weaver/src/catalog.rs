@@ -401,6 +401,10 @@ pub struct Catalog {
     // Lu par l'écrivain du code (`code`, `code_sync`) seul : sans la feature, personne n'y écrit ni ne le lit.
     #[cfg_attr(not(feature = "code"), allow(dead_code))]
     pub(crate) naissances: std::collections::HashMap<String, i64>,
+    /// **The write in another layer** (2a′-3, lot 1, [`Catalog::write_in_layer`]): the backend's visibility set
+    /// aside while `generations` is the written layer's, its pinned parent, and the files it rewrote (the
+    /// tombstones of its generation). `None` outside such a write.
+    pub(crate) layer_write: Option<LayerWriteState>,
     /// Les arêtes entrantes recopiées depuis la dernière publication (page 06, § 9).
     pub(crate) recopies_en_attente: usize,
     /// **La version de l'analyse** (page 06, § 13) : le parseur, les règles de rag3weaver et le gabarit
@@ -574,6 +578,28 @@ pub const fn rebuild_threshold(dim: usize) -> usize {
 }
 
 /// Clé de `_catalog_meta` : le choix du premier index et sa raison.
+/// **A write in a layer** (2a′-3, lot 1): the layer (its stable id) and its parent pinned at a rank, `None` for a
+/// root (a history layer without a parent branch).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LayerWrite {
+    pub layer: String,
+    pub parent: Option<(String, i64)>,
+}
+
+/// See [`Catalog::layer_write`].
+#[derive(Debug)]
+pub(crate) struct LayerWriteState {
+    backend: Option<crate::generations::Visibilite>,
+    parent: Option<(String, i64)>,
+    /// The paths of the files the writer rewrote in the layer (`File.path`, `Scope.file_path`).
+    pub(crate) files: std::collections::BTreeSet<String>,
+    backend_births: std::collections::HashMap<String, i64>,
+    backend_copied_edges: usize,
+    /// The tombstones the write sets itself ([`Catalog::set_layer_tombstones`]): a work layer names its dirty
+    /// files exactly, without the union with its earlier generations.
+    tombstones: Option<std::collections::BTreeSet<String>>,
+}
+
 /// La clé méta de l'arbre indexé (racine, commit, heure) : voir
 /// [`Catalog::note_indexed_tree`].
 pub const INDEXED_TREE_KEY: &str = "indexed_tree";
@@ -595,8 +621,9 @@ pub fn indexed_tree_of(root: &str) -> serde_json::Value {
     let commit = git(&["rev-parse", "--short", "HEAD"]).unwrap_or_default();
     // La branche : `HEAD` détaché n'en a pas (null).
     let branch = git(&["rev-parse", "--abbrev-ref", "HEAD"]).filter(|b| !b.is_empty() && b != "HEAD");
-    let dirty = git(&["status", "--porcelain", "--untracked-files=no"]).is_some_and(|s| !s.is_empty());
-    serde_json::json!({ "root": root, "commit": commit, "branch": branch, "dirty": dirty, "at_ms": retard::now_ms() })
+    let status = git(&["status", "--porcelain", "--untracked-files=no"]).unwrap_or_default();
+    let dirty_paths = status.lines().filter(|l| !l.trim().is_empty()).count();
+    serde_json::json!({ "root": root, "commit": commit, "branch": branch, "dirty": dirty_paths > 0, "dirty_paths": dirty_paths, "at_ms": retard::now_ms() })
 }
 pub const EMBEDDING_CHOICE_KEY: &str = "embedding_choice";
 
@@ -785,6 +812,7 @@ fn read_threads() -> u64 {
             multi_cell: false,
             generations: None,
             naissances: std::collections::HashMap::new(),
+            layer_write: None,
             recopies_en_attente: 0,
             version_de_l_analyse: String::new(),
             initialized: false,
@@ -10645,10 +10673,10 @@ fn read_threads() -> u64 {
         // la copie du lot de banc le 16 novembre) lire les lignes fermées.
         let mut tout_visible = true;
         for table in tables {
-            let Some(visible) = self.dialect.condition_visible_sur("s", couche, rang + 1) else { continue };
+            let Some(requete) = self.hidden_row_read(table, couche, rang + 1)? else { continue };
             let lu = self
                 .conn
-                .execute(&format!("MATCH (s:`{table}`) WHERE NOT ({visible}) RETURN s._uuid LIMIT 1"))
+                .execute(&requete)
                 .map_err(|e| CatalogError::DbError(format!("la visibilité de {table} à l'ouverture : {e}")))?;
             if !lu.rows.is_empty() {
                 tout_visible = false;
@@ -10701,6 +10729,74 @@ fn read_threads() -> u64 {
         rendu
     }
 
+    /// **Write in another layer than the backend's** (2a′-3, lot 1): while `f` runs, the writer, the births and
+    /// the publication work in `layer.layer`, on its parent pinned at `layer.parent`; the backend's visibility
+    /// comes back after, and the published read view stays the backend's meanwhile.
+    pub fn write_in_layer<R>(&mut self, layer: &LayerWrite, f: impl FnOnce(&mut Self) -> R) -> Result<R, CatalogError> {
+        if self.layer_write.is_some() {
+            return Err(CatalogError::DbError(format!("écrire dans la couche {} : une écriture dans une autre couche est en cours", layer.layer)));
+        }
+        if layer.layer == crate::generations::COUCHE_DU_BACKEND {
+            return Err(CatalogError::DbError("écrire dans une couche : la couche du backend s'écrit sans write_in_layer".into()));
+        }
+        let visibility = self.layer_visibility(&layer.layer)?;
+        self.layer_write = Some(LayerWriteState {
+            backend: self.generations.replace(visibility),
+            parent: layer.parent.clone(),
+            files: Default::default(),
+            backend_births: std::mem::take(&mut self.naissances),
+            backend_copied_edges: std::mem::take(&mut self.recopies_en_attente),
+            tombstones: None,
+        });
+        let rendu = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(self)));
+        if let Some(state) = self.layer_write.take() {
+            self.generations = state.backend;
+            // The base now has rows of another layer: a reader without filter no longer reads « everything ».
+            if let Some(v) = self.generations.as_mut() {
+                v.tout_visible = false;
+            }
+            self.naissances = state.backend_births;
+            self.recopies_en_attente = state.backend_copied_edges;
+        }
+        self.publish_read_view();
+        match rendu {
+            Ok(r) => Ok(r),
+            Err(panique) => std::panic::resume_unwind(panique),
+        }
+    }
+
+    /// **The tombstones of the generation being written in a layer**, set by the caller instead of the union of the
+    /// files it rewrote with those of its earlier generations (a work layer: exactly its dirty files). Outside a
+    /// write in a layer, a refusal.
+    pub fn set_layer_tombstones(&mut self, files: std::collections::BTreeSet<String>) -> Result<(), CatalogError> {
+        let state = self.layer_write.as_mut().ok_or_else(|| CatalogError::DbError("les tombstones d'une couche : aucune écriture dans une couche en cours".into()))?;
+        state.tombstones = Some(files);
+        Ok(())
+    }
+
+    /// **The visibility of a layer to write in**: the backend's tables and sets, the layer's last published rank
+    /// read in `_generation` (0 for a layer without generation), and the pending rank above it.
+    fn layer_visibility(&self, layer: &str) -> Result<crate::generations::Visibilite, CatalogError> {
+        let backend = self.generations.as_ref().ok_or_else(|| CatalogError::DbError(format!("écrire dans la couche {layer} : cette base n'a pas de générations")))?;
+        let dernier = self.dialect.latest_generation_rank().ok_or_else(|| CatalogError::DbError("écrire dans une couche : ce dialecte ne sait pas les générations".into()))?;
+        let lu = self
+            .conn
+            .execute_with_params(&dernier, &[QueryParam::new("couche", CypherValue::String(layer.to_string()))])
+            .map_err(|e| CatalogError::DbError(format!("le dernier rang de la couche {layer} : {e}")))?;
+        let published = match lu.rows.first().and_then(|r| r.first()) {
+            Some(CypherValue::Int(r)) => *r,
+            _ => 0,
+        };
+        Ok(crate::generations::Visibilite {
+            couche: layer.to_string(),
+            rang: published + 1,
+            rang_publie: published,
+            tout_visible: false,
+            parents: Vec::new(),
+            ..backend.clone()
+        })
+    }
+
     /// **Le dernier rang publié de la couche** (2a′-2, page 06, § 1).
     pub fn rang_publie(&self) -> Option<i64> {
         self.generations.as_ref().map(|v| v.rang_publie)
@@ -10711,15 +10807,59 @@ fn read_threads() -> u64 {
         self.generations.as_ref().map(|v| v.rang)
     }
 
+    /// **The tombstones of a generation of another layer** (2a′-3): every file the layer has rewritten, those of
+    /// its last published generation and those of this write, so that its pinned parent's rows of these files are
+    /// masked. A generation's parent is pinned below the layer's earlier ranks, which the stack does not read.
+    fn layer_tombstones(&self, layer: &str, published: i64, written: &std::collections::BTreeSet<String>) -> Result<String, CatalogError> {
+        let mut files = written.clone();
+        if let Some(lire) = self.dialect.read_generation() {
+            let lu = self
+                .conn
+                .execute_with_params(&lire, &[QueryParam::new("couche", CypherValue::String(layer.to_string())), QueryParam::new("rang", CypherValue::Int(published))])
+                .map_err(|e| CatalogError::DbError(format!("les tombstones de {layer}:{published} : {e}")))?;
+            if let Some(CypherValue::String(t)) = lu.rows.first().and_then(|r| r.get(2)) {
+                let (_, avant) = crate::views::read_tombstones(layer, published, t).map_err(CatalogError::DbError)?;
+                files.extend(avant);
+            }
+        }
+        Ok(serde_json::json!({ "keys": [], "files": files }).to_string())
+    }
+
     /// **Publier la génération en attente** au commit de la source suivie (2a′-2, page 06, § 3) : la
     /// ligne `_generation` au rang en attente w, avec son commit et le nombre de chemins sales (un arbre
     /// propre en a 0), puis w devient le rang publié et w + 1 le rang en attente. Aucune ligne de
     /// `Scope` ni de `File` n'est réécrite : les lignes nées à w deviennent publiées par le seul rang.
+    /// **One row of `table` that is not visible at `rank` of `layer`**, if any (`LIMIT 1`): what tells a base
+    /// with a history from one that is « all visible ». `None` for a dialect without generations.
+    pub(crate) fn hidden_row_read(&self, table: &str, layer: &str, rank: i64) -> Result<Option<String>, CatalogError> {
+        if !self.dialect.sait_les_generations() {
+            return Ok(None);
+        }
+        let visible = rag3weaver_ir::Predicate::Visible { couche: layer.to_string(), rang: rank, mask: Default::default() };
+        let select = rag3weaver_ir::Select {
+            table: table.to_string(),
+            by_uuids: false,
+            filter: Some(rag3weaver_ir::Predicate::Not(Box::new(visible))),
+            returns: vec![rag3weaver_ir::Column::Node("_uuid".into())],
+            order_by: Vec::new(),
+            limit: Some(rag3weaver_ir::Limit::Literal(1)),
+            offset: None,
+        };
+        self.dialect.select(&select).map(Some).map_err(|e| CatalogError::DbError(e.to_string()))
+    }
+
     pub fn publier_la_generation(&mut self, commit: &str, chemins_sales: usize) -> Result<i64, CatalogError> {
         let Some(v) = self.generations.as_ref() else {
             return Err(CatalogError::DbError("publier une génération : cette base n'a pas de générations".into()));
         };
-        let (couche, w) = (v.couche.clone(), v.rang);
+        let (couche, w, publie) = (v.couche.clone(), v.rang, v.rang_publie);
+        let (parente, tombstones) = match &self.layer_write {
+            None => (None, "[]".to_string()),
+            Some(state) => match &state.tombstones {
+                Some(files) => (state.parent.clone(), serde_json::json!({ "keys": [], "files": files }).to_string()),
+                None => (state.parent.clone(), self.layer_tombstones(&couche, publie, &state.files)?),
+            },
+        };
         let poser = self
             .dialect
             .merge_generation()
@@ -10738,17 +10878,22 @@ fn read_threads() -> u64 {
                     texte("base", ""),
                     texte("recette", ""),
                     // Une génération de la couche du backend n'a pas de parente : ses rangs se lisent par
-                    // `_depuis` et `_jusqu_a` dans la couche même (2b′, une racine s'écrit '' et -1).
-                    texte("parente_couche", ""),
-                    QueryParam::new("parente_rang", CypherValue::Int(-1)),
-                    texte("tombstones", "[]"),
+                    // `_depuis` et `_jusqu_a` dans la couche même (2b′, une racine s'écrit '' et -1). Une
+                    // génération d'une autre couche (2a′-3) porte sa parente épinglée, ou '' et -1 pour une racine.
+                    texte("parente_couche", parente.as_ref().map_or("", |(c, _)| c.as_str())),
+                    QueryParam::new("parente_rang", CypherValue::Int(parente.as_ref().map_or(-1, |(_, r)| *r))),
+                    texte("tombstones", &tombstones),
                     QueryParam::new("publiee_le", CypherValue::Int(maintenant)),
                 ],
             )
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
+        let compter = self
+            .dialect
+            .set_generation_counts()
+            .ok_or_else(|| CatalogError::DbError("publier une génération : ce dialecte ne dit pas ses compteurs".into()))?;
         self.conn
             .execute_with_params(
-                &format!("MATCH (g:{} {{_key: $key}}) SET g.chemins_sales = $sales, g.aretes_recopiees = $recopiees", crate::generations::TABLE),
+                &compter,
                 &[
                     texte("key", &cle),
                     QueryParam::new("sales", CypherValue::Int(chemins_sales as i64)),
@@ -10860,7 +11005,11 @@ fn read_threads() -> u64 {
             fanout: self.fanout,
             two_step_hops: self.two_step_hops(),
             multi_cell: self.multi_cell,
-            generations: self.generations.clone(),
+            // During a write in another layer, readers keep reading the backend's layer.
+            generations: match &self.layer_write {
+                Some(state) => state.backend.clone(),
+                None => self.generations.clone(),
+            },
             search_backend_externe: if self.search_backend_par_defaut { None } else { self.search_backend.clone() },
             event_bus: self.event_bus.clone(),
             search_services: Arc::new(search),

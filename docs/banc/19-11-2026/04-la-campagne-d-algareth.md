@@ -8,6 +8,14 @@ Une ligne par cas joué ; les détails suivent la table.
 | cas | verdict | endroit | taille (Algareth / nôtre) | coût | dégâts à côté | indices présents, suivis ? |
 |---|---|---|---|---|---|---|
 | tty 09, une demande écrite une fois (`b1163f64e1`) | **écarté** : latence de Vertex (jeu du 19 à 16 h 26) ; à rejouer | aucun diff | 0 / +36 −3 (tui.rs +7 −2, vue.rs +29 −1 ; hors docs) | 2 pas, 45 appels, 1 814 s de modèle sur 1 828 s ; l'appel le plus lent 385 s pour 8 695 jetons d'invite ; invite totale 1,34 M jetons, dont 88 % par le cache | aucun (diff vide) | la souche `tui::nom_garde -> None` ; non suivie (rien n'est écrit) |
+| tty 09, jeu du 19 à 18 h 06 | **dégâts** : les deux témoins déclarés passent, mais un test vert au parent rougit, par une assertion qu'Algareth lui a ajoutée | **même** (tui.rs, vue.rs) et **autre** (boite.rs) | +46 −5 (dont +13 de tests) / +36 −3 | 5 pas, 165 appels, 1 181 s (1 155 s de modèle) ; invite totale 5,31 M jetons, dont 87 % par le cache ; sortie 2 647, raisonnement 92 592 | `vue::tests::the_view_keeps_the_last_agent_name_seen` vert au parent, rouge après | la souche `nom_garde` : **suivie** (remplie et branchée dans `/nom`) |
+| lucivy 04, l'ulp d'écart en parse (`e3c9753f7f`) | **réussi**, sans qu'Algareth ait pu jouer un test (cargo refusé dans le bac, voir plus bas) | **autre** : `buffered_union.rs` (Algareth) contre `score_combiner.rs` et `block_wand.rs` (nous) | +5 −22 / +17 −9 (hors le témoin, +81) | 2 pas, 54 appels, 464 s ; invite 1,66 M jetons, dont 82 % par le cache | aucun : le seul rouge de la suite l'était déjà au parent | trois fichiers de l'arbre, sans souche, absents de la consigne ; Algareth en a corrigé un |
+| ED 02, le préfixe d'une décision (`f063a90e52`) | **réussi** | **même** (`decide_nodes.rs`, et la même assertion de `decide_nodes/tests.rs`) | +13 −3 / +15 −3 | 3 pas, 72 appels, 680 s ; invite 2,09 M jetons, dont 58 % par le cache | aucun : la lib entière passe (1 745) | le fichier indiqué ; Algareth y a corrigé la cause |
+| ED 01, le journal plafonné (`b610560e51`) | **échoué** (réserve : Vertex lent) | aucun diff (nous : `commande.rs`) | 0 / +10 −2 | 3 pas, 34 appels, 1 388 s, dont 640 et 706 s pour les deux premiers pas ; invite 0,52 M jetons, dont 70 % par le cache | aucun | le fichier indiqué, lu sans conclure |
+| embarquement 02, le refus d'un démarrage mort (`c4b36feffa`) | **réussi** | **même** (`serveur.rs`) ; le nôtre nomme aussi le programme d'un démarrage muet, hors de la demande | +10 −4 / +20 −9 | 2 pas, 64 appels, 408 s ; invite 1,85 M jetons, dont 62 % par le cache | aucun : la lib entière passe (1 743) | le fichier indiqué |
+| lucivy 03, la requête floue longue sans positions (`fa65315ce8`) | **échoué** (défaut de forme du cas) | aucun diff : une analyse | 0 / voir le cas | 1 pas, 33 appels, 202 s ; invite 1,28 M jetons, dont 92 % par le cache | aucun | les deux fichiers indiqués, lus |
+| lucivy 03, jeu de 20 h 13, consigne réécrite | **écarté** (cargo refusé dans le bac à sable) | aucun diff | — | 8 pas, 1 454 s, arrêté sur « 3 pas de suite sans élément réussi » ; une bonne part des pas contre cargo | — | — |
+| lucivy 03, jeu de 20 h 50, cargo dans le bac | **échoué** | aucun diff ; l'endroit trouvé (`verify_stored`, `stored.rs`) est le bon | 0 / voir le cas | 5 pas, 146 appels, 1 331 s (8,7 s par appel, Vertex normal) ; invite 4,7 M jetons, dont 69 % par le cache ; 99 lectures de fichiers, 0 écriture | aucun | les deux fichiers indiqués, lus |
 
 ## tty 09 : une demande s'écrit une fois, et /nom retient le nom gardé (19 novembre)
 
@@ -40,3 +48,162 @@ Une ligne par cas joué ; les détails suivent la table.
   coquille qui ouvrent un pseudo-terminal refusé par le bac à sable. Le ticket est
   `docs/rag3weaver-archi/tickets/2026-11-19-le-bac-a-sable-refuse-le-pseudo-terminal.md`.
 - Le premier jeu du même cas (`20261119-160735`) ne compte pas : cargo n'y trouvait pas la chaîne Rust.
+
+### Le jeu du 19 novembre à 18 h 06 (`20261119-180649`), jugé
+
+- **Le tour** : Vertex était rapide, d'après la sonde d'archi (2 à 5 s par appel juste avant). Algareth a fini de
+  lui-même (« fait sans plan »), sans heurter le budget. Il fait 5 pas, 165 appels et 1 181 s, dont 1 155 s de modèle.
+- **Le diff** : 3 fichiers, +46 −5 :
+  - `tui.rs` : `nom_garde` est rempli et branché dans `/nom` ;
+  - `vue.rs` : le nom retenu et la ligne que la boîte rend ;
+  - `boite.rs` : l'en-tête porte un nom de repli.
+- **Le juge**, sur la tablette, dans le dépôt réel au parent `b1163f64e1`, puis avec `diff.patch` appliqué. C'est la
+  suite `tty` de la passe : avec et sans la vue, clippy `-D warnings`, et le bâti Release.
+
+| | parent | avec le diff d'Algareth |
+|---|---|---|
+| `cargo test` (vue) | 109 passés, 2 rouges : les deux témoins | 111 passés, 1 rouge : `the_view_keeps_the_last_agent_name_seen` |
+| sans la vue | 20 passés | 21 passés |
+| clippy `-D warnings`, Release | verts | verts |
+
+- **Les témoins déclarés** : rouges au parent, verts après, et intacts (le diff ne touche aucune de leurs lignes).
+- **Le test qui rougit** : `vue::tests::the_view_keeps_the_last_agent_name_seen` est **vert au parent** dans le dépôt
+  réel. Archi l'avait vu rouge au parent, mais dans le bac à sable. Algareth lui a ajouté deux lignes, et c'est son
+  assertion qui échoue (`vue.rs:1693`). Le comportement est bon : la ligne `[Algareth · message] bonjour` porte bien le
+  nom retenu. Mais l'assertion attend une seule ligne, alors que `prendre_lignes` rend toutes les lignes écrites depuis
+  le début du test. **C'est une assertion fausse, pas une régression du code.**
+- **Le verdict : dégâts.** Au sens de la grille, un test vert au parent rougit après le passage d'Algareth. La cause
+  est un test qu'il a lui-même modifié, et il n'avait pas à toucher un test qui n'était pas le témoin.
+- **Les mesures `plain_*`** de la suite `tty` n'existent pas au parent : elles sont postérieures au cas. Elles ne
+  s'appliquent pas.
+- **Les sorties** du juge sont à la tablette : `~/.cache/rag3db-banc-notes/campagne/09-20261119-180649/` (`parent.log`,
+  `algareth.log`), et le juge est `~/.cache/rag3weaver-build/juge-09.sh`.
+
+## lucivy 04 : l'ulp d'écart en parse (19 novembre, jeu de 18 h 48)
+
+- **Le cas** : `docs/lucivy/19-11-2026/04-cas-de-campagne-un-ulp-d-ecart-en-parse.md`. Le dépôt est un clone nu de
+  lucivy (`~/.cache/rag3weaver-build/campagne/depots/lucivy.git`). Le témoin n'existe pas au parent : son fichier,
+  `lucivy_core/tests/test_parse_scores_identical_across_layouts.rs`, est pris de notre correctif `3933431475` et posé
+  sur le parent `e3c9753f7f`.
+- **Le tour** : Algareth a fini de lui-même, en 2 pas, 54 appels, 464 s, sans reprise.
+- **Le diff** : `src/query/union/buffered_union.rs`, +5 −22. Il remplace `unordered_drain_filter` et son `swap_remove`
+  par `retain_mut`, qui garde l'ordre des scorers. Ainsi, l'ordre de la somme en f32 ne dépend plus de la disposition
+  des segments.
+- **Le juge**, sur la tablette, dans un clone à part et un target à part :
+
+| | parent et témoin | avec le diff d'Algareth |
+|---|---|---|
+| le témoin | rouge, sur l'assertion (`…_layouts.rs:80`) | **vert** |
+| `cargo test --workspace` | 2 200 passés, 2 rouges : le témoin et `derived_in_ram_answers_like_the_files` | 2 201 passés, 1 rouge : `derived_in_ram_answers_like_the_files` |
+
+- **Le verdict : réussi.**
+  - Le témoin passe, et son fichier n'est pas touché par le diff.
+  - Le seul rouge restant (`derived_in_ram_answers_like_the_files`, `tests/common/mod.rs:52`) l'était déjà au parent :
+    ce n'est pas un dégât.
+- **La comparaison** :
+  - **Notre correctif** additionne les scores d'un OU en f64, arrondis une fois (`score_combiner.rs`,
+    `block_wand.rs`). La somme ne dépend alors plus de son ordre.
+  - **Algareth** garde l'ordre des clauses dans l'union, ce qui fixe l'ordre de la somme en f32.
+  - Les deux passent le témoin. Le nôtre rend la somme indépendante de l'ordre, alors que celui d'Algareth la rend
+    seulement constante d'une disposition à l'autre. C'est plus étroit, mais exact sur ce que le témoin exige. Le
+    titre de notre correctif nomme d'ailleurs le même `swap_remove` comme cause.
+- **Les sorties** du juge sont à la tablette, `~/.cache/rag3db-banc-notes/campagne/lucivy-04-20261119-184828/`, et le
+  juge est `~/.cache/rag3weaver-build/juge-campagne-2.sh`.
+
+## ED 02 : le préfixe d'une décision (19 novembre, jeu de 19 h 22)
+
+- **Le cas** : `docs/everything-declarative/19-11-2026/02-cas-de-campagne-le-prefixe-d-une-decision.md`, au parent
+  `f063a90e52`, avec le témoin `dataflow::decide_nodes::tests::two_decisions_on_the_same_text_begin_with_the_same_bytes`.
+- **Le tour** : Algareth a fini de lui-même, en 3 pas, 72 appels et 680 s, sans reprise.
+- **Le diff** : `decide_nodes.rs` +12 −2 et `decide_nodes/tests.rs` +1 −1. Il remet les étiquettes admises en fin de
+  tour utilisateur, pour que deux décisions sur le même texte gardent un préfixe commun.
+- **Le fichier de tests touché** : ce n'est pas l'assertion du témoin. C'est celle de
+  `decide_by_llm_asks_a_schema_and_labels_the_element`, qui fige la forme de l'invite. Notre correctif `1bba221689`
+  la change à l'identique, avec le même texte attendu : c'est la suite légitime du changement de forme.
+- **Le juge**, à luciepc (le portable était laissé à la bascule), dans un worktree et un target à part :
+
+| | parent | avec le diff d'Algareth |
+|---|---|---|
+| suite `dataflow::decide_nodes::` | 28 passés, 1 rouge : le témoin, sur son assertion (`tests.rs:212`) | **29 passés** |
+| lib entière | — | **1 745 passés**, 0 rouge |
+
+- **Le verdict : réussi**, au même endroit que notre correctif, et de taille voisine (+13 −3 contre +15 −3).
+
+## ED 01 : le journal plafonné (19 novembre, jeu de 18 h 56)
+
+- **Le cas** : `docs/everything-declarative/19-11-2026/01-cas-de-campagne-le-journal-plafonne.md`, au parent
+  `b610560e51`, avec le témoin `commande::tests::en_fond_un_journal_au_dela_du_plafond_garde_la_fin_et_le_dit`.
+- **Le tour** : l'équipier s'est arrêté sur « 3 pas de suite sans élément réussi », en 1 388 s, avec 34 appels et un
+  diff vide. Il a lu `commande.rs`, approché la cause par écrit (le calcul de `apres` avant la troncature), et n'a rien
+  modifié.
+- **Le rouge**, prouvé par le juge (tablette, worktree et target à part) : le témoin est **rouge 5 fois sur 5** sur son
+  assertion (`commande.rs:1772`), trois fois joué seul et deux fois dans la lib entière (1 743 passés, 1 rouge). Le
+  lanceur l'avait aussi vu rouge sur l'assertion (`red.json`). **La consigne du cas dit à tort que le témoin « passe
+  seul »** : Algareth avait bien un rouge à corriger, et l'a vu.
+- **Le verdict : échoué**, avec une réserve. Vertex a été lent pendant ce jeu, avec des appels de 85 à 155 s pour 11 à
+  19 k jetons, et 640 et 706 s pour les deux premiers pas. La règle d'arrêt compte des pas, pas du temps : la lenteur
+  n'a pas coupé le tour, mais rien ne dit qu'un Vertex rapide l'aurait fait aboutir. Un second jeu, avec un Vertex
+  rapide et la consigne corrigée, départagerait.
+- **Les sorties** des juges sont dans `~/.cache/rag3db-banc-notes/campagne/ed-01-20261119-185644/` (tablette) et
+  `ed-02-20261119-192205/` (luciepc).
+
+## embarquement 02 : le refus d'un démarrage mort (19 novembre, jeu de 19 h 44)
+
+- **Le cas** : `docs/embarquement/19-11-2026/02-cas-de-campagne-le-refus-d-un-demarrage-mort.md`, au parent
+  `c4b36feffa`, avec le témoin `serveur::tests::a_dead_start_names_the_program`.
+- **Le tour** : Algareth a fini de lui-même, en 2 pas, 64 appels et 408 s, sans reprise.
+- **Le diff** : `serveur.rs`, +10 −4. Il ajoute un champ `programme` à `ServeurError::Mort`, et le nomme dans le
+  message de refus. Il ne touche aucun test.
+- **Le juge**, à luciepc, dans un worktree et un target à part :
+
+| | parent | avec le diff d'Algareth |
+|---|---|---|
+| module `serveur::` | 12 passés, 1 rouge : le témoin, sur son assertion (`serveur.rs:705`) | **13 passés** |
+| lib entière | — | **1 743 passés**, 0 rouge |
+
+- **Le verdict : réussi**, au même endroit que notre correctif `0bda7c020f` (+20 −9). Le nôtre nomme aussi le
+  programme dans le refus d'un démarrage **muet**. La demande ne parlait que du démarrage mort : Algareth a fait
+  exactement ce qui était demandé, et pas plus.
+
+## lucivy 03 : la requête floue longue sans positions (19 novembre, jeu de 19 h 36)
+
+- **Le cas** : `docs/lucivy/19-11-2026/03-cas-de-campagne-la-requete-floue-longue-sans-positions.md`, au parent
+  `fa65315ce8`, avec le témoin `a_long_fuzzy_query_without_positions_reads_windows_and_finds_the_same`. Le lanceur l'a
+  vu rouge au parent, sur son assertion (`red.json`).
+- **Le tour** : Algareth a fini de lui-même (« fait sans plan »), en 1 pas, 33 appels et 202 s. Le diff est vide : il
+  a rendu une analyse (les causes des 60 s, des pistes), sans correctif.
+- **Le juge** : un diff vide laisse le témoin tel qu'au parent, rouge. Il n'y avait rien à rejouer.
+- **Le verdict : échoué** au sens de la grille, qui se juge sur le témoin. Une analyse sans diff ne compte pas comme
+  un correctif.
+- **Mais c'est d'abord un défaut de forme du cas.** La consigne décrit le défaut et ses mesures, mais ne demande pas de
+  correctif, et ne nomme pas de témoin à faire passer. Les autres cas de la campagne finissent par une phrase de la
+  forme « un témoin …, rouge d'abord ». Algareth a répondu à la question qu'on lui posait. Le cas est à corriger chez
+  lucivy, puis à rejouer : ce verdict ne mesure pas sa capacité à corriger.
+
+## Une réserve sur les deux cas de lucivy : cargo refusé dans le bac à sable (archi, 19 novembre au soir)
+
+Dans le bac à sable de l'hôte de campagne, cargo ne tournait pas pour un arbre sans fichier de chaîne Rust, ce qui est
+le cas de lucivy. rustup y lisait son défaut à travers le lien de la maison isolée, et répondait « no default is
+configured ». Les arbres de rag3db (tty, ED, embarquement) épinglent leur chaîne : ils n'étaient pas touchés.
+Archi l'a corrigé (le gabarit figé pose `RUSTUP_HOME` et `CARGO_HOME` réels, `campagne-lanceur-5`, vu rouge d'abord).
+
+- **lucivy 04 (jeu de 18 h 48)** : Algareth n'a pu jouer aucun test, cargo lui a été refusé deux fois. Son diff est
+  juste, mais **sans avoir été vérifié par lui**. Le verdict « réussi » tient, parce que le juge l'a rejoué lui-même
+  (le témoin vert, la suite sans dégât). La ligne le dit : un correctif juste à l'aveugle ne vaut pas un correctif
+  vérifié, et le jeu qu'archi refait derrière, avec cargo, dira si Algareth le garde.
+- **lucivy 03, jeu de 20 h 13** (consigne réécrite, `campagne/03/20261119-201304`) : 8 pas, 1 454 s, arrêté sans diff
+  sur « 3 pas de suite sans élément réussi ». Une bonne part de ses pas a servi à se battre avec cargo (`RUSTUP_HOME` à
+  la main, un fichier `rust-toolchain` écrit, `cargo +stable`). **Écarté**, comme tty 09 à 16 h : il ne mesure pas
+  Algareth. Le jeu de 20 h 50, avec le correctif, le remplace.
+
+## lucivy 03, jeu de 20 h 50 (cargo dans le bac à sable, consigne réécrite)
+
+- **Le jeu** : `campagne/03-cas-de-campagne-la-requete-floue-longue-sans-positions/20261119-205010/`. Cargo tourne dans le
+  bac : lucivy-core et lucivy-fst compilent, et le témoin rougit 12 fois sous l'agent, sur son assertion. Le lanceur
+  l'avait vu rouge au parent (`red.json`).
+- **Le tour** : arrêté sur « 3 pas de suite sans élément réussi », en 5 pas, 146 appels et 1 331 s, sans reprise. Le diff
+  est vide. Vertex était normal : 1 266 s de modèle pour 146 appels, soit 8,7 s par appel.
+- **Ce qu'Algareth a trouvé** (dans son `step_done`) : `verify_stored`, dans `stored.rs`, passe la distance d'édition sur
+  tout le texte stocké de chaque document candidat. C'est le bon endroit. Mais il a lu 99 fichiers et n'a rien écrit.
+- **Le verdict : échoué.** Un diff vide laisse le témoin rouge. Ce jeu est le seul de la soirée où la consigne, cargo et
+  Vertex étaient tous en ordre : il mesure bien Algareth. Il a localisé la cause, mais il n'est pas passé au correctif.

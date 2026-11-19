@@ -84,3 +84,25 @@ SIGSEGV.
 lisait les pips pendant leur publication : voir le ticket
 `2026-11-13-une-recherche-par-cle-primaire-rate-des-cles-validees-pendant-un-point-de-reprise.md`.
 La ligne known_red de `DdlEveryMinute` reste intacte. Il faut le rejouer ×10 avant de fermer.
+
+## Le 19 novembre : ×10, puis une course nommée par TSan (cœur c++)
+
+`TwentyWriters.DdlEveryMinute` ×10 en Release sur la pile du 19 novembre (`4ab4ab8150`) : aucun SIGSEGV de cette
+pile, mais deux tours morts tôt de C1 (le dictionnaire au point de reprise, autre ticket) ; huit tours complets.
+Pas de quoi fermer.
+
+Sous TSan (×3, `~/.cache/rag3db-moteur-notes/c1-ddl/tsan-*.log` à luciepc), une course réelle sur le chemin de ce
+lecteur :
+
+- lecture : `NodeTable::lookupPK` → `NodeTable::isVisibleNoLock` → `NodeGroup::isVisibleNoLock` →
+  `findChunkedGroupFromRowIdxNoLock` → `findChunkedGroupIdx`, qui parcourt le vecteur des groupes de morceaux,
+  sous le `shared_mutex` de l'index de clé primaire en lecture ;
+- écriture précédente : `NodeGroup::checkpoint` → `GroupCollection<ChunkedNodeGroup>::appendGroup` →
+  `push_back` dans ce même vecteur, sous le mutex de la collection (`UniqLock`), pendant un point de reprise V2.
+
+Les deux ne tiennent pas le même verrou : un point de reprise qui laisse lire peut réallouer le vecteur des groupes
+sous un lecteur par clé primaire, qui lit alors de la mémoire rendue. C'est la cause probable de ce ticket. Le
+correctif : `isVisibleNoLock` lit le vecteur sous le verrou de la collection, ou le point de reprise remplace le
+vecteur sans le réallouer sous un lecteur. Témoin à écrire : des recherches par clé primaire en boucle pendant des
+points de reprise qui ajoutent des groupes, sous TSan, rouge d'abord.
+

@@ -70,9 +70,41 @@ pub fn view_settings(tracked: Option<&Value>) -> Result<ViewSettings, String> {
     Ok(r)
 }
 
+/// **The settings of the writes of layers** (2a′-3, lot 5), under `tracked.writes` of the manifest.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WriteSettings {
+    /// How many work layers are written at most; a new one beyond is refused, naming this setting.
+    pub max_work_layers: usize,
+    /// The period of the backend's sync of its tracked layers, in milliseconds; `None`: no sync runs (the default,
+    /// a backend writes only its own layer).
+    pub every_ms: Option<u64>,
+}
+
+impl Default for WriteSettings {
+    fn default() -> Self {
+        WriteSettings { max_work_layers: 32, every_ms: None }
+    }
+}
+
+/// **The settings of the writes** from `tracked` (the key `writes`); absent, the defaults.
+pub fn write_settings(tracked: Option<&Value>) -> Result<WriteSettings, String> {
+    let mut r = WriteSettings::default();
+    let Some(writes) = tracked.and_then(|t| t.get("writes")) else { return Ok(r) };
+    let objet = writes.as_object().ok_or_else(|| format!("tracked.writes : un objet {{max_work_layers?}} attendu, pas {writes}"))?;
+    for (cle, v) in objet {
+        match (cle.as_str(), v.as_u64().filter(|n| *n > 0)) {
+            ("max_work_layers", Some(n)) => r.max_work_layers = n as usize,
+            ("every_ms", Some(n)) => r.every_ms = Some(n),
+            ("max_work_layers" | "every_ms", None) => return Err(format!("tracked.writes.{cle} : un entier positif attendu, pas {v}")),
+            _ => return Err(format!("tracked.writes : clé inconnue « {cle} » (max_work_layers, every_ms)")),
+        }
+    }
+    Ok(r)
+}
+
 /// Les tombstones d'une génération : `[]` ou une liste de clés (l'écriture de la génération 0), ou
 /// `{"keys": [...], "files": [...]}`.
-fn read_tombstones(couche: &str, rang: i64, texte: &str) -> Result<(BTreeSet<String>, BTreeSet<String>), String> {
+pub(crate) fn read_tombstones(couche: &str, rang: i64, texte: &str) -> Result<(BTreeSet<String>, BTreeSet<String>), String> {
     let refus = || format!("vue {couche}:{rang} : tombstones illisibles ({texte})");
     let liste = |v: Option<&Value>| -> Result<BTreeSet<String>, String> {
         match v {

@@ -127,8 +127,31 @@ enqueue() {
   fi
   [ "$computed" = cpp ] && { echo "refusé : le lot touche le moteur (cpp), il passe par la voie transférable ou une fenêtre" >&2; return 1; }
   [ "$computed" = "$kind" ] || { echo "refusé : le lot est $computed, pas $kind" >&2; return 1; }
-  ( flock 9; printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$id" "$branch" "$full" "$kind" "$5" "$6" "$7" "$parent" "$9" >> "$Q" ) 9> "$D/queue.lock"
-  log "$id" déposé "$branch $(g rev-parse --short "$full") $kind par $9"
+  # A lot deposited again under the same id takes the rank of its first deposit: behind every lot of the queue first
+  # deposited before it, and behind its parent (19 Nov., c7: every redeposit fell at the tail, behind lots deposited
+  # hours after it). A new id goes to the tail.
+  local first again=""
+  first=$(awk -F'\t' -v id="$id" '$2 == id && $3 == "déposé" {print $1; exit}' "$D/log.tsv" 2>/dev/null)
+  [ -n "$first" ] && again=" (redéposé : rang du premier dépôt, $first)"
+  ( flock 9
+    line=$(printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s' "$id" "$branch" "$full" "$kind" "$5" "$6" "$7" "$parent" "$9")
+    if [ -z "$first" ]; then printf '%s\n' "$line" >> "$Q"
+    else
+      awk -F'\t' -v first="$first" -v line="$line" -v parent="$parent" '
+        NR == FNR { if ($3 == "déposé" && !($2 in t)) t[$2] = $1; next }
+        { a[++n] = $0 }
+        END {
+          pos = 0
+          for (i = 1; i <= n; i++) {
+            if (a[i] ~ /^#/) { if (i > pos) pos = i; continue }
+            split(a[i], f, "\t"); ti = (f[1] in t) ? t[f[1]] : "9"
+            if (ti < first || f[1] == parent) pos = i
+          }
+          for (i = 1; i <= n; i++) { if (i == pos + 1 || (pos == 0 && i == 1)) print line; print a[i] }
+          if (pos == n) print line
+        }' "$D/log.tsv" "$Q" > "$Q.new" && mv "$Q.new" "$Q"
+    fi ) 9> "$D/queue.lock"
+  log "$id" déposé "$branch $(g rev-parse --short "$full") $kind par $9$again"
   echo "déposé : $id ($kind), $(queue_lines | grep -c .) lot(s) dans la file"
 }
 
@@ -167,7 +190,7 @@ pushed() { # <id> <author> <branch>
 
 # The witnesses of a scripts lot: for each script it changes, test_<name>.sh or test_<name>.py next to it, or the
 # script itself when it is a witness. A script without a witness counts as the push guard counts it: as docs.
-replay_scripts() { # <id> → 0 green, 1 red (the failing witness on stdout)
+replay_scripts() { # <id> [quiet] → 0 green, 1 red (the failing witness on stdout); quiet: no « sans témoin » line
   local f dir n t played=""
   while IFS= read -r f; do
     [ -n "$f" ] || continue
@@ -184,9 +207,52 @@ replay_scripts() { # <id> → 0 green, 1 red (the failing witness on stdout)
         log "$1" témoin "$t rouge"; echo "$t"; return 1
       fi
     done
-    [ -n "$played" ] || log "$1" témoin "$f sans témoin (compté comme doc, comme la garde)"
+    [ -n "$played" ] || [ "${2:-}" = quiet ] || log "$1" témoin "$f sans témoin (compté comme doc, comme la garde)"
   done < <(g diff --name-only "$BASE" HEAD)
   return 0
+}
+
+# The tickets' headers, for a docs or scripts train (19 Nov., c7: lucivy-ticket-lost-words-2 landed a « corrigé » ticket
+# outside closed/, master went red at check_tickets, and three docs lots were pushed behind it). check_tickets.py on the
+# reposed tree; when red, on master's own docs: 0 green, 1 red by the train (the refusals in last-red.txt), 4 master
+# itself red (the train waits for a lot that mends it).
+# Master's own docs at check_tickets: 0 green (or no check_tickets.py), 1 red.
+master_tickets_red() {
+  local c=extension/rag3weaver/scripts/check_tickets.py tmp r
+  g cat-file -e "$BASE:$c" 2>/dev/null || return 1
+  tmp=$(mktemp -d)
+  g archive "$BASE" docs "$c" | tar -x -C "$tmp"
+  python3 "$tmp/$c" "$tmp" > /dev/null 2>&1; r=$?
+  rm -rf -- "$tmp"
+  [ $r != 0 ]
+}
+
+tickets_gate() {
+  local c=extension/rag3weaver/scripts/check_tickets.py
+  [ -f "$WT/$c" ] || return 0
+  python3 "$WT/$c" "$WT" > "$SD/last-tickets.log" 2>&1 && return 0
+  if ! master_tickets_red; then
+    { echo "check_tickets rouge sur l'arbre reposé :"; grep -E '^  - ' "$SD/last-tickets.log" | head -3; } | paste -sd' ' > "$SD/last-red.txt"
+    return 1
+  fi
+  return 4
+}
+
+# A train waiting on a master red at check_tickets goes behind the next lot of the queue that is not its own child, so
+# a lot that mends master reaches the head; once every lot has waited on this master, the pusher idles.
+tickets_wait() { # <line>…
+  local ids="" line w=$D/tickets-wait.txt
+  for line in "$@"; do ids="$ids $(f_ "$line" 1)"; done
+  [ "$(head -1 "$w" 2>/dev/null)" = "$BASE" ] || echo "$BASE" > "$w"
+  if grep -qx "$(f_ "$1" 1)" "$w"; then sleep "${PUSHER_IDLE:-60}"; return 0; fi
+  for line in "$@"; do f_ "$line" 1 >> "$w"; done
+  log "$TRAIN_LABEL" "en attente" "master $(g rev-parse --short "$BASE") rouge à check_tickets : le lot passe derrière le suivant"
+  ( flock 9
+    awk -F'\t' -v ids="$ids" 'BEGIN {n = split(ids, a, " "); for (i = 1; i <= n; i++) mine[a[i]] = 1}
+      /^#/ {print; next}
+      ($1 in mine) {held = held $0 "\n"; next}
+      {print; if (held != "" && !done && !($8 in mine)) {printf "%s", held; done = 1}}
+      END {if (!done) printf "%s", held}' "$Q" > "$Q.new" && mv "$Q.new" "$Q" ) 9> "$D/queue.lock"
 }
 
 # A Rust lot: one pinned pass under `poste lourd`, the peak of its memory in the log. An environment red (code 124,
@@ -352,8 +418,10 @@ red_family() { # <id> <author> <reason> <detail>
 repose() { # <line>…
   local line id head commits par pex before
   g checkout -q -f -B "$RB" "$BASE" && g clean -q -fd
-  # The lots of this repose, for their pull requests (open_prs): one line each, written after its cherry-pick.
-  : > "$SD/step-lots.tsv"
+  # The lots of this repose, for their pull requests (open_prs): one line each, written after its cherry-pick. The
+  # pull requests of an earlier step are not this step's: a docs push that landed left its own here (19 Nov.: the
+  # guard stopping parent-cache tried to close PR 47, landed twenty minutes before).
+  : > "$SD/step-lots.tsv"; : > "$SD/step-prs.tsv"
   for line in "$@"; do
     id=$(f_ "$line" 1); head=$(f_ "$line" 3); par=$(f_ "$line" 8); pex=""
     # A child leaves out its parent's original commits by the parent's original head (c7's rule: rebase --onto it);
@@ -379,6 +447,13 @@ repose() { # <line>…
       "$(g log -p --no-merges --format='commit %H' "$before..HEAD" | g patch-id --stable | awk '{print $1}' | paste -sd' ')" \
       "$(g log -1 --format=%s HEAD)" >> "$SD/step-lots.tsv"
   done
+  # The submodules at the reposed head's pointers, before the pass and the guard: a checkout and a cherry-pick move a
+  # pointer in the index, never the submodule (19 Nov., parent-cache: the pass played the old codeparsers, and the
+  # guard saw « M extension/rag3weaver/codeparsers »).
+  if ! g submodule update --init --quiet > "$SD/last-repose.log" 2>&1; then
+    echo "le sous-module ne se met pas au pointeur du lot : $(tail -1 "$SD/last-repose.log")" > "$SD/last-conflict.txt"
+    echo "${id:-sous-module}"; return 1
+  fi
   return 0
 }
 
@@ -391,6 +466,9 @@ replay_train() { # <line>…
     0) return 0 ;;
     1) replay_scripts "$TRAIN_LABEL" > "$SD/last-red.txt" && return 0; return 1 ;;
   esac
+  # The witnesses of the scripts a Rust train changes too (19 Nov., archi: ui/ide/lib/boite.ts and its test_boite.sh),
+  # before the pass: seconds, and a red one returns the train without twenty minutes of pass.
+  replay_scripts "$TRAIN_LABEL" quiet > "$SD/last-red.txt" || return 1
   # A Rust train: one pass. Its witness is the first Rust lot's; the other Rust lots' witnesses (e2e suites) and
   # every lot's extra suites join SUITES_EN_PLUS; a lib witness is covered by the whole lib that the pass plays.
   for line in "$@"; do
@@ -513,14 +591,19 @@ replay_and_push_a() {
       for line in "${part[@]}"; do log "$(f_ "$line" 1)" "déjà sur master"; pushed "$(f_ "$line" 1)" "$(f_ "$line" 9)" "$(f_ "$line" 2)"; done
       return 0
     fi
-    g push -q origin "HEAD:refs/heads/$RB" || { log "$TRAIN_LABEL" "push de la repose $RB refusé, rejoué au pas suivant"; return 0; }
-    log "$TRAIN_LABEL" reposé "$RB $(g rev-parse --short HEAD) sur $(g rev-parse --short "$BASE")"
-    replay_train "${part[@]}"
-    case $? in
-      0) break ;;
-      2) for line in "${part[@]}"; do red_family "$(f_ "$line" 1)" "$(f_ "$line" 9)" environnement "deux rouges d'environnement pour le train $TRAIN_LABEL : appeler c7"; done
-         return 0 ;;
-    esac
+    rank=0; for line in "${part[@]}"; do r=$(kind_rank "$(f_ "$line" 4)"); [ "$r" -gt "$rank" ] && rank=$r; done
+    gate=0; [ "$rank" -lt 2 ] && { tickets_gate; gate=$?; }
+    [ $gate = 4 ] && { tickets_wait "${part[@]}"; return 0; }
+    if [ $gate = 0 ]; then
+      g push -q origin "HEAD:refs/heads/$RB" || { log "$TRAIN_LABEL" "push de la repose $RB refusé, rejoué au pas suivant"; return 0; }
+      log "$TRAIN_LABEL" reposé "$RB $(g rev-parse --short HEAD) sur $(g rev-parse --short "$BASE")"
+      replay_train "${part[@]}"
+      case $? in
+        0) break ;;
+        2) for line in "${part[@]}"; do red_family "$(f_ "$line" 1)" "$(f_ "$line" 9)" environnement "deux rouges d'environnement pour le train $TRAIN_LABEL : appeler c7"; done
+           return 0 ;;
+      esac
+    fi
     n=${#part[@]}
     if [ "$n" = 1 ]; then
       red_family "$(f_ "${part[0]}" 1)" "$(f_ "${part[0]}" 9)" code "$(cat "$SD/last-red.txt" 2>/dev/null)"
@@ -657,6 +740,13 @@ step() {
     else kept+=("$line"); fi
   done
   BASE=$(g rev-parse origin/master)
+  # A Rust train is not taken on a master red at check_tickets: its pass would go red at check_features after twenty
+  # minutes (19 Nov., the chains of arbre and embarquement). It waits behind the next lot, so a docs lot that mends
+  # master reaches the head; the docs and scripts trains are judged on their reposed tree (tickets_gate).
+  rank=0; for line in "${kept[@]}"; do r=$(kind_rank "$(f_ "$line" 4)"); [ "$r" -gt "$rank" ] && rank=$r; done
+  if [ "$rank" = 2 ] && master_tickets_red; then
+    TRAIN_LABEL=$(f_ "${kept[0]}" 1); tickets_wait "${kept[@]}"; return 0
+  fi
   # To the millisecond: two steps in the same second reposed under the same branch name, and the push of the second
   # repose was refused (19 Nov.).
   STAMP=$(date +%Y%m%d-%H%M%S-%3N)

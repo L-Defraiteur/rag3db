@@ -155,6 +155,9 @@ def run_test(block, dest, target, poste, commande):
     replayed each other's binary, 19 Nov 2026), under `poste lourd` when given."""
     cwd = os.path.join(dest, block.get("tree") or ".")
     env = dict(os.environ, CARGO_TARGET_DIR=target)
+    # A case is built once, on its own target: no incremental cache, which is never reused (19 Nov 2026, c7: 20 of
+    # the 31 Go of archi's target were incremental/). The environment keeps the last word.
+    env.setdefault("CARGO_INCREMENTAL", "0")
     argv = ["sh", "-c", commande]
     if poste:
         argv = [poste, "lourd", *argv]

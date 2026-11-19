@@ -75,6 +75,8 @@ fn toy() -> (tempfile::TempDir, Backend) {
         cell_reactions: Mutex::new(std::collections::HashMap::new()),
         miroir_reacteur: Mutex::new(None),
         watches: Mutex::new(Vec::new()),
+        #[cfg(feature = "code")]
+        layer_sync: Mutex::new(None),
         components_watch: Mutex::new(None),
         propositions: Default::default(),
         reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -1542,4 +1544,38 @@ fn invocation_executes_the_checked_declarations_after_reload() {
     let response = backend.invoke_read_on(&checked, &authority, "echo", json!({}), cancel).unwrap();
     assert_ne!(response["result"]["version"], json!(2), "B ne doit jamais être exécutée après vérification de A : {response}");
     assert_eq!(response["result"], expected, "A doit avoir exécuté exactement sa lecture de schéma");
+}
+
+
+/// **An invocation does not wait behind an index** (ticket « un appel d'outil attend derrière un index sans le dire »,
+/// relevé d'arbre principal du 19 novembre 2026): while the catalog's lock is held, as an index holds it during its
+/// text phase, `invoke_read_on` answers from the read view. It took the lock only to read the cell.
+#[cfg(all(feature = "code", feature = "daemon"))]
+#[test]
+fn an_invocation_does_not_wait_behind_the_catalog_lock() {
+    let (dir, backend) = toy();
+    write(dir.path(), "echo.mmd", "%% tool: echo\n%% description: read the schema\n%% result: answer.result\ngraph LR\n answer[\"SchemaNode\"]\n");
+    backend.reload().unwrap();
+    // The product's opening publishes the read view once the catalog is mounted; this decor does not.
+    backend.catalog.lock().unwrap().publish_read_view();
+    let backend = std::sync::Arc::new(backend);
+    assert!(backend.read_view.current().is_some(), "no read view is published: the witness would test the opening's fallback, not the common use");
+    let authority = crate::dataflow::invocation_nodes::InvocationAuthority {
+        manifest: backend.prepared().manifest_path.clone(),
+        policy: Default::default(),
+        scope: Default::default(),
+    };
+    let catalog = backend.catalog.clone();
+    let tenu = catalog.lock().unwrap();
+    let (tx, rx) = std::sync::mpsc::channel();
+    let b = backend.clone();
+    let fil = std::thread::spawn(move || {
+        let cancel = crate::dataflow::node::NodeContext::new().cancellation();
+        let _ = tx.send(b.invoke_read_on(&b.prepared(), &authority, "echo", json!({}), cancel));
+    });
+    let rendu = rx.recv_timeout(std::time::Duration::from_secs(5));
+    drop(tenu);
+    fil.join().unwrap();
+    let rendu = rendu.expect("the invocation waited more than 5 s behind the catalog's lock");
+    assert!(rendu.is_ok(), "{rendu:?}");
 }

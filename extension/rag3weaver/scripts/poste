@@ -460,6 +460,18 @@ prendre() { flock "$@" & attente=$!; wait "$attente"; r=$?; attente=""; [ "$r" =
 trap '[ -n "$attente" ] && kill "$attente" 2>/dev/null; exit 143' TERM INT HUP
 FILS=$(fils_par "$mode")
 borner_fils "$FILS"
+# sccache et mold (19 novembre 2026, c7 ; posés par Lucie aux deux postes) : treize targets recompilaient chacun les
+# mêmes dépendances. Quand ils sont là, une commande compile par sccache (cache sur disque hors de /tmp, plafond 40G) et
+# lie par mold, à travers clang. Une variable déjà posée par l'appelant, même vide, l'emporte.
+if command -v sccache > /dev/null 2>&1; then
+  [ -n "${RUSTC_WRAPPER+posée}" ] || export RUSTC_WRAPPER=sccache
+  [ -n "${SCCACHE_DIR+posée}" ] || export SCCACHE_DIR="$HOME/.cache/sccache"
+  [ -n "${SCCACHE_CACHE_SIZE+posée}" ] || export SCCACHE_CACHE_SIZE=40G
+fi
+if command -v mold > /dev/null 2>&1 && command -v clang > /dev/null 2>&1 && [ -z "${CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER+posée}" ]; then
+  export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=clang
+  [ -n "${CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS+posée}" ] || export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS="-C link-arg=-fuse-ld=mold"
+fi
 QUOTA="${POSTE_CPU_QUOTA:-$((FILS * 100))%}"
 if [ "$borne" = 1 ]; then
   set -- systemd-run --user --scope -q -p MemoryMax="$MEM" -p MemorySwapMax="$SWAP" -p CPUQuota="$QUOTA" -- "$@"

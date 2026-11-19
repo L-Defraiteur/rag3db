@@ -1,6 +1,6 @@
 # Un même texte ne rend pas les mêmes bits selon son lot
 
-- **État** : ouvert (16 novembre 2026, embarquement ; observation, demande de c7)
+- **État** : fermé (19 novembre 2026, embarquement : observation tenue, pas de correctif) ; ouvert (16 novembre 2026, embarquement ; observation, demande de c7)
 - **Pour** : embarquement
 - **Famille** : produit
 - **Gravité** : observation. 1e-5 sur un cosinus ne change pas une réponse ; rien d'aujourd'hui ne dépend
@@ -28,3 +28,11 @@ fixe (coûteux). La parité se juge par tolérance : ticket
 
 Fermer ce ticket quand la tolérance est mesurée et écrite, en le disant : observation tenue, pas de
 correctif.
+
+## Fermé (19 novembre 2026)
+
+Observation tenue, comme prévu à l'entrée 2 de la page du 16 novembre : un même texte rend les mêmes bits dans une même
+forme de lot, et diffère selon son lot, sans que ce soit un défaut. La tolérance de cet écart est mesurée (granite-278m
+5,51e-5, bge-m3 1,34e-3, le 19 novembre) et sert désormais de règle de preuve d'une pose
+(`docs/embarquement/13-11-2026/01-activation-et-residence-livre-et-manquant.md`). Un réglage qui le rendrait
+déterministe se cherche à part (ticket du réglage déterministe de cubecl).
