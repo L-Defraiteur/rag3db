@@ -322,6 +322,39 @@ fn last_rank(catalog: &Catalog, layer: &str) -> Result<i64, String> {
     lu.rows.first().and_then(|r| r.first()).and_then(|v| v.as_i64()).ok_or_else(|| format!("la couche {layer} n'a pas de génération"))
 }
 
+/// **The backend's sync of its tracked layers, in service** (2a′-3, lot 5b-2): a thread that runs
+/// [`sync_tracked_layers`] every `every`, under the catalog's lock, until stopped. A refusal is said on stderr once,
+/// when it changes; a layer refused (the cap, a HEAD that waits for tip) does not stop the others.
+pub struct LayerSyncHandle {
+    stop: std::sync::Arc<(std::sync::Mutex<bool>, std::sync::Condvar)>,
+    thread: Option<std::thread::JoinHandle<()>>,
+}
+
+impl LayerSyncHandle {
+    /// Stops the thread and waits for it (woken: no wait for the period).
+    pub fn stop(mut self) {
+        let (flag, cv) = &*self.stop;
+        *flag.lock().unwrap_or_else(|e| e.into_inner()) = true;
+        cv.notify_all();
+        if let Some(t) = self.thread.take() {
+            let _ = t.join();
+        }
+    }
+}
+
+/// Starts the sync of the tracked layers of `workspace_root`. See [`LayerSyncHandle`].
+pub fn spawn_layer_sync(
+    catalog: std::sync::Arc<std::sync::Mutex<Catalog>>,
+    workspace_root: PathBuf,
+    tracked: Option<serde_json::Value>,
+    settings: crate::views::WriteSettings,
+    every: std::time::Duration,
+) -> LayerSyncHandle {
+    // RED STUB: no thread.
+    let _ = (catalog, workspace_root, tracked, settings, every);
+    LayerSyncHandle { stop: Default::default(), thread: None }
+}
+
 #[cfg(all(test, feature = "rag3db-native"))]
 mod tests {
     use super::*;
@@ -536,6 +569,42 @@ mod tests {
         assert!(issues.iter().all(|(_, _, r)| r.is_ok()), "{issues:?}");
         assert_eq!(generations(&cat, &b), 2, "a commit on b gave no generation");
         assert_eq!(fins_dans_la_vue(&mut cat, &w, "f"), vec![3], "wt does not follow its HEAD on b");
+    }
+
+    /// **The sync runs in service** (2a′-3, lot 5b-2): started on a catalog, it writes a tracked worktree's new file
+    /// into that worktree's view without any call, and stops when asked.
+    #[test]
+    fn the_sync_in_service_writes_a_worktree_s_new_file_into_its_view() {
+        let (d, c1, _, _) = depot();
+        let (cat, _) = base(d.path(), &c1);
+        let dossiers = tempfile::tempdir().unwrap();
+        let wt = dossiers.path().join("wt");
+        git(d.path(), &["worktree", "add", "-q", wt.to_str().unwrap(), "b"]);
+        let tracked = serde_json::json!({"sources": [{"select": "branch:b"}, {"select": "worktree:*"}], "writes": {"every_ms": 30}});
+        let settings = crate::views::write_settings(Some(&tracked)).unwrap();
+        assert_eq!(settings.every_ms, Some(30), "every_ms is not read from tracked.writes");
+        let cat = std::sync::Arc::new(std::sync::Mutex::new(cat));
+        let sync = spawn_layer_sync(cat.clone(), d.path().to_path_buf(), Some(tracked.clone()), settings, std::time::Duration::from_millis(30));
+        std::fs::write(wt.join("h.rs"), "pub fn h() -> u32 {\n    9\n}\n").unwrap();
+        let id = {
+            let c = cat.lock().unwrap();
+            let t = crate::suivies::tracked_layers(&c, d.path(), Some(&tracked)).unwrap().unwrap();
+            t.ids.iter().find(|(n, _)| n.ends_with("/wt")).map(|(_, id)| id.clone()).expect("the layer of wt")
+        };
+        let fin = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        loop {
+            let vu = {
+                let mut c = cat.lock().unwrap();
+                crate::views::load_stack(&c, &crate::views::ViewRequest { layer: id.clone(), rank: None }, &Default::default()).is_ok()
+                    && fins_dans_la_vue(&mut c, &id, "h") == vec![3]
+            };
+            if vu {
+                break;
+            }
+            assert!(std::time::Instant::now() < fin, "the sync in service did not write wt's h in 20 s");
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        sync.stop();
     }
 
     /// **Témoin 2 : a history layer is written without checkout.** Writing the generations of branch `b` (never
