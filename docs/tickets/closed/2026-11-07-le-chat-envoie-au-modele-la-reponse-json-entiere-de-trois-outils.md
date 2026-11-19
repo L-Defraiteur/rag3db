@@ -1,7 +1,6 @@
 # Le chat envoie au modèle la réponse JSON entière de read_file, grep_files et list_files
 
-- **État** : ouvert (7 novembre 2026), relevé par hooks-essai en lisant le chemin des retours
-  d'outils du chat (ticket de la mise en page humaine).
+- **État** : corrigé. Lot du 19 nov. 2026 (session tty, branche `cx-presentation-outils`) : `model_text` rend le texte de `result` ; page `docs/tty/19-11-2026/01-le-modele-lit-le-texte-des-lectures.md`.
 - **Famille** : produit
 - **Gravité** : coût et bruit. Le modèle lit `delivery`, `validation`, `run` et `metadata` vide
   autour du résultat. Le JSON coupé par la borne de 32 Kio arrive invalide.
