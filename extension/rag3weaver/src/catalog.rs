@@ -10645,10 +10645,10 @@ fn read_threads() -> u64 {
         // la copie du lot de banc le 16 novembre) lire les lignes fermées.
         let mut tout_visible = true;
         for table in tables {
-            let Some(visible) = self.dialect.condition_visible_sur("s", couche, rang + 1) else { continue };
+            let Some(requete) = self.hidden_row_read(table, couche, rang + 1)? else { continue };
             let lu = self
                 .conn
-                .execute(&format!("MATCH (s:`{table}`) WHERE NOT ({visible}) RETURN s._uuid LIMIT 1"))
+                .execute(&requete)
                 .map_err(|e| CatalogError::DbError(format!("la visibilité de {table} à l'ouverture : {e}")))?;
             if !lu.rows.is_empty() {
                 tout_visible = false;
@@ -10715,6 +10715,25 @@ fn read_threads() -> u64 {
     /// ligne `_generation` au rang en attente w, avec son commit et le nombre de chemins sales (un arbre
     /// propre en a 0), puis w devient le rang publié et w + 1 le rang en attente. Aucune ligne de
     /// `Scope` ni de `File` n'est réécrite : les lignes nées à w deviennent publiées par le seul rang.
+    /// **One row of `table` that is not visible at `rank` of `layer`**, if any (`LIMIT 1`): what tells a base
+    /// with a history from one that is « all visible ». `None` for a dialect without generations.
+    pub(crate) fn hidden_row_read(&self, table: &str, layer: &str, rank: i64) -> Result<Option<String>, CatalogError> {
+        if !self.dialect.sait_les_generations() {
+            return Ok(None);
+        }
+        let visible = rag3weaver_ir::Predicate::Visible { couche: layer.to_string(), rang: rank, mask: Default::default() };
+        let select = rag3weaver_ir::Select {
+            table: table.to_string(),
+            by_uuids: false,
+            filter: Some(rag3weaver_ir::Predicate::Not(Box::new(visible))),
+            returns: vec![rag3weaver_ir::Column::Node("_uuid".into())],
+            order_by: Vec::new(),
+            limit: Some(rag3weaver_ir::Limit::Literal(1)),
+            offset: None,
+        };
+        self.dialect.select(&select).map(Some).map_err(|e| CatalogError::DbError(e.to_string()))
+    }
+
     pub fn publier_la_generation(&mut self, commit: &str, chemins_sales: usize) -> Result<i64, CatalogError> {
         let Some(v) = self.generations.as_ref() else {
             return Err(CatalogError::DbError("publier une génération : cette base n'a pas de générations".into()));
@@ -10746,9 +10765,13 @@ fn read_threads() -> u64 {
                 ],
             )
             .map_err(|e| CatalogError::DbError(e.to_string()))?;
+        let compter = self
+            .dialect
+            .set_generation_counts()
+            .ok_or_else(|| CatalogError::DbError("publier une génération : ce dialecte ne dit pas ses compteurs".into()))?;
         self.conn
             .execute_with_params(
-                &format!("MATCH (g:{} {{_key: $key}}) SET g.chemins_sales = $sales, g.aretes_recopiees = $recopiees", crate::generations::TABLE),
+                &compter,
                 &[
                     texte("key", &cle),
                     QueryParam::new("sales", CypherValue::Int(chemins_sales as i64)),
