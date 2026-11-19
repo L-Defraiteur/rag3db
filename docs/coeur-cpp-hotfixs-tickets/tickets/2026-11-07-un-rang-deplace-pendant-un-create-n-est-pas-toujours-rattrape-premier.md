@@ -3,7 +3,7 @@
 - **État** : ouvert, le 7 novembre 2026 (seconde session cœur C++, hotfixs). Le cas est inscrit à
   `test/transaction/concurrence/probabilistic.txt` ; le correctif entre en tête du lot G6 (HNSW hors
   verrous), avec un témoin déterministe s'il s'en trouve un.
-- **Gravité** : réponse fausse en silence, à la marge : un rang mis à jour pendant la construction
+- **Gravité** : réponse fausse en silence (le 19 novembre : environ une fois sur deux sur une recette sans concurrence ; voir plus bas) : un rang mis à jour pendant la construction
   de l'index est trouvé, mais pas au premier rang, par une recherche à son vecteur exact.
 - **Atteignable en service** : oui, par un CREATE_VECTOR_INDEX sous écritures (le rattrapage de
   (δ), 6fe9ffe9b, et le CREATE concurrent (A), 97daa41ed).
@@ -106,6 +106,40 @@ même schéma vaut pour les rangs 25 et 27 d'un autre relevé, réinsérés eux 
 Les questions suivantes : la recherche d'insertion du rattrapage atteint-elle le rang 1 (les
 voisins du nuage d'origine qui pointent vers lui) ? Si oui, pourquoi l'arête est-elle perdue, à la
 sélection des voisins ou à un élagage (`shrinkForNode`) ? Et pourquoi seulement en mémoire ?
+
+### Le 19 novembre : sans concurrence ni CREATE, une fois sur deux
+
+**Le défaut n'est pas une course du CREATE.** Une sonde dans `insertToLayer` (couche basse, rattrapage) le montre :
+la première réinsertion, celle du rang 3 à `[501, 1, 0, …, -1]`, cherche depuis le nœud 10452 et rend 60 voisins,
+tous dans le nuage d'origine à environ 490. Le rang 1, pourtant à 1,41, n'en est pas. Chaque rang déplacé se relie
+ensuite aux précédents, et le nuage se forme sans lui.
+
+**La recette sans concurrence.** Au shell, master 9906f44d69, six essais par case :
+1. 20 000 lignes ;
+2. le SET du rang 1 à `[500, 0, …, -1]` ;
+3. CREATE_VECTOR_INDEX ;
+4. 150 SET (ou 150 insertions) à `[500 + j, j % 7, 0, …, -1]` ;
+5. `QUERY_VECTOR_INDEX(…, [500, 0, …, -1], 1, efs := 64)`.
+
+| nuage bâti par | en mémoire | sur disque |
+|---|---|---|
+| SET | 3 manqués sur 6 | 4 sur 6 |
+| insertions | 4 sur 6 | 3 sur 6 |
+
+**Lecture.** Au bâti, le rang 1 est seul loin du nuage d'origine. Toutes ses distances au nuage sont proches de 490,
+et la recherche ne les départage pas. Il se relie (60 arêtes sortantes, 32 entrantes) à des nœuds du nuage qui ne
+sont pas ceux par où passent les recherches venues de sa direction. Les points insérés ensuite près de lui ne le
+trouvent pas, et ne s'y relient pas. La recherche exacte de son vecteur s'arrête dans le nouveau nuage, au plus
+proche voisin, à 1,41.
+
+C'est une faiblesse du graphe HNSW autour d'un point isolé, par n'importe quel chemin (bâti, insertion, mise à jour,
+rattrapage), en mémoire comme sur disque. **Gravité** : une réponse fausse, la recherche exacte d'un vecteur présent
+ne le rend pas premier. Le cas du banc (`probabilistic.txt`) en est une forme.
+
+**Question à Lucie (19 novembre, par c7).** Corriger, c'est toucher la conception de l'insertion : par exemple
+relier un nouveau point aussi aux voisins de ses voisins, ou garder les arêtes entrantes d'un point isolé. Ou bien
+on tient cela pour la limite d'un index approché, et le témoin du banc dit une borne de rappel plutôt qu'un premier
+rang.
 
 ## Pour avancer
 
