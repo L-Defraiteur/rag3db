@@ -6090,10 +6090,6 @@ impl Backend {
         // **The stop of this run interrupts the statement its snapshot runs** on the engine (ticket
         // `2026-11-07-un-arret-ne-coupe-pas-une-requete-du-moteur-en-cours`): the snapshot's connection is this
         // call's alone, never the shared one; forgotten when the call returns.
-        let _interruption = instantane.as_ref().map(|i| {
-            let i = i.clone();
-            runtime.cancel_handle().on_cancel(move || i.interrompre())
-        });
         #[cfg(feature = "code")]
         crate::dataflow::invocation_nodes::with_parent_cancel(|cancel| {
             if let Some(cancel) = cancel {
