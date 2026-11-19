@@ -17,6 +17,12 @@
   « Previous step » : les fichiers lus et écrits, les commandes lancées et ce qu'elles ont rendu, dans la limite de
   `teammate.carry_over_chars` (8 000 caractères par défaut). L'équipier ne relit plus un fichier ni ne relance un
   test pour retrouver ce qu'il savait déjà au pas d'avant.
+- 19 novembre 2026 — **Un outil de lecture relit une génération passée.** Sur une base de code à versions (le défaut
+  d'un index neuf depuis le 14 novembre), chaque index fini publie une génération, et les outils de lecture
+  (`search_code`, `usages`, `outline`…) prennent `view: {"layer": …, "rank": …}`. Sans rang, ils lisent la dernière
+  génération publiée ; avec un rang, l'état de cette génération-là. La réponse dit la vue lue : sa couche, son rang, et
+  s'il y a des lignes en attente au-dessus. Une couche ou un rang inconnu est refusé en le nommant. Une base d'avant les
+  versions refuse `view` et se dit « à migrer ».
 
 - 19 novembre 2026 — **Un ADD ou un DROP de colonne attend les lectures ouvertes de sa table.** Une transaction qui
   lit une table la retient jusqu'à sa fin : un `ALTER TABLE … ADD`, `… DROP` ou un `DROP TABLE` l'attend, et la
