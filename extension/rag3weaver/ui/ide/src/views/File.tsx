@@ -110,6 +110,8 @@ export function File({ id, path, state }: { id: string; path: string; state: Hos
     if (!backend || editing) return;
     setRead(null);
     setPlan(null);
+    // The error of the file read before goes with it (ticket of 19 Nov. 2026: a readable file showed it above its lines).
+    setError(null);
     Promise.all([
       call(backend.manifest, "read_file", { path, offset, limit: 2000, format: "json" }) as Promise<Read>,
       (call(backend.manifest, "outline", { path, format: "json" }) as Promise<unknown>)
