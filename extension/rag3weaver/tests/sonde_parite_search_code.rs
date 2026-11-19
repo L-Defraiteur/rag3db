@@ -704,3 +704,86 @@ fn embedder_of(prepared: &PreparedBackend) -> Option<Box<dyn rag3weaver::embedde
         Err(e) => panic!("the relevé needs the manifest's embedder (set RAG3WEAVER_PARITE_NO_EMBEDDER=1 for lexical only): {e}"),
     }
 }
+
+/// The peak and current resident memory of this process, in MiB (`VmHWM`, `VmRSS`).
+fn memoire_du_processus() -> (u64, u64) {
+    let s = std::fs::read_to_string("/proc/self/status").unwrap_or_default();
+    let lire = |cle: &str| s.lines().find_map(|l| l.strip_prefix(cle)).and_then(|v| v.split_whitespace().next()).and_then(|v| v.parse::<u64>().ok()).unwrap_or(0) / 1024;
+    (lire("VmHWM:"), lire("VmRSS:"))
+}
+
+/// **The first pass of the writer on a migrated base, under the product's buffer** (ticket of 19 November 2026,
+/// « le premier passage de l'écrivain sur une base migrée remplit le tampon du moteur »): on a reflink copy of a
+/// base passed through 1b and the generations, never rewritten (`RAG3WEAVER_PARITE_BASE` and `_MANIFESTE`), the
+/// plan of the DEFINED_IN copy on one real batch, then the index the writer runs, sampled every second (the
+/// process's resident memory; the engine's buffer is inside it). Ends with the journal's last line.
+#[test]
+#[ignore]
+fn repasse_une_base_migree_sous_le_tampon_du_produit() {
+    let var = |n: &str| std::env::var_os(n);
+    let (Some(base), Some(manifeste)) = (var("RAG3WEAVER_PARITE_BASE"), var("RAG3WEAVER_PARITE_MANIFESTE")) else {
+        eprintln!("SAUTÉ repasse_une_base_migree_sous_le_tampon_du_produit : RAG3WEAVER_PARITE_BASE ou _MANIFESTE manque (une copie, jamais la base en service)");
+        return;
+    };
+    let tampon = rag3weaver::rag3db_connection::buffer_pool_choice(None);
+    eprintln!("[repassage] tampon : {tampon:?}");
+    let prepared = PreparedBackend::load(std::path::Path::new(&manifeste)).expect("le manifeste");
+    let backend = { let embedder = embedder_of(&prepared); prepared.open(Box::new(Rag3dbConnection::new(&base).expect("ouvrir la copie")), embedder) }.expect("ouvrir le backend");
+    eprintln!("[repassage] forme {:?}", rag3weaver::code::scope_form(&backend.catalog.lock().unwrap()).unwrap());
+    // The plan of the copy on one batch: the File rows of 200 paths, paired with themselves (the shape of the
+    // first pass, where every File is replaced).
+    {
+        let cat = backend.catalog.lock().unwrap();
+        let lu = cat.execute_raw("MATCH (f:File) WHERE f._jusqu_a IS NULL RETURN f._uuid, f.source, f.path LIMIT 200").unwrap();
+        let paires: Vec<rag3weaver::connection::CypherValue> = lu
+            .rows
+            .iter()
+            .map(|l| rag3weaver::connection::CypherValue::Map(std::collections::BTreeMap::from([("a".to_string(), l[0].clone()), ("n".to_string(), l[0].clone())])))
+            .collect();
+        let source = lu.rows.first().map(|l| l[1].clone()).unwrap_or(rag3weaver::connection::CypherValue::Null);
+        let chemins = rag3weaver::connection::CypherValue::List(lu.rows.iter().map(|l| l[2].clone()).collect());
+        let requete = rag3weaver::code_sync::edge_copy_write(&cat, "DEFINED_IN", "File", "Scope", rag3weaver_ir::Direction::Incoming, cat.rang_en_attente(), 1).unwrap();
+        let params = [
+            rag3weaver::connection::QueryParam::new("paires", rag3weaver::connection::CypherValue::List(paires)),
+            rag3weaver::connection::QueryParam::new("lot_s0", source),
+            rag3weaver::connection::QueryParam::new("lot_p0", chemins),
+        ];
+        let plan = cat.execute_raw_with_params(&format!("EXPLAIN {requete}"), &params).unwrap();
+        eprintln!("[repassage] la recopie DEFINED_IN : {requete}");
+        for l in &plan.rows {
+            eprintln!("{}", l.first().and_then(|v| v.as_str()).unwrap_or(""));
+        }
+    }
+    let fin = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let releve = {
+        let fin = fin.clone();
+        std::thread::spawn(move || {
+            let debut = std::time::Instant::now();
+            while !fin.load(std::sync::atomic::Ordering::SeqCst) {
+                let (pic, rss) = memoire_du_processus();
+                eprintln!("[mémoire] {:>5} s rss {rss} Mio, pic {pic} Mio", debut.elapsed().as_secs());
+                std::thread::sleep(std::time::Duration::from_secs(5));
+            }
+        })
+    };
+    let lance = backend.call("index", json!({"confirm": true})).unwrap_or_else(|e| panic!("index : {e}"));
+    let mut r = &lance;
+    while let Some(i) = r.get("result") {
+        r = i;
+    }
+    let journal = r.as_str().and_then(|t| t.lines().find_map(|l| l.strip_prefix("journal : ").map(str::to_string))).unwrap_or_else(|| panic!("le journal de l'index : {lance}"));
+    let debut = std::time::Instant::now();
+    let derniere = loop {
+        let lu = std::fs::read_to_string(&journal).unwrap_or_default();
+        let derniere = lu.lines().rev().find(|l| !l.trim().is_empty()).unwrap_or("").to_string();
+        if derniere.starts_with("indexation terminée") || derniere.starts_with("indexation échouée") || derniere.starts_with("indexation arrêtée") {
+            break derniere;
+        }
+        assert!(debut.elapsed().as_secs() < 7200, "pas fini en deux heures");
+        std::thread::sleep(std::time::Duration::from_secs(1));
+    };
+    fin.store(true, std::sync::atomic::Ordering::SeqCst);
+    releve.join().unwrap();
+    eprintln!("[repassage] en {:.0} s, pic {} Mio : {derniere}", debut.elapsed().as_secs_f64(), memoire_du_processus().0);
+    assert!(derniere.starts_with("indexation terminée"), "le premier passage de l'écrivain finit sous le tampon du produit : {derniere}");
+}
