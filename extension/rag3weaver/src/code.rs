@@ -1827,7 +1827,11 @@ pub fn analyze_in_project_avec(
             let mut non_types_lus: BTreeMap<String, bool> = BTreeMap::new();
             // Les verrous pris : symbole `Classe::champ` → sites.
             let mut verrous: BTreeMap<String, Vec<UsageSite>> = BTreeMap::new();
-            for r in &sc.identifier_references {
+            // **Le type d'un appel `Type::f()` / `Type.f()` est un usage du type** (19 novembre 2026) : la
+            // référence relevée est `f`, qualifiée par `Type` ; sans la tête, `usages Type` perdait le site
+            // quand `f` se résout par le type (41 sites de `Catalog` dans les tests de rag3weaver).
+            let tetes = tetes_de_type(&sc.identifier_references);
+            for r in sc.identifier_references.iter().chain(tetes.iter()) {
                 // Un verrou : le champ mutex de son propriétaire, `this` /
                 // `self` (la classe englobante) ou un receveur typé. Sans
                 // propriétaire lu, rien : on ne devine pas la classe.
@@ -4775,6 +4779,50 @@ fn par_reexportation(modules: &[String], definers: &[String], fichiers: &HashMap
         front = suivant;
     }
     None
+}
+
+/// **Les têtes de type des appels qualifiés d'un scope** : pour `Type::f()` (Rust, C++) ou `Type.f()` (Python,
+/// TypeScript, C#), une référence de plus vers `Type`, usage `type`, à la ligne de l'appel. Le qualificatif doit être
+/// écrit tel quel devant le nom sur la ligne (un chemin ou un accès), et nommer un type : un identifiant simple en
+/// capitale (le dernier segment d'un chemin `a::B`). Une tête déjà relevée sur la même ligne ne se double pas.
+fn tetes_de_type(
+    refs: &[codeparsers::scope_extraction::types::IdentifierReference],
+) -> Vec<codeparsers::scope_extraction::types::IdentifierReference> {
+    let mut out: Vec<codeparsers::scope_extraction::types::IdentifierReference> = Vec::new();
+    for r in refs {
+        let Some(q) = r.qualifier.as_deref() else { continue };
+        let ctx = r.context.as_deref().unwrap_or("");
+        let chemin = ctx.contains(&format!("{q}::{}", r.identifier));
+        let acces = !chemin && ctx.contains(&format!("{q}.{}", r.identifier));
+        if !chemin && !acces {
+            continue;
+        }
+        let tete = if chemin { q.rsplit("::").next().unwrap_or(q) } else { q };
+        let simple = !tete.is_empty() && tete.chars().all(|c| c.is_alphanumeric() || c == '_');
+        if !simple || !tete.starts_with(|c: char| c.is_uppercase()) || tete == "Self" || tete == r.identifier {
+            continue;
+        }
+        let deja = |x: &codeparsers::scope_extraction::types::IdentifierReference| x.identifier == tete && x.line == r.line;
+        if refs.iter().any(deja) || out.iter().any(deja) {
+            continue;
+        }
+        out.push(codeparsers::scope_extraction::types::IdentifierReference {
+            identifier: tete.to_string(),
+            line: r.line,
+            column: r.column.map(|c| c.saturating_sub(tete.len() + if chemin { 2 } else { 1 })),
+            context: r.context.clone(),
+            qualifier: if chemin { q.rsplit_once("::").map(|(p, _)| p.to_string()) } else { None },
+            usage: Some(UsageKind::Type),
+            kind: r.kind.clone(),
+            import_origin: r.import_origin.as_ref().filter(|o| o.via_qualifier).map(|o| codeparsers::scope_extraction::types::ImportOrigin {
+                source: o.source.clone(),
+                imported: o.imported.clone(),
+                via_qualifier: false,
+            }),
+            ..Default::default()
+        });
+    }
+    out
 }
 
 /// Le module que désigne `source`, écrit dans `module` : `runtime` →
