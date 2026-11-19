@@ -26,3 +26,16 @@ La passe de la tête (`journaux-hotfixs-pile-matin` à luciepc) s'est arrêtée 
 
 Pour tout script de passe : `cd <build>/test/transaction/concurrence && ctest -R '^concurrence_test\.known_red$'`,
 juger le code de sortie, et ne grepper que `100% tests passed(, 0 tests failed)? out of 1`.
+
+## Un piège de témoin : un BEGIN abandonne un point de reprise automatique en attente
+
+Relevé en écrivant le témoin du dernier lecteur en quarantaine (`QuarantineOpenTransactions`, branche
+`quarantine-last-reader-checkpoint`). Quand une validation a posé une demande de point de reprise automatique,
+les nouvelles transactions sont retenues. Un `BEGIN` fait à ce moment-là attend au plus `AUTO_CHECKPOINT_WAIT`, puis
+**abandonne la demande** (`cancelAutoCheckpointRequestNoLock`) avant de continuer. Un contrôle de mise en place placé
+là (un BEGIN pour vérifier la quarantaine) retirait l'objet du cas : le dernier lecteur n'avait plus rien à écrire, et
+le témoin passait vert sans rien prouver.
+
+Pour tout témoin d'un point de reprise automatique : ne rien ouvrir entre la demande et le départ du dernier, et
+vérifier que la demande est bien là au moment voulu (`FlakyCheckpointer::autoCheckpointRequested`). Une
+contre-épreuve sans la faute montre que la recette exerce le chemin.
