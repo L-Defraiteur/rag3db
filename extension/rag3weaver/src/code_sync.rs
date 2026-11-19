@@ -608,7 +608,7 @@ fn ecrire_la_table(
         let liste = CypherValue::List(uuids.iter().cloned().map(CypherValue::String).collect());
         catalog
             .execute_raw_with_params(
-                &format!("UNWIND $uuids AS u MATCH (s:`{table}` {{_uuid: u}}) SET s.{} = $valeur", crate::generations::JUSQU_A),
+                &retirement_write(catalog, table)?,
                 &[p("uuids", liste), p("valeur", valeur)],
             )
             .map(|_| ())
@@ -1583,6 +1583,13 @@ pub(crate) fn rows_to_compare_read(catalog: &Catalog, table: &str, path_field: &
 pub(crate) fn births_read(catalog: &Catalog, table: &str, key_field: &str) -> Result<String, String> {
     let rank = catalog.generations.as_ref().map(|v| v.rang).ok_or("sans générations")?;
     visible_read(catalog, table, Some(rank), vec![among(key_field, "cles")], &[key_field, crate::generations::DEPUIS], None)
+}
+
+/// **The retirement rank of given rows** (`$uuids`) set to `$valeur`: a rank to retire them, a typed NULL to
+/// reopen them. Rendered by the dialect as a mark.
+pub(crate) fn retirement_write(catalog: &Catalog, table: &str) -> Result<String, String> {
+    let marque = rag3weaver_ir::Write::Mark { table: table.to_string(), set: vec![(crate::generations::JUSQU_A.to_string(), Some("valeur".to_string()))] };
+    catalog.dialect_arc().write(&marque).map_err(|e| e.to_string())
 }
 
 /// The equality of `field` to the parameter `param`, for [`visible_read`].
