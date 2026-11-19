@@ -23,6 +23,14 @@ use crate::connection::{CypherValue, DbConnection, DbError, QueryParam, QueryRes
 /// Fields are declared so that `conn` is dropped before `db` (Rust drops
 /// fields in declaration order). The `Database` lives on the heap (`Arc`)
 /// so its address is stable.
+/// The engine's refusal of a statement whose table's schema changed after it started
+/// (`Transaction::SCHEMA_CHANGED_RETRY`, in the middle of the message, after « Transaction manager exception: »).
+pub const SCHEMA_CHANGED_RETRY: &str = "Schema changed, retry:";
+
+/// How many times a statement refused for a changed schema is started again: the refusal comes back only if
+/// another ALTER is validated in between (the core, 19 November 2026).
+pub const SCHEMA_CHANGED_RETRIES: usize = 3;
+
 pub struct Rag3dbConnection {
     // SAFETY: conn borrows from db. Declared first so it drops first.
     conn: rag3db::Connection<'static>,
@@ -43,6 +51,9 @@ pub struct Rag3dbConnection {
     /// started. The engine cannot make that refusal deterministic for a single autocommit statement.
     #[cfg(test)]
     schema_refusals: std::sync::atomic::AtomicUsize,
+    /// **An explicit transaction is open** on this connection (`BEGIN TRANSACTION` … `COMMIT`/`ROLLBACK`): a
+    /// statement refused for a changed schema is then not started again here; the caller rolls back first.
+    explicit_transaction: std::sync::atomic::AtomicBool,
     /// Le dernier refus du moteur sur cette connexion, effacé à chaque
     /// instruction réussie. Une transaction défaite par une instruction ne
     /// répond plus ensuite que « a statement in it failed » : l'erreur rendue
@@ -472,6 +483,7 @@ impl Rag3dbConnection {
             path: None,
             #[cfg(test)]
             schema_refusals: Default::default(),
+            explicit_transaction: Default::default(),
         })
     }
 
@@ -578,6 +590,38 @@ impl Rag3dbConnection {
     #[doc(hidden)]
     pub fn failed_checkpoint_hook(&self) -> FailedCheckpointHook {
         FailedCheckpointHook(Arc::downgrade(&self.reopen))
+    }
+
+    /// **A statement refused for a changed schema, started again** (ticket of 15 November 2026, grain (ii), confirmed
+    /// by the core on 19 November): outside an explicit transaction, the refused statement was rolled back whole and
+    /// left nothing, and the same statement, bound again on the new schema, goes through. At most
+    /// [`SCHEMA_CHANGED_RETRIES`] times; past that, or inside an explicit transaction, the error goes up.
+    fn started_again_on_a_changed_schema(&self, cypher: &str, run: impl Fn() -> Result<QueryResult, DbError>) -> Result<QueryResult, DbError> {
+        use std::sync::atomic::Ordering::SeqCst;
+        let mut retries = 0;
+        loop {
+            #[cfg(test)]
+            let r = self.injected_schema_refusal().and_then(|()| run());
+            #[cfg(not(test))]
+            let r = run();
+            let word = cypher.trim_start().split_whitespace().next().unwrap_or("").to_ascii_uppercase();
+            match r {
+                Err(e) if e.to_string().contains(SCHEMA_CHANGED_RETRY) && !self.explicit_transaction.load(SeqCst) => {
+                    if retries == SCHEMA_CHANGED_RETRIES {
+                        return Err(DbError::QueryError(format!("{e} — started again {retries} times, refused each time")));
+                    }
+                    retries += 1;
+                }
+                r => {
+                    match word.as_str() {
+                        "BEGIN" if r.is_ok() => self.explicit_transaction.store(true, SeqCst),
+                        "COMMIT" | "ROLLBACK" => self.explicit_transaction.store(false, SeqCst),
+                        _ => {}
+                    }
+                    return r;
+                }
+            }
+        }
     }
 
     /// Arms the test hook: the next `n` statements are refused for a changed schema.
@@ -687,9 +731,7 @@ impl DbConnection for Rag3dbConnection {
     fn execute(&self, cypher: &str) -> Result<QueryResult, DbError> {
         #[cfg(test)]
         thread_statements::count();
-        #[cfg(test)]
-        self.injected_schema_refusal()?;
-        self.query_sync(cypher)
+        self.started_again_on_a_changed_schema(cypher, || self.query_sync(cypher))
     }
 
     fn execute_with_params(
@@ -699,9 +741,7 @@ impl DbConnection for Rag3dbConnection {
     ) -> Result<QueryResult, DbError> {
         #[cfg(test)]
         thread_statements::count();
-        #[cfg(test)]
-        self.injected_schema_refusal()?;
-        self.query_with_params_sync(cypher, params)
+        self.started_again_on_a_changed_schema(cypher, || self.query_with_params_sync(cypher, params))
     }
 
     fn must_reopen(&self) -> Option<String> {
