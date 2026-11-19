@@ -1990,6 +1990,10 @@ fn synchroniser(
         let valider = tx && ((rang_du_paquet + 1) % par_validation == 0 || rang_du_paquet + 1 == nombre_de_paquets);
         if ouvrir {
             commencer(catalog)?;
+            if let Some(ddl) = catalog.take_alter_after_begin(rang_du_paquet) {
+                let autre = catalog.conn().read_connection(1).ok_or("crochet de test : pas d'autre connexion à la base")?;
+                autre.execute(&ddl).map_err(|e| format!("crochet de test : {ddl} : {e}"))?;
+            }
         }
         let resultat: Result<(), String> = (|| {
         let t = std::time::Instant::now();
