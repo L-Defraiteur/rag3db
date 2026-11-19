@@ -1108,7 +1108,8 @@ fn read_threads() -> u64 {
         self.publish_read_view();
     }
 
-    /// Creation-time positions policy; existing persisted indexes keep their schema.
+    /// Creation-time positions policy for the entities that declare none (`EntityConfig::fts_positions`);
+    /// existing persisted indexes keep their schema. Without a call: no positions (19 November 2026).
     pub fn set_fts_positions(&mut self, positions: bool) {
         self.fts_positions = positions;
     }
@@ -1871,11 +1872,12 @@ fn read_threads() -> u64 {
                 if self.lecture_seule {
                     return Err(Some(format!("index plein texte {table} absent ou illisible en lecture seule : {ouverture}")));
                 }
+                let positions = self.fts_positions;
                 let config = match crate::fts_handle::build_schema_config_with_positions(
                     text_fields,
                     filter_fields,
                     crate::fts_handle::DEFAULT_SHARDS,
-                    self.fts_positions,
+                    positions,
                 ) {
                     Ok(c) => c,
                     Err(e) => return Err(Some(format!("schéma du plein texte invalide pour {table} : {e}"))),
@@ -12566,6 +12568,31 @@ mod tests {
     }
 
     // ─── Le plafond de la requête embarquée (query_max_chars, 15 novembre 2026) ───
+    /// **An entity that declares `ftsPositions` keeps its positions, the others go without** (19 November
+    /// 2026, the light profile, decided by c7 on the measure of the code base): the catalog creates every
+    /// full text without positions unless told otherwise, and the declaration of one entity, in its own
+    /// config (`ftsPositions: true`, the camelCase of a manifest), is the declared exception.
+    #[cfg(feature = "rag3db-native")]
+    #[test]
+    fn an_entity_that_declares_fts_positions_keeps_them_and_the_others_go_without() {
+        let conn = crate::Rag3dbConnection::in_memory().expect("in-memory base");
+        let config = CatalogConfig { name: Some("positions".into()), embedding_dim: 4, ..Default::default() };
+        let mut catalog = Catalog::new(Box::new(conn), Box::new(crate::embedder::AbsentEmbedder::new("absent", 4)), config);
+        catalog.initialize().unwrap();
+        let plain = crate::config::EntityConfig { signals: crate::search::SearchSignals::BM25, ..make_product_entity_config() };
+        let mut declared = serde_json::to_value(&plain).unwrap();
+        declared["ftsPositions"] = serde_json::json!(true);
+        let declared: crate::config::EntityConfig = serde_json::from_value(declared).expect("ftsPositions is a field of an entity");
+        catalog.register_entity("Product", declared).unwrap();
+        catalog.register_entity("Plain", plain).unwrap();
+        let positions = |catalog: &mut Catalog, entity: &str| {
+            let table = catalog.resolve_search_target(entity).unwrap().parent_table;
+            catalog.fts_handle_nomme(&table).unwrap_or_else(|e| panic!("the full text of {entity}: {e}")).config.positions
+        };
+        assert_eq!(positions(&mut catalog, "Plain"), Some(false), "no declaration: the light profile");
+        assert_eq!(positions(&mut catalog, "Product"), Some(true), "ftsPositions: true keeps the positions");
+    }
+
     // Conception relue par c7 : un défaut fixe de 6 000 caractères, une seule
     // fonction avant les trois chemins (dense, dual, creux), coupée sur un mot,
     // dite ; le plein texte garde la requête entière.
