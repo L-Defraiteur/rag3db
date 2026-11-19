@@ -34,7 +34,10 @@ impl BackendTools<'_> {
 /// run's journal. Anything else, a failure `{ok: false, error}` first, stays the whole answer as JSON: the reading
 /// fingerprint of chat.rs, `Step::note_tool` and the status of `put_turn` judge a failure by it (archi, 18 nov.).
 pub fn model_text(result: &Value) -> String {
-    let Some(text) = result["presentation"].as_str().or_else(|| result["result"].as_str()) else {
+    // A graph may give a partial result with an error: the failure never hides behind the text (archi, 19 nov.).
+    let failed = result["ok"] == false || result["error"].as_str().is_some_and(|e| !e.is_empty()) || result["error"].is_object() || result["error"].is_array();
+    let text = result["presentation"].as_str().or_else(|| result["result"].as_str());
+    let Some(text) = text.filter(|_| !failed || result["presentation"].is_string()) else {
         return result.to_string();
     };
     match result.get("metadata").filter(|m| m.as_object().is_some_and(|o| !o.is_empty())) {
