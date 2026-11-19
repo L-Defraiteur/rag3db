@@ -1644,6 +1644,80 @@ fn le_theme_daemon_se_choisit_et_l_invocation_tourne_pendant_que_le_modele_refle
     fil.join().unwrap();
 }
 
+/// **Two windows of the same chat follow the same turn** (the IDE in several windows, slice 1;
+/// Lucie, 13 Nov. 2026: the chat on one screen, the repository on the other). A turn sent from the
+/// first window streams its words; a second window, opened in the middle of the turn, shows the same
+/// turn alive with the text it has so far — the beginning included, not only the words that come
+/// after it opened — then the same answer as the first. Nothing is asked of the host for it but the
+/// page's own load.
+#[test]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+fn deux_fenetres_du_chat_suivent_le_meme_tour() {
+    use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+    const TEMOIN: &str = "deux_fenetres_du_chat_suivent_le_meme_tour";
+    let Some(binaire) = navigateur_ou_saut(TEMOIN) else {
+        return;
+    };
+    // The answer comes word by word, one every 150 ms, twenty words: three seconds of a turn.
+    const MOTS: [&str; 20] = ["un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf", "dix", "onze", "douze", "treize", "quatorze", "quinze", "seize", "dix-sept", "dix-huit", "dix-neuf", "vingt"];
+    let model: ChatModel = Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+        Ok(Arc::new(CallbackLlm::new("faux-lent", 8192, |_turns, _opts, sink| {
+            for m in MOTS {
+                if sink.on_token(&format!("{m} ")) == Flow::Stop {
+                    sink.on_finish(&Finish::cancelled());
+                    return Ok((Finish::cancelled(), Usage::default()));
+                }
+                std::thread::sleep(Duration::from_millis(150));
+            }
+            sink.on_finish(&Finish::eos());
+            Ok((Finish::eos(), Usage::default()))
+        })))
+    });
+    let (d, h, m, id) = banc_dans("atelier", model.clone(), |_| {});
+    drop(h);
+    let (chats, taches, runs) = (d.path().join("chats"), d.path().join("taches"), d.path().join("runs"));
+    let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| h.with_racine_des_taches(taches).with_chats_root(chats).with_runs_root(runs).with_chat_model(model));
+    let racine = format!("http://{adresse}");
+    let mut r = crate::daemon::agent_de_temoin()
+        .post(format!("{racine}/ide/describe"))
+        .header("Cookie", "rag3weaver_ide=j")
+        .header("content-type", "application/json")
+        .send(json!({ "manifest": m }).to_string())
+        .unwrap();
+    let v: Value = serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap();
+    assert_eq!(v["ok"], true, "{v}");
+
+    let mut n = Navigateur::lancer(&binaire);
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+    let prete = "document.querySelector('#send') && !document.querySelector('#send').disabled && document.getElementById('lien')?.textContent === 'flux : ouvert'";
+    n.aller(&format!("{racine}/ide/code/{id}/chat"), prete);
+    let vivant = "document.querySelector('article.message.assistant.en-cours')?.textContent ?? ''";
+    n.evaluer("document.querySelector('#message').value = 'compte'; document.querySelector('#send').click()");
+    n.attendre(&format!("({vivant}).includes('quatre')"), "the first window streams the turn");
+    // The second window, in the middle of the turn.
+    n.nouvel_onglet();
+    n.aller(&format!("{racine}/ide/code/{id}/chat"), "document.getElementById('lien')?.textContent === 'flux : ouvert'");
+    n.attendre("!!document.querySelector('article.message.assistant.en-cours')", "the second window shows the turn alive");
+    n.attendre(&format!("({vivant}).includes('dix')"), "the second window streams the rest of the turn");
+    let seconde = n.evaluer(vivant).as_str().unwrap_or_default().to_string();
+    assert!(seconde.contains("un deux trois"), "the second window shows the beginning of the turn too, not only what came after it opened : {seconde:?}");
+    let fin = "document.querySelector('#status')?.textContent === 'fini' || !document.querySelector('article.message.assistant.en-cours')";
+    n.attendre(fin, "the end of the turn in the second window");
+    let derniere = "[...document.querySelectorAll('article.message.assistant')].at(-1)?.textContent ?? ''";
+    let dans_la_seconde = n.evaluer(derniere).as_str().unwrap_or_default().to_string();
+    n.onglet(0);
+    n.attendre(fin, "the end of the turn in the first window");
+    let dans_la_premiere = n.evaluer(derniere).as_str().unwrap_or_default().to_string();
+    assert!(dans_la_premiere.contains("un deux trois") && dans_la_premiere.contains("vingt"), "{dans_la_premiere:?}");
+    assert_eq!(dans_la_seconde.trim(), dans_la_premiere.trim(), "the two windows end on the same answer");
+    assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
+    drop(n);
+    drop(d);
+    let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+    assert_eq!(statut, 200);
+    fil.join().unwrap();
+}
+
 /// **Le menu des thèmes** (c7, 13 novembre 2026 : Lucie a demandé trois thèmes de plus,
 /// tty les pose dans `templates/themes/`). Le menu de l'en-tête montre les thèmes du
 /// dossier, et eux seuls ; choisir forêt pose les couleurs que son fichier dit ; le choix
