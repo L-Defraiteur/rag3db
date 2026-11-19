@@ -761,8 +761,10 @@ fn the_bulk_switch_yields_the_same_graph_and_a_working_vector_index() {
 fn a_bulk_load_interrupted_by_a_caught_panic_is_repaired_on_reopen() {
     use std::panic::AssertUnwindSafe;
 
-    let dir = std::env::temp_dir().join(format!("rag3weaver-bulk-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+    // The base and its neighbours (`.fts`, `.extensions`, `.readers`) live in a temporary directory held to the end
+    // of the test, dropped after the catalogue: nothing stays in the suite's TMPDIR (entry 7 of the handover).
+    let tmp = tempfile::tempdir().unwrap();
+    let dir = tmp.path().join("rag3weaver-bulk");
 
     let open = |register: bool| {
         let conn = Rag3dbConnection::new(&dir).expect("base sur disque");
