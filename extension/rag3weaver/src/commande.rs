@@ -903,6 +903,9 @@ pub struct Atelier {
     /// l'état d'avant, gardé pour les postes de confiance et dit par
     /// `describe`.
     pub bac_a_sable: Option<BacASable>,
+    /// **The machine's lock for heavy commands** (19 Nov 2026): the path of `poste` and how many
+    /// seconds a heavy command waits for its place. `None`: heavy commands run as before.
+    pub poste: Option<(std::path::PathBuf, u64)>,
     /// Le nom des journaux (`<nom>.out`, `<nom>.err`) : la poignée d'une
     /// commande en fond. `None` : `<programme>-<pid>-<n>`, unique dans le
     /// processus — deux lancements du même programme ne s'écrasent plus.
@@ -931,6 +934,12 @@ impl Atelier {
         }
     }
 
+    /// Heavy commands go through `poste lourd` at `chemin`, waiting `attente_s` at most.
+    pub fn avec_le_poste(mut self, chemin: impl Into<std::path::PathBuf>, attente_s: u64) -> Self {
+        self.poste = Some((chemin.into(), attente_s));
+        self
+    }
+
     pub fn dans(cwd: impl Into<std::path::PathBuf>) -> Self {
         Self {
             cwd: cwd.into(),
@@ -938,6 +947,7 @@ impl Atelier {
             max_sortie: 100_000,
             journaux: None,
             bac_a_sable: None,
+            poste: None,
             nom_journaux: None,
             plafond_journal: std::env::var("RAG3WEAVER_JOURNAL_PLAFOND")
                 .ok()
@@ -2663,4 +2673,56 @@ mod tests {
             }
         }
     }
+
+    /// A fake `poste`: it writes its argv, then runs what follows « lourd » (or exits with `code`).
+    fn faux_poste(d: &std::path::Path, code: Option<i32>) -> std::path::PathBuf {
+        let p = d.join("poste");
+        let corps = match code {
+            Some(c) => format!("#!/bin/sh\necho \"$@\" > {}\nexit {c}\n", d.join("argv").display()),
+            None => format!("#!/bin/sh\necho \"$@\" > {}\nshift\nexec \"$@\"\n", d.join("argv").display()),
+        };
+        std::fs::write(&p, corps).unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+        p
+    }
+
+    /// **A heavy command of the gate goes through `poste lourd`** (19 Nov 2026, the D6 campaign:
+    /// an agent's cargo test built at full load on Lucie's screen).
+    #[test]
+    fn a_heavy_command_goes_through_poste_lourd() {
+        let d = tempfile::tempdir().unwrap();
+        let poste = faux_poste(d.path(), None);
+        let atelier = Atelier::dans(d.path()).avec_le_poste(&poste, 5);
+        let s = executer(Autorisee(cmd("cargo", &["test", "--help"])), &atelier).expect("the command runs");
+        assert_eq!(s.code, Some(0), "{}", s.stderr);
+        let argv = std::fs::read_to_string(d.path().join("argv")).unwrap_or_default();
+        assert!(argv.starts_with("lourd ") && argv.contains("cargo test --help"), "through poste lourd: {argv:?}");
+    }
+
+    /// **A place refused is said to the agent** (code 75 of `poste lourd`), and nothing runs.
+    #[test]
+    fn a_place_refused_by_poste_is_said_and_nothing_runs() {
+        let d = tempfile::tempdir().unwrap();
+        let poste = faux_poste(d.path(), Some(75));
+        let atelier = Atelier::dans(d.path()).avec_le_poste(&poste, 5);
+        let r = executer(Autorisee(cmd("cargo", &["build"])), &atelier);
+        let dit = match r {
+            Err(e) => e.to_string(),
+            Ok(s) => format!("code {:?} : {}", s.code, s.stderr),
+        };
+        assert!(dit.contains("machine is busy") && dit.contains("did not run"), "{dit}");
+    }
+
+    /// **A light command does not go through `poste`.**
+    #[test]
+    fn a_light_command_does_not_go_through_poste() {
+        let d = tempfile::tempdir().unwrap();
+        let poste = faux_poste(d.path(), None);
+        let atelier = Atelier::dans(d.path()).avec_le_poste(&poste, 5);
+        let s = executer(sh("echo light"), &atelier).expect("the command runs");
+        assert!(s.stdout.contains("light"));
+        assert!(!d.path().join("argv").exists(), "no poste for a light command");
+    }
 }
+
