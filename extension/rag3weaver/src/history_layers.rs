@@ -979,10 +979,30 @@ mod tests {
             .collect();
         let comptes = |cat: &Catalog| -> serde_json::Value {
             let mut m = serde_json::Map::new();
+            let gen = &cat.generations.as_ref().unwrap().tables;
             for t in &tables {
-                let Ok(lu) = cat.execute_raw(&format!("MATCH (s:`{t}`) RETURN count(s), sum(size(coalesce(s._text, '')))")) else { continue };
-                let r = &lu.rows[0];
-                m.insert(t.clone(), serde_json::json!({"lignes": r[0].as_i64(), "octets_de_texte": r[1].as_i64()}));
+                // Les lignes ; celles de la couche, et celles qu'un plafond y retire (le doublon du bord haut) ; le texte,
+                // quand la table en porte ; une requête refusée est dite, pas sautée.
+                let mut fiche = serde_json::Map::new();
+                let total = cat.execute_raw(&format!("MATCH (s:`{t}`) RETURN count(s)"));
+                match total {
+                    Ok(lu) => fiche.insert("lignes".into(), serde_json::json!(lu.rows[0][0].as_i64())),
+                    Err(e) => fiche.insert("refus".into(), serde_json::json!(e.to_string())),
+                };
+                if gen.contains(t) {
+                    let c = crate::generations::COUCHE;
+                    let j = crate::generations::JUSQU_A;
+                    if let Ok(lu) = cat.execute_raw(&format!(
+                        "MATCH (s:`{t}`) WHERE s.{c} = 'refs/heads/master' RETURN count(s), count(s.{j})"
+                    )) {
+                        fiche.insert("de_la_couche".into(), serde_json::json!(lu.rows[0][0].as_i64()));
+                        fiche.insert("retirees_au_plafond".into(), serde_json::json!(lu.rows[0][1].as_i64()));
+                    }
+                }
+                if let Ok(lu) = cat.execute_raw(&format!("MATCH (s:`{t}`) RETURN sum(size(s._text))")) {
+                    fiche.insert("octets_de_texte".into(), serde_json::json!(lu.rows[0][0].as_i64()));
+                }
+                m.insert(t.clone(), serde_json::Value::Object(fiche));
             }
             serde_json::Value::Object(m)
         };
