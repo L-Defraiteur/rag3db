@@ -27,4 +27,4 @@ graph LR
     done["RhaiNode(script_id=archive_slice_done, inputs='run,from_turn,to_turn', run=$run, from_turn=$from_turn, to_turn=$to_turn)"]
     render -->|result:value| slice
     slice -->|result:elements| core
-    core -->|results:value| done
+    core -->|list:value| done
