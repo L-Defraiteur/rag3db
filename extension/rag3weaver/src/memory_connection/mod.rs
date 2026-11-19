@@ -115,3 +115,5 @@ impl DbConnection for MemoryConnection {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_writes;
