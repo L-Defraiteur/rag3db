@@ -529,7 +529,7 @@ fn le_mode_des_relations_se_choisit_selon_la_source() {
     let mut phases = Vec::new();
     let premiere = sync_source(&mut catalog, &Snapshot::new("depot", source_reliee()), &SourceSyncOptions { batch_files: 2, ..Default::default() }, &mut |p| phases.push(p.phase)).unwrap();
     assert_eq!(premiere.relations_mode, Some(RelationsMode::Bulk));
-    assert_eq!(phases, [SyncPhase::Nodes, SyncPhase::Nodes, SyncPhase::Relations, SyncPhase::Derivations, SyncPhase::Done], "{phases:?}");
+    assert_eq!(phases, [SyncPhase::Nodes, SyncPhase::Nodes, SyncPhase::Relations, SyncPhase::Done], "{phases:?}");
     let marques = catalog
         .execute_raw("MATCH (m:_catalog_meta) WHERE m._key STARTS WITH 'relations_pending:' AND m._value <> '' RETURN m._key")
         .unwrap()
@@ -540,55 +540,6 @@ fn le_mode_des_relations_se_choisit_selon_la_source() {
     let seconde = sync_source(&mut catalog, &Snapshot::new("depot", source_reliee()), &SourceSyncOptions { batch_files: 2, ..Default::default() }, &mut |p| phases.push(p.phase)).unwrap();
     assert_eq!(seconde.relations_mode, Some(RelationsMode::PerBatch));
     assert_eq!(phases, [SyncPhase::Nodes, SyncPhase::Nodes, SyncPhase::Done], "{phases:?}");
-}
-
-/// **A first index poses the relations before the derivations** (decision C of Lucie, 18 November 2026, page
-/// `docs/recherche/18-11-2026/02-les-outils-de-reference-avant-l-index.md`). The derived entities of the code
-/// (`ScopeContent`, its full text) were drained batch by batch, before the relations: 15 s of 42 on
-/// rag3weaver/src. Now the phases say it: the nodes, the relations, then the derivations; and nothing is lost —
-/// every scope has its content at the end, and no derivation is left owed.
-#[test]
-#[ignore]
-fn a_first_index_poses_the_relations_before_the_derivations() {
-    let mut catalog = catalogue();
-    let mut phases = Vec::new();
-    let report = sync_source(&mut catalog, &Snapshot::new("depot", source_reliee()), &SourceSyncOptions { batch_files: 2, ..Default::default() }, &mut |p| phases.push(p.phase)).unwrap();
-    assert_eq!(report.relations_mode, Some(RelationsMode::Bulk));
-    assert_eq!(phases, [SyncPhase::Nodes, SyncPhase::Nodes, SyncPhase::Relations, SyncPhase::Derivations, SyncPhase::Done], "{phases:?}");
-    let count = |q: &str| match catalog.execute_raw(q).unwrap().rows.first().and_then(|r| r.first()) {
-        Some(CypherValue::Int(n)) => *n,
-        other => panic!("{q}: {other:?}"),
-    };
-    let scopes = count("MATCH (s:Scope) RETURN count(s)");
-    let contents = count(&format!("MATCH (c:{}) RETURN count(c)", rag3weaver::code::SCOPE_CONTENT));
-    assert!(scopes > 0 && contents > 0, "the source has scopes and contents: {scopes}, {contents}");
-    let missing = count(&format!(
-        "MATCH (s:Scope) OPTIONAL MATCH (s)-[]-(c:{}) WITH s, count(c) AS n WHERE n = 0 RETURN count(s)",
-        rag3weaver::code::SCOPE_CONTENT
-    ));
-    assert_eq!(missing, 0, "every scope has its content at the end");
-}
-
-/// **Held derivations are not drained by the batch, and are drained on release** (the catalogue side of C).
-/// Under `defer_derivations`, ingesting a batch of code leaves `ScopeContent` empty; the relations still pose;
-/// `release_deferred_derivations` renders the contents.
-#[test]
-#[ignore]
-fn held_derivations_wait_for_their_release() {
-    let mut catalog = catalogue();
-    let count = |catalog: &Catalog, q: &str| match catalog.execute_raw(q).unwrap().rows.first().and_then(|r| r.first()) {
-        Some(CypherValue::Int(n)) => *n,
-        other => panic!("{q}: {other:?}"),
-    };
-    let contents = format!("MATCH (c:{}) RETURN count(c)", rag3weaver::code::SCOPE_CONTENT);
-    catalog.defer_derivations(true);
-    let analysis = rag3weaver::code::analyze("/depot", source_reliee());
-    catalog.ingest_code_jusqu_a(&analysis, rag3weaver::disponibilite::Disponibilites::default()).unwrap();
-    assert!(count(&catalog, "MATCH (s:Scope) RETURN count(s)") > 0, "the scopes are posed");
-    assert_eq!(count(&catalog, &contents), 0, "the held contents are not rendered by the batch");
-    let released = catalog.release_deferred_derivations(rag3weaver::disponibilite::Disponibilites::default());
-    assert_eq!(released.failed, 0, "{released:?}");
-    assert!(count(&catalog, &contents) > 0, "the release renders the contents");
 }
 
 /// **`usages` does not show the declaration of a retired container** (ticket
@@ -765,7 +716,7 @@ fn une_edition_apres_le_passage_du_fichier_est_reprise_a_la_fin() {
         assert!(avancements.iter().any(|p| p.phase == SyncPhase::Nodes && p.files_to_resume == 1), "{mode:?} : l'avancement compte la reprise : {avancements:?}");
         let phases: Vec<SyncPhase> = avancements.iter().map(|p| p.phase).filter(|p| *p != SyncPhase::Nodes).collect();
         let attendu = match mode {
-            Some(RelationsMode::Bulk) => vec![SyncPhase::Relations, SyncPhase::Derivations, SyncPhase::Resume, SyncPhase::Resume, SyncPhase::Done],
+            Some(RelationsMode::Bulk) => vec![SyncPhase::Relations, SyncPhase::Resume, SyncPhase::Resume, SyncPhase::Done],
             _ => vec![SyncPhase::Resume, SyncPhase::Resume, SyncPhase::Done],
         };
         assert_eq!(phases, attendu, "{mode:?}");
