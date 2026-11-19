@@ -28,12 +28,6 @@
           "run": {
             "type": "string"
           },
-          "turn": {
-            "type": "integer"
-          },
-          "seq": {
-            "type": "integer"
-          },
           "at": {
             "type": "string"
           },
@@ -55,12 +49,6 @@
           },
           "status": {
             "type": "string"
-          },
-          "masked": {
-            "type": "integer"
-          },
-          "cut": {
-            "type": "boolean"
           },
           "section": {
             "type": "string",
