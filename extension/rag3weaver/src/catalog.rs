@@ -1670,6 +1670,9 @@ fn read_threads() -> u64 {
                 .enumerate()
                 .filter_map(|(i, name)| row.get(i + 1).and_then(|v| v.as_str()).map(|sv| (name.clone(), sv.to_string())))
                 .collect();
+            if self.hors_candidats(&source, &values) {
+                continue;
+            }
             if let Err(e) = crate::fts_handle::index_document(&handle, &values, offset as u64) {
                 eprintln!("[rag3weaver] rebâti du plein texte de {entity} : {e}");
             }
@@ -3473,6 +3476,9 @@ fn read_threads() -> u64 {
                                         .map(|sv| ((*name).clone(), sv.to_string()))
                                 })
                                 .collect();
+                            if self.hors_candidats(&table, &values) {
+                                continue;
+                            }
                             if let Err(e) =
                                 crate::fts_handle::index_document(&handle, &values, offset)
                             {
@@ -8635,15 +8641,19 @@ fn read_threads() -> u64 {
             ]).map_err(|e| CatalogError::DbError(e.to_string()))?;
             let handle = self.ensure_fts_handle(&table, &text_fields, &crate::scope::fts_filter_fields())
                 .ok_or_else(|| CatalogError::IndexPersistence(format!("no lexical handle for {table}")))?;
+            let mut candidates = 0u64;
             for row in &rows.rows {
                 if row.len() != fields.len()+1 {return Err(CatalogError::IndexPersistence("malformed persisted lexical row".into()))}
                 let offset = row[0].as_i64().and_then(|n| u64::try_from(n).ok())
                     .ok_or_else(|| CatalogError::IndexPersistence("invalid lexical row offset".into()))?;
                 let values = fields.iter().zip(&row[1..]).filter_map(|(field,value)| value.as_str().map(|value|(field.clone(),value.to_owned()))).collect::<Vec<_>>();
+                // A row that is not a search candidate (2.12) has no document.
+                if self.hors_candidats(&table, &values) {continue}
+                candidates += 1;
                 crate::fts_handle::upsert_document(&handle, &values, offset).map_err(CatalogError::IndexPersistence)?;
             }
             handle.commit().map_err(CatalogError::IndexPersistence)?;
-            if handle.num_docs()!=rows.rows.len() as u64 {return Err(CatalogError::IndexPersistence(format!("lexical multiplicity mismatch for {table}")))}
+            if handle.num_docs()!=candidates {return Err(CatalogError::IndexPersistence(format!("lexical multiplicity mismatch for {table}")))}
         }
         self.flush_blob_store("owned lexical reconstruction")
     }
@@ -8674,6 +8684,9 @@ fn read_threads() -> u64 {
                 .zip(&ligne[1..])
                 .filter_map(|(c, v)| v.as_str().map(|v| (c.clone(), v.to_owned())))
                 .collect();
+            if self.hors_candidats(table, &valeurs) {
+                continue;
+            }
             crate::fts_handle::upsert_document(&handle, &valeurs, decalage).map_err(CatalogError::IndexPersistence)?;
         }
         handle.commit().map_err(CatalogError::IndexPersistence)?;
@@ -10715,6 +10728,99 @@ fn read_threads() -> u64 {
     /// ligne `_generation` au rang en attente w, avec son commit et le nombre de chemins sales (un arbre
     /// propre en a 0), puis w devient le rang publié et w + 1 le rang en attente. Aucune ligne de
     /// `Scope` ni de `File` n'est réécrite : les lignes nées à w deviennent publiées par le seul rang.
+    /// **The gesture of a base indexed before the rule** (2.12, c7's decision of 19 November 2026): a row that is not a
+    /// search candidate (`ChunkingConfig::not_candidate` of `entity`) loses its chunks, hence its vectors, and its
+    /// full-text document; the row itself, and its edges, stay. A version is never rewritten for it: its render does
+    /// not change, so the writer would find it unchanged. Replayable: a second pass removes nothing. Returns how many
+    /// rows lost something. **The threshold is the base's**: it is noted at the first gesture, and a gesture with
+    /// another threshold is refused, naming both.
+    /// The witnesses' rule of non-candidates of `entity` (2.12): a base indexed before the rule, then under it.
+    #[cfg(test)]
+    pub(crate) fn poser_la_regle_des_non_candidats(&mut self, entity: &str, regle: Option<crate::config::NotCandidate>) {
+        if let Some(c) = self.entity_configs.get_mut(entity) {
+            c.chunking.not_candidate = regle;
+        }
+    }
+
+    /// Whether a full-text write of these values on `table` is set aside by its rule of non-candidates (2.12).
+    fn hors_candidats(&self, table: &str, values: &[(String, String)]) -> bool {
+        self.entity_configs.get(table).and_then(|c| c.chunking.not_candidate.as_ref()).is_some_and(|r| r.excludes_values(values))
+    }
+
+    pub fn set_aside_non_candidates(&mut self, entity: &str) -> Result<usize, CatalogError> {
+        let Some(regle) = self.entity_config(entity).and_then(|c| c.chunking.not_candidate.clone()) else { return Ok(0) };
+        let cle = format!("not_candidate_min_chars:{entity}");
+        match self.read_meta_key(&cle)?.and_then(|v| v.parse::<usize>().ok()) {
+            Some(note) if note != regle.min_chars => {
+                return Err(CatalogError::DbError(format!(
+                    "{entity} : le seuil des non-candidats de cette base est {note}, ce geste porte {} ; un seuil est une propriété de la base (workspace.container_min_chars)",
+                    regle.min_chars
+                )))
+            }
+            Some(_) => {}
+            None => self.persist_meta_key(&cle, &regle.min_chars.to_string())?,
+        }
+        // The rows of the declared types, with their text fields; the rule is judged here, generically.
+        let mut champs = vec!["_uuid".to_string()];
+        champs.extend(regle.text_fields.iter().cloned());
+        champs.push(regle.type_field.clone());
+        let select = rag3weaver_ir::Select {
+            table: entity.to_string(),
+            by_uuids: false,
+            filter: Some(rag3weaver_ir::Predicate::In { field: regle.type_field.clone(), param: "types".into() }),
+            returns: champs.iter().map(|f| rag3weaver_ir::Column::Node(f.clone())).collect(),
+            order_by: Vec::new(),
+            limit: None,
+            offset: None,
+        };
+        let requete = self.dialect.select(&select).map_err(|e| CatalogError::DbError(e.to_string()))?;
+        let types = CypherValue::List(regle.types.iter().map(|t| CypherValue::String(t.clone())).collect());
+        let lu = self.conn.execute_with_params(&requete, &[QueryParam::new("types", types)]).map_err(|e| CatalogError::DbError(e.to_string()))?;
+        let exclues: Vec<String> = lu
+            .rows
+            .iter()
+            .filter_map(|l| {
+                let data: std::collections::BTreeMap<String, CypherValue> = champs.iter().cloned().zip(l.iter().cloned()).collect();
+                if regle.excludes(&data) { data.get("_uuid").and_then(|v| v.as_str()).map(str::to_string) } else { None }
+            })
+            .collect();
+        if exclues.is_empty() {
+            return Ok(0);
+        }
+        let uuids = CypherValue::List(exclues.iter().cloned().map(CypherValue::String).collect());
+        let mut touchees: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+        // Their chunks, and the vectors on them.
+        let effacer = rag3weaver_ir::Write::Delete { table: format!("{entity}_Chunk"), by: "_parent_uuid".into(), cascade: true, count: true };
+        let q = self.dialect.write(&effacer).map_err(|e| CatalogError::DbError(e.to_string()))?;
+        let r = self.conn.execute_with_params(&q, &[QueryParam::new("uuids", uuids.clone())]).map_err(|e| CatalogError::DbError(e.to_string()))?;
+        for l in &r.rows {
+            if l.get(1).and_then(|v| v.as_i64()).unwrap_or(0) > 0 {
+                if let Some(u) = l.first().and_then(|v| v.as_str()) {
+                    touchees.insert(u.to_string());
+                }
+            }
+        }
+        // Their full-text documents, at the offsets the router knows (an unknown offset would be broadcast to every
+        // shard): the retirements of a batch's buffer, applied the same way.
+        if let Some(h) = self.fts_handles.get(entity) {
+            let q = self.dialect.select_node_ids(entity);
+            let rows = self.conn.execute_with_params(&q, &[QueryParam::new("uuids", uuids)]).map_err(|e| CatalogError::DbError(e.to_string()))?;
+            let mut a = crate::fts_tampon::Application::default();
+            for r in &rows.rows {
+                let (Some(uuid), Some(id)) = (r.first().and_then(|v| v.as_str()), r.get(1)) else { continue };
+                let offset = id.as_i64().and_then(|n| u64::try_from(n).ok()).or_else(|| id.as_str().and_then(crate::node_id_cache::InternalNodeId::parse).map(|id| id.offset));
+                if let Some(o) = offset.filter(|o| h.shard_for_node_id(*o).is_some()) {
+                    a.retraits.entry(entity.to_string()).or_default().insert(o);
+                    touchees.insert(uuid.to_string());
+                }
+            }
+            if !a.retraits.is_empty() {
+                self.appliquer_le_tampon(a)?;
+            }
+        }
+        Ok(touchees.len())
+    }
+
     pub fn publier_la_generation(&mut self, commit: &str, chemins_sales: usize) -> Result<i64, CatalogError> {
         let Some(v) = self.generations.as_ref() else {
             return Err(CatalogError::DbError("publier une génération : cette base n'a pas de générations".into()));

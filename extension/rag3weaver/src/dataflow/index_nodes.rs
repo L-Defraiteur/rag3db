@@ -551,6 +551,12 @@ fn run_index(
     for (reason, n) in &report.files_set_aside {
         log(journal, &format!("{n} fichiers écartés : {reason}"));
     }
+    if report.non_candidates_set_aside > 0 {
+        log(
+            journal,
+            &format!("{} versions de conteneurs repliés écartées de la recherche (plein texte et morceaux)", report.non_candidates_set_aside),
+        );
+    }
 
     // **La garde des comptes, dite** : chaque entité au plein texte, ses
     // documents contre ses lignes, zéro écart attendu. Un écart est une
