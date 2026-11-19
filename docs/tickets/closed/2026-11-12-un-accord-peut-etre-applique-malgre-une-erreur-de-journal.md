@@ -1,6 +1,6 @@
 # Un accord peut être appliqué malgré une erreur de journal
 
-- **État** : ouvert ; effet après erreur de journal reproduit sur fixture, hors correctif concurrence.
+- **État** : fermé (19 novembre 2026, ED) — le contrat de reçu est posé depuis 0f4207fa59 (13 novembre) : `decider_accord` écrit le reçu **avant** de publier l'accord ; sans journal, rien n'est publié et l'erreur le dit (témoin `erreur_du_journal_apres_commit_ne_signifie_pas_absence_d_effet`, attente changée) ; un reçu dont la publication échoue ensuite est marqué par une seconde ligne « non posé », avec sa cause, la demande reste ouverte (témoin `a_receipt_whose_publication_fails_is_marked_not_posed`, éprouvé par mutant : rouge sans la ligne « non posé », vert avec) ; un accord ne se rejoue jamais au redémarrage (`recharger_la_carte_conserve_la_decision_redemarrer_ne_la_rejoue_pas`).
 - **Famille** : produit
 - **Gravité** : reçu en erreur alors que l'accord est déjà appliqué en mémoire.
 - **Atteignable en service** : si le journal decisions.jsonl ne peut pas être écrit.
