@@ -92,6 +92,8 @@ pub(crate) struct Navigateur {
     recus: Receiver<Value>,
     suivant: u64,
     session: String,
+    /// The sessions of the open tabs, in their order of opening (`onglet` goes back to one).
+    onglets: Vec<String>,
     /// Les erreurs vues : exceptions, `console.error`/`warn`, journal en erreur.
     pub(crate) erreurs: Vec<String>,
     _profil: tempfile::TempDir,
@@ -192,6 +194,7 @@ impl Navigateur {
             recus,
             suivant: 0,
             session: String::new(),
+            onglets: Vec::new(),
             erreurs: Vec::new(),
             _profil: profil,
         };
@@ -210,6 +213,7 @@ impl Navigateur {
     fn attacher(&mut self, cible: Value) {
         let attache = self.commande("Target.attachToTarget", json!({ "targetId": cible, "flatten": true }));
         self.session = attache["sessionId"].as_str().unwrap().to_string();
+        self.onglets.push(self.session.clone());
         for domaine in ["Runtime.enable", "Log.enable", "Page.enable"] {
             self.commande(domaine, json!({}));
         }
@@ -231,6 +235,13 @@ impl Navigateur {
         self.session.clear();
         let cree = self.commande("Target.createTarget", json!({ "url": "about:blank" }));
         self.attacher(cree["targetId"].clone());
+    }
+
+    /// **Back to the tab opened in `i`-th place** (0 is the first), which becomes the current tab;
+    /// the others stay open (two windows of the IDE, 19 Nov. 2026).
+    #[cfg(feature = "code")]
+    pub(crate) fn onglet(&mut self, i: usize) {
+        self.session = self.onglets[i].clone();
     }
 
     /// Une commande à l'onglet (au navigateur tant qu'aucune session), et sa
