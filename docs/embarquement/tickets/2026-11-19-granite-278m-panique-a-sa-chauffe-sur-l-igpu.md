@@ -41,3 +41,12 @@ au matin. Les journaux sont à luciepc : `~/.cache/rag3weaver-build/short-lane-m
 ## Taille
 
 À départager d'abord (1 à 2 h).
+
+## Départagé (19 novembre 2026, au soir)
+
+Voir `docs/embarquement/19-11-2026/04-la-panique-de-granite-sur-l-igpu.md` (branche `warmup-lot`, déposée au pousseur
+sous `emb-warmup-lot`). **La cause est à l'amont** (burn/cubecl sur l'iGPU, Vulkan radv) : un appel direct de 128
+textes de 182 jetons, puis d'un texte de 382, panique. La fiche est chez G, pour une issue après une reproduction
+réduite à burn seul et le oui de Lucie. **Chez nous, c'est contourné** : la chauffe passe par le découpage du service
+(au plus 32 textes, sous le budget d'octets), et granite-278m démarre sur `igpu:0`. Le ticket reste ouvert tant que le
+défaut amont n'est pas réglé.
