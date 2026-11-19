@@ -1,5 +1,13 @@
 # Nouveautés
 
+- 19 novembre 2026 — **Un graphe compose le contexte d'un appel au modèle, sans script de prose.** Le nœud `Collect`
+  rassemble ses entrées nommées dans l'ordre que le graphe déclare (`inputs='identity,report,slice'`), quel que soit
+  l'ordre où elles arrivent ; une entrée vide est retirée, sauf `keep_empty`. `LlmNode` prend une `instruction` (la
+  ligne de tâche) et un port `context` : une liste de parts `{name, title, value, format?, max_tokens?}`, rendues en
+  sections, une chaîne telle quelle et toute autre valeur en JSON à clés triées (ou en lignes « clé : valeur » avec
+  `format: "kv"`). Une part au-delà de son plafond est coupée, et la coupe est dite. La même composition rend la
+  même invite, octet pour octet.
+
 - 19 novembre 2026 — **Le chat de l'IDE ne fait plus disparaître un tour.** Une relecture de la conversation
   partie avant un tour et revenue après lui remettait un écran sans ce tour, jusqu'au rechargement suivant. La page
   n'applique plus une relecture dépassée par un tour.
