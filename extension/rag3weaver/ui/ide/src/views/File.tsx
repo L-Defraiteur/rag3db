@@ -123,7 +123,10 @@ export function File({ id, path, state }: { id: string; path: string; state: Hos
       .catch((e: Error) => setError(e.message));
   }, [backend?.manifest, path, offset, editing, generation]);
 
-  // La ligne visée par l'ancre (#L12), centrée, à l'arrivée et au changement d'ancre.
+  // La ligne visée par l'ancre (#L12), centrée, à l'arrivée et au changement d'ancre. **The anchor is read at each
+  // render** (the IDE in several windows, slice 3, ED's review): a detached window follows by `history.pushState`,
+  // which fires no `hashchange`; the same file at another line changes only the hash, and must aim again.
+  const ancre = location.hash;
   useEffect(() => {
     const aim = () => {
       document.querySelectorAll("tr.vise").forEach((t) => t.classList.remove("vise"));
@@ -136,7 +139,7 @@ export function File({ id, path, state }: { id: string; path: string; state: Hos
     aim();
     addEventListener("hashchange", aim);
     return () => removeEventListener("hashchange", aim);
-  }, [read]);
+  }, [read, ancre]);
 
   const lines = useMemo(() => {
     const out: { n: number; text: string }[] = [];
