@@ -3424,7 +3424,7 @@ mod tests {
         let ecrivain = {
             let c = catalog.clone();
             std::thread::spawn(move || {
-                let _tenu = c.lock().unwrap();
+                let _tenu = c.lock().unwrap(); // L4 : écriture (le témoin joue l'index qui tient le catalogue)
                 pret.send(()).unwrap();
                 std::thread::sleep(Duration::from_secs(2));
             })
