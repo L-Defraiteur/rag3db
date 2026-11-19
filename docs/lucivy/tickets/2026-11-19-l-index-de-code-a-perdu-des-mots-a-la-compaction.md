@@ -1,6 +1,6 @@
 # L'index de code a perdu des mots : la compaction du dictionnaire ne voit pas les documents en cours
 
-- **État** : corrigé dans lucivy main (PR #50, 9191372, 19 novembre 2026), en attente de la 4.3.12 et du pointeur dans rag3weaver ; la cause première reste à nommer (le correctif la journalisera).
+- **État** : en cours (19 novembre 2026, soir). Le sursis d'un cycle (PR lucivy #50) est un filet, pas le correctif : la perte est reproduite avec lui.
 - **Gravité** : justesse. Un document dont un mot est perdu ne sort plus pour ce mot, en exact comme en flou. Rien
   ne le signale à la recherche.
 - **Atteignable en service** : oui. C'est mesuré sur une copie de l'index de code de la base du dépôt (tablette, le
@@ -52,9 +52,26 @@ qui le cite** : c'est la cause, qui sera nommée à la prochaine occurrence. Ell
 `test_failpoints_a_compaction_that_misses_a_segment_loses_no_word` (suite `failpoints`, un point de faute cache un
 segment à la compaction) : 7 mots perdus sans le correctif, 0 avec.
 
+## La perte reproduite (19 novembre 2026, soir)
+
+Dans la CI de la PR de version 4.3.12 (lucivy #51), sur un runner à 4 cœurs, le test de charge
+`rewriting_files_while_the_maintenance_compacts_loses_no_word` (`lucivy_core/tests/test_compaction_keeps_words_in_flight.rs`)
+a perdu **152 mots**, sursis compris. En 4 compactions, 196 textes sont revenus du sursis, cités par 8 segments
+différents. Les compactions ratent donc des segments **sans cesse**, et un segment raté deux fois de suite perd ses
+mots. La 4.3.12 est suspendue.
+
+**Piste en cours de preuve** : la compaction lit les champs de chaque segment par son méta (`reader.sfx_fields()`).
+Un segment fraîchement fusionné dont le méta ne porte pas encore ses champs ne serait pas lu, alors que
+`check_dictionary` passe par le schéma. Branche lucivy `debug-missed-segments` : la compaction y journalise, sous
+`LUCIVY_DEBUG_COMPACTION`, les segments commités, ceux du gestionnaire, et par segment ses champs et ses `.gmap`
+lus. Le test tourne en boucle sous `taskset -c 0-3` jusqu'au rouge.
+
+Ensuite : un témoin ciblé (un segment fusionné au méta sans champs, juste avant la compaction, perd ses mots), puis
+le correctif de la cause. Le sursis reste comme filet.
+
 ## Ce qu'il reste
 
-- La 4.3.12, au mot de Lucie, puis le pointeur dans rag3weaver. La compaction est coupée sur les hôtes depuis le
+- Le correctif de la cause, puis la 4.3.12 au mot de Lucie, puis le pointeur dans rag3weaver. La compaction est coupée sur les hôtes depuis le
   19 à 17 h 44 (G) ; elle revient avec le pointeur.
 - Le rebâti du plein texte des bases touchées rend les mots perdus : avec le profil léger, puis `check_dictionary`.
 - La sonde de nuit, par le chemin de rag3weaver (branche rag3db `probe-lost-words`) ; et la lecture du journal de
