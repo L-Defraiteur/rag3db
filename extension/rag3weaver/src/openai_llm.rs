@@ -1528,10 +1528,16 @@ fn read_sse(
             // pour les API compatibles OpenAI, `cached_content_token_count`
             // quand Gemini transparaît sous la compatibilité. On lit les deux
             // plutôt que de parier sur laquelle arrivera.
-            usage.cached_prompt_tokens = u["prompt_tokens_details"]["cached_tokens"]
-                .as_u64()
-                .or_else(|| u["cached_content_token_count"].as_u64())
-                .unwrap_or(0) as usize;
+            let cached = u["prompt_tokens_details"]["cached_tokens"].as_u64().or_else(|| u["cached_content_token_count"].as_u64());
+            // **An absent count is not a zero**: `cache_reported` says the provider spoke.
+            usage.cached_prompt_tokens = cached.unwrap_or(0) as usize;
+            usage.cache_reported = cached.is_some();
+        }
+        // **llama-server says its prompt cache in `timings`** (`cache_n`, the prompt tokens taken from its slot's
+        // cache; `prompt_n`, those it computed). `usage.prompt_tokens` counts both.
+        if let Some(n) = chunk["timings"]["cache_n"].as_u64() {
+            usage.cached_prompt_tokens = n as usize;
+            usage.cache_reported = true;
         }
 
         let Some(choice) = chunk["choices"].get(0) else { continue };

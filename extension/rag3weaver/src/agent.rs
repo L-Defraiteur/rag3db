@@ -1821,6 +1821,7 @@ impl<'a> Agent<'a> {
                 iteration: run.iterations,
                 prompt_tokens: usage.prompt_tokens,
                 cached_prompt_tokens: usage.cached_prompt_tokens,
+                cache_reported: usage.cache_reported,
                 completion_tokens: usage.completion_tokens,
                 ms: usage.ms,
                 retries: usage.retries,
@@ -2182,6 +2183,8 @@ fn accumulate(total: &mut Usage, one: &Usage) {
     // La part servie par le cache et celle du raisonnement : sans elles, le
     // total d'un run comptait tout le cache au plein tarif (25 octobre 2026).
     total.cached_prompt_tokens += one.cached_prompt_tokens;
+    // For the run: some call of it said its cache. Which ones did is in their `LlmCall` events.
+    total.cache_reported |= one.cache_reported;
     total.reasoning_tokens += one.reasoning_tokens;
     total.ms += one.ms;
     total.retries += one.retries;
