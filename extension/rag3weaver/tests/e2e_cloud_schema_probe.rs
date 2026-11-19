@@ -46,7 +46,7 @@ fn set_defaults_nonempty(v: &mut serde_json::Value) {
 #[test]
 #[ignore]
 fn which_tool_schemas_does_vertex_accept() {
-    let Some(llm) = vertex() else { eprintln!("skipped"); return; };
+    let Some(llm) = vertex() else { return crate::common::sauter("e2e_cloud_schema_probe", "pas d'identifiants Vertex") };
     let (_, tools) = builtin_graph_tools().unwrap();
     let all: Vec<ToolDef> = rag3weaver::tools::graph_tool_defs(&tools);
     let only = |names: &[&str]| -> Vec<ToolDef> { all.iter().filter(|d| names.contains(&d.name.as_str())).cloned().collect() };

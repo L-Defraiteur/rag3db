@@ -79,7 +79,7 @@ fn compte(catalog: &Catalog, q: &str) -> String {
 #[test]
 #[ignore]
 fn role_enfant() {
-    let (Ok(role), Ok(base)) = (std::env::var(ROLE), std::env::var(BASE)) else { return };
+    let (Ok(role), Ok(base)) = (std::env::var(ROLE), std::env::var(BASE)) else { return crate::common::enfant("e2e_copy_refuse_rouvre") };
     let mut catalog = catalogue(&base);
     if role == "refuser" {
         catalog.begin_proving_presence();
