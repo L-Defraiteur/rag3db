@@ -30,6 +30,14 @@ function App() {
   const [flux, setFlux] = useState<FluxStatus>("fermé");
   const [theme, setTheme] = useState<Theme>(storedTheme());
   const [livres, setLivres] = useState<string[]>([]);
+  // **A detached window** (the IDE in several windows, slice 3): its role, and a render on each internal navigation.
+  const fenetre = roleDeLaFenetre();
+  const [, setNavigation] = useState(0);
+  useEffect(() => {
+    const relire = () => setNavigation((n) => n + 1);
+    window.addEventListener("popstate", relire);
+    return () => window.removeEventListener("popstate", relire);
+  }, []);
 
   // Un nom que l'hôte ne connaît pas revient au choix du système : l'état le suit.
   useEffect(() => applyTheme(theme, (applique) => applique !== theme && setTheme(applique)), [theme]);
@@ -56,7 +64,10 @@ function App() {
       // By `URL` (ED's review): a cited address with its own query keeps it, and the window its role; the hash follows.
       const u = new URL(s.href, location.origin);
       u.searchParams.set("fenetre", "depot");
-      location.assign(u.toString());
+      // Slice 3: an internal navigation — the page is not reloaded, it keeps its link to the worker, and the view
+      // renders again from the new address.
+      history.pushState(null, "", u.toString());
+      setNavigation((n) => n + 1);
     });
   }, []);
   useEffect(() => {
@@ -82,42 +93,53 @@ function App() {
     // (sa liste) ; les autres vues gardent leur largeur de lecture et la page
     // défile (ticket « le chat a une largeur fixe sur un écran large »).
     <div className={`${fullWindow ? "h-dvh overflow-hidden" : "min-h-dvh"} flex flex-col bg-background text-foreground`}>
-      <header className="flex items-center gap-3 px-4 py-2 border-b" id="entete">
-        <a href="/ide/" className="font-semibold tracking-tight">
-          rag3weaver
-        </a>
-        <span className="text-xs text-muted-foreground">IDE</span>
+      <header className="flex items-center gap-3 px-4 py-2 border-b" id="entete" data-fenetre={fenetre ?? undefined}>
+        {/* A detached window says its role and the stream only (slice 3). */}
+        {fenetre ? (
+          <span className="text-xs text-muted-foreground">{`fenêtre : ${fenetre === "depot" ? "dépôt" : fenetre}`}</span>
+        ) : (
+          <>
+            <a href="/ide/" className="font-semibold tracking-tight">
+              rag3weaver
+            </a>
+            <span className="text-xs text-muted-foreground">IDE</span>
+          </>
+        )}
         <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground">
           <Radio className="size-3" aria-hidden />
           {/* Le texte exact « flux : ouvert » : les témoins le lisent à l'égal. */}
           <span id="lien" data-flux={flux}>{`flux : ${flux}`}</span>
         </span>
-        <Button
-          variant="ghost"
-          size="icon"
-          id="theme"
-          aria-label={dark ? "passer en clair" : "passer en sombre"}
-          title={dark ? "passer en clair" : "passer en sombre"}
-          onClick={() => setTheme(dark ? "light" : "dark")}
-        >
-          {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
-        </Button>
-        {/* Les thèmes du terminal (templates/themes/<nom>.json), ceux que l'hôte sert. */}
-        <select
-          id="theme-fichier"
-          aria-label="thème"
-          title="thème"
-          className="h-8 rounded-md border bg-background px-2 text-xs text-foreground"
-          value={fichier}
-          onChange={(e) => setTheme(e.target.value || "system")}
-        >
-          <option value="">thème…</option>
-          {livres.map((nom) => (
-            <option key={nom} value={nom}>
-              {nom}
-            </option>
-          ))}
-        </select>
+        {fenetre ? null : (
+          <>
+            <Button
+              variant="ghost"
+              size="icon"
+              id="theme"
+              aria-label={dark ? "passer en clair" : "passer en sombre"}
+              title={dark ? "passer en clair" : "passer en sombre"}
+              onClick={() => setTheme(dark ? "light" : "dark")}
+            >
+              {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
+            </Button>
+            {/* Les thèmes du terminal (templates/themes/<nom>.json), ceux que l'hôte sert. */}
+            <select
+              id="theme-fichier"
+              aria-label="thème"
+              title="thème"
+              className="h-8 rounded-md border bg-background px-2 text-xs text-foreground"
+              value={fichier}
+              onChange={(e) => setTheme(e.target.value || "system")}
+            >
+              <option value="">thème…</option>
+              {livres.map((nom) => (
+                <option key={nom} value={nom}>
+                  {nom}
+                </option>
+              ))}
+            </select>
+          </>
+        )}
       </header>
       <main id="vue" className={fullWindow ? "flex-1 min-h-0 w-full flex flex-col" : "flex-1 px-4 py-6 max-w-5xl w-full mx-auto"}>
         {error ? (
