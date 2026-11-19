@@ -207,6 +207,9 @@ pub enum Event {
         /// La part de `prompt_tokens` servie depuis le cache du fournisseur,
         /// comprise dedans. Environ dix fois moins chère.
         cached_prompt_tokens: usize,
+        /// **The provider said its cache** for this call (`Usage::cache_reported`): `false`, the 0 above is not a
+        /// measure. A rate of cache counts only the calls that said it.
+        cache_reported: bool,
         completion_tokens: usize,
         ms: u64,
         retries: u32,
@@ -720,9 +723,9 @@ impl Event {
                 "kind": "TurnCompacted", "run": run, "rewritten": rewritten,
                 "kept": kept, "dropped": dropped,
             }),
-            Self::LlmCall { run, agent, model, iteration, prompt_tokens, cached_prompt_tokens, completion_tokens, ms, retries, retry_log, finish, tool_calls } => json!({
+            Self::LlmCall { run, agent, model, iteration, prompt_tokens, cached_prompt_tokens, cache_reported, completion_tokens, ms, retries, retry_log, finish, tool_calls } => json!({
                 "kind": "LlmCall", "run": run, "agent": agent, "model": model, "iteration": iteration,
-                "prompt_tokens": prompt_tokens, "cached_prompt_tokens": cached_prompt_tokens,
+                "prompt_tokens": prompt_tokens, "cached_prompt_tokens": cached_prompt_tokens, "cache_reported": cache_reported,
                 "completion_tokens": completion_tokens,
                 "tokens": prompt_tokens + completion_tokens, "ms": ms, "retries": retries,
                 "retry_log": retry_log,
@@ -1166,7 +1169,7 @@ mod tests {
         let bus = EventBus::new(2);
         let cursor = bus.cursor(topic::AGENT, "trace");
         for i in 0..5 {
-            bus.emit(Event::LlmCall { run: "r1".into(), agent: "a".into(), model: "m".into(), iteration: i, cached_prompt_tokens: 0, prompt_tokens: 0, completion_tokens: 0, ms: 0, retries: 0, retry_log: vec![], finish: "Eos".into(), tool_calls: 0 });
+            bus.emit(Event::LlmCall { run: "r1".into(), agent: "a".into(), model: "m".into(), iteration: i, cached_prompt_tokens: 0, cache_reported: false, prompt_tokens: 0, completion_tokens: 0, ms: 0, retries: 0, retry_log: vec![], finish: "Eos".into(), tool_calls: 0 });
         }
         // Le même curseur, retrouvé par son nom — pas un nouveau récepteur.
         let same = bus.cursor(topic::AGENT, "trace");
@@ -1214,7 +1217,7 @@ mod tests {
         let mut own = a.subscribe(&run_topic("r1"));
 
         b.emit(Event::EntitiesStored { count: 7 });
-        b.emit(Event::LlmCall { run: "r1".into(), agent: "spy".into(), model: "m".into(), iteration: 1, cached_prompt_tokens: 0, prompt_tokens: 0, completion_tokens: 0, ms: 0, retries: 0, retry_log: vec![], finish: "Eos".into(), tool_calls: 0 });
+        b.emit(Event::LlmCall { run: "r1".into(), agent: "spy".into(), model: "m".into(), iteration: 1, cached_prompt_tokens: 0, cache_reported: false, prompt_tokens: 0, completion_tokens: 0, ms: 0, retries: 0, retry_log: vec![], finish: "Eos".into(), tool_calls: 0 });
         b.send_message("r1", "spy", "r1", "coucou");
 
         for rx in &mut heard_by_a {

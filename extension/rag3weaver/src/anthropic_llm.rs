@@ -613,6 +613,7 @@ fn read_sse(
         let written = u["cache_creation_input_tokens"].as_u64().unwrap_or(0) as usize;
         usage.prompt_tokens = input as usize + read + written;
         usage.cached_prompt_tokens = read;
+        usage.cache_reported = u.get("cache_read_input_tokens").is_some_and(|v| !v.is_null());
         true
     }
 
