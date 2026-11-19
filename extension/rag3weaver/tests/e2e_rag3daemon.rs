@@ -72,15 +72,12 @@ fn deux_processus_partagent_la_base_par_le_demon() {
         std::process::exit(0);
     }
 
-    let dossier = std::env::temp_dir().join(format!(
-        "rag3weaver-rag3daemon-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    let journal = std::env::temp_dir().join("rag3weaver-e2e-rag3daemon");
+    // The base, its neighbours (`.ecrivain`, `.wal`, `.readers`) and the daemon's journal live in a temporary
+    // directory declared first, so dropped last, after the daemon: nothing stays in the suite's TMPDIR (entry 7 of
+    // the handover).
+    let tmp = tempfile::tempdir().unwrap();
+    let dossier = tmp.path().join("rag3weaver-rag3daemon");
+    let journal = tmp.path().join("rag3weaver-e2e-rag3daemon");
 
     let serveur = DaemonConnection::serveur(
         PORT_NUL,
@@ -178,7 +175,6 @@ fn deux_processus_partagent_la_base_par_le_demon() {
     assert_eq!(reste.rows[0][0], CypherValue::Int(0));
 
     drop(parent); // arrête le démon (Fin::Arreter)
-    let _ = std::fs::remove_dir_all(&dossier);
 }
 
 // ═══ Le choix du lecteur, et ce qu'il en dit ════════════════════════════════
@@ -199,15 +195,12 @@ fn deux_processus_partagent_la_base_par_le_demon() {
 fn un_lecteur_choisit_son_chemin_et_le_dit() {
     use rag3weaver::acces::{ouvrir_lecteur, Acces, Chemin};
 
-    let dossier = std::env::temp_dir().join(format!(
-        "rag3weaver-acces-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
-    let journal = std::env::temp_dir().join("rag3weaver-e2e-acces");
+    // The base, its neighbours (`.ecrivain`, `.wal`, `.readers`) and the daemon's journal live in a temporary
+    // directory declared first, so dropped last, after the daemon: nothing stays in the suite's TMPDIR (entry 7 of
+    // the handover).
+    let tmp = tempfile::tempdir().unwrap();
+    let dossier = tmp.path().join("rag3weaver-acces");
+    let journal = tmp.path().join("rag3weaver-e2e-acces");
 
     let serveur = DaemonConnection::serveur(
         PORT_NUL,
@@ -290,8 +283,6 @@ fn un_lecteur_choisit_son_chemin_et_le_dit() {
             println!("▸ auto   : replié sur le relais, et il le dit");
         }
     }
-
-    let _ = std::fs::remove_dir_all(&dossier);
 }
 
 /// **Après un point de reprise échoué**, le démon répond l'erreur puis
