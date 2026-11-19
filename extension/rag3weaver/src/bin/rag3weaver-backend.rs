@@ -1061,6 +1061,17 @@ fn run() -> Result<(), String> {
     backend.shutdown()
 }
 fn main() {
+    // **The enclosing helper of a heavy command under `poste lourd`** (19 Nov 2026): it sets the
+    // command's sandbox on itself, then becomes the command; it never returns on success.
+    #[cfg(all(feature = "code", target_os = "linux"))]
+    {
+        let args: Vec<String> = std::env::args().skip(1).collect();
+        if args.first().map(String::as_str) == Some("sandbox-exec") {
+            let Err(e) = rag3weaver::commande::sandbox_exec(&args[1..]);
+            eprintln!("{e}");
+            std::process::exit(126);
+        }
+    }
     if let Err(e) = run() {
         eprintln!("{e}");
         // Le refus d'un hôte (un autre répond déjà…) s'écrit dans son journal
