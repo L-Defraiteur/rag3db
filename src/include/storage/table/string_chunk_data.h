@@ -25,6 +25,8 @@ public:
     void append(common::ValueVector* vector, const common::SelectionView& selView) override;
     void append(const ColumnChunkData* other, common::offset_t startPosInOtherChunk,
         uint32_t numValuesToAppend) override;
+    static void probeSourceString(const StringChunkData& src, common::offset_t srcPos,
+        common::offset_t numValuesToCopy, common::offset_t srcOffsetInChunk);
     ColumnChunkData* getIndexColumnChunk();
     const ColumnChunkData* getIndexColumnChunk() const;
 

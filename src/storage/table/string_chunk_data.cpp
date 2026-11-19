@@ -1,5 +1,8 @@
 #include "storage/table/string_chunk_data.h"
 
+#include <cstdio>
+#include <cstdlib>
+
 #include "common/data_chunk/sel_vector.h"
 #include "common/serializer/deserializer.h"
 #include "common/serializer/serializer.h"
@@ -198,8 +201,54 @@ void StringChunkData::write(const ColumnChunkData* srcChunk, offset_t srcOffsetI
         if (isNull) {
             continue;
         }
+        probeSourceString(srcStringChunk, srcPos, numValuesToCopy, srcOffsetInChunk);
         setValueFromString(srcStringChunk.getValue<std::string_view>(srcPos), dstPos);
     }
+}
+
+// SONDE C1 (branche c1-probe, jamais pour master) : la chaîne source doit tenir dans le tampon
+// de son dictionnaire. Sinon, l'état du morceau source sur stderr, puis abort.
+void StringChunkData::probeSourceString(const StringChunkData& src, offset_t srcPos,
+    offset_t numValuesToCopy, offset_t srcOffsetInChunk) {
+    const auto& dict = src.getDictionaryChunk();
+    const auto* offsets = dict.getOffsetChunk();
+    const auto* data = dict.getStringDataChunk();
+    const auto* indexes = src.getIndexColumnChunk();
+    const auto numIndexes = indexes->getNumValues();
+    const auto numOffsets = offsets->getNumValues();
+    const auto numBytes = data->getNumValues();
+    const auto index =
+        srcPos < indexes->getCapacity() ? indexes->getValue<DictionaryChunk::string_index_t>(srcPos) :
+                                          ~0u;
+    bool bad = srcPos >= numIndexes || index >= numOffsets;
+    uint64_t start = 0, end = 0;
+    if (!bad) {
+        start = offsets->getValue<DictionaryChunk::string_offset_t>(index);
+        end = index + 1 < numOffsets ? offsets->getValue<DictionaryChunk::string_offset_t>(index + 1) :
+                                       numBytes;
+        bad = start > end || end > numBytes || end > data->getCapacity();
+    }
+    if (!bad) {
+        return;
+    }
+    fprintf(stderr,
+        "[sonde C1] chaîne source hors de son tampon : srcPos %lu (de %lu, copie de %lu à partir de "
+        "%lu), index %u, index du morceau %lu (capacité %lu), offsets %lu (capacité %lu), octets %lu "
+        "(capacité %lu), début %lu, fin %lu, morceau source %p, dictionnaire %p, données %p\n",
+        (unsigned long)srcPos, (unsigned long)src.getNumValues(), (unsigned long)numValuesToCopy,
+        (unsigned long)srcOffsetInChunk, index, (unsigned long)numIndexes,
+        (unsigned long)indexes->getCapacity(), (unsigned long)numOffsets,
+        (unsigned long)offsets->getCapacity(), (unsigned long)numBytes,
+        (unsigned long)data->getCapacity(), (unsigned long)start, (unsigned long)end,
+        static_cast<const void*>(&src), static_cast<const void*>(&dict),
+        static_cast<const void*>(data->getData()));
+    const auto from = numOffsets > 4 ? numOffsets - 4 : 0;
+    for (auto k = from; k < numOffsets; k++) {
+        fprintf(stderr, "[sonde C1] offset[%lu] = %lu\n", (unsigned long)k,
+            (unsigned long)offsets->getValue<DictionaryChunk::string_offset_t>(k));
+    }
+    fflush(stderr);
+    abort();
 }
 
 void StringChunkData::appendStringColumnChunk(const StringChunkData* other,
