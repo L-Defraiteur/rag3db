@@ -1,7 +1,6 @@
 # Un COMMIT qui écrit sous un index vectoriel saute des tables de nœuds
 
-- **État** : ouvert (13 novembre 2026, cœur c++) — corrigé par le lot qui porte ce ticket (branche
-  `insertion-defaite-reouverture`), à fermer après la lib et le rejeu d'arbre principal
+- **État** : corrigé sur master `8275be382b` (13 novembre 2026, cœur c++) ; fermé le 19 novembre 2026
 - **Famille** : moteur
 - **Gravité** : perte — un COMMIT qui rend succès ne publie pas les nœuds de certaines tables ;
   leurs relations, publiées, restent orphelines
@@ -88,3 +87,13 @@ du cœur, avec ses dix exemples nommés.
 ## Pour le fermer
 
 Le correctif sur master, la lib bâtie par G, et le repreneur d'arbre principal vert dessus.
+
+## Fermé (19 novembre 2026)
+
+Les trois conditions sont tenues. Le correctif `8275be382b` est sur master depuis le 13 novembre, et dans toutes
+les libs épinglées depuis. Le témoin C++ `CommitLocalTablesTest.ACommitWithAVectorIndexKeepsTheRowsOfEveryTable`
+est vert dans la passe de la pile C++ du 19 novembre (`transaction_test` 407 verts, journal
+`~/.cache/rag3db-moteur-notes/train-soir/transaction.log` à luciepc). Le repreneur d'arbre principal
+`e2e_tx_vecteurs_apres_rollback` est vert 30 fois dans les journaux de `~/.cache/rag3weaver-build` à luciepc :
+ses trois cas `ok`, la dernière fois dans la passe d'everything declarative du 19 novembre à 13 h 36
+(`passe-ed-27ii`).
