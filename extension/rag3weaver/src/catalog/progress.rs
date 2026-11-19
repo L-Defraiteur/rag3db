@@ -322,6 +322,19 @@ pub const BENCH_RATE_FACTOR: f64 = 0.5;
 /// The variable that names the host's declaration of rates ; empty : none is read.
 pub const EMBEDDING_RATES_VARIABLE: &str = "RAG3WEAVER_EMBEDDING_RATES";
 
+/// **The host's declaration of rates** : `RAG3WEAVER_EMBEDDING_RATES` (empty : none),
+/// else `$XDG_CONFIG_HOME/rag3weaver/embedding-rates.json`, else under `~/.config`.
+pub fn embedding_rates_path() -> Option<std::path::PathBuf> {
+    match std::env::var(EMBEDDING_RATES_VARIABLE) {
+        Ok(v) if v.trim().is_empty() => None,
+        Ok(v) => Some(std::path::PathBuf::from(v)),
+        Err(_) => std::env::var_os("XDG_CONFIG_HOME")
+            .map(std::path::PathBuf::from)
+            .or_else(|| std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".config")))
+            .map(|c| c.join("rag3weaver").join("embedding-rates.json")),
+    }
+}
+
 /// **This machine's name**, the `host` of a rate key.
 pub fn this_host() -> String {
     #[cfg(unix)]
@@ -719,16 +732,39 @@ impl Catalog {
     /// declaration (`~/.config/rag3weaver/embedding-rates.json`) times
     /// [`BENCH_RATE_FACTOR`], else unknown.
     pub fn embedding_rate_for_wait(&self) -> Result<(Option<Rate>, RateSource), CatalogError> {
-        self.embedding_rate_for_wait_from(None)
+        self.embedding_rate_for_wait_from(embedding_rates_path().as_deref())
     }
 
-    /// [`Self::embedding_rate_for_wait`], the declaration given. Stub : the catalog's key only.
+    /// [`Self::embedding_rate_for_wait`], the declaration given (`None` : none read).
     pub fn embedding_rate_for_wait_from(&self, declaration: Option<&std::path::Path>) -> Result<(Option<Rate>, RateSource), CatalogError> {
-        let _ = (declaration, BENCH_RATE_FACTOR, EMBEDDING_RATES_VARIABLE);
-        Ok(match self.known_embedding_rate()? {
-            Some(rate) => (Some(rate), RateSource::Index),
-            None => (None, RateSource::Unknown { reason: None }),
-        })
+        if let Some(rate) = self.known_embedding_rate()? {
+            return Ok((Some(rate), RateSource::Index));
+        }
+        let unknown = |reason: Option<String>| Ok((None, RateSource::Unknown { reason }));
+        let (Some(embedder), Some(path)) = (&self.embedder, declaration) else { return unknown(None) };
+        let Some(place) = Self::embedding_rate_place(embedder.as_ref()) else { return unknown(None) };
+        let text = match std::fs::read_to_string(path) {
+            Ok(text) => text,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return unknown(None),
+            Err(e) => return unknown(Some(format!("déclaration illisible : {} : {e}", path.display()))),
+        };
+        let illegible = |why: String| unknown(Some(format!("déclaration illisible : {} : {why}", path.display())));
+        let value: serde_json::Value = match serde_json::from_str(&text) {
+            Ok(v) => v,
+            Err(e) => return illegible(e.to_string()),
+        };
+        if value["version"].as_u64() != Some(1) {
+            return illegible(format!("version {} (1 attendue)", value["version"]));
+        }
+        let Some(rates) = value["rates"].as_object() else { return illegible("« rates » n'est pas un objet".into()) };
+        let Some(entry) = rates.get(&format!("{}:{place}", embedder.name())) else { return unknown(None) };
+        match entry["chars_per_second"].as_f64().filter(|c| c.is_finite() && *c > 0.0) {
+            Some(cps) => Ok((
+                Some(Rate { chars_per_second: cps * BENCH_RATE_FACTOR }),
+                RateSource::Bench { measured_at: entry["measured_at"].as_str().unwrap_or("?").to_string(), factor: BENCH_RATE_FACTOR },
+            )),
+            None => illegible(format!("chars_per_second {} (un nombre positif attendu)", entry["chars_per_second"])),
+        }
     }
 
     /// Note le débit constaté d'un modèle configuré. Le profil lexical ne
