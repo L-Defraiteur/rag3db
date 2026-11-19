@@ -458,6 +458,35 @@ sont ceux de la base, au couple près (fichier, ligne, scope, cible, marque) :
 - **Si elle n'y descend pas**, la question revient à Lucie : garder C seule, ou chercher le gain ailleurs (une
   analyse en parallèle, un repli limité à `outline`).
 
+## B : la conclusion, la porte reste fermée (19 novembre 2026, c7)
+
+**Ce qui a été construit**, chaque morceau vu rouge puis vert :
+- **`MemoryImage`** : les lignes de l'ingestion en mémoire, avec chaînes internées, index et relations en MERGE.
+  Elle sait ôter un fichier, un nœud ou une relation, fusionner des propriétés sans déplier, et lire des champs
+  projetés. Le champ du fichier se déclare par table.
+- **Le dialecte `memoire` et la connexion mémoire** : huit familles. `ddl`, `meta` et `read` sont de recherche ;
+  `load`, `links`, `count`, `aside` et `writes` de codeparsers. S'y ajoutent `NoCheckpoints` et `memory_catalog`.
+- **La parité** : un `Catalog` posé sur la connexion mémoire ingère et résout le code par son propre chemin.
+  L'image porte les mêmes CONSUMES que la base, au couple près, sur rag3weaver/src (49 063) et `src/` du moteur
+  (19 645).
+- Branches : `memory-image` (le module, déposé au pousseur), `memory-connection` (recherche, tête 07efdcd76f) et
+  `codeparsers/memory-connection-writes-3` (codeparsers, par-dessus).
+
+**Le chiffre** (codeparsers, après la lecture projetée et ses deux corrections), sur rag3weaver/src :
+- ingestion dans l'image : **12,3 s** ;
+- repli complet (analyse et image) : **~21 s**, contre **26 s** pour l'index réel depuis C.
+
+Le gain restant est faible : l'essentiel du coût est le chemin commun, la résolution, ses relectures et ses
+drains, qui pèse autant dans l'image que dans la base.
+
+**La décision (c7)** : la porte des outils vers l'image **reste fermée**. `memory-image` atterrit comme socle, sans
+effet sur l'existant. L'effort va au **chemin commun**, qui sert aussi l'index réel : d'abord une regex de
+codeparsers (~2 s), puis la résolution. Lucie peut rouvrir si elle le préfère ; c7 le lui dit.
+
+**La condition de réouverture** : une ingestion dans l'image **sous ~5 s** sur rag3weaver/src, c'est-à-dire une
+résolution environ deux fois plus rapide. Le repli tomberait alors vers 12 s, la moitié de l'index. Si le chemin
+commun y arrive, la porte (le lot 4 de la conception de B) se construit sur le socle tel qu'il est.
+
 ## Questions pour Lucie (posées avant sa décision)
 
 1. ~~Mesurer d'abord C ?~~ **Tranché par c7 : oui.** C est mesurée au §7. Réordonner l'index donne ~27 s sur
