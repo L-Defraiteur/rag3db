@@ -81,6 +81,42 @@ impl DaemonHost {
     }
 }
 
+/// **A call that waits says so** (19 November 2026): past `notice`, `on_notice` runs once (the
+/// teammate's mailbox line) and `Waiting {run, cause: "tool", what, since_ms}` goes on the bus; when
+/// the call returns after it, `Resumed {run, cause, waited_ms}`. Never at each turn of a loop, and the
+/// call is never abandoned. Shared by a teammate's step ([`Etanche`]) and a turn of the chat.
+pub(super) fn say_the_wait<T>(notice: Duration, bus: Option<&crate::events::EventBus>, run: &str, tool: &str, on_notice: impl Fn() + Sync, f: impl FnOnce() -> T) -> T {
+    let fini = AtomicBool::new(false);
+    // Set once the call has said it waits: only then does its end say `Resumed`.
+    let attendu = AtomicBool::new(false);
+    let depart = Instant::now();
+    let r = std::thread::scope(|sc| {
+        sc.spawn(|| {
+            while !fini.load(Ordering::SeqCst) {
+                if depart.elapsed() >= notice {
+                    on_notice();
+                    if let Some(bus) = bus {
+                        attendu.store(true, Ordering::SeqCst);
+                        bus.emit(crate::events::Event::Waiting { run: run.to_string(), cause: "tool".into(), what: tool.to_string(), since_ms: depart.elapsed().as_millis() as u64, wait_ms: None });
+                    }
+                    return;
+                }
+                std::thread::sleep(Duration::from_millis(100));
+            }
+        });
+        let r = f();
+        fini.store(true, Ordering::SeqCst);
+        r
+    });
+    // The watcher has returned with the scope: a `Waiting` it emitted is already on the bus.
+    if attendu.load(Ordering::SeqCst) {
+        if let Some(bus) = bus {
+            bus.emit(crate::events::Event::Resumed { run: run.to_string(), cause: "tool".into(), waited_ms: depart.elapsed().as_millis() as u64 });
+        }
+    }
+    r
+}
+
 /// **La boîte d'outils étanche** d'un pas : le backend pris à chaque appel, le repli
 /// sur les fichiers quand il manque.
 pub(super) struct Etanche<'a> {
@@ -111,50 +147,28 @@ impl Etanche<'_> {
         if let Some(cause) = &self.hors_ligne {
             return self.repli_sur_fichiers(call, cause);
         }
-        let fini = AtomicBool::new(false);
-        // Set once the call has said it waits: only then does its end say `Resumed`.
-        let attendu = AtomicBool::new(false);
-        let depart = Instant::now();
-        let r = std::thread::scope(|sc| {
-            sc.spawn(|| {
-                while !fini.load(Ordering::SeqCst) {
-                    if depart.elapsed() >= self.notice {
-                        let _ = self.boite.append(
-                            "host",
-                            "report",
-                            None,
-                            &format!("« {} » attend depuis {} s (un index tient sans doute l'écriture) ; l'appel continue, rien n'est abandonné", call.name, self.notice.as_secs()),
-                        );
-                        if let Some(bus) = &self.bus {
-                            attendu.store(true, Ordering::SeqCst);
-                            bus.emit(crate::events::Event::Waiting {
-                                run: self.run.clone(),
-                                cause: "tool".into(),
-                                what: call.name.clone(),
-                                since_ms: depart.elapsed().as_millis() as u64,
-                                wait_ms: None,
-                            });
-                        }
-                        return;
-                    }
-                    std::thread::sleep(Duration::from_millis(100));
-                }
-            });
-            let r = self.host.with_backend(&self.hosted, |b| {
-                let outils = crate::backend_tools::BackendTools { backend: b };
-                let declares = crate::declare::DeclarationTools { backend: b, inner: &outils };
-                let du_chat = OutilsDuChat::de(b, &declares, true).avec_empreinte(self.empreinte.0.clone(), self.empreinte.1, b.prepared().workspace_root());
-                f(&du_chat)
-            });
-            fini.store(true, Ordering::SeqCst);
-            r
-        });
-        // The watcher has returned with the scope: a `Waiting` it emitted is already on the bus.
-        if attendu.load(Ordering::SeqCst) {
-            if let Some(bus) = &self.bus {
-                bus.emit(crate::events::Event::Resumed { run: self.run.clone(), cause: "tool".into(), waited_ms: depart.elapsed().as_millis() as u64 });
-            }
-        }
+        let r = say_the_wait(
+            self.notice,
+            self.bus.as_ref(),
+            &self.run,
+            &call.name,
+            || {
+                let _ = self.boite.append(
+                    "host",
+                    "report",
+                    None,
+                    &format!("« {} » attend depuis {} s (un index tient sans doute l'écriture) ; l'appel continue, rien n'est abandonné", call.name, self.notice.as_secs()),
+                );
+            },
+            || {
+                self.host.with_backend(&self.hosted, |b| {
+                    let outils = crate::backend_tools::BackendTools { backend: b };
+                    let declares = crate::declare::DeclarationTools { backend: b, inner: &outils };
+                    let du_chat = OutilsDuChat::de(b, &declares, true).avec_empreinte(self.empreinte.0.clone(), self.empreinte.1, b.prepared().workspace_root());
+                    f(&du_chat)
+                })
+            },
+        );
         match r {
             Ok(turn) => turn,
             Err(cause) => self.repli_sur_fichiers(call, &cause),
