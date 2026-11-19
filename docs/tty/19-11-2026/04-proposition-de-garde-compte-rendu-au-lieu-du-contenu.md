@@ -39,21 +39,22 @@ Le trou : sans `expects`, rien ne regarde si le texte demandé est venu.
 Archi a tranché les trois points dans `docs/rag3weaver-archi/19-11-2026/01-garde-compte-rendu-au-lieu-du-contenu.md`. Le juge n'est pas le décideur local ; c'est le modèle de la tâche lui-même. Le code est dans `daemon_host/teammate.rs`, `DaemonHost::judge_the_content`, à la fin d'un pas déclaré réussi qui finirait la tâche.
 
 - **Couche 1, sans appel** : le pas n'a écrit aucun texte, ses reports font moins de 300 caractères chacun, et la request n'a pas d'`expects`. Hors de ce cas, rien ne change.
-- **Couche 2, le juge** : un appel au modèle de la tâche (`llm_du_chat`), hors du tour : il n'entre pas dans la session de la tâche. Température 0, 50 jetons au plus. La question fermée en anglais (`CONTENT_QUESTION`) porte la request et les reports. La réponse est `delivered`, `missing` ou `action`.
+- **Couche 2, le juge** : un appel au modèle de la tâche (`llm_du_chat`), hors du tour : il n'entre pas dans la session de la tâche. Température 0. La question fermée en anglais (`CONTENT_QUESTION`) porte la request et les reports. Le verdict est le premier mot de la réponse : `delivered`, `missing` ou `action`. À la relecture d'archi, le raisonnement est coupé (`ReasoningEffort::Minimal`), avec 512 jetons de place : 50 jetons, qu'un modèle qui raisonne dépense à penser (2 805 jetons de raisonnement dans D1 sur gemini-3.8-flash), laisseraient la réponse vide. La consommation de l'appel s'inscrit au compteur du chat, sur le run du pas, sous l'agent `content-judge` : l'usage du run la porte.
 - **Couche 3, ce qui suit** :
-  - `missing` : l'hôte écrit « fait sans le contenu demandé : … ; le pas suivant part pour l'écrire », et le pas suivant part avec une relance en anglais. C'est la relance unique de la request, partagée avec la garde B (`relancee`). C'est un pas, compté dans `MAX_STEPS`.
-  - un second `missing` : « fait sans le contenu demandé, après la relance : j'attends le superviseur », une attente bornée par `teammate.reply_wait_s`.
-  - un juge en échec (une erreur, ou une réponse qui n'est aucun des trois mots) : « fin sans texte, à vérifier (…) », et la tâche finit comme avant.
+  - `missing` : l'hôte écrit « ended without the requested content: … the next step starts to write it », et le pas suivant part avec une relance. Les lignes de boîte sont en anglais, comme la relance : le modèle relit la boîte à sa frontière. C'est la relance unique de la request, partagée avec la garde B (`relancee`). C'est un pas, compté dans `MAX_STEPS`.
+  - un second `missing` : « ended without the requested content, after the relaunch: waiting for the supervisor », une attente bornée par `teammate.reply_wait_s`.
+  - un juge en échec (une erreur, ou un premier mot qui n'est aucun des trois) : « ended without a text, to be checked (…) », et la tâche finit comme avant.
   - `delivered` et `action` : la tâche finit comme avant.
 
-L'appel du juge se dit sur la sortie d'erreur de l'hôte (« le juge du contenu dit … »). Il n'émet pas de `LlmCall` sur le bus : c'est une suite possible, si archi veut qu'il compte au coût du run.
+L'appel du juge se dit aussi sur la sortie d'erreur de l'hôte (« le juge du contenu dit … »). Il n'émet pas de `LlmCall` sur le bus : archi n'en veut pas, le compteur suffit.
 
 ### Les témoins
 
 Tous dans `daemon_host::teammate_tests`, vus rouges (31603f67a2, puis d6cda0c9fc avec le faux juge), puis verts (d09dd37392) :
 - `a_report_about_the_text_is_not_the_text` : le juge dit `missing`, et le contenu arrive au pas de la relance ;
 - `a_report_judged_an_action_lets_the_task_end` : le juge est appelé une fois, dit `action`, et la tâche finit « fait sans plan », sans ligne de manque ;
-- `a_judge_that_fails_says_the_end_is_to_be_checked` : le juge est en panne, et la boîte dit « fin sans texte, à vérifier ».
+- `a_judge_that_fails_says_the_end_is_to_be_checked` : le juge est en panne, et la boîte dit « ended without a text, to be checked » ;
+- à la relecture d'archi (rouges 7c80e7ee14) : `the_verdict_is_the_judge_s_first_word` (« Delivered, not missing. » est une livraison) et `the_judge_thinks_little_and_counts_in_the_run_s_usage` (raisonnement minimal ou place pour lui, et la consommation sur le run du pas). Les témoins attendent le superviseur 3 s : un rouge qui l'attendait 1 800 s a tenu la place lourde du portable.
 
-Les modules `daemon_host::teammate` (46) et `daemon_host::chat` (21) restent verts, sous la lib épinglée 3d706f709 avec `RAG3WEAVER_MOTEUR_ANCIEN=1`, en le sachant. Le témoin réel sous Vertex (`e2e_equipier`) n'est pas joué par tty, qui ne lit pas les identifiants : il est à la passe.
+Les modules `daemon_host::teammate` (48) et `daemon_host::chat` (21) restent verts, sous la lib épinglée 3d706f709 avec `RAG3WEAVER_MOTEUR_ANCIEN=1`, en le sachant. Le témoin réel sous Vertex (`e2e_equipier`) n'est pas joué par tty, qui ne lit pas les identifiants : il est à la passe.
 
