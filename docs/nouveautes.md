@@ -57,6 +57,7 @@
 - 19 novembre 2026 — **`usages` ne montre plus la déclaration d'un conteneur retiré.** Une classe retirée par une
   édition ne laissait pas partir ses déclarations : `usages bar` montrait encore « déclaré dans Foo — foo.h:3 »
   après la synchronisation qui avait retiré `Foo`. Les usages ne lisent plus que les lignes visibles de la base.
+- 19 novembre 2026 — Dans le terminal de l'agent, ce que l'hôte attend se dit à côté de l'animation : « read_file README.md attend… (25 s) » pendant qu'un outil attend, « gemini-3.8-flash attend le fournisseur… (reprise dans 3 s) » pendant que le fournisseur retient le modèle, au lieu d'un « à toi » faux.
 
 - 18 novembre 2026 — **La fin d'un index dit une libération ou une dette qu'elle n'a pas pu faire.** Une erreur en rendant les réclamations d'embarquement s'ajoute à la dernière ligne du journal, avec sa table et sa cause, sans en effacer la cause de fin ; une dette restante illisible se dit « dette inconnue », plus jamais « 0 ».
 
