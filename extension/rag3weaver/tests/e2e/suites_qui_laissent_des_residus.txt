@@ -13,7 +13,6 @@
 # du TMPDIR) : des bases de test entières, une base d'accès, des dossiers .tmp* de tempfile.
 e2e_prise_atomique
 e2e_rag3daemon
-e2e_repli_de_branche
 
 # Intermittent : un processus tué pendant COPY ne peut plus effacer son CSV.
 e2e_tx_par_paquet_arret docs/recherche/tickets/2026-11-11-un-copy-tue-laisse-son-csv-dans-le-dossier-temporaire.md
