@@ -11,6 +11,9 @@ if type_of(r.results) == "array" {
 }
 r.slice_summary = summary;
 r.open = if open == () { [] } else { open };
+// The path of the slice Source, written even when a topic failed (the host keeps it only when the
+// slice is archived).
+r.source = input.chemin;
 if type_of(r.results) == "array" {
     let t = #{ calls: 0, without_usage: 0, prompt_tokens: 0, cached_prompt_tokens: 0, completion_tokens: 0, ms: 0 };
     for x in r.results {
