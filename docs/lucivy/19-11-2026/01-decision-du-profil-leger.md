@@ -2,7 +2,7 @@
 
 Pour Lucie, à la demande de c7. La question est de savoir si les index plein texte de rag3weaver doivent garder leurs
 positions. Sans positions, un index pèse environ trois fois moins, mais chaque requête relit le texte de ses candidats.
-Les chiffres d'aujourd'hui s'ajoutent à cette page après la mesure, au rang que c7 lui donnera (§ 5).
+Les chiffres d'aujourd'hui sont au § 7, avec la recommandation (mesure du 19 novembre, 14 h).
 
 ## 1. Ce qui est en jeu
 
@@ -75,3 +75,50 @@ Les chiffres d'aujourd'hui s'ajoutent à cette page après la mesure, au rang qu
 
 La recommandation viendra avec les chiffres. Ce qui la guidera : le gain en octets contre la latence de `search_code`
 sur des requêtes d'un ou deux mots, les plus fréquentes, avec « un poil plus lent » comme limite.
+
+## 7. Les chiffres du 19 novembre, et la recommandation
+
+Mesure jouée à luciepc sous `poste mesure`, sur lucivy 4.3.11 (main 792f514). Elle porte sur la copie de
+`Lucivy_Scope` de la base du dépôt : 82 063 documents, **80,7 Mo de texte**. Le 14 novembre, c'était 932 Mo : les
+exclusions de fichiers ont retiré les fichiers minifiés et générés.
+
+| profil | sur disque | dictionnaire | positions | postings | texte stocké | indexé en |
+|---|---:|---:|---:|---:|---:|---:|
+| avec positions (l'actuel) | 865,8 Mo | 439,7 Mo | 171,7 Mo | 210,8 Mo | 43,6 Mo | 12,8 s |
+| **sans positions** | **613,4 Mo (−29 %)** | 439,9 Mo | 0 | 130,1 Mo | 43,5 Mo | **8,9 s** |
+
+Les requêtes, en médiane de cinq, avec les spans que rag3weaver demande toujours :
+
+| requête | avec positions | sans positions |
+|---|---:|---:|
+| 1 mot, contains d1 | 20 ms | 15 ms |
+| 1 mot court (`commit`), d1 | 40 ms | 62 ms |
+| 1 mot, d0 | 3 ms | 13 ms |
+| 2 mots, contains d1 | 22 ms | 48 ms |
+| 2 mots, parse | 15 ms | 60 ms |
+| 4 mots, contains d1 | 8 ms | 96 ms |
+| 4 mots, parse | 29 ms | 89 ms |
+| phrase entre guillemets | 2 ms | 4 ms |
+| requête longue d1 (archiviste) | 75 ms | 95 ms |
+| requête longue d0 (> 900 caractères) | 280 ms | 247 ms |
+
+**Les réponses sont les mêmes** dans les deux profils : mêmes documents, et le même nombre de spans pour chaque
+requête (9 794 pour `commit`, 23 009 pour les quatre mots en `parse`).
+
+**Lecture** :
+- **La latence n'est plus un obstacle.** Tout reste sous 100 ms. Le pire est « 4 mots, contains » : ×12, mais
+  96 ms. C'est le « un poil plus lent » que Lucie accepte. La 4.3.11 et les exclusions ont fait disparaître les
+  secondes du 14 novembre.
+- **Le gain en place est plus petit qu'annoncé** : −29 %, soit 252 Mo sur cette base, au lieu de −67 %. Ce qui
+  pèse aujourd'hui, c'est le **dictionnaire** : 440 Mo, la moitié de l'index, plus de cinq fois le texte. Les
+  positions ne font plus que 172 Mo.
+- **L'indexation est 30 % plus rapide** sans positions.
+
+**Recommandation** :
+1. **Passer les index de code au profil léger**, avec `fts_positions: false` par défaut dans les manifestes de
+   rag3weaver. La possibilité de garder les positions index par index reste ouverte, pour qui le demanderait. Gain :
+   un quart à un tiers de la place et de l'indexation, pour quelques dizaines de millisecondes par requête. Ce sera un
+   lot de rag3weaver, puis un rebâti du plein texte de chaque base, sur copie d'abord.
+2. **Le levier suivant est le dictionnaire**, pas les positions : 440 Mo pour 81 Mo de texte. C'est une mesure à faire
+   (ce qui y pèse, par champ et par longueur de mot ; le 15 novembre, le vocabulaire en était la cause), avant tout
+   changement de format, qui serait une 4.4.
