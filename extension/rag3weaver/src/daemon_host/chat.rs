@@ -858,6 +858,9 @@ impl DaemonHost {
         step: Option<&super::teammate::Step>,
     ) -> Result<Value, String> {
         let llm = self.llm_du_chat(manifest, &tour.prepared).map_err(|why| format!("le chat est éteint : {why}"))?;
+        if let Some(s) = step {
+            s.note_turn_run(run_id, llm.name());
+        }
         let dans_une_tache = tour.dans_une_tache;
         let mut prompt = system_prompt_du_backend(tour.prepared.manifest.kind, tour.mode, dans_une_tache);
         // **La consigne déclarée du chat** (`chat_instructions`) : celle de l'atelier dit
