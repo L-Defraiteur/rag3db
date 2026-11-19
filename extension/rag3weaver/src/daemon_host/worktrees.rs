@@ -1883,6 +1883,67 @@ mod tests {
     }
 
 
+    /// **A first call does not wait for a debt of vectors** (ticket « un appel d'outil attend derrière un index sans le
+    /// dire », its last point, 19 November 2026): on 11 October, a backend reopened with 2 074 chunks to embed made its
+    /// first `initialize` wait 26 s, the catch-up running before the answer. A cut index leaves a debt under a slow
+    /// service; reopened with `catch_up_on_open`, the opening and the first call answer within 5 s, the state says the
+    /// vectors still owed, and the catch-up goes on behind.
+    #[test]
+    fn a_first_call_does_not_wait_for_a_debt_of_vectors() {
+        let d = tempfile::tempdir().unwrap();
+        let (manifeste, arbre) = crate::daemon_host::symboles_cites::tests::petit_depot(d.path());
+        let manifeste = PathBuf::from(manifeste);
+        for i in 0..1500 {
+            std::fs::write(arbre.join(format!("src/f{i}.rs")), format!("pub fn fonction_{i}() -> u32 {{\n    {i}\n}}\n")).unwrap();
+        }
+        let ecrire = |f: &dyn Fn(&mut Value)| {
+            let mut m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
+            f(&mut m);
+            std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+        };
+        let adresse = service_granite();
+        ecrire(&|m| {
+            m["embeddings"]["catch_up_on_open"] = json!(false);
+            m["embeddings"]["address"] = json!(adresse);
+        });
+        let host = Arc::new(crate::daemon_host::tests::hote_isole());
+        let h = host.hosted(&manifeste).unwrap();
+        let recu = host.with_backend(&h, |b| b.call("index", json!({ "confirm": true }))).unwrap().unwrap();
+        let journal = recu["result"].as_str().unwrap_or_default().lines().find_map(|l| l.strip_prefix("journal : ")).unwrap().trim().to_string();
+        let debut = std::time::Instant::now();
+        while !std::fs::read_to_string(&journal).is_ok_and(|t| t.contains("plein texte prêt")) {
+            assert!(debut.elapsed() < std::time::Duration::from_secs(120), "le plein texte n'est pas prêt en 120 s : {journal}");
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        let catalogue = host.with_backend(&h, |b| b.catalog.clone()).unwrap();
+        crate::dataflow::index_nodes::stop_indexings_of(&catalogue);
+        drop(catalogue);
+        let debut = std::time::Instant::now();
+        while host.with_backend(&h, |b| crate::dataflow::index_nodes::indexings_running(&b.catalog)).unwrap() > 0 {
+            assert!(debut.elapsed() < std::time::Duration::from_secs(120), "l'index n'a pas fini en 120 s");
+            std::thread::sleep(std::time::Duration::from_millis(200));
+        }
+        let dus = host.with_backend(&h, |b| b.catalog.lock().unwrap().index_progress().unwrap().dense_missing()).unwrap();
+        assert!(dus > 0, "the cut index leaves no debt");
+        let s = host.open_session("le témoin", None, Vec::new(), None);
+        assert_eq!(host.close(Some(&s), &manifeste)["ok"], true);
+
+        // Reopened with the catch-up declared: the opening and the first call, timed.
+        ecrire(&|m| m["embeddings"]["catch_up_on_open"] = json!(true));
+        let debut = std::time::Instant::now();
+        let etat = host.with_backend(&h, |b| b.index_states()).unwrap().expect("the state");
+        let premier = debut.elapsed();
+        assert!(premier < std::time::Duration::from_secs(5), "the opening and the first call waited {premier:?} for a debt of {dus} chunks");
+        let texte = etat.to_string();
+        assert!(etat["Scope"]["vectors"] != json!("ready") || etat["File"]["vectors"] != json!("ready"), "the state does not say the vectors still owed: {texte}");
+        assert!(
+            host.with_backend(&h, |b| crate::dataflow::index_nodes::indexings_running(&b.catalog)).unwrap() > 0,
+            "the catch-up does not go on behind the first answer"
+        );
+        let s = host.open_session("le témoin", None, Vec::new(), None);
+        assert_eq!(host.close(Some(&s), &manifeste)["ok"], true);
+    }
+
     /// **Une note « en cours » d'avant un arrêt ne se lit pas comme un index qui tourne**
     /// (c7, 8 novembre 2026 : code-essais-c7 rendait `text: running` noté le 25 octobre à
     /// 23 h 21, ses comptes complets, rien ne tournant ; list_worktrees disait « plein texte
