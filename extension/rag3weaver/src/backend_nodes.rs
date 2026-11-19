@@ -62,7 +62,7 @@ impl NodeFactory for EntityRecordFactory {
                 return Err(format!("missing {key}"));
             }
         }
-        if !matches!(config["action"].as_str(), Some("get" | "put" | "restore")) {
+        if !matches!(config["action"].as_str(), Some("get" | "put" | "restore" | "expire")) {
             return Err("invalid action".into());
         }
         if config["action"] == "restore" && config["uuid"].as_str().is_none_or(str::is_empty) {
