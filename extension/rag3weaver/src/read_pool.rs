@@ -405,7 +405,8 @@ mod tests {
 
     /// **A stopped call gives the hand back in under a second, and the other call goes to its end** (ticket
     /// `2026-11-07-un-arret-ne-coupe-pas-une-requete-du-moteur-en-cours`). Two snapshots of one pool each run a long
-    /// count; the first is interrupted in flight: its statement ends with an error well before its end, a later
+    /// count (a billion rows, built from two short lists: a long `range` is a list held in memory); the first
+    /// is interrupted in flight: its statement ends with an error well before its end, a later
     /// statement of it is refused, and the second snapshot's count is whole.
     #[test]
     fn an_interrupted_snapshot_gives_the_hand_back_and_the_other_goes_to_its_end() {
@@ -414,8 +415,8 @@ mod tests {
         let a = p.instantane(Duration::from_secs(5)).expect("a first snapshot");
         let b = p.instantane(Duration::from_secs(5)).expect("a second snapshot");
         let (ca, cb) = (a.conn(), b.conn());
-        let long = std::thread::spawn(move || ca.execute("UNWIND range(1, 2000000000) AS x RETURN count(x)"));
-        let other = std::thread::spawn(move || cb.execute("UNWIND range(1, 30000000) AS x RETURN count(x)"));
+        let long = std::thread::spawn(move || ca.execute("UNWIND range(1, 20000) AS x UNWIND range(1, 50000) AS y RETURN count(*)"));
+        let other = std::thread::spawn(move || cb.execute("UNWIND range(1, 3000) AS x UNWIND range(1, 10000) AS y RETURN count(*)"));
         std::thread::sleep(Duration::from_millis(300));
         let t = Instant::now();
         a.interrompre();
