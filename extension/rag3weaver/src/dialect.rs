@@ -4664,7 +4664,8 @@ mod tests {
             Predicate::Contains { field: "titre".into(), param: "t".into() },
         ]), vec![Column::Node("titre".into()), Column::Null]);
         assert_eq!(d.select(&f).unwrap(), r#"SELECT m."titre", NULL FROM "doc" AS m WHERE (m."source" = $s OR strpos(m."titre", $t) > 0)"#);
-        assert!(d.select(&Select::all("Doc", vec![Column::Whole])).is_err());
+        // The whole row, as a JSON object (2.11, lot B: the writer compares whole rows).
+        assert_eq!(d.select(&Select::all("Doc", vec![Column::Whole])).unwrap(), r#"SELECT to_jsonb(m) FROM "doc" AS m"#);
         assert_eq!(
             d.count(&Count::Edges { start: "Symbol".into(), relation: "DEFINES".into(), direction: Direction::Incoming }).unwrap(),
             r#"SELECT v.u, count(*) FROM unnest($uuids::text[]) AS v(u) JOIN "defines" AS r ON r."to_uuid" = v.u GROUP BY v.u"#
@@ -4723,7 +4724,8 @@ mod tests {
             Rag3dbDialect.write(&marque).unwrap(),
             "UNWIND $uuids AS uuid MATCH (n:`Doc` {_uuid: uuid}) SET n.`_snapshot` = $session, n.`_absent_since` = NULL"
         );
-        assert!(PostgresDialect.write(&marque).is_err(), "une marque large se dit par le dialecte, ou se refuse");
+        // A mark with values, said by postgres itself as an UPDATE by uuids (2.11, lot B: the writer's retirement).
+        assert_eq!(PostgresDialect.write(&marque).unwrap(), r#"UPDATE "doc" SET "_snapshot" = $session, "_absent_since" = NULL WHERE "_uuid" = ANY($uuids)"#);
         for d in [&Rag3dbDialect as &dyn SchemaDialect, &PostgresDialect] {
             let del = |by: &str, cascade, count| Write::Delete { table: "Doc".into(), by: by.into(), cascade, count };
             assert_eq!(d.write(&del("_uuid", true, false)).unwrap(), d.batch_cascade_delete("Doc"));
