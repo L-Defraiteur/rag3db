@@ -136,15 +136,18 @@ hf-hub = { version = "0.4", optional = true, default-features = false, features 
 # en f64, arrondis une fois — les mêmes documents ont le même score au bit près quelle que
 # soit la disposition des segments (un ulp d'écart en `parse` avant) ; `indexed: false` sur
 # un champ texte est signalé. Format inchangé.
-lucivy-core = "4.3.10"
+# La 4.3.11 (19 novembre 2026, tag v4.3.11, main 29594b9) : sans positions, une requête
+# floue longue ne relit plus chaque valeur entière (la distance d'édition seulement autour
+# des morceaux du pigeonnier ; 6,8 s → 0,19 s pour 230 octets). Format inchangé.
+lucivy-core = "4.3.11"
 # Moteur : nécessaire pour construire les LucivyDocument à l'indexation.
-ld-lucivy = { version = "4.3.10", default-features = false, features = ["stopwords", "lz4-compression"] }
+ld-lucivy = { version = "4.3.11", default-features = false, features = ["stopwords", "lz4-compression"] }
 
 
 # sparse_vector — crate ami de lucivy (Apache-2.0, dérivé en partie de Qdrant,
-# voir son NOTICE), persistance via lucistore. Aligné sur lucivy en 4.3.10
-# (18 novembre 2026) ; depuis la 4.3.3, close() arrête aussi ses pools après une erreur.
-sparse-vector = "4.3.10"
+# voir son NOTICE), persistance via lucistore. Aligné sur lucivy en 4.3.11
+# (19 novembre 2026) ; depuis la 4.3.3, close() arrête aussi ses pools après une erreur.
+sparse-vector = "4.3.11"
 
 # rag3db native (feature flag, pour natif + Node.js)
 rag3db = { path = "../../tools/rust_api", optional = true }
