@@ -1898,60 +1898,9 @@ mod tests {
         }
     }
 
-    /// **Chunks refused by the service are claimed again by the next index** (ticket of 8 November 2026): a first
-    /// index whose declared service refuses every text leaves the vectors owed; with a healthy service, the next
-    /// index embeds them, and the owed vectors fall to zero.
-    #[test]
-    fn chunks_refused_by_the_service_are_claimed_again_by_the_next_index() {
-        let d = tempfile::tempdir().unwrap();
-        let (manifeste, _arbre) = crate::daemon_host::symboles_cites::tests::petit_depot(d.path());
-        let manifeste = PathBuf::from(manifeste);
-        let ecrire = |f: &dyn Fn(&mut Value)| {
-            let mut m: Value = serde_json::from_slice(&std::fs::read(&manifeste).unwrap()).unwrap();
-            f(&mut m);
-            std::fs::write(&manifeste, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
-        };
-        let refusing = servir(Arc::new(RefusingGranite));
-        ecrire(&|m| {
-            m["embeddings"]["catch_up_on_open"] = json!(false);
-            m["embeddings"]["address"] = json!(refusing);
-        });
-        let host = Arc::new(crate::daemon_host::tests::hote_isole());
-        let h = host.hosted(&manifeste).unwrap();
-        // A known rate: `index` does not probe the refusing service (the probe would refuse to start).
-        host.with_backend(&h, |b| b.catalog.lock().unwrap().note_measured_embedding_rate(crate::estimate::Rate::from_sample(100_000, std::time::Duration::from_secs(1)).unwrap()).unwrap()).unwrap();
-        let indexer = |quoi: &str| {
-            let recu = host.with_backend(&h, |b| b.call("index", json!({ "confirm": true }))).unwrap().unwrap();
-            let journal = recu["result"].as_str().unwrap_or_default().lines().find_map(|l| l.strip_prefix("journal : ")).unwrap_or_else(|| panic!("{quoi}: the index says its journal: {recu}")).trim().to_string();
-            let debut = std::time::Instant::now();
-            loop {
-                let derniere = std::fs::read_to_string(&journal).ok().and_then(|t| t.lines().rev().find(|l| !l.trim().is_empty()).map(str::to_string)).unwrap_or_default();
-                if derniere.starts_with(crate::dataflow::index_nodes::DONE_LINE) || derniere.starts_with(crate::dataflow::index_nodes::FAILED_PREFIX) {
-                    break;
-                }
-                assert!(debut.elapsed() < std::time::Duration::from_secs(300), "{quoi}: the index did not end in {} s", debut.elapsed().as_secs());
-                std::thread::sleep(std::time::Duration::from_millis(100));
-            }
-            while host.with_backend(&h, |b| crate::dataflow::index_nodes::indexings_running(&b.catalog)).unwrap() > 0 {
-                std::thread::sleep(std::time::Duration::from_millis(50));
-            }
-            std::fs::read_to_string(&journal).unwrap_or_default()
-        };
-        let dus = || host.with_backend(&h, |b| b.catalog.lock().unwrap().index_progress().unwrap().dense_missing()).unwrap();
-        let premier = indexer("the index under a refusing service");
-        let avant = dus();
-        assert!(avant > 0, "a refusing service leaves owed vectors: {premier}");
-
-        // The healthy service, declared in the manifest: reopened, then indexed again.
-        let sain = service_granite();
-        ecrire(&|m| m["embeddings"]["address"] = json!(sain));
-        let s = host.open_session("the witness", None, Vec::new(), None);
-        assert_eq!(host.close(Some(&s), &manifeste)["ok"], true);
-        let second = indexer("the index under a healthy service");
-        assert_eq!(dus(), 0, "the next index claims the refused chunks again ({avant} owed before): {second}");
-    }
-
-    /// **Chunks refused by the service are caught up on open** (ticket of 8 November 2026, the form it was seen in):
+    /// **Chunks refused by the service are caught up on open** (ticket of 8 November 2026, the form it was seen in;
+    /// fixed by b3f31b544f, whose witness `refused_chunks_are_retaken_by_the_next_index_after_a_reopen` takes them
+    /// again by an explicit index):
     /// a first index under a refusing service; reopened with a healthy service and `embeddings.catch_up_on_open`,
     /// the index that starts on open embeds them, and the owed vectors fall to zero.
     #[test]
