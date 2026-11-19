@@ -29,6 +29,7 @@ printf '#!/bin/bash\necho bar\n' > tools/poste/bar.sh
 printf '#!/bin/bash\n[ -n "${1:-}" ] && [ -e "${BREAK_COPY:-/nonexistent}" ] && exit 1\nexit 0\n' > tools/poste/test_bar.sh
 cp "$HERE/push_garde.sh" tools/poste/push_garde.sh
 echo 'fn main() {}' > extension/rag3weaver/src/lib.rs
+mkdir -p extension/rag3weaver/tests && echo '#[test] fn t() {}' > extension/rag3weaver/tests/e2e_code.rs && cp extension/rag3weaver/tests/e2e_code.rs extension/rag3weaver/tests/e2e_code_sync.rs
 echo 'int main() {}' > src/engine.cpp
 git add -A && git commit -qm base && git push -q origin HEAD:master
 BASE0=$(git rev-parse HEAD)
@@ -82,7 +83,7 @@ esac
 exit 2
 Q
 chmod +x "$D/poste.sh"
-export PUSHER_CACHE=$D/cache PUSHER_PEERS= PUSHER_DIR=$D/pusher PUSHER_WORKSPACES=$D/ws PUSHER_WT_NAME=wt PUSHER_JOURNALS_ROOT=$D/journals \
+export PUSHER_FETCH_LOCK=$D/fetch.lock PUSHER_CACHE=$D/cache PUSHER_PEERS= PUSHER_DIR=$D/pusher PUSHER_WORKSPACES=$D/ws PUSHER_WT_NAME=wt PUSHER_JOURNALS_ROOT=$D/journals \
   PUSHER_PASS=$D/pass.sh PUSHER_GUARD=$D/guard.sh PUSHER_POSTE=$D/poste.sh PUSHER_MASTER_HELD=$D/master-tenu \
   REAL_GUARD=$HERE/push_garde.sh OUTCOMES=$D/outcomes PASS_CALLS=$D/pass_calls GUARD_CALLS=$D/guard_calls PASS_ENV=$D/pass_env
 : > "$D/outcomes"; : > "$D/pass_calls"; : > "$D/guard_calls"
@@ -96,10 +97,12 @@ h=$(lot docs-1 docs/notes.md '# notes, more')
 P enqueue docs-1 docs-1 "$h" docs - - - - author-a > /dev/null && ok "dépôt d'un lot de docs accepté" || ko "dépôt d'un lot de docs refusé"
 P enqueue docs-1 docs-1 "$h" docs - - - - author-a > /dev/null 2>&1 && ko "id en double accepté" || ok "id en double refusé"
 P enqueue docs-x docs-1 0123456789 docs - - - - author-a > /dev/null 2>&1 && ko "tête autre que celle d'origin acceptée" || ok "tête autre que celle d'origin refusée"
-P enqueue docs-y docs-1 "$h" rust e2e_code e2e - - author-a > /dev/null 2>&1 && ko "kind faux (rust pour des docs) accepté" || ok "kind faux refusé"
+P enqueue docs-y docs-1 "$h" rust some_witness e2e_code - - author-a > /dev/null 2>&1 && ko "kind faux (rust pour des docs) accepté" || ok "kind faux refusé"
 hc=$(lot cpp-1 src/engine.cpp 'int main() { return 1; }')
 P enqueue cpp-1 cpp-1 "$hc" cpp - - - - author-a > /dev/null 2>&1 && ko "lot C++ accepté" || ok "lot C++ refusé (hors du pousseur)"
 P enqueue docs-z docs-1 "$h" docs - - - absent author-a > /dev/null 2>&1 && ko "parent absent de la file accepté" || ok "parent absent de la file refusé"
+hw=$(lot rust-w extension/rag3weaver/src/w.rs 'fn w() {}')
+out=$(P enqueue rust-w rust-w "$hw" rust some_witness e2e - - author-c 2>&1) && ko "suite du témoin « e2e » acceptée" || { echo "$out" | grep -q 'e2e' && ok "suite du témoin ni lib ni e2e existante : refusée, nommée" || ko "suite du témoin refusée sans la nommer ($out)"; }
 
 hr=$(lot rust-0 extension/rag3weaver/src/lib.rs 'fn main() { let _ = 0; }')
 P enqueue rust-0 rust-0 "$hr" rust - e2e - - author-c > /dev/null 2>&1 && ko "lot rust sans témoin accepté" || ok "lot rust sans témoin refusé"
@@ -140,24 +143,24 @@ P enqueue scripts-2 scripts-2 "$h" scripts - - - - author-b > /dev/null && P ste
 # 5. A Rust lot: one pass, then the guard.
 h=$(lot rust-1 extension/rag3weaver/src/lib.rs 'fn main() { println!(); }')
 echo VERT >> "$D/outcomes"
-P enqueue rust-1 rust-1 "$h" rust e2e_code e2e - - author-c > /dev/null && P step > /dev/null 2>&1
+P enqueue rust-1 rust-1 "$h" rust some_witness e2e_code - - author-c > /dev/null && P step > /dev/null 2>&1
 on_master rust-1 && [ "$(calls "$D/pass_calls")" = 1 ] && [ "$(calls "$D/guard_calls")" = 1 ] && ok "rust : une passe, la garde, poussé" || ko "rust : pas poussé, ou passe ou garde manquante"
 grep -q "	rust-1	.*peak=" "$D/pusher/log.tsv" && ok "pic mémoire du rejeu au journal" || ko "pas de pic mémoire au journal"
 
 # 6. A Rust lot red on code: returned, no guard.
 h=$(lot rust-2 extension/rag3weaver/src/lib.rs 'fn main() { panic!(); }')
 echo "ROUGE e2e_code" >> "$D/outcomes"
-P enqueue rust-2 rust-2 "$h" rust e2e_code e2e - - author-c > /dev/null && P step > /dev/null 2>&1
+P enqueue rust-2 rust-2 "$h" rust some_witness e2e_code - - author-c > /dev/null && P step > /dev/null 2>&1
 ! on_master rust-2 && [ "$(calls "$D/guard_calls")" = 1 ] && grep -q "^rouge	rust-2	code	" "$D/pusher/inbox/author-c.txt" && ok "rust rouge de code : rendu, sans garde" || ko "rust rouge de code : mal traité"
 
 # 7. Environment red: replayed once, then green; twice: returned as environment.
 h=$(lot rust-3 extension/rag3weaver/src/lib.rs 'fn main() { let _ = 3; }')
 printf '124\nVERT\n' >> "$D/outcomes"
-P enqueue rust-3 rust-3 "$h" rust e2e_code e2e - - author-c > /dev/null && P step > /dev/null 2>&1
+P enqueue rust-3 rust-3 "$h" rust some_witness e2e_code - - author-c > /dev/null && P step > /dev/null 2>&1
 on_master rust-3 && [ "$(calls "$D/pass_calls")" = 4 ] && ok "rouge d'environnement rejoué une fois, puis poussé" || ko "rouge d'environnement : pas rejoué, ou pas poussé"
 h=$(lot rust-4 extension/rag3weaver/src/lib.rs 'fn main() { let _ = 4; }')
 printf '124\n124\n' >> "$D/outcomes"
-P enqueue rust-4 rust-4 "$h" rust e2e_code e2e - - author-c > /dev/null && P step > /dev/null 2>&1
+P enqueue rust-4 rust-4 "$h" rust some_witness e2e_code - - author-c > /dev/null && P step > /dev/null 2>&1
 ! on_master rust-4 && grep -q "^rouge	rust-4	environnement	" "$D/pusher/inbox/author-c.txt" && ok "deux rouges d'environnement : rendu comme environnement" || ko "deux rouges d'environnement : mal traités"
 
 # 8. A conflict at the repose: returned, master unchanged.
@@ -190,7 +193,7 @@ on_master tr-a && on_master tr-b && on_master tr-c && [ "$(calls "$D/pass_calls"
 c0=$(calls "$D/pass_calls")
 ha=$(lot bi-a extension/rag3weaver/src/a.rs 'fn a() {}'); hb=$(lot bi-b extension/rag3weaver/src/b.rs 'fn b() {}')
 hc=$(lot bi-c extension/rag3weaver/src/c.rs 'fn c() {}'); hd=$(lot bi-d extension/rag3weaver/src/d.rs 'fn d() {}')
-for x in "bi-a $ha" "bi-b $hb" "bi-c $hc" "bi-d $hd"; do set -- $x; P enqueue "$1" "$1" "$2" rust e2e_code e2e - - author-c > /dev/null; done
+for x in "bi-a $ha" "bi-b $hb" "bi-c $hc" "bi-d $hd"; do set -- $x; P enqueue "$1" "$1" "$2" rust some_witness e2e_code - - author-c > /dev/null; done
 printf 'ROUGE e2e_code
 VERT
 ROUGE e2e_code
@@ -211,7 +214,7 @@ on_master cf-a && on_master cf-c && ! on_master cf-b && grep -q "^rouge	cf-b	con
 # 14. The child of a red lot is returned with it.
 hp=$(lot pa-1 extension/rag3weaver/src/p.rs 'fn p() {}')
 hk=$(FROM=pa-1 lot pa-2 extension/rag3weaver/src/k.rs 'fn k() {}')
-P enqueue pa-1 pa-1 "$hp" rust e2e_code e2e - - author-c > /dev/null; P enqueue pa-2 pa-2 "$hk" rust e2e_code e2e - pa-1 author-c > /dev/null
+P enqueue pa-1 pa-1 "$hp" rust some_witness e2e_code - - author-c > /dev/null; P enqueue pa-2 pa-2 "$hk" rust some_witness e2e_code - pa-1 author-c > /dev/null
 printf 'ROUGE e2e_code\nROUGE e2e_code\n' >> "$D/outcomes"
 P step > /dev/null 2>&1
 grep -q "^rouge	pa-1	code	" "$D/pusher/inbox/author-c.txt" && grep -q "^rouge	pa-2	parent rouge	" "$D/pusher/inbox/author-c.txt" && [ -z "$(grep -v '^#' "$D/pusher/queue.tsv")" ] \
@@ -223,7 +226,7 @@ git -C "$D/author" fetch -q origin && git -C "$D/author" checkout -q -B cpp-land
 echo 'int main() { return 2; }' > "$D/author/src/engine.cpp"
 git -C "$D/author" commit -qam cpp-lands && git -C "$D/author" push -q origin HEAD:master
 hr=$(lot late-r extension/rag3weaver/src/late.rs 'fn late() {}'); hd=$(lot late-d docs/late.md '# late')
-P enqueue late-r late-r "$hr" rust e2e_code e2e - - author-c > /dev/null; P enqueue late-d late-d "$hd" docs - - - - author-a > /dev/null
+P enqueue late-r late-r "$hr" rust some_witness e2e_code - - author-c > /dev/null; P enqueue late-d late-d "$hd" docs - - - - author-a > /dev/null
 c0=$(calls "$D/pass_calls")
 P step > /dev/null 2>&1
 on_master late-d && ! on_master late-r && [ "$(calls "$D/pass_calls")" = "$c0" ] && grep -q "^late-r	" "$D/pusher/queue.tsv" && [ -s "$D/pusher/lib-late" ] \
@@ -251,7 +254,7 @@ on_master nv-a && on_master nv-b && git -C "$D/author" show origin/master:docs/n
 
 # 17. Poste refuses the pass (no summary written): an environment red, never a code red.
 h=$(lot env-poste extension/rag3weaver/src/envp.rs 'fn envp() {}')
-P enqueue env-poste env-poste "$h" rust e2e_code e2e - - author-c > /dev/null
+P enqueue env-poste env-poste "$h" rust some_witness e2e_code - - author-c > /dev/null
 c0=$(calls "$D/pass_calls")
 FAKE_POSTE_DOWN=1 P step > /dev/null 2>&1
 ! on_master env-poste && [ "$(calls "$D/pass_calls")" = "$c0" ] && grep -q "^rouge	env-poste	environnement	" "$D/pusher/inbox/author-c.txt" \
@@ -277,4 +280,17 @@ P step > /dev/null 2>&1
 on_master cc-a && ! on_master cc-b && grep -q 'echo cut' "$D/cache/foo.sh" && ok "un lot qui change une copie du cache ferme son train" || ko "le lot d'après est parti dans le même train"
 P step > /dev/null 2>&1
 on_master cc-b && ok "le lot d'après passe au pas suivant" || ko "le lot d'après n'est pas passé"
+
+# 20. A fetch that meets a ref lock held a few seconds (another fetch in the shared repository, 19 Nov.): retried, the
+# lot passes; never returned.
+h=$(lot fl-a docs/fl.md '# fl')
+P enqueue fl-a fl-a "$h" docs - - - - author-a > /dev/null
+gd=$(git -C "$D/ws/wt" rev-parse --git-common-dir); case "$gd" in /*) ;; *) gd=$D/ws/wt/$gd ;; esac
+# Master moves first (another session's push), so the fetch must write the ref and meets the lock.
+FROM=origin/master lot fl-other docs/fl-other.md '# other' > /dev/null && git -C "$D/author" push -q origin fl-other:master
+mkdir -p "$gd/refs/remotes/origin" && touch "$gd/refs/remotes/origin/master.lock"
+( sleep 4; rm -f "$gd/refs/remotes/origin/master.lock" ) &
+P step > /dev/null 2>&1; wait
+on_master fl-a && ! grep -q "^rouge	fl-a	" "$D/pusher/inbox/author-a.txt" && ok "fetch sur un verrou de ref : retenté dans le même pas, le lot passe" || ko "fetch sur un verrou de ref : lot rendu ou pas passé"
+grep -q "	fl-a	.*\|	train	fetch" "$D/pusher/log.tsv" && grep -q "verrou de ref" "$D/pusher/log.tsv" && ok "le journal dit le verrou de ref retenté" || ko "le journal ne dit pas le verrou de ref"
 exit $red
