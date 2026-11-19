@@ -7721,6 +7721,10 @@ mod tests {
             )
             .unwrap();
         }
+        // **The case of the bench** (c7, 19 November 2026): the outer namespace of a real header carries only a forward
+        // declaration in a nested namespace and the folded inner namespace; past 80 characters by its structure
+        // alone. The real `src/include/binder/bound_standalone_call.h`, « rag3db » renamed « zorg ».
+        std::fs::write(dir.path().join("sources/bound_standalone_call.h"), "#pragma once\n\n#include \"binder/bound_statement.h\"\n#include \"binder/expression/expression.h\"\n\nnamespace zorg {\nnamespace main {\nstruct Option;\n}\nnamespace binder {\n\nclass BoundStandaloneCall final : public BoundStatement {\n    static constexpr common::StatementType type_ = common::StatementType::STANDALONE_CALL;\n\npublic:\n    BoundStandaloneCall(const main::Option* option, std::shared_ptr<Expression> optionValue)\n        : BoundStatement{type_, BoundStatementResult::createEmptyResult()}, option{option},\n          optionValue{std::move(optionValue)} {}\n\n    const main::Option* getOption() const { return option; }\n\n    std::shared_ptr<Expression> getOptionValue() const { return optionValue; }\n\nprivate:\n    const main::Option* option;\n    std::shared_ptr<Expression> optionValue;\n};\n\n} // namespace binder\n} // namespace zorg\n").unwrap();
         std::fs::write(
             dir.path().join("sources/api.h"),
             "#pragma once\n\n/// The zorg engine: the public API of zorg, its handle and its state.\nnamespace zorg {\nint version();\n}\n\n\
@@ -7734,7 +7738,13 @@ mod tests {
             let mut cat = backend.catalog.lock().unwrap();
             crate::code_sync::sync_source(&mut cat, source.as_ref(), &Default::default(), &mut |_| {}).expect("l'index");
         }
-        let r = backend.call("search_code", json!({"query": "zorg", "options": {"signals": ["bm25"], "limit": 10, "format": "json"}})).expect("search_code");
+        let r = backend.call("search_code", json!({"query": "zorg", "options": {"signals": ["bm25"], "limit": 50, "format": "json"}})).expect("search_code");
+        for l in r["result"].as_array().unwrap_or(&Vec::new()) {
+            if l["data"]["scope_type"] == "namespace" {
+                let c = l["data"]["content"].as_str().unwrap_or("");
+                eprintln!("[témoin] namespace {} de {} : {} caractères : {c:?}", l["data"]["name"], l["data"]["file_path"], c.chars().count());
+            }
+        }
         let lignes: Vec<(String, String, String)> = r["result"]
             .as_array()
             .unwrap_or(&Vec::new())
@@ -7744,7 +7754,7 @@ mod tests {
                 (d["name"].as_str().unwrap_or("").to_string(), d["scope_type"].as_str().unwrap_or("").to_string(), d["file_path"].as_str().unwrap_or("").to_string())
             })
             .collect();
-        assert!(lignes.iter().any(|(n, _, _)| n == "zorg_database"), "the struct is in the first ten: {lignes:?}");
+        assert!(lignes.iter().take(10).any(|(n, _, _)| n == "zorg_database"), "the struct is in the first ten: {lignes:?}");
         assert!(
             !lignes.iter().any(|(n, t, f)| n == "zorg" && t == "namespace" && f != "api.h"),
             "no folded namespace is a result: {lignes:?}"
