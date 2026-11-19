@@ -232,9 +232,30 @@ pub fn scope_chunking_with(container_min_chars: usize) -> ChunkingConfig {
             types: vec!["namespace".into(), "module".into()],
             text_fields: vec!["content".into(), "docstring".into()],
             min_chars: container_min_chars,
+            structure_field: Some("content".into()),
+            language_field: Some("language".into()),
+            structure: container_structure(),
         }),
         ..default_scope_chunking_without_rule()
     }
+}
+
+/// **The lines of pure structure of a container, by language** (c7, 19 November 2026): C and C++, a brace alone,
+/// `namespace x {` folded or not, a forward declaration; Rust, `mod x;`, `pub mod x {`, a brace alone. Python and
+/// JavaScript come when they do.
+fn container_structure() -> std::collections::BTreeMap<String, Vec<crate::config::StructureLine>> {
+    use crate::config::StructureLine;
+    let c_family = || {
+        vec![
+            StructureLine::BraceOnly,
+            StructureLine::Opening { keyword: "namespace".into() },
+            StructureLine::ForwardDeclaration {
+                keywords: ["class", "struct", "union", "enum class", "enum struct", "enum"].map(String::from).to_vec(),
+            },
+        ]
+    };
+    let rust = vec![StructureLine::BraceOnly, StructureLine::Opening { keyword: "mod".into() }];
+    std::collections::BTreeMap::from([("c".to_string(), c_family()), ("cpp".to_string(), c_family()), ("rust".to_string(), rust)])
 }
 
 /// The scope chunking, with the container rule at its default threshold.
