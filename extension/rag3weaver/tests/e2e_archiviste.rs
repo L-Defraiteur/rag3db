@@ -1228,6 +1228,22 @@ fn the_slice_extraction_asks_low_reasoning_by_default() {
     assert_eq!(first["reasoning_effort"], json!("low"), "{}", first);
 }
 
+/// **The slice report carries the usage of its extraction** (19 November 2026, the banc: the extraction's tokens
+/// were only estimated): `extraction_usage` says the prompt, cached and completion tokens the provider returned.
+#[test]
+#[ignore]
+fn the_slice_report_carries_the_usage_of_its_extraction() {
+    let serveur = FakeServer::start_sequence(vec![avec_usage(text_reply(r#"{"slice_summary": "s", "topics": [], "not_filed": [{"from": 1, "to": 6, "reason": "nothing"}]}"#), 5000, 1200, 900)]);
+    let adresse = serveur.url.clone();
+    let dir = tempfile::tempdir().expect("dossier");
+    let b = ouvrir(dir.path(), |m| {
+        m["models"]["llm"] = json!({"provider": "compatible", "protocol": "openai", "model": "faux", "address": adresse});
+    });
+    let r = appel(&b, "archive_slice", json!({"titre": "t", "chemin": "sources/t.md", "contenu": slice_of_six_turns()}));
+    let u = &r["result"]["extraction_usage"];
+    assert_eq!((u["prompt_tokens"].clone(), u["cached_prompt_tokens"].clone(), u["completion_tokens"].clone()), (json!(5000), json!(1200), json!(900)), "{r}");
+}
+
 /// The split of a long section (archive, segment_over): the instruction, then its numbered paragraphs as a part;
 /// the rules of a topic are in the schema.
 #[test]
