@@ -34,6 +34,8 @@ pub const STEP_DONE: &str = "step_done";
 pub const REPORT: &str = "report";
 /// `propose` est pris par les propositions de déclaration : l'outil du hors-plan s'appelle `suggest`.
 pub const SUGGEST: &str = "suggest";
+/// Mode pair, lot 3: write to a Claude Code session.
+pub const SEND_TO_SESSION: &str = "send_to_session";
 /// Les pas d'un équipier lancé, au plus (un garde-fou, pas un réglage du grain).
 const MAX_STEPS: usize = 40;
 /// Les pas de suite sans `step_done` réussi avant que l'équipier s'arrête et le
@@ -461,7 +463,8 @@ pub(crate) fn request_without_a_line(lignes: &[Value]) -> Option<usize> {
     if !lignes[n]["expects"].is_null() {
         return None;
     }
-    let ligne = lignes[n + 1..].iter().any(|l| l["from"] == "teammate" && matches!(l["kind"].as_str(), Some("report" | "question" | "approval")));
+    // A message sent to a session (mode pair) is the teammate's line too: the answer to a peer.
+    let ligne = lignes[n + 1..].iter().any(|l| l["from"] == "teammate" && matches!(l["kind"].as_str(), Some("report" | "question" | "approval" | "message")));
     (!ligne).then_some(n)
 }
 
@@ -509,6 +512,8 @@ pub struct Step {
     last_context: std::sync::Arc<AtomicUsize>,
     /// Ce que `step_done` a déclaré.
     done: Mutex<Option<Value>>,
+    /// The pair entry of the task, and its key (mode pair, lot 3).
+    pair: Option<(Arc<super::pair::Pair>, String)>,
     /// Les plans clos pendant ce pas (à ranger en L1).
     closed: Mutex<Vec<Plan>>,
     /// L'agent a-t-il tranché sur le plan actif (continue, pause, close) ?
@@ -606,7 +611,14 @@ impl Step {
             woke_by: None,
             succeeded_tools: Mutex::new(Vec::new()),
             work: Mutex::new(StepWork::default()),
+            pair: None,
         }
+    }
+
+    /// The pair entry this step's task holds (mode pair): it gets send_to_session.
+    pub fn with_pair(mut self, pair: Option<(Arc<super::pair::Pair>, String)>) -> Self {
+        self.pair = pair;
+        self
     }
 
     /// The step's bounds, from the backend's `teammate` policy.
@@ -855,6 +867,20 @@ impl Step {
                 }
                 reply(self.post("report", None, text).map(|_| json!({ "ok": true })))
             }
+            SEND_TO_SESSION => {
+                let Some((pair, cle)) = &self.pair else {
+                    return reply(Err("send_to_session: this task is not paired (teammate.pair)".into()));
+                };
+                let (to, text) = (args["to"].as_str().unwrap_or_default(), args["text"].as_str().unwrap_or_default());
+                if to.trim().is_empty() || text.trim().is_empty() {
+                    return reply(Err("send_to_session: to and text are required".into()));
+                }
+                reply(pair.envoyer(cle, to, text).and_then(|msg_id| {
+                    let line = self.files.append_with("teammate", "message", None, text, &json!({ "direction": "out", "to": to, "msg_id": msg_id }))?;
+                    publish(self.bus.as_ref(), &self.task, &line);
+                    Ok(json!({ "ok": true, "msg_id": msg_id }))
+                }))
+            }
             SUGGEST => {
                 let text = args["text"].as_str().unwrap_or_default();
                 if text.trim().is_empty() {
@@ -1024,7 +1050,14 @@ impl crate::agent::ToolBox for StepTools<'_> {
     fn tool_defs(&self) -> Vec<ToolDef> {
         // Les nôtres gagnent sur un homonyme du backend : un fournisseur refuse
         // deux déclarations du même nom (Vertex : « Duplicate function declaration »).
-        let ours = Step::tool_defs();
+        let mut ours = Step::tool_defs();
+        if self.step.pair.is_some() {
+            ours.push(ToolDef {
+                name: SEND_TO_SESSION.into(),
+                description: "Write to another agent session (Claude Code or a peer) in the sessions registry. `to` is its name, or the address a received line carries (reply_to_address, « uds:… »). A request whose text is a <cross-session-message from-name=… > came from such a session: answer it with this tool, to that session, not with report. The message is kept in your mailbox.".into(),
+                parameters: json!({ "type": "object", "properties": { "to": { "type": "string", "description": "the session's name, or a uds: address" }, "text": { "type": "string" } }, "required": ["to", "text"] }),
+            });
+        }
         let mut defs: Vec<ToolDef> = self.inner.tool_defs().into_iter().filter(|d| !ours.iter().any(|o| o.name == d.name)).collect();
         defs.extend(ours);
         defs
@@ -1704,7 +1737,9 @@ impl DaemonHost {
             }
             message.push_str(&previous_step);
             self.pair_statut(&format!("{parent}/{task}"), true);
-            let mut step = Step::new(files.clone(), task, &request, bus.clone(), number).with_policy(&policy);
+            let cle = format!("{parent}/{task}");
+            let tenue = self.pair.get().cloned().flatten().filter(|p| p.tient(&cle)).map(|p| (p, cle));
+            let mut step = Step::new(files.clone(), task, &request, bus.clone(), number).with_policy(&policy).with_pair(tenue);
             step.woke_by = woke_by.take();
             // **Un pas qui n'aboutit pas ne termine pas l'équipier** : l'échec va
             // dans la boîte et le pas suivant repart de la frontière ; seuls
