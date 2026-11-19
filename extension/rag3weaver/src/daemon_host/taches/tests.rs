@@ -83,15 +83,30 @@ fn la_base_principale_n_est_jamais_ecrite_par_la_tache() {
     // La tâche écrit : elle indexe le code dans sa base.
     let index = host.with_backend(&h, |b| b.call("index", json!({ "confirm": true }))).unwrap();
     assert!(index.is_ok(), "{index:?}");
-    let fin = Instant::now() + Duration::from_secs(60);
-    loop {
-        let u = host.with_backend(&h, |b| b.call("usages", json!({ "name": "depart", "format": "json" }))).unwrap();
-        if u.as_ref().is_ok_and(|v| v.to_string().contains("main.rs")) {
-            break;
+    // **The index's mark, not a duration** (ticket of 7 November 2026, « des tests de la lib rougissent sous
+    // charge »): the last line of its journal, the module's contract. Under the whole lib's load the index took
+    // more than the 60 s this witness used to give it.
+    let rendu = index.unwrap();
+    let texte = rendu["result"].as_str().or_else(|| rendu.as_str()).unwrap_or_default().to_string();
+    let journal = PathBuf::from(
+        texte.lines().find_map(|l| l.strip_prefix("journal : ")).unwrap_or_else(|| panic!("the index says its journal: {rendu}")).trim(),
+    );
+    let debut = Instant::now();
+    let fin = debut + Duration::from_secs(600);
+    let derniere = loop {
+        let derniere = std::fs::read_to_string(&journal).ok().and_then(|j| j.lines().last().map(str::to_string)).unwrap_or_default();
+        if [crate::dataflow::index_nodes::DONE_LINE, crate::dataflow::index_nodes::FAILED_PREFIX, crate::dataflow::index_nodes::STOPPED_PREFIX]
+            .iter()
+            .any(|m| derniere.starts_with(m))
+        {
+            break derniere;
         }
-        assert!(Instant::now() < fin, "la tâche n'a pas indexé en 60 s : {u:?}");
+        assert!(Instant::now() < fin, "the task's index did not end in {} s: {derniere}", debut.elapsed().as_secs());
         std::thread::sleep(Duration::from_millis(200));
-    }
+    };
+    assert!(derniere.starts_with(crate::dataflow::index_nodes::DONE_LINE), "the task's index ended: {derniere}");
+    let u = host.with_backend(&h, |b| b.call("usages", json!({ "name": "depart", "format": "json" }))).unwrap();
+    assert!(u.as_ref().is_ok_and(|v| v.to_string().contains("main.rs")), "the task indexed its code: {u:?}");
     // L'indexation de la tâche finie : tout ce qu'elle écrit est écrit.
     while host.with_backend(&h, |b| crate::dataflow::index_nodes::indexings_running(&b.catalog)).unwrap() > 0 {
         assert!(Instant::now() < fin, "l'indexation de la tâche ne finit pas");
