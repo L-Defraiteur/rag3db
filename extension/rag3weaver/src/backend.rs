@@ -467,6 +467,12 @@ impl EmbeddingService {
 }
 
 impl BackendManifest {
+    /// The positions policy of the full text for the entities that declare none: `fts_positions`, and
+    /// **without it, no positions** (19 November 2026, the light profile). The only reading of the field.
+    pub fn fts_positions(&self) -> bool {
+        self.fts_positions.unwrap_or(false)
+    }
+
     /// **L'embarquement dense de ce backend** : `models.embed`, ou la section
     /// `embeddings` d'avant. Les deux à la fois, ou aucune, c'est une erreur
     /// dite au chargement.
@@ -2895,7 +2901,7 @@ impl PreparedBackend {
             },
         );
         cat.set_moteur_texte(MoteurTexte::Lucivy);
-        cat.set_fts_positions(self.manifest.fts_positions.unwrap_or(false));
+        cat.set_fts_positions(self.manifest.fts_positions());
         // **Le creux, enfin branché.** Le backend comptait le signal `sparse`
         // pour exiger un service, puis ne donnait jamais d'embarqueur creux
         // au catalogue (trouvé le 3 octobre 2026) : le signal restait muet.
@@ -7581,6 +7587,8 @@ mod tests {
             embarqueur,
             CatalogConfig { allow_mock_embedder: true, embedding_dim: 8, ..Default::default() },
         );
+        // The manifest's positions policy, read as the opening reads it (`BackendManifest::fts_positions`).
+        catalog.set_fts_positions(prepared.manifest.fts_positions());
         catalog.initialize().unwrap();
         // Les nœuds de code consultent File/Scope : le schéma de code
         // s'enregistre, la connexion à vide absorbe les DDL.
