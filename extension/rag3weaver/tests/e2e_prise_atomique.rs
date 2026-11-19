@@ -1061,11 +1061,12 @@ fn le_lot_ne_tombe_que_l_index_du_modele_courant_et_le_retrouve() {
 #[ignore]
 fn aucune_ouverture_n_est_croisee_sous_l_ecrivain_qui_affamait() {
     const INSISTANT: &str = "RAG3WEAVER_ENFANT_INSISTANT";
-    let dossier = std::path::PathBuf::from(std::env::var("HOME").unwrap()).join(format!(
-        ".cache/rag3weaver-build/affame-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
-    ));
+    // On a real disk (the build cache), not the tmpfs, as before; in a temporary directory declared before the
+    // writer, so dropped after it, with the base's neighbours (`.readers`): nothing stays in the cache.
+    let cache = std::path::PathBuf::from(std::env::var("HOME").unwrap()).join(".cache/rag3weaver-build");
+    std::fs::create_dir_all(&cache).unwrap();
+    let tmp = tempfile::Builder::new().prefix("affame-").tempdir_in(&cache).unwrap();
+    let dossier = tmp.path().join("base");
     let ecrivain = Rag3dbConnection::new(&dossier).expect("écrivain");
     ecrivain
         .execute("CREATE NODE TABLE Travail(id INT64, statut STRING, preneur STRING, PRIMARY KEY(id))")
@@ -1103,7 +1104,6 @@ fn aucune_ouverture_n_est_croisee_sous_l_ecrivain_qui_affamait() {
     };
     let (refus, incoherents, reprises) = (lire("REFUS="), lire("INCOHERENTS="), lire("REPRISES="));
     drop(ecrivain);
-    let _ = std::fs::remove_dir_all(&dossier);
     assert_eq!(incoherents, 0, "une ouverture qui réussit lit un compte cohérent ({ligne})");
     assert_eq!(refus, 0, "aucune ouverture n'est refusée sous cet écrivain ({ligne}) ; {autre}");
     assert_eq!(reprises, 0, "aucune ouverture n'est croisée, donc aucune n'est reprise ({ligne})");
