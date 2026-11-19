@@ -53,3 +53,18 @@ ED a corrigé le 19 novembre (`ed-chat-reload-epoch`) une relecture du chat qui,
 Et, à chaque tranche, **un témoin au repos** (relecture d'ED, pendant du témoin des six onglets, 967224067b) : deux fenêtres ouvertes, une seule connexion `/ide/flux` à l'hôte, et aucune requête au repos.
 
 Sans SharedWorker (navigation privée), chaque fenêtre garde son flux, et `etatPartage` reste local (`ecrireLocalement`) : les fenêtres ne se guident pas, et rien ne casse. La page le dit une fois dans l'en-tête.
+
+## Tranche 1, faite (19 novembre au soir)
+
+**Deux fenêtres du même chat suivent le même tour.** Elle ne tenait pas : une fenêtre ouverte en plein tour reprenait bien le run en vol (`reload`), mais ne montrait que les mots arrivés après son ouverture (« six sept huit neuf dix », sans « un deux trois quatre cinq »).
+
+- **Le worker garde le texte des tours en vol** (`lib/flux-worker.ts`) : pour chaque run, le texte de ses `Token` et le numéro du dernier. C'est borné à 512 Kio, et oublié à son `RunFinished`. Il répond à la demande `tour` d'une page.
+- **La page le demande** (`tourEnVol(run)` de `lib/host.ts`, qui rend `null` sans worker ou au bout d'1 s) quand sa relecture trouve un run en vol. Le chat pose ce texte dans la bulle vivante de ce run, et saute les jetons déjà comptés. Rien n'est demandé à l'hôte.
+- **L'époque des tours d'ED avance aussi** sur le `RunStarted` et le `RunFinished` d'un tour venu d'ailleurs, et sur l'état poussé de fin de tour. Une relecture de la seconde fenêtre, partie avant un tour de la première et revenue après lui, ne l'efface plus.
+- Un premier essai rendait la reprise derrière `runRef.current === run`. Or la réponse du worker arrive avant le rendu qui pose `runRef`, et la reprise renonçait. Le débogage l'a montré : le worker avait tout le texte, la page l'abandonnait. La mise à jour vise maintenant la bulle vivante de ce run.
+
+Les témoins, navigateur, joués à luciepc, vus rouges d'abord (f80e058514, puis f5f1132f4f sans le code), puis verts (845b95fef9) :
+- `deux_fenetres_du_chat_suivent_le_meme_tour` ;
+- `une_relecture_retenue_de_la_seconde_fenetre_n_efface_pas_le_tour_de_la_premiere`, avec la barrière d'ED.
+
+Ce qui n'est pas repris par une fenêtre ouverte en plein tour : les appels d'outil d'avant son ouverture. Elle les voit à la fin du tour, par l'état poussé. La tranche 1 ne porte que le texte.
