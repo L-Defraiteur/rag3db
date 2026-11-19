@@ -1,7 +1,7 @@
 # Vérifier la quarantaine après annulation partielle pour les transactions déjà ouvertes
 
-- **État** : ouvert — avancé le 19 novembre 2026 : la validation d'une écriture déjà ouverte est refusée (branche
-  `quarantine-holds-open-transactions`) ; reste le point de reprise automatique du dernier lecteur (voir l'avancement)
+- **État** : fermé (19 novembre 2026, branches `quarantine-holds-open-transactions-2` puis
+  `quarantine-last-reader-checkpoint`) ; ouvert le 12 novembre 2026
 - **Famille** : moteur
 - **Gravité** : risque de persistance ou de lecture d’un état partiellement annulé, à établir ; aucune corruption observée par cette revue
 - **Atteignable en service** : à confirmer — une annulation doit lever après le début des effets partagés, tandis qu’une autre transaction reste ouverte
@@ -191,3 +191,21 @@ Vert sur 852266a8b0 avec le correctif, les deux cas.
 dernier lecteur qui part peut lancer le point de reprise automatique demandé (`checkpointNoLock`), sans garde en
 quarantaine. Le témoin demande une demande automatique pendante au moment de la faute ; il est à écrire. La
 récupération après réouverture (le journal rejoué) reste celle d'aujourd'hui, que ce lot ne change pas.
+
+## La fermeture (19 novembre 2026, au soir)
+
+**Le dernier lecteur aussi.** Une écriture validée pendant que TA et un lecteur R sont ouverts dépasse le seuil et
+pose la demande de point de reprise automatique, que le dernier à partir écrit. L'annulation de TA échoue à
+mi-chemin ; R, en partant, lançait quand même ce point de reprise (`writeRequestedCheckpointIfLastNoLock`). Le témoin
+`TheLastReaderToLeaveDoesNotWriteTheRequestedCheckpoint` est rouge sur 38eacb2664 (« witness: checkpointer reached »,
+la demande encore posée au départ de R), vert avec le correctif : en quarantaine, le dernier à partir renonce à la
+demande, et les transactions retenues sont relâchées pour être refusées par leur nom. Sa contre-épreuve, sans la faute,
+prouve que la recette exerce le chemin : le dernier lecteur y écrit bien le point de reprise.
+
+Un piège de témoin, noté pour d'autres : un BEGIN fait pendant qu'un point de reprise automatique est en attente
+attend au plus `AUTO_CHECKPOINT_WAIT`, puis **abandonne la demande**. Un contrôle de mise en place placé là retirait
+l'objet du cas, et le vert ne prouvait rien.
+
+**Ce qui est couvert** : la validation d'une écriture ouverte avant (forcée ou non), le BEGIN et le CHECKPOINT publics
+(déjà), le point de reprise automatique du dernier à partir. La récupération après réouverture (le journal rejoué)
+est celle d'aujourd'hui, que ces lots ne changent pas.

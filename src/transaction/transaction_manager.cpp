@@ -567,6 +567,13 @@ void TransactionManager::writeRequestedCheckpointIfLastNoLock(main::ClientContex
     if (!autoCheckpointRequested || hasActiveWriteTransactionNoLock()) {
         return;
     }
+    if (rollbackFailed) {
+        // En quarantaine, le point de reprise écrirait dans les fichiers de données une mémoire à
+        // moitié annulée : le dernier à partir renonce à la demande. Les transactions retenues
+        // sont relâchées, et leur BEGIN est refusé par le nom de la quarantaine.
+        cancelAutoCheckpointRequestNoLock();
+        return;
+    }
     autoCheckpointRequested = false;
     try {
         checkpointNoLock(clientContext, publicLock, true /* newTransactionsAlreadyStopped */);
