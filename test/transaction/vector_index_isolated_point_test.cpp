@@ -20,7 +20,11 @@ namespace {
 
 class VectorIndexIsolatedPoint : public EmptyDBTest {
 protected:
-    static constexpr int ROUNDS = 6;
+    static constexpr int ROUNDS = 10;
+    // The build is parallel: with 1 or 4 threads the lone point was never missed (0/12 each), with
+    // 8 it was missed 5 times in 12, with 24 4 times (luciepc, 19 Nov.). The test sets its own
+    // count, or it would run at the 2 threads of the test configuration and never see the defect.
+    static constexpr uint64_t BUILD_THREADS = 8;
     static constexpr int CLOUD = 150;
 
     void SetUp() override {
@@ -32,8 +36,10 @@ protected:
             TestHelper::appendRag3dbRootPath("extension/vector/build/libvector.rag3db_extension");
         ASSERT_TRUE(std::filesystem::exists(extension))
             << "[check: setup] build rag3db_vector_extension before this test";
+        systemConfig->maxNumThreads = BUILD_THREADS;
         createDBAndConn();
         ok("LOAD EXTENSION '" + extension + "';");
+        ok("CALL threads=" + std::to_string(BUILD_THREADS) + ";");
     }
 
     void ok(const std::string& query) {
