@@ -43,6 +43,10 @@ def read_case(path):
     return block, "\n".join(lignes).strip()
 
 
+def repo_of(block, default, depots):
+    raise NotImplementedError
+
+
 def changed_paths(repo, commit):
     """The files a commit changes."""
     out = git(repo, "diff-tree", "--no-commit-id", "--name-only", "-r", "--root", commit).decode()
