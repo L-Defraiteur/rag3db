@@ -44,6 +44,11 @@ performance en Rust, dans le moteur de lucivy. Il se joue sans la lib rag3db, en
 >
 > La requête longue en distance 1 ne trouve **aucun** document, et prend pourtant une minute. La vérification floue
 > à travers les tokens se fait sur le texte stocké de tous les candidats.
+>
+> Corriger ce cas : une requête floue longue sur un index sans positions doit donner les mêmes documents et les
+> mêmes spans qu'avec positions, sans passer chaque valeur stockée entière à la distance d'édition. Le témoin
+> `a_long_fuzzy_query_without_positions_reads_windows_and_finds_the_same`
+> (`lucivy_core/tests/test_no_positions_long_fuzzy.rs`) le vérifie : il est rouge d'abord, il doit passer.
 
 ## Le témoin
 
