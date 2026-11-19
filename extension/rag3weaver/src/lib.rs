@@ -394,6 +394,8 @@ mod backend_nodes;
 /// cassait). Le TLS passe par rustls, compilé dans le binaire : aucune dépendance, même de
 /// témoin ou optionnelle, ne tire `native-tls` ni `openssl-sys`.
 #[cfg(test)]
+mod tests_hygiene;
+#[cfg(test)]
 mod le_tls_ne_tire_pas_openssl {
     #[test]
     fn the_lockfile_pulls_neither_openssl_nor_native_tls() {
