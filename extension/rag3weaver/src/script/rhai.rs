@@ -1,6 +1,6 @@
 //! Le branchement rhai : ce que faisait `harness::evaluate`, à l'identique —
 //! une expression qui lit la constante `input` et rend sa dernière valeur ;
-//! `json_string` et `content_hash` pour seules fonctions de l'hôte ; `eval`,
+//! `json_string`, `content_hash` et `mask_secrets` pour seules fonctions de l'hôte ; `eval`,
 //! `import`, `export` coupés ; opérations, profondeurs, tailles et échéance
 //! bornées. Le script est compilé une fois à la préparation.
 use super::{
@@ -74,6 +74,14 @@ fn engine(limits: &ScriptLimits, start: Option<std::time::Instant>) -> rhai::Eng
                 .to_string())
         },
     );
+    // The secret filter of put_turn (18 November 2026): #{text, count}.
+    engine.register_fn("mask_secrets", |text: &str| -> rhai::Map {
+        let (masked, count) = super::secrets::mask_secrets(text);
+        let mut m = rhai::Map::new();
+        m.insert("text".into(), masked.into());
+        m.insert("count".into(), (count as rhai::INT).into());
+        m
+    });
     // no_module is also enabled at build time. No host I/O APIs are registered.
     for keyword in ["eval", "import", "export"] {
         engine.disable_symbol(keyword);
