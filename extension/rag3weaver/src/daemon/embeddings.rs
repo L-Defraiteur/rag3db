@@ -1634,7 +1634,14 @@ mod tests {
         let bilan = &identite.chauffe.as_ref().unwrap()["embed"];
         assert_eq!(bilan.etat, EtatChauffe::Partielle);
         assert_eq!(bilan.formes.len(), 16);
-        assert_eq!(bilan.formes.iter().filter(|f| f.erreur.is_some()).count(), 4);
+        // The warm-up goes through the service's batching (19 November 2026) : a form of
+        // 8 texts is one batch of 8 only if the 8 fit in the byte budget ; otherwise the
+        // service cuts it, as it would cut a request, and the model never sees 8.
+        let entiers = [40usize, 90, 190, 380].iter().filter(|&&mots| {
+            let octets: usize = (0..8).map(|i| (0..mots).map(|j| format!("m{}", (i * 7 + j * 13) % 97)).collect::<Vec<_>>().join(" ").len()).sum();
+            octets <= crate::embedder::embed_char_budget()
+        }).count();
+        assert_eq!(bilan.formes.iter().filter(|f| f.erreur.is_some()).count(), entiers);
         assert!(bilan.formes.iter().filter_map(|f| f.erreur.as_ref()).all(|e| e.contains("forme refusée")));
         assert_eq!(identite.modele, "chauffe-fixture");
         let sans = EmbedDaemon::new(Arc::new(FormeRefusee)).chauffer(false);
