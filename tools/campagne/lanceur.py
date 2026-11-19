@@ -230,6 +230,12 @@ def freeze_declarations(repo, rev, dest):
     bac = m["workspace"].get("sandbox") or {}
     if "extra_read" in bac:
         bac["extra_read"] = [os.path.join(os.path.expanduser("~"), c[2:]) if c.startswith("~/") else c for c in bac["extra_read"]]
+    # And the real homes of the rust chain: a tree without its own toolchain file falls back on
+    # rustup's default, read in RUSTUP_HOME (case lucivy 03).
+    if "sandbox" in m["workspace"]:
+        env = m["workspace"]["sandbox"].setdefault("env", {})
+        env["RUSTUP_HOME"] = os.path.join(os.path.expanduser("~"), ".rustup")
+        env["CARGO_HOME"] = os.path.join(os.path.expanduser("~"), ".cargo")
     with open(manifeste, "w") as f:
         json.dump(m, f, indent=2, ensure_ascii=False)
     return racine
