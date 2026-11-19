@@ -1886,10 +1886,11 @@ mod tests {
     /// characters by default, about 3 per token).
     /// A model that advises batches of 128, and remembers the largest it was given.
     #[derive(Default)]
-    struct Advising { largest: std::sync::atomic::AtomicUsize }
+    struct Advising { largest: std::sync::atomic::AtomicUsize, batches: std::sync::Mutex<Vec<(usize, usize)>> }
     impl Embedder for Advising {
         fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
             self.largest.fetch_max(texts.len(), std::sync::atomic::Ordering::Relaxed);
+            self.batches.lock().unwrap().push((texts.len(), texts.iter().map(|t| t.len()).sum()));
             Ok(texts.iter().map(|_| vec![0.5; 4]).collect())
         }
         fn dim(&self) -> usize { 4 }
@@ -1907,6 +1908,11 @@ mod tests {
         let model = Arc::new(Advising::default());
         let _ = EmbedDaemon::new(model.clone()).chauffer(true);
         assert_eq!(model.largest.load(std::sync::atomic::Ordering::Relaxed), 32, "the warm-up's largest batch is the service's lot_max");
+        // And the service's byte budget : a batch of 32 × 382 tokens then one of 512
+        // still panicked on the iGPU, while the service never sends such a batch.
+        let budget = crate::embedder::embed_char_budget();
+        let over: Vec<(usize, usize)> = model.batches.lock().unwrap().iter().copied().filter(|&(n, bytes)| n > 1 && bytes > budget).collect();
+        assert!(over.is_empty(), "no warm-up batch above the service's budget of {budget} bytes : {over:?}");
     }
 
     /// A slow model : 200 ms for a call with a text over 1 000 bytes, 10 ms otherwise.
