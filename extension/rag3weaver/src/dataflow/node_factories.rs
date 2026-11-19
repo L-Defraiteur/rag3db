@@ -1532,6 +1532,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
     registry.register(Box::new(FetchRelatedNodeFactory));
     registry.register(Box::new(super::react_nodes::ReactTransitionNodeFactory));
     registry.register(Box::new(super::ref_nodes::AddRefNodeFactory));
+    registry.register(Box::new(super::ref_nodes::DefineRefNodeFactory));
     registry.register(Box::new(super::ref_nodes::CreateRefTypeNodeFactory));
     registry.register(Box::new(super::usage_nodes::UsagesNodeFactory));
     registry.register(Box::new(super::neighborhood_nodes::NeighborhoodNodeFactory));
@@ -1863,6 +1864,7 @@ mod tests {
                 "FetchRelatedNode" => serde_json::json!({ "relation": "HAS_VARIANT" }),
                 "ReactTransitionNode" => serde_json::json!({ "target": "Memory", "transition": "review", "relation": "ANCHORED_TO" }),
                 "AddRefNode" => serde_json::json!({ "genre": "code_file", "valeur": "src/catalog.rs", "refs_entity": "Ref", "types_entity": "RefType", "from_entity": "Memory", "relation": "CITE" }),
+                "DefineRefNode" => serde_json::json!({ "genre": "incident_type", "valeur": "v-7k2q", "definition": "a disk failure", "refs_entity": "Ref", "types_entity": "RefType" }),
                 "CreateRefTypeNode" => serde_json::json!({ "name": "invoice", "description": "un numéro de facture", "types_entity": "RefType" }),
                 "UsagesNode" => serde_json::json!({ "pivot": "Symbol", "key": "name", "name": "x" }),
                 "NeighborhoodNode" => serde_json::json!({ "pivot": "Symbol", "key": "name", "relations": "CONSUMES", "name": "x" }),

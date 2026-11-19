@@ -1,0 +1,17 @@
+%% tool: define_ref
+%% description: Définit une valeur déjà citée, par exemple la valeur d'une catégorie : écrit sa définition sur la référence (genre et forme normale) et l'annonce comme un changement de définition. C'est le seul verbe qui écrit une définition. Les fiches ancrées à la valeur repassent « à revoir » quand sa définition change, jamais quand quelqu'un la cite (add_ref). Une valeur que personne n'a encore citée se cite d'abord, puis se définit.
+%% param: genre string! -- Le genre de la valeur (la catégorie).
+%% choices: genre = @values:RefType.name
+%% param: valeur string! -- La valeur, telle que tu l'as ; le harnais du genre la met en forme normale s'il en a un. Son identifiant stable, pas son nom affiché.
+%% param: definition string! -- Ce que la valeur veut dire. Une valeur valide n'est pas un fait vrai : la définition dit le sens du mot, pas ce qui est arrivé.
+%% param: refs_entity string = "Ref" -- Entité qui porte les références.
+%% param: types_entity string = "RefType" -- Entité qui porte les genres.
+%% result: define.report
+%%
+%% **Pourquoi un verbe à part** (18 novembre 2026, les catégories, question n° 2) : `add_ref` réécrit la
+%% référence à chaque citation, `dit_comme` compris, et `review_anchored` réagit à tout changement de sa
+%% source. Un signal « définition changée » branché sur toute écriture de la référence ferait repasser à
+%% revoir toutes les fiches ancrées à chaque nouvelle citation. Ce verbe annonce `change: "definition"`,
+%% et la réaction `review_definitions` ne retient que ce changement-là.
+graph LR
+    define["DefineRefNode(genre=$genre, valeur=$valeur, definition=$definition, refs_entity=$refs_entity, types_entity=$types_entity)"]

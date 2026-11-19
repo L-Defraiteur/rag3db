@@ -1,0 +1,17 @@
+%% tool: review_definitions
+%% description: Une définition changée (define_ref) fait repasser « à revoir » les fiches ancrées à la valeur. La même fiche que review_anchored, avec un curseur à elle et le filtre change ; une citation (add_ref) ne déclenche rien.
+%% param: target string! -- Entité dont les lignes ancrées reçoivent la transition ; elle doit déclarer un cycle de vie.
+%% param: relation string! -- Relation d'ancrage, remontée **depuis la cible** : (cible)-[relation]->(ligne changée).
+%% param: transition string! -- Nom d'une transition déclarée sur la cible. C'est la déclaration qui porte ses deux états, jamais ce graphe.
+%% param: source string = "" -- Entité dont les changements déclenchent ; vide pour n'importe laquelle.
+%% param: change string = "" -- Le changement qui déclenche (`change` de l'événement : ingested, updated, definition…) ; vide pour tous. Une définition changée seule fait repasser les fiches à revoir, pas une citation.
+%% on: catalog
+%% policy: debounce 500
+%% result: react.report
+%%
+%% La remontée et ses garanties sont celles de `review_anchored.mmd` ; seuls le nom (le curseur) et la liaison `change` diffèrent.
+graph LR
+    events["EventSourceNode(topics='catalog', cursor='review_definitions', limit=1000)"]
+    react["ReactTransitionNode(source=$source, relation=$relation, target=$target, transition=$transition, change=$change)"]
+
+    events -->|events| react
