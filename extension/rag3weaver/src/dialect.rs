@@ -1451,6 +1451,7 @@ fn postgres_condition_sur(d: &PostgresDialect, p: &rag3weaver_ir::Predicate, a: 
         Predicate::AtLeast { field, param } => format!("{a}.{} >= ${param}", d.quote(field)),
         Predicate::AnyOf(v) => format!("({})", v.iter().map(|q| postgres_condition_sur(d, q, a, n)).collect::<Vec<_>>().join(" OR ")),
         Predicate::AllOf(v) => format!("({})", v.iter().map(|q| postgres_condition_sur(d, q, a, n)).collect::<Vec<_>>().join(" AND ")),
+        Predicate::Not(q) => format!("NOT ({})", postgres_condition_sur(d, q, a, n)),
         Predicate::In { field, param } => d.filter_in(&format!("{a}.{}", d.quote(field)), param),
         // Jamais `LIKE` : un `%` ou un `_` d'un chemin y serait un joker.
         Predicate::StartsWith { field, param } => format!("left({a}.{}, length(${param})) = ${param}", d.quote(field)),
@@ -1579,6 +1580,7 @@ fn rag3db_condition_sur(p: &rag3weaver_ir::Predicate, a: &str, n: &mut usize) ->
         Predicate::AnyOf(v) => v.iter().map(|q| rag3db_condition_sur(q, a, n)).collect::<Vec<_>>().join(" OR "),
         // Chaque membre entre parenthèses : un `AnyOf` dedans garde son sens.
         Predicate::AllOf(v) => v.iter().map(|q| format!("({})", rag3db_condition_sur(q, a, n))).collect::<Vec<_>>().join(" AND "),
+        Predicate::Not(q) => format!("NOT ({})", rag3db_condition_sur(q, a, n)),
         Predicate::In { field, param } => Rag3dbDialect.filter_in(&format!("{a}.{}", cypher_quote(field)), param),
         Predicate::StartsWith { field, param } => format!("{a}.{} STARTS WITH ${param}", cypher_quote(field)),
         Predicate::Through { relation, direction, end, filter } => {
@@ -4178,6 +4180,17 @@ impl SchemaDialect for PostgresDialect {
 
 #[cfg(test)]
 mod tests {
+    /// **A negated condition** (2.11): `NOT (…)` around the inner condition, on both dialects, an `AnyOf` inside
+    /// kept whole by the parentheses.
+    #[test]
+    fn a_negated_condition_renders_not_around_the_inner_one() {
+        use rag3weaver_ir::Predicate;
+        let eq = |f: &str, p: &str| Predicate::Equals { field: f.into(), param: p.into() };
+        let nie = Predicate::AllOf(vec![eq("source", "src"), Predicate::Not(Box::new(Predicate::AnyOf(vec![eq("a", "x"), eq("b", "y")])))]);
+        assert_eq!(rag3db_condition_sur(&nie, "s", &mut 0), "(s.`source` = $src) AND (NOT (s.`a` = $x OR s.`b` = $y))");
+        assert_eq!(postgres_condition_sur(&PostgresDialect, &nie, "s", &mut 0), "(s.\"source\" = $src AND NOT ((s.\"a\" = $x OR s.\"b\" = $y)))");
+    }
+
     use super::*;
 
     /// **Le filtre d'un index rangé par morceaux** (ticket du 7 novembre 2026) : la requête
