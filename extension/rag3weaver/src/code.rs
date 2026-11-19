@@ -641,7 +641,10 @@ fn usage_properties(sites: &[UsageSite]) -> BTreeMap<String, CypherValue> {
 // (la racine du chemin lue à la position de la mention).
 // 9 (20 novembre 2026) : le type d'un appel `Type::f()` / `Type.f()` est un usage du type (`tetes_de_type`) — les
 // sites qualifiés rejoignent leur type, en Rust, C++, Python, TypeScript et C# (`usages Catalog` perdait 41 sites).
-pub const REGLES_DE_L_ANALYSE: u32 = 9;
+// 10 (20 novembre 2026) : un conteneur replié n'est pas candidat à la recherche — ce qu'il porte à lui, hors lignes
+// de structure (ouvertures, plis, déclarations avancées, fermetures et leurs commentaires), sous le seuil du
+// manifeste (`container_min_chars`, 80 par défaut), le tient hors du plein texte et des morceaux (2.12).
+pub const REGLES_DE_L_ANALYSE: u32 = 10;
 
 /// **La version de l'analyse** (page 06, § 13) : le commit du parseur lié, [`REGLES_DE_L_ANALYSE`] et le
 /// gabarit du code (le découpage et les champs déclarés de `File` et de `Scope`), hachés.
