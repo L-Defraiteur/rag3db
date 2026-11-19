@@ -244,9 +244,82 @@ pub fn sync_tracked_layers(
     tracked: Option<&serde_json::Value>,
     settings: &crate::views::WriteSettings,
 ) -> Result<Vec<(String, String, Result<i64, String>)>, String> {
-    // RED STUB: nothing is written.
-    let _ = (catalog, workspace_root, tracked, settings);
-    Ok(Vec::new())
+    use crate::suivies::ParenteResolue;
+    let Some(t) = crate::suivies::tracked_layers(catalog, workspace_root, tracked)? else { return Ok(Vec::new()) };
+    let backend = crate::generations::COUCHE_DU_BACKEND.to_string();
+    let backend_rank = catalog.rang_publie().ok_or("les couches suivies : cette base n'a pas de générations")?;
+    let full = |b: &str| if b.starts_with("refs/") { b.to_string() } else { format!("refs/heads/{b}") };
+    let mut issues = Vec::new();
+    // The history layers, parents first: a layer waits for its tracked parent's generation.
+    let tracked_names: std::collections::BTreeSet<&str> = t.resolution.pile.couches.iter().map(|c| c.nom.as_str()).collect();
+    let mut pending: Vec<&crate::suivies::CoucheResolue> = t.resolution.pile.couches.iter().collect();
+    let mut done: std::collections::BTreeSet<String> = Default::default();
+    while !pending.is_empty() {
+        let before = pending.len();
+        let mut rest = Vec::new();
+        for couche in pending {
+            let parent_name = match &couche.parente {
+                ParenteResolue::Declaree(p) | ParenteResolue::Inferee { parente: p, .. } if tracked_names.contains(p.as_str()) => Some(p.clone()),
+                _ => None,
+            };
+            if parent_name.as_ref().is_some_and(|p| !done.contains(p)) {
+                rest.push(couche);
+                continue;
+            }
+            done.insert(couche.nom.clone());
+            let Some(id) = t.ids.get(&couche.nom).cloned() else { continue };
+            let issue = if generation_commit(catalog, &id, None)?.as_deref() == Some(couche.pointe.as_str()) {
+                last_rank(catalog, &id)
+            } else {
+                let parent = match parent_name.and_then(|p| t.ids.get(&p).cloned()) {
+                    Some(pid) => match last_rank(catalog, &pid) {
+                        Ok(r) => (pid, r),
+                        Err(_) => (backend.clone(), backend_rank),
+                    },
+                    None => (backend.clone(), backend_rank),
+                };
+                write_history_generation(catalog, &t.repo, &LayerWrite { layer: id.clone(), parent: Some(parent) }, &couche.pointe)
+            };
+            issues.push((couche.nom.clone(), id, issue));
+        }
+        if rest.len() == before {
+            // A cycle of parents (a flow): those layers are said, not written.
+            for couche in rest {
+                issues.push((couche.nom.clone(), t.ids.get(&couche.nom).cloned().unwrap_or_default(), Err(format!("couche {} : sa parente suivie ne s'écrit pas avant elle (un flux)", couche.nom))));
+            }
+            break;
+        }
+        pending = rest;
+    }
+    // The work layers of the tracked worktrees, the backend's own excepted, on their branch's layer.
+    let mut work = Vec::new();
+    let mut names = std::collections::BTreeMap::new();
+    for tr in t.resolution.sources.iter().flat_map(|s| s.travail.iter()) {
+        let name = format!("worktree:{}", tr.chemin.display());
+        let Some(id) = t.ids.get(&name).cloned() else { continue };
+        if id == crate::suivies::ID_DE_LA_COUCHE_DU_BACKEND || names.contains_key(&id) {
+            continue;
+        }
+        let branch_layer = tr.branche.as_deref().and_then(|b| t.ids.get(&full(b)).cloned()).unwrap_or_else(|| backend.clone());
+        names.insert(id.clone(), name);
+        work.push(WorkLayerToWrite { layer: id, worktree: tr.chemin.clone(), branch_layer });
+    }
+    for (id, issue) in refresh_work_layers(catalog, &work, settings) {
+        issues.push((names.get(&id).cloned().unwrap_or_default(), id, issue));
+    }
+    Ok(issues)
+}
+
+/// The last published rank of `layer`, or a refusal when it has none.
+fn last_rank(catalog: &Catalog, layer: &str) -> Result<i64, String> {
+    use crate::connection::{CypherValue, QueryParam};
+    let lu = catalog
+        .execute_raw_with_params(
+            &format!("MATCH (g:{}) WHERE g.couche = $couche RETURN max(g.rang)", crate::generations::TABLE),
+            &[QueryParam::new("couche", CypherValue::String(layer.to_string()))],
+        )
+        .map_err(|e| e.to_string())?;
+    lu.rows.first().and_then(|r| r.first()).and_then(|v| v.as_i64()).ok_or_else(|| format!("la couche {layer} n'a pas de génération"))
 }
 
 #[cfg(all(test, feature = "rag3db-native"))]
