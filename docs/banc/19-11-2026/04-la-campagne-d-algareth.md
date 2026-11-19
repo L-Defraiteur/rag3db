@@ -15,6 +15,7 @@ Une ligne par cas joué ; les détails suivent la table.
 | embarquement 02, le refus d'un démarrage mort (`c4b36feffa`) | **réussi** | **même** (`serveur.rs`) ; le nôtre nomme aussi le programme d'un démarrage muet, hors de la demande | +10 −4 / +20 −9 | 2 pas, 64 appels, 408 s ; invite 1,85 M jetons, dont 62 % par le cache | aucun : la lib entière passe (1 743) | le fichier indiqué |
 | lucivy 03, la requête floue longue sans positions (`fa65315ce8`) | **échoué** (défaut de forme du cas) | aucun diff : une analyse | 0 / voir le cas | 1 pas, 33 appels, 202 s ; invite 1,28 M jetons, dont 92 % par le cache | aucun | les deux fichiers indiqués, lus |
 | lucivy 03, jeu de 20 h 13, consigne réécrite | **écarté** (cargo refusé dans le bac à sable) | aucun diff | — | 8 pas, 1 454 s, arrêté sur « 3 pas de suite sans élément réussi » ; une bonne part des pas contre cargo | — | — |
+| lucivy 03, jeu de 20 h 50, cargo dans le bac | **échoué** | aucun diff ; l'endroit trouvé (`verify_stored`, `stored.rs`) est le bon | 0 / voir le cas | 5 pas, 146 appels, 1 331 s (8,7 s par appel, Vertex normal) ; invite 4,7 M jetons, dont 69 % par le cache ; 99 lectures de fichiers, 0 écriture | aucun | les deux fichiers indiqués, lus |
 
 ## tty 09 : une demande s'écrit une fois, et /nom retient le nom gardé (19 novembre)
 
@@ -194,3 +195,15 @@ Archi l'a corrigé (le gabarit figé pose `RUSTUP_HOME` et `CARGO_HOME` réels, 
   sur « 3 pas de suite sans élément réussi ». Une bonne part de ses pas a servi à se battre avec cargo (`RUSTUP_HOME` à
   la main, un fichier `rust-toolchain` écrit, `cargo +stable`). **Écarté**, comme tty 09 à 16 h : il ne mesure pas
   Algareth. Le jeu de 20 h 50, avec le correctif, le remplace.
+
+## lucivy 03, jeu de 20 h 50 (cargo dans le bac à sable, consigne réécrite)
+
+- **Le jeu** : `campagne/03-cas-de-campagne-la-requete-floue-longue-sans-positions/20261119-205010/`. Cargo tourne dans le
+  bac : lucivy-core et lucivy-fst compilent, et le témoin rougit 12 fois sous l'agent, sur son assertion. Le lanceur
+  l'avait vu rouge au parent (`red.json`).
+- **Le tour** : arrêté sur « 3 pas de suite sans élément réussi », en 5 pas, 146 appels et 1 331 s, sans reprise. Le diff
+  est vide. Vertex était normal : 1 266 s de modèle pour 146 appels, soit 8,7 s par appel.
+- **Ce qu'Algareth a trouvé** (dans son `step_done`) : `verify_stored`, dans `stored.rs`, passe la distance d'édition sur
+  tout le texte stocké de chaque document candidat. C'est le bon endroit. Mais il a lu 99 fichiers et n'a rien écrit.
+- **Le verdict : échoué.** Un diff vide laisse le témoin rouge. Ce jeu est le seul de la soirée où la consigne, cargo et
+  Vertex étaient tous en ordre : il mesure bien Algareth. Il a localisé la cause, mais il n'est pas passé au correctif.
