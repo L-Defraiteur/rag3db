@@ -846,4 +846,97 @@ mod tests {
         graph.add_node(Box::new(LlmNode::new("llm"))).unwrap();
         assert!(graph.connect("ocr", "ocr", "llm", "prompt").is_err());
     }
+
+    // ── Lot B1 (19 November 2026): the context of a model call, declared ──
+
+    /// A model that notes the text of the prompt it receives, and replies JSON.
+    fn notes_prompt(seen: Arc<std::sync::Mutex<String>>) -> Arc<dyn Llm> {
+        Arc::new(crate::llm::CallbackLlm::new("spy", 4096, move |turns, _opts, sink| {
+            *seen.lock().unwrap() = turns.iter().map(|t| t.content.clone()).collect::<Vec<_>>().join("\n---\n");
+            for f in crate::llm::fragments("{\"topics\": []}") {
+                sink.on_token(&f);
+            }
+            sink.on_finish(&Finish::eos());
+            Ok((Finish::eos(), crate::llm::Usage::default()))
+        }))
+    }
+
+    fn registry() -> NodeRegistry {
+        let mut r = NodeRegistry::new();
+        register_builtins(&mut r);
+        r
+    }
+
+    /// **Collect** gathers its named inputs into one list, in the order its configuration declares them,
+    /// whatever the order they arrive in: two branches that finish in disorder give the same list. An empty
+    /// input (a disabled ingredient) is dropped, or kept with `keep_empty`.
+    #[test]
+    fn collect_gives_its_inputs_in_declared_order_whatever_their_arrival() {
+        let r = registry();
+        let parts = |a: &str| serde_json::json!({"name": a, "title": a, "value": format!("text of {a}")});
+        let mut lists = Vec::new();
+        for arrival in [["slice", "identity", "report"], ["report", "slice", "identity"]] {
+            let mut node = r.create("Collect", "c", &serde_json::json!({"inputs": "identity,report,slice"})).expect("Collect is a node");
+            let mut ctx = NodeContext::with_services(Arc::new(ServiceRegistry::new()));
+            for name in arrival {
+                ctx.set_input(name, PortValue::new(parts(name)));
+            }
+            node.execute(&mut ctx).unwrap();
+            let list = ctx.drain_outputs().remove("list").and_then(take_or_clone::<serde_json::Value>).expect("the list port");
+            lists.push(list);
+        }
+        assert_eq!(lists[0], lists[1], "the same list whatever the arrival");
+        let names: Vec<&str> = lists[0].as_array().unwrap().iter().map(|p| p["name"].as_str().unwrap()).collect();
+        assert_eq!(names, ["identity", "report", "slice"]);
+        // An empty input: dropped by default, kept with keep_empty.
+        for (keep, n) in [(false, 1), (true, 2)] {
+            let mut node = r.create("Collect", "c", &serde_json::json!({"inputs": "identity,report", "keep_empty": keep})).unwrap();
+            let mut ctx = NodeContext::with_services(Arc::new(ServiceRegistry::new()));
+            ctx.set_input("identity", PortValue::new(parts("identity")));
+            ctx.set_input("report", PortValue::new(serde_json::json!({"name": "report", "title": "Report", "value": ""})));
+            node.execute(&mut ctx).unwrap();
+            let list = ctx.drain_outputs().remove("list").and_then(take_or_clone::<serde_json::Value>).unwrap();
+            assert_eq!(list.as_array().unwrap().len(), n, "keep_empty={keep}: {list}");
+        }
+        assert!(r.schema_for("Collect", &serde_json::json!({"inputs": "a,b"})).unwrap().inputs.iter().map(|p| p.name.to_string()).eq(["a", "b"]),
+            "one input port per declared name, in order");
+    }
+
+    /// **The context of LlmNode**: the `instruction` (a declared parameter), then each part in the order of
+    /// the list, as a section — « ## title », then the value: a string as it is, any other value as JSON with
+    /// sorted keys, one line per element of a list, or « key: value » lines with format kv. An empty part is
+    /// not rendered. The prompt is the same byte for byte.
+    #[test]
+    fn llm_context_parts_render_as_sections_after_the_instruction() {
+        let seen = Arc::new(std::sync::Mutex::new(String::new()));
+        let mut node = LlmNodeFactory
+            .create("extract", &serde_json::json!({"instruction": "Split this slice into topics.", "response_schema": topics_schema()}))
+            .unwrap();
+        let mut ctx = ctx_with(notes_prompt(seen.clone()));
+        ctx.set_input("context", PortValue::new(serde_json::json!([
+            {"name": "identity", "title": "Identity", "value": "I am the archivist."},
+            {"name": "fiche", "title": "Fiche", "value": {"name": "Zeta", "about": "x", "alpha": 1}},
+            {"name": "turns", "title": "Turns", "value": [{"turn": 2, "b": 1}, {"turn": 1}]},
+            {"name": "off", "title": "Disabled", "value": ""},
+            {"name": "kv", "title": "As key-value", "value": {"b": "two", "a": 1}, "format": "kv"}
+        ])));
+        node.execute(&mut ctx).expect("the context is the prompt");
+        assert_eq!(
+            *seen.lock().unwrap(),
+            "Split this slice into topics.\n\n## Identity\n\nI am the archivist.\n\n## Fiche\n\n{\"about\":\"x\",\"alpha\":1,\"name\":\"Zeta\"}\n\n## Turns\n\n{\"b\":1,\"turn\":2}\n{\"turn\":1}\n\n## As key-value\n\na: 1\nb: two"
+        );
+    }
+
+    /// A part over its `max_tokens` (estimated: characters / 4, rounded up) is cut, and the section says it.
+    #[test]
+    fn a_context_part_over_its_ceiling_is_cut_and_says_so() {
+        let seen = Arc::new(std::sync::Mutex::new(String::new()));
+        let mut node = LlmNodeFactory.create("extract", &serde_json::json!({"instruction": "Read."})).unwrap();
+        let mut ctx = ctx_with(notes_prompt(seen.clone()));
+        ctx.set_input("context", PortValue::new(serde_json::json!([
+            {"name": "long", "title": "Long", "value": "a".repeat(100), "max_tokens": 10}
+        ])));
+        node.execute(&mut ctx).unwrap();
+        assert_eq!(*seen.lock().unwrap(), format!("Read.\n\n## Long\n\n{}\n[cut: 10 of 25 estimated tokens kept]", "a".repeat(40)));
+    }
 }
