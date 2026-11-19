@@ -110,6 +110,13 @@ impl Backend {
     }
 
     /// Les propositions de ce backend, dans l'ordre.
+    /// Holds the list of propositions, for a test: a `propose` waits behind it (19 Nov., the chat's
+    /// tool that waits).
+    #[cfg(test)]
+    pub(crate) fn hold_for_a_test(&self) -> std::sync::MutexGuard<'_, Vec<Proposition>> {
+        self.propositions.liste.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
     pub fn propositions(&self) -> Vec<Proposition> {
         self.propositions.liste.lock().unwrap_or_else(|e| e.into_inner()).clone()
     }
