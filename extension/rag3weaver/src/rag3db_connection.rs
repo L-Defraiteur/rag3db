@@ -38,6 +38,11 @@ pub struct Rag3dbConnection {
     /// Combien de fois l'ouverture en lecture seule a été reprise parce qu'un
     /// point de reprise d'un autre processus l'avait croisée.
     open_retries: u32,
+    /// **A test hook** (ticket of 15 November 2026, « recommencer une écriture refusée par un ALTER validé »): the
+    /// next n statements are refused as the engine refuses a statement whose table's schema changed after it
+    /// started. The engine cannot make that refusal deterministic for a single autocommit statement.
+    #[cfg(test)]
+    schema_refusals: std::sync::atomic::AtomicUsize,
     /// Le dernier refus du moteur sur cette connexion, effacé à chaque
     /// instruction réussie. Une transaction défaite par une instruction ne
     /// répond plus ensuite que « a statement in it failed » : l'erreur rendue
@@ -457,7 +462,17 @@ impl Rag3dbConnection {
             }
             std::mem::transmute::<rag3db::Connection<'_>, rag3db::Connection<'static>>(conn)
         };
-        Ok(Self { conn, db, reopen, buffer_pool: None, open_retries: 0, first_refusal: std::sync::Mutex::new(None), path: None })
+        Ok(Self {
+            conn,
+            db,
+            reopen,
+            buffer_pool: None,
+            open_retries: 0,
+            first_refusal: std::sync::Mutex::new(None),
+            path: None,
+            #[cfg(test)]
+            schema_refusals: Default::default(),
+        })
     }
 
     /// Create a second connection on the same Database, for sync BlobStore operations.
@@ -565,6 +580,23 @@ impl Rag3dbConnection {
         FailedCheckpointHook(Arc::downgrade(&self.reopen))
     }
 
+    /// Arms the test hook: the next `n` statements are refused for a changed schema.
+    #[cfg(test)]
+    pub(crate) fn refuse_next_for_a_changed_schema(&self, n: usize) {
+        self.schema_refusals.store(n, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    #[cfg(test)]
+    fn injected_schema_refusal(&self) -> Result<(), DbError> {
+        use std::sync::atomic::Ordering::SeqCst;
+        if self.schema_refusals.fetch_update(SeqCst, SeqCst, |n| n.checked_sub(1)).is_ok() {
+            return Err(DbError::QueryError(
+                "Transaction manager exception: Schema changed, retry: the schema of table Fixture changed after this transaction started".into(),
+            ));
+        }
+        Ok(())
+    }
+
     /// Execute a raw Cypher query (sync, used internally).
     fn query_sync(&self, cypher: &str) -> Result<QueryResult, DbError> {
         self.before_engine_for(cypher)?;
@@ -655,6 +687,8 @@ impl DbConnection for Rag3dbConnection {
     fn execute(&self, cypher: &str) -> Result<QueryResult, DbError> {
         #[cfg(test)]
         thread_statements::count();
+        #[cfg(test)]
+        self.injected_schema_refusal()?;
         self.query_sync(cypher)
     }
 
@@ -665,6 +699,8 @@ impl DbConnection for Rag3dbConnection {
     ) -> Result<QueryResult, DbError> {
         #[cfg(test)]
         thread_statements::count();
+        #[cfg(test)]
+        self.injected_schema_refusal()?;
         self.query_with_params_sync(cypher, params)
     }
 
@@ -1085,6 +1121,32 @@ fn db_threads_from(var: Option<&str>, parallelism: usize) -> u64 {
 
 #[cfg(test)]
 mod tests {
+    /// **A statement refused for a changed schema is started again** (ticket of 15 November 2026, « recommencer une
+    /// écriture refusée par un ALTER validé », grain (ii), confirmed by the core on 19 November): outside an explicit
+    /// transaction, a refused statement left nothing, and the connection starts it again, at most 3 times; past
+    /// that, the error names the retries. Inside an explicit transaction, the error goes up as it is: the caller
+    /// must roll back first.
+    #[test]
+    fn a_statement_refused_for_a_changed_schema_is_started_again() {
+        use super::*;
+        let c = Rag3dbConnection::in_memory().unwrap();
+        c.execute("CREATE NODE TABLE Fixture(id INT64, PRIMARY KEY(id))").unwrap();
+        let count = |c: &Rag3dbConnection| c.execute("MATCH (n:Fixture) RETURN count(n)").unwrap().rows[0][0].as_i64().unwrap();
+        c.refuse_next_for_a_changed_schema(2);
+        c.execute("CREATE (:Fixture {id: 1})").expect("refused twice, started again, done");
+        assert_eq!(count(&c), 1, "one row, not two");
+        c.refuse_next_for_a_changed_schema(4);
+        let e = c.execute("CREATE (:Fixture {id: 2})").expect_err("refused four times").to_string();
+        assert!(e.contains("Schema changed, retry:") && e.contains("3"), "the error names the retries: {e}");
+        assert_eq!(count(&c), 1, "nothing written");
+        c.begin().unwrap();
+        c.refuse_next_for_a_changed_schema(1);
+        let e = c.execute("CREATE (:Fixture {id: 3})").expect_err("inside a transaction, no retry").to_string();
+        assert!(e.contains("Schema changed, retry:"), "{e}");
+        c.rollback().unwrap();
+        assert_eq!(count(&c), 1);
+    }
+
     /// **Un crochet de test gardé n'empêche pas la réouverture** : la base fermée, son crochet encore
     /// tenu (comme le garde `e2e_demon_hote::une_base_a_rouvrir_ne_lache_que_son_backend`), la base
     /// se rouvre tout de suite. Rouge, le crochet tenait l'état « à rouvrir », que le registre des
@@ -1092,6 +1154,7 @@ mod tests {
     #[test]
     fn un_crochet_garde_n_empeche_pas_la_reouverture() {
         use super::*;
+
         let dossier = tempfile::tempdir().unwrap();
         let chemin = dossier.path().join("base.rag3db");
         let conn = Rag3dbConnection::new(&chemin).expect("la base s'ouvre");
