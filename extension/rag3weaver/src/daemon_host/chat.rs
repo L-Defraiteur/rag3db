@@ -213,6 +213,12 @@ impl DaemonHost {
     /// Sources, and the session restarts on it, with the last `memory.keep_turns` turns raw. A
     /// failure leaves the session as it was.
     pub fn compacter_le_chat(&self, backend_id: &str) -> Result<Value, String> {
+        self.compacter(backend_id, false)
+    }
+
+    /// The compaction; `sans_le_dernier`: the last turn (the one that overflowed) leaves the
+    /// session too, filed, and no turn stays raw (the turns taken out stay a prefix of the run).
+    fn compacter(&self, backend_id: &str, sans_le_dernier: bool) -> Result<Value, String> {
         let hosted = self.hote_par_id(backend_id)?;
         let r = self.rangement_de(&hosted, backend_id).ok_or("no memory to compact into: the backend declares no bilans.memoire, or memory.index_turns is off")?;
         let fenetre = self.chat_state(backend_id).ok().and_then(|v| v["context"]["max"].as_u64()).map(|n| n as usize);
@@ -245,7 +251,7 @@ impl DaemonHost {
             let texte = reprise["text"].as_str().ok_or_else(|| format!("compose_restart returned no text: {reprise}"))?.to_string();
             // The last `keep_turns` turns stay raw; the turns before them leave the session.
             let comptes: Vec<usize> = session.turns.iter().enumerate().filter(|(_, t)| t.role == "user" && !super::rangement::de_reprise(t)).map(|(i, _)| i).collect();
-            let gardes = r.reglage.keep_turns.min(comptes.len());
+            let gardes = if sans_le_dernier { 0 } else { r.reglage.keep_turns.min(comptes.len()) };
             let debut_de_la_queue = if gardes == 0 { session.turns.len() } else { comptes[comptes.len() - gardes] };
             let retires = comptes.len() - gardes;
             let systeme: Vec<crate::llm::Turn> = session.turns.iter().filter(|t| t.role == "system").cloned().collect();
@@ -638,7 +644,17 @@ impl DaemonHost {
     /// **Un tour de chat** sur le backend `backend_id`. Rend le texte, le run,
     /// qui l'a arrêté s'il l'a été, et ce qu'il a consommé.
     pub fn chat_turn(&self, backend_id: &str, message: &str) -> Result<Value, String> {
-        self.chat_turn_with(backend_id, message, None)
+        match self.chat_turn_with(backend_id, message, None) {
+            // **The net of a context overflow** (lot 3 of the session archived as it goes, 19 Nov
+            // 2026): the turn that overflowed stays true in the memory and is filed with the open
+            // slice; the session restarts from compose_restart; the message goes again, once, as
+            // a new turn. A second overflow is a named failure.
+            Err(e) if e.contains("llm context overflow") => match self.compacter(backend_id, true) {
+                Ok(_) => self.chat_turn_with(backend_id, message, None).map_err(|e2| if e2.contains("llm context overflow") { format!("context overflow after a compaction: {e2}") } else { e2 }),
+                Err(refus) => Err(format!("{e} (the compaction that would have made room was refused: {refus})")),
+            },
+            r => r,
+        }
     }
 
     /// Le même tour, **comme un pas d'équipier** quand `step` est donné (page
