@@ -1,5 +1,10 @@
 # Nouveautés
 
+- 19 novembre 2026 — **Une instruction refusée pour un schéma changé recommence d'elle-même.** Hors d'une
+  transaction explicite, une instruction que le moteur refuse par « Schema changed, retry: » est rejouée par la
+  connexion, trois fois au plus ; au-delà, l'erreur dit les essais. Dans un `BEGIN … COMMIT`, le refus remonte tel
+  quel.
+
 - 18 novembre 2026 — **La fin d'un index dit une libération ou une dette qu'elle n'a pas pu faire.** Une erreur en rendant les réclamations d'embarquement s'ajoute à la dernière ligne du journal, avec sa table et sa cause, sans en effacer la cause de fin ; une dette restante illisible se dit « dette inconnue », plus jamais « 0 ».
 
 - 18 novembre 2026 — **Un modèle déclaré dit `access` et `provider`.** `access` dit la manière d'y accéder (`local`, `service`, `compatible`), `provider` le fournisseur (`openai`, `vertex`, `anthropic`, `llama_server`). L'ancienne forme, `provider` pour la manière et `protocol` pour le fournisseur, se lit encore **jusqu'au 29 novembre 2026** ; un modèle qui mêle les deux est refusé, en nommant les deux mots. `/model` rend les deux mots neufs.
