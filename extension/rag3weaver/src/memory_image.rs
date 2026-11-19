@@ -273,6 +273,13 @@ impl MemoryImage {
         true
     }
 
+    /// **Merge the given properties of a relation, without unfolding it**: the pair `(rel, from, to)` is linked if
+    /// it is missing; only the keys of `set` are written and those of `unset` removed, the others kept. `false` when
+    /// one end is missing.
+    pub fn merge_rel_props(&mut self, _rel: &str, _from: &str, _to: &str, _set: BTreeMap<String, CypherValue>, _unset: &[String]) -> bool {
+        unimplemented!("memory image: merge_rel_props")
+    }
+
     pub fn node(&self, uuid: &str) -> Option<NodeView> {
         let n = &self.nodes[self.live(uuid)? as usize];
         Some(NodeView {
@@ -568,6 +575,17 @@ mod tests {
         assert_eq!(m.remove_file("src/x.rs").nodes, 1);
         m.insert_node("Scope", "s-y", Some("given.rs"), props(&[("file_path", s("src/y.rs"))]));
         assert_eq!(m.nodes_of_file("given.rs"), ["s-y"], "a file given by the caller wins");
+    }
+
+    #[test]
+    fn merging_relation_properties_touches_only_the_given_keys() {
+        let mut m = image();
+        assert!(m.merge_rel_props("CONSUMES", "s-a", "s-b", props(&[("resolution", s("nom")), ("line", CypherValue::Int(7))]), &["usage".to_string()]));
+        assert_eq!(m.outgoing("CONSUMES", "s-a"), vec![("s-b".to_string(), props(&[("resolution", s("nom")), ("line", CypherValue::Int(7))]))], "usage removed, resolution replaced, line added");
+        assert!(m.merge_rel_props("PARENT_OF", "s-a", "s-b", props(&[("depth", CypherValue::Int(1))]), &[]), "a missing pair is linked");
+        assert_eq!(m.outgoing("PARENT_OF", "s-a").len(), 1);
+        assert_eq!(m.counts(), (3, 4));
+        assert!(!m.merge_rel_props("CONSUMES", "s-a", "absent", BTreeMap::new(), &[]), "a missing end is refused");
     }
 
     #[test]
