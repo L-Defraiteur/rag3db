@@ -1,5 +1,13 @@
 # Nouveautés
 
+- 19 novembre 2026 — **Une extraction coupée par sa borne le dit, et l'archiviste demande peu de réflexion au
+  modèle.** Sur Vertex, la réflexion de Gemini compte dans `max_tokens` ; elle coupait le JSON de 5 extractions sur 19.
+  Une réponse coupée sous un schéma est maintenant refusée par « the reply was cut at max_tokens=N (finish: length),
+  reasoning R of C completion tokens », au lieu de « pas du JSON ». `LlmNode` prend `reasoning` (`minimal`, `low`,
+  `medium`, `high`), et l'extraction comme le découpage demandent `low` par défaut (`extract_reasoning`). Chaque appel
+  dit son usage sur un port `usage`, et le rapport d'`archive_slice` porte celui de son extraction
+  (`extraction_usage`).
+
 - 19 novembre 2026 — **Les secrets que la mémoire masque sont déclarés, et chaque masque dit son genre.** Les motifs
   de `put_turn` sont un paramètre (`patterns`) : un préfixe suivi d'un corps assez long (`ghp_`, `sk-ant-`, `AKIA`…),
   un jeton `Bearer`, une clé privée PEM. Ajouter un motif ne demande plus de rebâtir. Un secret masqué se lit
