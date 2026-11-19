@@ -10618,6 +10618,8 @@ fn read_threads() -> u64 {
                 let colonne = ColumnDef { name: nom.into(), col_type: type_ };
                 self.alter_absorbing(table, &self.dialect.alter_add_column_default(table, &colonne, defaut))?;
             }
+            // The visibility read by an index where the dialect has them (2.11: postgres).
+            self.poser_index(self.dialect.generation_indexes(table));
         }
         // **L'entité `Generation`** : la génération 0 de la couche, posée par l'estampille du format
         // (page 03, § 2). Son commit, sa base et sa recette viennent avec l'écrivain (2a′-2).
