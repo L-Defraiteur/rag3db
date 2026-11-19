@@ -1811,16 +1811,24 @@ fn le_chat_guide_une_fenetre_du_depot_detachee() {
     n.aller(&format!("{racine}/ide/code/{id}/chat"), prete);
     n.evaluer("document.querySelector('#message').value = 'où commence le code ?'; document.querySelector('#send').click()");
     n.attendre("document.querySelector('#status')?.textContent === 'fini' && !!document.querySelector('article.message.assistant a.code-ref')", "the answer cites src/main.rs as a link (a cited path has a « / »)");
+    // Slice 3: the chat offers to detach the repository, in a window of its own.
+    let detacher = n.evaluer("(() => { const a = document.querySelector('#detacher-depot'); return a ? [a.getAttribute('target'), a.getAttribute('href')] : null; })()");
+    assert_eq!(detacher, json!(["_blank", format!("/ide/code/{id}/arbre?fenetre=depot")]), "the chat's button opens the repository in a window of its own");
     // The window of the repository, detached, on the tree; it takes the focus last.
     n.nouvel_onglet();
     n.aller(&format!("{racine}/ide/code/{id}/arbre?fenetre=depot"), "document.getElementById('lien')?.textContent === 'flux : ouvert'");
     n.evaluer("window.dispatchEvent(new Event('focus'))");
+    // Slice 3: the window alone — its header says its role and the stream, without the theme menu.
+    assert_eq!(n.evaluer("[document.querySelector('#entete')?.dataset.fenetre ?? null, !!document.querySelector('#theme-fichier'), !!document.getElementById('lien')]"), json!(["depot", false, true]), "a detached window shows its role and the stream only");
+    // Slice 3: it follows the chat without reloading (its page keeps this mark).
+    n.evaluer("window.__pasRecharge = true");
     // Back to the chat: the link, clicked.
     n.onglet(0);
     n.attendre("(window.__ide?.fenetres ?? []).some((f) => f.role === 'depot')", "the chat knows that a window of the repository is open");
     n.evaluer("document.querySelector('article.message.assistant a.code-ref').click()");
     n.onglet(1);
     n.attendre("location.pathname.includes('/fichier/src/main.rs')", "the window of the repository opens the cited file");
+    assert_eq!(n.evaluer("window.__pasRecharge === true"), json!(true), "the window of the repository followed without reloading its page");
     assert_eq!(n.evaluer("new URLSearchParams(location.search).get('fenetre')"), json!("depot"), "it stays a window of the repository");
     n.onglet(0);
     assert!(n.evaluer("location.pathname").as_str().unwrap_or_default().ends_with("/chat"), "the chat stays on its conversation : {}", n.evaluer("location.href"));
