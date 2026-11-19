@@ -814,6 +814,45 @@ fn code_tree_pose_enregistre_clone_et_retire_un_arbre() {
     let _ = std::fs::remove_dir_all(d);
 }
 
+/// **A call never waits for a long open without a word** (ticket of 11 October 2026, « Un appel
+/// d'outil attend derrière un index sans le dire », taken by tty on 19 November): the open holds the
+/// backend's slot in write (schema, vector-index rebuild: 26 s seen on Lucie's host), and a second
+/// call blocked on the slot's read with no bound. Here the first open takes 15 s; a call made
+/// meanwhile answers within 8 s that the backend is opening, and since when; the open goes on, and
+/// the call after it is served.
+#[test]
+#[ignore]
+fn a_call_during_a_long_open_says_the_backend_is_opening() {
+    let d = dossier("ouverture-longue");
+    let m = manifeste(&d);
+    let lente = Arc::new(std::sync::atomic::AtomicBool::new(true));
+    let pour_l_ouvreur = lente.clone();
+    let host = Arc::new(DaemonHost::with_opener(Box::new(move |prepared: PreparedBackend| {
+        if pour_l_ouvreur.swap(false, std::sync::atomic::Ordering::SeqCst) {
+            std::thread::sleep(Duration::from_secs(15));
+        }
+        let base = prepared.path(&prepared.manifest.database);
+        let conn = Rag3dbConnection::new(&base).map_err(|e| e.to_string())?;
+        prepared.open(Box::new(conn), None)
+    })));
+    let s = host.open_session("témoin", None, vec![], None);
+    let premier = {
+        let (host, s, m) = (host.clone(), s.clone(), m.clone());
+        std::thread::spawn(move || host.describe(Some(&s), &m))
+    };
+    std::thread::sleep(Duration::from_millis(500));
+    let t = std::time::Instant::now();
+    let pendant = host.describe(Some(&s), &m);
+    let duree = t.elapsed();
+    let court: String = pendant.to_string().chars().take(300).collect();
+    assert!(duree < Duration::from_secs(8), "the call waited the whole open ({duree:?}) : {court}");
+    assert_eq!(pendant["ok"], json!(false), "{court}");
+    let dit = pendant["error"].as_str().unwrap_or_default();
+    assert!(dit.contains("s'ouvre depuis") && dit.contains(" s"), "the refusal does not say the open and since when : {court}");
+    ok(&premier.join().unwrap());
+    ok(&host.describe(Some(&s), &m));
+}
+
 /// **Les appels d'un backend courent en parallèle** (lot L5, 18 octobre
 /// 2026) : l'hôte tenait un mutex par backend pendant tout l'appel, et un seul
 /// appel bloqué derrière un écrivain du catalogue (la réaction de la montre)
