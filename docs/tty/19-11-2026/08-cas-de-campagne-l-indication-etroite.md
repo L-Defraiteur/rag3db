@@ -1,5 +1,24 @@
 # Cas de campagne : l'indication de la saisie vide, trop étroite
 
+```json
+{
+  "parent": "f2a3872baf1895f1ae7ea6b2e984afb91fa21fcc",
+  "tree": "extension/rag3weaver/tty",
+  "needs_lib": false,
+  "witness": "vue::tests::the_empty_input_says_how_to_break_a_line",
+  "test": "cargo test -j 8 -- --exact vue::tests::the_empty_input_says_how_to_break_a_line",
+  "suites": [
+    "cargo test -j 8",
+    "cargo test -j 8 --no-default-features",
+    "cargo clippy -j 8 --all-targets -- -D warnings"
+  ],
+  "hints": [],
+  "ours": "113d44f32359e25925e3621f52b4bba0a18d450b"
+}
+```
+
+Le bloc est celui du lanceur (forme d'archi). `witness` porte les filtres exacts, séparés par une espace ; `test` les passe à libtest avec `--exact`. Les `suites` sont celles de la suite exigée `tty` qui existent au parent : les mesures `plain_*` n'y sont pas encore (elles datent du 16 novembre, après le parent).
+
 Session tty, 19 novembre 2026, pour la campagne des correctifs passés (chantier de Lucie ; lanceur d'archi, juge du banc). C'est un cas court, en Rust, dans le crate du terminal.
 
 ## Le point de départ
