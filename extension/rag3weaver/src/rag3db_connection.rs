@@ -23,13 +23,7 @@ use crate::connection::{CypherValue, DbConnection, DbError, QueryParam, QueryRes
 /// Fields are declared so that `conn` is dropped before `db` (Rust drops
 /// fields in declaration order). The `Database` lives on the heap (`Arc`)
 /// so its address is stable.
-/// The engine's refusal of a statement whose table's schema changed after it started
-/// (`Transaction::SCHEMA_CHANGED_RETRY`, in the middle of the message, after « Transaction manager exception: »).
-pub const SCHEMA_CHANGED_RETRY: &str = "Schema changed, retry:";
-
-/// How many times a statement refused for a changed schema is started again: the refusal comes back only if
-/// another ALTER is validated in between (the core, 19 November 2026).
-pub const SCHEMA_CHANGED_RETRIES: usize = 3;
+pub use crate::connection::{SCHEMA_CHANGED_RETRIES, SCHEMA_CHANGED_RETRY};
 
 pub struct Rag3dbConnection {
     // SAFETY: conn borrows from db. Declared first so it drops first.
