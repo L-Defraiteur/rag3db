@@ -26,7 +26,10 @@ echo '# notes' > docs/notes.md
 printf '# Nouveautés\n\n- le début\n' > docs/nouveautes.md
 printf '#!/bin/bash\necho ok\n' > tools/poste/foo.sh
 printf '#!/bin/bash\ngrep -q "echo ok" "${1:-$(dirname "$0")/foo.sh}"\n' > tools/poste/test_foo.sh
-printf 'tools/poste/foo.sh foo.sh tools/poste/test_foo.sh\ntools/poste/bar.sh bar.sh tools/poste/test_bar.sh\n' > tools/poste/cache_copies.txt
+printf 'tools/poste/foo.sh foo.sh tools/poste/test_foo.sh\ntools/poste/bar.sh bar.sh tools/poste/test_bar.sh\ntools/poste/pin.sh pin.sh tools/poste/test_pin.sh\n' > tools/poste/cache_copies.txt
+# pin.sh stands for passe_epinglee.sh: the lib it pins, under the same line the real one has.
+printf '#!/bin/bash\nexport RAG3DB_LIB=rag3db-build-%040d-Release\n' 1 > tools/poste/pin.sh
+printf '#!/bin/bash\ngrep -q RAG3DB_LIB= "${1:-$(dirname "$0")/pin.sh}"\n' > tools/poste/test_pin.sh
 # bar.sh's witness goes red against a cache copy when $BREAK_COPY exists: a copy that behaves otherwise at the cache.
 printf '#!/bin/bash\necho bar\n' > tools/poste/bar.sh
 printf '#!/bin/bash\n[ -n "${1:-}" ] && [ -e "${BREAK_COPY:-/nonexistent}" ] && exit 1\nexit 0\n' > tools/poste/test_bar.sh
@@ -86,7 +89,7 @@ esac
 exit 2
 Q
 chmod +x "$D/poste.sh"
-export PUSHER_FETCH_LOCK=$D/fetch.lock PUSHER_CACHE=$D/cache PUSHER_PEERS= PUSHER_DIR=$D/pusher PUSHER_WORKSPACES=$D/ws PUSHER_WT_NAME=wt PUSHER_JOURNALS_ROOT=$D/journals \
+export PUSHER_PIN_SCRIPT=pin.sh PUSHER_FETCH_LOCK=$D/fetch.lock PUSHER_CACHE=$D/cache PUSHER_PEERS= PUSHER_DIR=$D/pusher PUSHER_WORKSPACES=$D/ws PUSHER_WT_NAME=wt PUSHER_JOURNALS_ROOT=$D/journals \
   PUSHER_PASS=$D/pass.sh PUSHER_GUARD=$D/guard.sh PUSHER_POSTE=$D/poste.sh PUSHER_MASTER_HELD=$D/master-tenu \
   REAL_GUARD=$HERE/push_garde.sh OUTCOMES=$D/outcomes PASS_CALLS=$D/pass_calls GUARD_CALLS=$D/guard_calls PASS_ENV=$D/pass_env
 : > "$D/outcomes"; : > "$D/pass_calls"; : > "$D/guard_calls"
@@ -337,4 +340,14 @@ P step > /dev/null 2>&1
 git -C "$D/author" fetch -q origin
 n=$(git -C "$D/author" show origin/master:docs/nouveautes.md | grep -c 'la ligne du parent')
 [ ! -e "$D/un-k.refus" ] && on_master un-p && on_master un-k && [ "$n" = 1 ] && ok "l'enfant d'un parent atterri se repose sur ses seuls commits (ligne du parent une fois)" || ko "l'enfant d'un parent atterri : refusé, absent, ou la ligne du parent $n fois"
+
+# 24. A lot that changes the pinned lib: once recopied, lib-des-passes says that lib, the old file kept (19 Nov., relevé de
+# mémoire: lib-des-passes said 59ac9c86b, two bascules late, and tour.sh reads it first).
+cp "$D/author/tools/poste/pin.sh" "$D/cache/pin.sh"; echo rag3db-build-old > "$D/cache/lib-des-passes"
+newlib=rag3db-build-$(printf '%040d' 2)-Release
+h=$(lot pin-2 tools/poste/pin.sh "#!/bin/bash
+export RAG3DB_LIB=$newlib")
+P enqueue pin-2 pin-2 "$h" scripts - - - - author-b > /dev/null && P step > /dev/null 2>&1
+on_master pin-2 && [ "$(cat "$D/cache/lib-des-passes")" = "$newlib" ] && [ "$(cat "$D/cache/lib-des-passes.avant-pin-2" 2>/dev/null)" = rag3db-build-old ] \
+  && ok "après une épingle, lib-des-passes dit la lib épinglée (ancien gardé)" || ko "lib-des-passes : $(cat "$D/cache/lib-des-passes")"
 exit $red
