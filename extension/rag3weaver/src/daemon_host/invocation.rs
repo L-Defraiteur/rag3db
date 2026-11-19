@@ -118,6 +118,44 @@ mod tests {
             );
         }
     }
+    /// **The current view by the context** (2b-C, ticket « les vues des worktrees des sessions », point 2): an
+    /// invocation whose context carries `view`, without `view` in its arguments, reads under that view, and its answer
+    /// says the view read (layer, rank). A view the target does not know is refused naming it. An explicit `view` in
+    /// the arguments wins over the context's.
+    #[test]
+    fn an_invocation_reads_under_the_view_of_its_context() {
+        let d = tempfile::tempdir().unwrap();
+        let a = atelier(d.path());
+        let depot = petit_depot(&d.path().join("B"));
+        a.appeler("attach_worktree", json!({"path":depot})).unwrap();
+        attendre_l_index(&a, &depot);
+        let roots = a.host.racines_de_code().unwrap();
+        let name = crate::code_tree::name_of_tree(&depot.canonicalize().unwrap()).unwrap();
+        let target = a.host.hosted(&roots.manifest(&name)).unwrap();
+        let authority = InvocationAuthority {
+            manifest: a.h.manifest.clone(),
+            policy: crate::backend_code::ToolPolicy { read_files: true, ..Default::default() },
+            scope: Default::default(),
+        };
+        let relay = HostedInvocations { host: Arc::downgrade(&a.host) };
+        let invoke = |context: Value, arguments: Value| {
+            relay.invoke(&authority, &context, "usages", arguments, "parent", NodeContext::new().cancellation())
+        };
+        let lu = invoke(json!({"target":{"kind":"backend","id":target.id},"view":{"layer":"backend"}}), json!({"name":"un"}))
+            .expect("an invocation under the view of its context is refused");
+        assert_eq!(lu["view"]["layer"], "backend", "the answer does not say the view read: {lu}");
+        assert!(lu["view"]["rank"].is_i64(), "the answer does not say the rank read: {lu}");
+        let refus = invoke(json!({"target":{"kind":"backend","id":target.id},"view":{"layer":"inconnue"}}), json!({"name":"un"}))
+            .expect_err("a view unknown to the target is read");
+        assert!(refus.contains("inconnue"), "the refusal does not name the view: {refus}");
+        let explicite = invoke(
+            json!({"target":{"kind":"backend","id":target.id},"view":{"layer":"inconnue"}}),
+            json!({"name":"un","view":{"layer":"backend"}}),
+        )
+        .expect("an explicit view does not win over the context's");
+        assert_eq!(explicite["view"]["layer"], "backend", "{explicite}");
+    }
+
     #[test]
     fn contextual_host_reads_the_selected_depot_and_refuses_an_elevated_operation() {
         let d = tempfile::tempdir().unwrap();
