@@ -187,5 +187,20 @@ class Lanceur(unittest.TestCase):
         self.assertEqual([s["step"] for s in t["per_step"]], [1, 2])
 
 
+    def test_a_wrapped_block_naming_its_repository_is_read_and_cloned(self):
+        b = {"lanceur": {"repo": self.repo, "parent": self.parent, "tree": "crate", "needs_lib": False,
+                         "witness": "the_witness", "test": "cargo test", "suites": [], "hints": [], "ours": self.ours}}
+        p = os.path.join(self.tmp.name, "cas-enveloppe.md")
+        ecrire(p, "# Un cas\n\n```json\n" + json.dumps(b) + "\n```\n\n" + lanceur.REPORT_TITLE + "\n\n> f rend 1.\n")
+        block, report = lanceur.read_case(p)
+        self.assertEqual(block["parent"], self.parent)
+        self.assertEqual(report, "f rend 1.")
+        depots = os.path.join(self.tmp.name, "depots")
+        repo = lanceur.repo_of(block, "/nowhere/the-default-repo", depots)
+        self.assertTrue(repo.startswith(depots), repo)
+        self.assertEqual(git(repo, "rev-parse", self.parent + "^{commit}"), self.parent)
+        self.assertEqual(lanceur.repo_of({"parent": self.parent}, self.repo, depots), self.repo, "no repo: the default one")
+
+
 if __name__ == "__main__":
     unittest.main()
