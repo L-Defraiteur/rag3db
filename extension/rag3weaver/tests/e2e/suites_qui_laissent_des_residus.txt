@@ -11,7 +11,6 @@
 # propre. Elle ne sort que dans le commit qui corrige sa cause, prouvé par plusieurs passes propres.
 # Au départ (8 novembre 2026, passe entière de master 29fd5522a, une fois le cache d'index sorti
 # du TMPDIR) : des bases de test entières, une base d'accès, des dossiers .tmp* de tempfile.
-e2e_code
 e2e_prise_atomique
 e2e_rag3daemon
 e2e_repli_de_branche
