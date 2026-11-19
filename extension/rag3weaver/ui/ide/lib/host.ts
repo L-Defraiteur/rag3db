@@ -158,7 +158,12 @@ function partager(vue: { onmessage: (e: { data: string }) => void }, statut: (s:
     new Promise((resolve) => {
       attentesDeTour.set(run, [...(attentesDeTour.get(run) ?? []), resolve]);
       port.postMessage({ type: "tour", run });
-      setTimeout(() => resolve(null), 1000);
+      setTimeout(() => {
+        const reste = (attentesDeTour.get(run) ?? []).filter((f) => f !== resolve);
+        if (reste.length) attentesDeTour.set(run, reste);
+        else attentesDeTour.delete(run);
+        resolve(null);
+      }, 1000);
     });
   port.start();
   ecrireEtat = (cle, valeur) => port.postMessage({ type: "etat-ecrire", cle, valeur });
@@ -234,7 +239,7 @@ function etatRecu(cle: string, valeur: unknown) {
 const ecrireLocalement = (cle: string, valeur: unknown) => etatRecu(cle, valeur);
 let ecrireEtat: (cle: string, valeur: unknown) => void = ecrireLocalement;
 /// The text of a turn in flight, as the shared worker kept it; `null` without a worker, or past a second.
-export type TourEnVol = { texte: string; seq: number };
+export type TourEnVol = { texte: string; seq: number; tronque?: boolean };
 const sansWorker = async (_run: string): Promise<TourEnVol | null> => null;
 let demanderTour: (run: string) => Promise<TourEnVol | null> = sansWorker;
 /// **Joins a turn in flight** (the IDE in several windows): what the worker kept of its text.
