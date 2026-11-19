@@ -1744,6 +1744,9 @@ impl PreparedBackend {
         nodes.register(Box::new(crate::backend_nodes::SnapshotSessionFactory));
         nodes.register(Box::new(crate::backend_nodes::RelationBatchFactory));
         nodes.register(Box::new(crate::dataflow::plan_node::PlanNodeFactory));
+        // A slow read for the tests only (`lecture_lente`): the stop of a call through the host's path.
+        #[cfg(test)]
+        nodes.register(Box::new(lecture_lente::SlowReadNodeFactory));
         // Les sous-graphes cités (GraphNode, ForEachNode) : leur registre est
         // celui-ci, posé une fois bâti, plus bas.
         let registre_des_sous_graphes = crate::dataflow::foreach_node::RegistreDesSousGraphes::default();
@@ -6709,6 +6712,66 @@ fn payload_schema(
     Ok(result)
 }
 
+/// **A slow read, for the tests only**: one statement on the call's read snapshot (service `conn`), a sum computed on
+/// four billion rows (about 20 s alone). The witness of the stop of a call through the host's path (ticket
+/// `2026-11-07-un-arret-ne-coupe-pas-une-requete-du-moteur-en-cours`): no node of the product runs a slow or arbitrary
+/// statement on the snapshot.
+#[cfg(test)]
+pub(crate) mod lecture_lente {
+    use crate::dataflow::node::{Node, NodeContext};
+    use crate::dataflow::node_registry::{NodeFactory, NodeSchema};
+    use crate::dataflow::port::{PortDef, PortType, PortValue};
+
+    pub const STATEMENT: &str = "UNWIND range(1, 40000) AS x UNWIND range(1, 100000) AS y RETURN sum(x * y % 13)";
+
+    pub struct SlowReadNodeFactory;
+
+    impl NodeFactory for SlowReadNodeFactory {
+        fn node_type(&self) -> &'static str {
+            "SlowReadNode"
+        }
+        fn schema(&self) -> NodeSchema {
+            NodeSchema {
+                node_type: "SlowReadNode".into(),
+                description: "Tests only: a long sum on the call's read snapshot".into(),
+                inputs: vec![],
+                outputs: vec![PortDef::value("result", PortType::Map, false)],
+                config_params: vec![],
+            }
+        }
+        fn create(&self, name: &str, _config: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+            Ok(Box::new(SlowReadNode(name.to_string())))
+        }
+        fn snapshot_safe(&self, _config: &serde_json::Value) -> bool {
+            true
+        }
+    }
+
+    struct SlowReadNode(String);
+
+    impl Node for SlowReadNode {
+        fn name(&self) -> &str {
+            &self.0
+        }
+        fn node_type(&self) -> &'static str {
+            "SlowReadNode"
+        }
+        fn outputs(&self) -> Vec<PortDef> {
+            vec![PortDef::value("result", PortType::Map, false)]
+        }
+        fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+            let conn = ctx
+                .service::<crate::dataflow::services::ConnService>("conn")
+                .ok_or("SlowReadNode: no 'conn' service (the call has no read snapshot)")?
+                .0
+                .clone();
+            let r = conn.execute(STATEMENT).map_err(|e| e.to_string())?;
+            ctx.set_output("result", PortValue::new(serde_json::json!({"rows": r.rows.len()})));
+            Ok(())
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     /// **L'extension se cherche d'abord à côté de la lib réellement chargée**
@@ -8002,6 +8065,56 @@ mod tests {
             crate::code_sync::sync_source(&mut cat, source.as_ref(), &Default::default(), &mut |_| {}).expect("l'index de départ");
         }
         (dir, backend)
+    }
+
+    /// **Stopping a call interrupts its read snapshot's statement, through the host's path** (ticket
+    /// `2026-11-07-un-arret-ne-coupe-pas-une-requete-du-moteur-en-cours`). A tool whose one node runs a long sum on the
+    /// call's snapshot (about 20 s alone) is called by `call_in` on the catalogue's cell, as a session of the host
+    /// does; once its run is in flight, `stop_run` stops it. The call gives the hand back in under a second, and the
+    /// run ends stopped, not with its sum.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn stopping_a_call_interrupts_its_snapshot_statement_through_the_host_path() {
+        let (dir, p) = fixture_code_avec("working_tree", false, json!({}), &|m| {
+            m["tools"]["lente"] = json!({"graph": "lente.mmd"});
+        });
+        drop(p);
+        std::fs::write(
+            dir.path().join("lente.mmd"),
+            "%% tool: lente\n%% description: tests only, a long read on the call's snapshot\n%% result: lente.result\ngraph LR\n    lente[\"SlowReadNode\"]\n",
+        )
+        .unwrap();
+        let prepared = PreparedBackend::load(&dir.path().join("backend.json")).expect("the manifest with the slow tool loads");
+        let backend = backend_de_code(dir.path(), prepared);
+        let cellule = backend.catalog.lock().unwrap().scope().clone();
+        let vue = backend.read_view.current().expect("a published read view");
+        assert!(vue.scope == cellule && vue.pool.is_some(), "the call reads under a snapshot of the catalogue's cell");
+
+        std::thread::scope(|s| {
+            let appel = s.spawn(|| {
+                let r = backend.call_in(&cellule, "lente", json!({}));
+                (r, std::time::Instant::now())
+            });
+            let echeance = std::time::Instant::now() + std::time::Duration::from_secs(10);
+            let run = loop {
+                if let Some(run) = backend.runs_in_flight().into_iter().next() {
+                    break run;
+                }
+                assert!(std::time::Instant::now() < echeance, "the slow call never got in flight");
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            };
+            // In flight, and in its statement.
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            let arret = std::time::Instant::now();
+            backend.stop_run(&run, "ide").expect("the run is in flight");
+            let (r, fin) = appel.join().unwrap();
+            let rendu = fin.duration_since(arret);
+            assert!(rendu < std::time::Duration::from_secs(1), "the call gives the hand back in under a second: {rendu:?} ({r:?})");
+            assert!(
+                r.as_ref().map_or(true, |v| v["result"]["rows"].is_null()),
+                "a stopped call does not answer with its sum: {r:?}"
+            );
+        });
     }
 
     #[cfg(all(feature = "code", feature = "rag3db-native"))]
