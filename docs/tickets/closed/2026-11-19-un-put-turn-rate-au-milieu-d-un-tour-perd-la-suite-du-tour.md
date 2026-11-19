@@ -1,6 +1,6 @@
 # Un put_turn raté au milieu d'un tour perd la suite de ce tour
 
-- **État** : ouvert, le 19 novembre 2026 ; à reprendre par archi au lot 2 du rangement au fil.
+- **État** : fermé le 19 novembre 2026 par `1de6ae04c` (rangement-lot-2, PR #3, par le pousseur).
 - **Famille** : produit
 - **Pour** : archi
 - **Gravité** : une tranche rangée peut manquer des messages d'un tour, sans le dire, hors du fichier de rangement.
@@ -34,3 +34,12 @@ messages manquants du tour 1 partent avant ceux du tour 2. Puis la passe du lot.
 ## Taille et blocage
 
 2 h. Après l'atterrissage de pile-archi-19.
+
+## Fermeture
+
+Le fichier de rangement tient `written_through` (turn, seq). À chaque fin de tour, et avant une
+compaction, tout ce qui suit cette position repart par `put_turn` : un message refusé repart au
+tour suivant, avant ceux du nouveau tour. Le texte de `last_error` lit les erreurs du rapport plat
+d'`archive_slice` (et `report.*`). Témoin `a_refused_put_turn_is_sent_again_with_the_next_turn`,
+vu rouge sur e8d664ec6. Passe du pousseur verte sur la lib 7c2b506ec, e2e_equipier sous Vertex
+compris.
