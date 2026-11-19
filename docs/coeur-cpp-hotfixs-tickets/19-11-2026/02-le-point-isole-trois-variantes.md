@@ -10,6 +10,14 @@
 > lue vide et perdue. Une case écrite après l'élagage tombe hors de la nouvelle longueur, ou écrase un voisin gardé.
 > Les arêtes perdues touchent d'abord un point isolé, qui en a peu : ses arêtes de retour depuis le nuage.
 >
+> **11 h 15 : le verrou par nœud ne corrige pas.** Écrit et mesuré (non commité) : avec lui, la recette manque encore
+> 5/12 à 8 fils et 8/12 à 24, et le témoin du shell (`tools/shell/test/test_shell_isolated_point.py`) reste rouge.
+> La perte d'arêtes par la course existe peut-être, mais ce n'est pas elle qui isole le point. Ce qui tient : le
+> rang 1, au décalage 1, est inséré au tout début du bâti, quand chaque fil entame sa tranche de 2 048 lignes et que
+> le graphe ne compte que quelques nœuds ; ses voisins sont choisis parmi eux. Prochaine piste à mesurer : réinsérer,
+> à la fin du bâti, les nœuds insérés en tête de chaque tranche ; ou la promotion d'un point isolé (variante 1).
+> Le témoin gtest ne reproduit pas (plus de 100 tours, même avec une pause injectée) : retiré (2666554278).
+>
 > **Le correctif retenu (c7)** fait ce que fait hnswlib sous `addPoint` concurrent : un verrou par nœud (ici un
 > tableau de verrous répartis par décalage). Il est tenu pour ajouter à une liste, pour l'élaguer, et pour la copier
 > pendant une recherche du bâti. Les trois variantes ci-dessous visaient la conséquence ; elles restent en réserve,
