@@ -1,7 +1,7 @@
 # Le témoin de mort du raccord physique meurt par un signal, une fois sur dix
 
-- **État** : ouvert (13 novembre 2026), relevé par embarquement ; pour arbre principal, à prendre
-  après les deux reprises du lot 1a des vues (décision de c7).
+- **État** : corrigé (19 novembre 2026, 46101db7b5, PR #50), arbre principal ; relevé par embarquement le
+  13 novembre.
 - **Famille** : produit
 - **Gravité** : la lib entière rougit sans cause dans le lot qui la joue, une fois sur dix.
 - **Atteignable en service** : non, tant que le raccord physique n'est pas adopté par l'index réel.
@@ -63,3 +63,27 @@ lib entière de la passe du lot 4 de 2a′-3 :
 
 Le lot ne touche ni le raccord physique ni ses tests : 2 632 autres tests verts, et les suites e2e vertes dans la
 même passe. Le rejeu de la même tête juge.
+
+## Fermeture (19 novembre 2026)
+
+**La cause, trouvée par le vidage.** À luciepc, sur le code d'alors, le témoin a rougi 1 fois en 40 tours, au point
+« after-lexical-durability ». Le noyau a noté une faute de segmentation dans un fil `scheduler-4`, et le vidage
+(`coredumpctl`, puis gdb, sans ptrace) montre deux choses au même instant :
+
+- le fil principal est dans `exit()` → `_dl_fini`, appelé par `physical_boundary` (`std::process::exit(91)`) ;
+- un fil `rag3db::common::TaskScheduler` est dans `antlr4::Lexer::emit`, en train d'analyser une requête, et saute dans
+  une table que les destructeurs statiques viennent de détruire (SIGSEGV, SEGV_ACCERR).
+
+Ce n'était donc ni la reprise ni le moteur en service. La **sortie simulée** lançait les destructeurs pendant qu'une
+requête était en vol, alors qu'une vraie mort n'en lance aucun.
+
+**Le correctif** (46101db7b5) : toute mort simulée d'un témoin passe par `fautes_de_test::simulated_death`, qui sort par
+`libc::_exit`. Cela vaut pour la coupure du raccord (91) et pour l'enfant de la publication native (73 et 74). Les
+autres `process::exit` relevés ne sont pas des morts simulées : `e2e_tx_par_paquet_arret` meurt déjà par SIGKILL,
+`e2e_arret_brutal` est tué par son parent, et les autres rendent un résultat d'enfant.
+
+**La série** : 0 rouge sur 150 tours sur le correctif, soit 120 tours du raccord et 30 de la publication native.
+
+**À garder** : une requête s'analysait en fond pendant `execute_initial_batch`, au point « after-lexical-durability ».
+Ce n'est pas un défaut pour une mort simulée, mais c'est un fil vivant à connaître si le raccord est un jour adopté par
+l'index réel.
