@@ -1540,6 +1540,55 @@ fn prepare_full_text_for_source_sync(catalog: &mut Catalog) -> Result<Option<std
     Ok((!rebuilt.is_empty()).then_some(rebuild_started))
 }
 
+/// **A read of the rows the writer sees** (2.11, the writer by the IR): `table` kept by `conditions` and, when
+/// `rank` is given, visible at that rank of the writer's layer; returning `fields`, in the order of `order` when
+/// given. Rendered by the catalog's dialect: no raw query of the writer carries a language of its own.
+pub(crate) fn visible_read(
+    catalog: &Catalog,
+    table: &str,
+    rank: Option<i64>,
+    mut conditions: Vec<rag3weaver_ir::Predicate>,
+    fields: &[&str],
+    order: Option<&str>,
+) -> Result<String, String> {
+    if let Some(rank) = rank {
+        let v = catalog.generations.as_ref().ok_or("sans générations")?;
+        conditions.push(rag3weaver_ir::Predicate::Visible { couche: v.couche.clone(), rang: rank, mask: Default::default() });
+    }
+    let select = rag3weaver_ir::Select {
+        table: table.to_string(),
+        by_uuids: false,
+        filter: Some(rag3weaver_ir::Predicate::AllOf(conditions)),
+        returns: fields.iter().map(|f| rag3weaver_ir::Column::Node(f.to_string())).collect(),
+        order_by: order.map(|f| vec![rag3weaver_ir::OrderKey { by: rag3weaver_ir::OrderBy::Field(f.to_string()), desc: false }]).unwrap_or_default(),
+        limit: None,
+        offset: None,
+    };
+    catalog.dialect_arc().select(&select).map_err(|e| e.to_string())
+}
+
+/// The equality of `field` to the parameter `param`, for [`visible_read`].
+fn equals(field: &str, param: &str) -> rag3weaver_ir::Predicate {
+    rag3weaver_ir::Predicate::Equals { field: field.to_string(), param: param.to_string() }
+}
+
+/// The files of a source (`$src`) visible at `rank`: path, content hash, analysis version.
+pub(crate) fn indexed_files_read(catalog: &Catalog, rank: i64) -> Result<String, String> {
+    visible_read(catalog, FILE, Some(rank), vec![equals("source", "src")], &["path", "content_hash", "analyse"], None)
+}
+
+/// The `_uuid` of the rows of `table` whose `path_field` is among `$chemins`, in the source `$src`, visible at
+/// the pending rank when the catalog has generations.
+pub(crate) fn rows_of_paths_read(catalog: &Catalog, table: &str, path_field: &str) -> Result<String, String> {
+    let rank = catalog.generations.as_ref().map(|v| v.rang);
+    visible_read(catalog, table, rank, vec![equals("source", "src"), among(path_field, "chemins")], &["_uuid"], Some("_uuid"))
+}
+
+/// The membership of `field` in the list parameter `param`, for [`visible_read`].
+fn among(field: &str, param: &str) -> rag3weaver_ir::Predicate {
+    rag3weaver_ir::Predicate::In { field: field.to_string(), param: param.to_string() }
+}
+
 /// **La synchronisation d'une source déjà indexée, sous les générations** : les fichiers retenus par
 /// paquets, puis ceux que la couche voit encore au rang en attente et que la source ne liste plus, tous
 /// par [`reingest_files_par_generations`] — l'écrivain décide, rien n'est effacé d'une génération
@@ -1559,14 +1608,10 @@ fn synchroniser_par_generations(
     catalog.note_manifestes(&manifestes).map_err(|e| e.to_string())?;
     let retenus: Vec<String> = listed.iter().filter(|p| crate::code::admission(p, None, &options.generated).is_ok()).cloned().collect();
     let v = catalog.generations.clone().ok_or("sans générations")?;
-    let visible = catalog.dialect_arc().condition_visible_sur("f", &v.couche, v.rang).ok_or("ce dialecte ne sait pas les générations")?;
     let lu = catalog
         .execute_raw_with_params(
-            &format!("MATCH (f:{FILE}) WHERE f.source = $src AND f._couche = $couche AND {visible} RETURN f.path, f.content_hash, f.analyse"),
-            &[
-                crate::connection::QueryParam::new("src", CypherValue::String(source_id.clone())),
-                crate::connection::QueryParam::new("couche", CypherValue::String(v.couche.clone())),
-            ],
+            &indexed_files_read(catalog, v.rang)?,
+            &[crate::connection::QueryParam::new("src", CypherValue::String(source_id.clone()))],
         )
         .map_err(|e| e.to_string())?;
     // Le chemin et l'empreinte indexée de chaque fichier que la couche voit au rang en attente : son
@@ -1706,10 +1751,9 @@ fn lignes_visibles_des_fichiers(catalog: &Catalog, source_id: &str, chemins: &[S
         return Ok((Vec::new(), Vec::new()));
     }
     let lire = |table: &str, champ: &str| -> Result<Vec<String>, String> {
-        let visible = catalog.condition_visible("x").map(|c| format!(" AND {c}")).unwrap_or_default();
         let lu = catalog
             .execute_raw_with_params(
-                &format!("MATCH (x:`{table}`) WHERE x.source = $src AND x.`{champ}` IN $chemins{visible} RETURN x._uuid ORDER BY x._uuid"),
+                &rows_of_paths_read(catalog, table, champ)?,
                 &[
                     crate::connection::QueryParam::new("src", CypherValue::String(source_id.to_string())),
                     crate::connection::QueryParam::new("chemins", CypherValue::List(chemins.iter().map(|c| CypherValue::String(c.clone())).collect())),
@@ -2408,3 +2452,7 @@ mod registry_key_tests {
     }
 }
 
+
+#[cfg(all(test, feature = "rag3db-native"))]
+#[path = "code_sync_ir_parity_tests.rs"]
+mod ir_parity_tests;
