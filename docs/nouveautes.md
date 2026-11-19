@@ -1,10 +1,12 @@
 # Nouveautés
 
-- 19 novembre 2026 — **Un namespace replié ne passe plus devant la classe qu'on cherche.** Un `namespace` ou un
-  `module` dont le contenu replié et la docstring tiennent en moins de 80 caractères n'est plus candidat à la recherche :
+- 20 novembre 2026 — **Un namespace replié ne passe plus devant la classe qu'on cherche.** Un `namespace` ou un
+  `module` qui porte à lui, hors de ses lignes de structure (ouvertures, plis des conteneurs imbriqués, déclarations
+  avancées, accolades fermantes et leurs commentaires), moins de 80 caractères n'est plus candidat à la recherche :
   ni plein texte, ni vecteurs. Il reste dans le graphe, `outline` et `usages`. Le seuil est une propriété de la base
-  (`workspace.container_min_chars`). Une base déjà indexée les écarte à son prochain index, et le journal le compte.
-- 20 novembre 2026 — **`usages` d'un type compte les appels `Type::méthode()`.** Un appel comme `Catalog::new()`, `PhysicalTypeID::INT64` ou `Catalog.create()` se reliait à la méthode, mais pas au type lui-même : un scope qui ne nommait le type que par cet appel n'apparaissait pas dans `usages Catalog` (41 sites perdus dans les tests de rag3weaver). Le type d'un appel qualifié compte désormais comme un usage, en Rust, C++, Python, TypeScript et C# ; sur le moteur, 3 664 arêtes de plus, 3 845 sur rag3weaver/src, aucune retirée.
+  (`workspace.container_min_chars`). Sur les en-têtes du moteur, `rag3db_database` passe au rang 8 de « rag3db » (absent
+  du top 20 avant). Les bases repassent une fois à leur prochaine synchronisation (règles de l'analyse 10), et le
+  journal d'index compte les conteneurs écartés.
 - 20 novembre 2026 — **`usages` d'un type compte les appels `Type::méthode()`.** Un appel comme `Catalog::new()`, `PhysicalTypeID::INT64` ou `Catalog.create()` se reliait à la méthode, mais pas au type lui-même : un scope qui ne nommait le type que par cet appel n'apparaissait pas dans `usages Catalog` (41 sites perdus dans les tests de rag3weaver). Le type d'un appel qualifié compte désormais comme un usage, en Rust, C++, Python, TypeScript et C# ; sur le moteur, 3 664 arêtes de plus, 3 845 sur rag3weaver/src, aucune retirée. Les bases repassent une fois à leur prochaine synchronisation (règles de l'analyse 9).
 
 - 19 novembre 2026 — **Une fonction ou une classe nommée comme un mot de JavaScript est une référence, dans tous les langages.** C++, C# et Go reprenaient la liste des mots vides de JavaScript, Python sa liste des noms intégrés : une fonction `of` ou `function`, une classe `Symbol` ou `Map` du projet n'étaient reliées à rien. Les mots vides et les noms intégrés des huit langages viennent maintenant d'une seule source (`data/stop_words/`, un fichier par langage, tirés des grammaires tree-sitter, des mots-clés et du module `builtins` de Python, du `builtin.go` de Go).
