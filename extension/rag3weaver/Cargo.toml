@@ -638,6 +638,10 @@ path = "tests/sonde_marques.rs"
 name = "sonde_marque_nom"
 path = "tests/sonde_marque_nom.rs"
 [[test]]
+name = "probe_memory_image_parity"
+path = "tests/probe_memory_image_parity.rs"
+required-features = ["rag3db-native", "code"]
+[[test]]
 name = "probe_unique_definer_misses"
 path = "tests/probe_unique_definer_misses.rs"
 [[test]]
