@@ -1,12 +1,8 @@
-use std::sync::Arc;
-
 use super::*;
 use crate::memory_dialect::MemoryDialect;
 
 fn catalog_on_memory() -> crate::Catalog {
-    let mut catalog = crate::Catalog::without_embedding_model(Box::new(MemoryConnection::new()), crate::CatalogConfig::default());
-    catalog.set_dialect(Arc::new(MemoryDialect));
-    catalog
+    memory_catalog(crate::CatalogConfig::default()).0
 }
 
 /// **A statement the memory dialect does not translate is refused by its name** — never guessed.

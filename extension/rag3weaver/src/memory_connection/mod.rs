@@ -45,10 +45,22 @@ pub(crate) struct State {
     pub rel_tables: BTreeMap<String, RelTable>,
 }
 
-/// The memory connection. See the module.
-#[derive(Debug, Default)]
+/// The memory connection. See the module. A handle: its clones share one image (the catalog holds one, a probe or a
+/// witness another).
+#[derive(Debug, Default, Clone)]
 pub struct MemoryConnection {
-    state: Mutex<State>,
+    state: std::sync::Arc<Mutex<State>>,
+}
+
+/// **A catalog on a new memory connection**, ready to `initialize`: the memory dialect, and a blob store in memory
+/// (the catalog refuses a dialect that does not speak Cypher without one; the schema of the references has no full
+/// text, and an image does not outlive its process anyway). Gives back the connection, to read the image.
+pub fn memory_catalog(config: crate::CatalogConfig) -> (crate::Catalog, MemoryConnection) {
+    let conn = MemoryConnection::new();
+    let mut catalog = crate::Catalog::without_embedding_model(Box::new(conn.clone()), config);
+    catalog.set_dialect(std::sync::Arc::new(crate::memory_dialect::MemoryDialect));
+    catalog.set_blob_store(std::sync::Arc::new(lucivy_core::blob_store::MemBlobStore::new()));
+    (catalog, conn)
 }
 
 impl MemoryConnection {
