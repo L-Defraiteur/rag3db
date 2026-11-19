@@ -66,16 +66,18 @@ fn produit_ligne(texte: &str) -> Vec<std::collections::BTreeMap<String, CypherVa
     vec![d]
 }
 
-fn dossier_temporaire(nom: &str) -> std::path::PathBuf {
-    let d = std::env::temp_dir().join(format!("rag3weaver-{nom}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    d
+/// A base in a temporary directory held by the caller to the end of its test, with its neighbours (`.fts`,
+/// `.extensions`, `.readers`): nothing stays in the suite's TMPDIR (entry 7 of the handover).
+fn dossier_temporaire(nom: &str) -> (tempfile::TempDir, std::path::PathBuf) {
+    let tmp = tempfile::tempdir().unwrap();
+    let d = tmp.path().join(format!("rag3weaver-{nom}"));
+    (tmp, d)
 }
 
 /// Une base écrite avec `modele-a`, rouverte en lecture avec `modele-b` :
 /// la branche dense est indisponible, la branche texte sait répondre.
-fn lecteur_au_mauvais_modele(nom: &str) -> (std::path::PathBuf, Arc<Mutex<rag3weaver::Catalog>>) {
-    let dossier = dossier_temporaire(nom);
+fn lecteur_au_mauvais_modele(nom: &str) -> (tempfile::TempDir, Arc<Mutex<rag3weaver::Catalog>>) {
+    let (tmp, dossier) = dossier_temporaire(nom);
     {
         let mut a = catalogue_sur(&dossier, EmbarqueurNomme("modele-a", 4));
         a.register_entity("Produit", produit_entite()).unwrap();
@@ -92,7 +94,7 @@ fn lecteur_au_mauvais_modele(nom: &str) -> (std::path::PathBuf, Arc<Mutex<rag3we
         config,
     )));
     lecteur.lock().unwrap().initialize().unwrap();
-    (dossier, lecteur)
+    (tmp, lecteur)
 }
 
 fn options(signals: SearchSignals) -> SearchOptions {
@@ -110,7 +112,7 @@ fn options(signals: SearchSignals) -> SearchOptions {
 #[test]
 #[ignore]
 fn l_hybride_sans_modele_rend_les_mots_et_le_dit() {
-    let (dossier, lecteur) = lecteur_au_mauvais_modele("repli-hybride");
+    let (_tmp, lecteur) = lecteur_au_mauvais_modele("repli-hybride");
     let r = rag3weaver::Catalog::rechercher(&lecteur, "Produit", "clavecin", options(SearchSignals::HYBRID))
         .expect("le repli par branche est le défaut : l'hybride répond par les mots");
     assert!(
@@ -124,7 +126,6 @@ fn l_hybride_sans_modele_rend_les_mots_et_le_dit() {
         r.meta.warnings
     );
     drop(lecteur);
-    let _ = std::fs::remove_dir_all(&dossier);
 }
 
 /// **Toutes les branches tombées = une erreur, pas un vide** : en vecteur
@@ -133,7 +134,7 @@ fn l_hybride_sans_modele_rend_les_mots_et_le_dit() {
 #[test]
 #[ignore]
 fn le_vecteur_seul_sans_modele_reste_une_erreur() {
-    let (dossier, lecteur) = lecteur_au_mauvais_modele("repli-vecteur-seul");
+    let (_tmp, lecteur) = lecteur_au_mauvais_modele("repli-vecteur-seul");
     match rag3weaver::Catalog::rechercher(&lecteur, "Produit", "clavecin", options(SearchSignals::VECTOR)) {
         Err(rag3weaver::CatalogError::EmbeddingModelUnavailable(message)) => {
             assert!(message.contains("modele_b") || message.contains("modele-b"), "{message}");
@@ -141,7 +142,6 @@ fn le_vecteur_seul_sans_modele_reste_une_erreur() {
         autre => panic!("toutes les branches tombées devait rester une erreur nommée — {autre:?}"),
     }
     drop(lecteur);
-    let _ = std::fs::remove_dir_all(&dossier);
 }
 
 /// **Le strict au choix de l'appelant** : avec `strict_signals`, l'hybride
@@ -149,7 +149,7 @@ fn le_vecteur_seul_sans_modele_reste_une_erreur() {
 #[test]
 #[ignore]
 fn le_strict_rend_l_erreur_comme_avant() {
-    let (dossier, lecteur) = lecteur_au_mauvais_modele("repli-strict");
+    let (_tmp, lecteur) = lecteur_au_mauvais_modele("repli-strict");
     let mut o = options(SearchSignals::HYBRID);
     o.strict_signals = true;
     match rag3weaver::Catalog::rechercher(&lecteur, "Produit", "clavecin", o) {
@@ -160,5 +160,4 @@ fn le_strict_rend_l_erreur_comme_avant() {
         ),
     }
     drop(lecteur);
-    let _ = std::fs::remove_dir_all(&dossier);
 }
