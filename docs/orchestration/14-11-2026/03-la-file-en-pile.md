@@ -2381,3 +2381,45 @@ campagne-incremental-off déposé, 8/8), mold comme éditeur de liens. Lucie a p
 cargo-sweep 0.8.0 sur les deux postes (21 h 31). Le ménage programmé attend sa décision : la session de G refuse
 d'écrire un script qui effacerait à sa place après deux refus de permission ce soir ; je lui ai recommandé de donner
 à G une règle de permission sur `~/.cache/rag3weaver-build` et `~/.local/share/rag3weaver`.
+
+## 19 novembre, 22 h 15 — deux causes trouvées le même soir : le raisonnement sans borne, et les mots perdus
+
+**Le ménage par marque est sur master (94be61f21a, 22 h 04)**, avec la permission que Lucie a donnée à G dans sa
+session, et dans le sens qu'elle a retourné à 21 h 37 : « ou bien ces instantanés sont marqués tests car ils vous
+servent à vous, plutôt que l'inverse ? ». Par défaut rien ne se touche ; seul un dossier portant `.jetable.json`
+(famille, garder 3, âge 72 h) peut partir ; les trois plus récents d'une famille restent toujours ; un dossier tenu
+par un processus reste ; minuteur 07 h 30 aux deux postes, balayage `cargo sweep` des targets. Les marques sont posées
+sur les instantanés de bascule (à la création désormais), les copies de répétition (arbre a marqué les siennes), et
+816 dossiers Codex du cache. sccache et mold sont posés sous poste (b3e414a640) ; mesure d'avant au pousseur : 814 s
+par passe rust, target 7,5 Go ; l'après se mesure sur trois passes.
+
+**Algareth n'écrit pas : la cause.** lucivy 03 rejoué à 20 h 50, le premier jeu propre de la soirée (consigne, cargo,
+Vertex en ordre : 8,7 s par appel, 146 appels) : il trouve le bon endroit (`verify_stored`, la distance d'édition sur
+tout le texte stocké), lit 99 fichiers, n'écrit rien, s'arrête sur « 3 pas sans élément réussi ». Archi lit la trace
+(docs/rag3weaver-archi/19-11-2026/06, 46389f71ad) : quatre pas sur cinq finissent sur MaxTokens sans appel d'outil,
+~3 930 jetons de raisonnement pour 162 de texte sur un plafond de 4 096 ; le gabarit de code ne déclare aucun modèle,
+l'équipier tourne sur le défaut de l'hôte sans reasoning_effort, et Gemini 3.x réfléchit jusqu'à remplir la sortie ;
+une réponse coupée sans outil termine le pas ; trois pas coupés d'affilée l'arrêtent, juste après qu'il a validé sa
+conception au pas 4. **La même cause chez l'archiviste** : B3 (l'extraction par parts), 5 fenêtres sur 19 en échec,
+JSON coupé, `extract_max_tokens` 8 192 partagé avec le raisonnement (mémoire l'a lu dans openai_llm.rs:401 ; le banc a
+vérifié que ce sont des échecs d'appel, pas des fenêtres vides : P1 0,704 avec 26 % d'échecs). Décidé : une seule clé
+déclarée `reasoning` (minimal, low, medium, high → reasoning_effort), sur LlmNode (lot de mémoire sur B6, avec le refus
+explicite « cut at max_tokens=N (finish: length), reasoning R of C ») et sur le modèle de l'équipier (lot d'archi demain
+matin : le gabarit déclare le modèle avec reasoning low et max_output_tokens, relance déclarée et bornée sur réponse
+coupée, règle des trois pas qui ne compte que les pas sans rien fait), défaut de l'hôte dans models.llm.reasoning ;
+archi et mémoire s'accordent sur le nom avant le premier témoin. Aucun rejeu de cas avant. Le banc mesure ensuite b3
+avec low, minimal, et la borne à 16 384.
+
+**Les mots perdus de lucivy : la cause, prouvée (PR lucivy #54).** Pas un segment raté : la table des créations en
+attente du dictionnaire n'oubliait jamais sur le commit des shards (l'époque ne tournait que dans `prepare_commit`,
+le chemin de `ShardedHandle` n'y passe pas) et répondait sans vérifier le texte ; un mot dont la compaction avait
+retiré le texte reprenait son ancien id, sans texte. Témoin déterministe : 2 perdus sur main, 0 avec ; boucle serrée
+de compactions sur 600 réécritures : 383 → 0. Correctif : `flush_workers` fait tourner l'époque, la compaction retire
+les ids qu'elle jette ; le sursis reste en filet. Lucie a autorisé la 4.3.12 dans la session lucivy. Suite : le
+pointeur 4.3.12 remplace le lot 4.3.11 en file ; la compaction, coupée sur les hôtes depuis 17 h 44, se rallume après
+une nuit de sonde sur 4.3.12.
+
+**2.12** : parité d'ED sur index neuf, 0 changé, 0 perdu, mais `rag3db_database` toujours hors du top 20 : d'autres
+namespaces vides, faits de déclarations anticipées, passent les 80 caractères. Validé : la longueur se mesure sur ce
+qui reste une fois ôtées les lignes de pure structure, déclarées par motifs et par langage dans `NotCandidate` ;
+témoin rouge sur bound_standalone_call.h, parité rejouée, le critère reste le top 20.
