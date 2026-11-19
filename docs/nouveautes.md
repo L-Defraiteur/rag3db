@@ -1,5 +1,23 @@
 # Nouveautés
 
+- 19 novembre 2026 — **La conversation d'un chat se range en mémoire au fil de l'eau.** Chaque tour du chat de
+  l'IDE s'écrit dans la mémoire déclarée par le dépôt (`bilans.memoire`). Quand les tours pas encore rangés
+  dépassent `memory.slice_tokens` (50 000 jetons par défaut), une tranche se range en fond, sans retarder le chat.
+  Quand la conversation approche de la fenêtre du modèle (`memory.compact_at`, 80 % par défaut), ou sur demande, le
+  chat se compacte : il repart d'un contexte recomposé depuis ce qui est rangé, avec les deux derniers tours tels
+  quels (`memory.keep_turns`), et la numérotation des tours continue. Un tour qui déborde quand même la fenêtre est
+  rangé, puis rejoué une fois sur le contexte compacté, au lieu de finir en erreur.
+
+- 19 novembre 2026 — **Une nouvelle demande à l'équipier ne remplace plus la précédente.** Ce que l'équipier doit
+  faire, c'est l'ensemble des demandes reçues depuis sa dernière fin de travail : la première sous « Request »
+  (avec son heure), les suivantes sous « Follow-up ». Une précision envoyée en cours de route s'ajoute à la
+  demande au lieu d'en prendre la place.
+
+- 19 novembre 2026 — **Le pas suivant d'un équipier voit ce que le pas d'avant a fait.** Chaque pas reçoit un bloc
+  « Previous step » : les fichiers lus et écrits, les commandes lancées et ce qu'elles ont rendu, dans la limite de
+  `teammate.carry_over_chars` (8 000 caractères par défaut). L'équipier ne relit plus un fichier ni ne relance un
+  test pour retrouver ce qu'il savait déjà au pas d'avant.
+
 - 19 novembre 2026 — **Un ADD ou un DROP de colonne attend les lectures ouvertes de sa table.** Une transaction qui
   lit une table la retient jusqu'à sa fin : un `ALTER TABLE … ADD`, `… DROP` ou un `DROP TABLE` l'attend, et la
   lecture relit ses colonnes au lieu d'être refusée. L'attente est bornée par `alter_lock_timeout` (5 s par défaut,
