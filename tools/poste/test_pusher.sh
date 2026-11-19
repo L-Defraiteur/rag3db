@@ -50,6 +50,7 @@ lot() {
 # The pusher's single worktree, its folder, and the doubles.
 mkdir -p "$D/ws" "$D/journals" "$D/pusher"
 git clone -q "$D/origin.git" "$D/ws/wt" 2>/dev/null && git -C "$D/ws/wt" config user.email luciedefraiteur@gmail.com && git -C "$D/ws/wt" config user.name t
+git -C "$D/ws/wt" worktree add -q --detach "$D/ws/wt2" 2>/dev/null; mkdir -p "$D/outcomes.d"
 # The pass double: one outcome per call, read from $D/outcomes (VERT, ROUGE <step> or 124).
 cat > "$D/pass.sh" <<'P'
 #!/bin/bash
@@ -58,7 +59,14 @@ echo "${SUITES_EN_PLUS:-}" >> "$PASS_ENV"
 J=$PUSHER_JOURNALS_ROOT/$2; mkdir -p "$J"
 echo "commit $(git -C "$PUSHER_WORKSPACES/$1" rev-parse HEAD) ; lib 0000000001" > "$J/resume.log"
 echo "RAG3DB_LIB=rag3db-build-$(printf '%040d' 1)-Release" > "$J/lib.log"
-o=$(head -1 "$OUTCOMES"); sed -i 1d "$OUTCOMES"
+# An outcome named for a lot (outcomes.d/<id>) wins over the queue of outcomes: two passes at once have no order.
+o=""
+for f in "$OUTCOMES_DIR"/*; do
+  [ -f "$f" ] || continue
+  case "$2" in *-"${f##*/}"|*-"${f##*/}"+*|*-"${f##*/}"-2) o=$(cat "$f"); rm -f "$f"; break ;; esac
+done
+if [ -z "$o" ]; then o=$(head -1 "$OUTCOMES"); sed -i 1d "$OUTCOMES"; fi
+echo "$1 $2 start $(date +%s%N)" >> "$PASS_TIMES"; sleep 1; echo "$1 $2 end $(date +%s%N)" >> "$PASS_TIMES"
 case "$o" in
   VERT) echo VERT >> "$J/resume.log" ;;
   124) echo "ROUGE e2e_code (124)" >> "$J/resume.log"; exit 124 ;;
@@ -95,7 +103,7 @@ Q
 chmod +x "$D/poste.sh"
 export PUSHER_PIN_SCRIPT=pin.sh PUSHER_FETCH_LOCK=$D/fetch.lock PUSHER_CACHE=$D/cache PUSHER_PEERS= PUSHER_DIR=$D/pusher PUSHER_WORKSPACES=$D/ws PUSHER_WT_NAME=wt PUSHER_JOURNALS_ROOT=$D/journals \
   PUSHER_PASS=$D/pass.sh PUSHER_GUARD=$D/guard.sh PUSHER_POSTE=$D/poste.sh PUSHER_MASTER_HELD=$D/master-tenu \
-  REAL_GUARD=$HERE/push_garde.sh OUTCOMES=$D/outcomes PASS_CALLS=$D/pass_calls GUARD_CALLS=$D/guard_calls PASS_ENV=$D/pass_env POSTE_VOIES=$D/poste_voies
+  REAL_GUARD=$HERE/push_garde.sh OUTCOMES=$D/outcomes PASS_CALLS=$D/pass_calls GUARD_CALLS=$D/guard_calls PASS_ENV=$D/pass_env OUTCOMES_DIR=$D/outcomes.d PASS_TIMES=$D/pass_times POSTE_VOIES=$D/poste_voies
 : > "$D/outcomes"; : > "$D/pass_calls"; : > "$D/guard_calls"
 # The gh double (one pull request per lot, 19 Nov.): notes each call, and each --body apart; $GH_DOWN existing makes
 # every call fail. A pull request it creates is numbered from 41.
@@ -431,4 +439,35 @@ cb=$(git -C "$D/author" ls-remote origin 'refs/heads/pusher/*-pr-down-base' | cu
   && grep -q "^pr close [0-9]* .*--comment atterri sur master à $tip" "$D/gh_calls" && ok "rattrapage : -base au master d'avant, PR de la finale vers elle, fermée « atterri sur master »" || ko "rattrapage faux ($cb)"
 grep -vE '^[[:space:]]*#' "$PUSHER" | grep -qE 'push[^|;]*(--delete|[[:space:]]:refs/)' && ko "le pousseur efface une ref" || ok "aucune ref effacée par le pousseur"
 
+
+# The second slot (19 Nov., c7 and G). 25. Two Rust lots, trains of one, two slots: the second is reposed on the first's
+# head in the second worktree and replayed at the same time; both green, both pushed in one step.
+h1=$(lot sl-a extension/rag3weaver/src/sla.rs 'fn sla() {}'); h2=$(FROM=sl-a lot sl-b extension/rag3weaver/src/slb.rs 'fn slb() {}')
+P enqueue sl-a sl-a "$h1" rust some_witness e2e_code - - author-c > /dev/null; P enqueue sl-b sl-b "$h2" rust some_witness e2e_code - sl-a author-c > /dev/null
+echo VERT > "$D/outcomes.d/sl-a"; echo VERT > "$D/outcomes.d/sl-b"
+PUSHER_SLOTS=2 PUSHER_TRAIN_MAX=1 PUSHER_WT2_NAME=wt2 P step > /dev/null 2>&1
+ea=$(awk '$2 ~ /-sl-a$/ && $3 == "end" {print $4}' "$D/pass_times")
+sb=$(awk '$2 ~ /-sl-b/ && $3 == "start" {print $4}' "$D/pass_times"); wb=$(awk '$2 ~ /-sl-b/ && $3 == "start" {print $1}' "$D/pass_times")
+on_master sl-a && on_master sl-b && [ "$wb" = wt2 ] && [ -n "$sb" ] && [ -n "$ea" ] && [ "$sb" -lt "$ea" ] \
+  && ok "second créneau : B reposé sur A dans wt2, rejoué en même temps, les deux poussés en un pas" || ko "second créneau : A ou B pas poussé, ou B pas rejoué dans wt2 en même temps (wt=$wb)"
+
+# 26. A red, B speculative on A: A returned, B thrown away but kept in the queue (never returned), then replayed alone.
+h1=$(lot sr-a extension/rag3weaver/src/sra.rs 'fn sra() {}'); h2=$(lot sr-b extension/rag3weaver/src/srb.rs 'fn srb() {}')
+P enqueue sr-a sr-a "$h1" rust some_witness e2e_code - - author-c > /dev/null; P enqueue sr-b sr-b "$h2" rust some_witness e2e_code - - author-c > /dev/null
+echo "ROUGE e2e_code" > "$D/outcomes.d/sr-a"; echo VERT > "$D/outcomes.d/sr-b"
+PUSHER_SLOTS=2 PUSHER_TRAIN_MAX=1 PUSHER_WT2_NAME=wt2 P step > /dev/null 2>&1
+q1=$(grep -c "^sr-b	" "$D/pusher/queue.tsv")
+echo VERT > "$D/outcomes.d/sr-b"
+PUSHER_SLOTS=2 PUSHER_TRAIN_MAX=1 PUSHER_WT2_NAME=wt2 P step > /dev/null 2>&1
+! on_master sr-a && grep -q "^rouge	sr-a	code	" "$D/pusher/inbox/author-c.txt" && [ "$q1" = 1 ] && ! grep -q "^rouge	sr-b	" "$D/pusher/inbox/author-c.txt" && on_master sr-b \
+  && ok "A rouge : B spéculatif jeté sans être rendu, puis rejoué seul et poussé" || ko "A rouge : B rendu, perdu ou pas repris (B en file après le pas 1 : $q1)"
+
+# 27. A green, B red: A pushed, B kept in the queue (not returned) for its own replay.
+h1=$(lot sg-a extension/rag3weaver/src/sga.rs 'fn sga() {}'); h2=$(lot sg-b extension/rag3weaver/src/sgb.rs 'fn sgb() {}')
+P enqueue sg-a sg-a "$h1" rust some_witness e2e_code - - author-c > /dev/null; P enqueue sg-b sg-b "$h2" rust some_witness e2e_code - - author-c > /dev/null
+echo VERT > "$D/outcomes.d/sg-a"; echo "ROUGE e2e_code" > "$D/outcomes.d/sg-b"
+PUSHER_SLOTS=2 PUSHER_TRAIN_MAX=1 PUSHER_WT2_NAME=wt2 P step > /dev/null 2>&1
+on_master sg-a && ! on_master sg-b && grep -q "^sg-b	" "$D/pusher/queue.tsv" && ! grep -q "^rouge	sg-b	" "$D/pusher/inbox/author-c.txt" \
+  && ok "A vert, B rouge : A poussé, B gardé en file pour son propre rejeu" || ko "A vert, B rouge : mal traité"
+P dequeue sg-b > /dev/null 2>&1
 exit $red
