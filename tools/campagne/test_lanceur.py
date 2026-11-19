@@ -116,5 +116,37 @@ class Lanceur(unittest.TestCase):
         self.assertIn("compile", rouge["why"])
 
 
+    def test_git_is_refused_and_the_rest_granted(self):
+        for c in ["git log", "git -C . show HEAD", "env A=b git status", "cd x && git diff", "/usr/bin/git log"]:
+            self.assertFalse(lanceur.answer_for(c)["approved"], c)
+        for c in ["cargo test -j 8", "env RUSTUP_HOME=/x cargo --version", "grep -rn digit src"]:
+            self.assertTrue(lanceur.answer_for(c)["approved"], c)
+
+    def test_the_frozen_declarations_let_commands_run_without_a_human(self):
+        ecrire(os.path.join(self.repo, "extension/rag3weaver/templates/backends/code/backend.json"),
+               json.dumps({"database": "x", "tools": [], "workspace": {"commands": "approval", "root": "."}}))
+        git(self.repo, "add", "-A")
+        git(self.repo, "-c", "user.name=T", "-c", "user.email=t@example.org", "commit", "-qm", "templates")
+        d = lanceur.freeze_declarations(self.repo, "HEAD", os.path.join(self.tmp.name, "decl"))
+        with open(os.path.join(d, "templates/backends/code/backend.json")) as f:
+            self.assertEqual(json.load(f)["workspace"]["commands"], "auto")
+
+    def test_the_diff_holds_new_files_and_uncommitted_changes(self):
+        block, _ = lanceur.read_case(self.case("> f rend 1."))
+        dest = os.path.join(self.tmp.name, "arbre")
+        lanceur.build_tree(block, self.repo, os.path.join(self.tmp.name, "depots"), dest)
+        base = git(dest, "rev-parse", "HEAD")
+        ecrire(os.path.join(dest, "crate/src/lib.rs"), "pub fn f() -> u8 { 2 }\n")
+        git(dest, "-c", "user.name=T", "-c", "user.email=t@example.org", "commit", "-qam", "agent")
+        ecrire(os.path.join(dest, "crate/src/neuf.rs"), "// new\n")
+        ecrire(os.path.join(dest, "crate/README.md"), "Le crate, revu.\n")
+        diff, stat = lanceur.collect_diff(dest, base)
+        self.assertIn("{ 2 }", diff)
+        self.assertIn("crate/src/neuf.rs", diff)
+        self.assertIn("revu", diff)
+        self.assertIn("3 files changed", stat)
+        self.assertEqual(git(dest, "status", "--porcelain"), "?? crate/src/neuf.rs", "the worktree is left as it was")
+
+
 if __name__ == "__main__":
     unittest.main()

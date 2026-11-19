@@ -187,6 +187,18 @@ def prove_red(block, dest, target, poste):
     return {"red": True, "why": "red on the assertion", "failed": failed, "code": code, "tail": sortie[-2000:]}
 
 
+def answer_for(command):
+    raise NotImplementedError
+
+
+def freeze_declarations(repo, rev, dest):
+    raise NotImplementedError
+
+
+def collect_diff(worktree, base):
+    raise NotImplementedError
+
+
 CAMPAGNE = os.path.expanduser("~/.cache/rag3weaver-build/campagne")
 
 
