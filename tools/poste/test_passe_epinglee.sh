@@ -158,4 +158,41 @@ grep -q "^non jugés dans e2e_code : 1 — non jugé : la lib n'a pas la colonne
 passe "ROUGE témoin : 1 test non jugé" "un non-jugé dans le témoin rend la passe rouge" FAUX_NON_JUGE=e2e_lectures
 passe VERT "aucun non-jugé"
 grep -q '^tests non jugés : 0$' $R && echo "vert   sans non-jugé, le résumé dit 0" || { echo "ROUGE  sans non-jugé : « $(grep -iE 'non jug' $R | tr '\n' ' ') »"; rouge=1; }
+# **Un lot du terminal joue le crate du terminal** (19 novembre 2026, trou relevé par tty) : la passe ne jouait ni le crate
+# extension/rag3weaver/tty ni ses mesures ; un lot qui ne touchait que tty/ passait VERT sans qu'un test du terminal
+# tourne. Quand le lot touche tty/ (required_suites.txt, suite « tty »), la passe joue `cargo test` avec et sans vue
+# (compilé depuis le worktree, la ligne « Compiling rag3weaver-tty (<worktree>) » vérifiée), clippy -D warnings, puis
+# les deux mesures plain_* sur le binaire bâti.
+T=$W/tty; mkdir -p $T/src $T/mesures
+echo 'pub fn t() {}' > $T/src/lib.rs
+for m in plain_stays_attached plain_waits_for_a_resumed_run; do
+  printf 'import os, sys\nopen(os.environ["FAUX_TRACE"], "a").write("%s\\n")\nprint("VERT" if os.environ.get("FAUX_PLAIN") != "%s" else "ROUGE")\n' $m $m > $T/mesures/$m.py
+done
+echo '# faux hôte' > $T/mesures/faux_hote.py
+cat > $D/bin/cargo <<'F'
+#!/bin/bash
+echo "cargo $*" >> "$FAUX_TRACE"
+case "$*" in
+  *clippy*) [ "${FAUX_CARGO:-}" = clippy ] && { echo "error: clippy"; exit 101; }; exit 0 ;;
+  build*) echo "   Compiling rag3weaver-tty v0.1.0 ($PWD)"; mkdir -p "$CARGO_TARGET_DIR/release"; : > "$CARGO_TARGET_DIR/release/rag3weaver-tty"; exit 0 ;;
+  test*) echo "   Compiling rag3weaver-tty v0.1.0 ($PWD)"
+    [ "${FAUX_CARGO:-}" = rouge ] && { echo "test result: FAILED. 0 passed; 1 failed"; exit 101; }
+    echo "test result: ok. 2 passed; 0 failed" ;;
+esac
+F
+chmod +x $D/bin/cargo
+$G add -A > /dev/null; $G commit -qm "tty du jouet"; $G update-ref refs/remotes/origin/master HEAD
+echo '// lot tty' >> $T/src/lib.rs; $G commit -qam "lot tty"
+passe VERT "un lot qui touche tty/" SUITES=-
+grep -q '^suites exigées par le lot : tty (extension/rag3weaver/tty/src/lib.rs)' $R && grep -qx '== tty' $R \
+  && [ "$(grep -c '^cargo test' $D/trace)" = 2 ] && grep -q '^cargo test.*--no-default-features' $D/trace && grep -q '^cargo clippy' $D/trace \
+  && grep -qx 'plain_stays_attached' $D/trace && grep -qx 'plain_waits_for_a_resumed_run' $D/trace && grep -q '^test result: ok' $H/.cache/rag3weaver-build/j/tty.log \
+  && echo "vert   tty/ touché : le crate avec et sans vue, clippy et les deux mesures, « == tty » et tty.log pour la garde" \
+  || { echo "ROUGE  tty/ touché : trace « $(grep -v EMBED $D/trace | tr '\n' ' ') », résumé « $(grep -E '^suites|^== tty' $R | tr '\n' ' ') »"; rouge=1; }
+passe "ROUGE tty" "un test du crate du terminal rouge" SUITES=- FAUX_CARGO=rouge
+passe "ROUGE tty" "clippy rouge sur le crate du terminal" SUITES=- FAUX_CARGO=clippy
+passe "ROUGE tty" "une mesure plain_* rouge" SUITES=- FAUX_PLAIN=plain_waits_for_a_resumed_run
+$G reset -q --hard HEAD~1
+passe VERT "un lot qui ne touche pas tty/" SUITES=-
+grep -q '^cargo ' $D/trace && { echo "ROUGE  sans tty/ : le crate du terminal joué quand même"; rouge=1; } || echo "vert   sans tty/ : le crate du terminal n'est pas joué"
 exit $rouge
