@@ -73,6 +73,16 @@ mod tests {
         assert_eq!(model_text(&json!({ "presentation": "deux résultats", "result": [1, 2] })), "deux résultats");
         let failure = json!({ "ok": false, "error": "path outside the workspace" });
         assert_eq!(serde_json::from_str::<serde_json::Value>(&model_text(&failure)).unwrap(), failure);
+        // A graph may give a partial result with an error: the failure never hides behind the text (archi, 19 nov.).
+        for partial in [
+            json!({ "ok": false, "result": "début du fichier", "error": "lecture coupée" }),
+            json!({ "result": "début du fichier", "error": "lecture coupée" }),
+            json!({ "ok": false, "result": "début du fichier" }),
+        ] {
+            assert_eq!(serde_json::from_str::<serde_json::Value>(&model_text(&partial)).ok(), Some(partial.clone()), "a failure stays JSON: {partial}");
+        }
+        assert_eq!(model_text(&json!({ "result": "tout le fichier", "error": null })), "tout le fichier", "a null error is no error");
+        assert_eq!(model_text(&json!({ "result": "tout le fichier", "error": "" })), "tout le fichier", "an empty error is no error");
         let not_text = json!({ "result": { "files": ["a.rs"] }, "run": "r-2" });
         assert_eq!(serde_json::from_str::<serde_json::Value>(&model_text(&not_text)).unwrap(), not_text, "a result that is not text stays JSON");
     }
