@@ -1776,6 +1776,73 @@ fn deux_fenetres_du_chat_suivent_le_meme_tour() {
     fil.join().unwrap();
 }
 
+/// **Past the worker's bound, the joined text says what it misses** (ED's review of slice 1): the worker keeps the
+/// text of a turn in flight up to a bound (512 Kio; lowered here to 12 characters by the witnesses' message
+/// `tour-max`). A second window opened past it shows the kept beginning, a mark « […] » where the text was not kept,
+/// then every word it received — none twice, none skipped.
+#[test]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+fn passe_la_borne_du_worker_le_texte_repris_dit_ce_qui_lui_manque() {
+    use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+    const TEMOIN: &str = "passe_la_borne_du_worker_le_texte_repris_dit_ce_qui_lui_manque";
+    let Some(binaire) = navigateur_ou_saut(TEMOIN) else {
+        return;
+    };
+    const MOTS: [&str; 20] = ["un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf", "dix", "onze", "douze", "treize", "quatorze", "quinze", "seize", "dix-sept", "dix-huit", "dix-neuf", "vingt"];
+    let model: ChatModel = Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+        Ok(Arc::new(CallbackLlm::new("faux-lent", 8192, |_turns, _opts, sink| {
+            for m in MOTS {
+                if sink.on_token(&format!("{m} ")) == Flow::Stop {
+                    sink.on_finish(&Finish::cancelled());
+                    return Ok((Finish::cancelled(), Usage::default()));
+                }
+                std::thread::sleep(Duration::from_millis(150));
+            }
+            sink.on_finish(&Finish::eos());
+            Ok((Finish::eos(), Usage::default()))
+        })))
+    });
+    let (d, h, m, id) = banc_dans("atelier", model.clone(), |_| {});
+    drop(h);
+    let (chats, taches, runs) = (d.path().join("chats"), d.path().join("taches"), d.path().join("runs"));
+    let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| h.with_racine_des_taches(taches).with_chats_root(chats).with_runs_root(runs).with_chat_model(model));
+    let racine = format!("http://{adresse}");
+    let mut r = crate::daemon::agent_de_temoin()
+        .post(format!("{racine}/ide/describe"))
+        .header("Cookie", "rag3weaver_ide=j")
+        .header("content-type", "application/json")
+        .send(json!({ "manifest": m }).to_string())
+        .unwrap();
+    let v: Value = serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap();
+    assert_eq!(v["ok"], true, "{v}");
+
+    let mut n = Navigateur::lancer(&binaire);
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+    let prete = "document.querySelector('#send') && !document.querySelector('#send').disabled && document.getElementById('lien')?.textContent === 'flux : ouvert'";
+    n.aller(&format!("{racine}/ide/code/{id}/chat"), prete);
+    // The worker's bound, lowered for the witness: twelve characters, « un deux trois » at most.
+    n.evaluer("new SharedWorker('/ide/flux-worker.js', { name: 'rag3weaver-flux' }).port.postMessage({ type: 'tour-max', max: 12 })");
+    let vivant = "document.querySelector('article.message.assistant.en-cours')?.textContent ?? ''";
+    n.evaluer("document.querySelector('#message').value = 'compte'; document.querySelector('#send').click()");
+    n.attendre(&format!("({vivant}).includes('six')"), "the first window streams past the bound");
+    n.nouvel_onglet();
+    n.aller(&format!("{racine}/ide/code/{id}/chat"), "document.getElementById('lien')?.textContent === 'flux : ouvert'");
+    n.attendre(&format!("({vivant}).includes('quinze')"), "the second window streams the rest of the turn");
+    let seconde = n.evaluer(vivant).as_str().unwrap_or_default().to_string();
+    assert!(seconde.contains("un deux"), "the kept beginning : {seconde:?}");
+    assert!(seconde.contains("[…]"), "a mark where the text was not kept : {seconde:?}");
+    let mots: Vec<&str> = seconde.split_whitespace().collect();
+    for m in ["douze", "treize", "quatorze", "quinze"] {
+        assert_eq!(mots.iter().filter(|w| w.ends_with(m)).count(), 1, "« {m} » once, received after the window opened : {seconde:?}");
+    }
+    assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
+    drop(n);
+    drop(d);
+    let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+    assert_eq!(statut, 200);
+    fil.join().unwrap();
+}
+
 /// **A read of the second window held across a turn of the first does not erase it** (ED's review of the IDE in
 /// several windows, the epoch of the turns): the second window, which sends nothing, loads with its read held at
 /// `window.__ide.relectureRetenue`; the first window runs a whole turn; the read is let go after the turn's end. It
@@ -1821,10 +1888,11 @@ fn une_relecture_retenue_de_la_seconde_fenetre_n_efface_pas_le_tour_de_la_premie
     n.onglet(1);
     let reponse = "[...document.querySelectorAll('article.message.assistant')].some((a) => a.textContent.includes('La réponse du tour de la première fenêtre.'))";
     n.attendre(reponse, "the second window shows the turn of the first");
+    // The read lands: wait until the page says it has applied (or set aside) one more read — an order, not a delay
+    // (ED's review: `window.__ide.relecturesAppliquees`, counted at the end of each read).
+    let avant = n.evaluer("window.__ide?.relecturesAppliquees ?? 0").as_u64().unwrap_or(0);
     n.evaluer("window.__lacherLaRelecture()");
-    // The read lands: let it be applied, then the turn must still be there.
-    n.attendre("document.querySelectorAll('article.message').length > 0", "the read applied");
-    std::thread::sleep(Duration::from_millis(500));
+    n.attendre(&format!("(window.__ide?.relecturesAppliquees ?? 0) > {avant}"), "the held read applied or set aside");
     assert_eq!(n.evaluer(reponse), json!(true), "the held read, older than the turn, erased it from the second window");
     assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
     drop(n);
