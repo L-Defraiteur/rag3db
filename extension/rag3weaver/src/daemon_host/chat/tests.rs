@@ -1778,6 +1778,64 @@ fn deux_fenetres_du_chat_suivent_le_meme_tour() {
     fil.join().unwrap();
 }
 
+/// **A read of the second window held across a turn of the first does not erase it** (ED's review of the IDE in
+/// several windows, the epoch of the turns): the second window, which sends nothing, loads with its read held at
+/// `window.__ide.relectureRetenue`; the first window runs a whole turn; the read is let go after the turn's end. It
+/// left before the turn and lands after it: it must not put back a screen without that turn. An order, not a delay.
+#[test]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+fn une_relecture_retenue_de_la_seconde_fenetre_n_efface_pas_le_tour_de_la_premiere() {
+    use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+    const TEMOIN: &str = "une_relecture_retenue_de_la_seconde_fenetre_n_efface_pas_le_tour_de_la_premiere";
+    let Some(binaire) = navigateur_ou_saut(TEMOIN) else {
+        return;
+    };
+    let model: ChatModel = Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+        Ok(Arc::new(CallbackLlm::new("faux-modele", 8192, |turns, opts, sink| MockLlm::new("La réponse du tour de la première fenêtre.").generate(turns, opts, sink))))
+    });
+    let (d, h, m, id) = banc_dans("atelier", model.clone(), |_| {});
+    drop(h);
+    let (chats, taches, runs) = (d.path().join("chats"), d.path().join("taches"), d.path().join("runs"));
+    let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| h.with_racine_des_taches(taches).with_chats_root(chats).with_runs_root(runs).with_chat_model(model));
+    let racine = format!("http://{adresse}");
+    let mut r = crate::daemon::agent_de_temoin()
+        .post(format!("{racine}/ide/describe"))
+        .header("Cookie", "rag3weaver_ide=j")
+        .header("content-type", "application/json")
+        .send(json!({ "manifest": m }).to_string())
+        .unwrap();
+    let v: Value = serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap();
+    assert_eq!(v["ok"], true, "{v}");
+
+    let mut n = Navigateur::lancer(&binaire);
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+    let prete = "document.querySelector('#send') && !document.querySelector('#send').disabled && document.getElementById('lien')?.textContent === 'flux : ouvert'";
+    n.aller(&format!("{racine}/ide/code/{id}/chat"), prete);
+    // The second window, its reads held from its very first load.
+    n.nouvel_onglet();
+    n.commande("Page.addScriptToEvaluateOnNewDocument", json!({ "source": "window.__ide = { relectureRetenue: new Promise((r) => { window.__lacherLaRelecture = r; }) };" }));
+    n.aller(&format!("{racine}/ide/code/{id}/chat"), "document.getElementById('lien')?.textContent === 'flux : ouvert'");
+    // The first window runs a whole turn.
+    n.onglet(0);
+    n.evaluer("document.querySelector('#message').value = 'réponds'; document.querySelector('#send').click()");
+    n.attendre("document.querySelector('#status')?.textContent === 'fini'", "the turn of the first window");
+    // The second window saw the turn by the stream; its held read is let go now.
+    n.onglet(1);
+    let reponse = "[...document.querySelectorAll('article.message.assistant')].some((a) => a.textContent.includes('La réponse du tour de la première fenêtre.'))";
+    n.attendre(reponse, "the second window shows the turn of the first");
+    n.evaluer("window.__lacherLaRelecture()");
+    // The read lands: let it be applied, then the turn must still be there.
+    n.attendre("document.querySelectorAll('article.message').length > 0", "the read applied");
+    std::thread::sleep(Duration::from_millis(500));
+    assert_eq!(n.evaluer(reponse), json!(true), "the held read, older than the turn, erased it from the second window");
+    assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
+    drop(n);
+    drop(d);
+    let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+    assert_eq!(statut, 200);
+    fil.join().unwrap();
+}
+
 /// **The chat page names what a turn waits for** (ticket of 19 Nov., « Un outil lent du chat de
 /// l'IDE ne dit pas qu'il attend », its page half). The host says `Waiting` then `Resumed` on the
 /// turn's run; the page shows « propose attend… (N s) » in its status, counted by a local timer (the
