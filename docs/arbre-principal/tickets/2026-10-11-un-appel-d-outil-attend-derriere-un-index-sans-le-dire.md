@@ -120,3 +120,36 @@ Le reste du point 1 de tty se réduit donc à ceci : **le rattrapage d'une dette
 réponse qui dit le retard, et non avant le premier appel**. C'est déjà la forme que ce ticket demandait en octobre.
 Un témoin qui l'éprouve doit ouvrir une base **avec** une dette ; c'est le dernier point ouvert de ce ticket, avec les
 lots déposés (`arbre-verrou-invocation`, `arbre-strict-borne`) et la part hôte de tty.
+
+## Le dernier point : un premier appel devant une dette de vecteurs (19 novembre 2026, 16 h 20)
+
+**Le témoin** : `daemon_host::worktrees::tests::a_first_call_does_not_wait_for_a_debt_of_vectors`, déposé comme garde
+(`arbre-garde-dette-ouverture`, branche `arbre-principal/dette-a-l-ouverture`). Il reproduit la condition du
+11 octobre :
+
+- une base sur disque, et un index coupé qui laisse une dette de vecteurs sous un service d'embarquement lent ;
+- le backend fermé, puis 20 fichiers changés et 5 retirés, pour que la réconciliation de départ de la montre les
+  réindexe par la réaction ;
+- la réouverture par l'hôte avec `catch_up_on_open`, puis le premier appel.
+
+Il exige trois choses :
+
+- l'ouverture et le premier appel en moins de 5 s ;
+- l'état qui dit les vecteurs encore dus ;
+- le rattrapage qui continue derrière.
+
+**Il est vert sur master**, avec et sans la réconciliation : 10 s de test, l'ouverture et le premier appel sous la
+borne.
+
+**Pourquoi le 11 octobre attendait** : le binaire d'alors (e9d690915) datait d'avant L2 (12 octobre) et L4 (18 octobre).
+`call_in` prenait le mutex du catalogue deux fois avant la vue, dans `reactions_de_la_cellule` puis dans
+`build_services`, c'est-à-dire le témoin « un appel par la cellule du catalogue n'attend pas l'écrivain » du
+12 octobre. Ce mutex, la réaction de la montre et le rattrapage de 2 074 morceaux le tenaient : le rattrapage
+s'annonçait au journal juste avant (« l'index tombe le temps du rattrapage »). Depuis :
+
+- les appels lisent par la vue et l'instantané, sans ce mutex ;
+- `index_states` ne fait qu'un `try_lock` ;
+- le rattrapage à l'ouverture tourne en fond (`catch_up_on_open`, la forme (b) du 8 novembre).
+
+Le point est clos par la garde. Le ticket se ferme quand ses lots sont sur master : `arbre-verrou-invocation`,
+`arbre-strict-borne`, la garde, et la part hôte de tty (`cx-outil-pendant-index`).
