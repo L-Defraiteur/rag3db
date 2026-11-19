@@ -1,6 +1,10 @@
 # Nouveautés
 
 - 19 novembre 2026 — **Deux fenêtres de l'IDE sur le même chat suivent le même tour.** Une fenêtre ouverte au milieu d'un tour montre son texte depuis le début, et non seulement les mots arrivés après elle : le worker partagé du flux le garde pendant le tour. Une relecture d'une fenêtre, partie avant un tour d'une autre, ne l'efface plus.
+- 19 novembre 2026 — **Arrêter un appel coupe aussi la requête qu'il fait au moteur.** Un appel arrêté (par l'IDE,
+  `stop_run` ou son `deadline_ms`) allait au bout de la requête que son nœud avait déjà lancée, par exemple un plein
+  texte flou de 30 s. Sa lecture est maintenant interrompue en vol : il rend la main en moins d'une seconde, et les
+  appels voisins sur le même backend vont au bout des leurs.
 
 - 19 novembre 2026 — **Le chat de l'IDE ne fait plus disparaître un tour.** Une relecture de la conversation
   partie avant un tour et revenue après lui remettait un écran sans ce tour, jusqu'au rechargement suivant. La page
