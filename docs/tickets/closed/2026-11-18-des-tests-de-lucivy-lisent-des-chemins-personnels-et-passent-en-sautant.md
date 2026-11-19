@@ -1,6 +1,10 @@
 # Des tests de lucivy lisent des chemins personnels et passent en sautant
 
-- **État** : ouvert (18 novembre 2026). Constat de Codex (16 novembre), vérifié dans lucivy main `a1c0dfd`.
+- **État** : corrigé (19 novembre 2026), dans lucivy main : PR #46 (04caeb7, `.vault` et `.env*` jamais lus par le
+  parcours de corpus) et PR #47 (e223176). Les quatre diagnostics et `bench_vs_tantivy` sont `#[ignore]` et lisent
+  leurs chemins dans l'environnement (`LUCIVY_DIAG_INDEX`, `BENCH_DATASET`, `LUCIVY_BENCH_VS_TANTIVY_DIR`). Les sauts
+  passent par `common::usable`. Témoin `test_tests_hold_no_personal_path` : rouge sur main (12 lignes), vert ensuite.
+  Tests seulement : pas de version.
 - **Gravité** : moyenne, pour la valeur des verdicts. `cargo test -p lucivy-core` peut dire vert alors que des
   tests n'ont rien vérifié. Et un test de vérité peut lire des fichiers de `.vault/`.
 - **Atteignable en service** : non (tests et bancs seulement).

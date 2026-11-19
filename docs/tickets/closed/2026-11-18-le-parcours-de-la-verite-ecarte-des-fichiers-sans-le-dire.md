@@ -1,9 +1,10 @@
 # Le parcours de la vérité écarte des fichiers sans le dire
 
-- **État** : ouvert (18 novembre 2026). Il remplace le ticket de Codex
-  `2026-11-16-l-admission-du-corpus-fs-ne-garantit-pas-la-vue-consommee.md`, resté sur sa branche
-  `cx-lucivy-reprise-16nov`. Son harnais de 1 274 lignes (branches lucivy `cx-lucivy-fs-*`) n'est pas repris
-  (`docs/lucivy/18-11-2026/01-evaluation-du-travail-de-codex.md`).
+- **État** : corrigé (18 novembre 2026), dans lucivy main 04caeb7 (PR #46). `common::corpus::walk` trie chaque dossier,
+  compte par raison ce qu'il écarte (`Walk::report`) et ne lit jamais `.vault` ni `.env*`. Sept tests de corpus y
+  passent ; les deux du playground gardent leurs filtres et excluent les chemins secrets. Témoin `test_corpus_walk` :
+  rouge sur le parcours d'avant, vert ensuite. `-p lucivy-core` : 242 ok sur les corpus rag3db et linux v7.2. Tests
+  seulement : pas de version.
 - **Gravité** : faible. La comparaison reste juste, puisque l'index et la vérité sautent les mêmes fichiers. Mais un
   vert ne dit pas sur combien de fichiers il porte, ni qu'il en reste.
 - **Atteignable en service** : non (tests seulement).
