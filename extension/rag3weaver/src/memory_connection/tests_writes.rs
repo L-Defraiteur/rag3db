@@ -98,3 +98,79 @@ fn the_counts_of_rows_edges_and_degrees() {
         .expect("degrees");
     assert_eq!(degree.rows, vec![vec![s("a1"), CypherValue::Int(2)]], "a start without an edge has no row");
 }
+
+
+/// **An upsert is a MERGE by `_uuid`**: a new row is inserted with its file; a row already there takes the listed
+/// columns and keeps the others; typed parameters are read as their values; each row gives back `(id, _uuid)`.
+#[test]
+fn an_upsert_merges_rows_by_uuid_and_gives_back_their_ids() {
+    let conn = MemoryConnection::new();
+    let upsert = |columns: &[&str], rows: Vec<Vec<(&str, CypherValue)>>| {
+        let q = MemoryDialect.write(&rag3weaver_ir::Write::Upsert { table: "Scope".into(), columns: columns.iter().map(|c| c.to_string()).collect() }).unwrap();
+        let items = CypherValue::List(rows.into_iter().map(|r| CypherValue::Map(r.into_iter().map(|(k, v)| (k.to_string(), v)).collect())).collect());
+        conn.execute_with_params(&q, &[QueryParam::new("items", items)]).expect("the upsert runs")
+    };
+    let typed = |v: CypherValue| CypherValue::Typed { value: Box::new(v), field_type: rag3weaver_ir::FieldType::String };
+    let r = upsert(&["_uuid", "name", "file_path"], vec![vec![("_uuid", s("u1")), ("name", typed(s("start"))), ("file_path", s("main.rs"))]]);
+    assert_eq!(r.rows.len(), 1);
+    assert_eq!(r.rows[0][1], s("u1"), "the second column is the uuid");
+    assert!(r.rows[0][0].as_str().is_some_and(|id| !id.is_empty()), "the first is an id: {:?}", r.rows[0]);
+    upsert(&["_uuid", "line"], vec![vec![("_uuid", s("u1")), ("line", CypherValue::Int(3))]]);
+    let node = conn.with_image(|i| i.node("u1")).expect("the row is there");
+    assert_eq!(node.props.get("name"), Some(&s("start")), "an unlisted column keeps its value, read without its type");
+    assert_eq!(node.props.get("line"), Some(&CypherValue::Int(3)));
+    assert_eq!(node.file.as_deref(), Some("main.rs"), "its file comes from file_path");
+    assert_eq!(conn.with_image(|i| i.nodes_of_file("main.rs")), vec!["u1".to_string()]);
+}
+
+/// **The aside**: copies posed by key, read back while their row is not empty, cleared, and purged at most `limit`.
+#[test]
+fn the_aside_poses_reads_clears_and_purges() {
+    let conn = MemoryConnection::new();
+    let copy = |key: &str, at: i64| {
+        CypherValue::Map(
+            [("key", s(key)), ("entity", s("Scope")), ("uuid", s(&format!("u-{key}"))), ("hash", s("h")), ("row", s("{}")), ("chunks", s("[]")), ("session", s("s1")), ("at", CypherValue::Int(at))]
+                .into_iter()
+                .map(|(k, v)| (k.to_string(), v))
+                .collect(),
+        )
+    };
+    conn.execute_with_params(&MemoryDialect.upsert_aside(), &[QueryParam::new("items", CypherValue::List(vec![copy("k1", 1), copy("k2", 2), copy("k3", 3)]))]).expect("posed");
+    let r = conn.execute_with_params(&MemoryDialect.select_aside(), &[QueryParam::new("keys", CypherValue::List(vec![s("k1"), s("absent")]))]).expect("read");
+    assert_eq!(r.rows, vec![vec![s("u-k1"), s("h"), s("{}"), s("[]"), s("s1")]]);
+    let r = conn
+        .execute_with_params(&MemoryDialect.select_aside_by_session(), &[QueryParam::new("entity", s("Scope")), QueryParam::new("session", s("s1"))])
+        .expect("by session");
+    assert_eq!(r.rows.len(), 3);
+    conn.execute_with_params(&MemoryDialect.clear_aside(), &[QueryParam::new("keys", CypherValue::List(vec![s("k1")]))]).expect("cleared");
+    let r = conn.execute_with_params(&MemoryDialect.select_aside(), &[QueryParam::new("keys", CypherValue::List(vec![s("k1")]))]).unwrap();
+    assert!(r.rows.is_empty(), "a cleared copy is not read back");
+    let r = conn
+        .execute_with_params(&MemoryDialect.purge_aside_before(1), &[QueryParam::new("entity", s("Scope")), QueryParam::new("before", CypherValue::Int(10))])
+        .expect("purged");
+    assert_eq!(r.rows, vec![vec![CypherValue::Int(1)]], "at most limit copies");
+}
+
+/// **The filtered counts**, by the one evaluator of `read`: the rows a predicate keeps, and the edges whose own fields it keeps.
+#[test]
+fn the_filtered_counts_use_the_one_evaluator() {
+    let conn = connection();
+    conn.execute_with_params(
+        &MemoryDialect.batch_link_labeled("R", Some(("A", "B")), &["why"]),
+        &[QueryParam::new("items", CypherValue::List(vec![
+            item(&[("from_uuid", "a1"), ("to_uuid", "b1"), ("why", "ambigu")]),
+            item(&[("from_uuid", "a1"), ("to_uuid", "b2"), ("why", "nom")]),
+        ]))],
+    )
+    .unwrap();
+    let edges = MemoryDialect
+        .count(&rag3weaver_ir::Count::EdgesMatching { relation: "R".into(), filter: rag3weaver_ir::Predicate::Equals { field: "why".into(), param: "marque".into() } })
+        .unwrap();
+    let r = conn.execute_with_params(&edges, &[QueryParam::new("marque", s("ambigu"))]).expect("the edges a predicate keeps");
+    assert_eq!(r.rows, vec![vec![CypherValue::Int(1)]]);
+    let rows = MemoryDialect
+        .count(&rag3weaver_ir::Count::Matching { table: "B".into(), filter: Some(rag3weaver_ir::Predicate::Equals { field: "_uuid".into(), param: "u".into() }) })
+        .unwrap();
+    let r = conn.execute_with_params(&rows, &[QueryParam::new("u", s("b2"))]).expect("the rows a predicate keeps");
+    assert_eq!(r.rows, vec![vec![CypherValue::Int(1)]]);
+}
