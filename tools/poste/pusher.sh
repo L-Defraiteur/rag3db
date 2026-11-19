@@ -130,12 +130,31 @@ enqueue() {
   # A lot deposited again under the same id takes the rank of its first deposit: behind every lot of the queue first
   # deposited before it, and behind its parent (19 Nov., c7: every redeposit fell at the tail, behind lots deposited
   # hours after it). A new id goes to the tail.
-  local first again=""
+  local first again="" rang=""
   first=$(awk -F'\t' -v id="$id" '$2 == id && $3 == "déposé" {print $1; exit}' "$D/log.tsv" 2>/dev/null)
   [ -n "$first" ] && again=" (redéposé : rang du premier dépôt, $first)"
+  # Returned (red, conflict) and deposited again within the hour: the rank it had at the return, behind its parent
+  # (20 Nov., c7: a red of the guard mended in ten minutes must not fall back).
+  rang=$(awk -F'\t' -v id="$id" -v now="$(date +%s)" '$2 == id && now - $1 <= 3600 {r = $3} END {print r}' "$D/rendus.tsv" 2>/dev/null)
+  [ -n "$rang" ] && again=" (redéposé dans l'heure : rang $rang, celui du rendu)"
   ( flock 9
     line=$(printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s' "$id" "$branch" "$full" "$kind" "$5" "$6" "$7" "$parent" "$9")
-    if [ -z "$first" ]; then printf '%s\n' "$line" >> "$Q"
+    if [ -n "$rang" ]; then
+      awk -F'\t' -v rang="$rang" -v line="$line" -v parent="$parent" '
+        { a[++n] = $0 }
+        END {
+          k = 0; pos = 0; ppos = 0
+          for (i = 1; i <= n; i++) {
+            if (a[i] ~ /^#/) { if (i > pos) pos = i; continue }
+            split(a[i], f, "\t"); k++
+            if (k < rang) pos = i
+            if (f[1] == parent) ppos = i
+          }
+          if (ppos > pos) pos = ppos
+          for (i = 1; i <= n; i++) { if (i == pos + 1) print line; print a[i] }
+          if (pos == n) print line
+        }' "$Q" > "$Q.new" && mv "$Q.new" "$Q"
+    elif [ -z "$first" ]; then printf '%s\n' "$line" >> "$Q"
     else
       awk -F'\t' -v first="$first" -v line="$line" -v parent="$parent" '
         NR == FNR { if ($3 == "déposé" && !($2 in t)) t[$2] = $1; next }
@@ -164,6 +183,8 @@ dequeue() {
 red() { # <id> <author> <reason> <detail>
   # The line is kept: a red of the pusher's own making is deposited again as it was (19 Nov.).
   queue_lines | awk -F'\t' -v id="$1" '$1 == id' >> "$D/returned.tsv"
+  # Its rank at the return, for a redeposit within the hour (20 Nov., c7).
+  printf '%s\t%s\t%s\n' "$(date +%s)" "$1" "$(queue_lines | awk -F'\t' -v id="$1" '$1 == id {print NR; exit}')" >> "$D/rendus.tsv"
   remove_from_queue "$1"
   log "$1" rouge "$3 : $4"
   printf 'rouge\t%s\t%s\t%s\n' "$1" "$3" "$4" >> "$D/inbox/$2.txt"
