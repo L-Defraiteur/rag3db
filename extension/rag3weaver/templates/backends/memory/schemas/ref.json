@@ -8,6 +8,7 @@
     "dit_comme": {"type": "string", "description": "Les mots qui ont cité la chose, quand ils ne sont pas la valeur elle-même (« le design d'hier »). Vide pour une référence extraite sans modèle. C'est ce qui s'embarque et se cherche."},
     "empreinte": {"type": "string", "description": "Ce qui fait vieillir cette référence, selon son genre : l'empreinte d'un fichier, la révision d'une ligne. Vide quand rien ne la fait vieillir (un commit est immuable)."},
     "etat": {"type": "string", "enum": ["vue", "a_revoir", "introuvable", "retiree"], "description": "Une référence dont la cible a bougé passe « a_revoir » ; une cible disparue devient « introuvable » — « cité, introuvable » est une information, elle n'est ni jetée ni inventée."},
+    "definition": {"type": "string", "description": "Ce que la valeur veut dire, écrit par define_ref seul. Une valeur valide n'est pas un fait vrai : la définition dit le sens, pas ce qui est arrivé. Vide pour une référence qui n'est pas la valeur d'une catégorie."},
     "revision": {"type": "integer", "minimum": 1},
     "created_at": {"type": "integer", "description": "Server UTC epoch milliseconds"},
     "updated_at": {"type": "integer", "description": "Server UTC epoch milliseconds"}

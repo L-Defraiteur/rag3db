@@ -4,6 +4,7 @@
 %% param: relation string! -- Relation d'ancrage, remontée **depuis la cible** : (cible)-[relation]->(ligne changée).
 %% param: transition string! -- Nom d'une transition déclarée sur la cible. C'est la déclaration qui porte ses deux états, jamais ce graphe.
 %% param: source string = "" -- Entité dont les changements déclenchent ; vide pour n'importe laquelle.
+%% param: change string = "" -- Le changement qui déclenche (`change` de l'événement : ingested, updated, definition…) ; vide pour tous. Une définition changée seule fait repasser les fiches à revoir, pas une citation.
 %% on: catalog
 %% policy: debounce 500
 %% result: react.report
@@ -64,6 +65,6 @@
 %% ────────────────────────────────────────────────────────────────────────────
 graph LR
     events["EventSourceNode(topics='catalog', cursor='review_anchored', limit=1000)"]
-    react["ReactTransitionNode(source=$source, relation=$relation, target=$target, transition=$transition)"]
+    react["ReactTransitionNode(source=$source, relation=$relation, target=$target, transition=$transition, change=$change)"]
 
     events -->|events| react
