@@ -162,14 +162,10 @@ fn deux_processus_ne_peuvent_pas_ouvrir_la_meme_base() {
         }
     }
 
-    let dossier = std::env::temp_dir().join(format!(
-        "rag3weaver-prise-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
+    // The base and its neighbours live in a temporary directory declared before the connections, so dropped after
+    // them: nothing stays in the suite's TMPDIR (entry 7 of the handover).
+    let tmp = tempfile::tempdir().unwrap();
+    let dossier = tmp.path().join("rag3weaver-prise");
     let _parent = Rag3dbConnection::new(&dossier).expect("le parent ouvre la base");
 
     let sortie = std::process::Command::new(std::env::current_exe().expect("current_exe"))
@@ -182,7 +178,6 @@ fn deux_processus_ne_peuvent_pas_ouvrir_la_meme_base() {
     let code = sortie.status.code();
 
     println!("▸ l'enfant a rendu {code:?} (3 = refusé, 7 = ouvert)");
-    let _ = std::fs::remove_dir_all(&dossier);
 
     assert_eq!(
         code,
@@ -231,14 +226,10 @@ fn plusieurs_lecteurs_partagent_une_base_qu_aucun_ecrivain_ne_tient() {
         }
     }
 
-    let dossier = std::env::temp_dir().join(format!(
-        "rag3weaver-lecteurs-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
+    // The base and its neighbours live in a temporary directory declared before the connections, so dropped after
+    // them: nothing stays in the suite's TMPDIR (entry 7 of the handover).
+    let tmp = tempfile::tempdir().unwrap();
+    let dossier = tmp.path().join("rag3weaver-lecteurs");
 
     // Écrire, puis **lâcher** la base : c'est la condition du partage.
     {
@@ -304,7 +295,6 @@ fn plusieurs_lecteurs_partagent_une_base_qu_aucun_ecrivain_ne_tient() {
     }
     drop(ecrivain);
 
-    let _ = std::fs::remove_dir_all(&dossier);
 }
 
 // ═══ Un lecteur qui insiste pendant qu'on écrit ═════════════════════════════
@@ -387,14 +377,10 @@ fn un_lecteur_qui_insiste_pendant_qu_on_ecrit() {
         std::process::exit(0);
     }
 
-    let dossier = std::env::temp_dir().join(format!(
-        "rag3weaver-insistant-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
+    // The base and its neighbours live in a temporary directory declared before the connections, so dropped after
+    // them: nothing stays in the suite's TMPDIR (entry 7 of the handover).
+    let tmp = tempfile::tempdir().unwrap();
+    let dossier = tmp.path().join("rag3weaver-insistant");
 
     let ecrivain = Rag3dbConnection::new(&dossier).expect("écrivain");
     ecrivain
@@ -475,7 +461,6 @@ fn un_lecteur_qui_insiste_pendant_qu_on_ecrit() {
         );
     }
     drop(ecrivain);
-    let _ = std::fs::remove_dir_all(&dossier);
 }
 
 // ═══ La marque d'eau, vue depuis un autre processus ═════════════════════════
@@ -527,14 +512,10 @@ fn la_marque_dingestion_se_voit_depuis_un_autre_processus() {
         }
     }
 
-    let dossier = std::env::temp_dir().join(format!(
-        "rag3weaver-marque-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
+    // The base and its neighbours live in a temporary directory declared before the connections, so dropped after
+    // them: nothing stays in the suite's TMPDIR (entry 7 of the handover).
+    let tmp = tempfile::tempdir().unwrap();
+    let dossier = tmp.path().join("rag3weaver-marque");
 
     let mut config = CatalogConfig::default();
     config.embedding_dim = 4;
@@ -600,7 +581,6 @@ fn la_marque_dingestion_se_voit_depuis_un_autre_processus() {
              encore. Test sans objet ici, et il le dit."
         );
         drop(ecrivain);
-        let _ = std::fs::remove_dir_all(&dossier);
         return;
     };
     assert_eq!(au_repos, 0, "au repos, aucun écrivain ne doit être marqué");
@@ -625,7 +605,6 @@ fn la_marque_dingestion_se_voit_depuis_un_autre_processus() {
     assert_eq!(apres, 0, "après le drain, plus rien ne doit être marqué");
 
     drop(ecrivain);
-    let _ = std::fs::remove_dir_all(&dossier);
 }
 
 
@@ -700,14 +679,10 @@ fn un_catalogue_en_lecture_lit_ce_qu_un_ecrivain_a_pose() {
         }
     }
 
-    let dossier = std::env::temp_dir().join(format!(
-        "rag3weaver-catalogue-lecteur-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
+    // The base and its neighbours live in a temporary directory declared before the connections, so dropped after
+    // them: nothing stays in the suite's TMPDIR (entry 7 of the handover).
+    let tmp = tempfile::tempdir().unwrap();
+    let dossier = tmp.path().join("rag3weaver-catalogue-lecteur");
 
     // L'écrivain pose, indexe, et lâche.
     {
@@ -761,7 +736,6 @@ fn un_catalogue_en_lecture_lit_ce_qu_un_ecrivain_a_pose() {
         "le lecteur doit trouver ce que l'écrivain a posé, et être refusé à l'écriture"
     );
 
-    let _ = std::fs::remove_dir_all(&dossier);
 }
 
 // ─── Le modèle d'embarquement de la base ─────────────────────────────────────
@@ -817,10 +791,12 @@ fn produit_ligne(texte: &str) -> Vec<std::collections::BTreeMap<String, CypherVa
     vec![d]
 }
 
-fn dossier_temporaire(nom: &str) -> std::path::PathBuf {
-    let d = std::env::temp_dir().join(format!("rag3weaver-{nom}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&d);
-    d
+/// A base in a temporary directory held by the caller to the end of its test, with its neighbours (`.fts`,
+/// `.extensions`, `.readers`): nothing stays in the suite's TMPDIR (entry 7 of the handover).
+fn dossier_temporaire(nom: &str) -> (tempfile::TempDir, std::path::PathBuf) {
+    let tmp = tempfile::tempdir().unwrap();
+    let d = tmp.path().join(format!("rag3weaver-{nom}"));
+    (tmp, d)
 }
 
 fn recherche_vectorielle(c: &Arc<Mutex<rag3weaver::Catalog>>, requete: &str) -> Result<rag3weaver::search::SearchResponse, rag3weaver::CatalogError> {
@@ -857,7 +833,7 @@ fn slugs(c: &rag3weaver::Catalog) -> Vec<String> {
 #[test]
 #[ignore]
 fn deux_modeles_se_partagent_un_index() {
-    let dossier = dossier_temporaire("modeles-deux");
+    let (_tmp, dossier) = dossier_temporaire("modeles-deux");
     {
         let a = Arc::new(Mutex::new(catalogue_sur(&dossier, EmbarqueurNomme("modele-a", 4))));
         a.lock().unwrap().register_entity("Produit", produit_entite()).unwrap();
@@ -894,7 +870,6 @@ fn deux_modeles_se_partagent_un_index() {
         assert!(!recherche_vectorielle(&a2, "clavecin").unwrap().results.is_empty());
         assert_eq!(slugs(&a2.lock().unwrap()), ["modele_a", "modele_b"]);
     }
-    let _ = std::fs::remove_dir_all(&dossier);
 }
 
 /// **Le cas dégénéré, sans rien déplacer.** Une base au schéma v5 — colonne
@@ -904,7 +879,7 @@ fn deux_modeles_se_partagent_un_index() {
 #[test]
 #[ignore]
 fn une_base_v5_ouverte_par_la_v6_ne_bouge_pas() {
-    let dossier = dossier_temporaire("modeles-v5");
+    let (_tmp, dossier) = dossier_temporaire("modeles-v5");
     {
         let mut a = catalogue_sur(&dossier, EmbarqueurNomme("modele-a", 4));
         a.register_entity("Produit", produit_entite()).unwrap();
@@ -936,14 +911,13 @@ fn une_base_v5_ouverte_par_la_v6_ne_bouge_pas() {
         assert_eq!(a.lock().unwrap().indexed_embedding_model().unwrap().as_deref(), Some("modele-a:4"), "la clé d'avant reste lisible");
         assert!(!recherche_vectorielle(&a, "clavecin").unwrap().results.is_empty(), "la même recherche répond");
     }
-    let _ = std::fs::remove_dir_all(&dossier);
 }
 
 /// **Le seul conflit qui reste** : même nom, autre dimension.
 #[test]
 #[ignore]
 fn le_meme_nom_avec_une_autre_dimension_est_refuse() {
-    let dossier = dossier_temporaire("modeles-dim");
+    let (_tmp, dossier) = dossier_temporaire("modeles-dim");
     {
         let mut a = catalogue_sur(&dossier, EmbarqueurNomme("modele-a", 4));
         a.register_entity("Produit", produit_entite()).unwrap();
@@ -958,7 +932,6 @@ fn le_meme_nom_avec_une_autre_dimension_est_refuse() {
             autre => panic!("même nom, autre dimension : devait être refusé — {autre:?}"),
         }
     }
-    let _ = std::fs::remove_dir_all(&dossier);
 }
 
 /// **Un modèle absent refuse en le disant.** Un lecteur n'enregistre rien ; un
@@ -967,7 +940,7 @@ fn le_meme_nom_avec_une_autre_dimension_est_refuse() {
 #[test]
 #[ignore]
 fn un_modele_absent_refuse_en_nommant_les_disponibles() {
-    let dossier = dossier_temporaire("modeles-absent");
+    let (_tmp, dossier) = dossier_temporaire("modeles-absent");
     {
         let mut a = catalogue_sur(&dossier, EmbarqueurNomme("modele-a", 4));
         a.register_entity("Produit", produit_entite()).unwrap();
@@ -989,7 +962,6 @@ fn un_modele_absent_refuse_en_nommant_les_disponibles() {
         autre => panic!("un modèle absent devait être refusé en le disant — {autre:?}"),
     }
     drop(lecteur);
-    let _ = std::fs::remove_dir_all(&dossier);
 }
 
 /// **Pourquoi ce modèle est là le premier** se note une fois, se relit, et un
@@ -1000,7 +972,7 @@ fn un_modele_absent_refuse_en_nommant_les_disponibles() {
 #[ignore]
 fn le_choix_du_premier_index_se_note_une_fois_et_se_relit() {
     use rag3weaver::embedding_choice::{recommended_model, CardClass, Choice};
-    let dossier = dossier_temporaire("modeles-choix");
+    let (_tmp, dossier) = dossier_temporaire("modeles-choix");
     {
         let mut a = catalogue_sur(&dossier, EmbarqueurNomme("modele-a", 4));
         a.register_entity("Produit", produit_entite()).unwrap();
@@ -1030,7 +1002,6 @@ fn le_choix_du_premier_index_se_note_une_fois_et_se_relit() {
         assert_eq!(lecteur.embedding_choice().unwrap().unwrap().model, "granite-278m", "un lecteur n'écrit rien");
         drop(lecteur);
     }
-    let _ = std::fs::remove_dir_all(&dossier);
 }
 
 /// **Le lot ne détruit que l'index du modèle courant**, et un arrêt brutal
@@ -1038,7 +1009,7 @@ fn le_choix_du_premier_index_se_note_une_fois_et_se_relit() {
 #[test]
 #[ignore]
 fn le_lot_ne_tombe_que_l_index_du_modele_courant_et_le_retrouve() {
-    let dossier = dossier_temporaire("modeles-lot");
+    let (_tmp, dossier) = dossier_temporaire("modeles-lot");
     {
         let mut a = catalogue_sur(&dossier, EmbarqueurNomme("modele-a", 4));
         a.register_entity("Produit", produit_entite()).unwrap();
@@ -1065,7 +1036,6 @@ fn le_lot_ne_tombe_que_l_index_du_modele_courant_et_le_retrouve() {
         assert_eq!(compte(&b2.lock().unwrap(), "MATCH (m:_catalog_meta) WHERE m._key STARTS WITH 'vector_index_dropped:' AND m._value <> '' RETURN count(m)"), 0, "l'ouverture a reconstruit");
         assert!(!recherche_vectorielle(&b2, "clavecin").unwrap().results.is_empty(), "et l'index répond");
     }
-    let _ = std::fs::remove_dir_all(&dossier);
 }
 
 /// **Aucune ouverture n'est croisée sous l'écrivain qui affamait le lecteur**
