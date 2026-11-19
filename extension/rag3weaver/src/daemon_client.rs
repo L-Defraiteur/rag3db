@@ -607,6 +607,7 @@ impl ReadyWatchSettings {
 /// other. A watch polls the host until the layer is ready, then sends one notice and ends.
 #[derive(Default, Clone)]
 pub struct ReadyWatches {
+    #[allow(dead_code)] // the red stub does not read it yet
     active: std::sync::Arc<Mutex<std::collections::HashSet<String>>>,
 }
 
