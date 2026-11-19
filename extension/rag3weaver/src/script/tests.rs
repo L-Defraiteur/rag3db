@@ -329,22 +329,35 @@ fn rhai_messages_are_unchanged() {
     assert_eq!(err.to_string(), "Rhai input or host limit invalid/exceeded");
 }
 
-/// **The secret filter of put_turn** (18 November 2026): a host function, `mask_secrets`, masks
-/// the known shapes of a secret (provider keys, tokens, a PEM private key, a Bearer header) and
-/// counts them; an ordinary word that only starts like one is kept.
+/// **The secret filter of put_turn** (18 November 2026; lot B6, 19 November: the patterns are declared, not a Rust
+/// constant): `mask_secrets(text, patterns)` masks what the declared patterns describe — a prefix with a body long
+/// enough, a PEM private key, a Bearer token — names each mask by its pattern, and counts them; a word that merely
+/// starts like one is kept, and a shape nobody declared is not masked.
 #[test]
-fn rhai_masks_known_secret_shapes_and_counts_them() {
+fn rhai_masks_the_declared_patterns_and_names_them() {
+    let patterns = json!([
+        {"name": "anthropic key", "kind": "prefix", "prefix": "sk-ant-", "min_body": 20},
+        {"name": "github token", "kind": "prefix", "prefix": "ghp_", "min_body": 30},
+        {"name": "aws key", "kind": "prefix", "prefix": "AKIA", "min_body": 16},
+        {"name": "bearer token", "kind": "bearer", "min_body": 16},
+        {"name": "private key", "kind": "pem"},
+        {"name": "acme key", "kind": "prefix", "prefix": "acme_", "min_body": 8}
+    ]);
     let text = "key sk-ant-api03-AbCdEf0123456789xyzXYZ0123, then ghp_0123456789abcdefABCDEF0123456789abcd \
 and AKIAIOSFODNN7EXAMPLE; Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.abcdefghijklmnop\n\
 -----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAA\n-----END OPENSSH PRIVATE KEY-----\n\
-ordinary words: sk-short, hf_ alone, a risk-free plan.";
-    let out = evaluate("rhai", "mask_secrets(input.text)", &json!({"text": text}), &limits())
+acme_12345678 here; ordinary words: sk-short, hf_ alone, a risk-free plan; glpat-abcdefghijklmnopqrstuvwx is not declared.";
+    let out = evaluate("rhai", "mask_secrets(input.text, input.patterns)", &json!({"text": text, "patterns": patterns}), &limits())
         .unwrap_or_else(|e| panic!("{e}"));
-    assert_eq!(out["count"], json!(5), "{out}");
+    assert_eq!(out["count"], json!(6), "{out}");
     let masked = out["text"].as_str().unwrap();
-    for secret in ["AbCdEf0123456789", "0123456789abcdefABCDEF", "IOSFODNN7EXAMPLE", "eyJhbGciOiJIUzI1NiJ9", "b3BlbnNzaC1rZXktdjEAAAA"] {
+    for secret in ["AbCdEf0123456789", "0123456789abcdefABCDEF", "IOSFODNN7EXAMPLE", "eyJhbGciOiJIUzI1NiJ9", "b3BlbnNzaC1rZXktdjEAAAA", "acme_12345678"] {
         assert!(!masked.contains(secret), "{secret} stays: {masked}");
     }
-    assert_eq!(masked.matches("[masked secret]").count(), 5, "{masked}");
+    for name in ["anthropic key", "github token", "aws key", "private key", "acme key"] {
+        assert!(masked.contains(&format!("[masked secret: {name}]")), "{name}: {masked}");
+    }
+    assert!(masked.contains("Bearer [masked secret: bearer token]"), "{masked}");
     assert!(masked.contains("sk-short") && masked.contains("hf_ alone") && masked.contains("risk-free"), "{masked}");
+    assert!(masked.contains("glpat-abcdefghijklmnopqrstuvwx"), "a shape nobody declared is not masked: {masked}");
 }
