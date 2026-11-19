@@ -19,6 +19,7 @@
 
 - 18 novembre 2026 — **Un llama-server déclaré a le budget d'un modèle local.** Déclaré `compatible`/`openai` à une adresse de ce poste (`127.0.0.1`, `localhost` ou `::1`), un modèle de langage repart après une compaction avec la moitié de sa fenêtre, et non plus avec les 100 000 jetons d'un modèle du cloud.
 - 19 novembre 2026 — **Le modèle lit le texte de ses lectures, pas leur enveloppe.** `read_file`, `grep_files` et `list_files` lui rendent le texte qu'ils ont lu, et non plus leur réponse JSON entière ; un échec, lui, reste rendu en entier, pour qu'il ne disparaisse jamais derrière un texte partiel.
+- 19 novembre 2026 — Dans le terminal de l'agent, la réponse que l'hôte recopie dans la boîte ne s'affiche plus une seconde fois quand elle a déjà défilé : elle se reconnaît à son champ `origin`, et non plus à un texte français.
 
 - 18 novembre2026 — Dans le terminal de l'agent, ce qu'on tape pendant une commande `!` ne se garde plus jamais dans sa sortie, même tapé avant que la commande coupe l'écho : un mot de passe tapé avant l'invite de `sudo` se voit à l'écran, comme dans tout terminal, mais n'entre ni dans la consigne envoyée à l'équipier, ni dans le journal.
 
