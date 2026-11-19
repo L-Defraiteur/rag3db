@@ -167,7 +167,7 @@ pushed() { # <id> <author> <branch>
 
 # The witnesses of a scripts lot: for each script it changes, test_<name>.sh or test_<name>.py next to it, or the
 # script itself when it is a witness. A script without a witness counts as the push guard counts it: as docs.
-replay_scripts() { # <id> → 0 green, 1 red (the failing witness on stdout)
+replay_scripts() { # <id> [quiet] → 0 green, 1 red (the failing witness on stdout); quiet: no « sans témoin » line
   local f dir n t played=""
   while IFS= read -r f; do
     [ -n "$f" ] || continue
@@ -184,7 +184,7 @@ replay_scripts() { # <id> → 0 green, 1 red (the failing witness on stdout)
         log "$1" témoin "$t rouge"; echo "$t"; return 1
       fi
     done
-    [ -n "$played" ] || log "$1" témoin "$f sans témoin (compté comme doc, comme la garde)"
+    [ -n "$played" ] || [ "${2:-}" = quiet ] || log "$1" témoin "$f sans témoin (compté comme doc, comme la garde)"
   done < <(g diff --name-only "$BASE" HEAD)
   return 0
 }
@@ -443,6 +443,9 @@ replay_train() { # <line>…
     0) return 0 ;;
     1) replay_scripts "$TRAIN_LABEL" > "$SD/last-red.txt" && return 0; return 1 ;;
   esac
+  # The witnesses of the scripts a Rust train changes too (19 Nov., archi: ui/ide/lib/boite.ts and its test_boite.sh),
+  # before the pass: seconds, and a red one returns the train without twenty minutes of pass.
+  replay_scripts "$TRAIN_LABEL" quiet > "$SD/last-red.txt" || return 1
   # A Rust train: one pass. Its witness is the first Rust lot's; the other Rust lots' witnesses (e2e suites) and
   # every lot's extra suites join SUITES_EN_PLUS; a lib witness is covered by the whole lib that the pass plays.
   for line in "$@"; do

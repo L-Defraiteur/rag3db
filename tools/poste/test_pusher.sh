@@ -576,4 +576,14 @@ c1=$(calls "$D/pass_calls")
 PUSHER_IDLE=0 PUSHER_TRAIN_MAX=1 P step > /dev/null 2>&1; PUSHER_IDLE=0 PUSHER_TRAIN_MAX=1 P step > /dev/null 2>&1
 on_master tk-mend2 && on_master tk-rust && ok "le lot de docs qui répare atterrit, puis le lot rust" || ko "après la réparation : tk-mend2 $(on_master tk-mend2 && echo poussé || echo absent), tk-rust $(on_master tk-rust && echo poussé || echo absent)"
 rm -f "$D/outcomes.d/tk-rust"
+# 36. A Rust lot that also changes a script with a witness next to it (19 Nov., archi: ui/ide/lib/boite.ts and its
+# test_boite.sh): the witness is played before the pass, and a red witness returns the lot without a pass.
+h=$(lot rs-w extension/rag3weaver/src/rsw.rs 'fn rsw() {}')
+git -C "$D/author" checkout -q rs-w && printf '#!/bin/bash\necho broken\n' > "$D/author/tools/poste/foo.sh" && git -C "$D/author" commit -qam "rs-w breaks foo" && git -C "$D/author" push -q origin HEAD:rs-w
+h=$(git -C "$D/author" rev-parse rs-w)
+P enqueue rs-w rs-w "$h" rust some_witness e2e_code - - author-c > /dev/null; echo VERT > "$D/outcomes.d/rs-w"; c0=$(calls "$D/pass_calls")
+PUSHER_TRAIN_MAX=1 P step > /dev/null 2>&1
+! on_master rs-w && grep -q "^rouge	rs-w	.*test_foo.sh" "$D/pusher/inbox/author-c.txt" && [ "$(calls "$D/pass_calls")" = "$c0" ] \
+  && ok "un lot rust qui casse le témoin d'un script : rendu sans passe" || ko "un lot rust qui casse le témoin d'un script : $(grep -P '\trs-w\t' "$D/pusher/log.tsv" | tail -1 | cut -f3,4)"
+rm -f "$D/outcomes.d/rs-w"
 exit $red
