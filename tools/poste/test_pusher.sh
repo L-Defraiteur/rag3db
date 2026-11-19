@@ -83,7 +83,8 @@ cat > "$D/poste.sh" <<'Q'
 # real one refuses before its queue, 19 Nov.); FAKE_POSTE_DOWN refuses everything. `push <session> -- <cmd>` runs it.
 [ -n "${FAKE_POSTE_DOWN:-}" ] && { echo "poste: refusé (doublure)"; exit 2; }
 case "$1" in
-  lourd) shift; [ "${POSTE_MEM_MAX:-}" = 32G ] || { echo "poste: refusé avant la file : une validation sous un plafond de 40G"; exit 2; }; exec "$@" ;;
+  lourd) shift; [ "${POSTE_MEM_MAX:-}" = 32G ] || { echo "poste: refusé avant la file : une validation sous un plafond de 40G"; exit 2; }
+         echo "${POSTE_VOIE:-}" >> "$POSTE_VOIES"; exec "$@" ;;
   push) shift 3; exec "$@" ;;
 esac
 exit 2
@@ -91,7 +92,7 @@ Q
 chmod +x "$D/poste.sh"
 export PUSHER_PIN_SCRIPT=pin.sh PUSHER_FETCH_LOCK=$D/fetch.lock PUSHER_CACHE=$D/cache PUSHER_PEERS= PUSHER_DIR=$D/pusher PUSHER_WORKSPACES=$D/ws PUSHER_WT_NAME=wt PUSHER_JOURNALS_ROOT=$D/journals \
   PUSHER_PASS=$D/pass.sh PUSHER_GUARD=$D/guard.sh PUSHER_POSTE=$D/poste.sh PUSHER_MASTER_HELD=$D/master-tenu \
-  REAL_GUARD=$HERE/push_garde.sh OUTCOMES=$D/outcomes PASS_CALLS=$D/pass_calls GUARD_CALLS=$D/guard_calls PASS_ENV=$D/pass_env
+  REAL_GUARD=$HERE/push_garde.sh OUTCOMES=$D/outcomes PASS_CALLS=$D/pass_calls GUARD_CALLS=$D/guard_calls PASS_ENV=$D/pass_env POSTE_VOIES=$D/poste_voies
 : > "$D/outcomes"; : > "$D/pass_calls"; : > "$D/guard_calls"
 P() { bash "$PUSHER" "$@"; }
 master() { git -C "$D/author" fetch -q origin && git -C "$D/author" rev-parse origin/master; }
@@ -152,6 +153,7 @@ echo VERT >> "$D/outcomes"
 P enqueue rust-1 rust-1 "$h" rust some_witness e2e_code - - author-c > /dev/null && P step > /dev/null 2>&1
 on_master rust-1 && [ "$(calls "$D/pass_calls")" = 1 ] && [ "$(calls "$D/guard_calls")" = 1 ] && ok "rust : une passe, la garde, poussé" || ko "rust : pas poussé, ou passe ou garde manquante"
 grep -q "	rust-1	.*peak=" "$D/pusher/log.tsv" && ok "pic mémoire du rejeu au journal" || ko "pas de pic mémoire au journal"
+grep -qx pousseur "$D/poste_voies" 2>/dev/null && ! grep -vqx pousseur "$D/poste_voies" && ok "la passe du pousseur prend la voie du pousseur (POSTE_VOIE)" || ko "la passe du pousseur ne demande pas sa voie ($(sort -u "$D/poste_voies" 2>/dev/null | tr '\n' ' '))"
 
 # 6. A Rust lot red on code: returned, no guard.
 h=$(lot rust-2 extension/rag3weaver/src/lib.rs 'fn main() { panic!(); }')

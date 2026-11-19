@@ -74,7 +74,8 @@ remove_from_queue() {
   ( flock 9; awk -F'\t' -v id="$1" '/^#/ || $1 != id' "$Q" > "$Q.new" && mv "$Q.new" "$Q" ) 9> "$D/queue.lock"
 }
 # The ceiling is poste's own (19 Nov.: given to the pass only, poste refused every validation under its 40G default).
-poste_lourd() { if [ -n "$POSTE" ]; then POSTE_MEM_MAX=32G "$POSTE" lourd "$@"; else "$@"; fi; }
+# The pusher's lane (POSTE_VOIE=pousseur): its pass heads the queue of heavy jobs, behind a waiting measure (19 Nov.).
+poste_lourd() { if [ -n "$POSTE" ]; then POSTE_VOIE=pousseur POSTE_MEM_MAX=32G "$POSTE" lourd "$@"; else "$@"; fi; }
 poste_push() { if [ -n "$POSTE" ]; then "$POSTE" push pusher -- "$@"; else "$@"; fi; }
 
 # The kind of a lot, from what it changes since master: docs (only .md), cpp (an engine path), rust (what the push
