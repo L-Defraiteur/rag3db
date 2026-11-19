@@ -195,3 +195,14 @@ témoin seulement.
 - Sans train, c'est 1,5 à 2 lots Rust par heure au plus, et c'est le plafond. Avec le train, quatre lots Rust
   passent dans le même rejeu, si aucun n'est rouge.
 - Un second créneau ne double pas le débit : il ne sert que lorsque des trains attendent.
+
+## Mise en service
+
+19 novembre 2026, 9 h 20, au mot de c7 :
+
+- worktree `~/git_workspaces/rag3db-pusher` à luciepc, détaché sur master, sous-module à jour, identité gmail ;
+- `~/.cache/rag3weaver-build/pusher.sh` recopié du dépôt (sha256 c3341aec2c7bde77, les mêmes octets), son témoin
+  joué contre la copie : 32 cas verts ;
+- dossier `~/.cache/rag3weaver-build/pusher/` ; `target-pusher` naît à la première passe Rust.
+
+Le premier train est un train à blanc : ce paragraphe, déposé comme un lot de docs et poussé par le pousseur.
