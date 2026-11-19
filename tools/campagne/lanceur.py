@@ -150,5 +150,9 @@ def build_tree(block, repo, depots, dest):
     git(dest, *ident, "commit", "-qm", "base")
 
 
+def prove_red(block, dest, target, poste):
+    raise NotImplementedError
+
+
 if __name__ == "__main__":
     sys.exit("usage: lanceur.py <case.md> …")
