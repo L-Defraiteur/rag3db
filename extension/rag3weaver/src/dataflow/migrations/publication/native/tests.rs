@@ -209,10 +209,10 @@ fn native_interruption_child() {
         let mut r = read_registry(&store.conn, &origin).unwrap();
         r.apply(&intent).unwrap();
         write_registry(&store.conn, &r).unwrap();
-        std::process::exit(73);
+        crate::fautes_de_test::simulated_death(73);
     }
     store.publish(&intent).unwrap();
-    std::process::exit(74);
+    crate::fautes_de_test::simulated_death(74);
 }
 
 #[test]
