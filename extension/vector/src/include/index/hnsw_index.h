@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdlib>
 #include <queue>
 #include <unordered_map>
 
@@ -156,13 +157,22 @@ struct InMemHNSWLayerInfo {
     double alpha;
     int64_t efc;
     const NodeToHNSWGraphOffsetMap& offsetMap;
+    // Test-only fault injection (RAG3DB_TEST_HNSW_APPEND_PAUSE_EVERY=N): every N-th append to a
+    // neighbour list pauses between taking its slot and writing it, the window where a parallel
+    // build lost edges. Read once per build; 0, the default, never pauses.
+    uint64_t appendPauseEvery;
 
     InMemHNSWLayerInfo(common::offset_t numNodes, HNSWIndexEmbeddings* embeddings,
         metric_func_t metricFunc, int64_t degreeThresholdToShrink, int64_t maxDegree, double alpha,
         int64_t efc, const NodeToHNSWGraphOffsetMap& offsetMap)
         : numNodes{numNodes}, embeddings{embeddings}, metricFunc{std::move(metricFunc)},
           degreeThresholdToShrink{degreeThresholdToShrink}, maxDegree{maxDegree}, alpha{alpha},
-          efc{efc}, offsetMap(offsetMap) {}
+          efc{efc}, offsetMap(offsetMap), appendPauseEvery{readAppendPauseEvery()} {}
+
+    static uint64_t readAppendPauseEvery() {
+        const auto* value = std::getenv("RAG3DB_TEST_HNSW_APPEND_PAUSE_EVERY");
+        return value == nullptr ? 0 : std::strtoull(value, nullptr, 10);
+    }
 
     uint64_t getDimension() const { return embeddings->getDimension(); }
     EmbeddingHandle getEmbedding(common::offset_t offsetInGraph,

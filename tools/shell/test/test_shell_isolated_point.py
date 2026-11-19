@@ -9,8 +9,8 @@ from test_helper import RAG3DB_ROOT
 # 19 Nov. 2026). The vector index is built in parallel; two threads appending to the same neighbour
 # list while one of them shrinks it lose edges, and the lone point, which has few, loses its links to
 # the route searches take. Measured at luciepc with this recipe, 12 runs per thread count: missed
-# 0 times at 1 and 4 threads, 5 at 8, 4 at 24. The test builds at 8 threads: it can only be red on a
-# machine with at least 8 cores. Driven through the shell because the same recipe through the C++ API
+# 0 times at 1 and 4 threads, 5 at 8, 4 at 24. The test builds at 8 threads; it was red on 5 cores
+# too (missed once in 10, under the machine lock). Driven through the shell because the same recipe through the C++ API
 # in transaction_test never missed (100 rounds), for a reason not yet found.
 
 EXTENSION = os.path.join(

@@ -8,6 +8,7 @@
 // and on disk.
 
 #include <cstdint>
+#include <cstdlib>
 #include <filesystem>
 #include <string>
 
@@ -100,6 +101,17 @@ protected:
                                     << "exact vector:" << misses;
     }
 };
+
+// The same, with the test-only pause between taking a slot of a neighbour list and writing it
+// (RAG3DB_TEST_HNSW_APPEND_PAUSE_EVERY): it widens the window where an append and a shrink of the
+// same list overlapped, so the lost edges show without depending on how busy the machine is.
+TEST_F(VectorIndexIsolatedPoint, ALonePointIsFoundFirstEvenWhenAppendsPauseMidway) {
+    struct PauseAppends {
+        PauseAppends() { setenv("RAG3DB_TEST_HNSW_APPEND_PAUSE_EVERY", "64", 1); }
+        ~PauseAppends() { unsetenv("RAG3DB_TEST_HNSW_APPEND_PAUSE_EVERY"); }
+    } pause;
+    expectFoundFirstEveryRound(true, "lone-point-found-first-with-paused-appends");
+}
 
 TEST_F(VectorIndexIsolatedPoint, ALonePointIsFoundFirstOnceSetRowsFormACloudBesideIt) {
     expectFoundFirstEveryRound(true, "lone-point-found-first-after-set-cloud");
