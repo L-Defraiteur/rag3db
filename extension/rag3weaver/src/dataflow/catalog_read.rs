@@ -164,7 +164,7 @@ fn statut(cat: &Catalog, entity: &str, cell: Option<&crate::scope::Scope>) -> Re
     let cell = cell.cloned().unwrap_or_else(|| cat.scope().clone());
     let lag = cat
         .file_lag()
-        .summary_in(&cell)
+        .summary_of(&crate::catalog::retard::LagKey::backend(&cell))
         .map(|s| s.status_line(crate::catalog::retard::now_ms()));
     let status = match (status, lag) {
         (Some(partial), Some(lag)) => Some(format!("{partial} {lag}")),
@@ -191,7 +191,7 @@ fn statut(cat: &Catalog, entity: &str, cell: Option<&crate::scope::Scope>) -> Re
 /// Le champ `freshness` des outils de lecture (JSON), et leur ligne d'en-tête (markdown).
 pub fn freshness_of(cat: &Catalog, cell: &crate::scope::Scope) -> Option<serde_json::Value> {
     let arbre = cat.indexed_tree(cell)?;
-    let retard = cat.file_lag().summary_in(cell);
+    let retard = cat.file_lag().summary_of(&crate::catalog::retard::LagKey::backend(cell));
     Some(serde_json::json!({
         "root": arbre.get("root"),
         "commit": arbre.get("commit"),
@@ -207,7 +207,7 @@ pub fn freshness_of(cat: &Catalog, cell: &crate::scope::Scope) -> Option<serde_j
 pub fn freshness_line(cat: &Catalog, cell: &crate::scope::Scope) -> Option<String> {
     let now = crate::catalog::retard::now_ms();
     let arbre = cat.indexed_tree_line(cell, now)?;
-    Some(match cat.file_lag().summary_in(cell) {
+    Some(match cat.file_lag().summary_of(&crate::catalog::retard::LagKey::backend(cell)) {
         Some(r) => format!("{arbre} — {}", r.status_line(now)),
         None => format!("{arbre}, à jour"),
     })

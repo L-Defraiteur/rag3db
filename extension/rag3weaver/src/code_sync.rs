@@ -1356,7 +1356,7 @@ pub fn sync_source(
             };
             report.failed += r.failed;
             // Relu et repris : le retard noté avant cette lecture tombe.
-            catalog.file_lag().done(&catalog.scope().clone(), &path, lu_a);
+            catalog.file_lag().done_in(&crate::catalog::retard::LagKey::backend(catalog.scope()), &path, lu_a);
             report.files_resumed.push(path);
             avancement.files_resumed += 1;
             avancement.files_to_resume -= 1;
@@ -1756,7 +1756,7 @@ fn synchroniser_par_generations(
         report.failed += r.failed;
         let (lag, cell) = (catalog.file_lag(), catalog.scope().clone());
         for path in paquet {
-            lag.done(&cell, path, lu_a);
+            lag.done_in(&crate::catalog::retard::LagKey::backend(&cell), path, lu_a);
         }
         avancement.files_done += paquet.len();
         avancement.scopes_written = report.scopes_written;
@@ -2041,7 +2041,7 @@ fn synchroniser(
         {
             let (lag, cell) = (catalog.file_lag(), catalog.scope().clone());
             for path in paquet {
-                lag.done(&cell, path, lu_a);
+                lag.done_in(&crate::catalog::retard::LagKey::backend(&cell), path, lu_a);
             }
         }
         crate::ingest_profile::add("sync · paquet entier, de bout en bout", t_paquet);
