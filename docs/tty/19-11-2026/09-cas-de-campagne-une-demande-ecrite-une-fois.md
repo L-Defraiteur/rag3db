@@ -4,6 +4,10 @@
 {
   "parent": "b1163f64e10c748f3bdc65f82fca55e066592365",
   "tree": "extension/rag3weaver/tty",
+  "paths": [
+    "extension/rag3weaver/tty",
+    "extension/rag3weaver/templates/themes"
+  ],
   "needs_lib": false,
   "witness": "tui::tests::the_name_kept_by_the_host_is_the_one_the_view_keeps vue::tests::what_you_send_is_written_once_even_when_the_mailbox_gives_it_back",
   "test": "cargo test -j 8 -- --exact tui::tests::the_name_kept_by_the_host_is_the_one_the_view_keeps vue::tests::what_you_send_is_written_once_even_when_the_mailbox_gives_it_back",
@@ -20,6 +24,8 @@
 ```
 
 Le bloc est celui du lanceur (forme d'archi). `witness` porte les filtres exacts, séparés par une espace ; `test` les passe à libtest avec `--exact`. Les `suites` sont celles de la suite exigée `tty` qui existent au parent : les mesures `plain_*` n'y sont pas encore (elles datent du 16 novembre, après le parent).
+
+`tree` est le dossier d'où les commandes partent ; `paths` sont les chemins à archiver (`git archive <parent> <paths>`) : le crate inclut les thèmes de `extension/rag3weaver/templates/themes` (`include_str!`), et sans eux il ne compile pas. Un target par cas : deux arbres de cas sur un même `CARGO_TARGET_DIR` ont rejoué le binaire de l'autre (vu le 19 nov. en vérifiant ces deux cas). Vérifié sur l'arbre archivé, dans un target propre : le témoin est rouge au parent.
 
 Session tty, 19 novembre 2026, pour la campagne des correctifs passés (chantier de Lucie ; lanceur d'archi, juge du banc). C'est un cas court, en Rust, dans le crate du terminal, avec deux témoins.
 
