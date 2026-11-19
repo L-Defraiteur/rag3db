@@ -7,10 +7,13 @@
 set -u
 journal="$1"
 filter="${2:-}"
-vides=$(grep -c '^test result: .* 0 passed; 0 failed;' "$journal" || true)
+# **The binary's own safety nets do not count** (`Running tests/e2e_filets.rs`): they play first in every pass, two
+# tests, whatever the filter; counted, they made a filter that names nothing look like a pass (11 November 2026).
+results=$(awk '/^ *Running / { nets = ($0 ~ /e2e_filets\.rs/) } /^test result:/ && !nets' "$journal")
+vides=$(printf '%s\n' "$results" | grep -c '^test result: .* 0 passed; 0 failed;' || true)
 total=0
 # The tests played, passed or not: a filter that names a failing test names something.
-for n in $(grep '^test result:' "$journal" | grep -oP '\d+(?= (passed|failed);)'); do total=$((total + n)); done
+for n in $(printf '%s\n' "$results" | grep -oP '\d+(?= (passed|failed);)'); do total=$((total + n)); done
 if [ -z "$filter" ] && [ "${vides:-0}" -gt 0 ]; then
   echo "✗ ${vides} suite(s) n'ont joué aucun test : feature manquante, ou fichier sans test ?"
   exit 1
