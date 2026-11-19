@@ -206,6 +206,83 @@ impl DaemonHost {
         self
     }
 
+    /// **The compaction of a chat** (lot 2 of the session archived as it goes, 19 Nov 2026;
+    /// `POST /ide/chat/compact`, and a chat turn past `memory.compact_at` of the window). Refused
+    /// while a turn or a filing is in flight. The messages not yet written go to the memory, the
+    /// open slice is filed (waiting), `compose_restart` composes the context from the filed
+    /// Sources, and the session restarts on it, with the last `memory.keep_turns` turns raw. A
+    /// failure leaves the session as it was.
+    pub fn compacter_le_chat(&self, backend_id: &str) -> Result<Value, String> {
+        let hosted = self.hote_par_id(backend_id)?;
+        let r = self.rangement_de(&hosted, backend_id).ok_or("no memory to compact into: the backend declares no bilans.memoire, or memory.index_turns is off")?;
+        let fenetre = self.chat_state(backend_id).ok().and_then(|v| v["context"]["max"].as_u64()).map(|n| n as usize);
+        if self.rangements_en_vol.lock().unwrap_or_else(|p| p.into_inner()).contains(backend_id) {
+            return Err("a filing is in flight: compact once it ends".into());
+        }
+        // The session, taken like a turn takes it: no turn starts meanwhile.
+        let mut session = {
+            let mut chats = self.chats.lock().unwrap_or_else(|p| p.into_inner());
+            let e = chats.get_mut(backend_id).ok_or("no conversation on this backend")?;
+            if let Some(run) = &e.busy {
+                return Err(format!("a turn is in flight (run {run}): compact once it ends"));
+            }
+            e.busy = Some("compaction".to_string());
+            std::mem::take(&mut e.session)
+        };
+        let run = format!("chat:{backend_id}");
+        let fait = (|| -> Result<Value, String> {
+            r.envoyer_les_tours(&run, &session.turns)?;
+            let (de, jusqu_a, _) = r.tranche_ouverte(&session.turns);
+            if jusqu_a >= de {
+                r.ranger(&run, de, jusqu_a)?;
+            }
+            let etat = r.etat();
+            if etat.sources.is_empty() {
+                return Err("nothing filed to restart from".into());
+            }
+            let budget = fenetre.map(|f| f / 2).unwrap_or(20_000).max(1_000);
+            let reprise = r.rangeur.compose_restart(&r.memoire, &json!({ "sources": etat.sources, "identity": "", "task_fiche": "", "budget_tokens": budget }))?;
+            let texte = reprise["text"].as_str().ok_or_else(|| format!("compose_restart returned no text: {reprise}"))?.to_string();
+            // The last `keep_turns` turns stay raw; the turns before them leave the session.
+            let comptes: Vec<usize> = session.turns.iter().enumerate().filter(|(_, t)| t.role == "user" && !super::rangement::de_reprise(t)).map(|(i, _)| i).collect();
+            let gardes = r.reglage.keep_turns.min(comptes.len());
+            let debut_de_la_queue = if gardes == 0 { session.turns.len() } else { comptes[comptes.len() - gardes] };
+            let retires = comptes.len() - gardes;
+            let systeme: Vec<crate::llm::Turn> = session.turns.iter().filter(|t| t.role == "system").cloned().collect();
+            let queue: Vec<crate::llm::Turn> = session.turns[debut_de_la_queue..].to_vec();
+            let mut contexte = crate::llm::Turn::user(&format!("[Context restored after a compaction: what earlier turns filed in memory]\n\n{texte}"));
+            contexte.metadata = Some(json!({ "compaction": true }));
+            let mut accuse = crate::llm::Turn::assistant("Context restored.");
+            accuse.metadata = Some(json!({ "compaction": true }));
+            session.turns = systeme.into_iter().chain([contexte, accuse]).chain(queue).collect();
+            let etat = r.changer(|s| s.turn_offset += retires);
+            Ok(json!({ "ok": true, "archived_through_turn": etat.archived_through_turn, "turn_offset": etat.turn_offset, "kept_turns": gardes, "restart_tokens": reprise["tokens"] }))
+        })();
+        {
+            let mut chats = self.chats.lock().unwrap_or_else(|p| p.into_inner());
+            if let Some(e) = chats.get_mut(backend_id) {
+                e.session = session;
+                e.busy = None;
+            }
+        }
+        if fait.is_ok() {
+            self.write_chat(backend_id)?;
+        }
+        fait
+    }
+
+    /// Before a chat turn: past `memory.compact_at` of the window, compact first. A refusal or a
+    /// failure lets the turn go on as it is; the next turn tries again.
+    fn compacter_si_la_jauge_deborde(&self, backend_id: &str) {
+        let Ok(etat) = self.chat_state(backend_id) else { return };
+        let (Some(used), Some(max)) = (etat["context"]["used"].as_u64(), etat["context"]["max"].as_u64()) else { return };
+        let Ok(hosted) = self.hote_par_id(backend_id) else { return };
+        let Some(r) = self.rangement_de(&hosted, backend_id) else { return };
+        if max > 0 && used as f64 >= r.reglage.compact_at * max as f64 {
+            let _ = self.compacter_le_chat(backend_id);
+        }
+    }
+
     /// The calls to the memory of the session archived as it goes (a witness plays them).
     pub fn with_rangeur(mut self, rangeur: Arc<dyn super::rangement::Rangeur>) -> Self {
         self.rangeur = Some(rangeur);
@@ -569,6 +646,10 @@ impl DaemonHost {
     /// `step_done`, `report`) et son budget enveloppent ceux du chat, `step_done`
     /// termine le tour, et le journal du run dit la demande (la fiche du juge).
     pub fn chat_turn_with(&self, backend_id: &str, message: &str, step: Option<&super::teammate::Step>) -> Result<Value, String> {
+        // A chat turn past `memory.compact_at` of the window compacts first (lot 2).
+        if step.is_none() {
+            self.compacter_si_la_jauge_deborde(backend_id);
+        }
         let hosted = self.hote_par_id(backend_id)?;
         let run_id = crate::events::new_run_id("agent");
         // L'arrêt du tour : lever son drapeau et dire qui l'a demandé.
@@ -666,7 +747,7 @@ impl DaemonHost {
                 None => format!("chat:{backend_id}"),
             };
             let turns = self.chats.lock().unwrap_or_else(|p| p.into_inner()).get(backend_id).map(|e| e.session.turns.clone()).unwrap_or_default();
-            self.ranger_apres_le_tour(&hosted, backend_id, &run, depuis, turns);
+            self.ranger_apres_le_tour(&hosted, backend_id, &run, turns);
         }
         resultat
     }
