@@ -1201,6 +1201,32 @@ mod tests {
         assert_eq!((count("File"), count("Scope")), (6, 6), "no row lost, none doubled");
     }
 
+    /// **The estimate of a reindexing starts from what changes** (ticket of 15 November 2026, « l'estimation
+    /// d'une réindexation compte toute la source »): on a base already indexed, without debt, a reindexing of
+    /// an unchanged source embeds nothing. It used to count the whole source as a first index, and at a slow
+    /// rate it asked for a confirmation the work did not need.
+    #[cfg(all(feature = "rag3db-native", feature = "code"))]
+    #[test]
+    fn the_estimate_of_an_unchanged_reindexing_announces_no_vector() {
+        let fichiers: Vec<(String, String)> = (0..6).map(|i| (format!("src/f{i}.rs"), format!("pub fn f{i}() -> u32 {{ {i} }}\n// {}\n", "x".repeat(120)))).collect();
+        let source: Arc<dyn FileSource> = Arc::new(Snapshot::new("depot", fichiers));
+        let conn = crate::Rag3dbConnection::in_memory().expect("in-memory base");
+        let config = crate::CatalogConfig { name: Some("estimate".into()), embedding_dim: 8, allow_mock_embedder: true, ..Default::default() };
+        let mut catalog = Catalog::new(Box::new(conn), Box::new(crate::embedder::HashEmbedder::new(8)), config);
+        catalog.initialize().unwrap();
+        crate::code::register_code_schema(&mut catalog, crate::code::default_scope_chunking()).unwrap();
+        let catalog = Arc::new(Mutex::new(catalog));
+        let journal = new_index_journal().expect("journal");
+        spawn_index(catalog.clone(), source.clone(), journal.clone(), 0, Default::default()).join().expect("the index thread");
+        let _ = std::fs::remove_file(&journal);
+        assert_eq!(catalog.lock().unwrap().index_progress().unwrap().dense_missing(), 0, "indexed, without debt");
+        // One character a second: the whole source would take far longer than the confirmation threshold.
+        catalog.lock().unwrap().note_measured_embedding_rate(crate::estimate::Rate { chars_per_second: 1.0 }).unwrap();
+        let e = estimate_of(source.as_ref(), Some(&catalog), false, &Default::default(), None).expect("the estimate");
+        assert_eq!(e.vectors_seconds, Some(0), "nothing changed, nothing to embed: {e:?}");
+        assert!(!e.needs_confirmation, "no confirmation for a reindexing that costs nothing: {e:?}");
+    }
+
     /// **La garde des comptes du plein texte, dite à la fin d'un index**
     /// (25 octobre 2026) : le journal dit « vérifié » quand chaque entité a
     /// autant de documents que de lignes, l'état garde les comptes ; et un
