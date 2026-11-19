@@ -43,9 +43,10 @@ else
 fi
 export RAG3WEAVER_TARGET_REPRENDRE=1
 # Épinglée : une bascule de `courant` ne change pas la lib sous la passe.
-export RAG3DB_LIB=rag3db-build-7c2b506ec74e79812df7960b220fc470d8449f14-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
-# Depuis le 19 novembre 2026 (bascule de G, fenêtre de 9 h 32) : lib 7c2b506ec posée aux deux postes, hôtes source
-# 72a02fdd1a ; les passes de cette source ne demandent plus MOTEUR_ANCIEN. Avant : 3d706f709 (18 novembre), 59ac9c86bc
+export RAG3DB_LIB=rag3db-build-6e2476d41bd7e8a58d1594495da05c49b6f99461-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+# Depuis le 19 novembre 2026 au soir (bascule de G, train du cœur : DROP qui attend les lecteurs, lock_tables) : lib
+# 6e2476d41 posée aux deux postes, hôtes source 8328a87be8 ; les passes de cette source ne demandent plus MOTEUR_ANCIEN.
+# Avant : 7c2b506ec (19 novembre, matin), 3d706f709 (18 novembre), 59ac9c86bc
 # (16 novembre), 373b5477b (14 novembre),
 # puis 29a7bc52a, 9bae60786, cbc06c3e1, dadbf0041.
 # Le plafond du target de run_e2e.sh, 32 Go mesurés par G (d845744a2) : une branche d'avant garde 20.
