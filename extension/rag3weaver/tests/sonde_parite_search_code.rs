@@ -723,6 +723,17 @@ fn releve_le_namespace_devant_la_classe() {
     let prepared = PreparedBackend::load(std::path::Path::new(&manifeste)).expect("le manifeste");
     let backend = { let embedder = embedder_of(&prepared); prepared.open(Box::new(Rag3dbConnection::new(&base).expect("ouvrir la copie")), embedder) }.expect("ouvrir le backend");
     let forme = format!("{:?}", rag3weaver::code::scope_form(&backend.catalog.lock().unwrap()).unwrap());
+    // The search targets as resolved at run time: their default signals and where they read (the dense default).
+    {
+        let cat = backend.catalog.lock().unwrap();
+        for nom in ["Scope", "ScopeContent"] {
+            match cat.resolve_search_target(nom) {
+                Ok(t) => eprintln!("[namespace] cible {nom} : default_signals {:?}, parent_table {}, chunk_table {}, bm25_fields {:?}", t.default_signals, t.parent_table, t.chunk_table, t.bm25_fields),
+                Err(e) => eprintln!("[namespace] cible {nom} : {e}"),
+            }
+            eprintln!("[namespace] config {nom} : signals {:?}", cat.entity_config(nom).map(|c| c.signals));
+        }
+    }
     let mut releve = json!({"base": base.to_string_lossy(), "forme": forme, "requete": requete, "chemin": chemin, "modes": {}});
     for (nom, signaux) in [("tous", Value::Null), ("dense", json!(["vector"])), ("bm25", json!(["bm25"]))] {
         let limite: u64 = std::env::var("RAG3WEAVER_NAMESPACE_LIMITE").ok().and_then(|v| v.parse().ok()).unwrap_or(20);
