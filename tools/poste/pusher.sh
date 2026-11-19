@@ -120,8 +120,9 @@ enqueue() {
   [ "$full" = "$remote" ] || { echo "refusé : la tête de $branch sur origin ($(g rev-parse --short "$remote")) n'est pas $head" >&2; return 1; }
   computed=$(kind_of "$remote") || { echo "refusé : le lot ne se lit pas contre master" >&2; return 1; }
   # The witness's suite is SUITE_DU_TEMOIN: « lib », or the name of an e2e suite of the lot's tree (19 Nov., relevé d'ED).
-  if [ "$kind" = rust ] && [ "$6" != lib ] && ! g cat-file -e "$remote:extension/rag3weaver/tests/$6.rs" 2>/dev/null; then
-    echo "refusé : la suite du témoin « $6 » n'est ni lib ni une suite e2e du lot (extension/rag3weaver/tests/$6.rs)" >&2; return 1
+  # « navigateur » (19 Nov., c7): a witness under the feature navigateur, judged at the pass's step of browser witnesses.
+  if [ "$kind" = rust ] && [ "$6" != lib ] && [ "$6" != navigateur ] && ! g cat-file -e "$remote:extension/rag3weaver/tests/$6.rs" 2>/dev/null; then
+    echo "refusé : la suite du témoin « $6 » n'est ni lib, ni navigateur, ni une suite e2e du lot (extension/rag3weaver/tests/$6.rs)" >&2; return 1
   fi
   [ "$computed" = cpp ] && { echo "refusé : le lot touche le moteur (cpp), il passe par la voie transférable ou une fenêtre" >&2; return 1; }
   [ "$computed" = "$kind" ] || { echo "refusé : le lot est $computed, pas $kind" >&2; return 1; }
@@ -396,7 +397,7 @@ replay_train() { # <line>…
     # A later lot adds its suite: with « e2e » (or « - ») its witness names an e2e suite; with a named suite its
     # witness is a test of it, played by playing the suite (19 Nov.: a test's name was given as a suite).
     if [ -z "$first" ]; then first=$w; [ "$s" = - ] || suite=$s
-    else case "$s" in lib) ;; e2e|-) extra="$extra,$w" ;; *) extra="$extra,$s" ;; esac; fi
+    else case "$s" in lib|navigateur) ;; e2e|-) extra="$extra,$w" ;; *) extra="$extra,$s" ;; esac; fi
     [ "$x" = - ] || extra="$extra,$x"
   done
   extra=$(echo "${extra#,}" | tr ',' '\n' | awk 'NF && !seen[$0]++' | paste -sd,)
