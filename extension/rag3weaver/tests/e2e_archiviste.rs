@@ -1003,6 +1003,65 @@ fn read_turns_gives_each_turn_of_the_range_with_its_state() {
     assert_eq!(t[2]["messages"], json!([]));
 }
 
+/// **The TTL of the turns** (19 November 2026, tranché par c7 : une expiration déclarée par
+/// l'entité) : purge_turns expires the Turn rows older than the bound, with their full text; the
+/// slice Source and the L1 filed from those turns stay (they cite a range, not rows).
+#[test]
+#[ignore]
+fn purge_turns_expires_old_turns_and_keeps_the_slice_and_its_l1s() {
+    let extraction = r#"{"slice_summary": "s", "topics": [
+        {"title": "la reprise du journal", "turns": [{"from": 1, "to": 6}], "said": "SAIDREPRISE", "open": false, "attributes": []}
+    ], "not_filed": []}"#;
+    let serveur = FakeServer::start_sequence(vec![
+        text_reply(extraction),
+        etiquette_decrite("create", "La reprise du journal", "Comment le moteur rejoue son journal à l’ouverture."),
+    ]);
+    let adresse = serveur.url.clone();
+    let dir = tempfile::tempdir().expect("dossier");
+    let b = ouvrir(dir.path(), |m| {
+        m["models"]["llm"] = json!({"provider": "compatible", "protocol": "openai", "model": "faux", "address": adresse});
+    });
+    put_six_turns(&b);
+    let r = appel(&b, "archive_slice", json!({"run": "chat:test", "from_turn": 1, "to_turn": 6, "allow_create": true}));
+    assert_eq!(r["result"]["archived_through_turn"], json!(6), "{r}");
+    // The default bound is the entity's ttl_days (30): fresh turns stay.
+    let r = appel(&b, "purge_turns", json!({}));
+    assert_eq!(r["result"]["expired"], json!(0), "{r}");
+    assert_eq!(r["result"]["older_than_days"], json!(30), "{r}");
+    // 0 days: every row written before now goes.
+    let r = appel(&b, "purge_turns", json!({"older_than_days": 0}));
+    assert_eq!(r["result"]["expired"], json!(13), "6 turns × 2 messages + 1 tool call: {r}");
+    let read = appel(&b, "read_turns", json!({"run": "chat:test", "from_turn": 1, "to_turn": 6}));
+    assert!(read["result"]["turns"].as_array().unwrap().iter().all(|t| t["state"] == json!("gone")), "{read}");
+    let found = appel(&b, "search_turns", json!({"query": "SLICEONE", "options": {"consistency": "strict"}}));
+    assert_eq!(found["result"]["turns"], json!([]), "the full text goes with the row: {found}");
+    let s = appel(&b, "select_sources", json!({"filter": {"field": {"key": "chemin", "value": "sources/chat-test-turns-1-6.md"}}}));
+    assert_eq!(s["result"].as_array().map(Vec::len), Some(1), "the slice Source stays: {s}");
+    assert_eq!(apports_de(&b, "La reprise du journal").len(), 1, "the L1 stays");
+}
+
+/// **The guard is the entity's declaration** : expire on an entity that does not declare
+/// `writes.expires` is refused, naming it — a tool can expire nothing else than turns.
+#[test]
+#[ignore]
+fn expire_is_refused_on_an_entity_that_does_not_declare_it() {
+    let dir = tempfile::tempdir().expect("dossier");
+    let racine = dir.path().to_path_buf();
+    let b = ouvrir(dir.path(), |m| {
+        std::fs::write(
+            racine.join("templates/backends/memory/graphs/expire_fiches.mmd"),
+            "%% tool: expire_fiches\n%% description: test\n%% param: record json = {}\n%% result: x.record\n\ngraph LR\n    x[\"EntityRecordNode(entity='Fiche', action='expire', record=$record, older_than_days=0)\"]\n",
+        )
+        .unwrap();
+        m["tools"]["expire_fiches"] = json!({"graph": "graphs/expire_fiches.mmd"});
+    });
+    appel(&b, "put_fiche", json!({"record": {"name": "Une fiche qui reste", "about": "Une fiche qui ne doit jamais expirer.", "state": "current"}}));
+    let said = match b.call("expire_fiches", json!({})) { Ok(v) => v.to_string(), Err(e) => e.to_string() };
+    assert!(said.contains("Fiche") && said.contains("writes.expires"), "refused, naming the entity: {said}");
+    let f = appel(&b, "get_fiche", json!({"record": {"name": "Une fiche qui reste"}}));
+    assert!(f["result"]["data"].is_object(), "the fiche stays: {f}");
+}
+
 /// An extraction that is not the requested JSON is refused, naming response_schema: nothing is
 /// guessed and nothing is filed.
 #[test]
