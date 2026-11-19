@@ -47,12 +47,12 @@ passe() { # passe <attendu: VERT|ROUGE …|TEMOINS…> <description> [variables�
 }
 R=$H/.cache/rag3weaver-build/j/resume.log
 passe VERT "la passe entière, tout vert"
-grep -q '^commit [0-9a-f]\{7,\} — .* — lib 3d706f709' $R && echo "vert   la première ligne dit le commit et la lib" || { echo "ROUGE  première ligne : $(head -1 $R)"; rouge=1; }
-grep -q 'LIB=rag3db-build-3d706f709a59edc13d4986689323cbf0e2a83c8e-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF ' $D/trace && echo "vert   les suites reçoivent la lib complète de la bascule" || { echo "ROUGE  la lib complète de la bascule manque aux suites"; rouge=1; }
+grep -q '^commit [0-9a-f]\{7,\} — .* — lib 7c2b506ec' $R && echo "vert   la première ligne dit le commit et la lib" || { echo "ROUGE  première ligne : $(head -1 $R)"; rouge=1; }
+grep -q 'LIB=rag3db-build-7c2b506ec74e79812df7960b220fc470d8449f14-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF ' $D/trace && echo "vert   les suites reçoivent la lib complète de la bascule" || { echo "ROUGE  la lib complète de la bascule manque aux suites"; rouge=1; }
 [ "$(cut -d' ' -f1 $D/trace | tr '\n' ' ')" = "e2e_lectures e2e_lectures e2e_code " ] && echo "vert   le témoin, puis e2e_lectures et e2e_code" || { echo "ROUGE  suites jouées : $(cut -d' ' -f1 $D/trace | tr '\n' ' ')"; rouge=1; }
 [ "$(cat $H/.cache/rag3weaver-build/j/base 2>/dev/null)" = "$BASE_JOUET" ] && echo "vert   la base testée est écrite pour la garde (<journaux>/base = master sous la tête)" || { echo "ROUGE  base testée : « $(cat $H/.cache/rag3weaver-build/j/base 2>/dev/null) », attendu $BASE_JOUET"; rouge=1; }
 passe VERT "sous RAG3WEAVER_MOTEUR_ANCIEN=1" RAG3WEAVER_MOTEUR_ANCIEN=1
-grep -q '^RAG3WEAVER_MOTEUR_ANCIEN=1 : le C++ du lot est plus neuf que la lib 3d706f709' $R && echo "vert   RAG3WEAVER_MOTEUR_ANCIEN est dit au résumé" || { echo "ROUGE  RAG3WEAVER_MOTEUR_ANCIEN n'est pas dit au résumé"; rouge=1; }
+grep -q '^RAG3WEAVER_MOTEUR_ANCIEN=1 : le C++ du lot est plus neuf que la lib 7c2b506ec' $R && echo "vert   RAG3WEAVER_MOTEUR_ANCIEN est dit au résumé" || { echo "ROUGE  RAG3WEAVER_MOTEUR_ANCIEN n'est pas dit au résumé"; rouge=1; }
 : > $D/trace; HOME=$H PATH=$D/bin:$PATH FAUX_TRACE=$D/trace bash "$X" wt j filtre temoins > /dev/null 2>&1
 [ "$(tail -1 $R)" = "TEMOINS code=0" ] && [ "$(wc -l < $D/trace)" = 1 ] && echo "vert   « temoins » ne joue que le témoin" || { echo "ROUGE  témoin seul : $(tail -1 $R), $(wc -l < $D/trace) suite(s)"; rouge=1; }
 passe "ROUGE e2e_code" "une suite rouge arrête la passe" FAUX_ROUGE=e2e_code
@@ -64,7 +64,8 @@ passe VERT "SUITES=- ne joue que le témoin, puis le reste" SUITES=-
 # Les services d'embarquement : jamais 7880 ni 7981, arrêtés depuis le 12 novembre.
 for h in LuciePC lucie-tablette; do
   passe VERT "la passe sur $h" FAUX_HOTE=$h
-  grep -qE '7880|7981' $D/trace && { echo "ROUGE  $h cite un service arrêté : $(head -1 $D/trace | grep -o 'EMBED=[^ ]*')"; rouge=1; } || echo "vert   $h ne cite ni 7880 ni 7981 ($(head -1 $D/trace | grep -o 'EMBED=[^ ]*'))"
+  # Ports, never bare digits: the lib of 19 Nov. (7c2b506ec74e79812df…) holds « 7981 » in its hash.
+  grep -qE ':(7880|7981)([^0-9]|$)' $D/trace && { echo "ROUGE  $h cite un service arrêté : $(head -1 $D/trace | grep -o 'EMBED=[^ ]*')"; rouge=1; } || echo "vert   $h ne cite ni 7880 ni 7981 ($(head -1 $D/trace | grep -o 'EMBED=[^ ]*'))"
 done
 # Le repli des tests sur l'iGPU : à luciepc seulement, jamais au portable (son seul GPU porte l'écran), même posé par l'appelant.
 passe VERT "le repli à luciepc" FAUX_HOTE=LuciePC
