@@ -1349,3 +1349,44 @@ fn usages_d_un_type_compte_ses_sites_type_methode_d_un_type_importe() {
         "le site Catalog::new() de tests/a.rs:4 est compté : {sites:?}"
     );
 }
+
+/// **La même règle dans les autres langages qui ont la forme** : `Type::f()` en C++, `Type.f()` en Python, en
+/// TypeScript et en C#, le type défini dans un autre fichier et importé. `usages Catalog` compte le site de l'appel.
+#[test]
+#[ignore]
+fn usages_d_un_type_compte_ses_sites_type_methode_dans_chaque_langage() {
+    let f = |p: &str, c: &str| (p.to_string(), c.to_string());
+    let cas = vec![
+        ("C++", "a.cpp", 4, vec![
+            f("lib.h", "class Catalog {\npublic:\n    static Catalog make();\n};\n"),
+            f("a.cpp", "#include \"lib.h\"\n\nvoid essai() {\n    Catalog c = Catalog::make();\n}\n"),
+        ]),
+        ("Python", "a.py", 4, vec![
+            f("lib.py", "class Catalog:\n    @staticmethod\n    def create():\n        return Catalog()\n"),
+            f("a.py", "from lib import Catalog\n\ndef essai():\n    c = Catalog.create()\n    return c\n"),
+        ]),
+        ("TypeScript", "a.ts", 4, vec![
+            f("lib.ts", "export class Catalog {\n    static create(): Catalog {\n        return new Catalog();\n    }\n}\n"),
+            f("a.ts", "import { Catalog } from './lib';\n\nexport function essai() {\n    const c = Catalog.create();\n    return c;\n}\n"),
+        ]),
+        ("C#", "A.cs", 5, vec![
+            f("Lib.cs", "namespace M {\n    public class Catalog {\n        public static Catalog Create() { return new Catalog(); }\n    }\n}\n"),
+            f("A.cs", "namespace M {\n    public class Usage {\n        public void Essai() {\n            var x = 1;\n            var c = Catalog.Create();\n        }\n    }\n}\n"),
+        ]),
+    ];
+    let mut perdus = Vec::new();
+    for (langue, fichier_appel, ligne, fichiers) in cas {
+        let catalog = setup();
+        {
+            let mut cat = catalog.lock().unwrap();
+            cat.ingest_code(&analyze("/projet", fichiers)).unwrap();
+        }
+        let cat = catalog.lock().unwrap();
+        let r = usages_of(&cat, &code_config(), "Catalog", "").unwrap();
+        let sites: BTreeSet<(String, Option<i64>)> = r.usages.iter().map(|u| (fichier(&u.user.path), u.user.line)).collect();
+        if !sites.iter().any(|(f, l)| f == fichier_appel && *l == Some(ligne)) {
+            perdus.push(format!("{langue} : {fichier_appel}:{ligne} absent de {sites:?}"));
+        }
+    }
+    assert!(perdus.is_empty(), "les sites Type::méthode() comptés pour le type : {perdus:#?}");
+}
