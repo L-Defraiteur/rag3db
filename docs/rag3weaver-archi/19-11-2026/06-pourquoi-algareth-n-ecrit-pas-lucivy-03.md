@@ -74,6 +74,34 @@ Les témoins, rouges d'abord :
 
 Ensuite seulement, rejouer lucivy 03, puis les autres cas.
 
+## La forme retenue pour le point 1 (c7, mémoire et ED, le soir du 19 novembre)
+
+- **Une seule clé, `reasoning`**, aux valeurs fixes `minimal`, `low`, `medium` et `high`, lue dans
+  `ReasoningEffort`. Elle vaut sur LlmNode (lot de mémoire `cx-memoire-extraction-cut`) comme sur
+  le modèle de l'équipier. L'ordre : l'appel (`GenOptions.reasoning`), puis `models.llm.reasoning`,
+  puis le modèle.
+- **Une entrée de `models.llm` sans `model`** vaut « le modèle par défaut de l'hôte, avec ces
+  réglages » : d'abord `reasoning`, puis `max_output_tokens` et `context_tokens`. Le nom du modèle
+  reste à l'environnement. Exemple : `"models": {"llm": {"reasoning": "low"}}`.
+- **L'hôte nu a son propre défaut de `reasoning`**, déclaré, pour qu'un hôte sans manifeste qui en
+  parle ait la borne.
+- **La phrase d'une réponse coupée** est `crate::llm::cut_reply(max_tokens, &usage)`, du lot de
+  mémoire. Le pas coupé l'appelle telle quelle et ajoute sa suite. La relance est déclarée, bornée,
+  et jamais silencieuse : la trace du pas dit la coupure et les jetons de raisonnement.
+- **Les deux pièges d'ED**, à fermer dans le premier témoin rouge :
+  1. Une entrée sans `model` qui porte une clé de connexion (`access`, `provider`, `protocol`,
+     `address`, `api_key_env`, `activation`) est une faute, pas un réglage. Elle est refusée en
+     nommant la clé de connexion et le `model` qui manque. L'ancienne forme (`{"provider":
+     "service"}` sans `model`) tombe dans le même refus. Seules les clés de réglage (`reasoning`,
+     `max_output_tokens`, `context_tokens`, `timeout_secs`, `params`, `name`) font une entrée « défaut
+     de l'hôte ».
+  2. Aucune chaîne vide comme nom de modèle. `ModelSourceWire.model` se résout en une variante
+     explicite (« le défaut de l'hôte, avec ces réglages »), pour qu'aucun chemin ne prenne `""`
+     pour un modèle.
+- **`context_tokens` sur le défaut de l'hôte** ne se vérifie pas contre le modèle, que l'on ne
+  connaît qu'à l'exécution. Il se dit au rendu de l'entrée, ou se plafonne par ce que l'hôte
+  annonce.
+
 ## Taille
 
 Une demi-journée pour 1 et 2, une demi-journée pour 3, côté hôte.
