@@ -849,10 +849,28 @@ fn put_turn_masks_secrets_bounds_tool_payloads_and_keeps_one_row_per_message() {
     let text = r["result"]["text"].as_str().unwrap();
     assert_eq!(r["result"]["messages"], json!(2), "one row per (run, turn, seq): {text}");
     assert_eq!(text.matches("### user").count(), 1, "{text}");
-    assert!(!text.contains("ghp_0123456789") && text.contains("[masked secret]"), "{text}");
+    assert!(!text.contains("ghp_0123456789") && text.contains("[masked secret: github token]"), "{text}");
     assert!(text.contains("### tool · 2026-11-18T21:00:05Z · grep_files · error"), "{text}");
     assert!(text.contains("… (9000 characters)") && !text.contains(&"x".repeat(8001)), "the result is bounded at 8000");
     assert!(text.contains("characters)") && !text.contains(&"p".repeat(4001)), "the params are bounded at 4000");
+}
+
+/// **put_turn's patterns are a parameter** (lot B6): a pattern added by the call is masked, without a rebuild, and the
+/// declared defaults still apply.
+#[test]
+#[ignore]
+fn put_turn_masks_a_pattern_added_by_its_parameter() {
+    let dir = tempfile::tempdir().expect("dossier");
+    let b = ouvrir(dir.path(), |_| {});
+    let defaults = b.tool_graph("put_turn").and_then(|g| g.params().iter().find(|p| p.name == "patterns").and_then(|p| p.default.clone())).expect("put_turn declares its patterns");
+    let mut patterns = defaults.as_array().cloned().unwrap();
+    patterns.push(json!({"name": "acme key", "kind": "prefix", "prefix": "acme_", "min_body": 8}));
+    let said = appel(&b, "put_turn", json!({"run": "chat:p", "turn": 1, "seq": 0, "at": "", "role": "user",
+        "text": "acme_12345678 and ghp_0123456789abcdefABCDEF0123456789abcd", "patterns": patterns}));
+    assert_eq!(said["result"]["masked"], json!(2), "{said}");
+    let r = appel(&b, "render_turns", json!({"run": "chat:p", "from_turn": 1, "to_turn": 1}));
+    let text = r["result"]["text"].as_str().unwrap();
+    assert!(text.contains("[masked secret: acme key]") && text.contains("[masked secret: github token]"), "{text}");
 }
 
 /// **One form, written in one place** (archi and mémoire, 18 November 2026): render_turns makes the
