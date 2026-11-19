@@ -496,7 +496,13 @@ impl Node for InsertRecordNode {
                         // base, donc celle que le chunker verra — condition
                         // nécessaire pour que les offsets de highlight s'alignent
                         // sur les spans de chunk.
-                        if let Some(ref handles) = fts_handles {
+                        // A row that is not a search candidate (2.12) gets no full-text document.
+                        let candidate = ctx
+                            .service::<HashMap<String, crate::config::EntityConfig>>("entity_configs")
+                            .and_then(|c| c.get(entity_name))
+                            .and_then(|c| c.chunking.not_candidate.as_ref())
+                            .is_none_or(|r| !r.excludes(&rec.data));
+                        if let Some(ref handles) = fts_handles.as_ref().filter(|_| candidate) {
                             if let Some(handle) = handles.get(entity_name) {
                                 let text_fields: Vec<(String, String)> = rec
                                     .data
@@ -1791,6 +1797,10 @@ impl ChunkRecordNode {
         // table parente. `EntityConfig::validate` a déjà refusé cette
         // déclaration si un signal vecteur ou sparse était demandé.
         if entity_config.chunked == Some(false) {
+            return (vec![], vec![]);
+        }
+        // A row that is not a search candidate (2.12): no chunks, hence no vectors owed.
+        if entity_config.chunking.not_candidate.as_ref().is_some_and(|r| r.excludes(data)) {
             return (vec![], vec![]);
         }
 

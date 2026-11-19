@@ -179,6 +179,32 @@ pub struct ChunkingConfig {
     /// le texte dépasse.
     #[serde(alias = "overlap_lines")]
     pub overlap_lines: usize,
+
+    /// **The rows that are not search candidates** (2.12): none when absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub not_candidate: Option<NotCandidate>,
+}
+
+/// **A row that is not a search candidate** (2.12, c7's rule of 19 November 2026): a row whose `type_field` is one
+/// of `types` and whose `text_fields` together hold fewer than `min_chars` characters gets neither chunks (so no
+/// vectors owed) nor a full-text document. The row itself stays, with its edges. For code: a folded `namespace` or
+/// `module` that carries only its name.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct NotCandidate {
+    pub type_field: String,
+    pub types: Vec<String>,
+    pub text_fields: Vec<String>,
+    pub min_chars: usize,
+}
+
+impl NotCandidate {
+    /// Whether the row of these fields is set aside.
+    pub fn excludes(&self, data: &std::collections::BTreeMap<String, crate::connection::CypherValue>) -> bool {
+        let texte = |f: &str| data.get(f).and_then(|v| v.as_str()).map_or(0, |s| s.chars().count());
+        data.get(&self.type_field).and_then(|v| v.as_str()).is_some_and(|t| self.types.iter().any(|x| x == t))
+            && self.text_fields.iter().map(|f| texte(f)).sum::<usize>() < self.min_chars
+    }
 }
 
 fn default_title_max_chars() -> usize { 256 }
@@ -215,6 +241,7 @@ impl Default for ChunkingConfig {
             title_max_chars: default_title_max_chars(),
             max_lines: 30,
             overlap_lines: 5,
+            not_candidate: None,
         }
     }
 }
