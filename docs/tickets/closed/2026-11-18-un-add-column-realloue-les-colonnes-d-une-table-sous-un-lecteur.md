@@ -1,6 +1,6 @@
 # Un ADD COLUMN réalloue les colonnes d'une table sous un lecteur
 
-- **État** : ouvert (18 novembre 2026, cœur c++)
+- **État** : corrigé sur master `d6fb388ad9` (19 novembre 2026, cœur c++), atterri dans la pile `9906f44d69`
 - **Famille** : moteur
 - **Gravité** : plantage possible (une lecture après libération), vu par TSan, pas encore en Release
 - **Atteignable en service** : oui, pour un ALTER TABLE … ADD posé pendant qu'une requête lit la table
@@ -38,3 +38,16 @@ prennent pas le verrou de schéma de la table, qui n'exclut que les écrivains (
 ## Pour fermer
 
 Le témoin rouge puis vert, `transaction_test`, known_red et `e2e_test` entiers.
+
+## Fermé (19 novembre 2026)
+
+Le vecteur des colonnes de `NodeTable` et de `RelTableData` se lit sous un verrou partagé
+(`columnsMtx`) et ne change que sous un verrou exclusif : l'ajout, son annulation, la remise à zéro du
+point de reprise. Le témoin `AddColumnUnderReaders.ReadersScanWhileColumnsAreAdded`
+(`concurrence_test`) : sous TSan, 13 lignes de rapport sur les colonnes en 3 tours avant le correctif
+(`60b21c753`), 0 après (`f4dea9df5`), journal `~/.cache/rag3db-moteur-notes/columns-race/` à luciepc.
+Reposé (`d6fb388ad9`) et poussé avec la pile C++ du 19 novembre (tête `9906f44d69`) : passe de la tête
+verte, `transaction_test` 399, known_red, `e2e_test` 1 867 avec `DropNodeTableReclaim` admis.
+
+La forme de fond, que les lecteurs prennent le verrou de table et qu'un ALTER les attende, reste au
+ticket `2026-11-18-un-alter-ou-un-drop-n-attend-pas-les-lecteurs-de-sa-table.md`.
