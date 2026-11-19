@@ -1,3 +1,6 @@
+#include <algorithm>
+#include <thread>
+
 #include "catalog/catalog_entry/function_catalog_entry.h"
 #include "catalog/catalog_entry/node_table_catalog_entry.h"
 #include "catalog/hnsw_index_catalog_entry.h"
@@ -102,9 +105,22 @@ static offset_t createInMemHNSWTableFunc(const TableFuncInput& input, TableFuncO
     }
     const auto& hnswIndex = sharedState->hnswIndex;
     offset_t numNodesInserted = 0;
+    // The sequential seed (seed_points): the offsets below `seed` are in the first range, which the
+    // first thread takes (ranges are handed out in order); a thread past it waits until they have
+    // all been visited, inserted or skipped.
+    const auto seed = std::min(static_cast<offset_t>(sharedState->bindData->config.seedPoints),
+        sharedState->numNodes);
     for (auto i = morsel.startOffset; i < morsel.endOffset; i++) {
+        if (i >= seed) {
+            while (sharedState->seedNodesVisited.load(std::memory_order_acquire) < seed) {
+                std::this_thread::yield();
+            }
+        }
         numNodesInserted +=
             hnswIndex->insert(i, input.localState->ptrCast<CreateInMemHNSWLocalState>());
+        if (i < seed) {
+            sharedState->seedNodesVisited.fetch_add(1, std::memory_order_release);
+        }
     }
     sharedState->numNodesInserted.fetch_add(numNodesInserted);
     return morsel.endOffset - morsel.startOffset;
@@ -470,6 +486,7 @@ static std::string rewriteCreateHNSWQuery(main::ClientContext& context,
     params += stringFormat("metric := '{}', ", HNSWIndexConfig::metricToString(config.metric));
     params += stringFormat("alpha := {}, ", config.alpha);
     params += stringFormat("pu := {}, ", config.pu);
+    params += stringFormat("seed_points := {}, ", config.seedPoints);
     params +=
         stringFormat("cache_embeddings := {}", config.cacheEmbeddingsColumn ? "true" : "false");
     auto columnName = hnswBindData->tableEntry->getProperty(hnswBindData->propertyID).getName();

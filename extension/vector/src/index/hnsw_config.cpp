@@ -54,6 +54,12 @@ void Efc::validate(int64_t value) {
     }
 }
 
+void SeedPoints::validate(int64_t value) {
+    if (value < 0) {
+        throw common::BinderException{"Seed points must be a non-negative integer."};
+    }
+}
+
 void Alpha::validate(double value) {
     if (value < 1) {
         throw common::BinderException{"Alpha must be a double greater than or equal to 1."};
@@ -108,6 +114,10 @@ HNSWIndexConfig::HNSWIndexConfig(const function::optional_params_t& optionalPara
             value.validateType(Efc::TYPE);
             efc = value.getValue<int64_t>();
             Efc::validate(efc);
+        } else if (SeedPoints::NAME == lowerCaseName) {
+            value.validateType(SeedPoints::TYPE);
+            seedPoints = value.getValue<int64_t>();
+            SeedPoints::validate(seedPoints);
         } else if (CacheEmbeddings::NAME == lowerCaseName) {
             value.validateType(CacheEmbeddings::TYPE);
             cacheEmbeddingsColumn = value.getValue<bool>();

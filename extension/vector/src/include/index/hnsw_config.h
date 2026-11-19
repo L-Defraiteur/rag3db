@@ -74,6 +74,19 @@ struct Efs {
     static void validate(int64_t value);
 };
 
+// The number of points the build inserts with one thread before the parallel phase, so that no
+// thread starts its range on a graph of a few nodes: a point far from everything, inserted at the
+// very start, linked to the few nodes there, off the route of the searches coming from its
+// direction, and the points placed near it later did not find it. It does not change the index,
+// only its build: neither stored nor shown by SHOW_INDEXES. 0 builds as before.
+struct SeedPoints {
+    static constexpr const char* NAME = "seed_points";
+    static constexpr common::LogicalTypeID TYPE = common::LogicalTypeID::INT64;
+    static constexpr int64_t DEFAULT_VALUE = 1000;
+
+    static void validate(int64_t value);
+};
+
 struct CacheEmbeddings {
     static constexpr const char* NAME = "cache_embeddings";
     static constexpr common::LogicalTypeID TYPE = common::LogicalTypeID::BOOL;
@@ -118,6 +131,7 @@ struct HNSWIndexConfig {
     double alpha = Alpha::DEFAULT_VALUE;
     int64_t efc = Efc::DEFAULT_VALUE;
     bool cacheEmbeddingsColumn = CacheEmbeddings::DEFAULT_VALUE;
+    int64_t seedPoints = SeedPoints::DEFAULT_VALUE;
     common::ConflictAction conflictAction = SkipIfExists::DEFAULT_VALUE;
 
     HNSWIndexConfig() = default;
@@ -136,7 +150,7 @@ private:
     HNSWIndexConfig(const HNSWIndexConfig& other)
         : mu{other.mu}, ml{other.ml}, pu{other.pu}, metric{other.metric}, alpha{other.alpha},
           efc{other.efc}, cacheEmbeddingsColumn(other.cacheEmbeddingsColumn),
-          conflictAction(other.conflictAction) {}
+          seedPoints{other.seedPoints}, conflictAction(other.conflictAction) {}
 
     static MetricType getMetricType(const std::string& metricName);
 };
