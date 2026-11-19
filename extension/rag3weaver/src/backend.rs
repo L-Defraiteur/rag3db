@@ -8924,6 +8924,66 @@ mod tests {
         assert!(backend.stop_reactions().is_empty());
     }
 
+    /// **A view by its worktree's path** (2a′-3, lot 7: the sugar of a view's name, ticket
+    /// `docs/recherche/tickets/2026-11-16-la-vue-d-un-worktree-par-son-nom-court.md`). A work layer is named
+    /// `worktree:<real path>`; `view: {"worktree": <path>}` reads it, the path canonicalized first, so that a path
+    /// written otherwise (here with a trailing `/.`) reads the same view as `{"layer": "worktree:<real path>"}`.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_view_by_its_worktree_path_reads_the_same_view_as_by_its_layer() {
+        let (_dir, backend) = backend_qui_surveille();
+        backend.mount_reactions().unwrap();
+        attendre_les_usages(&backend, "depart", |u| u.contains("outils.rs"));
+        let under_backend = backend.call("usages", json!({"name": "depart", "view": {"layer": "backend"}})).expect("the backend's view");
+        let rank = under_backend["view"]["rank"].as_i64().expect("the backend's rank");
+        let wt = tempfile::tempdir().unwrap();
+        let real = std::fs::canonicalize(wt.path()).unwrap();
+        let layer = format!("worktree:{}", real.display());
+        backend
+            .catalog
+            .lock()
+            .unwrap()
+            .execute_raw(&format!(
+                "CREATE (:_generation {{_key: '{layer}:1', couche: '{layer}', rang: 1, commit: '', base: '', recette: '', \
+                 parente_couche: 'backend', parente_rang: {rank}, tombstones: '{{\"keys\": [], \"files\": [\"outils.rs\"]}}', publiee_le: 0}})"
+            ))
+            .expect("the generation of the work layer");
+        let by_layer = backend.call("usages", json!({"name": "depart", "view": {"layer": layer}})).expect("usages under the layer");
+        let written_otherwise = format!("{}/.", wt.path().display());
+        let by_path = backend
+            .call("usages", json!({"name": "depart", "view": {"worktree": written_otherwise}}))
+            .unwrap_or_else(|e| panic!("usages under the worktree's path: {e}"));
+        assert_eq!(by_path["view"], by_layer["view"], "the path reads the same view as the layer: {by_path}");
+        assert_eq!(by_path["view"]["layer"], json!(layer), "the view read is said by its layer: {by_path}");
+        assert_eq!(by_path["result"], by_layer["result"]);
+        assert!(backend.stop_reactions().is_empty());
+    }
+
+    /// **A path that is no tracked worktree is refused before any read**, naming the layer it would be; a path that
+    /// does not exist, or is relative, is refused naming the path.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_view_by_a_path_that_is_no_tracked_worktree_is_refused() {
+        let (_dir, backend) = backend_qui_surveille();
+        let untracked = tempfile::tempdir().unwrap();
+        let real = std::fs::canonicalize(untracked.path()).unwrap();
+        let e = backend.call("usages", json!({"name": "depart", "view": {"worktree": untracked.path()}})).expect_err("an untracked path is read");
+        assert!(e.contains(&format!("worktree:{}", real.display())), "the refusal names the layer it would be: {e}");
+        let e = backend.call("usages", json!({"name": "depart", "view": {"worktree": "/nowhere/at/all"}})).expect_err("a missing path is read");
+        assert!(e.contains("/nowhere/at/all") && e.contains("introuvable"), "the refusal names the missing path: {e}");
+        let e = backend.call("usages", json!({"name": "depart", "view": {"worktree": "relative/path"}})).expect_err("a relative path is read");
+        assert!(e.contains("relative/path") && e.contains("absolu"), "the refusal asks for an absolute path: {e}");
+    }
+
+    /// **`worktree` and `layer` together are refused**, naming both: a view is read by one name.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_view_by_both_its_worktree_and_its_layer_is_refused() {
+        let v = json!({"worktree": "/tmp", "layer": "backend"});
+        let e = super::parse_view(&v).expect_err("both names are read");
+        assert!(e.contains("worktree") && e.contains("layer") && e.contains("l'un ou l'autre"), "{e}");
+    }
+
     /// **Une vue de deux étages se compose par `view`** (2b-C sur la
     /// composition de 2b′) : une couche « enfant » posée à la main sur la
     /// génération courante de `backend`, qui retire le fichier `outils.rs`. Sous
