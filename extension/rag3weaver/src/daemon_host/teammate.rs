@@ -1442,6 +1442,46 @@ impl DaemonHost {
         lance.is_ok()
     }
 
+    /// The pair mode's entry for this task, if its backend declares `teammate.pair`: made at the
+    /// first paired task (the registry is cleaned of our dead entries then, never before), posed
+    /// busy, named after the agent, in the task's folder. A refusal (a second paired task, a
+    /// registry that cannot be written) is said in the mailbox, and the task runs without it.
+    fn pair_de_la_tache(&self, parent: &str, task: &str, files: &TeammateFiles) -> Option<Arc<super::pair::Pair>> {
+        let t = self.tache(parent, task)?;
+        let policy = crate::backend::PreparedBackend::load(&t.manifest).ok().and_then(|p| p.manifest.teammate.clone()).unwrap_or_default();
+        if !policy.pair {
+            return None;
+        }
+        let pair = self
+            .pair
+            .get_or_init(|| {
+                let registre = self.pair_registre.clone().or_else(|| super::pair::Registre::depuis(|k| std::env::var(k).ok()))?;
+                registre.nettoyer();
+                Some(Arc::new(super::pair::Pair::new(registre)))
+            })
+            .clone();
+        let Some(pair) = pair else {
+            let _ = files.append("host", "report", None, "teammate.pair: no sessions registry here (neither HOME nor XDG_RUNTIME_DIR): the task runs without the pair mode");
+            return None;
+        };
+        let nom = self.with_backend_id(&t.id, |b| b.prepared().nom_de_l_agent()).unwrap_or_else(|_| task.to_string());
+        let dossier = t.workspace.as_ref().map(|w| w.racine.clone()).unwrap_or_else(|| t.arbre.clone());
+        match pair.ouvrir(&format!("{parent}/{task}"), &nom, &dossier) {
+            Ok(()) => Some(pair),
+            Err(e) => {
+                let _ = files.append("host", "report", None, &format!("{e}: the task runs without the pair mode"));
+                None
+            }
+        }
+    }
+
+    /// `busy` or `idle` on the pair entry, if this task holds it.
+    fn pair_statut(&self, cle: &str, occupe: bool) {
+        if let Some(Some(p)) = self.pair.get() {
+            p.statut(cle, occupe);
+        }
+    }
+
     /// Un équipier tourne-t-il sur cette tâche ?
     pub fn teammate_running(&self, parent: &str, task: &str) -> bool {
         self.teammates.lock().unwrap_or_else(|p| p.into_inner()).contains(&format!("{parent}/{task}"))
@@ -1454,11 +1494,17 @@ impl DaemonHost {
     /// éléments qui attendent le superviseur, elle attend la boîte.
     pub fn run_teammate(&self, parent: &str, task: &str) -> Result<Outcome, String> {
         let files = self.teammate_files(parent, task)?;
+        // **The pair mode**: the entry in the sessions registry lives as long as the teammate.
+        let cle = format!("{parent}/{task}");
+        let pair = self.pair_de_la_tache(parent, task, &files);
         // La fin, dans la boîte, erreur comprise : le superviseur la lit sans IDE.
         let outcome = match self.teammate_loop(parent, task, &files) {
             Ok(o) => o,
             Err(e) => Outcome { steps: Vec::new(), ended: format!("erreur : {e}") },
         };
+        if let Some(p) = &pair {
+            p.fermer(&cle);
+        }
         let line = files.append("host", "ended", None, &outcome.ended)?;
         if let Ok(bus) = self.tache(parent, task).ok_or(()).and_then(|t| self.with_backend_id(&t.id, |b| b.bus_de_publication()).map_err(|_| ())) {
             publish(Some(&bus), task, &line);
@@ -1549,6 +1595,7 @@ impl DaemonHost {
                 // suivant dit par où l'équipier s'est réveillé.
                 let depuis = files.mailbox().len();
                 let mut tour = 0u32;
+                self.pair_statut(&format!("{parent}/{task}"), false);
                 woke_by = loop {
                     if let Some(rx) = wake.as_mut() {
                         match rx.try_recv() {
@@ -1617,6 +1664,7 @@ impl DaemonHost {
                 message.push_str(&format!("\n{r}\n"));
             }
             message.push_str(&previous_step);
+            self.pair_statut(&format!("{parent}/{task}"), true);
             let mut step = Step::new(files.clone(), task, &request, bus.clone(), number).with_policy(&policy);
             step.woke_by = woke_by.take();
             // **Un pas qui n'aboutit pas ne termine pas l'équipier** : l'échec va
