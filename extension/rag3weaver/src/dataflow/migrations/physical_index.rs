@@ -988,17 +988,8 @@ fn physical_boundary(_stage: &str, _step: Option<usize>) {
             || _step
                 .is_some_and(|step| wanted.as_deref() == Some(format!("{_stage}:{step}").as_str()))
         {
-            // **A death, not an exit** (ticket « le témoin de mort du raccord physique meurt par un signal, une fois
-            // sur dix », 19 November 2026): `std::process::exit` runs the static destructors (`_dl_fini`) while the
-            // engine's scheduler still parses a query on another thread, which then jumps into a destroyed table
-            // (SIGSEGV in `antlr4::Lexer::emit`, core of tour 34 of 40 at luciepc). A process that dies runs no
-            // destructor: `_exit` is that death.
-            #[cfg(unix)]
-            unsafe {
-                libc::_exit(91)
-            };
-            #[cfg(not(unix))]
-            std::process::exit(91);
+            // A death, not an exit: no destructor runs (`fautes_de_test::simulated_death`).
+            crate::fautes_de_test::simulated_death(91);
         }
     }
 }
