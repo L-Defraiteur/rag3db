@@ -478,6 +478,13 @@ impl Catalog {
                 return Ok(IndexState { text: Level::Running, text_percent: Some(percent), ..state });
             }
         }
+        // **Derived content owed by a dead first index** (the mark of held derivations): the full text of a derived
+        // entity is « to rebuild » until a writer renders it, never « never » nor « ready ».
+        if let Some(storage) = key.strip_prefix("index_state:") {
+            if self.entity_configs.get(storage).is_some_and(|c| c.derived.is_some()) && self.derivations_held() {
+                return Ok(IndexState { text: Level::Running, text_percent: Some(0), ..state });
+            }
+        }
         if touche && state.text == Level::Ready {
             return Ok(IndexState { text: Level::Running, ..state });
         }
