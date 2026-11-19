@@ -1,7 +1,7 @@
 # La source de l'EINTR de la tablette
 
 - **État** : ouvert, le 19 novembre 2026 ; pour archi
-- **Famille** : outillage
+- **Famille** : produit
 - **Pour** : archi
 - **Gravité** : faible : le correctif `reprise-eintr` fait reprendre l'attente d'une réponse, et le témoin `a_backend_closes_between_two_tool_calls_of_a_step` ne rougit plus pour cette raison. Ce qui reste inconnu, c'est d'où vient le signal.
 - **Atteignable en service** : peut-être : un client du produit qui attend une réponse sur une socket à délai, sur le portable, peut recevoir le même EINTR. `agent_with_timeout` le reprend désormais.
