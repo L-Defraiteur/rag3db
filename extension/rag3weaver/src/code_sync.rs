@@ -1845,6 +1845,8 @@ fn synchroniser(
     // entities of each batch (`ScopeContent`, the full text of the code) are held, their debt put in the base, and
     // rendered after the relations. The reference tools answer sooner; `synchroniser_la_source` releases them on
     // any other way out.
+    // A mark left by a pass that died: its batches owe their derivations, rendered at the end of this one.
+    let owed_before = mode == RelationsMode::Bulk && catalog.derivations_held();
     if mode == RelationsMode::Bulk {
         catalog.defer_derivations(true);
     }
@@ -1892,6 +1894,10 @@ fn synchroniser(
             commencer(catalog)?;
         }
         let resultat: Result<(), String> = (|| {
+        // **The mark of held derivations**, in the transaction of the first batch: durable with its rows.
+        if mode == RelationsMode::Bulk && rang_du_paquet == 0 {
+            catalog.mark_derivations_held(true).map_err(|e| e.to_string())?;
+        }
         let t = std::time::Instant::now();
         let ingere = match mode {
             RelationsMode::PerBatch => catalog.ingest_code_jusqu_a(&analysis, options.exige),
@@ -2011,10 +2017,18 @@ fn synchroniser(
             commencer(catalog)?;
         }
         let rendu = catalog.release_deferred_derivations(options.exige);
-        if tx {
-            terminer(catalog, Ok(()))?;
-        }
         report.failed += rendu.failed;
+        // Rendered: the mark goes. A mark a dead pass left (its batches owe their derivations) is repaid first.
+        let soldee = if owed_before {
+            catalog.repair_held_derivations(options.exige.dense() || options.exige.sparse()).map(|_| ())
+        } else {
+            catalog.mark_derivations_held(false)
+        };
+        let soldee = soldee.map_err(|e| e.to_string());
+        if tx {
+            terminer(catalog, soldee.clone())?;
+        }
+        soldee?;
         profil.add("rendre les dérivations, après les relations", debut);
     }
     if poussee_differee {
