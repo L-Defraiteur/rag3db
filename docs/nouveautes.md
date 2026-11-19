@@ -1,5 +1,10 @@
 # Nouveautés
 
+- 19 novembre 2026 — **Un paquet d'index ne casse plus sur un ALTER validé pendant lui.** Chaque paquet prend ses
+  tables dès son `BEGIN` (`CALL lock_tables`). Un ALTER validé entre-temps le refuse avant toute écriture : le
+  paquet est annulé sans abîmer le catalogue et recommence sur place, trois fois au plus, et le journal d'index le
+  dit. Un moteur sans `lock_tables` ne prend rien, comme avant.
+
 - 18 novembre 2026 — **La fin d'un index dit une libération ou une dette qu'elle n'a pas pu faire.** Une erreur en rendant les réclamations d'embarquement s'ajoute à la dernière ligne du journal, avec sa table et sa cause, sans en effacer la cause de fin ; une dette restante illisible se dit « dette inconnue », plus jamais « 0 ».
 
 - 18 novembre 2026 — **Un modèle déclaré dit `access` et `provider`.** `access` dit la manière d'y accéder (`local`, `service`, `compatible`), `provider` le fournisseur (`openai`, `vertex`, `anthropic`, `llama_server`). L'ancienne forme, `provider` pour la manière et `protocol` pour le fournisseur, se lit encore **jusqu'au 29 novembre 2026** ; un modèle qui mêle les deux est refusé, en nommant les deux mots. `/model` rend les deux mots neufs.
