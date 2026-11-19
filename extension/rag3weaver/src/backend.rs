@@ -3033,7 +3033,8 @@ impl PreparedBackend {
             .as_ref()
             .and_then(|w| w.index.as_deref())
         {
-            crate::code::register_code_schema(&mut cat, crate::code::default_scope_chunking())
+            let seuil = self.manifest.workspace.as_ref().and_then(|w| w.container_min_chars).unwrap_or(crate::code::CONTAINER_MIN_CHARS);
+            crate::code::register_code_schema(&mut cat, crate::code::scope_chunking_with(seuil))
                 .map_err(|e| e.to_string())?;
             // Les fonctions de verrou déclarées pour ce dépôt.
             if let Some(w) = &self.manifest.workspace {
