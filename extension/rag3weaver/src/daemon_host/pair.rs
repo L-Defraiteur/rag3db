@@ -108,15 +108,50 @@ fn session_id() -> String {
     format!("{}-{}-{}-{}-{}", &h[0..8], &h[8..12], &h[12..16], &h[16..20], &h[20..32])
 }
 
+/// La taille au-delà de laquelle une trame est refusée.
+pub const TRAME_MAX: usize = 64 * 1024;
+
+/// Ce qu'une connexion à la socket apporte (relevés du 16 et du 18 novembre 2026).
+#[derive(Debug, Clone, PartialEq)]
+pub enum Trame {
+    /// `type: "user"` : le texte, enveloppe `<cross-session-message …>` comprise, faite par
+    /// l'émetteur ; `from` est son adresse de réponse.
+    Message { texte: String, from: String, from_name: String, msg_id: String, priority: String },
+    /// `type: "control"`, `action: "notify_when_idle"` : l'émetteur veut un avis à la pause.
+    Abonnement { from: String, msg_id: String },
+}
+
+/// Une connexion lue : `None` pour une sonde (rien d'écrit), la trame sinon, ou la raison du
+/// refus (illisible, trop longue, d'une version ou d'un genre inconnus).
+pub fn lire_trame(octets: &[u8]) -> Result<Option<Trame>, String> {
+    let _ = octets;
+    Err("not yet".into())
+}
+
+/// Ce que l'hôte fait d'une trame reçue pour la tâche `cle`.
+pub type Livreur = std::sync::Arc<dyn Fn(&str, Trame) + Send + Sync>;
+
 /// L'entrée de l'hôte : une tâche en mode pair au plus.
 pub struct Pair {
     registre: Registre,
     tenue: Mutex<Option<(String, Value)>>,
+    livreur: Option<Livreur>,
 }
 
 impl Pair {
     pub fn new(registre: Registre) -> Self {
-        Pair { registre, tenue: Mutex::new(None) }
+        Pair { registre, tenue: Mutex::new(None), livreur: None }
+    }
+
+    /// Ce que l'hôte fait des trames reçues par la socket.
+    pub fn avec_livreur(mut self, livreur: Livreur) -> Self {
+        self.livreur = Some(livreur);
+        self
+    }
+
+    /// Les abonnements aux avis de pause reçus, à servir au lot 5.
+    pub fn abonnements(&self) -> Vec<(String, String)> {
+        Vec::new()
     }
 
     /// Pose l'entrée de la tâche `cle` (`parent/task`), nommée `name`, dans `cwd`. Une seconde
@@ -205,6 +240,82 @@ mod tests {
         let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).unwrap();
         let apres = &stat[stat.rfind(')').unwrap() + 2..];
         apres.split(' ').nth(19).unwrap().to_string()
+    }
+
+    fn message(content: &str) -> Value {
+        json!({ "msgV": 1, "msg_id": "m-1", "type": "user", "priority": "next",
+                "from": "uds:/run/user/1000/cc-socks/42.sock",
+                "message": { "role": "user", "content": content } })
+    }
+
+    const ENVELOPPE: &str = "<cross-session-message from=\"uds:/run/user/1000/cc-socks/42.sock\" from-name=\"rag3db-5a\" from-mode=\"prompting\">\nHello\n</cross-session-message>";
+
+    #[test]
+    fn a_frame_is_read_as_a_message_a_subscription_or_refused() {
+        let m = lire_trame(format!("{}\n", message(ENVELOPPE)).as_bytes()).unwrap();
+        assert_eq!(
+            m,
+            Some(Trame::Message {
+                texte: ENVELOPPE.into(),
+                from: "uds:/run/user/1000/cc-socks/42.sock".into(),
+                from_name: "rag3db-5a".into(),
+                msg_id: "m-1".into(),
+                priority: "next".into()
+            })
+        );
+        let c = json!({ "type": "control", "action": "notify_when_idle", "from": "uds:/x.sock", "from_mode": "prompting", "msgV": 1, "msg_id": "c-1" });
+        assert_eq!(lire_trame(c.to_string().as_bytes()).unwrap(), Some(Trame::Abonnement { from: "uds:/x.sock".into(), msg_id: "c-1".into() }));
+        assert_eq!(lire_trame(b"").unwrap(), None, "a probe writes nothing");
+        let long = message(&"x".repeat(TRAME_MAX));
+        assert!(lire_trame(long.to_string().as_bytes()).unwrap_err().contains("64"), "too long");
+        let mut v2 = message("hi");
+        v2["msgV"] = json!(2);
+        assert!(lire_trame(v2.to_string().as_bytes()).unwrap_err().contains("msgV"));
+        assert!(lire_trame(b"{not json").is_err());
+        let autre = json!({ "msgV": 1, "type": "control", "action": "something_else", "from": "uds:/x" });
+        assert!(lire_trame(autre.to_string().as_bytes()).is_err());
+        let sans_texte = json!({ "msgV": 1, "type": "user", "from": "uds:/x", "message": { "role": "user", "content": "" } });
+        assert!(lire_trame(sans_texte.to_string().as_bytes()).is_err(), "an empty message is refused");
+    }
+
+    #[test]
+    fn the_socket_delivers_messages_keeps_subscriptions_and_ignores_probes() {
+        use std::io::Write;
+        use std::os::unix::fs::PermissionsExt;
+        use std::os::unix::net::UnixStream;
+        let t = tempfile::tempdir().unwrap();
+        let r = registre(&t);
+        let recues = std::sync::Arc::new(Mutex::new(Vec::<(String, Trame)>::new()));
+        let livreur: Livreur = {
+            let recues = recues.clone();
+            std::sync::Arc::new(move |cle: &str, trame: Trame| recues.lock().unwrap().push((cle.to_string(), trame)))
+        };
+        let pair = Pair::new(r.clone()).avec_livreur(livreur);
+        pair.ouvrir("p/a", "a", Path::new("/w")).unwrap();
+        let chemin = PathBuf::from(entree(&r)["messagingSocketPath"].as_str().unwrap());
+        assert_eq!(std::fs::metadata(&chemin).map(|m| m.permissions().mode() & 0o777).ok(), Some(0o600), "the socket is there, 600");
+        drop(UnixStream::connect(&chemin).unwrap()); // a probe
+        let mut c = UnixStream::connect(&chemin).unwrap();
+        c.write_all(format!("{}\n", message(ENVELOPPE)).as_bytes()).unwrap();
+        drop(c);
+        let mut c = UnixStream::connect(&chemin).unwrap();
+        c.write_all(json!({ "type": "control", "action": "notify_when_idle", "from": "uds:/x.sock", "msgV": 1, "msg_id": "c-1" }).to_string().as_bytes()).unwrap();
+        drop(c);
+        let mut c = UnixStream::connect(&chemin).unwrap();
+        c.write_all(b"{garbage").unwrap();
+        drop(c);
+        let fin = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while (recues.lock().unwrap().is_empty() || pair.abonnements().is_empty()) && std::time::Instant::now() < fin {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        let recues = recues.lock().unwrap().clone();
+        assert_eq!(recues.len(), 1, "one message, no probe, no garbage: {recues:?}");
+        assert_eq!(recues[0].0, "p/a");
+        assert!(matches!(&recues[0].1, Trame::Message { from_name, .. } if from_name == "rag3db-5a"), "{recues:?}");
+        assert_eq!(pair.abonnements(), vec![("uds:/x.sock".to_string(), "c-1".to_string())]);
+        pair.fermer("p/a");
+        assert!(!chemin.exists(), "the socket goes with the entry");
+        assert!(UnixStream::connect(&chemin).is_err());
     }
 
     #[test]
