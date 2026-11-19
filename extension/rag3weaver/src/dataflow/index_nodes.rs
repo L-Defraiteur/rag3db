@@ -1192,6 +1192,76 @@ mod tests {
         assert_eq!(docs, lignes + 1, "un document de trop se compte : {comptes:?}");
     }
 
+    /// **Probe, ignored: the host's nightly maintenance while code is re-indexed** (19 November 2026, lost words
+    /// of the code base; `docs/lucivy/tickets/2026-11-19-l-index-de-code-a-perdu-des-mots-a-la-compaction.md`).
+    /// One thread re-indexes a source whose files change every round (`spawn_index`, as the host's watcher does);
+    /// another runs `fts_maintenance_nocturne` with the compaction, in a loop, on the same catalog — the host's
+    /// path, `daemon_host` included in spirit. At the end, `check_dictionary` on every full-text handle: no word
+    /// may be lost. `RAG3WEAVER_PROBE_ROUNDS` sets the rounds (default 40).
+    #[cfg(all(feature = "rag3db-native", feature = "code"))]
+    #[test]
+    #[ignore]
+    fn the_nightly_compaction_during_reindexing_loses_no_word() {
+        let rounds: u64 = std::env::var("RAG3WEAVER_PROBE_ROUNDS").ok().and_then(|v| v.parse().ok()).unwrap_or(40);
+        let files = 240u64;
+        let source_at = |round: u64| -> Arc<dyn FileSource> {
+            let fichiers: Vec<(String, String)> = (0..files)
+                .map(|f| {
+                    // A third of the files change each round; their words are new or come back.
+                    let v = if f % 3 == round % 3 { round } else { round - round % 3 };
+                    (
+                        format!("src/m{}/f{f}.rs", f % 12),
+                        format!(
+                            "/// File {f}, version {v}: word{}x{} and note{}.\npub fn f{f}_v{v}(arg{}: u32) -> u32 {{\n    let local{}y{} = arg{} + {};\n    helper_{}(local{}y{})\n}}\n\npub fn helper_{}(x: u32) -> u32 {{ x * {} }}\n",
+                            f % 37, v % 9, (f * 7 + v) % 131, v % 5, f % 29, v % 4, v % 5, v, (f + v) % 61, f % 29, v % 4, (f + v) % 61, f + 1
+                        ),
+                    )
+                })
+                .collect();
+            Arc::new(Snapshot::new("depot", fichiers))
+        };
+        let conn = crate::Rag3dbConnection::in_memory().expect("in-memory base");
+        let config = crate::CatalogConfig { name: Some("probe-lost-words".into()), embedding_dim: 4, ..Default::default() };
+        let mut catalog = Catalog::new(Box::new(conn), Box::new(crate::embedder::AbsentEmbedder::new("absent", 4)), config);
+        catalog.initialize().unwrap();
+        crate::code::register_code_schema(&mut catalog, crate::code::default_scope_chunking()).unwrap();
+        let catalog = Arc::new(Mutex::new(catalog));
+        let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let maintenance = {
+            let (catalog, stop) = (catalog.clone(), stop.clone());
+            std::thread::spawn(move || {
+                let mut notes = Vec::new();
+                while !stop.load(std::sync::atomic::Ordering::Relaxed) {
+                    if let Some(note) = catalog.lock().unwrap().fts_maintenance_nocturne(jiff::Zoned::now().datetime(), 1.0, true) {
+                        notes.push(note["summary"].as_str().unwrap_or("").to_string());
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(20));
+                }
+                notes
+            })
+        };
+        for round in 0..rounds {
+            let journal = new_index_journal().expect("journal");
+            spawn_index(catalog.clone(), source_at(round), journal.clone(), 0, Default::default()).join().expect("the index thread");
+            let _ = std::fs::remove_file(&journal);
+        }
+        stop.store(true, std::sync::atomic::Ordering::Relaxed);
+        let notes = maintenance.join().unwrap();
+        let cat = catalog.lock().unwrap();
+        let mut lost = Vec::new();
+        for (table, handle) in cat.fts_handles() {
+            let check = handle.check_dictionary().expect("check_dictionary");
+            for f in &check.fields {
+                if f.unknown > 0 {
+                    lost.push(format!("{table} {}: {} of {} referenced ids lost", f.field, f.unknown, f.referenced));
+                }
+            }
+        }
+        eprintln!("{rounds} rounds, {} maintenance(s); last: {:?}", notes.len(), notes.last());
+        assert!(notes.len() >= 3, "the maintenance ran several times during the re-indexing: {}", notes.len());
+        assert!(lost.is_empty(), "words lost:\n{}", lost.join("\n"));
+    }
+
     /// **The noted full-text counts carry their date, and the nightly maintenance refreshes them** (ticket
     /// `docs/recherche/tickets/2026-11-15-l-etat-d-index-ne-voit-pas-les-orphelins-du-plein-texte.md`): the
     /// state read `fts_counts` from the end of the last full index only, and said « as many documents as rows »
