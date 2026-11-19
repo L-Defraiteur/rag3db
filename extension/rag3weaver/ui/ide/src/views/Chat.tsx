@@ -353,6 +353,8 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
   // **The text a window joined in flight** (the IDE in several windows, 19 Nov. 2026): the run and the last token the
   // worker had counted; a token at or below it is already in the bubble.
   const dejaRepris = useRef<{ run: string; seq: number } | null>(null);
+  // The tokens this window received of a run before the worker's answer: those past the worker's text follow it.
+  const recus = useRef<{ run: string; jetons: { seq: number; text: string }[] } | null>(null);
   // **Les runs que la page sait finis** (la bulle fantôme, relevée par everything declarative le
   // 13 novembre 2026) : sous charge, le RunStarted d'un tour envoyé d'ici peut arriver après la
   // réponse de son POST ; pris pour un tour venu d'ailleurs, il ouvrait une bulle que rien ne
@@ -403,9 +405,15 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
     // answers late. Set by the witnesses only, through `window.__ide.relectureRetenue` (a promise).
     const retenue = (window as unknown as { __ide?: { relectureRetenue?: Promise<unknown> } }).__ide?.relectureRetenue;
     if (retenue) await retenue;
+    // The witnesses' count of reads that landed, applied or set aside (ED's review: an order, not a delay).
+    const compter = () => {
+      const w = window as unknown as { __ide?: { relecturesAppliquees?: number } };
+      if (w.__ide) w.__ide.relecturesAppliquees = (w.__ide.relecturesAppliquees ?? 0) + 1;
+    };
     if (epoqueDesTours.current !== depart) {
       // A turn moved meanwhile: its own end set the screen from the session; this state is older.
       reloadRecaps();
+      compter();
       return;
     }
     toursRef.current = s.turns;
@@ -420,15 +428,21 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
       // The worker's answer can come before the next render, while `runRef` still holds the run of before: the update
       // itself picks the live bubble of this run (the functional updates apply in order, after the one that gives
       // the bubble its run).
+      // The joined text goes before the tools that came live (ED's review): « words, tool, words » of the turn is
+      // not rebuilt here; the turn's end puts back the session's order.
       tourEnVol(run).then((t) => {
         if (!t) return;
         dejaRepris.current = { run, seq: t.seq };
-        setItems((cur) => cur.map((i) => (i.kind === "message" && i.live && i.run === run ? { ...i, parts: [{ kind: "text", text: t.texte } as Part, ...i.parts.filter((p) => p.kind !== "text")] } : i)));
+        const apres = recus.current?.run === run ? recus.current.jetons.filter((j) => j.seq > t.seq).map((j) => j.text).join("") : "";
+        // Past the worker's bound, the gap is said, never hidden (Lucie: one must know when an information is missing).
+        const texte = t.texte + (t.tronque ? " […] " : "") + apres;
+        setItems((cur) => cur.map((i) => (i.kind === "message" && i.live && i.run === run ? { ...i, parts: [{ kind: "text", text: texte } as Part, ...i.parts.filter((p) => p.kind !== "text")] } : i)));
       });
       setStatus("l'agent travaille…");
       setItems((cur) => (cur.some((i) => i.kind === "message" && i.live) ? cur.map((i) => (i.kind === "message" && i.live ? { ...i, run: s.run! } : i)) : [...cur, message("assistant", "", { run: s.run!, live: true })]));
     }
     reloadRecaps();
+    compter();
   };
   useEffect(() => {
     reload().catch((e: Error) => setStatus(e.message));
@@ -537,6 +551,10 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
       if (ev.kind === "Token") {
         const repris = dejaRepris.current;
         if (repris && ev.run === repris.run && typeof ev.seq === "number" && ev.seq <= repris.seq) return;
+        if ((!repris || repris.run !== ev.run) && typeof ev.seq === "number" && ev.run !== undefined) {
+          if (recus.current?.run !== String(ev.run)) recus.current = { run: String(ev.run), jetons: [] };
+          if (recus.current.jetons.length < 100_000) recus.current.jetons.push({ seq: ev.seq, text: String(ev.text ?? "") });
+        }
         if (typeof ev.seq === "number") (tokenLog.applied[String(ev.run)] ??= []).push(ev.seq);
         live((m) => ({ ...m, parts: appendText(m.parts, String(ev.text ?? "")) }));
       }
