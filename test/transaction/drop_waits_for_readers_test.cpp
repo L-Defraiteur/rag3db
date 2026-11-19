@@ -79,4 +79,46 @@ TEST_F(DropWaitsForReaders, ADropOfAColumnWaitsForAnOpenReaderWhoKeepsReadingIt)
     EXPECT_EQ(row(*conn, "MATCH (t:T) RETURN count(*), sum(t.n);"), "20000|200010000\n");
 }
 
+TEST_F(DropWaitsForReaders, ADropGivesUpAfterItsTimeoutNamingTheReaderItWaitedFor) {
+    run(*conn, "CREATE NODE TABLE T(id INT64 PRIMARY KEY, n INT64, s STRING);");
+    run(*conn, "UNWIND range(1, 1000) AS i CREATE (:T {id: i, n: i, s: 'v'});");
+    Connection reader(database.get());
+    run(reader, "BEGIN TRANSACTION READ ONLY;");
+    ASSERT_EQ(row(reader, "MATCH (t:T) RETURN count(t.s);"), "1000\n");
+    run(*conn, "CALL alter_lock_timeout=300;");
+    const auto refused = row(*conn, "ALTER TABLE T DROP s;");
+    EXPECT_NE(refused.find("read-only, open for"), std::string::npos)
+        << "[check: a-drop-timeout-names-the-reader] " << refused;
+    EXPECT_EQ(row(reader, "MATCH (t:T) RETURN count(t.s);"), "1000\n");
+    run(reader, "COMMIT;");
+    run(*conn, "ALTER TABLE T DROP s;");
+}
+
+TEST_F(DropWaitsForReaders, ANewReaderWaitsBehindAWaitingDropAtMostItsTimeout) {
+    run(*conn, "CREATE NODE TABLE T(id INT64 PRIMARY KEY, n INT64, s STRING);");
+    run(*conn, "UNWIND range(1, 1000) AS i CREATE (:T {id: i, n: i, s: 'v'});");
+    Connection longReader(database.get());
+    run(longReader, "BEGIN TRANSACTION READ ONLY;");
+    ASSERT_EQ(row(longReader, "MATCH (t:T) RETURN count(t.s);"), "1000\n");
+    std::string dropResult;
+    std::thread dropper([&] {
+        Connection ddl(database.get());
+        ddl.query("CALL alter_lock_timeout=1500;");
+        dropResult = row(ddl, "ALTER TABLE T DROP s;");
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    // Le DROP attend le lecteur long ; un lecteur neuf attend derrière le DROP (file FIFO), au plus
+    // jusqu'à ce que le DROP renonce.
+    Connection newReader(database.get());
+    const auto start = Clock::now();
+    const auto read = row(newReader, "MATCH (t:T) RETURN count(t.s);");
+    const auto waited = std::chrono::duration<double, std::milli>(Clock::now() - start).count();
+    dropper.join();
+    EXPECT_EQ(read, "1000\n");
+    EXPECT_GT(waited, 600) << "[check: a-new-reader-queues-behind-a-waiting-drop]";
+    EXPECT_LT(waited, 5000) << "[check: the-freeze-is-bounded-by-the-drop-timeout]";
+    EXPECT_NE(dropResult.find("read-only, open for"), std::string::npos) << dropResult;
+    run(longReader, "COMMIT;");
+}
+
 } // namespace
