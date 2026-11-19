@@ -384,4 +384,20 @@ nonjuge() { # nonjuge <attendu: tenue|arret> <description> <ligne à ajouter au 
 }
 nonjuge arret "e2e_code_sync exigée, un test non jugé dans son journal" "non jugé : la lib n'a pas la colonne state"
 nonjuge tenue "e2e_code_sync exigée, aucun non-jugé" "fin"
+# **Un rouge connu dans une suite exigée** (19 novembre 2026, c7) : un cas listé dans tools/poste/known_red_e2e.txt de
+# l'arbre, au ticket ouvert, ne refuse pas et se dit « rouge connu » ; tout autre rouge refuse.
+connu() { # connu <attendu: tenue|arret> <description> <cas rouge du journal>
+  git checkout -q "$BASE" 2>/dev/null; mkdir -p extension/rag3weaver/src docs/x/tickets tools/poste
+  echo '// lot' > extension/rag3weaver/src/code_sync.rs
+  printf -- '# t\n\n- **État** : ouvert (19 novembre 2026)\n' > docs/x/tickets/connu.md
+  printf 'e2e_code_sync\tcas_connu\tdocs/x/tickets/connu.md\n' > tools/poste/known_red_e2e.txt
+  git add -- extension/rag3weaver/src/code_sync.rs docs/x/tickets/connu.md tools/poste/known_red_e2e.txt; git commit -qm "$2"; N=$(git rev-parse HEAD)
+  local J; J=$(mktemp -d); printf 'commit x\n== e2e_code_sync\ntest result: FAILED. 19 passed; 1 failed;\n' > "$J/resume.log"
+  printf 'test %s ... FAILED\ntest result: FAILED. 19 passed; 1 failed;\n' "$3" > "$J/e2e_code_sync.log"
+  local sortie rc; sortie=$(bash "$GARDE" --required-suites "$BASE" "$N" "$J" 2>&1); rc=$?; rm -rf "$J"
+  if { [ "$1" = tenue ] && [ $rc = 0 ] && echo "$sortie" | grep -q "rouge connu (docs/x/tickets/connu.md)"; } || { [ "$1" = arret ] && [ $rc != 0 ] && echo "$sortie" | grep -q "e2e_code_sync"; }; then echo "vert   rouge connu, $1 : $2"
+  else echo "ROUGE  rouge connu, attendu $1 (rc $rc) : $2 — $sortie"; rouge=1; fi
+}
+connu tenue "e2e_code_sync exigée, son seul rouge est un cas listé au ticket ouvert" e2e_code_sync::tests::cas_connu
+connu arret "e2e_code_sync exigée, un rouge non listé" e2e_code_sync::tests::cas_autre
 exit $rouge
