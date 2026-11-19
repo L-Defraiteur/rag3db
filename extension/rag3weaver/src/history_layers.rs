@@ -572,7 +572,8 @@ pub fn check_layer_history(catalog: &Catalog, root: &Path, layer: &str, refname:
         };
         // The first parent of the ref, from its base: the commit at position `rang` (1 = just above the base).
         let chaine = String::from_utf8_lossy(&git(root, &["rev-list", "--first-parent", "--reverse", &range])?).lines().map(str::to_string).collect::<Vec<_>>();
-        let au_rang = usize::try_from(rang - 1).ok().and_then(|i| chaine.get(i));
+        // Rank 0 is the base itself (a ref that has not moved since its base).
+        let au_rang = if rang == 0 { base.as_ref() } else { usize::try_from(rang - 1).ok().and_then(|i| chaine.get(i)) };
         if au_rang.map(String::as_str) != Some(commit) {
             return Err(format!(
                 "couche {layer} à rebâtir : la ref {refname} a été réécrite, le commit {commit} n'est plus au rang {rang} de sa première parente"
