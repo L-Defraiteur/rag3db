@@ -7312,7 +7312,8 @@ mod tests {
             outil.len(),
             // Le relais est admis sous code sans conférer read_files : une lecture
             // pure en base reste possible ; les effets de la cible sont revérifiés.
-            44 + usize::from(cfg!(feature = "code"))
+            // Collect (lot B1, 19 nov. 2026) : rassembler dans un ordre déclaré, pur comme RhaiNode.
+            45 + usize::from(cfg!(feature = "code"))
                 // SlowReadNode, in the test builds only (`backend::lecture_lente`): the slow read on the call's
                 // snapshot that the host-path witness of the interruption stops. Never in the product.
                 + usize::from(cfg!(test)),
