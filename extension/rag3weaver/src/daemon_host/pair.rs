@@ -313,7 +313,9 @@ mod tests {
         ecrire("illisible.json", Value::String("pas une entrée".into()));
         let mut retires: Vec<String> = r.nettoyer().iter().map(|p| p.file_name().unwrap().to_string_lossy().into_owned()).collect();
         retires.sort();
-        assert_eq!(retires, vec![format!("{moi}.json"), "4194399.json".to_string()], "dead, or its pid taken by another process");
+        let mut attendus = vec![format!("{moi}.json"), "4194399.json".to_string()];
+        attendus.sort();
+        assert_eq!(retires, attendus, "dead, or its pid taken by another process");
         for reste in ["4194398.json", "1.json", "illisible.json"] {
             assert!(r.sessions.join(reste).exists(), "{reste} is not ours or is alive");
         }
