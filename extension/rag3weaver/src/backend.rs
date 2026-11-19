@@ -8258,6 +8258,31 @@ mod tests {
         assert!(backend.stop_reactions().is_empty());
     }
 
+    /// **A long hold of the catalog does not refuse a tool's read** (ticket of 12 October 2026, « une lecture refusée
+    /// pendant une réaction une fois sur neuf », seen only before the read view of L2): the catalog is held for as long
+    /// as the read takes; `usages` answers from the read view, says that a write is in progress, and is never
+    /// « Catalogue occupé ».
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_long_hold_of_the_catalog_does_not_refuse_a_tool_read() {
+        let (_dir, backend) = backend_qui_surveille();
+        let catalog = backend.catalog.clone();
+        let (pris, prends) = std::sync::mpsc::channel();
+        let (fini, finir) = std::sync::mpsc::channel::<()>();
+        let tenu = std::thread::spawn(move || {
+            let _g = catalog.lock().unwrap();
+            pris.send(()).unwrap();
+            // Held until the read has answered: longer than any wait of a reader, an order, not a duration.
+            let _ = finir.recv();
+        });
+        prends.recv().unwrap();
+        let u = usages_de(&backend, "depart");
+        fini.send(()).unwrap();
+        tenu.join().unwrap();
+        assert!(!u.contains(crate::dataflow::catalog_read::BUSY), "a read refused under a long hold: {u}");
+        assert!(u.contains(crate::dataflow::catalog_read::WRITER_HOLDS) && u.contains("main"), "the read answers from the view, and says so: {u}");
+    }
+
     /// **Un changement localisé ne fait pas refuser une lecture** : le
     /// catalogue tenu le temps d'une réindexation (ici 300 ms), `usages` attend
     /// et répond — « catalogue occupé » est réservé à une tenue longue.
