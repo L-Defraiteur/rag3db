@@ -158,3 +158,26 @@ chaque tour dans son propre processus, journaux sous `~/.cache/rag3db-moteur-not
 Rien en 400 tours : le petit test ne le reproduit pas à une fréquence utile. Le défaut reste rare
 partout : une fois sur 12 sous `DdlEveryMinute` à 200 Mio, une fois chez Codex, jamais sous ASan
 (7 tours) ni sous TSan (6 tours). C'est cohérent avec une course qui demande un entrelacement précis.
+
+## Revu vivant sur master le 19 novembre (cœur c++)
+
+`TwentyWriters.DdlEveryMinute` dix fois de suite à luciepc, sur le moteur de la pile C++ du 19 novembre (`4ab4ab8150`,
+Release, offsets de `9fa16affff` compris) : **deux SIGSEGV, aux tours 3 et 8**, chaque fois dans les deux premières
+minutes. La pile est celle de C1 dans les deux cores (pids 3923328 et 1542664, systemd-coredump ; copie
+`~/.cache/rag3db-moteur-notes/ddl-x10/cores/core.1542664`) :
+
+`TransactionManager::commit` → `writeRequestedCheckpointIfLastNoLock` → `Checkpointer::writeCheckpoint` →
+`NodeTable::checkpoint` → `NodeGroup::checkpointInMemAndOnDisk` → `ColumnChunk::checkpoint` →
+`Column::checkpointSegment` → `StringChunkData::write` → `DictionaryChunk::appendString` →
+`unordered_set::_M_find_tr<string_view>` → `std::_Hash_bytes`, SEGV_ACCERR.
+
+Ce que dit le core : la faute est le hachage de la chaîne **source** (`indexTable.find(val)`, la recherche
+hétérogène ne hache que la clé). L'adresse fautive `0x7ff4fc809000` est la première page non engagée d'un tas
+d'arène de malloc (`0x7ff4fc000000`, partie lisible jusqu'à `0x7ff4fc809000`, le reste réservé sans droit) : la vue
+de la chaîne source déborde le tampon de son dictionnaire. Soit sa longueur ou son début sont faux (offsets
+incohérents dans le dictionnaire du morceau source), soit le tampon a été libéré ou réalloué sous elle.
+
+Le petit test de Codex, vert 400 fois, ne le voit pas ; `DdlEveryMinute` le voit deux fois sur dix. Ce qui les
+sépare : des écrivains et des DDL concurrents pendant les points de reprise automatiques. Suite : `DdlEveryMinute`
+sous TSan et sous ASan à luciepc.
+
