@@ -1129,6 +1129,10 @@ impl JournalEnAnneau {
 /// pas de la sortie, et ne compte pas dans les perdus. Rend le total des
 /// octets perdus et la longueur de l'en-tête en place. Tenu par le surveillant de ce
 /// processus : s'il disparaît, le journal continue d'avancer, sans plafond.
+/// The test hook of [`plafonner`]: a delay before the truncation, in milliseconds.
+#[cfg(test)]
+static PLAFONNER_RETARD_MS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 fn plafonner(chemin: &std::path::Path, plafond: u64, perdus: u64, entete: u64) -> (u64, u64) {
     use std::io::{Read, Seek, SeekFrom, Write};
     let Ok(taille) = std::fs::metadata(chemin).map(|m| m.len()) else { return (perdus, entete) };
@@ -1144,6 +1148,15 @@ fn plafonner(chemin: &std::path::Path, plafond: u64, perdus: u64, entete: u64) -
     let apres = perdus + (taille - garde).saturating_sub(entete);
     let tete = format!("… {apres} octets perdus en tête (journal en anneau de {} Mio : on garde la fin)\n", plafond >> 20);
     let Ok(mut ecrit) = std::fs::OpenOptions::new().write(true).open(chemin) else { return (perdus, entete) };
+    #[cfg(test)]
+    {
+        // **A loaded machine, made deterministic** (ticket of 7 November 2026): the window between reading the end
+        // and truncating grows, and the command keeps writing into it.
+        let ms = PLAFONNER_RETARD_MS.load(std::sync::atomic::Ordering::SeqCst);
+        if ms > 0 {
+            std::thread::sleep(std::time::Duration::from_millis(ms));
+        }
+    }
     if ecrit.set_len(0).is_err() {
         return (perdus, entete);
     }
@@ -1735,6 +1748,8 @@ mod tests {
     fn en_fond_un_journal_au_dela_du_plafond_garde_la_fin_et_le_dit() {
         let (_d, atelier) = atelier_temp();
         let atelier = atelier.avec_plafond_journal(100_000);
+        // A loaded machine: 50 ms between reading the end and truncating, while the command writes on.
+        PLAFONNER_RETARD_MS.store(50, std::sync::atomic::Ordering::SeqCst);
         let (tx, rx) = std::sync::mpsc::channel();
         let f = lancer_en_fond(
             sh("i=0; while [ $i -lt 30000 ]; do printf 'ligne%05d\\n' $i; i=$((i+1)); done"),
@@ -1750,7 +1765,11 @@ mod tests {
         // lecture de la fin et la troncature part sans être compté (voir
         // `plafonner`) : le compte ne dépasse jamais l'écrit, et il en manque
         // au plus quelques Ko par troncature.
-        assert!(fin.octets_stdout <= 330_000 && fin.octets_stdout > 300_000, "{}", fin.octets_stdout);
+        PLAFONNER_RETARD_MS.store(0, std::sync::atomic::Ordering::SeqCst);
+        // 30 000 lines of 11 bytes: 330 000 written. What the command writes while the journal is truncated is
+        // counted with the lost bytes (ticket of 7 November 2026): the count misses at most the bytes written
+        // between the last read of the size and the truncation, a few, even on a loaded machine.
+        assert!(fin.octets_stdout <= 330_000 && fin.octets_stdout > 325_000, "{}", fin.octets_stdout);
         let j = std::fs::read_to_string(f.journal_stdout.as_ref().unwrap()).unwrap();
         assert!(j.lines().next().unwrap().contains("octets perdus en tête"), "l'en-tête dit la perte : {}", j.lines().next().unwrap());
         assert!(j.trim_end().ends_with("ligne29999"), "la fin est gardée");
