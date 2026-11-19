@@ -828,6 +828,17 @@ impl fmt::Display for ReasoningEffort {
 /// Comptage d'un appel. `prompt_tokens` est ce qu'a coûté le préremplissage,
 /// `completion_tokens` le nombre de fragments émis.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+/// **A reply cut by its limit, said the same everywhere** (19 November 2026: the archiviste's extraction and the
+/// teammate's steps were both cut on Vertex, where the reasoning of Gemini counts in max_tokens): the limit, the
+/// reasoning that ate it; each caller adds what to do. LlmNode refuses a cut reply under a response_schema with it; the
+/// teammate's trace of a cut step says it too.
+pub fn cut_reply(max_tokens: usize, usage: &Usage) -> String {
+    format!(
+        "the reply was cut at max_tokens={max_tokens} (finish: length), reasoning {} of {} completion tokens",
+        usage.reasoning_tokens, usage.completion_tokens
+    )
+}
+
 pub struct Usage {
     pub prompt_tokens: usize,
     pub completion_tokens: usize,
