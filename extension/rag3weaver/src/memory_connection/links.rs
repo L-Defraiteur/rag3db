@@ -48,20 +48,19 @@ fn link(state: &mut State, relation: &str, props: &[String], params: &[QueryPara
         let (Some(CypherValue::String(from)), Some(CypherValue::String(to))) = (item.get("from_uuid").map(untyped), item.get("to_uuid").map(untyped)) else {
             return Err(DbError::QueryError(format!("connexion mémoire : un lien de « {relation} » sans from_uuid ni to_uuid")));
         };
-        // `MERGE … SET r.c = item.c` sets the listed properties only (a missing one becomes NULL); the others keep theirs.
-        let mut merged: BTreeMap<String, CypherValue> =
-            state.image.outgoing(relation, from).into_iter().find(|(t, _)| t == to).map(|(_, p)| p).unwrap_or_default();
+        // `MERGE … SET r.c = item.c` sets the listed properties only (a missing one becomes NULL); the others keep
+        // theirs. `merge_rel_props` finds the pair by its index and unfolds nothing.
+        let mut set = BTreeMap::new();
+        let mut unset = Vec::new();
         for p in props {
             match item.get(p).map(untyped) {
-                Some(CypherValue::Null) | None => {
-                    merged.remove(p);
-                }
+                Some(CypherValue::Null) | None => unset.push(p.clone()),
                 Some(v) => {
-                    merged.insert(p.clone(), plain(v));
+                    set.insert(p.clone(), plain(v));
                 }
             }
         }
-        state.image.insert_rel(relation, from, to, merged);
+        state.image.merge_rel_props(relation, from, to, set, &unset);
     }
     Ok(QueryResult::default())
 }
