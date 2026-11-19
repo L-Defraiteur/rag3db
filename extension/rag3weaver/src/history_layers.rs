@@ -350,9 +350,43 @@ pub fn spawn_layer_sync(
     settings: crate::views::WriteSettings,
     every: std::time::Duration,
 ) -> LayerSyncHandle {
-    // RED STUB: no thread.
-    let _ = (catalog, workspace_root, tracked, settings, every);
-    LayerSyncHandle { stop: Default::default(), thread: None }
+    let stop: std::sync::Arc<(std::sync::Mutex<bool>, std::sync::Condvar)> = Default::default();
+    let s = stop.clone();
+    let thread = std::thread::Builder::new()
+        .name("couches-suivies".into())
+        .spawn(move || {
+            let mut dit: Option<String> = None;
+            loop {
+                {
+                    let (flag, cv) = &*s;
+                    let g = flag.lock().unwrap_or_else(|e| e.into_inner());
+                    if *g {
+                        return;
+                    }
+                    let (g, _) = cv.wait_timeout(g, every).unwrap_or_else(|e| e.into_inner());
+                    if *g {
+                        return;
+                    }
+                }
+                let issues = match catalog.lock() {
+                    Ok(mut cat) => sync_tracked_layers(&mut cat, &workspace_root, tracked.as_ref(), &settings),
+                    Err(_) => return,
+                };
+                let refus: Vec<String> = match issues {
+                    Ok(issues) => issues.into_iter().filter_map(|(n, _, r)| r.err().map(|e| format!("{n} : {e}"))).collect(),
+                    Err(e) => vec![e],
+                };
+                let texte = (!refus.is_empty()).then(|| refus.join(" ; "));
+                if texte != dit {
+                    if let Some(t) = &texte {
+                        eprintln!("[rag3weaver] couches suivies : {t}");
+                    }
+                    dit = texte;
+                }
+            }
+        })
+        .ok();
+    LayerSyncHandle { stop, thread }
 }
 
 #[cfg(all(test, feature = "rag3db-native"))]
