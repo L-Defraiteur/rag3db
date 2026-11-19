@@ -5,7 +5,7 @@
 //! files up to 1 MB), analyzes them, then ingests the analysis with the schema of the references either on the memory
 //! connection (`image`) or on an in-memory rag3db base (`base`), and writes one line per `CONSUMES`: file and line of
 //! the mention, its scope, the target, its file, the mark. Two runs, one per face, give two files to compare with
-//! `cmp`. It prints the times (analysis, ingestion) and the memory high-water mark after each step.
+//! `cmp`. It prints the times (analysis, ingestion, and the ingestion's stages) and the memory high-water mark after each step.
 //!
 //! Run with: PROBE_ROOT=… PROBE_FACE=image PROBE_TSV=… cargo test --release --features rag3db-native,code \
 //!   --test probe_memory_image_parity -- --ignored --nocapture
@@ -49,6 +49,19 @@ fn text(props: &BTreeMap<String, CypherValue>, k: &str) -> String {
     }
 }
 
+/// The ingestion stages (`ingest_profile`), summed by name, the longest first.
+fn print_stages(face: &str, root: &str, stages: &[(&'static str, std::time::Duration)]) {
+    let mut by: BTreeMap<&str, u128> = BTreeMap::new();
+    for (s, d) in stages {
+        *by.entry(s).or_default() += d.as_millis();
+    }
+    let mut v: Vec<_> = by.into_iter().collect();
+    v.sort_by(|a, b| b.1.cmp(&a.1));
+    for (s, ms) in v.into_iter().take(25) {
+        println!("PROBE {face} {root} : stage {ms} ms  {s}");
+    }
+}
+
 #[test]
 #[ignore]
 fn the_image_against_the_base_on_a_tree() {
@@ -75,8 +88,10 @@ fn the_image_against_the_base_on_a_tree() {
     let mut lines: Vec<String> = Vec::new();
     match face.as_str() {
         "image" => {
-            let connection = rag3weaver::memory_resolution::memory_image_of(&analysis).expect("the image is built");
+            let (connection, stages) = rag3weaver::ingest_profile::record(|| rag3weaver::memory_resolution::memory_image_of(&analysis));
+            let connection = connection.expect("the image is built");
             let ingest_ms = t.elapsed().as_millis();
+            print_stages(&face, &root, &stages);
             connection.with_image(|image| {
                 for from in image.nodes_of_table("Scope") {
                     let a = image.node(&from).expect("a scope");
@@ -98,8 +113,10 @@ fn the_image_against_the_base_on_a_tree() {
             );
             cat.initialize().unwrap();
             rag3weaver::memory_resolution::register_code_schema_for_references(&mut cat).unwrap();
-            cat.ingest_code(&analysis).unwrap();
+            let (r, stages) = rag3weaver::ingest_profile::record(|| cat.ingest_code(&analysis));
+            r.unwrap();
             println!("PROBE base {root} : ingest {} ms ; VmHWM {} MiB", t.elapsed().as_millis(), high_water());
+            print_stages(&face, &root, &stages);
             let r = cat
                 .execute_raw("MATCH (a:Scope)-[r:CONSUMES]->(b:Scope) RETURN a.file_path, r.line, a.name, b.name, b.file_path, r.resolution")
                 .unwrap();
