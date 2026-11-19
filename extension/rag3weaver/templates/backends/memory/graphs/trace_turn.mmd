@@ -1,0 +1,20 @@
+%% tool: trace_turn
+%% description: Where a turn comes from and what was kept of it, in one call: the turn (its messages if still indexed, else gone), its slice (closed with its range and summary, or open when it is not filed yet), the L1 whose range covers the turn, and their fiches.
+%% param: run string! -- The run.
+%% param: turn int! -- The turn.
+%% result: render.result
+
+graph LR
+    query["RhaiNode(script_id=trace_turn_query, inputs='run,turn', run=$run, turn=$turn)"]
+    turns["ForEachNode(graph='@builtin:backends/memory/graphs/rows_turn.mmd')"]
+    slice["RhaiNode(script_id=trace_turn_slice)"]
+    source["ForEachNode(graph='@builtin:backends/memory/graphs/rows_source.mmd')"]
+    l1["RhaiNode(script_id=trace_turn_l1)"]
+    apports["ForEachNode(graph='@builtin:backends/memory/graphs/rows_apport.mmd')"]
+    render["RhaiNode(script_id=trace_turn_render)"]
+    query -->|result:elements| turns
+    turns -->|list:value| slice
+    slice -->|result:elements| source
+    source -->|list:value| l1
+    l1 -->|result:elements| apports
+    apports -->|list:value| render

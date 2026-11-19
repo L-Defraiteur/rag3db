@@ -1,0 +1,15 @@
+%% tool: list_slices
+%% description: The filed slices of a run, in order of their first turn, each with its range, its summary and the number of L1 it produced. A turn after the last slice is not filed yet.
+%% param: run string! -- The run.
+%% result: render.result
+
+graph LR
+    query["RhaiNode(script_id=slices_query, inputs='run', run=$run)"]
+    sources["ForEachNode(graph='@builtin:backends/memory/graphs/rows_source.mmd')"]
+    l1query["RhaiNode(script_id=slices_l1_query)"]
+    apports["ForEachNode(graph='@builtin:backends/memory/graphs/rows_apport.mmd')"]
+    render["RhaiNode(script_id=slices_render)"]
+    query -->|result:elements| sources
+    sources -->|list:value| l1query
+    l1query -->|result:elements| apports
+    apports -->|list:value| render

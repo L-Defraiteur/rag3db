@@ -52,7 +52,7 @@ for t in x.topics {
     let text = if input.step2_input == "extracted" { t.said } else if input.step2_input == "raw_turns" { raw } else { t.said + "\n\n" + raw };
     text.trim();
     if t.open == true { open.push(t.title); }
-    elements.push(#{ title: `turns ${lo}-${hi} · ${t.title}`, level: 2, text: text, anchor: "", index: i, chemin: input.chemin, titre: input.titre, origine: input.origine });
+    elements.push(#{ title: `turns ${lo}-${hi} · ${t.title}`, level: 2, text: text, anchor: "", index: i, chemin: input.chemin, titre: input.titre, origine: input.origine, run: input.run, from_turn: lo, to_turn: hi });
     i += 1;
 }
 let set_aside = #{};
@@ -78,7 +78,7 @@ for r in residuals {
     let raw = "";
     for n in range(r[0], r[1] + 1) { let k = n.to_string(); if raw.len() + blocks[k].len() <= budget { raw += blocks[k] + "\n"; } }
     raw.trim();
-    elements.push(#{ title: `turns ${r[0]}-${r[1]} · reste`, level: 2, text: raw, anchor: "", index: i, chemin: input.chemin, titre: input.titre, origine: input.origine });
+    elements.push(#{ title: `turns ${r[0]}-${r[1]} · reste`, level: 2, text: raw, anchor: "", index: i, chemin: input.chemin, titre: input.titre, origine: input.origine, run: input.run, from_turn: r[0], to_turn: r[1] });
     i += 1;
 }
 let summary = if x.slice_summary == () { "" } else { x.slice_summary };
