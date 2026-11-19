@@ -569,6 +569,14 @@ pub struct Catalog {
 /// monopoliser la carte. Ce qui dépasse est repris à la passe suivante.
 pub const RATTRAPAGE_PAR_PASSE: usize = 512;
 
+/// **The mark of held derivations** (`_catalog_meta`): set in the transaction of the first batch of a first index
+/// that holds its derivations until after the relations (decision C), cleared when they are rendered. Left behind by
+/// a pass that died, it says the base owes derived content (the full text of the code) for batches already
+/// validated: the next writer renders it ([`Catalog::repair_held_derivations`]), and the state says « to rebuild »
+/// meanwhile. It lives in the base, not in the journal of the `index` command: `sync_source` (the watch, a resume)
+/// writes no such journal, and a catalogue that reopens reads none.
+pub const DERIVATIONS_HELD_KEY: &str = "derivations_held";
+
 /// **Au-delà, tomber l'index HNSW et le reconstruire coûte moins que d'y
 /// insérer ligne à ligne.**
 ///
@@ -5175,6 +5183,12 @@ fn read_threads() -> u64 {
         // La fermeture est recalculée à chaque étape et non gardée : une
         // étape peut la changer (une relation posée n'y lie plus rien).
         let fermeture = |moi: &Self| cible.map(|c| moi.fermeture(c, false));
+        // **What a dead first index held back** (the mark of held derivations): rendered before anything is read.
+        if !self.lecture_seule && self.derivations_held() {
+            if let Err(e) = self.repair_held_derivations(exige.dense() || exige.sparse()) {
+                warnings.push(format!("les dérivées retenues par un index arrêté n'ont pas pu être rendues : {e}"));
+            }
+        }
 
         // **Ce que le moteur sait tenir, et où il approxime.** Voir la table en
         // tête de `disponibilite` : la garantie est conservatrice — on ne dit
@@ -8636,6 +8650,36 @@ fn read_threads() -> u64 {
 
     /// **The derivations held back, drained now**, after the relations: turns the hold off and drains them like a
     /// batch would have. A no-op when nothing was held.
+    /// Whether a first index left derivations held and not yet rendered ([`DERIVATIONS_HELD_KEY`]).
+    pub fn derivations_held(&self) -> bool {
+        self.read_meta_key(DERIVATIONS_HELD_KEY).ok().flatten().is_some_and(|v| !v.is_empty())
+    }
+
+    /// Set or clear the mark of held derivations.
+    pub fn mark_derivations_held(&self, on: bool) -> Result<(), CatalogError> {
+        self.persist_meta_key(DERIVATIONS_HELD_KEY, if on { "1" } else { "" })
+    }
+
+    /// **Render what a dead pass held back**: while the mark is there, the render catch-up runs to the end (the roots
+    /// without their derived row, by the base, nothing kept in memory), then the mark is cleared. A no-op without the
+    /// mark, or read-only. Gives back the roots rendered.
+    pub fn repair_held_derivations(&mut self, embed: bool) -> Result<usize, CatalogError> {
+        if self.lecture_seule || !self.derivations_held() {
+            return Ok(0);
+        }
+        let mut total = 0usize;
+        // Bounded: a root that keeps failing must not hold the catalogue for ever.
+        for _ in 0..10_000 {
+            let n = self.rendre_le_retard(None, RATTRAPAGE_PAR_PASSE, embed)?;
+            total += n;
+            if n < RATTRAPAGE_PAR_PASSE {
+                break;
+            }
+        }
+        self.mark_derivations_held(false)?;
+        Ok(total)
+    }
+
     pub fn release_deferred_derivations(&mut self, exige: crate::disponibilite::Disponibilites) -> FlushResult {
         self.defer_derivations = false;
         let held = std::mem::take(&mut self.deferred_derivations);
