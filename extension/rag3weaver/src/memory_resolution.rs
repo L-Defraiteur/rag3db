@@ -1,4 +1,4 @@
-//! **The code of a view as a [`MemoryImage`]** (B, page `docs/recherche/18-11-2026/02-les-outils-de-reference-avant-l-index.md`,
+//! **The code of a view as a [`crate::memory_image::MemoryImage`]** (B, page `docs/recherche/18-11-2026/02-les-outils-de-reference-avant-l-index.md`,
 //! ticket `docs/recherche/tickets/2026-11-18-les-outils-de-reference-par-des-tables-a-soi-avant-l-index.md`).
 //!
 //! The reference tools answer before the index from an image built by the parsing: the same rows the ingestion
@@ -6,11 +6,16 @@
 //! resolution chooses across files, by the same choice functions as the ingestion.
 
 use crate::code::CodeAnalysis;
-use crate::memory_image::MemoryImage;
 
-/// The image of an analysis: its rows, and the links the resolution draws between its files.
-pub fn memory_image_of(_analysis: &CodeAnalysis) -> MemoryImage {
-    MemoryImage::new()
+/// The image of an analysis: its rows, and the links the resolution draws between its files — by the ingestion
+/// itself, on a catalog set on the memory connection, with the schema of the references. The connection is given
+/// back: its clones share the image ([`crate::memory_connection::MemoryConnection::with_image`]).
+pub fn memory_image_of(analysis: &CodeAnalysis) -> Result<crate::memory_connection::MemoryConnection, crate::catalog::CatalogError> {
+    let (mut catalog, connection) = crate::memory_connection::memory_catalog(crate::CatalogConfig::default());
+    catalog.initialize()?;
+    register_code_schema_for_references(&mut catalog)?;
+    catalog.ingest_code(analysis)?;
+    Ok(connection)
 }
 
 /// **The code schema for the reference tools**: files, scopes, libraries, symbols and their relations, without
@@ -42,6 +47,7 @@ pub fn register_code_schema_for_references(catalog: &mut crate::Catalog) -> Resu
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::memory_image::MemoryImage;
     use crate::embedder::HashEmbedder;
     use crate::{Catalog, CatalogConfig, Rag3dbConnection};
 
@@ -76,7 +82,11 @@ mod tests {
         out
     }
 
-    fn by_the_image(image: &MemoryImage) -> Vec<String> {
+    fn by_the_image(connection: &crate::memory_connection::MemoryConnection) -> Vec<String> {
+        connection.with_image(links_of)
+    }
+
+    fn links_of(image: &MemoryImage) -> Vec<String> {
         let text = |props: &std::collections::BTreeMap<String, crate::connection::CypherValue>, k: &str| props.get(k).and_then(|v| v.as_str()).unwrap_or("").to_string();
         let mut out = Vec::new();
         for from in image.nodes_of_table("Scope") {
@@ -95,7 +105,7 @@ mod tests {
         let analysis = crate::code::analyze("/virtual", project());
         let base = by_the_base(&analysis);
         assert!(base.iter().any(|l| l.contains("\tstart\thelper\t")), "the base links the call across files: {base:#?}");
-        let image = by_the_image(&memory_image_of(&analysis));
+        let image = by_the_image(&memory_image_of(&analysis).expect("the analysis is ingested on the memory connection"));
         assert_eq!(image, base, "the image has the base's links, mark for mark");
     }
 
