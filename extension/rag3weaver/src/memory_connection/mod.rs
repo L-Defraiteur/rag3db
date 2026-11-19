@@ -24,6 +24,7 @@ mod links;
 mod load;
 mod meta;
 mod read;
+mod writes;
 
 /// A declared relation table: its two ends and its properties.
 // Read by the families as they are written (the skeleton refuses them all).
@@ -111,6 +112,7 @@ impl DbConnection for MemoryConnection {
             "count" => count::execute(&mut state, op, &stmt, params),
             "links" => links::execute(&mut state, op, &stmt, params),
             "aside" => aside::execute(&mut state, op, &stmt, params),
+            "writes" => writes::execute(&mut state, op, &stmt, params),
             other => Err(not_written(other, op)),
         }
     }
