@@ -1,7 +1,7 @@
 # Le témoin du relais tronqué du chat perd sa page du navigateur, une fois
 
 - **État** : ouvert (19 novembre 2026)
-- **Famille** : témoin
+- **Famille** : produit (un témoin du produit)
 - **Gravité** : un faux rouge de passe. Une passe complète verte sur tout le reste tombe sur ce seul témoin
   navigateur, et le lot attend un rejeu de 30 minutes.
 - **Atteignable en service** : non. C'est la page du navigateur du témoin qui disparaît, pas le chat.
