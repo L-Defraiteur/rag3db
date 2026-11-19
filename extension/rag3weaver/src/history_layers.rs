@@ -234,6 +234,21 @@ fn has_generation(catalog: &Catalog, layer: &str) -> Result<bool, String> {
     Ok(lu.rows.first().and_then(|r| r.first()).and_then(|v| v.as_i64()).unwrap_or(0) > 0)
 }
 
+/// **Bring the tracked layers up to date** (2a′-3, lot 5c): for each tracked ref whose tip has no generation yet in
+/// its layer, the generation of its tip (on its tracked parent's last generation, or on the backend's published rank
+/// for a ref without a tracked parent), then the work layer of each tracked worktree other than the backend's, on its
+/// branch's generation at its HEAD, under the cap. Each layer's outcome: (name, id, rank or refusal).
+pub fn sync_tracked_layers(
+    catalog: &mut Catalog,
+    workspace_root: &Path,
+    tracked: Option<&serde_json::Value>,
+    settings: &crate::views::WriteSettings,
+) -> Result<Vec<(String, String, Result<i64, String>)>, String> {
+    // RED STUB: nothing is written.
+    let _ = (catalog, workspace_root, tracked, settings);
+    Ok(Vec::new())
+}
+
 #[cfg(all(test, feature = "rag3db-native"))]
 mod tests {
     use super::*;
@@ -406,6 +421,48 @@ mod tests {
             assert!(refus.contains("tracked.writes.max_work_layers") && refus.contains('2'), "tour {tour}: the refusal does not name the setting: {refus}");
         }
         assert!(fins_dans_la_vue(&mut cat, "travail-1", "n1") == vec![3], "the second work layer is not read");
+    }
+
+    /// **The tracked layers are brought up to date** (2a′-3, lot 5c). Tracked: branch `b` and every worktree; a
+    /// worktree `wt` on `b`, with an uncommitted `h`. A sync writes `b`'s tip on the backend and `wt`'s work layer on
+    /// it: the view of `b` reads f as at its tip, the view of `wt` reads f and h. A second sync writes no new
+    /// generation of `b` (its tip did not move); a commit on `b` gives one, and `wt` follows its HEAD.
+    #[test]
+    fn the_tracked_layers_are_brought_up_to_date() {
+        let (d, c1, _, _) = depot();
+        let (mut cat, _) = base(d.path(), &c1);
+        let dossiers = tempfile::tempdir().unwrap();
+        let wt = dossiers.path().join("wt");
+        git(d.path(), &["worktree", "add", "-q", wt.to_str().unwrap(), "b"]);
+        std::fs::write(wt.join("h.rs"), "pub fn h() -> u32 {\n    9\n}\n").unwrap();
+        let tracked = serde_json::json!({"sources": [{"select": "branch:b"}, {"select": "worktree:*"}]});
+        let settings = crate::views::WriteSettings::default();
+        let issues = sync_tracked_layers(&mut cat, d.path(), Some(&tracked), &settings).expect("la synchro");
+        let id_de = |fin: &str| -> String {
+            issues.iter().find(|(n, _, _)| n.ends_with(fin)).map(|(_, id, _)| id.clone()).unwrap_or_else(|| panic!("no layer named …{fin}: {issues:?}"))
+        };
+        let (b, w) = (id_de("refs/heads/b"), id_de("/wt"));
+        assert!(issues.iter().all(|(_, _, r)| r.is_ok()), "{issues:?}");
+        assert_eq!(fins_dans_la_vue(&mut cat, &b, "f"), vec![5], "the view of b does not read f as at its tip");
+        assert_eq!(fins_dans_la_vue(&mut cat, &w, "f"), vec![5], "the view of wt does not read f from b");
+        assert_eq!(fins_dans_la_vue(&mut cat, &w, "h"), vec![3], "the view of wt does not read its uncommitted h");
+        let generations = |cat: &Catalog, couche: &str| -> i64 {
+            let lu = cat
+                .execute_raw_with_params(
+                    &format!("MATCH (g:{}) WHERE g.couche = $c RETURN count(*)", crate::generations::TABLE),
+                    &[crate::connection::QueryParam::new("c", CypherValue::String(couche.into()))],
+                )
+                .unwrap();
+            lu.rows[0][0].as_i64().unwrap()
+        };
+        sync_tracked_layers(&mut cat, d.path(), Some(&tracked), &settings).expect("la deuxième synchro");
+        assert_eq!(generations(&cat, &b), 1, "a tip that did not move gave a new generation of b");
+        std::fs::write(wt.join("f.rs"), F1).unwrap();
+        git(&wt, &["commit", "-q", "-am", "c4"]);
+        let issues = sync_tracked_layers(&mut cat, d.path(), Some(&tracked), &settings).expect("la troisième synchro");
+        assert!(issues.iter().all(|(_, _, r)| r.is_ok()), "{issues:?}");
+        assert_eq!(generations(&cat, &b), 2, "a commit on b gave no generation");
+        assert_eq!(fins_dans_la_vue(&mut cat, &w, "f"), vec![3], "wt does not follow its HEAD on b");
     }
 
     /// **Témoin 2 : a history layer is written without checkout.** Writing the generations of branch `b` (never
