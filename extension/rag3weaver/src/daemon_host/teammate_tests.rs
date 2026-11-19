@@ -1301,6 +1301,11 @@ fn a_waiting_tool_says_so_on_the_bus_once_and_says_when_it_resumes() {
     m["teammate"]["tool_wait_notice_s"] = json!(1);
     m["teammate"]["reply_wait_s"] = json!(5);
     std::fs::write(&manifeste, serde_json::to_string_pretty(&m).unwrap()).unwrap();
+    // A task reads its manifest from the committed declarations.
+    let declarations = manifeste.parent().unwrap();
+    for args in [&["add", "-A"][..], &["commit", "-q", "-m", "un seuil d'une seconde"]] {
+        assert!(std::process::Command::new("git").args(args).current_dir(declarations).status().unwrap().success(), "git {args:?}");
+    }
     let tenu: Arc<Mutex<Option<Arc<super::Hosted>>>> = Arc::default();
     let model: ChatModel = {
         let tenu = tenu.clone();
