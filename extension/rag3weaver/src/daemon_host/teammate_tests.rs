@@ -2393,3 +2393,53 @@ fn the_teammate_steps_go_to_the_memory_as_they_go() {
         std::thread::sleep(std::time::Duration::from_millis(100));
     }
 }
+
+/// **A paired task holds its entry while it works, and leaves none** (mode pair, lot 1, page 05 of
+/// 19 Nov 2026): with `teammate.pair`, the agent's entry is in the sessions registry during its
+/// step, named after the agent and busy; after the teammate ends, nothing is left. A task without
+/// it writes nothing.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn a_paired_task_holds_its_entry_while_it_works_and_leaves_none() {
+    for pair in [true, false] {
+        let d = tempfile::tempdir().unwrap();
+        let (_depot, manifeste) = depot_inscrit(d.path(), true);
+        let mut m: Value = serde_json::from_str(&std::fs::read_to_string(&manifeste).unwrap()).unwrap();
+        m["teammate"] = json!({ "pair": pair });
+        std::fs::write(&manifeste, serde_json::to_string_pretty(&m).unwrap()).unwrap();
+        let declarations = manifeste.parent().unwrap();
+        for args in [&["add", "-A"][..], &["commit", "-q", "-m", "le mode pair"]] {
+            assert!(std::process::Command::new("git").args(args).current_dir(declarations).status().unwrap().success(), "git {args:?}");
+        }
+        let registre = super::pair::Registre { sessions: d.path().join("sessions"), socks: d.path().join("socks") };
+        let vues = Arc::new(Mutex::new(Vec::<Value>::new()));
+        let model: ChatModel = {
+            let (vues, sessions) = (vues.clone(), registre.sessions.clone());
+            Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+                let (vues, sessions) = (vues.clone(), sessions.clone());
+                Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
+                    let entree = std::fs::read(sessions.join(format!("{}.json", std::process::id()))).ok().and_then(|o| serde_json::from_slice(&o).ok());
+                    vues.lock().unwrap().push(entree.unwrap_or(Value::Null));
+                    answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "fait", "remaining": "" }))]))
+                })))
+            })
+        };
+        let host = hote(d.path(), model).with_runs_root(d.path().join("runs")).with_pair_registry(registre.clone());
+        let h = host.hosted(&manifeste).unwrap();
+        host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+        host.ouvrir_une_tache(&h.id, "doc").expect("la tâche s'ouvre");
+        let files = host.teammate_files(&h.id, "doc").unwrap();
+        files.append_with("supervisor", "request", None, "Fais-le.", &json!({ "expects": "none" })).unwrap();
+        host.run_teammate(&h.id, "doc").unwrap();
+        let vues = vues.lock().unwrap();
+        let restes: Vec<_> = std::fs::read_dir(&registre.sessions).map(|r| r.flatten().map(|e| e.file_name()).collect()).unwrap_or_default();
+        if pair {
+            assert_eq!(vues[0]["status"], "busy", "the entry is there during the step: {:?}", vues[0]);
+            assert!(vues[0]["name"].as_str().is_some_and(|n| !n.is_empty()), "named after the agent: {:?}", vues[0]);
+            assert!(restes.is_empty(), "nothing left after the teammate ends: {restes:?}");
+        } else {
+            assert_eq!(vues[0], Value::Null, "no pair, no entry");
+            assert!(restes.is_empty(), "{restes:?}");
+        }
+    }
+}

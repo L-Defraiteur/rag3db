@@ -342,6 +342,11 @@ pub struct DaemonHost {
     rangements_en_vol: Arc<Mutex<std::collections::HashSet<String>>>,
     /// One writer at a time for the mark files (`chats/<backend>.rangement.json`).
     rangement_verrou: Arc<Mutex<()>>,
+    /// The pair mode's registry entry, made at the first paired task (never before: a host
+    /// without a paired task does not read or write the sessions registry).
+    pair: std::sync::OnceLock<Option<Arc<pair::Pair>>>,
+    /// The registry to use instead of the environment's (the witnesses).
+    pair_registre: Option<pair::Registre>,
     /// Le modèle de langage nommé qu'une tâche a choisi, connecté (lot tty-14).
     modele_nomme: chat::ModeleNomme,
     /// Ce que les chats ont consommé, par run et par slug.
@@ -524,6 +529,8 @@ impl DaemonHost {
             rangeur: None,
             rangements_en_vol: Arc::new(Mutex::new(Default::default())),
             rangement_verrou: Arc::new(Mutex::new(())),
+            pair: std::sync::OnceLock::new(),
+            pair_registre: None,
             modele_nomme: chat::default_modele_nomme(),
             chat_meter: Arc::new(crate::meter::Meter::new()),
             journal: journal_des_runs::JournalDesRuns::par_defaut(),
@@ -553,6 +560,12 @@ impl DaemonHost {
             Some(r) => Ok(r.clone()),
             None => crate::code_tree::Roots::of_user(),
         }
+    }
+
+    /// The sessions registry of the pair mode, instead of the environment's (the witnesses).
+    pub fn with_pair_registry(mut self, registre: pair::Registre) -> Self {
+        self.pair_registre = Some(registre);
+        self
     }
 
     /// Le journal des runs, sous une autre racine (les témoins).
