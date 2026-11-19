@@ -94,4 +94,6 @@ Le témoin, `le_chat_guide_une_fenetre_du_depot_detachee` (navigateur, joué à 
 - Rouge ensuite (ef275fdc67 : le chat ne sait pas qu'une fenêtre du dépôt est ouverte), puis vert (bdb740179a).
 - Restent verts : les trois témoins de la tranche 1, `ide_par_le_flux` (2) et le contrôle du bundle. tsc est propre.
 
+À la relecture d'ED, la fenêtre du dépôt suit l'adresse citée par `URL` : `?fenetre=depot` collé derrière l'adresse donnait `?q=main?fenetre=depot` pour une adresse qui avait sa propre requête, et la fenêtre perdait son rôle. Le témoin le prouve par une sélection `…/recherche?q=main`, vue rouge (339b9edcfc), puis verte (c5bf47bd47). Remarque d'ED pour la tranche 3 : `location.assign` recharge la fenêtre du dépôt à chaque clic (défilement remis à zéro, connexion au worker rouverte) ; une navigation interne viendra avec elle.
+
 Pas encore fait : le bouton « détacher » et la vue seule sans barre (tranche 3). Aujourd'hui, une fenêtre du dépôt s'ouvre par son adresse, avec `?fenetre=depot`.
