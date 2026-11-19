@@ -4784,7 +4784,8 @@ fn par_reexportation(modules: &[String], definers: &[String], fichiers: &HashMap
 /// **Les têtes de type des appels qualifiés d'un scope** : pour `Type::f()` (Rust, C++) ou `Type.f()` (Python,
 /// TypeScript, C#), une référence de plus vers `Type`, usage `type`, à la ligne de l'appel. Le qualificatif doit être
 /// écrit tel quel devant le nom sur la ligne (un chemin ou un accès), et nommer un type : un identifiant simple en
-/// capitale (le dernier segment d'un chemin `a::B`). Une tête déjà relevée sur la même ligne ne se double pas.
+/// capitale (le dernier segment d'un chemin `a::B`). Seulement quand le scope ne nomme pas déjà le type : sinon sa
+/// propre référence décide de l'arête (une arête « fichier » devenait « nom », 433 sur rag3weaver/src).
 fn tetes_de_type(
     refs: &[codeparsers::scope_extraction::types::IdentifierReference],
 ) -> Vec<codeparsers::scope_extraction::types::IdentifierReference> {
@@ -4802,7 +4803,9 @@ fn tetes_de_type(
         if !simple || !tete.starts_with(|c: char| c.is_uppercase()) || tete == "Self" || tete == r.identifier {
             continue;
         }
-        let deja = |x: &codeparsers::scope_extraction::types::IdentifierReference| x.identifier == tete && x.line == r.line;
+        // Un scope qui nomme déjà le type ailleurs en est déjà l'usager : sa référence (résolue dans le fichier
+        // par codeparsers, ou par un rendez-vous) décide de l'arête, la tête n'en pose pas une seconde.
+        let deja = |x: &codeparsers::scope_extraction::types::IdentifierReference| x.identifier == tete;
         if refs.iter().any(deja) || out.iter().any(deja) {
             continue;
         }
