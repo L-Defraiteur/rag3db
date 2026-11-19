@@ -1,6 +1,6 @@
 # Le suivi des imports sans expression régulière attend une repasse groupée
 
-- **État** : ouvert (19 novembre 2026) — prêt et vert, retenu exprès : son pointeur ne part qu'avec le prochain lot qui
+- **État** : corrigé (19 novembre 2026) — parti avec le lot du cache des parents (branche rag3db `codeparsers/parent-cache-3`, pointeur codeparsers 828f855), pour une seule repasse
   change de toute façon la version de l'analyse
 - **Famille** : produit
 - **Gravité** : lenteur légère : environ 10 % de l'analyse de rag3weaver/src (4,94 → 4,45 s, une mesure par état à
@@ -29,3 +29,12 @@ a été retiré.
 Reposer cette branche avec le **prochain lot qui change la version de l'analyse** (une grammaire, une règle, la
 résolution si elle la touche), en pile, pour une seule repasse ; rejouer alors la passe et déposer les deux ensemble.
 Fermer ce ticket à l'atterrissage.
+
+## Fermeture, 19 novembre 2026
+
+Le suivi des imports part en pile sous le lot du cache des parents, qui change de toute façon la version de
+l'analyse : une seule repasse pour les deux. Le chiffre de l'ensemble, l'analyse en release avant/après (deux tours
+entrelacés à luciepc, arbre figé) : rag3weaver/src 4,28 et 3,88 s → 2,72 et 2,15 s ; `src/` du moteur 1,48 et
+1,51 s → 0,89 et 0,88 s ; `tools/` 0,22 et 0,28 s → 0,14 et 0,16 s. Sonde de marque identique au couple près sur
+rag3weaver/src, le moteur, `tools/python_api` et l'UI de rag3weaver.
+
