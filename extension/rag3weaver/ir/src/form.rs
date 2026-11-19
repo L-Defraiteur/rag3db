@@ -698,6 +698,12 @@ pub enum Write {
     /// `Incoming` : la cible) est une ligne de `table` que `filter` retient
     /// (sur l'alias `m`). Une instruction par relation.
     Detach { relation: String, table: String, side: Direction, filter: Predicate },
+    /// **Copy the edges of replaced rows to their replacements**: for each pair of `$paires` (`a`: a replaced row
+    /// of `table`, `n`: the row that replaces it), each edge of `relation` between the replaced row and a row of
+    /// `other` that `filter` keeps (on the alias `m`) is copied to the replacement with its `props`, unless the
+    /// replacement already has it. `side`: `Incoming` for the edges that arrive at the replaced row, `Outgoing`
+    /// for those that leave it. Returns the number of edges copied.
+    CopyEdges { relation: String, table: String, other: String, side: Direction, filter: Option<Predicate>, props: Vec<String> },
 }
 
 /// Ce qu'un [`Write::Load`] remplit.
@@ -745,6 +751,19 @@ impl Write {
             Write::Load { target: LoadTarget::Links { relation, ends, props }, .. } => {
                 noms.extend([relation.as_str(), ends.0.as_str(), ends.1.as_str()]);
                 noms.extend(props.iter().map(String::as_str));
+            }
+            Write::CopyEdges { relation, table, other, filter, props, .. } => {
+                let mut du_filtre = Vec::new();
+                if let Some(f) = filter {
+                    f.names(&mut du_filtre);
+                }
+                let mut tous: Vec<&str> = vec![relation, table, other];
+                tous.extend(props.iter().map(String::as_str));
+                tous.extend(du_filtre.iter().map(String::as_str));
+                return match tous.into_iter().find(|n| !crate::is_valid_identifier(n)) {
+                    Some(n) => Err(TranslateError::Invalid(format!("écriture : « {n} » n'est pas un identifiant"))),
+                    None => Ok(()),
+                };
             }
             Write::Detach { relation, table, filter, .. } => {
                 let mut du_filtre = Vec::new();
