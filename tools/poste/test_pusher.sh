@@ -544,4 +544,24 @@ played=$(awk '$1 ~ /-sub-bump/ {print $2}' "$D/pass_sub" | tail -1)
 [ "$played" = "$c2" ] && ok "un lot qui bouge le pointeur du sous-module : la passe joue son codeparsers" || ko "la passe a joué le codeparsers $played, pas celui du lot ($c2)"
 on_master sub-bump && ok "le lot du sous-module poussé, la garde voit un arbre propre" || ko "le lot du sous-module rendu : $(grep -P '\tsub-bump\t' "$D/pusher/log.tsv" | tail -1 | cut -f3,4)"
 [ -n "$dpr" ] && ! grep -q "^pr close $dpr " "$D/gh_calls" && ok "la PR du lot de docs du pas d'avant n'est jamais fermée par ce pas" || ko "la PR $dpr du pas d'avant visée par une fermeture"
+# 34. The tickets' headers (19 Nov., c7): master carries check_tickets.py; a docs lot whose ticket says « corrigé » outside
+# closed/ is returned with the refusal; with master red at check_tickets, a docs lot that does not mend it waits behind
+# the next lot, the lot that mends it lands, and the waiting one lands after.
+tk() { printf '# %s\n\n- **État** : %s\n- **Famille** : produit\n- **Gravité** : faible\n- **Atteignable en service** : non\n- **Touche rag3weaver** : non\n' "$1" "$2"; }
+( cd "$D/author" && git fetch -q origin && git checkout -q -B tk-base origin/master && mkdir -p extension/rag3weaver/scripts docs/s/tickets docs/tickets/closed && touch docs/tickets/closed/.keep \
+  && cp "$HERE/../../extension/rag3weaver/scripts/check_tickets.py" extension/rag3weaver/scripts/ && tk un ouvert > docs/s/tickets/un.md \
+  && git add -A && git commit -qm "check_tickets" && git push -q origin HEAD:master )
+( cd "$D/author" && python3 extension/rag3weaver/scripts/check_tickets.py . > /dev/null ) && ok "master du témoin vert à check_tickets" || ko "master du témoin déjà rouge à check_tickets"
+h=$(lot tk-bad docs/s/tickets/deux.md "$(tk deux corrigé)")
+P enqueue tk-bad tk-bad "$h" docs - - - - author-a > /dev/null; P step > /dev/null 2>&1
+! on_master tk-bad && grep -q "^rouge	tk-bad	.*check_tickets" "$D/pusher/inbox/author-a.txt" && ok "un ticket « corrigé » hors closed/ : le lot rendu avec le refus" || ko "le lot au ticket faux : $(grep -P '\ttk-bad\t' "$D/pusher/log.tsv" | tail -1 | cut -f3,4)"
+# master made red by another way, then a docs lot that does not mend it, and one that does
+( cd "$D/author" && git fetch -q origin && git checkout -q -B tk-red origin/master && tk trois corrigé > docs/s/tickets/trois.md && git add -A && git commit -qm "red tickets" && git push -q origin HEAD:master )
+h1=$(lot tk-wait docs/other.md '# other'); P enqueue tk-wait tk-wait "$h1" docs - - - - author-a > /dev/null
+h2=$(lot tk-mend docs/s/tickets/trois.md "$(tk trois ouvert)"); P enqueue tk-mend tk-mend "$h2" docs - - - - author-a > /dev/null
+PUSHER_IDLE=0 PUSHER_TRAIN_MAX=1 P step > /dev/null 2>&1
+w1=$(on_master tk-wait && echo poussé || echo attend)
+PUSHER_IDLE=0 PUSHER_TRAIN_MAX=1 P step > /dev/null 2>&1; PUSHER_IDLE=0 PUSHER_TRAIN_MAX=1 P step > /dev/null 2>&1
+[ "$w1" = attend ] && ! grep -q "^rouge	tk-wait	" "$D/pusher/inbox/author-a.txt" && ok "master rouge à check_tickets : le lot qui ne le répare pas attend, sans être rendu" || ko "master rouge : le lot qui ne répare pas est $w1"
+on_master tk-mend && on_master tk-wait && ok "le lot qui répare atterrit, puis celui qui attendait" || ko "après la réparation : tk-mend $(on_master tk-mend && echo poussé || echo absent), tk-wait $(on_master tk-wait && echo poussé || echo absent)"
 exit $red
