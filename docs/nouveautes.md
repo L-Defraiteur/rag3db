@@ -1,5 +1,13 @@
 # Nouveautés
 
+- 19 novembre 2026 — **Un graphe compose le contexte d'un appel au modèle, sans script de prose.** Le nœud `Collect`
+  rassemble ses entrées nommées dans l'ordre que le graphe déclare (`inputs='identity,report,slice'`), quel que soit
+  l'ordre où elles arrivent ; une entrée vide est retirée, sauf `keep_empty`. `LlmNode` prend une `instruction` (la
+  ligne de tâche) et un port `context` : une liste de parts `{name, title, value, format?, max_tokens?}`, rendues en
+  sections, une chaîne telle quelle et toute autre valeur en JSON à clés triées (ou en lignes « clé : valeur » avec
+  `format: "kv"`). Une part au-delà de son plafond est coupée, et la coupe est dite. La même composition rend la
+  même invite, octet pour octet.
+
 - 20 novembre 2026 — **Le chat de l'IDE dit quand l'index n'est pas prêt, puis quand il l'est.** Sous un outil qui a répondu avant que l'index ne rattrape, une ligne dit en clair combien de temps il faut encore pour le texte et pour les vecteurs, ou pourquoi les vecteurs manquent ; l'outil n'est pas refusé. Une fois l'index à jour, une seule ligne le dit dans le chat.
 - 19 novembre 2026 — **Une seule notification quand l'index d'une vue est prêt.** Quand une recherche ou une lecture
   a répondu « index pas prêt », le serveur MCP de l'agent surveille cette vue. Quand elle est prête, il envoie une
