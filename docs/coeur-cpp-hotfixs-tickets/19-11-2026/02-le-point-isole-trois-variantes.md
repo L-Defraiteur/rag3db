@@ -1,5 +1,20 @@
 # Le point isolé que rejoint un nuage : trois variantes à mesurer
 
+> **Revu le 19 novembre, 10 h 30 : la cause première est le bâti parallèle.** La même recette au shell, 12 essais par
+> nombre de fils du bâti (`CALL threads`), sur disque : **0 manqué à 1 fil, 0 à 4, 5 à 8, 4 à 24**. Le témoin gtest
+> passait parce que les tests tournent à 2 fils ; il fixe désormais 8 fils et joue dix tours (92f40e9ae4).
+>
+> **La course.** Dans `InMemHNSWLayer::insertRel`, un fil réserve une case de la liste de voisins par un incrément
+> atomique (`incrementCSRLength`), puis l'écrit (`setDstNode`). Le fil qui prend la dernière case lance
+> `shrinkForNode`, qui relit la liste et la réécrit. Une case réservée par un autre fil mais pas encore écrite est
+> lue vide et perdue. Une case écrite après l'élagage tombe hors de la nouvelle longueur, ou écrase un voisin gardé.
+> Les arêtes perdues touchent d'abord un point isolé, qui en a peu : ses arêtes de retour depuis le nuage.
+>
+> **Le correctif retenu (c7)** fait ce que fait hnswlib sous `addPoint` concurrent : un verrou par nœud (ici un
+> tableau de verrous répartis par décalage). Il est tenu pour ajouter à une liste, pour l'élaguer, et pour la copier
+> pendant une recherche du bâti. Les trois variantes ci-dessous visaient la conséquence ; elles restent en réserve,
+> au cas où le point isolé manquerait encore à 1 fil sur une autre recette.
+
 Suite du ticket
 [un rang déplacé pendant un CREATE…](../tickets/2026-11-07-un-rang-deplace-pendant-un-create-n-est-pas-toujours-rattrape-premier.md),
 décision de c7 du 19 novembre, à relire par Lucie : une recherche du vecteur exact qui ne rend pas le point
