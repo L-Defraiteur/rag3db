@@ -419,6 +419,34 @@ après C (26 s). Le disque ne coûte presque rien ici. Le gain de B ne viendra d
 un moteur : pas de `COPY` par fichier CSV, pas de MERGE en Cypher, pas de points de reprise. Il reste à le mesurer
 une fois écrite. Si elle ne descend pas nettement sous l'index, il faudra le dire avant d'aller plus loin.
 
+## C en service : le manifeste réel de l'hôte, en premier index (19 novembre 2026, 11 h 50)
+
+**Pourquoi un premier index.** C ne joue que sur le chemin en masse d'un premier index. Une base déjà indexée ne fait
+qu'une synchronisation incrémentale, et une réindexation par changement de version de l'analyse passe par l'écrivain
+des générations. Les hôtes reposés ce matin n'ont donc rien réindexé : leurs bases ont gardé leur index du 25 octobre.
+
+**Le relevé.**
+- Le manifeste de l'hôte (`rag3db.json`, copie préparée par G), ouvert par la sonde `probe_index_timeline`
+  (branche `probe-index-timeline-3`, `PROBE_MANIFEST`), sa base repointée vers une base vide.
+- L'arbre est celui de Lucie (6 422 fichiers retenus, 65 908 scopes).
+- Plein texte seul, sous `poste mesure`, lib 7c2b506ec. Journal : `probe-index-c-service.log` à luciepc.
+
+| Repère | Temps |
+|---|---|
+| `usages Catalog` partiel (1 ligne) | 18 s |
+| fichiers et scopes posés | 32 s |
+| **`usages Catalog` complet (568 lignes)** | **55 s** |
+| relations posées | 59 s |
+| index entier | 114 s |
+
+Les phases (`[sync-profile]`) : analyse 14,4 s, ingestion des paquets 14,0 s, relations 26,3 s, puis dérivations
+55,1 s.
+
+**La lecture.** En service comme sur la sonde, C fait arriver les relations à la moitié de l'index (59 s sur 114).
+Avant C, elles venaient tout à la fin. Les 55 s de dérivations passées derrière les relations sont le gain pour les
+outils de référence. Cet arbre n'est pas celui de la sonde (8 585 fichiers) : les chiffres ne se comparent qu'en
+proportion. Par la sonde, sur la même branche, `usages` passait de 151 s à 89 s sur le dépôt.
+
 ## B : la parité tient, le temps ne bat pas encore l'index (19 novembre 2026, matin)
 
 **Ce qui est écrit**, sur `memory-connection` (recherche, tête c49cf61c92) et `codeparsers/memory-connection-writes-2`
