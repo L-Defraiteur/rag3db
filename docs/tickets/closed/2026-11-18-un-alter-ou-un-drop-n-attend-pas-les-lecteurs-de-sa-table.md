@@ -1,6 +1,6 @@
 # Un ALTER ou un DROP n'attend pas les lecteurs de sa table
 
-- **État** : ouvert (18 novembre 2026, cœur c++) — la forme de fond, pour un lot à part (c7)
+- **État** : corrigé sur master par la pile C++ du 19 novembre 2026 (tête testée `4ab4ab8150`, cœur c++)
 - **Famille** : moteur
 - **Gravité** : la cause commune de deux défauts couverts par des correctifs de surface
 - **Atteignable en service** : oui, par un lecteur long pendant une montée de schéma
@@ -38,3 +38,20 @@ retiendrait l'ALTER.
 La conception écrite et accordée par l'orchestration ; le verrou des lecteurs ; les deux témoins
 (`AddColumnUnderReaders`, `DroppedColumnUnderOpenReader`) verts sur le chemin de l'attente (le lecteur
 lit sa colonne, le DROP attend) ; la mesure du coût sur les lectures.
+
+## Fermé (19 novembre 2026)
+
+La forme (c), accordée par c7 : une transaction qui lit une table tient le verrou de ses lecteurs
+(`LockResourceKind::TABLE_READ`) en partagé, de sa première lecture (`TableScanState::setToTable`) à sa fin. Un ADD
+ou un DROP de colonne et un DROP TABLE le prennent en exclusif avant le verrou de schéma, et attendent ; un COMMENT,
+un RENAME, un CREATE ou DROP d'index ne le prennent pas (le DROP du graphe d'un index HNSW garde la rétention des
+lecteurs d'avant). L'attente est bornée par `alter_lock_timeout` (5 s par défaut, jamais plus que `lock_timeout`) ;
+les lecteurs neufs attendent derrière un ALTER en attente (file FIFO, comme PostgreSQL). Le refus nomme les
+transactions attendues : « reader N (read-only, open for X ms) », « writer N (open for X ms) ». Pas de contrôle de
+schéma pour un lecteur : le refus nommé de `ac39dd1db4` reste le filet sans les écritures multiples.
+
+Témoins (`drop_waits_for_readers_test.cpp`) : rouges 3/3 sur `c802e8c5b0`, verts 3/3 sur la tête. La première forme
+(`d7a617c9eb`, le verrou de table lui-même) cassait cinq tests (rétention HNSW, COMMENT, ADD sous lecteurs, délai et
+message de l'ALTER) : reprise en `6c5f6d5218`. Passe de la tête `4ab4ab8150` : `transaction_test` 407, known_red,
+`.test` de vector 74, `e2e_test` 1 867 avec `DropNodeTableReclaim` admis. Le coût du verrou de lecture sur le
+chemin des lectures n'est pas mesuré : à faire au banc des lectures.

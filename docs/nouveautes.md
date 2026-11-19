@@ -1,5 +1,18 @@
 # Nouveautés
 
+- 19 novembre 2026 — **Un ADD ou un DROP de colonne attend les lectures ouvertes de sa table.** Une transaction qui
+  lit une table la retient jusqu'à sa fin : un `ALTER TABLE … ADD`, `… DROP` ou un `DROP TABLE` l'attend, et la
+  lecture relit ses colonnes au lieu d'être refusée. L'attente est bornée par `alter_lock_timeout` (5 s par défaut,
+  et jamais plus que `lock_timeout`) ; pendant qu'un ALTER attend, les lectures neuves de la table attendent derrière
+  lui, comme sous PostgreSQL. Un ALTER qui renonce dit qui il attendait : « reader 12 (read-only, open for 3400 ms) »
+  ou « writer 15 (open for … ms) ». Un COMMENT, un RENAME ou un DROP d'index n'attendent pas les lectures.
+
+- 19 novembre 2026 — **`CALL lock_tables([...])` : un paquet prend ses tables d'avance.** En tête d'une transaction
+  explicite, la transaction tient chaque table nommée comme si elle y avait déjà écrit. Un ALTER validé depuis le
+  `BEGIN` la refuse par « Schema changed, retry: » avant toute écriture : on annule et on recommence sur place. Une
+  fois la prise faite, un ALTER ou un DROP de ces tables attend la fin du paquet ; deux paquets ne s'attendent pas.
+  Une table inconnue est nommée ; en autocommit, l'appel est refusé.
+
 - 18 novembre 2026 — **La fin d'un index dit une libération ou une dette qu'elle n'a pas pu faire.** Une erreur en rendant les réclamations d'embarquement s'ajoute à la dernière ligne du journal, avec sa table et sa cause, sans en effacer la cause de fin ; une dette restante illisible se dit « dette inconnue », plus jamais « 0 ».
 
 - 18 novembre 2026 — **Un modèle déclaré dit `access` et `provider`.** `access` dit la manière d'y accéder (`local`, `service`, `compatible`), `provider` le fournisseur (`openai`, `vertex`, `anthropic`, `llama_server`). L'ancienne forme, `provider` pour la manière et `protocol` pour le fournisseur, se lit encore **jusqu'au 29 novembre 2026** ; un modèle qui mêle les deux est refusé, en nommant les deux mots. `/model` rend les deux mots neufs.
