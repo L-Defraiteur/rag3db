@@ -879,6 +879,21 @@ pub fn repo_id(racine: &std::path::Path, tracked: Option<&Value>) -> Result<Opti
     }))
 }
 
+/// **The tracked layers of a repository, to write** (2a′-3, lot 5c): its top-level, the resolution of its tracked
+/// sources (with the workshop's additions), and the stable id of each layer by name. `None` outside git.
+pub struct TrackedLayers {
+    pub repo: std::path::PathBuf,
+    pub resolution: Resolution,
+    pub ids: std::collections::BTreeMap<String, String>,
+}
+
+/// See [`TrackedLayers`]. The ids are born or read here, as [`ouvrir_une_tache`] does.
+pub fn tracked_layers(catalog: &crate::catalog::Catalog, racine_du_workspace: &std::path::Path, tracked: Option<&Value>) -> Result<Option<TrackedLayers>, String> {
+    let Some(c) = contexte(catalog, racine_du_workspace, tracked)? else { return Ok(None) };
+    let ids = identifiants_des_couches(catalog, &c.id, &c.backend, &c.resolution)?;
+    Ok(Some(TrackedLayers { repo: c.depot, resolution: c.resolution, ids }))
+}
+
 fn contexte(catalog: &crate::catalog::Catalog, racine: &std::path::Path, tracked: Option<&Value>) -> Result<Option<Contexte>, String> {
     let Ok(depot) = crate::couches::git(racine, &["rev-parse", "--show-toplevel"]) else { return Ok(None) };
     let depot = std::path::PathBuf::from(depot);
