@@ -36,7 +36,11 @@ fn calls(v: &[(&str, Value)]) -> Vec<(String, String)> {
 }
 
 fn answer(turns: &[Turn], opts: &crate::llm::GenOptions, sink: &mut dyn crate::llm::TokenSink, text: &str, tool_calls: Vec<(String, String)>) -> Result<(crate::llm::Finish, crate::llm::Usage), crate::llm::LlmError> {
-    MockLlm::new(text).with_tool_calls(tool_calls).generate(turns, opts, sink)
+    // The mock counts whitespace-separated fragments, with a window of its own (4 096 by default).
+    // The fake teammates declare up to 16 384; a read given to the model as text (with its newlines)
+    // counts more fragments than the same read escaped in JSON (`\n` is no space), and step 2 of
+    // the three-item plan overflowed the inner mock's window, not the teammate's (19 Nov. 2026).
+    MockLlm::new(text).with_context_len(16384).with_tool_calls(tool_calls).generate(turns, opts, sink)
 }
 
 /// Ce que le faux modèle a vu : les frontières, pas par pas, et les refus.
