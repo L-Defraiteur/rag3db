@@ -293,6 +293,20 @@ function Writes({ writes, why, open }: { writes?: MemoryWrite[]; why?: string | 
   );
 }
 
+/** What the host says a turn waits for (`Waiting {cause, what, since_ms, wait_ms?}`), until `Resumed`. */
+type Attente = { cause: string; what: string; depuis: number; fenetre?: number };
+
+/** The status while a turn waits: the tool and the time it has waited, or the model and when it resumes. */
+function texteDAttente(a: Attente, maintenant: number): string {
+  const ecoule = Math.max(0, maintenant - a.depuis);
+  if (a.cause === "model") {
+    return a.fenetre !== undefined
+      ? `${a.what} attend le fournisseur… (reprise dans ${Math.ceil(Math.max(0, a.fenetre - ecoule) / 1000)} s)`
+      : `${a.what} attend le fournisseur… (${Math.floor(ecoule / 1000)} s)`;
+  }
+  return `${a.what} attend… (${Math.floor(ecoule / 1000)} s)`;
+}
+
 export function Chat({ id, state }: { id: string; state: HostState }) {
   const backend = state.backends.find((b) => b.id === id);
   // Le rag de chaque dépôt, tel que l'état de l'hôte le tient (les cartes relues s'en servent).
@@ -319,6 +333,16 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
   const input = useRef<HTMLTextAreaElement>(null);
   const messages = useRef<HTMLElement>(null);
   const runRef = useRef<string | null>(null);
+  // **What the turn waits for, as the host says it** (`Waiting` then `Resumed`, 19 Nov. 2026): the
+  // status names it, counted by a local timer — the page asks the host nothing for it.
+  const [attente, setAttente] = useState<Attente | null>(null);
+  const [maintenant, setMaintenant] = useState(() => Date.now());
+  useEffect(() => {
+    if (!attente) return;
+    setMaintenant(Date.now());
+    const t = setInterval(() => setMaintenant(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [attente]);
   // Un tour envoyé par cette page ; un tour venu d'ailleurs (relancé par la carte d'accord,
   // lot 7 de l'atelier) se suit par le flux et se relit à sa fin.
   const envoiDeLaPage = useRef(false);
@@ -474,6 +498,10 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
       if (runRef.current && ev.run === runRef.current) {
         if (ev.kind === "Token" || ev.kind === "ToolCallStarted" || ev.kind === "RunFinished") setPense(false);
         else if (ev.kind === "ToolCallFinished") setPense(true);
+        if (ev.kind === "Waiting") {
+          const since = typeof ev.since_ms === "number" ? ev.since_ms : 0;
+          setAttente({ cause: String(ev.cause ?? "tool"), what: String(ev.what ?? ""), depuis: Date.now() - since, fenetre: typeof ev.wait_ms === "number" ? ev.wait_ms : undefined });
+        } else if (ev.kind === "Resumed" || ev.kind === "ToolCallStarted" || ev.kind === "ToolCallFinished" || ev.kind === "RunFinished") setAttente(null);
       }
       if (ev.kind === "Token") {
         if (typeof ev.seq === "number") (tokenLog.applied[String(ev.run)] ??= []).push(ev.seq);
@@ -749,7 +777,7 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
               <Scale className="size-3.5" /> bilans
             </a>
             <span id="status" role="status" className="text-primary">
-              {status}
+              {attente ? texteDAttente(attente, maintenant) : status}
             </span>
           </nav>
         </header>
