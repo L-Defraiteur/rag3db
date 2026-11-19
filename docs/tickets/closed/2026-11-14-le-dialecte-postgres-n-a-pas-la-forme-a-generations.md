@@ -1,6 +1,6 @@
 # Le dialecte postgres n'a pas la forme à générations
 
-- **État** : ouvert (14 novembre 2026).
+- **État** : fermé (19 novembre 2026, everything declarative) ; ouvert le 14 novembre 2026.
 - **Famille** : produit
 - **Gravité** : manque — une base postgres neuve reste à la forme d'avant (« forme sans couches ») : elle n'aura ni l'historique de l'ancre (2a′-2) ni les couches (2b′)
 - **Atteignable en service** : oui, toute base de code ouverte sur postgres
@@ -30,3 +30,32 @@ Il manque :
 
 Ouvrir une base de code neuve sur postgres, puis lire `code_scope_form` dans les métadonnées : on y
 trouve `code-scope-v1/content`.
+
+## Fermé le 19 novembre 2026 (ED) : postgres sait les générations
+
+Le dessin est la page `docs/everything-declarative/19-11-2026/03-dessin-du-dialecte-postgres-a-generations.md`,
+relue par c7. Deux lots.
+
+**Lot A** (`writer-through-ir`) : les onze requêtes Cypher brutes de l'écrivain à générations passent par le
+dialecte.
+- Les lectures sont des `Select` avec `Visible`.
+- Les écritures passent par `Write::Mark`, `Write::CopyEdges` (neuve), `Write::Detach` avec l'autre bout et
+  `set_generation_counts`. `Predicate::Not` est neuf aussi.
+- La preuve est une parité par résultat avec chaque ancienne requête : mêmes lignes et mêmes pas d'accès pour une
+  lecture, même état pour une écriture.
+
+**Lot B** (`postgres-generations`) : `PostgresDialect` reçoit :
+- les conditions de visibilité ;
+- la table `_generation` : création, publication sans toucher une génération déjà posée, dernier rang, lecture,
+  compteurs ;
+- la marque à valeurs ;
+- la recopie d'arêtes ;
+- la ligne entière ;
+- l'index de visibilité.
+
+Les témoins, rouges d'abord :
+- `e2e_postgres::a_new_code_base_on_postgres_has_generations` : l'estampille `…/generations`, puis une édition qui
+  retire au rang en attente et garde le rang publié. Rouge avant le lot B, avec l'estampille `Versions` ;
+- `e2e_postgres::the_visibility_is_read_by_its_index_on_postgres` : sur 40 400 lignes surtout d'histoire, la
+  lecture visible passe par `scope_visibilite_idx`. Au rang haut, c'est un `BitmapOr` de `_jusqu_a IS NULL` et de
+  `_jusqu_a > r`. Sans l'index, c'est un `Seq Scan`.
