@@ -7794,6 +7794,8 @@ mod tests {
             crate::code_sync::sync_source(&mut cat, source.as_ref(), &Default::default(), &mut |_| {}).expect("the index before the rule");
         }
         assert!(replies(&backend) >= 10, "before the rule, the folded namespaces are results");
+        // A host that has just opened the base: no full-text handle yet (they open at their first use).
+        backend.catalog.lock().unwrap().fermer_les_poignees_du_plein_texte();
         // Under the rule: the next index sets them aside, and says how many.
         let ecartees = {
             let mut cat = backend.catalog.lock().unwrap();
