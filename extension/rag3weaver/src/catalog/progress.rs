@@ -600,6 +600,17 @@ impl Catalog {
         (!host.is_empty()).then(|| format!("{address}@{host}"))
     }
 
+    /// **What a view owes in vectors** (point 7 of the vision of 15 November, page
+    /// `docs/arbre-principal/19-11-2026/05-l-estimation-du-reste-par-vue.md`): the chunks without a vector — in `layer`
+    /// when the chunk table carries the layer column, in the whole base for a table of shared contents — their mean size,
+    /// and the rate of the catalog's embedder: its key (an index's rate), else the bench's declared rate halved and said
+    /// so, else unknown.
+    pub fn vectors_due_for_view(&self, layer: &str) -> Result<crate::views::VectorsDue, CatalogError> {
+        // RED STUB.
+        let _ = layer;
+        Ok(crate::views::VectorsDue::default())
+    }
+
     /// Le débit noté pour l'embarqueur de ce catalogue, s'il y en a un.
     pub fn known_embedding_rate(&self) -> Result<Option<Rate>, CatalogError> {
         self.check_reopen()?;
@@ -683,6 +694,41 @@ impl Catalog {
 
 #[cfg(test)]
 mod tests {
+
+    /// **What a view owes in vectors, and from which rate** (page 05 of 19 November). Text ingested without embedding
+    /// leaves chunks due; no rate anywhere: « débit inconnu »; a declared bench rate: halved and said « banc × 0,5 »; the
+    /// catalog's key of the service: taken first, said « index ».
+    #[cfg(all(feature = "rag3db-native", feature = "code"))]
+    #[test]
+    fn what_a_view_owes_in_vectors_and_from_which_rate() {
+        let conn = crate::Rag3dbConnection::in_memory().unwrap();
+        let mut cat = Catalog::new(Box::new(conn), Box::new(crate::embedder::HashEmbedder::new(8)), crate::CatalogConfig {
+            allow_mock_embedder: true,
+            embedding_dim: 8,
+            ..Default::default()
+        });
+        cat.initialize().unwrap();
+        crate::code::register_code_schema(&mut cat, crate::code::default_scope_chunking()).unwrap();
+        let src = crate::code_tools::Snapshot::new("depot", (0..5).map(|i| (format!("f{i}.rs"), format!("pub fn f{i}() -> u32 {{\n    {i}\n}}\n"))));
+        let lot: Vec<(String, Option<String>)> = (0..5).map(|i| (format!("f{i}.rs"), Some(format!("pub fn f{i}() -> u32 {{\n    {i}\n}}\n")))).collect();
+        crate::code_sync::reingest_files(&mut cat, &src, &lot, crate::disponibilite::Disponibilites::RECHERCHE_TEXTE).unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let declares = dir.path().join("embedding-rates.json");
+        std::env::set_var("RAG3WEAVER_EMBEDDING_RATES", &declares);
+        let du = cat.vectors_due_for_view(crate::generations::COUCHE_DU_BACKEND).unwrap();
+        assert!(du.chunks > 0, "text ingested without embedding leaves no chunk due: {du:?}");
+        assert!(du.mean_chars > 0.0, "{du:?}");
+        assert_eq!((du.chars_per_s, du.rate_from), (None, None), "a rate without key nor declaration: {du:?}");
+        let place = Catalog::embedding_rate_place(cat.embedder.as_deref().unwrap()).expect("the place of the embedder");
+        std::fs::write(&declares, serde_json::json!({ format!("{}:{place}", cat.embedder.as_ref().unwrap().name()): 100_000 }).to_string()).unwrap();
+        let du = cat.vectors_due_for_view(crate::generations::COUCHE_DU_BACKEND).unwrap();
+        assert_eq!((du.chars_per_s, du.rate_from), (Some(50_000.0), Some("banc × 0,5")), "the declared bench rate is not halved and said: {du:?}");
+        cat.note_measured_embedding_rate(crate::estimate::Rate { chars_per_second: 30_000.0 }).unwrap();
+        let du = cat.vectors_due_for_view(crate::generations::COUCHE_DU_BACKEND).unwrap();
+        assert_eq!((du.chars_per_s, du.rate_from), (Some(30_000.0), Some("index")), "the catalog's key does not come first: {du:?}");
+        std::env::remove_var("RAG3WEAVER_EMBEDDING_RATES");
+    }
+
     use super::*;
 
     fn progress(chunks: usize, dense_missing: usize, sparse_missing: Option<usize>, writes_pending: usize) -> IndexProgress {
