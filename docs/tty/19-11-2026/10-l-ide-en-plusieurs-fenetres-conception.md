@@ -78,3 +78,20 @@ Ce qui n'est pas repris par une fenêtre ouverte en plein tour : les appels d'ou
 - **Une demande de tour sans réponse** quitte la file de `host.ts` au bout de la seconde.
 
 Rouges d'abord (290141f1d1 : pas de marque au-delà de la borne, et un compteur qui n'existait pas), puis verts (b0e034b81a). Restent verts : les deux témoins de la tranche, `ide_par_le_flux` (2) et le contrôle du bundle.
+
+## Tranche 2, faite (19 novembre au soir)
+
+**Le chat guide une fenêtre du dépôt détachée.** Avant, cliquer un fichier cité dans le chat emmenait la fenêtre du chat sur la vue du fichier, hors de sa conversation, même quand une fenêtre du dépôt était ouverte à côté.
+
+- **Le worker tient `fenetres`** (`lib/flux-worker.ts`). Une page ouverte avec `?fenetre=<rôle>` lui déclare son rôle et son backend à son branchement, puis son focus à chaque `focus`. Le worker numérote chaque page et lui rend son numéro (`moi`). Il publie la liste `{id, rôle, backend, focus}` sous la clé `fenetres`, à chaque changement, au départ d'une page, et quand son battement l'oublie. Les pages ne l'écrivent jamais (relecture d'ED).
+- **`host.ts`** expose `fenetres()`, `roleDeLaFenetre()` et `jeSuisLaFenetre(rôle, backend)`, cette dernière vraie pour la fenêtre de ce rôle qui a eu le focus en dernier. La liste est recopiée dans `window.__ide.fenetres` pour les témoins.
+- **Le chat** (`Chat.tsx`) capte, en phase de capture, le clic sur un `a.code-ref` (un fichier ou un symbole cité). Si une fenêtre du dépôt est ouverte pour son backend, il écrit `selection:<backend>` (`{href, at}`) et reste sur sa conversation. Sinon, le lien va comme avant.
+- **La fenêtre du dépôt** (`main.tsx`) qui a eu le focus en dernier suit `selection:<backend>`. Elle ouvre l'adresse citée en gardant `?fenetre=depot`, et ignore une sélection antérieure à son ouverture, qu'elle reçoit pourtant entière à son branchement.
+
+Le témoin, `le_chat_guide_une_fenetre_du_depot_detachee` (navigateur, joué à luciepc), suit ce chemin : le chat cite `src/main.rs:1` ; une seconde fenêtre s'ouvre sur l'arbre avec `?fenetre=depot` et prend le focus ; le clic dans le chat ouvre `fichier/src/main.rs` dans la seconde fenêtre, qui reste `?fenetre=depot`, et le chat reste sur `/chat`.
+
+- Un premier rouge était faux : la réponse citait `main.rs:1`, qui n'est pas un lien (un chemin cité doit contenir un « / »). Le rouge butait avant le clic.
+- Rouge ensuite (ef275fdc67 : le chat ne sait pas qu'une fenêtre du dépôt est ouverte), puis vert (bdb740179a).
+- Restent verts : les trois témoins de la tranche 1, `ide_par_le_flux` (2) et le contrôle du bundle. tsc est propre.
+
+Pas encore fait : le bouton « détacher » et la vue seule sans barre (tranche 3). Aujourd'hui, une fenêtre du dépôt s'ouvre par son adresse, avec `?fenetre=depot`.
