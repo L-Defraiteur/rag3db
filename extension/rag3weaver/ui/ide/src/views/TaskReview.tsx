@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, X, Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ligneDeBoite } from "@/lib/boite";
 import { lineDiff } from "@/lib/diff";
 import { GraphDiffSection, type GraphDiff } from "@/lib/graph";
 import { shortName, type HostState } from "@/lib/host";
@@ -98,12 +99,20 @@ function TeammateSection({ backend, task }: { backend: string; task: string }) {
       <h3 className="text-sm font-semibold">Boîte aux lettres</h3>
       {t.mailbox.length ? (
         <ul className="boite grid gap-1 text-sm">
-          {t.mailbox.map((l, k) => (
-            <li key={k} data-kind={String(l.kind)} data-from={String(l.from)}>
-              <span className="meta text-xs text-muted-foreground">{new Date(Number(l.at)).toLocaleTimeString()} · {String(l.from)} · {String(l.kind)}{l.item ? ` [${String(l.item)}]` : ""} </span>
-              {String(l.text ?? "")}
-            </li>
-          ))}
+          {t.mailbox.map((l, k) => {
+            const v = ligneDeBoite(l);
+            return (
+              <li key={k} data-kind={String(l.kind)} data-from={String(l.from)} data-session={v.session ? "1" : undefined}>
+                <span className="meta text-xs text-muted-foreground">
+                  {new Date(Number(l.at)).toLocaleTimeString()} · {v.qui}
+                  {v.vers ? ` → ${v.vers}` : ""} · {v.genre}
+                  {v.session ? " · session" : ""}
+                  {l.item ? ` [${String(l.item)}]` : ""}{" "}
+                </span>
+                {v.texte}
+              </li>
+            );
+          })}
         </ul>
       ) : (
         <p className="note text-sm text-muted-foreground">Rien encore.</p>
