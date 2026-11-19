@@ -256,6 +256,8 @@ pub enum Event {
         cause: String,
         what: String,
         since_ms: u64,
+        /// The window announced when it is known (the provider's backoff), for « reprise dans N s ».
+        wait_ms: Option<u64>,
     },
     /// **The wait is over**: only after a [`Event::Waiting`] of the same run and cause.
     Resumed {
@@ -750,7 +752,13 @@ impl Event {
             Self::ToolCallStarted { run, agent, call_id, tool, arguments } => json!({
                 "kind": "ToolCallStarted", "run": run, "agent": agent, "call_id": call_id, "tool": tool, "arguments": arguments,
             }),
-            Self::Waiting { run, cause, what, since_ms } => json!({ "kind": "Waiting", "run": run, "cause": cause, "what": what, "since_ms": since_ms }),
+            Self::Waiting { run, cause, what, since_ms, wait_ms } => {
+                let mut v = json!({ "kind": "Waiting", "run": run, "cause": cause, "what": what, "since_ms": since_ms });
+                if let Some(ms) = wait_ms {
+                    v["wait_ms"] = json!(ms);
+                }
+                v
+            }
             Self::Resumed { run, cause, waited_ms } => json!({ "kind": "Resumed", "run": run, "cause": cause, "waited_ms": waited_ms }),
             Self::ToolCallFinished { run, agent, call_id, tool, ok, error_kind, ms, bytes, result_excerpt, truncated, ui, metadata } => {
                 let mut v = json!({
