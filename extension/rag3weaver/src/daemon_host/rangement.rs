@@ -23,6 +23,10 @@ pub trait Rangeur: Send + Sync {
     fn compose_restart(&self, _memoire: &Path, _args: &Value) -> Result<Value, String> {
         Err("compose_restart: not offered by this memory".into())
     }
+    /// The L1 that cite a slice's Source (`cited_by` on the memory): a list of apports.
+    fn cited_by(&self, _memoire: &Path, _source: &str) -> Result<Value, String> {
+        Err("cited_by: not offered by this memory".into())
+    }
 }
 
 use super::DaemonHost;
