@@ -1554,6 +1554,11 @@ fn a_waiting_tool_says_so_on_the_bus_once_and_says_when_it_resumes() {
     assert_eq!(Some(w["run"].clone()), premier_run, "on the run of the first step : {kinds:?}");
     let (iw, ir) = (evenements.iter().position(|e| e["kind"] == "Waiting").unwrap(), evenements.iter().position(|e| e["kind"] == "Resumed").unwrap());
     assert!(iw < ir, "Waiting before Resumed : {kinds:?}");
+    // The mailbox line is for the model too, which reads the mailbox at its frontier: in English
+    // (archi's review of cx-chat-waiting-2).
+    let boite = files.mailbox();
+    let ligne = boite.iter().find(|l| l["from"] == "host" && l["text"].as_str().is_some_and(|t| t.contains("read_file") && t.contains("1 s"))).map(|l| l["text"].as_str().unwrap_or_default().to_string());
+    assert_eq!(ligne.as_deref(), Some("\"read_file\" has been waiting for 1 s (an index is probably holding the write); the call goes on, nothing is abandoned"), "{boite:#?}");
 }
 
 /// **Une request qui exige un report ne se clôt pas sans lui** (`expects: "report"`, déclaré
