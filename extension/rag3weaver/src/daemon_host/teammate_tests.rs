@@ -2203,6 +2203,13 @@ fn a_message_to_a_paired_task_socket_is_a_request_in_its_mailbox() {
     files.append_with("supervisor", "request", None, "Fais-le.", &json!({ "expects": "none" })).unwrap();
     // As in service: through start_teammate, so that a message during a step starts no second one.
     assert!(host.start_teammate(&h.id, "doc"));
+    // The session's request waits for the teammate's line (no `expects`): once read, stop it.
+    let fin = std::time::Instant::now() + std::time::Duration::from_secs(90);
+    while !frontieres.lock().unwrap().iter().skip(1).any(|t| t.contains("What is 2+2?")) {
+        assert!(std::time::Instant::now() < fin, "the teammate reads the message at a next step: {:?}", frontieres.lock().unwrap());
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    host.post_to_teammate(&h.id, "doc", "supervisor", "stop", None, "enough", &json!({})).unwrap();
     attendre_dans(&files, "the teammate ends", &|b| b.iter().any(|l| l["kind"] == "ended"));
     let fin = std::time::Instant::now() + std::time::Duration::from_secs(10);
     while host.teammate_running(&h.id, "doc") && std::time::Instant::now() < fin {
@@ -2237,11 +2244,19 @@ fn a_paired_task_is_reachable_between_two_works_and_leaves_with_its_task() {
         assert!(std::process::Command::new("git").args(args).current_dir(declarations).status().unwrap().success(), "git {args:?}");
     }
     let registre = super::pair::Registre { sessions: d.path().join("sessions"), socks: d.path().join("socks") };
-    let model: ChatModel = Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
-        Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
-            answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "4", "remaining": "" }))]))
-        })))
-    });
+    let frontieres = Arc::new(Mutex::new(Vec::<String>::new()));
+    let model: ChatModel = {
+        let frontieres = frontieres.clone();
+        Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let frontieres = frontieres.clone();
+            Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
+                if tool_results(turns).is_empty() {
+                    frontieres.lock().unwrap().push(last_user(turns));
+                }
+                answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "4", "remaining": "" }))]))
+            })))
+        })
+    };
     let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")).with_pair_registry(registre.clone()));
     host.se_connaitre();
     let h = host.hosted(&manifeste).unwrap();
@@ -2257,7 +2272,14 @@ fn a_paired_task_is_reachable_between_two_works_and_leaves_with_its_task() {
     c.write_all(format!("{trame}\n").as_bytes()).unwrap();
     drop(c);
     let files = host.teammate_files(&h.id, "doc").unwrap();
-    attendre_dans(&files, "the message starts the teammate, which ends", &|b| b.iter().any(|l| l["from"] == "session") && b.iter().any(|l| l["kind"] == "ended"));
+    let fin = std::time::Instant::now() + std::time::Duration::from_secs(90);
+    while !frontieres.lock().unwrap().iter().any(|t| t.contains("What is 2+2?")) {
+        assert!(std::time::Instant::now() < fin, "the message starts the teammate, which reads it: {:#?}", files.mailbox());
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    // It waits for its own line (lot 3 answers the peer): stop it.
+    host.post_to_teammate(&h.id, "doc", "supervisor", "stop", None, "enough", &json!({})).unwrap();
+    attendre_dans(&files, "the teammate ends", &|b| b.iter().any(|l| l["kind"] == "ended"));
     let fin = std::time::Instant::now() + std::time::Duration::from_secs(10);
     while (host.teammate_running(&h.id, "doc") || lire()["status"] != "idle") && std::time::Instant::now() < fin {
         std::thread::sleep(std::time::Duration::from_millis(50));
