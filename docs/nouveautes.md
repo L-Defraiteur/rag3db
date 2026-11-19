@@ -3,6 +3,10 @@
 - 19 novembre 2026 — **Le chat de l'IDE ne fait plus disparaître un tour.** Une relecture de la conversation
   partie avant un tour et revenue après lui remettait un écran sans ce tour, jusqu'au rechargement suivant. La page
   n'applique plus une relecture dépassée par un tour.
+- 19 novembre 2026 — **Un paquet d'index ne casse plus sur un ALTER validé pendant lui.** Chaque paquet prend ses
+  tables dès son `BEGIN` (`CALL lock_tables`). Un ALTER validé entre-temps le refuse avant toute écriture : le
+  paquet est annulé sans abîmer le catalogue et recommence sur place, trois fois au plus, et le journal d'index le
+  dit. Un moteur sans `lock_tables` ne prend rien, comme avant.
 - 19 novembre 2026 — **La ligne d'attente d'un outil, dans la boîte de l'équipier, est en anglais**, comme les autres lignes de l'hôte que le modèle relit à chaque pas : « "read_file" has been waiting for N s … ».
 
 - 19 novembre 2026 — **La page du chat de l'IDE dit ce qu'un tour attend.** Pendant qu'un outil attend, sa ligne d'état dit « propose attend… (N s) » ; pendant que le fournisseur retient le modèle, « attend le fournisseur… (reprise dans N s) » ; le compte tourne dans la page, sans rien demander à l'hôte.
