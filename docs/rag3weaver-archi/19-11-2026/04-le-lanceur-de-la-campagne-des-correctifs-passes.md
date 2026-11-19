@@ -18,7 +18,8 @@ Un fichier Markdown par cas, avec en tête un bloc ```json « lanceur » :
 {
   "repo": "<dépôt, si ce n'est pas rag3db : ex. https://github.com/L-Defraiteur/lucivy>",
   "parent": "<commit 40 hex>",
-  "tree": "<sous-dossier suffisant ; « . » pour tout le dépôt>",
+  "tree": "<dossier d'où se jouent les commandes ; « . » pour la racine>",
+  "paths": ["<facultatif : restreint l'archive à ces chemins>"],
   "needs_lib": false,
   "witness": "<filtre exact du témoin>",
   "witness_files_from": { "commit": "<40 hex>", "paths": ["…"] },
@@ -48,13 +49,18 @@ tel qu'il était »**, mot pour mot. Toute piste (ce qu'on suppose, ce qu'on pou
 ## Ce que fait le lanceur, par cas
 
 1. **L'arbre sans histoire.**
-   - `git archive <parent> <tree>` dans un dossier neuf (dépôt `repo`, rag3db par défaut).
+   - `git archive <parent>` dans un dossier neuf (dépôt `repo`, rag3db par défaut). C'est le
+     **dépôt entier par défaut** : un crate qui inclut hors de lui (`include_str!` vers `templates/`)
+     ne compilerait pas avec son seul dossier. `paths`, quand le cas le déclare, restreint l'archive,
+     jamais l'inverse. `tree` n'est que le dossier d'où se jouent les commandes.
    - Puis les fichiers de `witness_files_from`, copiés depuis leur commit : ce sont des indices
      déclarés, que le banc voit comme « test rouge en place ».
    - Puis `git init` et un seul commit « base ». La tâche a besoin d'un dépôt pour sa branche et
      son worktree ; il n'y a aucune histoire.
 2. **Le rouge prouvé au parent.** La commande `test` est jouée sous `poste lourd`, rouge sur
-   l'assertion.
+   l'assertion, avec **un `CARGO_TARGET_DIR` propre au cas**, sous son dossier. Deux arbres sur le
+   même target ont rejoué le binaire de l'autre (« 0 passed, 98 filtered out », tty, 19 novembre).
+   Le même target sert ensuite à la tâche d'Algareth et au juge.
 3. **L'hôte de campagne**, à part des hôtes de service : son port, ses racines de tâches et de
    runs, la lib épinglée si `needs_lib`.
    - Pour chaque cas, un backend de code sur l'arbre, avec son index.
