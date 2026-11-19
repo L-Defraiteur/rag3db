@@ -414,6 +414,9 @@ pub enum Predicate {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         filter: Option<Box<Predicate>>,
     },
+    /// **The condition does not hold** (2.11, the writer by the IR): `NOT (…)` on every dialect. A NULL field
+    /// that the inner condition reads makes it neither true nor false, as in SQL and Cypher.
+    Not(Box<Predicate>),
     /// **Une condition facultative** (un Plan déclaré) : retirée au liage si
     /// l'un de ses paramètres est absent, une liste vide ou une chaîne vide.
     /// Un Plan lié n'en porte plus ; la validation la refuse.
@@ -466,6 +469,7 @@ impl Predicate {
             Predicate::Let(_) => Some("let"),
             Predicate::AnyOf(v) | Predicate::AllOf(v) => v.iter().find_map(Predicate::unresolved),
             Predicate::Through { filter: Some(f), .. } => f.unresolved(),
+            Predicate::Not(p) => p.unresolved(),
             _ => None,
         }
     }
@@ -481,7 +485,7 @@ impl Predicate {
                 out.insert(param.clone());
             }
             Predicate::Through { filter: Some(f), .. } => f.params(out),
-            Predicate::Optional(p) => p.params(out),
+            Predicate::Optional(p) | Predicate::Not(p) => p.params(out),
             Predicate::AnyOf(v) | Predicate::AllOf(v) => v.iter().for_each(|p| p.params(out)),
             Predicate::Through { filter: None, .. } | Predicate::Let(_) | Predicate::Compiled(_) | Predicate::Visible { .. } => {}
         }
@@ -506,6 +510,7 @@ impl Predicate {
             }
             // Non résolues : la validation les refuse ([`Predicate::unresolved`]).
             Predicate::Optional(p) => p.names(out),
+            Predicate::Not(p) => p.names(out),
             Predicate::Let(_) => {}
             // Une liste vide ne dit rien (`WHERE ` vide, `()`) : elle se refuse
             // comme un nom qui n'est pas un identifiant, avant le moteur.

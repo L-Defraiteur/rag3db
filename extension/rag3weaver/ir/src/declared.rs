@@ -294,7 +294,7 @@ impl DeclaredPlan {
                 }
             }
             Predicate::AnyOf(v) | Predicate::AllOf(v) => v.iter().try_for_each(|p| self.verifier_contre(p, table, schema)),
-            Predicate::Optional(p) => self.verifier_contre(p, table, schema),
+            Predicate::Optional(p) | Predicate::Not(p) => self.verifier_contre(p, table, schema),
             Predicate::Let(nom) => {
                 let p = self.lets.get(nom).ok_or_else(|| format!("la condition « {nom} » n'est pas déclarée dans let"))?;
                 self.verifier_contre(p, table, schema)
@@ -332,6 +332,7 @@ impl DeclaredPlan {
             Predicate::AnyOf(v) => Predicate::AnyOf(v.iter().map(|p| self.deplier(p, chaine)).collect::<Result<_, _>>()?),
             Predicate::AllOf(v) => Predicate::AllOf(v.iter().map(|p| self.deplier(p, chaine)).collect::<Result<_, _>>()?),
             Predicate::Optional(p) => Predicate::Optional(Box::new(self.deplier(p, chaine)?)),
+            Predicate::Not(p) => Predicate::Not(Box::new(self.deplier(p, chaine)?)),
             Predicate::Through { relation, direction, end, filter } => Predicate::Through {
                 relation: relation.clone(),
                 direction: *direction,
@@ -537,6 +538,12 @@ fn lier_predicat(p: &Predicate, params: &BTreeMap<String, Value>, noms: &mut BTr
             };
             Some(Predicate::Through { relation: relation.clone(), direction: *direction, end: end.clone(), filter: filtre })
         }
+        // A negated condition keeps its parameters: an optional one inside it would change its meaning when
+        // removed, so it is bound whole, an absent parameter refused.
+        Predicate::Not(dedans) => match lier_predicat(dedans, params, noms)? {
+            Some(q) => Some(Predicate::Not(Box::new(q))),
+            None => return Err("une condition niée ne peut pas être retirée entière (un optional sous not)".into()),
+        },
         Predicate::Let(nom) => return Err(format!("la condition « {nom} » n'a pas été dépliée")),
         Predicate::Compiled(_) => return Err("une condition compilée n'a pas sa place dans un Plan déclaré".into()),
         Predicate::Visible { .. } => return Err("la visibilité d'une génération n'a pas sa place dans un Plan déclaré".into()),
