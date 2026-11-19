@@ -38,16 +38,19 @@ ENGINE_PATHS='^(src|test|extension/vector|tools/rust_api|tools/shell)/'
 Q=$D/queue.tsv
 LOG=$D/log.tsv
 mkdir -p "$D/inbox"
+printf 'docs/nouveautes.md merge=union\n' > "$D/attributes"
 [ -f "$Q" ] || printf '# id\tbranch\thead\tkind\twitness\twitness_suite\textra_suites\tparent\tauthor\n' > "$Q"
 
 log() { printf '%s\t%s\t%s\t%s\n' "$(date +%FT%T)" "$1" "$2" "${3:-}" >> "$LOG"; }   # <id> <event> [detail]
-g() { git -C "$WT" "$@"; }
+# Git in English: the pusher reads its messages (19 Nov.: git spoke French at luciepc, and a conflict had no name).
+g() { LC_ALL=C git -C "$WT" "$@"; }
 queue_lines() { grep -v '^#' "$Q"; }
 in_queue() { queue_lines | awk -F'\t' -v id="$1" '$1 == id {f=1} END {exit !f}'; }
 remove_from_queue() {
   ( flock 9; awk -F'\t' -v id="$1" '/^#/ || $1 != id' "$Q" > "$Q.new" && mv "$Q.new" "$Q" ) 9> "$D/queue.lock"
 }
-poste_lourd() { if [ -n "$POSTE" ]; then "$POSTE" lourd "$@"; else "$@"; fi; }
+# The ceiling is poste's own (19 Nov.: given to the pass only, poste refused every validation under its 40G default).
+poste_lourd() { if [ -n "$POSTE" ]; then POSTE_MEM_MAX=32G "$POSTE" lourd "$@"; else "$@"; fi; }
 poste_push() { if [ -n "$POSTE" ]; then "$POSTE" push pusher -- "$@"; else "$@"; fi; }
 
 # The kind of a lot, from what it changes since master: docs (only .md), cpp (an engine path), rust (what the push
@@ -90,6 +93,8 @@ dequeue() {
 
 # A red: out of the queue, in the log and in the author's inbox.
 red() { # <id> <author> <reason> <detail>
+  # The line is kept: a red of the pusher's own making is deposited again as it was (19 Nov.).
+  queue_lines | awk -F'\t' -v id="$1" '$1 == id' >> "$D/returned.tsv"
   remove_from_queue "$1"
   log "$1" rouge "$3 : $4"
   printf 'rouge\t%s\t%s\t%s\n' "$1" "$3" "$4" >> "$D/inbox/$2.txt"
@@ -141,6 +146,8 @@ replay_rust() { # <id> <journals> <witness> <witness_suite> <extra_suites> → 0
   last=$(tail -1 "$JR/$J/resume.log" 2>/dev/null)
   log "$id" rejoué "$J : $last (rc $rc) peak=$peak"
   [ "$last" = VERT ] && return 0
+  # No summary: the pass never ran (poste refused it, the worktree was missing) — the environment, not the lot.
+  [ -s "$JR/$J/resume.log" ] || return 2
   if [ "$rc" = 124 ] || grep -qE '\(124\)|poste tenu|Connection refused|refuse la pose' "$JR/$J/resume.log" 2>/dev/null; then return 2; fi
   return 1
 }
@@ -182,7 +189,9 @@ repose() { # <line>…
     id=$(f_ "$line" 1); head=$(f_ "$line" 3)
     commits=$(g rev-list --reverse --no-merges "HEAD..$head")
     [ -n "$commits" ] || continue
-    if ! g cherry-pick --empty=drop $commits > "$D/last-repose.log" 2>&1; then
+    # docs/nouveautes.md takes every lot's line at its head: the two sides are kept (union), as a session resolves
+    # it by hand. Any other collision stays a conflict for the author.
+    if ! g -c core.attributesFile="$D/attributes" cherry-pick --empty=drop $commits > "$D/last-repose.log" 2>&1; then
       g cherry-pick --abort 2>/dev/null
       echo "$id"; return 1
     fi

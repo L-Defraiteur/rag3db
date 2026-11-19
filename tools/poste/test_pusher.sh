@@ -8,6 +8,8 @@ PUSHER=$(realpath "${1:-$(dirname "$0")/pusher.sh}")
 HERE=$(dirname "$(realpath "$0")")
 [ -f "$PUSHER" ] || { echo "ROUGE  pusher.sh absent : $PUSHER"; exit 1; }
 D=$(mktemp -d); trap 'rm -rf "$D"' EXIT
+# Git speaks French at luciepc (19 Nov.: « CONFLIT », and a filter on « CONFLICT » named no conflict).
+export LANG=fr_FR.UTF-8 LC_ALL=fr_FR.UTF-8
 red=0
 ok() { echo "vert   $1"; }
 ko() { echo "ROUGE  $1"; red=1; }
@@ -18,6 +20,7 @@ git clone -q "$D/origin.git" "$D/author" 2>/dev/null
 cd "$D/author" && git config user.email luciedefraiteur@gmail.com && git config user.name t
 mkdir -p docs tools/poste extension/rag3weaver/src src
 echo '# notes' > docs/notes.md
+printf '# Nouveautés\n\n- le début\n' > docs/nouveautes.md
 printf '#!/bin/bash\necho ok\n' > tools/poste/foo.sh
 printf '#!/bin/bash\ngrep -q "echo ok" "${1:-$(dirname "$0")/foo.sh}"\n' > tools/poste/test_foo.sh
 printf 'tools/poste/foo.sh foo.sh tools/poste/test_foo.sh\ntools/poste/bar.sh bar.sh tools/poste/test_bar.sh\n' > tools/poste/cache_copies.txt
@@ -66,8 +69,20 @@ echo POUSSE
 G
 mkdir -p "$D/cache" && cp "$D/author/tools/poste/foo.sh" "$D/author/tools/poste/bar.sh" "$D/cache/"
 export BREAK_COPY=$D/break-copy
+cat > "$D/poste.sh" <<'Q'
+#!/bin/bash
+# The poste double: `lourd <cmd>` refuses a validation unless POSTE_MEM_MAX=32G is in poste's own environment (the
+# real one refuses before its queue, 19 Nov.); FAKE_POSTE_DOWN refuses everything. `push <session> -- <cmd>` runs it.
+[ -n "${FAKE_POSTE_DOWN:-}" ] && { echo "poste: refusé (doublure)"; exit 2; }
+case "$1" in
+  lourd) shift; [ "${POSTE_MEM_MAX:-}" = 32G ] || { echo "poste: refusé avant la file : une validation sous un plafond de 40G"; exit 2; }; exec "$@" ;;
+  push) shift 3; exec "$@" ;;
+esac
+exit 2
+Q
+chmod +x "$D/poste.sh"
 export PUSHER_CACHE=$D/cache PUSHER_PEERS= PUSHER_DIR=$D/pusher PUSHER_WORKSPACES=$D/ws PUSHER_WT_NAME=wt PUSHER_JOURNALS_ROOT=$D/journals \
-  PUSHER_PASS=$D/pass.sh PUSHER_GUARD=$D/guard.sh PUSHER_POSTE= PUSHER_MASTER_HELD=$D/master-tenu \
+  PUSHER_PASS=$D/pass.sh PUSHER_GUARD=$D/guard.sh PUSHER_POSTE=$D/poste.sh PUSHER_MASTER_HELD=$D/master-tenu \
   REAL_GUARD=$HERE/push_garde.sh OUTCOMES=$D/outcomes PASS_CALLS=$D/pass_calls GUARD_CALLS=$D/guard_calls
 : > "$D/outcomes"; : > "$D/pass_calls"; : > "$D/guard_calls"
 P() { bash "$PUSHER" "$@"; }
@@ -148,7 +163,8 @@ P enqueue rust-4 rust-4 "$h" rust e2e_code e2e - - author-c > /dev/null && P ste
 h=$(FROM=$BASE0 lot docs-2 docs/notes.md '# notes, the other way')
 P enqueue docs-2 docs-2 "$h" docs - - - - author-a > /dev/null; m0=$(master)
 P step > /dev/null 2>&1
-[ "$(master)" = "$m0" ] && grep -q "^rouge	docs-2	conflit	" "$D/pusher/inbox/author-a.txt" && ok "conflit à la repose : rendu à l'auteur" || ko "conflit à la repose : mal traité"
+[ "$(master)" = "$m0" ] && grep -q "^rouge	docs-2	conflit	.*CONFLICT" "$D/pusher/inbox/author-a.txt" && ok "conflit à la repose : rendu à l'auteur, nommé" || ko "conflit à la repose : mal traité, ou sans son nom"
+grep -q "^docs-2	" "$D/pusher/returned.tsv" 2>/dev/null && ok "la ligne rendue est gardée (returned.tsv)" || ko "la ligne rendue est perdue"
 
 # 9. A branch moved after its deposit: returned.
 h=$(lot docs-3 docs/other.md '# other')
@@ -215,4 +231,28 @@ sed -i "s/rag3db-build-$BASE0-/rag3db-build-$(master)-/" "$D/pass.sh"
 echo VERT >> "$D/outcomes"
 P step > /dev/null 2>&1
 on_master late-r && [ ! -e "$D/pusher/lib-late" ] && ok "après la bascule : le lot rust passe, lib-late retiré" || ko "après la bascule : lot rust pas poussé, ou lib-late resté"
+
+# 16. Two lots each adding their line at the head of docs/nouveautes.md, from the same base: one train, both pushed,
+# both lines on master (union, as a session resolves it by hand).
+m0=$(master)
+h1=$(FROM=$m0 lot nv-a docs/nouveautes.md '# Nouveautés
+
+- la ligne de a
+- le début'); h2=$(FROM=$m0 lot nv-b docs/nouveautes.md '# Nouveautés
+
+- la ligne de b
+- le début')
+P enqueue nv-a nv-a "$h1" docs - - - - author-a > /dev/null; P enqueue nv-b nv-b "$h2" docs - - - - author-a > /dev/null
+P step > /dev/null 2>&1
+git -C "$D/author" fetch -q origin
+on_master nv-a && on_master nv-b && git -C "$D/author" show origin/master:docs/nouveautes.md | grep -q 'la ligne de a' && git -C "$D/author" show origin/master:docs/nouveautes.md | grep -q 'la ligne de b' \
+  && ok "nouveautes.md : les deux lignes, un train" || ko "nouveautes.md : un lot rendu, ou une ligne perdue"
+
+# 17. Poste refuses the pass (no summary written): an environment red, never a code red.
+h=$(lot env-poste extension/rag3weaver/src/envp.rs 'fn envp() {}')
+P enqueue env-poste env-poste "$h" rust e2e_code e2e - - author-c > /dev/null
+c0=$(calls "$D/pass_calls")
+FAKE_POSTE_DOWN=1 P step > /dev/null 2>&1
+! on_master env-poste && [ "$(calls "$D/pass_calls")" = "$c0" ] && grep -q "^rouge	env-poste	environnement	" "$D/pusher/inbox/author-c.txt" \
+  && ok "passe refusée par poste : rouge d'environnement" || ko "passe refusée par poste : comptée rouge de code, ou jouée"
 exit $red
