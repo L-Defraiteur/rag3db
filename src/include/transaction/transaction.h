@@ -3,6 +3,7 @@
 #include <atomic>
 #include <functional>
 #include <mutex>
+#include <optional>
 #include <unordered_set>
 #include <vector>
 
@@ -198,6 +199,8 @@ public:
     // ordinaire prend ses verrous sous le mode multi-écrivains ; hors de ce mode, en reprise, ou
     // sans contexte, elle ne prend rien et acquireLocks ne fait rien.
     bool usesLocks() const;
+    void acquireLocks(std::span<const LockRequest> requests,
+        std::optional<uint64_t> timeoutInMS) const;
     // Prend les verrous demandés, en attendant s'il le faut : au plus lock_timeout, en regardant
     // l'interruption de la connexion. Sur un interblocage, un délai dépassé ou une interruption,
     // lève l'erreur nommée du gestionnaire (TransactionManagerException) : l'instruction échoue,
@@ -211,6 +214,15 @@ public:
     // le graphe d'attente ne voit pas). Un changement de schéma la prend en exclusif, et attend.
     void lockTableForWrite(common::table_id_t tableID) const;
     void lockTableForSchemaChange(common::table_id_t tableID) const;
+    // Un lecteur tient le verrou de schéma de chaque table qu'il lit, en partagé, jusqu'à la fin de
+    // sa transaction : un ALTER ou un DROP l'attend, et il relit ses colonnes (ticket de l'ALTER
+    // qui n'attend pas les lecteurs, 19 novembre 2026).
+    void lockTableForRead(common::table_id_t tableID) const;
+    // Les verrous de table valent pour une lecture aussi, sous les écritures multiples.
+    bool usesReadLocks() const;
+    // La prise partagée du verrou de schéma d'une table, une fois par transaction, pour une
+    // lecture comme pour une écriture.
+    void lockTableShared(common::table_id_t tableID) const;
     // Le début stable du refus d'une écriture dont la table a changé de schéma depuis le départ de
     // sa transaction : un client le reconnaît et recommence la transaction, qui se lie alors sur
     // le nouveau schéma.

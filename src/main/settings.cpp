@@ -49,6 +49,15 @@ common::Value LockTimeoutSetting::getSetting(const ClientContext* context) {
     return common::Value(context->getClientConfig()->lockTimeoutInMS);
 }
 
+void AlterLockTimeoutSetting::setContext(ClientContext* context, const common::Value& parameter) {
+    parameter.validateType(inputType);
+    context->getClientConfigUnsafe()->alterLockTimeoutInMS = parameter.getValue<uint64_t>();
+}
+
+common::Value AlterLockTimeoutSetting::getSetting(const ClientContext* context) {
+    return common::Value(context->getClientConfig()->alterLockTimeoutInMS);
+}
+
 void ForceCheckpointOnCopySetting::setContext(ClientContext* context,
     const common::Value& parameter) {
     parameter.validateType(inputType);
