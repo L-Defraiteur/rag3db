@@ -314,8 +314,15 @@ pub trait SchemaDialect: Send + Sync {
     /// dont le nœud du côté `side` est une ligne de `table` que `filter`
     /// retient. `None` : ce dialecte ne le dit pas, et l'écriture se refuse en
     /// se nommant.
-    fn detach_edges(&self, relation: &str, table: &str, side: rag3weaver_ir::Direction, filter: &rag3weaver_ir::Predicate) -> Option<String> {
-        let _ = (relation, table, side, filter);
+    fn detach_edges(
+        &self,
+        relation: &str,
+        table: &str,
+        side: rag3weaver_ir::Direction,
+        filter: &rag3weaver_ir::Predicate,
+        end: Option<(&str, &rag3weaver_ir::Predicate)>,
+    ) -> Option<String> {
+        let _ = (relation, table, side, filter, end);
         None
     }
 
@@ -326,8 +333,15 @@ pub trait SchemaDialect: Send + Sync {
     /// ré-indexation de 200 fichiers de code-lourd (19 octobre 2026). `None` :
     /// ce dialecte ne le dit pas, la déliaison passe par `detach_edges` et se
     /// tait.
-    fn detach_edges_returning(&self, relation: &str, table: &str, side: rag3weaver_ir::Direction, filter: &rag3weaver_ir::Predicate) -> Option<String> {
-        let _ = (relation, table, side, filter);
+    fn detach_edges_returning(
+        &self,
+        relation: &str,
+        table: &str,
+        side: rag3weaver_ir::Direction,
+        filter: &rag3weaver_ir::Predicate,
+        end: Option<(&str, &rag3weaver_ir::Predicate)>,
+    ) -> Option<String> {
+        let _ = (relation, table, side, filter, end);
         None
     }
 
@@ -1422,8 +1436,8 @@ pub fn write_by_methods<D: SchemaDialect + ?Sized>(d: &D, write: &rag3weaver_ir:
             _ => return Err(rag3weaver_ir::TranslateError::Untranslated { dialect: d.name().into(), form: "Write::Delete" }),
         },
         rag3weaver_ir::Write::Unlink { relation } => d.batch_delete_relation(relation),
-        rag3weaver_ir::Write::Detach { relation, table, side, filter } => d
-            .detach_edges(relation, table, *side, filter)
+        rag3weaver_ir::Write::Detach { relation, table, side, filter, end } => d
+            .detach_edges(relation, table, *side, filter, end.as_ref().map(|(t, p)| (t.as_str(), p)))
             .ok_or_else(|| rag3weaver_ir::TranslateError::Untranslated { dialect: d.name().into(), form: "Write::Detach" })?,
         rag3weaver_ir::Write::CopyEdges { relation, table, other, side, filter, props } => d
             .copy_edges(relation, table, other, *side, filter.as_ref(), props)
@@ -1586,6 +1600,12 @@ fn postgres_condition_sur_uuid(p: &rag3weaver_ir::Predicate, colonne: &str) -> O
 /// passe telle quelle.
 fn rag3db_condition(p: &rag3weaver_ir::Predicate) -> String {
     rag3db_condition_sur(p, "m", &mut 0)
+}
+
+/// The condition on the other end `o` of a detach, ` AND (…)`, or nothing. The relation fixes the other end's
+/// table: the node is not labelled.
+fn rag3db_end_condition(end: Option<(&str, &rag3weaver_ir::Predicate)>) -> String {
+    end.map(|(_, p)| format!(" AND ({})", rag3db_condition_sur(p, "o", &mut 0))).unwrap_or_default()
 }
 
 /// La même, sur l'alias `a` ; `n` numérote les alias des sous-requêtes
@@ -1941,22 +1961,36 @@ impl SchemaDialect for Rag3dbDialect {
 
     /// `MATCH (m:T)-[r:R]->() WHERE … DELETE r` en sortant, `MATCH
     /// ()-[r:R]->(m:T) WHERE … DELETE r` en entrant.
-    fn detach_edges(&self, relation: &str, table: &str, side: rag3weaver_ir::Direction, filter: &rag3weaver_ir::Predicate) -> Option<String> {
+    fn detach_edges(
+        &self,
+        relation: &str,
+        table: &str,
+        side: rag3weaver_ir::Direction,
+        filter: &rag3weaver_ir::Predicate,
+        end: Option<(&str, &rag3weaver_ir::Predicate)>,
+    ) -> Option<String> {
         let (t, r) = (self.quote(table), self.quote(relation));
         let motif = match side {
-            rag3weaver_ir::Direction::Outgoing => format!("(m:{t})-[r:{r}]->()"),
-            rag3weaver_ir::Direction::Incoming => format!("()-[r:{r}]->(m:{t})"),
+            rag3weaver_ir::Direction::Outgoing => format!("(m:{t})-[r:{r}]->(o)"),
+            rag3weaver_ir::Direction::Incoming => format!("(o)-[r:{r}]->(m:{t})"),
         };
-        Some(format!("MATCH {motif} WHERE {} DELETE r", rag3db_condition(filter)))
+        Some(format!("MATCH {motif} WHERE {}{} DELETE r", rag3db_condition(filter), rag3db_end_condition(end)))
     }
 
-    fn detach_edges_returning(&self, relation: &str, table: &str, side: rag3weaver_ir::Direction, filter: &rag3weaver_ir::Predicate) -> Option<String> {
+    fn detach_edges_returning(
+        &self,
+        relation: &str,
+        table: &str,
+        side: rag3weaver_ir::Direction,
+        filter: &rag3weaver_ir::Predicate,
+        end: Option<(&str, &rag3weaver_ir::Predicate)>,
+    ) -> Option<String> {
         let (t, r) = (self.quote(table), self.quote(relation));
         let (motif, rendre) = match side {
             rag3weaver_ir::Direction::Outgoing => (format!("(m:{t})-[r:{r}]->(o)"), "m._uuid, o._uuid"),
             rag3weaver_ir::Direction::Incoming => (format!("(o)-[r:{r}]->(m:{t})"), "o._uuid, m._uuid"),
         };
-        Some(format!("MATCH {motif} WHERE {} DELETE r RETURN {rendre}", rag3db_condition(filter)))
+        Some(format!("MATCH {motif} WHERE {}{} DELETE r RETURN {rendre}", rag3db_condition(filter), rag3db_end_condition(end)))
     }
 
     /// `UNION ALL` des branches, chacune fondue à l'amont s'il y en a un
@@ -2845,6 +2879,37 @@ impl SchemaDialect for Rag3dbDialect {
 /// SQL DDL/DML for PostgreSQL with pgvector (Supabase-compatible).
 pub struct PostgresDialect;
 
+impl PostgresDialect {
+    /// The relation table joined to the node table by the end of side `side` (`from_uuid` outgoing, `to_uuid`
+    /// incoming) and, when `end` is given, to the other end's table by the other column, kept by its condition.
+    fn postgres_detach(
+        &self,
+        relation: &str,
+        table: &str,
+        side: rag3weaver_ir::Direction,
+        filter: &rag3weaver_ir::Predicate,
+        end: Option<(&str, &rag3weaver_ir::Predicate)>,
+    ) -> String {
+        let (bout, autre_bout) = match side {
+            rag3weaver_ir::Direction::Outgoing => ("from_uuid", "to_uuid"),
+            rag3weaver_ir::Direction::Incoming => ("to_uuid", "from_uuid"),
+        };
+        let (autre_table, autre_condition) = match end {
+            Some((t, p)) => (
+                format!(", {} AS o", self.quote(t)),
+                format!(" AND o.\"_uuid\" = r.\"{autre_bout}\" AND ({})", postgres_condition_sur(self, p, "o", &mut 0)),
+            ),
+            None => (String::new(), String::new()),
+        };
+        format!(
+            "DELETE FROM {} AS r USING {} AS m{autre_table} WHERE m.\"_uuid\" = r.\"{bout}\" AND ({}){autre_condition}",
+            self.quote(relation),
+            self.quote(table),
+            postgres_condition(self, filter)
+        )
+    }
+}
+
 impl SchemaDialect for PostgresDialect {
     fn name(&self) -> &'static str {
         "postgresql"
@@ -2944,30 +3009,26 @@ impl SchemaDialect for PostgresDialect {
 
     /// La table de relation, jointe à la table des nœuds par le bout du côté
     /// `side` (`from_uuid` en sortant, `to_uuid` en entrant).
-    fn detach_edges(&self, relation: &str, table: &str, side: rag3weaver_ir::Direction, filter: &rag3weaver_ir::Predicate) -> Option<String> {
-        let bout = match side {
-            rag3weaver_ir::Direction::Outgoing => "from_uuid",
-            rag3weaver_ir::Direction::Incoming => "to_uuid",
-        };
-        Some(format!(
-            "DELETE FROM {} AS r USING {} AS m WHERE m.\"_uuid\" = r.\"{bout}\" AND ({})",
-            self.quote(relation),
-            self.quote(table),
-            postgres_condition(self, filter)
-        ))
+    fn detach_edges(
+        &self,
+        relation: &str,
+        table: &str,
+        side: rag3weaver_ir::Direction,
+        filter: &rag3weaver_ir::Predicate,
+        end: Option<(&str, &rag3weaver_ir::Predicate)>,
+    ) -> Option<String> {
+        Some(self.postgres_detach(relation, table, side, filter, end))
     }
 
-    fn detach_edges_returning(&self, relation: &str, table: &str, side: rag3weaver_ir::Direction, filter: &rag3weaver_ir::Predicate) -> Option<String> {
-        let bout = match side {
-            rag3weaver_ir::Direction::Outgoing => "from_uuid",
-            rag3weaver_ir::Direction::Incoming => "to_uuid",
-        };
-        Some(format!(
-            "DELETE FROM {} AS r USING {} AS m WHERE m.\"_uuid\" = r.\"{bout}\" AND ({}) RETURNING r.from_uuid, r.to_uuid",
-            self.quote(relation),
-            self.quote(table),
-            postgres_condition(self, filter)
-        ))
+    fn detach_edges_returning(
+        &self,
+        relation: &str,
+        table: &str,
+        side: rag3weaver_ir::Direction,
+        filter: &rag3weaver_ir::Predicate,
+        end: Option<(&str, &rag3weaver_ir::Predicate)>,
+    ) -> Option<String> {
+        Some(format!("{} RETURNING r.from_uuid, r.to_uuid", self.postgres_detach(relation, table, side, filter, end)))
     }
 
     /// **Fondre en CTE** : l'amont devient `WITH __chain(c0, c1, …) AS (…)`, et

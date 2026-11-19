@@ -223,7 +223,12 @@ pub(super) fn same_write_from(site: &str, before: &str, after: &str, params: &dy
     let depart = state(&avant);
     let na = avant.execute_raw_with_params(before, &pa).unwrap_or_else(|e| panic!("[{site}] {before}: {e}"));
     let nb = apres.execute_raw_with_params(after, &pb).unwrap_or_else(|e| panic!("[{site}] {after}: {e}"));
-    assert_eq!(format!("{:?}", nb.rows), format!("{:?}", na.rows), "[{site}] the same count returned");
+    let trie = |r: &crate::connection::QueryResult| {
+        let mut v: Vec<String> = r.rows.iter().map(|l| format!("{l:?}")).collect();
+        v.sort();
+        v
+    };
+    assert_eq!(trie(&nb), trie(&na), "[{site}] the same rows returned");
     if changes {
         assert_ne!(state(&avant), depart, "[{site}] the old write changes something on the witness base");
     }
@@ -320,4 +325,38 @@ fn the_edge_copies_by_the_ir_at_parity() {
         same_write_from(&format!("copy {rel}"), &before, &after, &params, n > 0);
     }
     assert!(copiees > 0, "the witness base has edges to copy");
+}
+
+/// `forget_edges_of_files`: the edges of the scopes of given files undone, only those whose other end is visible
+/// at the pending rank, returning the undone pairs; each relation that leaves a scope, and `CONSUMED_BY` that
+/// arrives.
+#[test]
+fn the_detaches_by_the_ir_at_parity() {
+    use rag3weaver_ir::{Direction, Predicate};
+    let (catalog, _) = base_with_history();
+    let v = catalog.generations.clone().unwrap();
+    let filtre = Predicate::AllOf(vec![
+        Predicate::Equals { field: "source".into(), param: "source".into() },
+        Predicate::In { field: "file_path".into(), param: "paths".into() },
+        Predicate::Visible { couche: v.couche.clone(), rang: v.rang, mask: Default::default() },
+    ]);
+    let mut cas: Vec<(&str, Direction, &str)> = crate::code::RELATIONS.iter().filter(|(r, f, _)| *f == SCOPE && *r != "CONSUMED_BY").map(|(r, _, t)| (*r, Direction::Outgoing, *t)).collect();
+    cas.push(("CONSUMED_BY", Direction::Incoming, SCOPE));
+    let mut defaites = 0;
+    for (rel, side, autre) in cas {
+        let d = catalog.dialect_arc();
+        // The old text: the detach rendered without its other end, then the clause pasted before ` DELETE r`.
+        let sans_bout = d.detach_edges_returning(rel, SCOPE, side, &filtre, None).unwrap();
+        let before = match v.tables.contains(autre).then(|| d.condition_visible_sur("o", &v.couche, v.rang)).flatten() {
+            Some(c) => sans_bout.replacen(" DELETE r", &format!(" AND ({c}) DELETE r"), 1),
+            None => sans_bout,
+        };
+        let bout = edge_end_visible(catalog.generations.as_ref(), autre);
+        let after = d.detach_edges_returning(rel, SCOPE, side, &filtre, bout.as_ref().map(|(t, p)| (t.as_str(), p))).unwrap();
+        let params = |c: &Catalog| vec![param("source", text(&source_of(c))), param("paths", CypherValue::List(vec![text("a.rs"), text("c.rs")]))];
+        let (essai, _) = base_with_history();
+        defaites += essai.execute_raw_with_params(&before, &params(&essai)).unwrap().rows.len();
+        same_write_from(&format!("detach {rel}"), &before, &after, &params, false);
+    }
+    assert!(defaites > 0, "the witness base has edges to undo");
 }
