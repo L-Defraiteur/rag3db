@@ -135,6 +135,7 @@ pub fn maintain(handle: &Handle, demande: &Demande) -> Result<serde_json::Value,
         "absent": report.absent,
         "merge_rounds": report.merge_rounds,
         "dictionary_texts": [report.dictionary_texts.0, report.dictionary_texts.1],
+        "dictionary_revived": report.dictionary_revived,
         "purge_ms": report.purge_ms,
         "compact_ms": report.compact_ms,
         "before": rapport(&report.before),
@@ -232,6 +233,7 @@ pub fn maintenance_nocturne(
         "dictionary_bytes": [dictionnaire(&report.before), dictionnaire(&report.after)],
         "index_bytes": [report.before.index_bytes, report.after.index_bytes],
         "dictionary_texts": [report.dictionary_texts.0, report.dictionary_texts.1],
+        "dictionary_revived": report.dictionary_revived,
         "retries": releve["retries"],
     }))
 }
@@ -254,6 +256,14 @@ pub fn phrase_de_la_nuit(quand: &str, tables: &[serde_json::Value]) -> String {
         }
         if let Some(erreur) = t["error"].as_str() {
             phrase.push_str(&format!(" ; {} : {erreur}", t["table"].as_str().unwrap_or("?")));
+        }
+        // Des textes que la compaction croyait morts, repris du sursis : l'indice d'un défaut, nommé.
+        if let Some(repris) = t["dictionary_revived"].as_array().filter(|a| !a.is_empty()) {
+            let segment = repris[0].as_str().and_then(|r| r.rsplit_once("segment ")).map(|(_, s)| s).unwrap_or("?");
+            phrase.push_str(&format!(
+                " ; {} : {} texte{} repris du sursis (segment {segment})",
+                t["table"].as_str().unwrap_or("?"), repris.len(), if repris.len() > 1 { "s" } else { "" }
+            ));
         }
     }
     phrase
