@@ -1780,8 +1780,8 @@ fn deux_fenetres_du_chat_suivent_le_meme_tour() {
 
 /// **The chat guides a detached window of the repository** (the IDE in several windows, slice 2; Lucie, 13 Nov.
 /// 2026: the chat on one screen, the repository on the other). A window opened on the repository with
-/// `?fenetre=depot` declares itself to the shared worker; a file cited in the chat (`main.rs:1`), clicked, opens in
-/// that window, and the chat stays on its conversation. Nothing is asked of the host for it.
+/// `?fenetre=depot` declares itself to the shared worker; a file cited in the chat (`src/main.rs:1`), clicked, opens in
+/// that window, and the chat stays on its conversation (the link only: the file need not exist). Nothing is asked of the host for it.
 #[test]
 #[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
 fn le_chat_guide_une_fenetre_du_depot_detachee() {
@@ -1791,7 +1791,7 @@ fn le_chat_guide_une_fenetre_du_depot_detachee() {
         return;
     };
     let model: ChatModel = Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
-        Ok(Arc::new(CallbackLlm::new("faux-modele", 8192, |turns, opts, sink| MockLlm::new("Le point d'entrée est `main.rs:1`.").generate(turns, opts, sink))))
+        Ok(Arc::new(CallbackLlm::new("faux-modele", 8192, |turns, opts, sink| MockLlm::new("Le point d'entrée est `src/main.rs:1`.").generate(turns, opts, sink))))
     });
     let (d, h, m, id) = banc_dans("atelier", model.clone(), |_| {});
     drop(h);
@@ -1812,7 +1812,7 @@ fn le_chat_guide_une_fenetre_du_depot_detachee() {
     let prete = "document.querySelector('#send') && !document.querySelector('#send').disabled && document.getElementById('lien')?.textContent === 'flux : ouvert'";
     n.aller(&format!("{racine}/ide/code/{id}/chat"), prete);
     n.evaluer("document.querySelector('#message').value = 'où commence le code ?'; document.querySelector('#send').click()");
-    n.attendre("document.querySelector('#status')?.textContent === 'fini' && !!document.querySelector('article.message.assistant a.code-ref')", "the answer cites main.rs as a link");
+    n.attendre("document.querySelector('#status')?.textContent === 'fini' && !!document.querySelector('article.message.assistant a.code-ref')", "the answer cites src/main.rs as a link (a cited path has a « / »)");
     // The window of the repository, detached, on the tree; it takes the focus last.
     n.nouvel_onglet();
     n.aller(&format!("{racine}/ide/code/{id}/arbre?fenetre=depot"), "document.getElementById('lien')?.textContent === 'flux : ouvert'");
@@ -1822,7 +1822,7 @@ fn le_chat_guide_une_fenetre_du_depot_detachee() {
     n.attendre("(window.__ide?.fenetres ?? []).some((f) => f.role === 'depot')", "the chat knows that a window of the repository is open");
     n.evaluer("document.querySelector('article.message.assistant a.code-ref').click()");
     n.onglet(1);
-    n.attendre("location.pathname.includes('/fichier/main.rs')", "the window of the repository opens the cited file");
+    n.attendre("location.pathname.includes('/fichier/src/main.rs')", "the window of the repository opens the cited file");
     assert_eq!(n.evaluer("new URLSearchParams(location.search).get('fenetre')"), json!("depot"), "it stays a window of the repository");
     n.onglet(0);
     assert!(n.evaluer("location.pathname").as_str().unwrap_or_default().ends_with("/chat"), "the chat stays on its conversation : {}", n.evaluer("location.href"));
