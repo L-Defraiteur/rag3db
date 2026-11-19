@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 19 novembre2026 — **L'analyse du code suit les imports d'un fichier sans une expression régulière par import.** Pour chaque scope et chaque import externe pas encore relevé, codeparsers compilait `\bnom\b` ; il cherche maintenant le mot entier directement, avec la même frontière. Sur 300 imports par 300 scopes : 12 s → 0,5 s ; sur rag3weaver/src, l'analyse passe de 4,9 à 4,5 s (une mesure, à luciepc). Les arêtes ne changent pas (sonde de marque, au couple près). **Toutes les bases repassent une fois** (pointeur codeparsers : le mot entier, `f164cb6`).
+
 - 18 novembre 2026 — **La fin d'un index dit une libération ou une dette qu'elle n'a pas pu faire.** Une erreur en rendant les réclamations d'embarquement s'ajoute à la dernière ligne du journal, avec sa table et sa cause, sans en effacer la cause de fin ; une dette restante illisible se dit « dette inconnue », plus jamais « 0 ».
 
 - 18 novembre 2026 — **Un modèle déclaré dit `access` et `provider`.** `access` dit la manière d'y accéder (`local`, `service`, `compatible`), `provider` le fournisseur (`openai`, `vertex`, `anthropic`, `llama_server`). L'ancienne forme, `provider` pour la manière et `protocol` pour le fournisseur, se lit encore **jusqu'au 29 novembre 2026** ; un modèle qui mêle les deux est refusé, en nommant les deux mots. `/model` rend les deux mots neufs.
