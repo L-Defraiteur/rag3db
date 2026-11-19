@@ -300,6 +300,9 @@ mode="${1:-}"; [ $# -gt 0 ] && shift
 F="$V/fiches"
 # La file des lourds : un billet `<instant en ns>-<pid>` par lourd qui attend ; l'ordre
 # des noms est l'ordre d'arrivée. Un billet dont le processus est mort est retiré.
+# **La voie du pousseur** (19 novembre 2026, c7 et G : sa passe attendait derrière sept lourds, et tout le monde attend
+# ses passes pour atterrir) : sous POSTE_VOIE=pousseur, le billet s'appelle `0-<instant>-<pid>` et passe devant les
+# autres ; la porte ne change pas, une mesure en attente reste devant lui. Le pid se lit après le dernier tiret.
 T="$V/file"
 places() {
   _n="${POSTE_LOURDS_MAX:-$(cat "$V/lourds-max" 2>/dev/null)}"
@@ -343,11 +346,11 @@ lourds_tenus() {
 file_des_lourds() {
   _r=0
   for _t in $(ls "$T" 2>/dev/null | sort); do
-    kill -0 "${_t#*-}" 2>/dev/null || { rm -f "$T/$_t"; continue; }
+    kill -0 "${_t##*-}" 2>/dev/null || { rm -f "$T/$_t"; continue; }
     if [ -n "${1:-}" ]; then
       [ "$T/$_t" = "$1" ] && { echo "$_r"; return 0; }
     else
-      echo "${_t#*-}"
+      echo "${_t##*-}"
     fi
     _r=$((_r + 1))
   done
@@ -477,7 +480,8 @@ case "$mode" in
     # et la fiche dit « tient » avant que la porte soit rendue.
     # POSTE_LOURD_ATTENTE_MAX (secondes, pour `push --lourd`) : au-delà, code 75, rien de pris.
     mkdir -p "$T"
-    billet="$T/$(date +%s%N)-$$"; : > "$billet"
+    if [ "${POSTE_VOIE:-}" = pousseur ]; then billet="$T/0-$(date +%s%N)-$$"; else billet="$T/$(date +%s%N)-$$"; fi
+    : > "$billet"
     trap 'rm -f "$fiche" "$billet"' EXIT
     exec 9>>"$V/poste.lock"
     debut=$(date +%s)

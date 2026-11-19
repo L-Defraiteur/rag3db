@@ -222,6 +222,27 @@ rc=$?
 wait
 [ "$rc" = 75 ] && [ -z "$(instant P début)" ]
 cas $? "un push lourd compte parmi les places : places prises, il rend 75 sans rien lancer (code $rc)"
+# La voie du pousseur (19 novembre 2026, c7 et G : sept lourds en file devant sa passe, que tout le monde attend pour
+# atterrir) : un lourd sous POSTE_VOIE=pousseur prend la tête de la file des lourds ; une mesure en attente reste devant.
+: > "$J"
+echo 1 > "$POSTE_LOCK_DIR/lourds-max"
+travail lourd L1 2 &
+sleep 0.3
+travail lourd L2 1 &
+sleep 0.3
+POSTE_VOIE=pousseur travail lourd P 1 &
+wait
+[ -n "$(instant P début)" ] && [ "$(instant P début)" -ge "$(instant L1 fin)" ] && [ "$(instant L2 début)" -ge "$(instant P fin)" ]
+cas $? "la voie du pousseur : arrivé après L2, il passe avant lui, à la première place libre"
+: > "$J"
+travail lourd L1 2 &
+sleep 0.3
+travail mesure M 1 &
+sleep 0.3
+POSTE_VOIE=pousseur travail lourd P 1 &
+wait
+[ -n "$(instant P début)" ] && [ "$(instant P début)" -ge "$(instant M fin)" ]
+cas $? "la voie du pousseur reste derrière une mesure en attente"
 rm -f "$POSTE_LOCK_DIR/lourds-max"
 [ -z "$(ls -A "$POSTE_LOCK_DIR/fiches" 2>/dev/null)" ] && [ -z "$(ls -A "$POSTE_LOCK_DIR/file" 2>/dev/null)" ]
 cas $? "à la fin, aucune fiche ni aucun billet ne reste"
