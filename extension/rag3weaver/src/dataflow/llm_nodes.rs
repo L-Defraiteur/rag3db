@@ -53,6 +53,8 @@ pub struct LlmNode {
     /// La forme imposée à la réponse (`response_schema`) : envoyée en format
     /// strict, et la réponse lue en JSON sur le port `json`.
     response_schema: Option<serde_json::Value>,
+    /// The task line (lot B1): a declared parameter, short, set before the context parts.
+    instruction: Option<String>,
 }
 
 /// **La réponse lue sous son schéma** : du JSON, de la forme de la racine du
@@ -106,13 +108,57 @@ impl TokenSink for AnswerSink<'_> {
 
 impl LlmNode {
     pub fn new(name: &str) -> Self {
-        Self { node_name: name.to_string(), opts: GenOptions::default(), with_tools: false, stop_when_unread: false, response_schema: None }
+        Self { node_name: name.to_string(), opts: GenOptions::default(), with_tools: false, stop_when_unread: false, response_schema: None, instruction: None }
     }
 
     /// Impose une forme JSON à la réponse ; elle sort aussi sur `json`.
     pub fn with_response_schema(mut self, schema: serde_json::Value) -> Self {
         self.response_schema = Some(schema);
         self
+    }
+
+    /// The task line, set before the context parts (lot B1).
+    pub fn with_instruction(mut self, instruction: String) -> Self {
+        self.instruction = Some(instruction);
+        self
+    }
+
+    /// **The prompt of a declared context** (lot B1, 19 November 2026): the `instruction`, then each part of the
+    /// `context` list in order as a section, then the `prompt` text if one comes — the variable last, for the
+    /// provider's prefix cache. `None` when the node has neither an instruction nor a context: the `prompt`/`value`
+    /// ports are read as before.
+    fn compose(&self, ctx: &mut NodeContext) -> Result<Option<Vec<Turn>>, String> {
+        let context = ctx.take_input("context");
+        if context.is_none() && self.instruction.is_none() {
+            return Ok(None);
+        }
+        let mut pieces: Vec<String> = Vec::new();
+        if let Some(i) = self.instruction.as_ref().filter(|i| !i.is_empty()) {
+            pieces.push(i.clone());
+        }
+        if let Some(pv) = context {
+            let parts = take_or_clone::<serde_json::Value>(pv).ok_or("LlmNode: 'context' carries a list of parts {name, title, value, format?, max_tokens?}")?;
+            let parts = match parts {
+                serde_json::Value::Array(a) => a,
+                serde_json::Value::Null => Vec::new(),
+                other => vec![other],
+            };
+            for part in &parts {
+                if let Some(section) = render_part(part)? {
+                    pieces.push(section);
+                }
+            }
+        }
+        if let Some(pv) = ctx.take_input("prompt") {
+            let text = take_or_clone::<String>(pv).ok_or("LlmNode: with a context, 'prompt' carries a text")?;
+            if !text.is_empty() {
+                pieces.push(text);
+            }
+        }
+        if pieces.is_empty() {
+            return Err("LlmNode: the instruction and the context are both empty: no prompt".into());
+        }
+        Ok(Some(vec![Turn::user(pieces.join("\n\n"))]))
     }
 
     /// Arrêter la génération quand plus personne ne lit `tokens`.
@@ -177,7 +223,10 @@ impl Node for LlmNode {
             .service::<Arc<dyn Llm>>(LLM_SERVICE)
             .cloned()
             .ok_or("LlmNode: 'llm' service not found")?;
-        let turns = Self::take_turns(ctx)?;
+        let turns = match self.compose(ctx)? {
+            Some(turns) => turns,
+            None => Self::take_turns(ctx)?,
+        };
 
         let mut opts = self.opts.clone();
         if self.with_tools {
@@ -243,6 +292,84 @@ impl Node for LlmNode {
 
 // ─── Factory ─────────────────────────────────────────────────────────────────
 
+/// A JSON value with its object keys sorted, at every depth: the same value always renders the same bytes.
+fn sorted(v: &serde_json::Value) -> serde_json::Value {
+    match v {
+        serde_json::Value::Object(o) => {
+            let mut keys: Vec<&String> = o.keys().collect();
+            keys.sort();
+            let mut m = serde_json::Map::new();
+            for k in keys {
+                m.insert(k.clone(), sorted(&o[k]));
+            }
+            serde_json::Value::Object(m)
+        }
+        serde_json::Value::Array(a) => serde_json::Value::Array(a.iter().map(sorted).collect()),
+        other => other.clone(),
+    }
+}
+
+/// `json` (the default): compact, keys sorted, one line per element of a list. A string is never quoted.
+fn render_json(v: &serde_json::Value) -> String {
+    match v {
+        serde_json::Value::String(s) => s.clone(),
+        serde_json::Value::Array(a) => a.iter().map(|x| match x {
+            serde_json::Value::String(s) => s.clone(),
+            other => sorted(other).to_string(),
+        }).collect::<Vec<_>>().join("\n"),
+        other => sorted(other).to_string(),
+    }
+}
+
+/// `kv`: an object as « key: value » lines, keys sorted (a string value as it is, any other as compact JSON);
+/// a list as its elements so rendered, separated by a blank line.
+fn render_kv(v: &serde_json::Value) -> String {
+    match v {
+        serde_json::Value::Object(o) => {
+            let mut keys: Vec<&String> = o.keys().collect();
+            keys.sort();
+            keys.iter().map(|k| match &o[*k] {
+                serde_json::Value::String(s) => format!("{k}: {s}"),
+                other => format!("{k}: {}", sorted(other)),
+            }).collect::<Vec<_>>().join("\n")
+        }
+        serde_json::Value::Array(a) => a.iter().map(render_kv).collect::<Vec<_>>().join("\n\n"),
+        other => render_json(other),
+    }
+}
+
+/// One context part as a section: « ## title », a blank line, the value rendered by its `format` (json, the
+/// default, or kv), cut to `max_tokens` (estimated: characters / 4, rounded up) with the cut said. An empty part
+/// renders nothing.
+fn render_part(part: &serde_json::Value) -> Result<Option<String>, String> {
+    let o = part.as_object().ok_or("LlmNode: a context part is an object {name, title, value, format?, max_tokens?}")?;
+    let name = o.get("name").and_then(serde_json::Value::as_str).unwrap_or("?");
+    let title = o
+        .get("title")
+        .and_then(serde_json::Value::as_str)
+        .filter(|t| !t.is_empty())
+        .ok_or_else(|| format!("LlmNode: the context part « {name} » has no title"))?;
+    let value = o.get("value").unwrap_or(&serde_json::Value::Null);
+    if crate::dataflow::collect_node::is_empty(value) {
+        return Ok(None);
+    }
+    let mut text = match o.get("format").and_then(serde_json::Value::as_str) {
+        None | Some("json") => render_json(value),
+        Some("kv") => render_kv(value),
+        Some(other) => return Err(format!("LlmNode: the context part « {name} » asks for the format « {other} »; known: json, kv")),
+    };
+    if let Some(max) = o.get("max_tokens").filter(|v| !v.is_null()) {
+        let max = max.as_u64().filter(|m| *m > 0).ok_or_else(|| format!("LlmNode: the context part « {name} »: max_tokens is a positive integer"))? as usize;
+        let chars = text.chars().count();
+        let tokens = chars.div_ceil(4);
+        if tokens > max {
+            text = text.chars().take(max * 4).collect::<String>();
+            text.push_str(&format!("\n[cut: {max} of {tokens} estimated tokens kept]"));
+        }
+    }
+    Ok(Some(format!("## {title}\n\n{text}")))
+}
+
 pub struct LlmNodeFactory;
 
 /// Lit un flottant borné, avec défaut.
@@ -299,7 +426,12 @@ impl NodeFactory for LlmNodeFactory {
             .with_temperature(temperature)
             .with_top_p(top_p)
             .with_stop(stop);
-        let node = LlmNode::new(name).with_options(opts).with_tools(with_tools).with_stop_when_unread(stop_when_unread);
+        let mut node = LlmNode::new(name).with_options(opts).with_tools(with_tools).with_stop_when_unread(stop_when_unread);
+        match config.get("instruction") {
+            None | Some(serde_json::Value::Null) => {}
+            Some(serde_json::Value::String(i)) => node = node.with_instruction(i.clone()),
+            Some(_) => return Err("LlmNode: 'instruction' is a text".into()),
+        }
         Ok(Box::new(match response_schema {
             Some(schema) => node.with_response_schema(schema),
             None => node,
@@ -316,7 +448,13 @@ impl NodeFactory for LlmNodeFactory {
             description: "Generates text from a prompt via the 'llm' service (streaming-capable)".into(),
             // `prompt` (Text) : un texte ou une conversation ; `value` (Map) : un texte rendu en JSON par
             // un RhaiNode, ou {prompt}. L'un des deux, au moment de jouer.
-            inputs: vec![PortDef::value("prompt", PortType::Text, false), PortDef::value("value", PortType::Map, false)],
+            // `context` (lot B1): a list of parts {name, title, value, format?, max_tokens?}, usually from a
+            // Collect; rendered after `instruction`, and before a `prompt` text if one comes.
+            inputs: vec![
+                PortDef::value("prompt", PortType::Text, false),
+                PortDef::value("value", PortType::Map, false),
+                PortDef::value("context", PortType::Map, false),
+            ],
             outputs: vec![
                 PortDef::value("text", PortType::Text, false),
                 PortDef::value("llm", PortType::Llm, false),
@@ -366,6 +504,15 @@ impl NodeFactory for LlmNodeFactory {
                     required: false,
                     default: Some(serde_json::json!(false)),
                     description: "Expose every registered node type to the model as a tool".into(),
+                    choices: None,
+                    json_schema: None,
+                },
+                ConfigParam {
+                    name: "instruction".into(),
+                    param_type: ConfigParamType::String,
+                    required: false,
+                    default: None,
+                    description: "The task line, short: set first, before the context parts. The meaning goes in the descriptions of response_schema's fields".into(),
                     choices: None,
                     json_schema: None,
                 },
