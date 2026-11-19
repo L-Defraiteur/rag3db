@@ -51,3 +51,20 @@ secondes quand il abandonne ; la borne de perte du journal se mesure sur ce que 
 dans le lot du témoin du chat, après la vue 3b.
 
 **Le binaire de la lib mort sans résumé** (ce poste, 7 nov. 21 h 33, la même passe) : après ces deux rouges, le binaire de tests de la lib s'est arrêté sept minutes après son départ, sans ligne `test result` ni panique au journal ; plusieurs tests étaient « running for over 60 seconds ». La lib entière rejouée seule juste après, au même code et sous la même lib : 1988 verts, 26 s. Non reproduit ; à surveiller : un deuxième cas dirait s'il s'agit d'un arrêt du processus (signal, mémoire) plutôt que d'un faux rouge de durée. Ce que le poste dit de cet instant (le portable, pas luciepc : la passe tournait ici) : le journal du noyau, de 21 h 30 à 21 h 36, ne montre ni arrêt par manque de mémoire, ni signal du noyau, ni vidage mémoire du binaire de tests (`journalctl -k`, `coredumpctl`) ; le seul vidage de la fenêtre est `plasma-discover` (SIGABRT, 21 h 32 m 44 s), sans lien. Sur le poste à ce moment : la passe seule sous `poste lourd` (une place), et la copie par `scp` de la lib 7cd11e5fa depuis luciepc (21 h 33). La charge elle-même n'a pas été relevée : le journal de charge de `run_e2e.sh` ne couvre pas l'étape de la lib. Pour le second cas : relever `uptime` et la mémoire libre au départ et à la fin de l'étape de la lib, et le code de sortie de `cargo test` (un signal se lit dans `$?` au-delà de 128).
+
+## Corrigé le 19 novembre 2026 (ED) : le journal plafonné d'une commande en fond
+
+`commande::tests::en_fond_un_journal_au_dela_du_plafond_garde_la_fin_et_le_dit`. Ce n'était pas seulement le témoin :
+**`plafonner` perdait sans les compter les octets écrits entre la lecture de la fin et la troncature**, et une commande
+qui finissait dans cette fenêtre perdait sa fin, celle que le journal doit garder.
+
+- Le témoin le rend déterministe : un retard de 50 ms dans cette fenêtre (`PLAFONNER_RETARD_MS`, `cfg(test)`).
+- ROUGE sur b610560e51 : 260 051 octets comptés pour 330 000 écrits.
+- Le correctif relit juste avant la troncature ce qui s'est écrit, garde les `garde` derniers octets et compte le
+  reste comme perdu. Ne passent plus à travers que les quelques octets écrits entre cette relecture et la
+  troncature elle-même.
+- La borne du témoin se resserre (plus de 325 000 au lieu de plus de 300 000). La fin est gardée, et les 52 tests de
+  `commande` sont verts.
+
+**Reste à faire** : les autres témoins du tableau, d'abord `taches::tests::la_base_principale_n_est_jamais_ecrite_par_la_tache`
+(une attente de 60 s, à remplacer par un repère).
