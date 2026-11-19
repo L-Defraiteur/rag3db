@@ -1005,6 +1005,22 @@ fn load_call_view_stack(
     requested: &crate::views::ViewRequest,
     settings: &crate::views::ViewSettings,
 ) -> Result<crate::views::ReadStack, String> {
+    // **A finished layer is refused, saying its end** (2a′-3, lot 6b), before any read: by its id it still has
+    // its generations, and would be read as if alive.
+    if let Some(root) = prepared.workspace_root() {
+        if let Some(repo) = crate::suivies::repo_id(&root, prepared.manifest.tracked.as_ref())? {
+            let read_meta = |key: &str| -> Result<Option<String>, String> {
+                let q = dialect.load_meta_by_prefix("prefix");
+                let rows = conn
+                    .execute_with_params(&q, &[crate::connection::QueryParam::new("prefix", crate::connection::CypherValue::String(key.to_string()))])
+                    .map_err(|e| format!("`view` : lecture de _catalog_meta : {e}"))?;
+                Ok(rows.rows.iter().find(|r| r.first().and_then(|k| k.as_str()) == Some(key)).and_then(|r| r.get(1)).and_then(|v| v.as_str()).map(str::to_string))
+            };
+            if let Some((_, quand)) = crate::suivies::finished_layer(&read_meta, &repo, &requested.layer)? {
+                return Err(format!("vue « {} » : couche finie le {quand} (sa ref ou son worktree a disparu)", requested.layer));
+            }
+        }
+    }
     let refusal = match crate::views::load_stack_on(conn, dialect, requested, settings) {
         Ok(pile) => return Ok(pile),
         // Seule une couche inconnue se relit par son nom ; un rang absent d'une couche connue reste un refus.

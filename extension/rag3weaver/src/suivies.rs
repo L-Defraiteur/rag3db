@@ -739,9 +739,17 @@ pub fn finished_layer(
     depot: &str,
     nom_ou_id: &str,
 ) -> Result<Option<(String, String)>, String> {
-    // RED STUB: no layer is ever said finished.
-    let _ = (lire_meta, depot, nom_ou_id);
-    Ok(None)
+    let fiche = |id: &str| -> Result<Option<Value>, String> {
+        Ok(lire_meta(&format!("fiche_couche:{depot}:{id}"))?.filter(|v| !v.is_empty()).and_then(|v| serde_json::from_str(&v).ok()))
+    };
+    let par_nom = lire_meta(&format!("couche_nom:{depot}:{nom_ou_id}"))?.filter(|v| !v.is_empty());
+    let id = par_nom.unwrap_or_else(|| nom_ou_id.to_string());
+    let Some(f) = fiche(&id)? else { return Ok(None) };
+    Ok(f.get("fin").map(|fin| {
+        // An end written before its date (« true ») is said without one.
+        let quand = fin.as_str().map(str::to_string).unwrap_or_else(|| "à une date non notée".to_string());
+        (id, quand)
+    }))
 }
 
 /// **L'id d'une couche par son nom** (`couche_nom:<dépôt>:<nom>`), seulement si sa fiche est vivante
@@ -831,9 +839,10 @@ pub fn identifiants_des_couches(
             out.insert(neuf, id);
         } else {
             let mut f = f.clone();
-            f["fin"] = json!(true);
+            // The date of the end, said by a view refused on it (2a′-3, lot 6b). The name keeps leading to this id
+            // until a layer of the same name is born, so that a view by name says the end too.
+            f["fin"] = json!(jiff::Zoned::now().strftime("%Y-%m-%d %H:%M %Z").to_string());
             ecrire_fiche(&id, &f)?;
-            catalog.persist_meta_key(&index(d), "").map_err(e)?;
         }
     }
     // Les naissances : l'id dérivé de la naissance, jamais celui d'une autre lignée (une fiche qui existe déjà
