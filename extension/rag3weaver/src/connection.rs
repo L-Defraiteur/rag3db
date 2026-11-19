@@ -402,6 +402,14 @@ impl DbConnection for CallbackConnection {
     }
 }
 
+/// The engine's refusal of a statement whose table's schema changed after it started
+/// (`Transaction::SCHEMA_CHANGED_RETRY`, in the middle of the message, after « Transaction manager exception: »).
+pub const SCHEMA_CHANGED_RETRY: &str = "Schema changed, retry:";
+
+/// How many times a statement refused for a changed schema is started again: the refusal comes back only if
+/// another ALTER is validated in between (the core, 19 November 2026).
+pub const SCHEMA_CHANGED_RETRIES: usize = 3;
+
 /// Mock database connection for testing. Returns empty result sets.
 #[derive(Debug, Default)]
 pub struct MockConnection {

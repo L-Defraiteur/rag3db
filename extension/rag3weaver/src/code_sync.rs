@@ -1889,10 +1889,32 @@ fn synchroniser(
         let ouvrir = tx && rang_du_paquet % par_validation == 0;
         let valider = tx && ((rang_du_paquet + 1) % par_validation == 0 || rang_du_paquet + 1 == nombre_de_paquets);
         if ouvrir {
-            commencer(catalog)?;
-            if let Some(ddl) = catalog.take_alter_after_begin(rang_du_paquet) {
-                let autre = catalog.conn().read_connection(1).ok_or("crochet de test : pas d'autre connexion à la base")?;
-                autre.execute(&ddl).map_err(|e| format!("crochet de test : {ddl} : {e}"))?;
+            // **The batch's tables locked first** (ticket of 15 November 2026, way (i), the core's `lock_tables`):
+            // right after the BEGIN, before any write. An ALTER validated since the BEGIN refuses the lock, not a
+            // write: nothing of the catalog changed yet, so a ROLLBACK is enough, without poisoning, and the batch
+            // starts again here, at most `SCHEMA_CHANGED_RETRIES` times. Once locked, an ALTER waits for our COMMIT.
+            let verrous = lock_tables_known(catalog);
+            let mut essais = 0;
+            loop {
+                commencer(catalog)?;
+                if let Some(ddl) = catalog.take_alter_after_begin(rang_du_paquet) {
+                    let autre = catalog.conn().read_connection(1).ok_or("crochet de test : pas d'autre connexion à la base")?;
+                    autre.execute(&ddl).map_err(|e| format!("crochet de test : {ddl} : {e}"))?;
+                }
+                match if verrous { verrouiller_les_tables(catalog) } else { Ok(()) } {
+                    Ok(()) => break,
+                    Err(e) if e.contains(crate::connection::SCHEMA_CHANGED_RETRY) && essais < crate::connection::SCHEMA_CHANGED_RETRIES => {
+                        catalog.set_in_transaction(false);
+                        catalog.conn().rollback().map_err(|r| format!("{e} — ROLLBACK refusé : {r}"))?;
+                        essais += 1;
+                        report.warnings.push(format!(
+                            "schéma changé sur une table du paquet {} depuis son ouverture : le paquet est recommencé ({essais} sur {}) — {e}",
+                            rang_du_paquet + 1,
+                            crate::connection::SCHEMA_CHANGED_RETRIES
+                        ));
+                    }
+                    Err(e) => return terminer(catalog, Err(e)).map(|()| unreachable!("terminer rend une erreur sur un échec")),
+                }
             }
         }
         let resultat: Result<(), String> = (|| {
@@ -2251,6 +2273,49 @@ fn commencer(catalog: &mut Catalog) -> Result<(), String> {
     // transaction : coupés, sauf `RAG3WEAVER_TX_AVEC_POINTS_DE_REPRISE=1`.
     catalog.set_checkpoints_in_transaction(std::env::var("RAG3WEAVER_TX_AVEC_POINTS_DE_REPRISE").as_deref() == Ok("1"));
     Ok(())
+}
+
+/// **Lock the tables of a batch** (the core's `CALL lock_tables`, 19 November 2026): every node and relation table
+/// of the base, read from the transaction's own snapshot, in a shared lock (two batches do not wait for each other;
+/// only an ALTER or a DROP waits). A dialect without the call locks nothing.
+fn verrouiller_les_tables(catalog: &mut Catalog) -> Result<(), String> {
+    if catalog.dialect_name() != "rag3db" {
+        return Ok(());
+    }
+    let lu = catalog.conn().execute("CALL show_tables() RETURN name, type").map_err(|e| e.to_string())?;
+    let noms: Vec<String> = lu
+        .rows
+        .iter()
+        .filter(|l| matches!(l.get(1).and_then(|v| v.as_str()), Some("NODE") | Some("REL")))
+        .filter_map(|l| l.first().and_then(|v| v.as_str()).map(|n| format!("'{}'", n.replace('\'', "\\'"))))
+        .collect();
+    if noms.is_empty() {
+        return Ok(());
+    }
+    catalog.conn().execute(&format!("CALL lock_tables([{}])", noms.join(", "))).map(|_| ()).map_err(|e| e.to_string())
+}
+
+/// **Does the engine know `lock_tables`?** Asked once per process, outside any transaction: an unknown call inside
+/// a transaction would roll it back whole. A lib before the core's lock_tables locks nothing, as before; a refusal
+/// then still comes at the first write, and poisons the catalog as before.
+fn lock_tables_known(catalog: &Catalog) -> bool {
+    use std::sync::atomic::{AtomicU8, Ordering::SeqCst};
+    static KNOWN: AtomicU8 = AtomicU8::new(0);
+    match KNOWN.load(SeqCst) {
+        1 => return true,
+        2 => return false,
+        _ => {}
+    }
+    if catalog.dialect_name() != "rag3db" {
+        return false;
+    }
+    let known = catalog
+        .conn()
+        .execute("CALL show_functions() RETURN name")
+        .map(|r| r.rows.iter().any(|l| l.first().and_then(|v| v.as_str()).is_some_and(|n| n.eq_ignore_ascii_case("lock_tables"))))
+        .unwrap_or(false);
+    KNOWN.store(if known { 1 } else { 2 }, SeqCst);
+    known
 }
 
 /// **Valider le paquet, ou le défaire.** Sur un échec, `ROLLBACK`, puis le
