@@ -89,7 +89,8 @@ class Lanceur(unittest.TestCase):
         dest = os.path.join(self.tmp.name, "arbre")
         lanceur.build_tree(block, self.repo, os.path.join(self.tmp.name, "depots"), dest)
         self.assertEqual(git(dest, "rev-list", "--count", "HEAD"), "1", "one commit, no history")
-        self.assertIn("f() -> u8 { 1 }", open(os.path.join(dest, "crate/src/lib.rs")).read(), "the parent, not the fix")
+        with open(os.path.join(dest, "crate/src/lib.rs")) as f:
+            self.assertIn("f() -> u8 { 1 }", f.read(), "the parent, not the fix")
         self.assertFalse(os.path.exists(os.path.join(dest, "docs/session")), "no session journal")
         self.assertTrue(os.path.exists(os.path.join(dest, "docs/procedures/push.md")))
         self.assertTrue(os.path.exists(os.path.join(dest, "crate/README.md")))
