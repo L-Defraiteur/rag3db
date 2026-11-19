@@ -33,3 +33,27 @@ Le trou : sans `expects`, rien ne regarde si le texte demandé est venu.
 - Est-ce le juge des commandes ou un appel au modèle de l'équipier lui-même (plus cher, mais sans dépendance) ?
 - La relance unique : est-elle bien au compte des pas (MAX_STEPS) ?
 - Le terminal (tty) et l'IDE pourraient-ils poser `expects: "report"` d'eux-mêmes quand la demande est une question ? Je ne le propose pas : le superviseur ne le sait pas mieux que le juge.
+
+## Le correctif (19 novembre 2026, sur la conception d'archi)
+
+Archi a tranché les trois points dans `docs/rag3weaver-archi/19-11-2026/01-garde-compte-rendu-au-lieu-du-contenu.md`. Le juge n'est pas le décideur local ; c'est le modèle de la tâche lui-même. Le code est dans `daemon_host/teammate.rs`, `DaemonHost::judge_the_content`, à la fin d'un pas déclaré réussi qui finirait la tâche.
+
+- **Couche 1, sans appel** : le pas n'a écrit aucun texte, ses reports font moins de 300 caractères chacun, et la request n'a pas d'`expects`. Hors de ce cas, rien ne change.
+- **Couche 2, le juge** : un appel au modèle de la tâche (`llm_du_chat`), hors du tour : il n'entre pas dans la session de la tâche. Température 0, 50 jetons au plus. La question fermée en anglais (`CONTENT_QUESTION`) porte la request et les reports. La réponse est `delivered`, `missing` ou `action`.
+- **Couche 3, ce qui suit** :
+  - `missing` : l'hôte écrit « fait sans le contenu demandé : … ; le pas suivant part pour l'écrire », et le pas suivant part avec une relance en anglais. C'est la relance unique de la request, partagée avec la garde B (`relancee`). C'est un pas, compté dans `MAX_STEPS`.
+  - un second `missing` : « fait sans le contenu demandé, après la relance : j'attends le superviseur », une attente bornée par `teammate.reply_wait_s`.
+  - un juge en échec (une erreur, ou une réponse qui n'est aucun des trois mots) : « fin sans texte, à vérifier (…) », et la tâche finit comme avant.
+  - `delivered` et `action` : la tâche finit comme avant.
+
+L'appel du juge se dit sur la sortie d'erreur de l'hôte (« le juge du contenu dit … »). Il n'émet pas de `LlmCall` sur le bus : c'est une suite possible, si archi veut qu'il compte au coût du run.
+
+### Les témoins
+
+Tous dans `daemon_host::teammate_tests`, vus rouges (31603f67a2, puis d6cda0c9fc avec le faux juge), puis verts (d09dd37392) :
+- `a_report_about_the_text_is_not_the_text` : le juge dit `missing`, et le contenu arrive au pas de la relance ;
+- `a_report_judged_an_action_lets_the_task_end` : le juge est appelé une fois, dit `action`, et la tâche finit « fait sans plan », sans ligne de manque ;
+- `a_judge_that_fails_says_the_end_is_to_be_checked` : le juge est en panne, et la boîte dit « fin sans texte, à vérifier ».
+
+Les modules `daemon_host::teammate` (46) et `daemon_host::chat` (21) restent verts, sous la lib épinglée 3d706f709 avec `RAG3WEAVER_MOTEUR_ANCIEN=1`, en le sachant. Le témoin réel sous Vertex (`e2e_equipier`) n'est pas joué par tty, qui ne lit pas les identifiants : il est à la passe.
+
