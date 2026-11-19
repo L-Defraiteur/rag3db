@@ -1,6 +1,8 @@
 #include "index/hnsw_index.h"
 
 #include <algorithm>
+#include <chrono>
+#include <thread>
 
 #include "catalog/catalog_entry/index_catalog_entry.h"
 #include "catalog/hnsw_index_catalog_entry.h"
@@ -101,6 +103,12 @@ common::offset_t InMemHNSWLayer::searchNN(const EmbeddingHandle& queryVector,
 void InMemHNSWLayer::insertRel(common::offset_t srcNode, common::offset_t dstNode,
     GetEmbeddingsScanState& scanState) {
     const auto currentLen = graph->incrementCSRLength(srcNode);
+    if (info.appendPauseEvery != 0) {
+        thread_local uint64_t appends = 0;
+        if (++appends % info.appendPauseEvery == 0) {
+            std::this_thread::sleep_for(std::chrono::microseconds(200));
+        }
+    }
     KU_ASSERT(srcNode < info.numNodes);
     graph->setDstNode(srcNode * info.degreeThresholdToShrink + currentLen, dstNode);
     if (currentLen == info.degreeThresholdToShrink - 1) {
