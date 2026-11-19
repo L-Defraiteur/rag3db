@@ -74,9 +74,18 @@ protected:
                  ("quarantine-" + std::to_string(getpid()) + ".txt");
     }
 
+    enum class Case { FORCED_COMMIT, ORDINARY_COMMIT, LAST_READER, LAST_READER_WITHOUT_FAULT };
+
     // Plays the case in a child: TA's rollback stops halfway, then TB, open before, commits
-    // (forced or not). The child writes one line per step to the report and leaves by _exit.
-    void play(bool forceTB) {
+    // (forced or not). In LAST_READER, TB is a read-only transaction, and a write committed by
+    // another connection while TA and TB were open has asked for an automatic checkpoint, which
+    // the last transaction to leave writes. The child writes one line per step to the report and
+    // leaves by _exit.
+    void play(Case kase) {
+        const bool forceTB = kase == Case::FORCED_COMMIT;
+        const bool lastReader =
+            kase == Case::LAST_READER || kase == Case::LAST_READER_WITHOUT_FAULT;
+        const bool fault = kase != Case::LAST_READER_WITHOUT_FAULT;
         const auto pid = fork();
         if (pid == 0) {
             std::ofstream out(report);
@@ -124,9 +133,12 @@ protected:
                 data << "100,100\n101,101\n";
             }
             if (!a->query("BEGIN TRANSACTION;")->isSuccess() ||
-                !b->query("BEGIN TRANSACTION;")->isSuccess() ||
+                !b->query(lastReader ? "BEGIN TRANSACTION READ ONLY;" : "BEGIN TRANSACTION;")
+                     ->isSuccess() ||
                 !a->query("COPY A FROM '" + csv.string() + "' (HEADER=false);")->isSuccess() ||
-                !b->query("CREATE (:B {id: 200, v: 200});")->isSuccess()) {
+                !b->query(lastReader ? "MATCH (n:B) RETURN count(n);" :
+                                       "CREATE (:B {id: 200, v: 200});")
+                     ->isSuccess()) {
                 line("setup-failed\ttransactions");
                 _exit(3);
             }
@@ -135,16 +147,46 @@ protected:
             if (forceTB) {
                 txB->setForceCheckpoint();
             }
-            armed = true;
+            if (lastReader) {
+                line(std::string("before-request\trequested=") +
+                     (FlakyCheckpointer::autoCheckpointRequested(*context) ? "1" : "0") +
+                     " pending=" + (FlakyCheckpointer::checkpointPending(*context) ? "1" : "0"));
+                // A write that goes over the threshold while TA and TB are open asks for the
+                // automatic checkpoint, and leaves it to the last transaction to go.
+                for (const auto* q : {"CALL auto_checkpoint=true;", "CALL checkpoint_threshold=1;",
+                         "CREATE (:B {id: 300, v: 300});"}) {
+                    const auto r = control->query(q);
+                    if (!r->isSuccess()) {
+                        line(std::string("setup-failed\t") + q + " : " + r->getErrorMessage());
+                        _exit(3);
+                    }
+                }
+                line("checkpoint-requested\t" + std::to_string(factoryCalls));
+                line(std::string("after-request\trequested=") +
+                     (FlakyCheckpointer::autoCheckpointRequested(*context) ? "1" : "0") +
+                     " pending=" + (FlakyCheckpointer::checkpointPending(*context) ? "1" : "0"));
+            }
+            armed = fault;
             const auto rollback = a->query("ROLLBACK;");
             line(std::string("rollback-a\t") +
                  (rollback->isSuccess() ? "ok" : rollback->getErrorMessage()));
-            const auto begin = control->query("BEGIN TRANSACTION;");
-            line(std::string("begin-control\t") +
-                 (begin->isSuccess() ? "ok" : begin->getErrorMessage()));
+            line(std::string("after-rollback\trequested=") +
+                 (FlakyCheckpointer::autoCheckpointRequested(*context) ? "1" : "0") +
+                 " pending=" + (FlakyCheckpointer::checkpointPending(*context) ? "1" : "0"));
+            if (fault && !lastReader) {
+                // The quarantine, seen by a transaction that was not open: its BEGIN is refused.
+                // Not in LAST_READER: a BEGIN there waits on the pending automatic checkpoint and
+                // gives the request up, which took away what the case is about.
+                const auto begin = control->query("BEGIN TRANSACTION;");
+                line(std::string("begin-control\t") +
+                     (begin->isSuccess() ? "ok" : begin->getErrorMessage()));
+            }
             const auto commit = b->query("COMMIT;");
             line(std::string("commit-b\t") +
                  (commit->isSuccess() ? "ok" : commit->getErrorMessage()));
+            line(std::string("after-commit-b\trequested=") +
+                 (FlakyCheckpointer::autoCheckpointRequested(*context) ? "1" : "0") +
+                 " pending=" + (FlakyCheckpointer::checkpointPending(*context) ? "1" : "0"));
             line("checkpointer-calls\t" + std::to_string(factoryCalls));
             out.flush();
             _exit(0);
@@ -172,6 +214,27 @@ protected:
         return "<missing>";
     }
 
+    void expectNoCheckpointByTheLastReader() const {
+        const std::string quarantine =
+            transaction::TransactionManager::REOPEN_AFTER_FAILED_ROLLBACK;
+        ASSERT_EQ(value("checkpoint-requested"), "0")
+            << "[check: setup] the write wrote its checkpoint instead of asking for it\n"
+            << readReport();
+        ASSERT_NE(value("rollback-a").find(UNDO_FAULT), std::string::npos)
+            << "[check: setup] the rollback fault did not fire\n"
+            << readReport();
+        ASSERT_NE(value("rollback-a").find(quarantine), std::string::npos)
+            << "[check: setup] no quarantine after the half-done rollback\n"
+            << readReport();
+        ASSERT_EQ(value("after-rollback"), "requested=1 pending=1")
+            << "[check: setup] the automatic checkpoint was not still requested when TB left\n"
+            << readReport();
+        EXPECT_EQ(value("checkpointer-calls"), "0")
+            << "[check: no-automatic-checkpoint-by-the-last-reader-in-quarantine] the last reader "
+               "to leave wrote the requested checkpoint\n"
+            << readReport();
+    }
+
     void expectQuarantineHeldForTB() const {
         const std::string quarantine =
             transaction::TransactionManager::REOPEN_AFTER_FAILED_ROLLBACK;
@@ -194,7 +257,7 @@ protected:
 };
 
 TEST_F(QuarantineOpenTransactions, AForcedCommitOpenBeforeIsRefusedWithoutCheckpointing) {
-    play(true /*forceTB*/);
+    play(Case::FORCED_COMMIT);
     if (HasFatalFailure()) {
         return;
     }
@@ -202,11 +265,45 @@ TEST_F(QuarantineOpenTransactions, AForcedCommitOpenBeforeIsRefusedWithoutCheckp
 }
 
 TEST_F(QuarantineOpenTransactions, AnOrdinaryCommitOpenBeforeIsRefused) {
-    play(false /*forceTB*/);
+    play(Case::ORDINARY_COMMIT);
     if (HasFatalFailure()) {
         return;
     }
     expectQuarantineHeldForTB();
+}
+
+} // namespace
+} // namespace rag3db::testing
+
+namespace rag3db::testing {
+namespace {
+
+TEST_F(QuarantineOpenTransactions, TheLastReaderToLeaveDoesNotWriteTheRequestedCheckpoint) {
+    play(Case::LAST_READER);
+    if (HasFatalFailure()) {
+        return;
+    }
+    expectNoCheckpointByTheLastReader();
+}
+
+} // namespace
+} // namespace rag3db::testing
+
+namespace rag3db::testing {
+namespace {
+
+// The counter-proof of the recipe: without the fault, the last reader to leave does write the
+// requested checkpoint. Without it, a green above would only say the request was never made.
+TEST_F(QuarantineOpenTransactions, WithoutTheFaultTheLastReaderWritesTheRequestedCheckpoint) {
+    play(Case::LAST_READER_WITHOUT_FAULT);
+    if (HasFatalFailure()) {
+        return;
+    }
+    EXPECT_EQ(value("rollback-a"), "ok") << "[check: setup] " << readReport();
+    EXPECT_EQ(value("checkpointer-calls"), "1")
+        << "[check: the-recipe-asks-for-an-automatic-checkpoint] the last reader did not write "
+           "it\n"
+        << readReport();
 }
 
 } // namespace
