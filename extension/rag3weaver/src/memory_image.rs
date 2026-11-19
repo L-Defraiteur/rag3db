@@ -253,22 +253,9 @@ impl MemoryImage {
         let (Some(from), Some(to)) = (self.live(from), self.live(to)) else { return false };
         let rel = self.strings.intern(rel);
         let props = self.compact(props);
-        let existing = self
-            .outgoing
-            .get(&(rel, from))
-            .and_then(|ids| ids.iter().copied().find(|r| self.rels[*r as usize].to == to));
-        match existing {
+        match self.find_rel(rel, from, to) {
             Some(r) => self.rels[r as usize].props = props,
-            None => {
-                let r = self.rels.len() as u32;
-                self.rels.push(Rel { rel, from, to, props, alive: true });
-                self.outgoing.entry((rel, from)).or_default().push(r);
-                self.incoming.entry((rel, to)).or_default().push(r);
-                self.touching[from as usize].push(r);
-                if to != from {
-                    self.touching[to as usize].push(r);
-                }
-            }
+            None => self.link(rel, from, to, props),
         }
         true
     }
@@ -276,8 +263,52 @@ impl MemoryImage {
     /// **Merge the given properties of a relation, without unfolding it**: the pair `(rel, from, to)` is linked if
     /// it is missing; only the keys of `set` are written and those of `unset` removed, the others kept. `false` when
     /// one end is missing.
-    pub fn merge_rel_props(&mut self, _rel: &str, _from: &str, _to: &str, _set: BTreeMap<String, CypherValue>, _unset: &[String]) -> bool {
-        unimplemented!("memory image: merge_rel_props")
+    pub fn merge_rel_props(&mut self, rel: &str, from: &str, to: &str, set: BTreeMap<String, CypherValue>, unset: &[String]) -> bool {
+        let (Some(from), Some(to)) = (self.live(from), self.live(to)) else { return false };
+        let rel = self.strings.intern(rel);
+        let set = self.compact(set);
+        let unset: Vec<Sym> = unset.iter().filter_map(|k| self.strings.get(k)).collect();
+        match self.find_rel(rel, from, to) {
+            Some(r) => {
+                let props = &mut self.rels[r as usize].props;
+                props.retain(|(k, _)| !unset.contains(k));
+                for (k, v) in set {
+                    match props.iter_mut().find(|(key, _)| *key == k) {
+                        Some(slot) => slot.1 = v,
+                        None => props.push((k, v)),
+                    }
+                }
+            }
+            None => self.link(rel, from, to, set),
+        }
+        true
+    }
+
+    fn find_rel(&self, rel: Sym, from: u32, to: u32) -> Option<u32> {
+        self.outgoing.get(&(rel, from)).and_then(|ids| ids.iter().copied().find(|r| self.rels[*r as usize].to == to))
+    }
+
+    fn link(&mut self, rel: Sym, from: u32, to: u32, props: Vec<(Sym, Compact)>) {
+        let r = self.rels.len() as u32;
+        self.rels.push(Rel { rel, from, to, props, alive: true });
+        self.outgoing.entry((rel, from)).or_default().push(r);
+        self.incoming.entry((rel, to)).or_default().push(r);
+        self.touching[from as usize].push(r);
+        if to != from {
+            self.touching[to as usize].push(r);
+        }
+    }
+
+    /// **A node's table and only the given fields** (`_uuid` included by its name), without unfolding the others:
+    /// the reads of the resolution ask for a few columns of many rows.
+    pub fn node_fields(&self, _uuid: &str, _fields: &[&str]) -> Option<(String, Vec<CypherValue>)> {
+        unimplemented!("memory image: node_fields")
+    }
+
+    /// **The neighbours by `rel`** from `at` (outgoing, or incoming): each one's uuid and only the given fields of
+    /// the edge, without unfolding the others.
+    pub fn neighbours_fields(&self, _rel: &str, _at: &str, _outgoing: bool, _edge_fields: &[&str]) -> Vec<(String, Vec<CypherValue>)> {
+        unimplemented!("memory image: neighbours_fields")
     }
 
     pub fn node(&self, uuid: &str) -> Option<NodeView> {
@@ -586,6 +617,16 @@ mod tests {
         assert_eq!(m.outgoing("PARENT_OF", "s-a").len(), 1);
         assert_eq!(m.counts(), (3, 4));
         assert!(!m.merge_rel_props("CONSUMES", "s-a", "absent", BTreeMap::new(), &[]), "a missing end is refused");
+    }
+
+    #[test]
+    fn a_read_unfolds_only_the_fields_it_asks_for() {
+        let m = image();
+        assert_eq!(m.node_fields("s-a", &["name", "_uuid", "absent"]), Some(("Scope".to_string(), vec![s("alpha"), s("s-a"), CypherValue::Null])));
+        assert_eq!(m.node_fields("nobody", &["name"]), None);
+        assert_eq!(m.neighbours_fields("CONSUMES", "s-a", true, &["resolution"]), vec![("s-b".to_string(), vec![s("unique")])]);
+        assert_eq!(m.neighbours_fields("CONSUMES", "s-b", false, &[]), vec![("s-a".to_string(), vec![])]);
+        assert!(m.neighbours_fields("CONSUMES", "s-b", true, &["usage"]).is_empty());
     }
 
     #[test]
