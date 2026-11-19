@@ -35,6 +35,21 @@ existe, ce qui est en suspens, et l'ordre proposé. Le rapport de session du mê
 
 ## 1. Branches ouvertes
 
+- **19 novembre 2026, 18 h 17 — la bascule des trois bases de code de Lucie vers les versions : tentée, annulée,
+  revenue intacte** (arbre principal pour la recette, G pour la fenêtre).
+  - **Les trois bases** : `code-rag3db-depot` (le portable), `code-lourd` et `code-principal` (luciepc).
+  - **Ce qui a marché** : 1b (`migration versions --base`) en 770 s au portable et 659 à 770 s à luciepc, les
+    générations en 3 s, puis une réouverture sans avertissement.
+  - **Le rouge** : le repassage, le premier index de l'écrivain base ouverte, a rempli le tampon du moteur sur
+    DEFINED_IN, à 8 Gio puis à 24 Gio. La fenêtre est annulée.
+  - **Le retour arrière** : vert, en 30 s par base, par l'instantané de l'étape 3. Les trois bases sont rouvertes au
+    format d'avant à 18 h 17, avec une recherche et des usages identiques à ceux d'avant.
+  - **Les copies migrées** sont gardées pour ED, qui a le ticket du tampon.
+  - **La condition de la prochaine tentative** : une répétition qui joue aussi le repassage jusqu'au critère, sur une
+    copie de la vraie base, avec le binaire et la lib du soir, en relevant la mémoire du moteur.
+  - **Les références** : la recette et l'annulation sont dans `docs/arbre-principal/19-11-2026/03-la-repetition-de-la-bascule.md`,
+    et les scripts de la fenêtre à luciepc, sous `~/.cache/rag3weaver-build/notes-G/bascule-versions/`.
+
 - **11 octobre 2026, 4 h — mémoire longue, le montage des réactions : FAIT, sur master** (`0387fe401`, `ca9806d06`, `297b4af7a`, `7fcff7d23` ; worktree `~/git_workspaces/rag3db-montage`, target `target-montage`, à effacer) : `Reactor::watch` n'avait aucun appelant dans tout `src/` — `Backend::mount_reactions` l'appelle maintenant à l'ouverture, avec les liaisons du manifeste et la liste blanche réactive **écrite dans le montage et jamais dans le manifeste**. `stop_reactions` (arrêt attendu, appelé par `shutdown` avant le catalogue), `reload_reactions`, `apply_reload_with_reactions(pending)` pour l'hôte qui garde la vérification à lui. `review_anchored` déclaré dans le gabarit `memory`. Deux refus de chargement nouveaux : la clé du manifeste doit être le nom de la fiche, et le `cursor=` de l'`EventSourceNode` doit être ce même nom. Témoin de bout en bout : `tests/e2e_reaction_montee.rs` — un manifeste déclare, `Backend::open` monte, un `put_sujet` ordinaire émet, la fiche ancrée passe `a_revoir`, et **aucun appel ne nomme la réaction**. L'ordre A de la mémoire est joué : le gabarit `memory` branché par MCP, base `~/.local/share/rag3weaver/memoire-longue.rag3db`, binaire release dans `~/.local/bin/` (hors target, qui s'efface), recette et mises en garde dans `extension/rag3weaver/docs/10-octobre-2026-18h00/07-l-ordre-a-la-memoire-branchee.md`. **Ce qui reste, en tickets** : aucun nœud ne relie deux entités gérées, donc `ANCHORED_TO` et `REPLACES` n'ont pas de verbe et la réaction tourne à vide (une à deux passes, signature nouvelle, décision de Lucie) ; puis le huitième refus de `"reactions"`, **après** le nœud sous peine de rendre le gabarit livré inchargeable.
 
 - **10 octobre 2026, soir — codeparsers, chantier « indexer nos propres dépôts » (B4, B5, B2/B1, B3), master de codeparsers en avance rapide** (clone `~/git_workspaces/codeparsers-couverture`, target `~/.cache/rag3weaver-build/codeparsers-couverture`, sonde C++ `~/.cache/rag3weaver-build/sonde-cpp`) : la couverture la plus grande possible, C++ et Rust d'abord, mesurée sur nos dépôts. **B4 vert** (`eb41801`) : les références non résolues sont relevées avec leur raison (le relevé rendait 0). Suite : B5, le banc de couverture avec une ligne de référence commitée par dépôt. Mesure de chaque lot : les appelants de `NodeTable::update` (0 aujourd'hui). Page : `extension/rag3weaver/docs/10-octobre-2026-18h20/orchestration/04-indexer-nos-propres-depots.md` ; rapport : `extension/rag3weaver/docs/10-octobre-2026-18h20/codeparsers/01-rapport-de-session.md`.
