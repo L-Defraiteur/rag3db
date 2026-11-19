@@ -10,6 +10,18 @@
 > lue vide et perdue. Une case écrite après l'élagage tombe hors de la nouvelle longueur, ou écrase un voisin gardé.
 > Les arêtes perdues touchent d'abord un point isolé, qui en a peu : ses arêtes de retour depuis le nuage.
 >
+> **11 h 45 : l'amorce séquentielle tient (variante de c7).** Les N premiers points insérés par un seul fil avant la
+> phase parallèle, pour qu'aucun fil n'entame sa tranche sur un graphe de quelques nœuds. Même binaire, réglé par une
+> variable d'expérience, à luciepc sous poste lourd (5 cœurs) :
+>
+> | | manqués à 8 fils | à 24 fils | CREATE de 20 000 lignes, 8 fils |
+> |---|---|---|---|
+> | sans amorce | 3/12 | 3/12 | 1 534 à 1 569 ms |
+> | amorce de 1 000 points | 0/12 | 0/12 | 1 614 à 1 674 ms (+6,5 %) |
+>
+> Le lot se fait sur elle : une amorce de min(N, 1 000) points, le témoin du shell, 36 essais de la recette ; puis le
+> coût et le rappel sur la base du banc (120 000 × 768).
+>
 > **11 h 15 : le verrou par nœud ne corrige pas.** Écrit et mesuré (non commité) : avec lui, la recette manque encore
 > 5/12 à 8 fils et 8/12 à 24, et le témoin du shell (`tools/shell/test/test_shell_isolated_point.py`) reste rouge.
 > La perte d'arêtes par la course existe peut-être, mais ce n'est pas elle qui isole le point. Ce qui tient : le
