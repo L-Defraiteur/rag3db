@@ -60,6 +60,11 @@ impl MemoryConnection {
     pub fn with_image<T>(&self, f: impl FnOnce(&MemoryImage) -> T) -> T {
         f(&self.state.lock().unwrap_or_else(|e| e.into_inner()).image)
     }
+
+    /// Change the image (for a witness, or for codeparsers' invalidation by file).
+    pub fn with_image_mut<T>(&self, f: impl FnOnce(&mut MemoryImage) -> T) -> T {
+        f(&mut self.state.lock().unwrap_or_else(|e| e.into_inner()).image)
+    }
 }
 
 /// A family not written yet, refused by its name and its op.

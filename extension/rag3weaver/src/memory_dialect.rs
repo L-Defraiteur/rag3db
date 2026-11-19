@@ -35,6 +35,18 @@ pub fn op(family: &str, op: &str, args: Value) -> String {
     format!("{MEMORY_PREFIX}{v}")
 }
 
+/// An IR form under `form`. A form that carries what JSON cannot say (`Predicate::Compiled`, the text of another
+/// dialect, or `Predicate::Visible`, the generations a memory image does not have) is refused by its name.
+fn form<T: serde::Serialize>(dialect: &MemoryDialect, family: &str, op_name: &str, x: &T) -> Result<String, rag3weaver_ir::TranslateError> {
+    match serde_json::to_value(x) {
+        Ok(v) => Ok(op(family, op_name, json!({"form": v}))),
+        Err(_) => Err(rag3weaver_ir::TranslateError::Untranslated {
+            dialect: dialect.name().to_string(),
+            form: "une forme qui porte Predicate::Compiled ou Predicate::Visible",
+        }),
+    }
+}
+
 fn names(cols: &[ColumnDef]) -> Vec<String> {
     cols.iter().map(|c| c.name.clone()).collect()
 }
@@ -118,11 +130,11 @@ impl SchemaDialect for MemoryDialect {
     // ── read ─────────────────────────────────────────────────────────────────
     fn select(&self, select: &rag3weaver_ir::Select) -> Result<String, rag3weaver_ir::TranslateError> {
         select.validate()?;
-        Ok(op("read", "select", json!({"form": select})))
+        form(self, "read", "select", select)
     }
     fn hop(&self, hop: &rag3weaver_ir::Hop) -> Result<String, rag3weaver_ir::TranslateError> {
         hop.validate()?;
-        Ok(op("read", "hop", json!({"form": hop})))
+        form(self, "read", "hop", hop)
     }
     fn select_by_uuids(&self, table: &str, fields: &[&str]) -> String {
         op("read", "select_by_uuids", json!({"table": table, "fields": fields}))
@@ -157,7 +169,7 @@ impl SchemaDialect for MemoryDialect {
             W::Link { .. } => "links",
             W::Update { .. } | W::Mark { .. } | W::Delete { .. } | W::Unlink { .. } | W::Detach { .. } => "writes",
         };
-        Ok(op(family, "write", json!({"form": write})))
+        form(self, family, "write", write)
     }
     fn batch_upsert(&self, table: &str, columns: &[&str]) -> String {
         op("load", "batch_upsert", json!({"table": table, "columns": columns}))
@@ -184,7 +196,7 @@ impl SchemaDialect for MemoryDialect {
     // ── count ────────────────────────────────────────────────────────────────
     fn count(&self, count: &rag3weaver_ir::Count) -> Result<String, rag3weaver_ir::TranslateError> {
         count.validate()?;
-        Ok(op("count", "count", json!({"form": count})))
+        form(self, "count", "count", count)
     }
     fn count_links(&self, rel_table: &str) -> String {
         op("count", "count_links", json!({"relation": rel_table}))
