@@ -145,7 +145,7 @@ class Lanceur(unittest.TestCase):
         self.assertIn("crate/src/neuf.rs", diff)
         self.assertIn("revu", diff)
         self.assertIn("3 files changed", stat)
-        self.assertEqual(git(dest, "status", "--porcelain"), "?? crate/src/neuf.rs", "the worktree is left as it was")
+        self.assertEqual([l.strip() for l in git(dest, "status", "--porcelain").splitlines()], ["M crate/README.md", "?? crate/src/neuf.rs"], "the worktree and its index are left as they were")
 
 
 if __name__ == "__main__":
