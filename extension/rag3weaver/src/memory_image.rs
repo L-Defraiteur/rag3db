@@ -380,6 +380,16 @@ impl MemoryImage {
         removed
     }
 
+    /// Take one node out, with all its relations, both directions (a `DETACH DELETE`). `false` when it is absent.
+    pub fn remove_node(&mut self, _uuid: &str) -> bool {
+        unimplemented!("memory image: remove_node")
+    }
+
+    /// Take one relation out. `false` when it is absent.
+    pub fn remove_rel(&mut self, _rel: &str, _from: &str, _to: &str) -> bool {
+        unimplemented!("memory image: remove_rel")
+    }
+
     /// The live nodes and relations.
     pub fn counts(&self) -> (usize, usize) {
         (self.nodes.iter().filter(|n| n.alive).count(), self.rels.iter().filter(|r| r.alive).count())
@@ -475,6 +485,31 @@ mod tests {
         assert_eq!(removed.symbol_names, BTreeSet::from(["beta".to_string()]), "s-a mentioned beta");
         assert!(m.node("y-beta").is_some(), "the symbol stays");
         assert_eq!(m.outgoing("DEFINES", "y-beta").len(), 1);
+    }
+
+    #[test]
+    fn removing_a_node_takes_its_relations_both_ways() {
+        let mut m = image();
+        assert!(m.remove_node("s-b"));
+        assert!(m.node("s-b").is_none());
+        assert!(m.outgoing("CONSUMES", "s-a").is_empty(), "the call into s-b is gone");
+        assert!(m.outgoing("DEFINES", "y-beta").is_empty(), "the definition of beta is gone");
+        assert_eq!(m.counts(), (2, 1), "s-a, y-beta and the mention stay");
+        assert!(m.nodes_of_file("src/b.rs").is_empty());
+        assert!(!m.remove_node("s-b"), "a second removal finds nothing");
+    }
+
+    #[test]
+    fn removing_a_relation_leaves_its_ends() {
+        let mut m = image();
+        assert!(m.remove_rel("CONSUMES", "s-a", "s-b"));
+        assert!(m.outgoing("CONSUMES", "s-a").is_empty());
+        assert!(m.incoming("CONSUMES", "s-b").is_empty());
+        assert!(m.node("s-a").is_some() && m.node("s-b").is_some());
+        assert_eq!(m.counts(), (3, 2));
+        assert!(!m.remove_rel("CONSUMES", "s-a", "s-b"), "a second removal finds nothing");
+        assert!(m.insert_rel("CONSUMES", "s-a", "s-b", BTreeMap::new()), "the pair can be linked again");
+        assert_eq!(m.outgoing("CONSUMES", "s-a").len(), 1);
     }
 
     #[test]
