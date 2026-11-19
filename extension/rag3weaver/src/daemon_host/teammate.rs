@@ -1730,25 +1730,25 @@ impl DaemonHost {
                     // **Un compte rendu n'est pas le contenu demandé** (archi, 19 novembre 2026, sur la
                     // proposition de tty) : un pas réussi sans texte, sous une request sans `expects`, dont
                     // les reports sont courts, se fait juger par le modèle de la tâche, hors du tour.
-                    match self.judge_the_content(&t, &files.mailbox(), avant, &texte_du_pas) {
+                    match self.judge_the_content(&t, &run, &files.mailbox(), avant, &texte_du_pas) {
                         ContentVerdict::Missing => {
                             let demande = demande_suivie.unwrap_or(usize::MAX);
                             if relancee != Some(demande) {
                                 // La relance unique de la request, partagée avec la garde B ; un pas, compté.
                                 relancee = Some(demande);
-                                let line = files.append("host", "report", None, "fait sans le contenu demandé : tes reports disent ce que tu as fait, pas le texte demandé ; le pas suivant part pour l'écrire")?;
+                                let line = files.append("host", "report", None, "ended without the requested content: your reports describe the work, they are not the requested text; the next step starts to write it")?;
                                 publish(bus.as_ref(), task, &line);
                                 relance = Some("Your step ended without the text the request asks for: your reports describe the work, they are not the text. Write the text itself now, in your answer, then call step_done.".to_string());
                                 encore = true;
                                 continue;
                             }
-                            let line = files.append("host", "report", None, "fait sans le contenu demandé, après la relance : j'attends le superviseur")?;
+                            let line = files.append("host", "report", None, "ended without the requested content, after the relaunch: waiting for the supervisor")?;
                             publish(bus.as_ref(), task, &line);
                             attente_bornee = Some(std::time::Instant::now() + std::time::Duration::from_secs(policy.reply_wait_s));
                             continue;
                         }
                         ContentVerdict::Failed(why) => {
-                            let line = files.append("host", "report", None, &format!("fin sans texte, à vérifier (le juge du contenu n'a pas répondu : {why})"))?;
+                            let line = files.append("host", "report", None, &format!("ended without a text, to be checked (the content judge did not answer: {why})"))?;
                             publish(bus.as_ref(), task, &line);
                         }
                         ContentVerdict::NotAsked | ContentVerdict::Delivered | ContentVerdict::Action => {}
@@ -1796,8 +1796,10 @@ impl DaemonHost {
     /// **The judge of the content**, only in the narrow case (layer 1, read from what the step noted):
     /// no text from the model, reports of fewer than 300 characters, a request without `expects`.
     /// One call to the task's model, outside the turn (it does not enter the task's session),
-    /// temperature 0, 50 tokens at most.
-    fn judge_the_content(&self, t: &super::taches::Tache, boite: &[Value], avant: usize, texte_du_pas: &str) -> ContentVerdict {
+    /// temperature 0, the least reasoning and room for it (archi's review: 2 805 reasoning tokens in
+    /// D1 on gemini-3.8-flash would leave 50 tokens empty). Its consumption is recorded on the step's
+    /// run by the chat's meter, as `content-judge`. The verdict is the answer's first word.
+    fn judge_the_content(&self, t: &super::taches::Tache, run: &str, boite: &[Value], avant: usize, texte_du_pas: &str) -> ContentVerdict {
         if !texte_du_pas.trim().is_empty() {
             return ContentVerdict::NotAsked;
         }
@@ -1820,21 +1822,28 @@ impl DaemonHost {
             boite[n]["text"].as_str().unwrap_or_default(),
             reports.join("\n---\n")
         );
-        let opts = crate::llm::GenOptions { max_tokens: 50, temperature: 0.0, ..Default::default() };
+        let opts = crate::llm::GenOptions { max_tokens: 512, temperature: 0.0, reasoning: Some(crate::llm::ReasoningEffort::Minimal), ..Default::default() };
         let mut sink = crate::llm::StringSink::default();
         match llm.generate(&[crate::llm::Turn::user(question)], &opts, &mut sink) {
             Err(e) => ContentVerdict::Failed(e.to_string()),
-            Ok(_) => {
-                let dit = sink.text.trim().to_lowercase();
-                eprintln!("[équipier] {} : le juge du contenu dit « {dit} »", t.nom);
-                if dit.contains("missing") {
-                    ContentVerdict::Missing
-                } else if dit.contains("delivered") {
-                    ContentVerdict::Delivered
-                } else if dit.contains("action") {
-                    ContentVerdict::Action
-                } else {
-                    ContentVerdict::Failed(format!("réponse illisible : « {} »", sink.text.trim()))
+            Ok((_, usage)) => {
+                let nom = llm.name().rsplit('/').next().unwrap_or(llm.name());
+                let c = crate::meter::Consumption::new(format!("llm.{nom}"), "unknown")
+                    .by(run, "content-judge")
+                    .with(crate::meter::Unit::InputTokens, usage.prompt_tokens.saturating_sub(usage.cached_prompt_tokens) as u64)
+                    .with(crate::meter::Unit::CachedInputTokens, usage.cached_prompt_tokens as u64)
+                    .with(crate::meter::Unit::OutputTokens, usage.completion_tokens.saturating_sub(usage.reasoning_tokens) as u64)
+                    .with(crate::meter::Unit::ReasoningTokens, usage.reasoning_tokens as u64);
+                if !c.is_empty() {
+                    self.chat_meter.record(c);
+                }
+                let mot = sink.text.split(|c: char| !c.is_alphabetic()).find(|w| !w.is_empty()).unwrap_or_default().to_lowercase();
+                eprintln!("[équipier] {} : le juge du contenu dit « {} »", t.nom, sink.text.trim());
+                match mot.as_str() {
+                    "missing" => ContentVerdict::Missing,
+                    "delivered" => ContentVerdict::Delivered,
+                    "action" => ContentVerdict::Action,
+                    _ => ContentVerdict::Failed(format!("unreadable answer: « {} »", sink.text.trim())),
                 }
             }
         }
