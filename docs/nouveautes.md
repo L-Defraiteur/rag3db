@@ -150,6 +150,10 @@
   rend sa réponse complète en 12,2 s au lieu de 23,9 s sur rag3weaver/src, en 40,5 s au lieu de 74,9 s sur le dépôt,
   et l'index entier ne ralentit pas. Si l'index meurt avant de rendre ce texte, la base le sait : l'état dit
   « à rebâtir », et la prochaine recherche ou la reprise le rend avant de répondre.
+- 19 novembre 2026 — **Un appel n'attend plus derrière un index sans le dire.** Une invocation d'un outil d'un autre
+  backend ne prend plus le verrou du catalogue pour lire sa cellule : elle répond pendant qu'un index écrit. Une
+  recherche en cohérence `Strict` attend le catalogue au plus 10 s, puis répond « occupé : une écriture (une
+  indexation) tient le catalogue… », avec quoi faire : relancer, ou chercher sans `Strict` pour l'état validé.
 
 - 19 novembre 2026 — **Un ADD ou un DROP de colonne attend les lectures ouvertes de sa table.** Une transaction qui
   lit une table la retient jusqu'à sa fin : un `ALTER TABLE … ADD`, `… DROP` ou un `DROP TABLE` l'attend, et la
