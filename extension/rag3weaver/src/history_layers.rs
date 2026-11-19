@@ -933,7 +933,7 @@ mod tests {
     /// dépôt `RAG3WEAVER_SONDE_DEPOT` est écrite à sa pointe (K commits au-dessus de l'arbre indexé,
     /// `RAG3WEAVER_SONDE_K`, 20 par défaut), puis rattrapée commit par commit, le plus récent d'abord. Elle relève par
     /// table les lignes et les octets ajoutés, les doublons au bord haut, et le temps de lecture d'une vue. Une ligne
-    /// `SONDE_PLACE` par relevé. Sans embarqueur : les vecteurs restent dus, les lignes et les morceaux sont écrits.
+    /// `SONDE_PLACE` par relevé.
     #[test]
     #[ignore]
     fn sonde_place_des_couches() {
@@ -943,7 +943,14 @@ mod tests {
         let k: usize = std::env::var("RAG3WEAVER_SONDE_K").ok().and_then(|v| v.parse().ok()).unwrap_or(20);
         let depot = std::path::PathBuf::from(depot);
         let conn = crate::Rag3dbConnection::new(&chemin).expect("la base de la sonde");
-        let mut cat = Catalog::without_embedding_model(Box::new(conn), crate::CatalogConfig::default());
+        // L'embarqueur de hachage à la dimension de la base : des vecteurs sans sens, mais la sonde compte la place, pas
+        // la recherche ; elle ne joue que sur un reflink jetable.
+        let dim: usize = std::env::var("RAG3WEAVER_SONDE_DIM").ok().and_then(|v| v.parse().ok()).unwrap_or(768);
+        let mut cat = Catalog::new(Box::new(conn), Box::new(crate::embedder::HashEmbedder::new(dim)), crate::CatalogConfig {
+            allow_mock_embedder: true,
+            embedding_dim: dim,
+            ..Default::default()
+        });
         cat.initialize().unwrap();
         crate::code::register_code_schema(&mut cat, crate::code::default_scope_chunking()).unwrap();
         let ligne = |quoi: &str, v: serde_json::Value| println!("SONDE_PLACE {}", serde_json::json!({"relevé": quoi, "valeur": v}));
