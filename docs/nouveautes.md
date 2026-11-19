@@ -8,6 +8,9 @@
   paquet est annulé sans abîmer le catalogue et recommence sur place, trois fois au plus, et le journal d'index le
   dit. Un moteur sans `lock_tables` ne prend rien, comme avant.
 - 19 novembre 2026 — **La ligne d'attente d'un outil, dans la boîte de l'équipier, est en anglais**, comme les autres lignes de l'hôte que le modèle relit à chaque pas : « "read_file" has been waiting for N s … ».
+- 19 novembre 2026 — **Le modèle lit le texte de ses lectures, pas leur enveloppe.** `read_file`, `grep_files` et `list_files` lui rendent le texte qu'ils ont lu, et non plus leur réponse JSON entière ; un échec, lui, reste rendu en entier, pour qu'il ne disparaisse jamais derrière un texte partiel.
+
+- 18 novembre2026 — Dans le terminal de l'agent, ce qu'on tape pendant une commande `!` ne se garde plus jamais dans sa sortie, même tapé avant que la commande coupe l'écho : un mot de passe tapé avant l'invite de `sudo` se voit à l'écran, comme dans tout terminal, mais n'entre ni dans la consigne envoyée à l'équipier, ni dans le journal.
 
 - 19 novembre 2026 — **La page du chat de l'IDE dit ce qu'un tour attend.** Pendant qu'un outil attend, sa ligne d'état dit « propose attend… (N s) » ; pendant que le fournisseur retient le modèle, « attend le fournisseur… (reprise dans N s) » ; le compte tourne dans la page, sans rien demander à l'hôte.
 
