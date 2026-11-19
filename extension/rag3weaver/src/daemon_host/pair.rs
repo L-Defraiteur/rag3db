@@ -26,15 +26,86 @@ impl Registre {
     /// `RAG3WEAVER_PAIR_SESSIONS_DIR`, sinon `~/.claude/sessions` ; `RAG3WEAVER_PAIR_SOCKS_DIR`,
     /// sinon `$XDG_RUNTIME_DIR/cc-socks`.
     pub fn depuis(lire: impl Fn(&str) -> Option<String>) -> Option<Self> {
-        let _ = lire;
-        None
+        let non_vide = |k: &str| lire(k).filter(|v| !v.is_empty());
+        let sessions = match non_vide("RAG3WEAVER_PAIR_SESSIONS_DIR") {
+            Some(d) => PathBuf::from(d),
+            None => PathBuf::from(non_vide("HOME")?).join(".claude/sessions"),
+        };
+        let socks = match non_vide("RAG3WEAVER_PAIR_SOCKS_DIR") {
+            Some(d) => PathBuf::from(d),
+            None => PathBuf::from(non_vide("XDG_RUNTIME_DIR")?).join("cc-socks"),
+        };
+        Some(Registre { sessions, socks })
+    }
+
+    fn fichier(&self, pid: u32) -> PathBuf {
+        self.sessions.join(format!("{pid}.json"))
+    }
+
+    /// Écrit l'entrée d'un coup : un fichier voisin, puis `rename`. Un lecteur ne voit jamais une
+    /// entrée à moitié écrite.
+    fn ecrire(&self, entree: &Value) -> Result<(), String> {
+        let pid = entree["pid"].as_u64().unwrap_or_default() as u32;
+        std::fs::create_dir_all(&self.sessions).map_err(|e| format!("{} : {e}", self.sessions.display()))?;
+        let tmp = self.sessions.join(format!(".{pid}.json.rag3weaver-tmp"));
+        std::fs::write(&tmp, entree.to_string()).map_err(|e| format!("{} : {e}", tmp.display()))?;
+        std::fs::rename(&tmp, self.fichier(pid)).map_err(|e| format!("{} : {e}", self.fichier(pid).display()))
     }
 
     /// Retire les entrées laissées par un hôte mort (les nôtres seulement) : pid absent, ou pid
     /// repris par un autre processus (`procStart` différent). Rend les fichiers retirés.
     pub fn nettoyer(&self) -> Vec<PathBuf> {
-        Vec::new()
+        let Ok(lus) = std::fs::read_dir(&self.sessions) else { return Vec::new() };
+        let mut retires = Vec::new();
+        for d in lus.flatten() {
+            let p = d.path();
+            if p.extension().and_then(|e| e.to_str()) != Some("json") {
+                continue;
+            }
+            let Some(e) = std::fs::read(&p).ok().and_then(|o| serde_json::from_slice::<Value>(&o).ok()) else { continue };
+            if e["nameSource"] != NAME_SOURCE {
+                continue;
+            }
+            let Some(pid) = e["pid"].as_u64() else { continue };
+            let vivant = proc_start(pid as u32).is_some_and(|s| Some(s.as_str()) == e["procStart"].as_str());
+            if !vivant && std::fs::remove_file(&p).is_ok() {
+                retires.push(p);
+            }
+        }
+        retires
     }
+}
+
+/// Le champ 22 de `/proc/<pid>/stat` (l'heure de départ du processus) : un pid repris par un autre
+/// processus ne le partage pas.
+fn proc_start(pid: u32) -> Option<String> {
+    let stat = std::fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+    let apres = stat.get(stat.rfind(')')? + 2..)?;
+    apres.split(' ').nth(19).map(str::to_string)
+}
+
+/// `linux:<machine-id>:pid:[<inode>]`, comme les entrées de Claude Code.
+fn pid_domain() -> Option<String> {
+    let machine = std::fs::read_to_string("/etc/machine-id").ok()?;
+    let espace = std::fs::read_link("/proc/self/ns/pid").ok()?;
+    Some(format!("linux:{}:{}", machine.trim(), espace.to_string_lossy()))
+}
+
+fn maintenant_ms() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or_default()
+}
+
+/// Un identifiant de session au format UUID v4, tiré de `/dev/urandom`.
+fn session_id() -> String {
+    let mut o = [0u8; 16];
+    if let Ok(mut f) = std::fs::File::open("/dev/urandom") {
+        use std::io::Read;
+        let _ = f.read_exact(&mut o);
+    }
+    o[6] = (o[6] & 0x0f) | 0x40;
+    o[8] = (o[8] & 0x3f) | 0x80;
+    let h: String = o.iter().map(|b| format!("{b:02x}")).collect();
+    format!("{}-{}-{}-{}-{}", &h[0..8], &h[8..12], &h[12..16], &h[16..20], &h[20..32])
 }
 
 /// L'entrée de l'hôte : une tâche en mode pair au plus.
@@ -51,18 +122,69 @@ impl Pair {
     /// Pose l'entrée de la tâche `cle` (`parent/task`), nommée `name`, dans `cwd`. Une seconde
     /// tâche est refusée en le disant.
     pub fn ouvrir(&self, cle: &str, name: &str, cwd: &Path) -> Result<(), String> {
-        let _ = (cle, name, cwd, &self.registre, &self.tenue);
+        let mut tenue = self.tenue.lock().unwrap_or_else(|p| p.into_inner());
+        if let Some((autre, _)) = tenue.as_ref().filter(|(autre, _)| autre != cle) {
+            return Err(format!("teammate.pair: this host already holds {autre} in the sessions registry, and holds one task at a time"));
+        }
+        let pid = std::process::id();
+        let t = maintenant_ms();
+        let entree = json!({
+            "pid": pid,
+            "sessionId": session_id(),
+            "cwd": cwd.to_string_lossy(),
+            "startedAt": t,
+            "procStart": proc_start(pid).unwrap_or_default(),
+            "version": env!("CARGO_PKG_VERSION"),
+            "peerProtocol": 1,
+            "peerFeatures": [],
+            "kind": "interactive",
+            "entrypoint": "rag3weaver",
+            "pidDomain": pid_domain().unwrap_or_default(),
+            "messagingSocketPath": self.registre.socks.join(format!("{pid}.sock")).to_string_lossy(),
+            "name": name,
+            "nameSource": NAME_SOURCE,
+            "nameSince": t,
+            "updatedAt": t,
+            "status": "busy",
+            "statusUpdatedAt": t,
+        });
+        self.registre.ecrire(&entree)?;
+        *tenue = Some((cle.to_string(), entree));
         Ok(())
     }
 
     /// `busy` pendant un pas, `idle` sinon.
     pub fn statut(&self, cle: &str, occupe: bool) {
-        let _ = (cle, occupe);
+        let mut tenue = self.tenue.lock().unwrap_or_else(|p| p.into_inner());
+        let Some((tenante, entree)) = tenue.as_mut() else { return };
+        if tenante != cle {
+            return;
+        }
+        let t = maintenant_ms();
+        entree["status"] = json!(if occupe { "busy" } else { "idle" });
+        entree["statusUpdatedAt"] = json!(t);
+        entree["updatedAt"] = json!(t);
+        if let Err(e) = self.registre.ecrire(entree) {
+            eprintln!("[pair] the entry of {cle} could not be updated: {e}");
+        }
     }
 
     /// Retire l'entrée de la tâche `cle`, si c'est elle qui la tient.
     pub fn fermer(&self, cle: &str) {
-        let _ = cle;
+        let mut tenue = self.tenue.lock().unwrap_or_else(|p| p.into_inner());
+        if tenue.as_ref().is_some_and(|(tenante, _)| tenante == cle) {
+            let _ = std::fs::remove_file(self.registre.fichier(std::process::id()));
+            *tenue = None;
+        }
+    }
+}
+
+impl Drop for Pair {
+    /// L'hôte qui s'arrête retire son entrée.
+    fn drop(&mut self) {
+        if self.tenue.get_mut().map(|t| t.is_some()).unwrap_or(true) {
+            let _ = std::fs::remove_file(self.registre.fichier(std::process::id()));
+        }
     }
 }
 
