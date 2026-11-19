@@ -3,14 +3,16 @@
 # (règle de Lucie, 13 octobre 2026 : son arbre ~/git_workspaces/rag3db reste sur
 # master et ne porte aucun bâti ; plus de build/lecteurs-csv chez elle).
 #
-# Usage : [ABI_CHANGEE=1] batir.sh [<commit>]   (défaut : origin/master ; ABI_CHANGEE quand le cœur l'annonce)
+# Usage : [ABI_CHANGEE=1] [LIB_ARBRE=<worktree>] batir-lib.sh [<commit>]   (défaut : origin/master)
+# L'arbre (20 novembre 2026, règle des worktrees du 19) : LIB_ARBRE s'il est donné, et alors gardé ; sinon créé sous
+# ~/git_workspaces/<session>/<jj-mm-aaaa>-lib (SESSION, G par défaut), et retiré à la fin d'un bâti publié.
 # Sous le jeton du lourd de l'orchestration (une compilation à la fois par poste).
 # Le worktree et son build/ sont gardés entre les rebâtis (plafond 20 Go), effacés en
 # fin de session. L'ancienne recette : batir-arbre-de-lucie.sh.ancien.
 set -u
 D=/home/lucied/.cache/rag3weaver-notes-A/lib58
 P=/home/lucied/git_workspaces/rag3db
-W=/home/lucied/.cache/rag3weaver-build/wt-lib-arbre
+W=${LIB_ARBRE:-$HOME/git_workspaces/${SESSION:-G}/$(date +%d-%m-%Y)-lib}; CREE=${LIB_ARBRE:+donne}
 B=$W/build/lib
 L=/home/lucied/.cache/rag3weaver-build/poste
 S=$P/extension/rag3weaver/scripts/rag3db_libs.py
@@ -76,4 +78,8 @@ journal "publication rc=$? ; courant : $(python3 $S courant 2>&1)"
 basename "$(sed -n 's/^publié : //p' $D/etat | tail -1)" > $D/id
 md5sum $B/src/librag3db.so $W/extension/vector/build/libvector.rag3db_extension >> $D/etat
 journal "dernier commit moteur : $(git -C $W log -1 --format='%h %ci' -- src extension/vector)"
+# L'arbre créé par ce bâti se retire une fois la lib publiée (la lib vit au magasin, plus ici) ; un arbre donné reste.
+if [ -z "$CREE" ] && [ -s $D/id ]; then
+  git -C $P worktree remove --force $W && journal "arbre retiré : $W" || journal "arbre non retiré : $W"
+fi
 touch $D/fini
