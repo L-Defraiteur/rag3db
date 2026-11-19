@@ -274,7 +274,7 @@ pub struct ViewState {
 }
 
 /// What a view owes in vectors, and how fast its service embeds: the input of [`ViewState::with_vectors_due`].
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct VectorsDue {
     /// The chunks of the view without a vector.
     pub chunks: usize,
@@ -283,6 +283,9 @@ pub struct VectorsDue {
     /// The rate of the view's embedding service, in characters per second (an index's rate: the claim, the call and
     /// the write); `None` when no rate is known.
     pub chars_per_s: Option<f64>,
+    /// Where the rate comes from, said in the answer: « index » (the catalog's key of the service, an index's rate),
+    /// « banc × 0,5 » (the bench's declared rate, halved), or `None` (unknown).
+    pub rate_from: Option<&'static str>,
 }
 
 impl ViewState {
@@ -546,7 +549,7 @@ mod tests {
         assert_eq!(etat("a").text_eta_s, Some(2), "4 files at 500 ms per file are not 2 s");
         lag.set_rate(&cell, 1_000.0);
         assert_eq!(etat("a").text_eta_s, Some(4), "the estimate does not follow the rate");
-        let du = VectorsDue { chunks: 1_000, mean_chars: 600.0, chars_per_s: Some(200_000.0) };
+        let du = VectorsDue { chunks: 1_000, mean_chars: 600.0, chars_per_s: Some(200_000.0), rate_from: Some("index") };
         assert_eq!(etat("a").with_vectors_due(du).vectors_eta_s, Some(3), "1 000 chunks of 600 characters at 200 000 c/s are not 3 s");
         assert_eq!(etat("a").with_vectors_due(VectorsDue { chars_per_s: None, ..du }).vectors_eta_s, None, "an unknown rate gives an estimate");
         let b = etat("b").with_vectors_due(VectorsDue { chunks: 0, ..du });
