@@ -761,7 +761,7 @@
     "whois": "scripts/whois.rhai",
     "archive_rapport": "scripts/archive_rapport.rhai",
     "archive_query": "scripts/archive_query.rhai",
-    "archive_slice_prompt": "scripts/archive_slice_prompt.rhai",
+    "slice_part": "scripts/slice_part.rhai",
     "archive_slice_build": "scripts/archive_slice_build.rhai",
     "archive_slice_rapport": "scripts/archive_slice_rapport.rhai",
     "put_turn_record": "scripts/put_turn_record.rhai",
