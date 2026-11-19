@@ -1317,6 +1317,9 @@ pub struct SourceSyncReport {
     /// générés (`SourceSyncOptions::generated`). Ils ne sont pas analysés.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub files_set_aside: BTreeMap<String, usize>,
+    /// The versions set aside by the gesture of a base indexed before the rule of non-candidates (2.12).
+    #[serde(default)]
+    pub non_candidates_set_aside: usize,
     /// **Ce qui a changé le chemin de la synchronisation**, dit en clair :
     /// par exemple la transaction par paquet coupée parce que le dialecte
     /// ne déclare pas de transactions.
@@ -1652,6 +1655,9 @@ fn synchroniser_par_generations(
     // The same guard as the snapshot path, before anything is listed: an unchanged source is resynchronized
     // without a single batch, so no batch would run it later.
     prepare_full_text_for_source_sync(catalog)?;
+    // **The containers that are not search candidates, set aside** (2.12): a version written before the rule keeps
+    // its render, so the writer would never rewrite it; the gesture takes it out of the full text and its chunks.
+    let non_candidats = catalog.set_aside_non_candidates(crate::code::SCOPE_CONTENT).map_err(|e| e.to_string())?;
     let listed = source.list()?;
     let manifestes = crate::manifestes::Manifestes::lire(&listed, |c| source.read(c).ok().flatten());
     catalog.note_manifestes(&manifestes).map_err(|e| e.to_string())?;
@@ -1711,6 +1717,7 @@ fn synchroniser_par_generations(
         files_listed: listed.len(),
         relations_mode: Some(RelationsMode::PerBatch),
         buffer_pool: catalog.conn().buffer_pool().map(crate::connection::describe_buffer_pool),
+        non_candidates_set_aside: non_candidats,
         ..Default::default()
     };
     // Les fichiers déjà indexés dont la version de l'analyse n'est pas la courante : ils repassent tous,
