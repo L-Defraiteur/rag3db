@@ -208,13 +208,29 @@ replay_rust() { # <id> <journals> <witness> <witness_suite> <extra_suites> → 0
 
 # Master, re-read after the replay: docs and scripts are pushed by the pusher itself (the guard is for a pass), under
 # `poste push`, and only if master has not moved since the repose; otherwise the lot stays in the queue, reposed next step.
-push_plain() { # <base> → 0 pushed, 1 master moved, 2 refused
-  gfetch -q origin master || return 2
-  [ "$(g rev-parse FETCH_HEAD)" = "$1" ] || return 1
-  open_prs "$STAMP" - "$(g rev-parse HEAD)"
-  poste_push git -C "$WT" push -q origin HEAD:master || { close_step_prs "le push vers master a été refusé"; return 2; }
-  gfetch -q origin master
-  [ -z "$(g status --porcelain)" ] && [ ! -d "$(g rev-parse --git-dir)/rebase-merge" ] && [ "$(g rev-parse FETCH_HEAD)" = "$(g rev-parse HEAD)" ]
+push_plain() { # <base> → 0 pushed, 1 master moved with code, 2 refused
+  # Master moved by docs only since the repose (another session's page): the lot is reposed on it without a replay, as
+  # the guard does, and pushed in the same step (19 Nov.: a scripts lot was taken three times while sessions wrote
+  # pages). Code on master sends it back to the head of the queue, for a replay. Three tries.
+  local i fresh base=$1
+  for i in 1 2 3; do
+    gfetch -q origin master || return 2
+    fresh=$(g rev-parse FETCH_HEAD)
+    if [ "$fresh" != "$base" ]; then
+      [ -z "$(g diff --name-only "$base" "$fresh" -- . ':!*.md')" ] || return 1
+      g rebase -q "$fresh" > /dev/null 2>&1 || { g rebase --abort 2>/dev/null; return 1; }
+      log "$TRAIN_LABEL" "master a bougé en docs seules" "reposé sur $(g rev-parse --short "$fresh"), sans rejeu"
+      base=$fresh
+    fi
+    open_prs "$STAMP" - "$(g rev-parse HEAD)"
+    if poste_push git -C "$WT" push -q origin HEAD:master; then
+      gfetch -q origin master
+      [ -z "$(g status --porcelain)" ] && [ ! -d "$(g rev-parse --git-dir)/rebase-merge" ] && [ "$(g rev-parse FETCH_HEAD)" = "$(g rev-parse HEAD)" ]
+      return
+    fi
+    close_step_prs "le push vers master a été refusé (essai $i)"
+  done
+  return 2
 }
 
 # ── One pull request per lot (19 Nov., c7 and G) ──────────────────────────────────────────────────────────────────
