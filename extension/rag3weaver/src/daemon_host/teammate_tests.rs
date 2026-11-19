@@ -2289,3 +2289,109 @@ fn a_paired_task_is_reachable_between_two_works_and_leaves_with_its_task() {
     assert!(!fichier.exists(), "the entry goes with the task");
     assert!(!socket.exists(), "and its socket");
 }
+
+/// **A pair answers a session** (mode pair, lot 3): a session writes to the socket of a paired
+/// task; the teammate answers with send_to_session to the address the line carries; the session
+/// receives the frame of the bus with the answer; the mailbox keeps the message out; and that
+/// answer is the teammate's line: the request ends by itself.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn a_pair_answers_a_session_and_its_request_ends() {
+    use std::io::{Read, Write};
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let mut m: Value = serde_json::from_str(&std::fs::read_to_string(&manifeste).unwrap()).unwrap();
+    m["teammate"] = json!({ "pair": true });
+    std::fs::write(&manifeste, serde_json::to_string_pretty(&m).unwrap()).unwrap();
+    let declarations = manifeste.parent().unwrap();
+    for args in [&["add", "-A"][..], &["commit", "-q", "-m", "le mode pair"]] {
+        assert!(std::process::Command::new("git").args(args).current_dir(declarations).status().unwrap().success(), "git {args:?}");
+    }
+    let registre = super::pair::Registre { sessions: d.path().join("sessions"), socks: d.path().join("socks") };
+    // The session: its socket keeps what it receives.
+    std::fs::create_dir_all(&registre.socks).unwrap();
+    let sa_socket = registre.socks.join("42.sock");
+    let ecoute = std::os::unix::net::UnixListener::bind(&sa_socket).unwrap();
+    let recues = Arc::new(Mutex::new(Vec::<Value>::new()));
+    {
+        let recues = recues.clone();
+        std::thread::spawn(move || {
+            for c in ecoute.incoming().flatten() {
+                let mut o = Vec::new();
+                let _ = (&c).read_to_end(&mut o);
+                if let Ok(v) = serde_json::from_slice::<Value>(&o) {
+                    recues.lock().unwrap().push(v);
+                }
+            }
+        });
+    }
+    let adresse = format!("uds:{}", sa_socket.display());
+    let outils = Arc::new(Mutex::new(Vec::<String>::new()));
+    let model: ChatModel = {
+        let (adresse, outils) = (adresse.clone(), outils.clone());
+        Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let (adresse, outils) = (adresse.clone(), outils.clone());
+            Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
+                *outils.lock().unwrap() = opts.tools.iter().map(|d| d.name.clone()).collect();
+                if tool_results(turns).is_empty() && last_user(turns).contains("What is 2+2?") {
+                    return answer(turns, opts, sink, "", calls(&[("send_to_session", json!({ "to": adresse, "text": "4" }))]));
+                }
+                answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "répondu", "remaining": "" }))]))
+            })))
+        })
+    };
+    let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")).with_pair_registry(registre.clone()));
+    host.se_connaitre();
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    host.ouvrir_une_tache(&h.id, "doc").expect("la tâche s'ouvre");
+    let e: Value = serde_json::from_slice(&std::fs::read(registre.sessions.join(format!("{}.json", std::process::id()))).unwrap()).unwrap();
+    let mut c = std::os::unix::net::UnixStream::connect(e["messagingSocketPath"].as_str().unwrap()).unwrap();
+    let trame = json!({ "msgV": 1, "msg_id": "m-1", "type": "user", "priority": "next", "from": adresse,
+                        "message": { "role": "user", "content": format!("<cross-session-message from=\"{adresse}\" from-name=\"rag3db-5a\" from-mode=\"prompting\">\nWhat is 2+2?\n</cross-session-message>") } });
+    c.write_all(format!("{trame}\n").as_bytes()).unwrap();
+    drop(c);
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    let boite = attendre_dans(&files, "the request ends by itself once answered", &|b| b.iter().any(|l| l["kind"] == "ended"));
+    let fin = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while recues.lock().unwrap().is_empty() && std::time::Instant::now() < fin {
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    let recues = recues.lock().unwrap();
+    assert_eq!(recues.len(), 1, "the session received one frame: {recues:?}");
+    assert!(recues[0]["message"]["content"].as_str().unwrap_or_default().contains("\n4\n"), "{:?}", recues[0]);
+    let sortie: Vec<&Value> = boite.iter().filter(|l| l["from"] == "teammate" && l["kind"] == "message").collect();
+    assert_eq!(sortie.len(), 1, "the mailbox keeps the message out: {boite:#?}");
+    assert_eq!(sortie[0]["direction"], "out");
+    assert_eq!(sortie[0]["to"], adresse.as_str());
+    assert_eq!(sortie[0]["text"], "4");
+    assert!(outils.lock().unwrap().iter().any(|n| n == "send_to_session"), "a paired task's teammate has the tool");
+}
+
+/// **A task that is not paired has no send_to_session** (mode pair, lot 3).
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn a_task_that_is_not_paired_has_no_send_to_session() {
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let outils = Arc::new(Mutex::new(Vec::<String>::new()));
+    let model: ChatModel = {
+        let outils = outils.clone();
+        Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let outils = outils.clone();
+            Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
+                *outils.lock().unwrap() = opts.tools.iter().map(|d| d.name.clone()).collect();
+                answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "fait", "remaining": "" }))]))
+            })))
+        })
+    };
+    let host = hote(d.path(), model).with_runs_root(d.path().join("runs"));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    host.ouvrir_une_tache(&h.id, "doc").expect("la tâche s'ouvre");
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    files.append_with("supervisor", "request", None, "Fais-le.", &json!({ "expects": "none" })).unwrap();
+    host.run_teammate(&h.id, "doc").unwrap();
+    let outils = outils.lock().unwrap();
+    assert!(!outils.is_empty() && !outils.iter().any(|n| n == "send_to_session"), "{outils:?}");
+}
