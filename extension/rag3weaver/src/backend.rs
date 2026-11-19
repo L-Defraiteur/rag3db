@@ -49,6 +49,11 @@ pub struct TeammatePolicy {
     /// attente, sa boîte dit pourquoi.
     #[serde(default = "TeammatePolicy::oui")]
     pub resume_after_restart: bool,
+    /// **The pair mode** (page 05 of 19 Nov 2026, rag3weaver-archi): the task's agent is seen by
+    /// the Claude Code sessions as one of them, through an entry the host holds in their registry
+    /// while the teammate runs. Off by default; one paired task per host.
+    #[serde(default)]
+    pub pair: bool,
     /// **Un fournisseur qui ne répond pas n'est pas un pas raté** (8 novembre
     /// 2026, essai 3 : des 429 RESOURCE_EXHAUSTED arrêtaient l'équipier par
     /// `max_failed_steps`). Un quota dépassé (429) ou un service en panne (5xx,
@@ -135,6 +140,7 @@ impl Default for TeammatePolicy {
             max_tool_calls_per_step: Self::max_tool_calls_per_step_default(),
             max_model_calls_per_step: Self::max_model_calls_per_step_default(),
             carry_over_chars: Self::carry_over_chars_default(),
+            pair: false,
         }
     }
 }
