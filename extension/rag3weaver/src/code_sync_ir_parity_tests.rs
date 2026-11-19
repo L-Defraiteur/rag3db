@@ -162,3 +162,61 @@ fn the_births_read_by_the_ir_at_parity() {
         same_read(&catalog, &format!("births, {table}"), &before, &after, &[param("cles", cles_de(table, champ)), param("couche", text(&v.couche))]);
     }
 }
+
+/// **The state a write leaves**: every row of the generations tables with its rank fields, every edge between
+/// them, and the generations with their counts. Sorted: two equal states compare equal.
+pub(super) fn state(catalog: &Catalog) -> Vec<String> {
+    let mut v = Vec::new();
+    for (table, nom) in [(SCOPE, "key"), (FILE, "path")] {
+        v.extend(rows(catalog, &format!("MATCH (s:`{table}`) RETURN '{table}', s._uuid, s.`{nom}`, s._couche, s._depuis, s._jusqu_a"), &[]));
+    }
+    v.extend(rows(catalog, "MATCH (a)-[r]->(b) RETURN label(r), a._uuid, b._uuid", &[]));
+    // Every field of a generation but its publication time (a clock, different between two bases).
+    v.extend(rows(
+        catalog,
+        &format!(
+            "MATCH (g:{}) RETURN g._key, g.couche, g.rang, g.commit, g.base, g.recette, g.parente_couche, g.parente_rang, g.tombstones, g.chemins_sales, g.aretes_recopiees",
+            crate::generations::TABLE
+        ),
+        &[],
+    ));
+    v
+}
+
+/// **A write at parity**: the same write by its raw Cypher on one base and by its IR form on another, both built
+/// the same way; then the same state. Both texts are printed for the review.
+pub(super) fn same_write(site: &str, before: &str, after: &str, params: impl Fn(&Catalog) -> Vec<crate::connection::QueryParam>) {
+    eprintln!("[{site}] before: {before}\n[{site}] after:  {after}");
+    let (avant, _) = base_with_history();
+    let (apres, _) = base_with_history();
+    assert_eq!(state(&apres), state(&avant), "[{site}] the two bases start equal");
+    let depart = state(&avant);
+    avant.execute_raw_with_params(before, &params(&avant)).unwrap_or_else(|e| panic!("[{site}] {before}: {e}"));
+    apres.execute_raw_with_params(after, &params(&apres)).unwrap_or_else(|e| panic!("[{site}] {after}: {e}"));
+    assert_ne!(state(&avant), depart, "[{site}] the old write changes something on the witness base");
+    assert_eq!(state(&apres), state(&avant), "[{site}] the same state");
+}
+
+/// `ecrire_la_table`: the retirement rank of given rows, set then reopened with a typed NULL.
+#[test]
+fn the_retirement_write_by_the_ir_at_parity() {
+    for table in [SCOPE, FILE] {
+        let before = format!("UNWIND $uuids AS u MATCH (s:`{table}` {{_uuid: u}}) SET s.{} = $valeur", crate::generations::JUSQU_A);
+        let (catalog, _) = base_with_history();
+        let after = retirement_write(&catalog, table).unwrap();
+        let rang = catalog.generations.clone().unwrap().rang;
+        let vivantes = move |c: &Catalog| -> CypherValue {
+            let lu = c.execute_raw(&format!("MATCH (s:`{table}`) WHERE s._jusqu_a IS NULL RETURN s._uuid ORDER BY s._uuid LIMIT 2")).unwrap();
+            CypherValue::List(lu.rows.iter().filter_map(|l| l.first().cloned()).collect())
+        };
+        same_write(&format!("retire, {table}"), &before, &after, |c| vec![param("uuids", vivantes(c)), param("valeur", CypherValue::Int(rang))]);
+        let fermees = move |c: &Catalog| -> CypherValue {
+            let lu = c.execute_raw(&format!("MATCH (s:`{table}`) WHERE s._jusqu_a IS NOT NULL RETURN s._uuid ORDER BY s._uuid")).unwrap();
+            CypherValue::List(lu.rows.iter().filter_map(|l| l.first().cloned()).collect())
+        };
+        let null_entier = || CypherValue::Typed { value: Box::new(CypherValue::Null), field_type: crate::config::FieldType::Int64 };
+        if table == SCOPE {
+            same_write("reopen, Scope", &before, &after, |c| vec![param("uuids", fermees(c)), param("valeur", null_entier())]);
+        }
+    }
+}
