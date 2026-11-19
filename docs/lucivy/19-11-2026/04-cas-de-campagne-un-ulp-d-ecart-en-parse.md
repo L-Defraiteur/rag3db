@@ -1,3 +1,31 @@
+```json
+{
+  "lanceur": {
+    "repo": "https://github.com/L-Defraiteur/lucivy",
+    "parent": "e3c9753f7fe5976eb47c3273fc150ca621001280",
+    "tree": ".",
+    "needs_lib": false,
+    "witness": "parse_scores_are_identical_across_segment_layouts",
+    "witness_files_from": {
+      "commit": "3933431475aa09b88970ddce66f0a3b7500fd4ee",
+      "paths": [
+        "lucivy_core/tests/test_parse_scores_identical_across_layouts.rs"
+      ]
+    },
+    "test": "cargo test -p lucivy-core --test test_parse_scores_identical_across_layouts parse_scores_are_identical_across_segment_layouts",
+    "suites": [
+      "cargo test --workspace"
+    ],
+    "hints": [
+      "src/query/score_combiner.rs",
+      "src/query/union/buffered_union.rs",
+      "src/query/boolean_query/block_wand.rs"
+    ],
+    "ours": "3933431475aa09b88970ddce66f0a3b7500fd4ee"
+  }
+}
+```
+
 # Cas de campagne : un ulp d'écart de score en `parse`, d'une disposition de segments à l'autre
 
 Session lucivy, 19 novembre 2026, pour la campagne des correctifs passés (chantier de Lucie). C'est un cas court
@@ -8,15 +36,12 @@ de justesse numérique, en Rust, dans le moteur de lucivy. Il se joue sans la li
 
 - **Dépôt** : lucivy (`github.com/L-Defraiteur/lucivy`), pas rag3db.
 - **Commit parent** : `e3c9753f7fe5` (16 novembre 2026). Le correctif n'y est pas. **Le témoin n'y est pas non plus** :
-  il est entré dans le même commit que le correctif. Il faut le copier depuis main dans l'arbre d'Algareth, tel
+  il est entré dans le même commit que le correctif. Le lanceur le copie depuis le commit de notre correctif (`witness_files_from`), tel
   quel, avant de lui donner le cas.
 - **Arbre** : le workspace lucivy entier (le moteur `ld-lucivy` à la racine, `lucivy_core` pour le témoin).
+- **Le signalement ci-dessous** : c'est le ticket du 14 novembre (`docs/lucivy/tickets/2026-11-14-un-ulp-d-ecart-de-score-entre-profils-en-parse.md`, dans rag3db). Il est repris sans sa partie « Ce qu'on suppose », qui nommait la cause et le correctif. Sa partie « Comment le rejouer » est remplacée par le témoin.
 
 ## Le signalement, tel qu'il était
-
-C'est le ticket du 14 novembre (`docs/lucivy/tickets/2026-11-14-un-ulp-d-ecart-de-score-entre-profils-en-parse.md`,
-dans rag3db). Il est repris sans sa partie « Ce qu'on suppose », qui nommait la cause et le correctif. Sa partie
-« Comment le rejouer » est remplacée par le témoin.
 
 > Une même requête `parse` sur les mêmes 89 894 documents, réindexés dans trois profils (positions, sans positions,
 > dictionnaire par segment), rend les mêmes documents. Mais pour 2 à 4 documents du top 20, le score diffère d'un
