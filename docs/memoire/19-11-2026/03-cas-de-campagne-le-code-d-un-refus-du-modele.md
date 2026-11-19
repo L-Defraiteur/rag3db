@@ -8,9 +8,6 @@
     "extension/rag3weaver",
     "tools/rust_api"
   ],
-  "submodules": {
-    "extension/rag3weaver/codeparsers": "72ab7a80ea4f9a371ec0e7a74288f4a9e312547f"
-  },
   "needs_lib": false,
   "witness": "agent::tests::llm_call_event_keeps_each_retry_reason_and_wait",
   "test": "cargo test -j 8 --lib -- --exact agent::tests::llm_call_event_keeps_each_retry_reason_and_wait",
@@ -24,9 +21,10 @@
 }
 ```
 
-Le bloc est celui du lanceur (forme d'archi). `paths` et `submodules` comme dans
-[le cas de la garde des scripts](02-cas-de-campagne-la-garde-des-scripts.md) : `tools/rust_api` et le
-sous-module `codeparsers` sont des dépendances par chemin que cargo lit même sans features. Sans features, le cas
+Le bloc est celui du lanceur (forme d'archi). `paths` comme dans
+[le cas de la garde des scripts](02-cas-de-campagne-la-garde-des-scripts.md) : `tools/rust_api` est une
+dépendance par chemin que cargo lit même sans features ; le lanceur pose le sous-module `codeparsers` au commit du
+parent. Sans features, le cas
 ne demande pas la lib rag3db.
 
 **Vérifié le 19 novembre à luciepc**, sur l'arbre archivé au parent avec le sous-module extrait, dans un target
