@@ -704,3 +704,62 @@ fn embedder_of(prepared: &PreparedBackend) -> Option<Box<dyn rag3weaver::embedde
         Err(e) => panic!("the relevé needs the manifest's embedder (set RAG3WEAVER_PARITE_NO_EMBEDDER=1 for lexical only): {e}"),
     }
 }
+
+/// **A namespace scope before a class of the same name** (ticket of 16 November 2026, 2.12): on a copy of a
+/// code base, the query `RAG3WEAVER_NAMESPACE_REQUETE` (« rag3db » by default) filtered on
+/// `RAG3WEAVER_NAMESPACE_CHEMIN` (`src/include/` by default), by all signals, by the dense signal alone and by
+/// BM25 alone: the first 20 of each, with their scope type and the length of the content they were ranked on.
+/// Written to `RAG3WEAVER_PARITE_SORTIE`. A measure, not a verdict.
+#[test]
+#[ignore]
+fn releve_le_namespace_devant_la_classe() {
+    let var = |n: &str| std::env::var_os(n);
+    let (Some(base), Some(manifeste), Some(sortie)) = (var("RAG3WEAVER_PARITE_BASE"), var("RAG3WEAVER_PARITE_MANIFESTE"), var("RAG3WEAVER_PARITE_SORTIE")) else {
+        eprintln!("SAUTÉ releve_le_namespace_devant_la_classe : RAG3WEAVER_PARITE_BASE, _MANIFESTE ou _SORTIE manque (une copie, jamais la base en service)");
+        return;
+    };
+    let requete = std::env::var("RAG3WEAVER_NAMESPACE_REQUETE").unwrap_or_else(|_| "rag3db".into());
+    let chemin = std::env::var("RAG3WEAVER_NAMESPACE_CHEMIN").unwrap_or_else(|_| "src/include/".into());
+    let prepared = PreparedBackend::load(std::path::Path::new(&manifeste)).expect("le manifeste");
+    let backend = { let embedder = embedder_of(&prepared); prepared.open(Box::new(Rag3dbConnection::new(&base).expect("ouvrir la copie")), embedder) }.expect("ouvrir le backend");
+    let forme = format!("{:?}", rag3weaver::code::scope_form(&backend.catalog.lock().unwrap()).unwrap());
+    let mut releve = json!({"base": base.to_string_lossy(), "forme": forme, "requete": requete, "chemin": chemin, "modes": {}});
+    for (nom, signaux) in [("tous", Value::Null), ("dense", json!(["vector"])), ("bm25", json!(["bm25"]))] {
+        let mut options = json!({"limit": 20});
+        if !signaux.is_null() {
+            options["signals"] = signaux;
+        }
+        let r = backend.call("search_code", json!({"query": requete, "scope": chemin, "options": options})).unwrap_or_else(|e| panic!("search_code ({nom}) : {e}"));
+        let lignes: Vec<Value> = r["result"].as_array().cloned().unwrap_or_default();
+        let rangs: Vec<Value> = lignes
+            .iter()
+            .enumerate()
+            .map(|(i, l)| {
+                let d = &l["data"];
+                let texte = ["content", "text", "body"].iter().map(|c| &d[*c]).find(|v| v.is_string()).and_then(|v| v.as_str()).unwrap_or("");
+                json!({
+                    "rang": i + 1,
+                    "name": d["name"],
+                    "scope_type": d["scope_type"],
+                    "file_path": d["file_path"],
+                    "start_line": d["start_line"],
+                    "end_line": d["end_line"],
+                    "content_len": texte.chars().count(),
+                    "content_head": texte.chars().take(160).collect::<String>(),
+                    "score": l["score"],
+                    "signal": l["signal"],
+                    "best_signal": l["bestSignal"],
+                })
+            })
+            .collect();
+        eprintln!("[namespace] {nom} : {} résultats", rangs.len());
+        for x in &rangs {
+            eprintln!("  {:>2} {:<28} {:<10} {}:{} len={} score={}", x["rang"], x["name"].as_str().unwrap_or("?"), x["scope_type"].as_str().unwrap_or("?"), x["file_path"].as_str().unwrap_or("?"), x["start_line"], x["content_len"], x["score"]);
+        }
+        if let Some(premier) = lignes.first() {
+            eprintln!("  champs de data : {:?}", premier["data"].as_object().map(|o| o.keys().cloned().collect::<Vec<_>>()).unwrap_or_default());
+        }
+        releve["modes"][nom] = Value::Array(rangs);
+    }
+    std::fs::write(&sortie, serde_json::to_string_pretty(&releve).unwrap()).expect("écrire le relevé");
+}
