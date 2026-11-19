@@ -3,8 +3,8 @@
 //! No bulk load here: the memory dialect refuses `Write::Load` (a CSV has no types), and the writers fall back on the
 //! typed upsert. `write` (`Write::Upsert`) and `batch_upsert` take `$items`, one map per row, as
 //! `MERGE (n {_uuid}) SET n.c = item.c RETURN ID(n), item._uuid`: a row already there takes the listed columns and
-//! keeps the others. The id given back is `table:uuid`. A row's file is its `file_path`, else its `path` (the code
-//! schema: `Scope` and `File`).
+//! keeps the others. The id given back is `table:uuid`. A row's file is the field its table declares
+//! (`MemoryImage::set_file_field`; the code schema: `Scope.file_path`, `File.path`).
 
 use std::collections::BTreeMap;
 
@@ -64,8 +64,8 @@ fn upsert(state: &mut State, table: &str, columns: &[String], params: &[QueryPar
                 }
             }
         }
-        let file = ["file_path", "path"].iter().find_map(|f| props.get(*f).and_then(|v| v.as_str()).map(str::to_string));
-        state.image.insert_node(table, uuid, file.as_deref(), props);
+        // The file of the row is the declared field of its table (`MemoryImage::set_file_field`).
+        state.image.insert_node(table, uuid, None, props);
         rows.push(vec![CypherValue::String(format!("{table}:{uuid}")), CypherValue::String(uuid.clone())]);
     }
     Ok(QueryResult { columns: vec!["id".into(), "_uuid".into()], rows })
