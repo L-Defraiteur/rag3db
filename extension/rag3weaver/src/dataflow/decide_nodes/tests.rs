@@ -188,6 +188,30 @@ fn decide_by_llm_asks_a_schema_and_labels_the_element() {
     }
 }
 
+/// **The stable comes first** (19 November 2026, « composer les invites pour le cache »): two decisions on the same
+/// text with different candidate labels send a prompt that begins with the same bytes, the instruction and the
+/// whole text; the labels, which change from one call to the next, come at the end. A provider's cache serves only
+/// an identical prefix.
+#[test]
+fn two_decisions_on_the_same_text_begin_with_the_same_bytes() {
+    let prompts = Arc::new(Mutex::new(Vec::<String>::new()));
+    let text = "a long text that stays the same from one decision to the next ".repeat(20);
+    for labels in ["a|b", "a|c|d"] {
+        let p = prompts.clone();
+        let llm = CallbackLlm::new("classe", 4096, move |turns, opts, sink| {
+            p.lock().unwrap().push(turns.iter().map(|t| t.content.as_str()).collect::<Vec<_>>().join("\n---\n"));
+            MockLlm::new(r#"{"label": "a"}"#).generate(turns, opts, sink)
+        });
+        let def = graph(json!({"content": text}), "Decide", json!({"labels": labels, "field": "content"}), &[]);
+        run(&def, with_llm(llm)).unwrap();
+    }
+    let prompts = prompts.lock().unwrap().clone();
+    assert_eq!(prompts.len(), 2);
+    let common = prompts[0].bytes().zip(prompts[1].bytes()).take_while(|(x, y)| x == y).count();
+    let through_text = prompts[0].find(text.as_str()).map(|i| i + text.len()).expect("the text is in the prompt");
+    assert!(common >= through_text, "the common prefix ({common} bytes) covers the instruction and the whole text ({through_text}): {prompts:?}");
+}
+
 /// L'élément sans son `usage`, et l'usage à part : les témoins de l'étiquette restent ceux d'avant.
 fn sans_usage(e: Option<Value>) -> (Option<Value>, Option<Value>) {
     match e {
