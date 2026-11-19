@@ -483,6 +483,32 @@ avant code. Ce qui est noté dès maintenant :
   en prose dans `archive_slice_prompt.rhai` se déplace dans la description du champ qu'elle concerne. **La
   preuve** : rejouer le témoin d'extraction sur les mêmes tranches avec l'invite réduite et comparer les
   sorties. Si une consigne manque vraiment, elle devient une description de champ, pas un paragraphe.
+- **Le nœud d'extraction structurée est `LlmNode`** (question de Lucie : « un nœud générique d'extraction
+  structurée, qui prend en entrée des descriptions de champs et des contextes ; une chaîne et un titre ? » ; forme
+  de c7). Il n'y a pas de type de nœud de plus. Il lui manque le contrat du contexte, en trois déclarations :
+  1. **un port `context`**, qui reçoit des **parts** `{name, title, text, max_tokens?}`. Chaque part vient d'un nœud
+     amont du graphe : la tranche rendue, les fiches rappelées, le rapport d'avant, les catégories candidates.
+     Ce sont les ingrédients `archivist.context.*`. Le nœud rend chaque part en section (`## title`, puis le
+     texte) et dit la coupe quand une part dépasse son plafond. Un ingrédient débrayé rend une part vide, que le
+     nœud ne rend pas ;
+  2. **un paramètre `context_order`**, la liste des noms de parts, dans l'ordre où le nœud les rend. Une part
+     absente de la liste est refusée en la nommant. C'est la règle « le stable d'abord » de cette page, écrite
+     dans le graphe ;
+  3. **`instruction`** (la ligne de tâche) et **`response_schema`** (le sens, dans les descriptions des champs).
+
+  Plus aucun script Rhai n'assemble une invite en prose : `archive_slice_prompt.rhai` disparaît. La même forme de
+  part sert à `compose_restart` (`restart.context.*`) et au composeur de contexte.
+
+  **Ce que le moteur demande** (vérifié le 19 novembre) :
+  - un port ne reçoit pas aujourd'hui plusieurs valeurs JSON. Le fan-in (`merge_port_values`,
+    `src/dataflow/port.rs`) ne fusionne que des résultats, des uuids, des enfants, des états de branche et des
+    métas. Il faut une règle de plus : une part, ou une liste de parts, se concatène ;
+  - l'ordre d'arrivée du fan-in suit la fin des branches, qui tournent en parallèle. Sans `context_order`,
+    l'invite changerait d'un appel à l'autre, et le cache de préfixe ne servirait plus.
+
+  **Les témoins** : un graphe à deux parts et un schéma rend l'invite attendue octet pour octet ; deux branches
+  qui finissent dans le désordre donnent la même invite ; une part au-dessus de son plafond est coupée, et la
+  coupe est dite.
 - **Une graine à garder dans la forme** : qu'un agent puisse un jour éditer ces graphes et ces scripts par
   outils (lecture, écriture, revue, retour arrière, un témoin qui juge). Rien dans leur forme ne doit
   l'empêcher.
