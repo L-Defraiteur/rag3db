@@ -21,3 +21,14 @@ Session tty, 19 novembre 2026. Trou relevé en déposant tty-28 au pousseur de G
 - un lot qui ne touche pas `tty/` ne joue rien du terminal.
 
 Vu rouge (f72cbcbe97 : le lot tty passait VERT sans un appel à `cargo`, même avec un test ou clippy rouge), puis vert : 42 cas. Les témoins de la garde (`test_push_garde.sh`) et du pousseur (`test_pusher.sh`) restent verts.
+
+## Le témoin d'un lot du terminal : `SUITE_DU_TEMOIN=tty` (19 novembre, après-midi)
+
+L'étape « témoin » ne savait jouer qu'un test de la lib de rag3weaver (`lib`), d'une suite e2e, ou du navigateur (`navigateur`). Le témoin d'un lot du terminal est un test du crate `extension/rag3weaver/tty`, que `run_e2e.sh` ne trouve pas. Depuis witness-must-run, il aurait été rouge à « aucun test joué ok » ; avant, il partait en `--test tty` et la passe restait verte sans le juger.
+
+`SUITE_DU_TEMOIN=tty`, comme `navigateur` :
+- l'étape témoin le renvoie à l'étape « tty », et rougit si le lot ne touche pas `tty/` ;
+- l'étape « tty » exige, dans `tty.log`, la ligne `test <chemin>::<filtre> ... ok` ;
+- le témoin n'est pas ajouté aux suites e2e.
+
+Témoin de la passe : trois cas, vus rouges (91f7f383d6), puis verts (59 cas). Les témoins de la garde et du pousseur restent verts. Le dépôt d'un lot du terminal se fait ainsi : `enqueue <id> <branche> <tête> rust <filtre> tty - - tty`.
