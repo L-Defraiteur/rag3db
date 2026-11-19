@@ -124,8 +124,59 @@ pub enum Trame {
 /// Une connexion lue : `None` pour une sonde (rien d'écrit), la trame sinon, ou la raison du
 /// refus (illisible, trop longue, d'une version ou d'un genre inconnus).
 pub fn lire_trame(octets: &[u8]) -> Result<Option<Trame>, String> {
-    let _ = octets;
-    Err("not yet".into())
+    if octets.iter().all(u8::is_ascii_whitespace) {
+        return Ok(None);
+    }
+    if octets.len() > TRAME_MAX {
+        return Err(format!("frame of {} bytes, over 64 KiB", octets.len()));
+    }
+    let v: Value = serde_json::from_slice(octets.trim_ascii()).map_err(|e| format!("unreadable frame: {e}"))?;
+    if v["msgV"] != 1 {
+        return Err(format!("unknown msgV: {}", v["msgV"]));
+    }
+    let texte = |k: &str| v[k].as_str().unwrap_or_default().to_string();
+    let from = v["from"].as_str().filter(|f| !f.is_empty()).ok_or("a frame without from")?.to_string();
+    match (v["type"].as_str(), v["action"].as_str()) {
+        (Some("user"), _) => {
+            let contenu = v["message"]["content"].as_str().filter(|c| !c.trim().is_empty()).ok_or("an empty message")?;
+            Ok(Some(Trame::Message {
+                texte: contenu.to_string(),
+                from,
+                from_name: attribut(contenu, "from-name").unwrap_or_default(),
+                msg_id: texte("msg_id"),
+                priority: v["priority"].as_str().unwrap_or("next").to_string(),
+            }))
+        }
+        (Some("control"), Some("notify_when_idle")) => Ok(Some(Trame::Abonnement { from, msg_id: texte("msg_id") })),
+        (t, a) => Err(format!("unknown frame: type {t:?}, action {a:?}")),
+    }
+}
+
+/// `nom="valeur"` dans l'enveloppe `<cross-session-message …>`.
+fn attribut(enveloppe: &str, nom: &str) -> Option<String> {
+    let tete = enveloppe.split('>').next()?;
+    let debut = tete.find(&format!("{nom}=\""))? + nom.len() + 2;
+    let fin = tete[debut..].find('"')?;
+    Some(tete[debut..debut + fin].to_string())
+}
+
+/// La socket d'écoute et son fil.
+struct Ecoute {
+    chemin: PathBuf,
+    arret: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    fil: Option<std::thread::JoinHandle<()>>,
+}
+
+impl Ecoute {
+    fn arreter(mut self) {
+        self.arret.store(true, std::sync::atomic::Ordering::SeqCst);
+        // Réveille l'accept qui attend.
+        let _ = std::os::unix::net::UnixStream::connect(&self.chemin);
+        if let Some(f) = self.fil.take() {
+            let _ = f.join();
+        }
+        let _ = std::fs::remove_file(&self.chemin);
+    }
 }
 
 /// Ce que l'hôte fait d'une trame reçue pour la tâche `cle`.
@@ -134,13 +185,15 @@ pub type Livreur = std::sync::Arc<dyn Fn(&str, Trame) + Send + Sync>;
 /// L'entrée de l'hôte : une tâche en mode pair au plus.
 pub struct Pair {
     registre: Registre,
-    tenue: Mutex<Option<(String, Value)>>,
+    tenue: std::sync::Arc<Mutex<Option<(String, Value)>>>,
     livreur: Option<Livreur>,
+    ecoute: Mutex<Option<Ecoute>>,
+    abonnements: std::sync::Arc<Mutex<Vec<(String, String)>>>,
 }
 
 impl Pair {
     pub fn new(registre: Registre) -> Self {
-        Pair { registre, tenue: Mutex::new(None), livreur: None }
+        Pair { registre, tenue: Default::default(), livreur: None, ecoute: Mutex::new(None), abonnements: Default::default() }
     }
 
     /// Ce que l'hôte fait des trames reçues par la socket.
@@ -151,7 +204,61 @@ impl Pair {
 
     /// Les abonnements aux avis de pause reçus, à servir au lot 5.
     pub fn abonnements(&self) -> Vec<(String, String)> {
-        Vec::new()
+        self.abonnements.lock().unwrap_or_else(|p| p.into_inner()).clone()
+    }
+
+    /// La socket, en 600, et le fil qui lit une trame par connexion : une sonde ne laisse rien, un
+    /// message va au livreur pour la tâche tenue, un abonnement est gardé, une trame refusée est
+    /// journalisée.
+    fn ecouter(&self) -> Result<(), String> {
+        use std::os::unix::fs::PermissionsExt;
+        let mut ecoute = self.ecoute.lock().unwrap_or_else(|p| p.into_inner());
+        if ecoute.is_some() {
+            return Ok(());
+        }
+        std::fs::create_dir_all(&self.registre.socks).map_err(|e| format!("{} : {e}", self.registre.socks.display()))?;
+        let chemin = self.registre.socks.join(format!("{}.sock", std::process::id()));
+        // Une socket à notre pid ne peut être que la nôtre, laissée par un hôte mort.
+        let _ = std::fs::remove_file(&chemin);
+        let l = std::os::unix::net::UnixListener::bind(&chemin).map_err(|e| format!("{} : {e}", chemin.display()))?;
+        std::fs::set_permissions(&chemin, std::fs::Permissions::from_mode(0o600)).map_err(|e| format!("{} : {e}", chemin.display()))?;
+        let arret = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let (tenue, livreur, abonnements, a) = (self.tenue.clone(), self.livreur.clone(), self.abonnements.clone(), arret.clone());
+        let fil = std::thread::Builder::new()
+            .name("pair-socket".into())
+            .spawn(move || {
+                for c in l.incoming() {
+                    if a.load(std::sync::atomic::Ordering::SeqCst) {
+                        break;
+                    }
+                    let Ok(c) = c else { continue };
+                    let _ = c.set_read_timeout(Some(std::time::Duration::from_secs(2)));
+                    let mut octets = Vec::new();
+                    use std::io::Read;
+                    let _ = c.take(TRAME_MAX as u64 + 1).read_to_end(&mut octets);
+                    match lire_trame(&octets) {
+                        Ok(None) => {}
+                        Ok(Some(Trame::Abonnement { from, msg_id })) => abonnements.lock().unwrap_or_else(|p| p.into_inner()).push((from, msg_id)),
+                        Ok(Some(m)) => {
+                            let cle = tenue.lock().unwrap_or_else(|p| p.into_inner()).as_ref().map(|(c, _)| c.clone());
+                            match (cle, &livreur) {
+                                (Some(cle), Some(livrer)) => livrer(&cle, m),
+                                _ => eprintln!("[pair] a message arrived with no task to give it to"),
+                            }
+                        }
+                        Err(e) => eprintln!("[pair] frame refused: {e}"),
+                    }
+                }
+            })
+            .map_err(|e| e.to_string())?;
+        *ecoute = Some(Ecoute { chemin, arret, fil: Some(fil) });
+        Ok(())
+    }
+
+    fn cesser_d_ecouter(&self) {
+        if let Some(e) = self.ecoute.lock().unwrap_or_else(|p| p.into_inner()).take() {
+            e.arreter();
+        }
     }
 
     /// Pose l'entrée de la tâche `cle` (`parent/task`), nommée `name`, dans `cwd`. Une seconde
@@ -160,6 +267,12 @@ impl Pair {
         let mut tenue = self.tenue.lock().unwrap_or_else(|p| p.into_inner());
         if let Some((autre, _)) = tenue.as_ref().filter(|(autre, _)| autre != cle) {
             return Err(format!("teammate.pair: this host already holds {autre} in the sessions registry, and holds one task at a time"));
+        }
+        if tenue.is_some() {
+            // The same task again: its entry stays (same sessionId), busy.
+            drop(tenue);
+            self.statut(cle, true);
+            return Ok(());
         }
         let pid = std::process::id();
         let t = maintenant_ms();
@@ -185,6 +298,11 @@ impl Pair {
         });
         self.registre.ecrire(&entree)?;
         *tenue = Some((cle.to_string(), entree));
+        drop(tenue);
+        if let Err(e) = self.ecouter() {
+            self.fermer(cle);
+            return Err(format!("teammate.pair: the socket does not listen: {e}"));
+        }
         Ok(())
     }
 
@@ -210,6 +328,8 @@ impl Pair {
         if tenue.as_ref().is_some_and(|(tenante, _)| tenante == cle) {
             let _ = std::fs::remove_file(self.registre.fichier(std::process::id()));
             *tenue = None;
+            drop(tenue);
+            self.cesser_d_ecouter();
         }
     }
 }
@@ -217,9 +337,10 @@ impl Pair {
 impl Drop for Pair {
     /// L'hôte qui s'arrête retire son entrée.
     fn drop(&mut self) {
-        if self.tenue.get_mut().map(|t| t.is_some()).unwrap_or(true) {
+        if self.tenue.lock().map(|t| t.is_some()).unwrap_or(true) {
             let _ = std::fs::remove_file(self.registre.fichier(std::process::id()));
         }
+        self.cesser_d_ecouter();
     }
 }
 

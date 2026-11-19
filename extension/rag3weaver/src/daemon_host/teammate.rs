@@ -1228,6 +1228,12 @@ impl DaemonHost {
     /// Rend une ligne par équipier.
     pub fn reprendre_les_equipiers(self: &Arc<Self>) -> Vec<String> {
         let mut lignes = Vec::new();
+        // A pair is reachable between two works: its open task is in the registry again, idle.
+        for (t, _) in self.every_teammate() {
+            if self.pair_de_la_tache(&t.parent, &t.nom, false).is_some() {
+                lignes.push(format!("pair {}/{} reachable again in the sessions registry", t.parent, t.nom));
+            }
+        }
         for (t, files) in self.every_teammate() {
             let boite = files.mailbox();
             let Some(demande) = boite.iter().rposition(|l| l["kind"] == "request") else { continue };
@@ -1446,7 +1452,13 @@ impl DaemonHost {
     /// first paired task (the registry is cleaned of our dead entries then, never before), posed
     /// busy, named after the agent, in the task's folder. A refusal (a second paired task, a
     /// registry that cannot be written) is said in the mailbox, and the task runs without it.
-    fn pair_de_la_tache(&self, parent: &str, task: &str, files: &TeammateFiles) -> Option<Arc<super::pair::Pair>> {
+    pub(super) fn pair_de_la_tache(&self, parent: &str, task: &str, occupe: bool) -> Option<Arc<super::pair::Pair>> {
+        let files = self.teammate_files(parent, task).ok();
+        let dire = |texte: &str| {
+            if let Some(f) = &files {
+                let _ = f.append("host", "report", None, texte);
+            }
+        };
         let t = self.tache(parent, task)?;
         let policy = crate::backend::PreparedBackend::load(&t.manifest).ok().and_then(|p| p.manifest.teammate.clone()).unwrap_or_default();
         if !policy.pair {
@@ -1457,21 +1469,47 @@ impl DaemonHost {
             .get_or_init(|| {
                 let registre = self.pair_registre.clone().or_else(|| super::pair::Registre::depuis(|k| std::env::var(k).ok()))?;
                 registre.nettoyer();
-                Some(Arc::new(super::pair::Pair::new(registre)))
+                let mut pair = super::pair::Pair::new(registre);
+                // A message from a session is a request from « session » in the task's mailbox: it
+                // starts the teammate, or joins the running one's mailbox (never a second one).
+                if let Some(hote) = self.soi.get().cloned() {
+                    pair = pair.avec_livreur(Arc::new(move |cle: &str, trame: super::pair::Trame| {
+                        let (Some(h), super::pair::Trame::Message { texte, from, from_name, msg_id, priority }) = (hote.upgrade(), trame) else { return };
+                        let Some((parent, task)) = cle.split_once('/') else { return };
+                        let extra = json!({ "peer": from_name, "reply_to_address": from, "msg_id": msg_id, "priority": priority });
+                        if let Err(e) = h.post_to_teammate(parent, task, "session", "request", None, &texte, &extra) {
+                            eprintln!("[pair] the message for {cle} did not reach its mailbox: {e}");
+                        }
+                    }));
+                }
+                Some(Arc::new(pair))
             })
             .clone();
         let Some(pair) = pair else {
-            let _ = files.append("host", "report", None, "teammate.pair: no sessions registry here (neither HOME nor XDG_RUNTIME_DIR): the task runs without the pair mode");
+            dire("teammate.pair: no sessions registry here (neither HOME nor XDG_RUNTIME_DIR): the task runs without the pair mode");
             return None;
         };
         let nom = self.with_backend_id(&t.id, |b| b.prepared().nom_de_l_agent()).unwrap_or_else(|_| task.to_string());
         let dossier = t.workspace.as_ref().map(|w| w.racine.clone()).unwrap_or_else(|| t.arbre.clone());
-        match pair.ouvrir(&format!("{parent}/{task}"), &nom, &dossier) {
-            Ok(()) => Some(pair),
+        let cle = format!("{parent}/{task}");
+        match pair.ouvrir(&cle, &nom, &dossier) {
+            Ok(()) => {
+                if !occupe {
+                    pair.statut(&cle, false);
+                }
+                Some(pair)
+            }
             Err(e) => {
-                let _ = files.append("host", "report", None, &format!("{e}: the task runs without the pair mode"));
+                dire(&format!("{e}: the task runs without the pair mode"));
                 None
             }
+        }
+    }
+
+    /// The pair entry of a closed task goes, with its socket.
+    pub(super) fn pair_fermer(&self, cle: &str) {
+        if let Some(Some(p)) = self.pair.get() {
+            p.fermer(cle);
         }
     }
 
@@ -1496,14 +1534,15 @@ impl DaemonHost {
         let files = self.teammate_files(parent, task)?;
         // **The pair mode**: the entry in the sessions registry lives as long as the teammate.
         let cle = format!("{parent}/{task}");
-        let pair = self.pair_de_la_tache(parent, task, &files);
+        let pair = self.pair_de_la_tache(parent, task, true);
         // La fin, dans la boîte, erreur comprise : le superviseur la lit sans IDE.
         let outcome = match self.teammate_loop(parent, task, &files) {
             Ok(o) => o,
             Err(e) => Outcome { steps: Vec::new(), ended: format!("erreur : {e}") },
         };
+        // A pair stays reachable between two works: idle, until its task is closed.
         if let Some(p) = &pair {
-            p.fermer(&cle);
+            p.statut(&cle, false);
         }
         let line = files.append("host", "ended", None, &outcome.ended)?;
         if let Ok(bus) = self.tache(parent, task).ok_or(()).and_then(|t| self.with_backend_id(&t.id, |b| b.bus_de_publication()).map_err(|_| ())) {

@@ -786,6 +786,8 @@ impl DaemonHost {
             let _ = self.fermer_une_tache(parent, nom);
             return Err(format!("tâche « {nom} » : le registre des tâches : {e} ; la tâche est refermée, elle ne survivrait pas à l'hôte"));
         }
+        // **Le mode pair** : une tâche qui le déclare est joignable dès son ouverture, au repos.
+        let _ = self.pair_de_la_tache(parent, nom, false);
         Ok(tache)
     }
 
@@ -798,6 +800,7 @@ impl DaemonHost {
             let mut slot = h.backend.write().unwrap_or_else(|p| p.into_inner());
             self.close_slot(&h, &mut slot)?;
         }
+        self.pair_fermer(&format!("{parent}/{nom}"));
         self.backends.lock().unwrap_or_else(|p| p.into_inner()).remove(&tache.manifest);
         self.taches.lock().unwrap_or_else(|p| p.into_inner()).remove(&tache.manifest);
         // La couche de la tâche sort des suivies et se marque fermée ; rien n'est effacé ici (la
