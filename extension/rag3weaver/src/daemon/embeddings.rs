@@ -437,7 +437,11 @@ impl EmbedDaemon {
         }
         if active {
             let debut = std::time::Instant::now();
-            let (lot_max, _) = self.embedder.budget_conseille().unwrap_or((32, 512));
+            // The batches the service computes : at most its `lot_max`, whatever the
+            // model advises (19 November 2026 : a warm-up batch of 128 the service
+            // never sends made burn panic on the iGPU of luciepc).
+            let (advised, _) = self.embedder.budget_conseille().unwrap_or((32, 512));
+            let lot_max = advised.min(self.lot_max);
             let before = self.embedder.troncatures().map_or(0, |(n, _)| n);
             let mut sent = 0usize;
             let mut faits = Vec::new();
