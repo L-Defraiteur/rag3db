@@ -4955,7 +4955,7 @@ impl Backend {
 
     /// Whether a call reads the vectors: its `options.signals`, else the default signals of its `target` entity; never
     /// in `scan` mode.
-    fn call_reads_vectors(&self, args: &Value) -> bool {
+    fn call_reads_vectors(&self, args: &serde_json::Map<String, Value>) -> bool {
         if args.get("mode").and_then(Value::as_str) == Some("scan") {
             return false;
         }
