@@ -1,0 +1,7 @@
+%% tool: turns_search
+%% description: The full-text search of search_turns on Turn, cited once through a ForEachNode of one element: the options carry a computed filter.
+%% param: element json! -- {query, options}.
+%% result: search.result
+
+graph LR
+    search["GraphNode(graph='@builtin:tools/search_structured.mmd', target='Turn', query=$element.query, options=$element.options)"]
