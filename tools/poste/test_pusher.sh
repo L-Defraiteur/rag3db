@@ -494,7 +494,10 @@ echo mv code')
 P enqueue mv-c mv-c "$h" scripts - - - - author-b > /dev/null
 MOVE_MASTER=code P step > /dev/null 2>&1
 ! on_master mv-c && grep -q "^mv-c	" "$D/pusher/queue.tsv" && ok "master bouge en code pendant le pas : le lot reste en tête pour un rejeu" || ko "master bouge en code : le lot est parti sans rejeu"
+# The next step, in the same second: its repose goes under a name of its own, and the lot lands (19 Nov.: two steps in
+# one second reposed under the same name, the push of the second repose was refused, the lot looped).
 P step > /dev/null 2>&1
+on_master mv-c && ok "le pas suivant, dans la même seconde, repose sous un nom neuf et pousse" || ko "le pas suivant n'a pas poussé ($(grep -P '\tmv-c\t' "$D/pusher/log.tsv" | tail -1 | cut -f3))"
 
 # 30. A lot whose only witness is a browser test (19 Nov., c7): witness suite « navigateur » accepted at the deposit, and
 # handed to the pass as SUITE_DU_TEMOIN=navigateur.
