@@ -755,6 +755,12 @@ impl DbConnection for Rag3dbConnection {
         self.fermer_sans_point_de_reprise();
     }
 
+    fn interrupt(&self) {
+        // The engine sets its query's flag and the running operators read it; an error here is a connection
+        // already gone, with nothing left to interrupt.
+        let _ = self.conn.interrupt();
+    }
+
     fn database_path(&self) -> Option<std::path::PathBuf> {
         self.path.clone()
     }
