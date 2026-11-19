@@ -1,5 +1,6 @@
 # Nouveautés
 
+- 19 novembre 2026 — **L'estimation d'une réindexation compte ce qui change.** Sur une base déjà indexée, `estimate` et `index` ne comptent plus toute la source : seulement les fichiers dont le contenu ou la version de l'analyse a changé, et les vecteurs déjà dus. Une réindexation sans changement annonce zéro vecteur et ne demande plus de confirmation ; l'estimation dit combien de fichiers changent.
 - 19 novembre 2026 — **Le plein texte ne perd plus de mots à la maintenance nocturne (lucivy 4.3.12).** La
   compaction du dictionnaire retirait le texte d'un mot qu'aucun document ne citait plus, mais le mot restait dans
   une table d'attente qui n'était jamais vidée ; un fichier réindexé qui contenait de nouveau ce mot reprenait
