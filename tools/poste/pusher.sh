@@ -193,15 +193,22 @@ replay_scripts() { # <id> → 0 green, 1 red (the failing witness on stdout)
 # outside closed/, master went red at check_tickets, and three docs lots were pushed behind it). check_tickets.py on the
 # reposed tree; when red, on master's own docs: 0 green, 1 red by the train (the refusals in last-red.txt), 4 master
 # itself red (the train waits for a lot that mends it).
-tickets_gate() {
+# Master's own docs at check_tickets: 0 green (or no check_tickets.py), 1 red.
+master_tickets_red() {
   local c=extension/rag3weaver/scripts/check_tickets.py tmp r
+  g cat-file -e "$BASE:$c" 2>/dev/null || return 1
+  tmp=$(mktemp -d)
+  g archive "$BASE" docs "$c" | tar -x -C "$tmp"
+  python3 "$tmp/$c" "$tmp" > /dev/null 2>&1; r=$?
+  rm -rf -- "$tmp"
+  [ $r != 0 ]
+}
+
+tickets_gate() {
+  local c=extension/rag3weaver/scripts/check_tickets.py
   [ -f "$WT/$c" ] || return 0
   python3 "$WT/$c" "$WT" > "$SD/last-tickets.log" 2>&1 && return 0
-  tmp=$(mktemp -d)
-  g archive "$BASE" docs | tar -x -C "$tmp"
-  python3 "$WT/$c" "$tmp" > /dev/null 2>&1; r=$?
-  rm -rf -- "$tmp"
-  if [ $r = 0 ]; then
+  if ! master_tickets_red; then
     { echo "check_tickets rouge sur l'arbre reposé :"; grep -E '^  - ' "$SD/last-tickets.log" | head -3; } | paste -sd' ' > "$SD/last-red.txt"
     return 1
   fi
@@ -707,6 +714,13 @@ step() {
     else kept+=("$line"); fi
   done
   BASE=$(g rev-parse origin/master)
+  # A Rust train is not taken on a master red at check_tickets: its pass would go red at check_features after twenty
+  # minutes (19 Nov., the chains of arbre and embarquement). It waits behind the next lot, so a docs lot that mends
+  # master reaches the head; the docs and scripts trains are judged on their reposed tree (tickets_gate).
+  rank=0; for line in "${kept[@]}"; do r=$(kind_rank "$(f_ "$line" 4)"); [ "$r" -gt "$rank" ] && rank=$r; done
+  if [ "$rank" = 2 ] && master_tickets_red; then
+    TRAIN_LABEL=$(f_ "${kept[0]}" 1); tickets_wait "${kept[@]}"; return 0
+  fi
   # To the millisecond: two steps in the same second reposed under the same branch name, and the push of the second
   # repose was refused (19 Nov.).
   STAMP=$(date +%Y%m%d-%H%M%S-%3N)
