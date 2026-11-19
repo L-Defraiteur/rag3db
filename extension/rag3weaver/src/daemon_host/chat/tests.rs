@@ -2215,3 +2215,45 @@ fn a_refused_put_turn_is_sent_again_with_the_next_turn() {
     assert!(keys.iter().position(|k| *k == (1, 1)).unwrap() < first_of_turn_2, "before turn 2: {keys:?}");
 }
 
+/// A model that overflows on the calls named, and answers the others.
+fn qui_deborde(appels_qui_debordent: &'static [usize]) -> ChatModel {
+    let n = Arc::new(AtomicUsize::new(0));
+    Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+        let n = n.clone();
+        Ok(Arc::new(CallbackLlm::new("overflowing", 8192, move |turns, opts, sink| {
+            let k = n.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+            if appels_qui_debordent.contains(&k) {
+                return Err(crate::llm::LlmError::ContextOverflow { max: 8192, got: 9000 });
+            }
+            MockLlm::new("an answer").generate(turns, opts, sink)
+        })))
+    })
+}
+
+/// **A turn that overflows the context compacts, then goes again once as a new turn** (lot 3,
+/// 19 Nov 2026): the overflowing turn 2 stays true in the memory and is filed, the retry is turn
+/// 3 with the same message, and the answer comes back.
+#[test]
+fn a_turn_that_overflows_compacts_then_goes_again_as_a_new_turn() {
+    let (_d, host, id, memoire) = banc_de_compaction(json!({ "slice_tokens": 1_000_000, "keep_turns": 1 }), qui_deborde(&[2]));
+    host.chat_turn(&id, "first question").expect("turn 1");
+    let r = host.chat_turn(&id, "second question").expect("turn 2 overflows, is compacted, then answered");
+    assert!(r.to_string().contains("an answer"), "{r}");
+    assert_eq!(memoire.restarts.lock().unwrap().len(), 1, "one compaction");
+    let slices = memoire.slices.lock().unwrap().clone();
+    assert_eq!(slices.last().map(|s| s["to_turn"].clone()), Some(json!(2)), "the overflowing turn 2 is filed: {slices:#?}");
+    let lines = memoire.turns.lock().unwrap().clone();
+    assert!(lines.iter().any(|l| l["turn"] == 2 && l["seq"] == 0 && l["text"] == "second question"), "turn 2 as it happened: {lines:#?}");
+    assert!(lines.iter().any(|l| l["turn"] == 3 && l["seq"] == 0 && l["text"] == "second question"), "the retry is turn 3: {lines:#?}");
+}
+
+/// **A second overflow after the compaction is a named failure** (lot 3).
+#[test]
+fn a_second_overflow_after_the_compaction_is_a_named_failure() {
+    let (_d, host, id, memoire) = banc_de_compaction(json!({ "slice_tokens": 1_000_000 }), qui_deborde(&[2, 3]));
+    host.chat_turn(&id, "first question").expect("turn 1");
+    let e = host.chat_turn(&id, "second question").expect_err("the retry overflows too");
+    assert!(e.contains("after a compaction"), "{e}");
+    assert_eq!(memoire.restarts.lock().unwrap().len(), 1, "one compaction, not a loop");
+}
+
