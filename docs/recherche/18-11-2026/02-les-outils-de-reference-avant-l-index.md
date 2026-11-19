@@ -26,6 +26,32 @@
 >   du moteur, Python et JS) sur l'état de link-copy-split. Les tableaux ci-dessous les recevront, à côté des chiffres
 >   de debug.
 
+## Les chiffres en release (19 novembre 2026, 13 h 30)
+
+**Le relevé.**
+- La sonde `probe_index_timeline` en `cargo test --release`, plein texte seul, sous `poste mesure`, lib 7c2b506ec.
+- Script `mesure-c-release.sh`, journaux `~/.cache/rag3weaver-build/mesure-c-release/` à luciepc.
+- **Après C** : `probe-index-timeline-3`, sur master. **Avant C** : `probe-before-c`, le parent de C (07b5f782f8)
+  plus la sonde.
+
+| Arbre | `usages` complet, avant C | `usages` complet, après C | Relations posées, après C | Index entier, avant → après |
+|---|---|---|---|---|
+| rag3weaver/src (311 fichiers, 17 500 scopes) | 24,1 s | **14,1 s** | 16,1 s | 26,1 → 26,2 s |
+| dépôt entier (8 500 fichiers, 82 600 scopes) | 76,6 s (708 lignes à 107,8 s) | **48,6 s** | 50,6 s | 109,9 → 100,6 s |
+| en service : le manifeste de l'hôte, en premier index | — | **34,4 s** | 38,6 s | 78,4 s |
+
+Les phases en release, après C, sur rag3weaver/src : analyse 6,6 s, ingestion des paquets 2,0 s, relations 6,1 s,
+dérivations 10,5 s. Sur le dépôt : 15,4 s, 9,7 s, 20,9 s et 49,9 s.
+
+**La lecture.**
+- **C tient en release.** `usages` est complet 10 s plus tôt sur rag3weaver/src (24 → 14 s) et 28 s plus tôt sur
+  le dépôt (77 → 49 s). L'index entier ne ralentit pas : il gagne 9 s sur le dépôt.
+- **B ne bat pas l'index, en release des deux côtés.** Le repli prend ~21 s (codeparsers, en release : analyse 7,5 à
+  9 s et image 12,3 s). L'index réel, lui, rend `usages` complet en 14,1 s sur rag3weaver/src après C. La porte reste
+  fermée. La condition de réouverture se lit maintenant contre 14 s, et non plus contre 26 s.
+- **Les tableaux de debug plus bas** gardent leurs rapports. Leurs valeurs absolues ne valent que comme ordre de
+  grandeur.
+
 ## 1. Quels outils (recherche)
 
 Les quatre outils de référence lisent le même graphe : le schéma de code de `src/code.rs`.
