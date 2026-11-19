@@ -7655,6 +7655,61 @@ mod tests {
         (dir, backend)
     }
 
+    /// **A folded container is not a search candidate** (2.12, ticket of 16 November 2026, « un scope de namespace
+    /// passe devant une classe du même nom »; c7's rule: a `namespace` or `module` whose folded content and
+    /// docstring together are shorter than `workspace.container_min_chars`, 80 by default, is in neither the full
+    /// text nor the chunks). Thirty headers each open `namespace zorg {` around one class: thirty folded scopes
+    /// named exactly « zorg ». `api.h` holds a documented `struct zorg_database` and a documented `namespace zorg`.
+    /// The query « zorg », by the default signals: the struct is in the first ten, the documented namespace stays
+    /// a candidate, and no folded namespace is a result.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_folded_container_is_not_a_search_candidate() {
+        let tools = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/tools");
+        let (dir, p) = fixture_code_avec("working_tree", false, json!({}), &|m| {
+            m["tools"]["search_code"] =
+                json!({"graph": "search_workspace.mmd", "bindings": {"target": "Scope"}, "policy": {"read_files": true}});
+        });
+        drop(p);
+        std::fs::copy(tools.join("search_workspace.mmd"), dir.path().join("search_workspace.mmd")).unwrap();
+        for i in 0..30 {
+            std::fs::write(
+                dir.path().join(format!("sources/h{i}.h")),
+                format!("#pragma once\n\nnamespace zorg {{\nclass Thing{i} {{\n  int a{i};\n  int b{i};\n}};\n}}\n"),
+            )
+            .unwrap();
+        }
+        std::fs::write(
+            dir.path().join("sources/api.h"),
+            "#pragma once\n\n/// The zorg engine: the public API of zorg, its handle and its state.\nnamespace zorg {\nint version();\n}\n\n\
+             /// A zorg database: the handle to an open zorg store.\nstruct zorg_database {\n  void* handle;\n  int state;\n};\n",
+        )
+        .unwrap();
+        let prepared = PreparedBackend::load(&dir.path().join("backend.json")).expect("le manifeste se charge");
+        let backend = backend_de_code(dir.path(), prepared);
+        {
+            let source = backend.file_source.clone().unwrap();
+            let mut cat = backend.catalog.lock().unwrap();
+            crate::code_sync::sync_source(&mut cat, source.as_ref(), &Default::default(), &mut |_| {}).expect("l'index");
+        }
+        let r = backend.call("search_code", json!({"query": "zorg", "options": {"signals": ["bm25"], "limit": 10, "format": "json"}})).expect("search_code");
+        let lignes: Vec<(String, String, String)> = r["result"]
+            .as_array()
+            .unwrap_or(&Vec::new())
+            .iter()
+            .map(|l| {
+                let d = &l["data"];
+                (d["name"].as_str().unwrap_or("").to_string(), d["scope_type"].as_str().unwrap_or("").to_string(), d["file_path"].as_str().unwrap_or("").to_string())
+            })
+            .collect();
+        assert!(lignes.iter().any(|(n, _, _)| n == "zorg_database"), "the struct is in the first ten: {lignes:?}");
+        assert!(
+            !lignes.iter().any(|(n, t, f)| n == "zorg" && t == "namespace" && f != "api.h"),
+            "no folded namespace is a result: {lignes:?}"
+        );
+        assert!(lignes.iter().any(|(n, t, f)| n == "zorg" && t == "namespace" && f == "api.h"), "the documented namespace stays a candidate: {lignes:?}");
+    }
+
     /// **Témoin 1 de la vue : aucune projection n'écrit de liste** (2a′-2, page 05, § 5). Une recherche
     /// dense filtrée par chemin, sur une base à générations, projette un Cypher court : moins de 4 Kio,
     /// quelle que soit la taille de la base. Aujourd'hui, le masque des versions y est écrit en clair.
