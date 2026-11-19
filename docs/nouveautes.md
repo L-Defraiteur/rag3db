@@ -36,6 +36,10 @@
   bornés à 4 000 et 8 000 caractères, la taille d'origine dite. `render_turns` rend une tranche dans une seule forme,
   et `archive_slice(run, from_turn, to_turn)` la range en deux temps : les sujets de la tranche, puis chaque sujet sur
   sa fiche. Elle garde la tranche comme Source, et rend son chemin et jusqu'à quel tour le run est rangé.
+- 19 novembre 2026 — **Un accord ne se publie qu'après son reçu.** Une décision sur une carte d'accord écrit
+  d'abord son reçu dans le journal des décisions, puis publie l'accord. Sans journal, rien n'est publié, et l'erreur
+  le dit : un accord ne semble jamais appliqué sans l'être. Un reçu dont la publication échoue est marqué « non
+  posé ».
 
 - 19 novembre 2026 — **Un ADD ou un DROP de colonne attend les lectures ouvertes de sa table.** Une transaction qui
   lit une table la retient jusqu'à sa fin : un `ALTER TABLE … ADD`, `… DROP` ou un `DROP TABLE` l'attend, et la
