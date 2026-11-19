@@ -1221,4 +1221,44 @@ mod tests {
         let md = prompt_of("Read.", serde_json::json!([{"name": "m", "title": "M", "value": {"b": "two", "a": 1}, "format": "markdown"}]));
         assert!(md.ends_with("## M\n\n**a**: 1\n**b**: two"), "{md}");
     }
+
+    // ── A reply cut by its limit (19 November 2026, the banc's B3 pass: 5 windows of 19 cut) ──
+
+    /// A model that stops at its limit in the middle of the JSON, its budget eaten by reasoning.
+    fn cut_reply(seen: Arc<std::sync::Mutex<Option<crate::llm::ReasoningEffort>>>) -> Arc<dyn Llm> {
+        Arc::new(crate::llm::CallbackLlm::new("cut", 4096, move |_t, opts, sink| {
+            *seen.lock().unwrap() = opts.reasoning;
+            for f in crate::llm::fragments("{\"topics\": [{\"title\": \"la rep") {
+                sink.on_token(&f);
+            }
+            sink.on_finish(&Finish::max_tokens());
+            Ok((Finish::max_tokens(), crate::llm::Usage { completion_tokens: 8192, reasoning_tokens: 8000, ..Default::default() }))
+        }))
+    }
+
+    /// **A reply cut by its limit is refused, saying so**: under a response_schema, a reply that stops at max_tokens
+    /// is not « not JSON » — it is cut, and the refusal says the limit, the reasoning that ate it, and what to change.
+    #[test]
+    fn a_reply_cut_by_its_limit_is_refused_saying_so() {
+        let seen = Arc::new(std::sync::Mutex::new(None));
+        let mut node = LlmNodeFactory.create("extract", &serde_json::json!({"response_schema": topics_schema(), "max_tokens": 8192})).unwrap();
+        let mut ctx = ctx_with(cut_reply(seen));
+        ctx.set_input("prompt", PortValue::new("découpe".to_string()));
+        let e = node.execute(&mut ctx).err().expect("a cut reply is refused");
+        assert!(e.contains("cut at max_tokens=8192") && e.contains("reasoning 8000") && e.contains("response_schema"), "{e}");
+        assert!(!e.contains("n'est pas du JSON"), "{e}");
+    }
+
+    /// **The reasoning of a call is a declared parameter**: `reasoning` (minimal, low, medium, high) reaches the model
+    /// as its reasoning effort; an unknown value is refused at creation.
+    #[test]
+    fn the_declared_reasoning_reaches_the_model() {
+        let seen = Arc::new(std::sync::Mutex::new(None));
+        let mut node = LlmNodeFactory.create("extract", &serde_json::json!({"reasoning": "low"})).unwrap();
+        let mut ctx = ctx_with(cut_reply(seen.clone()));
+        ctx.set_input("prompt", PortValue::new("découpe".to_string()));
+        let _ = node.execute(&mut ctx);
+        assert_eq!(*seen.lock().unwrap(), Some(crate::llm::ReasoningEffort::Low));
+        assert!(LlmNodeFactory.create("x", &serde_json::json!({"reasoning": "lots"})).is_err(), "an unknown reasoning is refused");
+    }
 }

@@ -1211,6 +1211,23 @@ fn the_slice_extraction_prompt_is_the_instruction_and_the_slice_only() {
     assert!(user_prompt(&first).starts_with("Find the topics.\n\n## The slice\n\n"), "{}", user_prompt(&first));
 }
 
+/// **The extraction asks for little reasoning by default** (19 November 2026: on Vertex, the reasoning of Gemini
+/// counts in max_tokens, and cut 5 extractions of 19): `extract_reasoning` is declared, `low` by default, and reaches
+/// the request.
+#[test]
+#[ignore]
+fn the_slice_extraction_asks_low_reasoning_by_default() {
+    let serveur = FakeServer::start_sequence(vec![text_reply(r#"{"slice_summary": "s", "topics": [], "not_filed": [{"from": 1, "to": 6, "reason": "nothing"}]}"#)]);
+    let adresse = serveur.url.clone();
+    let dir = tempfile::tempdir().expect("dossier");
+    let b = ouvrir(dir.path(), |m| {
+        m["models"]["llm"] = json!({"provider": "compatible", "protocol": "openai", "model": "faux", "address": adresse});
+    });
+    let _ = b.call("archive_slice", json!({"titre": "t", "chemin": "sources/t.md", "contenu": slice_of_six_turns()}));
+    let first: Value = serde_json::from_str(&serveur.request.recv().unwrap()).unwrap();
+    assert_eq!(first["reasoning_effort"], json!("low"), "{}", first);
+}
+
 /// The split of a long section (archive, segment_over): the instruction, then its numbered paragraphs as a part;
 /// the rules of a topic are in the schema.
 #[test]
