@@ -165,6 +165,11 @@ pub struct Identite {
     /// tokens. Absent : a service from before, or a model that does not say.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_tokens_per_text: Option<usize>,
+    /// **The size of a short request**, in texts : it passes before the next
+    /// long batch at the pass lock (19 November 2026). Absent : a service from
+    /// before the short lane.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub short_request_texts: Option<usize>,
     /// **Texts the model truncated to that window** since the service started.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub truncated_texts: Option<u64>,
@@ -644,6 +649,7 @@ impl EmbedDaemon {
             max_chars_per_text: Some(self.max_chars),
             chars_per_token: Some(CARACTERES_PAR_JETON),
             cut_texts: Some(self.cut_texts.load(std::sync::atomic::Ordering::Relaxed)),
+            short_request_texts: None,
             max_tokens_per_text: self.embedder.troncatures().map(|(_, window)| window),
             truncated_texts: self.embedder.troncatures().map(|(count, _)| count.saturating_sub(self.warmup_truncations) as u64),
         }
@@ -1838,6 +1844,44 @@ mod tests {
     /// had the 7878 refuse every batch of 512, and a whole index stayed
     /// without vectors). The identity says the cap and its ratio (12 000
     /// characters by default, about 3 per token).
+    /// A slow model : 200 ms for a call with a text over 1 000 bytes, 10 ms otherwise.
+    struct Slow;
+    impl Embedder for Slow {
+        fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
+            let long = texts.iter().any(|t| t.len() > 1000);
+            std::thread::sleep(std::time::Duration::from_millis(if long { 200 } else { 10 }));
+            Ok(texts.iter().map(|_| vec![0.5; 4]).collect())
+        }
+        fn dim(&self) -> usize { 4 }
+        fn name(&self) -> &str { "slow" }
+    }
+
+    /// **A short request passes before the next long batch** (19 November 2026,
+    /// ticket of the call that waits behind an index) : while a request of 20
+    /// batches of 200 ms runs, a request of one text answers in less than two
+    /// batches. The worst of three tries counts.
+    #[test]
+    fn a_short_request_passes_before_the_next_long_batch() {
+        // A card shared with the screen : bursts of 200 ms and a gap of 100 ms, the
+        // gap waited under the pass lock — where a query waited behind each batch.
+        let settings = crate::burst::BurstSettings { target: std::time::Duration::from_millis(200), pause: std::time::Duration::from_millis(100) };
+        let adresse = demon(EmbedDaemon::new(Arc::new(Slow)).burst(Some(settings)));
+        let client = Arc::new(DaemonEmbedder::joindre(&adresse).expect("joindre"));
+        let mut worst = std::time::Duration::ZERO;
+        for _ in 0..3 {
+            // 20 texts of 5 000 bytes : one per batch (budget of 8 192), 20 batches.
+            let long: Vec<String> = (0..20).map(|i| format!("{i} {}", "x".repeat(5000))).collect();
+            let index = { let c = client.clone(); std::thread::spawn(move || c.embed(&long).expect("the long request")) };
+            std::thread::sleep(std::time::Duration::from_millis(300));
+            let start = std::time::Instant::now();
+            client.embed(&["une requête".to_string()]).expect("the short request");
+            worst = worst.max(start.elapsed());
+            index.join().unwrap();
+        }
+        assert!(worst < std::time::Duration::from_millis(400), "a short request waits at most the batch in course : {worst:?}");
+        assert_eq!(client.identite().short_request_texts, Some(4), "the short lane is declared");
+    }
+
     /// A model that truncates any text longer than 1 000 bytes, at a window of 32.
     #[derive(Default)]
     struct Truncating { count: std::sync::atomic::AtomicUsize, last: std::sync::Mutex<Vec<usize>> }
