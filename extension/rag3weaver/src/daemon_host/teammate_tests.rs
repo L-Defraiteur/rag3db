@@ -2443,3 +2443,64 @@ fn a_paired_task_holds_its_entry_while_it_works_and_leaves_none() {
         }
     }
 }
+
+/// **A message to a paired task's socket is a request in its mailbox** (mode pair, lot 2): a
+/// session writes the frame relevé on 16 Nov 2026 to the socket named by the entry; the mailbox
+/// has a request from « session », its text the envelope as sent, with the peer's name and its
+/// reply address; the teammate reads it at its next step.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn a_message_to_a_paired_task_socket_is_a_request_in_its_mailbox() {
+    use std::io::Write;
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let mut m: Value = serde_json::from_str(&std::fs::read_to_string(&manifeste).unwrap()).unwrap();
+    m["teammate"] = json!({ "pair": true });
+    std::fs::write(&manifeste, serde_json::to_string_pretty(&m).unwrap()).unwrap();
+    let declarations = manifeste.parent().unwrap();
+    for args in [&["add", "-A"][..], &["commit", "-q", "-m", "le mode pair"]] {
+        assert!(std::process::Command::new("git").args(args).current_dir(declarations).status().unwrap().success(), "git {args:?}");
+    }
+    let registre = super::pair::Registre { sessions: d.path().join("sessions"), socks: d.path().join("socks") };
+    let enveloppe = "<cross-session-message from=\"uds:/run/user/1000/cc-socks/42.sock\" from-name=\"rag3db-5a\" from-mode=\"prompting\">\nWhat is 2+2?\n</cross-session-message>";
+    let frontieres = Arc::new(Mutex::new(Vec::<String>::new()));
+    let model: ChatModel = {
+        let (frontieres, sessions) = (frontieres.clone(), registre.sessions.clone());
+        Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let (frontieres, sessions) = (frontieres.clone(), sessions.clone());
+            Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
+                if tool_results(turns).is_empty() {
+                    let n = { let mut f = frontieres.lock().unwrap(); f.push(last_user(turns)); f.len() };
+                    if n == 1 {
+                        // During the first step, a session writes to the socket of the entry.
+                        let e: Value = serde_json::from_slice(&std::fs::read(sessions.join(format!("{}.json", std::process::id()))).unwrap()).unwrap();
+                        let mut c = std::os::unix::net::UnixStream::connect(e["messagingSocketPath"].as_str().unwrap()).unwrap();
+                        let trame = json!({ "msgV": 1, "msg_id": "m-1", "type": "user", "priority": "next", "from": "uds:/run/user/1000/cc-socks/42.sock",
+                                            "message": { "role": "user", "content": "<cross-session-message from=\"uds:/run/user/1000/cc-socks/42.sock\" from-name=\"rag3db-5a\" from-mode=\"prompting\">\nWhat is 2+2?\n</cross-session-message>" } });
+                        c.write_all(format!("{trame}\n").as_bytes()).unwrap();
+                        drop(c);
+                        std::thread::sleep(std::time::Duration::from_millis(300));
+                    }
+                }
+                answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "fait", "remaining": "" }))]))
+            })))
+        })
+    };
+    let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")).with_pair_registry(registre));
+    host.se_connaitre();
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    host.ouvrir_une_tache(&h.id, "doc").expect("la tâche s'ouvre");
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    files.append_with("supervisor", "request", None, "Fais-le.", &json!({ "expects": "none" })).unwrap();
+    host.run_teammate(&h.id, "doc").unwrap();
+    let boite = files.mailbox();
+    let venue: Vec<&Value> = boite.iter().filter(|l| l["from"] == "session").collect();
+    assert_eq!(venue.len(), 1, "the message is in the mailbox once: {boite:#?}");
+    assert_eq!(venue[0]["kind"], "request");
+    assert_eq!(venue[0]["text"], enveloppe);
+    assert_eq!(venue[0]["peer"], "rag3db-5a");
+    assert_eq!(venue[0]["reply_to_address"], "uds:/run/user/1000/cc-socks/42.sock");
+    let f = frontieres.lock().unwrap();
+    assert!(f.iter().skip(1).any(|t| t.contains("What is 2+2?")), "the teammate reads it at a next step: {f:?}");
+}
