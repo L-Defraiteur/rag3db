@@ -133,7 +133,7 @@ fn verifier(catalog: &Catalog) {
 #[test]
 #[ignore]
 fn role_enfant() {
-    let (Ok(role), Ok(base)) = (std::env::var(ROLE), std::env::var(BASE)) else { return };
+    let (Ok(role), Ok(base)) = (std::env::var(ROLE), std::env::var(BASE)) else { return crate::common::enfant("e2e_tx_vecteurs_apres_rollback") };
     let base = PathBuf::from(base);
     let mut catalog = catalogue(&base);
     match role.as_str() {

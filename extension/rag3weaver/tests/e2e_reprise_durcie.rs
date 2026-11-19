@@ -120,7 +120,7 @@ fn des_morceaux_sans_leur_arete_sont_refaits_a_la_relance() {
 #[test]
 #[ignore]
 fn role_enfant() {
-    let (Ok(_), Ok(base)) = (std::env::var(ROLE), std::env::var(BASE)) else { return };
+    let (Ok(_), Ok(base)) = (std::env::var(ROLE), std::env::var(BASE)) else { return crate::common::enfant("e2e_reprise_durcie") };
     let mut catalog = catalogue(Rag3dbConnection::new(&base).expect("base"));
     let options = SourceSyncOptions {
         batch_files: 16,

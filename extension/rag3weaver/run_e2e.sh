@@ -732,11 +732,22 @@ compter_les_suites() {
   done
   echo "Suites jouées : $JOUEES sur $ATTENDUES demandées."
 }
+# **Les marques d'un journal** (19 novembre 2026) : `SAUTÉ <suite> — <raison>`, un test qui n'a pas pu juger
+# (common::sauter) ; `ENFANT <suite>`, un point d'entrée qu'un test parent relance en sous-processus (role_*), joué
+# seul : ce n'est pas un test (common::enfant, décision de c7). Libtest compte les deux réussis : la passe les retire
+# des verts, nomme les sautés, compte les enfants à part, pour que « 36/36 » veuille dire 36 tests.
+compter_les_marques() { # <journal> → SAUTES, ENFANTS
+  mapfile -t SAUTES < <(grep -oP '^SAUTÉ \K.*' "$1")
+  mapfile -t ENFANTS < <(grep -oP '^ENFANT \K.*' "$1")
+}
+
 # Pour le témoin (scripts/test_run_e2e.sh) : le compte seul, sur un journal
 # donné, sans rien bâtir ni jouer.
 if [ -n "${RAG3WEAVER_E2E_COMPTER_JOURNAL:-}" ]; then
   compter_les_suites "$RAG3WEAVER_E2E_COMPTER_JOURNAL"
   [ ${#MANQUANTES[@]} -eq 0 ] || echo "manquantes : ${MANQUANTES[*]}"
+  compter_les_marques "$RAG3WEAVER_E2E_COMPTER_JOURNAL"
+  echo "Marques : ${#SAUTES[@]} sauté(s), ${#ENFANTS[@]} point(s) d'entrée d'enfant."
   exit 0
 fi
 
@@ -1332,7 +1343,11 @@ if [ "$SUMMARY" = true ]; then
   # fournisseur n'a pas répondu (quota épuisé, panne : `LlmError::Unavailable`)
   # imprime `SAUTÉ <suite> — <raison>` et rend la main ; libtest le compte
   # réussi. Il est retiré des verts, nommé, et la passe se dit incomplète.
-  mapfile -t SAUTES < <(grep -oP '^SAUTÉ \K.*' "$TMPLOG")
+  compter_les_marques "$TMPLOG"
+  if [ ${#ENFANTS[@]} -gt 0 ]; then
+    TOTAL_PASSED=$((TOTAL_PASSED - ${#ENFANTS[@]}))
+    say "\n  %d point(s) d'entrée d'enfant joué(s) seul(s), retirés des verts : ce ne sont pas des tests\n" "${#ENFANTS[@]}"
+  fi
   if [ ${#SAUTES[@]} -gt 0 ]; then
     TOTAL_PASSED=$((TOTAL_PASSED - ${#SAUTES[@]}))
     say "\n  sautés (le fournisseur n'a pas répondu ; un saut n'est pas un vert) :\n"
