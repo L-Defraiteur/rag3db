@@ -42,6 +42,12 @@ cat > $W/scripts/cargo_magasin.sh <<'F'
 case "$*" in *--lib*) echo "test result: ok. 3 passed; 0 failed" ;; *) [ "${FAUX_PREUVE:-}" = muette ] || echo "    Checking rag3weaver v0.1.0" ;; esac
 F
 printf '#!/bin/sh\necho "${FAUX_HOTE:-lucie-tablette}"\n' > $D/bin/hostname
+# L'étape des témoins navigateur : FAUX_NAV_OK=<nom>,… dit « ok » pour ces tests (sinon un seul test, « autre »).
+cat > $W/scripts/temoins_navigateur.sh <<'F'
+#!/bin/bash
+for c in $(echo "${FAUX_NAV_OK:-autre}" | tr , ' '); do echo "test daemon_host::chat::tests::$c ... ok"; done
+echo "test result: ok. 1 passed; 0 failed"
+F
 chmod +x $W/run_e2e.sh $W/scripts/*.sh $D/bin/hostname
 rouge=0
 passe() { # passe <attendu: VERT|ROUGE …|TEMOINS…> <description> [variables…] : joue la passe, juge la dernière ligne
@@ -92,6 +98,14 @@ passe "ROUGE rouges connus" "un rouge connu au ticket dans closed/ refuse la pas
 printf -- '# t\n\n- **État** : fermé (corrigé par abc)\n' > $T/rouge.md; printf 'e2e_x\tcas_un\tdocs/x/tickets/rouge.md\n' > $K
 passe "ROUGE rouges connus" "un rouge connu au ticket fermé refuse la passe" SUITES_EN_PLUS=e2e_x
 rm -f $K
+
+# **Le témoin navigateur** (19 novembre 2026, c7) : SUITE_DU_TEMOIN=navigateur, pour un lot dont le seul témoin est un test
+# sous la feature `navigateur` (Chat.tsx) ; l'étape « témoin » ne le joue pas dans la lib (il y serait ignoré, donc
+# « 0 passed » et vert sans avoir jugé), il se juge à l'étape des témoins navigateur, où son nom doit sortir « ok ».
+passe VERT "SUITE_DU_TEMOIN=navigateur : le témoin se juge à l'étape navigateur" SUITE_DU_TEMOIN=navigateur FAUX_NAV_OK=filtre
+grep -q 'témoin navigateur filtre : ok' $R && [ "$(cut -d' ' -f1 $D/trace | tr '\n' ' ')" = "e2e_lectures e2e_code " ] \
+  && echo "vert   le témoin navigateur est dit ok, et l'étape lib ne le joue pas" || { echo "ROUGE  témoin navigateur : $(grep -i 'navigateur' $R | head -2 | tr '\n' ' ') ; suites : $(cut -d' ' -f1 $D/trace | tr '\n' ' ')"; rouge=1; }
+passe "ROUGE témoin navigateur" "SUITE_DU_TEMOIN=navigateur : un témoin qui ne sort pas ok rougit" SUITE_DU_TEMOIN=navigateur FAUX_NAV_OK=autre
 
 # Le repli des tests sur l'iGPU : à luciepc seulement, jamais au portable (son seul GPU porte l'écran), même posé par l'appelant.
 passe VERT "le repli à luciepc" FAUX_HOTE=LuciePC

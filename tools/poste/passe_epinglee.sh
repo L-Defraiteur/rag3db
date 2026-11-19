@@ -118,7 +118,15 @@ juge_connus() {
 }
 echo "== témoin" >> $R
 # SUITE_DU_TEMOIN=lib (15 novembre 2026, ticket d'hotfixs) : le témoin est un test de la lib, joué par `run_e2e.sh --lib`.
-if [ "${SUITE_DU_TEMOIN:-}" = lib ]; then
+# SUITE_DU_TEMOIN=navigateur (19 novembre 2026, c7) : le témoin est un test sous la feature `navigateur`. Dans la lib, il
+# serait ignoré, donc « 0 passed » et vert sans avoir jugé : il se juge à l'étape des témoins navigateur, où son nom doit
+# sortir « ok ».
+if [ "${SUITE_DU_TEMOIN:-}" = navigateur ]; then
+  echo "témoin navigateur : $FILTRE, jugé à l'étape des témoins navigateur" >> $R
+  [ -x scripts/temoins_navigateur.sh ] || rouge "témoin navigateur : pas d'étape des témoins navigateur (scripts/temoins_navigateur.sh) dans cet arbre"
+  [ "$SEUL" = temoins ] && { echo "TEMOINS code=0 (témoin navigateur, jugé à son étape)" >> $R; exit 0; }
+  c=0
+elif [ "${SUITE_DU_TEMOIN:-}" = lib ]; then
   timeout 3600 ./run_e2e.sh --features openai-llm,anthropic-llm --lib "$FILTRE" > $J/temoins.log 2>&1; c=$?
 else
   timeout 3600 ./run_e2e.sh --features openai-llm,anthropic-llm --test ${SUITE_DU_TEMOIN:-e2e_lectures} "$FILTRE" > $J/temoins.log 2>&1; c=$?
@@ -138,7 +146,7 @@ if [ -n "${SUITES:-}" ]; then
   LISTE_DES_SUITES="$LISTE_DES_SUITES $EXIGEES_NOMS"
 else
   # La lib n'est pas une suite e2e : elle se rejoue entière à l'étape « lib ».
-  LISTE_DES_SUITES="$EXIGEES_NOMS e2e_lectures e2e_code $([ "${SUITE_DU_TEMOIN:-}" = lib ] || echo "${SUITE_DU_TEMOIN:-}") ${SUITES_EN_PLUS:-}"
+  LISTE_DES_SUITES="$EXIGEES_NOMS e2e_lectures e2e_code $(case "${SUITE_DU_TEMOIN:-}" in lib|navigateur) ;; *) echo "${SUITE_DU_TEMOIN:-}" ;; esac) ${SUITES_EN_PLUS:-}"
 fi
 JOUEES=""
 for suite in $(echo $LISTE_DES_SUITES | tr " " "\n" | awk 'NF && !vu[$0]++'); do
@@ -178,6 +186,10 @@ if [ -x scripts/temoins_navigateur.sh ]; then
   FEATURES=$FEAT timeout 1800 scripts/temoins_navigateur.sh > $J/navigateur.log 2>&1; c=$?
   grep -E '^test result|panicked at|SAUTÉ|ROUGE' $J/navigateur.log | head -10 >> $R
   [ $c = 0 ] || rouge "témoins navigateur (code=$c)"
+  if [ "${SUITE_DU_TEMOIN:-}" = navigateur ]; then
+    grep -qE "^test ([^ ]*::)?$FILTRE \.\.\. ok$" $J/navigateur.log || rouge "témoin navigateur $FILTRE : pas vu « ok » à l'étape des témoins navigateur"
+    echo "témoin navigateur $FILTRE : ok" >> $R
+  fi
 elif [ -n "${5:-}" ]; then
   # Un arbre d'avant 3ec37ef1e : le témoin navigateur nommé, seul et exigé.
   echo "== témoin navigateur" >> $R

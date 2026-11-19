@@ -495,4 +495,10 @@ P enqueue mv-c mv-c "$h" scripts - - - - author-b > /dev/null
 MOVE_MASTER=code P step > /dev/null 2>&1
 ! on_master mv-c && grep -q "^mv-c	" "$D/pusher/queue.tsv" && ok "master bouge en code pendant le pas : le lot reste en tête pour un rejeu" || ko "master bouge en code : le lot est parti sans rejeu"
 P step > /dev/null 2>&1
+
+# 30. A lot whose only witness is a browser test (19 Nov., c7): witness suite « navigateur » accepted at the deposit, and
+# handed to the pass as SUITE_DU_TEMOIN=navigateur.
+h=$(lot nav-1 extension/rag3weaver/src/nav.rs 'fn nav() {}')
+P enqueue nav-1 nav-1 "$h" rust la_page_du_chat_nomme navigateur - - author-c > /dev/null 2>&1 && ok "suite du témoin « navigateur » acceptée au dépôt" || ko "suite du témoin « navigateur » refusée au dépôt"
+P dequeue nav-1 > /dev/null 2>&1
 exit $red
