@@ -2452,3 +2452,27 @@ seul le chemin manquait au message rendu à l'auteur, 4197a0ec9e). Posé aussi :
 (une clé `reasoning`, models.llm sans model, 702a3adb74) ; la mesure du raisonnement de l'extraction au banc sur la tête
 de mémoire (memoire-extraction-cut e94b15ca2) ; le correctif des usages qualifiés de codeparsers, puis la répétition
 rejouée et la bascule des bases.
+
+## 20 novembre, 00 h 30 — les hôtes sur lucivy 4.3.12, et deux dégâts de ma purge
+
+**La fenêtre de l'hôte de G** : binaire 60cff306c4 (lucivy 4.3.12, lib 6e2476d41 inchangée, essai 7991 vert aux deux
+postes, sans sccache) posé et réveillé : portable 9 s de coupure (00 h 25 49 → 00 h 25 58), luciepc 36 s. Les trois
+bases ouvertes sans avertissement, File, Library, Scope prêts, vecteurs 100 %. Lucivy lance sa sonde de nuit.
+
+**Deux dégâts de ma purge de 21 h 14, les deux à luciepc.** (1) `~/git_workspaces/rag3db-lourd` n'était dans aucune
+liste de session : c'était la **racine indexée de la base code-lourd de Lucie** (manifeste source working_tree). Le
+nouvel hôte a refusé le manifeste (« la racine n'existe pas »), la base est restée intacte et fermée ; recréé à
+00 h 26 au même chemin, détaché sur la tête exacte qu'il avait (a72acfeef0, lue dans mon journal de purge), déclaré dans
+la liste gardée hors règle d'horodatage. Règle apprise : une purge croise d'abord les chemins avec les racines des
+manifestes (`~/.config/rag3weaver/*/templates/backends/*/*.json`) ; une racine indexée est à Lucie, pas à une session.
+Relevé après coup : toutes les racines des manifestes existent sur les deux postes, sauf une base d'essai de
+codeparsers (base-avant) déjà morte avant ce soir. (2) `~/git_workspaces/rag3db-docs-G` à luciepc, dans aucune liste
+non plus : le filet de pose de l'hôte y lisait `installer-l-unite-de-l-hote.sh`, d'où le premier passage rouge et les
+36 s ; G a repris avec l'installeur de master lu dans le worktree du pousseur, et corrige bascule-pose.sh pour ne plus
+lire un worktree à plat.
+
+**Dans la file** : ed-estimate rendu à ED (conflit à la repose dans index_nodes.rs) ; les lots de recherche
+(notification « index prêt » et son e2e par le binaire réel, sucre de nom, page de diagnostic, cas de campagne 03
+avec un témoin shell : archi fait accepter un témoin .sh/.py au lanceur demain, derrière le bac à sable) ; codeparsers
+redépose sa pile avec les usages qualifiés dans la nuit (cause : rien ne posait de rendez-vous vers le type d'un
+appel `Type::f()` ; trois témoins rouges vus).
