@@ -296,4 +296,24 @@ mkdir -p "$gd/refs/remotes/origin" && touch "$gd/refs/remotes/origin/master.lock
 P step > /dev/null 2>&1; wait
 on_master fl-a && ! grep -q "^rouge	fl-a	" "$D/pusher/inbox/author-a.txt" && ok "fetch sur un verrou de ref : retenté dans le même pas, le lot passe" || ko "fetch sur un verrou de ref : lot rendu ou pas passé"
 grep -q "	fl-a	.*\|	train	fetch" "$D/pusher/log.tsv" && grep -q "verrou de ref" "$D/pusher/log.tsv" && ok "le journal dit le verrou de ref retenté" || ko "le journal ne dit pas le verrou de ref"
+
+# 21. A child lot written on a parent that landed reposed (new hashes): the parent's first commit adds a line that its
+# second commit rewrites; picking the parent's commits again would conflict. Commits are chosen by patch (19 Nov.:
+# rangement-lot-2 and memoire-turns returned « conflit » after pile-archi-19 landed).
+git -C "$D/author" fetch -q origin && git -C "$D/author" checkout -q -B ch-p origin/master
+echo 'step one' > "$D/author/docs/ch.md" && git -C "$D/author" add -A && git -C "$D/author" commit -qm "ch-p 1"
+echo 'step two' > "$D/author/docs/ch.md" && git -C "$D/author" commit -qam "ch-p 2" && git -C "$D/author" push -q origin HEAD:ch-p
+hp=$(git -C "$D/author" rev-parse HEAD)
+hk=$(FROM=ch-p lot ch-k docs/ch-k.md '# child')
+FROM=origin/master lot ch-move docs/ch-move.md '# master moves' > /dev/null && git -C "$D/author" push -q origin ch-move:master
+P enqueue ch-p ch-p "$hp" docs - - - - author-a > /dev/null; P enqueue ch-k ch-k "$hk" docs - - - ch-p author-a > /dev/null
+P step > /dev/null 2>&1; P step > /dev/null 2>&1
+on_master "ch-p 2" && on_master ch-k && ok "l'enfant d'un parent reposé passe (commits choisis par patch)" || ko "l'enfant d'un parent reposé bute ($(grep -P '\tch-k\t' "$D/pusher/log.tsv" | tail -1 | cut -f3-))"
+
+# 22. A lot holding a commit empty from its origin (git commit --allow-empty): kept, not a conflict (19 Nov.: pile-arbre-2a3).
+git -C "$D/author" fetch -q origin && git -C "$D/author" checkout -q -B em-a origin/master
+git -C "$D/author" commit -q --allow-empty -m "em-a marker" && echo '# em' > "$D/author/docs/em.md" && git -C "$D/author" add -A && git -C "$D/author" commit -qm "em-a" && git -C "$D/author" push -q origin HEAD:em-a
+P enqueue em-a em-a "$(git -C "$D/author" rev-parse HEAD)" docs - - - - author-a > /dev/null
+P step > /dev/null 2>&1
+on_master em-a && ok "un commit vide à l'origine passe" || ko "un commit vide à l'origine bute ($(grep -P '\tem-a\t' "$D/pusher/log.tsv" | tail -1 | cut -f3-))"
 exit $red
