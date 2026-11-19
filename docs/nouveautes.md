@@ -1,5 +1,12 @@
 # Nouveautés
 
+- 19 novembre 2026 — **Le plein texte ne perd plus de mots à la maintenance nocturne (lucivy 4.3.12).** La
+  compaction du dictionnaire retirait le texte d'un mot qu'aucun document ne citait plus, mais le mot restait dans
+  une table d'attente qui n'était jamais vidée ; un fichier réindexé qui contenait de nouveau ce mot reprenait
+  l'ancien id, sans texte, et ne sortait plus en recherche sur ce mot. L'index de code de la base du dépôt en avait
+  perdu environ 7 500. Les textes morts restent maintenant un cycle en sursis, et la note de maintenance dit ceux
+  qu'elle reprend. Les mots déjà perdus reviennent au rebâti du plein texte.
+
 - 19 novembre 2026 — **La conversation d'un chat se range en mémoire au fil de l'eau.** Chaque tour du chat de
   l'IDE s'écrit dans la mémoire déclarée par le dépôt (`bilans.memoire`). Quand les tours pas encore rangés
   dépassent `memory.slice_tokens` (50 000 jetons par défaut), une tranche se range en fond, sans retarder le chat.

@@ -136,9 +136,14 @@ hf-hub = { version = "0.4", optional = true, default-features = false, features 
 # en f64, arrondis une fois — les mêmes documents ont le même score au bit près quelle que
 # soit la disposition des segments (un ulp d'écart en `parse` avant) ; `indexed: false` sur
 # un champ texte est signalé. Format inchangé.
-lucivy-core = "4.3.10"
+# La 4.3.12 (19 novembre 2026, tag v4.3.12, main edfe422) : la compaction du dictionnaire ne
+# perd plus de mots — la table des créations en attente n'oubliait jamais sur le commit des
+# shards et rendait l'ancien id d'un mot dont la compaction avait retiré le texte ; les textes
+# morts restent un cycle en sursis ; `maintain` nomme ceux qu'il reprend. Et la 4.3.11 (une
+# requête floue longue sans positions ne relit plus chaque valeur entière). Format inchangé.
+lucivy-core = "4.3.12"
 # Moteur : nécessaire pour construire les LucivyDocument à l'indexation.
-ld-lucivy = { version = "4.3.10", default-features = false, features = ["stopwords", "lz4-compression"] }
+ld-lucivy = { version = "4.3.12", default-features = false, features = ["stopwords", "lz4-compression"] }
 
 
 # sparse_vector — crate ami de lucivy (Apache-2.0, dérivé en partie de Qdrant,
