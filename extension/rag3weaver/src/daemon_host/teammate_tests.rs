@@ -1268,6 +1268,84 @@ fn a_text_both_written_and_reported_is_in_the_mailbox_once() {
     assert_eq!(portee, 1, "le contenu une seule fois, celui du report : {boite:#?}");
 }
 
+/// **A tool that waits says so on the bus, once, and says when it resumes** (c7 and archi, 19
+/// November 2026: the terminal names a cause beside its animation, and only the host knows that a
+/// call is waiting). `teammate.tool_wait_notice_s` at 1 s; the fake model calls `read_file` while the
+/// test holds the task backend's slot for 2.5 s. The bus of the task carries one
+/// `Waiting {run, cause: "tool", what: "read_file", since_ms}` on the step's run, past the threshold,
+/// then one `Resumed {run, cause: "tool", waited_ms}` after it; the fast call of the next step, none.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn a_waiting_tool_says_so_on_the_bus_once_and_says_when_it_resumes() {
+    use std::time::{Duration, Instant};
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let mut m: Value = serde_json::from_str(&std::fs::read_to_string(&manifeste).unwrap()).unwrap();
+    m["teammate"]["tool_wait_notice_s"] = json!(1);
+    m["teammate"]["reply_wait_s"] = json!(5);
+    std::fs::write(&manifeste, serde_json::to_string_pretty(&m).unwrap()).unwrap();
+    let tenu: Arc<Mutex<Option<Arc<super::Hosted>>>> = Arc::default();
+    let model: ChatModel = {
+        let tenu = tenu.clone();
+        Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let tenu = tenu.clone();
+            Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
+                let lire = calls(&[("read_file", json!({ "path": "README.md" }))]);
+                match (step_of(turns), tool_results(turns).len()) {
+                    (1, 0) => {
+                        // The slot of the task backend, held 2.5 s from another thread before the call.
+                        let h = tenu.lock().unwrap().clone().expect("the task backend");
+                        let (pris, attendre) = std::sync::mpsc::channel();
+                        std::thread::spawn(move || {
+                            let borne = Instant::now() + Duration::from_secs(5);
+                            let _slot = loop {
+                                if let Ok(slot) = h.backend.try_write() {
+                                    break slot;
+                                }
+                                assert!(Instant::now() < borne, "the slot of the task backend is held by the turn");
+                                std::thread::sleep(Duration::from_millis(10));
+                            };
+                            pris.send(()).unwrap();
+                            std::thread::sleep(Duration::from_millis(2500));
+                        });
+                        attendre.recv_timeout(Duration::from_secs(6)).expect("the slot taken");
+                        answer(turns, opts, sink, "", lire)
+                    }
+                    (_, 0) => answer(turns, opts, sink, "", lire),
+                    (n, _) => answer(turns, opts, sink, "Le README dit « Petit dépôt ».", calls(&[("step_done", json!({ "item": "", "succeeded": n >= 2, "done": "lu", "remaining": if n >= 2 { "" } else { "relire" } }))])),
+                }
+            })))
+        })
+    };
+    let host = hote(d.path(), model).with_runs_root(d.path().join("runs"));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    let tache = host.ouvrir_une_tache(&h.id, "doc").expect("la tâche s'ouvre");
+    let t = host.hote_par_id(&tache.id).unwrap();
+    let mut agent = host.with_backend(&t, |b| b.bus_de_publication().subscribe(crate::events::topic::AGENT)).unwrap();
+    *tenu.lock().unwrap() = Some(t.clone());
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    files.append("supervisor", "request", None, "Lis le README.").unwrap();
+    let o = host.run_teammate(&h.id, "doc").unwrap();
+    let mut evenements = Vec::new();
+    while let Ok(e) = agent.try_recv() {
+        evenements.push(e.to_json());
+    }
+    let attentes: Vec<&Value> = evenements.iter().filter(|e| e["kind"] == "Waiting").collect();
+    let reprises: Vec<&Value> = evenements.iter().filter(|e| e["kind"] == "Resumed").collect();
+    let kinds: Vec<&Value> = evenements.iter().map(|e| &e["kind"]).collect();
+    assert_eq!((attentes.len(), reprises.len()), (1, 1), "one Waiting and one Resumed ({o:?}) : {kinds:?}");
+    let (w, r) = (attentes[0], reprises[0]);
+    assert_eq!((&w["cause"], &w["what"], &r["cause"]), (&json!("tool"), &json!("read_file"), &json!("tool")), "{w} {r}");
+    assert!(w["since_ms"].as_u64().is_some_and(|ms| ms >= 1000), "past the threshold : {w}");
+    assert!(r["waited_ms"].as_u64().is_some_and(|ms| ms >= 2000), "the whole wait : {r}");
+    assert_eq!(w["run"], r["run"], "{w} {r}");
+    let premier_run = evenements.iter().find(|e| e["kind"] == "RunStarted").map(|e| e["run"].clone());
+    assert_eq!(Some(w["run"].clone()), premier_run, "on the run of the first step : {kinds:?}");
+    let (iw, ir) = (evenements.iter().position(|e| e["kind"] == "Waiting").unwrap(), evenements.iter().position(|e| e["kind"] == "Resumed").unwrap());
+    assert!(iw < ir, "Waiting before Resumed : {kinds:?}");
+}
+
 /// **Une request qui exige un report ne se clôt pas sans lui** (`expects: "report"`, déclaré
 /// par le superviseur) : un `step_done` sans `report` dit « fait sans le livrable demandé » et
 /// l'équipier attend la boîte sans appeler le modèle ; une ligne du superviseur le relance, le
