@@ -1117,6 +1117,10 @@ fn a_provider_refusal_waits_a_window_and_does_not_fail_the_step() {
     let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")));
     let h = host.hosted(&manifeste).unwrap();
     host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    // The bus of the task, before the request: each backoff says `Waiting` (cause model), then `Resumed`.
+    let tache = host.ouvrir_une_tache(&h.id, "doc").expect("la tâche s'ouvre");
+    let t = host.hote_par_id(&tache.id).unwrap();
+    let mut agent = host.with_backend(&t, |b| b.bus_de_publication().subscribe(crate::events::topic::AGENT)).unwrap();
     host.post_to_teammate(&h.id, "doc", "c7", "request", None, "Fais le travail.", &json!({ "expects": "none" })).expect("la request");
     let files = host.teammate_files(&h.id, "doc").unwrap();
     let borne = Instant::now() + Duration::from_secs(90);
@@ -1135,6 +1139,19 @@ fn a_provider_refusal_waits_a_window_and_does_not_fail_the_step() {
     assert_eq!(attentes.len(), 3, "chaque refus dit son attente : {boite:#?}");
     assert!(attentes[0].starts_with("le pas 1 attend le fournisseur (1 refus") && attentes[2].contains("reprise dans 4 s"), "{attentes:#?}");
     assert!(!boite.iter().any(|l| l["text"].as_str().unwrap_or_default().contains("n'a pas abouti")), "un refus n'est pas un pas raté : {boite:#?}");
+    let mut evenements = Vec::new();
+    while let Ok(e) = agent.try_recv() {
+        evenements.push(e.to_json());
+    }
+    let suite: Vec<String> = evenements
+        .iter()
+        .filter(|e| e["kind"] == "Waiting" || e["kind"] == "Resumed")
+        .map(|e| format!("{} {} {}", e["kind"].as_str().unwrap_or_default(), e["cause"].as_str().unwrap_or_default(), e["what"].as_str().unwrap_or_default()))
+        .collect();
+    assert_eq!(suite, ["Waiting model faux-equipier", "Resumed model ", "Waiting model faux-equipier", "Resumed model ", "Waiting model faux-equipier", "Resumed model "], "each backoff says it waits for the model, then resumes : {evenements:#?}");
+    let reprises: Vec<u64> = evenements.iter().filter(|e| e["kind"] == "Resumed").filter_map(|e| e["waited_ms"].as_u64()).collect();
+    assert!(reprises.len() == 3 && reprises[2] >= 4000, "the whole backoff (1, 2, then 4 s) : {reprises:?}");
+    assert!(evenements.iter().filter(|e| e["kind"] == "Waiting").all(|e| e["run"].as_str().is_some_and(|r| r.starts_with("agent-"))), "on the run of the refused step : {evenements:#?}");
 }
 
 /// Attend dans la boîte une ligne qui satisfait `ok`, 90 s au plus.
