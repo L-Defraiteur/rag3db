@@ -1,3 +1,20 @@
+```json
+{
+  "lanceur": {
+    "parent": "f54bb40e17bd89ad72457edd09cbb3480db5dedb",
+    "tree": "extension/rag3weaver",
+    "needs_lib": false,
+    "witness": "watch::tests::a_watch_notes_in_the_layer_it_serves",
+    "test": "cargo test --lib --features code -- --exact watch::tests::a_watch_notes_in_the_layer_it_serves",
+    "suites": [],
+    "hints": [
+      "src/watch.rs"
+    ],
+    "ours": "bbd469fdfa72de9f26f7ba99edb17e4f51b3d2e5"
+  }
+}
+```
+
 # Cas de campagne : la montre qui note dans la couche du backend
 
 Arbre principal, 19 novembre 2026, pour la campagne des correctifs passés (chantier de Lucie). C'est un cas court, en
