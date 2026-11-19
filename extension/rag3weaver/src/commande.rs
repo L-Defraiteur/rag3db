@@ -939,6 +939,12 @@ impl Atelier {
         }
     }
 
+    /// **The host's poste** (19 Nov 2026): `RAG3WEAVER_POSTE` (the path of `poste`) and
+    /// `RAG3WEAVER_POSTE_ATTENTE_S` (60 by default), read through `lire`. Absent: nothing changes.
+    pub fn avec_le_poste_de_l_hote(self, _lire: impl Fn(&str) -> Option<String>) -> Self {
+        self
+    }
+
     /// Heavy commands go through `poste lourd` at `chemin`, waiting `attente_s` at most.
     pub fn avec_le_poste(mut self, chemin: impl Into<std::path::PathBuf>, attente_s: u64) -> Self {
         self.poste = Some((chemin.into(), attente_s));
@@ -2843,6 +2849,23 @@ mod tests {
             .unwrap();
         assert!(domaine.path().join("dedans").exists(), "a write inside the domain passes: {}", String::from_utf8_lossy(&sortie.stderr));
         assert!(!dehors.path().join("dehors").exists(), "a write outside is refused");
+    }
+
+    /// **The host's setting fills the poste** (19 Nov 2026): `RAG3WEAVER_POSTE` and
+    /// `RAG3WEAVER_POSTE_ATTENTE_S`; absent, nothing changes.
+    #[test]
+    fn the_host_setting_fills_the_poste_of_an_atelier() {
+        let d = tempfile::tempdir().unwrap();
+        let vars = |k: &str| match k {
+            "RAG3WEAVER_POSTE" => Some("/opt/poste".to_string()),
+            "RAG3WEAVER_POSTE_ATTENTE_S" => Some("90".to_string()),
+            _ => None,
+        };
+        let a = Atelier::dans(d.path()).avec_le_poste_de_l_hote(vars);
+        assert_eq!(a.poste, Some((std::path::PathBuf::from("/opt/poste"), 90)));
+        let defaut = Atelier::dans(d.path()).avec_le_poste_de_l_hote(|k| (k == "RAG3WEAVER_POSTE").then(|| "/opt/poste".to_string()));
+        assert_eq!(defaut.poste, Some((std::path::PathBuf::from("/opt/poste"), 60)));
+        assert_eq!(Atelier::dans(d.path()).avec_le_poste_de_l_hote(|_| None).poste, None);
     }
 }
 
