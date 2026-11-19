@@ -692,6 +692,9 @@ pub fn hook_nodes(policy: &ToolPolicy) -> Vec<&'static str> {
 /// Les types de nœuds que cette politique permet.
 pub fn allowed_nodes(policy: &ToolPolicy) -> Vec<&'static str> {
     let mut nodes: Vec<&'static str> = BASE_NODES.to_vec();
+    // The slow read of the tests (`backend::lecture_lente`), never in the product.
+    #[cfg(test)]
+    nodes.push("SlowReadNode");
     if policy.read_files {
         nodes.extend_from_slice(READ_NODES);
     }
