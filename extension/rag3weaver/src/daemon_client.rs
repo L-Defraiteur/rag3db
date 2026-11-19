@@ -294,6 +294,13 @@ impl DaemonClient {
     /// répond plus est relancé (si ce client sait le faire), la session
     /// rouverte, le backend rouvert, et le message rejoué une fois : la
     /// connexion refusée prouve qu'il n'avait pas été reçu.
+    /// **The state of the index of this session's view, now** (`POST /index_state`): what a read would say, without
+    /// waiting (`ready`, the estimates). The index watch of the thin client polls it.
+    pub fn index_state(&self, view: Option<&Value>) -> Result<Value, String> {
+        let _ = view;
+        Ok(Value::Null)
+    }
+
     pub fn op(&self, route: &str, body: Value) -> Result<Value, OpError> {
         let premier = match self.envoyer(route, &body) {
             Err(Injoignable(e)) => match &self.relaunch {
@@ -502,13 +509,6 @@ impl Hote for DaemonClient {
                 Vec::new()
             }
         }
-    }
-
-    /// **The state of the index of this session's view, now** (`POST /index_state`): what a read would say, without
-    /// waiting (`ready`, the estimates). The index watch of the thin client polls it.
-    pub fn index_state(&self, view: Option<&Value>) -> Result<Value, String> {
-        let _ = view;
-        Ok(Value::Null)
     }
 
     fn appeler(&self, nom: &str, arguments: Value) -> Result<Value, String> {
