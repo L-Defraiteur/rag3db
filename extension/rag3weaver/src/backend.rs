@@ -500,6 +500,14 @@ pub struct WritePolicy {
     /// Immutable rows can be inserted or replayed identically, never overwritten.
     #[serde(default)]
     pub immutable: bool,
+    /// **Rows that expire** (19 November 2026, the TTL of the indexed turns): the only entities a
+    /// tool may delete from, by the `expire` action of `EntityRecordNode`, which removes the rows
+    /// whose `created_at` is older than a bound. Off by default: the declaration is the guard.
+    #[serde(default)]
+    pub expires: bool,
+    /// The default bound of `expire`, in days, when the call gives none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ttl_days: Option<u64>,
     #[serde(default)]
     pub transition_dates: Vec<TransitionDate>,
 }

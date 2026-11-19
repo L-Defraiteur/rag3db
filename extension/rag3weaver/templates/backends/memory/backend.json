@@ -76,7 +76,9 @@
         "created_at": "created_at",
         "updated_at": "updated_at",
         "revision": "revision",
-        "immutable": true
+        "immutable": true,
+        "expires": true,
+        "ttl_days": 30
       }
     },
     "Memory": {
@@ -1049,6 +1051,9 @@
     },
     "read_turns": {
       "graph": "graphs/read_turns.mmd"
+    },
+    "purge_turns": {
+      "graph": "graphs/purge_turns.mmd"
     }
   },
   "reactions": {
