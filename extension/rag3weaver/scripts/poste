@@ -502,9 +502,10 @@ case "$mode" in
       if [ -n "${POSTE_LOURD_ATTENTE_MAX:-}" ]; then prendre -w "$POSTE_LOURD_ATTENTE_MAX" -x 8; else prendre -x 8; fi
       max=$(places); tenus=$(lourds_tenus); rang=$(file_des_lourds "$billet")
       # La place réservée (19 novembre 2026, c7 : quatre mesures longues de sessions ont figé la file du pousseur une
-      # heure) : à partir de deux places, un lourd hors de la voie du pousseur n'en compte que N-1 ; la dernière reste
-      # au pousseur, dont tout le monde attend les passes pour atterrir.
-      [ "${POSTE_VOIE:-}" != pousseur ] && [ "$max" -ge 2 ] && max=$((max - 1))
+      # heure) : sur un poste qui la déclare (le fichier `place-pousseur` du dossier des verrous, là où tourne le
+      # pousseur) et à partir de deux places, un lourd hors de la voie du pousseur n'en compte que N-1 ; la dernière
+      # reste au pousseur. Ailleurs, les sessions ont les N places.
+      [ -e "$V/place-pousseur" ] && [ "${POSTE_VOIE:-}" != pousseur ] && [ "$max" -ge 2 ] && max=$((max - 1))
       if [ "$tenus" -lt "$max" ] && [ "$rang" -lt $((max - tenus)) ] && flock -n -s 9; then
         rm -f "$billet"; dire tient
         flock -u 8; exec 8>&-
