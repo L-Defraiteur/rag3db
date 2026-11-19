@@ -7,7 +7,7 @@ Une ligne par cas joué ; les détails suivent la table.
 
 | cas | verdict | endroit | taille (Algareth / nôtre) | coût | dégâts à côté | indices présents, suivis ? |
 |---|---|---|---|---|---|---|
-| tty 09, une demande écrite une fois (`b1163f64e1`) | **échoué, faute de budget** (`stopped_by: wall`) | aucun diff | 0 / +36 −3 (tui.rs +7 −2, vue.rs +29 −1 ; hors docs) | 1 pas en 1 831 s, budget de 30 min ; appels et jetons sans `trace.json` (lot 3 d'archi) | aucun (diff vide) | la souche `tui::nom_garde -> None` ; non suivie (rien n'est écrit) |
+| tty 09, une demande écrite une fois (`b1163f64e1`) | **écarté** : latence de Vertex (jeu du 19 à 16 h 26) ; à rejouer | aucun diff | 0 / +36 −3 (tui.rs +7 −2, vue.rs +29 −1 ; hors docs) | 2 pas, 45 appels, 1 814 s de modèle sur 1 828 s ; l'appel le plus lent 385 s pour 8 695 jetons d'invite | aucun (diff vide) | la souche `tui::nom_garde -> None` ; non suivie (rien n'est écrit) |
 
 ## tty 09 : une demande s'écrit une fois, et /nom retient le nom gardé (19 novembre)
 
@@ -25,10 +25,14 @@ Une ligne par cas joué ; les détails suivent la table.
   - La boîte montre un seul pas fait : « Analyse des deux défauts terminée. Les causes sont identifiées dans tui.rs,
     vue.rs et boite.rs. » Le pas suivant (« Appliquer les corrections… puis vérifier les tests avec cargo test ») était
     parti quand le budget l'a arrêté.
-- **Le verdict** : **échoué, faute de budget**. Avec un diff vide, le témoin reste au parent, donc rouge. Il n'y avait
-  rien à rejouer.
-- **Ce qui reste à départager** avant d'en conclure quoi que ce soit sur Algareth : un seul pas en 30 minutes est
-  lent. Le lot 3 d'archi mesurera le temps du modèle par appel (`trace.json`).
+- **Le premier verdict, « échoué, faute de budget », est requalifié en écarté.** Le `trace.json` du lot 3 d'archi
+  dit : 45 appels au modèle, **1 814 s de modèle sur 1 828 s d'horloge**, 14 s d'outils, aucune reprise, aucun quota.
+  L'appel le plus lent prend 385 s pour 8 695 jetons d'invite et 34 jetons de sortie ; le suivant 285 s. C'est la
+  latence de Vertex à ce moment-là, pas l'agent ni un outil. Le jeu ne se juge pas sur ce qu'il n'a pas pu faire.
+  Archi le rejoue.
+- **Un point à éclaircir sur les compteurs** : la trace compte 156 794 jetons d'entrée et **1 186 786** jetons servis
+  par le cache. Le cache dépasse l'entrée : `input_tokens` ne compte sans doute que la part non servie par le cache.
+  Il faut le confirmer avant d'en tirer la colonne « coût » et la part servie par le cache (ticket R, P5).
 - **À ne pas compter contre l'agent** : dans le bac à sable, la suite `tty` rend 3 rouges de plus, des tests de
   coquille qui ouvrent un pseudo-terminal refusé par le bac à sable. Le ticket est
   `docs/rag3weaver-archi/tickets/2026-11-19-le-bac-a-sable-refuse-le-pseudo-terminal.md`.
