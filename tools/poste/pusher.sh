@@ -206,11 +206,14 @@ repose() { # <line>…
   g checkout -q -f -B "$RB" "$BASE" && g clean -q -fd
   for line in "$@"; do
     id=$(f_ "$line" 1); head=$(f_ "$line" 3)
-    commits=$(g rev-list --reverse --no-merges "HEAD..$head")
+    # By patch: a commit whose change is already on the reposed head (a parent that landed reposed, under new hashes)
+    # is left out (19 Nov.: picking it again conflicted with the parent's later commits).
+    commits=$(g rev-list --reverse --no-merges --cherry-pick --right-only "HEAD...$head")
     [ -n "$commits" ] || continue
     # docs/nouveautes.md takes every lot's line at its head: the two sides are kept (union), as a session resolves
     # it by hand. Any other collision stays a conflict for the author.
-    if ! g -c core.attributesFile="$D/attributes" cherry-pick --empty=drop $commits > "$D/last-repose.log" 2>&1; then
+    # --allow-empty keeps a commit empty from its origin (a marker); --empty=drop still drops one that became empty.
+    if ! g -c core.attributesFile="$D/attributes" cherry-pick --allow-empty --empty=drop $commits > "$D/last-repose.log" 2>&1; then
       g cherry-pick --abort 2>/dev/null
       echo "$id"; return 1
     fi
