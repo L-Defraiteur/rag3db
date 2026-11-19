@@ -44,6 +44,8 @@ pub enum Worktree {
     DuBackend,
     Tous,
     Chemin(String),
+    /// **A path pattern** (2a′-3, lot 6): `*` and `?` within a path segment, `~` expanded.
+    Pattern(String),
 }
 
 /// La parente d'une source.
@@ -116,6 +118,13 @@ pub fn declaration_du_manifeste(tracked: Option<&Value>) -> Result<Declaration, 
         Some(autre) => return Err(format!("tracked.sources : une liste attendue, pas {autre}")),
     };
     Ok(Declaration { root, sources })
+}
+
+/// `~` at the head of a path, expanded to `home` (the `HOME` of the process when `None` is given by the caller).
+pub(crate) fn expand_home(path: &str, home: Option<&str>) -> String {
+    // RED STUB: not expanded.
+    let _ = home;
+    path.to_string()
 }
 
 fn lire_une_source(i: usize, v: &Value) -> Result<Source, String> {
@@ -272,11 +281,14 @@ pub fn resoudre_les_sources(
                             let voulu = std::path::Path::new(c).canonicalize().ok();
                             worktrees.iter().filter(|w| voulu.as_ref() == Some(&w.chemin)).collect()
                         }
+                        // RED STUB: a pattern selects nothing.
+                        Worktree::Pattern(_) => Vec::new(),
                     };
                     let vide = choisis.is_empty().then(|| match quel {
                         Worktree::DuBackend => format!("worktree:backend : {} n'est dans aucun worktree du dépôt", worktree_du_backend.display()),
                         Worktree::Tous => "worktree:* : le dépôt n'a aucun worktree".to_string(),
                         Worktree::Chemin(c) => format!("worktree:{c} : aucun worktree du dépôt à ce chemin"),
+                        Worktree::Pattern(m) => format!("worktree:{m} : aucun worktree du dépôt ne répond à ce motif"),
                     });
                     (refs_des_worktrees(&refs, &choisis), choisis, vide)
                 }
@@ -1269,6 +1281,30 @@ mod tests {
         git(&d, &["worktree", "add", "-q", "--detach", t.path().join("wt-d").to_str().unwrap(), "HEAD~1"]);
         git(&d, &["worktree", "add", "-q", t.path().join("wt-t1").to_str().unwrap(), "agent/t1"]);
         (t, d)
+    }
+
+    /// **Témoin 5 : the selector by path pattern** (2a′-3, lot 6). `worktree:<dir>/wt-*` takes the three worktrees,
+    /// `wt-?` the two whose name has one letter after `wt-`; a pattern that takes none is said in the state, without
+    /// refusal; a malformed pattern (a bracket) is refused naming it; `~` is expanded.
+    #[test]
+    fn the_worktree_selector_by_path_pattern() {
+        let (t, d) = depot();
+        let base = t.path().canonicalize().unwrap();
+        let choisis = |motif: &str| -> (Vec<String>, Option<String>) {
+            let decl = declaration_du_manifeste(Some(&serde_json::json!({"sources": [{"select": format!("worktree:{motif}")}]}))).expect("la déclaration");
+            let r = resoudre_les_sources(&d, &d, &[], &decl).expect("la résolution");
+            let mut noms: Vec<String> = r[0].travail.iter().map(|w| w.chemin.file_name().unwrap().to_string_lossy().into_owned()).collect();
+            noms.sort();
+            (noms, r[0].vide.clone())
+        };
+        assert_eq!(choisis(&format!("{}/wt-*", base.display())).0, vec!["wt-a", "wt-d", "wt-t1"], "wt-* does not take the three worktrees");
+        assert_eq!(choisis(&format!("{}/wt-?", base.display())).0, vec!["wt-a", "wt-d"], "wt-? does not take the two one-letter worktrees");
+        let (aucun, dit) = choisis(&format!("{}/zz-*", base.display()));
+        assert!(aucun.is_empty() && dit.as_deref().is_some_and(|v| v.contains("zz-*")), "a pattern that takes none is not said: {dit:?}");
+        let refus = declaration_du_manifeste(Some(&serde_json::json!({"sources": [{"select": format!("worktree:{}/wt-[ad]", base.display())}]})))
+            .expect_err("a malformed pattern is accepted");
+        assert!(refus.contains("wt-[ad]") && refus.contains("motif"), "the refusal does not name the pattern: {refus}");
+        assert_eq!(expand_home("~/x/wt-*", Some("/home/h")), "/home/h/x/wt-*", "~ is not expanded");
     }
 
     fn une(select: Selecteur, work: bool) -> Declaration {
