@@ -132,6 +132,43 @@ Tout est à luciepc, sous `~/.cache/rag3db-banc-notes/compaction/`, avec une cop
   tours chaque fenêtre contient vraiment. Essayé sur un transcript de 17 frontières : la 17ᵉ n'a que 18 tours après elle ;
 - **reste** : le lanceur de la matrice. Il attend les noms des réglages que la session mémoire déclarera.
 
+## Le cache explicite de Vertex pour une fenêtre entière : le chiffre (session mémoire, 19 novembre)
+
+Demandé par Lucie par c7. Rien ne se code avant ce chiffre, ni avant la mesure du taux de cache par appel (ED).
+
+**Ce que dit Vertex**, vérifié le 19 novembre sur la [vue d'ensemble du cache de contexte](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/context-cache/context-cache-overview) :
+- **le seuil** : 4 096 jetons pour Gemini 3 (sauf exceptions) et Gemini 4, 2 048 pour Gemini 2. Gemini 3.8 Flash est
+  listé à 6 144 jetons pour le cache implicite ; son seuil explicite est à confirmer dans la console avant tout essai ;
+- **la durée** : 60 minutes par défaut, 1 minute au moins, sans maximum ;
+- **le prix** : 90 % de remise sur les jetons servis par le cache (implicite comme explicite, Gemini 2.5 et
+  suivants). La création se paie au prix d'entrée. L'explicite paie en plus son stockage à la durée ; l'implicite n'a
+  pas de stockage.
+
+**Les tarifs de Gemini 3.8 Flash** (`gemini-3.8-flash`, le modèle des mesures du banc) : 0,75 $ le million de jetons
+d'entrée et 3,75 $ en sortie, prix d'introduction jusqu'au 31 décembre 2026 (page des prix de Google). Les deux
+chiffres suivants viennent de pages tierces : la page des prix de Google ne s'est pas chargée ici, et ils sont à
+vérifier avant toute décision. La lecture du cache coûte 0,075 $ le million, cohérent avec la remise de 90 %. Le
+stockage coûte 0,50 $ par million de jetons et par heure jusqu'au 31 décembre 2026, puis 1,00 $.
+
+**Le calcul, pour une fenêtre de 50 k jetons relue par k appels** (k = 15 : une extraction et quatorze Decide) :
+
+| | sans cache | cache explicite de la fenêtre (10 min) |
+|---|---|---|
+| création | — | 50 k × 0,75 $/M = 0,0375 $ |
+| lectures | 15 × 50 k × 0,75 $/M = 0,5625 $ | 15 × 50 k × 0,075 $/M = 0,0563 $ |
+| stockage | — | 50 k × 0,50 $/M × 1/6 h = 0,0042 $ |
+| **total d'entrée par fenêtre** | **0,56 $** | **0,10 $** |
+
+Le cache implicite, quand il sert le même préfixe, coûte la même lecture, sans création ni stockage. Il n'est
+simplement pas garanti.
+
+**La limite du calcul** : dans la forme en deux étapes, seule l'extraction lit la fenêtre entière. Chaque Decide de
+l'étape 2 lit son sujet (le « said » et ses tours bruts, au plus 12 000 jetons), pas les 50 k. Un cache explicite de
+la fenêtre ne sert donc qu'à l'extraction. Ce qui se répète d'un Decide à l'autre, c'est le préfixe stable de la
+page (e) : la consigne, le schéma, l'identité, le rapport et les résumés d'avant. C'est lui qu'il faut mesurer d'abord,
+taille et part servie par appel, contre le seuil de 6 144 jetons. Le cache explicite ne vaut d'être chiffré plus
+finement que si ce préfixe dépasse le seuil et que l'implicite ne le sert pas.
+
 ## Pour fermer
 
 Les quatre réglages de la matrice joués dans la forme en deux étapes, jugés contre N en P1, P2 et P5 ; les trois profils d'après compaction jugés contre la compaction de Claude Code ; les deux résultats écrits dans leurs pages.

@@ -431,6 +431,20 @@ déjà leurs défauts : `recall_apports` y tient son `default_filter`. Cela ne d
 `BackendManifest` refuse une clé inconnue à sa racine, mais les bindings d'un outil sont libres.
 Une copie de banc change ses bindings et rien d'autre.
 
+### L'ordre des ingrédients : le stable d'abord, pour le cache (19 novembre, question de Lucie)
+
+Le cache de préfixe du fournisseur ne sert que le début commun de deux appels proches. Sur la F300, 28 % des
+jetons d'entrée ont été servis par le cache sans qu'on l'ait cherché. La composition suit donc une règle :
+
+1. **En tête, ce qui ne change pas d'une fenêtre à l'autre** : la consigne, le schéma de réponse, l'identité, puis
+   les résumés et le rapport d'avant (stables pendant toute une fenêtre), puis les candidates quand elles le sont.
+2. **À la fin, ce qui change à chaque appel** : la tranche, et la requête du sujet ou de la section.
+
+Le préfixe stable doit aussi dépasser le seuil du modèle : sur Gemini 3.8 Flash, le cache implicite ne joue
+qu'au-delà de 6 144 jetons communs (documentation Vertex du 19 novembre). Un préfixe stable plus court n'est
+jamais servi, quel que soit son ordre. Le cache explicite, chiffré dans le ticket R du banc, ne se code pas avant
+la mesure du taux de cache par appel (ED), et pas avant ce chiffre.
+
 ### Ce que coûte de tout préparer
 
 - **Le composeur de contexte**, un script Rhai : les ingrédients dans l'ordre, chacun coupé à sa
