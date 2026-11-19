@@ -105,6 +105,7 @@ fn the_counts_of_rows_edges_and_degrees() {
 #[test]
 fn an_upsert_merges_rows_by_uuid_and_gives_back_their_ids() {
     let conn = MemoryConnection::new();
+    conn.with_image_mut(|i| i.set_file_field("Scope", "file_path"));
     let upsert = |columns: &[&str], rows: Vec<Vec<(&str, CypherValue)>>| {
         let q = MemoryDialect.write(&rag3weaver_ir::Write::Upsert { table: "Scope".into(), columns: columns.iter().map(|c| c.to_string()).collect() }).unwrap();
         let items = CypherValue::List(rows.into_iter().map(|r| CypherValue::Map(r.into_iter().map(|(k, v)| (k.to_string(), v)).collect())).collect());
@@ -119,7 +120,7 @@ fn an_upsert_merges_rows_by_uuid_and_gives_back_their_ids() {
     let node = conn.with_image(|i| i.node("u1")).expect("the row is there");
     assert_eq!(node.props.get("name"), Some(&s("start")), "an unlisted column keeps its value, read without its type");
     assert_eq!(node.props.get("line"), Some(&CypherValue::Int(3)));
-    assert_eq!(node.file.as_deref(), Some("main.rs"), "its file comes from file_path");
+    assert_eq!(node.file.as_deref(), Some("main.rs"), "its file is the declared field of its table");
     assert_eq!(conn.with_image(|i| i.nodes_of_file("main.rs")), vec!["u1".to_string()]);
 }
 
@@ -173,4 +174,60 @@ fn the_filtered_counts_use_the_one_evaluator() {
         .unwrap();
     let r = conn.execute_with_params(&rows, &[QueryParam::new("u", s("b2"))]).expect("the rows a predicate keeps");
     assert_eq!(r.rows, vec![vec![CypherValue::Int(1)]]);
+}
+
+
+fn write(conn: &MemoryConnection, w: rag3weaver_ir::Write, params: &[QueryParam]) -> QueryResult {
+    conn.execute_with_params(&MemoryDialect.write(&w).expect("the memory dialect writes it"), params).expect("the write runs")
+}
+
+/// **Update and mark**: the listed fields are set, a NULL takes one away, the others keep their values; a row that
+/// is not there is skipped.
+#[test]
+fn an_update_and_a_mark_set_their_fields_only() {
+    let conn = connection();
+    conn.with_image_mut(|i| i.insert_node("B", "b1", Some("b.rs"), BTreeMap::from([("name".to_string(), s("x")), ("hash".to_string(), s("h"))])));
+    write(&conn, rag3weaver_ir::Write::Update { table: "B".into(), columns: vec!["_uuid".into(), "hash".into()] }, &[QueryParam::new("items", CypherValue::List(vec![item(&[("_uuid", "b1"), ("hash", "h2")]), item(&[("_uuid", "absent"), ("hash", "z")])]))]);
+    let b1 = conn.with_image(|i| i.node("b1")).unwrap();
+    assert_eq!((b1.props.get("name"), b1.props.get("hash")), (Some(&s("x")), Some(&s("h2"))));
+    assert_eq!(b1.file.as_deref(), Some("b.rs"), "its file is kept");
+    assert!(conn.with_image(|i| i.node("absent")).is_none(), "an update creates nothing");
+    write(&conn, rag3weaver_ir::Write::Mark { table: "B".into(), set: vec![("name".into(), Some("v".into())), ("hash".into(), None)] }, &[QueryParam::new("uuids", CypherValue::List(vec![s("b1")])), QueryParam::new("v", s("y"))]);
+    let b1 = conn.with_image(|i| i.node("b1")).unwrap();
+    assert_eq!((b1.props.get("name"), b1.props.get("hash")), (Some(&s("y")), None));
+}
+
+/// **Delete**: by uuid, the row and its edges; by a field, with the count of each value that deleted something.
+#[test]
+fn a_delete_takes_rows_and_their_edges_and_counts_by_field() {
+    let conn = connection();
+    conn.with_image_mut(|i| {
+        i.insert_node("B", "c1", None, BTreeMap::from([("parent".to_string(), s("b1"))]));
+        i.insert_node("B", "c2", None, BTreeMap::from([("parent".to_string(), s("b1"))]));
+        i.insert_rel("R", "a1", "b1", BTreeMap::new());
+    });
+    let r = write(&conn, rag3weaver_ir::Write::Delete { table: "B".into(), by: "parent".into(), cascade: true, count: true }, &[QueryParam::new("uuids", CypherValue::List(vec![s("b1"), s("none")]))]);
+    assert_eq!(r.rows, vec![vec![s("b1"), CypherValue::Int(2)]], "one row per value that deleted something");
+    write(&conn, rag3weaver_ir::Write::Delete { table: "B".into(), by: "_uuid".into(), cascade: true, count: false }, &[QueryParam::new("uuids", CypherValue::List(vec![s("b1")]))]);
+    assert!(conn.with_image(|i| i.node("b1")).is_none());
+    assert!(conn.with_image(|i| i.outgoing("R", "a1")).is_empty(), "its edges go with it");
+}
+
+/// **Unlink and detach**: a pair taken away keeps its ends; detach takes the edges whose node on one side a filter keeps.
+#[test]
+fn unlink_and_detach_take_edges_away_and_keep_their_ends() {
+    let conn = connection();
+    conn.with_image_mut(|i| {
+        i.insert_rel("R", "a1", "b1", BTreeMap::new());
+        i.insert_rel("R", "a1", "b2", BTreeMap::new());
+    });
+    write(&conn, rag3weaver_ir::Write::Unlink { relation: "R".into() }, &[QueryParam::new("items", CypherValue::List(vec![item(&[("from", "a1"), ("to", "b1")])]))]);
+    assert_eq!(conn.with_image(|i| i.outgoing("R", "a1").len()), 1);
+    assert!(conn.with_image(|i| i.node("b1")).is_some(), "the ends stay");
+    write(
+        &conn,
+        rag3weaver_ir::Write::Detach { relation: "R".into(), table: "B".into(), side: rag3weaver_ir::Direction::Incoming, filter: rag3weaver_ir::Predicate::Equals { field: "_uuid".into(), param: "u".into() } },
+        &[QueryParam::new("u", s("b2"))],
+    );
+    assert!(conn.with_image(|i| i.outgoing("R", "a1")).is_empty(), "the edge reaching the kept node is detached");
 }

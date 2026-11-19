@@ -14,6 +14,10 @@ pub fn memory_image_of(analysis: &CodeAnalysis) -> Result<crate::memory_connecti
     let (mut catalog, connection) = crate::memory_connection::memory_catalog(crate::CatalogConfig::default());
     catalog.initialize()?;
     register_code_schema_for_references(&mut catalog)?;
+    connection.with_image_mut(|image| {
+        image.set_file_field(crate::code::SCOPE, "file_path");
+        image.set_file_field(crate::code::FILE, "path");
+    });
     catalog.ingest_code(analysis)?;
     Ok(connection)
 }
