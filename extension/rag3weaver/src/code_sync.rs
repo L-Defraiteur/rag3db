@@ -1575,7 +1575,7 @@ pub(crate) fn retirement_write(catalog: &Catalog, table: &str) -> Result<String,
 /// its visibility at `visible_rank` when given and, for `batch_sources` sources of the batch, outside the batch
 /// (`$lot_s{i}`, `$lot_p{i}`): the ingestion of the batch's files sets their edges again. The relation's
 /// properties are copied with it.
-pub(crate) fn edge_copy_write(
+pub fn edge_copy_write(
     catalog: &Catalog,
     relation: &str,
     table: &str,
