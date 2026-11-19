@@ -114,6 +114,13 @@ impl MemoryImage {
         self.symbol_table = Some((self.strings.intern(table), self.strings.intern(name_field)));
     }
 
+    /// **The field that names the file of a row of `table`** (a generic schema says it, nothing is guessed): a node
+    /// inserted without a file takes the value of this field, and [`remove_file`](Self::remove_file) finds it. A table
+    /// without one keeps its nodes out of any file (a symbol).
+    pub fn set_file_field(&mut self, _table: &str, _field: &str) {
+        unimplemented!("memory image: set_file_field")
+    }
+
     /// Index `table.field` (a text field) for [`find`](Self::find).
     pub fn index_field(&mut self, table: &str, field: &str) {
         let key = (self.strings.intern(table), self.strings.intern(field));
@@ -539,6 +546,20 @@ mod tests {
         assert!(!m.remove_rel("CONSUMES", "s-a", "s-b"), "a second removal finds nothing");
         assert!(m.insert_rel("CONSUMES", "s-a", "s-b", BTreeMap::new()), "the pair can be linked again");
         assert_eq!(m.outgoing("CONSUMES", "s-a").len(), 1);
+    }
+
+    #[test]
+    fn a_declared_file_field_places_a_node_in_its_file() {
+        let mut m = MemoryImage::new();
+        m.set_file_field("Scope", "file_path");
+        m.insert_node("Scope", "s-x", None, props(&[("file_path", s("src/x.rs"))]));
+        m.insert_node("Symbol", "y-x", None, props(&[("name", s("x"))]));
+        assert_eq!(m.nodes_of_file("src/x.rs"), ["s-x"], "the scope is in its file by the declared field");
+        assert_eq!(m.node("s-x").unwrap().file.as_deref(), Some("src/x.rs"));
+        assert_eq!(m.node("y-x").unwrap().file, None, "a table without the field keeps its nodes out of any file");
+        assert_eq!(m.remove_file("src/x.rs").nodes, 1);
+        m.insert_node("Scope", "s-y", Some("given.rs"), props(&[("file_path", s("src/y.rs"))]));
+        assert_eq!(m.nodes_of_file("given.rs"), ["s-y"], "a file given by the caller wins");
     }
 
     #[test]
