@@ -353,8 +353,11 @@ def play(run, repo, hote, rev="origin/master", task="campagne", wall_s=1800):
     r = hote.lancer(hote.binaire, "code-tree", "add", arbre, "--from", racine_decl, "--as", nom, "--daemon", f"127.0.0.1:{hote.port}")
     if r.returncode:
         raise RuntimeError(f"code-tree add: {r.stdout}{r.stderr}")
+    # By its manifest, which carries the unique name: the host lists one repository per folder
+    # name, and every case tree is called « arbre ».
     etat = hote.http("GET", "/ide/etat")
-    backend = next(d["backend"] for d in etat["available_repos"] if os.path.realpath(d["path"]) == os.path.realpath(arbre))
+    marque = os.path.join(hote.maison, ".config/rag3weaver", nom) + "/"
+    backend = next(b["id"] for b in etat["backends"] if b["manifest"].startswith(marque))
     with open(os.path.join(run, "request.txt")) as f:
         demande = f.read().strip()
     t0 = time.time()
