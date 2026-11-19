@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 19 novembre 2026 — **Un équipier qui rend un compte rendu au lieu du texte demandé est relancé.** Quand un pas se dit réussi sans avoir écrit de texte, et que ses rapports ne font que décrire le travail, le modèle de la tâche juge si la demande attendait un texte. S'il manque, l'équipier repart une fois pour l'écrire, puis attend le superviseur ; si le juge ne répond pas, la boîte dit « fin sans texte, à vérifier ».
+
 - 18 novembre 2026 — **La fin d'un index dit une libération ou une dette qu'elle n'a pas pu faire.** Une erreur en rendant les réclamations d'embarquement s'ajoute à la dernière ligne du journal, avec sa table et sa cause, sans en effacer la cause de fin ; une dette restante illisible se dit « dette inconnue », plus jamais « 0 ».
 
 - 18 novembre 2026 — **Un modèle déclaré dit `access` et `provider`.** `access` dit la manière d'y accéder (`local`, `service`, `compatible`), `provider` le fournisseur (`openai`, `vertex`, `anthropic`, `llama_server`). L'ancienne forme, `provider` pour la manière et `protocol` pour le fournisseur, se lit encore **jusqu'au 29 novembre 2026** ; un modèle qui mêle les deux est refusé, en nommant les deux mots. `/model` rend les deux mots neufs.
