@@ -1,5 +1,11 @@
 # Nouveautés
 
+- 19 novembre 2026 — **Une seule notification quand l'index d'une vue est prêt.** Quand une recherche ou une lecture
+  a répondu « index pas prêt », le serveur MCP de l'agent surveille cette vue. Quand elle est prête, il envoie une
+  seule notification (« l'index de la vue … est prêt : texte et vecteurs ») ; rien à chaque réindexation. La veille
+  sonde l'hôte à l'estimation annoncée, puis toutes les 5 s. Elle renonce à trois fois l'estimation, ou au bout de
+  30 min. Ses réglages se déclarent dans le manifeste, sous `search.ready_watch`.
+
 - 19 novembre 2026 — **Une recherche qui lit les vecteurs attend aussi les vecteurs dus.** `search_code` en hybride
   ou par le sens attend que les vecteurs de sa vue soient calculés quand c'est court (sous `search.index_wait_s`,
   6 s par défaut). Sinon, elle répond tout de suite et dit les deux estimations à part : « index pas prêt : texte
