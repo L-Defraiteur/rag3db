@@ -1,6 +1,6 @@
 # Le pas suivant ne voit plus ce que le pas d'avant a lu
 
-- **État** : ouvert, le 16 novembre 2026 ; à faire par Codex (passation d'archi).
+- **État** : fermé le 19 novembre 2026 par `39203390d` (pile-archi-19, par le pousseur).
 - **Famille** : produit
 - **Pour** : archi (passation à Codex)
 - **Gravité** : bloquant pour une tâche longue : chaque pas relit tout (D6).
@@ -37,3 +37,6 @@ qu'un `replace_lines` n'exige pas une relecture inutile.
 
 1 jour. Après le plafond (même zone de `teammate.rs`).
 
+## Fermeture
+
+La frontière suivante porte un bloc `Previous step`, borné par `teammate.carry_over_chars` (8 000) : les fichiers lus avec la plage rendue, les fichiers écrits, la dernière commande et la fin de sa sortie, le dernier texte. L'empreinte de lecture couvre déjà le pas N+1 (elle vaut pour ce tour et le précédent). En chemin, un défaut voisin a été corrigé : l'empreinte ignorait `limit` (le read_file d'une tâche), si bien que 5 lignes lues comptaient pour 200. Conception : `docs/rag3weaver-archi/18-11-2026/05-s2-le-pas-suivant-voit.md`. Rouges vus sur 8f3a0b420 et 5f4b4c8a9 ; passe complète verte sur a8d6302ca ; poussé avec la pile par le pousseur (passe épinglée verte, lib 7c2b506ec).

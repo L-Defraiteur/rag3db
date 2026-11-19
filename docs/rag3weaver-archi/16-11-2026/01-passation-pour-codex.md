@@ -79,8 +79,8 @@ doit passer avant le reste.
    2. Pousser par la garde au « à toi » de l'orchestration. La garde rejoue si du code est arrivé
       sur master depuis `6b672afa6`.
 2. `2026-11-16-le-plafond-d-appels-d-un-pas.md` (S1) : 4 h. **Fait par archi le 18 novembre : `53879cf74` sur master.**
-3. `2026-11-16-le-pas-suivant-ne-voit-pas-les-retours-d-outils.md` (S2) : 1 jour.
-4. `2026-11-16-une-request-remplace-la-demande-en-cours.md` (S3) : 3 h.
+3. `2026-11-16-le-pas-suivant-ne-voit-pas-les-retours-d-outils.md` (S2) : 1 jour. **Fait par archi le 19 novembre : `39203390d` sur master.**
+4. `2026-11-16-une-request-remplace-la-demande-en-cours.md` (S3) : 3 h. **Fait par archi le 19 novembre : `39203390d` sur master.**
 5. `2026-11-16-la-garde-b-pour-une-consigne.md` : 3 h.
 6. `2026-11-16-step-done-avant-report-relance-un-pas-entier.md` (S4) : 3 h.
 7. `2026-11-16-l-agent-se-presente-a-chaque-run.md` (S5) : 1 h.

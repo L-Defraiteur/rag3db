@@ -1,6 +1,6 @@
 # Une nouvelle request (« continue ») remplace la demande en cours
 
-- **État** : ouvert, le 16 novembre 2026 ; à faire par Codex (passation d'archi).
+- **État** : fermé le 19 novembre 2026 par `39203390d` (pile-archi-19, par le pousseur).
 - **Famille** : produit
 - **Pour** : archi (passation à Codex)
 - **Gravité** : réponse fausse : l'agent perd ce qu'on lui demandait, et va chercher ailleurs (D6).
@@ -32,3 +32,6 @@ le plafond.
 
 3 h. Aucun.
 
+## Fermeture
+
+La demande ouverte, ce sont les requests du superviseur depuis le dernier `ended`. La frontière dit `Request (opened at …): <la première>` puis `Follow-up: …`, et les pas faits se comptent depuis la première. La garde B et la boîte ne changent pas. Conception : `docs/rag3weaver-archi/18-11-2026/06-s3-la-demande-s-ajoute.md`. Rouge vu sur 6e9e06e4c ; passe complète verte sur 7def47a4a ; poussé avec la pile.
