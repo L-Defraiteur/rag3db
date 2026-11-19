@@ -170,6 +170,24 @@ if [ "${1:-}" = "--derive" ]; then derive "$2"; exit 0; fi
 # l'arbre (par required_suites.sh) : chaque suite qu'exige un chemin du lot doit avoir sa ligne « == <suite> » au résumé
 # et un journal <suite>.log vert. Un arbre sans la table n'exige rien, et la garde le dit. Mode
 # `--required-suites <base> <testé> <journaux>`, joué par le témoin.
+# rouges_connus <suite> <journal> : 0 si chaque cas rouge du journal est listé pour cette suite dans
+# tools/poste/known_red_e2e.txt de l'arbre, avec un ticket présent, hors de closed/ et ouvert (ou en cours) ; il le dit.
+rouges_connus() {
+  local f base kt etat rouges dits=""
+  [ -f tools/poste/known_red_e2e.txt ] || return 1
+  rouges=$(grep -oE '^test [^ ]+ \.\.\. FAILED$' "$2" | awk '{print $2}')
+  [ -n "$rouges" ] || return 1
+  for f in $rouges; do
+    base=${f##*::}
+    kt=$(awk -F'\t' -v s="$1" -v c="$base" '!/^#/ && $1 == s && $2 == c {print $3; exit}' tools/poste/known_red_e2e.txt)
+    [ -n "$kt" ] && [ -f "$kt" ] || return 1
+    case "$kt" in */closed/*) return 1 ;; esac
+    etat=$(grep -m1 -E '^- \*\*État\*\* *:' "$kt" | sed 's/^[^:]*: *//')
+    case "$etat" in ouvert*|"en cours"*) ;; *) return 1 ;; esac
+    dits="$dits rouge connu ($kt) : $1::$base ;"
+  done
+  echo "suite exigée jouée, rouges connus :$dits"
+}
 required_suites_played() {
   local base=$1 teste=$2 J=$3 exigees ligne suite chemin manque=""
   if [ ! -x tools/poste/required_suites.sh ]; then echo "suites exigées : pas de table dans l'arbre (tools/poste/required_suites.txt)"; return 0; fi
@@ -177,7 +195,12 @@ required_suites_played() {
   [ -n "$exigees" ] || return 0
   while read -r suite chemin; do
     [ -n "$suite" ] || continue
-    if grep -qx "== $suite" "$J/resume.log" && grep -q '^test result: ok' "$J/$suite.log" 2>/dev/null && ! grep -q '^test result: FAILED' "$J/$suite.log"; then
+    # Un rouge connu (19 novembre 2026, c7) : une suite exigée dont tous les cas rouges sont listés dans
+    # tools/poste/known_red_e2e.txt de l'arbre, au ticket ouvert, compte jouée ; chaque cas se dit avec son ticket.
+    if grep -qx "== $suite" "$J/resume.log" && grep -q '^test result: FAILED' "$J/$suite.log" 2>/dev/null && rouges_connus "$suite" "$J/$suite.log"; then
+      # Le non-jugé se juge aussi dans une suite à rouge connu.
+      grep -q '^non jugé : ' "$J/$suite.log" && manque="$manque $suite ($chemin) : $(grep -c '^non jugé : ' "$J/$suite.log") test(s) non jugé(s)"
+    elif grep -qx "== $suite" "$J/resume.log" && grep -q '^test result: ok' "$J/$suite.log" 2>/dev/null && ! grep -q '^test result: FAILED' "$J/$suite.log"; then
       # Un test qui dit « non jugé » et rend la main compte parmi les passés de cargo (18 novembre 2026, ticket de c7).
       if grep -q '^non jugé : ' "$J/$suite.log"; then
         manque="$manque $suite ($chemin) : $(grep -c '^non jugé : ' "$J/$suite.log") test(s) non jugé(s)"
