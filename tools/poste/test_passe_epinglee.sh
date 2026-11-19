@@ -177,6 +177,8 @@ case "$*" in
   build*) echo "   Compiling rag3weaver-tty v0.1.0 ($PWD)"; mkdir -p "$CARGO_TARGET_DIR/release"; : > "$CARGO_TARGET_DIR/release/rag3weaver-tty"; exit 0 ;;
   test*) echo "   Compiling rag3weaver-tty v0.1.0 ($PWD)"
     [ "${FAUX_CARGO:-}" = rouge ] && { echo "test result: FAILED. 0 passed; 1 failed"; exit 101; }
+    [ "${FAUX_TTY_TEMOIN:-}" = absent ] || echo "test vue::tests::filtre ... ok"
+    echo "test vue::tests::un_autre ... ok"
     echo "test result: ok. 2 passed; 0 failed" ;;
 esac
 F
@@ -192,7 +194,16 @@ grep -q '^suites exigées par le lot : tty (extension/rag3weaver/tty/src/lib.rs)
 passe "ROUGE tty" "un test du crate du terminal rouge" SUITES=- FAUX_CARGO=rouge
 passe "ROUGE tty" "clippy rouge sur le crate du terminal" SUITES=- FAUX_CARGO=clippy
 passe "ROUGE tty" "une mesure plain_* rouge" SUITES=- FAUX_PLAIN=plain_waits_for_a_resumed_run
+# **Un témoin du crate du terminal** (19 novembre 2026, tty) : `SUITE_DU_TEMOIN=tty`, comme `navigateur`, se juge à
+# l'étape « tty » (le crate n'est pas dans la lib de rag3weaver, où run_e2e.sh ne le trouverait pas) : son nom doit y
+# sortir « ok ». Un lot qui ne touche pas tty/ ne peut pas avoir ce témoin.
+passe VERT "SUITE_DU_TEMOIN=tty : le témoin jugé à l'étape tty" SUITES=- SUITE_DU_TEMOIN=tty
+grep -q '^témoin tty filtre : ok' $R && ! grep -q '^lib ' $D/trace \
+  && echo "vert   SUITE_DU_TEMOIN=tty : « ok » lu dans tty.log, la lib de rag3weaver n'est pas jouée pour lui" \
+  || { echo "ROUGE  SUITE_DU_TEMOIN=tty : résumé « $(grep -iE 'témoin' $R | tr '\n' ' ') », trace « $(cut -d' ' -f1 $D/trace | tr '\n' ' ') »"; rouge=1; }
+passe "ROUGE témoin tty filtre" "SUITE_DU_TEMOIN=tty, le témoin pas joué ok à l'étape tty" SUITES=- SUITE_DU_TEMOIN=tty FAUX_TTY_TEMOIN=absent
 $G reset -q --hard HEAD~1
+passe "ROUGE témoin tty" "SUITE_DU_TEMOIN=tty pour un lot qui ne touche pas tty/" SUITES=- SUITE_DU_TEMOIN=tty
 passe VERT "un lot qui ne touche pas tty/" SUITES=-
 grep -q '^cargo ' $D/trace && { echo "ROUGE  sans tty/ : le crate du terminal joué quand même"; rouge=1; } || echo "vert   sans tty/ : le crate du terminal n'est pas joué"
 exit $rouge
