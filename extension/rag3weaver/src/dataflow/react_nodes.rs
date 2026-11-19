@@ -127,6 +127,9 @@ impl ReactTransitionNode {
             {
                 continue;
             }
+            if !self.cfg.change.is_empty() && e.get("change").and_then(|v| v.as_str()) != Some(self.cfg.change.as_str()) {
+                continue;
+            }
             if let Some(liste) = e.get("uuids").and_then(|v| v.as_array()) {
                 out.extend(liste.iter().filter_map(|v| v.as_str()).map(str::to_string));
             }
@@ -485,6 +488,15 @@ impl NodeFactory for ReactTransitionNodeFactory {
                     required: false,
                     default: Some(serde_json::json!(DEFAULT_LIMIT)),
                     description: "Maximum rows transitioned per execution".into(),
+                    choices: None,
+                    json_schema: None,
+                },
+                ConfigParam {
+                    name: "change".into(),
+                    param_type: ConfigParamType::String,
+                    required: false,
+                    default: Some(serde_json::json!("")),
+                    description: "Only EntitiesChanged events of this change count (ingested, updated, definition…); empty for every change".into(),
                     choices: None,
                     json_schema: None,
                 },
