@@ -100,6 +100,8 @@ pub struct MemoryImage {
     /// `(table, field)` → value → nodes.
     indexes: HashMap<(Sym, Sym), HashMap<Sym, Vec<u32>>>,
     symbol_table: Option<(Sym, Sym)>,
+    /// The declared file field of each table.
+    file_fields: HashMap<Sym, Sym>,
 }
 
 impl MemoryImage {
@@ -117,8 +119,9 @@ impl MemoryImage {
     /// **The field that names the file of a row of `table`** (a generic schema says it, nothing is guessed): a node
     /// inserted without a file takes the value of this field, and [`remove_file`](Self::remove_file) finds it. A table
     /// without one keeps its nodes out of any file (a symbol).
-    pub fn set_file_field(&mut self, _table: &str, _field: &str) {
-        unimplemented!("memory image: set_file_field")
+    pub fn set_file_field(&mut self, table: &str, field: &str) {
+        let (table, field) = (self.strings.intern(table), self.strings.intern(field));
+        self.file_fields.insert(table, field);
     }
 
     /// Index `table.field` (a text field) for [`find`](Self::find).
@@ -191,6 +194,11 @@ impl MemoryImage {
         let uuid = self.strings.intern(uuid);
         let file = file.map(|f| self.strings.intern(f));
         let props = self.compact(props);
+        // A file given by the caller wins; otherwise the declared file field of the table, if the row carries it.
+        let file = file.or_else(|| match prop(&props, *self.file_fields.get(&table)?) {
+            Some(Compact::Str(f)) => Some(*f),
+            _ => None,
+        });
         let id = match self.by_uuid.get(&uuid).copied() {
             Some(id) => {
                 self.unindex(id);
