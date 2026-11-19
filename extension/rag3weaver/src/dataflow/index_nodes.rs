@@ -1474,6 +1474,47 @@ mod tests {
         assert!(lines.last().is_some_and(|l| l.starts_with(DONE_LINE)), "the index ends : {lines:?}");
     }
 
+    /// **The index journal names the chunks the model truncated** (19 November
+    /// 2026 : 67 chunks of real traffic cut at 512 tokens by granite in 40 minutes,
+    /// and nobody could say which).
+    #[cfg(all(feature = "rag3db-native", feature = "code"))]
+    #[test]
+    fn the_index_journal_names_the_chunks_the_model_truncated() {
+        #[derive(Default)]
+        struct Naming { count: std::sync::atomic::AtomicUsize }
+        impl crate::embedder::Embedder for Naming {
+            fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, crate::embedder::EmbedError> {
+                let n = texts.iter().filter(|t| t.contains("f3()")).count();
+                self.count.fetch_add(n, std::sync::atomic::Ordering::SeqCst);
+                Ok(vec![vec![0.5; 4]; texts.len()])
+            }
+            fn dim(&self) -> usize { 4 }
+            fn name(&self) -> &str { "naming" }
+            fn distant(&self) -> bool { true }
+            fn troncatures(&self) -> Option<(usize, usize)> { Some((self.count.load(std::sync::atomic::Ordering::SeqCst), 512)) }
+            fn was_truncated(&self, text: &str) -> bool { text.contains("f3()") }
+        }
+        let files: Vec<(String, String)> = (0..6).map(|i| (format!("src/f{i}.rs"), format!("pub fn f{i}() -> u32 {{ {i} }}\n"))).collect();
+        let source: Arc<dyn FileSource> = Arc::new(Snapshot::new("depot", files));
+        let conn = crate::Rag3dbConnection::in_memory().expect("in-memory base");
+        let ext = crate::backend::vector_extension_of_this_process().unwrap_or_else(|e| panic!("{e}"));
+        crate::connection::DbConnection::execute(&conn, &format!("LOAD EXTENSION {}", crate::connection::cypher_path_literal(&ext))).expect("vector extension");
+        let config = crate::CatalogConfig { name: Some("naming".into()), embedding_dim: 4, ..Default::default() };
+        let mut catalog = Catalog::new(Box::new(conn), Box::new(Naming::default()), config);
+        catalog.initialize().unwrap();
+        crate::code::register_code_schema(&mut catalog, crate::code::default_scope_chunking()).unwrap();
+        let catalog = Arc::new(Mutex::new(catalog));
+        let journal = new_index_journal().expect("journal");
+        spawn_index(catalog.clone(), source, journal.clone(), 0, Default::default()).join().expect("the index thread");
+        let lines: Vec<String> = std::fs::read_to_string(&journal).unwrap().lines().map(String::from).collect();
+        let _ = std::fs::remove_file(&journal);
+        let named: Vec<&String> = lines.iter().filter(|l| l.contains("coupé(s) à 512 jetons par le modèle : ")).collect();
+        assert_eq!(named.len(), 1, "the truncated chunks are named once : {lines:?}");
+        assert!(named[0].contains("f3"), "the chunk of f3 is named : {}", named[0]);
+        assert!(!named[0].contains("f4"), "and only it : {}", named[0]);
+        assert!(lines.last().is_some_and(|l| l.starts_with(DONE_LINE)), "the last line stays the contract : {lines:?}");
+    }
+
     /// **Two index journals created in the same millisecond are two files**
     /// (16 November 2026 : two witnesses run in parallel wrote into one journal,
     /// named by the millisecond and the pid only ; a host starting two indexes in
