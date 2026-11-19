@@ -1,5 +1,11 @@
 # Nouveautés
 
+- 19 novembre 2026 — **Une recherche qui lit les vecteurs attend aussi les vecteurs dus.** `search_code` en hybride
+  ou par le sens attend que les vecteurs de sa vue soient calculés quand c'est court (sous `search.index_wait_s`,
+  6 s par défaut). Sinon, elle répond tout de suite et dit les deux estimations à part : « index pas prêt : texte
+  environ 0 s, vecteurs environ 40 s ». En bm25 seul, elle n'attend que le texte. Sans service d'embarquement, elle
+  n'attend pas et dit pourquoi. usages, outline, read_file et grep n'attendent jamais les vecteurs.
+
 - 19 novembre 2026 — **Deux fenêtres de l'IDE sur le même chat suivent le même tour.** Une fenêtre ouverte au milieu d'un tour montre son texte depuis le début, et non seulement les mots arrivés après elle : le worker partagé du flux le garde pendant le tour. Une relecture d'une fenêtre, partie avant un tour d'une autre, ne l'efface plus.
 - 19 novembre 2026 — **Arrêter un appel coupe aussi la requête qu'il fait au moteur.** Un appel arrêté (par l'IDE,
   `stop_run` ou son `deadline_ms`) allait au bout de la requête que son nœud avait déjà lancée, par exemple un plein
