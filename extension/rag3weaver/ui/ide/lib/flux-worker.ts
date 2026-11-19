@@ -29,9 +29,13 @@ const pages = new Set<Page>();
 const etat = new Map<string, unknown>();
 /// **The text of each turn in flight** (the IDE in several windows, 19 Nov. 2026): a window opened in the middle of
 /// a turn asks for it (`tour`), and shows the turn's beginning, not only what streams after it opened. Kept from the
-/// turn's tokens until its `RunFinished`, bounded at TOUR_MAX characters (past it, the rest is not kept).
-const tours = new Map<string, { texte: string; seq: number }>();
-const TOUR_MAX = 512 * 1024;
+/// turn's tokens until its `RunFinished`, bounded at `tourMax` characters. Past the bound (ED's review), the text and
+/// its `seq` stop together and `tronque` says it: the page marks the gap and keeps every token it received after it.
+/// At most TOURS_MAX runs are kept, the oldest forgotten first, and all are forgotten on `EventsMissed` (a lost
+/// `RunFinished` must not keep a text forever).
+const tours = new Map<string, { texte: string; seq: number; tronque: boolean }>();
+let tourMax = 512 * 1024;
+const TOURS_MAX = 8;
 let source: EventSource | null = null;
 let dernier = "";
 let statut: Statut = "fermé";
@@ -61,11 +65,20 @@ function brancher() {
       /* une ligne illisible va à tous : la page la jettera */
     }
     if (ev?.run && ev.kind === "Token") {
-      const t = tours.get(ev.run) ?? { texte: "", seq: -1 };
-      if (t.texte.length < TOUR_MAX) t.texte += String(ev.text ?? "");
-      if (typeof ev.seq === "number") t.seq = Math.max(t.seq, ev.seq);
-      tours.set(ev.run, t);
+      let t = tours.get(ev.run);
+      if (!t) {
+        if (tours.size >= TOURS_MAX) tours.delete(tours.keys().next().value as string);
+        t = { texte: "", seq: -1, tronque: false };
+        tours.set(ev.run, t);
+      }
+      const texte = String(ev.text ?? "");
+      if (t.tronque || t.texte.length + texte.length > tourMax) t.tronque = true;
+      else {
+        t.texte += texte;
+        if (typeof ev.seq === "number") t.seq = Math.max(t.seq, ev.seq);
+      }
     } else if (ev?.run && ev.kind === "RunFinished") tours.delete(ev.run);
+    else if (ev?.kind === "EventsMissed") tours.clear();
     for (const p of pages) {
       if (!p.sujets || sujet === undefined || p.sujets.has(sujet)) p.port.postMessage({ type: "evenement", data: e.data, id: e.lastEventId });
     }
@@ -113,6 +126,10 @@ function oublier(p: Page) {
         break;
       case "tour":
         port.postMessage({ type: "tour", run: d.run, tour: tours.get(String(d.run)) ?? null });
+        break;
+      case "tour-max":
+        // The witnesses only: a low bound, to prove what is said past it.
+        if (typeof d.max === "number" && d.max > 0) tourMax = d.max;
         break;
       case "etat-ecrire":
         if (typeof d.cle === "string") {
