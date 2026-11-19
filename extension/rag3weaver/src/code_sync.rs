@@ -793,15 +793,9 @@ fn forget_edges_of_files(catalog: &mut Catalog, source_id: &str, chemins: &[Stri
     let visibilite = catalog.generations.clone();
     let mut defaire = |relation: &str, side: Direction, autre: &str| -> Result<(), String> {
         let dialecte = catalog.dialect_arc();
-        let autre_visible = visibilite
-            .as_ref()
-            .filter(|v| v.tables.contains(autre))
-            .and_then(|v| dialecte.condition_visible_sur("o", &v.couche, v.rang));
-        let Some(requete) = dialecte.detach_edges_returning(relation, SCOPE, side, &filtre).map(|q| match &autre_visible {
-            Some(c) => q.replacen(" DELETE r", &format!(" AND ({c}) DELETE r"), 1),
-            None => q,
-        }) else {
-            let ecrire = Write::Detach { relation: relation.into(), table: SCOPE.into(), side, filter: filtre.clone() };
+        let bout = edge_end_visible(visibilite.as_ref(), autre);
+        let Some(requete) = dialecte.detach_edges_returning(relation, SCOPE, side, &filtre, bout.as_ref().map(|(t, p)| (t.as_str(), p))) else {
+            let ecrire = Write::Detach { relation: relation.into(), table: SCOPE.into(), side, filter: filtre.clone(), end: bout };
             let requete = dialecte.write(&ecrire).map_err(|e| e.to_string())?;
             catalog.execute_raw_with_params(&requete, &params).map_err(|e| e.to_string())?;
             return Ok(());
@@ -1602,6 +1596,13 @@ pub(crate) fn edge_copy_write(
         props,
     };
     catalog.dialect_arc().write(&copie).map_err(|e| e.to_string())
+}
+
+/// **The other end of a detach, kept visible at the pending rank** (witness 13: an edge towards a closed row is
+/// history): the other end's table and its visibility, when that table has generations.
+pub(crate) fn edge_end_visible(generations: Option<&crate::generations::Visibilite>, other: &str) -> Option<(String, rag3weaver_ir::Predicate)> {
+    let v = generations.filter(|v| v.tables.contains(other))?;
+    Some((other.to_string(), rag3weaver_ir::Predicate::Visible { couche: v.couche.clone(), rang: v.rang, mask: Default::default() }))
 }
 
 /// The equality of `field` to the parameter `param`, for [`visible_read`].
