@@ -264,6 +264,35 @@ pub struct ViewState {
     pub behind_since_ms: Option<u64>,
     /// `!indexing && files_behind == 0`.
     pub up_to_date: bool,
+    /// **The seconds left to reindex the text of the files behind** (point 7 of the vision of 15 November): the files
+    /// behind times the observed reindexing rate of the cell (`Lag::rate`, never a constant). `Some(0)` when nothing is
+    /// behind; `None` when files are behind and no rate was observed yet.
+    pub text_eta_s: Option<u64>,
+    /// **The seconds left to embed the view's chunks due**, set by [`ViewState::with_vectors_due`] from the chunks due,
+    /// their mean size and the rate of the view's embedding service. `None` until it is set, or when no rate is known.
+    pub vectors_eta_s: Option<u64>,
+}
+
+/// What a view owes in vectors, and how fast its service embeds: the input of [`ViewState::with_vectors_due`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct VectorsDue {
+    /// The chunks of the view without a vector.
+    pub chunks: usize,
+    /// Their mean size, in characters.
+    pub mean_chars: f64,
+    /// The rate of the view's embedding service, in characters per second (an index's rate: the claim, the call and
+    /// the write); `None` when no rate is known.
+    pub chars_per_s: Option<f64>,
+}
+
+impl ViewState {
+    /// **The seconds left to embed** the chunks due: chunks × mean size ÷ rate, rounded up; `Some(0)` with nothing due,
+    /// `None` without a rate.
+    pub fn with_vectors_due(self, due: VectorsDue) -> Self {
+        // RED STUB: not set.
+        let _ = due;
+        self
+    }
 }
 
 /// **The state of a view**, read on `conn` (the snapshot of a tool call, like [`load_stack_on`]) and in `lag`
@@ -301,6 +330,9 @@ pub fn view_state(
         files_behind,
         behind_since_ms: behind.map(|b| b.since_ms),
         up_to_date: !indexing && files_behind == 0,
+        // RED STUB: not computed.
+        text_eta_s: None,
+        vectors_eta_s: None,
     })
 }
 
@@ -475,13 +507,44 @@ mod tests {
         let b = etat("b");
         assert_eq!(
             b,
-            ViewState { layer: "b".into(), rank: Some(1), indexing: false, files_behind: 0, behind_since_ms: None, up_to_date: true },
+            ViewState { layer: "b".into(), rank: Some(1), indexing: false, files_behind: 0, behind_since_ms: None, up_to_date: true, text_eta_s: Some(0), vectors_eta_s: None },
             "view b is held behind layer a's index"
         );
         let a_ = etat("a");
         assert!(a_.indexing && !a_.up_to_date, "layer a, being written, says it is up to date: {a_:?}");
         assert_eq!((a_.files_behind, a_.behind_since_ms), (2, Some(1_000)), "{a_:?}");
         assert!(etat("backend").up_to_date, "the backend's layer is held behind layer a's index");
+    }
+
+    /// **The estimates of a view follow the rates** (point 7 of the vision of 15 November, page
+    /// `docs/arbre-principal/19-11-2026/05-l-estimation-du-reste-par-vue.md`). Layer a has 4 files behind and an observed
+    /// reindexing rate of 500 ms per file: `text_eta_s` is 2 s, and 4 s at 1 000 ms. 1 000 chunks due of 600 characters
+    /// under a rate of 200 000 characters per second: `vectors_eta_s` is 3 s. Without a rate, `None`. View b, with
+    /// nothing behind and nothing due: 0 and 0.
+    #[test]
+    fn the_estimates_of_a_view_follow_the_rates() {
+        use crate::catalog::retard::{LagKey, LayerId};
+        let cat = catalogue();
+        poser(&cat, "backend", 0, None, "[]");
+        poser(&cat, "a", 1, Some(("backend", 0)), "[]");
+        poser(&cat, "b", 1, Some(("backend", 0)), "[]");
+        let lag = crate::catalog::retard::Lag::new();
+        let cell = cat.scope().clone();
+        let a = LagKey { cell: cell.clone(), layer: LayerId("a".into()) };
+        for f in ["w.rs", "x.rs", "y.rs", "z.rs"] {
+            lag.note_in(&a, f, 1_000);
+        }
+        let etat = |v: &str| view_state(cat.conn(), cat.dialect_arc().as_ref(), &vue(v, None), &lag, &cell).unwrap();
+        assert_eq!(etat("a").text_eta_s, None, "files behind without an observed rate have an estimate");
+        lag.set_rate(&cell, 500.0);
+        assert_eq!(etat("a").text_eta_s, Some(2), "4 files at 500 ms per file are not 2 s");
+        lag.set_rate(&cell, 1_000.0);
+        assert_eq!(etat("a").text_eta_s, Some(4), "the estimate does not follow the rate");
+        let du = VectorsDue { chunks: 1_000, mean_chars: 600.0, chars_per_s: Some(200_000.0) };
+        assert_eq!(etat("a").with_vectors_due(du).vectors_eta_s, Some(3), "1 000 chunks of 600 characters at 200 000 c/s are not 3 s");
+        assert_eq!(etat("a").with_vectors_due(VectorsDue { chars_per_s: None, ..du }).vectors_eta_s, None, "an unknown rate gives an estimate");
+        let b = etat("b").with_vectors_due(VectorsDue { chunks: 0, ..du });
+        assert_eq!((b.text_eta_s, b.vectors_eta_s), (Some(0), Some(0)), "a view with nothing due is not at 0 and 0");
     }
 
     /// **An unknown layer is a state, not a refusal**: a worktree layer before 2a′-3 has no generation; its view
