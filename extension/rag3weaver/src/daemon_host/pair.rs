@@ -255,6 +255,15 @@ impl Pair {
         Ok(())
     }
 
+    /// **Écrire à une session** (lot 3) au nom de l'agent de la tâche `cle` : `to` est un nom du
+    /// registre (lu, jamais écrit) ou l'adresse `uds:` d'une ligne reçue. La trame a la forme
+    /// relevée le 16 novembre 2026, enveloppe faite ici ; une connexion, sans attendre de réponse.
+    /// Rend le `msg_id` de la trame.
+    pub fn envoyer(&self, cle: &str, to: &str, texte: &str) -> Result<String, String> {
+        let _ = (cle, to, texte);
+        Err("not yet".into())
+    }
+
     fn cesser_d_ecouter(&self) {
         if let Some(e) = self.ecoute.lock().unwrap_or_else(|p| p.into_inner()).take() {
             e.arreter();
@@ -437,6 +446,70 @@ mod tests {
         pair.fermer("p/a");
         assert!(!chemin.exists(), "the socket goes with the entry");
         assert!(UnixStream::connect(&chemin).is_err());
+    }
+
+    /// Une fausse session : son entrée au registre, et sa socket qui garde ce qu'elle reçoit.
+    fn fausse_session(r: &Registre, nom: &str) -> (PathBuf, std::sync::Arc<Mutex<Vec<Vec<u8>>>>) {
+        std::fs::create_dir_all(&r.sessions).unwrap();
+        std::fs::create_dir_all(&r.socks).unwrap();
+        let chemin = r.socks.join(format!("{nom}.sock"));
+        let l = std::os::unix::net::UnixListener::bind(&chemin).unwrap();
+        std::fs::write(r.sessions.join(format!("{nom}.json")), json!({ "pid": 4194390u32, "name": nom, "nameSource": "user", "messagingSocketPath": chemin }).to_string()).unwrap();
+        let recues = std::sync::Arc::new(Mutex::new(Vec::new()));
+        let r2 = recues.clone();
+        std::thread::spawn(move || {
+            for c in l.incoming().flatten() {
+                use std::io::Read;
+                let mut o = Vec::new();
+                let _ = (&c).read_to_end(&mut o);
+                if !o.is_empty() {
+                    r2.lock().unwrap().push(o);
+                }
+            }
+        });
+        (chemin, recues)
+    }
+
+    fn attendre(recues: &std::sync::Arc<Mutex<Vec<Vec<u8>>>>, n: usize) -> Vec<Value> {
+        let fin = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while recues.lock().unwrap().len() < n && std::time::Instant::now() < fin {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        recues.lock().unwrap().iter().map(|o| serde_json::from_slice(o).unwrap()).collect()
+    }
+
+    #[test]
+    fn a_message_goes_to_a_session_by_name_or_address_in_the_frame_of_the_bus() {
+        let t = tempfile::tempdir().unwrap();
+        let r = registre(&t);
+        let (chemin, recues) = fausse_session(&r, "rag3db-5a");
+        let pair = Pair::new(r.clone());
+        pair.ouvrir("p/a", "algareth", Path::new("/w")).unwrap();
+        let notre = entree(&r)["messagingSocketPath"].as_str().unwrap().to_string();
+        let id = pair.envoyer("p/a", "rag3db-5a", "4").unwrap();
+        let f = attendre(&recues, 1);
+        assert_eq!(f.len(), 1, "{f:?}");
+        assert_eq!(f[0]["msgV"], 1);
+        assert_eq!(f[0]["type"], "user");
+        assert_eq!(f[0]["priority"], "next");
+        assert_eq!(f[0]["msg_id"], id.as_str());
+        assert_eq!(f[0]["from"], format!("uds:{notre}"));
+        assert_eq!(f[0]["message"]["role"], "user");
+        assert_eq!(
+            f[0]["message"]["content"],
+            format!("<cross-session-message from=\"uds:{notre}\" from-name=\"algareth\" from-mode=\"rag3weaver\">\n4\n</cross-session-message>")
+        );
+        // By the address a received line carries.
+        pair.envoyer("p/a", &format!("uds:{}", chemin.display()), "encore").unwrap();
+        assert_eq!(attendre(&recues, 2).len(), 2);
+        // An unknown name names those present; a task that does not hold the entry cannot send.
+        let e = pair.envoyer("p/a", "personne", "x").unwrap_err();
+        assert!(e.contains("personne") && e.contains("rag3db-5a"), "{e}");
+        assert!(pair.envoyer("p/autre", "rag3db-5a", "x").is_err());
+        // A session whose socket does not answer is said.
+        std::fs::remove_file(&chemin).unwrap();
+        let e = pair.envoyer("p/a", "rag3db-5a", "x").unwrap_err();
+        assert!(e.contains("rag3db-5a"), "{e}");
     }
 
     #[test]
