@@ -1,8 +1,6 @@
 %% tool: archive_slice_core
 %% description: The two steps of archive_slice on a slice already rendered (titre, contenu, chemin): cited by archive_slice once, through a ForEachNode of one element. See archive_slice.
-%% param: titre string! -- The slice title (e.g. « run <run>, turns a-b »).
-%% param: contenu string! -- The slice, in the single form rendered from Turn rows: one « ## turn <n> » per turn, one « ### <role> · <time> » per message.
-%% param: chemin string! -- The path of the slice Source, e.g. sources/<run slug>-turns-<a>-<b>.md.
+%% param: element json! -- {titre, contenu, chemin}: the slice rendered by archive_slice (its title, its text in the single form, the path of its Source).
 %% param: origine string = "run_trace" -- The origin of the Source.
 %% param: jour string = "" -- The day, AAAA-MM-JJ: only for a default path, which archive_slice always gives.
 %% param: candidates int = 5 -- Candidate fiches recalled per topic.
@@ -22,9 +20,9 @@
 
 graph LR
     genre["CreateRefTypeNode(name='doc', description='La section d&#39;un source Markdown, provenance d&#39;un apport : doc:<chemin du source>#<titre de la section>.', forme='doc:<chemin du source>#<titre>', confirm=true, types_entity='RefType')"]
-    prompt["RhaiNode(script_id=archive_slice_prompt, inputs='contenu', contenu=$contenu)"]
+    prompt["RhaiNode(script_id=archive_slice_prompt, inputs='contenu', contenu=$element.contenu)"]
     extract["LlmNode(response_schema=$schema, max_tokens=$extract_max_tokens, temperature=0)"]
-    build["RhaiNode(script_id=archive_slice_build, inputs='contenu,chemin,titre,origine,step2_input,raw_turns_max_tokens', contenu=$contenu, chemin=$chemin, titre=$titre, origine=$origine, step2_input=$step2_input, raw_turns_max_tokens=$raw_turns_max_tokens)"]
+    build["RhaiNode(script_id=archive_slice_build, inputs='contenu,chemin,titre,origine,step2_input,raw_turns_max_tokens', contenu=$element.contenu, chemin=$element.chemin, titre=$element.titre, origine=$origine, step2_input=$step2_input, raw_turns_max_tokens=$raw_turns_max_tokens)"]
     decide["ForEachNode(graph='@builtin:backends/memory/graphs/archive_decide.mmd', on_error='report', carry='proposed', report_results=true, candidates=$candidates, allow_create=$allow_create, instruction=$instruction, search_options=$search_options, context=$context, context_title=$context_title, query_chars=$query_chars)"]
     decided["Route(key='stage', routes='decided')"]
     subject["ForEachNode(graph='@builtin:backends/memory/graphs/archive_subject.mmd')"]
@@ -33,7 +31,7 @@ graph LR
     create["ForEachNode(graph='@builtin:backends/memory/graphs/archive_create.mmd', on_error='report')"]
     refs["ForEachNode(graph='@builtin:backends/memory/graphs/archive_link.mmd', on_error='report')"]
     refs_new["ForEachNode(graph='@builtin:backends/memory/graphs/archive_link.mmd', on_error='report')"]
-    sourcer["RhaiNode(script_id=archive_params, inputs='titre,contenu,chemin,origine,jour', titre=$titre, contenu=$contenu, chemin=$chemin, origine=$origine, jour=$jour)"]
+    sourcer["RhaiNode(script_id=archive_params, inputs='titre,contenu,chemin,origine,jour', titre=$element.titre, contenu=$element.contenu, chemin=$element.chemin, origine=$origine, jour=$jour)"]
     source["EntityRecordNode(entity='Source', action='put', record=$source)"]
     rapport["RhaiNode(script_id=archive_slice_rapport, inputs='trace', trace=$trace)"]
     genre -->|report:value| prompt
