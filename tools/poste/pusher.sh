@@ -213,8 +213,10 @@ replay_train() { # <line>…
   for line in "$@"; do
     [ "$(f_ "$line" 4)" = rust ] || continue
     w=$(f_ "$line" 5); s=$(f_ "$line" 6); x=$(f_ "$line" 7)
+    # A later lot adds its suite: with « e2e » (or « - ») its witness names an e2e suite; with a named suite its
+    # witness is a test of it, played by playing the suite (19 Nov.: a test's name was given as a suite).
     if [ -z "$first" ]; then first=$w; [ "$s" = - ] || suite=$s
-    elif [ "$s" != lib ]; then extra="$extra,$w"; fi
+    else case "$s" in lib) ;; e2e|-) extra="$extra,$w" ;; *) extra="$extra,$s" ;; esac; fi
     [ "$x" = - ] || extra="$extra,$x"
   done
   extra=$(echo "${extra#,}" | tr ',' '\n' | awk 'NF && !seen[$0]++' | paste -sd,)
@@ -317,12 +319,22 @@ step() {
     [ -e "$D/lib-late" ] && { rm -f -- "$D/lib-late"; log lib "à jour : les lots rust reprennent"; }
   fi
   # The train: up to TRAIN_MAX lots in queue order; under a late lib, the Rust lots and their children stay queued.
+  # A lot that changes the source of a cache copy closes its train: the lots after it run on the new copy, recopied
+  # once the train is pushed (19 Nov.: a pass changed with the lot that needed it would run the old copy).
+  local sources closed=""
+  sources=$(g show origin/master:tools/poste/cache_copies.txt 2>/dev/null | grep -vE '^[[:space:]]*(#|$)' | awk '{print $1}')
   while IFS= read -r line; do
     id=$(f_ "$line" 1)
     if { [ -n "$late" ] && [ "$(f_ "$line" 4)" = rust ]; } || [[ "$skipped" == *" $(f_ "$line" 8) "* ]]; then
       skipped="$skipped$id "; continue
     fi
-    [ ${#train[@]} -lt "$TRAIN_MAX" ] && train+=("$line")
+    [ -z "$closed" ] && [ ${#train[@]} -lt "$TRAIN_MAX" ] || continue
+    train+=("$line")
+    branch=$(f_ "$line" 2)
+    g fetch -q origin "+refs/heads/$branch:refs/remotes/origin/$branch" 2>/dev/null
+    if [ -n "$sources" ] && g diff --name-only "$(g merge-base origin/master "origin/$branch" 2>/dev/null)" "origin/$branch" 2>/dev/null | grep -qxF "$sources"; then
+      closed=$id; log "$id" "train fermé" "le lot change une copie du cache"
+    fi
   done < <(queue_lines)
   [ ${#train[@]} -gt 0 ] || { echo "lots rust suspendus : lib en retard ($late)"; return 0; }
   for line in "${train[@]}"; do
