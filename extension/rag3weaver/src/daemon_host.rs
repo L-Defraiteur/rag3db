@@ -369,6 +369,7 @@ pub mod chat;
 
 /// The session archived as it goes: each turn to the memory, each slice to the archivist.
 pub mod rangement;
+pub mod pair;
 
 /// Le journal des runs de l'hôte : un fichier par run racine, borné.
 pub mod journal_des_runs;
