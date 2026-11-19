@@ -8,9 +8,6 @@
     "extension/rag3weaver",
     "tools/rust_api"
   ],
-  "submodules": {
-    "extension/rag3weaver/codeparsers": "bd133850f89d6b12a3ca2b2f6ce238785ed37e3a"
-  },
   "needs_lib": false,
   "witness": "dataflow::foreach_node::tests::substituted_description_key_is_not_taken_for_a_script",
   "test": "cargo test -j 8 --lib -- --exact dataflow::foreach_node::tests::substituted_description_key_is_not_taken_for_a_script",
@@ -26,8 +23,8 @@
 
 Le bloc est celui du lanceur (forme d'archi). `paths` porte `tools/rust_api` parce que le crate déclare la lib
 rag3db par un chemin hors de son dossier (`../../tools/rust_api`, optionnelle) : cargo lit son manifeste même
-quand la dépendance n'est pas prise. `submodules` donne le sous-module `codeparsers` à son commit du parent, pour
-la même raison ; `git archive` ne l'extrait pas. Sans les features (le défaut du crate est vide), le cas ne
+quand la dépendance n'est pas prise. Le sous-module `codeparsers` est posé par le lanceur au commit que le parent
+enregistre. Sans les features (le défaut du crate est vide), le cas ne
 demande pas la lib rag3db.
 
 **Vérifié le 19 novembre à luciepc**, sur l'arbre archivé au parent avec le sous-module extrait, dans un target
