@@ -437,6 +437,8 @@ const BASE_NODES: &[&str] = &[
     #[cfg(feature = "code")]
     "InvokeToolNode",
     "RhaiNode",
+    // **Gather in a declared order, touching nothing** (lot B1, 19 November 2026): pure like `RhaiNode`.
+    "Collect",
     // **Aiguiller et découper, sans rien toucher** (M4, 7 novembre 2026) : `Route`
     // pose un élément sur le port de sa clé, `SplitSections` rend les sections d'un
     // texte reçu. Ni fichier, ni réseau, ni écriture : purs comme `RhaiNode`.
