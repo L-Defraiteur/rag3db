@@ -24,7 +24,7 @@ Ses sections, dans cet ordre (celui de tty) :
 6. **Notre correctif** (caché à Algareth, pour le juge) : le commit, son titre, les fichiers avec leurs `+/−`, et
    ce qui est hors du cas (une page de docs, par exemple).
 
-**Ce que le lanceur donne à Algareth** : l'arbre minimal au parent, sans `.git`, et le signalement. Il ne donne ni le
+**Ce que le lanceur donne à Algareth** : l'arbre minimal au parent, avec un `.git` neuf sans histoire (§ 4), et le signalement. Il ne donne ni le
 nom du témoin ni notre correctif. Le témoin est dans l'arbre, comme tout test : Algareth peut le trouver et le jouer.
 
 ## 2. Le juge
@@ -69,9 +69,30 @@ joué) :
 **Le poids des indices** : un cas avec une souche posée avec le rouge est plus facile qu'un cas sans indice. La page
 de la campagne compte séparément les réussites avec indice et celles sans. Ce sont deux nombres, pas un seul taux.
 
-## 4. Ce qui reste à convenir avec archi
+## 4. La sortie du lanceur, convenue avec archi (19 novembre)
 
-- Où le lanceur écrit le diff et la trace de l'agent, pour que le banc les lise sans relancer l'agent.
-- Le budget d'un tour (pas, jetons, temps), pour qu'un « échoué » dise s'il a manqué de temps ou de juste.
+**Où** : sur le poste qui a joué, `~/.cache/rag3weaver-build/campagne/<cas>/<run>/`, où `<run>` vaut
+`AAAAMMJJ-HHMMSS`. Le lanceur ne juge rien : aucun verdict dans ce dossier. On y trouve :
+- `case.json` : le bloc « lanceur » du cas, et l'empreinte du texte donné ;
+- `request.txt` : le signalement, mot pour mot, tel qu'Algareth l'a reçu ;
+- `diff.patch` et `diffstat.txt` : `git diff base..fin` sur l'arbre de la tâche, nouveaux fichiers compris. C'est la
+  source des colonnes « endroit », « taille » et « dégâts à côté » ;
+- `trace.json` : `steps`, `model_calls`, `input_tokens`, `output_tokens`, `cached_tokens`, `reasoning_tokens`,
+  `wall_ms`, `model_ms`, `tool_calls` par outil, `ended` (la ligne de fin de la boîte) et `stopped_by`. C'est la
+  source de la colonne « coût » ;
+- `mailbox.jsonl` et `runs/` : la boîte et les journaux bruts, pour relire sans relancer ;
+- `budget.json` : le budget appliqué.
 
-La page se soumet à c7 et à archi. Le juge commence au premier cas que le lanceur aura joué.
+**Le budget d'un tour** : 12 pas, 2 M de jetons d'entrée cumulés, 30 min d'horloge, par défaut. Il se règle par cas
+dans le bloc `budget`. Au premier dépassement, le lanceur écrit stop dans la boîte et `stopped_by` dans `trace.json`.
+**Un « échoué » se lit en deux** : avec `stopped_by` non nul, il a manqué de budget ; sans, il a manqué de justesse.
+La grille porte les deux.
+
+**L'arbre a un `.git`, mais neuf** : un `git init` et un seul commit `base`, sans aucune histoire, parce que la tâche a
+besoin d'un dépôt pour sa branche et son worktree. La porte de la campagne refuse toute commande git. Algareth ne peut
+donc ni lire ni écrire l'histoire, et il n'y en a pas. C'est aussi ce qui rend `diff.patch` exact.
+
+**Le juge rejoue** le témoin et les suites exigées sur un worktree du dépôt réel au parent, avec `diff.patch`
+appliqué. Il ne les rejoue pas dans l'arbre de la tâche.
+
+Le juge commence au premier cas que le lanceur aura joué.
