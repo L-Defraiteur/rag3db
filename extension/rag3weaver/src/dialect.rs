@@ -402,6 +402,12 @@ pub trait SchemaDialect: Send + Sync {
         None
     }
 
+    /// **The indexes of the visibility columns** of a generations table: none by default.
+    fn generation_indexes(&self, table: &str) -> Vec<String> {
+        let _ = table;
+        Vec::new()
+    }
+
     /// **The counts of a published generation** (`$key`): its dirty paths (`$sales`) and its copied edges
     /// (`$recopiees`). None for a dialect without generations.
     fn set_generation_counts(&self) -> Option<String> {
@@ -2932,6 +2938,116 @@ impl SchemaDialect for PostgresDialect {
         "postgresql"
     }
 
+    /// **Postgres knows the generations** (2.11, lot B): the three columns, the visibility, the `_generation` table.
+    fn sait_les_generations(&self) -> bool {
+        true
+    }
+
+    fn condition_visible_sur(&self, alias: &str, couche: &str, rang: i64) -> Option<String> {
+        let p = rag3weaver_ir::Predicate::Visible { couche: couche.to_string(), rang, mask: Default::default() };
+        Some(postgres_condition_sur(self, &p, alias, &mut 0))
+    }
+
+    fn condition_sur_predicat(&self, alias: &str, predicat: &rag3weaver_ir::Predicate) -> Option<String> {
+        Some(postgres_condition_sur(self, predicat, alias, &mut 0))
+    }
+
+    fn create_generation_table(&self) -> Option<String> {
+        Some(format!(
+            "CREATE TABLE IF NOT EXISTS {} (\"_key\" TEXT PRIMARY KEY, \"couche\" TEXT, \"rang\" BIGINT, \"commit\" TEXT, \"base\" TEXT, \
+             \"recette\" TEXT, \"parente_couche\" TEXT, \"parente_rang\" BIGINT, \"tombstones\" TEXT, \"publiee_le\" BIGINT)",
+            self.quote(crate::generations::TABLE)
+        ))
+    }
+
+    /// Never touches a generation already there (`ON CONFLICT DO NOTHING`), like the rag3db `MERGE … ON CREATE`.
+    fn merge_generation(&self) -> Option<String> {
+        Some(format!(
+            "INSERT INTO {} (\"_key\", \"couche\", \"rang\", \"commit\", \"base\", \"recette\", \"parente_couche\", \"parente_rang\", \"tombstones\", \"publiee_le\") \
+             VALUES ($key, $couche, $rang, $commit, $base, $recette, NULLIF($parente_couche, ''), CASE WHEN $parente_rang::bigint < 0 THEN NULL ELSE $parente_rang::bigint END, \
+             $tombstones, $publiee_le) ON CONFLICT (\"_key\") DO NOTHING",
+            self.quote(crate::generations::TABLE)
+        ))
+    }
+
+    fn latest_generation_rank(&self) -> Option<String> {
+        Some(format!("SELECT max(\"rang\") FROM {} WHERE \"couche\" = $couche", self.quote(crate::generations::TABLE)))
+    }
+
+    fn read_generation(&self) -> Option<String> {
+        Some(format!(
+            "SELECT \"parente_couche\", \"parente_rang\", \"tombstones\" FROM {} WHERE \"couche\" = $couche AND \"rang\" = $rang",
+            self.quote(crate::generations::TABLE)
+        ))
+    }
+
+    /// `(_couche, _jusqu_a, _depuis)`: the visibility `_jusqu_a IS NULL OR _jusqu_a > r` reads as two ranges of
+    /// this index (a `BitmapOr`), the layer first; `_depuis` last, checked in the index.
+    fn generation_indexes(&self, table: &str) -> Vec<String> {
+        let court = table.replace('.', "_").to_lowercase();
+        vec![format!(
+            "CREATE INDEX IF NOT EXISTS {} ON {} (\"_couche\", \"_jusqu_a\", \"_depuis\")",
+            self.quote(&format!("{court}_visibilite_idx")),
+            self.quote(table)
+        )]
+    }
+
+    fn set_generation_counts(&self) -> Option<String> {
+        Some(format!(
+            "UPDATE {} SET \"chemins_sales\" = $sales, \"aretes_recopiees\" = $recopiees WHERE \"_key\" = $key",
+            self.quote(crate::generations::TABLE)
+        ))
+    }
+
+    /// The pairs arrive as JSON rows (`jsonb_to_recordset`); an edge already there is kept (`ON CONFLICT DO
+    /// NOTHING` on the relation's key), and the count of the copies is returned.
+    fn copy_edges(
+        &self,
+        relation: &str,
+        table: &str,
+        other: &str,
+        side: rag3weaver_ir::Direction,
+        filter: Option<&rag3weaver_ir::Predicate>,
+        props: &[String],
+    ) -> Option<String> {
+        let rel = self.quote(relation);
+        let (vers_l_ancienne, vers_l_autre, colonnes) = match side {
+            rag3weaver_ir::Direction::Incoming => ("to_uuid", "from_uuid", "r.\"from_uuid\", p.n"),
+            rag3weaver_ir::Direction::Outgoing => ("from_uuid", "to_uuid", "p.n, r.\"to_uuid\""),
+        };
+        let props_cibles: String = props.iter().map(|k| format!(", {}", self.quote(k))).collect();
+        let props_sources: String = props.iter().map(|k| format!(", r.{}", self.quote(k))).collect();
+        let filtre = filter.map(|f| format!(" WHERE {}", postgres_condition_sur(self, f, "x", &mut 0))).unwrap_or_default();
+        Some(format!(
+            "WITH copies AS (INSERT INTO {rel} (\"from_uuid\", \"to_uuid\"{props_cibles}) \
+             SELECT {colonnes}{props_sources} FROM jsonb_to_recordset($paires::jsonb) AS p(a text, n text) \
+             JOIN {rel} AS r ON r.\"{vers_l_ancienne}\" = p.a \
+             JOIN {t} AS nt ON nt.\"_uuid\" = p.n \
+             JOIN {o} AS x ON x.\"_uuid\" = r.\"{vers_l_autre}\"{filtre} \
+             ON CONFLICT DO NOTHING RETURNING 1) SELECT count(*) FROM copies",
+            t = self.quote(table),
+            o = self.quote(other),
+        ))
+    }
+
+    /// A mark with values (`Some(param)`) as an `UPDATE` by uuids; the rest by the dialect's methods.
+    fn write(&self, write: &rag3weaver_ir::Write) -> Result<String, rag3weaver_ir::TranslateError> {
+        match write {
+            rag3weaver_ir::Write::Mark { table, set } if set.iter().any(|(_, p)| p.is_some()) => {
+                write.validate()?;
+                let assigns: Vec<String> = set
+                    .iter()
+                    .map(|(f, p)| match p {
+                        Some(p) => format!("{} = ${p}", self.quote(f)),
+                        None => format!("{} = NULL", self.quote(f)),
+                    })
+                    .collect();
+                Ok(format!("UPDATE {} SET {} WHERE \"_uuid\" = ANY($uuids)", self.quote(table), assigns.join(", ")))
+            }
+            _ => write_by_methods(self, write),
+        }
+    }
+
     /// **Le guillemet double, sur le nom replié en minuscules.** Replié exprès :
     /// un nom non cité est replié par PostgreSQL, donc une table créée hier
     /// sous `Document` s'appelle physiquement `document`. Citer le nom tel
@@ -2977,6 +3093,8 @@ impl SchemaDialect for PostgresDialect {
                         self.quote(&c.alias)
                     )
                 }
+                // **The whole row** as a JSON object (2.11): read back as a map, like a rag3db node.
+                Column::Whole => "to_jsonb(m)".to_string(),
                 _ => return Err(rag3weaver_ir::TranslateError::Untranslated { dialect: self.name().into(), form: "Select (ligne entière)" }),
             });
         }

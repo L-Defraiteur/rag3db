@@ -37,7 +37,7 @@ use std::sync::{Arc, Mutex};
 
 use rag3weaver::config::FieldType;
 use rag3weaver::connection::{CypherValue, DbConnection};
-use rag3weaver::dialect::PostgresDialect;
+use rag3weaver::dialect::{PostgresDialect, SchemaDialect};
 // `HashEmbedder` et pas `MockEmbedder` : le second rend des vecteurs **nuls**,
 // et la distance cosinus d'un vecteur nul est `NaN` — pgvector trie alors sur
 // du NaN et son index HNSW ne rend rien. Un montage qui « marche » avec des
@@ -2254,4 +2254,36 @@ fn a_new_code_base_on_postgres_has_generations() {
     assert!(au_rang_en_attente.contains(&"gamma".to_string()) && !au_rang_en_attente.contains(&"beta".to_string()), "at the pending rank: {au_rang_en_attente:?}");
     let au_publie = catalog.au_rang(publie, noms);
     assert!(au_publie.contains(&"beta".to_string()) && !au_publie.contains(&"gamma".to_string()), "at the published rank: {au_publie:?}");
+}
+
+/// **The visibility is read by its index on postgres** (c7, 19 November 2026: an index is proven by its plan): a
+/// scope table of real size, mostly history (40 000 closed rows, 400 living), `ANALYZE`d; the plan of a visible
+/// read goes by the index, not by a scan of the table.
+#[cfg(feature = "code")]
+#[test]
+#[ignore]
+fn the_visibility_is_read_by_its_index_on_postgres() {
+    use rag3weaver::code::{default_scope_chunking, register_code_schema};
+    let (_garde, mut catalog) = catalogue(8);
+    register_code_schema(&mut catalog, default_scope_chunking()).unwrap();
+    let conn = catalog.conn();
+    conn.execute(
+        "INSERT INTO scope (\"_uuid\", \"_couche\", \"_depuis\", \"_jusqu_a\") \
+         SELECT 'h' || i, 'backend', i % 50, i % 50 + 1 FROM generate_series(1, 40000) AS i",
+    )
+    .unwrap();
+    conn.execute(
+        "INSERT INTO scope (\"_uuid\", \"_couche\", \"_depuis\", \"_jusqu_a\") SELECT 'v' || i, 'backend', i % 55, NULL FROM generate_series(1, 400) AS i",
+    )
+    .unwrap();
+    conn.execute("ANALYZE scope").unwrap();
+    // At the pending rank of this new base (1), and at a high rank (60), where every row was born before and
+    // only `_jusqu_a` tells the living from the history: the shape of a real base.
+    for visible in [catalog.condition_visible("s").expect("visible"), PostgresDialect.condition_visible_sur("s", "backend", 60).expect("visible")] {
+        let plan = conn.execute(&format!("EXPLAIN SELECT s.\"_uuid\" FROM scope AS s WHERE {visible}")).unwrap();
+        let plan: Vec<String> = plan.rows.iter().filter_map(|l| l.first().and_then(|v| v.as_str()).map(str::to_string)).collect();
+        eprintln!("PLAN {visible}\n{}", plan.join("\n"));
+        assert!(plan.iter().any(|l| l.contains("visibilite_idx")), "the visible read goes by the visibility index: {plan:#?}");
+        assert!(!plan.iter().any(|l| l.contains("Seq Scan on scope")), "no scan of the scope table: {plan:#?}");
+    }
 }
