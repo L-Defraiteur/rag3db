@@ -68,6 +68,13 @@ tel qu'il était »**, mot pour mot. Toute piste (ce qu'on suppose, ce qu'on pou
    l'assertion, avec **un `CARGO_TARGET_DIR` propre au cas**, sous son dossier. Deux arbres sur le
    même target ont rejoué le binaire de l'autre (« 0 passed, 98 filtered out », tty, 19 novembre).
    Le même target sert ensuite à la tâche d'Algareth et au juge.
+   - **Un cas `needs_lib: true` ne bâtit jamais la lib.** Un arbre archivé hors git ne la bâtit pas
+     (le `build.rs` de `tools/rust_api` retombe sur cmake). Le lanceur exporte la lib **épinglée du
+     magasin** dans l'environnement du rouge au parent et du bac à sable de l'agent (`RAG3DB_LIB`,
+     puis `exporter_la_lib`). C'est la lib épinglée des passes du moment, et `case.json` la nomme.
+     Ce sera le lot qui prend le premier cas à lib.
+   - **Les sous-modules se lisent au parent**, au commit qu'il enregistre. Un bloc n'a pas à les
+     donner, et une clé `submodules` n'est pas lue.
 3. **L'hôte de campagne**, à part des hôtes de service : son port, ses racines de tâches et de
    runs, la lib épinglée si `needs_lib`.
    - Pour chaque cas, un backend de code sur l'arbre, avec son index.
