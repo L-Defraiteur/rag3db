@@ -23,7 +23,8 @@ const MUET_MS = 45_000;
 const GRACE_MS = 10_000;
 
 type Statut = "ouvert" | "coupé, reprise…" | "fermé";
-type Page = { port: MessagePort; sujets: Set<string> | null; vu: number };
+type Page = { port: MessagePort; sujets: Set<string> | null; vu: number; id: number; role?: string; backend?: string; focus: number };
+let pagesNumerotees = 0;
 
 const pages = new Set<Page>();
 const etat = new Map<string, unknown>();
@@ -99,14 +100,24 @@ function debrancherSiPersonne() {
   }, GRACE_MS);
 }
 
+/// **The open windows of the IDE** (slice 2, ED's review: kept by the worker, never written by the pages, so that two
+/// windows opening together do not lose one another): those that declared a role (`?fenetre=`), their backend and
+/// when they last had the focus. Shared as the state key `fenetres`.
+function publierLesFenetres() {
+  const liste = [...pages].filter((p) => p.role).map((p) => ({ id: p.id, role: p.role, backend: p.backend, focus: p.focus }));
+  etat.set("fenetres", liste);
+  diffuser({ type: "etat", cle: "fenetres", valeur: liste });
+}
+
 function oublier(p: Page) {
   pages.delete(p);
+  if (p.role) publierLesFenetres();
   debrancherSiPersonne();
 }
 
 (self as unknown as { onconnect: (e: MessageEvent) => void }).onconnect = (e: MessageEvent) => {
   const port = e.ports[0];
-  const page: Page = { port, sujets: null, vu: Date.now() };
+  const page: Page = { port, sujets: null, vu: Date.now(), id: ++pagesNumerotees, focus: 0 };
   pages.add(page);
   port.onmessage = (m: MessageEvent) => {
     const d = m.data ?? {};
@@ -126,6 +137,17 @@ function oublier(p: Page) {
         break;
       case "tour":
         port.postMessage({ type: "tour", run: d.run, tour: tours.get(String(d.run)) ?? null });
+        break;
+      case "fenetre":
+        page.role = String(d.role ?? "") || undefined;
+        page.backend = d.backend ? String(d.backend) : undefined;
+        page.focus = Date.now();
+        port.postMessage({ type: "moi", id: page.id });
+        publierLesFenetres();
+        break;
+      case "focus":
+        page.focus = Date.now();
+        if (page.role) publierLesFenetres();
         break;
       case "tour-max":
         // The witnesses only: a low bound, to prove what is said past it.
@@ -150,6 +172,9 @@ function oublier(p: Page) {
 
 setInterval(() => {
   const limite = Date.now() - MUET_MS;
-  for (const p of [...pages]) if (p.vu < limite) pages.delete(p);
+  for (const p of [...pages]) if (p.vu < limite) {
+    pages.delete(p);
+    if (p.role) publierLesFenetres();
+  }
   debrancherSiPersonne();
 }, 15_000);
