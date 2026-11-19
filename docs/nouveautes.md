@@ -1,5 +1,14 @@
 # Nouveautés
 
+- 19 novembre 2026 — **La chauffe du service d'embarquement chauffe ce qu'il calcule vraiment.** Elle passe par le même
+  découpage que les requêtes (au plus 32 textes, sous le budget d'octets), au lieu des lots de 128 que conseille
+  granite. granite-278m démarre ainsi sur l'iGPU de luciepc, où un lot de 128 longs textes faisait paniquer burn à la
+  chauffe (le défaut de burn reste, à l'amont).
+- 19 novembre 2026 — **La pose d'un service d'embarquement se prouve contre une tolérance mesurée.**
+  `scripts/embed_parity.py` embarque un jeu fixe de 100 textes seuls, puis en lots de 8, 32 et 128, et dit l'écart
+  entre lots : au plus 5,5e-5 pour granite-278m, 1,3e-3 pour bge-m3 (mesuré le 19 novembre). Une pose garde le bit près
+  pour un même lot, et reste sous deux fois cette tolérance entre lots.
+
 - 19 novembre 2026 — **Une requête de recherche passe devant les lots d'index au service d'embarquement.** Une requête
   de 4 textes au plus n'attend plus que le lot d'index en cours, jamais les suivants, et pas le trou d'une rafale sur
   une carte partagée. Mesuré pendant un index : la latence d'une requête au 95e centile passe de 116 ms à 38 ms, sans
