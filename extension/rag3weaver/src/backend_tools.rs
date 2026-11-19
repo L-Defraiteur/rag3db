@@ -28,18 +28,18 @@ impl BackendTools<'_> {
     }
 }
 
-/// **The text the model reads from a tool's answer.** The `presentation` when the graph gave one (a search),
-/// followed by the non-empty metadata. Without it, nothing yet: the whole answer as JSON.
+/// **The text the model reads from a tool's answer.** The `presentation` when the graph gave one (a search), else
+/// the `result` when it is text (read_file, grep_files, list_files: their Markdown, the freshness line already at
+/// its head), each followed by the non-empty metadata. The envelope (`delivery`, `validation`, `run`) stays in the
+/// run's journal. Anything else, a failure `{ok: false, error}` first, stays the whole answer as JSON: the reading
+/// fingerprint of chat.rs, `Step::note_tool` and the status of `put_turn` judge a failure by it (archi, 18 nov.).
 pub fn model_text(result: &Value) -> String {
-    match result["presentation"].as_str() {
-        Some(text) => match result
-            .get("metadata")
-            .filter(|m| m.as_object().is_some_and(|o| !o.is_empty()))
-        {
-            Some(metadata) => format!("{text}\nMetadata: {metadata}"),
-            None => text.to_string(),
-        },
-        None => result.to_string(),
+    let Some(text) = result["presentation"].as_str().or_else(|| result["result"].as_str()) else {
+        return result.to_string();
+    };
+    match result.get("metadata").filter(|m| m.as_object().is_some_and(|o| !o.is_empty())) {
+        Some(metadata) => format!("{text}\nMetadata: {metadata}"),
+        None => text.to_string(),
     }
 }
 
