@@ -1174,7 +1174,6 @@ fn plafonner(chemin: &std::path::Path, plafond: u64, perdus: u64, entete: u64) -
         return (perdus, entete);
     }
     let apres = perdus + (taille - garde).saturating_sub(entete);
-    let tete = format!("… {apres} octets perdus en tête (journal en anneau de {} Mio : on garde la fin)\n", plafond >> 20);
     let Ok(mut ecrit) = std::fs::OpenOptions::new().write(true).open(chemin) else { return (perdus, entete) };
     #[cfg(test)]
     {
@@ -1185,10 +1184,19 @@ fn plafonner(chemin: &std::path::Path, plafond: u64, perdus: u64, entete: u64) -
             std::thread::sleep(std::time::Duration::from_millis(ms));
         }
     }
+    // **What was written since the end was read is kept** (ticket of 7 November 2026): read again right before the
+    // truncation, then only the last `garde` bytes stay, the older ones counted lost. A command that finished in the
+    // window kept its end; only the bytes written between this read and the truncation itself escape — a few, even
+    // on a loaded machine.
+    let _ = f.read_to_end(&mut lu);
+    let surplus = (lu.len() as u64).saturating_sub(garde);
+    let lu = &lu[surplus as usize..];
+    let apres = apres + surplus;
     if ecrit.set_len(0).is_err() {
         return (perdus, entete);
     }
-    let _ = ecrit.write_all(tete.as_bytes()).and_then(|_| ecrit.write_all(&lu));
+    let tete = format!("… {apres} octets perdus en tête (journal en anneau de {} Mio : on garde la fin)\n", plafond >> 20);
+    let _ = ecrit.write_all(tete.as_bytes()).and_then(|_| ecrit.write_all(lu));
     (apres, tete.len() as u64)
 }
 
