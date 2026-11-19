@@ -1,6 +1,6 @@
 # Le témoin du chat dans la page rougit à la première exécution après un bâti
 
-- **État** : ouvert (7 novembre 2026), pour everything declarative — correctif dans un petit lot à
+- **État** : fermé (19 novembre 2026, everything declarative) ; ouvert le 7 novembre 2026 — correctif dans un petit lot à
   part, après les vues 5, 6, 7 et 3b de l'IDE en React.
 - **Gravité** : faux rouge (le témoin), et peut-être une réponse fausse de la page derrière (un
   tour effacé de l'écran par une relecture tardive — hypothèse, à prouver à froid).
@@ -61,3 +61,18 @@ pas de lui-même après `close()` ; la relecture tardive vient bien du témoin.
   son départ) — si l'hypothèse se prouve.
 - **D'ici là** : une passe où ce seul témoin rougit se compte en nommant ce ticket, et le témoin
   se rejoue une fois seul avant de pousser.
+
+## Fermé le 19 novembre 2026 (ED) : l'hypothèse prouvée, la page corrigée
+
+**Le défaut était dans la page, pas seulement dans le témoin.** Une relecture de l'état du chat partie avant un tour
+et revenue après lui remettait un écran sans ce tour.
+- **Rouge déterministe** (203f3d7e66) : une barrière de témoin (`window.__ide.relectureRetenue`) retient la relecture
+  jusqu'à la fin d'un tour envoyé entre-temps. Lâchée, elle laissait 8 messages à l'écran au lieu de 10. C'est un
+  ordre, pas une durée.
+- **Correctif de la page** (`Chat.tsx`) : une époque des tours avance à l'envoi d'un tour et à sa fin. Une relecture
+  n'applique son état que si l'époque n'a pas bougé depuis son départ.
+- **Le témoin** n'appelle plus `onopen()` à chaque évaluation de sa condition, mais une fois, quand l'hôte a le run
+  en vol.
+
+Le module `daemon_host::chat::` est vert avec les témoins navigateur (40 tests). Le bundle commité est celui du code
+(`build.mjs --check`).
