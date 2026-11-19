@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 19 novembre 2026 — **Un outil lent du chat de l'IDE dit qu'il attend.** Au-delà de `teammate.tool_wait_notice_s`, un tour du chat publie `Waiting` puis `Resumed` sur son run, comme un pas de l'équipier : la page et le terminal peuvent nommer ce qu'ils attendent.
+
 - 19 novembre 2026 — **Un tour qui attend le dit sur le flux.** Un outil qui attend au-delà de `teammate.tool_wait_notice_s`, ou un modèle que le fournisseur fait patienter, publie `Waiting` avec la cause (`tool` ou `model`), le nom de l'outil ou du modèle et le temps déjà attendu, puis `Resumed` quand il reprend. Le terminal et l'IDE peuvent ainsi nommer ce qu'ils attendent.
 
 - 18 novembre 2026 — **La fin d'un index dit une libération ou une dette qu'elle n'a pas pu faire.** Une erreur en rendant les réclamations d'embarquement s'ajoute à la dernière ligne du journal, avec sa table et sa cause, sans en effacer la cause de fin ; une dette restante illisible se dit « dette inconnue », plus jamais « 0 ».
