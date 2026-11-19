@@ -23,6 +23,12 @@
   génération publiée ; avec un rang, l'état de cette génération-là. La réponse dit la vue lue : sa couche, son rang, et
   s'il y a des lignes en attente au-dessus. Une couche ou un rang inconnu est refusé en le nommant. Une base d'avant les
   versions refuse `view` et se dit « à migrer ».
+- 19 novembre 2026 — **Un point isolé que rejoint un nuage reste la première réponse à son vecteur.** Un index
+  vectoriel bâti en parallèle pouvait perdre de vue un point loin de tout, inséré au tout début du bâti : une fois
+  d'autres points posés près de lui, la recherche de son vecteur exact rendait un voisin à sa place (environ une fois
+  sur trois au-delà de quatre fils). Le bâti commence désormais par une amorce de points insérés par un seul fil,
+  réglée par l'option `seed_points` de `CREATE_VECTOR_INDEX` (1 000 par défaut, 0 pour le bâti d'avant). Elle ne
+  change que le bâti, pas l'index : de 3 à 6 % de temps en plus, sans perte de rappel.
 
 - 19 novembre 2026 — **Un ADD ou un DROP de colonne attend les lectures ouvertes de sa table.** Une transaction qui
   lit une table la retient jusqu'à sa fin : un `ALTER TABLE … ADD`, `… DROP` ou un `DROP TABLE` l'attend, et la
