@@ -1,5 +1,11 @@
 # Nouveautés
 
+- 19 novembre 2026 — **On retrouve un tour passé par ses filtres ou par ses mots.** `list_turns` liste les tours du
+  plus récent au plus ancien, filtrés par run, rôle, outil, statut et date : « l'appel d'archive en erreur d'hier,
+  avec ses paramètres et son résultat ». `search_turns` cherche dans leurs mots, et c'est le seul outil qui les voit :
+  les rappels ordinaires (`recall_fiches`, `recall_apports`) ne rendent jamais un tour. `read_turns` relit les tours
+  d'un intervalle, chacun avec son état : encore indexé, ou disparu.
+
 - 19 novembre 2026 — **Les tours d'une conversation s'écrivent dans la mémoire, et l'archiviste range une tranche par
   ses numéros de tours.** Chaque message d'un tour (la demande, la réponse, chaque appel d'outil avec ses paramètres et
   son résultat) devient une ligne de la mémoire par `put_turn`. Les secrets reconnus (clés et jetons de fournisseurs,
