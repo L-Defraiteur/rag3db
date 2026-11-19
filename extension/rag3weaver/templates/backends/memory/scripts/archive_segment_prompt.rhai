@@ -1,14 +1,10 @@
-// archive_segment_prompt — le prompt du découpage d'une section longue : ses paragraphes (séparés par
-// une ligne vide) numérotés [1], [2]…, et ce que les sujets doivent être. Les mêmes paragraphes sont
-// relus par archive_segment_build : la même découpe, dans le même ordre.
+// archive_segment_prompt — the context part of the split of a long section: its paragraphs (separated by a
+// blank line) numbered [1], [2]… The same paragraphs are read again by archive_segment_build: the same cut, in the
+// same order. No prose: the rules of a topic are in the descriptions of the schema (lot B3).
 let s = input.section;
 let paragraphs = [];
 for p in s.text.split("\n\n") { let t = p; t.trim(); if t != "" { paragraphs.push(t); } }
-let body = "";
+let body = [];
 let i = 1;
-for p in paragraphs { body += "[" + i + "] " + p + "\n\n"; i += 1; }
-`Split this section into topics. A topic is a piece of work, a thing or a rule; neighbouring paragraphs on the same topic go together. Return each topic by its title in a few words (title) and by the range of its paragraphs (from, to, numbers included), in order, each paragraph in exactly one topic.
-
-Section « ${s.title} », in ${paragraphs.len()} paragraphs:
-
-${body}`
+for p in paragraphs { body.push("[" + i + "] " + p); i += 1; }
+#{ name: "section", title: "The section: " + s.title, value: body.reduce(|acc, x| if acc == "" { x } else { acc + "\n\n" + x }, "") }
