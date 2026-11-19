@@ -536,14 +536,17 @@ lib_late() {
 # installed, its witness played against the copy; a red witness puts the old copy back and pauses the queue. The other
 # postes get the same bytes, proved by their sha256. Returns 3 when pusher.sh itself was recopied (run re-executes).
 recopy() { # <label>
-  local label=$1 src name witness sum peer rc=0 table lib
+  local label=$1 src name witness sum peer rc=0 table lib run
   table=$(g show HEAD:tools/poste/cache_copies.txt 2>/dev/null | grep -vE '^[[:space:]]*(#|$)') || return 0
   while read -r src name witness; do
     g diff --quiet "$BASE" HEAD -- "$src" && continue
     [ -f "$CACHE_DIR/$name" ] && cp -p "$CACHE_DIR/$name" "$CACHE_DIR/$name.avant-$label"
     install -m 755 "$WT/$src" "$CACHE_DIR/$name.neuf" && mv "$CACHE_DIR/$name.neuf" "$CACHE_DIR/$name"
     sum=$(sha256sum "$CACHE_DIR/$name" | cut -c1-16)
-    if (cd "$WT" && bash "$witness" "$CACHE_DIR/$name") > "$SD/last-recopy.log" 2>&1; then
+    # A witness runs by its kind: .py by python3, the rest by bash (19 Nov.: test_menage.py by bash ran ImageMagick's
+    # import, which waited for a screen, and the queue stood still 40 minutes).
+    case "$witness" in *.py) run=(python3 -I) ;; *) run=(bash) ;; esac
+    if (cd "$WT" && timeout 600 "${run[@]}" "$witness" "$CACHE_DIR/$name") > "$SD/last-recopy.log" 2>&1; then
       log "$label" recopié "$name $sum, témoin vert"
     else
       [ -f "$CACHE_DIR/$name.avant-$label" ] && mv "$CACHE_DIR/$name.avant-$label" "$CACHE_DIR/$name"
