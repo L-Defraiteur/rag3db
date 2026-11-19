@@ -232,6 +232,39 @@ Le lot 1 passe à 4 jours au lieu de 1,5, avec les champs des tours et les filtr
     sinon `from_turn - 1`.
   - La Source de tranche est `sources/<run en slug>-turns-<a>-<b>.md`.
 
+## Lot 2 : la compaction (conception du 19 novembre)
+
+1. **Quand.**
+   - Au début d'un tour du chat, si le dernier appel au modèle a dépassé `memory.compact_at`
+     (0,8) de la fenêtre du modèle, l'hôte compacte d'abord. La personne attend ce moment-là,
+     comme dans Claude Code. Il n'y a pas de fil à part qui réécrirait la session.
+   - Sur demande : `POST /ide/chat/compact {backend}` (la commande `/compact`).
+   - L'équipier n'est pas concerné : chaque pas repart déjà d'un fil neuf.
+2. **Les refus.**
+   - Pendant un tour en vol (`busy`) : « un tour est en cours ».
+   - Pendant un rangement de fond en vol : « un rangement est en cours ».
+   - Le tour automatique qui trouve un refus passe sans compacter ; le suivant réessaie.
+3. **Les étapes, dans l'ordre.**
+   1. Les messages pas encore écrits partent par `put_turn` : c'est le ticket du put_turn raté,
+      dans ce lot. Le fichier de rangement tient `turns_written_through` (turn, seq).
+   2. La tranche ouverte (marque + 1 jusqu'au dernier tour) se range en attendant
+      (`archive_slice`). Un échec arrête la compaction : `last_error`, et la session ne change
+      pas.
+   3. `compose_restart(sources, identity, task_fiche, budget_tokens)`, avec `sources` = la liste du
+      fichier de rangement. Chaque `source` rendue par `archive_slice` n'y entre que si
+      `archived_through_turn == to_turn`.
+   4. La session repart sur trois éléments :
+      - le message système, réécrit à chaque tour comme aujourd'hui ;
+      - un tour « contexte de reprise » (le texte de `compose_restart`, marqué
+        `metadata.compaction`) ;
+      - la queue brute, soit les `memory.keep_turns` derniers tours (2 par défaut).
+4. **La numérotation survit à la compaction.**
+   - Le fichier de rangement tient `turn_offset`, le nombre de tours retirés de la session.
+   - Le tour n d'une session compactée est le tour `turn_offset + n` du run, et le tour de reprise
+     ne compte pas.
+   - `put_turn` reste immuable par `(run, turn, seq)` : rien n'est réécrit.
+5. **Le filet `ContextOverflow`** va au lot 3, avec les outils de lecture.
+
 ## La preuve, rouge d'abord (demain)
 
 - **Faux modèle, `slice_tokens` petit.** Après assez de tours, l'outil `archive` du memory du
