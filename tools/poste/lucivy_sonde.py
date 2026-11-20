@@ -10,7 +10,7 @@ times, two minutes apart.
 The verdict, one line at the end of `~/.cache/rag3weaver-build/lucivy-sonde/journal.log`:
   - ROUGE: a field has more lost ids than the known losses (`lucivy_sonde_connus.txt`, words lost before 4.3.12 that
     only a rebuild gives back);
-  - INCOMPLET: an index never opened, or the bases file names nothing;
+  - INCOMPLET: an index never opened, the bases file names nothing, or no `Lucivy_*` index was seen;
   - VERT otherwise. Ids in reprieve are said, never red: they are known and read.
 
 Usage: lucivy_sonde.py [--bases <file>] [--connus <file>] [--bin <lucivy-sonde>] [--racine <folder of the copies>]
@@ -70,6 +70,7 @@ def main(argv=None):
     if pathlib.Path(a.bases).exists():
         bases = [l.strip() for l in pathlib.Path(a.bases).read_text().splitlines() if l.strip() and not l.startswith("#")]
     lines, red, incomplete = [f"== {now:%Y-%m-%d %H:%M:%S} sonde des dictionnaires"], False, not bases
+    seen = 0
     if not bases:
         lines.append(f"aucune base dans {a.bases}")
     for fts in bases:
@@ -92,6 +93,9 @@ def main(argv=None):
                 err = next((r["error"] for r in rows if "error" in r), "aucune ligne")
                 lines.append(f"INCOHÉRENTE {base} {index.name} : {err}")
                 continue
+            seen += 1
+            lines.append(f"vu {base} {index.name} : {len(rows)} champs, {sum(r['referenced'] for r in rows)} ids cités, "
+                         f"{sum(r['unknown'] for r in rows)} perdus, {sum(r['in_reprieve'] for r in rows)} en sursis")
             for r in rows:
                 k = known.get((base, index.name, r["field"]), 0)
                 if r["unknown"] > k:
@@ -101,7 +105,11 @@ def main(argv=None):
                     lines.append(f"connu {base} {index.name} {r['field']} : {r['unknown']} perdus d'avant (rendus au rebâti)")
                 if r["in_reprieve"]:
                     lines.append(f"sursis {base} {index.name} {r['field']} : {r['in_reprieve']} ids cités tiennent par le sursis")
+    if bases and not seen:
+        incomplete = True
+        lines.append("aucun index Lucivy_* vu dans les bases")
     verdict = "ROUGE" if red else ("INCOMPLET" if incomplete else "VERT")
+    lines.append(f"{seen} index vus")
     lines.append(f"{verdict} sonde des dictionnaires {now:%Y-%m-%d %H:%M}")
     journal = pathlib.Path(a.journal)
     journal.parent.mkdir(parents=True, exist_ok=True)
