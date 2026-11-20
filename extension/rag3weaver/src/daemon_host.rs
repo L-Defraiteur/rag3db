@@ -2714,6 +2714,68 @@ mod tests {
     /// en millisecondes ; dix secondes laissent la marge de la lib entière sous charge.
     pub(super) const DELAI_D_UNE_SONDE: std::time::Duration = std::time::Duration::from_secs(10);
 
+    /// **A window that stops reading does not starve the page of another** (ticket
+    /// `docs/recherche/tickets/2026-11-14-le-temoin-du-chat-d-une-tache-rougit-sous-charge.md`). The witnesses' host
+    /// serves on two threads. A browser window subscribes to the IDE flux, then stops reading (a page gone, or slow
+    /// under load); the host publishes until the window's socket is full. A page then loads as the chat page does:
+    /// two `GET /ide/etat` (which count the windows of the flux), then `GET /ide/app.js`. The bundle must come within a
+    /// second: a page whose `app.js` never comes stays empty, with nothing in flight and no error.
+    #[test]
+    fn a_window_that_stops_reading_does_not_starve_the_page_of_another() {
+        use std::io::{Read, Write};
+        use std::net::TcpStream;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let seconde = std::time::Duration::from_secs(1);
+        let tenu = Arc::new(std::sync::Mutex::new(None));
+        let pour_regler = tenu.clone();
+        let (adresse, _fil) = hote_garde_avec("j", move |h| {
+            *pour_regler.lock().unwrap() = Some(h.ide_flux().clone());
+            h
+        });
+        let flux = tenu.lock().unwrap().clone().expect("the host's flux");
+        let ecrire = |chemin: &str| {
+            let mut s = TcpStream::connect(&adresse).unwrap();
+            s.write_all(format!("GET {chemin} HTTP/1.1\r\nHost: x\r\nCookie: rag3weaver_ide=j\r\n\r\n").as_bytes()).unwrap();
+            s
+        };
+        // The window that subscribes, then never reads again.
+        let muette = ecrire("/ide/flux");
+        let debut = std::time::Instant::now();
+        while flux.fenetres() < 1 {
+            assert!(debut.elapsed() < std::time::Duration::from_secs(5), "the window never subscribed");
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        // The host publishes until the window's socket is full (or 2 000 large events went through).
+        let publiees = Arc::new(AtomicUsize::new(0));
+        let (f, p) = (flux.clone(), publiees.clone());
+        std::thread::spawn(move || {
+            let gros = "x".repeat(64 * 1024);
+            for _ in 0..2000 {
+                f.publier("etat", "x", json!({ "gros": gros }));
+                p.fetch_add(1, Ordering::SeqCst);
+            }
+        });
+        let mut avant = usize::MAX;
+        while publiees.load(Ordering::SeqCst) != avant && publiees.load(Ordering::SeqCst) < 2000 {
+            avant = publiees.load(Ordering::SeqCst);
+            std::thread::sleep(std::time::Duration::from_millis(500));
+        }
+        eprintln!("published before the window's socket filled: {}", publiees.load(Ordering::SeqCst));
+        // A page loads, as the chat page does: twice the host's state, then its bundle.
+        let _etats = (ecrire("/ide/etat"), ecrire("/ide/etat"));
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        let t = std::time::Instant::now();
+        let mut bundle = ecrire("/ide/app.js");
+        bundle.set_read_timeout(Some(std::time::Duration::from_secs(5))).unwrap();
+        let mut premiere = [0u8; 64];
+        let lu = bundle.read(&mut premiere).unwrap_or(0);
+        let rendu = t.elapsed();
+        let tete = String::from_utf8_lossy(&premiere[..lu]).to_string();
+        drop(muette);
+        assert!(tete.starts_with("HTTP/1.1 200"), "the page's bundle never came ({rendu:?}): {tete:?}");
+        assert!(rendu < seconde, "the page's bundle waited {rendu:?} behind a window that stopped reading");
+    }
+
     pub(super) fn hote_garde(jeton: &str) -> (String, std::thread::JoinHandle<()>) {
         hote_garde_avec(jeton, |h| h)
     }
