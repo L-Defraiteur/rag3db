@@ -1,5 +1,11 @@
 # Nouveautés
 
+- 20 novembre 2026 — **Chaque appel d'outil dit la version du gabarit qui l'a servi.** La réponse porte
+  `metadata.template` : l'empreinte de ce que le chargement a mis en service (manifeste, scripts, graphes, schémas,
+  et le contenu embarqué par le binaire) et le numéro de rechargement. Une entité qui déclare `writes.template` reçoit
+  cette empreinte sur chaque ligne écrite : dans le gabarit memory, la Source d'une tranche et chaque L1. Une baisse
+  du rangement se relie ainsi à la version du gabarit qui l'a produite.
+
 - 20 novembre 2026 — **La fenêtre détachée du dépôt dit aussi quand l'index est prêt.** Après une réponse « index pas prêt » dans le chat, une fenêtre du dépôt ouverte à côté le dit dans son en-tête, une fois, quand l'index a rattrapé.
 - 20 novembre 2026 — **Un morceau de code tient dans la fenêtre de l'embarqueur.** Sous granite (512 jetons), 72,5 % des
   morceaux de rag3weaver dépassaient sa fenêtre, et leur fin n'était pas cherchable par le vecteur : le contexte ajouté
