@@ -853,6 +853,9 @@ impl DaemonHost {
         // 2026: the default of 12 cut half of the D6 steps).
         if let Some(s) = step {
             config["max_iterations"] = json!(s.max_model_calls());
+            if let Some(r) = s.cut_relaunch() {
+                config["cut_relaunch"] = json!(r);
+            }
         }
         let config: ChatConfig = serde_json::from_value(config)
         .map_err(|e| e.to_string())?;

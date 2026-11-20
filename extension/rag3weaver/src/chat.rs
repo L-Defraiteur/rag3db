@@ -45,6 +45,10 @@ pub struct ChatConfig {
     pub max_iterations: usize,
     #[serde(default = "tokens")]
     pub max_output_tokens: usize,
+    /// A reply cut at max_tokens is relaunched with this text, at most this many times
+    /// ([`crate::agent::AgentLimits::cut_relaunch`]); none by default.
+    #[serde(default)]
+    pub cut_relaunch: Option<(String, usize)>,
     /// Sampling is provider-independent; models need not share the greedy default.
     #[serde(default)]
     pub temperature: f32,
@@ -284,6 +288,7 @@ impl ChatSession {
             .with_name(&config.name)
             .with_limits(AgentLimits {
                 max_iterations: config.max_iterations,
+                cut_relaunch: config.cut_relaunch.clone(),
                 ..Default::default()
             })
             .with_gen_options(
