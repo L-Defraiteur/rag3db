@@ -1,5 +1,11 @@
 # Nouveautés
 
+- 20 novembre 2026 — **Les gabarits installés suivent le binaire.** Une base posée par `code-tree add` désigne
+  désormais le gabarit livré par le binaire (`builtin:`) pour chaque outil qu'il livre, même quand la base de départ en
+  tenait une copie différente : une copie périmée ne se propage plus d'une base à l'autre (neuf gabarits sur quatorze
+  dataient du 11 octobre). La copie qui différait est gardée à côté (`.copie-locale`) et nommée ; `--keep-copies` la
+  garde telle quelle. `/sante` donne la version des gabarits livrés et, par base, les copies servies à leur place ;
+  l'ouverture d'une base les dit au journal.
 - 20 novembre 2026 — **La fenêtre détachée du dépôt dit aussi quand l'index est prêt.** Après une réponse « index pas prêt » dans le chat, une fenêtre du dépôt ouverte à côté le dit dans son en-tête, une fois, quand l'index a rattrapé.
 - 20 novembre 2026 — **Un morceau de code tient dans la fenêtre de l'embarqueur.** Sous granite (512 jetons), 72,5 % des
   morceaux de rag3weaver dépassaient sa fenêtre, et leur fin n'était pas cherchable par le vecteur : le contexte ajouté
