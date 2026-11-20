@@ -126,4 +126,16 @@ Vu en route, hors tranche : la vue d'un fichier garde l'erreur du fichier préc�
 
 Témoin `le_graphe_detache_suit_les_outils_du_tour` : une fenêtre ouverte sur `dag/?fenetre=graphe` avant un tour qui appelle `list_files` puis `read_file` finit sur `dag/tool/read_file`, sans s'être rechargée, son rôle gardé, et le chat reste sur `/chat`. Rouge (8404c763b7 : elle restait sur la liste des graphes), puis vert (01f7960f71). Restent verts : les témoins des tranches 1 à 3, `ide_par_le_flux` et le contrôle du bundle.
 
+### La relecture d'ED de la tranche 4
+
+- **Le bouton « graphe à côté »** du chat (`#detacher-graphe`, `…/dag?fenetre=graphe`), à côté de celui du dépôt : sans lui, l'utilisateur ne savait pas ouvrir la fenêtre du graphe. Le témoin le clique au lieu d'ouvrir l'adresse. Le pilote clique alors comme une personne (`cliquer`, `userGesture`), puisqu'un `target="_blank"` cliqué par un script seul est une fenêtre surgissante bloquée. Il rejoint ensuite l'onglet ouvert (`rejoindre`).
+- **Un outil sans graphe déclaré** (`propose`, `report`… que l'hôte sert lui-même) : la fenêtre dit « « propose » : outil sans graphe » (`#sans-graphe`), au lieu de l'erreur de l'hôte. `/ide/graphe` répond pour lui 200 avec `sans_graphe: true`, et non plus 404 : ce 404 était une erreur de console dans chaque fenêtre qui suivait un tel outil. La vue `dag` laisse aussi le graphe et l'erreur de l'outil d'avant quand elle en suit un autre ; elle montrait encore le graphe d'avant sous l'erreur.
+- **Chaque promesse vue rouge isolément** :
+  - sans le bouton (a397b001a6) : rouge sur le bouton ;
+  - avec le bouton seul (variante V3, jouée à luciepc, le worktree remis après) : rouge sur « outil sans graphe » ;
+  - avec les deux, mais l'hôte encore à 404 (d02631d6d4) : rouge sur l'erreur de console.
+- Vert (efde269a1c), avec les tranches 1 à 3, `ide_par_le_flux` et le contrôle du bundle. Les tests `ide::` de la lib restent verts (12).
+
+**Graine, sans ticket (ED)** : une vue par run, qui montrerait le run lui-même (ses outils dans l'ordre, ses nœuds allumés, sa fin), et non le graphe de chaque outil. La fenêtre du graphe la suivrait par son `run`.
+
 Reste la tranche 5 : le compte des accords dans une fenêtre qui n'est pas le chat.
