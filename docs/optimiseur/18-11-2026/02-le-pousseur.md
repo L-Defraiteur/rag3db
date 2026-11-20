@@ -210,3 +210,54 @@ témoin seulement.
 - dossier `~/.cache/rag3weaver-build/pusher/` ; `target-pusher` naît à la première passe Rust.
 
 Le premier train est un train à blanc : ce paragraphe, déposé comme un lot de docs et poussé par le pousseur.
+
+## Ce qui nomme un poste en dur (relevé du 20 novembre 2026)
+
+Lucie a posé une contrainte le 20 novembre à 18 h, relayée par c7 : « imaginons le mec il a quinze ordis, il doit pouvoir
+s'en sortir quand même, ou un seul ». Le pousseur est un seul, où qu'il tourne ; les hôtes sont N. La place du pousseur,
+l'emplacement de `landed.tsv` et sa lecture par un hôte, les recopies aux postes : tout cela doit se déclarer, par un
+fichier de poste comme `place-pousseur`. Sur un seul poste, tout est local, sans ssh.
+
+Ce relevé n'est pas encore un lot. Les lots se feront quand les vues de l'arbre seront là. Il couvre `tools/poste/`,
+`scripts/poste`, `check_features.sh` et `tools/campagne/` sur master, plus mes scripts de bascule.
+
+**Déjà déclaré** (rien à faire) :
+- `poste` : le relais du verrou de push vers un autre poste se lit dans le fichier `poste-push-hote` (ou
+  `POSTE_PUSH_HOTE`), et la place réservée au pousseur dans `place-pousseur`. Sans ces fichiers, tout est local.
+- `pusher.sh` : ses dossiers, worktrees, targets et scripts appelés se règlent tous par une variable `PUSHER_*`, avec
+  `~/.cache/rag3weaver-build` et `~/git_workspaces` pour défauts, sans nom de poste.
+
+**En dur, à déclarer** :
+1. **`pusher.sh`, `PEERS=${PUSHER_PEERS-lucie-tablette}`** (ligne 42) : les postes où recopier `poste`, `pusher.sh`
+   et les autres copies du cache. Le défaut nomme la tablette, et la recopie passe par `ssh -o BatchMode=yes "$peer"`
+   (ligne 672). À remplacer par un fichier `pairs-du-pousseur` (une ligne par poste, vide ou absent : aucun pair, tout
+   local). Sur un poste unique, aucune recopie distante.
+2. **`passe_epinglee.sh`, `if [ "$(hostname)" = LuciePC ]`** (ligne 28) : le seul aiguillage par nom de poste. Il
+   choisit :
+   - les services d'embarquement (`127.0.0.1:7878,7879` en local, ou `7979,7980` par les tunnels) ;
+   - la base PostgreSQL de test (`127.0.0.1:5433`) ;
+   - le repli des tests sur `igpu:0` ;
+   - le régime doux de l'écran (`RAG3WEAVER_EMBED_CHAR_BUDGET`, `RAG3WEAVER_GPU_DUTY`).
+
+   À remplacer par un fichier d'environnement de passe par poste, par exemple `passe.env` dans le dossier du poste, lu
+   s'il existe. Sans lui, aucun service et aucun repli : les suites qui en ont besoin le disent par leur garde de
+   capacité.
+3. **`pusher.sh`, le dépôt des pull requests** : `PR_REPO=L-Defraiteur/rag3db` se règle par variable, mais
+   `PR_ACCOUNT=L-Defraiteur` est fixe (lignes 49-50). C'est un compte, pas un poste : à déclarer avec le dépôt, dans la
+   même déclaration.
+4. **L'identité git**, que `pusher.sh` contrôle (ligne 265, l'adresse de Lucie) : c'est une garde légale voulue (jamais
+   l'adresse pro). Elle reste, mais se lit dans une déclaration plutôt que dans le code, pour un autre propriétaire.
+5. **Les dépôts des sessions** passent par `ssh -T lucied@luciepc "… pusher.sh enqueue …"` (procédure de push, mes
+   messages). Le poste du pousseur est écrit dans les procédures. À déclarer dans un fichier `poste-du-pousseur` lu par
+   un petit `deposer` : en local s'il désigne ce poste, par ssh sinon. Les procédures citeront `deposer`, plus le poste.
+6. **La lecture de `landed.tsv` par les hôtes** (l'arbre, page 02 § 6 bis) : en local à luciepc, par ssh depuis la
+   tablette. Même déclaration `poste-du-pousseur`, pour que chaque hôte sache où le lire.
+7. **Les ports** : 7878 et 7879 (services d'embarquement de card2), 7979 et 7980 (leurs tunnels), 7970 (l'hôte),
+   7991 et 7992 (le banc). Ils ne sont écrits en dur que dans `passe_epinglee.sh` (point 2) et dans mes scripts de bascule.
+
+**Mes scripts de bascule** (le bloc-notes de G, hors dépôt) nomment luciepc, `lucied@luciepc`, 7970 et 7878 :
+`bascule-pose.sh`, `bascule-reveil.sh`, `preparer-binaire.sh`, `hostcall.py`, `ordonner-file.sh`, et les gardes et
+verdicts d'un jour. Ils ne sont pas des outils du dépôt. S'ils y entrent, ce sera avec les mêmes déclarations.
+
+**Le commentaire « Usage, at luciepc »** en tête de `pusher.sh`, et celui de `push_garde.sh` (« à luciepc »), décrivent
+le poste d'aujourd'hui. Ils deviendront « au poste du pousseur ».
