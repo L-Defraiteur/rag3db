@@ -200,3 +200,30 @@ sous TSan et sous ASan à luciepc.
 À 2 sur 10 la veille, 0 sur 10 arrive environ une fois sur neuf par hasard : rien n'est conclu. La sonde reste à
 rejouer (×20) sur la lib qui porte le correctif des groupes, pour départager un lien entre les deux.
 
+## Le core avec symboles (20 novembre, cœur c++) : le tampon des offsets porte du texte
+
+Lib épinglée `4ad394f4d2` (avec le correctif de la course des groupes), bâtie en RelWithDebInfo à luciepc
+(`~/git_workspaces/coeur/20-11-2026-bati/build/rwdi`) : `DdlEveryMinute` meurt au tour 4 (pid 204417, 13 h 02 ; core
+`~/.cache/rag3db-moteur-notes/c1-boucle/cores/core.204417`). C1 n'est donc pas la course des groupes.
+
+La faute tombe dans `DictionaryChunk::appendString` (`dictionary_chunk.cpp:80`, l'`insert` de la nouvelle entrée), au
+hachage de l'entrée (`StringOps::operator()`, `entry.get(*dict)`), avec une longueur de 2^64 − 100 615 : négative.
+Le pointeur `dict` de `StringOps` est bien le dictionnaire courant. L'état de ce dictionnaire (de destination, celui
+du point de reprise) :
+
+- `offsetChunk` : 8 832 valeurs, capacité 16 384 (un tampon de 131 072 octets) ;
+- `stringDataChunk` : 4 991 octets, capacité 131 072 ;
+- `indexTable` : 0 élément ;
+- **les offsets ne sont pas des offsets** : les premiers valent 29 801, 12 985, 101 704…, et les octets du tampon des
+  offsets commencent par `'i' 't' 0 0 …`. Ce sont des fragments du texte des données (« …titre 2 1139titre 12185… »,
+  le début du tampon de chaînes est « 83titre 2 1139titre 12185titre 12186… »).
+
+Le tampon des offsets de ce dictionnaire est donc occupé par les octets d'un tampon de chaînes. Un tampon de 128 Kio
+n'est pas une page du pool (`TEMP_PAGE_SIZE` = 256 Kio) : `MemoryManager::allocateBuffer` le prend par `malloc` à sa
+taille exacte et `freeBlock` le rend par `free`. L'hypothèse : **une lecture et une écriture après libération** —
+le tampon des offsets a été rendu (un `resize`, une remise à vide, la destruction d'un morceau) pendant qu'un morceau
+le tient encore, et `malloc` l'a redonné au tampon de chaînes d'un autre morceau. Le premier core du 19 (arène de malloc)
+va dans le même sens. ASan doit le voir dès un tour qui tombe : ses trois tours du 19 n'en ont pas eu (environ un tour
+sur cinq plante). Suite : `DdlEveryMinute` ×10 sous ASan (`quarantine_size_mb=1024`), arrêt au premier rapport,
+arbre `20-11-2026-bati/build/asan`.
+
