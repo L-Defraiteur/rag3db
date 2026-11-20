@@ -1461,6 +1461,57 @@ impl NodeFactory for RerankNodeFactory {
 pub struct ResolveParentNodeFactory;
 
 /// Factory for PaginateNode (aucune config : la page voyage avec la requête).
+pub struct ExactNameNodeFactory;
+
+impl NodeFactory for ExactNameNodeFactory {
+    // L6 : ne fait que lire.
+    fn snapshot_safe(&self, _config: &serde_json::Value) -> bool {
+        true
+    }
+    fn create(&self, name: &str, config: &serde_json::Value) -> Result<Box<dyn super::node::Node>, String> {
+        let mut node = super::generic_search_nodes::ExactNameNode::new(name);
+        if let Some(f) = config.get("field").and_then(|v| v.as_str()) {
+            node = node.with_field(f);
+        }
+        if let Some(f) = config.get("leaf").and_then(|v| v.as_str()).filter(|f| !f.is_empty()) {
+            node = node.with_leaf(f);
+        }
+        if let Some(l) = config.get("limit").and_then(|v| v.as_u64()) {
+            node = node.with_limit(l as usize);
+        }
+        if let Some(s) = config.get("signal").and_then(|v| v.as_str()) {
+            node = node.with_signal(s);
+        }
+        Ok(Box::new(node))
+    }
+    fn node_type(&self) -> &'static str {
+        "ExactNameNode"
+    }
+    fn schema(&self) -> NodeSchema {
+        let param = |name: &'static str, param_type: ConfigParamType, description: &'static str| ConfigParam {
+            name: name.into(),
+            param_type,
+            required: false,
+            default: None,
+            description: description.into(),
+            choices: None,
+            json_schema: None,
+        };
+        NodeSchema {
+            node_type: "ExactNameNode".into(),
+            description: "Les lignes dont le nom est la requête entière, lues par le nom (bornées, sous le filtre et la génération visible), pour que la fusion les promeuve".into(),
+            inputs: vec![query_in()],
+            outputs: vec![results_out()],
+            config_params: vec![
+                param("field", ConfigParamType::String, "Le champ du nom (name par défaut)"),
+                param("leaf", ConfigParamType::String, "Le champ des enfants repliés : une ligne qui en replie n'est pas lue par son nom"),
+                param("limit", ConfigParamType::Int, "Combien de lignes au plus (20 par défaut)"),
+                param("signal", ConfigParamType::String, "L'étiquette du signal (name_exact par défaut)"),
+            ],
+        }
+    }
+}
+
 pub struct PaginateNodeFactory;
 
 impl NodeFactory for PaginateNodeFactory {
@@ -1583,6 +1634,7 @@ pub fn register_builtins(registry: &mut NodeRegistry) {
     registry.register(Box::new(HighlightNodeFactory));
     registry.register(Box::new(ResolveParentNodeFactory));
     registry.register(Box::new(PaginateNodeFactory));
+    registry.register(Box::new(ExactNameNodeFactory));
     registry.register(Box::new(MarquerDecoupeNodeFactory));
     // Record nodes
     registry.register(Box::new(InsertRecordNodeFactory));

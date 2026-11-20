@@ -1,5 +1,9 @@
 # Nouveautés
 
+- 20 novembre 2026 — **Un nom tapé exactement rend sa déclaration, même courant.** Chercher `lib`, `result` ou
+  `con` rendait des dizaines de lignes qui les citent, et pas la déclaration de ce nom : elle restait hors de la liste
+  que la recherche classe. La recherche lit maintenant directement les déclarations dont le nom est la requête entière,
+  sous les mêmes filtres de chemin et de langage, et les met devant.
 - 20 novembre 2026 — **Les gabarits installés suivent le binaire.** Une base posée par `code-tree add` désigne
   désormais le gabarit livré par le binaire (`builtin:`) pour chaque outil qu'il livre, même quand la base de départ en
   tenait une copie différente : une copie périmée ne se propage plus d'une base à l'autre (neuf gabarits sur quatorze
