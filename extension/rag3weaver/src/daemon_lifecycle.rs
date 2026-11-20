@@ -322,7 +322,9 @@ pub fn remove_if_mine(pid: u32) -> bool {
 /// is another host's (left as it is) or absent. The stop line says which (the night of 20 Nov 2026:
 /// a second host said « daemon.json retiré » for a file it had left untouched).
 pub(crate) fn remove_if_mine_in(dossier: &Path, pid: u32) -> bool {
-    let _ = (dossier, pid);
+    if read_in(dossier).is_some_and(|f| f.pid == pid) {
+        return std::fs::remove_file(dossier.join("daemon.json")).is_ok();
+    }
     false
 }
 

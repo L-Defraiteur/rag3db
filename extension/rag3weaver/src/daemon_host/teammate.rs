@@ -1281,6 +1281,10 @@ impl DaemonHost {
     /// sur le disque. `teammate.resume_after_restart: false` le laisse en attente.
     /// Rend une ligne par équipier.
     pub fn reprendre_les_equipiers(self: &Arc<Self>) -> Vec<String> {
+        // **A guest host takes over nothing** of the live host whose root it shares.
+        if let Some(de) = &self.invite {
+            return vec![format!("guest host of {de}: its teammates are left to it, none is resumed here")];
+        }
         let mut lignes = Vec::new();
         // A pair is reachable between two works: its open task is in the registry again, idle.
         for (t, _) in self.every_teammate() {
