@@ -1,6 +1,6 @@
 # Les gabarits installés ne suivent pas le binaire
 
-- **État** : ouvert (20 novembre 2026)
+- **État** : fermé le 20 novembre 2026, par le lot `templates-follow-the-binary`.
 - **Famille** : produit (les gabarits, l'hôte)
 - **Gravité** : grave. Les hôtes de Lucie servent la fusion d'il y a cinq semaines, quel que soit le binaire : rien de
   ce qui a atterri dans `templates/` depuis le 11 octobre n'atteint le service. C'est pourquoi le juge du banc sur la
@@ -46,3 +46,19 @@ lui. Une table d'empreintes tirée de l'historique de git, commitée et vérifi�
 du gabarit courant y soit, le permet sans dépendre de git au moment de l'ouverture.
 
 Rouge d'abord : un gabarit installé d'une vieille version est servi tel quel à l'ouverture.
+
+## Fermeture (20 novembre 2026, soir)
+
+La forme retenue avec c7, sans table d'empreintes (elle vieillirait comme les copies) :
+1. `code-tree add` pointe `builtin:` pour chaque outil dont le binaire livre un gabarit du même nom, que la copie de
+   `--from` en diffère ou non (`builtin_templates::link_all`) ;
+2. une copie qui différait est sauvée à côté (`<copie>.copie-locale`) et nommée à la sortie de l'installeur ;
+3. `--keep-copies` la garde telle quelle ;
+4. `/sante` donne `gabarits.livres` (l'empreinte du contenu embarqué) et `gabarits.derive` (par backend, le nombre et
+   les noms des copies qui diffèrent), et l'ouverture d'un backend les dit au journal (`[gabarits]`).
+
+Témoins, chacun vu rouge : `add_points_the_builtin_template_even_when_from_holds_a_stale_copy` (la base neuve
+servait `../../tools/search_workspace.mmd`), `health_names_a_backend_whose_copy_is_of_an_older_version` et
+`health_gives_the_templates_version_and_their_drift`.
+
+Les bases déjà installées : G les a repointées au livré dans la fenêtre du 20 novembre au soir (manifeste sauvé à côté).
