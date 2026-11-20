@@ -73,6 +73,22 @@ namespace {
 constexpr auto ORIGIN_VECTOR = "[n.id % 17, n.id % 23, n.id % 29, n.id]";
 constexpr auto OTHER_VECTOR = "[n.id % 13 + 0.5, n.id % 19, n.id % 31, n.id + 0.25]";
 
+// La couche basse d'un index HNSW, parcourue en largeur (ticket
+// 2026-10-11-l-elagage-peut-couper-le-dernier-pont-vers-une-region). Une recherche entre dans la
+// couche basse par le nœud que la couche haute lui désigne, ou par son point d'entrée : un nœud
+// relié qu'aucune de ces entrées n'atteint est perdu pour toute recherche, quelle que soit la
+// requête. Plus de zéro signe la coupure.
+struct LowerGraphReach {
+    int64_t linked = 0;                // lignes vivantes, au vecteur non nul, reliées au graphe
+    int64_t edges = 0;                 // arêtes de la couche basse
+    int64_t entries = 0;               // entrées possibles de la couche basse
+    int64_t unreachable = 0;           // reliées, injoignables depuis toute entrée
+    int64_t unreachableFromEntry = 0;  // depuis le seul point d'entrée de la couche basse
+    std::string error;
+};
+LowerGraphReach lowerGraphReach(rag3db::main::Connection& connection, const std::string& table,
+    const std::string& index, const std::string& column);
+
 class VectorIndexUpdate : public EmptyDBTest {
 public:
     void SetUp() override {
@@ -87,6 +103,7 @@ public:
         if (const auto* runs = std::getenv("CONCURRENCE_VECTOR_RUNS")) {
             forcedRuns = std::max(1, std::atoi(runs));
         }
+        checkLowerGraph = std::getenv("CONCURRENCE_LOWER_GRAPH") != nullptr;
     }
 
     void mustRun(const std::string& query) {
@@ -211,6 +228,19 @@ public:
         }
         if (dead != 0) {
             failed.insert("vector-search-no-dead-row");
+        }
+        if (checkLowerGraph) {
+            const auto reach = lowerGraphReach(*conn, table, index, column);
+            const auto line = stringFormat("{} : lower graph, {} linked rows, {} edges, {} entries, "
+                                           "{} unreachable from every entry, {} from the lower "
+                                           "entry point{}",
+                label, reach.linked, reach.edges, reach.entries, reach.unreachable,
+                reach.unreachableFromEntry, reach.error.empty() ? "" : " ; " + reach.error);
+            std::cerr << line << "\n";
+            if (!reach.error.empty() || reach.unreachable != 0) {
+                lastCheckSummary += "\n  " + line;
+                failed.insert("vector-lower-graph-connected");
+            }
         }
         return failed;
     }
@@ -467,6 +497,7 @@ public:
 
     int forcedRuns = 0;
     bool checkSecondIndex = false;
+    bool checkLowerGraph = false;
     // Le compte du dernier contrôle (check), pour le message d'un essai perdant.
     std::string lastCheckSummary;
     std::string table;
@@ -1252,6 +1283,128 @@ int64_t lowerGraphEdgeCount(rag3db::main::Connection& connection, const std::str
         static_cast<int64_t>(storage->getTable(info.lowerRelTableID)->getNumTotalRows(transaction));
     EXPECT_TRUE(connection.query("COMMIT;")->isSuccess());
     return count;
+}
+
+LowerGraphReach lowerGraphReach(rag3db::main::Connection& connection, const std::string& table,
+    const std::string& index, const std::string& column) {
+    LowerGraphReach reach;
+    if (!beginReadOnly(connection)) {
+        reach.error = "no read transaction";
+        return reach;
+    }
+    table_id_t tableID = 0;
+    offset_t upperEntry = INVALID_OFFSET, lowerEntry = INVALID_OFFSET, numLinked = 0;
+    {
+        auto* context = connection.getClientContext();
+        auto* transaction = rag3db::transaction::Transaction::Get(*context);
+        const auto* entry =
+            rag3db::catalog::Catalog::Get(*context)->getTableCatalogEntry(transaction, table);
+        tableID = entry->getTableID();
+        auto& nodeTable = rag3db::storage::StorageManager::Get(*context)
+                              ->getTable(tableID)
+                              ->cast<rag3db::storage::NodeTable>();
+        const auto& info = static_cast<const HNSWStorageInfoMirror&>(
+            nodeTable.getIndex(index, nullptr).value()->getStorageInfo());
+        upperEntry = info.upperEntryPoint;
+        lowerEntry = info.lowerEntryPoint;
+        numLinked = info.numCheckpointedNodes;
+    }
+    EXPECT_TRUE(connection.query("COMMIT;")->isSuccess());
+    // The linked rows: alive, with a vector, below the count of linked rows.
+    std::vector<int64_t> linked;
+    {
+        auto rows = connection.query(stringFormat(
+            "MATCH (n:{}) WHERE n.{} IS NOT NULL AND offset(ID(n)) < {} RETURN offset(ID(n));",
+            table, column, numLinked));
+        if (!rows->isSuccess()) {
+            reach.error = rows->getErrorMessage();
+            return reach;
+        }
+        while (rows->hasNext()) {
+            linked.push_back(rows->getNext()->getValue(0)->getValue<int64_t>());
+        }
+    }
+    reach.linked = static_cast<int64_t>(linked.size());
+    const auto size = static_cast<size_t>(numLinked) + 1;
+    std::vector<std::vector<int64_t>> lower(size), upper(size);
+    std::vector<char> inUpper(size, 0);
+    // The graph tables are only visible with the internal catalog.
+    EXPECT_TRUE(connection.query("CALL ENABLE_INTERNAL_CATALOG=true;")->isSuccess());
+    const auto readLayer = [&](const std::string& layer, std::vector<std::vector<int64_t>>& out,
+                               bool markUpper) {
+        auto edges = connection.query(stringFormat(
+            "MATCH (a:{})-[r:_{}_{}_{}]->(b:{}) RETURN offset(ID(a)), offset(ID(b));", table,
+            tableID, index, layer, table));
+        if (!edges->isSuccess()) {
+            reach.error = layer + ": " + edges->getErrorMessage();
+            return int64_t{0};
+        }
+        int64_t count = 0;
+        while (edges->hasNext()) {
+            auto tuple = edges->getNext();
+            const auto src = tuple->getValue(0)->getValue<int64_t>();
+            const auto dst = tuple->getValue(1)->getValue<int64_t>();
+            if (src < 0 || dst < 0 || static_cast<size_t>(src) >= size ||
+                static_cast<size_t>(dst) >= size) {
+                continue;
+            }
+            out[src].push_back(dst);
+            if (markUpper) {
+                inUpper[src] = inUpper[dst] = 1;
+            }
+            count++;
+        }
+        return count;
+    };
+    reach.edges = readLayer("LOWER", lower, false);
+    readLayer("UPPER", upper, true);
+    EXPECT_TRUE(connection.query("CALL ENABLE_INTERNAL_CATALOG=false;")->isSuccess());
+    if (!reach.error.empty()) {
+        return reach;
+    }
+    const auto walk = [&](const std::vector<std::vector<int64_t>>& graph,
+                          const std::vector<int64_t>& from) {
+        std::vector<char> seen(size, 0);
+        std::vector<int64_t> queue;
+        for (const auto node : from) {
+            if (node >= 0 && static_cast<size_t>(node) < size && !seen[node]) {
+                seen[node] = 1;
+                queue.push_back(node);
+            }
+        }
+        for (size_t head = 0; head < queue.size(); ++head) {
+            for (const auto next : graph[queue[head]]) {
+                if (!seen[next]) {
+                    seen[next] = 1;
+                    queue.push_back(next);
+                }
+            }
+        }
+        return seen;
+    };
+    // The possible entries of the lower layer: its own entry point, and every node the upper
+    // layer reaches from its entry point (the nearest of them to a query is where it descends).
+    std::vector<int64_t> entries;
+    if (lowerEntry != INVALID_OFFSET) {
+        entries.push_back(static_cast<int64_t>(lowerEntry));
+    }
+    if (upperEntry != INVALID_OFFSET) {
+        const auto upperSeen = walk(upper, {static_cast<int64_t>(upperEntry)});
+        for (size_t node = 0; node < size; ++node) {
+            if (upperSeen[node]) {
+                entries.push_back(static_cast<int64_t>(node));
+            }
+        }
+    }
+    reach.entries = static_cast<int64_t>(entries.size());
+    const auto fromEvery = walk(lower, entries);
+    const auto fromEntry =
+        walk(lower, entries.empty() ? std::vector<int64_t>{} : std::vector<int64_t>{entries[0]});
+    for (const auto node : linked) {
+        reach.unreachable += !fromEvery[node];
+        reach.unreachableFromEntry += !fromEntry[node];
+    }
+    return reach;
 }
 
 // Le point d'entrée de la couche haute de l'index, lu ou, avec newEntryPoint, écrit par les
