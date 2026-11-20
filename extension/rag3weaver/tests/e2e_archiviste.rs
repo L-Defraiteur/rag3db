@@ -1378,9 +1378,9 @@ fn a_proposal_is_checked_on_a_copy_without_touching_the_version_in_service() {
     assert!(e.contains("entities") && e.contains("migration"), "{e}");
     // A proposal whose graph does not load is refused, saying why.
     let manifest = copy_of_template(dir.path(), "broken");
-    std::fs::write(manifest.parent().unwrap().join("graphs/list_turns.mmd"), "%% tool: list_turns\ngraph LR\n    x[\"NoSuchNode()\"]\n").unwrap();
+    std::fs::write(manifest.parent().unwrap().join("graphs/list_turns.mmd"), "%% tool: list_turns\n%% description: broken\n%% result: x.result\n\ngraph LR\n    x[\"NoSuchNode()\"]\n").unwrap();
     let e = b.check_proposal(&manifest).err().expect("a graph that does not load is refused");
-    assert!(e.contains("NoSuchNode") || e.contains("list_turns"), "{e}");
+    assert!(e.contains("NoSuchNode"), "the refusal names what does not load: {e}");
 }
 
 /// The split of a long section (archive, segment_over): the instruction, then its numbered paragraphs as a part;
