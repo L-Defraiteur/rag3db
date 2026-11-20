@@ -520,7 +520,11 @@ if [ -s "$V/embedder-allow-integrated-gpu" ] && [ -z "${RAG3WEAVER_EMBEDDER_ALLO
 fi
 QUOTA="${POSTE_CPU_QUOTA:-$((FILS * 100))%}"
 if [ "$borne" = 1 ]; then
-  set -- systemd-run --user --scope -q -p MemoryMax="$MEM" -p MemorySwapMax="$SWAP" -p CPUQuota="$QUOTA" -- "$@"
+  # **Delegate=yes** (20 novembre 2026, c7 et recherche) : le confineur de validation partageait la portée plafonnée avec
+  # sa commande, et un débordement le tuait en seconde victime (-9, aucun verdict.json ; vu par `journalctl -k` aux deux
+  # postes). Déléguée, la portée laisse le confineur y créer deux feuilles, superviseur et commande, plafonner la
+  # seconde sous la portée et arrêter lui-même la commande ; le plafond de poste contient toujours tout.
+  set -- systemd-run --user --scope -q -p Delegate=yes -p MemoryMax="$MEM" -p MemorySwapMax="$SWAP" -p CPUQuota="$QUOTA" -- "$@"
 fi
 # fin_prevue <fiche> <commande…> : l'instant de fin prévu d'un lourd (secondes), vide si sa commande n'a pas de timeout en
 # tête (après des `env VAR=…`). Une fonction : ses arguments ne touchent pas à la commande de ce poste.

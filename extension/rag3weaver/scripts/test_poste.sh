@@ -409,4 +409,17 @@ rm -f "$POSTE_LOCK_DIR/embedder-allow-integrated-gpu"
 [ "$sans" = absent ] && [ "$lourd" = 1 ] && [ "$mesure" = 1 ]
 cas $? "le fichier embedder-allow-integrated-gpu autorise l'iGPU sous poste lourd et mesure, et seulement lui (sans : $sans, lourd : $lourd, mesure : $mesure)"
 
+# ── 47. La portée de poste lourd et de poste mesure délègue ses sous-groupes (20 novembre 2026, c7 et recherche : le
+# confineur de validation partage la portée plafonnée avec sa commande ; un débordement tuait le confineur en seconde
+# victime, sans verdict). Avec Delegate=yes, le confineur y crée ses deux feuilles et arrête lui-même la commande.
+R=$(mktemp -d -p "${TMPDIR:-$HOME/.cache}")
+printf '%s\n' '#!/bin/sh' 'u=$(sed -n "s#^0::.*/##p" /proc/self/cgroup); systemctl --user show "$u" -p Delegate --value > "$1"' > "$R/delegue.sh"
+"$POSTE" lourd sh "$R/delegue.sh" "$R/dl" > /dev/null 2>&1
+"$POSTE" mesure sh "$R/delegue.sh" "$R/dm" > /dev/null 2>&1
+if systemd-run --user --scope -q -- true 2>/dev/null; then
+  [ "$(cat "$R/dl" 2>/dev/null)" = yes ] && [ "$(cat "$R/dm" 2>/dev/null)" = yes ]
+  cas $? "la portée de poste lourd et de poste mesure porte Delegate=yes (lourd : $(cat "$R/dl" 2>/dev/null), mesure : $(cat "$R/dm" 2>/dev/null))"
+else cas 1 "systemd-run indisponible : le cas de la délégation ne se juge pas ici (un cas non joué est rouge)"; fi
+rm -rf "$R"
+
 exit $echec
