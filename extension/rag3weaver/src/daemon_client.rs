@@ -1340,4 +1340,16 @@ mod tests {
         assert_eq!(r.eta_factor, 2);
         assert_eq!(r.max, ReadyWatchSettings::default().max);
     }
+
+    /// **A manifest that declares the watch's settings still opens** (found by tty, 20 November 2026, on the IDE's
+    /// watch): `search` refused unknown fields, so a backend whose manifest said `search.ready_watch` did not open
+    /// (« unknown field `ready_watch`, expected `index_wait_s` »).
+    #[test]
+    fn a_manifest_that_declares_the_watch_settings_still_opens() {
+        let s: Result<crate::backend::SearchSettings, _> =
+            serde_json::from_value(json!({"index_wait_s": 6, "ready_watch": {"first_poll_max_s": 1, "every_s": 7, "max_s": 60, "eta_factor": 2}}));
+        assert!(s.is_ok(), "{s:?}");
+        let faute: Result<crate::backend::SearchSettings, _> = serde_json::from_value(json!({"ready_watch": {"every": 7}}));
+        assert!(faute.is_err(), "a misspelt setting is still refused : {faute:?}");
+    }
 }
