@@ -2930,7 +2930,10 @@ fn the_chat_page_says_an_index_not_ready_then_ready_once() {
     );
     let dit = n.evaluer(ligne);
     assert!(dit.as_str().is_some_and(|t| t.contains("20 s")), "the estimate in clear : {dit}");
-    assert_eq!(n.evaluer("document.querySelector('details.outil[data-outil=usages]').dataset.ok"), json!("true"), "the tool is not refused");
+    // The bubble read again from the chat's state at the turn's end carries no `ok`: a refusal is `data-ok="false"` and
+    // « refusé » in its summary.
+    let refus = n.evaluer("(() => { const d = document.querySelector('details.outil[data-outil=usages]'); return d.dataset.ok === 'false' || d.querySelector('summary').textContent.includes('refusé'); })()");
+    assert_eq!(refus, json!(false), "the tool is not refused");
     assert_eq!(n.evaluer("document.querySelectorAll('.index-pret').length"), json!(0), "not ready yet, nothing said");
 
     b.rattraper();
