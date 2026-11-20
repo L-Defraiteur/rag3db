@@ -1792,6 +1792,17 @@ pub fn analyze_in_project_avec(
         .filter(|l| matches!(l.provenance.as_deref(), Some("builtin" | "dependency")))
         .map(|l| l.name.clone())
         .collect();
+    // **Ce qu'un `export * from './x'` réexporte** (20 novembre 2026) : les noms de premier niveau que `./x` définit
+    // dans ce lot, et eux seuls — on ne devine pas un nom qui n'y est pas.
+    let mut premier_niveau: HashMap<String, Vec<String>> = HashMap::new();
+    for s in &analysis.scopes {
+        if s.parent_name.is_empty() && !s.name.is_empty() && !s.name.starts_with("file_scope") {
+            let liste = premier_niveau.entry(crate::workspace_path::slash(&s.file_path)).or_default();
+            if !liste.contains(&s.name) {
+                liste.push(s.name.clone());
+            }
+        }
+    }
     for (abs, fa) in fichiers_tries.iter().copied() {
         let rel = relative(root, abs);
         // Positions AST : lignes originales et colonnes en octets, avant tout trim ou découpage de scope.
@@ -1812,6 +1823,19 @@ pub fn analyze_in_project_avec(
                 (dernier == nom).then(|| (nom, module_d_une_reexportation(&source, &rel), imp.line))
             })
             .collect();
+        // `export * from './x'` (pas `export * as ns`, qui réexporte un objet) : un nom par définition de premier
+        // niveau du fichier que `./x` désigne.
+        let mut reexportes = reexportes;
+        for imp in fa.import_references.iter().filter(|i| i.reexport && i.imported == "*" && i.alias.is_none()) {
+            let module = module_d_une_reexportation(&imp.source, &rel);
+            for (_, noms) in premier_niveau.iter().filter(|(f, _)| module_designe_fichier(&module, f)) {
+                for nom in noms {
+                    if !reexportes.iter().any(|(n, _, _)| n == nom) {
+                        reexportes.push((nom.clone(), module.clone(), imp.line));
+                    }
+                }
+            }
+        }
         // **Le scope qui porte une réexportation est celui du `pub use`** :
         // le plus étroit qui contient sa ligne, et dont l'arête du nom est
         // déjà posée par la référence de la ligne (avec son site et son
