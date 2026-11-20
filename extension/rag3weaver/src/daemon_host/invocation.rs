@@ -329,7 +329,7 @@ mod tests {
     fn close_view_refuses_a_view_it_did_not_open() {
         let v = une_vue_ouverte("a");
         for autre in ["arbre/20-11-2026-jamais", "rag3db"] {
-            let r = v.a.host.close_view(Some(&v.s), &v.manifeste, autre);
+            let r = v.a.host.close_view(Some(&v.s), &v.manifeste, autre, false);
             assert!(r["ok"] == json!(false) && r["error"].as_str().unwrap_or_default().contains("pas ouverte"), "{autre}: {r}");
         }
         assert!(v.chemin.exists());
@@ -340,7 +340,7 @@ mod tests {
     fn close_view_refuses_a_dirty_tree() {
         let v = une_vue_ouverte("b");
         std::fs::write(v.chemin.join("sale.rs"), "pub fn sale() {}\n").unwrap();
-        let r = v.a.host.close_view(Some(&v.s), &v.manifeste, &v.nom);
+        let r = v.a.host.close_view(Some(&v.s), &v.manifeste, &v.nom, false);
         assert!(r["ok"] == json!(false) && r["error"].as_str().unwrap_or_default().contains("sale"), "{r}");
         assert!(v.chemin.exists());
     }
@@ -353,7 +353,7 @@ mod tests {
         let git = |args: &[&str]| assert!(std::process::Command::new("git").arg("-C").arg(&v.chemin).args(["-c", "user.name=t", "-c", "user.email=t@t"]).args(args).status().unwrap().success());
         git(&["add", "."]);
         git(&["commit", "-q", "-m", "local"]);
-        let r = v.a.host.close_view(Some(&v.s), &v.manifeste, &v.nom);
+        let r = v.a.host.close_view(Some(&v.s), &v.manifeste, &v.nom, false);
         assert!(r["ok"] == json!(false) && r["error"].as_str().unwrap_or_default().contains("non poussé"), "{r}");
         assert!(v.chemin.exists());
     }
@@ -363,7 +363,7 @@ mod tests {
     fn close_view_refuses_a_tree_a_process_works_in() {
         let v = une_vue_ouverte("d");
         let mut dedans = std::process::Command::new("sleep").arg("60").current_dir(&v.chemin).spawn().unwrap();
-        let r = v.a.host.close_view(Some(&v.s), &v.manifeste, &v.nom);
+        let r = v.a.host.close_view(Some(&v.s), &v.manifeste, &v.nom, false);
         let _ = dedans.kill();
         let _ = dedans.wait();
         assert!(r["ok"] == json!(false) && r["error"].as_str().unwrap_or_default().contains("processus"), "{r}");
@@ -378,7 +378,7 @@ mod tests {
         let etat: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(v._d.path().join("e/vues/S1.json")).unwrap()).unwrap();
         let target = std::path::PathBuf::from(etat["ouvertes"][&v.nom]["target"].as_str().unwrap());
         std::fs::create_dir_all(target.join("debug")).unwrap();
-        let r = v.a.host.close_view(Some(&v.s), &v.manifeste, &v.nom);
+        let r = v.a.host.close_view(Some(&v.s), &v.manifeste, &v.nom, false);
         assert_eq!(r["ok"], json!(true), "{r}");
         assert!(!v.chemin.exists(), "the worktree is still there");
         assert!(!target.exists(), "the target is still there");
@@ -388,6 +388,69 @@ mod tests {
         // Closed by hand, not landed: the layer ends, and a read under it is refused saying so (c7, 20 November).
         let lu = v.a.host.call(Some(&v.s), &v.manifeste, "usages", json!({"name": "un", "view": {"layer": v.couche}}));
         assert!(lu["ok"] == json!(false) && lu.to_string().contains("couche finie"), "the closed view's layer is not ended: {lu}");
+    }
+
+    /// The generations of a view's layer, by its name, on the atelier's backend.
+    fn generations_de(v: &VueOuverte) -> i64 {
+        let hosted = v.a.host.hosted(&v.manifeste).unwrap();
+        v.a.host
+            .with_backend(&hosted, |b| {
+                let racine = b.prepared().workspace_root().unwrap();
+                let repo = crate::suivies::repo_id(&racine, b.prepared().manifest.tracked.as_ref()).unwrap().unwrap();
+                let cat = b.catalog.lock().unwrap();
+                let lire = |k: &str| cat.read_meta_key(k).map_err(|e| e.to_string());
+                let prefixe = format!("couche_nom:{repo}:{}", v.couche);
+                let id = lire(&prefixe).unwrap().expect("the layer's id");
+                let lu = cat
+                    .execute_raw_with_params(
+                        &format!("MATCH (g:{}) WHERE g.couche = $c RETURN count(g)", crate::generations::TABLE),
+                        &[crate::connection::QueryParam::new("c", crate::connection::CypherValue::String(id))],
+                    )
+                    .unwrap();
+                lu.rows[0][0].as_i64().unwrap_or(-1)
+            })
+            .unwrap()
+    }
+
+    /// **The views of the landed lots close on their machine** (O4, page 03 of 20 November 2026): one machine, its
+    /// `landed.tsv` read as a file; the view named in the 6th column is closed, its generations purged.
+    #[test]
+    fn landed_views_close_on_their_machine() {
+        let v = une_vue_ouverte("f");
+        assert!(generations_de(&v) > 0, "the view opened has no generation");
+        let journal = v._d.path().join("landed.tsv");
+        std::fs::write(&journal, format!("autre\th\th\t-\t-\t-\nle-lot\th1\th2\ttemoin\tlib\tposte-a:{}\n", v.nom)).unwrap();
+        v.a.host.set_atterrissages("poste-a", crate::daemon_host::VoieDesAtterrissages::Fichier(journal));
+        let r = v.a.host.fermer_les_vues_atterries();
+        assert_eq!(r["closed"], json!([v.nom]), "the landed view is not closed: {r}");
+        assert!(!v.chemin.exists(), "the landed view's worktree is still there");
+        assert_eq!(generations_de(&v), 0, "the landed view's generations are not purged");
+    }
+
+    /// **Each machine closes its own views only** (O4, N machines): the landings read by a declared command; a host of
+    /// another machine closes nothing, the host of the view's machine closes it.
+    #[test]
+    fn landed_views_close_only_on_their_own_machine() {
+        let v = une_vue_ouverte("g");
+        let journal = v._d.path().join("landed.tsv");
+        std::fs::write(&journal, format!("le-lot\th1\th2\ttemoin\tlib\tposte-a:{}\n", v.nom)).unwrap();
+        let voie = crate::daemon_host::VoieDesAtterrissages::Commande(vec!["cat".into(), journal.to_string_lossy().to_string()]);
+        v.a.host.set_atterrissages("poste-b", voie.clone());
+        let r = v.a.host.fermer_les_vues_atterries();
+        assert_eq!(r["closed"], json!([]), "a host closes another machine's view: {r}");
+        assert!(v.chemin.exists());
+        v.a.host.set_atterrissages("poste-a", voie);
+        let r = v.a.host.fermer_les_vues_atterries();
+        assert_eq!(r["closed"], json!([v.nom]), "the view's machine does not close it: {r}");
+    }
+
+    /// **`close_view` purges on demand** (O4): by hand, a view's generations stay; with `purge`, they go.
+    #[test]
+    fn close_view_purges_on_demand() {
+        let v = une_vue_ouverte("h");
+        let r = v.a.host.close_view(Some(&v.s), &v.manifeste, &v.nom, true);
+        assert_eq!(r["ok"], json!(true), "{r}");
+        assert_eq!(generations_de(&v), 0, "close_view with purge leaves the generations");
     }
 
     /// **`views` and `use_view` follow the Claude Code session** (page 02 of 20 November 2026, lot 2): two thin clients
