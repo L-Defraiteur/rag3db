@@ -734,9 +734,12 @@ pub fn spawn(
     let name = name.to_string();
     let label = name.clone();
     let s = stop.clone();
+    // The layer is watched while the thread lives: a view reads this watch's count, not the cold diff of its tree.
+    let montre = lag.watching_guard(layer.clone());
     let thread = std::thread::Builder::new()
         .name(format!("montre-{name}"))
         .spawn(move || loop {
+            let _montre = &montre;
             // L'observateur vit avec le fil.
             let _ = &observateur;
             {
