@@ -67,6 +67,10 @@ pub struct UnifiedResult {
     /// se mesure, sur des prompts étiquetés.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub best_signal: Option<SignalScore>,
+    /// **A row that cannot carry a vector by design** (its parent has no chunk: a short declaration of a value,
+    /// 20 November 2026). The fusion judges it by the signals it can have, not by a zero for the dense one.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub sans_vecteur: bool,
 }
 
 /// **Ce que la fusion a dit d'une ligne** : son étiquette, ce que chaque
@@ -120,6 +124,7 @@ impl From<SearchResult> for UnifiedResult {
             signal: None,
             signals: Vec::new(),
             best_signal: None,
+            sans_vecteur: r.sans_vecteur,
         }
     }
 }
@@ -133,6 +138,7 @@ impl From<UnifiedResult> for SearchResult {
             data: u.data,
             chunk: u.chunk,
             chunks: u.chunks,
+            sans_vecteur: u.sans_vecteur,
         }
     }
 }
@@ -178,7 +184,7 @@ mod tests {
 
     #[test]
     fn unified_result_from_search_result() {
-        let sr = SearchResult {
+        let sr = SearchResult { sans_vecteur: false,
             uuid: "u1".into(),
             score: 0.9,
             entity: Some("TreeKB_Index".into()),
@@ -197,7 +203,7 @@ mod tests {
 
     #[test]
     fn search_result_from_unified() {
-        let ur = UnifiedResult {
+        let ur = UnifiedResult { sans_vecteur: false,
             signal: None,
             uuid: "u1".into(),
             score: 0.8,
@@ -229,7 +235,7 @@ mod tests {
             "_source_uuid".into(),
             CypherValue::String("dir-uuid-123".into()),
         );
-        let ur = UnifiedResult {
+        let ur = UnifiedResult { sans_vecteur: false,
             signal: None,
             uuid: "index-entry-uuid".into(),
             score: 0.7,
@@ -251,7 +257,7 @@ mod tests {
 
     #[test]
     fn source_info_source_resolved() {
-        let ur = UnifiedResult {
+        let ur = UnifiedResult { sans_vecteur: false,
             signal: None,
             uuid: "dir-uuid-123".into(),
             score: 0.7,
@@ -274,7 +280,7 @@ mod tests {
     /// Sans donnée, l'entité du résultat est la source.
     #[test]
     fn source_info_no_data() {
-        let ur = UnifiedResult {
+        let ur = UnifiedResult { sans_vecteur: false,
             signal: None,
             uuid: "x".into(),
             score: 0.0,

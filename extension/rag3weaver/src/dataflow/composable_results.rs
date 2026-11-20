@@ -276,7 +276,7 @@ impl Node for SetNode {
                         .and_then(CypherValue::as_str)
                         .ok_or("selected entity has no UUID")?
                         .to_owned();
-                    let mut selected = UnifiedResult::from(SearchResult {
+                    let mut selected = UnifiedResult::from(SearchResult { sans_vecteur: false,
                         uuid,
                         score: 1.0,
                         entity: Some(entity.into()),
@@ -303,7 +303,7 @@ impl Node for SetNode {
                         let entry = out
                             .entry((child.entity.clone(), child.uuid.clone()))
                             .or_insert_with(|| {
-                                let mut r = UnifiedResult::from(SearchResult {
+                                let mut r = UnifiedResult::from(SearchResult { sans_vecteur: false,
                                     uuid: child.uuid.clone(),
                                     score: parent.score,
                                     entity: Some(child.entity.clone()),

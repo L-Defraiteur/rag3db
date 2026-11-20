@@ -192,7 +192,7 @@ impl Node for ScanFilesNode {
                 let mut data = BTreeMap::new();
                 data.insert("name".to_string(), CypherValue::String(name));
                 data.insert("file_path".to_string(), CypherValue::String(h.path.clone()));
-                UnifiedResult {
+                UnifiedResult { sans_vecteur: false,
                     uuid: format!("scan:{}", h.path),
                     // Le score dit le classement, pas une probabilité : il
                     // n'est pas comparable à un score d'index.
