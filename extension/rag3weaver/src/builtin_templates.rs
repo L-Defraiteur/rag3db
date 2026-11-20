@@ -524,12 +524,19 @@ mod tests {
     /// plus apparaît sous templates/ pendant la lib entière, une fois »): the names on the disk and not embedded, and
     /// the names embedded and not on the disk. A file another test writes for a moment under `templates/` is named.
     fn ecart(embarques: &[&str], disque: &[String]) -> Result<(), String> {
-        // RED STUB: the counts only, as before.
-        if embarques.len() == disque.len() {
-            Ok(())
-        } else {
-            Err(format!("{} embarqués, {} sur le disque", embarques.len(), disque.len()))
+        use std::collections::BTreeSet;
+        let e: BTreeSet<&str> = embarques.iter().copied().collect();
+        let d: BTreeSet<&str> = disque.iter().map(String::as_str).collect();
+        let en_trop: Vec<&str> = d.difference(&e).copied().collect();
+        let absents: Vec<&str> = e.difference(&d).copied().collect();
+        if en_trop.is_empty() && absents.is_empty() {
+            return Ok(());
         }
+        Err(format!(
+            "{} embarqués, {} sur le disque ; sur le disque et non embarqués : {en_trop:?} ; embarqués et absents du disque : {absents:?}",
+            embarques.len(),
+            disque.len()
+        ))
     }
 
     /// **The gap names its files** (ticket of 13 November 2026): a name more on the disk is named; a name replaced at
