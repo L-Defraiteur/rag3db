@@ -14,6 +14,23 @@ use serde::{Deserialize, Serialize};
 
 use crate::embedder::{budget_batches, EmbedError};
 
+/// **How long the check may take** : on card2 it takes 1.4 s for granite-278m. Past
+/// this, the card is refused : the Intel iGPU of luciepc lost its device in the check
+/// (« Parent device is lost ») and the call never came back (20 November 2026).
+pub const DEADLINE: std::time::Duration = std::time::Duration::from_secs(120);
+
+/// **`f` within `deadline`, or `None`** : `f` runs on a thread of its own, left behind
+/// when it does not answer (a lost card does not give its call back).
+pub fn within<T: Send + 'static>(deadline: std::time::Duration, f: impl FnOnce() -> T + Send + 'static) -> Option<T> {
+    let _ = deadline;
+    Some(f())
+}
+
+/// The refusal of a check that did not answer in time.
+pub fn no_answer(model: &str, deadline: std::time::Duration) -> String {
+    format!("{model} : carte refusée par l'autovérification : pas de réponse en {} s (carte perdue ?)", deadline.as_secs())
+}
+
 /// The reference's file name, beside the weights.
 pub const REFERENCE_FILE: &str = "reference.json";
 
@@ -268,6 +285,16 @@ mod tests {
         assert_eq!(c.state, CheckState::NotVerified, "{c:?}");
         let c = check(&wrong, &wrong, Some(&r), || Ok("other".to_string()), 32);
         assert!(c.state == CheckState::NotVerified && c.reason.as_deref().unwrap_or("").contains("d'autres poids"), "{c:?}");
+    }
+
+    /// **A check that does not answer in time is cut**, and what does answer comes back.
+    #[test]
+    fn a_check_that_does_not_answer_in_time_is_cut() {
+        let start = std::time::Instant::now();
+        let none = within(std::time::Duration::from_millis(50), || std::thread::sleep(std::time::Duration::from_secs(2)));
+        assert!(none.is_none() && start.elapsed() < std::time::Duration::from_secs(1), "cut at the deadline, not waited for : {:?}", start.elapsed());
+        assert_eq!(within(std::time::Duration::from_secs(5), || 7), Some(7));
+        assert!(no_answer("granite-278m", DEADLINE).contains("pas de réponse en 120 s"));
     }
 
     /// The service's batches : by length, under the byte budget, the order kept.
