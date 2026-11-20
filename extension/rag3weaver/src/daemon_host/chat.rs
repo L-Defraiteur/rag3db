@@ -725,7 +725,7 @@ impl DaemonHost {
                 .with_backend(&hosted, |b| {
                     let declares = crate::declare::DeclarationTools { backend: b, inner: &crate::backend_tools::BackendTools { backend: b } };
                     let dans_une_tache = b.prepared().surcharges().workspace.is_some();
-                    let outils = OutilsDuChat::de(b, &declares, dans_une_tache).avec_empreinte(empreintes.clone(), numero_du_tour, b.prepared().workspace_root());
+                    let outils = OutilsDuChat::de(b, &declares, dans_une_tache).avec_empreinte(empreintes.clone(), numero_du_tour, b.prepared().workspace_root()).avec_les_vues(self.vues_de(&hosted.id));
                     // Hors d'une tâche, une commande en attente se décide sur la carte
                     // d'accord (lot 7) ; dans une tâche, la boîte du superviseur la tient.
                     #[cfg(feature = "code")]
@@ -999,8 +999,23 @@ impl Tour<'_> {
 /// `view`, a call outside the child's views is refused, naming the view and the set; a call without
 /// one takes the active view. A tool that reads no view passes as it is.
 pub(crate) fn juger_la_vue(args: &Value, vues: &[String], active: &str, prend_view: bool) -> Result<Value, String> {
-    let _ = (vues, active, prend_view);
-    Ok(args.clone())
+    if !prend_view {
+        return Ok(args.clone());
+    }
+    let mut a = args.clone();
+    match a.get("view").and_then(|v| v.as_str()) {
+        Some(v) if !vues.iter().any(|x| x == v) => Err(format!(
+            "the view « {v} » is outside this task's views ({}): use one of them, or ask the parent session to add it",
+            vues.join(", ")
+        )),
+        Some(_) => Ok(a),
+        None => {
+            if let Some(o) = a.as_object_mut() {
+                o.insert("view".into(), Value::String(active.to_string()));
+            }
+            Ok(a)
+        }
+    }
 }
 
 pub(crate) struct OutilsDuChat<'a> {
@@ -1019,6 +1034,8 @@ pub(crate) struct OutilsDuChat<'a> {
     /// **Une carte d'accord passée sous un appel** : son id, rattaché à la conversation pour
     /// que la décision y relance le tour (la carte d'un chemin ; c7, 9 novembre 2026).
     rattacher: Option<Box<dyn Fn(&str) + Send + Sync + 'a>>,
+    /// A child's views and its active one (the sub-agent with views): read at its opening.
+    vues: Option<(Vec<String>, String)>,
 }
 
 impl<'a> OutilsDuChat<'a> {
@@ -1053,7 +1070,7 @@ impl<'a> OutilsDuChat<'a> {
             }
         }
         Self {
-            inner, ecrivent, retires, empreinte: None, rattacher: None,
+            inner, ecrivent, retires, empreinte: None, rattacher: None, vues: None,
             #[cfg(feature = "code")]
             en_attente: None,
         }
@@ -1217,15 +1234,47 @@ impl<'a> OutilsDuChat<'a> {
     }
 }
 
+impl OutilsDuChat<'_> {
+    /// A child's views on the call: refused outside them, the active one when it names none.
+    fn avec_la_vue(&self, call: &crate::llm::ToolCall) -> Result<crate::llm::ToolCall, crate::llm::Turn> {
+        let Some((vues, active)) = &self.vues else { return Ok(call.clone()) };
+        let prend = self.inner.tool_defs().iter().any(|d| d.name == call.name && d.parameters["properties"].get("view").is_some());
+        let args: Value = serde_json::from_str(&call.arguments).unwrap_or(Value::Object(Default::default()));
+        match juger_la_vue(&args, vues, active, prend) {
+            Ok(a) => {
+                let mut c = call.clone();
+                c.arguments = a.to_string();
+                Ok(c)
+            }
+            Err(e) => Err(crate::llm::Turn::tool_result(&call.id, &call.name, serde_json::json!({ "ok": false, "error": e }).to_string())),
+        }
+    }
+
+    /// The views of the child this chat works for.
+    pub(crate) fn avec_les_vues(mut self, vues: Option<(Vec<String>, String)>) -> Self {
+        self.vues = vues;
+        self
+    }
+}
+
 impl crate::agent::ToolBox for OutilsDuChat<'_> {
     fn call(&self, call: &crate::llm::ToolCall) -> crate::llm::Turn {
-        self.appeler(call, || self.inner.call(call))
+        match self.avec_la_vue(call) {
+            Err(t) => t,
+            Ok(c) => self.appeler(&c, || self.inner.call(&c)),
+        }
     }
     fn call_in(&self, call: &crate::llm::ToolCall, run: &str) -> crate::llm::Turn {
-        self.appeler(call, || self.inner.call_in(call, run))
+        match self.avec_la_vue(call) {
+            Err(t) => t,
+            Ok(c) => self.appeler(&c, || self.inner.call_in(&c, run)),
+        }
     }
     fn call_with(&self, call: &crate::llm::ToolCall, run: &str, inv: &crate::agent::ToolInvocation) -> crate::llm::Turn {
-        self.appeler(call, || self.inner.call_with(call, run, inv))
+        match self.avec_la_vue(call) {
+            Err(t) => t,
+            Ok(c) => self.appeler(&c, || self.inner.call_with(&c, run, inv)),
+        }
     }
     fn tool_defs(&self) -> Vec<crate::tools::ToolDef> {
         self.inner.tool_defs().into_iter().filter(|d| !self.retires.contains_key(&d.name)).collect()

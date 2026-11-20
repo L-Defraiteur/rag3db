@@ -959,11 +959,40 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
                     let id = c["backend"].as_str().unwrap_or_default();
                     let nom = c["nom"].as_str().unwrap_or_default();
                     let r = match path.as_str() {
-                        "/ide/taches" => host.ouvrir_une_tache_nommee(id, nom, c["agent_name"].as_str(), c["agent_persona"].as_str()).map(|t| json!(t)),
+                        // **A child of a session** (the sub-agent with views): named `<session>-<name>`,
+                        // its views given by the parent at its opening.
+                        "/ide/taches" => match c["parent_session"].as_str().filter(|s| !s.is_empty()) {
+                            None => host.ouvrir_une_tache_nommee(id, nom, c["agent_name"].as_str(), c["agent_persona"].as_str()).map(|t| json!(t)),
+                            Some(session) => {
+                                let enfant = crate::daemon_host::taches::nom_d_enfant(session, nom);
+                                let vues: Vec<String> = c["views"].as_array().map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect()).unwrap_or_default();
+                                host.ouvrir_une_tache_nommee(id, &enfant, c["agent_name"].as_str(), c["agent_persona"].as_str()).and_then(|t| {
+                                    host.donner_les_vues(id, &enfant, session, vues, c["active"].as_str().map(str::to_string)).map(|()| json!(t)).or_else(|e| {
+                                        let _ = host.rejeter_une_tache(id, &enfant, &format!("views refused at its opening: {e}"));
+                                        Err(e)
+                                    })
+                                })
+                            }
+                        },
                         "/ide/taches/fusionner" => host.fusionner_une_tache(id, nom, c["message"].as_str().unwrap_or_default()),
                         _ => host.rejeter_une_tache(id, nom, c["why"].as_str().unwrap_or_default()),
                     };
                     match r {
+                        Ok(v) => json!({ "ok": true, "result": v }),
+                        Err(e) => json!({ "ok": false, "error": e }),
+                    }
+                }
+            };
+            let _ = request.respond(json_(200, &v));
+        }
+        // **The parent changes a child's views** (the sub-agent with views): add, remove, switch.
+        ("POST", "/ide/teammate/views") => {
+            let mut corps = Vec::new();
+            let v = match request.as_reader().read_to_end(&mut corps).map_err(|e| e.to_string()).and_then(|_| serde_json::from_slice::<Value>(&corps).map_err(|e| e.to_string())) {
+                Err(e) => json!({ "ok": false, "error": format!("corps illisible : {e}") }),
+                Ok(c) => {
+                    let liste = |k: &str| -> Vec<String> { c[k].as_array().map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect()).unwrap_or_default() };
+                    match host.changer_les_vues(c["backend"].as_str().unwrap_or_default(), c["task"].as_str().unwrap_or_default(), &liste("add"), &liste("remove"), c["active"].as_str()) {
                         Ok(v) => json!({ "ok": true, "result": v }),
                         Err(e) => json!({ "ok": false, "error": e }),
                     }
