@@ -2063,6 +2063,11 @@ pub struct FuseResultsNode {
     /// entière du plein texte (`bm25_exact`) qui ne se noie plus sous des
     /// signaux faibles (Lucie, 25 octobre 2026).
     dominant: Vec<String>,
+    /// **The field of a result's name, when the query names it exactly** (c7's decision (B), 20 November 2026): a
+    /// result whose `exact_name` field is the query, case included, goes before every other, dominant ones included.
+    /// Typing `research` gives `research` first, as it did when its own short vector was there (Lucie's invariant: no
+    /// difference of use). None: no such rule.
+    exact_name: Option<String>,
     top_k: Option<usize>,
     signal: Option<String>,
 }
@@ -2078,6 +2083,7 @@ impl FuseResultsNode {
             default_weights: HashMap::new(),
             boost: HashSet::new(),
             dominant: Vec::new(),
+            exact_name: None,
             top_k: None,
             signal: None,
         }
@@ -2113,6 +2119,12 @@ impl FuseResultsNode {
     }
 
     /// Étiquette en rôle `Boost` (module le score fusionné au lieu d'y entrer).
+    /// Names the field of a result's name: a result whose name is the query goes first (see `exact_name`).
+    pub fn with_exact_name(mut self, field: impl Into<String>) -> Self {
+        self.exact_name = Some(field.into());
+        self
+    }
+
     /// Déclare une étiquette dominante (voir le champ `dominant`).
     pub fn with_dominant(mut self, label: impl Into<String>) -> Self {
         self.dominant.push(label.into());
@@ -2223,6 +2235,7 @@ impl Node for FuseResultsNode {
             "default_weights": self.default_weights.iter().collect::<std::collections::BTreeMap<_, _>>(),
             "boost": boost,
             "dominant": self.dominant,
+            "exact_name": self.exact_name,
             "top_k": self.top_k,
             "signal": self.signal,
         })))
@@ -2285,6 +2298,7 @@ impl Node for FuseResultsNode {
         // La requête, si le gabarit l'a câblée : c'est elle qui dit d'où
         // viennent les poids.
         let qp = ctx.take_input("query").and_then(|pv| take_or_clone::<QueryPayload>(pv));
+        let requete = qp.as_ref().map(|q| q.query.trim().to_string()).filter(|q| !q.is_empty());
         let (base, source) = Self::base_de_fusion(qp.as_ref());
         let (strategy, rrf_k) = if source == WeightSource::Engine {
             (self.strategy, self.rrf_k)
@@ -2443,6 +2457,14 @@ impl Node for FuseResultsNode {
                 (None, None) => a.1.cmp(&b.1),
             });
             fused = ranges.into_iter().map(|(_, _, u)| u).collect();
+        }
+
+        // **A name typed exactly first** (c7's decision (B)): the results whose name field is the query, case included,
+        // go before every other, in the order they had; the rest follows in its order.
+        if let (Some(champ), Some(q)) = (self.exact_name.as_deref(), requete.as_deref()) {
+            let nomme = |u: &UnifiedResult| u.data.as_ref().and_then(|d| d.get(champ)).and_then(|v| v.as_str()) == Some(q);
+            let (devant, reste): (Vec<UnifiedResult>, Vec<UnifiedResult>) = fused.into_iter().partition(nomme);
+            fused = devant.into_iter().chain(reste).collect();
         }
 
         ctx.set_output("results", PortValue::new(fused));
@@ -3746,6 +3768,50 @@ mod tests {
         assert!(results.len() >= 2);
         // "a" should be first (appears in both signals)
         assert_eq!(results[0].uuid, "a");
+    }
+
+    /// **A name typed exactly gives its declaration first** (c7's decision (B), 20 November 2026; the bench: `research`
+    /// fell from rank 1 to 7 once its short vector was gone, its full-text rank being 7). `research` is seventh by the
+    /// full text, behind rivals that cite its name and have both signals; the query is its name: it comes first.
+    #[test]
+    fn a_name_typed_exactly_gives_its_declaration_first() {
+        let nomme = |uuid: &str, name: &str, score: f64| {
+            let mut r = make_unified_result(uuid, score);
+            r.data = Some(std::collections::BTreeMap::from([("name".to_string(), CypherValue::String(name.into()))]));
+            r
+        };
+        let mut ctx = NodeContext::new();
+        let mut bm25: Vec<UnifiedResult> = (0..6).map(|i| nomme(&format!("r{i}"), &format!("build_research_{i}"), 9.0 - i as f64)).collect();
+        bm25.push(UnifiedResult { sans_vecteur: true, ..nomme("d", "research", 2.0) });
+        ctx.set_input("bm25", PortValue::new(bm25));
+        ctx.set_input("vector", PortValue::new((0..6).map(|i| nomme(&format!("r{i}"), &format!("build_research_{i}"), 0.9)).collect::<Vec<_>>()));
+        ctx.set_input("query", PortValue::new(QueryPayload {
+            target_name: "Scope".into(),
+            query: "research".into(),
+            options: SearchOptions::default(),
+            target: None,
+            embedding: None,
+            sparse: None,
+            scan: false,
+        }));
+        FuseResultsNode::new("fuse").with_dominant("bm25_exact").with_exact_name("name").execute(&mut ctx).unwrap();
+        let ordre: Vec<String> = results_of(&mut ctx).iter().map(|r| r.uuid.clone()).collect();
+        assert_eq!(ordre.first().map(String::as_str), Some("d"), "the declaration named by the query comes first: {ordre:?}");
+        // Another query, no exact name: the fusion's order stands.
+        let mut ctx = NodeContext::new();
+        ctx.set_input("bm25", PortValue::new(vec![nomme("a", "alpha", 2.0), nomme("b", "beta", 1.0)]));
+        ctx.set_input("query", PortValue::new(QueryPayload {
+            target_name: "Scope".into(),
+            query: "Beta".into(),
+            options: SearchOptions::default(),
+            target: None,
+            embedding: None,
+            sparse: None,
+            scan: false,
+        }));
+        FuseResultsNode::new("fuse").with_exact_name("name").execute(&mut ctx).unwrap();
+        let ordre: Vec<String> = results_of(&mut ctx).iter().map(|r| r.uuid.clone()).collect();
+        assert_eq!(ordre, vec!["a".to_string(), "b".to_string()], "the case counts: « Beta » is not « beta »");
     }
 
     /// **A row that cannot carry a vector is judged by the signals it can have** (c7's decision (A), 20 November

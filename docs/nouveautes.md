@@ -6,8 +6,8 @@
   88 % de luciepc. Une déclaration de valeur (une variable, une constante, un alias de type ; un champ de classe est
   une variable) qui porte moins de 80 caractères (`workspace.variable_min_chars`) n'a plus de morceau, donc plus de
   vecteur, quel que soit son type parmi elles. Une fonction courte garde le sien. La déclaration garde son document de
-  plein texte, et la fusion la juge sur les signaux qu'elle peut avoir : elle se trouve toujours par son nom, au même
-  rang qu'avant. Elle reste dans le graphe, `outline` et `usages`. Les bases repassent une fois (règles de l'analyse 13).
+  plein texte, et la fusion la juge sur les signaux qu'elle peut avoir. Un nom tapé exactement rend sa déclaration
+  en tête, comme avant. Elle reste dans le graphe, `outline` et `usages`. Les bases repassent une fois (règles de l'analyse 13).
 - 19 novembre 2026 — **Deux fenêtres de l'IDE sur le même chat suivent le même tour.** Une fenêtre ouverte au milieu d'un tour montre son texte depuis le début, et non seulement les mots arrivés après elle : le worker partagé du flux le garde pendant le tour. Une relecture d'une fenêtre, partie avant un tour d'une autre, ne l'efface plus.
 - 19 novembre 2026 — **Une fenêtre détachée de l'IDE dit les accords qui attendent dans le chat.** Son en-tête compte les demandes d'accord de son dépôt encore sans réponse, à son ouverture comme au fil du flux, et le compte retombe quand le chat accorde ou refuse.
 - 20 novembre 2026 — **Le chat de l'IDE dit quand l'index n'est pas prêt, puis quand il l'est.** Sous un outil qui a répondu avant que l'index ne rattrape, une ligne dit en clair combien de temps il faut encore pour le texte et pour les vecteurs, ou pourquoi les vecteurs manquent ; l'outil n'est pas refusé. Une fois l'index à jour, une seule ligne le dit dans le chat.
