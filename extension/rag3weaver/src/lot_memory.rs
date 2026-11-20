@@ -54,6 +54,15 @@ pub fn over(e: Estimate, bounds: Bounds) -> Option<String> {
     None
 }
 
+/// **The free memory a batch may draw on** (20 November 2026) : on an integrated adapter
+/// (an APU), the VRAM is only a carve-out (4 GiB on the tablet's, 3 taken) and the
+/// computations live in the GTT (112 GiB) : both count ; on a discrete card, the VRAM only.
+/// Stub : the VRAM only.
+pub fn free_memory_of(pci_bus_id: &str, drm: &std::path::Path, integrated: bool) -> Option<u64> {
+    let _ = integrated;
+    free_memory(pci_bus_id, drm)
+}
+
 /// **The free memory of the card at this PCI address** : `mem_info_vram_total −
 /// mem_info_vram_used` under `drm/cardN/device`, the card found by its `PCI_SLOT_NAME`.
 pub fn free_memory(pci_bus_id: &str, drm: &std::path::Path) -> Option<u64> {
@@ -142,6 +151,14 @@ mod tests {
             std::fs::write(d.join("mem_info_vram_used"), format!("{used}\n")).unwrap();
         }
         assert_eq!(free_memory("0000:0C:00.0", drm.path()), Some(750));
+        let apu = drm.path().join("card1").join("device");
+        std::fs::create_dir_all(&apu).unwrap();
+        for (name, value) in [("uevent", "PCI_SLOT_NAME=0000:c4:00.0\n".to_string()), ("mem_info_vram_total", "4096".into()), ("mem_info_vram_used", "3000".into()),
+                              ("mem_info_gtt_total", "112000".into()), ("mem_info_gtt_used", "2000".into())] {
+            std::fs::write(apu.join(name), value).unwrap();
+        }
+        assert_eq!(free_memory_of("0000:c4:00.0", drm.path(), true), Some(1096 + 110_000), "an APU : VRAM and GTT");
+        assert_eq!(free_memory_of("0000:c4:00.0", drm.path(), false), Some(1096), "a discrete card : VRAM only");
         assert_eq!(free_memory("0000:99:00.0", drm.path()), None);
     }
 }
