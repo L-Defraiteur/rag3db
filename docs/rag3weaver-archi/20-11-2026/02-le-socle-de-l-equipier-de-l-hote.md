@@ -26,6 +26,25 @@ navigateur (le pont jackwener), et arbre fait les outils des vues.
   `suggest.text`, `send_to_session.text` et la plupart des champs d'`edit_plan` n'avaient pas de
   description.
 
+## Un invariant (Lucie, le 20 novembre à 17 h 4x)
+
+Une session au terminal et l'IDE se retrouvent dans le même backend, dans les deux sens. À terme,
+Lucie parle depuis son téléphone, sur l'IDE, à un agent actif dans un terminal de son PC. Le
+registre des sessions, la socket et `send_to_session` sont cette voie : une session de tty, une
+fenêtre de l'IDE et un équipier de l'hôte sont des pairs du même hôte, joignables par leur nom.
+L'accès distant passe par l'hôte authentifié (le jeton, un tunnel), jamais par un second backend.
+
+**Ce qui l'empêche aujourd'hui :**
+- **Le pair est la tâche, pas le client.** Une session de tty et une fenêtre de l'IDE ne sont pas
+  dans le registre : elles parlent à leur tâche par la boîte, en HTTP. Elles sont joignables à
+  travers la tâche (un message de session arrive dans sa boîte, et l'IDE le montre depuis le lot 4
+  du mode pair), mais pas par leur propre nom.
+- **Une seule tâche en mode pair par hôte**, parce que le registre a un fichier par pid. Plusieurs
+  pairs d'un même hôte demandent plusieurs entrées pour un seul pid : c'est la question ouverte du
+  lot 6 du mode pair (le registre lit-il le nom du fichier ou le champ `pid` ?), à relever au mot de
+  Lucie. Sinon, une socket qui porte plusieurs noms.
+- **Le distant, lui, est déjà là** : `/ide/teammate/mailbox` sous le jeton de l'hôte.
+
 ## Les lots, dans l'ordre
 
 ### 1. `run` : une commande bornée, au premier plan ou en fond — 1 jour
