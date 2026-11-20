@@ -296,7 +296,7 @@ pub struct VectorsDue {
 
 /// **The files changed since a layer's index, without a watch** (ticket of 18 November 2026): its indexed tree
 /// (`Catalog::indexed_tree_of_layer`) against its tip: the working tree of its root, or its ref for a history layer
-/// (`ref` in the marker). Untracked files are not counted, as the marker does not note them. Runs `git`: call it without the
+/// (`ref` in the marker). Untracked files the index takes are counted too (`untracked_blobs`). Runs `git`: call it without the
 /// catalog's lock. A path is behind when it differs from its indexed commit and was not indexed in that very state
 /// (`dirty_blobs`), or when it was indexed modified and is no longer. `None` outside git, or when git refuses.
 ///
@@ -315,9 +315,11 @@ pub fn cold_files_behind(marque: &Value) -> Option<usize> {
         return Some(git(&["diff", "--name-only", commit, pointe.trim()])?.lines().filter(|l| !l.is_empty()).count());
     }
     let tete = git(&["rev-parse", "HEAD"])?;
-    let status = git(&["status", "--porcelain", "--untracked-files=no"])?;
+    // Untracked files included: the index takes them, so the tip's signature and the diff count them.
+    let status = git(&["status", "--porcelain", "--untracked-files=all"])?;
     let mut signature = format!("{}\n{}\n", marque, tete.trim());
-    for chemin in status_paths(&status) {
+    // Tracked changes and untracked files alike: an edit of either moves the tip.
+    for chemin in status_paths(&status).into_iter().chain(untracked_paths(racine)) {
         let m = std::fs::metadata(std::path::Path::new(racine).join(&chemin)).ok();
         let (mtime, taille) = m.map_or((0, 0), |m| {
             (m.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map_or(0, |d| d.as_nanos()), m.len())
@@ -338,8 +340,30 @@ pub fn cold_files_behind(marque: &Value) -> Option<usize> {
         .and_then(Value::as_object)
         .map(|m| m.iter().map(|(k, v)| (k.clone(), v.as_str().unwrap_or("-").to_string())).collect())
         .unwrap_or_default();
+    let blobs_de = |cle: &str| -> std::collections::BTreeMap<String, String> {
+        marque
+            .get(cle)
+            .and_then(Value::as_object)
+            .map(|m| m.iter().map(|(k, v)| (k.clone(), v.as_str().unwrap_or("-").to_string())).collect())
+            .unwrap_or_default()
+    };
+    let non_suivis_indexes = blobs_de("untracked_blobs");
+    let non_suivis: BTreeSet<String> = untracked_paths(racine).into_iter().collect();
+    let blob = |chemin: &str| git(&["hash-object", "--", chemin]).map(|h| h.trim().to_string()).unwrap_or_else(|| "-".to_string());
     let mut derriere = 0usize;
+    // Untracked now: behind unless indexed untracked in this very state.
+    for chemin in &non_suivis {
+        if non_suivis_indexes.get(chemin) != Some(&blob(chemin)) {
+            derriere += 1;
+        }
+    }
+    // Untracked at the index and no longer: deleted, or tracked since (then counted by the diff below).
+    derriere += non_suivis_indexes.keys().filter(|c| !non_suivis.contains(*c) && !changes.contains(*c)).count();
     for chemin in &changes {
+        // Untracked at the index, tracked since, unchanged: indexed in this state.
+        if non_suivis_indexes.get(chemin).is_some_and(|b| *b == blob(chemin)) {
+            continue;
+        }
         match sales.get(chemin) {
             // Indexed in this modified state: behind only if it moved since.
             Some(blob) => {
@@ -357,11 +381,26 @@ pub fn cold_files_behind(marque: &Value) -> Option<usize> {
     Some(derriere)
 }
 
-/// The paths `git status --porcelain` names (a rename names its new path).
+/// **The untracked files of `root` the index takes**: not tracked, not ignored (`git ls-files --others
+/// --exclude-standard`).
+pub fn untracked_paths(root: &str) -> Vec<String> {
+    std::process::Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(["ls-files", "--others", "--exclude-standard", "-z"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| o.stdout.split(|b| *b == 0).filter(|p| !p.is_empty()).map(|p| String::from_utf8_lossy(p).to_string()).collect())
+        .unwrap_or_default()
+}
+
+/// The paths `git status --porcelain` names as changed (a rename names its new path); untracked lines (`??`) are not
+/// changes of a tracked file.
 pub fn status_paths(status: &str) -> Vec<String> {
     status
         .lines()
-        .filter(|l| l.len() > 3)
+        .filter(|l| l.len() > 3 && !l.starts_with("??"))
         .map(|l| {
             let chemin = &l[3..];
             chemin.rsplit(" -> ").next().unwrap_or(chemin).trim_matches('"').to_string()
