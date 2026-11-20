@@ -823,7 +823,7 @@ impl DaemonHost {
             // Without the code feature, no layer of code: the worktree is opened all the same.
             #[cfg(not(feature = "code"))]
             let indexee: Result<bool, String> = Err(format!("la couche de travail de {} demande la feature « code » de rag3weaver", reel.display()));
-            let mut ouverte = json!({ "name": nom, "path": chemin, "branch": branche, "target": target, "from": base, "fork": base_commit });
+            let mut ouverte = json!({ "name": nom, "path": chemin, "branch": branche, "target": target, "from": base, "fork": base_commit, "manifest": manifest });
             match &indexee {
                 Ok(en_fond) => {
                     ouverte["layer"] = json!(couche);
@@ -852,18 +852,78 @@ impl DaemonHost {
     /// is closed by its name, its generations purged (master holds its content). Gives the views closed, and those
     /// refused with why.
     pub fn fermer_les_vues_atterries(&self) -> Value {
-        let _ = &self.atterrissages;
-        json!({ "ok": true, "closed": [], "refused": [] }) // RED STUB.
+        let (poste, voie) = match self.atterrissages.lock().unwrap_or_else(|e| e.into_inner()).clone().map(Ok).unwrap_or_else(atterrissages_declares) {
+            Ok(x) => x,
+            Err(e) => return json!({ "ok": false, "error": e }),
+        };
+        let texte = match lire_les_atterrissages(&voie) {
+            Ok(t) => t,
+            Err(e) => return json!({ "ok": false, "error": e }),
+        };
+        let (mut fermees, mut refusees) = (Vec::new(), Vec::new());
+        for ligne in texte.lines() {
+            let Some(vue) = ligne.split('\t').nth(5) else { continue };
+            let Some((p, nom)) = vue.split_once(':') else { continue };
+            if p != poste {
+                continue;
+            }
+            // The Claude Code session that opened it: its state notes the view.
+            let Some(claude) = self.qui_a_ouvert(nom) else { continue };
+            match self.fermer(&claude, None, nom, true) {
+                Ok(_) => fermees.push(json!(nom)),
+                Err(e) => refusees.push(json!({ "name": nom, "error": e })),
+            }
+        }
+        json!({ "ok": true, "closed": fermees, "refused": refusees })
+    }
+
+    /// The Claude Code session whose state notes the view `nom` as opened, if any.
+    fn qui_a_ouvert(&self, nom: &str) -> Option<String> {
+        std::fs::read_dir(self.vues_dir()).ok()?.flatten().find_map(|e| {
+            let p = e.path();
+            let etat: Value = serde_json::from_str(&std::fs::read_to_string(&p).ok()?).ok()?;
+            etat["ouvertes"].get(nom).filter(|v| !v.is_null())?;
+            p.file_stem().map(|s| s.to_string_lossy().to_string())
+        })
+    }
+
+    /// **The pulled closing, in the background** (O4): every `every`, the views of this machine's landed lots close.
+    /// Only the host's service starts it, and only when `~/.config/rag3weaver/atterrissages.json` declares the way.
+    pub fn demarrer_la_fermeture_tiree(self: &Arc<Self>, every: std::time::Duration) {
+        if cfg!(test) || atterrissages_declares().is_err() {
+            return;
+        }
+        let hote = Arc::downgrade(self);
+        let _ = std::thread::Builder::new().name("fermeture-tiree".into()).spawn(move || loop {
+            std::thread::sleep(every);
+            let Some(h) = hote.upgrade() else { return };
+            let r = h.fermer_les_vues_atterries();
+            for refus in r["refused"].as_array().into_iter().flatten() {
+                eprintln!("[vues] la vue atterrie « {} » ne se ferme pas : {}", refus["name"].as_str().unwrap_or("?"), refus["error"].as_str().unwrap_or("?"));
+            }
+            for nom in r["closed"].as_array().into_iter().flatten() {
+                eprintln!("[vues] vue atterrie fermée : {}", nom.as_str().unwrap_or("?"));
+            }
+        });
     }
 
     /// **`close_view <name>`** (page 03 of 20 November 2026, O3): a view the host opened for this session is forgotten,
     /// its worktree and its target removed. Refused, saying why: a view the host did not open for the session (Lucie's
     /// tree among them), a dirty tree (submodule included), commits no remote branch holds, a process working in it.
     pub fn close_view(&self, session: Option<&str>, manifest: &Path, name: &str, purge: bool) -> Value {
-        let _ = purge; // RED STUB.
         let r = self.check_session(session).and_then(|s| {
             let claude = s.claude_session.clone().ok_or("close_view : la session Claude Code qui appelle n'est pas connue (son sessionId)")?;
-            let fichier = self.fichier_de_vue(&claude).ok_or_else(|| format!("session Claude Code illisible : « {claude} »"))?;
+            self.fermer(&claude, Some(manifest), name, purge)
+        });
+        r.unwrap_or_else(|e| op_response(Err(e)))
+    }
+
+    /// **Close a view the host opened for a Claude Code session** (`close_view`, and the landings): the guards, then the
+    /// worktree and its target removed, the layer ended (or purged), the view forgotten. `manifest`: the backend of the
+    /// layer; `None` takes the one noted at the opening.
+    fn fermer(&self, claude: &str, manifest: Option<&Path>, name: &str, purge: bool) -> Result<Value, String> {
+        {
+            let fichier = self.fichier_de_vue(claude).ok_or_else(|| format!("session Claude Code illisible : « {claude} »"))?;
             let mut etat: Value = std::fs::read_to_string(&fichier).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_else(|| json!({}));
             // 1. A view the host opened for this session, and no other (Lucie's tree among them).
             let ouverte = etat["ouvertes"].get(name).cloned().filter(|v| !v.is_null()).ok_or_else(|| {
@@ -909,20 +969,25 @@ impl DaemonHost {
                     std::fs::remove_dir_all(&t).map_err(|e| format!("close_view : le target {} : {e}", t.display()))?;
                 }
             }
-            // Closed by hand, not landed: the layer ends, its generations stay.
+            // Closed by hand, not landed: the layer ends, its generations stay; landed or purged: they go.
             let couche = ouverte["layer"].as_str().map(str::to_string).unwrap_or_else(|| format!("worktree:{}", reel.display()));
+            let manifeste = manifest.map(Path::to_path_buf).or_else(|| ouverte["manifest"].as_str().map(std::path::PathBuf::from));
             #[cfg(feature = "code")]
-            if let Ok(hosted) = self.hosted(manifest) {
+            if let Some(hosted) = manifeste.as_deref().and_then(|m| self.hosted(m).ok()) {
                 let _ = self.with_backend(&hosted, |b| -> Result<bool, String> {
                     let prepared = b.prepared();
                     let racine = prepared.workspace_root().ok_or("pas de racine de travail")?;
                     let repo = crate::suivies::repo_id(&racine, prepared.manifest.tracked.as_ref())?.ok_or("pas d'id de dépôt")?;
                     let cat = b.catalog.lock().map_err(|_| "catalogue empoisonné".to_string())?;
-                    crate::suivies::end_layer(&cat, &repo, &couche)
+                    if purge {
+                        crate::suivies::purge_layer(&cat, &repo, &couche)
+                    } else {
+                        crate::suivies::end_layer(&cat, &repo, &couche)
+                    }
                 });
             }
             #[cfg(not(feature = "code"))]
-            let _ = manifest;
+            let _ = (&manifeste, purge);
             // Forgotten: the state, and every session that read it reads the backend again.
             if let Some(m) = etat["ouvertes"].as_object_mut() {
                 m.remove(name);
@@ -942,9 +1007,8 @@ impl DaemonHost {
             for id in lisaient {
                 let _ = self.set_session_view(&id, None);
             }
-            Ok(json!({ "ok": true, "closed": name, "layer": couche }))
-        });
-        r.unwrap_or_else(|e| op_response(Err(e)))
+            Ok(json!({ "ok": true, "closed": name, "layer": couche, "purged": purge }))
+        }
     }
 
     fn espace_et_table(&self) -> (std::path::PathBuf, std::path::PathBuf) {
@@ -2530,6 +2594,40 @@ impl Default for DaemonHost {
     }
 }
 
+/// **The machine and the way to its landings, as declared** (O4): `~/.config/rag3weaver/atterrissages.json`,
+/// `{"poste"?: …, "chemin": …}` or `{"poste"?: …, "commande": [...]}`; the machine is the hostname unless named.
+fn atterrissages_declares() -> Result<(String, VoieDesAtterrissages), String> {
+    let home = std::env::var_os("HOME").ok_or("pas de HOME")?;
+    let chemin = Path::new(&home).join(".config/rag3weaver/atterrissages.json");
+    let v: Value = serde_json::from_str(&std::fs::read_to_string(&chemin).map_err(|e| format!("{} : {e}", chemin.display()))?)
+        .map_err(|e| format!("{} : {e}", chemin.display()))?;
+    let voie = match (v["chemin"].as_str(), v["commande"].as_array()) {
+        (Some(c), _) => VoieDesAtterrissages::Fichier(c.into()),
+        (None, Some(a)) if !a.is_empty() => VoieDesAtterrissages::Commande(a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect()),
+        _ => return Err(format!("{} : « chemin » ou « commande » attendu", chemin.display())),
+    };
+    let poste = match v["poste"].as_str() {
+        Some(p) => p.to_string(),
+        None => std::fs::read_to_string("/proc/sys/kernel/hostname").map(|h| h.trim().to_string()).map_err(|e| format!("le hostname : {e}"))?,
+    };
+    Ok((poste, voie))
+}
+
+/// The text of the landings, by its way.
+fn lire_les_atterrissages(voie: &VoieDesAtterrissages) -> Result<String, String> {
+    match voie {
+        VoieDesAtterrissages::Fichier(p) => std::fs::read_to_string(p).map_err(|e| format!("les atterrissages {} : {e}", p.display())),
+        VoieDesAtterrissages::Commande(c) => {
+            let (prog, args) = c.split_first().ok_or("une commande vide")?;
+            let o = std::process::Command::new(prog).args(args).output().map_err(|e| format!("les atterrissages par {prog} : {e}"))?;
+            if !o.status.success() {
+                return Err(format!("les atterrissages par {} : {}", c.join(" "), String::from_utf8_lossy(&o.stderr).trim()));
+            }
+            Ok(String::from_utf8_lossy(&o.stdout).to_string())
+        }
+    }
+}
+
 /// **The way to this machine's landings** (O4): a file read here, or a command whose output is the file (`ssh`, `cat`…),
 /// as the configuration declares; nothing is written in the code about which machine holds the pusher.
 #[derive(Debug, Clone)]
@@ -2801,6 +2899,8 @@ impl DaemonServer {
         // Les bilans de session des backends qui les déclarent (page 04).
         host.se_connaitre();
         host.servir_les_bilans();
+        // The views of this machine's landed lots close, every five minutes, when the way is declared (O4).
+        host.demarrer_la_fermeture_tiree(std::time::Duration::from_secs(300));
         // Les équipiers que l'arrêt de l'hôte a interrompus reprennent (page
         // 07-novembre-2026-everything-declarative/01, § 1).
         for l in host.reprendre_les_equipiers() {

@@ -492,8 +492,8 @@ pub fn outils_des_vues() -> Vec<Value> {
         }),
         json!({
             "name": "close_view",
-            "description": "Ferme une vue que l'hôte a ouverte pour cette session (`name`, tel que open_view l'a rendu) : retire son worktree et son target, oublie la vue, et la session relit le backend. Refuse, en le disant, une vue ouverte ailleurs (l'arbre de Lucie compris), un arbre sale (sous-module compris), des commits qu'aucune branche distante ne porte, un processus qui y travaille. Sa couche finit ; ses générations restent.",
-            "inputSchema": { "type": "object", "properties": { "name": { "type": "string", "minLength": 1 } }, "required": ["name"], "additionalProperties": false }
+            "description": "Ferme une vue que l'hôte a ouverte pour cette session (`name`, tel que open_view l'a rendu) : retire son worktree et son target, oublie la vue, et la session relit le backend. Refuse, en le disant, une vue ouverte ailleurs (l'arbre de Lucie compris), un arbre sale (sous-module compris), des commits qu'aucune branche distante ne porte, un processus qui y travaille. Sa couche finit ; ses générations restent, sauf `purge: true`, qui les retire.",
+            "inputSchema": { "type": "object", "properties": { "name": { "type": "string", "minLength": 1 }, "purge": { "type": "boolean" } }, "required": ["name"], "additionalProperties": false }
         }),
         json!({
             "name": "use_view",
@@ -1020,7 +1020,7 @@ impl Hote for McpClient {
             Side::Attached(c) if nom == "views" || nom == "use_view" || nom == "open_view" || nom == "close_view" => {
                 let (route, corps) = match nom {
                     "views" => ("/views", json!({ "manifest": c.manifest })),
-                    "close_view" => ("/views/close", json!({ "manifest": c.manifest, "name": arguments["name"] })),
+                    "close_view" => ("/views/close", json!({ "manifest": c.manifest, "name": arguments["name"], "purge": arguments["purge"] })),
                     "open_view" => ("/views/open", json!({ "manifest": c.manifest, "lot": arguments["lot"], "session_dir": arguments["session_dir"] })),
                     _ => ("/views/use", json!({ "manifest": c.manifest, "name": arguments["name"] })),
                 };
