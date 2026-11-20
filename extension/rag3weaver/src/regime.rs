@@ -243,8 +243,9 @@ pub const MODELE_VERTEX_PAR_DEFAUT: &str = "google/gemini-3.8-flash";
 /// nu borne donc à `low` ; `models.llm.reasoning` (réglages du défaut) l'emporte, et
 /// `VERTEX_REASONING`, de la même forme que `VERTEX_MODEL`, règle l'hôte lui-même.
 pub fn raisonnement_du_defaut(declare: Option<crate::llm::ReasoningEffort>, lire: impl Fn(&str) -> Option<String>) -> crate::llm::ReasoningEffort {
-    let _ = (declare, lire);
-    crate::llm::ReasoningEffort::High
+    declare
+        .or_else(|| lire("VERTEX_REASONING").and_then(|v| serde_json::from_value(serde_json::Value::String(v)).ok()))
+        .unwrap_or(crate::llm::ReasoningEffort::Low)
 }
 
 /// **Le modèle agentique, en un seul endroit.**

@@ -1,5 +1,12 @@
 # Nouveautés
 
+- 20 novembre 2026 — **Le modèle par défaut de l'hôte réfléchit dans une borne.** Sans `models.llm` au manifeste,
+  l'hôte choisit lui-même son modèle (Gemini sur Vertex) : il le règle désormais à `reasoning: low`, parce qu'un
+  Gemini 3.x sans borne réfléchit jusqu'à remplir sa sortie et coupe sa réponse avant d'appeler un outil.
+  `VERTEX_REASONING` (comme `VERTEX_MODEL`) règle l'hôte lui-même, et une entrée de `models.llm` **sans `model`**
+  règle ce modèle par défaut sans le nommer : `"models": {"llm": {"reasoning": "medium", "context_tokens": 200000}}`.
+  Une telle entrée qui porte une clé de connexion (`access`, `provider`, `address`…) est refusée en la nommant.
+
 - 19 novembre 2026 — **Une extraction coupée par sa borne le dit, et l'archiviste demande peu de réflexion au
   modèle.** Sur Vertex, la réflexion de Gemini compte dans `max_tokens` ; elle coupait le JSON de 5 extractions sur 19.
   Une réponse coupée sous un schéma est maintenant refusée par « the reply was cut at max_tokens=N (finish: length),

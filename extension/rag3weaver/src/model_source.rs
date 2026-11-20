@@ -507,6 +507,20 @@ impl<'de> Deserialize<'de> for Modeles {
         let mut modeles = Modeles::default();
         for (capacite, valeur) in brut {
             let lire = |v: serde_json::Value, ou: String| serde_json::from_value::<ModelSource>(v).map_err(|e| D::Error::custom(format!("{ou} : {e}")));
+            // `models.llm` without `model`: the host default's settings, never a model source.
+            if capacite == Capability::Llm && valeur.as_object().is_some_and(|o| !o.contains_key("model")) {
+                let objet = valeur.as_object().expect("an object");
+                if let Some(cle) = CLES_DE_CONNEXION.iter().find(|c| objet.contains_key(**c)) {
+                    return Err(D::Error::custom(format!(
+                        "models.llm : `{cle}` dit où joindre un modèle, mais `model` manque ; une entrée sans `model` ne règle que le \
+                         modèle par défaut de l'hôte (reasoning, max_output_tokens, context_tokens, timeout_secs, params, name) : \
+                         ajouter `model`, ou retirer `{cle}`"
+                    )));
+                }
+                let reglages = serde_json::from_value::<ReglagesDuDefaut>(valeur).map_err(|e| D::Error::custom(format!("models.llm (réglages du modèle par défaut de l'hôte) : {e}")))?;
+                modeles.defaut_de_l_hote = Some(reglages);
+                continue;
+            }
             let serde_json::Value::Array(elements) = valeur else {
                 modeles.par_capacite.insert(capacite, lire(valeur, format!("models.{}", capacite.name()))?);
                 continue;
