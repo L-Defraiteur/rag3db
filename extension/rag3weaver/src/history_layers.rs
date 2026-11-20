@@ -225,6 +225,16 @@ pub fn write_work_generation(catalog: &mut Catalog, worktree: &Path, layer_id: &
     Ok(r)
 }
 
+/// **Write a work layer on its fork** (page 03 of 20 November 2026, O2, Lucie's rule of 18 h 47): the worktree's whole
+/// gap from its fork commit (`git merge-base HEAD <master_ref>`), pinned on the layer `fourche:<commit>`, one generation
+/// over the backend's published one: the files that differ between the indexed root and the fork commit, written on
+/// demand and shared by every worktree that forks there. No ref is followed, and nothing between the root and the fork
+/// is indexed. A fork at the root itself has no layer: the work layer sits on the backend. `repo` names the layers.
+pub fn write_fork_work_generation(catalog: &mut Catalog, worktree: &Path, layer_id: &str, repo: &str, master_ref: &str) -> Result<i64, String> {
+    let _ = (catalog, worktree, layer_id, repo, master_ref);
+    Err("la couche de travail sur sa fourche : pas encore".into()) // RED STUB.
+}
+
 /// **The dirty paths of a worktree**: changed, added, deleted, renamed (both names), unmerged and untracked, as
 /// `git status --porcelain=v2 -z --untracked-files=all` says them, without refreshing its index.
 fn dirty_paths(worktree: &Path) -> Result<std::collections::BTreeSet<String>, String> {
@@ -731,6 +741,47 @@ mod tests {
         git(&wt, &["commit", "-q", "-m", "h"]);
         let refus = write_work_generation(&mut cat, &wt, &couche, "refs/heads/travail").expect_err("a HEAD without generation of its branch is written");
         assert!(refus.contains("tip"), "the refusal does not say the work layer waits for tip: {refus}");
+    }
+
+    /// **Work layers on their fork share it, without a followed ref** (page 03 of 20 November 2026, O2). The root is
+    /// indexed at c1; master moves to a commit that changes g. Two worktrees fork there: one commits f, the other leaves
+    /// h untracked. Each reads its own gap and the new g through the fork; the backend reads the old g and neither f nor
+    /// h; the layer `fourche:<commit>` has one generation, shared.
+    #[test]
+    fn work_layers_on_their_fork_share_it_without_a_followed_ref() {
+        const G2: &str = "pub fn g() -> u32 {\n    let y = 8;\n    y\n}\n";
+        let (d, c1, _, _) = depot();
+        let (mut cat, _) = base(d.path(), &c1);
+        std::fs::write(d.path().join("g.rs"), G2).unwrap();
+        git(d.path(), &["commit", "-q", "-am", "master avance"]);
+        let fourche = git(d.path(), &["rev-parse", "HEAD"]);
+        let wt_dir = tempfile::tempdir().unwrap();
+        let (wt1, wt2) = (wt_dir.path().join("wt1"), wt_dir.path().join("wt2"));
+        git(d.path(), &["worktree", "add", "-q", "-b", "l1", wt1.to_str().unwrap(), &fourche]);
+        git(d.path(), &["worktree", "add", "-q", "-b", "l2", wt2.to_str().unwrap(), &fourche]);
+        std::fs::write(wt1.join("f.rs"), F2).unwrap();
+        git(&wt1, &["commit", "-q", "-am", "le lot 1"]);
+        std::fs::write(wt2.join("h.rs"), "pub fn h() -> u32 {\n    9\n}\n").unwrap();
+        let (v1, v2) = (format!("worktree:{}", wt1.display()), format!("worktree:{}", wt2.display()));
+        write_fork_work_generation(&mut cat, &wt1, &v1, "depot", "main").expect("the layer of wt1 on its fork");
+        write_fork_work_generation(&mut cat, &wt2, &v2, "depot", "main").expect("the layer of wt2 on its fork");
+        assert_eq!(fins_dans_la_vue(&mut cat, &v1, "f"), vec![4], "wt1 does not read its committed f");
+        assert_eq!(fins_dans_la_vue(&mut cat, &v1, "g"), vec![4], "wt1 does not read g of its fork");
+        assert!(fins_dans_la_vue(&mut cat, &v1, "h").is_empty(), "wt1 reads wt2's h");
+        assert_eq!(fins_dans_la_vue(&mut cat, &v2, "f"), vec![3], "wt2 reads wt1's f");
+        assert_eq!(fins_dans_la_vue(&mut cat, &v2, "g"), vec![4], "wt2 does not read g of its fork");
+        assert_eq!(fins_dans_la_vue(&mut cat, &v2, "h"), vec![3], "wt2 does not read its untracked h");
+        assert_eq!(fins_dans_la_vue(&mut cat, crate::generations::COUCHE_DU_BACKEND, "g"), vec![3], "the backend reads the fork's g");
+        assert!(fins_dans_la_vue(&mut cat, crate::generations::COUCHE_DU_BACKEND, "h").is_empty(), "the backend reads wt2's h");
+        let lire = |k: &str| cat.read_meta_key(k).map_err(|e| e.to_string());
+        let id = crate::suivies::layer_id_by_name(&lire, "depot", &format!("fourche:{fourche}")).unwrap().expect("the fork's layer is not named by its commit");
+        let lu = cat
+            .execute_raw_with_params(
+                &format!("MATCH (g:{}) WHERE g.couche = $c RETURN count(g)", crate::generations::TABLE),
+                &[QueryParam::new("c", CypherValue::String(id))],
+            )
+            .unwrap();
+        assert_eq!(lu.rows[0][0].as_i64(), Some(1), "the fork is written more than once for two worktrees");
     }
 
     /// **Témoin 4 : the cap of the work layers.** Under `tracked.writes.max_work_layers: 2`, three worktrees: the
