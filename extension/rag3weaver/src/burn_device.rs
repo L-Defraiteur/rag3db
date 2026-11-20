@@ -258,6 +258,50 @@ impl BurnDevice {
     }
 }
 
+/// **The kind of adapter a device resolves to** (see [`BurnDevice::resolved_adapter`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AdapterKind {
+    Discrete,
+    Integrated,
+    Cpu,
+    /// A virtual GPU, or a type the driver does not say.
+    Other,
+    /// No Vulkan adapter, or a stack wgpu does not see (HIP).
+    Unknown,
+}
+
+/// The Vulkan adapter wgpu prefers under `HighPerformance`, as cubecl asks for a
+/// `default` device. A native enumeration is ready at the first poll (see
+/// `regime::driver_card_types`).
+fn preferred_vulkan_adapter() -> AdapterKind {
+    use std::future::Future;
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        backends: wgpu::Backends::VULKAN,
+        ..wgpu::InstanceDescriptor::new_without_display_handle()
+    });
+    let options = wgpu::RequestAdapterOptions {
+        power_preference: wgpu::PowerPreference::HighPerformance,
+        force_fallback_adapter: false,
+        compatible_surface: None,
+        ..wgpu::RequestAdapterOptions::default()
+    };
+    let mut future = std::pin::pin!(instance.request_adapter(&options));
+    let mut context = std::task::Context::from_waker(std::task::Waker::noop());
+    let adapter = loop {
+        match future.as_mut().poll(&mut context) {
+            std::task::Poll::Ready(adapter) => break adapter,
+            std::task::Poll::Pending => std::thread::yield_now(),
+        }
+    };
+    match adapter.map(|a| a.get_info().device_type) {
+        Ok(wgpu::DeviceType::DiscreteGpu) => AdapterKind::Discrete,
+        Ok(wgpu::DeviceType::IntegratedGpu) => AdapterKind::Integrated,
+        Ok(wgpu::DeviceType::Cpu) => AdapterKind::Cpu,
+        Ok(_) => AdapterKind::Other,
+        Err(_) => AdapterKind::Unknown,
+    }
+}
+
 /// **The variable that lets an embedder run on an integrated GPU anyway** : `1` only,
 /// for a trial that does not look at the values (see [`BurnDevice::check_embedder`]).
 pub const ALLOW_INTEGRATED_GPU_VARIABLE: &str = "RAG3WEAVER_EMBEDDER_ALLOW_INTEGRATED_GPU";
@@ -274,11 +318,20 @@ impl BurnDevice {
     /// and the in-process embedder refuse it, unless `allow` (the value of
     /// [`ALLOW_INTEGRATED_GPU_VARIABLE`]) is `1`.
     ///
-    /// `default` passes : on a machine without a discrete card it may resolve to an
-    /// integrated one, which only `resolve()` knows. The tests' fallback
-    /// (`RAG3WEAVER_TESTS_REPLI_PERIPHERIQUE`) loads its models directly and does not
-    /// go through here.
+    /// The guard judges the adapter the device resolves to ([`Self::resolved_adapter`]),
+    /// `default` included : on a machine whose only card is integrated, `default` is
+    /// that card. The tests' fallback (`RAG3WEAVER_TESTS_REPLI_PERIPHERIQUE`) loads its
+    /// models directly ; a test that compares values goes through here first
+    /// (`common::burn::compares_values`).
     pub fn check_embedder(self, allow: Option<&str>) -> Result<Self, String> {
+        self.check_embedder_on(self.resolved_adapter(), allow)
+    }
+
+    /// [`Self::check_embedder`], the adapter this device resolves to given : the guard
+    /// judges the adapter, not the way the device is written (`default` resolves to the
+    /// only card of a machine whose only card is integrated).
+    pub fn check_embedder_on(self, adapter: AdapterKind, allow: Option<&str>) -> Result<Self, String> {
+        let _ = adapter;
         match self {
             Self::IntegratedGpu(n) if allow.map(str::trim) != Some("1") => Err(format!(
                 "igpu:{n} refusé pour un embarqueur : sur un GPU intégré, granite calcule des vecteurs faux en lot, \
@@ -286,6 +339,28 @@ impl BurnDevice {
                  pour un essai qui ne regarde pas les valeurs"
             )),
             device => Ok(device),
+        }
+    }
+
+    /// **The kind of adapter this device resolves to**, chosen as cubecl-wgpu chooses
+    /// (rev bdf6b77, `create_setup_for_device`) : a named kind is that kind ; `default`
+    /// (and `rocm:N` without `burn-rocm`, which falls back to it) is the adapter of
+    /// `CUBECL_WGPU_DEFAULT_DEVICE` when set, else the Vulkan adapter wgpu prefers under
+    /// `HighPerformance`. `rocm:N` with `burn-rocm` runs on HIP, which wgpu does not
+    /// see : unknown.
+    pub fn resolved_adapter(self) -> AdapterKind {
+        match self {
+            Self::DiscreteGpu(_) => AdapterKind::Discrete,
+            Self::IntegratedGpu(_) => AdapterKind::Integrated,
+            Self::Cpu => AdapterKind::Cpu,
+            #[cfg(feature = "burn-rocm")]
+            Self::Rocm(_) => AdapterKind::Unknown,
+            _ => match std::env::var("CUBECL_WGPU_DEFAULT_DEVICE").ok().as_deref().map(str::trim) {
+                Some(v) if v.starts_with("DiscreteGpu(") => AdapterKind::Discrete,
+                Some(v) if v.starts_with("IntegratedGpu(") => AdapterKind::Integrated,
+                Some(v) if v.starts_with("Cpu") => AdapterKind::Cpu,
+                _ => preferred_vulkan_adapter(),
+            },
         }
     }
 }
@@ -304,9 +379,25 @@ mod tests {
             assert!(BurnDevice::IntegratedGpu(1).check_embedder(no).is_err(), "{no:?} does not allow it");
         }
         assert_eq!(BurnDevice::IntegratedGpu(0).check_embedder(Some(" 1 ")), Ok(BurnDevice::IntegratedGpu(0)));
-        for device in [BurnDevice::Default, BurnDevice::DiscreteGpu(0), BurnDevice::Rocm(0), BurnDevice::Cpu] {
+        for device in [BurnDevice::DiscreteGpu(0), BurnDevice::Cpu] {
             assert_eq!(device.check_embedder(None), Ok(device), "{device:?}");
         }
+    }
+
+    /// **The guard judges the adapter a device resolves to, not its name** (20 November
+    /// 2026) : `default` on a machine whose only card is integrated (the tablet, an APU)
+    /// is refused ; on a discrete card, or the CPU, it passes ; `1` allows it.
+    #[test]
+    fn an_embedder_refuses_a_default_that_resolves_to_an_integrated_gpu() {
+        let refused = BurnDevice::Default.check_embedder_on(AdapterKind::Integrated, None).expect_err("default on an integrated GPU is refused");
+        assert!(refused.contains("Default") && refused.contains(INTEGRATED_GPU_TICKET), "{refused}");
+        assert!(BurnDevice::Rocm(0).check_embedder_on(AdapterKind::Integrated, None).is_err(), "rocm:0 falling back to an integrated default");
+        assert_eq!(BurnDevice::Default.check_embedder_on(AdapterKind::Integrated, Some("1")), Ok(BurnDevice::Default));
+        for adapter in [AdapterKind::Discrete, AdapterKind::Cpu, AdapterKind::Other, AdapterKind::Unknown] {
+            assert_eq!(BurnDevice::Default.check_embedder_on(adapter, None), Ok(BurnDevice::Default), "{adapter:?}");
+        }
+        assert_eq!(BurnDevice::IntegratedGpu(0).resolved_adapter(), AdapterKind::Integrated);
+        assert_eq!(BurnDevice::DiscreteGpu(1).resolved_adapter(), AdapterKind::Discrete);
     }
 
     /// **Le chiffre qui décidait de ne pas activer ROCm — et ce qu'il mesurait.**
