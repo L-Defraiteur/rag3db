@@ -2478,9 +2478,21 @@ impl Node for FuseResultsNode {
             fused = ranges.into_iter().map(|(_, _, u)| u).collect();
         }
 
-        // **A name typed exactly first** (c7's decision (B)): the results whose name field is the query, case included,
-        // go before every other, in the order they had; the rest follows in its order.
-        if let (Some(champ), Some(q)) = (self.exact_name.as_deref(), requete.as_deref()) {
+        // **A row without a vector never passes the best row with a vector** (c7, 20 November 2026; the bench on (A'):
+        // `manifest` and `s = index.read_text()`, without a vector, stayed first by the dominant `bm25_exact`, a word
+        // of the query being their name or in their content). After the dominant ones, the first row with a vector
+        // goes before the rows without one that preceded it; they follow it in their order. Only the name typed
+        // exactly, below, brings a row without a vector first.
+        if let Some(p) = fused.iter().position(|u| !u.sans_vecteur) {
+            if p > 0 {
+                let meilleur = fused.remove(p);
+                fused.insert(0, meilleur);
+            }
+        }
+
+        // **A name typed exactly first** (c7's decision (B)): the results whose name field is the whole query, trimmed,
+        // case included, go before every other, in the order they had; the rest follows in its order.
+        if let (Some(champ), Some(q)) = (self.exact_name.as_deref(), requete.as_deref().map(str::trim)) {
             // A folded container (it folds children) is never brought first by its name.
             let feuille = |u: &UnifiedResult| match &self.exact_name_leaf {
                 None => true,
@@ -3852,6 +3864,45 @@ mod tests {
         FuseResultsNode::new("fuse").with_exact_name("name").execute(&mut ctx).unwrap();
         let ordre: Vec<String> = results_of(&mut ctx).iter().map(|r| r.uuid.clone()).collect();
         assert_eq!(ordre, vec!["a".to_string(), "b".to_string()], "the case counts: « Beta » is not « beta »");
+    }
+
+    /// **A row without a vector never passes the best row with a vector, dominant signal included, unless the query
+    /// is its name** (c7, 20 November 2026; the bench on (A'): « parse a json manifest » still gave `manifest`, a
+    /// variable of 51 characters, and « read_text » `s = index.read_text()`, first: the dominant `bm25_exact` brought
+    /// them before everything). `d` is first by `bm25_exact`, without a vector; `f` has a vector: `f` comes first.
+    /// Typed exactly, `d`'s name gives `d` first.
+    #[test]
+    fn a_row_without_a_vector_does_not_pass_the_best_vector_row_even_when_dominant() {
+        let nomme = |uuid: &str, name: &str, score: f64| {
+            let mut r = make_unified_result(uuid, score);
+            r.data = Some(std::collections::BTreeMap::from([("name".to_string(), CypherValue::String(name.into()))]));
+            r
+        };
+        let sans = |uuid: &str, name: &str, score: f64| UnifiedResult { sans_vecteur: true, ..nomme(uuid, name, score) };
+        let jouer = |requete: &str| -> Vec<String> {
+            let mut ctx = NodeContext::new();
+            let mut exact = sans("d", "manifest", 5.0);
+            exact.signal = Some("bm25_exact".into());
+            ctx.set_input("signals", PortValue::new(vec![exact]));
+            ctx.set_input("bm25", PortValue::new(vec![sans("d", "manifest", 9.0), nomme("f", "parse_declaration", 8.0), nomme("m", "load", 7.0)]));
+            ctx.set_input("vector", PortValue::new(vec![nomme("f", "parse_declaration", 0.9), nomme("g", "read_manifest", 0.8)]));
+            ctx.set_input("query", PortValue::new(QueryPayload {
+                target_name: "Scope".into(),
+                query: requete.into(),
+                options: SearchOptions::default(),
+                target: None,
+                embedding: None,
+                sparse: None,
+                scan: false,
+            }));
+            FuseResultsNode::new("fuse").with_dominant("bm25_exact").with_exact_name("name").execute(&mut ctx).unwrap();
+            results_of(&mut ctx).iter().map(|r| r.uuid.clone()).collect()
+        };
+        let ordre = jouer("parse a json manifest");
+        assert_eq!(ordre.first().map(String::as_str), Some("f"), "a row without a vector leads by a word: {ordre:?}");
+        assert_eq!(ordre.get(1).map(String::as_str), Some("d"), "it comes right after the best row with a vector: {ordre:?}");
+        let ordre = jouer("manifest");
+        assert_eq!(ordre.first().map(String::as_str), Some("d"), "its name typed exactly gives it first: {ordre:?}");
     }
 
     /// **A row without a vector is counted last by the dense signal, not at zero, and never leads by a sense it has
