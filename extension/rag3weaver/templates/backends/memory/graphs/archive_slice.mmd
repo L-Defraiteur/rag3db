@@ -23,9 +23,9 @@
 %% result: done.result
 
 graph LR
-    render["GraphNode(graph='@builtin:backends/memory/graphs/render_turns.mmd', run=$run, from_turn=$from_turn, to_turn=$to_turn)"]
+    render["GraphNode(graph='@graphs/render_turns.mmd', run=$run, from_turn=$from_turn, to_turn=$to_turn)"]
     slice["RhaiNode(script_id=archive_slice_input, inputs='run,from_turn,to_turn,titre,contenu,chemin', run=$run, from_turn=$from_turn, to_turn=$to_turn, titre=$titre, contenu=$contenu, chemin=$chemin)"]
-    core["ForEachNode(graph='@builtin:backends/memory/graphs/archive_slice_core.mmd', origine=$origine, jour=$jour, candidates=$candidates, search_options=$search_options, allow_create=$allow_create, context=$context, context_title=$context_title, query_chars=$query_chars, step2_input=$step2_input, raw_turns_max_tokens=$raw_turns_max_tokens, extract_max_tokens=$extract_max_tokens, extract_instruction=$extract_instruction, extract_reasoning=$extract_reasoning, trace=$trace)"]
+    core["ForEachNode(graph='@graphs/archive_slice_core.mmd', origine=$origine, jour=$jour, candidates=$candidates, search_options=$search_options, allow_create=$allow_create, context=$context, context_title=$context_title, query_chars=$query_chars, step2_input=$step2_input, raw_turns_max_tokens=$raw_turns_max_tokens, extract_max_tokens=$extract_max_tokens, extract_instruction=$extract_instruction, extract_reasoning=$extract_reasoning, trace=$trace)"]
     done["RhaiNode(script_id=archive_slice_done, inputs='run,from_turn,to_turn', run=$run, from_turn=$from_turn, to_turn=$to_turn)"]
     render -->|result:value| slice
     slice -->|result:elements| core

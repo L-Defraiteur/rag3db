@@ -15,7 +15,7 @@
 
 graph LR
     requete["RhaiNode(script_id=archive_query, inputs='section,query_chars', section=$element, query_chars=$query_chars)"]
-    recall["ForEachNode(graph='@builtin:backends/memory/graphs/archive_recall.mmd', search_options=$search_options)"]
+    recall["ForEachNode(graph='@graphs/archive_recall.mmd', search_options=$search_options)"]
     prepare["RhaiNode(script_id=archive_candidates, inputs='section,candidates,allow_create,proposed,context,context_title', section=$element, candidates=$candidates, allow_create=$allow_create, proposed=$proposed, context=$context, context_title=$context_title)"]
     decide["Decide(via='llm', labels_from='candidates', labels='none|create', field='prompt', as='verdict', name_as='subject', about_as='subject_about', max_tokens=4096, instruction='$instruction')"]
     decided["RhaiNode(script_id=archive_decided, inputs='allow_create,proposed', allow_create=$allow_create, proposed=$proposed)"]

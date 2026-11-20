@@ -11,7 +11,7 @@
 
 graph LR
     where["RhaiNode(script_id=turns_where, inputs='run,role,tool_name,status,since,until', run=$run, role=$role, tool_name=$tool_name, status=$status, since=$since, until=$until)"]
-    select["ForEachNode(graph='@builtin:backends/memory/graphs/turns_select.mmd')"]
+    select["ForEachNode(graph='@graphs/turns_select.mmd')"]
     list["RhaiNode(script_id=turns_list, inputs='limit', limit=$limit)"]
     where -->|result:elements| select
     select -->|list:value| list

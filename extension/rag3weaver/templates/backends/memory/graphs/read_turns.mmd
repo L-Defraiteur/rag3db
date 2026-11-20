@@ -7,7 +7,7 @@
 
 graph LR
     filter["RhaiNode(script_id=turns_filter, inputs='run,from_turn,to_turn', run=$run, from_turn=$from_turn, to_turn=$to_turn)"]
-    select["ForEachNode(graph='@builtin:backends/memory/graphs/turns_select.mmd')"]
+    select["ForEachNode(graph='@graphs/turns_select.mmd')"]
     read["RhaiNode(script_id=read_turns, inputs='run,from_turn,to_turn', run=$run, from_turn=$from_turn, to_turn=$to_turn)"]
     filter -->|result:elements| select
     select -->|list:value| read

@@ -5,7 +5,7 @@
 
 graph LR
     lr["RhaiNode(script='input.groupe.recopies', inputs='groupe', groupe=$groupe)"]
-    rec["ForEachNode(graph='@builtin:backends/memory/graphs/ecrire_apport.mmd', element='ligne')"]
+    rec["ForEachNode(graph='@graphs/ecrire_apport.mmd', element='ligne')"]
     out["RhaiNode(script='input.groupe', inputs='groupe', groupe=$groupe)"]
     lr -->|result:elements| rec
     rec -->|list:value| out
