@@ -2833,6 +2833,7 @@ fn every_parameter_of_the_teammates_tools_is_described() {
         }
     }
     let mut defs = super::teammate::Step::tool_defs();
+    defs.push(super::teammate::Step::fetch_def());
     defs.push(super::teammate::Step::send_to_session_def());
     let mut manquent = Vec::new();
     for d in &defs {
