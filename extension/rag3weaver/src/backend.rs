@@ -8275,6 +8275,10 @@ mod tests {
                 .map(|q| {
                     let mut r = backend.call("search_code", json!({"query": q, "options": {}})).unwrap_or_else(|e| panic!("{q}: {e}"));
                     r.as_object_mut().and_then(|o| o.remove("run"));
+                    // The two manifests differ by `fts_positions`: their template versions differ, and only that
+                    // field. The hash is set aside; everything else, its reload number included, stays compared.
+                    let hash = r.pointer_mut("/metadata/template").and_then(Value::as_object_mut).and_then(|t| t.remove("hash"));
+                    assert!(hash.is_some(), "{q}: the answer says its template version: {r}");
                     assert!(r["result"].as_array().is_some_and(|a| !a.is_empty()), "{q} finds something: {r}");
                     r
                 })
