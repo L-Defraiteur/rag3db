@@ -660,8 +660,97 @@ impl DaemonHost {
     /// session's state. The path is checked first, before any `git`, in this order: Lucie's tree, sairen, another
     /// session's folder, outside the session's folder, a path already taken.
     pub fn open_view(&self, session: Option<&str>, manifest: &Path, lot: &str, session_dir: Option<&str>) -> Value {
-        let _ = (session, manifest, lot, session_dir, &self.espace);
-        json!({ "ok": false, "error": "open_view : pas encore" }) // RED STUB.
+        let r = self.check_session(session).and_then(|s| {
+            let qui = s.claude_name.clone().ok_or("open_view : la session Claude Code qui appelle n'est pas connue (son nom au registre) ; le client mince la donne à POST /session")?;
+            let claude = s.claude_session.clone().ok_or("open_view : la session Claude Code qui appelle n'est pas connue (son sessionId)")?;
+            let (espace, table) = self.espace_et_table();
+            let mut dossiers = lire_la_table_des_dossiers(&table)?;
+            let dossier = match session_dir {
+                Some(d) => d.to_string(),
+                None => dossiers
+                    .iter()
+                    .find(|(k, v)| k.as_str() != "_" && v.as_str() == Some(qui.as_str()))
+                    .map(|(k, _)| k.clone())
+                    .ok_or_else(|| format!("open_view : aucun dossier inscrit au nom de « {qui} » dans {} ; donnez session_dir", table.display()))?,
+            };
+            let date = date_locale();
+            let chemin = normaliser(&espace.join(&dossier).join(format!("{date}-{lot}")));
+            let refus = |regle: &str| format!("open_view : {} refusé — {regle}", chemin.display());
+            // 1. Lucie's tree.
+            let lucie = espace.join("rag3db");
+            if chemin.starts_with(&lucie) || dossier == "rag3db" {
+                return Err(refus(&format!("c'est l'arbre de Lucie ({}) : l'hôte n'y crée rien", lucie.display())));
+            }
+            // 2. sairen.
+            let premier = chemin.strip_prefix(&espace).ok().and_then(|r| r.components().next()).map(|c| c.as_os_str().to_string_lossy().to_string());
+            if dossier.starts_with("sairen") || premier.as_deref().is_some_and(|p| p.starts_with("sairen")) {
+                return Err(refus("c'est sairen : l'hôte n'y crée rien"));
+            }
+            // 3. Another session's folder, or a folder on the disk the table does not know.
+            match dossiers.get(&dossier).and_then(Value::as_str) {
+                Some(autre) if autre != qui => return Err(refus(&format!("le dossier « {dossier} » est à la session « {autre} »"))),
+                Some(_) => {}
+                None if espace.join(&dossier).exists() => {
+                    return Err(refus(&format!("le dossier « {dossier} » existe sans propriétaire inscrit dans {} : l'hôte ne devine pas", table.display())));
+                }
+                None => {}
+            }
+            // 4. Outside the session's folder: a lot that is not a plain name, or a path that leaves the folder.
+            let nom_sain = !lot.is_empty() && lot.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+            if !nom_sain || chemin.parent() != Some(espace.join(&dossier).as_path()) {
+                return Err(refus(&format!("hors du dossier de la session ({}) : le lot est un nom fait de lettres, de chiffres, de - et de _", espace.join(&dossier).display())));
+            }
+            // 5. A path already taken.
+            if chemin.exists() {
+                return Err(refus("chemin déjà pris"));
+            }
+            // The guards hold: the backend's repository, then git.
+            let hosted = self.hosted(manifest)?;
+            let depot = self.with_backend(&hosted, |b| b.prepared().workspace_root())?.ok_or("open_view : ce backend n'a pas de dépôt (pas de racine de travail)")?;
+            let git = |dans: &Path, args: &[&str]| -> Result<String, String> {
+                let o = std::process::Command::new("git").arg("-C").arg(dans).args(args).output().map_err(|e| format!("git : {e}"))?;
+                if o.status.success() {
+                    Ok(String::from_utf8_lossy(&o.stdout).trim().to_string())
+                } else {
+                    Err(format!("git {} : {}", args.join(" "), String::from_utf8_lossy(&o.stderr).trim()))
+                }
+            };
+            let base = if git(&depot, &["rev-parse", "--verify", "-q", "origin/master"]).is_ok() { "origin/master" } else { "HEAD" };
+            let branche = format!("{dossier}/{lot}");
+            if dossiers.get(&dossier).is_none() {
+                dossiers.insert(dossier.clone(), json!(qui));
+                std::fs::write(&table, Value::Object(dossiers.clone()).to_string()).map_err(|e| format!("{} : {e}", table.display()))?;
+            }
+            std::fs::create_dir_all(espace.join(&dossier)).map_err(|e| format!("{} : {e}", espace.join(&dossier).display()))?;
+            git(&depot, &["worktree", "add", "-q", "-b", &branche, &chemin.to_string_lossy(), base])?;
+            git(&chemin, &["submodule", "update", "-q", "--init"]).map_err(|e| format!("open_view : {} créé, mais son sous-module : {e}", chemin.display()))?;
+            let nom = format!("{dossier}/{date}-{lot}");
+            let target = std::env::var_os("HOME")
+                .map(|h| Path::new(&h).join(format!(".cache/rag3weaver-build/target-{dossier}/{date}-{lot}")))
+                .unwrap_or_default();
+            let ouverte = json!({ "name": nom, "path": chemin, "branch": branche, "target": target, "from": base });
+            self.noter_l_ouverture(&claude, &nom, &ouverte)?;
+            let mut r = ouverte;
+            r["ok"] = json!(true);
+            Ok(r)
+        });
+        r.unwrap_or_else(|e| op_response(Err(e)))
+    }
+
+    fn espace_et_table(&self) -> (std::path::PathBuf, std::path::PathBuf) {
+        if let Some(x) = self.espace.lock().unwrap_or_else(|p| p.into_inner()).clone() {
+            return x;
+        }
+        let home = std::env::var_os("HOME").map(std::path::PathBuf::from).unwrap_or_default();
+        (home.join("git_workspaces"), home.join(".config/rag3weaver/dossiers-des-sessions.json"))
+    }
+
+    /// Notes a view opened by the host for a Claude Code session, beside its active one.
+    fn noter_l_ouverture(&self, claude: &str, nom: &str, ouverte: &Value) -> Result<(), String> {
+        let chemin = self.fichier_de_vue(claude).ok_or_else(|| format!("session Claude Code illisible : « {claude} »"))?;
+        let mut etat: Value = std::fs::read_to_string(&chemin).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_else(|| json!({}));
+        etat["ouvertes"][nom] = ouverte.clone();
+        ecrire_par_renommage(&chemin, &etat)
     }
 
     /// The view by default of a session, `None` without one.
@@ -693,20 +782,11 @@ impl DaemonHost {
 
     fn garder_la_vue(&self, claude: &str, view: Option<&Value>) -> Result<(), String> {
         let Some(chemin) = self.fichier_de_vue(claude) else { return Err(format!("session Claude Code illisible : « {claude} »")) };
-        match view {
-            None => match std::fs::remove_file(&chemin) {
-                Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(format!("{} : {e}", chemin.display())),
-                _ => Ok(()),
-            },
-            Some(v) => {
-                let dir = chemin.parent().unwrap();
-                std::fs::create_dir_all(dir).map_err(|e| format!("{} : {e}", dir.display()))?;
-                let tmp = chemin.with_extension("json.tmp");
-                std::fs::write(&tmp, json!({ "active": v, "at_ms": crate::catalog::retard::now_ms() }).to_string())
-                    .and_then(|_| std::fs::rename(&tmp, &chemin))
-                    .map_err(|e| format!("{} : {e}", chemin.display()))
-            }
-        }
+        // The views the host opened stay noted beside the active one.
+        let mut etat: Value = std::fs::read_to_string(&chemin).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_else(|| json!({}));
+        etat["active"] = view.cloned().unwrap_or(Value::Null);
+        etat["at_ms"] = json!(crate::catalog::retard::now_ms());
+        ecrire_par_renommage(&chemin, &etat)
     }
 
     /// The name a view value is known by: its layer, or `worktree:<path>`.
@@ -2212,6 +2292,53 @@ impl Default for DaemonHost {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Writes `v` at `chemin` by a temporary file and a rename, its folder created.
+fn ecrire_par_renommage(chemin: &Path, v: &Value) -> Result<(), String> {
+    let dir = chemin.parent().ok_or_else(|| format!("{} : sans dossier", chemin.display()))?;
+    std::fs::create_dir_all(dir).map_err(|e| format!("{} : {e}", dir.display()))?;
+    let tmp = chemin.with_extension("json.tmp");
+    std::fs::write(&tmp, v.to_string()).and_then(|_| std::fs::rename(&tmp, chemin)).map_err(|e| format!("{} : {e}", chemin.display()))
+}
+
+/// The table of the folders (`{folder: session name}`, `_` a comment); absent, it is empty; unreadable, a refusal.
+fn lire_la_table_des_dossiers(table: &Path) -> Result<serde_json::Map<String, Value>, String> {
+    match std::fs::read_to_string(table) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(serde_json::Map::new()),
+        Err(e) => Err(format!("{} : {e}", table.display())),
+        Ok(t) => match serde_json::from_str::<Value>(&t) {
+            Ok(Value::Object(m)) => Ok(m),
+            Ok(_) => Err(format!("{} : un objet {{dossier: session}} attendu", table.display())),
+            Err(e) => Err(format!("{} : {e}", table.display())),
+        },
+    }
+}
+
+/// Today's local date, `dd-mm-yyyy`, as the worktrees of the sessions are named.
+fn date_locale() -> String {
+    std::process::Command::new("date")
+        .arg("+%d-%m-%Y")
+        .output()
+        .ok()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .filter(|d| d.len() == 10)
+        .unwrap_or_else(|| "00-00-0000".to_string())
+}
+
+/// A path with its `.` and `..` resolved by the letter, without the disk (a guard looks before anything exists).
+fn normaliser(p: &Path) -> std::path::PathBuf {
+    let mut out = std::path::PathBuf::new();
+    for c in p.components() {
+        match c {
+            std::path::Component::ParentDir => {
+                out.pop();
+            }
+            std::path::Component::CurDir => {}
+            autre => out.push(autre),
+        }
+    }
+    out
 }
 
 /// La cellule d'une session : `{org, project}`, validée. Sans cellule, la
