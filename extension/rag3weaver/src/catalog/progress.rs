@@ -666,6 +666,12 @@ impl Catalog {
     /// and the rate of the catalog's embedder: its key (an index's rate), else the bench's declared rate halved and said
     /// so, else unknown.
     pub fn vectors_due_for_view(&self, layer: &str) -> Result<crate::views::VectorsDue, CatalogError> {
+        self.vectors_due_for_view_from(layer, None)
+    }
+
+    /// [`Self::vectors_due_for_view`], the declaration of the bench given (RED STUB: ignored).
+    pub fn vectors_due_for_view_from(&self, layer: &str, declaration: Option<&std::path::Path>) -> Result<crate::views::VectorsDue, CatalogError> {
+        let _ = declaration;
         self.check_reopen()?;
         let par_couche: std::collections::BTreeSet<String> = self.generations.as_ref().map(|v| v.tables.iter().cloned().collect()).unwrap_or_default();
         let (mut chunks, mut chars) = (0usize, 0f64);
@@ -838,8 +844,8 @@ impl Catalog {
 mod tests {
 
     /// **What a view owes in vectors, and from which rate** (page 05 of 19 November). Text ingested without embedding
-    /// leaves chunks due; no rate anywhere: « débit inconnu »; a declared bench rate: halved and said « banc × 0,5 »; the
-    /// catalog's key of the service: taken first, said « index ».
+    /// leaves chunks due; no rate anywhere: « unknown »; a declared bench rate, in embarquement's declaration: halved and
+    /// said « bench »; the catalog's key of the service: taken first, said « index ».
     #[cfg(all(feature = "rag3db-native", feature = "code"))]
     #[test]
     fn what_a_view_owes_in_vectors_and_from_which_rate() {
@@ -854,21 +860,27 @@ mod tests {
         let src = crate::code_tools::Snapshot::new("depot", (0..5).map(|i| (format!("f{i}.rs"), format!("pub fn f{i}() -> u32 {{\n    {i}\n}}\n"))));
         let lot: Vec<(String, Option<String>)> = (0..5).map(|i| (format!("f{i}.rs"), Some(format!("pub fn f{i}() -> u32 {{\n    {i}\n}}\n")))).collect();
         crate::code_sync::reingest_files(&mut cat, &src, &lot, crate::disponibilite::Disponibilites::RECHERCHE_TEXTE).unwrap();
+        // The declaration given by its path, never by the environment: the lib's tests run in parallel.
         let dir = tempfile::tempdir().unwrap();
         let declares = dir.path().join("embedding-rates.json");
-        std::env::set_var("RAG3WEAVER_EMBEDDING_RATES", &declares);
-        let du = cat.vectors_due_for_view(crate::generations::COUCHE_DU_BACKEND).unwrap();
+        let couche = crate::generations::COUCHE_DU_BACKEND;
+        let du = cat.vectors_due_for_view_from(couche, Some(&declares)).unwrap();
         assert!(du.chunks > 0, "text ingested without embedding leaves no chunk due: {du:?}");
         assert!(du.mean_chars > 0.0, "{du:?}");
         assert_eq!((du.chars_per_s, du.rate_from), (None, Some("unknown")), "a rate without key nor declaration: {du:?}");
+        // embarquement's form (its page 05 of 19 November): `{"version": 1, "rates": {"<model>:<address>@<host>": {…}}}`.
         let place = Catalog::embedding_rate_place(cat.embedder.as_deref().unwrap()).expect("the place of the embedder");
-        std::fs::write(&declares, serde_json::json!({ format!("{}:{place}", cat.embedder.as_ref().unwrap().name()): 100_000 }).to_string()).unwrap();
-        let du = cat.vectors_due_for_view(crate::generations::COUCHE_DU_BACKEND).unwrap();
+        let cle = format!("{}:{place}", cat.embedder.as_ref().unwrap().name());
+        std::fs::write(
+            &declares,
+            serde_json::json!({ "version": 1, "rates": { cle: { "chars_per_second": 100_000, "measured_at": "2026-11-18", "source": "the witness" } } }).to_string(),
+        )
+        .unwrap();
+        let du = cat.vectors_due_for_view_from(couche, Some(&declares)).unwrap();
         assert_eq!((du.chars_per_s, du.rate_from), (Some(50_000.0), Some("bench")), "the declared bench rate is not halved and said: {du:?}");
         cat.note_measured_embedding_rate(crate::estimate::Rate { chars_per_second: 30_000.0 }).unwrap();
-        let du = cat.vectors_due_for_view(crate::generations::COUCHE_DU_BACKEND).unwrap();
+        let du = cat.vectors_due_for_view_from(couche, Some(&declares)).unwrap();
         assert_eq!((du.chars_per_s, du.rate_from), (Some(30_000.0), Some("index")), "the catalog's key does not come first: {du:?}");
-        std::env::remove_var("RAG3WEAVER_EMBEDDING_RATES");
     }
 
     use super::*;
