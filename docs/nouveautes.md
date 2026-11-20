@@ -1,5 +1,12 @@
 # Nouveautés
 
+- 20 novembre 2026 — **Le service d'embarquement vérifie sa carte avant de servir.** Au démarrage, il embarque les
+  textes de la référence de son modèle, seuls puis dans ses vrais lots, et les compare aux vecteurs du modèle
+  d'origine. Une carte qui calcule faux, ou qui ne répond pas en 60 s, est refusée, et la raison est dite. Avant, l'iGPU
+  Intel de luciepc rendait des vecteurs faux en lot sans un mot. Le résultat se lit dans `/sante`, sous `self_check`.
+  La référence se pose à côté des poids (`scripts/install_embedder_reference.py`) ; sans elle, le service dit qu'il
+  n'a pas pu se vérifier. Le délai se règle par `RAG3WEAVER_SELF_CHECK_DEADLINE_S`.
+
 - 19 novembre 2026 — **Une seule notification quand l'index d'une vue est prêt.** Quand une recherche ou une lecture
   a répondu « index pas prêt », le serveur MCP de l'agent surveille cette vue. Quand elle est prête, il envoie une
   seule notification (« l'index de la vue … est prêt : texte et vecteurs ») ; rien à chaque réindexation. La veille
