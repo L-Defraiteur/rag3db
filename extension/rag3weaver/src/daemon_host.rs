@@ -310,6 +310,7 @@ pub struct DaemonHost {
     vues_en_ecriture: Mutex<HashMap<String, (std::time::Instant, usize)>>,
     /// The witnesses' gate: the background writing of a view waits on it while it is shut.
     #[cfg(test)]
+    #[cfg_attr(not(feature = "code"), allow(dead_code))]
     porte_d_ecriture: Mutex<Option<PorteDEcriture>>,
     /// **Soi, en lien faible** : posé par [`DaemonHost::se_connaitre`] (le service, les
     /// témoins), il permet à l'hôte de donner aux backends qu'il ouvre l'hôte des
@@ -2419,6 +2420,8 @@ impl PorteDEcriture {
         self.0 .1.notify_all();
     }
 
+    // Waited on by the background writing, which needs the code feature.
+    #[cfg_attr(not(feature = "code"), allow(dead_code))]
     fn attendre(&self) {
         let mut ouverte = self.0 .0.lock().unwrap_or_else(|e| e.into_inner());
         while !*ouverte {
