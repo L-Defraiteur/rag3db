@@ -176,6 +176,8 @@ pub mod connection;
 pub mod generations;
 pub mod dialect;
 pub mod embedder;
+/// The embedder checks itself at start against a reference (20 November 2026).
+pub mod embedder_check;
 #[cfg(feature = "daemon")]
 pub mod http_embedder;
 pub mod chat;

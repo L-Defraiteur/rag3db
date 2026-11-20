@@ -97,6 +97,11 @@ pub struct Identite {
     /// Absent : fournisseur ancien ou sans instrumentation, jamais « chaud ».
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub chauffe: Option<std::collections::BTreeMap<String, Chauffe>>,
+    /// **The self-check at start**, by capability (20 November 2026) : the card
+    /// verified against the model's reference, refused, or not verified and why.
+    /// Absent : a provider that does not check itself.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub self_check: Option<std::collections::BTreeMap<String, crate::embedder_check::SelfCheck>>,
     /// Toujours [`SERVICE`].
     pub service: String,
     /// Le nom du modèle servi, tel que l'embedder le donne.
@@ -337,6 +342,8 @@ pub struct EmbedDaemon {
     cut_texts: std::sync::atomic::AtomicU64,
     /// The model's truncations during the warm-up : not traffic (19 November 2026).
     warmup_truncations: usize,
+    /// The self-check at start (20 November 2026).
+    self_check: Option<crate::embedder_check::SelfCheck>,
 }
 
 impl EmbedDaemon {
@@ -371,6 +378,7 @@ impl EmbedDaemon {
             max_chars: MAX_CHARS_PAR_TEXTE,
             cut_texts: std::sync::atomic::AtomicU64::new(0),
             warmup_truncations: 0,
+            self_check: None,
         }
     }
 
@@ -423,6 +431,22 @@ impl EmbedDaemon {
 
     pub fn avec_activation(mut self, activation: Option<IdentiteActivation>) -> Self {
         self.activation = activation;
+        self
+    }
+
+    /// **The embedder checks itself before serving** (20 November 2026, see
+    /// [`crate::embedder_check`]) : the reference's texts alone, then cycled to
+    /// `lot_max` in this service's own batches ([`Self::par_lots`]), against the
+    /// original model's vectors. The result is in the identity, `self_check.embed`.
+    pub fn self_check(mut self, reference: Option<&crate::embedder_check::Reference>, weights_sha256: impl FnOnce() -> Result<String, String>) -> Self {
+        let check = crate::embedder_check::check(
+            |texts: &[String]| self.embedder.embed(texts),
+            |texts: &[String]| self.par_lots(texts, |lot| self.embedder.embed(lot)),
+            reference,
+            weights_sha256,
+            self.lot_max,
+        );
+        self.self_check = Some(check);
         self
     }
 
@@ -660,6 +684,7 @@ impl EmbedDaemon {
         Identite {
             activation: self.activation.clone(),
             chauffe: self.chauffe.clone(),
+            self_check: self.self_check.clone().map(|c| std::collections::BTreeMap::from([("embed".to_string(), c)])),
             service: SERVICE.to_string(),
             modele: self.embedder.name().to_string(),
             dim: self.embedder.dim(),
@@ -1617,6 +1642,31 @@ impl DualEmbedder for DaemonEmbedder {
 
 #[cfg(test)]
 mod tests {
+    /// **The self-check is said in the identity, `/sante`** (20 November 2026) : a model
+    /// that computes wrong in the service's batches is refused, with the batch's gap.
+    #[test]
+    fn the_self_check_is_said_in_the_identity() {
+        use super::*;
+        struct WrongInBatch;
+        impl Embedder for WrongInBatch {
+            fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
+                Ok(texts.iter().map(|t| vec![t.len() as f32 / 100.0 + if texts.len() > 1 { 0.1 } else { 0.0 }, 0.5]).collect())
+            }
+            fn dim(&self) -> usize { 2 }
+            fn name(&self) -> &str { "wrong-in-batch" }
+        }
+        let texts: Vec<String> = ["un texte", "un texte un peu plus long"].iter().map(|s| s.to_string()).collect();
+        let vectors = texts.iter().map(|t| vec![t.len() as f32 / 100.0, 0.5]).collect();
+        let reference = crate::embedder_check::Reference { weights_sha256: "w".into(), tolerance: 5e-4, texts, vectors };
+        let daemon = EmbedDaemon::new(Arc::new(WrongInBatch)).self_check(Some(&reference), || Ok("w".into()));
+        let identity = daemon.identite();
+        let check = identity.self_check.as_ref().and_then(|m| m.get("embed")).expect("the self-check in the identity");
+        assert_eq!(check.state, crate::embedder_check::CheckState::Refused, "{check:?}");
+        assert!(check.batch_gap.unwrap_or(0.0) > 0.09 && check.batch_texts == 32, "{check:?}");
+        let json = serde_json::to_string(&identity).unwrap();
+        assert!(json.contains(r#""self_check":{"embed":{"state":"refused""#), "{json}");
+    }
+
     #[test]
     fn chauffe_partielle_garde_erreurs_et_formes() {
         use super::*;
