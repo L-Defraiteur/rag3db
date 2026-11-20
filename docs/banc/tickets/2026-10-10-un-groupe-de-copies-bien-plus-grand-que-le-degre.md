@@ -3,8 +3,13 @@
 - **État** : ouvert, confort.
 - **Gravité** : réponse fausse. Des lignes ne sont plus joignables par la recherche exhaustive.
   Aucun plantage.
-- **Atteignable en service** : seulement avec des centaines de lignes du même vecteur. Le plus
-  grand groupe d'un corpus réel mesuré est de 49 copies, et il est retrouvé.
+- **Atteignable en service** : oui, sur un corpus réel (corrigé le 20 novembre 2026, hotfixs). code-lourd compte
+  2 204 groupes de copies exactes parmi ses 127 198 morceaux, le plus grand de 404 lignes. Un amas de quatre
+  quasi-copies (deux paires de copies exactes, à distance nulle entre elles, le voisin suivant à 0,09) y perd deux ou
+  trois de ses membres à presque chaque bâti : un nœud du dehors en garde un et écarte les autres comme « couverts ».
+  C'est le mécanisme du ticket du pont, que son correctif du bâti couvre (mesures :
+  `docs/coeur-cpp-hotfixs-tickets/20-11-2026/04-le-graphe-hnsw-parcouru-sur-des-vecteurs-reels.md`). Avant : « seulement avec des centaines de lignes du même vecteur ; le plus
+  grand groupe d'un corpus réel mesuré est de 49 copies, et il est retrouvé ».
 - **Touche rag3weaver** : non. L'arbre principal n'écrit plus de vecteur nul (10 octobre), et ce
   sont les vecteurs nuls du MockEmbedder qui avaient fait plusieurs centaines de copies en août.
 - **Famille** : moteur

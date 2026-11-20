@@ -1,7 +1,15 @@
 # Les points les plus isolés d'un index HNSW ne sont pas atteints
 
-- **État** : ouvert, en faible gravité (20 novembre 2026, au mot de c7 : un défaut connu et non corrigé garde son
-  ticket). Fermé un moment le même jour, puis rouvert. La mesure de hotfixs sur des vecteurs réels
+- **État** : ouvert, **remonté en réponse fausse** le 20 novembre au soir et rattaché au ticket du pont
+  (`docs/banc/tickets/2026-10-11-l-elagage-peut-couper-le-dernier-pont-vers-une-region.md`), dont le correctif du bâti
+  le couvre (mesures : `docs/coeur-cpp-hotfixs-tickets/20-11-2026/04-le-graphe-hnsw-parcouru-sur-des-vecteurs-reels.md`). Le parcours de la couche basse sur les 127 198 vrais
+  vecteurs trouve de 0 à 6 lignes injoignables par bâti, dont des points isolés ordinaires (plus proche voisin à
+  0,10 et 0,12), qu'aucune recherche ne rend : environ 3e-5 par bâti.
+  **Une leçon de mesure** : le « 200 sur 200 » ci-dessous ne pouvait pas voir ce taux. Il cherchait les 200 lignes
+  les plus isolées d'un **échantillon de 2 000**, et des pertes de 0 à 6 lignes sur 127 000 n'ont presque aucune chance
+  d'y tomber. Une absence de perte se mesure sur toute la table (un parcours du graphe), pas sur un échantillon.
+- **Avant, le même jour** : en faible gravité (au mot de c7 : un défaut connu et non corrigé garde son ticket).
+  Fermé un moment, puis rouvert. La mesure de hotfixs sur des vecteurs réels
   (`docs/coeur-cpp-hotfixs-tickets/20-11-2026/03-les-points-isoles-sur-des-vecteurs-reels.md` ; branche
   `seed-measure-real-vectors`, 8caebb63e9) : sur les 126 998 `Scope_Chunk` indexés de code-lourd, 200 points isolés
   sur 200 dans leur propre top 10 et un rappel@10 de 0,998 à 0,999, avec ou sans amorce. Le défaut est réel sur la base
