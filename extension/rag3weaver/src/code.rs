@@ -706,7 +706,10 @@ fn usage_properties(sites: &[UsageSite]) -> BTreeMap<String, CypherValue> {
 // sous `workspace.variable_min_chars`, 80) n'a pas de morceau, donc pas de vecteur, quel que soit son type parmi
 // elles ; elle garde son document de plein texte (le 88 % de luciepc : `s=index.read_text()`, 18 caractères,
 // gagnait au vecteur). Une fonction courte garde son vecteur.
-pub const REGLES_DE_L_ANALYSE: u32 = 13;
+// 14 (20 novembre 2026) : un morceau de code tient dans la fenêtre du plus petit embarqueur de la base — borné en
+// entier (cœur et contexte), en octets puis en jetons comptés par son tokenizer (granite : 512 ; ticket
+// d'embarquement, 72,5 % des morceaux la dépassaient).
+pub const REGLES_DE_L_ANALYSE: u32 = 14;
 
 /// **La version de l'analyse** (page 06, § 13) : le commit du parseur lié, [`REGLES_DE_L_ANALYSE`] et le
 /// gabarit du code (le découpage et les champs déclarés de `File` et de `Scope`), hachés.
