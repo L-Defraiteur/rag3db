@@ -109,7 +109,7 @@ cat > "$D/poste.sh" <<'Q'
 [ -n "${FAKE_POSTE_DOWN:-}" ] && { echo "poste: refusé (doublure)"; exit 2; }
 case "$1" in
   lourd) shift; [ "${POSTE_MEM_MAX:-}" = 32G ] || { echo "poste: refusé avant la file : une validation sous un plafond de 40G"; exit 2; }
-         echo "${POSTE_VOIE:-}" >> "$POSTE_VOIES"; exec "$@" ;;
+         echo "${POSTE_VOIE:-}" >> "$POSTE_VOIES"; echo "$1" >> "${POSTE_CMDS:-/dev/null}"; exec "$@" ;;
   push) shift 3; exec "$@" ;;
 esac
 exit 2
@@ -671,4 +671,11 @@ grep -q '^as-1	' "$D/pusher/queue.tsv" && ok "l'attestation du sommet d'une pile
 out=$(PUSHER_EXIGER_ATTESTATION=1 CHECK_FEATURES_LOG="$D/att-sommet" P enqueue as-x as-x "$h3" rust some_witness e2e_code - - author-c 2>&1)
 ! grep -q '^as-x	' "$D/pusher/queue.tsv" && ok "l'attestation d'une autre pile ne vaut pas pour une tête qui n'en est pas l'ancêtre" || ko "tête étrangère acceptée"
 for x in as-1 as-x; do P dequeue $x > /dev/null 2>&1; done
+# 44. A pass of the pusher goes under poste with a timeout at the head of its command (20 Nov., c7: a measure refuses
+# behind a heavy whose end is unknown; the pusher's passes had none, and would have been counted as long).
+h=$(lot pt-1 extension/rag3weaver/src/pt.rs 'fn pt() {}')
+P enqueue pt-1 pt-1 "$h" rust some_witness e2e_code - - author-c > /dev/null; echo VERT > "$D/outcomes.d/pt-1"
+: > "$D/poste_cmds"; POSTE_CMDS="$D/poste_cmds" PUSHER_TRAIN_MAX=1 P step > /dev/null 2>&1
+[ "$(head -1 "$D/poste_cmds")" = timeout ] && ok "la passe du pousseur part sous poste avec un timeout en tête" || ko "passe sans timeout en tête : « $(head -1 "$D/poste_cmds") »"
+P dequeue pt-1 > /dev/null 2>&1
 exit $red
