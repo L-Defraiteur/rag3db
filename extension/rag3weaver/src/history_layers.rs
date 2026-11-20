@@ -225,6 +225,15 @@ pub fn write_work_generation(catalog: &mut Catalog, worktree: &Path, layer_id: &
     Ok(r)
 }
 
+/// **Write a work layer at the fork point** (page 03 of 20 November 2026, O2): the worktree's whole gap from where it
+/// forked from `master_ref` (`git merge-base HEAD <master_ref>`): the lot's commits, its uncommitted, untracked and
+/// deleted files, pinned on the generation of `master_layer` at the fork commit, written first if it lacks. Its own
+/// branch needs no layer of its own.
+pub fn write_fork_work_generation(catalog: &mut Catalog, worktree: &Path, layer_id: &str, master_layer: &str, master_ref: &str) -> Result<i64, String> {
+    let _ = (catalog, worktree, layer_id, master_layer, master_ref);
+    Err("la couche de travail au point de fourche : pas encore".into()) // RED STUB.
+}
+
 /// **The dirty paths of a worktree**: changed, added, deleted, renamed (both names), unmerged and untracked, as
 /// `git status --porcelain=v2 -z --untracked-files=all` says them, without refreshing its index.
 fn dirty_paths(worktree: &Path) -> Result<std::collections::BTreeSet<String>, String> {
@@ -731,6 +740,31 @@ mod tests {
         git(&wt, &["commit", "-q", "-m", "h"]);
         let refus = write_work_generation(&mut cat, &wt, &couche, "refs/heads/travail").expect_err("a HEAD without generation of its branch is written");
         assert!(refus.contains("tip"), "the refusal does not say the work layer waits for tip: {refus}");
+    }
+
+    /// **A work layer at the fork point reads the whole lot, without a layer of its branch** (page 03 of 20 November
+    /// 2026, O2). `main` is a history layer at c1; a worktree forked from c1 on a branch `lot` that no layer follows
+    /// commits f (F2), and leaves h untracked. Its work layer at the fork point reads both, and g from the backend; the
+    /// backend's view reads neither the lot's f nor h.
+    #[test]
+    fn a_work_layer_at_the_fork_point_reads_the_lot_without_a_layer_of_its_branch() {
+        let (d, c1, _, _) = depot();
+        let (mut cat, n) = base(d.path(), &c1);
+        let main = LayerWrite { layer: "refs/heads/main".into(), parent: Some((crate::generations::COUCHE_DU_BACKEND.into(), n)) };
+        write_history_generation(&mut cat, d.path(), &main, &c1).expect("main@c1");
+        let wt_dir = tempfile::tempdir().unwrap();
+        let wt = wt_dir.path().join("wt");
+        git(d.path(), &["worktree", "add", "-q", "-b", "lot", wt.to_str().unwrap(), &c1]);
+        std::fs::write(wt.join("f.rs"), F2).unwrap();
+        git(&wt, &["commit", "-q", "-am", "le lot"]);
+        std::fs::write(wt.join("h.rs"), "pub fn h() -> u32 {\n    9\n}\n").unwrap();
+        let couche = format!("worktree:{}", wt.display());
+        write_fork_work_generation(&mut cat, &wt, &couche, "refs/heads/main", "main").expect("the work layer at the fork point");
+        assert_eq!(fins_dans_la_vue(&mut cat, &couche, "f"), vec![4], "the view of the lot does not read its committed f");
+        assert_eq!(fins_dans_la_vue(&mut cat, &couche, "h"), vec![3], "the view of the lot does not read its untracked h");
+        assert_eq!(fins_dans_la_vue(&mut cat, &couche, "g"), vec![3], "the view of the lot does not read g from below");
+        assert_eq!(fins_dans_la_vue(&mut cat, crate::generations::COUCHE_DU_BACKEND, "f"), vec![3], "the backend's view reads the lot's f");
+        assert!(fins_dans_la_vue(&mut cat, crate::generations::COUCHE_DU_BACKEND, "h").is_empty(), "the backend's view reads the lot's h");
     }
 
     /// **Témoin 4 : the cap of the work layers.** Under `tracked.writes.max_work_layers: 2`, three worktrees: the
