@@ -169,6 +169,24 @@ enqueue() {
           for (i = 1; i <= n; i++) { if (i == pos + 1 || (pos == 0 && i == 1)) print line; print a[i] }
           if (pos == n) print line
         }' "$D/log.tsv" "$Q" > "$Q.new" && mv "$Q.new" "$Q"
+    fi
+    # A docs lot goes before the Rust lots waiting (19-20 Nov., c7: it costs a minute and delays nothing), unless a Rust
+    # ancestor of it is still in the queue, behind which it stays. Placed first by the rules above, then moved up to just
+    # before the first Rust lot if it landed behind one.
+    if [ "$kind" = docs ] && [ "$(awk -F'\t' -v p="$parent" '
+        !/^#/ { k[$1] = $4; par[$1] = $8 }
+        END { while (p != "-" && p != "" && (p in k)) { if (k[p] == "rust") { print "non"; exit } ; p = par[p] } ; print "oui" }' "$Q")" = oui ]; then
+      awk -F'\t' -v id="$id" '
+        { a[++n] = $0 }
+        END {
+          r = 0; me = 0
+          for (i = 1; i <= n; i++) { if (a[i] ~ /^#/) continue; split(a[i], f, "\t"); if (!r && f[4] == "rust") r = i; if (f[1] == id) me = i }
+          for (i = 1; i <= n; i++) {
+            if (r && me > r && i == r) print a[me]
+            if (r && me > r && i == me) continue
+            print a[i]
+          }
+        }' "$Q" > "$Q.new" && mv "$Q.new" "$Q"
     fi ) 9> "$D/queue.lock"
   log "$id" déposé "$branch $(g rev-parse --short "$full") $kind par $9$again"
   echo "déposé : $id ($kind), $(queue_lines | grep -c .) lot(s) dans la file"

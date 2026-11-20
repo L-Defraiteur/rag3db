@@ -628,4 +628,12 @@ P enqueue rk-a rk-a "$h" rust some_witness e2e_code - - author-c > /dev/null
 first=$(grep -v '^#' "$D/pusher/queue.tsv" | head -1 | cut -f1)
 [ "$first" = rk-a ] && ok "un lot rendu et redéposé dans l'heure reprend le rang qu'il avait au rendu" || ko "redéposé au rang du premier dépôt : en tête, $first ; rk-a au rang $(grep -v '^#' "$D/pusher/queue.tsv" | cut -f1 | grep -nx rk-a | cut -d: -f1)"
 for x in rk-a rk-b rk-c; do P dequeue $x > /dev/null 2>&1; done; rm -f "$D/outcomes.d/rk-a"
+# 41. A docs lot goes before the Rust lots waiting (19-20 Nov., c7: docs lots of a minute waited hours behind Rust trains),
+# unless a Rust ancestor of it is still in the queue: then it stays behind its parent.
+for x in df-r1 df-r2; do h=$(lot $x extension/rag3weaver/src/$x.rs "fn x() {}"); P enqueue $x $x "$h" rust some_witness e2e_code - - author-c > /dev/null; done
+h=$(lot df-d docs/df-d.md '# df'); P enqueue df-d df-d "$h" docs - - - - author-a > /dev/null
+h=$(lot df-c docs/df-c.md '# df child'); P enqueue df-c df-c "$h" docs - - - df-r2 author-a > /dev/null
+order=$(grep -v '^#' "$D/pusher/queue.tsv" | cut -f1 | grep -E '^df-' | paste -sd' ')
+[ "$order" = "df-d df-r1 df-r2 df-c" ] && ok "un lot docs passe devant les rust en file, sauf derrière son parent rust" || ko "docs devant les rust : $order"
+for x in df-d df-r1 df-r2 df-c; do P dequeue $x > /dev/null 2>&1; done
 exit $red
