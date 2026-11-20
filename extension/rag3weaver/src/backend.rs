@@ -7930,7 +7930,7 @@ mod tests {
         std::fs::copy(tools.join("search_workspace.mmd"), dir.path().join("search_workspace.mmd")).unwrap();
         std::fs::write(
             dir.path().join("sources/plant.py"),
-            "import pathlib\nindex = pathlib.Path('index.html'); s=index.read_text(); print(len(s))\nPLANTE_MAX_KG = 1024\nseuil_de_la_plante = 7\n\n\
+            "import pathlib\nindex = pathlib.Path('index.html'); s=index.read_text(); print(len(s))\nPLANTE_MAX_KG = 1024\nseuil_de_la_plante = 7\n\ndef aire(x): return x * x\n\n\
              def mesurer_la_plante(hauteur, largeur):\n    \"\"\"La surface d'une feuille de la plante, en centimetres carres.\"\"\"\n\
                  surface = hauteur * largeur * 0.5\n    return surface + PLANTE_MAX_KG / 1000.0\n",
         )
@@ -7969,6 +7969,21 @@ mod tests {
         assert!(
             constante.iter().all(|l| l.get(1).and_then(|v| v.as_i64()) == Some(0)),
             "a short constant is a leaf under the threshold: no chunk, whatever its type: {constante:?}"
+        );
+        // A short function keeps its vector: its name and body carry a meaning (c7, 20 November 2026: the rule holds
+        // for the declarations of a value, by size whatever their type among them, not for the callables).
+        let fonction = {
+            let cat = backend.catalog.lock().unwrap();
+            let t = crate::code::SCOPE_CONTENT;
+            cat.execute_raw(&format!(
+                "MATCH (v:{t}) WHERE v.name = 'aire' OPTIONAL MATCH (c:{t}_Chunk)-[:{t}_CHUNKED_FROM]->(v) RETURN v.scope_type, count(c)"
+            ))
+            .expect("the function")
+            .rows
+        };
+        assert!(
+            !fonction.is_empty() && fonction.iter().all(|l| l.get(1).and_then(|v| v.as_i64()).unwrap_or(0) > 0),
+            "a short function keeps its chunk: {fonction:?}"
         );
         let vues: Vec<String> = chunks.iter().map(|l| format!("{:?}", l)).collect();
         assert!(!chunks.is_empty(), "the file has variables: {vues:?}");
