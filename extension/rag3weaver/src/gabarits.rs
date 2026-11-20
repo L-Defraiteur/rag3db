@@ -58,7 +58,10 @@ pub(crate) mod jouable {
                         let chemin_par_la_cle = CLES.contains(&k.as_str());
                         if let Some(s) = val.as_str() {
                             let chemin_par_l_extension = s.ends_with(".rhai");
-                            if (chemin_par_la_cle || chemin_par_l_extension) && !s.starts_with('/') {
+                            // `template` n'est un chemin que s'il désigne un fichier du gabarit : `writes.template`
+                            // nomme le champ qui reçoit la version du gabarit (20 nov. 2026), pas un fichier.
+                            let un_champ = k == "template" && !gabarit.join(s).is_file();
+                            if (chemin_par_la_cle || chemin_par_l_extension) && !un_champ && !s.starts_with('/') {
                                 *val = Value::String(
                                     gabarit.join(s).to_string_lossy().to_string(),
                                 );
