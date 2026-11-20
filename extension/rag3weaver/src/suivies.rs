@@ -790,6 +790,27 @@ pub fn register_layer(catalog: &crate::catalog::Catalog, depot: &str, nom: &str,
     Ok(id)
 }
 
+/// **Finir une couche par son nom** (page 03 du 20 novembre 2026, O3) : sa fiche reçoit `fin`, la date ; ses générations
+/// restent, lisibles par leur id, et une vue par son nom se refuse en disant sa fin. Rend `false` sans couche vivante
+/// sous ce nom.
+pub fn end_layer(catalog: &crate::catalog::Catalog, depot: &str, nom: &str) -> Result<bool, String> {
+    let e = |e: crate::catalog::CatalogError| e.to_string();
+    let lire = |cle: &str| catalog.read_meta_key(cle).map_err(e);
+    let Some(id) = layer_id_by_name(&lire, depot, nom)? else { return Ok(false) };
+    let cle = format!("fiche_couche:{depot}:{id}");
+    let mut fiche: Value = lire(&cle)?.and_then(|v| serde_json::from_str(&v).ok()).unwrap_or_else(|| serde_json::json!({ "nom": nom }));
+    let quand = std::process::Command::new("date")
+        .arg("+%Y-%m-%d %H:%M")
+        .output()
+        .ok()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .filter(|d| !d.is_empty())
+        .unwrap_or_else(|| "à une date non notée".into());
+    fiche["fin"] = serde_json::json!(quand);
+    catalog.persist_meta_key(&cle, &fiche.to_string()).map_err(e)?;
+    Ok(true)
+}
+
 /// **Les identifiants stables des couches** d'une résolution (décision d'ED et d'arbre principal, 14 nov.,
 /// page `docs/arbre-principal/14-11-2026/02-les-suivies-tracked.md`) : un id par couche, distinct de son nom,
 /// dérivé de sa naissance (le dépôt, le nom complet et la pointe à la première vue) et gardé dans
