@@ -1,5 +1,21 @@
 # Nouveautés
 
+- 20 novembre 2026 — **Un morceau de code tient dans la fenêtre de l'embarqueur.** Sous granite (512 jetons), 72,5 % des
+  morceaux de rag3weaver dépassaient sa fenêtre, et leur fin n'était pas cherchable par le vecteur : le contexte ajouté
+  autour d'un morceau n'était borné que côté par côté. Un morceau est maintenant borné en entier par le plus petit
+  embarqueur de la base, en octets puis en jetons comptés par son propre tokenizer ; sur les en-têtes les plus denses du
+  moteur, aucun morceau ne passe 512. Une base sous bge-m3 seul ne change pas. Le tokenizer est une capacité : s'il
+  manque, la base refuse de s'ouvrir pour l'index en nommant le fichier. Les bases repassent une fois (règles de
+  l'analyse 12, une fois avec la racine de paquet de codeparsers).
+- 19 novembre 2026 — **Le chat de l'IDE ne fait plus disparaître un tour.** Une relecture de la conversation
+  partie avant un tour et revenue après lui remettait un écran sans ce tour, jusqu'au rechargement suivant. La page
+  n'applique plus une relecture dépassée par un tour.
+- 19 novembre 2026 — **Un paquet d'index ne casse plus sur un ALTER validé pendant lui.** Chaque paquet prend ses
+  tables dès son `BEGIN` (`CALL lock_tables`). Un ALTER validé entre-temps le refuse avant toute écriture : le
+  paquet est annulé sans abîmer le catalogue et recommence sur place, trois fois au plus, et le journal d'index le
+  dit. Un moteur sans `lock_tables` ne prend rien, comme avant.
+- 19 novembre 2026 — **La ligne d'attente d'un outil, dans la boîte de l'équipier, est en anglais**, comme les autres lignes de l'hôte que le modèle relit à chaque pas : « "read_file" has been waiting for N s … ».
+- 19 novembre 2026 — **Le modèle lit le texte de ses lectures, pas leur enveloppe.** `read_file`, `grep_files` et `list_files` lui rendent le texte qu'ils ont lu, et non plus leur réponse JSON entière ; un échec, lui, reste rendu en entier, pour qu'il ne disparaisse jamais derrière un texte partiel.
 - 20 novembre 2026 — **Un paquet du dépôt importé par son nom se résout par l'import, et les réexportations de Python et de TypeScript se suivent.** Dans les tests d'un crate (`use rag3weaver::Catalog`), un import par le nom d'un paquet npm du dépôt, ou par un `__init__.py` qui réexporte (`from monpaquet.lib import Catalog`), le lien vers la définition était deviné par le nom ; il passe maintenant par l'import, lu dans les manifestes (`Cargo.toml`, `package.json`). `export { X } from './x'` et les imports nommés d'un `__init__.py` sont des réexportations, comme `pub use` en Rust. Sur le crate rag3weaver entier, 5 493 liens passent de « nom » à « import » et 325 s'ajoutent, aucun ne se perd. Les bases repassent une fois (règles de l'analyse 11).
 
 - 20 novembre 2026 — **Un namespace replié ne passe plus devant la classe qu'on cherche.** Un `namespace` ou un
