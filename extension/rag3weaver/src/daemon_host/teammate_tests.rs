@@ -2718,3 +2718,38 @@ fn every_parameter_of_the_teammates_tools_is_described() {
     }
     assert!(manquent.is_empty(), "parameters without a description: {manquent:#?}");
 }
+
+/// **A step whose reply is cut goes on** (lucivy 03, 19 Nov 2026): the model's first reply is cut at
+/// max_tokens without a tool call; the step relaunches it (teammate.cut_relaunches_per_step, 2 by
+/// default) instead of ending, and the step that follows the relaunch succeeds as one step.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn a_step_whose_reply_is_cut_goes_on_instead_of_ending() {
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let appels = Arc::new(Mutex::new(0usize));
+    let model: ChatModel = {
+        let appels = appels.clone();
+        Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let appels = appels.clone();
+            Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
+                let n = { let mut a = appels.lock().unwrap(); *a += 1; *a };
+                if n == 1 {
+                    let usage = crate::llm::Usage { completion_tokens: 4092, reasoning_tokens: 3930, ..Default::default() };
+                    return Ok((crate::llm::Finish::max_tokens(), usage));
+                }
+                answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "fait après la relance", "remaining": "" }))]))
+            })))
+        })
+    };
+    let host = hote(d.path(), model).with_runs_root(d.path().join("runs"));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    host.ouvrir_une_tache(&h.id, "doc").expect("la tâche s'ouvre");
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    files.append_with("supervisor", "request", None, "Fais-le.", &json!({ "expects": "none" })).unwrap();
+    let o = host.run_teammate(&h.id, "doc").unwrap();
+    let boite = files.mailbox();
+    assert_eq!(o.steps.len(), 1, "the cut reply was relaunched within the step: {o:?} — {boite:#?}");
+    assert!(!boite.iter().any(|l| l["text"].as_str().is_some_and(|t| t.contains("without step_done"))), "{boite:#?}");
+}
