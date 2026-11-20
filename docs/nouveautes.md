@@ -30,6 +30,13 @@
   lisait les fichiers indexés que dans les lignes `File`, et ce chemin lui échappait. Un index complet retire
   maintenant les scopes d'un chemin sans `File` que la source ne retient plus. La cause de ces orphelins reste à
   trouver (ticket).
+- 20 novembre 2026 — **Les graphes de l'archiviste se lisent sur disque, dans le gabarit memory.** Ses graphes et ses
+  Plans cités (`archive_decide`, `archive_slice_core`, `turns_select`…) étaient pris dans le binaire
+  (`@builtin:`) : une copie éditée du gabarit n'en changeait rien. Ils se citent maintenant à côté du manifeste
+  (`@graphs/…`, `@plans/…`), si bien qu'éditer la copie change ce que l'appel joue, et la version du gabarit.
+  Conséquence : un manifeste memory recopié ailleurs doit emporter ses dossiers `graphs/` et `plans/`. Seuls les
+  outils génériques du moteur (`select_structured`, `search_structured`) restent cités dans le binaire.
+
 - 20 novembre 2026 — **Chaque appel d'outil dit la version du gabarit qui l'a servi.** La réponse porte
   `metadata.template` : l'empreinte de ce que le chargement a mis en service (manifeste, scripts, graphes, schémas,
   et le contenu embarqué par le binaire) et le numéro de rechargement. Une entité qui déclare `writes.template` reçoit
