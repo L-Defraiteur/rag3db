@@ -2583,3 +2583,29 @@ rechargement du chat, la garde de dette d'arbre, lucivy 04 jugé réussi et vér
 la parité B4 (S 50), le lot 3 du lanceur. Déposés et tenus : B4, la version du gabarit, les graphes sur disque et
 check_proposal de mémoire (la boucle d'édition du workflow, page docs/memoire/20-11-2026/01), le paquet de
 codeparsers (tenu par G), les morceaux d'ED (tenu jusqu'à 09 h 30), l'index pas prêt dans l'IDE (tty).
+
+## 20 novembre, 07 h 50 — la bascule : le dépôt à versions, les deux bases de luciepc revenues en arrière
+
+**La fenêtre de G**, annoncée à 06 h 40 aux douze sessions (lourds tenus de 06 h 45 à 09 h 30). Hôte baccb2ea6e posé
+et réveillé au portable (6 s de coupure) et à luciepc (1 s). **code-rag3db-depot basculée** : relevés d'avant sur la
+base vivante, fermeture qui tient, instantané `avant-versions-20261120` (jetable, RETOUR.sh prêt), contrôle des deux
+sens sans écart, 1b en 681 s, générations en 3 s, rouverte à 06 h 55 (12 min 22 s de coupure), repassage en 16 min
+jusqu'à « indexation terminée », vecteurs prêts (179 864 morceaux). **Critère tenu** : recouvrement 98,8 %, même
+premier 10/10, 0 usage perdu (Catalog 789 → 1 133), aucun « rebâti depuis les lignes », aucun « écart ».
+
+**code-lourd et code-principal**, lancées en parallèle à luciepc à 07 h 12 (1b 467 s et 597 s, rouvertes à 07 h 21
+et 07 h 22, repassage fini à 07 h 31 et 07 h 35) : **rouge au critère**, recouvrement 88,0 %, même premier 8/10, et
+40 et 43 usages de Catalog « perdus ». Départage de G en dix minutes, sans rien toucher : les usages sont un **faux
+rouge de la mesure**, le rendu de `usages` a quatre sections et la section « non attribués » est plafonnée à 200
+affichés des deux côtés (466 → 739 en vrai, total 610 → 896) : les sites « perdus » sont sortis des 200 montrés, pas
+de la base ; 0 usage attribué d'avant absent d'après. Le 88 % du banc, lui, n'a pas de cause démontrée : la racine
+de ces deux bases est un arbre du 18 octobre (284cc00c0b) qui contient encore `experiments/mtga/`, et quatre scripts
+Python `build_*_variant.py` entrent dans le top 10 de « index du plein texte » sur les deux ; piste : les scopes
+Python de cet arbre ancien repesés par la nouvelle analyse (règles 9), ce qui expliquerait 98,8 % sur le dépôt neuf
+et 88 % ici avec le même binaire. **Décidé (c7, 07 h 48) : retour arrière des deux bases de luciepc** sur leurs
+instantanés, le dépôt reste basculé ; on comprend après, sur une copie reflink, règles 8 contre 9 requête par
+requête (codeparsers prévenu) ; la re-bascule de ces deux bases à la fenêtre suivante, sur un juge qui l'explique.
+Le push du train C++ et la lib partent après le retour.
+
+**Le ménage de 07 h 30** a joué son premier passage sur les deux postes : les dossiers Codex marqués jetables et
+vieux de plus de 72 h, hors des trois plus récents par famille, effacés un par un au journal.
