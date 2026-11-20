@@ -83,9 +83,25 @@ l'équipier : « proposer une version du gabarit memory ». Elle suit quatre tem
 6. **Une limite à ce qu'une proposition peut toucher.** Une liste déclarée des fichiers que la tâche peut écrire :
    les graphes, scripts et schémas de présentation, mais pas `backend.json` (entités, relations, modèles).
 
+7. **Les graphes cités par `@builtin:` venaient du binaire** (trouvé le 20 novembre en posant 5.1). Un agent qui
+   édite la copie du gabarit ne changeait donc pas `archive_decide`, `archive_slice_core`, `turns_select`… Le lot
+   memoire-graphs-on-disk les cite à côté du manifeste (`@graphs/…`, `@plans/…`). `@builtin:` ne reste que pour les
+   outils génériques du moteur (`select_structured`, `search_structured`). Un manifeste memory recopié ailleurs
+   emporte ses dossiers `graphs/` et `plans/`, et une proposition est une copie de l'arbre des gabarits entier,
+   puisque memory cite `../notebook` et `../../tools`.
+
 ## 6. Ce qui reste à trancher
 
 - le seuil de la parité : P1, P2, coût, et leur bruit ;
 - si le oui de Lucie reste exigé, ou s'il ne l'est que pour certaines parties (les consignes oui, les graphes non) ;
 - l'ordre des lots : la version dans la trace (5.1) d'abord, puisqu'elle sert aussi le banc aujourd'hui, puis le
   rechargement en deux temps (5.2), puis la tâche de proposition.
+
+## 7. L'ordre des lots, le 20 novembre à midi
+
+La pile de la nuit est reposée sur master le matin. Le banc a mesuré B4 (le Decide en parts) en F300 : P1 passe de
+0,907 à 0,815, et le cache des Decide ne monte pas (41 % contre 43 %). Un second jeu doit départager cette baisse du
+bruit. B4 est donc tenu seul jusqu'à ce verdict (décision de c7). 5.1 (la version du gabarit), les graphes sur disque
+et 5.2 (`check_proposal`) ne dépendent pas de B4 : ils sont reposés sur l'extraction coupée et déposés sans
+l'attendre. B4 se reposera sur leur sommet, ou se reprendra, après le verdict. Le levier du cache des Decide est le
+cache explicite du fournisseur, pas l'ordre des parts.
