@@ -237,6 +237,19 @@ impl Navigateur {
         self.attacher(cree["targetId"].clone());
     }
 
+    /// **Clicks an element as a person would** (`userGesture`): a link with `target="_blank"` clicked by a script
+    /// alone is a blocked popup, and opens no tab (the IDE in several windows, slice 4).
+    #[cfg(feature = "code")]
+    pub(crate) fn cliquer(&mut self, selecteur: &str) {
+        let r = self.commande(
+            "Runtime.evaluate",
+            json!({ "expression": format!("document.querySelector({}).click()", serde_json::to_string(selecteur).unwrap()), "userGesture": true, "awaitPromise": true }),
+        );
+        if let Some(e) = r.get("exceptionDetails") {
+            panic!("cliquer {selecteur} : {e}");
+        }
+    }
+
     /// **Joins the tab that a link opened** (`target="_blank"`): the first page target whose address contains
     /// `contient`, waited for 20 s at most, becomes the current tab and joins the list (the IDE in several windows,
     /// slice 4: the buttons that detach a window).
