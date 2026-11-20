@@ -476,6 +476,48 @@ red_family() { # <id> <author> <reason> <detail>
   done
 }
 
+# **Files declared generated are rebuilt at the repose** (20 Nov. 2026, c7: the IDE bundle, a one-line app.js nobody writes
+# by hand, returned mode-pair-4 and ide-fenetres-5 at each tty slice). `tools/poste/generated_files.txt` on master lists
+# `<path> TAB <command>`. While a cherry-pick stops on conflicts that are all declared generated, each is taken from the
+# reposed side (master and the lots before), its command rebuilds it from the merged sources, `<command> --check`
+# confirms it, and the cherry-pick continues. Any other file in conflict, a rebuild or a check that fails: the conflict
+# stays, returned to the author. 0 when the cherry-pick ended, 1 otherwise (still in progress, for the caller's abort).
+rebuild_generated() { # <id>
+  local id=$1 list conflicts f cmd cmds path n=0
+  list=$(g show HEAD:tools/poste/generated_files.txt 2>/dev/null | grep -v '^#' | grep -P '\t')
+  [ -n "$list" ] || return 1
+  # The unit's PATH has no node (fnm puts it in login shells only): its stable alias goes first, when present.
+  local gpath=$PATH nb=${PUSHER_NODE_BIN:-$HOME/.local/share/fnm/aliases/default/bin}
+  [ -x "$nb/node" ] && gpath=$nb:$PATH
+  while g rev-parse -q --verify CHERRY_PICK_HEAD > /dev/null; do
+    conflicts=$(g diff --name-only --diff-filter=U)
+    [ -n "$conflicts" ] || return 1
+    cmds=""
+    for f in $conflicts; do
+      cmd=$(printf '%s\n' "$list" | awk -F'\t' -v p="$f" '$1 == p { print $2; exit }')
+      [ -n "$cmd" ] || return 1
+      g checkout -q --ours -- "$f" || return 1
+      printf '%s\n' "$cmds" | grep -qxF "$cmd" || cmds="${cmds:+$cmds
+}$cmd"
+    done
+    while IFS= read -r cmd; do
+      [ -n "$cmd" ] || continue
+      ( cd "$WT" && PATH=$gpath timeout "${PUSHER_GEN_MAX:-900}" bash -c "$cmd" ) >> "$SD/last-repose.log" 2>&1 || { echo "rebâti refusé : $cmd" >> "$SD/last-repose.log"; return 1; }
+      ( cd "$WT" && PATH=$gpath timeout "${PUSHER_GEN_MAX:-900}" bash -c "$cmd --check" ) >> "$SD/last-repose.log" 2>&1 || { echo "contrôle refusé : $cmd --check" >> "$SD/last-repose.log"; return 1; }
+      while IFS=$'\t' read -r path _; do g add -- "$path"; done < <(printf '%s\n' "$list" | awk -F'\t' -v c="$cmd" '$2 == c')
+    done <<< "$cmds"
+    n=$((n + 1))
+    log "$id" "généré rebâti" "$(printf '%s ' $conflicts)par $(printf '%s' "$cmds" | paste -sd';')"
+    if g diff --cached --quiet; then
+      g -c core.editor=true cherry-pick --skip >> "$SD/last-repose.log" 2>&1 || true
+    else
+      g -c core.editor=true -c core.attributesFile="$D/attributes" cherry-pick --continue >> "$SD/last-repose.log" 2>&1 || true
+    fi
+    [ "$n" -lt 50 ] || return 1
+  done
+  return 0
+}
+
 # Repose the given lines on BASE, in the pusher's worktree, under the branch RB. Prints the id of the lot whose
 # cherry-pick conflicts and returns 1; returns 0 when every lot is reposed.
 repose() { # <line>…
@@ -498,7 +540,8 @@ repose() { # <line>…
     # it by hand. Any other collision stays a conflict for the author.
     # --allow-empty keeps a commit empty from its origin (a marker); --empty=drop still drops one that became empty.
     before=$(g rev-parse HEAD)
-    if ! g -c core.attributesFile="$D/attributes" cherry-pick --allow-empty --empty=drop $commits > "$SD/last-repose.log" 2>&1; then
+    if ! g -c core.attributesFile="$D/attributes" cherry-pick --allow-empty --empty=drop $commits > "$SD/last-repose.log" 2>&1 \
+       && ! rebuild_generated "$id"; then
       # The files in conflict, named for the author (19 Nov., c7: « bute : » said nothing).
       g diff --name-only --diff-filter=U | paste -sd' ' > "$SD/last-conflict.txt"
       g cherry-pick --abort 2>/dev/null

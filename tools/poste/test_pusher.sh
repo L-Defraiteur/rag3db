@@ -678,4 +678,38 @@ P enqueue pt-1 pt-1 "$h" rust some_witness e2e_code - - author-c > /dev/null; ec
 : > "$D/poste_cmds"; POSTE_CMDS="$D/poste_cmds" PUSHER_TRAIN_MAX=1 P step > /dev/null 2>&1
 [ "$(head -1 "$D/poste_cmds")" = timeout ] && ok "la passe du pousseur part sous poste avec un timeout en tête" || ko "passe sans timeout en tête : « $(head -1 "$D/poste_cmds") »"
 P dequeue pt-1 > /dev/null 2>&1
+# 45. A file declared generated (tools/poste/generated_files.txt: <path> TAB <command>) that conflicts at the repose is
+# taken from master and rebuilt by its command, then checked by `<command> --check` (20 Nov., c7: the IDE bundle, a
+# one-line app.js nobody writes by hand, returned mode-pair-4 and ide-fenetres-5 at every tty slice). A conflict that
+# also holds a source stays the author's.
+mkdir -p "$D/gen" && git clone -q "$D/origin.git" "$D/gen/m" 2>/dev/null && cd "$D/gen/m" && git config user.email t@t && git config user.name t
+mkdir -p tools/gen docs/gen
+cat > tools/gen/gen.sh <<'G'
+#!/bin/bash
+# Writes docs/gen/out.md from docs/gen/src-*.md; --check rebuilds aside and compares.
+cd "$(dirname "$0")/../.."
+if [ "${1:-}" = --check ]; then cat docs/gen/src-*.md | cmp -s - docs/gen/out.md; exit; fi
+cat docs/gen/src-*.md > docs/gen/out.md
+G
+printf 'docs/gen/out.md\tbash tools/gen/gen.sh\n' > tools/poste/generated_files.txt
+echo a0 > docs/gen/src-a.md; echo b0 > docs/gen/src-b.md; bash tools/gen/gen.sh
+git add -A && git commit -qm "gen base" && git push -q origin HEAD:master; cd "$HERE"
+g0=$(master)
+# The lot: src-b and its rebuilt out.md, from g0. Then master moves src-a and its out.md: out.md conflicts.
+git -C "$D/author" fetch -q origin && git -C "$D/author" checkout -q -B ge-b "$g0"
+echo b1 > "$D/author/docs/gen/src-b.md"; ( cd "$D/author" && bash tools/gen/gen.sh ) && git -C "$D/author" add -A && git -C "$D/author" commit -qm ge-b && git -C "$D/author" push -q origin HEAD:ge-b
+hb=$(git -C "$D/author" rev-parse HEAD)
+git -C "$D/author" checkout -q -B ge-x "$g0"
+echo bx > "$D/author/docs/gen/src-a.md"; ( cd "$D/author" && bash tools/gen/gen.sh ) && git -C "$D/author" add -A && git -C "$D/author" commit -qm ge-x && git -C "$D/author" push -q origin HEAD:ge-x
+hx=$(git -C "$D/author" rev-parse HEAD)
+cd "$D/gen/m" && git pull -q origin master 2>/dev/null; echo a1 > docs/gen/src-a.md; bash tools/gen/gen.sh; git commit -qam "gen master moves" && git push -q origin HEAD:master; cd "$HERE"
+P enqueue ge-b ge-b "$hb" docs - - - - author-a > /dev/null
+P step > /dev/null 2>&1
+out=$(git -C "$D/author" fetch -q origin && git -C "$D/author" show origin/master:docs/gen/out.md 2>/dev/null | paste -sd,)
+on_master ge-b && [ "$out" = a1,b1 ] && ok "un fichier généré en conflit est rebâti à la repose, le lot atterrit (out.md : $out)" \
+  || ko "fichier généré en conflit : lot rendu ou mal rebâti (out.md : $out ; $(grep -P '\tge-b\t' "$D/pusher/log.tsv" | tail -1 | cut -f3,4 | cut -c1-120))"
+# A source in conflict too (src-a changed on both sides): the lot is returned to its author.
+P enqueue ge-x ge-x "$hx" docs - - - - author-a > /dev/null
+P step > /dev/null 2>&1
+! on_master ge-x && grep -q "^rouge	ge-x	conflit	" "$D/pusher/inbox/author-a.txt" && ok "un conflit qui tient aussi une source est rendu à l'auteur" || ko "conflit d'une source : pas rendu"
 exit $red

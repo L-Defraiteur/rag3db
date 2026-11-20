@@ -1,0 +1,7 @@
+# Files declared generated (20 Nov. 2026, c7): <path> TAB <command run from the repository root>.
+# At the repose, a conflict limited to these files is resolved by taking master's side and running the command, then
+# `<command> --check`; a conflict on any other file is returned to the author. Read by tools/poste/pusher.sh.
+extension/rag3weaver/templates/ide/app/app.js	bash extension/rag3weaver/scripts/ide_bundle.sh
+extension/rag3weaver/templates/ide/app/app.css	bash extension/rag3weaver/scripts/ide_bundle.sh
+extension/rag3weaver/templates/ide/app/flux-worker.js	bash extension/rag3weaver/scripts/ide_bundle.sh
+extension/rag3weaver/templates/ide/app/bundle.json	bash extension/rag3weaver/scripts/ide_bundle.sh
