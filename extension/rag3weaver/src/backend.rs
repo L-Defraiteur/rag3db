@@ -1169,7 +1169,7 @@ fn not_ready_line(state: &Value) -> String {
 /// Le rang omis vaut la dernière génération publiée de la couche. Toute autre
 /// clé, une couche absente ou vide, un rang qui n'est pas un entier : un refus
 /// qui les nomme.
-fn parse_view(v: &Value) -> Result<crate::views::ViewRequest, String> {
+pub(crate) fn parse_view(v: &Value) -> Result<crate::views::ViewRequest, String> {
     let o = v.as_object().ok_or_else(|| format!("`view` doit être un objet {{\"layer\" ou \"worktree\", \"rank\"?}}, pas {v}"))?;
     if let Some(k) = o.keys().find(|k| !matches!(k.as_str(), "layer" | "worktree" | "rank")) {
         return Err(format!("`view` : clé inconnue « {k} » (attendues : layer ou worktree, rank)"));
@@ -3755,6 +3755,13 @@ thread_local! {
 
 /// Exécute `f` avec le délai `d` posé pour les graphes de ce fil, puis le
 /// remet.
+/// **The view of the session that calls** (V1 of the page `docs/arbre-principal/20-11-2026/01-…`): the host poses it
+/// around a call; a reading tool called without `view` reads under it, and its answer says `view.source: "session"`.
+pub fn with_session_view<T>(v: Option<Value>, f: impl FnOnce() -> T) -> T {
+    let _ = v; // RED STUB.
+    f()
+}
+
 pub fn with_call_deadline<T>(d: Option<CallDeadline>, f: impl FnOnce() -> T) -> T {
     struct Remettre(Option<CallDeadline>);
     impl Drop for Remettre {
