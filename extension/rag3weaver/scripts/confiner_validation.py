@@ -25,8 +25,9 @@ class Refus(RuntimeError):
 
 
 # How long the descendants of a finished command may take to end before they count as left behind: a bus session
-# closes after its command (20 Nov. 2026). A real leak lives far beyond.
-GRACE_DE_FERMETURE = 1.0
+# closes after its command (20 Nov. 2026). Two seconds is a choice: a real leak is then seen one second later than
+# with one, and a session closing under a loaded poste (the passes run beside heavy ones) still has its margin.
+GRACE_DE_FERMETURE = 2.0
 
 
 def processus():
@@ -277,6 +278,12 @@ class Descendants:
         return self.vivants()
 
 
+def lever_le_score_oom():
+    """In the command's process, before its exec: the first victim of the OOM killer, before the supervisor."""
+    with open('/proc/self/oom_score_adj', 'w') as f:
+        f.write('1000')
+
+
 def superviser(command, delai, preuves):
     commence = time.monotonic()
     table = processus()
@@ -334,7 +341,11 @@ def superviser(command, delai, preuves):
     try:
         if time.monotonic() >= echeance - 2:
             raise Refus('budget épuisé pendant le montage, commande non lancée')
-        enfant = subprocess.Popen(argv, env=env, start_new_session=True)
+        # **The supervisor is the OOM killer's last candidate** (20 Nov. 2026, journalctl -k at luciepc: a command that
+        # filled the scope's memory got killed, then the supervisor itself 3 ms later, before the first victim's
+        # memory was released: -9, and no verdict.json for the caller). The command and all its descendants raise
+        # their oom_score_adj to 1000 (raising needs no privilege); the supervisor keeps its own.
+        enfant = subprocess.Popen(argv, env=env, start_new_session=True, preexec_fn=lever_le_score_oom)
         # Avant tout poll/wait (qui pourrait récolter l'enfant), figer même un
         # Zombie : tant qu'il n'est pas récolté son PID ne peut pas être réutilisé.
         debut_enfant = (Path('/proc') / str(enfant.pid) / 'stat').read_text().rsplit(') ', 1)[1].split()[19]
