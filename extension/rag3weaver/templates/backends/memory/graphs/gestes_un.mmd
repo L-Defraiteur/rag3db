@@ -6,12 +6,12 @@
 graph LR
     apports["GraphNode(graph='@builtin:tools/select_structured.mmd', entity='Apport', filter=$element.filtre_apports, limit=0)"]
     plan["RhaiNode(script_id=gestes_plan, inputs='element', element=$element)"]
-    creer["ForEachNode(graph='@builtin:backends/memory/graphs/gestes_creer.mmd', element='groupe')"]
-    relier["ForEachNode(graph='@builtin:backends/memory/graphs/gestes_relier.mmd', element='groupe')"]
-    recopier["ForEachNode(graph='@builtin:backends/memory/graphs/gestes_recopier.mmd', element='groupe')"]
+    creer["ForEachNode(graph='@graphs/gestes_creer.mmd', element='groupe')"]
+    relier["ForEachNode(graph='@graphs/gestes_relier.mmd', element='groupe')"]
+    recopier["ForEachNode(graph='@graphs/gestes_recopier.mmd', element='groupe')"]
     fin["RhaiNode(script_id=gestes_fin)"]
     lignes["RhaiNode(script='input.lignes')"]
-    retirer["ForEachNode(graph='@builtin:backends/memory/graphs/ecrire_fiche.mmd', element='ligne')"]
+    retirer["ForEachNode(graph='@graphs/ecrire_fiche.mmd', element='ligne')"]
     rendu["RhaiNode(script='input.rendu')"]
     apports -->|result:value| plan
     plan -->|result:elements| creer

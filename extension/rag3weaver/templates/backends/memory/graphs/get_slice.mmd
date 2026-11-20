@@ -7,9 +7,9 @@
 
 graph LR
     find["RhaiNode(script_id=slice_find, inputs='chemin,run,turn', chemin=$chemin, run=$run, turn=$turn)"]
-    source["ForEachNode(graph='@builtin:backends/memory/graphs/rows_source.mmd')"]
+    source["ForEachNode(graph='@graphs/rows_source.mmd')"]
     query["RhaiNode(script_id=slice_l1_query)"]
-    apports["ForEachNode(graph='@builtin:backends/memory/graphs/rows_apport.mmd')"]
+    apports["ForEachNode(graph='@graphs/rows_apport.mmd')"]
     render["RhaiNode(script_id=slice_render)"]
     find -->|result:elements| source
     source -->|list:value| query
