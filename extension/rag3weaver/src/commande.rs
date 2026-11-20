@@ -2109,6 +2109,28 @@ mod tests {
         assert_ne!(g.juger(&cmd("rm", &["autre.txt"]), &Contexte::default()).decision, Decision::Autorise);
     }
 
+    /// **The agent never sets a git identity** (the night of 20 Nov 2026: two granted cards
+    /// `git config user.*` made one up). Refused, a user's grant included, and the refusal says why.
+    #[test]
+    fn a_git_identity_set_by_the_agent_is_refused_even_granted() {
+        let g = Garde::new(Mode::Auto);
+        let accorde = Contexte { accorde_par_l_utilisateur: true, ..Default::default() };
+        for c in [
+            cmd("git", &["config", "user.email", "lucied@example.com"]),
+            cmd("git", &["config", "--local", "user.name", "Lucie"]),
+            cmd("git", &["-c", "user.name=Lucie", "commit", "-m", "x"]),
+            cmd("git", &["config", "--global", "core.editor", "vi"]),
+        ] {
+            for ctx in [&accorde, &Contexte::default()] {
+                let v = g.juger(&c, ctx);
+                assert_eq!(v.decision, Decision::Refuse, "{}: {}", c.lisible(), v.motif);
+                assert!(v.motif.contains("identit"), "the refusal says why: {}", v.motif);
+            }
+        }
+        // Reading the configuration stays allowed.
+        assert_ne!(g.juger(&cmd("git", &["config", "--get", "core.bare"]), &accorde).decision, Decision::Refuse);
+    }
+
     #[test]
     fn l_elevation_est_refusee_meme_en_auto() {
         let g = Garde::new(Mode::Auto);

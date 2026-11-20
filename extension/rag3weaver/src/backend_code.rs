@@ -627,6 +627,30 @@ pub fn build_bac_a_sable(
 /// Lecture Git d'un worktree lié : administration propre et contenu commun,
 /// jamais les écritures du principal ni les administrations de ses voisins.
 /// Le principal est celui porté par l'hôte, pas un chemin fourni à l'outil.
+/// **The host's git identity** (`user.name`, `user.email` of its global configuration), read once
+/// at start. The sandbox sets `GIT_CONFIG_GLOBAL=/dev/null`: without this, a first commit fails, and
+/// the agent made one up (the night of 20 Nov 2026: `Lucie <lucied@example.com>`).
+pub(crate) fn identite_de_l_hote() -> Option<(String, String)> {
+    static IDENTITE: std::sync::OnceLock<Option<(String, String)>> = std::sync::OnceLock::new();
+    IDENTITE
+        .get_or_init(|| {
+            let lire = |cle: &str| {
+                let sortie = std::process::Command::new("git").args(["config", "--global", "--get", cle]).output().ok()?;
+                let v = String::from_utf8(sortie.stdout).ok()?.trim().to_string();
+                (sortie.status.success() && !v.is_empty()).then_some(v)
+            };
+            Some((lire("user.name")?, lire("user.email")?))
+        })
+        .clone()
+}
+
+/// The identity given to the sandbox: the one the workshop's manifest declares (`sandbox.env`)
+/// wins, key by key; the host's fills the rest; none, nothing is set (the commit fails, and says so).
+pub(crate) fn avec_l_identite(bac: crate::commande::BacASable, identite: Option<(String, String)>) -> crate::commande::BacASable {
+    let _ = identite;
+    bac
+}
+
 pub fn avec_lecture_git(
     mut bac: crate::commande::BacASable,
     racine: &std::path::Path,
@@ -1170,6 +1194,36 @@ mod tests {
         let explicite = crate::commande::BacASable::autour(&lie).avec_env("GIT_CONFIG_GLOBAL", "/configuration-declaree");
         let explicite = avec_lecture_git(explicite, &lie, &principal);
         assert_eq!(explicite.env.iter().find(|(k, _)| k == "GIT_CONFIG_GLOBAL").unwrap().1, "/configuration-declaree");
+    }
+
+    /// **A commit in the sandbox carries the host's identity, never a made-up one** (the night of
+    /// 20 Nov 2026). Under the sandbox's `GIT_CONFIG_GLOBAL=/dev/null`, the commit takes the identity
+    /// given by the host; one declared by the manifest wins.
+    #[test]
+    fn a_commit_in_the_sandbox_carries_the_hosts_identity() {
+        let d = tempfile::tempdir().unwrap();
+        let depot = d.path().join("depot");
+        std::fs::create_dir_all(&depot).unwrap();
+        let git = |env: &[(String, String)], args: &[&str]| {
+            let mut c = std::process::Command::new("git");
+            c.current_dir(&depot).env_clear().env("PATH", std::env::var_os("PATH").unwrap()).env("HOME", d.path());
+            for (k, v) in env { c.env(k, v); }
+            c.args(args).output().unwrap()
+        };
+        let hote = Some(("Hôte Témoin".to_string(), "hote@temoin.invalid".to_string()));
+        let bac = avec_lecture_git(avec_l_identite(crate::commande::BacASable::autour(&depot), hote.clone()), &depot, &depot);
+        assert!(git(&bac.env, &["init", "-q"]).status.success());
+        let commit = git(&bac.env, &["commit", "-q", "--allow-empty", "-m", "premier"]);
+        assert!(commit.status.success(), "the first commit finds an identity: {}", String::from_utf8_lossy(&commit.stderr));
+        let auteur = String::from_utf8(git(&bac.env, &["log", "-1", "--format=%an <%ae> / %cn <%ce>"]).stdout).unwrap();
+        assert_eq!(auteur.trim(), "Hôte Témoin <hote@temoin.invalid> / Hôte Témoin <hote@temoin.invalid>");
+        // The manifest's declaration wins.
+        let declare = crate::commande::BacASable::autour(&depot).avec_env("GIT_AUTHOR_EMAIL", "atelier@declare.invalid");
+        let declare = avec_l_identite(declare, hote);
+        assert_eq!(declare.env.iter().find(|(k, _)| k == "GIT_AUTHOR_EMAIL").unwrap().1, "atelier@declare.invalid");
+        assert_eq!(declare.env.iter().find(|(k, _)| k == "GIT_COMMITTER_EMAIL").unwrap().1, "hote@temoin.invalid");
+        // No identity on the host: nothing is set.
+        assert!(!avec_l_identite(crate::commande::BacASable::autour(&depot), None).env.iter().any(|(k, _)| k.starts_with("GIT_AUTHOR") || k.starts_with("GIT_COMMITTER")));
     }
 
     /// La porte : `off` ne monte rien, les trois modes montent la Garde.
