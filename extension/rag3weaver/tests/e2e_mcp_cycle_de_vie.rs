@@ -210,6 +210,7 @@ impl Client {
     }
 
     /// **Branched on a given host** (`--daemon <address>`): never launched from here, never relaunched.
+    #[cfg(feature = "daemon")]
     fn branche(manifeste: &Path, adresse: &str) -> Self {
         let mut enfant = Command::new(env!("CARGO_BIN_EXE_rag3weaver-backend"))
             .args(["mcp", "--manifest", &manifeste.to_string_lossy(), "--daemon", adresse])
@@ -690,6 +691,8 @@ fn le_journal_de_l_hote_dit_l_heure_et_l_auteur_de_chaque_ligne() {
     );
 }
 
+/// (The fake host speaks HTTP through `tiny_http`, a dependency of the `daemon` feature.)
+#[cfg(feature = "daemon")]
 /// **A fake host, by route**, for the thin client's index watch: every `/call` answers « not ready » (an estimate of
 /// 1 s), `/index_state` answers ready from its `ready_after`-th poll on. Gives its address and the count of polls.
 fn faux_hote_pas_pret(ready_after: usize) -> (String, std::sync::Arc<std::sync::atomic::AtomicUsize>) {
@@ -725,6 +728,7 @@ fn faux_hote_pas_pret(ready_after: usize) -> (String, std::sync::Arc<std::sync::
 /// 20 November 2026; page `docs/recherche/19-11-2026/03-…`). Two calls answer « not ready » on the view `w`; the host
 /// says the layer ready from its third poll. The MCP client receives exactly one `notifications/message`, level
 /// info, that names the view; nothing more after.
+#[cfg(feature = "daemon")]
 #[test]
 #[ignore]
 fn a_view_not_ready_is_notified_once_when_its_index_is_ready() {
