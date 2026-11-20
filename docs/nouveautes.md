@@ -1,5 +1,6 @@
 # Nouveautés
 
+- 20 novembre 2026 — **La page d'une tâche suit son équipier en direct, et répond à ses accords.** Dans l'IDE, la boîte d'une tâche se met à jour au fil du travail, sans recharger. Une commande qui attend ton accord, ou une question de l'équipier, s'affiche en carte, et « Oui », « Non » ou une réponse partent de la page, comme au terminal.
 - 19 novembre 2026 — **Une fenêtre détachée de l'IDE dit les accords qui attendent dans le chat.** Son en-tête compte les demandes d'accord de son dépôt encore sans réponse, à son ouverture comme au fil du flux, et le compte retombe quand le chat accorde ou refuse.
 - 20 novembre 2026 — **Le chat de l'IDE dit quand l'index n'est pas prêt, puis quand il l'est.** Sous un outil qui a répondu avant que l'index ne rattrape, une ligne dit en clair combien de temps il faut encore pour le texte et pour les vecteurs, ou pourquoi les vecteurs manquent ; l'outil n'est pas refusé. Une fois l'index à jour, une seule ligne le dit dans le chat.
 - 19 novembre 2026 — **Une seule notification quand l'index d'une vue est prêt.** Quand une recherche ou une lecture
