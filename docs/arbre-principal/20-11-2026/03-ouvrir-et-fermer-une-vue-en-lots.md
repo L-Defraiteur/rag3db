@@ -32,6 +32,22 @@ nomme le chemin et la règle :
 
 Le nom du lot n'admet que lettres, chiffres, `-` et `_`.
 
+## 2 bis. Un poste ou quinze (Lucie, 20 novembre, 18 h 1x)
+
+« Imaginons le mec, il a quinze ordis, il doit pouvoir s'en sortir quand même, ou un seul. » Donc :
+
+- **Le poste, c'est son hostname.** Aucun nom de poste n'est écrit dans le code.
+- **Un hôte par poste** gère ses worktrees et ses vues.
+- **La table des dossiers vit par poste**, dans la configuration de l'hôte. Une session vit sur un poste à la fois,
+  et un même nom de session peut avoir un dossier sur chaque poste.
+- **La fermeture tirée (O4) lit les atterrissages de son poste par une voie que sa configuration déclare** : où est
+  le journal du pousseur, et comment le lire (un chemin local, ou une commande). Sur un seul poste, tout est local,
+  sans ssh. Sur N postes, chaque hôte a sa voie. Jamais de `ssh` vers `luciepc` écrit en dur.
+- **Les témoins jouent les deux cas** :
+  - un seul poste : le journal en local ;
+  - N postes : un faux hostname, deux tables, et deux journaux, dont un lu par la voie déclarée. Chaque hôte ne ferme
+    que les vues de son poste.
+
 ## 3. Les lots
 
 **O1, `open_view` sans index** (½ jour d'agent). La garde du § 2, le fichier des dossiers, puis
@@ -70,12 +86,16 @@ qui la lisait retombe sur le backend, et la réponse suivante le dit une fois.
 Témoins rouges : un arbre sale refusé, l'arbre de Lucie refusé (non ouvert par l'hôte), un processus dedans refusé, puis
 un arbre propre retiré avec son target.
 
-**O4, la fermeture tirée des atterrissages** (¼ jour). Toutes les quelques minutes, l'hôte lit les atterrissages de
-son poste, colonne `vue` de `landed.tsv` : en local à luciepc, par `ssh` depuis la tablette. Il ferme ses vues par
-`close_view`, et un refus va au journal du poste.
+**O4, la fermeture tirée des atterrissages** (¼ jour). Toutes les quelques minutes, l'hôte lit les atterrissages
+de son poste (la colonne `vue` de `landed.tsv`), par la voie que déclare sa configuration (§ 2 bis). Il ferme les vues
+dont le poste est son hostname, par `close_view`, et un refus va au journal du poste.
 
-Témoin rouge : un faux `landed.tsv` avec une vue du poste ; elle se ferme par son nom, même quand la branche atterrie
-n'est pas celle de l'auteur.
+Témoins rouges :
+
+- un seul poste, journal local : une vue du poste se ferme par son nom, même quand la branche atterrie n'est pas
+  celle de l'auteur ;
+- deux postes : deux hôtes de hostnames faux, deux tables, un journal lu par une commande déclarée. Chacun ne ferme
+  que sa vue.
 
 **Total** : 2 ¼ jours d'agent. O1, O3 et O4 tiennent sans O2 : une vue ouverte sans couche se ferme quand même.
 
