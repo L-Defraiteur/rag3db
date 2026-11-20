@@ -23,6 +23,36 @@ Une déclaration peut tout régler, sauf ouvrir une porte que le code garde ferm
 | **Les primitives du socle** (`run`, MCP à chaud, fetch, cron, fork, recherche web) | (à naître) Leurs schémas, leurs bornes, le catalogue des serveurs MCP, la politique réseau | Les processus, les sockets, les minuteries, le réseau, le fork du contexte | Ils touchent le système et des frontières : un processus lancé, une adresse locale, un délai | Ce qui se déclare naît déclaré. Le reste est un mécanisme nommé, que le gabarit appelle |
 | **Le relais du mode pair** | `teammate.pair`, le nom de l'agent ; (à naître) la table des hôtes pour plusieurs postes | Le registre (`<pid>.json`, au format de Claude Code), la socket, la trame, le relais par pair, le retrait propre | Un format qui n'est pas le nôtre (celui de Claude Code, relevé par essais), et des fichiers d'un autre programme | Rien à passer : seuls les noms, l'activation et la table des hôtes sont des choix, et ils sont déclarés |
 
+## En trois colonnes (le critère de Lucie, 21 h 4x)
+
+« Ce qui a besoin de flexibilité d'implémentation → script ; ce qui a besoin de performance et qui
+est une primitive → Rust. » Le nœud scripté existe (`ScriptedNode`, un `.ts` dans QuickJS), et le
+défaut pour un nœud neuf devient le script, sauf primitive ou performance mesurée.
+
+| Chez les agents et les tâches | Gabarit (une donnée) | Nœud scripté (une logique qui change) | Rust (une primitive, une garde) |
+|---|---|---|---|
+| Invites, textes de reprise, descriptions d'outils | ✔ | | |
+| Bornes du pas, modèle et raisonnement, familles d'outils, catalogue MCP, politique réseau, table des hôtes | ✔ | | |
+| L'assemblage de l'invite d'un pas (la frontière : boîte, plans, report du pas d'avant, résumé de la palette) | | ✔ | |
+| Les règles d'un pas (quand il est raté, quand un pas suivant part, la relance d'une réponse coupée) | | ✔ | |
+| La mise en forme d'un résumé (report du pas d'avant, trace pour le banc, compte rendu au parent) | | ✔ | |
+| Le choix d'une famille d'outils (la recherche de `find_tool`, son rang, le déchargement) | | ✔ (le rang par le sens appelle l'index, une primitive) | |
+| La boucle des pas, son état sur disque, la reprise après un arrêt | | | ✔ |
+| La porte : sentinelle, Landlock, variables retirées du bac | | | ✔ (une garde) |
+| `run`, les processus, les minuteries du cron, le fetch, le fork du contexte | | | ✔ (des primitives) |
+| Le relais du mode pair : registre, socket, trame | | | ✔ (un format d'un autre programme) |
+
+**La condition.** Le pas de l'équipier n'est pas un graphe. Un script n'y entre que si la boucle l'appelle à des points
+déclarés : composer la frontière, juger un pas, rendre un résumé, choisir une famille. Chaque point reçoit
+un état en JSON et rend une décision en JSON, avec un défaut en Rust si le gabarit n'en déclare pas.
+Ces points d'appel sont un mécanisme à écrire une fois (environ deux jours), sur `ScriptedNode`. Ensuite,
+une règle d'un pas se change en éditant un `.ts` du gabarit, et un agent pourra un jour éditer les siennes
+(la graine « un agent édite son propre workflow »).
+
+**Ce qui reste Rust**, et pourquoi : la boucle et son état (des reprises sûres après un arrêt), les
+gardes (une garde qui dépend d'un script ou d'un modèle pour dire non a une panne de trop), les
+primitives (processus, sockets, minuteries, réseau), et le relais (un format qui n'est pas le nôtre).
+
 ## Ce que coûte l'ensemble
 
 Le plus utile, et le moins cher : **les textes**. Ce sont l'invite de l'équipier, celle du chat, les
