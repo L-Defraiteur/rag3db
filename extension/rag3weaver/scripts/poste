@@ -498,10 +498,10 @@ borner_fils "$FILS"
 # sccache et mold (19 novembre 2026, c7 ; posés par Lucie aux deux postes) : treize targets recompilaient chacun les
 # mêmes dépendances. Quand ils sont là, une commande compile par sccache (cache sur disque hors de /tmp, plafond 40G) et
 # lie par mold, à travers clang. Une variable déjà posée par l'appelant, même vide, l'emporte.
-# sccache n'est qu'en opt-in (POSTE_SCCACHE=1) tant que le bac à sable du produit hérite de RUSTC_WRAPPER : son cargo y
-# échouait par intermittence, « Permission denied » (19 novembre 2026, ticket d'optimiseur ; c7). Au correctif
-# d'archi, il redevient le défaut.
-if [ "${POSTE_SCCACHE:-}" = 1 ] && command -v sccache > /dev/null 2>&1; then
+# sccache a été en opt-in du 19 au 20 novembre 2026 : le bac à sable du produit héritait de RUSTC_WRAPPER, et son cargo
+# y échouait par intermittence, « Permission denied » (ticket d'optimiseur ; c7). Le bac retire désormais RUSTC_WRAPPER
+# et SCCACHE_* (lot bac-sans-sccache d'archi, 20d406a82c) : sccache redevient le défaut, POSTE_SCCACHE=0 le coupe.
+if [ "${POSTE_SCCACHE:-1}" = 1 ] && command -v sccache > /dev/null 2>&1; then
   [ -n "${RUSTC_WRAPPER+posée}" ] || export RUSTC_WRAPPER=sccache
   [ -n "${SCCACHE_DIR+posée}" ] || export SCCACHE_DIR="$HOME/.cache/sccache"
   [ -n "${SCCACHE_CACHE_SIZE+posée}" ] || export SCCACHE_CACHE_SIZE=40G

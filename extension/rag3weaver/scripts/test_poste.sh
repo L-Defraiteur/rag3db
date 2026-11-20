@@ -329,16 +329,20 @@ seuil_confineur=$(python3 -c "import re,sys; m=re.search(r'^MAX_MEMOIRE = (\d+) 
 [ -n "$seuil_poste" ] && [ "$seuil_poste" = "$seuil_confineur" ]
 cas $? "le seuil de poste est celui du confineur (poste ${seuil_poste:-absent}, confiner_validation.py ${seuil_confineur:-absent})"
 # sccache et mold (19 novembre 2026, c7 ; posés par Lucie aux deux postes) : sous `poste`, une commande lie par mold
-# quand il est là ; sccache seulement sous POSTE_SCCACHE=1, tant que le bac à sable du produit en hérite (ticket du
-# 19 nov., cargo y échoue par intermittence) ; un choix de l'appelant l'emporte.
+# quand il est là, et compile par sccache (redevenu le défaut le 20 novembre 2026 : le bac à sable du produit retire
+# RUSTC_WRAPPER et SCCACHE_*, lot bac-sans-sccache d'archi) ; POSTE_SCCACHE=0 le coupe ; un choix de l'appelant l'emporte.
 R=$(mktemp -d -p "${TMPDIR:-$HOME/.cache}"); mkdir -p "$R/bin"
 for b in sccache mold clang; do printf '#!/bin/sh\nexit 0\n' > "$R/bin/$b"; chmod +x "$R/bin/$b"; done
 # Un script, pas un `sh -c` : systemd-run développe lui-même les ${…} d'une ligne de commande.
 printf '%s\n' '#!/bin/sh' 'echo "${RUSTC_WRAPPER-absent}|${SCCACHE_DIR-absent}|${SCCACHE_CACHE_SIZE-absent}|${CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER-absent}|${CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS-absent}" > "$1"' > "$R/lire.sh"
 env -u RUSTC_WRAPPER -u SCCACHE_DIR -u SCCACHE_CACHE_SIZE -u CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER -u CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS -u POSTE_SCCACHE \
   PATH="$R/bin:$PATH" "$POSTE" lourd sh "$R/lire.sh" "$R/env" > /dev/null 2>&1
-[ "$(cat "$R/env" 2>/dev/null)" = "absent|absent|absent|clang|-C link-arg=-fuse-ld=mold" ]
-cas $? "sous poste, sans POSTE_SCCACHE : ni RUSTC_WRAPPER ni SCCACHE_*, et mold par clang (lu : $(cat "$R/env" 2>/dev/null))"
+[ "$(cat "$R/env" 2>/dev/null)" = "sccache|$HOME/.cache/sccache|40G|clang|-C link-arg=-fuse-ld=mold" ]
+cas $? "sous poste, sans POSTE_SCCACHE : sccache par défaut (~/.cache/sccache, 40G) et mold par clang (lu : $(cat "$R/env" 2>/dev/null))"
+env -u RUSTC_WRAPPER -u SCCACHE_DIR -u SCCACHE_CACHE_SIZE -u CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER -u CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS \
+  POSTE_SCCACHE=0 PATH="$R/bin:$PATH" "$POSTE" lourd sh "$R/lire.sh" "$R/env0" > /dev/null 2>&1
+[ "$(cat "$R/env0" 2>/dev/null)" = "absent|absent|absent|clang|-C link-arg=-fuse-ld=mold" ]
+cas $? "sous POSTE_SCCACHE=0 : ni RUSTC_WRAPPER ni SCCACHE_*, mold reste (lu : $(cat "$R/env0" 2>/dev/null))"
 env -u RUSTC_WRAPPER -u SCCACHE_DIR -u SCCACHE_CACHE_SIZE -u CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER -u CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS \
   POSTE_SCCACHE=1 PATH="$R/bin:$PATH" "$POSTE" lourd sh "$R/lire.sh" "$R/env1" > /dev/null 2>&1
 [ "$(cat "$R/env1" 2>/dev/null)" = "sccache|$HOME/.cache/sccache|40G|clang|-C link-arg=-fuse-ld=mold" ]
