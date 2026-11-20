@@ -31,9 +31,35 @@ les deux passes en série. L'extraction est en `low` des deux côtés (le défau
 - **P1 ne bouge pas** au-delà de l'écart d'un jeu à l'autre (± 0,07, page `02-le-raisonnement-de-l-extraction.md`) :
   0,778 contre 0,796. B4 ne coûte pas de sujets.
 
-## F300 (à 9 h 30)
+## F300 (joué de 9 h 13 à 11 h 50)
 
-C'est en F300 que B4 peut se voir : chaque Decide y reçoit les résumés des fenêtres d'avant et le chevauchement, soit
-des dizaines de milliers de caractères stables d'une section à l'autre de la même fenêtre. La paire F300 (environ 75
-minutes par passe, comme le 18) ne tenait pas avant la fenêtre du matin de 6 h 45 à 9 h 30. Elle part à 9 h 30, avec les
-deux binaires déjà bâtis. Ses chiffres complèteront cette page.
+La forme F300 du 18 novembre (`x_archive_long.py`, `VARIANTE=F`, fenêtre de 300 000 jetons, chevauchement de 10 %,
+résumés de 60 000) : 244 sections, une décision `archive` chacune, avec le contexte d'avant (sa place, les résumés des
+fenêtres d'avant, le chevauchement, les tours d'avant de la fenêtre). Les deux binaires bâtis pour S 50, en série, une
+base neuve chacun. La passe « après » a duré 100 min, contre 55 : Vertex a ralenti en fin de passe (jusqu'à 65 s par
+tour).
+
+| | avant (`c4e92b082f`) | après B4 (`2884c9ed37`) |
+|---|---|---|
+| décisions, erreurs | 244, 0 | 244, 0 |
+| create, fiche, none | 56, 149, 39 | 58, 159, 27 |
+| P1 contre N | **0,907** (49/54) | **0,815** (44/54) |
+| P2, doublons | 5 (0,128) | 4 (0,091) |
+| invite des Decide | 27 112 496 jetons | 27 085 664 jetons |
+| **servie par le cache** | **11 545 746 (42,6 %)** | **11 162 764 (41,2 %)** |
+| tours servis par le cache | 110 sur 244 | 108 sur 244 |
+| part du cache d'un tour servi (médiane) | 89,3 % | 87,8 % |
+| par fenêtre (1, 2, 3) | 33,9 %, 43,7 %, 43,5 % | 32,0 %, 44,3 %, 40,3 % |
+
+**Ce qu'on peut en dire**
+
+1. **B4 ne fait pas monter le cache.** Il reste à 41-43 % des deux côtés.
+2. **Le cache se joue en tout ou rien, appel par appel.** Un tour sur deux est servi à ~88 % de son invite, l'autre pas
+   du tout, avant comme après B4. Le préfixe stable existe donc déjà avant B4 : le contexte de F300 ne s'allonge que par
+   sa fin, d'un tour au suivant. C'est le cache **implicite** de Vertex qui ne le sert qu'une fois sur deux. Le levier
+   est le cache **explicite** (ticket R, section du 19 novembre), pas l'ordre des parts du Decide.
+3. **P1 baisse de 0,907 à 0,815.** Le côté avant retrouve exactement le P1 de la F300 du 18 novembre (0,907) : sur
+   F300, P1 a l'air stable d'un jeu à l'autre, contrairement à S 50 (± 0,07). Une baisse de 0,09 est donc à prendre au
+   sérieux. Les décisions changent : 27 « none » contre 39, et 10 rangements de plus sous une fiche existante. B4 range
+   plus volontiers sous une candidate, et perd 5 sujets de N. **Un second jeu « après » est nécessaire** pour dire si
+   la baisse est réelle, avant d'en tirer une conclusion sur B4.
