@@ -103,4 +103,20 @@ second cas : un ROLLBACK de paquet, sans mort, qui doit laisser l'index à N san
    l'effacement de N−1 après la validation de N+1 ; le témoin rouge ci-dessus, puis vert.
 3. Le moteur : rien. La session hotfixs relit le tout (l'ordre fsync, rename, marque en base) et le banc d'arrêt.
 
+## Relu par le cœur (20 novembre)
+
+L'ordre du point de reprise et ce que couvre le rejeu sont confirmés. Avec A, une mort entre le scellement et l'en-tête
+laisse l'ancien en-tête nommer l'ancienne génération, qui doit donc exister encore. Après le rejeu, l'index reste au point
+de reprise, en retard de tout ce que le journal rejoue : A ne suffit pas sans un index du moteur journalisé. Le cœur
+recommande B lui aussi, et deux précisions s'ajoutent :
+
+1. **B ne dépend pas du point de reprise V2** : des lecteurs tournent pendant qu'il s'écrit, mais aucun écrivain ne
+   valide, et le lien de B passe par la clé `fts_generation`, journalisée avec les lignes.
+2. **À l'étape 2, le retrait de N−1 attend que la validation de N+1 soit durable** : le journal synchronisé au COMMIT,
+   et pas seulement la transaction validée. C'est le défaut du moteur aujourd'hui ; l'écrire, pour qu'un mode sans fsync
+   du journal, s'il en vient un, ne le casse pas.
+
+Pour le lot L3 (le moteur valide avant lucivy), la base est en avance et on ne peut pas revenir en arrière : son
+`fts_pending:` et le rebâti de ses seules entités restent.
+
 Question pour c7 et Lucie : B, ou A ?
