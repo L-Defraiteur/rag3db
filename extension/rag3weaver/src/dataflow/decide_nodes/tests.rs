@@ -213,6 +213,30 @@ fn two_decisions_on_the_same_text_begin_with_the_same_bytes() {
     assert!(common >= through_text, "the common prefix ({common} bytes) covers the instruction and the whole text ({through_text}): {prompts:?}");
 }
 
+/// **A field of context parts** (lot B4): when the field Decide reads is a list of parts {name, title, value, format?},
+/// the text sent is those parts rendered as sections, as LlmNode renders its context — no prose assembled by a script.
+#[test]
+fn decide_by_llm_renders_a_field_of_context_parts_as_sections() {
+    let asked = Arc::new(Mutex::new(None));
+    let a = asked.clone();
+    let llm = CallbackLlm::new("classe", 4096, move |turns, opts, sink| {
+        *a.lock().unwrap() = Some(turns.last().unwrap().content.clone());
+        MockLlm::new(r#"{"label": "question"}"#).generate(turns, opts, sink)
+    });
+    let def = graph(
+        json!({"parts": [
+            {"name": "section", "title": "Section « S »", "value": "comment indexer ?"},
+            {"name": "off", "title": "Rien", "value": ""},
+            {"name": "c", "title": "Candidates", "value": [{"alias": "a1", "name": "N"}], "format": {"template": "- {{ alias }} : {{ name }}"}}
+        ]}),
+        "Decide",
+        json!({"labels": "question|bavardage", "field": "parts"}),
+        &[],
+    );
+    run(&def, with_llm(llm)).unwrap();
+    assert_eq!(asked.lock().unwrap().clone().unwrap(), "## Section « S »\n\ncomment indexer ?\n\n## Candidates\n\n- a1 : N");
+}
+
 /// L'élément sans son `usage`, et l'usage à part : les témoins de l'étiquette restent ceux d'avant.
 fn sans_usage(e: Option<Value>) -> (Option<Value>, Option<Value>) {
     match e {
