@@ -16,6 +16,13 @@
 #[test]
 #[ignore]
 fn sonde_granite_107m() {
+    // Judged in its relaunch only (`RAG3WEAVER_VALUES_PROBE`, set by `sonde_sous`) : played by a
+    // pass where no service serves granite-107m and no fallback is named (the tablet, 20
+    // November 2026), it was red with no defect of the code.
+    if std::env::var_os("RAG3WEAVER_VALUES_PROBE").is_none() {
+        println!("▸ sonde : hors relance, rien à juger");
+        return;
+    }
     let e = &*crate::common::burn::GRANITE_107M;
     let v = e.embed(&["une phrase d'essai".into()]).expect("le calcul de la sonde");
     println!("▸ sonde : dim {} factice {}", v[0].len(), e.is_mock());
@@ -76,6 +83,7 @@ fn sonde_sous(repli: Option<&str>) -> (bool, String) {
     let mut c = std::process::Command::new(std::env::current_exe().unwrap());
     c.args(["--exact", &crate::common::test_de_cette_suite!("sonde_granite_107m"), "--ignored", "--nocapture", "--test-threads=1"])
         .env("RAG3WEAVER_SERVICE_EMBED", "127.0.0.1:9")
+        .env("RAG3WEAVER_VALUES_PROBE", "1")
         .env_remove("RAG3WEAVER_EMBED_SERVICE")
         .env_remove("RAG3WEAVER_TESTS_REPLI_PERIPHERIQUE");
     if let Some(r) = repli {
