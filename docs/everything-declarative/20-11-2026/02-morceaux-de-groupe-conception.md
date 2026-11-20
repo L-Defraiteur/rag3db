@@ -1,8 +1,19 @@
-# Les morceaux de groupe — conception, à relire par Lucie avant le code
+# Les morceaux de groupe — conception, relue par Lucie
 
 20 novembre 2026, session everything declarative. L'idée est de Lucie (10 h 29, par c7) : plutôt que de seulement
 retirer du vecteur les petits scopes `variable`, réunir une suite de petits scopes frères juxtaposés en **un seul
-morceau d'embarquement**. Rien n'est codé : cette page attend son mot.
+morceau d'embarquement**. **Lucie a dit oui à 10 h 36**, avec ses réponses (à la fin de la page) ; le code commence
+après le dépôt du lot 13.
+
+## Les deux invariants (mots de Lucie)
+
+1. **« Jamais quelqu'un ne doit être bloqué par un hack ni avoir l'impression d'une différence d'usage. »** Aucun type
+   de résultat neuf, aucune option, aucun réglage demandé : le seuil est celui de l'exclusion
+   (`workspace.variable_min_chars`, 80), et le groupe ne se voit pas.
+2. **« Important qu'on sache quand même voir comme entité indépendante la variable ou le petit scope feuille en
+   général. »** Le petit scope garde sa clé, sa ligne, sa place dans `outline`, ses `usages`, ses arêtes du graphe et
+   sa place dans les résultats. **Le groupe n'est qu'un véhicule d'embarquement**, jamais une entité que l'utilisateur
+   voit.
 
 ## Ce qui précède
 
@@ -29,17 +40,22 @@ Le groupe vit **uniquement au niveau de l'embarquement** : des lignes `…_Chunk
 
 ## Ce qui entre dans un groupe
 
-- **Les types** : ceux de la règle d'exclusion des variables (`variable`), et c'est le seul type au premier lot. Une
-  liste déclarée dans la règle permet d'y ajouter plus tard des types qui ont le même défaut, si une mesure le montre :
-  `constant`, un champ court, un alias de type. Je ne les mets pas sans mesure.
-- **Le seuil** : celui de l'exclusion (`workspace.variable_min_chars`, 80). Un scope qui serait exclu entre dans un
-  groupe à la place. Un scope au-dessus du seuil garde son propre morceau, comme aujourd'hui, et **coupe** le groupe.
+- **Tout scope feuille sous le seuil** (réponse 1 de Lucie) : la règle est **par taille, pas par type**. Une feuille
+  est un scope qui ne contient pas d'autres scopes : une variable, une constante, un champ, un alias, une petite
+  fonction d'une ligne. Une constante (un type à part chez codeparsers) ne doit pas se chercher autrement qu'une
+  variable. Les conteneurs (fichier, module, namespace, classe, fonction qui contient des scopes) ne se groupent jamais :
+  ce sont eux qui portent les groupes.
+- **Le seuil** : celui de l'exclusion (`workspace.variable_min_chars`, 80), sans réglage de plus. Une feuille sous le
+  seuil entre dans un groupe. Une feuille au-dessus garde son propre morceau, comme aujourd'hui, et **coupe** le groupe.
 - **Un groupe trop court reste exclu.** Un groupe dont le texte total n'atteint pas le seuil (un `s=…` seul) n'a pas
   de morceau : c'est le cas que l'exclusion règle déjà, et il ne doit pas revenir par le groupe.
 
-**La règle devient** : `TakesOut::Chunks` (ce que fait `variable-not-candidate`), plus une option `groups: true`. Les
-scopes exclus de leur propre morceau sont réunis par groupes ; les autres règles (les conteneurs de 2.12) ne groupent
-pas.
+**La règle** reste celle de l'exclusion des feuilles courtes (elles n'ont pas de morceau **à elles**), et leurs
+textes sont réunis en morceaux de groupe portés par leur parent. Les conteneurs repliés de 2.12 ne groupent pas.
+
+**Une conséquence pour le lot 12** (`variable-not-candidate`) : il exclut par **type** (`variable`). La réponse 1 dit
+« par taille ». Soit le lot 12 passe tout de suite aux feuilles par taille (avant d'atterrir, le juge du banc en
+cours), soit il atterrit par type et le lot des groupes l'élargit. La question est posée à c7.
 
 ## Où un groupe coupe
 
@@ -78,9 +94,10 @@ ne la prends pas sans ton mot.
 
 ## Comment la recherche le rend
 
-Un résultat porté par un morceau de groupe se rend comme **le parent, à la plage du groupe** : le fichier (ou la
-fonction), les lignes `_start_line`–`_end_line` lisibles par `read_file`, et la liste des noms des membres
-(`_group` → `name`).
+Un résultat porté par un morceau de groupe se rend comme **le parent, à la plage du groupe** (réponse 3) : le fichier
+(ou la fonction), les lignes `_start_line`–`_end_line` lisibles par `read_file`, et la liste des noms des membres
+(`_group` → `name`). C'est un résultat de parent comme les autres, à une plage : **aucun type de résultat neuf**
+(invariant 1). Le groupe lui-même n'est jamais nommé.
 
 Quand la même requête trouve aussi un membre par le plein texte, la fusion garde **le membre**, plus précis, et le
 groupe ne s'ajoute pas en doublon : la clé de dédoublonnage du résultat est la plage de lignes. C'est le point le plus
@@ -123,9 +140,8 @@ Environ une journée d'agent :
   bundle d'une ligne ; une variable éditée réembarque son seul parent ; la garde des comptes inchangée ;
 - puis le juge sur la copie de G.
 
-## Ce que je te demande, Lucie
+## Les réponses de Lucie (10 h 36)
 
-1. **Le seul type `variable` au premier lot**, les autres types par mesure plus tard : d'accord ?
-2. **`groups_hash` dans le rendu du parent** plutôt qu'une entité de version propre aux groupes : d'accord ?
-3. **Le rendu d'un résultat de groupe** comme le parent à la plage du groupe, avec la liste des noms, et le membre
-   préféré au groupe quand le plein texte le trouve : d'accord ?
+1. **Pas seulement `variable`** : tout scope feuille sous le seuil, par taille, pas par type.
+2. **Oui** à `groups_hash` dans le rendu du parent.
+3. **Oui** au rendu par le parent à la plage du groupe, et au membre précis quand le plein texte le trouve.
