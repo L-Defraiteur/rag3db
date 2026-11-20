@@ -102,6 +102,33 @@ lu le lendemain, sans index de mesure ni essai sur le service.
 Une fois la chauffe retirée, il reste **67 morceaux du trafic réel coupés à 512 jetons en 40 minutes** (10 h 47 → 11 h 27).
 Quels textes, et quelle vue : le service ne les nomme pas. C'est à lire côté client, au journal d'index des hôtes, qui
 ne voit pas aujourd'hui les troncatures d'un service distant (`DaemonEmbedder::troncatures` n'est pas relayé).
+
+**La mesure, le 20 novembre (1 h 3x)** : un quart des morceaux de code dépasse la fenêtre de granite. Ticket
+`embarquement/tickets/2026-11-20-un-quart-des-morceaux-de-code-depasse-la-fenetre-de-granite.md`. Découpés comme le crate
+(30 lignes ou 1 500 caractères), les 311 fichiers `.rs` d'`extension/rag3weaver` donnent 8 843 morceaux, dont **25,3 %**
+au-dessus de 512 jetons pour granite. À 1 200 caractères, 0,7 % ; à 1 100, 0,1 %. Le compteur du 7878 dit 146 463
+troncatures depuis le 19 à 10 h 47 (le repassage de la bascule du soir surtout). **C'est le découpage en amont, pas le
+plafond.** Le script, rejouable en une minute (`uvx --with tokenizers python -I chunk_sizes.py <dossier>`) :
+
+```python
+import sys, pathlib
+from tokenizers import Tokenizer
+t = Tokenizer.from_file("/home/lucied/.cache/rag3weaver/granite-278m/tokenizer.json"); t.no_truncation(); t.no_padding()
+root = pathlib.Path(sys.argv[1]); files = [f.read_text(errors="replace").splitlines(keepends=True) for f in sorted(root.rglob("*.rs"))]
+for size in (1500, 1300, 1200, 1100, 1000, 900):
+    total = over = 0
+    for lines in files:
+        i = 0
+        while i < len(lines):
+            chunk, n = [], 0
+            while i < len(lines) and len(chunk) < 30 and (n + len(lines[i]) <= size or not chunk):
+                chunk.append(lines[i]); n += len(lines[i]); i += 1
+            text = "".join(chunk)
+            if text.strip():
+                total += 1; over += len(t.encode(text).ids) > 512
+    print(f"max_size {size} : {total} morceaux, {over} au-dessus de 512 ({100*over/total:.1f} %)")
+```
+
 S'ils sont nombreux, `text-splitter` sait dimensionner par un tokenizer, et `max_size` peut alors se dire en jetons
 par modèle. **Taille : une mesure, puis à décider.**
 
