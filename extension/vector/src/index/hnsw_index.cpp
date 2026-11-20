@@ -388,15 +388,36 @@ uint64_t InMemHNSWLayer::keepEveryNodeReachable(GetEmbeddingsScanState& scanStat
         if (vector.isNull()) {
             continue;
         }
-        // The search only walks what the entry point reaches: its nearest result is reached.
-        const auto closest =
-            searchKNN(vector, entry, info.maxDegree, info.efc, visited, scanState);
+        // Its own neighbours first, chosen near it by the build: the nearest one reached. A search
+        // from the entry costs a whole walk per node, and a cloud of isolated points (the drawn
+        // gaussian base) has thousands of them.
         auto from = common::INVALID_OFFSET;
-        for (const auto& candidate : closest) {
-            if (candidate.nodeOffset != node && candidate.nodeOffset < info.numNodes &&
-                reached[candidate.nodeOffset]) {
-                from = candidate.nodeOffset;
-                break;
+        auto best = std::numeric_limits<double>::max();
+        const auto nbrOffsets = getNodeOffsets(graph->getNeighbors(node));
+        const auto nbrVectors = info.getEmbeddings(nbrOffsets, scanState);
+        for (common::offset_t i = 0; i < nbrOffsets.size(); ++i) {
+            const auto nbr = nbrOffsets[i];
+            if (nbr == node || nbr >= info.numNodes || !reached[nbr] || nbrVectors[i].isNull()) {
+                continue;
+            }
+            const auto dist =
+                info.metricFunc(vector.getPtr(), nbrVectors[i].getPtr(), info.getDimension());
+            if (dist < best) {
+                best = dist;
+                from = nbr;
+            }
+        }
+        if (from == common::INVALID_OFFSET) {
+            // None of them reached: the search only walks what the entry point reaches, so its
+            // nearest result is reached.
+            const auto closest =
+                searchKNN(vector, entry, info.maxDegree, info.efc, visited, scanState);
+            for (const auto& candidate : closest) {
+                if (candidate.nodeOffset != node && candidate.nodeOffset < info.numNodes &&
+                    reached[candidate.nodeOffset]) {
+                    from = candidate.nodeOffset;
+                    break;
+                }
             }
         }
         if (from == common::INVALID_OFFSET) {
