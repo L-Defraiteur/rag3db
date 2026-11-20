@@ -2146,7 +2146,8 @@ mod tests_keep_for {
     }
 }
 
-#[cfg(test)]
+// The rule it tests is the code schema's (`crate::code`): under the `code` feature only.
+#[cfg(all(test, feature = "code"))]
 mod not_candidate_tests {
     use super::*;
     use crate::connection::CypherValue;
