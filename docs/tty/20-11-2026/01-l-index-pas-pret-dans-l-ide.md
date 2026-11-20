@@ -4,7 +4,7 @@ Session tty, nuit du 19 au 20 novembre 2026. C'est une tâche de c7, posée sur 
 - l'attente des vecteurs : le champ `index` d'une réponse d'outil ;
 - la notification « index prêt » du client mince : `ReadyWatches`, `$/rag3weaver/notice`.
 
-Branche `cx-index-pas-pret-1`, sur `recherche-notification-index` (50b892df9e).
+Branche `cx-index-pas-pret-2`, posée sur `index-ready-notify` de recherche (2b8c8d4632), qui porte aussi la correction ci-dessous.
 
 ## Ce que la page dit
 
@@ -28,18 +28,19 @@ Branche `cx-index-pas-pret-1`, sur `recherche-notification-index` (50b892df9e).
 
   La sonde est `index_state_now`. Une fois la couche prête, l'hôte publie `IndexReady {view, text}` sur le flux de l'IDE, sujet `index`, que la page reçoit désormais.
 
-## Un défaut de recherche, corrigé ici
+## Un défaut de recherche, trouvé ici, porté par recherche
 
-`SearchSettings` refusait les champs inconnus et ne connaissait que `index_wait_s`. Un manifeste qui déclarait `search.ready_watch` ne s'ouvrait plus. Le témoin de recherche écrivait un faux manifeste, jamais chargé. La correction déclare `ready_watch` dans `SearchSettings`, avec ses quatre champs typés ; une faute de frappe y est toujours refusée. Rouge f450a06dcf, vert 9fa084ef38. Recherche est prévenue.
+`SearchSettings` refusait les champs inconnus et ne connaissait que `index_wait_s`. Un manifeste qui déclarait `search.ready_watch` ne s'ouvrait plus. Le témoin de recherche écrivait un faux manifeste, jamais chargé. La correction déclare `ready_watch` dans `SearchSettings`, avec ses quatre champs typés ; une faute de frappe y est toujours refusée. Je l'ai écrite rouge d'abord ; recherche l'a reprise dans son propre lot (ae38d24ecb rouge, 2b8c8d4632 vert), pour que son lot n'annonce pas un réglage qui empêche le manifeste de s'ouvrir.
 
 ## Les témoins, rouges d'abord
 
 | Témoin | Ce qu'il prouve | Rouge | Vert |
 |---|---|---|---|
-| `backend_tools::tests::the_state_of_an_index_not_ready_goes_with_the_receipt` | l'état dans `metadata.index` | db0e6100e0 | 8c5d837384 |
-| `daemon_client::tests::a_manifest_that_declares_the_watch_settings_still_opens` | le manifeste s'ouvre | f450a06dcf | 9fa084ef38 |
-| `daemon_host::chat::tests::an_index_not_ready_in_the_chat_is_watched_and_said_ready_once` | deux réponses pas prêtes, un seul `IndexReady` | c344aa15d1 | (veille) |
-| `daemon_host::chat::tests::the_chat_page_says_an_index_not_ready_then_ready_once` (navigateur) | la ligne sous la bulle, puis une seule ligne « prêt » | 59c9ca7df7 | (IDE) |
+| `backend_tools::tests::the_state_of_an_index_not_ready_goes_with_the_receipt` | l'état dans `metadata.index` | 264c92c353 | 13374db45c |
+| `daemon_host::chat::tests::an_index_not_ready_in_the_chat_is_watched_and_said_ready_once` | deux réponses pas prêtes, un seul `IndexReady` | ae3cfd4348 | d89fadb605 |
+| `daemon_host::chat::tests::the_chat_page_says_an_index_not_ready_then_ready_once` (navigateur) | la ligne sous la bulle, puis une seule ligne « prêt » | 5a02c4fb6a | ba3e9e7f37 |
+
+Les rouges et les verts ont été joués sur la première pose (`cx-index-pas-pret-1`, sur 50b892df9e) ; la repose sur la tête de recherche ne change aucun fichier.
 
 Le banc est le même pour les deux derniers (`BancPasPret`). Ce n'est pas un faux hôte : c'est le vrai chemin, avec un retard noté à la main.
 - Un fichier est noté en retard dans la couche du backend, à un débit observé de 20 s par fichier. `usages` répond donc tout de suite, pas prêt.
