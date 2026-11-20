@@ -3348,6 +3348,14 @@ impl PendingReload {
     }
 }
 
+/// A proposal of the template that checks (5.2): its version, and the version in service with its reload number.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Proposal {
+    pub template_hash: String,
+    pub in_service: String,
+    pub version: u64,
+}
+
 /// Ce qu'un rechargement accepté a mis en service.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Reloaded {
@@ -4524,6 +4532,30 @@ impl Backend {
         Ok(PendingReload {
             next,
             removed_reactions,
+        })
+    }
+
+    /// **A proposal of the template, checked on a copy** (5.2, 20 November 2026, the page of the agent that edits its
+    /// memory workflow): loads the manifest of a copy, checks it as a reload would — what was fixed at the opening
+    /// (base, models, entities, relations…) must not change — and says its version next to the one in service.
+    /// Nothing is put in service: the copy's relative paths (its base, its files) point at the copy, so a proposal is
+    /// applied by copying it into the template in service, then [`Backend::check_reload`] and
+    /// [`Backend::apply_reload`].
+    pub fn check_proposal(&self, manifest: &Path) -> Result<Proposal, String> {
+        let refused = |why: String| format!("proposition refusée, la version en service ne change pas : {why}");
+        let current = self.prepared();
+        let next = PreparedBackend::load(manifest).map_err(refused)?;
+        let changed = opening_changes(&current, &next);
+        if !changed.is_empty() {
+            return Err(refused(format!(
+                "{} change — fixé à l'ouverture de la base : c'est une migration, pas une proposition",
+                changed.join(", ")
+            )));
+        }
+        Ok(Proposal {
+            template_hash: next.template_hash.clone(),
+            in_service: current.template_hash.clone(),
+            version: self.version.load(std::sync::atomic::Ordering::SeqCst),
         })
     }
 
