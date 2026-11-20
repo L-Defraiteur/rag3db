@@ -24,6 +24,11 @@ class Refus(RuntimeError):
     pass
 
 
+# How long the descendants of a finished command may take to end before they count as left behind: a bus session
+# closes after its command (20 Nov. 2026). A real leak lives far beyond.
+GRACE_DE_FERMETURE = 1.0
+
+
 def processus():
     result = {}
     for p in Path('/proc').iterdir():
@@ -225,6 +230,16 @@ class Descendants:
         if erreurs:
             raise Refus('confinement enfant : ' + json.dumps(erreurs))
 
+    def finir(self, grace):
+        """**Let a closing session end** (20 Nov. 2026, 18 h 50: « descendants laissés » with `restes: []`, the
+        identical replay green). The bus session is still closing when the command's end is read: follow the
+        descendants for at most `grace` seconds, and give back those still alive then."""
+        fin = time.monotonic() + grace
+        while self.vivants() and time.monotonic() < fin:
+            self.relever(processus())
+            time.sleep(.025)
+        return self.vivants()
+
     def vivants(self):
         t = processus()
         return [pid for pid, debut in self.possedes.items() if pid in t and t[pid]['debut'] == debut]
@@ -328,7 +343,7 @@ def superviser(command, delai, preuves):
             groupe.relever(processus())
             if enfant.poll() is not None:
                 code = enfant.returncode
-                if groupe.vivants():
+                if groupe.finir(GRACE_DE_FERMETURE):
                     raise Refus('descendants laissés après la commande')
                 break
             # Réserver le nettoyage dans le délai global, pas après son échéance.
@@ -344,7 +359,7 @@ def superviser(command, delai, preuves):
                     groupe.relever(processus())
                 except (Refus, OSError) as e:
                     erreur = (erreur + '; ' if erreur else '') + str(e)
-                if code == 0 and groupe.vivants() and not erreur:
+                if code == 0 and not erreur and groupe.finir(GRACE_DE_FERMETURE):
                     erreur = 'descendants laissés découverts au nettoyage'
             restes = groupe.arreter() if groupe else []
         except (OSError, Refus) as e:
