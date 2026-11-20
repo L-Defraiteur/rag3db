@@ -53,7 +53,7 @@ graph LR
     vector["VectorSearchNode"]
     sparse["SparseSearchNode"]
     scan["ScanFilesNode"]
-    fuse["FuseResultsNode(default_weights='bm25:0.45,vector:0.55,sparse:0.4', dominant='bm25_exact')"]
+    fuse["FuseResultsNode(default_weights='bm25:0.45,vector:0.55,sparse:0.4', dominant='bm25_exact', exact_name='name')"]
     rerank["RerankNode(keep_signal=true)"]
     paginate["PaginateNode"]
     highlight["HighlightNode"]
