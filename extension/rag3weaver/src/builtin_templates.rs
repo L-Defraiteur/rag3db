@@ -36,7 +36,7 @@ pub fn names_under(prefixe: &str) -> impl Iterator<Item = &'static str> + '_ {
 }
 
 /// L'empreinte du contenu embarqué : le nom du dossier où il est extrait.
-fn fingerprint() -> &'static str {
+pub(crate) fn fingerprint() -> &'static str {
     static F: OnceLock<String> = OnceLock::new();
     F.get_or_init(|| {
         let mut h = blake3::Hasher::new();
