@@ -27,6 +27,8 @@ mkdir -p "$POSTE_LOCK_DIR" "$POSTE_PUSH_DIR"
 # L'ancien « entre quand même » au bout d'une seconde, au lieu de 600 : sans la
 # priorité de la mesure, un lourd arrivé derrière elle passe devant.
 export POSTE_PORTE_MAX=1
+# Le refus d'une mesure derrière un lourd long (cas 43) est coupé pour les autres cas, dont les lourds n'ont pas de timeout.
+export POSTE_MESURE_ATTENTE_MAX=0
 echec=0
 cas() { if [ "$1" = 0 ]; then echo "OK     $2"; else echo "ÉCHEC  $2"; echec=1; fi; }
 J="$ICI/journal"
@@ -350,4 +352,23 @@ env -u RUSTC_WRAPPER -u SCCACHE_DIR -u SCCACHE_CACHE_SIZE -u CARGO_TARGET_X86_64
 if command -v sccache > /dev/null 2>&1 && [ "$(command -v sccache)" != "$R/bin/sccache" ]; then cas 0 "(sccache installé ici : le cas sans outils ne se juge pas)"
 else [ "$(cut -d'|' -f1 "$R/env3" 2>/dev/null)" = absent ]; cas $? "sans sccache ni mold, rien n'est posé (lu : $(cat "$R/env3" 2>/dev/null))"; fi
 rm -rf "$R"
+# ── 43. Une mesure refuse à l'arrivée derrière un lourd long (20 novembre 2026, c7 : deux gels de la file en deux heures
+# à luciepc, une mesure tenant la porte derrière un lourd de six heures). La fin prévue d'un lourd est le moment où il a
+# pris sa place plus le `timeout N` en tête de sa commande ; sans timeout, elle est inconnue, donc longue. Au-delà de
+# POSTE_MESURE_ATTENTE_MAX (1200 s par défaut), la mesure refuse tout de suite, code 76, en nommant le lourd.
+: > "$J"
+travail lourd LONG 4 &
+sleep 0.5
+debut=$(date +%s); sortie=$(POSTE_MESURE_ATTENTE_MAX=1200 "$POSTE" mesure bash -c "note M début" 2>&1); rc=$?; duree=$(( $(date +%s) - debut ))
+wait
+[ "$rc" = 76 ] && [ "$duree" -le 2 ] && [ -z "$(instant M début)" ] && echo "$sortie" | grep -q "rejouer sous poste lourd"
+cas $? "une mesure derrière un lourd sans timeout refuse tout de suite, code 76 (rc $rc, ${duree} s)"
+: > "$J"
+"$POSTE" lourd timeout 30 bash -c "note C début; sleep 2; note C fin" > /dev/null 2>&1 &
+sleep 0.5
+POSTE_MESURE_ATTENTE_MAX=1200 "$POSTE" mesure bash -c "note M début" > /dev/null 2>&1; rc=$?
+wait
+[ "$rc" = 0 ] && [ -n "$(instant M début)" ] && [ "$(instant M début)" -ge "$(instant C fin)" ]
+cas $? "une mesure derrière un lourd court (timeout 30) attend sa fin et joue (rc $rc)"
+
 exit $echec
