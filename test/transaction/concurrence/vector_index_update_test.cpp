@@ -2954,6 +2954,90 @@ TEST_F(VectorIndexMeasure, MeasureSearchOverRowsOutsideTheGraph) {
     indexedRowCount(*conn, table, "doc_index", static_cast<offset_t>(TOTAL));
 }
 
+
+// Le dernier pont sur des vecteurs réels (ticket 2026-10-11-l-elagage-peut-couper-le-dernier-
+// pont-vers-une-region) : une table des vecteurs de BANC_VECTORS_CSV (une ligne « [x,…] » par
+// vecteur, le COPY TO d'une colonne), indexée en cosinus comme rag3weaver l'indexe ; puis des
+// mises à jour par lots de 512 (le vecteur renversé, une autre direction de même norme) et la
+// suppression d'une ligne sur sept, et le parcours de la couche basse depuis toutes ses entrées.
+// Une mesure : sautée sans CONCURRENCE_MEASURE=1 ; CONCURRENCE_VECTOR_RUNS tours (3 par défaut).
+class VectorIndexBridgeMeasure : public VectorIndexUpdate {
+public:
+    void SetUp() override {
+        EmptyDBTest::SetUp();
+        systemConfig->bufferPoolSize = 8ull * 1024 * 1024 * 1024;
+        createDBAndConn();
+        mustRun("CALL auto_checkpoint=false;");
+        concurrency::loadVectorExtension(*conn);
+        if (const auto* runs = std::getenv("CONCURRENCE_VECTOR_RUNS")) {
+            forcedRuns = std::max(1, std::atoi(runs));
+        }
+    }
+};
+
+TEST_F(VectorIndexBridgeMeasure, RealVectorsUpdatedAndDeleted) {
+    const auto* source = std::getenv("BANC_VECTORS_CSV");
+    if (std::getenv("CONCURRENCE_MEASURE") == nullptr || source == nullptr) {
+        GTEST_SKIP() << "a measure: CONCURRENCE_MEASURE=1 and BANC_VECTORS_CSV, under `poste lourd`";
+    }
+    const auto csv = databasePath + ".real.csv";
+    int64_t total = 0;
+    int dimension = 0;
+    {
+        std::ifstream in(source);
+        std::ofstream out(csv);
+        for (std::string line; std::getline(in, line);) {
+            line.erase(std::remove(line.begin(), line.end(), '"'), line.end());
+            if (line.empty()) {
+                continue;
+            }
+            if (dimension == 0) {
+                dimension = 1 + static_cast<int>(std::count(line.begin(), line.end(), ','));
+            }
+            out << total++ << ",\"" << line << "\"\n";
+        }
+    }
+    ASSERT_GT(total, 10'000) << "[check: setup] too few vectors in " << source;
+    const auto updated = std::min<int64_t>(20'000, total / 4);
+    const auto runs = forcedRuns > 0 ? forcedRuns : 3;
+    int cut = 0;
+    std::string details;
+    for (auto run = 0; run < runs; ++run) {
+        table = stringFormat("Real{}", run);
+        mustRun(stringFormat("CREATE NODE TABLE {}(id INT64 PRIMARY KEY, vec FLOAT[{}]);", table,
+            dimension));
+        mustRun(stringFormat("COPY {} FROM '{}' (header=false);", table, csv));
+        mustRun(stringFormat(
+            "CALL CREATE_VECTOR_INDEX('{}', 'doc_index', 'vec', metric := 'cosine');", table));
+        for (int64_t low = 0; low < updated; low += 512) {
+            mustRun(stringFormat("MATCH (n:{}) WHERE n.id >= {} AND n.id < {} SET n.vec = "
+                                 "CAST(list_reverse(n.vec) AS FLOAT[{}]);",
+                table, low, std::min(updated, low + 512), dimension));
+        }
+        mustRun(stringFormat("MATCH (n:{}) WHERE n.id >= {} AND n.id < {} AND n.id % 7 = 0 DELETE n;",
+            table, updated, 2 * updated));
+        if (HasFatalFailure()) {
+            return;
+        }
+        const auto reach = lowerGraphReach(*conn, table, "doc_index", "vec");
+        const auto line = stringFormat("run {} : {} rows, {} updated, lower graph, {} linked rows, "
+                                       "{} edges, {} entries, {} unreachable from every entry, {} "
+                                       "from the lower entry point{}",
+            run, total, updated, reach.linked, reach.edges, reach.entries, reach.unreachable,
+            reach.unreachableFromEntry, reach.error.empty() ? "" : " ; " + reach.error);
+        std::cerr << "  [pont] " << line << "\n";
+        if (!reach.error.empty() || reach.unreachable != 0) {
+            cut++;
+            details += "\n  " + line;
+        }
+        mustRun(stringFormat("CALL DROP_VECTOR_INDEX('{}', 'doc_index');", table));
+        mustRun(stringFormat("DROP TABLE {};", table));
+    }
+    std::filesystem::remove(csv);
+    EXPECT_EQ(cut, 0) << "[check: vector-lower-graph-connected] " << cut << " of " << runs
+                      << " runs leave linked rows that no entry of the lower layer reaches:"
+                      << details;
+}
 } // namespace
 
 #endif
