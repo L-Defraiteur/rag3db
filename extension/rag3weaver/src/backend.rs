@@ -1059,6 +1059,24 @@ pub struct SearchSettings {
     /// How long a read waits for a lagging index, in seconds (6 by default).
     #[serde(default = "default_index_wait_s")]
     pub index_wait_s: u64,
+    /// **The watch of a view that answered « not ready »** (`ready_watch`): read by
+    /// `daemon_client::ReadyWatchSettings::from_manifest`, declared here so that a manifest saying it still opens.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ready_watch: Option<ReadyWatchDeclared>,
+}
+
+/// The watch's settings as a manifest declares them, in seconds; each one absent takes its default.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ReadyWatchDeclared {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub first_poll_max_s: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub every_s: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_s: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub eta_factor: Option<u32>,
 }
 
 fn default_index_wait_s() -> u64 {
