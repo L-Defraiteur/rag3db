@@ -60,10 +60,30 @@ pub fn nth_apport(v: &Value, n: usize) -> Option<String> {
     v["l1"].as_array()?.get(n.checked_sub(1)?)?["apport"].as_str().map(str::to_string)
 }
 
+/// **What `/turns <n>` asks of `POST /ide/turns/read`** for the `n`-th L1 (from 1): the host's route takes
+/// `{run, from, to}`, the L1's run and range (archi's route on master, 19 nov.: by apport it is refused, until the
+/// memory's trace_turn).
+pub fn turns_request(_v: &Value, _n: usize) -> Option<Value> {
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
+
+    /// The host's route takes the L1's run and range, not its apport (refused on master, 19 nov.).
+    #[test]
+    fn turns_ask_the_host_for_the_run_and_range_of_the_l1() {
+        let v = json!({ "l1": [
+            { "apport": "a-1", "run": "t:d", "from_turn": 12, "to_turn": 15 },
+            { "apport": "a-2", "run": "t:d", "from_turn": 16, "to_turn": 16 }
+        ] });
+        assert_eq!(turns_request(&v, 1), Some(json!({ "run": "t:d", "from": 12, "to": 15 })));
+        assert_eq!(turns_request(&v, 2), Some(json!({ "run": "t:d", "from": 16, "to": 16 })));
+        assert_eq!(turns_request(&v, 3), None, "no third L1");
+        assert_eq!(turns_request(&json!({ "l1": [{ "apport": "a-3", "run": "t:d" }] }), 1), None, "an L1 without a range asks nothing");
+    }
 
     fn l1s() -> Value {
         json!({ "l1": [
