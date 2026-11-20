@@ -1099,7 +1099,19 @@ mod tests {
     }
 
     impl Capture {
+        /// What the window received, **once its writer has delivered**: each window has its own writer thread
+        /// (ticket of the 14th), so a frame arrives just after `publier` returns. Read when the capture has stopped
+        /// growing for 20 ms, 2 s at most.
         fn texte(&self) -> String {
+            let mut avant = usize::MAX;
+            for _ in 0..100 {
+                let n = self.0.lock().unwrap().len();
+                if n == avant {
+                    break;
+                }
+                avant = n;
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
             String::from_utf8(self.0.lock().unwrap().clone()).unwrap()
         }
         /// Les ids des événements reçus, dans l'ordre.
