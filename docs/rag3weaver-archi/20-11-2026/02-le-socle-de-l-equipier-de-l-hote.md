@@ -110,6 +110,20 @@ navigateur (le pont jackwener), et arbre fait les outils des vues.
   - un faux modèle rend des métadonnées de grounding, et l'outil rend les sources ;
   - un modèle qui n'est pas Gemini est refusé en le disant.
 
+## Qui fait quoi (c7, le 20 novembre au soir)
+
+- **archi** : `run`, la palette différée, les serveurs MCP à chaud et le fork, dans cet ordre. Ils
+  viennent après la repose de `mode-pair-4`, le raisonnement borné et le sous-agent à vues.
+- **mémoire** : `fetch` et `web_search` (le grounding relève de `models.llm`), après sa pile.
+- **recherche** : le cron, après son ticket du chat.
+
+Chacun code depuis cette page. Tant que les outils de l'équipier ne sont pas déclarables dans le
+gabarit (ticket `2026-11-19-le-rangement-de-l-hote-devient-un-mecanisme-generique-declare.md`, point
+4), un outil d'équipier est une `ToolDef` dans `src/daemon_host/teammate.rs` : sa définition dans
+`StepTools::tool_defs`, son traitement dans `Step::ours`, et sa borne dans `TeammatePolicy`. Il
+migrera avec les autres. archi donne à chacun la forme exacte de son outil quand il commence, pour
+qu'il n'y ait qu'une écriture.
+
 ## Le total
 
 Environ 7 jours. Les lots 1 et 2 rendent l'équipier utilisable sur un vrai dépôt. Les lots 3 et 4
