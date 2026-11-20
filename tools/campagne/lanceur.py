@@ -190,6 +190,13 @@ def prove_red(block, dest, target, poste):
     """The witness is red at the parent, on its assertion: the test command fails, libtest says
     FAILED for the witness. A compile error, a missing test or a green are not a red."""
     code, sortie = run_test(block, dest, target, poste, block["test"])
+    # A witness that is a script (.sh by bash, .py by python3, as the pusher plays them): judged by
+    # its exit code; a last line that says VERT is never a red (recherche, case 03).
+    if block["witness"].strip().endswith((".sh", ".py")):
+        derniere = next((l.strip() for l in reversed(sortie.splitlines()) if l.strip()), "")
+        if code == 0 or derniere == "VERT":
+            return {"red": False, "why": f"the witness script ends green (code {code}, last line « {derniere} »)", "failed": [], "code": code, "tail": sortie[-2000:]}
+        return {"red": True, "why": f"the witness script ends red (code {code})", "failed": [block["witness"].strip()], "code": code, "tail": sortie[-2000:]}
     temoins = block["witness"].split()
     failed = [t for t in temoins if any(n == t or n.endswith("::" + t) or t.endswith("::" + n) for n in failed_tests(sortie))]
     if re.search(r"^error(\[E\d+\])?: ", sortie, re.M) and "test result" not in sortie:
