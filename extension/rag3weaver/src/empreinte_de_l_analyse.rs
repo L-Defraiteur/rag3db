@@ -10,6 +10,10 @@
 //! à la table `tests/fixtures/empreinte_analyse.txt` (`<règles> <empreinte>`). Une empreinte qui change sans que le
 //! numéro monte est rouge ; monter les règles, c'est écrire la ligne de la nouvelle empreinte, et ce geste se lit dans
 //! le diff du lot. Un pointeur codeparsers qui change l'empreinte monte les règles aussi.
+//!
+//! **Un corpus qui change remplace la ligne du numéro courant** (c7, 20 novembre 2026) : le commit prouve d'abord que
+//! l'ancien corpus donne encore l'empreinte notée, puis remplace la ligne par celle du nouveau corpus ; une analyse qui
+//! change monte le numéro. Un corpus ne monte jamais les règles : ce serait faire repasser les bases pour rien.
 
 use std::path::{Path, PathBuf};
 
