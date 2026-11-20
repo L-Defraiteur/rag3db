@@ -145,7 +145,19 @@ elif [ "${SUITE_DU_TEMOIN:-}" = lib ]; then
 else
   timeout 3600 ./run_e2e.sh --features openai-llm,anthropic-llm --test ${SUITE_DU_TEMOIN:-e2e_lectures} "$FILTRE" > $J/temoins.log 2>&1; c=$?
 fi
-grep -E '^test result|panicked at' $J/temoins.log >> $R
+# **extrait <journal> <motif>** : les lignes du motif, sans les paniques attendues (20 novembre 2026, recherche : la
+# panique d'un #[should_panic] qui passe, « should panic ... ok », recopiée au résumé, passait pour un rouge). Elles sont
+# comptées sur une ligne ; la panique d'un test rouge reste.
+extrait() {
+  awk -v motif="$2" '
+    NR == FNR { if ($0 ~ /^test .* - should panic \.\.\. ok$/) { n = $0; sub(/^test /, "", n); sub(/ - should panic \.\.\. ok$/, "", n); ok[n] = 1 }; next }
+    $0 ~ motif {
+      if ($0 ~ /^thread .* panicked at/) { th = $0; sub(/^thread \047/, "", th); sub(/\047( \([0-9]+\))? panicked at.*/, "", th); if (th in ok) { omis++; next } }
+      print
+    }
+    END { if (omis) print omis " panique(s) attendue(s) omise(s) : tests « should panic ... ok »" }' "$1" "$1"
+}
+extrait $J/temoins.log '^test result|panicked at' >> $R
 [ "$SEUL" = temoins ] && { echo "TEMOINS code=$c" >> $R; exit $c; }
 [ $c = 0 ] || rouge "témoin (code=$c)"
 # **Un témoin qui ne joue rien n'est pas vert** (19 novembre 2026, c7) : un filtre qui ne désigne aucun test, ou un test
@@ -192,7 +204,7 @@ if echo " $EXIGEES_NOMS " | grep -q " tty "; then
       tail -1 $J/tty-$m.log | grep -qx VERT || exit 15
     done
   ) > $J/tty.log 2>&1; c=$?
-  grep -E '^test result|FAILED|panicked|^plain_' $J/tty.log | head -20 >> $R
+  extrait $J/tty.log '^test result|FAILED|panicked|^plain_' | head -20 >> $R
   [ $c = 0 ] || rouge "tty (code=$c)"
   [ "$(grep -c "Compiling rag3weaver-tty v.* ($TTY)" $J/tty.log)" -ge 2 ] || rouge "tty : le crate n'a pas été compilé deux fois depuis $TTY"
   if [ "${SUITE_DU_TEMOIN:-}" = tty ]; then
@@ -205,7 +217,7 @@ for suite in $(echo $LISTE_DES_SUITES | tr " " "\n" | awk 'NF && !vu[$0]++'); do
   echo "== $suite" >> $R
   JOUEES="$JOUEES $suite"
   timeout 5400 ./run_e2e.sh --features openai-llm,anthropic-llm --test $suite > $J/$suite.log 2>&1; c=$?
-  grep -E '^test result|FAILED|panicked' $J/$suite.log | head -20 >> $R
+  extrait $J/$suite.log '^test result|FAILED|panicked' | head -20 >> $R
   [ $c = 0 ] || juge_connus "$suite" $J/$suite.log || rouge "$suite (code=$c)"
   printf '%s' "$CONNUS" | awk -F'\t' -v s="$suite" '$1 == s {print $2 "\t" $3}' | while IFS=$'\t' read -r kc kt; do
     grep -qE "^test ([^ ]*::)?$kc( - should panic)? \.\.\. ok$" $J/$suite.log && echo "à lever : $suite::$kc passe (ticket $kt)" >> $R
@@ -228,7 +240,7 @@ echo "preuve : rag3weaver revérifié" >> $R
 
 echo "== lib" >> $R
 timeout 1800 scripts/cargo_magasin.sh test --lib --features $FEAT > $J/lib.log 2>&1; c=$?
-grep -E '^test result|FAILED|panicked' $J/lib.log | head -20 >> $R
+extrait $J/lib.log '^test result|FAILED|panicked' | head -20 >> $R
 [ $c = 0 ] || rouge "lib (code=$c)"
 
 # Les témoins navigateur (depuis 3ec37ef1e, ignorés dans la lib sans la feature `navigateur`) :
@@ -236,7 +248,7 @@ grep -E '^test result|FAILED|panicked' $J/lib.log | head -20 >> $R
 if [ -x scripts/temoins_navigateur.sh ]; then
   echo "== témoins navigateur" >> $R
   FEATURES=$FEAT timeout 1800 scripts/temoins_navigateur.sh > $J/navigateur.log 2>&1; c=$?
-  grep -E '^test result|panicked at|SAUTÉ|ROUGE' $J/navigateur.log | head -10 >> $R
+  extrait $J/navigateur.log '^test result|panicked at|SAUTÉ|ROUGE' | head -10 >> $R
   [ $c = 0 ] || rouge "témoins navigateur (code=$c)"
   if [ "${SUITE_DU_TEMOIN:-}" = navigateur ]; then
     grep -qE "^test ([^ ]*::)?$FILTRE( - should panic)? \.\.\. ok$" $J/navigateur.log || rouge "témoin navigateur $FILTRE : pas vu « ok » à l'étape des témoins navigateur"
@@ -246,7 +258,7 @@ elif [ -n "${5:-}" ]; then
   # Un arbre d'avant 3ec37ef1e : le témoin navigateur nommé, seul et exigé.
   echo "== témoin navigateur" >> $R
   RAG3WEAVER_EXIGER_NAVIGATEUR=1 timeout 1800 scripts/cargo_magasin.sh test --lib --features $FEAT -- "$5" > $J/navigateur.log 2>&1; c=$?
-  grep -E '^test result|panicked at' $J/navigateur.log >> $R
+  extrait $J/navigateur.log '^test result|panicked at' >> $R
   [ $c = 0 ] || rouge "témoin navigateur (code=$c)"
 fi
 echo "suites jouées :${JOUEES:- aucune}" >> $R
