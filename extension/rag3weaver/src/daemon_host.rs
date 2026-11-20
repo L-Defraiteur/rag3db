@@ -1037,8 +1037,72 @@ impl DaemonHost {
     /// exist, or an empty one, is created and gets `git init` (never a push). Refused, saying why: Lucie's tree, sairen,
     /// another session's folder, a folder with files that is not a git repository.
     pub fn ouvrir_un_dossier(&self, session: Option<&str>, chemin: &Path) -> Value {
-        let _ = (session, chemin);
-        json!({ "ok": false, "error": "ouvrir un dossier : pas encore" }) // RED STUB.
+        let r = self.check_session(session).and_then(|s| {
+            if !chemin.is_absolute() {
+                return Err(format!("ouvrir {} : un chemin absolu est attendu", chemin.display()));
+            }
+            let qui = s.claude_name.clone();
+            let (espace, table) = self.espace_et_table();
+            let dossiers = lire_la_table_des_dossiers(&table)?;
+            let lettre = normaliser(chemin);
+            let refus = |regle: &str| format!("ouvrir {} : refusé — {regle}", lettre.display());
+            // The guards judge the path by the letter, and by the disk when it exists (a link into a guarded folder).
+            for p in [Some(lettre.clone()), lettre.canonicalize().ok()].into_iter().flatten() {
+                let lucie = espace.join("rag3db");
+                if p.starts_with(&lucie) {
+                    return Err(refus(&format!("c'est l'arbre de Lucie ({}) : l'hôte n'y ouvre rien", lucie.display())));
+                }
+                let premier = p.strip_prefix(&espace).ok().and_then(|r| r.components().next()).map(|c| c.as_os_str().to_string_lossy().to_string());
+                if let Some(d) = premier {
+                    if d.starts_with("sairen") {
+                        return Err(refus("c'est sairen : l'hôte n'y ouvre rien"));
+                    }
+                    if let Some(autre) = dossiers.get(&d).and_then(Value::as_str).filter(|_| d != "_") {
+                        if Some(autre) != qui.as_deref() {
+                            return Err(refus(&format!("le dossier « {d} » est à la session « {autre} »")));
+                        }
+                    }
+                }
+            }
+            let git = |dans: &Path, args: &[&str]| -> Result<String, String> {
+                let o = std::process::Command::new("git").arg("-C").arg(dans).args(args).output().map_err(|e| format!("git : {e}"))?;
+                if o.status.success() {
+                    Ok(String::from_utf8_lossy(&o.stdout).trim().to_string())
+                } else {
+                    Err(format!("git {} : {}", args.join(" "), String::from_utf8_lossy(&o.stderr).trim()))
+                }
+            };
+            // A new folder, or an empty one, is created and gets git init (never a remote, never a push).
+            let mut cree = false;
+            if !lettre.exists() {
+                std::fs::create_dir_all(&lettre).map_err(|e| format!("{} : {e}", lettre.display()))?;
+                git(&lettre, &["init", "-q"])?;
+                cree = true;
+            } else if git(&lettre, &["rev-parse", "--is-inside-work-tree"]).is_err() {
+                let vide = std::fs::read_dir(&lettre).map_err(|e| format!("{} : {e}", lettre.display()))?.next().is_none();
+                if !vide {
+                    return Err(refus("ce dossier n'est pas un dépôt git et n'est pas vide : l'hôte n'y fait pas git init"));
+                }
+                git(&lettre, &["init", "-q"])?;
+                cree = true;
+            }
+            // The atelier: a hosted one, else the one the service poses.
+            let atelier = self
+                .backends
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .keys()
+                .find(|m| m.ends_with("backends/atelier/backend.json"))
+                .cloned()
+                .or_else(|| {
+                    self.racines_de_code().ok().map(|r| r.config.join("atelier/templates/backends/atelier/backend.json")).filter(|m| m.is_file())
+                })
+                .ok_or("ouvrir un dossier : l'atelier n'est pas posé ; `rag3weaver-backend atelier` le pose")?;
+            let hosted = self.hosted(&atelier)?;
+            let dit = self.with_backend(&hosted, |b| b.call("attach_worktree", json!({ "path": lettre })))??;
+            Ok(json!({ "ok": true, "path": lettre, "created": cree, "attached": dit["result"] }))
+        });
+        r.unwrap_or_else(|e| op_response(Err(e)))
     }
 
     fn espace_et_table(&self) -> (std::path::PathBuf, std::path::PathBuf) {
