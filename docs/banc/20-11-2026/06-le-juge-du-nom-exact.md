@@ -65,8 +65,8 @@ candidates, celles qui ont un document de plein texte. Le rejeu suit sur sa têt
 
 ## 4. Les premiers changés par le sens
 
-Sur les 40 requêtes, trois requêtes de sens changent de premier ; aucun nouveau premier n'est une déclaration de valeur
-courte. ED les explique un par un.
+Sur les 40 requêtes, trois requêtes de sens changent de premier. **J'avais écrit qu'aucun nouveau premier n'est une
+déclaration de valeur courte : c'est faux, voir le § 6.** ED les explique un par un.
 
 | requête | premier sur master | premier avec (B) |
 |---|---|---|
@@ -99,4 +99,26 @@ est son nom, et c'est l'effet voulu de (B), pas un premier pris par un sens.
   ce sont des fonctions et méthodes de l'extension json, plus `events` (une variable de 92 caractères, qui garde son
   vecteur) ; en BM25 seul, des fonctions de rag3weaver, identiques des deux côtés.
 
-**Verdict : vert.**
+**Verdict : vert sur le nom exact et le critère de G, mais rouge sur le revers de (A) : voir le § 6.**
+
+## 6. Correction : le revers de (A) n'est pas tenu
+
+J'avais jugé le revers sur la **ligne source** du premier rendu (220 et 152 caractères), lue par sa clé `chemin:ligne`.
+Or une ligne Python qui enchaîne des affectations porte plusieurs scopes `variable`, et cette clé ne dit pas lequel est
+rendu. Relu par l'hôte du lot (`03fbecf8b8`, ses gabarits, base `feuille-lot-1636`, limite 10, format JSON, avec le
+nom et le contenu de chaque résultat ; `quel-scope.json`) :
+
+| requête | premier avec le lot | ensuite |
+|---|---|---|
+| « parse a json manifest » | `manifest`, variable de **51 caractères** (`prepare_engine_relations.py:14`) | `manifest` (33 car., `test_backend_persistence.py:78`), puis `parse_declaration`, le premier de master |
+| « rebuild the vector index », langage python | `index`, variable de **22 caractères** (`index=ROOT/'README.md'`, `build_plant_variant.py:32`) | les trois autres `index` des jumeaux mtga |
+
+**Ce sont des déclarations de valeur courtes, sans vecteur, qui prennent la tête de requêtes par le sens.** Un mot de la
+requête est leur nom, et (A) les remonte sur le seul BM25 ; ce n'est pas `exact_name`, la requête n'étant pas leur nom
+exact. **Le critère « aucune ligne sans vecteur ne prend un premier rang par un sens qu'elle n'a pas » est rouge.**
+
+- **Les versions fermées ne sont pas en cause.** Les scopes rendus sont les versions courantes. Les vieilles versions de
+  la ligne entière (`_depuis` 0, `_jusqu_a` 1, avec un `_snapshot`, laissées par une analyse antérieure de la copie)
+  partagent la même clé `chemin:ligne`, d'où la confusion. Les générations 0, 1 et 2 des deux bases sont publiées.
+- **La recette change** : le revers se juge désormais sur le scope rendu (nom, type, taille du contenu, par la réponse
+  JSON), jamais sur la ligne source.
