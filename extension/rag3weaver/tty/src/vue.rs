@@ -767,8 +767,9 @@ impl Vue {
         }
         match t {
             // Un accord attend et rien n'est tapé : `o` accorde, `n` refuse, ← → choisissent le
-            // bouton, Entrée valide le choix (Oui d'avance).
-            Touche::Car(c @ ('o' | 'O' | 'y' | 'Y' | 'n' | 'N')) if self.saisie.est_vide() && self.accord_en_cours().is_some() => self.repondre_accord(matches!(c, 'o' | 'O' | 'y' | 'Y')),
+            // bouton, Entrée valide le choix (Oui d'avance). **Minuscules seules** (essais du 21 nov.) :
+            // une majuscule commence une phrase, « Ne commite pas… » ne refuse rien.
+            Touche::Car(c @ ('o' | 'y' | 'n')) if self.saisie.est_vide() && self.accord_en_cours().is_some() => self.repondre_accord(matches!(c, 'o' | 'y')),
             Touche::Gauche if self.saisie.est_vide() && self.accord_en_cours().is_some() => {
                 self.non_pour = None;
                 None
@@ -813,8 +814,10 @@ impl Vue {
                     (Some(c), _) => return Some(Action::Commande(c)),
                     (None, envoi) => envoi.unwrap_or(texte),
                 };
-                // Ce que l'équipier attend passe avant : la saisie y répond.
-                if let Some(attente) = self.boite.premiere().cloned() {
+                // Ce que l'équipier attend passe avant : la saisie répond à une question. Une approbation
+                // ne prend qu'un oui ou un non (o / n, les boutons) : un texte tapé pendant qu'elle attend
+                // part comme un message, et elle reste dite (essais du 21 nov.).
+                if let Some(attente) = self.boite.premiere().cloned().filter(|a| a.kind != "approval") {
                     self.clore();
                     self.valider_avec_tete(Genre::Boite, "› ", &texte);
                     self.retenir_l_envoi(&texte);
