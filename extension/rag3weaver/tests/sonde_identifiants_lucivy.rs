@@ -145,6 +145,7 @@ fn sonde_identifiants() {
     // ── 1. Le chemin réel : Catalog::rechercher, BM25 seul ─────────────────
     // Ce qui passe devant l'attendu, requête par requête.
     eprintln!("\n### 1. Le chemin réel (BM25 seul, mode Auto→Contains d=1)\n");
+    let mut trouves_reel = 0usize;
     for ident in IDENTIFIANTS {
         let r = Catalog::rechercher(&reel, SCOPE, ident, options_bm25()).expect("bm25");
         let mut lignes = Vec::new();
@@ -181,6 +182,9 @@ fn sonde_identifiants() {
             }
         }
         eprintln!("  {ident} → rang {rang}");
+        if rang != "—" {
+            trouves_reel += 1;
+        }
         for l in lignes {
             eprintln!("{l}");
         }
@@ -194,6 +198,7 @@ fn sonde_identifiants() {
         "| identifiant | lev d=1 (actuel) | exact d=0 | jaro-winkler 0,9 | exact_match | strict sép. | phrase | parse | content exact_match |"
     );
     eprintln!("|---|---|---|---|---|---|---|---|---|");
+    let mut trouves_lucivy = 0usize;
     for ident in IDENTIFIANTS {
         let actuel = sur_les_champs(|f| {
             serde_json::json!({"type":"contains","field":f,"value":ident,"distance":1})
@@ -226,6 +231,9 @@ fn sonde_identifiants() {
                 "exact_match":true});
 
         let mut cellules = Vec::new();
+        if signatures_lucivy(&handle, &actuel, 10).is_ok_and(|noms| rang_de(&noms, ident) != "—") {
+            trouves_lucivy += 1;
+        }
         for q in [&actuel, &exact, &jaro, &entier, &strict, &phrase, &parse, &nom_seul] {
             match signatures_lucivy(&handle, q, 10) {
                 Ok(noms) => cellules.push(rang_de(&noms, ident)),
@@ -234,6 +242,11 @@ fn sonde_identifiants() {
         }
         eprintln!("| {ident} | {} |", cellules.join(" | "));
     }
+
+    // **Une sonde qui ne trouve rien ne juge rien** (ticket du 18 novembre 2026) : sur une base à versions, une table
+    // sans plein texte rend « — » partout, et la sonde passait.
+    assert!(trouves_reel > 0, "le chemin réel ne trouve aucun des dix identifiants : la sonde ne lit pas l'index du texte des scopes");
+    assert!(trouves_lucivy > 0, "lucivy en direct ne trouve aucun des dix identifiants : la sonde interroge un index où le texte des scopes ne vit pas");
 
     // Ce que l'actuel met devant, vu de lucivy même (top 3 brut, sans la
     // résolution aux chunks) — dit si le désordre naît dans lucivy ou après.
