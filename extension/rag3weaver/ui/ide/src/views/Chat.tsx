@@ -831,6 +831,10 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
             <a id="detacher-depot" href={`/ide/code/${id}/arbre?fenetre=depot`} target="_blank" rel="noopener" className="inline-flex items-center gap-1 hover:underline" title="ouvrir le dépôt dans une fenêtre à côté : les fichiers cités ici s'y ouvrent">
               <ExternalLink className="size-3.5" /> dépôt à côté
             </a>
+            {/* Slice 4 (ED's review): the graph in a window of its own, that follows the tools of this chat's turns. */}
+            <a id="detacher-graphe" href={`/ide/code/${id}/dag?fenetre=graphe`} target="_blank" rel="noopener" className="inline-flex items-center gap-1 hover:underline" title="ouvrir le graphe dans une fenêtre à côté : il montre l'outil que le tour appelle">
+              <ExternalLink className="size-3.5" /> graphe à côté
+            </a>
             <span id="status" role="status" className="text-primary">
               {status}
             </span>

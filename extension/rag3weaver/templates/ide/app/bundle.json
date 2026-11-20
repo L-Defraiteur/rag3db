@@ -1,6 +1,6 @@
 {
   "sha256": {
-    "app.js": "9e432dd417de6bd7c1f207519f7ebbdcd71bad4e4242280e41ebf6843ad5297a",
+    "app.js": "4710c083feed75a95f9a541cb884fe8e5e65b435bc3df644e2492cbd02a194d8",
     "app.css": "20d2a75348e6631b1c1763f0545a765f53ae35e5b8b3178dcdef726f50d3af30",
     "flux-worker.js": "a476fe22cffeb0050916bfd16b36074d9d212539da9bf43cd33d969539184a4e"
   },
