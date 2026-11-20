@@ -96,6 +96,9 @@ pub struct Session {
     /// **The view by default of the session** (V1, page of 20 November 2026): a reading tool called without `view`
     /// reads under it. Posed by `POST /session {view}` or [`DaemonHost::set_session_view`]; `None`: the backend.
     pub default_view: Option<Value>,
+    /// **The Claude Code session that calls**, by its `sessionId` (read by the thin client in the registry of its
+    /// ancestor `claude`): two thin clients of one session share its view, kept on disk under this id.
+    pub claude_session: Option<String>,
 }
 
 /// Un backend hébergé. `None` : pas encore ouvert, ou lâché pour être rouvert.
@@ -294,6 +297,10 @@ pub const MANIFEST_CHANGED: &str =
 
 /// **L'hôte** : les backends et les sessions d'un démon.
 pub struct DaemonHost {
+    /// **Where the views of the sessions are kept** (`<dir>/<claude session id>.json`), across thin clients and host
+    /// restarts; `None`: `$XDG_STATE_HOME/rag3weaver/vues`, else `~/.local/state/rag3weaver/vues`.
+    #[allow(dead_code)] // RED STUB: read once views and use_view are written.
+    vues_dir: Mutex<Option<std::path::PathBuf>>,
     /// **Soi, en lien faible** : posé par [`DaemonHost::se_connaitre`] (le service, les
     /// témoins), il permet à l'hôte de donner aux backends qu'il ouvre l'hôte des
     /// worktrees de l'atelier.
@@ -517,6 +524,7 @@ impl DaemonHost {
             racines_de_code: None,
             backends: Mutex::new(HashMap::new()),
             sessions: Mutex::new(HashMap::new()),
+            vues_dir: Mutex::new(None),
             opener,
             closed_dead: std::sync::atomic::AtomicUsize::new(0),
             background: crate::dataflow::background::registry(),
@@ -621,9 +629,35 @@ impl DaemonHost {
             pid: process.map(|(p, _)| p),
             pid_started: process.map(|(_, d)| d),
             default_view: None,
+            claude_session: None,
         };
         self.sessions.lock().unwrap_or_else(|p| p.into_inner()).insert(id.clone(), session);
         id
+    }
+
+    /// Where the views of the sessions are kept (the witnesses give a temporary directory).
+    pub fn set_vues_dir(&self, dir: std::path::PathBuf) {
+        *self.vues_dir.lock().unwrap_or_else(|p| p.into_inner()) = Some(dir);
+    }
+
+    /// The view by default of a session, `None` without one.
+    pub fn session_default_view(&self, session: &str) -> Option<Value> {
+        let _ = session;
+        None // RED STUB.
+    }
+
+    /// **`views`**: the views a session can read on a backend (`backend`, then the live layers by their name), and the
+    /// active one with its source (« session », or « défaut »).
+    pub fn views(&self, session: Option<&str>, manifest: &Path) -> Value {
+        let _ = (session, manifest);
+        json!({ "ok": false, "error": "views : pas encore" }) // RED STUB.
+    }
+
+    /// **`use_view <name>`**: the view `name` becomes the active one of the session (and of every thin client of the same
+    /// Claude Code session), kept on disk; an unknown name is refused, listing the known ones.
+    pub fn use_view(&self, session: Option<&str>, manifest: &Path, name: &str) -> Value {
+        let _ = (session, manifest, name);
+        json!({ "ok": false, "error": "use_view : pas encore" }) // RED STUB.
     }
 
     /// **Pose (or withdraws, with `None`) the view by default of a session**, checked as a call's `view` is: an unknown
@@ -2022,6 +2056,23 @@ impl DaemonHost {
                 if matches!(path, "/describe" | "/call") && self.hosted_existing(&m).is_some_and(|h| self.manifest_changed(&h)) {
                     reponse["warnings"] = json!([MANIFEST_CHANGED]);
                 }
+                (statut(&reponse), reponse)
+            }
+            // **The views of a session** (page 02 of 20 November 2026): on the backend of `manifest`.
+            ("POST", "/views" | "/views/use") => {
+                let v = match corps().and_then(|v| manifeste(&v).map(|m| (v, m))) {
+                    Ok(x) => x,
+                    Err(e) => return (400, json!({ "ok": false, "error": e })),
+                };
+                let (v, m) = v;
+                let reponse = if path == "/views" {
+                    self.views(session, &m)
+                } else {
+                    match v["name"].as_str() {
+                        Some(name) => self.use_view(session, &m, name),
+                        None => json!({ "ok": false, "error": "« name » manque : la vue à rendre active" }),
+                    }
+                };
                 (statut(&reponse), reponse)
             }
             _ => (404, json!({ "ok": false, "error": format!("route inconnue : {method} {path}") })),
