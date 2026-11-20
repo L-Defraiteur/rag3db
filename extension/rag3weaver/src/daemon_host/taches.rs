@@ -55,6 +55,16 @@ pub struct Tache {
     /// **La persona de l'agent de la tâche**, à la place de `agent.persona` du manifeste.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub persona_de_l_agent: Option<String>,
+    /// **The sub-agent with views** (page 20-11-2026/01 of rag3weaver-archi): the session this task
+    /// is the child of. It owns nothing: the views and the identity are the session's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_session: Option<String>,
+    /// The views the parent gave it; `None` is no restriction (a task that is no child).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vues: Option<Vec<String>>,
+    /// Its active view, always within `vues`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vue_active: Option<String>,
     /// **Aucun dépôt** (ni les déclarations ni la racine) : pas de worktree ni
     /// de branche ; `arbre` est l'espace copié, `depot`, `branche` et `depart`
     /// sont vides de sens. Ses changements se relisent par différence de
@@ -757,6 +767,9 @@ impl DaemonHost {
             modele: None,
             nom_de_l_agent,
             persona_de_l_agent,
+            parent_session: None,
+            vues: None,
+            vue_active: None,
         };
         // **La tâche devient une couche** (liaison branche → couche, décision de Lucie du
         // 13 novembre : « tout ce que touche l'agent, ça reste indexé » ; généralisée par les suivies,
@@ -1039,3 +1052,30 @@ impl DaemonHost {
 
 #[cfg(all(test, feature = "code"))]
 mod tests;
+
+
+/// **The name of a child**: `<session>-<name>`, unless it already carries its session.
+pub fn nom_d_enfant(session: &str, nom: &str) -> String {
+    let _ = session;
+    nom.to_string()
+}
+
+impl super::DaemonHost {
+    /// Gives a child task its views and its active one, at its opening.
+    pub fn donner_les_vues(&self, parent: &str, nom: &str, session: &str, vues: Vec<String>, active: Option<String>) -> Result<(), String> {
+        let _ = (parent, nom, session, vues, active);
+        Ok(())
+    }
+
+    /// The parent changes a child's views: add, remove, switch the active one.
+    pub fn changer_les_vues(&self, parent: &str, nom: &str, ajouter: &[String], retirer: &[String], active: Option<&str>) -> Result<Value, String> {
+        let _ = (parent, nom, ajouter, retirer, active);
+        Err("not yet".into())
+    }
+
+    /// The views of the task whose backend is `backend_id`, and its active one; `None` when it is no child.
+    pub fn vues_de(&self, backend_id: &str) -> Option<(Vec<String>, String)> {
+        let _ = backend_id;
+        None
+    }
+}
