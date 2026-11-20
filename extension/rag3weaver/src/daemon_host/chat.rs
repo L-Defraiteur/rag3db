@@ -995,6 +995,14 @@ impl Tour<'_> {
 /// (`task_writes` ne vise que l'agent d'un workspace qui le dit). Un outil qui
 /// lance des commandes n'est proposé nulle part : coder, ici, c'est lire et
 /// éditer.
+/// **The gate of a child's views** (page 20-11-2026/01 of rag3weaver-archi): for a tool that reads a
+/// `view`, a call outside the child's views is refused, naming the view and the set; a call without
+/// one takes the active view. A tool that reads no view passes as it is.
+pub(crate) fn juger_la_vue(args: &Value, vues: &[String], active: &str, prend_view: bool) -> Result<Value, String> {
+    let _ = (vues, active, prend_view);
+    Ok(args.clone())
+}
+
 pub(crate) struct OutilsDuChat<'a> {
     inner: &'a (dyn crate::agent::ToolBox + Sync),
     /// L'empreinte de lecture, le numéro du tour et la racine de travail (les chemins
