@@ -256,9 +256,9 @@ pub struct ViewState {
     pub rank: Option<i64>,
     /// An index writes this layer right now (`Lag::is_writing`).
     pub indexing: bool,
-    /// The files changed in this layer and not yet reindexed, as the watch noted them (`Lag`, its starting
-    /// reconciliation included). Without a watch, nothing is noted and this is 0: the cold tree diff is a
-    /// ticket of its own.
+    /// The files changed in this layer and not yet reindexed: as the watch noted them (`Lag`, its starting
+    /// reconciliation included) when a watch serves the layer; otherwise the cold diff of its tree, once
+    /// [`ViewState::with_cold_behind`] is applied.
     pub files_behind: usize,
     /// The oldest of those changes (Unix milliseconds), when there are some.
     pub behind_since_ms: Option<u64>,
@@ -271,6 +271,9 @@ pub struct ViewState {
     /// behind times the observed reindexing rate of the cell (`Lag::rate`, never a constant). `Some(0)` when nothing is
     /// behind; `None` when files are behind and no rate was observed yet.
     pub text_eta_s: Option<u64>,
+    /// The observed reindexing rate of the cell (`Lag::rate`), rounded to the millisecond per file, `None` before a
+    /// first index: what `text_eta_s` is computed with, kept for [`ViewState::with_cold_behind`].
+    pub text_rate_ms_per_file: Option<u64>,
     /// **The seconds left to embed the view's chunks due**, set by [`ViewState::with_vectors_due`] from the chunks due,
     /// their mean size and the rate of the view's embedding service. `None` until it is set, or when no rate is known.
     pub vectors_eta_s: Option<u64>,
@@ -292,18 +295,96 @@ pub struct VectorsDue {
 }
 
 /// **The files changed since a layer's index, without a watch** (ticket of 18 November 2026): its indexed tree
-/// (`Catalog::indexed_tree_of_layer`) against its tip. Runs `git`: call it without the catalog's lock.
+/// (`Catalog::indexed_tree_of_layer`) against its tip: the working tree of its root, or its ref for a history layer
+/// (`ref` in the marker). Untracked files are not counted, as the marker does not note them. Runs `git`: call it without the
+/// catalog's lock. A path is behind when it differs from its indexed commit and was not indexed in that very state
+/// (`dirty_blobs`), or when it was indexed modified and is no longer. `None` outside git, or when git refuses.
+///
+/// **Kept while the tip does not move**: the answer is cached under the tip's signature, its `HEAD` and the
+/// modification time and size of each path `git status` names; only `git status` and `rev-parse` run again.
 pub fn cold_files_behind(marque: &Value) -> Option<usize> {
-    let _ = marque;
-    None // RED STUB.
+    let racine = marque.get("root")?.as_str()?;
+    let commit = marque.get("commit")?.as_str().filter(|c| !c.is_empty())?;
+    let git = |args: &[&str]| -> Option<String> {
+        let out = std::process::Command::new("git").arg("-C").arg(racine).args(args).output().ok()?;
+        out.status.success().then(|| String::from_utf8_lossy(&out.stdout).to_string())
+    };
+    // A history layer's tip is its ref: the files changed between its indexed commit and the ref now.
+    if let Some(reference) = marque.get("ref").and_then(Value::as_str) {
+        let pointe = git(&["rev-parse", reference])?;
+        return Some(git(&["diff", "--name-only", commit, pointe.trim()])?.lines().filter(|l| !l.is_empty()).count());
+    }
+    let tete = git(&["rev-parse", "HEAD"])?;
+    let status = git(&["status", "--porcelain", "--untracked-files=no"])?;
+    let mut signature = format!("{}\n{}\n", marque, tete.trim());
+    for chemin in status_paths(&status) {
+        let m = std::fs::metadata(std::path::Path::new(racine).join(&chemin)).ok();
+        let (mtime, taille) = m.map_or((0, 0), |m| {
+            (m.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map_or(0, |d| d.as_nanos()), m.len())
+        });
+        signature.push_str(&format!("{chemin}\t{mtime}\t{taille}\n"));
+    }
+    static GARDE: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, (String, usize)>>> = std::sync::OnceLock::new();
+    let garde = GARDE.get_or_init(Default::default);
+    let cle = format!("{racine}\n{}", marque.get("at_ms").and_then(Value::as_u64).unwrap_or(0));
+    if let Some((sig, n)) = garde.lock().unwrap_or_else(|e| e.into_inner()).get(&cle) {
+        if *sig == signature {
+            return Some(*n);
+        }
+    }
+    let changes: BTreeSet<String> = git(&["diff", "--name-only", commit])?.lines().filter(|l| !l.is_empty()).map(str::to_string).collect();
+    let sales: std::collections::BTreeMap<String, String> = marque
+        .get("dirty_blobs")
+        .and_then(Value::as_object)
+        .map(|m| m.iter().map(|(k, v)| (k.clone(), v.as_str().unwrap_or("-").to_string())).collect())
+        .unwrap_or_default();
+    let mut derriere = 0usize;
+    for chemin in &changes {
+        match sales.get(chemin) {
+            // Indexed in this modified state: behind only if it moved since.
+            Some(blob) => {
+                let maintenant = git(&["hash-object", "--", chemin]).map(|h| h.trim().to_string()).unwrap_or_else(|| "-".to_string());
+                if &maintenant != blob {
+                    derriere += 1;
+                }
+            }
+            None => derriere += 1,
+        }
+    }
+    // Indexed modified, now back to its commit.
+    derriere += sales.keys().filter(|c| !changes.contains(*c)).count();
+    garde.lock().unwrap_or_else(|e| e.into_inner()).insert(cle, (signature, derriere));
+    Some(derriere)
+}
+
+/// The paths `git status --porcelain` names (a rename names its new path).
+pub fn status_paths(status: &str) -> Vec<String> {
+    status
+        .lines()
+        .filter(|l| l.len() > 3)
+        .map(|l| {
+            let chemin = &l[3..];
+            chemin.rsplit(" -> ").next().unwrap_or(chemin).trim_matches('"').to_string()
+        })
+        .collect()
 }
 
 impl ViewState {
-    /// **A view without a watch counts the cold diff of its tree** as its files behind; a watched view keeps the
-    /// watch's count.
+    /// **A view without a watch counts the cold diff of its tree** as its files behind (the larger of it and what
+    /// `Lag` holds); a watched view keeps the watch's count. `None` (outside git) changes nothing.
     pub fn with_cold_behind(self, files: Option<usize>) -> Self {
-        let _ = files;
-        self // RED STUB.
+        let Some(froid) = files.filter(|_| !self.watched) else { return self };
+        let files_behind = self.files_behind.max(froid);
+        ViewState {
+            files_behind,
+            up_to_date: !self.indexing && files_behind == 0,
+            text_eta_s: if files_behind == 0 {
+                Some(0)
+            } else {
+                self.text_rate_ms_per_file.map(|ms| (files_behind as u64 * ms).div_ceil(1000))
+            },
+            ..self
+        }
     }
 
     /// **The seconds left to embed** the chunks due: chunks × mean size ÷ rate, rounded up; `Some(0)` with nothing due,
@@ -359,6 +440,7 @@ pub fn view_state(
         } else {
             lag.rate(cell).map(|ms_par_fichier| (files_behind as f64 * ms_par_fichier / 1000.0).ceil() as u64)
         },
+        text_rate_ms_per_file: lag.rate(cell).map(|ms| ms.round() as u64),
         vectors_eta_s: None,
     })
 }
@@ -534,7 +616,7 @@ mod tests {
         let b = etat("b");
         assert_eq!(
             b,
-            ViewState { layer: "b".into(), rank: Some(1), indexing: false, files_behind: 0, behind_since_ms: None, up_to_date: true, watched: false, text_eta_s: Some(0), vectors_eta_s: None },
+            ViewState { layer: "b".into(), rank: Some(1), indexing: false, files_behind: 0, behind_since_ms: None, up_to_date: true, watched: false, text_eta_s: Some(0), text_rate_ms_per_file: None, vectors_eta_s: None },
             "view b is held behind layer a's index"
         );
         let a_ = etat("a");

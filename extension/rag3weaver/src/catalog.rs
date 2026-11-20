@@ -646,7 +646,14 @@ pub fn indexed_tree_of(root: &str) -> serde_json::Value {
     let branch = git(&["rev-parse", "--abbrev-ref", "HEAD"]).filter(|b| !b.is_empty() && b != "HEAD");
     let status = git(&["status", "--porcelain", "--untracked-files=no"]).unwrap_or_default();
     let dirty_paths = status.lines().filter(|l| !l.trim().is_empty()).count();
-    serde_json::json!({ "root": root, "commit": commit, "branch": branch, "dirty": dirty_paths > 0, "dirty_paths": dirty_paths, "at_ms": retard::now_ms() })
+    // The blob of each modified path as it was indexed (`-` when deleted): a view without a watch compares the tree to
+    // it, so a file indexed modified and unchanged since is not behind (ticket of 18 November 2026).
+    let mut dirty_blobs = serde_json::Map::new();
+    for chemin in crate::views::status_paths(&status) {
+        let blob = git(&["hash-object", "--", &chemin]).unwrap_or_else(|| "-".to_string());
+        dirty_blobs.insert(chemin, serde_json::Value::String(blob));
+    }
+    serde_json::json!({ "root": root, "commit": commit, "branch": branch, "dirty": dirty_paths > 0, "dirty_paths": dirty_paths, "dirty_blobs": dirty_blobs, "at_ms": retard::now_ms() })
 }
 pub const EMBEDDING_CHOICE_KEY: &str = "embedding_choice";
 

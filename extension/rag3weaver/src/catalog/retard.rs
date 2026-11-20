@@ -247,12 +247,17 @@ impl Lag {
     /// **Whether a watch serves the layer of `key`**: its lag is then noted as files change, and a view reads it;
     /// without a watch, a view's lag is the cold diff of its tree (`views::cold_files_behind`).
     pub fn is_watched(&self, key: &LagKey) -> bool {
-        let _ = key;
-        false // RED STUB.
+        self.watching().get(key).is_some_and(|n| *n > 0)
     }
 
-    /// **The mark of a watch on its layer**, held by the watch's thread for its whole life.
+    fn watching(&self) -> std::sync::MutexGuard<'_, HashMap<LagKey, usize>> {
+        self.watching.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// **The mark of a watch on its layer**, held by the watch's thread for its whole life; two watches on one
+    /// layer count twice, and the layer stays watched until both are gone.
     pub fn watching_guard(self: &std::sync::Arc<Self>, key: LagKey) -> WatchingGuard {
+        *self.watching().entry(key.clone()).or_insert(0) += 1;
         WatchingGuard { lag: self.clone(), key }
     }
 }
@@ -260,10 +265,20 @@ impl Lag {
 /// See [`Lag::watching_guard`].
 #[derive(Debug)]
 pub struct WatchingGuard {
-    #[allow(dead_code)]
     lag: std::sync::Arc<Lag>,
-    #[allow(dead_code)]
     key: LagKey,
+}
+
+impl Drop for WatchingGuard {
+    fn drop(&mut self) {
+        let mut w = self.lag.watching();
+        if let Some(n) = w.get_mut(&self.key) {
+            *n = n.saturating_sub(1);
+            if *n == 0 {
+                w.remove(&self.key);
+            }
+        }
+    }
 }
 
 /// See [`Lag::writing_guard`].
