@@ -514,6 +514,8 @@ pub struct Step {
     done: Mutex<Option<Value>>,
     /// The pair entry of the task, and its key (mode pair, lot 3).
     pair: Option<(Arc<super::pair::Pair>, String)>,
+    /// The relaunch of a cut reply: its text and bound (`teammate.cut_relaunch_*`).
+    cut_relaunch: (String, usize),
     /// Les plans clos pendant ce pas (à ranger en L1).
     closed: Mutex<Vec<Plan>>,
     /// L'agent a-t-il tranché sur le plan actif (continue, pause, close) ?
@@ -616,6 +618,7 @@ impl Step {
             work: Mutex::new(StepWork::default()),
             turn_run: Mutex::new(None),
             pair: None,
+            cut_relaunch: (crate::backend::TeammatePolicy::default().cut_relaunch_text, crate::backend::TeammatePolicy::default().cut_relaunches_per_step),
         }
     }
 
@@ -635,11 +638,17 @@ impl Step {
         self
     }
 
+    /// The relaunch of a cut reply, for the step's chat turn.
+    pub fn cut_relaunch(&self) -> Option<(String, usize)> {
+        (self.cut_relaunch.1 > 0).then(|| self.cut_relaunch.clone())
+    }
+
     /// The step's bounds, from the backend's `teammate` policy.
     pub fn with_policy(mut self, policy: &crate::backend::TeammatePolicy) -> Self {
         self.max_tool_calls = policy.max_tool_calls_per_step.max(1);
         self.context_tokens = policy.step_context_tokens.max(1);
         self.max_model_calls = policy.max_model_calls_per_step.clamp(1, 100);
+        self.cut_relaunch = (policy.cut_relaunch_text.clone(), policy.cut_relaunches_per_step.min(10));
         self
     }
 

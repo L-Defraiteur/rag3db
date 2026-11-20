@@ -59,6 +59,14 @@ pub struct TeammatePolicy {
     /// while the teammate runs. Off by default; one paired task per host.
     #[serde(default)]
     pub pair: bool,
+    /// **A reply cut at max_tokens is relaunched within the step** (page 19-11-2026/06 of
+    /// rag3weaver-archi: lucivy 03's steps were cut at 3 930 reasoning tokens of 4 096, each ending
+    /// the step): at most this many times per step. Default: 2.
+    #[serde(default = "TeammatePolicy::cut_relaunches_per_step_default")]
+    pub cut_relaunches_per_step: usize,
+    /// The text of that relaunch, after the cut's note (`cut_reply`).
+    #[serde(default = "TeammatePolicy::cut_relaunch_text_default")]
+    pub cut_relaunch_text: String,
     /// **Un fournisseur qui ne répond pas n'est pas un pas raté** (8 novembre
     /// 2026, essai 3 : des 429 RESOURCE_EXHAUSTED arrêtaient l'équipier par
     /// `max_failed_steps`). Un quota dépassé (429) ou un service en panne (5xx,
@@ -132,6 +140,15 @@ impl TeammatePolicy {
     }
 }
 
+impl TeammatePolicy {
+    fn cut_relaunches_per_step_default() -> usize {
+        2
+    }
+    fn cut_relaunch_text_default() -> String {
+        "Your reply was cut before any tool call. Do not think at length: call one tool now, or step_done.".into()
+    }
+}
+
 impl Default for TeammatePolicy {
     fn default() -> Self {
         TeammatePolicy {
@@ -146,6 +163,8 @@ impl Default for TeammatePolicy {
             max_model_calls_per_step: Self::max_model_calls_per_step_default(),
             carry_over_chars: Self::carry_over_chars_default(),
             pair: false,
+            cut_relaunches_per_step: Self::cut_relaunches_per_step_default(),
+            cut_relaunch_text: Self::cut_relaunch_text_default(),
         }
     }
 }
