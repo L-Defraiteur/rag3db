@@ -10,6 +10,7 @@ Une ligne par cas joué ; les détails suivent la table.
 | tty 09, une demande écrite une fois (`b1163f64e1`) | **écarté** : latence de Vertex (jeu du 19 à 16 h 26) ; à rejouer | aucun diff | 0 / +36 −3 (tui.rs +7 −2, vue.rs +29 −1 ; hors docs) | 2 pas, 45 appels, 1 814 s de modèle sur 1 828 s ; l'appel le plus lent 385 s pour 8 695 jetons d'invite ; invite totale 1,34 M jetons, dont 88 % par le cache | aucun (diff vide) | la souche `tui::nom_garde -> None` ; non suivie (rien n'est écrit) |
 | tty 09, jeu du 19 à 18 h 06 | **dégâts** : les deux témoins déclarés passent, mais un test vert au parent rougit, par une assertion qu'Algareth lui a ajoutée | **même** (tui.rs, vue.rs) et **autre** (boite.rs) | +46 −5 (dont +13 de tests) / +36 −3 | 5 pas, 165 appels, 1 181 s (1 155 s de modèle) ; invite totale 5,31 M jetons, dont 87 % par le cache ; sortie 2 647, raisonnement 92 592 | `vue::tests::the_view_keeps_the_last_agent_name_seen` vert au parent, rouge après | la souche `nom_garde` : **suivie** (remplie et branchée dans `/nom`) |
 | lucivy 04, l'ulp d'écart en parse (`e3c9753f7f`) | **réussi**, sans qu'Algareth ait pu jouer un test (cargo refusé dans le bac, voir plus bas) | **autre** : `buffered_union.rs` (Algareth) contre `score_combiner.rs` et `block_wand.rs` (nous) | +5 −22 / +17 −9 (hors le témoin, +81) | 2 pas, 54 appels, 464 s ; invite 1,66 M jetons, dont 82 % par le cache | aucun : le seul rouge de la suite l'était déjà au parent | trois fichiers de l'arbre, sans souche, absents de la consigne ; Algareth en a corrigé un |
+| lucivy 04, jeu du 20 à 01 h 31, cargo dans le bac | **réussi**, vérifié par l'agent cette fois | **autre** : `buffered_union.rs` (Algareth) contre `score_combiner.rs` et `block_wand.rs` (nous) | +7 −6 / +17 −9 | 2 pas, 75 appels, 438 s (3,9 s par appel) ; invite 2,34 M jetons, dont 82 % par le cache | aucun : le seul rouge restant l'était au parent (corpus absent) | les trois fichiers indiqués ; Algareth en corrige un |
 | ED 02, le préfixe d'une décision (`f063a90e52`) | **réussi** | **même** (`decide_nodes.rs`, et la même assertion de `decide_nodes/tests.rs`) | +13 −3 / +15 −3 | 3 pas, 72 appels, 680 s ; invite 2,09 M jetons, dont 58 % par le cache | aucun : la lib entière passe (1 745) | le fichier indiqué ; Algareth y a corrigé la cause |
 | ED 01, le journal plafonné (`b610560e51`) | **échoué** (réserve : Vertex lent) | aucun diff (nous : `commande.rs`) | 0 / +10 −2 | 3 pas, 34 appels, 1 388 s, dont 640 et 706 s pour les deux premiers pas ; invite 0,52 M jetons, dont 70 % par le cache | aucun | le fichier indiqué, lu sans conclure |
 | embarquement 02, le refus d'un démarrage mort (`c4b36feffa`) | **réussi** | **même** (`serveur.rs`) ; le nôtre nomme aussi le programme d'un démarrage muet, hors de la demande | +10 −4 / +20 −9 | 2 pas, 64 appels, 408 s ; invite 1,85 M jetons, dont 62 % par le cache | aucun : la lib entière passe (1 743) | le fichier indiqué |
@@ -207,3 +208,22 @@ Archi l'a corrigé (le gabarit figé pose `RUSTUP_HOME` et `CARGO_HOME` réels, 
   tout le texte stocké de chaque document candidat. C'est le bon endroit. Mais il a lu 99 fichiers et n'a rien écrit.
 - **Le verdict : échoué.** Un diff vide laisse le témoin rouge. Ce jeu est le seul de la soirée où la consigne, cargo et
   Vertex étaient tous en ordre : il mesure bien Algareth. Il a localisé la cause, mais il n'est pas passé au correctif.
+
+## lucivy 04, rejoué le 20 novembre à 01 h 31 (cargo dans le bac à sable)
+
+- **Le jeu** : `campagne/04-cas-de-campagne-un-ulp-d-ecart-en-parse/20261120-013128/`. Algareth a fini de lui-même, en 2
+  pas, 75 appels et 438 s. Cette fois, il a vu le témoin rouge puis vert sous cargo.
+- **Le diff** : `buffered_union.rs`, +7 −6. `unordered_drain_filter` devient `ordered_drain_filter`, qui retire par
+  `v.remove(i)` au lieu de `v.swap_remove(i)` : l'ordre des scorers est gardé, donc celui de la somme en f32. C'est la
+  même idée qu'au premier jeu (`retain_mut`), écrite autrement. `remove` décale la fin du vecteur à chaque retrait ; sur
+  une union de quelques clauses, c'est sans effet mesurable.
+- **Le juge** (tablette, clone et target à part, sous `~/git_workspaces/banc/`) :
+
+| | parent et témoin | avec le diff d'Algareth |
+|---|---|---|
+| le témoin | rouge, sur l'assertion (`…_layouts.rs:80`) | **vert** |
+| `cargo test --workspace` | 2 200 passés, 2 rouges : le témoin et `derived_in_ram_answers_like_the_files` | 2 201 passés, 1 rouge : `derived_in_ram_answers_like_the_files` |
+
+- **Le verdict : réussi.** Le témoin passe, son fichier n'est pas touché, et le seul rouge restant l'était au parent : le
+  corpus `/tmp/lucivy-cmp` manque sur la tablette (il est vert à luciepc, où le corpus existe, page plus haut). Les « 1
+  passed; 3 failed » qu'archi a vus sous l'agent sont des tests qui exigent un corpus absent du bac à sable.
