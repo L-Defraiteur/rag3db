@@ -46,7 +46,7 @@ pub const LIBRARY: &str = "Library";
 /// question.
 pub const SYMBOL: &str = "Symbol";
 
-pub const RELATIONS: [(&str, &str, &str); 14] = [
+pub const RELATIONS: [(&str, &str, &str); 15] = [
     ("DEFINED_IN", SCOPE, FILE),
     ("CONSUMES", SCOPE, SCOPE),
     ("CONSUMED_BY", SCOPE, SCOPE),
@@ -68,6 +68,8 @@ pub const RELATIONS: [(&str, &str, &str); 14] = [
     // déclaré désigne — et le nom qu'une classe enregistre.
     ("QUERIES", SCOPE, SYMBOL),
     ("REGISTERS", SCOPE, SYMBOL),
+    // PROTOTYPE de mesure (lot 2 de l'intra-scope, jamais déposé) : une arête par site de référence.
+    ("OCCURS", SCOPE, SYMBOL),
 ];
 
 /// Répertoires qu'on ne parse jamais.
@@ -625,6 +627,9 @@ fn field_def(field_type: FieldType) -> crate::config::FieldDef {
     crate::config::FieldDef { field_type, title_for: None, content_for: None, boost: None, default_value: None }
 }
 
+/// PROTOTYPE de mesure : le nombre d'arêtes OCCURS mises en file par ce processus.
+pub static PROTO_OCCURRENCES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
 fn usage_property_defs() -> HashMap<String, crate::config::FieldDef> {
     HashMap::from([
         ("usage".to_string(), field_def(FieldType::String)),
@@ -779,6 +784,15 @@ fn code_relation_properties(rel: &str) -> HashMap<String, crate::config::FieldDe
         let mut props = std::collections::HashMap::new();
         props.insert("via".to_string(), field_def(FieldType::String));
         return props;
+    }
+    if rel == "OCCURS" {
+        return HashMap::from([
+            ("line".to_string(), field_def(FieldType::Int64)),
+            ("column".to_string(), field_def(FieldType::Int64)),
+            ("byte_start".to_string(), field_def(FieldType::Int64)),
+            ("byte_end".to_string(), field_def(FieldType::Int64)),
+            ("role".to_string(), field_def(FieldType::String)),
+        ]);
     }
     if rel == "LOCKS" {
         // Le genre (`lock`, `shared_lock`) et la ligne du verrou ; `via` :
@@ -3098,6 +3112,40 @@ impl Catalog {
             }
         }
         self.mettre_en_file_les_liens("LOCKS", verrous)?;
+        // PROTOTYPE de mesure (lot 2 de l'intra-scope) : une arête OCCURS par site, sous RAG3WEAVER_PROTO_OCCURRENCES.
+        if std::env::var_os("RAG3WEAVER_PROTO_OCCURRENCES").is_some() {
+            let t = std::time::Instant::now();
+            let nom_de: HashMap<&str, &str> = analysis.scopes.iter().map(|sc| (sc.key.as_str(), sc.name.as_str())).collect();
+            let mut par_site: Vec<(&str, &str, &UsageSite)> = Vec::new();
+            for r in analysis.relations.iter().filter(|r| r.from_entity == SCOPE && USAGE_RELATIONS.contains(&r.rel.as_str())) {
+                if let Some(nom) = nom_de.get(r.to_key.as_str()) {
+                    par_site.extend(r.sites.iter().map(|x| (r.from_key.as_str(), *nom, x)));
+                }
+            }
+            for (scope_key, nom, sites) in &analysis.pending_sites {
+                par_site.extend(sites.iter().map(|x| (scope_key.as_str(), nom.as_str(), x)));
+            }
+            let mut uuids: HashMap<&str, String> = HashMap::new();
+            let mut occurrences = Vec::with_capacity(par_site.len());
+            for (i, (scope_key, nom, site)) in par_site.into_iter().enumerate() {
+                if !uuids.contains_key(scope_key) {
+                    let u = self.entity_uuid(SCOPE, &self.donnees_de_cle(SCOPE, scope_key, ""))?;
+                    uuids.insert(scope_key, u);
+                }
+                let line = site.line.map_or(CypherValue::Null, |l| CypherValue::Int(l as i64));
+                let props = BTreeMap::from([
+                    ("line".to_string(), line),
+                    ("column".to_string(), CypherValue::Int(i as i64)),
+                    ("byte_start".to_string(), CypherValue::Int(i as i64 * 7)),
+                    ("byte_end".to_string(), CypherValue::Int(i as i64 * 7 + nom.len() as i64)),
+                    ("role".to_string(), s(usage_name(&site.usage))),
+                ]);
+                occurrences.push((uuids[scope_key].clone(), symbol_uuid(self, nom)?, props));
+            }
+            let n = self.mettre_en_file_les_liens("OCCURS", occurrences)?;
+            crate::ingest_profile::add("occurrences · prototype (mise en file)", t);
+            PROTO_OCCURRENCES.fetch_add(n, std::sync::atomic::Ordering::Relaxed);
+        }
         // Les tests par requêtes : QUERIES du test vers le symbole demandé,
         // REGISTERS de la classe vers le nom qu'elle enregistre.
         if !requetes.queries.is_empty() || !requetes.registers.is_empty() {

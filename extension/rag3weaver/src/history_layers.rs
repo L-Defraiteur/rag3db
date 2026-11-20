@@ -893,7 +893,11 @@ mod tests {
         let mut lourdes: Vec<_> = cumul.into_iter().collect();
         lourdes.sort_by(|a, b| b.1 .0.cmp(&a.1 .0));
         let lourdes: Vec<serde_json::Value> = lourdes.into_iter().take(15).map(|(e, (ms, fois))| serde_json::json!({"étape": e, "ms": ms, "fois": fois})).collect();
-        println!("SONDE_ECRITURE {}", serde_json::json!({"mode": mode, "ms": ms, "fichiers": fichiers.len(), "étapes": lourdes}));
+        let compte = |rel: &str| cat.execute_raw(&format!("MATCH ()-[r:{rel}]->() RETURN count(r)")).ok().and_then(|v| v.rows.first().and_then(|l| l.first().cloned()));
+        let occurs = compte("OCCURS");
+        let mentions = compte("MENTIONS");
+        let consumes = compte("CONSUMES");
+        println!("SONDE_ECRITURE {}", serde_json::json!({"mode": mode, "ms": ms, "fichiers": fichiers.len(), "occurrences_en_file": crate::code::PROTO_OCCURRENCES.load(std::sync::atomic::Ordering::Relaxed), "OCCURS": format!("{occurs:?}"), "MENTIONS": format!("{mentions:?}"), "CONSUMES": format!("{consumes:?}"), "étapes": lourdes}));
     }
 
     /// **Témoin 4 : the cap of the work layers.** Under `tracked.writes.max_work_layers: 2`, three worktrees: the
