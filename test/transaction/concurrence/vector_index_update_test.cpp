@@ -3073,6 +3073,116 @@ TEST_F(VectorIndexBridgeMeasure, RealVectorsUpdatedAndDeleted) {
                       << " runs leave linked rows that no entry of the lower layer reaches:"
                       << details;
 }
+
+// Des amas de quasi-copies (ticket 2026-10-10-un-groupe-de-copies-bien-plus-grand-que-le-degre,
+// 20 novembre 2026 : sur les vrais vecteurs de code-lourd, deux lignes d'un amas de trois, à
+// distance nulle entre elles et à 0,09 du reste, injoignables dès le CREATE). Des vecteurs qui
+// diffèrent d'un bit ne sont pas des copies pour selectNeighbours (memcmp) : un nœud du dehors en
+// garde un et écarte les autres comme « couverts » par lui, à écart presque nul. Le témoin :
+// CLUSTERS amas de trois quasi-copies, loin d'un nuage gaussien, un bâti parallèle à 8 fils ;
+// chaque membre doit être joignable dans la couche basse et rendu par son propre vecteur.
+class VectorIndexNearCopies : public VectorIndexUpdate {
+public:
+    void SetUp() override {
+        EmptyDBTest::SetUp();
+        if (inMemMode) {
+            GTEST_SKIP() << "on-disk database needed";
+        }
+        systemConfig->bufferPoolSize = 1024 * 1024 * 1024;
+        systemConfig->maxNumThreads = 8;
+        createDBAndConn();
+        mustRun("CALL auto_checkpoint=false;");
+        mustRun("CALL threads=8;");
+        concurrency::loadVectorExtension(*conn);
+        if (const auto* runs = std::getenv("CONCURRENCE_VECTOR_RUNS")) {
+            forcedRuns = std::max(1, std::atoi(runs));
+        }
+    }
+};
+
+TEST_F(VectorIndexNearCopies, EveryMemberOfANearCopyClusterStaysReachable) {
+    constexpr int DIMENSION = 16;
+    constexpr int64_t CLOUD = 20'000;
+    constexpr int64_t CLUSTERS = 500;
+    constexpr int64_t MEMBERS = 3;
+    const auto runs = forcedRuns > 0 ? forcedRuns : 3;
+    int failedRuns = 0;
+    std::string details;
+    for (auto run = 0; run < runs; ++run) {
+        table = stringFormat("Near{}", run);
+        mustRun(stringFormat("CREATE NODE TABLE {}(id INT64 PRIMARY KEY, vec FLOAT[{}]);", table,
+            DIMENSION));
+        // The cloud, then the clusters: each member is its centre, moved by one part in a
+        // million on one coordinate (not a byte copy, at a distance near zero).
+        std::vector<std::string> members;
+        const auto csv = databasePath + stringFormat(".near{}.csv", run);
+        {
+            std::ofstream out(csv);
+            out.precision(9);
+            std::mt19937 engine(static_cast<uint32_t>(1000 + run));
+            std::normal_distribution<float> normal(0, 1);
+            int64_t id = 0;
+            for (; id < CLOUD; ++id) {
+                out << id << ",\"[";
+                for (auto d = 0; d < DIMENSION; ++d) {
+                    out << (d ? "," : "") << normal(engine);
+                }
+                out << "]\"\n";
+            }
+            for (int64_t c = 0; c < CLUSTERS; ++c) {
+                std::vector<float> centre(DIMENSION);
+                for (auto& value : centre) {
+                    value = 4 * normal(engine);
+                }
+                for (int64_t m = 0; m < MEMBERS; ++m, ++id) {
+                    std::ostringstream vector;
+                    vector.precision(9);
+                    vector << "[";
+                    for (auto d = 0; d < DIMENSION; ++d) {
+                        const auto value = centre[d] * (d == 0 ? 1 + 1e-6f * m : 1.0f);
+                        vector << (d ? "," : "") << value;
+                    }
+                    vector << "]";
+                    members.push_back(stringFormat("{}:{}", id, vector.str()));
+                    out << id << ",\"" << vector.str() << "\"\n";
+                }
+            }
+        }
+        mustRun(stringFormat("COPY {} FROM '{}' (header=false);", table, csv));
+        std::filesystem::remove(csv);
+        mustRun(stringFormat("CALL CREATE_VECTOR_INDEX('{}', 'doc_index', 'vec', metric := 'l2');",
+            table));
+        if (HasFatalFailure()) {
+            return;
+        }
+        const auto reach = lowerGraphReach(*conn, table, "doc_index", "vec");
+        int64_t notFound = 0;
+        for (const auto& member : members) {
+            const auto colon = member.find(':');
+            const auto id = std::stoll(member.substr(0, colon));
+            auto own = conn->query(stringFormat(
+                "CALL QUERY_VECTOR_INDEX('{}', 'doc_index', {}, 10) RETURN node.id;", table,
+                member.substr(colon + 1)));
+            auto found = false;
+            while (own->isSuccess() && own->hasNext()) {
+                found |= own->getNext()->getValue(0)->getValue<int64_t>() == id;
+            }
+            notFound += !found;
+        }
+        const auto line = stringFormat("run {} : {} cluster members, {} not returned by their own "
+                                       "vector ; lower graph, {} linked rows, {} unreachable from "
+                                       "every entry{}",
+            run, members.size(), notFound, reach.linked, reach.unreachable,
+            reach.error.empty() ? "" : " ; " + reach.error);
+        std::cerr << "  [quasi-copies] " << line << "\n";
+        if (notFound != 0 || reach.unreachable != 0 || !reach.error.empty()) {
+            failedRuns++;
+            details += "\n  " + line;
+        }
+    }
+    EXPECT_EQ(failedRuns, 0) << "[check: vector-near-copies-reachable] " << failedRuns << " of "
+                             << runs << " runs lose members of near-copy clusters:" << details;
+}
 } // namespace
 
 #endif
