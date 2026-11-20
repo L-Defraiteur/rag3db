@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 20 novembre 2026 — **Le code de premier niveau Python a ses références, et `export * from` se suit.** Ce qu'un fichier Python fait hors de ses fonctions et de ses classes (un appel au chargement, une constante construite, le bloc `__main__`) se relie désormais comme dans les autres langages ; ses liaisons (variables de boucle, déballages, alias, modules importés) n'en sont pas. `export * from './x'` réexporte les définitions de premier niveau de `./x`, et elles seules. Sur le crate rag3weaver entier, 805 liens s'ajoutent, aucun ne se perd ; un premier niveau court (moins de 80 caractères) ne concourt pas à la recherche. Les bases repassent une fois (règles de l'analyse 14).
+
 - 20 novembre 2026 — **Un paquet du dépôt importé par son nom se résout par l'import, et les réexportations de Python et de TypeScript se suivent.** Dans les tests d'un crate (`use rag3weaver::Catalog`), un import par le nom d'un paquet npm du dépôt, ou par un `__init__.py` qui réexporte (`from monpaquet.lib import Catalog`), le lien vers la définition était deviné par le nom ; il passe maintenant par l'import, lu dans les manifestes (`Cargo.toml`, `package.json`). `export { X } from './x'` et les imports nommés d'un `__init__.py` sont des réexportations, comme `pub use` en Rust. Sur le crate rag3weaver entier, 5 493 liens passent de « nom » à « import » et 325 s'ajoutent, aucun ne se perd. Les bases repassent une fois (règles de l'analyse 11).
 
 - 20 novembre 2026 — **Un namespace replié ne passe plus devant la classe qu'on cherche.** Un `namespace` ou un
