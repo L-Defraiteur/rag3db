@@ -7146,7 +7146,8 @@ mod tests {
         );
         assert_eq!(
             reactif.len(),
-            outil.len() + 3,
+            // SlowReadNode is a tool node of the test builds only, never a reactive one.
+            outil.len() + 3 - usize::from(cfg!(test)),
             "la liste réactive est la base plus EventSourceNode, ReactTransitionNode et \
              ReindexFileNode (écrire l'index d'un fichier changé sous une montre, W2), \
              soit trois entrées — elle en a {}",
