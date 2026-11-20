@@ -1031,7 +1031,7 @@ pub(crate) fn connect_llm_with_vertex(
 
 /// Un artefact de modèle local : `<PRÉFIXE>_<SUFFIXE>` dans l'environnement,
 /// sinon `~/.cache/rag3weaver/<dossier>/<fichier>`.
-#[cfg(feature = "burn-embedder")]
+#[cfg(feature = "token-count")]
 pub(crate) fn local_artifact(folder: &str, prefix: &str, suffix: &str, file: &str) -> Result<std::path::PathBuf, String> {
     let variable = format!("{prefix}_{suffix}");
     let path = match std::env::var(&variable) {

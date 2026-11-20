@@ -188,6 +188,10 @@ pub struct ChunkingConfig {
     /// embedder (ticket of embarquement, 20 November 2026). None: `max_size` bounds the core and each side.
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "max_chunk_size")]
     pub max_chunk_size: Option<usize>,
+
+    /// `Lines`: **the bound of a whole chunk in tokens**, counted by the tokenizer of the base's smallest embedder.
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "token_bound")]
+    pub token_bound: Option<crate::tokens::TokenBound>,
 }
 
 /// **A row that is not a search candidate** (2.12, c7's rule of 19 November 2026): a row whose `type_field` is one
@@ -326,6 +330,7 @@ impl Default for ChunkingConfig {
             overlap_lines: 5,
             not_candidate: None,
             max_chunk_size: None,
+            token_bound: None,
         }
     }
 }
