@@ -717,7 +717,7 @@ impl DaemonHost {
                     let veille = hosted.clone();
                     let outils = OutilsDuChat::de(b, &declares, dans_une_tache)
                         .avec_empreinte(empreintes.clone(), numero_du_tour, b.prepared().workspace_root())
-                        .avec_la_veille_de_l_index(move |index| self.veiller_l_index(&veille, index));
+                        .avec_la_veille_de_l_index(move |index, vue| self.veiller_l_index(&veille, index, vue));
                     // Hors d'une tâche, une commande en attente se décide sur la carte
                     // d'accord (lot 7) ; dans une tâche, la boîte du superviseur la tient.
                     #[cfg(feature = "code")]
@@ -776,17 +776,18 @@ impl DaemonHost {
     /// `depuis`. GET, flux et récapitulatif lisent la même projection du journal,
     /// dont le total est scellé à la fin du tour, avant sa publication.
     /// **Watch an index « not ready » met by the chat** (c7's night task, 20 November 2026): the thin client's watch
-    /// (`ReadyWatches`, its settings `search.ready_watch`, its text), on the backend's layer; once ready, one
+    /// (`ReadyWatches`, its settings `search.ready_watch`, its text), on the layer of the call's view (the backend's
+    /// without one); once ready, one
     /// `IndexReady {view, text}` on the IDE's stream, subject `index`. An answer met while its watch runs starts none.
-    fn veiller_l_index(&self, hosted: &Arc<super::Hosted>, index: &Value) {
+    fn veiller_l_index(&self, hosted: &Arc<super::Hosted>, index: &Value, vue: Option<Value>) {
         let Some(crate::daemon_client::WhatAWatchSays { eta, vectors, key, text }) =
-            crate::daemon_client::what_a_watch_says(&hosted.manifest, index, None)
+            crate::daemon_client::what_a_watch_says(&hosted.manifest, index, vue.as_ref())
         else {
             return;
         };
         let Some(soi) = self.soi.get().cloned() else { return };
         let settings = crate::daemon_client::ReadyWatchSettings::from_manifest(&hosted.manifest);
-        let (sonde, h, manifeste) = (soi.clone(), hosted.clone(), hosted.manifest.display().to_string());
+        let (sonde, h, manifeste, sondee) = (soi.clone(), hosted.clone(), hosted.manifest.display().to_string(), vue.clone());
         self.veilles_d_index.watch(
             &key,
             eta,
@@ -794,11 +795,11 @@ impl DaemonHost {
             text,
             move || {
                 let hote = sonde.upgrade()?;
-                hote.with_backend(&h, |b| b.index_state_now(None, None, vectors)).ok()?.ok().map(|s| s["ready"] == json!(true))
+                hote.with_backend(&h, |b| b.index_state_now(None, sondee.as_ref(), vectors)).ok()?.ok().map(|s| s["ready"] == json!(true))
             },
             move |t| {
                 if let Some(hote) = soi.upgrade() {
-                    hote.ide_flux().publier("index", &manifeste, json!({ "kind": "IndexReady", "view": Value::Null, "text": t }));
+                    hote.ide_flux().publier("index", &manifeste, json!({ "kind": "IndexReady", "view": vue, "text": t }));
                 }
             },
         );
@@ -1029,8 +1030,9 @@ pub(crate) struct OutilsDuChat<'a> {
     /// **Une carte d'accord passée sous un appel** : son id, rattaché à la conversation pour
     /// que la décision y relance le tour (la carte d'un chemin ; c7, 9 novembre 2026).
     rattacher: Option<Box<dyn Fn(&str) + Send + Sync + 'a>>,
-    /// **An answer whose index is not ready** (its `index`, carried by the turn's `metadata`): the host watches it.
-    pas_pret: Option<Box<dyn Fn(&Value) + Send + Sync + 'a>>,
+    /// **An answer whose index is not ready** (its `index`, carried by the turn's `metadata`, and the call's `view`):
+    /// the host watches it.
+    pas_pret: Option<Box<dyn Fn(&Value, Option<Value>) + Send + Sync + 'a>>,
 }
 
 impl<'a> OutilsDuChat<'a> {
@@ -1178,7 +1180,7 @@ impl<'a> OutilsDuChat<'a> {
     /// Hors d'une tâche, chaque carte d'accord sous un appel se rattache à la conversation.
     #[cfg(feature = "code")]
     /// Watch the index of an answer « not ready » (the IDE's chat; c7's night task, 20 November 2026).
-    pub(crate) fn avec_la_veille_de_l_index(mut self, veiller: impl Fn(&Value) + Send + Sync + 'a) -> Self {
+    pub(crate) fn avec_la_veille_de_l_index(mut self, veiller: impl Fn(&Value, Option<Value>) + Send + Sync + 'a) -> Self {
         self.pas_pret = Some(Box::new(veiller));
         self
     }
@@ -1226,7 +1228,9 @@ impl<'a> OutilsDuChat<'a> {
         self.carte_d_une_commande_en_attente(call, &mut t);
         self.rattacher_les_cartes(&t);
         if let (Some(veiller), Some(index)) = (&self.pas_pret, t.metadata.as_ref().map(|m| &m["index"]).filter(|i| i["ready"] == json!(false))) {
-            veiller(index);
+            // The view the call named (`view`, read by every tool): its index « not ready » is that view's.
+            let vue = serde_json::from_str::<Value>(&call.arguments).ok().map(|a| a["view"].clone()).filter(|v| !v.is_null());
+            veiller(index, vue);
         }
         t
     }
