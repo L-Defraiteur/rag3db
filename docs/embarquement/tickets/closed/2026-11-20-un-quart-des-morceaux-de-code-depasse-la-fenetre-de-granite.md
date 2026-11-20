@@ -1,6 +1,6 @@
 # Un quart des morceaux de code dépasse la fenêtre de granite
 
-- **État** : ouvert (20 novembre 2026, embarquement ; point C de la page des bornes)
+- **État** : fermé le 20 novembre 2026 par le lot des morceaux d'everything declarative (`chunk-bound-from-embedder`, règles de l'analyse 14). Voir « Fermeture ».
 - **Pour** : la session qui découpe le code (`default_scope_chunking`, `src/code.rs`) ; embarquement pour la mesure
 - **Famille** : produit
 - **Gravité** : haute pour la recherche par le vecteur. Sous granite-278m, la fin de **près de trois morceaux sur quatre** n'est pas
@@ -88,3 +88,23 @@ comptés par le tokenizer de granite.
   scopes sont petits (médiane de 110 jetons), et le contexte ne sort pas d'un scope. La réserve de l'estimation tenait.
 - Le témoin de mesure était jetable (jamais commité) ; les journaux sont à luciepc dans
   `~/.cache/rag3weaver-build/mesure-point-c/`.
+
+## Fermeture (20 novembre 2026, session everything declarative)
+
+**Le correctif**, dans le lot des morceaux (règles de l'analyse 14) :
+- **la borne vaut pour le morceau entier**, cœur et contexte, la queue fusionnée et un texte gardé entier ; le contexte
+  cède d'abord, une ligne à la fois de chaque côté (`ChunkingConfig::max_chunk_size`) ;
+- **elle vient du plus petit embarqueur de la base**, celui que le backend déclare et ceux dont la base garde des
+  vecteurs : fenêtre × marge ÷ ratio en octets d'abord (1 024 pour granite), puis en jetons comptés par son propre
+  tokenizer (`src/tokens.rs`) ;
+- **le tokenizer est une capacité** : s'il manque, la base refuse de s'ouvrir pour l'index en nommant le fichier, et
+  jamais un découpage par les octets seuls ;
+- bge-m3 seul garde ses 1 500.
+
+**La preuve** : la mesure par l'index ci-dessus, sur la tête du lot. Aucun morceau au-dessus de 512 jetons sur les deux
+corpus entiers (max 510), pour 8,7 % et 3,9 % de morceaux en plus. Les témoins du lot, vus rouges puis verts :
+- tous les en-têtes du moteur découpés fichier par fichier : un morceau à 602 jetons sans l'étage des jetons, aucun
+  au-dessus de 512 avec ;
+- une base de code qui indexe quatre en-têtes denses scope par scope : 21 morceaux sur 184 au-dessus de 512 avec le
+  découpage d'avant (jusqu'à 1 290), aucun avec la borne ;
+- un modèle sans tokenizer refusé, en nommant le fichier.
