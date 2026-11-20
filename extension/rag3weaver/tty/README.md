@@ -63,7 +63,7 @@ host's own words are not shown; Ctrl-O and the journal keep them all. `--steps`
 An approval request is live state: it is said on the status line, not written to the history,
 and still said once the teammate's step has ended. It shows two buttons, `[ Oui ]` chosen in
 advance and `Non`: ← → change the choice (the chosen one in reverse video), Enter validates it,
-and `o` or `n` answer at once, with an empty input; the answer, from the terminal or from the IDE, leaves
+and a lone lowercase `o` or `n` answers at once, with an empty input (a capital starts a message); text typed while an approval waits goes to the teammate as a message, and the approval keeps waiting; the answer, from the terminal or from the IDE, leaves
 one line, `› accordé : <command>` or `› refusé : <command>`. A declarations proposal of the main
 repository (the `declarations` stream) waits the same way after the mailbox: `o` applies it, `n`
 rejects it (`POST /ide/propositions/appliquer`, `/rejeter`).
