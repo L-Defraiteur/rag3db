@@ -16,6 +16,12 @@
   agent n'y était connu qu'à son prochain appel d'outil : l'IDE ne listait que ceux qui avaient travaillé depuis. Le
   client MCP relit maintenant son `daemon.json` toutes les 5 s et ouvre une session à son nom sur un hôte neuf, sans
   rien envoyer à l'hôte tant qu'il reste le même (un hôte laissé seul s'arrête encore).
+- 20 novembre 2026 — **Chaque appel d'outil dit la version du gabarit qui l'a servi.** La réponse porte
+  `metadata.template` : l'empreinte de ce que le chargement a mis en service (manifeste, scripts, graphes, schémas,
+  et le contenu embarqué par le binaire) et le numéro de rechargement. Une entité qui déclare `writes.template` reçoit
+  cette empreinte sur chaque ligne écrite : dans le gabarit memory, la Source d'une tranche et chaque L1. Une baisse
+  du rangement se relie ainsi à la version du gabarit qui l'a produite.
+
 - 21 novembre 2026 — **Au terminal, un message tapé pendant qu'un accord attend reste un message.** Seuls `o` et `n` minuscules, seuls, répondent tout de suite à une demande d'accord. Une phrase qui commence par une majuscule (« Ne commite pas… ») part à l'équipier comme un message, et la demande d'accord reste affichée, au lieu d'être refusée par la première lettre.
 - 21 novembre 2026 — **cargo marche dans le chat de l'atelier.** Le bac à sable des commandes de l'atelier n'ouvrait
   que son dossier : `cargo init`, `cargo build` ou `cargo test`, accordés, échouaient sur la configuration de rustup.
