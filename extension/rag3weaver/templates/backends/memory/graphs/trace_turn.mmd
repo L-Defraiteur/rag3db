@@ -6,11 +6,11 @@
 
 graph LR
     query["RhaiNode(script_id=trace_turn_query, inputs='run,turn', run=$run, turn=$turn)"]
-    turns["ForEachNode(graph='@builtin:backends/memory/graphs/rows_turn.mmd')"]
+    turns["ForEachNode(graph='@graphs/rows_turn.mmd')"]
     slice["RhaiNode(script_id=trace_turn_slice)"]
-    source["ForEachNode(graph='@builtin:backends/memory/graphs/rows_source.mmd')"]
+    source["ForEachNode(graph='@graphs/rows_source.mmd')"]
     l1["RhaiNode(script_id=trace_turn_l1)"]
-    apports["ForEachNode(graph='@builtin:backends/memory/graphs/rows_apport.mmd')"]
+    apports["ForEachNode(graph='@graphs/rows_apport.mmd')"]
     render["RhaiNode(script_id=trace_turn_render)"]
     query -->|result:elements| turns
     turns -->|list:value| slice
