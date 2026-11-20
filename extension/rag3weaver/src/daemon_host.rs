@@ -369,6 +369,9 @@ pub struct DaemonHost {
     rangements_en_vol: Arc<Mutex<std::collections::HashSet<String>>>,
     /// One writer at a time for the mark files (`chats/<backend>.rangement.json`).
     rangement_verrou: Arc<Mutex<()>>,
+    /// **A guest host** (the night of 20 Nov 2026): started by hand in the root of a live host, it
+    /// takes over nothing of it — no task reread, no chat, no teammate resumed. Names the owner.
+    invite: Option<String>,
     /// The pair mode's registry entry, made at the first paired task (never before: a host
     /// without a paired task does not read or write the sessions registry).
     pair: std::sync::OnceLock<Option<Arc<pair::Pair>>>,
@@ -563,6 +566,7 @@ impl DaemonHost {
             rangeur: None,
             rangements_en_vol: Arc::new(Mutex::new(Default::default())),
             rangement_verrou: Arc::new(Mutex::new(())),
+            invite: None,
             pair: std::sync::OnceLock::new(),
             pair_registre: None,
             modele_nomme: chat::default_modele_nomme(),
@@ -599,6 +603,12 @@ impl DaemonHost {
     /// The sessions registry of the pair mode, instead of the environment's (the witnesses).
     pub fn with_pair_registry(mut self, registre: pair::Registre) -> Self {
         self.pair_registre = Some(registre);
+        self
+    }
+
+    /// A guest of the live host `de` (« 127.0.0.1:7970 (pid 2800109) »): it resumes nothing of it.
+    pub fn en_invite(mut self, de: String) -> Self {
+        self.invite = Some(de);
         self
     }
 
