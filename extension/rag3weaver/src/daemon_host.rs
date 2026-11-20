@@ -305,6 +305,12 @@ pub struct DaemonHost {
     /// **The space of the sessions' worktrees and the table of their folders** (page 03 of 20 November 2026):
     /// `None` gives `~/git_workspaces` and `~/.config/rag3weaver/dossiers-des-sessions.json`.
     espace: Mutex<Option<(std::path::PathBuf, std::path::PathBuf)>>,
+    /// **The views whose layer is being written in the background** (`open_view`): their name → when the writing began and
+    /// how many files it writes. A read under one of them answers « index pas prêt » at once.
+    vues_en_ecriture: Mutex<HashMap<String, (std::time::Instant, usize)>>,
+    /// The witnesses' gate: the background writing of a view waits on it while it is shut.
+    #[cfg(test)]
+    porte_d_ecriture: Mutex<Option<PorteDEcriture>>,
     /// **Soi, en lien faible** : posé par [`DaemonHost::se_connaitre`] (le service, les
     /// témoins), il permet à l'hôte de donner aux backends qu'il ouvre l'hôte des
     /// worktrees de l'atelier.
@@ -530,6 +536,9 @@ impl DaemonHost {
             sessions: Mutex::new(HashMap::new()),
             vues_dir: Mutex::new(None),
             espace: Mutex::new(None),
+            vues_en_ecriture: Mutex::new(HashMap::new()),
+            #[cfg(test)]
+            porte_d_ecriture: Mutex::new(None),
             opener,
             closed_dead: std::sync::atomic::AtomicUsize::new(0),
             background: crate::dataflow::background::registry(),
@@ -648,6 +657,28 @@ impl DaemonHost {
     /// Where the views of the sessions are kept (the witnesses give a temporary directory).
     pub fn set_vues_dir(&self, dir: std::path::PathBuf) {
         *self.vues_dir.lock().unwrap_or_else(|p| p.into_inner()) = Some(dir);
+    }
+
+    /// The witnesses: shut the gate of the views' background writing, and get it to open it again.
+    #[cfg(test)]
+    pub fn retenir_les_ecritures_de_vues(&self) -> PorteDEcriture {
+        let p = PorteDEcriture::default();
+        *self.porte_d_ecriture.lock().unwrap_or_else(|e| e.into_inner()) = Some(p.clone());
+        p
+    }
+
+    /// Waits until no view's layer is being written, at most `delai`; `true` when none is.
+    pub fn attendre_l_ecriture_des_vues(&self, delai: std::time::Duration) -> bool {
+        let fin = std::time::Instant::now() + delai;
+        loop {
+            if self.vues_en_ecriture.lock().unwrap_or_else(|e| e.into_inner()).is_empty() {
+                return true;
+            }
+            if std::time::Instant::now() > fin {
+                return false;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
     }
 
     /// The space of the worktrees and the table of the folders (the witnesses give temporary ones).
@@ -2318,6 +2349,27 @@ impl DaemonHost {
 impl Default for DaemonHost {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// The gate of the views' background writing (the witnesses): shut until [`PorteDEcriture::relacher`].
+#[cfg(test)]
+#[derive(Clone, Default)]
+pub struct PorteDEcriture(Arc<(Mutex<bool>, std::sync::Condvar)>);
+
+#[cfg(test)]
+impl PorteDEcriture {
+    pub fn relacher(&self) {
+        *self.0 .0.lock().unwrap_or_else(|e| e.into_inner()) = true;
+        self.0 .1.notify_all();
+    }
+
+    #[allow(dead_code)] // RED STUB: waited on by the background writing.
+    fn attendre(&self) {
+        let mut ouverte = self.0 .0.lock().unwrap_or_else(|e| e.into_inner());
+        while !*ouverte {
+            ouverte = self.0 .1.wait(ouverte).unwrap_or_else(|e| e.into_inner());
+        }
     }
 }
 
