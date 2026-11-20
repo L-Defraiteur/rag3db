@@ -849,8 +849,9 @@ impl DaemonHost {
 
     /// **Close the views of the landed lots** (page 03 of 20 November 2026, O4): the landings of this machine (the 6th
     /// column of `landed.tsv`, `<machine>:<view>`), read by the way the configuration declares; each view the host opened
-    /// is closed by its name, its generations purged (master holds its content). Gives the views closed, and those
-    /// refused with why.
+    /// and whose head stands at the lot's landed head (its 2nd column) or behind it is closed by its name, its
+    /// generations purged (master holds its content). Gives the views closed, those kept (their head moved on: a
+    /// worktree kept for the next lot) and those refused, with why.
     pub fn fermer_les_vues_atterries(&self) -> Value {
         let (poste, voie) = match self.atterrissages.lock().unwrap_or_else(|e| e.into_inner()).clone().map(Ok).unwrap_or_else(atterrissages_declares) {
             Ok(x) => x,
@@ -860,30 +861,37 @@ impl DaemonHost {
             Ok(t) => t,
             Err(e) => return json!({ "ok": false, "error": e }),
         };
-        let (mut fermees, mut refusees) = (Vec::new(), Vec::new());
+        let (mut fermees, mut refusees, mut gardees) = (Vec::new(), Vec::new(), Vec::new());
         for ligne in texte.lines() {
-            let Some(vue) = ligne.split('\t').nth(5) else { continue };
+            let colonnes: Vec<&str> = ligne.split('\t').collect();
+            let (Some(tete_deposee), Some(vue)) = (colonnes.get(1), colonnes.get(5)) else { continue };
             let Some((p, nom)) = vue.split_once(':') else { continue };
             if p != poste {
                 continue;
             }
             // The Claude Code session that opened it: its state notes the view.
-            let Some(claude) = self.qui_a_ouvert(nom) else { continue };
+            let Some((claude, chemin)) = self.qui_a_ouvert(nom) else { continue };
+            // **Its head at the landed head, or behind it** (c7, 20 November): a worktree kept for the next lot in a pile
+            // has moved on, and is kept.
+            if let Err(pourquoi) = tete_atterrie(&chemin, tete_deposee) {
+                gardees.push(json!({ "name": nom, "why": pourquoi }));
+                continue;
+            }
             match self.fermer(&claude, None, nom, true) {
                 Ok(_) => fermees.push(json!(nom)),
                 Err(e) => refusees.push(json!({ "name": nom, "error": e })),
             }
         }
-        json!({ "ok": true, "closed": fermees, "refused": refusees })
+        json!({ "ok": true, "closed": fermees, "refused": refusees, "kept": gardees })
     }
 
-    /// The Claude Code session whose state notes the view `nom` as opened, if any.
-    fn qui_a_ouvert(&self, nom: &str) -> Option<String> {
+    /// The Claude Code session whose state notes the view `nom` as opened, and the view's path, if any.
+    fn qui_a_ouvert(&self, nom: &str) -> Option<(String, std::path::PathBuf)> {
         std::fs::read_dir(self.vues_dir()).ok()?.flatten().find_map(|e| {
             let p = e.path();
             let etat: Value = serde_json::from_str(&std::fs::read_to_string(&p).ok()?).ok()?;
-            etat["ouvertes"].get(nom).filter(|v| !v.is_null())?;
-            p.file_stem().map(|s| s.to_string_lossy().to_string())
+            let chemin = etat["ouvertes"].get(nom).filter(|v| !v.is_null())?["path"].as_str()?.to_string();
+            Some((p.file_stem()?.to_string_lossy().to_string(), chemin.into()))
         })
     }
 
@@ -900,6 +908,9 @@ impl DaemonHost {
             let r = h.fermer_les_vues_atterries();
             for refus in r["refused"].as_array().into_iter().flatten() {
                 eprintln!("[vues] la vue atterrie « {} » ne se ferme pas : {}", refus["name"].as_str().unwrap_or("?"), refus["error"].as_str().unwrap_or("?"));
+            }
+            for g in r["kept"].as_array().into_iter().flatten() {
+                eprintln!("[vues] la vue atterrie « {} » est gardée : {}", g["name"].as_str().unwrap_or("?"), g["why"].as_str().unwrap_or("?"));
             }
             for nom in r["closed"].as_array().into_iter().flatten() {
                 eprintln!("[vues] vue atterrie fermée : {}", nom.as_str().unwrap_or("?"));
@@ -2611,6 +2622,25 @@ fn atterrissages_declares() -> Result<(String, VoieDesAtterrissages), String> {
         None => std::fs::read_to_string("/proc/sys/kernel/hostname").map(|h| h.trim().to_string()).map_err(|e| format!("le hostname : {e}"))?,
     };
     Ok((poste, voie))
+}
+
+/// **Whether a worktree stands at a landed head, or behind it**: `Err(why)` when its head moved on past it (a worktree
+/// kept for the next lot), or when the landed head is unknown here.
+fn tete_atterrie(chemin: &Path, tete_deposee: &str) -> Result<(), String> {
+    if !chemin.exists() {
+        return Ok(());
+    }
+    let git = |args: &[&str]| std::process::Command::new("git").arg("-C").arg(chemin).args(args).output();
+    let tete = git(&["rev-parse", "HEAD"]).ok().filter(|o| o.status.success()).map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
+    match tete {
+        Some(t) if t == tete_deposee => Ok(()),
+        Some(t) => match git(&["merge-base", "--is-ancestor", &t, tete_deposee]) {
+            Ok(o) if o.status.success() => Ok(()),
+            Ok(o) if o.status.code() == Some(1) => Err(format!("sa tête {t} a avancé au-delà de la tête atterrie {tete_deposee} : gardée pour le lot suivant")),
+            _ => Err(format!("la tête atterrie {tete_deposee} est inconnue ici : gardée")),
+        },
+        None => Err("sa tête est illisible : gardée".into()),
+    }
 }
 
 /// The text of the landings, by its way.
