@@ -8075,7 +8075,15 @@ mod tests {
         let started = std::time::Instant::now();
         let backend = prepared.open_on_disk().expect("the copy opens");
         let mut cat = backend.catalog.lock().unwrap();
+        // Which table carries each entity's full text on this base (on a base with scope versions, Scope's text
+        // and full text live on ScopeContent): a folder no target names is read by nobody.
+        for entity in cat.search_target_names() {
+            if let Ok(t) = cat.resolve_search_target(&entity) {
+                eprintln!("cible {entity} : plein texte sur {}", t.parent_table);
+            }
+        }
         cat.open_fts_files();
+        eprintln!("tables du plein texte ouvertes : {:?}", cat.fts_handles().keys().collect::<Vec<_>>());
         eprintln!("ouvert en {:.1} s ; à rebâtir : {}", started.elapsed().as_secs_f64(), cat.fts_rebuild_pending());
         let rebuild = std::time::Instant::now();
         let mut steps = 0u32;
