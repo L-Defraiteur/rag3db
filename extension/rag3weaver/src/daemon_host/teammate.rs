@@ -936,7 +936,7 @@ impl Step {
         ToolDef {
             name: SEND_TO_SESSION.into(),
             description: "Write to another agent session (Claude Code or a peer) in the sessions registry. `to` is its name, or the address a received line carries (reply_to_address, « uds:… »). A request whose text is a <cross-session-message from-name=… > came from such a session: answer it with this tool, to that session, not with report. The message is kept in your mailbox.".into(),
-            parameters: json!({ "type": "object", "properties": { "to": { "type": "string", "description": "the session's name, or a uds: address" }, "text": { "type": "string" } }, "required": ["to", "text"] }),
+            parameters: json!({ "type": "object", "properties": { "to": { "type": "string", "description": "the session's name, or a uds: address" }, "text": { "type": "string", "description": "the message itself, as the session will read it" } }, "required": ["to", "text"] }),
         }
     }
 
@@ -944,12 +944,12 @@ impl Step {
         let item = json!({
             "type": "object",
             "properties": {
-                "id": { "type": "string" },
-                "text": { "type": "string" },
-                "status": { "type": "string", "enum": ["todo", "doing", "done", "blocked", "dropped"] },
+                "id": { "type": "string", "description": "l'identifiant court de l'élément, stable dans le plan (exemple : « lire-la-porte »)" },
+                "text": { "type": "string", "description": "ce que l'élément fait, en une phrase" },
+                "status": { "type": "string", "enum": ["todo", "doing", "done", "blocked", "dropped"], "description": "l'état de l'élément ; todo à sa création" },
                 "alone": { "type": "boolean", "description": "true si tu peux le faire sans validation du superviseur" },
                 "question": { "type": "string", "description": "la question posée au superviseur, si l'élément demande une validation" },
-                "reason": { "type": "string" }
+                "reason": { "type": "string", "description": "pourquoi l'élément est bloqué ou abandonné ; vide sinon" }
             },
             "required": ["id"]
         });
@@ -962,23 +962,25 @@ impl Step {
                     "properties": {
                         "plan": {
                             "type": "object",
+                            "description": "ouvre un plan, quand aucun n'est actif",
                             "properties": {
                                 "request": { "type": "string", "description": "la demande telle que tu la comprends" },
                                 "proposal": { "type": "string", "description": "ce que tu proposes" },
-                                "items": { "type": "array", "items": item.clone() }
+                                "items": { "type": "array", "items": item.clone(), "description": "les éléments du plan, dans l'ordre où tu les feras" }
                             },
                             "required": ["request", "proposal", "items"]
                         },
-                        "item": item,
+                        "item": { "description": "change ou ajoute un élément du plan actif, par son id", "type": "object", "properties": item["properties"].clone(), "required": item["required"].clone() },
                         "remove": { "type": "string", "description": "l'id d'un élément à retirer" },
-                        "continue": { "type": "boolean" },
-                        "pause": { "type": "object", "properties": { "reason": { "type": "string" } }, "required": ["reason"] },
+                        "continue": { "type": "boolean", "description": "true : la demande nouvelle rejoint le plan actif, ou attend qu'il finisse" },
+                        "pause": { "type": "object", "description": "met le plan actif en pause, pour une demande nouvelle", "properties": { "reason": { "type": "string", "description": "pourquoi le plan s'interrompt" } }, "required": ["reason"] },
                         "resume": { "type": "integer", "description": "le numéro d'un plan en pause" },
                         "close": {
                             "type": "object",
+                            "description": "clôt un plan, accompli ou obsolète",
                             "properties": {
-                                "outcome": { "type": "string", "enum": ["accomplished", "obsolete"] },
-                                "reason": { "type": "string" },
+                                "outcome": { "type": "string", "enum": ["accomplished", "obsolete"], "description": "accomplished quand il est fait, obsolete quand il n'a plus lieu d'être" },
+                                "reason": { "type": "string", "description": "pourquoi il se clôt, en une phrase" },
                                 "number": { "type": "integer", "description": "le plan à clore ; sans lui, l'actif" },
                                 "concepts": { "type": "array", "items": { "type": "string" }, "description": "les notions que ce plan a touchées, en mots (une indication pour la mémoire)" }
                             },
@@ -993,10 +995,10 @@ impl Step {
                 parameters: json!({
                     "type": "object",
                     "properties": {
-                        "item": { "type": "string" },
-                        "succeeded": { "type": "boolean" },
-                        "done": { "type": "string" },
-                        "remaining": { "type": "string" }
+                        "item": { "type": "string", "description": "l'id de l'élément travaillé ; vide (\"\") sans plan" },
+                        "succeeded": { "type": "boolean", "description": "true si le pas a fait ce qu'il visait ; l'élément passe alors à done" },
+                        "done": { "type": "string", "description": "ce que le pas a fait, en une phrase (exemple : « le test rouge passe, la porte refuse sccache »)" },
+                        "remaining": { "type": "string", "description": "ce qui reste ; vide (\"\") quand rien ne reste, sinon un pas suivant part" }
                     },
                     "required": ["item", "succeeded", "done", "remaining"]
                 }),
@@ -1004,12 +1006,12 @@ impl Step {
             ToolDef {
                 name: SUGGEST.into(),
                 description: "Propose au superviseur une direction hors du plan (« voudrais-tu qu'on pousse dans ce sens ? »), avec l'id de l'élément qu'elle ouvrirait. Tu continues le plan courant sans attendre ; tu n'ouvres pas cette direction sans sa réponse.".into(),
-                parameters: json!({ "type": "object", "properties": { "text": { "type": "string" }, "item": { "type": "string", "description": "l'id de l'élément que la proposition ouvrirait" } }, "required": ["text"] }),
+                parameters: json!({ "type": "object", "properties": { "text": { "type": "string", "description": "la direction proposée, en une ou deux phrases" }, "item": { "type": "string", "description": "l'id de l'élément que la proposition ouvrirait" } }, "required": ["text"] }),
             },
             ToolDef {
                 name: REPORT.into(),
                 description: "Écrit au superviseur, dans sa boîte. À une demande de texte (une présentation, une explication, un résumé), c'est le texte lui-même, tel qu'il est à lire, jamais une phrase qui le décrit ; après un travail d'outils, ce qui a été fait, ce qui attend, ce que tu as décidé.".into(),
-                parameters: json!({ "type": "object", "properties": { "text": { "type": "string" } }, "required": ["text"] }),
+                parameters: json!({ "type": "object", "properties": { "text": { "type": "string", "description": "le texte à lire par le superviseur, tel quel : titres, listes et gras gardés" } }, "required": ["text"] }),
             },
         ]
     }
