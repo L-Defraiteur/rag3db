@@ -2850,7 +2850,7 @@ impl BancPasPret {
                 let cat = b.catalog.lock().unwrap();
                 let cellule = cat.scope().clone();
                 cat.file_lag().observe(&cellule, 1, Duration::from_secs(20));
-                cat.file_lag().note(&cellule, "main.rs", crate::catalog::retard::now_ms());
+                cat.file_lag().note_in(&crate::catalog::retard::LagKey::backend(&cellule), "main.rs", crate::catalog::retard::now_ms());
                 cellule
             })
             .unwrap();
