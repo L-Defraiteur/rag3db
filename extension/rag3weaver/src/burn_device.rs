@@ -258,9 +258,50 @@ impl BurnDevice {
     }
 }
 
+/// **The variable that lets an embedder run on an integrated GPU anyway** : `1` only,
+/// for a trial that does not look at the values (see [`BurnDevice::check_embedder`]).
+pub const ALLOW_INTEGRATED_GPU_VARIABLE: &str = "RAG3WEAVER_EMBEDDER_ALLOW_INTEGRATED_GPU";
+
+/// The ticket an integrated GPU's refusal names.
+pub const INTEGRATED_GPU_TICKET: &str = "2026-11-20-sur-l-igpu-granite-rend-des-vecteurs-faux-en-lot";
+
+impl BurnDevice {
+    /// **An embedder refuses an integrated GPU** (20 November 2026). On luciepc's
+    /// (Vulkan, radv), granite-278m computes wrong vectors as soon as it computes a
+    /// batch, with no error : cosine 0.59 to 0.87 against the same text alone, where a
+    /// discrete card gives 0.99999993 ; and a text alone after a call of another length
+    /// is wrong too (0.878). Wrong vectors poison an index in silence, so the service
+    /// and the in-process embedder refuse it, unless `allow` (the value of
+    /// [`ALLOW_INTEGRATED_GPU_VARIABLE`]) is `1`.
+    ///
+    /// `default` passes : on a machine without a discrete card it may resolve to an
+    /// integrated one, which only `resolve()` knows. The tests' fallback
+    /// (`RAG3WEAVER_TESTS_REPLI_PERIPHERIQUE`) loads its models directly and does not
+    /// go through here.
+    pub fn check_embedder(self, allow: Option<&str>) -> Result<Self, String> {
+        let _ = allow;
+        Ok(self)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// **An embedder refuses an integrated GPU, and says why and how to allow it** ;
+    /// `1` allows it ; any other card passes.
+    #[test]
+    fn an_embedder_refuses_an_integrated_gpu_unless_allowed() {
+        let refused = BurnDevice::IntegratedGpu(0).check_embedder(None).expect_err("igpu:0 is refused");
+        assert!(refused.contains(INTEGRATED_GPU_TICKET) && refused.contains(ALLOW_INTEGRATED_GPU_VARIABLE), "{refused}");
+        for no in [Some(""), Some("0"), Some("oui")] {
+            assert!(BurnDevice::IntegratedGpu(1).check_embedder(no).is_err(), "{no:?} does not allow it");
+        }
+        assert_eq!(BurnDevice::IntegratedGpu(0).check_embedder(Some(" 1 ")), Ok(BurnDevice::IntegratedGpu(0)));
+        for device in [BurnDevice::Default, BurnDevice::DiscreteGpu(0), BurnDevice::Rocm(0), BurnDevice::Cpu] {
+            assert_eq!(device.check_embedder(None), Ok(device), "{device:?}");
+        }
+    }
 
     /// **Le chiffre qui décidait de ne pas activer ROCm — et ce qu'il mesurait.**
     ///
