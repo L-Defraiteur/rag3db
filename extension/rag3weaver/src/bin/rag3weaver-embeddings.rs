@@ -194,6 +194,14 @@ fn servir() -> Result<(), Box<dyn std::error::Error>> {
     if !expose && !rag3weaver::daemon::est_local(&adresse) {
         return Err(rag3weaver::daemon::DaemonError::Exposition { adresse }.into());
     }
+    // **Check before serving** (20 November 2026) : the reference's texts alone, then
+    // in this service's batches, against the original model's vectors ; a card that
+    // computes wrong is refused, said, before listening (`rag3weaver::embedder_check`).
+    let reference = rag3weaver::embedder_check::read_reference(&bpk)?;
+    let demon = demon.self_check(reference.as_ref(), || Ok(rag3weaver::embedder_check::sha256_hex(&octets)));
+    if let Some(check) = demon.identite().self_check.and_then(|m| m.get("embed").cloned()) {
+        check.into_result(&nom)?;
+    }
     // **Chauffer avant de servir.** Le cache d'autotune est global et chaud,
     // mais chaque processus recompile ses noyaux (SPIR-V, puis le pipeline
     // radv) à la première rencontre de chaque classe de forme : un démon
