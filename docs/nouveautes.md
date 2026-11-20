@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 20 novembre 2026 — **Un paquet du dépôt importé par son nom se résout par l'import, et les réexportations de Python et de TypeScript se suivent.** Dans les tests d'un crate (`use rag3weaver::Catalog`), un import par le nom d'un paquet npm du dépôt, ou par un `__init__.py` qui réexporte (`from monpaquet.lib import Catalog`), le lien vers la définition était deviné par le nom ; il passe maintenant par l'import, lu dans les manifestes (`Cargo.toml`, `package.json`). `export { X } from './x'` et les imports nommés d'un `__init__.py` sont des réexportations, comme `pub use` en Rust. Sur le crate rag3weaver entier, 5 493 liens passent de « nom » à « import » et 325 s'ajoutent, aucun ne se perd. Les bases repassent une fois (règles de l'analyse 11).
+
 - 20 novembre 2026 — **Un namespace replié ne passe plus devant la classe qu'on cherche.** Un `namespace` ou un
   `module` qui porte à lui, hors de ses lignes de structure (ouvertures, plis des conteneurs imbriqués, déclarations
   avancées, accolades fermantes et leurs commentaires), moins de 80 caractères n'est plus candidat à la recherche :
