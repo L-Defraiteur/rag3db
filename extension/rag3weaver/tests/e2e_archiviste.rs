@@ -225,7 +225,7 @@ fn les_alias_courts_resolvent_le_nom_exact_sans_changer_l_identite() {
         assert_eq!(out["apport_record"]["fiche"], *nom);
         assert_eq!(out["links"][0]["from"]["name"], *nom);
     }
-    assert!(prepared["prompt"].as_str().unwrap().contains("Description conservée"));
+    assert!(prepared["parts"].to_string().contains("Description conservée"), "the about of each candidate is shown");
 }
 
 #[test]
