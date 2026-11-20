@@ -789,7 +789,17 @@ spec_settle() { # after A: push B, or leave its lots in the queue
   res=$(cat "$D/slot2/result" 2>/dev/null); code=$(f_ "$res" 1); jn=$(f_ "$res" 2); label=$(f_ "$res" 3)
   if [ "$A_FULL_PUSHED" != 1 ]; then log "${label:-créneau2}" "créneau 2 jeté" "A n'a pas atterri entier : ses lots restent en file"; return 0; fi
   for line in "${spec[@]}"; do in_queue "$(f_ "$line" 1)" || { log "$label" "créneau 2 jeté" "$(f_ "$line" 1) n'est plus en file"; return 0; }; done
-  if [ "$code" != 0 ]; then log "$label" "créneau 2 rouge" "ses lots restent en file pour leur propre rejeu ($(head -1 "$D/slot2/last-red.txt" 2>/dev/null))"; return 0; fi
+  # **Sans verdict sur ses lots, le créneau 2 est jeté, jamais rouge** (20 Nov., c7 and mémoire: at 22:16,
+  # memoire-extraction-cut was written « créneau 2 rouge » with an empty reason, its pass cut, nothing failed; a red
+  # reads as a defect of the lot). No result (the pass cut or never finished), or an environment red (2): « jeté » with
+  # its reason. A code red (1) of the lot keeps « créneau 2 rouge », with its reason or its journals.
+  case "$code" in
+    0) ;;
+    1) log "$label" "créneau 2 rouge" "ses lots restent en file pour leur propre rejeu ($(head -1 "$D/slot2/last-red.txt" 2>/dev/null || true)${jn:+ ; journaux $JR/$jn})"; return 0 ;;
+    2) log "${label:-créneau2}" "créneau 2 jeté" "rouge d'environnement, rien de jugé sur ses lots : ils restent en file"; return 0 ;;
+    '') log "${label:-créneau2}" "créneau 2 jeté" "sans résultat (passe interrompue ou jamais finie), rien de jugé : ses lots restent en file"; return 0 ;;
+    *) log "${label:-créneau2}" "créneau 2 jeté" "code $code, rien de jugé sur ses lots : ils restent en file"; return 0 ;;
+  esac
   (
     slot2_env; BASE=$(cat "$SD/base"); JNAME=$jn; TRAIN_LABEL=$label
     PILE_AVANT=$BASE; export PILE_AVANT

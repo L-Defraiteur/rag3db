@@ -739,4 +739,15 @@ echo FUITE > "$D/outcomes.d/rc-b"
 PUSHER_TRAIN_MAX=1 P step > /dev/null 2>&1
 ! on_master rc-b && grep -q "^rouge	rc-b	" "$D/pusher/inbox/author-c.txt" && ! grep -qP '\trc-b\tcourse du confineur' "$D/pusher/log.tsv" && ok "un descendant vraiment laissé reste un rouge rendu" || ko "fuite du confineur : pas rendue, ou prise pour une course"
 P dequeue rc-b > /dev/null 2>&1
+# 48. A slot-2 pass with no verdict on its lot is « jeté », never « rouge » (20 Nov., c7 and mémoire: at 22:16,
+# memoire-extraction-cut was written « créneau 2 rouge » with an empty reason; its pass had been cut, nothing had failed).
+# An environment red (124, twice) says so; a red of the lot keeps « créneau 2 rouge » with its reason.
+h1=$(lot sj-a extension/rag3weaver/src/sja.rs 'fn sja() {}'); h2=$(lot sj-b extension/rag3weaver/src/sjb.rs 'fn sjb() {}')
+P enqueue sj-a sj-a "$h1" rust some_witness e2e_code - - author-c > /dev/null; P enqueue sj-b sj-b "$h2" rust some_witness e2e_code - - author-c > /dev/null
+echo VERT > "$D/outcomes.d/sj-a"; echo 124 > "$D/outcomes.d/sj-b"; { echo 124; cat "$D/outcomes" 2>/dev/null; } > "$D/outcomes.n" && mv "$D/outcomes.n" "$D/outcomes"
+PUSHER_SLOTS=2 PUSHER_TRAIN_MAX=1 PUSHER_WT2_NAME=wt2 P step > /dev/null 2>&1
+l=$(grep -P '\tsj-b\tcréneau 2 ' "$D/pusher/log.tsv" | tail -1 | cut -f3,4)
+on_master sj-a && grep -q "^sj-b	" "$D/pusher/queue.tsv" && [[ "$l" == "créneau 2 jeté"*environnement* ]] \
+  && ok "créneau 2 sans verdict sur son lot (rouge d'environnement) : « jeté », avec sa raison" || ko "créneau 2 d'environnement écrit « $l »"
+P dequeue sj-b > /dev/null 2>&1
 exit $red
