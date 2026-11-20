@@ -6,6 +6,7 @@
 #
 # Usage, at luciepc:
 #   pusher.sh enqueue <id> <branch> <head> <kind> <witness> <witness_suite> <extra_suites> <parent> <author>
+#     (VUE=<poste>:<view name> before it: the lot's view, closed by its host once the lot has landed)
 #             kind: docs, scripts or rust (cpp is refused: it lands by the transferable path or a window);
 #             « - » for an empty field; extra_suites comma-separated
 #   pusher.sh dequeue <id>
@@ -56,7 +57,7 @@ mkdir -p "$D/inbox"
 # The files of a step (its lots, its pull requests, its last red…) live in the slot's own folder.
 SD=${PUSHER_SD:-$D}; mkdir -p "$SD"
 printf 'docs/nouveautes.md merge=union\n' > "$D/attributes"
-[ -f "$Q" ] || printf '# id\tbranch\thead\tkind\twitness\twitness_suite\textra_suites\tparent\tauthor\n' > "$Q"
+[ -f "$Q" ] || printf '# id\tbranch\thead\tkind\twitness\twitness_suite\textra_suites\tparent\tauthor\tvue\n' > "$Q"
 
 log() { printf '%s\t%s\t%s\t%s\n' "$(date +%FT%T)" "$1" "$2" "${3:-}" >> "$LOG"; }   # <id> <event> [detail]
 # Git in English: the pusher reads its messages (19 Nov.: git spoke French at luciepc, and a conflict had no name).
@@ -109,6 +110,10 @@ enqueue() {
   [ $# = 9 ] || { echo "enqueue : neuf champs attendus (id branch head kind witness witness_suite extra_suites parent author)" >&2; return 2; }
   local id=$1 branch=$2 head=$3 kind=$4 parent=$8 remote full computed
   case "$id$branch$9" in *[[:space:]]*) echo "refusé : un champ porte une espace" >&2; return 1 ;; esac
+  # The lot's view, VUE=<poste>:<name> (20 Nov., c7 and the tree): written to landed.tsv, where each host reads its poste's
+  # landings and closes the view by its name. None: « - ».
+  local vue=${VUE:--}
+  [ "$vue" = - ] || [[ "$vue" =~ ^[A-Za-z0-9._-]+:[^[:space:]]+$ ]] || { echo "refusé : VUE=<poste>:<nom de la vue> (par exemple lucie-tablette:G/20-11-2026-mon-lot), pas « $vue »" >&2; return 1; }
   case "$kind" in docs|scripts|rust) ;; cpp) echo "refusé : un lot C++ passe par la voie transférable ou une fenêtre, pas par le pousseur" >&2; return 1 ;;
     *) echo "refusé : kind inconnu « $kind » (docs, scripts, rust)" >&2; return 1 ;; esac
   [ "$kind" = rust ] && [ "$5" = - ] && { echo "refusé : un lot rust nomme son témoin (le filtre de run_e2e.sh)" >&2; return 1; }
@@ -160,7 +165,7 @@ enqueue() {
   rang=$(awk -F'\t' -v id="$id" -v now="$(date +%s)" '$2 == id && now - $1 <= 3600 {r = $3} END {print r}' "$D/rendus.tsv" 2>/dev/null)
   [ -n "$rang" ] && again=" (redéposé dans l'heure : rang $rang, celui du rendu)"
   ( flock 9
-    line=$(printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s' "$id" "$branch" "$full" "$kind" "$5" "$6" "$7" "$parent" "$9")
+    line=$(printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s' "$id" "$branch" "$full" "$kind" "$5" "$6" "$7" "$parent" "$9" "$vue")
     if [ -n "$rang" ]; then
       awk -F'\t' -v rang="$rang" -v line="$line" -v parent="$parent" '
         { a[++n] = $0 }
@@ -235,7 +240,8 @@ pushed() { # <id> <author> <branch>
   pr=$(awk -F'\t' -v id="$1" '$1 == id {n=$2} END {print n}' "$SD/step-prs.tsv" 2>/dev/null)
   # The lot's original head, kept: a child deposited on it later reposes on its own commits only (19 Nov., c7).
   # id, original head, pushed head, declared witness and its suite (19 Nov., c7: an audit reads what proved each lot).
-  queue_lines | awk -F'\t' -v id="$1" -v h="$(g rev-parse HEAD)" '$1 == id {print $1 "\t" $3 "\t" h "\t" $5 "\t" $6}' >> "$D/landed.tsv"
+  # Then the lot's view (« - » when none), read by the hosts to close it.
+  queue_lines | awk -F'\t' -v id="$1" -v h="$(g rev-parse HEAD)" '$1 == id {print $1 "\t" $3 "\t" h "\t" $5 "\t" $6 "\t" ($10 == "" ? "-" : $10)}' >> "$D/landed.tsv"
   remove_from_queue "$1"
   log "$1" poussé "$h${pr:+ PR $pr}"
   printf 'poussé\t%s\t%s\t%s%s\n' "$1" "$h" "$3" "${pr:+	PR $pr}" >> "$D/inbox/$2.txt"
