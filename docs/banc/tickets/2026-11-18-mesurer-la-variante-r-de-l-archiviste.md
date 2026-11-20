@@ -176,3 +176,23 @@ finement que si ce préfixe dépasse le seuil et que l'implicite ne le sert pas.
 ## Pour fermer
 
 Les quatre réglages de la matrice joués dans la forme en deux étapes, jugés contre N en P1, P2 et P5 ; les trois profils d'après compaction jugés contre la compaction de Claude Code ; les deux résultats écrits dans leurs pages.
+
+## À mesurer en décembre : Gemini 4 Hydrogen contre 3.8 Flash (c7, 20 novembre, sur une question de Lucie)
+
+Les prix du jour (aistudio.google.com/docs/pricing, relevés par c7 le 20 novembre), par million de jetons, entrée /
+sortie / cache lu :
+
+| modèle | jusqu'au 31 décembre 2026 | à partir du 1er janvier 2027 |
+|---|---|---|
+| `gemini-3.8-flash` (le nôtre) | 0,75 / 3,75 / 0,075 | 1,50 / 7,50 / 0,15 |
+| Gemini 4 Hydrogen (sorti le 12 novembre) | 1,50 / 7,50 / 0,075 | inchangé |
+| 3.5 Flash-Lite | 0,30 / 2,50 / 0,03 | — |
+
+Le Batch coûte la moitié. Hydrogen n'est pas moins cher que 3.8 Flash pendant la promotion, mais il est à égalité au
+1er janvier, avec un cache lu deux fois moins cher.
+
+**La mesure, avant le changement de prix** : un jeu F300 de chaque modèle (la forme du 18 novembre), avec P1 et P2 contre
+la N rejouée, et **le coût réel au cache** : invite, part servie par le cache et sortie, aux deux grilles de prix. En
+F300, environ 42 % de l'invite est servie par le cache implicite (page `20-11-2026/03-la-parite-de-b4.md`). C'est là
+qu'un cache lu deux fois moins cher pèse le plus. Comme P1 varie d'une dizaine de points d'un jeu à l'autre, il faut
+deux jeux par modèle avant de conclure.
