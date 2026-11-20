@@ -117,6 +117,8 @@ pub struct BurnBgeM3Embedder {
     /// The indices truncated in the last call (read by a service under its pass lock).
     last_truncated: Mutex<Vec<usize>>,
     device: Device,
+    /// What the driver says of the card, for the memory bound of a batch.
+    adapter: Option<crate::burn_device::AdapterFacts>,
 }
 
 impl BurnBgeM3Embedder {
@@ -128,7 +130,9 @@ impl BurnBgeM3Embedder {
         tokenizer_path: impl AsRef<std::path::Path>,
         device: BurnDevice,
     ) -> Result<Self, EmbedError> {
-        let device = device.or_role(crate::burn_device::BurnRole::Embedder).resolve();
+        let wanted = device.or_role(crate::burn_device::BurnRole::Embedder);
+        let adapter = wanted.adapter_facts();
+        let device = wanted.resolve();
 
         let mut tokenizer = Tokenizer::from_file(tokenizer_path.as_ref())
             .map_err(|e| EmbedError::ProviderError(format!("tokenizer: {e}")))?;
@@ -173,6 +177,7 @@ impl BurnBgeM3Embedder {
         let sparse_head = SparseHead::from_embedded(&device)?;
 
         Ok(Self {
+            adapter,
             graph,
             sparse_head,
             tokenizer: Mutex::new(tokenizer),
@@ -361,6 +366,24 @@ fn fondre(jetons: &Jetons, poids: &[f32]) -> (SparseVector, Vec<SparseSpan>) {
 }
 
 impl Embedder for BurnBgeM3Embedder {
+    /// 16 heads, 1 024 wide (XLM-R large) : the buffer cubecl asked for, 32 × 1 704
+    /// tokens, was 32 × 16 × 1 704² × 4 bytes (20 November 2026).
+    fn memory_shape(&self) -> Option<crate::lot_memory::Shape> {
+        Some(crate::lot_memory::Shape { heads: 16, hidden: HIDDEN_SIZE })
+    }
+
+    fn token_counts(&self, texts: &[String]) -> Option<Vec<usize>> {
+        let tokenizer = self.tokenizer.lock().ok()?;
+        texts.iter().map(|t| tokenizer.encode(t.as_str(), true).ok().map(|e| e.get_ids().len())).collect()
+    }
+
+    fn memory_bounds(&self) -> crate::lot_memory::Bounds {
+        crate::lot_memory::Bounds {
+            max_allocation: self.adapter.as_ref().map(|a| a.max_allocation),
+            free: self.adapter.as_ref().and_then(|a| crate::lot_memory::free_memory(&a.pci_bus_id, std::path::Path::new("/sys/class/drm"))),
+        }
+    }
+
     fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
         if texts.is_empty() {
             return Ok(vec![]);

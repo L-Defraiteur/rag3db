@@ -73,16 +73,34 @@ pub fn free_memory(pci_bus_id: &str, drm: &std::path::Path) -> Option<u64> {
     None
 }
 
-/// The memory a batch of these token counts asks for. Stub : nothing.
+/// The memory a batch of these token counts asks for : the attention's buffer
+/// (batch × heads × T² × 4 bytes), and a total of three such buffers (scores, mask,
+/// softmax) plus the activations (batch × T × hidden × 4 bytes, 32 times over the layers'
+/// live tensors).
 pub fn estimate(shape: Shape, tokens: &[usize]) -> Estimate {
-    let _ = (shape, tokens);
-    Estimate { largest: 0, total: 0 }
+    let batch = tokens.len() as u64;
+    let t = tokens.iter().copied().max().unwrap_or(0) as u64;
+    let largest = batch * shape.heads as u64 * t * t * 4;
+    Estimate { largest, total: 3 * largest + batch * t * shape.hidden as u64 * 4 * 32 }
 }
 
-/// The batches, cut so that each fits. Stub : unchanged.
+/// **The batches, cut so that each fits** : a batch over a bound is cut in two, then
+/// again, in order ; a text alone that does not fit is `Err((its index, why))`.
 pub fn cut(tokens: &[usize], batches: Vec<std::ops::Range<usize>>, shape: Shape, bounds: Bounds) -> Result<Vec<std::ops::Range<usize>>, (usize, String)> {
-    let _ = (tokens, shape, bounds, over as fn(Estimate, Bounds) -> Option<String>);
-    Ok(batches)
+    let mut out = Vec::new();
+    let mut stack: Vec<std::ops::Range<usize>> = batches.into_iter().rev().collect();
+    while let Some(batch) = stack.pop() {
+        match over(estimate(shape, &tokens[batch.clone()]), bounds) {
+            None => out.push(batch),
+            Some(why) if batch.len() == 1 => return Err((batch.start, why)),
+            Some(_) => {
+                let mid = batch.start + batch.len() / 2;
+                stack.push(mid..batch.end);
+                stack.push(batch.start..mid);
+            }
+        }
+    }
+    Ok(out)
 }
 
 #[cfg(test)]
