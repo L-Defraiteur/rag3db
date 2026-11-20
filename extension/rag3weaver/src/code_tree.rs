@@ -145,6 +145,9 @@ pub struct Added {
     /// La copie s'est faite par reflink (sinon une copie pleine : un système
     /// de fichiers sans reflink, `/tmp` en mémoire par exemple).
     pub reflink: bool,
+    /// **Les copies de gabarits de `--from` qui différaient du livré** : remplacées par le livré et sauvées à côté
+    /// `(valeur, livré, copie sauvée)` ; vide avec `--keep-copies`.
+    pub copies_replaced: Vec<(String, String, PathBuf)>,
 }
 
 /// Le nom d'un backend d'arbre : `code-<dernier segment>`, réduit aux lettres,
@@ -226,6 +229,12 @@ fn depot_des_declarations(dossier: &Path, identite: &[(&'static str, String)], t
 /// celle de `from` par reflink. `name` : `--as`, sinon le nom de l'arbre.
 /// Refuse d'écraser un manifeste ou une base qui existent.
 pub fn add_files(roots: &Roots, tree: &Path, from: &str, name: Option<&str>) -> Result<Added, String> {
+    add_files_with(roots, tree, from, name, false)
+}
+
+/// [`add_files`], et `keep_copies` (`--keep-copies`) : les copies de gabarits de `--from` qui diffèrent du livré sont
+/// gardées telles quelles au lieu d'être remplacées par le livré.
+pub fn add_files_with(roots: &Roots, tree: &Path, from: &str, name: Option<&str>, keep_copies: bool) -> Result<Added, String> {
     let tree = std::fs::canonicalize(tree).map_err(|e| format!("arbre {} : {e}", tree.display()))?;
     if !tree.is_dir() {
         return Err(format!("arbre {} : pas un dossier", tree.display()));
@@ -279,12 +288,13 @@ pub fn add_files(roots: &Roots, tree: &Path, from: &str, name: Option<&str>) -> 
     // copie du manifeste de `from` venue avec le gabarit.
     let sous_templates = source.strip_prefix(gabarit).map_err(|_| format!("--from {from} : le manifeste n'est pas sous {}", gabarit.display()))?;
     let manifest = dossier.join("templates").join(sous_templates);
-    // Les gabarits identiques au livré se désignent par leur nom (`builtin:`) et
-    // suivent donc chaque bâti ; seuls ceux que `from` a modifiés restent des
-    // copies (`crate::builtin_templates::link`).
-    if let Some(dir) = manifest.parent() {
-        crate::builtin_templates::link(dir, &mut m);
-    }
+    // **Chaque outil dont le binaire livre un gabarit pointe le livré** (`builtin:`) et suit donc chaque bâti, que la
+    // copie de `from` en diffère ou non : une copie périmée de `from` ne se propage plus (le banc, 20 novembre 2026).
+    // Une copie qui différait est sauvée à côté et dite ; `--keep-copies` la garde.
+    let copies_replaced = match manifest.parent() {
+        Some(dir) => crate::builtin_templates::link_all(dir, &mut m, keep_copies)?.replaced,
+        None => Vec::new(),
+    };
     std::fs::write(&manifest, serde_json::to_string_pretty(&m).map_err(|e| e.to_string())? + "\n").map_err(|e| format!("{} : {e}", manifest.display()))?;
     // Posé d'après un gabarit livré : il suivra les bâtis (`builtin_templates::refresh`).
     if let Some(nom) = source.canonicalize().ok().and_then(|s| crate::builtin_templates::builtin_name_of(&s)) {
@@ -303,7 +313,8 @@ pub fn add_files(roots: &Roots, tree: &Path, from: &str, name: Option<&str>) -> 
         }
     }
     let reflink = reflink && !copied.is_empty();
-    Ok(Added { name, manifest, database, copied, reflink })
+    Ok(Added { name, manifest, database, copied, reflink, copies_replaced
+    })
 }
 
 /// Ce que `remove` a mis de côté.
@@ -411,7 +422,7 @@ fn is_open(state: &Value, manifest: &Path) -> bool {
 /// `POST /backend/open` pour le rouvrir — même si la copie a échoué. Enfin
 /// l'arbre neuf est enregistré.
 #[cfg(all(feature = "daemon", feature = "rag3db-native"))]
-pub fn add_with_host(roots: &Roots, tree: &Path, from: &str, name: Option<&str>, address: &str) -> Result<(Added, FromAroundCopy), String> {
+pub fn add_with_host(roots: &Roots, tree: &Path, from: &str, name: Option<&str>, address: &str, keep_copies: bool) -> Result<(Added, FromAroundCopy), String> {
     let etat = host_state(address);
     // Par nom, le manifeste que l'hôte a enregistré sous le dossier de cet arbre
     // fait foi : il ne se devine pas.
@@ -433,7 +444,7 @@ pub fn add_with_host(roots: &Roots, tree: &Path, from: &str, name: Option<&str>,
         }
         Some(_) => FromAroundCopy::NotOpen,
     };
-    let copie = add_files(roots, tree, from, name);
+    let copie = add_files_with(roots, tree, from, name, keep_copies);
     if autour == FromAroundCopy::ClosedAndReopened {
         register(address, &source).map_err(|e| format!("--from {from} : fermé pour la copie, pas rouvert : {e}"))?;
     }
@@ -504,6 +515,38 @@ mod tests {
             git(&arbre, args).unwrap();
         }
         (roots, arbre)
+    }
+
+    /// **Une base posée depuis une base aux copies périmées sert les gabarits du binaire** (le banc, 20 novembre 2026 :
+    /// les hôtes de Lucie servaient la fusion du 11 octobre, `search_workspace.mmd` copié sans `exact_name`, et les bases
+    /// posées depuis elles héritaient de ces copies). La copie de `--from` diffère du livré : la base neuve pointe quand
+    /// même le livré, et la copie est gardée à côté, dite.
+    #[test]
+    fn add_points_the_builtin_template_even_when_from_holds_a_stale_copy() {
+        let (roots, arbre) = poste("perimee");
+        let copie = roots.config.join("code-lourd/templates/tools/search_workspace.mmd");
+        let ancienne = std::fs::read_to_string(&copie).unwrap().replace(", exact_name='name'", "").replace(", exact_name_leaf='folds'", "");
+        std::fs::write(&copie, &ancienne).unwrap();
+        let a = add_files(&roots, &arbre, "code-lourd", None).unwrap();
+        let m: Value = serde_json::from_str(&std::fs::read_to_string(&a.manifest).unwrap()).unwrap();
+        assert_eq!(
+            m["tools"]["search_code"]["graph"], "builtin:tools/search_workspace.mmd",
+            "the stale copy is not served: {}", m["tools"]["search_code"]
+        );
+        // The copy that differed is saved aside and named: nothing is lost.
+        let remplacee = a.copies_replaced.iter().find(|(_, livre, _)| livre == "tools/search_workspace.mmd").expect("named in the report");
+        assert!(remplacee.2.is_file(), "saved aside: {}", remplacee.2.display());
+        assert!(std::fs::read_to_string(&remplacee.2).unwrap() == ancienne, "the saved copy is the stale one");
+        // `--keep-copies`: a base that modified its copy on purpose keeps it.
+        let arbre2 = arbre.parent().unwrap().join("rag3db-garde");
+        std::fs::create_dir_all(&arbre2).unwrap();
+        for args in [&["init", "-q"][..], &["config", "user.name", "Personne Test"], &["config", "user.email", "personne@example.org"]] {
+            git(&arbre2, args).unwrap();
+        }
+        let b = add_files_with(&roots, &arbre2, "code-lourd", Some("code-garde"), true).unwrap();
+        let m: Value = serde_json::from_str(&std::fs::read_to_string(&b.manifest).unwrap()).unwrap();
+        assert_ne!(m["tools"]["search_code"]["graph"], "builtin:tools/search_workspace.mmd", "kept: {}", m["tools"]["search_code"]);
+        assert!(b.copies_replaced.is_empty());
     }
 
     #[test]

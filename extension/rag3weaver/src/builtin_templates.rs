@@ -236,6 +236,74 @@ pub fn link(directory: &Path, manifest: &mut Value) -> (Vec<(String, String)>, V
     (reliees, gardees)
 }
 
+/// **La santé des gabarits servis** (`/sante`) : la version des gabarits livrés par ce binaire (l'empreinte de leur
+/// contenu embarqué), et, par backend, les copies locales qui diffèrent du livré du même nom, comptées et nommées
+/// (c7, 20 novembre 2026 : les hôtes de Lucie servaient la fusion du 11 octobre, et rien ne le disait). Chaque
+/// manifeste est relu sur le disque, sans ouvrir sa base ; un manifeste illisible ne compte pas.
+pub fn health(manifests: impl IntoIterator<Item = (String, PathBuf)>) -> Value {
+    let mut derive = Vec::new();
+    for (backend, manifeste) in manifests {
+        let Some(dir) = manifeste.parent() else { continue };
+        let Some(m) = std::fs::read(&manifeste).ok().and_then(|b| serde_json::from_slice::<Value>(&b).ok()) else { continue };
+        let d = drift(dir, &m);
+        if !d.is_empty() {
+            let mut noms: Vec<String> = d.into_iter().map(|x| x.builtin).collect();
+            noms.sort();
+            noms.dedup();
+            derive.push(serde_json::json!({ "backend": backend, "n": noms.len(), "gabarits": noms }));
+        }
+    }
+    serde_json::json!({ "livres": fingerprint(), "derive": derive })
+}
+
+/// **Ce que [`link_all`] a fait des copies locales d'un manifeste.**
+#[derive(Debug, Default, Clone)]
+pub struct Linking {
+    /// Les copies identiques au livré, désignées par leur nom.
+    pub linked: Vec<(String, String)>,
+    /// Les copies qui différaient du livré, remplacées par lui et sauvées à côté : `(valeur, livré, copie sauvée)`.
+    pub replaced: Vec<(String, String, PathBuf)>,
+    /// Les copies qui différaient et sont gardées (`--keep-copies`).
+    pub kept: Vec<Drift>,
+}
+
+/// **Le suffixe d'une copie locale remplacée par le livré**, sauvée à côté de son chemin d'origine.
+pub const SAVED_COPY_SUFFIX: &str = ".copie-locale";
+
+/// **Chaque outil dont le binaire livre un gabarit du même nom pointe le livré** (`builtin:`), que la copie diffère
+/// ou non (le banc, 20 novembre 2026 : les hôtes de Lucie servaient la fusion du 11 octobre, des copies que rien ne
+/// rafraîchissait). Une copie qui différait est sauvée à côté (`<copie>.copie-locale`) et dite ; avec
+/// `keep_copies`, elle est gardée telle quelle, pour qui l'a modifiée exprès. Le manifeste n'est pas écrit ici.
+pub fn link_all(directory: &Path, manifest: &mut Value, keep_copies: bool) -> Result<Linking, String> {
+    let (linked, differentes) = link(directory, manifest);
+    let mut out = Linking { linked, ..Default::default() };
+    if keep_copies {
+        out.kept = differentes;
+        return Ok(out);
+    }
+    for d in differentes {
+        let copie = directory.join(&d.path);
+        let sauvee = PathBuf::from(format!("{}{SAVED_COPY_SUFFIX}", copie.display()));
+        if copie.is_file() {
+            std::fs::rename(&copie, &sauvee).map_err(|e| format!("{} : {e}", copie.display()))?;
+        }
+        let vers = format!("{PREFIX}{}", d.builtin);
+        remplacer_partout(manifest, &d.path, &vers);
+        out.replaced.push((d.path, d.builtin, sauvee));
+    }
+    Ok(out)
+}
+
+/// Chaque valeur égale à `de` devient `vers`, à toute profondeur du manifeste.
+fn remplacer_partout(v: &mut Value, de: &str, vers: &str) {
+    match v {
+        Value::String(s) if s == de => *s = vers.to_string(),
+        Value::Array(a) => a.iter_mut().for_each(|x| remplacer_partout(x, de, vers)),
+        Value::Object(o) => o.values_mut().for_each(|x| remplacer_partout(x, de, vers)),
+        _ => {}
+    }
+}
+
 /// **Un manifeste posé d'après un gabarit livré suit les bâtis** (Lucie, 8 novembre 2026,
 /// 16 h 12 : « faut que ce soit dynamique hein, […] qu'on n'ait pas besoin de tout
 /// recharger manuellement à chacune de nos avancées »). À côté du manifeste écrit,
@@ -562,6 +630,22 @@ mod tests {
             }
         }
         out
+    }
+
+    /// **The health of a backend's templates names its drifting copies** : a manifest whose `list_files` points a local
+    /// copy of an older shipped version is counted and named, with the backend it belongs to.
+    #[test]
+    fn health_names_a_backend_whose_copy_is_of_an_older_version() {
+        let d = tempfile::tempdir().unwrap();
+        let copie = d.path().join("templates/tools/list.mmd");
+        std::fs::create_dir_all(copie.parent().unwrap()).unwrap();
+        let ancien = String::from_utf8(get("tools/list.mmd").unwrap().to_vec()).unwrap() + "\n%% une ligne d'avant\n";
+        std::fs::write(&copie, ancien).unwrap();
+        let manifeste = d.path().join("templates/backend.json");
+        std::fs::write(&manifeste, json!({ "tools": { "list_files": { "graph": "tools/list.mmd" }, "read_file": { "graph": "builtin:tools/read.mmd" } } }).to_string()).unwrap();
+        let h = health([("code-vieux".to_string(), manifeste)]);
+        assert_eq!(h["livres"], json!(fingerprint()));
+        assert_eq!(h["derive"], json!([{ "backend": "code-vieux", "n": 1, "gabarits": ["tools/list.mmd"] }]), "{h}");
     }
 
     /// **`builtin:` se résout vers le gabarit extrait**, et un nom inconnu se

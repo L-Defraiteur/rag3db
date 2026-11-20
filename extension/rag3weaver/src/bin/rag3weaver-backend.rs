@@ -799,15 +799,18 @@ fn taches_cli(args: &[String]) -> Result<(), String> {
 }
 
 fn code_tree(args: &[String]) -> Result<(), String> {
-    const USAGE: &str = "usage: rag3weaver-backend code-tree add <arbre> [--from code-lourd] [--as <nom>] [--daemon <adresse>] [--sans-hote]\n       \
+    const USAGE: &str = "usage: rag3weaver-backend code-tree add <arbre> [--from code-lourd] [--as <nom>] [--daemon <adresse>] [--sans-hote] [--keep-copies]\n       \
                          rag3weaver-backend code-tree remove <nom | arbre> [--daemon <adresse>] [--sans-hote]";
-    use rag3weaver::code_tree::{add_files, add_with_host, name_of_tree, remove_files, unregister, FromAroundCopy, Roots};
+    use rag3weaver::code_tree::{add_files_with, add_with_host, name_of_tree, remove_files, unregister, FromAroundCopy, Roots};
     let (action, reste) = args.split_first().ok_or(USAGE)?;
     let mut cible = None;
     let mut from = "code-lourd".to_string();
     let mut nom = None;
     let mut hote = None;
     let mut sans_hote = false;
+    // Garder telles quelles les copies de gabarits de `--from` qui diffèrent du livré (sinon : le livré, la copie
+    // sauvée à côté).
+    let mut keep_copies = false;
     let mut i = 0;
     while i < reste.len() {
         let valeur = |i: usize| reste.get(i + 1).cloned().ok_or_else(|| format!("{} demande une valeur\n{USAGE}", reste[i]));
@@ -816,6 +819,7 @@ fn code_tree(args: &[String]) -> Result<(), String> {
             "--as" => { nom = Some(valeur(i)?); i += 2; }
             "--daemon" => { hote = Some(valeur(i)?); i += 2; }
             "--sans-hote" => { sans_hote = true; i += 1; }
+            "--keep-copies" => { keep_copies = true; i += 1; }
             x if cible.is_none() && !x.starts_with("--") => { cible = Some(x.to_string()); i += 1; }
             x => return Err(format!("argument inconnu « {x} »\n{USAGE}")),
         }
@@ -826,11 +830,22 @@ fn code_tree(args: &[String]) -> Result<(), String> {
     match action.as_str() {
         "add" => {
             let (a, autour) = if sans_hote {
-                (add_files(&roots, Path::new(&cible), &from, nom.as_deref())?, FromAroundCopy::NoHost)
+                (add_files_with(&roots, Path::new(&cible), &from, nom.as_deref(), keep_copies)?, FromAroundCopy::NoHost)
             } else {
-                add_with_host(&roots, Path::new(&cible), &from, nom.as_deref(), &adresse())?
+                add_with_host(&roots, Path::new(&cible), &from, nom.as_deref(), &adresse(), keep_copies)?
             };
             println!("{} : manifeste {}", a.name, a.manifest.display());
+            // Les copies de `--from` qui différaient du livré : le livré est servi, la copie gardée à côté.
+            if !a.copies_replaced.is_empty() {
+                println!(
+                    "{} gabarit(s) de {from} différaient du livré : remplacés par le livré (builtin:), copies gardées à côté \
+                     (--keep-copies pour les garder telles quelles) :",
+                    a.copies_replaced.len()
+                );
+                for (_, livre, sauvee) in &a.copies_replaced {
+                    println!("  {livre} — copie gardée sous {}", sauvee.display());
+                }
+            }
             println!("base {} — {} fichier(s) de {from}, {}", a.database.display(), a.copied.len(), if a.reflink { "par reflink" } else { "copie pleine (pas de reflink ici)" });
             match autour {
                 FromAroundCopy::NoHost => println!("aucun hôte ne répond : la base de {from} n'est ouverte par personne, copiée telle quelle"),
