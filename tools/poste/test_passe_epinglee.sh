@@ -31,6 +31,12 @@ if [ "${FAUX_CAS_ROUGES%%:*}" = "$s" ]; then
   n=0; for c in $(echo "${FAUX_CAS_ROUGES#*:}" | tr , ' '); do if [ "$c" = "${FAUX_SP_CAS:-}" ]; then echo "test $c - should panic ... FAILED"; else echo "test $c ... FAILED"; fi; n=$((n + 1)); done
   echo "test result: FAILED. 2 passed; $n failed"; exit 101
 fi
+# FAUX_PANIQUES=<suite> : un #[should_panic] qui passe (sa panique est attendue) et un test rouge qui panique.
+if [ "${FAUX_PANIQUES:-}" = "$s" ]; then
+  echo "thread 'recu_index::refuse_sans_index' (4120118) panicked at tests/e2e/../common/mod.rs:22:5:"
+  echo "test recu_index::refuse_sans_index - should panic ... ok"
+  [ -n "${FAUX_PANIQUE_ROUGE:-}" ] && { echo "thread 'recu_index::vraiment_rouge' (4120119) panicked at tests/e2e/recu_index.rs:9:5:"; echo "test recu_index::vraiment_rouge ... FAILED"; echo "test result: FAILED. 1 passed; 1 failed"; exit 101; }
+fi
 # Le témoin (le filtre « filtre ») : cargo écrit la ligne du test joué ; FAUX_TEMOIN_MUET l'ignore (0 passed).
 if [ "$dernier" = filtre ]; then
   [ -n "${FAUX_TEMOIN_MUET:-}" ] && { echo "test result: ok. 0 passed; 0 failed; 1 ignored"; exit 0; }
@@ -212,4 +218,12 @@ $G reset -q --hard HEAD~1
 passe "ROUGE témoin tty" "SUITE_DU_TEMOIN=tty pour un lot qui ne touche pas tty/" SUITES=- SUITE_DU_TEMOIN=tty
 passe VERT "un lot qui ne touche pas tty/" SUITES=-
 grep -q '^cargo ' $D/trace && { echo "ROUGE  sans tty/ : le crate du terminal joué quand même"; rouge=1; } || echo "vert   sans tty/ : le crate du terminal n'est pas joué"
+# **Une panique attendue n'est pas recopiée au résumé** (20 novembre 2026, recherche : sous « == e2e_lectures », les
+# paniques des #[should_panic] de recu_index, « should panic ... ok », passaient pour des rouges). Celle d'un test rouge
+# reste.
+passe VERT "une panique attendue (should panic ... ok) n'est pas recopiée au résumé" SUITES_EN_PLUS=e2e_x FAUX_PANIQUES=e2e_x
+! grep -q 'refuse_sans_index.*panicked\|panicked.*mod.rs:22' $R && grep -q 'panique(s) attendue(s) omise(s)' $R \
+  && echo "vert   la panique attendue omise et comptée au résumé" || { echo "ROUGE  panique attendue recopiée : « $(grep -E 'panick|omise' $R | tr '\n' ' ') »"; rouge=1; }
+passe "ROUGE e2e_x" "la panique d'un test rouge reste au résumé" SUITES_EN_PLUS=e2e_x FAUX_PANIQUES=e2e_x FAUX_PANIQUE_ROUGE=1
+grep -q "vraiment_rouge' (4120119) panicked" $R && echo "vert   la panique d'un test rouge est recopiée" || { echo "ROUGE  panique d'un test rouge perdue du résumé"; rouge=1; }
 exit $rouge
