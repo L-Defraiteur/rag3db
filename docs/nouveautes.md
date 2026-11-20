@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 19 novembre 2026 — **Une fenêtre du graphe suit les outils du chat.** Ouverte sur les graphes avec `?fenetre=graphe`, elle montre le graphe de chaque outil que le tour du chat appelle, au moment où il l'appelle, et le flux l'allume nœud par nœud ; elle ne se recharge pas, et la fenêtre du dépôt ne bouge pas pour autant.
+
 - 19 novembre 2026 — Dans l'IDE, la vue d'un fichier ne garde plus l'erreur du fichier lu juste avant : passer d'un fichier absent à un fichier lisible montre ses lignes seules, sans l'alerte du premier.
 
 - 19 novembre 2026 — **Le chat de l'IDE ouvre le dépôt à côté.** Un lien « dépôt à côté » de son en-tête ouvre l'arbre du dépôt dans une fenêtre à lui, qui ne montre que son rôle et le flux ; les fichiers cités dans le chat s'y ouvrent sans recharger cette fenêtre, et précédent et suivant y reviennent sur les vues suivies.
