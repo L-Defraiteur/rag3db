@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 19 novembre 2026 — **Une fenêtre détachée de l'IDE dit les accords qui attendent dans le chat.** Son en-tête compte les demandes d'accord de son dépôt encore sans réponse, à son ouverture comme au fil du flux, et le compte retombe quand le chat accorde ou refuse.
+
 - 19 novembre 2026 — **Une fenêtre du graphe suit les outils du chat.** Ouverte sur les graphes avec `?fenetre=graphe`, elle montre le graphe de chaque outil que le tour du chat appelle, au moment où il l'appelle, et le flux l'allume nœud par nœud ; elle ne se recharge pas, et la fenêtre du dépôt ne bouge pas pour autant.
 
 - 19 novembre 2026 — Dans l'IDE, la vue d'un fichier ne garde plus l'erreur du fichier lu juste avant : passer d'un fichier absent à un fichier lisible montre ses lignes seules, sans l'alerte du premier.
