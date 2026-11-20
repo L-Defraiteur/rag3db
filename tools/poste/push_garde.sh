@@ -345,7 +345,30 @@ if [ -n "${PRE_PUSH:-}" ]; then
   # shellcheck disable=SC2086
   ${PRE_PUSH} "$(git rev-parse HEAD)" || echo "PR absente : le crochet PRE_PUSH a rendu $?"
 fi
-git push -q origin HEAD:master || { echo "ARRÊT : push refusé"; revenir; exit 1; }
+# **Des docs arrivées sur master pendant le push** (20 novembre 2026, c7 : arbre-open-view rendu à 19 h 24, un commit de
+# chronologie poussé entre le fetch d'en haut et ce push, pendant PRE_PUSH ; treize minutes de passe perdues). Sur un
+# push refusé, la garde relit master : si ce qui est arrivé depuis son fetch n'est que des docs (rien hors des .md et de
+# docs/), elle repose les commits du lot dessus et repousse, sans rejeu, trois fois au plus ; du code arrivé reste un
+# refus, que le pousseur repose au pas suivant.
+essais=0
+until git push -q origin HEAD:master 2>/dev/null; do
+  essais=$((essais + 1))
+  [ "$essais" -le 3 ] || { echo "ARRÊT : push refusé (trois fois)"; revenir; exit 1; }
+  git fetch -q origin master || { echo "ARRÊT : push refusé, et master illisible"; revenir; exit 1; }
+  arrive=$(git rev-parse FETCH_HEAD)
+  # Master n'a pas bougé : le refus a une autre cause (un crochet, le réseau) ; le même appel, rejoué, repart d'ici.
+  [ "$arrive" != "$neuf" ] || { echo "ARRÊT : push refusé"; revenir; exit 1; }
+  hors_docs=$(git diff --name-only "$neuf" "$arrive" -- . ':!*.md' ':!docs/')
+  if [ -n "$hors_docs" ] || ! git merge-base --is-ancestor "$neuf" "$arrive"; then
+    echo "ARRÊT : push refusé : master a apporté autre chose que des docs pendant le push"; echo "$hors_docs" | sed 's/^/  /'; revenir; exit 1
+  fi
+  git -c core.attributesFile="$UNION" rebase --onto "$arrive" "$neuf" > /dev/null 2>&1
+  if [ -d "$gd/rebase-merge" ] || [ -d "$gd/rebase-apply" ] || git status --short | grep -q '^UU'; then
+    git rebase --abort; echo "ARRÊT : push refusé, et le rebase sur les docs arrivées bute"; revenir; exit 1
+  fi
+  echo "docs arrivées sur master pendant le push ($(git rev-parse --short "$neuf")..$(git rev-parse --short "$arrive")) : reposé dessus, repoussé sans rejeu"
+  neuf=$arrive
+done
 git fetch -q origin master
 echo "== trois contrôles"
 echo "status : [$(git status --porcelain)]"
