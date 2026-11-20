@@ -2497,8 +2497,8 @@ impl PreparedBackend {
         drop(schema);
         drop(provided_schema);
         // **Every script a graph names is declared** (20 November 2026): a `script_id` was only resolved at the call,
-        // so a template whose graph named an undeclared script loaded, and failed in service. The cited graphs are
-        // already inlined in their node's configuration: walking the whole definition reaches them.
+        // so a template whose graph named an undeclared script loaded, and failed in service. A cited graph is kept in
+        // its node's configuration as {cite, mermaid, sous}: its text is read again for its nodes, and `sous` walked.
         fn undeclared_scripts(v: &Value, scripts: &BTreeMap<String, String>, out: &mut BTreeSet<String>) {
             match v {
                 Value::Object(o) => {
@@ -2507,6 +2507,12 @@ impl PreparedBackend {
                             if !id.contains('$') && !scripts.contains_key(id) {
                                 out.insert(id.to_string());
                             }
+                        }
+                    }
+                    // A cited graph is kept as {cite, mermaid, sous}: its own nodes are in its text.
+                    if let (Some(_), Some(text)) = (o.get("cite"), o.get("mermaid").and_then(Value::as_str)) {
+                        if let Ok(cited) = crate::dataflow::graph_tool::GraphTool::from_mermaid(text) {
+                            undeclared_scripts(&serde_json::to_value(cited.template()).unwrap_or_default(), scripts, out);
                         }
                     }
                     for x in o.values() {
