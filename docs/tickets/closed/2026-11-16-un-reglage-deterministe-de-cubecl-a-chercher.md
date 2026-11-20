@@ -1,6 +1,6 @@
 # Un réglage déterministe de cubecl, à chercher (seulement s'il est gratuit)
 
-- **État** : ouvert (16 novembre 2026, embarquement ; décision de c7 : « pas de correctif sauf s'il est
+- **État** : fermé (20 novembre 2026, embarquement, au mot de c7 : pas de réglage gratuit mesurable) ; ouvert (16 novembre 2026, embarquement ; décision de c7 : « pas de correctif sauf s'il est
   gratuit »)
 - **Pour** : embarquement
 - **Famille** : produit
@@ -44,3 +44,19 @@ différentes.
 ## Ce qui le bloque
 
 Le ticket de tolérance d'abord (son script sert à la mesure).
+
+## Fermé (20 novembre 2026)
+
+- **La lecture** (cubecl bdf6b77, burn 21674205) : à l'exécution, `CUBECL_AUTOTUNE_LEVEL` (minimal, balanced,
+  extensive, full), `CUBECL_AUTOTUNE_CACHE` (cache persistant) et `CUBECL_AUTOTUNE_SHORT_CIRCUIT`
+  (`crates/cubecl-runtime/src/config/base.rs:139-175`). À la compilation, la feature `burn-autotune`, dont l'arrêt
+  n'est pas gratuit : c'est elle qui avait fait le facteur 14 du débit.
+- **Sur card2** (le 7878, par des `/embed` client) : sur un jeu **sans aucun rembourrage** (64 permutations des mêmes
+  120 mots d'un jeton, tous à 122 jetons), seul contre en lot donne **4,9e-5** (cosinus 0,99999994, 0 sur 64 au bit
+  près). L'écart ne vient donc pas seulement du rembourrage : c'est un ordre de réductions qui dépend de la taille du
+  lot. Il est sain, et couvert par la tolérance de pose prouvée le 19 novembre.
+- **Aucun réglage gratuit n'est mesurable** sans un second service sur card2, qu'on ne veut pas à côté de celui qui
+  sert. L'iGPU ne peut pas servir à le mesurer : il calcule faux en lot (ticket
+  `embarquement/tickets/2026-11-20-sur-l-igpu-granite-rend-des-vecteurs-faux-en-lot.md`). Sur l'iGPU, `minimal` ne
+  changeait presque rien (cosinus 0,870 contre 0,870 sans rembourrage).
+- **À rouvrir seulement si** une mesure de qualité montre un effet de cet écart.

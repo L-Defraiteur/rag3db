@@ -46,3 +46,23 @@ Les journaux sont à luciepc : `~/.cache/rag3weaver-build/cubecl-mesure/` (`same
 3. **D'ici là, chez nous** : aucun service sur l'iGPU. La règle « un essai GPU va sur `igpu:0` » ne vaut que pour des
    essais qui ne regardent pas les valeurs. Un garde-fou se discute : refuser l'adaptateur `IntegratedGpu` pour un
    embarqueur, sauf réglage explicite.
+
+## Le verdict contre card2 (20 novembre, 13 h)
+
+Les mêmes textes, sur le 7878 (card2, par des `/embed` client) et sur le service d'essai de l'iGPU, comparés au
+vecteur seul de card2 :
+
+| Comparaison | Sans rembourrage (cosinus min) | Standard (cosinus min) |
+|---|---|---|
+| card2 seul / card2 en lot | 0,99999994 (écart 4,9e-5) | 0,99999993 (5,5e-5) |
+| iGPU seul / card2 seul | 0,99999994 | **0,878** (médiane 0,99999997) |
+| iGPU en lot / card2 seul | **0,870** | **0,590** |
+
+- **Sur l'iGPU, « en lot » est faux, « seul » est presque toujours juste.** Quelques textes seuls sont faux aussi,
+  quand l'appel d'avant avait une autre longueur : la contamination d'un appel à l'autre.
+- **Donc aucun service d'embarquement sur l'iGPU**, même pour des textes seuls. Aucun ne tourne là au 20 novembre
+  (vérifié par c7).
+- **Les témoins qui chargent un modèle sur `igpu:0`** (le repli des tests à luciepc, `RAG3WEAVER_TESTS_REPLI_PERIPHERIQUE`)
+  le font directement et restent exposés : un témoin qui compare des valeurs sur l'iGPU peut mentir.
+- La fiche amont est chez G (lot `tracel-ai`), avec les deux formes de repro : un lot de textes de même longueur contre
+  chacun seul, et une suite d'appels seuls de longueurs croissantes.
