@@ -7136,7 +7136,10 @@ mod tests {
             outil.len(),
             // Le relais est admis sous code sans conférer read_files : une lecture
             // pure en base reste possible ; les effets de la cible sont revérifiés.
-            44 + usize::from(cfg!(feature = "code")),
+            44 + usize::from(cfg!(feature = "code"))
+                // SlowReadNode, in the test builds only (`backend::lecture_lente`): the slow read on the call's
+                // snapshot that the host-path witness of the interruption stops. Never in the product.
+                + usize::from(cfg!(test)),
             "la liste des nœuds d'outil a changé ({} entrées) : si c'est voulu, corrigez \
              ce compte dans le même commit — et dites pourquoi dans son message",
             outil.len()
