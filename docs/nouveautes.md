@@ -1,5 +1,11 @@
 # Nouveautés
 
+- 20 novembre 2026 — **Une sonde rejoue la maintenance nocturne pendant des réindexations de code.** Le test ignoré
+  `the_nightly_compaction_during_reindexing_loses_no_word` (`dataflow::index_nodes`) indexe un dépôt dont les
+  fichiers changent à chaque tour, pendant que la maintenance du plein texte compacte en boucle sur le même
+  catalogue, puis contrôle le dictionnaire. Elle perdait 534 mots sous lucivy 4.3.10, aucun sous 4.3.12. Elle se
+  joue à la main : `--include-ignored`, `RAG3WEAVER_PROBE_ROUNDS` pour la durée.
+
 - 19 novembre 2026 — **Une fenêtre du graphe suit les outils du chat.** Ouverte sur les graphes avec `?fenetre=graphe`, elle montre le graphe de chaque outil que le tour du chat appelle, au moment où il l'appelle, et le flux l'allume nœud par nœud ; elle ne se recharge pas, et la fenêtre du dépôt ne bouge pas pour autant.
 
 - 19 novembre 2026 — Dans l'IDE, la vue d'un fichier ne garde plus l'erreur du fichier lu juste avant : passer d'un fichier absent à un fichier lisible montre ses lignes seules, sans l'alerte du premier.
