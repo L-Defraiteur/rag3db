@@ -555,11 +555,14 @@ fn une_fenetre_qui_n_est_pas_le_chat_compte_les_accords_en_attente() {
     let model: ChatModel = Arc::new(move |_| -> Result<Arc<dyn Llm>, String> {
         Ok(Arc::new(CallbackLlm::new("faux-accord", 8192, move |turns: &[Turn], opts, sink| {
             let depuis = turns.iter().rposition(|t| t.role == "user").unwrap();
-            if turns[depuis..].iter().any(|t| t.role == "tool") {
+            // A command only on a message the witness typed (« lance echo », « relance echo »): the turn relaunched by
+            // a granted approval answers in words, and asks for nothing new.
+            let tape = turns[depuis].content.contains("echo");
+            if !tape || turns[depuis..].iter().any(|t| t.role == "tool") {
                 MockLlm::new("J'attends ton accord.").generate(turns, opts, sink)
             } else {
-                // A command of its own at each turn: the line granted at the first is not asked again at the second.
-                let n = turns.iter().filter(|t| t.role == "user").count();
+                // A command of its own at each typed message: the line granted at the first is not asked again later.
+                let n = turns.iter().filter(|t| t.role == "user" && t.content.contains("echo")).count();
                 MockLlm::new("").with_tool_calls(vec![("run_command".to_string(), json!({ "command": format!("echo accorde-moi-{n}") }).to_string())]).generate(turns, opts, sink)
             }
         })))
