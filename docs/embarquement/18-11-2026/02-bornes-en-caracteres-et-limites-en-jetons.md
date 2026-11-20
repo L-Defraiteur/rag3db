@@ -151,3 +151,19 @@ ou la borne est un budget d'affichage, ou elle est déjà sûre au pire ratio.
 - le dimensionneur par défaut de `text-splitter` compte-t-il en caractères ?
 - les embarqueurs candle (`bge_m3_embedder.rs`, `candle_embedder.rs`) dépendent-ils du préréglage de leur
   `tokenizer.json` ?
+
+**La mesure par l'index, scope par scope (20 novembre, 9 h 5x)**, au mot de c7 : le crate découpe vraiment les deux
+corpus, en plein texte seul et sans service. La comparaison porte sur master et sur la tête des morceaux d'ED
+(`chunk-bound-from-embedder`, 1e082624c2, découpage pour granite), lib 4ad394f4d2. Les `_text` des morceaux sont
+comptés par le tokenizer de granite.
+
+| Corpus | Master : morceaux | > 512 jetons | ED : morceaux | > 512 jetons |
+|---|---|---|---|---|
+| `extension/rag3weaver/src/**/*.rs` (312 fichiers) | 24 479 | **3 206 (13,1 %)**, max 1 175 | 26 621 (**+8,7 %**) | **0**, max 510 |
+| `src/include/**/*.h` du moteur (810) | 8 738 | **436 (5,0 %)**, max 1 290 | 9 083 (**+3,9 %**) | **0**, max 510 |
+
+- **Le lot d'ED tient la promesse** : aucun morceau au-dessus de la fenêtre de granite, pour 4 à 9 % de morceaux en plus.
+- **La part réelle sur master est 13,1 %** pour le Rust, et non les 72,5 % de l'estimation par fichiers entiers. Les
+  scopes sont petits (médiane de 110 jetons), et le contexte ne sort pas d'un scope. La réserve de l'estimation tenait.
+- Le témoin de mesure était jetable (jamais commité) ; les journaux sont à luciepc dans
+  `~/.cache/rag3weaver-build/mesure-point-c/`.
