@@ -48,13 +48,15 @@ fn corpus() -> Vec<(String, String)> {
 }
 
 /// Ôte ce qui ne dit rien de l'analyse (la version, qui porte déjà les règles et le commit du parseur ; les chemins
-/// absolus), et trie les listes : l'empreinte ne dépend que du contenu, pas de l'ordre d'un parcours.
+/// absolus ; les durées), et trie les listes : l'empreinte ne dépend que du contenu, pas de l'ordre d'un parcours.
 fn canonique(v: &mut serde_json::Value) {
     match v {
         serde_json::Value::Object(m) => {
             for cle in ["root", "version_de_l_analyse", "absolute_path"] {
                 m.remove(cle);
             }
+            // Les durées (`parse_ms`…) mesurent la machine, pas l'analyse.
+            m.retain(|cle, _| !cle.ends_with("_ms"));
             for x in m.values_mut() {
                 canonique(x);
             }
