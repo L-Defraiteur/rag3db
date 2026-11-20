@@ -308,6 +308,9 @@ pub struct DaemonHost {
     /// **The views whose layer is being written in the background** (`open_view`): their name → when the writing began and
     /// how many files it writes. A read under one of them answers « index pas prêt » at once.
     vues_en_ecriture: Mutex<HashMap<String, (std::time::Instant, usize)>>,
+    /// **This host's machine and the way to its landings** (page 03 of 20 November 2026, O4): `None` reads
+    /// `~/.config/rag3weaver/atterrissages.json`, the machine being the hostname unless the file names it.
+    atterrissages: Mutex<Option<(String, VoieDesAtterrissages)>>,
     /// The witnesses' gate: the background writing of a view waits on it while it is shut.
     #[cfg(test)]
     #[cfg_attr(not(feature = "code"), allow(dead_code))]
@@ -538,6 +541,7 @@ impl DaemonHost {
             vues_dir: Mutex::new(None),
             espace: Mutex::new(None),
             vues_en_ecriture: Mutex::new(HashMap::new()),
+            atterrissages: Mutex::new(None),
             #[cfg(test)]
             porte_d_ecriture: Mutex::new(None),
             opener,
@@ -838,10 +842,25 @@ impl DaemonHost {
         r.unwrap_or_else(|e| op_response(Err(e)))
     }
 
+    /// The machine and the way to the landings (the witnesses give theirs).
+    pub fn set_atterrissages(&self, poste: &str, voie: VoieDesAtterrissages) {
+        *self.atterrissages.lock().unwrap_or_else(|e| e.into_inner()) = Some((poste.to_string(), voie));
+    }
+
+    /// **Close the views of the landed lots** (page 03 of 20 November 2026, O4): the landings of this machine (the 6th
+    /// column of `landed.tsv`, `<machine>:<view>`), read by the way the configuration declares; each view the host opened
+    /// is closed by its name, its generations purged (master holds its content). Gives the views closed, and those
+    /// refused with why.
+    pub fn fermer_les_vues_atterries(&self) -> Value {
+        let _ = &self.atterrissages;
+        json!({ "ok": true, "closed": [], "refused": [] }) // RED STUB.
+    }
+
     /// **`close_view <name>`** (page 03 of 20 November 2026, O3): a view the host opened for this session is forgotten,
     /// its worktree and its target removed. Refused, saying why: a view the host did not open for the session (Lucie's
     /// tree among them), a dirty tree (submodule included), commits no remote branch holds, a process working in it.
-    pub fn close_view(&self, session: Option<&str>, manifest: &Path, name: &str) -> Value {
+    pub fn close_view(&self, session: Option<&str>, manifest: &Path, name: &str, purge: bool) -> Value {
+        let _ = purge; // RED STUB.
         let r = self.check_session(session).and_then(|s| {
             let claude = s.claude_session.clone().ok_or("close_view : la session Claude Code qui appelle n'est pas connue (son sessionId)")?;
             let fichier = self.fichier_de_vue(&claude).ok_or_else(|| format!("session Claude Code illisible : « {claude} »"))?;
@@ -2483,7 +2502,7 @@ impl DaemonHost {
                 };
                 let (v, m) = v;
                 let reponse = match v["name"].as_str() {
-                    Some(name) => self.close_view(session, &m, name),
+                    Some(name) => self.close_view(session, &m, name, v["purge"] == json!(true)),
                     None => json!({ "ok": false, "error": "« name » manque : la vue à fermer" }),
                 };
                 let reponse = if reponse["ok"] == json!(true) { json!({ "ok": true, "result": reponse }) } else { reponse };
@@ -2529,6 +2548,14 @@ impl Default for DaemonHost {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// **The way to this machine's landings** (O4): a file read here, or a command whose output is the file (`ssh`, `cat`…),
+/// as the configuration declares; nothing is written in the code about which machine holds the pusher.
+#[derive(Debug, Clone)]
+pub enum VoieDesAtterrissages {
+    Fichier(std::path::PathBuf),
+    Commande(Vec<String>),
 }
 
 /// The gate of the views' background writing (the witnesses): shut until [`PorteDEcriture::relacher`].
