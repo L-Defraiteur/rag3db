@@ -18,7 +18,7 @@
 ///   navigateur, et l'hôte comptait deux flux (mesuré le 13 novembre 2026). Le dernier onglet
 ///   fermé, le navigateur arrête le worker, et sa connexion avec lui.
 
-const ADRESSE = "/ide/flux?sujets=files,dataflow,catalog,reactions,declarations,agent,tokens,repos,accords,etat,index";
+const ADRESSE = "/ide/flux?sujets=files,dataflow,catalog,reactions,declarations,agent,tokens,repos,accords,etat,index,mailbox";
 const MUET_MS = 45_000;
 const GRACE_MS = 10_000;
 
