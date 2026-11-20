@@ -479,9 +479,40 @@ QUOTA="${POSTE_CPU_QUOTA:-$((FILS * 100))%}"
 if [ "$borne" = 1 ]; then
   set -- systemd-run --user --scope -q -p MemoryMax="$MEM" -p MemorySwapMax="$SWAP" -p CPUQuota="$QUOTA" -- "$@"
 fi
+# fin_prevue <fiche> <commande…> : l'instant de fin prévu d'un lourd (secondes), vide si sa commande n'a pas de timeout en
+# tête (après des `env VAR=…`). Une fonction : ses arguments ne touchent pas à la commande de ce poste.
+fin_prevue() {
+  _fp=$1; shift
+  while [ $# -gt 0 ] && { [ "$1" = env ] || case "$1" in *=*) true ;; *) false ;; esac; }; do shift; done
+  [ "${1:-}" = timeout ] || return 0
+  shift; while [ $# -gt 0 ] && case "$1" in -*) true ;; *) false ;; esac; do case "$1" in -k|-s|--kill-after|--signal) shift ;; esac; shift; done
+  _d=${1:-}; _n=${_d%[smhd]}
+  case "$_n" in ''|*[!0-9]*) return 0 ;; esac
+  case "$_d" in *m) _n=$((_n * 60)) ;; *h) _n=$((_n * 3600)) ;; *d) _n=$((_n * 86400)) ;; esac
+  echo $(( $(stat -c %Y "$_fp") + _n ))
+}
 dire attend
 case "$mode" in
   mesure)
+    # **Une mesure refuse à l'arrivée derrière un lourd long** (20 novembre 2026, c7 : deux gels de la file en deux heures
+    # à luciepc, une mesure tenant la porte derrière un lourd de six heures). La fin prévue d'un lourd qui tient sa place :
+    # l'instant de sa fiche « tient », plus le `timeout N` en tête de sa commande (après des `env VAR=…`) ; sans timeout,
+    # elle est inconnue, donc longue. Au-delà de POSTE_MESURE_ATTENTE_MAX secondes (1200 ; 0 coupe la règle), la mesure
+    # refuse tout de suite, code 76, et dit quel lourd, sa fin prévue, et quoi faire.
+    if [ "${POSTE_MESURE_ATTENTE_MAX:-1200}" != 0 ]; then
+      maintenant=$(date +%s); limite=$((maintenant + ${POSTE_MESURE_ATTENTE_MAX:-1200}))
+      for _f in "$F"/*; do
+        [ -f "$_f" ] && [ "$_f" != "$fiche" ] || continue
+        _l=$(cat "$_f" 2>/dev/null); case "$_l" in "tient lourd"*) ;; *) continue ;; esac
+        kill -0 "${_f##*/}" 2>/dev/null || continue
+        _cmd=${_l#* — }; set -f; _fin=$(fin_prevue "$_f" $_cmd); set +f
+        if [ -z "$_fin" ] || [ "$_fin" -gt "$limite" ]; then
+          if [ -n "$_fin" ]; then _quand="fin prévue à $(date -d "@$_fin" +%H:%M)"; _apres=" ou après $(date -d "@$_fin" +%H:%M)"; else _quand="fin inconnue (pas de timeout en tête)"; _apres=""; fi
+          echo "poste: mesure refusée : le lourd pid ${_f##*/} tient sa place, $_quand — ${_cmd} ; rejouer sous poste lourd$_apres" >&2
+          exit 76
+        fi
+      done
+    fi
     exec 8>>"$V/porte.lock"; prendre -x 8
     exec 9>>"$V/poste.lock"; prendre -x 9
     dire tient
