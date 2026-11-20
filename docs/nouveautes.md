@@ -14,6 +14,12 @@
   écrire. rag3weaver passe à cette version sans rien changer à ce qu'on voit : ses rebâtis, son tampon d'écriture et le
   geste des non-candidats commitent sans créer de génération, et l'annulation d'un flush dit désormais un commit qui
   échoue au lieu de l'avaler. Brancher les générations sur les versions de la base est l'étape suivante.
+- 20 novembre 2026 — **Les graphes de l'archiviste se lisent sur disque, dans le gabarit memory.** Ses graphes et ses
+  Plans cités (`archive_decide`, `archive_slice_core`, `turns_select`…) étaient pris dans le binaire
+  (`@builtin:`) : une copie éditée du gabarit n'en changeait rien. Ils se citent maintenant à côté du manifeste
+  (`@graphs/…`, `@plans/…`), si bien qu'éditer la copie change ce que l'appel joue, et la version du gabarit.
+  Conséquence : un manifeste memory recopié ailleurs doit emporter ses dossiers `graphs/` et `plans/`. Seuls les
+  outils génériques du moteur (`select_structured`, `search_structured`) restent cités dans le binaire.
 
 - 21 novembre 2026 — **La suite à faute injectée du confineur se joue à la demande.** `FAUTE_INJECTEE=1` ajoute à
   `passe_epinglee` la vraie portée crevée (un vrai oom_kill) ; sous une session graphique, elle se saute en le disant,
