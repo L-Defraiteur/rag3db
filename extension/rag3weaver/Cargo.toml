@@ -141,9 +141,12 @@ hf-hub = { version = "0.4", optional = true, default-features = false, features 
 # shards et rendait l'ancien id d'un mot dont la compaction avait retiré le texte ; les textes
 # morts restent un cycle en sursis ; `maintain` nomme ceux qu'il reprend. Et la 4.3.11 (une
 # requête floue longue sans positions ne relit plus chaque valeur entière). Format inchangé.
-lucivy-core = "4.3.12"
+# La 4.3.13 (20 novembre 2026, tag v4.3.13, main a633e13) : un index qu'une lucivy plus récente a
+# marqué (`min_lucivy`, posé par la 4.4 sur un index à générations étiquetées) est refusé à l'ouverture,
+# en nommant les deux versions, avant tout écrivain et tout ramasse-miettes. Format inchangé.
+lucivy-core = "4.3.13"
 # Moteur : nécessaire pour construire les LucivyDocument à l'indexation.
-ld-lucivy = { version = "4.3.12", default-features = false, features = ["stopwords", "lz4-compression"] }
+ld-lucivy = { version = "4.3.13", default-features = false, features = ["stopwords", "lz4-compression"] }
 
 
 # sparse_vector — crate ami de lucivy (Apache-2.0, dérivé en partie de Qdrant,
