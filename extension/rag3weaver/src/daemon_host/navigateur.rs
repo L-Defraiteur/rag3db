@@ -237,6 +237,24 @@ impl Navigateur {
         self.attacher(cree["targetId"].clone());
     }
 
+    /// **Joins the tab that a link opened** (`target="_blank"`): the first page target whose address contains
+    /// `contient`, waited for 20 s at most, becomes the current tab and joins the list (the IDE in several windows,
+    /// slice 4: the buttons that detach a window).
+    #[cfg(feature = "code")]
+    pub(crate) fn rejoindre(&mut self, contient: &str) {
+        self.session.clear();
+        let fin = Instant::now() + Duration::from_secs(20);
+        let cible = loop {
+            let cibles = self.commande("Target.getTargets", json!({}));
+            if let Some(c) = cibles["targetInfos"].as_array().and_then(|t| t.iter().find(|c| c["type"] == "page" && c["url"].as_str().is_some_and(|u| u.contains(contient)))) {
+                break c["targetId"].clone();
+            }
+            assert!(Instant::now() < fin, "no tab whose address contains « {contient} » in 20 s : {cibles}");
+            std::thread::sleep(Duration::from_millis(100));
+        };
+        self.attacher(cible);
+    }
+
     /// **Back to the tab opened in `i`-th place** (0 is the first), which becomes the current tab;
     /// the others stay open (two windows of the IDE, 19 Nov. 2026).
     #[cfg(feature = "code")]
