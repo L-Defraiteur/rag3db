@@ -492,6 +492,64 @@ mod tests {
         assert_eq!(generations_de(&v), 0, "close_view with purge leaves the generations");
     }
 
+    /// An atelier with a space of worktrees and a table of folders, and a session of « le témoin ».
+    fn atelier_d_espace(d: &std::path::Path) -> (crate::daemon_host::atelier_fichiers::tests::Atelier, std::path::PathBuf, String) {
+        let a = atelier(d);
+        let (_h, espace, _) = hote_d_espace(&d.join("e"));
+        a.host.set_espace(espace.clone(), d.join("e/dossiers-des-sessions.json"));
+        a.host.set_vues_dir(d.join("e/vues"));
+        let corps = json!({"client": "ide", "claude": {"session_id": "S1", "name": "le témoin"}}).to_string();
+        let (_, r) = a.host.handle("POST", "/session", None, corps.as_bytes());
+        (a, espace, r["session"].as_str().unwrap().to_string())
+    }
+
+    /// **Opening a new folder creates it and attaches it** (Lucie's first step in the IDE, 21 November 2026): absent, it
+    /// is created, gets `git init` (no remote, no push), is attached to the atelier, and appears among the trees.
+    #[test]
+    fn opening_a_new_folder_creates_and_attaches_it() {
+        let d = tempfile::tempdir().unwrap();
+        let (a, _, s) = atelier_d_espace(d.path());
+        let neuf = d.path().join("projets/neuf");
+        let r = a.host.ouvrir_un_dossier(Some(&s), &neuf);
+        assert_eq!((&r["ok"], &r["created"]), (&json!(true), &json!(true)), "{r}");
+        assert!(neuf.join(".git").exists(), "the new folder has no git repository");
+        let distants = std::process::Command::new("git").arg("-C").arg(&neuf).arg("remote").output().unwrap();
+        assert!(distants.stdout.is_empty(), "the new folder has a remote");
+        let nom = crate::code_tree::name_of_tree(&neuf.canonicalize().unwrap()).unwrap();
+        assert!(a.host.racines_de_code().unwrap().manifest(&nom).exists(), "the new folder is not among the trees: {r}");
+        attendre_l_index(&a, &neuf);
+    }
+
+    /// **Opening a git repository attaches it, without creating anything.**
+    #[test]
+    fn opening_a_git_repository_attaches_it() {
+        let d = tempfile::tempdir().unwrap();
+        let (a, _, s) = atelier_d_espace(d.path());
+        let depot = petit_depot(&d.path().join("B"));
+        let r = a.host.ouvrir_un_dossier(Some(&s), &depot);
+        assert_eq!((&r["ok"], &r["created"]), (&json!(true), &json!(false)), "{r}");
+        let nom = crate::code_tree::name_of_tree(&depot.canonicalize().unwrap()).unwrap();
+        assert!(a.host.racines_de_code().unwrap().manifest(&nom).exists(), "the repository is not among the trees: {r}");
+        attendre_l_index(&a, &depot);
+    }
+
+    /// **Opening a folder refuses**, saying why: Lucie's tree, another session's folder, a folder with files that is not
+    /// a git repository; nothing is created.
+    #[test]
+    fn opening_a_folder_refuses_lucies_tree_another_sessions_folder_and_a_non_repository() {
+        let d = tempfile::tempdir().unwrap();
+        let (a, espace, s) = atelier_d_espace(d.path());
+        let refus = |p: &std::path::Path| a.host.ouvrir_un_dossier(Some(&s), p)["error"].as_str().unwrap_or_default().to_string();
+        assert!(refus(&espace.join("rag3db")).contains("l'arbre de Lucie"));
+        assert!(refus(&espace.join("rag3db/sous")).contains("l'arbre de Lucie"));
+        assert!(refus(&espace.join("archi/un-lot")).contains("rag3weaver archi"), "another session's folder is opened");
+        let plein = d.path().join("plein");
+        std::fs::create_dir_all(&plein).unwrap();
+        std::fs::write(plein.join("notes.txt"), "à moi").unwrap();
+        assert!(refus(&plein).contains("pas un dépôt git"), "a folder with files gets git init");
+        assert!(!plein.join(".git").exists() && !espace.join("archi/un-lot").exists());
+    }
+
     /// **`views` and `use_view` follow the Claude Code session** (page 02 of 20 November 2026, lot 2): two thin clients
     /// of one session (one `sessionId`) see the same active view, another session does not; an unknown name is refused,
     /// listing the known views; a host restarted on the same state finds the view again.
