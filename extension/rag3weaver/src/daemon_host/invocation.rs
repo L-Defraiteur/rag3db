@@ -419,7 +419,9 @@ mod tests {
         let v = une_vue_ouverte("f");
         assert!(generations_de(&v) > 0, "the view opened has no generation");
         let journal = v._d.path().join("landed.tsv");
-        std::fs::write(&journal, format!("autre\th\th\t-\t-\t-\nle-lot\th1\th2\ttemoin\tlib\tposte-a:{}\n", v.nom)).unwrap();
+        // The lot's landed head is the worktree's own (c7's guard: closed only at the landed head or behind it).
+        let tete = String::from_utf8(std::process::Command::new("git").arg("-C").arg(&v.chemin).args(["rev-parse", "HEAD"]).output().unwrap().stdout).unwrap();
+        std::fs::write(&journal, format!("autre\th\th\t-\t-\t-\nle-lot\t{}\th2\ttemoin\tlib\tposte-a:{}\n", tete.trim(), v.nom)).unwrap();
         v.a.host.set_atterrissages("poste-a", crate::daemon_host::VoieDesAtterrissages::Fichier(journal));
         let r = v.a.host.fermer_les_vues_atterries();
         assert_eq!(r["closed"], json!([v.nom]), "the landed view is not closed: {r}");
@@ -433,7 +435,8 @@ mod tests {
     fn landed_views_close_only_on_their_own_machine() {
         let v = une_vue_ouverte("g");
         let journal = v._d.path().join("landed.tsv");
-        std::fs::write(&journal, format!("le-lot\th1\th2\ttemoin\tlib\tposte-a:{}\n", v.nom)).unwrap();
+        let tete = String::from_utf8(std::process::Command::new("git").arg("-C").arg(&v.chemin).args(["rev-parse", "HEAD"]).output().unwrap().stdout).unwrap();
+        std::fs::write(&journal, format!("le-lot\t{}\th2\ttemoin\tlib\tposte-a:{}\n", tete.trim(), v.nom)).unwrap();
         let voie = crate::daemon_host::VoieDesAtterrissages::Commande(vec!["cat".into(), journal.to_string_lossy().to_string()]);
         v.a.host.set_atterrissages("poste-b", voie.clone());
         let r = v.a.host.fermer_les_vues_atterries();
