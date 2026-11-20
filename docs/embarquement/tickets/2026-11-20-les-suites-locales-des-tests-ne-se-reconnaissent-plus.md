@@ -2,7 +2,7 @@
 
 - **État** : ouvert (20 novembre 2026, embarquement ; relevé en triant les tests qui comparent des valeurs)
 - **Pour** : embarquement
-- **Famille** : tests
+- **Famille** : produit (les tests du crate)
 - **Gravité** : moyenne. Des suites qui disent éprouver le modèle sur la carte d'ici éprouvent le service, ou le
   modèle chargé sur le périphérique du repli (`igpu:0` à luciepc, qui calcule faux en lot : ticket
   `2026-11-20-sur-l-igpu-granite-rend-des-vecteurs-faux-en-lot`).
