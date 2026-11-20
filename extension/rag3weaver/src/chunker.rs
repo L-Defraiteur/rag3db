@@ -61,6 +61,9 @@ pub struct ChunkerConfig {
     pub max_lines: usize,
     /// `Lines` : lignes partagées entre voisins, quand le texte dépasse.
     pub overlap_lines: usize,
+    /// `Lines`: **the bound of a whole chunk**, core and context, in bytes (the window of the base's embedder). None:
+    /// only `max_size`, which bounds the core and each side of the context.
+    pub max_chunk_size: Option<usize>,
 }
 
 impl Default for ChunkerConfig {
@@ -71,6 +74,7 @@ impl Default for ChunkerConfig {
             strategy: ChunkStrategy::Semantic,
             max_lines: 30,
             overlap_lines: 5,
+            max_chunk_size: None,
         }
     }
 }
@@ -86,6 +90,7 @@ impl From<&crate::config::ChunkingConfig> for ChunkerConfig {
             strategy: c.strategy.clone(),
             max_lines: c.max_lines,
             overlap_lines: c.overlap_lines,
+            max_chunk_size: c.max_chunk_size,
         }
     }
 }
@@ -115,7 +120,9 @@ impl Chunker {
         let tient_en_lignes = self.config.strategy != ChunkStrategy::Lines
             || self.config.max_lines == 0
             || text.lines().count() <= self.config.max_lines;
-        if text.len() <= self.config.max_size && tient_en_lignes {
+        // A text whole is one chunk only under the bound of a whole chunk too.
+        let tient_en_octets = text.len() <= self.config.max_size.min(self.config.max_chunk_size.unwrap_or(usize::MAX));
+        if tient_en_octets && tient_en_lignes {
             let trimmed = text.trim();
             if trimmed.is_empty() {
                 return vec![];
@@ -165,7 +172,11 @@ impl Chunker {
 
         // Phase 1 : les cœurs, en lignes. A line longer than `max_size` is cut in place: its cores are byte
         // ranges inside it (`in_one_line`), and they take no context.
-        let max_size = self.config.max_size.max(1);
+        // **The bound of a whole chunk** (ticket of embarquement, 20 November 2026): the core keeps under it, and so do
+        // its context and a merged tail below. Without it, `max_size` bounds the core and each side of the context.
+        let borne = self.config.max_chunk_size.unwrap_or(usize::MAX).max(1);
+        let cote_max = self.config.max_size.max(1);
+        let max_size = cote_max.min(borne);
         // (first line, last line excluded, byte range of the core, inside one long line)
         let mut cores: Vec<(usize, usize, usize, usize, bool)> = Vec::new();
         let mut l = 0;
@@ -194,7 +205,8 @@ impl Chunker {
         if cores.len() >= 2 {
             let (d, f, _, last_byte, in_one_line) = cores[cores.len() - 1];
             let previous_in_one_line = cores[cores.len() - 2].4;
-            if !in_one_line && !previous_in_one_line && last_byte - debuts[d] < 50 {
+            let merged_start = debuts[cores[cores.len() - 2].0];
+            if !in_one_line && !previous_in_one_line && last_byte - debuts[d] < 50 && last_byte - merged_start <= borne {
                 cores.pop();
                 let last = cores.last_mut().expect("au moins un cœur");
                 last.1 = f;
@@ -208,13 +220,29 @@ impl Chunker {
             let (start_byte, end_byte) = if in_one_line {
                 (core_start, core_end)
             } else {
-                let mut start_line = d;
-                while start_line > d.saturating_sub(self.config.overlap_lines) && debuts[d] - debuts[start_line - 1] <= max_size {
-                    start_line -= 1;
-                }
-                let mut end_line = f;
-                while end_line < (f + self.config.overlap_lines).min(n) && fin_de(end_line) - fin_de(f - 1) <= max_size {
-                    end_line += 1;
+                // A line of context at a time, before then after, while each side keeps under `max_size` and the
+                // whole chunk under its bound: the context gives way first, the core never does.
+                let (premiere, derniere) = (d.saturating_sub(self.config.overlap_lines), (f + self.config.overlap_lines).min(n));
+                let (mut start_line, mut end_line) = (d, f);
+                loop {
+                    let mut grew = false;
+                    if start_line > premiere
+                        && debuts[d] - debuts[start_line - 1] <= cote_max
+                        && fin_de(end_line - 1) - debuts[start_line - 1] <= borne
+                    {
+                        start_line -= 1;
+                        grew = true;
+                    }
+                    if end_line < derniere
+                        && fin_de(end_line) - fin_de(f - 1) <= cote_max
+                        && fin_de(end_line) - debuts[start_line] <= borne
+                    {
+                        end_line += 1;
+                        grew = true;
+                    }
+                    if !grew {
+                        break;
+                    }
                 }
                 (debuts[start_line], fin_de(end_line - 1))
             };
@@ -375,7 +403,51 @@ mod tests {
     use super::*;
 
     fn par_lignes(max_lines: usize, max_size: usize, overlap_lines: usize) -> Chunker {
-        Chunker::new(ChunkerConfig { strategy: ChunkStrategy::Lines, max_lines, max_size, overlap_lines, overlap: 0 })
+        Chunker::new(ChunkerConfig { strategy: ChunkStrategy::Lines, max_lines, max_size, overlap_lines, overlap: 0, max_chunk_size: None })
+    }
+
+    /// **A whole chunk keeps under its bound, context and merged tail included** (ticket of embarquement, 20 November
+    /// 2026: 72,5 % of rag3weaver's chunks passed granite's window, because the bound held the core and each side of
+    /// the context, never the whole). Long lines, a context of five lines on each side, and a short last core that
+    /// the chunker merges with the previous one.
+    #[test]
+    fn a_whole_chunk_keeps_under_its_bound() {
+        let ligne = |i: usize| format!("    let value_{i:03} = compute_something_long(argument_{i}, other_{i});");
+        let mut texte = (0..120).map(ligne).collect::<Vec<_>>().join("\n");
+        texte.push_str("\n}");
+        let borne = 900;
+        let c = Chunker::new(ChunkerConfig {
+            strategy: ChunkStrategy::Lines,
+            max_lines: 30,
+            max_size: 1500,
+            overlap_lines: 5,
+            overlap: 0,
+            max_chunk_size: Some(borne),
+        })
+        .chunk(&texte);
+        assert!(c.len() > 1, "the text is cut");
+        let trop: Vec<(usize, usize)> = c.iter().filter(|k| k.text.len() > borne).map(|k| (k.index, k.text.len())).collect();
+        assert!(trop.is_empty(), "chunks over the bound of {borne} bytes (index, length): {trop:?}");
+        // Every line is in a core: the bound cuts the context first, never a line out of the index.
+        let mut couvert = 0;
+        for k in &c {
+            assert_eq!(k.core_start_byte, couvert, "the cores follow each other");
+            couvert = k.core_end_byte;
+        }
+        assert!(couvert >= texte.trim_end().len(), "the cores cover the text");
+        // A text that fits `max_size` but not the bound is cut too, not kept whole.
+        let court: String = (0..14).map(ligne).collect::<Vec<_>>().join("\n");
+        assert!(court.len() > borne && court.len() < 1500);
+        let c = Chunker::new(ChunkerConfig {
+            strategy: ChunkStrategy::Lines,
+            max_lines: 30,
+            max_size: 1500,
+            overlap_lines: 5,
+            overlap: 0,
+            max_chunk_size: Some(borne),
+        })
+        .chunk(&court);
+        assert!(c.iter().all(|k| k.text.len() <= borne), "a short text over the bound: {:?}", c.iter().map(|k| k.text.len()).collect::<Vec<_>>());
     }
 
     /// **Un texte qui tient est un seul chunk, tel quel.** Pas de
