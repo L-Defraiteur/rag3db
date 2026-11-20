@@ -1177,14 +1177,14 @@ impl<'a> OutilsDuChat<'a> {
         self
     }
 
-    /// Hors d'une tâche, chaque carte d'accord sous un appel se rattache à la conversation.
-    #[cfg(feature = "code")]
     /// Watch the index of an answer « not ready » (the IDE's chat; c7's night task, 20 November 2026).
     pub(crate) fn avec_la_veille_de_l_index(mut self, veiller: impl Fn(&Value, Option<Value>) + Send + Sync + 'a) -> Self {
         self.pas_pret = Some(Box::new(veiller));
         self
     }
 
+    /// Hors d'une tâche, chaque carte d'accord sous un appel se rattache à la conversation.
+    #[cfg(feature = "code")]
     pub(crate) fn avec_les_cartes_rattachees(mut self, rattacher: impl Fn(&str) + Send + Sync + 'a) -> Self {
         self.rattacher = Some(Box::new(rattacher));
         self
