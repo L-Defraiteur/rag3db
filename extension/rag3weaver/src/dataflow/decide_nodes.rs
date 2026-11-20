@@ -620,7 +620,20 @@ impl Node for DecideNode {
 impl DecideNode {
     /// Un élément étiqueté.
     fn label(&self, ctx: &mut NodeContext, element: Value, decider: Option<&dyn Decider>, llm: Option<&dyn Llm>) -> Result<Value, String> {
-        let text = self.text_of(&element);
+        // A field of context parts (lot B4) renders as sections, as LlmNode renders its context.
+        let parts = match &self.field {
+            Some(f) => element.get(f).filter(|v| crate::dataflow::llm_nodes::is_parts(v)).cloned(),
+            None => None,
+        };
+        let text = match parts {
+            Some(serde_json::Value::Array(p)) => {
+                let presentations = ctx
+                    .service::<std::collections::HashMap<String, serde_json::Value>>(crate::dataflow::llm_nodes::PRESENTATIONS_SERVICE)
+                    .cloned();
+                crate::dataflow::llm_nodes::render_parts(&p, presentations.as_ref())?
+            }
+            _ => self.text_of(&element),
+        };
         let labels = self.labels_for(&element)?;
         let (label, probability, name, about, usage) = match (self.via, decider, llm) {
             (Via::Auto | Via::Decider, Some(d), _) => {

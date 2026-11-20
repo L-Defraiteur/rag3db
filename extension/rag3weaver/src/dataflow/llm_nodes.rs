@@ -389,7 +389,7 @@ fn render_lines(v: &serde_json::Value, bold: bool) -> String {
 /// per element; any other form, a blank line between elements).
 fn render_one(
     v: &serde_json::Value,
-    format: Option<&str>,
+    format: Option<&serde_json::Value>,
     presentations: Option<&std::collections::HashMap<String, serde_json::Value>>,
 ) -> Result<(String, bool), String> {
     let (entity, content) = match typed(v) {
@@ -399,10 +399,13 @@ fn render_one(
     if let serde_json::Value::String(s) = content {
         return Ok((s.clone(), true));
     }
+    // The part's format (a form name, or {template} / {form} — lot B4), else the type's presentation.
     let declared = match format {
+        Some(f @ serde_json::Value::Object(_)) => Some(f),
         Some(_) => None,
         None => entity.and_then(|e| presentations.and_then(|p| p.get(e))),
     };
+    let format = format.and_then(serde_json::Value::as_str);
     if let Some(t) = declared.and_then(|p| p.get("template")).and_then(serde_json::Value::as_str) {
         let text = minijinja::Environment::new()
             .render_str(t, content)
@@ -424,13 +427,14 @@ fn render_one(
 /// them otherwise); anything else by [`render_one`].
 fn render_value(
     v: &serde_json::Value,
-    format: Option<&str>,
+    format: Option<&serde_json::Value>,
     presentations: Option<&std::collections::HashMap<String, serde_json::Value>>,
 ) -> Result<String, String> {
     match v {
         serde_json::Value::Array(a) => {
             let rendered = a.iter().map(|x| render_one(x, format, presentations)).collect::<Result<Vec<_>, _>>()?;
-            let sep = if rendered.iter().all(|(_, line)| *line) { "\n" } else { "\n\n" };
+            // One line per element when each rendering holds on one line (lot B4), a blank line between them otherwise.
+            let sep = if rendered.iter().all(|(t, _)| !t.contains('\n')) { "\n" } else { "\n\n" };
             Ok(rendered.into_iter().map(|(t, _)| t).collect::<Vec<_>>().join(sep))
         }
         other => render_one(other, format, presentations).map(|(t, _)| t),
@@ -455,7 +459,10 @@ fn render_part(
     if crate::dataflow::collect_node::is_empty(value) {
         return Ok(None);
     }
-    let format = o.get("format").and_then(serde_json::Value::as_str);
+    let format = o.get("format").filter(|f| !f.is_null());
+    if let Some(f) = format.filter(|f| f.is_object()) {
+        check_presentation(f).map_err(|e| format!("LlmNode: the context part « {name} »: format: {e}"))?;
+    }
     let mut text = render_value(value, format, presentations).map_err(|e| format!("{e} (context part « {name} »)"))?;
     if let Some(max) = o.get("max_tokens").filter(|v| !v.is_null()) {
         let max = max.as_u64().filter(|m| *m > 0).ok_or_else(|| format!("LlmNode: the context part « {name} »: max_tokens is a positive integer"))? as usize;
@@ -467,6 +474,26 @@ fn render_part(
         }
     }
     Ok(Some(format!("## {title}\n\n{text}")))
+}
+
+/// **A list of context parts rendered as sections** (lot B4): what LlmNode renders after its instruction, shared with
+/// Decide when the field it reads is a list of parts.
+pub(crate) fn render_parts(
+    parts: &[serde_json::Value],
+    presentations: Option<&std::collections::HashMap<String, serde_json::Value>>,
+) -> Result<String, String> {
+    let mut sections = Vec::new();
+    for part in parts {
+        if let Some(s) = render_part(part, presentations)? {
+            sections.push(s);
+        }
+    }
+    Ok(sections.join("\n\n"))
+}
+
+/// A list of objects each with a `title`: a list of context parts.
+pub(crate) fn is_parts(v: &serde_json::Value) -> bool {
+    v.as_array().is_some_and(|a| !a.is_empty() && a.iter().all(|p| p.get("title").is_some_and(serde_json::Value::is_string)))
 }
 
 pub struct LlmNodeFactory;
