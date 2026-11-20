@@ -57,10 +57,25 @@ pub fn over(e: Estimate, bounds: Bounds) -> Option<String> {
 /// **The free memory a batch may draw on** (20 November 2026) : on an integrated adapter
 /// (an APU), the VRAM is only a carve-out (4 GiB on the tablet's, 3 taken) and the
 /// computations live in the GTT (112 GiB) : both count ; on a discrete card, the VRAM only.
-/// Stub : the VRAM only.
 pub fn free_memory_of(pci_bus_id: &str, drm: &std::path::Path, integrated: bool) -> Option<u64> {
-    let _ = integrated;
-    free_memory(pci_bus_id, drm)
+    let vram = free_memory(pci_bus_id, drm)?;
+    if !integrated {
+        return Some(vram);
+    }
+    let gtt = card_device(pci_bus_id, drm).and_then(|device| {
+        let read = |name: &str| std::fs::read_to_string(device.join(name)).ok()?.trim().parse::<u64>().ok();
+        Some(read("mem_info_gtt_total")?.saturating_sub(read("mem_info_gtt_used")?))
+    });
+    Some(vram + gtt.unwrap_or(0))
+}
+
+/// The `device` folder of the card at this PCI address, under a drm tree.
+fn card_device(pci_bus_id: &str, drm: &std::path::Path) -> Option<std::path::PathBuf> {
+    let wanted = pci_bus_id.trim().to_ascii_lowercase();
+    std::fs::read_dir(drm).ok()?.flatten().map(|e| e.path().join("device")).find(|device| {
+        std::fs::read_to_string(device.join("uevent")).unwrap_or_default().lines()
+            .find_map(|l| l.strip_prefix("PCI_SLOT_NAME=")).is_some_and(|s| s.to_ascii_lowercase() == wanted)
+    })
 }
 
 /// **The free memory of the card at this PCI address** : `mem_info_vram_total −
