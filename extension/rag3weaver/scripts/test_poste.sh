@@ -386,12 +386,12 @@ cas $? "une baisse des places sans heure de retour refuse, lourds-max inchangé 
 h=$(date -d '+2 hours' +%H:%M)
 "$POSTE" places 1 "jusqu'à" "$h" > /dev/null 2>&1; rc=$?
 qui=$("$POSTE" --qui 2>&1)
-[ "$rc" = 0 ] && [ "$(cat "$POSTE_LOCK_DIR/lourds-max")" = 1 ] && echo "$qui" | grep -q "places baissées à 1 jusqu'à $h" && echo "$qui" | grep -q '/1 places'
+[ "$rc" = 0 ] && [ "$(cat "$POSTE_LOCK_DIR/lourds-max")" = 1 ] && echo "$qui" | grep -q "places réglées à 1 jusqu'au $(date -d "$h" +%d/%m) $h (puis 2)" && echo "$qui" | grep -q '/1 places'
 cas $? "poste places 1 jusqu'à $h baisse à 1, et --qui le dit (rc $rc)"
 # L'heure passée : la valeur d'avant revient à la première lecture.
 read -r avant _ < "$POSTE_LOCK_DIR/lourds-max.retour"; echo "$avant $(( $(date +%s) - 60 ))" > "$POSTE_LOCK_DIR/lourds-max.retour"
 qui=$("$POSTE" --qui 2>&1)
-[ "$(cat "$POSTE_LOCK_DIR/lourds-max")" = 2 ] && [ ! -e "$POSTE_LOCK_DIR/lourds-max.retour" ] && ! echo "$qui" | grep -q 'baissées' && echo "$qui" | grep -q '/2 places'
+[ "$(cat "$POSTE_LOCK_DIR/lourds-max")" = 2 ] && [ ! -e "$POSTE_LOCK_DIR/lourds-max.retour" ] && ! echo "$qui" | grep -q 'réglées' && echo "$qui" | grep -q '/2 places'
 cas $? "passé l'heure, les places reviennent à la valeur d'avant (2) et --qui ne dit plus de baisse"
 rm -f "$POSTE_LOCK_DIR/lourds-max" "$POSTE_LOCK_DIR/lourds-max.retour"
 
@@ -408,5 +408,21 @@ mesure=$("$POSTE" mesure bash -c 'echo "${RAG3WEAVER_EMBEDDER_ALLOW_INTEGRATED_G
 rm -f "$POSTE_LOCK_DIR/embedder-allow-integrated-gpu"
 [ "$sans" = absent ] && [ "$lourd" = 1 ] && [ "$mesure" = 1 ]
 cas $? "le fichier embedder-allow-integrated-gpu autorise l'iGPU sous poste lourd et mesure, et seulement lui (sans : $sans, lourd : $lourd, mesure : $mesure)"
+
+# ── 48. Une hausse datée des places (20 novembre 2026, c7 et Lucie : la tablette à trois lourds jusqu'au lundi 8 h, le
+# retour posé à la main faute d'outil, et --qui disait « baissées ») : `poste places 3 jusqu'à <date HH:MM>` monte, la
+# valeur d'avant revient passé l'heure, et --qui dit « réglées à N jusqu'au jj/mm HH:MM (puis M) ». Une hausse sans heure
+# reste permanente.
+echo 2 > "$POSTE_LOCK_DIR/lourds-max"; rm -f "$POSTE_LOCK_DIR/lourds-max.retour"
+quand=$(date -d '+3 days' '+%Y-%m-%d 08:00')
+"$POSTE" places 3 "jusqu'à" "$quand" > /dev/null 2>&1; rc=$?
+qui=$("$POSTE" --qui 2>&1)
+[ "$rc" = 0 ] && [ "$(cat "$POSTE_LOCK_DIR/lourds-max")" = 3 ] && [ -s "$POSTE_LOCK_DIR/lourds-max.retour" ] \
+  && echo "$qui" | grep -q "places réglées à 3 jusqu'au $(date -d "$quand" '+%d/%m %H:%M') (puis 2)"
+cas $? "poste places 3 jusqu'à $quand monte à 3 jusqu'à la date, et --qui le dit (rc $rc ; $(echo "$qui" | grep -m1 'places' ))"
+"$POSTE" places 4 > /dev/null 2>&1; rc=$?
+[ "$rc" = 0 ] && [ "$(cat "$POSTE_LOCK_DIR/lourds-max")" = 4 ] && [ ! -e "$POSTE_LOCK_DIR/lourds-max.retour" ]
+cas $? "une hausse sans heure reste permanente et efface un retour en cours (rc $rc)"
+rm -f "$POSTE_LOCK_DIR/lourds-max" "$POSTE_LOCK_DIR/lourds-max.retour"
 
 exit $echec
