@@ -562,6 +562,12 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
       }
       else if (ev.kind === "ToolCallStarted") {
         setStatus(String(ev.tool));
+        // **A detached window of the graph follows the tools of the turn** (the IDE in several windows, slice 4): the
+        // graph of the tool called, which the stream lights up — under `graphe:<backend>`, so that the window of the
+        // repository does not follow the tools.
+        if (fenetres().some((f) => f.role === "graphe" && f.backend === id)) {
+          etatPartage.ecrire(`graphe:${id}`, { href: `/ide/code/${id}/dag/tool/${encodeURIComponent(String(ev.tool))}`, at: Date.now() });
+        }
         live((m) => ({ ...m, parts: [...m.parts, { kind: "tool", id: String(ev.call_id), name: String(ev.tool), args: String(ev.arguments ?? ""), at: d.at_ms }] }));
       } else if (ev.kind === "ToolCallFinished") {
         const ok = ev.ok !== false;

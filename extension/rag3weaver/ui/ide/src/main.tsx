@@ -54,16 +54,19 @@ function App() {
   // **A detached window of the repository follows the selection** (slice 2): the one of its backend that had the
   // focus last opens what the chat cites, and stays a window of the repository. A selection older than the window
   // (received whole when it opens) is not followed.
+  // Slice 4: the window of the graph follows the tools of the turn, under its own key (`graphe:<backend>`).
   useEffect(() => {
     const id = route().id;
-    if (roleDeLaFenetre() !== "depot" || !id) return;
+    const role = roleDeLaFenetre();
+    const cle = role === "depot" ? "selection" : role === "graphe" ? "graphe" : null;
+    if (!role || !cle || !id) return;
     const ouverte = Date.now();
-    return etatPartage.suivre(`selection:${id}`, (v) => {
+    return etatPartage.suivre(`${cle}:${id}`, (v) => {
       const s = v as { href?: string; at?: number } | undefined;
-      if (!s?.href || (s.at ?? 0) < ouverte || !jeSuisLaFenetre("depot", id)) return;
+      if (!s?.href || (s.at ?? 0) < ouverte || !jeSuisLaFenetre(role, id)) return;
       // By `URL` (ED's review): a cited address with its own query keeps it, and the window its role; the hash follows.
       const u = new URL(s.href, location.origin);
-      u.searchParams.set("fenetre", "depot");
+      u.searchParams.set("fenetre", role);
       // Slice 3: an internal navigation — the page is not reloaded, it keeps its link to the worker, and the view
       // renders again from the new address.
       history.pushState(null, "", u.toString());
