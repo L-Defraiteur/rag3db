@@ -766,4 +766,24 @@ l=$(grep -P '\tsj-b\tcréneau 2 ' "$D/pusher/log.tsv" | tail -1 | cut -f3,4)
 on_master sj-a && grep -q "^sj-b	" "$D/pusher/queue.tsv" && [[ "$l" == "créneau 2 jeté"*environnement* ]] \
   && ok "créneau 2 sans verdict sur son lot (rouge d'environnement) : « jeté », avec sa raison" || ko "créneau 2 d'environnement écrit « $l »"
 P dequeue sj-b > /dev/null 2>&1
+# 50. The tickets' headers on every path (21 Nov., c7: garde-repousse-docs landed through slot 2 with a ticket in closed/
+# whose État said « ouvert », and master went red at check_tickets): a lot judged in slot 2, and a Rust lot in A, are
+# gated like a docs train in A — returned with the ticket's name, master untouched.
+h1=$(lot tp-a extension/rag3weaver/src/tpa.rs 'fn tpa() {}')
+git -C "$D/author" fetch -q origin && git -C "$D/author" checkout -q -B tp-b origin/master
+tk quatre ouvert > "$D/author/docs/tickets/closed/quatre.md"; printf '#!/bin/bash\necho ok\n' > "$D/author/tools/poste/foo.sh"
+git -C "$D/author" add -A && git -C "$D/author" commit -qm tp-b && git -C "$D/author" push -q origin HEAD:tp-b; h2=$(git -C "$D/author" rev-parse HEAD)
+P enqueue tp-a tp-a "$h1" rust some_witness e2e_code - - author-c > /dev/null; P enqueue tp-b tp-b "$h2" scripts - - - - author-c > /dev/null
+echo VERT > "$D/outcomes.d/tp-a"
+PUSHER_SLOTS=2 PUSHER_TRAIN_MAX=1 PUSHER_WT2_NAME=wt2 P step > /dev/null 2>&1
+( cd "$D/author" && git fetch -q origin && git checkout -q --detach origin/master && python3 extension/rag3weaver/scripts/check_tickets.py . > /dev/null 2>&1 ); mr=$?
+on_master tp-a && ! on_master tp-b && [ "$mr" = 0 ] && grep -P '\ttp-b\t' "$D/pusher/log.tsv" | grep -q 'quatre' \
+  && ok "créneau 2 : un ticket mal rangé rend le lot (nommé), master reste vert à check_tickets" \
+  || ko "créneau 2 et ticket mal rangé : master $([ "$mr" = 0 ] && echo vert || echo ROUGE), tp-b $(on_master tp-b && echo poussé || echo gardé) ; $(grep -P '\ttp-b\t' "$D/pusher/log.tsv" | tail -1 | cut -f3,4 | cut -c1-120)"
+P dequeue tp-b > /dev/null 2>&1
+h=$(lot tp-r extension/rag3weaver/src/tpr.rs 'fn tpr() {}'); git -C "$D/author" checkout -q tp-r && tk cinq ouvert > "$D/author/docs/tickets/closed/cinq.md" && git -C "$D/author" add -A && git -C "$D/author" commit -qm "tp-r ticket" && git -C "$D/author" push -q origin HEAD:tp-r; h=$(git -C "$D/author" rev-parse HEAD)
+P enqueue tp-r tp-r "$h" rust some_witness e2e_code - - author-c > /dev/null; echo VERT > "$D/outcomes.d/tp-r"
+PUSHER_TRAIN_MAX=1 P step > /dev/null 2>&1
+! on_master tp-r && grep -q "^rouge	tp-r	.*check_tickets" "$D/pusher/inbox/author-c.txt" && ok "un lot rust au ticket mal rangé : rendu par la garde des tickets, avant sa passe" || ko "lot rust au ticket mal rangé : $(on_master tp-r && echo poussé || echo gardé)"
+P dequeue tp-r > /dev/null 2>&1
 exit $red
