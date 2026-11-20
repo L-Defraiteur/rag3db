@@ -84,6 +84,7 @@ struct LowerGraphReach {
     int64_t entries = 0;               // entrées possibles de la couche basse
     int64_t unreachable = 0;           // reliées, injoignables depuis toute entrée
     int64_t unreachableFromEntry = 0;  // depuis le seul point d'entrée de la couche basse
+    std::vector<int64_t> lost;         // les premiers décalages injoignables (au plus 20)
     std::string error;
 };
 LowerGraphReach lowerGraphReach(rag3db::main::Connection& connection, const std::string& table,
@@ -1403,6 +1404,9 @@ LowerGraphReach lowerGraphReach(rag3db::main::Connection& connection, const std:
     for (const auto node : linked) {
         reach.unreachable += !fromEvery[node];
         reach.unreachableFromEntry += !fromEntry[node];
+        if (!fromEvery[node] && reach.lost.size() < 20) {
+            reach.lost.push_back(node);
+        }
     }
     return reach;
 }
@@ -3009,11 +3013,18 @@ TEST_F(VectorIndexBridgeMeasure, RealVectorsUpdatedAndDeleted) {
         mustRun(stringFormat("COPY {} FROM '{}' (header=false);", table, csv));
         mustRun(stringFormat(
             "CALL CREATE_VECTOR_INDEX('{}', 'doc_index', 'vec', metric := 'cosine');", table));
+        const auto stage = [&](const std::string& name) {
+            const auto reach = lowerGraphReach(*conn, table, "doc_index", "vec");
+            std::cerr << "  [pont] run " << run << ", after " << name << " : " << reach.linked
+                      << " linked, " << reach.unreachable << " unreachable from every entry\n";
+        };
+        stage("the create");
         for (int64_t low = 0; low < updated; low += 512) {
             mustRun(stringFormat("MATCH (n:{}) WHERE n.id >= {} AND n.id < {} SET n.vec = "
                                  "CAST(list_reverse(n.vec) AS FLOAT[{}]);",
                 table, low, std::min(updated, low + 512), dimension));
         }
+        stage("the updates");
         mustRun(stringFormat("MATCH (n:{}) WHERE n.id >= {} AND n.id < {} AND n.id % 7 = 0 DELETE n;",
             table, updated, 2 * updated));
         if (HasFatalFailure()) {
@@ -3026,6 +3037,30 @@ TEST_F(VectorIndexBridgeMeasure, RealVectorsUpdatedAndDeleted) {
             run, total, updated, reach.linked, reach.edges, reach.entries, reach.unreachable,
             reach.unreachableFromEntry, reach.error.empty() ? "" : " ; " + reach.error);
         std::cerr << "  [pont] " << line << "\n";
+        // Each lost row, searched by its own vector with a wide efs: found, the walk was wrong.
+        for (const auto offset : reach.lost) {
+            auto row = conn->query(stringFormat(
+                "MATCH (n:{}) WHERE offset(ID(n)) = {} RETURN n.id, n.vec;", table, offset));
+            if (!row->isSuccess() || !row->hasNext()) {
+                std::cerr << "    offset " << offset << " : not read\n";
+                continue;
+            }
+            auto tuple = row->getNext();
+            const auto id = tuple->getValue(0)->getValue<int64_t>();
+            const auto vector = tuple->getValue(1)->toString();
+            auto own = conn->query(stringFormat("CALL QUERY_VECTOR_INDEX('{}', 'doc_index', {}, 10, "
+                                                "efs := 10000) RETURN node.id ORDER BY distance;",
+                table, vector));
+            auto found = false;
+            while (own->isSuccess() && own->hasNext()) {
+                found |= own->getNext()->getValue(0)->getValue<int64_t>() == id;
+            }
+            std::cerr << "    offset " << offset << ", id " << id
+                      << (id < updated ? " (updated)" : "")
+                      << (found ? " : FOUND by its own vector at efs 10000"
+                                : " : not found by its own vector at efs 10000")
+                      << "\n";
+        }
         if (!reach.error.empty() || reach.unreachable != 0) {
             cut++;
             details += "\n  " + line;
