@@ -739,4 +739,20 @@ echo FUITE > "$D/outcomes.d/rc-b"
 PUSHER_TRAIN_MAX=1 P step > /dev/null 2>&1
 ! on_master rc-b && grep -q "^rouge	rc-b	" "$D/pusher/inbox/author-c.txt" && ! grep -qP '\trc-b\tcourse du confineur' "$D/pusher/log.tsv" && ok "un descendant vraiment laissé reste un rouge rendu" || ko "fuite du confineur : pas rendue, ou prise pour une course"
 P dequeue rc-b > /dev/null 2>&1
+# 49. A cache copy recopied from slot 2 is judged by its witness in a clean environment (20 Nov., garde-repousse-docs:
+# spec_settle exports PILE_AVANT for the train's guard, the recopy inherited it, test_push_garde.sh saw every case in
+# pile mode on a foreign commit, and the pusher paused at 23:15). Here B changes foo.sh and its witness, which refuses an
+# inherited PILE_AVANT, and lands through slot 2: the copy is recopied, nothing paused.
+h1=$(lot rp-a extension/rag3weaver/src/rpa.rs 'fn rpa() {}')
+git -C "$D/author" fetch -q origin && git -C "$D/author" checkout -q -B rp-b origin/master
+printf '#!/bin/bash\necho ok, rp\n' > "$D/author/tools/poste/foo.sh"
+printf '#!/bin/bash\n[ -z "${PILE_AVANT:-}" ] || { echo "PILE_AVANT hérité : $PILE_AVANT"; exit 1; }\ngrep -q "echo ok" "${1:-$(dirname "$0")/foo.sh}"\n' > "$D/author/tools/poste/test_foo.sh"
+git -C "$D/author" add -A && git -C "$D/author" commit -qm rp-b && git -C "$D/author" push -q origin HEAD:rp-b; h2=$(git -C "$D/author" rev-parse HEAD)
+P enqueue rp-a rp-a "$h1" rust some_witness e2e_code - - author-c > /dev/null; P enqueue rp-b rp-b "$h2" scripts - - - - author-c > /dev/null
+echo VERT > "$D/outcomes.d/rp-a"
+PUSHER_SLOTS=2 PUSHER_TRAIN_MAX=1 PUSHER_WT2_NAME=wt2 P step > /dev/null 2>&1
+on_master rp-b && grep -q 'echo ok, rp' "$D/cache/foo.sh" && [ ! -e "$D/pusher/paused" ] \
+  && ok "une copie recopiée depuis le créneau 2 : son témoin joué sans PILE_AVANT hérité" \
+  || ko "recopie depuis le créneau 2 : $(grep -P '\trp-b\t' "$D/pusher/log.tsv" | tail -1 | cut -f3,4) ; $(cat "$D/pusher/paused" 2>/dev/null)"
+rm -f "$D/pusher/paused"
 exit $red
