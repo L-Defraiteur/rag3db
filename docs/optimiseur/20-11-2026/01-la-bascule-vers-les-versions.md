@@ -119,10 +119,10 @@ même scope.
   du portable était déjà à jour, d'où 98,8 % d'un côté et 88 % de l'autre avec le même binaire.
 - **Ce qui n'est pas voulu** : qu'un scope `variable` de 18 caractères concoure à la recherche et l'emporte.
   **La leçon** (dite à codeparsers) : un lot qui change l'analyse monte REGLES_DE_L_ANALYSE dans le même lot.
-  **Décision de c7** : le remède, variable-not-candidate, revient à codeparsers, qui l'avait commencé (seuil de 80
-  caractères prouvé sur la copie), et ED le relit. `not_candidate` est étendu au scope
-  `variable` dont le contenu propre est sous `container_min_chars`. Un tel scope reste dans le graphe et dans `usages`,
-  mais ne concourt plus à la recherche.
+  **Décision de c7** (9 h 02, définitive) : le remède, variable-not-candidate, revient à ED, et codeparsers relit le
+  diff. Sa forme : un scope `variable` dont le contenu propre est sous 80 caractères perd ses morceaux, donc sa
+  candidature vectorielle, mais garde son plein texte. Le seuil de 80 est prouvé sur la copie migrée, avec les
+  premiers résultats exacts sur des constantes courtes. Le scope reste dans le graphe et dans `usages`.
   Ce lot est l'enfant de package-name-root (règles 12), et les morceaux d'ED suivent en règles 13. Le banc juge le
   remède sur la copie migrée et son hôte isolé, avant l'atterrissage. La re-bascule de code-lourd et code-principal se
   fera à la fenêtre suivante, sur une répétition qui porte le remède.
