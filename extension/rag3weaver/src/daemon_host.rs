@@ -734,6 +734,7 @@ impl DaemonHost {
             // active. A layer that cannot be written leaves the worktree opened, and the answer says why.
             let reel = chemin.canonicalize().unwrap_or_else(|_| chemin.clone());
             let couche = format!("worktree:{}", reel.display());
+            #[cfg(feature = "code")]
             let indexee = self.with_backend(&hosted, |b| -> Result<(), String> {
                 let prepared = b.prepared();
                 let racine = prepared.workspace_root().ok_or("pas de racine de travail")?;
@@ -744,6 +745,9 @@ impl DaemonHost {
                 crate::history_layers::write_fork_work_generation(&mut cat, &reel, &id, &repo, &base_commit)?;
                 Ok(())
             })?;
+            // Without the code feature, no layer of code: the worktree is opened all the same.
+            #[cfg(not(feature = "code"))]
+            let indexee: Result<(), String> = Err(format!("la couche de travail de {} demande la feature « code » de rag3weaver", reel.display()));
             let mut ouverte = json!({ "name": nom, "path": chemin, "branch": branche, "target": target, "from": base, "fork": base_commit });
             match &indexee {
                 Ok(()) => ouverte["layer"] = json!(couche),
