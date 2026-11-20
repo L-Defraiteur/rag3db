@@ -835,6 +835,67 @@ mod tests {
         assert_eq!(lu.rows[0][0].as_i64(), Some(1), "the fork is written more than once for two worktrees");
     }
 
+    /// **La sonde de l'écriture en couche** (c7, 20 novembre 2026, pour ED ; à jouer sur un reflink, jamais sur une base
+    /// vivante). Les fichiers qui diffèrent entre l'arbre indexé de `RAG3WEAVER_SONDE_BASE` et la tête du worktree
+    /// `RAG3WEAVER_SONDE_LOT` (détaché sur `origin/master`), écrits selon `RAG3WEAVER_SONDE_MODE` : `couche` (une fourche,
+    /// `write_fork_work_generation`) ou `ordinaire` (`reingest_files` sur le backend, sans couche). Une ligne
+    /// `SONDE_ECRITURE` : la durée, le nombre de fichiers, les étapes les plus lourdes (`ingest_profile::record`).
+    #[test]
+    #[ignore]
+    fn sonde_ecriture_en_couche() {
+        let var = |n: &str| std::env::var(n).unwrap_or_else(|_| panic!("{n} est requis"));
+        let (chemin, lot, mode) = (var("RAG3WEAVER_SONDE_BASE"), std::path::PathBuf::from(var("RAG3WEAVER_SONDE_LOT")), var("RAG3WEAVER_SONDE_MODE"));
+        let conn = crate::Rag3dbConnection::new(&chemin).expect("la base de la sonde");
+        let ext = crate::backend::vector_extension_of_this_process().expect("l'extension vector de ce processus");
+        crate::connection::DbConnection::execute(&conn, &format!("LOAD EXTENSION '{}'", ext.display())).expect("charger l'extension vecteur");
+        let mut cat = Catalog::new(Box::new(conn), Box::new(crate::embedder::HashEmbedder::new(768)), crate::CatalogConfig {
+            allow_mock_embedder: true,
+            embedding_dim: 768,
+            ..Default::default()
+        });
+        cat.initialize().unwrap();
+        crate::code::register_code_schema(&mut cat, crate::code::default_scope_chunking()).unwrap();
+        let cell = cat.scope().clone();
+        let court = cat.indexed_tree(&cell).and_then(|v| v.get("commit").and_then(|c| c.as_str()).map(str::to_string)).expect("l'arbre indexé");
+        let racine = git(&lot, &["rev-parse", &court]);
+        let n = cat.rang_publie().expect("une base à générations");
+        cat.execute_raw_with_params(
+            &format!("MATCH (g:{}) WHERE g.couche = 'backend' AND g.rang = $n SET g.commit = $c", crate::generations::TABLE),
+            &[QueryParam::new("n", CypherValue::Int(n)), QueryParam::new("c", CypherValue::String(racine.clone()))],
+        )
+        .unwrap();
+        let tete = git(&lot, &["rev-parse", "HEAD"]);
+        let fichiers: Vec<String> = git(&lot, &["diff", "--name-only", &racine, &tete]).lines().map(str::to_string).collect();
+        let debut = std::time::Instant::now();
+        let (r, etapes) = crate::ingest_profile::record(|| match mode.as_str() {
+            "couche" => {
+                let couche = format!("worktree:{}", lot.display());
+                write_fork_work_generation(&mut cat, &lot, &couche, "sonde", &tete).map(|_| ())
+            }
+            "ordinaire" => {
+                let source = GitCommitSource::new(&lot, &tete);
+                let mut lot_de_fichiers = Vec::new();
+                for p in &fichiers {
+                    lot_de_fichiers.push((p.clone(), source.read(p).unwrap()));
+                }
+                crate::code_sync::reingest_files(&mut cat, &source, &lot_de_fichiers, crate::disponibilite::Disponibilites::TOUT).map(|_| ())
+            }
+            autre => panic!("mode inconnu : {autre}"),
+        });
+        let ms = debut.elapsed().as_millis();
+        r.expect("l'écriture de la sonde");
+        let mut cumul: std::collections::BTreeMap<&str, (u128, u64)> = Default::default();
+        for (e, d) in etapes {
+            let c = cumul.entry(e).or_default();
+            c.0 += d.as_millis();
+            c.1 += 1;
+        }
+        let mut lourdes: Vec<_> = cumul.into_iter().collect();
+        lourdes.sort_by(|a, b| b.1 .0.cmp(&a.1 .0));
+        let lourdes: Vec<serde_json::Value> = lourdes.into_iter().take(15).map(|(e, (ms, fois))| serde_json::json!({"étape": e, "ms": ms, "fois": fois})).collect();
+        println!("SONDE_ECRITURE {}", serde_json::json!({"mode": mode, "ms": ms, "fichiers": fichiers.len(), "étapes": lourdes}));
+    }
+
     /// **Témoin 4 : the cap of the work layers.** Under `tracked.writes.max_work_layers: 2`, three worktrees: the
     /// first two are written, the third is refused naming the setting, and written again later neither; the two
     /// written ones are written again. The manifest accepts the key, and refuses an unknown one under `writes`.
