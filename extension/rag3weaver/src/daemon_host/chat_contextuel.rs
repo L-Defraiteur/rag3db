@@ -557,12 +557,14 @@ fn une_fenetre_qui_n_est_pas_le_chat_compte_les_accords_en_attente() {
             let depuis = turns.iter().rposition(|t| t.role == "user").unwrap();
             // A command only on a message the witness typed (« lance echo », « relance echo »): the turn relaunched by
             // a granted approval answers in words, and asks for nothing new.
-            let tape = turns[depuis].content.contains("echo");
+            // The host's relaunch says « commande accordée … : echo … »: only what starts as the witness typed counts.
+            let tape_ici = |c: &str| c.starts_with("lance echo") || c.starts_with("relance echo");
+            let tape = tape_ici(&turns[depuis].content);
             if !tape || turns[depuis..].iter().any(|t| t.role == "tool") {
                 MockLlm::new("J'attends ton accord.").generate(turns, opts, sink)
             } else {
                 // A command of its own at each typed message: the line granted at the first is not asked again later.
-                let n = turns.iter().filter(|t| t.role == "user" && t.content.contains("echo")).count();
+                let n = turns.iter().filter(|t| t.role == "user" && tape_ici(&t.content)).count();
                 MockLlm::new("").with_tool_calls(vec![("run_command".to_string(), json!({ "command": format!("echo accorde-moi-{n}") }).to_string())]).generate(turns, opts, sink)
             }
         })))
