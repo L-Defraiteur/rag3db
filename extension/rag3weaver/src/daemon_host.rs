@@ -1197,6 +1197,17 @@ impl DaemonHost {
                 }
                 None => PreparedBackend::load(&hosted.manifest)?,
             };
+            // **Une copie locale qui diffère du livré se dit au journal à l'ouverture** : elle est servie à la place
+            // du gabarit du binaire, et ne suit plus ses bâtis (le banc, 20 novembre 2026).
+            if !prepared.template_drift().is_empty() {
+                let noms: Vec<&str> = prepared.template_drift().iter().map(|d| d.builtin.as_str()).collect();
+                eprintln!(
+                    "[gabarits] {} : {} copie(s) locale(s) diffèrent du gabarit livré et sont servies à sa place : {}",
+                    hosted.id,
+                    noms.len(),
+                    noms.join(", ")
+                );
+            }
             // **Un écrivain autonome tient la base** : l'ouvrir attendrait le
             // verrou du moteur pour échouer ; le refus le nomme tout de suite,
             // et `/etat` le garde jusqu'à l'ouverture suivante.
@@ -1877,6 +1888,14 @@ impl DaemonHost {
 
     /// **L'état du démon** : ses backends (ouverts ou non, combien de fois)
     /// et ses sessions. C'est ce que l'outil « état du démon » dira.
+    /// **La version des gabarits servis et leur dérive**, par backend enregistré
+    /// ([`crate::builtin_templates::health`]) : les manifestes relus sur le disque, sans attendre aucun backend.
+    fn templates_health(&self) -> Value {
+        let manifestes: Vec<(String, PathBuf)> =
+            self.backends.lock().unwrap_or_else(|p| p.into_inner()).values().map(|h| (h.id.clone(), h.manifest.clone())).collect();
+        crate::builtin_templates::health(manifestes)
+    }
+
     pub fn state(&self) -> Value {
         self.reap_dead_sessions();
         let hotes: Vec<Arc<Hosted>> = self.backends.lock().unwrap_or_else(|p| p.into_inner()).values().cloned().collect();
@@ -2249,6 +2268,7 @@ impl DaemonHost {
                     "pid": std::process::id(),
                     "build": crate::daemon_lifecycle::build_id(),
                     "fils_du_moteur": fils_du_moteur(),
+                    "gabarits": self.templates_health(),
                 }),
             ),
             ("GET", "/etat") => {
@@ -3284,6 +3304,21 @@ mod tests {
             assert_eq!(statut, 422, "{mauvais} : {r}");
         }
         let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// **`/sante` gives the version of the templates served and their drift** (c7, 20 November 2026: Lucie's hosts
+    /// served the fusion of 11 October from copies nothing refreshed, and nothing said so). The embedded templates'
+    /// fingerprint, and per registered backend the local copies that differ from the shipped template, by name.
+    #[test]
+    fn health_gives_the_templates_version_and_their_drift() {
+        let host = DaemonHost::new();
+        let (statut, sante) = host.handle("GET", "/sante", None, &[]);
+        assert_eq!(statut, 200);
+        assert!(
+            sante["gabarits"]["livres"].as_str().is_some_and(|v| !v.is_empty()),
+            "the version of the shipped templates is not given: {sante}"
+        );
+        assert_eq!(sante["gabarits"]["derive"], json!([]), "no backend, no drift: {sante}");
     }
 
     #[test]
