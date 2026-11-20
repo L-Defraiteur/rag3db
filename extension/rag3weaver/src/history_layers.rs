@@ -835,6 +835,67 @@ mod tests {
         assert!(fins_dans_la_vue(&mut cat, crate::generations::COUCHE_DU_BACKEND, "h").is_empty(), "the backend's view reads the lot's h");
     }
 
+    /// **La sonde de `tracked: master`** (c7, 20 novembre 2026 ; à jouer sur un reflink, jamais sur une base vivante) :
+    /// sur la base `RAG3WEAVER_SONDE_BASE`, migrée et repassée, la couche `refs/heads/master` du dépôt
+    /// `RAG3WEAVER_SONDE_DEPOT` est écrite pour la première fois, à `origin/master`, sur la génération du backend
+    /// (l'arbre indexé) ; puis la couche de travail au point de fourche du worktree `RAG3WEAVER_SONDE_LOT`. Une ligne
+    /// `SONDE_TRACKED` par relevé : durée, lignes par table, fichiers de l'écart.
+    #[test]
+    #[ignore]
+    fn sonde_tracked_master() {
+        let var = |n: &str| std::env::var(n).unwrap_or_else(|_| panic!("{n} est requis"));
+        let (chemin, depot, lot) = (var("RAG3WEAVER_SONDE_BASE"), std::path::PathBuf::from(var("RAG3WEAVER_SONDE_DEPOT")), std::path::PathBuf::from(var("RAG3WEAVER_SONDE_LOT")));
+        let conn = crate::Rag3dbConnection::new(&chemin).expect("la base de la sonde");
+        let mut cat = Catalog::new(Box::new(conn), Box::new(crate::embedder::HashEmbedder::new(768)), crate::CatalogConfig {
+            allow_mock_embedder: true,
+            embedding_dim: 768,
+            ..Default::default()
+        });
+        cat.initialize().unwrap();
+        crate::code::register_code_schema(&mut cat, crate::code::default_scope_chunking()).unwrap();
+        let ligne = |quoi: &str, v: serde_json::Value| println!("SONDE_TRACKED {}", serde_json::json!({"relevé": quoi, "valeur": v}));
+        let tables = ["Scope", "File", "ScopeContent", "ScopeContent_Chunk", "Scope_Chunk", "File_Chunk", "Symbol"];
+        let comptes = |cat: &Catalog| -> serde_json::Value {
+            let mut m = serde_json::Map::new();
+            for t in tables {
+                if let Ok(lu) = cat.execute_raw(&format!("MATCH (s:`{t}`) RETURN count(s)")) {
+                    m.insert(t.into(), serde_json::json!(lu.rows[0][0].as_i64()));
+                }
+            }
+            serde_json::Value::Object(m)
+        };
+        let cell = cat.scope().clone();
+        let court = cat.indexed_tree(&cell).and_then(|v| v.get("commit").and_then(|c| c.as_str()).map(str::to_string)).expect("l'arbre indexé");
+        let base = git(&depot, &["rev-parse", &court]);
+        let n = cat.rang_publie().expect("une base à générations");
+        cat.execute_raw_with_params(
+            &format!("MATCH (g:{}) WHERE g.couche = 'backend' AND g.rang = $n SET g.commit = $c", crate::generations::TABLE),
+            &[QueryParam::new("n", CypherValue::Int(n)), QueryParam::new("c", CypherValue::String(base.clone()))],
+        )
+        .unwrap();
+        let pointe = git(&depot, &["rev-parse", "origin/master"]);
+        let ecart_master = git(&depot, &["diff", "--name-only", &base, &pointe]).lines().count();
+        let commits = git(&depot, &["rev-list", "--count", &format!("{base}..{pointe}")]);
+        ligne("départ", serde_json::json!({"base": base, "pointe": pointe, "commits": commits, "fichiers": ecart_master, "comptes": comptes(&cat)}));
+        let repo = "sonde";
+        let master = crate::suivies::register_layer(&cat, repo, "refs/heads/master", &pointe).unwrap();
+        let debut = std::time::Instant::now();
+        let lw = LayerWrite { layer: master.clone(), parent: Some((crate::generations::COUCHE_DU_BACKEND.into(), n)) };
+        let r = write_history_generation(&mut cat, &depot, &lw, &pointe).expect("le premier rattrapage de master");
+        ligne("master", serde_json::json!({"rang": r, "ms": debut.elapsed().as_millis(), "comptes": comptes(&cat)}));
+        let tete = git(&lot, &["rev-parse", "HEAD"]);
+        let fourche = git(&lot, &["merge-base", "HEAD", "origin/master"]);
+        let ecart_lot = git(&lot, &["diff", "--name-only", &fourche]).lines().count();
+        let couche = format!("worktree:{}", lot.display());
+        let id = crate::suivies::register_layer(&cat, repo, &couche, &tete).unwrap();
+        let debut = std::time::Instant::now();
+        let r = write_fork_work_generation(&mut cat, &lot, &id, &master, "origin/master").expect("la couche du lot");
+        ligne(
+            "lot",
+            serde_json::json!({"rang": r, "ms": debut.elapsed().as_millis(), "fourche": fourche, "fichiers": ecart_lot, "fourche_derriere_la_pointe": fourche != pointe, "comptes": comptes(&cat)}),
+        );
+    }
+
     /// **Témoin 4 : the cap of the work layers.** Under `tracked.writes.max_work_layers: 2`, three worktrees: the
     /// first two are written, the third is refused naming the setting, and written again later neither; the two
     /// written ones are written again. The manifest accepts the key, and refuses an unknown one under `writes`.
