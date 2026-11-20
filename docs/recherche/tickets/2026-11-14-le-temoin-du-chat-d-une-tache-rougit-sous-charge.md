@@ -54,3 +54,47 @@ le garde.
 **Ce qu'il faut pour le fermer** : à la prochaine occurrence, lire l'état rendu. Un module manquant ou lent mènera
 à la page de l'IDE et à son chargement. Une ressource de flux absente mènera au `SharedWorker`. Une adresse restée
 l'ancienne mènera à la navigation du témoin.
+
+## Le 20 novembre 2026 : deux essais sans rouge, la lecture du démarrage, une hypothèse (recherche)
+
+**Les essais**, à luciepc, sur master 1a890cefec, lib 4ad394f4d2, les deux témoins du chat
+(`chat_qui_code::le_chat_d_une_tache_mene_a_sa_relecture_dans_la_page` et
+`chat::tests::le_chat_se_mene_et_s_arrete_dans_la_page`), joués en boucle par le binaire de test :
+- **sous une passe lourde parallèle** (`e2e_code` répétée quatre fois dans un autre worktree, son propre target, sous
+  `timeout`) : **0 rouge sur 120 passages** (60 tours), de 15 h 2x à 16 h 15. Charge du poste : 8 à 12 sur 24 cœurs ;
+- **sous une famine déterministe** (au mot de c7) : le binaire et son Chromium épinglés par `taskset` sur deux cœurs
+  partagés avec quatre boucles actives, sous `timeout` et `poste lourd` : **0 rouge sur 120 passages** (60 tours),
+  jusqu'à 17 h 25.
+
+Au taux observé jusque-là (2 sur environ 215), 240 passages sans rouge disent que le défaut ne vient ni de la seule
+charge CPU, ni de la lenteur du témoin. Pas de troisième charge (règle de c7).
+
+**La lecture du démarrage de la page** (`ui/ide`, `src/daemon_host/navigateur.rs`, `src/ide.rs`) :
+- une vue `""` veut dire que `#root` est vide, donc qu'`App` n'a jamais été monté. Dès que React rend, `#vue` porte du
+  texte (« … l'état de l'hôte se lit », puis « Connexion… »). Le flux du SharedWorker ne peut donc pas expliquer une
+  vue vide : bloqué, il laisserait la page rendue avec « flux : fermé » ;
+- le bundle est un seul module ESM (`/ide/app.js`), sans import dynamique. Comme le script est un module, donc
+  différé, `readyState` vaut déjà `interactive` avant qu'il ne s'exécute : la condition `readyState !== 'loading'`
+  passe pendant qu'`app.js` est encore en route ;
+- « en vol » ne compte que les `fetch` de la page : le chargement d'`app.js` n'y est pas, ni comme requête, ni comme
+  erreur. **Seul un `app.js` qui n'arrive pas** colle à « vue "", en vol [], erreurs [] ». Le diagnostic de page
+  (896dcb7967) le montrera à la prochaine occurrence : `document` à `interactive`, et `/ide/app.js` absent des
+  ressources, puisqu'une ressource n'y figure qu'une fois finie.
+
+**L'hypothèse, à éprouver par un témoin** : le serveur de l'hôte des témoins n'a que **deux fils**
+(`DaemonServer::new(server, 2)`). `Flux::publier` (`src/ide.rs`, l. 166-173) écrit dans la socket de chaque abonné
+SSE **sous le verrou `abonnes`**, et `battre` aussi. Un abonné qui ne lit plus (une page partie, ou lente sous charge)
+peut faire bloquer cette écriture quand le tampon de sa socket est plein ; le verrou reste alors tenu. Toute requête
+qui publie, et toute nouvelle abonnée, attend ce verrou ; si les deux fils du serveur y attendent, `app.js` ne part
+jamais, sans erreur ni requête en vol.
+
+**Le témoin proposé** (un lot à part, rouge d'abord) : un abonné SSE qui ne lit plus jusqu'à remplir sa socket,
+une publication, puis une requête d'un autre client (`GET /ide/app.js`) ; elle doit répondre en moins d'une seconde.
+Si elle attend, le correctif écrit hors du verrou (copier la liste, écrire, retirer les abonnés morts) avec une
+écriture bornée, et le ticket se ferme sur ce témoin. Si elle répond, l'hypothèse tombe, et le ticket attend la
+prochaine occurrence et son diagnostic.
+
+Le journal d'un autre rouge du même après-midi, sans rapport avec ce ticket, est gardé à luciepc :
+`~/.cache/rag3weaver-build/gardes-recherche/2026-11-20-relecture-retenue-sous-charge/`. C'est la relecture retenue
+de la seconde fenêtre : la page y est rendue, `app.js` arrivé.
+
