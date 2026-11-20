@@ -811,6 +811,27 @@ pub fn end_layer(catalog: &crate::catalog::Catalog, depot: &str, nom: &str) -> R
     Ok(true)
 }
 
+/// **Purger une couche par son nom** (page 03 du 20 novembre 2026, O4 : un lot atterri, ou `close_view` avec `purge`) :
+/// ses lignes quittent les tables à générations, ses générations quittent `_generation`, puis elle finit. Les contenus
+/// partagés restent : d'autres couches les portent. Rend `false` sans couche vivante sous ce nom.
+pub fn purge_layer(catalog: &crate::catalog::Catalog, depot: &str, nom: &str) -> Result<bool, String> {
+    use crate::connection::{CypherValue, QueryParam};
+    let e = |e: crate::catalog::CatalogError| e.to_string();
+    let lire = |cle: &str| catalog.read_meta_key(cle).map_err(e);
+    let Some(id) = layer_id_by_name(&lire, depot, nom)? else { return Ok(false) };
+    let tables: Vec<String> = catalog.generations.as_ref().map(|v| v.tables.iter().cloned().collect()).unwrap_or_default();
+    let p = || vec![QueryParam::new("id", CypherValue::String(id.clone()))];
+    for t in tables {
+        catalog
+            .execute_raw_with_params(&format!("MATCH (s:`{t}`) WHERE s.{} = $id DETACH DELETE s", crate::generations::COUCHE), &p())
+            .map_err(|e| format!("purger {nom} dans {t} : {e}"))?;
+    }
+    catalog
+        .execute_raw_with_params(&format!("MATCH (g:{}) WHERE g.couche = $id DETACH DELETE g", crate::generations::TABLE), &p())
+        .map_err(|e| format!("purger les générations de {nom} : {e}"))?;
+    end_layer(catalog, depot, nom)
+}
+
 /// **Les identifiants stables des couches** d'une résolution (décision d'ED et d'arbre principal, 14 nov.,
 /// page `docs/arbre-principal/14-11-2026/02-les-suivies-tracked.md`) : un id par couche, distinct de son nom,
 /// dérivé de sa naissance (le dépôt, le nom complet et la pointe à la première vue) et gardé dans
