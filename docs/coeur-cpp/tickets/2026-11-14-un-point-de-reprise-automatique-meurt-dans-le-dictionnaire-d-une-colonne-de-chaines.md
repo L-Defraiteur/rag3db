@@ -227,3 +227,32 @@ va dans le même sens. ASan doit le voir dès un tour qui tombe : ses trois tour
 sur cinq plante). Suite : `DdlEveryMinute` ×10 sous ASan (`quarantine_size_mb=1024`), arrêt au premier rapport,
 arbre `20-11-2026-bati/build/asan`.
 
+## Treize tours ASan sans C1, et ce que dit l'adresse des tampons (20 novembre au soir, cœur c++)
+
+**ASan.** `DdlEveryMinute` sous ASan, RelWithDebInfo, `quarantine_size_mb=1024`, sur la lib `4ad394f4d2` : dix tours à
+luciepc (13 h 32 → 23 h 13, `~/.cache/rag3db-moteur-notes/c1-asan/`), plus les trois du 19 : **0 rapport, 0
+plantage** en treize tours ; les rouges sont des bornes du test (`create-rel-table-holds-writers-at-most-its-duration`,
+`catalog-as-expected`). Le Release, avec ou sans symboles, plante environ un tour sur cinq. Dix tours de plus tournent
+à la tablette (`~/.cache/rag3db-moteur-notes/c1-asan-tablette/`).
+
+**Le core de 13 h 02 (pid 204417) relu.** Ce n'est pas une lecture après libération, c'est un **débordement** :
+
+- le tampon de chaînes du dictionnaire fautif est à `0x7ff684e07d80`, 131 072 octets : il finit à `0x7ff684e27d80` ;
+- son tampon d'offsets est à `0x7ff684e27d90`, seize octets plus loin (l'en-tête de malloc) : le bloc voisin ;
+- le texte trouvé dans les offsets (« it… », « titre 12185… ») est la suite d'une chaîne écrite au-delà de la fin du
+  tampon de chaînes de **ce même dictionnaire**.
+
+Un seul fil travaille dans ce dictionnaire (`thread apply all bt`, 36 fils) : le point de reprise
+(`Checkpointer::writeCheckpoint` → `NodeGroup::checkpointInMemAndOnDisk` → `Column::checkpointSegment` →
+`StringChunkData::write`, `srcOffsetInChunk = 0`, `dstOffsetInChunk = 0`, `numValuesToCopy = 8831`), au tout
+premier appel (`pos = 0`). Le dictionnaire de destination n'était pourtant pas vide à ce moment : 8 831 offsets
+déjà là, une table de hachage vide, 131 072 octets de capacité. Il a été rempli avant `write`, sans sa table : c'est
+la forme d'un remplissage par balayage du disque, et non par `appendString`.
+
+**La piste à lire maintenant** : `DictionaryColumn::scan` (`dictionary_column.cpp:39-70`) agrandit le tampon de
+chaînes d'après `dataMetadata.numValues`, puis le remplit par `scanSegment` en relisant ce même `numValues`. Si les
+métadonnées du segment lues là ne sont pas celles que le balayage écrit (un `numValues` qui change entre les deux
+lectures, ou des métadonnées d'un autre segment), il écrit plus que ce qu'il a réservé. `appendString` vérifie sa
+place, ce chemin-là non. À lire avec les remises à vide (`setToInMemory`, qui vide la table mais garde offsets et
+octets ; `resetToEmpty`) et les échanges de morceaux de `Column::checkpointSegment`.
+
