@@ -322,7 +322,9 @@ replay_rust() { # <id> <journals> <witness> <witness_suite> <extra_suites> → 0
   local id=$1 J=$2 witness=$3 suite=$4 extra=$5 rc peak last
   [ "$suite" = - ] && suite=e2e
   [ "$extra" = - ] && extra=
-  poste_lourd env CIBLE="$TARGET" SUITE_DU_TEMOIN="$suite" SUITES_EN_PLUS="${extra//,/ }" POSTE_MEM_MAX=32G \
+  # A timeout at the head of the command (20 Nov., c7): a measure reads the end of a heavy from it, and refuses behind one
+  # whose end is unknown. An expiry (124) is an environment red, replayed once.
+  poste_lourd timeout "${PUSHER_PASSE_MAX:-60m}" env CIBLE="$TARGET" SUITE_DU_TEMOIN="$suite" SUITES_EN_PLUS="${extra//,/ }" POSTE_MEM_MAX=32G \
     PEAK_FILE="$JR/$J.peak" bash -c '"$@"; rc=$?; cat "/sys/fs/cgroup$(sed -n "s/^0:://p" /proc/self/cgroup)/memory.peak" > "$PEAK_FILE" 2>/dev/null; exit $rc' \
     _ bash "$PASS" "$WTN" "$J" "$witness" - > "$JR/$J.out" 2>&1
   rc=$?
