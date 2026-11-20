@@ -82,7 +82,7 @@ fn texte_canonique() -> String {
         .scopes
         .iter()
         .map(|s| {
-            let candidat = !decoupage.not_candidate.as_ref().is_some_and(|r| r.excludes(&s.data()));
+            let candidat = !decoupage.excludes_chunks(&s.data());
             let textes: Vec<String> = if candidat { decoupeur.chunk(&s.content).into_iter().map(|c| c.text).collect() } else { Vec::new() };
             serde_json::json!({ "key": s.key, "candidat": candidat, "morceaux": textes })
         })
