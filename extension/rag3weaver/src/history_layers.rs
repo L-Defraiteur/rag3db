@@ -846,6 +846,9 @@ mod tests {
         let var = |n: &str| std::env::var(n).unwrap_or_else(|_| panic!("{n} est requis"));
         let (chemin, depot, lot) = (var("RAG3WEAVER_SONDE_BASE"), std::path::PathBuf::from(var("RAG3WEAVER_SONDE_DEPOT")), std::path::PathBuf::from(var("RAG3WEAVER_SONDE_LOT")));
         let conn = crate::Rag3dbConnection::new(&chemin).expect("la base de la sonde");
+        // The vector extension of this process: the base does not load the one noted beside it under this lib.
+        let ext = crate::backend::vector_extension_of_this_process().expect("l'extension vector de ce processus");
+        crate::connection::DbConnection::execute(&conn, &format!("LOAD EXTENSION '{}'", ext.display())).expect("charger l'extension vecteur");
         let mut cat = Catalog::new(Box::new(conn), Box::new(crate::embedder::HashEmbedder::new(768)), crate::CatalogConfig {
             allow_mock_embedder: true,
             embedding_dim: 768,
