@@ -63,3 +63,23 @@ tour).
    sérieux. Les décisions changent : 27 « none » contre 39, et 10 rangements de plus sous une fiche existante. B4 range
    plus volontiers sous une candidate, et perd 5 sujets de N. **Un second jeu « après » est nécessaire** pour dire si
    la baisse est réelle, avant d'en tirer une conclusion sur B4.
+
+## F300, second jeu « après » (12 h 41 à 13 h 31)
+
+Le même binaire de B4, la même forme, une base neuve.
+
+| | avant | après, 1ᵉʳ jeu | **après, 2ᵉ jeu** |
+|---|---|---|---|
+| create, fiche, none | 56, 149, 39 | 58, 159, 27 | 64, 147, 33 |
+| P1 contre N | 0,907 | 0,815 | **0,944** (51/54) |
+| P2, doublons | 5 (0,128) | 4 (0,091) | **14 (0,28)** |
+| servie par le cache | 42,6 % | 41,2 % | 43,4 % |
+
+- **La baisse de P1 était l'écart d'un jeu à l'autre.** La même tête donne 0,815 puis 0,944. Sur F300 aussi, P1 varie
+  d'une dizaine de points d'un jeu à l'autre. Le 0,907 d'avant, égal à celui du 18, était une coïncidence. **Verdict :
+  B4 ne coûte pas de sujets, et il atterrit** (la règle de c7 : « s'il revient vers 0,90, c'était le bruit »).
+- **Le cache est confirmé** : 43 %, comme les deux autres passes. B4 ne le fait pas monter.
+- **Une réserve, les doublons** : 14 dans ce jeu, contre 4 et 5. Une passe de plus qui crée plus de fiches (64 « create »)
+  en a aussi plus en double. On ne peut pas départager sur trois jeux : c'est à suivre aux prochaines mesures de
+  l'archiviste, pas une raison de retenir B4.
+- **Pour juger un réglage de l'archiviste**, il faut désormais plusieurs jeux par côté, en S 50 comme en F300.
