@@ -576,6 +576,9 @@ pub struct SearchResult {
     pub chunk: Option<ChunkInfo>,
     /// All matched chunks with source attribution (Detailed mode only).
     pub chunks: Option<Vec<AttributedChunk>>,
+    /// A row that cannot carry a vector by design: see [`crate::dataflow::resultat::UnifiedResult::sans_vecteur`].
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub sans_vecteur: bool,
 }
 
 /// Chunk information attached to a search result.
@@ -1187,7 +1190,7 @@ pub fn search_vector_via_backend(
         }
     })?;
 
-    Ok(hits.into_iter().map(|h| SearchResult {
+    Ok(hits.into_iter().map(|h| SearchResult { sans_vecteur: false,
         uuid: h.uuid,
         score: h.score,
         entity: h.entity.or_else(|| Some(entity.to_string())),
@@ -1255,7 +1258,7 @@ pub fn resolve_and_enrich_via_backend(
         .iter()
         .filter_map(|(offset, score)| {
             let r = offset_map.get(offset)?;
-            Some(SearchResult {
+            Some(SearchResult { sans_vecteur: false,
                 uuid: r.uuid.clone(),
                 score: *score,
                 entity: Some(entity.to_string()),
@@ -1544,7 +1547,7 @@ pub fn resolve_vector_chunks_admitted(
             .into_iter()
             .map(|(parent_uuid, mut acc)| {
                 acc.chunks.sort_by(|a, b| b.score.total_cmp(&a.score).then_with(|| a.uuid.cmp(&b.uuid)));
-                SearchResult {
+                SearchResult { sans_vecteur: false,
                 uuid: parent_uuid,
                 score: acc.score,
                 entity: Some(parent_entity.to_string()),
@@ -1591,7 +1594,7 @@ pub fn resolve_vector_chunks_admitted(
     // 5. Build parent-level results
     let mut resolved: Vec<SearchResult> = parent_best
         .into_values()
-        .map(|(score, parent_uuid, chunk_info, data)| SearchResult {
+        .map(|(score, parent_uuid, chunk_info, data)| SearchResult { sans_vecteur: false,
             uuid: parent_uuid,
             score,
             entity: Some(parent_entity.to_string()),
@@ -2359,7 +2362,7 @@ pub fn search_texte_natif(
 
     let sortie: Vec<SearchResult> = par_parent
         .into_iter()
-        .map(|(parent, chunk, score)| SearchResult {
+        .map(|(parent, chunk, score)| SearchResult { sans_vecteur: false,
             data: donnees.get(&parent).cloned(),
             uuid: parent,
             score,
@@ -2509,7 +2512,7 @@ fn finish_bm25_chunked(
 
         if matched_chunks.is_empty() {
             // No chunk intersection (e.g. match in title only)
-            results.push(SearchResult {
+            results.push(SearchResult { sans_vecteur: parent.chunks.is_empty(),
                 uuid: parent.uuid.clone(),
                 score: *score,
                 entity: Some(entity.to_string()),
@@ -2539,7 +2542,7 @@ fn finish_bm25_chunked(
                         signal: None,
                     })
                     .collect();
-                results.push(SearchResult {
+                results.push(SearchResult { sans_vecteur: false,
                     uuid: parent.uuid.clone(),
                     score: *score,
                     entity: Some(entity.to_string()),
@@ -2558,7 +2561,7 @@ fn finish_bm25_chunked(
                 // `search`. Tous les chunks d'un parent restent accessibles
                 // par `ResultMode::Detailed`, qui est fait pour ça.
                 for (_, c) in matched_chunks.into_iter().take(1) {
-                    results.push(SearchResult {
+                    results.push(SearchResult { sans_vecteur: false,
                         uuid: parent.uuid.clone(),
                         score: *score,
                         entity: Some(entity.to_string()),
@@ -2801,7 +2804,7 @@ pub fn fuse_signals(
     let mut fused: Vec<SearchResult> = result_vec
         .into_iter()
         .map(|(uuid, score)| {
-            SearchResult {
+            SearchResult { sans_vecteur: false,
                 entity: entity_map.get(&uuid).cloned(),
                 uuid,
                 score,
@@ -2982,7 +2985,7 @@ mod tests {
         });
         for mode in [ResultMode::Aggregated, ResultMode::Detailed, ResultMode::SourceResolved] {
             for admission in [None, Some(HashSet::from(["parent-b".into()])), Some(HashSet::new())] {
-                let hits = [("shared", 0.25), ("shared", 0.75), ("other", 0.75)].into_iter().map(|(uuid, score)| SearchResult {
+                let hits = [("shared", 0.25), ("shared", 0.75), ("other", 0.75)].into_iter().map(|(uuid, score)| SearchResult { sans_vecteur: false,
                     uuid: uuid.into(), score, entity: None, data: None, chunk: None, chunks: None,
                 }).collect();
                 let rows = resolve_vector_chunks_admitted(&conn, &target, hits, &["file_path".into()],
@@ -3027,7 +3030,7 @@ mod tests {
     // ── test helpers ──────────────────────────────────────────────────────
 
     fn make_result(uuid: &str, score: f64) -> SearchResult {
-        SearchResult {
+        SearchResult { sans_vecteur: false,
             uuid: uuid.to_string(),
             score,
             entity: Some("Document".to_string()),

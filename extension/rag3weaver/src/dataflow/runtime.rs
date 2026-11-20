@@ -2029,7 +2029,7 @@ mod tests {
     }
 
     fn test_result(uuid: &str) -> UnifiedResult {
-        UnifiedResult {
+        UnifiedResult { sans_vecteur: false,
             signal: None,
             uuid: uuid.into(),
             score: 1.0,

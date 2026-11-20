@@ -301,7 +301,7 @@ mod tests {
     #[test]
     fn summarize_results() {
         let val = PortValue::new(vec![
-            UnifiedResult {
+            UnifiedResult { sans_vecteur: false,
                 signal: None,
                 uuid: "u1".into(),
                 score: 1.0,
@@ -316,7 +316,7 @@ mod tests {
                 signals: Vec::new(),
                 best_signal: None,
             },
-            UnifiedResult {
+            UnifiedResult { sans_vecteur: false,
                 signal: None,
                 uuid: "u2".into(),
                 score: 0.5,

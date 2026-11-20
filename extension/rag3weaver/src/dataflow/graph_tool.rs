@@ -3124,7 +3124,7 @@ mod tests {
     #[test]
     fn results_render_as_json() {
         use crate::search_strategy::UnifiedResult;
-        let r = UnifiedResult {
+        let r = UnifiedResult { sans_vecteur: false,
             signal: None,
             uuid: "abc".into(),
             score: 1.5,

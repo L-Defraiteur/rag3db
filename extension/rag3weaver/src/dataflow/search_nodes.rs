@@ -469,7 +469,7 @@ mod tests {
     use crate::search::SearchOptions;
 
     fn make_result(uuid: &str, entity: &str) -> UnifiedResult {
-        UnifiedResult {
+        UnifiedResult { sans_vecteur: false,
             signal: None,
             uuid: uuid.into(),
             score: 0.9,
@@ -501,7 +501,7 @@ mod tests {
             "_source_uuid".into(),
             CypherValue::String(source_uuid.into()),
         );
-        UnifiedResult {
+        UnifiedResult { sans_vecteur: false,
             signal: None,
             uuid: uuid.into(),
             score: 0.8,
