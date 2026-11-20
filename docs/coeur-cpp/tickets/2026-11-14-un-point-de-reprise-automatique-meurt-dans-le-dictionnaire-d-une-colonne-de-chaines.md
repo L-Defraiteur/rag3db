@@ -181,3 +181,22 @@ Le petit test de Codex, vert 400 fois, ne le voit pas ; `DdlEveryMinute` le voit
 sépare : des écrivains et des DDL concurrents pendant les points de reprise automatiques. Suite : `DdlEveryMinute`
 sous TSan et sous ASan à luciepc.
 
+## Sous TSan, sous ASan, puis sondé (19 et 20 novembre, cœur c++)
+
+- **TSan**, `DdlEveryMinute` ×3 (`~/.cache/rag3db-moteur-notes/c1-ddl/tsan-*.log` à luciepc) : 18, 16 et 17 rapports,
+  aucun dans `DictionaryChunk` ni `StringChunkData`. Trois familles : le compteur de relations lu par le
+  planificateur, `setTimestamp` du catalogue (B1), et une course réelle des groupes de morceaux sous un lecteur
+  par clé primaire, corrigée à part (lot `course-des-groupes`, ticket du lecteur qui meurt dans l'index de clé
+  primaire).
+- **ASan**, `DdlEveryMinute` ×3 : aucune erreur, aucun SIGSEGV. (Un premier essai TSan et ASan n'avait rien jugé :
+  l'extension vector est chargée depuis `extension/vector/build/`, que chaque arbre de bâti écrase ; elle se bâtit
+  maintenant dans l'arbre du sanitizer juste avant ses tours.)
+- **Sonde en Release**, branche `c1-probe` (`ba5ccce329`, jamais pour master) : avant chaque copie de chaîne dans
+  `StringChunkData::write`, la chaîne source doit tenir dans le tampon de son dictionnaire, sinon l'état du morceau
+  source sur stderr puis abort. `DdlEveryMinute` ×10 sur master du 19 au soir : **aucun déclenchement, aucun
+  SIGSEGV** (7 rouges de bornes connues : `create-rel-table-holds-writers-at-most-its-duration` ×7,
+  `catalog-as-expected` ×3). Journal `~/.cache/rag3db-moteur-notes/c1-sonde/`.
+
+À 2 sur 10 la veille, 0 sur 10 arrive environ une fois sur neuf par hasard : rien n'est conclu. La sonde reste à
+rejouer (×20) sur la lib qui porte le correctif des groupes, pour départager un lien entre les deux.
+
