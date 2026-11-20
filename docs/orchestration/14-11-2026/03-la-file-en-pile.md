@@ -2535,3 +2535,24 @@ caractère dans les tables d'en-têtes, un ratio seul ne tient pas) : forme rete
 le comptage en jetons avec le tokenizer du plus petit embarqueur de la base, sans repli silencieux (tokenizer
 absent = refus dit). Rendus de 03 h 41, tous des conflits de repose : la chaîne d'attente de tty, la garde de dette
 d'arbre, define-ref d'ED ; chacun repose.
+
+## 20 novembre, 04 h 45 — retournement : 2.12 casse la garde des comptes du plein texte ; la bascule part sans lui
+
+À 04 h 25 le lot c-durable-3 de recherche rougit en premier créneau sur trois tests `en_fichiers`
+d'e2e_tx_par_paquet_arret (« une base saine ne se rebâtit pas », « plus rien à rebâtir », « 300 documents pour 301
+lignes »). Départage de recherche : **master nu est rouge pareil**, son lot était 6/6 la veille sous la même lib ;
+lucivy lit le journal et ne voit pas comment 4.3.12 perdrait un document. Puis la lecture de G dans ses deux
+répétitions tranche : sur 1f22743e17 (2.12), la réouverture dit « plein texte de Scope : 67 610 documents pour 75 246
+lignes — index rebâti depuis les lignes » (22 s) et le journal d'index finit sur « écart entre documents et lignes —
+Scope : 94 469 pour 103 999 » : **chaque réouverture rebâtirait le plein texte** ; sur baccb2ea6e, qui porte déjà
+lucivy 4.3.12 mais pas 2.12 : aucun rebâti, aucun écart. Cause probable : un conteneur non candidat garde sa ligne
+mais plus de document de plein texte, et la garde des comptes lit un index cassé.
+
+**Décidé (c7, 04 h 45)** : la bascule de 06 h 45 se fait sur **baccb2ea6e + 6e2476d41** (répété vert, 97,8 %, premier
+10/10, 0 usage perdu, aucun écart), pas sur 1f22743e17 ; l'hôte de la fenêtre de lib se bâtit aussi sur baccb2ea6e
+tant que le correctif n'est pas atterri (aucun hôte posé ne porte l'écart) ; ED corrige 2.12 en priorité, rouge
+d'abord sur les trois tests de master, et 2.12 fera repasser les bases à sa fenêtre avec les deux montées de règles
+qui attendent (paquets de codeparsers, morceaux d'ED). Lucivy et recherche hors de cause ; lucivy confirme sur les
+tests (pointeur^ contre pointeur) et a ouvert le ticket, qu'elle passe à ED. Le train C++ : passe de la tête commune
+verte (501d7ccc90, témoins 6/6 ×3, transaction 411, e2e_test 1 867) ; la lib est déjà bâtie et publiée sans courant
+(symboles 0/0 contre 6e2476d41) par le nouveau batir-lib.sh, qui a créé et retiré son arbre sous ~/git_workspaces/G/.
