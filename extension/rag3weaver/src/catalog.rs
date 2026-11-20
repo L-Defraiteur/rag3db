@@ -12759,6 +12759,33 @@ mod tests {
         assert_eq!(calls.load(Ordering::SeqCst),1,"shutdown and final buffer Drop must not retry");
     }
 
+    /// **Reading, ignored: the full-text counts of a copied base** (20 November 2026, the gap « Scope 104 625
+    /// documents for 95 176 rows » on the repository base after the move to scope versions). Opens the copy that
+    /// `RAG3WEAVER_REBATI_MANIFEST` names (under `mesures/` only) by the product's path and only reads: the rows of
+    /// Scope and ScopeContent, the rows each one's non-candidate rule sets aside (2.12), the count guard's figures,
+    /// and the dry survey of ScopeContent (live documents, graph rows, orphans).
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    #[ignore]
+    fn read_the_full_text_counts_of_a_copied_base() {
+        let manifest = std::env::var("RAG3WEAVER_REBATI_MANIFEST").expect("RAG3WEAVER_REBATI_MANIFEST=<manifest of a copy>");
+        let prepared = crate::backend::PreparedBackend::load(std::path::Path::new(&manifest)).expect("the manifest loads");
+        let database = format!("{:?}", prepared.manifest.database);
+        assert!(database.contains("/mesures/"), "a copy under mesures/ only, never a live base: {database}");
+        let backend = prepared.open_on_disk().expect("the copy opens");
+        let mut cat = backend.catalog.lock().unwrap();
+        for entity in ["Scope", "ScopeContent"] {
+            let rows = cat.conn().execute(&format!("MATCH (n:`{entity}`) RETURN count(n)")).ok().and_then(|r| r.rows.first().and_then(|l| l[0].as_i64()));
+            let set_aside = cat.non_candidate_uuids(entity).map(|v| v.len());
+            println!("RELEVE {entity} : {rows:?} lignes, {set_aside:?} non candidates");
+        }
+        println!("RELEVE comptes {:?}", cat.comptes_du_plein_texte());
+        match cat.fts_releve_a_blanc("ScopeContent") {
+            Ok(r) => println!("RELEVE ScopeContent live_docs {} graph_docs {} orphans {}", r["live_docs"], r["graph_docs"], r["orphans"].as_array().map(|a| a.len()).unwrap_or(0)),
+            Err(e) => println!("RELEVE ScopeContent erreur {e}"),
+        }
+    }
+
     // ─── Le plafond de la requête embarquée (query_max_chars, 15 novembre 2026) ───
     /// **An entity that declares `ftsPositions` keeps its positions, the others go without** (19 November
     /// 2026, the light profile, decided by c7 on the measure of the code base): the catalog creates every
