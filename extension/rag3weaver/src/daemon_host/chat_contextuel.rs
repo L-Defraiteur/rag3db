@@ -558,7 +558,9 @@ fn une_fenetre_qui_n_est_pas_le_chat_compte_les_accords_en_attente() {
             if turns[depuis..].iter().any(|t| t.role == "tool") {
                 MockLlm::new("J'attends ton accord.").generate(turns, opts, sink)
             } else {
-                MockLlm::new("").with_tool_calls(vec![("run_command".to_string(), json!({ "command": "echo accorde-moi" }).to_string())]).generate(turns, opts, sink)
+                // A command of its own at each turn: the line granted at the first is not asked again at the second.
+                let n = turns.iter().filter(|t| t.role == "user").count();
+                MockLlm::new("").with_tool_calls(vec![("run_command".to_string(), json!({ "command": format!("echo accorde-moi-{n}") }).to_string())]).generate(turns, opts, sink)
             }
         })))
     });
