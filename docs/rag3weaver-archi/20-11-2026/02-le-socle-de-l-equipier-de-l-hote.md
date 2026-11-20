@@ -44,6 +44,17 @@ navigateur (le pont jackwener), et arbre fait les outils des vues.
 - Un appel à un outil non chargé est refusé, en nommant `find_tool`.
 - Un changement de palette (un serveur MCP ajouté, retiré) se dit au pas suivant, comme
   `tools/list_changed`.
+- **Référence** (c7) : OpenCode, en clone de lecture `~/git_workspaces/c7/20-11-2026-opencode` (MIT).
+  Il n'a pas de ToolSearch, mais un catalogue à espaces de noms
+  (`packages/codemode/src/codemode/catalog.ts`) :
+  - tous les espaces restent visibles en résumé, et un seul est affiché en entier par tour ;
+  - quelques outils sont épinglés (`pinned`) ;
+  - `scanTools` et `search` trouvent le reste.
+
+  La forme reprise pour `find_tool` : les épingles (les outils de tête), les espaces (un par serveur
+  MCP et un pour l'hôte), la recherche, et `tools/list_changed` vers le client. Leurs descriptions
+  d'outils (`packages/core/src/tool/plugin/*.ts`, une phrase par paramètre) servent de modèle pour
+  `run` et `fetch`.
 - **Témoins** :
   - le modèle ne voit que la tête et `find_tool` ;
   - après `find_tool`, l'outil trouvé s'appelle au tour suivant ;
