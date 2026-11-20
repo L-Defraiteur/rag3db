@@ -617,7 +617,11 @@ impl DaemonHost {
     /// **Enregistrer un client** : rend l'identifiant de sa session.
     pub fn open_session(&self, client: &str, cell: Option<Value>, keys: Vec<String>, process: Option<(u32, u64)>) -> String {
         let opened_at = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis();
-        let seed = format!("{client}|{opened_at}|{}|{:?}", std::process::id(), std::thread::current().id());
+        // A counter in the seed: two sessions opened by one client, in one millisecond, on one thread had the same id,
+        // and the second replaced the first (seen by the witness of the views, 20 November 2026).
+        static OUVERTES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let rang = OUVERTES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let seed = format!("{client}|{opened_at}|{}|{:?}|{rang}", std::process::id(), std::thread::current().id());
         let id = format!("s-{}", &blake3::hash(seed.as_bytes()).to_hex()[..16]);
         let session = Session {
             id: id.clone(),
