@@ -2999,6 +2999,54 @@ fn the_chat_page_says_an_index_not_ready_then_ready_once() {
     let _ = fil.join();
 }
 
+/// **A detached window of the repository says the index is ready, once** (ticket of 20 Nov., « l'avis index prêt dans
+/// la fenêtre détachée du dépôt »; c7's night task: the chat's window and the window of the view). A window of the
+/// repository, open before the turn, says nothing while the index is not ready; once the layer caught up, its header
+/// says « l'index … est prêt », and only once: it counts the notices it took.
+#[cfg(all(unix, feature = "code", feature = "rag3db-native"))]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : étape séparée")]
+#[test]
+fn a_detached_window_of_the_repository_says_the_index_is_ready_once() {
+    use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+    let Some(binaire) = navigateur_ou_saut("a_detached_window_of_the_repository_says_the_index_is_ready_once") else {
+        return;
+    };
+    let b = BancPasPret::new();
+    let ecoute = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let racine = format!("http://{}", ecoute.local_addr().unwrap());
+    let server = tiny_http::Server::from_listener(ecoute, None).unwrap();
+    let servi = b.host.clone();
+    let fil = std::thread::spawn(move || crate::daemon_host::DaemonServer::new(server, 2).serve(servi, Some("j".into())));
+    let mut n = Navigateur::lancer(&binaire);
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+    n.aller(
+        &format!("{racine}/ide/code/{}/chat", b.id),
+        "document.querySelector('#send') && !document.querySelector('#send').disabled && document.getElementById('lien')?.textContent === 'flux : ouvert'",
+    );
+    n.nouvel_onglet();
+    n.aller(&format!("{racine}/ide/code/{}/arbre?fenetre=depot", b.id), "document.getElementById('lien')?.textContent === 'flux : ouvert'");
+    let avis = "document.querySelector('#index-pret-fenetre')";
+    n.onglet(0);
+    n.evaluer("document.querySelector('#message').value = 'qui appelle main ?'; document.querySelector('#send').click()");
+    n.attendre("(document.querySelector('details.outil[data-outil=usages] ~ .index-pas-pret')?.textContent ?? '').includes('pas prêt') && document.querySelector('#status')?.textContent === 'fini'", "the chat says the index is not ready");
+    n.onglet(1);
+    assert_eq!(n.evaluer(&format!("{avis}?.dataset.recus ?? '0'")), json!("0"), "not ready yet: the window says nothing");
+    b.rattraper();
+    n.attendre(&format!("({avis}?.textContent ?? '').includes('est prêt')"), "the window of the repository says the index is ready");
+    let recus = n.evaluer(&format!("new Promise((r) => setTimeout(() => r({avis}?.dataset.recus ?? null), {}))", deux_periodes().as_millis()));
+    assert_eq!(recus, json!("1"), "said once");
+    n.onglet(0);
+    assert_eq!(n.evaluer("document.querySelectorAll('.index-pret').length"), json!(1), "the chat says it once too");
+    assert!(n.erreurs.is_empty(), "console : {:?}", n.erreurs);
+    drop(n);
+    let _ = crate::daemon::agent_with_timeout(Duration::from_secs(5))
+        .post(format!("{racine}/arret"))
+        .header("Authorization", "Bearer j")
+        .header("content-type", "application/json")
+        .send("{}");
+    let _ = fil.join();
+}
+
 /// **`/ide/turns/read`, first form: the turns read from the chat file** (19 Nov 2026, for tty-26):
 /// each turn of the interval with its messages and its state, `from_chat_file`, or `gone` once a
 /// compaction took it out of the session.
