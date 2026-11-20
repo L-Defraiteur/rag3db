@@ -60,7 +60,8 @@ fn options_bm25() -> SearchOptions {
     }
 }
 
-/// Pose une requête lucivy brute sur le handle FTS du Scope et rend la
+/// Pose une requête lucivy brute sur le handle FTS du texte des scopes (`Scope`, ou `ScopeContent` sur une base à
+/// versions) et rend la
 /// PREMIÈRE LIGNE du content de chaque document, dans l'ordre des scores.
 /// (`name` n'est pas dans l'index — c'est la découverte de cette sonde — mais
 /// `content` est stocké et sa première ligne est la signature du scope.)
@@ -192,7 +193,14 @@ fn sonde_identifiants() {
 
     // ── 2. Lucivy en direct, mode par mode ─────────────────────────────────
     let cat = reel.lock().unwrap();
-    let handle = cat.fts_handle(SCOPE).expect("handle FTS du Scope");
+    // **The table of the scopes' full text follows the form of the base** (ticket of 18 November 2026): on a base with
+    // scope versions (or generations), the text and its full text live on ScopeContent; Scope has none.
+    let table = match rag3weaver::code::scope_form(&cat).expect("la forme de la base") {
+        rag3weaver::code::ScopeForm::SansVersions => SCOPE,
+        _ => rag3weaver::code::SCOPE_CONTENT,
+    };
+    eprintln!("[sonde] plein texte des scopes : {table}");
+    let handle = cat.fts_handle(table).unwrap_or_else(|| panic!("handle FTS de {table}"));
     eprintln!("\n### 2. Lucivy en direct — rang de l'attendu par mode\n");
     eprintln!(
         "| identifiant | lev d=1 (actuel) | exact d=0 | jaro-winkler 0,9 | exact_match | strict sép. | phrase | parse | content exact_match |"
