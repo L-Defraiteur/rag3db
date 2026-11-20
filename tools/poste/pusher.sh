@@ -727,7 +727,8 @@ replay_and_push_a() {
       return 0
     fi
     rank=0; for line in "${part[@]}"; do r=$(kind_rank "$(f_ "$line" 4)"); [ "$r" -gt "$rank" ] && rank=$r; done
-    gate=0; [ "$rank" -lt 2 ] && { tickets_gate; gate=$?; }
+    # The tickets' gate for every kind (21 Nov., c7: a Rust lot that carries a ticket is gated like a docs lot).
+    tickets_gate; gate=$?
     [ $gate = 4 ] && { tickets_wait "${part[@]}"; return 0; }
     if [ $gate = 0 ]; then
       g push -q origin "HEAD:refs/heads/$RB" || { log "$TRAIN_LABEL" "push de la repose $RB refusé, rejoué au pas suivant"; return 0; }
@@ -781,6 +782,13 @@ spec_run() { # <A's head> <line>… — in the background; its result in slot2/r
     [ "$(g rev-parse "origin/$(f_ "$line" 2)")" = "$(f_ "$line" 3)" ] || { log "$TRAIN_LABEL" "créneau 2 jeté" "$(f_ "$line" 1) a bougé"; printf '4\t-\t%s\n' "$TRAIN_LABEL" > "$SD/result"; return; }
   done
   repose "$@" > /dev/null || { log "$TRAIN_LABEL" "créneau 2 jeté" "la repose sur la tête de A bute"; printf '5\t-\t%s\n' "$TRAIN_LABEL" > "$SD/result"; return; }
+  # The tickets' gate in slot 2 too (21 Nov., c7: garde-repousse-docs landed through slot 2 with a ticket in closed/
+  # whose État said « ouvert », and master went red at check_tickets). Red by the lot: a code red with the refusal; master
+  # itself red: thrown, the lots wait in the queue.
+  tickets_gate; case $? in
+    1) log "$TRAIN_LABEL" "créneau 2 rouge" "$(cat "$SD/last-red.txt")"; printf '1\t-\t%s\n' "$TRAIN_LABEL" > "$SD/result"; return ;;
+    4) log "$TRAIN_LABEL" "créneau 2 jeté" "master rouge à check_tickets"; printf '2\t-\t%s\n' "$TRAIN_LABEL" > "$SD/result"; return ;;
+  esac
   g push -q origin "HEAD:refs/heads/$RB" || { printf '2\t-\t%s\n' "$TRAIN_LABEL" > "$SD/result"; return; }
   log "$TRAIN_LABEL" "reposé (créneau 2)" "$RB $(g rev-parse --short HEAD) sur $(g rev-parse --short "$BASE"), la tête de A"
   JNAME=-
