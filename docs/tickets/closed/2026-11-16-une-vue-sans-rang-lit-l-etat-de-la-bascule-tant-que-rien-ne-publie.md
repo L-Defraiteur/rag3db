@@ -1,6 +1,9 @@
 # Une vue sans rang lit l'état de la bascule tant que rien ne publie
 
-- **État** : ouvert (16 novembre 2026), arbre principal ; à faire dans 2a′-3.
+- **État** : corrigé (18 novembre 2026), par le lot 2 de 2a′-3 (67a6e47261, rouge aef84a7412) : une
+  indexation terminée publie la génération de la couche du backend au commit indexé
+  (`src/dataflow/index_nodes.rs`, `indexer_et_dire`). Le témoin est
+  `dataflow::index_nodes::tests::a_finished_index_publishes_its_generation`, sur master. Fermé le 20 novembre 2026.
 - **Famille** : produit
 - **Gravité** : une recherche sous `view: {layer: backend}` est périmée en silence sur une base vivante. Elle lit
   la génération 0, l'état de la bascule, pendant que l'appel sans vue lit l'index vivant. La réponse le dit depuis
@@ -42,3 +45,10 @@ rang et l'appel sans vue rendent la même réponse, et `pending_rows` est faux.
 
 Le témoin rouge puis vert dans 2a′-3, et la vérification sur une base basculée : après un index, `rank` de la vue
 vaut le rang publié neuf.
+
+## La fermeture (20 novembre 2026)
+
+Le remède est celui de ce ticket : à « indexation terminée », le rang en attente devient publié, au commit de
+l'arbre indexé, avec son compte de chemins sales, et un rang neuf s'ouvre en attente. Un index arrêté ou en échec ne
+publie rien ; une publication refusée se dit au journal avant la ligne de fin. Une vue sans rang lit donc ce que lit
+un appel sans vue, dès le premier index fini après la bascule.
