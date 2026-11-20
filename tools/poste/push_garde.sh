@@ -175,7 +175,8 @@ if [ "${1:-}" = "--derive" ]; then derive "$2"; exit 0; fi
 rouges_connus() {
   local f base kt etat rouges dits=""
   [ -f tools/poste/known_red_e2e.txt ] || return 1
-  rouges=$(grep -oE '^test [^ ]+ \.\.\. FAILED$' "$2" | awk '{print $2}')
+  # « test <nom> ... FAILED », ou « test <nom> - should panic ... FAILED » pour un #[should_panic] (20 nov.).
+  rouges=$(grep -oE '^test [^ ]+( - should panic)? \.\.\. FAILED$' "$2" | awk '{print $2}')
   [ -n "$rouges" ] || return 1
   for f in $rouges; do
     base=${f##*::}
