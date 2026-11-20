@@ -13,7 +13,21 @@ import { SearchBox } from "@/components/SearchBox";
 export function Home({ state }: { state: HostState }) {
   const backends = state.backends ?? [];
   if (!backends.length) {
-    return <p className="text-muted-foreground">L'hôte ne sert encore aucun dépôt : un dépôt paraît ici quand un agent ou l'atelier l'ouvre.</p>;
+    // **How to open a project** (scenario 2 of the night of 20 November 2026): a newcomer who reads only the IDE
+    // stopped at this page. It gives the command and the folder to run it from, and what follows.
+    return (
+      <div className="accueil-vide text-muted-foreground space-y-2">
+        <p>L'hôte ne sert encore aucun dépôt.</p>
+        <p>
+          Pour ouvrir un projet, lancez dans un terminal, depuis le dossier du projet :{" "}
+          <code className="text-foreground">rag3weaver-backend atelier</code>
+        </p>
+        <p>
+          L'atelier paraît alors ici. Son chat crée les fichiers et le dépôt git (sans rien pousser), ou attache un
+          worktree déjà sur le disque.
+        </p>
+      </div>
+    );
   }
   const principals = backends.filter((b) => !b.tache);
   const tasksOf = (b: Backend) => backends.filter((t) => t.tache && t.tache.parent === b.id);
