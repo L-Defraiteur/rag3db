@@ -1,5 +1,11 @@
 # Nouveautés
 
+- 20 novembre 2026 — **Une sonde rejoue la maintenance nocturne pendant des réindexations de code.** Le test ignoré
+  `the_nightly_compaction_during_reindexing_loses_no_word` (`dataflow::index_nodes`) indexe un dépôt dont les
+  fichiers changent à chaque tour, pendant que la maintenance du plein texte compacte en boucle sur le même
+  catalogue, puis contrôle le dictionnaire. Elle perdait 534 mots sous lucivy 4.3.10, aucun sous 4.3.12. Elle se
+  joue à la main : `--include-ignored`, `RAG3WEAVER_PROBE_ROUNDS` pour la durée.
+
 - 20 novembre 2026 — **`usages` d'un type compte les appels `Type::méthode()`.** Un appel comme `Catalog::new()`, `PhysicalTypeID::INT64` ou `Catalog.create()` se reliait à la méthode, mais pas au type lui-même : un scope qui ne nommait le type que par cet appel n'apparaissait pas dans `usages Catalog` (41 sites perdus dans les tests de rag3weaver). Le type d'un appel qualifié compte désormais comme un usage, en Rust, C++, Python, TypeScript et C# ; sur le moteur, 3 664 arêtes de plus, 3 845 sur rag3weaver/src, aucune retirée. Les bases repassent une fois à leur prochaine synchronisation (règles de l'analyse 9).
 
 - 19 novembre 2026 — **Une fonction ou une classe nommée comme un mot de JavaScript est une référence, dans tous les langages.** C++, C# et Go reprenaient la liste des mots vides de JavaScript, Python sa liste des noms intégrés : une fonction `of` ou `function`, une classe `Symbol` ou `Map` du projet n'étaient reliées à rien. Les mots vides et les noms intégrés des huit langages viennent maintenant d'une seule source (`data/stop_words/`, un fichier par langage, tirés des grammaires tree-sitter, des mots-clés et du module `builtins` de Python, du `builtin.go` de Go).

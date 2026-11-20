@@ -1197,12 +1197,15 @@ mod tests {
     /// One thread re-indexes a source whose files change every round (`spawn_index`, as the host's watcher does);
     /// another runs `fts_maintenance_nocturne` with the compaction, in a loop, on the same catalog — the host's
     /// path, `daemon_host` included in spirit. At the end, `check_dictionary` on every full-text handle: no word
-    /// may be lost. `RAG3WEAVER_PROBE_ROUNDS` sets the rounds (default 40).
+    /// may be lost. `RAG3WEAVER_PROBE_ROUNDS` sets the rounds (default 40, about 10 min on luciepc; 120 rounds,
+    /// 30 min). **Proved on 20 November 2026**: 534 ids lost under lucivy 4.3.10 (495 maintenances), 0 under
+    /// 4.3.12 (431). No capacity guard: the lucivy it judges is the one `Cargo.lock` pins, always the crate's.
     #[cfg(all(feature = "rag3db-native", feature = "code"))]
     #[test]
     #[ignore]
     fn the_nightly_compaction_during_reindexing_loses_no_word() {
         let rounds: u64 = std::env::var("RAG3WEAVER_PROBE_ROUNDS").ok().and_then(|v| v.parse().ok()).unwrap_or(40);
+        let started = std::time::Instant::now();
         let files = 240u64;
         let source_at = |round: u64| -> Arc<dyn FileSource> {
             let fichiers: Vec<(String, String)> = (0..files)
@@ -1257,7 +1260,7 @@ mod tests {
                 }
             }
         }
-        eprintln!("{rounds} rounds, {} maintenance(s); last: {:?}", notes.len(), notes.last());
+        eprintln!("{rounds} rounds, {} maintenance(s) in {:.0} s; last: {:?}", notes.len(), started.elapsed().as_secs_f64(), notes.last());
         assert!(notes.len() >= 3, "the maintenance ran several times during the re-indexing: {}", notes.len());
         assert!(lost.is_empty(), "words lost:\n{}", lost.join("\n"));
     }
