@@ -18,23 +18,28 @@ impl BackendTools<'_> {
     /// texte : le modèle ne le voit jamais.
     fn execute(&self, call: &ToolCall) -> Result<(String, Option<Value>, Option<Value>), String> {
         let arguments: Value = serde_json::from_str(&call.arguments).map_err(|e| e.to_string())?;
-        let mut result = self.backend.call(&call.name, arguments)?;
-        let ui = result.as_object_mut().and_then(|o| o.remove("ui")).filter(|u| !u.is_null());
-        // Le contexte d'action ne dépend pas du texte borné. Les métadonnées de
-        // recherche volumineuses restent dans le reçu, sans gonfler chaque événement.
-        let metadata = result.get("metadata").and_then(|m| m.get("invocation"))
-            .map(|invocation| json!({"invocation":invocation}));
-        Ok((match result["presentation"].as_str() {
-            Some(text) => match result
-                .get("metadata")
-                .filter(|m| m.as_object().is_some_and(|o| !o.is_empty()))
-            {
-                Some(metadata) => format!("{text}\nMetadata: {metadata}"),
-                None => text.to_string(),
-            },
-            None => result.to_string(),
-        }, ui, metadata))
+        Ok(the_parts_of_an_answer(self.backend.call(&call.name, arguments)?))
     }
+}
+
+/// **What a tool's answer becomes in the turn**: the text the model reads, what the page renders under the turn
+/// (`ui`, taken out of the text), and the receipt's context (`metadata`), which the page reads and the model does not.
+fn the_parts_of_an_answer(mut result: Value) -> (String, Option<Value>, Option<Value>) {
+    let ui = result.as_object_mut().and_then(|o| o.remove("ui")).filter(|u| !u.is_null());
+    // Le contexte d'action ne dépend pas du texte borné. Les métadonnées de
+    // recherche volumineuses restent dans le reçu, sans gonfler chaque événement.
+    let metadata = result.get("metadata").and_then(|m| m.get("invocation"))
+        .map(|invocation| json!({"invocation":invocation}));
+    (match result["presentation"].as_str() {
+        Some(text) => match result
+            .get("metadata")
+            .filter(|m| m.as_object().is_some_and(|o| !o.is_empty()))
+        {
+            Some(metadata) => format!("{text}\nMetadata: {metadata}"),
+            None => text.to_string(),
+        },
+        None => result.to_string(),
+    }, ui, metadata)
 }
 
 impl crate::agent::ToolBox for BackendTools<'_> {
@@ -61,5 +66,35 @@ impl crate::agent::ToolBox for BackendTools<'_> {
             Ok((texte, ui, metadata)) => Turn { ui, metadata, ..Turn::tool_result(&call.id, &call.name, texte) },
             Err(e) => Turn::tool_result(&call.id, &call.name, json!({"error": e}).to_string()),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// **The state of an index that is not ready reaches the page** (c7's night task, 20 November 2026; recherche's
+    /// `index` field of a tool's answer): the model reads it in the « > » line of the text; the page reads it in the
+    /// receipt's context, beside the invocation, to say it in clear under the tool.
+    #[test]
+    fn the_state_of_an_index_not_ready_goes_with_the_receipt() {
+        let index = json!({"ready": false, "eta_s": 40, "text_eta_s": 12, "vectors_eta_s": 40, "vectors_due": 300});
+        let answer = json!({
+            "presentation": "> l'index n'est pas prêt\n**r**",
+            "index": index,
+            "metadata": {"invocation": {"view": "w"}},
+        });
+        let (text, _, metadata) = the_parts_of_an_answer(answer);
+        assert!(text.starts_with("> l'index n'est pas prêt"), "the model reads the line : {text}");
+        let metadata = metadata.expect("a receipt's context");
+        assert_eq!(metadata["index"], index, "{metadata}");
+        assert_eq!(metadata["invocation"], json!({"view": "w"}), "{metadata}");
+    }
+
+    /// Without an index state, nothing is added: a ready index says nothing.
+    #[test]
+    fn a_ready_index_adds_nothing_to_the_receipt() {
+        let (_, _, metadata) = the_parts_of_an_answer(json!({"presentation": "r"}));
+        assert!(metadata.is_none(), "{metadata:?}");
     }
 }
