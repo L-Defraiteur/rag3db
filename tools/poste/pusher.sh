@@ -322,6 +322,18 @@ tickets_wait() { # <line>…
       END {if (!done) printf "%s", held}' "$Q" > "$Q.new" && mv "$Q.new" "$Q" ) 9> "$D/queue.lock"
 }
 
+# confiner_race <journals>: 0 when every « validation : ROUGE (descendants laissés après la commande) » of the pass names
+# a verdict with nothing left (restes: []), and there is at least one.
+confiner_race() {
+  local d n=0
+  while IFS= read -r d; do
+    [ -n "$d" ] || continue
+    python3 -c 'import json, sys; sys.exit(0 if json.load(open(sys.argv[1])).get("restes") == [] else 1)' "$d/verdict.json" 2>/dev/null || return 1
+    n=$((n + 1))
+  done < <(grep -ho 'validation : ROUGE (descendants laissés après la commande) ; preuves : [^ ]*' "$1"/*.log 2>/dev/null | sed 's/.* ; preuves : //')
+  [ "$n" -gt 0 ]
+}
+
 # A Rust lot: one pinned pass under `poste lourd`, the peak of its memory in the log. An environment red (code 124,
 # poste held, a service that refuses) is replayed once; anything else is a code red.
 replay_rust() { # <id> <journals> <witness> <witness_suite> <extra_suites> → 0 green, 1 code red, 2 environment red
@@ -341,6 +353,10 @@ replay_rust() { # <id> <journals> <witness> <witness_suite> <extra_suites> → 0
   # No summary: the pass never ran (poste refused it, the worktree was missing) — the environment, not the lot.
   [ -s "$JR/$J/resume.log" ] || return 2
   if [ "$rc" = 124 ] || grep -qE '\(124\)|poste tenu|Connection refused|refuse la pose' "$JR/$J/resume.log" 2>/dev/null; then return 2; fi
+  # **The confiner's race** (20 Nov., ticket of embarquement, c7): « descendants laissés après la commande » while its
+  # verdict says nothing was left at the cleaning (restes: []) is a dbus session not yet closed when the guard looked.
+  # An environment red, replayed once, until recherche's fix; a pid really left stays a code red.
+  if confiner_race "$JR/$J"; then log "$id" "course du confineur" "descendants laissés, restes: [] — rejeu (ticket du 20 nov.)"; return 2; fi
   return 1
 }
 
