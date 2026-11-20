@@ -540,3 +540,56 @@ fn un_accord_exterieur_reprend_la_ligne_exacte_et_n_accorde_pas_sa_variante() {
     drop(n);
     serveur.arreter();
 }
+
+/// **A window that is not the chat counts the approvals awaited** (the IDE in several windows, slice 5; ED's review:
+/// from what the host already says, without a shared key). A detached window of the repository says in its header how
+/// many approval cards of its backend wait for a decision: one opened before the turn follows it by the stream, one
+/// opened after the card reads it at its load; both fall back to none when the chat grants it.
+#[test]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : étape séparée")]
+fn une_fenetre_qui_n_est_pas_le_chat_compte_les_accords_en_attente() {
+    let Some(binaire) = navigateur_ou_saut("une_fenetre_qui_n_est_pas_le_chat_compte_les_accords_en_attente") else {
+        return;
+    };
+    let d = tempfile::tempdir().unwrap();
+    let model: ChatModel = Arc::new(move |_| -> Result<Arc<dyn Llm>, String> {
+        Ok(Arc::new(CallbackLlm::new("faux-accord", 8192, move |turns: &[Turn], opts, sink| {
+            let depuis = turns.iter().rposition(|t| t.role == "user").unwrap();
+            if turns[depuis..].iter().any(|t| t.role == "tool") {
+                MockLlm::new("J'attends ton accord.").generate(turns, opts, sink)
+            } else {
+                MockLlm::new("").with_tool_calls(vec![("run_command".to_string(), json!({ "command": "echo accorde-moi" }).to_string())]).generate(turns, opts, sink)
+            }
+        })))
+    });
+    let a = atelier_avec(d.path(), model);
+    let mut serveur = Serveur::lancer(&a);
+    let mut n = Navigateur::lancer(&binaire);
+    n.aller(&format!("{}/ide/entrer?jeton=j", serveur.racine()), "location.pathname.startsWith('/ide/')");
+    n.aller(&format!("{}/ide/code/{}/chat", serveur.racine(), a.h.id), PRETE);
+    // A window of the repository, open before the turn.
+    n.nouvel_onglet();
+    n.aller(&format!("{}/ide/code/{}/arbre?fenetre=depot", serveur.racine(), a.h.id), "document.getElementById('lien')?.textContent === 'flux : ouvert'");
+    let compte = "document.querySelector('#accords-en-attente')?.dataset.compte ?? null";
+    n.attendre(&format!("{compte} === '0'"), "the detached window says no approval awaited, before the turn");
+    n.onglet(0);
+    n.evaluer("document.querySelector('#message').value = 'lance echo'; document.querySelector('#send').click()");
+    let carte = "details.outil[data-outil=run_command] + .ui-du-tour .carte-accord";
+    n.attendre(&format!("!!document.querySelector('{carte} button.accorder') && document.querySelector('#status')?.textContent === 'fini'"), "the command awaits its approval in the chat");
+    n.onglet(1);
+    n.attendre(&format!("{compte} === '1'"), "the window open before the turn counts the approval awaited, by the stream");
+    // A window opened after the card: it reads it at its load.
+    n.nouvel_onglet();
+    n.aller(&format!("{}/ide/code/{}/arbre?fenetre=depot", serveur.racine(), a.h.id), "document.getElementById('lien')?.textContent === 'flux : ouvert'");
+    n.attendre(&format!("{compte} === '1'"), "the window opened after the card counts it at its load");
+    // The chat grants it: both fall back to none.
+    n.onglet(0);
+    n.evaluer(&format!("document.querySelector('{carte} button.accorder').click()"));
+    for i in [1, 2] {
+        n.onglet(i);
+        n.attendre(&format!("{compte} === '0'"), "the approval granted, no approval awaited");
+    }
+    assert!(n.erreurs.is_empty(), "console : {:?}", n.erreurs);
+    drop(n);
+    serveur.arreter();
+}
