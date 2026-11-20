@@ -55,6 +55,7 @@ function LiveDag({ id, genre, name, state }: { id: string; genre: string; name: 
   const [marks, setMarks] = useState<Map<string, string>>(new Map());
   const [durations, setDurations] = useState<Map<string, string>>(new Map());
   const [stopNote, setStopNote] = useState("");
+  const [sansGraphe, setSansGraphe] = useState(false);
   const runRef = useRef<string | null>(null);
   runRef.current = run;
   const target = JSON.stringify({ [genre]: name });
@@ -63,9 +64,10 @@ function LiveDag({ id, genre, name, state }: { id: string; genre: string; name: 
     // graph and the error of the tool before go with it.
     setG(null);
     setError(null);
+    setSansGraphe(false);
     fetch(`/ide/graphe?${new URLSearchParams({ backend: id, [genre]: name })}`)
       .then((r) => r.json())
-      .then((r) => (r.ok ? setG(r.result) : setError(r.error)))
+      .then((r) => (r.ok ? setG(r.result) : r.sans_graphe ? setSansGraphe(true) : setError(r.error)))
       .catch((e: Error) => setError(e.message));
   }, [id, genre, name]);
   useEffect(
@@ -110,7 +112,7 @@ function LiveDag({ id, genre, name, state }: { id: string; genre: string; name: 
       <h1 className="text-xl font-semibold mb-1">{name}</h1>
       {/* A tool the host serves itself (propose, report…) has no declared graph: said so, not a host error (ED's
           review of slice 4: a detached window follows every tool of the turn). */}
-      {error && genre === "tool" && error.startsWith("graph : pas d'outil") ? (
+      {sansGraphe ? (
         <p id="sans-graphe" className="text-sm text-muted-foreground" role="status">
           « {name} » : outil sans graphe — l'hôte le sert lui-même, il n'a pas de graphe déclaré à montrer.
         </p>
