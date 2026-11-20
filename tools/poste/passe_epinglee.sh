@@ -104,7 +104,8 @@ fi
 # juge_connus <suite> <journal> : 0 si chaque cas rouge du journal est un rouge connu de cette suite (et il le dit).
 juge_connus() {
   local f base kt rouges
-  rouges=$(grep -oE '^test [^ ]+ \.\.\. FAILED$' "$2" | awk '{print $2}')
+  # « test <nom> ... FAILED », ou « test <nom> - should panic ... FAILED » pour un #[should_panic] (20 nov.).
+  rouges=$(grep -oE '^test [^ ]+( - should panic)? \.\.\. FAILED$' "$2" | awk '{print $2}')
   [ -n "$rouges" ] || return 1
   for f in $rouges; do
     base=${f##*::}
@@ -147,7 +148,7 @@ grep -E '^test result|panicked at' $J/temoins.log >> $R
 # ignoré (la lib sans la feature navigateur), dit « 0 passed » avec le code 0. Au moins un test dont le nom porte le
 # filtre doit sortir « ok » (le témoin navigateur se juge à son étape).
 if [ "${SUITE_DU_TEMOIN:-}" != navigateur ] && [ "${SUITE_DU_TEMOIN:-}" != tty ]; then
-  awk -v f="$FILTRE" '$1 == "test" && $3 == "..." && $4 == "ok" && index($2, f) {t = 1} END {exit !t}' $J/temoins.log \
+  awk -v f="$FILTRE" '$1 == "test" && $(NF - 1) == "..." && $NF == "ok" && index($2, f) {t = 1} END {exit !t}' $J/temoins.log \
     || rouge "témoin : aucun test « $FILTRE » n'a été joué ok ($(grep -m1 '^test result' $J/temoins.log))"
 fi
 non_juges $J/temoins.log témoin || rouge "témoin : $(grep -c '^non jugé : ' $J/temoins.log) test non jugé (un témoin doit juger)"
@@ -191,7 +192,7 @@ if echo " $EXIGEES_NOMS " | grep -q " tty "; then
   [ $c = 0 ] || rouge "tty (code=$c)"
   [ "$(grep -c "Compiling rag3weaver-tty v.* ($TTY)" $J/tty.log)" -ge 2 ] || rouge "tty : le crate n'a pas été compilé deux fois depuis $TTY"
   if [ "${SUITE_DU_TEMOIN:-}" = tty ]; then
-    grep -qE "^test ([^ ]*::)?$FILTRE \.\.\. ok$" $J/tty.log || rouge "témoin tty $FILTRE : pas vu « ok » à l'étape tty"
+    grep -qE "^test ([^ ]*::)?$FILTRE( - should panic)? \.\.\. ok$" $J/tty.log || rouge "témoin tty $FILTRE : pas vu « ok » à l'étape tty"
     echo "témoin tty $FILTRE : ok" >> $R
   fi
 fi
@@ -203,7 +204,7 @@ for suite in $(echo $LISTE_DES_SUITES | tr " " "\n" | awk 'NF && !vu[$0]++'); do
   grep -E '^test result|FAILED|panicked' $J/$suite.log | head -20 >> $R
   [ $c = 0 ] || juge_connus "$suite" $J/$suite.log || rouge "$suite (code=$c)"
   printf '%s' "$CONNUS" | awk -F'\t' -v s="$suite" '$1 == s {print $2 "\t" $3}' | while IFS=$'\t' read -r kc kt; do
-    grep -qE "^test ([^ ]*::)?$kc \.\.\. ok$" $J/$suite.log && echo "à lever : $suite::$kc passe (ticket $kt)" >> $R
+    grep -qE "^test ([^ ]*::)?$kc( - should panic)? \.\.\. ok$" $J/$suite.log && echo "à lever : $suite::$kc passe (ticket $kt)" >> $R
   done
   # Une suite non jouée faute de feature est rouge (procédure, 7 novembre 2026).
   grep -q 'NON JOUÉES' $J/$suite.log && rouge "$suite : des suites non jouées faute de feature"
@@ -234,7 +235,7 @@ if [ -x scripts/temoins_navigateur.sh ]; then
   grep -E '^test result|panicked at|SAUTÉ|ROUGE' $J/navigateur.log | head -10 >> $R
   [ $c = 0 ] || rouge "témoins navigateur (code=$c)"
   if [ "${SUITE_DU_TEMOIN:-}" = navigateur ]; then
-    grep -qE "^test ([^ ]*::)?$FILTRE \.\.\. ok$" $J/navigateur.log || rouge "témoin navigateur $FILTRE : pas vu « ok » à l'étape des témoins navigateur"
+    grep -qE "^test ([^ ]*::)?$FILTRE( - should panic)? \.\.\. ok$" $J/navigateur.log || rouge "témoin navigateur $FILTRE : pas vu « ok » à l'étape des témoins navigateur"
     echo "témoin navigateur $FILTRE : ok" >> $R
   fi
 elif [ -n "${5:-}" ]; then
