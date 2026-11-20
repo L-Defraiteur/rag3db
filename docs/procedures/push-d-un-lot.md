@@ -70,6 +70,20 @@ pousseur refuse à l'enqueue un lot rust sans attestation. Les lots docs et scri
    `VERT n/n`. Une tête qui change, par une repose ou un commit de plus, demande une attestation rejouée. Le pousseur
    garde chaque attestation dans `pusher/attestations/`.
 
+**L'empreinte de l'analyse (20 nov. 2026, codeparsers, au mot de c7 ; en vigueur depuis l'atterrissage du garde-fou
+`codeparsers/analysis-fingerprint`).** Un lot qui change le texte d'un scope, son découpage, sa candidature ou ses
+arêtes monte `REGLES_DE_L_ANALYSE` (`extension/rag3weaver/src/code.rs`, avec sa ligne d'historique) **dans le même
+lot**, et il ajoute la ligne `<règles> <empreinte>` à `extension/rag3weaver/tests/fixtures/empreinte_analyse.txt`. C'est
+vrai aussi d'un pointeur codeparsers qui change l'analyse.
+Le témoin `empreinte_de_l_analyse::l_empreinte_de_l_analyse_ne_change_qu_avec_les_regles` (lib, feature `code`, joué par
+le pousseur à chaque lot) analyse un corpus figé de sept langues (`tests/fixtures/empreinte_analyse/`). Il rougit quand
+l'empreinte change sans que le numéro monte, et quand le numéro monte sans que sa ligne soit notée. Son message donne la
+ligne exacte à copier.
+Sans montée, une base reçoit le changement fichier par fichier, et le lot suivant qui monte les règles l'applique d'un
+coup et en porte le chapeau. C'est arrivé le 20 novembre : 57bfc142bf (14 novembre, le contenu d'un scope borné à ses
+octets) a coûté dix points de recherche à la bascule de luciepc. On ne touche pas au corpus figé pour faire passer le
+témoin : un lot qui en a besoin le dit dans son message.
+
 **Toute passe lourde part sous `timeout`, dans `poste` (c7, 15 nov. 2026, rappel de la règle du 10 octobre)** : `poste lourd timeout <N> <commande>`, aux deux postes, lib comme batterie. Le 15 novembre, un `cargo test --lib` sans borne a tenu la seule place lourde du portable 80 minutes à 1,7 de charge : des témoins attendaient un superviseur sans délai, et quatre passes attendaient derrière. Une attente sans borne dans un test est un défaut du produit à écrire (le produit a un délai réglé et le dit), pas une raison de laisser la place.
 
 **Mémoire (c7, 13 nov. 2026)** : **32 Gio pour toute validation**, l'invariant de `scripts/confiner_validation.py`. `poste` garde son défaut de **40 Gio pour les bâtis**. Donc `run_e2e.sh` se lance seul (il prend `poste` avec 32G), ou bien `POSTE_MEM_MAX=32G poste lourd … run_e2e.sh` : sous un `poste lourd` sans cette variable, la portée existe déjà à 40 Gio et le confineur refuse la passe.
