@@ -99,6 +99,10 @@ Sans montée, une base reçoit le changement fichier par fichier, et le lot suiv
 coup et en porte le chapeau. C'est arrivé le 20 novembre : 57bfc142bf (14 novembre, le contenu d'un scope borné à ses
 octets) a coûté dix points de recherche à la bascule de luciepc. On ne touche pas au corpus figé pour faire passer le
 témoin : un lot qui en a besoin le dit dans son message.
+**Un corpus qui change remplace la ligne du numéro courant** (c7, 20 nov. 2026) : le lot prouve d'abord, par un commit
+qui ne touche pas le corpus, que l'empreinte calculée est encore celle notée ; puis il ajoute ses fichiers au corpus et
+remplace la ligne du numéro courant par la nouvelle valeur, en citant la preuve dans son message. Une analyse qui change
+monte le numéro ; un corpus ne monte jamais les règles, ce qui ferait repasser les bases pour rien.
 
 **Toute passe lourde part sous `timeout`, dans `poste` (c7, 15 nov. 2026, rappel de la règle du 10 octobre)** : `poste lourd timeout <N> <commande>`, aux deux postes, lib comme batterie. Le 15 novembre, un `cargo test --lib` sans borne a tenu la seule place lourde du portable 80 minutes à 1,7 de charge : des témoins attendaient un superviseur sans délai, et quatre passes attendaient derrière. Une attente sans borne dans un test est un défaut du produit à écrire (le produit a un délai réglé et le dit), pas une raison de laisser la place.
 
