@@ -6,6 +6,11 @@
   dataient du 11 octobre). La copie qui différait est gardée à côté (`.copie-locale`) et nommée ; `--keep-copies` la
   garde telle quelle. `/sante` donne la version des gabarits livrés et, par base, les copies servies à leur place ;
   l'ouverture d'une base les dit au journal.
+- 20 novembre 2026 — **lucivy 4.3.13 : un index plus récent est refusé en le disant.** Si un plein texte a été écrit
+  par une lucivy plus récente qui y garde des générations anciennes (la 4.4 à venir), cette version refuse de l'ouvrir
+  et nomme la version qu'il faut, au lieu de l'ouvrir et d'en effacer les générations gardées. Les index existants
+  s'ouvrent comme avant.
+
 - 20 novembre 2026 — **La fenêtre détachée du dépôt dit aussi quand l'index est prêt.** Après une réponse « index pas prêt » dans le chat, une fenêtre du dépôt ouverte à côté le dit dans son en-tête, une fois, quand l'index a rattrapé.
 - 20 novembre 2026 — **Un morceau de code tient dans la fenêtre de l'embarqueur.** Sous granite (512 jetons), 72,5 % des
   morceaux de rag3weaver dépassaient sa fenêtre, et leur fin n'était pas cherchable par le vecteur : le contexte ajouté
