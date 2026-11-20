@@ -257,7 +257,16 @@ fn une_exclusion_posee_apres_coup_retire_le_minifie_et_ses_documents() {
     let mut catalog = catalogue();
     let mut source = source_a_trois_fichiers();
     source.push(("app.js".to_string(), format!("function minifie(){{{}}}\n", "var a=1;".repeat(1500))));
-    sync_source(&mut catalog, &Snapshot::new("depot", source.clone()), &SourceSyncOptions::default(), &mut |_| {}).unwrap();
+    // Sans règle : depuis le 20 novembre 2026, l'exclusion vaut par défaut ; une base qui veut ses bundles la lève.
+    let sans_regle: rag3weaver::backend_code::WorkspaceConfig = serde_json::from_value(serde_json::json!({
+        "source": "snapshot",
+        "root": "workspace",
+        "index": "code",
+        "index_exclude": {"minified_line_max_bytes": "off", "code_file_max_bytes": "off", "paths": []}
+    }))
+    .unwrap();
+    let options_sans_regle = SourceSyncOptions { generated: sans_regle.index_gate(), ..Default::default() };
+    sync_source(&mut catalog, &Snapshot::new("depot", source.clone()), &options_sans_regle, &mut |_| {}).unwrap();
     assert_eq!(scopes_nommes(&catalog, "minifie"), 1, "sans règle, le minifié est indexé");
     let workspace: rag3weaver::backend_code::WorkspaceConfig = serde_json::from_value(serde_json::json!({
         "source": "snapshot",
