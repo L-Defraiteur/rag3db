@@ -14,6 +14,12 @@
   écrire. rag3weaver passe à cette version sans rien changer à ce qu'on voit : ses rebâtis, son tampon d'écriture et le
   geste des non-candidats commitent sans créer de génération, et l'annulation d'un flush dit désormais un commit qui
   échoue au lieu de l'avaler. Brancher les générations sur les versions de la base est l'étape suivante.
+- 20 novembre 2026 — **Une proposition de gabarit se vérifie sur une copie, sans toucher la version en service.**
+  `Backend::check_proposal(<manifeste de la copie>)` charge la copie comme le ferait un rechargement, refuse tout
+  changement de ce qui est fixé à l'ouverture (base, modèles, entités, relations) en le nommant, et rend la version de
+  la copie à côté de celle en service. Rien n'est mis en service : une proposition s'applique en la recopiant dans le
+  gabarit, puis par `check_reload` et `apply_reload`.
+
 - 20 novembre 2026 — **Les graphes de l'archiviste se lisent sur disque, dans le gabarit memory.** Ses graphes et ses
   Plans cités (`archive_decide`, `archive_slice_core`, `turns_select`…) étaient pris dans le binaire
   (`@builtin:`) : une copie éditée du gabarit n'en changeait rien. Ils se citent maintenant à côté du manifeste
