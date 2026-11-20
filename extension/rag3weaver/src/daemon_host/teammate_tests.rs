@@ -2692,3 +2692,69 @@ fn a_task_that_is_not_paired_has_no_send_to_session() {
     let outils = outils.lock().unwrap();
     assert!(!outils.is_empty() && !outils.iter().any(|n| n == "send_to_session"), "{outils:?}");
 }
+
+/// **The page of a task follows its teammate by the stream, and answers its approvals** (c7, 20 November 2026: a run
+/// of the terminal seen and reachable in the IDE; Lucie's invariant, one host for both). The page of the task « doc » is
+/// open before the request. Without reloading, its mailbox shows the teammate's lines as they come, and the command
+/// the gate held (`echo accorde-moi`) becomes a card with « oui » and « non », as the terminal's o / n. « oui » from
+/// the page: the command runs at the next step, and the card goes.
+#[cfg(all(unix, feature = "code", feature = "rag3db-native"))]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : étape séparée")]
+#[test]
+fn the_page_of_a_task_follows_its_teammate_and_answers_its_approval() {
+    use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+    use std::time::Duration;
+    let Some(binaire) = navigateur_ou_saut("the_page_of_a_task_follows_its_teammate_and_answers_its_approval") else {
+        return;
+    };
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let model: ChatModel = Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+        Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
+            let results = tool_results(turns);
+            let accorde = turns.iter().any(|t| t.content.contains("commande accordée"));
+            let run = |ligne: &str| ("run_command", json!({ "command": ligne }));
+            match (accorde, results.len()) {
+                (false, 0) => answer(turns, opts, sink, "", calls(&[run("echo accorde-moi")])),
+                (false, _) => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": false, "done": "rien", "remaining": "echo attend l'accord" }))])),
+                (true, 0) => answer(turns, opts, sink, "", calls(&[run("echo accorde-moi")])),
+                (true, _) => answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "echo joué après l'accord", "remaining": "" }))])),
+            }
+        })))
+    });
+    let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")));
+    host.se_connaitre();
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    host.ouvrir_une_tache(&h.id, "doc").expect("la tâche s'ouvre");
+    let ecoute = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let racine = format!("http://{}", ecoute.local_addr().unwrap());
+    let server = tiny_http::Server::from_listener(ecoute, None).unwrap();
+    let servi = host.clone();
+    let fil = std::thread::spawn(move || crate::daemon_host::DaemonServer::new(server, 2).serve(servi, Some("j".into())));
+    let mut n = Navigateur::lancer(&binaire);
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+    n.aller(&format!("{racine}/ide/code/{}/taches/doc", h.id), "!!document.querySelector('section.equipier') && document.getElementById('lien')?.textContent === 'flux : ouvert'");
+    n.evaluer("window.__pasRecharge = true");
+    host.post_to_teammate(&h.id, "doc", "c7", "request", None, "Dis bonjour par echo.", &Value::Null).expect("la request");
+    let carte = "document.querySelector('#attente-equipier')";
+    n.attendre(&format!("({carte}?.textContent ?? '').includes('echo accorde-moi') && !!{carte}?.querySelector('button.accorder')"), "the page shows the held command as a card, by the stream");
+    assert!(n.evaluer("[...document.querySelectorAll('ul.boite li')].some((l) => l.dataset.kind === 'approval')").as_bool().unwrap_or(false), "the mailbox shows the approval line");
+    n.evaluer(&format!("{carte}.querySelector('button.accorder').click()"));
+    n.attendre(
+        "[...document.querySelectorAll('ul.boite li')].some((l) => l.dataset.kind === 'step_done' && l.textContent.includes('echo joué après l'accord'))",
+        "the command ran after the page's « oui », and the mailbox shows it",
+    );
+    assert_eq!(n.evaluer(&format!("!!{carte}")), json!(false), "the card goes once answered");
+    assert_eq!(n.evaluer("window.__pasRecharge === true"), json!(true), "followed without reloading the page");
+    let boite = host.teammate_files(&h.id, "doc").unwrap().mailbox();
+    assert!(boite.iter().any(|l| l["kind"] == "answer" && l["approved"] == true), "the page's answer is an approval in the mailbox : {boite:#?}");
+    assert!(n.erreurs.is_empty(), "console : {:?}", n.erreurs);
+    drop(n);
+    let _ = crate::daemon::agent_with_timeout(Duration::from_secs(5))
+        .post(format!("{racine}/arret"))
+        .header("Authorization", "Bearer j")
+        .header("content-type", "application/json")
+        .send("{}");
+    let _ = fil.join();
+}
