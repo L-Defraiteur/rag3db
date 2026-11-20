@@ -109,14 +109,14 @@ impl Backend {
         Ok(p)
     }
 
-    /// Les propositions de ce backend, dans l'ordre.
     /// Holds the list of propositions, for a test: a `propose` waits behind it (19 Nov., the chat's
-    /// tool that waits).
-    #[cfg(test)]
+    /// tool that waits). Its witnesses are the chat's tests, under the features of their module.
+    #[cfg(all(test, feature = "daemon", feature = "rag3db-native", feature = "code"))]
     pub(crate) fn hold_for_a_test(&self) -> std::sync::MutexGuard<'_, Vec<Proposition>> {
         self.propositions.liste.lock().unwrap_or_else(|e| e.into_inner())
     }
 
+    /// Les propositions de ce backend, dans l'ordre.
     pub fn propositions(&self) -> Vec<Proposition> {
         self.propositions.liste.lock().unwrap_or_else(|e| e.into_inner()).clone()
     }
