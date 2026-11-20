@@ -461,6 +461,38 @@ impl From<Envoi> for OpError {
     }
 }
 
+/// **The Claude Code session that runs this thin client** (page 02 of 20 November 2026): its ancestor `claude`, then
+/// that process's entry in Claude Code's registry (`~/.claude/sessions/<pid>.json`: `sessionId`, `name`), else the
+/// card the hook wrote (`mail::fiche_du_pid`). `None` outside a Claude Code session.
+fn claude_de_l_appelant() -> Option<Value> {
+    let (pid, _) = crate::mail::ancetre_claude(std::process::id())?;
+    let registre = std::env::var_os("HOME").map(|h| std::path::Path::new(&h).join(".claude/sessions"))?;
+    claude_du_registre(&registre, pid).or_else(|| crate::mail::fiche_du_pid(pid).map(|f| json!({ "session_id": f.session_id, "pid": pid })))
+}
+
+/// A Claude Code process's entry in the registry `dir`: `{session_id, name, pid}`, or `None` without a `sessionId`.
+pub(crate) fn claude_du_registre(dir: &Path, pid: u32) -> Option<Value> {
+    let v: Value = serde_json::from_str(&std::fs::read_to_string(dir.join(format!("{pid}.json"))).ok()?).ok()?;
+    let session = v["sessionId"].as_str().filter(|s| !s.is_empty())?;
+    Some(json!({ "session_id": session, "name": v["name"], "pid": pid }))
+}
+
+/// **The host's tools of the views**, served by the thin client beside the backend's (page 02 of 20 November 2026).
+pub fn outils_des_vues() -> Vec<Value> {
+    vec![
+        json!({
+            "name": "views",
+            "description": "Les vues que cette session peut lire sur ce backend (le backend, les couches de branche et de worktree suivies), et l'active avec sa source (session, ou défaut). Chaque réponse de lecture dit aussi la vue lue (view).",
+            "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+        }),
+        json!({
+            "name": "use_view",
+            "description": "Rend la vue `name` active pour cette session, et pour tout client de la même session Claude Code ; l'hôte la garde. Un outil de lecture appelé sans `view` la lit. `name` : backend, le nom d'une couche (refs/heads/…, worktree:<chemin>), ou le chemin absolu d'un worktree suivi. Un nom inconnu refuse en listant les vues connues.",
+            "inputSchema": { "type": "object", "properties": { "name": { "type": "string", "minLength": 1 } }, "required": ["name"], "additionalProperties": false }
+        }),
+    ]
+}
+
 fn open_session(
     agent: &ureq::Agent,
     base: &str,
@@ -471,7 +503,12 @@ fn open_session(
 ) -> Result<String, String> {
     // Le pid, pour que l'hôte ferme la session si ce client meurt sans la
     // fermer (tué, ou abandonné par la sonde de `claude mcp get`).
-    let corps = json!({ "client": client, "keys": keys, "pid": std::process::id() }).to_string();
+    let mut corps = json!({ "client": client, "keys": keys, "pid": std::process::id() });
+    // The Claude Code session that calls: its view, kept by the host, is found again (page 02 of 20 November 2026).
+    if let Some(claude) = claude_de_l_appelant() {
+        corps["claude"] = claude;
+    }
+    let corps = corps.to_string();
     let mut requete = agent.post(format!("{base}/session")).header("content-type", "application/json");
     if let Some(t) = token {
         requete = requete.header("Authorization", &format!("Bearer {t}"));
@@ -950,6 +987,7 @@ impl Hote for McpClient {
         let mut outils = vec![Self::status_tool()];
         if let Side::Attached(c) = &*self.side.lock().unwrap_or_else(|p| p.into_inner()) {
             outils.extend(c.outils());
+            outils.extend(outils_des_vues());
         }
         outils
     }
@@ -968,6 +1006,15 @@ impl Hote for McpClient {
             }
         }
         match &*side {
+            // The host's tools of the views: on this backend, for this session.
+            Side::Attached(c) if nom == "views" || nom == "use_view" => {
+                let (route, corps) = if nom == "views" {
+                    ("/views", json!({ "manifest": c.manifest }))
+                } else {
+                    ("/views/use", json!({ "manifest": c.manifest, "name": arguments["name"] }))
+                };
+                c.op(route, corps).map(|r| json!({ "result": r })).map_err(|e| e.error)
+            }
             Side::Attached(c) => {
                 let view = arguments.get("view").cloned();
                 let r = c.appeler(nom, arguments);
@@ -991,7 +1038,7 @@ impl Hote for McpClient {
     /// Sans hôte, tout nom passe : [`McpClient::appeler`] retente l'hôte, et
     /// rend sinon une erreur d'outil qui dit pourquoi (page C, §4).
     fn accepte(&self, nom: &str) -> bool {
-        if nom == DAEMON_STATUS {
+        if nom == DAEMON_STATUS || nom == "views" || nom == "use_view" {
             return true;
         }
         match &*self.side.lock().unwrap_or_else(|p| p.into_inner()) {
@@ -1193,6 +1240,20 @@ mod tests {
         let m = manifeste_quelconque();
         let e = DaemonClient::connect("127.0.0.1:9", m.path(), "le témoin", vec![]).err().expect("refusé");
         assert!(e.contains("127.0.0.1:9"), "{e}");
+    }
+
+    /// **The Claude Code session is read in its registry** (page 02 of 20 November 2026): `sessionId` and `name` of the
+    /// ancestor's entry; an entry without `sessionId`, or no entry, gives nothing.
+    #[test]
+    fn the_claude_session_is_read_in_its_registry() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::write(d.path().join("42.json"), r#"{"sessionId":"abc-1","name":"arbre principal","cwd":"/x"}"#).unwrap();
+        std::fs::write(d.path().join("43.json"), r#"{"name":"sans id"}"#).unwrap();
+        assert_eq!(claude_du_registre(d.path(), 42), Some(json!({"session_id": "abc-1", "name": "arbre principal", "pid": 42})));
+        assert_eq!(claude_du_registre(d.path(), 43), None);
+        assert_eq!(claude_du_registre(d.path(), 44), None);
+        let noms: Vec<Value> = outils_des_vues().iter().map(|t| t["name"].clone()).collect();
+        assert_eq!(noms, vec![json!("views"), json!("use_view")]);
     }
 
     /// Un hôte en TCP brut qui répond à `/session` et `/open`, puis **coupe la

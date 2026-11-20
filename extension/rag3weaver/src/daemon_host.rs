@@ -299,7 +299,6 @@ pub const MANIFEST_CHANGED: &str =
 pub struct DaemonHost {
     /// **Where the views of the sessions are kept** (`<dir>/<claude session id>.json`), across thin clients and host
     /// restarts; `None`: `$XDG_STATE_HOME/rag3weaver/vues`, else `~/.local/state/rag3weaver/vues`.
-    #[allow(dead_code)] // RED STUB: read once views and use_view are written.
     vues_dir: Mutex<Option<std::path::PathBuf>>,
     /// **Soi, en lien faible** : posé par [`DaemonHost::se_connaitre`] (le service, les
     /// témoins), il permet à l'hôte de donner aux backends qu'il ouvre l'hôte des
@@ -642,22 +641,92 @@ impl DaemonHost {
 
     /// The view by default of a session, `None` without one.
     pub fn session_default_view(&self, session: &str) -> Option<Value> {
-        let _ = session;
-        None // RED STUB.
+        self.sessions.lock().unwrap_or_else(|p| p.into_inner()).get(session).and_then(|s| s.default_view.clone())
+    }
+
+    fn vues_dir(&self) -> std::path::PathBuf {
+        if let Some(d) = self.vues_dir.lock().unwrap_or_else(|p| p.into_inner()).clone() {
+            return d;
+        }
+        let etat = std::env::var_os("XDG_STATE_HOME")
+            .map(std::path::PathBuf::from)
+            .or_else(|| std::env::var_os("HOME").map(|h| std::path::Path::new(&h).join(".local/state")))
+            .unwrap_or_else(std::env::temp_dir);
+        etat.join("rag3weaver/vues")
+    }
+
+    /// The file of a Claude Code session's view; `None` for an id that is not a plain name (never a path).
+    fn fichier_de_vue(&self, claude: &str) -> Option<std::path::PathBuf> {
+        let sain = !claude.is_empty() && claude.len() <= 128 && claude.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+        sain.then(|| self.vues_dir().join(format!("{claude}.json")))
+    }
+
+    fn vue_gardee(&self, claude: &str) -> Option<Value> {
+        let texte = std::fs::read_to_string(self.fichier_de_vue(claude)?).ok()?;
+        serde_json::from_str::<Value>(&texte).ok()?.get("active").cloned().filter(|v| !v.is_null())
+    }
+
+    fn garder_la_vue(&self, claude: &str, view: Option<&Value>) -> Result<(), String> {
+        let Some(chemin) = self.fichier_de_vue(claude) else { return Err(format!("session Claude Code illisible : « {claude} »")) };
+        match view {
+            None => match std::fs::remove_file(&chemin) {
+                Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(format!("{} : {e}", chemin.display())),
+                _ => Ok(()),
+            },
+            Some(v) => {
+                let dir = chemin.parent().unwrap();
+                std::fs::create_dir_all(dir).map_err(|e| format!("{} : {e}", dir.display()))?;
+                let tmp = chemin.with_extension("json.tmp");
+                std::fs::write(&tmp, json!({ "active": v, "at_ms": crate::catalog::retard::now_ms() }).to_string())
+                    .and_then(|_| std::fs::rename(&tmp, &chemin))
+                    .map_err(|e| format!("{} : {e}", chemin.display()))
+            }
+        }
+    }
+
+    /// The name a view value is known by: its layer, or `worktree:<path>`.
+    fn nom_de_vue(v: &Value) -> String {
+        v["layer"].as_str().map(str::to_string).or_else(|| v["worktree"].as_str().map(|w| format!("worktree:{w}"))).unwrap_or_default()
+    }
+
+    fn noms_des_vues(&self, manifest: &Path) -> Result<Vec<String>, String> {
+        let hosted = self.hosted(manifest)?;
+        self.with_backend(&hosted, |b| b.view_names())?
     }
 
     /// **`views`**: the views a session can read on a backend (`backend`, then the live layers by their name), and the
     /// active one with its source (« session », or « défaut »).
     pub fn views(&self, session: Option<&str>, manifest: &Path) -> Value {
-        let _ = (session, manifest);
-        json!({ "ok": false, "error": "views : pas encore" }) // RED STUB.
+        let r = self.check_session(session).and_then(|s| {
+            let noms = self.noms_des_vues(manifest)?;
+            let active = match &s.default_view {
+                Some(v) => json!({ "name": Self::nom_de_vue(v), "source": "session" }),
+                None => json!({ "name": crate::generations::COUCHE_DU_BACKEND, "source": "défaut" }),
+            };
+            Ok(json!({ "ok": true, "views": noms.iter().map(|n| json!({ "name": n })).collect::<Vec<_>>(), "active": active }))
+        });
+        r.unwrap_or_else(|e| op_response(Err(e)))
     }
 
     /// **`use_view <name>`**: the view `name` becomes the active one of the session (and of every thin client of the same
     /// Claude Code session), kept on disk; an unknown name is refused, listing the known ones.
     pub fn use_view(&self, session: Option<&str>, manifest: &Path, name: &str) -> Value {
-        let _ = (session, manifest, name);
-        json!({ "ok": false, "error": "use_view : pas encore" }) // RED STUB.
+        let r = self.check_session(session).and_then(|s| {
+            let noms = self.noms_des_vues(manifest)?;
+            // A worktree by its path: its layer is `worktree:<real path>`.
+            let par_chemin = std::path::Path::new(name)
+                .is_absolute()
+                .then(|| std::path::Path::new(name).canonicalize().ok())
+                .flatten()
+                .map(|p| format!("worktree:{}", p.display()));
+            let couche = [Some(name.to_string()), par_chemin].into_iter().flatten().find(|n| noms.contains(n)).ok_or_else(|| {
+                format!("vue « {name} » inconnue de ce backend ; vues connues : {}", noms.join(", "))
+            })?;
+            let vue = json!({ "layer": couche });
+            self.set_session_view(&s.id, Some(vue))?;
+            Ok(json!({ "ok": true, "active": { "name": couche, "source": "session" } }))
+        });
+        r.unwrap_or_else(|e| op_response(Err(e)))
     }
 
     /// **Pose (or withdraws, with `None`) the view by default of a session**, checked as a call's `view` is: an unknown
@@ -668,7 +737,15 @@ impl DaemonHost {
         }
         let mut sessions = self.sessions.lock().unwrap_or_else(|p| p.into_inner());
         let s = sessions.get_mut(session).ok_or_else(|| format!("session inconnue : {session}"))?;
-        s.default_view = view;
+        s.default_view = view.clone();
+        // One Claude Code session, one view: every thin client of it follows, and the view is kept on disk.
+        if let Some(claude) = s.claude_session.clone() {
+            for autre in sessions.values_mut().filter(|o| o.claude_session.as_deref() == Some(claude.as_str())) {
+                autre.default_view = view.clone();
+            }
+            drop(sessions);
+            self.garder_la_vue(&claude, view.as_ref())?;
+        }
         Ok(())
     }
 
@@ -1975,6 +2052,16 @@ impl DaemonHost {
                         .map(|p| p as u32)
                         .and_then(|p| crate::daemon_lifecycle::process_start(p).map(|d| (p, d)));
                     let id = self.open_session(&client, cell, keys, process);
+                    // The Claude Code session that calls (its `sessionId`): its view, kept on disk, is found again.
+                    if let Some(claude) = v["claude"]["session_id"].as_str().filter(|c| !c.is_empty()) {
+                        let gardee = self.vue_gardee(claude);
+                        if let Some(s) = self.sessions.lock().unwrap_or_else(|p| p.into_inner()).get_mut(&id) {
+                            s.claude_session = Some(claude.to_string());
+                            if s.default_view.is_none() {
+                                s.default_view = gardee;
+                            }
+                        }
+                    }
                     match v.get("view").filter(|w| !w.is_null()).map(|w| self.set_session_view(&id, Some(w.clone()))) {
                         Some(Err(e)) => {
                             self.close_session(&id);
@@ -2073,6 +2160,8 @@ impl DaemonHost {
                         None => json!({ "ok": false, "error": "« name » manque : la vue à rendre active" }),
                     }
                 };
+                // As `/call`: an answer that holds is under `result`.
+                let reponse = if reponse["ok"] == json!(true) { json!({ "ok": true, "result": reponse }) } else { reponse };
                 (statut(&reponse), reponse)
             }
             _ => (404, json!({ "ok": false, "error": format!("route inconnue : {method} {path}") })),
