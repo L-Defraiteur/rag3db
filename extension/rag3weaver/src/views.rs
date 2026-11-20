@@ -697,6 +697,43 @@ mod tests {
         assert!(s.watched && s.up_to_date && s.files_behind == 0, "a watched layer takes the cold diff instead of its watch's count: {s:?}");
     }
 
+    /// **A view without a watch sees its untracked files** (the rest of the ticket of 18 November 2026): the index takes
+    /// the files git does not track, so the cold diff counts them too. `n.rs` untracked at the index and unchanged is not
+    /// behind; edited, it is; `m.rs`, new after the index, is; `o.rs`, untracked at the index then deleted, is.
+    #[test]
+    fn a_view_without_a_watch_sees_its_untracked_files() {
+        let d = tempfile::tempdir().unwrap();
+        let racine = d.path();
+        let git = |args: &[&str]| {
+            let o = std::process::Command::new("git").arg("-C").arg(racine).args(args).output().unwrap();
+            assert!(o.status.success(), "git {args:?} : {}", String::from_utf8_lossy(&o.stderr));
+        };
+        git(&["init", "-q"]);
+        std::fs::write(racine.join("f.rs"), "pub fn f() {}\n").unwrap();
+        git(&["add", "."]);
+        git(&["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "c1"]);
+        std::fs::write(racine.join("n.rs"), "pub fn n() {}\n").unwrap();
+        std::fs::write(racine.join("o.rs"), "pub fn o() {}\n").unwrap();
+        let cat = catalogue();
+        poser(&cat, "backend", 0, None, "[]");
+        let cell = cat.scope().clone();
+        cat.note_indexed_tree_of_layer(&cell, "backend", &crate::catalog::indexed_tree_of(&racine.to_string_lossy())).unwrap();
+        let lag = std::sync::Arc::new(crate::catalog::retard::Lag::new());
+        let etat = || {
+            let marque = cat.indexed_tree_of_layer(&cell, "backend").expect("the layer's indexed tree");
+            view_state(cat.conn(), cat.dialect_arc().as_ref(), &vue("backend", None), &lag, &cell).unwrap().with_cold_behind(cold_files_behind(&marque))
+        };
+        let s = etat();
+        assert!(s.up_to_date && s.files_behind == 0, "right after its index, untracked files indexed as they are are behind: {s:?}");
+        std::fs::write(racine.join("n.rs"), "pub fn n() -> u8 { 1 }\n").unwrap();
+        assert_eq!(etat().files_behind, 1, "an untracked file edited since the index is not behind");
+        std::fs::write(racine.join("m.rs"), "pub fn m() {}\n").unwrap();
+        assert_eq!(etat().files_behind, 2, "an untracked file new since the index is not behind");
+        std::fs::remove_file(racine.join("o.rs")).unwrap();
+        let s = etat();
+        assert!(!s.up_to_date && s.files_behind == 3, "an untracked file indexed then deleted is not behind: {s:?}");
+    }
+
     /// **An unknown layer is a state, not a refusal**: a worktree layer before 2a′-3 has no generation; its view
     /// has no rank, and its lag is still read.
     #[test]
