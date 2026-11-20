@@ -510,6 +510,14 @@ if command -v mold > /dev/null 2>&1 && command -v clang > /dev/null 2>&1 && [ -z
   export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=clang
   [ -n "${CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS+posée}" ] || export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS="-C link-arg=-fuse-ld=mold"
 fi
+# **L'iGPU autorisé à l'embarqueur par un fichier déclaré du poste** (20 novembre 2026, c7 et embarquement) : un
+# embarqueur burn refuse un adaptateur intégré, car l'Intel ARL de luciepc (anv) rend des vecteurs faux. L'APU Radeon
+# 8060S de la tablette (radv) calcule juste, mesuré contre card2. Le fichier `embedder-allow-integrated-gpu` du dossier
+# des verrous, posé à la tablette seulement, porte la référence de cette mesure ; il autorise, il ne force rien. Une
+# variable déjà posée par l'appelant l'emporte.
+if [ -s "$V/embedder-allow-integrated-gpu" ] && [ -z "${RAG3WEAVER_EMBEDDER_ALLOW_INTEGRATED_GPU+posée}" ]; then
+  export RAG3WEAVER_EMBEDDER_ALLOW_INTEGRATED_GPU=1
+fi
 QUOTA="${POSTE_CPU_QUOTA:-$((FILS * 100))%}"
 if [ "$borne" = 1 ]; then
   set -- systemd-run --user --scope -q -p MemoryMax="$MEM" -p MemorySwapMax="$SWAP" -p CPUQuota="$QUOTA" -- "$@"
