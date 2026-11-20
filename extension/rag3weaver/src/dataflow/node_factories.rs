@@ -1232,6 +1232,9 @@ impl NodeFactory for FuseResultsNodeFactory {
         if let Some(f) = config.get("exact_name").and_then(|v| v.as_str()).filter(|f| !f.is_empty()) {
             node = node.with_exact_name(f);
         }
+        if let Some(f) = config.get("exact_name_leaf").and_then(|v| v.as_str()).filter(|f| !f.is_empty()) {
+            node = node.with_exact_name_leaf(f);
+        }
         if let Some(k) = config.get("top_k") {
             let k = k.as_u64().ok_or("FuseResultsNode: 'top_k' must be an integer")? as usize;
             node = node.with_top_k(k);
@@ -1320,6 +1323,15 @@ impl NodeFactory for FuseResultsNodeFactory {
                     required: false,
                     default: None,
                     description: "Le champ du nom d'un résultat : un résultat dont ce champ est la requête, à la casse près, passe devant tous les autres".into(),
+                    choices: None,
+                    json_schema: None,
+                },
+                ConfigParam {
+                    name: "exact_name_leaf".into(),
+                    param_type: ConfigParamType::String,
+                    required: false,
+                    default: None,
+                    description: "Le champ qui dit qu'un résultat replie des enfants : un tel résultat ne passe pas devant par son nom exact".into(),
                     choices: None,
                     json_schema: None,
                 },
