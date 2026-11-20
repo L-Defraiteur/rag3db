@@ -4051,6 +4051,25 @@ impl Backend {
         self.garde.as_ref()
     }
 
+    /// **The views a call can read on this backend** (page 02 of 20 November 2026): `backend`, then each live layer by
+    /// its name (`couche_nom:<repo>:<name>`, its card without `fin`), as `view: {layer}` resolves them.
+    pub fn view_names(&self) -> Result<Vec<String>, String> {
+        let mut noms = vec![crate::generations::COUCHE_DU_BACKEND.to_string()];
+        let prepared = self.prepared();
+        let Some(root) = prepared.workspace_root() else { return Ok(noms) };
+        let Some(repo) = crate::suivies::repo_id(&root, prepared.manifest.tracked.as_ref())? else { return Ok(noms) };
+        let cat = self.catalog.lock().map_err(|_| "vues : catalogue empoisonné".to_string())?;
+        let prefixe = format!("couche_nom:{repo}:");
+        for (cle, id) in cat.meta_par_prefixe(&prefixe).map_err(|e| e.to_string())? {
+            let fiche: Option<Value> = cat.read_meta_key(&format!("fiche_couche:{repo}:{id}")).map_err(|e| e.to_string())?.and_then(|v| serde_json::from_str(&v).ok());
+            let nom = cle[prefixe.len()..].to_string();
+            if fiche.is_some_and(|f| f.get("fin").is_none()) && !noms.contains(&nom) {
+                noms.push(nom);
+            }
+        }
+        Ok(noms)
+    }
+
     pub fn prepared(&self) -> Arc<PreparedBackend> {
         self.prepared
             .read()
