@@ -1,6 +1,6 @@
 # Le témoin de la fermeture entre deux appels d'un pas rougit par intermittence
 
-- **État** : ouvert. Relevé par la session tty le 19 nov. 2026 ; pour archi (l'équipier).
+- **État** : fermé le 20 novembre 2026 par la session tty. Le lot `reprise-eintr-2` d'archi a atterri : la cause est une attente `recv` interrompue (EINTR) sur la socket du témoin, et le client de l'hôte la retente désormais (`daemon::connecteur_qui_reprend`, 16613c3d05 ; témoin rouge 16613c3d05). Seule l'attente se retente ; un envoi interrompu n'est jamais rejoué. Relevé par la session tty le 19 nov. 2026.
 - **Famille** : produit
 - **Gravité** : faux rouge (instable). Il peut rendre rouge la lib d'une passe sans que le lot y soit pour rien.
 - **Atteignable en service** : non (le témoin).
