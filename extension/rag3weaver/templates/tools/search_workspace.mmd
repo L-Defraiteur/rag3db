@@ -53,6 +53,7 @@ graph LR
     vector["VectorSearchNode"]
     sparse["SparseSearchNode"]
     scan["ScanFilesNode"]
+    exact_name["ExactNameNode(field='name', leaf='folds', limit=20)"]
     fuse["FuseResultsNode(default_weights='bm25:0.45,vector:0.55,sparse:0.4', dominant='bm25_exact', exact_name='name', exact_name_leaf='folds')"]
     rerank["RerankNode(keep_signal=true)"]
     paginate["PaginateNode"]
@@ -63,6 +64,7 @@ graph LR
     source -->|query| vector
     source -->|query| sparse
     source -->|query| scan
+    source -->|query| exact_name
     source -->|query| fuse
     source -->|query| rerank
     source -->|query| paginate
@@ -78,6 +80,7 @@ graph LR
     highlight -->|meta| render
     bm25 -->|results:bm25| fuse
     bm25 -->|exact:signals| fuse
+    exact_name -->|results:signals| fuse
     bm25 -->|status| fuse
     vector -->|results:vector| fuse
     vector -->|status| fuse

@@ -468,6 +468,8 @@ const BASE_NODES: &[&str] = &[
     "BM25SearchNode",
     "VectorSearchNode",
     "SparseSearchNode",
+    // The rows named by the whole query, read by the name: a read under the query's filter, nothing written.
+    "ExactNameNode",
     "FuseResultsNode",
     "FieldWeightNode",
     // Le filtre de résultats : un seuil, une exclusion — rien n'est relu.
