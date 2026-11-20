@@ -336,7 +336,7 @@ fn preview(
             return Err(refusal(ChunkCoverage, &chunk.uuid, "orphan, duplicate or incorrectly identified source chunk"));
         }
     }
-    let chunker = Chunker::new(ChunkerConfig::from(&target.chunking));
+    let chunker = Chunker::try_new(ChunkerConfig::from(&target.chunking)).map_err(|e| refusal(UnsupportedRecipe, "chunking", e))?;
     let mut versions: BTreeMap<_, PreviewVersion> = BTreeMap::new();
     let mut chunks: BTreeMap<_, PreviewChunk> = BTreeMap::new();
     let mut consumed = BTreeSet::new();
