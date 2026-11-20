@@ -117,4 +117,13 @@ Le témoin de la tranche 2 est étendu à ces trois points : l'adresse et la cib
 
 Vu en route, hors tranche : la vue d'un fichier garde l'erreur du fichier précédent quand son chemin change. Ticket : [`docs/tty/tickets/2026-11-19-la-vue-d-un-fichier-garde-l-erreur-du-precedent.md`](../tickets/2026-11-19-la-vue-d-un-fichier-garde-l-erreur-du-precedent.md).
 
-Restent les tranches 4 (le graphe détaché suit le run du tour) et 5 (le compte des accords dans une fenêtre qui n'est pas le chat).
+## Tranche 4, faite (20 novembre, dans la nuit)
+
+**Une fenêtre du graphe détachée suit les outils du tour.** La vue `dag` montre le graphe d'un outil (`dag/tool/<nom>`), que le sujet `dataflow` du flux allume nœud par nœud. Il n'y a pas de vue par run. « Le graphe suit le run du tour » se lit donc ainsi : il montre le graphe de chaque outil que le tour appelle, au moment où il l'appelle.
+
+- **Le chat**, à chaque `ToolCallStarted` de son tour, écrit `graphe:<backend>` (`{href: …/dag/tool/<nom>, at}`) quand une fenêtre du graphe est ouverte pour son backend. C'est une clé à part de `selection:<backend>` : la fenêtre du dépôt ne suit pas les outils.
+- **`main.tsx`** : chaque rôle suit sa clé (`depot` → `selection`, `graphe` → `graphe`), par la même navigation interne, et garde son rôle dans l'adresse. L'en-tête dit « fenêtre : graphe ».
+
+Témoin `le_graphe_detache_suit_les_outils_du_tour` : une fenêtre ouverte sur `dag/?fenetre=graphe` avant un tour qui appelle `list_files` puis `read_file` finit sur `dag/tool/read_file`, sans s'être rechargée, son rôle gardé, et le chat reste sur `/chat`. Rouge (8404c763b7 : elle restait sur la liste des graphes), puis vert (01f7960f71). Restent verts : les témoins des tranches 1 à 3, `ide_par_le_flux` et le contrôle du bundle.
+
+Reste la tranche 5 : le compte des accords dans une fenêtre qui n'est pas le chat.
