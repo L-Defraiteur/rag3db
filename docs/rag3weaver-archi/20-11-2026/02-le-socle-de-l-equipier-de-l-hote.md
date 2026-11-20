@@ -18,6 +18,13 @@ navigateur (le pont jackwener), et arbre fait les outils des vues.
 - **Sous la porte** : ce qui lance un processus passe par la porte des commandes et le bac à sable de
   la tâche. Ce qui sort sur le réseau passe par une politique déclarée.
 - **Rouge d'abord**, avec un faux modèle, un faux serveur ou une fausse horloge, jamais le réseau.
+- **Une phrase par paramètre** (Lucie, le 20 novembre à 17 h 25), pour tout outil exposé, MCP ou
+  `ToolDef` : ce qu'il fait, son défaut, et un exemple quand la valeur a une forme. Un témoin de lib
+  rougit sur tout paramètre sans description dans les schémas rendus (`tools/list`, et les outils que
+  le modèle de l'équipier reçoit). Les descriptions d'OpenCode donnent le ton. Le 20 novembre, les
+  outils de l'équipier ne la tenaient pas : `step_done` (ses quatre paramètres), `report.text`,
+  `suggest.text`, `send_to_session.text` et la plupart des champs d'`edit_plan` n'avaient pas de
+  description.
 
 ## Les lots, dans l'ordre
 
