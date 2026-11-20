@@ -1310,6 +1310,32 @@ fn an_edited_template_reloaded_is_a_new_version() {
     assert_ne!(after["metadata"]["template"]["hash"], json!(h0), "another content, another hash");
 }
 
+/// **The cited graphs are on disk, in the template** (20 November 2026: a graph cited by `@builtin:` came from the
+/// binary, and an agent that edited the template's copy edited nothing): a cited graph edited in the template's
+/// folder changes what the call plays, and the version of the template.
+#[test]
+#[ignore]
+fn a_cited_graph_edited_on_disk_changes_what_the_call_plays() {
+    let serveur = FakeServer::start_sequence(vec![etiquette("candidate_1")]);
+    let adresse = serveur.url.clone();
+    let dir = tempfile::tempdir().expect("dossier");
+    let b = ouvrir(dir.path(), |m| {
+        m["models"]["llm"] = json!({"provider": "compatible", "protocol": "openai", "model": "faux", "address": adresse});
+    });
+    let h0 = appel(&b, "list_turns", json!({}))["metadata"]["template"]["hash"].clone();
+    let cited = dir.path().join("templates/backends/memory/graphs/archive_decide.mmd");
+    let text = std::fs::read_to_string(&cited).unwrap();
+    let edited = text.replace("%% param: candidates_template string = \"- {{ alias }}", "%% param: candidates_template string = \"EDITED {{ alias }}");
+    assert_ne!(edited, text, "the witness edits the candidates template");
+    std::fs::write(&cited, edited).unwrap();
+    b.reload().expect("the edited template reloads");
+    appel(&b, "put_fiche", json!({"record": {"name": FICHE, "about": "Comment le moteur rejoue son journal à l'ouverture.", "state": "current"}}));
+    let r = appel(&b, "archive", json!({"titre": "Un doc", "contenu": "# Un doc\n\n## Le journal\n\nLe WAL se rejoue.\n", "jour": "2026-11-20"}));
+    let first: Value = serde_json::from_str(&serveur.request.recv().unwrap()).unwrap();
+    assert!(user_prompt(&first).contains("EDITED candidate_1"), "the edited graph is played: {}", user_prompt(&first));
+    assert_ne!(r["metadata"]["template"]["hash"], h0, "and the version changed");
+}
+
 /// The split of a long section (archive, segment_over): the instruction, then its numbered paragraphs as a part;
 /// the rules of a topic are in the schema.
 #[test]
