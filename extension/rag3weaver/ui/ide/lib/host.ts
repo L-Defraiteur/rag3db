@@ -200,7 +200,7 @@ function partager(vue: { onmessage: (e: { data: string }) => void }, statut: (s:
 
 /// Le flux de la page seule, quand le `SharedWorker` manque.
 function fluxDeLaPage(vue: { onmessage: (e: { data: string }) => void }, statut: (s: FluxStatus) => void): () => void {
-  const adresse = "/ide/flux?sujets=files,dataflow,catalog,reactions,declarations,agent,tokens,repos,accords,etat,index";
+  const adresse = "/ide/flux?sujets=files,dataflow,catalog,reactions,declarations,agent,tokens,repos,accords,etat,index,mailbox";
   let source: EventSource | null = null;
   let dernier = "";
   const brancher = () => {

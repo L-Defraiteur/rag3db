@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ligneDeBoite } from "@/lib/boite";
 import { lineDiff } from "@/lib/diff";
 import { GraphDiffSection, type GraphDiff } from "@/lib/graph";
-import { shortName, type HostState } from "@/lib/host";
+import { onFlux, shortName, type FluxEvent, type HostState } from "@/lib/host";
 
 // **La relecture d'une tâche** (page 08, vue 5) : la branche et son départ, les
 // témoins de la branche, fusionner ou rejeter, les graphes changés (en texte :
@@ -17,7 +17,7 @@ import { shortName, type HostState } from "@/lib/host";
 type File = { genre: string; path: string; avant: string | null; apres: string | null };
 type Review = { tache: { nom: string; id: string; branche: string; depart: string }; fichiers: File[]; graphes: GraphDiff[]; temoins: { chargement: boolean; refus?: string }; base_a_bouge: boolean };
 type Plan = { number: number; request: string; proposal: string; state: string; reason?: string; items: { id: string; text: string; status: string; alone: boolean; question?: string; reason?: string }[]; steps?: string[] };
-type Teammate = { mailbox: Record<string, unknown>[]; plans: { plans: Plan[] }; closed: Plan[]; running: boolean };
+type Teammate = { backend?: string | null; mailbox: Record<string, unknown>[]; plans: { plans: Plan[] }; closed: Plan[]; running: boolean; waiting?: Record<string, unknown> | null };
 
 const STATUS: Record<string, string> = { todo: "à faire", doing: "en cours", done: "fait", blocked: "bloqué", dropped: "abandonné" };
 
@@ -69,6 +69,26 @@ function TeammateSection({ backend, task }: { backend: string; task: string }) {
   useEffect(() => {
     load();
   }, [backend, task]);
+  // **The task's teammate, followed by the stream** (c7, 20 Nov. 2026: a run of the terminal seen and reachable in the
+  // IDE): each line of its mailbox (`MailboxLine`, the task's manifest) reads the teammate again — its mailbox, its
+  // plans, what waits for the supervisor. Nothing while idle.
+  const manifeste = t?.backend ?? null;
+  useEffect(() => {
+    if (!manifeste) return;
+    return onFlux((d: FluxEvent) => {
+      const e = d.evenement ?? {};
+      if (d.sujet === "mailbox" && e.kind === "MailboxLine" && d.backend === manifeste && e.task === task) load();
+    });
+  }, [manifeste, task]);
+  // **An answer to what waits** (the terminal's o / n): `answer`, in reply to the waiting line; `approved` for an approval.
+  const repondre = async (attente: Record<string, unknown>, texte: string, accord?: boolean) => {
+    setNote("envoi…");
+    const corps: Record<string, unknown> = { backend, task, kind: "answer", text: texte, reply_to: attente.id, from: "ide" };
+    if (accord !== undefined) corps.approved = accord;
+    const r = await (await fetch("/ide/teammate/mailbox", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corps) })).json();
+    setNote(r.ok ? (accord === undefined ? "répondu" : accord ? "accordé" : "refusé") : r.error);
+    await load();
+  };
   const send = async () => {
     setNote("envoi…");
     const r = await (await fetch("/ide/teammate/mailbox", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ backend, task, kind: kind.current?.value ?? "request", item: item.current?.value || undefined, text: text.current?.value ?? "", from: "ide" }) })).json();
@@ -95,6 +115,26 @@ function TeammateSection({ backend, task }: { backend: string; task: string }) {
           <summary className="cursor-pointer text-sm">{t.closed.length} plan(s) clos</summary>
           <div className="grid gap-2 mt-2">{t.closed.map((p) => <PlanCard key={p.number} p={p} label={p.state === "accomplished" ? "accompli" : "obsolète"} />)}</div>
         </details>
+      ) : null}
+      {t.waiting ? (
+        <div id="attente-equipier" role="status" data-kind={String(t.waiting.kind)} className="rounded-lg border border-primary/60 px-3.5 py-2.5 text-sm grid gap-2">
+          <p>
+            {t.waiting.kind === "approval" ? "L'équipier attend ton accord" : "L'équipier attend ta réponse"}
+            {t.waiting.command ? <> : <code className="font-mono">{String(t.waiting.command)}</code></> : null}
+          </p>
+          {t.waiting.text && !t.waiting.command ? <p className="text-muted-foreground">{String(t.waiting.text)}</p> : null}
+          {t.waiting.kind === "approval" ? (
+            <div className="flex gap-2">
+              <Button size="sm" className="accorder" onClick={() => repondre(t.waiting!, "oui", true)}>Oui</Button>
+              <Button size="sm" variant="outline" className="refuser" onClick={() => repondre(t.waiting!, "non", false)}>Non</Button>
+            </div>
+          ) : (
+            <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); const champ = (e.currentTarget.elements.namedItem("reponse") as HTMLInputElement); repondre(t.waiting!, champ.value); }}>
+              <input name="reponse" aria-label="réponse à l'équipier" className="flex-1 rounded-md border bg-input/30 px-2 py-1.5 text-sm" />
+              <Button size="sm" type="submit">Répondre</Button>
+            </form>
+          )}
+        </div>
       ) : null}
       <h3 className="text-sm font-semibold">Boîte aux lettres</h3>
       {t.mailbox.length ? (
