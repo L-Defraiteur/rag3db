@@ -36,6 +36,7 @@ pub const REPORT: &str = "report";
 pub const SUGGEST: &str = "suggest";
 /// Mode pair, lot 3: write to a Claude Code session.
 pub const SEND_TO_SESSION: &str = "send_to_session";
+pub const FETCH: &str = "fetch";
 /// Les pas d'un équipier lancé, au plus (un garde-fou, pas un réglage du grain).
 const MAX_STEPS: usize = 40;
 /// Les pas de suite sans `step_done` réussi avant que l'équipier s'arrête et le
@@ -516,6 +517,8 @@ pub struct Step {
     pair: Option<(Arc<super::pair::Pair>, String)>,
     /// The relaunch of a cut reply: its text and bound (`teammate.cut_relaunch_*`).
     cut_relaunch: (String, usize),
+    /// What the teammate may read on the web (`teammate.fetch`).
+    fetch: crate::backend::FetchPolicy,
     /// Les plans clos pendant ce pas (à ranger en L1).
     closed: Mutex<Vec<Plan>>,
     /// L'agent a-t-il tranché sur le plan actif (continue, pause, close) ?
@@ -679,6 +682,7 @@ impl Step {
             turn_run: Mutex::new(None),
             pair: None,
             cut_relaunch: (crate::backend::TeammatePolicy::default().cut_relaunch_text, crate::backend::TeammatePolicy::default().cut_relaunches_per_step),
+            fetch: crate::backend::FetchPolicy::default(),
         }
     }
 
@@ -709,6 +713,7 @@ impl Step {
         self.context_tokens = policy.step_context_tokens.max(1);
         self.max_model_calls = policy.max_model_calls_per_step.clamp(1, 100);
         self.cut_relaunch = (policy.cut_relaunch_text.clone(), policy.cut_relaunches_per_step.min(10));
+        self.fetch = policy.fetch.clone();
         self
     }
 
@@ -1002,6 +1007,7 @@ impl Step {
                     Ok(json!({ "ok": true, "msg_id": msg_id }))
                 }))
             }
+            FETCH => reply(super::web_fetch::fetch(&self.fetch, &args)),
             SUGGEST => {
                 let text = args["text"].as_str().unwrap_or_default();
                 if text.trim().is_empty() {
@@ -1046,6 +1052,18 @@ impl Step {
             name: SEND_TO_SESSION.into(),
             description: "Write to another agent session (Claude Code or a peer) in the sessions registry. `to` is its name, or the address a received line carries (reply_to_address, « uds:… »). A request whose text is a <cross-session-message from-name=… > came from such a session: answer it with this tool, to that session, not with report. The message is kept in your mailbox.".into(),
             parameters: json!({ "type": "object", "properties": { "to": { "type": "string", "description": "the session's name, or a uds: address" }, "text": { "type": "string", "description": "the message itself, as the session will read it" } }, "required": ["to", "text"] }),
+        }
+    }
+
+    /// fetch, the teammate's page reader (the teammate's base, 20 November 2026).
+    pub fn fetch_def() -> ToolDef {
+        ToolDef {
+            name: FETCH.into(),
+            description: "Read a web page: its readable text (no script, no style, no markup), its HTTP status, its type, its final address and the redirects followed. The text is cut at max_bytes, and the cut is said. A local address (this machine, the local network) is refused unless teammate.fetch.allow_local says otherwise; an HTTP error is said with the page's own text.".into(),
+            parameters: json!({ "type": "object", "properties": {
+                "url": { "type": "string", "description": "the address to read, with its scheme (example: « https://docs.rs/ureq/latest/ureq/ »)" },
+                "max_bytes": { "type": "integer", "description": "the most text bytes to bring back; default and ceiling: teammate.fetch.max_bytes (100 000)" }
+            }, "required": ["url"] }),
         }
     }
 
@@ -1185,6 +1203,7 @@ impl crate::agent::ToolBox for StepTools<'_> {
         // Les nôtres gagnent sur un homonyme du backend : un fournisseur refuse
         // deux déclarations du même nom (Vertex : « Duplicate function declaration »).
         let mut ours = Step::tool_defs();
+        ours.push(Step::fetch_def());
         if self.step.pair.is_some() {
             ours.push(Step::send_to_session_def());
         }
