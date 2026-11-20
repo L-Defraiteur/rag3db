@@ -43,9 +43,9 @@ else
 fi
 export RAG3WEAVER_TARGET_REPRENDRE=1
 # Épinglée : une bascule de `courant` ne change pas la lib sous la passe.
-export RAG3DB_LIB=rag3db-build-501d7ccc9053d17d6562e131e113d7405a79e1d0-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+export RAG3DB_LIB=rag3db-build-4ad394f4d228a166dce401937155ace0d305c6db-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
 # Depuis le 20 novembre 2026 (fenêtre de G, train C++ train-20-11 : la quarantaine du dernier lecteur au point de
-# reprise de hotfixs et la course des groupes du cœur) : lib 501d7ccc90 posée aux deux postes, hôtes source baccb2ea6e
+# reprise de hotfixs et la course des groupes du cœur) : lib 4ad394f4d2 (le commit moteur de master du train, mêmes sources que 501d7ccc90, BUILD_ID seul différent) posée aux deux postes, hôtes source baccb2ea6e
 # (l'hôte répété de la bascule vers les versions) ; les passes de cette source ne demandent plus MOTEUR_ANCIEN.
 # Avant : 6e2476d41 (19 novembre au soir), 7c2b506ec (19 novembre).
 # Depuis le 19 novembre 2026 au soir (bascule de G, train du cœur : DROP qui attend les lecteurs, lock_tables) : lib
