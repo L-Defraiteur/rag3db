@@ -40,6 +40,9 @@ pub trait GraniteGraph: Send + Sync + 'static {
     const DIM: usize;
     const NOM: &'static str;
     const NOM_LONG: &'static str;
+    /// The attention heads, for the memory of a batch (`crate::lot_memory`) : 12 for both
+    /// granite models (XLM-R base) ; more than the model has only bounds tighter.
+    const HEADS: usize = 12;
     /// Le graphe chargé dans la précision voulue (voir `burn_device::charger_burnpack`).
     fn charger(device: &Device, weights: &[u8], precision: Option<burn::tensor::FloatDType>) -> Result<Self, String>
     where
@@ -90,11 +93,15 @@ pub struct GraniteEmbedder<G: GraniteGraph> {
     /// The indices truncated in the last call (read by a service under its pass lock).
     last_truncated: Mutex<Vec<usize>>,
     device: Device,
+    /// What the driver says of the card, for the memory bound of a batch.
+    adapter: Option<crate::burn_device::AdapterFacts>,
 }
 
 impl<G: GraniteGraph> GraniteEmbedder<G> {
     pub fn from_bytes(weights: &[u8], tokenizer_path: impl AsRef<Path>, device: BurnDevice) -> Result<Self, EmbedError> {
-        let device = device.or_role(BurnRole::Embedder).resolve();
+        let wanted = device.or_role(BurnRole::Embedder);
+        let adapter = wanted.adapter_facts();
+        let device = wanted.resolve();
 
         let mut tokenizer = Tokenizer::from_file(tokenizer_path.as_ref())
             .map_err(|e| EmbedError::ProviderError(format!("tokenizer: {e}")))?;
@@ -114,7 +121,7 @@ impl<G: GraniteGraph> GraniteEmbedder<G> {
         // `from_bytes`, ne profite pas de Flex32 pour cette raison).
         let graph = G::charger(&device, weights, crate::burn_device::float_dtype_voulu()).map_err(EmbedError::ProviderError)?;
 
-        Ok(Self { graph, tokenizer: Mutex::new(tokenizer), troncatures: AtomicUsize::new(0), last_truncated: Mutex::new(Vec::new()), device })
+        Ok(Self { graph, tokenizer: Mutex::new(tokenizer), troncatures: AtomicUsize::new(0), last_truncated: Mutex::new(Vec::new()), device, adapter })
     }
 
     pub fn from_files(weights: impl AsRef<Path>, tokenizer_path: impl AsRef<Path>, device: BurnDevice) -> Result<Self, EmbedError> {
@@ -168,6 +175,22 @@ impl<G: GraniteGraph> GraniteEmbedder<G> {
 impl<G: GraniteGraph> Embedder for GraniteEmbedder<G> {
     fn name(&self) -> &str {
         G::NOM
+    }
+
+    fn memory_shape(&self) -> Option<crate::lot_memory::Shape> {
+        Some(crate::lot_memory::Shape { heads: G::HEADS, hidden: G::DIM })
+    }
+
+    fn token_counts(&self, texts: &[String]) -> Option<Vec<usize>> {
+        let tokenizer = self.tokenizer.lock().ok()?;
+        texts.iter().map(|t| tokenizer.encode(t.as_str(), true).ok().map(|e| e.get_ids().len())).collect()
+    }
+
+    fn memory_bounds(&self) -> crate::lot_memory::Bounds {
+        crate::lot_memory::Bounds {
+            max_allocation: self.adapter.as_ref().map(|a| a.max_allocation),
+            free: self.adapter.as_ref().and_then(|a| crate::lot_memory::free_memory(&a.pci_bus_id, std::path::Path::new("/sys/class/drm"))),
+        }
     }
 
     fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {

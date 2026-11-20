@@ -258,6 +258,64 @@ impl BurnDevice {
     }
 }
 
+/// **What the driver says of the adapter a device resolves to** (20 November 2026) : its
+/// single allocation limit (wgpu `max_buffer_size` : radv's `maxMemoryAllocationSize`,
+/// 0xfffffffc bytes, though cubecl believes a quarter of the heap), and its PCI address,
+/// for the free memory in sysfs (`crate::lot_memory`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AdapterFacts {
+    pub max_allocation: u64,
+    pub pci_bus_id: String,
+}
+
+/// A native wgpu future is ready at its first polls : no executor for it.
+fn ready<F: std::future::Future>(future: F) -> F::Output {
+    let mut future = std::pin::pin!(future);
+    let mut context = std::task::Context::from_waker(std::task::Waker::noop());
+    loop {
+        if let std::task::Poll::Ready(out) = future.as_mut().poll(&mut context) {
+            return out;
+        }
+        std::thread::yield_now();
+    }
+}
+
+impl BurnDevice {
+    /// [`AdapterFacts`] of the adapter this device resolves to, chosen as cubecl-wgpu
+    /// chooses (see [`Self::resolved_adapter`]) ; `None` when wgpu does not see it.
+    pub fn adapter_facts(self) -> Option<AdapterFacts> {
+        let named = |v: &str, prefix: &str| v.strip_prefix(prefix).and_then(|r| r.strip_suffix(')')).and_then(|n| n.trim().parse::<usize>().ok());
+        let (kind, index) = match self {
+            Self::DiscreteGpu(n) => (Some(wgpu::DeviceType::DiscreteGpu), n),
+            Self::IntegratedGpu(n) => (Some(wgpu::DeviceType::IntegratedGpu), n),
+            Self::Cpu => (Some(wgpu::DeviceType::Cpu), 0),
+            #[cfg(feature = "burn-rocm")]
+            Self::Rocm(_) => return None,
+            _ => match std::env::var("CUBECL_WGPU_DEFAULT_DEVICE").ok().as_deref().map(str::trim) {
+                Some(v) if named(v, "DiscreteGpu(").is_some() => (Some(wgpu::DeviceType::DiscreteGpu), named(v, "DiscreteGpu(").unwrap()),
+                Some(v) if named(v, "IntegratedGpu(").is_some() => (Some(wgpu::DeviceType::IntegratedGpu), named(v, "IntegratedGpu(").unwrap()),
+                Some(v) if v.starts_with("Cpu") => (Some(wgpu::DeviceType::Cpu), 0),
+                _ => (None, 0),
+            },
+        };
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::VULKAN,
+            ..wgpu::InstanceDescriptor::new_without_display_handle()
+        });
+        let adapter = match kind {
+            None => ready(instance.request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::HighPerformance,
+                force_fallback_adapter: false,
+                compatible_surface: None,
+                ..wgpu::RequestAdapterOptions::default()
+            }))
+            .ok()?,
+            Some(t) => ready(instance.enumerate_adapters(wgpu::Backends::VULKAN)).into_iter().filter(|a| a.get_info().device_type == t).nth(index)?,
+        };
+        Some(AdapterFacts { max_allocation: adapter.limits().max_buffer_size, pci_bus_id: adapter.get_info().device_pci_bus_id })
+    }
+}
+
 /// **The kind of adapter a device resolves to** (see [`BurnDevice::resolved_adapter`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AdapterKind {
