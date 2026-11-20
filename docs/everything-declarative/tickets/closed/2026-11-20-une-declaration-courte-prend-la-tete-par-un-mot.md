@@ -1,6 +1,6 @@
 # Une déclaration courte prend la tête d'une recherche par le sens, par un mot de la requête
 
-- **État** : ouvert (20 novembre 2026, soir)
+- **État** : fermé le 20 novembre 2026, par le lot `vectorless-below-best` (décision (A')).
 - **Famille** : produit (la recherche, la fusion)
 - **Gravité** : une recherche par le sens rend en tête une variable de quelques dizaines de caractères, sans vecteur,
   dont le nom est un mot de la requête. Apporté par la bascule du lot `variable-not-candidate` (f8c74d0876).
@@ -31,3 +31,11 @@ Ne plus mettre à l'échelle : compter le signal dense d'une ligne sans vecteur 
 (décision (A'), c7). La recherche par le nom reste tenue par la règle du nom exact (B). Un témoin rouge (une variable
 courte première en BM25 par un mot ne passe pas devant une fonction trouvée par le sens et le BM25), puis le juge du
 banc sur sa base `feuille-lot-1636`.
+
+## Fermeture (20 novembre 2026, soir)
+
+`FuseResultsNode` ne met plus à l'échelle : une ligne sans vecteur reçoit, pour chaque signal qui lit les morceaux
+(`vector`, `sparse`), la contribution du rang qui suit le dernier de sa liste ; une liste vide n'impute rien, et seule
+la fusion RRF impute. Témoin `a_short_declaration_named_by_a_word_does_not_lead_by_a_sense_it_has_not`, rouge sous
+la mise à l'échelle (`["d", "f", …]` : la variable devant la fonction), vert avec (A') ; le témoin du nom exact reste
+vert.
