@@ -1,5 +1,10 @@
 # Nouveautés
 
+- 20 novembre 2026 — **Une recherche par clé primaire ne lit plus de mémoire rendue pendant un point de reprise.**
+  Le point de reprise d'une table de nœuds remplaçait la liste des blocs d'un groupe pendant qu'une recherche par
+  clé primaire la parcourait : sous vingt écrivains, un lecteur pouvait mourir. Le remplacement attend désormais
+  les lectures en cours, comme un ajout.
+
 - 19 novembre 2026 — **Après une annulation qui n'a pas pu finir, une écriture déjà ouverte ne valide plus.** Quand
   l'annulation d'une transaction échoue en cours de route, la base demande à être fermée et rouverte, et refusait déjà
   tout `BEGIN` et tout `CHECKPOINT`. Une transaction d'écriture ouverte avant pouvait pourtant encore valider, et une
