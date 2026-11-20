@@ -1,5 +1,11 @@
 # Nouveautés
 
+- 20 novembre 2026 — **Chaque appel d'outil dit la version du gabarit qui l'a servi.** La réponse porte
+  `metadata.template` : l'empreinte de ce que le chargement a mis en service (manifeste, scripts, graphes, schémas,
+  et le contenu embarqué par le binaire) et le numéro de rechargement. Une entité qui déclare `writes.template` reçoit
+  cette empreinte sur chaque ligne écrite : dans le gabarit memory, la Source d'une tranche et chaque L1. Une baisse
+  du rangement se relie ainsi à la version du gabarit qui l'a produite.
+
 - 20 novembre 2026 — **Les gabarits installés suivent le binaire.** Une base posée par `code-tree add` désigne
   désormais le gabarit livré par le binaire (`builtin:`) pour chaque outil qu'il livre, même quand la base de départ en
   tenait une copie différente : une copie périmée ne se propage plus d'une base à l'autre (neuf gabarits sur quatorze
