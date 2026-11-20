@@ -49,7 +49,8 @@ porte sur l'index vectoriel) ; les cas d'arrêt du plein texte sont dans `e2e_tx
 - le point de reprise connaît les dossiers d'index qu'une extension déclare ;
 - dans `checkpointStorage`, il demande à l'extension de sceller une génération (un commit lucivy, sans effacer
   l'ancienne) ;
-- il inscrit le numéro de cette génération dans le catalogue, publié par l'en-tête comme le reste ;
+- il inscrit le numéro de cette génération dans le catalogue, publié avec le reste : par l'enregistrement CHECKPOINT
+  au journal, suivi de l'application des pages ombres (l'en-tête s'écrit par elles) ;
 - il laisse l'extension retirer l'ancienne génération après la remise à zéro du journal.
 
 Le crochet existe : `Index::checkpoint`, que le R-tree de geo emploie (`extension/geo/src/index/rtree_index.cpp:144`).
@@ -105,8 +106,10 @@ second cas : un ROLLBACK de paquet, sans mort, qui doit laisser l'index à N san
 
 ## Relu par le cœur (20 novembre)
 
-L'ordre du point de reprise et ce que couvre le rejeu sont confirmés. Avec A, une mort entre le scellement et l'en-tête
-laisse l'ancien en-tête nommer l'ancienne génération, qui doit donc exister encore. Après le rejeu, l'index reste au point
+L'ordre du point de reprise et ce que couvre le rejeu sont confirmés. Avec A, une mort avant que l'enregistrement CHECKPOINT soit
+durable laisse l'ancien état nommer l'ancienne génération, qui doit donc exister encore. Le point qui publie est cet
+enregistrement au journal, suivi de l'application des pages ombres, et non l'écriture de l'en-tête elle-même ; l'ancienne
+génération vit jusqu'à la remise à zéro du journal. Après le rejeu, l'index reste au point
 de reprise, en retard de tout ce que le journal rejoue : A ne suffit pas sans un index du moteur journalisé. Le cœur
 recommande B lui aussi, et deux précisions s'ajoutent :
 
