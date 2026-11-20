@@ -22,14 +22,14 @@ graph LR
     params["RhaiNode(script_id=archive_params, inputs='titre,contenu,chemin,origine,jour', titre=$titre, contenu=$contenu, chemin=$chemin, origine=$origine, jour=$jour)"]
     source["EntityRecordNode(entity='Source', action='put', record=$source)"]
     split["SplitSections(field='contenu')"]
-    decide["ForEachNode(graph='@builtin:backends/memory/graphs/archive_decide.mmd', on_error='report', carry='proposed', report_results=$trace, candidates=$candidates, allow_create=$allow_create, instruction=$instruction, search_options=$search_options, context=$context, context_title=$context_title, query_chars=$query_chars)"]
+    decide["ForEachNode(graph='@graphs/archive_decide.mmd', on_error='report', carry='proposed', report_results=$trace, candidates=$candidates, allow_create=$allow_create, instruction=$instruction, search_options=$search_options, context=$context, context_title=$context_title, query_chars=$query_chars)"]
     decided["Route(key='stage', routes='decided')"]
-    subject["ForEachNode(graph='@builtin:backends/memory/graphs/archive_subject.mmd')"]
+    subject["ForEachNode(graph='@graphs/archive_subject.mmd')"]
     route["Route(key='kind', routes='none|create|fiche')"]
-    write["ForEachNode(graph='@builtin:backends/memory/graphs/archive_write.mmd', on_error='report')"]
-    create["ForEachNode(graph='@builtin:backends/memory/graphs/archive_create.mmd', on_error='report')"]
-    refs["ForEachNode(graph='@builtin:backends/memory/graphs/archive_link.mmd', on_error='report')"]
-    refs_new["ForEachNode(graph='@builtin:backends/memory/graphs/archive_link.mmd', on_error='report')"]
+    write["ForEachNode(graph='@graphs/archive_write.mmd', on_error='report')"]
+    create["ForEachNode(graph='@graphs/archive_create.mmd', on_error='report')"]
+    refs["ForEachNode(graph='@graphs/archive_link.mmd', on_error='report')"]
+    refs_new["ForEachNode(graph='@graphs/archive_link.mmd', on_error='report')"]
     sourcer["RhaiNode(script_id=archive_params, inputs='titre,contenu,chemin,origine,jour', titre=$titre, contenu=$contenu, chemin=$chemin, origine=$origine, jour=$jour)"]
     genre -->|report:value| params
     params -->|result:text| split
@@ -37,8 +37,8 @@ graph LR
     decide -->|report:value| rapport
     decide -->|report:value| sourcer
     sourcer -->|result:record| source
-    mark["ForEachNode(graph='@builtin:backends/memory/graphs/archive_mark.mmd', segment_over=$segment_over)"]
-    split_long["ForEachNode(graph='@builtin:backends/memory/graphs/archive_segment.mmd', when='long', flatten=true)"]
+    mark["ForEachNode(graph='@graphs/archive_mark.mmd', segment_over=$segment_over)"]
+    split_long["ForEachNode(graph='@graphs/archive_segment.mmd', when='long', flatten=true)"]
     split -->|element:elements| mark
     mark -->|results:elements| split_long
     split_long -->|results:elements| decide
