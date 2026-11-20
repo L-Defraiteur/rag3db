@@ -2609,3 +2609,44 @@ Le push du train C++ et la lib partent après le retour.
 
 **Le ménage de 07 h 30** a joué son premier passage sur les deux postes : les dossiers Codex marqués jetables et
 vieux de plus de 72 h, hors des trois plus récents par famille, effacés un par un au journal.
+
+## 20 novembre, 08 h 51 — le train C++ sur master, la lib épinglée par une preuve transférable, la fenêtre finie
+
+**Le train C++** (cœur : la quarantaine du dernier lecteur au point de reprise, l'annulation inachevée, la course des
+groupes ; hotfixs : le lecteur mort dans l'index de clé primaire sous vingt écrivains) est parti sous `poste push` dès
+le retour arrière des deux bases, à 07 h 38. La garde s'est arrêtée une fois : un conflit sur `docs/nouveautes.md`,
+que le pousseur fusionne par union à la repose et que la garde ne savait pas fusionner. Lot de G dans la minute
+(a59febb911, 07 h 43 : la garde fusionne nouveautés par union, tout autre conflit arrête), puis push à 07 h 42, master
+44c14e1c38 ; le commit moteur, rebasé par la garde, est **4ad394f4d2** (le même contenu que 501d7ccc90 bâti et jugé
+dans la nuit).
+
+**La lib par une voie transférable** : la nuit avait bâti et jugé la lib de 501d7ccc90 (e2e_code 36, e2e_lectures 28,
+e2e_demon_hote 26, hôte baccb2ea6e), et master porte 4ad394f4d2. Plutôt que de rebâtir sous la fenêtre, on a prouvé
+que les deux sont la même lib : `git diff 501d7ccc90 4ad394f4d2 -- src test extension/vector tools/rust_api cmake`
+vide (zéro ligne de source), et les deux `.so` ne diffèrent que de 125 octets, trois chaînes BUILD_ID et le build-id
+GNU. Le verdict de la nuit est transféré ; épingle 501d7ccc90 à 07 h 51 (47aaaebef1), corrigée en 4ad394f4d2 à 07 h 57
+(1b02372432), l'une et l'autre par G.
+
+**Le pousseur à l'arrêt sur la lib** : à 07 h 59, le premier lot rust pris après le train (recherche-interruption-2)
+est rouge d'un ROUGE lib, et le pousseur dit « lib en retard : épinglée sur 6e2476d41b, master a changé le moteur » ;
+il tient les rust et pousse les docs, quinze d'un trait entre 08 h 00 et 08 h 09 (cas de campagne, intra-scope, place
+des couches, piège du BEGIN, le cadrage du plein texte et ses trois relectures, le lot suivant par famille, deux
+tickets fermés, la page du workflow de mémoire, la mesure du raisonnement). L'épingle 1b02372432 atterrit à 08 h 49,
+« lib à jour : les lots rust reprennent » à 08 h 49 ; les hôtes posés sur baccb2ea6e liés à 4ad394f4d2 (md5 aec89843)
+aux deux postes à 08 h 50, courant 4ad394f4d2, les trois bases ouvertes. **G déclare la fenêtre finie à 08 h 51**,
+diffusé aux douze sessions avec leur lot suivant : places lourdes quatre à luciepc, une à la tablette, tout rust sous
+l'épingle.
+
+**La pile de mémoire rendue** : à 08 h 49 le premier lot rust pris est memoire-b1-collect, conflit sur
+`backend.rs` à la repose sur master, et les huit lots derrière lui tombent par parent rouge ; mémoire repose B1
+d'abord et redépose dans l'heure, aux mêmes rangs. Derrière, arbre-estimation-hote reposé, emb-embedding-rates en
+créneau 2 sur sa tête.
+
+**Le paquet et les morceaux** : la file a vingt-et-un lots et aucun paquet de codeparsers ; le package-name-root
+(4eed1f8ef0, règles 11) est tenu par G depuis la fenêtre. Demandé à G de le redéposer maintenant pour qu'ED dépose ses
+morceaux dessus en parent (règles 12, un seul repassage des bases) ; s'il ne peut pas dans l'heure, ED dépose seul en
+règles 11 et codeparsers montera en 12 derrière, deux repassages : le prix accepté pour ne pas le tenir.
+
+**Ménage des atterris** : ED a retiré ses trois worktrees (19 Go), recherche quatre, et m'a laissé les deux
+`rag3db-view-lag` (sous-module, `--force` refusé chez elle), retirés à 08 h 56 aux deux postes, propres, aucun
+processus. Il reste 18 dossiers sous git_workspaces à la tablette, 27 à luciepc.
