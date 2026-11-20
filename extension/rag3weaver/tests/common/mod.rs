@@ -333,10 +333,16 @@ pub mod burn {
     #[cfg(feature = "daemon")]
     const SUITES_LOCALES: &[&str] = &["e2e_burn_", "e2e_demon_embeddings", "e2e_mesure_ingestion_code", "e2e_banc_bge_m3"];
 
+    /// **The suite is read from the test being run, not from the binary** (20 November
+    /// 2026) : since the 11 October, every `tests/e2e_*.rs` is a module of the single
+    /// binary `e2e`, whose name (`e2e-<hash>`) matched no prefix, and the local suites went
+    /// through the service, then the fallback. Under libtest, the test's thread carries its
+    /// path, `<suite>::<test>` ; `run_e2e.sh` runs one process per suite, so a model loaded
+    /// once belongs to that suite.
     #[cfg(feature = "daemon")]
     pub fn suite_locale() -> bool {
-        let binaire = std::env::current_exe().ok().and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string())).unwrap_or_default();
-        SUITES_LOCALES.iter().any(|s| binaire.starts_with(s))
+        let test = std::thread::current().name().unwrap_or_default().to_string();
+        SUITES_LOCALES.iter().any(|s| test.starts_with(s))
     }
 
     fn bge_m3() -> Bge {
