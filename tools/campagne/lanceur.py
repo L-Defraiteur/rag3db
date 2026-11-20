@@ -96,6 +96,29 @@ def archive_into(repo, commit, dest, paths=None, prefix=""):
         tar.extractall(os.path.join(dest, prefix) if prefix else dest, members=membres, filter="data")
 
 
+def keep_ignores(repo, commit, dest, paths):
+    """A case restricted to `paths` keeps the .gitignore files of the root and of each ancestor
+    folder of its paths: without them, what the repository ignores (.pyc, build output) came into
+    the diff (the night of 21 Nov 2026)."""
+    dossiers = {""}
+    for p in paths:
+        parties = p.strip("/").split("/")
+        for i in range(len(parties)):
+            dossiers.add("/".join(parties[:i]))
+    for d in sorted(dossiers):
+        chemin = f"{d}/.gitignore" if d else ".gitignore"
+        if excluded(chemin):
+            continue
+        try:
+            contenu = git(repo, "show", f"{commit}:{chemin}")
+        except RuntimeError:
+            continue
+        cible = os.path.join(dest, chemin)
+        os.makedirs(os.path.dirname(cible) or dest, exist_ok=True)
+        with open(cible, "wb") as f:
+            f.write(contenu)
+
+
 def submodules(repo, commit):
     """(path, commit, url) of each submodule recorded at `commit`."""
     urls = {}
@@ -139,6 +162,8 @@ def build_tree(block, repo, depots, dest):
     os.makedirs(dest, exist_ok=False)
     paths = block.get("paths")
     archive_into(repo, parent, dest, paths)
+    if paths:
+        keep_ignores(repo, parent, dest, paths)
     for chemin, sha, url in submodules(repo, parent):
         if paths and not any(chemin == p or chemin.startswith(p.rstrip("/") + "/") or p.startswith(chemin + "/") for p in paths):
             continue
