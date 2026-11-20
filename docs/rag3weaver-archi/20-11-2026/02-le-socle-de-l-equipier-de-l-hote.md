@@ -75,6 +75,28 @@ L'accès distant passe par l'hôte authentifié (le jeton, un tunnel), jamais pa
   - une commande en fond finit par une ligne `notice` ;
   - une écriture hors du domaine est refusée dans le bac.
 
+### 1 bis. La sortie gardée et relue — une petite journée (graine de Lucie, 20 novembre, 23 h 3x)
+
+Les agents coupent la sortie d'une commande (`| tail`), puis ne peuvent plus relire ce qu'ils ont
+jeté.
+
+- **La sortie brute de tout `run` est gardée** par le confineur, dans un fichier du dossier de la
+  tâche. Sa taille est bornée et sa rétention déclarée (`teammate.run_output_max_bytes`,
+  `teammate.run_output_keep`), et la réponse de `run` rend son chemin et sa taille.
+- **`read_output {run, window}`** relit après coup, avec une fenêtre : `head N`, `tail N`,
+  `lines a-b` ou `grep motif`. Une phrase par paramètre.
+- **`run` prend la même fenêtre déclarée**, pour que l'agent n'ait plus de raison d'écrire un pipe. Il
+  n'y a pas de parseur de pipes.
+- **La règle du soir** : la primitive (garder, borner, retenir) est en Rust. Les filtres de la
+  fenêtre sont un nœud scripté.
+- **Témoins** :
+  - une commande de 5 Mo garde sa sortie entière (dans la borne) et rend son chemin ;
+  - `read_output` rend `tail 20` puis `lines 100-120` de cette sortie, sans relancer la commande ;
+  - `grep` trouve une ligne coupée de la réponse de `run` ;
+  - au-delà de la rétention, la plus vieille sortie part, et une relecture le dit.
+- **Place** : après le sous-agent à vues et le relais du mode pair, avant le cron. Le navigateur de
+  tty passe devant.
+
 ### 2. La palette différée, par familles — 1,5 jour
 
 Les précisions de Lucie, le 20 novembre entre 17 h 28 et 17 h 3x :
