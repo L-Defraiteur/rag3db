@@ -171,6 +171,7 @@ pub mod postgres_blob_store;
 #[cfg(feature = "postgres")]
 pub mod postgres_search_backend;
 pub mod chunker;
+pub mod tokens;
 pub mod config;
 pub mod connection;
 pub mod generations;
