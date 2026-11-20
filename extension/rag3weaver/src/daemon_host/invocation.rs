@@ -256,6 +256,38 @@ mod tests {
         assert_eq!((&lu["ok"], &lu["result"]["view"]["source"]), (&json!(true), &json!("session")), "a call without view does not read under the view opened: {lu}");
     }
 
+    /// **`open_view` answers at once, and its view says « index pas prêt » until its layer is written** (page 03 of
+    /// 20 November 2026, O2 in the background): the writing held by the witness's gate, `open_view` answers
+    /// `indexing: true`, and a read under the view answers not ready at once; the gate opened and the writing done, the
+    /// read reads under the view.
+    #[test]
+    fn open_view_answers_at_once_and_its_view_is_not_ready_until_written() {
+        let d = tempfile::tempdir().unwrap();
+        let a = atelier(d.path());
+        let depot = petit_depot(&d.path().join("B"));
+        a.appeler("attach_worktree", json!({"path":depot})).unwrap();
+        attendre_l_index(&a, &depot);
+        let roots = a.host.racines_de_code().unwrap();
+        let name = crate::code_tree::name_of_tree(&depot.canonicalize().unwrap()).unwrap();
+        let manifeste = roots.manifest(&name);
+        let (_h, espace, _) = hote_d_espace(&d.path().join("e"));
+        a.host.set_espace(espace, d.path().join("e/dossiers-des-sessions.json"));
+        a.host.set_vues_dir(d.path().join("e/vues"));
+        let corps = json!({"client": "mcp (pid 1)", "claude": {"session_id": "S1", "name": "le témoin"}}).to_string();
+        let (_, r) = a.host.handle("POST", "/session", None, corps.as_bytes());
+        let s = r["session"].as_str().unwrap().to_string();
+        let porte = a.host.retenir_les_ecritures_de_vues();
+        let r = a.host.open_view(Some(&s), &manifeste, "fond", None);
+        assert_eq!((&r["ok"], &r["indexing"]), (&json!(true), &json!(true)), "open_view waits for its layer: {r}");
+        let lu = a.host.call(Some(&s), &manifeste, "usages", json!({"name": "un"}));
+        assert_eq!(lu["result"]["index_state"]["ready"], json!(false), "a read under a view being written does not say it is not ready: {lu}");
+        assert!(lu["result"]["result"].as_str().is_some_and(|t| t.contains("index pas prêt")), "{lu}");
+        porte.relacher();
+        assert!(a.host.attendre_l_ecriture_des_vues(std::time::Duration::from_secs(120)), "the view's layer is not written");
+        let lu = a.host.call(Some(&s), &manifeste, "usages", json!({"name": "un"}));
+        assert_eq!((&lu["ok"], &lu["result"]["view"]["source"]), (&json!(true), &json!("session")), "the view written is not read: {lu}");
+    }
+
     /// **`views` and `use_view` follow the Claude Code session** (page 02 of 20 November 2026, lot 2): two thin clients
     /// of one session (one `sessionId`) see the same active view, another session does not; an unknown name is refused,
     /// listing the known views; a host restarted on the same state finds the view again.
