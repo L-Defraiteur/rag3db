@@ -1,0 +1,106 @@
+# Cadrage : le plein texte en fichiers et le point de reprise du moteur
+
+Demandé par c7 le 20 novembre, pour le ticket `docs/tickets/2026-10-10-index-plein-texte-en-fichiers-hors-du-point-de-reprise.md`
+(décision de Lucie du 10 octobre : « on fera plutôt comme Neo4j pour l'instant »). Docs seules : pas de code avant que c7
+l'ait lue. À relire par le cœur (le point de reprise) et l'arbre principal (l'état d'index). Lu sur origin/master du
+20 novembre ; lucivy aux versions du Cargo.lock (`lucivy-core` et `ld-lucivy` 4.3.12).
+
+## Ce qui existe déjà : un protocole de génération côté produit
+
+Le ticket du 10 octobre décrit l'index comme « réparé après coup ». C'est vrai, mais la réparation repose déjà sur un
+lien solide avec la base :
+
+- **Où** : un dossier par table qui porte l'index et par cellule, `<base>.fts/Lucivy_<Table>[__org__project]/`, avec
+  4 shards (`catalog.rs:1155, 1777-1783`, `fts_handle.rs:38-43, 353`).
+- **Le lien** : un numéro de génération entier, des deux côtés.
+  - Dans le dossier, le fichier `_generation`, écrit par `.tmp`, `sync_data`, `rename`, puis fsync du dossier
+    (`fts_directory.rs:249-286`).
+  - Dans la base, la clé méta `fts_generation:<index>` (`catalog.rs:9753-9756`).
+  - `Catalog::flush_blob_store` les pose dans cet ordre : fsync des fichiers lucivy, `_generation` = N+1, puis la clé
+    en base (`catalog.rs:9730-9795`).
+- **Le paquet de la synchronisation de code** (le défaut, `code_sync.rs:2274-2379`) fait tout cela **dans** la
+  transaction du moteur, avant son COMMIT. La marque en base est donc atomique avec les lignes, par le journal du
+  moteur. Le **lot L3** (`catalog.rs:8756-8956`) fait l'inverse : COMMIT du moteur, puis lucivy, puis la marque, hors
+  transaction. Une erreur après le COMMIT y rend `MustReopen`.
+- **Les gardes** :
+  - la génération à l'ouverture (`catalog.rs:1779-1828`) : un écart entre le dossier et la base, ou un `fts_pending:`
+    encore posé, fait jeter le dossier et le rebâtir depuis les lignes ;
+  - la promesse orpheline (`fts_promesse`, `catalog.rs:7256-7291`) ;
+  - les comptes (`check_fts_counts`, `catalog.rs:1302-1355`).
+- **Les témoins existent** : `tests/e2e_tx_par_paquet_arret.rs`, cas 810, 841, 860, 887 et 937. Une mort entre les
+  fichiers et la validation y est rebâtie aux bons comptes, et une base saine se rouvre sans rebâtir.
+
+**Ce qui manque n'est donc pas la cohérence, mais son prix.** Sur tout écart, la réparation est un rebâti **entier**
+depuis les lignes : le dossier est jeté, puis repeuplé par lots de 2 000, `FTS_REBUILD_BATCH`. Pendant ce temps, la
+recherche répond « mots : en cours ». La cause : lucivy ne garde qu'une génération sur disque. Après chaque commit, il
+efface ce que le nouveau `meta.json` ne référence plus (`garbage_collect_files`, `segment_updater_actor.rs:460`), et
+`IndexWriter::rollback` ne revient qu'au dernier commit. rag3weaver le dit lui-même : « on ne garde pas la génération
+N−1 pour y revenir, on rebâtit » (`fts_directory.rs:24-25`). Un ROLLBACK de paquet coûte en plus une réouverture du
+catalogue (`catalog.poison`, `code_sync.rs:2381`).
+
+Deux écarts au ticket, à corriger quand il sera repris : son « cas tués d'`e2e_arret_brutal` » n'existe pas (ce test
+porte sur l'index vectoriel) ; les cas d'arrêt du plein texte sont dans `e2e_tx_par_paquet_arret.rs`.
+
+## Deux voies
+
+### A. Ancrer l'index au point de reprise du moteur (la forme Neo4j)
+
+**Ce qu'elle demande au moteur** :
+- le point de reprise connaît les dossiers d'index qu'une extension déclare ;
+- dans `checkpointStorage`, il demande à l'extension de sceller une génération (un commit lucivy, sans effacer
+  l'ancienne) ;
+- il inscrit le numéro de cette génération dans le catalogue, publié par l'en-tête comme le reste ;
+- il laisse l'extension retirer l'ancienne génération après la remise à zéro du journal.
+
+Le crochet existe : `Index::checkpoint`, que le R-tree de geo emploie (`extension/geo/src/index/rtree_index.cpp:144`).
+Mais il réécrit son fichier en place, sans fsync ni renommage : c'est exactement le défaut à éviter.
+
+**Ce qu'elle ne règle pas seule** : après une mort, le rejeu du journal ramène les lignes validées **après** le point
+de reprise, mais rien ne ramène l'index au même point. Le moteur ne connaît pas les écritures de lucivy, que rag3weaver
+fait lui-même. Pour que le rejeu les refasse, le plein texte devrait devenir un index du moteur, nourri par
+`insert`/`delete`/`commitInsert` et journalisé comme HNSW. C'est le chantier que le ticket du 10 octobre écartait (les
+blobs au journal à 25 octets par cellule, les points de reprise forcés). Sinon, rag3weaver devrait rejouer lui-même le
+delta d'après le point de reprise. **Taille** : grande (un nouveau genre d'index, le format, le rejeu), à cheval sur le
+moteur, lucivy et rag3weaver.
+
+### B. Garder deux générations et revenir à celle que la base nomme (dans le produit)
+
+Le lien est déjà là : la clé `fts_generation` en base est atomique avec les lignes du paquet. Il suffit que la
+génération que la base nomme existe encore sur disque quand le dossier est en avance :
+
+- **Dans lucivy** : un commit qui garde les fichiers de la génération précédente, sans `garbage_collect_files`
+  immédiat, et un « revenir au `meta.json` de la génération N », par shard ; ou bien `PreparedCommit::set_payload` pour
+  porter N dans `meta.json`.
+- **Dans rag3weaver** : à l'ouverture, si `_generation` = N+1 et la base dit N, revenir à N au lieu de jeter le dossier.
+  L'effacement de N−1 attend que la base ait validé N+1. Le ROLLBACK d'un paquet revient de même à N, au lieu
+  d'empoisonner le catalogue.
+- **Le lot L3** (le moteur valide avant lucivy) : le cas inverse, la base en avance sur le dossier. Il garde son
+  `fts_pending:` et le rebâti de ses seules entités, ou bien rejoue son tampon, qui est par `_uuid`.
+
+**Le moteur n'a rien à changer.** **Taille** : moyenne, dans lucivy (garder une génération, y revenir) et dans
+rag3weaver (la garde de génération, le ROLLBACK du paquet).
+
+## Ce que je recommande
+
+**B d'abord.** Il garde la forme actuelle, qui est juste, et en retire le coût : plus de rebâti entier après une mort
+ou un ROLLBACK de paquet, seulement un retour à la génération que la base nomme. A ne se justifie que si l'on veut que
+l'index soit couvert par le **rejeu** du moteur, ce qui revient à en faire un index du moteur ; c'est un autre ordre de
+grandeur, et le ticket du 10 octobre avait écarté ce chemin pour le coût du journal. « Comme Neo4j » se lit alors comme
+« le produit garantit la cohérence de bout en bout » ; B la garantit sans rebâti.
+
+## Le témoin rouge (pour B)
+
+Partir du cas 810 de `e2e_tx_par_paquet_arret.rs` (SIGKILL au paquet 2, fichiers synchronisés et marqués, lignes non
+validées). Aujourd'hui, le repreneur dit « dossier jeté, rebâti depuis les lignes », et c'est vert pour les comptes.
+Le témoin de B exige en plus que **le dossier ne soit pas jeté** : le repreneur revient à la génération N, sans rebâti,
+mesuré par l'absence du message et par le nombre de documents relus. **Rouge aujourd'hui**, puisqu'il rebâtit. Un
+second cas : un ROLLBACK de paquet, sans mort, qui doit laisser l'index à N sans réouverture.
+
+## Les étapes, si B est retenu
+
+1. Lucivy (session lucivy) : garder la génération d'avant et y revenir, par shard, avec son témoin dans lucivy.
+2. rag3weaver (arbre principal) : la garde de génération qui revient à N au lieu de jeter ; le ROLLBACK du paquet ;
+   l'effacement de N−1 après la validation de N+1 ; le témoin rouge ci-dessus, puis vert.
+3. Le moteur : rien. La session hotfixs relit le tout (l'ordre fsync, rename, marque en base) et le banc d'arrêt.
+
+Question pour c7 et Lucie : B, ou A ?
