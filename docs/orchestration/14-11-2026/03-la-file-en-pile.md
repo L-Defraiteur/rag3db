@@ -2556,3 +2556,30 @@ qui attendent (paquets de codeparsers, morceaux d'ED). Lucivy et recherche hors 
 tests (pointeur^ contre pointeur) et a ouvert le ticket, qu'elle passe à ED. Le train C++ : passe de la tête commune
 verte (501d7ccc90, témoins 6/6 ×3, transaction 411, e2e_test 1 867) ; la lib est déjà bâtie et publiée sans courant
 (symboles 0/0 contre 6e2476d41) par le nouveau batir-lib.sh, qui a créé et retiré son arbre sous ~/git_workspaces/G/.
+
+## 20 novembre, 06 h 15 — master vert de nouveau, la fenêtre peut s'ouvrir
+
+**Le correctif de 2.12 est atterri à 06 h 14 (82837aec86)**, et il y avait trois causes, pas une : la garde des
+comptes du plein texte comparait les documents à toutes les lignes, la garde du lecteur (`fts_rebuild_percent`)
+aussi, et l'avancement du rebâti de même ; les trois comptent désormais les lignes candidates
+(`Catalog::candidate_rows_of`), et les invariants des tests jugent par la règle elle-même. e2e_tx_par_paquet_arret
+18/18, lib, e2e_code_sync, e2e_lectures, check_features 8/8. Le ticket de lucivy est fermé dans le lot ; recherche a
+redéposé c-durable-3 tel quel. Rien ne change pour 06 h 45 : bascule et hôte sur baccb2ea6e, déjà répété ; le master
+corrigé se répète après la fenêtre, avec les deux montées de règles (paquets 11, morceaux 12), pour un seul repassage.
+
+**La nuit des reposes.** Après trente-six atterrissages entre 21 h et 06 h 15, les lots déposés tôt ont presque tous
+buté à la repose : index_nodes.rs (ed-estimate, schema-resume), le gabarit mémoire (define-ref, trois fois : la
+chaîne des tranches et l'expiration des tours arrivaient au même endroit), teammate_tests.rs (la chaîne d'attente
+de tty contre le témoin de la porte d'ED), worktrees.rs (la garde de dette d'arbre), le bundle généré de l'IDE
+(chat-reload-epoch, et derrière lui les six lots des fenêtres de tty). Chacun a reposé et redéposé dans l'heure, à
+son rang (la règle d'ab2cb02d94 a joué, cascade comprise). Trois rouges de la garde des features (2.12,
+tests-never-skip-silently, chat-waiting), tous des cfg manquants vus par le pousseur et jamais par l'auteur : lots
+demandés à G pour après sa fenêtre : attestation check_features à l'enqueue d'un lot rust, fichiers générés déclarés
+(bundle.json) rebâtis à la repose au lieu de rendre le lot, les docs devant les rust. Atterris dans la nuit, entre
+autres : la chaîne des tranches de mémoire (lecture, expiration, chaîne), define_ref, le préfixe stable du décideur,
+le cache des appels de modèle, le retry sur schéma changé, le journal plafonné, le dialecte postgres à générations
+(2.11 fermé), la chaîne d'attente de tty (hôte, chat, IDE, boîte), le profil léger du plein texte (−29 %), le
+rechargement du chat, la garde de dette d'arbre, lucivy 04 jugé réussi et vérifié, la mesure du raisonnement (low),
+la parité B4 (S 50), le lot 3 du lanceur. Déposés et tenus : B4, la version du gabarit, les graphes sur disque et
+check_proposal de mémoire (la boucle d'édition du workflow, page docs/memoire/20-11-2026/01), le paquet de
+codeparsers (tenu par G), les morceaux d'ED (tenu jusqu'à 09 h 30), l'index pas prêt dans l'IDE (tty).
