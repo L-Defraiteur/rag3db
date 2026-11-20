@@ -331,14 +331,13 @@ impl BurnDevice {
     /// judges the adapter, not the way the device is written (`default` resolves to the
     /// only card of a machine whose only card is integrated).
     pub fn check_embedder_on(self, adapter: AdapterKind, allow: Option<&str>) -> Result<Self, String> {
-        let _ = adapter;
-        match self {
-            Self::IntegratedGpu(n) if allow.map(str::trim) != Some("1") => Err(format!(
-                "igpu:{n} refusé pour un embarqueur : sur un GPU intégré, granite calcule des vecteurs faux en lot, \
-                 sans erreur (ticket {INTEGRATED_GPU_TICKET}) ; {ALLOW_INTEGRATED_GPU_VARIABLE}=1 l'accepte quand même, \
-                 pour un essai qui ne regarde pas les valeurs"
+        match adapter {
+            AdapterKind::Integrated if allow.map(str::trim) != Some("1") => Err(format!(
+                "{self:?} se résout sur un GPU intégré, refusé pour un embarqueur : granite y calcule des vecteurs faux \
+                 en lot, sans erreur (ticket {INTEGRATED_GPU_TICKET}) ; {ALLOW_INTEGRATED_GPU_VARIABLE}=1 l'accepte quand \
+                 même, pour un essai qui ne regarde pas les valeurs"
             )),
-            device => Ok(device),
+            _ => Ok(self),
         }
     }
 
