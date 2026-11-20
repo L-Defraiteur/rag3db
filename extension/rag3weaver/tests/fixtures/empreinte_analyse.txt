@@ -2,3 +2,4 @@
 # (src/empreinte_de_l_analyse.rs). Monter les règles, c'est ajouter la ligne de la nouvelle empreinte.
 11 6d64e8426067c29380b5c29a8434bd6f522857fcd5089e8814ecd81c9c357b8d
 12 044d777f5aa63412a7fceae955edd71dee694e49444e17ae9acabbac7a496467
+13 db372885eb76532004ebd4148dfa14cab7e8f01c477b0b0eb46c1df23647f35e
