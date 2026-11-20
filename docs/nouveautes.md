@@ -30,6 +30,12 @@
   lisait les fichiers indexés que dans les lignes `File`, et ce chemin lui échappait. Un index complet retire
   maintenant les scopes d'un chemin sans `File` que la source ne retient plus. La cause de ces orphelins reste à
   trouver (ticket).
+- 20 novembre 2026 — **Chaque appel d'outil dit la version du gabarit qui l'a servi.** La réponse porte
+  `metadata.template` : l'empreinte de ce que le chargement a mis en service (manifeste, scripts, graphes, schémas,
+  et le contenu embarqué par le binaire) et le numéro de rechargement. Une entité qui déclare `writes.template` reçoit
+  cette empreinte sur chaque ligne écrite : dans le gabarit memory, la Source d'une tranche et chaque L1. Une baisse
+  du rangement se relie ainsi à la version du gabarit qui l'a produite.
+
 - 19 novembre 2026 — **Une extraction coupée par sa borne le dit, et l'archiviste demande peu de réflexion au
   modèle.** Sur Vertex, la réflexion de Gemini compte dans `max_tokens` ; elle coupait le JSON de 5 extractions sur 19.
   Une réponse coupée sous un schéma est maintenant refusée par « the reply was cut at max_tokens=N (finish: length),
