@@ -1916,7 +1916,13 @@ mod tests {
     fn the_warm_up_batches_stay_within_the_service_lot_max() {
         let model = Arc::new(Advising::default());
         let _ = EmbedDaemon::new(model.clone()).chauffer(true);
-        assert_eq!(model.largest.load(std::sync::atomic::Ordering::Relaxed), 32, "the warm-up's largest batch is the service's lot_max");
+        // The largest batch is the service's own : lot_max (32), under the byte budget of
+        // this host (8 192 by default ; 2 048 under the `Confort` regime of a card shared
+        // with the screen, where 13 texts of 40 « words » fit).
+        let mut forty: Vec<usize> = (0..32).map(|i| (0..40).map(|j| format!("m{}", (i * 7 + j * 13) % 97)).collect::<Vec<_>>().join(" ").len()).collect();
+        forty.sort();
+        let expected = crate::embedder::budget_batches(&forty, 32, crate::embedder::embed_char_budget()).iter().map(|r| r.len()).max().unwrap();
+        assert_eq!(model.largest.load(std::sync::atomic::Ordering::Relaxed), expected, "the warm-up's largest batch is the service's own (lot_max, under the byte budget)");
         // And the service's byte budget : a batch of 32 × 382 tokens then one of 512
         // still panicked on the iGPU, while the service never sends such a batch.
         let budget = crate::embedder::embed_char_budget();
