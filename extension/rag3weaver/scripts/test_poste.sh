@@ -371,4 +371,24 @@ wait
 [ "$rc" = 0 ] && [ -n "$(instant M début)" ] && [ "$(instant M début)" -ge "$(instant C fin)" ]
 cas $? "une mesure derrière un lourd court (timeout 30) attend sa fin et joue (rc $rc)"
 
+# ── 44. Une baisse des places porte son heure de retour (20 novembre 2026, c7 : la tablette est restée à une place de
+# 07 h 30 à 13 h 35, la fenêtre du matin finie à 08 h 51, six lourds derrière). `poste places <N> jusqu'à HH:MM` écrit
+# lourds-max et lourds-max.retour ; la valeur d'avant revient à la première lecture passé l'heure ; --qui le dit tant
+# que ça dure ; une baisse sans heure refuse.
+echo 2 > "$POSTE_LOCK_DIR/lourds-max"; rm -f "$POSTE_LOCK_DIR/lourds-max.retour"
+"$POSTE" places 1 > /dev/null 2>&1; rc=$?
+[ "$rc" = 2 ] && [ "$(cat "$POSTE_LOCK_DIR/lourds-max")" = 2 ]
+cas $? "une baisse des places sans heure de retour refuse, lourds-max inchangé (rc $rc)"
+h=$(date -d '+2 hours' +%H:%M)
+"$POSTE" places 1 "jusqu'à" "$h" > /dev/null 2>&1; rc=$?
+qui=$("$POSTE" --qui 2>&1)
+[ "$rc" = 0 ] && [ "$(cat "$POSTE_LOCK_DIR/lourds-max")" = 1 ] && echo "$qui" | grep -q "places baissées à 1 jusqu'à $h" && echo "$qui" | grep -q '/1 places'
+cas $? "poste places 1 jusqu'à $h baisse à 1, et --qui le dit (rc $rc)"
+# L'heure passée : la valeur d'avant revient à la première lecture.
+read -r avant _ < "$POSTE_LOCK_DIR/lourds-max.retour"; echo "$avant $(( $(date +%s) - 60 ))" > "$POSTE_LOCK_DIR/lourds-max.retour"
+qui=$("$POSTE" --qui 2>&1)
+[ "$(cat "$POSTE_LOCK_DIR/lourds-max")" = 2 ] && [ ! -e "$POSTE_LOCK_DIR/lourds-max.retour" ] && ! echo "$qui" | grep -q 'baissées' && echo "$qui" | grep -q '/2 places'
+cas $? "passé l'heure, les places reviennent à la valeur d'avant (2) et --qui ne dit plus de baisse"
+rm -f "$POSTE_LOCK_DIR/lourds-max" "$POSTE_LOCK_DIR/lourds-max.retour"
+
 exit $echec

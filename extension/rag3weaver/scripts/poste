@@ -293,7 +293,7 @@ esac
 MEM="${POSTE_MEM_MAX:-40G}"
 SWAP="${POSTE_SWAP_MAX:-4G}"
 usage() {
-  echo "usage: poste mesure|lourd <commande…>   |   poste --qui   |   poste push <session> [--lourd] -- <commande…>   |   poste push --qui" >&2
+  echo "usage: poste mesure|lourd <commande…>   |   poste --qui   |   poste places <N> [jusqu'à HH:MM]   |   poste push <session> [--lourd] -- <commande…>   |   poste push --qui" >&2
   exit 2
 }
 mode="${1:-}"; [ $# -gt 0 ] && shift
@@ -304,7 +304,18 @@ F="$V/fiches"
 # ses passes pour atterrir) : sous POSTE_VOIE=pousseur, le billet s'appelle `0-<instant>-<pid>` et passe devant les
 # autres ; la porte ne change pas, une mesure en attente reste devant lui. Le pid se lit après le dernier tiret.
 T="$V/file"
+# **Une baisse des places porte son heure de retour** (20 novembre 2026, c7 : la tablette est restée à une place de
+# 07 h 30 à 13 h 35, la fenêtre du matin finie à 08 h 51). `lourds-max.retour` dit « <valeur d'avant> <instant> » ; à la
+# première lecture passé l'instant, la valeur d'avant revient et le retour s'efface.
+retour_des_places() {
+  [ -s "$V/lourds-max.retour" ] || return 0
+  read -r _avant _quand < "$V/lourds-max.retour" 2>/dev/null || return 0
+  case "$_avant$_quand" in ''|*[!0-9]*) return 0 ;; esac
+  [ "$(date +%s)" -ge "$_quand" ] || return 0
+  echo "$_avant" > "$V/lourds-max"; rm -f "$V/lourds-max.retour"
+}
 places() {
+  retour_des_places
   _n="${POSTE_LOURDS_MAX:-$(cat "$V/lourds-max" 2>/dev/null)}"
   case "$_n" in ''|*[!0-9]*) _n=2 ;; esac
   [ "$_n" -ge 1 ] || _n=1
@@ -371,6 +382,30 @@ if [ "$mode" = "--qui" ]; then
   file=$(file_des_lourds | tr '\n' ' ')
   echo "lourds : $(lourds_tenus)/$(places) places tenues${file:+, en file dans l'ordre : pid $file}"
   [ -s "$PUSH_FICHE" ] && echo "push : tenu — $(cat "$PUSH_FICHE")"
+  if [ -s "$V/lourds-max.retour" ]; then
+    read -r _avant _quand < "$V/lourds-max.retour"
+    echo "places baissées à $(cat "$V/lourds-max" 2>/dev/null) jusqu'à $(date -d "@$_quand" +%H:%M) (puis $_avant)"
+  fi
+  exit 0
+fi
+# ── poste places <N> [jusqu'à HH:MM] : changer le nombre de places lourdes ──
+# Une baisse exige son heure de retour (c7, 20 novembre 2026) ; une hausse, ou un retour à la valeur d'avant, n'en a
+# pas besoin et efface un retour en cours. Une heure déjà passée aujourd'hui est celle de demain.
+if [ "$mode" = places ]; then
+  _n=${1:-}; case "$_n" in ''|*[!0-9]*|0) echo "poste places : un nombre de places ≥ 1, puis jusqu'à HH:MM pour une baisse" >&2; exit 2 ;; esac
+  _h=""; [ $# -ge 3 ] && case "$2" in "jusqu'à"|jusqua|until) _h=$3 ;; esac
+  _avant=$(places)
+  if [ -s "$V/lourds-max.retour" ]; then read -r _avant _ < "$V/lourds-max.retour"; fi
+  if [ "$_n" -lt "$_avant" ]; then
+    [ -n "$_h" ] || { echo "poste places : une baisse ($_avant → $_n) dit son heure de retour : poste places $_n jusqu'à HH:MM" >&2; exit 2; }
+    _quand=$(date -d "$_h" +%s 2>/dev/null) || { echo "poste places : heure illisible « $_h » (HH:MM)" >&2; exit 2; }
+    [ "$_quand" -gt "$(date +%s)" ] || _quand=$((_quand + 86400))
+    echo "$_n" > "$V/lourds-max"; echo "$_avant $_quand" > "$V/lourds-max.retour"
+    echo "poste : places baissées à $_n jusqu'à $(date -d "@$_quand" '+%H:%M (%d/%m)'), puis $_avant"
+  else
+    echo "$_n" > "$V/lourds-max"; rm -f "$V/lourds-max.retour"
+    echo "poste : $_n places"
+  fi
   exit 0
 fi
 case "$mode" in mesure|lourd) ;; *) usage ;; esac
