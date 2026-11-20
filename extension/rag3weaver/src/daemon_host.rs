@@ -99,6 +99,8 @@ pub struct Session {
     /// **The Claude Code session that calls**, by its `sessionId` (read by the thin client in the registry of its
     /// ancestor `claude`): two thin clients of one session share its view, kept on disk under this id.
     pub claude_session: Option<String>,
+    /// Its `name` in Claude Code's registry: whose folder is whose (the table of the folders).
+    pub claude_name: Option<String>,
 }
 
 /// Un backend hébergé. `None` : pas encore ouvert, ou lâché pour être rouvert.
@@ -300,6 +302,9 @@ pub struct DaemonHost {
     /// **Where the views of the sessions are kept** (`<dir>/<claude session id>.json`), across thin clients and host
     /// restarts; `None`: `$XDG_STATE_HOME/rag3weaver/vues`, else `~/.local/state/rag3weaver/vues`.
     vues_dir: Mutex<Option<std::path::PathBuf>>,
+    /// **The space of the sessions' worktrees and the table of their folders** (page 03 of 20 November 2026):
+    /// `None` gives `~/git_workspaces` and `~/.config/rag3weaver/dossiers-des-sessions.json`.
+    espace: Mutex<Option<(std::path::PathBuf, std::path::PathBuf)>>,
     /// **Soi, en lien faible** : posé par [`DaemonHost::se_connaitre`] (le service, les
     /// témoins), il permet à l'hôte de donner aux backends qu'il ouvre l'hôte des
     /// worktrees de l'atelier.
@@ -524,6 +529,7 @@ impl DaemonHost {
             backends: Mutex::new(HashMap::new()),
             sessions: Mutex::new(HashMap::new()),
             vues_dir: Mutex::new(None),
+            espace: Mutex::new(None),
             opener,
             closed_dead: std::sync::atomic::AtomicUsize::new(0),
             background: crate::dataflow::background::registry(),
@@ -633,6 +639,7 @@ impl DaemonHost {
             pid_started: process.map(|(_, d)| d),
             default_view: None,
             claude_session: None,
+            claude_name: None,
         };
         self.sessions.lock().unwrap_or_else(|p| p.into_inner()).insert(id.clone(), session);
         id
@@ -641,6 +648,20 @@ impl DaemonHost {
     /// Where the views of the sessions are kept (the witnesses give a temporary directory).
     pub fn set_vues_dir(&self, dir: std::path::PathBuf) {
         *self.vues_dir.lock().unwrap_or_else(|p| p.into_inner()) = Some(dir);
+    }
+
+    /// The space of the worktrees and the table of the folders (the witnesses give temporary ones).
+    pub fn set_espace(&self, espace: std::path::PathBuf, dossiers: std::path::PathBuf) {
+        *self.espace.lock().unwrap_or_else(|p| p.into_inner()) = Some((espace, dossiers));
+    }
+
+    /// **`open_view <lot>`** (page 03 of 20 November 2026, O1): a worktree for the lot under the session's folder,
+    /// `<space>/<folder>/<dd-mm-yyyy>-<lot>`, on a new branch `<folder>/<lot>`, its submodule initialized, noted in the
+    /// session's state. The path is checked first, before any `git`, in this order: Lucie's tree, sairen, another
+    /// session's folder, outside the session's folder, a path already taken.
+    pub fn open_view(&self, session: Option<&str>, manifest: &Path, lot: &str, session_dir: Option<&str>) -> Value {
+        let _ = (session, manifest, lot, session_dir, &self.espace);
+        json!({ "ok": false, "error": "open_view : pas encore" }) // RED STUB.
     }
 
     /// The view by default of a session, `None` without one.
@@ -2061,6 +2082,7 @@ impl DaemonHost {
                         let gardee = self.vue_gardee(claude);
                         if let Some(s) = self.sessions.lock().unwrap_or_else(|p| p.into_inner()).get_mut(&id) {
                             s.claude_session = Some(claude.to_string());
+                            s.claude_name = v["claude"]["name"].as_str().filter(|n| !n.is_empty()).map(str::to_string);
                             if s.default_view.is_none() {
                                 s.default_view = gardee;
                             }
@@ -2150,6 +2172,19 @@ impl DaemonHost {
                 (statut(&reponse), reponse)
             }
             // **The views of a session** (page 02 of 20 November 2026): on the backend of `manifest`.
+            ("POST", "/views/open") => {
+                let v = match corps().and_then(|v| manifeste(&v).map(|m| (v, m))) {
+                    Ok(x) => x,
+                    Err(e) => return (400, json!({ "ok": false, "error": e })),
+                };
+                let (v, m) = v;
+                let reponse = match v["lot"].as_str() {
+                    Some(lot) => self.open_view(session, &m, lot, v["session_dir"].as_str()),
+                    None => json!({ "ok": false, "error": "« lot » manque : le nom du lot, qui nomme le worktree" }),
+                };
+                let reponse = if reponse["ok"] == json!(true) { json!({ "ok": true, "result": reponse }) } else { reponse };
+                (statut(&reponse), reponse)
+            }
             ("POST", "/views" | "/views/use") => {
                 let v = match corps().and_then(|v| manifeste(&v).map(|m| (v, m))) {
                     Ok(x) => x,
