@@ -931,6 +931,15 @@ impl Step {
         self.refusal(call)
     }
 
+    /// send_to_session, given to a paired task's teammate only (mode pair, lot 3).
+    pub fn send_to_session_def() -> ToolDef {
+        ToolDef {
+            name: SEND_TO_SESSION.into(),
+            description: "Write to another agent session (Claude Code or a peer) in the sessions registry. `to` is its name, or the address a received line carries (reply_to_address, « uds:… »). A request whose text is a <cross-session-message from-name=… > came from such a session: answer it with this tool, to that session, not with report. The message is kept in your mailbox.".into(),
+            parameters: json!({ "type": "object", "properties": { "to": { "type": "string", "description": "the session's name, or a uds: address" }, "text": { "type": "string" } }, "required": ["to", "text"] }),
+        }
+    }
+
     pub fn tool_defs() -> Vec<ToolDef> {
         let item = json!({
             "type": "object",
@@ -1066,11 +1075,7 @@ impl crate::agent::ToolBox for StepTools<'_> {
         // deux déclarations du même nom (Vertex : « Duplicate function declaration »).
         let mut ours = Step::tool_defs();
         if self.step.pair.is_some() {
-            ours.push(ToolDef {
-                name: SEND_TO_SESSION.into(),
-                description: "Write to another agent session (Claude Code or a peer) in the sessions registry. `to` is its name, or the address a received line carries (reply_to_address, « uds:… »). A request whose text is a <cross-session-message from-name=… > came from such a session: answer it with this tool, to that session, not with report. The message is kept in your mailbox.".into(),
-                parameters: json!({ "type": "object", "properties": { "to": { "type": "string", "description": "the session's name, or a uds: address" }, "text": { "type": "string" } }, "required": ["to", "text"] }),
-            });
+            ours.push(Step::send_to_session_def());
         }
         let mut defs: Vec<ToolDef> = self.inner.tool_defs().into_iter().filter(|d| !ours.iter().any(|o| o.name == d.name)).collect();
         defs.extend(ours);

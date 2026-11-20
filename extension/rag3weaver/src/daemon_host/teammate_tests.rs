@@ -2692,3 +2692,29 @@ fn a_task_that_is_not_paired_has_no_send_to_session() {
     let outils = outils.lock().unwrap();
     assert!(!outils.is_empty() && !outils.iter().any(|n| n == "send_to_session"), "{outils:?}");
 }
+
+/// **One sentence per parameter** (Lucie, 20 Nov 2026): every property of every tool the teammate's
+/// model receives has a description: what it does, its default, an example when the value has a
+/// shape. A property without one is named.
+#[test]
+fn every_parameter_of_the_teammates_tools_is_described() {
+    fn sans(prefixe: &str, schema: &Value, out: &mut Vec<String>) {
+        if let Some(props) = schema["properties"].as_object() {
+            for (nom, p) in props {
+                let chemin = format!("{prefixe}.{nom}");
+                if p["description"].as_str().map_or(true, |d| d.trim().is_empty()) {
+                    out.push(chemin.clone());
+                }
+                sans(&chemin, p, out);
+                sans(&format!("{chemin}[]"), &p["items"], out);
+            }
+        }
+    }
+    let mut defs = super::teammate::Step::tool_defs();
+    defs.push(super::teammate::Step::send_to_session_def());
+    let mut manquent = Vec::new();
+    for d in &defs {
+        sans(&d.name, &d.parameters, &mut manquent);
+    }
+    assert!(manquent.is_empty(), "parameters without a description: {manquent:#?}");
+}
