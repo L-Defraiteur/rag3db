@@ -53,6 +53,23 @@ l'enfant, son ensemble de vues, la porte qui le tient, et l'identité qu'il port
 - `views close` sur une vue de l'ensemble d'un enfant : l'enfant la perd-il, et le dit-on dans sa
   boîte ?
 
+## L'accord avec arbre (20 novembre, page `docs/arbre-principal/20-11-2026/02-les-outils-des-vues.md`)
+
+1. **Le nom d'une vue est stable**, jamais un identifiant d'index. C'est `backend`, une couche de
+   branche (`refs/heads/master`), ou `<nom court>/<jj-mm-aaaa>-<lot>` pour un worktree ouvert,
+   unique sur le poste. Un chemin de worktree est accepté et ramené à son nom.
+2. **`use_view` change l'active à l'hôte.** Elle est gardée au registre des tâches pour un enfant,
+   et vaut pour tous ses appels suivants. Elle ne sort jamais de l'ensemble.
+3. **Ce qu'un enfant ouvre appartient à la session** et n'entre dans son ensemble que si le parent
+   l'y ajoute.
+4. **Une vue fermée sort de l'ensemble de chaque enfant**, qui le lit dans sa boîte. Si c'était son
+   active, elle retombe sur la première vue qui reste dans son ensemble, et l'enfant le lit aussi.
+- Les routes de l'enfant sont celles de cette page. arbre retire son `/views/child`. Ses routes
+  (`GET /views`, `POST /views/use`, `/views/open`, `/views/close`) rendent ce que dit sa page.
+- **Une limite** : un sous-agent de Claude Code (l'outil Agent) appelle par le serveur MCP de son
+  parent, et l'hôte ne distingue pas ses appels. L'ensemble d'un enfant ne vaut que pour un enfant
+  qui a sa propre session d'hôte : une tâche de l'hôte, en mode pair.
+
 ## Les témoins, rouges d'abord (côté hôte)
 
 - un appel hors de l'ensemble est refusé en nommant la vue ;
