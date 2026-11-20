@@ -55,16 +55,12 @@ pub fn turns_lines(v: &Value) -> Vec<Validee> {
     out
 }
 
-/// The apport of the `n`-th L1 (from 1) of a `GET /ide/l1` answer.
-pub fn nth_apport(v: &Value, n: usize) -> Option<String> {
-    v["l1"].as_array()?.get(n.checked_sub(1)?)?["apport"].as_str().map(str::to_string)
-}
-
 /// **What `/turns <n>` asks of `POST /ide/turns/read`** for the `n`-th L1 (from 1): the host's route takes
 /// `{run, from, to}`, the L1's run and range (archi's route on master, 19 nov.: by apport it is refused, until the
 /// memory's trace_turn).
-pub fn turns_request(_v: &Value, _n: usize) -> Option<Value> {
-    None
+pub fn turns_request(v: &Value, n: usize) -> Option<Value> {
+    let l1 = v["l1"].as_array()?.get(n.checked_sub(1)?)?;
+    Some(serde_json::json!({ "run": l1["run"].as_str()?, "from": l1["from_turn"].as_u64()?, "to": l1["to_turn"].as_u64()? }))
 }
 
 #[cfg(test)]
@@ -101,8 +97,6 @@ mod tests {
             "  2. fiche:archiviste — une question sur les L1 · tour 16".to_string(),
         ]);
         assert_eq!(l1_lines(&json!({ "l1": [] })), vec!["aucun L1 pour ce run".to_string()]);
-        assert_eq!(nth_apport(&l1s(), 2).as_deref(), Some("a-2"));
-        assert_eq!(nth_apport(&l1s(), 3), None);
     }
 
     /// The turns of an L1, each with its state said as the host says it; a turn gone is said, not empty.

@@ -515,11 +515,11 @@ fn executer(c: crate::commandes::Commande, terminal: &mut ratatui::DefaultTermin
         }
         Commande::Turns(n) => {
             let n = n.as_deref().and_then(|s| s.trim().parse::<usize>().ok());
-            let apport = n.and_then(|n| vue.memory.as_ref().and_then(|m| crate::memory::nth_apport(m, n)));
-            match (n, apport) {
+            let requete = n.and_then(|n| vue.memory.as_ref().and_then(|m| crate::memory::turns_request(m, n)));
+            match (n, requete) {
                 (None, _) => vue.note("/turns <n> : le numéro d'un L1 de /memory"),
                 (Some(n), None) => vue.note(&format!("/turns {n} : pas de L1 {n} (/memory les liste)")),
-                (Some(n), Some(apport)) => match client::poster(agent, ep, "/ide/turns/read", &json!({ "backend": tache.depot.id, "apport": apport })) {
+                (Some(n), Some(requete)) => match client::poster(agent, ep, "/ide/turns/read", &requete) {
                     Ok(v) => {
                         let range = vue.memory.as_ref().map(|m| crate::memory::range(&m["l1"][n - 1])).unwrap_or_default();
                         vue.open_document(&format!("L1 {n} · {range}"), crate::memory::turns_lines(&v));
