@@ -1863,7 +1863,7 @@ fn le_chat_guide_une_fenetre_du_depot_detachee() {
 }
 
 /// **A detached window of the graph follows the tools of the turn** (the IDE in several windows, slice 4): a window
-/// opened on the graphs with `?fenetre=graphe` shows, as the chat's turn calls its tools, the graph of the tool being
+/// opened by the chat's button « graphe à côté » (`?fenetre=graphe`) shows, as the chat's turn calls its tools, the graph of the tool being
 /// called (`dag/tool/<name>`), which the stream lights up; it follows without reloading, and keeps its role. The
 /// repository window is not moved by the tools: they go under `graphe:<backend>`, not `selection:<backend>`.
 #[test]
@@ -1874,10 +1874,27 @@ fn le_graphe_detache_suit_les_outils_du_tour() {
     let Some(binaire) = navigateur_ou_saut(TEMOIN) else {
         return;
     };
-    let (d, h, m, id) = banc_dans("atelier", qui_lit_deux_fois(), |_| {});
+    // list_files and read_file have a declared graph; propose, a tool the host serves itself, has none.
+    let model: ChatModel = {
+        let appels = Arc::new(AtomicUsize::new(0));
+        Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let appels = appels.clone();
+            Ok(Arc::new(CallbackLlm::new("faux-lecteur", 8192, move |turns, opts, sink| {
+                let proposition = json!({ "files": [{ "path": "notes.md", "content": "# Une note\n" }], "reason": "une note" }).to_string();
+                let modele = match appels.fetch_add(1, Ordering::SeqCst) {
+                    0 => MockLlm::new("je liste").with_tool_calls(vec![("list_files", "{}")]),
+                    1 => MockLlm::new("je lis").with_tool_calls(vec![("read_file", r#"{"path":"main.rs"}"#)]),
+                    2 => MockLlm::new("je propose").with_tool_calls(vec![(crate::declare::PROPOSE, proposition.as_str())]),
+                    _ => MockLlm::new("Fini."),
+                };
+                modele.generate(turns, opts, sink)
+            })))
+        })
+    };
+    let (d, h, m, id) = banc_dans("atelier", model.clone(), |_| {});
     drop(h);
     let (chats, taches, runs) = (d.path().join("chats"), d.path().join("taches"), d.path().join("runs"));
-    let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| h.with_racine_des_taches(taches).with_chats_root(chats).with_runs_root(runs).with_chat_model(qui_lit_deux_fois()));
+    let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| h.with_racine_des_taches(taches).with_chats_root(chats).with_runs_root(runs).with_chat_model(model));
     let racine = format!("http://{adresse}");
     let mut r = crate::daemon::agent_de_temoin()
         .post(format!("{racine}/ide/describe"))
@@ -1892,17 +1909,24 @@ fn le_graphe_detache_suit_les_outils_du_tour() {
     n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
     let prete = "document.querySelector('#send') && !document.querySelector('#send').disabled && document.getElementById('lien')?.textContent === 'flux : ouvert'";
     n.aller(&format!("{racine}/ide/code/{id}/chat"), prete);
-    // The window of the graph, detached, before the turn.
-    n.nouvel_onglet();
-    n.aller(&format!("{racine}/ide/code/{id}/dag/?fenetre=graphe"), "document.getElementById('lien')?.textContent === 'flux : ouvert'");
+    // The window of the graph, detached by the chat's button « graphe à côté » (ED's review), before the turn.
+    let bouton = n.evaluer("(() => { const a = document.querySelector('#detacher-graphe'); return a ? [a.getAttribute('target'), a.getAttribute('href')] : null; })()");
+    assert_eq!(bouton, json!(["_blank", format!("/ide/code/{id}/dag?fenetre=graphe")]), "the chat's button opens the graph in a window of its own");
+    n.evaluer("document.querySelector('#detacher-graphe').click()");
+    n.rejoindre("fenetre=graphe");
+    n.attendre("document.getElementById('lien')?.textContent === 'flux : ouvert'", "the window of the graph, opened by the button");
+    let fenetre_du_graphe = 1;
     n.evaluer("window.dispatchEvent(new Event('focus')); window.__pasRecharge = true");
     n.onglet(0);
     n.attendre("(window.__ide?.fenetres ?? []).some((f) => f.role === 'graphe')", "the chat knows that a window of the graph is open");
     n.evaluer("document.querySelector('#message').value = 'regarde le code'; document.querySelector('#send').click()");
-    n.attendre("document.querySelector('#status')?.textContent === 'fini'", "the turn, through list_files then read_file");
+    n.attendre("document.querySelector('#status')?.textContent === 'fini'", "the turn, through list_files, read_file, then propose");
     assert!(n.evaluer("location.pathname").as_str().unwrap_or_default().ends_with("/chat"), "the chat stays on its conversation");
-    n.onglet(1);
-    n.attendre("location.pathname.endsWith('/dag/tool/read_file')", "the window of the graph shows the graph of the last tool called");
+    n.onglet(fenetre_du_graphe);
+    // The last tool, propose, is served by the host and has no declared graph: the window says so, no alert.
+    n.attendre("location.pathname.endsWith('/dag/tool/propose')", "the window of the graph follows to the last tool called");
+    n.attendre("!!document.querySelector('#sans-graphe')", "a tool without a graph is said so, not a blank page");
+    assert_eq!(n.evaluer("document.querySelector('[role=alert]')?.textContent ?? null"), Value::Null, "no host error for a tool without a graph");
     assert_eq!(n.evaluer("[new URLSearchParams(location.search).get('fenetre'), window.__pasRecharge === true, document.querySelector('#entete')?.dataset.fenetre ?? null]"), json!(["graphe", true, "graphe"]), "it keeps its role, follows without reloading, and says its role");
     assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
     drop(n);
