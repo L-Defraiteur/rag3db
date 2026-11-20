@@ -17,8 +17,13 @@ Les noms d'outils MCP n'ont pas d'espace : « `views open <lot>` » de la décis
 « `views close <nom>` » devient `close_view {name}`. Ce sont des outils **de l'hôte**, servis par le client MCP à côté
 de ceux du backend, pas des outils d'un graphe.
 
-**Une vue a un nom** : le backend (`backend`), une couche de branche (`refs/heads/master`), ou un worktree suivi (son
-nom court, `20-11-2026-vue-de-la-session`, ou son chemin). `use_view` et `close_view` prennent l'un ou l'autre.
+**Une vue a un nom stable, jamais une branche ni un identifiant d'index** : `backend`, une couche de branche
+(`refs/heads/master`), ou un worktree ouvert, `<nom court>/<jj-mm-aaaa>-<lot>` (`arbre/20-11-2026-vue-de-la-session`),
+unique sur le poste. `use_view` et `close_view` prennent ce nom ; le chemin du worktree est accepté et ramené au nom.
+L'identifiant de couche reste interne ; `views` rend les deux.
+
+**`use_view` change l'active à l'hôte**, gardée dans l'état de la session (pour un enfant, au registre des tâches) :
+elle vaut pour tous les appels suivants, pas pour le seul prochain.
 
 **Chaque réponse de lecture répète la vue lue** : `view: {layer, rank, source}` (V1, en jeu). La source est l'une de
 `appel`, `déclarée`, `racines`, `défaut`. L'ordre : la vue de l'appel, puis celle que la session a déclarée
@@ -81,11 +86,14 @@ le dit une fois.
 ## 5. L'ensemble de vues d'un enfant
 
 - **Un enfant** est nommé `<session>-<nom>`. Son parent lui donne, au lancement, un ensemble de vues (une, plusieurs, ou
-  toutes les siennes) et l'active : `POST /views/child {child, views, active}`.
+  toutes les siennes) et l'active, par les routes d'archi (§ 6).
 - **Le parent le modifie à tout moment** (ajouter, retirer, basculer) pour un enfant nommé.
 - **L'enfant** bascule dans son ensemble (`use_view`) s'il en a plusieurs, mais ne l'élargit jamais. Un appel hors de
-  son ensemble refuse en le nommant. Ce qu'il ouvre (`open_view`) appartient à la session parente, et entre dans son
-  propre ensemble.
+  son ensemble refuse en le nommant. Ce qu'il ouvre (`open_view`) appartient à la session parente **et n'entre pas de
+  lui-même dans son ensemble** : l'enfant ne l'élargit jamais, c'est le parent qui l'ajoute (accordé avec archi).
+- **Une vue fermée** (`close_view`, ou par le pousseur) sort de l'ensemble de chaque enfant qui l'avait, et l'enfant le
+  lit dans sa boîte ; si c'était son active, l'active d'un enfant retombe sur la première vue qui reste dans son
+  ensemble, et l'enfant le lit aussi.
 - **La session est le parent de ses propres vues** : même mécanique à deux niveaux. L'ensemble d'une session est tout
   ce qu'elle a ouvert ou souscrit, plus le backend et les couches de branche.
 - **Une limite à dire à archi** : un sous-agent de Claude Code (l'outil Agent) appelle par le serveur MCP de son parent.
@@ -102,10 +110,26 @@ le dit une fois.
 | `POST /views/use` | `{name}` | `{active}` |
 | `POST /views/open` | `{lot, session_dir?}` | `{name, path, branch, target, layer}` |
 | `POST /views/close` | `{name}` | `{closed: name}` |
-| `POST /views/child` | `{child, views, active}` | `{child, views, active}` |
 
-Toutes prennent la session par `X-Rag3weaver-Session`. Une session d'enfant n'a pas `/views/child`, et `/views/open`
-y range la vue chez le parent.
+Toutes prennent la session par `X-Rag3weaver-Session`. **Les ensembles des enfants passent par les routes d'archi**
+(`docs/rag3weaver-archi/20-11-2026/01-le-sous-agent-a-vues.md`) : `POST /ide/taches` prend `parent_session`, `views`
+(une liste, ou `*`) et `active` ; `POST /ide/teammate/views {backend, task, add?, remove?, active?}` sert au parent
+seul ; la porte des appels du chat relit l'ensemble à chaque appel. Une session d'enfant n'appelle pas ces routes, et
+son `/views/open` range la vue chez le parent.
+
+## 6 bis. La fermeture par le pousseur (questions de G)
+
+- **Le pousseur ne joint pas l'hôte d'un autre poste.** L'hôte n'écoute que sa boucle locale ; pas de tunnel ni de
+  relais à ouvrir pour lui. **La fermeture se tire** : le dépôt porte la vue du lot, `vue=<poste>:<nom>`
+  (`lucie-tablette:arbre/20-11-2026-vue-de-la-session`), écrite au journal d'atterrissage. Chaque hôte lit, toutes les
+  quelques minutes, les atterrissages de son poste (`landed.tsv` à luciepc, par ssh depuis la tablette, en local à
+  luciepc) et ferme ses vues par sa propre route, `POST /views/close {name}`.
+- **La vue se désigne par son nom, jamais par sa branche.** Le pousseur repose la branche sous un autre nom : c'est le
+  cas normal, et la fermeture ne regarde pas la branche. Ses contrôles restent ceux du § 3 : arbre propre, tête de
+  l'auteur sur une branche distante, aucun processus dedans. Une vue qui refuse de se fermer reste, et le refus est
+  écrit au journal du poste.
+- **Le témoin de G**, dans `test_pusher.sh` : un faux `landed.tsv` avec une vue, un faux hôte, et la vue fermée par son
+  nom, alors que la branche atterrie n'est pas celle de l'auteur.
 
 ## 7. Les lots, dans l'ordre de c7
 
