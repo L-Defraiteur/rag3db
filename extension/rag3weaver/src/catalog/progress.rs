@@ -663,15 +663,14 @@ impl Catalog {
     /// **What a view owes in vectors** (point 7 of the vision of 15 November, page
     /// `docs/arbre-principal/19-11-2026/05-l-estimation-du-reste-par-vue.md`): the chunks without a vector — in `layer`
     /// when the chunk table carries the layer column, in the whole base for a table of shared contents — their mean size,
-    /// and the rate of the catalog's embedder: its key (an index's rate), else the bench's declared rate halved and said
-    /// so, else unknown.
+    /// and the rate of the catalog's embedder with its source, read as [`Self::embedding_rate_for_wait`] reads it.
     pub fn vectors_due_for_view(&self, layer: &str) -> Result<crate::views::VectorsDue, CatalogError> {
-        self.vectors_due_for_view_from(layer, None)
+        self.vectors_due_for_view_from(layer, embedding_rates_path().as_deref())
     }
 
-    /// [`Self::vectors_due_for_view`], the declaration of the bench given (RED STUB: ignored).
+    /// [`Self::vectors_due_for_view`], the bench's declaration given (`None`: none read), as
+    /// [`Self::embedding_rate_for_wait_from`] takes it.
     pub fn vectors_due_for_view_from(&self, layer: &str, declaration: Option<&std::path::Path>) -> Result<crate::views::VectorsDue, CatalogError> {
-        let _ = declaration;
         self.check_reopen()?;
         let par_couche: std::collections::BTreeSet<String> = self.generations.as_ref().map(|v| v.tables.iter().cloned().collect()).unwrap_or_default();
         let (mut chunks, mut chars) = (0usize, 0f64);
@@ -696,28 +695,11 @@ impl Catalog {
             }
         }
         let mean_chars = if chunks == 0 { 0.0 } else { chars / chunks as f64 };
-        let (chars_per_s, rate_from) = match self.known_embedding_rate()? {
-            Some(rate) => (Some(rate.chars_per_second), Some("index")),
-            None => match self.declared_embedding_rate() {
-                // The bench measures the calls alone; an index's rate was 47 % of it on B′ (page 05): halved, and said.
-                Some(r) => (Some(r * 0.5), Some("bench")),
-                None => (None, Some("unknown")),
-            },
-        };
+        // The rate and its source, as a wait reads them (embarquement): the catalog's key, else the bench's declaration
+        // times BENCH_RATE_FACTOR, else unknown.
+        let (rate, source) = self.embedding_rate_for_wait_from(declaration)?;
+        let (chars_per_s, rate_from) = (rate.map(|r| r.chars_per_second), Some(source.key()));
         Ok(crate::views::VectorsDue { chunks, mean_chars, chars_per_s, rate_from })
-    }
-
-    /// **The bench's declared rate** of this catalog's embedder (page 05 of 19 November): a file of
-    /// `{"<model>:<address>@<host>": <chars/s>}`, at `RAG3WEAVER_EMBEDDING_RATES`, else
-    /// `~/.config/rag3weaver/embedding-rates.json` (the form proposed by the bench; embarquement decides it).
-    fn declared_embedding_rate(&self) -> Option<f64> {
-        let embedder = self.embedder.as_ref()?;
-        let place = Self::embedding_rate_place(embedder.as_ref())?;
-        let chemin = std::env::var_os("RAG3WEAVER_EMBEDDING_RATES")
-            .map(std::path::PathBuf::from)
-            .or_else(|| std::env::var_os("HOME").map(|h| std::path::Path::new(&h).join(".config/rag3weaver/embedding-rates.json")))?;
-        let table: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(chemin).ok()?).ok()?;
-        table.get(format!("{}:{place}", embedder.name()))?.as_f64().filter(|r| *r > 0.0)
     }
 
     /// Le débit noté pour l'embarqueur de ce catalogue, s'il y en a un.
