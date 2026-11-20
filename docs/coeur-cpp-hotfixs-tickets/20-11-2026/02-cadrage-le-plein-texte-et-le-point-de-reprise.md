@@ -123,3 +123,43 @@ Pour le lot L3 (le moteur valide avant lucivy), la base est en avance et on ne p
 `fts_pending:` et le rebâti de ses seules entités restent.
 
 Question pour c7 et Lucie : B, ou A ?
+
+## Relu par l'arbre principal (20 novembre) : trois corrections à B
+
+L'arbre principal est d'accord avec B et avec l'ordre fichiers → `_generation` → clé en base → COMMIT du paquet. Il
+corrige trois points, qui remplacent ce que la voie B disait plus haut.
+
+1. **Garder toute génération au-dessus de la dernière validée, pas « deux générations ».** `flush_blob_store` est appelé
+   à chaque frontière, et pas une fois par paquet : `ingest` (`catalog.rs:7121`, à chaque `ingest_entities`) et
+   `drain` (`:9626`). Sous la transaction par paquet de la synchronisation, `fts_tampon` n'est pas posé (seul L3 le
+   pose) : un paquet avance donc `_generation` plusieurs fois, N+1, N+2… avant son COMMIT. Après une mort, la base dit
+   N et le dossier peut être à N+k. La règle : garder sur disque toute génération ≥ celle que la base a validée en
+   dernier, et n'effacer qu'en dessous, après un COMMIT durable. **Le témoin (cas 810) doit forcer k ≥ 2** (deux
+   ingestions dans le paquet tué) : une lucivy qui ne garderait que deux générations passerait sinon un témoin à k = 1
+   et casserait en vrai. Le k réel d'un paquet se lit dans `ingest_profile` (la ligne « rendre durable le plein texte
+   (fichiers) », par paquet).
+2. **Revenir à N retire le rebâti, pas la réouverture après un ROLLBACK.** `Catalog::poison` et `terminer` nomment
+   d'autres caches qui gardent des écritures défaites (identifiants de nœuds, modèles enregistrés, file vidée, magasin
+   de blobs préparé) ; le plein texte n'est qu'un des motifs. Le second cas du témoin devient donc « ROLLBACK, puis
+   réouverture **sans rebâti** » ; un ROLLBACK sans réouverture serait un autre lot, pour les autres caches.
+3. **L'unité du retour est le dossier de l'index, ses quatre shards ensemble.** `_generation` est par dossier,
+   `meta.json` par shard. Revenir à N, c'est revenir à N sur les quatre, ou ne rien faire : un retour coupé entre deux
+   shards retombe sur le rebâti d'aujourd'hui, `fts_pending:` posé d'abord (comme la garde le fait, `:1810-1818`), et
+   `_generation` ne se réécrit à N qu'**après** les quatre retours, par le même `.tmp` → `sync_data` → `rename`.
+
+**Pour l'étape 1, à demander à lucivy** : qu'un **lecteur** (`lecture_seule`, `:1797`) qui trouve le dossier à N+k et
+la base à N puisse **servir N en lecture**, en ouvrant le `meta.json` d'une génération nommée sans toucher au dossier.
+Ce serait mieux qu'« à rebâtir par un écrivain ».
+
+**Le lot L3, vérifié** (la question de l'arbre). La marque qui le protège n'est pas `fts_pending:` mais la **promesse**.
+Le premier verbe d'écriture d'une génération passe par `check_ecriture` (`catalog.rs:7230-7235`), qui écrit
+`fts_promesse` (le jeton du processus, `promettre_le_plein_texte`, `:7241-7254`). Dans un lot, cette écriture tombe dans
+la transaction ouverte par `commencer_lot_atomique` (`:8774-8780`) et part avec son COMMIT. Une mort entre ce COMMIT et
+lucivy (`commit_lot_after_native`, `:8844-8878`) laisse donc en base une promesse d'un autre jeton :
+`reprendre_une_promesse` la trouve à la réouverture et marque toutes les entités au plein texte à rebâtir. L'écart est vu.
+Réserve : lu, pas joué, et pas vérifié pour chaque chemin d'écriture du lot ; à confirmer par un témoin (une mort entre le
+COMMIT du lot et `appliquer_le_tampon`, puis la réouverture qui rebâtit) avant de s'y fier. S'il rougissait, ce serait un
+défaut d'aujourd'hui, avec ou sans B, et un ticket à part.
+
+**Qui fait quoi.** L'arbre principal prend l'étape 2 quand c7 aura dit B et que l'étape 1 de lucivy aura posé, rouge
+d'abord, avec le témoin à k ≥ 2.
