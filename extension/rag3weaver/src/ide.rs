@@ -57,7 +57,7 @@
 
 use std::collections::{HashSet, VecDeque};
 use std::io::Write;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, Weak};
 
 use serde_json::{json, Value};
@@ -73,6 +73,11 @@ pub const COOKIE: &str = "rag3weaver_ide";
 pub const SUJETS: [&str; 8] = ["files", "dataflow", "agent", "tokens", "catalog", "components", "reactions", "declarations"];
 /// Combien d'événements le flux garde pour rejouer.
 const TAMPON: usize = 2048;
+/// **What a window may owe before it counts as gone** (ticket
+/// `docs/recherche/tickets/2026-11-14-le-temoin-du-chat-d-une-tache-rougit-sous-charge.md`): the frames queued for its
+/// writer, a whole replay of the buffer included. Beyond, the window stopped reading: it is dropped, and comes back
+/// with its `Last-Event-ID`, replayed from the buffer.
+const EN_ATTENTE_PAR_FENETRE: usize = TAMPON + 256;
 /// Le pas du battement qui fait tomber une fenêtre fermée.
 const BATTEMENT: std::time::Duration = std::time::Duration::from_secs(15);
 
@@ -116,7 +121,11 @@ struct Entree {
 struct Abonne {
     sujets: Option<HashSet<String>>,
     dernier: u64,
-    ecrivain: Box<dyn Write + Send>,
+    /// The frames for this window's own writer thread: never a write under the subscribers' lock, which a window
+    /// that stopped reading would hold for ever (ticket of the 14th).
+    envoi: std::sync::mpsc::SyncSender<Arc<str>>,
+    /// False once its writer failed: the window is gone.
+    vivant: Arc<AtomicBool>,
     navigateur: bool,
 }
 
@@ -131,7 +140,13 @@ impl Abonne {
             return true;
         }
         self.dernier = e.id;
-        self.ecrivain.write_all(e.trame.as_bytes()).and_then(|_| self.ecrivain.flush()).is_ok()
+        self.pousser(e.trame.as_str())
+    }
+
+    /// Queue a frame for the window's writer, never waiting: a full queue (the window stopped reading) or a writer
+    /// gone (the window left) drops the window.
+    fn pousser(&self, trame: &str) -> bool {
+        self.vivant.load(Ordering::SeqCst) && self.envoi.try_send(Arc::from(trame)).is_ok()
     }
 }
 
@@ -205,13 +220,30 @@ impl Flux {
     fn abonner_avec(&self, mut ecrivain: Box<dyn Write + Send>, sujets: Option<HashSet<String>>, depuis: Option<u64>, navigateur: bool) {
         // Sous le verrou des abonnés : une publication qui tombe pendant le
         // rejeu attend, puis passe ; l'abonné saute ce qu'il a déjà eu.
-        let mut abonnes = self.abonnes.lock().unwrap_or_else(|p| p.into_inner());
-        let entete = b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\n\
-            Connection: keep-alive\r\n\r\n: ide\n\n";
-        if ecrivain.write_all(entete).and_then(|_| ecrivain.flush()).is_err() {
+        // **Its own writer** (ticket of the 14th): the header, then each frame queued for it, written outside the
+        // subscribers' lock. It ends when the window leaves (a write fails) or is dropped (its queue closes).
+        let (envoi, recu) = std::sync::mpsc::sync_channel::<Arc<str>>(EN_ATTENTE_PAR_FENETRE);
+        let vivant = Arc::new(AtomicBool::new(true));
+        let du_fil = vivant.clone();
+        let lance = std::thread::Builder::new().name("ide-fenetre".into()).spawn(move || {
+            let entete = b"HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\n\
+                Connection: keep-alive\r\n\r\n: ide\n\n";
+            if ecrivain.write_all(entete).and_then(|_| ecrivain.flush()).is_err() {
+                du_fil.store(false, Ordering::SeqCst);
+                return;
+            }
+            for trame in recu {
+                if ecrivain.write_all(trame.as_bytes()).and_then(|_| ecrivain.flush()).is_err() {
+                    du_fil.store(false, Ordering::SeqCst);
+                    return;
+                }
+            }
+        });
+        if lance.is_err() {
             return;
         }
-        let mut abonne = Abonne { sujets, dernier: 0, ecrivain, navigateur };
+        let mut abonnes = self.abonnes.lock().unwrap_or_else(|p| p.into_inner());
+        let mut abonne = Abonne { sujets, dernier: 0, envoi, vivant, navigateur };
         if let Some(depuis) = depuis {
             abonne.dernier = depuis;
             let tampon: Vec<Arc<Entree>> = self.tampon.lock().unwrap_or_else(|p| p.into_inner()).iter().cloned().collect();
@@ -221,7 +253,7 @@ impl Flux {
                     "event: lacune\ndata: {}\n\n",
                     json!({ "depuis": depuis, "premier": premier, "raison": "le tampon du flux ne garde plus ces événements : relire l'état" })
                 );
-                if abonne.ecrivain.write_all(trame.as_bytes()).and_then(|_| abonne.ecrivain.flush()).is_err() {
+                if !abonne.pousser(&trame) {
                     return;
                 }
             }
@@ -242,7 +274,7 @@ impl Flux {
         self.abonnes
             .lock()
             .unwrap_or_else(|p| p.into_inner())
-            .retain_mut(|a| a.ecrivain.write_all(b": battement\n\n").and_then(|_| a.ecrivain.flush()).is_ok());
+            .retain_mut(|a| a.pousser(": battement\n\n"));
     }
 
     /// Combien de fenêtres du navigateur écoutent (une par navigateur quand ses onglets
