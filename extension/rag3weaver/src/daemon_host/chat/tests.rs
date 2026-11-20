@@ -2050,6 +2050,10 @@ fn une_relecture_retenue_de_la_seconde_fenetre_n_efface_pas_le_tour_de_la_premie
     // 333 then 395 ms): 2 s here, so that the stream opens long before the chat is mounted and listens.
     n.commande("Page.addScriptToEvaluateOnNewDocument", json!({ "source": "(() => { const f = window.fetch; window.fetch = (u, o) => String(u).includes('/ide/etat') ? new Promise((ok) => setTimeout(ok, 2000)).then(() => f(u, o)) : f(u, o); })();" }));
     n.aller(&format!("{racine}/ide/code/{id}/chat"), "document.getElementById('lien')?.textContent === 'flux : ouvert'");
+    // « flux : ouvert » says the worker is linked, not that the chat listens: its reads held, the second window sees
+    // the turn by the stream only, so the turn starts once its chat listens (`__chatTokens`, set by the effect that
+    // subscribes). An order, not a delay.
+    n.attendre("!!window.__chatTokens", "the chat of the second window listens to the stream");
     // The first window runs a whole turn.
     n.onglet(0);
     n.evaluer("document.querySelector('#message').value = 'réponds'; document.querySelector('#send').click()");
