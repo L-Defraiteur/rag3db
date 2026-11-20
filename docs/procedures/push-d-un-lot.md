@@ -55,6 +55,21 @@ tous des rejeux d'auteurs que le pousseur allait refaire. Une passe complète d'
 touche une suite lourde partout (le catalogue, l'index) : l'auteur le dit en déposant. Le dépôt et la file :
 `docs/optimiseur/18-11-2026/02-le-pousseur.md`.
 
+**Un lot rust se dépose avec son attestation check_features (20 nov. 2026, c7, lot pusher-attestation).** Le 20
+novembre, trois lots ont été rendus rouges à check_features dans la même nuit : un `cfg` de feature manquait, le
+pousseur l'a vu, jamais leur auteur. Chaque fois, un train était perdu et un rang à reprendre. Depuis 11 h 04, le
+pousseur refuse à l'enqueue un lot rust sans attestation. Les lots docs et scripts en sont exempts.
+1. Sur la tête exacte que l'on dépose, arbre propre, sous-module à jour : sans `git submodule update --init`,
+   `sans-feature` rougit sur « failed to get codeparsers ». La commande, depuis `extension/rag3weaver` :
+   `POSTE_MEM_MAX=32G CARGO_TARGET_DIR=<target> ~/.cache/rag3weaver-build/poste lourd timeout 50m bash scripts/check_features.sh > <journal> 2>&1`
+   Le journal commence par `TÊTE <hash>` et `ARBRE propre`, et finit par `CHECK_FEATURES VERT 8/8`.
+2. Le dépôt passe le journal sur l'entrée :
+   `ssh -T lucied@luciepc "CHECK_FEATURES_LOG=- bash .cache/rag3weaver-build/pusher.sh enqueue <id> <branche> <tête> rust <témoin> <suite> <suites en plus> <parent> <auteur>" < <journal>`
+   À luciepc même : `CHECK_FEATURES_LOG=<journal> bash ~/.cache/rag3weaver-build/pusher.sh enqueue …`.
+3. Un refus dit pourquoi : pas d'attestation, une autre tête, un arbre modifié, ou une dernière ligne qui n'est pas
+   `VERT n/n`. Une tête qui change, par une repose ou un commit de plus, demande une attestation rejouée. Le pousseur
+   garde chaque attestation dans `pusher/attestations/`.
+
 **Toute passe lourde part sous `timeout`, dans `poste` (c7, 15 nov. 2026, rappel de la règle du 10 octobre)** : `poste lourd timeout <N> <commande>`, aux deux postes, lib comme batterie. Le 15 novembre, un `cargo test --lib` sans borne a tenu la seule place lourde du portable 80 minutes à 1,7 de charge : des témoins attendaient un superviseur sans délai, et quatre passes attendaient derrière. Une attente sans borne dans un test est un défaut du produit à écrire (le produit a un délai réglé et le dit), pas une raison de laisser la place.
 
 **Mémoire (c7, 13 nov. 2026)** : **32 Gio pour toute validation**, l'invariant de `scripts/confiner_validation.py`. `poste` garde son défaut de **40 Gio pour les bâtis**. Donc `run_e2e.sh` se lance seul (il prend `poste` avec 32G), ou bien `POSTE_MEM_MAX=32G poste lourd … run_e2e.sh` : sous un `poste lourd` sans cette variable, la portée existe déjà à 40 Gio et le confineur refuse la passe.
