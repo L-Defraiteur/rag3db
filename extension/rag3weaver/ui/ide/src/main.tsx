@@ -30,8 +30,11 @@ import { Home } from "@/views/Home";
 /// that carries an approval card adds it, an `AccordDecide` takes it away. No request while idle.
 function AccordsEnAttente({ id, manifest }: { id: string; manifest: string | undefined }) {
   const [enAttente, setEnAttente] = useState<Set<string>>(new Set());
+  // The load done (the chat's state and each card's decision read): a mark for the witnesses, an order not a delay.
+  const [charge, setCharge] = useState(false);
   useEffect(() => {
     let vivant = true;
+    setCharge(false);
     const decides = new Set<string>();
     const ajouter = (ids: string[]) =>
       setEnAttente((cur) => {
@@ -64,7 +67,8 @@ function AccordsEnAttente({ id, manifest }: { id: string; manifest: string | und
         if (!vivant) return;
         for (const r of rs) (r.decide ? retirer(r.i) : ajouter([r.i]));
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => vivant && setCharge(true));
     const off = onFlux((d) => {
       const e = d.evenement ?? {};
       if (d.sujet === "accords" && e.kind === "AccordDecide" && e.id) retirer(String(e.id));
@@ -77,7 +81,7 @@ function AccordsEnAttente({ id, manifest }: { id: string; manifest: string | und
   }, [id, manifest]);
   const n = enAttente.size;
   return (
-    <span id="accords-en-attente" data-compte={String(n)} className={n ? "text-xs text-primary" : "hidden"}>
+    <span id="accords-en-attente" data-compte={String(n)} data-charge={charge ? "1" : "0"} className={n ? "text-xs text-primary" : "hidden"}>
       {n === 1 ? "1 accord attend dans le chat" : `${n} accords attendent dans le chat`}
     </span>
   );
