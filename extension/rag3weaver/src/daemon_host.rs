@@ -409,6 +409,7 @@ pub mod juge;
 /// L'équipier : un agent qui accomplit une tâche seul, par pas, et parle à un
 /// superviseur par une boîte aux lettres.
 pub mod teammate;
+pub mod web_fetch;
 
 /// Le pas d'un équipier étanche au moteur : le backend pris à chaque appel
 /// d'outil, le repli sur les fichiers du worktree quand il manque.
