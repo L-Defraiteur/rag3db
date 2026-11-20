@@ -1,5 +1,11 @@
 # Nouveautés
 
+- 20 novembre 2026 — **Chaque appel d'outil dit la version du gabarit qui l'a servi.** La réponse porte
+  `metadata.template` : l'empreinte de ce que le chargement a mis en service (manifeste, scripts, graphes, schémas,
+  et le contenu embarqué par le binaire) et le numéro de rechargement. Une entité qui déclare `writes.template` reçoit
+  cette empreinte sur chaque ligne écrite : dans le gabarit memory, la Source d'une tranche et chaque L1. Une baisse
+  du rangement se relie ainsi à la version du gabarit qui l'a produite.
+
 - 20 novembre 2026 — **La décision de rangement de l'archiviste est composée de parts, le stable devant.** Le texte
   que reçoit le modèle pour ranger une section est fait de parts : ce qui précède (stable pour tout le document),
   la section, puis les fiches candidates, chacune rendue par un gabarit déclaré (`candidates_template`
