@@ -214,6 +214,26 @@ Si l'écriture coûte trop, deux replis, dans cet ordre : n'écrire les occurren
 (calcul à la demande, la réécriture réanalyse de toute façon), puis ne garder par défaut que les occurrences des
 symboles exportés.
 
+## Lot 1 : la couverture mesurée (20 novembre 2026)
+
+Le module `codeparsers::coverage` range chaque nœud nommé d'un fichier : **référence** (relevée par codeparsers à sa
+ligne et sa colonne), **déclaration** (le nom d'un scope), **écarté** (un autre identifiant : locale, paramètre, champ,
+type non relevé, mot vide, nom intégré), **neutre** (littéral, commentaire), **structure** (tout autre nœud ; un chemin
+`a::b` compte en structure, ses noms un à un). La sonde `tests/probe_coverage.rs` le rend par langue et par sorte de
+nœud, sans rien changer au graphe. Premier relevé, sur l'arbre de travail du 20 novembre :
+
+| corpus | langue | nœuds nommés | référence | déclaration | écarté | neutre | structure |
+|---|---|---|---|---|---|---|---|
+| rag3weaver/src | Rust | 1 822 381 | 12,0 % | 2,0 % | 17,5 % | 15,7 % | 52,8 % |
+| moteur `src/` | C++ (`.cpp`) | 684 473 | 10,3 % | 3,3 % | 21,0 % | 4,9 % | 60,5 % |
+| moteur `src/` | C++ (`.h`) | 336 698 | 9,7 % | 7,1 % | 17,4 % | 4,9 % | 61,0 % |
+| `tools/python_api` | Python | 62 971 | 10,8 % | 1,5 % | 11,8 % | 32,7 % | 43,2 % |
+| UI | TSX | 43 132 | 12,2 % | 5,7 % | 13,3 % | 13,7 % | 55,2 % |
+
+Les identifiants écartés sont d'abord des `identifier` (les locales et les paramètres que les lots 2 et 3 feront
+entrer au graphe), puis des `field_identifier` et des `type_identifier` (des champs et des types lus dans un corps,
+que la résolution par le receveur ne relève pas encore comme références). C'est là que porteront les lots suivants.
+
 ## Les réponses de Lucie (20 novembre 2026, 17 h 47)
 
 Oui aux trois questions :
