@@ -122,3 +122,45 @@ exact. **Le critère « aucune ligne sans vecteur ne prend un premier rang par u
   partagent la même clé `chemin:ligne`, d'où la confusion. Les générations 0, 1 et 2 des deux bases sont publiées.
 - **La recette change** : le revers se juge désormais sur le scope rendu (nom, type, taille du contenu, par la réponse
   JSON), jamais sur la ligne source.
+
+## 7. (A') : la ligne sans vecteur comptée après la liste dense
+
+`vectorless-below-best` `68b82e86df` (fusion seule, graphe inchangé) : une ligne sans vecteur est comptée au rang qui suit
+le dernier de la liste dense. En requêtes seules sur `feuille-lot-1636`, par un hôte de la tête et ses gabarits, jugé
+sur le scope rendu (`revers-a-20261120/revers-juge.json`). **Rouge, à moitié réparé.**
+
+- Les 13 noms tapés exactement, premiers dans les relevés du lot, le restent, à leur ligne.
+- Les 10 requêtes de G n'ont aucune déclaration courte en tête.
+- « rebuild the vector index » [python] : **réparé**. En tête, `file_scope_08` (module, 105 caractères), et la variable
+  `index` (22 caractères) descend au rang 3.
+- **Restent en tête, sans vecteur** : `manifest` (variable, 51 caractères) pour « parse a json manifest », sans filtre et
+  en python ; `s` (variable, 19 caractères, `s=index.read_text()`) pour « read_text », sans filtre et en python. Le mot
+  de la requête est dans leur contenu, pas leur nom : le signal dominant `bm25_exact` les garde devant.
+
+**La référence d'avant la bascule** (hôte baccb2ea6e, ancienne analyse, ancienne fusion, ouverte par G) : « parse a json
+manifest » y rend en tête une méthode (`parse_declaration` sur code-principal, `read_manifest` sur code-lourd), la
+variable courte `packageJson` au rang 3 ou 4. **Le revers est donc apporté par la bascule, pas hérité.** « rebuild the
+vector index » [python] ne s'y compare pas : l'ancien hôte refuse `language` en argument et ignore `options.language`.
+
+## 8. Le juge sur les bases vivantes, après la fenêtre de re-bascule
+
+Par l'hôte de service (`83c667e420`, 7970), gabarits livrés (`builtin:`), en lecture seule, le 20 novembre vers 21 h 20.
+
+| base | juge | requêtes de G | noms courts | 30 cas |
+|---|---|---|---|---|
+| code-principal (luciepc) | contre les relevés du lot de feuille-5d | **10/10**, recouvrement 100 % | **13/13** premiers | 0 premier différent |
+| code-lourd (luciepc) | à un côté, sur `rag3db-lourd` a72acfeef0 | les 5 identifiants rendent leur définition | 12/20 premiers à leur ligne, 7 battus par un homonyme, 1 absent (`BINARY`) | — |
+| code-rag3db-depot (tablette) | à un côté, sur l'arbre de Lucie 327534c972 | les 5 identifiants rendent leur définition | 10/20 premiers à leur ligne | — |
+
+**Vert sur le critère, aux trois bases.** Les trois requêtes au premier changé de code-principal rendent les bons scopes :
+`point_de_reprise_final` (function), `copy_links_from_csv` (method) et `add_rag3db_test(e2e_test …)` (texte brut).
+
+**Un point à regarder sur la tablette** : cinq noms tirés de son arbre sont absents du top 10, sans aucun homonyme qui
+l'explique : `__all__` (`tools/python_api/src_py/__init__.py:73`), `lib` (`third_party/pybind11/tools/libsize.py:12`),
+`result` (`docs/arbre-principal/13-11-2026/couches-2a-union-detache/lancer.py:76`), `con`
+(`benchmark/click/load.py:8`), `PORT` (`extension/rag3weaver/tty/mesures/mesure.py:44`). Le nom exact n'en remonte aucun.
+Reste à lire si ces scopes sont dans la base ; ce n'est pas classé rouge sans l'avoir vu.
+
+**À un côté** : code-lourd et la tablette indexent un autre arbre que code-principal (`rag3db-lourd`, l'arbre de Lucie à
+la tablette). Leurs lignes diffèrent, et une clé `chemin:ligne` ne se compare pas d'une base à l'autre. Le juge y tire
+ses noms de l'arbre de la base, et un nom battu par un homonyme défini ailleurs (une requête ambiguë) n'est pas un défaut.
