@@ -9738,6 +9738,12 @@ mod tests {
         std::fs::write(dir.path().join("sources/outil.min.js"), "function reduite(a) {\n  return a * 2;\n}\n").unwrap();
         std::fs::write(dir.path().join("sources/ecran.bundle.js"), "function montee(a) {\n  return a - 1;\n}\n").unwrap();
         std::fs::write(dir.path().join("sources/garde.rs"), "pub fn garde() -> u32 {\n    1\n}\n").unwrap();
+        // A source named like a bundle (c7: `bundle.rs`, the code of a bundler) is not a produced file: indexed.
+        std::fs::write(
+            dir.path().join("sources/bundle.rs"),
+            (0..10).map(|i| format!("pub fn assemble_{i}() -> u32 {{ {i} }}\n")).collect::<String>(),
+        )
+        .unwrap();
         let prepared = PreparedBackend::load(&dir.path().join("backend.json")).expect("le manifeste se charge");
         assert!(prepared.manifest.workspace.as_ref().is_some(), "a code workspace");
         let backend = backend_de_code(dir.path(), prepared);
@@ -9764,6 +9770,7 @@ mod tests {
                 .unwrap_or(-1)
         };
         assert!(scopes("garde.rs") >= 1, "a file written by hand is indexed");
+        assert!(scopes("bundle.rs") >= 10, "a source named like a bundle is indexed: {}", scopes("bundle.rs"));
         for exclu in ["app.js", "dist/lib.js", "outil.min.js", "ecran.bundle.js"] {
             assert_eq!(scopes(exclu), 0, "{exclu} is excluded by default");
         }

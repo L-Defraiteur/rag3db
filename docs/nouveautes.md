@@ -10,7 +10,8 @@
   l'analyse 14).
 - 20 novembre 2026 — **Les bundles sont exclus de l'index par défaut, et l'état dit lesquels.** Sans rien déclarer,
   une base de code n'indexe plus un fichier minifié (une ligne au-delà de 5 000 octets), un fichier de code de plus de
-  1 Mio, ni ce que nomment les motifs `dist/`, `build/`, `*.min.js` et `*bundle*`. Une base qui veut ses bundles le dit
+  1 Mio, ni ce que nomment les motifs `dist/`, `build/`, `*.min.js`, `*bundle*.js`, `*bundle*.css` et `*.bundle.*` (les
+  bundles produits : un `bundle.rs` reste indexé). Une base qui veut ses bundles le dit
   dans `workspace.index_exclude` : un seuil à `null` ou `"off"`, `paths: []`. Un fichier déjà indexé que ces règles
   écartent quitte l'index au prochain index complet, sans compter comme manquant. L'état de l'index nomme les fichiers
   écartés sous `excluded_files`, par règle, et le journal d'index cite les premiers.
