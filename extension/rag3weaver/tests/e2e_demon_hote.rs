@@ -791,7 +791,7 @@ fn code_tree_pose_enregistre_clone_et_retire_un_arbre() {
     };
     let etat_de = || -> Value { serde_json::from_str(&agent.get(format!("http://{adresse}/etat")).call().unwrap().body_mut().read_to_string().unwrap()).unwrap() };
     let avant = ouvertures(&etat_de(), "/code-coeur/");
-    let (b, autour) = add_with_host(&roots, &arbre, "code-coeur", Some("code-clone"), &adresse).unwrap();
+    let (b, autour) = add_with_host(&roots, &arbre, "code-coeur", Some("code-clone"), &adresse, false).unwrap();
     assert_eq!(autour, FromAroundCopy::ClosedAndReopened, "le départ était ouvert");
     assert!(!b.copied.is_empty(), "la base du premier est copiée : {b:?}");
     let apres = etat_de();
