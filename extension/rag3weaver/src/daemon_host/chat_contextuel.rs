@@ -593,6 +593,17 @@ fn une_fenetre_qui_n_est_pas_le_chat_compte_les_accords_en_attente() {
         n.onglet(i);
         n.attendre(&format!("{compte} === '0'"), "the approval granted, no approval awaited");
     }
+    // A card the host no longer knows (ED's review): a second turn asks again, then the host forgets its requests, as
+    // a restart does. Nobody can decide that card any more: a window opened now must not count it.
+    n.onglet(0);
+    n.attendre(PRETE, "the chat ready for a second turn");
+    n.evaluer("document.querySelector('#message').value = 'relance echo'; document.querySelector('#send').click()");
+    n.attendre(&format!("document.querySelectorAll('{carte}').length === 2 && document.querySelector('#status')?.textContent === 'fini'"), "a second card awaits its approval");
+    a.host.oublier_les_demandes_pour_un_temoin();
+    n.nouvel_onglet();
+    n.aller(&format!("{}/ide/code/{}/arbre?fenetre=depot", serveur.racine(), a.h.id), "document.getElementById('lien')?.textContent === 'flux : ouvert'");
+    n.attendre("document.querySelector('#accords-en-attente')?.dataset.charge === '1'", "the window has read the chat and its cards");
+    assert_eq!(n.evaluer(compte), json!("0"), "a card the host no longer knows is not awaited");
     assert!(n.erreurs.is_empty(), "console : {:?}", n.erreurs);
     drop(n);
     serveur.arreter();

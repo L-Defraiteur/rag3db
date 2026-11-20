@@ -381,6 +381,13 @@ impl DaemonHost {
     }
 
     /// L'état d'une demande (la carte relue après un rechargement).
+    /// **Forgets the approval requests, as a restart of the host does** (they live in its memory only): for the
+    /// witness of a card the host no longer knows (the IDE in several windows, slice 5, ED's review).
+    #[cfg(test)]
+    pub(crate) fn oublier_les_demandes_pour_un_temoin(&self) {
+        self.accords.lock().unwrap_or_else(|p| p.into_inner()).demandes.clear();
+    }
+
     pub fn etat_accord(&self, id: &str) -> Option<Value> {
         let a = self.accords.lock().unwrap_or_else(|p| p.into_inner());
         a.demandes.get(id).map(|d| {
