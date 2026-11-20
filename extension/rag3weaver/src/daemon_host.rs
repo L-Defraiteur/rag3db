@@ -842,8 +842,90 @@ impl DaemonHost {
     /// its worktree and its target removed. Refused, saying why: a view the host did not open for the session (Lucie's
     /// tree among them), a dirty tree (submodule included), commits no remote branch holds, a process working in it.
     pub fn close_view(&self, session: Option<&str>, manifest: &Path, name: &str) -> Value {
-        let _ = (session, manifest, name);
-        json!({ "ok": false, "error": "close_view : pas encore" }) // RED STUB.
+        let r = self.check_session(session).and_then(|s| {
+            let claude = s.claude_session.clone().ok_or("close_view : la session Claude Code qui appelle n'est pas connue (son sessionId)")?;
+            let fichier = self.fichier_de_vue(&claude).ok_or_else(|| format!("session Claude Code illisible : « {claude} »"))?;
+            let mut etat: Value = std::fs::read_to_string(&fichier).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_else(|| json!({}));
+            // 1. A view the host opened for this session, and no other (Lucie's tree among them).
+            let ouverte = etat["ouvertes"].get(name).cloned().filter(|v| !v.is_null()).ok_or_else(|| {
+                format!("close_view : la vue « {name} » n'est pas ouverte par l'hôte pour cette session ; une vue ouverte ailleurs se ferme au mot de Lucie")
+            })?;
+            let chemin = std::path::PathBuf::from(ouverte["path"].as_str().ok_or("close_view : la vue notée n'a pas de chemin")?);
+            let reel = chemin.canonicalize().unwrap_or_else(|_| chemin.clone());
+            let git = |dans: &Path, args: &[&str]| -> Result<String, String> {
+                let o = std::process::Command::new("git").arg("-C").arg(dans).args(args).output().map_err(|e| format!("git : {e}"))?;
+                if o.status.success() {
+                    Ok(String::from_utf8_lossy(&o.stdout).trim().to_string())
+                } else {
+                    Err(format!("git {} : {}", args.join(" "), String::from_utf8_lossy(&o.stderr).trim()))
+                }
+            };
+            if reel.exists() {
+                // 2. A dirty tree, submodule included: nothing local is lost.
+                let sale = git(&reel, &["status", "--porcelain", "--ignore-submodules=none"])?;
+                if !sale.is_empty() {
+                    return Err(format!("close_view : {} est sale ({} chemins) ; l'arbre reste", reel.display(), sale.lines().count()));
+                }
+                // 3. Commits since the fork that no remote branch holds.
+                let fourche = ouverte["fork"].as_str().unwrap_or("HEAD");
+                let seuls = git(&reel, &["rev-list", "--count", &format!("{fourche}..HEAD"), "--not", "--remotes"])?;
+                if seuls != "0" {
+                    return Err(format!("close_view : {} a {seuls} commit(s) non poussé(s) ; l'arbre reste", reel.display()));
+                }
+                // 4. A process working in it.
+                let dedans = std::fs::read_dir("/proc")
+                    .map(|d| d.flatten().filter(|e| std::fs::read_link(e.path().join("cwd")).is_ok_and(|c| c.starts_with(&reel))).count())
+                    .unwrap_or(0);
+                if dedans > 0 {
+                    return Err(format!("close_view : {dedans} processus travaille(nt) dans {} ; l'arbre reste", reel.display()));
+                }
+                let commun = git(&reel, &["rev-parse", "--path-format=absolute", "--git-common-dir"])?;
+                let depot = Path::new(&commun).parent().ok_or("close_view : dépôt introuvable")?.to_path_buf();
+                git(&depot, &["worktree", "remove", "--force", &reel.to_string_lossy()])?;
+                git(&depot, &["worktree", "prune"])?;
+            }
+            // Its target, only under a target folder of the build cache.
+            if let Some(t) = ouverte["target"].as_str().map(std::path::PathBuf::from) {
+                if t.components().any(|c| c.as_os_str().to_string_lossy().starts_with("target-")) && t.exists() {
+                    std::fs::remove_dir_all(&t).map_err(|e| format!("close_view : le target {} : {e}", t.display()))?;
+                }
+            }
+            // Closed by hand, not landed: the layer ends, its generations stay.
+            let couche = ouverte["layer"].as_str().map(str::to_string).unwrap_or_else(|| format!("worktree:{}", reel.display()));
+            #[cfg(feature = "code")]
+            if let Ok(hosted) = self.hosted(manifest) {
+                let _ = self.with_backend(&hosted, |b| -> Result<bool, String> {
+                    let prepared = b.prepared();
+                    let racine = prepared.workspace_root().ok_or("pas de racine de travail")?;
+                    let repo = crate::suivies::repo_id(&racine, prepared.manifest.tracked.as_ref())?.ok_or("pas d'id de dépôt")?;
+                    let cat = b.catalog.lock().map_err(|_| "catalogue empoisonné".to_string())?;
+                    crate::suivies::end_layer(&cat, &repo, &couche)
+                });
+            }
+            #[cfg(not(feature = "code"))]
+            let _ = manifest;
+            // Forgotten: the state, and every session that read it reads the backend again.
+            if let Some(m) = etat["ouvertes"].as_object_mut() {
+                m.remove(name);
+            }
+            if etat["active"] == json!({ "layer": couche }) {
+                etat["active"] = Value::Null;
+            }
+            ecrire_par_renommage(&fichier, &etat)?;
+            let lisaient: Vec<String> = self
+                .sessions
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .values()
+                .filter(|o| o.default_view == Some(json!({ "layer": couche })))
+                .map(|o| o.id.clone())
+                .collect();
+            for id in lisaient {
+                let _ = self.set_session_view(&id, None);
+            }
+            Ok(json!({ "ok": true, "closed": name, "layer": couche }))
+        });
+        r.unwrap_or_else(|e| op_response(Err(e)))
     }
 
     fn espace_et_table(&self) -> (std::path::PathBuf, std::path::PathBuf) {
