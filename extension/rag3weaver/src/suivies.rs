@@ -765,6 +765,31 @@ pub fn layer_id_by_name(
     Ok(fiche.filter(|f| f.get("fin").is_none()).map(|_| id))
 }
 
+/// **Inscrire une couche par son nom** (page 03 du 20 novembre 2026, O2) : son id stable, dérivé comme celui de
+/// [`identifiants_des_couches`] (le dépôt, le nom, la pointe à la naissance), sa fiche et l'index de son nom. Une couche
+/// vivante sous ce nom garde son id. Rend l'id.
+pub fn register_layer(catalog: &crate::catalog::Catalog, depot: &str, nom: &str, pointe: &str) -> Result<String, String> {
+    let e = |e: crate::catalog::CatalogError| e.to_string();
+    let lire = |cle: &str| catalog.read_meta_key(cle).map_err(e);
+    if let Some(id) = layer_id_by_name(&lire, depot, nom)? {
+        return Ok(id);
+    }
+    let mut rang = 0u32;
+    let id = loop {
+        let r = rang.to_string();
+        let parts: Vec<&str> = if rang == 0 { vec![depot, nom, pointe] } else { vec![depot, nom, pointe, &r] };
+        let id = crate::uuid::hashsafe_uuid("Couche", &parts);
+        if lire(&format!("fiche_couche:{depot}:{id}"))?.filter(|v| !v.is_empty()).is_none() {
+            break id;
+        }
+        rang += 1;
+    };
+    let fiche = serde_json::json!({"nom": nom, "naissance": {"nom": nom, "pointe": pointe}, "pointe_vue": pointe});
+    catalog.persist_meta_key(&format!("fiche_couche:{depot}:{id}"), &fiche.to_string()).map_err(e)?;
+    catalog.persist_meta_key(&format!("couche_nom:{depot}:{nom}"), &id).map_err(e)?;
+    Ok(id)
+}
+
 /// **Les identifiants stables des couches** d'une résolution (décision d'ED et d'arbre principal, 14 nov.,
 /// page `docs/arbre-principal/14-11-2026/02-les-suivies-tracked.md`) : un id par couche, distinct de son nom,
 /// dérivé de sa naissance (le dépôt, le nom complet et la pointe à la première vue) et gardé dans
