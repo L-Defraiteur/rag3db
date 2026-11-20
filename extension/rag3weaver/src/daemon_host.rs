@@ -838,6 +838,14 @@ impl DaemonHost {
         r.unwrap_or_else(|e| op_response(Err(e)))
     }
 
+    /// **`close_view <name>`** (page 03 of 20 November 2026, O3): a view the host opened for this session is forgotten,
+    /// its worktree and its target removed. Refused, saying why: a view the host did not open for the session (Lucie's
+    /// tree among them), a dirty tree (submodule included), commits no remote branch holds, a process working in it.
+    pub fn close_view(&self, session: Option<&str>, manifest: &Path, name: &str) -> Value {
+        let _ = (session, manifest, name);
+        json!({ "ok": false, "error": "close_view : pas encore" }) // RED STUB.
+    }
+
     fn espace_et_table(&self) -> (std::path::PathBuf, std::path::PathBuf) {
         if let Some(x) = self.espace.lock().unwrap_or_else(|p| p.into_inner()).clone() {
             return x;
@@ -2366,6 +2374,19 @@ impl DaemonHost {
                 (statut(&reponse), reponse)
             }
             // **The views of a session** (page 02 of 20 November 2026): on the backend of `manifest`.
+            ("POST", "/views/close") => {
+                let v = match corps().and_then(|v| manifeste(&v).map(|m| (v, m))) {
+                    Ok(x) => x,
+                    Err(e) => return (400, json!({ "ok": false, "error": e })),
+                };
+                let (v, m) = v;
+                let reponse = match v["name"].as_str() {
+                    Some(name) => self.close_view(session, &m, name),
+                    None => json!({ "ok": false, "error": "« name » manque : la vue à fermer" }),
+                };
+                let reponse = if reponse["ok"] == json!(true) { json!({ "ok": true, "result": reponse }) } else { reponse };
+                (statut(&reponse), reponse)
+            }
             ("POST", "/views/open") => {
                 let v = match corps().and_then(|v| manifeste(&v).map(|m| (v, m))) {
                     Ok(x) => x,
