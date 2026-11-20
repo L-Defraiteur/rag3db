@@ -2718,3 +2718,98 @@ fn every_parameter_of_the_teammates_tools_is_described() {
     }
     assert!(manquent.is_empty(), "parameters without a description: {manquent:#?}");
 }
+
+/// A local HTTP server for the witnesses of `fetch`: `/page` (HTML, a script and visible text), `/missing` (404),
+/// `/moved` (302 to `/page`). Returns its base address.
+fn web_server() -> String {
+    use std::io::{Read, Write};
+    let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let base = format!("http://{}", l.local_addr().unwrap());
+    std::thread::spawn(move || {
+        for c in l.incoming().flatten() {
+            let mut c = c;
+            let mut buf = [0u8; 2048];
+            let n = c.read(&mut buf).unwrap_or(0);
+            let req = String::from_utf8_lossy(&buf[..n]).to_string();
+            let path = req.split_whitespace().nth(1).unwrap_or("/").to_string();
+            let (status, extra, body) = match path.as_str() {
+                "/page" => ("200 OK", "Content-Type: text/html; charset=utf-8\r\n".to_string(),
+                    format!("<html><head><title>T</title><script>var secretScript = 1;</script><style>p {{}}</style></head><body><h1>Visible heading</h1><p>Visible text &amp; more.</p><p>{}</p></body></html>", "padding ".repeat(80))),
+                "/moved" => ("302 Found", "Location: /page\r\n".to_string(), String::new()),
+                _ => ("404 Not Found", "Content-Type: text/plain\r\n".to_string(), "nothing here".to_string()),
+            };
+            let _ = write!(c, "HTTP/1.1 {status}\r\n{extra}Content-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
+        }
+    });
+    base
+}
+
+/// **fetch** (the teammate's base, 20 November 2026): a page comes back as readable text (no script, no style),
+/// cut at its bound with the cut said; a 404 is said, not hidden; a redirect is followed and reported; a local
+/// address is refused by default, naming `teammate.fetch.allow_local`.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn the_teammate_fetches_a_page_says_its_status_and_refuses_a_local_address_by_default() {
+    let base = web_server();
+    for allow_local in [false, true] {
+        let d = tempfile::tempdir().unwrap();
+        let (_depot, manifeste) = depot_inscrit(d.path(), true);
+        let mut m: Value = serde_json::from_str(&std::fs::read_to_string(&manifeste).unwrap()).unwrap();
+        m["teammate"] = json!({ "fetch": { "allow_local": allow_local, "max_bytes": 300 } });
+        std::fs::write(&manifeste, serde_json::to_string_pretty(&m).unwrap()).unwrap();
+        let declarations = manifeste.parent().unwrap();
+        for args in [&["add", "-A"][..], &["commit", "-q", "-m", "fetch"]] {
+            assert!(std::process::Command::new("git").args(args).current_dir(declarations).status().unwrap().success(), "git {args:?}");
+        }
+        let results = Arc::new(Mutex::new(Vec::<Value>::new()));
+        let model: ChatModel = {
+            let (base, results) = (base.clone(), results.clone());
+            Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+                let (base, results) = (base.clone(), results.clone());
+                Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
+                    let got = tool_results(turns);
+                    if got.is_empty() {
+                        return answer(turns, opts, sink, "", calls(&[
+                            ("fetch", json!({ "url": format!("{base}/page") })),
+                            ("fetch", json!({ "url": format!("{base}/missing") })),
+                            ("fetch", json!({ "url": format!("{base}/moved") })),
+                        ]));
+                    }
+                    if results.lock().unwrap().is_empty() {
+                        *results.lock().unwrap() = got.iter().map(|r| serde_json::from_str(r).unwrap_or(json!(r))).collect();
+                    }
+                    answer(turns, opts, sink, "", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "lu", "remaining": "" }))]))
+                })))
+            })
+        };
+        let host = hote(d.path(), model).with_runs_root(d.path().join("runs"));
+        let h = host.hosted(&manifeste).unwrap();
+        host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+        host.ouvrir_une_tache(&h.id, "doc").expect("la tâche s'ouvre");
+        let files = host.teammate_files(&h.id, "doc").unwrap();
+        files.append("supervisor", "request", None, "Lis ces pages.").unwrap();
+        let _ = host.run_teammate(&h.id, "doc");
+        let r = results.lock().unwrap().clone();
+        assert_eq!(r.len(), 3, "allow_local={allow_local}: {r:?}");
+        if !allow_local {
+            for x in &r {
+                assert_eq!(x["ok"], json!(false), "{x}");
+                let e = x["error"].as_str().unwrap_or_default();
+                assert!(e.contains("local") && e.contains("teammate.fetch.allow_local"), "a local address is refused by default: {x}");
+            }
+            continue;
+        }
+        let page = &r[0];
+        assert_eq!((page["ok"].clone(), page["status"].clone()), (json!(true), json!(200)), "{page}");
+        let text = page["text"].as_str().unwrap_or_default();
+        assert!(text.contains("Visible heading") && text.contains("Visible text & more."), "readable text: {page}");
+        assert!(!text.contains("secretScript") && !text.contains("<p>"), "no script, no markup: {page}");
+        assert!(page["cut_bytes"].as_u64().is_some_and(|n| n > 0), "cut at max_bytes, and said: {page}");
+        let missing = &r[1];
+        assert_eq!((missing["ok"].clone(), missing["status"].clone()), (json!(false), json!(404)), "a 404 is said: {missing}");
+        let moved = &r[2];
+        assert_eq!(moved["status"], json!(200), "{moved}");
+        assert!(moved["url"].as_str().is_some_and(|u| u.ends_with("/page")), "{moved}");
+        assert_eq!(moved["redirects"].as_array().map(Vec::len), Some(1), "the redirect is reported: {moved}");
+    }
+}
