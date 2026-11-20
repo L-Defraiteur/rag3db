@@ -37,7 +37,7 @@ coupée, et l'usage réel de l'appel d'extraction (`extraction_usage`).
 1. **`low` supprime la coupure.** Aucune fenêtre coupée sur 19 dans les deux passes, contre 3 et 5 sous le raisonnement
    par défaut du modèle (parité de B3). Vertex rend 0 jeton de raisonnement pour l'extraction sous `low`, et
    l'extraction prend 10 s de médiane, contre 24 à 51 s avant.
-2. **La borne à 16 384 n'apporte rien de plus** sous `low` : aucune réponse n'approche 8 192 (au plus ~1 100 jetons de
+2. **La borne à 16 384 n'apporte rien de plus** sous `low` : aucune réponse n’approche 8 192 (en moyenne ~1 100 jetons de
    sortie par fenêtre).
 3. **`minimal` est refusé par Vertex** : « HTTP 400 : Thinking level is unsupported: THINKING_LEVEL_MINIMAL » (requête
    gardée sous `minimal-8192-…/etat/requetes-refusees/`). Le paramètre offre `minimal` sans le traduire pour Gemini 3.8
