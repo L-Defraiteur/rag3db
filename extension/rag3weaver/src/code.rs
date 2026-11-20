@@ -1756,9 +1756,11 @@ pub fn analyze_in_project_avec(
             .iter()
             .filter(|imp| imp.reexport && imp.kind == codeparsers::scope_extraction::types::ImportReferenceKind::Named)
             .filter_map(|imp| {
-                let nom = imp.alias.clone()?;
-                let dernier = imp.imported.rsplit("::").next().unwrap_or(&imp.imported);
-                (dernier == nom).then(|| (nom, imp.module_path.clone().unwrap_or_else(|| imp.source.clone()), imp.line))
+                // Le nom réexporté : l'alias (Rust le pose toujours), sinon le nom importé (Python, TypeScript).
+                let dernier = imp.imported.rsplit("::").next().unwrap_or(&imp.imported).rsplit('.').next().unwrap_or(&imp.imported);
+                let nom = imp.alias.clone().unwrap_or_else(|| dernier.to_string());
+                let source = imp.module_path.clone().unwrap_or_else(|| imp.source.clone());
+                (dernier == nom).then(|| (nom, module_d_une_reexportation(&source, &rel), imp.line))
             })
             .collect();
         // **Le scope qui porte une réexportation est celui du `pub use`** :
@@ -4858,31 +4860,74 @@ fn modules_d_un_paquet_du_depot(
         let d = rel(dossier);
         if d.is_empty() { suite.to_string() } else { format!("{d}/{suite}") }
     };
+    // Un module désigne un dossier par son fichier d'index (`module_designe_fichier` retire `/index`, `/mod`,
+    // `/__init__` du fichier) : `src/index` se dit `src`.
+    let candidats = |v: Vec<String>| -> Vec<String> {
+        let mut v: Vec<String> = v
+            .into_iter()
+            .map(|c| ["/index", "/mod", "/__init__"].iter().find_map(|s| c.strip_suffix(s)).map(str::to_string).unwrap_or(c))
+            .collect();
+        v.dedup();
+        v
+    };
     match famille_de_langage(fichier)? {
         "rust" => {
             let mut segments = module.split("::");
             let tete = segments.next()?;
             let p = paquets.get("rust")?.get(tete)?;
             let suite: Vec<&str> = segments.filter(|s| !s.is_empty()).collect();
-            Some(match suite.as_slice() {
+            Some(candidats(match suite.as_slice() {
                 [] => p.entrees.iter().map(|e| rel(e)).collect(),
                 [seul] => vec![sous(&p.dossier, &format!("src/{seul}")), sous(&p.dossier, "src/lib")],
                 [avant @ .., _] => vec![sous(&p.dossier, &format!("src/{}", suite.join("/"))), sous(&p.dossier, &format!("src/{}", avant.join("/")))],
-            })
+            }))
         }
         "js" => {
             let table = paquets.get("javascript")?;
             let (nom, p) = table.iter().filter(|(n, _)| module == n.as_str() || module.starts_with(&format!("{n}/"))).max_by_key(|(n, _)| n.len())?;
             let reste = module[nom.len()..].trim_start_matches('/');
-            Some(if reste.is_empty() {
+            Some(candidats(if reste.is_empty() {
                 p.entrees.iter().map(|e| rel(e)).collect()
             } else {
                 let reste = reste.rsplit_once('.').filter(|(_, x)| !x.contains('/')).map(|(a, _)| a).unwrap_or(reste);
                 vec![sous(&p.dossier, reste), sous(&p.dossier, &format!("src/{reste}"))]
-            })
+            }))
         }
         _ => None,
     }
+}
+
+/// **Le module d'une réexportation, lu depuis son fichier** (20 novembre 2026) : un import relatif de Python
+/// (`.lib`, `..outils.x` dans `monpaquet/__init__.py`) ou de TypeScript (`./catalog`, `../a` dans `src/index.ts`)
+/// devient le chemin du module depuis la racine (`monpaquet/lib`, `src/catalog`) ; un autre reste tel quel
+/// (`crate::a`, `monpaquet.lib`).
+fn module_d_une_reexportation(source: &str, fichier: &str) -> String {
+    let fichier = crate::workspace_path::slash(fichier);
+    let mut dossier: Vec<&str> = fichier.split('/').filter(|s| !s.is_empty()).collect();
+    dossier.pop();
+    if source.starts_with("./") || source.starts_with("../") {
+        for seg in source.split('/') {
+            match seg {
+                "." | "" => {}
+                ".." => {
+                    dossier.pop();
+                }
+                s => dossier.push(s),
+            }
+        }
+        let chemin = dossier.join("/");
+        return chemin.rsplit_once('.').filter(|(_, x)| !x.contains('/')).map(|(a, _)| a.to_string()).unwrap_or(chemin);
+    }
+    if let Some(reste) = source.strip_prefix('.') {
+        let mut reste = reste;
+        while let Some(r) = reste.strip_prefix('.') {
+            dossier.pop();
+            reste = r;
+        }
+        dossier.extend(reste.split('.').filter(|s| !s.is_empty()));
+        return dossier.join("/");
+    }
+    source.to_string()
 }
 
 /// Le module que désigne `source`, écrit dans `module` : `runtime` →
@@ -4894,6 +4939,11 @@ fn default_export_symbol(source: &str, file: &str) -> String {
 
 fn joindre_les_modules(module: &str, source: &str) -> String {
     if source.starts_with("crate::") || source == "crate" {
+        return source.to_string();
+    }
+    // Un chemin (une réexportation relative de Python ou de TypeScript, déjà lue depuis son fichier) ou un
+    // module Python absolu (`monpaquet.lib`) se suffit.
+    if source.contains('/') || (!source.contains("::") && source.contains('.')) {
         return source.to_string();
     }
     let mut base: Vec<&str> = module.split("::").filter(|s| !s.is_empty()).collect();
