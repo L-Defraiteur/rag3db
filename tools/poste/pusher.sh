@@ -127,6 +127,21 @@ enqueue() {
   fi
   [ "$computed" = cpp ] && { echo "refusé : le lot touche le moteur (cpp), il passe par la voie transférable ou une fenêtre" >&2; return 1; }
   [ "$computed" = "$kind" ] || { echo "refusé : le lot est $computed, pas $kind" >&2; return 1; }
+  # The check_features attestation of a Rust lot (20 Nov., c7: three lots red at check_features in one night, seen by
+  # the pusher and never by their author): the journal of check_features.sh played on this very head, clean tree, last
+  # line « CHECK_FEATURES VERT n/n ». CHECK_FEATURES_LOG=<path on this poste>, or « - » for standard input. Kept.
+  if [ "$kind" = rust ] && [ "${PUSHER_EXIGER_ATTESTATION:-1}" = 1 ]; then
+    local att; att=$(mktemp)
+    case "${CHECK_FEATURES_LOG:-}" in
+      "") rm -f "$att"; echo "refusé : un lot rust apporte son attestation check_features : jouer extension/rag3weaver/scripts/check_features.sh sur la tête $(g rev-parse --short "$full"), arbre propre, puis déposer avec CHECK_FEATURES_LOG=<journal> (ou - et le journal sur l'entrée)" >&2; return 1 ;;
+      -) cat > "$att" ;;
+      *) cp "$CHECK_FEATURES_LOG" "$att" 2>/dev/null || { rm -f "$att"; echo "refusé : attestation illisible : $CHECK_FEATURES_LOG" >&2; return 1; } ;;
+    esac
+    if ! grep -qx "TÊTE $full" "$att"; then rm -f "$att"; echo "refusé : l'attestation check_features n'a pas été jouée sur la tête $(g rev-parse --short "$full") (elle dit : $(grep -m1 '^TÊTE' "$att" 2>/dev/null || echo 'aucune tête'))" >&2; return 1; fi
+    if ! grep -qx "ARBRE propre" "$att"; then rm -f "$att"; echo "refusé : l'attestation check_features a été jouée sur un arbre modifié : la rejouer sur la tête déposée, arbre propre" >&2; return 1; fi
+    if ! tail -1 "$att" | grep -qE '^CHECK_FEATURES VERT ([0-9]+)/\1$'; then rm -f "$att"; echo "refusé : l'attestation check_features ne finit pas sur « CHECK_FEATURES VERT n/n » ($(tail -1 "$att"))" >&2; return 1; fi
+    mkdir -p "$D/attestations"; mv "$att" "$D/attestations/$id-$(date +%Y%m%d-%H%M%S).log"
+  fi
   # A lot deposited again under the same id takes the rank of its first deposit: behind every lot of the queue first
   # deposited before it, and behind its parent (19 Nov., c7: every redeposit fell at the tail, behind lots deposited
   # hours after it). A new id goes to the tail.

@@ -37,6 +37,10 @@ JEUX=(
   "rag3db-native"
 )
 ICI="$(cd "$(dirname "$0")/.." && pwd)"
+# La tête jouée et l'état de l'arbre, en tête du journal (20 novembre 2026) : le pousseur exige ce journal, joué sur la
+# tête déposée, arbre propre, comme attestation d'un lot rust.
+echo "TÊTE $(git -C "$ICI" rev-parse HEAD 2>/dev/null)"
+if [ -z "$(git -C "$ICI/../.." status --porcelain --untracked-files=no -- . ':!extension/rag3weaver/codeparsers' 2>/dev/null)" ]; then echo "ARBRE propre"; else echo "ARBRE modifié"; fi
 . "$ICI/scripts/garde_target.sh"
 garder_le_target "${CARGO_TARGET_DIR:-$ICI/target}" "$ICI" || exit 2
 . "$ICI/scripts/lib_du_magasin.sh"
