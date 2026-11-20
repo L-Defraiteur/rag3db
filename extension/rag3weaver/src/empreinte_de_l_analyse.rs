@@ -69,8 +69,8 @@ fn canonique(v: &mut serde_json::Value) {
     }
 }
 
-/// L'empreinte de l'analyse du corpus figé, en hexadécimal.
-pub(crate) fn empreinte() -> String {
+/// Le texte canonique dont l'empreinte est tirée.
+fn texte_canonique() -> String {
     let analyse = analyze("/empreinte", corpus());
     let mut v = serde_json::to_value(&analyse).expect("l'analyse se sérialise");
     canonique(&mut v);
@@ -86,9 +86,13 @@ pub(crate) fn empreinte() -> String {
         })
         .collect();
     morceaux.sort_by_cached_key(|x| x.to_string());
-    let tout = serde_json::json!({ "analyse": v, "morceaux": morceaux });
+    serde_json::json!({ "analyse": v, "morceaux": morceaux }).to_string()
+}
+
+/// L'empreinte de l'analyse du corpus figé, en hexadécimal.
+pub(crate) fn empreinte() -> String {
     let mut h = Sha256::new();
-    h.update(tout.to_string().as_bytes());
+    h.update(texte_canonique().as_bytes());
     h.finalize().iter().map(|b| format!("{b:02x}")).collect()
 }
 
@@ -124,5 +128,11 @@ fn l_empreinte_de_l_analyse_ne_change_qu_avec_les_regles() {
 /// Deux calculs de suite donnent la même empreinte : elle ne dépend d'aucun ordre de parcours ni d'aucun état.
 #[test]
 fn l_empreinte_est_stable() {
-    assert_eq!(empreinte(), empreinte());
+    let (a, b) = (texte_canonique(), texte_canonique());
+    if a != b {
+        let i = a.bytes().zip(b.bytes()).position(|(x, y)| x != y).unwrap_or(a.len().min(b.len()));
+        let debut = i.saturating_sub(300);
+        let autour = |s: &str| s.get(debut..(i + 300).min(s.len())).unwrap_or("").to_string();
+        panic!("deux calculs diffèrent à l'octet {i} :\n  premier : {}\n  second  : {}", autour(&a), autour(&b));
+    }
 }
