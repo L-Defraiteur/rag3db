@@ -102,3 +102,35 @@ claude.ai. Trois choses où nous avons déjà mieux : l'index par le sens avec v
 fiches citables (ils n'ont que le fichier `CLAUDE.md` et la mémoire automatique), le pousseur avec ses juges (rien
 chez eux). L'ordre que je proposerais : la palette différée et `run` d'abord (ce sont les deux qui rendent un équipier
 utilisable sur un vrai dépôt), puis `watch` et la liste de tâches du run, puis le fork.
+
+## OpenCode (anomalyco), relevé du clone du 20 novembre
+
+Lucie, 17 h 2x : « y a pas des implémentations qu'on peut copier-coller ? est-ce qu'ils font aussi un tool search ? ».
+Clone de lecture `~/git_workspaces/c7/20-11-2026-opencode` (7f90d8d, MIT, TypeScript + Effect, bun ; marqué jetable, 72 h).
+
+**Leurs outils** (`packages/core/src/tool/plugin/`) : `read`, `write`, `edit`, `patch` (un patch textuel ajout /
+mise à jour / suppression, avec sa grammaire), `glob`, `grep`, `shell`, `webfetch`, `websearch`, `question`, `skill`,
+`subagent`, `todo`, `artifact`, `automation` (des déclencheurs planifiés, l'heure courante en UTC), `mcp-resource`,
+`mcp-events`, `session-search` (chercher dans ses propres sessions passées), `file-diff`, `opencode` (renommer la
+session…), `image-generate`, `video-generate`. Rien d'autre : pas d'`Agent` à fork, pas de `Monitor`, pas de
+worktree, pas de `ToolSearch`.
+
+**Leur réponse à « trop d'outils » n'est pas un outil de recherche, c'est le mode code** (`packages/codemode`, sur
+l'interpréteur psychoscript) : le modèle écrit un petit programme qui appelle les outils d'un **catalogue** à espaces de
+noms ; le catalogue garde « every namespace visible », n'affiche en entier qu'un espace par tour (« select full
+listings one per namespace per round »), épingle quelques outils (`pinned`), et le programme a `scanTools` /
+`search` pour trouver le reste. Le programme ne touche ni réseau, ni fichiers, ni processus : tout passe par les
+outils, bornés en temps, en nombre d'appels et en taille de sortie. C'est l'idée de Cloudflare (code mode), reprise
+sans isolat.
+
+**Ce qui se reprend chez nous** : pas le code (TypeScript/Effect, nous sommes en Rust), mais trois choses précises :
+les **descriptions** de leurs outils (une phrase par paramètre, lisibles), **le catalogue à espaces de noms avec
+épingles** comme forme de notre palette différée (les outils de tête épinglés, le reste par espace et par recherche),
+et **`session-search`** (chercher dans ses propres sessions passées : c'est notre mémoire des runs, à exposer comme
+outil). À regarder plus tard : le mode code comme seconde voie, un programme borné qui enchaîne dix appels d'outils
+sans dix tours de modèle ; c'est aussi ce que fait notre lanceur de campagne, en déclaratif.
+
+**Avons-nous besoin d'un tool search ?** Oui, c'est décidé (la palette différée du socle de l'équipier) : avec les
+vues, le mode pair, le navigateur et les MCP à chaud, la palette dépasse ce qu'une invite doit porter ; la forme sera
+celle du catalogue (épingles, espaces, recherche), et `tools/list_changed` du protocole MCP la rend visible au
+client.
