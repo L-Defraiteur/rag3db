@@ -649,7 +649,17 @@ pub fn indexed_tree_of(root: &str) -> serde_json::Value {
     // The blob of each modified path as it was indexed (`-` when deleted): a view without a watch compares the tree to
     // it, so a file indexed modified and unchanged since is not behind (ticket of 18 November 2026).
     let mut dirty_blobs = serde_json::Map::new();
-    for chemin in crate::views::status_paths(&status) {
+    // `git` above trims its output, which eats the leading blank of a first ` M path`: the paths read untrimmed.
+    let brut = std::process::Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(["status", "--porcelain", "--untracked-files=no"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+        .unwrap_or_default();
+    for chemin in crate::views::status_paths(&brut) {
         let blob = git(&["hash-object", "--", &chemin]).unwrap_or_else(|| "-".to_string());
         dirty_blobs.insert(chemin, serde_json::Value::String(blob));
     }
