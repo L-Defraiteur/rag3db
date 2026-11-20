@@ -164,3 +164,20 @@ Reste à lire si ces scopes sont dans la base ; ce n'est pas classé rouge sans 
 **À un côté** : code-lourd et la tablette indexent un autre arbre que code-principal (`rag3db-lourd`, l'arbre de Lucie à
 la tablette). Leurs lignes diffèrent, et une clé `chemin:ligne` ne se compare pas d'une base à l'autre. Le juge y tire
 ses noms de l'arbre de la base, et un nom battu par un homonyme défini ailleurs (une requête ambiguë) n'est pas un défaut.
+
+## 9. (A'), second pas : vert
+
+`vectorless-below-best` `e5f1f8052d` : après le tri des dominants (`bm25_exact`), la première ligne à vecteur passe
+devant les lignes sans vecteur qui la précédaient ; seul le nom exact (la requête entière) remet une ligne sans vecteur
+en tête. Même juge que le § 7, sur `feuille-lot-1636` (`revers-a2-20261120/`). **Vert.**
+
+- Les 12 noms premiers dans les relevés du lot le restent, à leur ligne ; `ENTETE`, 2ᵉ dans ces relevés, passe premier.
+- « parse a json manifest » : sans filtre, `parse_declaration` (méthode, 1 143 caractères), `manifest` au rang 2 ; en
+  python, `JSON_HEADER_PATH` (constante de 87 caractères, avec vecteur).
+- « read_text » : sans filtre, `backend_memory` (fonction) ; en python, `meta` (variable de 84 caractères, avec vecteur).
+- « rebuild the vector index » [python] : `file_scope_08` (module), `index` au rang 3.
+- Les 10 requêtes de G et les 30 cas : aucune ligne sans vecteur au premier rang.
+
+**Reste** : les cinq noms du dépôt de la tablette (§ 8), que le nom exact ne promeut pas quand la déclaration sort de la
+liste fusionnée bornée. C'est le lot suivant d'ED (le nom exact cherché par une lecture directe, avant la fusion) ;
+ce juge-là les ajoutera.
