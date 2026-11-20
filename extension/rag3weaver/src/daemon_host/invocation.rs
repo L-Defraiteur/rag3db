@@ -225,6 +225,37 @@ mod tests {
         assert!(etat.contains(r["name"].as_str().unwrap()), "{etat}");
     }
 
+    /// **`open_view` makes its view active on a base without `tracked`** (page 03 of 20 November 2026, O2, Lucie's rule of
+    /// 18 h 47): no ref is followed; the view opened is a work layer on its fork, among the session's views, active, and a
+    /// call without `view` reads under it.
+    #[test]
+    fn open_view_makes_its_view_active_without_a_followed_ref() {
+        let d = tempfile::tempdir().unwrap();
+        let a = atelier(d.path());
+        let depot = petit_depot(&d.path().join("B"));
+        a.appeler("attach_worktree", json!({"path":depot})).unwrap();
+        attendre_l_index(&a, &depot);
+        let roots = a.host.racines_de_code().unwrap();
+        let name = crate::code_tree::name_of_tree(&depot.canonicalize().unwrap()).unwrap();
+        let manifeste = roots.manifest(&name);
+        let (_h, espace, _) = hote_d_espace(&d.path().join("e"));
+        a.host.set_espace(espace, d.path().join("e/dossiers-des-sessions.json"));
+        a.host.set_vues_dir(d.path().join("e/vues"));
+        let corps = json!({"client": "mcp (pid 1)", "claude": {"session_id": "S1", "name": "le témoin"}}).to_string();
+        let (_, r) = a.host.handle("POST", "/session", None, corps.as_bytes());
+        let s = r["session"].as_str().unwrap().to_string();
+        let r = a.host.open_view(Some(&s), &manifeste, "fourche", None);
+        assert_eq!(r["ok"], json!(true), "{r}");
+        let chemin = std::path::PathBuf::from(r["path"].as_str().unwrap()).canonicalize().unwrap();
+        let couche = format!("worktree:{}", chemin.display());
+        assert_eq!(r["layer"], json!(couche), "the view opened has no layer on a base without tracked: {r}");
+        let v = a.host.views(Some(&s), &manifeste);
+        assert!(v["views"].as_array().is_some_and(|l| l.iter().any(|x| x["name"] == json!(couche))), "the view opened is not among the views: {v}");
+        assert_eq!(v["active"], json!({"name": couche, "source": "session"}), "the view opened is not active: {v}");
+        let lu = a.host.call(Some(&s), &manifeste, "usages", json!({"name": "un"}));
+        assert_eq!((&lu["ok"], &lu["result"]["view"]["source"]), (&json!(true), &json!("session")), "a call without view does not read under the view opened: {lu}");
+    }
+
     /// **`views` and `use_view` follow the Claude Code session** (page 02 of 20 November 2026, lot 2): two thin clients
     /// of one session (one `sessionId`) see the same active view, another session does not; an unknown name is refused,
     /// listing the known views; a host restarted on the same state finds the view again.
