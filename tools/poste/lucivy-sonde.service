@@ -1,0 +1,7 @@
+[Unit]
+Description=lucivy : la sonde nocturne des dictionnaires (check_dictionary sur une copie de chaque Lucivy_*, 20 nov. 2026)
+
+[Service]
+Type=oneshot
+Nice=15
+ExecStart=/bin/sh -c 'python3 -I %h/.cache/rag3weaver-build/lucivy_sonde.py >> %h/.cache/rag3weaver-build/lucivy-sonde/sortie.log 2>&1'

@@ -1,0 +1,5 @@
+# Mots perdus connus : <base> <index> <champ> <nombre>. Ils datent d'avant lucivy 4.3.12, et seul un rebâti du plein
+# texte les rend : retirer la ligne après le rebâti. Relevé du 20 novembre 2026, docs/lucivy/20-11-2026/01-….
+code-rag3db-depot Lucivy_Scope content 532
+code-rag3db-depot Lucivy_Scope docstring 133
+code-rag3db-depot Lucivy_Scope name 25

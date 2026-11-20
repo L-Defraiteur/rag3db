@@ -1,0 +1,9 @@
+[Unit]
+Description=lucivy : la sonde des dictionnaires à 05 h 00, après la maintenance nocturne du plein texte (03 h 30)
+
+[Timer]
+OnCalendar=*-*-* 05:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
