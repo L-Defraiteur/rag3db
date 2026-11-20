@@ -1640,6 +1640,7 @@ impl<'a> Agent<'a> {
         // outil (une salutation passe, un « c'est fait » inventé est relancé
         // une fois), **deux** après un travail commencé sans soumission acceptée.
         let mut completion_nudges = 0usize;
+        let mut cut_relaunches = 0usize;
         // **La portée du run** : les commandes en fond y enregistrent leur
         // mort ; elle est vidée à la sortie du scope — toutes voies
         // confondues, par la garde — AVANT que les fils de portée soient
@@ -1921,6 +1922,17 @@ impl<'a> Agent<'a> {
                 }
                 if !text.is_empty() {
                     turns.push(Turn::assistant(text));
+                }
+                // **A reply cut at max_tokens is relaunched** (page 19-11-2026/06 of rag3weaver-archi):
+                // said in the trace (cut_reply: the cap, the reasoning, the completion), bounded.
+                if finish.reason == FinishReason::MaxTokens {
+                    if let Some((relance, max)) = &self.limits.cut_relaunch {
+                        if cut_relaunches < *max {
+                            cut_relaunches += 1;
+                            turns.push(Turn::user(format!("{}. {relance}", crate::llm::cut_reply(self.opts.max_tokens, &usage))));
+                            continue;
+                        }
+                    }
                 }
                 if finish.reason != FinishReason::Cancelled
                     && self.completion.is_some_and(|c| !c.accepted())
