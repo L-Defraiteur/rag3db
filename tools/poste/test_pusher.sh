@@ -135,6 +135,8 @@ case "$1 $2" in
 esac
 H
 chmod +x "$D/gh.sh"
+# The check_features attestation of a Rust lot (case 42) is required by default; the other cases deposit without it.
+export PUSHER_EXIGER_ATTESTATION=0
 export PUSHER_GH=$D/gh.sh GH_CALLS=$D/gh_calls GH_BODIES=$D/gh_bodies GH_DOWN=$D/gh-down GUARD_REFUSE=$D/guard-refuse
 : > "$D/gh_calls"; : > "$D/gh_bodies"
 P() { bash "$PUSHER" "$@"; }
@@ -636,4 +638,26 @@ h=$(lot df-c docs/df-c.md '# df child'); P enqueue df-c df-c "$h" docs - - - df-
 order=$(grep -v '^#' "$D/pusher/queue.tsv" | cut -f1 | grep -E '^df-' | paste -sd' ')
 [ "$order" = "df-d df-r1 df-r2 df-c" ] && ok "un lot docs passe devant les rust en file, sauf derrière son parent rust" || ko "docs devant les rust : $order"
 for x in df-d df-r1 df-r2 df-c; do P dequeue $x > /dev/null 2>&1; done
+# 42. A Rust lot brings its check_features attestation at the deposit (20 Nov., c7: three lots red at check_features in one
+# night, each a train lost): the journal of check_features.sh played by the author on this very head, clean tree, last
+# line « CHECK_FEATURES VERT n/n ». Given by CHECK_FEATURES_LOG=<path>, or « - » on standard input. Docs and scripts need none.
+h=$(lot at-1 extension/rag3weaver/src/at1.rs 'fn at1() {}')
+att() { printf 'TÊTE %s\nARBRE %s\nVERT  sans-feature\nCHECK_FEATURES %s\n' "$1" "$2" "$3"; }
+out=$(PUSHER_EXIGER_ATTESTATION=1 P enqueue at-1 at-1 "$h" rust some_witness e2e_code - - author-c 2>&1)
+! grep -q '^at-1	' "$D/pusher/queue.tsv" && echo "$out" | grep -q 'attestation' && ok "un lot rust sans attestation check_features est refusé au dépôt" || ko "sans attestation : $out"
+att 0000000000000000000000000000000000000000 propre "VERT 8/8" > "$D/att-autre"
+out=$(PUSHER_EXIGER_ATTESTATION=1 CHECK_FEATURES_LOG="$D/att-autre" P enqueue at-1 at-1 "$h" rust some_witness e2e_code - - author-c 2>&1)
+! grep -q '^at-1	' "$D/pusher/queue.tsv" && echo "$out" | grep -q 'tête' && ok "une attestation jouée sur une autre tête est refusée" || ko "autre tête : $out"
+att "$h" modifié "VERT 8/8" > "$D/att-sale"
+out=$(PUSHER_EXIGER_ATTESTATION=1 CHECK_FEATURES_LOG="$D/att-sale" P enqueue at-1 at-1 "$h" rust some_witness e2e_code - - author-c 2>&1)
+! grep -q '^at-1	' "$D/pusher/queue.tsv" && ok "une attestation jouée sur un arbre modifié est refusée" || ko "arbre modifié : $out"
+att "$h" propre "ROUGE sans-feature" > "$D/att-rouge"
+out=$(PUSHER_EXIGER_ATTESTATION=1 CHECK_FEATURES_LOG="$D/att-rouge" P enqueue at-1 at-1 "$h" rust some_witness e2e_code - - author-c 2>&1)
+! grep -q '^at-1	' "$D/pusher/queue.tsv" && ok "une attestation qui ne finit pas sur « CHECK_FEATURES VERT n/n » est refusée" || ko "attestation rouge : $out"
+out=$(att "$h" propre "VERT 8/8" | PUSHER_EXIGER_ATTESTATION=1 CHECK_FEATURES_LOG=- P enqueue at-1 at-1 "$h" rust some_witness e2e_code - - author-c 2>&1)
+grep -q '^at-1	' "$D/pusher/queue.tsv" && ls "$D/pusher/attestations/" 2>/dev/null | grep -q '^at-1-' && ok "l'attestation de la tête, arbre propre, vert 8/8, par l'entrée : déposé, attestation gardée" || ko "attestation juste refusée : $out"
+P dequeue at-1 > /dev/null 2>&1
+h=$(lot at-d docs/at-d.md '# at'); out=$(PUSHER_EXIGER_ATTESTATION=1 P enqueue at-d at-d "$h" docs - - - - author-a 2>&1)
+grep -q '^at-d	' "$D/pusher/queue.tsv" && ok "un lot docs se dépose sans attestation" || ko "docs refusé : $out"
+P dequeue at-d > /dev/null 2>&1
 exit $red
