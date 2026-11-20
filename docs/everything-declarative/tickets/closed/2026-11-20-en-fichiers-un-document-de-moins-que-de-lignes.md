@@ -45,12 +45,20 @@ qui l'a laissé passer.
 - Les lignes écartées sont lues par une seule fonction (`Catalog::non_candidate_uuids`), partagée par la garde et par
   le geste de 2.12. Elle lit aussi les champs de structure et de langue que la règle juge : le geste ne les lisait pas,
   si bien qu'il jugeait sans la règle de structure, et autrement que l'insertion.
+- La garde d'un lecteur (`fts_rebuild_percent`, qui dit « à rebâtir » sans rien écrire) et l'avancement d'un rebâti
+  comptent les mêmes lignes candidates : c'était le rouge de `en_fichiers_le_rebati_dit_son_etat…` (« plus rien à
+  rebâtir »).
+- Les invariants des tests d'`e2e_tx_par_paquet_arret` suivent la règle : « un document par ligne » devient « un
+  document par ligne candidate » (`Catalog::candidate_rows_of`), et « aucun parent découpé sans morceau » ne compte
+  pas un conteneur écarté, jugé par la règle elle-même. Le fantôme du test de relance se pose au décalage de la
+  prochaine ligne, qui suit toutes les lignes, candidates ou non.
 - Une base indexée avant 2.12 a encore les documents de ses conteneurs à sa première ouverture : la garde y voit un
   écart et rebâtit une fois depuis les lignes, sans eux. Les ouvertures suivantes ne rebâtissent rien.
 
 **Les témoins.**
-- Les trois tests en fichiers d'`e2e_tx_par_paquet_arret` : rouges sur master 877019bdf2 (« 300 documents pour 301
-  lignes »), verts avec le correctif.
+- `e2e_tx_par_paquet_arret` en entier : sur master 877019bdf2, les trois tests en fichiers rouges (« 300 documents
+  pour 301 lignes ») ; joué en entier sur le correctif de la garde seule, cinq rouges (les invariants des tests, et
+  la garde du lecteur) ; vert en entier avec le lot.
 - `backend::tests::a_base_with_containers_set_aside_keeps_its_full_text_at_its_reopening` : une base de code dont les
   namespaces repliés sont écartés. Rouge sans le correctif (13 documents pour 26 lignes), vert avec : aucun écart, et la
   garde de réouverture ne rebâtit rien.
