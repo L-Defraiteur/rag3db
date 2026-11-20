@@ -410,7 +410,16 @@ impl OpenAiLlm {
         // `ReasoningEffort`. `reasoning_effort`, lui, est validé : une valeur
         // invalide répond 400 en nommant celles qu'il accepte.
         if let Some(effort) = opts.reasoning.or(self.reasoning_default) {
-            body.insert("reasoning_effort".into(), json!(effort.as_str()));
+            // Google refuses `minimal` (Vertex, Gemini 3.8 Flash, 20 November 2026: « HTTP 400 : Thinking level is
+            // unsupported: THINKING_LEVEL_MINIMAL »): it goes as `low`, as the Anthropic client does, said once.
+            let sent = if self.google_extras && effort == crate::llm::ReasoningEffort::Minimal {
+                static SAID: std::sync::Once = std::sync::Once::new();
+                SAID.call_once(|| eprintln!("[modèle {}] reasoning minimal is refused by Google: sent as low", self.model));
+                crate::llm::ReasoningEffort::Low
+            } else {
+                effort
+            };
+            body.insert("reasoning_effort".into(), json!(sent.as_str()));
         }
         // Indépendant de `tools` : on peut vouloir une sortie structurée sans
         // aucun outil, et l'inverse. ⚠ Chez Google, **combiner les deux est en
