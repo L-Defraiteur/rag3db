@@ -83,6 +83,10 @@
       "type": "integer",
       "minimum": 1,
       "description": "The last turn of its range, included; absent for a document."
+    },
+    "template": {
+      "type": "string",
+      "description": "The hash of the template that wrote this row (set by the server)."
     }
   }
 }

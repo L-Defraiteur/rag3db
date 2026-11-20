@@ -77,6 +77,10 @@
     "slice_summary": {
       "type": "string",
       "description": "A slice Source: what happened in the whole slice, by the extraction."
+    },
+    "template": {
+      "type": "string",
+      "description": "The hash of the template that wrote this row (set by the server)."
     }
   }
 }
