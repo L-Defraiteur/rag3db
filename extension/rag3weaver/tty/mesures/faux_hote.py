@@ -177,7 +177,11 @@ class Gestion(http.server.BaseHTTPRequestHandler):
             ligne(corps.get("kind", "message"), corps.get("text", ""), de="session", **extra)
             self.json({"ok": True, "result": {"id": boite[-1]["id"]}})
         elif self.path == "/ide/turns/read":
-            # read_turns (archi's route, 18 nov.): one turn indexed, one read from the chat file, one gone.
+            # read_turns (archi's route, on master 19 nov.): {run, from, to}; by apport it is refused, as the host does.
+            if "apport" in corps or not all(k in corps for k in ("run", "from", "to")):
+                self.json({"ok": False, "error": "turns/read by apport comes with the memory's trace_turn; give {run, from, to}"})
+                return
+            # One turn indexed, one read from the chat file, one gone.
             self.json({"ok": True, "result": {"turns": [
                 {"turn": 12, "state": "indexed", "messages": [{"role": "user", "text": "lance le plain"}, {"role": "tool", "tool_name": "run_command", "status": "ok", "text": "fait"}]},
                 {"turn": 13, "state": "from_chat_file", "messages": [{"role": "assistant", "text": "le tour lu dans le fichier du chat"}]},
