@@ -2961,7 +2961,8 @@ TEST_F(VectorIndexSeedMeasure, RecallAndBuildTimeWithAndWithoutTheSeed) {
         }
         literal += "]";
         auto result = conn->query(stringFormat(
-            "CALL QUERY_VECTOR_INDEX('Far', 'doc_index', {}, {}) RETURN node.id;", literal, k));
+            "CALL QUERY_VECTOR_INDEX('Far', 'doc_index', {}, {}) RETURN node.id ORDER BY distance;",
+            literal, k));
         std::vector<int64_t> ids;
         EXPECT_TRUE(result->isSuccess()) << "[check: query] " << result->getErrorMessage();
         while (result->isSuccess() && result->hasNext()) {
