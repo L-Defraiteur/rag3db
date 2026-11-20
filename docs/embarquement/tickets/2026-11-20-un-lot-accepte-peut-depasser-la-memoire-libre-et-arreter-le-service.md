@@ -37,3 +37,15 @@ mémoire que le lot demandera, ni celle que la carte a de libre (card2 : 20,1 Gi
   de textes longs l'arrête aujourd'hui ; elle doit être recoupée et servie.
 - **Pour l'autovérification au démarrage** : son lot de `lot_max` textes recyclés passe par le même découpage, et
   hérite donc du même risque sur une carte pleine.
+
+## Ce que la mesure a montré (20 novembre, 21 h 30)
+
+- **Le 7879 n'a pas manqué de mémoire libre** : sous radv, une allocation unique est limitée à 0xfffffffc octets
+  (`maxMemoryAllocationSize`, 4 Gio), sur card2 comme sur l'APU. Les 4 357 506 816 octets refusés la dépassaient, alors
+  que card2 avait 12 Gio de libres.
+- **Une allocation refusée empoisonne cubecl pour de bon** (essai jetable sur l'APU) : après le refus d'un tampon de
+  5,95 Gio, « Parent device is lost », puis tout appel suivant panique. Recouper et réessayer est impossible.
+- **La conception retenue**, page `docs/embarquement/20-11-2026/02-borner-chaque-lot-par-la-memoire-de-la-carte.md` :
+  deux bornes estimées avant l'appel (le plus grand tampon sous la limite d'allocation, le total sous la moitié de la
+  mémoire libre), le recoupage avant l'appel, et le 503 nommé pour un texte seul qui ne tient pas.
+
