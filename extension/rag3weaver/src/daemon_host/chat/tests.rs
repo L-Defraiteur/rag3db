@@ -1804,6 +1804,56 @@ fn le_chat_guide_une_fenetre_du_depot_detachee() {
     fil.join().unwrap();
 }
 
+/// **A detached window of the graph follows the tools of the turn** (the IDE in several windows, slice 4): a window
+/// opened on the graphs with `?fenetre=graphe` shows, as the chat's turn calls its tools, the graph of the tool being
+/// called (`dag/tool/<name>`), which the stream lights up; it follows without reloading, and keeps its role. The
+/// repository window is not moved by the tools: they go under `graphe:<backend>`, not `selection:<backend>`.
+#[test]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+fn le_graphe_detache_suit_les_outils_du_tour() {
+    use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+    const TEMOIN: &str = "le_graphe_detache_suit_les_outils_du_tour";
+    let Some(binaire) = navigateur_ou_saut(TEMOIN) else {
+        return;
+    };
+    let (d, h, m, id) = banc_dans("atelier", qui_lit_deux_fois(), |_| {});
+    drop(h);
+    let (chats, taches, runs) = (d.path().join("chats"), d.path().join("taches"), d.path().join("runs"));
+    let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| h.with_racine_des_taches(taches).with_chats_root(chats).with_runs_root(runs).with_chat_model(qui_lit_deux_fois()));
+    let racine = format!("http://{adresse}");
+    let mut r = crate::daemon::agent_de_temoin()
+        .post(format!("{racine}/ide/describe"))
+        .header("Cookie", "rag3weaver_ide=j")
+        .header("content-type", "application/json")
+        .send(json!({ "manifest": m }).to_string())
+        .unwrap();
+    let v: Value = serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap();
+    assert_eq!(v["ok"], true, "{v}");
+
+    let mut n = Navigateur::lancer(&binaire);
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+    let prete = "document.querySelector('#send') && !document.querySelector('#send').disabled && document.getElementById('lien')?.textContent === 'flux : ouvert'";
+    n.aller(&format!("{racine}/ide/code/{id}/chat"), prete);
+    // The window of the graph, detached, before the turn.
+    n.nouvel_onglet();
+    n.aller(&format!("{racine}/ide/code/{id}/dag/?fenetre=graphe"), "document.getElementById('lien')?.textContent === 'flux : ouvert'");
+    n.evaluer("window.dispatchEvent(new Event('focus')); window.__pasRecharge = true");
+    n.onglet(0);
+    n.attendre("(window.__ide?.fenetres ?? []).some((f) => f.role === 'graphe')", "the chat knows that a window of the graph is open");
+    n.evaluer("document.querySelector('#message').value = 'regarde le code'; document.querySelector('#send').click()");
+    n.attendre("document.querySelector('#status')?.textContent === 'fini'", "the turn, through list_files then read_file");
+    assert!(n.evaluer("location.pathname").as_str().unwrap_or_default().ends_with("/chat"), "the chat stays on its conversation");
+    n.onglet(1);
+    n.attendre("location.pathname.endsWith('/dag/tool/read_file')", "the window of the graph shows the graph of the last tool called");
+    assert_eq!(n.evaluer("[new URLSearchParams(location.search).get('fenetre'), window.__pasRecharge === true, document.querySelector('#entete')?.dataset.fenetre ?? null]"), json!(["graphe", true, "graphe"]), "it keeps its role, follows without reloading, and says its role");
+    assert!(n.erreurs.is_empty(), "erreurs à la console : {:#?}", n.erreurs);
+    drop(n);
+    drop(d);
+    let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+    assert_eq!(statut, 200);
+    fil.join().unwrap();
+}
+
 /// **Past the worker's bound, the joined text says what it misses** (ED's review of slice 1): the worker keeps the
 /// text of a turn in flight up to a bound (512 Kio; lowered here to 12 characters by the witnesses' message
 /// `tour-max`). A second window opened past it shows the kept beginning, a mark « […] » where the text was not kept,
