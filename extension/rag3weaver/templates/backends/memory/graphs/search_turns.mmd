@@ -12,7 +12,7 @@
 
 graph LR
     where["RhaiNode(script_id=turns_where, inputs='query,options,run,role,tool_name,status,since,until', query=$query, options=$options, run=$run, role=$role, tool_name=$tool_name, status=$status, since=$since, until=$until)"]
-    search["ForEachNode(graph='@builtin:backends/memory/graphs/turns_search.mmd')"]
+    search["ForEachNode(graph='@graphs/turns_search.mmd')"]
     found["RhaiNode(script_id=turns_found)"]
     where -->|result:elements| search
     search -->|list:value| found

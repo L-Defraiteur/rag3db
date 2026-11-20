@@ -8,6 +8,6 @@
 graph LR
     fiches["GraphNode(graph='@builtin:tools/select_structured.mmd', entity='Fiche', filter=$tout, limit=0)"]
     trouver["RhaiNode(script_id=gestes_rejoindre, inputs='uuid_a,uuid_b', uuid_a=$uuid_a, uuid_b=$uuid_b)"]
-    geste["ForEachNode(graph='@builtin:backends/memory/graphs/gestes_un.mmd')"]
+    geste["ForEachNode(graph='@graphs/gestes_un.mmd')"]
     fiches -->|result:value| trouver
     trouver -->|result:elements| geste

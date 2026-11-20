@@ -7,7 +7,7 @@ graph LR
     link["RelationBatchNode(relation='A_POUR_APPORT', links=$groupe.links)"]
     ancrer["AddRefNode(genre=$groupe.genre, valeur=$groupe.ancien, fiche=$groupe.fiche_id, refs_entity='Ref', types_entity='RefType', from_entity='Fiche', relation='ANCRE')"]
     lc["RhaiNode(script='input.groupe.citations', inputs='groupe', groupe=$groupe)"]
-    citer["ForEachNode(graph='@builtin:backends/memory/graphs/gestes_citer.mmd', element='ligne')"]
+    citer["ForEachNode(graph='@graphs/gestes_citer.mmd', element='ligne')"]
     out["RhaiNode(script='input.groupe', inputs='groupe', groupe=$groupe)"]
     link -->|report:value| lc
     lc -->|result:elements| citer
