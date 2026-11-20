@@ -58,14 +58,19 @@ function AccordsEnAttente({ id, manifest }: { id: string; manifest: string | und
           s.turns.flatMap((t: ChatTurn) => accords(t.ui)).map((i) =>
             fetch(`/ide/accords?id=${encodeURIComponent(i)}`)
               .then((r) => r.json())
-              .then((v: { ok?: boolean; result?: { decision?: string | null } }) => ({ i, decide: !!(v.ok && v.result?.decision) }))
-              .catch(() => ({ i, decide: false })),
+              // Awaited only when the host knows the card and it has no decision (ED's review): requests live in
+              // the host's memory, and a card it no longer knows (a restart) can never be decided.
+              .then((v: { ok?: boolean; result?: { decision?: string | null } }) => ({ i, etat: v.ok && v.result ? (v.result.decision ? "decide" : "attente") : "inconnue" }))
+              .catch(() => ({ i, etat: "inconnue" })),
           ),
         ),
       )
       .then((rs) => {
         if (!vivant) return;
-        for (const r of rs) (r.decide ? retirer(r.i) : ajouter([r.i]));
+        for (const r of rs) {
+          if (r.etat === "decide") retirer(r.i);
+          else if (r.etat === "attente") ajouter([r.i]);
+        }
       })
       .catch(() => {})
       .finally(() => vivant && setCharge(true));
