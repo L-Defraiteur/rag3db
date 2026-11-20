@@ -380,7 +380,7 @@ impl Embedder for BurnBgeM3Embedder {
     fn memory_bounds(&self) -> crate::lot_memory::Bounds {
         crate::lot_memory::Bounds {
             max_allocation: self.adapter.as_ref().map(|a| a.max_allocation),
-            free: self.adapter.as_ref().and_then(|a| crate::lot_memory::free_memory(&a.pci_bus_id, std::path::Path::new("/sys/class/drm"))),
+            free: self.adapter.as_ref().and_then(|a| crate::lot_memory::free_memory_of(&a.pci_bus_id, std::path::Path::new("/sys/class/drm"), a.integrated)),
         }
     }
 

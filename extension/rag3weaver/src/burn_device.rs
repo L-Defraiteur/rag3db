@@ -266,6 +266,8 @@ impl BurnDevice {
 pub struct AdapterFacts {
     pub max_allocation: u64,
     pub pci_bus_id: String,
+    /// An integrated adapter (an APU) computes in the GTT, not in its VRAM carve-out.
+    pub integrated: bool,
 }
 
 /// A native wgpu future is ready at its first polls : no executor for it.
@@ -312,7 +314,12 @@ impl BurnDevice {
             .ok()?,
             Some(t) => ready(instance.enumerate_adapters(wgpu::Backends::VULKAN)).into_iter().filter(|a| a.get_info().device_type == t).nth(index)?,
         };
-        Some(AdapterFacts { max_allocation: adapter.limits().max_buffer_size, pci_bus_id: adapter.get_info().device_pci_bus_id })
+        let info = adapter.get_info();
+        Some(AdapterFacts {
+            max_allocation: adapter.limits().max_buffer_size,
+            integrated: info.device_type == wgpu::DeviceType::IntegratedGpu,
+            pci_bus_id: info.device_pci_bus_id,
+        })
     }
 }
 
