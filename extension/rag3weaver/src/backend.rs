@@ -25,6 +25,11 @@ use std::{
 /// `vector_extension`, et ce que les gabarits livrés déclarent.
 pub const DEFAULT_VECTOR_EXTENSION: &str = "vector";
 
+/// **The start of the refusal for a tool without a declared graph** (`graph_json`): shared with the route `/ide/graphe`,
+/// which answers it as a fact of the tool (`sans_graphe`) and not as a missing resource (ED's review of the IDE in
+/// several windows, slice 4: matching the text in two places would let a rewording fall back to a 404 unseen).
+pub const GRAPH_PAS_D_OUTIL: &str = "graph : pas d'outil";
+
 fn default_vector_extension() -> PathBuf {
     PathBuf::from(DEFAULT_VECTOR_EXTENSION)
 }
@@ -3512,7 +3517,7 @@ impl PreparedBackend {
         };
         match target {
             GraphTarget::Tool(name) => {
-                let t = self.tools.get(name).ok_or_else(|| format!("graph : pas d'outil « {name} » dans ce backend"))?;
+                let t = self.tools.get(name).ok_or_else(|| format!("{GRAPH_PAS_D_OUTIL} « {name} » dans ce backend"))?;
                 let mut v = dessin("tool", name, &self.manifest.tools[name].graph, t.template(), true);
                 v["inputSchema"] = self.tool_schemas[name].clone();
                 v["result"] = json!({"node":t.result().0,"port":t.result().1});

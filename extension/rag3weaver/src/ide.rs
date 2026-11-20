@@ -635,7 +635,7 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
                     // detached window of the graph follows every tool of a turn, propose and report included). It is
                     // a fact about the tool, said by `sans_graphe`, not a missing resource: a 404 there was a console
                     // error in every window that followed such a tool.
-                    Err(e) if e.starts_with("graph : pas d'outil") => (200, json!({ "ok": false, "error": e, "sans_graphe": true })),
+                    Err(e) if e.starts_with(crate::backend::GRAPH_PAS_D_OUTIL) => (200, json!({ "ok": false, "error": e, "sans_graphe": true })),
                     Err(e) => (404, json!({ "ok": false, "error": e })),
                 },
             };
