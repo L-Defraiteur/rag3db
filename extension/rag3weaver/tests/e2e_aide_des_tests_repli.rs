@@ -21,10 +21,16 @@ fn sonde_granite_107m() {
     println!("▸ sonde : dim {} factice {}", v[0].len(), e.is_mock());
 }
 
-/// The values probe : a test that compares values declares it, then computes.
+/// The values probe : a test that compares values declares it, then computes. It judges
+/// nothing outside its relaunch (`RAG3WEAVER_VALUES_PROBE`) : played by a pass under the
+/// fallback `igpu:0`, it would be refused, which is what the relaunch checks.
 #[test]
 #[ignore]
 fn values_probe_granite_107m() {
+    if std::env::var_os("RAG3WEAVER_VALUES_PROBE").is_none() {
+        println!("▸ sonde de valeurs : hors relance, rien à juger");
+        return;
+    }
     crate::common::burn::compares_values("granite-107m");
     let e = &*crate::common::burn::GRANITE_107M;
     let v = e.embed(&["une phrase d'essai".into()]).expect("le calcul de la sonde");
@@ -39,6 +45,7 @@ fn values_probe_under(allow: Option<&str>) -> (bool, String) {
         .env("RAG3WEAVER_SERVICE_EMBED", "127.0.0.1:9")
         .env_remove("RAG3WEAVER_EMBED_SERVICE")
         .env("RAG3WEAVER_TESTS_REPLI_PERIPHERIQUE", "igpu:0")
+        .env("RAG3WEAVER_VALUES_PROBE", "1")
         .env_remove("RAG3WEAVER_EMBEDDER_ALLOW_INTEGRATED_GPU");
     if let Some(a) = allow {
         c.env("RAG3WEAVER_EMBEDDER_ALLOW_INTEGRATED_GPU", a);
