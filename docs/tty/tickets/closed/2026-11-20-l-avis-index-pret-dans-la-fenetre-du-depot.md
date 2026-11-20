@@ -1,6 +1,6 @@
 # L'avis « index prêt » dans la fenêtre détachée du dépôt
 
-- **État** : ouvert le 20 novembre 2026 par la session tty ; à faire sur master une fois atterris `ide-fenetres-5` (la fenêtre détachée du dépôt) et `index-pas-pret` (l'avis `IndexReady` de l'hôte).
+- **État** : fermé le 20 novembre 2026 par la session tty. La fenêtre détachée du dépôt dit « l'index … est prêt » dans son en-tête, une fois, au flux seul (`IndexPretFenetre`, `#index-pret-fenetre`). Témoin `daemon_host::chat::tests::a_detached_window_of_the_repository_says_the_index_is_ready_once` : rouge à luciepc (b8d94bd939, la fenêtre ne disait rien), vert avec le code (465dd089dd), comme la page du chat, les accords, la fenêtre guidée, `ide_par_le_flux` et le bundle.
 - **Famille** : produit
 - **Gravité** : faible (l'avis est dit dans le chat ; seule la fenêtre détachée ne le dit pas).
 - **Touche rag3weaver** : oui (l'IDE, `ui/ide`).

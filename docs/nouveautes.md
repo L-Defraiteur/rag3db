@@ -1,5 +1,6 @@
 # Nouveautés
 
+- 20 novembre 2026 — **La fenêtre détachée du dépôt dit aussi quand l'index est prêt.** Après une réponse « index pas prêt » dans le chat, une fenêtre du dépôt ouverte à côté le dit dans son en-tête, une fois, quand l'index a rattrapé.
 - 20 novembre 2026 — **Une déclaration d'une ligne ne remonte plus en tête par le seul vecteur.** Depuis que le
   contenu d'un scope s'arrête aux octets de son nœud, une variable Python d'une instruction (`s=index.read_text()`, 18
   caractères) avait son propre morceau, et son vecteur gagnait des recherches où elle n'avait rien à faire : c'était le
