@@ -21,6 +21,48 @@ fn sonde_granite_107m() {
     println!("▸ sonde : dim {} factice {}", v[0].len(), e.is_mock());
 }
 
+/// The values probe : a test that compares values declares it, then computes.
+#[test]
+#[ignore]
+fn values_probe_granite_107m() {
+    crate::common::burn::compares_values("granite-107m");
+    let e = &*crate::common::burn::GRANITE_107M;
+    let v = e.embed(&["une phrase d'essai".into()]).expect("le calcul de la sonde");
+    println!("▸ sonde de valeurs : dim {}", v[0].len());
+}
+
+/// The binary relaunched on the values probe, no service serving the model, the fallback on
+/// `igpu:0`, and the variable that allows an integrated GPU given or not.
+fn values_probe_under(allow: Option<&str>) -> (bool, String) {
+    let mut c = std::process::Command::new(std::env::current_exe().unwrap());
+    c.args(["--exact", &crate::common::test_de_cette_suite!("values_probe_granite_107m"), "--ignored", "--nocapture", "--test-threads=1"])
+        .env("RAG3WEAVER_SERVICE_EMBED", "127.0.0.1:9")
+        .env_remove("RAG3WEAVER_EMBED_SERVICE")
+        .env("RAG3WEAVER_TESTS_REPLI_PERIPHERIQUE", "igpu:0")
+        .env_remove("RAG3WEAVER_EMBEDDER_ALLOW_INTEGRATED_GPU");
+    if let Some(a) = allow {
+        c.env("RAG3WEAVER_EMBEDDER_ALLOW_INTEGRATED_GPU", a);
+    }
+    let out = c.output().expect("relancer le binaire sur la sonde de valeurs");
+    let text = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+    (out.status.success(), text)
+}
+
+/// **A test that compares values refuses the fallback on an integrated GPU, and names the
+/// ticket** (20 November 2026, ticket `2026-11-20-sur-l-igpu-granite-rend-des-vecteurs-faux-en-lot`) ;
+/// `RAG3WEAVER_EMBEDDER_ALLOW_INTEGRATED_GPU=1` lets it through. A test of paths keeps the
+/// fallback (A1 above).
+#[test]
+#[ignore]
+fn a_values_test_refuses_the_fallback_on_an_integrated_gpu() {
+    let (ok, text) = values_probe_under(None);
+    assert!(!ok, "the values probe is red on the fallback igpu:0 : {text}");
+    assert!(text.contains("ce test compare des valeurs") && text.contains("2026-11-20-sur-l-igpu-granite-rend-des-vecteurs-faux-en-lot"),
+        "the red says why and names the ticket : {text}");
+    let (ok, text) = values_probe_under(Some("1"));
+    assert!(ok && text.contains("▸ sonde de valeurs : dim 384"), "allowed, the probe computes : {text}");
+}
+
 /// Le binaire relancé sur la sonde, sous une variable de service qui ne sert rien (un port
 /// où personne n'écoute) et la variable de repli donnée.
 fn sonde_sous(repli: Option<&str>) -> (bool, String) {
