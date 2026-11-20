@@ -144,6 +144,18 @@ mod tests {
         assert!(trop.is_empty(), "{} chunks of {morceaux} over {} tokens, first ones: {:?}", trop.len(), borne.window, &trop[..trop.len().min(5)]);
     }
 
+    /// **A model without its tokenizer is refused**, naming the file and the variable — never a chunk cut by the bytes
+    /// alone.
+    #[test]
+    fn a_model_without_its_tokenizer_is_refused() {
+        let e = counter("un-modele-sans-tokenizer").err().expect("refused");
+        assert!(e.contains("un-modele-sans-tokenizer"), "{e}");
+        #[cfg(feature = "token-count")]
+        assert!(e.contains("tokenizer.json") && e.contains("RAG3WEAVER_UN_MODELE_SANS_TOKENIZER_TOKENIZER"), "{e}");
+        #[cfg(not(feature = "token-count"))]
+        assert!(e.contains("token-count"), "{e}");
+    }
+
     #[test]
     fn the_smallest_embedder_makes_the_bound() {
         let (octets, borne) = bound_for(["bge-m3", "granite-278m"], DEFAULT_MARGIN).expect("known models");
