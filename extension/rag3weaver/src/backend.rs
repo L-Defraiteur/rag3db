@@ -7656,6 +7656,31 @@ mod tests {
         (p, request)
     }
 
+    /// **Every `script_id` is checked at load** (20 November 2026: a script was only resolved at the call, so a
+    /// proposal of a template whose graph named an undeclared script loaded, and failed in service on « unknown
+    /// registered script »): a graph that names a script the manifest does not declare is refused at load, naming
+    /// the script and the tool — in a tool's graph, and in a graph it cites.
+    #[test]
+    fn an_undeclared_script_id_is_refused_at_load_naming_it() {
+        for cited in [false, true] {
+            let (dir, _) = fixture_avec_descriptions();
+            let manifest_path = dir.path().join("backend.json");
+            let mut m: Value = serde_json::from_slice(&std::fs::read(&manifest_path).unwrap()).unwrap();
+            let rhai = "    s[\"RhaiNode(script_id=no_such_script)\"]\n";
+            if cited {
+                std::fs::write(dir.path().join("inner.mmd"), format!("%% tool: inner\n%% description: cited\n%% result: s.result\n\ngraph LR\n{rhai}")).unwrap();
+                std::fs::write(dir.path().join("outer.mmd"), "%% tool: outer\n%% description: cites\n%% result: g.result\n\ngraph LR\n    g[\"GraphNode(graph='@inner.mmd')\"]\n").unwrap();
+                m["tools"]["outer"] = json!({"graph": "outer.mmd"});
+            } else {
+                std::fs::write(dir.path().join("outer.mmd"), format!("%% tool: outer\n%% description: names a script\n%% result: s.result\n\ngraph LR\n{rhai}")).unwrap();
+                m["tools"]["outer"] = json!({"graph": "outer.mmd"});
+            }
+            std::fs::write(&manifest_path, serde_json::to_vec_pretty(&m).unwrap()).unwrap();
+            let e = PreparedBackend::load(&manifest_path).err().unwrap_or_else(|| panic!("cited={cited}: an undeclared script is refused at load"));
+            assert!(e.contains("no_such_script") && e.contains("outer"), "cited={cited}: {e}");
+        }
+    }
+
     /// **A type's presentation is checked at load** (lot B2): `x-presentation` in an entity's schema is
     /// `{template}` (a text template on the row's fields) or `{form}` (json, kv, markdown); a template that does
     /// not compile, or an unknown form, is refused naming the entity.
