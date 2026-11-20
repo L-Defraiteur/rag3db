@@ -7,7 +7,7 @@
 
 graph LR
     params["RhaiNode(script_id=whois_params, inputs='agent,handle,alias', agent=$agent, handle=$handle, alias=$alias)"]
-    plan["PlanNode(plan='@builtin:backends/memory/plans/whois.json')"]
+    plan["PlanNode(plan='@plans/whois.json')"]
     rendre["RhaiNode(script_id=whois)"]
     params -->|result:params| plan
     plan -->|rows:value| rendre
