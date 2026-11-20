@@ -176,6 +176,9 @@ pub fn admission(path: &str, content: Option<&str>, generated: &crate::generated
     if let Some(raison) = generated.reason_by_path(path) {
         return Err(raison);
     }
+    if let Some(raison) = generated.index_exclude.reason_by_path(path) {
+        return Err(raison);
+    }
     if let Some(contenu) = content {
         let mut tete = contenu.len().min(8000);
         while !contenu.is_char_boundary(tete) {

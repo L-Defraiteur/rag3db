@@ -1320,6 +1320,10 @@ pub struct SourceSyncReport {
     /// générés (`SourceSyncOptions::generated`). Ils ne sont pas analysés.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub files_set_aside: BTreeMap<String, usize>,
+    /// **Which files, by reason** (Lucie, 20 November 2026: the state of the index names the files set aside and
+    /// their rule): at most [`FILES_SET_ASIDE_NAMED`] per reason, the count being `files_set_aside`.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub files_set_aside_paths: BTreeMap<String, Vec<String>>,
     /// The versions set aside by the gesture of a base indexed before the rule of non-candidates (2.12).
     #[serde(default)]
     pub non_candidates_set_aside: usize,
@@ -1510,6 +1514,18 @@ fn synchroniser_la_source(
     avec_le_compte(resultat)
 }
 
+/// How many files a report names per reason of setting aside; the count says the rest.
+pub const FILES_SET_ASIDE_NAMED: usize = 100;
+
+/// **A file set aside by a declared rule**: counted under its reason, and named while the reason has room.
+fn ecarter(report: &mut SourceSyncReport, raison: &str, chemin: &str) {
+    *report.files_set_aside.entry(raison.to_string()).or_default() += 1;
+    let noms = report.files_set_aside_paths.entry(raison.to_string()).or_default();
+    if noms.len() < FILES_SET_ASIDE_NAMED {
+        noms.push(chemin.to_string());
+    }
+}
+
 /// **The full text, prepared before a source is synchronized**, on both paths (the snapshot one and the
 /// generations writer): the counts guard (a document with no row, a row with no document) marks an index to
 /// rebuild; the folder left by a killed process is checked; and a full text left pending by a first index
@@ -1691,7 +1707,15 @@ fn synchroniser_par_generations(
     // interrompue : ses liens manquent, il faut tout repasser.
     let tout_repasser = bulk_pass_interrupted(catalog, &source_id)?;
     let presents: BTreeSet<String> = retenus.iter().map(|p| crate::code_tools::indexed_name(source, p).1).collect();
-    let mut partis: Vec<String> = indexes.into_iter().filter(|p| !presents.contains(p)).collect();
+    // **Listed, but set aside by their path** (a bundle, a build output, a generated folder): not gone. An indexed one
+    // leaves the index like a file set aside on its content, after the guards, and never counts as missing (a base
+    // indexed before the default exclusion would otherwise trip `maxMissingRatio` and refuse its sync).
+    let exclus_par_chemin: BTreeSet<String> = listed
+        .iter()
+        .filter(|p| crate::code::admission(p, None, &options.generated).is_err())
+        .map(|p| crate::code_tools::indexed_name(source, p).1)
+        .collect();
+    let mut partis: Vec<String> = indexes.iter().filter(|p| !presents.contains(*p) && !exclus_par_chemin.contains(*p)).cloned().collect();
     // **The guards of a snapshot sync, before any write** (e2e_code_sync, 16 November 2026: the writer's path
     // had none). An empty source refuses without `allow_empty`; more missing files than `maxMissingRatio`
     // looks like a truncated source and refuses without `force`. Nothing is retired.
@@ -1719,7 +1743,7 @@ fn synchroniser_par_generations(
     }
     // Indexed files the admission now sets aside on their content (a generated or minified file, a rule
     // set after the fact): they leave the index like a deleted file.
-    let mut ecartes: Vec<String> = Vec::new();
+    let mut ecartes: Vec<String> = indexes.iter().filter(|p| exclus_par_chemin.contains(*p)).cloned().collect();
     let mut report = SourceSyncReport {
         source: source_id,
         files_listed: listed.len(),
@@ -1727,6 +1751,11 @@ fn synchroniser_par_generations(
         buffer_pool: catalog.conn().buffer_pool().map(crate::connection::describe_buffer_pool),
         ..Default::default()
     };
+    for p in &listed {
+        if let Err(raison) = crate::code::admission(p, None, &options.generated) {
+            ecarter(&mut report, raison, p);
+        }
+    }
     // Les fichiers déjà indexés dont la version de l'analyse n'est pas la courante : ils repassent tous,
     // et l'avancement le dit (page 06, § 13 ; la condition de c7 à l'atterrissage).
     let repasses_pour_l_analyse = retenus
@@ -1746,7 +1775,7 @@ fn synchroniser_par_generations(
             let contenu = source.read(path)?;
             if let Some(c) = &contenu {
                 if let Err(raison) = crate::code::admission(path, Some(c), &options.generated) {
-                    *report.files_set_aside.entry(raison.to_string()).or_default() += 1;
+                    ecarter(&mut report, raison, path);
                     let indexe = crate::code_tools::indexed_name(source, path).1;
                     if empreintes.contains_key(&indexe) {
                         ecartes.push(indexe);
@@ -1934,6 +1963,12 @@ fn synchroniser(
             buffer_pool: catalog.conn().buffer_pool().map(crate::connection::describe_buffer_pool),
             ..Default::default()
         };
+    // Set aside by their path at the listing (a bundle, a build output, a generated folder): counted and named.
+    for p in &listed {
+        if let Err(raison) = crate::code::admission(p, None, &options.generated) {
+            ecarter(&mut report, raison, p);
+        }
+    }
     let mut noms_differes = std::collections::BTreeSet::new();
     let mut avancement = SourceSyncProgress { files_total: retenus.len(), ..Default::default() };
     report.warnings.extend(coupee);
@@ -1995,7 +2030,7 @@ fn synchroniser(
                 // se compte : la fin de session retire ce qu'il avait laissé.
                 // La même porte que la montre (`code::admission`).
                 if let Err(reason) = crate::code::admission(path, Some(&content), &options.generated) {
-                    *report.files_set_aside.entry(reason.to_string()).or_default() += 1;
+                    ecarter(&mut report, reason, path);
                     continue;
                 }
                 sources.push((path.clone(), content));

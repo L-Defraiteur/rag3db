@@ -172,8 +172,8 @@ pub struct WorkspaceConfig {
     #[serde(default)]
     pub generated: crate::generated::GeneratedPolicy,
     /// **Ce que l'index de code n'indexe pas** ([`crate::exclusion`]) : un fichier de code
-    /// minifié, un fichier de code trop gros. Absent : rien de plus n'est écarté ; le
-    /// gabarit de code porte les seuils par défaut.
+    /// minifié, un fichier de code trop gros, un bundle ou une sortie de bâti par son chemin.
+    /// Absent : les défauts valent (Lucie, 20 novembre 2026) ; une base qui veut ses bundles le dit.
     #[serde(default)]
     pub index_exclude: crate::exclusion::ExclusionPolicy,
     /// **Les noms importés d'un dépôt qui ne sont pas ceux de leur distribution**, par langue
