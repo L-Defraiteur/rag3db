@@ -391,4 +391,18 @@ qui=$("$POSTE" --qui 2>&1)
 cas $? "passé l'heure, les places reviennent à la valeur d'avant (2) et --qui ne dit plus de baisse"
 rm -f "$POSTE_LOCK_DIR/lourds-max" "$POSTE_LOCK_DIR/lourds-max.retour"
 
+# ── 45. Le poste autorise l'iGPU à l'embarqueur par un fichier déclaré (20 novembre 2026, c7 et embarquement : l'APU
+# Radeon 8060S de la tablette calcule juste, l'Intel ARL de luciepc non). `embedder-allow-integrated-gpu` dans le dossier
+# des verrous, contenu = la référence de la mesure : poste lourd et poste mesure exportent alors
+# RAG3WEAVER_EMBEDDER_ALLOW_INTEGRATED_GPU=1 ; sans lui, rien.
+unset RAG3WEAVER_EMBEDDER_ALLOW_INTEGRATED_GPU
+rm -f "$POSTE_LOCK_DIR/embedder-allow-integrated-gpu"
+sans=$("$POSTE" lourd bash -c 'echo "${RAG3WEAVER_EMBEDDER_ALLOW_INTEGRATED_GPU:-absent}"' 2>/dev/null)
+echo "embarquement 08979a5b37 : APU Radeon 8060S, cos >= 0,99999991 contre card2" > "$POSTE_LOCK_DIR/embedder-allow-integrated-gpu"
+lourd=$("$POSTE" lourd bash -c 'echo "${RAG3WEAVER_EMBEDDER_ALLOW_INTEGRATED_GPU:-absent}"' 2>/dev/null)
+mesure=$("$POSTE" mesure bash -c 'echo "${RAG3WEAVER_EMBEDDER_ALLOW_INTEGRATED_GPU:-absent}"' 2>/dev/null)
+rm -f "$POSTE_LOCK_DIR/embedder-allow-integrated-gpu"
+[ "$sans" = absent ] && [ "$lourd" = 1 ] && [ "$mesure" = 1 ]
+cas $? "le fichier embedder-allow-integrated-gpu autorise l'iGPU sous poste lourd et mesure, et seulement lui (sans : $sans, lourd : $lourd, mesure : $mesure)"
+
 exit $echec
