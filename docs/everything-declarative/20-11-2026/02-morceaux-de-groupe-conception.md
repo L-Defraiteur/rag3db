@@ -45,6 +45,11 @@ Le groupe vit **uniquement au niveau de l'embarquement** : des lignes `…_Chunk
   fonction d'une ligne. Une constante (un type à part chez codeparsers) ne doit pas se chercher autrement qu'une
   variable. Les conteneurs (fichier, module, namespace, classe, fonction qui contient des scopes) ne se groupent jamais :
   ce sont eux qui portent les groupes.
+- **La famille regroupée est la même que celle de l'exclusion** (Lucie, 11 h 46, réponse (ii) sur le lot 12) : les
+  feuilles qui déclarent une valeur (`variable`, `constant`, `type_alias` ; un champ de classe est une `variable`),
+  par taille, quel que soit leur type dans cette famille. Les fonctions et méthodes courtes gardent leur propre
+  morceau et ne se groupent pas. Le paragraphe précédent, écrit avant ce mot, dit « tout scope feuille » : c'est
+  cette famille qu'il faut lire.
 - **Le seuil** : celui de l'exclusion (`workspace.variable_min_chars`, 80), sans réglage de plus. Une feuille sous le
   seuil entre dans un groupe. Une feuille au-dessus garde son propre morceau, comme aujourd'hui, et **coupe** le groupe.
 - **Un groupe trop court reste exclu.** Un groupe dont le texte total n'atteint pas le seuil (un `s=…` seul) n'a pas
