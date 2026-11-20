@@ -81,6 +81,9 @@ pub struct Lag {
     rates: Mutex<HashMap<Scope, f64>>,
     /// The layers an index is writing right now (`set_writing`).
     writing: Mutex<HashSet<LagKey>>,
+    /// The layers a watch serves right now, with the number of watches (`watching_guard`).
+    #[allow(dead_code)] // RED STUB: read by is_watched once it is written.
+    watching: Mutex<HashMap<LagKey, usize>>,
 }
 
 impl Lag {
@@ -239,6 +242,29 @@ impl Lag {
         self.set_writing(&key, true);
         WritingGuard { lag: self.clone(), key }
     }
+}
+
+impl Lag {
+    /// **Whether a watch serves the layer of `key`**: its lag is then noted as files change, and a view reads it;
+    /// without a watch, a view's lag is the cold diff of its tree (`views::cold_files_behind`).
+    pub fn is_watched(&self, key: &LagKey) -> bool {
+        let _ = key;
+        false // RED STUB.
+    }
+
+    /// **The mark of a watch on its layer**, held by the watch's thread for its whole life.
+    pub fn watching_guard(self: &std::sync::Arc<Self>, key: LagKey) -> WatchingGuard {
+        WatchingGuard { lag: self.clone(), key }
+    }
+}
+
+/// See [`Lag::watching_guard`].
+#[derive(Debug)]
+pub struct WatchingGuard {
+    #[allow(dead_code)]
+    lag: std::sync::Arc<Lag>,
+    #[allow(dead_code)]
+    key: LagKey,
 }
 
 /// See [`Lag::writing_guard`].
