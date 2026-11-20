@@ -1,6 +1,6 @@
 # Le témoin du chat d'une tâche rougit sous la charge d'autres passes
 
-- **État** : ouvert (14 novembre 2026, session recherche).
+- **État** : fermé (21 novembre 2026, session recherche) : la cause prouvée par un témoin rouge, corrigée par `recherche-flux-sans-verrou` (a60f9f7a71, PR 278). Ouvert le 14 novembre 2026, session recherche.
 - **Gravité** : faux rouge de passe. Il coûte un rejeu entier.
 - **Atteignable en service** : non établi. Le témoin attend la page du chat, et sous charge la page
   n'a jamais rendu sa vue.
@@ -97,4 +97,34 @@ prochaine occurrence et son diagnostic.
 Le journal d'un autre rouge du même après-midi, sans rapport avec ce ticket, est gardé à luciepc :
 `~/.cache/rag3weaver-build/gardes-recherche/2026-11-20-relecture-retenue-sous-charge/`. C'est la relecture retenue
 de la seconde fenêtre : la page y est rendue, `app.js` arrivé.
+
+## Ce qui le ferme (20 et 21 novembre 2026, recherche)
+
+**L'hypothèse du verrou `abonnes`, prouvée.** Le témoin `daemon_host::tests::a_window_that_stops_reading_does_not_starve_the_page_of_another`
+suit le chargement d'une page sur l'hôte des témoins à deux fils :
+- une fenêtre s'abonne au flux, puis ne lit plus ;
+- des publications de 64 Ko suivent ;
+- puis deux `GET /ide/etat`, qui comptent les fenêtres par `fenetres()`, sous le même verrou ;
+- puis `GET /ide/app.js`.
+
+**Rouge** sur d082708414 : après 39 publications, la socket de la fenêtre muette est pleine, et le publieur bloque en tenant
+le verrou. Les deux `/ide/etat` l'attendent sur les deux fils, et `app.js` ne vient pas en 5 s. C'est la page vide du
+ticket, « en vol [], erreurs [] ».
+
+**Le correctif** (`src/ide.rs`) : chaque fenêtre a son propre fil d'écriture et une file bornée
+(`EN_ATTENTE_PAR_FENETRE`). La publication, le battement et le rejeu n'y font que pousser sous le verrou, sans
+attendre. Une file pleine (la fenêtre ne lit plus) ou un écrivain tombé retire la fenêtre, qui revient par son
+`Last-Event-ID`. `fenetres()` ne compte que les vivantes.
+
+**Vert** :
+- le témoin, avec 131 tests du flux, de l'IDE, de l'équipier et du chat ;
+- les **54 témoins navigateur** (luciepc, `RAG3WEAVER_PAQUETS_REACT`), dont le journal est gardé à
+  `luciepc:~/.cache/rag3weaver-build/gardes-recherche/2026-11-20-flux-sans-verrou-navigateur/` ;
+- l'attestation check_features, 8/8 ;
+- la passe du pousseur, qui rejoue aussi les témoins navigateur.
+
+Les témoins navigateur ont trouvé en route un effet de bord : une fenêtre partie restait comptée jusqu'à 45 s. Il est
+corrigé avant le dépôt (`fenetres()` ne compte que les vivantes).
+
+Si une page vide revient, le diagnostic de page (896dcb7967) dira où elle s'est arrêtée.
 
