@@ -212,7 +212,9 @@ fn les_alias_courts_resolvent_le_nom_exact_sans_changer_l_identite() {
     let prepared = preparer_alias(&noms);
     assert_eq!(prepared["candidates"], json!(["candidate_1", "candidate_2", "candidate_3", "candidate_4"]));
     for (i, nom) in noms.iter().enumerate() {
-        assert!(prepared["prompt"].as_str().unwrap().contains(nom));
+        // B4: the candidates are a part, each with its exact name.
+        let shown = prepared["parts"].as_array().unwrap().iter().find(|p| p["name"] == json!("candidates")).unwrap()["value"].clone();
+        assert!(shown.as_array().unwrap().iter().any(|c| c["name"] == json!(nom)), "{nom}: {shown}");
         let mut section = prepared.clone();
         section["verdict"] = json!(format!("candidate_{}", i + 1));
         let out = resoudre_alias(section).unwrap();
