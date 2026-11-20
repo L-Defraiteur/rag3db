@@ -233,15 +233,17 @@ default = []
 # 24 cœurs tenus, la page ne rendait pas en 20 s (c7, 25 octobre 2026, quatre rouges). Sans la
 # feature, ces témoins sont ignorés, avec la raison.
 navigateur = []
-candle-embedder = ["dep:candle-core", "dep:candle-nn", "dep:candle-transformers", "dep:tokenizers", "dep:hf-hub"]
-bge-m3 = ["dep:candle-core", "dep:candle-nn", "dep:candle-transformers", "dep:tokenizers", "dep:hf-hub"]
+# The chunker counts tokens with the tokenizer of the base's smallest embedder (20 November 2026).
+token-count = ["dep:tokenizers"]
+candle-embedder = ["dep:candle-core", "dep:candle-nn", "dep:candle-transformers", "dep:tokenizers", "dep:hf-hub", "token-count"]
+bge-m3 = ["dep:candle-core", "dep:candle-nn", "dep:candle-transformers", "dep:tokenizers", "dep:hf-hub", "token-count"]
 cuda = ["dep:candle-core", "dep:candle-nn", "candle-core/cuda", "candle-nn/cuda"]
 rag3db-native = ["dep:rag3db"]
 postgres = ["dep:tokio-postgres", "dep:deadpool-postgres", "dep:postgres-types", "dep:bytes"]
 # Embedder BGE-M3 via burn — pas de candle, pas de CUDA, pas de hf-hub.
 # Le modele generé vit dans generated/bge_m3_onnx.rs ; les poids se chargent
 # depuis un .bpk fourni par l'appelant (cf generated/README.md).
-burn-embedder = ["dep:burn", "dep:burn-store", "dep:tokenizers", "vulkan", "burn-autotune", "burn-fusion", "dep:wgpu"]
+burn-embedder = ["dep:burn", "dep:burn-store", "dep:tokenizers", "token-count", "vulkan", "burn-autotune", "burn-fusion", "dep:wgpu"]
 # **Autotune et fusion, nommées chez nous.** Deux features de burn qu'on croyait
 # avoir et qu'on n'avait pas : `burn` est pris sans ses defaults, et seule
 # `burn-rocm` les rallumait — d'où le « facteur 14 » du 28 août (une chauffe
