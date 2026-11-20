@@ -1,2 +1,3 @@
 # Les empreintes de l'analyse du corpus figé tests/fixtures/empreinte_analyse/, par numéro de REGLES_DE_L_ANALYSE
 # (src/empreinte_de_l_analyse.rs). Monter les règles, c'est ajouter la ligne de la nouvelle empreinte.
+11 6d64e8426067c29380b5c29a8434bd6f522857fcd5089e8814ecd81c9c357b8d
