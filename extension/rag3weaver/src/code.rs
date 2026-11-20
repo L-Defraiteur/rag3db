@@ -649,7 +649,9 @@ fn usage_properties(sites: &[UsageSite]) -> BTreeMap<String, CypherValue> {
 // (`__init__.py`) et de TypeScript (`export { X } from`) se suivent comme celles de Rust.
 // 12 (20 novembre 2026) : le code de premier niveau Python a ses scopes de fichier (codeparsers), et
 // `export * from './x'` se suit sans deviner, par les définitions de premier niveau de `./x`.
-pub const REGLES_DE_L_ANALYSE: u32 = 12;
+// 13 (20 novembre 2026) : un nom intégré du langage (`print`, `len`, `console`, `JSON`) n'est pas une référence du
+// code de premier niveau relevé par le texte, et le suivi des imports ne le remet pas (codeparsers).
+pub const REGLES_DE_L_ANALYSE: u32 = 13;
 
 /// **La version de l'analyse** (page 06, § 13) : le commit du parseur lié, [`REGLES_DE_L_ANALYSE`] et le
 /// gabarit du code (le découpage et les champs déclarés de `File` et de `Scope`), hachés.
