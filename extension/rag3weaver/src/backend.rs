@@ -59,6 +59,9 @@ pub struct TeammatePolicy {
     /// while the teammate runs. Off by default; one paired task per host.
     #[serde(default)]
     pub pair: bool,
+    /// **fetch** (the teammate's base, 20 November 2026): what the teammate may read on the web.
+    #[serde(default)]
+    pub fetch: FetchPolicy,
     /// **Un fournisseur qui ne répond pas n'est pas un pas raté** (8 novembre
     /// 2026, essai 3 : des 429 RESOURCE_EXHAUSTED arrêtaient l'équipier par
     /// `max_failed_steps`). Un quota dépassé (429) ou un service en panne (5xx,
@@ -146,7 +149,27 @@ impl Default for TeammatePolicy {
             max_model_calls_per_step: Self::max_model_calls_per_step_default(),
             carry_over_chars: Self::carry_over_chars_default(),
             pair: false,
+            fetch: FetchPolicy::default(),
         }
+    }
+}
+
+/// **What the teammate may read on the web** (`teammate.fetch`, 20 November 2026): the schemes allowed, the hosts
+/// refused (a name refuses its subdomains too), whether a local address (this host, the local network) is allowed —
+/// refused by default —, the bound of a page's text, and the time a request may take.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[serde(deny_unknown_fields, default)]
+pub struct FetchPolicy {
+    pub schemes: Vec<String>,
+    pub deny_hosts: Vec<String>,
+    pub allow_local: bool,
+    pub max_bytes: usize,
+    pub timeout_s: u64,
+}
+
+impl Default for FetchPolicy {
+    fn default() -> Self {
+        FetchPolicy { schemes: vec!["https".into(), "http".into()], deny_hosts: Vec::new(), allow_local: false, max_bytes: 100_000, timeout_s: 20 }
     }
 }
 
