@@ -141,6 +141,84 @@ d'index : ni « rebâti depuis les lignes », ni « garde des comptes », ni « 
 Le remède d'ED est rouge à ce juge : les noms courts ne sont plus trouvés, et le plein texte gardé ne sert pas
 `search_code`. ED corrige, et la re-bascule attend sa tête verte.
 
+## La re-bascule du soir (20 novembre, 20 h 50 - 21 h 33)
+
+Ce soir, code-principal et code-lourd sont passées en versions à luciepc, et le dépôt de la tablette a été repassé.
+Il n'y a pas eu de retour arrière. Les heures ci-dessous sont lues à l'horloge, dans les journaux.
+
+### Les préalables
+
+- **(a) Le remède d'ED** (variable-not-candidate, règles 13) a atterri à 19 h 10 (f8c74d0876).
+- **(b) L'hôte** a été bâti depuis la tête de master, **83c667e420**, contre la lib 4ad394f4d2 (le moteur n'avait pas
+  bougé), avec lucivy 4.3.12. L'essai et check-lib sont verts aux deux postes. Les trois manifestes « refusés » au
+  portable étaient des manifestes d'essai effacés, donc des fichiers absents.
+- **(c) La répétition** a tourné sur les instantanés du matin de code-principal et code-lourd :
+  - 1b en 423 s et 545 s, repassages de 12 et 13 min, RSS au plus 5,7 Gio ;
+  - les journaux sont propres.
+
+  Deux faux rouges du banc d'essai :
+  - la maintenance quotidienne du plein texte d'un hôte neuf tenait le backend pendant le relevé d'après (422) ;
+  - la copie du matin notait VECTOR depuis la lib 6e2476d41, que l'ouverture ne chargeait pas. Une fois corrigée, le
+    chiffre était identique.
+- **Le critère de recouvrement est remplacé, pas relâché** (c7, 20 h 20). Contre la référence même copie et même
+  source (l'instantané repassé à l'ancien format par l'hôte posé baccb2ea6e), le recouvrement est de 71 % et le même
+  premier de 7/10, sans aucun usage perdu. C'est le chiffre que le banc a trouvé l'après-midi : entre les règles 9 et
+  13, le classement change par construction. Le juge devient :
+  - aucun usage perdu ;
+  - un journal propre ;
+  - des versions rendues ouvertes avec un rang publié ≥ 1, lus par Cypher (`cypher-sur-copie.sh` de codeparsers) :
+    code-principal 99/99 ouvertes, code-lourd 98/98, rang publié 1 sur les deux ;
+  - le juge du nom exact de banc.
+- **Les gabarits de recherche étaient périmés** (banc, 20 h 30). code-principal et code-lourd servaient 9 gabarits
+  d'outils sur 14 depuis des copies installées le 11 octobre, dont `search_workspace.mmd` sans `bm25_exact` ni
+  `exact_name`. Le juge de banc donnait 5/10. Une fois les chemins remis au livré (`builtin:`) sur les copies, il donne
+  **10/10**, avec un recouvrement de 100 % contre les relevés de feuille-5d. À la tablette, le dépôt et l'atelier
+  étaient déjà en `builtin:` : leurs copies installées, vieilles elles aussi, ne sont pas lues.
+
+### Les pas
+
+| Heure | Pas | Coupure |
+|---|---|---|
+| 20 h 49 | 7878 et 7879 sans bail ; à luciepc, aucun backend ouvert | — |
+| 20 h 50 min 07 s | luciepc : hôte 83c667e420 posé ; réveil VERT à 20 h 50 min 16 s (l'aide `notes-extensions.sh` manquait à la copie) | aucune vue |
+| 20 h 50 min 25 s - 20 h 50 min 54 s | tablette : hôte posé, réveil VERT | 29 s |
+| 20 h 51 min 15 s | code-principal et code-lourd fermées ; instantanés `avant-versions-20261120-soir-<base>` ; contrôle des deux sens sans écart | |
+| 20 h 59 min 26 s | code-principal rouverte (1b en 464 s ; manifeste au livré, 13 chemins, `templates drift` à 0) | 8 min 11 s |
+| 21 h 02 min 11 s | code-lourd rouverte (1b en 613 s ; manifeste au livré) | 10 min 56 s |
+| 21 h 02 min 47 s - 21 h 02 min 53 s | dépôt : `Lucivy_Scope` (885 Mo) déplacé dans `instantanes/lucivy-scope-mort-20261120/`, jetable 72 h | 6 s |
+| 21 h 03 | `reference.json` de granite-278m posé à luciepc (24 textes, tolérance 5e-4) | — |
+| 21 h 11 min 14 s | code-principal repassée en 13 : journal propre ; Catalog 348 → 900 sites, 0 perdu | base ouverte |
+| 21 h 13 min 29 s | dépôt repassé en 13 : le geste a joué, les comptes collent (Scope 97 539 = 97 539) | base ouverte |
+| 21 h 15 min 29 s | code-lourd repassée en 13 : journal propre ; Catalog 348 → 859, 0 perdu | base ouverte |
+| 21 h 2x | juge de banc sur les bases vivantes : code-principal VERT (10/10, 100 %, 13/13, 30 cas) ; code-lourd et dépôt VERTS à un côté | — |
+
+Le recouvrement contre l'avant de la base vivante, relevé mais non jugé, vaut 31 % et 33 % : l'avant servait les
+gabarits du 11 octobre. Les gains de Catalog viennent de l'outil `usages` livré.
+
+### Ce qui reste ouvert
+
+- **Le dépôt : 12 373 versions écartées, contre 9 449 nommées.** Le compte du journal est la somme des gestes des deux
+  règles des règles 13. Il additionne les conteneurs repliés (environ 9 449) et les déclarations de valeur courtes,
+  `variable|constant|type_alias` de moins de 80 caractères, privées de leurs morceaux (environ 2 900). Le libellé de
+  la ligne (`index_nodes.rs:637`) ne nomme que les conteneurs : c'est un défaut de libellé, et ED en a ouvert le
+  ticket. Une preuve par Cypher sur la copie répétée de code-principal : **0 morceau restant** à ces déclarations
+  (1 156 versions visées), et les déclarations de valeur plus longues gardent les leurs (529 morceaux).
+- **Le revers de la fusion (A)** (banc) : sur « parse a json manifest », la variable courte `manifest` passe au rang 1
+  ou 2 (3 ou 4 sur baccb). C'est un défaut connu, dans le graphe de fusion seul. ED dépose (A′) ; à son atterrissage,
+  un hôte neuf sera posé, sans repassage ni coupure longue.
+- **Cinq déclarations courtes du dépôt absentes par leur nom** (banc, juge à un côté) : `__all__`, `lib`, `result`,
+  `con`, `PORT`. Le plein texte devrait les garder. Banc et ED regardent si le geste l'a retiré aussi, ou si la
+  recherche du nom passe par les morceaux.
+- **bge-m3 n'a pas de `reference.json`**. Sa vérification au démarrage enverrait 32 textes allant jusqu'à 1 742
+  jetons : c'est la forme qui a fait tomber le 7879 à 20 h 35 (ticket d'embarquement). Pas de référence tant que le lot
+  de la mémoire libre d'embarquement n'a pas atterri. Les services gardent leur binaire ce soir, et leur `/sante` reste
+  « non vérifié » jusqu'à leur repose avec un binaire ≥ e2725d9f6c.
+- **Les règles 14** (a44474d874, les morceaux bornés d'ED) viendront au repassage suivant, base ouverte, sans coupure.
+
+**Retour arrière, s'il le faut** : le RETOUR.sh de l'instantané `avant-versions-20261120-soir-<base>`, puis le
+manifeste remis depuis `backend.json.avant-builtin-20261120`. Pour le dépôt, remettre `Lucivy_Scope` à sa place,
+base fermée.
+
 ## La lib du train C++
 
 - **Le bâti** : la lib 501d7ccc90 a été bâtie à 4 h 38 sur la tête du train de cœur, train-20-11. La garde de cœur a
