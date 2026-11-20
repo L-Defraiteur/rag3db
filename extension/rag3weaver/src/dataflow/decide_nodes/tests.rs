@@ -234,7 +234,8 @@ fn decide_by_llm_renders_a_field_of_context_parts_as_sections() {
         &[],
     );
     run(&def, with_llm(llm)).unwrap();
-    assert_eq!(asked.lock().unwrap().clone().unwrap(), "## Section « S »\n\ncomment indexer ?\n\n## Candidates\n\n- a1 : N");
+    // The parts, then the labels at the end (ed-decider-prefix: the variable last, for the provider's cache).
+    assert_eq!(asked.lock().unwrap().clone().unwrap(), "## Section « S »\n\ncomment indexer ?\n\n## Candidates\n\n- a1 : N\n\nÉtiquettes admises : question, bavardage.");
 }
 
 /// L'élément sans son `usage`, et l'usage à part : les témoins de l'étiquette restent ceux d'avant.
