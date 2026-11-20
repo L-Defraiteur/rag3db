@@ -113,6 +113,18 @@ runs a la durée de la branche dense) ; à défaut de mesure locale, `N* = 13 00
 **Le témoin du produit** : un index à N* + 1 lignes hors du graphe déclenche la reconstruction au
 repos, et après elle la recherche retombe sous 1,1 × `t₀` ; à N* − 1, rien ne se passe.
 
+## Ce que le moteur rend désormais (20 novembre 2026)
+
+Le nombre attendu au paragraphe « Ce qu'il faut du moteur » est lisible : `CALL SHOW_INDEXES() RETURN index_name,
+rows_outside_graph_at_most;`, sans écrire et sans verrou en lecture seule. C'est une borne supérieure (elle compte aussi
+les lignes supprimées de la plage, et celles que le rattrapage d'un CREATE a déjà reliées), qui ne se trompe que dans le
+sens prudent : elle suffit au seuil N*. **Le produit peut donc décider la reconstruction au seuil** ; ce ticket attend
+désormais la décision et le déclencheur côté rag3weaver (« Qui : rag3weaver » ci-dessus).
+
+Une insertion ordinaire validée après les lignes d'un COPY forcé ne les fait plus sortir de la plage balayée
+(`1cfdaf353e`, ticket fermé `2026-11-18-une-insertion-apres-un-copy-force-fait-sauter-ses-lignes-a-la-recherche.md`) :
+elles restent comptées et trouvées jusqu'à la reconstruction.
+
 ## Pour le fermer
 
 1. La mesure.
