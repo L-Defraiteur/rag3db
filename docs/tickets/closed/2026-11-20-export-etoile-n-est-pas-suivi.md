@@ -1,6 +1,6 @@
 # `export * from './x'` n'est pas suivi
 
-- **État** : ouvert (20 novembre 2026)
+- **État** : corrigé (20 novembre 2026) — branche rag3db `codeparsers/python-file-scopes-export-star`, règles de l'analyse 14
 - **Famille** : produit
 - **Gravité** : basse : un nom réexporté par `export * from './x'` se relie par le nom (deviné), pas par l'import
 - **Atteignable en service** : oui, dans un paquet TypeScript dont l'entrée réexporte tout un module
@@ -21,3 +21,13 @@ Garder, par fichier, ses réexportations larges (le module source) ; au choix d'
 module qui désigne ce fichier, suivre aussi ces réexportations et ne retenir qu'un définisseur du nom dans le module
 réexporté. Témoin rouge d'abord : `export * from './catalog'` dans l'entrée, `Catalog` défini dans `catalog.ts`,
 l'arête marquée « import ».
+
+## Fermé
+
+20 novembre 2026, session codeparsers. `export * from './x'` (pas `export * as ns`, un objet) devient une réexportation
+nommée de chaque définition de premier niveau du fichier que `./x` désigne **dans le lot** ; aucun nom n'est deviné
+(code.rs, `premier_niveau`). Témoin `export_etoile_se_suit_sans_deviner` (e2e_usages) : rouge vu (« nom »), puis vert
+(« import ») ; un nom que `./x` ne définit pas n'est pas réexporté.
+
+Limite connue : une synchronisation qui relit l'entrée sans `./x` dans le même lot ne développe rien pour elle ; la
+réindexation complète le fait.
