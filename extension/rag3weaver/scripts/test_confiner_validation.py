@@ -224,6 +224,19 @@ class Montage(unittest.TestCase):
         self.assertEqual(json.loads((evidence / 'autorite.json').read_text())['etat'], 'termine')
         return rc, verdict
 
+    def test_a_session_that_closes_late_is_not_a_leak(self):
+        # 20 Nov. 2026, 18 h 50 at luciepc (G): « descendants laissés après la commande » with `restes: []`. The
+        # bus session was still closing when the command's end was read; the identical replay was green. A descendant
+        # that ends 0.3 s after the command is a closing session, not a leak.
+        rc, verdict = self.cas_processus('import subprocess,sys\nsubprocess.Popen([sys.executable, "-c", "import time; time.sleep(0.3)"])\nsys.exit(0)\n')
+        self.assertEqual((rc, verdict['verdict'], verdict['erreur']), (0, 'VERT', None))
+
+    def test_a_descendant_that_outlives_the_grace_is_still_a_leak(self):
+        # The guard keeps its teeth: a descendant still alive well after the command's end is left behind.
+        rc, verdict = self.cas_processus('import subprocess,sys\nsubprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])\nsys.exit(0)\n')
+        self.assertEqual(verdict['verdict'], 'ROUGE')
+        self.assertIn('descendants laissés après la commande', verdict['erreur'])
+
     def portee_jouet(self, oom_kill):
         # Une portée jouet sous un faux /sys/fs/cgroup : le plafond (100 Mio) sur le parent de la
         # portée du témoin, comme le MemoryMax de poste sur sa portée systemd-run.
