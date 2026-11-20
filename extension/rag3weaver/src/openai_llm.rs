@@ -2488,6 +2488,18 @@ mod tests {
         assert!(body.get("reasoning_effort").is_none());
     }
 
+    /// **Google refuses `minimal`** (20 November 2026, the banc: « HTTP 400 : Thinking level is unsupported:
+    /// THINKING_LEVEL_MINIMAL » on Vertex with Gemini 3.8 Flash): towards Google, `minimal` goes as `low`, as the
+    /// Anthropic client already does; any other provider still receives `minimal`.
+    #[test]
+    fn minimal_reasoning_goes_to_google_as_low() {
+        let opts = GenOptions::default().with_reasoning(ReasoningEffort::Minimal);
+        let google = OpenAiLlm::new("http://x/v1", "m").with_google_extras();
+        assert_eq!(google.request_body(&hello(), &opts)["reasoning_effort"], "low");
+        let other = OpenAiLlm::new("http://x/v1", "m");
+        assert_eq!(other.request_body(&hello(), &opts)["reasoning_effort"], "minimal");
+    }
+
     #[test]
     fn reasoning_effort_serializes_the_four_accepted_values() {
         let llm = OpenAiLlm::new("http://x/v1", "m");
