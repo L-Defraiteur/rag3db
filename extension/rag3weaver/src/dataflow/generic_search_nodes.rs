@@ -2366,19 +2366,25 @@ impl Node for FuseResultsNode {
             lists.iter().map(|(l, c)| (l.as_slice(), *c)).collect();
         let mut scores = fuse_signals(&borrowed, strategy, rrf_k);
         // **A row that cannot carry a vector by design** (`sans_vecteur`: its parent has no chunk, a short declaration
-        // of a value) is judged by the signals it can have (c7's decision (A), 20 November 2026; Lucie's invariant: no
-        // difference of use). The signals that read chunks (`vector`, `sparse`) cannot name it; its fused score is
-        // brought back to the total weight, as the weighted mean of the signals it can have. A row with chunks still
-        // owed their vectors keeps today's fusion.
-        let lisent_les_morceaux = |l: &str| l == "vector" || l == "sparse";
-        let poids_fusion: f64 = poids_des_signaux.iter().filter(|(_, c)| c.role == SignalRole::Fuse).map(|(_, c)| c.weight).sum();
-        let poids_impossible: f64 =
-            poids_des_signaux.iter().filter(|(l, c)| c.role == SignalRole::Fuse && lisent_les_morceaux(l)).map(|(_, c)| c.weight).sum();
-        if poids_impossible > 0.0 && poids_fusion > poids_impossible {
-            let facteur = poids_fusion / (poids_fusion - poids_impossible);
-            for s in scores.iter_mut() {
-                if originals.get(&s.uuid).is_some_and(|v| v.iter().any(|(_, r)| r.sans_vecteur)) {
-                    s.score *= facteur;
+        // of a value) is counted by each signal that reads chunks (`vector`, `sparse`) at the rank after the last of
+        // that signal's list (c7's decision (A'), 20 November 2026). Not at zero: it is not buried under rows the
+        // dense signal merely did not reach. Not rescaled to the total weight, as (A) did: a first in BM25 by a word
+        // of the query then beat every row found by the sense (the bench: `manifest`, `index` first). A search by
+        // the name itself is held by `exact_name`. An empty list imputes nothing (its last rank would be the first),
+        // and only the RRF has ranks to impute.
+        if strategy == crate::search::FusionStrategy::Rrf {
+            let lisent_les_morceaux = |l: &str| l == "vector" || l == "sparse";
+            let imputation: f64 = poids_des_signaux
+                .iter()
+                .zip(lists.iter())
+                .filter(|((l, c), (liste, _))| c.role == SignalRole::Fuse && lisent_les_morceaux(l) && !liste.is_empty())
+                .map(|((_, c), (liste, _))| c.weight / (rrf_k + liste.len() as f64 + 1.0))
+                .sum();
+            if imputation > 0.0 {
+                for s in scores.iter_mut() {
+                    if originals.get(&s.uuid).is_some_and(|v| v.iter().any(|(_, r)| r.sans_vecteur)) {
+                        s.score += imputation;
+                    }
                 }
             }
         }
@@ -3848,33 +3854,24 @@ mod tests {
         assert_eq!(ordre, vec!["a".to_string(), "b".to_string()], "the case counts: « Beta » is not « beta »");
     }
 
-    /// **A row that cannot carry a vector is judged by the signals it can have** (c7's decision (A), 20 November
-    /// 2026; the bench: `CONFIGS` fell from rank 1 to 26 while its full-text rank did not move). `d` is first by the
-    /// full text and has no vector by design (`sans_vecteur`); its rivals have both signals, behind it in the full
-    /// text. It stays first. A row absent from the dense signal for another reason (`m`, its vector owed or simply
-    /// not near) keeps today's fusion: it is not brought back.
+    /// **A row without a vector is counted last by the dense signal, not at zero, and never leads by a sense it has
+    /// not** (c7's decision (A'), 20 November 2026; the bench on (A): « parse a json manifest » gave first `manifest`, a
+    /// variable of 51 characters without a vector, and « rebuild the vector index » four variables `index` — a word of
+    /// the query was their name, and (A)'s rescale, × total weight ÷ BM25 weight, made a first in BM25 beat every row
+    /// with both signals). `d` is first by BM25 and has no vector: `f`, found by the sense and the BM25, passes it; `d`
+    /// passes `m`, a row merely absent from the dense signal (the dense signal it cannot have is not a zero).
     #[test]
-    fn a_row_without_a_vector_is_judged_by_the_signals_it_can_have() {
+    fn a_short_declaration_named_by_a_word_does_not_lead_by_a_sense_it_has_not() {
         let mut node = FuseResultsNode::new("fuse");
         let mut ctx = NodeContext::new();
         let sans = |uuid: &str, score: f64| UnifiedResult { sans_vecteur: true, ..make_unified_result(uuid, score) };
-        ctx.set_input(
-            "bm25",
-            PortValue::new(vec![
-                sans("d", 9.0),
-                make_unified_result("m", 8.5),
-                make_unified_result("r1", 8.0),
-                make_unified_result("r2", 7.0),
-                make_unified_result("r3", 6.0),
-            ]),
-        );
-        ctx.set_input("vector", PortValue::new(vec![make_unified_result("r1", 0.9), make_unified_result("r2", 0.8), make_unified_result("r3", 0.7)]));
+        ctx.set_input("bm25", PortValue::new(vec![sans("d", 9.0), make_unified_result("f", 8.0), make_unified_result("m", 7.0)]));
+        ctx.set_input("vector", PortValue::new(vec![make_unified_result("f", 0.9), make_unified_result("g", 0.8), make_unified_result("h", 0.7)]));
         node.execute(&mut ctx).unwrap();
-        let results = results_of(&mut ctx);
-        let ordre: Vec<&str> = results.iter().map(|r| r.uuid.as_str()).collect();
-        assert_eq!(ordre.first(), Some(&"d"), "the row without a vector keeps its full-text lead: {ordre:?}");
-        let rang = |u: &str| ordre.iter().position(|x| *x == u).unwrap();
-        assert!(rang("m") > rang("r3"), "a row merely absent from the dense signal keeps today's fusion: {ordre:?}");
+        let ordre: Vec<String> = results_of(&mut ctx).iter().map(|r| r.uuid.clone()).collect();
+        let rang = |u: &str| ordre.iter().position(|x| x == u).unwrap();
+        assert!(rang("f") < rang("d"), "a row found by the sense and the BM25 passes the declaration named by a word: {ordre:?}");
+        assert!(rang("d") < rang("m"), "the declaration is not counted at zero by the dense signal: {ordre:?}");
     }
 
     /// **Chaque signal dit le sien** (pièce 1 de la recherche de l'IDE) : le
