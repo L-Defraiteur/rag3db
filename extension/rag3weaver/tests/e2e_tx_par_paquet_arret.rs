@@ -304,12 +304,33 @@ fn role_enfant() {
             .map(|r| !r.rows.is_empty())
             .unwrap_or(false);
         let code = if a_versions { rag3weaver::code::SCOPE_CONTENT } else { "Scope" };
+        // A container set aside by 2.12 is marked chunked and has no chunk, by design: judged by the rule itself, on
+        // the fields it reads.
+        let regle = rag3weaver::code::default_scope_chunking().not_candidate.expect("the code rule");
+        let sans_morceau_de = |e: &str, colonnes: &str| {
+            format!(
+                "MATCH (p:{e}) WHERE p._chunked_hash IS NOT NULL AND p._chunked_hash <> '' \
+                 AND NOT EXISTS {{ MATCH (:{e}_Chunk)-[:{e}_CHUNKED_FROM]->(p) }} RETURN {colonnes}"
+            )
+        };
         for e in ["File", code] {
             orphelins += compte(&format!("MATCH (c:{e}_Chunk) WHERE NOT EXISTS {{ MATCH (c)-[:{e}_CHUNKED_FROM]->(:{e}) }} RETURN count(c)"));
-            sans_morceau += compte(&format!(
-                "MATCH (p:{e}) WHERE p._chunked_hash IS NOT NULL AND p._chunked_hash <> '' \
-                 AND NOT EXISTS {{ MATCH (:{e}_Chunk)-[:{e}_CHUNKED_FROM]->(p) }} RETURN count(p)"
-            ));
+            if e == "File" {
+                sans_morceau += compte(&sans_morceau_de(e, "count(p)"));
+                continue;
+            }
+            let champs = ["scope_type", "content", "docstring", "language"];
+            let colonnes = champs.iter().map(|c| format!("p.{c}")).collect::<Vec<_>>().join(", ");
+            let r = rag3weaver::connection::DbConnection::execute(&conn, &sans_morceau_de(e, &colonnes)).unwrap();
+            sans_morceau += r
+                .rows
+                .iter()
+                .filter(|l| {
+                    let data: std::collections::BTreeMap<String, rag3weaver::connection::CypherValue> =
+                        champs.iter().map(|c| c.to_string()).zip(l.iter().cloned()).collect();
+                    !regle.excludes(&data)
+                })
+                .count() as i64;
         }
         println!("CONSTAT fichiers={fichiers} morceaux_sans_arete={orphelins} parents_sans_morceau={sans_morceau}");
         return;
@@ -972,7 +993,8 @@ fn rendus(catalog: &std::sync::Arc<std::sync::Mutex<Catalog>>, mot: &str, k: usi
 
 fn documents_et_lignes(catalog: &Catalog) -> (u64, i64) {
     let docs = catalog.fts_handle(&index_du_code(catalog)).expect("index des scopes").num_docs();
-    let lignes = catalog.conn().execute(&format!("MATCH (n:`{}`) RETURN count(n)", index_du_code(catalog))).unwrap().rows[0][0].as_i64().unwrap();
+    // The candidate rows: a container set aside by 2.12 has no document by design.
+    let lignes = catalog.candidate_rows_of(&index_du_code(catalog)) as i64;
     (docs, lignes)
 }
 
@@ -1045,10 +1067,12 @@ fn a_la_relance_la_ligne_refaite_remplace_le_document_de_son_decalage() {
     let base = dossier.join("base.rag3db");
     let mut catalog = catalogue(&base);
     synchroniser(&mut catalog, false);
-    let (_, lignes) = documents_et_lignes(&catalog);
+    // The offset the next row takes follows every row of the table, candidate or not (a container set aside by 2.12
+    // has its row and no document).
+    let toutes = catalog.conn().execute(&format!("MATCH (n:`{}`) RETURN count(n)", index_du_code(&catalog))).unwrap().rows[0][0].as_i64().unwrap();
     {
         let handle = catalog.fts_handle(&index_du_code(&catalog)).unwrap();
-        rag3weaver::fts_handle::index_document(&handle, &[("content".to_string(), "fantomatique".to_string())], lignes as u64).unwrap();
+        rag3weaver::fts_handle::index_document(&handle, &[("content".to_string(), "fantomatique".to_string())], toutes as u64).unwrap();
         handle.commit().unwrap();
     }
     let analyse = rag3weaver::code::analyze("/neuf", vec![("src/neuf.rs".to_string(), "pub fn neuf_unique() -> u32 { 1 }\n".to_string())]);
@@ -1061,7 +1085,7 @@ fn a_la_relance_la_ligne_refaite_remplace_le_document_de_son_decalage() {
         .as_i64()
         .unwrap();
     let (docs, lignes) = documents_et_lignes(&catalog);
-    println!("▸ la ligne neuve a pris le décalage {decalage} (le fantôme était au décalage {}) ; {docs} documents, {lignes} lignes", lignes - 1);
+    println!("▸ la ligne neuve a pris le décalage {decalage} (le fantôme était au décalage {toutes}) ; {docs} documents, {lignes} lignes candidates");
     let catalog = std::sync::Arc::new(std::sync::Mutex::new(catalog));
     assert_eq!(rendus(&catalog, "fantomatique", 10), 0, "le fantôme n'est plus là");
     assert_eq!(docs as i64, lignes, "un document par ligne : remplacé, pas ajouté");

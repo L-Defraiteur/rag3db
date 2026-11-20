@@ -1633,7 +1633,7 @@ fn read_threads() -> u64 {
             // rebâtir » (voir `check_fts_counts`).
             if self.lecture_seule {
                 let docs = self.fts_handles.get(&table)?.num_docs();
-                if docs != self.count_rows_of(&table) as u64 {
+                if docs != self.candidate_rows_of(&table) {
                     return Some(0);
                 }
             }
@@ -1645,7 +1645,7 @@ fn read_threads() -> u64 {
             return Some(0);
         }
         let docs = self.fts_handles.get(&table).map(|h| h.num_docs()).unwrap_or(0);
-        let rows = self.count_rows_of(&table).max(1) as u64;
+        let rows = self.candidate_rows_of(&table).max(1);
         Some((100 * docs.min(rows) / rows) as u8)
     }
 
@@ -10893,8 +10893,9 @@ fn read_threads() -> u64 {
     }
 
     /// **The rows of a full-text table that carry a document**: all of them, but those its rule of non-candidates
-    /// sets aside (2.12), which have none by design.
-    fn candidate_rows_of(&self, table: &str) -> u64 {
+    /// sets aside (2.12), which have none by design. What the count guard, the reader's guard and the rebuild's
+    /// progress compare the documents with.
+    pub fn candidate_rows_of(&self, table: &str) -> u64 {
         let toutes = self.count_rows_of(table) as u64;
         toutes.saturating_sub(self.non_candidate_uuids(table).map(|u| u.len() as u64).unwrap_or(0))
     }
