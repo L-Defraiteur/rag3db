@@ -4,7 +4,7 @@
 //!
 //! Deux seuils et des motifs de chemin, déclarés par le manifeste du backend. **Sans déclaration, les défauts
 //! valent** (Lucie, 20 novembre 2026, 17 h 00 : les bundles exclus de l'index par défaut) : 5 000 octets par ligne,
-//! 1 Mio par fichier, et `dist/`, `build/`, `*.min.js`, `*bundle*`. Une base qui veut ses bundles le dit : un seuil à
+//! 1 Mio par fichier, et `dist/`, `build/`, `*.min.js`, `*bundle*.js`, `*bundle*.css`, `*.bundle.*`. Une base qui veut ses bundles le dit : un seuil à
 //! `null` ou `"off"`, `paths: []`.
 //!
 //! - **Un fichier de code minifié** (`minified_line_max_bytes`) : une ligne au-delà du
@@ -36,8 +36,10 @@ pub const REASON_PATH: &str = "bundle ou sortie de bâti — un motif de chemin 
 pub const DEFAULT_MINIFIED_LINE_MAX_BYTES: usize = 5000;
 pub const DEFAULT_CODE_FILE_MAX_BYTES: usize = 1 << 20;
 /// **Les motifs de chemin par défaut** : un dossier se nomme avec `/` à la fin (à n'importe quel niveau), un nom de
-/// fichier avec des `*` pour jokers.
-pub const DEFAULT_PATHS: [&str; 4] = ["dist/", "build/", "*.min.js", "*bundle*"];
+/// fichier avec des `*` pour jokers. Les bundles **produits** seulement (c7, 20 novembre 2026) : `*bundle*` écartait
+/// aussi des sources (`bundle.rs`, `Bundle.swift`, le code d'un bundler) sans que la base ait rien déclaré ; les seuils
+/// de taille font le reste.
+pub const DEFAULT_PATHS: [&str; 6] = ["dist/", "build/", "*.min.js", "*bundle*.js", "*bundle*.css", "*.bundle.*"];
 
 /// **Les seuils et les motifs de `workspace.index_exclude`.** Sans déclaration, les défauts valent : une base qui veut
 /// ses bundles le dit, un seuil à `null` ou `"off"`, `paths: []`.
@@ -192,6 +194,11 @@ mod tests {
         assert_eq!(p.reason_by_path("outils/build/sortie.rs"), Some(REASON_PATH));
         assert_eq!(p.reason_by_path("lib/jquery.min.js"), Some(REASON_PATH));
         assert_eq!(p.reason_by_path("ui/app.bundle.js"), Some(REASON_PATH));
+        assert_eq!(p.reason_by_path("ui/vendor-bundle.css"), Some(REASON_PATH));
+        assert_eq!(p.reason_by_path("ui/main.bundle.mjs"), Some(REASON_PATH));
+        assert_eq!(p.reason_by_path("src/bundle.rs"), None, "a source named like a bundle is not a produced file");
+        assert_eq!(p.reason_by_path("Sources/Bundle.swift"), None);
+        assert_eq!(p.reason_by_path("lib/bundles/loader.py"), None, "a folder named bundles is not excluded");
         assert_eq!(p.reason_by_path("src/builder.rs"), None, "a folder is named whole, not a prefix");
         assert_eq!(p.reason_by_path("dist"), None, "a file named like a folder is not inside it");
     }
