@@ -69,6 +69,11 @@ pousseur refuse à l'enqueue un lot rust sans attestation. Les lots docs et scri
 3. Un refus dit pourquoi : pas d'attestation, une autre tête, un arbre modifié, ou une dernière ligne qui n'est pas
    `VERT n/n`. Une tête qui change, par une repose ou un commit de plus, demande une attestation rejouée. Le pousseur
    garde chaque attestation dans `pusher/attestations/`.
+4. Une tête plus ancienne que le `check_features.sh` qui écrit `TÊTE` et `ARBRE` (20 nov. 2026, c7) s'atteste avec la
+   version de master, posée **en fichier non suivi dans `extension/rag3weaver/scripts/` de l'arbre de cette tête**, par
+   exemple `git show origin/master:extension/rag3weaver/scripts/check_features.sh > scripts/check_features_du_maitre.sh`,
+   puis `bash scripts/check_features_du_maitre.sh`. Copiée ailleurs, elle ne trouve ni ses aides ni la tête. Le fichier
+   non suivi ne rend pas l'arbre « modifié » : l'état de l'arbre ignore les fichiers non suivis.
 
 **Toute passe lourde part sous `timeout`, dans `poste` (c7, 15 nov. 2026, rappel de la règle du 10 octobre)** : `poste lourd timeout <N> <commande>`, aux deux postes, lib comme batterie. Le 15 novembre, un `cargo test --lib` sans borne a tenu la seule place lourde du portable 80 minutes à 1,7 de charge : des témoins attendaient un superviseur sans délai, et quatre passes attendaient derrière. Une attente sans borne dans un test est un défaut du produit à écrire (le produit a un délai réglé et le dit), pas une raison de laisser la place.
 
