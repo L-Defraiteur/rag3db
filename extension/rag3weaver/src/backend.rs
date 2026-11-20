@@ -3071,8 +3071,16 @@ impl PreparedBackend {
             .and_then(|w| w.index.as_deref())
         {
             let seuil = self.manifest.workspace.as_ref().and_then(|w| w.container_min_chars).unwrap_or(crate::code::CONTAINER_MIN_CHARS);
-            crate::code::register_code_schema(&mut cat, crate::code::scope_chunking_with(seuil))
-                .map_err(|e| e.to_string())?;
+            // **The chunks fit the base's smallest embedder** (ticket of embarquement, 20 November 2026): the one this
+            // backend declares, and those the base already holds vectors for. Its tokenizer is a capability: missing,
+            // the base refuses to open for indexing, naming the file — never chunks cut by the bytes alone.
+            let mut embarqueurs: Vec<String> = cat.registered_embedding_models().unwrap_or_default().into_iter().map(|e| e.name).collect();
+            embarqueurs.push(self.embed.model.clone());
+            let decoupage = crate::code::scope_chunking_for(seuil, embarqueurs.iter().map(String::as_str));
+            if let Some(b) = &decoupage.token_bound {
+                crate::tokens::counter(&b.model)?;
+            }
+            crate::code::register_code_schema(&mut cat, decoupage).map_err(|e| e.to_string())?;
             // Les fonctions de verrou déclarées pour ce dépôt.
             if let Some(w) = &self.manifest.workspace {
                 cat.declare_lock_calls(w.locks_via.clone());
@@ -7663,6 +7671,16 @@ mod tests {
     /// [`backend_de_code`], l'embarqueur donné (un compteur, pour un témoin).
     #[cfg(all(feature = "code", feature = "rag3db-native"))]
     fn backend_de_code_avec(dir: &Path, prepared: PreparedBackend, embarqueur: Box<dyn crate::embedder::Embedder>) -> Backend {
+        backend_de_code_decoupe(dir, prepared, embarqueur, crate::code::default_scope_chunking())
+    }
+
+    /// [`backend_de_code_avec`], with the scope chunking given (the bound of a chunk for an embedder, a witness).
+    fn backend_de_code_decoupe(
+        dir: &Path,
+        prepared: PreparedBackend,
+        embarqueur: Box<dyn crate::embedder::Embedder>,
+        decoupage: crate::config::ChunkingConfig,
+    ) -> Backend {
         // Une VRAIE base en mémoire : depuis que `edit` réindexe par la
         // synchronisation déclarée, la session fine s'écrit puis se RELIT en
         // base — une connexion factice qui rend des résultats vides la
@@ -7681,7 +7699,7 @@ mod tests {
         catalog.initialize().unwrap();
         // Les nœuds de code consultent File/Scope : le schéma de code
         // s'enregistre, la connexion à vide absorbe les DDL.
-        crate::code::register_code_schema(&mut catalog, crate::code::default_scope_chunking()).unwrap();
+        crate::code::register_code_schema(&mut catalog, decoupage).unwrap();
         let workspace = prepared.manifest.workspace.clone().unwrap();
         let file_source =
             crate::backend_code::build_source(&workspace, dir, &prepared.manifest.name).unwrap();
@@ -7947,6 +7965,34 @@ mod tests {
         // The reopening's guard rebuilds nothing.
         let a_rebatir = cat.check_fts_counts().expect("the guard");
         assert!(a_rebatir.is_empty(), "the reopening's guard rebuilds {a_rebatir:?}; counts {comptes:?}");
+    }
+
+    /// **A code base chunked for granite has no chunk over its window** (ticket of embarquement, 20 November 2026), on
+    /// the densest of the engine's headers, scope by scope as the index cuts them. Every chunk written is counted by
+    /// granite's own tokenizer.
+    #[cfg(all(feature = "code", feature = "rag3db-native", feature = "token-count"))]
+    #[test]
+    fn a_code_base_chunked_for_granite_has_no_chunk_over_its_window() {
+        let (dir, p) = fixture_code_avec("working_tree", false, json!({}), &|_| {});
+        drop(p);
+        let moteur = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../src/include");
+        for (i, f) in ["common/null_mask.h", "common/types/types.h", "common/types/int128_t.h", "common/types/uint128_t.h"].iter().enumerate() {
+            let texte = std::fs::read_to_string(moteur.join(f)).unwrap_or_else(|e| panic!("{f}: {e}"));
+            std::fs::write(dir.path().join(format!("sources/dense{i}.h")), texte).unwrap();
+        }
+        let prepared = PreparedBackend::load(&dir.path().join("backend.json")).expect("le manifeste se charge");
+        let decoupage = crate::code::scope_chunking_for(crate::code::CONTAINER_MIN_CHARS, ["granite-278m"]);
+        let backend = backend_de_code_decoupe(dir.path(), prepared, Box::new(crate::embedder::HashEmbedder::new(8)), decoupage);
+        let compte = crate::tokens::counter("granite-278m").unwrap_or_else(|e| panic!("the witness counts with granite's tokenizer: {e}"));
+        let source = backend.file_source.clone().unwrap();
+        let mut cat = backend.catalog.lock().unwrap();
+        crate::code_sync::sync_source(&mut cat, source.as_ref(), &Default::default(), &mut |_| {}).expect("l'index");
+        let table = format!("{}_Chunk", crate::code::SCOPE_CONTENT);
+        let r = cat.execute_raw(&format!("MATCH (c:`{table}`) WHERE c._text <> '' RETURN c._text")).expect("the chunks");
+        let textes: Vec<String> = r.rows.iter().filter_map(|l| l.first().and_then(|v| v.as_str()).map(str::to_string)).collect();
+        assert!(textes.len() > 50, "the dense headers give chunks: {}", textes.len());
+        let trop: Vec<usize> = textes.iter().map(|t| compte(t)).filter(|n| *n > 512).collect();
+        assert!(trop.is_empty(), "{} chunks of {} over granite's 512 tokens: {trop:?}", trop.len(), textes.len());
     }
 
     #[cfg(all(feature = "code", feature = "rag3db-native"))]
