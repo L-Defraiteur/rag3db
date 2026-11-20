@@ -1,8 +1,16 @@
 # Les points les plus isolés d'un index HNSW ne sont pas atteints
 
-- **État** : fermé (20 novembre 2026), non atteint sur des vecteurs réels. Hotfixs a rejoué la mesure sur les
-  127 198 `Scope_Chunk` de code-lourd (branche `seed-measure-real-vectors` 8caebb63e9, lot ee6183c410) : 200 points
-  isolés sur 200 dans leur propre top 10. Le constat ne vaut que sur la base gaussienne.
+- **État** : ouvert, en faible gravité (20 novembre 2026, au mot de c7 : un défaut connu et non corrigé garde son
+  ticket). Fermé un moment le même jour, puis rouvert. La mesure de hotfixs sur des vecteurs réels
+  (`docs/coeur-cpp-hotfixs-tickets/20-11-2026/03-les-points-isoles-sur-des-vecteurs-reels.md` ; branche
+  `seed-measure-real-vectors`, 8caebb63e9) : sur les 126 998 `Scope_Chunk` indexés de code-lourd, 200 points isolés
+  sur 200 dans leur propre top 10 et un rappel@10 de 0,998 à 0,999, avec ou sans amorce. Le défaut est réel sur la base
+  gaussienne du banc, invisible sur ce corpus.
+- **Ce qui le ferait changer** :
+  - **remonter en réponse fausse** : un corpus réel, ou un autre embarqueur, où le rappel@10 tombe sous 0,99 ou
+    des points isolés manquent dans leur propre top 10 ;
+  - **le fermer** : la preuve qu'aucun embarqueur ne produit une distribution comme la gaussienne de dimension 768 du
+    banc (de dimension intrinsèque maximale), ou un correctif dont le témoin passe sur la base gaussienne.
 - **Famille** : moteur
 - **Gravité** : faible (20 novembre) : le cas ne se montre que sur des gaussiennes de dimension 768. Avant :
   à établir. Sur la base synthétique, une ligne isolée n'est presque jamais rendue à sa propre requête.
