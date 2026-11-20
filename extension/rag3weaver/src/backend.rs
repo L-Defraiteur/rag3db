@@ -8163,6 +8163,69 @@ mod tests {
         (dir, backend)
     }
 
+    /// **A short declaration keeps its rank by its name among rivals that have both signals** (the bench, 20
+    /// November 2026: `CONFIGS` fell from rank 1 to 26, `ROOT` from 2 to 40, while their full-text rank did not move:
+    /// the fusion gave nothing for the dense signal they cannot have, and every rival with both passed them). A
+    /// constant set aside from the vector, cited in the bodies of fifteen functions: found first by the full text
+    /// alone, it must stay in the first three by the default signals.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_short_declaration_keeps_its_rank_by_its_name_among_rivals() {
+        let tools = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/tools");
+        let (dir, p) = fixture_code_avec("working_tree", false, json!({}), &|m| {
+            m["tools"]["search_code"] =
+                json!({"graph": "search_workspace.mmd", "bindings": {"target": "Scope"}, "policy": {"read_files": true}});
+        });
+        drop(p);
+        std::fs::copy(tools.join("search_workspace.mmd"), dir.path().join("search_workspace.mmd")).unwrap();
+        // As `ROOT` on luciepc: the same short constant declared in several scripts (all set aside from the vector),
+        // and functions that cite it, with both signals. The target is one declaration among its namesakes.
+        let mut fichiers: Vec<(String, String)> = (0..6)
+            .map(|k| (format!("script_{k}.py"), format!("SEUILS_DU_BANC = {{\"bas\": {k}, \"haut\": 9}}\n")))
+            .collect();
+        let mut regles = String::new();
+        for i in 0..15 {
+            regles.push_str(&format!(
+                "def regler_{i}(v):\n    return SEUILS_DU_BANC[v] + SEUILS_DU_BANC[\"haut\"] * SEUILS_DU_BANC[\"bas\"] + {i}\n\n"
+            ));
+        }
+        fichiers.push(("regles.py".to_string(), regles));
+        for (f, texte) in &fichiers {
+            std::fs::write(dir.path().join(format!("sources/{f}")), texte).unwrap();
+        }
+        let prepared = PreparedBackend::load(&dir.path().join("backend.json")).expect("le manifeste se charge");
+        let backend = backend_de_code(dir.path(), prepared);
+        {
+            // The ingestion that embeds in line: the rivals carry their vectors, as on a base whose debt is paid.
+            let mut cat = backend.catalog.lock().unwrap();
+            cat.ingest_code(&crate::code::analyze("/banc", fichiers.clone())).expect("l'ingestion");
+            let manque = cat.index_progress().map(|p| p.dense_missing()).unwrap_or(1);
+            assert_eq!(manque, 0, "every chunk has its vector");
+        }
+        let rang = |options: serde_json::Value| {
+            let r = backend.call("search_code", json!({"query": "SEUILS_DU_BANC", "options": options})).expect("search_code");
+            let noms: Vec<String> = r["result"]
+                .as_array()
+                .unwrap_or(&Vec::new())
+                .iter()
+                .map(|l| format!("{}@{}", l["data"]["name"].as_str().unwrap_or(""), l["data"]["file_path"].as_str().unwrap_or("")))
+                .collect();
+            (noms.iter().position(|n| n.starts_with("SEUILS_DU_BANC@") && n.ends_with("script_3.py")), noms)
+        };
+        for options in [json!({"signals": ["dense"], "limit": 20, "format": "json"}), json!({"signals": ["bm25"], "limit": 20, "format": "json"}), json!({"limit": 20, "format": "json"})] {
+            let (r, n) = rang(options.clone());
+            eprintln!("[témoin] {options} : rang {r:?} : {n:?}");
+        }
+        let (par_le_texte, noms) = rang(json!({"signals": ["bm25"], "limit": 20, "format": "json"}));
+        let par_le_texte = par_le_texte.unwrap_or_else(|| panic!("the full text finds the constant: {noms:?}"));
+        let (par_defaut, noms) = rang(json!({"limit": 20, "format": "json"}));
+        // The default signals rank it no worse than the full text alone: the dense signal it cannot have costs nothing.
+        assert!(
+            par_defaut.is_some_and(|r| r <= par_le_texte),
+            "by the default signals, the constant keeps its full-text rank {par_le_texte}: {par_defaut:?} {noms:?}"
+        );
+    }
+
     /// **A short `variable` is not a vector candidate, and keeps its full text** (c7, 20 November 2026: since the content
     /// of a scope is bounded to its node's bytes, 57bfc142bf, a Python `variable` of one statement on a line `a;b;c`
     /// carries 18 characters, `s=index.read_text()`, and wins by the vector alone — luciepc's 88 %). Its chunks go;
@@ -8180,7 +8243,7 @@ mod tests {
         std::fs::copy(tools.join("search_workspace.mmd"), dir.path().join("search_workspace.mmd")).unwrap();
         std::fs::write(
             dir.path().join("sources/plant.py"),
-            "import pathlib\nindex = pathlib.Path('index.html'); s=index.read_text(); print(len(s))\nPLANTE_MAX_KG = 1024\nseuil_de_la_plante = 7\n\n\
+            "import pathlib\nindex = pathlib.Path('index.html'); s=index.read_text(); print(len(s))\nPLANTE_MAX_KG = 1024\nseuil_de_la_plante = 7\n\ndef aire(x): return x * x\n\n\
              def mesurer_la_plante(hauteur, largeur):\n    \"\"\"La surface d'une feuille de la plante, en centimetres carres.\"\"\"\n\
                  surface = hauteur * largeur * 0.5\n    return surface + PLANTE_MAX_KG / 1000.0\n",
         )
@@ -8205,16 +8268,51 @@ mod tests {
             (t, r.rows)
         };
         let _ = table;
+        // A short constant too (a type of its own in codeparsers): the rule is by size, not by type (Lucie, 10 h 36).
+        let constante = {
+            let cat = backend.catalog.lock().unwrap();
+            let t = crate::code::SCOPE_CONTENT;
+            cat.execute_raw(&format!(
+                "MATCH (v:{t}) WHERE v.name = 'PLANTE_MAX_KG' OPTIONAL MATCH (c:{t}_Chunk)-[:{t}_CHUNKED_FROM]->(v) RETURN v.scope_type, count(c)"
+            ))
+            .expect("the constant")
+            .rows
+        };
+        assert!(!constante.is_empty(), "the short constant is a scope");
+        assert!(
+            constante.iter().all(|l| l.get(1).and_then(|v| v.as_i64()) == Some(0)),
+            "a short constant is a leaf under the threshold: no chunk, whatever its type: {constante:?}"
+        );
+        // A short function keeps its vector: its name and body carry a meaning (c7, 20 November 2026: the rule holds
+        // for the declarations of a value, by size whatever their type among them, not for the callables).
+        let fonction = {
+            let cat = backend.catalog.lock().unwrap();
+            let t = crate::code::SCOPE_CONTENT;
+            cat.execute_raw(&format!(
+                "MATCH (v:{t}) WHERE v.name = 'aire' OPTIONAL MATCH (c:{t}_Chunk)-[:{t}_CHUNKED_FROM]->(v) RETURN v.scope_type, count(c)"
+            ))
+            .expect("the function")
+            .rows
+        };
+        assert!(
+            !fonction.is_empty() && fonction.iter().all(|l| l.get(1).and_then(|v| v.as_i64()).unwrap_or(0) > 0),
+            "a short function keeps its chunk: {fonction:?}"
+        );
         let vues: Vec<String> = chunks.iter().map(|l| format!("{:?}", l)).collect();
         assert!(!chunks.is_empty(), "the file has variables: {vues:?}");
         let avec_morceau: Vec<&Vec<crate::connection::CypherValue>> = chunks.iter().filter(|l| l.get(2).and_then(|v| v.as_i64()).unwrap_or(0) > 0).collect();
         assert!(avec_morceau.is_empty(), "a short variable is not a vector candidate, yet has chunks: {avec_morceau:?}");
         // Found by its name all the same: its full-text document stays.
         // A short `variable` (not a constant, which has its own type) found by its name, by the full text alone.
+        // By the default signals, as the bench plays them (its red of 20 November 2026: 12 short names of 14 left the
+        // top 10), and by the full text alone; rank ≤ 3 either way.
         for nom in ["seuil_de_la_plante", "PLANTE_MAX_KG"] {
-            let r = backend.call("search_code", json!({"query": nom, "options": {"signals": ["bm25"], "limit": 10, "format": "json"}})).expect("search_code");
-            let noms: Vec<String> = r["result"].as_array().unwrap_or(&Vec::new()).iter().map(|l| l["data"]["name"].as_str().unwrap_or("").to_string()).collect();
-            assert!(noms.iter().any(|n| n == nom), "the short {nom} is found by its name: {noms:?}");
+            for options in [json!({"limit": 10, "format": "json"}), json!({"signals": ["bm25"], "limit": 10, "format": "json"})] {
+                let r = backend.call("search_code", json!({"query": nom, "options": options})).expect("search_code");
+                let noms: Vec<String> = r["result"].as_array().unwrap_or(&Vec::new()).iter().map(|l| l["data"]["name"].as_str().unwrap_or("").to_string()).collect();
+                let rang = noms.iter().position(|n| n == nom);
+                assert!(rang.is_some_and(|r| r < 3), "the short {nom} is found by its name (options {options}), rank {rang:?}: {noms:?}");
+            }
         }
         // The reopening's guard rebuilds nothing: the variable kept its document.
         let mut cat = backend.catalog.lock().unwrap();

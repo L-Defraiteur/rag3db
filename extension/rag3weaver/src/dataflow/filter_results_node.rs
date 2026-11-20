@@ -174,7 +174,7 @@ mod tests {
     fn r(uuid: &str, score: f64, path: &str) -> UnifiedResult {
         let mut data = BTreeMap::new();
         data.insert("file_path".to_string(), CypherValue::String(path.to_string()));
-        UnifiedResult {
+        UnifiedResult { sans_vecteur: false,
             uuid: uuid.into(),
             score,
             entity: None,

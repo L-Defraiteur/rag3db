@@ -224,7 +224,7 @@ impl Node for PlanNode {
                     .and_then(CypherValue::as_str)
                     .ok_or_else(|| format!("{NODE_TYPE}: une ligne de « {} » n'a pas de « {} »", r.form, r.uuid))?
                     .to_owned();
-                let mut un = UnifiedResult::from(SearchResult {
+                let mut un = UnifiedResult::from(SearchResult { sans_vecteur: false,
                     uuid,
                     score: 1.0,
                     entity: Some(r.entity.clone()),

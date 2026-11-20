@@ -222,7 +222,7 @@ mod tests {
     }
 
     fn make_result(uuid: &str, score: f64, kind: Option<&str>) -> UnifiedResult {
-        let mut r = UnifiedResult {
+        let mut r = UnifiedResult { sans_vecteur: false,
             uuid: uuid.into(),
             score,
             entity: Some("T".into()),

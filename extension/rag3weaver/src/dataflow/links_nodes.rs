@@ -641,7 +641,7 @@ impl Node for CohesionNode {
             if s <= 0.0 || !deja.insert(r.uuid.clone()) {
                 continue;
             }
-            sortie.push(UnifiedResult {
+            sortie.push(UnifiedResult { sans_vecteur: false,
                 uuid: r.uuid.clone(),
                 score: s,
                 entity: r.entity.clone(),

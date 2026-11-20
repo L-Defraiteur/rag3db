@@ -201,6 +201,14 @@ pub struct NotCandidate {
     /// (a short `variable`: its vector would win on 18 characters, its name must stay findable).
     #[serde(default)]
     pub takes_out: TakesOut,
+    /// **The rule holds for leaves only, when given**: a row is a leaf when this field does not hold `fold_mark` —
+    /// the mark a parent writes in its content in place of each child it folds (`own_texts`: « … »). With `types`
+    /// empty, the rule holds for every leaf, by size, whatever its type (Lucie, 20 November 2026: « par taille, pas
+    /// par type »). A leaf that holds the mark literally keeps its vector: the safe side.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub leaf_field: Option<String>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub fold_mark: String,
     pub type_field: String,
     pub types: Vec<String>,
     pub text_fields: Vec<String>,
@@ -241,6 +249,7 @@ impl NotCandidate {
     /// The fields the rule reads: its type, its text fields, its structure and language fields.
     pub fn fields_read(&self) -> Vec<&str> {
         let mut v: Vec<&str> = std::iter::once(self.type_field.as_str())
+            .chain(self.leaf_field.as_deref())
             .chain(self.text_fields.iter().map(String::as_str))
             .chain(self.structure_field.as_deref())
             .chain(self.language_field.as_deref())
@@ -326,7 +335,9 @@ impl NotCandidate {
 
     /// Whether the row of these fields is set aside.
     pub fn excludes(&self, data: &std::collections::BTreeMap<String, crate::connection::CypherValue>) -> bool {
-        data.get(&self.type_field).and_then(|v| v.as_str()).is_some_and(|t| self.types.iter().any(|x| x == t)) && self.own_chars(data) < self.min_chars
+        let du_type = self.types.is_empty() || data.get(&self.type_field).and_then(|v| v.as_str()).is_some_and(|t| self.types.iter().any(|x| x == t));
+        let feuille = self.leaf_field.as_ref().is_none_or(|f| !data.get(f).and_then(|v| v.as_str()).is_some_and(|s| s.contains(self.fold_mark.as_str())));
+        du_type && feuille && self.own_chars(data) < self.min_chars
     }
 
     /// **What the row carries of its own**, in characters: its text fields, the lines of pure structure of its
