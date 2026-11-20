@@ -1,6 +1,6 @@
 # La vue d'un worktree ne se demande pas encore par son nom court
 
-- **État** : ouvert (16 novembre 2026, session recherche, pour la passation à Codex).
+- **État** : fermé (20 novembre 2026, session recherche) : tenu par `recherche-sucre-de-nom-2`, vérifié sur master. Ouvert le 16 novembre 2026, session recherche.
 - **Gravité** : confort. Aujourd'hui, une vue se nomme par l'id de sa couche ou par son nom complet.
 - **Atteignable en service** : oui, dès qu'une couche de travail par worktree existe (2a′-3).
 - **Touche rag3weaver** : oui (`src/backend.rs`, `parse_view` et `load_call_view_stack`).
@@ -27,3 +27,14 @@ reste dite par son id, sa couche et son rang.
   - un worktree réel du dépôt de test, nommé par son chemin, rend la même pile que par son id ;
   - un chemin qui n'est pas un worktree suivi est refusé avant toute lecture ;
   - `worktree` et `layer` ensemble sont refusés.
+
+## Ce qui le ferme (vérifié sur master le 20 novembre 2026)
+
+Le lot `recherche-sucre-de-nom-2` (38b224831c, PR 84) :
+- `parse_view` accepte `worktree` (un chemin canonicalisé en `worktree:<chemin réel>`) ou `layer`, et refuse les
+  deux à la fois en les nommant ;
+- le schéma annoncé dans `tools/list` dit `oneOf` `layer` ou `worktree` ;
+- ses témoins : `a_view_by_its_worktree_path_reads_the_same_view_as_by_its_layer`,
+  `a_view_by_a_path_that_is_no_tracked_worktree_is_refused`, `a_view_by_both_its_worktree_and_its_layer_is_refused`.
+
+`task` (le nom d'une tâche de l'atelier) n'est pas fait : la page de 2a′-3 ne l'a pas confirmé.

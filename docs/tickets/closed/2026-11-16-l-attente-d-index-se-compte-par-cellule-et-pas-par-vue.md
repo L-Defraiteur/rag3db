@@ -1,6 +1,6 @@
 # L'attente d'index se compte par cellule, et pas encore par vue
 
-- **État** : ouvert (16 novembre 2026, session recherche, pour la passation à Codex).
+- **État** : fermé (20 novembre 2026, session recherche) : tenu par les lots atterris, vérifié sur master. Ouvert le 16 novembre 2026, session recherche.
 - **Gravité** : réponse approximative. Sous une vue d'une autre couche que celle du backend, « index pas
   prêt » parle du retard de la cellule, pas de celui de la couche lue.
 - **Atteignable en service** : oui, dès que des couches de travail par worktree s'indexent (2a′-3).
@@ -60,3 +60,18 @@ restriction aux fichiers de la vue et le départ du débit au banc.
 
 **Décidé par Lucie** (18 novembre 2026, « oui pour ta suggestion », relayé par c7) : la forme et les trois
 nuances ci-dessus. **Bloqué par** : le débit du banc d'étalonnage seulement. Rien ne se code avant.
+
+## Ce qui le ferme (vérifié sur master le 20 novembre 2026)
+
+- **Le retard par `(cellule, couche)`** : `LagKey { cell, layer }`, `Lag::note_in`, `estimate_of` et
+  `wait_caught_up_of` (`catalog/retard.rs`).
+- **L'attente lit la couche de la vue de l'appel** : `wait_for_a_lagging_index` prend la couche de `CALL_VIEW`, à
+  défaut celle du backend (`backend.rs`, « by view », Lucie, 18 novembre).
+- **Ses témoins** : `a_read_under_another_view_waits_only_for_its_own_layer` et
+  `a_read_under_its_up_to_date_view_does_not_wait_for_another_layer`.
+- **L'attente compte aussi les vecteurs dus** (la forme de c7 du 16 novembre) : lot `recherche-attente-vecteurs`
+  (PR 197). Texte et vecteurs ont chacun leur estimation (`text_eta_s`, `vectors_eta_s`) ; bm25 seul n'attend que
+  le texte ; sans service, pas d'attente et la cause dite (`vectors_unavailable`). Les témoins sont
+  `a_hybrid_search_owing_long_vectors_answers_at_once_and_says_them` et
+  `a_hybrid_search_without_an_embedding_service_does_not_wait_and_says_why`. La notification unique
+  « index prêt » suit (lots `recherche-notification-index-2` et `recherche-notification-e2e`).
