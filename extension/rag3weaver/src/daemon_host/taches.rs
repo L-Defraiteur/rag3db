@@ -1071,26 +1071,71 @@ mod tests;
 
 /// **The name of a child**: `<session>-<name>`, unless it already carries its session.
 pub fn nom_d_enfant(session: &str, nom: &str) -> String {
-    let _ = session;
-    nom.to_string()
+    if nom.starts_with(&format!("{session}-")) { nom.to_string() } else { format!("{session}-{nom}") }
 }
 
 impl super::DaemonHost {
     /// Gives a child task its views and its active one, at its opening.
     pub fn donner_les_vues(&self, parent: &str, nom: &str, session: &str, vues: Vec<String>, active: Option<String>) -> Result<(), String> {
-        let _ = (parent, nom, session, vues, active);
-        Ok(())
+        if vues.is_empty() {
+            return Err("a child gets at least one view".into());
+        }
+        let active = active.unwrap_or_else(|| vues[0].clone());
+        if !vues.contains(&active) {
+            return Err(format!("the active view « {active} » is outside the views given ({})", vues.join(", ")));
+        }
+        let t = self.tache(parent, nom).ok_or_else(|| format!("no task « {nom} » open on {parent}"))?;
+        if let Some(g) = self.taches.lock().unwrap_or_else(|p| p.into_inner()).get_mut(&t.manifest) {
+            g.parent_session = Some(session.to_string());
+            g.vues = Some(vues);
+            g.vue_active = Some(active);
+        }
+        self.ecrire_le_registre()
     }
 
     /// The parent changes a child's views: add, remove, switch the active one.
     pub fn changer_les_vues(&self, parent: &str, nom: &str, ajouter: &[String], retirer: &[String], active: Option<&str>) -> Result<Value, String> {
-        let _ = (parent, nom, ajouter, retirer, active);
-        Err("not yet".into())
+        let t = self.tache(parent, nom).ok_or_else(|| format!("no task « {nom} » open on {parent}"))?;
+        let Some(avant) = t.vues.clone() else { return Err(format!("« {nom} » is not the child of a session: it has no views to change")) };
+        let mut vues: Vec<String> = avant.clone();
+        for v in ajouter {
+            if !vues.contains(v) {
+                vues.push(v.clone());
+            }
+        }
+        vues.retain(|v| !retirer.contains(v));
+        if vues.is_empty() {
+            return Err("a child keeps at least one view".into());
+        }
+        let ancienne = t.vue_active.clone().unwrap_or_else(|| avant[0].clone());
+        let neuve = match active {
+            Some(a) if vues.iter().any(|v| v == a) => a.to_string(),
+            Some(a) => return Err(format!("the active view « {a} » is outside the views ({})", vues.join(", "))),
+            None if vues.contains(&ancienne) => ancienne.clone(),
+            None => vues[0].clone(),
+        };
+        if let Some(g) = self.taches.lock().unwrap_or_else(|p| p.into_inner()).get_mut(&t.manifest) {
+            g.vues = Some(vues.clone());
+            g.vue_active = Some(neuve.clone());
+        }
+        self.ecrire_le_registre()?;
+        // The child reads it in its mailbox, at its next step.
+        let mut dit = format!("the parent session changed your views: {} ; active: {neuve}", vues.join(", "));
+        if !vues.contains(&ancienne) {
+            dit = format!("your active view « {ancienne} » was removed: the active is now « {neuve} » ; views: {}", vues.join(", "));
+        }
+        if let Ok(f) = self.teammate_files(parent, nom) {
+            let _ = f.append("host", "report", None, &dit);
+        }
+        Ok(serde_json::json!({ "views": vues, "active": neuve }))
     }
 
     /// The views of the task whose backend is `backend_id`, and its active one; `None` when it is no child.
     pub fn vues_de(&self, backend_id: &str) -> Option<(Vec<String>, String)> {
-        let _ = backend_id;
-        None
+        let taches = self.taches.lock().unwrap_or_else(|p| p.into_inner());
+        let t = taches.values().find(|t| t.id == backend_id)?;
+        let vues = t.vues.clone()?;
+        let active = t.vue_active.clone().unwrap_or_else(|| vues[0].clone());
+        Some((vues, active))
     }
 }
