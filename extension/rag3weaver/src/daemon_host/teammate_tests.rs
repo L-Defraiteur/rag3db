@@ -2718,3 +2718,28 @@ fn every_parameter_of_the_teammates_tools_is_described() {
     }
     assert!(manquent.is_empty(), "parameters without a description: {manquent:#?}");
 }
+
+/// **A guest host resumes no teammate of the host it is the guest of** (the night of 20 Nov 2026: a
+/// host started by hand by --address next to the service host resumed the atelier's teammate of
+/// Lucie). Two hosts on the same tasks root: the owner's teammate waits for its request; the guest
+/// says it leaves it, and starts nothing.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn a_guest_host_resumes_no_teammate_of_its_owner() {
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let model: ChatModel = Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> { Err("no model here".into()) });
+    let proprietaire = hote(d.path(), model.clone()).with_runs_root(d.path().join("runs"));
+    let h = proprietaire.hosted(&manifeste).unwrap();
+    proprietaire.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    proprietaire.ouvrir_une_tache(&h.id, "doc").expect("la tâche s'ouvre");
+    let files = proprietaire.teammate_files(&h.id, "doc").unwrap();
+    files.append("supervisor", "request", None, "Fais-le.").unwrap();
+    // The guest, on the same tasks root, rereads it (as the night's host did), then resumes.
+    let invite = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs-invite")).en_invite("127.0.0.1:7970 (pid 2800109)".into()));
+    invite.relire_les_taches();
+    let lignes = invite.reprendre_les_equipiers();
+    assert!(lignes.iter().any(|l| l.contains("127.0.0.1:7970 (pid 2800109)")), "the guest says whose teammates it leaves: {lignes:?}");
+    assert!(!invite.teammate_running(&h.id, "doc"), "and starts none");
+    assert!(!files.mailbox().iter().any(|l| l["from"] == "host" && l["text"].as_str().is_some_and(|t| t.contains("repris") || t.contains("resum"))), "{:#?}", files.mailbox());
+}
