@@ -1827,6 +1827,10 @@ fn le_chat_guide_une_fenetre_du_depot_detachee() {
     assert_eq!(n.evaluer("[document.querySelector('#entete')?.dataset.fenetre ?? null, !!document.querySelector('#theme-fichier'), !!document.getElementById('lien')]"), json!(["depot", false, true]), "a detached window shows its role and the stream only");
     // Slice 3: it follows the chat without reloading (its page keeps this mark).
     n.evaluer("window.__pasRecharge = true");
+    // **A late answer of a file left** (the red of the pusher, 20 Nov., slice 5's pass): the reads of src/main.rs,
+    // absent, answer 1.5 s late in this window, so that they come after the view went to src/long.rs. A view must not
+    // take what a file it left answers.
+    n.evaluer("(() => { const f = window.fetch; window.fetch = (u, o) => { const p = f(u, o); return String(o?.body ?? '').includes('\"path\":\"src/main.rs\"') ? p.then((r) => new Promise((ok) => setTimeout(() => ok(r), 1500))) : p; }; })()");
     // Back to the chat: the link, clicked.
     n.onglet(0);
     n.attendre("(window.__ide?.fenetres ?? []).some((f) => f.role === 'depot')", "the chat knows that a window of the repository is open");
@@ -1842,8 +1846,9 @@ fn le_chat_guide_une_fenetre_du_depot_detachee() {
     };
     cliquer(&mut n, "src/long.rs#L5");
     n.attendre("document.querySelector('tr.vise')?.id === 'L5'", "the window aims at line 5 of src/long.rs");
-    // The view of src/long.rs does not keep the error of src/main.rs, absent, read just before (ticket of 19 Nov.).
-    let alerte = n.evaluer("document.querySelector('[role=alert]')?.textContent ?? null");
+    // The view of src/long.rs does not keep the error of src/main.rs, absent, read just before (ticket of 19 Nov.),
+    // nor take it when it answers late: judged once that late answer has come.
+    let alerte = n.evaluer("new Promise((ok) => setTimeout(() => ok(document.querySelector('[role=alert]')?.textContent ?? null), 2500))");
     assert_eq!(alerte, Value::Null, "the view of a readable file keeps the error of the file read before it");
     cliquer(&mut n, "src/long.rs#L40");
     n.attendre("document.querySelector('tr.vise')?.id === 'L40'", "the window aims at line 40 of the same file: only the hash changed");
