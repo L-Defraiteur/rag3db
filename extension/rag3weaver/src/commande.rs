@@ -1373,6 +1373,16 @@ pub fn purger_les_cibles(depot: Option<&str>) -> Vec<String> {
     lignes
 }
 
+/// **Les variables du poste qu'une commande du bac à sable ne reçoit pas** (le rouge sous sccache
+/// du 19 novembre 2026 : `RUSTC_WRAPPER=sccache` du poste passait dans le bac, et cargo y mourait
+/// sur « sccache: error: Permission denied », le cache et la socket du serveur de sccache étant
+/// hors du domaine). Un compilateur enveloppant écrit hors du bac et parle à un démon partagé :
+/// la porte se ferme. Ce que `sandbox.env` déclare passe quand même.
+pub(crate) fn variables_du_poste_hors_du_bac(poste: impl IntoIterator<Item = String>, declare: &[(String, String)]) -> Vec<String> {
+    let _ = (poste.into_iter().count(), declare);
+    Vec::new()
+}
+
 /// **Lancer par argv, dans son propre groupe de processus, flux lus par deux
 /// fils.** Les flux sont lus pendant que le processus tourne : un tube qu'on
 /// ne lit qu'après `wait` se remplit, et le processus se fige à son premier
@@ -1417,8 +1427,12 @@ fn lancer(a: &Autorisee, atelier: &Atelier, direct: bool) -> Result<Lance, ExecE
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    // L'environnement déclaré (`sandbox.env`), par-dessus celui de l'hôte.
+    // L'environnement déclaré (`sandbox.env`), par-dessus celui de l'hôte, sans les compilateurs
+    // enveloppants du poste.
     if let Some(bac) = &atelier.bac_a_sable {
+        for v in variables_du_poste_hors_du_bac(std::env::vars_os().filter_map(|(k, _)| k.into_string().ok()), &bac.env) {
+            commande.env_remove(v);
+        }
         commande.envs(bac.env.iter().map(|(k, v)| (k.as_str(), v.as_str())));
     }
     // Son propre groupe : la tuer, c'est tuer aussi ce qu'elle a lancé.
@@ -2290,6 +2304,24 @@ mod tests {
             let s = executer(laissez, &atelier).expect("cp tourne");
             assert_eq!((s.a_reussi(), vers.exists()), (permis, permis), "{}: {s:?}", vers.display());
         }
+    }
+
+    /// **Un compilateur enveloppant du poste ne passe pas dans le bac** (le rouge sous sccache du
+    /// 19 novembre 2026) : `RUSTC_WRAPPER`, `RUSTC_WORKSPACE_WRAPPER`, leurs formes `CARGO_BUILD_…`
+    /// et les `SCCACHE_*` du poste restent dehors ; ce que `sandbox.env` déclare passe.
+    #[test]
+    fn a_compiler_wrapper_of_the_host_does_not_reach_the_sandbox() {
+        let poste = ["PATH", "RUSTC_WRAPPER", "RUSTC_WORKSPACE_WRAPPER", "CARGO_BUILD_RUSTC_WRAPPER", "CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER", "SCCACHE_DIR", "SCCACHE_SERVER_PORT", "CARGO_HOME", "HOME"].map(String::from);
+        let mut hors = variables_du_poste_hors_du_bac(poste.clone(), &[]);
+        hors.sort();
+        assert_eq!(
+            hors,
+            ["CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER", "CARGO_BUILD_RUSTC_WRAPPER", "RUSTC_WORKSPACE_WRAPPER", "RUSTC_WRAPPER", "SCCACHE_DIR", "SCCACHE_SERVER_PORT"],
+            "the wrappers and sccache's variables stay outside; PATH, HOME and CARGO_HOME pass"
+        );
+        // What sandbox.env declares passes all the same.
+        let declare = vec![("RUSTC_WRAPPER".to_string(), "/opt/mon-wrapper".to_string())];
+        assert!(!variables_du_poste_hors_du_bac(poste, &declare).contains(&"RUSTC_WRAPPER".to_string()));
     }
 
     /// **Le target partagé tenu par une autre commande se dit** : la commande attend son
