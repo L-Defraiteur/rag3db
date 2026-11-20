@@ -1,7 +1,7 @@
 # Le nombre de lignes hors du graphe d'un index vectoriel, lisible sans écrire
 
-- **État** : ouvert (8 novembre 2026, à la demande de l'orchestration ; après G3 et G5 dans la
-  liste de la session hotfixs)
+- **État** : fermé (20 novembre 2026) par le lot (a), sur master depuis le 18 novembre au soir ; ouvert le 8 novembre
+  2026, à la demande de l'orchestration
 - **Famille** : moteur
 - **Gravité** : lenteur — sans ce nombre, le produit ne sait pas quand reconstruire un index dont
   une part de lignes est hors du graphe, et chaque recherche la balaie une à une
@@ -14,7 +14,7 @@
 
 Les lignes d'une table indexée qui ne sont pas dans le graphe HNSW sont balayées une à une par
 chaque recherche (ticket
-[les lignes d'un COPY forcé… restent hors du graphe](2026-10-18-les-lignes-d-un-copy-force-valide-apres-un-create-restent-hors-du-graphe.md)).
+[les lignes d'un COPY forcé… restent hors du graphe](../2026-10-18-les-lignes-d-un-copy-force-valide-apres-un-create-restent-hors-du-graphe.md)).
 Le moteur connaît leur nombre : les lignes de la table au-delà de `numCheckpointedNodes`
 (`extension/vector/src/include/index/hnsw_index.h:93`), plus celles que le dernier bâti n'a pas
 prises. Aucune lecture ne le rend aujourd'hui : `SHOW_INDEXES` dit `state` et `extension_loaded`,
@@ -60,3 +60,22 @@ Un index bâti, puis un COPY forcé validé juste après le CREATE (la recette d
 
 La lecture, son témoin, et la ligne dans le ticket du 18 octobre qui dit que le produit peut
 décider la reconstruction au seuil.
+
+## La fermeture (20 novembre 2026)
+
+**La lecture** : `SHOW_INDEXES` rend une neuvième colonne, `rows_outside_graph_at_most` (UINT64), sous l'instantané de
+l'appelant et sans verrou en lecture seule (`221b1d801e`). Pour un index vectoriel, ce sont les lignes de
+`[numCheckpointedNodes, numTotalRows)`, celles que chaque recherche balaie une à une. C'est une **borne** : elle compte
+aussi, dans cette plage, les lignes supprimées et celles déjà reliées par le rattrapage d'un CREATE. NULL pour un index
+qui n'en a pas la notion. Choix (a) de Lucie du 18 novembre ; la page (b) (le marqueur d'appartenance) est à part.
+
+**Le témoin** : `VectorIndexDiagnosticsTest` (`test/transaction/vector_index_diagnostics_test.cpp`) et le COPY forcé
+d'`AForcedCopyCommittedRightAfterACreateIsReached`, qui lit ses mille lignes dans la colonne, puis 0 après la
+reconstruction. Rouges sans la colonne, verts avec.
+
+**Trouvé en chemin, et corrigé dans le même train** (`1cfdaf353e`) : une insertion validée après un COPY forcé posait
+`numCheckpointedNodes` au-delà des lignes du COPY, qui n'étaient alors ni dans le graphe ni balayées (une réponse
+fausse), et que la colonne aurait comptées 0. Ticket fermé :
+`docs/tickets/closed/2026-11-18-une-insertion-apres-un-copy-force-fait-sauter-ses-lignes-a-la-recherche.md`.
+
+**La ligne dans le ticket du 18 octobre** est écrite : le produit peut décider la reconstruction au seuil.
