@@ -582,9 +582,26 @@ fn servir_le_demon(args: &[String]) -> Result<(), String> {
         });
     });
     // Les tâches de l'agent et les sessions de chat survivent à l'hôte : relues.
-    serveur.serve(std::sync::Arc::new(rag3weaver::daemon_host::DaemonHost::new().avec_les_taches_relues().with_chats_reread()), Some(jeton));
-    cycle::remove_if_mine(pid);
-    eprintln!("[démon] arrêté ; {} retiré", cycle::file_path().display());
+    // **A guest host** (the night of 20 Nov 2026): started by hand in the root of a live host, it
+    // rereads none of its tasks or chats, and resumes none of its teammates.
+    let hote = rag3weaver::daemon_host::DaemonHost::new();
+    let hote = match &autre {
+        Some(a) => {
+            eprintln!(
+                "[démon] hôte invité de {} (pid {}) : ses tâches, ses chats et ses équipiers ne sont ni relus ni repris ici",
+                a.address, a.pid
+            );
+            hote.en_invite(format!("{} (pid {})", a.address, a.pid))
+        }
+        None => hote.avec_les_taches_relues().with_chats_reread(),
+    };
+    serveur.serve(std::sync::Arc::new(hote), Some(jeton));
+    let retire = cycle::remove_if_mine(pid);
+    eprintln!(
+        "[démon] arrêté ; {} {}",
+        cycle::file_path().display(),
+        if retire { "retiré" } else { "laissé : ce n'est pas celui de cet hôte" }
+    );
     rag3weaver::host_log::stop_timestamps();
     Ok(())
 }
