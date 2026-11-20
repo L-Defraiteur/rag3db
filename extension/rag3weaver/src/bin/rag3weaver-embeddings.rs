@@ -197,8 +197,14 @@ fn servir() -> Result<(), Box<dyn std::error::Error>> {
     // **Check before serving** (20 November 2026) : the reference's texts alone, then
     // in this service's batches, against the original model's vectors ; a card that
     // computes wrong is refused, said, before listening (`rag3weaver::embedder_check`).
+    // Within a deadline : a card lost in the check does not give its call back.
     let reference = rag3weaver::embedder_check::read_reference(&bpk)?;
-    let demon = demon.self_check(reference.as_ref(), || Ok(rag3weaver::embedder_check::sha256_hex(&octets)));
+    let sha = reference.as_ref().map(|_| rag3weaver::embedder_check::sha256_hex(&octets));
+    let deadline = rag3weaver::embedder_check::deadline();
+    let demon = rag3weaver::embedder_check::within(deadline, move || {
+        demon.self_check(reference.as_ref(), || sha.ok_or_else(|| "pas d'empreinte".to_string()))
+    })
+    .ok_or_else(|| rag3weaver::embedder_check::no_answer(&nom, deadline))?;
     if let Some(check) = demon.identite().self_check.and_then(|m| m.get("embed").cloned()) {
         check.into_result(&nom)?;
     }

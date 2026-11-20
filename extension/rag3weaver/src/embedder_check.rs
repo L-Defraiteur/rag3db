@@ -22,8 +22,24 @@ pub const DEADLINE: std::time::Duration = std::time::Duration::from_secs(120);
 /// **`f` within `deadline`, or `None`** : `f` runs on a thread of its own, left behind
 /// when it does not answer (a lost card does not give its call back).
 pub fn within<T: Send + 'static>(deadline: std::time::Duration, f: impl FnOnce() -> T + Send + 'static) -> Option<T> {
-    let _ = deadline;
-    Some(f())
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::Builder::new()
+        .name("self-check".into())
+        .spawn(move || {
+            let _ = tx.send(f());
+        })
+        .ok()?;
+    rx.recv_timeout(deadline).ok()
+}
+
+/// The variable that moves the deadline, in seconds.
+pub const DEADLINE_VARIABLE: &str = "RAG3WEAVER_SELF_CHECK_DEADLINE_S";
+
+/// The deadline : [`DEADLINE_VARIABLE`] when it reads as a positive number of seconds,
+/// else [`DEADLINE`].
+pub fn deadline() -> std::time::Duration {
+    std::env::var(DEADLINE_VARIABLE).ok().and_then(|v| v.trim().parse::<u64>().ok()).filter(|s| *s > 0)
+        .map_or(DEADLINE, std::time::Duration::from_secs)
 }
 
 /// The refusal of a check that did not answer in time.

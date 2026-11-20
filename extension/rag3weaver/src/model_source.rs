@@ -758,15 +758,21 @@ pub fn local_embedder(model: &str) -> Result<Box<dyn crate::embedder::Embedder>,
     };
     // **Checked before use** (20 November 2026, `crate::embedder_check`) : refused, said,
     // when the card computes wrong against the model's reference.
+    // Within a deadline : a card lost in the check does not give its call back.
     let reference = crate::embedder_check::read_reference(&weights)?;
-    crate::embedder_check::check(
-        |texts: &[String]| built.embed(texts),
-        |texts: &[String]| crate::embedder_check::embed_in_service_batches(texts, 32, crate::embedder::embed_char_budget(), |b| built.embed(b)),
-        reference.as_ref(),
-        || std::fs::read(&weights).map(|b| crate::embedder_check::sha256_hex(&b)).map_err(|e| e.to_string()),
-        32,
-    )
-    .into_result(model)?;
+    let deadline = crate::embedder_check::deadline();
+    let (built, check) = crate::embedder_check::within(deadline, move || {
+        let check = crate::embedder_check::check(
+            |texts: &[String]| built.embed(texts),
+            |texts: &[String]| crate::embedder_check::embed_in_service_batches(texts, 32, crate::embedder::embed_char_budget(), |b| built.embed(b)),
+            reference.as_ref(),
+            || std::fs::read(&weights).map(|b| crate::embedder_check::sha256_hex(&b)).map_err(|e| e.to_string()),
+            32,
+        );
+        (built, check)
+    })
+    .ok_or_else(|| crate::embedder_check::no_answer(model, deadline))?;
+    check.into_result(model)?;
     Ok(built)
 }
 
