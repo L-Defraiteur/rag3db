@@ -1332,7 +1332,8 @@ fn read_threads() -> u64 {
             // l'entité publique : sous un `searchIndex` à contenu partagé
             // (version de scope), deux occurrences d'un contenu font un seul
             // document, et ce n'est pas une écriture perdue (13 novembre 2026).
-            let lignes = self.count_rows_of(&table) as u64;
+            // Without the rows its rule of non-candidates sets aside (2.12): they carry no document by design.
+            let lignes = self.candidate_rows_of(&table);
             if docs == lignes {
                 continue;
             }
@@ -1367,7 +1368,7 @@ fn read_threads() -> u64 {
             }
             let Some(docs) = self.fts_handles.get(&target.parent_table).map(|h| h.num_docs()) else { continue };
             // Comme `check_fts_counts` : les lignes de la table de l'index.
-            comptes.push((entity.clone(), docs, self.count_rows_of(&target.parent_table) as u64));
+            comptes.push((entity.clone(), docs, self.candidate_rows_of(&target.parent_table)));
         }
         comptes.sort();
         comptes
@@ -10857,6 +10858,47 @@ fn read_threads() -> u64 {
         self.entity_configs.get(table).and_then(|c| c.chunking.not_candidate.as_ref()).is_some_and(|r| r.excludes_values(values))
     }
 
+    /// **The rows of `entity` its rule of non-candidates sets aside** (2.12): the rows of the declared types, read
+    /// with every field the rule judges (its text fields, its type, its structure and language fields), judged by
+    /// the rule itself. Shared by the gesture, which takes their documents and chunks out, and by the count guard,
+    /// which compares the documents with the rows that are candidates (G's repetition, 20 November 2026).
+    fn non_candidate_uuids(&self, entity: &str) -> Result<Vec<String>, CatalogError> {
+        let Some(regle) = self.entity_config(entity).and_then(|c| c.chunking.not_candidate.clone()) else { return Ok(Vec::new()) };
+        let mut champs = vec!["_uuid".to_string()];
+        for f in regle.text_fields.iter().chain([&regle.type_field]).chain(regle.structure_field.iter()).chain(regle.language_field.iter()) {
+            if !champs.contains(f) {
+                champs.push(f.clone());
+            }
+        }
+        let select = rag3weaver_ir::Select {
+            table: entity.to_string(),
+            by_uuids: false,
+            filter: Some(rag3weaver_ir::Predicate::In { field: regle.type_field.clone(), param: "types".into() }),
+            returns: champs.iter().map(|f| rag3weaver_ir::Column::Node(f.clone())).collect(),
+            order_by: Vec::new(),
+            limit: None,
+            offset: None,
+        };
+        let requete = self.dialect.select(&select).map_err(|e| CatalogError::DbError(e.to_string()))?;
+        let types = CypherValue::List(regle.types.iter().map(|t| CypherValue::String(t.clone())).collect());
+        let lu = self.conn.execute_with_params(&requete, &[QueryParam::new("types", types)]).map_err(|e| CatalogError::DbError(e.to_string()))?;
+        Ok(lu
+            .rows
+            .iter()
+            .filter_map(|l| {
+                let data: std::collections::BTreeMap<String, CypherValue> = champs.iter().cloned().zip(l.iter().cloned()).collect();
+                if regle.excludes(&data) { data.get("_uuid").and_then(|v| v.as_str()).map(str::to_string) } else { None }
+            })
+            .collect())
+    }
+
+    /// **The rows of a full-text table that carry a document**: all of them, but those its rule of non-candidates
+    /// sets aside (2.12), which have none by design.
+    fn candidate_rows_of(&self, table: &str) -> u64 {
+        let toutes = self.count_rows_of(table) as u64;
+        toutes.saturating_sub(self.non_candidate_uuids(table).map(|u| u.len() as u64).unwrap_or(0))
+    }
+
     /// **The gesture of a base indexed before the rule** (2.12, c7's decision of 19 November 2026): a row that is not a
     /// search candidate (`ChunkingConfig::not_candidate` of `entity`) loses its chunks, hence its vectors, and its
     /// full-text document; the row itself, and its edges, stay. A version is never rewritten for it: its render does
@@ -10876,30 +10918,7 @@ fn read_threads() -> u64 {
             Some(_) => {}
             None => self.persist_meta_key(&cle, &regle.min_chars.to_string())?,
         }
-        // The rows of the declared types, with their text fields; the rule is judged here, generically.
-        let mut champs = vec!["_uuid".to_string()];
-        champs.extend(regle.text_fields.iter().cloned());
-        champs.push(regle.type_field.clone());
-        let select = rag3weaver_ir::Select {
-            table: entity.to_string(),
-            by_uuids: false,
-            filter: Some(rag3weaver_ir::Predicate::In { field: regle.type_field.clone(), param: "types".into() }),
-            returns: champs.iter().map(|f| rag3weaver_ir::Column::Node(f.clone())).collect(),
-            order_by: Vec::new(),
-            limit: None,
-            offset: None,
-        };
-        let requete = self.dialect.select(&select).map_err(|e| CatalogError::DbError(e.to_string()))?;
-        let types = CypherValue::List(regle.types.iter().map(|t| CypherValue::String(t.clone())).collect());
-        let lu = self.conn.execute_with_params(&requete, &[QueryParam::new("types", types)]).map_err(|e| CatalogError::DbError(e.to_string()))?;
-        let exclues: Vec<String> = lu
-            .rows
-            .iter()
-            .filter_map(|l| {
-                let data: std::collections::BTreeMap<String, CypherValue> = champs.iter().cloned().zip(l.iter().cloned()).collect();
-                if regle.excludes(&data) { data.get("_uuid").and_then(|v| v.as_str()).map(str::to_string) } else { None }
-            })
-            .collect();
+        let exclues = self.non_candidate_uuids(entity)?;
         if exclues.is_empty() {
             return Ok(0);
         }

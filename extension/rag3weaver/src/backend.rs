@@ -7741,6 +7741,36 @@ mod tests {
     /// named exactly « zorg ». `api.h` holds a documented `struct zorg_database` and a documented `namespace zorg`.
     /// The query « zorg », by the default signals: the struct is in the first ten, the documented namespace stays
     /// a candidate, and no folded namespace is a result.
+    /// **A base whose containers are set aside keeps its full text at its reopening** (the repetition of G, 20
+    /// November 2026: « 67 610 documents pour 75 246 lignes — index rebâti depuis les lignes » at every opening, and
+    /// three `en_fichiers` tests of e2e_tx_par_paquet_arret red on master). A container set aside has no document by
+    /// design: the count guard compares the documents with the **candidate** rows.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_base_with_containers_set_aside_keeps_its_full_text_at_its_reopening() {
+        let (dir, p) = fixture_code_avec("working_tree", false, json!({}), &|_| {});
+        drop(p);
+        for i in 0..12 {
+            std::fs::write(
+                dir.path().join(format!("sources/h{i}.h")),
+                format!("#pragma once\n\nnamespace zorg {{\nclass Thing{i} {{\n  int a{i};\n  int b{i};\n}};\n}}\n"),
+            )
+            .unwrap();
+        }
+        let prepared = PreparedBackend::load(&dir.path().join("backend.json")).expect("le manifeste se charge");
+        let backend = backend_de_code(dir.path(), prepared);
+        let source = backend.file_source.clone().unwrap();
+        let mut cat = backend.catalog.lock().unwrap();
+        let rapport = crate::code_sync::sync_source(&mut cat, source.as_ref(), &Default::default(), &mut |_| {}).expect("l'index");
+        let _ = rapport;
+        let comptes = cat.comptes_du_plein_texte();
+        let ecarts: Vec<_> = comptes.iter().filter(|(_, d, l)| d != l).collect();
+        assert!(ecarts.is_empty(), "documents and candidate rows differ after the index: {ecarts:?}");
+        // The reopening's guard rebuilds nothing.
+        let a_rebatir = cat.check_fts_counts().expect("the guard");
+        assert!(a_rebatir.is_empty(), "the reopening's guard rebuilds {a_rebatir:?}; counts {comptes:?}");
+    }
+
     #[cfg(all(feature = "code", feature = "rag3db-native"))]
     #[test]
     fn a_folded_container_is_not_a_search_candidate() {
