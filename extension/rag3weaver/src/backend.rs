@@ -512,6 +512,10 @@ pub struct WritePolicy {
     /// Immutable rows can be inserted or replayed identically, never overwritten.
     #[serde(default)]
     pub immutable: bool,
+    /// **The field that carries the version of the template** (20 November 2026): set by the server on each put,
+    /// like the dates, from the hash of the template in service.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub template: Option<String>,
     /// **Rows that expire** (19 November 2026, the TTL of the indexed turns): the only entities a
     /// tool may delete from, by the `expire` action of `EntityRecordNode`, which removes the rows
     /// whose `created_at` is older than a bound. Off by default: the declaration is the guard.
@@ -1383,6 +1387,10 @@ pub struct PreparedBackend {
     /// rien ne peut consulter est le défaut qu'on écrit en boucle.
     reactions: BTreeMap<String, GraphTool>,
     scripts: BTreeMap<String, String>,
+    /// **The version of the template** (20 November 2026): a hash of what this load put in service — the manifest,
+    /// its scripts, its graphs and schemas, and the content the binary embeds (`builtin:` and `@builtin:`). Every tool
+    /// call says it, and the rows whose entity declares `writes.template` carry it.
+    template_hash: String,
     /// Les entités **décrites** que chaque outil vise (payloads, bindings,
     /// nœuds de sélection/recherche) : ce que `describe()` reprend.
     tool_entities: BTreeMap<String, BTreeSet<String>>,
@@ -2400,7 +2408,28 @@ impl PreparedBackend {
         let relation_defs = schema.relations.clone();
         drop(schema);
         drop(provided_schema);
+        let template_hash = {
+            let mut h = blake3::Hasher::new();
+            h.update(&brut);
+            for (k, v) in &scripts {
+                h.update(k.as_bytes());
+                h.update(v.as_bytes());
+            }
+            for (k, t) in tools.iter().chain(reactions.iter()) {
+                h.update(k.as_bytes());
+                h.update(t.to_mermaid().as_bytes());
+            }
+            let mut names: Vec<&String> = schemas.keys().collect();
+            names.sort();
+            for n in names {
+                h.update(n.as_bytes());
+                h.update(schemas[n].to_string().as_bytes());
+            }
+            h.update(crate::builtin_templates::fingerprint().as_bytes());
+            h.finalize().to_hex().to_string()
+        };
         Ok(Self {
+            template_hash,
             lecteurs_du_creux,
             search_tools,
             template_drift,
@@ -3299,6 +3328,9 @@ pub(crate) fn opening_changes(old: &PreparedBackend, new: &PreparedBackend) -> V
     }
     changed
 }
+
+/// The service that gives graphs the hash of the template in service (20 November 2026).
+pub const TEMPLATE_SERVICE: &str = "backend_template";
 
 /// Une version vérifiée, pas encore en service ([`Backend::check_reload`]).
 pub struct PendingReload {
@@ -4687,6 +4719,14 @@ impl Backend {
         }
         let mut response = self.call_tool_on(prepared, name, args)?;
         harness_presentation(&mut response);
+        // **The version of the template the call ran on** (20 November 2026): its content hash and its reload number.
+        if let Some(o) = response.as_object_mut() {
+            let version = self.version.load(std::sync::atomic::Ordering::SeqCst);
+            let meta = o.entry("metadata").or_insert_with(|| json!({}));
+            if let Some(m) = meta.as_object_mut() {
+                m.insert("template".into(), json!({"hash": prepared.template_hash, "version": version}));
+            }
+        }
         Ok(response)
     }
 
@@ -5405,6 +5445,7 @@ impl Backend {
             prepared.manifest.relations.clone(),
         );
         services.register("backend_mappings", prepared.mappings.clone());
+        services.register(TEMPLATE_SERVICE, prepared.template_hash.clone());
         services.register(crate::dataflow::llm_nodes::PRESENTATIONS_SERVICE, prepared.presentations.clone());
         services.register("backend_validators", prepared.validators.clone());
         services.register(crate::fichiers_entite::SERVICE, prepared.miroirs.clone());

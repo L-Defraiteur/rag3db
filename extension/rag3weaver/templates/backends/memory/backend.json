@@ -525,7 +525,8 @@
           "created_at",
           "run",
           "from_turn",
-          "to_turn"
+          "to_turn",
+          "template"
         ],
         "signals": [
           "bm25",
@@ -551,7 +552,8 @@
       "writes": {
         "created_at": "created_at",
         "updated_at": "updated_at",
-        "revision": "revision"
+        "revision": "revision",
+        "template": "template"
       }
     },
     "Etat": {
@@ -634,6 +636,7 @@
         "created_at": "created_at",
         "updated_at": "updated_at",
         "revision": "revision",
+        "template": "template",
         "immutable": true
       },
       "files": {
@@ -652,7 +655,8 @@
           "run",
           "from_turn",
           "to_turn",
-          "slice_summary"
+          "slice_summary",
+          "template"
         ],
         "body": "contenu"
       }
