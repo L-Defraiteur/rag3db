@@ -1,6 +1,6 @@
 # Sous vingt écrivains, un lecteur meurt dans l'index de clé primaire sur disque
 
-- **État** : ouvert (13 novembre 2026, cœur c++)
+- **État** : corrigé sur master par le lot course-des-groupes (testé `e6a38eccd2`, 20 novembre 2026, cœur c++)
 - **Famille** : moteur
 - **Gravité** : plantage (SIGSEGV du processus entier)
 - **Atteignable en service** : à établir. Le banc le produit seul, une fois sur trois ; un hôte qui
@@ -84,3 +84,40 @@ SIGSEGV.
 lisait les pips pendant leur publication : voir le ticket
 `2026-11-13-une-recherche-par-cle-primaire-rate-des-cles-validees-pendant-un-point-de-reprise.md`.
 La ligne known_red de `DdlEveryMinute` reste intacte. Il faut le rejouer ×10 avant de fermer.
+
+## Le 19 novembre : ×10, puis une course nommée par TSan (cœur c++)
+
+`TwentyWriters.DdlEveryMinute` ×10 en Release sur la pile du 19 novembre (`4ab4ab8150`) : aucun SIGSEGV de cette
+pile, mais deux tours morts tôt de C1 (le dictionnaire au point de reprise, autre ticket) ; huit tours complets.
+Pas de quoi fermer.
+
+Sous TSan (×3, `~/.cache/rag3db-moteur-notes/c1-ddl/tsan-*.log` à luciepc), une course réelle sur le chemin de ce
+lecteur :
+
+- lecture : `NodeTable::lookupPK` → `NodeTable::isVisibleNoLock` → `NodeGroup::isVisibleNoLock` →
+  `findChunkedGroupFromRowIdxNoLock` → `findChunkedGroupIdx`, qui parcourt le vecteur des groupes de morceaux,
+  sous le `shared_mutex` de l'index de clé primaire en lecture ;
+- écriture précédente : `NodeGroup::checkpoint` → `GroupCollection<ChunkedNodeGroup>::appendGroup` →
+  `push_back` dans ce même vecteur, sous le mutex de la collection (`UniqLock`), pendant un point de reprise V2.
+
+Les deux ne tiennent pas le même verrou : un point de reprise qui laisse lire peut réallouer le vecteur des groupes
+sous un lecteur par clé primaire, qui lit alors de la mémoire rendue. C'est la cause probable de ce ticket. Le
+correctif : `isVisibleNoLock` lit le vecteur sous le verrou de la collection, ou le point de reprise remplace le
+vecteur sans le réallouer sous un lecteur. Témoin à écrire : des recherches par clé primaire en boucle pendant des
+points de reprise qui ajoutent des groupes, sous TSan, rouge d'abord.
+
+## Fermé (20 novembre 2026)
+
+Le correctif (`e6a38eccd2`) : `NodeGroup::checkpoint` prend `inMemAppendMtx` en exclusif quand il vide et remplit la
+liste des blocs, dans l'ordre du fichier (le verrou des blocs, puis celui-ci). Les lecteurs qui la parcourent sans
+le verrou des blocs (`isVisibleNoLock`) tiennent ce même verrou en partagé et attendent l'échange.
+
+Le témoin : `PkLookupUnderCheckpoint` sous TSan, rouge 3/3 sur master `b0edc09e63` (9 à 16 rapports, 21 à 41
+lignes en `findChunkedGroupIdx`), vert 3/3 sur le correctif (0 rapport). Sous TSan, `DdlEveryMinute` sur le
+correctif ne nomme plus `findChunkedGroupIdx`. En Release : `transaction_test` 407, known_red, `e2e_test` 1 867
+avec `DropNodeTableReclaim` admis.
+
+Deux sites de la même forme, non couverts par un témoin, restent à voir : `NodeGroup::merge` (un bloc ajouté
+sous le seul verrou des blocs) et le `clear` du point de reprise d'un groupe CSR (`csr_node_group.cpp`, dont les
+lecteurs tiennent aussi `inMemAppendMtx` en partagé). Un témoin rouge d'abord avant d'y toucher.
+
