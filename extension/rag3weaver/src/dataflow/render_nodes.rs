@@ -1385,7 +1385,7 @@ mod tests {
             ("start_line".to_string(), CypherValue::Int(101)),
             ("end_line".to_string(), CypherValue::Int(140)),
         ]);
-        let r = UnifiedResult {
+        let r = UnifiedResult { sans_vecteur: false,
             uuid: "u1".into(),
             entity: Some("Scope".into()),
             score: 1.0,
@@ -1442,7 +1442,7 @@ mod tests {
     }
 
     fn scope(name: &str, parent: &str, start: i64, end: i64, score: f64) -> UnifiedResult {
-        UnifiedResult {
+        UnifiedResult { sans_vecteur: false,
             uuid: format!("uuid-of-{name}"),
             score,
             entity: Some("Scope".into()),

@@ -42,7 +42,7 @@ fn un_hit_partage_se_projette_vers_toutes_ses_occurrences() {
     cat.execute_raw(&format!("MATCH (c:Scope_Chunk), (s:Scope) WHERE c._uuid = '{uuid}' AND s.name = 'partagee' AND s.file_path = 'b.rs' CREATE (c)-[:Scope_CHUNKED_FROM]->(s)")).unwrap();
     let target = cat.resolve_search_target("Scope").unwrap();
     for mode in [ResultMode::Aggregated, ResultMode::Detailed, ResultMode::SourceResolved] {
-        let hit = SearchResult { uuid: uuid.clone(), score: 0.75, entity: Some("Scope_Chunk".into()), data: None, chunk: None, chunks: None };
+        let hit = SearchResult { sans_vecteur: false, uuid: uuid.clone(), score: 0.75, entity: Some("Scope_Chunk".into()), data: None, chunk: None, chunks: None };
         let fields = vec!["file_path".into(), "start_line".into()];
         let mut resolved = resolve_vector_chunks_with_dialect(cat.conn(), &target, vec![hit], &fields, mode, cat.dialect_arc().as_ref()).unwrap();
         assert_eq!(resolved.len(), 2, "le hit partagé perd une occurrence en mode {mode:?} : {resolved:?}");
