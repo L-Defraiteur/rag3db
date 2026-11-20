@@ -444,6 +444,42 @@ mod tests {
         assert_eq!(r["closed"], json!([v.nom]), "the view's machine does not close it: {r}");
     }
 
+    /// **A landed view whose head moved on is kept** (O4, c7 on 20 November 2026): sessions keep a worktree for the next
+    /// lot in a pile. The lot landed at commit A; the worktree went on to B, pushed, clean, no process in it: none of
+    /// close_view's guards sees it, and it must not be closed. Its head at the landed head (or an ancestor of it), it is.
+    #[test]
+    fn a_landed_view_whose_head_moved_on_is_kept() {
+        let v = une_vue_ouverte("i");
+        let git = |dans: &std::path::Path, args: &[&str]| -> String {
+            let o = std::process::Command::new("git").arg("-C").arg(dans).args(["-c", "user.name=t", "-c", "user.email=t@t"]).args(args).output().unwrap();
+            assert!(o.status.success(), "git {args:?} : {}", String::from_utf8_lossy(&o.stderr));
+            String::from_utf8_lossy(&o.stdout).trim().to_string()
+        };
+        std::fs::write(v.chemin.join("a.rs"), "pub fn a() {}\n").unwrap();
+        git(&v.chemin, &["add", "."]);
+        git(&v.chemin, &["commit", "-q", "-m", "le lot atterri"]);
+        let a = git(&v.chemin, &["rev-parse", "HEAD"]);
+        std::fs::write(v.chemin.join("b.rs"), "pub fn b() {}\n").unwrap();
+        git(&v.chemin, &["add", "."]);
+        git(&v.chemin, &["commit", "-q", "-m", "le lot suivant, en pile"]);
+        let b = git(&v.chemin, &["rev-parse", "HEAD"]);
+        // Pushed: no remote-less commit for close_view's guard to see.
+        let distant = v._d.path().join("distant.git");
+        git(v._d.path(), &["init", "-q", "--bare", distant.to_str().unwrap()]);
+        git(&v.chemin, &["push", "-q", distant.to_str().unwrap(), "HEAD:refs/heads/pile"]);
+        git(&v.chemin, &["fetch", "-q", distant.to_str().unwrap(), "+refs/heads/pile:refs/remotes/distant/pile"]);
+        let journal = v._d.path().join("landed.tsv");
+        v.a.host.set_atterrissages("poste-a", crate::daemon_host::VoieDesAtterrissages::Fichier(journal.clone()));
+        std::fs::write(&journal, format!("le-lot\t{a}\th2\ttemoin\tlib\tposte-a:{}\n", v.nom)).unwrap();
+        let r = v.a.host.fermer_les_vues_atterries();
+        assert_eq!(r["closed"], json!([]), "a view whose head moved on past the landed head is closed: {r}");
+        assert!(r.to_string().contains(&v.nom), "the kept view is not said: {r}");
+        assert!(v.chemin.exists(), "the worktree in use is removed");
+        std::fs::write(&journal, format!("le-lot\t{b}\th3\ttemoin\tlib\tposte-a:{}\n", v.nom)).unwrap();
+        let r = v.a.host.fermer_les_vues_atterries();
+        assert_eq!(r["closed"], json!([v.nom]), "a view at its landed head is not closed: {r}");
+    }
+
     /// **`close_view` purges on demand** (O4): by hand, a view's generations stay; with `purge`, they go.
     #[test]
     fn close_view_purges_on_demand() {
