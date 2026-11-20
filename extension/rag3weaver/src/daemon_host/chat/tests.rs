@@ -1912,7 +1912,7 @@ fn le_graphe_detache_suit_les_outils_du_tour() {
     // The window of the graph, detached by the chat's button « graphe à côté » (ED's review), before the turn.
     let bouton = n.evaluer("(() => { const a = document.querySelector('#detacher-graphe'); return a ? [a.getAttribute('target'), a.getAttribute('href')] : null; })()");
     assert_eq!(bouton, json!(["_blank", format!("/ide/code/{id}/dag?fenetre=graphe")]), "the chat's button opens the graph in a window of its own");
-    n.evaluer("document.querySelector('#detacher-graphe').click()");
+    n.cliquer("#detacher-graphe");
     n.rejoindre("fenetre=graphe");
     n.attendre("document.getElementById('lien')?.textContent === 'flux : ouvert'", "the window of the graph, opened by the button");
     let fenetre_du_graphe = 1;
