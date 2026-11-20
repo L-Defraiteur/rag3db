@@ -1,5 +1,11 @@
 # Nouveautés
 
+- 20 novembre 2026 — **Chaque appel d'outil dit la version du gabarit qui l'a servi.** La réponse porte
+  `metadata.template` : l'empreinte de ce que le chargement a mis en service (manifeste, scripts, graphes, schémas,
+  et le contenu embarqué par le binaire) et le numéro de rechargement. Une entité qui déclare `writes.template` reçoit
+  cette empreinte sur chaque ligne écrite : dans le gabarit memory, la Source d'une tranche et chaque L1. Une baisse
+  du rangement se relie ainsi à la version du gabarit qui l'a produite.
+
 - 21 novembre 2026 — **Au terminal, un message tapé pendant qu'un accord attend reste un message.** Seuls `o` et `n` minuscules, seuls, répondent tout de suite à une demande d'accord. Une phrase qui commence par une majuscule (« Ne commite pas… ») part à l'équipier comme un message, et la demande d'accord reste affichée, au lieu d'être refusée par la première lettre.
 - 20 novembre 2026 — **Les gabarits installés suivent le binaire.** Une base posée par `code-tree add` désigne
   désormais le gabarit livré par le binaire (`builtin:`) pour chaque outil qu'il livre, même quand la base de départ en
