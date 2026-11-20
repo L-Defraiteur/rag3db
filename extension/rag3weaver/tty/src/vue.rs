@@ -2128,4 +2128,37 @@ mod tests {
             assert!(non_vides[2].contains("INVOCATION DU CODE"), "le modèle réfléchit : le Cercle — {l}×{h} : {ecran:#?}");
         }
     }
+
+    /// **A capital letter starts a message, even while an approval waits** (the night's essays, 21 Nov. 2026: « Ne
+    /// commite pas… », typed while `git add` waited, refused it on its « N »). Only a lone lowercase `o`, `y` or `n`
+    /// answers at once; a capital is the start of a sentence.
+    #[test]
+    fn a_capital_letter_starts_a_message_while_an_approval_waits() {
+        let mut v = Vue::new(120, true);
+        v.ligne_de_boite(&json!({ "id": "d/t:1", "from": "teammate", "kind": "approval", "text": "commande en attente", "command": "git add a.py" }));
+        for c in ['N', 'O', 'Y'] {
+            let mut w = Vue::new(120, true);
+            w.ligne_de_boite(&json!({ "id": "d/t:1", "from": "teammate", "kind": "approval", "text": "commande en attente", "command": "git add a.py" }));
+            assert_eq!(w.touche(Touche::Car(c)), None, "« {c} » starts a message");
+            assert_eq!(w.saisie.texte(), c.to_string(), "« {c} » is in the input");
+        }
+        assert!(matches!(v.touche(Touche::Car('n')), Some(Action::Repondre { accord: Some(false), .. })), "a lone lowercase n still refuses");
+    }
+
+    /// **A message typed while an approval waits goes to the teammate as a message** (same essays: the rest of the
+    /// sentence went as a text answer to the next approval, which only takes a yes or a no). The approval stays, and
+    /// is still said on the status line; a question, which takes words, is still answered by the input.
+    #[test]
+    fn a_message_typed_while_an_approval_waits_goes_as_a_message_not_an_answer() {
+        let mut v = Vue::new(120, true);
+        v.ligne_de_boite(&json!({ "id": "d/t:1", "from": "teammate", "kind": "approval", "text": "commande en attente", "command": "git add a.py" }));
+        v.touche(Touche::Coller("Ne commite pas toi-même".into()));
+        assert!(matches!(v.touche(Touche::Entree), Some(Action::Envoyer(ref t, _)) if t == "Ne commite pas toi-même"), "a message, not an answer");
+        assert!(v.ligne_d_etat().contains("git add a.py"), "the approval still waits : {}", v.ligne_d_etat());
+        let mut q = Vue::new(120, true);
+        q.ligne_de_boite(&json!({ "id": "d/t:2", "from": "teammate", "kind": "question", "text": "quel nom ?" }));
+        q.touche(Touche::Coller("compteur".into()));
+        assert!(matches!(q.touche(Touche::Entree), Some(Action::Repondre { accord: None, .. })), "a question is answered by the input");
+    }
+
 }
