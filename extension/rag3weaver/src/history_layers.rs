@@ -231,8 +231,59 @@ pub fn write_work_generation(catalog: &mut Catalog, worktree: &Path, layer_id: &
 /// demand and shared by every worktree that forks there. No ref is followed, and nothing between the root and the fork
 /// is indexed. A fork at the root itself has no layer: the work layer sits on the backend. `repo` names the layers.
 pub fn write_fork_work_generation(catalog: &mut Catalog, worktree: &Path, layer_id: &str, repo: &str, master_ref: &str) -> Result<i64, String> {
-    let _ = (catalog, worktree, layer_id, repo, master_ref);
-    Err("la couche de travail sur sa fourche : pas encore".into()) // RED STUB.
+    use crate::connection::{CypherValue, QueryParam};
+    use crate::generations::COUCHE_DU_BACKEND;
+    let texte = |args: &[&str]| -> Result<String, String> { Ok(String::from_utf8_lossy(&git(worktree, args)?).trim().to_string()) };
+    let head = texte(&["rev-parse", "HEAD"])?;
+    let fourche = texte(&["merge-base", "HEAD", master_ref])?;
+    let n = catalog.rang_publie().ok_or("couche de travail : la base n'a pas de génération publiée")?;
+    let racine = generation_commit(catalog, COUCHE_DU_BACKEND, Some(n))?;
+    // The fork's layer: none at the root itself; else `fourche:<commit>`, written once over the backend.
+    let parent = if racine.as_deref() == Some(fourche.as_str()) {
+        (COUCHE_DU_BACKEND.to_string(), n)
+    } else {
+        let id = crate::suivies::register_layer(catalog, repo, &format!("fourche:{fourche}"), &fourche)?;
+        let lu = catalog
+            .execute_raw_with_params(
+                &format!("MATCH (g:{}) WHERE g.couche = $couche RETURN max(g.rang)", crate::generations::TABLE),
+                &[QueryParam::new("couche", CypherValue::String(id.clone()))],
+            )
+            .map_err(|e| e.to_string())?;
+        let rang = match lu.rows.first().and_then(|r| r.first()).and_then(|v| v.as_i64()) {
+            Some(r) => r,
+            None => {
+                let lw = LayerWrite { layer: id.clone(), parent: Some((COUCHE_DU_BACKEND.to_string(), n)) };
+                write_history_at(catalog, worktree, &lw, &fourche, 1, None)?
+            }
+        };
+        (id, rang)
+    };
+    // The whole gap from the fork: tracked files that differ from it (committed or not, deleted included), and the
+    // untracked files the index takes.
+    let mut ecart: std::collections::BTreeSet<String> = paths_z(&git(worktree, &["--no-optional-locks", "diff", "--name-only", "-z", &fourche])?).into_iter().collect();
+    ecart.extend(paths_z(&git(worktree, &["ls-files", "--others", "--exclude-standard", "-z"])?));
+    let before = last_tombstoned_files(catalog, layer_id)?;
+    let source = crate::code_tools::WorkingTree::new(worktree);
+    let mut files = Vec::new();
+    for p in &ecart {
+        files.push((p.clone(), source.read(p)?));
+    }
+    // Back to the fork's state: its rows leave the layer, and the fork's show.
+    for p in before.difference(&ecart) {
+        files.push((p.clone(), None));
+    }
+    let layer = LayerWrite { layer: layer_id.to_string(), parent: Some(parent) };
+    let r = catalog
+        .write_in_layer(&layer, |c| {
+            crate::code_sync::reingest_files(c, &source, &files, crate::disponibilite::Disponibilites::TOUT)?;
+            c.set_layer_tombstones(ecart.clone()).map_err(|e| e.to_string())?;
+            c.publier_la_generation(&head, ecart.len()).map_err(|e| e.to_string())
+        })
+        .map_err(|e| e.to_string())??;
+    let marque = crate::catalog::indexed_tree_of(&worktree.to_string_lossy());
+    let cell = catalog.scope().clone();
+    catalog.note_indexed_tree_of_layer(&cell, layer_id, &marque).map_err(|e| e.to_string())?;
+    Ok(r)
 }
 
 /// **The dirty paths of a worktree**: changed, added, deleted, renamed (both names), unmerged and untracked, as

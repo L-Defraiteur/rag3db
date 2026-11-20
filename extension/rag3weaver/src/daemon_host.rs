@@ -716,20 +716,43 @@ impl DaemonHost {
                 }
             };
             let base = if git(&depot, &["rev-parse", "--verify", "-q", "origin/master"]).is_ok() { "origin/master" } else { "HEAD" };
+            // The base as a commit: the worktree forks from it, and its layer sits on that fork.
+            let base_commit = git(&depot, &["rev-parse", base])?;
             let branche = format!("{dossier}/{lot}");
             if dossiers.get(&dossier).is_none() {
                 dossiers.insert(dossier.clone(), json!(qui));
                 std::fs::write(&table, Value::Object(dossiers.clone()).to_string()).map_err(|e| format!("{} : {e}", table.display()))?;
             }
             std::fs::create_dir_all(espace.join(&dossier)).map_err(|e| format!("{} : {e}", espace.join(&dossier).display()))?;
-            git(&depot, &["worktree", "add", "-q", "-b", &branche, &chemin.to_string_lossy(), base])?;
+            git(&depot, &["worktree", "add", "-q", "-b", &branche, &chemin.to_string_lossy(), &base_commit])?;
             git(&chemin, &["submodule", "update", "-q", "--init"]).map_err(|e| format!("open_view : {} créé, mais son sous-module : {e}", chemin.display()))?;
             let nom = format!("{dossier}/{date}-{lot}");
             let target = std::env::var_os("HOME")
                 .map(|h| Path::new(&h).join(format!(".cache/rag3weaver-build/target-{dossier}/{date}-{lot}")))
                 .unwrap_or_default();
-            let ouverte = json!({ "name": nom, "path": chemin, "branch": branche, "target": target, "from": base });
+            // O2: its work layer on its fork (Lucie's rule of 20 November, 18 h 47: no ref followed), then the view
+            // active. A layer that cannot be written leaves the worktree opened, and the answer says why.
+            let reel = chemin.canonicalize().unwrap_or_else(|_| chemin.clone());
+            let couche = format!("worktree:{}", reel.display());
+            let indexee = self.with_backend(&hosted, |b| -> Result<(), String> {
+                let prepared = b.prepared();
+                let racine = prepared.workspace_root().ok_or("pas de racine de travail")?;
+                let repo = crate::suivies::repo_id(&racine, prepared.manifest.tracked.as_ref())?.ok_or("pas d'id de dépôt")?;
+                let mut cat = b.catalog.lock().map_err(|_| "catalogue empoisonné".to_string())?;
+                let tete = git(&reel, &["rev-parse", "HEAD"])?;
+                let id = crate::suivies::register_layer(&cat, &repo, &couche, &tete)?;
+                crate::history_layers::write_fork_work_generation(&mut cat, &reel, &id, &repo, &base_commit)?;
+                Ok(())
+            })?;
+            let mut ouverte = json!({ "name": nom, "path": chemin, "branch": branche, "target": target, "from": base, "fork": base_commit });
+            match &indexee {
+                Ok(()) => ouverte["layer"] = json!(couche),
+                Err(e) => ouverte["layer_refused"] = json!(e),
+            }
             self.noter_l_ouverture(&claude, &nom, &ouverte)?;
+            if indexee.is_ok() {
+                self.set_session_view(&s.id, Some(json!({ "layer": couche })))?;
+            }
             let mut r = ouverte;
             r["ok"] = json!(true);
             Ok(r)
