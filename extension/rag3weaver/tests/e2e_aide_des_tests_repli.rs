@@ -119,3 +119,10 @@ fn repli_interdit_le_test_est_rouge_et_nomme_le_modele() {
     assert!(!ok, "le repli interdit, la sonde rougit : {texte}");
     assert!(texte.contains("pas de service pour granite-107m"), "le rouge nomme le modèle : {texte}");
 }
+
+/// **A suite that is not local is not recognised as local** (20 November 2026).
+#[test]
+#[ignore]
+fn this_suite_is_not_recognised_as_local() {
+    assert!(!crate::common::burn::suite_locale(), "e2e_aide_des_tests_repli is not a local suite (test {:?})", std::thread::current().name());
+}

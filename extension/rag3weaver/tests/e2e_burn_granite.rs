@@ -161,3 +161,13 @@ fn granite_278m_contre_la_reference_onnx() { crate::common::burn::compares_value
 #[test]
 #[ignore]
 fn granite_107m_contre_la_reference_onnx() { crate::common::burn::compares_values("granite-107m");  contre_la_reference_onnx(common::burn::GRANITE_107M.as_ref(), "reference-107m.json"); }
+
+/// **This suite is recognised as local** (20 November 2026, ticket
+/// `2026-11-20-les-suites-locales-des-tests-ne-se-reconnaissent-plus`) : its models load on this
+/// card, never through a service nor the fallback.
+#[cfg(feature = "daemon")]
+#[test]
+#[ignore]
+fn this_suite_is_recognised_as_local() {
+    assert!(crate::common::burn::suite_locale(), "e2e_burn_granite is a local suite (test {:?})", std::thread::current().name());
+}

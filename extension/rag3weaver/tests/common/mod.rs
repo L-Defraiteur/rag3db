@@ -334,7 +334,7 @@ pub mod burn {
     const SUITES_LOCALES: &[&str] = &["e2e_burn_", "e2e_demon_embeddings", "e2e_mesure_ingestion_code", "e2e_banc_bge_m3"];
 
     #[cfg(feature = "daemon")]
-    fn suite_locale() -> bool {
+    pub fn suite_locale() -> bool {
         let binaire = std::env::current_exe().ok().and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string())).unwrap_or_default();
         SUITES_LOCALES.iter().any(|s| binaire.starts_with(s))
     }
