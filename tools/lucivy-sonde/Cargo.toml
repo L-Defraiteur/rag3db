@@ -1,0 +1,13 @@
+[package]
+name = "lucivy-sonde"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Checks the shard dictionaries of lucivy indexes: words cited by live segments with no text (check_dictionary)"
+
+[dependencies]
+# The lucivy that rag3weaver pins (extension/rag3weaver/Cargo.toml): the probe judges the format the hosts write.
+lucivy-core = "=4.3.12"
+serde_json = "1"
+
+[workspace]

@@ -7,7 +7,7 @@
   embarqué dans un lot ne rend pas le vecteur qu'il rend seul (cosinus jusqu'à 0,59).
 - **Atteignable en service** : oui, tout service granite-278m sur `igpu:0` (aucun en place aujourd'hui : 7878 et 7879
   sont sur card2)
-- **Touche rag3weaver** : à départager (burn/cubecl sur l'adaptateur `IntegratedGpu`, Vulkan radv)
+- **Touche rag3weaver** : à départager : burn/cubecl, ou le pilote Vulkan d'Intel (anv, Mesa 26.2.6) de l'iGPU de luciepc, un Intel Graphics (ARL). Ce n'est pas toute carte intégrée : l'APU de la tablette est sain (plus bas).
 
 ## Ce que c'est
 
@@ -66,3 +66,28 @@ vecteur seul de card2 :
   le font directement et restent exposés : un témoin qui compare des valeurs sur l'iGPU peut mentir.
 - La fiche amont est chez G (lot `tracel-ai`), avec les deux formes de repro : un lot de textes de même longueur contre
   chacun seul, et une suite d'appels seuls de longueurs croissantes.
+
+## L'APU de la tablette est sain (20 novembre, 14 h 30)
+
+Correction : l'iGPU de luciepc n'est pas sous radv. C'est un **Intel Graphics (ARL)**, sous le pilote libre de Mesa pour
+Intel (anv), Mesa 26.2.6 (`vulkaninfo`). Le défaut est le sien, pas celui de toute carte intégrée.
+
+La même mesure sur la tablette, sous `poste lourd`, sur son **APU AMD Radeon 8060S (Strix Halo, radv)** : un service
+granite-278m sur `igpu:0`, port 7995, binaire de debug 137f5de2cd5cfaa7. Comparée aux vecteurs de card2 :
+
+| Comparaison | Sans rembourrage (cosinus min) | Standard (cosinus min) |
+|---|---|---|
+| APU seul / card2 seul | 0,99999991 | 0,99999993 |
+| APU en lot / card2 seul | 0,99999991 | 0,99999993 |
+| APU seul / APU en lot | 0,99999993 | 0,99999994 |
+
+C'est le bruit de réduction de card2 (4,9e-5). **L'APU de la tablette calcule juste**, en lot comme seul.
+
+- **Pour l'amont** : le défaut pourrait venir du pilote d'Intel (anv) autant que de burn ou de cubecl. La repro
+  réduite se joue sur l'iGPU de luciepc, et se compare à une autre carte intégrée.
+- **Pour le garde-fou** : il refuse toute carte intégrée, parce qu'on ne sait pas encore lesquelles calculent faux. Sur
+  la tablette, `RAG3WEAVER_EMBEDDER_ALLOW_INTEGRATED_GPU=1` se pose, avec cette mesure pour référence.
+- **Par fournisseur plutôt que par type, un jour** (G, 20 novembre) : le garde-fou refuse tout adaptateur intégré, l'APU
+  sain de la tablette compris. C'est prudent tant qu'on ne sait pas lesquels calculent faux. Pour servir un jour sur la
+  tablette sans réglage, il faudrait refuser par fournisseur ou par pilote (Intel, anv) plutôt que par type, une fois
+  la cause connue.

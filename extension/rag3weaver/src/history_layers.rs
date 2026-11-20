@@ -61,7 +61,12 @@ impl FileSource for GitCommitSource {
 /// parent's generation for a first one, or the whole tree for a root layer.
 pub fn write_history_generation(catalog: &mut Catalog, root: &Path, layer: &LayerWrite, commit: &str) -> Result<i64, String> {
     let rank = commit_rank(catalog, root, layer, commit)?;
-    write_history_at(catalog, root, layer, commit, rank, None)
+    let r = write_history_at(catalog, root, layer, commit, rank, None)?;
+    // The layer's indexed tree, for a view without a watch: its commit against its ref (ticket of 18 November 2026).
+    let marque = serde_json::json!({ "root": root.to_string_lossy(), "commit": commit, "ref": layer.layer, "at_ms": crate::catalog::retard::now_ms() });
+    let cell = catalog.scope().clone();
+    catalog.note_indexed_tree_of_layer(&cell, &layer.layer, &marque).map_err(|e| e.to_string())?;
+    Ok(r)
 }
 
 /// **The rank of a commit in a history layer** (2a′-3, lot 8): its position on the ref's first parent, counted from the
@@ -206,13 +211,18 @@ pub fn write_work_generation(catalog: &mut Catalog, worktree: &Path, layer_id: &
         files.push((p.clone(), None));
     }
     let layer = LayerWrite { layer: layer_id.to_string(), parent: Some((branch_layer.to_string(), parent_rank)) };
-    catalog
+    let r = catalog
         .write_in_layer(&layer, |c| {
             crate::code_sync::reingest_files(c, &source, &files, crate::disponibilite::Disponibilites::TOUT)?;
             c.set_layer_tombstones(dirty.clone()).map_err(|e| e.to_string())?;
             c.publier_la_generation(&head, dirty.len()).map_err(|e| e.to_string())
         })
-        .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())??;
+    // The layer's indexed tree, for a view without a watch (ticket of 18 November 2026).
+    let marque = crate::catalog::indexed_tree_of(&worktree.to_string_lossy());
+    let cell = catalog.scope().clone();
+    catalog.note_indexed_tree_of_layer(&cell, layer_id, &marque).map_err(|e| e.to_string())?;
+    Ok(r)
 }
 
 /// **The dirty paths of a worktree**: changed, added, deleted, renamed (both names), unmerged and untracked, as

@@ -27,6 +27,8 @@ mkdir -p "$POSTE_LOCK_DIR" "$POSTE_PUSH_DIR"
 # L'ancien « entre quand même » au bout d'une seconde, au lieu de 600 : sans la
 # priorité de la mesure, un lourd arrivé derrière elle passe devant.
 export POSTE_PORTE_MAX=1
+# Le refus d'une mesure derrière un lourd long (cas 43) est coupé pour les autres cas, dont les lourds n'ont pas de timeout.
+export POSTE_MESURE_ATTENTE_MAX=0
 echec=0
 cas() { if [ "$1" = 0 ]; then echo "OK     $2"; else echo "ÉCHEC  $2"; echec=1; fi; }
 J="$ICI/journal"
@@ -350,4 +352,43 @@ env -u RUSTC_WRAPPER -u SCCACHE_DIR -u SCCACHE_CACHE_SIZE -u CARGO_TARGET_X86_64
 if command -v sccache > /dev/null 2>&1 && [ "$(command -v sccache)" != "$R/bin/sccache" ]; then cas 0 "(sccache installé ici : le cas sans outils ne se juge pas)"
 else [ "$(cut -d'|' -f1 "$R/env3" 2>/dev/null)" = absent ]; cas $? "sans sccache ni mold, rien n'est posé (lu : $(cat "$R/env3" 2>/dev/null))"; fi
 rm -rf "$R"
+# ── 43. Une mesure refuse à l'arrivée derrière un lourd long (20 novembre 2026, c7 : deux gels de la file en deux heures
+# à luciepc, une mesure tenant la porte derrière un lourd de six heures). La fin prévue d'un lourd est le moment où il a
+# pris sa place plus le `timeout N` en tête de sa commande ; sans timeout, elle est inconnue, donc longue. Au-delà de
+# POSTE_MESURE_ATTENTE_MAX (1200 s par défaut), la mesure refuse tout de suite, code 76, en nommant le lourd.
+: > "$J"
+travail lourd LONG 4 &
+sleep 0.5
+debut=$(date +%s); sortie=$(POSTE_MESURE_ATTENTE_MAX=1200 "$POSTE" mesure bash -c "note M début" 2>&1); rc=$?; duree=$(( $(date +%s) - debut ))
+wait
+[ "$rc" = 76 ] && [ "$duree" -le 2 ] && [ -z "$(instant M début)" ] && echo "$sortie" | grep -q "rejouer sous poste lourd"
+cas $? "une mesure derrière un lourd sans timeout refuse tout de suite, code 76 (rc $rc, ${duree} s)"
+: > "$J"
+"$POSTE" lourd timeout 30 bash -c "note C début; sleep 2; note C fin" > /dev/null 2>&1 &
+sleep 0.5
+POSTE_MESURE_ATTENTE_MAX=1200 "$POSTE" mesure bash -c "note M début" > /dev/null 2>&1; rc=$?
+wait
+[ "$rc" = 0 ] && [ -n "$(instant M début)" ] && [ "$(instant M début)" -ge "$(instant C fin)" ]
+cas $? "une mesure derrière un lourd court (timeout 30) attend sa fin et joue (rc $rc)"
+
+# ── 44. Une baisse des places porte son heure de retour (20 novembre 2026, c7 : la tablette est restée à une place de
+# 07 h 30 à 13 h 35, la fenêtre du matin finie à 08 h 51, six lourds derrière). `poste places <N> jusqu'à HH:MM` écrit
+# lourds-max et lourds-max.retour ; la valeur d'avant revient à la première lecture passé l'heure ; --qui le dit tant
+# que ça dure ; une baisse sans heure refuse.
+echo 2 > "$POSTE_LOCK_DIR/lourds-max"; rm -f "$POSTE_LOCK_DIR/lourds-max.retour"
+"$POSTE" places 1 > /dev/null 2>&1; rc=$?
+[ "$rc" = 2 ] && [ "$(cat "$POSTE_LOCK_DIR/lourds-max")" = 2 ]
+cas $? "une baisse des places sans heure de retour refuse, lourds-max inchangé (rc $rc)"
+h=$(date -d '+2 hours' +%H:%M)
+"$POSTE" places 1 "jusqu'à" "$h" > /dev/null 2>&1; rc=$?
+qui=$("$POSTE" --qui 2>&1)
+[ "$rc" = 0 ] && [ "$(cat "$POSTE_LOCK_DIR/lourds-max")" = 1 ] && echo "$qui" | grep -q "places baissées à 1 jusqu'à $h" && echo "$qui" | grep -q '/1 places'
+cas $? "poste places 1 jusqu'à $h baisse à 1, et --qui le dit (rc $rc)"
+# L'heure passée : la valeur d'avant revient à la première lecture.
+read -r avant _ < "$POSTE_LOCK_DIR/lourds-max.retour"; echo "$avant $(( $(date +%s) - 60 ))" > "$POSTE_LOCK_DIR/lourds-max.retour"
+qui=$("$POSTE" --qui 2>&1)
+[ "$(cat "$POSTE_LOCK_DIR/lourds-max")" = 2 ] && [ ! -e "$POSTE_LOCK_DIR/lourds-max.retour" ] && ! echo "$qui" | grep -q 'baissées' && echo "$qui" | grep -q '/2 places'
+cas $? "passé l'heure, les places reviennent à la valeur d'avant (2) et --qui ne dit plus de baisse"
+rm -f "$POSTE_LOCK_DIR/lourds-max" "$POSTE_LOCK_DIR/lourds-max.retour"
+
 exit $echec

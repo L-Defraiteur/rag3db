@@ -293,7 +293,7 @@ esac
 MEM="${POSTE_MEM_MAX:-40G}"
 SWAP="${POSTE_SWAP_MAX:-4G}"
 usage() {
-  echo "usage: poste mesure|lourd <commande…>   |   poste --qui   |   poste push <session> [--lourd] -- <commande…>   |   poste push --qui" >&2
+  echo "usage: poste mesure|lourd <commande…>   |   poste --qui   |   poste places <N> [jusqu'à HH:MM]   |   poste push <session> [--lourd] -- <commande…>   |   poste push --qui" >&2
   exit 2
 }
 mode="${1:-}"; [ $# -gt 0 ] && shift
@@ -304,7 +304,18 @@ F="$V/fiches"
 # ses passes pour atterrir) : sous POSTE_VOIE=pousseur, le billet s'appelle `0-<instant>-<pid>` et passe devant les
 # autres ; la porte ne change pas, une mesure en attente reste devant lui. Le pid se lit après le dernier tiret.
 T="$V/file"
+# **Une baisse des places porte son heure de retour** (20 novembre 2026, c7 : la tablette est restée à une place de
+# 07 h 30 à 13 h 35, la fenêtre du matin finie à 08 h 51). `lourds-max.retour` dit « <valeur d'avant> <instant> » ; à la
+# première lecture passé l'instant, la valeur d'avant revient et le retour s'efface.
+retour_des_places() {
+  [ -s "$V/lourds-max.retour" ] || return 0
+  read -r _avant _quand < "$V/lourds-max.retour" 2>/dev/null || return 0
+  case "$_avant$_quand" in ''|*[!0-9]*) return 0 ;; esac
+  [ "$(date +%s)" -ge "$_quand" ] || return 0
+  echo "$_avant" > "$V/lourds-max"; rm -f "$V/lourds-max.retour"
+}
 places() {
+  retour_des_places
   _n="${POSTE_LOURDS_MAX:-$(cat "$V/lourds-max" 2>/dev/null)}"
   case "$_n" in ''|*[!0-9]*) _n=2 ;; esac
   [ "$_n" -ge 1 ] || _n=1
@@ -371,6 +382,30 @@ if [ "$mode" = "--qui" ]; then
   file=$(file_des_lourds | tr '\n' ' ')
   echo "lourds : $(lourds_tenus)/$(places) places tenues${file:+, en file dans l'ordre : pid $file}"
   [ -s "$PUSH_FICHE" ] && echo "push : tenu — $(cat "$PUSH_FICHE")"
+  if [ -s "$V/lourds-max.retour" ]; then
+    read -r _avant _quand < "$V/lourds-max.retour"
+    echo "places baissées à $(cat "$V/lourds-max" 2>/dev/null) jusqu'à $(date -d "@$_quand" +%H:%M) (puis $_avant)"
+  fi
+  exit 0
+fi
+# ── poste places <N> [jusqu'à HH:MM] : changer le nombre de places lourdes ──
+# Une baisse exige son heure de retour (c7, 20 novembre 2026) ; une hausse, ou un retour à la valeur d'avant, n'en a
+# pas besoin et efface un retour en cours. Une heure déjà passée aujourd'hui est celle de demain.
+if [ "$mode" = places ]; then
+  _n=${1:-}; case "$_n" in ''|*[!0-9]*|0) echo "poste places : un nombre de places ≥ 1, puis jusqu'à HH:MM pour une baisse" >&2; exit 2 ;; esac
+  _h=""; [ $# -ge 3 ] && case "$2" in "jusqu'à"|jusqua|until) _h=$3 ;; esac
+  _avant=$(places)
+  if [ -s "$V/lourds-max.retour" ]; then read -r _avant _ < "$V/lourds-max.retour"; fi
+  if [ "$_n" -lt "$_avant" ]; then
+    [ -n "$_h" ] || { echo "poste places : une baisse ($_avant → $_n) dit son heure de retour : poste places $_n jusqu'à HH:MM" >&2; exit 2; }
+    _quand=$(date -d "$_h" +%s 2>/dev/null) || { echo "poste places : heure illisible « $_h » (HH:MM)" >&2; exit 2; }
+    [ "$_quand" -gt "$(date +%s)" ] || _quand=$((_quand + 86400))
+    echo "$_n" > "$V/lourds-max"; echo "$_avant $_quand" > "$V/lourds-max.retour"
+    echo "poste : places baissées à $_n jusqu'à $(date -d "@$_quand" '+%H:%M (%d/%m)'), puis $_avant"
+  else
+    echo "$_n" > "$V/lourds-max"; rm -f "$V/lourds-max.retour"
+    echo "poste : $_n places"
+  fi
   exit 0
 fi
 case "$mode" in mesure|lourd) ;; *) usage ;; esac
@@ -479,9 +514,40 @@ QUOTA="${POSTE_CPU_QUOTA:-$((FILS * 100))%}"
 if [ "$borne" = 1 ]; then
   set -- systemd-run --user --scope -q -p MemoryMax="$MEM" -p MemorySwapMax="$SWAP" -p CPUQuota="$QUOTA" -- "$@"
 fi
+# fin_prevue <fiche> <commande…> : l'instant de fin prévu d'un lourd (secondes), vide si sa commande n'a pas de timeout en
+# tête (après des `env VAR=…`). Une fonction : ses arguments ne touchent pas à la commande de ce poste.
+fin_prevue() {
+  _fp=$1; shift
+  while [ $# -gt 0 ] && { [ "$1" = env ] || case "$1" in *=*) true ;; *) false ;; esac; }; do shift; done
+  [ "${1:-}" = timeout ] || return 0
+  shift; while [ $# -gt 0 ] && case "$1" in -*) true ;; *) false ;; esac; do case "$1" in -k|-s|--kill-after|--signal) shift ;; esac; shift; done
+  _d=${1:-}; _n=${_d%[smhd]}
+  case "$_n" in ''|*[!0-9]*) return 0 ;; esac
+  case "$_d" in *m) _n=$((_n * 60)) ;; *h) _n=$((_n * 3600)) ;; *d) _n=$((_n * 86400)) ;; esac
+  echo $(( $(stat -c %Y "$_fp") + _n ))
+}
 dire attend
 case "$mode" in
   mesure)
+    # **Une mesure refuse à l'arrivée derrière un lourd long** (20 novembre 2026, c7 : deux gels de la file en deux heures
+    # à luciepc, une mesure tenant la porte derrière un lourd de six heures). La fin prévue d'un lourd qui tient sa place :
+    # l'instant de sa fiche « tient », plus le `timeout N` en tête de sa commande (après des `env VAR=…`) ; sans timeout,
+    # elle est inconnue, donc longue. Au-delà de POSTE_MESURE_ATTENTE_MAX secondes (1200 ; 0 coupe la règle), la mesure
+    # refuse tout de suite, code 76, et dit quel lourd, sa fin prévue, et quoi faire.
+    if [ "${POSTE_MESURE_ATTENTE_MAX:-1200}" != 0 ]; then
+      maintenant=$(date +%s); limite=$((maintenant + ${POSTE_MESURE_ATTENTE_MAX:-1200}))
+      for _f in "$F"/*; do
+        [ -f "$_f" ] && [ "$_f" != "$fiche" ] || continue
+        _l=$(cat "$_f" 2>/dev/null); case "$_l" in "tient lourd"*) ;; *) continue ;; esac
+        kill -0 "${_f##*/}" 2>/dev/null || continue
+        _cmd=${_l#* — }; set -f; _fin=$(fin_prevue "$_f" $_cmd); set +f
+        if [ -z "$_fin" ] || [ "$_fin" -gt "$limite" ]; then
+          if [ -n "$_fin" ]; then _quand="fin prévue à $(date -d "@$_fin" +%H:%M)"; _apres=" ou après $(date -d "@$_fin" +%H:%M)"; else _quand="fin inconnue (pas de timeout en tête)"; _apres=""; fi
+          echo "poste: mesure refusée : le lourd pid ${_f##*/} tient sa place, $_quand — ${_cmd} ; rejouer sous poste lourd$_apres" >&2
+          exit 76
+        fi
+      done
+    fi
     exec 8>>"$V/porte.lock"; prendre -x 8
     exec 9>>"$V/poste.lock"; prendre -x 9
     dire tient

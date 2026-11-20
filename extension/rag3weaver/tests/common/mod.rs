@@ -303,6 +303,24 @@ pub mod burn {
         }
     }
 
+    /// **A test whose verdict depends on the vectors being right declares it** (20 November
+    /// 2026, decision of c7 ; ticket `2026-11-20-sur-l-igpu-granite-rend-des-vecteurs-faux-en-lot`).
+    /// On an integrated GPU, our embedders compute wrong vectors in a batch, with no
+    /// error. The fallback of [`ou_charger`] stays as it is for the tests that only
+    /// exercise paths (counts, dimension, bookkeeping) ; a test that compares values
+    /// (a ranking, a cosine, a reference, a quality number) calls this first, and is red
+    /// when `model` would be loaded here on an integrated GPU, unless
+    /// `RAG3WEAVER_EMBEDDER_ALLOW_INTEGRATED_GPU=1`. A served model passes.
+    #[cfg(feature = "daemon")]
+    pub fn compares_values(model: &str) {
+        if let OuCharger::Ici(device) = ou_charger(model) {
+            let allow = std::env::var(rag3weaver::burn_device::ALLOW_INTEGRATED_GPU_VARIABLE).ok();
+            if let Err(e) = device.check_embedder(allow.as_deref()) {
+                panic!("{model} : ce test compare des valeurs ; {e}");
+            }
+        }
+    }
+
     /// **Les suites qui restent sur la carte d'ici, variable posée ou non** :
     /// celles dont l'objet est l'embarqueur ou le démon lui-même, ou la
     /// vitesse de *ce* poste. Les envoyer au service, ce serait éprouver

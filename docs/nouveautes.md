@@ -1,6 +1,20 @@
 # Nouveautés
 
 - 19 novembre 2026 — **Une fenêtre détachée de l'IDE dit les accords qui attendent dans le chat.** Son en-tête compte les demandes d'accord de son dépôt encore sans réponse, à son ouverture comme au fil du flux, et le compte retombe quand le chat accorde ou refuse.
+- 20 novembre 2026 — **Le chat de l'IDE dit quand l'index n'est pas prêt, puis quand il l'est.** Sous un outil qui a répondu avant que l'index ne rattrape, une ligne dit en clair combien de temps il faut encore pour le texte et pour les vecteurs, ou pourquoi les vecteurs manquent ; l'outil n'est pas refusé. Une fois l'index à jour, une seule ligne le dit dans le chat.
+- 19 novembre 2026 — **Une seule notification quand l'index d'une vue est prêt.** Quand une recherche ou une lecture
+  a répondu « index pas prêt », le serveur MCP de l'agent surveille cette vue. Quand elle est prête, il envoie une
+  seule notification (« l'index de la vue … est prêt : texte et vecteurs ») ; rien à chaque réindexation. La veille
+  sonde l'hôte à l'estimation annoncée, puis toutes les 5 s. Elle renonce à trois fois l'estimation, ou au bout de
+  30 min. Ses réglages se déclarent dans le manifeste, sous `search.ready_watch`.
+
+- 19 novembre 2026 — **Une recherche qui lit les vecteurs attend aussi les vecteurs dus.** `search_code` en hybride
+  ou par le sens attend que les vecteurs de sa vue soient calculés quand c'est court (sous `search.index_wait_s`,
+  6 s par défaut). Sinon, elle répond tout de suite et dit les deux estimations à part : « index pas prêt : texte
+  environ 0 s, vecteurs environ 40 s ». En bm25 seul, elle n'attend que le texte. Sans service d'embarquement, elle
+  n'attend pas et dit pourquoi. usages, outline, read_file et grep n'attendent jamais les vecteurs.
+- 20 novembre 2026 — **Le code de premier niveau Python a ses références, et `export * from` se suit.** Ce qu'un fichier Python fait hors de ses fonctions et de ses classes (un appel au chargement, une constante construite, le bloc `__main__`) se relie désormais comme dans les autres langages ; ses liaisons (variables de boucle, déballages, alias, modules importés) n'en sont pas. `export * from './x'` réexporte les définitions de premier niveau de `./x`, et elles seules. Sur le crate rag3weaver entier, 805 liens s'ajoutent, aucun ne se perd ; un premier niveau court (moins de 80 caractères) ne concourt pas à la recherche. Les bases repassent une fois (règles de l'analyse 14).
+- 20 novembre 2026 — **Le code de premier niveau Python a ses références, et `export * from` se suit.** Ce qu'un fichier Python fait hors de ses fonctions et de ses classes (un appel au chargement, une constante construite, le bloc `__main__`) se relie désormais comme dans les autres langages ; ses liaisons (variables de boucle, déballages, alias, modules importés) n'en sont pas. `export * from './x'` réexporte les définitions de premier niveau de `./x`, et elles seules. Sur le crate rag3weaver entier, 805 liens s'ajoutent, aucun ne se perd ; un premier niveau court (moins de 80 caractères) ne concourt pas à la recherche. Les bases repassent une fois (règles de l'analyse 12).
 
 - 19 novembre 2026 — **Une fenêtre du graphe suit les outils du chat.** Ouverte sur les graphes avec `?fenetre=graphe`, elle montre le graphe de chaque outil que le tour du chat appelle, au moment où il l'appelle, et le flux l'allume nœud par nœud ; elle ne se recharge pas, et la fenêtre du dépôt ne bouge pas pour autant.
 

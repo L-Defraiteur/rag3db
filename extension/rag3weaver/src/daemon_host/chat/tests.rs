@@ -2804,6 +2804,201 @@ fn a_second_overflow_after_the_compaction_is_a_named_failure() {
     assert_eq!(memoire.restarts.lock().unwrap().len(), 1, "one compaction, not a loop");
 }
 
+/// **A bench whose index is not ready** (c7's night task, 20 November 2026): the code template, the watch's settings
+/// short (`search.ready_watch`), a host that knows itself (its watches need it), and a file noted behind at 20 s per
+/// file, so `usages` answers at once, not ready. The fake model calls `usages` once per message, then says « Lu. ».
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+struct BancPasPret {
+    _d: tempfile::TempDir,
+    host: Arc<DaemonHost>,
+    id: String,
+    h: Arc<super::super::Hosted>,
+    cellule: crate::scope::Scope,
+}
+
+/// The watch's period, declared in the bench's manifest (`search.ready_watch.every_s`): a witness that judges « no
+/// second notice » waits twice that (ED's review), not a constant.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+const PERIODE_DE_VEILLE_S: u64 = 1;
+
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+fn deux_periodes() -> Duration {
+    Duration::from_secs(2 * PERIODE_DE_VEILLE_S) + Duration::from_millis(500)
+}
+
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+impl BancPasPret {
+    fn new() -> Self {
+        Self::avec_l_appel(r#"{"name":"main"}"#)
+    }
+
+    /// The bench, the fake model calling `usages` with `arguments` (a `view`, for the watch of a view).
+    fn avec_l_appel(arguments: &'static str) -> Self {
+        let modele: ChatModel = Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            Ok(Arc::new(CallbackLlm::new("faux-usages", 8192, move |turns, opts, sink| {
+                let depuis = turns.iter().rposition(|t| t.role == "user").unwrap();
+                if turns[depuis..].iter().any(|t| t.role == "tool") {
+                    MockLlm::new("Lu.").generate(turns, opts, sink)
+                } else {
+                    MockLlm::new("").with_tool_calls(vec![("usages", arguments)]).generate(turns, opts, sink)
+                }
+            })))
+        });
+        let (d, host, manifeste, id) = banc_avec(modele, |m| {
+            m["search"] = json!({ "ready_watch": { "first_poll_max_s": 1, "every_s": PERIODE_DE_VEILLE_S, "max_s": 60 } });
+        });
+        let host = Arc::new(host);
+        host.se_connaitre();
+        let h = host.hosted(&manifeste).unwrap();
+        let cellule = host
+            .with_backend(&h, |b| {
+                let cat = b.catalog.lock().unwrap();
+                let cellule = cat.scope().clone();
+                cat.file_lag().observe(&cellule, 1, Duration::from_secs(20));
+                cat.file_lag().note_in(&crate::catalog::retard::LagKey::backend(&cellule), "main.rs", crate::catalog::retard::now_ms());
+                cellule
+            })
+            .unwrap();
+        Self { _d: d, host, id, h, cellule }
+    }
+
+    /// What the IDE's stream says on the subject `index`, as it comes.
+    fn capter_le_sujet_index(&self) -> Arc<Mutex<Vec<u8>>> {
+        struct Capte(Arc<Mutex<Vec<u8>>>);
+        impl std::io::Write for Capte {
+            fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
+                self.0.lock().unwrap().extend_from_slice(b);
+                Ok(b.len())
+            }
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+        let flux = Arc::new(Mutex::new(Vec::<u8>::new()));
+        self.host.ide_flux().abonner(Box::new(Capte(flux.clone())), Some(["index".to_string()].into_iter().collect()), None);
+        flux
+    }
+
+    /// The layer catches up: the file noted behind is reindexed.
+    fn rattraper(&self) {
+        self.host
+            .with_backend(&self.h, |b| {
+                let cat = b.catalog.lock().unwrap();
+                for chemin in ["main.rs", "code/main.rs"] {
+                    cat.file_lag().done_in(&crate::catalog::retard::LagKey::backend(&self.cellule), chemin, u64::MAX);
+                }
+            })
+            .unwrap();
+    }
+}
+
+/// **An index not ready in the chat is watched, and said ready once** (c7's night task, 20 November 2026; recherche's
+/// watch of the thin client, `ReadyWatches`, reused in the host for the IDE's chat). `usages` answers at once, not
+/// ready. The tool's turn carries the state for the page (`metadata.index`); the host watches the backend's layer by
+/// the manifest's `search.ready_watch`, and once the layer caught up, publishes one `IndexReady` on the IDE's stream,
+/// subject `index`, with the thin client's text. A second answer « not ready » while the watch runs does not start a
+/// second one.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn an_index_not_ready_in_the_chat_is_watched_and_said_ready_once() {
+    let b = BancPasPret::new();
+    let flux = b.capter_le_sujet_index();
+    let prets = || String::from_utf8_lossy(&flux.lock().unwrap()).matches("IndexReady").count();
+
+    b.host.chat_turn(&b.id, "qui appelle main ?").expect("the turn");
+    let etat = b.host.chat_state(&b.id).unwrap();
+    let outil = etat["turns"].as_array().unwrap().iter().find(|t| t["role"] == "tool").cloned().expect("the tool's turn");
+    assert_eq!(outil["metadata"]["index"]["ready"], json!(false), "the state goes with the turn : {outil}");
+    b.host.chat_turn(&b.id, "et encore ?").expect("a second turn, still not ready");
+    std::thread::sleep(deux_periodes());
+    assert_eq!(prets(), 0, "not ready yet, nothing said");
+
+    b.rattraper();
+    let fin = Instant::now() + Duration::from_secs(10);
+    while prets() == 0 {
+        assert!(Instant::now() < fin, "the layer caught up, and nothing was said in 10 s");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    std::thread::sleep(deux_periodes());
+    let capte = String::from_utf8_lossy(&flux.lock().unwrap()).into_owned();
+    assert_eq!(prets(), 1, "once, for two answers not ready : {capte}");
+    assert!(capte.contains("l'index de la vue du backend est prêt"), "the thin client's text : {capte}");
+}
+
+/// **The watch is the one of the call's view** (ED's review, 20 November 2026): a tool's call names its view
+/// (`view`, read by every tool), and its index « not ready » is that view's. The host watches that view's layer, under
+/// a key of its own, and its `IndexReady` carries the view and the thin client's text for it.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn the_watch_of_a_call_with_a_view_is_the_view_s() {
+    let b = BancPasPret::avec_l_appel(r#"{"name":"main","view":{"layer":"backend"}}"#);
+    let flux = b.capter_le_sujet_index();
+    b.host.chat_turn(&b.id, "qui appelle main ?").expect("the turn");
+    b.rattraper();
+    let fin = Instant::now() + Duration::from_secs(10);
+    let pret = loop {
+        let capte = String::from_utf8_lossy(&flux.lock().unwrap()).into_owned();
+        if let Some(l) = capte.lines().find(|l| l.contains("IndexReady")) {
+            break l.to_string();
+        }
+        assert!(Instant::now() < fin, "the layer caught up, and nothing was said in 10 s");
+        std::thread::sleep(Duration::from_millis(50));
+    };
+    assert!(pret.contains(r#""view":{"layer":"backend"}"#), "the view of the call : {pret}");
+    assert!(pret.contains("l'index de la vue backend est prêt"), "the thin client's text for that view : {pret}");
+}
+
+/// **The chat's page says an index not ready, then ready, once** (c7's night task, 20 November 2026). Under the
+/// `usages` bubble, in clear and without opening it: not ready, about 20 s for the text; the turn ends, the tool is not
+/// refused. Once the layer caught up, one notice « l'index … est prêt » in the chat's page, and only one.
+#[cfg(all(unix, feature = "code", feature = "rag3db-native"))]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : étape séparée")]
+#[test]
+fn the_chat_page_says_an_index_not_ready_then_ready_once() {
+    use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+    let Some(binaire) = navigateur_ou_saut("the_chat_page_says_an_index_not_ready_then_ready_once") else {
+        return;
+    };
+    let b = BancPasPret::new();
+    let ecoute = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let racine = format!("http://{}", ecoute.local_addr().unwrap());
+    let server = tiny_http::Server::from_listener(ecoute, None).unwrap();
+    let servi = b.host.clone();
+    let fil = std::thread::spawn(move || crate::daemon_host::DaemonServer::new(server, 2).serve(servi, Some("j".into())));
+    let mut n = Navigateur::lancer(&binaire);
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+    n.aller(
+        &format!("{racine}/ide/code/{}/chat", b.id),
+        "document.querySelector('#send') && !document.querySelector('#send').disabled && document.getElementById('lien')?.textContent === 'flux : ouvert'",
+    );
+    n.evaluer("document.querySelector('#message').value = 'qui appelle main ?'; document.querySelector('#send').click()");
+    let ligne = "document.querySelector('details.outil[data-outil=usages] ~ .index-pas-pret')?.textContent ?? ''";
+    n.attendre(
+        &format!("({ligne}).includes('pas prêt') && document.querySelector('#status')?.textContent === 'fini'"),
+        "the bubble says the index is not ready, and the turn ends",
+    );
+    let dit = n.evaluer(ligne);
+    assert!(dit.as_str().is_some_and(|t| t.contains("20 s")), "the estimate in clear : {dit}");
+    // The bubble read again from the chat's state at the turn's end carries no `ok`: a refusal is `data-ok="false"` and
+    // « refusé » in its summary.
+    let refus = n.evaluer("(() => { const d = document.querySelector('details.outil[data-outil=usages]'); return d.dataset.ok === 'false' || d.querySelector('summary').textContent.includes('refusé'); })()");
+    assert_eq!(refus, json!(false), "the tool is not refused");
+    assert_eq!(n.evaluer("document.querySelectorAll('.index-pret').length"), json!(0), "not ready yet, nothing said");
+
+    b.rattraper();
+    n.attendre("(document.querySelector('.index-pret')?.textContent ?? '').includes('est prêt')", "the chat's page says the index is ready");
+    let apres = n.evaluer(&format!("new Promise((r) => setTimeout(() => r(document.querySelectorAll('.index-pret').length), {}))", deux_periodes().as_millis()));
+    assert_eq!(apres, json!(1), "said once");
+    assert!(n.erreurs.is_empty(), "console : {:?}", n.erreurs);
+    drop(n);
+    let _ = crate::daemon::agent_with_timeout(Duration::from_secs(5))
+        .post(format!("{racine}/arret"))
+        .header("Authorization", "Bearer j")
+        .header("content-type", "application/json")
+        .send("{}");
+    let _ = fil.join();
+}
+
 /// **`/ide/turns/read`, first form: the turns read from the chat file** (19 Nov 2026, for tty-26):
 /// each turn of the interval with its messages and its state, `from_chat_file`, or `gone` once a
 /// compaction took it out of the session.

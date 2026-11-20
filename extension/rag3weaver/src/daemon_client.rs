@@ -294,6 +294,17 @@ impl DaemonClient {
     /// répond plus est relancé (si ce client sait le faire), la session
     /// rouverte, le backend rouvert, et le message rejoué une fois : la
     /// connexion refusée prouve qu'il n'avait pas été reçu.
+    /// **The state of the index of this session's view, now** (`POST /index_state`): what a read would say, without
+    /// waiting (`ready`, the estimates). The index watch of the thin client polls it.
+    pub fn index_state(&self, view: Option<&Value>) -> Result<Value, String> {
+        self.index_state_of(view, false)
+    }
+
+    /// [`Self::index_state`], the vectors owed too when `vectors`.
+    pub fn index_state_of(&self, view: Option<&Value>, vectors: bool) -> Result<Value, String> {
+        self.op("/index_state", json!({ "manifest": self.manifest, "view": view, "vectors": vectors })).map_err(|e| e.error)
+    }
+
     pub fn op(&self, route: &str, body: Value) -> Result<Value, OpError> {
         let premier = match self.envoyer(route, &body) {
             Err(Injoignable(e)) => match &self.relaunch {
@@ -556,6 +567,11 @@ pub struct McpInner {
     /// Ce qui fait sortir `notifications/tools/list_changed` (posé par le
     /// binaire : un message glissé dans l'entrée de la boucle MCP).
     notifier: Mutex<Option<Box<dyn Fn() + Send + Sync>>>,
+    /// The watches of views that answered « not ready », and their settings (the manifest's `search.ready_watch`).
+    watches: ReadyWatches,
+    watch_settings: ReadyWatchSettings,
+    /// What sends a notice to the MCP client (set by the binary: an internal notice slipped into the loop's input).
+    notice: std::sync::Arc<Mutex<Option<Box<dyn Fn(String) + Send + Sync>>>>,
 }
 
 impl std::ops::Deref for McpClient {
@@ -563,6 +579,115 @@ impl std::ops::Deref for McpClient {
     fn deref(&self) -> &McpInner {
         &self.inner
     }
+}
+
+/// **The watch of a view that answered « not ready »** (Lucie, 15 and 18 November 2026; c7, 19 November): its
+/// settings, declared in the manifest under `search.ready_watch` (`first_poll_max_s`, `every_s`, `max_s`,
+/// `eta_factor`). The first poll comes at the estimate the answer carried (bounded by `first_poll_max`), then every
+/// `every`; the watch gives up at `max` or at `eta_factor` times the estimate, whichever comes first.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ReadyWatchSettings {
+    pub first_poll_max: std::time::Duration,
+    pub every: std::time::Duration,
+    pub max: std::time::Duration,
+    pub eta_factor: u32,
+}
+
+impl Default for ReadyWatchSettings {
+    fn default() -> Self {
+        ReadyWatchSettings {
+            first_poll_max: std::time::Duration::from_secs(60),
+            every: std::time::Duration::from_secs(5),
+            max: std::time::Duration::from_secs(30 * 60),
+            eta_factor: 3,
+        }
+    }
+}
+
+impl ReadyWatchSettings {
+    /// The settings a manifest declares, the defaults for what it does not.
+    pub fn from_manifest(manifest: &Path) -> Self {
+        let d = Self::default();
+        let v: Value = std::fs::read(manifest).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or(Value::Null);
+        let w = &v["search"]["ready_watch"];
+        let s = |k: &str, defaut: std::time::Duration| w[k].as_u64().map_or(defaut, std::time::Duration::from_secs);
+        ReadyWatchSettings {
+            first_poll_max: s("first_poll_max_s", d.first_poll_max),
+            every: s("every_s", d.every),
+            max: s("max_s", d.max),
+            eta_factor: w["eta_factor"].as_u64().map_or(d.eta_factor, |n| n.clamp(1, 100) as u32),
+        }
+    }
+}
+
+/// **The watches in flight**, one per key (manifest and layer): a second « not ready » on a watched layer opens no
+/// other. A watch polls the host until the layer is ready, then sends one notice and ends.
+#[derive(Default, Clone)]
+pub struct ReadyWatches {
+    active: std::sync::Arc<Mutex<std::collections::HashSet<String>>>,
+}
+
+impl ReadyWatches {
+    /// Watch `key` unless it is watched already (`false` then). `ready` polls the host: `Some(true)` ready,
+    /// `Some(false)` not yet, `None` unknown (the host is gone: the watch goes on until its bound). `notify` receives
+    /// the one text to send.
+    pub fn watch(
+        &self,
+        key: &str,
+        eta_s: Option<u64>,
+        settings: ReadyWatchSettings,
+        text: String,
+        ready: impl Fn() -> Option<bool> + Send + 'static,
+        notify: impl Fn(String) + Send + 'static,
+    ) -> bool {
+        if !self.active.lock().unwrap_or_else(|p| p.into_inner()).insert(key.to_string()) {
+            return false;
+        }
+        let (active, key) = (self.active.clone(), key.to_string());
+        std::thread::spawn(move || {
+            let eta = eta_s.map(std::time::Duration::from_secs);
+            let first = eta.unwrap_or(settings.every).min(settings.first_poll_max);
+            let bound = settings.max.min(eta.unwrap_or(settings.max).max(settings.every) * settings.eta_factor);
+            let start = std::time::Instant::now();
+            std::thread::sleep(first);
+            loop {
+                if ready() == Some(true) {
+                    notify(text);
+                    break;
+                }
+                if start.elapsed() + settings.every > bound {
+                    break;
+                }
+                std::thread::sleep(settings.every);
+            }
+            active.lock().unwrap_or_else(|p| p.into_inner()).remove(&key);
+        });
+        true
+    }
+}
+
+/// **What the watch of an answer « not ready » says** (the thin client's, and the host's for the IDE's chat): its
+/// estimate, whether it waits for the vectors too, its key (the manifest and the view: one watch for both), and the
+/// one text sent when the layer is ready. `None`: the answer is ready, nothing to watch.
+pub(crate) struct WhatAWatchSays {
+    pub eta: Option<u64>,
+    pub vectors: bool,
+    pub key: String,
+    pub text: String,
+}
+
+pub(crate) fn what_a_watch_says(manifest: &Path, index: &Value, view: Option<&Value>) -> Option<WhatAWatchSays> {
+    if index["ready"] != json!(false) {
+        return None;
+    }
+    let vectors = index.get("vectors_eta_s").is_some();
+    let eta = ["eta_s", "text_eta_s", "vectors_eta_s"].iter().filter_map(|k| index[*k].as_u64()).max();
+    let label = view
+        .and_then(|v| v["worktree"].as_str().or_else(|| v["layer"].as_str()).map(str::to_string))
+        .unwrap_or_else(|| "du backend".to_string());
+    let key = format!("{}|{}", manifest.display(), view.map_or_else(|| "backend".to_string(), |v| v.to_string()));
+    let text = format!("l'index de la vue {label} est prêt : {}", if vectors { "texte et vecteurs" } else { "texte" });
+    Some(WhatAWatchSays { eta, vectors, key, text })
 }
 
 /// Combien de temps `start` attend l'hôte avant de laisser la session démarrer
@@ -622,6 +747,9 @@ impl McpClient {
             keys,
             side: Mutex::new(Side::Missing(Missing::Absent("connexion à l'hôte en cours".into()))),
             notifier: Mutex::new(None),
+            watches: ReadyWatches::default(),
+            watch_settings: ReadyWatchSettings::from_manifest(manifest),
+            notice: Default::default(),
         });
         let (fait, attendu) = std::sync::mpsc::channel::<()>();
         let fil = inner.clone();
@@ -659,6 +787,35 @@ impl McpClient {
     /// message dans l'entrée de la boucle MCP).
     pub fn set_notifier(&self, n: Box<dyn Fn() + Send + Sync>) {
         *self.notifier.lock().unwrap_or_else(|p| p.into_inner()) = Some(n);
+    }
+
+    /// What sends a notice to the MCP client (the binary slips an [`crate::mcp::INTERNAL_NOTICE`] into the loop).
+    pub fn set_notice(&self, n: Box<dyn Fn(String) + Send + Sync>) {
+        *self.notice.lock().unwrap_or_else(|p| p.into_inner()) = Some(n);
+    }
+
+    /// **An answer « not ready » opens a watch of its view** (one per manifest and view): polled on the host until
+    /// ready, then one notice that names the view and what is ready (« texte » or « texte et vecteurs »).
+    fn watch_if_not_ready(&self, answer: &Value, view: Option<Value>) {
+        let Some(WhatAWatchSays { eta, vectors, key, text }) = what_a_watch_says(&self.manifest, &answer["index"], view.as_ref()) else {
+            return;
+        };
+        let (inner, notice) = (self.inner.clone(), self.notice.clone());
+        self.watches.watch(
+            &key,
+            eta,
+            self.watch_settings,
+            text,
+            move || match &*inner.side.lock().unwrap_or_else(|p| p.into_inner()) {
+                Side::Attached(c) => c.index_state_of(view.as_ref(), vectors).ok().map(|s| s["ready"] == json!(true)),
+                Side::Missing(_) => None,
+            },
+            move |t| {
+                if let Some(n) = &*notice.lock().unwrap_or_else(|p| p.into_inner()) {
+                    n(t);
+                }
+            },
+        );
     }
 
     fn try_attach(attach: &Attach, manifest: &Path, client: &str, keys: &[String]) -> Side {
@@ -811,7 +968,14 @@ impl Hote for McpClient {
             }
         }
         match &*side {
-            Side::Attached(c) => c.appeler(nom, arguments),
+            Side::Attached(c) => {
+                let view = arguments.get("view").cloned();
+                let r = c.appeler(nom, arguments);
+                if let Ok(answer) = &r {
+                    self.watch_if_not_ready(answer, view);
+                }
+                r
+            }
             Side::Missing(m) => Err(format!(
                 "l'hôte du démon est {} : {} — appelez {DAEMON_STATUS} pour le détail",
                 m.state(),
@@ -1098,5 +1262,109 @@ mod tests {
         let e = c.appeler("un_outil", json!({})).expect_err("la coupure est une erreur");
         assert!(e.contains("coupée pendant l'appel") && e.contains("pas rejoué"), "{e}");
         assert_eq!(appels.load(std::sync::atomic::Ordering::SeqCst), 1, "l'appel n'a été envoyé qu'une fois");
+    }
+
+    /// **The index state is asked of the host** (`POST /index_state`, the manifest and the view), and its answer
+    /// returned as is.
+    #[test]
+    fn the_index_state_is_asked_of_the_host() {
+        let (adresse, recues) = faux_hote(vec![
+            (200, json!({"session": "s-1"})),
+            ouvert(),
+            (200, json!({"ok": true, "result": {"ready": false, "text_eta_s": 4}})),
+        ]);
+        let m = manifeste_quelconque();
+        let client = DaemonClient::connect(&adresse, m.path(), "le témoin", vec![]).expect("branché");
+        let etat = client.index_state(Some(&json!({"layer": "w"}))).expect("the state");
+        assert_eq!(etat, json!({"ready": false, "text_eta_s": 4}));
+        let recues = recues.lock().unwrap();
+        let (route, session, corps) = recues.last().expect("a request").clone();
+        assert_eq!(route, "/index_state");
+        assert_eq!(session.as_deref(), Some("s-1"));
+        let corps: Value = serde_json::from_str(&corps).unwrap();
+        assert_eq!(corps["view"], json!({"layer": "w"}));
+        assert!(corps["manifest"].is_string());
+    }
+
+    fn reglages_courts() -> ReadyWatchSettings {
+        ReadyWatchSettings {
+            first_poll_max: std::time::Duration::from_millis(20),
+            every: std::time::Duration::from_millis(20),
+            max: std::time::Duration::from_millis(400),
+            eta_factor: 3,
+        }
+    }
+
+    /// **One watch per layer, one notice when it is ready** (c7, 19 November 2026): the layer answers « not ready »
+    /// twice then ready; a second watch of the same key opens nothing; exactly one notice is sent, then the key is
+    /// free again.
+    #[test]
+    fn a_layer_not_ready_is_watched_once_and_notified_once_when_ready() {
+        let watches = ReadyWatches::default();
+        let sondages = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let (envoi, recu) = std::sync::mpsc::channel::<String>();
+        let s = sondages.clone();
+        let ouverte = watches.watch("m|w", Some(1), reglages_courts(), "l'index de la vue w est prêt".into(), move || {
+            Some(s.fetch_add(1, std::sync::atomic::Ordering::SeqCst) >= 2)
+        }, move |t| {
+            let _ = envoi.send(t);
+        });
+        assert!(ouverte, "the first « not ready » opens a watch");
+        let seconde = watches.watch("m|w", Some(0), reglages_courts(), String::new(), || Some(true), |_| panic!("a second watch of the same layer"));
+        assert!(!seconde, "a second « not ready » on the same layer opens no other watch");
+        let texte = recu.recv_timeout(std::time::Duration::from_secs(5)).expect("one notice when ready");
+        assert_eq!(texte, "l'index de la vue w est prêt");
+        assert!(recu.recv_timeout(std::time::Duration::from_millis(200)).is_err(), "one notice, not two");
+        assert!(sondages.load(std::sync::atomic::Ordering::SeqCst) >= 3, "the watch polled until ready");
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        assert!(watches.watch("m|w", Some(0), reglages_courts(), String::new(), || Some(true), |_| {}), "the key is free once notified");
+    }
+
+    /// **A watch gives up at its bound, silently**: never ready, it stops at `eta_factor` times the estimate (here
+    /// before `max`), sends nothing, and frees its key.
+    #[test]
+    fn a_watch_gives_up_at_its_bound_and_says_nothing() {
+        let watches = ReadyWatches::default();
+        let (envoi, recu) = std::sync::mpsc::channel::<String>();
+        let reglages = ReadyWatchSettings { max: std::time::Duration::from_secs(60), ..reglages_courts() };
+        let debut = std::time::Instant::now();
+        assert!(watches.watch("m|w", Some(0), reglages, String::new(), || Some(false), move |t| {
+            let _ = envoi.send(t);
+        }));
+        // An estimate of 0 s: the bound is the first poll's floor times the factor, well under a second.
+        let mut libre = false;
+        while debut.elapsed() < std::time::Duration::from_secs(5) {
+            if watches.watch("m|w", Some(0), reglages, String::new(), || Some(true), |_| {}) {
+                libre = true;
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        assert!(libre, "the watch never gave up");
+        assert!(recu.try_recv().is_err(), "a watch that gives up says nothing");
+    }
+
+    /// **The settings are declared in the manifest** (`search.ready_watch`), the defaults for the rest.
+    #[test]
+    fn the_watch_settings_are_read_from_the_manifest() {
+        let dir = tempfile::tempdir().unwrap();
+        let m = dir.path().join("backend.json");
+        std::fs::write(&m, json!({"search": {"ready_watch": {"every_s": 7, "eta_factor": 2}}}).to_string()).unwrap();
+        let r = ReadyWatchSettings::from_manifest(&m);
+        assert_eq!(r.every, std::time::Duration::from_secs(7));
+        assert_eq!(r.eta_factor, 2);
+        assert_eq!(r.max, ReadyWatchSettings::default().max);
+    }
+
+    /// **A manifest that declares the watch's settings still opens** (found by tty, 20 November 2026, on the IDE's
+    /// watch): `search` refused unknown fields, so a backend whose manifest said `search.ready_watch` did not open
+    /// (« unknown field `ready_watch`, expected `index_wait_s` »).
+    #[test]
+    fn a_manifest_that_declares_the_watch_settings_still_opens() {
+        let s: Result<crate::backend::SearchSettings, _> =
+            serde_json::from_value(json!({"index_wait_s": 6, "ready_watch": {"first_poll_max_s": 1, "every_s": 7, "max_s": 60, "eta_factor": 2}}));
+        assert!(s.is_ok(), "{s:?}");
+        let faute: Result<crate::backend::SearchSettings, _> = serde_json::from_value(json!({"ready_watch": {"every": 7}}));
+        assert!(faute.is_err(), "a misspelt setting is still refused : {faute:?}");
     }
 }

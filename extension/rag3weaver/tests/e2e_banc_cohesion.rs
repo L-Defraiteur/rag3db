@@ -83,13 +83,13 @@ fn embarqueur() -> (Arc<dyn Embedder>, String) {
     let voulu = std::env::var("RAG3WEAVER_BANC_MODELE").unwrap_or_default();
     match voulu.as_str() {
         #[cfg(feature = "burn-embedder")]
-        "granite-278m" => (common::burn::GRANITE_278M.clone(), "granite-278m".into()),
+        "granite-278m" => ({ crate::common::burn::compares_values("granite-278m"); common::burn::GRANITE_278M.clone() }, "granite-278m".into()),
         #[cfg(feature = "burn-embedder")]
-        "granite-107m" => (common::burn::GRANITE_107M.clone(), "granite-107m".into()),
+        "granite-107m" => ({ crate::common::burn::compares_values("granite-107m"); common::burn::GRANITE_107M.clone() }, "granite-107m".into()),
         // BGE-M3 porte le creux : c'est le modèle de la mesure de fusion
         // avec le signal sparse (lot 2, demande de Lucie du 1er octobre).
         #[cfg(feature = "burn-embedder")]
-        "bge-m3" => (common::burn::BGE_M3.clone() as Arc<dyn Embedder>, "bge-m3".into()),
+        "bge-m3" => ({ crate::common::burn::compares_values("bge-m3"); common::burn::BGE_M3.clone() } as Arc<dyn Embedder>, "bge-m3".into()),
         "" => (Arc::new(HashEmbedder::new(64)), "HashEmbedder (montage à vide)".into()),
         autre => panic!("RAG3WEAVER_BANC_MODELE={autre} : granite-278m, granite-107m, bge-m3, ou rien (HashEmbedder)"),
     }

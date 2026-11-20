@@ -624,6 +624,15 @@ fn indexed_tree_key(cell: &crate::scope::Scope) -> String {
     format!("{INDEXED_TREE_KEY}:{}/{}", cell.org, cell.project)
 }
 
+/// The key of a layer's indexed tree: the cell's for the backend's layer.
+fn indexed_tree_key_of_layer(cell: &crate::scope::Scope, layer: &str) -> String {
+    if layer == crate::generations::COUCHE_DU_BACKEND {
+        indexed_tree_key(cell)
+    } else {
+        format!("{}@{layer}", indexed_tree_key(cell))
+    }
+}
+
 /// **L'arbre et le commit de `root`** : la racine, le commit court, des
 /// modifications non commitées ou non, l'heure. Lance `git` : à appeler sans
 /// tenir le verrou du catalogue, puis [`Catalog::note_indexed_tree`].
@@ -637,7 +646,24 @@ pub fn indexed_tree_of(root: &str) -> serde_json::Value {
     let branch = git(&["rev-parse", "--abbrev-ref", "HEAD"]).filter(|b| !b.is_empty() && b != "HEAD");
     let status = git(&["status", "--porcelain", "--untracked-files=no"]).unwrap_or_default();
     let dirty_paths = status.lines().filter(|l| !l.trim().is_empty()).count();
-    serde_json::json!({ "root": root, "commit": commit, "branch": branch, "dirty": dirty_paths > 0, "dirty_paths": dirty_paths, "at_ms": retard::now_ms() })
+    // The blob of each modified path as it was indexed (`-` when deleted): a view without a watch compares the tree to
+    // it, so a file indexed modified and unchanged since is not behind (ticket of 18 November 2026).
+    let mut dirty_blobs = serde_json::Map::new();
+    // `git` above trims its output, which eats the leading blank of a first ` M path`: the paths read untrimmed.
+    let brut = std::process::Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(["status", "--porcelain", "--untracked-files=no"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+        .unwrap_or_default();
+    for chemin in crate::views::status_paths(&brut) {
+        let blob = git(&["hash-object", "--", &chemin]).unwrap_or_else(|| "-".to_string());
+        dirty_blobs.insert(chemin, serde_json::Value::String(blob));
+    }
+    serde_json::json!({ "root": root, "commit": commit, "branch": branch, "dirty": dirty_paths > 0, "dirty_paths": dirty_paths, "dirty_blobs": dirty_blobs, "at_ms": retard::now_ms() })
 }
 pub const EMBEDDING_CHOICE_KEY: &str = "embedding_choice";
 
@@ -3815,6 +3841,17 @@ fn read_threads() -> u64 {
     /// réponse de lecture de cette cellule les dit ([`Self::indexed_tree_line`]).
     pub fn note_indexed_tree(&self, cell: &crate::scope::Scope, v: &serde_json::Value) -> Result<(), CatalogError> {
         self.persist_meta_key(&indexed_tree_key(cell), &v.to_string())
+    }
+
+    /// **The indexed tree of a layer**: the backend's layer keeps the cell's key of today; another layer has its own
+    /// (`indexed_tree:<org>/<project>@<layer>`). Written at the end of the layer's index, read by a view without a watch.
+    pub fn note_indexed_tree_of_layer(&self, cell: &crate::scope::Scope, layer: &str, v: &serde_json::Value) -> Result<(), CatalogError> {
+        self.persist_meta_key(&indexed_tree_key_of_layer(cell, layer), &v.to_string())
+    }
+
+    /// The indexed tree noted for `layer` of `cell`, or `None`.
+    pub fn indexed_tree_of_layer(&self, cell: &crate::scope::Scope, layer: &str) -> Option<serde_json::Value> {
+        serde_json::from_str(&self.read_meta_key(&indexed_tree_key_of_layer(cell, layer)).ok()??).ok()
     }
 
     /// L'arbre indexé noté pour la cellule (`root`, `commit`, `branch`, `dirty`, `at_ms`), ou

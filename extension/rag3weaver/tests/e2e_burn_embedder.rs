@@ -222,6 +222,7 @@ fn burn_dual_three_signals_contribute() {
 #[test]
 #[ignore]
 fn burn_dual_top_result_english() {
+    crate::common::burn::compares_values("bge-m3");
     let catalog = Arc::new(Mutex::new(setup()));
     let response = Catalog::rechercher(&catalog, "kb", "systems programming safety ownership", options(None)).unwrap();
 
@@ -237,6 +238,7 @@ fn burn_dual_top_result_english() {
 #[test]
 #[ignore]
 fn burn_vector_only_multilingual_semantic() {
+    crate::common::burn::compares_values("bge-m3");
     let catalog = Arc::new(Mutex::new(setup()));
     let response = Catalog::rechercher(
         &catalog,
@@ -262,6 +264,7 @@ fn burn_vector_only_multilingual_semantic() {
 #[test]
 #[ignore]
 fn burn_sparse_only_retrieves() {
+    crate::common::burn::compares_values("bge-m3");
     let catalog = Arc::new(Mutex::new(setup()));
     let response = Catalog::rechercher(
         &catalog,

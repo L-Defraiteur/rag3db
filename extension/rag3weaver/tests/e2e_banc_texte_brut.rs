@@ -108,9 +108,9 @@ fn embarqueur() -> (Arc<dyn Embedder>, String) {
     let voulu = std::env::var("RAG3WEAVER_BANC_MODELE").unwrap_or_default();
     match voulu.as_str() {
         #[cfg(feature = "burn-embedder")]
-        "granite-278m" => (common::burn::GRANITE_278M.clone(), "granite-278m".into()),
+        "granite-278m" => ({ crate::common::burn::compares_values("granite-278m"); common::burn::GRANITE_278M.clone() }, "granite-278m".into()),
         #[cfg(feature = "burn-embedder")]
-        "granite-107m" => (common::burn::GRANITE_107M.clone(), "granite-107m".into()),
+        "granite-107m" => ({ crate::common::burn::compares_values("granite-107m"); common::burn::GRANITE_107M.clone() }, "granite-107m".into()),
         "" => (Arc::new(HashEmbedder::new(64)), "HashEmbedder (montage à vide)".into()),
         autre => panic!("RAG3WEAVER_BANC_MODELE={autre} : granite-278m, granite-107m, ou rien (HashEmbedder) — burn-embedder requis pour un vrai modèle"),
     }

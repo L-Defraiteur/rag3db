@@ -50,6 +50,10 @@ fn capacites(hote: &dyn Hote) -> Value {
 /// des méthodes MCP : venu de l'extérieur, il ne ferait qu'annoncer une liste
 /// à relire.
 pub const OUTILS_CHANGES: &str = "$/rag3weaver/tools_changed";
+/// **An internal notice** slipped into the loop's input by the thin client (its index watch): `params` `{level, data}`,
+/// written to the MCP client as `notifications/message`. Ticket-free: Lucie, 15 and 18 November 2026, one notification
+/// when the index of a view that answered « not ready » is ready.
+pub const INTERNAL_NOTICE: &str = "$/rag3weaver/notice";
 
 /// Ce que le protocole demande à son hôte, et rien de plus.
 ///
@@ -249,6 +253,9 @@ pub fn servir(
         let reponse = match serde_json::from_str::<Value>(&ligne) {
             Ok(requete) if requete["method"] == OUTILS_CHANGES => {
                 Some(json!({ "jsonrpc": "2.0", "method": "notifications/tools/list_changed" }))
+            }
+            Ok(requete) if requete["method"] == INTERNAL_NOTICE => {
+                Some(json!({ "jsonrpc": "2.0", "method": "notifications/message", "params": requete["params"].clone() }))
             }
             Ok(requete) => traiter(&requete, hote, cles),
             // Une ligne illisible : le protocole veut un `id` nul.
@@ -527,5 +534,17 @@ mod tests {
         servir(&HoteDeTest { refuse: false, rouvrir: None }, &[], entree.as_bytes(), &mut sortie).unwrap();
         let texte = String::from_utf8(sortie).unwrap();
         assert_eq!(texte.trim(), r#"{"jsonrpc":"2.0","method":"notifications/tools/list_changed"}"#);
+    }
+
+    /// **An internal notice reaches the MCP client as a message** (the index watch of the thin client): the level and
+    /// the text it carries, as `notifications/message`, with no `id`.
+    #[test]
+    fn an_internal_notice_reaches_the_client_as_a_message() {
+        let notice = json!({"jsonrpc": "2.0", "method": INTERNAL_NOTICE, "params": {"level": "info", "data": "l'index de la vue w est prêt"}});
+        let entree = format!("{notice}\n");
+        let mut sortie = Vec::new();
+        servir(&HoteDeTest { refuse: false, rouvrir: None }, &[], entree.as_bytes(), &mut sortie).unwrap();
+        let ligne: Value = serde_json::from_str(String::from_utf8(sortie).unwrap().trim()).expect("one line written");
+        assert_eq!(ligne, json!({"jsonrpc": "2.0", "method": "notifications/message", "params": {"level": "info", "data": "l'index de la vue w est prêt"}}));
     }
 }
