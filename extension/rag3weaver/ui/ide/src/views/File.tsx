@@ -108,6 +108,9 @@ export function File({ id, path, state }: { id: string; path: string; state: Hos
 
   useEffect(() => {
     if (!backend || editing) return;
+    // **A view takes nothing from a file it left** (the pusher's red of 20 Nov. 2026): a read that answers after the
+    // view moved on — an absent file's error, or the lines of the file before — is dropped.
+    let vivant = true;
     setRead(null);
     setPlan(null);
     // The error of the file read before goes with it (ticket of 19 Nov. 2026: a readable file showed it above its lines).
@@ -119,10 +122,16 @@ export function File({ id, path, state }: { id: string; path: string; state: Hos
         .catch((e: Error) => ({ erreur: e.message }) as Plan),
     ])
       .then(([r, p]) => {
+        if (!vivant) return;
         setRead(r);
         setPlan(p);
       })
-      .catch((e: Error) => setError(e.message));
+      .catch((e: Error) => {
+        if (vivant) setError(e.message);
+      });
+    return () => {
+      vivant = false;
+    };
   }, [backend?.manifest, path, offset, editing, generation]);
 
   // La ligne visée par l'ancre (#L12), centrée, à l'arrivée et au changement d'ancre. **The anchor is read at each
