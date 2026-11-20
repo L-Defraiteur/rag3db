@@ -1,51 +1,47 @@
 # Les trois premiers changés par le sens, avec les déclarations courtes
 
 20 novembre 2026, session everything declarative. Le juge du banc sur le lot `variable-not-candidate` (03fbecf8b8, contre
-master 216c3a70e6) ; les types et les longueurs lus par Cypher sur une copie de la base du lot, les rangs dans
-`banc-parite/sorties/feuille-5d-20261120/trois-premiers.json` à luciepc. Le lot lui-même est décrit dans la page 03 de ce
-dossier.
+master 216c3a70e6). **Cette page a été corrigée le soir même** : sa première version lisait mal les scopes rendus, voir
+« La première lecture, et pourquoi elle était fausse ».
 
-## Les trois cas
+## Les trois cas, lus par l'hôte
+
+Par l'hôte de 03fbecf8b8 (limit 10, format json, le nom et le contenu de chaque résultat ;
+`banc-parite/sorties/feuille-5d-20261120/quel-scope.json` à luciepc) :
 
 **1. « parse a json manifest », sans filtre**
-- master : `extension/rag3weaver/codeparsers/src/css/css_parser.rs:403`, méthode `parse_declaration` (lignes 403-441,
-  1 143 caractères). Avec le lot : rang 3.
-- lot : `experiments/mtga/scripts/prepare_engine_relations.py:14`, une `variable` d'une ligne de 220 caractères. Sur
-  master : hors du top 10.
+- avec le lot : 1ᵉʳ `manifest` (une variable de 51 caractères, `experiments/mtga/scripts/prepare_engine_relations.py:14`),
+  2ᵉ `manifest` (33 caractères, `extension/rag3weaver/scripts/test_backend_persistence.py:78`), 3ᵉ `parse_declaration`
+  (méthode, 1 143 caractères) ;
+- sur master : 1ᵉʳ `parse_declaration`. Sur les références de G (l'ancienne fusion), une méthode en tête, et la
+  variable courte au rang 3 ou 4.
 
 **2. « rebuild the vector index », langage python**
-- master : `extension/rag3weaver/scripts/test_backend_persistence.py:89`, module `file_scope_08` (lignes 89-90, 105
-  caractères). Avec le lot : rang 5.
-- lot : `experiments/mtga/scripts/build_plant_variant.py:32`, une `variable` d'une ligne de 152 caractères. Sur master :
-  hors du top 10.
+- avec le lot : aux rangs 1 à 4, des variables `index = ROOT/'README.md'` (22 caractères), dans
+  `build_plant_variant.py:32`, `build_red_variants.py:50`, `build_theme_variants.py:42` et
+  `build_ultimatum_variant.py:31`.
 
 **3. « transaction rollback », langage python**
-- master : `experiments/mtga/scripts/audit_validated_run.py:40`, la `variable` `last_accepted`, 29 caractères. Avec le
-  lot : hors du top 10. C'est l'effet voulu : une déclaration courte n'a plus de vecteur.
-- lot : `extension/rag3weaver/scripts/test_backend_snapshot.py:128`, module `file_scope_21` (lignes 128-129, 167
-  caractères). Sur master : rang 7.
+- sur master : `last_accepted` (une variable de 29 caractères) ; avec le lot, elle sort du top 10. C'est l'effet voulu :
+  une déclaration courte n'a plus de vecteur.
 
-## Ce qui explique les cas 1 et 2
+## Ce qui explique les cas 1 et 2 : le revers de la décision (A)
 
-Une ligne Python qui enchaîne des affectations (`manifest=…;cards=…;owned=…`) porte **plusieurs scopes `variable` sur
-la même ligne**, de deux sortes :
-- **les uns ont pour contenu leur seule affectation** : 26 à 59 caractères pour `prepare_engine_relations.py:14` ; 19,
-  22 et 109 pour `build_plant_variant.py:32`. Sous 80, ils sont écartés par la règle du lot ;
-- **les autres ont pour contenu la ligne entière** : 220 et 152 caractères, au-dessus du seuil, donc candidats, avec un
-  vecteur.
+Ce sont des déclarations **courantes**, sans vecteur, dont **le nom est un mot de la requête** (`manifest`, `index`).
+Elles sont premières en BM25 pour cette raison. La décision (A) ramenait le score d'une ligne sans vecteur au poids
+total, soit × 2,2 environ : une première en BM25 battait alors tout ce qui a les deux signaux, y compris ce que le sens
+trouve. Ce n'est pas la règle du nom exact (B) : la requête n'est pas leur nom.
 
-Libérés de la concurrence de leurs jumeaux courts, ce sont ces scopes de la ligne entière qui prennent la tête. La clé
-du banc (`chemin:ligne`) ne dit pas lequel des scopes de la ligne remonte. Mais la ligne entière est la seule de
-longueur candidate, et c'est elle.
+C'est le revers que c7 voulait exclure, et il est apporté par la bascule. Il a son ticket
+(`tickets/2026-11-20-une-declaration-courte-prend-la-tete-par-un-mot.md`), fermé par la décision (A') : le signal dense
+d'une ligne sans vecteur compte au rang qui suit le dernier de sa liste, sans mise à l'échelle. La recherche par le nom
+reste tenue par (B).
 
-**Le cas 2 est la ligne même du 88 %** (`build_plant_variant.py:32`, celle de `s=index.read_text()`) : sa version
-« ligne entière » remonte pour une requête sans rapport. Le défaut n'est pas dans la règle du lot. C'est un scope qui
-recopie le texte de ses frères : un `variable` dont le contenu est toute la ligne, alors que chaque affectation a déjà
-son propre scope. Il a son ticket (`tickets/2026-11-20-un-scope-variable-recopie-la-ligne-de-ses-freres.md`), pour
-codeparsers.
+## La première lecture, et pourquoi elle était fausse
 
-## Ce qui n'est pas en cause
-
-- **Le cas 3** est l'effet voulu du lot : une déclaration de 29 caractères perd son vecteur.
-- **La fusion (A) et le nom exact (B)** ne jouent dans aucun des trois : aucune requête n'est un nom, et les lignes qui
-  montent ont un vecteur.
+La première version de cette page attribuait les cas 1 et 2 à des scopes `variable` qui recopiaient toute leur ligne
+(220 et 152 caractères), et ouvrait un ticket pour codeparsers. **C'était faux.** La clé du banc (`chemin:ligne`) ne
+disait pas quel scope de la ligne remontait. Ces scopes de la ligne entière sont des **versions fermées** d'une analyse
+antérieure au bornage aux octets (`_depuis` 0, `_jusqu_a` 1), et ils n'ont pas été rendus. Les générations 0, 1 et 2
+sont publiées, et la recherche ne lit pas de version fermée. Codeparsers l'a confirmé : l'analyse courante ne produit
+aucun scope de la ligne entière. Le ticket est fermé comme faux défaut.
