@@ -106,6 +106,30 @@ function fromTurns(turns: ChatTurn[]): Item[] {
 }
 
 /// L'heure d'un appel et sa durée, quand on les sait.
+/// **An index not ready, said in clear under its tool** (c7's night task, 20 November 2026): the answer's `index`
+/// (recherche's field), carried by the receipt's `metadata`. The text's and the vectors' estimates, the files behind,
+/// the vectors due, or why the vectors are not there; the tool itself is not refused.
+type EtatIndex = { ready?: boolean; eta_s?: number | null; text_eta_s?: number | null; vectors_eta_s?: number | null; pending_files?: number; vectors_due?: number; vectors_unavailable?: string; indexing?: boolean };
+function IndexPasPret({ metadata }: { metadata: unknown }) {
+  const index = (metadata as { index?: EtatIndex } | undefined)?.index;
+  if (!index || index.ready !== false) return null;
+  const duree = (s: number | null | undefined) => (typeof s === "number" ? `environ ${s} s` : "durée inconnue");
+  const parts: string[] = [];
+  if (index.indexing) parts.push("l'index s'écrit en ce moment");
+  else if ("text_eta_s" in index || "vectors_eta_s" in index) {
+    parts.push(`texte : ${index.text_eta_s === 0 ? "prêt" : duree(index.text_eta_s)}`);
+    if (index.vectors_unavailable) parts.push(`vecteurs indisponibles : ${index.vectors_unavailable}`);
+    else parts.push(`vecteurs : ${duree(index.vectors_eta_s)}${typeof index.vectors_due === "number" ? ` (${index.vectors_due} morceaux dus)` : ""}`);
+  } else parts.push(duree(index.eta_s));
+  if (typeof index.pending_files === "number" && index.pending_files > 0) parts.push(`${index.pending_files} fichier${index.pending_files > 1 ? "s" : ""} en retard`);
+  if (index.vectors_unavailable && !parts.some((p) => p.startsWith("vecteurs indisponibles"))) parts.push(`vecteurs indisponibles : ${index.vectors_unavailable}`);
+  return (
+    <p className="index-pas-pret text-xs text-muted-foreground -mt-2 mb-3" role="status">
+      index pas prêt — {parts.join(" · ")}.
+    </p>
+  );
+}
+
 function when(t: ToolBlock): string {
   if (t.at === undefined) return "";
   const at = new Date(t.at).toLocaleTimeString();
@@ -488,6 +512,11 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
             ? `index de ${nom} terminé${[comptes, duree].filter(Boolean).length ? " : " + [comptes, duree].filter(Boolean).join(", ") : ""}${ev.reste ? ` — vecteurs en dette : ${ev.reste}` : ""}`
             : `index de ${nom} en échec : ${String(ev.erreur ?? "raison inconnue")}`;
         setItems((cur) => [...cur, { kind: "info", text, cls: ev.ok === true ? "fin-d-index" : "fin-d-index echec" }]);
+      }
+      // **The index of a view that answered « not ready » is ready** (c7's night task, 20 November 2026): the host's
+      // watch says it once; a line of the page in the chat of its backend, not a turn.
+      if (ev.kind === "IndexReady" && backend && d.backend === backend.manifest) {
+        setItems((cur) => [...cur, { kind: "info", text: String(ev.text ?? "l'index est prêt"), cls: "index-pret" }]);
       }
       // Le flux rouvert (page à peine chargée, flux coupé puis repris) : l'état
       // du chat se relit, avant tout filtre — ce signal n'a pas de backend.
@@ -923,6 +952,7 @@ export function Chat({ id, state }: { id: string; state: HostState }) {
                         ) : null}
                       </div>
                     </details>
+                    {p.result !== undefined ? <IndexPasPret metadata={p.metadata} /> : null}
                     {contexte.id !== null ? <UiDuTour ui={p.ui} /> : null}
                     </Fragment>
                   );
