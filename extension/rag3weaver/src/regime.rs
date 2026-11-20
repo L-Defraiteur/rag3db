@@ -238,6 +238,15 @@ impl Origine {
 /// (`llm.gemini-3.8-flash`), la tarification s'applique à la lecture.
 pub const MODELE_VERTEX_PAR_DEFAUT: &str = "google/gemini-3.8-flash";
 
+/// **Le raisonnement du modèle par défaut de l'hôte** (page 19-11-2026/06 de rag3weaver-archi) :
+/// sans borne, Gemini 3.x réfléchit jusqu'à remplir `max_tokens` et tronque la vraie réponse. Un hôte
+/// nu borne donc à `low` ; `models.llm.reasoning` (réglages du défaut) l'emporte, et
+/// `VERTEX_REASONING`, de la même forme que `VERTEX_MODEL`, règle l'hôte lui-même.
+pub fn raisonnement_du_defaut(declare: Option<crate::llm::ReasoningEffort>, lire: impl Fn(&str) -> Option<String>) -> crate::llm::ReasoningEffort {
+    let _ = (declare, lire);
+    crate::llm::ReasoningEffort::High
+}
+
 /// **Le modèle agentique, en un seul endroit.**
 ///
 /// Rend `None` avec une raison **écrite** plutôt qu'un silence : cinq suites
@@ -498,6 +507,15 @@ pub fn least_watched_card(racine: &Path) -> Option<usize> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_hosts_default_model_reasons_within_a_bound() {
+        use crate::llm::ReasoningEffort::*;
+        assert_eq!(raisonnement_du_defaut(None, |_| None), Low, "a bare host is bounded");
+        assert_eq!(raisonnement_du_defaut(None, |k| (k == "VERTEX_REASONING").then(|| "medium".into())), Medium);
+        assert_eq!(raisonnement_du_defaut(Some(Minimal), |k| (k == "VERTEX_REASONING").then(|| "medium".into())), Minimal, "the declaration wins");
+        assert_eq!(raisonnement_du_defaut(None, |k| (k == "VERTEX_REASONING").then(|| "beaucoup".into())), Low, "an unknown word keeps the bound");
+    }
+
     use super::*;
 
     #[test]
