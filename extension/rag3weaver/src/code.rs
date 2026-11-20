@@ -598,7 +598,10 @@ fn usage_properties(sites: &[UsageSite]) -> BTreeMap<String, CypherValue> {
 // (la racine du chemin lue à la position de la mention).
 // 9 (20 novembre 2026) : le type d'un appel `Type::f()` / `Type.f()` est un usage du type (`tetes_de_type`) — les
 // sites qualifiés rejoignent leur type, en Rust, C++, Python, TypeScript et C# (`usages Catalog` perdait 41 sites).
-pub const REGLES_DE_L_ANALYSE: u32 = 9;
+// 10 (20 novembre 2026) : un paquet du dépôt importé par son nom (`use monlib::X` dans les tests d'un crate,
+// `import … from "monpaquet"`) désigne ses fichiers, lus dans les manifestes ; les réexportations de Python
+// (`__init__.py`) et de TypeScript (`export { X } from`) se suivent comme celles de Rust.
+pub const REGLES_DE_L_ANALYSE: u32 = 10;
 
 /// **La version de l'analyse** (page 06, § 13) : le commit du parseur lié, [`REGLES_DE_L_ANALYSE`] et le
 /// gabarit du code (le découpage et les champs déclarés de `File` et de `Scope`), hachés.
