@@ -137,7 +137,14 @@ enqueue() {
       -) cat > "$att" ;;
       *) cp "$CHECK_FEATURES_LOG" "$att" 2>/dev/null || { rm -f "$att"; echo "refusé : attestation illisible : $CHECK_FEATURES_LOG" >&2; return 1; } ;;
     esac
-    if ! grep -qx "TÊTE $full" "$att"; then rm -f "$att"; echo "refusé : l'attestation check_features n'a pas été jouée sur la tête $(g rev-parse --short "$full") (elle dit : $(grep -m1 '^TÊTE' "$att" 2>/dev/null || echo 'aucune tête'))" >&2; return 1; fi
+    # The head attested, or a descendant of it: the attestation of the top of a linear pile covers its ancestors (20 Nov.,
+    # mémoire: nine lots in a pile, nine check_features of eight builds each). The pass still plays check_features on
+    # every train: the attestation spares a lost train, it does not replace the pass.
+    local atteste; atteste=$(sed -n 's/^TÊTE \([0-9a-f]\{40\}\)$/\1/p' "$att" | head -1)
+    [ -n "$atteste" ] && ! g cat-file -e "$atteste^{commit}" 2>/dev/null && gfetch -q origin 2>/dev/null
+    if [ -z "$atteste" ] || { [ "$atteste" != "$full" ] && ! g merge-base --is-ancestor "$full" "$atteste" 2>/dev/null; }; then
+      echo "refusé : l'attestation check_features n'a pas été jouée sur la tête $(g rev-parse --short "$full") ni sur une tête qui la contient (elle dit : $(grep -m1 '^TÊTE' "$att" 2>/dev/null || echo 'aucune tête'))" >&2; rm -f "$att"; return 1
+    fi
     if ! grep -qx "ARBRE propre" "$att"; then rm -f "$att"; echo "refusé : l'attestation check_features a été jouée sur un arbre modifié : la rejouer sur la tête déposée, arbre propre" >&2; return 1; fi
     if ! tail -1 "$att" | grep -qE '^CHECK_FEATURES VERT ([0-9]+)/\1$'; then rm -f "$att"; echo "refusé : l'attestation check_features ne finit pas sur « CHECK_FEATURES VERT n/n » ($(tail -1 "$att"))" >&2; return 1; fi
     mkdir -p "$D/attestations"; mv "$att" "$D/attestations/$id-$(date +%Y%m%d-%H%M%S).log"

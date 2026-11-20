@@ -660,4 +660,15 @@ P dequeue at-1 > /dev/null 2>&1
 h=$(lot at-d docs/at-d.md '# at'); out=$(PUSHER_EXIGER_ATTESTATION=1 P enqueue at-d at-d "$h" docs - - - - author-a 2>&1)
 grep -q '^at-d	' "$D/pusher/queue.tsv" && ok "un lot docs se dépose sans attestation" || ko "docs refusé : $out"
 P dequeue at-d > /dev/null 2>&1
+# 43. The attestation of the top of a pile covers its ancestors (20 Nov., mémoire: nine Rust lots in a linear pile, nine
+# check_features of eight builds each): a head that is an ancestor of the attested head is accepted; a head that is not is
+# refused.
+h1=$(lot as-1 extension/rag3weaver/src/as1.rs 'fn as1() {}'); h2=$(FROM=as-1 lot as-2 extension/rag3weaver/src/as2.rs 'fn as2() {}')
+h3=$(lot as-x extension/rag3weaver/src/asx.rs 'fn asx() {}')
+printf 'TÊTE %s\nARBRE propre\nCHECK_FEATURES VERT 8/8\n' "$h2" > "$D/att-sommet"
+out=$(PUSHER_EXIGER_ATTESTATION=1 CHECK_FEATURES_LOG="$D/att-sommet" P enqueue as-1 as-1 "$h1" rust some_witness e2e_code - - author-c 2>&1)
+grep -q '^as-1	' "$D/pusher/queue.tsv" && ok "l'attestation du sommet d'une pile vaut pour un parent, ancêtre de la tête attestée" || ko "parent refusé avec l'attestation du sommet : $out"
+out=$(PUSHER_EXIGER_ATTESTATION=1 CHECK_FEATURES_LOG="$D/att-sommet" P enqueue as-x as-x "$h3" rust some_witness e2e_code - - author-c 2>&1)
+! grep -q '^as-x	' "$D/pusher/queue.tsv" && ok "l'attestation d'une autre pile ne vaut pas pour une tête qui n'en est pas l'ancêtre" || ko "tête étrangère acceptée"
+for x in as-1 as-x; do P dequeue $x > /dev/null 2>&1; done
 exit $red
