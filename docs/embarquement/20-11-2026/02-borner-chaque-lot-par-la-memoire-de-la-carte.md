@@ -61,3 +61,23 @@ embarque dessus, sans rien lui envoyer ; l'estimation doit majorer ce relevé au
 ## Taille
 
 Une journée, calibrage compris.
+
+## Ce qui est livré, et prouvé (20 novembre, 23 h 30)
+
+- **Le lot `memory-bound`** : `src/lot_memory.rs` (l'estimation, les deux bornes, le recoupage, la mémoire libre lue en
+  sysfs), `Embedder::memory_shape`, `token_counts` et `memory_bounds`, déclarés par granite et bge-m3,
+  `BurnDevice::adapter_facts`, le recoupage dans `par_lots` sur ses deux chemins, `EmbedError::Refused` rendu en 503, et
+  `memory_bound` dans `/sante`.
+- **Un APU compte la GTT** : sur celui de la tablette, la VRAM n'est qu'une réserve de 4 Gio, dont 3 sont pris, et les
+  calculs vivent dans la GTT (112 Gio). Pour un adaptateur intégré, la mémoire libre est donc la VRAM plus la GTT.
+- **La limite que wgpu rend** est de 2 147 483 647 octets (2 Gio moins un), plus stricte que les 4 Gio de Vulkan : la
+  borne est prudente.
+- **La preuve par le vrai binaire**, sur l'APU de la tablette (bge-m3, port 7995, budget d'octets levé) :
+  - la requête du 20 novembre (32 × 1 700 mots, un tampon de 5,95 Gio sans le lot) est **servie, en un lot recoupé** ;
+  - un texte dense (11 000 « é », plus de 8 192 jetons) reçoit un **503 nommé** : « un texte de 8192 jetons ne tient
+    pas sur la carte : un tampon de 4294967296 octets estimés, au-delà de 90 % de la limite d'allocation de la carte » ;
+  - la requête suivante est servie : le service n'est pas empoisonné.
+- **Le calibrage sur l'APU** : le pic mesuré est de 5,97 Go au-dessus du repos, et l'estimation, pour des lots de
+  8 × 1 704 jetons, donne 6,25 Go. Elle majore, de 5 %.
+- **Reste à prouver** : la majoration sur card2, passivement, par lecture de sysfs autour d'un lot réel du 7879.
+

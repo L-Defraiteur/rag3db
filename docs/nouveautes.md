@@ -1,5 +1,11 @@
 # Nouveautés
 
+- 20 novembre 2026 — **Le service d'embarquement ne tombe plus sur une requête trop grosse pour la carte.** Avant
+  chaque lot, il estime la mémoire qu'il demandera. Un lot qui dépasserait la carte est recoupé avant le calcul. Un
+  texte seul qui ne tiendrait pas reçoit un 503 qui dit pourquoi, et le service continue de servir. Avant, une requête
+  acceptée de 32 textes longs a arrêté le bge-m3 de luciepc douze secondes, en coupant tous ses clients. `/sante` dit
+  `memory_bound` : la limite d'allocation de la carte, les lots recoupés, les textes refusés.
+
 - 20 novembre 2026 — **La fenêtre détachée du dépôt dit aussi quand l'index est prêt.** Après une réponse « index pas prêt » dans le chat, une fenêtre du dépôt ouverte à côté le dit dans son en-tête, une fois, quand l'index a rattrapé.
 - 20 novembre 2026 — **Un morceau de code tient dans la fenêtre de l'embarqueur.** Sous granite (512 jetons), 72,5 % des
   morceaux de rag3weaver dépassaient sa fenêtre, et leur fin n'était pas cherchable par le vecteur : le contexte ajouté
