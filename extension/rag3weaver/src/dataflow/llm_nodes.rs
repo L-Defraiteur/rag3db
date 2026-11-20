@@ -1246,7 +1246,8 @@ mod tests {
         assert!(two.ends_with("## Fiche\n\nZeta — the z"), "the same fiche, the same text: {two}");
         // A list of rows: each by its presentation, a blank line between.
         let list = prompt_of("Extract.", serde_json::json!([{"name": "f", "title": "Fiches", "value": [fiche_row("Zeta", "the z"), fiche_row("Alpha", "the a")]}]));
-        assert!(list.ends_with("## Fiches\n\nZeta — the z\n\nAlpha — the a"), "{list}");
+        // B4: one-line renderings take one line each.
+        assert!(list.ends_with("## Fiches\n\nZeta — the z\nAlpha — the a"), "{list}");
         // The part's format wins, on the row's fields.
         let json = prompt_of("Extract.", serde_json::json!([{"name": "f", "title": "Fiche", "value": fiche_row("Zeta", "the z"), "format": "json"}]));
         assert!(json.ends_with("## Fiche\n\n{\"about\":\"the z\",\"name\":\"Zeta\",\"state\":\"current\"}"), "{json}");
@@ -1327,5 +1328,17 @@ mod tests {
             "{usage}"
         );
         assert!(usage["finish"].is_string(), "{usage}");
+    }
+
+    /// **A part's format can be a template** (lot B4, 19 November 2026): `format: {template}` renders each element by
+    /// that template, the same form as a type's presentation, at this place only; a list whose renderings each hold
+    /// on one line takes one line per element, otherwise a blank line between them.
+    #[test]
+    fn a_part_format_can_be_a_template_and_one_line_renderings_take_one_line_each() {
+        let p = prompt_of("Decide.", serde_json::json!([{"name": "c", "title": "Fiches candidates", "format": {"template": "- {{ alias }} : « {{ name }} »{% if proposed %} (proposée plus haut){% endif %} : {{ about }}"},
+            "value": [{"alias": "candidate_1", "name": "Zeta", "about": "the z"}, {"alias": "candidate_2", "name": "Alpha", "about": "the a", "proposed": true}]}]));
+        assert!(p.ends_with("## Fiches candidates\n\n- candidate_1 : « Zeta » : the z\n- candidate_2 : « Alpha » (proposée plus haut) : the a"), "{p}");
+        let multi = prompt_of("Decide.", serde_json::json!([{"name": "c", "title": "T", "format": {"template": "{{ a }}\n{{ b }}"}, "value": [{"a": 1, "b": 2}, {"a": 3, "b": 4}]}]));
+        assert!(multi.ends_with("## T\n\n1\n2\n\n3\n4"), "{multi}");
     }
 }
