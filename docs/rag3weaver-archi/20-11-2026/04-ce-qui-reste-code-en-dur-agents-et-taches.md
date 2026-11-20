@@ -42,6 +42,24 @@ défaut pour un nœud neuf devient le script, sauf primitive ou performance mesu
 | `run`, les processus, les minuteries du cron, le fetch, le fork du contexte | | | ✔ (des primitives) |
 | Le relais du mode pair : registre, socket, trame | | | ✔ (un format d'un autre programme) |
 
+**Ce qui bouge encore va d'abord en script** (Lucie, 21 h 5x : « si c'est un truc en construction
+qu'on n'est pas sûr, […] on reteste différentes configurations sans tout rebâtir »). Ce qui est en
+construction ou incertain va en nœuds et en script, et ne descend en Rust qu'une fois figé et prouvé,
+s'il est une primitive ou si la performance le demande. Chez les agents et les tâches, dans l'ordre où
+ils bougent encore :
+
+1. **Le choix d'une famille d'outils et le résumé de la palette** : la palette par familles n'existe
+   pas encore, et sa forme vient de changer trois fois en une heure. Elle naît en script.
+2. **Les règles d'un pas** (raté, suivant, relance d'une réponse coupée) : elles ont changé trois fois
+   cette semaine (S1, la relance, le compte des pas coupés). Elles passent en script dès que les points
+   d'appel existent. D'ici là, leurs bornes sont déjà des clés déclarées.
+3. **L'assemblage de l'invite d'un pas** : il change avec chaque lot de l'équipier (S2, S3, le mode
+   pair). Il passe en script avec les règles.
+4. **La mise en forme des résumés** (« Previous step », la trace pour le banc) : c'est la plus stable.
+   Elle sert de cas de validation du nœud scripté (ED), justement parce que son oracle est figé.
+
+Ce qui est figé et prouvé reste en Rust : la boucle et son état, les gardes, les primitives, le relais.
+
 **La condition.** Le pas de l'équipier n'est pas un graphe. Un script n'y entre que si la boucle l'appelle à des points
 déclarés : composer la frontière, juger un pas, rendre un résumé, choisir une famille. Chaque point reçoit
 un état en JSON et rend une décision en JSON, avec un défaut en Rust si le gabarit n'en déclare pas.
