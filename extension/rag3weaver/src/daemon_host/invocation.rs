@@ -123,6 +123,107 @@ mod tests {
             );
         }
     }
+    /// A host with a space of worktrees and a table of folders in `d`: `arbre` is « le témoin »'s, `archi` another
+    /// session's, `sans-proprietaire` a folder on the disk the table does not know; Lucie's tree and a sairen folder exist.
+    fn hote_d_espace(d: &std::path::Path) -> (crate::daemon_host::DaemonHost, std::path::PathBuf, String) {
+        let espace = d.join("git_workspaces");
+        for dossier in ["rag3db", "sairen", "archi", "sans-proprietaire", "arbre"] {
+            std::fs::create_dir_all(espace.join(dossier)).unwrap();
+        }
+        let table = d.join("dossiers-des-sessions.json");
+        std::fs::write(&table, json!({"_": "un commentaire", "arbre": "le témoin", "archi": "rag3weaver archi"}).to_string()).unwrap();
+        let host = crate::daemon_host::DaemonHost::new();
+        host.set_espace(espace.clone(), table);
+        host.set_vues_dir(d.join("vues"));
+        let corps = json!({"client": "mcp (pid 1)", "claude": {"session_id": "S1", "name": "le témoin"}}).to_string();
+        let (_, r) = host.handle("POST", "/session", None, corps.as_bytes());
+        (host, espace, r["session"].as_str().unwrap().to_string())
+    }
+
+    fn refus_d_ouverture(lot: &str, dossier: Option<&str>) -> (String, std::path::PathBuf) {
+        let d = tempfile::tempdir().unwrap();
+        let (host, espace, s) = hote_d_espace(d.path());
+        let r = host.open_view(Some(&s), std::path::Path::new("/nulle-part/backend.json"), lot, dossier);
+        assert_eq!(r["ok"], json!(false), "the opening is not refused: {r}");
+        let reste: Vec<String> = std::fs::read_dir(&espace).unwrap().flatten().map(|e| e.file_name().to_string_lossy().to_string()).collect();
+        (r["error"].as_str().unwrap_or_default().to_string(), espace.join(reste.join(",")))
+    }
+
+    /// **Guard 1 of `open_view`: never Lucie's tree** (page 03 of 20 November 2026), even by a lot that climbs into it.
+    #[test]
+    fn open_view_refuses_lucies_tree() {
+        let (e, _) = refus_d_ouverture("x", Some("rag3db"));
+        assert!(e.contains("l'arbre de Lucie"), "{e}");
+        let (e, _) = refus_d_ouverture("../../rag3db/x", Some("arbre"));
+        assert!(e.contains("l'arbre de Lucie"), "a lot that climbs into Lucie's tree is not refused as such: {e}");
+    }
+
+    /// **Guard 2: never sairen.**
+    #[test]
+    fn open_view_refuses_sairen() {
+        let (e, _) = refus_d_ouverture("x", Some("sairen"));
+        assert!(e.contains("sairen"), "{e}");
+    }
+
+    /// **Guard 3: never another session's folder**, nor a folder on the disk the table does not know.
+    #[test]
+    fn open_view_refuses_another_sessions_folder() {
+        let (e, _) = refus_d_ouverture("x", Some("archi"));
+        assert!(e.contains("rag3weaver archi"), "the refusal does not say whose folder it is: {e}");
+        let (e, _) = refus_d_ouverture("x", Some("sans-proprietaire"));
+        assert!(e.contains("sans propriétaire"), "a folder the table does not know is guessed: {e}");
+    }
+
+    /// **Guard 4: never outside the session's folder**: a lot that leaves it, or one with characters a name does not take.
+    #[test]
+    fn open_view_refuses_a_path_outside_the_sessions_folder() {
+        let (e, _) = refus_d_ouverture("../banc/x", Some("arbre"));
+        assert!(e.contains("hors du dossier"), "{e}");
+        let (e, _) = refus_d_ouverture("a b", Some("arbre"));
+        assert!(e.contains("hors du dossier"), "{e}");
+    }
+
+    /// **Guard 5: never a path already taken.**
+    #[test]
+    fn open_view_refuses_a_path_already_taken() {
+        let d = tempfile::tempdir().unwrap();
+        let (host, espace, s) = hote_d_espace(d.path());
+        let date = String::from_utf8(std::process::Command::new("date").arg("+%d-%m-%Y").output().unwrap().stdout).unwrap();
+        std::fs::create_dir_all(espace.join("arbre").join(format!("{}-pris", date.trim()))).unwrap();
+        let r = host.open_view(Some(&s), std::path::Path::new("/nulle-part/backend.json"), "pris", None);
+        assert!(r["ok"] == json!(false) && r["error"].as_str().unwrap_or_default().contains("déjà pris"), "{r}");
+    }
+
+    /// **`open_view` opens** (O1): under the session's folder, from the table (no `session_dir`), on a new branch
+    /// `<folder>/<lot>`, noted in the session's state, without touching anything else of the space.
+    #[test]
+    fn open_view_opens_a_worktree_under_the_sessions_folder() {
+        let d = tempfile::tempdir().unwrap();
+        let a = atelier(d.path());
+        let depot = petit_depot(&d.path().join("B"));
+        a.appeler("attach_worktree", json!({"path":depot})).unwrap();
+        attendre_l_index(&a, &depot);
+        let roots = a.host.racines_de_code().unwrap();
+        let name = crate::code_tree::name_of_tree(&depot.canonicalize().unwrap()).unwrap();
+        let manifeste = roots.manifest(&name);
+        let (_h, espace, _) = hote_d_espace(&d.path().join("e"));
+        a.host.set_espace(espace.clone(), d.path().join("e/dossiers-des-sessions.json"));
+        a.host.set_vues_dir(d.path().join("e/vues"));
+        let corps = json!({"client": "mcp (pid 1)", "claude": {"session_id": "S1", "name": "le témoin"}}).to_string();
+        let (_, r) = a.host.handle("POST", "/session", None, corps.as_bytes());
+        let s = r["session"].as_str().unwrap().to_string();
+        let r = a.host.open_view(Some(&s), &manifeste, "essai", None);
+        assert_eq!(r["ok"], json!(true), "{r}");
+        let chemin = std::path::PathBuf::from(r["path"].as_str().unwrap());
+        assert!(chemin.starts_with(espace.join("arbre")) && chemin.join(".git").exists(), "the worktree is not under the session's folder: {r}");
+        assert_eq!(r["branch"], json!("arbre/essai"), "{r}");
+        assert!(r["name"].as_str().is_some_and(|n| n.starts_with("arbre/") && n.ends_with("-essai")), "{r}");
+        let branche = std::process::Command::new("git").arg("-C").arg(&chemin).args(["rev-parse", "--abbrev-ref", "HEAD"]).output().unwrap();
+        assert_eq!(String::from_utf8_lossy(&branche.stdout).trim(), "arbre/essai");
+        let etat = std::fs::read_to_string(d.path().join("e/vues/S1.json")).expect("the opened view is not noted");
+        assert!(etat.contains(r["name"].as_str().unwrap()), "{etat}");
+    }
+
     /// **`views` and `use_view` follow the Claude Code session** (page 02 of 20 November 2026, lot 2): two thin clients
     /// of one session (one `sessionId`) see the same active view, another session does not; an unknown name is refused,
     /// listing the known views; a host restarted on the same state finds the view again.
