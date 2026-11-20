@@ -1,5 +1,10 @@
 # Nouveautés
 
+- 20 novembre 2026 — **Une recherche par clé primaire ne lit plus de mémoire rendue pendant un point de reprise.**
+  Le point de reprise d'une table de nœuds remplaçait la liste des blocs d'un groupe pendant qu'une recherche par
+  clé primaire la parcourait : sous vingt écrivains, un lecteur pouvait mourir. Le remplacement attend désormais
+  les lectures en cours, comme un ajout.
+
 - 19 novembre 2026 — **La conversation d'un chat se range en mémoire au fil de l'eau.** Chaque tour du chat de
   l'IDE s'écrit dans la mémoire déclarée par le dépôt (`bilans.memoire`). Quand les tours pas encore rangés
   dépassent `memory.slice_tokens` (50 000 jetons par défaut), une tranche se range en fond, sans retarder le chat.

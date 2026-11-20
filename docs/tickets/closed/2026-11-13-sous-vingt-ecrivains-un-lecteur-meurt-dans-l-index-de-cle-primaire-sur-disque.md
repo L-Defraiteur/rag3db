@@ -1,6 +1,6 @@
 # Sous vingt écrivains, un lecteur meurt dans l'index de clé primaire sur disque
 
-- **État** : ouvert (13 novembre 2026, cœur c++)
+- **État** : corrigé sur master par le lot course-des-groupes (testé `e6a38eccd2`, 20 novembre 2026, cœur c++)
 - **Famille** : moteur
 - **Gravité** : plantage (SIGSEGV du processus entier)
 - **Atteignable en service** : à établir. Le banc le produit seul, une fois sur trois ; un hôte qui
@@ -105,4 +105,19 @@ sous un lecteur par clé primaire, qui lit alors de la mémoire rendue. C'est la
 correctif : `isVisibleNoLock` lit le vecteur sous le verrou de la collection, ou le point de reprise remplace le
 vecteur sans le réallouer sous un lecteur. Témoin à écrire : des recherches par clé primaire en boucle pendant des
 points de reprise qui ajoutent des groupes, sous TSan, rouge d'abord.
+
+## Fermé (20 novembre 2026)
+
+Le correctif (`e6a38eccd2`) : `NodeGroup::checkpoint` prend `inMemAppendMtx` en exclusif quand il vide et remplit la
+liste des blocs, dans l'ordre du fichier (le verrou des blocs, puis celui-ci). Les lecteurs qui la parcourent sans
+le verrou des blocs (`isVisibleNoLock`) tiennent ce même verrou en partagé et attendent l'échange.
+
+Le témoin : `PkLookupUnderCheckpoint` sous TSan, rouge 3/3 sur master `b0edc09e63` (9 à 16 rapports, 21 à 41
+lignes en `findChunkedGroupIdx`), vert 3/3 sur le correctif (0 rapport). Sous TSan, `DdlEveryMinute` sur le
+correctif ne nomme plus `findChunkedGroupIdx`. En Release : `transaction_test` 407, known_red, `e2e_test` 1 867
+avec `DropNodeTableReclaim` admis.
+
+Deux sites de la même forme, non couverts par un témoin, restent à voir : `NodeGroup::merge` (un bloc ajouté
+sous le seul verrou des blocs) et le `clear` du point de reprise d'un groupe CSR (`csr_node_group.cpp`, dont les
+lecteurs tiennent aussi `inMemAppendMtx` en partagé). Un témoin rouge d'abord avant d'y toucher.
 
