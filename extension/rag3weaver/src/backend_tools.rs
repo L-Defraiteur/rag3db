@@ -28,8 +28,13 @@ fn the_parts_of_an_answer(mut result: Value) -> (String, Option<Value>, Option<V
     let ui = result.as_object_mut().and_then(|o| o.remove("ui")).filter(|u| !u.is_null());
     // Le contexte d'action ne dépend pas du texte borné. Les métadonnées de
     // recherche volumineuses restent dans le reçu, sans gonfler chaque événement.
-    let metadata = result.get("metadata").and_then(|m| m.get("invocation"))
+    let mut metadata = result.get("metadata").and_then(|m| m.get("invocation"))
         .map(|invocation| json!({"invocation":invocation}));
+    // **An index not ready** (the answer's `index`: its estimates, the vectors due or unavailable): the model reads it
+    // in the « > » line of the text, the page in the receipt, to say it in clear under the tool.
+    if let Some(index) = result.get("index").filter(|i| !i.is_null()) {
+        metadata.get_or_insert_with(|| json!({}))["index"] = index.clone();
+    }
     (match result["presentation"].as_str() {
         Some(text) => match result
             .get("metadata")
