@@ -444,6 +444,11 @@ impl ToolBox for CallbackToolBox {
 /// Ce qui empêche la boucle de tourner en silence.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AgentLimits {
+    /// **A reply cut at `max_tokens` without a tool call is relaunched** (page 19-11-2026/06 of
+    /// rag3weaver-archi): this text, after [`crate::llm::cut_reply`], at most `.1` times per run. `None`
+    /// by default: a cut reply ends the run as `Finished(MaxTokens)`.
+    pub cut_relaunch: Option<(String, usize)>,
+
     /// Nombre maximal d'appels au modèle. **Borne dure, toujours active** :
     /// c'est elle qui garantit la terminaison, quoi que fasse le modèle.
     ///
@@ -491,6 +496,7 @@ impl Default for AgentLimits {
             stop_on_repeated_error: true,
             interrupted_tool_result: INTERRUPTED_TOOL_RESULT.to_string(),
             final_nudge: Some(FINAL_NUDGE.to_string()),
+            cut_relaunch: None,
         }
     }
 }
@@ -2584,6 +2590,44 @@ mod tests {
         assert_eq!(seen[2], (true, crate::llm::ToolChoice::None), "last call: nudged, no tools");
         // Le tour de relance est dans l'historique, une seule fois.
         assert_eq!(turns.iter().filter(|t| t.content == FINAL_NUDGE).count(), 1);
+    }
+
+    /// **A reply cut at max_tokens is relaunched, said, and bounded** (lucivy 03, 19 Nov 2026: four
+    /// steps cut at 3 930 reasoning tokens of 4 096, each ending the step).
+    #[test]
+    fn a_reply_cut_at_max_tokens_is_relaunched_said_and_bounded() {
+        use std::sync::Arc;
+        let coupe = |n: usize| {
+            let calls = Arc::new(Mutex::new(0usize));
+            let llm = CallbackLlm::new("coupe", 4096, move |turns, opts, sink| {
+                let mut c = calls.lock().unwrap();
+                *c += 1;
+                if *c <= n {
+                    let usage = crate::llm::Usage { completion_tokens: 4092, reasoning_tokens: 3930, ..Default::default() };
+                    return Ok((crate::llm::Finish::max_tokens(), usage));
+                }
+                MockLlm::new("fini").generate(turns, opts, sink)
+            });
+            llm
+        };
+        let toolbox = toolbox(vec![("search", "[]")]);
+        // Without the relaunch: a cut reply ends the run, said as such.
+        let llm = coupe(2);
+        let run = Agent::new(&llm, &toolbox).run(&mut start(), &mut StringSink::default()).unwrap();
+        assert_eq!(run.stop, StopReason::Finished(crate::llm::FinishReason::MaxTokens));
+        // With it: relaunched twice, then the third call answers.
+        let llm = coupe(2);
+        let mut turns = start();
+        let limits = AgentLimits { cut_relaunch: Some(("Call a tool now, or step_done.".into(), 2)), ..Default::default() };
+        let run = Agent::new(&llm, &toolbox).with_limits(limits.clone()).run(&mut turns, &mut StringSink::default()).unwrap();
+        assert_eq!(run.stop, StopReason::Finished(crate::llm::FinishReason::Eos), "{turns:#?}");
+        let relances: Vec<&Turn> = turns.iter().filter(|t| t.role == "user" && t.content.contains("the reply was cut at max_tokens=")).collect();
+        assert_eq!(relances.len(), 2, "each cut is said in the trace: {turns:#?}");
+        assert!(relances[0].content.contains("reasoning 3930 of 4092") && relances[0].content.contains("Call a tool now"), "{}", relances[0].content);
+        // Bounded: three cuts with two relaunches end as MaxTokens.
+        let llm = coupe(3);
+        let run = Agent::new(&llm, &toolbox).with_limits(limits).run(&mut start(), &mut StringSink::default()).unwrap();
+        assert_eq!(run.stop, StopReason::Finished(crate::llm::FinishReason::MaxTokens));
     }
 
     fn start() -> Vec<Turn> {
