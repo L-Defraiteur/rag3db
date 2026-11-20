@@ -83,6 +83,11 @@ echo "$1 $2 start $(date +%s%N)" >> "$PASS_TIMES"; sleep 1; echo "$1 $2 end $(da
 case "$o" in
   VERT) echo VERT >> "$J/resume.log" ;;
   124) echo "ROUGE e2e_code (124)" >> "$J/resume.log"; exit 124 ;;
+  # The confiner's verdict of « descendants laissés »: COURSE, nothing left at the cleaning (restes: []); FUITE, a pid left.
+  COURSE|FUITE) v=$J/validation-x; mkdir -p "$v"; [ "$o" = COURSE ] && r='[]' || r='[4242]'
+    printf '{"verdict": "ROUGE", "code": 0, "erreur": "descendants laissés après la commande", "restes": %s}\n' "$r" > "$v/verdict.json"
+    echo "validation : ROUGE (descendants laissés après la commande) ; preuves : $v" >> "$J/temoins.log"
+    echo "TEMOINS code=1" >> "$J/resume.log"; exit 1 ;;
   *) echo "$o" >> "$J/resume.log"; exit 1 ;;
 esac
 P
@@ -721,4 +726,17 @@ P step > /dev/null 2>&1
 va=$(awk -F'\t' '$1 == "vu-a" {print $6}' "$D/pusher/landed.tsv" | tail -1); vb=$(awk -F'\t' '$1 == "vu-b" {print $6}' "$D/pusher/landed.tsv" | tail -1)
 [ "$va" = lucie-tablette:G/20-11-2026-vu-a ] && [ "$vb" = - ] && ok "la vue déclarée au dépôt est dans landed.tsv ; sans vue, « - »" || ko "vue dans landed.tsv : vu-a « $va », vu-b « $vb »"
 ! grep -q '^vu-x	' "$D/pusher/queue.tsv" && echo "$out" | grep -q 'VUE' && ok "une vue sans poste est refusée au dépôt" || ko "vue mal formée acceptée : $out"
+# 47. The confiner judges the descendants before a dbus session has closed (20 Nov., ticket of the day, embarquement):
+# « descendants laissés après la commande » with restes: [] at the cleaning is that race, replayed once rather than
+# returned (c7, until recherche's fix); a pid really left is a code red, returned.
+h=$(lot rc-a extension/rag3weaver/src/rca.rs 'fn rca() {}'); P enqueue rc-a rc-a "$h" rust some_witness e2e_code - - author-c > /dev/null
+echo COURSE > "$D/outcomes.d/rc-a"; { echo VERT; cat "$D/outcomes" 2>/dev/null; } > "$D/outcomes.n" && mv "$D/outcomes.n" "$D/outcomes"
+PUSHER_TRAIN_MAX=1 P step > /dev/null 2>&1
+on_master rc-a && grep -qP '\trc-a\tcourse du confineur\t' "$D/pusher/log.tsv" && ok "la course du confineur (restes: []) est rejouée, le lot atterrit" \
+  || ko "course du confineur : $(grep -P '\trc-a\t' "$D/pusher/log.tsv" | tail -2 | cut -f3,4 | tr '\n' ' ' | cut -c1-160)"
+h=$(lot rc-b extension/rag3weaver/src/rcb.rs 'fn rcb() {}'); P enqueue rc-b rc-b "$h" rust some_witness e2e_code - - author-c > /dev/null
+echo FUITE > "$D/outcomes.d/rc-b"
+PUSHER_TRAIN_MAX=1 P step > /dev/null 2>&1
+! on_master rc-b && grep -q "^rouge	rc-b	" "$D/pusher/inbox/author-c.txt" && ! grep -qP '\trc-b\tcourse du confineur' "$D/pusher/log.tsv" && ok "un descendant vraiment laissé reste un rouge rendu" || ko "fuite du confineur : pas rendue, ou prise pour une course"
+P dequeue rc-b > /dev/null 2>&1
 exit $red
