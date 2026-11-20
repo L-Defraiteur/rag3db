@@ -666,6 +666,30 @@ impl ReadyWatches {
     }
 }
 
+/// **What the watch of an answer « not ready » says** (the thin client's, and the host's for the IDE's chat): its
+/// estimate, whether it waits for the vectors too, its key (the manifest and the view: one watch for both), and the
+/// one text sent when the layer is ready. `None`: the answer is ready, nothing to watch.
+pub(crate) struct WhatAWatchSays {
+    pub eta: Option<u64>,
+    pub vectors: bool,
+    pub key: String,
+    pub text: String,
+}
+
+pub(crate) fn what_a_watch_says(manifest: &Path, index: &Value, view: Option<&Value>) -> Option<WhatAWatchSays> {
+    if index["ready"] != json!(false) {
+        return None;
+    }
+    let vectors = index.get("vectors_eta_s").is_some();
+    let eta = ["eta_s", "text_eta_s", "vectors_eta_s"].iter().filter_map(|k| index[*k].as_u64()).max();
+    let label = view
+        .and_then(|v| v["worktree"].as_str().or_else(|| v["layer"].as_str()).map(str::to_string))
+        .unwrap_or_else(|| "du backend".to_string());
+    let key = format!("{}|{}", manifest.display(), view.map_or_else(|| "backend".to_string(), |v| v.to_string()));
+    let text = format!("l'index de la vue {label} est prêt : {}", if vectors { "texte et vecteurs" } else { "texte" });
+    Some(WhatAWatchSays { eta, vectors, key, text })
+}
+
 /// Combien de temps `start` attend l'hôte avant de laisser la session démarrer
 /// sans lui : Claude Code abandonne un serveur muet au bout de 30 s.
 const START_WAIT: std::time::Duration = std::time::Duration::from_secs(4);
@@ -773,18 +797,9 @@ impl McpClient {
     /// **An answer « not ready » opens a watch of its view** (one per manifest and view): polled on the host until
     /// ready, then one notice that names the view and what is ready (« texte » or « texte et vecteurs »).
     fn watch_if_not_ready(&self, answer: &Value, view: Option<Value>) {
-        let index = &answer["index"];
-        if index["ready"] != json!(false) {
+        let Some(WhatAWatchSays { eta, vectors, key, text }) = what_a_watch_says(&self.manifest, &answer["index"], view.as_ref()) else {
             return;
-        }
-        let vectors = index.get("vectors_eta_s").is_some();
-        let eta = ["eta_s", "text_eta_s", "vectors_eta_s"].iter().filter_map(|k| index[*k].as_u64()).max();
-        let label = view
-            .as_ref()
-            .and_then(|v| v["worktree"].as_str().or_else(|| v["layer"].as_str()).map(str::to_string))
-            .unwrap_or_else(|| "du backend".to_string());
-        let key = format!("{}|{}", self.manifest.display(), view.as_ref().map_or_else(|| "backend".to_string(), |v| v.to_string()));
-        let text = format!("l'index de la vue {label} est prêt : {}", if vectors { "texte et vecteurs" } else { "texte" });
+        };
         let (inner, notice) = (self.inner.clone(), self.notice.clone());
         self.watches.watch(
             &key,
