@@ -296,7 +296,7 @@ impl Node for EntityRecordNode {
             ctx.set_output("record", PortValue::new(result));
             return Ok(());
         }
-        let generated: Vec<&str> = [&policy.created_at, &policy.updated_at, &policy.revision]
+        let generated: Vec<&str> = [&policy.created_at, &policy.updated_at, &policy.revision, &policy.template]
             .into_iter()
             .flatten()
             .map(String::as_str)
@@ -353,6 +353,11 @@ impl Node for EntityRecordNode {
         }
         if let Some(field) = &policy.updated_at {
             input[field] = json!(now);
+        }
+        if let Some(field) = &policy.template {
+            if let Some(hash) = ctx.service::<String>(crate::backend::TEMPLATE_SERVICE) {
+                input[field] = json!(hash);
+            }
         }
         for transition in &policy.transition_dates {
             let previous = old
