@@ -155,4 +155,12 @@ Témoin `chat_contextuel::une_fenetre_qui_n_est_pas_le_chat_compte_les_accords_e
   - sans le retrait : rouge à « the approval granted, no approval awaited ».
 - **Vert** (8763658748), avec les tranches 2 à 4, `ide_par_le_flux` et le contrôle du bundle ; tsc propre.
 
+**Relecture d'ED (20 novembre, 3 h 3x) : un accord fantôme se comptait pour toujours.** Les demandes ne vivent qu'en mémoire de l'hôte (`etat_accord` lit `accords.demandes`) : après un redémarrage, la carte d'un tour d'avant y est inconnue, `GET /ide/accords?id=` répond sans `ok`, et le chargement la comptait comme en attente, alors qu'aucun `AccordDecide` ne viendra jamais. Même cas pour une carte refusée par l'hôte quand le journal de la décision n'a pas pu s'écrire. Correction : au chargement, seule une carte que l'hôte connaît **et** sans décision compte ; une carte inconnue n'est ni ajoutée ni retirée.
+
+- Témoin étendu : un second tour demande un second accord, puis l'hôte oublie ses demandes (`oublier_les_demandes_pour_un_temoin`, sous `cfg(test)`, comme un redémarrage), et une fenêtre ouverte alors doit dire 0 une fois son chargement fini (`data-charge`, une marque d'ordre et non un délai).
+- Mises au point du témoin avant le rouge, chacune vue au journal : une commande propre à chaque message (la ligne accordée au premier tour ne redemande pas d'accord), et seulement sur un message tapé par le témoin (la relance de l'hôte après un accord dit aussi « echo »).
+- **Rouge** à 7e857c459c, sur l'assertion de la carte inconnue ; **vert** à b34ac65f0a, avec les tranches 2 à 4, `ide_par_le_flux` et le bundle.
+
+**Second point d'ED, noté et non corrigé ici** : à chaque ouverture d'une fenêtre détachée, un chat long fait une requête par carte d'accord de son histoire. Si l'hôte offre un jour la liste de ses demandes ouvertes, ce sera une seule requête, et c'est elle qui dira aussi ce que l'hôte connaît.
+
 Les cinq tranches de la conception sont faites. Restent hors d'elles : la graine de la vue par run (tranche 4), et la reprise des appels d'outil d'avant l'ouverture d'une fenêtre (tranche 1).
