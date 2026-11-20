@@ -1092,7 +1092,7 @@ impl EmbedDaemon {
                                     })
                                     .unwrap_or_default(),
                                 ),
-                                Err(e) => (status_of(&e), erreur(&e.to_string())),
+                                Err(e) => (500, erreur(&e.to_string())),
                             }
                         }
                     }
