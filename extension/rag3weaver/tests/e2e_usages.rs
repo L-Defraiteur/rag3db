@@ -1466,3 +1466,37 @@ fn un_paquet_du_projet_importe_par_son_nom_se_resout_par_l_import() {
     }
     assert!(faux.is_empty(), "un paquet du projet importé par son nom : {faux:#?}");
 }
+
+/// **`export * from './x'` se suit sans deviner** (ticket du 20 novembre 2026) : l'entrée d'un paquet TypeScript
+/// réexporte tout `./catalog` ; `import { Catalog } from "monpaquet"` va à la `Catalog` de `catalog.ts`, marqué
+/// « import ». Un nom que `./catalog` ne définit pas (`Absent`) n'y est pas réexporté : il ne se relie pas par cette
+/// voie.
+#[test]
+#[ignore]
+fn export_etoile_se_suit_sans_deviner() {
+    let dir = std::env::temp_dir().join(format!("export-etoile-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let fichiers = [
+        ("package.json", "{\n  \"name\": \"monpaquet\",\n  \"version\": \"0.1.0\"\n}\n"),
+        ("src/index.ts", "export * from './catalog';\n"),
+        ("src/catalog.ts", "export class Catalog {\n    static create(): Catalog {\n        return new Catalog();\n    }\n}\n"),
+        ("src/ailleurs.ts", "export class Absent {}\n"),
+        ("tests/a.test.ts", "import { Catalog, Absent } from \"monpaquet\";\n\nexport function essai() {\n    Absent;\n    return Catalog.create();\n}\n"),
+    ];
+    for (c, texte) in fichiers {
+        let p = dir.join(c);
+        std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+        std::fs::write(&p, texte).unwrap();
+    }
+    let racine = dir.to_string_lossy().to_string();
+    let m = rag3weaver::manifestes::Manifestes::lire(&[dir.join("package.json").to_string_lossy().to_string()], |c| std::fs::read_to_string(c).ok());
+    let catalog = setup();
+    let mut cat = catalog.lock().unwrap();
+    cat.ingest_code(&rag3weaver::code::analyze_in_project_avec(&racine, read_sources(&racine).unwrap(), "", None, Some(&m))).unwrap();
+    let catalog_marques = marques_vers(&cat, "essai", "Catalog");
+    let absent_marques = marques_vers(&cat, "essai", "Absent");
+    drop(cat);
+    let _ = std::fs::remove_dir_all(&dir);
+    assert_eq!(catalog_marques, vec!["import".to_string()], "Catalog par la réexportation large");
+    assert!(!absent_marques.contains(&"import".to_string()), "Absent n'est pas réexporté par index.ts : {absent_marques:?}");
+}
