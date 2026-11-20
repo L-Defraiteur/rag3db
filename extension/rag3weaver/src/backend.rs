@@ -7912,6 +7912,58 @@ mod tests {
         (dir, backend)
     }
 
+    /// **A short `variable` is not a vector candidate, and keeps its full text** (c7, 20 November 2026: since the content
+    /// of a scope is bounded to its node's bytes, 57bfc142bf, a Python `variable` of one statement on a line `a;b;c`
+    /// carries 18 characters, `s=index.read_text()`, and wins by the vector alone — luciepc's 88 %). Its chunks go;
+    /// its full-text document stays, so a short constant is still found by its name; the reopening's guard rebuilds
+    /// nothing.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_short_variable_has_no_chunk_and_keeps_its_full_text() {
+        let (dir, p) = fixture_code_avec("working_tree", false, json!({}), &|_| {});
+        drop(p);
+        std::fs::write(
+            dir.path().join("sources/plant.py"),
+            "import pathlib\nindex = pathlib.Path('index.html'); s=index.read_text(); print(len(s))\nPLANTE_MAX_KG = 1024\n\n\
+             def mesurer_la_plante(hauteur, largeur):\n    \"\"\"La surface d'une feuille de la plante, en centimetres carres.\"\"\"\n\
+                 surface = hauteur * largeur * 0.5\n    return surface + PLANTE_MAX_KG / 1000.0\n",
+        )
+        .unwrap();
+        let prepared = PreparedBackend::load(&dir.path().join("backend.json")).expect("le manifeste se charge");
+        let backend = backend_de_code(dir.path(), prepared);
+        let source = backend.file_source.clone().unwrap();
+        {
+            let mut cat = backend.catalog.lock().unwrap();
+            crate::code_sync::sync_source(&mut cat, source.as_ref(), &Default::default(), &mut |_| {}).expect("l'index");
+        }
+        // The variables of the file and their chunks, by the table that carries the chunks.
+        let (table, chunks) = {
+            let cat = backend.catalog.lock().unwrap();
+            let t = crate::code::SCOPE_CONTENT;
+            let r = cat
+                .execute_raw(&format!(
+                    "MATCH (v:{t}) WHERE v.scope_type = 'variable' OPTIONAL MATCH (c:{t}_Chunk)-[:{t}_CHUNKED_FROM]->(v) \
+                     RETURN v.name, v.content, count(c)"
+                ))
+                .expect("the variables");
+            (t, r.rows)
+        };
+        let _ = table;
+        let vues: Vec<String> = chunks.iter().map(|l| format!("{:?}", l)).collect();
+        assert!(!chunks.is_empty(), "the file has variables: {vues:?}");
+        let avec_morceau: Vec<&Vec<crate::connection::CypherValue>> = chunks.iter().filter(|l| l.get(2).and_then(|v| v.as_i64()).unwrap_or(0) > 0).collect();
+        assert!(avec_morceau.is_empty(), "a short variable is not a vector candidate, yet has chunks: {avec_morceau:?}");
+        // Found by its name all the same: its full-text document stays.
+        let r = backend.call("search_code", json!({"query": "PLANTE_MAX_KG", "options": {"signals": ["bm25"], "limit": 10, "format": "json"}})).expect("search_code");
+        let noms: Vec<String> = r["result"].as_array().unwrap_or(&Vec::new()).iter().map(|l| l["data"]["name"].as_str().unwrap_or("").to_string()).collect();
+        assert!(noms.iter().any(|n| n == "PLANTE_MAX_KG"), "the short constant is found by its name: {noms:?}");
+        // The reopening's guard rebuilds nothing: the variable kept its document.
+        let mut cat = backend.catalog.lock().unwrap();
+        let comptes = cat.comptes_du_plein_texte();
+        assert!(comptes.iter().all(|(_, d, l)| d == l), "documents and candidate rows: {comptes:?}");
+        assert!(cat.check_fts_counts().expect("the guard").is_empty(), "the reopening's guard rebuilds; counts {comptes:?}");
+    }
+
     /// **A folded container is not a search candidate** (2.12, ticket of 16 November 2026, « un scope de namespace
     /// passe devant une classe du même nom »; c7's rule: a `namespace` or `module` whose folded content and
     /// docstring together are shorter than `workspace.container_min_chars`, 80 by default, is in neither the full
