@@ -2476,3 +2476,35 @@ lire un worktree à plat.
 avec un témoin shell : archi fait accepter un témoin .sh/.py au lanceur demain, derrière le bac à sable) ; codeparsers
 redépose sa pile avec les usages qualifiés dans la nuit (cause : rien ne posait de rendez-vous vers le type d'un
 appel `Type::f()` ; trois témoins rouges vus).
+
+## 20 novembre, 01 h 42 — la répétition est verte : la bascule des bases se fait à 06 h 45
+
+**Le verdict de G.** Répétition complète sur une copie neuve de l'instantané d'avant 1b, hôte baccb2ea6e
+(stop-words-locals, codeparsers b67ad75, règles de l'analyse 9, lucivy 4.3.12) et lib 6e2476d41 : départ 01 h 08 47,
+repassage de 01 h 20 52 à 01 h 40 08 (19 min 16 s) jusqu'à « indexation terminée », RSS maximal de l'hôte 9,7 Gio, aucune
+erreur de tampon. Le juge, contre la production du même arbre (56b5d73142, encore sous l'ancienne analyse) : **les 41
+sites de `usages Catalog` perdus hier sont revenus, 0 manquant** ; aucun site de la production perdu sur les quatre
+noms (acquireLock 8/8, FileSource 133/133, lockRowForWrite 3/3, Catalog 788 → 1 129 : 0 perdu, 341 gagnés, et 12 tirés au
+hasard sont tous de vrais `Catalog::new(`, `Catalog::rechercher(`, `Catalog::Get(`) ; search_code : recouvrement 97,8 %,
+même premier 10/10. Le « critère manqué » du script compare à l'instantané de 17 h 50, sous l'ancienne analyse : écarté
+comme convenu. Copie gardée et marquée jetable : `mesures/repetition-versions-code-rag3db-depot-20261120-010847`.
+
+**La fenêtre du matin, ordre de G** (accepté) : (a) 06 h 45, annonce ; les sessions tiennent leurs lourds de 06 h 45 à
+09 h 30 aux deux postes, tablette entière ; pose de baccb2ea6e aux deux postes (les hôtes tournent encore sur
+60cff306c4 ; l'essai est déjà vert) ; si 2.12 d'ED a atterri d'ici là, répétition rejouée sur son binaire d'abord
+(35 min) ; (b) 07 h 00 ou 07 h 35, **la bascule des trois bases de Lucie sur exactement le couple répété**,
+code-rag3db-depot d'abord, puis code-lourd et code-principal en parallèle, fin vers 08 h 00 ou 08 h 30, critère
+compris, retour arrière prêt 72 h ; (c) au « à toi », le train C++ en un seul push par la garde de cœur (branche
+train-20-11 : la quarantaine du dernier lecteur de hotfixs 4b6fa1b91f, puis la course des groupes de morceaux de cœur
+501d7ccc90, passe de la tête commune jouée cette nuit à luciepc, verdict vers 05 h 30) ; (d) la lib bâtie sur cette
+tête, verdict, épingle, contrôle des deux sens, pose et réveil, fin vers 09 h 30. Pourquoi la bascule avant la lib : la
+bascule se fait sur ce qui a été répété, jamais sur un autre binaire ; le train C++ touche les points de reprise et les
+lecteurs, pas le format, et sa lib passe ensuite sur des bases déjà migrées, avec ses propres garde-fous.
+
+**Cette nuit, en parallèle** : la parité 2.12 du banc (6ff7d11cae contre a542e0f518, fin vers 02 h 45) puis la mesure
+du raisonnement de l'extraction (low, minimal, borne 16 384, sur la tête de mémoire e94b15ca2, garde-fou 06 h 30) ; le
+rejeu du cas lucivy 04 d'archi (fin avant 03 h) ; le lot des paquets par leur nom de codeparsers (Rust, TS, et les
+réexportations Python/TS dans le même lot, sous la sonde de marque). Embarquement a mesuré le point C : avec les lignes
+de contexte, **72,5 % des morceaux de code dépassent la fenêtre de granite** (512 jetons) ; lot à ED après 2.12 : la
+taille de morceau déduite de la déclaration de l'embarqueur (fenêtre × marge ÷ ratio déclaré par modèle), tenue comme
+propriété de la base, témoin qui compte en Rust avec le tokenizer de granite.
