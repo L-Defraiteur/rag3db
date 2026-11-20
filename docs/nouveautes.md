@@ -1,5 +1,9 @@
 # Nouveautés
 
+- 20 novembre 2026 — **Un nom tapé exactement rend sa déclaration, même courant.** Chercher `lib`, `result` ou
+  `con` rendait des dizaines de lignes qui les citent, et pas la déclaration de ce nom : elle restait hors de la liste
+  que la recherche classe. La recherche lit maintenant directement les déclarations dont le nom est la requête entière,
+  sous les mêmes filtres de chemin et de langage, et les met devant.
 - 21 novembre 2026 — **Une recherche se lance sans `options`.** `search_code` et les autres outils de recherche
   livrés prennent `options` comme facultatif, avec ses défauts : un appel avec la seule requête répond, au lieu d'être
   refusé sur le schéma.
