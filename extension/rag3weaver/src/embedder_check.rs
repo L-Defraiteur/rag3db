@@ -147,7 +147,7 @@ pub fn check(
     weights_sha256: impl FnOnce() -> Result<String, String>,
     lot_max: usize,
 ) -> SelfCheck {
-    let _ = (alone, batch, reference, weights_sha256, lot_max, largest_gap as fn(&[f32], &[f32]) -> f32);
+    let _ = (alone, batch, reference, weights_sha256, lot_max, largest_gap as fn(&[f32], &[f32]) -> f32, SelfCheck::not_verified as fn(String) -> SelfCheck);
     SelfCheck { state: CheckState::Verified, alone_gap: None, batch_gap: None, tolerance: None, batch_texts: 0, duration_ms: 0, reason: None }
 }
 
