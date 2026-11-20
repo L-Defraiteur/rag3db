@@ -104,9 +104,9 @@ pub struct WorkspaceConfig {
     /// full text nor the chunks. A property of the base: it joins the version of the analysis. Absent: 80.
     #[serde(default)]
     pub container_min_chars: Option<usize>,
-    /// **The shortest `variable` that is a vector candidate** (20 November 2026): a `variable` scope whose content and
-    /// docstring hold fewer characters has no chunk (so no vector) and keeps its full-text document. A property of
-    /// the base, like `container_min_chars`. Absent: 80.
+    /// **The shortest leaf scope that is a vector candidate** (20 November 2026): a scope that folds no child, whatever
+    /// its type, whose content and docstring hold fewer characters has no chunk (so no vector) and keeps its
+    /// full-text document. A property of the base, like `container_min_chars`. Absent: 80.
     #[serde(default)]
     pub variable_min_chars: Option<usize>,
     /// La porte des commandes (`run`/`run_bg`) : absente ou `off`, le

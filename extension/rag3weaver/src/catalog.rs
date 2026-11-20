@@ -11007,18 +11007,34 @@ fn read_threads() -> u64 {
                 champs.push(f.to_string());
             }
         }
+        // The rows of its types, when it names some; its leaves, when it holds for leaves (a leaf folds no child).
+        let mut conditions = Vec::new();
+        let mut params = Vec::new();
+        if !regle.types.is_empty() {
+            conditions.push(rag3weaver_ir::Predicate::In { field: regle.type_field.clone(), param: "types".into() });
+            params.push(QueryParam::new("types", CypherValue::List(regle.types.iter().map(|t| CypherValue::String(t.clone())).collect())));
+        }
+        if let Some(f) = regle.leaf_field.as_ref().filter(|_| !regle.fold_mark.is_empty()) {
+            // A leaf folds no child: its content holds no fold mark.
+            conditions.push(rag3weaver_ir::Predicate::Not(Box::new(rag3weaver_ir::Predicate::Contains { field: f.clone(), param: "marque_de_pli".into() })));
+            params.push(QueryParam::new("marque_de_pli", CypherValue::String(regle.fold_mark.clone())));
+        }
+        let filter = match conditions.len() {
+            0 => None,
+            1 => conditions.pop(),
+            _ => Some(rag3weaver_ir::Predicate::AllOf(conditions)),
+        };
         let select = rag3weaver_ir::Select {
             table: entity.to_string(),
             by_uuids: false,
-            filter: Some(rag3weaver_ir::Predicate::In { field: regle.type_field.clone(), param: "types".into() }),
+            filter,
             returns: champs.iter().map(|f| rag3weaver_ir::Column::Node(f.clone())).collect(),
             order_by: Vec::new(),
             limit: None,
             offset: None,
         };
         let requete = self.dialect.select(&select).map_err(|e| CatalogError::DbError(e.to_string()))?;
-        let types = CypherValue::List(regle.types.iter().map(|t| CypherValue::String(t.clone())).collect());
-        let lu = self.conn.execute_with_params(&requete, &[QueryParam::new("types", types)]).map_err(|e| CatalogError::DbError(e.to_string()))?;
+        let lu = self.conn.execute_with_params(&requete, &params).map_err(|e| CatalogError::DbError(e.to_string()))?;
         Ok(lu
             .rows
             .iter()
@@ -11071,8 +11087,15 @@ fn read_threads() -> u64 {
             Some(_) => {}
             None => self.persist_meta_key(&cle, &regle.min_chars.to_string())?,
         }
+        // **Once per rule and threshold**: a row inserted after the gesture is judged at its insertion, so a base that
+        // played the gesture never reads all its leaves again at each sync.
+        let fait = format!("{cle}:geste");
+        if self.read_meta_key(&fait)?.as_deref() == Some(regle.min_chars.to_string().as_str()) {
+            return Ok(0);
+        }
         let exclues = self.non_candidate_uuids(entity, regle)?;
         if exclues.is_empty() {
+            self.persist_meta_key(&fait, &regle.min_chars.to_string())?;
             return Ok(0);
         }
         let uuids = CypherValue::List(exclues.iter().cloned().map(CypherValue::String).collect());
@@ -11119,6 +11142,7 @@ fn read_threads() -> u64 {
                 self.appliquer_le_tampon(a)?;
             }
         }
+        self.persist_meta_key(&fait, &regle.min_chars.to_string())?;
         Ok(touchees.len())
     }
 

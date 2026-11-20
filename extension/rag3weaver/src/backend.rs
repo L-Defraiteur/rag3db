@@ -7955,6 +7955,21 @@ mod tests {
             (t, r.rows)
         };
         let _ = table;
+        // A short constant too (a type of its own in codeparsers): the rule is by size, not by type (Lucie, 10 h 36).
+        let constante = {
+            let cat = backend.catalog.lock().unwrap();
+            let t = crate::code::SCOPE_CONTENT;
+            cat.execute_raw(&format!(
+                "MATCH (v:{t}) WHERE v.name = 'PLANTE_MAX_KG' OPTIONAL MATCH (c:{t}_Chunk)-[:{t}_CHUNKED_FROM]->(v) RETURN v.scope_type, count(c)"
+            ))
+            .expect("the constant")
+            .rows
+        };
+        assert!(!constante.is_empty(), "the short constant is a scope");
+        assert!(
+            constante.iter().all(|l| l.get(1).and_then(|v| v.as_i64()) == Some(0)),
+            "a short constant is a leaf under the threshold: no chunk, whatever its type: {constante:?}"
+        );
         let vues: Vec<String> = chunks.iter().map(|l| format!("{:?}", l)).collect();
         assert!(!chunks.is_empty(), "the file has variables: {vues:?}");
         let avec_morceau: Vec<&Vec<crate::connection::CypherValue>> = chunks.iter().filter(|l| l.get(2).and_then(|v| v.as_i64()).unwrap_or(0) > 0).collect();
