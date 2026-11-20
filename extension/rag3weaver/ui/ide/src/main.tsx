@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { Moon, Sun, Radio } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { dispatchFlux, etatPartage, fetchState, jeSuisLaFenetre, onEtat, openFlux, roleDeLaFenetre, route, type FluxStatus, type HostState } from "@/lib/host";
+import { dispatchFlux, etatPartage, fetchChat, fetchState, jeSuisLaFenetre, onEtat, onFlux, openFlux, roleDeLaFenetre, route, type ChatTurn, type FluxStatus, type HostState, type UiComposant } from "@/lib/host";
 import { Chat } from "@/views/Chat";
 import { File } from "@/views/File";
 import { Search } from "@/views/Search";
@@ -24,6 +24,65 @@ import { Home } from "@/views/Home";
 // l'état de l'hôte relu à chaque ouverture du flux, et la vue que l'URL nomme.
 // Les vues non portées sont servies par l'hôte depuis l'ancienne page : la
 // route de l'hôte choisit, la page ne les connaît pas.
+/// **The approvals awaited, in a window that is not the chat** (the IDE in several windows, slice 5; ED's review: from
+/// what the host already says, without a shared key). At its load, the window reads the chat's state once, and the
+/// decision of each approval card it finds there; then it follows the stream only: a `ToolCallFinished` of its backend
+/// that carries an approval card adds it, an `AccordDecide` takes it away. No request while idle.
+function AccordsEnAttente({ id, manifest }: { id: string; manifest: string | undefined }) {
+  const [enAttente, setEnAttente] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    let vivant = true;
+    const decides = new Set<string>();
+    const ajouter = (ids: string[]) =>
+      setEnAttente((cur) => {
+        const n = new Set(cur);
+        for (const i of ids) if (!decides.has(i)) n.add(i);
+        return n.size === cur.size ? cur : n;
+      });
+    const retirer = (i: string) => {
+      decides.add(i);
+      setEnAttente((cur) => {
+        if (!cur.has(i)) return cur;
+        const n = new Set(cur);
+        n.delete(i);
+        return n;
+      });
+    };
+    const accords = (ui: UiComposant[] | undefined) => (ui ?? []).filter((u) => u.kind === "accord" && u.id).map((u) => String(u.id));
+    fetchChat(id)
+      .then((s) =>
+        Promise.all(
+          s.turns.flatMap((t: ChatTurn) => accords(t.ui)).map((i) =>
+            fetch(`/ide/accords?id=${encodeURIComponent(i)}`)
+              .then((r) => r.json())
+              .then((v: { ok?: boolean; result?: { decision?: string | null } }) => ({ i, decide: !!(v.ok && v.result?.decision) }))
+              .catch(() => ({ i, decide: false })),
+          ),
+        ),
+      )
+      .then((rs) => {
+        if (!vivant) return;
+        for (const r of rs) (r.decide ? retirer(r.i) : ajouter([r.i]));
+      })
+      .catch(() => {});
+    const off = onFlux((d) => {
+      const e = d.evenement ?? {};
+      if (d.sujet === "accords" && e.kind === "AccordDecide" && e.id) retirer(String(e.id));
+      else if (e.kind === "ToolCallFinished" && d.backend === manifest && Array.isArray(e.ui)) ajouter(accords(e.ui as UiComposant[]));
+    });
+    return () => {
+      vivant = false;
+      off();
+    };
+  }, [id, manifest]);
+  const n = enAttente.size;
+  return (
+    <span id="accords-en-attente" data-compte={String(n)} className={n ? "text-xs text-primary" : "hidden"}>
+      {n === 1 ? "1 accord attend dans le chat" : `${n} accords attendent dans le chat`}
+    </span>
+  );
+}
+
 function App() {
   const [state, setState] = useState<HostState | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -99,7 +158,10 @@ function App() {
       <header className="flex items-center gap-3 px-4 py-2 border-b" id="entete" data-fenetre={fenetre ?? undefined}>
         {/* A detached window says its role and the stream only (slice 3). */}
         {fenetre ? (
-          <span className="text-xs text-muted-foreground">{`fenêtre : ${fenetre === "depot" ? "dépôt" : fenetre}`}</span>
+          <>
+            <span className="text-xs text-muted-foreground">{`fenêtre : ${fenetre === "depot" ? "dépôt" : fenetre}`}</span>
+            {route().id ? <AccordsEnAttente id={route().id!} manifest={state?.backends.find((b) => b.id === route().id)?.manifest} /> : null}
+          </>
         ) : (
           <>
             <a href="/ide/" className="font-semibold tracking-tight">
