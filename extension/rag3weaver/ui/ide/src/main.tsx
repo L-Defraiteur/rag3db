@@ -92,6 +92,27 @@ function AccordsEnAttente({ id, manifest }: { id: string; manifest: string | und
   );
 }
 
+/// **The index of the window's repository is ready** (ticket of 20 Nov. 2026, « l'avis index prêt dans la fenêtre
+/// détachée du dépôt »): the host's watch says `IndexReady` once on the stream, subject `index`; a detached window of
+/// that backend says it in its header. From the stream only: no request, at rest or otherwise.
+function IndexPretFenetre({ manifest }: { manifest: string | undefined }) {
+  const [avis, setAvis] = useState<{ texte: string; recus: number }>({ texte: "", recus: 0 });
+  useEffect(
+    () =>
+      onFlux((d) => {
+        const e = d.evenement ?? {};
+        if (d.sujet === "index" && e.kind === "IndexReady" && manifest && d.backend === manifest)
+          setAvis((a) => ({ texte: String(e.text ?? "l'index est prêt"), recus: a.recus + 1 }));
+      }),
+    [manifest],
+  );
+  return (
+    <span id="index-pret-fenetre" role="status" data-recus={String(avis.recus)} className={avis.recus ? "text-xs text-primary" : "hidden"}>
+      {avis.texte}
+    </span>
+  );
+}
+
 function App() {
   const [state, setState] = useState<HostState | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -170,6 +191,7 @@ function App() {
           <>
             <span className="text-xs text-muted-foreground">{`fenêtre : ${fenetre === "depot" ? "dépôt" : fenetre}`}</span>
             {route().id ? <AccordsEnAttente id={route().id!} manifest={state?.backends.find((b) => b.id === route().id)?.manifest} /> : null}
+            {route().id ? <IndexPretFenetre manifest={state?.backends.find((b) => b.id === route().id)?.manifest} /> : null}
           </>
         ) : (
           <>
