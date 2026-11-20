@@ -10839,7 +10839,7 @@ fn read_threads() -> u64 {
     }
 
     /// The witnesses' rule of non-candidates of `entity` (2.12): a base indexed before the rule, then under it.
-    #[cfg(test)]
+    #[cfg(all(test, feature = "code"))]
     pub(crate) fn poser_la_regle_des_non_candidats(&mut self, entity: &str, regle: Option<crate::config::NotCandidate>) {
         if let Some(c) = self.entity_configs.get_mut(entity) {
             c.chunking.not_candidate = regle;
@@ -10847,7 +10847,7 @@ fn read_threads() -> u64 {
     }
 
     /// The witnesses' fresh process (2.12): the full-text handles closed, as a host that has just opened the base.
-    #[cfg(test)]
+    #[cfg(all(test, feature = "code"))]
     pub(crate) fn fermer_les_poignees_du_plein_texte(&mut self) {
         let _ = self.close_fts_handles();
     }
