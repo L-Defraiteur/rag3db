@@ -64,6 +64,9 @@ pub struct ChunkerConfig {
     /// `Lines`: **the bound of a whole chunk**, core and context, in bytes (the window of the base's embedder). None:
     /// only `max_size`, which bounds the core and each side of the context.
     pub max_chunk_size: Option<usize>,
+    /// `Lines`: **the bound of a whole chunk in tokens**, counted by the tokenizer of the model it names. A chunker
+    /// with a bound in tokens is built by [`Chunker::try_new`], which refuses when the tokenizer is missing.
+    pub token_bound: Option<crate::tokens::TokenBound>,
 }
 
 impl Default for ChunkerConfig {
@@ -75,6 +78,7 @@ impl Default for ChunkerConfig {
             max_lines: 30,
             overlap_lines: 5,
             max_chunk_size: None,
+            token_bound: None,
         }
     }
 }
@@ -91,6 +95,7 @@ impl From<&crate::config::ChunkingConfig> for ChunkerConfig {
             max_lines: c.max_lines,
             overlap_lines: c.overlap_lines,
             max_chunk_size: c.max_chunk_size,
+            token_bound: c.token_bound.clone(),
         }
     }
 }
@@ -100,11 +105,45 @@ impl From<&crate::config::ChunkingConfig> for ChunkerConfig {
 /// Split text into overlapping chunks with offset tracking.
 pub struct Chunker {
     config: ChunkerConfig,
+    /// The counter of the bound in tokens, when the configuration has one.
+    tokens: Option<crate::tokens::TokenCounter>,
 }
 
 impl Chunker {
+    /// A chunker without a bound in tokens. **With one, use [`Self::try_new`]**: this one would have no counter, and
+    /// panics rather than cut by the bytes alone.
     pub fn new(config: ChunkerConfig) -> Self {
-        Self { config }
+        Self::try_new(config).unwrap_or_else(|e| panic!("Chunker::new with a bound in tokens: {e} (use Chunker::try_new)"))
+    }
+
+    /// **A chunker, its counter of tokens loaded** when its configuration bounds chunks in tokens. Refuses, naming the
+    /// tokenizer, when this build or this machine has none: the chunks for that model are never cut by the bytes
+    /// alone.
+    pub fn try_new(config: ChunkerConfig) -> Result<Self, String> {
+        let tokens = match &config.token_bound {
+            Some(b) => Some(crate::tokens::counter(&b.model)?),
+            None => None,
+        };
+        Ok(Self { config, tokens })
+    }
+
+    /// A chunker with this counter of tokens (the witnesses, and a caller that holds one already).
+    pub fn with_counter(config: ChunkerConfig, tokens: crate::tokens::TokenCounter) -> Self {
+        Self { config, tokens: Some(tokens) }
+    }
+
+    /// **Whether `text[a..b]` fits a whole chunk**: under the bound in bytes, and, when the chunk could pass the
+    /// window, under it in tokens. A token covers at least one byte, so a text of at most `window − 2` bytes (the two
+    /// special tokens) is never counted.
+    fn fits(&self, text: &str, a: usize, b: usize) -> bool {
+        let octets = b - a;
+        if octets > self.config.max_chunk_size.unwrap_or(usize::MAX) {
+            return false;
+        }
+        match (&self.config.token_bound, &self.tokens) {
+            (Some(borne), Some(compte)) if octets + 2 > borne.window => compte(text[a..b].trim_end()) <= borne.window,
+            _ => true,
+        }
     }
 
     /// Split `text` into chunks.
@@ -122,7 +161,7 @@ impl Chunker {
             || text.lines().count() <= self.config.max_lines;
         // A text whole is one chunk only under the bound of a whole chunk too.
         let tient_en_octets = text.len() <= self.config.max_size.min(self.config.max_chunk_size.unwrap_or(usize::MAX));
-        if tient_en_octets && tient_en_lignes {
+        if tient_en_octets && tient_en_lignes && self.fits(text, 0, text.len()) {
             let trimmed = text.trim();
             if trimmed.is_empty() {
                 return vec![];
@@ -181,13 +220,18 @@ impl Chunker {
         let mut cores: Vec<(usize, usize, usize, usize, bool)> = Vec::new();
         let mut l = 0;
         while l < n {
-            if fin_de(l) - debuts[l] > max_size {
+            if fin_de(l) - debuts[l] > max_size || !self.fits(text, debuts[l], fin_de(l)) {
                 let mut start = debuts[l];
                 while start < fin_de(l) {
+                    let un_caractere = |s: usize| s + text[s..].chars().next().map_or(1, char::len_utf8);
                     let mut end = snap_to_char_boundary(text, (start + max_size).min(fin_de(l)));
+                    // A line too dense for the window in tokens: its piece halves until it fits.
+                    while end > start && !self.fits(text, start, end) {
+                        end = snap_to_char_boundary(text, start + (end - start) / 2);
+                    }
                     if end <= start {
                         // Never an empty core: at least one whole character.
-                        end = start + text[start..].chars().next().map_or(1, char::len_utf8);
+                        end = un_caractere(start);
                     }
                     cores.push((l, l + 1, start, end, true));
                     start = end;
@@ -196,7 +240,7 @@ impl Chunker {
                 continue;
             }
             let mut fin = l + 1;
-            while fin < n && fin - l < max_lines && fin_de(fin) - debuts[l] <= max_size {
+            while fin < n && fin - l < max_lines && fin_de(fin) - debuts[l] <= max_size && self.fits(text, debuts[l], fin_de(fin)) {
                 fin += 1;
             }
             cores.push((l, fin, debuts[l], fin_de(fin - 1), false));
@@ -206,7 +250,7 @@ impl Chunker {
             let (d, f, _, last_byte, in_one_line) = cores[cores.len() - 1];
             let previous_in_one_line = cores[cores.len() - 2].4;
             let merged_start = debuts[cores[cores.len() - 2].0];
-            if !in_one_line && !previous_in_one_line && last_byte - debuts[d] < 50 && last_byte - merged_start <= borne {
+            if !in_one_line && !previous_in_one_line && last_byte - debuts[d] < 50 && self.fits(text, merged_start, last_byte) {
                 cores.pop();
                 let last = cores.last_mut().expect("au moins un cœur");
                 last.1 = f;
@@ -228,14 +272,14 @@ impl Chunker {
                     let mut grew = false;
                     if start_line > premiere
                         && debuts[d] - debuts[start_line - 1] <= cote_max
-                        && fin_de(end_line - 1) - debuts[start_line - 1] <= borne
+                        && self.fits(text, debuts[start_line - 1], fin_de(end_line - 1))
                     {
                         start_line -= 1;
                         grew = true;
                     }
                     if end_line < derniere
                         && fin_de(end_line) - fin_de(f - 1) <= cote_max
-                        && fin_de(end_line) - debuts[start_line] <= borne
+                        && self.fits(text, debuts[start_line], fin_de(end_line))
                     {
                         end_line += 1;
                         grew = true;
@@ -403,7 +447,7 @@ mod tests {
     use super::*;
 
     fn par_lignes(max_lines: usize, max_size: usize, overlap_lines: usize) -> Chunker {
-        Chunker::new(ChunkerConfig { strategy: ChunkStrategy::Lines, max_lines, max_size, overlap_lines, overlap: 0, max_chunk_size: None })
+        Chunker::new(ChunkerConfig { strategy: ChunkStrategy::Lines, max_lines, max_size, overlap_lines, overlap: 0, max_chunk_size: None, token_bound: None })
     }
 
     /// **A whole chunk keeps under its bound, context and merged tail included** (ticket of embarquement, 20 November
@@ -423,6 +467,7 @@ mod tests {
             overlap_lines: 5,
             overlap: 0,
             max_chunk_size: Some(borne),
+            token_bound: None,
         })
         .chunk(&texte);
         assert!(c.len() > 1, "the text is cut");
@@ -445,6 +490,7 @@ mod tests {
             overlap_lines: 5,
             overlap: 0,
             max_chunk_size: Some(borne),
+            token_bound: None,
         })
         .chunk(&court);
         assert!(c.iter().all(|k| k.text.len() <= borne), "a short text over the bound: {:?}", c.iter().map(|k| k.text.len()).collect::<Vec<_>>());
