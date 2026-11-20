@@ -2457,6 +2457,37 @@ impl PreparedBackend {
         let relation_defs = schema.relations.clone();
         drop(schema);
         drop(provided_schema);
+        // **Every script a graph names is declared** (20 November 2026): a `script_id` was only resolved at the call,
+        // so a template whose graph named an undeclared script loaded, and failed in service. The cited graphs are
+        // already inlined in their node's configuration: walking the whole definition reaches them.
+        fn undeclared_scripts(v: &Value, scripts: &BTreeMap<String, String>, out: &mut BTreeSet<String>) {
+            match v {
+                Value::Object(o) => {
+                    if o.get("node_type").and_then(Value::as_str) == Some("RhaiNode") {
+                        if let Some(id) = o.get("config").and_then(|c| c.get("script_id")).and_then(Value::as_str) {
+                            if !id.contains('$') && !scripts.contains_key(id) {
+                                out.insert(id.to_string());
+                            }
+                        }
+                    }
+                    for x in o.values() {
+                        undeclared_scripts(x, scripts, out);
+                    }
+                }
+                Value::Array(a) => a.iter().for_each(|x| undeclared_scripts(x, scripts, out)),
+                _ => {}
+            }
+        }
+        for (name, t) in tools.iter().chain(reactions.iter()) {
+            let mut out = BTreeSet::new();
+            undeclared_scripts(&serde_json::to_value(t.template()).unwrap_or_default(), &scripts, &mut out);
+            if !out.is_empty() {
+                return Err(format!(
+                    "{name} : le graphe nomme un script que le manifeste ne déclare pas : {} — déclarez-le sous `scripts`",
+                    out.into_iter().collect::<Vec<_>>().join(", ")
+                ));
+            }
+        }
         let template_hash = {
             let mut h = blake3::Hasher::new();
             h.update(&brut);
