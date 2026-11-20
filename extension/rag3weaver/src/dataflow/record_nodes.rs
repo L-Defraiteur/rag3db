@@ -500,8 +500,7 @@ impl Node for InsertRecordNode {
                         let candidate = ctx
                             .service::<HashMap<String, crate::config::EntityConfig>>("entity_configs")
                             .and_then(|c| c.get(entity_name))
-                            .and_then(|c| c.chunking.not_candidate.as_ref())
-                            .is_none_or(|r| !r.excludes(&rec.data));
+                            .is_none_or(|c| !c.chunking.excludes_full_text(&rec.data));
                         if let Some(ref handles) = fts_handles.as_ref().filter(|_| candidate) {
                             if let Some(handle) = handles.get(entity_name) {
                                 let text_fields: Vec<(String, String)> = rec
@@ -1800,7 +1799,7 @@ impl ChunkRecordNode {
             return (vec![], vec![]);
         }
         // A row that is not a search candidate (2.12): no chunks, hence no vectors owed.
-        if entity_config.chunking.not_candidate.as_ref().is_some_and(|r| r.excludes(data)) {
+        if entity_config.chunking.excludes_chunks(data) {
             return (vec![], vec![]);
         }
 
@@ -4345,7 +4344,8 @@ impl Node for UpdateRecordNode {
                             let regle = ctx
                                 .service::<HashMap<String, crate::config::EntityConfig>>("entity_configs")
                                 .and_then(|c| c.get(entity_name))
-                                .and_then(|c| c.chunking.not_candidate.clone());
+                                .map(|c| c.chunking.full_text_rules())
+                                .unwrap_or_default();
                             if let Err(e) = reindex_fts_rows(
                                 conn.as_ref(),
                                 dialect.as_ref(),
@@ -4355,7 +4355,7 @@ impl Node for UpdateRecordNode {
                                 uuids,
                                 &schema_fields,
                                 tampon.as_deref(),
-                                regle.as_ref(),
+                                &regle,
                             ) {
                                 consigner_l_echec(
                                     ctx, "UpdateRecordNode", entity_name, 0,
@@ -4584,7 +4584,8 @@ impl Node for UpdateRecordNode {
                             .entity_configs
                             .as_ref()
                             .and_then(|c| c.get(entity_name))
-                            .and_then(|c| c.chunking.not_candidate.clone());
+                            .map(|c| c.chunking.full_text_rules())
+                            .unwrap_or_default();
                         reindex_fts_rows(
                             conn.as_ref(),
                             dialect.as_ref(),
@@ -4594,7 +4595,7 @@ impl Node for UpdateRecordNode {
                             uuids,
                             &schema_fields,
                             None,
-                            regle.as_ref(),
+                            &regle,
                         )?;
                     }
                 }
@@ -4633,14 +4634,14 @@ fn reindex_fts_rows(
     uuids: Vec<CypherValue>,
     schema_fields: &[String],
     tampon: Option<&crate::fts_tampon::TamponPleinTexte>,
-    regle: Option<&crate::config::NotCandidate>,
+    regles: &[crate::config::NotCandidate],
 ) -> Result<(), String> {
     let mut cols: Vec<&str> = vec!["_uuid"];
     cols.extend(schema_fields.iter().map(|s| s.as_str()));
-    // The fields the rule of non-candidates reads (2.12), after the indexed ones.
-    let lus_pour_la_regle: Vec<&str> = regle
-        .map(|r| std::iter::once(r.type_field.as_str()).chain(r.text_fields.iter().map(String::as_str)).filter(|f| !schema_fields.iter().any(|s| s == f)).collect())
-        .unwrap_or_default();
+    // The fields the rules of non-candidates read (2.12), after the indexed ones — their structure and language fields
+    // too, or a rule would judge here otherwise than at the insertion.
+    let lus_pour_la_regle: Vec<&str> =
+        regles.iter().flat_map(|r| r.fields_read()).filter(|f| !schema_fields.iter().any(|s| s == f)).collect();
     let lus_pour_la_regle: Vec<&str> = {
         let mut v = lus_pour_la_regle;
         v.sort_unstable();
@@ -4674,14 +4675,14 @@ fn reindex_fts_rows(
             })
             .collect();
         // **A row that is not a search candidate** (2.12) loses its document instead of being reindexed.
-        if let Some(r) = regle {
+        if !regles.is_empty() {
             let mut jugees = values.clone();
             for (j, f) in lus_pour_la_regle.iter().enumerate() {
                 if let Some(s) = row.get(1 + schema_fields.len() + j).and_then(|v| v.as_str()) {
                     jugees.push((f.to_string(), s.to_string()));
                 }
             }
-            if r.excludes_values(&jugees) {
+            if regles.iter().any(|r| r.excludes_values(&jugees)) {
                 if let Some(t) = tampon {
                     t.retirer(entity_name, uuid, offset);
                 } else if let Some(o) = offset.filter(|o| handle.shard_for_node_id(*o).is_some()) {

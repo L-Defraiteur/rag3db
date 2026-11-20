@@ -11023,7 +11023,7 @@ fn read_threads() -> u64 {
     #[cfg(all(test, feature = "code"))]
     pub(crate) fn poser_la_regle_des_non_candidats(&mut self, entity: &str, regle: Option<crate::config::NotCandidate>) {
         if let Some(c) = self.entity_configs.get_mut(entity) {
-            c.chunking.not_candidate = regle;
+            c.chunking.not_candidate = regle.into_iter().collect();
         }
     }
 
@@ -11033,21 +11033,21 @@ fn read_threads() -> u64 {
         let _ = self.close_fts_handles();
     }
 
-    /// Whether a full-text write of these values on `table` is set aside by its rule of non-candidates (2.12).
+    /// Whether a full-text write of these values on `table` is set aside by a rule of non-candidates that takes the
+    /// full text out (2.12; a short `variable` keeps its document).
     fn hors_candidats(&self, table: &str, values: &[(String, String)]) -> bool {
-        self.entity_configs.get(table).and_then(|c| c.chunking.not_candidate.as_ref()).is_some_and(|r| r.excludes_values(values))
+        self.entity_configs.get(table).is_some_and(|c| c.chunking.excludes_full_text_values(values))
     }
 
     /// **The rows of `entity` its rule of non-candidates sets aside** (2.12): the rows of the declared types, read
     /// with every field the rule judges (its text fields, its type, its structure and language fields), judged by
     /// the rule itself. Shared by the gesture, which takes their documents and chunks out, and by the count guard,
     /// which compares the documents with the rows that are candidates (G's repetition, 20 November 2026).
-    fn non_candidate_uuids(&self, entity: &str) -> Result<Vec<String>, CatalogError> {
-        let Some(regle) = self.entity_config(entity).and_then(|c| c.chunking.not_candidate.clone()) else { return Ok(Vec::new()) };
+    fn non_candidate_uuids(&self, entity: &str, regle: &crate::config::NotCandidate) -> Result<Vec<String>, CatalogError> {
         let mut champs = vec!["_uuid".to_string()];
-        for f in regle.text_fields.iter().chain([&regle.type_field]).chain(regle.structure_field.iter()).chain(regle.language_field.iter()) {
-            if !champs.contains(f) {
-                champs.push(f.clone());
+        for f in regle.fields_read() {
+            if !champs.iter().any(|c| c == f) {
+                champs.push(f.to_string());
             }
         }
         let select = rag3weaver_ir::Select {
@@ -11077,7 +11077,11 @@ fn read_threads() -> u64 {
     /// progress compare the documents with.
     pub fn candidate_rows_of(&self, table: &str) -> u64 {
         let toutes = self.count_rows_of(table) as u64;
-        toutes.saturating_sub(self.non_candidate_uuids(table).map(|u| u.len() as u64).unwrap_or(0))
+        // The rows a rule that takes the full text out sets aside; a row two rules set aside counts once.
+        let regles = self.entity_config(table).map(|c| c.chunking.full_text_rules()).unwrap_or_default();
+        let sans_document: std::collections::BTreeSet<String> =
+            regles.iter().filter_map(|r| self.non_candidate_uuids(table, r).ok()).flatten().collect();
+        toutes.saturating_sub(sans_document.len() as u64)
     }
 
     /// **The gesture of a base indexed before the rule** (2.12, c7's decision of 19 November 2026): a row that is not a
@@ -11087,19 +11091,30 @@ fn read_threads() -> u64 {
     /// rows lost something. **The threshold is the base's**: it is noted at the first gesture, and a gesture with
     /// another threshold is refused, naming both.
     pub fn set_aside_non_candidates(&mut self, entity: &str) -> Result<usize, CatalogError> {
-        let Some(regle) = self.entity_config(entity).and_then(|c| c.chunking.not_candidate.clone()) else { return Ok(0) };
-        let cle = format!("not_candidate_min_chars:{entity}");
+        let regles = self.entity_config(entity).map(|c| c.chunking.not_candidate.clone()).unwrap_or_default();
+        let mut total = 0;
+        for regle in &regles {
+            total += self.set_aside_by_rule(entity, regle)?;
+        }
+        Ok(total)
+    }
+
+    /// The gesture of one rule: its threshold checked against the base's, its rows' chunks taken out, and their
+    /// full-text documents too when the rule takes the full text out.
+    fn set_aside_by_rule(&mut self, entity: &str, regle: &crate::config::NotCandidate) -> Result<usize, CatalogError> {
+        let cle = regle.threshold_key(entity);
         match self.read_meta_key(&cle)?.and_then(|v| v.parse::<usize>().ok()) {
             Some(note) if note != regle.min_chars => {
                 return Err(CatalogError::DbError(format!(
-                    "{entity} : le seuil des non-candidats de cette base est {note}, ce geste porte {} ; un seuil est une propriété de la base (workspace.container_min_chars)",
+                    "{entity} : le seuil des non-candidats « {} » de cette base est {note}, ce geste porte {} ; un seuil est une propriété de la base (workspace.container_min_chars, workspace.variable_min_chars)",
+                    if regle.name.is_empty() { "conteneurs" } else { regle.name.as_str() },
                     regle.min_chars
                 )))
             }
             Some(_) => {}
             None => self.persist_meta_key(&cle, &regle.min_chars.to_string())?,
         }
-        let exclues = self.non_candidate_uuids(entity)?;
+        let exclues = self.non_candidate_uuids(entity, regle)?;
         if exclues.is_empty() {
             return Ok(0);
         }
@@ -11128,10 +11143,10 @@ fn read_threads() -> u64 {
             .collect::<Vec<_>>()
             .into_iter()
             .find_map(|nom| self.resolve_search_target(&nom).ok().filter(|t| t.parent_table == entity).map(|t| t.bm25_fields));
-        if let Some(champs) = champs_texte {
+        if let Some(champs) = champs_texte.filter(|_| regle.takes_full_text()) {
             let _ = self.ensure_fts_handle(entity, &champs, &crate::scope::fts_filter_fields());
         }
-        if let Some(h) = self.fts_handles.get(entity) {
+        if let Some(h) = self.fts_handles.get(entity).filter(|_| regle.takes_full_text()) {
             let q = self.dialect.select_node_ids(entity);
             let rows = self.conn.execute_with_params(&q, &[QueryParam::new("uuids", uuids)]).map_err(|e| CatalogError::DbError(e.to_string()))?;
             let mut a = crate::fts_tampon::Application::default();

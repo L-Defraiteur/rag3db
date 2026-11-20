@@ -306,7 +306,7 @@ fn role_enfant() {
         let code = if a_versions { rag3weaver::code::SCOPE_CONTENT } else { "Scope" };
         // A container set aside by 2.12 is marked chunked and has no chunk, by design: judged by the rule itself, on
         // the fields it reads.
-        let regle = rag3weaver::code::default_scope_chunking().not_candidate.expect("the code rule");
+        let decoupage = rag3weaver::code::default_scope_chunking();
         let sans_morceau_de = |e: &str, colonnes: &str| {
             format!(
                 "MATCH (p:{e}) WHERE p._chunked_hash IS NOT NULL AND p._chunked_hash <> '' \
@@ -328,7 +328,7 @@ fn role_enfant() {
                 .filter(|l| {
                     let data: std::collections::BTreeMap<String, rag3weaver::connection::CypherValue> =
                         champs.iter().map(|c| c.to_string()).zip(l.iter().cloned()).collect();
-                    !regle.excludes(&data)
+                    !decoupage.excludes_chunks(&data)
                 })
                 .count() as i64;
         }
