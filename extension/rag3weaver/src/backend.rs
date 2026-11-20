@@ -3758,8 +3758,20 @@ thread_local! {
 /// **The view of the session that calls** (V1 of the page `docs/arbre-principal/20-11-2026/01-…`): the host poses it
 /// around a call; a reading tool called without `view` reads under it, and its answer says `view.source: "session"`.
 pub fn with_session_view<T>(v: Option<Value>, f: impl FnOnce() -> T) -> T {
-    let _ = v; // RED STUB.
+    struct Remettre(Option<Value>);
+    impl Drop for Remettre {
+        fn drop(&mut self) {
+            SESSION_VIEW.with(|c| *c.borrow_mut() = self.0.take());
+        }
+    }
+    let avant = SESSION_VIEW.with(|c| c.replace(v));
+    let _remettre = Remettre(avant);
     f()
+}
+
+thread_local! {
+    /// See [`with_session_view`].
+    static SESSION_VIEW: std::cell::RefCell<Option<Value>> = const { std::cell::RefCell::new(None) };
 }
 
 pub fn with_call_deadline<T>(d: Option<CallDeadline>, f: impl FnOnce() -> T) -> T {
@@ -4935,9 +4947,15 @@ impl Backend {
             .clone();
         // `view` est commun à tous les outils (page 28 d'arbre principal, l. 45) :
         // lu ici une fois, jamais un paramètre de graphe.
-        let view = match args.remove("view") {
-            None | Some(Value::Null) => None,
-            Some(v) => Some(parse_view(&v)?),
+        // The view read: the call's, then the session's (`with_session_view`) for a tool that reads, then the
+        // backend's. Its source is said in the answer (V1, page of 20 November 2026).
+        let lit = !attachment.policy.write_files && !attachment.policy.run_commands;
+        let (view, source) = match args.remove("view") {
+            None | Some(Value::Null) => match SESSION_VIEW.with(|v| v.borrow().clone()).filter(|_| lit) {
+                Some(v) => (Some(parse_view(&v).map_err(|e| format!("la vue par défaut de la session : {e}"))?), "session"),
+                None => (None, "défaut"),
+            },
+            Some(v) => (Some(parse_view(&v)?), "appel"),
         };
         for key in args.keys() {
             if attachment.bindings.contains_key(key) {
@@ -5024,6 +5042,10 @@ impl Backend {
                 format!("`view` : l'outil {name} n'a lu sous aucune vue (ce backend n'a pas d'instantané de lecture) ; la réponse n'est pas rendue")
             })?;
             response["view"] = read;
+            response["view"]["source"] = json!(source);
+        } else if lit {
+            // Without a view, a reading tool reads the backend's layer, and says so.
+            response["view"] = json!({ "layer": crate::generations::COUCHE_DU_BACKEND, "source": source });
         }
         context["result"] = response["result"].clone();
         let mut report = self.validate_hooks(prepared, &harness.after, &context);
@@ -9682,7 +9704,9 @@ mod tests {
         assert_eq!(with_view["view"]["layer"], "backend", "la couche lue est dite : {with_view}");
         assert!(with_view["view"]["rank"].is_i64(), "le rang lu est dit : {with_view}");
         assert_eq!(with_view["view"]["depth"], 1, "la profondeur de la pile est dite : {with_view}");
-        assert!(without.get("view").is_none(), "sans `view`, la réponse ne s'invente pas de vue : {without}");
+        // Since V1 (page of 20 November 2026), a reading tool without `view` says the view it read: the backend's, by default.
+        assert_eq!(without["view"], json!({"layer": "backend", "source": "défaut"}), "sans `view`, la réponse ne dit pas qu'elle lit le backend : {without}");
+        assert_eq!(with_view["view"]["source"], "appel", "la source de la vue n'est pas dite : {with_view}");
         assert!(backend.stop_reactions().is_empty());
     }
 
@@ -9771,7 +9795,7 @@ mod tests {
         let under_child = backend
             .call("usages", json!({"name": "depart", "view": {"layer": "enfant"}}))
             .unwrap_or_else(|e| panic!("usages sous la vue de l'enfant : {e}"));
-        assert_eq!(under_child["view"], json!({"layer": "enfant", "rank": 1, "depth": 2, "pending": 2, "pending_rows": false}), "la pile lue est dite : {under_child}");
+        assert_eq!(under_child["view"], json!({"layer": "enfant", "rank": 1, "depth": 2, "pending": 2, "pending_rows": false, "source": "appel"}), "la pile lue est dite : {under_child}");
         assert!(!under_child["result"].to_string().contains("outils.rs"), "le fichier que l'enfant retire ne se voit plus : {under_child}");
         let without = backend.call("usages", json!({"name": "depart"})).expect("usages sans vue");
         assert!(without["result"].to_string().contains("outils.rs"), "sans vue, la vue courante reste celle du backend : {without}");
