@@ -138,4 +138,21 @@ Témoin `le_graphe_detache_suit_les_outils_du_tour` : une fenêtre ouverte sur `
 
 **Graine, sans ticket (ED)** : une vue par run, qui montrerait le run lui-même (ses outils dans l'ordre, ses nœuds allumés, sa fin), et non le graphe de chaque outil. La fenêtre du graphe la suivrait par son `run`.
 
-Reste la tranche 5 : le compte des accords dans une fenêtre qui n'est pas le chat.
+## Tranche 5, faite (20 novembre, dans la nuit)
+
+**Une fenêtre qui n'est pas le chat compte les accords en attente.** L'état poussé du chat ne porte pas les accords ; une carte d'accord arrive comme composant `ui` d'un retour d'outil (`ToolCallFinished`), et sa décision sur le sujet `accords` (`AccordDecide`). L'hôte ne publie pas de demande à part. D'où, sans clé partagée et sans rien changer à l'hôte (relecture d'ED) :
+
+- **Au chargement**, la fenêtre détachée lit une fois l'état du chat (`fetchChat`), puis, pour chaque carte d'accord de ses tours, sa décision une fois (`GET /ide/accords?id=`).
+- **Ensuite, le flux seul** : un `ToolCallFinished` de son backend qui porte une carte `accord` l'ajoute ; un `AccordDecide` la retire, et une décision vue avant la fin du chargement n'est pas recomptée.
+- **L'en-tête** de la fenêtre détachée porte `#accords-en-attente` (`data-compte`), et dit « 1 accord attend dans le chat » quand il y en a.
+
+Témoin `chat_contextuel::une_fenetre_qui_n_est_pas_le_chat_compte_les_accords_en_attente` : un tour lance `echo accorde-moi`, qui attend son accord dans le chat. Une fenêtre du dépôt ouverte avant le tour dit 0, puis 1 par le flux ; une seconde, ouverte après la carte, dit 1 à son chargement ; le chat accorde, et les deux disent 0.
+
+- **Rouge** (77b7e69bfe, puis 57cb0fbc17 une fois le compte parenthésé dans le témoin : `x ?? null === '0'` se lisait `x ?? (null === '0')`, et un compte de « 1 » serait passé pour « 0 »).
+- **Chaque promesse vue rouge isolément**, avec une variante du bundle privée d'un seul morceau, jouée à luciepc, le worktree remis après chacune :
+  - sans le chargement : rouge à « the window opened after the card counts it at its load » ;
+  - sans le flux qui ajoute : rouge à « the window open before the turn counts the approval awaited, by the stream » ;
+  - sans le retrait : rouge à « the approval granted, no approval awaited ».
+- **Vert** (8763658748), avec les tranches 2 à 4, `ide_par_le_flux` et le contrôle du bundle ; tsc propre.
+
+Les cinq tranches de la conception sont faites. Restent hors d'elles : la graine de la vue par run (tranche 4), et la reprise des appels d'outil d'avant l'ouverture d'une fenêtre (tranche 1).
