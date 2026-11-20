@@ -123,6 +123,38 @@ mod tests {
             );
         }
     }
+    /// **A call without `view` reads the view of its session** (V1 of the page
+    /// `docs/arbre-principal/20-11-2026/01-cadrage-la-vue-par-defaut-de-la-session.md`): the view read is the call's,
+    /// then the session's, then the backend's, and every answer of a reading tool says it and its source. A session's
+    /// view unknown to the backend is refused at the call, naming it; a malformed one at its declaration.
+    #[test]
+    fn a_call_without_view_reads_the_view_of_its_session() {
+        let d = tempfile::tempdir().unwrap();
+        let a = atelier(d.path());
+        let depot = petit_depot(&d.path().join("B"));
+        a.appeler("attach_worktree", json!({"path":depot})).unwrap();
+        attendre_l_index(&a, &depot);
+        let roots = a.host.racines_de_code().unwrap();
+        let name = crate::code_tree::name_of_tree(&depot.canonicalize().unwrap()).unwrap();
+        let manifeste = roots.manifest(&name);
+        let avec = a.host.open_session("session avec vue", None, Vec::new(), None);
+        let sans = a.host.open_session("session sans vue", None, Vec::new(), None);
+        a.host.set_session_view(&avec, Some(json!({"layer": "backend"}))).expect("a session's view is refused");
+        let lu = a.host.call(Some(&avec), &manifeste, "usages", json!({"name": "un"}));
+        assert_eq!(lu["ok"], json!(true), "{lu}");
+        assert_eq!((&lu["view"]["layer"], &lu["view"]["source"]), (&json!("backend"), &json!("session")), "the view of the session is not read, or not said: {lu}");
+        assert!(lu["view"]["rank"].is_i64(), "the rank read under the session's view is not said: {lu}");
+        let explicite = a.host.call(Some(&avec), &manifeste, "usages", json!({"name": "un", "view": {"layer": "backend"}}));
+        assert_eq!(explicite["view"]["source"], json!("appel"), "a call's view does not win over the session's: {explicite}");
+        let defaut = a.host.call(Some(&sans), &manifeste, "usages", json!({"name": "un"}));
+        assert_eq!(defaut["view"], json!({"layer": "backend", "source": "défaut"}), "a call without view nor session's view does not say it reads the backend: {defaut}");
+        a.host.set_session_view(&avec, Some(json!({"layer": "inconnue"}))).unwrap();
+        let refus = a.host.call(Some(&avec), &manifeste, "usages", json!({"name": "un"}));
+        assert!(refus["ok"] == json!(false) && refus.to_string().contains("inconnue"), "a session's view unknown to the backend is read: {refus}");
+        let malformee = a.host.set_session_view(&avec, Some(json!({"branch": "main"}))).expect_err("a malformed session's view is posed");
+        assert!(malformee.contains("vue par défaut"), "{malformee}");
+    }
+
     /// **The current view by the context** (2b-C, ticket « les vues des worktrees des sessions », point 2): an
     /// invocation whose context carries `view`, without `view` in its arguments, reads under that view, and its answer
     /// says the view read (layer, rank). A view the target does not know is refused naming it. An explicit `view` in

@@ -93,6 +93,9 @@ pub struct Session {
     /// ([`crate::daemon_lifecycle::process_start`]) : un pid repris par un autre
     /// processus n'a pas le même, et la session se ferme quand même.
     pub pid_started: Option<u64>,
+    /// **The view by default of the session** (V1, page of 20 November 2026): a reading tool called without `view`
+    /// reads under it. Posed by `POST /session {view}` or [`DaemonHost::set_session_view`]; `None`: the backend.
+    pub default_view: Option<Value>,
 }
 
 /// Un backend hébergé. `None` : pas encore ouvert, ou lâché pour être rouvert.
@@ -617,9 +620,22 @@ impl DaemonHost {
             opened_at,
             pid: process.map(|(p, _)| p),
             pid_started: process.map(|(_, d)| d),
+            default_view: None,
         };
         self.sessions.lock().unwrap_or_else(|p| p.into_inner()).insert(id.clone(), session);
         id
+    }
+
+    /// **Pose (or withdraws, with `None`) the view by default of a session**, checked as a call's `view` is: an unknown
+    /// session or a malformed view is refused, naming it. A layer unknown to a backend is refused at the call.
+    pub fn set_session_view(&self, session: &str, view: Option<Value>) -> Result<(), String> {
+        if let Some(v) = &view {
+            crate::backend::parse_view(v).map_err(|e| format!("la vue par défaut de la session : {e}"))?;
+        }
+        let mut sessions = self.sessions.lock().unwrap_or_else(|p| p.into_inner());
+        let s = sessions.get_mut(session).ok_or_else(|| format!("session inconnue : {session}"))?;
+        s.default_view = view;
+        Ok(())
     }
 
     /// **Fermer les sessions dont le client est mort** (ticket du 11 octobre
@@ -1214,14 +1230,15 @@ impl DaemonHost {
             if let Some(rangee) = self.ranger_une_ecriture(&hosted, &s, humain, name, &arguments)? {
                 return Ok(rangee);
             }
-            self.with_backend(&hosted, |b| match (&cell, humain) {
+            let vue = s.default_view.clone();
+            crate::backend::with_session_view(vue, || self.with_backend(&hosted, |b| match (&cell, humain) {
                 // La cellule de la session (marche 1 bis) : elle passe par la
                 // requête, jamais par le catalogue.
                 (Some(cell), false) => b.call_in(cell, name, arguments),
                 (Some(cell), true) => b.call_in_humain(cell, name, arguments),
                 (None, false) => b.call(name, arguments),
                 (None, true) => b.call_humain(name, arguments),
-            })
+            }))
             .and_then(|r| r)
             .inspect(|r| self.journaliser_l_appel(&hosted.id, &client, humain, name, &appel, r))
         });
@@ -1923,7 +1940,14 @@ impl DaemonHost {
                         .as_u64()
                         .map(|p| p as u32)
                         .and_then(|p| crate::daemon_lifecycle::process_start(p).map(|d| (p, d)));
-                    (200, json!({ "session": self.open_session(&client, cell, keys, process) }))
+                    let id = self.open_session(&client, cell, keys, process);
+                    match v.get("view").filter(|w| !w.is_null()).map(|w| self.set_session_view(&id, Some(w.clone()))) {
+                        Some(Err(e)) => {
+                            self.close_session(&id);
+                            (400, json!({ "ok": false, "error": e }))
+                        }
+                        _ => (200, json!({ "session": id })),
+                    }
                 }
                 Err(e) => (400, json!({ "ok": false, "error": e })),
             },
