@@ -1,6 +1,6 @@
 # L'index de code a perdu des mots : la compaction du dictionnaire ne voit pas les documents en cours
 
-- **État** : en cours (19 novembre 2026, soir). Le sursis d'un cycle (PR lucivy #50) est un filet, pas le correctif : la perte est reproduite avec lui.
+- **État** : corrigé, en vérification (20 novembre 2026). La cause est trouvée et corrigée dans lucivy 4.3.12 (PR #54), publiée et posée sur les hôtes. Le ticket se ferme sur le verdict de la première nuit compaction rallumée (21 novembre au matin).
 - **Gravité** : justesse. Un document dont un mot est perdu ne sort plus pour ce mot, en exact comme en flou. Rien
   ne le signale à la recherche.
 - **Atteignable en service** : oui. C'est mesuré sur une copie de l'index de code de la base du dépôt (tablette, le
@@ -68,6 +68,25 @@ lus. Le test tourne en boucle sous `taskset -c 0-3` jusqu'au rouge.
 
 Ensuite : un témoin ciblé (un segment fusionné au méta sans champs, juste avant la compaction, perd ses mots), puis
 le correctif de la cause. Le sursis reste comme filet.
+
+## La cause, trouvée et corrigée (20 novembre 2026)
+
+Ce n'était pas un segment raté. Un mot neuf entre dans la table des créations en attente du dictionnaire de shard,
+qui l'oublie une fois ses textes nommés par un commit, selon l'époque de commit. Seul `IndexWriter::prepare_commit`
+faisait tourner cette époque. Le commit des shards (`drain_workers`, `flush_workers`, `finalize_flush_and_prepare`),
+celui de rag3weaver, ne la faisait jamais tourner : la table gardait chaque mot pour toujours, et elle rend un id sans
+vérifier que son texte existe encore. Après qu'une compaction avait retiré le texte d'un mot que plus aucun document
+ne citait, le fichier réindexé qui le contenait de nouveau reprenait l'ancien id, sans texte.
+
+- **Le correctif** (lucivy 4.3.12, PR #54) : `flush_workers` fait tourner l'époque, et la compaction retire de la
+  table les ids qu'elle jette. Le sursis d'un cycle (#50) reste comme filet, et `maintain` nomme les textes qu'il
+  reprend (#52).
+- **Les témoins** : `a_word_removed_by_the_compaction_comes_back_with_a_text` (2 perdus avant, 0 après) et
+  `files_rewritten_under_a_tight_compaction_loop_lose_no_word` (383 avant, 0 après). Côté rag3weaver, la sonde
+  `the_nightly_compaction_during_reindexing_loses_no_word` : 534 perdus sous 4.3.10, 0 sous 4.3.12.
+- **Les bases** (relevé du 20 novembre, `docs/lucivy/20-11-2026/01-…`) : 0 perte neuve. Les 690 anciens du dépôt sont
+  dans `Lucivy_Scope`, que la base à versions ne lit plus (la recherche de Scope passe par ScopeContent, qui en a
+  0) : G rend ce dossier mort au ménage.
 
 ## Ce qu'il reste
 
