@@ -313,7 +313,12 @@ pub mod burn {
     /// `RAG3WEAVER_EMBEDDER_ALLOW_INTEGRATED_GPU=1`. A served model passes.
     #[cfg(feature = "daemon")]
     pub fn compares_values(model: &str) {
-        let _ = model;
+        if let OuCharger::Ici(device) = ou_charger(model) {
+            let allow = std::env::var(rag3weaver::burn_device::ALLOW_INTEGRATED_GPU_VARIABLE).ok();
+            if let Err(e) = device.check_embedder(allow.as_deref()) {
+                panic!("{model} : ce test compare des valeurs ; {e}");
+            }
+        }
     }
 
     /// **Les suites qui restent sur la carte d'ici, variable posée ou non** :
