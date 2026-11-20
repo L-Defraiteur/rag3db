@@ -1,5 +1,6 @@
 # Nouveautés
 
+- 20 novembre 2026 — **Une recherche vectorielle ne perd plus de lignes à la création de l'index.** Le bâti parallèle d'un index vectoriel pouvait laisser quelques lignes qu'aucune recherche ne rendait, pas même celle de leur propre vecteur : de 0 à 6 sur les 127 198 morceaux d'une base de code, des quasi-copies et des points isolés. En fin de bâti, chaque ligne que le graphe n'atteint pas y est maintenant rattachée à sa plus proche voisine. Les index existants gardent leurs pertes jusqu'à leur prochaine reconstruction.
 - 19 novembre 2026 — **Une fenêtre du graphe suit les outils du chat.** Ouverte sur les graphes avec `?fenetre=graphe`, elle montre le graphe de chaque outil que le tour du chat appelle, au moment où il l'appelle, et le flux l'allume nœud par nœud ; elle ne se recharge pas, et la fenêtre du dépôt ne bouge pas pour autant.
 
 - 19 novembre 2026 — Dans l'IDE, la vue d'un fichier ne garde plus l'erreur du fichier lu juste avant : passer d'un fichier absent à un fichier lisible montre ses lignes seules, sans l'alerte du premier.
