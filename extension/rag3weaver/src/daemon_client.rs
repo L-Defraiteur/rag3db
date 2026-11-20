@@ -486,6 +486,11 @@ pub fn outils_des_vues() -> Vec<Value> {
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
         }),
         json!({
+            "name": "open_view",
+            "description": "Crée, sur le poste de l'hôte, un worktree pour le lot `lot` sous le dossier de cette session (~/git_workspaces/<dossier>/<jj-mm-aaaa>-<lot>), sur une branche neuve <dossier>/<lot> depuis origin/master, sous-module compris, et le note pour la session. Rend son nom, son chemin, sa branche et son target. Refuse l'arbre de Lucie, sairen, le dossier d'une autre session, un chemin hors du dossier de la session ou déjà pris. `session_dir` : le dossier, quand la table des dossiers ne le dit pas.",
+            "inputSchema": { "type": "object", "properties": { "lot": { "type": "string", "minLength": 1 }, "session_dir": { "type": "string", "minLength": 1 } }, "required": ["lot"], "additionalProperties": false }
+        }),
+        json!({
             "name": "use_view",
             "description": "Rend la vue `name` active pour cette session, et pour tout client de la même session Claude Code ; l'hôte la garde. Un outil de lecture appelé sans `view` la lit. `name` : backend, le nom d'une couche (refs/heads/…, worktree:<chemin>), ou le chemin absolu d'un worktree suivi. Un nom inconnu refuse en listant les vues connues.",
             "inputSchema": { "type": "object", "properties": { "name": { "type": "string", "minLength": 1 } }, "required": ["name"], "additionalProperties": false }
@@ -1007,11 +1012,11 @@ impl Hote for McpClient {
         }
         match &*side {
             // The host's tools of the views: on this backend, for this session.
-            Side::Attached(c) if nom == "views" || nom == "use_view" => {
-                let (route, corps) = if nom == "views" {
-                    ("/views", json!({ "manifest": c.manifest }))
-                } else {
-                    ("/views/use", json!({ "manifest": c.manifest, "name": arguments["name"] }))
+            Side::Attached(c) if nom == "views" || nom == "use_view" || nom == "open_view" => {
+                let (route, corps) = match nom {
+                    "views" => ("/views", json!({ "manifest": c.manifest })),
+                    "open_view" => ("/views/open", json!({ "manifest": c.manifest, "lot": arguments["lot"], "session_dir": arguments["session_dir"] })),
+                    _ => ("/views/use", json!({ "manifest": c.manifest, "name": arguments["name"] })),
                 };
                 c.op(route, corps).map(|r| json!({ "result": r })).map_err(|e| e.error)
             }
@@ -1038,7 +1043,7 @@ impl Hote for McpClient {
     /// Sans hôte, tout nom passe : [`McpClient::appeler`] retente l'hôte, et
     /// rend sinon une erreur d'outil qui dit pourquoi (page C, §4).
     fn accepte(&self, nom: &str) -> bool {
-        if nom == DAEMON_STATUS || nom == "views" || nom == "use_view" {
+        if nom == DAEMON_STATUS || nom == "views" || nom == "use_view" || nom == "open_view" {
             return true;
         }
         match &*self.side.lock().unwrap_or_else(|p| p.into_inner()) {
@@ -1253,7 +1258,8 @@ mod tests {
         assert_eq!(claude_du_registre(d.path(), 43), None);
         assert_eq!(claude_du_registre(d.path(), 44), None);
         let noms: Vec<Value> = outils_des_vues().iter().map(|t| t["name"].clone()).collect();
-        assert_eq!(noms, vec![json!("views"), json!("use_view")]);
+        // O1 (page 03 of 20 November 2026) adds open_view.
+        assert_eq!(noms, vec![json!("views"), json!("open_view"), json!("use_view")]);
     }
 
     /// Un hôte en TCP brut qui répond à `/session` et `/open`, puis **coupe la
