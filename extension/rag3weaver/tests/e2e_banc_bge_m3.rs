@@ -115,6 +115,7 @@ fn banc(e: &dyn Embedder) {
 #[test]
 #[ignore]
 fn le_f16_rend_les_memes_vecteurs() {
+    crate::common::burn::compares_values("bge-m3");
     let e: &dyn Embedder = common::burn::BGE_M3.as_ref();
     let precision = std::env::var("RAG3WEAVER_BURN_FLOAT").unwrap_or_else(|_| "flex32".into());
     let textes: Vec<String> = [

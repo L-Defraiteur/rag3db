@@ -57,19 +57,19 @@ fn question_trouve_le_code(e: &dyn Embedder) {
 fn granite_107m_vecteurs_unitaires() { unitaires(common::burn::GRANITE_107M.as_ref()); }
 #[test]
 #[ignore]
-fn granite_107m_paraphrase_entre_langues() { paraphrase_entre_langues(common::burn::GRANITE_107M.as_ref()); }
+fn granite_107m_paraphrase_entre_langues() { crate::common::burn::compares_values("granite-107m");  paraphrase_entre_langues(common::burn::GRANITE_107M.as_ref()); }
 #[test]
 #[ignore]
-fn granite_107m_question_trouve_le_code() { question_trouve_le_code(common::burn::GRANITE_107M.as_ref()); }
+fn granite_107m_question_trouve_le_code() { crate::common::burn::compares_values("granite-107m");  question_trouve_le_code(common::burn::GRANITE_107M.as_ref()); }
 #[test]
 #[ignore]
 fn granite_278m_vecteurs_unitaires() { unitaires(common::burn::GRANITE_278M.as_ref()); }
 #[test]
 #[ignore]
-fn granite_278m_paraphrase_entre_langues() { paraphrase_entre_langues(common::burn::GRANITE_278M.as_ref()); }
+fn granite_278m_paraphrase_entre_langues() { crate::common::burn::compares_values("granite-278m");  paraphrase_entre_langues(common::burn::GRANITE_278M.as_ref()); }
 #[test]
 #[ignore]
-fn granite_278m_question_trouve_le_code() { question_trouve_le_code(common::burn::GRANITE_278M.as_ref()); }
+fn granite_278m_question_trouve_le_code() { crate::common::burn::compares_values("granite-278m");  question_trouve_le_code(common::burn::GRANITE_278M.as_ref()); }
 
 /// **Un lot de 256 séquences de ~450 mots** : ce que le conseil de lot promet
 /// une fois l'attention fusionnée (sans elle, 3,2 Go de scores, refusé).
@@ -157,7 +157,7 @@ fn contre_la_reference_onnx(e: &dyn Embedder, fichier: &str) {
 
 #[test]
 #[ignore]
-fn granite_278m_contre_la_reference_onnx() { contre_la_reference_onnx(common::burn::GRANITE_278M.as_ref(), "reference-278m.json"); }
+fn granite_278m_contre_la_reference_onnx() { crate::common::burn::compares_values("granite-278m");  contre_la_reference_onnx(common::burn::GRANITE_278M.as_ref(), "reference-278m.json"); }
 #[test]
 #[ignore]
-fn granite_107m_contre_la_reference_onnx() { contre_la_reference_onnx(common::burn::GRANITE_107M.as_ref(), "reference-107m.json"); }
+fn granite_107m_contre_la_reference_onnx() { crate::common::burn::compares_values("granite-107m");  contre_la_reference_onnx(common::burn::GRANITE_107M.as_ref(), "reference-107m.json"); }
