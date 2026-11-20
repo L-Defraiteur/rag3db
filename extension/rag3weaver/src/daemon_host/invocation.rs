@@ -123,6 +123,43 @@ mod tests {
             );
         }
     }
+    /// **`views` and `use_view` follow the Claude Code session** (page 02 of 20 November 2026, lot 2): two thin clients
+    /// of one session (one `sessionId`) see the same active view, another session does not; an unknown name is refused,
+    /// listing the known views; a host restarted on the same state finds the view again.
+    #[test]
+    fn views_and_use_view_follow_the_claude_session() {
+        let d = tempfile::tempdir().unwrap();
+        let a = atelier(d.path());
+        let depot = petit_depot(&d.path().join("B"));
+        a.appeler("attach_worktree", json!({"path":depot})).unwrap();
+        attendre_l_index(&a, &depot);
+        let roots = a.host.racines_de_code().unwrap();
+        let name = crate::code_tree::name_of_tree(&depot.canonicalize().unwrap()).unwrap();
+        let manifeste = roots.manifest(&name);
+        let etat = d.path().join("vues");
+        a.host.set_vues_dir(etat.clone());
+        let ouvrir = |host: &crate::daemon_host::DaemonHost, sid: &str| -> String {
+            let corps = json!({"client": "mcp (pid 1)", "claude": {"session_id": sid, "name": "le témoin"}}).to_string();
+            let (code, r) = host.handle("POST", "/session", None, corps.as_bytes());
+            assert_eq!(code, 200, "{r}");
+            r["session"].as_str().unwrap().to_string()
+        };
+        let (s1, s2, s3) = (ouvrir(&a.host, "S1"), ouvrir(&a.host, "S1"), ouvrir(&a.host, "S2"));
+        let v = a.host.views(Some(&s1), &manifeste);
+        assert!(v["views"].as_array().is_some_and(|l| l.iter().any(|x| x["name"] == "backend")), "the backend is not among the views: {v}");
+        assert_eq!(v["active"], json!({"name": "backend", "source": "défaut"}), "{v}");
+        let u = a.host.use_view(Some(&s1), &manifeste, "backend");
+        assert_eq!(u["ok"], json!(true), "use_view refuses a known view: {u}");
+        assert_eq!(a.host.views(Some(&s2), &manifeste)["active"], json!({"name": "backend", "source": "session"}), "a second thin client of the same session does not see its view");
+        assert_eq!(a.host.views(Some(&s3), &manifeste)["active"]["source"], json!("défaut"), "another session takes this one's view");
+        let refus = a.host.use_view(Some(&s1), &manifeste, "inconnue");
+        assert!(refus["ok"] == json!(false) && refus.to_string().contains("inconnue") && refus.to_string().contains("backend"), "an unknown view is not refused listing the known ones: {refus}");
+        let relance = crate::daemon_host::DaemonHost::new();
+        relance.set_vues_dir(etat);
+        let s4 = ouvrir(&relance, "S1");
+        assert_eq!(relance.session_default_view(&s4), Some(json!({"layer": "backend"})), "a restarted host does not find the session's view");
+    }
+
     /// **A call without `view` reads the view of its session** (V1 of the page
     /// `docs/arbre-principal/20-11-2026/01-cadrage-la-vue-par-defaut-de-la-session.md`): the view read is the call's,
     /// then the session's, then the backend's, and every answer of a reading tool says it and its source. A session's
