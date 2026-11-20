@@ -6768,6 +6768,13 @@ impl Backend {
             }
             etats.insert("fts_counts".into(), Value::Object(comptes));
         }
+        // **The files the last index set aside, and their rule** (Lucie, 20 November 2026): a bundle, a minified
+        // file, a build output — named, so that « why is this file not found » has its answer in the state.
+        if let Some(Value::Object(ecartes)) = cat.fichiers_ecartes_notes() {
+            if !ecartes.is_empty() {
+                etats.insert("excluded_files".into(), Value::Object(ecartes));
+            }
+        }
         // **Un index vectoriel retiré se dit en clair** : la recherche dense
         // de cette entité ne répond pas tant qu'il manque, et ce n'est pas
         // « running 97 % » (hôte de Lucie, 25 octobre 2026). Ce qui reste à
@@ -9664,6 +9671,55 @@ mod tests {
             })
             .map(|c| c.to_string())
             .collect()
+    }
+
+    /// **A base that declares nothing excludes the bundles by default** (Lucie, 20 November 2026, 17 h 00: « exclus de
+    /// l'index par défaut »). The manifest has no `index_exclude`: a one-line minified file, a file under `dist/` and a
+    /// `*.min.js` are not indexed, by the defaults of the code template; a file written by hand is.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_base_that_declares_nothing_excludes_the_bundles_by_default() {
+        let (dir, p) = fixture_code_avec("working_tree", false, json!({}), &|_| {});
+        drop(p);
+        let mut bundle = String::new();
+        for i in 0..400 {
+            bundle.push_str(&format!("function f{i}(a){{return a*{i}+{i}}};"));
+        }
+        std::fs::write(dir.path().join("sources/app.js"), &bundle).unwrap();
+        std::fs::create_dir_all(dir.path().join("sources/dist")).unwrap();
+        std::fs::write(dir.path().join("sources/dist/lib.js"), "function servie(a) {\n  return a + 1;\n}\n").unwrap();
+        std::fs::write(dir.path().join("sources/outil.min.js"), "function reduite(a) {\n  return a * 2;\n}\n").unwrap();
+        std::fs::write(dir.path().join("sources/ecran.bundle.js"), "function montee(a) {\n  return a - 1;\n}\n").unwrap();
+        std::fs::write(dir.path().join("sources/garde.rs"), "pub fn garde() -> u32 {\n    1\n}\n").unwrap();
+        let prepared = PreparedBackend::load(&dir.path().join("backend.json")).expect("le manifeste se charge");
+        assert!(prepared.manifest.workspace.as_ref().is_some(), "a code workspace");
+        let backend = backend_de_code(dir.path(), prepared);
+        let source = backend.file_source.clone().unwrap();
+        let mut cat = backend.catalog.lock().unwrap();
+        let rapport = crate::code_sync::sync_source(&mut cat, source.as_ref(), &Default::default(), &mut |_| {}).expect("l'index");
+        // The report names each file set aside under its rule: the state takes it from there.
+        let nomme = |raison: &str, chemin: &str| {
+            rapport.files_set_aside_paths.get(raison).is_some_and(|v| v.iter().any(|p| p.ends_with(chemin)))
+        };
+        let nomme_sous_une_regle = |chemin: &str| rapport.files_set_aside_paths.values().flatten().any(|p| p.ends_with(chemin));
+        let vu = &rapport.files_set_aside_paths;
+        assert!(nomme(crate::exclusion::REASON_MINIFIED, "app.js"), "the minified bundle is named under its rule: {vu:?}");
+        // A bundle by its name only, which no older rule sets aside: named under the rule of the paths.
+        assert!(nomme(crate::exclusion::REASON_PATH, "ecran.bundle.js"), "the *bundle* is named under the rule of the paths: {vu:?}");
+        // A *.min.js the older rule « généré ou minifié » already sets aside by its name: named under one rule or the
+        // other. `dist/` is not listed at all by the source (its exclusions): it cannot be named, and is not indexed.
+        assert!(nomme_sous_une_regle("outil.min.js"), "the *.min.js is named: {vu:?}");
+        let scopes = |suffixe: &str| -> i64 {
+            cat.execute_raw(&format!("MATCH (s:{}) WHERE s.file_path ENDS WITH '{suffixe}' RETURN count(s)", crate::code::SCOPE))
+                .unwrap()
+                .rows[0][0]
+                .as_i64()
+                .unwrap_or(-1)
+        };
+        assert!(scopes("garde.rs") >= 1, "a file written by hand is indexed");
+        for exclu in ["app.js", "dist/lib.js", "outil.min.js", "ecran.bundle.js"] {
+            assert_eq!(scopes(exclu), 0, "{exclu} is excluded by default");
+        }
     }
 
     /// **La montre n'indexe pas ce que l'index écarte** : un dossier généré,

@@ -1,5 +1,11 @@
 # Nouveautés
 
+- 20 novembre 2026 — **Les bundles sont exclus de l'index par défaut, et l'état dit lesquels.** Sans rien déclarer,
+  une base de code n'indexe plus un fichier minifié (une ligne au-delà de 5 000 octets), un fichier de code de plus de
+  1 Mio, ni ce que nomment les motifs `dist/`, `build/`, `*.min.js` et `*bundle*`. Une base qui veut ses bundles le dit
+  dans `workspace.index_exclude` : un seuil à `null` ou `"off"`, `paths: []`. Un fichier déjà indexé que ces règles
+  écartent quitte l'index au prochain index complet, sans compter comme manquant. L'état de l'index nomme les fichiers
+  écartés sous `excluded_files`, par règle, et le journal d'index cite les premiers.
 - 20 novembre 2026 — **Une déclaration d'une ligne ne remonte plus en tête par le seul vecteur.** Depuis que le
   contenu d'un scope s'arrête aux octets de son nœud, une variable Python d'une instruction (`s=index.read_text()`, 18
   caractères) avait son propre morceau, et son vecteur gagnait des recherches où elle n'avait rien à faire : c'était le

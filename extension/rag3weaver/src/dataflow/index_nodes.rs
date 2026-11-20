@@ -629,7 +629,15 @@ fn run_index(
     );
 
     for (reason, n) in &report.files_set_aside {
-        log(journal, &format!("{n} fichiers écartés : {reason}"));
+        // The first ones named: the state keeps up to a hundred per rule.
+        let noms = report.files_set_aside_paths.get(reason).map(|v| v.iter().take(5).cloned().collect::<Vec<_>>().join(", ")).unwrap_or_default();
+        let suite = if *n > 5 { ", …" } else { "" };
+        log(journal, &format!("{n} fichiers écartés : {reason} ({noms}{suite})"));
+    }
+    if let Ok(cat) = catalog.lock() {
+        if let Err(e) = cat.noter_les_fichiers_ecartes(&report.files_set_aside, &report.files_set_aside_paths) {
+            log(journal, &format!("avertissement : fichiers écartés non notés ({e})"));
+        }
     }
     if report.non_candidates_set_aside > 0 {
         log(

@@ -678,6 +678,8 @@ pub const EMBEDDING_CHOICE_KEY: &str = "embedding_choice";
 pub const CHUNKS_SANS_TEXTE_KEY: &str = "chunks_without_text";
 /// La méta des comptes du plein texte relevés à la fin du dernier index.
 pub const COMPTES_DU_PLEIN_TEXTE_KEY: &str = "fts_counts_at_index_end";
+/// **The files set aside at the last index, by rule** (Lucie, 20 November 2026: the state names them).
+pub const FICHIERS_ECARTES_KEY: &str = "files_set_aside_at_index_end";
 /// La note de la dernière maintenance nocturne du plein texte (`Catalog::fts_maintenance_nocturne`).
 pub const FTS_MAINTENANCE_KEY: &str = "fts_maintenance_last";
 
@@ -1470,6 +1472,27 @@ fn read_threads() -> u64 {
     }
 
     /// Les comptes du dernier index, s'il y en a eu un.
+    /// **The files set aside by the last index, by rule**, for the state: `{reason: {count, paths, measured_at_ms}}`.
+    pub fn noter_les_fichiers_ecartes(
+        &self,
+        comptes: &std::collections::BTreeMap<String, usize>,
+        chemins: &std::collections::BTreeMap<String, Vec<String>>,
+    ) -> Result<(), CatalogError> {
+        let at = crate::catalog::retard::now_ms();
+        let v: serde_json::Map<String, serde_json::Value> = comptes
+            .iter()
+            .map(|(raison, n)| {
+                (raison.clone(), serde_json::json!({ "count": n, "paths": chemins.get(raison).cloned().unwrap_or_default(), "measured_at_ms": at }))
+            })
+            .collect();
+        self.persist_meta_key(FICHIERS_ECARTES_KEY, &serde_json::Value::Object(v).to_string())
+    }
+
+    /// The files set aside noted by the last index, or `None` before any.
+    pub fn fichiers_ecartes_notes(&self) -> Option<serde_json::Value> {
+        self.read_meta_key(FICHIERS_ECARTES_KEY).ok().flatten().and_then(|v| serde_json::from_str(&v).ok())
+    }
+
     pub fn comptes_notes_du_plein_texte(&self) -> Option<serde_json::Value> {
         self.read_meta_key(COMPTES_DU_PLEIN_TEXTE_KEY).ok().flatten().and_then(|v| serde_json::from_str(&v).ok())
     }
