@@ -624,6 +624,15 @@ fn indexed_tree_key(cell: &crate::scope::Scope) -> String {
     format!("{INDEXED_TREE_KEY}:{}/{}", cell.org, cell.project)
 }
 
+/// The key of a layer's indexed tree: the cell's for the backend's layer.
+fn indexed_tree_key_of_layer(cell: &crate::scope::Scope, layer: &str) -> String {
+    if layer == crate::generations::COUCHE_DU_BACKEND {
+        indexed_tree_key(cell)
+    } else {
+        format!("{}@{layer}", indexed_tree_key(cell))
+    }
+}
+
 /// **L'arbre et le commit de `root`** : la racine, le commit court, des
 /// modifications non commitées ou non, l'heure. Lance `git` : à appeler sans
 /// tenir le verrou du catalogue, puis [`Catalog::note_indexed_tree`].
@@ -3815,6 +3824,17 @@ fn read_threads() -> u64 {
     /// réponse de lecture de cette cellule les dit ([`Self::indexed_tree_line`]).
     pub fn note_indexed_tree(&self, cell: &crate::scope::Scope, v: &serde_json::Value) -> Result<(), CatalogError> {
         self.persist_meta_key(&indexed_tree_key(cell), &v.to_string())
+    }
+
+    /// **The indexed tree of a layer**: the backend's layer keeps the cell's key of today; another layer has its own
+    /// (`indexed_tree:<org>/<project>@<layer>`). Written at the end of the layer's index, read by a view without a watch.
+    pub fn note_indexed_tree_of_layer(&self, cell: &crate::scope::Scope, layer: &str, v: &serde_json::Value) -> Result<(), CatalogError> {
+        self.persist_meta_key(&indexed_tree_key_of_layer(cell, layer), &v.to_string())
+    }
+
+    /// The indexed tree noted for `layer` of `cell`, or `None`.
+    pub fn indexed_tree_of_layer(&self, cell: &crate::scope::Scope, layer: &str) -> Option<serde_json::Value> {
+        serde_json::from_str(&self.read_meta_key(&indexed_tree_key_of_layer(cell, layer)).ok()??).ok()
     }
 
     /// L'arbre indexé noté pour la cellule (`root`, `commit`, `branch`, `dirty`, `at_ms`), ou
