@@ -47,14 +47,16 @@ accepté, c'est l'intention de (B).
 
 ## La fonction `lines`
 
-Le juge de 16 h 30 donnait `lines` (une fonction d'une ligne, `prepare_engine_relations.py:12`) 6ᵉ sur master pour « lire
-chaque ligne d'un fichier jsonl comme un objet json », et hors du top 10 avec le lot. **C'était un artefact du banc** : le
-côté master lisait les gabarits installés du service, pas ceux de master. Rejouée avec chaque côté sur ses propres
-gabarits (feuille-5d), **`lines` n'est dans le top 10 ni sur master ni avec le lot**, et aucune déclaration courte n'y
-entre. Le top 10 en BM25 seul est identique des deux côtés. Par défaut, un seul rang change : le 5ᵉ de master, `cards`
-(une variable de 220 caractères, au-dessus du seuil, qui garde son vecteur), sort, et `events` (92 caractères, au-dessus
-du seuil aussi) entre au 2ᵉ rang. Ni l'un ni l'autre n'est touché par l'exclusion : c'est la fusion (A) qui déplace des
-lignes à deux signaux, de quelques rangs.
+Le juge de 16 h 30 donnait « `lines` 6ᵉ sur master » pour « lire chaque ligne d'un fichier jsonl comme un objet json »
+(`prepare_engine_relations.py:12`, une fonction d'une ligne), et hors du top 10 avec le lot. **C'était le rang du
+fichier, pas de la fonction** : le client du banc comptait le premier résultat dans le bon fichier, et ce 6ᵉ était
+`cards`, la ligne 14 du même fichier, une variable de 220 caractères. **La fonction `lines` n'est dans le top 10 d'aucun
+côté**, ni sur master ni avec le lot, rejouée avec chaque côté sur ses propres gabarits (feuille-5d).
+
+Ce qui change, c'est `cards` : elle sort du top 10 avec le lot, et `events` (une variable de 92 caractères) y entre au
+2ᵉ rang. Les deux sont au-dessus du seuil de 80 et gardent leur vecteur : l'exclusion ne les touche pas. C'est la fusion
+(A), qui remonte les lignes sans vecteur, qui déplace des lignes à deux signaux de quelques rangs. Le top 10 en BM25 seul
+est identique des deux côtés, et aucune déclaration courte n'entre dans le top 10.
 
 ## Les témoins
 
