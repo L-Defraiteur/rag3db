@@ -87,6 +87,20 @@ impl IdentiteActivation {
     }
 }
 
+/// The memory bound of the batches, as `/sante` says it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct MemoryBound {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_allocation: Option<u64>,
+    pub recut_batches: u64,
+    pub refused_texts: u64,
+}
+
+/// The status of a computation's error : a refusal before computing is a 503.
+fn status_of(e: &EmbedError) -> u16 {
+    if matches!(e, EmbedError::Refused(_)) { 503 } else { 500 }
+}
+
 /// Ce que `GET /sante` rend. **Tout ce qu'un client a besoin de savoir avant
 /// d'envoyer quoi que ce soit** : la dimension pour se câbler, le caractère
 /// factice pour ne pas mentir au catalogue.
@@ -102,6 +116,11 @@ pub struct Identite {
     /// Absent : a provider that does not check itself.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub self_check: Option<std::collections::BTreeMap<String, crate::embedder_check::SelfCheck>>,
+    /// **The memory bound of the batches** (20 November 2026, `crate::lot_memory`) : the
+    /// card's single allocation limit, the batches cut before the call, the texts refused.
+    /// Absent : the model does not declare its shape, the batches are not bounded.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub memory_bound: Option<MemoryBound>,
     /// Toujours [`SERVICE`].
     pub service: String,
     /// Le nom du modèle servi, tel que l'embedder le donne.
@@ -344,6 +363,9 @@ pub struct EmbedDaemon {
     warmup_truncations: usize,
     /// The self-check at start (20 November 2026).
     self_check: Option<crate::embedder_check::SelfCheck>,
+    /// Batches cut before the call, texts refused, by the memory bound (20 November 2026).
+    recut_batches: std::sync::atomic::AtomicU64,
+    refused_texts: std::sync::atomic::AtomicU64,
 }
 
 impl EmbedDaemon {
@@ -379,6 +401,8 @@ impl EmbedDaemon {
             cut_texts: std::sync::atomic::AtomicU64::new(0),
             warmup_truncations: 0,
             self_check: None,
+            recut_batches: std::sync::atomic::AtomicU64::new(0),
+            refused_texts: std::sync::atomic::AtomicU64::new(0),
         }
     }
 
@@ -630,16 +654,37 @@ impl EmbedDaemon {
             Ok(())
         };
         let short = textes.len() <= SHORT_REQUEST_TEXTS;
+        // **Bounded by the card's memory, before the call** (20 November 2026) : a batch
+        // over a bound is cut, a text alone that does not fit is refused, named. A refused
+        // allocation poisons cubecl for good : nothing is retried after the fact.
+        let shaped = self.embedder.memory_shape().and_then(|shape| self.embedder.token_counts(&tries).map(|tokens| (shape, tokens)));
+        let bounded = |plage: std::ops::Range<usize>| -> Result<Vec<std::ops::Range<usize>>, EmbedError> {
+            let Some((shape, tokens)) = &shaped else { return Ok(vec![plage]) };
+            match crate::lot_memory::cut(tokens, vec![plage], *shape, self.embedder.memory_bounds()) {
+                Ok(parts) => {
+                    if parts.len() > 1 {
+                        self.recut_batches.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    }
+                    Ok(parts)
+                }
+                Err((i, why)) => {
+                    self.refused_texts.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    Err(EmbedError::Refused(format!("un texte de {} jetons ne tient pas sur la carte : {why}", tokens[i])))
+                }
+            }
+        };
         match &self.gate {
             None => {
-                for plage in budget_batches(&lens, self.lot_max, embed_char_budget()) {
-                    let debut = std::time::Instant::now();
-                    let lot = {
-                        let _passe = self.take_pass(short);
-                        embarquer(&tries[plage.clone()])
-                    }?;
-                    souffler(debut.elapsed());
-                    ranger(plage, lot)?;
+                for lot_du_budget in budget_batches(&lens, self.lot_max, embed_char_budget()) {
+                    for plage in bounded(lot_du_budget)? {
+                        let debut = std::time::Instant::now();
+                        let lot = {
+                            let _passe = self.take_pass(short);
+                            embarquer(&tries[plage.clone()])
+                        }?;
+                        souffler(debut.elapsed());
+                        ranger(plage, lot)?;
+                    }
                 }
             }
             // **Carte partagée avec l'affichage.** Le lot se taille sous le
@@ -654,6 +699,11 @@ impl EmbedDaemon {
                         let _passe = self.take_pass(short);
                         let mut gate = gate.lock().unwrap_or_else(|e| e.into_inner());
                         let plage = crate::burst::next_paced_batch(&lens, start, budget, gate.budget());
+                        // The memory bound cuts the paced batch : its first part goes now.
+                        let plage = match bounded(plage) {
+                            Ok(parts) => parts[0].clone(),
+                            Err(e) => return Err(e),
+                        };
                         // A short request does not wait the burst's gap ; it counts
                         // in the next burst (`done` below), for the screen's share.
                         if !short {
@@ -685,6 +735,11 @@ impl EmbedDaemon {
             activation: self.activation.clone(),
             chauffe: self.chauffe.clone(),
             self_check: self.self_check.clone().map(|c| std::collections::BTreeMap::from([("embed".to_string(), c)])),
+            memory_bound: self.embedder.memory_shape().map(|_| MemoryBound {
+                max_allocation: self.embedder.memory_bounds().max_allocation,
+                recut_batches: self.recut_batches.load(std::sync::atomic::Ordering::Relaxed),
+                refused_texts: self.refused_texts.load(std::sync::atomic::Ordering::Relaxed),
+            }),
             service: SERVICE.to_string(),
             modele: self.embedder.name().to_string(),
             dim: self.embedder.dim(),
@@ -939,7 +994,7 @@ impl EmbedDaemon {
                             };
                             (200, body.to_string())
                         }
-                        Err(e) => (500, erreur(&e.to_string())),
+                        Err(e) => (status_of(&e), erreur(&e.to_string())),
                     }
                 }
             },
@@ -963,7 +1018,7 @@ impl EmbedDaemon {
                             .to_string(),
                         )
                     }
-                    Err(e) => (500, erreur(&e.to_string())),
+                    Err(e) => (status_of(&e), erreur(&e.to_string())),
                 },
             },
             ("POST", "/embed_sparse") => match (&self.sparse, lire_json::<Textes>(req)) {
@@ -978,7 +1033,7 @@ impl EmbedDaemon {
                         })
                         .to_string(),
                     ),
-                    Err(e) => (500, erreur(&e.to_string())),
+                    Err(e) => (status_of(&e), erreur(&e.to_string())),
                 },
                 (Some(sp), Ok(t)) => match self.par_lots(&self.cut_to_cap(&t.texts), |lot| sp.embed_sparse(lot)) {
                     Ok(creux) => (
@@ -988,7 +1043,7 @@ impl EmbedDaemon {
                         })
                         .to_string(),
                     ),
-                    Err(e) => (500, erreur(&e.to_string())),
+                    Err(e) => (status_of(&e), erreur(&e.to_string())),
                 },
             },
             // Le relecteur et l'OCR prennent la carte comme un lot
@@ -1005,7 +1060,7 @@ impl EmbedDaemon {
                     souffler(debut.elapsed());
                     match scores {
                         Ok(scores) => (200, serde_json::json!({ "scores": scores }).to_string()),
-                        Err(e) => (500, erreur(&e.to_string())),
+                        Err(e) => (status_of(&e), erreur(&e.to_string())),
                     }
                 }
             },
@@ -1037,7 +1092,7 @@ impl EmbedDaemon {
                                     })
                                     .unwrap_or_default(),
                                 ),
-                                Err(e) => (500, erreur(&e.to_string())),
+                                Err(e) => (status_of(&e), erreur(&e.to_string())),
                             }
                         }
                     }
@@ -1642,6 +1697,46 @@ impl DualEmbedder for DaemonEmbedder {
 
 #[cfg(test)]
 mod tests {
+    /// **A request whose batches would overflow the card is cut before the call, and
+    /// served ; a text alone that cannot fit is refused (503), and the service keeps
+    /// serving** (20 November 2026 : the 7879 fell on a batch over radv's allocation
+    /// limit). The model panics like cubecl over its limit.
+    #[test]
+    fn a_batch_over_the_card_is_cut_before_the_call_and_the_service_keeps_serving() {
+        use super::*;
+        struct Attentive;
+        const LIMIT: u64 = 5_000_000;
+        fn tokens(t: &str) -> usize { t.split(' ').count() + 2 }
+        impl Embedder for Attentive {
+            fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>, EmbedError> {
+                let t = texts.iter().map(|t| tokens(t)).max().unwrap_or(0) as u64;
+                let bytes = texts.len() as u64 * 16 * t * t * 4;
+                if bytes > LIMIT {
+                    panic!("failed to reserve {bytes} bytes of device memory");
+                }
+                Ok(texts.iter().map(|t| vec![t.len() as f32, 1.0]).collect())
+            }
+            fn dim(&self) -> usize { 2 }
+            fn name(&self) -> &str { "attentive" }
+            fn memory_shape(&self) -> Option<crate::lot_memory::Shape> { Some(crate::lot_memory::Shape { heads: 16, hidden: 64 }) }
+            fn token_counts(&self, texts: &[String]) -> Option<Vec<usize>> { Some(texts.iter().map(|t| tokens(t)).collect()) }
+            fn memory_bounds(&self) -> crate::lot_memory::Bounds { crate::lot_memory::Bounds { max_allocation: Some(LIMIT), free: None } }
+        }
+        let daemon = EmbedDaemon::new(Arc::new(Attentive));
+        let texts: Vec<String> = (0..32).map(|i| format!("{i} {}", "a ".repeat(200).trim_end())).collect();
+        let served = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| daemon.par_lots(&texts, |lot| daemon.embedder.embed(lot))));
+        let vectors = served.expect("cut before the call, not a panic").expect("served");
+        assert_eq!(vectors.iter().map(|v| v[0] as usize).collect::<Vec<_>>(), texts.iter().map(|t| t.len()).collect::<Vec<_>>(), "in the order received");
+        assert!(daemon.poison().is_none());
+        let alone = vec![format!("x {}", "a ".repeat(600).trim_end())];
+        let refused = daemon.par_lots(&alone, |lot| daemon.embedder.embed(lot)).expect_err("a text alone over the card");
+        assert!(matches!(&refused, EmbedError::Refused(m) if m.contains("jetons")), "{refused:?}");
+        assert_eq!(status_of(&refused), 503);
+        assert!(daemon.poison().is_none(), "refused, not poisoned");
+        let bound = daemon.identite().memory_bound.expect("the bound in the identity");
+        assert!(bound.recut_batches >= 1 && bound.refused_texts == 1 && bound.max_allocation == Some(LIMIT), "{bound:?}");
+    }
+
     /// **The self-check is said in the identity, `/sante`** (20 November 2026) : a model
     /// that computes wrong in the service's batches is refused, with the batch's gap.
     #[test]
