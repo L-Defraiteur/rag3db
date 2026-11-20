@@ -55,6 +55,17 @@ tous des rejeux d'auteurs que le pousseur allait refaire. Une passe complète d'
 touche une suite lourde partout (le catalogue, l'index) : l'auteur le dit en déposant. Le dépôt et la file :
 `docs/optimiseur/18-11-2026/02-le-pousseur.md`.
 
+**Les docs aussi passent par le pousseur, et personne ne pousse direct sur master (c7, 21 nov. 2026, 00 h 2x).** Le
+20 novembre au soir, deux tickets déplacés dans `closed/` avec un État « ouvert » (le `git mv` commité sans le `git add`
+du fichier corrigé) ont mis `check_tickets` rouge sur master et retenu toute la file rust ; l'un était passé par le
+créneau 2, qui ne jouait pas la garde des tickets, l'autre par un push direct, que le pousseur ne pouvait pas voir ; et
+un commit de docs poussé direct pendant le push d'un lot rust avait coûté une passe entière à 19 h 24. Depuis : un
+ticket, une page, une correction de docs se déposent en train docs (`… enqueue <id> <branche> <tête> docs - - - -
+<session>`, avec `VUE=`), qui passe en une minute et joue `check_tickets` sur l'arbre reposé avant de pousser
+(`pusher-tickets-partout`) ; aucun push direct sur master, même de docs. Avant de déposer un ticket fermé :
+`git status --porcelain` vide, et le contrôle joué sur ce qui est commité (`git show HEAD:<chemin>` ou
+`git archive HEAD`), jamais sur l'arbre de travail.
+
 **Un lot rust se dépose avec son attestation check_features (20 nov. 2026, c7, lot pusher-attestation).** Le 20
 novembre, trois lots ont été rendus rouges à check_features dans la même nuit : un `cfg` de feature manquait, le
 pousseur l'a vu, jamais leur auteur. Chaque fois, un train était perdu et un rang à reprendre. Depuis 11 h 04, le
