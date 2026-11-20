@@ -2830,13 +2830,16 @@ public:
         const auto* value = std::getenv("BANC_SEED_POINTS");
         return value == nullptr ? 1000 : std::stoull(value);
     }
+    // Real vectors instead of the drawn ones: one "[x,y,...]" per line (the COPY TO of a vector
+    // column). The last QUERIES lines are the queries, outside the table; the others are the rows.
+    static const char* realVectors() { return std::getenv("BANC_VECTORS_CSV"); }
 };
 
 TEST_F(VectorIndexSeedMeasure, RecallAndBuildTimeWithAndWithoutTheSeed) {
     if (std::getenv("CONCURRENCE_MEASURE") == nullptr) {
         GTEST_SKIP() << "a measure: CONCURRENCE_MEASURE=1, under `poste mesure`";
     }
-    constexpr int64_t TOTAL = 120'000;
+    int64_t TOTAL = 120'000;
     constexpr int DIMENSION = 768;
     constexpr int QUERIES = 200;
     constexpr int SAMPLE = 2'000;
@@ -2845,9 +2848,41 @@ TEST_F(VectorIndexSeedMeasure, RecallAndBuildTimeWithAndWithoutTheSeed) {
     table = "Far";
     mustRun(stringFormat("CREATE NODE TABLE Far(id INT64 PRIMARY KEY, vec FLOAT[{}]);", DIMENSION));
     // The base, rounded as the CSV writes it, so that the exhaustive search sees what the index holds.
-    std::vector<float> base(static_cast<size_t>(TOTAL) * DIMENSION);
+    std::vector<float> base;
+    std::vector<std::vector<float>> realQueries;
     const auto csv = databasePath + ".far.csv";
-    {
+    if (realVectors() != nullptr) {
+        std::ifstream in(realVectors());
+        std::vector<std::string> lines;
+        for (std::string line; std::getline(in, line);) {
+            if (!line.empty()) {
+                lines.push_back(line);
+            }
+        }
+        ASSERT_GT(lines.size(), static_cast<size_t>(QUERIES + SAMPLE)) << "[check: setup] too few vectors";
+        TOTAL = static_cast<int64_t>(lines.size()) - QUERIES;
+        base.resize(static_cast<size_t>(TOTAL) * DIMENSION);
+        std::ofstream out(csv);
+        for (size_t row = 0; row < lines.size(); ++row) {
+            auto text = lines[row];
+            text.erase(std::remove(text.begin(), text.end(), '"'), text.end());
+            ASSERT_TRUE(text.size() > 2 && text.front() == '[' && text.back() == ']')
+                << "[check: setup] line " << row;
+            std::vector<float> values;
+            std::stringstream cells(text.substr(1, text.size() - 2));
+            for (std::string cell; std::getline(cells, cell, ',');) {
+                values.push_back(std::stof(cell));
+            }
+            ASSERT_EQ(values.size(), static_cast<size_t>(DIMENSION)) << "[check: setup] line " << row;
+            if (static_cast<int64_t>(row) < TOTAL) {
+                std::copy(values.begin(), values.end(), &base[row * DIMENSION]);
+                out << row << ",\"" << text << "\"\n";
+            } else {
+                realQueries.push_back(std::move(values));
+            }
+        }
+    } else {
+        base.resize(static_cast<size_t>(TOTAL) * DIMENSION);
         std::ofstream out(csv);
         out.precision(3);
         for (int64_t id = 0; id < TOTAL; ++id) {
@@ -2943,6 +2978,9 @@ TEST_F(VectorIndexSeedMeasure, RecallAndBuildTimeWithAndWithoutTheSeed) {
         for (auto& value : query) {
             value = std::stof(std::to_string(normal(engine)));
         }
+        if (!realQueries.empty()) {
+            query = realQueries[q];
+        }
         const auto truth = exhaustive(query, -1, K);
         const auto found = searchIndex(query, K);
         std::set<int64_t> expected;
@@ -2980,7 +3018,8 @@ TEST_F(VectorIndexSeedMeasure, RecallAndBuildTimeWithAndWithoutTheSeed) {
             missed.push_back(id);
         }
     }
-    std::cerr << "  [amorce] seed_points " << seedPoints() << ", threads " << threads() << ": CREATE "
+    std::cerr << "  [amorce] " << (realVectors() ? realVectors() : "drawn vectors") << ", " << TOTAL
+              << " rows ; seed_points " << seedPoints() << ", threads " << threads() << ": CREATE "
               << createMs << " ms ; recall@" << K << " " << recallSum / QUERIES << " over " << QUERIES
               << " queries ; isolated points found by their own vector: first " << ownFirst << "/"
               << ISOLATED << ", top " << K << " " << ownTopK << "/" << ISOLATED << " ; missed";
