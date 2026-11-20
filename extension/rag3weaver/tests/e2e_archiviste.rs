@@ -1267,6 +1267,49 @@ fn the_decide_prompt_is_its_parts_stable_first() {
     assert!(!p.contains("Réponds par"), "no prose line: {p}");
 }
 
+/// **The version of the template, everywhere a filing leaves a trace** (20 November 2026, the seed of an agent that
+/// edits its own memory workflow: a drop must be tied to the version that produced it): every tool call says the
+/// template it ran on (`metadata.template`: its content hash and its reload number), and the slice Source and the L1
+/// it filed carry that hash.
+#[test]
+#[ignore]
+fn the_template_version_is_on_the_call_the_source_and_the_l1() {
+    let serveur = three_topics_server();
+    let adresse = serveur.url.clone();
+    let dir = tempfile::tempdir().expect("dossier");
+    let b = ouvrir(dir.path(), |m| {
+        m["models"]["llm"] = json!({"provider": "compatible", "protocol": "openai", "model": "faux", "address": adresse});
+    });
+    put_six_turns(&b);
+    let r = appel(&b, "archive_slice", json!({"run": "chat:test", "from_turn": 1, "to_turn": 6, "allow_create": true}));
+    let hash = r["metadata"]["template"]["hash"].as_str().unwrap_or_else(|| panic!("the call says its template: {r}")).to_string();
+    assert!(hash.len() == 64 && hash.chars().all(|c| c.is_ascii_hexdigit()), "{hash}");
+    assert_eq!(r["metadata"]["template"]["version"], json!(0), "{r}");
+    let s = appel(&b, "select_sources", json!({"filter": {"field": {"key": "chemin", "value": "sources/chat-test-turns-1-6.md"}}}));
+    assert_eq!(s["result"][0]["data"]["template"], json!(hash), "the Source: {s}");
+    assert_eq!(apports_de(&b, "Le compositeur du portable")[0]["template"], json!(hash), "the L1");
+}
+
+/// **An edited template is a new version**: after a script of the template changes and the backend reloads, the
+/// calls say another hash and the next reload number.
+#[test]
+#[ignore]
+fn an_edited_template_reloaded_is_a_new_version() {
+    let dir = tempfile::tempdir().expect("dossier");
+    let b = ouvrir(dir.path(), |_| {});
+    let before = appel(&b, "list_turns", json!({}));
+    let h0 = before["metadata"]["template"]["hash"].as_str().unwrap_or_else(|| panic!("{before}")).to_string();
+    let script = dir.path().join("templates/backends/memory/scripts/turns_list.rhai");
+    let mut text = std::fs::read_to_string(&script).unwrap();
+    text.push_str("\n// edited by the witness\n");
+    std::fs::write(&script, text).unwrap();
+    let reloaded = b.reload().expect("the edited template reloads");
+    assert_eq!(reloaded.version, 1);
+    let after = appel(&b, "list_turns", json!({}));
+    assert_eq!(after["metadata"]["template"]["version"], json!(1), "{after}");
+    assert_ne!(after["metadata"]["template"]["hash"], json!(h0), "another content, another hash");
+}
+
 /// The split of a long section (archive, segment_over): the instruction, then its numbered paragraphs as a part;
 /// the rules of a topic are in the schema.
 #[test]
