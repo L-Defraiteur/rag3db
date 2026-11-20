@@ -570,7 +570,8 @@ fn une_fenetre_qui_n_est_pas_le_chat_compte_les_accords_en_attente() {
     // A window of the repository, open before the turn.
     n.nouvel_onglet();
     n.aller(&format!("{}/ide/code/{}/arbre?fenetre=depot", serveur.racine(), a.h.id), "document.getElementById('lien')?.textContent === 'flux : ouvert'");
-    let compte = "document.querySelector('#accords-en-attente')?.dataset.compte ?? null";
+    // Parenthesised: `x ?? null === '0'` reads `x ?? (null === '0')`, and a count of « 1 » would pass for « 0 ».
+    let compte = "(document.querySelector('#accords-en-attente')?.dataset.compte ?? null)";
     n.attendre(&format!("{compte} === '0'"), "the detached window says no approval awaited, before the turn");
     n.onglet(0);
     n.evaluer("document.querySelector('#message').value = 'lance echo'; document.querySelector('#send').click()");
