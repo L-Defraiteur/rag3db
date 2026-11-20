@@ -5,7 +5,7 @@ Ticket `embarquement/tickets/2026-11-19-granite-278m-panique-a-sa-chauffe-sur-l-
 
 ## Le départage
 
-Tous les essais sont faits à luciepc le 19 novembre, sur `igpu:0` (`Device<Vulkan(IntegratedGpu(0))>`, radv), avec
+Tous les essais sont faits à luciepc le 19 novembre, sur `igpu:0` (`Device<Vulkan(IntegratedGpu(0))>`, un Intel Graphics ARL sous anv, Mesa 26.2.6 ; corrigé le 20 novembre, c'était écrit radv), avec
 le binaire de master `91bd3ebd959ebedd`, Flex32, autotune et fusion actifs. Les journaux sont dans
 `~/.cache/rag3weaver-build/igpu-panique/`.
 

@@ -87,3 +87,7 @@ C'est le bruit de réduction de card2 (4,9e-5). **L'APU de la tablette calcule j
   réduite se joue sur l'iGPU de luciepc, et se compare à une autre carte intégrée.
 - **Pour le garde-fou** : il refuse toute carte intégrée, parce qu'on ne sait pas encore lesquelles calculent faux. Sur
   la tablette, `RAG3WEAVER_EMBEDDER_ALLOW_INTEGRATED_GPU=1` se pose, avec cette mesure pour référence.
+- **Par fournisseur plutôt que par type, un jour** (G, 20 novembre) : le garde-fou refuse tout adaptateur intégré, l'APU
+  sain de la tablette compris. C'est prudent tant qu'on ne sait pas lesquels calculent faux. Pour servir un jour sur la
+  tablette sans réglage, il faudrait refuser par fournisseur ou par pilote (Intel, anv) plutôt que par type, une fois
+  la cause connue.
