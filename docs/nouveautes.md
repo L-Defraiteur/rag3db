@@ -1,6 +1,13 @@
 # Nouveautés
 
 - 21 novembre 2026 — **Au terminal, un message tapé pendant qu'un accord attend reste un message.** Seuls `o` et `n` minuscules, seuls, répondent tout de suite à une demande d'accord. Une phrase qui commence par une majuscule (« Ne commite pas… ») part à l'équipier comme un message, et la demande d'accord reste affichée, au lieu d'être refusée par la première lettre.
+- 20 novembre 2026 — **Le modèle par défaut de l'hôte réfléchit dans une borne.** Sans `models.llm` au manifeste,
+  l'hôte choisit lui-même son modèle (Gemini sur Vertex) : il le règle désormais à `reasoning: low`, parce qu'un
+  Gemini 3.x sans borne réfléchit jusqu'à remplir sa sortie et coupe sa réponse avant d'appeler un outil.
+  `VERTEX_REASONING` (comme `VERTEX_MODEL`) règle l'hôte lui-même, et une entrée de `models.llm` **sans `model`**
+  règle ce modèle par défaut sans le nommer : `"models": {"llm": {"reasoning": "medium", "context_tokens": 200000}}`.
+  Une telle entrée qui porte une clé de connexion (`access`, `provider`, `address`…) est refusée en la nommant.
+
 - 20 novembre 2026 — **Les gabarits installés suivent le binaire.** Une base posée par `code-tree add` désigne
   désormais le gabarit livré par le binaire (`builtin:`) pour chaque outil qu'il livre, même quand la base de départ en
   tenait une copie différente : une copie périmée ne se propage plus d'une base à l'autre (neuf gabarits sur quatorze
