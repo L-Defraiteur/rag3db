@@ -1,5 +1,10 @@
 # Nouveautés
 
+- 20 novembre 2026 — **Des scopes restés sans leur fichier quittent l'index.** Sur la base du dépôt, `app.js` gardait
+  160 scopes depuis la migration, sans ligne `File`, alors que la règle des minifiés l'écarte : la synchronisation ne
+  lisait les fichiers indexés que dans les lignes `File`, et ce chemin lui échappait. Un index complet retire
+  maintenant les scopes d'un chemin sans `File` que la source ne retient plus. La cause de ces orphelins reste à
+  trouver (ticket).
 - 20 novembre 2026 — **Le chat de l'IDE dit quand l'index n'est pas prêt, puis quand il l'est.** Sous un outil qui a répondu avant que l'index ne rattrape, une ligne dit en clair combien de temps il faut encore pour le texte et pour les vecteurs, ou pourquoi les vecteurs manquent ; l'outil n'est pas refusé. Une fois l'index à jour, une seule ligne le dit dans le chat.
 - 19 novembre 2026 — **Une seule notification quand l'index d'une vue est prêt.** Quand une recherche ou une lecture
   a répondu « index pas prêt », le serveur MCP de l'agent surveille cette vue. Quand elle est prête, il envoie une
