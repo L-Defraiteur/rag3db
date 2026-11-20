@@ -1,5 +1,11 @@
 # Nouveautés
 
+- 20 novembre 2026 — **Une variable d'une ligne ne remonte plus en tête par le seul vecteur.** Depuis que le contenu
+  d'un scope s'arrête aux octets de son nœud, une variable Python d'une instruction (`s=index.read_text()`, 18
+  caractères) avait son propre morceau, et son vecteur gagnait des recherches où elle n'avait rien à faire : c'était le
+  88 % de luciepc. Une `variable` qui porte moins de 80 caractères (`workspace.variable_min_chars`) n'a plus de
+  morceau, donc plus de vecteur, mais elle garde son document de plein texte : une constante courte se trouve toujours
+  par son nom. Elle reste dans le graphe, `outline` et `usages`. Les bases repassent une fois (règles de l'analyse 12).
 - 19 novembre 2026 — **Deux fenêtres de l'IDE sur le même chat suivent le même tour.** Une fenêtre ouverte au milieu d'un tour montre son texte depuis le début, et non seulement les mots arrivés après elle : le worker partagé du flux le garde pendant le tour. Une relecture d'une fenêtre, partie avant un tour d'une autre, ne l'efface plus.
 
 - 19 novembre 2026 — **Le chat de l'IDE ne fait plus disparaître un tour.** Une relecture de la conversation
