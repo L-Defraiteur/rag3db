@@ -2257,3 +2257,77 @@ fn a_second_overflow_after_the_compaction_is_a_named_failure() {
     assert_eq!(memoire.restarts.lock().unwrap().len(), 1, "one compaction, not a loop");
 }
 
+
+/// **An index not ready in the chat is watched, and said ready once** (c7's night task, 20 November 2026; recherche's
+/// watch of the thin client, `ReadyWatches`, reused in the host for the IDE's chat). A file is noted behind at 20 s per
+/// file, so `usages` answers at once, not ready. The tool's turn carries the state for the page (`metadata.index`); the
+/// host watches the backend's layer by the manifest's `search.ready_watch`, and once the layer caught up, publishes one
+/// `IndexReady` on the IDE's stream, subject `index`, with the thin client's text. A second answer « not ready » while
+/// the watch runs does not start a second one.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn an_index_not_ready_in_the_chat_is_watched_and_said_ready_once() {
+    let modele: ChatModel = Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+        Ok(Arc::new(CallbackLlm::new("faux-usages", 8192, |turns, opts, sink| {
+            let depuis = turns.iter().rposition(|t| t.role == "user").unwrap();
+            if turns[depuis..].iter().any(|t| t.role == "tool") {
+                MockLlm::new("Lu.").generate(turns, opts, sink)
+            } else {
+                MockLlm::new("").with_tool_calls(vec![("usages", r#"{"name":"main"}"#)]).generate(turns, opts, sink)
+            }
+        })))
+    });
+    let (_d, host, manifeste, id) = banc_avec(modele, |m| {
+        m["search"] = json!({ "ready_watch": { "first_poll_max_s": 1, "every_s": 1, "max_s": 60 } });
+    });
+    let host = Arc::new(host);
+    host.se_connaitre();
+    let flux = Arc::new(Mutex::new(Vec::<u8>::new()));
+    struct Capte(Arc<Mutex<Vec<u8>>>);
+    impl std::io::Write for Capte {
+        fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().unwrap().extend_from_slice(b);
+            Ok(b.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    host.ide_flux().abonner(Box::new(Capte(flux.clone())), Some(["index".to_string()].into_iter().collect()), None);
+    let h = host.hosted(&manifeste).unwrap();
+    let cellule = host
+        .with_backend(&h, |b| {
+            let cat = b.catalog.lock().unwrap();
+            let cellule = cat.scope().clone();
+            cat.file_lag().observe(&cellule, 1, Duration::from_secs(20));
+            cat.file_lag().note(&cellule, "main.rs", crate::catalog::retard::now_ms());
+            cellule
+        })
+        .unwrap();
+    let prets = || String::from_utf8_lossy(&flux.lock().unwrap()).matches("IndexReady").count();
+
+    host.chat_turn(&id, "qui appelle main ?").expect("the turn");
+    let etat = host.chat_state(&id).unwrap();
+    let outil = etat["turns"].as_array().unwrap().iter().find(|t| t["role"] == "tool").cloned().expect("the tool's turn");
+    assert_eq!(outil["metadata"]["index"]["ready"], json!(false), "the state goes with the turn : {outil}");
+    host.chat_turn(&id, "et encore ?").expect("a second turn, still not ready");
+    std::thread::sleep(Duration::from_millis(2500));
+    assert_eq!(prets(), 0, "not ready yet, nothing said");
+
+    host.with_backend(&h, |b| {
+        let cat = b.catalog.lock().unwrap();
+        for chemin in ["main.rs", "code/main.rs"] {
+            cat.file_lag().done_in(&crate::catalog::retard::LagKey::backend(&cellule), chemin, u64::MAX);
+        }
+    })
+    .unwrap();
+    let fin = Instant::now() + Duration::from_secs(10);
+    while prets() == 0 {
+        assert!(Instant::now() < fin, "the layer caught up, and nothing was said in 10 s");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    std::thread::sleep(Duration::from_millis(2500));
+    let capte = String::from_utf8_lossy(&flux.lock().unwrap()).into_owned();
+    assert_eq!(prets(), 1, "once, for two answers not ready : {capte}");
+    assert!(capte.contains("l'index de la vue du backend est prêt"), "the thin client's text : {capte}");
+}
