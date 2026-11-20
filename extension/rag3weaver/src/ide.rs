@@ -280,7 +280,9 @@ impl Flux {
     /// Combien de fenêtres du navigateur écoutent (une par navigateur quand ses onglets
     /// partagent le flux, une par page sinon) ; les lecteurs de l'hôte n'y comptent pas.
     pub fn fenetres(&self) -> usize {
-        self.abonnes.lock().unwrap_or_else(|p| p.into_inner()).iter().filter(|a| a.navigateur).count()
+        // Only the living ones: a window whose writer failed (it left) no longer listens, even before the next
+        // frame drops it from the list.
+        self.abonnes.lock().unwrap_or_else(|p| p.into_inner()).iter().filter(|a| a.navigateur && a.vivant.load(Ordering::SeqCst)).count()
     }
 
     /// **Relaie le bus d'un backend** qui vient de s'ouvrir : un fil par
