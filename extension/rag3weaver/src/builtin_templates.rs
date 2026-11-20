@@ -506,12 +506,43 @@ mod tests {
     #[test]
     fn every_shipped_template_is_embedded_and_sorted() {
         let racine = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates");
-        let n = walk(&racine).len();
-        assert!(n > 100, "{n} gabarits sur le disque");
-        assert_eq!(BUILTIN.len(), n, "chaque fichier de templates/ est embarqué");
+        let disque: Vec<String> = walk(&racine)
+            .iter()
+            .map(|p| p.strip_prefix(&racine).unwrap().components().map(|c| c.as_os_str().to_string_lossy()).collect::<Vec<_>>().join("/"))
+            .collect();
+        assert!(disque.len() > 100, "{} gabarits sur le disque", disque.len());
+        let embarques: Vec<&str> = BUILTIN.iter().map(|(nom, _)| *nom).collect();
+        if let Err(e) = ecart(&embarques, &disque) {
+            panic!("chaque fichier de templates/ est embarqué, et rien d'autre n'y vit : {e}");
+        }
         assert!(BUILTIN.windows(2).all(|w| w[0].0 < w[1].0), "triés : la recherche est dichotomique");
         assert_eq!(get("tools/list.mmd"), Some(std::fs::read(racine.join("tools/list.mmd")).unwrap().as_slice()));
         assert!(get("tools/nulle-part.mmd").is_none());
+    }
+
+    /// **The gap between the embedded templates and the disk, by name** (ticket of 13 November 2026, « un fichier de
+    /// plus apparaît sous templates/ pendant la lib entière, une fois »): the names on the disk and not embedded, and
+    /// the names embedded and not on the disk. A file another test writes for a moment under `templates/` is named.
+    fn ecart(embarques: &[&str], disque: &[String]) -> Result<(), String> {
+        // RED STUB: the counts only, as before.
+        if embarques.len() == disque.len() {
+            Ok(())
+        } else {
+            Err(format!("{} embarqués, {} sur le disque", embarques.len(), disque.len()))
+        }
+    }
+
+    /// **The gap names its files** (ticket of 13 November 2026): a name more on the disk is named; a name replaced at
+    /// the same count is seen, both ways.
+    #[test]
+    fn the_gap_of_the_templates_names_its_files() {
+        let embarques = ["backends/code/manifest.json", "tools/list.mmd"];
+        let disque = |noms: &[&str]| noms.iter().map(|n| n.to_string()).collect::<Vec<_>>();
+        assert!(ecart(&embarques, &disque(&["tools/list.mmd", "backends/code/manifest.json"])).is_ok());
+        let e = ecart(&embarques, &disque(&["backends/code/manifest.json", "tools/list.mmd", "backends/code/x.rag3db.lock"])).unwrap_err();
+        assert!(e.contains("backends/code/x.rag3db.lock"), "the file more on the disk is not named: {e}");
+        let e = ecart(&embarques, &disque(&["backends/code/manifest.json", "tools/passager.mmd"])).expect_err("a name replaced at the same count is not seen");
+        assert!(e.contains("tools/passager.mmd") && e.contains("tools/list.mmd"), "both sides of a replaced name are not named: {e}");
     }
 
     fn walk(d: &Path) -> Vec<PathBuf> {
