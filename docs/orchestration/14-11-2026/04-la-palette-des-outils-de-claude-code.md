@@ -134,3 +134,43 @@ sans dix tours de modèle ; c'est aussi ce que fait notre lanceur de campagne, e
 vues, le mode pair, le navigateur et les MCP à chaud, la palette dépasse ce qu'une invite doit porter ; la forme sera
 celle du catalogue (épingles, espaces, recherche), et `tools/list_changed` du protocole MCP la rend visible au
 client.
+
+## Les produits voisins : Projects, Claude Tag, agent teams (lu le 20 novembre, 18 h)
+
+Lucie, 18 h 0x : « il y a Claude Tag et Claude Projects qui ressemblent un peu aux produits qu'on construit ». Lecture
+des pages officielles (code.claude.com/docs/en/claude-projects, claude.com/docs/claude-tag, agent-teams), et ce que
+chacun dit de nous.
+
+**Projects** (bêta, plans individuels) : « one ongoing conversation where Claude coordinates a stream of related
+work » ; chaque tâche devient un **thread**, une session cloud sur sa propre branche qui ouvre sa PR, ou une session sur
+ta machine par Remote Control ; un **Overview** classe les threads par état (en cours, **ready for review**, waiting on
+you, landing, resolved) ; une **mémoire de projet** en fichiers (`MEMORY.md` lu au départ de chaque thread, les autres
+à la demande), des **instructions de projet** (16 000 caractères), les dépôts et leur `CLAUDE.md` ; « you can check on
+them and steer them from your phone ». C'est, à peu près, notre file de lots + le pousseur + le kanban décidé cet
+après-midi + les L1 ; la différence : chez nous la mémoire est en fiches citables avec leurs sources, les états d'un
+lot sont jugés (témoin, attestation, juge), et tout vit sur l'hôte de Lucie. **À prendre** : l'Overview par état avec
+« ce qui a besoin de toi » en tête (c'est la première colonne de notre kanban), et le téléphone comme client de l'hôte
+(l'invariant de Lucie).
+
+**Claude Tag** (plans Team et Enterprise) : « Tag @Claude in. Get results back in the thread » ; un agent dans un
+canal Slack, un **bac à sable éphémère** par conversation, une **checklist postée dans le fil** au fil du travail, des
+**connecteurs** par canal posés par un admin, une **mémoire par canal** (« how memory follows places »), des tâches
+planifiées et des canaux surveillés, et les PR ouvertes depuis un bug rapporté dans le canal. C'est notre mode pair
+vu de Slack : un équipier nommé qu'on appelle là où on parle. **À prendre** : la checklist vivante dans le fil (notre
+tâche au flux, que tty met dans l'IDE), la mémoire attachée au lieu (une fiche par canal, par dépôt, par vue), et le
+« what can you access from this channel? » comme question que tout équipier sait répondre (notre `views` et notre
+résumé des familles).
+
+**Agent teams** (expérimental) : un lead, des teammates qui sont des sessions entières, une **liste de tâches
+partagée** (pending, in progress, completed, dépendances, verrou de fichier à la prise), une **boîte par agent**
+(`~/.claude/teams/<team>/inboxes/<agent>.json`), des hooks `TeammateIdle`, `TaskCreated`, `TaskCompleted` pour des
+portes de qualité, l'arrêt par demande que l'équipier peut refuser ; limites : une équipe par session, pas d'équipes
+imbriquées, pas de reprise après `/resume`. C'est exactement ce que c7 fait à la main avec treize sessions depuis une
+semaine. **À prendre** : la liste de tâches partagée avec dépendances et prise verrouillée (notre file du pousseur l'a
+pour les lots, pas pour les tâches des sessions), et les trois hooks comme portes (notre « vert est aucun rouge » et
+l'attestation à l'enqueue en sont déjà deux).
+
+**Ce que nous avons et qu'aucun des trois n'a** : l'index de code par le sens avec vues par worktree, le juge sur copie
+avant master, la mémoire en fiches relue par l'archiviste, et le tout sur les postes de Lucie, sous son jeton, sans
+cloud. Les trois convergent vers le même dessin que nous : des agents nommés, joignables là où l'humain est, une liste
+de travail partagée, une mémoire par lieu, des PR qui atterrissent d'elles-mêmes.
