@@ -644,7 +644,10 @@ fn usage_properties(sites: &[UsageSite]) -> BTreeMap<String, CypherValue> {
 // 10 (20 novembre 2026) : un conteneur replié n'est pas candidat à la recherche — ce qu'il porte à lui, hors lignes
 // de structure (ouvertures, plis, déclarations avancées, fermetures et leurs commentaires), sous le seuil du
 // manifeste (`container_min_chars`, 80 par défaut), le tient hors du plein texte et des morceaux (2.12).
-pub const REGLES_DE_L_ANALYSE: u32 = 10;
+// 11 (20 novembre 2026) : un paquet du dépôt importé par son nom (`use monlib::X` dans les tests d'un crate,
+// `import … from "monpaquet"`) désigne ses fichiers, lus dans les manifestes ; les réexportations de Python
+// (`__init__.py`) et de TypeScript (`export { X } from`) se suivent comme celles de Rust.
+pub const REGLES_DE_L_ANALYSE: u32 = 11;
 
 /// **La version de l'analyse** (page 06, § 13) : le commit du parseur lié, [`REGLES_DE_L_ANALYSE`] et le
 /// gabarit du code (le découpage et les champs déclarés de `File` et de `Scope`), hachés.
