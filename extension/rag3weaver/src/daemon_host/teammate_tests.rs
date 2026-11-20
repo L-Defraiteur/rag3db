@@ -2742,7 +2742,7 @@ fn the_page_of_a_task_follows_its_teammate_and_answers_its_approval() {
     assert!(n.evaluer("[...document.querySelectorAll('ul.boite li')].some((l) => l.dataset.kind === 'approval')").as_bool().unwrap_or(false), "the mailbox shows the approval line");
     n.evaluer(&format!("{carte}.querySelector('button.accorder').click()"));
     n.attendre(
-        "[...document.querySelectorAll('ul.boite li')].some((l) => l.dataset.kind === 'step_done' && l.textContent.includes('echo joué après l'accord'))",
+        "[...document.querySelectorAll('ul.boite li')].some((l) => l.dataset.kind === 'step_done' && l.textContent.includes('echo joué après'))",
         "the command ran after the page's « oui », and the mailbox shows it",
     );
     assert_eq!(n.evaluer(&format!("!!{carte}")), json!(false), "the card goes once answered");
