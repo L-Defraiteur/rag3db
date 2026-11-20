@@ -1,6 +1,13 @@
 # Nouveautés
 
 - 20 novembre 2026 — **La fenêtre détachée du dépôt dit aussi quand l'index est prêt.** Après une réponse « index pas prêt » dans le chat, une fenêtre du dépôt ouverte à côté le dit dans son en-tête, une fois, quand l'index a rattrapé.
+- 20 novembre 2026 — **Un morceau de code tient dans la fenêtre de l'embarqueur.** Sous granite (512 jetons), 72,5 % des
+  morceaux de rag3weaver dépassaient sa fenêtre, et leur fin n'était pas cherchable par le vecteur : le contexte ajouté
+  autour d'un morceau n'était borné que côté par côté. Un morceau est maintenant borné en entier par le plus petit
+  embarqueur de la base, en octets puis en jetons comptés par son propre tokenizer ; sur les en-têtes les plus denses du
+  moteur, aucun morceau ne passe 512. Une base sous bge-m3 seul ne change pas. Le tokenizer est une capacité : s'il
+  manque, la base refuse de s'ouvrir pour l'index en nommant le fichier. Les bases repassent une fois (règles de
+  l'analyse 14).
 - 20 novembre 2026 — **Une déclaration d'une ligne ne remonte plus en tête par le seul vecteur.** Depuis que le
   contenu d'un scope s'arrête aux octets de son nœud, une variable Python d'une instruction (`s=index.read_text()`, 18
   caractères) avait son propre morceau, et son vecteur gagnait des recherches où elle n'avait rien à faire : c'était le
