@@ -1,5 +1,12 @@
 # Nouveautés
 
+- 20 novembre 2026 — **Une variable d'une ligne ne remonte plus en tête par le seul vecteur.** Depuis que le contenu
+  d'un scope s'arrête aux octets de son nœud, une variable Python d'une instruction (`s=index.read_text()`, 18
+  caractères) avait son propre morceau, et son vecteur gagnait des recherches où elle n'avait rien à faire : c'était le
+  88 % de luciepc. Une `variable` qui porte moins de 80 caractères (`workspace.variable_min_chars`) n'a plus de
+  morceau, donc plus de vecteur, mais elle garde son document de plein texte : une constante courte se trouve toujours
+  par son nom. Elle reste dans le graphe, `outline` et `usages`. Les bases repassent une fois (règles de l'analyse 13).
+- 19 novembre 2026 — **Deux fenêtres de l'IDE sur le même chat suivent le même tour.** Une fenêtre ouverte au milieu d'un tour montre son texte depuis le début, et non seulement les mots arrivés après elle : le worker partagé du flux le garde pendant le tour. Une relecture d'une fenêtre, partie avant un tour d'une autre, ne l'efface plus.
 - 19 novembre 2026 — **Une fenêtre détachée de l'IDE dit les accords qui attendent dans le chat.** Son en-tête compte les demandes d'accord de son dépôt encore sans réponse, à son ouverture comme au fil du flux, et le compte retombe quand le chat accorde ou refuse.
 - 20 novembre 2026 — **Des scopes restés sans leur fichier quittent l'index.** Sur la base du dépôt, `app.js` gardait
   160 scopes depuis la migration, sans ligne `File`, alors que la règle des minifiés l'écarte : la synchronisation ne
