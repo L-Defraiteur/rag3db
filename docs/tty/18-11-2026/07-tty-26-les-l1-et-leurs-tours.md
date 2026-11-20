@@ -26,3 +26,11 @@ Archi a pris ces noms ; il donnera le commit de ses routes. Si un nom change, un
 - Ce lot n'a pas commité son rouge avant le code : un écart à la règle, dit ici.
 - Le harnais : la séance 1i, sur les routes `GET /ide/l1` et `POST /ide/turns/read` du faux hôte. Elle est rouge contre le binaire de master, puis verte ; le harnais entier est VERT sous `tmux-local-ouvert`.
 - Le crate passe 121 + 1 tests, et 23 sans vue ; clippy `-D warnings` ne signale rien.
+
+## Reposé sur les routes d'archi (20 novembre)
+
+Les routes d'archi ont atterri sur master (6a1a102138). `GET /ide/l1` a la forme convenue (`{backend, run, l1: [{apport, fiche, section, run, from_turn, to_turn, source}]}`). En revanche, `POST /ide/turns/read` prend `{run, from, to}` et refuse un `apport` (« turns/read by apport comes with the memory's trace_turn ») : le terminal envoyait `{backend, apport}`.
+
+- `/turns <n>` demande maintenant le run et la plage du L1 (`memory::turns_request`). Témoin `memory::tests::turns_ask_the_host_for_the_run_and_range_of_the_l1`, rouge (fa93b58940) puis vert ; `nth_apport` part.
+- Le faux hôte refuse l'apport comme le fait l'hôte. Le harnais entier est VERT sous `tmux-local-ouvert`, séance 1i comprise. Le crate passe 128 + 2 tests, 23 sans vue, et clippy `-D warnings` ne dit rien.
+- **Contre le vrai hôte : pas encore.** Le binaire posé le 20 au matin (baccb2ea6e) précède les routes d'archi : `POST /ide/turns/read` y répond « route inconnue ». Le rejeu se fera à la prochaine pose d'un hôte bâti depuis master.
