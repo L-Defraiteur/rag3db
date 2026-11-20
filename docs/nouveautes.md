@@ -1,6 +1,6 @@
 # Nouveautés
 
-- 20 novembre 2026 — **Le chat de l'IDE dit quand l'index n'est pas prêt, puis quand il l'est.** Sous un outil qui a répondu avant que l'index ne rattrape, une ligne dit en clair combien de temps il faut encore pour le texte et pour les vecteurs, ou pourquoi les vecteurs manquent ; l'outil n'est pas refusé. Une fois l'index à jour, une seule ligne le dit dans le chat. Un manifeste qui règle cette veille (`search.ready_watch`) s'ouvre de nouveau.
+- 20 novembre 2026 — **Le chat de l'IDE dit quand l'index n'est pas prêt, puis quand il l'est.** Sous un outil qui a répondu avant que l'index ne rattrape, une ligne dit en clair combien de temps il faut encore pour le texte et pour les vecteurs, ou pourquoi les vecteurs manquent ; l'outil n'est pas refusé. Une fois l'index à jour, une seule ligne le dit dans le chat.
 - 19 novembre 2026 — **Une seule notification quand l'index d'une vue est prêt.** Quand une recherche ou une lecture
   a répondu « index pas prêt », le serveur MCP de l'agent surveille cette vue. Quand elle est prête, il envoie une
   seule notification (« l'index de la vue … est prêt : texte et vecteurs ») ; rien à chaque réindexation. La veille
