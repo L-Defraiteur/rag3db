@@ -8058,6 +8058,34 @@ mod tests {
         assert!(backend.call("read_file", json!({"path": "outils.rs", "format": "html"})).is_err());
     }
 
+    /// **Rehearsal, ignored: rebuild one full-text table of a copied base** (20 November 2026, the 690 words the code
+    /// index of the repository base lost before lucivy 4.3.12). `RAG3WEAVER_REBATI_MANIFEST` names a manifest whose
+    /// `database` is a **copy** under a `mesures/` folder (refused otherwise). The table to rebuild has had its
+    /// `_generation` file removed beforehand: the opening takes the product's path (« dossier jeté, rebâti depuis les
+    /// lignes ») and `rebuild_fts_step` runs to the end, as the host's `spawn_fts_rebuild` does. Prints the duration,
+    /// the steps and the full-text counts.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    #[ignore]
+    fn rebuild_the_full_text_of_a_copied_base() {
+        let manifest = std::env::var("RAG3WEAVER_REBATI_MANIFEST").expect("RAG3WEAVER_REBATI_MANIFEST=<manifest of a copy>");
+        let prepared = PreparedBackend::load(Path::new(&manifest)).expect("the manifest loads");
+        let database = format!("{:?}", prepared.manifest.database);
+        assert!(database.contains("/mesures/"), "a copy under mesures/ only, never a live base: {database}");
+        let started = std::time::Instant::now();
+        let backend = prepared.open_on_disk().expect("the copy opens");
+        let mut cat = backend.catalog.lock().unwrap();
+        cat.open_fts_files();
+        eprintln!("ouvert en {:.1} s ; à rebâtir : {}", started.elapsed().as_secs_f64(), cat.fts_rebuild_pending());
+        let rebuild = std::time::Instant::now();
+        let mut steps = 0u32;
+        while cat.rebuild_fts_step(2_000).expect("a rebuild step") {
+            steps += 1;
+        }
+        eprintln!("rebâti en {:.1} s, {steps} pas ; comptes {:?}", rebuild.elapsed().as_secs_f64(), cat.comptes_du_plein_texte());
+        assert!(!cat.fts_rebuild_pending(), "nothing left to rebuild");
+    }
+
     /// A code backend, its sources written, indexed, with `search_code`; `patch` edits its manifest.
     #[cfg(all(feature = "code", feature = "rag3db-native"))]
     fn indexed_code_backend(files: &[(&str, &str)], patch: &dyn Fn(&mut Value)) -> (tempfile::TempDir, Backend) {
