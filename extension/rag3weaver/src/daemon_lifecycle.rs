@@ -314,12 +314,16 @@ pub fn write(file: &DaemonFile) -> Result<(), String> {
 
 /// **Retirer `daemon.json` s'il est le sien** : un hôte qui s'arrête ne retire
 /// pas celui d'un autre qui l'aurait remplacé.
-pub fn remove_if_mine(pid: u32) {
-    if read().is_some_and(|f| f.pid == pid) {
-        if let Ok(d) = racine(Dossier::Donnees) {
-            let _ = std::fs::remove_file(d.join("daemon.json"));
-        }
-    }
+pub fn remove_if_mine(pid: u32) -> bool {
+    racine(Dossier::Donnees).is_ok_and(|d| remove_if_mine_in(&d, pid))
+}
+
+/// [`remove_if_mine`] in `dossier`: true when the file was this host's and is gone; false when it
+/// is another host's (left as it is) or absent. The stop line says which (the night of 20 Nov 2026:
+/// a second host said « daemon.json retiré » for a file it had left untouched).
+pub(crate) fn remove_if_mine_in(dossier: &Path, pid: u32) -> bool {
+    let _ = (dossier, pid);
+    false
 }
 
 /// **Un pid vit-il ?** `Some(true)` ou `Some(false)` quand le système sait le
@@ -794,6 +798,18 @@ fn tail(log: &Path) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_host_removes_its_daemon_json_only_and_says_which() {
+        let d = tempfile::tempdir().unwrap();
+        let fiche = |pid: u32| serde_json::json!({ "address": "127.0.0.1:1", "pid": pid, "token": "t", "build": "b", "started_at": 0 });
+        std::fs::write(d.path().join("daemon.json"), fiche(42).to_string()).unwrap();
+        assert!(!remove_if_mine_in(d.path(), 7), "another host's file is not ours");
+        assert!(d.path().join("daemon.json").exists(), "and it stays");
+        assert!(remove_if_mine_in(d.path(), 42), "ours is removed");
+        assert!(!d.path().join("daemon.json").exists());
+        assert!(!remove_if_mine_in(d.path(), 42), "nothing left to remove");
+    }
+
     use super::*;
 
     fn dossier_d_unite(env: Option<&str>) -> (tempfile::TempDir, PathBuf) {
