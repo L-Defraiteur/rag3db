@@ -5,3 +5,5 @@ tools/poste/passe_epinglee.sh passe_epinglee.sh tools/poste/test_passe_epinglee.
 tools/poste/pusher.sh pusher.sh tools/poste/test_pusher.sh
 extension/rag3weaver/scripts/poste poste extension/rag3weaver/scripts/test_poste.sh
 tools/poste/menage.py menage.py tools/poste/test_menage.py
+tools/poste/lucivy_sonde.py lucivy_sonde.py tools/poste/test_lucivy_sonde.py
+tools/poste/lucivy_sonde_connus.txt lucivy_sonde_connus.txt tools/poste/test_lucivy_sonde.py
