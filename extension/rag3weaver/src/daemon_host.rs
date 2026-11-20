@@ -331,6 +331,9 @@ pub struct DaemonHost {
     /// en mémoire (un redémarrage les ferme ; le journal des décisions les garde).
     #[cfg(feature = "code")]
     accords: Mutex<atelier_fichiers::Accords>,
+    /// **The watches of an index « not ready » in the chat** (the thin client's `ReadyWatches`, one per backend and
+    /// view): once its layer is ready, one `IndexReady` on the IDE's stream.
+    veilles_d_index: crate::daemon_client::ReadyWatches,
     /// La racine des sessions de chat (`RAG3WEAVER_CHATS_DIR`).
     chats_root: PathBuf,
     /// Ce qui donne le modèle d'un backend.
@@ -524,6 +527,7 @@ impl DaemonHost {
             resumes_des_runs: Mutex::new(HashMap::new()),
             #[cfg(feature = "code")]
             accords: Mutex::new(Default::default()),
+            veilles_d_index: Default::default(),
             chats_root: chat::default_chats_root(),
             chat_model: chat::default_chat_model(),
             rangeur: None,
