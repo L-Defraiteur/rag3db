@@ -419,6 +419,7 @@ static void finalizeHNSWTableFinalizeFunc(const ExecutionContext* context,
     auto* catchingUp =
         &nodeTable->completeNotedIndex(bindData->indexName, std::move(onDiskIndex), transaction)
              ->cast<OnDiskHNSWIndex>();
+    index->keepLowerLayerReachable();
     index->moveToPartitionState(*hnswSharedState->partitionerSharedState);
     transaction->setForceCheckpoint();
     transaction->addPreCommitAction([clientContext, catchingUp, buildStartTS] {

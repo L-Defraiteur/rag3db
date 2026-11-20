@@ -191,6 +191,9 @@ public:
         GetEmbeddingsScanState& scanState) const;
     void finalizeNodeGroup(common::node_group_idx_t nodeGroupIdx, common::offset_t numNodesInTable,
         const NodeToHNSWGraphOffsetMap& selectedNodesMap, GetEmbeddingsScanState& scanState) const;
+    // After the last shrink: every node with a vector is reachable from the entry point, or gets
+    // an edge from its nearest reachable node. Returns the number of nodes so attached.
+    uint64_t keepEveryNodeReachable(GetEmbeddingsScanState& scanState);
 
     std::unique_ptr<InMemHNSWGraph> moveGraph() { return std::move(graph); }
 
@@ -247,6 +250,8 @@ public:
     // Note that the input is only `offset`, as we assume embeddings are already cached in memory.
     bool insert(common::offset_t offset, CreateInMemHNSWLocalState* localState);
     void finalizeNodeGroup(common::node_group_idx_t nodeGroupIdx);
+    // Once every node group is finalized, before the graph is written.
+    uint64_t keepLowerLayerReachable();
 
     void moveToPartitionState(HNSWIndexPartitionerSharedState& partitionState);
 

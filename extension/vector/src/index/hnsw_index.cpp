@@ -343,6 +343,84 @@ void InMemHNSWLayer::finalizeNodeGroup(common::node_group_idx_t nodeGroupIdx,
     }
 }
 
+// Le bâti parallèle laisse des nœuds sans aucune arête entrante qu'on atteigne depuis l'entrée :
+// un nœud est écarté d'une liste comme « couvert » par un voisin plus proche de lui, qui ne le vise
+// pas (il ne l'a jamais eu pour candidat), et aucune recherche ne le rend plus, pas même celle de
+// son propre vecteur. Sur les 127 198 vecteurs de code-lourd (20 novembre 2026), de 0 à 6 lignes
+// par bâti : les membres d'un amas de quasi-copies, et des points isolés ordinaires (tickets
+// 2026-10-11-l-elagage-peut-couper-le-dernier-pont-vers-une-region et
+// 2026-11-19-les-points-les-plus-isoles-d-un-index-hnsw-ne-sont-pas-atteints). Après le dernier
+// élagage, la couche est parcourue en largeur depuis son point d'entrée ; chaque nœud au vecteur
+// non nul qu'elle n'atteint pas reçoit une arête depuis son plus proche nœud atteint, dans la marge
+// entre le degré et le seuil d'élagage (ou à la place de la dernière arête d'une liste pleine),
+// puis ce qu'il atteint est atteint. C'est keepNodeReachable, pour le bâti.
+uint64_t InMemHNSWLayer::keepEveryNodeReachable(GetEmbeddingsScanState& scanState) {
+    const auto entry = entryPoint.load();
+    if (entry == common::INVALID_OFFSET) {
+        return 0;
+    }
+    std::vector<bool> reached(info.numNodes, false);
+    std::vector<common::offset_t> queue;
+    const auto reachFrom = [&](common::offset_t start) {
+        if (reached[start]) {
+            return;
+        }
+        reached[start] = true;
+        queue.clear();
+        queue.push_back(start);
+        for (size_t head = 0; head < queue.size(); ++head) {
+            for (const auto nbr : getNodeOffsets(graph->getNeighbors(queue[head]))) {
+                if (nbr < info.numNodes && !reached[nbr]) {
+                    reached[nbr] = true;
+                    queue.push_back(nbr);
+                }
+            }
+        }
+    };
+    reachFrom(entry);
+    VisitedState visited(info.numNodes);
+    uint64_t attached = 0;
+    for (common::offset_t node = 0; node < info.numNodes; ++node) {
+        if (reached[node]) {
+            continue;
+        }
+        const auto vector = info.getEmbedding(node, scanState);
+        if (vector.isNull()) {
+            continue;
+        }
+        // The search only walks what the entry point reaches: its nearest result is reached.
+        const auto closest =
+            searchKNN(vector, entry, info.maxDegree, info.efc, visited, scanState);
+        auto from = common::INVALID_OFFSET;
+        for (const auto& candidate : closest) {
+            if (candidate.nodeOffset != node && candidate.nodeOffset < info.numNodes &&
+                reached[candidate.nodeOffset]) {
+                from = candidate.nodeOffset;
+                break;
+            }
+        }
+        if (from == common::INVALID_OFFSET) {
+            continue;
+        }
+        const auto length = graph->getCSRLength(from);
+        const auto start = from * info.degreeThresholdToShrink;
+        if (length < info.degreeThresholdToShrink) {
+            graph->setDstNode(start + length, node);
+            graph->setCSRLength(from, length + 1);
+        } else {
+            graph->setDstNode(start + length - 1, node);
+        }
+        attached++;
+        reachFrom(node);
+    }
+    return attached;
+}
+
+uint64_t InMemHNSWIndex::keepLowerLayerReachable() {
+    auto scanState = embeddings->constructScanState();
+    return lowerLayer->keepEveryNodeReachable(*scanState);
+}
+
 void InMemHNSWIndex::moveToPartitionState(HNSWIndexPartitionerSharedState& partitionState) {
     partitionState.lowerPartitionerSharedState->setGraph(lowerLayer->moveGraph(),
         std::move(lowerGraphSelectionMap));
