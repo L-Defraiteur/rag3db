@@ -99,6 +99,15 @@ pub(crate) mod jouable {
             }
         }
         absolutiser(&mut m, gabarit);
+        // **The graphs and Plans cited from inside a graph** (`@graphs/x.mmd`, `@plans/y.json`, 20 November 2026:
+        // the memory template cites its own, on disk) resolve next to the manifest: a manifest written elsewhere
+        // carries them, here by a link to the template's folders.
+        for dossier in ["graphs", "plans"] {
+            let source = gabarit.join(dossier);
+            if source.is_dir() && !ou.join(dossier).exists() {
+                std::os::unix::fs::symlink(&source, ou.join(dossier)).map_err(|e| format!("{dossier} : {e}"))?;
+            }
+        }
 
         let ecrit = ou.join("backend.json");
         std::fs::write(&ecrit, serde_json::to_vec_pretty(&m).map_err(|e| e.to_string())?)
