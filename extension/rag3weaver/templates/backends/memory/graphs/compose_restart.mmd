@@ -8,7 +8,7 @@
 
 graph LR
     params["RhaiNode(script_id=compose_restart_params, inputs='sources,identity,task_fiche,budget_tokens', sources=$sources, identity=$identity, task_fiche=$task_fiche, budget_tokens=$budget_tokens)"]
-    plan["PlanNode(plan='@builtin:backends/memory/plans/compose_restart.json')"]
+    plan["PlanNode(plan='@plans/compose_restart.json')"]
     rendre["RhaiNode(script_id=compose_restart, inputs='sources,identity,task_fiche,budget_tokens', sources=$sources, identity=$identity, task_fiche=$task_fiche, budget_tokens=$budget_tokens)"]
     params -->|result:params| plan
     plan -->|rows:value| rendre
