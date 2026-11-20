@@ -27,6 +27,10 @@
   - deux pairs du même hôte sont visibles sous leurs noms ;
   - un message à chacun arrive dans la bonne boîte ;
   - la fermeture ne laisse ni fichier ni socket.
+- **Plusieurs postes** (Lucie, le 20 novembre à 18 h 1x) : un registre et des relais par poste ; une
+  adresse `<poste>:<nom>` ; vers un autre poste, l'hôte local relaie à l'hôte distant par HTTP sous
+  jeton, par une table des hôtes déclarée, jamais par ssh. Sur un seul poste, rien ne change. Les
+  témoins du relais jouent un poste et deux postes factices.
 
 ## Ce qui est su
 

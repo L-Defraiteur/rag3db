@@ -64,6 +64,14 @@ l'enfant, son ensemble de vues, la porte qui le tient, et l'identité qu'il port
    l'y ajoute.
 4. **Une vue fermée sort de l'ensemble de chaque enfant**, qui le lit dans sa boîte. Si c'était son
    active, elle retombe sur la première vue qui reste dans son ensemble, et l'enfant le lit aussi.
+- **Les sources et les formes, corrigées par arbre** (lot `arbre-views-use-view`, sur V1) :
+  - la source de la vue active se dit `appel`, `session` ou `défaut` (`racines` viendra avec le lot
+    des `roots`), comme chaque réponse de lecture l'écrit déjà dans `view.source` ;
+  - `POST /views {manifest}` rend `{ok, result: {views: [{name}], active: {name, source}}}` ;
+  - `POST /views/use {manifest, name}` rend `{ok, result: {active: {name, source: "session"}}}` ;
+  - un nom inconnu rend `{ok: false, error: "vue « … » inconnue de ce backend ; vues connues : …"}` ;
+  - les noms sont `backend`, puis les couches vivantes (`refs/heads/…`, `worktree:<chemin réel>`).
+    Le nom court `<session>/<date>-<lot>` viendra avec `open_view`.
 - Les routes de l'enfant sont celles de cette page. arbre retire son `/views/child`. Ses routes
   (`GET /views`, `POST /views/use`, `/views/open`, `/views/close`) rendent ce que dit sa page.
 - **Une limite** : un sous-agent de Claude Code (l'outil Agent) appelle par le serveur MCP de son

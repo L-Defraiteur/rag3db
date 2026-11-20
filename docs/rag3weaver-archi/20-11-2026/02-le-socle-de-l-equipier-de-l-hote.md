@@ -45,6 +45,19 @@ L'accès distant passe par l'hôte authentifié (le jeton, un tunnel), jamais pa
   Lucie. Sinon, une socket qui porte plusieurs noms.
 - **Le distant, lui, est déjà là** : `/ide/teammate/mailbox` sous le jeton de l'hôte.
 
+## Un poste ou quinze (Lucie, le 20 novembre à 18 h 1x)
+
+« Imaginons le mec il a quinze ordis, il doit pouvoir s'en sortir quand même, ou un seul. »
+
+- **Un registre par poste.** Celui de Claude Code est local à la machine, et chaque pair a son relais
+  sur son poste.
+- **L'adresse d'un agent porte son poste** : `<poste>:<nom>`, comme la vue d'un lot.
+- **Joindre un agent d'un autre poste** : l'hôte local relaie vers l'hôte de ce poste, par HTTP sous
+  jeton, grâce à une table des hôtes déclarée dans la configuration. Jamais par ssh.
+- **Sur un seul poste, rien de tout cela ne se voit** : tout est local, et `<nom>` seul suffit.
+- **Les témoins jouent les deux cas** : un poste, et deux postes factices (deux hôtes de test sur
+  deux ports, avec leur table).
+
 ## Les lots, dans l'ordre
 
 ### 1. `run` : une commande bornée, au premier plan ou en fond — 1 jour
