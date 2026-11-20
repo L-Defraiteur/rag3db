@@ -663,7 +663,13 @@ pub fn indexed_tree_of(root: &str) -> serde_json::Value {
         let blob = git(&["hash-object", "--", &chemin]).unwrap_or_else(|| "-".to_string());
         dirty_blobs.insert(chemin, serde_json::Value::String(blob));
     }
-    serde_json::json!({ "root": root, "commit": commit, "branch": branch, "dirty": dirty_paths > 0, "dirty_paths": dirty_paths, "dirty_blobs": dirty_blobs, "at_ms": retard::now_ms() })
+    // The untracked files the index takes (not ignored), with their blob: a view without a watch counts them too.
+    let mut untracked_blobs = serde_json::Map::new();
+    for chemin in crate::views::untracked_paths(root) {
+        let blob = git(&["hash-object", "--", &chemin]).unwrap_or_else(|| "-".to_string());
+        untracked_blobs.insert(chemin, serde_json::Value::String(blob));
+    }
+    serde_json::json!({ "root": root, "commit": commit, "branch": branch, "dirty": dirty_paths > 0, "dirty_paths": dirty_paths, "dirty_blobs": dirty_blobs, "untracked_blobs": untracked_blobs, "at_ms": retard::now_ms() })
 }
 pub const EMBEDDING_CHOICE_KEY: &str = "embedding_choice";
 
