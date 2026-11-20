@@ -127,6 +127,20 @@ même scope.
   remède sur la copie migrée et son hôte isolé, avant l'atterrissage. La re-bascule de code-lourd et code-principal se
   fera à la fenêtre suivante, sur une répétition qui porte le remède.
 
+### Le critère de la re-bascule de code-lourd et code-principal
+
+Le banc a jugé le remède d'ED sur la copie migrée (`docs/banc/20-11-2026/04`, 4ea69dc2d3). Contre la référence « base
+vivante des règles 8 », master échoue autant que le lot : 71 % et 74 % de recouvrement, même premier 7/10, et 38 sites
+de Catalog perdus des deux côtés. Cette référence ne départage donc plus rien, puisque l'écart vient de l'analyse
+d'aujourd'hui, pas de la tête à poser.
+
+**Le critère devient : la tête à poser contre master**, sur la même copie migrée et la même source, avec les mêmes 10
+requêtes, le top 10, les usages comptés par section et les seuils du critère de c7. Le juge lit aussi le journal
+d'index : ni « rebâti depuis les lignes », ni « garde des comptes », ni « écart entre documents et lignes ».
+
+Le remède d'ED est rouge à ce juge : les noms courts ne sont plus trouvés, et le plein texte gardé ne sert pas
+`search_code`. ED corrige, et la re-bascule attend sa tête verte.
+
 ## La lib du train C++
 
 - **Le bâti** : la lib 501d7ccc90 a été bâtie à 4 h 38 sur la tête du train de cœur, train-20-11. La garde de cœur a
