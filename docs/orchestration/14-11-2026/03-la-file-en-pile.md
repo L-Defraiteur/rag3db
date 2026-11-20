@@ -2508,3 +2508,30 @@ réexportations Python/TS dans le même lot, sous la sonde de marque). Embarquem
 de contexte, **72,5 % des morceaux de code dépassent la fenêtre de granite** (512 jetons) ; lot à ED après 2.12 : la
 taille de morceau déduite de la déclaration de l'embarqueur (fenêtre × marge ÷ ratio déclaré par modèle), tenue comme
 propriété de la base, témoin qui compte en Rust avec le tokenizer de granite.
+
+## 20 novembre, 03 h 45 — la répétition avec 2.12 : le seuil tenu par la preuve, bascule sur 1f22743e17
+
+2.12 atterri à 03 h 00 (1f22743e17, 16 commits, règles de l'analyse 10 ; rendu une fois à la garde pour un module
+de test sans la feature `code`, corrigé en dix minutes). G a rejoué la répétition dessus : repassage 27 min, RSS
+8,9 Gio, aucune erreur de tampon, 0 usage perdu sur les quatre noms, les 41 sites présents, même premier 10/10 ;
+recouvrement du top 10 contre la production **88,5 %**, sous le seuil de 90 %. Mais l'écart n'est pas celui de la
+bascule : la copie de 2.12 diffère de la production exactement comme elle diffère de la copie baccb2ea6e (même
+intersection, requête par requête), et baccb2ea6e tient 97,8 % ; ce qui sort, ce sont des fichiers-conteneurs
+(`tests/e2e/main.rs:1`, `re2/include/mutex.h:69`), ce qui entre, des définitions proches de la question : l'effet
+voulu de 2.12, déjà jugé vert par la parité du banc sur base existante et index neuf (rag3db_database au rang 8).
+**Décidé (c7) : bascule à 06 h 45 sur 1f22743e17, règles 10.** Le seuil n'est pas relâché, il est tenu par la
+preuve qui isole l'effet de 2.12 ; la page de bascule de G le dira requête par requête. Un seul repassage des bases.
+
+**La nuit autour** : la mesure du raisonnement du banc (383b8844ba) : `low` à 8 192 supprime la coupure (0 sur 19,
+0 jeton de raisonnement, 10,8 s par fenêtre contre 24 à 51), 16 384 n'apporte rien, `minimal` refusé par Vertex
+(mémoire le traduit en low, comme le client Anthropic), P1 ± 0,07 d'un jeu à l'autre, et 48 % de cache quand
+l'invite est rejouée mot pour mot : le levier de B4, vert en branche, parité au banc (S 50 avant 06 h 45, F300
+après 09 h 30). lucivy 04 rejoué avec cargo dans le bac : réussi et vérifié par l'agent (2 pas, 75 appels, 438 s,
+un correctif de sept lignes, témoin rouge au parent et vert avec). La sonde de nuit de lucivy par le chemin de
+l'hôte : 534 ids perdus en 4.3.10, 0 en 4.3.12. Codeparsers a déposé les paquets par leur nom (Rust, TS, et les
+réexportations Python/TS, 5 493 arêtes de « nom » à « import », aucune retirée, règles 11), tenu hors prise par G
+jusqu'après la fenêtre. ED : la borne des morceaux se mesure au tokenizer (le C++ du moteur monte à 0,8 jeton par
+caractère dans les tables d'en-têtes, un ratio seul ne tient pas) : forme retenue, la borne en octets devant puis
+le comptage en jetons avec le tokenizer du plus petit embarqueur de la base, sans repli silencieux (tokenizer
+absent = refus dit). Rendus de 03 h 41, tous des conflits de repose : la chaîne d'attente de tty, la garde de dette
+d'arbre, define-ref d'ED ; chacun repose.
