@@ -437,4 +437,31 @@ union_au_rebase 13 code; { read -r rc; read -r sujets; read -r nouv; sortie=$(ca
 if [ "$rc" != 0 ] && echo "$sortie" | grep -q "ARRÊT : le rebase" && [ "$sujets" = "coeur p1 base" ]; then
   echo "vert   rebase de la garde : un conflit sur un autre fichier arrête toujours, rien de poussé"
 else echo "ROUGE  rebase de la garde, conflit sur du code : rc $rc, master « $sujets »"; echo "$sortie" | tail -3; rouge=1; fi
+# **Des docs arrivées sur master pendant le push** (20 novembre 2026, c7 : arbre-open-view rendu à 19 h 24, un commit de
+# chronologie poussé entre le fetch de la garde et son push, treize minutes de passe perdues) : la garde relit master,
+# rebase et repousse sans rejeu si l'arrivée n'est que des docs ; du code arrivé reste un refus.
+arrivee() { # arrivee <n> <docs|code> : le crochet PRE_PUSH pousse un commit sur master, comme une autre session
+  (
+    H="$D/homea$1"; mkdir -p "$H/git_workspaces" "$H/.cache/rag3weaver-build/j"
+    git clone -q --bare "$D" "$D/nua$1.git" 2>/dev/null; git -C "$D/nua$1.git" update-ref refs/heads/master "$BASE"
+    git clone -q "$D/nua$1.git" "$H/git_workspaces/wt" 2>/dev/null
+    cd "$H/git_workspaces/wt" && git config user.email luciedefraiteur@gmail.com && git config user.name t
+    git checkout -q --detach origin/master; echo 'fn lot() {}' > extension/rag3weaver/src/lot.rs; git add -A; git commit -qm lot
+    printf 'teste %s\nVERT\n' "$(git rev-parse --short HEAD)" > "$H/.cache/rag3weaver-build/j/resume.log"; git rev-parse origin/master > "$H/.cache/rag3weaver-build/j/base"
+    echo "rag3db-build-0123456789012345678901234567890123456789-Release" > "$H/.cache/rag3weaver-build/j/lib.log"
+    if [ "$2" = docs ]; then quoi='mkdir -p docs && echo "# chronologie" > docs/chrono.md'; else quoi='echo "fn autre() {}" > extension/rag3weaver/src/autre.rs'; fi
+    printf '#!/bin/bash\nc=$(mktemp -d); git clone -q -b master %s "$c/x" 2>/dev/null && cd "$c/x" && git config user.email t@t && git config user.name t && %s && git add -A && git commit -qm arrivee && git push -q origin HEAD:master\n' "$D/nua$1.git" "$quoi" > "$D/arrivee-$1.sh"
+    sortie=$(HOME="$H" PRE_PUSH="bash $D/arrivee-$1.sh" bash "$GARDE" wt j 2>&1); rc=$?
+    printf '%s\n%s\n%s\n' "$rc" "$(git -C "$D/nua$1.git" log --format=%s master | tr '\n' ' ')" "$sortie" > "$D/arrivee-$1"
+  )
+}
+arrivee 1 docs; arrivee 2 code
+r1=$(sed -n 1p "$D/arrivee-1"); s1=$(sed -n 2p "$D/arrivee-1")
+if [ "$r1" = 0 ] && grep -qx POUSSE "$D/arrivee-1" && [ "${s1%% arrivee *}" = lot ] && grep -q "docs arrivées sur master pendant le push" "$D/arrivee-1"; then
+  echo "vert   des docs arrivées pendant le push : la garde rebase et repousse sans rejeu"
+else echo "ROUGE  docs arrivées pendant le push : rc $r1, master « $s1 » — $(grep -A3 -E 'ARRÊT|docs arrivées' "$D/arrivee-1" | tr '\n' ' ')"; rouge=1; fi
+r2=$(sed -n 1p "$D/arrivee-2"); s2=$(sed -n 2p "$D/arrivee-2")
+if [ "$r2" != 0 ] && grep -q "ARRÊT : push refusé" "$D/arrivee-2" && [ "${s2%% *}" = arrivee ] && [[ " $s2" != *" lot "* ]]; then
+  echo "vert   du code arrivé pendant le push : refusé, rien de poussé (une repose)"
+else echo "ROUGE  code arrivé pendant le push : rc $r2, master « $s2 »"; rouge=1; fi
 exit $rouge
