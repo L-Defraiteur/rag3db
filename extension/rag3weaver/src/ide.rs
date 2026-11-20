@@ -859,6 +859,9 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
                 Ok(f) => json!({ "ok": true, "result": {
                     "backend": host.tache(&backend, &task).map(|t| t.manifest.display().to_string()),
                     "mailbox": f.mailbox(), "plans": f.read_plans(), "closed": f.closed(), "running": host.teammate_running(&backend, &task),
+                    // **What waits for the supervisor** (a run seen and reachable in the IDE, c7, 20 Nov. 2026): the
+                    // question or approval the teammate waits on, computed by the host as for the teammate itself.
+                    "waiting": crate::daemon_host::teammate::open_question(&f).map(|(_, l)| l),
                 } }),
                 Err(e) => json!({ "ok": false, "error": e }),
             };
