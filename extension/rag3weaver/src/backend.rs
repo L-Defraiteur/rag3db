@@ -3071,7 +3071,8 @@ impl PreparedBackend {
             .and_then(|w| w.index.as_deref())
         {
             let seuil = self.manifest.workspace.as_ref().and_then(|w| w.container_min_chars).unwrap_or(crate::code::CONTAINER_MIN_CHARS);
-            crate::code::register_code_schema(&mut cat, crate::code::scope_chunking_with(seuil))
+            let seuil_variable = self.manifest.workspace.as_ref().and_then(|w| w.variable_min_chars).unwrap_or(crate::code::VARIABLE_MIN_CHARS);
+            crate::code::register_code_schema(&mut cat, crate::code::scope_chunking_with_thresholds(seuil, seuil_variable))
                 .map_err(|e| e.to_string())?;
             // Les fonctions de verrou déclarées pour ce dépôt.
             if let Some(w) = &self.manifest.workspace {
@@ -7920,11 +7921,16 @@ mod tests {
     #[cfg(all(feature = "code", feature = "rag3db-native"))]
     #[test]
     fn a_short_variable_has_no_chunk_and_keeps_its_full_text() {
-        let (dir, p) = fixture_code_avec("working_tree", false, json!({}), &|_| {});
+        let tools = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/tools");
+        let (dir, p) = fixture_code_avec("working_tree", false, json!({}), &|m| {
+            m["tools"]["search_code"] =
+                json!({"graph": "search_workspace.mmd", "bindings": {"target": "Scope"}, "policy": {"read_files": true}});
+        });
         drop(p);
+        std::fs::copy(tools.join("search_workspace.mmd"), dir.path().join("search_workspace.mmd")).unwrap();
         std::fs::write(
             dir.path().join("sources/plant.py"),
-            "import pathlib\nindex = pathlib.Path('index.html'); s=index.read_text(); print(len(s))\nPLANTE_MAX_KG = 1024\n\n\
+            "import pathlib\nindex = pathlib.Path('index.html'); s=index.read_text(); print(len(s))\nPLANTE_MAX_KG = 1024\nseuil_de_la_plante = 7\n\n\
              def mesurer_la_plante(hauteur, largeur):\n    \"\"\"La surface d'une feuille de la plante, en centimetres carres.\"\"\"\n\
                  surface = hauteur * largeur * 0.5\n    return surface + PLANTE_MAX_KG / 1000.0\n",
         )
@@ -7954,9 +7960,12 @@ mod tests {
         let avec_morceau: Vec<&Vec<crate::connection::CypherValue>> = chunks.iter().filter(|l| l.get(2).and_then(|v| v.as_i64()).unwrap_or(0) > 0).collect();
         assert!(avec_morceau.is_empty(), "a short variable is not a vector candidate, yet has chunks: {avec_morceau:?}");
         // Found by its name all the same: its full-text document stays.
-        let r = backend.call("search_code", json!({"query": "PLANTE_MAX_KG", "options": {"signals": ["bm25"], "limit": 10, "format": "json"}})).expect("search_code");
-        let noms: Vec<String> = r["result"].as_array().unwrap_or(&Vec::new()).iter().map(|l| l["data"]["name"].as_str().unwrap_or("").to_string()).collect();
-        assert!(noms.iter().any(|n| n == "PLANTE_MAX_KG"), "the short constant is found by its name: {noms:?}");
+        // A short `variable` (not a constant, which has its own type) found by its name, by the full text alone.
+        for nom in ["seuil_de_la_plante", "PLANTE_MAX_KG"] {
+            let r = backend.call("search_code", json!({"query": nom, "options": {"signals": ["bm25"], "limit": 10, "format": "json"}})).expect("search_code");
+            let noms: Vec<String> = r["result"].as_array().unwrap_or(&Vec::new()).iter().map(|l| l["data"]["name"].as_str().unwrap_or("").to_string()).collect();
+            assert!(noms.iter().any(|n| n == nom), "the short {nom} is found by its name: {noms:?}");
+        }
         // The reopening's guard rebuilds nothing: the variable kept its document.
         let mut cat = backend.catalog.lock().unwrap();
         let comptes = cat.comptes_du_plein_texte();
@@ -8078,7 +8087,7 @@ mod tests {
         }
         let prepared = PreparedBackend::load(&dir.path().join("backend.json")).expect("le manifeste se charge");
         let backend = backend_de_code(dir.path(), prepared);
-        let regle = backend.catalog.lock().unwrap().entity_config(crate::code::SCOPE_CONTENT).and_then(|c| c.chunking.not_candidate.clone()).expect("the rule is declared");
+        let regle = backend.catalog.lock().unwrap().entity_config(crate::code::SCOPE_CONTENT).and_then(|c| c.chunking.not_candidate.first().cloned()).expect("the rule is declared");
         let source = backend.file_source.clone().unwrap();
         let replies = |backend: &Backend| -> usize {
             let r = backend.call("search_code", json!({"query": "zorg", "options": {"signals": ["bm25"], "limit": 20, "format": "json"}})).expect("search_code");

@@ -180,9 +180,10 @@ pub struct ChunkingConfig {
     #[serde(alias = "overlap_lines")]
     pub overlap_lines: usize,
 
-    /// **The rows that are not search candidates** (2.12): none when absent.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub not_candidate: Option<NotCandidate>,
+    /// **The rules of the rows that are not search candidates** (2.12; a short `variable`, 20 November 2026): none
+    /// when empty. Each rule is whole — its types, its threshold, what it takes out.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub not_candidate: Vec<NotCandidate>,
 }
 
 /// **A row that is not a search candidate** (2.12, c7's rule of 19 November 2026): a row whose `type_field` is one
@@ -192,6 +193,14 @@ pub struct ChunkingConfig {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct NotCandidate {
+    /// **The rule's name**: the key of its threshold in the base (`not_candidate_min_chars:<entity>:<name>`; the
+    /// unnamed rule keeps 2.12's key, `not_candidate_min_chars:<entity>`, already noted on the bases).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub name: String,
+    /// **What the rule takes out**: the chunks and the full-text document (a folded container), or the chunks only
+    /// (a short `variable`: its vector would win on 18 characters, its name must stay findable).
+    #[serde(default)]
+    pub takes_out: TakesOut,
     pub type_field: String,
     pub types: Vec<String>,
     pub text_fields: Vec<String>,
@@ -205,6 +214,63 @@ pub struct NotCandidate {
     pub language_field: Option<String>,
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub structure: std::collections::BTreeMap<String, Vec<StructureLine>>,
+}
+
+/// **What a rule of non-candidates takes out of a row** (20 November 2026).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TakesOut {
+    /// The chunks only, hence the vectors: the full-text document stays.
+    Chunks,
+    /// The chunks and the full-text document (2.12's folded containers).
+    #[default]
+    ChunksAndFullText,
+}
+
+impl NotCandidate {
+    /// Whether the rule takes the full-text document out too.
+    pub fn takes_full_text(&self) -> bool {
+        self.takes_out == TakesOut::ChunksAndFullText
+    }
+
+    /// The key of the rule's threshold in the base's meta.
+    pub fn threshold_key(&self, entity: &str) -> String {
+        if self.name.is_empty() { format!("not_candidate_min_chars:{entity}") } else { format!("not_candidate_min_chars:{entity}:{}", self.name) }
+    }
+
+    /// The fields the rule reads: its type, its text fields, its structure and language fields.
+    pub fn fields_read(&self) -> Vec<&str> {
+        let mut v: Vec<&str> = std::iter::once(self.type_field.as_str())
+            .chain(self.text_fields.iter().map(String::as_str))
+            .chain(self.structure_field.as_deref())
+            .chain(self.language_field.as_deref())
+            .collect();
+        v.sort_unstable();
+        v.dedup();
+        v
+    }
+}
+
+impl ChunkingConfig {
+    /// **Whether a row gets no chunk**: one of the rules sets it aside.
+    pub fn excludes_chunks(&self, data: &std::collections::BTreeMap<String, crate::connection::CypherValue>) -> bool {
+        self.not_candidate.iter().any(|r| r.excludes(data))
+    }
+
+    /// **Whether a row gets no full-text document**: one of the rules that take the full text out sets it aside.
+    pub fn excludes_full_text(&self, data: &std::collections::BTreeMap<String, crate::connection::CypherValue>) -> bool {
+        self.not_candidate.iter().any(|r| r.takes_full_text() && r.excludes(data))
+    }
+
+    /// [`Self::excludes_full_text`], on string values.
+    pub fn excludes_full_text_values(&self, values: &[(String, String)]) -> bool {
+        self.not_candidate.iter().any(|r| r.takes_full_text() && r.excludes_values(values))
+    }
+
+    /// The rules that take the full-text document out.
+    pub fn full_text_rules(&self) -> Vec<NotCandidate> {
+        self.not_candidate.iter().filter(|r| r.takes_full_text()).cloned().collect()
+    }
 }
 
 /// **A line of pure structure** in a language, declared rather than written as a regular expression.
@@ -319,7 +385,7 @@ impl Default for ChunkingConfig {
             title_max_chars: default_title_max_chars(),
             max_lines: 30,
             overlap_lines: 5,
-            not_candidate: None,
+            not_candidate: Vec::new(),
         }
     }
 }
@@ -2161,7 +2227,7 @@ mod not_candidate_tests {
     use crate::connection::CypherValue;
 
     fn regle() -> NotCandidate {
-        crate::code::scope_chunking_with(80).not_candidate.expect("the code rule")
+        crate::code::scope_chunking_with(80).not_candidate.into_iter().next().expect("the code rule")
     }
 
     fn ligne(t: &str, contenu: &str, doc: &str, langue: &str) -> std::collections::BTreeMap<String, CypherValue> {

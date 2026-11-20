@@ -224,10 +224,24 @@ fn content(t: FieldType) -> SimpleFieldDef {
 /// rag3db repository held 41 to 61 characters.
 pub const CONTAINER_MIN_CHARS: usize = 80;
 
+/// **The shortest `variable` that is a vector candidate** (c7, 20 November 2026): a `variable` scope whose content
+/// and docstring hold fewer characters has no chunk, so no vector; it keeps its full-text document, so a short
+/// constant is still found by its name. luciepc's 88 %: `s=index.read_text()`, 18 characters, won by the vector.
+pub const VARIABLE_MIN_CHARS: usize = 80;
+
 /// [`default_scope_chunking`], with the shortest container that is a search candidate given (2.12).
 pub fn scope_chunking_with(container_min_chars: usize) -> ChunkingConfig {
+    scope_chunking_with_thresholds(container_min_chars, VARIABLE_MIN_CHARS)
+}
+
+/// [`default_scope_chunking`], with both thresholds given: the shortest container (`workspace.container_min_chars`)
+/// and the shortest `variable` (`workspace.variable_min_chars`).
+pub fn scope_chunking_with_thresholds(container_min_chars: usize, variable_min_chars: usize) -> ChunkingConfig {
     ChunkingConfig {
-        not_candidate: Some(crate::config::NotCandidate {
+        not_candidate: vec![
+            crate::config::NotCandidate {
+            name: String::new(),
+            takes_out: crate::config::TakesOut::ChunksAndFullText,
             type_field: "scope_type".into(),
             types: vec!["namespace".into(), "module".into()],
             text_fields: vec!["content".into(), "docstring".into()],
@@ -235,7 +249,20 @@ pub fn scope_chunking_with(container_min_chars: usize) -> ChunkingConfig {
             structure_field: Some("content".into()),
             language_field: Some("language".into()),
             structure: container_structure(),
-        }),
+            },
+            // A short `variable`: its chunks only (its name stays findable by the full text).
+            crate::config::NotCandidate {
+                name: "variable".into(),
+                takes_out: crate::config::TakesOut::Chunks,
+                type_field: "scope_type".into(),
+                types: vec!["variable".into()],
+                text_fields: vec!["content".into(), "docstring".into()],
+                min_chars: variable_min_chars,
+                structure_field: None,
+                language_field: None,
+                structure: Default::default(),
+            },
+        ],
         ..default_scope_chunking_without_rule()
     }
 }
@@ -647,7 +674,10 @@ fn usage_properties(sites: &[UsageSite]) -> BTreeMap<String, CypherValue> {
 // 11 (20 novembre 2026) : un paquet du dépôt importé par son nom (`use monlib::X` dans les tests d'un crate,
 // `import … from "monpaquet"`) désigne ses fichiers, lus dans les manifestes ; les réexportations de Python
 // (`__init__.py`) et de TypeScript (`export { X } from`) se suivent comme celles de Rust.
-pub const REGLES_DE_L_ANALYSE: u32 = 11;
+// 12 (20 novembre 2026) : un scope `variable` court (contenu et docstring sous `workspace.variable_min_chars`, 80)
+// n'a pas de morceau, donc pas de vecteur ; il garde son document de plein texte (le 88 % de luciepc :
+// `s=index.read_text()`, 18 caractères, gagnait au vecteur).
+pub const REGLES_DE_L_ANALYSE: u32 = 12;
 
 /// **La version de l'analyse** (page 06, § 13) : le commit du parseur lié, [`REGLES_DE_L_ANALYSE`] et le
 /// gabarit du code (le découpage et les champs déclarés de `File` et de `Scope`), hachés.
