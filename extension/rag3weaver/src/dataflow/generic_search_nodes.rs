@@ -2068,6 +2068,10 @@ pub struct FuseResultsNode {
     /// Typing `research` gives `research` first, as it did when its own short vector was there (Lucie's invariant: no
     /// difference of use). None: no such rule.
     exact_name: Option<String>,
+    /// **The field that says a result folds children** (the bench on (B), 20 November 2026: a folded `namespace
+    /// rag3db {` and an `impl PortDef {` came first; c7: (B) never brings a folded container first). A result whose
+    /// field is not empty is not brought first by its name. None: no such rule.
+    exact_name_leaf: Option<String>,
     top_k: Option<usize>,
     signal: Option<String>,
 }
@@ -2084,6 +2088,7 @@ impl FuseResultsNode {
             boost: HashSet::new(),
             dominant: Vec::new(),
             exact_name: None,
+            exact_name_leaf: None,
             top_k: None,
             signal: None,
         }
@@ -2122,6 +2127,13 @@ impl FuseResultsNode {
     /// Names the field of a result's name: a result whose name is the query goes first (see `exact_name`).
     pub fn with_exact_name(mut self, field: impl Into<String>) -> Self {
         self.exact_name = Some(field.into());
+        self
+    }
+
+    /// Names the field that says a result folds children: such a result is not brought first (see
+    /// `exact_name_leaf`).
+    pub fn with_exact_name_leaf(mut self, field: impl Into<String>) -> Self {
+        self.exact_name_leaf = Some(field.into());
         self
     }
 
@@ -2236,6 +2248,7 @@ impl Node for FuseResultsNode {
             "boost": boost,
             "dominant": self.dominant,
             "exact_name": self.exact_name,
+            "exact_name_leaf": self.exact_name_leaf,
             "top_k": self.top_k,
             "signal": self.signal,
         })))
@@ -2462,7 +2475,12 @@ impl Node for FuseResultsNode {
         // **A name typed exactly first** (c7's decision (B)): the results whose name field is the query, case included,
         // go before every other, in the order they had; the rest follows in its order.
         if let (Some(champ), Some(q)) = (self.exact_name.as_deref(), requete.as_deref()) {
-            let nomme = |u: &UnifiedResult| u.data.as_ref().and_then(|d| d.get(champ)).and_then(|v| v.as_str()) == Some(q);
+            // A folded container (it folds children) is never brought first by its name.
+            let feuille = |u: &UnifiedResult| match &self.exact_name_leaf {
+                None => true,
+                Some(plis) => u.data.as_ref().and_then(|d| d.get(plis)).and_then(|v| v.as_str()).is_none_or(|s| s.is_empty() || s == "?"),
+            };
+            let nomme = |u: &UnifiedResult| feuille(u) && u.data.as_ref().and_then(|d| d.get(champ)).and_then(|v| v.as_str()) == Some(q);
             let (devant, reste): (Vec<UnifiedResult>, Vec<UnifiedResult>) = fused.into_iter().partition(nomme);
             fused = devant.into_iter().chain(reste).collect();
         }
@@ -3777,12 +3795,25 @@ mod tests {
     fn a_name_typed_exactly_gives_its_declaration_first() {
         let nomme = |uuid: &str, name: &str, score: f64| {
             let mut r = make_unified_result(uuid, score);
-            r.data = Some(std::collections::BTreeMap::from([("name".to_string(), CypherValue::String(name.into()))]));
+            r.data = Some(std::collections::BTreeMap::from([
+                ("name".to_string(), CypherValue::String(name.into())),
+                ("scope_type".to_string(), CypherValue::String("variable".into())),
+            ]));
+            r
+        };
+        let replie = |uuid: &str, name: &str, plis: &str, score: f64| {
+            let mut r = nomme(uuid, name, score);
+            r.data.as_mut().unwrap().insert("folds".to_string(), CypherValue::String(plis.into()));
             r
         };
         let mut ctx = NodeContext::new();
         let mut bm25: Vec<UnifiedResult> = (0..6).map(|i| nomme(&format!("r{i}"), &format!("build_research_{i}"), 9.0 - i as f64)).collect();
         bm25.push(UnifiedResult { sans_vecteur: true, ..nomme("d", "research", 2.0) });
+        // Named like the query: a folded container (it folds children) is not brought first (the bench on (B):
+        // `namespace rag3db {`, `impl PortDef {`); a function that folds nothing is, after the declaration (c7: the
+        // definition that carries the name is what a user expects).
+        bm25.push(replie("n", "research", "2:3-9", 1.5));
+        bm25.push(replie("f", "research", "", 1.0));
         ctx.set_input("bm25", PortValue::new(bm25));
         ctx.set_input("vector", PortValue::new((0..6).map(|i| nomme(&format!("r{i}"), &format!("build_research_{i}"), 0.9)).collect::<Vec<_>>()));
         ctx.set_input("query", PortValue::new(QueryPayload {
@@ -3794,9 +3825,12 @@ mod tests {
             sparse: None,
             scan: false,
         }));
-        FuseResultsNode::new("fuse").with_dominant("bm25_exact").with_exact_name("name").execute(&mut ctx).unwrap();
+        FuseResultsNode::new("fuse").with_dominant("bm25_exact").with_exact_name("name").with_exact_name_leaf("folds").execute(&mut ctx).unwrap();
         let ordre: Vec<String> = results_of(&mut ctx).iter().map(|r| r.uuid.clone()).collect();
         assert_eq!(ordre.first().map(String::as_str), Some("d"), "the declaration named by the query comes first: {ordre:?}");
+        let rang = |u: &str| ordre.iter().position(|x| x == u).unwrap();
+        assert!(rang("f") < rang("r0"), "a function that carries the name comes first too: {ordre:?}");
+        assert!(rang("n") > rang("r5"), "a folded container of the same name keeps the fusion's order: {ordre:?}");
         // Another query, no exact name: the fusion's order stands.
         let mut ctx = NodeContext::new();
         ctx.set_input("bm25", PortValue::new(vec![nomme("a", "alpha", 2.0), nomme("b", "beta", 1.0)]));
