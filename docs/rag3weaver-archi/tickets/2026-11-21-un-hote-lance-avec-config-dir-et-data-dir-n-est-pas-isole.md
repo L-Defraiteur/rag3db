@@ -4,27 +4,36 @@
 - **Famille** : produit
 - **Pour** : archi
 - **Gravité** : un second hôte « isolé » a repris pendant neuf secondes les sessions de chat de la
-  tablette et l'équipier de l'atelier de Lucie. À son arrêt, il a retiré le `daemon.json` de l'hôte de
-  service (G l'a remis).
+  tablette et l'équipier de l'atelier de Lucie. Le retrait du `daemon.json` de service, annoncé d'abord,
+  est démenti par G : le fichier est intact.
 - **Atteignable en service** : oui, dès qu'un second hôte tourne sur le poste (un essai, un témoin, un
   hôte de campagne mal réglé)
 - **Touche rag3weaver** : oui, `src/daemon_lifecycle.rs`, `src/code_tree.rs`, et les lectures de `HOME`
 - **Signalé par** : tty, la nuit du 20 au 21 novembre 2026 ; relevé par c7
 
-## La cause
+## Les faits, puis le code
 
-- **La racine de `daemon.json` ignore `RAG3WEAVER_DATA_DIR` et `RAG3WEAVER_CONFIG_DIR`.**
-  `racine(Dossier::Donnees)` ne lit que `RAG3WEAVER_DAEMON_DIR`, puis XDG ou `HOME`. Un hôte lancé avec
-  les deux autres variables écrit donc son `daemon.json` par-dessus celui de l'hôte de service. À son
-  arrêt, `remove_if_mine` le trouve « sien », puisqu'il porte son pid, et le retire. Il ne reste alors
-  plus aucun `daemon.json`.
-- **L'état d'un hôte est éparpillé.** Il y a 38 lectures de `HOME` dans `src/`, et `CONFIG_DIR` et
-  `DATA_DIR` n'en couvrent qu'une partie : `code_tree::Roots`. Les tâches (`RAG3WEAVER_TACHES_DIR`),
-  les runs (`RAG3WEAVER_RUNS_DIR`), les chats, l'état (`RAG3WEAVER_STATE_DIR`), le registre des agents
-  et les crochets ont chacun leur variable, ou aucune. C'est pour cela que l'hôte de campagne d'archi
-  tourne avec un `HOME` à lui (`tools/campagne/lanceur.py`, `Hote`), et non avec ces variables.
-- **Un client retire un `daemon.json` « périmé » d'un hôte vivant.** `daemon_lifecycle.rs`, vers la
-  ligne 704 : un pid vivant mais muet est jugé périmé, et son fichier est retiré.
+**Les faits** (G, la nuit du 20 au 21) : le `daemon.json` de la tablette est intact (mtime 20 h 50 min
+54 s, pid 2800109 du service, jeton présent, les clients MCP le trouvent). Le retrait annoncé d'abord
+ne s'est donc pas fait sur ce fichier. Une première version de ce ticket disait « écrit par-dessus puis
+retiré » : c'était une lecture du code, pas un fait, et le fait la contredit. Ce qui a été réellement
+écrit et retiré reste à lire dans les journaux de tty (l'environnement exact de son hôte, et son
+journal de démarrage et d'arrêt).
+
+**Ce que le code montre**, et qui suffit à expliquer la reprise des sessions et de l'équipier :
+- **Les tâches et les chats sont partagés.** Sans `RAG3WEAVER_TACHES_DIR` ni racine des chats propre,
+  un second hôte lit `~/.local/share/rag3weaver/taches` et les chats sous la même racine, quel que soit
+  `RAG3WEAVER_DATA_DIR` (qui ne couvre que `code_tree::Roots`). À son démarrage,
+  `reprendre_les_equipiers` relance les équipiers dont la demande n'a pas de fin : ceux de l'hôte de
+  service, dont celui de l'atelier de Lucie.
+- **La racine de `daemon.json` ignore `RAG3WEAVER_DATA_DIR` et `CONFIG_DIR`.** `racine(Dossier::Donnees)`
+  ne lit que `RAG3WEAVER_DAEMON_DIR`, puis `HOME`. Le second hôte visait donc le même `daemon.json`.
+  Que le fichier soit resté intact dit que le verrou ou `remove_if_mine` (qui compare le pid) l'ont
+  protégé. À vérifier par le journal de tty.
+- **L'état est éparpillé** : 38 lectures de `HOME` dans `src/`. Pour un hôte isolé aujourd'hui : un
+  `HOME` à lui plus `RAG3WEAVER_DAEMON_DIR`, comme fait `Hote` dans `tools/campagne/lanceur.py`.
+- **Un client retire un `daemon.json` jugé périmé**, vers la ligne 704 de `daemon_lifecycle.rs`, y
+  compris pour un pid vivant mais muet.
 
 ## Ce qu'il faut faire
 
