@@ -1,5 +1,12 @@
 # Nouveautés
 
+- 20 novembre 2026 — **La décision de rangement de l'archiviste est composée de parts, le stable devant.** Le texte
+  que reçoit le modèle pour ranger une section est fait de parts : ce qui précède (stable pour tout le document),
+  la section, puis les fiches candidates, chacune rendue par un gabarit déclaré (`candidates_template`
+  d'`archive_decide`). La ligne de prose « Réponds par l'identifiant court… » disparaît : les étiquettes et leur sens
+  sont dans l'instruction. Le `format` d'une part peut être un gabarit, et une liste dont chaque rendu tient sur une
+  ligne prend une ligne par élément.
+
 - 20 novembre 2026 — **Une proposition de gabarit se vérifie sur une copie, sans toucher la version en service.**
   `Backend::check_proposal(<manifeste de la copie>)` charge la copie comme le ferait un rechargement, refuse tout
   changement de ce qui est fixé à l'ouverture (base, modèles, entités, relations) en le nommant, et rend la version de
