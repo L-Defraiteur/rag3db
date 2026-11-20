@@ -552,6 +552,21 @@ pub fn vector_extension() -> String {
     }
 }
 
+/// **A test that cannot judge says so** (19 November 2026): `SAUTÉ <suite> — <reason>`, one line on stdout, which
+/// `run_e2e.sh` takes out of the green and names. A test that returns early always goes through here
+/// (`src/tests_hygiene.rs` reads the sources).
+#[allow(dead_code)]
+pub fn sauter(suite: &str, raison: &str) {
+    println!("SAUTÉ {suite} — {raison}");
+}
+
+/// **An entry point, not a test** (19 November 2026, c7): a `role_*` function that a parent test respawns as a child
+/// returns at once when played alone. It prints `ENFANT <suite>`, which `run_e2e.sh` counts apart, out of the green.
+#[allow(dead_code)]
+pub fn enfant(suite: &str) {
+    println!("ENFANT {suite}");
+}
+
 /// **Un fournisseur indisponible saute le test, en le nommant** (18 octobre
 /// 2026) : un quota Vertex épuisé ou une panne (`LlmError::Unavailable`) n'est
 /// pas un rouge du code. Imprime `SAUTÉ <suite> — <raison> : <erreur>`, que
@@ -559,19 +574,6 @@ pub fn vector_extension() -> String {
 /// l'appelant rend la main. Toute autre erreur : faux, l'appelant échoue.
 #[cfg(feature = "openai-llm")]
 #[allow(dead_code)]
-/// **A test that cannot judge says so** (19 November 2026): `SAUTÉ <suite> — <reason>`, one line on stdout, which
-/// `run_e2e.sh` takes out of the green and names. A test that returns early always goes through here
-/// (`src/tests_hygiene.rs` reads the sources).
-pub fn sauter(suite: &str, raison: &str) {
-    println!("SAUTÉ {suite} — {raison}");
-}
-
-/// **An entry point, not a test** (19 November 2026, c7): a `role_*` function that a parent test respawns as a child
-/// returns at once when played alone. It prints `ENFANT <suite>`, which `run_e2e.sh` counts apart, out of the green.
-pub fn enfant(suite: &str) {
-    println!("ENFANT {suite}");
-}
-
 pub fn sauter_si_indisponible(suite: &str, e: &rag3weaver::llm::LlmError) -> bool {
     if !e.is_unavailable() {
         return false;
