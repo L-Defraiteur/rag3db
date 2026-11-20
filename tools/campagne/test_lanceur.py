@@ -225,5 +225,27 @@ class Lanceur(unittest.TestCase):
         self.assertEqual(lanceur.repo_of({"parent": self.parent}, self.repo, depots), self.repo, "no repo: the default one")
 
 
+    def test_a_script_witness_is_judged_by_its_exit_code(self):
+        # A witness that is a script (recherche, case 03): bash for .sh, python3 for .py, red by a
+        # non-zero exit code, never red when its last line says VERT.
+        dest = os.path.join(self.tmp.name, "arbre")
+        block, _ = lanceur.read_case(self.case("> f rend 1.", witness="tests/test_f.sh", test="bash tests/test_f.sh"))
+        lanceur.build_tree(block, self.repo, os.path.join(self.tmp.name, "depots"), dest)
+        script = os.path.join(dest, "crate/tests/test_f.sh")
+        ecrire(script, "echo 'f rend 1'\necho ROUGE\nexit 1\n")
+        rouge = lanceur.prove_red(block, dest, os.path.join(self.tmp.name, "target"), poste=None)
+        self.assertTrue(rouge["red"], rouge)
+        self.assertEqual(rouge["failed"], ["tests/test_f.sh"])
+        ecrire(script, "echo VERT\nexit 0\n")
+        self.assertFalse(lanceur.prove_red(block, dest, os.path.join(self.tmp.name, "target"), poste=None)["red"])
+        ecrire(script, "echo VERT\nexit 3\n")
+        rouge = lanceur.prove_red(block, dest, os.path.join(self.tmp.name, "target"), poste=None)
+        self.assertFalse(rouge["red"], "a script that says VERT and fails is not a red: {}".format(rouge))
+        # A Python witness, by python3.
+        block, _ = lanceur.read_case(self.case("> f rend 1.", witness="tests/test_f.py", test="python3 tests/test_f.py"))
+        ecrire(os.path.join(dest, "crate/tests/test_f.py"), "import sys\nprint('ROUGE')\nsys.exit(1)\n")
+        self.assertTrue(lanceur.prove_red(block, dest, os.path.join(self.tmp.name, "target"), poste=None)["red"])
+
+
 if __name__ == "__main__":
     unittest.main()
