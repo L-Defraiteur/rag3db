@@ -3073,6 +3073,233 @@ TEST_F(VectorIndexBridgeMeasure, RealVectorsUpdatedAndDeleted) {
                       << " runs leave linked rows that no entry of the lower layer reaches:"
                       << details;
 }
+
+// The proof (b) of the sequential seed (bench, 19 November 2026, for hotfixs): global recall at k = 10
+// and the build time of the HNSW index, on the 8 November base (120 000 vectors of dimension 768 drawn
+// by mt19937 from id + 1, written with three significant digits), with BANC_SEED_POINTS points
+// inserted by a single thread before the parallel phase (0 = the build before the fix) and
+// BANC_THREADS threads (CALL threads, and maxNumThreads before the database opens: the test default is
+// 2, under which the defect does not show). Recall is judged against an exhaustive search over the
+// same rounded floats; the most isolated points of a sample are searched by their own vector. A
+// measure: skipped without CONCURRENCE_MEASURE=1, to run under `poste mesure`.
+class VectorIndexSeedMeasure : public VectorIndexUpdate {
+public:
+    void SetUp() override {
+        EmptyDBTest::SetUp();
+        systemConfig->bufferPoolSize = 4ull * 1024 * 1024 * 1024;
+        systemConfig->maxNumThreads = threads();
+        createDBAndConn();
+        mustRun("CALL auto_checkpoint=false;");
+        mustRun(stringFormat("CALL threads={};", threads()));
+        concurrency::loadVectorExtension(*conn);
+    }
+    static uint64_t threads() {
+        const auto* value = std::getenv("BANC_THREADS");
+        return value == nullptr ? 8 : std::stoull(value);
+    }
+    static uint64_t seedPoints() {
+        const auto* value = std::getenv("BANC_SEED_POINTS");
+        return value == nullptr ? 1000 : std::stoull(value);
+    }
+    // Real vectors instead of the drawn ones: one "[x,y,...]" per line (the COPY TO of a vector
+    // column). The last QUERIES lines are the queries, outside the table; the others are the rows.
+    static const char* realVectors() { return std::getenv("BANC_VECTORS_CSV"); }
+};
+
+TEST_F(VectorIndexSeedMeasure, RecallAndBuildTimeWithAndWithoutTheSeed) {
+    if (std::getenv("CONCURRENCE_MEASURE") == nullptr) {
+        GTEST_SKIP() << "a measure: CONCURRENCE_MEASURE=1, under `poste mesure`";
+    }
+    int64_t TOTAL = 120'000;
+    constexpr int DIMENSION = 768;
+    constexpr int QUERIES = 200;
+    constexpr int SAMPLE = 2'000;
+    constexpr int ISOLATED = 200;
+    constexpr int K = 10;
+    table = "Far";
+    mustRun(stringFormat("CREATE NODE TABLE Far(id INT64 PRIMARY KEY, vec FLOAT[{}]);", DIMENSION));
+    // The base, rounded as the CSV writes it, so that the exhaustive search sees what the index holds.
+    std::vector<float> base;
+    std::vector<std::vector<float>> realQueries;
+    const auto csv = databasePath + ".far.csv";
+    if (realVectors() != nullptr) {
+        std::ifstream in(realVectors());
+        std::vector<std::string> lines;
+        for (std::string line; std::getline(in, line);) {
+            if (!line.empty()) {
+                lines.push_back(line);
+            }
+        }
+        ASSERT_GT(lines.size(), static_cast<size_t>(QUERIES + SAMPLE)) << "[check: setup] too few vectors";
+        TOTAL = static_cast<int64_t>(lines.size()) - QUERIES;
+        base.resize(static_cast<size_t>(TOTAL) * DIMENSION);
+        std::ofstream out(csv);
+        for (size_t row = 0; row < lines.size(); ++row) {
+            auto text = lines[row];
+            text.erase(std::remove(text.begin(), text.end(), '"'), text.end());
+            ASSERT_TRUE(text.size() > 2 && text.front() == '[' && text.back() == ']')
+                << "[check: setup] line " << row;
+            std::vector<float> values;
+            std::stringstream cells(text.substr(1, text.size() - 2));
+            for (std::string cell; std::getline(cells, cell, ',');) {
+                values.push_back(std::stof(cell));
+            }
+            ASSERT_EQ(values.size(), static_cast<size_t>(DIMENSION)) << "[check: setup] line " << row;
+            if (static_cast<int64_t>(row) < TOTAL) {
+                std::copy(values.begin(), values.end(), &base[row * DIMENSION]);
+                out << row << ",\"" << text << "\"\n";
+            } else {
+                realQueries.push_back(std::move(values));
+            }
+        }
+    } else {
+        base.resize(static_cast<size_t>(TOTAL) * DIMENSION);
+        std::ofstream out(csv);
+        out.precision(3);
+        for (int64_t id = 0; id < TOTAL; ++id) {
+            std::mt19937 engine(static_cast<uint32_t>(id + 1));
+            std::normal_distribution<float> normal(0, 1);
+            out << id << ",\"[";
+            for (auto d = 0; d < DIMENSION; ++d) {
+                std::ostringstream cell;
+                cell.precision(3);
+                cell << normal(engine);
+                base[id * DIMENSION + d] = std::stof(cell.str());
+                out << (d ? "," : "") << cell.str();
+            }
+            out << "]\"\n";
+        }
+    }
+    mustRun("COPY Far FROM '" + csv + "' (header=false);");
+    std::filesystem::remove(csv);
+    if (HasFatalFailure()) {
+        return;
+    }
+    const auto start = std::chrono::steady_clock::now();
+    mustRun(stringFormat("CALL CREATE_VECTOR_INDEX('Far', 'doc_index', 'vec', metric := 'l2', "
+                         "seed_points := {});",
+        seedPoints()));
+    const auto createMs =
+        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+    mustRun("CHECKPOINT;");
+    if (HasFatalFailure()) {
+        return;
+    }
+    ASSERT_EQ(indexedRowCount(*conn, table, "doc_index"), static_cast<offset_t>(TOTAL))
+        << "[check: setup] every row is in the graph after the CREATE";
+    const auto distance = [&](const float* a, const float* b) {
+        float sum = 0;
+        for (auto d = 0; d < DIMENSION; ++d) {
+            const auto diff = a[d] - b[d];
+            sum += diff * diff;
+        }
+        return sum;
+    };
+    // The exhaustive top k of a vector, over all rows (optionally without one id), in parallel.
+    const auto exhaustive = [&](const std::vector<float>& query, int64_t without, int k) {
+        const auto workers = std::max<unsigned>(1, std::thread::hardware_concurrency() - 2);
+        std::vector<std::vector<std::pair<float, int64_t>>> partial(workers);
+        std::vector<std::thread> pool;
+        for (unsigned w = 0; w < workers; ++w) {
+            pool.emplace_back([&, w] {
+                auto& mine = partial[w];
+                for (int64_t id = w; id < TOTAL; id += workers) {
+                    if (id == without) {
+                        continue;
+                    }
+                    mine.emplace_back(distance(query.data(), &base[id * DIMENSION]), id);
+                }
+                const auto keep = std::min<size_t>(k, mine.size());
+                std::partial_sort(mine.begin(), mine.begin() + keep, mine.end());
+                mine.resize(keep);
+            });
+        }
+        for (auto& t : pool) {
+            t.join();
+        }
+        std::vector<std::pair<float, int64_t>> all;
+        for (auto& p : partial) {
+            all.insert(all.end(), p.begin(), p.end());
+        }
+        std::sort(all.begin(), all.end());
+        all.resize(std::min<size_t>(k, all.size()));
+        return all;
+    };
+    const auto searchIndex = [&](const std::vector<float>& query, int k) {
+        std::string literal = "[";
+        for (auto d = 0; d < DIMENSION; ++d) {
+            literal += (d ? "," : "") + std::to_string(query[d]);
+        }
+        literal += "]";
+        auto result = conn->query(stringFormat(
+            "CALL QUERY_VECTOR_INDEX('Far', 'doc_index', {}, {}) RETURN node.id ORDER BY distance;",
+            literal, k));
+        std::vector<int64_t> ids;
+        EXPECT_TRUE(result->isSuccess()) << "[check: query] " << result->getErrorMessage();
+        while (result->isSuccess() && result->hasNext()) {
+            ids.push_back(result->getNext()->getValue(0)->getValue<int64_t>());
+        }
+        return ids;
+    };
+    // Global recall at k: queries drawn outside the table, as the 8 November measure draws them.
+    double recallSum = 0;
+    for (auto q = 0; q < QUERIES; ++q) {
+        std::mt19937 engine(static_cast<uint32_t>(1'000'000 + q + 1));
+        std::normal_distribution<float> normal(0, 1);
+        std::vector<float> query(DIMENSION);
+        for (auto& value : query) {
+            value = std::stof(std::to_string(normal(engine)));
+        }
+        if (!realQueries.empty()) {
+            query = realQueries[q];
+        }
+        const auto truth = exhaustive(query, -1, K);
+        const auto found = searchIndex(query, K);
+        std::set<int64_t> expected;
+        for (const auto& [_, id] : truth) {
+            expected.insert(id);
+        }
+        auto hits = 0;
+        for (const auto id : found) {
+            hits += static_cast<int>(expected.count(id));
+        }
+        recallSum += static_cast<double>(hits) / K;
+    }
+    // The most isolated points of a sample (the largest distance to their nearest neighbour), each
+    // searched by its own vector: found when its id comes back in the top k.
+    std::vector<std::pair<float, int64_t>> isolation;
+    for (auto s = 0; s < SAMPLE; ++s) {
+        const int64_t id = static_cast<int64_t>(s) * (TOTAL / SAMPLE);
+        std::vector<float> own(&base[id * DIMENSION], &base[id * DIMENSION] + DIMENSION);
+        isolation.emplace_back(exhaustive(own, id, 1).front().first, id);
+    }
+    std::sort(isolation.rbegin(), isolation.rend());
+    auto ownFirst = 0, ownTopK = 0;
+    std::vector<int64_t> missed;
+    for (auto i = 0; i < ISOLATED; ++i) {
+        const auto id = isolation[i].second;
+        std::vector<float> own(&base[id * DIMENSION], &base[id * DIMENSION] + DIMENSION);
+        for (auto& value : own) {
+            value = std::stof(std::to_string(value));
+        }
+        const auto found = searchIndex(own, K);
+        ownFirst += static_cast<int>(!found.empty() && found.front() == id);
+        const bool inTop = std::find(found.begin(), found.end(), id) != found.end();
+        ownTopK += static_cast<int>(inTop);
+        if (!inTop) {
+            missed.push_back(id);
+        }
+    }
+    std::cerr << "  [amorce] " << (realVectors() ? realVectors() : "drawn vectors") << ", " << TOTAL
+              << " rows ; seed_points " << seedPoints() << ", threads " << threads() << ": CREATE "
+              << createMs << " ms ; recall@" << K << " " << recallSum / QUERIES << " over " << QUERIES
+              << " queries ; isolated points found by their own vector: first " << ownFirst << "/"
+              << ISOLATED << ", top " << K << " " << ownTopK << "/" << ISOLATED << " ; missed";
+    for (const auto id : missed) {
+        std::cerr << " " << id;
+    }
+    std::cerr << "\n";
+}
 } // namespace
 
 #endif
