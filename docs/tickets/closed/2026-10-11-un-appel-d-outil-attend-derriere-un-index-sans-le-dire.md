@@ -1,6 +1,10 @@
 # Un appel d'outil attend derrière un index sans le dire
 
-- **État** : ouvert (11 octobre 2026) — vu par le cœur et mesuré par la session codeparsers sur l'hôte de luciepc. Le 19 novembre, la session tty a borné l'attente côté hôte (voir « Relevé du 19 novembre ») ; le reste revient à l'arbre principal (au mot de c7).
+- **État** : corrigé (20 novembre 2026), par ses quatre lots, tous sur master : `arbre-verrou-invocation`
+  (14247c0856, une invocation lit sa cellule par la vue, sans le mutex du catalogue), `arbre-strict-borne-2` (9710cea8c0,
+  une recherche `Strict` dit « occupé » au lieu d'attendre derrière un index), `arbre-garde-dette-ouverture`
+  (34179694fc, la garde : un premier appel n'attend pas une dette de vecteurs) et `outil-pendant-index` (05c3b343ce,
+  la part de l'hôte de tty : un appel n'attend plus sans borne le slot d'un backend qu'une ouverture tient).
 - **Gravité** : blocage (un agent reste suspendu des minutes, sans réponse ni délai, jusqu'à ce qu'on l'interrompe)
 - **Atteignable en service** : oui, dès qu'un index (ou une réindexation de la montre) court sur le backend qu'un agent interroge
 - **Touche rag3weaver** : oui (verrou du catalogue, service d'embarquement, réponses des outils)
@@ -164,3 +168,15 @@ s'annonçait au journal juste avant (« l'index tombe le temps du rattrapage »)
 
 Le point est clos par la garde. Le ticket se ferme quand ses lots sont sur master : `arbre-verrou-invocation`,
 `arbre-strict-borne`, la garde, et la part hôte de tty (`cx-outil-pendant-index`).
+
+## La fermeture (20 novembre 2026)
+
+Les deux cas du ticket sont couverts, chacun par un témoin sur master :
+
+- **un appel pendant un index** : il lit par la vue et l'instantané, sans le mutex du catalogue
+  (`backend::reload_tests::an_invocation_does_not_wait_behind_the_catalog_lock`), et une recherche `Strict` qui
+  trouverait l'écrivain dit « occupé » (`dataflow::generic_search_nodes::tests::a_strict_search_says_busy_instead_of_waiting_behind_an_index`) ;
+- **un premier appel devant une dette de vecteurs à l'ouverture** : l'ouverture et l'appel tiennent sous 5 s, l'état
+  dit les vecteurs dus et le rattrapage continue derrière
+  (`daemon_host::worktrees::tests::a_first_call_does_not_wait_for_a_debt_of_vectors`) ;
+- **côté hôte**, un appel arrivé pendant une ouverture n'attend plus sans borne son slot (tty, `outil-pendant-index`).
