@@ -14,7 +14,6 @@ if type_of(found) == "array" && found.len() == 1 && type_of(found[0]) == "map" &
     if found == () { found = []; }
 }
 let names = [];
-let presentation = "";
 let aliases = [];
 let candidate_names = [];
 for r in found {
@@ -28,7 +27,6 @@ for r in found {
     aliases.push(alias);
     let about = if d.about == () { "" } else { d.about };
     candidate_names.push(#{ alias: alias, name: name, about: about });
-    presentation += `- ${alias} : « ${name} » : ${about}\n`;
 }
 // Les fiches proposées plus haut dans ce document : pas encore cherchables (la transaction de l'outil
 // ne les a pas validées), elles sont ajoutées aux candidates pour qu'une section puisse les rejoindre.
@@ -40,19 +38,20 @@ for p in proposed {
     let alias = "candidate_" + names.len().to_string();
     aliases.push(alias);
     let about = if p.about == () { "" } else { p.about };
-    candidate_names.push(#{ alias: alias, name: name, about: about });
-    presentation += `- ${alias} : « ${name} » (proposée plus haut dans ce document) : ${about}\n`;
+    candidate_names.push(#{ alias: alias, name: name, about: about, proposed: true });
 }
-let choix = if input.allow_create { "none, ou create si le sujet est net et qu'aucune fiche ne le porte (avec, dans name, le nom de ce sujet en quelques mots)" } else { "none" };
 let texte = section.text;
-if texte.len() > 4000 { texte = texte.sub_string(0, 4000) + "…"; }
-let liste = if presentation == "" { "(aucune)\n" } else { presentation };
 let titre_contexte = if input.context_title == () || input.context_title == "" { "Ce qui précède (déjà rangé, ne pas ranger) :" } else { input.context_title };
-let contexte = if input.context == () || input.context == "" { "" } else { `${titre_contexte}\n${input.context}\n\n` };
-let prompt = contexte + `Section « ${section.title} » :\n${texte}\n\nFiches candidates :\n${liste}\nRéponds par l’identifiant court d’une candidate, ou ${choix}.`;
+// The Decide in parts (lot B4): what precedes (stable for the whole document) first, then the section, then the
+// candidates by their declared template. No prose line: the labels and their meaning are in the Decide's instruction.
+let parts = [
+    #{ name: "context", title: titre_contexte, value: if input.context == () { "" } else { input.context } },
+    #{ name: "section", title: "Section « " + section.title + " »", value: texte, max_tokens: 1000 },
+    #{ name: "candidates", title: "Fiches candidates", value: if candidate_names.is_empty() { "(aucune)" } else { candidate_names }, format: #{ template: input.candidates_template } },
+];
 let out = section;
 out.candidates = aliases;
 out.candidate_names = candidate_names;
-out.prompt = prompt;
+out.parts = parts;
 if query_chars != () { out.query_chars = query_chars; }
 out
