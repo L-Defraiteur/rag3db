@@ -1,6 +1,6 @@
 # La garde du pousseur rend un lot quand des docs arrivent sur master entre son fetch et son push
 
-- **État** : ouvert (20 novembre 2026, écrit par G à la demande de c7)
+- **État** : corrigé (20 novembre 2026, lot garde-repousse-docs : sur un push refusé, la garde relit master ; des docs seules arrivées sont reposées dessous et repoussées sans rejeu, trois fois au plus ; témoin rouge d'abord dans test_push_garde.sh). Écrit par G à la demande de c7.
 - **Pour** : G (optimiseur)
 - **Famille** : produit (l'outillage des passes : le pousseur et sa garde)
 - **Gravité** : moyenne. Une passe Rust perdue (treize minutes le 20 novembre), et le créneau 2 du pousseur jeté avec
