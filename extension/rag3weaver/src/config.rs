@@ -184,6 +184,11 @@ pub struct ChunkingConfig {
     /// when empty. Each rule is whole — its types, its threshold, what it takes out.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub not_candidate: Vec<NotCandidate>,
+
+    /// `Lines`: **the bound of a whole chunk**, core and context, in bytes — the window of the base's smallest
+    /// embedder (ticket of embarquement, 20 November 2026). None: `max_size` bounds the core and each side.
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "max_chunk_size")]
+    pub max_chunk_size: Option<usize>,
 }
 
 /// **A row that is not a search candidate** (2.12, c7's rule of 19 November 2026): a row whose `type_field` is one
@@ -397,6 +402,7 @@ impl Default for ChunkingConfig {
             max_lines: 30,
             overlap_lines: 5,
             not_candidate: Vec::new(),
+            max_chunk_size: None,
         }
     }
 }
