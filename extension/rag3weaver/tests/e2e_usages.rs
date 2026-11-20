@@ -1410,7 +1410,7 @@ fn la_tete_de_type_ne_deplace_pas_une_arete_du_fichier() {
 
 /// **Un paquet du projet importé par son nom se résout par l'import** (ticket du 20 novembre 2026) : les tests d'un
 /// crate (`use monlib::Catalog`), un paquet Python (`from monpaquet import Catalog`, `pyproject.toml`), un paquet
-/// TypeScript (`import { Catalog } from "monpaquet"`, `package.json`). Le nom du paquet, lu dans le manifeste comme
+/// TypeScript (`import { Catalog } from "monpaquet"`, `package.json`, défini dans l'entrée ou réexporté par elle). Le nom du paquet, lu dans le manifeste comme
 /// l'index le lit, désigne la racine du paquet : l'arête vers `Catalog` est marquée « import », pas « nom ».
 #[test]
 #[ignore]
@@ -1430,6 +1430,12 @@ fn un_paquet_du_projet_importe_par_son_nom_se_resout_par_l_import() {
         ("TypeScript", "essai", vec![
             ("package.json", "{\n  \"name\": \"monpaquet\",\n  \"version\": \"0.1.0\",\n  \"main\": \"src/index.ts\"\n}\n"),
             ("src/index.ts", "export class Catalog {\n    static create(): Catalog {\n        return new Catalog();\n    }\n}\n"),
+            ("tests/a.test.ts", "import { Catalog } from \"monpaquet\";\n\nexport function essai() {\n    return Catalog.create();\n}\n"),
+        ]),
+        ("TypeScript réexporté", "essai", vec![
+            ("package.json", "{\n  \"name\": \"monpaquet\",\n  \"version\": \"0.1.0\"\n}\n"),
+            ("src/index.ts", "export { Catalog } from './catalog';\n"),
+            ("src/catalog.ts", "export class Catalog {\n    static create(): Catalog {\n        return new Catalog();\n    }\n}\n"),
             ("tests/a.test.ts", "import { Catalog } from \"monpaquet\";\n\nexport function essai() {\n    return Catalog.create();\n}\n"),
         ]),
     ];
