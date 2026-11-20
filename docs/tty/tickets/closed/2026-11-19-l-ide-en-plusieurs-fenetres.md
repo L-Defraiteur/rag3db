@@ -1,6 +1,6 @@
 # L'IDE en plusieurs fenêtres
 
-- **État** : ouvert. Pris par la session tty le 19 nov. 2026, au mot de c7 ; ED relit la conception et le diff.
+- **État** : fermé le 20 novembre 2026 par la session tty : les cinq tranches de la conception sont faites et relues par ED, chacune avec son témoin navigateur vu rouge d'abord (page `docs/tty/19-11-2026/10-l-ide-en-plusieurs-fenetres-conception.md`). Lots : `ide-fenetres-1` à `-4`, `file-erreur` et `ide-fenetres-5` (la tranche 5). Restent hors d'elles, dits dans la page : la graine de la vue par run, et la reprise des appels d'outil d'avant l'ouverture d'une fenêtre.
 - **Famille** : produit
 - **Gravité** : manque. Un souhait de Lucie resté en graine depuis le 13 novembre.
 - **Atteignable en service** : oui, dans l'IDE.
