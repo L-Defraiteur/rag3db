@@ -43,14 +43,58 @@ navigateur (le pont jackwener), et arbre fait les outils des vues.
   - une commande en fond finit par une ligne `notice` ;
   - une écriture hors du domaine est refusée dans le bac.
 
-### 2. La palette différée — 1 jour
+### 2. La palette différée, par familles — 1,5 jour
 
-- Les outils de tête (`teammate.tools.head`) sont toujours chargés. Les autres ne sont donnés que par
-  leur nom et une ligne, dans l'outil `find_tool {query}`, qui rend leurs schémas et les charge pour la
-  suite du pas.
-- Un appel à un outil non chargé est refusé, en nommant `find_tool`.
-- Un changement de palette (un serveur MCP ajouté, retiré) se dit au pas suivant, comme
-  `tools/list_changed`.
+Les précisions de Lucie, le 20 novembre entre 17 h 28 et 17 h 3x :
+
+- **On charge par familles qui vont ensemble, jamais un outil seul.** Les familles sont déclarées au
+  gabarit, pas devinées. Exemples :
+  - « lire le code » : `search_code`, `usages`, `outline`, `impact`, `callees`, `read_file` ;
+  - « mémoire », « vues », « navigateur », « fichiers »…
+
+  Chaque outil est dans une famille et une seule, et une famille a moins de dix outils. Une famille
+  de onze est refusée au chargement du gabarit, en la nommant.
+- **Une tête épinglée** est toujours chargée : `search_code`, `read_file`, `recall_fiches`,
+  `views`, `run`.
+- **Le résumé du catalogue** donne la liste des familles, la description d'une ligne de chacune, les
+  noms de ses outils et son coût en jetons une fois chargée. Il ne porte aucun paramètre ni aucune
+  description d'outil. Il change quand l'ensemble donné par le parent change.
+- **`find_tool`** accepte une liste. Il charge la famille entière quand on lui demande un membre ou
+  le nom de la famille. Sa réponse dit ce qui est chargé et ce que cela coûte en jetons. Appelé sans
+  argument, il rend le résumé.
+- **Une famille qui n'a pas servi depuis N pas se décharge**, et le changement est dit au pas
+  suivant, comme `tools/list_changed`.
+- **Les enfants d'une session héritent** de l'ensemble de familles que le parent leur donne, comme
+  pour les vues. Ils ne l'élargissent jamais.
+- **Tout est configurable au gabarit**, parce qu'avec des centaines de familles le résumé lui-même
+  déborde. Le bloc déclaré :
+
+  ```json
+  "palette": {
+    "head": ["search_code", "read_file", "recall_fiches", "views", "run"],
+    "families": { "lire-le-code": { "description": "…", "tools": ["search_code", "usages", "…"] } },
+    "summary": "always | on_demand | none",
+    "search": "families | tools | both",
+    "unload_after_steps": 6
+  }
+  ```
+
+  - **Le défaut** : `summary: always` (le résumé dans l'invite système), `search: families`.
+  - **Le mode « recherche d'abord »**, pour une grande palette : `summary: none`, `search: both`.
+    La recherche se fait par mots exacts ou par le sens, et l'index de code de l'hôte peut servir à
+    chercher dans les descriptions.
+- **Un appel hors palette** est refusé, en nommant la famille à charger.
+
+**Témoins**, rouges d'abord, dans les deux modes :
+- un membre demandé charge toute sa famille, et la réponse dit son coût ;
+- une famille de onze est refusée au chargement du gabarit ;
+- un appel hors palette est refusé en nommant la famille ;
+- avec `summary: always`, l'invite porte le résumé et aucun paramètre. Avec `summary: none` et
+  `search: both`, l'invite ne porte que la tête, et `find_tool` trouve un outil par un mot de sa
+  description ;
+- une famille inutilisée depuis N pas se décharge, et le pas suivant le dit ;
+- un enfant ne voit que les familles données par son parent.
+
 - **Référence** (c7) : OpenCode, en clone de lecture `~/git_workspaces/c7/20-11-2026-opencode` (MIT).
   Il n'a pas de ToolSearch, mais un catalogue à espaces de noms
   (`packages/codemode/src/codemode/catalog.ts`) :
@@ -144,5 +188,5 @@ qu'il n'y ait qu'une écriture.
 
 ## Le total
 
-Environ 7 jours. Les lots 1 et 2 rendent l'équipier utilisable sur un vrai dépôt. Les lots 3 et 4
+Environ 7 jours et demi. Les lots 1 et 2 rendent l'équipier utilisable sur un vrai dépôt. Les lots 3 et 4
 l'ouvrent. Les lots 5, 6 et 7 viennent ensuite. Chaque lot porte sa ligne de nouveautés.
