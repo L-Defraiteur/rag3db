@@ -1407,3 +1407,56 @@ fn la_tete_de_type_ne_deplace_pas_une_arete_du_fichier() {
     cat.ingest_code(&analyze("/projet", fichiers)).unwrap();
     assert_eq!(marques_vers(&cat, "f", "CatalogError"), vec!["fichier".to_string()], "l'arête du fichier reste « fichier »");
 }
+
+/// **Un paquet du projet importé par son nom se résout par l'import** (ticket du 20 novembre 2026) : les tests d'un
+/// crate (`use monlib::Catalog`), un paquet Python (`from monpaquet import Catalog`, `pyproject.toml`), un paquet
+/// TypeScript (`import { Catalog } from "monpaquet"`, `package.json`). Le nom du paquet, lu dans le manifeste comme
+/// l'index le lit, désigne la racine du paquet : l'arête vers `Catalog` est marquée « import », pas « nom ».
+#[test]
+#[ignore]
+fn un_paquet_du_projet_importe_par_son_nom_se_resout_par_l_import() {
+    let cas: Vec<(&str, &str, Vec<(&str, &str)>)> = vec![
+        ("Rust", "essai", vec![
+            ("Cargo.toml", "[package]\nname = \"monlib\"\nversion = \"0.1.0\"\nedition = \"2021\"\n"),
+            ("src/lib.rs", "pub struct Catalog;\n\nimpl Catalog {\n    pub fn new() -> Catalog {\n        Catalog\n    }\n}\n"),
+            ("tests/a.rs", "use monlib::Catalog;\n\nfn essai() {\n    let _c = Catalog::new();\n}\n"),
+        ]),
+        ("Python", "essai", vec![
+            ("pyproject.toml", "[project]\nname = \"monpaquet\"\nversion = \"0.1.0\"\n"),
+            ("monpaquet/__init__.py", "from monpaquet.lib import Catalog\n"),
+            ("monpaquet/lib.py", "class Catalog:\n    @staticmethod\n    def create():\n        return Catalog()\n"),
+            ("tests/test_a.py", "from monpaquet import Catalog\n\ndef essai():\n    return Catalog.create()\n"),
+        ]),
+        ("TypeScript", "essai", vec![
+            ("package.json", "{\n  \"name\": \"monpaquet\",\n  \"version\": \"0.1.0\",\n  \"main\": \"src/index.ts\"\n}\n"),
+            ("src/index.ts", "export class Catalog {\n    static create(): Catalog {\n        return new Catalog();\n    }\n}\n"),
+            ("tests/a.test.ts", "import { Catalog } from \"monpaquet\";\n\nexport function essai() {\n    return Catalog.create();\n}\n"),
+        ]),
+    ];
+    let mut faux = Vec::new();
+    for (langue, de, fichiers) in cas {
+        let dir = std::env::temp_dir().join(format!("paquet-par-son-nom-{}-{langue}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut manifestes = Vec::new();
+        for (chemin, texte) in &fichiers {
+            let p = dir.join(chemin);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(&p, texte).unwrap();
+            if rag3weaver::manifestes::est_un_manifeste(chemin) {
+                manifestes.push(p.to_string_lossy().to_string());
+            }
+        }
+        let racine = dir.to_string_lossy().to_string();
+        let m = rag3weaver::manifestes::Manifestes::lire(&manifestes, |c| std::fs::read_to_string(c).ok());
+        let catalog = setup();
+        let mut cat = catalog.lock().unwrap();
+        cat.ingest_code(&rag3weaver::code::analyze_in_project_avec(&racine, read_sources(&racine).unwrap(), "", None, Some(&m))).unwrap();
+        let marques = marques_vers(&cat, de, "Catalog");
+        if marques != vec!["import".to_string()] {
+            faux.push(format!("{langue} : {de} → Catalog marqué {marques:?}"));
+        }
+        drop(cat);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+    assert!(faux.is_empty(), "un paquet du projet importé par son nom : {faux:#?}");
+}
