@@ -288,6 +288,108 @@ mod tests {
         assert_eq!((&lu["ok"], &lu["result"]["view"]["source"]), (&json!(true), &json!("session")), "the view written is not read: {lu}");
     }
 
+    /// A view opened for « le témoin » (session S1) on the atelier's backend, its layer written: the atelier, the
+    /// manifest, the session, the view's name and path, and the folder of the test.
+    struct VueOuverte {
+        a: crate::daemon_host::atelier_fichiers::tests::Atelier,
+        manifeste: std::path::PathBuf,
+        s: String,
+        nom: String,
+        chemin: std::path::PathBuf,
+        couche: String,
+        _d: tempfile::TempDir,
+    }
+
+    fn une_vue_ouverte(lot: &str) -> VueOuverte {
+        let d = tempfile::tempdir().unwrap();
+        let a = atelier(d.path());
+        let depot = petit_depot(&d.path().join("B"));
+        a.appeler("attach_worktree", json!({"path":depot})).unwrap();
+        attendre_l_index(&a, &depot);
+        let roots = a.host.racines_de_code().unwrap();
+        let name = crate::code_tree::name_of_tree(&depot.canonicalize().unwrap()).unwrap();
+        let manifeste = roots.manifest(&name);
+        let (_h, espace, _) = hote_d_espace(&d.path().join("e"));
+        a.host.set_espace(espace, d.path().join("e/dossiers-des-sessions.json"));
+        a.host.set_vues_dir(d.path().join("e/vues"));
+        let corps = json!({"client": "mcp (pid 1)", "claude": {"session_id": "S1", "name": "le témoin"}}).to_string();
+        let (_, r) = a.host.handle("POST", "/session", None, corps.as_bytes());
+        let s = r["session"].as_str().unwrap().to_string();
+        let r = a.host.open_view(Some(&s), &manifeste, lot, None);
+        assert_eq!(r["ok"], json!(true), "{r}");
+        assert!(a.host.attendre_l_ecriture_des_vues(std::time::Duration::from_secs(120)), "the view's layer is not written");
+        let (nom, chemin) = (r["name"].as_str().unwrap().to_string(), std::path::PathBuf::from(r["path"].as_str().unwrap()));
+        let couche = r["layer"].as_str().expect("the view's layer").to_string();
+        VueOuverte { a, manifeste, s, nom, chemin, couche, _d: d }
+    }
+
+    /// **`close_view` refuses a view the host did not open for the session** (O3, page 03 of 20 November 2026), Lucie's
+    /// tree among them.
+    #[test]
+    fn close_view_refuses_a_view_it_did_not_open() {
+        let v = une_vue_ouverte("a");
+        for autre in ["arbre/20-11-2026-jamais", "rag3db"] {
+            let r = v.a.host.close_view(Some(&v.s), &v.manifeste, autre);
+            assert!(r["ok"] == json!(false) && r["error"].as_str().unwrap_or_default().contains("pas ouverte"), "{autre}: {r}");
+        }
+        assert!(v.chemin.exists());
+    }
+
+    /// **`close_view` refuses a dirty tree.**
+    #[test]
+    fn close_view_refuses_a_dirty_tree() {
+        let v = une_vue_ouverte("b");
+        std::fs::write(v.chemin.join("sale.rs"), "pub fn sale() {}\n").unwrap();
+        let r = v.a.host.close_view(Some(&v.s), &v.manifeste, &v.nom);
+        assert!(r["ok"] == json!(false) && r["error"].as_str().unwrap_or_default().contains("sale"), "{r}");
+        assert!(v.chemin.exists());
+    }
+
+    /// **`close_view` refuses commits no remote branch holds.**
+    #[test]
+    fn close_view_refuses_commits_not_pushed() {
+        let v = une_vue_ouverte("c");
+        std::fs::write(v.chemin.join("neuf.rs"), "pub fn neuf() {}\n").unwrap();
+        let git = |args: &[&str]| assert!(std::process::Command::new("git").arg("-C").arg(&v.chemin).args(["-c", "user.name=t", "-c", "user.email=t@t"]).args(args).status().unwrap().success());
+        git(&["add", "."]);
+        git(&["commit", "-q", "-m", "local"]);
+        let r = v.a.host.close_view(Some(&v.s), &v.manifeste, &v.nom);
+        assert!(r["ok"] == json!(false) && r["error"].as_str().unwrap_or_default().contains("non poussé"), "{r}");
+        assert!(v.chemin.exists());
+    }
+
+    /// **`close_view` refuses a tree a process works in.**
+    #[test]
+    fn close_view_refuses_a_tree_a_process_works_in() {
+        let v = une_vue_ouverte("d");
+        let mut dedans = std::process::Command::new("sleep").arg("60").current_dir(&v.chemin).spawn().unwrap();
+        let r = v.a.host.close_view(Some(&v.s), &v.manifeste, &v.nom);
+        let _ = dedans.kill();
+        let _ = dedans.wait();
+        assert!(r["ok"] == json!(false) && r["error"].as_str().unwrap_or_default().contains("processus"), "{r}");
+        assert!(v.chemin.exists());
+    }
+
+    /// **`close_view` closes a clean view**: the worktree and its target removed, the view forgotten, the session's active
+    /// view back to the backend.
+    #[test]
+    fn close_view_removes_a_clean_tree_and_its_target() {
+        let v = une_vue_ouverte("e");
+        let etat: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(v._d.path().join("e/vues/S1.json")).unwrap()).unwrap();
+        let target = std::path::PathBuf::from(etat["ouvertes"][&v.nom]["target"].as_str().unwrap());
+        std::fs::create_dir_all(target.join("debug")).unwrap();
+        let r = v.a.host.close_view(Some(&v.s), &v.manifeste, &v.nom);
+        assert_eq!(r["ok"], json!(true), "{r}");
+        assert!(!v.chemin.exists(), "the worktree is still there");
+        assert!(!target.exists(), "the target is still there");
+        assert_eq!(v.a.host.views(Some(&v.s), &v.manifeste)["active"], json!({"name": "backend", "source": "défaut"}), "the session still reads the closed view");
+        let etat = std::fs::read_to_string(v._d.path().join("e/vues/S1.json")).unwrap();
+        assert!(!etat.contains(&v.nom), "the closed view is still noted: {etat}");
+        // Closed by hand, not landed: the layer ends, and a read under it is refused saying so (c7, 20 November).
+        let lu = v.a.host.call(Some(&v.s), &v.manifeste, "usages", json!({"name": "un", "view": {"layer": v.couche}}));
+        assert!(lu["ok"] == json!(false) && lu.to_string().contains("couche finie"), "the closed view's layer is not ended: {lu}");
+    }
+
     /// **`views` and `use_view` follow the Claude Code session** (page 02 of 20 November 2026, lot 2): two thin clients
     /// of one session (one `sessionId`) see the same active view, another session does not; an unknown name is refused,
     /// listing the known views; a host restarted on the same state finds the view again.
