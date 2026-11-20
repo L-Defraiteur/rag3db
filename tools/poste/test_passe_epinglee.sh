@@ -28,13 +28,13 @@ echo "$s EMBED=$RAG3WEAVER_EMBED_SERVICE LIB=$RAG3DB_LIB REPLI=${RAG3WEAVER_TEST
 # FAUX_CAS_VERTS=<suite>:<cas>,… et FAUX_CAS_ROUGES=<suite>:<cas>,… nomment des cas, comme cargo les dit.
 if [ "${FAUX_CAS_VERTS%%:*}" = "$s" ]; then for c in $(echo "${FAUX_CAS_VERTS#*:}" | tr , ' '); do echo "test $c ... ok"; done; fi
 if [ "${FAUX_CAS_ROUGES%%:*}" = "$s" ]; then
-  n=0; for c in $(echo "${FAUX_CAS_ROUGES#*:}" | tr , ' '); do echo "test $c ... FAILED"; n=$((n + 1)); done
+  n=0; for c in $(echo "${FAUX_CAS_ROUGES#*:}" | tr , ' '); do if [ "$c" = "${FAUX_SP_CAS:-}" ]; then echo "test $c - should panic ... FAILED"; else echo "test $c ... FAILED"; fi; n=$((n + 1)); done
   echo "test result: FAILED. 2 passed; $n failed"; exit 101
 fi
 # Le témoin (le filtre « filtre ») : cargo écrit la ligne du test joué ; FAUX_TEMOIN_MUET l'ignore (0 passed).
 if [ "$dernier" = filtre ]; then
   [ -n "${FAUX_TEMOIN_MUET:-}" ] && { echo "test result: ok. 0 passed; 0 failed; 1 ignored"; exit 0; }
-  echo "test tests::filtre_du_lot ... ok"
+  echo "test tests::filtre_du_lot${FAUX_SP:+ - should panic} ... ok"
 fi
 echo "test result: ok. 1 passed; 0 failed"
 F
@@ -50,7 +50,7 @@ printf '#!/bin/sh\necho "${FAUX_HOTE:-lucie-tablette}"\n' > $D/bin/hostname
 # L'étape des témoins navigateur : FAUX_NAV_OK=<nom>,… dit « ok » pour ces tests (sinon un seul test, « autre »).
 cat > $W/scripts/temoins_navigateur.sh <<'F'
 #!/bin/bash
-for c in $(echo "${FAUX_NAV_OK:-autre}" | tr , ' '); do echo "test daemon_host::chat::tests::$c ... ok"; done
+for c in $(echo "${FAUX_NAV_OK:-autre}" | tr , ' '); do echo "test daemon_host::chat::tests::$c${FAUX_SP:+ - should panic} ... ok"; done
 echo "test result: ok. 1 passed; 0 failed"
 F
 chmod +x $W/run_e2e.sh $W/scripts/*.sh $D/bin/hostname
@@ -94,6 +94,7 @@ printf 'e2e_x\tcas_un\tdocs/x/tickets/rouge.md\n' > $K
 passe VERT "un cas listé rouge ne rougit pas la passe" SUITES_EN_PLUS=e2e_x FAUX_CAS_ROUGES=e2e_x:cas_un
 grep -q 'rouge connu (docs/x/tickets/rouge.md) : e2e_x::cas_un' $R && echo "vert   le rouge connu est dit avec son ticket" || { echo "ROUGE  le rouge connu n'est pas dit : $(grep -i connu $R)"; rouge=1; }
 passe "ROUGE e2e_x" "un cas non listé rouge, à côté d'un listé, rougit la passe" SUITES_EN_PLUS=e2e_x FAUX_CAS_ROUGES=e2e_x:cas_un,cas_deux
+passe "ROUGE e2e_x" "un cas should_panic non listé rouge, à côté d'un listé, rougit la passe" SUITES_EN_PLUS=e2e_x FAUX_CAS_ROUGES=e2e_x:cas_un,cas_deux FAUX_SP_CAS=cas_deux
 passe VERT "un cas listé qui passe" SUITES_EN_PLUS=e2e_x FAUX_CAS_VERTS=e2e_x:cas_un
 grep -q 'à lever : e2e_x::cas_un' $R && echo "vert   un cas listé vert est dit « à lever »" || { echo "ROUGE  le cas listé vert n'est pas dit à lever"; rouge=1; }
 printf 'e2e_x\tcas_un\tdocs/x/tickets/absent.md\n' > $K
@@ -115,6 +116,10 @@ passe VERT "SUITE_DU_TEMOIN=navigateur : le témoin se juge à l'étape navigate
 grep -q 'témoin navigateur filtre : ok' $R && [ "$(cut -d' ' -f1 $D/trace | tr '\n' ' ')" = "e2e_lectures e2e_code " ] \
   && echo "vert   le témoin navigateur est dit ok, et l'étape lib ne le joue pas" || { echo "ROUGE  témoin navigateur : $(grep -i 'navigateur' $R | head -2 | tr '\n' ' ') ; suites : $(cut -d' ' -f1 $D/trace | tr '\n' ' ')"; rouge=1; }
 passe "ROUGE témoin navigateur" "SUITE_DU_TEMOIN=navigateur : un témoin qui ne sort pas ok rougit" SUITE_DU_TEMOIN=navigateur FAUX_NAV_OK=autre
+# Un témoin #[should_panic] (20 novembre 2026, recherche-diagnostic-page-2 rendu rouge à tort) : libtest écrit
+# « test <nom> - should panic ... ok » ; la passe le lit vert, à chaque étape.
+passe VERT "un témoin should_panic de la lib se lit ok" FAUX_SP=1
+passe VERT "un témoin should_panic à l'étape navigateur se lit ok" SUITE_DU_TEMOIN=navigateur FAUX_NAV_OK=filtre FAUX_SP=1
 
 # Le repli des tests sur l'iGPU : à luciepc seulement, jamais au portable (son seul GPU porte l'écran), même posé par l'appelant.
 passe VERT "le repli à luciepc" FAUX_HOTE=LuciePC
@@ -177,7 +182,7 @@ case "$*" in
   build*) echo "   Compiling rag3weaver-tty v0.1.0 ($PWD)"; mkdir -p "$CARGO_TARGET_DIR/release"; : > "$CARGO_TARGET_DIR/release/rag3weaver-tty"; exit 0 ;;
   test*) echo "   Compiling rag3weaver-tty v0.1.0 ($PWD)"
     [ "${FAUX_CARGO:-}" = rouge ] && { echo "test result: FAILED. 0 passed; 1 failed"; exit 101; }
-    [ "${FAUX_TTY_TEMOIN:-}" = absent ] || echo "test vue::tests::filtre ... ok"
+    [ "${FAUX_TTY_TEMOIN:-}" = absent ] || echo "test vue::tests::filtre${FAUX_SP:+ - should panic} ... ok"
     echo "test vue::tests::un_autre ... ok"
     echo "test result: ok. 2 passed; 0 failed" ;;
 esac
@@ -202,6 +207,7 @@ grep -q '^témoin tty filtre : ok' $R && ! grep -q '^lib ' $D/trace \
   && echo "vert   SUITE_DU_TEMOIN=tty : « ok » lu dans tty.log, la lib de rag3weaver n'est pas jouée pour lui" \
   || { echo "ROUGE  SUITE_DU_TEMOIN=tty : résumé « $(grep -iE 'témoin' $R | tr '\n' ' ') », trace « $(cut -d' ' -f1 $D/trace | tr '\n' ' ') »"; rouge=1; }
 passe "ROUGE témoin tty filtre" "SUITE_DU_TEMOIN=tty, le témoin pas joué ok à l'étape tty" SUITES=- SUITE_DU_TEMOIN=tty FAUX_TTY_TEMOIN=absent
+passe VERT "un témoin should_panic à l'étape tty se lit ok" SUITES=- SUITE_DU_TEMOIN=tty FAUX_SP=1
 $G reset -q --hard HEAD~1
 passe "ROUGE témoin tty" "SUITE_DU_TEMOIN=tty pour un lot qui ne touche pas tty/" SUITES=- SUITE_DU_TEMOIN=tty
 passe VERT "un lot qui ne touche pas tty/" SUITES=-

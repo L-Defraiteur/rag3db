@@ -1343,7 +1343,8 @@ if [ "$SUMMARY" = true ]; then
 
   # **Nommer ce qui a cassé.** Un compteur dit qu'il y a un problème ; il ne
   # dit pas lequel, et c'est justement ce qu'on vient chercher.
-  mapfile -t FAILED_NAMES < <(grep -oP '^test \K[\w:]+(?= \.\.\. FAILED)' "$TMPLOG" | sort -u)
+  # Un #[should_panic] rouge s'écrit « test <nom> - should panic ... FAILED » (20 novembre 2026).
+  mapfile -t FAILED_NAMES < <(grep -oP '^test \K[\w:]+(?=( - should panic)? \.\.\. FAILED)' "$TMPLOG" | sort -u)
   if [ ${#FAILED_NAMES[@]} -gt 0 ]; then
     say "\n  échecs :\n"
     for t in "${FAILED_NAMES[@]}"; do
