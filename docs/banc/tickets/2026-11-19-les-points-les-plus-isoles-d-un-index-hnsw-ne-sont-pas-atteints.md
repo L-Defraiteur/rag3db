@@ -1,8 +1,11 @@
 # Les points les plus isolés d'un index HNSW ne sont pas atteints
 
-- **État** : ouvert ; constat sur une base synthétique, à chiffrer sur des vecteurs réels avant de juger.
+- **État** : fermé (20 novembre 2026), non atteint sur des vecteurs réels. Hotfixs a rejoué la mesure sur les
+  127 198 `Scope_Chunk` de code-lourd (branche `seed-measure-real-vectors` 8caebb63e9, lot ee6183c410) : 200 points
+  isolés sur 200 dans leur propre top 10. Le constat ne vaut que sur la base gaussienne.
 - **Famille** : moteur
-- **Gravité** : à établir. Sur la base synthétique, une ligne isolée n'est presque jamais rendue à sa propre requête.
+- **Gravité** : faible (20 novembre) : le cas ne se montre que sur des gaussiennes de dimension 768. Avant :
+  à établir. Sur la base synthétique, une ligne isolée n'est presque jamais rendue à sa propre requête.
   Si c'est vrai sur des vecteurs réels, c'est une réponse fausse : une ligne existe, et une recherche exacte de son
   vecteur ne la rend pas.
 - **Atteignable en service** : à établir, par la mesure sur un vrai corpus.
@@ -48,3 +51,18 @@ Le test est dans `test/transaction/concurrence/vector_index_update_test.cpp`, su
 Il se lance par `CONCURRENCE_MEASURE=1 BANC_SEED_POINTS=… BANC_THREADS=… concurrence_test
 --gtest_filter=VectorIndexSeedMeasure.*`, sous `poste mesure`. Les journaux du 19 novembre sont à luciepc :
 `~/.cache/rag3db-banc-notes/amorce/run-seed*-th*.log`.
+
+## Fermé : la mesure sur des vecteurs réels (hotfixs, 20 novembre)
+
+- **Le jeu** : `VectorIndexSeedMeasure` avec `BANC_VECTORS_CSV` (une ligne `[x,…]` par vecteur, les 200 dernières en
+  requêtes), sur les 127 198 `Scope_Chunk` de code-lourd, à 8 fils, avec et sans amorce. Page de hotfixs :
+  `docs/coeur-cpp-hotfixs-tickets/20-11-2026/03-…`.
+- **Le résultat** : **200 points isolés sur 200 dans leur propre top 10**, et un rappel@10 de 0,998 à 0,999, avec ou
+  sans amorce. Sur la base gaussienne, c'était 1 à 4 sur 200, pour un rappel de 0,75.
+- **La lecture** : les anti-hubs sont le pire cas des gaussiennes en grande dimension. Un corpus de code réel n'en a pas
+  assez pour que le graphe les perde. Une recherche par le vecteur exact d'une ligne la rend.
+- **Une faute de ma mesure, relevée par hotfixs** : la colonne « rendue au premier rang » ne vaut rien. Sans `ORDER BY`,
+  l'ordre des lignes de `QUERY_VECTOR_INDEX` n'est pas garanti : sur les vecteurs réels, elle vaut 12 à 22 sur 200, alors
+  que chaque point est à distance nulle de lui-même. Le top 10 ne dépend pas de l'ordre : c'est lui qui juge, et sur la
+  base gaussienne il restait à 1 à 4 sur 200.
+- **Ce qui reste** : le cas gaussien, sans portée en service. S'il revient sur un vrai corpus, ce ticket se rouvre.
