@@ -42,7 +42,10 @@ gabarits de chaque côté. Sorties : `banc-parite/sorties/feuille-5c-20261120/` 
 
 **Les noms courts : vert.** Les 8 noms que master met premiers le restent avec (B). Cinq montent au premier rang :
 research (7 → 1), threads (6 → 1), echecs (3 → 1), pool (9 → 1), CONFIGS (3 → 1). Des fonctions d'une ligne,
-`norm_path_theirs` (1) et `secondary_indexes` (2) gardent leur rang, `lines` sort du top 10 (6 → absent).
+`norm_path_theirs` (1) et `secondary_indexes` (2) gardent leur rang. Pour `lines`, le « 6 → absent » de mes
+relevés est le rang de son **fichier** (une requête par le sens compte le premier résultat dans le bon fichier) : c'est
+`cards`, la ligne 14 de prepare_engine_relations.py (220 caractères), qui sort du top 10. La fonction `lines` elle-même
+(ligne 12) n'est dans le top 10 d'aucun côté.
 
 **Le critère de G** : recouvrement 92 %, usages identiques (Catalog 900 = 900). Le même premier est à 6/10 au sens strict,
 **10/10 avec la règle de c7** (17 h 55) : « même premier, ou premier = la définition du nom exact ». Les quatre
@@ -73,3 +76,27 @@ courte. ED les explique un par un.
 
 « rag3db » sans filtre donne en tête `declare const rag3db: {` (23 caractères), une déclaration courte ; mais la requête
 est son nom, et c'est l'effet voulu de (B), pas un premier pris par un sens.
+
+## 5. (B) corrigé : vert
+
+`03fbecf8b8` : (B) ne promeut plus un résultat qui replie des enfants (`exact_name_leaf='folds'` dans
+`search_workspace.mmd`). Même recette, contre master `216c3a70e6`, chacun sur ses gabarits. Sorties :
+`banc-parite/sorties/feuille-5d-20261120/`.
+
+- **Le défaut est corrigé** : « rag3db » sur `src/include/` garde le premier de master (`c_api/rag3db.h:330`) ;
+  « PortDef » donne `pub struct PortDef {` (`port.rs:179`), la définition du nom exact, et non plus `impl PortDef {`.
+- **Le critère de G** : 92 %, **10/10 avec la règle du nom exact**, usages identiques (Catalog 900 = 900).
+- **Les noms courts** : les 8 que master met premiers le restent ; research, threads, echecs, pool et CONFIGS montent au
+  rang 1.
+- **Les premiers changés de mes 30 cas, un par un** :
+  - par le nom exact : « rag3db » sans filtre → `declare const rag3db` ; « PortDef » → `pub struct PortDef` ;
+    « value » → `IteratorType::reference value() const` (`third_party/nlohmann_json/json.hpp:5228`) ;
+  - par le sens : les trois du § 4, inchangés ;
+  - **le seul premier sorti du top 10** : « transaction rollback » [python]. Sur master, c'était
+    `last_accepted=(deck,restored)` (`audit_validated_run.py:40`), une déclaration de valeur de 29 caractères : le lot
+    lui retire son vecteur, c'est l'effet voulu, pas (B).
+- **La requête de `lines`**, en trois modes : aucune déclaration courte n'entre dans le top 10. Par défaut et en dense,
+  ce sont des fonctions et méthodes de l'extension json, plus `events` (une variable de 92 caractères, qui garde son
+  vecteur) ; en BM25 seul, des fonctions de rag3weaver, identiques des deux côtés.
+
+**Verdict : vert.**
