@@ -310,7 +310,6 @@ pub struct DaemonHost {
     vues_en_ecriture: Mutex<HashMap<String, (std::time::Instant, usize)>>,
     /// The witnesses' gate: the background writing of a view waits on it while it is shut.
     #[cfg(test)]
-    #[allow(dead_code)] // RED STUB: read by the background writing.
     porte_d_ecriture: Mutex<Option<PorteDEcriture>>,
     /// **Soi, en lien faible** : posé par [`DaemonHost::se_connaitre`] (le service, les
     /// témoins), il permet à l'hôte de donner aux backends qu'il ouvre l'hôte des
@@ -766,23 +765,65 @@ impl DaemonHost {
             // active. A layer that cannot be written leaves the worktree opened, and the answer says why.
             let reel = chemin.canonicalize().unwrap_or_else(|_| chemin.clone());
             let couche = format!("worktree:{}", reel.display());
+            // The layer is registered here; its fork and its gap are written in the background (page 03, O2 in the
+            // background): open_view answers at once, and a read under the view says « index pas prêt » until then.
             #[cfg(feature = "code")]
-            let indexee = self.with_backend(&hosted, |b| -> Result<(), String> {
-                let prepared = b.prepared();
-                let racine = prepared.workspace_root().ok_or("pas de racine de travail")?;
-                let repo = crate::suivies::repo_id(&racine, prepared.manifest.tracked.as_ref())?.ok_or("pas d'id de dépôt")?;
-                let mut cat = b.catalog.lock().map_err(|_| "catalogue empoisonné".to_string())?;
-                let tete = git(&reel, &["rev-parse", "HEAD"])?;
-                let id = crate::suivies::register_layer(&cat, &repo, &couche, &tete)?;
-                crate::history_layers::write_fork_work_generation(&mut cat, &reel, &id, &repo, &base_commit)?;
-                Ok(())
-            })?;
+            let indexee: Result<bool, String> = (|| {
+                let (id, repo) = self.with_backend(&hosted, |b| -> Result<(String, String), String> {
+                    let prepared = b.prepared();
+                    let racine = prepared.workspace_root().ok_or("pas de racine de travail")?;
+                    let repo = crate::suivies::repo_id(&racine, prepared.manifest.tracked.as_ref())?.ok_or("pas d'id de dépôt")?;
+                    let cat = b.catalog.lock().map_err(|_| "catalogue empoisonné".to_string())?;
+                    let tete = git(&reel, &["rev-parse", "HEAD"])?;
+                    Ok((crate::suivies::register_layer(&cat, &repo, &couche, &tete)?, repo))
+                })??;
+                let ecrire = {
+                    let (hosted, reel, base_commit) = (hosted.clone(), reel.clone(), base_commit.clone());
+                    move |hote: &DaemonHost| -> Result<(), String> {
+                        hote.with_backend(&hosted, |b| -> Result<i64, String> {
+                            let mut cat = b.catalog.lock().map_err(|_| "catalogue empoisonné".to_string())?;
+                            crate::history_layers::write_fork_work_generation(&mut cat, &reel, &id, &repo, &base_commit)
+                        })?
+                        .map(|_| ())
+                    }
+                };
+                let Some(hote) = self.soi.get().and_then(std::sync::Weak::upgrade) else {
+                    // A host that does not know itself writes in line, as before.
+                    ecrire(self)?;
+                    return Ok(false);
+                };
+                self.vues_en_ecriture.lock().unwrap_or_else(|e| e.into_inner()).insert(couche.clone(), (std::time::Instant::now(), 0));
+                // Active before the writing starts: a writing that fails sends the session back to the backend after.
+                self.set_session_view(&s.id, Some(json!({ "layer": couche })))?;
+                let (couche_f, claude_f, nom_f, session_f) = (couche.clone(), claude.clone(), nom.clone(), s.id.clone());
+                std::thread::Builder::new()
+                    .name("vue-en-fond".into())
+                    .spawn(move || {
+                        #[cfg(test)]
+                        if let Some(p) = hote.porte_d_ecriture.lock().unwrap_or_else(|e| e.into_inner()).clone() {
+                            p.attendre();
+                        }
+                        if let Err(e) = ecrire(&hote) {
+                            // The layer could not be written: said in the state, and the session reads the backend again.
+                            let _ = hote.noter_l_ouverture(&claude_f, &nom_f, &json!({ "name": nom_f, "layer_refused": e }));
+                            if hote.session_default_view(&session_f) == Some(json!({ "layer": couche_f })) {
+                                let _ = hote.set_session_view(&session_f, None);
+                            }
+                        }
+                        hote.vues_en_ecriture.lock().unwrap_or_else(|e| e.into_inner()).remove(&couche_f);
+                    })
+                    .map_err(|e| format!("le fil d'écriture de la vue : {e}"))?;
+                Ok(true)
+            })();
             // Without the code feature, no layer of code: the worktree is opened all the same.
             #[cfg(not(feature = "code"))]
-            let indexee: Result<(), String> = Err(format!("la couche de travail de {} demande la feature « code » de rag3weaver", reel.display()));
+            let indexee: Result<bool, String> = Err(format!("la couche de travail de {} demande la feature « code » de rag3weaver", reel.display()));
             let mut ouverte = json!({ "name": nom, "path": chemin, "branch": branche, "target": target, "from": base, "fork": base_commit });
             match &indexee {
-                Ok(()) => ouverte["layer"] = json!(couche),
+                Ok(en_fond) => {
+                    ouverte["layer"] = json!(couche);
+                    ouverte["indexing"] = json!(*en_fond);
+                }
                 Err(e) => ouverte["layer_refused"] = json!(e),
             }
             self.noter_l_ouverture(&claude, &nom, &ouverte)?;
@@ -1502,6 +1543,19 @@ impl DaemonHost {
             let humain = self.ide_session.get().is_some_and(|ide| *ide == s.id);
             // L'auteur des lignes du journal que cet appel fait naître (le crochet).
             let _appelant = crate::host_log::enter_call(&client, &s.id, &hosted.id);
+            // **A view whose layer is being written** (open_view in the background): not ready, at once.
+            let vue_de_l_appel = arguments.get("view").filter(|v| !v.is_null()).cloned();
+            let source = if vue_de_l_appel.is_some() { "appel" } else { "session" };
+            if let Some(v) = vue_de_l_appel.or_else(|| s.default_view.clone()) {
+                let nom = Self::nom_de_vue(&v);
+                if let Some((debut, _)) = self.vues_en_ecriture.lock().unwrap_or_else(|e| e.into_inner()).get(&nom).cloned() {
+                    return Ok(json!({
+                        "result": format!("index pas prêt : la couche de la vue « {nom} » s'écrit depuis {} s (sa fourche, puis son écart) ; réessayez dans un moment, ou lisez une autre vue", debut.elapsed().as_secs()),
+                        "index_state": { "ready": false, "indexing": true, "eta_s": null },
+                        "view": { "layer": nom, "source": source },
+                    }));
+                }
+            }
             if let Some(rangee) = self.ranger_une_ecriture(&hosted, &s, humain, name, &arguments)? {
                 return Ok(rangee);
             }
@@ -2365,7 +2419,6 @@ impl PorteDEcriture {
         self.0 .1.notify_all();
     }
 
-    #[allow(dead_code)] // RED STUB: waited on by the background writing.
     fn attendre(&self) {
         let mut ouverte = self.0 .0.lock().unwrap_or_else(|e| e.into_inner());
         while !*ouverte {
