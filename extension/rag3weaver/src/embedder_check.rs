@@ -147,8 +147,79 @@ pub fn check(
     weights_sha256: impl FnOnce() -> Result<String, String>,
     lot_max: usize,
 ) -> SelfCheck {
-    let _ = (alone, batch, reference, weights_sha256, lot_max, largest_gap as fn(&[f32], &[f32]) -> f32, SelfCheck::not_verified as fn(String) -> SelfCheck);
-    SelfCheck { state: CheckState::Verified, alone_gap: None, batch_gap: None, tolerance: None, batch_texts: 0, duration_ms: 0, reason: None }
+    let start = std::time::Instant::now();
+    let Some(reference) = reference else {
+        return SelfCheck::not_verified(format!("pas de {REFERENCE_FILE} à côté des poids"));
+    };
+    if reference.texts.is_empty() || reference.texts.len() != reference.vectors.len() {
+        return SelfCheck::not_verified(format!("{REFERENCE_FILE} : {} textes pour {} vecteurs", reference.texts.len(), reference.vectors.len()));
+    }
+    match weights_sha256() {
+        Ok(sha) if sha == reference.weights_sha256 => {}
+        Ok(sha) => {
+            return SelfCheck::not_verified(format!(
+                "{REFERENCE_FILE} couvre d'autres poids (sha256 {} ; ces poids : {})",
+                &reference.weights_sha256[..reference.weights_sha256.len().min(12)],
+                &sha[..12]
+            ))
+        }
+        Err(e) => return SelfCheck::not_verified(format!("empreinte des poids : {e}")),
+    }
+    let n = reference.texts.len();
+    let refused = |reason: String, alone_gap: Option<f32>, batch_gap: Option<f32>, batch_texts: usize| SelfCheck {
+        state: CheckState::Refused,
+        alone_gap,
+        batch_gap,
+        tolerance: Some(reference.tolerance),
+        batch_texts,
+        duration_ms: start.elapsed().as_millis() as u64,
+        reason: Some(reason),
+    };
+    // Each text alone.
+    let (mut alone_gap, mut alone_at) = (0f32, 0usize);
+    for (i, text) in reference.texts.iter().enumerate() {
+        let v = match alone(std::slice::from_ref(text)) {
+            Ok(mut v) if v.len() == 1 => v.remove(0),
+            Ok(v) => return refused(format!("{} vecteurs pour un texte seul", v.len()), None, None, 0),
+            Err(e) => return refused(format!("texte {i} seul : {e}"), None, None, 0),
+        };
+        let gap = largest_gap(&v, &reference.vectors[i]);
+        if gap > alone_gap || gap.is_infinite() {
+            (alone_gap, alone_at) = (gap, i);
+        }
+    }
+    // The same texts, cycled to `lot_max`, in the service's batches.
+    let indices: Vec<usize> = (0..lot_max.max(n.min(2))).map(|k| k % n).collect();
+    let texts: Vec<String> = indices.iter().map(|&i| reference.texts[i].clone()).collect();
+    let vectors = match batch(&texts) {
+        Ok(v) if v.len() == texts.len() => v,
+        Ok(v) => return refused(format!("{} vecteurs pour un lot de {}", v.len(), texts.len()), Some(alone_gap), None, texts.len()),
+        Err(e) => return refused(format!("en lot : {e}"), Some(alone_gap), None, texts.len()),
+    };
+    let (mut batch_gap, mut batch_at) = (0f32, 0usize);
+    for (v, &i) in vectors.iter().zip(&indices) {
+        let gap = largest_gap(v, &reference.vectors[i]);
+        if gap > batch_gap || gap.is_infinite() {
+            (batch_gap, batch_at) = (gap, i);
+        }
+    }
+    let tolerance = reference.tolerance;
+    let reason = if alone_gap > tolerance {
+        Some(format!("texte {alone_at} seul : écart {alone_gap:.2e} à la référence, au-dessus de {tolerance:.1e}"))
+    } else if batch_gap > tolerance {
+        Some(format!("en lot de {} : écart {batch_gap:.2e} à la référence (texte {batch_at}), au-dessus de {tolerance:.1e}", texts.len()))
+    } else {
+        None
+    };
+    SelfCheck {
+        state: if reason.is_some() { CheckState::Refused } else { CheckState::Verified },
+        alone_gap: Some(alone_gap),
+        batch_gap: Some(batch_gap),
+        tolerance: Some(tolerance),
+        batch_texts: texts.len(),
+        duration_ms: start.elapsed().as_millis() as u64,
+        reason,
+    }
 }
 
 #[cfg(test)]

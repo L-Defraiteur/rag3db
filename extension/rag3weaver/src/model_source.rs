@@ -756,6 +756,17 @@ pub fn local_embedder(model: &str) -> Result<Box<dyn crate::embedder::Embedder>,
         "granite-107m" => Box::new(crate::BurnGranite107m::from_files(&weights, &tokenizer, device).map_err(|e| e.to_string())?),
         _ => Box::new(crate::BurnGranite278m::from_files(&weights, &tokenizer, device).map_err(|e| e.to_string())?),
     };
+    // **Checked before use** (20 November 2026, `crate::embedder_check`) : refused, said,
+    // when the card computes wrong against the model's reference.
+    let reference = crate::embedder_check::read_reference(&weights)?;
+    crate::embedder_check::check(
+        |texts: &[String]| built.embed(texts),
+        |texts: &[String]| crate::embedder_check::embed_in_service_batches(texts, 32, crate::embedder::embed_char_budget(), |b| built.embed(b)),
+        reference.as_ref(),
+        || std::fs::read(&weights).map(|b| crate::embedder_check::sha256_hex(&b)).map_err(|e| e.to_string()),
+        32,
+    )
+    .into_result(model)?;
     Ok(built)
 }
 
