@@ -404,4 +404,37 @@ connu arret "e2e_code_sync exigée, un rouge non listé" e2e_code_sync::tests::c
 # Un #[should_panic] rouge s'écrit « test <nom> - should panic ... FAILED » (20 novembre 2026) : il compte comme un rouge.
 connu arret "un rouge should_panic non listé, à côté d'un listé" "e2e_code_sync::tests::cas_connu|sp:e2e_code_sync::tests::cas_autre"
 connu tenue "un rouge should_panic listé au ticket ouvert" "sp:e2e_code_sync::tests::cas_connu"
+# 12 et 13. L'union de nouveautes.md au rebase de la garde (20 novembre 2026, c7 : le push de cœur arrêté à 07 h 40, son
+# rebase ne butant que sur docs/nouveautes.md, où master avait ajouté ses lignes de la nuit) : un conflit sur ce seul
+# fichier se résout par union, les deux lignes gardées ; un conflit sur tout autre fichier arrête toujours.
+union_au_rebase() { # union_au_rebase <n> <fichier en conflit : nouveautes|code>
+  local n=$1 quoi=$2
+  (
+    H="$D/homeu$n"; mkdir -p "$H/git_workspaces" "$H/.cache/rag3weaver-build/j"
+    git clone -q --bare "$D" "$D/nuu$n.git" 2>/dev/null; git -C "$D/nuu$n.git" update-ref refs/heads/master "$BASE"
+    git clone -q "$D/nuu$n.git" "$H/git_workspaces/wt" 2>/dev/null
+    cd "$H/git_workspaces/wt" && git config user.email luciedefraiteur@gmail.com && git config user.name t
+    git checkout -q -B pile origin/master; mkdir -p extension/rag3weaver/docs
+    echo 'fn p1() {}' > extension/rag3weaver/src/p1.rs; echo '- p1' >> extension/rag3weaver/docs/nouveautes.md; git add -A; git commit -qm p1; P1=$(git rev-parse HEAD)
+    echo 'fn p2() {}' > extension/rag3weaver/src/p2.rs; echo '- p2' >> extension/rag3weaver/docs/nouveautes.md
+    [ "$quoi" = code ] && echo 'fn commun() { 2 }' > extension/rag3weaver/src/commun.rs
+    git add -A; git commit -qm p2; TESTE=$(git rev-parse --short HEAD)
+    git checkout -q -B atterri origin/master; git cherry-pick "$P1" > /dev/null 2>&1
+    printf -- '- p1\n- coeur\n' > extension/rag3weaver/docs/nouveautes.md
+    [ "$quoi" = code ] && echo 'fn commun() { 1 }' > extension/rag3weaver/src/commun.rs
+    git add -A; git commit -qm coeur; git push -q origin HEAD:master 2>/dev/null; git checkout -q pile
+    printf 'teste %s\nVERT\n' "$TESTE" > "$H/.cache/rag3weaver-build/j/resume.log"
+    echo "rag3db-build-0123456789012345678901234567890123456789-Release" > "$H/.cache/rag3weaver-build/j/lib.log"
+    sortie=$(HOME="$H" PILE_AVANT="$P1" bash "$GARDE" wt j 2>&1); rc=$?
+    { echo "$rc"; git -C "$D/nuu$n.git" log --format=%s master | tr '\n' ' '; echo; git -C "$D/nuu$n.git" show master:extension/rag3weaver/docs/nouveautes.md 2>/dev/null | tr '\n' ' '; echo; echo "$sortie"; } > "$D/resu-$n"
+  )
+}
+union_au_rebase 12 nouveautes; { read -r rc; read -r sujets; read -r nouv; sortie=$(cat); } < "$D/resu-12"
+if [ "$rc" = 0 ] && echo "$sortie" | grep -qx POUSSE && [ "$sujets" = "p2 coeur p1 base" ] && echo "$nouv" | grep -q -- '- coeur' && echo "$nouv" | grep -q -- '- p2'; then
+  echo "vert   rebase de la garde : un conflit sur nouveautes.md seul se résout par union, les deux lignes gardées, poussé"
+else echo "ROUGE  rebase de la garde, conflit sur nouveautes.md seul : rc $rc, master « $sujets », nouveautés « $nouv »"; echo "$sortie" | tail -3; rouge=1; fi
+union_au_rebase 13 code; { read -r rc; read -r sujets; read -r nouv; sortie=$(cat); } < "$D/resu-13"
+if [ "$rc" != 0 ] && echo "$sortie" | grep -q "ARRÊT : le rebase" && [ "$sujets" = "coeur p1 base" ]; then
+  echo "vert   rebase de la garde : un conflit sur un autre fichier arrête toujours, rien de poussé"
+else echo "ROUGE  rebase de la garde, conflit sur du code : rc $rc, master « $sujets »"; echo "$sortie" | tail -3; rouge=1; fi
 exit $rouge

@@ -286,6 +286,10 @@ neuf=$(git rev-parse FETCH_HEAD)
 # commits testés ; le passage suivant s'arrêtait sur « HEAD ne descend pas du commit testé ». La garde remet le
 # worktree où il était avant son rebase, et le dit : le même appel, rejoué, repart du commit testé.
 avant_rebase=$(git rev-parse HEAD)
+# **L'union de nouveautes.md au rebase** (20 novembre 2026, c7 : le push de cœur arrêté à 07 h 40, son rebase ne butant
+# que sur docs/nouveautes.md, où chaque lot ajoute ses lignes en tête) : ce seul fichier se fusionne par union, comme le
+# pousseur le fait à la repose ; tout autre conflit arrête toujours.
+UNION=$(mktemp); printf 'nouveautes.md merge=union\n' > "$UNION"; trap 'rm -f "$UNION"' EXIT
 revenir() { git reset -q --keep "$avant_rebase" 2>/dev/null || git checkout -q --detach "$avant_rebase"; echo "worktree remis sur $(git rev-parse --short "$avant_rebase"), la tête d'avant le rebase : rejouer le même appel"; }
 if [ -n "${PILE_TESTE:-}" ]; then
   echo "mode pile, tête reposée à la main, sans rebase par la garde : tête d'avant $(git rev-parse --short "$PILE_AVANT"), commit testé $teste, HEAD $(git rev-parse --short HEAD)"
@@ -296,7 +300,7 @@ elif [ -n "${PILE_AVANT:-}" ]; then
   # `--onto` (relecture de recherche) : HEAD est encore la branche de pile, avec les commits des lots d'avant sous
   # leurs anciens hashes ; un lot d'avant qui a résolu un conflit en atterrissant a un autre patch, et un rebase
   # simple le rejouerait. Seuls les commits du lot se reposent.
-  git rebase --onto $neuf "$PILE_AVANT" > /dev/null 2>&1
+  git -c core.attributesFile="$UNION" rebase --onto $neuf "$PILE_AVANT" > /dev/null 2>&1
   if [ -d "$gd/rebase-merge" ] || [ -d "$gd/rebase-apply" ] || git status --short | grep -q '^UU'; then
     git rebase --abort; echo "ARRÊT : le rebase sur $neuf bute — reposer le lot à la main sur une branche à part (rebase --onto origin/master $PILE_AVANT), résoudre, puis rejouer la garde depuis elle avec PILE_TESTE=$teste"; exit 1
   fi
@@ -312,7 +316,7 @@ else
   fi
   if [ -n "$apporte" ]; then echo "ARRÊT : master a apporté du code depuis la base testée"; echo "$apporte"; exit 1; fi
   echo "master $(git rev-parse --short $neuf), base testée $(git rev-parse --short $base) : rien de code entre les deux"
-  git rebase $neuf > /dev/null 2>&1
+  git -c core.attributesFile="$UNION" rebase $neuf > /dev/null 2>&1
   if [ -d "$gd/rebase-merge" ] || [ -d "$gd/rebase-apply" ] || git status --short | grep -q '^UU'; then
     git rebase --abort; echo "ARRÊT : le rebase sur $neuf bute"; exit 1
   fi
