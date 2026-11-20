@@ -165,7 +165,7 @@ impl Etanche<'_> {
                 self.host.with_backend(&self.hosted, |b| {
                     let outils = crate::backend_tools::BackendTools { backend: b };
                     let declares = crate::declare::DeclarationTools { backend: b, inner: &outils };
-                    let du_chat = OutilsDuChat::de(b, &declares, true).avec_empreinte(self.empreinte.0.clone(), self.empreinte.1, b.prepared().workspace_root());
+                    let du_chat = OutilsDuChat::de(b, &declares, true).avec_empreinte(self.empreinte.0.clone(), self.empreinte.1, b.prepared().workspace_root()).avec_les_vues(self.host.vues_de(&self.hosted.id));
                     f(&du_chat)
                 })
             },
