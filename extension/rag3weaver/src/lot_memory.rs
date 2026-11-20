@@ -125,7 +125,7 @@ mod tests {
         let (at, why) = cut(&[100, 8192, 100], vec![0..3], BGE, RADV).expect_err("a text of 8 192 tokens asks 4 294 967 296 bytes");
         assert_eq!(at, 1);
         assert!(why.contains("4294967296"), "{why}");
-        let free = Bounds { max_allocation: None, free: Some(1 << 30) };
+        let free = Bounds { max_allocation: None, free: Some(4 << 30) };
         assert!(cut(&[1704; 32], vec![0..32], BGE, free).unwrap().len() > 1, "half the free memory bounds the total too");
         assert_eq!(cut(&[1704; 32], vec![0..32], BGE, Bounds::default()).unwrap(), vec![0..32], "unknown bounds : unchanged");
     }
