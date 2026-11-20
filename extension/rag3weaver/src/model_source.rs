@@ -749,7 +749,8 @@ pub fn local_embedder(model: &str) -> Result<Box<dyn crate::embedder::Embedder>,
         other => return Err(format!("modèle local `{other}` inconnu (granite-278m, granite-107m, bge-m3)")),
     };
     let (weights, tokenizer) = (local_artifact(folder, prefix, "BPK", "model.bpk")?, local_artifact(folder, prefix, "TOKENIZER", "tokenizer.json")?);
-    let device = BurnDevice::for_role(BurnRole::Embedder);
+    let device = BurnDevice::for_role(BurnRole::Embedder)
+        .check_embedder(std::env::var(crate::burn_device::ALLOW_INTEGRATED_GPU_VARIABLE).ok().as_deref())?;
     let built: Box<dyn crate::embedder::Embedder> = match model {
         "bge-m3" => Box::new(crate::burn_bge_m3_embedder::BurnBgeM3Embedder::from_files(&weights, &tokenizer, device).map_err(|e| e.to_string())?),
         "granite-107m" => Box::new(crate::BurnGranite107m::from_files(&weights, &tokenizer, device).map_err(|e| e.to_string())?),

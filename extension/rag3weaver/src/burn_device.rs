@@ -279,8 +279,14 @@ impl BurnDevice {
     /// (`RAG3WEAVER_TESTS_REPLI_PERIPHERIQUE`) loads its models directly and does not
     /// go through here.
     pub fn check_embedder(self, allow: Option<&str>) -> Result<Self, String> {
-        let _ = allow;
-        Ok(self)
+        match self {
+            Self::IntegratedGpu(n) if allow.map(str::trim) != Some("1") => Err(format!(
+                "igpu:{n} refusé pour un embarqueur : sur un GPU intégré, granite calcule des vecteurs faux en lot, \
+                 sans erreur (ticket {INTEGRATED_GPU_TICKET}) ; {ALLOW_INTEGRATED_GPU_VARIABLE}=1 l'accepte quand même, \
+                 pour un essai qui ne regarde pas les valeurs"
+            )),
+            device => Ok(device),
+        }
     }
 }
 

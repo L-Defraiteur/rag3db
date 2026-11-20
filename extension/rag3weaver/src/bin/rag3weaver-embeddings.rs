@@ -89,7 +89,8 @@ fn servir() -> Result<(), Box<dyn std::error::Error>> {
     // le 29 août : carte d'affichage à 100 % et 18,9 Go de VRAM pendant une
     // passe. `RAG3WEAVER_BURN_DEVICE_EMBEDDER=gpu:N` le déplace ; sans elle on
     // reste sur le défaut, comme avant.
-    let carte = BurnDevice::for_role(BurnRole::Embedder);
+    let carte = BurnDevice::for_role(BurnRole::Embedder)
+        .check_embedder(std::env::var(rag3weaver::burn_device::ALLOW_INTEGRATED_GPU_VARIABLE).ok().as_deref())?;
     // The window of a text in tokens (18 November 2026) : bge-m3 only ; granite
     // truncates at its own 512.
     let max_tokens = rag3weaver::daemon::embeddings::max_tokens_from(
