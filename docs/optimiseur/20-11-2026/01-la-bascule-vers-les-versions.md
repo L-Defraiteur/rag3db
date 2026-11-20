@@ -1,8 +1,12 @@
 # La bascule des bases de code vers les versions, 20 novembre 2026
 
-Cette page dit pourquoi la bascule du 20 novembre se fait sur l'hôte **1f22743e17**, qui porte 2.12 (ED) et les règles
-de l'analyse 10. Elle se fait avec la lib 6e2476d41. Elle donne aussi la preuve qui tient le seuil de recherche. Les
-heures de la bascule elle-même suivent, base par base.
+Cette page dit comment la bascule du 20 novembre s'est décidée puis jouée. Elle donne aussi la preuve qui tient le
+seuil de recherche.
+- **Ce qui a été répété** : trois répétitions sur copie.
+- **Le choix de l'hôte** : d'abord 1f22743e17 (2.12), puis baccb2ea6e, après le défaut du plein texte de 2.12.
+- **Le résultat** : code-rag3db-depot basculée et verte ; code-lourd et code-principal remises sur leurs instantanés,
+  avec la cause de leur recul (88 %).
+- **La lib du train C++** : 4ad394f4d2, posée ensuite.
 
 ## Les répétitions
 
@@ -49,8 +53,92 @@ fichiers-conteneurs sortent, des définitions et des pages proches de la questio
 
 Le premier résultat est le même sur les dix requêtes, et aucun usage n'est perdu.
 
-Décision de c7 à 3 h 5x : bascule sur 1f22743e17. Les bases ne repassent qu'une fois pour les deux montées de règles
-(9 de codeparsers, 10 d'ED). package-name-root (règles 11) est tenu hors prise jusqu'après la fenêtre.
+Décision de c7 à 3 h 5x : bascule sur 1f22743e17. **Elle a été revue à 5 h** (section suivante).
+
+## La décision revue : la bascule sur baccb2ea6e
+
+Relue sans rien rejouer, la répétition sur 1f22743e17 montrait un défaut de 2.12. À la réouverture de la copie
+migrée, la garde des comptes a trouvé « plein texte de Scope : 67610 documents pour 75246 lignes » et rebâti l'index
+depuis les lignes, en 22 s. Après le repassage, l'écart demeurait : 94 469 documents pour 103 999 lignes. Chaque
+réouverture des bases de Lucie aurait donc rebâti leur plein texte.
+
+La répétition sur baccb2ea6e, qui porte déjà lucivy 4.3.12 mais pas 2.12, n'avait rien de tout cela. ED a confirmé dans
+le code que la garde comptait toutes les lignes, alors que 2.12 laisse sans document les conteneurs écartés. C'est
+aussi le rouge `e2e_tx_par_paquet_arret::en_fichiers_*` de master. Son correctif, ed-fts-count-guard (82837aec86), a
+atterri à 6 h 14.
+
+**Décision de c7 à 5 h** : la bascule se fait sur baccb2ea6e avec la lib 6e2476d41, le couple répété vert et sans écart.
+Aucun hôte posé ne porte 2.12 avant son correctif.
+
+## La bascule du matin
+
+**L'hôte** : baccb2ea6e, posé à 6 h 42 aux deux postes. La coupure a duré 6 s au portable et 1 s à luciepc.
+
+**code-rag3db-depot (portable) : basculée, critère tenu.**
+- 6 h 43, l'instantané `avant-versions-20261120`, puis le contrôle des deux sens : aucun écart.
+- 1b en 681 s, puis les générations en 3 s. Rouverte à 6 h 55 : 12 min 22 s de coupure.
+- Le repassage, de 6 h 55 à 7 h 11, jusqu'aux vecteurs prêts.
+- Contre la base vivante d'avant : recouvrement **98,8 %**, même premier **10/10**, **0 usage perdu** (Catalog
+  789 → 1 133). Aucun « rebâti depuis les lignes » ni « écart » à la réouverture.
+
+**code-lourd et code-principal (luciepc) : basculées, puis remises sur leurs instantanés.**
+- 1b en 597 s et en 467 s, puis le repassage.
+- Le critère est manqué : recouvrement **88,0 %**, même premier **8/10**, et une quarantaine d'usages « perdus ».
+- Le retour : à 7 h 38, l'hôte de luciepc est arrêté à froid pendant 18 s, et les deux RETOUR.sh sont VERTS.
+- Rouvertes à 7 h 39, les deux bases sont identiques à l'avant (100 %, premier 10/10). Une copie de code-principal
+  migrée et repassée est gardée pour le diagnostic.
+
+### Les usages « perdus » étaient un faux rouge
+
+À luciepc, l'hôte refuse l'argument `format`. L'outil de relevé s'est donc replié sur le markdown, où chaque section de
+`usages` est plafonnée à 200 lignes affichées, le titre portant le total. Pour code-principal :
+- les sections attribuées sont complètes : type 123 → 136, import 21 → 21, other 4 → 4. **Aucun usage attribué d'avant
+  ne manque après** ;
+- la section « non attribués (nom ambigu) » passe de **466 à 739**, mais n'est affichée qu'à 200 des deux côtés
+  (« … 266 de plus », « … 539 de plus »). Les 40 sites « perdus » sont tous dans cette section : ils sont sortis des
+  200 affichés, pas de la base. Le total va de 610 à 896.
+
+**Le juge compte donc par section** : les `(N)` des titres en markdown, la liste entière en JSON (le format JSON ne
+coupe rien). Jamais les lignes rendues.
+
+### La cause du recouvrement à 88 %
+
+Elle a été départagée sur la copie migrée, rouverte par un hôte isolé, contre la base vivante, sur le même arbre et le
+même scope.
+
+- **La ligne** : `experiments/mtga/scripts/build_plant_variant.py:32`, une ligne Python à trois instructions,
+  `index=ROOT/'README.md';s=index.read_text();line=f'…'`. Ses scopes `variable` (index, s, line) existent avant comme
+  après.
+- **Avant**, le morceau du scope `s` est **la ligne entière**. Pour « index du plein texte », il n'est pas dans le
+  top 50.
+- **Après**, il n'est que **`s=index.read_text()`**. Pour « index du plein texte », il est 22ᵉ, avec le signal vectoriel
+  au rang 4 (0,725). Ses quatre jumeaux, dans quatre scripts de `experiments/mtga`, entrent ensemble dans le top 10.
+- **Pourquoi** (codeparsers) : 57bfc142bf, du 14 novembre, borne le contenu d'un scope aux octets de son nœud. Ce lot
+  est voulu, puisqu'il retirait 844 Mo de doublons. Il n'avait pas monté REGLES_DE_L_ANALYSE. La repasse forcée des
+  règles 9 l'a donc appliqué d'un coup à l'arbre de luciepc, du 18 octobre, presque jamais réanalysé depuis. Le dépôt
+  du portable était déjà à jour, d'où 98,8 % d'un côté et 88 % de l'autre avec le même binaire.
+- **Ce qui n'est pas voulu** : qu'un scope `variable` de 18 caractères concoure à la recherche et l'emporte.
+  **Décision de c7** : codeparsers dépose le remède dans la chaîne de package-name-root (règles 12, ED passe en 13).
+  Son penchant : replier le scope variable sur sa ligne entière. La copie migrée et son hôte isolé jugent le remède
+  avant son atterrissage. La re-bascule de code-lourd et code-principal se fera à la fenêtre suivante, sur l'hôte qui
+  porte le remède, avec le même protocole.
+
+## La lib du train C++
+
+- **Le bâti** : la lib 501d7ccc90 a été bâtie à 4 h 38 sur la tête du train de cœur, train-20-11. La garde de cœur a
+  rebasé ce train au push, si bien que le commit moteur de master est **4ad394f4d2**.
+- **La voie transférable** : `git diff 501d7ccc90 4ad394f4d2 -- src test extension/vector tools/rust_api cmake` est
+  vide. La lib 4ad394f4d2 est rebâtie à 7 h 53. Les deux `librag3db.so`, de même taille (26 520 776 octets), ne
+  diffèrent que de 125 octets : les trois chaînes BUILD_ID (3 × 40) et la note `GNU build-id` de l'éditeur de liens
+  (20).
+- **Les empreintes** : librag3db.so de 501d7ccc90, md5 e89cfa9d ; de 4ad394f4d2, md5 c918c6b3.
+- **Le verdict** sous 501d7ccc90, joué sur les sources baccb2ea6e, se transfère donc à 4ad394f4d2 : e2e_code 36/36,
+  e2e_lectures 28/28, e2e_demon_hote 26/26.
+- **La pose**, à 8 h 49 et 8 h 50 :
+  - l'épingle sur 4ad394f4d2 (pin-lib-4ad394f4d) ;
+  - le contrôle des deux sens sous 4ad394f4d2 sur les trois bases : aucun écart ;
+  - l'hôte baccb2ea6e lié à 4ad394f4d2 (md5 aec89843), posé et réveillé aux deux postes ;
+  - `courant` = 4ad394f4d2.
 
 ## Les pièces
 
