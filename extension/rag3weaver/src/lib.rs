@@ -179,6 +179,8 @@ pub mod connection;
 pub mod generations;
 pub mod dialect;
 pub mod embedder;
+/// The memory of a batch, bounded before the call (20 November 2026).
+pub mod lot_memory;
 /// The embedder checks itself at start against a reference (20 November 2026).
 pub mod embedder_check;
 #[cfg(feature = "daemon")]

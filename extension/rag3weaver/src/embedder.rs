@@ -32,6 +32,11 @@ pub enum EmbedError {
 
     #[error("embedding request timed out")]
     Timeout,
+
+    /// **Refused before any computation**, named : a text that does not fit the card
+    /// (20 November 2026). A service answers it with a 503, and keeps serving.
+    #[error("refused: {0}")]
+    Refused(String),
 }
 
 /// Trait for embedding text into vectors.
@@ -46,6 +51,22 @@ pub trait Embedder: Send + Sync {
 
     /// The output dimension of the embedding model.
     fn dim(&self) -> usize;
+
+    /// **What the memory of a batch depends on** (20 November 2026, `crate::lot_memory`) :
+    /// `None`, the batches are not bounded by memory.
+    fn memory_shape(&self) -> Option<crate::lot_memory::Shape> {
+        None
+    }
+
+    /// The tokens of each text as the model counts them, cut at its window.
+    fn token_counts(&self, _texts: &[String]) -> Option<Vec<usize>> {
+        None
+    }
+
+    /// The bounds of the card under the model, read now.
+    fn memory_bounds(&self) -> crate::lot_memory::Bounds {
+        crate::lot_memory::Bounds::default()
+    }
 
     /// **Est-ce un embedder factice ?**
     ///
@@ -212,6 +233,15 @@ impl<T: Embedder + ?Sized> Embedder for std::sync::Arc<T> {
     }
     fn budget_conseille(&self) -> Option<(usize, usize)> {
         (**self).budget_conseille()
+    }
+    fn memory_shape(&self) -> Option<crate::lot_memory::Shape> {
+        (**self).memory_shape()
+    }
+    fn token_counts(&self, texts: &[String]) -> Option<Vec<usize>> {
+        (**self).token_counts(texts)
+    }
+    fn memory_bounds(&self) -> crate::lot_memory::Bounds {
+        (**self).memory_bounds()
     }
     /// Relayé aussi : il ne l'était pas, et un embarqueur derrière un `Arc` —
     /// c'est le cas dans `Catalog` — perdait son compte de troncatures, « la
