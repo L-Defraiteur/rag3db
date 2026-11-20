@@ -8632,6 +8632,39 @@ mod tests {
         assert!(rendu.contains("allongent"), "la recherche sans filtre rend la ligne ouverte de depart : {rendu}");
     }
 
+    /// **A search by meaning without a filter gives no closed version** (c7, 20 November 2026: on a bench copy of
+    /// ED's bases, two searches by meaning put closed versions of scopes first, `_depuis` 0, `_jusqu_a` 1). `depart`
+    /// is written three times in a short body close to the query, each marked « ancienne », under three published
+    /// generations, then once in a long body that differs: the three closed versions are closer to the query than the
+    /// open one. A vector search without a filter, five results, gives no « ancienne ».
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn a_search_by_meaning_without_a_filter_gives_no_closed_version() {
+        let (dir, backend) = base_de_la_vue();
+        let source = backend.file_source.clone().unwrap();
+        let neuf = format!("pub fn depart() {{\n    // {}\n}}\n", "un tout autre propos sur les files et les verrous ".repeat(12));
+        let versions: Vec<(String, String)> = ["un", "deux", "trois"]
+            .iter()
+            .enumerate()
+            .map(|(i, m)| (format!("c{}", i + 1), format!("pub fn depart() {{\n    // zorglub ancienne {m}\n}}\n")))
+            .chain(std::iter::once(("c4".to_string(), neuf.clone())))
+            .collect();
+        for (rang, texte) in versions {
+            let rang = rang.as_str();
+            std::fs::write(dir.path().join("sources/outils.rs"), &texte).unwrap();
+            let mut cat = backend.catalog.lock().unwrap();
+            crate::code_tools::reingest_file(&mut cat, source.as_ref(), "outils.rs", &texte).expect("la réindexation");
+            cat.publier_la_generation(rang, 0).expect("publier");
+        }
+        let fermees = backend.catalog.lock().unwrap().conn().execute("MATCH (s:Scope) WHERE s.name = 'depart' AND s._jusqu_a IS NOT NULL RETURN count(*)").unwrap().rows[0][0].as_i64();
+        assert_eq!(fermees, Some(3), "three closed rows of depart: the witness has something to give wrongly");
+        let r = backend
+            .call("search_code", json!({"query": "zorglub ancienne", "options": {"signals": ["vector"], "limit": 5}}))
+            .expect("search_code");
+        let rendu = r.to_string();
+        assert!(!rendu.contains("ancienne"), "a search by meaning without a filter gives a closed version: {rendu}");
+    }
+
     /// **Ties keep the same order from a rewritten base to a fresh one** (lucivy's ticket of 16 November 2026: strict
     /// ties of `search_code` changed rank between the migrated copy and the fresh index). Six twin scopes, the same
     /// score: in X they are written, published, then rewritten (their rows are reborn, their uuid carries `_depuis`);
