@@ -230,8 +230,76 @@ pub fn write_work_generation(catalog: &mut Catalog, worktree: &Path, layer_id: &
 /// deleted files, pinned on the generation of `master_layer` at the fork commit, written first if it lacks. Its own
 /// branch needs no layer of its own.
 pub fn write_fork_work_generation(catalog: &mut Catalog, worktree: &Path, layer_id: &str, master_layer: &str, master_ref: &str) -> Result<i64, String> {
-    let _ = (catalog, worktree, layer_id, master_layer, master_ref);
-    Err("la couche de travail au point de fourche : pas encore".into()) // RED STUB.
+    use crate::connection::{CypherValue, QueryParam};
+    let texte = |args: &[&str]| -> Result<String, String> { Ok(String::from_utf8_lossy(&git(worktree, args)?).trim().to_string()) };
+    let head = texte(&["rev-parse", "HEAD"])?;
+    let fourche = texte(&["merge-base", "HEAD", master_ref])?;
+    // The generation of master at the fork commit, written first when it lacks.
+    let rang_a = |catalog: &Catalog| -> Result<Option<i64>, String> {
+        let lu = catalog
+            .execute_raw_with_params(
+                &format!("MATCH (g:{}) WHERE g.couche = $couche AND g.commit = $commit RETURN max(g.rang)", crate::generations::TABLE),
+                &[QueryParam::new("couche", CypherValue::String(master_layer.to_string())), QueryParam::new("commit", CypherValue::String(fourche.clone()))],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(lu.rows.first().and_then(|r| r.first()).and_then(|v| v.as_i64()))
+    };
+    let parent_rank = match rang_a(catalog)? {
+        Some(r) => r,
+        None => {
+            let lu = catalog
+                .execute_raw_with_params(
+                    &format!("MATCH (g:{}) WHERE g.couche = $couche RETURN g.parente_couche, g.parente_rang ORDER BY g.rang ASC LIMIT 1", crate::generations::TABLE),
+                    &[QueryParam::new("couche", CypherValue::String(master_layer.to_string()))],
+                )
+                .map_err(|e| e.to_string())?;
+            let Some(ligne) = lu.rows.first() else {
+                return Err(format!(
+                    "couche de travail {layer_id} : la couche {master_layer} n'a aucune génération ; elle se suit d'abord (tracked), et la couche de travail s'écrit au point de fourche {fourche}"
+                ));
+            };
+            let parent = match (ligne.first().and_then(|v| v.as_str()), ligne.get(1).and_then(|v| v.as_i64())) {
+                (Some(c), Some(r)) if !c.is_empty() => Some((c.to_string(), r)),
+                _ => None,
+            };
+            let lw = LayerWrite { layer: master_layer.to_string(), parent };
+            let pointe = generation_commit(catalog, master_layer, None)?;
+            // Behind the layer's tip: a catch-up in the gap (lot 8); ahead of it: a new generation.
+            let en_arriere = pointe.as_deref().is_some_and(|p| git(worktree, &["merge-base", "--is-ancestor", &fourche, p]).is_ok());
+            if en_arriere {
+                write_history_catch_up(catalog, worktree, &lw, &fourche)?;
+            } else {
+                write_history_generation(catalog, worktree, &lw, &fourche)?;
+            }
+            rang_a(catalog)?.ok_or_else(|| format!("couche {master_layer} : la génération du point de fourche {fourche} n'a pas été écrite"))?
+        }
+    };
+    // The whole gap: tracked files that differ from the fork commit (committed or not, deleted included), and the
+    // untracked files the index takes.
+    let mut ecart: std::collections::BTreeSet<String> = paths_z(&git(worktree, &["--no-optional-locks", "diff", "--name-only", "-z", &fourche])?).into_iter().collect();
+    ecart.extend(paths_z(&git(worktree, &["ls-files", "--others", "--exclude-standard", "-z"])?));
+    let before = last_tombstoned_files(catalog, layer_id)?;
+    let source = crate::code_tools::WorkingTree::new(worktree);
+    let mut files = Vec::new();
+    for p in &ecart {
+        files.push((p.clone(), source.read(p)?));
+    }
+    // Back to the fork commit's state: its rows leave the layer, and master's show.
+    for p in before.difference(&ecart) {
+        files.push((p.clone(), None));
+    }
+    let layer = LayerWrite { layer: layer_id.to_string(), parent: Some((master_layer.to_string(), parent_rank)) };
+    let r = catalog
+        .write_in_layer(&layer, |c| {
+            crate::code_sync::reingest_files(c, &source, &files, crate::disponibilite::Disponibilites::TOUT)?;
+            c.set_layer_tombstones(ecart.clone()).map_err(|e| e.to_string())?;
+            c.publier_la_generation(&head, ecart.len()).map_err(|e| e.to_string())
+        })
+        .map_err(|e| e.to_string())??;
+    let marque = crate::catalog::indexed_tree_of(&worktree.to_string_lossy());
+    let cell = catalog.scope().clone();
+    catalog.note_indexed_tree_of_layer(&cell, layer_id, &marque).map_err(|e| e.to_string())?;
+    Ok(r)
 }
 
 /// **The dirty paths of a worktree**: changed, added, deleted, renamed (both names), unmerged and untracked, as
