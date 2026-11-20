@@ -160,7 +160,7 @@ pub fn check(
             return SelfCheck::not_verified(format!(
                 "{REFERENCE_FILE} couvre d'autres poids (sha256 {} ; ces poids : {})",
                 &reference.weights_sha256[..reference.weights_sha256.len().min(12)],
-                &sha[..12]
+                &sha[..sha.len().min(12)]
             ))
         }
         Err(e) => return SelfCheck::not_verified(format!("empreinte des poids : {e}")),
