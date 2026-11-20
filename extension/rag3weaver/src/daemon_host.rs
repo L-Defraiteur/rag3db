@@ -928,6 +928,15 @@ impl DaemonHost {
         r.unwrap_or_else(|e| op_response(Err(e)))
     }
 
+    /// **Open a folder** (Lucie's first step in the IDE, 21 November 2026; recherche makes `/ide/ouvrir`): a folder given
+    /// by its path is attached to the atelier, and appears among the trees of this machine. A folder that does not
+    /// exist, or an empty one, is created and gets `git init` (never a push). Refused, saying why: Lucie's tree, sairen,
+    /// another session's folder, a folder with files that is not a git repository.
+    pub fn ouvrir_un_dossier(&self, session: Option<&str>, chemin: &Path) -> Value {
+        let _ = (session, chemin);
+        json!({ "ok": false, "error": "ouvrir un dossier : pas encore" }) // RED STUB.
+    }
+
     fn espace_et_table(&self) -> (std::path::PathBuf, std::path::PathBuf) {
         if let Some(x) = self.espace.lock().unwrap_or_else(|p| p.into_inner()).clone() {
             return x;
@@ -2476,6 +2485,17 @@ impl DaemonHost {
                 (statut(&reponse), reponse)
             }
             // **The views of a session** (page 02 of 20 November 2026): on the backend of `manifest`.
+            ("POST", "/dossiers/ouvrir") => match corps() {
+                Ok(v) => match v["path"].as_str() {
+                    Some(p) => {
+                        let r = self.ouvrir_un_dossier(session, Path::new(p));
+                        let r = if r["ok"] == json!(true) { json!({ "ok": true, "result": r }) } else { r };
+                        (statut(&r), r)
+                    }
+                    None => (400, json!({ "ok": false, "error": "« path » manque : le dossier à ouvrir" })),
+                },
+                Err(e) => (400, json!({ "ok": false, "error": e })),
+            },
             ("POST", "/views/close") => {
                 let v = match corps().and_then(|v| manifeste(&v).map(|m| (v, m))) {
                     Ok(x) => x,
