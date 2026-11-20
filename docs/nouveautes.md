@@ -11,6 +11,7 @@
   6 s par défaut). Sinon, elle répond tout de suite et dit les deux estimations à part : « index pas prêt : texte
   environ 0 s, vecteurs environ 40 s ». En bm25 seul, elle n'attend que le texte. Sans service d'embarquement, elle
   n'attend pas et dit pourquoi. usages, outline, read_file et grep n'attendent jamais les vecteurs.
+- 20 novembre 2026 — **Le code de premier niveau Python a ses références, et `export * from` se suit.** Ce qu'un fichier Python fait hors de ses fonctions et de ses classes (un appel au chargement, une constante construite, le bloc `__main__`) se relie désormais comme dans les autres langages ; ses liaisons (variables de boucle, déballages, alias, modules importés) n'en sont pas. `export * from './x'` réexporte les définitions de premier niveau de `./x`, et elles seules. Sur le crate rag3weaver entier, 805 liens s'ajoutent, aucun ne se perd ; un premier niveau court (moins de 80 caractères) ne concourt pas à la recherche. Les bases repassent une fois (règles de l'analyse 14).
 
 - 19 novembre 2026 — **Une fenêtre du graphe suit les outils du chat.** Ouverte sur les graphes avec `?fenetre=graphe`, elle montre le graphe de chaque outil que le tour du chat appelle, au moment où il l'appelle, et le flux l'allume nœud par nœud ; elle ne se recharge pas, et la fenêtre du dépôt ne bouge pas pour autant.
 
