@@ -1,5 +1,12 @@
 # Nouveautés
 
+- 20 novembre 2026 — **La décision de rangement de l'archiviste est composée de parts, le stable devant.** Le texte
+  que reçoit le modèle pour ranger une section est fait de parts : ce qui précède (stable pour tout le document),
+  la section, puis les fiches candidates, chacune rendue par un gabarit déclaré (`candidates_template`
+  d'`archive_decide`). La ligne de prose « Réponds par l'identifiant court… » disparaît : les étiquettes et leur sens
+  sont dans l'instruction. Le `format` d'une part peut être un gabarit, et une liste dont chaque rendu tient sur une
+  ligne prend une ligne par élément.
+
 - 19 novembre 2026 — **Une extraction coupée par sa borne le dit, et l'archiviste demande peu de réflexion au
   modèle.** Sur Vertex, la réflexion de Gemini compte dans `max_tokens` ; elle coupait le JSON de 5 extractions sur 19.
   Une réponse coupée sous un schéma est maintenant refusée par « the reply was cut at max_tokens=N (finish: length),
