@@ -1379,8 +1379,12 @@ pub fn purger_les_cibles(depot: Option<&str>) -> Vec<String> {
 /// hors du domaine). Un compilateur enveloppant écrit hors du bac et parle à un démon partagé :
 /// la porte se ferme. Ce que `sandbox.env` déclare passe quand même.
 pub(crate) fn variables_du_poste_hors_du_bac(poste: impl IntoIterator<Item = String>, declare: &[(String, String)]) -> Vec<String> {
-    let _ = (poste.into_iter().count(), declare);
-    Vec::new()
+    const ENVELOPPANTS: [&str; 4] = ["RUSTC_WRAPPER", "RUSTC_WORKSPACE_WRAPPER", "CARGO_BUILD_RUSTC_WRAPPER", "CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER"];
+    poste
+        .into_iter()
+        .filter(|v| ENVELOPPANTS.contains(&v.as_str()) || v.starts_with("SCCACHE_"))
+        .filter(|v| !declare.iter().any(|(k, _)| k == v))
+        .collect()
 }
 
 /// **Lancer par argv, dans son propre groupe de processus, flux lus par deux
