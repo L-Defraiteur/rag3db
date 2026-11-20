@@ -293,7 +293,7 @@ esac
 MEM="${POSTE_MEM_MAX:-40G}"
 SWAP="${POSTE_SWAP_MAX:-4G}"
 usage() {
-  echo "usage: poste mesure|lourd <commande…>   |   poste --qui   |   poste places <N> [jusqu'à HH:MM]   |   poste push <session> [--lourd] -- <commande…>   |   poste push --qui" >&2
+  echo "usage: poste mesure|lourd <commande…>   |   poste --qui   |   poste places <N> [jusqu'à HH:MM | AAAA-MM-JJ HH:MM]   |   poste push <session> [--lourd] -- <commande…>   |   poste push --qui" >&2
   exit 2
 }
 mode="${1:-}"; [ $# -gt 0 ] && shift
@@ -384,24 +384,27 @@ if [ "$mode" = "--qui" ]; then
   [ -s "$PUSH_FICHE" ] && echo "push : tenu — $(cat "$PUSH_FICHE")"
   if [ -s "$V/lourds-max.retour" ]; then
     read -r _avant _quand < "$V/lourds-max.retour"
-    echo "places baissées à $(cat "$V/lourds-max" 2>/dev/null) jusqu'à $(date -d "@$_quand" +%H:%M) (puis $_avant)"
+    echo "places réglées à $(cat "$V/lourds-max" 2>/dev/null) jusqu'au $(date -d "@$_quand" '+%d/%m %H:%M') (puis $_avant)"
   fi
   exit 0
 fi
-# ── poste places <N> [jusqu'à HH:MM] : changer le nombre de places lourdes ──
+# ── poste places <N> [jusqu'à HH:MM | AAAA-MM-JJ HH:MM] : changer le nombre de places lourdes ──
 # Une baisse exige son heure de retour (c7, 20 novembre 2026) ; une hausse, ou un retour à la valeur d'avant, n'en a
 # pas besoin et efface un retour en cours. Une heure déjà passée aujourd'hui est celle de demain.
 if [ "$mode" = places ]; then
   _n=${1:-}; case "$_n" in ''|*[!0-9]*|0) echo "poste places : un nombre de places ≥ 1, puis jusqu'à HH:MM pour une baisse" >&2; exit 2 ;; esac
-  _h=""; [ $# -ge 3 ] && case "$2" in "jusqu'à"|jusqua|until) _h=$3 ;; esac
+  # L'heure de retour : HH:MM, ou une date (« 2026-11-23 08:00 », « monday 08:00 ») ; le reste de la ligne.
+  _h=""; [ $# -ge 3 ] && case "$2" in "jusqu'à"|jusqua|until) shift 2; _h="$*" ;; esac
   _avant=$(places)
   if [ -s "$V/lourds-max.retour" ]; then read -r _avant _ < "$V/lourds-max.retour"; fi
-  if [ "$_n" -lt "$_avant" ]; then
+  # Une baisse dit toujours son heure de retour ; une hausse peut la dire (20 novembre 2026 : la tablette montée à trois
+  # lourds jusqu'au lundi 8 h), sinon elle est permanente.
+  if [ "$_n" -lt "$_avant" ] || [ -n "$_h" ]; then
     [ -n "$_h" ] || { echo "poste places : une baisse ($_avant → $_n) dit son heure de retour : poste places $_n jusqu'à HH:MM" >&2; exit 2; }
-    _quand=$(date -d "$_h" +%s 2>/dev/null) || { echo "poste places : heure illisible « $_h » (HH:MM)" >&2; exit 2; }
+    _quand=$(date -d "$_h" +%s 2>/dev/null) || { echo "poste places : heure illisible « $_h » (HH:MM, ou AAAA-MM-JJ HH:MM)" >&2; exit 2; }
     [ "$_quand" -gt "$(date +%s)" ] || _quand=$((_quand + 86400))
     echo "$_n" > "$V/lourds-max"; echo "$_avant $_quand" > "$V/lourds-max.retour"
-    echo "poste : places baissées à $_n jusqu'à $(date -d "@$_quand" '+%H:%M (%d/%m)'), puis $_avant"
+    echo "poste : places réglées à $_n jusqu'au $(date -d "@$_quand" '+%d/%m %H:%M'), puis $_avant"
   else
     echo "$_n" > "$V/lourds-max"; rm -f "$V/lourds-max.retour"
     echo "poste : $_n places"
