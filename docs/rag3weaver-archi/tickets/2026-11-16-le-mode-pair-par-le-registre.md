@@ -8,6 +8,26 @@
 - **Touche rag3weaver** : oui
 - **Signalé par** : Lucie et c7, le 16 novembre 2026
 
+## Où il en est, le 20 novembre 2026
+
+- **Faits** :
+  - lot 1, l'entrée du registre ;
+  - lot 2, la socket, la réception et la durée de vie ;
+  - lot 3, `send_to_session` ;
+  - lot 4, l'affichage dans l'IDE ;
+  - lot 6, l'essai réel, au oui de Lucie (page `20-11-2026/03-l-essai-reel-du-mode-pair.md`).
+- **Tranché par le lot 6** : le registre de Claude Code lit le nom du fichier `<pid>.json`. Un
+  processus ne porte qu'une entrée et qu'un nom.
+- **Reste ouvert, lot 5** : la forme de l'avis de pause. `peerFeatures` est vide, donc l'émetteur
+  refuse l'abonnement. Il faut la relever en journalisant l'avis qu'une vraie session envoie, avant
+  de déclarer `notify_idle`.
+- **Vient ensuite** (c7, invariant de Lucie) : un relais par pair, un petit processus enfant de
+  l'hôte, qui tient son `<pid>.json` et sa socket, et passe les trames à l'hôte par HTTP sous jeton.
+  Il sert à une session de tty, une fenêtre de l'IDE ou un équipier nommé. Témoins rouges :
+  - deux pairs du même hôte sont visibles sous leurs noms ;
+  - un message à chacun arrive dans la bonne boîte ;
+  - la fermeture ne laisse ni fichier ni socket.
+
 ## Ce qui est su
 
 Relevé d'archi du 16 novembre, sans lire les sessions vivantes : la découverte de ListAgents passe
