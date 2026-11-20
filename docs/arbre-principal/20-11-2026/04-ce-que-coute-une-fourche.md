@@ -46,3 +46,24 @@ Embarqueur de hachage à la dimension de la base (768) : les vecteurs sont faux,
     réindexation ordinaire d'un fichier n'en coûte pas autant.
 - **Rien de ce coût n'exige `tracked`** : la décision de 18 h 47 tient, et `tracked: master` reste une option pour
   qui veut la vue d'historique.
+
+## 4. Où partent les secondes : la mesure propre (20 novembre, 20 h 36)
+
+La mesure, sous `poste mesure` (trois refus 76 attendus, pas forcés), en release, la lib 4ad394f4d2 prouvée par le
+`BUILD_ID` lu par le binaire joué, chaque mode sur un reflink neuf de la même copie. Sonde
+`history_layers::tests::sonde_ecriture_en_couche` (branche `arbre-principal/sonde-ecriture-en-couche`, hors push) :
+les mêmes 384 fichiers (de l'arbre indexé à `origin/master`) écrits en couche (une fourche) ou par la réindexation
+ordinaire, sans couche.
+
+| | durée | par fichier | `entités · dérivations` | analyse (codeparsers) | symboles | plein texte |
+|---|---:|---:|---:|---:|---:|---:|
+| en couche | 385 s | **1,0 s** | 279 s | 3,9 s | 9,6 s | 2,3 s |
+| en ordinaire | 414 s | **1,08 s** | 189 s (et ~140 s hors du fil relevé) | 3,9 s | 16,2 s | — |
+
+- **Le chiffre propre est 1,0 s par fichier**, pas 1,5 : la mesure du § 2 courait à côté d'un bâti.
+- **La couche n'est pas en cause** : la réindexation ordinaire coûte autant sur cette base.
+- **Le temps est dans les dérivations d'entités** (0,5 à 0,7 s par fichier, sur 117 548 `Scope`) ; l'analyse, les
+  symboles et le plein texte pèsent peu. Les vecteurs ne sont pas comptés (embarqueur de hachage).
+- **Relevé à ED**, qui tient l'écrivain : savoir si les dérivations parcourent une table entière par fichier.
+- **Pour `open_view`** : l'écriture en fond (lot `arbre-open-view-en-fond`) rend l'attente invisible à la session ;
+  le coût d'une fourche reste ~1 s par fichier d'écart entre la racine et la fourche, payé une fois.
