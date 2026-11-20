@@ -7579,6 +7579,7 @@ mod tests {
     }
 
     /// [`backend_de_code_avec`], with the scope chunking given (the bound of a chunk for an embedder, a witness).
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
     fn backend_de_code_decoupe(
         dir: &Path,
         prepared: PreparedBackend,
