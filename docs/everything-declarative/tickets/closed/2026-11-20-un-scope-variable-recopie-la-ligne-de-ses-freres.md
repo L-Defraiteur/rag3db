@@ -1,6 +1,6 @@
 # Un scope `variable` recopie la ligne de ses frères
 
-- **État** : ouvert (20 novembre 2026)
+- **État** : fermé le 20 novembre 2026, **faux défaut**. Voir « Fermeture ».
 - **Famille** : produit (l'analyse du code)
 - **Gravité** : un texte embarqué deux fois, et une ligne de bruit qui gagne des recherches par le sens. Après
   l'exclusion des déclarations courtes (lot `variable-not-candidate`, règles 13), c'est la copie longue qui remonte.
@@ -31,3 +31,15 @@ Les relevés sont à luciepc : `banc-parite/sorties/feuille-5d-20261120/trois-pr
 Savoir d'où vient le scope de la ligne entière (une affectation multiple vue comme un seul `variable` ? un repli de
 l'analyseur Python ?), et qu'aucun scope ne porte le texte de ses frères : un témoin rouge sur la ligne
 `index = …; s = index.read_text(); …`, qui ne doit avoir que des scopes à texte propre.
+
+## Fermeture (20 novembre 2026, soir, session everything declarative)
+
+**Faux défaut.** Le banc a corrigé sa lecture : les scopes de la ligne entière (220 et 152 caractères) sont des
+**versions fermées** d'une analyse antérieure au bornage aux octets (`_depuis` 0, `_jusqu_a` 1), et ils n'ont pas été
+rendus. Les résultats en tête étaient des déclarations courantes et courtes (`manifest`, `index`). Codeparsers a joué
+l'analyse courante sur les deux fichiers : aucun scope ne recopie la ligne de ses frères. Les générations 0, 1 et 2 sont
+publiées, et la recherche ne lit pas de version fermée.
+
+La vraie cause est le revers de la décision (A) : ticket
+`2026-11-20-une-declaration-courte-prend-la-tete-par-un-mot.md`, fermé par (A'). La page
+`20-11-2026/04-les-trois-premiers-changes-par-le-sens.md` est corrigée.
