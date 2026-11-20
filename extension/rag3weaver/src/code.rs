@@ -1980,11 +1980,18 @@ pub fn analyze_in_project_avec(
                     let chemin = r.context.as_deref().is_some_and(|ctx| ctx.contains(&format!("{q}::{id}")));
                     if chemin { module_d_un_chemin(q, &rel) } else { None }
                 });
+                // Un paquet du dépôt nommé par son nom (`monlib::X` dans les tests d'un crate, `"monpaquet"`) :
+                // ses fichiers candidats, lus dans les manifestes, au lieu du nom qui n'en désigne aucun.
+                let modules_du_module: Option<Vec<String>> = module.map(|m| {
+                    manifestes.and_then(|ms| modules_d_un_paquet_du_depot(&m, abs, &ms.paquets_du_depot, root)).unwrap_or_else(|| vec![m])
+                });
                 let modules = modules_lus.entry(id.to_string()).or_insert_with(|| Some(Vec::new()));
-                match (modules.as_mut(), module) {
-                    (Some(v), Some(m)) => {
-                        if !v.contains(&m) {
-                            v.push(m);
+                match (modules.as_mut(), modules_du_module) {
+                    (Some(v), Some(ms)) => {
+                        for m in ms {
+                            if !v.contains(&m) {
+                                v.push(m);
+                            }
                         }
                     }
                     _ => *modules = None,
@@ -4874,6 +4881,54 @@ fn tetes_de_type(
         });
     }
     out
+}
+
+/// **Les fichiers candidats d'un module qui nomme un paquet du dépôt** (20 novembre 2026), relatifs à `racine` et
+/// sans extension, ou `None` si le module ne commence pas par un paquet du dépôt de la langue du fichier :
+/// - Rust : `monlib` → la racine du crate (`src/lib`) ; `monlib::a::B` → `src/a/B` et `src/a` (le module, ou
+///   l'item d'un module ; `src/lib` pour un item de la racine) ;
+/// - JavaScript, TypeScript : `monpaquet` → ses points d'entrée (`types`, `module`, `main`, `src/index`,
+///   `index`) ; `monpaquet/x` → `x` et `src/x` sous son dossier.
+fn modules_d_un_paquet_du_depot(
+    module: &str,
+    fichier: &str,
+    paquets: &BTreeMap<String, BTreeMap<String, crate::manifestes::PaquetDuDepot>>,
+    racine: &str,
+) -> Option<Vec<String>> {
+    let rel = |chemin: &str| {
+        let r = relative(racine, chemin);
+        let r = r.trim_start_matches("./").trim_start_matches('/');
+        if r == "." { String::new() } else { r.to_string() }
+    };
+    let sous = |dossier: &str, suite: &str| {
+        let d = rel(dossier);
+        if d.is_empty() { suite.to_string() } else { format!("{d}/{suite}") }
+    };
+    match famille_de_langage(fichier)? {
+        "rust" => {
+            let mut segments = module.split("::");
+            let tete = segments.next()?;
+            let p = paquets.get("rust")?.get(tete)?;
+            let suite: Vec<&str> = segments.filter(|s| !s.is_empty()).collect();
+            Some(match suite.as_slice() {
+                [] => p.entrees.iter().map(|e| rel(e)).collect(),
+                [seul] => vec![sous(&p.dossier, &format!("src/{seul}")), sous(&p.dossier, "src/lib")],
+                [avant @ .., _] => vec![sous(&p.dossier, &format!("src/{}", suite.join("/"))), sous(&p.dossier, &format!("src/{}", avant.join("/")))],
+            })
+        }
+        "js" => {
+            let table = paquets.get("javascript")?;
+            let (nom, p) = table.iter().filter(|(n, _)| module == n.as_str() || module.starts_with(&format!("{n}/"))).max_by_key(|(n, _)| n.len())?;
+            let reste = module[nom.len()..].trim_start_matches('/');
+            Some(if reste.is_empty() {
+                p.entrees.iter().map(|e| rel(e)).collect()
+            } else {
+                let reste = reste.rsplit_once('.').filter(|(_, x)| !x.contains('/')).map(|(a, _)| a).unwrap_or(reste);
+                vec![sous(&p.dossier, reste), sous(&p.dossier, &format!("src/{reste}"))]
+            })
+        }
+        _ => None,
+    }
 }
 
 /// Le module que désigne `source`, écrit dans `module` : `runtime` →

@@ -44,6 +44,19 @@ pub struct Manifestes {
     /// par la synchronisation, ils voyagent avec les manifestes jusqu'à l'analyse.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub renommages: BTreeMap<String, Renommages>,
+    /// **Où est chaque paquet du dépôt, par langue** (20 novembre 2026) : le dossier de son manifeste et ses
+    /// points d'entrée possibles (chemins sans extension, tels que la source liste le manifeste). Un import qui
+    /// nomme le paquet (`use monlib::X` dans les tests d'un crate, `import … from "monpaquet"`) désigne ainsi des
+    /// fichiers du dépôt, comme `crate::` ou un chemin relatif.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub paquets_du_depot: BTreeMap<String, BTreeMap<String, PaquetDuDepot>>,
+}
+
+/// Un paquet du dépôt : le dossier de son manifeste et ses points d'entrée possibles, sans extension.
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct PaquetDuDepot {
+    pub dossier: String,
+    pub entrees: Vec<String>,
 }
 
 /// **Une langue sous `workspace.imports`** : les distributions dont le module importé porte un autre nom
@@ -88,6 +101,43 @@ impl Manifestes {
         for chemin in tries {
             let Some(texte) = lire(chemin) else { continue };
             let nom = chemin.rsplit('/').next().unwrap_or(chemin);
+            let dossier = chemin.rsplit_once('/').map(|(d, _)| d).unwrap_or("").to_string();
+            let joindre = |rel: &str| if dossier.is_empty() { rel.to_string() } else { format!("{dossier}/{rel}") };
+            match nom {
+                // Un crate : sa racine est `src/lib.rs` (le nom s'importe avec `_` pour `-`).
+                "Cargo.toml" => {
+                    for n in noms_de_section(&texte, |s| s == "[package]") {
+                        m.paquets_du_depot.entry("rust".into()).or_default().insert(
+                            n.replace('-', "_"),
+                            PaquetDuDepot { dossier: dossier.clone(), entrees: vec![joindre("src/lib")] },
+                        );
+                    }
+                }
+                // Un paquet npm : `types`, `module`, `main`, puis `src/index` et `index`.
+                "package.json" => {
+                    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&texte) {
+                        if let Some(n) = v.get("name").and_then(|n| n.as_str()) {
+                            let mut entrees: Vec<String> = Vec::new();
+                            for champ in ["types", "typings", "module", "main"] {
+                                if let Some(e) = v.get(champ).and_then(|e| e.as_str()) {
+                                    let e = e.trim_start_matches("./");
+                                    let e = e.rsplit_once('.').filter(|(_, x)| !x.contains('/')).map(|(a, _)| a).unwrap_or(e);
+                                    let e = e.strip_suffix(".d").unwrap_or(e);
+                                    entrees.push(joindre(e));
+                                }
+                            }
+                            entrees.push(joindre("src/index"));
+                            entrees.push(joindre("index"));
+                            entrees.dedup();
+                            m.paquets_du_depot
+                                .entry("javascript".into())
+                                .or_default()
+                                .insert(n.to_string(), PaquetDuDepot { dossier: dossier.clone(), entrees });
+                        }
+                    }
+                }
+                _ => {}
+            }
             // Ce que ce manifeste déclare, rangé ensuite sous sa ou ses langues.
             let mut un = Manifestes::default();
             let langues: &[&str] = match nom {
