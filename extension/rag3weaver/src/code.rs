@@ -277,6 +277,22 @@ pub fn scope_chunking_with_thresholds(container_min_chars: usize, variable_min_c
     }
 }
 
+/// **The scope chunking for the embedders of a base** (ticket of embarquement, 20 November 2026): the container rule,
+/// and the bound of a whole chunk set by the smallest of these embedders — in bytes first, then in tokens counted by
+/// its tokenizer. An embedder none declares leaves `max_size` alone.
+pub fn scope_chunking_for<'a>(
+    container_min_chars: usize,
+    variable_min_chars: usize,
+    embedders: impl IntoIterator<Item = &'a str>,
+) -> ChunkingConfig {
+    let mut c = scope_chunking_with_thresholds(container_min_chars, variable_min_chars);
+    if let Some((octets, borne)) = crate::tokens::bound_for(embedders, crate::tokens::DEFAULT_MARGIN) {
+        c.max_chunk_size = Some(octets);
+        c.token_bound = Some(borne);
+    }
+    c
+}
+
 /// **The lines of pure structure of a container, by language** (c7, 19 November 2026): C and C++, a brace alone,
 /// `namespace x {` folded or not, a forward declaration; Rust, `mod x;`, `pub mod x {`, a brace alone. Python and
 /// JavaScript come when they do.

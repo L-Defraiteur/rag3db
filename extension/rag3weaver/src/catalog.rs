@@ -6848,9 +6848,10 @@ fn read_threads() -> u64 {
 
         // Ensure chunker is cached for this entity's config
         let chunker_key = ChunkerConfig::from(&entity_config.chunking);
-        self.chunker_cache
-            .entry(chunker_key.clone())
-            .or_insert_with(|| Chunker::new(chunker_key));
+        if !self.chunker_cache.contains_key(&chunker_key) {
+            let chunker = Chunker::try_new(chunker_key.clone()).map_err(CatalogError::EmbeddingModelUnavailable)?;
+            self.chunker_cache.insert(chunker_key, chunker);
+        }
 
         // Build entity records with UUIDs and content hashes
         let entity_def = self.config.entities.get(entity_name)
@@ -12028,9 +12029,13 @@ impl Catalog {
     fn warm_chunker_cache(&mut self) {
         for ec in self.entity_configs.values() {
             let key = ChunkerConfig::from(&ec.chunking);
-            self.chunker_cache
-                .entry(key.clone())
-                .or_insert_with(|| Chunker::new(key));
+            // A chunking bounded in tokens without its tokenizer is refused where the schema is registered; here it
+            // is left out of the cache, so nothing is chunked for it (never by the bytes alone).
+            if !self.chunker_cache.contains_key(&key) {
+                if let Ok(chunker) = Chunker::try_new(key.clone()) {
+                    self.chunker_cache.insert(key, chunker);
+                }
+            }
         }
     }
 
