@@ -1,6 +1,6 @@
 # `export * from './x'` n'est pas suivi
 
-- **État** : corrigé (20 novembre 2026) — branche rag3db `codeparsers/python-file-scopes-export-star`, règles de l'analyse 14
+- **État** : corrigé (20 novembre 2026) — branche rag3db `codeparsers/python-file-scopes-export-star-2`, règles de l'analyse 12
 - **Famille** : produit
 - **Gravité** : basse : un nom réexporté par `export * from './x'` se relie par le nom (deviné), pas par l'import
 - **Atteignable en service** : oui, dans un paquet TypeScript dont l'entrée réexporte tout un module
