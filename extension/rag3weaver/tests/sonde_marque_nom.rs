@@ -12,7 +12,7 @@
 
 #![cfg(all(feature = "rag3db-native", feature = "code"))]
 
-use rag3weaver::code::{admission, analyze, default_scope_chunking, register_code_schema};
+use rag3weaver::code::{admission, default_scope_chunking, register_code_schema};
 use rag3weaver::embedder::HashEmbedder;
 use rag3weaver::{Catalog, CatalogConfig, Rag3dbConnection};
 
@@ -46,6 +46,23 @@ fn fichiers(d: &std::path::Path, v: &mut Vec<std::path::PathBuf>) {
     }
 }
 
+/// Les manifestes sous `d`, sans suivre les liens ni entrer dans les dossiers de bâti.
+fn des_manifestes(d: &std::path::Path, v: &mut Vec<String>) {
+    let Ok(lu) = std::fs::read_dir(d) else { return };
+    for e in lu.flatten() {
+        let p = e.path();
+        let nom = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        if nom.starts_with('.') || nom == "target" || nom == "node_modules" || nom == "build" || e.file_type().map(|t| t.is_symlink()).unwrap_or(true) {
+            continue;
+        }
+        if p.is_dir() {
+            des_manifestes(&p, v)
+        } else if rag3weaver::manifestes::est_un_manifeste(&p.to_string_lossy()) {
+            v.push(p.to_string_lossy().to_string())
+        }
+    }
+}
+
 fn texte(v: Option<&rag3weaver::connection::CypherValue>) -> String {
     v.map(|v| v.as_str().map(str::to_string).unwrap_or_else(|| v.as_i64().map(|n| n.to_string()).unwrap_or_default())).unwrap_or_default()
 }
@@ -69,8 +86,14 @@ fn aretes_par_marque_en_tsv() {
             })
             .collect();
         let admis = sources.len();
+        // Les manifestes du corpus, lus comme l'index les lit (`Cargo.toml`, `package.json`, `pyproject.toml`…) :
+        // la provenance des imports et les paquets du dépôt en dépendent (20 novembre 2026).
+        let mut manifestes = Vec::new();
+        des_manifestes(std::path::Path::new(racine), &mut manifestes);
+        manifestes.sort();
+        let m = rag3weaver::manifestes::Manifestes::lire(&manifestes, |c| std::fs::read_to_string(c).ok());
         let mut cat = setup();
-        cat.ingest_code(&analyze(racine, sources)).unwrap();
+        cat.ingest_code(&rag3weaver::code::analyze_in_project_avec(racine, sources, "", None, Some(&m))).unwrap();
         let r = cat.execute_raw("MATCH (:Scope)-[r:CONSUMES]->(:Scope) RETURN r.resolution, count(*)").unwrap();
         let mut marques: Vec<(String, i64)> = r.rows.iter().map(|x| (texte(x.first()), x.get(1).and_then(|v| v.as_i64()).unwrap_or(0))).collect();
         marques.sort();
