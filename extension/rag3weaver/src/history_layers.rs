@@ -855,6 +855,9 @@ mod tests {
         });
         cat.initialize().unwrap();
         crate::code::register_code_schema(&mut cat, crate::code::default_scope_chunking()).unwrap();
+        // The artefact measured: the lib's BUILD_ID, read by the binary played.
+        let build = cat.execute_raw("CALL BUILD_ID() RETURN *").map(|r| format!("{:?}", r.rows)).unwrap_or_else(|e| format!("illisible : {e}"));
+        println!("SONDE_ECRITURE_LIB {build}");
         let cell = cat.scope().clone();
         let court = cat.indexed_tree(&cell).and_then(|v| v.get("commit").and_then(|c| c.as_str()).map(str::to_string)).expect("l'arbre indexé");
         let racine = git(&lot, &["rev-parse", &court]);
