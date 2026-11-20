@@ -400,7 +400,35 @@ pub struct Modeles {
     par_capacite: std::collections::BTreeMap<Capability, ModelSource>,
     /// La liste déclarée de `models.llm`, quand c'en est une ; vide pour l'objet unique.
     langage: Vec<ModelSource>,
+    /// `models.llm` sans `model` : les réglages du modèle par défaut de l'hôte (page
+    /// 19-11-2026/06 de rag3weaver-archi). Jamais une source de modèle : `get(Llm)` reste vide.
+    defaut_de_l_hote: Option<ReglagesDuDefaut>,
 }
+
+/// **Les réglages du modèle par défaut de l'hôte** (c7, mémoire et ED, 19 novembre 2026) : une
+/// entrée de `models.llm` sans `model` règle le modèle que l'hôte choisit lui-même (son nom reste à
+/// l'environnement). Seules les clés de réglage y entrent ; une clé de connexion sans `model` est
+/// une faute, refusée en la nommant.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ReglagesDuDefaut {
+    #[serde(default)]
+    pub reasoning: Option<crate::llm::ReasoningEffort>,
+    #[serde(default)]
+    pub max_output_tokens: Option<usize>,
+    #[serde(default)]
+    pub context_tokens: Option<usize>,
+    #[serde(default)]
+    pub timeout_secs: Option<u64>,
+    #[serde(default)]
+    pub params: std::collections::BTreeMap<String, String>,
+    #[serde(default)]
+    pub name: Option<String>,
+}
+
+/// Les clés qui disent où joindre un modèle : sans `model`, elles iraient ailleurs que là où elles le
+/// disent.
+pub const CLES_DE_CONNEXION: [&str; 6] = ["access", "provider", "protocol", "address", "api_key_env", "activation"];
 
 impl std::ops::Deref for Modeles {
     type Target = std::collections::BTreeMap<Capability, ModelSource>;
@@ -417,11 +445,16 @@ impl std::ops::DerefMut for Modeles {
 
 impl From<std::collections::BTreeMap<Capability, ModelSource>> for Modeles {
     fn from(par_capacite: std::collections::BTreeMap<Capability, ModelSource>) -> Self {
-        Self { par_capacite, langage: Vec::new() }
+        Self { par_capacite, langage: Vec::new(), defaut_de_l_hote: None }
     }
 }
 
 impl Modeles {
+    /// Les réglages du modèle par défaut de l'hôte, s'ils sont déclarés (`models.llm` sans `model`).
+    pub fn defaut_de_l_hote(&self) -> Option<&ReglagesDuDefaut> {
+        self.defaut_de_l_hote.as_ref()
+    }
+
     /// Le nom sous lequel un modèle de langage se déclare et s'affiche.
     pub fn nom(source: &ModelSource) -> &str {
         source.name.as_deref().unwrap_or(&source.model)
@@ -1005,6 +1038,28 @@ pub(crate) fn local_artifact(folder: &str, prefix: &str, suffix: &str, file: &st
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn an_llm_without_model_sets_the_hosts_default_model_and_is_no_source() {
+        let m: Modeles = serde_json::from_value(serde_json::json!({ "llm": { "reasoning": "low", "context_tokens": 200000 } })).unwrap();
+        assert!(m.get(&Capability::Llm).is_none(), "no model source: nothing can take \"\" for a model");
+        let r = m.defaut_de_l_hote().expect("the host default's settings");
+        assert_eq!((r.reasoning, r.context_tokens), (Some(crate::llm::ReasoningEffort::Low), Some(200000)));
+    }
+
+    #[test]
+    fn an_llm_without_model_but_a_connection_key_is_refused_by_name() {
+        for (cle, entree) in [
+            ("access", serde_json::json!({ "access": "service", "address": "http://127.0.0.1:9" })),
+            ("provider", serde_json::json!({ "provider": "service" })),
+            ("api_key_env", serde_json::json!({ "api_key_env": "X", "reasoning": "low" })),
+        ] {
+            let e = serde_json::from_value::<Modeles>(serde_json::json!({ "llm": entree })).unwrap_err().to_string();
+            assert!(e.contains(cle) && e.contains("`model`"), "{cle}: {e}");
+        }
+        let e = serde_json::from_value::<Modeles>(serde_json::json!({ "llm": { "reasoning": "low", "bogus": 1 } })).unwrap_err().to_string();
+        assert!(e.contains("bogus"), "{e}");
+    }
+
 
     /// **`models.llm` en liste** (ticket `2026-11-15-models-llm-devient-une-liste-de-modeles-declares`).
     mod modeles_de_langage {
