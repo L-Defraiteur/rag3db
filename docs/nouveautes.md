@@ -1,5 +1,12 @@
 # Nouveautés
 
+- 20 novembre 2026 — **Un morceau de code tient dans la fenêtre de l'embarqueur.** Sous granite (512 jetons), 72,5 % des
+  morceaux de rag3weaver dépassaient sa fenêtre, et leur fin n'était pas cherchable par le vecteur : le contexte ajouté
+  autour d'un morceau n'était borné que côté par côté. Un morceau est maintenant borné en entier par le plus petit
+  embarqueur de la base, en octets puis en jetons comptés par son propre tokenizer ; sur les en-têtes les plus denses du
+  moteur, aucun morceau ne passe 512. Une base sous bge-m3 seul ne change pas. Le tokenizer est une capacité : s'il
+  manque, la base refuse de s'ouvrir pour l'index en nommant le fichier. Les bases repassent une fois (règles de
+  l'analyse 11).
 - 19 novembre 2026 — **Le chat de l'IDE ne fait plus disparaître un tour.** Une relecture de la conversation
   partie avant un tour et revenue après lui remettait un écran sans ce tour, jusqu'au rechargement suivant. La page
   n'applique plus une relecture dépassée par un tour.
