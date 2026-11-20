@@ -1291,7 +1291,7 @@ fn an_edited_template_reloaded_is_a_new_version() {
     assert_ne!(after["metadata"]["template"]["hash"], json!(h0), "another content, another hash");
 }
 
-/// A copy of the memory template, as a proposal would be written: the whole folder, next to the one in service.
+/// A copy of the templates tree, as a proposal of the memory template would be written, next to the one in service.
 fn copy_of_template(dir: &Path, name: &str) -> std::path::PathBuf {
     fn copier(src: &Path, dst: &Path) {
         std::fs::create_dir_all(dst).unwrap();
@@ -1301,11 +1301,9 @@ fn copy_of_template(dir: &Path, name: &str) -> std::path::PathBuf {
             if e.file_type().unwrap().is_dir() { copier(&e.path(), &cible) } else { std::fs::copy(e.path(), &cible).unwrap(); }
         }
     }
-    let to = dir.join(format!("{name}/backends/memory"));
-    copier(&dir.join("templates/backends/memory"), &to);
-    // The tools shared by the templates (`../../tools/*.mmd`) are next to `backends/`.
-    copier(&dir.join("templates/tools"), &dir.join(format!("{name}/tools")));
-    to.join("backend.json")
+    // The whole templates tree: the memory template cites its neighbours (`../notebook/graphs/…`, `../../tools/…`).
+    copier(&dir.join("templates"), &dir.join(name));
+    dir.join(format!("{name}/backends/memory/backend.json"))
 }
 
 /// **5.2, a proposal checked without touching the version in service** (20 November 2026, the page of the agent that
