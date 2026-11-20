@@ -2,7 +2,7 @@
 
 - **État** : ouvert (20 novembre 2026, écrit par G à la demande de c7)
 - **Pour** : G (optimiseur)
-- **Famille** : outillage (le pousseur et sa garde)
+- **Famille** : produit (l'outillage des passes : le pousseur et sa garde)
 - **Gravité** : moyenne. Une passe Rust perdue (treize minutes le 20 novembre), et le créneau 2 du pousseur jeté avec
   elle.
 - **Atteignable en service** : non, le pousseur seulement
