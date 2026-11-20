@@ -256,3 +256,27 @@ lectures, ou des métadonnées d'un autre segment), il écrit plus que ce qu'il 
 place, ce chemin-là non. À lire avec les remises à vide (`setToInMemory`, qui vide la table mais garde offsets et
 octets ; `resetToEmpty`) et les échanges de morceaux de `Column::checkpointSegment`.
 
+## La lecture du chemin (20 novembre, soir, cœur c++) : une hypothèse, pas encore prouvée
+
+`Column::checkpointSegment` (`column.cpp:402`) crée un morceau neuf, y relit le segment persistant
+(`scanSegment` → `DictionaryColumn::scan`, qui remplit offsets et octets sans bâtir la table de hachage), puis y
+fusionne les écritures par `StringChunkData::write` → `appendString`. Le core montre le dictionnaire juste après
+cette relecture : **8 831 offsets pour 4 991 octets**, ce qui est impossible pour des chaînes « titre N » de sept
+octets au moins, même dédupliquées. Les offsets et les octets relus ne décrivent donc pas la même version du
+dictionnaire : des offsets pointent au-delà des octets, `getString` lit hors du tampon, et `appendString`, qui
+calcule sa place sur cette base fausse, écrit au-delà de la fin du tampon de chaînes, jusque dans le bloc voisin.
+
+**Hypothèse** (non vérifiée dans le code, non reproduite) : les métadonnées de l'enfant OFFSET et celles de l'enfant
+DATA d'un même segment persistant ne décrivent pas la même version, parce qu'un point de reprise précédent réécrit
+les deux enfants séparément (flush de chacun, scission par `shouldSplit`/`split`) et peut publier l'un sans l'autre.
+À tracer d'abord dans `StringChunkData::flush`, `split` et la publication des métadonnées des enfants.
+
+**Le témoin**, en branche, rouge d'abord : une colonne de chaînes ; deux points de reprise de suite, avec des mises à
+jour qui font grandir le dictionnaire jusqu'à le scinder ; puis, pour chaque segment persistant, le contrôle que le
+dernier offset tient dans les octets.
+
+**Le correctif, deux pièces** (c7, 20 novembre) :
+1. la publication des deux enfants d'un segment ensemble : une version par segment, pas par enfant ;
+2. à la relecture (`DictionaryColumn::scan`), une garde qui refuse en le nommant un segment dont le dernier offset
+   dépasse ses octets, au lieu de déborder en silence.
+
