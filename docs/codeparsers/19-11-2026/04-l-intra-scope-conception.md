@@ -214,6 +214,26 @@ Si l'écriture coûte trop, deux replis, dans cet ordre : n'écrire les occurren
 (calcul à la demande, la réécriture réanalyse de toute façon), puis ne garder par défaut que les occurrences des
 symboles exportés.
 
+## Les réponses de Lucie (20 novembre 2026, 17 h 47)
+
+Oui aux trois questions :
+
+1. **Le découpage `Local`, `Occurrence`, `Expression` sélective**, « jusqu'à ce qu'on estime qu'il en manque » : pas
+   d'arbre complet des expressions ; une forme s'ajoute quand un usage la demande.
+2. **Le lot 1 d'abord** : la couverture mesurée, sans changement du graphe.
+3. **La provenance `inféré`** jamais mêlée à l'analyse, et le seuil de précision mesuré sur des cas cachés avant tout
+   branchement du modèle.
+
+**Une précision de forme** : « faut pas que ce soit spécialement cherchable en vecteur, juste des relations et des
+entités simples ». Les trois entités servent au graphe (`usages`, `impact`, la réécriture) : elles ne sont **ni
+candidates au plein texte, ni découpées en morceaux, ni embarquées**. La recherche par le sens continue de passer par
+les scopes.
+
+Cela borne le coût d'index estimé plus haut : seules les **rangées** et les **arêtes** s'ajoutent (de l'ordre de 275 000
+occurrences et 50 000 locales en plus par grand corpus, jusqu'à 210 000 expressions), sans document de plein texte,
+sans morceau et sans vecteur. Le coût à mesurer au lot 2 est donc l'écriture des rangées et des arêtes seule ;
+l'embarquement, qui domine le temps d'un index, n'en reçoit rien.
+
 ## Questions pour Lucie
 
 1. Les trois entités (`Local`, `Occurrence`, `Expression` sélective) : le bon découpage, ou veux-tu l'arbre des
