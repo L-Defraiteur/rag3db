@@ -356,6 +356,8 @@ class Montage(unittest.TestCase):
             def vivants(self):
                 self.appels += 1
                 return [] if self.appels == 1 else [99999999]
+            def finir(self, grace):
+                return self.vivants()
             def arreter(self):
                 return []  # Résidu simulé nettoyé, aucun vrai signal.
         with patch.object(v, 'Descendants', InventaireTardif):
