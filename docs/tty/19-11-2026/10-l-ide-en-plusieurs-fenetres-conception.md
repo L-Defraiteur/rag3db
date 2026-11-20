@@ -164,3 +164,10 @@ Témoin `chat_contextuel::une_fenetre_qui_n_est_pas_le_chat_compte_les_accords_e
 **Second point d'ED, noté et non corrigé ici** : à chaque ouverture d'une fenêtre détachée, un chat long fait une requête par carte d'accord de son histoire. Si l'hôte offre un jour la liste de ses demandes ouvertes, ce sera une seule requête, et c'est elle qui dira aussi ce que l'hôte connaît.
 
 Les cinq tranches de la conception sont faites. Restent hors d'elles : la graine de la vue par run (tranche 4), et la reprise des appels d'outil d'avant l'ouverture d'une fenêtre (tranche 1).
+
+## Le rouge du pousseur sur la tranche 5 (20 novembre, 11 h)
+
+Le témoin de la tranche 2 est tombé dans la passe de la tranche 5 : la vue de `src/long.rs` montrait l'erreur de `src/main.rs`, absent (« no such file … did you mean: main.rs »). La remise à zéro de l'erreur (`file-erreur`) était là ; mais l'effet de lecture de `File.tsx` n'écartait pas une réponse arrivée après que la vue avait changé de fichier. Une erreur, ou les lignes du fichier d'avant, se posaient sur la vue suivante. Sur master, l'erreur d'un fichier absent porte une suggestion (« did you mean »), ce qui la rend plus lente : la course est apparue là.
+
+- **Témoin rendu déterministe** : dans la fenêtre du dépôt, les lectures de `src/main.rs` répondent 1,5 s en retard (le témoin enveloppe `fetch`), et l'alerte se juge une fois cette réponse arrivée. Rouge à luciepc (cc67ffec98), sur l'assertion de `file-erreur`.
+- **Correction** : un garde `vivant` dans l'effet ; une réponse d'un fichier quitté ne pose plus rien. Vert (e675284d6d), avec les tranches 1 à 4, l'IDE au repos et le bundle.
