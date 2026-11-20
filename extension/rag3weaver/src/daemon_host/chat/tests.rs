@@ -2046,6 +2046,9 @@ fn une_relecture_retenue_de_la_seconde_fenetre_n_efface_pas_le_tour_de_la_premie
     // The second window, its reads held from its very first load.
     n.nouvel_onglet();
     n.commande("Page.addScriptToEvaluateOnNewDocument", json!({ "source": "window.__ide = { relectureRetenue: new Promise((r) => { window.__lacherLaRelecture = r; }) };" }));
+    // **The host's state answers late** (the red under load of 20 Nov., train of analysis-fingerprint: `/ide/etat` at
+    // 333 then 395 ms): 2 s here, so that the stream opens long before the chat is mounted and listens.
+    n.commande("Page.addScriptToEvaluateOnNewDocument", json!({ "source": "(() => { const f = window.fetch; window.fetch = (u, o) => String(u).includes('/ide/etat') ? new Promise((ok) => setTimeout(ok, 2000)).then(() => f(u, o)) : f(u, o); })();" }));
     n.aller(&format!("{racine}/ide/code/{id}/chat"), "document.getElementById('lien')?.textContent === 'flux : ouvert'");
     // The first window runs a whole turn.
     n.onglet(0);
