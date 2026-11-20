@@ -659,7 +659,10 @@ fn usage_properties(sites: &[UsageSite]) -> BTreeMap<String, CypherValue> {
 // 11 (20 novembre 2026) : un paquet du dépôt importé par son nom (`use monlib::X` dans les tests d'un crate,
 // `import … from "monpaquet"`) désigne ses fichiers, lus dans les manifestes ; les réexportations de Python
 // (`__init__.py`) et de TypeScript (`export { X } from`) se suivent comme celles de Rust.
-pub const REGLES_DE_L_ANALYSE: u32 = 11;
+// 12 (20 novembre 2026) : un morceau de code tient dans la fenêtre du plus petit embarqueur de la base — borné en
+// entier (cœur et contexte), en octets puis en jetons comptés par son tokenizer (granite : 512 ; ticket
+// d'embarquement, 72,5 % des morceaux la dépassaient).
+pub const REGLES_DE_L_ANALYSE: u32 = 12;
 
 /// **La version de l'analyse** (page 06, § 13) : le commit du parseur lié, [`REGLES_DE_L_ANALYSE`] et le
 /// gabarit du code (le découpage et les champs déclarés de `File` et de `Scope`), hachés.
