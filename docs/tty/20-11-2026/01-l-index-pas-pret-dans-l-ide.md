@@ -40,7 +40,9 @@ Branche `cx-index-pas-pret-2`, posée sur `index-ready-notify` de recherche (2b8
 | `daemon_host::chat::tests::an_index_not_ready_in_the_chat_is_watched_and_said_ready_once` | deux réponses pas prêtes, un seul `IndexReady` | ae3cfd4348 | d89fadb605 |
 | `daemon_host::chat::tests::the_chat_page_says_an_index_not_ready_then_ready_once` (navigateur) | la ligne sous la bulle, puis une seule ligne « prêt » | 5a02c4fb6a | ba3e9e7f37 |
 
-Les rouges et les verts ont été joués sur la première pose (`cx-index-pas-pret-1`, sur 50b892df9e) ; la repose sur la tête de recherche ne change aucun fichier.
+Les rouges ont été joués sur la première pose (`cx-index-pas-pret-1`, sur 50b892df9e), le navigateur à luciepc ; la repose sur la tête de recherche ne change aucun fichier.
+- Au premier vert du témoin navigateur, une seule assertion tombait : « l'outil n'est pas refusé » attendait `data-ok="true"`. Or la bulle relue depuis l'état du chat, à la fin du tour, ne porte pas `ok`. Le témoin juge maintenant un refus à ce qui le dit : `data-ok="false"`, ou « refusé » dans le titre (ae80d805d9).
+- Vert à luciepc sur ae80d805d9 : `daemon_host::chat::tests` (42, navigateur compris), `backend_tools`, `daemon_client::tests`, `ide_par_le_flux` et le contrôle du bundle.
 
 Le banc est le même pour les deux derniers (`BancPasPret`). Ce n'est pas un faux hôte : c'est le vrai chemin, avec un retard noté à la main.
 - Un fichier est noté en retard dans la couche du backend, à un débit observé de 20 s par fichier. `usages` répond donc tout de suite, pas prêt.
