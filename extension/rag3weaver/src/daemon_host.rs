@@ -728,8 +728,33 @@ impl DaemonHost {
             let target = std::env::var_os("HOME")
                 .map(|h| Path::new(&h).join(format!(".cache/rag3weaver-build/target-{dossier}/{date}-{lot}")))
                 .unwrap_or_default();
-            let ouverte = json!({ "name": nom, "path": chemin, "branch": branche, "target": target, "from": base });
+            // O2: its work layer at the fork point with master, then the view active. Without master followed, the
+            // worktree is opened all the same, and the answer says why it has no layer yet.
+            let reel = chemin.canonicalize().unwrap_or_else(|_| chemin.clone());
+            let couche = format!("worktree:{}", reel.display());
+            let ref_master = if base == "origin/master" { "origin/master" } else { "HEAD" };
+            let indexee = self.with_backend(&hosted, |b| -> Result<(), String> {
+                let prepared = b.prepared();
+                let racine = prepared.workspace_root().ok_or("pas de racine de travail")?;
+                let repo = crate::suivies::repo_id(&racine, prepared.manifest.tracked.as_ref())?.ok_or("pas d'id de dépôt")?;
+                let mut cat = b.catalog.lock().map_err(|_| "catalogue empoisonné".to_string())?;
+                let lire = |cle: &str| cat.read_meta_key(cle).map_err(|e| e.to_string());
+                let master = crate::suivies::layer_id_by_name(&lire, &repo, "refs/heads/master")?
+                    .ok_or("la couche refs/heads/master n'est pas suivie (tracked) : la vue s'indexera quand elle le sera")?;
+                let tete = git(&reel, &["rev-parse", "HEAD"])?;
+                let id = crate::suivies::register_layer(&cat, &repo, &couche, &tete)?;
+                crate::history_layers::write_fork_work_generation(&mut cat, &reel, &id, &master, ref_master)?;
+                Ok(())
+            })?;
+            let mut ouverte = json!({ "name": nom, "path": chemin, "branch": branche, "target": target, "from": base });
+            match &indexee {
+                Ok(()) => ouverte["layer"] = json!(couche),
+                Err(e) => ouverte["layer_refused"] = json!(e),
+            }
             self.noter_l_ouverture(&claude, &nom, &ouverte)?;
+            if indexee.is_ok() {
+                self.set_session_view(&s.id, Some(json!({ "layer": couche })))?;
+            }
             let mut r = ouverte;
             r["ok"] = json!(true);
             Ok(r)
