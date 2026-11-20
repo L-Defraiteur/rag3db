@@ -1,5 +1,6 @@
 # Nouveautés
 
+- 20 novembre 2026 — **Le terminal montre les messages entre sessions.** Un message reçu d'une autre session Claude tient sur une ligne, repliée quand il est long, et Ctrl-O l'ouvre en entier, parmi les appels d'outils ; un message envoyé dit à qui il est parti, puis s'il a été remis, mis en file ou refusé.
 - 19 novembre 2026 — **Le chat de l'IDE ne fait plus disparaître un tour.** Une relecture de la conversation
   partie avant un tour et revenue après lui remettait un écran sans ce tour, jusqu'au rechargement suivant. La page
   n'applique plus une relecture dépassée par un tour.
