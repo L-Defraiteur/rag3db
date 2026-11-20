@@ -16,6 +16,13 @@
   maintenant les scopes d'un chemin sans `File` que la source ne retient plus. La cause de ces orphelins reste à
   trouver (ticket).
 - 20 novembre 2026 — **Le chat de l'IDE dit quand l'index n'est pas prêt, puis quand il l'est.** Sous un outil qui a répondu avant que l'index ne rattrape, une ligne dit en clair combien de temps il faut encore pour le texte et pour les vecteurs, ou pourquoi les vecteurs manquent ; l'outil n'est pas refusé. Une fois l'index à jour, une seule ligne le dit dans le chat.
+- 20 novembre 2026 — **Le service d'embarquement vérifie sa carte avant de servir.** Au démarrage, il embarque les
+  textes de la référence de son modèle, seuls puis dans ses vrais lots, et les compare aux vecteurs du modèle
+  d'origine. Une carte qui calcule faux, ou qui ne répond pas en 60 s, est refusée, et la raison est dite. Avant, l'iGPU
+  Intel de luciepc rendait des vecteurs faux en lot sans un mot. Le résultat se lit dans `/sante`, sous `self_check`.
+  La référence se pose à côté des poids (`scripts/install_embedder_reference.py`) ; sans elle, le service dit qu'il
+  n'a pas pu se vérifier. Le délai se règle par `RAG3WEAVER_SELF_CHECK_DEADLINE_S`.
+
 - 19 novembre 2026 — **Une seule notification quand l'index d'une vue est prêt.** Quand une recherche ou une lecture
   a répondu « index pas prêt », le serveur MCP de l'agent surveille cette vue. Quand elle est prête, il envoie une
   seule notification (« l'index de la vue … est prêt : texte et vecteurs ») ; rien à chaque réindexation. La veille

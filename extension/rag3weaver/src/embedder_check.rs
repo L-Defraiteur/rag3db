@@ -14,10 +14,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::embedder::{budget_batches, EmbedError};
 
-/// **How long the check may take** : on card2 it takes 1.4 s for granite-278m. Past
-/// this, the card is refused : the Intel iGPU of luciepc lost its device in the check
-/// (« Parent device is lost ») and the call never came back (20 November 2026).
-pub const DEADLINE: std::time::Duration = std::time::Duration::from_secs(120);
+/// **How long the check may take** : about three times the longest measured, the
+/// autotune cache cold (20 November 2026, granite-278m, chauffe off) : 1.4 s on a
+/// discrete card (warm cache), 2.8 s on an AMD APU (warm), **17.7 s** on the same APU
+/// with an empty cache. Past this, the card is refused : the Intel iGPU of luciepc lost
+/// its device in the check (« Parent device is lost ») and the call never came back.
+pub const DEADLINE: std::time::Duration = std::time::Duration::from_secs(60);
 
 /// **`f` within `deadline`, or `None`** : `f` runs on a thread of its own, left behind
 /// when it does not answer (a lost card does not give its call back).
@@ -310,7 +312,7 @@ mod tests {
         let none = within(std::time::Duration::from_millis(50), || std::thread::sleep(std::time::Duration::from_secs(2)));
         assert!(none.is_none() && start.elapsed() < std::time::Duration::from_secs(1), "cut at the deadline, not waited for : {:?}", start.elapsed());
         assert_eq!(within(std::time::Duration::from_secs(5), || 7), Some(7));
-        assert!(no_answer("granite-278m", DEADLINE).contains("pas de réponse en 120 s"));
+        assert!(no_answer("granite-278m", DEADLINE).contains("pas de réponse en 60 s"));
     }
 
     /// The service's batches : by length, under the byte budget, the order kept.
