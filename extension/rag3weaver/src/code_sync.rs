@@ -1789,6 +1789,11 @@ fn synchroniser_par_generations(
         }
     }
     partis.extend(ecartes);
+    // **The paths that have visible scopes and no `File`** (G and codeparsers, 20 November 2026: `app.js` on the
+    // repository's base, 160 scopes since rank 0, no `File` under any version). The indexed files are read from
+    // the `File` rows, so such a path is neither set aside nor gone, and nothing would ever retire its scopes.
+    // When the source no longer retains it, it leaves with them; when it does, its next writing gives it a `File`.
+    partis.extend(chemins_orphelins(catalog, &report.source, &empreintes, &presents)?);
     partis.sort();
     partis.dedup();
     // **What leaves, said like a snapshot sync** : the visible `File` and `Scope` rows of the files that leave,
@@ -1806,6 +1811,26 @@ fn synchroniser_par_generations(
         progress(avancement);
     }
     Ok((report, avancement))
+}
+
+/// **The paths of the source that have visible scopes but no visible `File`**, and that the source no longer
+/// retains (absent, or set aside by the admission): what a sync reading the indexed files from the `File` rows alone
+/// never sees.
+fn chemins_orphelins(
+    catalog: &Catalog,
+    source_id: &str,
+    empreintes: &BTreeMap<String, (String, String)>,
+    presents: &BTreeSet<String>,
+) -> Result<Vec<String>, String> {
+    let rank = catalog.generations.as_ref().map(|v| v.rang);
+    let lu = catalog
+        .execute_raw_with_params(
+            &visible_read(catalog, crate::code::SCOPE, rank, vec![equals("source", "src")], &["file_path"], None)?,
+            &[crate::connection::QueryParam::new("src", CypherValue::String(source_id.to_string()))],
+        )
+        .map_err(|e| e.to_string())?;
+    let chemins: BTreeSet<String> = lu.rows.iter().filter_map(|l| l.first().and_then(|v| v.as_str()).map(str::to_string)).collect();
+    Ok(chemins.into_iter().filter(|c| !c.is_empty() && !empreintes.contains_key(c) && !presents.contains(c)).collect())
 }
 
 /// The `_uuid` of the visible `File` and `Scope` rows of these indexed paths, at the pending rank.

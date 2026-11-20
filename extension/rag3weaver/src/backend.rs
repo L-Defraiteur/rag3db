@@ -8290,6 +8290,41 @@ mod tests {
     /// versions of a base written before the rule keep their render, and the writer would never rewrite them. The
     /// gesture at the start of a sync takes them out of the full text and their chunks, counts them, and a second
     /// sync removes nothing. A gesture with another threshold than the base's is refused, naming both.
+    /// **Scopes left without their `File` are retired by the next full sync** (G and codeparsers, 20 November 2026:
+    /// on the repository's live base, `templates/ide/app/app.js` had 160 visible scopes since rank 0, no `File` under any
+    /// version and no `DEFINED_IN`, while the minified rule set it aside; the sync read the indexed files from the
+    /// `File` rows only, so that path was neither set aside nor gone for it, forever). Two files indexed; the `File` of
+    /// one removed by hand, as the base was left; that file then leaves the disk; a full sync retires its scopes.
+    #[cfg(all(feature = "code", feature = "rag3db-native"))]
+    #[test]
+    fn scopes_left_without_their_file_are_retired_by_the_next_sync() {
+        let (dir, p) = fixture_code_avec("working_tree", false, json!({}), &|_| {});
+        drop(p);
+        std::fs::write(dir.path().join("sources/garde.rs"), "pub fn garde() -> u32 {\n    1\n}\n").unwrap();
+        std::fs::write(dir.path().join("sources/orphelin.rs"), "pub fn orpheline_un() -> u32 {\n    1\n}\npub fn orpheline_deux() -> u32 {\n    2\n}\n").unwrap();
+        let prepared = PreparedBackend::load(&dir.path().join("backend.json")).expect("le manifeste se charge");
+        let backend = backend_de_code(dir.path(), prepared);
+        let source = backend.file_source.clone().unwrap();
+        let mut cat = backend.catalog.lock().unwrap();
+        crate::code_sync::sync_source(&mut cat, source.as_ref(), &Default::default(), &mut |_| {}).expect("le premier index");
+        let scopes_visibles = |cat: &Catalog| -> i64 {
+            cat.execute_raw(&format!(
+                "MATCH (s:{}) WHERE s.file_path ENDS WITH 'orphelin.rs' AND s._jusqu_a IS NULL RETURN count(s)",
+                crate::code::SCOPE
+            ))
+            .unwrap()
+            .rows[0][0]
+            .as_i64()
+            .unwrap_or(-1)
+        };
+        assert!(scopes_visibles(&cat) >= 2, "the file's scopes are indexed");
+        // The base as it was left: the scopes, and no `File` for their path under any version.
+        cat.execute_raw(&format!("MATCH (f:{}) WHERE f.path ENDS WITH 'orphelin.rs' DETACH DELETE f", crate::code::FILE)).unwrap();
+        std::fs::remove_file(dir.path().join("sources/orphelin.rs")).unwrap();
+        crate::code_sync::sync_source(&mut cat, source.as_ref(), &Default::default(), &mut |_| {}).expect("the next full sync");
+        assert_eq!(scopes_visibles(&cat), 0, "the scopes left without their file are retired");
+    }
+
     #[cfg(all(feature = "code", feature = "rag3db-native"))]
     #[test]
     fn a_base_indexed_before_the_rule_loses_its_folded_containers() {
