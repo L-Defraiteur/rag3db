@@ -84,5 +84,16 @@ with tempfile.TemporaryDirectory() as d:
     rc, j, _ = run(t, {"Lucivy_Scope": [row("content", 0)]}, bases=[])
     case("aucune base : INCOMPLET", rc == 1 and "INCOMPLET sonde" in j, j)
 
+with tempfile.TemporaryDirectory() as d:
+    t = pathlib.Path(d)
+    (t / "vide.rag3db.fts").mkdir()
+    rc, j, _ = run(t, {}, bases=[str(t / "vide.rag3db.fts")])
+    case("une base sans index Lucivy_* : INCOMPLET, jamais vert", rc == 1 and "aucun index Lucivy_* vu" in j and "INCOMPLET sonde" in j, j)
+
+with tempfile.TemporaryDirectory() as d:
+    t = pathlib.Path(d)
+    rc, j, _ = run(t, {"Lucivy_Scope": [row("content", 0, referenced=40), row("name", 0, referenced=2)]})
+    case("chaque index vu se dit, avec ses comptes", rc == 0 and "vu code-x Lucivy_Scope : 2 champs, 42 ids cités, 0 perdus, 0 en sursis" in j and "1 index vus" in j, j)
+
 print(f"{count - len(failures)}/{count}")
 sys.exit(1 if failures else 0)
