@@ -59,6 +59,10 @@ function LiveDag({ id, genre, name, state }: { id: string; genre: string; name: 
   runRef.current = run;
   const target = JSON.stringify({ [genre]: name });
   useEffect(() => {
+    // A window that follows the tools (the IDE in several windows, slice 4) changes `name` without remounting: the
+    // graph and the error of the tool before go with it.
+    setG(null);
+    setError(null);
     fetch(`/ide/graphe?${new URLSearchParams({ backend: id, [genre]: name })}`)
       .then((r) => r.json())
       .then((r) => (r.ok ? setG(r.result) : setError(r.error)))
@@ -104,7 +108,15 @@ function LiveDag({ id, genre, name, state }: { id: string; genre: string; name: 
     <>
       <p id="fil" className="text-xs text-muted-foreground mb-3"><a href="/ide/" className="hover:underline">backends</a> · <a href={`/ide/code/${id}/dag/`} className="hover:underline">{shortName(backend.manifest)}</a> · {genre} {name}</p>
       <h1 className="text-xl font-semibold mb-1">{name}</h1>
-      {error ? <p className="text-destructive" role="alert">{error}</p> : null}
+      {/* A tool the host serves itself (propose, report…) has no declared graph: said so, not a host error (ED's
+          review of slice 4: a detached window follows every tool of the turn). */}
+      {error && genre === "tool" && error.startsWith("graph : pas d'outil") ? (
+        <p id="sans-graphe" className="text-sm text-muted-foreground" role="status">
+          « {name} » : outil sans graphe — l'hôte le sert lui-même, il n'a pas de graphe déclaré à montrer.
+        </p>
+      ) : error ? (
+        <p className="text-destructive" role="alert">{error}</p>
+      ) : null}
       {g ? (
         <>
           <p className="note text-sm text-muted-foreground">{kind}, {g.nodes.length} nœud(s), {g.edges.length} arête(s){g.source ? " — " + g.source : ""}.</p>
