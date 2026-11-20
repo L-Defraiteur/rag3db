@@ -85,6 +85,27 @@ class Lanceur(unittest.TestCase):
         block, report = lanceur.read_case(self.case("> f rend 1."))
         self.assertEqual(lanceur.refusals(block, report, self.repo, "cas.md"), [])
 
+    def test_a_case_with_paths_keeps_the_gitignore_files_that_cover_them(self):
+        """The night of 21 Nov 2026: a case with `paths` lost the root .gitignore, and the .pyc
+        its Python witness left came into the diff."""
+        ident = ["-c", "user.name=T", "-c", "user.email=t@example.org"]
+        ecrire(os.path.join(self.repo, ".gitignore"), "__pycache__/\n")
+        ecrire(os.path.join(self.repo, "crate/.gitignore"), "*.tmp\n")
+        git(self.repo, "add", "-A")
+        git(self.repo, *ident, "commit", "-qm", "ignores")
+        parent = git(self.repo, "rev-parse", "HEAD")
+        block, _ = lanceur.read_case(self.case("> f rend 1.", parent=parent, paths=["crate/src"]))
+        dest = os.path.join(self.tmp.name, "arbre")
+        lanceur.build_tree(block, self.repo, os.path.join(self.tmp.name, "depots"), dest)
+        base = git(dest, "rev-parse", "HEAD")
+        ecrire(os.path.join(dest, "crate/src/__pycache__/x.cpython-314.pyc"), "binaire")
+        ecrire(os.path.join(dest, "crate/src/brouillon.tmp"), "brouillon")
+        ecrire(os.path.join(dest, "crate/src/lib.rs"), "pub fn f() -> u8 { 2 }\n")
+        diff, stat = lanceur.collect_diff(dest, base)
+        self.assertIn("crate/src/lib.rs", stat)
+        self.assertNotIn("__pycache__", stat, "what the repository ignores is not in the diff")
+        self.assertNotIn("brouillon.tmp", stat, "an ignore file of an ancestor folder counts too")
+
     def test_the_tree_has_no_history_no_docs_and_its_submodule(self):
         block, _ = lanceur.read_case(self.case("> f rend 1.", witness_files_from={"commit": self.ours, "paths": ["crate/tests/born.rs"]}))
         dest = os.path.join(self.tmp.name, "arbre")
