@@ -2753,3 +2753,50 @@ fn a_step_whose_reply_is_cut_goes_on_instead_of_ending() {
     assert_eq!(o.steps.len(), 1, "the cut reply was relaunched within the step: {o:?} — {boite:#?}");
     assert!(!boite.iter().any(|l| l["text"].as_str().is_some_and(|t| t.contains("without step_done"))), "{boite:#?}");
 }
+
+/// **The gate of a child's views**: outside the set, refused by name; without a view, the active one;
+/// a tool that reads no view is left as it is.
+#[test]
+fn a_call_outside_a_childs_views_is_refused_and_one_without_takes_the_active() {
+    let vues = vec!["backend".to_string(), "refs/heads/master".to_string()];
+    let e = super::chat::juger_la_vue(&json!({ "query": "x", "view": "worktree:/autre" }), &vues, "backend", true).unwrap_err();
+    assert!(e.contains("worktree:/autre") && e.contains("backend") && e.contains("refs/heads/master"), "{e}");
+    let a = super::chat::juger_la_vue(&json!({ "query": "x" }), &vues, "refs/heads/master", true).unwrap();
+    assert_eq!(a["view"], "refs/heads/master", "without a view, the active one");
+    let a = super::chat::juger_la_vue(&json!({ "query": "x", "view": "backend" }), &vues, "refs/heads/master", true).unwrap();
+    assert_eq!(a["view"], "backend", "within the set, as asked");
+    let a = super::chat::juger_la_vue(&json!({ "text": "x" }), &vues, "backend", false).unwrap();
+    assert_eq!(a, json!({ "text": "x" }), "a tool without view is left as it is");
+}
+
+/// **A child is named after its session, gets its views from the parent, and only the parent changes
+/// them** (page 20-11-2026/01 of rag3weaver-archi).
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn a_child_gets_its_views_from_the_parent_who_alone_changes_them() {
+    assert_eq!(super::taches::nom_d_enfant("archi", "fouille"), "archi-fouille");
+    assert_eq!(super::taches::nom_d_enfant("archi", "archi-fouille"), "archi-fouille", "already named");
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let model: ChatModel = Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> { Err("no model here".into()) });
+    let host = hote(d.path(), model).with_runs_root(d.path().join("runs"));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    let t = host.ouvrir_une_tache(&h.id, "archi-fouille").expect("la tâche s'ouvre");
+    let vues = vec!["backend".to_string(), "refs/heads/master".to_string()];
+    assert!(host.donner_les_vues(&h.id, "archi-fouille", "archi", vues.clone(), Some("ailleurs".into())).is_err(), "an active view outside the set is refused");
+    host.donner_les_vues(&h.id, "archi-fouille", "archi", vues.clone(), Some("backend".into())).unwrap();
+    assert_eq!(host.vues_de(&t.id), Some((vues.clone(), "backend".to_string())));
+    // The parent adds, switches; an unknown active is refused.
+    host.changer_les_vues(&h.id, "archi-fouille", &["worktree:/x".to_string()], &[], Some("worktree:/x")).unwrap();
+    assert_eq!(host.vues_de(&t.id).unwrap().1, "worktree:/x");
+    assert_eq!(host.vues_de(&t.id).unwrap().0.len(), 3);
+    assert!(host.changer_les_vues(&h.id, "archi-fouille", &[], &[], Some("inconnue")).is_err());
+    // Removing the active one falls back on the first that remains, and the child reads it.
+    host.changer_les_vues(&h.id, "archi-fouille", &[], &["worktree:/x".to_string()], None).unwrap();
+    assert_eq!(host.vues_de(&t.id), Some((vues.clone(), "backend".to_string())));
+    let files = host.teammate_files(&h.id, "archi-fouille").unwrap();
+    assert!(files.mailbox().iter().any(|l| l["from"] == "host" && l["text"].as_str().is_some_and(|t| t.contains("worktree:/x") && t.contains("backend"))), "{:#?}", files.mailbox());
+    // The set is never emptied.
+    assert!(host.changer_les_vues(&h.id, "archi-fouille", &[], &vues, None).is_err());
+}
