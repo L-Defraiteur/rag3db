@@ -712,7 +712,9 @@ fn usage_properties(sites: &[UsageSite]) -> BTreeMap<String, CypherValue> {
 // 14 (20 novembre 2026) : un morceau de code tient dans la fenêtre du plus petit embarqueur de la base — borné en
 // entier (cœur et contexte), en octets puis en jetons comptés par son tokenizer (granite : 512 ; ticket
 // d'embarquement, 72,5 % des morceaux la dépassaient).
-pub const REGLES_DE_L_ANALYSE: u32 = 14;
+// 15 (20 novembre 2026) : un nom intégré du langage (`print`, `len`, `console`, `JSON`) n'est pas une référence du
+// code de premier niveau relevé par le texte, et le suivi des imports ne le remet pas (codeparsers).
+pub const REGLES_DE_L_ANALYSE: u32 = 15;
 
 /// **La version de l'analyse** (page 06, § 13) : le commit du parseur lié, [`REGLES_DE_L_ANALYSE`] et le
 /// gabarit du code (le découpage et les champs déclarés de `File` et de `Scope`), hachés.
