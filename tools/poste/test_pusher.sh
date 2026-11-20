@@ -712,4 +712,13 @@ on_master ge-b && [ "$out" = a1,b1 ] && ok "un fichier généré en conflit est 
 P enqueue ge-x ge-x "$hx" docs - - - - author-a > /dev/null
 P step > /dev/null 2>&1
 ! on_master ge-x && grep -q "^rouge	ge-x	conflit	" "$D/pusher/inbox/author-a.txt" && ok "un conflit qui tient aussi une source est rendu à l'auteur" || ko "conflit d'une source : pas rendu"
+# 46. A lot declares its view at the deposit, VUE=<poste>:<name>, and landed.tsv carries it (20 Nov., c7 and the tree:
+# each host reads its poste's landings and closes its views; the view is named, never found by its branch).
+h=$(lot vu-a docs/vu-a.md '# vu a'); VUE=lucie-tablette:G/20-11-2026-vu-a P enqueue vu-a vu-a "$h" docs - - - - author-a > /dev/null
+h=$(lot vu-b docs/vu-b.md '# vu b'); P enqueue vu-b vu-b "$h" docs - - - - author-a > /dev/null
+h=$(lot vu-x docs/vu-x.md '# vu x'); out=$(VUE=sans-poste P enqueue vu-x vu-x "$h" docs - - - - author-a 2>&1)
+P step > /dev/null 2>&1
+va=$(awk -F'\t' '$1 == "vu-a" {print $6}' "$D/pusher/landed.tsv" | tail -1); vb=$(awk -F'\t' '$1 == "vu-b" {print $6}' "$D/pusher/landed.tsv" | tail -1)
+[ "$va" = lucie-tablette:G/20-11-2026-vu-a ] && [ "$vb" = - ] && ok "la vue déclarée au dépôt est dans landed.tsv ; sans vue, « - »" || ko "vue dans landed.tsv : vu-a « $va », vu-b « $vb »"
+! grep -q '^vu-x	' "$D/pusher/queue.tsv" && echo "$out" | grep -q 'VUE' && ok "une vue sans poste est refusée au dépôt" || ko "vue mal formée acceptée : $out"
 exit $red
