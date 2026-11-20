@@ -341,9 +341,9 @@ fn mesurer(e: &dyn Embedder, scopes: &[Scope]) -> Mesure {
 fn modeles() -> Vec<(&'static str, std::sync::Arc<dyn Embedder>)> {
     let voulus = std::env::var("RAG3WEAVER_BANC_MODELES").ok();
     let tous: Vec<(&str, fn() -> std::sync::Arc<dyn Embedder>)> = vec![
-        ("granite-107m", || common::burn::GRANITE_107M.clone()),
-        ("granite-278m", || common::burn::GRANITE_278M.clone()),
-        ("bge-m3", || common::burn::BGE_M3.clone()),
+        ("granite-107m", || { crate::common::burn::compares_values("granite-107m"); common::burn::GRANITE_107M.clone() }),
+        ("granite-278m", || { crate::common::burn::compares_values("granite-278m"); common::burn::GRANITE_278M.clone() }),
+        ("bge-m3", || { crate::common::burn::compares_values("bge-m3"); common::burn::BGE_M3.clone() }),
         ("minilm", || common::burn::MINILM.clone()),
         ("multilingual-minilm", || common::burn::MULTILINGUAL_MINILM.clone()),
     ];

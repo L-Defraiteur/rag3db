@@ -1161,6 +1161,7 @@ fn phase2_vector_multilingual_ml() {
 #[test]
 #[ignore]
 fn phase2_vector_bgem3_programming() {
+    crate::common::burn::compares_values("bge-m3");
     let embedder: Arc<dyn Embedder> = BGE_M3.clone();
     let catalog = Arc::new(Mutex::new(setup_vector_catalog(embedder)));
     assert_vector_top_result(
@@ -1175,6 +1176,7 @@ fn phase2_vector_bgem3_programming() {
 #[test]
 #[ignore]
 fn phase2_vector_bgem3_french() {
+    crate::common::burn::compares_values("bge-m3");
     let embedder: Arc<dyn Embedder> = BGE_M3.clone();
     let catalog = Arc::new(Mutex::new(setup_vector_catalog(embedder)));
     assert_vector_top_result(
@@ -1189,6 +1191,7 @@ fn phase2_vector_bgem3_french() {
 #[test]
 #[ignore]
 fn phase2_vector_bgem3_ml() {
+    crate::common::burn::compares_values("bge-m3");
     let embedder: Arc<dyn Embedder> = BGE_M3.clone();
     let catalog = Arc::new(Mutex::new(setup_vector_catalog(embedder)));
     assert_vector_top_result(
@@ -1358,6 +1361,7 @@ fn phase3_hybrid_3way() {
 #[test]
 #[ignore]
 fn phase3_sparse_top_result_programming() {
+    crate::common::burn::compares_values("bge-m3");
     let catalog = Arc::new(Mutex::new(setup_sparse_catalog()));
     let response = Catalog::rechercher(
         &catalog,
@@ -1701,6 +1705,7 @@ fn phase4_vector_sparse() {
 #[test]
 #[ignore]
 fn phase4_all_three() {
+    crate::common::burn::compares_values("bge-m3");
     let signals = SearchSignals::BM25 | SearchSignals::VECTOR | SearchSignals::SPARSE;
     let (catalog, _drain_ms) = setup_phase4_catalog(signals);
     let catalog = Arc::new(Mutex::new(catalog));
@@ -1830,6 +1835,7 @@ fn phase5_dual_sparse_search() {
 #[test]
 #[ignore]
 fn phase5_dual_top_result() {
+    crate::common::burn::compares_values("bge-m3");
     let catalog = Arc::new(Mutex::new(setup_dual_catalog()));
     let response = Catalog::rechercher(
         &catalog,

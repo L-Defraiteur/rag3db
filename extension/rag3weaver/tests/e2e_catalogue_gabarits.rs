@@ -71,6 +71,7 @@ fn setup() -> Catalog {
 #[test]
 #[ignore]
 fn brique_1_le_cosinus_nu_dit_il_la_verite() {
+    crate::common::burn::compares_values("bge-m3");
     use rag3weaver::embedder::Embedder;
     let emb: Arc<dyn Embedder> = common::burn::BGE_M3.clone();
 
@@ -229,6 +230,7 @@ fn brique_2_quel_signal_ment() {
 #[test]
 #[ignore]
 fn un_agent_trouve_ses_gabarits_comme_il_trouve_un_document() {
+    crate::common::burn::compares_values("bge-m3");
     let mut catalog = setup();
 
     // ── 1. Le catalogue s'indexe ────────────────────────────────────────
@@ -750,6 +752,7 @@ fn la_synchronisation_alimente_la_couche_du_projet() {
 #[test]
 #[ignore]
 fn un_agent_monte_comme_en_production_trouve_pose_et_adopte() {
+    crate::common::burn::compares_values("bge-m3");
     use rag3weaver::agent::mount_agent_services_on;
     use rag3weaver::code_tools::{FileSource, WorkingTree};
     use rag3weaver::dataflow::graph_tool::builtin_graph_tools;
