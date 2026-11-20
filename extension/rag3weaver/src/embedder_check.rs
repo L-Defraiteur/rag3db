@@ -315,6 +315,29 @@ mod tests {
         assert!(no_answer("granite-278m", DEADLINE).contains("pas de réponse en 60 s"));
     }
 
+    /// **The references the services check themselves against hold together** (20
+    /// November 2026) : texts and vectors paired, unit vectors of the model's dimension,
+    /// and for bge-m3 every text under the 7879's window (4 096 tokens), so that the check
+    /// never sends what the service would cut.
+    #[test]
+    fn the_shipped_references_hold_together() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+        for (file, dim, window) in [("granite/reference-278m.json", 768, 512), ("granite/reference-107m.json", 384, 512), ("bge-m3/reference.json", 1024, 4096)] {
+            let text = std::fs::read_to_string(root.join(file)).unwrap_or_else(|e| panic!("{file} : {e}"));
+            let r: serde_json::Value = serde_json::from_str(&text).unwrap();
+            let texts = r["phrases"].as_array().expect("phrases");
+            let vectors = r["vecteurs"].as_array().expect("vecteurs");
+            let tokens = r["jetons"].as_array().expect("jetons");
+            assert!(texts.len() >= 20 && texts.len() == vectors.len() && texts.len() == tokens.len(), "{file}");
+            for v in vectors {
+                let v: Vec<f64> = v.as_array().unwrap().iter().map(|x| x.as_f64().unwrap()).collect();
+                let norm = v.iter().map(|x| x * x).sum::<f64>().sqrt();
+                assert!(v.len() == dim && (norm - 1.0).abs() < 1e-3, "{file} : dim {} norm {norm}", v.len());
+            }
+            assert!(tokens.iter().all(|t| t.as_u64().unwrap() <= window), "{file} : a text over {window} tokens");
+        }
+    }
+
     /// The service's batches : by length, under the byte budget, the order kept.
     #[test]
     fn texts_are_embedded_in_the_service_batches_and_come_back_in_order() {
