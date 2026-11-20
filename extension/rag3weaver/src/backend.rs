@@ -4857,7 +4857,9 @@ impl Backend {
         let mut response = self.call_tool_on(prepared, name, args)?;
         harness_presentation(&mut response);
         // **The version of the template the call ran on** (20 November 2026): its content hash and its reload number.
-        if let Some(o) = response.as_object_mut() {
+        // Only on the envelope of a call ({result, metadata…}): a tool that serves a bare object (a graph as JSON)
+        // keeps it as it is.
+        if let Some(o) = response.as_object_mut().filter(|o| o.contains_key("result")) {
             let version = self.version.load(std::sync::atomic::Ordering::SeqCst);
             let meta = o.entry("metadata").or_insert_with(|| json!({}));
             if let Some(m) = meta.as_object_mut() {
