@@ -4,6 +4,9 @@
 # dans un dépôt jetable, chaque cas ajoute un fichier et dit s'il oblige à rejouer la passe.
 # Usage : bash tools/poste/test_push_garde.sh [chemin de push_garde.sh] — sortie 0 si tout est vert.
 set -u
+# Ce que la garde lit de son appelant ne vient jamais d'ici : le pousseur l'exporte pour sa propre garde (20 novembre 2026,
+# la recopie depuis le créneau 2 héritait de PILE_AVANT, et chaque cas se jugeait en mode pile sur un commit étranger).
+unset PILE_AVANT PILE_TESTE PRE_PUSH
 GARDE=$(realpath "${1:-$(dirname "$0")/push_garde.sh}")
 ICI_TEMOIN=$(dirname "$(realpath "$0")")
 D=$(mktemp -d); trap 'rm -rf "$D"' EXIT

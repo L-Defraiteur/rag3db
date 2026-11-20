@@ -675,11 +675,14 @@ recopy() { # <label>
     # A witness runs by its kind: .py by python3, the rest by bash (19 Nov.: test_menage.py by bash ran ImageMagick's
     # import, which waited for a screen, and the queue stood still 40 minutes).
     case "$witness" in *.py) run=(python3 -I) ;; *) run=(bash) ;; esac
-    if (cd "$WT" && timeout 600 "${run[@]}" "$witness" "$CACHE_DIR/$name") > "$SD/last-recopy.log" 2>&1; then
+    # The witness runs in a clean environment (20 Nov., garde-repousse-docs landed through slot 2: spec_settle exports
+    # PILE_AVANT for the train's guard, and test_push_garde.sh, inheriting it, judged every case in pile mode on a foreign
+    # commit; the pusher paused at 23:15).
+    if (cd "$WT" && env -u PILE_AVANT -u PILE_TESTE -u PRE_PUSH timeout 600 "${run[@]}" "$witness" "$CACHE_DIR/$name") > "$SD/last-recopy.log" 2>&1; then
       log "$label" recopié "$name $sum, témoin vert"
     else
       [ -f "$CACHE_DIR/$name.avant-$label" ] && mv "$CACHE_DIR/$name.avant-$label" "$CACHE_DIR/$name"
-      log "$label" "recopie refusée" "$name : témoin rouge contre la copie ($D/last-recopy.log), ancienne copie remise"
+      log "$label" "recopie refusée" "$name : témoin rouge contre la copie ($SD/last-recopy.log), ancienne copie remise"
       echo "recopie de $name refusée : témoin rouge contre la copie (lot $label) ; appeler c7" > "$D/paused"
       return 1
     fi
