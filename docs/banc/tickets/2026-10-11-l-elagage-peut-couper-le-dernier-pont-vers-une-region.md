@@ -1,11 +1,35 @@
 # L'élagage de l'index vectoriel peut couper le dernier pont vers une région
 
-- **État** : ouvert
-- **Gravité** : réponse fausse (des lignes que la recherche exhaustive ne trouve plus)
-- **Atteignable en service** : en principe oui, après des mises à jour ou des insertions massives. Vu seulement sur une variante d'essai ; jamais sur master, en 13 essais de `TenThousandRowsInBatchesOf512`.
+- **État** : ouvert ; correctif du bâti prêt (hotfixs, 20 novembre 2026, branche `hnsw-lower-graph-bridge`), en
+  attente de son train C++. Atteint sur les vrais vecteurs **dès le CREATE** ; la part des suppressions a son ticket,
+  `docs/coeur-cpp-hotfixs-tickets/tickets/2026-11-20-une-suppression-sous-un-index-vectoriel-peut-couper-des-voisins-du-graphe.md`.
+  Mesures : `docs/coeur-cpp-hotfixs-tickets/20-11-2026/04-le-graphe-hnsw-parcouru-sur-des-vecteurs-reels.md`.
+- **Gravité** : réponse fausse (des lignes qu'aucune recherche ne rend, pas même celle de leur propre vecteur)
+- **Atteignable en service** : oui. Sur les 127 198 vecteurs de `Scope_Chunk` de code-lourd, de 0 à 6 lignes
+  injoignables par bâti, 8 tours sur 10 (20 novembre). Toujours vert sur master en 100 tours de
+  `TenThousandRowsInBatchesOf512` (dimension 4), où le parcours de la couche basse ne trouve rien.
 - **Touche rag3weaver** : non vu
 - **Ouvert le** : 11 octobre 2026, session du banc (page 04 du banc, §10.1)
 - **Famille** : moteur
+
+## Le témoin sur vrais vecteurs (20 novembre 2026, hotfixs)
+
+Une mesure sous `poste lourd`, pas une suite : 8 minutes par tour, et 900 Mo de vecteurs hors du dépôt.
+
+1. **Les vecteurs** : une copie par reflink d'un instantané d'une base de code (base fermée), ouverte en lecture
+   seule, puis `COPY (MATCH (n:Scope_Chunk) RETURN n.embedding__granite_278m AS vec) TO '<dossier>/vec.csv'
+   (header=false);` par le shell (`rag3db -r`). Une ligne « [x,…] » par vecteur.
+2. **Le lancement**, dans un arbre bâti en Release avec l'extension vector :
+   `CONCURRENCE_MEASURE=1 CONCURRENCE_VECTOR_RUNS=10 BANC_VECTORS_CSV=<dossier>/vec.csv POSTE_MEM_MAX=32G
+   poste lourd timeout 150m test/transaction/concurrence/concurrence_test
+   --gtest_filter='VectorIndexBridgeMeasure.*'`.
+   Chaque tour : COPY, CREATE en cosinus, 20 000 vecteurs renversés par lots de 512, une suppression sur sept parmi
+   20 000 lignes ; la couche basse est parcourue en largeur depuis toutes ses entrées après chaque étape, et chaque
+   ligne injoignable est cherchée par son propre vecteur à efs 10000. Vert : 0 injoignable à chaque tour.
+3. **La suite entière** : `CONCURRENCE_LOWER_GRAPH=1` ajoute le parcours au contrôle de tous les tests de
+   `VectorIndexUpdate`, en quelques minutes.
+
+Tout lot qui touche l'élagage, le bâti ou les suppressions de l'index vectoriel rejoue les deux.
 
 ## Ce que c'est
 
