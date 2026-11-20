@@ -2312,6 +2312,32 @@ fn un_symbole_cite_par_le_modele_mene_a_sa_definition() {
     fil.join().unwrap();
 }
 
+/// **An empty welcome says how to open a project** (scenario 2 of the night of 20 November 2026, ticket
+/// `docs/recherche/tickets/2026-11-21-l-ide-n-ouvre-ni-ne-cree-de-projet.md`). A host that serves no repository: the
+/// welcome said « un dépôt paraît ici quand un agent ou l'atelier l'ouvre », with neither a link nor a command, and a
+/// newcomer who reads only the IDE stopped there. It gives the command, from the project's folder, and what follows.
+#[test]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+fn an_empty_welcome_says_how_to_open_a_project() {
+    use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+    let Some(binaire) = navigateur_ou_saut("an_empty_welcome_says_how_to_open_a_project") else {
+        return;
+    };
+    let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", |h| h);
+    let racine = format!("http://{adresse}");
+    let mut n = Navigateur::lancer(&binaire);
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+    n.aller(&format!("{racine}/ide/"), "(document.querySelector('#vue')?.innerText ?? '').length > 0");
+    let texte = n.evaluer("document.querySelector('#vue').innerText");
+    let texte = texte.as_str().unwrap_or_default();
+    assert!(texte.contains("rag3weaver-backend atelier"), "the empty welcome gives the command: {texte}");
+    assert!(texte.contains("dossier"), "and says where to run it, the project's folder: {texte}");
+    drop(n);
+    let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+    assert_eq!(statut, 200);
+    fil.join().unwrap();
+}
+
 /// **L'accueil parle en dépôts** (Lucie, 8 novembre 2026, sur le portable posé : l'accueil disait
 /// encore « Backends », « backends/code », le chemin du manifeste sous chaque nom). Le titre est
 /// « Dépôts » ; chaque carte est nommée par son dépôt et sa branche, comme la barre du chat ; le
