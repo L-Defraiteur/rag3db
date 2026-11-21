@@ -7490,7 +7490,7 @@ fn read_threads() -> u64 {
             .cloned()
             .collect();
         eprintln!(
-            "[rag3weaver] plein texte : une génération promise n'a pas été tenue (arrêt entre les lignes et le plein texte) — {} entités à rebâtir",
+            "[rag3weaver] plein texte : une génération promise n'a pas été tenue (arrêt entre les lignes et le plein texte ; promesse « {promesse} ») — {} entités à rebâtir",
             entites.len()
         );
         let refs: Vec<&str> = entites.iter().map(String::as_str).collect();
@@ -9231,6 +9231,14 @@ fn read_threads() -> u64 {
     /// Une synchronisation par paquet en transaction commence ou finit (voir `sync_par_paquet`).
     pub fn set_sync_par_paquet(&mut self, actif: bool) {
         self.sync_par_paquet = actif;
+        // Une promesse déjà posée (par l'ouverture, le schéma, les métas d'avant la synchronisation : rien qui ait un
+        // plein texte) prend le mode qui commence ; à la fin, elle redevient une promesse ordinaire.
+        if self.fts_promise.load(std::sync::atomic::Ordering::SeqCst) && !self.lecture_seule {
+            let promesse = if actif { format!("{}{PROMESSE_EN_TRANSACTION}", self.fts_promise_token) } else { self.fts_promise_token.clone() };
+            if let Err(e) = self.persist_meta_key(FTS_PROMISE, &promesse) {
+                eprintln!("[rag3weaver] plein texte : la promesse ne se réécrit pas ({e}) ; une reprise la croira hors transaction");
+            }
+        }
     }
 
     pub fn set_in_transaction(&mut self, open: bool) {
