@@ -26,17 +26,23 @@ fn a_background_command_that_ends_is_told_at_the_next_step() {
         assert!(std::process::Command::new("git").args(args).current_dir(&depot).status().unwrap().success(), "git {args:?}");
     }
     let told = Arc::new(Mutex::new(None::<String>));
+    let launched = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let model: ChatModel = {
-        let told = told.clone();
+        let (told, launched) = (told.clone(), launched.clone());
         Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
-            let told = told.clone();
+            let (told, launched) = (told.clone(), launched.clone());
             Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
                 let user = boundary(turns);
                 if user.contains("fini-de-fond") {
                     *told.lock().unwrap() = Some(user);
                     return super::answer(turns, opts, sink, "", super::calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "fin lue", "remaining": "" }))]));
                 }
-                if super::tool_results(turns).is_empty() && !user.contains("commande accordée") && !user.contains("en fond") {
+                // The command is asked for until it has run once (the gate may ask the supervisor first).
+                let ran = super::tool_results(turns).iter().any(|r| r.contains("fond.sh") && !r.contains(crate::dataflow::run_nodes::EN_ATTENTE));
+                if ran {
+                    launched.store(true, std::sync::atomic::Ordering::SeqCst);
+                }
+                if !launched.load(std::sync::atomic::Ordering::SeqCst) && super::tool_results(turns).is_empty() {
                     return super::answer(turns, opts, sink, "", super::calls(&[("run_command", json!({ "command": "sh fond.sh", "background": true }))]));
                 }
                 // Launched: the step ends; nothing asks after the command.
@@ -58,9 +64,10 @@ fn a_background_command_that_ends_is_told_at_the_next_step() {
                 host.post_to_teammate(&h.id, "doc", "c7", "answer", None, "oui", &json!({ "reply_to": l["id"], "approved": true })).expect("le oui");
             }
         }
-        assert!(Instant::now() < end, "in 90 s, no step was told the end of the background command:\n{:#?}", files.mailbox());
+        assert!(Instant::now() < end, "in 90 s, no step was told the end of the background command (launched: {}):\n{:#?}", launched.load(std::sync::atomic::Ordering::SeqCst), files.mailbox());
         std::thread::sleep(Duration::from_millis(100));
     }
+    assert!(launched.load(std::sync::atomic::Ordering::SeqCst), "the command ran");
     let said = told.lock().unwrap().clone().unwrap_or_default();
     assert!(said.contains("a fini") && said.contains("code 0"), "the end is said with its code: {said}");
 }
