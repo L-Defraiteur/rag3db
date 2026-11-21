@@ -72,6 +72,27 @@ pub fn migrate_to_shared_text(
     entries: &[EmbeddingModelEntry],
     create_index: &dyn Fn(&str, &str, &str) -> Result<(), String>,
 ) -> Result<TableReport, String> {
-    let _ = (conn, dialect, entries, create_index, execute as fn(&dyn DbConnection, &str) -> Result<crate::connection::QueryResult, String>, absorbing as fn(&dyn DbConnection, &str) -> Result<(), String>, count as fn(&dyn DbConnection, &str) -> usize);
-    Ok(TableReport { chunk_table: chunk_table.to_string(), ..Default::default() })
+    use crate::dialect::{ColumnDef, ColumnType};
+    let start = std::time::Instant::now();
+    let (text, rel) = (text_table_of(chunk_table), has_text_rel_of(chunk_table));
+    absorbing(conn, &dialect.create_text_table(&text))?;
+    if let Some(q) = dialect.create_has_text_rel(&rel, chunk_table, &text) {
+        absorbing(conn, &q)?;
+    }
+    execute(conn, &dialect.fill_texts(chunk_table, &text))?;
+    if let Some(q) = dialect.link_chunks_to_texts(&rel, chunk_table, &text) {
+        execute(conn, &q)?;
+    }
+    let mut vectors = Vec::new();
+    for entry in entries {
+        let chunk = VectorStorage::resolve(chunk_table, entry);
+        let shared = text_storage(chunk_table, entry);
+        let column = ColumnDef { name: shared.column.clone(), col_type: ColumnType::Vector(shared.dim) };
+        absorbing(conn, &dialect.alter_add_column_default(&text, &column, "NULL"))?;
+        execute(conn, &dialect.fill_text_vectors(chunk_table, &chunk.column, &chunk.marker, &text, &shared.column))?;
+        create_index(&text, &shared.column, &shared.index)?;
+        vectors.push((entry.slug(), count(conn, &dialect.count_non_null(&text, &shared.column))));
+    }
+    let edges = dialect.count_has_text_edges(&rel).map(|q| count(conn, &q));
+    Ok(TableReport { chunk_table: chunk_table.to_string(), texts: count(conn, &dialect.count_rows(&text)), edges, vectors, ms: start.elapsed().as_millis() })
 }
