@@ -727,6 +727,18 @@ pub fn servir(host: &Arc<DaemonHost>, mut request: tiny_http::Request, attendu: 
         // l'ouvrir, la fusionner, la rejeter. La page est une personne.
         // **The agents of the machine, as a tree** (21 Nov 2026): roots (Claude Code sessions by
         // name), their open tasks, and the tasks without a parent session.
+        // **A run as a tree, read-only** (21 Nov 2026): the IDE's agent page, and a reviewer or a
+        // judge that checks what a run really did.
+        ("GET", "/ide/run") => {
+            let (statut, v) = match (param("backend"), param("run")) {
+                (Some(b), Some(r)) => match host.run_tree(&b, &r) {
+                    Ok(t) => (200, json!({ "ok": true, "result": t })),
+                    Err(e) => (404, json!({ "ok": false, "error": e })),
+                },
+                _ => (400, json!({ "ok": false, "error": "run: backend=<id> and run=<id> are required" })),
+            };
+            let _ = request.respond(json_(statut, &v));
+        }
         ("GET", "/ide/agents") => {
             let _ = request.respond(json_(200, &json!({ "ok": true, "result": host.agents() })));
         }
