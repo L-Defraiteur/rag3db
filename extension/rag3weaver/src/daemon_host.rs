@@ -636,6 +636,24 @@ impl DaemonHost {
         self
     }
 
+    /// **The host's one listening bridge**, opened once, at its first call; a failure is kept and said, not retried.
+    pub(crate) fn browser_listening(&self) -> Result<Arc<crate::pont_navigateur::ecoute::Ecoute>, String> {
+        self.browser_listen
+            .get_or_init(|| {
+                let socket = match &self.browser_socket {
+                    Some(s) => s.clone(),
+                    None => crate::pont_navigateur::relai::chemin_du_socket()?,
+                };
+                let r = crate::pont_navigateur::ecoute::Ecoute::ouvrir(&socket, &crate::daemon_lifecycle::build_id(), Default::default()).map(Arc::new);
+                match &r {
+                    Ok(_) => eprintln!("[navigateur] l'hôte écoute l'extension sur {}", socket.display()),
+                    Err(e) => eprintln!("[navigateur] l'écoute ne s'ouvre pas : {e}"),
+                }
+                r
+            })
+            .clone()
+    }
+
     pub fn with_runs_root(mut self, racine: PathBuf) -> Self {
         self.journal = journal_des_runs::JournalDesRuns::new(racine);
         self
@@ -1677,6 +1695,11 @@ impl DaemonHost {
                 }
                 None => PreparedBackend::load(&hosted.manifest)?,
             };
+            // **The browser bridge listens from the first manifest that declares `teammate.browser`** (tty, 21 November
+            // 2026): the extension links to the host before a teammate reads.
+            if prepared.manifest.teammate.as_ref().is_some_and(|t| t.browser.is_some()) {
+                let _ = self.browser_listening();
+            }
             // **Une copie locale qui diffère du livré se dit au journal à l'ouverture** : elle est servie à la place
             // du gabarit du binaire, et ne suit plus ses bâtis (le banc, 20 novembre 2026).
             if !prepared.template_drift().is_empty() {
@@ -3044,7 +3067,10 @@ impl DaemonHost {
                     "build": crate::daemon_lifecycle::build_id(),
                     "fils_du_moteur": fils_du_moteur(),
                     "gabarits": self.templates_health(),
-                    "browser": self.browser_listen.get().map(|_| Value::Null),
+                    "browser": self.browser_listen.get().map(|r| match r {
+                        Ok(e) => json!({ "socket": e.chemin().display().to_string(), "browsers": e.navigateurs() }),
+                        Err(e) => json!({ "error": e }),
+                    }),
                 }),
             ),
             // **What a view has not pushed yet** (Lucie, 21 November 2026, 8 h 2x): read only, for the IDE and every agent.

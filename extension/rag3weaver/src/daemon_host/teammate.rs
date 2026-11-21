@@ -516,6 +516,8 @@ pub struct Step {
     done: Mutex<Option<Value>>,
     /// The pair entry of the task, and its key (mode pair, lot 3).
     pair: Option<(Arc<super::pair::Pair>, String)>,
+    /// The browser family (`teammate.browser`): its policy, and its tools or why the host does not listen.
+    browser: Option<(crate::backend::BrowserPolicy, Result<super::browser_tools::BrowserTools, String>)>,
     /// The relaunch of a cut reply: its text and bound (`teammate.cut_relaunch_*`).
     cut_relaunch: (String, usize),
     /// What the teammate may read on the web (`teammate.fetch`).
@@ -685,6 +687,7 @@ impl Step {
             work: Mutex::new(StepWork::default()),
             turn_run: Mutex::new(None),
             pair: None,
+            browser: None,
             cut_relaunch: (crate::backend::TeammatePolicy::default().cut_relaunch_text, crate::backend::TeammatePolicy::default().cut_relaunches_per_step),
             fetch: crate::backend::FetchPolicy::default(),
             web_search: crate::backend::WebSearchPolicy::default(),
@@ -702,6 +705,12 @@ impl Step {
     }
 
     /// The pair entry this step's task holds (mode pair): it gets send_to_session.
+    /// The browser family of the step (`teammate.browser`).
+    pub fn with_browser(mut self, browser: Option<(crate::backend::BrowserPolicy, Result<super::browser_tools::BrowserTools, String>)>) -> Self {
+        self.browser = browser;
+        self
+    }
+
     pub fn with_pair(mut self, pair: Option<(Arc<super::pair::Pair>, String)>) -> Self {
         self.pair = pair;
         self
@@ -1014,6 +1023,13 @@ impl Step {
                 }))
             }
             FETCH => reply(super::web_fetch::fetch(&self.fetch, &args)),
+            name @ (super::browser_tools::BROWSER_TABS | super::browser_tools::BROWSER_READ | super::browser_tools::BROWSER_CONSOLE) if self.browser.is_some() => {
+                reply(match self.browser.as_ref().map(|(_, t)| t) {
+                    Some(Ok(t)) => t.call(name, &args).unwrap_or_else(|| Err(format!("{name} : pas de la famille du navigateur"))),
+                    Some(Err(e)) => Err(format!("l'hôte n'écoute pas le navigateur : {e}")),
+                    None => Err("teammate.browser n'est pas déclaré".into()),
+                })
+            }
             WEB_SEARCH => reply(super::web_search::web_search(&self.web_search, &args)),
             SUGGEST => {
                 let text = args["text"].as_str().unwrap_or_default();
@@ -1223,6 +1239,7 @@ impl crate::agent::ToolBox for StepTools<'_> {
         let mut ours = Step::tool_defs();
         ours.push(Step::fetch_def());
         ours.push(Step::web_search_def());
+        ours.extend(super::browser_tools::family(self.step.browser.as_ref().map(|(p, _)| p)));
         if self.step.pair.is_some() {
             ours.push(Step::send_to_session_def());
         }
@@ -1945,7 +1962,10 @@ impl DaemonHost {
             self.pair_statut(&format!("{parent}/{task}"), true);
             let cle = format!("{parent}/{task}");
             let tenue = self.pair.get().cloned().flatten().filter(|p| p.tient(&cle)).map(|p| (p, cle));
-            let mut step = Step::new(files.clone(), task, &request, bus.clone(), number).with_policy(&policy).with_pair(tenue);
+            let mut step = Step::new(files.clone(), task, &request, bus.clone(), number).with_policy(&policy).with_pair(tenue).with_browser(policy.browser.clone().map(|p| {
+                let tools = self.browser_listening().map(|ecoute| super::browser_tools::BrowserTools { policy: p.clone(), ecoute, session: format!("teammate:{parent}/{task}") });
+                (p, tools)
+            }));
             step.woke_by = woke_by.take();
             // **Un pas qui n'aboutit pas ne termine pas l'équipier** : l'échec va
             // dans la boîte et le pas suivant repart de la frontière ; seuls
