@@ -27,6 +27,10 @@ use rag3weaver::Rag3dbConnection;
 
 use crate::common::fake_sse::{FakeServer, Reply};
 
+/// No secret enters the memory (lot 5 of the auto mode): the witnesses of the lot, in a file of their own.
+#[path = "e2e_archiviste/secrets.rs"]
+mod secrets;
+
 /// The author is set by the host (writes.author, M7) : les témoins du lot, dans un fichier à lui (règle de c7, 21 nov. 2026).
 #[path = "e2e_archiviste/author.rs"]
 mod author;
