@@ -1,6 +1,10 @@
 # Nouveautés
 
 - 21 novembre 2026 — **Au terminal, un message tapé pendant qu'un accord attend reste un message.** Seuls `o` et `n` minuscules, seuls, répondent tout de suite à une demande d'accord. Une phrase qui commence par une majuscule (« Ne commite pas… ») part à l'équipier comme un message, et la demande d'accord reste affichée, au lieu d'être refusée par la première lettre.
+- 21 novembre 2026 — **cargo marche dans le chat de l'atelier.** Le bac à sable des commandes de l'atelier n'ouvrait
+  que son dossier : `cargo init`, `cargo build` ou `cargo test`, accordés, échouaient sur la configuration de rustup.
+  L'atelier livré lit maintenant la chaîne Rust (rustup, les binaires, le registre et la configuration de cargo),
+  comme le backend de code. Un atelier déjà posé se repose (`rag3weaver-backend atelier`) pour en profiter.
 - 20 novembre 2026 — **Les gabarits installés suivent le binaire.** Une base posée par `code-tree add` désigne
   désormais le gabarit livré par le binaire (`builtin:`) pour chaque outil qu'il livre, même quand la base de départ en
   tenait une copie différente : une copie périmée ne se propage plus d'une base à l'autre (neuf gabarits sur quatorze
