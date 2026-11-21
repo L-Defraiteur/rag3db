@@ -3164,14 +3164,14 @@ impl PreparedBackend {
             let seuil = self.manifest.workspace.as_ref().and_then(|w| w.container_min_chars).unwrap_or(crate::code::CONTAINER_MIN_CHARS);
             let seuil_variable = self.manifest.workspace.as_ref().and_then(|w| w.variable_min_chars).unwrap_or(crate::code::VARIABLE_MIN_CHARS);
             // **The chunks fit the base's smallest embedder** (ticket of embarquement, 20 November 2026): the one this
-            // backend declares, and those the base already holds vectors for. Its tokenizer is a capability: missing,
-            // the base refuses to open for indexing, naming the file — never chunks cut by the bytes alone.
+            // backend declares, and those the base already holds vectors for. Its tokenizer is a capability **of the
+            // chunking only** (c7, 21 November 2026: a build without `token-count` refused to open the base, even to
+            // read and converse): the base opens and serves; a chunking without its counter refuses where chunks are
+            // written (`Catalog` ingestion, `ChunkRecordNode`), naming the feature — never chunks cut by the bytes
+            // alone, never a row written without its chunks.
             let mut embarqueurs: Vec<String> = cat.registered_embedding_models().unwrap_or_default().into_iter().map(|e| e.name).collect();
             embarqueurs.push(self.embed.model.clone());
             let decoupage = crate::code::scope_chunking_for(seuil, seuil_variable, embarqueurs.iter().map(String::as_str));
-            if let Some(b) = &decoupage.token_bound {
-                crate::tokens::counter(&b.model)?;
-            }
             crate::code::register_code_schema(&mut cat, decoupage).map_err(|e| e.to_string())?;
             // Les fonctions de verrou déclarées pour ce dépôt.
             if let Some(w) = &self.manifest.workspace {
@@ -11504,6 +11504,10 @@ mod tests {
     /// The witness of the lot `exact-name-by-name`, in a file of its own (rule of 21 November 2026).
     #[cfg(all(feature = "code", feature = "rag3db-native"))]
     mod exact_name_by_name;
+
+    /// The witness of the lot `token-count-only-for-chunking`, in a file of its own.
+    #[cfg(all(feature = "code", feature = "rag3db-native", not(feature = "token-count")))]
+    mod token_count_only_for_chunking;
 }
 
 #[cfg(test)]
