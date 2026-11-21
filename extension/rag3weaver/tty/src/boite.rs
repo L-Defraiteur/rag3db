@@ -64,10 +64,19 @@ impl Attente {
         }
     }
 
-    /// What the open card asks for, with « pour cet envoi seulement » when its scope is `once`.
+    /// What the open card asks for, with why it opens (its class, in plain words: archi, 21 November 2026) and
+    /// « pour cet envoi seulement » when its scope is `once`.
     pub fn asked(&self) -> String {
         let once = self.card.as_ref().is_some_and(|c| c.scope.as_deref() == Some("once"));
-        format!("{}{}", self.what(), if once { " — pour cet envoi seulement" } else { "" })
+        let why = self.card.as_ref().and_then(|c| c.class.as_deref()).map(|k| match k {
+            "destroy_local" => "supprime un fichier qui n'est sur aucun distant".to_string(),
+            "outbound" => "envoie hors de la machine ou installe des paquets".to_string(),
+            "database" => "touche une base".to_string(),
+            "system" => "touche le système".to_string(),
+            "open_root" => "lit hors des worktrees".to_string(),
+            autre => autre.to_string(),
+        });
+        format!("{}{}{}", self.what(), why.map(|w| format!(" — {w}")).unwrap_or_default(), if once { " — pour cet envoi seulement" } else { "" })
     }
 
     /// The card's state as said beside it, with the countdown of its wait at `now_ms`.
