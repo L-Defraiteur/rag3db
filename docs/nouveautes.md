@@ -1,5 +1,8 @@
 # Nouveautés
 
+- 21 novembre 2026 — **Un bâti sans compteur de jetons ouvre une base sous granite.** Lire, chercher et converser ne
+  comptent aucun jeton : la base s'ouvre et sert. Seul l'index refuse de découper, en nommant la feature `token-count`,
+  et n'écrit jamais une ligne sans ses morceaux.
 - 21 novembre 2026 — **Une recherche se lance sans `options`.** `search_code` et les autres outils de recherche
   livrés prennent `options` comme facultatif, avec ses défauts : un appel avec la seule requête répond, au lieu d'être
   refusé sur le schéma.
