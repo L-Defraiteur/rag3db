@@ -91,6 +91,7 @@ mod tests {
     mod run_dans_la_vue;
     mod view_diff_tests;
     mod view_follows;
+    mod view_freshness;
 
     use super::*;
     use crate::daemon_host::atelier_fichiers::tests::{atelier, attendre_l_index, petit_depot};
