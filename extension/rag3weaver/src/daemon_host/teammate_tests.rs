@@ -9,6 +9,9 @@ use crate::llm::{CallbackLlm, Llm, MockLlm, Turn};
 use serde_json::{json, Value};
 use std::sync::{Arc, Mutex};
 
+/// The witnesses of a lot, each in a file of its own (c7, 21 Nov. 2026).
+mod attente_commande;
+
 /// Le numéro du pas, lu dans le message de la frontière.
 fn step_of(turns: &[Turn]) -> usize {
     turns
