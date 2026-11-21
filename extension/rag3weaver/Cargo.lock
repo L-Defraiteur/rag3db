@@ -6769,6 +6769,7 @@ dependencies = [
 name = "rag3weaver-tty"
 version = "0.1.0"
 dependencies = [
+ "libc",
  "serde",
  "serde_json",
  "ureq 3.4.0",
