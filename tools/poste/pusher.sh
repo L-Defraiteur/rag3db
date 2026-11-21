@@ -254,7 +254,21 @@ dequeue() {
 }
 
 # A red: out of the queue, in the log and in the author's inbox.
-red() { # <id> <author> <reason> <detail>
+# **The entry a step took** (21 Nov., c7: e2e-equipier-faux-modele, dequeued and deposited again under the same id while
+# its pass ran; the old train's red removed the new entry). A verdict acts on a queue entry only when it is the very line
+# the step took (same id, head, kind, witness, suites, parent, author and view); a line deposited after it is left alone.
+declare -A TAKEN=()
+own_entry() { # <id> → 0 when the queue holds the entry the step took for this id (or the step took none under this id)
+  local t=${TAKEN[$1]-}
+  [ -n "$t" ] || return 0
+  [ "$(queue_lines | awk -F'\t' -v id="$1" '$1 == id' | head -1)" = "$t" ]
+}
+red() { # <id> <author> <reason> <detail> → 1 when the verdict concerns an entry no longer queued (deposited again since)
+  if in_queue "$1" && ! own_entry "$1"; then
+    log "$1" "rouge d'un dépôt retiré" "$3 : $4 — le redépôt d'après reste en file"
+    printf 'rouge-ancien\t%s\t%s\t%s (le redépôt reste en file)\n' "$1" "$3" "$4" >> "$D/inbox/$2.txt"
+    echo "rouge d'un dépôt retiré $1 : le redépôt reste en file"; return 1
+  fi
   # The line is kept: a red of the pusher's own making is deposited again as it was (19 Nov.).
   queue_lines | awk -F'\t' -v id="$1" '$1 == id' >> "$D/returned.tsv"
   # Its rank at the return, for a redeposit within the hour (20 Nov., c7).
@@ -451,7 +465,8 @@ open_prs() { # <stamp> <journals|-> <final head>
   local stamp=$1 jn=$2 final=$3 tok master id branch author kind w s x pids subj tip last n url err
   local -a lots=()
   # A lot dequeued during the pass or the guard: 75 withdraws the push (the guard stops), before any pull request.
-  [ -s "$SD/step-lots.tsv" ] && mapfile -t lots < "$SD/step-lots.tsv"
+  # The queue lines the step took for the lots of this repose (step-lots.tsv is not in the queue's format).
+  [ -s "$SD/step-lots.tsv" ] && mapfile -t lots < <(awk -F'\t' 'NR == FNR {want[$1] = 1; next} ($1 in want)' "$SD/step-lots.tsv" "$D/taken.tsv" 2>/dev/null)
   [ ${#lots[@]} -gt 0 ] && ! left_queue "$stamp" "${lots[@]}" && return 75
   : > "$SD/step-prs.tsv"
   [ -s "$SD/step-lots.tsv" ] || return 0
@@ -519,12 +534,13 @@ pr_catchup() { # <id> <master before> <tip> <author> <subject>
 # and replayed alone, down to one lot; a green prefix is pushed, and what follows it stays at the head of the queue
 # for the next step. A red lot leaves the queue with its children (a lot written on it).
 TRAIN_MAX=${PUSHER_TRAIN_MAX:-4}
-# The lots of a train that have left the queue since it was taken (a dequeue during its pass or its guard, 21 Nov.: c7,
+# The lots of a train that have left the queue since it was taken, or been deposited again (another entry under the same
+# id: c7, 21 Nov., e2e-equipier-faux-modele) (a dequeue during its pass or its guard, 21 Nov.: c7,
 # arbre-diffs-des-vues withdrawn at 10:07 during its pass and pushed at 10:13). Each is said « retiré pendant la passe,
 # non poussé »; the train is not pushed, its other lots stay in the queue for the next step.
 left_queue() { # <label> <line>… → 0 when every lot is still in the queue
   local label=$1 line id gone=""; shift
-  for line in "$@"; do id=$(f_ "$line" 1); in_queue "$id" || gone="$gone $id"; done
+  for line in "$@"; do id=$(f_ "$line" 1); { in_queue "$id" && [ "$(queue_lines | awk -F'\t' -v id="$id" '$1 == id' | head -1)" = "$line" ]; } || gone="$gone $id"; done
   [ -n "$gone" ] || return 0
   for id in $gone; do log "$id" "retiré pendant la passe, non poussé" "train $label"; done
   log "$label" "train arrêté" "lot(s) retiré(s) pendant la passe :$gone ; les autres restent en file"
@@ -536,7 +552,7 @@ kind_rank() { case "$1" in docs) echo 0 ;; scripts) echo 1 ;; *) echo 2 ;; esac;
 # A red lot and, through the queue, its children and theirs.
 red_family() { # <id> <author> <reason> <detail>
   local child
-  red "$1" "$2" "$3" "$4"
+  red "$1" "$2" "$3" "$4" || return 0
   queue_lines | awk -F'\t' -v p="$1" '$8 == p {print $1 "\t" $9}' | while IFS=$'\t' read -r child author; do
     red_family "$child" "$author" "parent rouge" "son parent $1 est rouge"
   done
@@ -926,6 +942,8 @@ step() {
       fi
     done < <(queue_lines)
   fi
+  # Also on disk, for open-prs (PRE_PUSH), which runs in the guard's process.
+  TAKEN=(); : > "$D/taken.tsv"; for line in "${train[@]}" "${spec[@]}"; do TAKEN[$(f_ "$line" 1)]=$line; printf '%s\n' "$line" >> "$D/taken.tsv"; done
   for line in "${train[@]}"; do
     branch=$(f_ "$line" 2); refs="$refs +refs/heads/$branch:refs/remotes/origin/$branch"
     log "$(f_ "$line" 1)" pris "$branch $(f_ "$line" 4), train de ${#train[@]}"
