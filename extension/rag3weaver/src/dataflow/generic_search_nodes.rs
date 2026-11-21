@@ -3019,6 +3019,137 @@ type VecteursDeRequete = (Option<Vec<f32>>, Option<crate::sparse_index::SparseVe
 /// Ce qu'un nœud de signal reçoit : une requête à chercher, ou l'ordre de se
 /// taire — le mode balayage répond par les fichiers, pas par l'index, et la
 /// cible peut même ne pas être résolue (catalogue occupé).
+/// **The rows whose name is the whole query, read by the name** (c7, 20 November 2026; the bench on the tablet's depot:
+/// `lib`, `result`, `con`, `__all__`, `PORT` absent from the top 10, while a search bounded to their file gave them
+/// first). The promotion of the exact name (`FuseResultsNode`'s `exact_name`) only sees the fused list, bounded
+/// before it: a common name, or one the full text finds inside many words (`con` in `release_connection`), never
+/// entered it. This node reads them directly, bounded to `limit`, with the filter of the query (paths, languages,
+/// the caller's) and the visible generation, and gives them to the fusion as one more signal; the promotion then
+/// brings them first. On an entity with occurrences, the occurrences are read (`Scope`, where the name lives), with
+/// the fields the other signals project.
+pub struct ExactNameNode {
+    node_name: String,
+    field: String,
+    /// A folded container (this field names the children it folds) is never read by its name: the fusion never
+    /// brings it first by its name either (`exact_name_leaf`), and a small one is not a search candidate at all.
+    leaf: Option<String>,
+    limit: usize,
+    signal: String,
+}
+
+impl ExactNameNode {
+    pub fn new(name: &str) -> Self {
+        Self { node_name: name.to_string(), field: "name".into(), leaf: None, limit: 20, signal: "name_exact".into() }
+    }
+    pub fn with_leaf(mut self, field: impl Into<String>) -> Self {
+        self.leaf = Some(field.into());
+        self
+    }
+    pub fn with_field(mut self, field: impl Into<String>) -> Self {
+        self.field = field.into();
+        self
+    }
+    pub fn with_limit(mut self, limit: usize) -> Self {
+        self.limit = limit;
+        self
+    }
+    pub fn with_signal(mut self, signal: impl Into<String>) -> Self {
+        self.signal = signal.into();
+        self
+    }
+}
+
+impl Node for ExactNameNode {
+    fn name(&self) -> &str {
+        &self.node_name
+    }
+    fn node_type(&self) -> &'static str {
+        "ExactNameNode"
+    }
+    fn node_config(&self) -> Option<Box<dyn std::any::Any + Send>> {
+        Some(Box::new(serde_json::json!({ "field": self.field, "leaf": self.leaf, "limit": self.limit, "signal": self.signal })))
+    }
+    fn inputs(&self) -> Vec<PortDef> {
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::ExactNameNodeFactory).0
+    }
+    fn outputs(&self) -> Vec<PortDef> {
+        crate::dataflow::node_registry::ports_declares(&crate::dataflow::node_factories::ExactNameNodeFactory).1
+    }
+    fn execute(&mut self, ctx: &mut NodeContext) -> Result<(), String> {
+        use crate::filter::{FilterCondition, FilterValue};
+        let vide = |ctx: &mut NodeContext| {
+            ctx.set_output("results", PortValue::new(Vec::<UnifiedResult>::new()));
+            Ok(())
+        };
+        let (requete, target, options, _) = match extract_query_and_target(ctx, "ExactNameNode")? {
+            SignalInput::Scan => return vide(ctx),
+            SignalInput::Query(q, t, o, v) => (q, t, o, v),
+        };
+        let nom = requete.trim().to_string();
+        if nom.is_empty() || self.limit == 0 {
+            return vide(ctx);
+        }
+        let conn = ctx.service::<ConnService>("conn").ok_or("ExactNameNode: 'conn' service not found")?.0.clone();
+        // The public entity: the occurrences when the target has some (the name lives there), the target otherwise.
+        let mut public = target.clone();
+        let champs: Vec<String> = match &target.occurrence_projection {
+            Some(p) => {
+                public.parent_table = p.entity.clone();
+                p.fields.clone()
+            }
+            None => Vec::new(),
+        };
+        public.filter_indirection = None;
+        public.occurrence_projection = None;
+        let mut opts = options.clone();
+        let par_le_nom = FilterCondition::Field { key: self.field.clone(), value: FilterValue::Direct(crate::connection::CypherValue::String(nom)) };
+        opts.filter_condition = Some(match options.filter_condition {
+            Some(f) => FilterCondition::Must(vec![f, par_le_nom]),
+            None => par_le_nom,
+        });
+        // The filter of the query, the cell, and the visible generation, as every signal reads them.
+        let admis = admitted_parent_uuids_for(ctx, &public, &opts, &conn)?.unwrap_or_default();
+        let mut uuids: Vec<String> = admis.into_iter().collect();
+        uuids.sort();
+        uuids.truncate(self.limit);
+        if uuids.is_empty() {
+            return vide(ctx);
+        }
+        let mut lus: Vec<&str> = champs.iter().map(String::as_str).collect();
+        for f in std::iter::once(self.field.as_str()).chain(self.leaf.as_deref()) {
+            if !lus.contains(&f) {
+                lus.push(f);
+            }
+        }
+        let refs: Vec<&str> = uuids.iter().map(String::as_str).collect();
+        let lignes = moteur_de_recherche(ctx, &conn).fetch_entities(&public.parent_table, &refs, &lus)?;
+        let feuille = |l: &crate::search_backend::EntityRow| match &self.leaf {
+            None => true,
+            Some(plis) => l.data.get(plis).and_then(|v| v.as_str()).is_none_or(|s| s.is_empty() || s == "?"),
+        };
+        let resultats: Vec<UnifiedResult> = lignes
+            .into_iter()
+            .filter(feuille)
+            .map(|l| {
+                let mut u = UnifiedResult::from(crate::search::SearchResult {
+                    uuid: l.uuid,
+                    score: 1.0,
+                    entity: Some(public.parent_table.clone()),
+                    data: Some(l.data),
+                    chunk: None,
+                    chunks: None,
+                    sans_vecteur: false,
+                });
+                u.signal = Some(self.signal.clone());
+                u
+            })
+            .collect();
+        ctx.metric(&format!("signal.{}", self.signal), resultats.len() as f64);
+        ctx.set_output("results", PortValue::new(resultats));
+        Ok(())
+    }
+}
+
 enum SignalInput {
     Scan,
     Query(String, SearchTarget, crate::search::SearchOptions, VecteursDeRequete),

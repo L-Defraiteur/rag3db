@@ -4,6 +4,10 @@
   `passe_epinglee` la vraie portée crevée (un vrai oom_kill) ; sous une session graphique, elle se saute en le disant,
   en première ligne du résumé, comptée non jugée. Le pousseur ne la joue pas.
 - 21 novembre 2026 — **Une commande longue n'est plus dite en attente d'un index.** Quand `run_command` ou `wait_output` dure, la boîte de l'équipier dit que la commande tourne encore ; l'index reste la cause supposée pour les autres outils.
+- 20 novembre 2026 — **Un nom tapé exactement rend sa déclaration, même courant.** Chercher `lib`, `result` ou
+  `con` rendait des dizaines de lignes qui les citent, et pas la déclaration de ce nom : elle restait hors de la liste
+  que la recherche classe. La recherche lit maintenant directement les déclarations dont le nom est la requête entière,
+  sous les mêmes filtres de chemin et de langage, et les met devant.
 - 21 novembre 2026 — **Les pages d'un dépôt parlent git.** Dans l'IDE, le fil d'Ariane des tâches, des propositions,
   des graphes, des réactions, des bilans, de l'arbre et de la recherche commence par « dépôts » et nomme le dépôt par son
   nom et sa branche, comme l'accueil ; le tableau des tâches a une colonne « worktree ». « backend » n'y paraît plus.
