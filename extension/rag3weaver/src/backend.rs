@@ -641,13 +641,13 @@ pub struct WritePolicy {
     /// Immutable rows can be inserted or replayed identically, never overwritten.
     #[serde(default)]
     pub immutable: bool,
+    /// **The author, set by the host** (M7, 21 November 2026): the field filled with the key of the agent the call
+    /// is made for (`Backend::call_as`). Given by the tool's caller, it is refused; with no agent, it stays absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author: Option<String>,
     /// **The field that carries the version of the template** (20 November 2026): set by the server on each put,
     /// like the dates, from the hash of the template in service.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    /// **The author, set by the host** (M7, 21 November 2026): the field filled with the key of the agent the call
-    /// is made for (`Backend::call_as`). Given by the tool's caller, it is refused; with no agent, it stays absent.
-    #[serde(default)]
-    pub author: Option<String>,
     pub template: Option<String>,
     /// **Rows that expire** (19 November 2026, the TTL of the indexed turns): the only entities a
     /// tool may delete from, by the `expire` action of `EntityRecordNode`, which removes the rows
