@@ -3364,7 +3364,7 @@ impl PreparedBackend {
                 backend_schema::SchemaStep::Relation(name) => {
                     if !self.manifest.relations.contains_key(&name) { continue; }
                     let r = &schema.relations[&name];
-                    cat.register_relation_with(&name, &r.from, &r.to, r.properties.clone().unwrap_or_default())
+                    cat.register_keyed_relation(&name, &r.from, &r.to, r.properties.clone().unwrap_or_default(), r.key.clone())
                         .map_err(|e|e.to_string())?;
                 }
             }

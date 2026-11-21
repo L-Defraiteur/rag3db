@@ -4820,6 +4820,117 @@ mod tests {
         assert_eq!(compte(&cat), ["b1=NULL", "b3=avant"], "b1 reste, b2 part, b3 revient avec sa raison");
     }
 
+    /// The edges of the keyed relation `R` of [`keyed_links_by`], as `b=k:v`, sorted.
+    #[cfg(feature = "rag3db-native")]
+    fn keyed_edges(cat: &crate::Catalog) -> Vec<String> {
+        let r = cat.execute_raw("MATCH (:A)-[r:R]->(b:B) RETURN b._uuid, r.k, r.v").unwrap();
+        let mut out: Vec<String> = r
+            .rows
+            .iter()
+            .map(|l| format!("{}={}:{}", l[0].as_str().unwrap_or("?"), l[1].as_i64().map_or("NULL".into(), |k| k.to_string()), l[2].as_str().unwrap_or("NULL")))
+            .collect();
+        out.sort();
+        out
+    }
+
+    /// **The links of a keyed relation, through `LinkRecordNode`, by batches or by COPY** (`copy_threshold`): a
+    /// relation `R` from `A` to `B` whose key is `k` (21 November 2026, the keyed links). Returns the catalogue, and
+    /// a function that writes one batch of `(to, k, v)` from `a` and gives back its node.
+    #[cfg(feature = "rag3db-native")]
+    fn keyed_links_by(copy_threshold: usize) -> (crate::Catalog, impl Fn(&crate::Catalog, &[(&str, i64, &str)]) -> LinkRecordNode) {
+        use crate::config::{FieldDef, RelationDef};
+        use crate::dataflow::services::ServiceRegistry;
+        use crate::records::{RefOrUuid, RelationRecord};
+        use crate::refs::RelationRef;
+        use crate::{Catalog, CatalogConfig, Rag3dbConnection};
+
+        let conn = Rag3dbConnection::in_memory().expect("in-memory base");
+        let mut cat = Catalog::new(Box::new(conn), Box::new(crate::embedder::MockEmbedder::new(4)), CatalogConfig { embedding_dim: 4, ..Default::default() });
+        cat.initialize().unwrap();
+        for t in ["A", "B"] {
+            cat.execute_raw(&format!("CREATE NODE TABLE {t}(_uuid STRING, PRIMARY KEY(_uuid))")).unwrap();
+        }
+        cat.execute_raw("CREATE REL TABLE R(FROM A TO B, k INT64, v STRING)").unwrap();
+        cat.execute_raw("CREATE (:A {_uuid: 'a'}), (:B {_uuid: 'b'}), (:B {_uuid: 'c'})").unwrap();
+        let def = |t: &str| -> FieldDef { serde_json::from_value(serde_json::json!({"type": t})).unwrap() };
+        let relation = RelationDef {
+            from: "A".into(),
+            to: "B".into(),
+            properties: Some(HashMap::from([("k".to_string(), def("int64")), ("v".to_string(), def("string"))])),
+            key: vec!["k".into()],
+        };
+        let write = move |cat: &Catalog, links: &[(&str, i64, &str)]| -> LinkRecordNode {
+            let mut config = CatalogConfig::default();
+            config.relations.insert("R".into(), relation.clone());
+            let mut services = ServiceRegistry::new();
+            services.register("conn", cat.conn_arc());
+            services.register("dialect", cat.dialect_arc());
+            services.register("config", config);
+            services.register(LINK_COPY_THRESHOLD_SERVICE, copy_threshold);
+            let mut ctx = NodeContext::with_services(Arc::new(services));
+            let records: Vec<RelationRecord> = links
+                .iter()
+                .map(|(b, k, v)| {
+                    let (r, res) = RelationRef::new("R");
+                    let props = BTreeMap::from([("k".to_string(), CypherValue::Int(*k)), ("v".to_string(), CypherValue::String((*v).into()))]);
+                    RelationRecord::new("R".into(), RefOrUuid::Uuid("a".into()), RefOrUuid::Uuid((*b).into()), props, res, r)
+                })
+                .collect();
+            ctx.set_input("relations", PortValue::new(BatchPayload::new(PortType::Relations, records)));
+            let mut node = LinkRecordNode::new("links");
+            node.execute(&mut ctx).expect("the batch");
+            node
+        };
+        (cat, write)
+    }
+
+    /// **A keyed relation keeps every link, by batches and by COPY** (21 November 2026, the keyed links, Lucie's
+    /// choice for the occurrences): several links between `a` and `b` told apart by `k`. A key repeated in a batch keeps
+    /// its last value, a second batch finds an existing key and adds a new one, and the undo of the second batch
+    /// removes only the link it created. Before the key, the drain held a link for a pair: the sites of a pair merged
+    /// (46 % lost on the occurrences of rag3weaver).
+    #[cfg(feature = "rag3db-native")]
+    #[test]
+    fn a_keyed_relation_keeps_every_link_by_batches_and_by_copy() {
+        for (path, threshold) in [("batches", usize::MAX), ("copy", 1)] {
+            let (cat, write) = keyed_links_by(threshold);
+            write(&cat, &[("b", 1, "x"), ("c", 1, "w"), ("b", 2, "y"), ("b", 1, "x-last")]);
+            assert_eq!(keyed_edges(&cat), ["b=1:x-last", "b=2:y", "c=1:w"], "{path}: one link per (pair, key), its last value");
+            let mut second = write(&cat, &[("b", 3, "z"), ("b", 2, "y-again")]);
+            assert_eq!(keyed_edges(&cat), ["b=1:x-last", "b=2:y-again", "b=3:z", "c=1:w"], "{path}: the second batch finds key 2 and adds key 3");
+            let undo = second.undo_context().expect("an undo context");
+            second.undo(undo).expect("the undo");
+            let left = keyed_edges(&cat);
+            assert!(!left.iter().any(|e| e.starts_with("b=3:")), "{path}: the undo removes the link it created, {left:?}");
+            assert!(left.iter().any(|e| e.starts_with("b=1:")) && left.iter().any(|e| e.starts_with("b=2:")) && left.contains(&"c=1:w".to_string()), "{path}: and only it, {left:?}");
+        }
+    }
+
+    /// **A relation that had a key cannot lose it** (21 November 2026, c7): a base already holds several links per
+    /// pair, or on PostgreSQL a primary key over the pair and the key. Registering the relation again without its
+    /// key is refused by name, even with no pair holding several links.
+    #[cfg(feature = "rag3db-native")]
+    #[test]
+    fn a_relation_that_had_a_key_cannot_lose_it() {
+        use crate::config::FieldDef;
+        let conn = crate::Rag3dbConnection::in_memory().expect("in-memory base");
+        let mut cat = crate::Catalog::new(Box::new(conn), Box::new(crate::embedder::MockEmbedder::new(4)), crate::CatalogConfig { embedding_dim: 4, ..Default::default() });
+        cat.initialize().unwrap();
+        let mut fields = HashMap::new();
+        fields.insert("nom".to_string(), crate::SimpleFieldDef { field_type: crate::config::FieldType::String, is_title: true, is_content: true, ..Default::default() });
+        let entity = crate::EntityConfig { fields, signals: crate::search::SearchSignals::BM25, hashsafe: Some(vec!["nom".into()]), ..Default::default() };
+        cat.register_entity("A", entity.clone()).unwrap();
+        cat.register_entity("B", entity).unwrap();
+        let k = || -> HashMap<String, FieldDef> { HashMap::from([("k".to_string(), serde_json::from_value(serde_json::json!({"type": "int64"})).unwrap())]) };
+        cat.register_keyed_relation("R", "A", "B", k(), vec!["k".into()]).unwrap();
+        cat.register_keyed_relation("R", "A", "B", k(), vec!["k".into()]).expect("the same key again");
+        let refused = cat.register_relation_with("R", "A", "B", k()).expect_err("removing the key is refused");
+        let said = refused.to_string();
+        assert!(said.contains("R") && said.contains("portait la clé k") && said.contains("pas pris en charge"), "{said}");
+        let unknown = cat.register_keyed_relation("S", "A", "B", k(), vec!["absent".into()]).expect_err("a key that is not a property");
+        assert!(unknown.to_string().contains("absent"), "{unknown}");
+    }
+
     /// L'écriture sans allocation rend octet pour octet ce que rend
     /// `cellule_csv` — le format du COPY ne change pas.
     #[test]
