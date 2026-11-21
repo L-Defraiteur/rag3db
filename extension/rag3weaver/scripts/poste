@@ -419,12 +419,12 @@ TG="$V/file-gpu"
 GPU_SYS="${POSTE_GPU_SYS:-/sys}"
 GPU_MEMINFO="${POSTE_GPU_MEMINFO:-/proc/meminfo}"
 gpu_now() { echo "${POSTE_GPU_NOW:-$(date +%s)}"; }
-gpu_machine_card() { tr -d ' \n' < "$V/gpu-card" 2>/dev/null; }
+gpu_machine_card() { { tr -d ' \n' < "$V/gpu-card"; } 2>/dev/null; }
 gpu_card() { if [ -n "$GPU_CARD_ASKED" ]; then echo "$GPU_CARD_ASKED"; else gpu_machine_card; fi; }
 gpu_mib_of() { _o=$(cat "$GPU_SYS/class/drm/$1/device/$2" 2>/dev/null); case "$_o" in ''|*[!0-9]*) echo "" ;; *) echo $((_o / 1048576)) ;; esac; }
 gpu_meminfo_mib() { awk -v k="$1:" '$1 == k {print int($2 / 1024)}' "$GPU_MEMINFO" 2>/dev/null; }
 gpu_reserve_mib() {
-  _r=$(tr -d ' \n' < "$V/gpu-reserve-gib" 2>/dev/null)
+  _r=$({ tr -d ' \n' < "$V/gpu-reserve-gib"; } 2>/dev/null)
   case "$_r" in ''|*[!0-9]*) if [ -n "$(gpu_machine_card)" ]; then _r=0; else _r=30; fi ;; esac
   echo $((_r * 1024))
 }
@@ -683,6 +683,14 @@ if [ "${POSTE_SCCACHE:-1}" = 1 ] && command -v sccache > /dev/null 2>&1; then
   [ -n "${RUSTC_WRAPPER+posée}" ] || export RUSTC_WRAPPER=sccache
   [ -n "${SCCACHE_DIR+posée}" ] || export SCCACHE_DIR="$HOME/.cache/sccache"
   [ -n "${SCCACHE_CACHE_SIZE+posée}" ] || export SCCACHE_CACHE_SIZE=40G
+fi
+# **Le serveur sccache démarré ici, hors de la portée de la commande** (21 novembre 2026, codeparsers par c7 : à chaque
+# passe sur un target neuf, la validation rougissait « descendants laissés après la commande » ; le reste était
+# /usr/bin/sccache, le serveur que cargo démarre au premier bâti et qui survit à la commande). poste le démarre avant
+# la commande, dans son propre processus : le client de cargo le trouve vivant et n'en lance plus dans la portée. Le
+# relevé des descendants du confineur n'est pas relâché. Déjà vivant, `--start-server` ne change rien.
+if [ "${RUSTC_WRAPPER:-}" = sccache ] && command -v sccache > /dev/null 2>&1; then
+  sccache --start-server > /dev/null 2>&1 || true
 fi
 if command -v mold > /dev/null 2>&1 && command -v clang > /dev/null 2>&1 && [ -z "${CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER+posée}" ]; then
   export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=clang
