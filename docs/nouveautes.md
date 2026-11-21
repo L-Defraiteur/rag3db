@@ -17,6 +17,8 @@
   à rien : un module qui importe un fichier, le réseau ou une horloge est refusé en le nommant. Chaque appel est une
   instance neuve, sous le plafond de mémoire de l'hôte et un carburant déterministe. Préparé une fois, un appel coûte
   0,37 ms, le tiers d'un nœud TypeScript.
+- 21 novembre 2026 — **Une vue fermée ne laisse rien derrière elle.** `close_view` retire le worktree et son target,
+  et efface maintenant aussi par défaut les générations de la vue dans la base. `keep: true` les garde.
 - 21 novembre 2026 — **La requête de `search_code` n'est que du texte.** Aucun caractère n'y est un opérateur :
   `--save-dev`, `-test`, un guillemet, `AND` ou une parenthèse sont cherchés tels quels. Une phrase reste pesée mot à
   mot (un « contient » par mot et par champ), construite par rag3weaver ; aucun analyseur de requêtes de lucivy ne

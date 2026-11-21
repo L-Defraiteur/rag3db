@@ -3452,7 +3452,9 @@ impl DaemonHost {
                 };
                 let (v, m) = v;
                 let reponse = match v["name"].as_str() {
-                    Some(name) => self.close_view(session, &m, name, v["purge"] == json!(true)),
+                    // A closed view leaves nothing behind by default (c7 for Lucie, 21 November 2026): its generations
+                    // are purged, unless `keep: true` (or the former `purge: false`) keeps them.
+                    Some(name) => self.close_view(session, &m, name, v["keep"] != json!(true) && v["purge"] != json!(false)),
                     None => json!({ "ok": false, "error": "« name » manque : la vue à fermer" }),
                 };
                 let reponse = if reponse["ok"] == json!(true) { json!({ "ok": true, "result": reponse }) } else { reponse };
