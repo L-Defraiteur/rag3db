@@ -448,6 +448,10 @@ pr_body() { # <id> <branch> <author> <kind> <witness> <suite> <extra> <tip> <fin
 # push, and by the guard through PRE_PUSH (the final head appended after the guard's own rebase).
 open_prs() { # <stamp> <journals|-> <final head>
   local stamp=$1 jn=$2 final=$3 tok master id branch author kind w s x pids subj tip last n url err
+  local -a lots=()
+  # A lot dequeued during the pass or the guard: 75 withdraws the push (the guard stops), before any pull request.
+  [ -s "$SD/step-lots.tsv" ] && mapfile -t lots < "$SD/step-lots.tsv"
+  [ ${#lots[@]} -gt 0 ] && ! left_queue "$stamp" "${lots[@]}" && return 75
   : > "$SD/step-prs.tsv"
   [ -s "$SD/step-lots.tsv" ] || return 0
   if ! tok=$(gh_token); then
@@ -514,6 +518,17 @@ pr_catchup() { # <id> <master before> <tip> <author> <subject>
 # and replayed alone, down to one lot; a green prefix is pushed, and what follows it stays at the head of the queue
 # for the next step. A red lot leaves the queue with its children (a lot written on it).
 TRAIN_MAX=${PUSHER_TRAIN_MAX:-4}
+# The lots of a train that have left the queue since it was taken (a dequeue during its pass or its guard, 21 Nov.: c7,
+# arbre-diffs-des-vues withdrawn at 10:07 during its pass and pushed at 10:13). Each is said « retiré pendant la passe,
+# non poussé »; the train is not pushed, its other lots stay in the queue for the next step.
+left_queue() { # <label> <line>… → 0 when every lot is still in the queue
+  local label=$1 line id gone=""; shift
+  for line in "$@"; do id=$(f_ "$line" 1); in_queue "$id" || gone="$gone $id"; done
+  [ -n "$gone" ] || return 0
+  for id in $gone; do log "$id" "retiré pendant la passe, non poussé" "train $label"; done
+  log "$label" "train arrêté" "lot(s) retiré(s) pendant la passe :$gone ; les autres restent en file"
+  return 1
+}
 f_() { printf '%s\n' "$1" | cut -f"$2"; }   # <queue line> <field number>
 kind_rank() { case "$1" in docs) echo 0 ;; scripts) echo 1 ;; *) echo 2 ;; esac; }
 
@@ -666,6 +681,7 @@ push_train() { # <line>…
     [ "$(echo "$out" | tail -1)" = POUSSE ] && return 0
     # The guard did not push: the pull requests it opened through PRE_PUSH will not land.
     close_step_prs "la garde n'a pas poussé : $(echo "$out" | grep -m1 'ARRÊT' || echo "$out" | tail -1)"
+    echo "$out" | grep -q 'ARRÊT : le pousseur retire le push' && return 4
     echo "$out" | grep -qE 'master a apporté du code|push refusé' && return 1
     echo "$out" | grep -m1 'ARRÊT' > "$SD/last-red.txt"; return 2
   fi
@@ -777,8 +793,10 @@ replay_and_push_a() {
     log "$TRAIN_LABEL" bissection "rouge sur $n lots, rejoue les $half premiers"
     part=("${part[@]:0:$half}")
   done
+  left_queue "$TRAIN_LABEL" "${part[@]}" || return 0
   push_train "${part[@]}"
   case $? in
+    4) log "$TRAIN_LABEL" "la garde n'a pas poussé : un lot a quitté la file pendant la garde" ;;
     0) for line in "${part[@]}"; do pushed "$(f_ "$line" 1)" "$(f_ "$line" 9)" "$(f_ "$line" 2)"; done
        [ ${#part[@]} = ${#train[@]} ] && A_FULL_PUSHED=1
        # A refused recopy has paused the queue already; 3 means pusher.sh itself was recopied.
@@ -827,7 +845,7 @@ spec_settle() { # after A: push B, or leave its lots in the queue
   local res code jn label line
   res=$(cat "$D/slot2/result" 2>/dev/null); code=$(f_ "$res" 1); jn=$(f_ "$res" 2); label=$(f_ "$res" 3)
   if [ "$A_FULL_PUSHED" != 1 ]; then log "${label:-créneau2}" "créneau 2 jeté" "A n'a pas atterri entier : ses lots restent en file"; return 0; fi
-  for line in "${spec[@]}"; do in_queue "$(f_ "$line" 1)" || { log "$label" "créneau 2 jeté" "$(f_ "$line" 1) n'est plus en file"; return 0; }; done
+  left_queue "$label" "${spec[@]}" || { log "$label" "créneau 2 jeté" "un lot a quitté la file pendant la passe"; return 0; }
   # **Sans verdict sur ses lots, le créneau 2 est jeté, jamais rouge** (20 Nov., c7 and mémoire: at 22:16,
   # memoire-extraction-cut was written « créneau 2 rouge » with an empty reason, its pass cut, nothing failed; a red
   # reads as a defect of the lot). No result (the pass cut or never finished), or an environment red (2): « jeté » with
@@ -847,6 +865,7 @@ spec_settle() { # after A: push B, or leave its lots in the queue
       0) for line in "${spec[@]}"; do pushed "$(f_ "$line" 1)" "$(f_ "$line" 9)" "$(f_ "$line" 2)"; done
          recopy "$TRAIN_LABEL"; [ $? = 3 ] && exit 3; exit 0 ;;
       1) log "$TRAIN_LABEL" "créneau 2 : master a bougé" "ses lots restent en file" ;;
+      4) log "$TRAIN_LABEL" "créneau 2 : la garde n'a pas poussé" "un lot a quitté la file pendant la garde" ;;
       *) log "$TRAIN_LABEL" "créneau 2 : la garde n'a pas poussé" "ses lots restent en file : $(head -1 "$SD/last-red.txt" 2>/dev/null)" ;;
     esac
     exit 0

@@ -340,10 +340,14 @@ if [ -n "$retires" ]; then
 fi
 # **La PR du lot** (19 novembre 2026, c7 et G) : le pousseur ouvre une PR par lot avant le push. PRE_PUSH, quand il est
 # posé, est une commande appelée avec la tête finale : après le rebase sur master (ou le --onto de la pile) et après le
-# commit des copies ouvertes, juste avant le push. Elle ne bloque jamais : son échec est dit, et le push se fait.
+# commit des copies ouvertes, juste avant le push. Son échec est dit, et le push se fait ; sauf 75 (21 novembre 2026, c7 :
+# arbre-diffs-des-vues, retiré pendant sa passe, a été poussé) : le pousseur retire le push, un lot du train a quitté sa
+# file pendant la passe ou la garde.
 if [ -n "${PRE_PUSH:-}" ]; then
   # shellcheck disable=SC2086
-  ${PRE_PUSH} "$(git rev-parse HEAD)" || echo "PR absente : le crochet PRE_PUSH a rendu $?"
+  ${PRE_PUSH} "$(git rev-parse HEAD)"; crochet=$?
+  [ $crochet = 75 ] && { echo "ARRÊT : le pousseur retire le push (un lot du train a quitté la file pendant la passe)"; revenir; exit 1; }
+  [ $crochet = 0 ] || echo "PR absente : le crochet PRE_PUSH a rendu $crochet"
 fi
 # **Des docs arrivées sur master pendant le push** (20 novembre 2026, c7 : arbre-open-view rendu à 19 h 24, un commit de
 # chronologie poussé entre le fetch d'en haut et ce push, pendant PRE_PUSH ; treize minutes de passe perdues). Sur un

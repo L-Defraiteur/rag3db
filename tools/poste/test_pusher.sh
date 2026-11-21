@@ -66,6 +66,8 @@ git -C "$D/ws/wt" worktree add -q --detach "$D/ws/wt2" 2>/dev/null; mkdir -p "$D
 cat > "$D/pass.sh" <<'P'
 #!/bin/bash
 echo "$*" >> "$PASS_CALLS"
+# A hook run once during the pass (21 Nov.: a lot dequeued while its pass runs).
+[ -f "${PASS_HOOK:-/nonexistent}" ] && { bash "$PASS_HOOK"; rm -f "$PASS_HOOK"; }
 echo "${SUITES_EN_PLUS:-}" >> "$PASS_ENV"
 # The codeparsers it plays with, when the worktree has the submodule (19 Nov.: the pass played the old pointer).
 [ -e "$PUSHER_WORKSPACES/$1/extension/rag3weaver/codeparsers/.git" ] && echo "$2 $(git -C "$PUSHER_WORKSPACES/$1/extension/rag3weaver/codeparsers" rev-parse HEAD)" >> "$PASS_SUB"
@@ -100,7 +102,11 @@ echo "$*" >> "$GUARD_CALLS"
 cd "$PUSHER_WORKSPACES/$1" || exit 1
 tail -1 "$PUSHER_JOURNALS_ROOT/$2/resume.log" | grep -qx VERT || { echo "ARRÊT : la passe n'est pas VERTE"; exit 1; }
 [ -z "$(git status --porcelain)" ] || { echo "ARRÊT : arbre sale"; exit 1; }
-if [ -n "${PRE_PUSH:-}" ]; then ${PRE_PUSH} "$(git rev-parse HEAD)" || echo "PR absente : le crochet PRE_PUSH a rendu $?"; fi
+[ -f "${GUARD_HOOK:-/nonexistent}" ] && { bash "$GUARD_HOOK"; rm -f "$GUARD_HOOK"; }
+# As the real guard: PRE_PUSH at 75 is the pusher withdrawing the push.
+if [ -n "${PRE_PUSH:-}" ]; then ${PRE_PUSH} "$(git rev-parse HEAD)"; pr=$?
+  [ $pr = 75 ] && { echo "ARRÊT : le pousseur retire le push (un lot du train a quitté la file)"; exit 1; }
+  [ $pr = 0 ] || echo "PR absente : le crochet PRE_PUSH a rendu $pr"; fi
 [ -e "${GUARD_REFUSE:-/nonexistent}" ] && { echo "ARRÊT : push refusé"; exit 1; }
 git push -q origin HEAD:master || { echo "ARRÊT : push refusé"; exit 1; }
 echo POUSSE
@@ -122,7 +128,7 @@ Q
 chmod +x "$D/poste.sh"
 export ORIGIN=$D/origin.git PUSHER_PIN_SCRIPT=pin.sh PUSHER_FETCH_LOCK=$D/fetch.lock PUSHER_CACHE=$D/cache PUSHER_PEERS= PUSHER_DIR=$D/pusher PUSHER_WORKSPACES=$D/ws PUSHER_WT_NAME=wt PUSHER_JOURNALS_ROOT=$D/journals \
   PUSHER_PASS=$D/pass.sh PUSHER_GUARD=$D/guard.sh PUSHER_POSTE=$D/poste.sh PUSHER_MASTER_HELD=$D/master-tenu \
-  REAL_GUARD=$HERE/push_garde.sh OUTCOMES=$D/outcomes PASS_CALLS=$D/pass_calls GUARD_CALLS=$D/guard_calls PASS_ENV=$D/pass_env OUTCOMES_DIR=$D/outcomes.d PASS_TIMES=$D/pass_times POSTE_VOIES=$D/poste_voies PASS_SUB=$D/pass_sub
+  REAL_GUARD=$HERE/push_garde.sh OUTCOMES=$D/outcomes PASS_CALLS=$D/pass_calls GUARD_CALLS=$D/guard_calls PASS_ENV=$D/pass_env OUTCOMES_DIR=$D/outcomes.d PASS_TIMES=$D/pass_times POSTE_VOIES=$D/poste_voies PASS_SUB=$D/pass_sub PASS_HOOK=$D/pass-hook GUARD_HOOK=$D/guard-hook
 : > "$D/outcomes"; : > "$D/pass_calls"; : > "$D/guard_calls"
 # The gh double (one pull request per lot, 19 Nov.): notes each call, and each --body apart; $GH_DOWN existing makes
 # every call fail. A pull request it creates is numbered from 41.
@@ -807,4 +813,33 @@ out=$(P enqueue fr-2 fr-2 "$h" scripts - - - - author-f 2>&1)
 ! echo "$out" | grep -q avertissement && ! grep -qP '\tfr-2\tidentifiants français' "$D/pusher/log.tsv" \
   && ok "des commentaires français seuls : aucun avertissement" || ko "commentaires français signalés : $(echo "$out" | tr '\n' ' ' | cut -c1-200)"
 P dequeue fr-1 > /dev/null 2>&1; P dequeue fr-2 > /dev/null 2>&1
+# 46. A lot dequeued while its train runs (21 Nov., c7: arbre-diffs-des-vues, withdrawn at 10:07 during its pass, was
+# pushed at 10:13). It is not pushed, whether it leaves during a scripts witness, a Rust pass or the guard; the log says
+# « retiré pendant la passe, non poussé »; master does not move.
+git -C "$D/author" fetch -q origin && git -C "$D/author" checkout -q -B dq-s origin/master
+printf '#!/bin/bash\necho dq\n' > "$D/author/tools/poste/dq.sh"
+printf '#!/bin/bash\nbash %q dequeue dq-s > /dev/null\n' "$PUSHER" > "$D/author/tools/poste/test_dq.sh"
+git -C "$D/author" add -A && git -C "$D/author" commit -qm dq-s && git -C "$D/author" push -q origin HEAD:dq-s; h=$(git -C "$D/author" rev-parse HEAD)
+P enqueue dq-s dq-s "$h" scripts - - - - author-d > /dev/null; m0=$(master)
+PUSHER_TRAIN_MAX=1 P step > /dev/null 2>&1
+[ "$(master)" = "$m0" ] && grep -P '\tdq-s\t' "$D/pusher/log.tsv" | grep -q 'retiré pendant la passe, non poussé' \
+  && ok "un lot de scripts retiré pendant son témoin : non poussé, dit au journal" \
+  || ko "lot de scripts retiré pendant son témoin : master $([ "$(master)" = "$m0" ] && echo immobile || echo BOUGÉ) ; $(grep -P '\tdq-s\t' "$D/pusher/log.tsv" | cut -f3 | paste -sd,)"
+h=$(lot dq-r extension/rag3weaver/src/dqr.rs 'fn dqr() {}')
+P enqueue dq-r dq-r "$h" rust some_witness e2e_code - - author-d > /dev/null; echo VERT > "$D/outcomes.d/dq-r"; m0=$(master)
+printf 'bash %q dequeue dq-r > /dev/null\n' "$PUSHER" > "$D/pass-hook"
+PUSHER_TRAIN_MAX=1 P step > /dev/null 2>&1
+[ "$(master)" = "$m0" ] && grep -P '\tdq-r\t' "$D/pusher/log.tsv" | grep -q 'retiré pendant la passe, non poussé' \
+  && ok "un lot rust retiré pendant sa passe : train arrêté avant la garde, non poussé" \
+  || ko "lot rust retiré pendant sa passe : master $([ "$(master)" = "$m0" ] && echo immobile || echo BOUGÉ) ; $(grep -P '\tdq-r\t' "$D/pusher/log.tsv" | cut -f3 | paste -sd,)"
+rm -f "$D/pass-hook"
+h=$(lot dq-g extension/rag3weaver/src/dqg.rs 'fn dqg() {}')
+P enqueue dq-g dq-g "$h" rust some_witness e2e_code - - author-d > /dev/null; echo VERT > "$D/outcomes.d/dq-g"; m0=$(master)
+printf 'bash %q dequeue dq-g > /dev/null\n' "$PUSHER" > "$D/guard-hook"
+PUSHER_TRAIN_MAX=1 P step > /dev/null 2>&1
+[ "$(master)" = "$m0" ] && grep -P '\tdq-g\t' "$D/pusher/log.tsv" | grep -q 'retiré pendant la passe, non poussé' \
+  && ! grep -q "^rouge	dq-g" "$D/pusher/inbox/author-d.txt" 2>/dev/null \
+  && ok "un lot rust retiré pendant la garde : la garde ne pousse pas, et rien n'est rendu rouge" \
+  || ko "lot rust retiré pendant la garde : master $([ "$(master)" = "$m0" ] && echo immobile || echo BOUGÉ) ; $(grep -P '\tdq-g\t' "$D/pusher/log.tsv" | cut -f3 | paste -sd,)"
+rm -f "$D/guard-hook"
 exit $red

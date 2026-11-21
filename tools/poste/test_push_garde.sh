@@ -250,7 +250,7 @@ crochet() { # crochet <n> <rc du crochet> : écrit rc, sortie, tête vue par le 
     printf '%s\n%s\n%s\n' "$rc" "$(git -C "$D/nup$1.git" rev-parse master)" "$sortie" > "$D/crochet-$1"
   )
 }
-crochet 1 0; crochet 2 1
+crochet 1 0; crochet 2 1; crochet 3 75
 r1=$(sed -n 1p "$D/crochet-1"); m1=$(sed -n 2p "$D/crochet-1"); vu1=$(cat "$D/crochet-vu-1" 2>/dev/null)
 if [ "$r1" = 0 ] && grep -qx POUSSE "$D/crochet-1" && [ "${vu1%% *}" = "$m1" ] && [ "${vu1#* }" != "$m1" ]; then
   echo "vert   PRE_PUSH appelé avec la tête finale, avant le push"
@@ -259,6 +259,11 @@ r2=$(sed -n 1p "$D/crochet-2")
 if [ "$r2" = 0 ] && grep -qx POUSSE "$D/crochet-2" && grep -q "PR absente : le crochet PRE_PUSH a rendu 1" "$D/crochet-2"; then
   echo "vert   PRE_PUSH en échec : « PR absente », le push se fait"
 else echo "ROUGE  PRE_PUSH en échec : rc $r2 — $(tail -2 "$D/crochet-2")"; rouge=1; fi
+# 75 (21 Nov., c7): the pusher withdraws the push, a lot of the train has left its queue during the pass.
+r3=$(sed -n 1p "$D/crochet-3"); m3=$(sed -n 2p "$D/crochet-3")
+if [ "$r3" != 0 ] && [ "$m3" = "$BASE" ] && grep -q "ARRÊT : le pousseur retire le push" "$D/crochet-3"; then
+  echo "vert   PRE_PUSH à 75 : ARRÊT, master ne bouge pas"
+else echo "ROUGE  PRE_PUSH à 75 : rc $r3, master $( [ "$m3" = "$BASE" ] && echo immobile || echo BOUGÉ) — $(tail -2 "$D/crochet-3")"; rouge=1; fi
 # **Les suites C++ transférables** (15 novembre 2026, relevé du cœur) : un lot qui ne touche que le moteur, quand seul du
 # Rust a atterri, pousse sans rejouer ; du C++ atterri aussi, ou un lot qui touche du Rust : arrêt.
 cpp_cas() { # cpp_cas <n> <fichier du lot…> -- <fichier de master…> : écrit rc, sortie et sujets de master dans $D/cpp-<n>
