@@ -236,7 +236,15 @@ fn declared_vertex_connector_retains_injected_source_and_refreshes() {
         "context_tokens":12345, "params":{"project":"fixture-project","location":"global"}
     })).unwrap();
     let mut constructed = 0;
-    let (client, origin) = connect_llm_with_vertex(&declaration, |project, location, model| {
+    // A paid provider is metered: the fixture's model has a price, in a ledger of its own.
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join("prices.json"),
+        r#"{"currency":"USD","monthly_cap":200,"prices":{"fixture-model":[{"from":"2026-01-01","input":1,"output":1}]}}"#,
+    )
+    .unwrap();
+    let ledger = Arc::new(crate::usage_ledger::Ledger::new(dir.path().join("usage"), dir.path().join("prices.json")));
+    let (client, origin) = connect_llm_with_vertex(&declaration, ledger, |project, location, model| {
         constructed += 1;
         assert_eq!((project,location,model), ("fixture-project","global","fixture-model"));
         Ok(current_declared_vertex(&source, &server.base_url))

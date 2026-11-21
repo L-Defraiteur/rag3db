@@ -867,6 +867,10 @@ pub struct Usage {
     /// appels Vertex »): `cached_prompt_tokens` was read from the answer, even if it is 0. `false`: the answer said
     /// nothing, and the 0 above is not a measure of an empty cache.
     pub cache_reported: bool,
+    /// **The tokens written to the provider's cache** (21 November 2026, the spending ledger): included in
+    /// `prompt_tokens`, like `cached_prompt_tokens`, and apart because they cost more than the input (1.25 times at
+    /// Anthropic). `0` when the provider does not say.
+    pub cache_write_tokens: usize,
 }
 
 /// **A reply cut by its limit, said the same everywhere** (19 November 2026: the archiviste's extraction and the

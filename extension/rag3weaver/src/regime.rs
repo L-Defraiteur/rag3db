@@ -298,6 +298,28 @@ pub fn modele_agentique_nomme(etiquette: &str) -> Option<(OpenAiLlm, String)> {
     }
 }
 
+/// **The regime's model, metered** (21 November 2026, the spending ledger): what the product hands out of
+/// [`modele_agentique_nomme`] goes through the user's ledger, like every model `connect_llm` builds. Vertex is paid;
+/// the local model is free when it is served at a private address and the prices say so.
+#[cfg(feature = "openai-llm")]
+pub fn metered(llm: OpenAiLlm, nom: &str) -> std::sync::Arc<dyn crate::llm::Llm> {
+    let (provider, private) = match Origine::voulue(Regime::courant()) {
+        Origine::Locale => {
+            let base = std::env::var("RAG3WEAVER_LOCAL_LLM").unwrap_or_default();
+            let private = crate::usage_ledger::is_private_address(&base);
+            (base, private)
+        }
+        Origine::Distante => ("vertex".to_string(), false),
+    };
+    std::sync::Arc::new(crate::usage_ledger::MeteredLlm::new(
+        std::sync::Arc::new(llm),
+        crate::usage_ledger::user_ledger(),
+        nom,
+        &provider,
+        private,
+    ))
+}
+
 /// [`least_watched_card`] sur le vrai `/sys/class/drm`, mesurée une fois.
 fn carte_libre_du_poste() -> Option<usize> {
     static CARTE: std::sync::OnceLock<Option<usize>> = std::sync::OnceLock::new();
