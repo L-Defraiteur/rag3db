@@ -185,9 +185,12 @@ fn argument_hors_domaine(
         }
         let p = Path::new(arg);
         if p.is_absolute() {
-            // Un absolu peut être DANS le domaine : sa forme canonique tranche.
+            // Un absolu peut être DANS le domaine : sa forme canonique tranche. Une racine accordée à l'agent qui
+            // appelle (RootGrants, posée par l'hôte autour de l'appel) en est aussi : le bac la monte, en lecture ou
+            // en écriture selon son mode, et c'est lui qui tient.
             match p.canonicalize() {
                 Ok(canon) if canon.starts_with(&domaine_canon) => continue,
+                Ok(canon) if crate::backend::granted_roots().iter().any(|(r, _)| canon.starts_with(r.canonicalize().unwrap_or_else(|_| r.clone()))) => continue,
                 _ => return Some((arg.clone(), "un chemin absolu hors du domaine de travail")),
             }
         }
