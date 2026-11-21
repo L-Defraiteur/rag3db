@@ -1,4 +1,4 @@
-import { FolderTree, GitBranch, History, MessageSquare, Scale, Workflow, Zap, FileDiff } from "lucide-react";
+import { FolderTree, Server, GitBranch, History, MessageSquare, Scale, Workflow, Zap, FileDiff } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { displayName, type Backend, type HostState } from "@/lib/host";
@@ -19,6 +19,7 @@ export function Home({ state }: { state: HostState }) {
   const tasksOf = (b: Backend) => backends.filter((t) => t.tache && t.tache.parent === b.id);
   return (
     <>
+      <p className="mb-4 text-sm"><a href="/ide/poste" className="lien-poste inline-flex items-center gap-1 hover:underline"><Server className="size-4" /> Poste : les agents, les dossiers, les vues ouvertes</a></p>
       <h1 className="text-xl font-semibold mb-4">Dépôts</h1>
       <ul className="liste grid gap-3">
         {principals.map((b) => (
