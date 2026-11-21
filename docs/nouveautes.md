@@ -21,6 +21,7 @@
   `browser_console` lit la console. Une page hors des domaines déclarés n'est ni prise ni lue, la valeur d'un champ
   secret (mot de passe, code, jeton, carte) est masquée, et la page se lit par le code de l'hôte, jamais par celui du
   modèle. Cliquer et remplir viendront avec l'accord générique.
+- 21 novembre 2026 — **Un point de reprise ne corrompt plus la mémoire quand une lecture libère des pages en même temps.** Le point de reprise vidait la liste des pages libérées sans le verrou que prend une requête qui y rend les siennes : une page pouvait être perdue, ou la mémoire du processus abîmée, jusqu'au plantage. Il prend maintenant le même verrou.
 - 21 novembre 2026 — **Une erreur d'un nœud scripté nomme son fichier.** Quand un nœud en TypeScript ou en
   JavaScript échoue, à la préparation comme à l'appel, son erreur donne le chemin du script et la ligne, au lieu du
   seul nom du nœud.
