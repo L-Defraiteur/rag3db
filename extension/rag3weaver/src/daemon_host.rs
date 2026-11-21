@@ -381,9 +381,11 @@ pub struct DaemonHost {
     user_token: Option<String>,
     /// The folder of the gate's declared configuration (`rules.json`, the judge's prompt), the
     /// user's, never an agent's repository (page 07 of rag3weaver-archi).
+    #[cfg_attr(not(feature = "code"), allow(dead_code))]
     gate_dir: Option<PathBuf>,
     /// The gate's judge, when it is given here (the witnesses; in service it is the model the
     /// configuration names).
+    #[cfg_attr(not(feature = "code"), allow(dead_code))]
     gate_judge: Option<GateJudge>,
     /// The IDE's one-use entry codes, with their deadline (ms).
     entry_codes: Arc<Mutex<std::collections::HashMap<String, u128>>>,
@@ -451,6 +453,7 @@ mod agents;
 /// The title of a human: the user token, the IDE's entry codes, `by` (21 Nov 2026).
 pub mod user_title;
 /// The gate of the auto mode, v1 (page 07 of rag3weaver-archi): the rules, one judge, the card.
+#[cfg(feature = "code")]
 pub mod gate;
 
 /// The gate's judge: its input (the action, its class, the human turns, the pair), its verdict
