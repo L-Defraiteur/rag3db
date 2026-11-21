@@ -3006,7 +3006,3 @@ fn a_fix_ends_only_through_its_verification_gate() {
         }
     }
 }
-
-
-
-
