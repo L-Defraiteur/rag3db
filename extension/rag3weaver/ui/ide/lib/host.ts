@@ -56,6 +56,23 @@ export type ChatSession = {
 export type SessionTask = { id: string; session: string; parent_task?: string | null; name: string; state?: RunState | null; awaits_answer?: boolean; spaces: Space[] };
 export type HostState = { backends: Backend[]; sessions?: unknown[]; chat_sessions?: ChatSession[]; tasks?: SessionTask[]; available_repos?: Space[] };
 
+/// **The machine at a glance** (`GET /poste` of the host, by `/ide/poste/etat`).
+export type Poste = {
+  machine: string;
+  sessions: { id: string; client: string; pid?: number | null; opened_at?: number | null; claude?: { session_id: string; name?: string | null } | null; active_view: { name: string; source: "session" | "default" } }[];
+  folders: { folder: string; session: string; exists: boolean; worktrees: string[] }[];
+  open_views: { session_id: string; name: string; path?: string | null; branch?: string | null; layer?: string | null; active: boolean; writing: boolean }[];
+  repositories: { id: string; repo?: string | null; name?: string | null; manifest: string; root?: string | null }[];
+  available?: Space[];
+  tasks: SessionTask[];
+};
+
+export async function fetchPoste(): Promise<Poste> {
+  const r = await fetch("/ide/poste/etat");
+  if (!r.ok) throw new Error(`/ide/poste/etat : HTTP ${r.status}`);
+  return r.json();
+}
+
 export async function fetchState(): Promise<HostState> {
   const r = await fetch("/ide/etat");
   if (!r.ok) throw new Error(`/ide/etat : HTTP ${r.status}`);
@@ -403,6 +420,7 @@ export async function stopRun(backend: string, run: string): Promise<void> {
 /// L'URL de la page lue comme une route : l'accueil, ou une vue d'un backend.
 export function route(): { view: string; id?: string; rest?: string } {
   const p = location.pathname.replace(/\/+$/, "") || "/ide";
+  if (p === "/ide/poste") return { view: "poste" };
   const m = p.match(/^\/ide\/code\/([^/]+)\/([a-z]+)(?:\/(.*))?$/);
   if (!m) return { view: "home" };
   return { view: m[2], id: m[1], rest: decodeURIComponent(m[3] ?? "") };

@@ -19,6 +19,7 @@ import { Reactions } from "@/views/Reactions";
 import { Propositions } from "@/views/Propositions";
 import { applyTheme, effectiveTheme, storedTheme, themesLivres, type Theme } from "@/lib/theme";
 import { Home } from "@/views/Home";
+import { Poste } from "@/views/Poste";
 
 // **Le cadre de l'IDE** (page 08, vue 1) : l'en-tête, le flux ouvert une fois,
 // l'état de l'hôte relu à chaque ouverture du flux, et la vue que l'URL nomme.
@@ -270,6 +271,7 @@ function View({ state, reload }: { state: HostState; reload: () => Promise<unkno
   if (r.view === "dag" && r.id) return <Dag id={r.id} rest={r.rest ?? ""} state={state} />;
   if (r.view === "reactions" && r.id) return <Reactions id={r.id} state={state} />;
   if (r.view === "propositions" && r.id) return <Propositions id={r.id} rest={r.rest ?? ""} state={state} />;
+  if (r.view === "poste") return <Poste />;
   return <Home state={state} />;
 }
 
