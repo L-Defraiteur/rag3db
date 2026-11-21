@@ -46,11 +46,11 @@ function CarteAccord({ u }: { u: UiComposant }) {
       <div className="font-medium text-foreground/90">
         {commande ? (
           <>
-            l'atelier demande à lancer <span className="commande font-mono">{u.commande}</span>
+            l'agent demande à lancer <span className="commande font-mono">{u.commande}</span>
           </>
         ) : (
           <>
-            l'atelier demande à {verbe} <span className="font-mono">{u.chemin}</span>
+            l'agent demande à {verbe} <span className="font-mono">{u.chemin}</span>
           </>
         )}
       </div>

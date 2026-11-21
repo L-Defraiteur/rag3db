@@ -26,6 +26,8 @@ export function displayName(b: Backend): string {
   if (b.tache) return b.tache.branche;
   if (b.kind === "memory") return "la mémoire";
   if (b.kind === "code" && b.repo) return b.branch ? `${b.repo} · ${b.branch}` : b.repo;
+  // A project is named by its folder, never by its template (« atelier » means nothing to a user, 21 November 2026).
+  if (b.kind === "project" && b.repo) return b.repo;
   return shortName(b.manifest).split("/").pop() || shortName(b.manifest);
 }
 // **La barre du chat** (modèle tranché par c7 avec Lucie, forme accordée avec
