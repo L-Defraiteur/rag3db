@@ -105,6 +105,15 @@ pub struct TeammatePolicy {
     /// and the end of its output, the last text) is bounded by these characters. Default: 8 000.
     #[serde(default = "TeammatePolicy::carry_over_chars_default")]
     pub carry_over_chars: usize,
+    /// **The `Previous step` block by a declared scripted node** (21 November 2026): the type name of a node of the
+    /// backend's `nodes/` folder (the shipped `PreviousStep`, or one's own), read again at each step; its `.ts`
+    /// edited serves at the next step. A script that fails never breaks the step: the Rust block serves, and the box
+    /// says why. Absent: the Rust block.
+    #[serde(default)]
+    pub carry_over_node: Option<String>,
+    /// The configuration of that node (`{"style": "compact"}` for the shipped one). Absent: its defaults.
+    #[serde(default)]
+    pub carry_over_node_config: serde_json::Value,
 }
 
 impl TeammatePolicy {
@@ -162,6 +171,8 @@ impl Default for TeammatePolicy {
             max_tool_calls_per_step: Self::max_tool_calls_per_step_default(),
             max_model_calls_per_step: Self::max_model_calls_per_step_default(),
             carry_over_chars: Self::carry_over_chars_default(),
+            carry_over_node: None,
+            carry_over_node_config: serde_json::Value::Null,
             pair: false,
             cut_relaunches_per_step: Self::cut_relaunches_per_step_default(),
             cut_relaunch_text: Self::cut_relaunch_text_default(),

@@ -16,6 +16,11 @@
   règle ce modèle par défaut sans le nommer : `"models": {"llm": {"reasoning": "medium", "context_tokens": 200000}}`.
   Une telle entrée qui porte une clé de connexion (`access`, `provider`, `address`…) est refusée en la nommant.
 
+- 21 novembre 2026 — **Le bloc « Previous step » de l'équipier peut venir d'un script.** Avec
+  `teammate.carry_over_node = "PreviousStep"`, le résumé du pas d'avant est produit par un nœud scripté en TypeScript,
+  livré dans `nodes/` du gabarit `code`, au lieu du code Rust : on l'édite, et le pas suivant le prend, sans rebâtir ni
+  redémarrer. Un script qui échoue ne casse rien : le résumé Rust sert, et la boîte de l'équipier dit l'erreur avec le
+  fichier et la ligne.
 - 20 novembre 2026 — **Les gabarits installés suivent le binaire.** Une base posée par `code-tree add` désigne
   désormais le gabarit livré par le binaire (`builtin:`) pour chaque outil qu'il livre, même quand la base de départ en
   tenait une copie différente : une copie périmée ne se propage plus d'une base à l'autre (neuf gabarits sur quatorze

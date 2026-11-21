@@ -540,6 +540,60 @@ struct StepWork {
     command: Option<(String, String)>,
 }
 
+impl StepWork {
+    /// **What a step did, as the input of a scripted `Previous step`** (`teammate.carry_over_node`): the same state
+    /// [`Self::block`] reads, plus the step's number, its last text and the budget.
+    fn to_json(&self, number: usize, last_text: &str, budget: usize) -> Value {
+        serde_json::json!({
+            "number": number,
+            "read": self.read,
+            "wrote": self.wrote,
+            "command": self.command.as_ref().map(|(c, o)| serde_json::json!({ "command": c, "output": o })),
+            "last_text": last_text,
+            "budget": budget,
+        })
+    }
+}
+
+/// **The `Previous step` block by a declared scripted node** (Lucie, 20 November 2026: « valider le scripting, qu'il
+/// fonctionne bien, et qu'il est pratique là où il est placé »). The node named `type_name` is looked for among the
+/// `*.node.json` of `nodes_dir` and **read again at each call**: an edited `.ts` serves at the next step, without
+/// restarting the host. Its input port `work` takes [`StepWork::to_json`]; its output port `block` is the block. An
+/// error names the script's file and line: the caller falls back to the Rust block and says it.
+fn carry_over_by_node(nodes_dir: &std::path::Path, type_name: &str, config: &Value, work: Value) -> Result<String, String> {
+    use crate::dataflow::node_registry::NodeFactory;
+    use crate::dataflow::scripted_node::{read_declaration, ScriptedNodeFactory};
+    // Looked for by its type name: a broken neighbour in the same folder does not stop it.
+    let mut chemins: Vec<std::path::PathBuf> = std::fs::read_dir(nodes_dir)
+        .map_err(|e| format!("{} : {e}", nodes_dir.display()))?
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.to_string_lossy().ends_with(".node.json"))
+        .collect();
+    chemins.sort();
+    let (chemin, decl) = chemins
+        .into_iter()
+        .find_map(|p| read_declaration(&p).ok().filter(|d| d.name == type_name).map(|d| (p, d)))
+        .ok_or_else(|| format!("aucun nœud scripté « {type_name} » sous {}", nodes_dir.display()))?;
+    // The error names the script's file: the engine gives its line, not its file.
+    let script = std::fs::read_to_string(&chemin)
+        .ok()
+        .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+        .and_then(|v| v["script"].as_str().map(|s| nodes_dir.join(s)))
+        .unwrap_or_else(|| chemin.clone());
+    let nomme = |e: String| format!("{} : {e}", script.display());
+    let fabrique = ScriptedNodeFactory::new(decl, crate::script::ScriptLimits::default()).map_err(nomme)?;
+    let mut noeud = fabrique.create("carry_over", config).map_err(nomme)?;
+    let mut ctx = crate::dataflow::node::NodeContext::new();
+    ctx.set_input("work", crate::dataflow::port::PortValue::new(work));
+    noeud.execute(&mut ctx).map_err(nomme)?;
+    ctx.drain_outputs()
+        .get("block")
+        .and_then(|v| v.downcast::<Value>())
+        .and_then(|v| v.as_str().map(str::to_string))
+        .ok_or_else(|| nomme(format!("{type_name} : le port « block » n'a pas rendu de texte")))
+}
+
 /// The tools that write a file, by their name.
 const WRITING_TOOLS: [&str; 5] = ["write", "replace_text", "replace_lines", "insert_lines", "edit_file"];
 
@@ -691,6 +745,20 @@ impl Step {
     /// its last text, within `budget` characters.
     pub fn carry_over(&self, last_text: &str, budget: usize) -> String {
         self.work.lock().unwrap_or_else(|p| p.into_inner()).block(self.number, last_text, budget)
+    }
+
+    /// [`Self::carry_over`], by the scripted node `node` (`nodes/` folder, type name, config) when one is declared:
+    /// `(block, error)`. On an error the block is the Rust one, and the error says why.
+    pub fn carry_over_with(&self, last_text: &str, budget: usize, node: Option<(&std::path::Path, &str, &Value)>) -> (String, Option<String>) {
+        let work = self.work.lock().unwrap_or_else(|p| p.into_inner());
+        let rust = || work.block(self.number, last_text, budget);
+        match node {
+            None => (rust(), None),
+            Some((dir, nom, config)) => match carry_over_by_node(dir, nom, config, work.to_json(self.number, last_text, budget)) {
+                Ok(b) => (b, None),
+                Err(e) => (rust(), Some(e)),
+            },
+        }
     }
 
     /// Les outils de travail aboutis pendant ce pas.
@@ -1658,6 +1726,8 @@ impl DaemonHost {
         let mut relance: Option<String> = None;
         // What the last step did, carried to the next frontier (S2).
         let mut previous_step = String::new();
+        // The last error of the scripted `Previous step`, said once until it changes.
+        let mut erreur_du_bloc: Option<String> = None;
         let mut attente_bornee: Option<std::time::Instant> = None;
         let request = files.mailbox().iter().find(|l| l["kind"] == "request").and_then(|l| l["text"].as_str()).unwrap_or_default().to_string();
         // `number` numérote les pas joués ; `counted` ne compte pas ceux qui
@@ -1782,7 +1852,28 @@ impl DaemonHost {
                 Ok(r) => {
                     failed = 0;
                     unavailable = 0;
-                    previous_step = step.carry_over(r["text"].as_str().unwrap_or_default(), policy.carry_over_chars);
+                    // By the declared scripted node when there is one (its `nodes/` folder is the live backend's), else
+                    // the Rust block; a failing script falls back to the Rust block, and the box says it once.
+                    let dossier = policy
+                        .carry_over_node
+                        .as_ref()
+                        .and_then(|_| self.with_backend_id(&t.id, |b| b.prepared().directory.join("nodes")).ok());
+                    let noeud = match (&policy.carry_over_node, &dossier) {
+                        (Some(nom), Some(d)) => Some((d.as_path(), nom.as_str(), &policy.carry_over_node_config)),
+                        _ => None,
+                    };
+                    let (bloc, erreur) = step.carry_over_with(r["text"].as_str().unwrap_or_default(), policy.carry_over_chars, noeud);
+                    previous_step = bloc;
+                    if let Some(e) = erreur.filter(|e| erreur_du_bloc.as_ref() != Some(e)) {
+                        let line = files.append(
+                            "host",
+                            "report",
+                            None,
+                            &format!("le bloc « Previous step » du pas {number} vient du repli Rust : le nœud teammate.carry_over_node a échoué : {e}"),
+                        )?;
+                        publish(bus.as_ref(), task, &line);
+                        erreur_du_bloc = Some(e);
+                    }
                     r
                 }
                 Err(e) if refus_du_fournisseur(&e).is_some() => {
@@ -2326,3 +2417,137 @@ mod tests {
         assert!(s.ours(&call(STEP_DONE, json!({ "item": "", "succeeded": false, "done": "", "remaining": "tout" }))).unwrap().content.contains("\"ok\":true"));
     }
 }
+
+#[cfg(test)]
+mod carry_over_tests {
+    //! **The scripted `Previous step`, against the Rust one** (validation of the scripted node, 21 November 2026).
+    use super::*;
+    use serde_json::json;
+    use std::path::{Path, PathBuf};
+
+    /// The shipped node, copied into a folder of its own: the tests edit their copy.
+    fn nodes() -> (tempfile::TempDir, PathBuf) {
+        let d = tempfile::tempdir().unwrap();
+        let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("templates/backends/code/nodes");
+        let dir = d.path().join("nodes");
+        std::fs::create_dir_all(&dir).unwrap();
+        for f in ["previous_step.node.json", "previous_step.ts"] {
+            std::fs::copy(src.join(f), dir.join(f)).unwrap();
+        }
+        (d, dir)
+    }
+
+    fn works() -> Vec<(StepWork, String, usize)> {
+        let w = |read: &[&str], wrote: &[&str], command: Option<(&str, &str)>| StepWork {
+            read: read.iter().map(|s| s.to_string()).collect(),
+            wrote: wrote.iter().map(|s| s.to_string()).collect(),
+            command: command.map(|(c, o)| (c.to_string(), o.to_string())),
+        };
+        let long: String = "é😀".repeat(5_000);
+        vec![
+            (w(&[], &[], None), String::new(), 8_000),
+            (w(&[], &[], None), "  \n ".into(), 8_000),
+            (w(&["src/a.rs (lines 1-120)", "src/é.rs (lines 40-end)"], &["src/a.rs"], Some(("cargo test", "ok\n"))), "  Je lis, puis j'édite.  ".into(), 8_000),
+            (w(&["src/a.rs (lines 1-3)"], &[], None), "fini".into(), 8_000),
+            // Over the budget, with characters outside the BMP right at the cut: a character is not a UTF-16 unit.
+            (w(&["src/b.rs (lines 1-9)"], &["src/b.rs"], Some(("make", &long))), long.clone(), 8_000),
+            (w(&["x (lines 1-2)"], &[], Some(("ls", "😀😀😀"))), "😀".repeat(200), 150),
+            (w(&["x (lines 1-2)"], &[], None), "z".into(), 10),
+        ]
+    }
+
+    /// **The shipped script gives the Rust block, to the byte**, on every state, the cut included (accents and
+    /// characters outside the BMP: the script counts code points, as `chars()`).
+    #[test]
+    fn the_scripted_previous_step_is_the_rust_one_to_the_byte() {
+        let (_d, dir) = nodes();
+        for (i, (w, texte, budget)) in works().into_iter().enumerate() {
+            let rust = w.block(3, &texte, budget);
+            let script = carry_over_by_node(&dir, "PreviousStep", &Value::Null, w.to_json(3, &texte, budget))
+                .unwrap_or_else(|e| panic!("state {i}: the script failed: {e}"));
+            assert!(script == rust, "state {i}: the script differs from the Rust block ({} and {} characters)", script.chars().count(), rust.chars().count());
+        }
+    }
+
+    /// **An edited script serves at the next call**, without restarting anything; **two configurations** of the same
+    /// script, on the same input, give their two blocks.
+    #[test]
+    fn an_edited_script_serves_at_the_next_call_and_two_configurations_give_two_blocks() {
+        let (_d, dir) = nodes();
+        let (w, texte, budget) = works().remove(2);
+        let complet = carry_over_by_node(&dir, "PreviousStep", &json!({"style": "full"}), w.to_json(3, &texte, budget)).unwrap();
+        let compact = carry_over_by_node(&dir, "PreviousStep", &json!({"style": "compact"}), w.to_json(3, &texte, budget)).unwrap();
+        assert!(complet.contains("Its output ends with:") && !compact.contains("Its output ends with:"), "{complet:?} / {compact:?}");
+        let ts = dir.join("previous_step.ts");
+        let edite = std::fs::read_to_string(&ts).unwrap().replace("## Previous step (step", "## The step before (step");
+        std::fs::write(&ts, edite).unwrap();
+        let apres = carry_over_by_node(&dir, "PreviousStep", &Value::Null, w.to_json(3, &texte, budget)).unwrap();
+        assert!(apres.contains("## The step before (step 3)"), "the edit is not served: {apres:?}");
+    }
+
+    /// **The cost of the scripted block, against the Rust one** (a measure, not a witness: `--ignored`, in release).
+    /// A state of real size (200 reads, 50 writes, a command and its 1 500 last characters, a last text of 3 000
+    /// characters, over the 8 000 budget): the Rust block; the node as a step calls it (the declaration read and the
+    /// script prepared again, which gives the hot reload); the script alone, prepared once.
+    #[test]
+    #[ignore]
+    fn measure_the_scripted_previous_step_against_the_rust_one() {
+        let (_d, dir) = nodes();
+        let w = StepWork {
+            read: (0..200).map(|i| format!("src/module_{i}/fichier_é.rs (lines {i}-{})", i + 40)).collect(),
+            wrote: (0..50).map(|i| format!("src/écrit_{i}.rs")).collect(),
+            command: Some(("cargo test --lib".into(), "test ok 😀\n".repeat(150))),
+        };
+        let texte = "Je relis le module, puis j'édite la fonction. ".repeat(65);
+        let n = 200;
+        let mediane = |mut v: Vec<std::time::Duration>| {
+            v.sort();
+            v[v.len() / 2]
+        };
+        let rust: Vec<_> = (0..n).map(|_| { let t = std::time::Instant::now(); std::hint::black_box(w.block(7, &texte, 8_000)); t.elapsed() }).collect();
+        let noeud: Vec<_> = (0..n)
+            .map(|_| {
+                let t = std::time::Instant::now();
+                std::hint::black_box(carry_over_by_node(&dir, "PreviousStep", &Value::Null, w.to_json(7, &texte, 8_000)).unwrap());
+                t.elapsed()
+            })
+            .collect();
+        use crate::dataflow::node_registry::NodeFactory;
+        let decl = crate::dataflow::scripted_node::read_declaration(&dir.join("previous_step.node.json")).unwrap();
+        let fabrique = crate::dataflow::scripted_node::ScriptedNodeFactory::new(decl, crate::script::ScriptLimits::default()).unwrap();
+        let script: Vec<_> = (0..n)
+            .map(|_| {
+                let mut noeud = fabrique.create("m", &Value::Null).unwrap();
+                let mut ctx = crate::dataflow::node::NodeContext::new();
+                ctx.set_input("work", crate::dataflow::port::PortValue::new(w.to_json(7, &texte, 8_000)));
+                let t = std::time::Instant::now();
+                noeud.execute(&mut ctx).unwrap();
+                t.elapsed()
+            })
+            .collect();
+        assert_eq!(carry_over_by_node(&dir, "PreviousStep", &Value::Null, w.to_json(7, &texte, 8_000)).unwrap(), w.block(7, &texte, 8_000));
+        eprintln!(
+            "[mesure] Previous step, médianes sur {n} appels : Rust {:?} ; nœud tel qu'un pas l'appelle (relu et préparé) {:?} ; script seul, préparé une fois {:?}",
+            mediane(rust),
+            mediane(noeud),
+            mediane(script)
+        );
+    }
+
+    /// **A broken script never breaks the step**: the Rust block serves, and the error names the script's file and
+    /// its line.
+    #[test]
+    fn a_broken_script_falls_back_to_the_rust_block_and_names_its_file_and_line() {
+        let (_d, dir) = nodes();
+        let ts = dir.join("previous_step.ts");
+        let casse = std::fs::read_to_string(&ts).unwrap().replace("  const w = inputs.work;", "  const w = inputs.work;\n  throw new Error(\"cassé exprès\");");
+        std::fs::write(&ts, casse).unwrap();
+        let step = Step::new(TeammateFiles::new(_d.path().join("boite"), "t"), "t", "r", None, 3);
+        step.work.lock().unwrap().read.push("src/a.rs (lines 1-3)".into());
+        let (bloc, erreur) = step.carry_over_with("fini", 8_000, Some((&dir, "PreviousStep", &Value::Null)));
+        assert_eq!(bloc, step.carry_over("fini", 8_000), "the Rust block serves");
+        let e = erreur.expect("the error is said");
+        assert!(e.contains("previous_step.ts") && e.contains("cassé exprès") && e.contains("line"), "{e}");
+    }
+}
+
