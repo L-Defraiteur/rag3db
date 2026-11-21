@@ -607,6 +607,26 @@ pub trait SchemaDialect: Send + Sync {
         self.batch_link(rel_table, prop_columns)
     }
 
+    /// [`Self::batch_link_labeled`] **for a keyed relation** (21 November 2026, the keyed links): a link is its pair
+    /// and the values of `key`, each one also in `prop_columns`. An existing link with the same pair and key values is
+    /// updated; any other one is added beside it. Without key, it is [`Self::batch_link_labeled`]. A dialect that
+    /// cannot say it refuses by name.
+    fn batch_link_keyed(&self, rel_table: &str, ends: Option<(&str, &str)>, prop_columns: &[&str], key: &[&str]) -> String {
+        if key.is_empty() {
+            return self.batch_link_labeled(rel_table, ends, prop_columns);
+        }
+        self.untranslated("batch_link_keyed")
+    }
+
+    /// [`Self::batch_delete_relation`] **for a keyed relation**: `$items` also carries the values of `key`, and only the
+    /// link that holds them is removed. Without key, every link of the pair, as before.
+    fn batch_delete_keyed_relation(&self, rel_table: &str, key: &[&str]) -> String {
+        if key.is_empty() {
+            return self.batch_delete_relation(rel_table);
+        }
+        self.untranslated("batch_delete_keyed_relation")
+    }
+
     /// **Charger des arêtes en masse depuis un CSV** (`from_uuid, to_uuid,
     /// props…`, sans en-tête), quand le moteur sait le faire. `None` : pas
     /// de chemin de masse, l'appelant reste sur [`Self::batch_link`].
@@ -1426,9 +1446,10 @@ pub fn write_by_methods<D: SchemaDialect + ?Sized>(d: &D, write: &rag3weaver_ir:
             let cols: Vec<&str> = columns.iter().map(String::as_str).collect();
             d.batch_upsert(table, &cols)
         }
-        rag3weaver_ir::Write::Link { relation, ends, props } => {
+        rag3weaver_ir::Write::Link { relation, ends, props, key } => {
             let props: Vec<&str> = props.iter().map(String::as_str).collect();
-            d.batch_link_labeled(relation, ends.as_ref().map(|(f, t)| (f.as_str(), t.as_str())), &props)
+            let key: Vec<&str> = key.iter().map(String::as_str).collect();
+            d.batch_link_keyed(relation, ends.as_ref().map(|(f, t)| (f.as_str(), t.as_str())), &props, &key)
         }
         rag3weaver_ir::Write::Update { table, columns } => {
             let cols: Vec<&str> = columns.iter().map(String::as_str).collect();
@@ -1447,7 +1468,10 @@ pub fn write_by_methods<D: SchemaDialect + ?Sized>(d: &D, write: &rag3weaver_ir:
             (field, true, true) => d.batch_cascade_delete_returning_count(table, field),
             _ => return Err(rag3weaver_ir::TranslateError::Untranslated { dialect: d.name().into(), form: "Write::Delete" }),
         },
-        rag3weaver_ir::Write::Unlink { relation } => d.batch_delete_relation(relation),
+        rag3weaver_ir::Write::Unlink { relation, key } => {
+            let key: Vec<&str> = key.iter().map(String::as_str).collect();
+            d.batch_delete_keyed_relation(relation, &key)
+        }
         rag3weaver_ir::Write::Detach { relation, table, side, filter, end } => d
             .detach_edges(relation, table, *side, filter, end.as_ref().map(|(t, p)| (t.as_str(), p)))
             .ok_or_else(|| rag3weaver_ir::TranslateError::Untranslated { dialect: d.name().into(), form: "Write::Detach" })?,
@@ -2398,6 +2422,50 @@ impl SchemaDialect for Rag3dbDialect {
             unwind_par_cle("items", &[par_uuid("a", None, "from")], "MATCH"),
             cle_de_ligne(&["a"], "to", "__cle_1"),
             self.quote(rel_table)
+        )
+    }
+
+    fn batch_delete_keyed_relation(&self, rel_table: &str, key: &[&str]) -> String {
+        if key.is_empty() {
+            return self.batch_delete_relation(rel_table);
+        }
+        let condition: Vec<String> = key.iter().map(|k| format!("r.{0} = item.{0}", self.quote(k))).collect();
+        format!(
+            "{} {} MATCH (a)-[r:{}]->(b {{_uuid: __cle_1}}) WHERE {} DELETE r",
+            unwind_par_cle("items", &[par_uuid("a", None, "from")], "MATCH"),
+            cle_de_ligne(&["a"], "to", "__cle_1"),
+            self.quote(rel_table),
+            condition.join(" AND ")
+        )
+    }
+
+    /// The key values are extracted in the `WITH` right before the `MERGE` that uses them, as [`cle_de_ligne`] says
+    /// of a node's key: one extracted earlier and carried through a second `WITH` makes the engine refuse the `MERGE`.
+    fn batch_link_keyed(&self, rel_table: &str, ends: Option<(&str, &str)>, prop_columns: &[&str], key: &[&str]) -> String {
+        if key.is_empty() {
+            return self.batch_link_labeled(rel_table, ends, prop_columns);
+        }
+        let (from, to) = match ends {
+            Some((f, t)) => (Some(self.quote(f)), Some(self.quote(t))),
+            None => (None, None),
+        };
+        let extraits: Vec<String> = key.iter().enumerate().map(|(i, k)| format!("item.{} AS __k_{i}", self.quote(k))).collect();
+        let motif: Vec<String> = key.iter().enumerate().map(|(i, k)| format!("{}: __k_{i}", self.quote(k))).collect();
+        let assigns: Vec<String> = prop_columns
+            .iter()
+            .filter(|c| !key.contains(c))
+            .map(|c| {
+                let c = self.quote(c);
+                format!("r.{c} = item.{c}")
+            })
+            .collect();
+        let set = if assigns.is_empty() { String::new() } else { format!(" SET {}", assigns.join(", ")) };
+        format!(
+            "{} WITH a, b, item, {} MERGE (a)-[r:{} {{{}}}]->(b){set}",
+            unwind_par_cle("items", &[par_uuid("a", from.as_deref(), "from_uuid"), par_uuid("b", to.as_deref(), "to_uuid")], "MATCH"),
+            extraits.join(", "),
+            self.quote(rel_table),
+            motif.join(", ")
         )
     }
 
@@ -3901,6 +3969,51 @@ impl SchemaDialect for PostgresDialect {
         )
     }
 
+    /// The key values are compared as JSON (`to_jsonb` of the column against the item's value): the column types are
+    /// not known here, and a text or an integer key reads the same way.
+    fn batch_delete_keyed_relation(&self, rel_table: &str, key: &[&str]) -> String {
+        if key.is_empty() {
+            return self.batch_delete_relation(rel_table);
+        }
+        let rel = self.quote(rel_table);
+        let colonnes: String = key.iter().map(|k| format!(", {} JSONB", self.quote(k))).collect();
+        let conditions: String = key.iter().map(|k| format!(" AND to_jsonb({rel}.{0}) = v.{0}", self.quote(k))).collect();
+        format!(
+            "DELETE FROM {rel} \
+             USING jsonb_to_recordset($items::text::jsonb) AS v(\"from\" TEXT, \"to\" TEXT{colonnes}) \
+             WHERE {rel}.from_uuid = v.\"from\" AND {rel}.to_uuid = v.\"to\"{conditions}"
+        )
+    }
+
+    /// The conflict target is the pair and the key, the primary key of a keyed relation's table; the key columns are
+    /// not updated (they are the identity).
+    fn batch_link_keyed(&self, rel_table: &str, ends: Option<(&str, &str)>, prop_columns: &[&str], key: &[&str]) -> String {
+        if key.is_empty() {
+            return self.batch_link_labeled(rel_table, ends, prop_columns);
+        }
+        let mut cols = vec!["from_uuid".to_string(), "to_uuid".to_string()];
+        cols.extend(prop_columns.iter().map(|c| self.quote(c)));
+        let col_list = cols.join(", ");
+        let val_refs = cols.iter().map(|c| format!("v.{c}")).collect::<Vec<_>>().join(", ");
+        let cible: Vec<String> = ["from_uuid".to_string(), "to_uuid".to_string()].into_iter().chain(key.iter().map(|k| self.quote(k))).collect();
+        let assigns: Vec<String> = prop_columns
+            .iter()
+            .filter(|c| !key.contains(c))
+            .map(|c| {
+                let c = self.quote(c);
+                format!("{c} = EXCLUDED.{c}")
+            })
+            .collect();
+        let conflict_update = if assigns.is_empty() { "DO NOTHING".to_string() } else { format!("DO UPDATE SET {}", assigns.join(", ")) };
+        let rel_table = self.quote(rel_table);
+        format!(
+            "INSERT INTO {rel_table} ({col_list}) \
+             SELECT {val_refs} FROM jsonb_populate_recordset(NULL::{rel_table}, $items::text::jsonb) AS v \
+             ON CONFLICT ({}) {conflict_update}",
+            cible.join(", ")
+        )
+    }
+
     fn batch_select(
         &self,
         table: &str,
@@ -4707,7 +4820,7 @@ mod tests {
     fn l_ecriture_est_le_texte_d_avant() {
         use rag3weaver_ir::Write;
         let up = Write::Upsert { table: "Doc".into(), columns: vec!["_uuid".into(), "titre".into()] };
-        let lien = Write::Link { relation: "CITES".into(), ends: Some(("Doc".into(), "Doc".into())), props: vec!["ligne".into()] };
+        let lien = Write::Link { relation: "CITES".into(), ends: Some(("Doc".into(), "Doc".into())), props: vec!["ligne".into()], key: vec![] };
         for d in [&Rag3dbDialect as &dyn SchemaDialect, &PostgresDialect] {
             assert_eq!(d.write(&up).unwrap(), d.batch_upsert("Doc", &["_uuid", "titre"]));
             assert_eq!(d.write(&lien).unwrap(), d.batch_link_labeled("CITES", Some(("Doc", "Doc")), &["ligne"]));
@@ -4732,7 +4845,7 @@ mod tests {
             assert_eq!(d.write(&del("_uuid", false, false)).unwrap(), d.batch_delete("Doc"));
             assert_eq!(d.write(&del("_parent_uuid", true, true)).unwrap(), d.batch_cascade_delete_returning_count("Doc", "_parent_uuid"));
             assert!(d.write(&del("_uuid", false, true)).is_err());
-            assert_eq!(d.write(&Write::Unlink { relation: "CITES".into() }).unwrap(), d.batch_delete_relation("CITES"));
+            assert_eq!(d.write(&Write::Unlink { relation: "CITES".into(), key: vec![] }).unwrap(), d.batch_delete_relation("CITES"));
         }
         use rag3weaver_ir::LoadTarget;
         let noeuds = Write::Load { target: LoadTarget::Nodes { table: "Doc".into(), columns: vec!["_uuid".into(), "titre".into()] }, path: "/tmp/x.csv".into() };
