@@ -460,6 +460,41 @@ impl Node for InsertRecordNode {
                 }
             }
 
+            // **The text of each chunk** (lot L2a, `crate::shared_text`) : in a chunk table that
+            // shares its texts, each chunk written is attached to its text, merged by its
+            // fingerprint, in one statement ; a vector the row carries (the mass path computes
+            // it before the insertion) goes to its text too, where the text has none.
+            if let Some(tables) = ctx.service::<crate::shared_text::SharedTextTables>(crate::shared_text::SERVICE_SHARED_TEXT_TABLES).cloned() {
+                if tables.contains(entity_name.as_str()) {
+                    let text_of = |i: usize| items[i].data.get("_text_hash").and_then(|v| v.as_str()).filter(|h| !h.is_empty()).map(str::to_string);
+                    let pairs: Vec<(String, String)> = indices
+                        .iter()
+                        .filter_map(|&i| Some((items[i].data.get("_uuid")?.as_str()?.to_string(), text_of(i)?)))
+                        .collect();
+                    crate::shared_text::attach_chunks_to_texts(conn.as_ref(), dialect.as_ref(), entity_name, &pairs)
+                        .map_err(|e| format!("textes partagés de « {entity_name} » : {e}"))?;
+                    let entry = ctx
+                        .service::<Vec<crate::embedding_storage::EmbeddingModelEntry>>("embedding_models")
+                        .zip(ctx.service::<String>("embedding_slug"))
+                        .and_then(|(m, s)| m.iter().find(|e| e.slug() == *s).cloned());
+                    if let Some(entry) = entry {
+                        let chunk_column = crate::embedding_storage::VectorStorage::resolve(entity_name, &entry).column;
+                        let carried: Vec<CypherValue> = indices
+                            .iter()
+                            .filter_map(|&i| {
+                                let d = items[i].vectors.as_ref()?.dense.as_ref().filter(|d| d.column == chunk_column)?;
+                                Some(CypherValue::Map(BTreeMap::from([
+                                    ("hash".to_string(), CypherValue::String(text_of(i)?)),
+                                    ("emb".to_string(), CypherValue::List(d.values.iter().map(|&f| CypherValue::Float(f as f64)).collect())),
+                                ])))
+                            })
+                            .collect();
+                        crate::shared_text::set_text_vectors(conn.as_ref(), dialect.as_ref(), entity_name, &crate::shared_text::text_storage(entity_name, &entry).column, carried)
+                            .map_err(|e| format!("textes partagés de « {entity_name} » : {e}"))?;
+                    }
+                }
+            }
+
             // Resolve refs + cache node IDs
             for &i in indices {
                 let rec = &mut items[i];
@@ -2826,6 +2861,24 @@ impl Node for EmbedNode {
                 None => (default_col.clone(), "_embed_hash".to_string()),
             }
         };
+        // **The shared texts** (lot L2a, `crate::shared_text`) : in a chunk table that shares
+        // its texts, every vector written on a chunk goes to its text too, where the text has
+        // none ; a text that carries one spares the model ; a text met twice goes once.
+        let shared_tables = ctx
+            .service::<crate::shared_text::SharedTextTables>(crate::shared_text::SERVICE_SHARED_TEXT_TABLES)
+            .cloned()
+            .unwrap_or_default();
+        let write_all = |table: &str, col: &str, marker: &str, items: Vec<CypherValue>| -> Result<(), String> {
+            let for_texts = current_entry
+                .as_ref()
+                .filter(|_| shared_tables.contains(table))
+                .map(|e| (crate::shared_text::text_storage(table, e).column, items.clone()));
+            write_vectors(conn.as_ref(), dialect.as_ref(), table, col, marker, items)?;
+            if let Some((column, items)) = for_texts {
+                crate::shared_text::set_text_vectors(conn.as_ref(), dialect.as_ref(), table, &column, items)?;
+            }
+            Ok(())
+        };
         let has_sparse_svc = ctx.service::<bool>("has_sparse").copied().unwrap_or(false);
         let has_dual_svc = ctx.service::<bool>("has_dual").copied().unwrap_or(false);
         let sparse_embedder = ctx.service::<Arc<dyn SparseEmbedder>>("sparse_embedder").cloned();
@@ -3051,7 +3104,37 @@ impl Node for EmbedNode {
             }
             for (entity_name, items) in groups {
                 let (col, marker) = storage_for(&entity_name);
-                write_vectors(conn.as_ref(), dialect.as_ref(), &entity_name, &col, &marker, items)?;
+                write_all(&entity_name, &col, &marker, items)?;
+            }
+        }
+        // **A text that already carries its vector spares the model** (lot L2a) : the chunk
+        // takes it like a known vector.
+        if !sans_base && !shared_tables.is_empty() && !dense_works.is_empty() {
+            if let Some(entry) = current_entry.as_ref() {
+                let mut wanted: HashMap<String, Vec<String>> = HashMap::new();
+                for w in dense_works.iter().filter(|w| !w.text_hash.is_empty() && shared_tables.contains(w.entity_name.as_str())) {
+                    wanted.entry(w.entity_name.clone()).or_default().push(w.text_hash.clone());
+                }
+                let mut found: HashMap<(String, String), Vec<f32>> = HashMap::new();
+                for (table, mut hashes) in wanted {
+                    hashes.sort();
+                    hashes.dedup();
+                    let column = crate::shared_text::text_storage(&table, entry).column;
+                    for (hash, vector) in crate::shared_text::text_vectors(conn.as_ref(), dialect.as_ref(), &table, &column, &hashes)? {
+                        if vector.len() == embedding_dim {
+                            found.insert((table.clone(), hash), vector);
+                        }
+                    }
+                }
+                let before = known_dense.len();
+                dense_works.retain(|w| match found.get(&(w.entity_name.clone(), w.text_hash.clone())) {
+                    Some(vector) => {
+                        known_dense.push((w.uuid.clone(), w.text_hash.clone(), w.entity_name.clone(), vector.clone()));
+                        false
+                    }
+                    None => true,
+                });
+                ctx.metric("dense_from_texts", (known_dense.len() - before) as f64);
             }
         }
         // Le dual produit les deux : il repasse si **l'un des deux** manque.
@@ -3087,8 +3170,24 @@ impl Node for EmbedNode {
             }
             for (entity_name, items) in groups {
                 let (col, marker) = storage_for(&entity_name);
-                write_vectors(conn.as_ref(), dialect.as_ref(), &entity_name, &col, &marker, items)?;
+                write_all(&entity_name, &col, &marker, items)?;
             }
+        }
+
+        // **A text met twice in the pass goes once to the model** (lot L2a) : its twins take the
+        // vector computed for the first.
+        let mut twins: Vec<(String, String, String)> = Vec::new();
+        let mut computed: HashMap<(String, String), Vec<f32>> = HashMap::new();
+        if !shared_tables.is_empty() {
+            let mut first: HashSet<(String, String)> = HashSet::new();
+            dense_works.retain(|w| {
+                if w.text_hash.is_empty() || !shared_tables.contains(w.entity_name.as_str()) || first.insert((w.entity_name.clone(), w.text_hash.clone())) {
+                    return true;
+                }
+                twins.push((w.uuid.clone(), w.text_hash.clone(), w.entity_name.clone()));
+                false
+            });
+            ctx.metric("dense_twins", twins.len() as f64);
         }
 
         // ── Dense embedding (GPU mini-batches) ──
@@ -3114,6 +3213,11 @@ impl Node for EmbedNode {
                         "embedder returned {} vectors for {} texts",
                         vectors.len(), chunk.len()
                     ));
+                }
+                if !twins.is_empty() {
+                    for (work, vector) in chunk.iter().zip(vectors.iter()) {
+                        computed.insert((work.entity_name.clone(), work.text_hash.clone()), vector.clone());
+                    }
                 }
                 if enrich {
                     for (work, vector) in chunk.iter().zip(vectors.into_iter()) {
@@ -3152,7 +3256,7 @@ impl Node for EmbedNode {
 
                     let (col, marker) = storage_for(entity_name);
                     let CypherValue::List(items) = items_param else { unreachable!("bâti comme une liste juste au-dessus") };
-                    write_vectors(conn.as_ref(), dialect.as_ref(), entity_name, &col, &marker, items)?;
+                    write_all(entity_name, &col, &marker, items)?;
                 }
                 Ok(())
             }, &suivi)?;
@@ -3167,6 +3271,25 @@ impl Node for EmbedNode {
             }
             ctx.metric("model_ms", stats.embed_ms as f64);
             ctx.metric("write_ms", stats.write_ms as f64);
+        }
+        if !twins.is_empty() {
+            let mut groups: HashMap<String, Vec<CypherValue>> = HashMap::new();
+            for (uuid, hash, entity_name) in twins {
+                let Some(vector) = computed.get(&(entity_name.clone(), hash.clone())) else { continue };
+                if enrich {
+                    dense_done.insert(uuid, vector.clone());
+                    continue;
+                }
+                groups.entry(entity_name).or_default().push(CypherValue::Map(BTreeMap::from([
+                    ("uuid".to_string(), CypherValue::String(uuid)),
+                    ("hash".to_string(), CypherValue::String(hash)),
+                    ("emb".to_string(), CypherValue::List(vector.iter().map(|&f| CypherValue::Float(f as f64)).collect())),
+                ])));
+            }
+            for (entity_name, items) in groups {
+                let (col, marker) = storage_for(&entity_name);
+                write_all(&entity_name, &col, &marker, items)?;
+            }
         }
 
         // ── Sparse embedding (GPU mini-batches) → insert into SparseHandle ──
@@ -3312,7 +3435,7 @@ impl Node for EmbedNode {
 
                         let (col, marker) = storage_for(entity_name);
                         let CypherValue::List(items) = items_param else { unreachable!("bâti comme une liste juste au-dessus") };
-                        write_vectors(conn.as_ref(), dialect.as_ref(), entity_name, &col, &marker, items)?;
+                        write_all(entity_name, &col, &marker, items)?;
                     }
                 }
 
@@ -3645,6 +3768,25 @@ impl Node for SparseCommitNode {
     }
 }
 
+/// **The fingerprints of the chunks of `parents`**, when `chunk_table` shares its texts (lot
+/// L2a, `crate::shared_text`) : read before the chunks go, the texts they leave orphan are
+/// removed right after ([`crate::shared_text::remove_orphan_texts`]).
+fn shared_text_hashes_before(
+    ctx: &NodeContext,
+    conn: &Arc<dyn DbConnection>,
+    dialect: &Arc<dyn crate::dialect::SchemaDialect>,
+    chunk_table: &str,
+    parents: &[String],
+) -> Result<Vec<String>, String> {
+    let shared = ctx
+        .service::<crate::shared_text::SharedTextTables>(crate::shared_text::SERVICE_SHARED_TEXT_TABLES)
+        .is_some_and(|t| t.contains(chunk_table));
+    if !shared || parents.is_empty() {
+        return Ok(Vec::new());
+    }
+    crate::shared_text::hashes_of_chunks_of(conn.as_ref(), dialect.as_ref(), chunk_table, parents)
+}
+
 /// **Retirer de l'index creux les chunks des lignes `parents`**, avant de les
 /// supprimer en base. Le creux ne vit que dans l'index lucistore, par offset
 /// de chunk : une suppression qui ne l'en retire pas y laisse des entrées
@@ -3751,6 +3893,7 @@ impl Node for RechunkDeleteNode {
                 .ok_or("RechunkDeleteNode: 'dialect' service not registered")?;
             let creux = retirer_le_creux_des_chunks(ctx, &conn, &dialect, &chunk_table, uuids)?;
             ctx.metric("sparse_removed", creux as f64);
+            let shared_hashes = shared_text_hashes_before(ctx, &conn, &dialect, &chunk_table, uuids)?;
             let cypher = crate::dialect::ecriture(&*dialect, &rag3weaver_ir::Write::Delete { table: chunk_table.clone(), by: "_parent_uuid".into(), cascade: true, count: true });
             oublier_la_table(ctx.service::<ProvenPresent>(PROVEN_PRESENT), &chunk_table);
             let result = conn
@@ -3759,6 +3902,7 @@ impl Node for RechunkDeleteNode {
                     &[QueryParam { name: "uuids".into(), value: uuid_list }],
                 )
                 .map_err(|e| e.to_string())?;
+            crate::shared_text::remove_orphan_texts(conn.as_ref(), dialect.as_ref(), &chunk_table, &shared_hashes)?;
             for row in &result.rows {
                 let Some(cnt) = row.get(1).and_then(|v| v.as_i64()) else { continue };
                 total_deleted += cnt as usize;
@@ -3914,6 +4058,7 @@ impl Node for DeleteRecordNode {
                 );
                 let creux = retirer_le_creux_des_chunks(ctx, &conn, &dialect, &chunk_table, uuids)?;
                 ctx.metric("sparse_removed", creux as f64);
+                let shared_hashes = shared_text_hashes_before(ctx, &conn, &dialect, &chunk_table, uuids)?;
                 let del_chunks = crate::dialect::ecriture(&*dialect, &rag3weaver_ir::Write::Delete { table: chunk_table.clone(), by: "_parent_uuid".into(), cascade: true, count: true });
                 oublier_la_table(ctx.service::<ProvenPresent>(PROVEN_PRESENT), &chunk_table);
                 let result = conn
@@ -3922,6 +4067,7 @@ impl Node for DeleteRecordNode {
                         &[QueryParam { name: "uuids".into(), value: uuid_list }],
                     )
                     .map_err(|e| e.to_string())?;
+                crate::shared_text::remove_orphan_texts(conn.as_ref(), dialect.as_ref(), &chunk_table, &shared_hashes)?;
                 for row in &result.rows {
                     if let (Some(uuid), Some(cnt)) = (
                         row.get(0).and_then(|v| v.as_str()),

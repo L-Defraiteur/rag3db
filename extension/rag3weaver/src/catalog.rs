@@ -30,6 +30,8 @@ mod synchronisation;
 mod reuse_by_text_hash_tests;
 #[cfg(all(test, feature = "rag3db-native"))]
 mod shared_text_tests;
+#[cfg(all(test, feature = "rag3db-native"))]
+mod shared_text_write_tests;
 pub use progress::{IndexProgress, IndexState, Level, SignalState, TableProgress};
 pub use aside::{KnownVectors, SnapshotUndo, SERVICE_KNOWN_VECTORS};
 pub use synchronisation::{SnapshotFinish, SnapshotFinishOptions, SnapshotSession};
@@ -4015,6 +4017,34 @@ fn read_threads() -> u64 {
         Ok(reports)
     }
 
+    /// **The chunk tables whose texts are shared** (lot L2a) : under the setting and out of
+    /// read only, those the migration has done for the registered models.
+    pub(crate) fn shared_text_tables(&self) -> std::collections::HashSet<String> {
+        if !self.config.shared_text_vectors || self.lecture_seule {
+            return Default::default();
+        }
+        let Ok(entries) = self.registered_embedding_models() else { return Default::default() };
+        let slugs = entries.iter().map(|e| e.slug()).collect::<Vec<_>>().join(",");
+        self.vector_tables()
+            .into_iter()
+            .filter(|t| self.read_meta_key(&format!("shared_text:{t}:{slugs}")).ok().flatten().is_some())
+            .collect()
+    }
+
+    /// The fingerprints of the chunks of `parents`, when `chunk_table` shares its texts ; read
+    /// before the chunks go.
+    pub(crate) fn shared_text_hashes_of_parents(&self, chunk_table: &str, parents: &[String]) -> Result<Vec<String>, CatalogError> {
+        if parents.is_empty() || !self.shared_text_tables().contains(chunk_table) {
+            return Ok(Vec::new());
+        }
+        crate::shared_text::hashes_of_chunks_of(self.conn.as_ref(), self.dialect.as_ref(), chunk_table, parents).map_err(CatalogError::DbError)
+    }
+
+    /// The texts among `hashes` left without a chunk, removed (`crate::shared_text::remove_orphan_texts`).
+    pub(crate) fn remove_orphan_texts_of(&self, chunk_table: &str, hashes: &[String]) -> Result<(), CatalogError> {
+        crate::shared_text::remove_orphan_texts(self.conn.as_ref(), self.dialect.as_ref(), chunk_table, hashes).map_err(CatalogError::DbError)
+    }
+
     /// Un `ALTER` dont « existe déjà » n'est pas une erreur.
     fn alter_absorbing(&self, table: &str, ddl: &str) -> Result<(), CatalogError> {
         match self.conn.execute(ddl) {
@@ -4366,6 +4396,7 @@ fn read_threads() -> u64 {
         services.register("has_sparse",
             self.sparse_embedder.is_some() || self.dual_embedder.is_some());
         services.register("has_dual", self.dual_embedder.is_some());
+        services.register(crate::shared_text::SERVICE_SHARED_TEXT_TABLES, crate::shared_text::SharedTextTables::new(self.shared_text_tables()));
         services.register("sparse_handles", self.sparse_handles.clone());
         services.register("fts_handles", self.fts_handles.clone());
         if let Some(t) = &self.fts_tampon {
@@ -5149,9 +5180,18 @@ fn read_threads() -> u64 {
             }
             poses += 1;
         }
+        // The texts of a table that shares them take the current model's vector too (lot L2a).
+        let shared = self.current_embedding_entry().filter(|_| self.shared_text_tables().contains(table));
         for (colonne, items) in denses {
+            let for_texts = shared
+                .as_ref()
+                .filter(|e| crate::embedding_storage::VectorStorage::resolve(table, e).column == colonne)
+                .map(|e| (crate::shared_text::text_storage(table, e).column, items.clone()));
             crate::dataflow::record_nodes::write_vectors(self.conn.as_ref(), self.dialect.as_ref(), table, &colonne, &marqueur, items)
                 .map_err(CatalogError::DbError)?;
+            if let Some((column, items)) = for_texts {
+                crate::shared_text::set_text_vectors(self.conn.as_ref(), self.dialect.as_ref(), table, &column, items).map_err(CatalogError::DbError)?;
+            }
         }
         if !creux.is_empty() {
             let items: Vec<(String, String, &crate::sparse_index::SparseVector)> = creux.iter().map(|(u, h, sv)| (u.clone(), h.clone(), sv)).collect();
@@ -11400,9 +11440,12 @@ fn read_threads() -> u64 {
         let uuids = CypherValue::List(exclues.iter().cloned().map(CypherValue::String).collect());
         let mut touchees: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
         // Their chunks, and the vectors on them.
-        let effacer = rag3weaver_ir::Write::Delete { table: format!("{entity}_Chunk"), by: "_parent_uuid".into(), cascade: true, count: true };
+        let chunk_table = format!("{entity}_Chunk");
+        let shared_hashes = self.shared_text_hashes_of_parents(&chunk_table, &exclues.iter().cloned().collect::<Vec<String>>())?;
+        let effacer = rag3weaver_ir::Write::Delete { table: chunk_table.clone(), by: "_parent_uuid".into(), cascade: true, count: true };
         let q = self.dialect.write(&effacer).map_err(|e| CatalogError::DbError(e.to_string()))?;
         let r = self.conn.execute_with_params(&q, &[QueryParam::new("uuids", uuids.clone())]).map_err(|e| CatalogError::DbError(e.to_string()))?;
+        self.remove_orphan_texts_of(&chunk_table, &shared_hashes)?;
         for l in &r.rows {
             if l.get(1).and_then(|v| v.as_i64()).unwrap_or(0) > 0 {
                 if let Some(u) = l.first().and_then(|v| v.as_str()) {

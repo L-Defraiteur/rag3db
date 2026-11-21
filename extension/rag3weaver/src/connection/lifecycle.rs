@@ -102,6 +102,9 @@ impl<C: DbConnection + ?Sized> DbConnection for RevocableConnection<C> {
     fn database_path(&self) -> Option<std::path::PathBuf> {
         self.inner.database_path()
     }
+    fn sole_writer(&self) -> Result<(), String> {
+        self.inner.sole_writer()
+    }
 }
 
 #[cfg(test)]

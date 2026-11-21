@@ -184,6 +184,13 @@ pub trait DbConnection: Send + Sync {
     fn database_path(&self) -> Option<std::path::PathBuf> {
         None
     }
+
+    /// **The single writer of the base** (21 November 2026, the shared texts) : `Err` names
+    /// a second writing connection open on the same database in this process. The default
+    /// is a connection that is its base's only writer.
+    fn sole_writer(&self) -> Result<(), String> {
+        Ok(())
+    }
 }
 
 /// D'où vient la taille du tampon du moteur.

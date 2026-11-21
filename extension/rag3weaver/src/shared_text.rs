@@ -96,3 +96,114 @@ pub fn migrate_to_shared_text(
     let edges = dialect.count_has_text_edges(&rel).map(|q| count(conn, &q));
     Ok(TableReport { chunk_table: chunk_table.to_string(), texts: count(conn, &dialect.count_rows(&text)), edges, vectors, ms: start.elapsed().as_millis() })
 }
+
+/// The service that names, to the dataflow nodes, the chunk tables whose texts are shared
+/// (lot L2a) : registered by the catalog, empty when the setting is off.
+pub const SERVICE_SHARED_TEXT_TABLES: &str = "shared_text_tables";
+pub type SharedTextTables = std::sync::Arc<std::collections::HashSet<String>>;
+
+/// **Writing the shared texts relies on the single writer of the base** (21 November 2026,
+/// c7 and Lucie) : attaching a chunk to its text and removing an orphan text are each one
+/// statement, and the base's single writer serialises them, so no text is removed between
+/// the moment a writer finds it and the moment it attaches a chunk to it. A second writing
+/// connection on the same base would break that (an edge towards a text another transaction
+/// removes) : the writes refuse it, named, instead of trying their luck.
+fn single_writer(conn: &dyn DbConnection) -> Result<(), String> {
+    conn.sole_writer()
+}
+
+/// The fingerprints looked up or touched per statement (`IN $list`, never an `UNWIND … WHERE`).
+const PACKET: usize = 20_000;
+
+fn strings(items: &[String]) -> crate::connection::CypherValue {
+    crate::connection::CypherValue::List(items.iter().map(|s| crate::connection::CypherValue::String(s.clone())).collect())
+}
+
+/// **Attach chunks to their texts** (`(chunk uuid, text hash)`), one statement per packet :
+/// the text is merged by its fingerprint (created when it is missing, its vector then due),
+/// and the edge in the same statement. Finding the text and attaching to it are never two.
+pub fn attach_chunks_to_texts(conn: &dyn DbConnection, dialect: &dyn SchemaDialect, chunk_table: &str, items: &[(String, String)]) -> Result<(), String> {
+    use crate::connection::{CypherValue, QueryParam};
+    let items: Vec<&(String, String)> = items.iter().filter(|(_, h)| !h.is_empty()).collect();
+    if items.is_empty() {
+        return Ok(());
+    }
+    single_writer(conn)?;
+    let q = dialect.attach_chunks_to_texts(chunk_table, &text_table_of(chunk_table), &has_text_rel_of(chunk_table));
+    for packet in items.chunks(PACKET) {
+        let list = CypherValue::List(
+            packet
+                .iter()
+                .map(|(u, h)| CypherValue::Map([("uuid".to_string(), CypherValue::String(u.clone())), ("hash".to_string(), CypherValue::String(h.clone()))].into_iter().collect()))
+                .collect(),
+        );
+        conn.execute_with_params(&q, &[QueryParam::new("items", list)]).map_err(|e| format!("{e} — « {q} »"))?;
+    }
+    Ok(())
+}
+
+/// The vectors the texts already carry in a model's column, by fingerprint ; empty when the
+/// engine does not read vectors back.
+pub fn text_vectors(conn: &dyn DbConnection, dialect: &dyn SchemaDialect, chunk_table: &str, column: &str, hashes: &[String]) -> Result<std::collections::HashMap<String, Vec<f32>>, String> {
+    use crate::connection::{CypherValue, QueryParam};
+    let mut out = std::collections::HashMap::new();
+    let Some(q) = dialect.text_vectors_by_hash(&text_table_of(chunk_table), column) else { return Ok(out) };
+    for packet in hashes.chunks(PACKET) {
+        let rows = conn.execute_with_params(&q, &[QueryParam::new("hashes", strings(packet))]).map_err(|e| format!("{e} — « {q} »"))?.rows;
+        for row in rows {
+            let (Some(h), Some(CypherValue::List(v))) = (row.first().and_then(|v| v.as_str()).map(str::to_string), row.get(1)) else { continue };
+            let vector: Vec<f32> = v.iter().filter_map(|x| x.as_f64()).map(|x| x as f32).collect();
+            if !vector.is_empty() {
+                out.entry(h).or_insert(vector);
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// **Put vectors on their texts** (maps with `hash` and `emb`, other keys ignored) where a
+/// text has none yet : a vector is never replaced (the HNSW index of rag3db loses rows when a
+/// `SET` replaces one, `record_nodes::write_vectors`).
+pub fn set_text_vectors(conn: &dyn DbConnection, dialect: &dyn SchemaDialect, chunk_table: &str, column: &str, items: Vec<crate::connection::CypherValue>) -> Result<(), String> {
+    use crate::connection::{CypherValue, QueryParam};
+    if items.is_empty() {
+        return Ok(());
+    }
+    single_writer(conn)?;
+    let q = dialect.set_text_vectors(&text_table_of(chunk_table), column);
+    for packet in items.chunks(PACKET) {
+        conn.execute_with_params(&q, &[QueryParam::new("items", CypherValue::List(packet.to_vec()))]).map_err(|e| format!("{e} — « {q} »"))?;
+    }
+    Ok(())
+}
+
+/// The fingerprints of the chunks of these parents : read **before** the chunks go, so the
+/// texts they leave orphan can be removed after.
+pub fn hashes_of_chunks_of(conn: &dyn DbConnection, dialect: &dyn SchemaDialect, chunk_table: &str, parents: &[String]) -> Result<Vec<String>, String> {
+    use crate::connection::QueryParam;
+    let q = dialect.hashes_of_chunks_by_parent(chunk_table);
+    let mut out = Vec::new();
+    for packet in parents.chunks(PACKET) {
+        let rows = conn.execute_with_params(&q, &[QueryParam::new("uuids", strings(packet))]).map_err(|e| format!("{e} — « {q} »"))?.rows;
+        out.extend(rows.iter().filter_map(|r| r.first().and_then(|v| v.as_str()).map(str::to_string)).filter(|h| !h.is_empty()));
+    }
+    out.sort();
+    out.dedup();
+    Ok(out)
+}
+
+/// **Remove the texts among `hashes` that no chunk points to any more**, with their vectors :
+/// one statement per packet, bounded to the texts the removal touched, right after the
+/// chunks went.
+pub fn remove_orphan_texts(conn: &dyn DbConnection, dialect: &dyn SchemaDialect, chunk_table: &str, hashes: &[String]) -> Result<(), String> {
+    use crate::connection::QueryParam;
+    if hashes.is_empty() {
+        return Ok(());
+    }
+    single_writer(conn)?;
+    let q = dialect.delete_orphan_texts(chunk_table, &text_table_of(chunk_table), &has_text_rel_of(chunk_table));
+    for packet in hashes.chunks(PACKET) {
+        conn.execute_with_params(&q, &[QueryParam::new("hashes", strings(packet))]).map_err(|e| format!("{e} — « {q} »"))?;
+    }
+    Ok(())
+}
