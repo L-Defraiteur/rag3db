@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ligneDeBoite } from "@/lib/boite";
 import { lineDiff } from "@/lib/diff";
 import { GraphDiffSection, type GraphDiff } from "@/lib/graph";
-import { onFlux, shortName, type FluxEvent, type HostState } from "@/lib/host";
+import { displayName, onFlux, type FluxEvent, type HostState } from "@/lib/host";
 
 // **La relecture d'une tâche** (page 08, vue 5) : la branche et son départ, les
 // témoins de la branche, fusionner ou rejeter, les graphes changés (en texte :
@@ -196,11 +196,11 @@ export function TaskReview({ id, name, state }: { id: string; name: string; stat
     // La tâche est fermée : la liste la montre parmi les fermées.
     location.assign(`/ide/code/${id}/taches/`);
   };
-  if (!backend) return <p className="text-destructive">backend inconnu : {id}</p>;
+  if (!backend) return <p className="text-destructive">dépôt inconnu : {id}</p>;
   return (
     <>
       <p id="fil" className="text-xs text-muted-foreground mb-3">
-        <a href="/ide/" className="hover:underline">backends</a> · <a href={`/ide/code/${id}/taches/`} className="hover:underline">{shortName(backend.manifest)}</a> · tâche {name}
+        <a href="/ide/" className="hover:underline">dépôts</a> · <a href={`/ide/code/${id}/taches/`} className="hover:underline">{displayName(backend)}</a> · tâche {name}
       </p>
       {error ? <p className="text-destructive" role="alert">{error}</p> : null}
       {r ? (

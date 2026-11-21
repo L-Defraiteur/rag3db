@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
-import { call, shortName, type HostState } from "@/lib/host";
+import { displayName, call, type HostState } from "@/lib/host";
 import { fileLink, symbolLink } from "@/views/File";
 
 // **Un symbole** (page 08, vue 7) : ses définitions et ses usages par genre
@@ -55,13 +55,13 @@ export function Symbol({ id, name, state }: { id: string; name: string; state: H
   const u = use(() => call(m, "usages", { name, limit: 200, format: "json" }) as Promise<Usages>, [m, name]);
   const imp = use(() => (call(m, "impact", { name, format: "json" }) as Promise<Reached>).catch((e: Error) => ({ erreur: e.message })), [m, name]);
   const app = use(() => (call(m, "callees", { name, format: "json" }) as Promise<Reached>).catch((e: Error) => ({ erreur: e.message })), [m, name]);
-  if (!backend) return <p className="text-destructive">backend inconnu : {id}</p>;
+  if (!backend) return <p className="text-destructive">dépôt inconnu : {id}</p>;
   const byKind = new Map<string, { user: Item; guessed?: boolean }[]>();
   if (u.state === "done") for (const x of u.value.usages ?? []) (byKind.get(x.usage) ?? byKind.set(x.usage, []).get(x.usage)!).push(x);
   return (
     <>
       <p id="fil" className="text-xs text-muted-foreground mb-3">
-        <a href={`/ide/code/${id}/arbre/`} className="hover:underline">{shortName(backend.manifest)}</a> · {name}
+        <a href={`/ide/code/${id}/arbre/`} className="hover:underline">{displayName(backend)}</a> · {name}
       </p>
       <h1 className="text-xl font-semibold mb-2 flex items-center gap-2">
         {name} <a href={graphLink(id, name)} className="pastille text-xs font-normal underline">en graphe</a>

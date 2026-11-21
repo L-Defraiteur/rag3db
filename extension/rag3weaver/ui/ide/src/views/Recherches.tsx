@@ -3,7 +3,7 @@ import { History, MousePointerClick, RotateCcw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { searchLink } from "@/components/SearchBox";
-import { shortName, type HostState } from "@/lib/host";
+import { displayName, type HostState } from "@/lib/host";
 import { fileLink } from "@/views/File";
 
 // **Mes recherches** (8 novembre 2026, décision de Lucie du 11 octobre : « j'aimerais
@@ -121,7 +121,7 @@ export function Recherches({ id, state }: { id: string; state: HostState }) {
   return (
     <>
       <p id="fil" className="text-xs text-muted-foreground mb-3">
-        <a href="/ide/" className="hover:underline">dépôts</a> · {shortName(backend.manifest)} · mes recherches
+        <a href="/ide/" className="hover:underline">dépôts</a> · {displayName(backend)} · mes recherches
       </p>
       <h1 className="text-xl font-semibold mb-1 inline-flex items-center gap-2"><History className="size-5" /> Mes recherches</h1>
       <p className="note text-sm text-muted-foreground mb-2">
