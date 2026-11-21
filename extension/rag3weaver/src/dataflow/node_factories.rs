@@ -1731,7 +1731,7 @@ mod tests {
         let e = refused("BM25SearchNode", serde_json::json!({"result_mode": "Aggregated"}));
         assert!(e.contains("'Aggregated'") && e.contains("aggregated, detailed, source_resolved"), "{e}");
         let e = refused("BM25SearchNode", serde_json::json!({"mode": "containsSplit"}));
-        assert!(e.contains("auto, contains, contains_split, regex, parse, symbol"), "{e}");
+        assert!(e.contains("auto, contains, contains_split, regex, words, symbol"), "{e}");
         let e = refused("FuseResultsNode", serde_json::json!({"strategy": "RRF"}));
         assert!(e.contains("rrf, weighted"), "{e}");
         // Le parseur lui-même est strict aussi, pas seulement le registre.
