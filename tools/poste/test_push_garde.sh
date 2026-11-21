@@ -243,7 +243,7 @@ crochet() { # crochet <n> <rc du crochet> : écrit rc, sortie, tête vue par le 
     git clone -q "$D/nup$1.git" "$H/git_workspaces/wt" 2>/dev/null
     cd "$H/git_workspaces/wt" && git config user.email luciedefraiteur@gmail.com && git config user.name t
     git checkout -q --detach origin/master; echo 'fn crochet() {}' > extension/rag3weaver/src/crochet.rs; git add -A; git commit -qm crochet
-    printf 'teste %s\nVERT\n' "$(git rev-parse --short HEAD)" > "$H/.cache/rag3weaver-build/j/resume.log"; git rev-parse origin/master > "$H/.cache/rag3weaver-build/j/base"
+    printf '%steste %s\nVERT\n' "${PREMIERE:-}" "$(git rev-parse --short HEAD)" > "$H/.cache/rag3weaver-build/j/resume.log"; git rev-parse origin/master > "$H/.cache/rag3weaver-build/j/base"
     echo "rag3db-build-0123456789012345678901234567890123456789-Release" > "$H/.cache/rag3weaver-build/j/lib.log"
     printf '#!/bin/bash\necho "$1 $(git -C %s rev-parse origin/master)" > %s\nexit %s\n' "$H/git_workspaces/wt" "$D/crochet-vu-$1" "$2" > "$D/crochet-$1.sh"
     sortie=$(HOME="$H" PRE_PUSH="bash $D/crochet-$1.sh" bash "$GARDE" wt j 2>&1); rc=$?
@@ -251,6 +251,11 @@ crochet() { # crochet <n> <rc du crochet> : écrit rc, sortie, tête vue par le 
   )
 }
 crochet 1 0; crochet 2 1; crochet 3 75
+# 21 Nov.: the pass may say « NON JUGÉS : … » (or « NON JUGÉE : … ») on its first line; the tested commit is on the next.
+PREMIERE=$'NON JUGÉS : 1 — e2e_x : SAUTÉ e2e_x : pas de modèle\n' crochet 4 0
+r4=$(sed -n 1p "$D/crochet-4")
+if [ "$r4" = 0 ] && grep -qx POUSSE "$D/crochet-4"; then echo "vert   une première ligne « NON JUGÉS » : la garde lit le commit testé dessous, et pousse"
+else echo "ROUGE  première ligne NON JUGÉS : rc $r4 — $(tail -2 "$D/crochet-4")"; rouge=1; fi
 r1=$(sed -n 1p "$D/crochet-1"); m1=$(sed -n 2p "$D/crochet-1"); vu1=$(cat "$D/crochet-vu-1" 2>/dev/null)
 if [ "$r1" = 0 ] && grep -qx POUSSE "$D/crochet-1" && [ "${vu1%% *}" = "$m1" ] && [ "${vu1#* }" != "$m1" ]; then
   echo "vert   PRE_PUSH appelé avec la tête finale, avant le push"

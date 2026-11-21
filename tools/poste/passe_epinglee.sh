@@ -68,7 +68,10 @@ R=$J/resume.log
 # La base testée, pour la garde hors pile (15 nov. 2026, note d'ED) : le dernier commit de master sous la tête.
 git -C $W merge-base HEAD origin/master > $J/base 2>/dev/null || rm -f $J/base
 echo "commit $(git -C $W rev-parse --short HEAD) — $(date '+%d/%m %H:%M') — lib ${RAG3DB_LIB:13:9}" > $R
-rouge() { echo "ROUGE $1" >> $R; exit 1; }
+# Les non-jugés des suites, dits en première ligne du résumé (21 novembre 2026, c7) : la garde lit le commit testé sur la
+# première ligne qui ne commence pas par « NON JUG ».
+dire_non_juges() { [ "${NJ_SUITES:-0}" -gt 0 ] && sed -i "1i NON JUGÉS : $NON_JUGES — $PREMIER_NJ" $R; return 0; }
+rouge() { dire_non_juges; echo "ROUGE $1" >> $R; exit 1; }
 # La règle 7 : un C++ du lot plus neuf que la lib épinglée se joue sous RAG3WEAVER_MOTEUR_ANCIEN=1, dit ici.
 [ -n "${RAG3WEAVER_MOTEUR_ANCIEN:-}" ] && echo "RAG3WEAVER_MOTEUR_ANCIEN=$RAG3WEAVER_MOTEUR_ANCIEN : le C++ du lot est plus neuf que la lib ${RAG3DB_LIB:13:9}" >> $R
 
@@ -84,15 +87,24 @@ EXIGEES_NOMS=$(echo "$EXIGEES" | awk 'NF {print $1}' | tr '\n' ' ')
 # **Un test non jugé n'est pas un test passé** (18 novembre 2026, ticket de c7) : un test qui dit « non jugé : … » et rend
 # la main compte parmi les passés de cargo (e2e_lectures, sous une lib d'avant le format 43). Chaque journal est relu : ses
 # non-jugés sont listés à part, comptés, et un non-jugé du témoin ou d'une suite exigée rend la passe rouge.
-NON_JUGES=0
-non_juges() { # <journal> <nom> : ajoute au résumé les non-jugés du journal, et rend leur nombre
-  local n; n=$(grep -c '^non jugé : ' "$1" 2>/dev/null); n=${n:-0}
+# **Un test sauté n'est pas un test passé** (21 novembre 2026, c7 : e2e_equipier rendait « 2 passed » en 0,00 s, ses deux
+# cas sur le vrai Gemini écrivant « SAUTÉ … » et rendant la main) : une ligne SAUTÉ (ou SAUTE, SKIPPED, SKIP) compte non
+# jugée comme « non jugé : ». La ligne de résumé « SAUTÉ(S) » de run_e2e.sh n'est pas une marque (suivie d'une parenthèse).
+NON_JUGES=0; NJ_SUITES=0; PREMIER_NJ=""
+MARQUE_NJ='^non jugé : |(^|[^A-Za-z])(SAUTÉ|SAUTÉE|SAUTÉS|SAUTE|SKIPPED|SKIP)([[:space:]:]|$)'
+non_juges() { # <journal> <nom> : ajoute au résumé les non-jugés du journal, et rend leur nombre (255 au plus)
+  local n premier; n=$(grep -cE "$MARQUE_NJ" "$1" 2>/dev/null); n=${n:-0}
   if [ "$n" -gt 0 ]; then
-    echo "non jugés dans $2 : $n — $(grep -m1 '^non jugé : ' "$1")" >> $R
-    NON_JUGES=$((NON_JUGES + n))
+    premier=$(grep -m1 -E "$MARQUE_NJ" "$1" | sed 's/^[[:space:]]*//' | cut -c1-160)
+    echo "non jugés dans $2 : $n — $premier" >> $R
+    NON_JUGES=$((NON_JUGES + n)); NJ_SUITES=$((NJ_SUITES + n))
+    [ -n "$PREMIER_NJ" ] || PREMIER_NJ="$2 : $premier"
   fi
+  [ "$n" -gt 255 ] && n=255
   return "$n"
 }
+# Les passés d'un journal de cargo (la somme des « test result: ok. N passed »).
+passes_de() { grep -oP '^test result: (ok|FAILED)\. \K[0-9]+(?= passed)' "$1" 2>/dev/null | awk '{s += $1} END {print s + 0}'; }
 # **Les rouges connus** (19 novembre 2026, forme de c7) : tools/poste/known_red_e2e.txt, dans l'arbre, une ligne par cas,
 # `suite<TAB>cas<TAB>chemin du ticket`. La suite se joue entière ; au verdict, un cas rouge qui a sa ligne compte « rouge
 # connu (ticket) », un cas listé qui passe est dit « à lever », tout autre rouge juge. Une ligne dont le ticket est absent,
@@ -173,7 +185,7 @@ if [ "${SUITE_DU_TEMOIN:-}" != navigateur ] && [ "${SUITE_DU_TEMOIN:-}" != tty ]
   awk -v f="$FILTRE" '$1 == "test" && $(NF - 1) == "..." && $NF == "ok" && index($2, f) {t = 1} END {exit !t}' $J/temoins.log \
     || rouge "témoin : aucun test « $FILTRE » n'a été joué ok ($(grep -m1 '^test result' $J/temoins.log))"
 fi
-non_juges $J/temoins.log témoin || rouge "témoin : $(grep -c '^non jugé : ' $J/temoins.log) test non jugé (un témoin doit juger)"
+non_juges $J/temoins.log témoin || rouge "témoin : $? test non jugé (un témoin doit juger)"
 
 # SUITES=<liste> (14 novembre 2026, au mot de c7) : la liste des suites e2e remplace celle par défaut
 # (e2e_lectures, e2e_code, SUITE_DU_TEMOIN, SUITES_EN_PLUS) ; SUITES=- n'en joue aucune. Le témoin,
@@ -230,7 +242,10 @@ for suite in $(echo $LISTE_DES_SUITES | tr " " "\n" | awk 'NF && !vu[$0]++'); do
   done
   # Une suite non jouée faute de feature est rouge (procédure, 7 novembre 2026).
   grep -q 'NON JOUÉES' $J/$suite.log && rouge "$suite : des suites non jouées faute de feature"
-  if ! non_juges $J/$suite.log $suite && echo " $EXIGEES_NOMS " | grep -q " $suite "; then
+  non_juges $J/$suite.log $suite; nj=$?
+  # Une suite dont tous les cas sont non jugés n'a pas été jouée : rouge, exigée ou non (une suite non jouée est rouge).
+  [ "$nj" -gt 0 ] && [ "$nj" -ge "$(passes_de $J/$suite.log)" ] && rouge "$suite : tous ses cas sont non jugés ($nj sur $(passes_de $J/$suite.log) passés) — une suite non jouée est rouge"
+  if [ "$nj" -gt 0 ] && echo " $EXIGEES_NOMS " | grep -q " $suite "; then
     rouge "$suite : suite exigée par le lot, et un de ses tests est non jugé"
   fi
 done
@@ -285,4 +300,5 @@ if [ -n "${FAUTE_INJECTEE:-}" ] && [ -f scripts/test_confiner_faute_injectee.py 
 fi
 echo "suites jouées :${JOUEES:- aucune}" >> $R
 echo "tests non jugés : $NON_JUGES" >> $R
+dire_non_juges
 echo VERT >> $R

@@ -243,7 +243,9 @@ cd $HOME/git_workspaces/$1 || exit 1
 derive "$PWD"
 gd=$(git rev-parse --git-dir)
 tail -1 $J/resume.log | grep -qx VERT || { echo "ARRÊT : la passe n'est pas VERTE"; exit 1; }
-teste=$(head -1 $J/resume.log | awk '{print $2}')
+# Le commit testé : la première ligne du résumé qui ne dit pas des non-jugés (« NON JUGÉS : … », « NON JUGÉE : … », mis en
+# tête par la passe, 21 novembre 2026).
+teste=$(grep -v '^NON JUG' $J/resume.log | head -1 | awk '{print $2}')
 # Les suites qu'exige le lot, sur la base de la passe (ou, sans elle, sur master sous le commit testé).
 base_exigees=$(cat "$J/base" 2>/dev/null || git merge-base "$teste" origin/master)
 required_suites_played "$base_exigees" "$teste" "$J" || exit 1
