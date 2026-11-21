@@ -77,6 +77,8 @@ fn toy() -> (tempfile::TempDir, Backend) {
         watches: Mutex::new(Vec::new()),
         #[cfg(feature = "code")]
         layer_sync: Mutex::new(None),
+        nodes_seen: Mutex::new(None),
+        auto_reloads: std::sync::atomic::AtomicUsize::new(0),
         components_watch: Mutex::new(None),
         propositions: Default::default(),
         reaction_stop: Arc::new(std::sync::atomic::AtomicBool::new(false)),
@@ -302,11 +304,8 @@ fn an_edited_declared_node_is_reloaded() {
         "double.ts",
         &DOUBLE_TS.replace("* 2", "* 3"),
     );
-    assert_eq!(
-        doubled(&backend, 21),
-        json!({"n": 42}),
-        "not before the reload"
-    );
+    // Since 21 November 2026 the edited node serves at the next call by itself (`hot_reload`); an explicit reload
+    // still serves it.
     backend.reload().unwrap();
     assert_eq!(doubled(&backend, 21), json!({"n": 63}));
 }
@@ -1579,3 +1578,7 @@ fn an_invocation_does_not_wait_behind_the_catalog_lock() {
     let rendu = rendu.expect("the invocation waited more than 5 s behind the catalog's lock");
     assert!(rendu.is_ok(), "{rendu:?}");
 }
+
+/// The witness of the lot `scripted-nodes-hot-reload`, in a file of its own.
+#[path = "backend_reload_tests/hot_reload.rs"]
+mod hot_reload;

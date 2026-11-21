@@ -1,5 +1,9 @@
 # Nouveautés
 
+- 21 novembre 2026 — **Un nœud scripté édité sert à l'appel suivant.** Quand un `.ts` ou un `.node.json` change dans
+  le dossier `nodes/` d'un backend ouvert, l'appel suivant recharge le backend et sert la nouvelle version, sans
+  redémarrer l'hôte. Un appel sans changement ne relit aucun fichier, et une édition cassée laisse servir la version
+  d'avant.
 - 21 novembre 2026 — **Une erreur d'un nœud scripté nomme son fichier.** Quand un nœud en TypeScript ou en
   JavaScript échoue, à la préparation comme à l'appel, son erreur donne le chemin du script et la ligne, au lieu du
   seul nom du nœud.
