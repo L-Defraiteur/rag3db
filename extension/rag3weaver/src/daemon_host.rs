@@ -1128,8 +1128,9 @@ impl DaemonHost {
 
     /// **Open a folder** (Lucie's first step in the IDE, 21 November 2026; recherche makes `/ide/ouvrir`): a folder given
     /// by its path is attached to the atelier, and appears among the trees of this machine. A folder that does not
-    /// exist, or an empty one, is created and gets `git init` (never a push). Refused, saying why: Lucie's tree, sairen,
-    /// another session's folder, a folder with files that is not a git repository.
+    /// exist, or an empty one, is created and gets `git init` (never a push); a folder with files that is not a git
+    /// repository opens as it is (Lucie, 21 November 2026). Refused, saying why: Lucie's tree, sairen, another session's
+    /// folder.
     pub fn ouvrir_un_dossier(&self, session: Option<&str>, chemin: &Path) -> Value {
         let r = self.check_session(session).and_then(|s| {
             if !chemin.is_absolute() {
@@ -1173,13 +1174,16 @@ impl DaemonHost {
                 git(&lettre, &["init", "-q"])?;
                 cree = true;
             } else if git(&lettre, &["rev-parse", "--is-inside-work-tree"]).is_err() {
+                // **A folder with files that is not a git repository opens as it is** (Lucie, 21 November 2026,
+                // 9 h 5x): no git init, no index; the access to its root is the gate's to decide. An empty one is a new
+                // project, and gets git init.
                 let vide = std::fs::read_dir(&lettre).map_err(|e| format!("{} : {e}", lettre.display()))?.next().is_none();
-                if !vide {
-                    return Err(refus("ce dossier n'est pas un dépôt git et n'est pas vide : l'hôte n'y fait pas git init"));
+                if vide {
+                    git(&lettre, &["init", "-q"])?;
+                    cree = true;
                 }
-                git(&lettre, &["init", "-q"])?;
-                cree = true;
             }
+            let est_git = git(&lettre, &["rev-parse", "--is-inside-work-tree"]).is_ok();
             // The atelier: a hosted one, else the one the service poses.
             let atelier = self
                 .backends
@@ -1225,7 +1229,7 @@ impl DaemonHost {
             let (offre, pourquoi) = self.index_offer_for(&hosted, &lettre.canonicalize().unwrap_or_else(|_| lettre.clone()));
             #[cfg(not(feature = "code"))]
             let (offre, pourquoi) = (false, "sans la feature code, aucun index".to_string());
-            Ok(json!({ "ok": true, "path": lettre, "created": cree, "attached": dit, "indexed": false, "index_offer": offre, "index_offer_why": pourquoi }))
+            Ok(json!({ "ok": true, "path": lettre, "created": cree, "git": est_git, "attached": dit, "indexed": false, "index_offer": offre, "index_offer_why": pourquoi }))
         });
         r.unwrap_or_else(|e| op_response(Err(e)))
     }
