@@ -70,11 +70,11 @@ fn gros() -> bool {
     std::env::var_os("TX_ARRET_GROS").is_some()
 }
 
-fn paquet() -> usize {
+pub(crate) fn paquet() -> usize {
     if gros() { 200 } else { 32 }
 }
 
-fn corpus() -> Vec<(String, String)> {
+pub(crate) fn corpus() -> Vec<(String, String)> {
     if gros() {
         return (0..400)
             .map(|i| {
@@ -96,7 +96,7 @@ fn catalogue(base: &Path) -> Catalog {
     catalogue_en(base, false)
 }
 
-fn catalogue_en(base: &Path, lecture: bool) -> Catalog {
+pub(crate) fn catalogue_en(base: &Path, lecture: bool) -> Catalog {
     let conn = Rag3dbConnection::new(base).expect("ouvrir la base");
     conn.execute(&format!("LOAD EXTENSION '{}'", crate::common::vector_extension()))
         .expect("extension vecteur");
@@ -126,7 +126,7 @@ fn catalogue_en(base: &Path, lecture: bool) -> Catalog {
 /// (`takeover`) — sans quoi la synchronisation refuse, une seule session à la
 /// fois par périmètre. C'est la voie que le produit donne aujourd'hui après
 /// un arrêt brutal.
-fn synchroniser(catalog: &mut Catalog, reprendre: bool) {
+pub(crate) fn synchroniser(catalog: &mut Catalog, reprendre: bool) {
     let options = SourceSyncOptions {
         batch_files: paquet(),
         relations: Some(RelationsMode::Bulk),
@@ -144,7 +144,7 @@ fn synchroniser(catalog: &mut Catalog, reprendre: bool) {
 /// les deux sens). Les tables internes (`_…`) en sont exclues : le magasin
 /// de blobs et les marques de session diffèrent légitimement entre une base
 /// reprise et une base neuve.
-fn comptes(catalog: &Catalog) -> BTreeMap<String, i64> {
+pub(crate) fn comptes(catalog: &Catalog) -> BTreeMap<String, i64> {
     let conn = catalog.conn();
     let tables = conn.execute("CALL show_tables() RETURN *").unwrap();
     let mut out = BTreeMap::new();
