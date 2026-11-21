@@ -168,6 +168,11 @@ impl DaemonHost {
     }
 }
 
+/// The witnesses of the sandbox mounted on the granted roots (lot `sandbox-roots`), in a file of their own.
+#[cfg(all(test, unix, feature = "code", feature = "rag3db-native"))]
+#[path = "root_grants/sandbox_tests.rs"]
+mod sandbox_tests;
+
 #[cfg(all(test, feature = "rag3db-native"))]
 mod tests {
     use super::*;
