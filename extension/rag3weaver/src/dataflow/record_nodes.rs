@@ -5204,6 +5204,9 @@ mod tests {
         assert_eq!(node.outputs()[1].name, "embedded");
     }
 
+
+    /// The witness of the lot `token-count-only-for-chunking`, in a file of its own (rule of 21 November 2026).
+    mod token_bound;
 }
 
 // An annotation belongs at the parameter boundary, never in stored records or checkpoints.
