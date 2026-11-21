@@ -308,6 +308,10 @@ pub struct DaemonHost {
     /// **The views whose layer is being written in the background** (`open_view`): their name → when the writing began and
     /// how many files it writes. A read under one of them answers « index pas prêt » at once.
     vues_en_ecriture: Mutex<HashMap<String, (std::time::Instant, usize)>>,
+    /// **The views that follow their worktree** (Lucie, 21 November 2026: a session searches its own worktree): by the
+    /// view's layer, the stop of the thread that rewrites its layer when the worktree changes, and the thread itself.
+    #[cfg(feature = "code")]
+    view_followers: Mutex<HashMap<String, ViewFollower>>,
     /// **This host's machine and the way to its landings** (page 03 of 20 November 2026, O4): `None` reads
     /// `~/.config/rag3weaver/atterrissages.json`, the machine being the hostname unless the file names it.
     atterrissages: Mutex<Option<(String, VoieDesAtterrissages)>>,
@@ -553,6 +557,8 @@ impl DaemonHost {
             vues_dir: Mutex::new(None),
             espace: Mutex::new(None),
             vues_en_ecriture: Mutex::new(HashMap::new()),
+            #[cfg(feature = "code")]
+            view_followers: Mutex::new(HashMap::new()),
             atterrissages: Mutex::new(None),
             #[cfg(test)]
             porte_d_ecriture: Mutex::new(None),
@@ -820,23 +826,71 @@ impl DaemonHost {
                 // Active before the writing starts: a writing that fails sends the session back to the backend after.
                 self.set_session_view(&s.id, Some(json!({ "layer": couche })))?;
                 let (couche_f, claude_f, nom_f, session_f) = (couche.clone(), claude.clone(), nom.clone(), s.id.clone());
-                std::thread::Builder::new()
+                let reel_f = reel.clone();
+                let arret: std::sync::Arc<(Mutex<bool>, std::sync::Condvar)> = Default::default();
+                let arret_f = arret.clone();
+                let fil = std::thread::Builder::new()
                     .name("vue-en-fond".into())
                     .spawn(move || {
                         #[cfg(test)]
                         if let Some(p) = hote.porte_d_ecriture.lock().unwrap_or_else(|e| e.into_inner()).clone() {
                             p.attendre();
                         }
+                        // The worktree's signature before the first writing: a change made during it is written next.
+                        let mut ecrite = worktree_signature(&reel_f);
                         if let Err(e) = ecrire(&hote) {
                             // The layer could not be written: said in the state, and the session reads the backend again.
                             let _ = hote.noter_l_ouverture(&claude_f, &nom_f, &json!({ "name": nom_f, "layer_refused": e }));
                             if hote.session_default_view(&session_f) == Some(json!({ "layer": couche_f })) {
                                 let _ = hote.set_session_view(&session_f, None);
                             }
+                            hote.vues_en_ecriture.lock().unwrap_or_else(|e| e.into_inner()).remove(&couche_f);
+                            return;
                         }
                         hote.vues_en_ecriture.lock().unwrap_or_else(|e| e.into_inner()).remove(&couche_f);
+                        // **Then the view follows its worktree** (Lucie, 21 November 2026, 12 h 28): each second, a change
+                        // of its signature (its HEAD, its status, the time and size of each changed file) rewrites the
+                        // layer's gap from the fork, deletions included. The host is held weakly: a host that goes stops it;
+                        // close_view stops it before the worktree is removed.
+                        let faible = std::sync::Arc::downgrade(&hote);
+                        drop(hote);
+                        let mut dit: Option<String> = None;
+                        loop {
+                            {
+                                let (drapeau, cv) = &*arret_f;
+                                let g = drapeau.lock().unwrap_or_else(|e| e.into_inner());
+                                if *g {
+                                    return;
+                                }
+                                let (g, _) = cv.wait_timeout(g, std::time::Duration::from_secs(1)).unwrap_or_else(|e| e.into_inner());
+                                if *g {
+                                    return;
+                                }
+                            }
+                            let Some(hote) = faible.upgrade() else { return };
+                            if !reel_f.is_dir() {
+                                return;
+                            }
+                            let signature = worktree_signature(&reel_f);
+                            if signature == ecrite {
+                                continue;
+                            }
+                            match ecrire(&hote) {
+                                Ok(()) => {
+                                    ecrite = signature;
+                                    dit = None;
+                                }
+                                Err(e) => {
+                                    if dit.as_deref() != Some(e.as_str()) {
+                                        eprintln!("[démon] la vue {couche_f} ne suit pas son worktree : {e}");
+                                        dit = Some(e);
+                                    }
+                                }
+                            }
+                        }
                     })
                     .map_err(|e| format!("le fil d'écriture de la vue : {e}"))?;
+                self.view_followers.lock().unwrap_or_else(|e| e.into_inner()).insert(couche.clone(), ViewFollower { stop: arret, thread: Some(fil) });
                 Ok(true)
             })();
             // Without the code feature, no layer of code: the worktree is opened all the same.
@@ -961,6 +1015,14 @@ impl DaemonHost {
             })?;
             let chemin = std::path::PathBuf::from(ouverte["path"].as_str().ok_or("close_view : la vue notée n'a pas de chemin")?);
             let reel = chemin.canonicalize().unwrap_or_else(|_| chemin.clone());
+            // The thread that makes the view follow its worktree stops first: it writes no more in a layer being ended.
+            #[cfg(feature = "code")]
+            {
+                let couche_suivie = ouverte["layer"].as_str().map(str::to_string).unwrap_or_else(|| format!("worktree:{}", reel.display()));
+                if let Some(suiveur) = self.view_followers.lock().unwrap_or_else(|e| e.into_inner()).remove(&couche_suivie) {
+                    suiveur.stop();
+                }
+            }
             let git = |dans: &Path, args: &[&str]| -> Result<String, String> {
                 let o = std::process::Command::new("git").arg("-C").arg(dans).args(args).output().map_err(|e| format!("git : {e}"))?;
                 if o.status.success() {
@@ -3362,6 +3424,52 @@ impl PorteDEcriture {
             ouverte = self.0 .1.wait(ouverte).unwrap_or_else(|e| e.into_inner());
         }
     }
+}
+
+/// The thread that makes a view follow its worktree, and its stop (see `DaemonHost::view_followers`).
+#[cfg(feature = "code")]
+pub(crate) struct ViewFollower {
+    stop: std::sync::Arc<(Mutex<bool>, std::sync::Condvar)>,
+    thread: Option<std::thread::JoinHandle<()>>,
+}
+
+#[cfg(feature = "code")]
+impl ViewFollower {
+    /// Stops the thread and waits for it (woken: no wait for its second).
+    fn stop(mut self) {
+        let (drapeau, cv) = &*self.stop;
+        *drapeau.lock().unwrap_or_else(|e| e.into_inner()) = true;
+        cv.notify_all();
+        if let Some(t) = self.thread.take() {
+            let _ = t.join();
+        }
+    }
+}
+
+/// **The signature of a worktree**: its HEAD, its `git status` (untracked files included), and the time and size of each
+/// file the status names. A change of it is a change the view's layer has not written.
+#[cfg(feature = "code")]
+fn worktree_signature(worktree: &Path) -> String {
+    let git = |args: &[&str]| -> String {
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(worktree)
+            .args(args)
+            .output()
+            .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+            .unwrap_or_default()
+    };
+    let tete = git(&["rev-parse", "HEAD"]);
+    let statut = git(&["status", "--porcelain=v1", "-z", "--untracked-files=all"]);
+    let mut signature = format!("{tete}\u{1f}{statut}");
+    for entree in statut.split('\0').filter(|e| e.len() > 3) {
+        let chemin = worktree.join(&entree[3..]);
+        if let Ok(m) = std::fs::metadata(&chemin) {
+            let quand = m.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_nanos()).unwrap_or(0);
+            signature.push_str(&format!("\u{1f}{}:{quand}:{}", entree, m.len()));
+        }
+    }
+    signature
 }
 
 /// Writes `v` at `chemin` by a temporary file and a rename, its folder created.
