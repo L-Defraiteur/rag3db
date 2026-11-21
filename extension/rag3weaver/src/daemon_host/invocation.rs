@@ -576,9 +576,13 @@ mod tests {
             n.evaluer("document.querySelector('#ouvrir input[name=chemin]').value = ''");
             n.evaluer("document.querySelector('#ouvrir input[name=chemin]').focus()");
             n.commande("Input.insertText", json!({ "text": chemin.to_string_lossy() }));
-            n.evaluer("document.querySelector('#ouvrir .ouvrir-resultat')?.remove()");
+            // The previous result, left to React: the new one is waited for by its text.
+            let avant = n.evaluer("document.querySelector('#ouvrir .ouvrir-resultat')?.innerText ?? ''");
             n.evaluer("document.querySelector('#ouvrir').requestSubmit()");
-            n.attendre("document.querySelector('#ouvrir .ouvrir-resultat')", "the result said under the field");
+            n.attendre(
+                &format!("(document.querySelector('#ouvrir .ouvrir-resultat')?.innerText ?? '') !== '' && document.querySelector('#ouvrir .ouvrir-resultat').innerText !== {avant}"),
+                "the result said under the field",
+            );
             n.evaluer("document.querySelector('#ouvrir .ouvrir-resultat').innerText").as_str().unwrap_or_default().to_string()
         };
 
