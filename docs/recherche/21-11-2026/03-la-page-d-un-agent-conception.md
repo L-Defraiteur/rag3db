@@ -40,12 +40,14 @@ L'accueil devient la liste des agents (actifs, puis inactifs) ; la page « Poste
    « avancé ».
 2. **La page d'un agent, première tranche** : qui, ses vues, ses tâches ; la conversation des agents de rag3weaver
    (routes existantes). Rien de neuf côté hôte.
-3. **La conversation d'un agent Claude** : une route en lecture seule de sa transcription, bornée (les N derniers
+3. **Les vues d'un agent et leurs diffs** : les vues dépliées (route existante), puis leurs diffs sur la route
+   d'arbre, en stat puis par fichier.
+4. **La conversation d'un agent Claude** : une route en lecture seule de sa transcription, bornée (les N derniers
    messages), rouge d'abord. À qui : arbre ou moi.
-4. **Sa mémoire** : la route de la session mémoire, puis le bloc.
-5. **La boucle en graphe**, repliée : la forme fixe animée par le flux ; l'arbre d'un run quand archi aura sa route.
+5. **Sa mémoire** : la route de la session mémoire, puis le bloc.
+6. **La boucle en graphe**, repliée : la forme fixe animée par le flux ; l'arbre d'un run quand archi aura sa route.
 
-Les tranches 1 et 2 ne demandent rien à personne ; 3 à 5 attendent leurs routes.
+Les tranches 1 et 2 ne demandent rien à personne ; 3 à 6 attendent leurs routes.
 
 ## L'accueil en arbre : la parenté, et parler à un sous-agent
 
@@ -66,6 +68,19 @@ Ce que la tranche 1 peut montrer sans route neuve : les racines (sessions Claude
 sous-agents par `parent_session` de `GET /ide/taches`, le plan en cours de chacun, et la saisie vers une conversation
 ou la boîte d'un sous-agent. Ensuite, dans l'ordre proposé par archi : `GET /ide/agents` (l'arbre d'un coup), puis
 écrire à une racine par le relais ; un troisième niveau seulement si Lucie veut des sous-agents de sous-agents.
+
+## Les vues d'un agent et leurs diffs
+
+Lucie (08 h 2x) : « afficher les vues de chacun, ou bien voir les diff git en cours du worktree actuel ou de telle vue
+sur son parent ». Dans l'arbre, chaque agent déplie ses vues (`open_views` de `/poste` par `session_id`, l'active
+dite) ; chaque vue, et le worktree courant, déplie deux diffs, repliés par défaut : **en cours** (le worktree contre
+sa tête) et **sur son parent** (sa branche contre la branche dont elle part). Un diff se montre en stat d'abord
+(fichiers, + et −), puis le patch d'un fichier au clic.
+
+- Ce que l'hôte donne : la liste des vues, leur chemin, leur branche, leur couche (`/poste`) ; le diff d'une tâche sur
+  sa base (la page d'une tâche le montre déjà).
+- Ce qui manque : une route de lecture du diff d'une vue, en cours ou sur son parent, en stat puis par fichier ; arbre
+  la fait.
 
 ## Ce qui reste hors de la vue principale
 
