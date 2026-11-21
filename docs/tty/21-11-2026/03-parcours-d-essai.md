@@ -32,7 +32,7 @@ Ce qui se lance, ce qu'on essaie au terminal et dans l'IDE, ce qu'on doit voir �
    - « graphe à côté » : la fenêtre suit les outils du tour ;
    - l'en-tête d'une fenêtre détachée compte les accords qui attendent dans le chat, et dit « l'index … est prêt » quand l'index a rattrapé.
 3. **L'index pas prêt** : sous un outil qui a répondu avant que l'index ne rattrape, une ligne dit combien de temps il faut encore, pour le texte et pour les vecteurs ; une fois l'index à jour, une seule ligne le dit.
-4. **Un projet de zéro depuis l'IDE** : son premier pas est au terminal, `rag3weaver-backend atelier` depuis le dossier du projet ; l'atelier paraît alors dans l'IDE, et son chat crée les fichiers et le dépôt.
+4. **Un projet de zéro depuis l'IDE** : le champ « Ouvrir un dossier » de l'accueil (recherche, `ide-ouvrir`, dans le second hôte du matin) ; sinon, au terminal, `rag3weaver-backend atelier` depuis le dossier du projet.
 
 ## 3. L'équipier, de bout en bout (la part d'archi)
 
@@ -44,22 +44,26 @@ Ce qui se lance, ce qu'on essaie au terminal et dans l'IDE, ce qu'on doit voir �
 
 | Ce qui manque | Contourner |
 |---|---|
-| **Pas d'écriture dans une vue** (`open_view` du client MCP) : `edit_file` dit « ouvrez une tâche » | Pour écrire, ouvrir une tâche |
 | `use_view` refuse le nom que rend `open_view` | Rien à faire : `open_view` active la vue ; sinon le nom `worktree:/…` que liste `views` |
-| **Un commit depuis une tâche est impossible** (le bac à sable refuse le gitdir du worktree) ; l'équipier tourne en rond sur ses droits. Corrigé, en file (`bac-commit-worktree`) | Jusqu'à son atterrissage : ne pas lui demander de commit, la branche se fusionne depuis l'IDE (« Fusionner ») |
 | L'équipier peut dire « fini » sur un arbre qui ne compile pas (archi, rejeu de la nuit ; correctif en cours, `teammate.verify`) | Lui demander de jouer le test nommé et de coller sa dernière ligne |
-| `code-tree add` dit « code-<nom> », le terminal ne connaissait que « <nom> » | Prendre le nom que liste le terminal (la route d'arbre, en file, accepte les deux) |
-| Une tâche sur un dépôt sans commit tombait sur l'erreur de git sur `HEAD` | Un premier commit (corrigé, en file : le message le dit) |
+| Une tâche sur un dépôt sans commit ne s'ouvre pas | Un premier commit : le message le dit, avec la commande |
 | Une carte d'accord par commande, parfois en double | Répondre à la plus récente d'abord, `o` ou `n` |
-| `cargo check` peut rester long ou bloqué dans une tâche sous charge | Lui laisser le temps ; la boîte le dit (« the command is still running », en file) |
+| `cargo check` peut rester long ou bloqué dans une tâche sous charge | Lui laisser le temps ; la boîte le dit (« the command is still running ») |
 | `search_code` sans `options` refuse | Passer `options: {}` |
 | Pas de `fetch` ni de recherche web, pas de cron, pas de navigateur pour l'équipier, pas encore de palette par familles, pas de `run` en fond ; le sous-agent à vues est en file (`sous-agent-vues-3`) | — (le navigateur est le prochain chantier de tty) |
 | Le mode pair existe, mais seulement avec `teammate.pair: true` | À n'allumer qu'en le voulant |
 
 ## Corrigé cette nuit (atterri ou en file)
 
+- **`close_view` dit ce qu'il laisse** (arbre).
+
+- **On écrit dans une vue ouverte par `open_view`** (arbre).
+
+- **Le terminal reconnaît un dépôt sous tous ses noms** (`--repo` résolu par l'hôte, atterri) : le nom court, `code-<nom>`, le chemin du projet ou du manifeste.
+
 - **Au terminal, un message tapé pendant qu'un accord attend reste un message** (atterri, PR 301) : seuls `o` et `n` minuscules, seuls, répondent tout de suite.
-- **Une tâche sur un dépôt sans commit le dit**, avec la commande (en file).
-- **Une commande longue est dite « still running »**, et plus « en attente d'un index » (en file).
+- **Une tâche sur un dépôt sans commit le dit**, avec la commande (atterri).
+- **Une commande longue est dite « still running »**, et plus « en attente d'un index » (atterri).
 - **Le terminal est posé avec l'hôte**, dans `~/.local/bin`, aux deux postes (G).
+- **L'équipier peut commiter depuis sa tâche** (archi, `bac-commit-worktree`, dans l'hôte de 6 h 10) : le bac à sable écrit le gitdir du worktree de la tâche, ses objets et la ref de sa branche, jamais `config`, `hooks/` ni `info/`.
 - **L'agent n'invente plus d'identité git** (archi, atterri, `identite-git`) : le bac à sable reçoit `user.name` et `user.email` de la config git globale de l'hôte, et refuse `git config user.*`, accord compris. Il faut donc une identité dans sa config git globale.
