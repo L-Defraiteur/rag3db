@@ -91,7 +91,8 @@ remove_from_queue() {
 }
 # The ceiling is poste's own (19 Nov.: given to the pass only, poste refused every validation under its 40G default).
 # The pusher's lane (POSTE_VOIE=pousseur): its pass heads the queue of heavy jobs, behind a waiting measure (19 Nov.).
-poste_lourd() { if [ -n "$POSTE" ]; then POSTE_VOIE=pousseur POSTE_MEM_MAX=32G "$POSTE" lourd "$@"; else "$@"; fi; }
+# The pass takes a cpu place (21 Nov. 2026: the classes of poste; « lourd » is the older name of cpu).
+poste_lourd() { if [ -n "$POSTE" ]; then POSTE_VOIE=pousseur POSTE_MEM_MAX=32G "$POSTE" cpu -- "$@"; else "$@"; fi; }
 poste_push() { if [ -n "$POSTE" ]; then "$POSTE" push pusher -- "$@"; else "$@"; fi; }
 
 # The kind of a lot, from what it changes since master: docs (only .md), cpp (an engine path), rust (what the push

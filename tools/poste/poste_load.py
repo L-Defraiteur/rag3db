@@ -15,11 +15,15 @@ Run by poste-load.timer (a systemd user unit, every 2 min). Appends one line to 
   psi_mem_some10    /proc/pressure/memory, some avg10
   psi_mem_full10    /proc/pressure/memory, full avg10
   psi_cpu_some10    /proc/pressure/cpu, some avg10
-  heavy_held        heavy places held (poste --qui, « tient lourd »)
-  heavy_places      heavy places set (« lourds : x/N places tenues »)
-  heavy_waiting     heavy commands waiting (« attend lourd »)
+  heavy_held        cpu places held (poste --qui: « tient cpu », « tient gpu+cpu », the older « tient lourd »)
+  heavy_places      cpu places set (« lourds : x/N places tenues »)
+  heavy_waiting     cpu places waited for (« attend cpu », « attend gpu+cpu », « attend lourd »)
   heavy_cores       cores of one heavy envelope: (cores - coeurs-libres) / places
   gpus              each card exposing gpu_busy_percent: name:busy%:vram used/total GiB[:gtt used GiB]
+  gpu_held          poste gpu jobs holding (« tient gpu… », 21 Nov. 2026: the classes)
+  gpu_waiting       poste gpu jobs waiting
+  gpu_declared_gib  Σ of the needs the holding gpu jobs declared
+A file written under other columns is moved aside (poste-load.tsv.before-<time>) and a new one starts.
 
 The file keeps 14 days: older lines are dropped. A missing source writes « - » in its column, never a crash.
 Environment, for the witness: POSTE_LOAD_DIR (the folder of the file and its state), POSTE_LOAD_PROC (/proc),
@@ -39,7 +43,7 @@ SYS = os.environ.get("POSTE_LOAD_SYS", "/sys")
 POSTE = os.environ.get("POSTE_LOAD_POSTE") or os.path.join(HOME, ".cache", "rag3weaver-build", "poste")
 COLUMNS = ["time", "cpu_busy_pct", "load1", "cores", "ram_used_gib", "ram_available_gib", "swap_used_gib",
            "swap_total_gib", "psi_mem_some10", "psi_mem_full10", "psi_cpu_some10", "heavy_held", "heavy_places",
-           "heavy_waiting", "heavy_cores", "gpus"]
+           "heavy_waiting", "heavy_cores", "gpus", "gpu_held", "gpu_waiting", "gpu_declared_gib"]
 KEEP_DAYS = 14
 GIB = 1024 ** 3
 
@@ -116,14 +120,22 @@ def cores():
     return os.cpu_count() or 0
 
 
-def heavy(n_cores):
-    """(held, places, waiting, cores of one envelope), from poste --qui and the lock folder's coeurs-libres."""
+CPU_PLACE = ("lourd", "cpu", "gpu+cpu")
+
+
+def poste_qui():
     try:
-        out = subprocess.run([POSTE, "--qui"], capture_output=True, text=True, timeout=20).stdout
+        return subprocess.run([POSTE, "--qui"], capture_output=True, text=True, timeout=20).stdout
     except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def heavy(n_cores, out):
+    """(held, places, waiting, cores of one envelope), from poste --qui and the lock folder's coeurs-libres."""
+    if out is None:
         return "-", "-", "-", "-"
-    held = sum(1 for l in out.splitlines() if l.startswith("tient lourd"))
-    waiting = sum(1 for l in out.splitlines() if l.startswith("attend lourd"))
+    held = sum(1 for l in out.splitlines() if l.startswith("tient ") and len(l.split()) > 1 and l.split()[1] in CPU_PLACE)
+    waiting = sum(1 for l in out.splitlines() if l.startswith("attend ") and len(l.split()) > 1 and l.split()[1] in CPU_PLACE)
     m = re.search(r"lourds : \d+/(\d+) places", out) or re.search(r"places réglées à (\d+)", out)
     places = int(m.group(1)) if m else None
     free = read(os.path.join(os.environ.get("POSTE_LOCK_DIR") or os.path.join(HOME, ".cache", "rag3weaver-build"), "coeurs-libres"))
@@ -133,6 +145,24 @@ def heavy(n_cores):
         free = 2
     envelope = f"{(n_cores - free) / places:.1f}" if places else "-"
     return str(held), "-" if places is None else str(places), str(waiting), envelope
+
+
+def gpu_jobs(out):
+    """(held, waiting, Σ declared GiB) of the poste gpu jobs (« tient gpu 12G … », « tient gpu+cpu 12G … »)."""
+    if out is None:
+        return "-", "-", "-"
+    held = waiting = declared = 0
+    for l in out.splitlines():
+        w = l.split()
+        if len(w) < 3 or w[1] not in ("gpu", "gpu+cpu"):
+            continue
+        if w[0] == "tient":
+            held += 1
+            m = re.fullmatch(r"(\d+)G", w[2])
+            declared += int(m.group(1)) if m else 0
+        elif w[0] == "attend":
+            waiting += 1
+    return str(held), str(waiting), str(declared)
 
 
 def gpus():
@@ -178,11 +208,20 @@ def main():
     total, avail = m.get("MemTotal"), m.get("MemAvailable")
     st, sf = m.get("SwapTotal"), m.get("SwapFree")
     load = (read(os.path.join(PROC, "loadavg")) or "- ").split()[0]
+    qui = poste_qui()
     row = [now.isoformat(timespec="seconds"), cpu_busy(os.path.join(DIR, "poste-load.state")), load, str(n),
            gib(total - avail if total is not None and avail is not None else None), gib(avail),
            gib(st - sf if st is not None and sf is not None else None), gib(st),
            pressure("memory", "some"), pressure("memory", "full"), pressure("cpu", "some"),
-           *heavy(n), gpus()]
+           *heavy(n, qui), gpus(), *gpu_jobs(qui)]
+    # Columns changed since the file began: the old file is kept aside, a new one starts.
+    try:
+        with open(path, encoding="utf-8") as f:
+            head = f.readline().rstrip("\n")
+        if head and head != "\t".join(COLUMNS):
+            os.replace(path, f"{path}.before-{now.strftime('%Y%m%d-%H%M%S')}")
+    except OSError:
+        pass
     rotate(path, now)
     new = not os.path.exists(path)
     with open(path, "a", encoding="utf-8") as f:

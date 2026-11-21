@@ -51,8 +51,9 @@ with tempfile.TemporaryDirectory() as d:
         write(dev / "gpu_busy_percent", busy + "\n"); write(dev / "mem_info_vram_used", f"{used}\n"); write(dev / "mem_info_vram_total", f"{32 * 1024 ** 3}\n")
     write(t / "sys" / "class" / "drm" / "card1" / "device" / "vendor", "0x8086\n")  # an Intel card: no gpu_busy_percent
     write(t / "locks" / "coeurs-libres", "2\n")
-    write(t / "poste", "#!/bin/sh\ncat <<'Q'\ntient lourd depuis 11:33:32 (pid 1) — a\ntient lourd depuis 11:34:00 (pid 2) — b\n"
-                       "tient lourd depuis 11:35:00 (pid 3) — c\nattend lourd depuis 11:34:20 (pid 4) — d\n"
+    write(t / "poste", "#!/bin/sh\ncat <<'Q'\ntient lourd depuis 11:33:32 (pid 1) — a\ntient cpu depuis 11:34:00 (pid 2) — b\n"
+                       "tient gpu+cpu 12G depuis 11:35:00 (pid 3) — c\nattend cpu depuis 11:34:20 (pid 4) — d\n"
+                       "tient gpu 6G depuis 11:36:00 (pid 5) — e\nattend gpu 20G depuis 11:37:00 (pid 6) — f\n"
                        "lourds : 3/4 places tenues, en file dans l'ordre : pid 4\nQ\n")
     (t / "poste").chmod(0o755)
 
@@ -71,7 +72,8 @@ with tempfile.TemporaryDirectory() as d:
         case("loadavg 1 min et cœurs", b["load1"] == "12.50" and b["cores"] == "24", f'{b["load1"]} {b["cores"]}')
         case("RAM utilisée et disponible, swap", (b["ram_used_gib"], b["ram_available_gib"], b["swap_used_gib"], b["swap_total_gib"]) == ("48.0", "48.0", "2.0", "8.0"), str(b))
         case("pression mémoire et CPU", (b["psi_mem_some10"], b["psi_mem_full10"], b["psi_cpu_some10"]) == ("1.50", "0.25", "7.00"), str(b))
-        case("places lourdes : 3 tenues, 4 réglées, 1 en attente", (b["heavy_held"], b["heavy_places"], b["heavy_waiting"]) == ("3", "4", "1"), str(b))
+        case("places cpu : 3 tenues (lourd, cpu, gpu+cpu), 4 réglées, 1 en attente", (b["heavy_held"], b["heavy_places"], b["heavy_waiting"]) == ("3", "4", "1"), str(b))
+        case("gpu : 2 tenus (gpu+cpu 12G, gpu 6G), 1 en attente, 18 Gio déclarés", (b["gpu_held"], b["gpu_waiting"], b["gpu_declared_gib"]) == ("2", "1", "18"), str(b))
         case("enveloppe d'un lourd : (24 - 2) / 4 = 5,5 cœurs", b["heavy_cores"] == "5.5", b["heavy_cores"])
         case("cartes : card0 et card2, pas la carte Intel", b["gpus"] == "card0:100%:2.0/32.0,card2:40%:16.0/32.0", b["gpus"])
         # A poste that does not answer: « - », never a crash.
@@ -83,6 +85,13 @@ with tempfile.TemporaryDirectory() as d:
         r4 = run(t, "2026-12-05T12:03:00", "cpu  1400 0 100 9800 100 0 0 0 0 0\n")
         _, rs = rows(t)
         case("rotation : les lignes de plus de 14 jours sont retirées", r4.returncode == 0 and [x["time"] for x in rs] == ["2026-11-21T12:04:00", "2026-12-05T12:03:00"], str([x["time"] for x in rs]))
+        # A file under older columns is moved aside, and a new one starts with the current header.
+        p = t / "out" / "poste-load.tsv"
+        p.write_text("time\tcpu_busy_pct\n2026-11-21T12:00:00\t1.0\n", encoding="utf-8")
+        r5 = run(t, "2026-12-05T12:05:00", "cpu  1310 0 100 9710 100 0 0 0 0 0\n")
+        head, rs = rows(t)
+        aside = list((t / "out").glob("poste-load.tsv.before-*"))
+        case("colonnes changées : l'ancien fichier mis de côté, un nouveau commence", r5.returncode == 0 and head[-1] == "gpu_declared_gib" and len(rs) == 1 and len(aside) == 1, f"{head} {len(rs)} {aside}")
 
 print(f"{count - len(failures)}/{count} verts")
 sys.exit(1 if failures else 0)
