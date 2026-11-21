@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 21 novembre 2026 — **Une vue fermée ne laisse rien derrière elle.** `close_view` retire le worktree et son target,
+  et efface maintenant aussi par défaut les générations de la vue dans la base. `keep: true` les garde.
 - 21 novembre 2026 — **La carte d'accord de l'IDE ne se cache jamais.** Dans la page d'une tâche, chaque demande
   d'accord est une carte : ouverte, elle dit l'outil et sa commande, l'étape où en est la porte (avec son compte à
   rebours) et la frise des étapes passées, avec « Accorder » et « Refuser » ; fermée, elle reste et dit qui a tranché
