@@ -694,6 +694,8 @@ pub fn avec_lecture_git(
             bac = bac.avec_env(cle, valeur);
         }
     }
+    // **The host's identity**, never one made up by the agent (the night of 20 Nov 2026).
+    let mut bac = avec_l_identite(bac, identite_de_l_hote());
     let Some((admin, commun)) = administration(racine) else { return bac };
     let Some((_, principal_commun)) = administration(principale) else { return bac };
     if commun != principal_commun { return bac; }
