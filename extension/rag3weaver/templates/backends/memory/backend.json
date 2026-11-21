@@ -450,6 +450,7 @@
         }
       },
       "writes": {
+        "author": "author",
         "created_at": "created_at",
         "updated_at": "updated_at",
         "revision": "revision"
@@ -554,6 +555,7 @@
         }
       },
       "writes": {
+        "author": "author",
         "created_at": "created_at",
         "updated_at": "updated_at",
         "revision": "revision",
@@ -637,6 +639,7 @@
         ]
       },
       "writes": {
+        "author": "author",
         "created_at": "created_at",
         "updated_at": "updated_at",
         "revision": "revision",

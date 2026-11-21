@@ -630,6 +630,10 @@ pub struct WritePolicy {
     /// **The field that carries the version of the template** (20 November 2026): set by the server on each put,
     /// like the dates, from the hash of the template in service.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// **The author, set by the host** (M7, 21 November 2026): the field filled with the key of the agent the call
+    /// is made for (`Backend::call_as`). Given by the tool's caller, it is refused; with no agent, it stays absent.
+    #[serde(default)]
+    pub author: Option<String>,
     pub template: Option<String>,
     /// **Rows that expire** (19 November 2026, the TTL of the indexed turns): the only entities a
     /// tool may delete from, by the `expire` action of `EntityRecordNode`, which removes the rows
@@ -4015,6 +4019,26 @@ pub fn with_call_deadline<T>(d: Option<CallDeadline>, f: impl FnOnce() -> T) -> 
 thread_local! {
     /// La cellule de l'appel en cours dans ce fil (`Backend::call_in`).
     static CELL_OF_CALL: std::cell::RefCell<Option<crate::scope::Scope>> = const { std::cell::RefCell::new(None) };
+    /// **The agent the call in this thread is made for** (`Backend::call_as`, M7, 21 November 2026): its key fills
+    /// `writes.author`. Set by the host only; a tool's caller never reaches it.
+    static AGENT_OF_CALL: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
+}
+
+/// The service under which a call's agent key reaches the write nodes (`writes.author`).
+pub const AGENT_SERVICE: &str = "backend_agent";
+
+/// **Runs `f` for the agent `agent`** (M7): every backend call made in this thread meanwhile signs the rows it writes
+/// with that key (`writes.author`); `None` is a call with no agent behind it, whose rows carry no author.
+pub fn as_agent<T>(agent: Option<&str>, f: impl FnOnce() -> T) -> T {
+    struct Restore(Option<String>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            AGENT_OF_CALL.with(|c| *c.borrow_mut() = self.0.take());
+        }
+    }
+    let before = AGENT_OF_CALL.with(|c| c.replace(agent.map(str::to_string)));
+    let _restore = Restore(before);
+    f()
 }
 
 thread_local! {
@@ -5098,6 +5122,12 @@ impl Backend {
         self.call_on(&self.prepared(), name, args)
     }
 
+    /// **A call made for an agent** (M7): as [`call`](Self::call), the rows it writes signed with `agent`'s key
+    /// (`writes.author`); `None`, no author.
+    pub fn call_as(&self, agent: Option<&str>, name: &str, args: Value) -> Result<Value, String> {
+        as_agent(agent, || self.call(name, args))
+    }
+
     fn call_on(&self, prepared: &PreparedBackend, name: &str, args: Value) -> Result<Value, String> {
         if !APPEL_HUMAIN.with(|h| h.get()) {
             self.refus_de_l_agent_hors_tache(prepared, name)?;
@@ -5916,6 +5946,10 @@ impl Backend {
             },
         }
         services.register("catalog", self.catalog.clone());
+        // The agent the call is made for, if the host said it (`as_agent`): `writes.author`.
+        if let Some(agent) = AGENT_OF_CALL.with(|c| c.borrow().clone()) {
+            services.register(AGENT_SERVICE, agent);
+        }
         services.register(crate::read_view::READ_VIEW_SERVICE, self.read_view.clone());
         // Le modèle d'embarquement déclaré : l'estimation et le reçu de
         // l'index le nomment, c'est celui qu'emploie l'index.
