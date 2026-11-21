@@ -64,3 +64,12 @@ une réindexation.
 
 **D'ici le correctif**, toute pose d'un hôte ferme d'abord ses backends de code par `/backend/close`, puis arrête
 l'hôte. C'est la règle tenue par G depuis le 21 novembre au matin.
+
+## Un quatrième défaut : la fermeture d'une pose survit au redémarrage (07 h 08 - 07 h 2x)
+
+Les deux fermetures de la pose de 07 h 08 (`/backend/close`, raison « pose du second hôte (G, 21 nov.) ») ont été
+**relues par l'hôte neuf** : à 07 h 24, `daemon_status` montrait encore 12389e156742 (le dépôt de Lucie) et
+2fb80390ed75 (la tâche atelier) en `held_closed`. Les recherches et écritures de Lucie, qui commençait son essai,
+étaient rangées ou refusées jusqu'à ce que G les relève par `POST /backend/open`. Une fermeture dont l'auteur a disparu
+(sa session fermée, l'hôte redémarré) ne devrait pas tenir au-delà de son délai sans le dire ; et un script de pose
+doit relever ses propres fermetures après le réveil (fait dans celui de G).
