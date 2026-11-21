@@ -2223,8 +2223,21 @@ impl DaemonHost {
 /// **The path a tool's output says the system refused** (« Permission denied », « Permission non
 /// accordée », « os error 13 »): the first quoted path of that line, or the line itself.
 fn refused_path(rendu: &str) -> Option<String> {
-    let _ = rendu;
-    None
+    const SIGNES: [&str; 3] = ["Permission denied", "Permission non accordée", "os error 13"];
+    let ligne = rendu.lines().find(|l| SIGNES.iter().any(|s| l.contains(s)))?.trim();
+    for (ouvre, ferme) in [('\'', '\''), ('"', '"'), ('`', '`'), ('«', '»')] {
+        let mut reste = ligne;
+        while let Some(i) = reste.find(ouvre) {
+            let apres = &reste[i + ouvre.len_utf8()..];
+            let Some(j) = apres.find(ferme) else { break };
+            let dedans = apres[..j].trim();
+            if dedans.contains('/') {
+                return Some(dedans.to_string());
+            }
+            reste = &apres[j + ferme.len_utf8()..];
+        }
+    }
+    Some(ligne.to_string())
 }
 
 /// **What the judge of the content says** (archi, 19 November 2026): the guard « un compte rendu
