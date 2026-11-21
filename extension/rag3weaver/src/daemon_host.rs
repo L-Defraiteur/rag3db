@@ -419,6 +419,8 @@ pub mod web_fetch;
 pub mod web_search;
 /// The agents of the machine, as a tree (`GET /ide/agents`).
 mod agents;
+/// The approval card: one card, its states, one closing (the gate of the auto mode).
+pub mod card;
 
 /// Le pas d'un équipier étanche au moteur : le backend pris à chaque appel
 /// d'outil, le repli sur les fichiers du worktree quand il manque.
