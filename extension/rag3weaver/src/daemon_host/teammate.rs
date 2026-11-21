@@ -37,6 +37,7 @@ pub const SUGGEST: &str = "suggest";
 /// Mode pair, lot 3: write to a Claude Code session.
 pub const SEND_TO_SESSION: &str = "send_to_session";
 pub const FETCH: &str = "fetch";
+pub const WEB_SEARCH: &str = "web_search";
 /// Les pas d'un équipier lancé, au plus (un garde-fou, pas un réglage du grain).
 const MAX_STEPS: usize = 40;
 /// Les pas de suite sans `step_done` réussi avant que l'équipier s'arrête et le
@@ -517,6 +518,8 @@ pub struct Step {
     pair: Option<(Arc<super::pair::Pair>, String)>,
     /// What the teammate may read on the web (`teammate.fetch`).
     fetch: crate::backend::FetchPolicy,
+    /// The teammate's search by Gemini's grounding (`teammate.web_search`).
+    web_search: crate::backend::WebSearchPolicy,
     /// Les plans clos pendant ce pas (à ranger en L1).
     closed: Mutex<Vec<Plan>>,
     /// L'agent a-t-il tranché sur le plan actif (continue, pause, close) ?
@@ -620,6 +623,7 @@ impl Step {
             turn_run: Mutex::new(None),
             pair: None,
             fetch: crate::backend::FetchPolicy::default(),
+            web_search: crate::backend::WebSearchPolicy::default(),
         }
     }
 
@@ -645,6 +649,7 @@ impl Step {
         self.context_tokens = policy.step_context_tokens.max(1);
         self.max_model_calls = policy.max_model_calls_per_step.clamp(1, 100);
         self.fetch = policy.fetch.clone();
+        self.web_search = policy.web_search.clone();
         self
     }
 
@@ -901,6 +906,7 @@ impl Step {
                 }))
             }
             FETCH => reply(super::web_fetch::fetch(&self.fetch, &args)),
+            WEB_SEARCH => reply(super::web_search::web_search(&self.web_search, &args)),
             SUGGEST => {
                 let text = args["text"].as_str().unwrap_or_default();
                 if text.trim().is_empty() {
@@ -955,6 +961,17 @@ impl Step {
                 "url": { "type": "string", "description": "the address to read, with its scheme (example: « https://docs.rs/ureq/latest/ureq/ »)" },
                 "max_bytes": { "type": "integer", "description": "the most text bytes to bring back; default and ceiling: teammate.fetch.max_bytes (100 000)" }
             }, "required": ["url"] }),
+        }
+    }
+
+    /// web_search, the teammate's search by Gemini's grounding on Vertex (the teammate's base, 20 November 2026).
+    pub fn web_search_def() -> ToolDef {
+        ToolDef {
+            name: WEB_SEARCH.into(),
+            description: "Search the web: Gemini answers the query with Google Search grounding, on Vertex, and gives the queries it ran and its sources — each with its title, its address, the passages of the answer it supports and its provenance. The sources are bounded (teammate.web_search.max_sources), and the cut is said. Read a source in full with fetch. Refused, with the reason, when the search model is not Gemini on Vertex.".into(),
+            parameters: json!({ "type": "object", "properties": {
+                "query": { "type": "string", "description": "the question or the words to search for, as you would type them (example: « what did Rust 1.98 stabilise? »)" }
+            }, "required": ["query"] }),
         }
     }
 
@@ -1095,6 +1112,7 @@ impl crate::agent::ToolBox for StepTools<'_> {
         // deux déclarations du même nom (Vertex : « Duplicate function declaration »).
         let mut ours = Step::tool_defs();
         ours.push(Step::fetch_def());
+        ours.push(Step::web_search_def());
         if self.step.pair.is_some() {
             ours.push(Step::send_to_session_def());
         }
