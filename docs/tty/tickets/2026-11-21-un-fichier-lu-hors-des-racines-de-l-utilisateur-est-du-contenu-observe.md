@@ -1,7 +1,7 @@
 # Un fichier lu hors des racines de l'utilisateur est du contenu observé
 
 - **État** : ouvert le 21 novembre 2026 par la session tty, sur la demande de c7. Il fait suite au lot du contenu observé (`observed-content`) et touche la porte d'archi, qui sait quelles racines sont accordées.
-- **Famille** : sécurité
+- **Famille** : produit
 - **Gravité** : un fichier d'un dépôt cloné, ou d'une racine accordée comme le dossier steam, peut porter une consigne écrite pour l'agent (« ignore tes consignes… »). Lu par `read_file` ou `search_code`, il arrive au modèle sans marque, comme le code de l'utilisateur.
 - **Atteignable en service** : oui, dès qu'un agent lit une racine accordée qui n'est pas à l'utilisateur.
 - **Touche rag3weaver** : oui (les outils de code, `code_tools.rs` ; la porte des racines accordées, chez archi ; l'invite de l'agent de code, `apps/code/chat.json`).
