@@ -3300,6 +3300,103 @@ TEST_F(VectorIndexSeedMeasure, RecallAndBuildTimeWithAndWithoutTheSeed) {
     }
     std::cerr << "\n";
 }
+
+// Les suppressions sur des vecteurs réels (ticket 2026-11-20-une-suppression-sous-un-index-vectoriel-
+// peut-couper-des-voisins-du-graphe) : après le CREATE, WAVES vagues de suppressions par blocs contigus
+// (deux lignes sur trois d'un bloc de BLOCK ids, comme la resynchronisation qui retire les morceaux
+// d'un fichier et laisse leurs voisins), et le parcours de la couche basse après chaque vague. Une
+// mesure : sautée sans CONCURRENCE_MEASURE=1 et BANC_VECTORS_CSV ; CONCURRENCE_VECTOR_RUNS tours
+// (2 par défaut), BANC_WAVES vagues (12 par défaut).
+TEST_F(VectorIndexBridgeMeasure, RealVectorsDeletedInWaves) {
+    const auto* source = std::getenv("BANC_VECTORS_CSV");
+    if (std::getenv("CONCURRENCE_MEASURE") == nullptr || source == nullptr) {
+        GTEST_SKIP() << "a measure: CONCURRENCE_MEASURE=1 and BANC_VECTORS_CSV, under `poste lourd`";
+    }
+    const auto csv = databasePath + ".waves.csv";
+    int64_t total = 0;
+    int dimension = 0;
+    {
+        std::ifstream in(source);
+        std::ofstream out(csv);
+        for (std::string line; std::getline(in, line);) {
+            line.erase(std::remove(line.begin(), line.end(), '"'), line.end());
+            if (line.empty()) {
+                continue;
+            }
+            if (dimension == 0) {
+                dimension = 1 + static_cast<int>(std::count(line.begin(), line.end(), ','));
+            }
+            out << total++ << ",\"" << line << "\"\n";
+        }
+    }
+    ASSERT_GT(total, 10'000) << "[check: setup] too few vectors in " << source;
+    const auto* wavesValue = std::getenv("BANC_WAVES");
+    const int64_t waves = wavesValue == nullptr ? 12 : std::max(1, std::atoi(wavesValue));
+    const int64_t block = std::max<int64_t>(1'000, total / (2 * waves));
+    const auto runs = forcedRuns > 0 ? forcedRuns : 2;
+    int cutWaves = 0;
+    std::string details;
+    for (auto run = 0; run < runs; ++run) {
+        table = stringFormat("Waves{}", run);
+        mustRun(stringFormat("CREATE NODE TABLE {}(id INT64 PRIMARY KEY, vec FLOAT[{}]);", table,
+            dimension));
+        mustRun(stringFormat("COPY {} FROM '{}' (header=false);", table, csv));
+        mustRun(stringFormat(
+            "CALL CREATE_VECTOR_INDEX('{}', 'doc_index', 'vec', metric := 'cosine');", table));
+        if (HasFatalFailure()) {
+            return;
+        }
+        const auto created = lowerGraphReach(*conn, table, "doc_index", "vec");
+        std::cerr << "  [vagues] run " << run << ", after the create : " << created.linked
+                  << " linked, " << created.unreachable << " unreachable\n";
+        for (int64_t wave = 0; wave < waves; ++wave) {
+            // Blocks spread over the table: wave w takes the block starting at (2w + run % 2) * block.
+            const auto low = (2 * wave + run % 2) * block;
+            mustRun(stringFormat(
+                "MATCH (n:{}) WHERE n.id >= {} AND n.id < {} AND n.id % 3 <> 0 DELETE n;", table, low,
+                low + block));
+            if (HasFatalFailure()) {
+                return;
+            }
+            const auto reach = lowerGraphReach(*conn, table, "doc_index", "vec");
+            const auto line = stringFormat("run {}, wave {} (ids {} to {}) : {} linked, {} "
+                                           "unreachable from every entry{}",
+                run, wave, low, low + block - 1, reach.linked, reach.unreachable,
+                reach.error.empty() ? "" : " ; " + reach.error);
+            std::cerr << "  [vagues] " << line << "\n";
+            for (const auto offset : reach.lost) {
+                auto row = conn->query(stringFormat(
+                    "MATCH (n:{}) WHERE offset(ID(n)) = {} RETURN n.id, n.vec;", table, offset));
+                if (!row->isSuccess() || !row->hasNext()) {
+                    continue;
+                }
+                auto tuple = row->getNext();
+                const auto id = tuple->getValue(0)->getValue<int64_t>();
+                auto own = conn->query(stringFormat("CALL QUERY_VECTOR_INDEX('{}', 'doc_index', {}, "
+                                                    "10, efs := 10000) RETURN node.id;",
+                    table, tuple->getValue(1)->toString()));
+                auto found = false;
+                while (own->isSuccess() && own->hasNext()) {
+                    found |= own->getNext()->getValue(0)->getValue<int64_t>() == id;
+                }
+                std::cerr << "    offset " << offset << ", id " << id
+                          << (found ? " : FOUND by its own vector at efs 10000"
+                                    : " : not found by its own vector at efs 10000")
+                          << "\n";
+            }
+            if (!reach.error.empty() || reach.unreachable != 0) {
+                cutWaves++;
+                details += "\n  " + line;
+            }
+        }
+        mustRun(stringFormat("CALL DROP_VECTOR_INDEX('{}', 'doc_index');", table));
+        mustRun(stringFormat("DROP TABLE {};", table));
+    }
+    std::filesystem::remove(csv);
+    EXPECT_EQ(cutWaves, 0) << "[check: vector-lower-graph-connected-after-delete] " << cutWaves
+                           << " of " << runs * waves
+                           << " delete waves leave linked rows that no entry reaches:" << details;
+}
 } // namespace
 
 #endif
