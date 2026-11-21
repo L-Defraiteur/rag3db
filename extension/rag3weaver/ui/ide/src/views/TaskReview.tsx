@@ -55,6 +55,110 @@ function PlanCard({ p, label }: { p: Plan; label: string }) {
   );
 }
 
+/// **Who wrote a line** (page 07 of rag3weaver-archi: `by: {kind: human | agent | host, client}`, from who calls).
+function byLabel(by: unknown): string | null {
+  if (!by || typeof by !== "object") return null;
+  const b = by as { kind?: string; client?: string };
+  const kind = b.kind === "human" ? "humain" : b.kind === "agent" ? "agent" : b.kind === "host" ? "hôte" : b.kind;
+  if (!kind) return null;
+  return b.client ? `${kind} (${b.client})` : kind;
+}
+
+type Line = Record<string, unknown>;
+type Card = { id: string; opening: Line; states: Line[]; closing: Line | null };
+
+/// The cards of a mailbox: an `approval` line opens one; its `approval_state` lines are its stages; its first `answer`
+/// closes it (page 07 of rag3weaver-archi: one card, never hidden, one closing that says who decided).
+function cardsOf(mailbox: Line[]): Card[] {
+  return mailbox
+    .filter((l) => l.kind === "approval" && l.id)
+    .map((opening) => {
+      const id = String(opening.id);
+      return {
+        id,
+        opening,
+        states: mailbox.filter((l) => l.kind === "approval_state" && l.reply_to === id),
+        closing: mailbox.find((l) => l.kind === "answer" && l.reply_to === id) ?? null,
+      };
+    });
+}
+
+/// Who closed a card, said: the user, a recalled authorization (quoted), the agent's appeal, or the verifier (its
+/// reasons and its alternative).
+function decision(closing: Line): string {
+  const verdict = closing.approved === true ? "accordé" : "refusé";
+  const from = String(closing.from ?? "");
+  if (from === "recall") {
+    const a = (closing.authorization ?? {}) as { quote?: string; at?: number };
+    const when = a.at ? ` du ${new Date(Number(a.at)).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}` : "";
+    return `${verdict} par ton autorisation${when} : « ${a.quote ?? ""} »`;
+  }
+  if (from === "appeal") return `${verdict} sur l'appel de l'agent`;
+  if (from === "verifier") {
+    const reasons = closing.reasons ? ` : ${Array.isArray(closing.reasons) ? closing.reasons.join(" ; ") : String(closing.reasons)}` : "";
+    const alt = closing.alternative as { text?: string } | undefined;
+    return `${verdict} par le vérificateur${closing.model ? ` (${String(closing.model)})` : ""}${reasons}${alt?.text ? ` — alternative : ${alt.text}` : ""}`;
+  }
+  return `${verdict} par ${from === "user" || from === "ide" ? "toi" : from}`;
+}
+
+const STAGES: Record<string, string> = { opened: "ouverte", recall: "rappel d'une autorisation", appeal: "appel de l'agent", waiting_survivor: "attente du survivant", survivor: "le survivant tranche" };
+
+function ApprovalCards({ mailbox, waitingId, onAnswer }: { mailbox: Line[]; waitingId: string | null; onAnswer: (line: Line, approved: boolean) => void }) {
+  const cards = cardsOf(mailbox);
+  if (!cards.length) return null;
+  return (
+    <div className="approval-cards grid gap-2">
+      {cards.map((c) => {
+        const open = !c.closing;
+        const current = c.states[c.states.length - 1];
+        const until = current?.until ? Number(current.until) : null;
+        const left = until ? Math.max(0, Math.round((until - Date.now()) / 60000)) : null;
+        const command = c.opening.command ? String(c.opening.command) : null;
+        return (
+          <div
+            key={c.id}
+            id={open && c.id === waitingId ? "attente-equipier" : undefined}
+            role="status"
+            data-kind="approval"
+            data-card={c.id}
+            data-state={open ? "open" : "closed"}
+            className={`approval-card rounded-lg border px-3.5 py-2.5 text-sm grid gap-2 ${open ? "border-primary/60" : "border-border opacity-80"}`}
+          >
+            <p>
+              {open ? "L'agent attend ton accord" : "Accord"} : {String(c.opening.tool ?? "run_command")}{" "}
+              <code className="font-mono">{command ?? JSON.stringify(c.opening.args ?? {})}</code>
+              {c.opening.class ? <span className="text-xs text-muted-foreground"> · {String(c.opening.class)}{c.opening.scope ? `, ${String(c.opening.scope)}` : ""}</span> : null}
+            </p>
+            <ol className="timeline flex flex-wrap gap-x-3 text-xs text-muted-foreground">
+              <li data-stage="opened">{STAGES.opened}</li>
+              {c.states.map((s, k) => (
+                <li key={k} data-stage={String(s.stage)}>→ {STAGES[String(s.stage)] ?? String(s.stage)}</li>
+              ))}
+            </ol>
+            {open ? (
+              <>
+                {current ? (
+                  <p className="stage text-muted-foreground">
+                    {String(current.text ?? "")}
+                    {left !== null ? ` (encore ${left} min)` : ""}
+                  </p>
+                ) : null}
+                <div className="flex gap-2">
+                  <Button size="sm" className="accept accorder" onClick={() => onAnswer(c.opening, true)}>Accorder</Button>
+                  <Button size="sm" variant="outline" className="refuse refuser" onClick={() => onAnswer(c.opening, false)}>Refuser</Button>
+                </div>
+              </>
+            ) : (
+              <p className="decision">{decision(c.closing!)}</p>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function TeammateSection({ backend, task }: { backend: string; task: string }) {
   const [t, setT] = useState<Teammate | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -116,7 +220,8 @@ function TeammateSection({ backend, task }: { backend: string; task: string }) {
           <div className="grid gap-2 mt-2">{t.closed.map((p) => <PlanCard key={p.number} p={p} label={p.state === "accomplished" ? "accompli" : "obsolète"} />)}</div>
         </details>
       ) : null}
-      {t.waiting ? (
+      <ApprovalCards mailbox={t.mailbox} waitingId={t.waiting?.kind === "approval" ? String(t.waiting.id) : null} onAnswer={(line, approved) => repondre(line, approved ? "oui" : "non", approved)} />
+      {t.waiting && t.waiting.kind !== "approval" ? (
         <div id="attente-equipier" role="status" data-kind={String(t.waiting.kind)} className="rounded-lg border border-primary/60 px-3.5 py-2.5 text-sm grid gap-2">
           <p>
             {t.waiting.kind === "approval" ? "L'équipier attend ton accord" : "L'équipier attend ta réponse"}
@@ -148,6 +253,7 @@ function TeammateSection({ backend, task }: { backend: string; task: string }) {
                   {v.vers ? ` → ${v.vers}` : ""} · {v.genre}
                   {v.session ? " · session" : ""}
                   {l.item ? ` [${String(l.item)}]` : ""}{" "}
+                  {byLabel(l.by) ? <span className="by"> · {byLabel(l.by)}</span> : null}
                 </span>
                 {v.texte}
               </li>
