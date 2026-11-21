@@ -44,6 +44,22 @@ class Montage(unittest.TestCase):
             r = subprocess.run(['sh', str(poste)], env=env, capture_output=True, text=True)
             self.assertEqual(r.stdout.strip(), attendu, f'{fiche} : {r.stdout} {r.stderr}')
 
+    def test_une_relance_sous_poste_qui_ne_reconnait_pas_sa_place_echoue_tout_de_suite(self):
+        # 21 nov. 2026 (c7) : un format de fiche inconnu doit être un rouge en une seconde, pas une heure de boucle.
+        # Relancé une fois par poste (CONFINER_RELANCE posé), le confineur qui ne reconnaît toujours pas sa place échoue,
+        # en disant les fiches lues, sans se relancer.
+        verrous = self.p / 'verrous'; (verrous / 'fiches').mkdir(parents=True)
+        (verrous / 'fiches' / str(os.getppid())).write_text('tient quantique depuis 12:00:00 (pid 1) — x\n')
+        argv = ['confiner_validation.py', 'lancer', '--delai', '30', '--', 'true']
+        erreur = []
+        with patch.object(sys, 'argv', argv), patch.object(v, 'poste_tenu', return_value=None), \
+                patch.dict(os.environ, {'POSTE_LOCK_DIR': str(verrous), 'CONFINER_RELANCE': '1'}), \
+                patch.object(os, 'execve') as executer, patch('sys.stderr.write', side_effect=erreur.append):
+            code = v.main()
+        self.assertEqual(code, 2)
+        executer.assert_not_called()
+        self.assertIn('tient quantique', ''.join(erreur))
+
     def test_bus_sans_activation_et_chemin_xml_echappe(self):
         root = ET.fromstring(v.configuration_bus(self.p / 'a&b'))
         self.assertEqual([x.tag for x in root], ['type', 'listen', 'auth', 'policy'])

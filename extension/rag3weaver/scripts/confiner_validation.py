@@ -122,6 +122,21 @@ def ancetres(pid, table):
         pid = table[pid]['parent']
 
 
+RELANCE = 'CONFINER_RELANCE'
+
+
+def fiches_des_ancetres(table):
+    """Les fiches de poste des ancêtres, telles qu'écrites, pour dire ce que poste_tenu n'a pas reconnu."""
+    verrous = Path(os.environ.get('POSTE_LOCK_DIR', str(Path.home() / '.cache/rag3weaver-build')))
+    vues = []
+    for pid in ancetres(os.getpid(), table):
+        try:
+            vues.append(f'{pid} : ' + (verrous / 'fiches' / str(pid)).read_text().strip()[:120])
+        except OSError:
+            pass
+    return ' ; '.join(vues)
+
+
 def poste_tenu(table):
     verrous = Path(os.environ.get('POSTE_LOCK_DIR', str(Path.home() / '.cache/rag3weaver-build')))
     for pid in ancetres(os.getpid(), table):
@@ -461,11 +476,19 @@ def main():
             autorite(table)  # Un reçu périmé/forgé n'autorise pas de nouveau superviseur.
             raise Refus('validation déjà supervisée : composer la commande dans cette portée')
         if not poste_tenu(table):
+            # **Jamais deux relances** (21 nov. 2026, c7) : relancé une fois par poste et toujours sans place reconnue,
+            # c'est un format de fiche que poste_tenu ne lit pas ; échouer tout de suite en disant les fiches lues, au
+            # lieu de se relancer en boucle (le 21 novembre : 17 relances par seconde pendant 33 minutes).
+            if os.environ.get(RELANCE):
+                raise Refus('relancé sous poste, et aucune place tenue reconnue ; fiches des ancêtres : '
+                            + (fiches_des_ancetres(table) or 'aucune') + ' — un format de fiche que poste_tenu ne lit pas ?')
             poste = Path(__file__).with_name('poste')
             env = dict(os.environ)
             env.setdefault('POSTE_MEM_MAX', '32G')
             env.pop('RAG3WEAVER_VERROU_TENU', None)
+            env[RELANCE] = '1'
             os.execve(str(poste), [str(poste), a.mode, sys.executable, str(Path(__file__).resolve()), *sys.argv[1:]], env)
+        os.environ.pop(RELANCE, None)  # la commande n'en hérite pas
         return superviser(command, a.delai, a.preuves)
     except (Refus, OSError, ValueError) as e:
         print('ROUGE validation : ' + str(e), file=sys.stderr)
