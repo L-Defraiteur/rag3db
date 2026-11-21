@@ -1384,7 +1384,11 @@ impl Node for LinkRecordNode {
         // (`STRUCT_EXTRACT(item,line) has data type STRING but expected
         // INT64`) : une définition hors de sa classe ne se reliait jamais. Un
         // lien neuf garde NULL sur la colonne omise.
-        let mut groups: HashMap<(String, Vec<String>), Vec<usize>> = HashMap::new();
+        // **By relation, then by properties** (21 November 2026, c7): the groups were walked in the order of a
+        // HashMap, whose seed changes with every map. A pair that comes in two groups took the value of the group
+        // written last, which changed from one drain to the next: two rewrites of the same files did not write the
+        // same links (`e2e_drain_order`).
+        let mut groups: BTreeMap<(String, Vec<String>), Vec<usize>> = BTreeMap::new();
         // Les déliaisons, à part : elles passent après les liens du lot.
         let mut a_retirer: BTreeMap<String, Vec<usize>> = BTreeMap::new();
         for (ri, rl) in resolved.iter().enumerate() {
