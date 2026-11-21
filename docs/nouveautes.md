@@ -1,5 +1,12 @@
 # Nouveautés
 
+- 21 novembre 2026 — **Une indexation dit les liens qu'elle n'a pas pu poser.** Un lien dont un bout manque
+  n'est pas écrit. Il était écarté sans un mot : une réécriture de 419 fichiers en écartait 26 544 et rendait
+  `failed: 0`. Le journal de l'index le dit maintenant, avec un exemple, et les rapports d'ingestion et de réécriture
+  le comptent à côté de `failed` (`dangling_links`). Leur cause est corrigée : une fermeture ou une compréhension
+  repliée dans sa fonction ne fabrique plus de liens partant d'elle, et ce qu'elle appelle reste porté par la
+  fonction. **Deux indexations des mêmes fichiers posent aussi les mêmes liens** : une paire venue deux fois prenait
+  l'une ou l'autre valeur selon les passes.
 - 21 novembre 2026 — **Un nœud scripté édité sert à l'appel suivant.** Quand un `.ts` ou un `.node.json` change dans
   le dossier `nodes/` d'un backend ouvert, l'appel suivant recharge le backend et sert la nouvelle version, sans
   redémarrer l'hôte. Un appel sans changement ne relit aucun fichier, et une édition cassée laisse servir la version
