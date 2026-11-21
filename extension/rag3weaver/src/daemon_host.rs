@@ -2074,8 +2074,49 @@ impl DaemonHost {
     /// its manifest: `code-compteur`) or its manifest's path; an unknown name is refused listing the attached ones in both
     /// forms. Tasks are not repositories. Gives `{id, repo, name, manifest}`.
     pub fn resoudre_un_depot(&self, nom: &str) -> Value {
-        let _ = nom;
-        json!({ "ok": false, "error": "resoudre un dépôt : pas encore" }) // RED STUB.
+        // The full name: the folder of the manifest, the one above its `templates`.
+        let complet = |m: &str| {
+            Path::new(m)
+                .ancestors()
+                .find(|a| a.file_name().is_some_and(|n| n == "templates"))
+                .and_then(Path::parent)
+                .and_then(Path::file_name)
+                .map(|n| n.to_string_lossy().to_string())
+        };
+        let etat = self.state();
+        let depots: Vec<Value> = etat["backends"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|b| b["tache"].is_null())
+            .map(|b| {
+                let m = b["manifest"].as_str().unwrap_or_default();
+                json!({ "id": b["id"], "repo": b["repo"], "name": complet(m), "manifest": m })
+            })
+            .collect();
+        let trouves: Vec<&Value> =
+            depots.iter().filter(|d| [&d["id"], &d["repo"], &d["name"], &d["manifest"]].iter().any(|v| v.as_str() == Some(nom))).collect();
+        let dire = |d: &Value| match (d["repo"].as_str(), d["name"].as_str()) {
+            (Some(r), Some(n)) if r != n => format!("{r} ({n})"),
+            (Some(r), _) => r.to_string(),
+            (None, Some(n)) => n.to_string(),
+            _ => d["id"].as_str().unwrap_or("?").to_string(),
+        };
+        match trouves.as_slice() {
+            [un] => {
+                let mut r = (*un).clone();
+                r["ok"] = json!(true);
+                r
+            }
+            [] => json!({
+                "ok": false,
+                "error": format!("aucun dépôt attaché ne s'appelle « {nom} » ; attachés : {}", depots.iter().map(dire).collect::<Vec<_>>().join(", ")),
+            }),
+            plusieurs => json!({
+                "ok": false,
+                "error": format!("« {nom} » désigne plusieurs dépôts : {}", plusieurs.iter().map(|d| dire(d)).collect::<Vec<_>>().join(", ")),
+            }),
+        }
     }
 
     pub fn state(&self) -> Value {
