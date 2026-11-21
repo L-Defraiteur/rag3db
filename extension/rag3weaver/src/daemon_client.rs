@@ -138,6 +138,9 @@ pub struct DaemonClient {
     client: String,
     keys: Vec<String>,
     session: Mutex<String>,
+    /// The host this client knows (its address and `started_at`), read in its daemon.json: another one there means a
+    /// restarted host, which does not know this session ([`Self::follow_restart`]).
+    known_host: Mutex<Option<(String, u64)>>,
     name: String,
     version: u32,
     /// Le délai de l'agent gardé ([`crate::daemon::Delais::reponse`]), que disent ses refus.
@@ -200,6 +203,7 @@ impl DaemonClient {
             client: client.to_string(),
             keys,
             session: Mutex::new(session),
+            known_host: Mutex::new(None),
             name: String::new(),
             version: 0,
             delai,
@@ -234,8 +238,35 @@ impl DaemonClient {
     /// **Follow a restarted host** (scenario 1 of the night of 20 November 2026): after a restart, the host knew a
     /// client's session only at its next tool call, and the IDE listed no agent. `Ok(true)` when the host changed and a
     /// new session was opened; `Ok(false)` when it is the same host.
+    ///
+    /// The daemon.json is read where it is local (the designated file, this machine's, or the one of a forced address
+    /// when it describes it), never by a command (an ssh per tick): nothing goes to the host while it stays the same,
+    /// so a host left alone still stops when idle.
     pub fn follow_restart(&self) -> Result<bool, String> {
-        Ok(false)
+        let fiche = match &self.designated {
+            Some(Designated { source: DaemonSource::File(p), .. }) => DaemonSource::File(p.clone()).read().ok(),
+            Some(_) => None,
+            None => crate::daemon_lifecycle::read().filter(|f| self.relaunch.is_some() || crate::daemon::base_url(&f.address) == self.base()),
+        };
+        let Some(fiche) = fiche else { return Ok(false) };
+        let adresse = self.designated.as_ref().and_then(|d| d.address.clone()).unwrap_or_else(|| fiche.address.clone());
+        let hote = (adresse.clone(), fiche.started_at);
+        let mut connu = self.known_host.lock().unwrap_or_else(|p| p.into_inner());
+        match connu.as_ref() {
+            None => {
+                *connu = Some(hote);
+                return Ok(false);
+            }
+            Some(h) if *h == hote => return Ok(false),
+            Some(_) => {}
+        }
+        let base = crate::daemon::base_url(&adresse);
+        let session = open_session(&self.agent, &base, Some(&fiche.token), &self.client, &self.keys, self.delai)?;
+        eprintln!("[mcp] l'hôte a redémarré ({adresse}, démarré à {}) : une session neuve y est ouverte, sans attendre un appel", fiche.started_at);
+        *self.endpoint.lock().unwrap_or_else(|p| p.into_inner()) = (base, Some(fiche.token));
+        *self.session.lock().unwrap_or_else(|p| p.into_inner()) = session;
+        *connu = Some(hote);
+        Ok(true)
     }
 
     /// L'hôte désigné a refusé le jeton : relire la source, une session neuve,
@@ -749,6 +780,8 @@ pub(crate) fn what_a_watch_says(manifest: &Path, index: &Value, view: Option<&Va
 const START_WAIT: std::time::Duration = std::time::Duration::from_secs(4);
 /// Le pas de la reprise quand l'hôte manque.
 pub const RETRY_EVERY: std::time::Duration = std::time::Duration::from_secs(10);
+/// How often an attached MCP client reads its daemon.json to follow a restarted host ([`DaemonClient::follow_restart`]).
+const FOLLOW_EVERY: std::time::Duration = std::time::Duration::from_secs(5);
 
 impl McpInner {
     fn annoncer(&self) {
@@ -826,6 +859,18 @@ impl McpClient {
                 }
             } else {
                 fil.reprendre();
+            }
+        });
+        // **A restarted host knows this client again on its own** (scenario 1 of the night of 20 November 2026): every
+        // FOLLOW_EVERY, the attached client reads its daemon.json and opens a session on a new host.
+        let suivi = std::sync::Arc::downgrade(&inner);
+        std::thread::spawn(move || loop {
+            std::thread::sleep(FOLLOW_EVERY);
+            let Some(i) = suivi.upgrade() else { return };
+            if let Side::Attached(c) = &*i.side.lock().unwrap_or_else(|p| p.into_inner()) {
+                if let Err(e) = c.follow_restart() {
+                    eprintln!("[mcp] l'hôte a redémarré, mais la session n'y est pas rouverte : {e} ; nouvel essai dans {} s", FOLLOW_EVERY.as_secs());
+                }
             }
         });
         if attendu.recv_timeout(START_WAIT).is_err() {
