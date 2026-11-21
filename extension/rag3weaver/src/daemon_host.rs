@@ -1054,6 +1054,7 @@ impl DaemonHost {
 
     /// Whether a view the host opened, other than `name` of the Claude Code session `claude`, comes from the fork `fourche`
     /// (every session's kept state is read): the fork's layer is shared while one does.
+    #[cfg(feature = "code")]
     fn fourche_partagee(&self, fourche: &str, claude: &str, name: &str) -> bool {
         std::fs::read_dir(self.vues_dir()).into_iter().flatten().flatten().any(|e| {
             let session = e.path().file_stem().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
