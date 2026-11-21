@@ -1788,7 +1788,7 @@ fn read_threads() -> u64 {
         }
         crate::ingest_profile::add("rebâti · indexer les documents", t);
         let t = std::time::Instant::now();
-        handle.commit().map_err(|e| CatalogError::IndexPersistence(format!("plein texte de {entity} : {e}")))?;
+        handle.commit_keeping_generation().map_err(|e| CatalogError::IndexPersistence(format!("plein texte de {entity} : {e}")))?;
         crate::ingest_profile::add("rebâti · commit lucivy", t);
         self.fts_rebuild_cursor.insert(table.clone(), dernier);
         if page.rows.len() < lot {
@@ -3595,7 +3595,7 @@ fn read_threads() -> u64 {
                                 eprintln!("[rag3weaver] reindex FTS {table}: {e}");
                             }
                         }
-                        if let Err(e) = handle.commit() {
+                        if let Err(e) = handle.commit_keeping_generation() {
                             eprintln!("[rag3weaver] reindex commit {table}: {e}");
                         }
                     }
@@ -8852,7 +8852,7 @@ fn read_threads() -> u64 {
                 candidates += 1;
                 crate::fts_handle::upsert_document(&handle, &values, offset).map_err(CatalogError::IndexPersistence)?;
             }
-            handle.commit().map_err(CatalogError::IndexPersistence)?;
+            handle.commit_keeping_generation().map_err(CatalogError::IndexPersistence)?;
             if handle.num_docs()!=candidates {return Err(CatalogError::IndexPersistence(format!("lexical multiplicity mismatch for {table}")))}
         }
         self.flush_blob_store("owned lexical reconstruction")
@@ -8889,7 +8889,7 @@ fn read_threads() -> u64 {
             }
             crate::fts_handle::upsert_document(&handle, &valeurs, decalage).map_err(CatalogError::IndexPersistence)?;
         }
-        handle.commit().map_err(CatalogError::IndexPersistence)?;
+        handle.commit_keeping_generation().map_err(CatalogError::IndexPersistence)?;
         self.flush_blob_store("rebâti du plein texte d'une table de versions")
     }
 
@@ -9111,7 +9111,7 @@ fn read_threads() -> u64 {
         }
         for entity in &touchees {
             if let Some(h) = self.fts_handles.get(entity) {
-                h.commit().map_err(|e| err(e.to_string()))?;
+                h.commit_keeping_generation().map_err(|e| err(e.to_string()))?;
             }
         }
         Ok(())

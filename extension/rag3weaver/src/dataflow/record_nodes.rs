@@ -3311,9 +3311,11 @@ impl Node for FlushNode {
                 // Une table sans handle n'a pas d'index FTS : rien à committer.
                 continue;
             };
-            // `commit()` est idempotent : il flush et recharge la lecture.
+            // Le commit est idempotent : il flush et recharge la lecture. Il garde la
+            // génération du plein texte (lucivy 4.4) : `commit()` est refusé sur un
+            // index étiqueté.
             // Les merges partent en tâche de fond selon la policy.
-            match handle.commit() {
+            match handle.commit_keeping_generation() {
                 Ok(()) => flushed += 1,
                 // Une table qui ne commite pas ne tue plus les autres : le
                 // plein texte de celle-ci est perdu, et ça se dit comme tel.
@@ -3349,10 +3351,13 @@ impl Node for FlushNode {
             .ok_or("FlushNode undo: expected array of table names")?;
 
         // Un commit est idempotent : le rejouer est le seul « undo » qui ait un
-        // sens ici (on ne dé-commite pas un index). Best-effort, comme avant.
+        // sens ici (on ne dé-commite pas un index). Best-effort, comme avant,
+        // mais un échec se dit : il était avalé par un `let _`.
         for t in tables {
-            if let Some(handle) = t.as_str().and_then(|table| handles.get(table)) {
-                let _ = handle.commit();
+            if let Some((table, handle)) = t.as_str().and_then(|table| handles.get(table).map(|h| (table, h))) {
+                if let Err(e) = handle.commit_keeping_generation() {
+                    eprintln!("[rag3weaver] FlushNode undo : le commit du plein texte de {table} échoue : {e}");
+                }
             }
         }
         Ok(())
