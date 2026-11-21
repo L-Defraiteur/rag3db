@@ -1232,6 +1232,8 @@ impl DataflowRuntime {
                 .get::<crate::events::RunTarget>(crate::events::RUN_TARGET_SERVICE)
                 .filter(|t| t.run == run_id)
                 .and_then(|t| t.role.clone()),
+            // A graph is never a teammate's step: the step is the agent's turn.
+            step: None,
             scope: self
                 .services
                 .get::<crate::scope::Scope>("scope")

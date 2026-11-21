@@ -133,6 +133,10 @@ pub enum Event {
         /// attachement au manifeste : `archiviste`, …) — la page range les runs
         /// par rôle sans lire leurs noms. Rendu dans `target.role`.
         role: Option<String>,
+        /// **The teammate's step this run is the turn of** (the agent page of the IDE, 21 Nov
+        /// 2026): the task and the step's number, so that the page finds the current step of a
+        /// task by its runs. `None` for any other run.
+        step: Option<StepRef>,
     },
     /// **Ce qu'un appel a consommé** — le compteur
     /// ([`crate::meter`], [doc 08](../docs/27-aout-2026-13h01/08-le-compteur.md)).
@@ -683,8 +687,9 @@ impl Event {
     pub fn to_json(&self) -> serde_json::Value {
         use serde_json::json;
         match self {
-            Self::RunStarted { run, parent, kind, name, domain, scope, target, role } => json!({
+            Self::RunStarted { run, parent, kind, name, domain, scope, target, role, step } => json!({
                 "kind": "RunStarted", "run": run, "parent": parent, "run_kind": kind, "name": name,
+                "step": step.as_ref().map(|s| json!({ "task": s.task, "number": s.number })),
                 "domain": domain, "target": target.as_ref().map(|t| {
                     let mut v = t.to_json();
                     if let (Some(r), Some(o)) = (role, v.as_object_mut()) {
@@ -837,6 +842,13 @@ pub mod topic {
     pub const REACTIONS: &str = "reactions";
     /// Les propositions de déclarations : proposées, appliquées, rejetées.
     pub const DECLARATIONS: &str = "declarations";
+}
+
+/// The teammate's step a run is the turn of: its task and its number.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct StepRef {
+    pub task: String,
+    pub number: usize,
 }
 
 /// **Ce dont un graphe est le graphe** : un outil, une réaction, un composant
@@ -1216,7 +1228,7 @@ mod tests {
         let mut all = bus.subscribe(topic::AGENT);
         let mut mine = bus.subscribe(&run_topic("r1"));
         let mut other = bus.subscribe(&run_topic("r2"));
-        bus.emit(Event::RunStarted { run: "r1".into(), parent: None, kind: "agent".into(), name: "demo".into(), domain: String::new(), scope: None, target: None, role: None });
+        bus.emit(Event::RunStarted { run: "r1".into(), parent: None, kind: "agent".into(), name: "demo".into(), domain: String::new(), scope: None, target: None, role: None, step: None });
         assert!(matches!(all.try_recv().unwrap(), Event::RunStarted { .. }));
         assert!(matches!(mine.try_recv().unwrap(), Event::RunStarted { .. }));
         assert!(matches!(other.try_recv(), Err(TryRecvError::Empty)));

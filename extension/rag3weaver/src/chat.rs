@@ -49,6 +49,9 @@ pub struct ChatConfig {
     /// ([`crate::agent::AgentLimits::cut_relaunch`]); none by default.
     #[serde(default)]
     pub cut_relaunch: Option<(String, usize)>,
+    /// The teammate's step this turn is (its task and number), said in the run's `RunStarted`.
+    #[serde(default)]
+    pub step: Option<crate::events::StepRef>,
     /// Sampling is provider-independent; models need not share the greedy default.
     #[serde(default)]
     pub temperature: f32,
@@ -286,6 +289,7 @@ impl ChatSession {
                     .map(|_| &completion as &dyn crate::agent::CompletionCheck),
             )
             .with_name(&config.name)
+            .with_step(config.step.clone())
             .with_limits(AgentLimits {
                 max_iterations: config.max_iterations,
                 cut_relaunch: config.cut_relaunch.clone(),

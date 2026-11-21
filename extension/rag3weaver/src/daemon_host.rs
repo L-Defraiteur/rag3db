@@ -3780,6 +3780,7 @@ mod tests {
             scope: None,
             target: None,
             role: None,
+            step: None,
         });
         bus.emit(Event::RunFinished { run: "r".into(), kind: "agent".into(), ms: 3, ok: true, cause: None, cancelled_by: None });
         // Le temps que le fil du sujet range l'événement, bien moins que la grâce.
@@ -3818,6 +3819,7 @@ mod tests {
             scope: None,
             target: None,
             role: None,
+            step: None,
         });
         bus.emit(Event::RunFinished { run: "r".into(), kind: "agent".into(), ms: 3, ok: true, cause: None, cancelled_by: None });
         std::thread::sleep(std::time::Duration::from_millis(30));
