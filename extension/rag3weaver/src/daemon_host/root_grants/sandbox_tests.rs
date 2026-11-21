@@ -120,3 +120,35 @@ fn the_hosts_token_and_the_ides_cookie_stay_out_of_every_sandbox() {
         assert_eq!(a.host.proposed_root(&maison.join(".config/google-chrome/Default/Cookies")), None, "a browser's profile is proposed");
     }
 }
+
+/// **The protected folders: the credential stores, a list that extends without recompiling, a refusal that says to
+/// grant a sub-folder** (c7, 21 November 2026): `~/.config` cannot be granted (it holds `gh`'s token) and the refusal
+/// says to propose a sub-folder; a folder added to `<config>/protected-folders.txt` is protected; `~/.local/share` is
+/// refused as a whole while a sub-folder of it that holds nothing protected stays grantable.
+#[test]
+fn the_protected_folders_cover_credential_stores_extend_by_a_file_and_say_to_grant_a_sub_folder() {
+    let d = tempfile::tempdir().unwrap();
+    let racines = crate::code_tree::Roots { config: d.path().join("config"), data: d.path().join("data") };
+    let host = crate::daemon_host::DaemonHost::new().with_racines_de_code(racines.clone());
+    let preuve = || Proof { quote: "oui".into(), at: None, turn: None };
+    let protegees = host.protected_folders();
+    let maison = std::path::PathBuf::from(std::env::var_os("HOME").unwrap());
+    for relatif in [".gnupg", ".password-store", ".local/share/keyrings", ".config/gh", ".aws", ".kube", ".docker"] {
+        assert!(protegees.iter().any(|p| p.ends_with(relatif)), "{relatif} is not protected: {protegees:?}");
+    }
+    if maison.join(".config").is_dir() {
+        let refus = host.grant_root("*", &maison.join(".config"), preuve(), "user", "read").unwrap_err();
+        assert!(refus.contains("sous-dossier"), "the refusal does not say to grant a sub-folder: {refus}");
+    }
+    // A folder added to the list, without recompiling.
+    let ajoute = d.path().join("coffre");
+    std::fs::create_dir_all(&ajoute).unwrap();
+    std::fs::create_dir_all(&racines.config).unwrap();
+    std::fs::write(racines.config.join("protected-folders.txt"), format!("# mes ajouts\n{}\n", ajoute.display())).unwrap();
+    assert!(host.grant_root("*", &ajoute, preuve(), "user", "read").is_err(), "a folder added to the list is granted");
+    assert!(host.grant_root("*", d.path(), preuve(), "user", "read").is_err(), "the parent of a folder added to the list is granted");
+    // A sub-folder that holds nothing protected stays grantable.
+    let libre = d.path().join("libre");
+    std::fs::create_dir_all(&libre).unwrap();
+    assert!(host.grant_root("*", &libre, preuve(), "user", "read").is_ok());
+}
