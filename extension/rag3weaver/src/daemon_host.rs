@@ -435,6 +435,8 @@ pub mod web_search;
 mod agents;
 /// A run as a tree, read-only (`GET /ide/run`).
 mod run_tree;
+/// The approval card: one card, its states, one closing (the gate of the auto mode).
+pub mod card;
 
 /// Le pas d'un équipier étanche au moteur : le backend pris à chaque appel
 /// d'outil, le repli sur les fichiers du worktree quand il manque.
