@@ -106,6 +106,8 @@ mod e2e_cloud_schema_probe;
 mod e2e_code;
 #[path = "../e2e_code_sync.rs"]
 mod e2e_code_sync;
+#[path = "../e2e_new_name_mentions.rs"]
+mod e2e_new_name_mentions;
 #[path = "../e2e_compose_restart.rs"]
 mod e2e_compose_restart;
 #[path = "../e2e_contrat_transactions.rs"]
