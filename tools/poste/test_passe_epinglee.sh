@@ -226,4 +226,25 @@ passe VERT "une panique attendue (should panic ... ok) n'est pas recopiée au r�
   && echo "vert   la panique attendue omise et comptée au résumé" || { echo "ROUGE  panique attendue recopiée : « $(grep -E 'panick|omise' $R | tr '\n' ' ') »"; rouge=1; }
 passe "ROUGE e2e_x" "la panique d'un test rouge reste au résumé" SUITES_EN_PLUS=e2e_x FAUX_PANIQUES=e2e_x FAUX_PANIQUE_ROUGE=1
 grep -q "vraiment_rouge' (4120119) panicked" $R && echo "vert   la panique d'un test rouge est recopiée" || { echo "ROUGE  panique d'un test rouge perdue du résumé"; rouge=1; }
+# **La suite à faute injectée du confineur** (21 novembre 2026, c7) : une étape à la demande seulement
+# (FAUTE_INJECTEE=1, que le pousseur ne pose pas) ; sous une session graphique, la suite se saute en le disant : non jugée,
+# comptée, dite en première ligne du résumé ; rouge, elle rougit la passe.
+cat > $W/scripts/test_confiner_faute_injectee.py <<'F'
+import os, sys
+f = os.environ.get('FAUX_FAUTE', 'ok')
+if f == 'saute':
+    print("setUpClass (__main__.PorteeReelle) ... skipped 'SKIP : session 3 (wayland) active sur ce poste'")
+elif f == 'rouge':
+    print('FAIL: test_vraie_portee_systemd_crevee_dit_l_enveloppe'); sys.exit(1)
+else:
+    print('test_vraie_portee_systemd_crevee_dit_l_enveloppe (__main__.PorteeReelle) ... ok')
+F
+passe VERT "sans FAUTE_INJECTEE, la suite à faute n'est pas jouée (le pousseur)" SUITES=- FAUX_FAUTE=rouge
+grep -q 'faute injectée' $R && { echo "ROUGE  sans FAUTE_INJECTEE : $(grep 'faute injectée' $R)"; rouge=1; } || echo "vert   sans FAUTE_INJECTEE : rien de la suite à faute au résumé"
+passe VERT "FAUTE_INJECTEE=1, la suite à faute jouée et verte" SUITES=- FAUTE_INJECTEE=1
+grep -q '^suite à faute injectée : jouée' $R && echo "vert   la suite à faute dite jouée" || { echo "ROUGE  suite à faute jouée non dite : $(grep -i faute $R)"; rouge=1; }
+passe "ROUGE suite à faute injectée" "FAUTE_INJECTEE=1, la suite à faute rouge rougit la passe" SUITES=- FAUTE_INJECTEE=1 FAUX_FAUTE=rouge
+passe VERT "FAUTE_INJECTEE=1 sous une session graphique : sautée, non jugée" SUITES=- FAUTE_INJECTEE=1 FAUX_FAUTE=saute
+head -1 $R | grep -q '^NON JUGÉE : la suite à faute injectée du confineur — SKIP : session 3 (wayland)' && grep -q '^tests non jugés : 1$' $R \
+  && echo "vert   le saut dit en première ligne et compté non jugé" || { echo "ROUGE  saut : première ligne « $(head -1 $R) », compteur « $(grep '^tests non jugés' $R) »"; rouge=1; }
 exit $rouge
