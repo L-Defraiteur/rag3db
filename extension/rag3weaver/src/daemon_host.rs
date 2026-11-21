@@ -862,7 +862,7 @@ impl DaemonHost {
                 self.set_session_view(&s.id, Some(json!({ "layer": couche })))?;
                 let (couche_f, claude_f, nom_f, session_f) = (couche.clone(), claude.clone(), nom.clone(), s.id.clone());
                 let reel_f = reel.clone();
-                let arret: std::sync::Arc<(Mutex<bool>, std::sync::Condvar)> = Default::default();
+                let arret: std::sync::Arc<(Mutex<FollowerSignal>, std::sync::Condvar)> = Default::default();
                 let arret_f = arret.clone();
                 let tours: std::sync::Arc<std::sync::atomic::AtomicUsize> = Default::default();
                 let tours_f = tours.clone();
@@ -885,25 +885,49 @@ impl DaemonHost {
                             return;
                         }
                         hote.vues_en_ecriture.lock().unwrap_or_else(|e| e.into_inner()).remove(&couche_f);
-                        // **Then the view follows its worktree** (Lucie, 21 November 2026, 12 h 28): each second, a change
-                        // of its signature (its HEAD, its status, the time and size of each changed file) rewrites the
-                        // layer's gap from the fork, deletions included. The host is held weakly: a host that goes stops it;
-                        // close_view stops it before the worktree is removed.
+                        // **Then the view follows its worktree** (Lucie, 21 November 2026, 12 h 28): the kernel's events on
+                        // the worktree (inotify, not the backend's files bus) wake the thread; it waits 150 ms of quiet, then
+                        // a change of the worktree's signature (its HEAD, its status, the time and size of each changed file)
+                        // rewrites the layer's gap from the fork, deletions included. A slow poll every 30 s stands in when the
+                        // kernel's events are missing. Measured on a rag3db worktree (about 9 500 tracked files): one signature
+                        // costs 16 to 25 ms at luciepc, about 50 ms at the tablet — too much each second for each open view.
+                        // The host is held weakly: a host that goes stops it; close_view stops it before the worktree goes.
                         let faible = std::sync::Arc::downgrade(&hote);
                         drop(hote);
+                        let sonnette = arret_f.clone();
+                        let reel_m = reel_f.clone();
+                        let _observateur = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
+                            let Ok(ev) = res else { return };
+                            // Git's own bookkeeping is not a change of the tree.
+                            if ev.paths.iter().all(|p| p.strip_prefix(&reel_m).is_ok_and(|r| r.starts_with(".git"))) {
+                                return;
+                            }
+                            let (etat, cv) = &*sonnette;
+                            etat.lock().unwrap_or_else(|e| e.into_inner()).sonne = true;
+                            cv.notify_all();
+                        })
+                        .and_then(|mut w| {
+                            use notify::Watcher;
+                            w.watch(&reel_f, notify::RecursiveMode::Recursive).map(|_| w)
+                        })
+                        .map_err(|e| eprintln!("[démon] la vue {couche_f} : pas d'événements du noyau ({e}) ; elle se relit toutes les 30 s"))
+                        .ok();
                         let mut dit: Option<String> = None;
                         loop {
                             {
-                                let (drapeau, cv) = &*arret_f;
-                                let g = drapeau.lock().unwrap_or_else(|e| e.into_inner());
-                                if *g {
+                                let (etat, cv) = &*arret_f;
+                                let mut g = etat.lock().unwrap_or_else(|e| e.into_inner());
+                                if !g.sonne && !g.arret {
+                                    g = cv.wait_timeout(g, std::time::Duration::from_secs(30)).unwrap_or_else(|e| e.into_inner()).0;
+                                }
+                                if g.arret {
                                     return;
                                 }
-                                let (g, _) = cv.wait_timeout(g, std::time::Duration::from_secs(1)).unwrap_or_else(|e| e.into_inner());
-                                if *g {
-                                    return;
-                                }
+                                g.sonne = false;
                             }
+                            // 150 ms of quiet: an editor's burst of writes is one change.
+                            std::thread::sleep(std::time::Duration::from_millis(150));
+                            arret_f.0.lock().unwrap_or_else(|e| e.into_inner()).sonne = false;
                             let Some(hote) = faible.upgrade() else { return };
                             if !reel_f.is_dir() {
                                 return;
@@ -3506,9 +3530,17 @@ impl PorteDEcriture {
 }
 
 /// The thread that makes a view follow its worktree, and its stop (see `DaemonHost::view_followers`).
+/// What wakes the thread of a view that follows its worktree: a kernel event (`sonne`), or its stop (`arret`).
+#[cfg(feature = "code")]
+#[derive(Default)]
+pub(crate) struct FollowerSignal {
+    sonne: bool,
+    arret: bool,
+}
+
 #[cfg(feature = "code")]
 pub(crate) struct ViewFollower {
-    stop: std::sync::Arc<(Mutex<bool>, std::sync::Condvar)>,
+    stop: std::sync::Arc<(Mutex<FollowerSignal>, std::sync::Condvar)>,
     thread: Option<std::thread::JoinHandle<()>>,
     /// The signatures the thread computed since the first writing (each one a `git status`).
     turns: std::sync::Arc<std::sync::atomic::AtomicUsize>,
@@ -3518,8 +3550,8 @@ pub(crate) struct ViewFollower {
 impl ViewFollower {
     /// Stops the thread and waits for it (woken: no wait for its second).
     fn stop(mut self) {
-        let (drapeau, cv) = &*self.stop;
-        *drapeau.lock().unwrap_or_else(|e| e.into_inner()) = true;
+        let (etat, cv) = &*self.stop;
+        etat.lock().unwrap_or_else(|e| e.into_inner()).arret = true;
         cv.notify_all();
         if let Some(t) = self.thread.take() {
             let _ = t.join();
