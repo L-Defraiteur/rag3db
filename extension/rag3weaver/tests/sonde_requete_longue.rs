@@ -145,7 +145,7 @@ fn le_cout_du_plein_texte_selon_le_nombre_de_termes() {
         println!(
             "| {n} | {} | {} | {} | {} | {} | {} |",
             requete.chars().count(),
-            mesurer(&requete, BM25Mode::Parse, 1),
+            mesurer(&requete, BM25Mode::Words, 1),
             mesurer(&requete, BM25Mode::ContainsSplit, 1),
             mesurer(&requete, BM25Mode::ContainsSplit, 0),
             mesurer(&requete, BM25Mode::Contains, 1),
