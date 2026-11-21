@@ -10,7 +10,7 @@ m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
 pid=m.poste_tenu(m.processus())
 assert pid is not None,'poste réel absent'
 fiche=pathlib.Path.home()/'.cache/rag3weaver-build/fiches'/str(pid)
-assert fiche.read_text().startswith('tient lourd '),'poste lourd requis'
+assert fiche.read_text().startswith(('tient lourd ','tient cpu ','tient gpu+cpu ')),'poste cpu requis (lourd avant le 21 nov. 2026)'
 p=pathlib.Path.home()/'.cache/rag3weaver-build/validations/validation-hex7oup7'
 a=json.loads((p/'autorite.json').read_text());r=json.loads((p/'recette.json').read_text())
 assert a['etat']=='termine' and r['delai']==2400
