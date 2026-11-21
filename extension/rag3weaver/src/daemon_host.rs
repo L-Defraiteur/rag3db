@@ -1067,6 +1067,14 @@ impl DaemonHost {
         })
     }
 
+    /// **Index on demand a folder attached without an index** (archi's page « un agent qui part neutre », arbre's part 2):
+    /// its watches put back, its backend reopened, its first index launched.
+    #[cfg(feature = "code")]
+    #[allow(unused_variables)]
+    pub fn indexer_un_dossier(&self, chemin: &Path) -> Result<Value, String> {
+        Err("indexer un dossier : pas encore".into()) // RED STUB.
+    }
+
     /// **Open a folder** (Lucie's first step in the IDE, 21 November 2026; recherche makes `/ide/ouvrir`): a folder given
     /// by its path is attached to the atelier, and appears among the trees of this machine. A folder that does not
     /// exist, or an empty one, is created and gets `git init` (never a push). Refused, saying why: Lucie's tree, sairen,
@@ -3722,6 +3730,8 @@ mod tests {
     // A lot's new witness goes in a file of its own, `daemon_host/tests/<lot>.rs` (c7, 21 November 2026).
     #[cfg(all(unix, feature = "code", feature = "rag3db-native", feature = "daemon"))]
     mod commande_ouvrir;
+    #[cfg(all(unix, feature = "code", feature = "rag3db-native", feature = "daemon"))]
+    mod index_a_la_demande;
     #[cfg(all(unix, feature = "code", feature = "rag3db-native", feature = "daemon"))]
     mod sans_index;
 
