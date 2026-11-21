@@ -22,6 +22,7 @@ mod rhai;
 #[cfg(test)]
 mod tests;
 mod typescript;
+pub mod wasm;
 /// Le composant React d'un gabarit, compilé en module ES pour le navigateur (rien ne s'y exécute).
 pub mod tsx;
 
@@ -31,16 +32,19 @@ pub enum Language {
     Rhai,
     TypeScript,
     JavaScript,
+    /// A WebAssembly module (feature `wasm-nodes`): its bytes in hexadecimal.
+    Wasm,
 }
 
 impl Language {
-    pub const ALL: [Language; 3] = [Language::Rhai, Language::TypeScript, Language::JavaScript];
+    pub const ALL: [Language; 4] = [Language::Rhai, Language::TypeScript, Language::JavaScript, Language::Wasm];
 
     pub fn name(self) -> &'static str {
         match self {
             Language::Rhai => "rhai",
             Language::TypeScript => "typescript",
             Language::JavaScript => "javascript",
+            Language::Wasm => "wasm",
         }
     }
 
@@ -72,6 +76,11 @@ pub struct ScriptLimits {
     pub collection_items: usize,
     pub timeout_ms: u64,
     pub memory_bytes: usize,
+    /// The work a WebAssembly call may do, in wasmi's fuel (about one unit per instruction): deterministic, the same
+    /// module on the same input stops at the same point.
+    pub fuel: u64,
+    /// The largest WebAssembly module accepted, in bytes.
+    pub module_bytes: usize,
 }
 
 impl Default for ScriptLimits {
@@ -83,6 +92,8 @@ impl Default for ScriptLimits {
             collection_items: 131072,
             timeout_ms: 1000,
             memory_bytes: 64 * 1024 * 1024,
+            fuel: 100_000_000,
+            module_bytes: 8 * 1024 * 1024,
         }
     }
 }
@@ -167,6 +178,7 @@ pub fn engine(language: Language) -> &'static dyn ScriptEngine {
         Language::Rhai => &rhai::RhaiEngine,
         Language::TypeScript => &typescript::TypeScriptEngine,
         Language::JavaScript => &quickjs::QuickJsEngine,
+        Language::Wasm => &wasm::WasmEngine,
     }
 }
 
@@ -195,6 +207,7 @@ fn label(language: Language) -> &'static str {
     match language {
         Language::Rhai => "Rhai",
         Language::TypeScript | Language::JavaScript => "Script",
+        Language::Wasm => "WebAssembly",
     }
 }
 

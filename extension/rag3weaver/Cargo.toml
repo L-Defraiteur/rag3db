@@ -213,6 +213,9 @@ tiny_http = { version = "0.12", optional = true }
 # puisse signer un JWT RS256 sans ajouter le moindre crate.
 ring = { version = "0.17", optional = true }
 base64 = { version = "0.22", optional = true }
+# WebAssembly nodes (feature wasm-nodes): an interpreter with deterministic fuel, chosen over wasmtime for its build
+# cost and its load time (docs/everything-declarative/21-11-2026/07-le-moteur-webassembly-wasmtime-ou-wasmi.md).
+wasmi = { version = "2.0.2", optional = true }
 # Le jeton local de l'hôte du démon : l'aléa du système, partout (getrandom
 # sous Linux, getentropy sous macOS, ProcessPrng sous Windows) ; déjà dans
 # l'arbre par ring et rand. Vu au cycle du démon sous Windows, 12 octobre 2026 :
@@ -228,6 +231,8 @@ jiff = "0.2.35"
 rhai = { version = "1.26.1", features = ["serde", "sync", "no_module"] }
 
 [features]
+# Declared nodes written in WebAssembly, run by wasmi (fuel and memory bounded, no import offered).
+wasm-nodes = ["dep:wasmi"]
 # Aucun embedder par défaut : la crate est un orchestrateur, `Catalog` prend un
 # `Box<dyn Embedder>`, et chaque provider se paie à l'activation. `burn-embedder`
 # est le chemin produit (AMD/NVIDIA/Apple/navigateur, un seul code) ; candle

@@ -361,3 +361,7 @@ acme_12345678 here; ordinary words: sk-short, hf_ alone, a risk-free plan; glpat
     assert!(masked.contains("sk-short") && masked.contains("hf_ alone") && masked.contains("risk-free"), "{masked}");
     assert!(masked.contains("glpat-abcdefghijklmnopqrstuvwx"), "a shape nobody declared is not masked: {masked}");
 }
+
+/// The witness of the lot `wasm-node-trial`, in a file of its own.
+#[cfg(feature = "wasm-nodes")]
+mod wasm;
