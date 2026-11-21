@@ -536,6 +536,20 @@ fn set_watches_aside(manifeste: &Path) -> Result<(), String> {
     std::fs::write(&fichier, serde_json::to_string_pretty(&note).map_err(|e| e.to_string())? + "\n").map_err(|e| format!("{} : {e}", fichier.display()))
 }
 
+/// The note of a tree attached without an index (`no-index.json`), `None` for a tree with its index.
+pub(super) fn no_index_note(manifeste: &Path) -> Option<Value> {
+    let f = no_index_note_path(manifeste)?;
+    serde_json::from_str(&std::fs::read_to_string(f).ok()?).ok()
+}
+
+/// Keeps « non merci » for the index of a tree attached without one (`refused_ms` in its note).
+pub(super) fn note_decline(manifeste: &Path) -> Result<(), String> {
+    let fichier = no_index_note_path(manifeste).filter(|f| f.is_file()).ok_or("ce dossier a déjà son index : il n'y a rien à refuser")?;
+    let mut note = no_index_note(manifeste).unwrap_or_else(|| json!({}));
+    note["refused_ms"] = json!(crate::catalog::retard::now_ms());
+    std::fs::write(&fichier, serde_json::to_string_pretty(&note).map_err(|e| e.to_string())? + "\n").map_err(|e| format!("{} : {e}", fichier.display()))
+}
+
 /// Puts a tree's watches back in its manifest from `no-index.json`, and removes the note (the index made on demand).
 /// `false` for a tree that was not attached without an index.
 pub(super) fn restore_watches(manifeste: &Path) -> Result<bool, String> {

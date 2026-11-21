@@ -1099,9 +1099,33 @@ impl DaemonHost {
     /// **Say no to the index of a folder** (archi's page « un agent qui part neutre »): the refusal is kept beside the
     /// folder's state, and the next opening no longer offers it.
     #[cfg(feature = "code")]
-    #[allow(unused_variables)]
     pub fn decline_index(&self, chemin: &Path) -> Result<Value, String> {
-        Err("refuser l'index : pas encore".into()) // RED STUB.
+        let dossier = chemin.canonicalize().map_err(|e| format!("{} : {e}", chemin.display()))?;
+        let manifeste = self.racines_de_code()?.manifest(&crate::code_tree::name_of_tree(&dossier)?);
+        if !manifeste.is_file() {
+            return Err(format!("{} n'est pas attaché : il n'y a rien à refuser", dossier.display()));
+        }
+        worktrees::note_decline(&manifeste)?;
+        Ok(json!({ "path": dossier, "index_offer": false, "index_offer_why": "refusé" }))
+    }
+
+    /// Whether the index of an opened folder is offered, and why (`index_offer` and `index_offer_why`): never for a
+    /// folder with its index or one whose offer was refused; else by the markers the atelier declares.
+    #[cfg(feature = "code")]
+    fn index_offer_for(&self, atelier: &Arc<Hosted>, dossier: &Path) -> (bool, String) {
+        let Ok(racines) = self.racines_de_code() else { return (false, "les racines de code sont illisibles".into()) };
+        let Ok(nom) = crate::code_tree::name_of_tree(dossier) else { return (false, "le dossier n'a pas de nom d'arbre".into()) };
+        let manifeste = racines.manifest(&nom);
+        let Some(note) = worktrees::no_index_note(&manifeste) else { return (false, "ce dossier a déjà son index".into()) };
+        if let Some(quand) = note["refused_ms"].as_u64() {
+            return (false, format!("refusé le {}", rangement::iso_utc(quand)));
+        }
+        let offre = self.with_backend(atelier, |b| b.prepared().manifest.index_offer.clone()).ok().flatten();
+        let Some(offre) = offre else { return (false, "l'atelier ne déclare pas index_offer".into()) };
+        match offre.markers.iter().find(|m| dossier.join(m).exists()) {
+            Some(m) => (true, format!("un projet de code ou de docs : {m}")),
+            None => (false, "aucun marqueur d'un projet de code ou de docs".into()),
+        }
     }
 
     /// **Open a folder** (Lucie's first step in the IDE, 21 November 2026; recherche makes `/ide/ouvrir`): a folder given
@@ -1199,7 +1223,11 @@ impl DaemonHost {
             // Without the code feature, no index exists: the atelier's tool attaches.
             #[cfg(not(feature = "code"))]
             let dit = self.with_backend(&hosted, |b| b.call("attach_worktree", json!({ "path": lettre })))??["result"].to_string();
-            Ok(json!({ "ok": true, "path": lettre, "created": cree, "attached": dit, "indexed": false }))
+            #[cfg(feature = "code")]
+            let (offre, pourquoi) = self.index_offer_for(&hosted, &lettre.canonicalize().unwrap_or_else(|_| lettre.clone()));
+            #[cfg(not(feature = "code"))]
+            let (offre, pourquoi) = (false, "sans la feature code, aucun index".to_string());
+            Ok(json!({ "ok": true, "path": lettre, "created": cree, "attached": dit, "indexed": false, "index_offer": offre, "index_offer_why": pourquoi }))
         });
         r.unwrap_or_else(|e| op_response(Err(e)))
     }
@@ -3155,6 +3183,18 @@ impl DaemonHost {
                         (statut(&r), r)
                     }
                     None => (400, json!({ "ok": false, "error": "« path » manque : le dossier attaché à indexer" })),
+                },
+                Err(e) => (400, json!({ "ok": false, "error": e })),
+            },
+            // **« Non merci » to the index of a folder** (archi's page « un agent qui part neutre »).
+            #[cfg(feature = "code")]
+            ("POST", "/folders/decline-index") => match corps() {
+                Ok(v) => match v["path"].as_str() {
+                    Some(p) => {
+                        let r = op_response(self.decline_index(Path::new(p)));
+                        (statut(&r), r)
+                    }
+                    None => (400, json!({ "ok": false, "error": "« path » manque : le dossier dont l'index est refusé" })),
                 },
                 Err(e) => (400, json!({ "ok": false, "error": e })),
             },
