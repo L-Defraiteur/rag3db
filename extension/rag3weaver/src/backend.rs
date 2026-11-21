@@ -79,6 +79,9 @@ pub struct TeammatePolicy {
     /// **fetch** (the teammate's base, 20 November 2026): what the teammate may read on the web.
     #[serde(default)]
     pub fetch: FetchPolicy,
+    /// **web_search** (the teammate's base, 20 November 2026): the teammate's search by Gemini's grounding.
+    #[serde(default)]
+    pub web_search: WebSearchPolicy,
     /// **Un fournisseur qui ne répond pas n'est pas un pas raté** (8 novembre
     /// 2026, essai 3 : des 429 RESOURCE_EXHAUSTED arrêtaient l'équipier par
     /// `max_failed_steps`). Un quota dépassé (429) ou un service en panne (5xx,
@@ -194,6 +197,7 @@ impl Default for TeammatePolicy {
             verify: Vec::new(),
             verify_relaunches: Self::verify_relaunches_default(),
             fetch: FetchPolicy::default(),
+            web_search: WebSearchPolicy::default(),
         }
     }
 }
@@ -209,6 +213,25 @@ pub struct FetchPolicy {
     pub allow_local: bool,
     pub max_bytes: usize,
     pub timeout_s: u64,
+}
+
+/// **The teammate's search** (`teammate.web_search`, 20 November 2026): the sources given at most, the model the
+/// search runs on (a Gemini on Vertex; absent, the host's `VERTEX_MODEL` or the regime's default), an endpoint that
+/// replaces Vertex's address (a proxy or a test; absent, Vertex for the host's `GOOGLE_CLOUD_PROJECT` and
+/// `GOOGLE_CLOUD_LOCATION`), and the time a search may take.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[serde(deny_unknown_fields, default)]
+pub struct WebSearchPolicy {
+    pub max_sources: usize,
+    pub model: Option<String>,
+    pub endpoint: Option<String>,
+    pub timeout_s: u64,
+}
+
+impl Default for WebSearchPolicy {
+    fn default() -> Self {
+        WebSearchPolicy { max_sources: 8, model: None, endpoint: None, timeout_s: 60 }
+    }
 }
 
 impl Default for FetchPolicy {
