@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 21 novembre 2026 — **L'IDE ne dit « dépôt git » que pour un dépôt git.** Un dossier ouvert qui n'en est pas un
+  est dit « dossier ouvert ».
 - 21 novembre 2026 — **Un nœud scripté édité sert à l'appel suivant.** Quand un `.ts` ou un `.node.json` change dans
   le dossier `nodes/` d'un backend ouvert, l'appel suivant recharge le backend et sert la nouvelle version, sans
   redémarrer l'hôte. Un appel sans changement ne relit aucun fichier, et une édition cassée laisse servir la version
