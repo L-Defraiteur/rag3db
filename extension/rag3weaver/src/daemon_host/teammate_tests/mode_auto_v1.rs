@@ -6,6 +6,9 @@
 //! A module of its own.
 
 use super::*;
+use crate::daemon_host::teammate::TeammateFiles;
+use crate::daemon_host::DaemonHost;
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 /// The user's request, signed human by the host (what the route does from the user's title).
