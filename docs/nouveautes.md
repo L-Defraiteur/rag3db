@@ -1,5 +1,9 @@
 # Nouveautés
 
+- 21 novembre 2026 — **L'accueil de l'IDE est l'arbre des agents.** En tête, ce qui attend une intervention (un
+  sous-agent ou une conversation qui attend une réponse) ; puis les agents racines, par leur nom Claude, actifs ou non,
+  les conversations des dépôts et les tâches lancées depuis l'IDE ; déplié, chaque agent montre ses sous-agents, vers
+  leur page vivante, avec l'élément en cours de leur plan. La plomberie du poste passe derrière « Avancé ».
 - 21 novembre 2026 — **« Atelier » quitte l'écran de l'IDE.** Un projet ouvert se nomme par son dossier, à l'accueil
   comme en tête de son chat ; l'accueil vide renvoie au champ « Ouvrir un dossier » ; une carte d'accord dit « l'agent
   demande à lancer… ».
