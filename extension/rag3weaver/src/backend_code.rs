@@ -1000,6 +1000,61 @@ mod tests {
         assert!(sortie.stdout.contains("fichier"), "le changement est vu : {sortie:?}");
     }
 
+    /// **A commit passes from a task in a linked worktree, and only it** (scenario 2 of tty, the
+    /// night of 20 Nov 2026: `.git/worktrees/<x>/index.lock` refused, the teammate went round its
+    /// rights). The sandbox writes the worktree's gitdir, `objects/`, its branch's ref folder and
+    /// its log; never the common `config`, `hooks/`, `info/`, nor another worktree's gitdir.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_commit_passes_from_a_linked_worktree_and_nothing_else_is_written() {
+        use crate::commande::{Atelier, Commande, Contexte, Garde, Mode};
+        let d = tempfile::tempdir().unwrap();
+        let principal = d.path().join("principal");
+        let lie = d.path().join("lie");
+        let voisin = d.path().join("voisin");
+        std::fs::create_dir(&principal).unwrap();
+        let git = |racine: &std::path::Path, args: &[&str]| {
+            let o = std::process::Command::new("git").arg("-C").arg(racine).args(args).output().unwrap();
+            assert!(o.status.success(), "git {args:?} : {}", String::from_utf8_lossy(&o.stderr));
+            String::from_utf8_lossy(&o.stdout).trim().to_string()
+        };
+        git(&principal, &["init", "-q"]);
+        std::fs::write(principal.join("fichier"), "avant\n").unwrap();
+        git(&principal, &["add", "fichier"]);
+        git(&principal, &["-c", "user.name=Fixture", "-c", "user.email=fixture@example.org", "commit", "-qm", "fixture"]);
+        git(&principal, &["worktree", "add", "-qb", "agent/tache", lie.to_str().unwrap()]);
+        git(&principal, &["worktree", "add", "-qb", "voisin", voisin.to_str().unwrap()]);
+        let avant = git(&principal, &["rev-parse", "agent/tache"]);
+        std::fs::write(lie.join("fichier"), "apres\n").unwrap();
+        let bac = avec_lecture_git(crate::commande::BacASable::autour(&lie), &lie, &principal)
+            .avec_env("GIT_AUTHOR_NAME", "Témoin").avec_env("GIT_AUTHOR_EMAIL", "temoin@example.org")
+            .avec_env("GIT_COMMITTER_NAME", "Témoin").avec_env("GIT_COMMITTER_EMAIL", "temoin@example.org");
+        bac.ruleset().expect("Landlock effectif");
+        let atelier = Atelier::dans(&lie).avec_bac_a_sable(bac);
+        let garde = Garde::new(Mode::Approbation);
+        let accorde = Contexte { accorde_par_l_utilisateur: true, ..Default::default() };
+        let jouer = |args: &[&str]| {
+            let c = Commande::new("git", args.iter().copied());
+            crate::commande::executer(garde.autoriser(&c, &accorde).unwrap(), &atelier).unwrap()
+        };
+        let s = jouer(&["add", "fichier"]);
+        assert!(s.a_reussi(), "git add in the task: {s:?}");
+        let s = jouer(&["commit", "-qm", "from the task"]);
+        assert!(s.a_reussi(), "git commit in the task: {s:?}");
+        assert_ne!(git(&principal, &["rev-parse", "agent/tache"]), avant, "the task's branch moved");
+        // Nothing else: the common config (a hooksPath would run outside the sandbox), the
+        // hooks, and the neighbour worktree's gitdir stay closed.
+        let config = std::fs::read_to_string(principal.join(".git/config")).unwrap();
+        assert!(!jouer(&["config", "core.hooksPath", "/tmp/ailleurs"]).a_reussi(), "the common config is not written");
+        assert_eq!(std::fs::read_to_string(principal.join(".git/config")).unwrap(), config);
+        let hooks = principal.join(".git/hooks");
+        std::fs::create_dir_all(&hooks).unwrap();
+        assert!(!jouer(&["-C", hooks.to_str().unwrap(), "init", "-q"]).a_reussi() || !hooks.join(".git").exists(), "hooks/ is not written");
+        let tete_voisin = std::fs::read_to_string(principal.join(".git/worktrees/voisin/HEAD")).unwrap();
+        assert!(!jouer(&["--git-dir", principal.join(".git/worktrees/voisin").to_str().unwrap(), "symbolic-ref", "HEAD", "refs/heads/agent/tache"]).a_reussi());
+        assert_eq!(std::fs::read_to_string(principal.join(".git/worktrees/voisin/HEAD")).unwrap(), tete_voisin, "the neighbour's gitdir is not written");
+    }
+
     /// **`run_command` dit de lancer `git status` nu** (même relevé : l'équipier inventait
     /// `git -c core.excludesFile=/dev/null status`).
     #[test]
