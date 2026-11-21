@@ -6,6 +6,9 @@ use std::path::Path;
 use std::sync::atomic::AtomicUsize;
 use std::time::{Duration, Instant};
 
+/// A secret a tool brings out is seen by no one (lot 5b of the auto mode): the witnesses of the lot, in a file of their own.
+mod secrets;
+
 /// Un backend du gabarit `code` dans un dépôt git (le manifeste commité, sa
 /// base à côté), en mode `approbation` (le défaut), et un hôte dont les
 /// sessions et les tâches vivent dans le dossier du témoin.
