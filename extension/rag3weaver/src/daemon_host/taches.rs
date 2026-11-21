@@ -838,6 +838,13 @@ impl DaemonHost {
     /// l'hôte, le worktree retiré, la branche effacée, la copie de base
     /// retirée. Le rejet et la fusion finissent par là.
     pub fn fermer_une_tache(&self, parent: &str, nom: &str) -> Result<Tache, String> {
+        self.fermer_en_gardant(parent, nom).map(|(t, _)| t)
+    }
+
+    /// **Close a task and keep its agent** (Lucie, 21 Nov 2026): its worktree and branch go as before, its folder
+    /// (mailbox, plan, conversation) is archived under `<tasks>/<parent>/.closed/<name>-<ms>` instead of erased, and
+    /// the card says who it was: parent session, views, active view, agent key, final plan, archive, branch head.
+    pub(crate) fn fermer_en_gardant(&self, parent: &str, nom: &str) -> Result<(Tache, Value), String> {
         let tache = self.tache(parent, nom).ok_or_else(|| format!("pas de tâche « {nom} » ouverte sur {parent}"))?;
         if let Some(h) = self.hosted_existing(&tache.manifest) {
             let mut slot = h.backend.write().unwrap_or_else(|p| p.into_inner());
@@ -859,6 +866,7 @@ impl DaemonHost {
                 eprintln!("[rag3weaver] tâche « {nom} » : la couche de sa branche n'est pas fermée ({e})");
             }
         }
+        let mut tete: Option<String> = None;
         for v in tache.volets() {
             // A repository whose folder went away (removed, moved): nothing to ask git there; the task's folder goes
             // below all the same, and the host says what it could not do (tty's ticket of 21 November 2026).
@@ -870,13 +878,32 @@ impl DaemonHost {
                 );
                 continue;
             }
+            // The branch's head, kept on the card: the branch goes, its commit stays reachable by the reflog.
+            if tete.is_none() {
+                tete = git(v.depot, &["rev-parse", &tache.branche]).ok().map(|o| o.trim().to_string()).filter(|t| !t.is_empty());
+            }
             git(v.depot, &["worktree", "remove", "--force", &v.arbre.to_string_lossy()])?;
             git(v.depot, &["branch", "-D", &tache.branche])?;
         }
         let dossier = tache.arbre.parent().map(Path::to_path_buf).unwrap_or_default();
-        std::fs::remove_dir_all(&dossier).map_err(|e| format!("{} : {e}", dossier.display()))?;
+        let plan: Value = std::fs::read(dossier.join("plan.json")).ok().and_then(|o| serde_json::from_slice(&o).ok()).unwrap_or(Value::Null);
+        let ms = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0);
+        let fermees = dossier.parent().map(|p| p.join(".closed")).unwrap_or_default();
+        std::fs::create_dir_all(&fermees).map_err(|e| format!("{} : {e}", fermees.display()))?;
+        let archive = fermees.join(format!("{nom}-{ms}"));
+        std::fs::rename(&dossier, &archive).map_err(|e| format!("{} → {} : {e}", dossier.display(), archive.display()))?;
         self.ecrire_le_registre()?;
-        Ok(tache)
+        let carte = json!({
+            "parent_session": tache.parent_session,
+            "views": tache.vues,
+            "active_view": tache.vue_active,
+            "agent_key": tache.agent_key,
+            "plan": plan,
+            "archive": archive,
+            "head": tete,
+            "closed_ms": ms,
+        });
+        Ok((tache, carte))
     }
 }
 
@@ -1060,12 +1087,13 @@ impl DaemonHost {
         let fusion = commits.last().cloned().unwrap_or_default();
         let fusion_code = (commits.len() > 1).then(|| commits[0].clone());
         let recharge = self.with_backend(&principal, |b| b.reload_reactions())?;
-        self.fermer_une_tache(parent, nom)?;
-        let fin = json!({
+        let (_, carte) = self.fermer_en_gardant(parent, nom)?;
+        let mut fin = json!({
             "nom": nom, "parent": parent, "etat": "fusionnee", "commit": fusion, "commit_code": fusion_code,
             "recopies": copie.as_ref().map(|_| &a_recopier),
             "message": message, "rechargement": recharge.as_ref().err(),
         });
+        fusionner_la_carte(&mut fin, carte);
         self.taches_fermees.lock().unwrap_or_else(|p| p.into_inner()).push(fin.clone());
         self.ecrire_le_registre()?;
         recharge.map_err(|e| format!("fusionné ({fusion}), mais le principal ne recharge pas : {e}"))?;
@@ -1077,8 +1105,9 @@ impl DaemonHost {
         if pourquoi.trim().is_empty() {
             return Err("un rejet dit pourquoi".into());
         }
-        self.fermer_une_tache(parent, nom)?;
-        let fin = json!({ "nom": nom, "parent": parent, "etat": "rejetee", "pourquoi": pourquoi });
+        let (_, carte) = self.fermer_en_gardant(parent, nom)?;
+        let mut fin = json!({ "nom": nom, "parent": parent, "etat": "rejetee", "pourquoi": pourquoi });
+        fusionner_la_carte(&mut fin, carte);
         self.taches_fermees.lock().unwrap_or_else(|p| p.into_inner()).push(fin.clone());
         self.ecrire_le_registre()?;
         Ok(fin)
@@ -1124,6 +1153,13 @@ impl DaemonHost {
 #[cfg(all(test, feature = "code"))]
 mod tests;
 
+
+/// The closing card's fields, added to a closed task's record.
+fn fusionner_la_carte(fin: &mut Value, carte: Value) {
+    if let (Some(f), Value::Object(c)) = (fin.as_object_mut(), carte) {
+        f.extend(c);
+    }
+}
 
 /// **The name of a child**: `<session>-<name>` as a task name (lowercase ASCII, digits, `-` and `_`,
 /// 64 at most), unless it already carries its session. A Claude session's name has spaces and
