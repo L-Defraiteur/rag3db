@@ -47,6 +47,26 @@ L'accueil devient la liste des agents (actifs, puis inactifs) ; la page « Poste
 
 Les tranches 1 et 2 ne demandent rien à personne ; 3 à 5 attendent leurs routes.
 
+## L'accueil en arbre : la parenté, et parler à un sous-agent
+
+Lucie (08 h 2x) : « parler à un agent ET à ses sous-agents si tu déplies les sessions, voir la liste des agents
+racines, quelles tâches a chacun, plans en cours, à coup de dépliage de hiérarchie ». L'accueil est un arbre : les
+agents racines ; dépliés, leurs sessions et leurs sous-agents ; sous chacun, ses tâches et l'élément en cours de son
+plan ; chaque nœud ouvre sa conversation, et la saisie va au nœud ouvert.
+
+| Ce qu'il faut | Ce que l'hôte donne déjà | Ce qui manque |
+|---|---|---|
+| **Les racines** | les sessions de `/poste` (nom Claude ; « sans nom » = serveur MCP d'avant le 21 nov., à reconnecter par `/mcp`) et les conversations de `/ide/etat` | la clé `agent:<clé>` qui regroupe les contextes d'un même agent |
+| **Une tâche sous sa conversation** | `tasks[].session` : le backend dont la conversation a ouvert la tâche | le lien tâche → session Claude (une tâche ouverte par un agent Claude via le terminal ou le MCP) |
+| **Un sous-agent sous son agent** | `tasks[].parent_task` existe, mais vaut toujours `null` : aucune tâche n'en délègue encore une autre ; le `parent` des runs fait l'arbre d'un run (un pas, ses outils, leurs nœuds) | la délégation d'une tâche à une sous-tâche (le parent posé par `POST /ide/taches`) ; les sous-agents de Claude Code (l'outil Agent) ne sont pas connus de l'hôte : aucun hook ne les relève |
+| **Le plan en cours** | `GET /ide/teammate` : `plan.json`, ses éléments et leur statut (`todo`, `doing`, `done`…) | rien pour l'équipier ; un agent Claude n'a pas de plan que l'hôte connaisse |
+| **Parler au nœud ouvert** | une conversation : `POST /ide/chat` ; l'équipier d'une tâche : `POST /ide/teammate/mailbox` (une demande dans sa boîte, vue au terminal ; joué cette nuit au scénario 1) | un agent Claude Code : l'hôte ne peut pas lui écrire (sa saisie est dans son terminal) ; un sous-agent Claude, de même |
+
+Ce que la tranche 1 peut montrer sans route neuve : les racines (sessions et conversations), leurs tâches par
+`tasks[].session`, le plan en cours de chaque équipier, et la saisie vers une conversation ou une boîte d'équipier.
+Le reste (la clé d'agent, la délégation, les sous-agents de Claude, écrire à un agent Claude) attend ses routes ; la
+partie équipier est chez archi.
+
 ## Ce qui reste hors de la vue principale
 
 Les recherches (au second rang, pour l'agent), et la plomberie (hôtes, clients MCP, backends, services, dérives de
