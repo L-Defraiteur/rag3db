@@ -1760,6 +1760,11 @@ pub fn build_bm25_query(
     obj.to_string()
 }
 
+/// The witnesses of a word starting with two dashes (21 November 2026), in a file of their own.
+#[cfg(test)]
+#[path = "search_double_dash_tests.rs"]
+mod double_dash_tests;
+
 /// Build contains clause(s) for one value across fields.
 /// Single field → single contains object. Multiple fields → boolean should.
 fn build_contains_clauses(
