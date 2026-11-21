@@ -482,14 +482,24 @@ mod tests {
             n.evaluer(&format!("document.querySelector('#{id}')?.innerText ?? ''")).as_str().unwrap_or_default().to_string()
         };
         n.attendre("(document.querySelector('#agents')?.innerText ?? '').includes('le témoin')", "the live agent by its Claude name");
+        // An entry is one `li`: its badge and its name are separate lines of innerText.
+        let entree = |n: &mut Navigateur, id: &str, contient: &str| -> String {
+            n.evaluer(&format!(
+                "[...document.querySelectorAll('#{id} li')].map(l => l.innerText.replace(/\\s+/g, ' ')).find(t => t.includes({})) ?? ''",
+                serde_json::to_string(contient).unwrap()
+            ))
+            .as_str()
+            .unwrap_or_default()
+            .to_string()
+        };
         let agents = texte(&mut n, "agents");
-        let archi = agents.lines().find(|l| l.contains("rag3weaver archi")).unwrap_or_default().to_string();
+        let archi = entree(&mut n, "agents", "rag3weaver archi");
         assert!(archi.contains("inactif"), "an agent of the table without a live session, said inactive: {agents}");
         let dossiers = texte(&mut n, "dossiers-du-poste");
         let nom_du_worktree = v.chemin.file_name().unwrap().to_string_lossy().to_string();
         assert!(dossiers.contains("arbre") && dossiers.contains("le témoin") && dossiers.contains(&nom_du_worktree), "the folder, its session, its worktree: {dossiers}");
         let vues = texte(&mut n, "vues-ouvertes");
-        let ligne = vues.lines().find(|l| l.contains(&v.nom)).unwrap_or_default().to_string();
+        let ligne = entree(&mut n, "vues-ouvertes", &v.nom);
         assert!(ligne.contains("active"), "the view opened, said active: {vues}");
         let depots = texte(&mut n, "depots-du-poste");
         assert!(depots.contains("rag3db-essai"), "the repository attached: {depots}");
