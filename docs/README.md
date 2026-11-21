@@ -110,4 +110,4 @@ ainsi que la frontière de lecture Git des worktrees et sa recette isolée.
   sans le mot de Lucie.
 - `.vault/` ne s'affiche ni ne se copie ; le `.env` ne se lit pas.
 - On ne tue que ses propres processus ; `/tmp` est de la mémoire vive ; un poste prend au plus
-  `-j8` ; les verrous `poste lourd`, `poste mesure`, `poste push` (`extension/rag3weaver/scripts/poste`).
+  `-j8` ; les verrous `poste cpu`, `poste gpu <Gio>`, `poste mesure`, `poste push` (`poste lourd` reste un alias de `cpu`) (`extension/rag3weaver/scripts/poste`).
