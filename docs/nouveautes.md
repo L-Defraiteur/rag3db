@@ -1,5 +1,11 @@
 # Nouveautés
 
+- 21 novembre 2026 — **Un équipier a sa clé d'agent.** L'agent est sa clé stable `agent:<clé>`, et une tâche
+  d'équipier est un contexte où il s'exécute. Le registre des tâches la tient (`agent_key`) : `teammate.agent`
+  déclaré fait continuer un agent existant, avec sa mémoire ; sinon l'hôte en frappe une à l'ouverture
+  (`agent:<tâche>-<6 hex>`). Elle survit au redémarrage de l'hôte, et la compaction de l'équipier le reprend sous
+  elle (`identity` de `compose_restart`).
+
 - 21 novembre 2026 — **Un bâti sans compteur de jetons ouvre une base sous granite.** Lire, chercher et converser ne
   comptent aucun jeton : la base s'ouvre et sert. Seul l'index refuse de découper, en nommant la feature `token-count`,
   et n'écrit jamais une ligne sans ses morceaux.
