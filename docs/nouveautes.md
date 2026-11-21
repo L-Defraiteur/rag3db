@@ -12,6 +12,9 @@
   à rien : un module qui importe un fichier, le réseau ou une horloge est refusé en le nommant. Chaque appel est une
   instance neuve, sous le plafond de mémoire de l'hôte et un carburant déterministe. Préparé une fois, un appel coûte
   0,37 ms, le tiers d'un nœud TypeScript.
+- 21 novembre 2026 — **Chercher une option de ligne de commande marche par mots.** `--save-dev`, `--features` ou
+  `--daemon` dans une requête de `search_code` sont cherchés comme des termes ; avant, le mot était lu comme une
+  négation et la recherche par mots tombait (en le disant), seul le reste répondait.
 - 21 novembre 2026 — **La carte d'accord de l'IDE ne se cache jamais.** Dans la page d'une tâche, chaque demande
   d'accord est une carte : ouverte, elle dit l'outil et sa commande, l'étape où en est la porte (avec son compte à
   rebours) et la frise des étapes passées, avec « Accorder » et « Refuser » ; fermée, elle reste et dit qui a tranché
