@@ -1059,6 +1059,14 @@ impl DaemonHost {
         Ok(fin)
     }
 
+    /// **Remove a repository from the host** (`code-tree remove`, tty's ticket of 21 November 2026): refused while a task
+    /// of it is open, naming them, unless `fermer_les_taches` rejects them first; then the backend is closed and leaves
+    /// the host's state.
+    #[allow(unused_variables)]
+    pub fn retirer_un_depot(&self, manifest: &Path, fermer_les_taches: bool) -> Result<Value, String> {
+        Err("retirer un dépôt : pas encore".into()) // RED STUB.
+    }
+
     /// Les tâches fermées d'un backend (fusionnées ou rejetées), dans l'ordre.
     pub fn taches_fermees_de(&self, parent: &str) -> Vec<Value> {
         self.taches_fermees.lock().unwrap_or_else(|p| p.into_inner()).iter().filter(|t| t["parent"] == parent).cloned().collect()
