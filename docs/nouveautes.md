@@ -1,5 +1,10 @@
 # Nouveautés
 
+- 21 novembre 2026 — **Un nœud déclaré peut s'écrire en WebAssembly** (feature `wasm-nodes`, à l'essai, hors du
+  service). Son `.node.json` désigne un `.wasm` qui exporte `memory`, `alloc` et `run`, et échange du JSON. Il n'a accès
+  à rien : un module qui importe un fichier, le réseau ou une horloge est refusé en le nommant. Chaque appel est une
+  instance neuve, sous le plafond de mémoire de l'hôte et un carburant déterministe. Préparé une fois, un appel coûte
+  0,37 ms, le tiers d'un nœud TypeScript.
 - 21 novembre 2026 — **Une erreur d'un nœud scripté nomme son fichier.** Quand un nœud en TypeScript ou en
   JavaScript échoue, à la préparation comme à l'appel, son erreur donne le chemin du script et la ligne, au lieu du
   seul nom du nœud.
