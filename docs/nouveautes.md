@@ -1,5 +1,6 @@
 # Nouveautés
 
+- 21 novembre 2026 — **Une commande longue n'est plus dite en attente d'un index.** Quand `run_command` ou `wait_output` dure, la boîte de l'équipier dit que la commande tourne encore ; l'index reste la cause supposée pour les autres outils.
 - 21 novembre 2026 — **Une recherche se lance sans `options`.** `search_code` et les autres outils de recherche
   livrés prennent `options` comme facultatif, avec ses défauts : un appel avec la seule requête répond, au lieu d'être
   refusé sur le schéma.
