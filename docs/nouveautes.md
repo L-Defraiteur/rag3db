@@ -8,6 +8,10 @@
   dans l'arbre de la tâche, par la même garde et le même bac à sable que les siennes. Une commande rouge lui rend un pas
   de plus, avec sa sortie ; encore rouge après `verify_relaunches` relances (2 par défaut), la tâche finit en échec en
   nommant la commande. Il ne peut plus dire « fini » sur un arbre qui ne compile pas.
+- 21 novembre 2026 — **Un agent reparaît à l'hôte dès que celui-ci redémarre.** Après un redémarrage de l'hôte, un
+  agent n'y était connu qu'à son prochain appel d'outil : l'IDE ne listait que ceux qui avaient travaillé depuis. Le
+  client MCP relit maintenant son `daemon.json` toutes les 5 s et ouvre une session à son nom sur un hôte neuf, sans
+  rien envoyer à l'hôte tant qu'il reste le même (un hôte laissé seul s'arrête encore).
 - 21 novembre 2026 — **Au terminal, un message tapé pendant qu'un accord attend reste un message.** Seuls `o` et `n` minuscules, seuls, répondent tout de suite à une demande d'accord. Une phrase qui commence par une majuscule (« Ne commite pas… ») part à l'équipier comme un message, et la demande d'accord reste affichée, au lieu d'être refusée par la première lettre.
 - 21 novembre 2026 — **cargo marche dans le chat de l'atelier.** Le bac à sable des commandes de l'atelier n'ouvrait
   que son dossier : `cargo init`, `cargo build` ou `cargo test`, accordés, échouaient sur la configuration de rustup.
