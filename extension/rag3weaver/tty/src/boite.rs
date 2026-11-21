@@ -20,10 +20,16 @@ pub struct Attente {
     pub text: String,
     /// La commande d'une `approval`.
     pub command: Option<String>,
-    /// **The card of the mode auto** (archi's page 07, 21 November 2026): the tool asked for, its arguments, its class
-    /// and its scope (`once`), and the state the host last said (`approval_state`).
-    pub tool: Option<String>,
-    pub args: Option<Value>,
+    /// **The card of the mode auto** (archi's page 07, 21 November 2026), boxed: an `approval` that names its tool.
+    pub card: Option<Box<Card>>,
+}
+
+/// What an approval card of the mode auto carries: the tool asked for, its arguments, its class and its scope
+/// (`once`), and the state the host last said (`approval_state`).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Card {
+    pub tool: String,
+    pub args: Value,
     pub class: Option<String>,
     pub scope: Option<String>,
     pub state: Option<CardState>,
@@ -40,13 +46,14 @@ pub struct CardState {
 }
 
 impl Attente {
-    /// **What the card asks for**: the command, or the tool and its arguments (`browser_click tab_id=7 ref=e4`), with
-    /// « pour cet envoi seulement » when its scope is `once`.
+    /// **What the card asks for**: the command, or the tool and its arguments in the order of their names
+    /// (`browser_click ref=e4 tab_id=7`).
     pub fn what(&self) -> String {
-        let mut s = match (&self.command, &self.tool) {
+        match (&self.command, &self.card) {
             (Some(c), _) => c.clone(),
-            (None, Some(t)) => {
-                let args: Vec<String> = self.args.as_ref().and_then(Value::as_object).into_iter().flatten().map(|(k, v)| {
+            (None, Some(card)) => {
+                let t = &card.tool;
+                let args: Vec<String> = card.args.as_object().into_iter().flatten().map(|(k, v)| {
                     let v = v.as_str().map_or_else(|| v.to_string(), str::to_string);
                     let v = if v.chars().count() > 40 { format!("{}…", v.chars().take(40).collect::<String>()) } else { v };
                     format!("{k}={v}")
@@ -54,16 +61,18 @@ impl Attente {
                 if args.is_empty() { t.clone() } else { format!("{t} {}", args.join(" ")) }
             }
             (None, None) => self.text.lines().next().unwrap_or_default().to_string(),
-        };
-        if self.scope.as_deref() == Some("once") {
-            s.push_str(" — pour cet envoi seulement");
         }
-        s
+    }
+
+    /// What the open card asks for, with « pour cet envoi seulement » when its scope is `once`.
+    pub fn asked(&self) -> String {
+        let once = self.card.as_ref().is_some_and(|c| c.scope.as_deref() == Some("once"));
+        format!("{}{}", self.what(), if once { " — pour cet envoi seulement" } else { "" })
     }
 
     /// The card's state as said beside it, with the countdown of its wait at `now_ms`.
     pub fn state_said(&self, now_ms: u64) -> Option<String> {
-        let st = self.state.as_ref()?;
+        let st = self.card.as_ref()?.state.as_ref()?;
         Some(match st.until {
             Some(u) => format!("{} ({})", st.text, countdown(u, now_ms)),
             None => st.text.clone(),
@@ -81,7 +90,7 @@ pub fn closing_line(a: &Attente, answer: &Value) -> Option<String> {
     Some(match answer["from"].as_str().unwrap_or("user") {
         "recall" => {
             let q = &answer["authorization"];
-            let at = q["at"].as_str().map(|t| format!(" du {t}")).unwrap_or_default();
+            let at = q["at"].as_u64().map(|ms| format!(", {}", local_date(ms))).unwrap_or_default();
             format!("{} par ton autorisation{at} : « {} » — {what}", if approved { "validé" } else { "refusé" }, q["quote"].as_str().unwrap_or_default())
         }
         "appeal" => format!("{verb} sur l'appel de l'agent : {what}"),
@@ -108,7 +117,7 @@ impl Boite {
         // **A state line changes the card, never closes it** (Lucie, 21 November 2026: one card, never hidden).
         if kind == "approval_state" {
             if let Some(a) = l["reply_to"].as_str().and_then(|r| self.attentes.iter_mut().find(|a| a.id == r)) {
-                a.state = Some(CardState { stage: l["stage"].as_str().unwrap_or_default().to_string(), text: l["text"].as_str().unwrap_or_default().to_string(), until: l["until"].as_u64() });
+                a.card.get_or_insert_with(Default::default).state = Some(CardState { stage: l["stage"].as_str().unwrap_or_default().to_string(), text: l["text"].as_str().unwrap_or_default().to_string(), until: l["until"].as_u64() });
             }
             return;
         }
@@ -124,11 +133,15 @@ impl Boite {
                         kind: kind.to_string(),
                         text: l["text"].as_str().unwrap_or_default().to_string(),
                         command: l["command"].as_str().map(str::to_string),
-                        tool: l["tool"].as_str().map(str::to_string),
-                        args: l.get("args").filter(|v| !v.is_null()).cloned(),
-                        class: l["class"].as_str().map(str::to_string),
-                        scope: l["scope"].as_str().map(str::to_string),
-                        state: None,
+                        card: l["tool"].as_str().map(|t| {
+                            Box::new(Card {
+                                tool: t.to_string(),
+                                args: l.get("args").cloned().unwrap_or(Value::Null),
+                                class: l["class"].as_str().map(str::to_string),
+                                scope: l["scope"].as_str().map(str::to_string),
+                                state: None,
+                            })
+                        }),
                     });
                 }
             }
@@ -166,8 +179,35 @@ pub fn countdown(until_ms: u64, now_ms: u64) -> String {
 }
 
 /// A date in local words: « le 21 nov. à 16 h 05 » (`month0` from 0).
-pub fn said_date(_day: u32, _month0: u32, _hour: u32, _minute: u32) -> String {
-    String::new()
+pub fn said_date(day: u32, month0: u32, hour: u32, minute: u32) -> String {
+    const MOIS: [&str; 12] = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
+    format!("le {day} {} à {hour} h {minute:02}", MOIS[(month0 % 12) as usize])
+}
+
+/// **An instant in ms since the epoch, in local words** (« le 21 nov. à 16 h 05 »): local time by `localtime_r`;
+/// where it is not at hand (Windows), in UTC, and said so.
+pub fn local_date(ms: u64) -> String {
+    let secs = (ms / 1000) as i64;
+    #[cfg(unix)]
+    {
+        // SAFETY: localtime_r writes only into `tm`, which lives on this stack; `t` is a valid time_t.
+        let t = secs as libc::time_t;
+        let mut tm: libc::tm = unsafe { std::mem::zeroed() };
+        if !unsafe { libc::localtime_r(&t, &mut tm) }.is_null() {
+            return said_date(tm.tm_mday as u32, tm.tm_mon as u32, tm.tm_hour as u32, tm.tm_min as u32);
+        }
+    }
+    // Days since the epoch to a civil date (Howard Hinnant's algorithm), in UTC.
+    let (days, rem) = (secs.div_euclid(86_400), secs.rem_euclid(86_400));
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = (doy - (153 * mp + 2) / 5 + 1) as u32;
+    let month0 = if mp < 10 { mp + 2 } else { mp - 10 } as u32;
+    format!("{} UTC", said_date(day, month0, (rem / 3600) as u32, ((rem % 3600) / 60) as u32))
 }
 
 /// Now, in ms since the epoch.

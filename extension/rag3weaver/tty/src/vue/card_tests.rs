@@ -27,7 +27,7 @@ fn the_card_names_the_tool_its_arguments_and_its_scope() {
     let mut v = Vue::new(160, true);
     opened(&mut v);
     let s = v.ligne_d_etat();
-    assert!(s.contains("attend ton accord : browser_click tab_id=7 ref=e4"), "{s}");
+    assert!(s.contains("attend ton accord : browser_click ref=e4 tab_id=7"), "the arguments in the order of their names: {s}");
     assert!(s.contains("pour cet envoi seulement"), "{s}");
     assert!(s.contains("[ Oui ]"), "{s}");
 }
@@ -71,7 +71,7 @@ fn the_closing_line_says_who_decided() {
         w[0].clone()
     };
     let by_user = close(json!({ "reply_to": "a1/doc:1", "approved": true, "from": "user" }));
-    assert!(by_user.ends_with("accordé par toi : browser_click tab_id=7 ref=e4"), "{by_user}");
+    assert!(by_user.ends_with("accordé par toi : browser_click ref=e4 tab_id=7"), "the scope is said on the open card only: {by_user}");
     let by_recall = close(json!({ "reply_to": "a1/doc:1", "approved": true, "from": "recall", "authorization": { "quote": "clique où tu veux sur la doc", "at": 1_795_273_500_000u64 } }));
     assert!(by_recall.contains("validé par ton autorisation, le ") && by_recall.contains(" : « clique où tu veux sur la doc »"), "{by_recall}");
     let by_appeal = close(json!({ "reply_to": "a1/doc:1", "approved": true, "from": "appeal" }));
