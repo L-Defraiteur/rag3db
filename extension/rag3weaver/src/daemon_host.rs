@@ -378,6 +378,10 @@ pub struct DaemonHost {
     /// The pair mode's registry entry, made at the first paired task (never before: a host
     /// without a paired task does not read or write the sessions registry).
     pair: std::sync::OnceLock<Option<Arc<pair::Pair>>>,
+    /// **The browser bridge's socket** (tty, 21 November 2026): `None` is the bridge's own (`relai::chemin_du_socket`).
+    browser_socket: Option<PathBuf>,
+    /// **The host's one listening bridge**, opened at the first backend whose manifest declares `teammate.browser`.
+    browser_listen: std::sync::OnceLock<Result<Arc<crate::pont_navigateur::ecoute::Ecoute>, String>>,
     /// The registry to use instead of the environment's (the witnesses).
     pair_registre: Option<pair::Registre>,
     /// Le modèle de langage nommé qu'une tâche a choisi, connecté (lot tty-14).
@@ -582,6 +586,8 @@ impl DaemonHost {
             rangement_verrou: Arc::new(Mutex::new(())),
             invite: None,
             pair: std::sync::OnceLock::new(),
+            browser_socket: None,
+            browser_listen: std::sync::OnceLock::new(),
             pair_registre: None,
             modele_nomme: chat::default_modele_nomme(),
             chat_meter: Arc::new(crate::meter::Meter::new()),
@@ -627,6 +633,12 @@ impl DaemonHost {
     }
 
     /// Le journal des runs, sous une autre racine (les témoins).
+    /// The browser bridge's socket, in place of the bridge's own (a witness's).
+    pub fn with_browser_socket(mut self, socket: PathBuf) -> Self {
+        self.browser_socket = Some(socket);
+        self
+    }
+
     pub fn with_runs_root(mut self, racine: PathBuf) -> Self {
         self.journal = journal_des_runs::JournalDesRuns::new(racine);
         self
@@ -3056,6 +3068,7 @@ impl DaemonHost {
                     "build": crate::daemon_lifecycle::build_id(),
                     "fils_du_moteur": fils_du_moteur(),
                     "gabarits": self.templates_health(),
+                    "browser": self.browser_listen.get().map(|_| Value::Null),
                 }),
             ),
             // **What a view has not pushed yet** (Lucie, 21 November 2026, 8 h 2x): read only, for the IDE and every agent.
