@@ -3590,15 +3590,15 @@ mod chat_qui_code;
 /// Le relais contextuel : cible effective, clic et reprise dans le navigateur.
 #[cfg(all(test, unix, feature = "code"))]
 mod chat_contextuel;
+/// L'accueil en arbre des agents (21 novembre 2026), ses témoins dans leur fichier.
+#[cfg(all(test, unix, feature = "code"))]
+mod ide_agents_tests;
 /// Ouvrir un dossier depuis l'IDE (21 novembre 2026), ses témoins dans leur fichier.
 #[cfg(all(test, unix, feature = "code"))]
 mod ide_ouvrir_tests;
 /// La page « Poste » (21 novembre 2026), ses témoins dans leur fichier.
 #[cfg(all(test, unix, feature = "code"))]
 mod ide_poste_tests;
-/// L'accueil en arbre des agents (21 novembre 2026), ses témoins dans leur fichier.
-#[cfg(all(test, unix, feature = "code"))]
-mod ide_agents_tests;
 
 /// **Colorer un texte par les grammaires** (`POST /highlight {text, language}`) :
 /// les spans de `codeparsers::syntax_highlighting::highlight`, chacun aux deux
