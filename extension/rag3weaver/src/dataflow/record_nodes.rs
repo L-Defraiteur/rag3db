@@ -2875,6 +2875,73 @@ impl Node for EmbedNode {
                 });
             }
         }
+        // **A vector already computed for the same text is reused** (21 November 2026) :
+        // a chunk whose `_text_hash` another chunk of the same table carries, with a
+        // vector valid for this model, takes that vector without the model. A view of a
+        // worktree renders new chunks for unchanged files ; a copied or moved file too.
+        // One query per table and pass, the fingerprints as a parameter. The vector is
+        // still written (the same `SET` as a computed one) : only the model is spared.
+        let mut reused_dense: Vec<(String, String, String, Vec<f32>)> = Vec::new();
+        if !enrich && !dense_works.is_empty() {
+            let mut wanted: HashMap<String, HashSet<String>> = HashMap::new();
+            for w in dense_works.iter().filter(|w| !w.text_hash.is_empty()) {
+                wanted.entry(w.entity_name.clone()).or_default().insert(w.text_hash.clone());
+            }
+            let as_vector = |v: &CypherValue| -> Option<Vec<f32>> {
+                match v {
+                    CypherValue::List(items) => items
+                        .iter()
+                        .map(|x| match x {
+                            CypherValue::Float(f) => Some(*f as f32),
+                            CypherValue::Int(i) => Some(*i as f32),
+                            _ => None,
+                        })
+                        .collect(),
+                    _ => None,
+                }
+            };
+            let mut found: HashMap<(String, String), Vec<f32>> = HashMap::new();
+            for (entity_name, hashes) in &wanted {
+                let (col, marker) = storage_for(entity_name);
+                let Some(cypher) = dialect.embed_find_by_hash(entity_name, &col, &marker) else { continue };
+                let items = CypherValue::List(
+                    hashes
+                        .iter()
+                        .map(|h| CypherValue::Map(BTreeMap::from([("hash".to_string(), CypherValue::String(h.clone()))])))
+                        .collect(),
+                );
+                if let Ok(result) = conn.execute_with_params(&cypher, &[QueryParam { name: "items".into(), value: items }]) {
+                    for row in &result.rows {
+                        let (Some(hash), Some(vector)) = (row.first().and_then(|v| v.as_str()), row.get(1).and_then(as_vector)) else { continue };
+                        if vector.len() == embedding_dim {
+                            found.entry((entity_name.clone(), hash.to_string())).or_insert(vector);
+                        }
+                    }
+                }
+            }
+            dense_works.retain(|w| match found.get(&(w.entity_name.clone(), w.text_hash.clone())) {
+                Some(vector) => {
+                    reused_dense.push((w.uuid.clone(), w.text_hash.clone(), w.entity_name.clone(), vector.clone()));
+                    false
+                }
+                None => true,
+            });
+        }
+        ctx.metric("dense_reused", reused_dense.len() as f64);
+        if !reused_dense.is_empty() {
+            let mut groups: HashMap<String, Vec<CypherValue>> = HashMap::new();
+            for (uuid, hash, entity_name, vector) in reused_dense {
+                let mut map = BTreeMap::new();
+                map.insert("uuid".into(), CypherValue::String(uuid));
+                map.insert("hash".into(), CypherValue::String(hash));
+                map.insert("emb".into(), CypherValue::List(vector.iter().map(|&f| CypherValue::Float(f as f64)).collect()));
+                groups.entry(entity_name).or_default().push(CypherValue::Map(map));
+            }
+            for (entity_name, items) in groups {
+                let (col, marker) = storage_for(&entity_name);
+                write_vectors(conn.as_ref(), dialect.as_ref(), &entity_name, &col, &marker, items)?;
+            }
+        }
         // Le dual produit les deux : il repasse si **l'un des deux** manque.
         dual_works.retain(|w| dense_a_faire(w) || sparse_a_faire(w));
         let skipped = pre_filter - (dense_works.len() + sparse_works.len() + dual_works.len());
