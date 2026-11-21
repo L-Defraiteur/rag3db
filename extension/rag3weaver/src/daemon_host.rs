@@ -2069,6 +2069,15 @@ impl DaemonHost {
         crate::builtin_templates::health(manifestes)
     }
 
+    /// **One name for a repository, everywhere** (21 November 2026, tty's scenario 2): a repository attached to this host
+    /// is found by its id, its short name (`repo`, the git repository's folder: `compteur`), its full name (the folder of
+    /// its manifest: `code-compteur`) or its manifest's path; an unknown name is refused listing the attached ones in both
+    /// forms. Tasks are not repositories. Gives `{id, repo, name, manifest}`.
+    pub fn resoudre_un_depot(&self, nom: &str) -> Value {
+        let _ = nom;
+        json!({ "ok": false, "error": "resoudre un dépôt : pas encore" }) // RED STUB.
+    }
+
     pub fn state(&self) -> Value {
         self.reap_dead_sessions();
         let hotes: Vec<Arc<Hosted>> = self.backends.lock().unwrap_or_else(|p| p.into_inner()).values().cloned().collect();
@@ -2559,6 +2568,17 @@ impl DaemonHost {
                 (statut(&reponse), reponse)
             }
             // **The views of a session** (page 02 of 20 November 2026): on the backend of `manifest`.
+            ("POST", "/depots/resoudre") => match corps() {
+                Ok(v) => match v["name"].as_str() {
+                    Some(n) => {
+                        let r = self.resoudre_un_depot(n);
+                        let r = if r["ok"] == json!(true) { json!({ "ok": true, "result": r }) } else { r };
+                        (statut(&r), r)
+                    }
+                    None => (400, json!({ "ok": false, "error": "« name » manque : le nom du dépôt" })),
+                },
+                Err(e) => (400, json!({ "ok": false, "error": e })),
+            },
             ("POST", "/views/close") => {
                 let v = match corps().and_then(|v| manifeste(&v).map(|m| (v, m))) {
                     Ok(x) => x,

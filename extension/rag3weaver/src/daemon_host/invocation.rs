@@ -453,6 +453,30 @@ mod tests {
         assert_eq!(generations_de(&v), 0, "close_view with purge leaves the generations");
     }
 
+    /// **One name for a repository, everywhere** (21 November 2026, tty's scenario 2: `code-tree add` said
+    /// « code-compteur », the terminal knew only « compteur », and its error did not say which to take): an attached
+    /// repository is found by its short name and by its full name, the same; an unknown name is refused listing the
+    /// attached ones in both forms.
+    #[test]
+    fn a_repository_is_found_by_its_short_and_its_full_name() {
+        let d = tempfile::tempdir().unwrap();
+        let a = atelier(d.path());
+        let depot = petit_depot(&d.path().join("compteur"));
+        a.appeler("attach_worktree", json!({"path":depot})).unwrap();
+        attendre_l_index(&a, &depot);
+        let complet = crate::code_tree::name_of_tree(&depot.canonicalize().unwrap()).unwrap();
+        assert_eq!(complet, "code-compteur", "the full name the witness expects");
+        let court = a.host.resoudre_un_depot("compteur");
+        let long = a.host.resoudre_un_depot("code-compteur");
+        assert_eq!(court["ok"], json!(true), "the short name is not found: {court}");
+        assert_eq!(long["ok"], json!(true), "the full name is not found: {long}");
+        assert_eq!(court["id"], long["id"], "the two names find two repositories: {court} {long}");
+        assert_eq!((&court["repo"], &court["name"]), (&json!("compteur"), &json!("code-compteur")), "{court}");
+        let inconnu = a.host.resoudre_un_depot("autre");
+        let e = inconnu["error"].as_str().unwrap_or_default();
+        assert!(inconnu["ok"] == json!(false) && e.contains("compteur (code-compteur)"), "an unknown name does not list the attached ones in both forms: {inconnu}");
+    }
+
     /// **`views` and `use_view` follow the Claude Code session** (page 02 of 20 November 2026, lot 2): two thin clients
     /// of one session (one `sessionId`) see the same active view, another session does not; an unknown name is refused,
     /// listing the known views; a host restarted on the same state finds the view again.
