@@ -817,8 +817,8 @@ fn taches_cli(args: &[String]) -> Result<(), String> {
 
 fn code_tree(args: &[String]) -> Result<(), String> {
     const USAGE: &str = "usage: rag3weaver-backend code-tree add <arbre> [--from code-lourd] [--as <nom>] [--daemon <adresse>] [--sans-hote] [--keep-copies]\n       \
-                         rag3weaver-backend code-tree remove <nom | arbre> [--daemon <adresse>] [--sans-hote]";
-    use rag3weaver::code_tree::{add_files_with, add_with_host, name_of_tree, remove_files, unregister, FromAroundCopy, Roots};
+                         rag3weaver-backend code-tree remove <nom | arbre> [--daemon <adresse>] [--sans-hote] [--close-tasks]";
+    use rag3weaver::code_tree::{add_files_with, add_with_host, name_of_tree, remove_files, retirer, FromAroundCopy, Roots};
     let (action, reste) = args.split_first().ok_or(USAGE)?;
     let mut cible = None;
     let mut from = "code-lourd".to_string();
@@ -828,6 +828,8 @@ fn code_tree(args: &[String]) -> Result<(), String> {
     // Garder telles quelles les copies de gabarits de `--from` qui diffèrent du livré (sinon : le livré, la copie
     // sauvée à côté).
     let mut keep_copies = false;
+    // `remove` : rejeter d'abord les tâches ouvertes du dépôt, au lieu de refuser en les nommant.
+    let mut close_tasks = false;
     let mut i = 0;
     while i < reste.len() {
         let valeur = |i: usize| reste.get(i + 1).cloned().ok_or_else(|| format!("{} demande une valeur\n{USAGE}", reste[i]));
@@ -837,6 +839,7 @@ fn code_tree(args: &[String]) -> Result<(), String> {
             "--daemon" => { hote = Some(valeur(i)?); i += 2; }
             "--sans-hote" => { sans_hote = true; i += 1; }
             "--keep-copies" => { keep_copies = true; i += 1; }
+            "--close-tasks" => { close_tasks = true; i += 1; }
             x if cible.is_none() && !x.starts_with("--") => { cible = Some(x.to_string()); i += 1; }
             x => return Err(format!("argument inconnu « {x} »\n{USAGE}")),
         }
@@ -881,8 +884,11 @@ fn code_tree(args: &[String]) -> Result<(), String> {
             // Fermer d'abord (le manifeste doit exister pour être canonisé),
             // déplacer ensuite.
             if !sans_hote {
-                unregister(&adresse(), &roots.source_manifest(&nom).unwrap_or_else(|_| roots.manifest(&nom)))?;
-                println!("{nom} : fermé par l'hôte {}", adresse());
+                let r = retirer(&adresse(), &roots.source_manifest(&nom).unwrap_or_else(|_| roots.manifest(&nom)), close_tasks)?;
+                if let Some(t) = r["closed_tasks"].as_array().filter(|t| !t.is_empty()) {
+                    println!("{nom} : tâches rejetées d'abord : {}", t.iter().filter_map(|n| n.as_str()).collect::<Vec<_>>().join(", "));
+                }
+                println!("{nom} : retiré de l'hôte {}", adresse());
             }
             let r = remove_files(&roots, &nom)?;
             println!("{nom} : manifeste et base mis de côté sous {}", r.aside.display());

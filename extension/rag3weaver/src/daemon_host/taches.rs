@@ -845,6 +845,16 @@ impl DaemonHost {
             }
         }
         for v in tache.volets() {
+            // A repository whose folder went away (removed, moved): nothing to ask git there; the task's folder goes
+            // below all the same, and the host says what it could not do (tty's ticket of 21 November 2026).
+            if !v.depot.is_dir() {
+                eprintln!(
+                    "[rag3weaver] tâche « {nom} » : le dépôt {} n'est plus là ; ni « git worktree remove » ni la branche {} n'y sont faits",
+                    v.depot.display(),
+                    tache.branche
+                );
+                continue;
+            }
             git(v.depot, &["worktree", "remove", "--force", &v.arbre.to_string_lossy()])?;
             git(v.depot, &["branch", "-D", &tache.branche])?;
         }
@@ -1062,9 +1072,32 @@ impl DaemonHost {
     /// **Remove a repository from the host** (`code-tree remove`, tty's ticket of 21 November 2026): refused while a task
     /// of it is open, naming them, unless `fermer_les_taches` rejects them first; then the backend is closed and leaves
     /// the host's state.
-    #[allow(unused_variables)]
     pub fn retirer_un_depot(&self, manifest: &Path, fermer_les_taches: bool) -> Result<Value, String> {
-        Err("retirer un dépôt : pas encore".into()) // RED STUB.
+        let Some(h) = self.hosted_existing(manifest) else {
+            return Ok(json!({ "removed": null, "why": format!("{} n'est pas inscrit à l'hôte", manifest.display()), "closed_tasks": [] }));
+        };
+        let taches = self.taches_de(&h.id);
+        if !taches.is_empty() && !fermer_les_taches {
+            let noms: Vec<&str> = taches.iter().map(|t| t.nom.as_str()).collect();
+            return Err(format!(
+                "{} a {} tâche(s) ouverte(s) : {} ; fusionnez-les ou rejetez-les d'abord (POST /ide/taches/fusionner, /ide/taches/rejeter), \
+                 ou demandez que le retrait les rejette (code-tree remove --close-tasks)",
+                manifest.display(),
+                noms.len(),
+                noms.join(", ")
+            ));
+        }
+        let mut fermees = Vec::new();
+        for t in &taches {
+            self.rejeter_une_tache(&h.id, &t.nom, "son dépôt est retiré (code-tree remove --close-tasks)")?;
+            fermees.push(t.nom.clone());
+        }
+        {
+            let mut slot = h.backend.write().unwrap_or_else(|p| p.into_inner());
+            self.close_slot(&h, &mut slot)?;
+        }
+        self.backends.lock().unwrap_or_else(|p| p.into_inner()).retain(|_, autre| autre.id != h.id);
+        Ok(json!({ "removed": h.id, "manifest": h.manifest, "closed_tasks": fermees }))
     }
 
     /// Les tâches fermées d'un backend (fusionnées ou rejetées), dans l'ordre.
