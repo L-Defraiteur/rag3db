@@ -867,7 +867,8 @@ impl McpClient {
         std::thread::spawn(move || loop {
             std::thread::sleep(FOLLOW_EVERY);
             let Some(i) = suivi.upgrade() else { return };
-            if let Side::Attached(c) = &*i.side.lock().unwrap_or_else(|p| p.into_inner()) {
+            let side = i.side.lock().unwrap_or_else(|p| p.into_inner());
+            if let Side::Attached(c) = &*side {
                 if let Err(e) = c.follow_restart() {
                     eprintln!("[mcp] l'hôte a redémarré, mais la session n'y est pas rouverte : {e} ; nouvel essai dans {} s", FOLLOW_EVERY.as_secs());
                 }
