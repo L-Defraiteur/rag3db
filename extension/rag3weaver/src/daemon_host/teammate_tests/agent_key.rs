@@ -33,12 +33,12 @@ fn a_task_gets_an_agent_key_that_survives_the_registry_being_reread() {
     let suffix = key.strip_prefix("agent:doc-").unwrap_or_default();
     assert!(suffix.len() == 6 && suffix.chars().all(|c| c.is_ascii_hexdigit()), "agent:<task>-<6 hex>: {key}");
     assert_eq!(key_in_registry(d.path(), "doc"), json!(key), "the registry holds it: {}", registry(d.path()));
-    drop(host);
-    let host = hote(d.path(), no_model());
-    host.relire_les_taches();
-    assert_eq!(key_in_registry(d.path(), "doc"), json!(key), "the reread registry keeps it: {}", registry(d.path()));
     let other = host.ouvrir_une_tache(&h.id, "tests").expect("a second task opens");
     assert_ne!(other.agent_key.as_deref(), Some(key.as_str()), "another task, another agent");
+    // A restart: another host rereads the registry (it reads the file, it opens no base of its own here).
+    let again = hote(d.path(), no_model());
+    again.relire_les_taches();
+    assert_eq!(key_in_registry(d.path(), "doc"), json!(key), "the reread registry keeps it: {}", registry(d.path()));
 }
 
 /// `teammate.agent` declared: the task continues that agent, with its key (the reviewer who takes up its work on the
