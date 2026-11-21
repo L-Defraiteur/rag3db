@@ -1,5 +1,7 @@
 # Les générations étiquetées du plein texte : quel commit, quelle génération
 
+**Décidé par Lucie le 21 novembre 2026, 08 h 2x : (A), la génération du paquet.** Codé par lucivy dans le lot `generations-par-paquet-2`.
+
 21 novembre 2026, nuit. Sessions everything declarative et lucivy, à la demande de c7. **Une décision pour Lucie** :
 deux propositions, en fin de page, avec notre recommandation.
 
