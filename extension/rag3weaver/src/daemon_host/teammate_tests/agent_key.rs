@@ -6,15 +6,15 @@
 
 use super::*;
 
-fn registre(d: &std::path::Path) -> Value {
+fn registry(d: &std::path::Path) -> Value {
     serde_json::from_str(&std::fs::read_to_string(d.join("taches/registre.json")).unwrap()).unwrap()
 }
 
-fn cle_au_registre(d: &std::path::Path, nom: &str) -> Value {
-    registre(d)["ouvertes"].as_array().into_iter().flatten().find(|t| t["nom"] == nom).map(|t| t["agent_key"].clone()).unwrap_or(Value::Null)
+fn key_in_registry(d: &std::path::Path, name: &str) -> Value {
+    registry(d)["ouvertes"].as_array().into_iter().flatten().find(|t| t["nom"] == name).map(|t| t["agent_key"].clone()).unwrap_or(Value::Null)
 }
 
-fn sans_modele() -> ChatModel {
+fn no_model() -> ChatModel {
     Arc::new(|_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> { Err("no model in this witness".into()) })
 }
 
@@ -25,20 +25,20 @@ fn sans_modele() -> ChatModel {
 fn a_task_gets_an_agent_key_that_survives_the_registry_being_reread() {
     let d = tempfile::tempdir().unwrap();
     let (_depot, manifeste) = depot_inscrit(d.path(), true);
-    let host = hote(d.path(), sans_modele());
+    let host = hote(d.path(), no_model());
     let h = host.hosted(&manifeste).unwrap();
     host.with_backend(&h, |_| ()).expect("the parent opens");
     let t = host.ouvrir_une_tache(&h.id, "doc").expect("the task opens");
-    let cle = t.agent_key.clone().expect("the task has a key");
-    let suffixe = cle.strip_prefix("agent:doc-").unwrap_or_default();
-    assert!(suffixe.len() == 6 && suffixe.chars().all(|c| c.is_ascii_hexdigit()), "agent:<task>-<6 hex>: {cle}");
-    assert_eq!(cle_au_registre(d.path(), "doc"), json!(cle), "the registry holds it: {}", registre(d.path()));
+    let key = t.agent_key.clone().expect("the task has a key");
+    let suffix = key.strip_prefix("agent:doc-").unwrap_or_default();
+    assert!(suffix.len() == 6 && suffix.chars().all(|c| c.is_ascii_hexdigit()), "agent:<task>-<6 hex>: {key}");
+    assert_eq!(key_in_registry(d.path(), "doc"), json!(key), "the registry holds it: {}", registry(d.path()));
     drop(host);
-    let host = hote(d.path(), sans_modele());
+    let host = hote(d.path(), no_model());
     host.relire_les_taches();
-    assert_eq!(cle_au_registre(d.path(), "doc"), json!(cle), "the reread registry keeps it: {}", registre(d.path()));
-    let autre = host.ouvrir_une_tache(&h.id, "tests").expect("a second task opens");
-    assert_ne!(autre.agent_key.as_deref(), Some(cle.as_str()), "another task, another agent");
+    assert_eq!(key_in_registry(d.path(), "doc"), json!(key), "the reread registry keeps it: {}", registry(d.path()));
+    let other = host.ouvrir_une_tache(&h.id, "tests").expect("a second task opens");
+    assert_ne!(other.agent_key.as_deref(), Some(key.as_str()), "another task, another agent");
 }
 
 /// `teammate.agent` declared: the task continues that agent, with its key (the reviewer who takes up its work on the
@@ -55,12 +55,12 @@ fn a_task_that_declares_teammate_agent_continues_that_agent() {
     for args in [&["add", "-A"][..], &["commit", "-q", "-m", "the reviewer"]] {
         assert!(std::process::Command::new("git").args(args).current_dir(declarations).status().unwrap().success(), "git {args:?}");
     }
-    let host = hote(d.path(), sans_modele());
+    let host = hote(d.path(), no_model());
     let h = host.hosted(&manifeste).unwrap();
     host.with_backend(&h, |_| ()).expect("the parent opens");
     let t = host.ouvrir_une_tache(&h.id, "lot-2").expect("the task opens");
     assert_eq!(t.agent_key.as_deref(), Some("agent:relecteur"));
-    assert_eq!(cle_au_registre(d.path(), "lot-2"), json!("agent:relecteur"));
+    assert_eq!(key_in_registry(d.path(), "lot-2"), json!("agent:relecteur"));
 }
 
 /// A memory that records what `compose_restart` is asked, and files each slice under a Source.
