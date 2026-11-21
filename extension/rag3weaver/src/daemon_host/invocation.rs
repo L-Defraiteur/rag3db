@@ -88,6 +88,7 @@ mod tests {
     mod ecrire_la_vue;
     mod fermer_tout;
     mod run_dans_la_vue;
+    mod vues_diff;
 
     use super::*;
     use crate::daemon_host::atelier_fichiers::tests::{atelier, attendre_l_index, petit_depot};

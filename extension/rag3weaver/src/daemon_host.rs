@@ -2356,6 +2356,13 @@ impl DaemonHost {
     /// **The machine at a glance** (21 November 2026, recherche's scenario 1: the IDE's overview had neither the agents nor
     /// their folders): the sessions with their Claude name and active view, the table of the folders with the worktrees
     /// found under each, the views opened, the repositories attached, those available, and the tasks.
+    /// **What a view has not pushed yet** (`GET /vues/diff`, Lucie, 21 November 2026): the commits not pushed and the
+    /// uncommitted diff of a view, by its name, of the calling session or of `session=<id>` (read only, for the IDE).
+    #[allow(unused_variables)]
+    pub fn diff_d_une_vue(&self, appelant: Option<&str>, parametres: &std::collections::HashMap<String, String>) -> Result<Value, String> {
+        Err("le diff d'une vue : pas encore".into()) // RED STUB.
+    }
+
     pub fn poste(&self) -> Value {
         let etat = self.state();
         let machine = std::fs::read_to_string("/proc/sys/kernel/hostname").map(|h| h.trim().to_string()).unwrap_or_default();
@@ -2818,6 +2825,11 @@ impl DaemonHost {
                     "gabarits": self.templates_health(),
                 }),
             ),
+            // **What a view has not pushed yet** (Lucie, 21 November 2026, 8 h 2x): read only, for the IDE and every agent.
+            ("GET", p) if p == "/vues/diff" || p.starts_with("/vues/diff?") => {
+                let r = op_response(self.diff_d_une_vue(session, &parametres_de_requete(p)));
+                (statut(&r), r)
+            }
             ("GET", "/poste") => {
                 (200, self.poste())
             }
@@ -3705,6 +3717,41 @@ fn branch_of(lieu: &Path) -> Option<String> {
 fn git_dans(dossier: &Path, args: &[&str]) -> Option<String> {
     let out = std::process::Command::new("git").arg("-C").arg(dossier).args(args).stderr(std::process::Stdio::null()).output().ok()?;
     out.status.success().then(|| String::from_utf8_lossy(&out.stdout).trim().to_string()).filter(|t| !t.is_empty())
+}
+
+/// The parameters of a request's query (`?a=b&c=d`), percent-decoded (`%2F`, `+` as a space).
+fn parametres_de_requete(chemin: &str) -> std::collections::HashMap<String, String> {
+    fn decoder(t: &str) -> String {
+        let octets = t.as_bytes();
+        let mut out = Vec::with_capacity(octets.len());
+        let mut i = 0;
+        while i < octets.len() {
+            match octets[i] {
+                b'+' => out.push(b' '),
+                b'%' if i + 2 < octets.len() => match std::str::from_utf8(&octets[i + 1..i + 3]).ok().and_then(|h| u8::from_str_radix(h, 16).ok()) {
+                    Some(o) => {
+                        out.push(o);
+                        i += 2;
+                    }
+                    None => out.push(b'%'),
+                },
+                o => out.push(o),
+            }
+            i += 1;
+        }
+        String::from_utf8_lossy(&out).into_owned()
+    }
+    chemin
+        .split_once('?')
+        .map(|(_, q)| q)
+        .unwrap_or_default()
+        .split('&')
+        .filter(|p| !p.is_empty())
+        .map(|p| {
+            let (k, v) = p.split_once('=').unwrap_or((p, ""));
+            (decoder(k), decoder(v))
+        })
+        .collect()
 }
 
 #[cfg(test)]
