@@ -2092,11 +2092,71 @@ impl DaemonHost {
 
     /// **One name for a repository, everywhere** (21 November 2026, tty's scenario 2): a repository attached to this host
     /// is found by its id, its short name (`repo`, the git repository's folder: `compteur`), its full name (the folder of
-    /// its manifest: `code-compteur`) or its manifest's path; an unknown name is refused listing the attached ones in both
-    /// forms. Tasks are not repositories. Gives `{id, repo, name, manifest}`.
+    /// its manifest: `code-compteur`), its manifest's path, its root (as given to `code-tree add`) or its manifest's
+    /// folder; an unknown name is refused listing the attached ones in both forms. Tasks are not repositories. Gives `{id, repo, name, manifest}`.
     pub fn resoudre_un_depot(&self, nom: &str) -> Value {
-        let _ = nom;
-        json!({ "ok": false, "error": "resoudre un dépôt : pas encore" }) // RED STUB.
+        // The full name: the folder of the manifest, the one above its `templates`.
+        let complet = |m: &str| {
+            Path::new(m)
+                .ancestors()
+                .find(|a| a.file_name().is_some_and(|n| n == "templates"))
+                .and_then(Path::parent)
+                .and_then(Path::file_name)
+                .map(|n| n.to_string_lossy().to_string())
+        };
+        let etat = self.state();
+        let depots: Vec<Value> = etat["backends"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|b| b["tache"].is_null())
+            .map(|b| {
+                let m = b["manifest"].as_str().unwrap_or_default();
+                json!({ "id": b["id"], "repo": b["repo"], "name": complet(m), "manifest": m })
+            })
+            .collect();
+        // By its paths too (tty, 21 November): the repository's root (its manifest's workspace.root) and the manifest's
+        // folder, both canonical; a name that is a path is canonicalized first.
+        let canon = |p: &Path| p.canonicalize().ok();
+        let chemin_donne = (nom.contains('/')).then(|| canon(Path::new(nom))).flatten();
+        let chemins = |d: &Value| -> Vec<std::path::PathBuf> {
+            let m = Path::new(d["manifest"].as_str().unwrap_or_default());
+            let racine = std::fs::read_to_string(m)
+                .ok()
+                .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+                .and_then(|v| v["workspace"]["root"].as_str().map(std::path::PathBuf::from))
+                .and_then(|r| canon(&r));
+            let dossier = m.ancestors().find(|a| a.file_name().is_some_and(|n| n == "templates")).and_then(Path::parent).and_then(canon);
+            [racine, dossier].into_iter().flatten().collect()
+        };
+        let trouves: Vec<&Value> = depots
+            .iter()
+            .filter(|d| {
+                [&d["id"], &d["repo"], &d["name"], &d["manifest"]].iter().any(|v| v.as_str() == Some(nom))
+                    || chemin_donne.as_ref().is_some_and(|c| chemins(d).contains(c))
+            })
+            .collect();
+        let dire = |d: &Value| match (d["repo"].as_str(), d["name"].as_str()) {
+            (Some(r), Some(n)) if r != n => format!("{r} ({n})"),
+            (Some(r), _) => r.to_string(),
+            (None, Some(n)) => n.to_string(),
+            _ => d["id"].as_str().unwrap_or("?").to_string(),
+        };
+        match trouves.as_slice() {
+            [un] => {
+                let mut r = (*un).clone();
+                r["ok"] = json!(true);
+                r
+            }
+            [] => json!({
+                "ok": false,
+                "error": format!("aucun dépôt attaché ne s'appelle « {nom} » ; attachés : {}", depots.iter().map(dire).collect::<Vec<_>>().join(", ")),
+            }),
+            plusieurs => json!({
+                "ok": false,
+                "error": format!("« {nom} » désigne plusieurs dépôts : {}", plusieurs.iter().map(|d| dire(d)).collect::<Vec<_>>().join(", ")),
+            }),
+        }
     }
 
     pub fn state(&self) -> Value {
