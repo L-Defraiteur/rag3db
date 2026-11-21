@@ -1137,6 +1137,18 @@ mod tests {
                 let sortie = texte(&mut ctx);
                 assert!(!sortie.contains("SCRIPT_EXTERIEUR_LU") && !sortie.contains("code 0"), "the line granted by a human ran outside the domain: {sortie}");
                 assert!(!domaine.path().join("lance.txt").exists(), "the line granted by a human ran: the script left its mark");
+                // **The second barrier, the kernel's**: a path the command computes itself passes the check before
+                // running (the command line names only a script in the domain); the command runs (its mark), Landlock
+                // refuses the read, and the content stays out of the output.
+                let calcule = domaine.path().join("calcule.py");
+                std::fs::write(&calcule, format!("import pathlib\npathlib.Path('lance.txt').write_text('x')\nprint(pathlib.Path({:?}).read_text())\n", frere.display().to_string())).unwrap();
+                let ligne_calculee = "python3 calcule.py".to_string();
+                garde.accorder_ligne(&ligne_calculee, &contexte_accord).unwrap();
+                RunCommandNode::new("run", &ligne_calculee).execute(&mut ctx).unwrap();
+                let sortie = texte(&mut ctx);
+                assert!(domaine.path().join("lance.txt").exists(), "the command computing its path did not run: {sortie}");
+                assert!(sortie.contains("Permission denied") && !sortie.contains("CONTENU_FRERE_NON_ACCORDE"), "the kernel does not refuse a path the command computes: {sortie}");
+                std::fs::remove_file(domaine.path().join("lance.txt")).unwrap();
             } else {
                 RunCommandNode::new("run", &ligne).execute(&mut ctx).unwrap();
                 let sortie = texte(&mut ctx);
