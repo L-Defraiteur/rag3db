@@ -1,4 +1,4 @@
-//! **`search_code` reads the view of a worktree, uncommitted work included** (Lucie, 21 November 2026, about 12 h 40:
+//! **`search_code` reads the view of a worktree, uncommitted work included** (Lucie, 21 November 2026, 12 h 28:
 //! « une session doit pouvoir chercher dans son propre worktree » ; the criterion of the orchestration: a function not
 //! committed in the worktree is found, a function it deleted is not returned). End to end through the host: a view
 //! opened by `open_view`, its worktree edited without a commit, `search_code` called with `view`.
@@ -7,7 +7,8 @@ use serde_json::{json, Value};
 
 use crate::daemon_host::atelier_fichiers::tests::{atelier, attendre_l_index as wait_for_the_index, petit_depot as small_repository};
 
-/// What the view search returns for `query` under `layer`, as text.
+/// The hits of the view search for `query` under `layer`, as text: the tool's `result` only — the response repeats the
+/// query in its metadata, so reading the whole response would always « find » it.
 fn search(workshop: &crate::daemon_host::atelier_fichiers::tests::Atelier, manifest: &std::path::Path, query: &str, layer: &str) -> String {
     let hosted = workshop.host.hosted(manifest).unwrap();
     let answer: Result<Value, String> = workshop
@@ -15,7 +16,7 @@ fn search(workshop: &crate::daemon_host::atelier_fichiers::tests::Atelier, manif
         .with_backend(&hosted, |b| b.call("search_code", json!({ "query": query, "options": { "limit": 20 }, "view": { "layer": layer } })))
         .and_then(|r| r);
     match answer {
-        Ok(v) => v.to_string(),
+        Ok(v) => v["result"].to_string(),
         Err(e) => format!("REFUSED: {e}"),
     }
 }
