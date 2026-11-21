@@ -814,6 +814,8 @@ pub struct Agent<'a> {
     /// Le domaine de travail déclaré — ce que cet agent regarde, et donc ce
     /// qu'il ne regarde pas. Vide : aucun.
     domain: String,
+    /// The teammate's step of this run, if it is one ([`Self::with_step`]).
+    step: Option<crate::events::StepRef>,
     /// Le slug sous lequel cet agent consomme. Vide : dérivé du modèle.
     /// Paramétrable parce que c'est lui qu'une table de prix résoudra un jour,
     /// et que le nom du modèle n'est pas toujours le nom du produit vendu.
@@ -884,6 +886,7 @@ impl<'a> Agent<'a> {
             postures: None,
             session: None,
             meter: None,
+            step: None,
             domain: String::new(),
             resource: None,
             provider: "unknown".to_string(),
@@ -1133,6 +1136,12 @@ impl<'a> Agent<'a> {
     /// ancien est écarté — la boucle ne ralentit jamais pour son observateur.
     pub fn with_events(mut self, bus: crate::events::EventBus) -> Self {
         self.events = Some(bus);
+        self
+    }
+
+    /// **The teammate's step this agent's run is the turn of**, said in its `RunStarted`.
+    pub fn with_step(mut self, step: Option<crate::events::StepRef>) -> Self {
+        self.step = step;
         self
     }
 
@@ -1491,6 +1500,7 @@ impl<'a> Agent<'a> {
             scope: self.events.as_ref().map(|b| b.scope().clone()),
             target: None,
             role: None,
+            step: { let _ = &self.step; None },
         });
         let outcome = self.run_inner(turns, sink, &run_id);
         // Le tour fini rend son nom : une fin adressée à ce nom attend le

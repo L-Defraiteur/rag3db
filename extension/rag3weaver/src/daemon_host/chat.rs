@@ -956,6 +956,7 @@ impl DaemonHost {
             if let Some(r) = s.cut_relaunch() {
                 config["cut_relaunch"] = json!(r);
             }
+            config["step"] = json!({ "task": s.task, "number": s.number });
         }
         let config: ChatConfig = serde_json::from_value(config)
         .map_err(|e| e.to_string())?;

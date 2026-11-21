@@ -714,6 +714,7 @@ mod tests {
             scope: None,
             target: None,
             role: None,
+            step: None,
         }
     }
 
