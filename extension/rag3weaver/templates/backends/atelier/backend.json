@@ -13,7 +13,8 @@
     "commands": "approval",
     "commands_outside_tasks": true,
     "sandbox": {
-      "network": true
+      "network": true,
+      "extra_read": ["~/.rustup", "~/.cargo/bin", "~/.cargo/registry", "~/.cargo/git", "~/.cargo/config.toml"]
     },
     "writes_outside_tasks": true
   },
