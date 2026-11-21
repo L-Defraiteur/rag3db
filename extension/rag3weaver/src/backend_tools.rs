@@ -104,6 +104,18 @@ mod tests {
         assert_eq!(model_text(&with_metadata), "trois fichiers\nMetadata: {\"skipped\":48}");
     }
 
+    /// **The template version is not for the model** (5.1, 21 Nov. 2026): every call's envelope says it in
+    /// `metadata.template`, for the run's journal and the rows; the model's text does not carry it — a read stays its
+    /// text alone, and the other metadata stay.
+    #[test]
+    fn the_template_version_stays_out_of_the_model_text() {
+        let template = json!({ "hash": "d40667e2750838485f30920cb8e18122ce44f9a76d03e0bee946042a78506fa7", "version": 0 });
+        let read = json!({ "result": "fn main() {}", "metadata": { "template": template } });
+        assert_eq!(model_text(&read), "fn main() {}");
+        let searched = json!({ "presentation": "# Search", "metadata": { "template": template, "skipped": 48 } });
+        assert_eq!(model_text(&searched), "# Search\nMetadata: {\"skipped\":48}");
+    }
+
     /// A presentation stays as it was; a failure stays a JSON `{ok: false, error}`, which three readers of the
     /// host judge (the reading fingerprint of chat.rs, `Step::note_tool`, the status of `put_turn`).
     #[test]
