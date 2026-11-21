@@ -112,6 +112,8 @@ mod e2e_new_name_mentions;
 mod e2e_dangling_links;
 #[path = "../e2e_drain_order.rs"]
 mod e2e_drain_order;
+#[path = "../e2e_class_users.rs"]
+mod e2e_class_users;
 #[path = "../e2e_compose_restart.rs"]
 mod e2e_compose_restart;
 #[path = "../e2e_contrat_transactions.rs"]
