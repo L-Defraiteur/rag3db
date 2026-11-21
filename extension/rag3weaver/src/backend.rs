@@ -4063,7 +4063,7 @@ thread_local! {
 /// **The sandbox of a call, as the host sets it** (the v1 defaults, Lucie, 21 November 2026): the roots granted to the
 /// calling agent with the default ones (the creation root, the tools' caches), the outbound network, the protected
 /// folders (a hard refusal, never an open_root request), and whether a path outside the roots goes to the judge
-/// (`judge_all`). RED STUB: only the roots are applied.
+/// (`judge_all`).
 #[derive(Debug, Clone, Default)]
 pub struct CallSandbox {
     pub roots: Vec<(PathBuf, String)>,
@@ -4074,7 +4074,41 @@ pub struct CallSandbox {
 
 /// Runs `f` under the sandbox of a call (see [`CallSandbox`]).
 pub fn with_call_sandbox<T>(sandbox: CallSandbox, f: impl FnOnce() -> T) -> T {
-    with_granted_roots(sandbox.roots, f)
+    struct Remettre(Option<bool>, Vec<PathBuf>, bool);
+    impl Drop for Remettre {
+        fn drop(&mut self) {
+            CALL_NETWORK.with(|c| c.set(self.0));
+            CALL_PROTECTED.with(|c| *c.borrow_mut() = std::mem::take(&mut self.1));
+            CALL_JUDGE_ALL.with(|c| c.set(self.2));
+        }
+    }
+    let avant = Remettre(
+        CALL_NETWORK.with(|c| c.replace(sandbox.network)),
+        CALL_PROTECTED.with(|c| c.replace(sandbox.protected)),
+        CALL_JUDGE_ALL.with(|c| c.replace(sandbox.judge_all)),
+    );
+    let r = with_granted_roots(sandbox.roots, f);
+    drop(avant);
+    r
+}
+
+thread_local! {
+    /// See [`with_call_sandbox`]: the outbound network the host sets (`None`: the manifest's).
+    static CALL_NETWORK: std::cell::Cell<Option<bool>> = const { std::cell::Cell::new(None) };
+    /// See [`with_call_sandbox`]: the protected folders, a hard refusal.
+    static CALL_PROTECTED: std::cell::RefCell<Vec<PathBuf>> = const { std::cell::RefCell::new(Vec::new()) };
+    /// See [`with_call_sandbox`]: a path outside the roots goes to the judge (true by default).
+    static CALL_JUDGE_ALL: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
+}
+
+/// The protected folders of the call (see [`with_call_sandbox`]).
+pub fn call_protected_folders() -> Vec<PathBuf> {
+    CALL_PROTECTED.with(|c| c.borrow().clone())
+}
+
+/// Whether a path outside the roots goes to the judge in this call (see [`with_call_sandbox`]).
+pub fn call_judge_all() -> bool {
+    CALL_JUDGE_ALL.with(|c| c.get())
 }
 
 /// The roots granted to the agent that calls, with their mode (see [`with_granted_roots`]).
@@ -6166,6 +6200,11 @@ impl Backend {
                         let bac = GRANTED_ROOTS.with(|c| {
                             c.borrow().iter().fold(bac, |b, (r, mode)| if mode == "write" { b.ecrire_en_plus(r.clone()) } else { b.lire_en_plus(r.clone()) })
                         });
+                        // The outbound network the host sets for the call (the v1 defaults: open), else the manifest's.
+                        let bac = match CALL_NETWORK.with(|c| c.get()) {
+                            Some(reseau) => bac.avec_reseau(reseau),
+                            None => bac,
+                        };
                         let principale = prepared.surcharges.racine_principale.as_deref().unwrap_or(&racine_du_backend);
                         let bac = crate::backend_code::avec_lecture_git(bac, &racine, principale);
                         services.register(

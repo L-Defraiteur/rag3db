@@ -10,6 +10,15 @@ use serde_json::{json, Value};
 
 use super::DaemonHost;
 
+/// The v1 defaults of the sandbox (see `DaemonHost::sandbox_defaults`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct SandboxDefaults {
+    pub creation_root: Option<PathBuf>,
+    pub writable_caches: Vec<PathBuf>,
+    pub network: bool,
+    pub judge_all: bool,
+}
+
 /// One grant: who (`agent:<clé>`, or `"*"` for every agent), which root (canonical), and its proof.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Grant {
@@ -282,15 +291,73 @@ impl DaemonHost {
         }))
     }
 
-    /// **The sandbox of a call on the backend `backend_id`** (the v1 defaults): RED STUB, the grants only.
+    /// **The sandbox of a call on the backend `backend_id`** (the v1 defaults, Lucie, 21 November 2026): the roots
+    /// granted to its agent (its task's key) and to every agent, the creation root and the tools' caches of
+    /// `<config>/sandbox-defaults.json` (in write, without a card), the outbound network, the protected folders (a hard
+    /// refusal), and `judge_all`. A root that holds a protected folder is never mounted, whatever grants it.
     pub fn call_sandbox_for(&self, backend_id: &str) -> crate::backend::CallSandbox {
-        let roots = self
+        let defauts = self.sandbox_defaults();
+        let mut roots: Vec<(PathBuf, String)> = self
             .root_grants(Some(&self.agent_key_of_backend(backend_id).unwrap_or_default()))
             .into_iter()
-            .filter(|g| !self.holds_a_protected_folder(&g.root))
             .map(|g| (g.root, g.mode))
             .collect();
-        crate::backend::CallSandbox { roots, network: None, protected: Vec::new(), judge_all: true }
+        if let Some(creation) = &defauts.creation_root {
+            // The creation root exists: Landlock skips a rule on a path that does not.
+            let _ = std::fs::create_dir_all(creation);
+            roots.push((creation.clone(), "write".into()));
+        }
+        roots.extend(defauts.writable_caches.iter().filter(|c| c.is_dir()).map(|c| (c.clone(), "write".to_string())));
+        let roots = roots
+            .into_iter()
+            .filter_map(|(r, m)| r.canonicalize().ok().map(|r| (r, m)))
+            .filter(|(r, _)| !self.holds_a_protected_folder(r))
+            .collect();
+        crate::backend::CallSandbox { roots, network: Some(defauts.network), protected: self.protected_folders(), judge_all: defauts.judge_all }
+    }
+
+    /// **The v1 defaults of the sandbox**, read at each call from `<config>/sandbox-defaults.json`, the code's defaults
+    /// for what it does not say: `creation_root` (`~/git_workspaces/projets`: a root for new projects, without a card),
+    /// `writable_caches` (the tools' caches by name: `~/.npm`, `~/.cargo`, `~/.rustup`, `~/.cache/pnpm`, `~/.cache/pip`,
+    /// `~/.cache/yarn`, `~/.cache/node-gyp`, `~/.cache/sccache`, `~/.local/share/pnpm` — never the whole `~/.cache`,
+    /// which holds the build's scripts), `network` (open) and `judge_all` (on).
+    pub fn sandbox_defaults(&self) -> SandboxDefaults {
+        let lu: Value = self
+            .racines_de_code()
+            .ok()
+            .and_then(|r| std::fs::read_to_string(r.config.join("sandbox-defaults.json")).ok())
+            .and_then(|t| serde_json::from_str(&t).ok())
+            .unwrap_or_else(|| json!({}));
+        let chemin = |v: &str| crate::backend_code::etendre_tilde(v);
+        let creation_root = match &lu["creation_root"] {
+            Value::Null => Some(chemin("~/git_workspaces/projets")),
+            Value::String(c) if c.is_empty() => None,
+            Value::String(c) => Some(chemin(c)),
+            _ => None,
+        };
+        let writable_caches = match lu["writable_caches"].as_array() {
+            Some(l) => l.iter().filter_map(|c| c.as_str()).map(chemin).collect(),
+            None => [
+                "~/.npm",
+                "~/.cargo",
+                "~/.rustup",
+                "~/.cache/pnpm",
+                "~/.cache/pip",
+                "~/.cache/yarn",
+                "~/.cache/node-gyp",
+                "~/.cache/sccache",
+                "~/.local/share/pnpm",
+            ]
+            .iter()
+            .map(|c| chemin(c))
+            .collect(),
+        };
+        SandboxDefaults {
+            creation_root,
+            writable_caches,
+            network: lu["network"].as_bool().unwrap_or(true),
+            judge_all: lu["judge_all"].as_bool().unwrap_or(true),
+        }
     }
 
     /// `GET /ide/root-grants`: every grant.
