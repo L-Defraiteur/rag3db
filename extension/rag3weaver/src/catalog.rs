@@ -3948,25 +3948,7 @@ fn read_threads() -> u64 {
     /// La ligne « index : racine @ commit de branche, indexé il y a … » de la cellule,
     /// ou `None` sans index noté.
     pub fn indexed_tree_line(&self, cell: &crate::scope::Scope, now_ms: u64) -> Option<String> {
-        let v = self.indexed_tree(cell)?;
-        let root = v.get("root")?.as_str()?;
-        let commit = v.get("commit").and_then(|c| c.as_str()).filter(|c| !c.is_empty());
-        let dirty = v.get("dirty").and_then(|d| d.as_bool()).unwrap_or(false);
-        let at = v.get("at_ms").and_then(|a| a.as_u64()).unwrap_or(now_ms);
-        let minutes = now_ms.saturating_sub(at) / 60_000;
-        let quand = match minutes {
-            0 => "à l'instant".to_string(),
-            m if m < 120 => format!("il y a {m} min"),
-            m if m < 48 * 60 => format!("il y a {} h", m / 60),
-            m => format!("il y a {} j", m / (24 * 60)),
-        };
-        let branche = v.get("branch").and_then(|b| b.as_str()).map(|b| format!(" de {b}")).unwrap_or_default();
-        let version = match (commit, dirty) {
-            (Some(c), false) => format!(" @ {c}{branche}"),
-            (Some(c), true) => format!(" @ {c}{branche} + modifications non commitées"),
-            (None, _) => " (hors git)".to_string(),
-        };
-        Some(format!("index : {root}{version}, indexé {quand}"))
+        indexed_tree_line_of(&self.indexed_tree(cell)?, now_ms)
     }
 
     // ── Persistence (_catalog_meta) ─────────────────────────────────────
@@ -15390,3 +15372,24 @@ struct EmbarquementCalcule {
     avertissements: Vec<String>,
 }
 
+/// The line « index : racine @ commit de branche, indexé il y a … » of a noted tree (see `Catalog::indexed_tree_line`).
+pub fn indexed_tree_line_of(v: &serde_json::Value, now_ms: u64) -> Option<String> {
+    let root = v.get("root")?.as_str()?;
+    let commit = v.get("commit").and_then(|c| c.as_str()).filter(|c| !c.is_empty());
+    let dirty = v.get("dirty").and_then(|d| d.as_bool()).unwrap_or(false);
+    let at = v.get("at_ms").and_then(|a| a.as_u64()).unwrap_or(now_ms);
+    let minutes = now_ms.saturating_sub(at) / 60_000;
+    let quand = match minutes {
+        0 => "à l'instant".to_string(),
+        m if m < 120 => format!("il y a {m} min"),
+        m if m < 48 * 60 => format!("il y a {} h", m / 60),
+        m => format!("il y a {} j", m / (24 * 60)),
+    };
+    let branche = v.get("branch").and_then(|b| b.as_str()).map(|b| format!(" de {b}")).unwrap_or_default();
+    let version = match (commit, dirty) {
+        (Some(c), false) => format!(" @ {c}{branche}"),
+        (Some(c), true) => format!(" @ {c}{branche} + modifications non commitées"),
+        (None, _) => " (hors git)".to_string(),
+    };
+    Some(format!("index : {root}{version}, indexé {quand}"))
+}

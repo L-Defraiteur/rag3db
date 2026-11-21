@@ -5729,13 +5729,42 @@ impl Backend {
             return;
         };
         let cell = cell.unwrap_or_else(|| cat.scope().clone());
-        let (Some(fraicheur), Some(ligne)) = (
+        let (Some(mut fraicheur), Some(mut ligne)) = (
             crate::dataflow::catalog_read::freshness_of(&cat, &cell),
             crate::dataflow::catalog_read::freshness_line(&cat, &cell),
         ) else {
             return;
         };
+        let arbre = cat.indexed_tree(&cell);
         drop(cat);
+        // **Under the view of a worktree, the freshness says that worktree** (recherche's ticket of 21 November 2026):
+        // its root, its commit, its branch and the view; the backend's noted tree is the main one's, which misled.
+        let couche = response["view"]["layer"].as_str().map(str::to_string);
+        if let (Some(racine), Some(mut arbre)) = (couche.as_deref().and_then(|c| c.strip_prefix("worktree:")), arbre) {
+            let racine = std::path::Path::new(racine).canonicalize().unwrap_or_else(|_| PathBuf::from(racine));
+            let git = |args: &[&str]| -> Option<String> {
+                let out = std::process::Command::new("git").arg("-C").arg(&racine).args(args).output().ok()?;
+                out.status.success().then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
+            };
+            let now = crate::catalog::retard::now_ms();
+            let avant = crate::catalog::indexed_tree_line_of(&arbre, now);
+            let racine_txt = racine.display().to_string();
+            let commit = git(&["rev-parse", "--short", "HEAD"]);
+            let branche = git(&["rev-parse", "--abbrev-ref", "HEAD"]).filter(|b| !b.is_empty() && b != "HEAD");
+            let sale = git(&["status", "--porcelain", "--untracked-files=no"]).is_some_and(|t| !t.is_empty());
+            arbre["root"] = json!(racine_txt);
+            arbre["commit"] = json!(commit);
+            arbre["branch"] = json!(branche);
+            arbre["dirty"] = json!(sale);
+            if let (Some(avant), Some(apres)) = (avant, crate::catalog::indexed_tree_line_of(&arbre, now)) {
+                ligne = ligne.replacen(&avant, &apres, 1);
+            }
+            fraicheur["root"] = json!(racine_txt);
+            fraicheur["commit"] = json!(commit);
+            fraicheur["branch"] = json!(branche);
+            fraicheur["dirty"] = json!(sale);
+            fraicheur["view"] = json!(couche);
+        }
         response["freshness"] = fraicheur;
         for cle in ["result", "presentation"] {
             if let Some(texte) = response.get(cle).and_then(Value::as_str) {
