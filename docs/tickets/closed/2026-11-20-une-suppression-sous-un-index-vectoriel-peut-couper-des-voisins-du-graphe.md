@@ -1,6 +1,16 @@
 # Une suppression sous un index vectoriel peut couper des voisins du graphe
 
-- **État** : ouvert (20 novembre 2026, hotfixs)
+- **État** : fermé (21 novembre 2026, hotfixs), corrigé sur la branche `hnsw-delete-reachability` (319730f984 avant
+  la repose). La cause : `keepFormerNeighboursReachable` (étape 3a) tenait un ancien voisin pour joignable dès qu'un
+  nœud du dehors pointait vers lui, alors que ce nœud pouvait n'être joint que par lui ; un îlot dont la seule entrée
+  venait des lignes supprimées se déclarait joignable sans recherche. Le correctif : seule l'ancre prouve ; le reste
+  passe par la recherche depuis l'entrée, et ce qu'elle visite est marqué joignable. La preuve : le témoin déterministe
+  `VectorIndexUpdate.AnIslandOfFormerNeighboursStaysReachableAfterADelete` (graphe posé à la main : 0 → D, D → X,
+  X ↔ Y ; D supprimé), **rouge sur le moteur de e22dede600** (2 injoignables, leur propre recherche rend 7 et 15),
+  **vert avec le correctif**. Sur les vrais vecteurs de code-lourd, `RealVectorsDeletedInWaves` (douze vagues de
+  suppressions par blocs contigus, deux tours) : rouge une vague sur 48 sans correctif (l'amas de quatre quasi-copies,
+  coupé par un bloc lointain), 0 sur 24 avec ; les DELETE ne sont pas plus lents (42 à 83 s avec, 51 à 92 s sans, sous
+  charge).
 - **Famille** : moteur
 - **Gravité** : réponse fausse. Une ligne vivante, voisine d'une ligne supprimée, n'est plus rendue par aucune
   recherche, pas même celle de son propre vecteur à efs 10000.
