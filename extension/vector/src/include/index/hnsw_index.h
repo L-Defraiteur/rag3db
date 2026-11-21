@@ -505,7 +505,9 @@ private:
         const std::unordered_map<common::offset_t, std::vector<common::offset_t>>& edgesOf,
         const std::vector<common::offset_t>& anchorEdges,
         const std::unordered_set<common::offset_t>& notAnchors, HNSWInsertState& insertState);
-    void keepNodeReachable(transaction::Transaction* transaction, common::offset_t offset,
+    // True when it searched the lower layer from an entry: every node the search visited is then
+    // reachable, and searchState.visited says which.
+    bool keepNodeReachable(transaction::Transaction* transaction, common::offset_t offset,
         const std::vector<common::offset_t>& neighbors, bool isUpperLayer,
         HNSWInsertState& insertState);
     // The first row of the table, other than `except`, that this transaction sees and that has a
