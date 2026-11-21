@@ -8,25 +8,23 @@
 
 ## Ce que c'est
 
-Archi publie les lignes de la carte d'accord sur le bus de la tâche, comme toute ligne de boîte :
+**La forme a changé, Lucie, le 21 novembre vers 10 h** : la carte ne se cache jamais. Une seule carte reste ouverte du début à la fin, son état change, et elle n'a qu'une seule fermeture (archi, mode auto, étage 3, page 03 du 21 novembre).
 
-1. La carte :
-   `{"from":"teammate","kind":"approval","id":"L12","tool":"run_command","args":{"command":"git push origin lot"},"class":"outbound","scope":"once","recall":"pending"}`
-   - Elle s'affiche tout de suite, avec accepter et refuser. L'outil et ses arguments sont dans `tool` et `args`.
-   - `recall: "pending"` veut dire : montrer « recherche d'une autorisation… ». Sans ce champ, il n'y a pas de rappel.
-2. Le rappel trouve une autorisation :
-   `{"from":"recall","kind":"answer","reply_to":"L12","approved":true,"authorization":{"id":…,"quote":"pousse quand c'est vert","at":…,"turn":"run:…#14"}}`
-   - La carte se ferme seule, en disant « validé par ton autorisation du <date> : « <quote> » ».
-3. Le rappel ne trouve pas, ou s'efface :
-   `{"from":"host","kind":"recall","reply_to":"L12","status":"not_found"|"option_off"|"abandoned"|"citation_unverified"}`
-   - La carte reste ouverte, à l'utilisateur.
-   - `abandoned` : l'utilisateur a répondu avant, et sa propre réponse prime.
+1. **L'ouverture** : `{"from":"teammate","kind":"approval","id":"L12","tool":…,"args":…,"class":…,"scope":"once"}`.
+2. **L'état** : une ligne par étape, chacune remplace la précédente à l'écran.
+   - Sa forme : `{"from":"host","kind":"approval_state","reply_to":"L12","stage":"recall"|"appeal"|"waiting_survivor"|"survivor","text":…,"until":<ms>|null}`.
+   - `until` sert au compte à rebours de `waiting_survivor`.
+   - Pour `appeal`, `text` porte ce que l'agent a fait valoir, et une ligne suivante dit pourquoi cela n'a pas suffi.
+3. **La fermeture**, une seule : `{"kind":"answer","reply_to":"L12","approved":true|false,"from":"user"|"recall"|"appeal"|"verifier",…}`.
+   - Elle dit qui a tranché.
+   - `recall` porte `authorization{quote, at}`.
+   - `verifier` porte `model` et `reasons`, plus `alternative{text, class}` si le refus en propose une.
+
+L'utilisateur peut répondre à tout instant : sa ligne `answer` ferme la carte et arrête tout ce qui court. La frise : le rappel en parallèle dès le début, l'appel de l'agent à 30 s (`gate.user_wait_s`), puis le survivant 10 min après l'échec de l'appel (`survivor.wait_s`), s'il est allumé.
 
 ## Ce qu'il faut au terminal
 
-- `Attente` porte `tool`, `args`, `class` et `scope`. La ligne d'état dit l'outil et ses arguments, par exemple `browser_click ref=…` ou `run_command git push …`, et non le seul `command`.
-- « recherche d'une autorisation… » s'affiche à côté de la carte tant que `recall` vaut `pending`.
-- Une `answer` de `recall` ferme la carte, avec sa ligne « validé par ton autorisation du … : « … » ».
-- Une ligne `host`/`recall` laisse la carte ouverte. Sur `not_found`, la ligne d'état le dit, sans bruit dans l'historique.
-- `scope: "once"` se dit (« pour cet envoi seulement »), pour que l'utilisateur sache que le « oui » ne vaut pas pour toute la tâche.
-- Les témoins sont rouges d'abord, dans `vue.rs` ou un fichier à part, sur les trois formes de lignes ci-dessus. La séance du harnais suit, avec un faux hôte qui les publie.
+- `Attente` porte `tool`, `args`, `class` et `scope`. La ligne d'état dit l'outil et ses arguments, pas le seul `command`, et « pour cet envoi seulement » quand `scope` vaut `once`.
+- La carte reste dans la zone vivante, avec o / n, du début à la fin. Une ligne `approval_state` remplace son état à l'écran (« cherche une autorisation… », « l'agent fait valoir : … », « le survivant tranchera dans 9 min »), avec le compte à rebours de `until`, sans rien écrire à l'historique.
+- La fermeture laisse une ligne d'historique qui dit qui a tranché : « accordé par toi », « validé par ton autorisation du … : « … » », « accordé sur l'appel de l'agent », ou « refusé par le vérificateur (<modèle>) : <raisons> », avec l'alternative s'il y en a une.
+- Les témoins sont rouges d'abord, sur les trois formes de lignes. Puis la séance du harnais, avec un faux hôte qui les publie.
