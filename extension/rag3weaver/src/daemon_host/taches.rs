@@ -337,6 +337,21 @@ pub(super) fn racine_par_defaut() -> PathBuf {
 }
 
 /// `git -C dir args…` : sa sortie, ou ce qu'il dit en refusant.
+
+/// **The commit a task starts from** (`HEAD` of the repository). A repository without any commit yet — a `git init`
+/// that `code-tree add` accepted — is said in plain words, with the command that makes one, instead of git's own
+/// (« argument 'HEAD' ambigu ») : the night's essays, 21 November 2026, a project from scratch.
+fn commit_de_depart(depot: &Path) -> Result<String, String> {
+    if git(depot, &["rev-parse", "--verify", "-q", "HEAD"]).is_err() {
+        return Err(format!(
+            "le dépôt {} n'a encore aucun commit : une tâche part d'un commit. Faites-en un (`git -C {} commit --allow-empty -m début`), puis rouvrez la tâche",
+            depot.display(),
+            depot.display()
+        ));
+    }
+    git(depot, &["rev-parse", "HEAD"])
+}
+
 fn git(dir: &Path, args: &[&str]) -> Result<String, String> {
     let o = std::process::Command::new("git")
         .arg("-C")
@@ -669,7 +684,7 @@ impl DaemonHost {
                 return Err(format!("la branche {branche} existe déjà dans {} : une tâche de ce nom n'a pas été fermée", d.display()));
             }
         }
-        let depart = if sans_depot { String::new() } else { git(&depot, &["rev-parse", "HEAD"])? };
+        let depart = if sans_depot { String::new() } else { commit_de_depart(&depot)? };
         std::fs::create_dir_all(&dossier).map_err(|e| format!("{} : {e}", dossier.display()))?;
         let defaire = |etape: &str, e: String| -> String {
             if !sans_depot {
@@ -690,7 +705,7 @@ impl DaemonHost {
             None => None,
             Some((racine_principale, permis)) => Some(match &depot_code {
                 Some(d) => {
-                    let depart_code = git(d, &["rev-parse", "HEAD"]).map_err(|e| defaire("le dépôt de code", e))?;
+                    let depart_code = commit_de_depart(d).map_err(|e| defaire("le dépôt de code", e))?;
                     git(d, &["worktree", "add", "-q", "-b", &branche, &arbre_code.to_string_lossy(), &depart_code])
                         .map_err(|e| defaire("le worktree de code", e))?;
                     let sous = racine_principale.strip_prefix(d).map(Path::to_path_buf).unwrap_or_default();
