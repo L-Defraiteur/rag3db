@@ -2312,6 +2312,58 @@ fn un_symbole_cite_par_le_modele_mene_a_sa_definition() {
     fil.join().unwrap();
 }
 
+/// **The pages of a repository speak git** (scenario 1 of the night of 20 November 2026, ticket
+/// `docs/recherche/tickets/2026-11-21-les-pages-des-taches-parlent-de-backends.md`; Lucie, 7 November 2026: git
+/// vocabulary, not backend). The breadcrumb of the tasks, a task, the propositions, the graphs, the reactions and the
+/// reports said « backends · backends/code · … », and the table of tasks had a « backend » column. Each breadcrumb
+/// starts with « dépôts » and names the repository by its name and branch, as the welcome does; « backend » is not on
+/// these pages.
+#[test]
+#[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+fn the_pages_of_a_repository_speak_git() {
+    use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+    let Some(binaire) = navigateur_ou_saut("the_pages_of_a_repository_speak_git") else {
+        return;
+    };
+    let (d1, h1, m1, id1) = banc_dans("atelier", page_du_chat(), |_| {});
+    drop(h1);
+    let (chats, taches) = (d1.path().join("chats"), d1.path().join("taches"));
+    let (adresse, fil) = crate::daemon_host::tests::hote_garde_avec("j", move |h| {
+        h.with_racine_des_taches(taches).with_chats_root(chats).with_chat_model(page_du_chat())
+    });
+    let racine = format!("http://{adresse}");
+    let ide = |chemin: &str, corps: Value| -> Value {
+        let mut r = crate::daemon::agent_de_temoin()
+            .post(format!("{racine}{chemin}"))
+            .header("Cookie", "rag3weaver_ide=j")
+            .header("content-type", "application/json")
+            .send(corps.to_string())
+            .unwrap();
+        serde_json::from_str(&r.body_mut().read_to_string().unwrap()).unwrap()
+    };
+    assert_eq!(ide("/ide/describe", json!({ "manifest": m1 }))["ok"], true);
+    let o = ide("/ide/taches", json!({ "backend": id1, "nom": "relecture" }));
+    assert!(o["ok"] == true, "the task opens: {o}");
+
+    let mut n = Navigateur::lancer(&binaire);
+    n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+    for page in ["taches/", "taches/relecture", "propositions/", "dag/", "reactions/", "bilans"] {
+        n.aller(&format!("{racine}/ide/code/{id1}/{page}"), "(document.querySelector('#fil')?.innerText ?? '').length > 0");
+        let fil_ariane = n.evaluer("document.querySelector('#fil').innerText");
+        let fil_ariane = fil_ariane.as_str().unwrap_or_default();
+        assert!(fil_ariane.starts_with("dépôts"), "{page}: the breadcrumb starts with « dépôts »: {fil_ariane:?}");
+        assert!(fil_ariane.contains("atelier · master"), "{page}: the repository named by its name and branch: {fil_ariane:?}");
+        assert!(!fil_ariane.to_lowercase().contains("backend"), "{page}: « backend » in the breadcrumb: {fil_ariane:?}");
+    }
+    n.aller(&format!("{racine}/ide/code/{id1}/taches/"), "document.querySelector('#taches thead')");
+    let entetes = n.evaluer("document.querySelector('#taches thead').innerText");
+    assert!(!entetes.as_str().unwrap_or_default().to_lowercase().contains("backend"), "the table of tasks: {entetes}");
+    drop(n);
+    let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+    assert_eq!(statut, 200);
+    fil.join().unwrap();
+}
+
 /// **L'accueil parle en dépôts** (Lucie, 8 novembre 2026, sur le portable posé : l'accueil disait
 /// encore « Backends », « backends/code », le chemin du manifeste sous chaque nom). Le titre est
 /// « Dépôts » ; chaque carte est nommée par son dépôt et sa branche, comme la barre du chat ; le
