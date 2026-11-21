@@ -551,4 +551,27 @@ sleep 2; [ -z "$(instant Z début)" ]; a=$?; echo $((2 * 1073741824)) > "$G/sys/
 [ "$a" = 0 ] && [ -n "$(instant Z début)" ]; cas $? "card0 : 30 Gio utilisés, un besoin de 8 attend, puis part quand la VRAM se libère"
 rm -f "$POSTE_LOCK_DIR/gpu-card" "$POSTE_LOCK_DIR/gpu-reserve-gib" "$POSTE_LOCK_DIR/lourds-max"; unset POSTE_GPU_NOW POSTE_GPU_MEMINFO POSTE_GPU_SYS
 
+# ── 59 bis. Un poste sans gpu-card ni gpu-reserve-gib ne dit rien de ces fichiers absents (21 novembre 2026 : chaque
+# appel écrivait « gpu-card : Aucun fichier ou dossier de ce nom », la redirection échouant avant son 2>/dev/null).
+rm -f "$POSTE_LOCK_DIR/gpu-card" "$POSTE_LOCK_DIR/gpu-reserve-gib"
+sortie=$("$POSTE" cpu -- true 2>&1; "$POSTE" --qui 2>&1)
+! echo "$sortie" | grep -q 'gpu-card\|gpu-reserve-gib'
+cas $? "sans gpu-card ni gpu-reserve-gib : aucun message sur ces fichiers ($(echo "$sortie" | grep -m1 'gpu-' | cut -c1-80))"
+# ── 60. Le serveur sccache hors de la portée de la commande (21 novembre 2026, codeparsers par c7 : à chaque passe sur
+# un target neuf, la validation rougissait « descendants laissés après la commande » ; le reste était /usr/bin/sccache,
+# le serveur que cargo démarre au premier bâti et qui survit à la commande). poste démarre le serveur lui-même, avant la
+# commande et hors de sa portée. Un port à lui (comme un target neuf, aucun serveur n'y tourne) ; on lit le cgroup du
+# serveur né pendant la commande, et on n'arrête que lui, par son port.
+if command -v sccache > /dev/null 2>&1 && systemd-run --user --scope -q -- true 2>/dev/null; then
+  P=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
+  R=$(mktemp -d -p "${TMPDIR:-$HOME/.cache}")
+  SCCACHE_SERVER_PORT=$P SCCACHE_DIR="$R/cache" "$POSTE" cpu -- sh -c "sed -n 's#^0::##p' /proc/self/cgroup > '$R/cg'; sccache --zero-stats > /dev/null 2>&1" > /dev/null 2>&1
+  srv=$(ss -ltnpH "sport = :$P" 2>/dev/null | grep -o 'pid=[0-9]*' | head -1 | cut -d= -f2)
+  cgs=$([ -n "$srv" ] && sed -n 's#^0::##p' "/proc/$srv/cgroup" 2>/dev/null)
+  SCCACHE_SERVER_PORT=$P sccache --stop-server > /dev/null 2>&1
+  [ -n "$srv" ] && [ -s "$R/cg" ] && [ "$cgs" != "$(cat "$R/cg")" ]
+  cas $? "le serveur sccache vit hors de la portée de la commande (serveur pid ${srv:-aucun}, cgroup ${cgs:-?} ; commande $(cat "$R/cg" 2>/dev/null))"
+  rm -rf -- "${R:?}"
+else cas 1 "sccache ou systemd-run absent : le cas du serveur sccache ne se juge pas ici (un cas non joué est rouge)"; fi
+
 exit $echec
