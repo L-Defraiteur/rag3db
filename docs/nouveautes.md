@@ -1,5 +1,12 @@
 # Nouveautés
 
+- 21 novembre 2026 — **Après un arrêt brutal, le plein texte revient au lieu d'être rebâti.** Un index de code tué au
+  milieu d'une synchronisation, ou dont un paquet échoue, gardait un plein texte en avance sur la base : il était jeté
+  et rebâti depuis les lignes, et la recherche par les mots répondait « en cours » pendant ce temps. Le plein texte
+  (lucivy 4.4) garde maintenant la génération que la base a validée et celles d'après ; la réouverture le ramène à
+  celle de la base, sans rebâti. La maintenance de la nuit se clôt par sa propre génération, et la place que garde une
+  compaction revient tout de suite.
+
 - 21 novembre 2026 — **Un bâti sans compteur de jetons ouvre une base sous granite.** Lire, chercher et converser ne
   comptent aucun jeton : la base s'ouvre et sert. Seul l'index refuse de découper, en nommant la feature `token-count`,
   et n'écrit jamais une ligne sans ses morceaux.
