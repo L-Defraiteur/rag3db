@@ -867,6 +867,10 @@ impl DaemonHost {
             }
         }
         let mut tete: Option<String> = None;
+        // The head is held by a ref of its own before the branch goes: `branch -D` erases the branch's reflog and
+        // `worktree remove` the worktree's, so an unpushed head would be unreachable and `gc` would take it (c7, 21 Nov).
+        let ms = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0);
+        let tenue = format!("refs/rag3weaver/closed/{nom}-{ms}");
         for v in tache.volets() {
             // A repository whose folder went away (removed, moved): nothing to ask git there; the task's folder goes
             // below all the same, and the host says what it could not do (tty's ticket of 21 November 2026).
@@ -879,15 +883,18 @@ impl DaemonHost {
                 continue;
             }
             // The branch's head, kept on the card: the branch goes, its commit stays reachable by the reflog.
+            let tete_du_volet = git(v.depot, &["rev-parse", &tache.branche]).ok().map(|o| o.trim().to_string()).filter(|t| !t.is_empty());
+            if let Some(t) = &tete_du_volet {
+                git(v.depot, &["update-ref", &tenue, t])?;
+            }
             if tete.is_none() {
-                tete = git(v.depot, &["rev-parse", &tache.branche]).ok().map(|o| o.trim().to_string()).filter(|t| !t.is_empty());
+                tete = tete_du_volet;
             }
             git(v.depot, &["worktree", "remove", "--force", &v.arbre.to_string_lossy()])?;
             git(v.depot, &["branch", "-D", &tache.branche])?;
         }
         let dossier = tache.arbre.parent().map(Path::to_path_buf).unwrap_or_default();
         let plan: Value = std::fs::read(dossier.join("plan.json")).ok().and_then(|o| serde_json::from_slice(&o).ok()).unwrap_or(Value::Null);
-        let ms = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0);
         let fermees = dossier.parent().map(|p| p.join(".closed")).unwrap_or_default();
         std::fs::create_dir_all(&fermees).map_err(|e| format!("{} : {e}", fermees.display()))?;
         let archive = fermees.join(format!("{nom}-{ms}"));
@@ -901,6 +908,7 @@ impl DaemonHost {
             "plan": plan,
             "archive": archive,
             "head": tete,
+            "head_ref": tete.as_ref().map(|_| tenue.clone()),
             "closed_ms": ms,
         });
         Ok((tache, carte))
