@@ -41,6 +41,14 @@ travail() { # <mode> <qui> <secondes>
   "$POSTE" "$1" bash -c "note $2 début; sleep $3; note $2 fin" > /dev/null 2>&1
 }
 
+# ── 0. Les scripts se lisent (21 novembre 2026, c7 : sous bash 5.3, l'apostrophe de « l'ordre » dans un ${file:+…} ouvrait une
+# chaîne, et `bash -n` refusait poste à la ligne 587 ; `poste --qui` le disait). bash -n sur poste et sur les scripts de
+# tools/poste/ du dépôt, quand le dépôt est là (le témoin joué contre une copie du cache juge au moins la copie).
+for _s in "$POSTE" $(ls "$(cd "$(dirname "$0")/../../.." 2>/dev/null && pwd)/tools/poste/"*.sh 2>/dev/null); do
+  bash -n "$_s" 2> "$ICI/bash-n" || { cas 1 "bash -n $(basename "$_s") : $(head -1 "$ICI/bash-n" | sed 's|.*: ligne|ligne|' | cut -c1-120)"; continue; }
+done
+cas 0 "bash -n : poste et les scripts de tools/poste se lisent (un rouge au-dessus les nomme)"
+
 # ── 1. La mesure passe avant les lourds arrivés derrière elle ──────────────
 : > "$J"
 travail lourd L1 3 &
