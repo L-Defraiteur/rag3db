@@ -1,5 +1,9 @@
 # Nouveautés
 
+- 21 novembre 2026 — **La carte d'accord de l'IDE ne se cache jamais.** Dans la page d'une tâche, chaque demande
+  d'accord est une carte : ouverte, elle dit l'outil et sa commande, l'étape où en est la porte (avec son compte à
+  rebours) et la frise des étapes passées, avec « Accorder » et « Refuser » ; fermée, elle reste et dit qui a tranché
+  (toi, ton autorisation citée, l'appel de l'agent, le vérificateur). Chaque ligne de la boîte dit qui l'a écrite.
 - 21 novembre 2026 — **Une erreur d'un nœud scripté nomme son fichier.** Quand un nœud en TypeScript ou en
   JavaScript échoue, à la préparation comme à l'appel, son erreur donne le chemin du script et la ligne, au lieu du
   seul nom du nœud.
