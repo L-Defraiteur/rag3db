@@ -2618,6 +2618,10 @@ pub fn read_sources_report(root: &str) -> std::io::Result<(Vec<(String, String)>
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CodeIngestReport {
     pub files: usize,
+    /// **The links dropped for lack of an end** by this ingestion's drains (21 November 2026): a link whose start or
+    /// end is in no table is not written. Beside `failed`: they were dropped without a word.
+    #[serde(default)]
+    pub dangling_links: usize,
     pub scopes: usize,
     pub libraries: usize,
     pub relations: usize,

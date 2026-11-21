@@ -61,3 +61,24 @@ fn a_link_dropped_for_lack_of_an_end_is_counted_and_said() {
         assert_eq!(catalog.take_dangling_links(), 0, "{path}: taken once");
     }
 }
+
+/// **The report of a code ingestion counts its links without an end**, beside `failed`: a rendezvous whose scope
+/// is in no table (one is added by hand to a real analysis) is one link dropped, and the report says 1.
+#[test]
+#[ignore]
+fn the_report_of_a_code_ingestion_counts_its_links_without_an_end() {
+    use rag3weaver::code::{analyze_source, default_scope_chunking, register_code_schema};
+    use rag3weaver::code_tools::Snapshot;
+    use rag3weaver::connection::DbConnection;
+    let conn = Rag3dbConnection::in_memory().expect("in-memory base");
+    conn.execute(&format!("LOAD EXTENSION '{}'", crate::common::vector_extension())).unwrap();
+    let config = CatalogConfig { name: Some("dangling-report".into()), embedding_dim: 64, ..Default::default() };
+    let mut catalog = Catalog::new(Box::new(conn), Box::new(rag3weaver::embedder::HashEmbedder::new(64)), config);
+    catalog.initialize().unwrap();
+    register_code_schema(&mut catalog, default_scope_chunking()).unwrap();
+    let snapshot = Snapshot::new("demo", [("a.rs".to_string(), "pub fn f() {\n    g();\n}\n".to_string())]);
+    let mut analysis = analyze_source(&snapshot).unwrap();
+    analysis.pending.push(("file#a.rs#no_such_scope:function".to_string(), "g".to_string(), "CONSUMES".to_string()));
+    let report = catalog.ingest_code(&analysis).unwrap();
+    assert_eq!((report.failed, report.dangling_links), (0, 1), "{report:?}");
+}
