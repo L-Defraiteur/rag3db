@@ -258,7 +258,9 @@ impl DaemonHost {
                 return Err("nothing filed to restart from".into());
             }
             let budget = fenetre.map(|f| f / 2).unwrap_or(20_000).max(1_000);
-            let reprise = r.rangeur.compose_restart(&r.memoire, &json!({ "sources": etat.sources, "identity": "", "task_fiche": "", "budget_tokens": budget }))?;
+            // The agent this session is a context of: a teammate's key, from the task registry.
+            let identity = self.agent_key_of_backend(backend_id).unwrap_or_default();
+            let reprise = r.rangeur.compose_restart(&r.memoire, &json!({ "sources": etat.sources, "identity": identity, "task_fiche": "", "budget_tokens": budget }))?;
             let texte = reprise["text"].as_str().ok_or_else(|| format!("compose_restart returned no text: {reprise}"))?.to_string();
             // The last `keep_turns` turns stay raw; the turns before them leave the session.
             let comptes: Vec<usize> = session.turns.iter().enumerate().filter(|(_, t)| t.role == "user" && !super::rangement::de_reprise(t)).map(|(i, _)| i).collect();

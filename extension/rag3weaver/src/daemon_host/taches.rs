@@ -52,6 +52,11 @@ pub struct Tache {
     /// manifeste, sinon « équipier »).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub nom_de_l_agent: Option<String>,
+    /// **The agent's stable key** (`agent:<key>`, 21 November 2026): the agent this task is a context of. Declared by
+    /// `teammate.agent`, else struck when the task opens; the registry is its source, and it signs what the host
+    /// writes for the agent (its identity in `compose_restart`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_key: Option<String>,
     /// **La persona de l'agent de la tâche**, à la place de `agent.persona` du manifeste.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub persona_de_l_agent: Option<String>,
@@ -470,7 +475,11 @@ impl DaemonHost {
         };
         let mut lignes = Vec::new();
         self.taches_fermees.lock().unwrap_or_else(|p| p.into_inner()).extend(registre.fermees);
-        for t in registre.ouvertes {
+        for mut t in registre.ouvertes {
+            // A task of before the agent's key gets one now: no context stays without its agent.
+            if t.agent_key.is_none() {
+                t.agent_key = Some(agent_key_for(&t.manifest, &t.nom));
+            }
             let rouverte = match ce_qui_manque(&t) {
                 Some(manque) => Err(manque),
                 None => self.hosted(&t.parent_manifest).and_then(|_| {
@@ -517,6 +526,11 @@ impl DaemonHost {
     /// sur le manifeste parent à chaque ouverture (les quinze « oui » de Lucie, 15 novembre 2026 :
     /// figé à la création, il survivait à un `task_writes` posé ensuite) ; le registre n'en garde
     /// que la valeur d'origine, prise quand le parent ne se lit pas.
+    /// The agent's key of the task whose backend is `backend_id` (`Tache.agent_key`), if it is a task.
+    pub(super) fn agent_key_of_backend(&self, backend_id: &str) -> Option<String> {
+        self.taches.lock().unwrap_or_else(|p| p.into_inner()).values().find(|t| t.id == backend_id).and_then(|t| t.agent_key.clone())
+    }
+
     pub(super) fn surcharges_de(&self, manifest: &Path) -> Option<Surcharges> {
         self.taches.lock().unwrap_or_else(|p| p.into_inner()).get(manifest).map(|t| Surcharges {
             database: Some(t.copie.base.clone()),
@@ -782,6 +796,7 @@ impl DaemonHost {
             modele: None,
             nom_de_l_agent,
             persona_de_l_agent,
+            agent_key: Some(agent_key_for(&manifest, nom)),
             parent_session: None,
             vues: None,
             vue_active: None,
@@ -1179,4 +1194,19 @@ impl super::DaemonHost {
         let active = t.vue_active.clone().unwrap_or_else(|| vues[0].clone());
         Some((vues, active))
     }
+}
+
+/// **The agent's key of a task** (21 November 2026): `teammate.agent` declared by its manifest (prefixed with
+/// `agent:` if bare), else a key struck now, `agent:<task>-<6 hex>`.
+pub(crate) fn agent_key_for(manifest: &Path, nom: &str) -> String {
+    let declaree = crate::backend::PreparedBackend::load(manifest).ok().and_then(|p| p.manifest.teammate.and_then(|t| t.agent)).map(|a| a.trim().to_string()).filter(|a| !a.is_empty());
+    if let Some(a) = declaree {
+        return if a.starts_with("agent:") { a } else { format!("agent:{a}") };
+    }
+    let mut octets = [0u8; 3];
+    if getrandom::fill(&mut octets).is_err() {
+        let n = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
+        octets = [(n >> 16) as u8, (n >> 8) as u8, n as u8];
+    }
+    format!("agent:{nom}-{:02x}{:02x}{:02x}", octets[0], octets[1], octets[2])
 }

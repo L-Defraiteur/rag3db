@@ -129,6 +129,11 @@ pub struct TeammatePolicy {
     /// The configuration of that node (`{"style": "compact"}` for the shipped one). Absent: its defaults.
     #[serde(default)]
     pub carry_over_node_config: serde_json::Value,
+    /// **The agent this task continues** (21 November 2026): its stable key, `agent:<key>` (a bare key is
+    /// prefixed). Declared, a new task is that agent again, with its memory (the reviewer who takes up its work on
+    /// the next lot); absent, the host strikes a key when the task opens (`agent:<task>-<6 hex>`).
+    #[serde(default)]
+    pub agent: Option<String>,
 }
 
 impl TeammatePolicy {
@@ -191,6 +196,7 @@ impl Default for TeammatePolicy {
             carry_over_chars: Self::carry_over_chars_default(),
             carry_over_node: None,
             carry_over_node_config: serde_json::Value::Null,
+            agent: None,
             pair: false,
             cut_relaunches_per_step: Self::cut_relaunches_per_step_default(),
             cut_relaunch_text: Self::cut_relaunch_text_default(),
