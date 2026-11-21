@@ -301,8 +301,23 @@ pub fn user_token() -> Result<String, String> {
 
 /// [`user_token`] under the data folder `dossier`.
 pub fn user_token_in(dossier: &Path) -> Result<String, String> {
-    let _ = dossier;
-    Err("not yet".into())
+    let dir = dossier.join("user");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("{} : {e}", dir.display()))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).map_err(|e| format!("{} : {e}", dir.display()))?;
+    }
+    let fichier = dir.join("user_token");
+    if let Ok(t) = std::fs::read_to_string(&fichier) {
+        let t = t.trim().to_string();
+        if !t.is_empty() {
+            return Ok(t);
+        }
+    }
+    let t = new_token()?;
+    ecrire_secret(&dir, "user_token", t.as_bytes())?;
+    Ok(t)
 }
 
 fn ecrire_secret(dossier: &Path, nom: &str, contenu: &[u8]) -> Result<(), String> {
