@@ -492,6 +492,18 @@ mod tests {
         assert_eq!(generations_de(&v), 0, "close_view with purge leaves the generations");
     }
 
+    /// **A read under the active view reads the view's tree** (tty's scenario 1, 21 November 2026, its point 3): a file
+    /// changed in the view's worktree is the one `read_file` gives under the session's view, not the main tree's.
+    #[test]
+    fn read_file_under_the_active_view_reads_the_views_tree() {
+        let v = une_vue_ouverte("lire");
+        std::fs::write(v.chemin.join("src/lib.rs"), "pub fn de_la_vue() -> u32 {\n    42\n}\n").unwrap();
+        let lu = v.a.host.call(Some(&v.s), &v.manifeste, "read_file", json!({"path": "src/lib.rs"}));
+        assert_eq!(lu["ok"], json!(true), "{lu}");
+        let texte = lu.to_string();
+        assert!(texte.contains("de_la_vue"), "read_file under the active view reads another tree: {lu}");
+    }
+
     /// **`views` and `use_view` follow the Claude Code session** (page 02 of 20 November 2026, lot 2): two thin clients
     /// of one session (one `sessionId`) see the same active view, another session does not; an unknown name is refused,
     /// listing the known views; a host restarted on the same state finds the view again.
