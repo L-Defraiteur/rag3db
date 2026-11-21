@@ -453,6 +453,53 @@ mod tests {
         assert_eq!(generations_de(&v), 0, "close_view with purge leaves the generations");
     }
 
+    /// **The IDE shows the machine at a glance** (Lucie, 20 November 2026: « gestion de tous les agents actifs ou non,
+    /// savoir tous les dossiers sur le PC ouverts dans rag3weaver »; scenario 1 of the night, tickets
+    /// `2026-11-21-l-ide-ne-montre-pas-les-agents-du-poste` and `…-les-dossiers-du-poste`). From the welcome page, the
+    /// page « Poste »: the agents (a live session by its Claude name; a session of the table of the folders without a live
+    /// session, inactive), the folders of the machine with their session and worktrees, the views opened (the active one
+    /// said), the repositories attached.
+    #[test]
+    #[cfg_attr(not(feature = "navigateur"), ignore = "témoin navigateur : une étape de passe à part, --features navigateur (scripts/temoins_navigateur.sh)")]
+    fn the_ide_shows_the_machine_at_a_glance() {
+        use crate::daemon_host::navigateur::{navigateur_ou_saut, Navigateur};
+        let Some(binaire) = navigateur_ou_saut("the_ide_shows_the_machine_at_a_glance") else {
+            return;
+        };
+        let v = une_vue_ouverte("p");
+        let ecoute = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let racine = format!("http://{}", ecoute.local_addr().unwrap());
+        let server = tiny_http::Server::from_listener(ecoute, None).unwrap();
+        let hote = v.a.host.clone();
+        let fil = std::thread::spawn(move || crate::daemon_host::DaemonServer::new(server, 2).serve(hote, Some("j".to_string())));
+
+        let mut n = Navigateur::lancer(&binaire);
+        n.aller(&format!("{racine}/ide/entrer?jeton=j"), "location.pathname.startsWith('/ide/')");
+        n.attendre("document.querySelector('a[href=\"/ide/poste\"]')", "a link to the page « Poste » on the welcome page");
+        n.cliquer_pour_naviguer("a[href=\"/ide/poste\"]");
+        n.attendre("document.querySelector('#agents') && document.querySelector('#dossiers-du-poste')", "the page « Poste »");
+        let texte = |n: &mut Navigateur, id: &str| -> String {
+            n.evaluer(&format!("document.querySelector('#{id}')?.innerText ?? ''")).as_str().unwrap_or_default().to_string()
+        };
+        n.attendre("(document.querySelector('#agents')?.innerText ?? '').includes('le témoin')", "the live agent by its Claude name");
+        let agents = texte(&mut n, "agents");
+        let archi = agents.lines().find(|l| l.contains("rag3weaver archi")).unwrap_or_default().to_string();
+        assert!(archi.contains("inactif"), "an agent of the table without a live session, said inactive: {agents}");
+        let dossiers = texte(&mut n, "dossiers-du-poste");
+        let nom_du_worktree = v.chemin.file_name().unwrap().to_string_lossy().to_string();
+        assert!(dossiers.contains("arbre") && dossiers.contains("le témoin") && dossiers.contains(&nom_du_worktree), "the folder, its session, its worktree: {dossiers}");
+        let vues = texte(&mut n, "vues-ouvertes");
+        let ligne = vues.lines().find(|l| l.contains(&v.nom)).unwrap_or_default().to_string();
+        assert!(ligne.contains("active"), "the view opened, said active: {vues}");
+        let depots = texte(&mut n, "depots-du-poste");
+        assert!(depots.contains("rag3db-essai"), "the repository attached: {depots}");
+
+        drop(n);
+        let (statut, _) = crate::daemon_host::tests::demander("POST", &format!("{racine}/arret"), Some("j"));
+        assert_eq!(statut, 200);
+        fil.join().unwrap();
+    }
+
     /// **The machine at a glance** (21 November 2026, recherche's scenario 1; keys in English, as recherche asked): after a
     /// view is opened, `GET /poste` says
     /// the session with its Claude name, the table of the folders with the worktree found under the session's, the view
