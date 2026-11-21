@@ -128,7 +128,10 @@ def poste_tenu(table):
         try:
             fiche = (verrous / 'fiches' / str(pid)).read_text()
             args = (Path('/proc') / str(pid) / 'cmdline').read_bytes().split(b'\0')
-            if fiche.startswith(('tient lourd ', 'tient mesure ')) and any(Path(os.fsdecode(a)).name == 'poste' for a in args if a):
+            # Les classes du poste (21 nov. 2026) : « tient cpu », « tient gpu 8G », « tient gpu+cpu 8G » tiennent la place
+            # comme « tient lourd » ; sans elles, le confineur se relançait sous poste en boucle.
+            if fiche.startswith(('tient lourd ', 'tient mesure ', 'tient cpu ', 'tient gpu ', 'tient gpu+cpu ')) \
+                    and any(Path(os.fsdecode(a)).name == 'poste' for a in args if a):
                 return pid
         except OSError:
             pass

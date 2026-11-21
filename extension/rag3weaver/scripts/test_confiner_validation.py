@@ -26,6 +26,24 @@ class Montage(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
+    def test_poste_tenu_reconnait_chaque_classe_de_poste(self):
+        # 21 nov. 2026, 14 h 25 (c7) : le poste aux classes déclarées écrit « tient cpu », que poste_tenu ne
+        # reconnaissait pas ; le confineur se relançait sous `poste lourd`, qui le rendait aussitôt (ancêtre tenant), en
+        # boucle 17 fois par seconde pendant 33 minutes. Un vrai ancêtre nommé poste, sa fiche dans des verrous isolés.
+        verrous = self.p / 'verrous'
+        poste = self.p / 'poste'
+        poste.write_text('#!/bin/sh\nmkdir -p "$POSTE_LOCK_DIR/fiches"\n'
+                         'echo "$FICHE depuis 12:00:00 (pid $$) — x" > "$POSTE_LOCK_DIR/fiches/$$"\n'
+                         '"$PY" -c "import importlib.util as u; s = u.spec_from_file_location(\'v\', \'$SCRIPT\'); '
+                         'v = u.module_from_spec(s); s.loader.exec_module(v); print(v.poste_tenu(v.processus()) is not None)"\n')
+        for fiche, attendu in [('tient lourd', 'True'), ('tient mesure', 'True'), ('tient cpu', 'True'),
+                               ('tient gpu 8G', 'True'), ('tient gpu+cpu 8G', 'True'), ('tient gpu 8G card0', 'True'),
+                               ('attend cpu', 'False')]:
+            env = dict(os.environ, POSTE_LOCK_DIR=str(verrous), FICHE=fiche, PY=sys.executable,
+                       SCRIPT=str(ICI / 'confiner_validation.py'))
+            r = subprocess.run(['sh', str(poste)], env=env, capture_output=True, text=True)
+            self.assertEqual(r.stdout.strip(), attendu, f'{fiche} : {r.stdout} {r.stderr}')
+
     def test_bus_sans_activation_et_chemin_xml_echappe(self):
         root = ET.fromstring(v.configuration_bus(self.p / 'a&b'))
         self.assertEqual([x.tag for x in root], ['type', 'listen', 'auth', 'policy'])
