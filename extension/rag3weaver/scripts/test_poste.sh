@@ -392,10 +392,11 @@ echo 2 > "$POSTE_LOCK_DIR/lourds-max"; rm -f "$POSTE_LOCK_DIR/lourds-max.retour"
 "$POSTE" places 1 > /dev/null 2>&1; rc=$?
 [ "$rc" = 2 ] && [ "$(cat "$POSTE_LOCK_DIR/lourds-max")" = 2 ]
 cas $? "une baisse des places sans heure de retour refuse, lourds-max inchangé (rc $rc)"
-h=$(date -d '+2 hours' +%H:%M)
+# La date de l'instant visé, pas celle du jour : passé 22 h, deux heures plus tard tombent le lendemain (21 nov., 23 h 49).
+h=$(date -d '+2 hours' +%H:%M); j=$(date -d '+2 hours' +%d/%m)
 "$POSTE" places 1 "jusqu'à" "$h" > /dev/null 2>&1; rc=$?
 qui=$("$POSTE" --qui 2>&1)
-[ "$rc" = 0 ] && [ "$(cat "$POSTE_LOCK_DIR/lourds-max")" = 1 ] && echo "$qui" | grep -q "places réglées à 1 jusqu'au $(date -d "$h" +%d/%m) $h (puis 2)" && echo "$qui" | grep -q '/1 places'
+[ "$rc" = 0 ] && [ "$(cat "$POSTE_LOCK_DIR/lourds-max")" = 1 ] && echo "$qui" | grep -q "places réglées à 1 jusqu'au $j $h (puis 2)" && echo "$qui" | grep -q '/1 places'
 cas $? "poste places 1 jusqu'à $h baisse à 1, et --qui le dit (rc $rc)"
 # L'heure passée : la valeur d'avant revient à la première lecture.
 read -r avant _ < "$POSTE_LOCK_DIR/lourds-max.retour"; echo "$avant $(( $(date +%s) - 60 ))" > "$POSTE_LOCK_DIR/lourds-max.retour"
@@ -565,7 +566,9 @@ cas $? "sans gpu-card ni gpu-reserve-gib : aucun message sur ces fichiers ($(ech
 if command -v sccache > /dev/null 2>&1 && systemd-run --user --scope -q -- true 2>/dev/null; then
   P=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
   R=$(mktemp -d -p "${TMPDIR:-$HOME/.cache}")
-  SCCACHE_SERVER_PORT=$P SCCACHE_DIR="$R/cache" "$POSTE" cpu -- sh -c "sed -n 's#^0::##p' /proc/self/cgroup > '$R/cg'; sccache --zero-stats > /dev/null 2>&1" > /dev/null 2>&1
+  # Le cas par défaut : RUSTC_WRAPPER retiré de l'environnement de l'appelant (le pousseur le pose vide, et poste respecte un
+  # choix de l'appelant : joué sous le pousseur, ce cas rougissait le 21 novembre à 16 h 36).
+  env -u RUSTC_WRAPPER SCCACHE_SERVER_PORT=$P SCCACHE_DIR="$R/cache" "$POSTE" cpu -- sh -c "sed -n 's#^0::##p' /proc/self/cgroup > '$R/cg'; sccache --zero-stats > /dev/null 2>&1" > /dev/null 2>&1
   srv=$(ss -ltnpH "sport = :$P" 2>/dev/null | grep -o 'pid=[0-9]*' | head -1 | cut -d= -f2)
   cgs=$([ -n "$srv" ] && sed -n 's#^0::##p' "/proc/$srv/cgroup" 2>/dev/null)
   SCCACHE_SERVER_PORT=$P sccache --stop-server > /dev/null 2>&1
