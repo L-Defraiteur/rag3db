@@ -60,28 +60,56 @@ fn canonical(chemin: &Path) -> Option<PathBuf> {
     Some(out)
 }
 
-/// **The folders no grant reopens** (archi via c7, 21 November 2026): the host's data folder (its token, `daemon.token`:
-/// a command that read it could call the host as the IDE's page), the browsers' profiles (the IDE's cookie), `~/.ssh`.
-pub fn protected_folders() -> Vec<PathBuf> {
+/// **The folders no grant reopens, by default** (archi via c7, 21 November 2026): the host's data folder (its token,
+/// `daemon.token`, and `user/`: a command that read them could call the host as the IDE's page), the browsers' profiles
+/// (the IDE's cookie), and the credential stores (`~/.ssh`, `~/.gnupg`, `~/.password-store`, `~/.local/share/keyrings`,
+/// `~/.config/gh`, `~/.aws`, `~/.kube`, `~/.docker`). Each keeps its parents from being granted too: neither `~` nor
+/// `~/.local/share` is granted whole. The credential files at the root of `~` (`.npmrc`, `.netrc`,
+/// `.cargo/credentials.toml`, `.git-credentials`) are exposed only if `~` is granted, which is refused already; they would
+/// join this list the day that rule changes.
+fn default_protected_folders() -> Vec<PathBuf> {
     let mut dossiers: Vec<PathBuf> = crate::daemon_lifecycle::file_path().parent().map(Path::to_path_buf).into_iter().collect();
     if let Some(maison) = std::env::var_os("HOME").map(PathBuf::from) {
-        for relatif in [".ssh", ".config/google-chrome", ".config/chromium", ".config/BraveSoftware", ".config/vivaldi", ".mozilla"] {
+        for relatif in [
+            ".config/google-chrome",
+            ".config/chromium",
+            ".config/BraveSoftware",
+            ".config/vivaldi",
+            ".mozilla",
+            ".ssh",
+            ".gnupg",
+            ".password-store",
+            ".local/share/keyrings",
+            ".config/gh",
+            ".aws",
+            ".kube",
+            ".docker",
+        ] {
             dossiers.push(maison.join(relatif));
         }
     }
-    dossiers.into_iter().map(|d| d.canonicalize().unwrap_or(d)).collect()
+    dossiers
 }
 
 impl DaemonHost {
-    /// RED STUB: the protected folders, the defaults and the list of `<config>/protected-folders.txt`.
+    /// **The protected folders**: the defaults, and one path per line of `<config>/protected-folders.txt` (`~/` expanded,
+    /// `#` a comment), read at each check so that the list extends without recompiling.
     pub fn protected_folders(&self) -> Vec<PathBuf> {
-        protected_folders()
+        let mut dossiers = default_protected_folders();
+        if let Some(fichier) = self.racines_de_code().ok().map(|r| r.config.join("protected-folders.txt")) {
+            if let Ok(texte) = std::fs::read_to_string(&fichier) {
+                for ligne in texte.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('#')) {
+                    dossiers.push(crate::backend_code::etendre_tilde(ligne));
+                }
+            }
+        }
+        dossiers.into_iter().map(|d| d.canonicalize().unwrap_or(d)).collect()
     }
-}
 
-/// Whether a root holds a protected folder, or lies inside one.
-pub(super) fn holds_a_protected_folder(root: &Path) -> bool {
-    protected_folders().iter().any(|p| p.starts_with(root) || root.starts_with(p))
+    /// Whether a root holds a protected folder, or lies inside one.
+    pub(super) fn holds_a_protected_folder(&self, root: &Path) -> bool {
+        self.protected_folders().iter().any(|p| p.starts_with(root) || root.starts_with(p))
+    }
 }
 
 /// Whether `chemin` is `root` or under it, by whole components (`notes-privees` is not under `notes`).
@@ -131,9 +159,9 @@ impl DaemonHost {
         if !root.is_dir() {
             return Err(format!("accorder {} : une racine est un dossier", root.display()));
         }
-        if holds_a_protected_folder(&root) {
+        if self.holds_a_protected_folder(&root) {
             return Err(format!(
-                "accorder {} : cette racine tient un dossier protégé (le jeton de l'hôte, un profil de navigateur, ~/.ssh) ; aucun accord ne l'ouvre",
+                "accorder {} : cette racine tient un dossier protégé (le jeton de l'hôte, un profil de navigateur, un magasin d'identifiants), ou elle est dedans ; aucun accord ne l'ouvre. Accordez plutôt le sous-dossier où se trouve ce qu'il faut et qui n'en tient aucun (par exemple ~/.local/share/Steam plutôt que ~/.local/share)",
                 root.display()
             ));
         }
@@ -189,7 +217,7 @@ impl DaemonHost {
         if dossier.components().any(|c| c.as_os_str() == ".vault" || c.as_os_str() == ".ssh") {
             return None;
         }
-        if holds_a_protected_folder(&dossier) {
+        if self.holds_a_protected_folder(&dossier) {
             return None;
         }
         // A parent of several repositories attached: their roots, read in their manifests.
