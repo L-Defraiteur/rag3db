@@ -365,3 +365,7 @@ acme_12345678 here; ordinary words: sk-short, hf_ alone, a risk-free plan; glpat
 /// The witness of the lot `wasm-node-trial`, in a file of its own.
 #[cfg(feature = "wasm-nodes")]
 mod wasm;
+
+/// The witness of the lot `wasm-node-trial` in the build without its feature, the service's.
+#[cfg(not(feature = "wasm-nodes"))]
+mod wasm_without_the_feature;
