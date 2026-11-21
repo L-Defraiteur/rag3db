@@ -12,7 +12,7 @@
 use serde_json::{json, Value};
 
 /// Une ligne de l'équipier qui attend la réponse du superviseur.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Attente {
     pub id: String,
     /// `question`, `approval` ou `proposal`.
@@ -20,6 +20,79 @@ pub struct Attente {
     pub text: String,
     /// La commande d'une `approval`.
     pub command: Option<String>,
+    /// **The card of the mode auto** (archi's page 07, 21 November 2026): the tool asked for, its arguments, its class
+    /// and its scope (`once`), and the state the host last said (`approval_state`).
+    pub tool: Option<String>,
+    pub args: Option<Value>,
+    pub class: Option<String>,
+    pub scope: Option<String>,
+    pub state: Option<CardState>,
+}
+
+/// The state of a card, as the host's last `approval_state` line says it.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct CardState {
+    /// `recall`, `appeal`, `waiting_survivor` or `survivor`.
+    pub stage: String,
+    pub text: String,
+    /// The end of the wait, in ms since the epoch (the survivor's countdown).
+    pub until: Option<u64>,
+}
+
+impl Attente {
+    /// **What the card asks for**: the command, or the tool and its arguments (`browser_click tab_id=7 ref=e4`), with
+    /// « pour cet envoi seulement » when its scope is `once`.
+    pub fn what(&self) -> String {
+        let mut s = match (&self.command, &self.tool) {
+            (Some(c), _) => c.clone(),
+            (None, Some(t)) => {
+                let args: Vec<String> = self.args.as_ref().and_then(Value::as_object).into_iter().flatten().map(|(k, v)| {
+                    let v = v.as_str().map_or_else(|| v.to_string(), str::to_string);
+                    let v = if v.chars().count() > 40 { format!("{}…", v.chars().take(40).collect::<String>()) } else { v };
+                    format!("{k}={v}")
+                }).collect();
+                if args.is_empty() { t.clone() } else { format!("{t} {}", args.join(" ")) }
+            }
+            (None, None) => self.text.lines().next().unwrap_or_default().to_string(),
+        };
+        if self.scope.as_deref() == Some("once") {
+            s.push_str(" — pour cet envoi seulement");
+        }
+        s
+    }
+
+    /// The card's state as said beside it, with the countdown of its wait at `now_ms`.
+    pub fn state_said(&self, now_ms: u64) -> Option<String> {
+        let st = self.state.as_ref()?;
+        Some(match st.until {
+            Some(u) => format!("{} ({})", st.text, countdown(u, now_ms)),
+            None => st.text.clone(),
+        })
+    }
+}
+
+/// **The closing line of a card**: who decided, and on what — the user, an authorization recalled (its quote), the
+/// agent's appeal, or the verifier (its model, its reasons, its alternative). `None` when `answer` does not close an
+/// approval (no `approved`).
+pub fn closing_line(a: &Attente, answer: &Value) -> Option<String> {
+    let approved = answer["approved"].as_bool()?;
+    let what = a.what();
+    let verb = if approved { "accordé" } else { "refusé" };
+    Some(match answer["from"].as_str().unwrap_or("user") {
+        "recall" => {
+            let q = &answer["authorization"];
+            let at = q["at"].as_str().map(|t| format!(" du {t}")).unwrap_or_default();
+            format!("{} par ton autorisation{at} : « {} » — {what}", if approved { "validé" } else { "refusé" }, q["quote"].as_str().unwrap_or_default())
+        }
+        "appeal" => format!("{verb} sur l'appel de l'agent : {what}"),
+        "verifier" => {
+            let model = answer["model"].as_str().map(|m| format!(" ({m})")).unwrap_or_default();
+            let reasons = answer["reasons"].as_str().map(|r| format!(" : {r}")).unwrap_or_default();
+            let alt = answer["alternative"]["text"].as_str().map(|t| format!(" — il propose : {t}")).unwrap_or_default();
+            format!("{verb} par le vérificateur{model}{reasons} — {what}{alt}")
+        }
+        _ => format!("{verb} par toi : {what}"),
+    })
 }
 
 /// Ce que le terminal sait de la boîte.
@@ -31,11 +104,18 @@ pub struct Boite {
 impl Boite {
     /// Une ligne de la boîte, dans l'ordre où elle arrive.
     pub fn ligne(&mut self, l: &Value) {
-        // Toute ligne qui y répond retire ce qu'elle vise, d'où qu'elle vienne.
+        let kind = l["kind"].as_str().unwrap_or_default();
+        // **A state line changes the card, never closes it** (Lucie, 21 November 2026: one card, never hidden).
+        if kind == "approval_state" {
+            if let Some(a) = l["reply_to"].as_str().and_then(|r| self.attentes.iter_mut().find(|a| a.id == r)) {
+                a.state = Some(CardState { stage: l["stage"].as_str().unwrap_or_default().to_string(), text: l["text"].as_str().unwrap_or_default().to_string(), until: l["until"].as_u64() });
+            }
+            return;
+        }
+        // Toute autre ligne qui y répond retire ce qu'elle vise, d'où qu'elle vienne.
         if let Some(r) = l["reply_to"].as_str() {
             self.attentes.retain(|a| a.id != r);
         }
-        let kind = l["kind"].as_str().unwrap_or_default();
         if l["from"] == "teammate" && matches!(kind, "question" | "approval" | "proposal") {
             if let Some(id) = l["id"].as_str() {
                 if !self.attentes.iter().any(|a| a.id == id) {
@@ -44,6 +124,11 @@ impl Boite {
                         kind: kind.to_string(),
                         text: l["text"].as_str().unwrap_or_default().to_string(),
                         command: l["command"].as_str().map(str::to_string),
+                        tool: l["tool"].as_str().map(str::to_string),
+                        args: l.get("args").filter(|v| !v.is_null()).cloned(),
+                        class: l["class"].as_str().map(str::to_string),
+                        scope: l["scope"].as_str().map(str::to_string),
+                        state: None,
                     });
                 }
             }
@@ -72,8 +157,17 @@ pub fn reponse(backend: &str, task: &str, a: &Attente, texte: &str, accord: Opti
 }
 
 /// **The time left before `until`** (ms since the epoch), as the card says it: « 9 min », « 45 s », « maintenant ».
-pub fn countdown(_until_ms: u64, _now_ms: u64) -> String {
-    String::new()
+pub fn countdown(until_ms: u64, now_ms: u64) -> String {
+    match until_ms.saturating_sub(now_ms) / 1000 {
+        0 => "maintenant".into(),
+        s if s < 60 => format!("{s} s"),
+        s => format!("{} min", s.div_ceil(60)),
+    }
+}
+
+/// Now, in ms since the epoch.
+pub fn now_ms() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as u64)
 }
 
 /// L'en-tête d'une ligne de boîte, en français : `[équipier · réponse] `
@@ -156,12 +250,12 @@ mod tests {
 
     #[test]
     fn the_answer_body_replies_to_the_item_and_carries_the_approval() {
-        let a = Attente { id: "a1/doc:2".into(), kind: "approval".into(), text: "commande en attente d'accord : echo".into(), command: Some("echo".into()) };
+        let a = Attente { id: "a1/doc:2".into(), kind: "approval".into(), text: "commande en attente d'accord : echo".into(), command: Some("echo".into()), ..Default::default() };
         assert_eq!(
             reponse("a1", "doc", &a, "oui", Some(true)),
             json!({ "backend": "a1", "task": "doc", "kind": "answer", "text": "oui", "reply_to": "a1/doc:2", "approved": true })
         );
-        let q = Attente { id: "a1/doc:1".into(), kind: "question".into(), text: "Quel titre ?".into(), command: None };
+        let q = Attente { id: "a1/doc:1".into(), kind: "question".into(), text: "Quel titre ?".into(), command: None, ..Default::default() };
         let r = reponse("a1", "doc", &q, "Petit dépôt", None);
         assert_eq!(r["reply_to"], "a1/doc:1");
         assert!(r.get("approved").is_none(), "une question n'a pas d'accord : {r}");
