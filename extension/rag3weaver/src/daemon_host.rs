@@ -2395,16 +2395,16 @@ impl DaemonHost {
     /// **The machine at a glance** (21 November 2026, recherche's scenario 1: the IDE's overview had neither the agents nor
     /// their folders): the sessions with their Claude name and active view, the table of the folders with the worktrees
     /// found under each, the views opened, the repositories attached, those available, and the tasks.
-    /// **What a view has not pushed yet** (`GET /vues/diff`, Lucie, 21 November 2026): the commits not pushed and the
+    /// **What a view has not pushed yet** (`GET /views/diff`, `/vues/diff` its alias, Lucie, 21 November 2026): the commits not pushed and the
     /// uncommitted diff of a view, by its name, of the calling session or of `session=<id>` (read only, for the IDE).
-    pub fn diff_d_une_vue(&self, appelant: Option<&str>, parametres: &std::collections::HashMap<String, String>) -> Result<Value, String> {
+    pub fn view_diff(&self, appelant: Option<&str>, parametres: &std::collections::HashMap<String, String>) -> Result<Value, String> {
         const BORNE: usize = 64 * 1024;
         let p = |k: &str| parametres.get(k).map(String::as_str).filter(|v| !v.is_empty());
-        let vue = p("vue").ok_or("« vue » manque : le nom de la vue (celui qu'open_view rend), ou « backend » avec « manifest »")?;
+        let vue = p("view").or_else(|| p("vue")).ok_or("« view » manque : le nom de la vue (celui qu'open_view rend), ou « backend » avec « manifest »")?;
         // The worktree: the main tree of a repository, or a view the host opened for a session (the caller's, or
         // `session=<id>` for the IDE, read only).
         let (racine, fourche) = if vue == crate::generations::COUCHE_DU_BACKEND {
-            let m = p("manifest").ok_or("vue=backend demande « manifest » : le dépôt dont l'arbre principal se lit")?;
+            let m = p("manifest").ok_or("view=backend demande « manifest » : le dépôt dont l'arbre principal se lit")?;
             let h = self.hosted(Path::new(m))?;
             (self.with_backend(&h, |b| b.prepared().workspace_root())?.ok_or("ce dépôt n'a pas de racine de travail")?, None)
         } else {
@@ -2517,14 +2517,14 @@ impl DaemonHost {
             non_commite.push(e);
         }
         let non_commite = json!({ "stat": non_commite });
-        if p("seulement") == Some("non_commite") {
-            return Ok(json!({ "path": racine, "non_commite": non_commite }));
+        if p("only") == Some("uncommitted") || p("seulement") == Some("non_commite") {
+            return Ok(json!({ "path": racine, "uncommitted": non_commite }));
         }
         let mut commits = Vec::new();
         for (sha, sujet, date) in &shas {
             commits.push(json!({ "sha": sha, "subject": sujet, "date": date, "stat": stat(&git(&["show", "--numstat", "-z", "-M", "--format=", sha])?) }));
         }
-        Ok(json!({ "path": racine, "upstream": amont, "base": intervalle, "commits": commits, "non_commite": non_commite }))
+        Ok(json!({ "path": racine, "upstream": amont, "base": intervalle, "commits": commits, "uncommitted": non_commite }))
     }
 
     pub fn poste(&self) -> Value {
@@ -2992,8 +2992,9 @@ impl DaemonHost {
                 }),
             ),
             // **What a view has not pushed yet** (Lucie, 21 November 2026, 8 h 2x): read only, for the IDE and every agent.
-            ("GET", p) if p == "/vues/diff" || p.starts_with("/vues/diff?") => {
-                let r = op_response(self.diff_d_une_vue(session, &parametres_de_requete(p)));
+            // `/vues/diff`: its former name, an alias while the IDE moves over (21 November 2026).
+            ("GET", p) if ["/views/diff", "/vues/diff"].iter().any(|r| p == *r || p.starts_with(&format!("{r}?"))) => {
+                let r = op_response(self.view_diff(session, &query_params(p)));
                 (statut(&r), r)
             }
             ("GET", "/poste") => {
@@ -3901,7 +3902,7 @@ fn git_dans(dossier: &Path, args: &[&str]) -> Option<String> {
 }
 
 /// The parameters of a request's query (`?a=b&c=d`), percent-decoded (`%2F`, `+` as a space).
-fn parametres_de_requete(chemin: &str) -> std::collections::HashMap<String, String> {
+fn query_params(chemin: &str) -> std::collections::HashMap<String, String> {
     fn decoder(t: &str) -> String {
         let octets = t.as_bytes();
         let mut out = Vec::with_capacity(octets.len());
