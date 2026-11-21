@@ -2818,7 +2818,9 @@ impl Catalog {
         analysis: &CodeAnalysis,
         exige: crate::disponibilite::Disponibilites,
     ) -> Result<CodeIngestReport, CatalogError> {
-        self.ingest_code_interne(analysis, exige, None)
+        let mut report = self.ingest_code_interne(analysis, exige, None)?;
+        report.dangling_links = self.take_dangling_links();
+        Ok(report)
     }
 
     /// **Les nœuds maintenant, les relations plus tard** : les lignes (File,
