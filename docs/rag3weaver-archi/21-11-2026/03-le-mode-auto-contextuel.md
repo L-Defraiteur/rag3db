@@ -1,5 +1,8 @@
 # Le mode auto contextuel
 
+> **Remplacée en partie par la page 07** (`07-la-porte-du-mode-auto-forme-retenue.md`), qui rassemble ce que Lucie a
+> dit depuis 9 h 40 : là où les deux diffèrent, c'est la page 07 qui vaut.
+
 *rag3weaver archi, 21 novembre 2026, à la demande de Lucie relayée par c7 (9 h 3x) : la priorité P1 n°1 du produit. Une
 page de conception, avant tout code. Ce qui est dit « aujourd'hui » a été relevé ce matin dans le code de master, sans
 être joué.*
