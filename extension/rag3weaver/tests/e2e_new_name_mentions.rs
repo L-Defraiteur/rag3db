@@ -7,7 +7,7 @@
 //! both paths on the same story.
 //!
 //! Run with: ./run_e2e.sh --test e2e_new_name_mentions
-#![cfg(feature = "rag3db-native")]
+#![cfg(all(feature = "rag3db-native", feature = "code"))]
 
 use rag3weaver::code::{analyze_source, default_scope_chunking, register_code_schema};
 use rag3weaver::code_tools::{edit_file, EditOp, Snapshot};

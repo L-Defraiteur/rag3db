@@ -64,6 +64,7 @@ fn a_link_dropped_for_lack_of_an_end_is_counted_and_said() {
 
 /// **The report of a code ingestion counts its links without an end**, beside `failed`: a rendezvous whose scope
 /// is in no table (one is added by hand to a real analysis) is one link dropped, and the report says 1.
+#[cfg(feature = "code")]
 #[test]
 #[ignore]
 fn the_report_of_a_code_ingestion_counts_its_links_without_an_end() {
