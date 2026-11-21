@@ -121,7 +121,10 @@ cat > "$D/poste.sh" <<'Q'
 case "$1" in
   lourd|cpu) shift; [ "${1:-}" = -- ] && shift; [ "${POSTE_MEM_MAX:-}" = 32G ] || { echo "poste: refusé avant la file : une validation sous un plafond de 40G"; exit 2; }
          echo "${POSTE_VOIE:-}" >> "$POSTE_VOIES"; echo "$1" >> "${POSTE_CMDS:-/dev/null}"; exec "$@" ;;
-  push) shift 3; exec "$@" ;;
+  # The relayed push lock down (POSTE_RELAY_DOWN exists): the real poste says it and returns 3, nothing run.
+  push) [ "${2:-}" = --qui ] && { [ -e "${POSTE_RELAY_DOWN:-/nonexistent}" ] && { echo "poste push : le verrou de l'hôte relais ne répond pas (ssh)"; exit 3; }; exit 0; }
+        [ -e "${POSTE_RELAY_DOWN:-/nonexistent}" ] && { echo "poste push : le verrou de l'hôte relais n'a pas pu être pris (ssh muet ou refusé) — rien n'est exécuté, jamais de push sans verrou"; exit 3; }
+        shift 3; exec "$@" ;;
 esac
 exit 2
 Q
@@ -859,4 +862,26 @@ for fin in ROUGE VERT; do
     || ko "redépôt pendant la passe, fin $fin : entrée en file « ${nouvelle:-aucune} », master $([ "$(master)" = "$m0" ] && echo immobile || echo BOUGÉ) ; $(grep -P "\t$id\t" "$D/pusher/log.tsv" | cut -f3 | paste -sd,)"
   rm -f "$D/pass-hook"; P dequeue "$id" > /dev/null 2>&1
 done
+# 48. The relayed push lock unreachable (21 Nov., embarquement by c7: emb-reuse-by-hash, replayed green at 15:40 while the
+# tablet rebooted; `poste push` could not reach the lock on the tablet, « ssh muet ou refusé », and the lot was returned
+# red with an empty reason). An unreachable lock is not the lot's defect: the pusher waits for it (up to
+# PUSHER_LOCK_WAIT seconds), then pushes the same train without a second pass; still unreachable, the lot stays at the
+# head of the queue, « verrou injoignable » in the log, never red.
+export POSTE_RELAY_DOWN=$D/relay-down PUSHER_LOCK_WAIT=6 PUSHER_LOCK_POLL=1
+h=$(lot vi-1 extension/rag3weaver/src/vi1.rs 'fn vi1() {}')
+P enqueue vi-1 vi-1 "$h" rust some_witness e2e_code - - author-v > /dev/null; echo VERT > "$D/outcomes.d/vi-1"
+touch "$POSTE_RELAY_DOWN"; ( sleep 3; rm -f "$POSTE_RELAY_DOWN" ) & n0=$(calls "$D/pass_calls")
+PUSHER_TRAIN_MAX=1 P step > /dev/null 2>&1; wait
+on_master vi-1 && [ "$(calls "$D/pass_calls")" = $((n0 + 1)) ] && grep -P '\tvi-1\t' "$D/pusher/log.tsv" | grep -q 'verrou injoignable' \
+  && ! grep -q "^rouge	vi-1" "$D/pusher/inbox/author-v.txt" 2>/dev/null \
+  && ok "verrou de push injoignable puis revenu : le même train poussé, sans seconde passe ni rouge" \
+  || ko "verrou injoignable puis revenu : $(on_master vi-1 && echo poussé || echo 'pas poussé'), passes $(( $(calls "$D/pass_calls") - n0 )) ; $(grep -P '\tvi-1\t' "$D/pusher/log.tsv" | cut -f3 | paste -sd,)"
+h=$(lot vi-2 extension/rag3weaver/src/vi2.rs 'fn vi2() {}')
+P enqueue vi-2 vi-2 "$h" rust some_witness e2e_code - - author-v > /dev/null; echo VERT > "$D/outcomes.d/vi-2"
+touch "$POSTE_RELAY_DOWN"; PUSHER_TRAIN_MAX=1 P step > /dev/null 2>&1
+! on_master vi-2 && grep -v '^#' "$D/pusher/queue.tsv" | head -1 | cut -f1 | grep -qx vi-2 && grep -P '\tvi-2\t' "$D/pusher/log.tsv" | grep -q 'verrou injoignable' \
+  && ! grep -q "^rouge	vi-2" "$D/pusher/inbox/author-v.txt" 2>/dev/null \
+  && ok "verrou de push toujours injoignable : rien de poussé, le lot reste en tête, jamais rouge" \
+  || ko "verrou toujours injoignable : $(on_master vi-2 && echo POUSSÉ || echo 'pas poussé'), tête de file $(grep -v '^#' "$D/pusher/queue.tsv" | head -1 | cut -f1) ; $(grep -P '\tvi-2\t' "$D/pusher/log.tsv" | cut -f3 | paste -sd,)"
+rm -f "$POSTE_RELAY_DOWN"; P dequeue vi-2 > /dev/null 2>&1; unset POSTE_RELAY_DOWN PUSHER_LOCK_WAIT PUSHER_LOCK_POLL
 exit $red

@@ -689,6 +689,17 @@ replay_train() { # <line>…
 
 # Push the reposed train: a Rust train through the guard, the others by the pusher itself. 0 pushed, 1 master moved
 # (the lots stay at the head of the queue), 2 refused (the message in $D/last-red.txt).
+# lock_back: 0 when the relayed push lock answers again within PUSHER_LOCK_WAIT seconds (« poste push --qui » leaves 3
+# while the relay host does not answer), polled every PUSHER_LOCK_POLL seconds (30).
+lock_back() {
+  local waited=0
+  [ -n "$POSTE" ] || return 0
+  while :; do
+    "$POSTE" push --qui > /dev/null 2>&1; [ $? = 3 ] || return 0
+    [ "$waited" -ge "${PUSHER_LOCK_WAIT:-1800}" ] && return 1
+    sleep "${PUSHER_LOCK_POLL:-30}"; waited=$((waited + ${PUSHER_LOCK_POLL:-30}))
+  done
+}
 push_train() { # <line>…
   local line rank=0 r out
   for line in "$@"; do r=$(kind_rank "$(f_ "$line" 4)"); [ "$r" -gt "$rank" ] && rank=$r; done
@@ -697,6 +708,8 @@ push_train() { # <line>…
     out=$(PRE_PUSH="bash $SELF open-prs $STAMP $JNAME" poste_push bash "$GUARD" "$WTN" "$JNAME" 2>&1)
     log "$TRAIN_LABEL" garde "$(echo "$out" | tail -1)"
     [ "$(echo "$out" | tail -1)" = POUSSE ] && return 0
+    # The relayed push lock unreachable (21 Nov., embarquement by c7): nothing ran, the lot is not at fault (5).
+    echo "$out" | grep -q "n'a pas pu être pris (ssh muet ou refusé)" && return 5
     # The guard did not push: the pull requests it opened through PRE_PUSH will not land.
     close_step_prs "la garde n'a pas poussé : $(echo "$out" | grep -m1 'ARRÊT' || echo "$out" | tail -1)"
     echo "$out" | grep -q 'ARRÊT : le pousseur retire le push' && return 4
@@ -812,8 +825,17 @@ replay_and_push_a() {
     part=("${part[@]:0:$half}")
   done
   left_queue "$TRAIN_LABEL" "${part[@]}" || return 0
-  push_train "${part[@]}"
-  case $? in
+  push_train "${part[@]}"; rc=$?
+  # **The push lock unreachable** (21 Nov. 2026, embarquement by c7: emb-reuse-by-hash, green at 15:40 while the tablet
+  # that holds the relayed lock rebooted, was returned red with an empty reason). Not the lot's defect: wait for the lock
+  # (PUSHER_LOCK_WAIT seconds, 1800 by default) and push the same train again, without a second pass; still
+  # unreachable, the lots stay in the queue, « verrou injoignable » in the log, never red.
+  if [ $rc = 5 ]; then
+    for line in "${part[@]}"; do log "$(f_ "$line" 1)" "verrou injoignable" "le verrou de push ne répond pas : attente du poste, sans rejeu"; done
+    lock_back && { log "$TRAIN_LABEL" "verrou de push revenu" "le même train repoussé, sans seconde passe"; push_train "${part[@]}"; rc=$?; }
+    if [ $rc = 5 ]; then log "$TRAIN_LABEL" "verrou injoignable" "après ${PUSHER_LOCK_WAIT:-1800} s : les lots restent en tête de file, rien de rendu"; return 0; fi
+  fi
+  case $rc in
     4) log "$TRAIN_LABEL" "la garde n'a pas poussé : un lot a quitté la file pendant la garde" ;;
     0) for line in "${part[@]}"; do pushed "$(f_ "$line" 1)" "$(f_ "$line" 9)" "$(f_ "$line" 2)"; done
        [ ${#part[@]} = ${#train[@]} ] && A_FULL_PUSHED=1
@@ -880,6 +902,7 @@ spec_settle() { # after A: push B, or leave its lots in the queue
     PILE_AVANT=$BASE; export PILE_AVANT
     push_train "${spec[@]}"
     case $? in
+      5) log "$TRAIN_LABEL" "verrou injoignable" "créneau 2 : ses lots restent en file, rien de rendu" ;;
       0) for line in "${spec[@]}"; do pushed "$(f_ "$line" 1)" "$(f_ "$line" 9)" "$(f_ "$line" 2)"; done
          recopy "$TRAIN_LABEL"; [ $? = 3 ] && exit 3; exit 0 ;;
       1) log "$TRAIN_LABEL" "créneau 2 : master a bougé" "ses lots restent en file" ;;
