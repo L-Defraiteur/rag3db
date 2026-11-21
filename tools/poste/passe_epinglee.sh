@@ -47,7 +47,9 @@ export RAG3WEAVER_TARGET_REPRENDRE=1
 # les points isolés d'un index restent atteignables), symboles identiques à 4ad394f4d2, posée aux deux postes.
 # 21 novembre 2026, 07 h (c7) : lib cb3624f3ec, bâtie à 3196d6f66f avec le second correctif HNSW de hotfixs
 # (hnsw-delete-reachability), symboles identiques à 4753938c9d, posée aux deux postes.
-export RAG3DB_LIB=rag3db-build-cb3624f3ece5af2d9ba7ddf5974ae5e34d3a4b36-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
+# 21 novembre 2026, 08 h 2x (G) : lib 424ce93e56, bâtie à 4fcbe09fc3 avec dictionary-scan-guard de hotfixs, symboles
+# identiques à cb3624f3ec, posée aux deux postes.
+export RAG3DB_LIB=rag3db-build-424ce93e569657a4418629ac8fd7175ec60b76ef-Release-p12-v11-g17-s18-rcOFF-stOFF-asanOFF-tsanOFF-ubsanOFF
 # Depuis le 20 novembre 2026 (fenêtre de G, train C++ train-20-11 : la quarantaine du dernier lecteur au point de
 # reprise de hotfixs et la course des groupes du cœur) : lib 4ad394f4d2 (le commit moteur de master du train, mêmes sources que 501d7ccc90, BUILD_ID seul différent) posée aux deux postes, hôtes source baccb2ea6e
 # (l'hôte répété de la bascule vers les versions) ; les passes de cette source ne demandent plus MOTEUR_ANCIEN.
