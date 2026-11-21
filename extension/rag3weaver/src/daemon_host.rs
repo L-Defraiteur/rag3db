@@ -422,6 +422,8 @@ pub mod teammate;
 pub mod web_fetch;
 /// The teammate's browser family (tty, 21 November 2026): read the tabs, a page and its console, through the bridge.
 pub mod browser_tools;
+/// Content observed from outside (a page, a search, a console) is data, never instructions (tty, 21 November 2026).
+pub mod observed;
 pub mod web_search;
 
 /// Le pas d'un équipier étanche au moteur : le backend pris à chaque appel

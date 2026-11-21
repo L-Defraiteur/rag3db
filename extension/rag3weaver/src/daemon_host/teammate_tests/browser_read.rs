@@ -18,6 +18,11 @@ const ARIA: &str = "- heading \"Guide\" [ref=e1]\n- textbox \"Recherche\" [ref=e
 
 /// The fake extension: tab 7 on the docs, tab 9 on a bank; it answers each command and keeps it.
 pub(super) fn fake_extension(socket: &std::path::Path) -> Arc<Mutex<Vec<Value>>> {
+    fake_extension_with(socket, ARIA)
+}
+
+/// The fake extension, its page's accessibility tree given.
+pub(super) fn fake_extension_with(socket: &std::path::Path, aria: &'static str) -> Arc<Mutex<Vec<Value>>> {
     let received = Arc::new(Mutex::new(Vec::<Value>::new()));
     let mut s = UnixStream::connect(socket).expect("the bridge listens");
     let hello = json!({ "type": "hello", "browserId": "chrome-essai", "extensionVersion": "0.0.0", "protocolRevision": 5, "features": [] });
@@ -42,7 +47,7 @@ pub(super) fn fake_extension(socket: &std::path::Path) -> Arc<Mutex<Vec<Value>>>
                 let data = match c["action"].as_str().unwrap_or_default() {
                     "user-tabs" => json!({ "tabs": [ { "tabId": 7, "url": DOCS, "title": "Guide" }, { "tabId": 9, "url": BANK, "title": "Banque" } ] }),
                     "claim" => json!({ "page": c["claim"]["tabId"].to_string(), "url": if c["claim"]["tabId"] == 9 { BANK } else { DOCS }, "title": "Guide" }),
-                    "exec" if c["code"].as_str().unwrap_or_default().contains(".aria(") => json!(ARIA),
+                    "exec" if c["code"].as_str().unwrap_or_default().contains(".aria(") => json!(aria),
                     "exec" => json!({ "url": url, "title": "Guide" }),
                     "console" => json!({ "items": [ { "sequence": 1, "at": 1795240000000u64, "level": "error", "text": "TypeError: x is undefined" } ], "next": 1 }),
                     _ => json!(null),
