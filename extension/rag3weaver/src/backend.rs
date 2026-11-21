@@ -82,6 +82,9 @@ pub struct TeammatePolicy {
     /// **web_search** (the teammate's base, 20 November 2026): the teammate's search by Gemini's grounding.
     #[serde(default)]
     pub web_search: WebSearchPolicy,
+    /// **The browser family** (`teammate.browser`, tty, 21 November 2026): absent, the teammate has no browser tool.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub browser: Option<BrowserPolicy>,
     /// **Un fournisseur qui ne répond pas n'est pas un pas raté** (8 novembre
     /// 2026, essai 3 : des 429 RESOURCE_EXHAUSTED arrêtaient l'équipier par
     /// `max_failed_steps`). Un quota dépassé (429) ou un service en panne (5xx,
@@ -204,6 +207,7 @@ impl Default for TeammatePolicy {
             verify_relaunches: Self::verify_relaunches_default(),
             fetch: FetchPolicy::default(),
             web_search: WebSearchPolicy::default(),
+            browser: None,
         }
     }
 }
@@ -232,6 +236,23 @@ pub struct WebSearchPolicy {
     pub model: Option<String>,
     pub endpoint: Option<String>,
     pub timeout_s: u64,
+}
+
+/// **What the teammate may do in the browser** (`teammate.browser`, tty, 21 November 2026): the domains its pages may
+/// be on (a name allows its subdomains; empty, nothing is allowed), the bound of a page read, and the time a command
+/// to the extension may take.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[serde(deny_unknown_fields, default)]
+pub struct BrowserPolicy {
+    pub domains: Vec<String>,
+    pub max_chars: usize,
+    pub timeout_s: u64,
+}
+
+impl Default for BrowserPolicy {
+    fn default() -> Self {
+        BrowserPolicy { domains: Vec::new(), max_chars: 20_000, timeout_s: 20 }
+    }
 }
 
 impl Default for WebSearchPolicy {

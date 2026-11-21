@@ -422,6 +422,8 @@ pub mod juge;
 /// superviseur par une boîte aux lettres.
 pub mod teammate;
 pub mod web_fetch;
+/// The teammate's browser family (tty, 21 November 2026): read the tabs, a page and its console, through the bridge.
+pub mod browser_tools;
 pub mod web_search;
 /// The agents of the machine, as a tree (`GET /ide/agents`).
 mod agents;
