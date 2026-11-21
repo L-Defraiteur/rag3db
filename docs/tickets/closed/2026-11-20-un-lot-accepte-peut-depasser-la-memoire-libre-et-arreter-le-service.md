@@ -1,6 +1,6 @@
 # Un lot que le service accepte peut dépasser la mémoire libre de la carte, et l'arrêter
 
-- **État** : ouvert (20 novembre 2026, embarquement ; c'est ma requête qui l'a déclenché)
+- **État** : corrigé (21 novembre 2026, lot `memory-bound`, master c4bcab84a0) ; ouvert (20 novembre 2026, embarquement ; c'est ma requête qui l'a déclenché)
 - **Pour** : embarquement
 - **Famille** : produit
 - **Gravité** : haute. Une requête légitime, sous `max_tokens` et sous `max_chars`, arrête le service et coupe tous
@@ -48,4 +48,16 @@ mémoire que le lot demandera, ni celle que la carte a de libre (card2 : 20,1 Gi
 - **La conception retenue**, page `docs/embarquement/20-11-2026/02-borner-chaque-lot-par-la-memoire-de-la-carte.md` :
   deux bornes estimées avant l'appel (le plus grand tampon sous la limite d'allocation, le total sous la moitié de la
   mémoire libre), le recoupage avant l'appel, et le 503 nommé pour un texte seul qui ne tient pas.
+
+## Fermé (21 novembre 2026)
+
+Le lot `memory-bound` (master c4bcab84a0) borne chaque lot avant l'appel : le plus grand tampon sous la limite
+d'allocation de l'adaptateur, le total sous la moitié de la mémoire libre (VRAM, plus la GTT pour un APU). Un lot qui
+dépasse est recoupé, et un texte seul qui ne tient pas reçoit un 503 nommé. Pas de réessai après coup : une allocation
+refusée empoisonne cubecl pour de bon.
+
+Prouvé par le vrai binaire sur l'APU de la tablette : la requête du 20 novembre est servie recoupée, un texte dense est
+refusé en 503, et le service n'est pas empoisonné. L'estimation majore sur l'APU (5 %), puis sur card2 à la repose du
+7879 (4 %). Le 7879 tourne avec ce lot depuis le 21 novembre, 06 h 19. Page :
+`docs/embarquement/20-11-2026/02-borner-chaque-lot-par-la-memoire-de-la-carte.md`.
 

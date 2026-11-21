@@ -79,5 +79,26 @@ Une journée, calibrage compris.
   - la requête suivante est servie : le service n'est pas empoisonné.
 - **Le calibrage sur l'APU** : le pic mesuré est de 5,97 Go au-dessus du repos, et l'estimation, pour des lots de
   8 × 1 704 jetons, donne 6,25 Go. Elle majore, de 5 %.
-- **Reste à prouver** : la majoration sur card2, passivement, par lecture de sysfs autour d'un lot réel du 7879.
+- **Prouvé sur card2** (21 novembre, repose du petit matin, relevé de G en lecture seule) : voir plus bas.
+
+## La majoration prouvée sur card2 (21 novembre, 06 h 19)
+
+G a reposé le 7879 avec le binaire de 78f2f2d885 (le lot `memory-bound` dedans), lib 4753938c9d, la référence de bge-m3
+posée juste avant. Il a relevé `mem_info_vram_used` de card2 toutes les 50 ms, en lecture seule
+(`~/.cache/rag3weaver-build/notes-G/vram-repose-bge-m3-20261121.txt`, à luciepc).
+
+- **La prédiction, écrite avant la mesure** : la vérification de bge-m3 envoie 24 textes seuls, puis quatre lots ; le plus
+  lourd, 8 textes à T = 1 482 jetons, est estimé à 1 072 Mio pour son plus grand tampon et à **4 699 Mio** au total.
+- **La mesure** : plateau après le chargement des poids, 5 955 Mio ; pic pendant la chauffe et la vérification,
+  10 458 Mio. **4 503 Mio au-dessus du plateau, sous les 4 699 Mio estimés** : l'estimation majore, de 4 % (5 % sur
+  l'APU).
+- **L'autovérification** : « juste (écart seul 2,5e-4, en lot 2,5e-4, tolérance 5,0e-3, 32 textes en lot, 3 552 ms) »,
+  sans redémarrage. granite au 7878 : « juste (4,8e-5 seul, 4,3e-5 en lot, 1 165 ms) ».
+- **Lecture** : le pool de cubecl garde ses tampons (la VRAM reste à 10 458 Mio ensuite). Le relevé donne donc le haut du
+  pool sur la fenêtre, qui majore ce qu'un seul lot a pris. La chauffe (formes jusqu'à 380 mots, lots de 32 au plus) est
+  bien plus légère que le lot de 8 × 1 482 jetons, et ne pèse pas sur ce haut.
+- **Deux réserves** :
+  - **La marge de l'estimation est mince** (4 à 5 %). La vraie marge est la moitié de la mémoire libre laissée de côté.
+  - **La borne se resserre avec le temps** : comme le pool garde ses tampons, la mémoire « utilisée » lue en sysfs croît
+    après les gros lots. La borne devient plus prudente, jamais plus laxiste.
 
