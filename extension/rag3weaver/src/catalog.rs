@@ -3171,7 +3171,21 @@ fn read_threads() -> u64 {
         rel_name: &str,
         from: &str,
         to: &str,
+        properties: HashMap<String, crate::config::FieldDef>,
+    ) -> Result<(), CatalogError> {
+        self.register_keyed_relation(rel_name, from, to, properties, Vec::new())
+    }
+
+    /// Comme [`Self::register_relation_with`], avec **l'identité d'un lien au-delà de sa paire** (`key`, voir
+    /// [`RelationDef::key`]) : les propriétés qui distinguent plusieurs liens entre deux mêmes nœuds. Vide, c'est
+    /// [`Self::register_relation_with`].
+    pub fn register_keyed_relation(
+        &mut self,
+        rel_name: &str,
+        from: &str,
+        to: &str,
         mut properties: HashMap<String, crate::config::FieldDef>,
+        key: Vec<String>,
     ) -> Result<(), CatalogError> {
         self.check_initialized()?;
         self.verifier_ecriture_de_reference(rel_name)?;
@@ -3241,7 +3255,7 @@ fn read_threads() -> u64 {
             from: from.to_string(),
             to: to.to_string(),
             properties: (!properties.is_empty()).then_some(properties),
-            key: Vec::new(),
+            key,
         };
         self.persist_relation(rel_name, &rel_def)?;
         let (de, vers) = (rel_def.from.clone(), rel_def.to.clone());
