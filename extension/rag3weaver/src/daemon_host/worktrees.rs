@@ -514,6 +514,28 @@ fn ouvert(h: &super::Hosted) -> bool {
 
 /// **Lance l'index d'un worktree** et pose le témoin de son journal ; dit en mots ce
 /// qui est parti.
+/// The file that says a tree is attached without an index, beside its `templates/`: `{since_ms, watches}`, the
+/// template's watches kept aside for the index made on demand.
+fn no_index_note_path(manifeste: &Path) -> Option<PathBuf> {
+    manifeste.ancestors().find(|a| a.file_name().is_some_and(|n| n == "templates")).and_then(Path::parent).map(|d| d.join("no-index.json"))
+}
+
+/// Whether a tree is attached without an index.
+pub(super) fn attached_without_index(manifeste: &Path) -> bool {
+    no_index_note_path(manifeste).is_some_and(|f| f.is_file())
+}
+
+/// Takes the template's watches out of a tree's manifest and keeps them aside: nothing indexes the folder.
+fn set_watches_aside(manifeste: &Path) -> Result<(), String> {
+    let fichier = no_index_note_path(manifeste).ok_or_else(|| format!("{} n'est pas sous un dossier templates/", manifeste.display()))?;
+    let mut m: Value = serde_json::from_str(&std::fs::read_to_string(manifeste).map_err(|e| format!("{} : {e}", manifeste.display()))?)
+        .map_err(|e| format!("{} : {e}", manifeste.display()))?;
+    let montres = m.as_object_mut().and_then(|o| o.remove("watches")).unwrap_or(Value::Null);
+    std::fs::write(manifeste, serde_json::to_string_pretty(&m).map_err(|e| e.to_string())? + "\n").map_err(|e| format!("{} : {e}", manifeste.display()))?;
+    let note = json!({ "since_ms": crate::catalog::retard::now_ms(), "watches": montres });
+    std::fs::write(&fichier, serde_json::to_string_pretty(&note).map_err(|e| e.to_string())? + "\n").map_err(|e| format!("{} : {e}", fichier.display()))
+}
+
 fn lancer_l_index(hote: &super::DaemonHost, h: &super::Hosted, manifeste: &Path) -> String {
     // Un index déjà reparti à l'ouverture (`a_l_ouverture`) se dit de même.
     let suivi = hote.soi.get().cloned().zip(hote.hosted_existing(manifeste));
@@ -563,8 +585,12 @@ impl super::DaemonHost {
     }
 }
 
-impl WorktreeHost for HoteDesWorktrees {
-    fn attach(&self, path: &Path) -> Result<WorktreeAnswer, String> {
+impl HoteDesWorktrees {
+    /// **Attach a folder, with its index or without** (archi's page « un agent qui part neutre », 21 November 2026):
+    /// `indexer` false attaches a folder that the standard file tools serve and nothing indexes — no first index, no
+    /// watch (the template's `watches` are kept aside in `no-index.json`, beside the tree's templates, for the index
+    /// made on demand). The agent's `attach_worktree` attaches with its index, as before.
+    pub fn attach_with(&self, path: &Path, indexer: bool) -> Result<WorktreeAnswer, String> {
         let worktree = path
             .canonicalize()
             .map_err(|e| format!("le worktree {} n'existe pas ({e}) : donnez le chemin d'un dossier sur ce poste", path.display()))?;
@@ -582,6 +608,9 @@ impl WorktreeHost for HoteDesWorktrees {
             let inscrit = crate::code_tree::add_files(&racines, &worktree, &source.display().to_string(), Some(&nom));
             let _ = std::fs::remove_dir_all(&a_effacer);
             inscrit?;
+            if !indexer {
+                set_watches_aside(&manifeste)?;
+            }
         }
         // Comparé à `/etat` par son chemin canonique, comme l'hôte le tient.
         let manifeste = manifeste.canonicalize().unwrap_or(manifeste);
@@ -593,7 +622,7 @@ impl WorktreeHost for HoteDesWorktrees {
         // Le premier index part en fond. Un worktree déjà attaché mais fermé (un hôte
         // redémarré depuis) se rouvre et relance le sien, qui reprend ce qui manque ; un
         // worktree ouvert garde le sien (c7, 8 novembre 2026, 16 h 09).
-        let index = if deja && !etait_ferme { None } else { Some(lancer_l_index(&hote, &h, &manifeste)) };
+        let index = if !indexer || attached_without_index(&manifeste) || (deja && !etait_ferme) { None } else { Some(lancer_l_index(&hote, &h, &manifeste)) };
         hote.ide_flux().publier(
             "repos",
             &manifeste.display().to_string(),
@@ -607,6 +636,10 @@ impl WorktreeHost for HoteDesWorktrees {
         };
         let ui: Vec<Value> = carte_si_avance(&hote, &manifeste).into_iter().collect();
         let text = match index {
+            None if attached_without_index(&manifeste) => format!(
+                "Dossier attaché sans index : {} ({ou}) ; les outils de fichiers le servent (lire, chercher, éditer, lancer), et son index se crée à la demande.",
+                worktree.display()
+            ),
             Some(i) if deja => format!("Le worktree {} est déjà attaché ({ou}) ; il était fermé, il est rouvert, et {i}. list_worktrees dit où il en est.", worktree.display()),
             Some(i) => format!("Worktree attaché : {} ({ou}) ; {i}. list_worktrees dit où il en est.", worktree.display()),
             None => format!(
@@ -616,6 +649,12 @@ impl WorktreeHost for HoteDesWorktrees {
             ),
         };
         Ok(WorktreeAnswer { text, ui })
+    }
+}
+
+impl WorktreeHost for HoteDesWorktrees {
+    fn attach(&self, path: &Path) -> Result<WorktreeAnswer, String> {
+        self.attach_with(path, true)
     }
 
     fn open_branch(&self, path: &Path, branch: &str, from: Option<&str>) -> Result<WorktreeAnswer, String> {
