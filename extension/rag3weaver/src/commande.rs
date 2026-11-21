@@ -354,6 +354,48 @@ fn refus_d_identite_git(c: &Commande) -> Option<Verdict> {
     })
 }
 
+/// **Showing a secret is refused, whatever the grant** (page 07 of rag3weaver-archi, the hard guards): reading
+/// a secret file to the output (`.env*`, `*.pem`, a private key, anything under `.vault/`), or printing a
+/// variable whose name says a secret. The refusal says how to use the secret without showing it.
+pub fn refus_d_afficher_un_secret(c: &Commande) -> Option<Verdict> {
+    let programme = std::path::Path::new(&c.programme).file_name()?.to_str()?.to_string();
+    let nom_secret = |n: &str| {
+        let n = n.to_ascii_uppercase();
+        ["_KEY", "_TOKEN", "_SECRET"].iter().any(|s| n.ends_with(s)) || n.contains("PASSWORD") || n.contains("API_KEY")
+    };
+    let fichier_secret = |a: &str| {
+        let p = std::path::Path::new(a);
+        let nom = p.file_name().and_then(|n| n.to_str()).unwrap_or_default();
+        nom == ".env" || (nom.starts_with(".env.") && !nom.ends_with(".example") && !nom.ends_with(".sample"))
+            || nom.ends_with(".pem") || nom.ends_with(".key")
+            || nom.starts_with("id_rsa") || nom.starts_with("id_ed25519") || nom.starts_with("id_ecdsa")
+            || p.components().any(|c| c.as_os_str() == ".vault")
+    };
+    let montre = matches!(programme.as_str(), "cat" | "less" | "more" | "head" | "tail" | "bat" | "strings" | "xxd" | "od" | "hexdump" | "base64" | "nl" | "tac" | "grep" | "rg" | "awk" | "sed" | "cut" | "sort" | "uniq" | "diff" | "cmp");
+    let fautif = if montre {
+        c.args.iter().find(|a| !a.starts_with('-') && fichier_secret(a)).cloned()
+    } else if programme == "printenv" {
+        c.args.iter().find(|a| nom_secret(a)).cloned().or_else(|| c.args.is_empty().then(|| "printenv".to_string()))
+    } else if programme == "env" && c.args.is_empty() {
+        Some("env".to_string())
+    } else if programme == "echo" || programme == "printf" {
+        c.args.iter().find(|a| a.contains('$') && nom_secret(a.trim_start_matches(|ch: char| ch == '$' || ch == '{').trim_end_matches('}'))).cloned()
+    } else {
+        None
+    }?;
+    Some(Verdict {
+        decision: Decision::Refuse,
+        portee: Portee::CetteFois,
+        fondement: Fondement::Configuration,
+        faits: observer(c),
+        motif: format!(
+            "`{fautif}` : showing a secret is refused, whatever the grant. Use it without printing it: \
+             pass its file to the program (`--env-file .env`, `set -a; . ./.env; set +a` in a script that prints nothing), \
+             or keep it in the vault with secret_store and point at its path."
+        ),
+    })
+}
+
 /// La sentinelle par défaut : des règles, pas de modèle.
 ///
 /// **C'est délibéré.** Un mécanisme de sûreté qui a besoin d'un modèle distant
@@ -369,6 +411,9 @@ impl Sentinelle for SentinelleDeBase {
 
     fn juger(&self, c: &Commande, ctx: &Contexte) -> Verdict {
         if let Some(refus) = refus_d_identite_git(c) {
+            return refus;
+        }
+        if let Some(refus) = refus_d_afficher_un_secret(c) {
             return refus;
         }
         let faits = observer(c);
@@ -613,8 +658,11 @@ impl Garde {
     /// **Le verdict, et lui seul.** Rien ne s'exécute ici : décider et faire
     /// sont deux gestes, et les séparer permet de montrer le premier.
     pub fn juger(&self, c: &Commande, ctx: &Contexte) -> Verdict {
-        // A git identity set by the agent: refused before any grant.
+        // A git identity set by the agent, or a secret shown: refused before any grant.
         if let Some(refus) = refus_d_identite_git(c) {
+            return refus;
+        }
+        if let Some(refus) = refus_d_afficher_un_secret(c) {
             return refus;
         }
         // **Le confinement passe avant les acquis** : un oui sur `cat x.rs`
