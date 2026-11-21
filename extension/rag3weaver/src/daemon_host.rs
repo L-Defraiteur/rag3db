@@ -2236,7 +2236,90 @@ impl DaemonHost {
     /// their folders): the sessions with their Claude name and active view, the table of the folders with the worktrees
     /// found under each, the views opened, the repositories attached, those available, and the tasks.
     pub fn poste(&self) -> Value {
-        json!({ "ok": false, "error": "le poste : pas encore" }) // RED STUB.
+        let etat = self.state();
+        let machine = std::fs::read_to_string("/proc/sys/kernel/hostname").map(|h| h.trim().to_string()).unwrap_or_default();
+        // The sessions, each with its Claude name and its active view.
+        let sessions: Vec<Value> = self
+            .sessions
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .values()
+            .map(|s| {
+                let active = match &s.default_view {
+                    Some(v) => json!({ "name": Self::nom_de_vue(v), "source": "session" }),
+                    None => json!({ "name": crate::generations::COUCHE_DU_BACKEND, "source": "default" }),
+                };
+                json!({
+                    "id": s.id,
+                    "client": s.client,
+                    "pid": s.pid,
+                    "opened_at": s.opened_at as u64,
+                    "claude": s.claude_session.as_ref().map(|c| json!({ "session_id": c, "name": s.claude_name })),
+                    "active_view": active,
+                })
+            })
+            .collect();
+        // The table of the folders, with the git worktrees found one level under each.
+        let (espace, table) = self.espace_et_table();
+        let folders: Vec<Value> = lire_la_table_des_dossiers(&table)
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|(k, _)| k != "_")
+            .map(|(dossier, session)| {
+                let chemin = espace.join(&dossier);
+                let mut worktrees: Vec<String> = std::fs::read_dir(&chemin)
+                    .map(|d| d.flatten().map(|e| e.path()).filter(|p| p.join(".git").exists()).map(|p| p.display().to_string()).collect())
+                    .unwrap_or_default();
+                worktrees.sort();
+                json!({ "folder": dossier, "session": session, "exists": chemin.is_dir(), "worktrees": worktrees })
+            })
+            .collect();
+        // The views open_view opened, for every session, read in the kept states.
+        let en_ecriture: Vec<String> = self.vues_en_ecriture.lock().unwrap_or_else(|e| e.into_inner()).keys().cloned().collect();
+        let mut open_views = Vec::new();
+        for e in std::fs::read_dir(self.vues_dir()).into_iter().flatten().flatten() {
+            let Some(etat_vue) = std::fs::read_to_string(e.path()).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()) else { continue };
+            let session_id = e.path().file_stem().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+            for (nom, o) in etat_vue["ouvertes"].as_object().into_iter().flatten() {
+                let couche = o["layer"].as_str();
+                open_views.push(json!({
+                    "session_id": session_id,
+                    "name": nom,
+                    "path": o["path"],
+                    "branch": o["branch"],
+                    "layer": couche,
+                    "active": couche.is_some() && etat_vue["active"]["layer"].as_str() == couche,
+                    "writing": couche.is_some_and(|c| en_ecriture.iter().any(|x| x == c)),
+                }));
+            }
+        }
+        // The repositories attached (tasks are not), with their root.
+        let repositories: Vec<Value> = etat["backends"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|b| b["tache"].is_null())
+            .map(|b| {
+                let m = b["manifest"].as_str().unwrap_or_default();
+                let racine = std::fs::read_to_string(m).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()).and_then(|v| v["workspace"]["root"].as_str().map(str::to_string));
+                let nom = Path::new(m)
+                    .ancestors()
+                    .find(|a| a.file_name().is_some_and(|n| n == "templates"))
+                    .and_then(Path::parent)
+                    .and_then(Path::file_name)
+                    .map(|n| n.to_string_lossy().to_string());
+                json!({ "id": b["id"], "repo": b["repo"], "name": nom, "manifest": m, "root": racine })
+            })
+            .collect();
+        json!({
+            "machine": machine,
+            "sessions": sessions,
+            "folders": folders,
+            "open_views": open_views,
+            "repositories": repositories,
+            "available": etat["available_repos"],
+            "tasks": etat["tasks"],
+        })
     }
 
     pub fn state(&self) -> Value {
@@ -2615,8 +2698,7 @@ impl DaemonHost {
                 }),
             ),
             ("GET", "/poste") => {
-                let r = self.poste();
-                (if r["ok"] == json!(false) { 422 } else { 200 }, r)
+                (200, self.poste())
             }
             ("GET", "/etat") => {
                 let mut etat = self.state();
