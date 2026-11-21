@@ -419,13 +419,13 @@ TG="$V/file-gpu"
 GPU_SYS="${POSTE_GPU_SYS:-/sys}"
 GPU_MEMINFO="${POSTE_GPU_MEMINFO:-/proc/meminfo}"
 gpu_now() { echo "${POSTE_GPU_NOW:-$(date +%s)}"; }
-gpu_card_of_poste() { tr -d ' \n' < "$V/gpu-card" 2>/dev/null; }
-gpu_card() { if [ -n "$GPU_CARD_ASKED" ]; then echo "$GPU_CARD_ASKED"; else gpu_card_of_poste; fi; }
+gpu_machine_card() { tr -d ' \n' < "$V/gpu-card" 2>/dev/null; }
+gpu_card() { if [ -n "$GPU_CARD_ASKED" ]; then echo "$GPU_CARD_ASKED"; else gpu_machine_card; fi; }
 gpu_mib_of() { _o=$(cat "$GPU_SYS/class/drm/$1/device/$2" 2>/dev/null); case "$_o" in ''|*[!0-9]*) echo "" ;; *) echo $((_o / 1048576)) ;; esac; }
 gpu_meminfo_mib() { awk -v k="$1:" '$1 == k {print int($2 / 1024)}' "$GPU_MEMINFO" 2>/dev/null; }
 gpu_reserve_mib() {
   _r=$(tr -d ' \n' < "$V/gpu-reserve-gib" 2>/dev/null)
-  case "$_r" in ''|*[!0-9]*) if [ -n "$(gpu_card_of_poste)" ]; then _r=0; else _r=30; fi ;; esac
+  case "$_r" in ''|*[!0-9]*) if [ -n "$(gpu_machine_card)" ]; then _r=0; else _r=30; fi ;; esac
   echo $((_r * 1024))
 }
 # gpu_open : 0 si le calendrier admet un gpu maintenant ; sinon la raison sur la sortie.
@@ -458,7 +458,7 @@ gpu_declared_mib() {
 # gpu_refusal_now : un refus qui ne se résout pas en attendant (« <code> <raison> » : 2 ou 77), ou rien.
 gpu_refusal_now() {
   _c=$(gpu_card)
-  if [ "$(gpu_card_of_poste)" = card0 ]; then echo "2 poste gpu : gpu-card = card0, la carte des écrans : jamais comme carte du poste"; return 0; fi
+  if [ "$(gpu_machine_card)" = card0 ]; then echo "2 poste gpu : gpu-card = card0, la carte des écrans : jamais comme carte du poste"; return 0; fi
   _ferme=$(gpu_open) || { echo "77 $_ferme"; return 0; }
   if [ "$_c" = card0 ]; then
     [ "$GPU_DISPOSABLE" = 1 ] || { echo "2 poste gpu --card card0 : seulement un travail jetable (--disposable : un banc, une mesure, une sonde) ; jamais un service, un index ou une base qui reste"; return 0; }
@@ -529,7 +529,7 @@ if [ "$mode" = "--qui" ]; then
     case "$_l" in "tient gpu"*) set -f; set -- $_l; set +f; _gt=$((_gt + 1)); _g=${3%G}; case "$_g" in *[!0-9]*|'') ;; *) _gd=$((_gd + _g)) ;; esac ;; esac
   done
   if gpu_open > /dev/null; then _o=ouvert; else _o="fermé (semaine)"; fi
-  _c=$(gpu_card_of_poste)
+  _c=$(gpu_machine_card)
   if [ -n "$_c" ]; then
     _m="VRAM $_c : $(( ($(gpu_mib_of "$_c" mem_info_vram_total) - $(gpu_mib_of "$_c" mem_info_vram_used)) / 1024 )) Gio libres, réserve des services $(( $(gpu_reserve_mib) / 1024 )) Gio"
   else
