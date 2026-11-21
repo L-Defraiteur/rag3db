@@ -416,6 +416,7 @@ pub mod juge;
 /// superviseur par une boîte aux lettres.
 pub mod teammate;
 pub mod web_fetch;
+pub mod web_search;
 
 /// Le pas d'un équipier étanche au moteur : le backend pris à chaque appel
 /// d'outil, le repli sur les fichiers du worktree quand il manque.
