@@ -1500,7 +1500,7 @@ impl<'a> Agent<'a> {
             scope: self.events.as_ref().map(|b| b.scope().clone()),
             target: None,
             role: None,
-            step: { let _ = &self.step; None },
+            step: self.step.clone(),
         });
         let outcome = self.run_inner(turns, sink, &run_id);
         // Le tour fini rend son nom : une fin adressée à ce nom attend le
