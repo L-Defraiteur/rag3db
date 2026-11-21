@@ -1466,10 +1466,10 @@ fn synchroniser_la_source(
     // Décidée avant la première écriture : sous une synchronisation par paquet, toute promesse du plein texte le dit
     // (lucivy 4.4, (A)), celles des écritures d'entre deux paquets comprises.
     let tx = decider_la_transaction_par_paquet(catalog)?;
-    catalog.set_sync_par_paquet(tx.0);
+    catalog.set_packet_sync(tx.0);
     if mode == RelationsMode::Bulk {
         if let Err(e) = catalog.persist_meta_key(&marque, &format!("{s_scopes}|0")) {
-            catalog.set_sync_par_paquet(false);
+            catalog.set_packet_sync(false);
             return Err(e.to_string());
         }
     }
@@ -1481,7 +1481,7 @@ fn synchroniser_la_source(
     }
     let resultat = synchroniser(catalog, source, options, mode, &marque, progress, &grain, &s_scopes, &s_files, source_id, tx);
     catalog.end_proving_presence();
-    catalog.set_sync_par_paquet(false);
+    catalog.set_packet_sync(false);
     if resultat.is_err() {
         // **Held derivations are never left held**: a suspended or failed pass renders what it held back (their
         // debt is in the base already, and the render catch-up would find it), and the hold is lifted, so that the
@@ -2551,7 +2551,7 @@ fn terminer(catalog: &mut Catalog, resultat: Result<(), String>) -> Result<(), S
                     catalog.publier_les_evenements_retenus();
                     // Le COMMIT est durable (le journal du moteur synchronisé au COMMIT) : les générations du plein
                     // texte sous celle que la base vient de valider partent (lucivy 4.4, (A)).
-                    catalog.relacher_les_generations_validees();
+                    catalog.release_validated_generations();
                     return Ok(());
                 }
                 Err(e) => {
