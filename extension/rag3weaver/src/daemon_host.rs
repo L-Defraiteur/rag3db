@@ -1094,6 +1094,14 @@ impl DaemonHost {
         Ok(json!({ "path": dossier, "manifest": manifeste, "was_without_index": etait_sans_index, "index": index }))
     }
 
+    /// **Say no to the index of a folder** (archi's page « un agent qui part neutre »): the refusal is kept beside the
+    /// folder's state, and the next opening no longer offers it.
+    #[cfg(feature = "code")]
+    #[allow(unused_variables)]
+    pub fn decline_index(&self, chemin: &Path) -> Result<Value, String> {
+        Err("refuser l'index : pas encore".into()) // RED STUB.
+    }
+
     /// **Open a folder** (Lucie's first step in the IDE, 21 November 2026; recherche makes `/ide/ouvrir`): a folder given
     /// by its path is attached to the atelier, and appears among the trees of this machine. A folder that does not
     /// exist, or an empty one, is created and gets `git init` (never a push). Refused, saying why: Lucie's tree, sairen,
@@ -3763,6 +3771,8 @@ mod tests {
     mod open_command;
     #[cfg(all(unix, feature = "code", feature = "rag3db-native", feature = "daemon"))]
     mod index_on_demand;
+    #[cfg(all(unix, feature = "code", feature = "rag3db-native", feature = "daemon"))]
+    mod index_offer;
     #[cfg(all(unix, feature = "code", feature = "rag3db-native", feature = "daemon"))]
     mod no_index;
 
