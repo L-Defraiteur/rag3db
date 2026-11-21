@@ -522,7 +522,9 @@ if [ "$mode" = "--qui" ]; then
   done
   [ "$vu" = 0 ] && echo "poste : libre (aucune mesure, aucun lourd)"
   file=$(file_des_lourds | tr '\n' ' ')
-  echo "lourds : $(lourds_tenus)/$(places) places tenues${file:+, en file dans l'ordre : pid $file}"
+  # Pas d'apostrophe dans un ${…:+…} entre guillemets : bash 5.3 y ouvre une chaîne (21 novembre 2026, `bash -n` refusait poste).
+  _enfile=""; [ -n "$file" ] && _enfile=", en file dans l'ordre : pid $file"
+  echo "lourds : $(lourds_tenus)/$(places) places tenues$_enfile"
   _gt=0; _gd=0
   for _f in "$F"/*; do
     [ -f "$_f" ] || continue; _l=$(cat "$_f" 2>/dev/null)
