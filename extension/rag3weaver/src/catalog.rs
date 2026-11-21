@@ -3202,6 +3202,25 @@ fn read_threads() -> u64 {
             return Err(CatalogError::UnknownEntity(to.to_string()));
         }
 
+        // **The key** (21 November 2026, the keyed links): each name a property of the relation, declared now or
+        // before; a key once given is never taken back nor changed — a base may hold several links per pair, and
+        // PostgreSQL a primary key over the pair and the key.
+        let declared_before: Vec<String> =
+            self.config.relations.get(rel_name).and_then(|r| r.properties.as_ref()).map(|p| p.keys().cloned().collect()).unwrap_or_default();
+        if let Some(k) = key.iter().find(|k| !properties.contains_key(*k) && !declared_before.contains(k)) {
+            return Err(CatalogError::SchemaError(format!("la clé « {k} » de la relation « {rel_name} » n'est pas une de ses propriétés")));
+        }
+        if let Some(existing) = self.config.relations.get(rel_name) {
+            if !existing.key.is_empty() && existing.key != key {
+                let avant = existing.key.join(", ");
+                return Err(CatalogError::SchemaError(if key.is_empty() {
+                    format!("la relation « {rel_name} » portait la clé {avant} ; la retirer n'est pas pris en charge")
+                } else {
+                    format!("la relation « {rel_name} » portait la clé {avant} ; la changer en {} n'est pas pris en charge", key.join(", "))
+                }));
+            }
+        }
+
         // If already registered, check consistency
         if let Some(existing) = self.config.relations.get(rel_name) {
             if existing.from != from || existing.to != to {
