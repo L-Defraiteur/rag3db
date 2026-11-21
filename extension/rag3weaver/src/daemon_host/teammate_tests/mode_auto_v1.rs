@@ -191,7 +191,7 @@ fn showing_a_secret_is_refused_with_its_alternative() {
     let seen = v.seen.lock().unwrap().clone();
     let r = seen.iter().find(|r| r.contains(".env")).expect("the refusal reached the model");
     assert!(!r.contains("sk-temoin"), "the value never reaches the model: {r}");
-    assert!(r.contains("secret_store"), "the refusal names the alternative: {r}");
+    assert!(r.contains("--env-file") && r.contains("secret_store"), "the refusal names the alternative: {r}");
 }
 
 /// 6. An install of packages goes to the card unless the user asked to install (Lucie, 21 Nov 20 h, banc's install
