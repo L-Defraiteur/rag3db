@@ -119,7 +119,7 @@ cat > "$D/poste.sh" <<'Q'
 # real one refuses before its queue, 19 Nov.); FAKE_POSTE_DOWN refuses everything. `push <session> -- <cmd>` runs it.
 [ -n "${FAKE_POSTE_DOWN:-}" ] && { echo "poste: refusé (doublure)"; exit 2; }
 case "$1" in
-  lourd) shift; [ "${POSTE_MEM_MAX:-}" = 32G ] || { echo "poste: refusé avant la file : une validation sous un plafond de 40G"; exit 2; }
+  lourd|cpu) shift; [ "${1:-}" = -- ] && shift; [ "${POSTE_MEM_MAX:-}" = 32G ] || { echo "poste: refusé avant la file : une validation sous un plafond de 40G"; exit 2; }
          echo "${POSTE_VOIE:-}" >> "$POSTE_VOIES"; echo "$1" >> "${POSTE_CMDS:-/dev/null}"; exec "$@" ;;
   push) shift 3; exec "$@" ;;
 esac

@@ -1,8 +1,12 @@
 #!/bin/sh
 # Verrou du poste, partagé entre les sessions.
 #   poste mesure <commande…>   une mesure de durée ou de mémoire : seule sur le poste
-#   poste lourd  <commande…>   compilation, batterie, e2e, banc, boucle : à plusieurs,
+#   poste cpu [--] <commande…> compilation, batterie, e2e, boucle : une place de cœurs, à plusieurs,
 #                              mais jamais pendant une mesure, et en priorité basse
+#   poste gpu <Gio> [--cpu] [--card cardN] [--disposable] -- <commande…>
+#                              un modèle, un embarqueur, un e2e qui embarque : admis sur la mémoire restante de la
+#                              carte (voir « La mémoire des cartes », plus bas) ; --cpu prend aussi une place de cœurs
+#   poste lourd  <commande…>   l'ancien nom de cpu, accepté le temps que les sessions déclarent leur ressource
 # La porte donne la priorité à la mesure : dès qu'une mesure attend, plus aucun
 # travail lourd n'entre ; elle n'attend que la fin de ceux déjà lancés.
 # Le travail lourd tourne en priorité basse (nice, ionice) : l'écran et la
@@ -170,7 +174,7 @@ fi
 # une mesure n'a rien à faire là (elle attendrait le partagé qui la contient).
 if [ -n "${POSTE_DANS_LOURD:-}" ]; then
   case "${1:-}" in
-    lourd) shift; exec "$@" ;;
+    lourd|cpu) shift; [ "${1:-}" = -- ] && shift; exec "$@" ;;
     mesure) echo "poste: une mesure ne se lance pas depuis un push lourd (elle attendrait sa propre place)" >&2; exit 2 ;;
   esac
 fi
@@ -293,11 +297,38 @@ esac
 MEM="${POSTE_MEM_MAX:-40G}"
 SWAP="${POSTE_SWAP_MAX:-4G}"
 usage() {
-  echo "usage: poste mesure|lourd <commande…>   |   poste --qui   |   poste places <N> [jusqu'à HH:MM | AAAA-MM-JJ HH:MM]   |   poste push <session> [--lourd] -- <commande…>   |   poste push --qui" >&2
+  echo "usage: poste mesure|cpu <commande…>   |   poste gpu <Gio> [--cpu] [--card cardN] [--disposable] -- <commande…>   |   poste --qui   |   poste places <N> [jusqu'à HH:MM | AAAA-MM-JJ HH:MM]   |   poste push <session> [--lourd] -- <commande…>   |   poste push --qui" >&2
   exit 2
 }
 mode="${1:-}"; [ $# -gt 0 ] && shift
 F="$V/fiches"
+# ── Les classes déclarées (21 novembre 2026, Lucie par c7 : « il ne faut pas qu'on dise juste lourd sans justifier si on
+# prend principalement CPU ou GPU ») ──
+# `poste cpu` prend une place de cœurs (l'enveloppe d'un lourd). `poste gpu <Gio>` est admis sur la mémoire restante, pas
+# sur un nombre : sans --cpu il ne prend pas de place de cœurs, avec --cpu il en prend une aussi. `poste lourd` reste un
+# alias de cpu, et le dit. La fiche dit la classe : « tient cpu », « tient gpu 12G », « tient gpu+cpu 12G », et la carte
+# quand le travail en nomme une (« tient gpu 8G card0 »).
+classe=$mode; GPU_BESOIN=""; GPU_CPU=0; GPU_CARTE_DEMANDEE=""; GPU_JETABLE=0
+case "$mode" in
+  lourd) echo "poste lourd : déclarer la ressource — « poste cpu -- … » (cœurs) ou « poste gpu <Gio> [--cpu] -- … » (mémoire de carte) ; lourd vaut cpu pour l'instant" >&2
+         mode=cpu; classe=cpu ;;
+  cpu) [ "${1:-}" = -- ] && shift ;;
+  gpu)
+    GPU_BESOIN=${1:-}
+    case "$GPU_BESOIN" in ''|*[!0-9]*|0) echo "poste gpu : un besoin en Gio (un entier ≥ 1), puis -- et la commande" >&2; exit 2 ;; esac
+    shift
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --cpu) GPU_CPU=1; shift ;;
+        --disposable) GPU_JETABLE=1; shift ;;
+        --card) GPU_CARTE_DEMANDEE=${2:-}; [ $# -ge 2 ] && shift; shift ;;
+        --) shift; break ;;
+        *) break ;;
+      esac
+    done
+    classe="gpu ${GPU_BESOIN}G"; [ "$GPU_CPU" = 1 ] && classe="gpu+cpu ${GPU_BESOIN}G"
+    [ -n "$GPU_CARTE_DEMANDEE" ] && classe="$classe $GPU_CARTE_DEMANDEE" ;;
+esac
 # La file des lourds : un billet `<instant en ns>-<pid>` par lourd qui attend ; l'ordre
 # des noms est l'ordre d'arrivée. Un billet dont le processus est mort est retiré.
 # **La voie du pousseur** (19 novembre 2026, c7 et G : sa passe attendait derrière sept lourds, et tout le monde attend
@@ -349,7 +380,7 @@ lourds_tenus() {
   _k=0
   for _f in "$F"/*; do
     [ -f "$_f" ] || continue
-    case "$(cat "$_f" 2>/dev/null)" in "tient lourd"*) kill -0 "${_f##*/}" 2>/dev/null && _k=$((_k + 1)) ;; esac
+    case "$(cat "$_f" 2>/dev/null)" in "tient lourd"*|"tient cpu"*|"tient gpu+cpu"*) kill -0 "${_f##*/}" 2>/dev/null && _k=$((_k + 1)) ;; esac
   done
   echo "$_k"
 }
@@ -369,6 +400,117 @@ file_des_lourds() {
   return 0
 }
 
+# ── La mémoire des cartes (poste gpu, 21 novembre 2026) ─────────────────────
+# `gpu-card` (dossier des verrous) nomme la carte du poste (card2 à luciepc) ; absent, la mémoire est unifiée (l'APU de
+# la tablette) et se lit dans /proc/meminfo. `gpu-reserve-gib` : la réserve, en Gio ; sur une carte, la VRAM gardée aux
+# services d'embarquement à leur pic (19 à luciepc : 18,7 Gio mesurés sur card2 le 21 novembre, référence de granite) ;
+# en mémoire unifiée, ce qui reste libre au poste (30 par défaut, mot de Lucie).
+# L'admission, dans l'ordre d'arrivée des gpu, sous le verrou des gpu :
+# - sur une carte : le registre, réserve + Σ besoins déclarés des gpu tenus + besoin ≤ VRAM totale ; et la mesure,
+#   VRAM totale − utilisée − Σ besoins des gpu admis depuis moins de POSTE_GPU_SETTLE s (300 ; pas encore alloués)
+#   − besoin ≥ 1 Gio ;
+# - en mémoire unifiée : MemAvailable − Σ besoins récents − besoin ≥ la réserve.
+# Le calendrier : ouvert du vendredi 18:00 au lundi 08:00 ; en semaine, là où le fichier `gpu-weekdays` existe
+# (luciepc). Sinon `poste gpu` refuse tout de suite, code 77.
+# card0 (les écrans de luciepc) : jamais comme carte du poste. Un travail la demande par --card card0, la nuit seulement
+# (01:00 à 08:00), sans session sur seat1, déclaré jetable (--disposable : un banc, une mesure, une sonde), sa durée
+# bornée par un timeout en tête qui finit avant 08:00 ; sa réserve est sa VRAM utilisée à l'instant, plus 1 Gio.
+TG="$V/file-gpu"
+GPU_SYS="${POSTE_GPU_SYS:-/sys}"
+GPU_MEMINFO="${POSTE_GPU_MEMINFO:-/proc/meminfo}"
+gpu_maintenant() { echo "${POSTE_GPU_NOW:-$(date +%s)}"; }
+gpu_carte_du_poste() { tr -d ' \n' < "$V/gpu-card" 2>/dev/null; }
+gpu_carte() { if [ -n "$GPU_CARTE_DEMANDEE" ]; then echo "$GPU_CARTE_DEMANDEE"; else gpu_carte_du_poste; fi; }
+gpu_mib_de() { _o=$(cat "$GPU_SYS/class/drm/$1/device/$2" 2>/dev/null); case "$_o" in ''|*[!0-9]*) echo "" ;; *) echo $((_o / 1048576)) ;; esac; }
+gpu_meminfo_mib() { awk -v k="$1:" '$1 == k {print int($2 / 1024)}' "$GPU_MEMINFO" 2>/dev/null; }
+gpu_reserve_mib() {
+  _r=$(tr -d ' \n' < "$V/gpu-reserve-gib" 2>/dev/null)
+  case "$_r" in ''|*[!0-9]*) if [ -n "$(gpu_carte_du_poste)" ]; then _r=0; else _r=30; fi ;; esac
+  echo $((_r * 1024))
+}
+# gpu_ouvert : 0 si le calendrier admet un gpu maintenant ; sinon la raison sur la sortie.
+gpu_ouvert() {
+  [ -e "$V/gpu-weekdays" ] && return 0
+  _n=$(gpu_maintenant); _j=$(date -d "@$_n" +%u); _h=$(date -d "@$_n" +%H%M)
+  case "$_j" in 6|7) return 0 ;; esac
+  [ "$_j" = 5 ] && [ "$_h" -ge 1800 ] && return 0
+  [ "$_j" = 1 ] && [ "$_h" -lt 800 ] && return 0
+  echo "poste gpu : fermé ici en semaine (ouvert du vendredi 18:00 au lundi 08:00 ; en semaine là où gpu-weekdays existe)"
+  return 1
+}
+# gpu_declares_mib : Σ des besoins déclarés des gpu qui tiennent sur la même mémoire que ce travail (GPU_QUELLE : « - »
+# pour la carte du poste ou la mémoire unifiée, sinon la carte nommée) ; GPU_RECENTS=1 : admis depuis moins de
+# POSTE_GPU_SETTLE secondes.
+gpu_declares_mib() {
+  _s=0; _lim=$(( $(gpu_maintenant) - ${POSTE_GPU_SETTLE:-300} ))
+  for _f in "$F"/*; do
+    [ -f "$_f" ] || continue
+    _l=$(cat "$_f" 2>/dev/null); case "$_l" in "tient gpu"*) ;; *) continue ;; esac
+    kill -0 "${_f##*/}" 2>/dev/null || continue
+    set -f; set -- $_l; set +f
+    _g=${3%G}; _c=-; [ "${4:-}" != depuis ] && _c=$4
+    [ "$_c" = "$GPU_QUELLE" ] || continue
+    if [ "${GPU_RECENTS:-}" = 1 ] && [ "$(stat -c %Y "$_f")" -lt "$_lim" ]; then continue; fi
+    case "$_g" in ''|*[!0-9]*) ;; *) _s=$((_s + _g * 1024)) ;; esac
+  done
+  echo "$_s"
+}
+# gpu_refus_immediat : un refus qui ne se résout pas en attendant (« <code> <raison> » : 2 ou 77), ou rien.
+gpu_refus_immediat() {
+  _c=$(gpu_carte)
+  if [ "$(gpu_carte_du_poste)" = card0 ]; then echo "2 poste gpu : gpu-card = card0, la carte des écrans : jamais comme carte du poste"; return 0; fi
+  _ferme=$(gpu_ouvert) || { echo "77 $_ferme"; return 0; }
+  if [ "$_c" = card0 ]; then
+    [ "$GPU_JETABLE" = 1 ] || { echo "2 poste gpu --card card0 : seulement un travail jetable (--disposable : un banc, une mesure, une sonde) ; jamais un service, un index ou une base qui reste"; return 0; }
+    _n=$(gpu_maintenant); _h=$(date -d "@$_n" +%H%M)
+    { [ "$_h" -ge 100 ] && [ "$_h" -lt 800 ]; } || { echo "77 poste gpu --card card0 : la nuit seulement, de 01:00 à 08:00"; return 0; }
+    "${POSTE_GPU_LOGINCTL:-loginctl}" list-sessions --no-legend 2>/dev/null | grep -qw seat1 && { echo "77 poste gpu --card card0 : une session est ouverte sur seat1 (les écrans) : refusé"; return 0; }
+    [ -n "$GPU_TIMEOUT_S" ] || { echo "2 poste gpu --card card0 : la durée doit être bornée par un timeout en tête de la commande, qui finit avant 08:00"; return 0; }
+    _huit=$(date -d "$(date -d "@$_n" +%F) 08:00" +%s)
+    [ $((_n + GPU_TIMEOUT_S)) -le "$_huit" ] || { echo "2 poste gpu --card card0 : le timeout ($GPU_TIMEOUT_S s) passe 08:00, quand les écrans reviennent"; return 0; }
+  fi
+  _b=$((GPU_BESOIN * 1024)); _r=$(gpu_reserve_mib)
+  if [ -n "$_c" ]; then
+    _t=$(gpu_mib_de "$_c" mem_info_vram_total)
+    [ -n "$_t" ] || { echo "2 poste gpu : la carte $_c ne dit pas sa VRAM ($GPU_SYS/class/drm/$_c/device)"; return 0; }
+    [ "$_c" = card0 ] && _r=0
+    [ $((_r + _b)) -le "$_t" ] || { echo "2 poste gpu : besoin de $GPU_BESOIN Gio, plus que $_c ne tiendra jamais ($((_t / 1024)) Gio, réserve $((_r / 1024)))"; return 0; }
+  else
+    _t=$(gpu_meminfo_mib MemTotal)
+    { [ -n "$_t" ] && [ $((_r + _b)) -le "$_t" ]; } || { echo "2 poste gpu : besoin de $GPU_BESOIN Gio, plus que la mémoire ne tiendra jamais (réserve $((_r / 1024)) Gio)"; return 0; }
+  fi
+  return 0
+}
+# gpu_admet : 0 si la mémoire admet le besoin maintenant.
+gpu_admet() {
+  _c=$(gpu_carte); _b=$((GPU_BESOIN * 1024)); _r=$(gpu_reserve_mib)
+  GPU_QUELLE=-; [ -n "$GPU_CARTE_DEMANDEE" ] && GPU_QUELLE=$GPU_CARTE_DEMANDEE
+  _rec=$(GPU_RECENTS=1 gpu_declares_mib); _tous=$(gpu_declares_mib)
+  if [ -n "$_c" ]; then
+    _t=$(gpu_mib_de "$_c" mem_info_vram_total); _u=$(gpu_mib_de "$_c" mem_info_vram_used)
+    { [ -n "$_t" ] && [ -n "$_u" ]; } || return 1
+    if [ "$_c" = card0 ]; then
+      [ $((_t - _u - _rec - _b)) -ge 1024 ]
+    else
+      [ $((_r + _tous + _b)) -le "$_t" ] && [ $((_t - _u - _rec - _b)) -ge 1024 ]
+    fi
+  else
+    _a=$(gpu_meminfo_mib MemAvailable); [ -n "$_a" ] || return 1
+    [ $((_a - _rec - _b)) -ge "$_r" ]
+  fi
+}
+# file_gpu [billet] : comme file_des_lourds, pour la file des gpu.
+file_gpu() {
+  _r=0
+  for _t in $(ls "$TG" 2>/dev/null | sort); do
+    kill -0 "${_t##*-}" 2>/dev/null || { rm -f -- "${TG:?}/${_t:?}"; continue; }
+    if [ -n "${1:-}" ]; then [ "$TG/$_t" = "$1" ] && { echo "$_r"; return 0; }; else echo "${_t##*-}"; fi
+    _r=$((_r + 1))
+  done
+  [ -n "${1:-}" ] && echo "$_r"
+  return 0
+}
+
 # ── poste --qui : qui tient la place, qui attend, depuis quand ─────────────
 # Chaque `poste mesure|lourd` tient une fiche (« attend » puis « tient ») tant
 # qu'il vit ; une fiche dont le processus est mort est retirée ici.
@@ -381,6 +523,20 @@ if [ "$mode" = "--qui" ]; then
   [ "$vu" = 0 ] && echo "poste : libre (aucune mesure, aucun lourd)"
   file=$(file_des_lourds | tr '\n' ' ')
   echo "lourds : $(lourds_tenus)/$(places) places tenues${file:+, en file dans l'ordre : pid $file}"
+  _gt=0; _gd=0
+  for _f in "$F"/*; do
+    [ -f "$_f" ] || continue; _l=$(cat "$_f" 2>/dev/null)
+    case "$_l" in "tient gpu"*) set -f; set -- $_l; set +f; _gt=$((_gt + 1)); _g=${3%G}; case "$_g" in *[!0-9]*|'') ;; *) _gd=$((_gd + _g)) ;; esac ;; esac
+  done
+  if gpu_ouvert > /dev/null; then _o=ouvert; else _o="fermé (semaine)"; fi
+  _c=$(gpu_carte_du_poste)
+  if [ -n "$_c" ]; then
+    _m="VRAM $_c : $(( ($(gpu_mib_de "$_c" mem_info_vram_total) - $(gpu_mib_de "$_c" mem_info_vram_used)) / 1024 )) Gio libres, réserve des services $(( $(gpu_reserve_mib) / 1024 )) Gio"
+  else
+    _m="mémoire unifiée : $(( $(gpu_meminfo_mib MemAvailable) / 1024 )) Gio disponibles, réserve $(( $(gpu_reserve_mib) / 1024 )) Gio"
+  fi
+  _fg=$(file_gpu | tr '\n' ' ')
+  echo "gpu : $_o ; $_gt tenu(s), $_gd Gio déclarés ; $_m${_fg:+ ; en file : pid $_fg}"
   [ -s "$PUSH_FICHE" ] && echo "push : tenu — $(cat "$PUSH_FICHE")"
   if [ -s "$V/lourds-max.retour" ]; then
     read -r _avant _quand < "$V/lourds-max.retour"
@@ -411,7 +567,7 @@ if [ "$mode" = places ]; then
   fi
   exit 0
 fi
-case "$mode" in mesure|lourd) ;; *) usage ;; esac
+case "$mode" in mesure|cpu|gpu) ;; *) usage ;; esac
 # **Une validation au-dessus du plafond du confineur est refusée avant la file** (15 novembre 2026, ticket d'hotfixs,
 # mot de c7) : `scripts/confiner_validation.py` exige un plafond effectif d'au plus 32 Gio, et refusait en 0,18 s une
 # passe qui avait attendu sa place sous le défaut de 40G (5 min 23 s à luciepc). Une commande qui nomme une entrée de
@@ -478,14 +634,33 @@ ancetre_tenant() {
   done
   return 1
 }
+GPU_IMBRIQUE=""
 if tenant=$(ancetre_tenant); then
-  echo "poste: un ancêtre tient déjà la place ($(cut -d' ' -f1-2 "$F/$tenant" 2>/dev/null), pid $tenant) : ce $mode passe sans verrou" >&2
-  exec "$@"
+  # Un gpu sous un ancêtre qui ne tient pas de mémoire (cpu, lourd) fait quand même son admission mémoire, sous le verrou
+  # des gpu et sans la porte (une mesure qui attend l'ancêtre ne l'attend pas) ; sous un gpu ou une mesure, il passe.
+  case "$mode $(cut -d' ' -f2 "$F/$tenant" 2>/dev/null)" in
+    "gpu cpu"|"gpu lourd") GPU_IMBRIQUE=$tenant ;;
+    *) echo "poste: un ancêtre tient déjà la place ($(cut -d' ' -f1-2 "$F/$tenant" 2>/dev/null), pid $tenant) : ce $mode passe sans verrou" >&2
+       exec "$@" ;;
+  esac
+fi
+# Le timeout en tête de la commande d'un gpu (card0 l'exige), en secondes ; puis les refus qui n'attendent pas.
+GPU_TIMEOUT_S=""
+if [ "$mode" = gpu ]; then
+  _d=""
+  if [ "${1:-}" = timeout ]; then
+    _p=0; for _x in "$@"; do _p=$((_p + 1)); [ "$_p" = 1 ] && continue; case "$_x" in -*) continue ;; *) _d=$_x; break ;; esac; done
+  fi
+  _v=${_d%[smhd]}
+  case "$_v" in ''|*[!0-9]*) ;; *) case "$_d" in *m) _v=$((_v * 60)) ;; *h) _v=$((_v * 3600)) ;; *d) _v=$((_v * 86400)) ;; esac; GPU_TIMEOUT_S=$_v ;; esac
+  _refus=$(gpu_refus_immediat)
+  if [ -n "$_refus" ]; then echo "${_refus#* }" >&2; exit "${_refus%% *}"; fi
+  [ -n "$(gpu_carte)" ] && { POSTE_GPU_CARD=$(gpu_carte); export POSTE_GPU_CARD; }
 fi
 mkdir -p "$F"
 fiche="$F/$$"
 resume=$(printf '%s ' "$@" | cut -c1-90)
-dire() { echo "$1 $mode depuis $(date +%H:%M:%S) (pid $$) — $resume" > "$fiche"; }
+dire() { echo "$1 $classe depuis $(date +%H:%M:%S) (pid $$) — $resume" > "$fiche"; }
 trap 'rm -f "$fiche"' EXIT
 # **Attendre un verrou sans se rendre sourd** (12 octobre 2026, luciepc : deux
 # bâtis annulés restaient bloqués dans flock, le signal n'étant traité qu'au
@@ -496,7 +671,7 @@ trap 'rm -f "$fiche"' EXIT
 attente=""
 prendre() { flock "$@" & attente=$!; wait "$attente"; r=$?; attente=""; [ "$r" = 0 ] || exit 75; }
 trap '[ -n "$attente" ] && kill "$attente" 2>/dev/null; exit 143' TERM INT HUP
-FILS=$(fils_par "$mode")
+FILS=$(fils_par "$( [ "$mode" = mesure ] && echo mesure || echo lourd)")
 borner_fils "$FILS"
 # sccache et mold (19 novembre 2026, c7 ; posés par Lucie aux deux postes) : treize targets recompilaient chacun les
 # mêmes dépendances. Quand ils sont là, une commande compile par sccache (cache sur disque hors de /tmp, plafond 40G) et
@@ -522,6 +697,11 @@ if [ -s "$V/embedder-allow-integrated-gpu" ] && [ -z "${RAG3WEAVER_EMBEDDER_ALLO
   export RAG3WEAVER_EMBEDDER_ALLOW_INTEGRATED_GPU=1
 fi
 QUOTA="${POSTE_CPU_QUOTA:-$((FILS * 100))%}"
+# Un gpu en mémoire unifiée alloue sa « VRAM » dans la RAM : le plafond de la portée tient au moins son besoin, plus 8 Gio.
+if [ "$mode" = gpu ] && [ -z "$(gpu_carte)" ] && [ -z "${POSTE_MEM_MAX:-}" ]; then
+  _m=$(to_bytes "$MEM"); _w=$(( (GPU_BESOIN + 8) * 1073741824 ))
+  [ -n "$_m" ] && [ "$_w" -gt "$_m" ] && MEM=$((GPU_BESOIN + 8))G
+fi
 if [ "$borne" = 1 ]; then
   # **Delegate=yes** (20 novembre 2026, c7 et recherche) : le confineur de validation partageait la portée plafonnée avec
   # sa commande, et un débordement le tuait en seconde victime (-9, aucun verdict.json ; vu par `journalctl -k` aux deux
@@ -553,7 +733,7 @@ case "$mode" in
       maintenant=$(date +%s); limite=$((maintenant + ${POSTE_MESURE_ATTENTE_MAX:-1200}))
       for _f in "$F"/*; do
         [ -f "$_f" ] && [ "$_f" != "$fiche" ] || continue
-        _l=$(cat "$_f" 2>/dev/null); case "$_l" in "tient lourd"*) ;; *) continue ;; esac
+        _l=$(cat "$_f" 2>/dev/null); case "$_l" in "tient mesure"*) continue ;; "tient "*) ;; *) continue ;; esac
         kill -0 "${_f##*/}" 2>/dev/null || continue
         _cmd=${_l#* — }; set -f; _fin=$(fin_prevue "$_f" $_cmd); set +f
         if [ -z "$_fin" ] || [ "$_fin" -gt "$limite" ]; then
@@ -569,38 +749,58 @@ case "$mode" in
     [ -n "${POSTE_MESURE_MAX:-}" ] && set -- timeout "$POSTE_MESURE_MAX" "$@"
     "$@" 8>&- 9>&-
     rc=$? ;;
-  lourd)
+  cpu|gpu)
     # La porte, puis une des N places, dans l'ordre d'arrivée. Chaque essai se fait
     # porte tenue : une mesure qui attend la tient, et aucun lourd n'entre derrière
     # elle ; deux lourds ne comptent jamais les places en même temps. Le billet part
     # et la fiche dit « tient » avant que la porte soit rendue.
     # POSTE_LOURD_ATTENTE_MAX (secondes, pour `push --lourd`) : au-delà, code 75, rien de pris.
-    mkdir -p "$T"
-    if [ "${POSTE_VOIE:-}" = pousseur ]; then billet="$T/0-$(date +%s%N)-$$"; else billet="$T/$(date +%s%N)-$$"; fi
-    : > "$billet"
-    trap 'rm -f "$fiche" "$billet"' EXIT
-    exec 9>>"$V/poste.lock"
+    # Un cpu, ou un gpu --cpu, prend une place de cœurs ; un gpu prend aussi son billet dans la file des gpu. Un gpu sous
+    # un ancêtre cpu n'a que son admission mémoire, sous le verrou des gpu (gpu.lock), sans la porte ni le partagé.
+    prend_cpu=1; { [ "$mode" = gpu ] && [ "$GPU_CPU" = 0 ]; } && prend_cpu=0; [ -n "$GPU_IMBRIQUE" ] && prend_cpu=0
+    mkdir -p "$T" "$TG"; billet=/dev/null; billet_gpu=/dev/null
+    if [ "$prend_cpu" = 1 ]; then
+      if [ "${POSTE_VOIE:-}" = pousseur ]; then billet="$T/0-$(date +%s%N)-$$"; else billet="$T/$(date +%s%N)-$$"; fi
+      : > "$billet"
+    fi
+    [ "$mode" = gpu ] && { billet_gpu="$TG/$(date +%s%N)-$$"; : > "$billet_gpu"; }
+    # Les billets valent /dev/null quand ce travail n'en a pas : jamais un chemin vide à effacer.
+    trap '[ "$billet" = /dev/null ] || rm -f -- "$billet"; [ "$billet_gpu" = /dev/null ] || rm -f -- "$billet_gpu"; rm -f -- "$fiche"' EXIT
+    [ -z "$GPU_IMBRIQUE" ] && exec 9>>"$V/poste.lock"
     debut=$(date +%s)
     while :; do
-      exec 8>>"$V/porte.lock"
+      if [ -n "$GPU_IMBRIQUE" ]; then exec 8>>"$V/gpu.lock"; else exec 8>>"$V/porte.lock"; fi
       if [ -n "${POSTE_LOURD_ATTENTE_MAX:-}" ]; then prendre -w "$POSTE_LOURD_ATTENTE_MAX" -x 8; else prendre -x 8; fi
-      max=$(places); tenus=$(lourds_tenus); rang=$(file_des_lourds "$billet")
-      # La place réservée (19 novembre 2026, c7 : quatre mesures longues de sessions ont figé la file du pousseur une
-      # heure) : sur un poste qui la déclare (le fichier `place-pousseur` du dossier des verrous, là où tourne le
-      # pousseur) et à partir de deux places, un lourd hors de la voie du pousseur n'en compte que N-1 ; la dernière
-      # reste au pousseur. Ailleurs, les sessions ont les N places.
-      [ -e "$V/place-pousseur" ] && [ "${POSTE_VOIE:-}" != pousseur ] && [ "$max" -ge 2 ] && max=$((max - 1))
-      if [ "$tenus" -lt "$max" ] && [ "$rang" -lt $((max - tenus)) ] && flock -n -s 9; then
-        rm -f "$billet"; dire tient
+      passe=1
+      if [ "$prend_cpu" = 1 ]; then
+        max=$(places); tenus=$(lourds_tenus); rang=$(file_des_lourds "$billet")
+        # La place réservée (19 novembre 2026, c7 : quatre mesures longues de sessions ont figé la file du pousseur une
+        # heure) : sur un poste qui la déclare (le fichier `place-pousseur` du dossier des verrous, là où tourne le
+        # pousseur) et à partir de deux places, un lourd hors de la voie du pousseur n'en compte que N-1 ; la dernière
+        # reste au pousseur. Ailleurs, les sessions ont les N places.
+        [ -e "$V/place-pousseur" ] && [ "${POSTE_VOIE:-}" != pousseur ] && [ "$max" -ge 2 ] && max=$((max - 1))
+        { [ "$tenus" -lt "$max" ] && [ "$rang" -lt $((max - tenus)) ]; } || passe=0
+      fi
+      if [ "$mode" = gpu ] && [ "$passe" = 1 ]; then
+        # L'admission mémoire sous le verrou des gpu : deux gpu, l'un sous la porte et l'autre sous un ancêtre cpu, ne
+        # comptent jamais la mémoire en même temps.
+        if [ -z "$GPU_IMBRIQUE" ]; then exec 7>>"$V/gpu.lock"; prendre -x 7; fi
+        { [ "$(file_gpu "$billet_gpu")" = 0 ] && gpu_admet; } || passe=0
+      fi
+      if [ "$passe" = 1 ] && { [ -n "$GPU_IMBRIQUE" ] || flock -n -s 9; }; then
+        [ "$billet" = /dev/null ] || rm -f -- "$billet"; [ "$billet_gpu" = /dev/null ] || rm -f -- "$billet_gpu"
+        dire tient
+        if [ "$mode" = gpu ] && [ -z "$GPU_IMBRIQUE" ]; then flock -u 7; exec 7>&-; fi
         flock -u 8; exec 8>&-
         break
       fi
+      if [ "$mode" = gpu ] && [ -z "$GPU_IMBRIQUE" ]; then flock -u 7 2>/dev/null; exec 7>&-; fi
       flock -u 8; exec 8>&-
       if [ -n "${POSTE_LOURD_ATTENTE_MAX:-}" ] && [ $(( $(date +%s) - debut )) -ge "$POSTE_LOURD_ATTENTE_MAX" ]; then exit 75; fi
       sleep 1 & attente=$!; wait "$attente"; attente=""
     done
     unset POSTE_LOURD_ATTENTE_MAX
-    nice -n 15 ionice -c 3 "$@" 9>&-
+    nice -n 15 ionice -c 3 "$@" 7>&- 9>&-
     rc=$? ;;
 esac
 exit "$rc"

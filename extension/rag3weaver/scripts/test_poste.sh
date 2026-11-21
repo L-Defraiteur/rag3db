@@ -81,7 +81,8 @@ sleep 1
 qui=$("$POSTE" --qui 2>&1)
 wait
 echo "$qui" | sed 's/^/       /'
-echo "$qui" | grep -q "tient.*lourd" && echo "$qui" | grep -q "attend.*mesure" && echo "$qui" | grep -q "depuis"
+# Depuis le 21 novembre 2026, la fiche dit la classe : poste lourd est un alias de cpu.
+echo "$qui" | grep -q "tient cpu" && echo "$qui" | grep -q "attend.*mesure" && echo "$qui" | grep -q "depuis"
 cas $? "poste --qui dit le lourd qui tient et la mesure qui attend, depuis quand"
 [ -z "$(ls -A "$POSTE_LOCK_DIR/fiches" 2>/dev/null)" ]
 cas $? "à la fin, aucune fiche ne reste"
@@ -436,5 +437,107 @@ cas $? "poste places 3 jusqu'à $quand monte à 3 jusqu'à la date, et --qui le 
 [ "$rc" = 0 ] && [ "$(cat "$POSTE_LOCK_DIR/lourds-max")" = 4 ] && [ ! -e "$POSTE_LOCK_DIR/lourds-max.retour" ]
 cas $? "une hausse sans heure reste permanente et efface un retour en cours (rc $rc)"
 rm -f "$POSTE_LOCK_DIR/lourds-max" "$POSTE_LOCK_DIR/lourds-max.retour"
+
+# ── 49 à 58. Les classes déclarées (21 novembre 2026, Lucie par c7 : « il ne faut pas qu'on dise juste lourd sans
+# justifier si on prend principalement CPU ou GPU »). `poste cpu` prend une place de cœurs ; `poste gpu <Gio> [--cpu]` est
+# admis sur la mémoire restante : à la tablette (mémoire unifiée), MemAvailable − besoin ≥ la réserve (30 Gio) ; là où
+# `gpu-card` nomme une carte, sur sa VRAM, la réserve des services comptée à leur pic ; dans l'ordre d'arrivée des gpu.
+# Ouvert du vendredi 18:00 au lundi 08:00, et en semaine là où `gpu-weekdays` existe ; sinon refus, code 77.
+G="$ICI/gpu"; mkdir -p "$G/sys/class/drm/card2/device" "$G/sys/class/drm/card0/device"
+export POSTE_GPU_MEMINFO="$G/meminfo" POSTE_GPU_SYS="$G/sys"
+SAMEDI=$(date -d '2026-11-21 12:00' +%s); MERCREDI=$(date -d '2026-11-18 12:00' +%s); VENDREDI_SOIR=$(date -d '2026-11-20 18:30' +%s); LUNDI_TOT=$(date -d '2026-11-23 07:30' +%s)
+memoire() { printf 'MemTotal: %d kB\nMemAvailable: %d kB\n' $((121 * 1048576)) $(($1 * 1048576)) > "$G/meminfo"; }
+vram() { echo $((32 * 1073741824)) > "$G/sys/class/drm/card2/device/mem_info_vram_total"; echo $(($1 * 1073741824)) > "$G/sys/class/drm/card2/device/mem_info_vram_used"; }
+rm -f "$POSTE_LOCK_DIR/gpu-card" "$POSTE_LOCK_DIR/gpu-reserve-gib" "$POSTE_LOCK_DIR/gpu-weekdays"; echo 2 > "$POSTE_LOCK_DIR/lourds-max"
+# 49. poste lourd reste un alias de cpu, et le dit ; la fiche dit la classe.
+sortie=$("$POSTE" lourd sh -c "cat $POSTE_LOCK_DIR/fiches/\$PPID 2>/dev/null; cat $POSTE_LOCK_DIR/fiches/* 2>/dev/null" 2>&1); rc=$?
+[ "$rc" = 0 ] && echo "$sortie" | grep -q 'déclarer la ressource' && echo "$sortie" | grep -q '^tient cpu'
+cas $? "poste lourd : alias de cpu, une ligne demande de déclarer la ressource, la fiche dit « tient cpu » (rc $rc)"
+"$POSTE" cpu -- true > /dev/null 2>&1
+cas $? "poste cpu -- commande joue"
+# 50. Le calendrier : en semaine sans gpu-weekdays, refus 77 tout de suite ; le week-end (vendredi soir compris, lundi avant
+# 8 h compris), admis.
+memoire 80
+POSTE_GPU_NOW=$MERCREDI "$POSTE" gpu 4 -- true > "$G/sortie" 2>&1; rc=$?
+[ "$rc" = 77 ] && grep -q 'semaine' "$G/sortie"
+cas $? "poste gpu en semaine, sans gpu-weekdays : refus 77, dit (rc $rc ; $(head -1 "$G/sortie"))"
+ok=0; for n in $SAMEDI $VENDREDI_SOIR $LUNDI_TOT; do POSTE_GPU_NOW=$n "$POSTE" gpu 4 -- true > /dev/null 2>&1 || ok=1; done
+cas $ok "poste gpu le week-end : samedi, vendredi 18 h 30 et lundi 7 h 30 admis"
+touch "$POSTE_LOCK_DIR/gpu-weekdays"; POSTE_GPU_NOW=$MERCREDI "$POSTE" gpu 4 -- true > /dev/null 2>&1; rc=$?; rm -f "$POSTE_LOCK_DIR/gpu-weekdays"
+cas $rc "poste gpu en semaine là où gpu-weekdays existe : admis"
+export POSTE_GPU_NOW=$SAMEDI
+# 51. Mémoire unifiée : 40 Gio disponibles, un besoin de 8 passe (32 ≥ 30) ; un besoin de 12 attend (28 < 30), puis passe
+# quand la mémoire revient.
+memoire 40
+"$POSTE" gpu 8 -- true > /dev/null 2>&1
+cas $? "mémoire unifiée : 40 Gio disponibles, besoin 8 : admis (32 ≥ 30)"
+: > "$J"; ( "$POSTE" gpu 12 -- bash -c 'note G12 début' > /dev/null 2>&1 ) & p=$!
+sleep 2; [ -z "$(instant G12 début)" ]; a=$?
+memoire 60; wait $p; rc=$?
+[ "$a" = 0 ] && [ "$rc" = 0 ] && [ -n "$(instant G12 début)" ]
+cas $? "mémoire unifiée : besoin 12 sur 40 Gio attend (28 < 30), puis part quand 60 Gio reviennent (rc $rc)"
+# 52. Un besoin que la mémoire ne peut jamais tenir est refusé tout de suite, pas mis en file.
+memoire 80; "$POSTE" gpu 200 -- true > /dev/null 2>&1; rc=$?
+cas $([ "$rc" = 2 ] && echo 0 || echo 1) "un besoin plus grand que la mémoire moins la réserve : refusé tout de suite (rc $rc)"
+# 53. Une carte déclarée : card2, 32 Gio, la réserve des services à 19. Un besoin de 10 passe (19 + 10 ≤ 32) ; un second
+# de 10 attend le premier (19 + 20 > 32), puis passe.
+echo card2 > "$POSTE_LOCK_DIR/gpu-card"; echo 19 > "$POSTE_LOCK_DIR/gpu-reserve-gib"; vram 15
+: > "$J"; ( "$POSTE" gpu 10 -- bash -c 'note C1 début; sleep 3; note C1 fin' > /dev/null 2>&1 ) & p1=$!
+sleep 1; ( "$POSTE" gpu 10 -- bash -c 'note C2 début' > /dev/null 2>&1 ) & p2=$!
+wait $p1 $p2
+[ -n "$(instant C1 fin)" ] && [ -n "$(instant C2 début)" ] && [ "$(instant C2 début)" -ge "$(instant C1 fin)" ]
+cas $? "card2 : deux besoins de 10 sous une réserve de 19 sur 32 Gio : le second attend la fin du premier"
+# 54. La VRAM mesurée compte aussi : 30 Gio utilisés hors de poste, un besoin de 4 attend (32 − 30 − 4 < 1).
+vram 30; : > "$J"; ( "$POSTE" gpu 4 -- bash -c 'note C3 début' > /dev/null 2>&1 ) & p=$!
+sleep 2; [ -z "$(instant C3 début)" ]; a=$?; vram 15; wait $p
+[ "$a" = 0 ] && [ -n "$(instant C3 début)" ]
+cas $? "card2 : la VRAM utilisée hors de poste retient un besoin, qui part quand elle se libère"
+# 55. Jamais card0 (les écrans).
+echo card0 > "$POSTE_LOCK_DIR/gpu-card"; "$POSTE" gpu 1 -- true > "$G/sortie" 2>&1; rc=$?
+[ "$rc" = 2 ] && grep -q 'card0' "$G/sortie"
+cas $? "gpu-card = card0 : refusé, jamais la carte des écrans (rc $rc)"
+echo card2 > "$POSTE_LOCK_DIR/gpu-card"; vram 15
+# 56. gpu seul ne prend pas de place cpu ; gpu --cpu en prend une.
+echo 1 > "$POSTE_LOCK_DIR/lourds-max"; : > "$J"
+# K tient 6 s : sous la charge de luciepc (17), un gpu lancé une seconde après lui démarrait parfois après 3 s.
+( "$POSTE" cpu -- bash -c 'note K début; sleep 6; note K fin' > /dev/null 2>&1 ) & pk=$!
+sleep 1; ( "$POSTE" gpu 2 -- bash -c 'note GS début' > /dev/null 2>&1 ) & pg=$!
+( "$POSTE" gpu 2 --cpu -- bash -c 'note GC début' > /dev/null 2>&1 ) & pc=$!
+wait $pk $pg $pc
+[ -n "$(instant GS début)" ] && [ "$(instant GS début)" -lt "$(instant K fin)" ] && [ "$(instant GC début)" -ge "$(instant K fin)" ]
+cas $? "une place cpu tenue : gpu seul part sans elle, gpu --cpu attend la place (ms : K $(instant K début)-$(instant K fin), GS $(instant GS début), GC $(instant GC début))"
+# 57. poste --qui dit la classe et l'état du gpu.
+( "$POSTE" gpu 3 -- sleep 3 > /dev/null 2>&1 ) & p=$!; sleep 1
+qui=$("$POSTE" --qui 2>&1); wait $p
+echo "$qui" | grep -q '^tient gpu 3G' && echo "$qui" | grep -q '^gpu : ouvert ; 1 tenu(s), 3 Gio déclarés ; VRAM card2'
+cas $? "poste --qui dit « tient gpu 3G » et la ligne gpu ($(echo "$qui" | grep '^gpu :'))"
+# 58. Un poste gpu sous un poste cpu fait quand même son admission mémoire (un ancêtre cpu ne tient pas la mémoire).
+vram 30; "$POSTE" cpu -- bash -c "timeout 3 '$POSTE' gpu 4 -- true" > /dev/null 2>&1; rc=$?; vram 15
+cas $([ "$rc" = 124 ] && echo 0 || echo 1) "un poste gpu sous un poste cpu attend la mémoire comme les autres (rc $rc, 124 attendu)"
+"$POSTE" cpu -- "$POSTE" gpu 4 -- true > /dev/null 2>&1
+cas $? "un poste gpu sous un poste cpu, mémoire libre : admis"
+# 59. card0, les écrans (21 novembre 2026, Lucie par c7) : un travail la demande par --card card0 ; admis de 01:00 à 08:00
+# seulement, sans session sur seat1, déclaré jetable (--disposable), sa durée bornée par un timeout en tête qui finit avant
+# 08:00 ; sa réserve est la VRAM utilisée de card0 à l'instant, plus 1 Gio. Hors de là, refusé en le disant.
+echo $((32 * 1073741824)) > "$G/sys/class/drm/card0/device/mem_info_vram_total"; echo $((2 * 1073741824)) > "$G/sys/class/drm/card0/device/mem_info_vram_used"
+printf '#!/bin/sh\necho "  3 1000 lucied seat0 tty2"\n' > "$G/loginctl-sans"; printf '#!/bin/sh\necho "  3 1000 lucied seat0 tty2"\necho "  7 1000 lucied seat1 tty3"\n' > "$G/loginctl-avec"; chmod +x "$G/loginctl-sans" "$G/loginctl-avec"
+NUIT=$(date -d '2026-11-22 02:00' +%s); APRES_MIDI=$(date -d '2026-11-22 14:00' +%s)
+POSTE_GPU_LOGINCTL="$G/loginctl-sans" POSTE_GPU_NOW=$NUIT "$POSTE" gpu 8 --card card0 --disposable -- timeout 60 true > "$G/sortie" 2>&1
+cas $? "card0 à 02:00, sans seat1, jetable, borné : admis ($(head -1 "$G/sortie"))"
+POSTE_GPU_LOGINCTL="$G/loginctl-avec" POSTE_GPU_NOW=$NUIT "$POSTE" gpu 8 --card card0 --disposable -- timeout 60 true > "$G/sortie" 2>&1; rc=$?
+[ "$rc" = 77 ] && grep -q seat1 "$G/sortie"; cas $? "card0 à 02:00 avec une session sur seat1 : refusé, dit (rc $rc)"
+POSTE_GPU_LOGINCTL="$G/loginctl-sans" POSTE_GPU_NOW=$APRES_MIDI "$POSTE" gpu 8 --card card0 --disposable -- timeout 60 true > "$G/sortie" 2>&1; rc=$?
+[ "$rc" = 77 ] && grep -q '01:00' "$G/sortie"; cas $? "card0 à 14:00 : refusé, la fenêtre dite (rc $rc)"
+POSTE_GPU_LOGINCTL="$G/loginctl-sans" POSTE_GPU_NOW=$NUIT "$POSTE" gpu 8 --card card0 -- timeout 60 true > "$G/sortie" 2>&1; rc=$?
+[ "$rc" = 2 ] && grep -q 'jetable' "$G/sortie"; cas $? "card0 sans --disposable : refusé, dit (rc $rc)"
+POSTE_GPU_LOGINCTL="$G/loginctl-sans" POSTE_GPU_NOW=$NUIT "$POSTE" gpu 8 --card card0 --disposable -- true > "$G/sortie" 2>&1; rc=$?
+[ "$rc" = 2 ] && grep -q 'timeout' "$G/sortie"; cas $? "card0 sans timeout en tête : refusé, dit (rc $rc)"
+POSTE_GPU_LOGINCTL="$G/loginctl-sans" POSTE_GPU_NOW=$NUIT "$POSTE" gpu 8 --card card0 --disposable -- timeout 8h true > "$G/sortie" 2>&1; rc=$?
+[ "$rc" = 2 ] && grep -q '08:00' "$G/sortie"; cas $? "card0 avec un timeout qui passe 08:00 : refusé, dit (rc $rc)"
+echo $((30 * 1073741824)) > "$G/sys/class/drm/card0/device/mem_info_vram_used"; : > "$J"
+( POSTE_GPU_LOGINCTL="$G/loginctl-sans" POSTE_GPU_NOW=$NUIT "$POSTE" gpu 8 --card card0 --disposable -- timeout 60 bash -c 'note Z début' > /dev/null 2>&1 ) & p=$!
+sleep 2; [ -z "$(instant Z début)" ]; a=$?; echo $((2 * 1073741824)) > "$G/sys/class/drm/card0/device/mem_info_vram_used"; wait $p
+[ "$a" = 0 ] && [ -n "$(instant Z début)" ]; cas $? "card0 : 30 Gio utilisés, un besoin de 8 attend, puis part quand la VRAM se libère"
+rm -f "$POSTE_LOCK_DIR/gpu-card" "$POSTE_LOCK_DIR/gpu-reserve-gib" "$POSTE_LOCK_DIR/lourds-max"; unset POSTE_GPU_NOW POSTE_GPU_MEMINFO POSTE_GPU_SYS
 
 exit $echec
