@@ -983,6 +983,19 @@ impl DaemonHost {
                 let depot = Path::new(&commun).parent().ok_or("close_view : dépôt introuvable")?.to_path_buf();
                 git(&depot, &["worktree", "remove", "--force", &reel.to_string_lossy()])?;
                 git(&depot, &["worktree", "prune"])?;
+                // 5. Its local branch (tty's scenario 1, point 5): nothing on it that no remote holds — the guard above
+                // said so for the tree, and it is checked again on the branch itself before `-D`.
+                if let Some(branche) = ouverte["branch"].as_str().filter(|b| !b.is_empty()) {
+                    let existe = git(&depot, &["rev-parse", "--verify", "-q", &format!("refs/heads/{branche}")]).is_ok();
+                    if existe {
+                        let seuls = git(&depot, &["rev-list", "--count", &format!("{fourche}..refs/heads/{branche}"), "--not", "--remotes"])?;
+                        if seuls == "0" {
+                            git(&depot, &["branch", "-D", branche])?;
+                        } else {
+                            eprintln!("[démon] close_view : la branche « {branche} » a {seuls} commit(s) qu'aucune branche distante ne tient ; elle reste");
+                        }
+                    }
+                }
             }
             // Its target, only under a target folder of the build cache.
             if let Some(t) = ouverte["target"].as_str().map(std::path::PathBuf::from) {
@@ -1000,11 +1013,16 @@ impl DaemonHost {
                     let racine = prepared.workspace_root().ok_or("pas de racine de travail")?;
                     let repo = crate::suivies::repo_id(&racine, prepared.manifest.tracked.as_ref())?.ok_or("pas d'id de dépôt")?;
                     let cat = b.catalog.lock().map_err(|_| "catalogue empoisonné".to_string())?;
-                    if purge {
-                        crate::suivies::purge_layer(&cat, &repo, &couche)
-                    } else {
-                        crate::suivies::end_layer(&cat, &repo, &couche)
+                    let fin = if purge { crate::suivies::purge_layer(&cat, &repo, &couche) } else { crate::suivies::end_layer(&cat, &repo, &couche) };
+                    // The fork's layer, once no other open view shares it (tty's scenario 1, point 5): it goes as the
+                    // view's does, ended or purged.
+                    if let Some(fourche) = ouverte["fork"].as_str().filter(|f| !f.is_empty()) {
+                        if !self.fourche_partagee(fourche, claude, name) {
+                            let nom = format!("fourche:{fourche}");
+                            let _ = if purge { crate::suivies::purge_layer(&cat, &repo, &nom) } else { crate::suivies::end_layer(&cat, &repo, &nom) };
+                        }
                     }
+                    fin
                 });
             }
             #[cfg(not(feature = "code"))]
@@ -1030,6 +1048,20 @@ impl DaemonHost {
             }
             Ok(json!({ "ok": true, "closed": name, "layer": couche, "purged": purge }))
         }
+    }
+
+    /// Whether a view the host opened, other than `name` of the Claude Code session `claude`, comes from the fork `fourche`
+    /// (every session's kept state is read): the fork's layer is shared while one does.
+    fn fourche_partagee(&self, fourche: &str, claude: &str, name: &str) -> bool {
+        std::fs::read_dir(self.vues_dir()).into_iter().flatten().flatten().any(|e| {
+            let session = e.path().file_stem().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+            let etat: Value = std::fs::read_to_string(e.path()).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_else(|| json!({}));
+            etat["ouvertes"]
+                .as_object()
+                .into_iter()
+                .flatten()
+                .any(|(nom, o)| !(session == claude && nom == name) && o["fork"].as_str() == Some(fourche))
+        })
     }
 
     /// **Open a folder** (Lucie's first step in the IDE, 21 November 2026; recherche makes `/ide/ouvrir`): a folder given
