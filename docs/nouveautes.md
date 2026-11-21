@@ -1,5 +1,7 @@
 # Nouveautés
 
+- 21 novembre 2026 — **Une vue fermée ne laisse rien derrière elle.** `close_view` retire le worktree et son target,
+  et efface maintenant aussi par défaut les générations de la vue dans la base. `keep: true` les garde.
 - 21 novembre 2026 — **Une indexation dit les liens qu'elle n'a pas pu poser.** Un lien dont un bout manque
   n'est pas écrit. Il était écarté sans un mot : une réécriture de 419 fichiers en écartait 26 544 et rendait
   `failed: 0`. Le journal de l'index le dit maintenant, avec un exemple, et les rapports d'ingestion et de réécriture
