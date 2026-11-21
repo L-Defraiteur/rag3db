@@ -1614,7 +1614,9 @@ impl DaemonHost {
                 .with_backend_id(backend_id, |b| {
                     let outils = crate::backend_tools::BackendTools { backend: b };
                     let declares = crate::declare::DeclarationTools { backend: b, inner: &outils };
-                    super::chat::OutilsDuChat::de(b, &declares, true).call(&call).content
+                    let du_chat = super::chat::OutilsDuChat::de(b, &declares, true);
+                    let rendu = du_chat.call(&call).content;
+                    rendu
                 })
                 .map_err(|e| (commande.clone(), e))?;
             let vert = rendu.contains("\ncode 0 ") && !rendu.contains("_Arrêt : cette commande a échoué._");
