@@ -263,6 +263,22 @@ elif [ -n "${5:-}" ]; then
   extrait $J/navigateur.log '^test result|panicked at' >> $R
   [ $c = 0 ] || rouge "témoin navigateur (code=$c)"
 fi
+# **La suite à faute injectée du confineur** (21 novembre 2026, c7) : une vraie portée systemd crevée, un vrai oom_kill.
+# À la demande seulement (FAUTE_INJECTEE=1) : le pousseur ne la pose pas, il tourne pendant que Lucie travaille. Sous une
+# session graphique active, la suite se saute en le disant : non jugée, comptée, dite en première ligne du résumé.
+if [ -n "${FAUTE_INJECTEE:-}" ] && [ -f scripts/test_confiner_faute_injectee.py ]; then
+  echo "== suite à faute injectée" >> $R
+  timeout 600 python3 scripts/test_confiner_faute_injectee.py -v > $J/faute-injectee.log 2>&1; c=$?
+  [ $c = 0 ] || rouge "suite à faute injectée (code=$c)"
+  if grep -q "skipped 'SKIP" $J/faute-injectee.log; then
+    m=$(grep -m1 -o "SKIP : [^']*" $J/faute-injectee.log)
+    echo "non jugé : suite à faute injectée — $m" >> $R
+    NON_JUGES=$((NON_JUGES + 1))
+    sed -i "1i NON JUGÉE : la suite à faute injectée du confineur — $m" $R
+  else
+    echo "suite à faute injectée : jouée" >> $R
+  fi
+fi
 echo "suites jouées :${JOUEES:- aucune}" >> $R
 echo "tests non jugés : $NON_JUGES" >> $R
 echo VERT >> $R
