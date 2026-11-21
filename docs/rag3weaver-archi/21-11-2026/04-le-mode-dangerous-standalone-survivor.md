@@ -1,5 +1,8 @@
 # Le mode « dangerous standalone survivor »
 
+> **Remplacée en partie par la page 07** (`07-la-porte-du-mode-auto-forme-retenue.md`), qui rassemble ce que Lucie a
+> dit depuis 9 h 40 : là où les deux diffèrent, c'est la page 07 qui vaut.
+
 *rag3weaver archi, 21 novembre 2026, à la demande de Lucie relayée par c7 (9 h 4x). Une page de conception, avant tout
 code. Elle prolonge la page 03, le mode auto contextuel, dont elle reprend les classes, la carte et le rappel.*
 
