@@ -1101,7 +1101,9 @@ mod tests {
         let dehors = tempfile::tempdir().unwrap();
         let script = dehors.path().join("lecture.py");
         let frere = dehors.path().join("frere.txt");
-        let contenu = "import pathlib, sys\nif len(sys.argv) > 1:\n    print(pathlib.Path(sys.argv[1]).read_text())\nelse:\n    print('SCRIPT_EXTERIEUR_LU')\n";
+        // The script leaves a mark in its working directory (the domain, writable) when it runs at all: the proof that
+        // a command stopped before running never ran, stronger than its absent output.
+        let contenu = "import pathlib, sys\npathlib.Path('lance.txt').write_text('x')\nif len(sys.argv) > 1:\n    print(pathlib.Path(sys.argv[1]).read_text())\nelse:\n    print('SCRIPT_EXTERIEUR_LU')\n";
         std::fs::write(&script, contenu).unwrap();
         std::fs::write(&frere, "CONTENU_FRERE_NON_ACCORDE").unwrap();
         assert_eq!(std::fs::read_to_string(&script).unwrap(), contenu, "l'hôte peut lire le même inode");
@@ -1134,16 +1136,20 @@ mod tests {
                 assert!(arrete(r.clone()), "a path outside the roots is not stopped as open_root: {r:?}");
                 let sortie = texte(&mut ctx);
                 assert!(!sortie.contains("SCRIPT_EXTERIEUR_LU") && !sortie.contains("code 0"), "the line granted by a human ran outside the domain: {sortie}");
+                assert!(!domaine.path().join("lance.txt").exists(), "the line granted by a human ran: the script left its mark");
             } else {
                 RunCommandNode::new("run", &ligne).execute(&mut ctx).unwrap();
                 let sortie = texte(&mut ctx);
                 assert!(sortie.contains("code 0") && sortie.contains("SCRIPT_EXTERIEUR_LU"), "seule différence : extra_read du fichier : {sortie}");
+                assert!(domaine.path().join("lance.txt").exists(), "the script read through extra_read left no mark: the mark proves nothing");
+                std::fs::remove_file(domaine.path().join("lance.txt")).unwrap();
                 let variante = format!("{ligne} {}", frere.display());
                 assert!(arrete(RunCommandNode::new("run", &variante).execute(&mut ctx)), "pas d'accord implicite de variante");
                 garde.accorder_ligne(&variante, &contexte_accord).unwrap();
                 let r = RunCommandNode::new("run", &variante).execute(&mut ctx);
                 assert!(arrete(r.clone()), "extra_read ne donne pas le parent : {r:?}");
                 assert!(!texte(&mut ctx).contains("CONTENU_FRERE_NON_ACCORDE"), "extra_read ne donne pas le parent");
+                assert!(!domaine.path().join("lance.txt").exists(), "the variant ran: the script left its mark");
             }
         }
     }
