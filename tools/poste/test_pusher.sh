@@ -843,4 +843,20 @@ PUSHER_TRAIN_MAX=1 P step > /dev/null 2>&1
   && ok "un lot rust retiré pendant la garde : la garde ne pousse pas, et rien n'est rendu rouge" \
   || ko "lot rust retiré pendant la garde : master $([ "$(master)" = "$m0" ] && echo immobile || echo BOUGÉ) ; $(grep -P '\tdq-g\t' "$D/pusher/log.tsv" | cut -f3 | paste -sd,)"
 rm -f "$D/guard-hook"
+# 47. A verdict touches only the entry its train took (21 Nov., c7: e2e-equipier-faux-modele, taken at 11:20:19, dequeued
+# at 11:20:39 and deposited again under the same id with another witness suite at 11:20:54; the old train went red at
+# 11:21:22, and its red removed the new entry). Dequeued and deposited again during the pass: a red end leaves the new
+# entry queued; a green end does not push the old train, and leaves the new entry queued too.
+for fin in ROUGE VERT; do
+  id=eq-$fin; h=$(lot "$id" extension/rag3weaver/src/$id.rs "fn eq_$fin() {}")
+  P enqueue "$id" "$id" "$h" rust some_witness e2e_code - - author-e > /dev/null
+  [ $fin = ROUGE ] && echo "ROUGE témoin" > "$D/outcomes.d/$id" || echo VERT > "$D/outcomes.d/$id"; m0=$(master)
+  printf 'bash %q dequeue %s > /dev/null; bash %q enqueue %s %s %s rust some_witness e2e_code_sync - - author-e > /dev/null\n' "$PUSHER" "$id" "$PUSHER" "$id" "$id" "$h" > "$D/pass-hook"
+  PUSHER_TRAIN_MAX=1 P step > /dev/null 2>&1
+  nouvelle=$(grep -v '^#' "$D/pusher/queue.tsv" | awk -F'\t' -v id="$id" '$1 == id {print $6}')
+  [ "$nouvelle" = e2e_code_sync ] && [ "$(master)" = "$m0" ] \
+    && ok "retiré puis redéposé pendant la passe, fin $fin de l'ancien train : le redépôt reste en file, rien de poussé" \
+    || ko "redépôt pendant la passe, fin $fin : entrée en file « ${nouvelle:-aucune} », master $([ "$(master)" = "$m0" ] && echo immobile || echo BOUGÉ) ; $(grep -P "\t$id\t" "$D/pusher/log.tsv" | cut -f3 | paste -sd,)"
+  rm -f "$D/pass-hook"; P dequeue "$id" > /dev/null 2>&1
+done
 exit $red
