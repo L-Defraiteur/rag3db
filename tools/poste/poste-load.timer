@@ -1,0 +1,9 @@
+[Unit]
+Description=poste : le relevé de charge toutes les deux minutes, pour juger le nombre de places lourdes
+
+[Timer]
+OnCalendar=*:0/2
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target
