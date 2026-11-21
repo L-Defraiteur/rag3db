@@ -559,8 +559,9 @@ impl Vue {
             }
         }
         // Un accord répondu : sa commande, avant que la boîte ne l'oublie.
-        let resultat = match (l["reply_to"].as_str(), l["approved"].as_bool()) {
-            (Some(r), Some(oui)) => self.boite.attentes().iter().find(|a| a.id == r && a.kind == "approval").map(|a| format!("{} : {}", if oui { "accordé" } else { "refusé" }, a.command.clone().unwrap_or_default())),
+        // The one closing line of a card says who decided (the mode auto, 21 November 2026).
+        let resultat = match l["reply_to"].as_str() {
+            Some(r) if l["kind"] != "approval_state" => self.boite.attentes().iter().find(|a| a.id == r && a.kind == "approval").and_then(|a| crate::boite::closing_line(a, l)),
             _ => None,
         };
         if l["from"] == "session" {
@@ -568,6 +569,10 @@ impl Vue {
             return;
         }
         self.boite.ligne(l);
+        // A card's state is said on the card, never written.
+        if l["kind"] == "approval_state" {
+            return;
+        }
         if let Some(n) = l["name"].as_str().filter(|n| !n.trim().is_empty() && l["from"] == "teammate") {
             self.nom_agent = Some(n.to_string());
         }
@@ -950,8 +955,11 @@ impl Vue {
                     1 => String::new(),
                     n => format!(" (+{})", n - 1),
                 };
-                return match (a.kind.as_str(), &a.command) {
-                    ("approval", Some(cmd)) => format!("{c} attend ton accord : {cmd}  {}  ← → Entrée, ou o / n{reste}", self.boutons()),
+                return match a.kind.as_str() {
+                    "approval" => {
+                        let etat = a.state_said(crate::boite::now_ms()).map(|s| format!(" · {s}")).unwrap_or_default();
+                        format!("{c} attend ton accord : {}{etat}  {}  ← → Entrée, ou o / n{reste}", a.what(), self.boutons())
+                    }
                     _ => format!("{c} attend ta réponse : {}{reste}", a.text.lines().next().unwrap_or_default()),
                 };
             }
@@ -1777,14 +1785,14 @@ mod tests {
         v.ligne_de_boite(&ligne_b(2, "supervisor", "answer", json!({ "reply_to": "a1/doc:1", "approved": true, "text": "oui" })));
         let apres = ecrites(&mut v);
         assert_eq!(apres.len(), 1, "une ligne de résultat : {apres:?}");
-        assert!(apres[0].ends_with("accordé : git status"), "{apres:?}");
+        assert!(apres[0].ends_with("accordé par toi : git status"), "{apres:?}");
         assert!(!vivante(&v).contains("accord"), "répondue, elle quitte la zone vivante : {}", vivante(&v));
         // Répondue ailleurs (l'IDE) : la même ligne de résultat.
         v.ligne_de_boite(&ligne_b(3, "teammate", "approval", json!({ "command": "rm -rf build" })));
         v.ligne_de_boite(&ligne_b(4, "supervisor", "answer", json!({ "reply_to": "a1/doc:3", "approved": false, "text": "non" })));
         let ailleurs = ecrites(&mut v);
         assert_eq!(ailleurs.len(), 1, "{ailleurs:?}");
-        assert!(ailleurs[0].ends_with("refusé : rm -rf build"), "{ailleurs:?}");
+        assert!(ailleurs[0].ends_with("refusé par toi : rm -rf build"), "{ailleurs:?}");
     }
 
     /// **Des boutons d'accord au clavier** (Lucie, 15 nov. : « faut pouvoir avoir "boutons" de
