@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Square } from "lucide-react";
-import { onFlux, shortName, stopRun, type FluxEvent, type HostState } from "@/lib/host";
+import { displayName, onFlux, stopRun, type FluxEvent, type HostState } from "@/lib/host";
 import { endOfRun } from "@/views/Dag";
 
 // **Les réactions** (page 08, vue 7) : les réactions déclarées (vers leur DAG
@@ -67,11 +67,11 @@ export function Reactions({ id, state }: { id: string; state: HostState }) {
       }),
     [backend?.manifest],
   );
-  if (!backend) return <p className="text-destructive">backend inconnu : {id}</p>;
+  if (!backend) return <p className="text-destructive">dépôt inconnu : {id}</p>;
   const watches = Object.entries(info?.index?.watches ?? {});
   return (
     <>
-      <p id="fil" className="text-xs text-muted-foreground mb-3"><a href="/ide/" className="hover:underline">backends</a> · {shortName(backend.manifest)} · réactions</p>
+      <p id="fil" className="text-xs text-muted-foreground mb-3"><a href="/ide/" className="hover:underline">dépôts</a> · {displayName(backend)} · réactions</p>
       <h1 className="text-xl font-semibold mb-1">Réactions</h1>
       {error ? <p className="text-destructive" role="alert">{error}</p> : null}
       {info ? (
