@@ -12,9 +12,10 @@ L'hôte posé à 01 h 29 (fed132c964) a été bâti sans la feature `token-count
 - `rag3weaver-backend code-tree add <copie> --from templates/backends/code/backend.json`, comme le dit le README, répond « l'hôte http://127.0.0.1:7970 n'ouvre pas ce backend : le découpage pour granite-278m compte ses jetons, et ce bâti n'a pas le compteur : il faut la feature token-count ».
 - **L'ajout écrit avant d'échouer** : `~/.config/rag3weaver/code-projet-tty/`, sa base, et un backend inscrit à l'hôte (76ad218634aa).
 - **Le retrait échoue de même** : `code-tree remove code-projet-tty` veut ouvrir le backend. Le ménage est laissé à G.
+- G a remis l'ancien hôte (83c667e420) à 01 h 33 aux deux postes. Le terminal posé, de fed132c964, reste. Ne pas forcer `--sans-hote` : l'hôte rebâti ouvrira `code-projet-tty`, qui se retirera alors par `code-tree remove`.
 - c7 a arrêté le scénario. Selon lui, `search_code` et le chat échouaient aussi depuis 01 h 29 sur les bases sous granite. G remet l'ancien binaire, puis rebâtit avec les features de service et repose l'hôte et le terminal.
 
-Constats pour le produit :
+Constats pour le produit (les deux premiers en ticket, `2026-11-21-un-ajout-de-depot-ecrit-avant-de-savoir-ouvrir-et-ne-se-retire-plus`) :
 - un ajout qui ne pourra pas ouvrir son backend ne devrait rien écrire ;
 - un dépôt inscrit qu'on ne peut pas ouvrir devrait pouvoir se retirer ;
 - la pose d'un hôte devrait vérifier que le binaire ouvre le gabarit de sa propre tête.
