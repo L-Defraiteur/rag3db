@@ -1,5 +1,11 @@
 # Nouveautés
 
+- 21 novembre 2026 — **Un texte déjà embarqué ne repart plus au modèle.** Avant de calculer un vecteur, l'indexation
+  cherche un morceau qui porte déjà le même texte, avec un vecteur à jour du même modèle, et le reprend. Une vue d'un
+  worktree en profite surtout : 74 % de ses morceaux ont un texte que la base embarque déjà. Un fichier copié ou déplacé
+  aussi, et 18 % des vecteurs d'une base sont des textes répétés. Le journal de profil compte `dense_reused`. L'écriture
+  du vecteur, elle, reste à faire.
+
 - 21 novembre 2026 — **« Atelier » quitte l'écran de l'IDE.** Un projet ouvert se nomme par son dossier, à l'accueil
   comme en tête de son chat ; l'accueil vide renvoie au champ « Ouvrir un dossier » ; une carte d'accord dit « l'agent
   demande à lancer… ».
