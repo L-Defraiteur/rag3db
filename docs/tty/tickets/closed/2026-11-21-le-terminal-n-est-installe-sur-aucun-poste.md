@@ -1,6 +1,6 @@
 # Le terminal n'est installé sur aucun poste
 
-- **État** : ouvert le 20 novembre 2026 à 23 h 4x par la session tty, dans les essais de la nuit demandés par Lucie. Il se ferme quand G aura posé `rag3weaver-tty` avec l'hôte.
+- **État** : fermé le 21 novembre 2026 par la session tty. G pose désormais `rag3weaver-tty` avec chaque hôte, bâti de la même tête, dans `~/.local/bin`, aux deux postes. Vérifié à 4 h 05 : `~/.local/bin/rag3weaver-tty` à la tablette et à luciepc, même empreinte (md5 7e70a282). L'installeur côté produit, qui posera le terminal avec l'hôte, est en ticket chez G. Ouvert le 20 novembre 2026 à 23 h 4x.
 - **Famille** : produit
 - **Gravité** : bloquant pour l'essai au terminal : sans bâtir le crate elle-même, Lucie ne peut pas lancer le terminal.
 - **Atteignable en service** : oui, à chaque poste.
