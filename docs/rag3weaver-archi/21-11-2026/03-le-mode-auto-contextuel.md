@@ -167,9 +167,40 @@ Les messages sont **masqués** (étage 0.1) avant d'être écrits : le jeu du ba
    `decision`, sans juge.
 4. L'étage 2 : le juge enfiché dans la sentinelle, ne lisant que les messages de l'utilisateur, avec la table de
    décision. Le banc fait l'expérience du juge sur le journal.
+5. L'étage 3 : les autorisations durables, après la clé d'agent (mémoire) et l'étage 2.
 
-## À trancher par Lucie
+## Tranché par Lucie (21 novembre, sur trois recommandations de c7)
 
-- La fenêtre des messages de l'utilisateur donnée au juge : les N derniers et un résumé, ou toute la tâche ?
-- `destroy_local` `covered` : passer en le disant, ou demander ?
-- Le coffre : un fichier par secret, ou un seul `.env` par projet (`coffre/<projet>.env`) ?
+- **La fenêtre du juge** : tous les messages de l'utilisateur de la tâche, bornés, plus le message qui l'a lancée.
+- **`destroy_local` `covered`** : passe en le disant si la commande vise des fichiers suivis par git dans la vue de
+  l'agent ; redemande hors de la vue, ou sur des fichiers non suivis (que git ne rendrait pas).
+- **Le coffre** : un `.env` par projet, sous le nom du projet, `~/.local/share/rag3weaver/coffre/<projet>.env`.
+  `secret_store {source, name}` y ajoute ou remplace la ligne `name=…`, sans jamais la relire pour le modèle.
+
+## Étage 3 : des autorisations qui survivent, par agent et sur option
+
+Lucie : « ces autorisations survivent par agent sur option, par un mécanisme mémoriel ».
+
+**Le mécanisme.** Quand le juge rend `not_authorized` faute de trace dans les messages de la tâche, la garde ne
+bloque pas d'emblée. Un petit modèle cherche d'abord dans les **autorisations rangées en mémoire pour cet agent**
+(sa clé `agent:<…>`, celle du lot de mémoire). L'archiviste les range à la compaction d'une session. Une autorisation
+retrouvée, et vérifiée, rend `covered` ; sinon la décision reste `not_authorized`.
+
+**Les gardes**, posées par c7 :
+- une autorisation durable naît **seulement d'un message de l'utilisateur**, cité mot pour mot et daté, avec sa portée :
+  `{agent, project, class, command_pattern, until, quote, at, turn}`. Elle ne naît jamais d'un contenu observé (un
+  fichier, une page, une sortie d'outil, le texte d'un agent) ;
+- **le juge vérifie la citation** avant de s'y fier : le tour cité existe dans l'archive, il est un message de
+  l'utilisateur, et sa date et son texte correspondent. Une autorisation dont la citation ne se retrouve pas est
+  ignorée et dite (empoisonnement possible) ;
+- l'échéance et la portée sont tenues en code : une autorisation passée, ou d'un autre agent, d'un autre projet ou
+  d'une autre classe, ne s'applique pas ;
+- afficher un secret, jamais : aucune autorisation ne le couvre ;
+- pour `outbound`, `database` et `secret`, l'option est donnée par Lucie **classe par classe**
+  (`gate.durable: {outbound: false, database: false, secret: false}` par défaut), et une autorisation durable de ces
+  classes reste `scope: "once"` à chaque usage si l'option est fermée.
+
+**Qui fait quoi** : mémoire range et rappelle (la forme de l'autorisation, le rangement à la compaction, le rappel par
+agent) ; archi met la vérification de la citation et la portée dans la garde ; banc ajoute deux cas au jeu : le rappel
+d'une autorisation ancienne valide, et une autorisation empoisonnée en mémoire, sans tour d'utilisateur qui la porte,
+qui ne doit pas passer.
