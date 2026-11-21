@@ -692,12 +692,45 @@ fn servir_http(args: &[String]) -> Result<(), String> {
 
 /// **`code-tree`** : poser ou retirer un arbre de code indexé (voir
 /// `rag3weaver::code_tree`).
+/// **`rag3weaver-backend ouvrir [dossier] [--daemon <adresse>]`** (Lucie, 21 November 2026): opens a folder — the
+/// current one by default — as the IDE does, by the host: created or found, attached, what is needed posed first.
+fn ouvrir_cli(args: &[String]) -> Result<(), String> {
+    const USAGE: &str = "usage: rag3weaver-backend ouvrir [dossier] [--daemon <adresse>]";
+    let (mut hote, mut dossier, mut i) = (None, None, 0);
+    while i < args.len() {
+        match args[i].as_str() {
+            "--daemon" => {
+                hote = Some(args.get(i + 1).cloned().ok_or(USAGE)?);
+                i += 2;
+            }
+            x if dossier.is_none() && !x.starts_with("--") => {
+                dossier = Some(std::path::PathBuf::from(x));
+                i += 1;
+            }
+            _ => return Err(USAGE.into()),
+        }
+    }
+    let dossier = match dossier {
+        Some(d) => d,
+        None => std::env::current_dir().map_err(|e| format!("le dossier courant : {e}"))?,
+    };
+    let endpoint = match hote {
+        Some(a) => rag3weaver::daemon_client::Endpoint::forced(&a),
+        None => rag3weaver::daemon_lifecycle::read()
+            .map(rag3weaver::daemon_client::Endpoint::from)
+            .unwrap_or_else(|| rag3weaver::daemon_client::Endpoint::forced(rag3weaver::daemon_lifecycle::DEFAULT_ADDRESS)),
+    };
+    let r = rag3weaver::code_tree::ouvrir(&endpoint, &dossier)?;
+    println!("{}", rag3weaver::code_tree::dire_l_ouverture(&r));
+    Ok(())
+}
+
 /// **`rag3weaver-backend atelier [--daemon <adresse>] [--sans-hote]`** : pose l'atelier
 /// chez l'utilisatrice (`<config>/atelier/templates`, copié du gabarit livré, sa base
 /// sous `<data>/atelier.rag3db`) s'il n'y est pas, puis le fait ouvrir par l'hôte, qui lui
 /// donne ses outils de worktrees. Rend le chemin du manifeste.
 fn atelier_cli(args: &[String]) -> Result<(), String> {
-    const USAGE: &str = "usage: rag3weaver-backend atelier [--daemon <adresse>] [--sans-hote]";
+    const USAGE: &str = "usage: rag3weaver-backend ouvrir [dossier] [--daemon <adresse>]";
     let (mut hote, mut sans_hote, mut i) = (None, false, 0);
     while i < args.len() {
         match args[i].as_str() {
@@ -718,23 +751,23 @@ fn atelier_cli(args: &[String]) -> Result<(), String> {
     let (manifeste, posee, racine) = rag3weaver::code_tree::poser_l_atelier(&roots, &ici, home.as_deref())?;
     if posee {
         if let Some(racine) = racine {
-            println!("racine de l'atelier : {}", racine.display());
+            println!("racine : {}", racine.display());
         }
-        println!("atelier posé : {}", manifeste.display());
+        println!("posé : {}", manifeste.display());
     } else {
-        println!("atelier déjà posé : {}", manifeste.display());
+        println!("déjà posé : {}", manifeste.display());
         // Sans hôte pour l'ouvrir, la remise au gabarit du binaire se fait ici.
         println!("{}", rag3weaver::builtin_templates::suivi_d_une_pose(&manifeste, sans_hote)?);
         // La racine d'un atelier posé reste la sienne (celle de Lucie : son dossier).
         let racine = std::fs::read_to_string(&manifeste).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()).and_then(|m| m["workspace"]["root"].as_str().map(str::to_string));
         if let Some(r) = racine {
-            println!("racine {r} gardée ; pour la changer : éditer workspace.root de {}, ou retirer ce manifeste et relancer `atelier` depuis le dossier voulu", manifeste.display());
+            println!("racine {r} gardée ; pour la changer : éditer workspace.root de {}, ou retirer ce manifeste et relancer `ouvrir` depuis le dossier voulu", manifeste.display());
         }
     }
     if !sans_hote {
         let adresse = hote.unwrap_or_else(|| rag3weaver::daemon_lifecycle::read().map(|f| f.address).unwrap_or_else(|| rag3weaver::daemon_lifecycle::DEFAULT_ADDRESS.to_string()));
         rag3weaver::code_tree::register(&adresse, &manifeste)?;
-        println!("atelier ouvert par l'hôte {adresse} : sa conversation attache des worktrees (attach_worktree, list_worktrees)");
+        println!("ouvert par l'hôte {adresse} : les dépôts s'y attachent (attach_worktree, list_worktrees)");
     }
     Ok(())
 }
@@ -976,8 +1009,16 @@ fn run() -> Result<(), String> {
     if tous.first().map(String::as_str) == Some("taches") {
         return taches_cli(&tous[1..]);
     }
+    // **`ouvrir [dossier]`** (Lucie, 21 November 2026: « atelier » means nothing to a user); `atelier` stays accepted,
+    // silently, as its former name — with `--sans-hote`, it poses without opening, as before.
+    if tous.first().map(String::as_str) == Some("ouvrir") {
+        return ouvrir_cli(&tous[1..]);
+    }
     if tous.first().map(String::as_str) == Some("atelier") {
-        return atelier_cli(&tous[1..]);
+        if tous[1..].iter().any(|a| a == "--sans-hote") {
+            return atelier_cli(&tous[1..]);
+        }
+        return ouvrir_cli(&tous[1..]);
     }
     if tous.first().map(String::as_str) == Some("check-manifests") {
         return check_manifests(&tous[1..]);
