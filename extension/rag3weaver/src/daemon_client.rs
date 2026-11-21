@@ -541,6 +541,31 @@ pub fn outils_des_vues() -> Vec<Value> {
     ]
 }
 
+/// **One call of a session, without a backend** (`rag3weaver-backend ouvrir`, 21 November 2026): a session opened, the
+/// route posted under it, the session closed. For the routes of the host that need a caller but no manifest
+/// (`/dossiers/ouvrir`).
+pub fn session_call(endpoint: &Endpoint, client: &str, route: &str, body: Value) -> Result<Value, String> {
+    let delai = crate::daemon::Delais::lus().reponse;
+    let agent = crate::daemon::agent_borne(delai);
+    let base = crate::daemon::base_url(&endpoint.address);
+    let token = endpoint.token.as_deref();
+    let session = open_session(&agent, &base, token, client, &[], delai)?;
+    let mut requete = agent.post(format!("{base}{route}")).header("content-type", "application/json").header(SESSION_HEADER, &session);
+    if let Some(t) = token {
+        requete = requete.header("Authorization", &format!("Bearer {t}"));
+    }
+    let rendu = requete.send(body.to_string()).map_err(|e| format!("{base}{route} : {e}")).and_then(|mut r| {
+        let texte = r.body_mut().read_to_string().map_err(|e| format!("réponse de l'hôte illisible : {e}"))?;
+        serde_json::from_str::<Value>(&texte).map_err(|e| format!("réponse de l'hôte illisible ({e}) : {texte}"))
+    });
+    let mut fin = agent.delete(format!("{base}/session")).header(SESSION_HEADER, &session);
+    if let Some(t) = token {
+        fin = fin.header("Authorization", &format!("Bearer {t}"));
+    }
+    let _ = fin.call();
+    rendu
+}
+
 fn open_session(
     agent: &ureq::Agent,
     base: &str,
