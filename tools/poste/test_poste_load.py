@@ -5,6 +5,7 @@ Usage: python3 tools/poste/test_poste_load.py [copy of poste_load.py] — exit 0
 """
 import os
 import pathlib
+import re
 import subprocess
 import sys
 import tempfile
@@ -75,6 +76,8 @@ with tempfile.TemporaryDirectory() as d:
         case("places cpu : 3 tenues (lourd, cpu, gpu+cpu), 4 réglées, 1 en attente", (b["heavy_held"], b["heavy_places"], b["heavy_waiting"]) == ("3", "4", "1"), str(b))
         case("gpu : 2 tenus (gpu+cpu 12G, gpu 6G), 1 en attente, 18 Gio déclarés", (b["gpu_held"], b["gpu_waiting"], b["gpu_declared_gib"]) == ("2", "1", "18"), str(b))
         case("enveloppe d'un lourd : (24 - 2) / 4 = 5,5 cœurs", b["heavy_cores"] == "5.5", b["heavy_cores"])
+        case("espace libre du disque du relevé, en Gio (21 nov., c7 : le disque plein n'était dit nulle part)",
+             re.fullmatch(r"\d+(\.\d)?", b.get("disk_free_gib", "")) is not None, b.get("disk_free_gib"))
         case("cartes : card0 et card2, pas la carte Intel", b["gpus"] == "card0:100%:2.0/32.0,card2:40%:16.0/32.0", b["gpus"])
         # A poste that does not answer: « - », never a crash.
         write(t / "poste", "#!/bin/sh\nexit 1\n")
@@ -91,7 +94,7 @@ with tempfile.TemporaryDirectory() as d:
         r5 = run(t, "2026-12-05T12:05:00", "cpu  1310 0 100 9710 100 0 0 0 0 0\n")
         head, rs = rows(t)
         aside = list((t / "out").glob("poste-load.tsv.before-*"))
-        case("colonnes changées : l'ancien fichier mis de côté, un nouveau commence", r5.returncode == 0 and head[-1] == "gpu_declared_gib" and len(rs) == 1 and len(aside) == 1, f"{head} {len(rs)} {aside}")
+        case("colonnes changées : l'ancien fichier mis de côté, un nouveau commence", r5.returncode == 0 and head[-1] == "disk_free_gib" and len(rs) == 1 and len(aside) == 1, f"{head} {len(rs)} {aside}")
 
 print(f"{count - len(failures)}/{count} verts")
 sys.exit(1 if failures else 0)
