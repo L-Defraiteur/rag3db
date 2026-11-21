@@ -14,6 +14,7 @@ mod agents;
 mod attente_commande;
 mod browser_read;
 mod nom_d_enfant;
+mod observed_content;
 mod run_du_pas;
 
 /// Le numéro du pas, lu dans le message de la frontière.

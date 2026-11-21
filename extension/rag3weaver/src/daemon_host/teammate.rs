@@ -818,6 +818,11 @@ impl Step {
     pub fn system_prompt(&self) -> &'static str {
         SYSTEM_PROMPT
     }
+    /// The teammate's prompt, for a witness that has no step at hand.
+    #[cfg(test)]
+    pub fn prompt_for_witnesses() -> &'static str {
+        SYSTEM_PROMPT
+    }
     /// Les outils qui terminent ce pas.
     pub fn terminal_tools() -> Vec<String> {
         vec![STEP_DONE.to_string()]
