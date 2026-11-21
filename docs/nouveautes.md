@@ -1,5 +1,9 @@
 # Nouveautés
 
+- 21 novembre 2026 — **Le poste d'un coup d'œil dans l'IDE.** Depuis l'accueil, la page « Poste » montre les agents
+  (actifs, par leur nom Claude ; inactifs, ceux dont la table des dossiers garde des dossiers sans session ouverte), les
+  dossiers du poste avec leur session et leurs worktrees, les vues ouvertes (l'active, la couche en écriture), les
+  dépôts attachés et disponibles, et les tâches, chacune vers sa page vivante. Elle se relit toutes les 5 s.
 - 21 novembre 2026 — **Une recherche se lance sans `options`.** `search_code` et les autres outils de recherche
   livrés prennent `options` comme facultatif, avec ses défauts : un appel avec la seule requête répond, au lieu d'être
   refusé sur le schéma.
