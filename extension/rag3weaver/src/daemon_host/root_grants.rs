@@ -30,37 +30,136 @@ pub struct Proof {
     pub turn: Option<String>,
 }
 
-#[allow(unused_variables)]
+/// A path made canonical, existing or not: its deepest existing ancestor resolved (links followed), the rest appended.
+/// `None` when the rest climbs (`..`) or the path is relative.
+fn canonique(chemin: &Path) -> Option<PathBuf> {
+    if !chemin.is_absolute() {
+        return None;
+    }
+    let mut existant = chemin.to_path_buf();
+    let mut reste = Vec::new();
+    while !existant.exists() {
+        reste.push(existant.file_name()?.to_os_string());
+        existant = existant.parent()?.to_path_buf();
+    }
+    let mut out = existant.canonicalize().ok()?;
+    for c in reste.iter().rev() {
+        if c == ".." || c == "." {
+            return None;
+        }
+        out.push(c);
+    }
+    Some(out)
+}
+
+/// Whether `chemin` is `root` or under it, by whole components (`notes-privees` is not under `notes`).
+fn couvre(root: &Path, chemin: &Path) -> bool {
+    chemin.starts_with(root)
+}
+
 impl DaemonHost {
     /// The register's file, beside the code trees' data (`~/.local/share/rag3weaver` in service).
     fn root_grants_file(&self) -> Result<PathBuf, String> {
         Ok(self.racines_de_code()?.data.join("root-grants.json"))
     }
 
+    fn read_grants(&self) -> Vec<Grant> {
+        let Ok(f) = self.root_grants_file() else { return Vec::new() };
+        std::fs::read_to_string(&f)
+            .ok()
+            .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+            .and_then(|v| serde_json::from_value::<Vec<Grant>>(v["grants"].clone()).ok())
+            .unwrap_or_default()
+    }
+
+    fn write_grants(&self, accords: &[Grant]) -> Result<(), String> {
+        let f = self.root_grants_file()?;
+        super::ecrire_par_renommage(&f, &json!({ "grants": accords }))
+    }
+
     /// **The grant that covers `chemin`** for `agent` (or for `"*"`): the path, canonical, is the root or under it.
     pub fn root_grant_for(&self, agent: &str, chemin: &Path) -> Option<Grant> {
-        None // RED STUB.
+        let chemin = canonique(chemin)?;
+        self.read_grants().into_iter().find(|a| (a.agent == agent || a.agent == "*") && couvre(&a.root, &chemin))
     }
 
-    /// **Grant a root** (the Card's « yes » on an `open_root` card): kept in the register, canonical.
+    /// **Grant a root** (the Card's « yes » on an `open_root` card): kept in the register, canonical; a grant already
+    /// there for the same agent and root is replaced by the new proof.
     pub fn grant_root(&self, agent: &str, root: &Path, preuve: Proof, par: &str) -> Result<Grant, String> {
-        Err("accorder une racine : pas encore".into()) // RED STUB.
+        if !matches!(par, "user" | "judge" | "survivor") {
+            return Err(format!("accorder une racine : « {par} » n'est pas user, judge ni survivor"));
+        }
+        if agent != "*" && !agent.starts_with("agent:") {
+            return Err(format!("accorder une racine : « {agent} » n'est ni « * » ni une clé agent:<clé>"));
+        }
+        let root = root.canonicalize().map_err(|e| format!("accorder {} : {e}", root.display()))?;
+        if !root.is_dir() {
+            return Err(format!("accorder {} : une racine est un dossier", root.display()));
+        }
+        let accord = Grant {
+            agent: agent.to_string(),
+            root,
+            quote: preuve.quote,
+            at: preuve.at.unwrap_or_else(crate::catalog::retard::now_ms),
+            turn: preuve.turn,
+            granted_by: par.to_string(),
+        };
+        let mut accords = self.read_grants();
+        accords.retain(|a| !(a.agent == accord.agent && a.root == accord.root));
+        accords.push(accord.clone());
+        self.write_grants(&accords)?;
+        Ok(accord)
     }
 
-    /// **Withdraw a root** granted to `agent` (or to `"*"`).
+    /// **Withdraw a root** granted to `agent` (or to `"*"`); an unknown grant is refused, saying the ones there are.
     pub fn revoke_root(&self, agent: &str, root: &Path) -> Result<(), String> {
-        Err("retirer une racine : pas encore".into()) // RED STUB.
+        let root = canonique(root).unwrap_or_else(|| root.to_path_buf());
+        let mut accords = self.read_grants();
+        let avant = accords.len();
+        accords.retain(|a| !(a.agent == agent && a.root == root));
+        if accords.len() == avant {
+            return Err(format!("aucune racine {} accordée à « {agent} »", root.display()));
+        }
+        self.write_grants(&accords)
     }
 
     /// The roots granted to `agent`, its own and those of `"*"` (`None`: every grant, for the IDE).
     pub fn root_grants(&self, agent: Option<&str>) -> Vec<Grant> {
-        Vec::new() // RED STUB.
+        self.read_grants().into_iter().filter(|a| agent.is_none_or(|k| a.agent == k || a.agent == "*")).collect()
     }
 
     /// **The root to propose for a refused path**: its deepest existing folder; never `$HOME`, `/`, a parent of several
     /// repositories attached, nor anything under `.vault` or `~/.ssh` (then `None`).
     pub fn proposed_root(&self, chemin_refuse: &Path) -> Option<PathBuf> {
-        None // RED STUB.
+        let mut dossier = canonique(chemin_refuse)?;
+        while !dossier.is_dir() {
+            dossier = dossier.parent()?.to_path_buf();
+        }
+        if dossier.parent().is_none() {
+            return None;
+        }
+        let maison = std::env::var_os("HOME").map(PathBuf::from).and_then(|h| h.canonicalize().ok());
+        if let Some(h) = &maison {
+            if &dossier == h || dossier.starts_with(h.join(".ssh")) || h.starts_with(&dossier) {
+                return None;
+            }
+        }
+        if dossier.components().any(|c| c.as_os_str() == ".vault" || c.as_os_str() == ".ssh") {
+            return None;
+        }
+        // A parent of several repositories attached: their roots, read in their manifests.
+        let racines = self.racines_de_code().ok()?;
+        let dessous = racines
+            .registered_manifests()
+            .iter()
+            .filter_map(|m| std::fs::read_to_string(m).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()))
+            .filter_map(|m| m["workspace"]["root"].as_str().and_then(|r| Path::new(r).canonicalize().ok()))
+            .filter(|r| r.starts_with(&dossier) && r != &dossier)
+            .count();
+        if dessous >= 2 {
+            return None;
+        }
+        Some(dossier)
     }
 
     /// `GET /ide/root-grants`: every grant.
