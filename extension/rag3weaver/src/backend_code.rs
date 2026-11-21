@@ -722,7 +722,42 @@ pub fn avec_lecture_git(
             if reel == chemin { bac = bac.lire_en_plus(reel); }
         }
     }
+    // **A commit from the worktree** (scenario 2 of tty, the night of 20 Nov 2026): the worktree's
+    // own gitdir (index, its lock, HEAD, logs), `objects/`, the folder of its branch's ref and of
+    // its log. Never the common `config`, `hooks/` or `info/` (a hooksPath or a hook would run
+    // outside the sandbox), nor `packed-refs`, nor another worktree's gitdir.
+    if admin != commun {
+        for chemin in ecritures_d_un_commit(&admin, &commun) {
+            bac = bac.ecrire_en_plus(chemin);
+        }
+    }
     bac
+}
+
+/// What a commit of the worktree whose gitdir is `admin` writes, under the common `commun`: the
+/// gitdir, `objects/`, and the folders of its branch's ref and reflog (each one that exists, read
+/// from `admin/HEAD`; a detached HEAD writes no ref).
+fn ecritures_d_un_commit(admin: &std::path::Path, commun: &std::path::Path) -> Vec<PathBuf> {
+    let mut chemins = vec![admin.to_path_buf()];
+    let objets = commun.join("objects");
+    if objets.canonicalize().ok().as_deref() == Some(objets.as_path()) {
+        chemins.push(objets);
+    }
+    let tete = std::fs::read_to_string(admin.join("HEAD")).unwrap_or_default();
+    if let Some(reference) = tete.trim().strip_prefix("ref: ") {
+        let reference = std::path::Path::new(reference);
+        let sure = reference.starts_with("refs/heads")
+            && reference.components().all(|c| matches!(c, std::path::Component::Normal(_)));
+        if let (true, Some(dossier)) = (sure, reference.parent()) {
+            for base in [commun.to_path_buf(), commun.join("logs")] {
+                let d = base.join(dossier);
+                if d.canonicalize().ok().as_deref() == Some(d.as_path()) {
+                    chemins.push(d);
+                }
+            }
+        }
+    }
+    chemins
 }
 
 /// Les types de nœuds qu'un crochet peut traverser, selon sa politique.
