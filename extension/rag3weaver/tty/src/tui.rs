@@ -49,9 +49,9 @@ pub(crate) struct Sending {
 
 pub(crate) fn sending_of(action: &Action, tache: &Tache) -> Option<Sending> {
     match action {
-        Action::Envoyer(texte, kind) => Some(Sending { body: json!({ "backend": tache.depot.id, "task": tache.task, "kind": kind, "text": texte }), typed: false }),
-        Action::Repondre { attente, texte, accord } => Some(Sending { body: crate::boite::reponse(&tache.depot.id, &tache.task, attente, texte, *accord), typed: false }),
-        Action::Arreter => Some(Sending { body: json!({ "backend": tache.depot.id, "task": tache.task, "kind": "stop", "text": "" }), typed: false }),
+        Action::Envoyer(texte, kind) => Some(Sending { body: json!({ "backend": tache.depot.id, "task": tache.task, "kind": kind, "text": texte }), typed: true }),
+        Action::Repondre { attente, texte, accord } => Some(Sending { body: crate::boite::reponse(&tache.depot.id, &tache.task, attente, texte, *accord), typed: true }),
+        Action::Arreter => Some(Sending { body: json!({ "backend": tache.depot.id, "task": tache.task, "kind": "stop", "text": "" }), typed: true }),
         _ => None,
     }
 }
@@ -141,7 +141,7 @@ pub fn lancer(ep: Endpoint, tache: Tache, demande: Option<String>, depuis: Optio
             let tx2 = tx.clone();
             let mut ouvert = || {
                 if let Some(texte) = demande.take() {
-                    match client::poster(&agent, &ep, "/ide/teammate/mailbox", &json!({ "backend": tache.depot.id, "task": tache.task, "kind": "request", "text": texte })) {
+                    match client::poster(&agent, &ep, "/ide/teammate/mailbox", &request_sending(&tache, &texte).body) {
                         // La demande ouvre la tâche : son worktree existe désormais.
                         Ok(_) => connaitre(&agent, &ep, &tache, &filtre, &tx2),
                         Err(e) => {
@@ -341,7 +341,8 @@ fn boucle(terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, rx: &mpsc::Rec
                 }
                 Some(Action::Envoyer(texte, kind)) => {
                     garder(&texte);
-                    if let Err(e) = client::poster(agent, ep, "/ide/teammate/mailbox", &json!({ "backend": tache.depot.id, "task": tache.task, "kind": kind, "text": texte })) {
+                    let s = sending_of(&Action::Envoyer(texte.clone(), kind), tache).expect("a message is sent");
+                    if let Err(e) = client::post_typed(agent, ep, "/ide/teammate/mailbox", &s.body) {
                         vue.note(&format!("refusé : {e}"));
                     }
                 }
@@ -350,12 +351,14 @@ fn boucle(terminal: &mut ratatui::DefaultTerminal, vue: &mut Vue, rx: &mpsc::Rec
                     if accord.is_none() {
                         garder(&texte);
                     }
-                    if let Err(e) = client::poster(agent, ep, "/ide/teammate/mailbox", &crate::boite::reponse(&tache.depot.id, &tache.task, &attente, &texte, accord)) {
+                    let s = sending_of(&Action::Repondre { attente, texte, accord }, tache).expect("an answer is sent");
+                    if let Err(e) = client::post_typed(agent, ep, "/ide/teammate/mailbox", &s.body) {
                         vue.note(&format!("la réponse est refusée : {e}"));
                     }
                 }
                 Some(Action::Arreter) => {
-                    if let Err(e) = client::poster(agent, ep, "/ide/teammate/mailbox", &json!({ "backend": tache.depot.id, "task": tache.task, "kind": "stop", "text": "" })) {
+                    let s = sending_of(&Action::Arreter, tache).expect("a stop is sent");
+                    if let Err(e) = client::post_typed(agent, ep, "/ide/teammate/mailbox", &s.body) {
                         vue.note(&format!("l'arrêt est refusé : {e}"));
                     } else {
                         vue.note("arrêt demandé");
@@ -607,7 +610,7 @@ fn lancer_une_commande(cmd: &str, terminal: &mut ratatui::DefaultTerminal, vue: 
             let code = r.code.map(|c| format!("code {c}")).unwrap_or_else(|| "arrêtée par un signal".into());
             vue.note(&format!("!{cmd} : {code} ; la sortie part à l'équipier"));
             let genre = vue.genre_d_un_envoi_du_terminal();
-            if let Err(e) = client::poster(agent, ep, "/ide/teammate/mailbox", &json!({ "backend": tache.depot.id, "task": tache.task, "kind": genre, "text": crate::coquille::consigne(cmd, &dossier, &r) })) {
+            if let Err(e) = client::post_typed(agent, ep, "/ide/teammate/mailbox", &json!({ "backend": tache.depot.id, "task": tache.task, "kind": genre, "text": crate::coquille::consigne(cmd, &dossier, &r) })) {
                 vue.note(&format!("la sortie est refusée : {e}"));
             }
         }

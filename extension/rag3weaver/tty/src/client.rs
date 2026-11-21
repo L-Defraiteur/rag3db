@@ -22,10 +22,15 @@ fn rendu(statut: u16, texte: &str, quoi: &str) -> Result<Value, String> {
 
 /// `POST <chemin>` avec un corps JSON.
 pub fn poster(agent: &ureq::Agent, ep: &Endpoint, chemin: &str, corps: &Value) -> Result<Value, String> {
-    let mut r = agent
-        .post(format!("{}{chemin}", ep.base()))
-        .header("Authorization", &format!("Bearer {}", ep.token))
-        .header("content-type", "application/json")
+    post_with(agent, ep, chemin, corps, None)
+}
+
+fn post_with(agent: &ureq::Agent, ep: &Endpoint, chemin: &str, corps: &Value, user_token: Option<&str>) -> Result<Value, String> {
+    let mut q = agent.post(format!("{}{chemin}", ep.base())).header("Authorization", &format!("Bearer {}", ep.token)).header("content-type", "application/json");
+    if let Some(u) = user_token {
+        q = q.header("X-Rag3weaver-User", u);
+    }
+    let mut r = q
         .send(corps.to_string())
         .map_err(|e| format!("POST {chemin} : l'hôte {} ne répond pas : {e}", ep.address))?;
     let statut = r.status().as_u16();
@@ -37,7 +42,7 @@ pub fn poster(agent: &ureq::Agent, ep: &Endpoint, chemin: &str, corps: &Value) -
 /// known, so that the host signs the line `by.kind = "human"` (the mode auto's human title, 21 November 2026). Never
 /// for what a command line or a script sends.
 pub fn post_typed(agent: &ureq::Agent, ep: &Endpoint, chemin: &str, corps: &Value) -> Result<Value, String> {
-    poster(agent, ep, chemin, corps)
+    post_with(agent, ep, chemin, corps, ep.user_token.as_deref())
 }
 
 /// `GET <chemin et requête>`.
