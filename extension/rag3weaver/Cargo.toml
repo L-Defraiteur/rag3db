@@ -215,7 +215,8 @@ ring = { version = "0.17", optional = true }
 base64 = { version = "0.22", optional = true }
 # WebAssembly nodes (feature wasm-nodes): an interpreter with deterministic fuel, chosen over wasmtime for its build
 # cost and its load time (docs/everything-declarative/21-11-2026/07-le-moteur-webassembly-wasmtime-ou-wasmi.md).
-wasmi = { version = "2.0.2", optional = true }
+# Without `wat`: the host takes a module's bytes, never its text. `validate` stays: a malformed module is refused.
+wasmi = { version = "2.0.2", optional = true, default-features = false, features = ["stable", "std", "validate", "auto-dispatch"] }
 # Le jeton local de l'hôte du démon : l'aléa du système, partout (getrandom
 # sous Linux, getentropy sous macOS, ProcessPrng sous Windows) ; déjà dans
 # l'arbre par ring et rand. Vu au cycle du démon sous Windows, 12 octobre 2026 :
