@@ -51,6 +51,7 @@ fn a_background_command_that_ends_is_told_at_the_next_step() {
         })
     };
     let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")));
+    host.se_connaitre();
     let h = host.hosted(&manifeste).unwrap();
     host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
     host.post_to_teammate(&h.id, "doc", "c7", "request", None, "Lance fond.sh en fond, et dis-moi quand il a fini.", &Value::Null).expect("la request");

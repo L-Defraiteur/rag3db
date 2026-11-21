@@ -846,6 +846,8 @@ impl DaemonHost {
     /// the card says who it was: parent session, views, active view, agent key, final plan, archive, branch head.
     pub(crate) fn fermer_en_gardant(&self, parent: &str, nom: &str) -> Result<(Tache, Value), String> {
         let tache = self.tache(parent, nom).ok_or_else(|| format!("pas de tâche « {nom} » ouverte sur {parent}"))?;
+        // The task's background commands die with it.
+        self.end_task_background(parent, nom);
         if let Some(h) = self.hosted_existing(&tache.manifest) {
             let mut slot = h.backend.write().unwrap_or_else(|p| p.into_inner());
             self.close_slot(&h, &mut slot)?;

@@ -328,6 +328,9 @@ pub struct DaemonHost {
     /// témoins), il permet à l'hôte de donner aux backends qu'il ouvre l'hôte des
     /// worktrees de l'atelier.
     soi: std::sync::OnceLock<std::sync::Weak<DaemonHost>>,
+    /// **The background commands of each task** (`parent/task`; Lucie, 21 November 2026): their scope outlives the
+    /// teammate's steps, and their ends come back to the task's mailbox.
+    task_backgrounds: Mutex<std::collections::HashMap<String, Arc<teammate::TaskBackground>>>,
     /// Où l'atelier inscrit les worktrees qu'il attache ; `None` : ceux de
     /// l'utilisateur (`code_tree::Roots::of_user`).
     racines_de_code: Option<crate::code_tree::Roots>,
@@ -566,6 +569,7 @@ impl DaemonHost {
     pub fn with_opener(opener: Opener) -> Self {
         Self {
             soi: std::sync::OnceLock::new(),
+            task_backgrounds: Default::default(),
             racines_de_code: None,
             backends: Mutex::new(HashMap::new()),
             sessions: Mutex::new(HashMap::new()),
