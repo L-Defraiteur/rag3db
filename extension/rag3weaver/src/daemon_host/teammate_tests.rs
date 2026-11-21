@@ -2891,3 +2891,56 @@ fn a_child_gets_its_views_from_the_parent_who_alone_changes_them() {
     // The set is never emptied.
     assert!(host.changer_les_vues(&h.id, "archi-fouille", &[], &vues, None).is_err());
 }
+
+/// **A fix ends through its verification gate** (the night replays of 21 Nov 2026: the teammate
+/// said « implemented and verified » on a tree that did not compile, and the task closed). With
+/// `teammate.verify`, a step_done on a red tree gives one more step with the gate's output; a
+/// green gate ends the task; still red after `verify_relaunches`, the task ends as a failure.
+#[cfg(all(feature = "code", feature = "rag3db-native", target_os = "linux"))]
+#[test]
+fn a_fix_ends_only_through_its_verification_gate() {
+    for ecrit in [true, false] {
+        let d = tempfile::tempdir().unwrap();
+        let (_depot, manifeste) = depot_inscrit(d.path(), true);
+        let mut m: Value = serde_json::from_str(&std::fs::read_to_string(&manifeste).unwrap()).unwrap();
+        m["teammate"] = json!({ "verify": ["cat FAIT.md"], "verify_relaunches": 1 });
+        std::fs::write(&manifeste, serde_json::to_string_pretty(&m).unwrap()).unwrap();
+        let declarations = manifeste.parent().unwrap();
+        for args in [&["add", "-A"][..], &["commit", "-q", "-m", "une porte"]] {
+            assert!(std::process::Command::new("git").args(args).current_dir(declarations).status().unwrap().success(), "git {args:?}");
+        }
+        let appels = Arc::new(Mutex::new(0usize));
+        let model: ChatModel = {
+            let appels = appels.clone();
+            Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+                let appels = appels.clone();
+                Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
+                    let n = { let mut a = appels.lock().unwrap(); *a += 1; *a };
+                    let fini = ("step_done", json!({ "item": "", "succeeded": true, "done": "implemented and verified", "remaining": "" }));
+                    if ecrit && n == 2 {
+                        return answer(turns, opts, sink, "", calls(&[("edit_file", json!({ "path": "FAIT.md", "content": "fait\n" }))]));
+                    }
+                    answer(turns, opts, sink, "", calls(&[fini]))
+                })))
+            })
+        };
+        let host = hote(d.path(), model).with_runs_root(d.path().join("runs"));
+        let h = host.hosted(&manifeste).unwrap();
+        host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+        host.ouvrir_une_tache(&h.id, "doc").expect("la tâche s'ouvre");
+        let files = host.teammate_files(&h.id, "doc").unwrap();
+        files.append_with("supervisor", "request", None, "Corrige-le.", &json!({ "expects": "none" })).unwrap();
+        let o = host.run_teammate(&h.id, "doc").unwrap();
+        let boite = files.mailbox();
+        let rouge = boite.iter().any(|l| l["from"] == "host" && l["text"].as_str().is_some_and(|t| t.contains("verification") && t.contains("cat FAIT.md") && t.contains("red")));
+        assert!(rouge, "the first step_done met a red gate, said with its command: {boite:#?}");
+        if ecrit {
+            assert_eq!(o.steps.len(), 2, "one more step after the red gate: {o:?}");
+            assert!(!o.ended.starts_with("failure"), "a green gate ends the task: {o:?}");
+            assert!(boite.iter().any(|l| l["from"] == "host" && l["text"].as_str().is_some_and(|t| t.contains("verification") && t.contains("green"))), "{boite:#?}");
+        } else {
+            assert!(o.ended.starts_with("failure") && o.ended.contains("cat FAIT.md"), "still red after its relaunch, the task fails saying so: {o:?}");
+            assert_eq!(o.steps.len(), 2, "one relaunch, then the failure: {o:?}");
+        }
+    }
+}
