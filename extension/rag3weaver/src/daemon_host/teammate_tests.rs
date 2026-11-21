@@ -2254,6 +2254,62 @@ fn the_next_step_sees_what_the_previous_step_read() {
     assert_eq!(mailbox.iter().find(|l| l["kind"] == "ended").unwrap()["text"], "fait sans plan", "{mailbox:#?}");
 }
 
+/// **A declared scripted `Previous step` that fails never breaks the step, and the box says it** (validation of the
+/// scripted node, 21 November 2026), by the host's path: the manifest declares `teammate.carry_over_node`, its
+/// `nodes/` script throws; the second frontier still carries the block (the Rust one), and a `host` report names the
+/// script and its line, once.
+#[test]
+fn a_failing_scripted_previous_step_falls_back_and_the_box_says_it() {
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let mut m: Value = serde_json::from_str(&std::fs::read_to_string(&manifeste).unwrap()).unwrap();
+    m["teammate"]["carry_over_node"] = json!("PreviousStep");
+    std::fs::write(&manifeste, serde_json::to_string_pretty(&m).unwrap()).unwrap();
+    let ts = manifeste.parent().unwrap().join("nodes/previous_step.ts");
+    let casse = std::fs::read_to_string(&ts).expect("the code template ships nodes/previous_step.ts").replace("  const w = inputs.work;", "  const w = inputs.work;\n  throw new Error(\"cassé exprès\");");
+    std::fs::write(&ts, casse).unwrap();
+    // A task starts from a commit of the declarations: the declaration and the broken script are committed, as a user
+    // would.
+    let declarations = manifeste.parent().unwrap();
+    for args in [&["add", "-A"][..], &["commit", "-q", "-m", "teammate.carry_over_node, un script cassé"]] {
+        let o = std::process::Command::new("git").arg("-C").arg(declarations).args(args).output().unwrap();
+        assert!(o.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&o.stderr));
+    }
+    let seen = Arc::new(Mutex::new(Vec::<String>::new()));
+    let model: ChatModel = {
+        let seen = seen.clone();
+        Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let seen = seen.clone();
+            Ok(Arc::new(CallbackLlm::new("previous-step-script", 8192, move |turns, opts, sink| {
+                let results = tool_results(turns);
+                if results.is_empty() {
+                    seen.lock().unwrap().push(last_user(turns));
+                }
+                match (step_of(turns), results.len()) {
+                    (1, 0) => answer(turns, opts, sink, "", calls(&[("read_file", json!({ "path": "src/lib.rs", "offset": 1, "limit": 20 }))])),
+                    (1, _) => answer(turns, opts, sink, "I read src/lib.rs.", vec![]),
+                    _ => answer(turns, opts, sink, "Done.", calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "read", "remaining": "" }))])),
+                }
+            })))
+        })
+    };
+    let host = Arc::new(hote(d.path(), model).with_runs_root(d.path().join("runs")));
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("the parent opens");
+    host.post_to_teammate(&h.id, "doc", "lucie", "request", None, "Read src/lib.rs.", &Value::Null).expect("the request");
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    let mailbox = attendre_dans(&files, "the end", &|b| b.iter().any(|l| l["kind"] == "ended"));
+    let second = seen.lock().unwrap().get(1).cloned().unwrap_or_default();
+    assert!(second.contains("Previous step") && second.contains("src/lib.rs"), "the Rust block serves: {second}");
+    let rapports: Vec<String> = mailbox
+        .iter()
+        .filter(|l| l["from"] == "host" && l["text"].as_str().is_some_and(|s| s.contains("repli Rust")))
+        .map(|l| l["text"].as_str().unwrap_or_default().to_string())
+        .collect();
+    assert_eq!(rapports.len(), 1, "the box says the fallback once: {mailbox:#?}");
+    assert!(rapports[0].contains("previous_step.ts") && rapports[0].contains("cassé exprès") && rapports[0].contains("line"), "{}", rapports[0]);
+}
+
 /// **A read of 5 lines covers 5 lines** (found with S2, 18 Nov 2026): the task's read_file (the
 /// code backend's) takes `limit`, and the read imprint only knew `length` — a read of 5 lines was
 /// counted as 200, and a replace_lines on a line never read passed.

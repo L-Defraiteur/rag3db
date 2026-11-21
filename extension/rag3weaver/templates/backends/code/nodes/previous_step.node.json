@@ -1,0 +1,35 @@
+{
+  "name": "PreviousStep",
+  "description": "Le bloc « Previous step » de l'équipier : ce que le pas d'avant a lu, écrit et lancé, et son dernier texte, borné en caractères. Déclaré par teammate.carry_over_node ; le bloc Rust prend la main si le script échoue.",
+  "script": "previous_step.ts",
+  "inputs": {
+    "work": {
+      "schema": {
+        "type": "object",
+        "required": ["number", "read", "wrote", "last_text", "budget"],
+        "properties": {
+          "number": { "type": "integer", "minimum": 0 },
+          "read": { "type": "array", "items": { "type": "string" } },
+          "wrote": { "type": "array", "items": { "type": "string" } },
+          "command": {
+            "oneOf": [
+              { "type": "null" },
+              { "type": "object", "required": ["command", "output"], "properties": { "command": { "type": "string" }, "output": { "type": "string" } } }
+            ]
+          },
+          "last_text": { "type": "string" },
+          "budget": { "type": "integer", "minimum": 0 }
+        }
+      },
+      "required": true
+    }
+  },
+  "outputs": { "block": { "schema": { "type": "string" } } },
+  "config": {
+    "style": {
+      "schema": { "enum": ["full", "compact"] },
+      "default": "full",
+      "description": "full : le bloc du Rust, à l'octet près ; compact : sans la fin de sortie de la dernière commande."
+    }
+  }
+}
