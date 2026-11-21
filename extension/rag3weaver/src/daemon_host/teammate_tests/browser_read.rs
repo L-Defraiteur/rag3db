@@ -17,7 +17,7 @@ const BANK: &str = "https://bank.example.com/";
 const ARIA: &str = "- heading \"Guide\" [ref=e1]\n- textbox \"Recherche\" [ref=e2]: rust\n- textbox \"Mot de passe\" [ref=e3]: hunter2\n- button \"Entrer\" [ref=e4]";
 
 /// The fake extension: tab 7 on the docs, tab 9 on a bank; it answers each command and keeps it.
-fn fake_extension(socket: &std::path::Path) -> Arc<Mutex<Vec<Value>>> {
+pub(super) fn fake_extension(socket: &std::path::Path) -> Arc<Mutex<Vec<Value>>> {
     let received = Arc::new(Mutex::new(Vec::<Value>::new()));
     let mut s = UnixStream::connect(socket).expect("the bridge listens");
     let hello = json!({ "type": "hello", "browserId": "chrome-essai", "extensionVersion": "0.0.0", "protocolRevision": 5, "features": [] });
@@ -143,4 +143,65 @@ fn a_page_console_is_read() {
     assert_eq!(items[0]["level"], "error", "{r}");
     assert!(items[0]["text"].as_str().is_some_and(|t| t.contains("TypeError")), "{r}");
     assert!(items[0]["at"].is_u64(), "{r}");
+}
+
+/// **Through the host** : a manifest that declares `teammate.browser` opens the host's one listening socket when its
+/// backend opens, `/sante` says it and the linked browsers, and the teammate's model sees the family and reads a page
+/// with it.
+#[cfg(all(feature = "code", feature = "rag3db-native"))]
+#[test]
+fn a_manifest_with_teammate_browser_opens_the_listening_and_gives_the_family() {
+    use super::super::chat::ChatModel;
+    use super::super::chat_qui_code::{depot_inscrit, hote};
+    use crate::llm::{CallbackLlm, Llm};
+    let d = tempfile::tempdir().unwrap();
+    let (_depot, manifeste) = depot_inscrit(d.path(), true);
+    let mut m: Value = serde_json::from_str(&std::fs::read_to_string(&manifeste).unwrap()).unwrap();
+    m["teammate"] = json!({ "browser": { "domains": ["example.org"] }, "reply_wait_s": 2 });
+    std::fs::write(&manifeste, serde_json::to_string_pretty(&m).unwrap()).unwrap();
+    let declarations = manifeste.parent().unwrap();
+    for args in [&["add", "-A"][..], &["commit", "-q", "-m", "browser"]] {
+        assert!(std::process::Command::new("git").args(args).current_dir(declarations).status().unwrap().success(), "git {args:?}");
+    }
+    let seen = Arc::new(Mutex::new((Vec::<String>::new(), Vec::<Value>::new())));
+    let model: ChatModel = {
+        let seen = seen.clone();
+        Arc::new(move |_b: &crate::backend::PreparedBackend| -> Result<Arc<dyn Llm>, String> {
+            let seen = seen.clone();
+            Ok(Arc::new(CallbackLlm::new("faux-equipier", 8192, move |turns, opts, sink| {
+                let got = super::tool_results(turns);
+                if got.is_empty() {
+                    seen.lock().unwrap().0 = opts.tools.iter().map(|t| t.name.clone()).collect();
+                    return super::answer(turns, opts, sink, "", super::calls(&[(BROWSER_READ, json!({ "tab_id": "7", "mode": "aria" }))]));
+                }
+                if seen.lock().unwrap().1.is_empty() {
+                    seen.lock().unwrap().1 = got.iter().map(|r| serde_json::from_str(r).unwrap_or(json!(r))).collect();
+                }
+                super::answer(turns, opts, sink, "", super::calls(&[("step_done", json!({ "item": "", "succeeded": true, "done": "lu", "remaining": "" }))]))
+            })))
+        })
+    };
+    let socket = d.path().join("pont").join("pont.sock");
+    let host = hote(d.path(), model).with_runs_root(d.path().join("runs")).with_browser_socket(socket.clone());
+    assert_eq!(host.handle("GET", "/sante", None, b"").1["browser"], Value::Null, "nothing listens before a manifest asks");
+    let h = host.hosted(&manifeste).unwrap();
+    host.with_backend(&h, |_| ()).expect("le principal s'ouvre");
+    let sante = host.handle("GET", "/sante", None, b"").1;
+    assert_eq!(sante["browser"]["socket"], json!(socket.display().to_string()), "{sante}");
+    let _received = fake_extension(&socket);
+    let end = Instant::now() + Duration::from_secs(10);
+    while host.handle("GET", "/sante", None, b"").1["browser"]["browsers"].as_array().is_none_or(|b| b.is_empty()) {
+        assert!(Instant::now() < end, "/sante never said the linked browser");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    host.ouvrir_une_tache(&h.id, "doc").expect("la tâche s'ouvre");
+    let files = host.teammate_files(&h.id, "doc").unwrap();
+    files.append("supervisor", "request", None, "Lis la page de l'onglet 7.").unwrap();
+    let outcome = host.run_teammate(&h.id, "doc");
+    let (tools, results) = seen.lock().unwrap().clone();
+    for t in [BROWSER_TABS, BROWSER_READ, BROWSER_CONSOLE] {
+        assert!(tools.iter().any(|n| n == t), "the model sees {t}: {tools:?}");
+    }
+    let r = results.first().cloned().unwrap_or_default();
+    assert!(r["content"].as_str().is_some_and(|c| c.contains("[ref=e2]") && !c.contains("hunter2")), "{r}\noutcome: {outcome:?}");
 }
