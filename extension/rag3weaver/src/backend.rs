@@ -5739,7 +5739,8 @@ impl Backend {
         drop(cat);
         // **Under the view of a worktree, the freshness says that worktree** (recherche's ticket of 21 November 2026):
         // its root, its commit, its branch and the view; the backend's noted tree is the main one's, which misled.
-        let couche = response["view"]["layer"].as_str().map(str::to_string);
+        // The view asked by the call (its name, `worktree:<path>`); the answer's `view.layer` is the stack's id.
+        let couche = CALL_VIEW.with(|v| v.borrow().as_ref().map(|r| r.layer.clone()));
         if let (Some(racine), Some(mut arbre)) = (couche.as_deref().and_then(|c| c.strip_prefix("worktree:")), arbre) {
             let racine = std::path::Path::new(racine).canonicalize().unwrap_or_else(|_| PathBuf::from(racine));
             let git = |args: &[&str]| -> Option<String> {
