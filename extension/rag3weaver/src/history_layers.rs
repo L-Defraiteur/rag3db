@@ -1033,6 +1033,86 @@ mod tests {
         }
     }
 
+    /// **The dense search of a shared text node, against today's** (embarquement, 21 November 2026, page
+    /// `docs/embarquement/21-11-2026/02-partager-le-vecteur-d-un-texte.md`) : on a copy, build `ScopeContent_Text` (one
+    /// node per text hash, the vector of one chunk carrying it), `HAS_TEXT` from every chunk, and its HNSW index ; then,
+    /// for N query vectors taken from chunks, today's search (the chunks' index) and B's (the texts' index), timed, and
+    /// their recall of the exact top 10 distinct texts (brute force over the texts). The filtered searches come with
+    /// `RAG3WEAVER_PROBE_VIEW_FILTER` (today's filter on `n`, a chunk) once its text is known.
+    #[test]
+    #[ignore]
+    fn probe_shared_text_search() {
+        use crate::connection::{CypherValue, DbConnection, QueryParam};
+        let path = std::env::var("RAG3WEAVER_SONDE_BASE").expect("RAG3WEAVER_SONDE_BASE");
+        let conn = crate::Rag3dbConnection::new(&path).expect("the probe's base");
+        let ext = crate::backend::vector_extension_of_this_process().expect("the vector extension");
+        conn.execute(&format!("LOAD EXTENSION '{}'", ext.display())).expect("load the vector extension");
+        let (chunk, col, mark, cidx) = ("ScopeContent_Chunk", "embedding__granite_278m", "_embed_hash__granite_278m", "ScopeContent_Chunk_vec__granite_278m");
+        let (text, tidx) = ("ScopeContent_Text", "ScopeContent_Text_vec");
+        let n: usize = std::env::var("RAG3WEAVER_PROBE_QUERIES").ok().and_then(|v| v.parse().ok()).unwrap_or(100);
+        let timed = |label: &str, q: &str| {
+            let t = std::time::Instant::now();
+            let r = conn.execute(q);
+            println!("PROBE_TEXT build {label} : {:?} in {:.1} s", r.as_ref().map(|r| r.rows.len()).map_err(|e| e.to_string()), t.elapsed().as_secs_f64());
+            r
+        };
+        let info = conn.execute(&format!("CALL TABLE_INFO('{chunk}') RETURN *")).unwrap();
+        let typ = info.rows.iter().find(|r| r.get(1).and_then(|v| v.as_str()) == Some(col)).and_then(|r| r.get(2).and_then(|v| v.as_str()).map(str::to_string)).expect("the vector column's type");
+        println!("PROBE_TEXT vector type {typ}");
+        let _ = timed("table", &format!("CREATE NODE TABLE {text}(_text_hash STRING, embedding {typ}, PRIMARY KEY(_text_hash))"));
+        let _ = timed("texts", &format!(
+            "MATCH (c:{chunk}) WHERE c.{col} IS NOT NULL AND c.{mark} = c._text_hash \
+             WITH c._text_hash AS h, collect(c.{col}) AS es CREATE (:{text} {{_text_hash: h, embedding: list_extract(es, 1)}})"
+        ));
+        let _ = timed("rel table", &format!("CREATE REL TABLE HAS_TEXT(FROM {chunk} TO {text})"));
+        let _ = timed("edges", &format!("MATCH (c:{chunk}) WITH c MATCH (t:{text} {{_text_hash: c._text_hash}}) CREATE (c)-[:HAS_TEXT]->(t)"));
+        let _ = timed("index", &format!("CALL CREATE_VECTOR_INDEX('{text}', '{tidx}', 'embedding', metric := 'cosine', mu := 30, ml := 60, efc := 200)"));
+        let count = |q: &str| conn.execute(q).ok().and_then(|r| r.rows.first().and_then(|r| r.first()).and_then(|v| v.as_i64())).unwrap_or(-1);
+        println!("PROBE_TEXT texts {} ; edges {} ; chunks with a vector {}", count(&format!("MATCH (t:{text}) RETURN count(*)")),
+            count(&format!("MATCH ()-[e:HAS_TEXT]->() RETURN count(e)")), count(&format!("MATCH (c:{chunk}) WHERE c.{col} IS NOT NULL RETURN count(*)")));
+
+        // N query vectors, taken from chunks spread over the table.
+        let total = count(&format!("MATCH (c:{chunk}) WHERE c.{col} IS NOT NULL RETURN count(*)")).max(1) as usize;
+        let step = (total / n).max(1);
+        let queries: Vec<Vec<f64>> = conn
+            .execute(&format!("MATCH (c:{chunk}) WHERE c.{col} IS NOT NULL RETURN c.{col}"))
+            .unwrap()
+            .rows
+            .iter()
+            .step_by(step)
+            .take(n)
+            .filter_map(|r| match r.first() { Some(CypherValue::List(v)) => Some(v.iter().filter_map(|x| x.as_f64()).collect()), _ => None })
+            .collect();
+        let list = |q: &[f64]| CypherValue::List(q.iter().map(|&f| CypherValue::Float(f)).collect());
+        let hashes_of = |q: &str, v: &[f64]| -> (std::collections::BTreeSet<String>, f64) {
+            let t = std::time::Instant::now();
+            let rows = conn.execute_with_params(q, &[QueryParam::new("q", list(v))]).map(|r| r.rows).unwrap_or_default();
+            let ms = t.elapsed().as_secs_f64() * 1000.0;
+            (rows.iter().filter_map(|r| r.first().and_then(|v| v.as_str()).map(str::to_string)).collect(), ms)
+        };
+        let exact = format!("MATCH (t:{text}) RETURN t._text_hash ORDER BY array_cosine_similarity(t.embedding, CAST($q AS {typ})) DESC LIMIT 10");
+        let today = format!("CALL QUERY_VECTOR_INDEX('{chunk}', '{cidx}', CAST($q AS {typ}), 10) RETURN node._text_hash");
+        let shared = format!("CALL QUERY_VECTOR_INDEX('{text}', '{tidx}', CAST($q AS {typ}), 10) RETURN node._text_hash");
+        let (mut t_today, mut t_shared) = (Vec::new(), Vec::new());
+        let (mut r_today, mut r_shared, mut distinct_today) = (0usize, 0usize, 0usize);
+        for q in &queries {
+            let (truth, _) = hashes_of(&exact, q);
+            let (a, ta) = hashes_of(&today, q);
+            let (b, tb) = hashes_of(&shared, q);
+            t_today.push(ta);
+            t_shared.push(tb);
+            distinct_today += a.len();
+            r_today += a.intersection(&truth).count();
+            r_shared += b.intersection(&truth).count();
+        }
+        let stats = |v: &mut Vec<f64>| { v.sort_by(|a, b| a.partial_cmp(b).unwrap()); (v[v.len() / 2], v[(v.len() * 95 / 100).min(v.len() - 1)]) };
+        let (m_today, p_today) = stats(&mut t_today);
+        let (m_shared, p_shared) = stats(&mut t_shared);
+        let nq = queries.len().max(1) as f64;
+        println!("PROBE_TEXT unfiltered, {} queries : today median {m_today:.1} ms p95 {p_today:.1} ms, recall@10 of distinct texts {:.3} ({:.1} distinct texts in its 10) ; shared median {m_shared:.1} ms p95 {p_shared:.1} ms, recall@10 {:.3}",
+            queries.len(), r_today as f64 / (10.0 * nq), distinct_today as f64 / nq, r_shared as f64 / (10.0 * nq));
+    }
+
     /// **The plan and the time of a lookup by text hash** (ED, 21 November 2026, for embarquement's reuse by hash): on a
     /// copy, read only, three forms for N hashes taken from the table (20 000, then 200): (1) UNWIND and equality, (2) a
     /// list parameter and IN, (3) one scan of (hash, uuid) joined here, then the vectors read by primary key.
