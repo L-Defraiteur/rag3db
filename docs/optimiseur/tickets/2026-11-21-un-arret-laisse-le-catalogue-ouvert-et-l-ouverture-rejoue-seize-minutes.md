@@ -49,3 +49,18 @@ moteur HNSW neuf de hotfixs.
 
 G pose un hôte neuf seulement quand la montre est au repos (`watches.code` sans réaction en cours), pour ne pas couper
 une réindexation.
+
+## La preuve de la fermeture demandée (21 novembre 2026, 06 h 17 et 07 h 08)
+
+- **06 h 17, arrêt brutal** (pose de l'hôte du matin à la tablette) : la montre, au repos depuis 06 h 04, s'était
+  réveillée à 06 h 17 min 19 s. À l'arrêt, à 06 h 17 min 43 s, le réacteur s'est de nouveau figé (« pas arrêté en
+  30 s (32 exécution(s) faites) — catalogue laissé ouvert »). Le rejeu à l'ouverture n'a duré qu'environ une minute :
+  la réaction coupée avait peu écrit.
+- **07 h 08, fermeture demandée avant l'arrêt** (pose du second hôte à la tablette) : le dépôt et la tâche atelier ont
+  été fermés par `POST /backend/close` avant l'arrêt de l'hôte, la montre ayant été active à 07 h 01 min 58 s. Le
+  dépôt s'est fermé en environ 10 s, la tâche en moins d'1 s. **Le point de reprise a été fait** : aucun `.wal` à côté
+  de la base après la fermeture, et aucun « réacteur figé » ni « catalogue laissé ouvert » au journal, ni à la
+  fermeture ni à l'arrêt qui a suivi. L'hôte neuf a rouvert le dépôt sans rejeu.
+
+**D'ici le correctif**, toute pose d'un hôte ferme d'abord ses backends de code par `/backend/close`, puis arrête
+l'hôte. C'est la règle tenue par G depuis le 21 novembre au matin.
