@@ -1,5 +1,8 @@
 # Nouveautés
 
+- 21 novembre 2026 — **« Atelier » quitte l'écran de l'IDE.** Un projet ouvert se nomme par son dossier, à l'accueil
+  comme en tête de son chat ; l'accueil vide renvoie au champ « Ouvrir un dossier » ; une carte d'accord dit « l'agent
+  demande à lancer… ».
 - 21 novembre 2026 — **La suite à faute injectée du confineur se joue à la demande.** `FAUTE_INJECTEE=1` ajoute à
   `passe_epinglee` la vraie portée crevée (un vrai oom_kill) ; sous une session graphique, elle se saute en le disant,
   en première ligne du résumé, comptée non jugée. Le pousseur ne la joue pas.
