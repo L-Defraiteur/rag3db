@@ -71,6 +71,9 @@ fn default_protected_folders() -> Vec<PathBuf> {
     let mut dossiers: Vec<PathBuf> = crate::daemon_lifecycle::file_path().parent().map(Path::to_path_buf).into_iter().collect();
     if let Some(maison) = std::env::var_os("HOME").map(PathBuf::from) {
         for relatif in [
+            // The host's own configuration (the list of protected folders, the survivor's models, the templates): an
+            // agent granted it could empty the list. In the code, the floor that a file cannot lower.
+            ".config/rag3weaver",
             ".config/google-chrome",
             ".config/chromium",
             ".config/BraveSoftware",
@@ -92,10 +95,15 @@ fn default_protected_folders() -> Vec<PathBuf> {
 }
 
 impl DaemonHost {
-    /// **The protected folders**: the defaults, and one path per line of `<config>/protected-folders.txt` (`~/` expanded,
+    /// **The protected folders**: the defaults and the host's configuration folder (the floor, in the code), and one path per line of `<config>/protected-folders.txt` (`~/` expanded,
     /// `#` a comment), read at each check so that the list extends without recompiling.
     pub fn protected_folders(&self) -> Vec<PathBuf> {
         let mut dossiers = default_protected_folders();
+        // The configuration folder this host reads (`~/.config/rag3weaver` in service, a witness's own): the floor too.
+        if let Ok(r) = self.racines_de_code() {
+            dossiers.push(r.config.clone());
+        }
+        // The file can only add to the floor.
         if let Some(fichier) = self.racines_de_code().ok().map(|r| r.config.join("protected-folders.txt")) {
             if let Ok(texte) = std::fs::read_to_string(&fichier) {
                 for ligne in texte.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('#')) {
