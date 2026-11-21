@@ -38,7 +38,7 @@ Ce qui se lance, ce qu'on essaie au terminal et dans l'IDE, ce qu'on doit voir �
 
 - Une petite demande se fait en un pas, sans plan ; une demande en trois éléments ouvre un plan et le suit pas à pas ; une précision envoyée en route s'ajoute à la demande ; un « arrêt » coupe le pas.
 - Chaque pas voit ce que le pas d'avant a lu, écrit et lancé. Au troisième pas de suite sans élément réussi, l'équipier s'arrête et le dit.
-- **En file, pas encore sur l'hôte** (lot `raisonnement-borne-3`) : une réponse du modèle coupée à son plafond relancée, au plus deux fois par pas ; le modèle par défaut à `reasoning: low`, réglable par `"models": {"llm": {"reasoning": "medium"}}` dans un manifeste. **Sans ce lot**, un Gemini 3.x par défaut peut remplir sa sortie de raisonnement et couper sa réponse avant tout outil : le pas finit alors sans rien faire. `/model` liste déjà les modèles d'une tâche.
+- **Sur master, pas encore dans l'hôte du matin** (lot `raisonnement-borne-3`, atterri après sa pose) : une réponse du modèle coupée à son plafond relancée, au plus deux fois par pas ; le modèle par défaut à `reasoning: low`, réglable par `"models": {"llm": {"reasoning": "medium"}}` dans un manifeste. **Sans ce lot**, un Gemini 3.x par défaut peut remplir sa sortie de raisonnement et couper sa réponse avant tout outil : le pas finit alors sans rien faire. `/model` liste déjà les modèles d'une tâche.
 
 ## 4. Ce qui manque encore, et comment contourner
 
@@ -50,10 +50,10 @@ Ce qui se lance, ce qu'on essaie au terminal et dans l'IDE, ce qu'on doit voir �
 | Une carte d'accord par commande, parfois en double | Répondre à la plus récente d'abord, `o` ou `n` |
 | `cargo check` peut rester long ou bloqué dans une tâche sous charge | Lui laisser le temps ; la boîte le dit (« the command is still running ») |
 | `search_code` sans `options` refuse | Passer `options: {}` |
-| Pas de `fetch` ni de recherche web, pas de cron, pas de navigateur pour l'équipier, pas encore de palette par familles, pas de `run` en fond ; le sous-agent à vues est en file (`sous-agent-vues-3`) | — (le navigateur est le prochain chantier de tty) |
+| Pas de `fetch` ni de recherche web, pas de cron, pas de navigateur pour l'équipier, pas encore de palette par familles, pas de `run` en fond ; le sous-agent à vues est sur master, pas encore dans l'hôte du matin (`sous-agent-vues-3`) | — (le navigateur est le prochain chantier de tty) |
 | Le mode pair existe, mais seulement avec `teammate.pair: true` | À n'allumer qu'en le voulant |
 
-## Corrigé cette nuit (atterri ou en file)
+## Corrigé cette nuit
 
 - **`close_view` dit ce qu'il laisse** (arbre).
 
