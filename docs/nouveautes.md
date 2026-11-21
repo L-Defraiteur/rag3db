@@ -1,5 +1,8 @@
 # Nouveautés
 
+- 21 novembre 2026 — **« Atelier » quitte l'écran de l'IDE.** Un projet ouvert se nomme par son dossier, à l'accueil
+  comme en tête de son chat ; l'accueil vide renvoie au champ « Ouvrir un dossier » ; une carte d'accord dit « l'agent
+  demande à lancer… ».
 - 21 novembre 2026 — **Un bâti sans compteur de jetons ouvre une base sous granite.** Lire, chercher et converser ne
   comptent aucun jeton : la base s'ouvre et sert. Seul l'index refuse de découper, en nommant la feature `token-count`,
   et n'écrit jamais une ligne sans ses morceaux.
