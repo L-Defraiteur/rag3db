@@ -200,6 +200,48 @@ retrouvée, et vérifiée, rend `covered` ; sinon la décision reste `not_author
   (`gate.durable: {outbound: false, database: false, secret: false}` par défaut), et une autorisation durable de ces
   classes reste `scope: "once"` à chaque usage si l'option est fermée.
 
+**La forme à l'écran** (Lucie, 9 h 4x) : « en attendant on affiche quand même accepter/refuser, et si entre deux le
+modèle de recherche mémoire trouve, hop il valide à la place de l'user si activé ».
+- La carte d'accord s'affiche **tout de suite**, au terminal et dans l'IDE.
+- Le rappel en mémoire court **en parallèle**.
+- S'il trouve une autorisation valide (citation vérifiée, portée et échéance tenues) et que l'option de l'agent est
+  allumée pour cette classe, la carte se résout seule et le dit, sur la carte et dans l'historique : « validé par ton
+  autorisation du <date> : « <citation> » ».
+- Si l'utilisateur a répondu avant, sa réponse prime et le rappel est abandonné.
+- Un refus du rappel ne ferme jamais la carte : elle reste à l'utilisateur.
+
+**Les lignes de la boîte**, pour l'écran (publiées sur le bus de la tâche comme toute ligne) :
+
+```json
+{"from": "teammate", "kind": "approval", "id": "L12", "tool": "run_command", "args": {"command": "git push origin lot"},
+ "class": "outbound", "scope": "once", "recall": "pending"}
+{"from": "recall", "kind": "answer", "reply_to": "L12", "approved": true,
+ "authorization": {"id": "<entité>", "quote": "pousse quand c'est vert", "at": 1795…, "turn": "run:…#14"}}
+{"from": "host", "kind": "recall", "reply_to": "L12", "status": "not_found" | "option_off" | "abandoned" | "citation_unverified"}
+```
+
+La carte lit `recall: "pending"` pour montrer « recherche d'une autorisation… ». Une ligne `answer` de
+`from: "recall"` la résout et montre la citation. Une ligne `recall` sans `answer` laisse la carte ouverte, et
+l'écran peut dire pourquoi. Une `answer` de l'utilisateur arrivée avant fait écrire `status: "abandoned"`.
+
+**Témoin**, rouge d'abord, sur un rappel simulé :
+- la carte est résolue par le rappel quand l'option est allumée ;
+- elle reste ouverte quand l'option est éteinte ;
+- la réponse de l'utilisateur arrivée avant gagne, et le rappel est abandonné.
+
+**Côté mémoire** (relevé de mémoire, ce matin) : l'archiviste range déjà les tours par rôle, extrait par tranche et
+sait l'échéance (`writes.expires`), la révocation (`superseded`) et le rappel déclaratif (un `Decide` sur des
+candidates filtrées). Il manque :
+- une **entité `Authorization`** à part, typée : la citation exacte, la date, le tour cité, l'agent, le projet, la
+  classe, le motif de commande et l'échéance ;
+- une extraction de cette catégorie qui ne lit **que** les messages `role=user`, et un contrôle en script : la
+  citation doit être une sous-chaîne exacte d'un message de l'utilisateur de la tranche, sinon le rangement est refusé
+  et le dit (le modèle propose, le code vérifie) ;
+- l'option `memory.authorizations` au manifeste : absente, rien n'est rangé ni rappelé ;
+- un rappel déclaré : les autorisations de cet agent et de ce projet, non échues, de la même classe, jugées par un
+  `Decide`, qui rend la fiche citée ;
+- la révocation dite : un « plus jamais ça » de l'utilisateur rend l'autorisation `superseded`.
+
 **Qui fait quoi** : mémoire range et rappelle (la forme de l'autorisation, le rangement à la compaction, le rappel par
 agent) ; archi met la vérification de la citation et la portée dans la garde ; banc ajoute deux cas au jeu : le rappel
 d'une autorisation ancienne valide, et une autorisation empoisonnée en mémoire, sans tour d'utilisateur qui la porte,
