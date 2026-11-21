@@ -871,7 +871,7 @@ mod tests {
         let typed = sending_of(&Action::Envoyer("fais ça".into(), "instruction"), &tache).expect("a message is sent");
         assert!(typed.typed, "{typed:?}");
         assert_eq!(typed.body["text"], "fais ça");
-        let attente = crate::boite::Attente { id: "L1".into(), kind: "approval".into(), text: "lancer cargo test".into(), command: Some("cargo test".into()) };
+        let attente = crate::boite::Attente { id: "L1".into(), kind: "approval".into(), text: "lancer cargo test".into(), command: Some("cargo test".into()), ..Default::default() };
         let answer = sending_of(&Action::Repondre { attente, texte: "oui".into(), accord: Some(true) }, &tache).expect("an answer is sent");
         assert!(answer.typed, "{answer:?}");
         assert!(!request_sending(&tache, "lance-toi").typed, "the --request of the command line is not typed");
