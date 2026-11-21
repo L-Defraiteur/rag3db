@@ -16,7 +16,7 @@ export function Home({ state }: { state: HostState }) {
   const backends = state.backends ?? [];
   if (!backends.length) {
     // **How to open a project** (scenario 2 of the night of 20 November 2026): a newcomer who reads only the IDE
-    // stopped at this page. It gives the command and the folder to run it from, and what follows.
+    // stopped at this page. It sends to the field « Ouvrir un dossier » (« atelier » means nothing to a user).
     return (
       <>
       <OpenFolder />
@@ -24,12 +24,8 @@ export function Home({ state }: { state: HostState }) {
         <p className="mb-4 text-sm"><a href="/ide/poste" className="lien-poste inline-flex items-center gap-1 hover:underline"><Server className="size-4" /> Poste : les agents, les dossiers, les vues ouvertes</a></p>
         <p>L'hôte ne sert encore aucun dépôt.</p>
         <p>
-          Pour ouvrir un projet, lancez dans un terminal, depuis le dossier du projet :{" "}
-          <code className="text-foreground">rag3weaver-backend atelier</code>
-        </p>
-        <p>
-          L'atelier paraît alors ici. Son chat crée les fichiers et le dépôt git (sans rien pousser), ou attache un
-          worktree déjà sur le disque.
+          Pour commencer, ouvrez un dossier avec le champ « Ouvrir un dossier » ci-dessus : un dossier absent ou vide
+          devient un projet (git init, rien de poussé) ; un dépôt git s'ouvre tel quel.
         </p>
       </div>
       </>
@@ -123,8 +119,8 @@ function OpenFolder() {
         setSaid({
           ok: true,
           text: o.created
-            ? `${o.path} : dossier créé, git init fait (aucun distant, rien de poussé), attaché à l'atelier.`
-            : `${o.path} : dépôt git attaché à l'atelier.`,
+            ? `${o.path} : dossier créé, git init fait (aucun distant, rien de poussé), ouvert.`
+            : `${o.path} : dépôt git ouvert.`,
         });
       } else {
         setSaid({ ok: false, text: r.error ?? "refusé" });
