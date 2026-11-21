@@ -10,15 +10,15 @@ use crate::e2e_generations_commun as g;
 #[test]
 #[ignore]
 fn a_compaction_closes_with_its_own_generation_and_gives_the_space_back() {
-    let d = g::dossier("compaction");
+    let d = g::case_dir("compaction");
     let base = d.join("base.rag3db");
-    let (statut, sortie) = g::lancer("premier", &base, &[]);
+    let (statut, sortie) = g::launch("premier", &base, &[]);
     assert!(statut.success(), "{sortie}");
     let avant = g::generations(&base);
 
-    let (statut, sortie) = g::lancer("mainteneur", &base, &[]);
+    let (statut, sortie) = g::launch("mainteneur", &base, &[]);
     assert!(statut.success(), "la maintenance avec compaction va au bout :\n{sortie}");
-    let ligne = sortie.lines().find_map(|l| l.strip_prefix("TAILLE ")).unwrap_or_else(|| panic!("pas de taille :\n{sortie}"));
+    let ligne = sortie.lines().find_map(|l| l.strip_prefix("TAILLE ")).unwrap_or_else(|| panic!("pas de dir_size :\n{sortie}"));
     let nombre = |k: &str| ligne.split_whitespace().find_map(|p| p.strip_prefix(k)).and_then(|v| v.parse::<u64>().ok()).unwrap();
     let (taille_avant, taille_apres) = (nombre("avant="), nombre("apres="));
     println!("▸ plein texte : {taille_avant} octets avant la compaction, {taille_apres} après ; générations {avant:?} → {:?}", g::generations(&base));
@@ -27,6 +27,6 @@ fn a_compaction_closes_with_its_own_generation_and_gives_the_space_back() {
         "après la compaction, la place revient : {taille_avant} → {taille_apres} octets (l'ancien index retenu ?)"
     );
     let apres = g::generations(&base);
-    assert!(apres.iter().all(|(_, en_base, disque)| en_base == disque), "le dossier et la base d'accord : {apres:?}");
+    assert!(apres.iter().all(|(_, en_base, disque)| en_base == disque), "le case_dir et la base d'accord : {apres:?}");
     let _ = std::fs::remove_dir_all(&d);
 }
