@@ -101,3 +101,21 @@ fn a_late_answer_is_said_without_effect() {
     let w = written(&mut v);
     assert!(w.iter().any(|l| l.contains("sans effet") && l.contains("déjà close par ton autorisation rappelée")), "{w:?}");
 }
+
+/// **The card says its class in plain words** (archi, 21 November 2026: so that Lucie sees why it opens); without a
+/// class, nothing changes.
+#[test]
+fn the_card_says_its_class_in_plain_words() {
+    let said = |class: &str| {
+        let mut v = Vue::new(200, true);
+        v.ligne_de_boite(&line(1, "teammate", "approval", json!({ "tool": "run_command", "args": { "command": "rm build.log" }, "command": "rm build.log", "class": class, "scope": "once" })));
+        v.ligne_d_etat()
+    };
+    assert!(said("destroy_local").contains("supprime un fichier qui n'est sur aucun distant"), "{}", said("destroy_local"));
+    assert!(said("outbound").contains("envoie hors de la machine ou installe des paquets"), "{}", said("outbound"));
+    assert!(said("database").contains("touche une base"), "{}", said("database"));
+    assert!(said("system").contains("touche le système"), "{}", said("system"));
+    let mut v = Vue::new(200, true);
+    v.ligne_de_boite(&line(1, "teammate", "approval", json!({ "command": "cargo build" })));
+    assert!(v.ligne_d_etat().contains("attend ton accord : cargo build  [ Oui ]"), "without a class, nothing changes: {}", v.ligne_d_etat());
+}
