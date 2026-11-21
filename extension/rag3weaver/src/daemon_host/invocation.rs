@@ -453,6 +453,29 @@ mod tests {
         assert_eq!(generations_de(&v), 0, "close_view with purge leaves the generations");
     }
 
+    /// **The machine at a glance** (21 November 2026, recherche's scenario 1; keys in English, as recherche asked): after a
+    /// view is opened, `GET /poste` says
+    /// the session with its Claude name, the table of the folders with the worktree found under the session's, the view
+    /// opened and active, and the repository attached.
+    #[test]
+    fn the_machine_at_a_glance_says_its_sessions_folders_views_and_repositories() {
+        let v = une_vue_ouverte("p");
+        let (code, r) = v.a.host.handle("GET", "/poste", None, &[]);
+        assert_eq!(code, 200, "{r}");
+        let sessions = r["sessions"].as_array().cloned().unwrap_or_default();
+        assert!(sessions.iter().any(|x| x["claude"]["name"] == json!("le témoin")), "the session and its Claude name are not said: {r}");
+        let folders = r["folders"].as_array().cloned().unwrap_or_default();
+        let arbre = folders.iter().find(|x| x["folder"] == json!("arbre")).cloned().unwrap_or_default();
+        assert_eq!(arbre["session"], json!("le témoin"), "the table of the folders is not said: {r}");
+        let reel = v.chemin.canonicalize().unwrap();
+        assert!(arbre["worktrees"].as_array().is_some_and(|l| l.iter().any(|w| w.as_str().map(std::path::PathBuf::from).and_then(|p| p.canonicalize().ok()) == Some(reel.clone()))), "the worktree under the session's folder is not said: {arbre}");
+        let vues = r["open_views"].as_array().cloned().unwrap_or_default();
+        assert!(r["machine"].as_str().is_some_and(|m| !m.is_empty()), "the machine is not named: {r}");
+        assert!(vues.iter().any(|x| x["name"] == json!(v.nom) && x["active"] == json!(true)), "the view opened and active is not said: {r}");
+        let depots = r["repositories"].as_array().cloned().unwrap_or_default();
+        assert!(depots.iter().any(|x| x["repo"] == json!("rag3db-essai")), "the repository attached is not said: {r}");
+    }
+
     /// **`views` and `use_view` follow the Claude Code session** (page 02 of 20 November 2026, lot 2): two thin clients
     /// of one session (one `sessionId`) see the same active view, another session does not; an unknown name is refused,
     /// listing the known views; a host restarted on the same state finds the view again.
