@@ -12,7 +12,7 @@ Two layers, each usable alone:
   types, constants, test names, shell functions and subcommands, routes (« "/…" »), JSON keys, serde and clap names,
   the values of keys that name a node, a tool or a type, and the names of the files the lot adds. Text is never read:
   comments, displayed strings, prompts, error messages, the prose of templates. An identifier also present on a line the
-  lot removes is not new.
+  lot removes, or already written in the base's tree, is not new.
 
 Usage: french_identifiers.py <repository> <base> <head>
   One line per French identifier, « path:line  identifier  (what, reason) ». Always exits 0: it is a warning, never a
@@ -204,16 +204,24 @@ def lot_identifiers(repo, base, head):
     return [a for a in added if a[2] not in removed]
 
 
+def in_tree(repo, rev, ident):
+    """Whether the identifier is already written in the tree of rev, as a whole word (git grep -w -F)."""
+    return subprocess.run(["git", "-C", repo, "grep", "-q", "-w", "-F", "-e", ident, rev, "--"],
+                          capture_output=True).returncode == 0
+
+
 def lot_french_identifiers(repo, base, head, lexicon=None):
-    """(path, line, identifier, what, reason) for each French identifier the lot adds, each identifier once."""
+    """(path, line, identifier, what, reason) for each French identifier the lot introduces, each identifier once. An
+    identifier already in the base's tree is not new (21 Nov., c7: a lot that calls an existing French route)."""
     lexicon = lexicon or Lexicon.load()
     seen, out = set(), []
     for path, line, ident, what in lot_identifiers(repo, base, head):
         if ident in seen:
             continue
+        seen.add(ident)
         r = french_reason(ident, lexicon)
-        if r:
-            seen.add(ident); out.append((path, line, ident, what, r))
+        if r and not in_tree(repo, base, ident):
+            out.append((path, line, ident, what, r))
     return out
 
 
