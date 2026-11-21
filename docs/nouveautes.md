@@ -1,5 +1,12 @@
 # Nouveautés
 
+- 21 novembre 2026 — **L'équipier lit le navigateur.** Un manifeste qui déclare `teammate.browser` (ses `domains`,
+  vides par défaut) fait écouter l'hôte pour l'extension rag3weaver de Chrome, et `/sante` dit le socket et les
+  navigateurs reliés. L'équipier gagne trois outils en lecture : `browser_tabs` liste les onglets et en prend un,
+  `browser_read` lit l'arbre d'accessibilité (avec les `[ref=…]` des éléments), le texte ou l'adresse,
+  `browser_console` lit la console. Une page hors des domaines déclarés n'est ni prise ni lue, la valeur d'un champ
+  secret (mot de passe, code, jeton, carte) est masquée, et la page se lit par le code de l'hôte, jamais par celui du
+  modèle. Cliquer et remplir viendront avec l'accord générique.
 - 21 novembre 2026 — **Une erreur d'un nœud scripté nomme son fichier.** Quand un nœud en TypeScript ou en
   JavaScript échoue, à la préparation comme à l'appel, son erreur donne le chemin du script et la ligne, au lieu du
   seul nom du nœud.
