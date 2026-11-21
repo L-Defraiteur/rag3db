@@ -68,6 +68,11 @@ void DictionaryColumn::scan(const SegmentState& state, DictionaryChunk& dictChun
         offsetChunk->setValue<string_offset_t>(
             offsetChunk->getValue<string_offset_t>(i) + initialDictDataSize, i);
     }
+    // The offsets read back must lie within the bytes read back. A segment whose two children
+    // disagree (ticket C1 : 8 831 offsets for 4 991 bytes at a checkpoint's read back) made the
+    // next appendString run past the data buffer and kill the process; it is refused by name.
+    dictChunk.throwIfInconsistent("read back", dataColumn->getName(), initialDictSize,
+        initialDictDataSize);
 }
 
 template<typename Result>

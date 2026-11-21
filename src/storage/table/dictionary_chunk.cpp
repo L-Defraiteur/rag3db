@@ -1,3 +1,5 @@
+#include "common/string_format.h"
+#include "common/exception/runtime.h"
 #include "storage/table/dictionary_chunk.h"
 
 #include "common/constants.h"
@@ -90,8 +92,37 @@ std::string_view DictionaryChunk::getString(string_index_t index) const {
         length);
 }
 
+// It compared the number of offsets to itself, and nothing called it (ticket C1).
 bool DictionaryChunk::sanityCheck() const {
-    return offsetChunk->getNumValues() <= offsetChunk->getNumValues();
+    return firstInconsistentOffset() == INVALID_ROW_IDX;
+}
+
+row_idx_t DictionaryChunk::firstInconsistentOffset(row_idx_t from, string_offset_t floor) const {
+    const auto numBytes = stringDataChunk->getNumValues();
+    auto previous = floor;
+    for (row_idx_t i = from; i < offsetChunk->getNumValues(); i++) {
+        const auto offset = offsetChunk->getValue<string_offset_t>(i);
+        if (offset < previous || offset > numBytes) {
+            return i;
+        }
+        previous = offset;
+    }
+    return INVALID_ROW_IDX;
+}
+
+void DictionaryChunk::throwIfInconsistent(std::string_view what, std::string_view columnName,
+    row_idx_t from, string_offset_t floor) const {
+    const auto bad = firstInconsistentOffset(from, floor);
+    if (bad == INVALID_ROW_IDX) {
+        return;
+    }
+    const auto previous = bad > from ? offsetChunk->getValue<string_offset_t>(bad - 1) : floor;
+    throw RuntimeException(stringFormat("Corrupted string dictionary {} for column {}: offset {} "
+                                        "of {} is {} (the one before is {}), for {} bytes of "
+                                        "string data. Its offsets and its data do not describe "
+                                        "the same strings.",
+        what, columnName, bad, offsetChunk->getNumValues(),
+        offsetChunk->getValue<string_offset_t>(bad), previous, stringDataChunk->getNumValues()));
 }
 
 void DictionaryChunk::resetNumValuesFromMetadata() {
@@ -104,6 +135,8 @@ uint64_t DictionaryChunk::getEstimatedMemoryUsage() const {
 }
 
 void DictionaryChunk::flush(PageAllocator& pageAllocator) {
+    // Never write a dictionary that a read back would refuse.
+    throwIfInconsistent("to write", "(being flushed)");
     stringDataChunk->flush(pageAllocator);
     offsetChunk->flush(pageAllocator);
 }
